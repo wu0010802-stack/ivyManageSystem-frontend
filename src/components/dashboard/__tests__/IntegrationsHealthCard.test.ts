@@ -60,13 +60,15 @@ describe('IntegrationsHealthCard', () => {
     wrapper.unmount()
   })
 
-  it('degraded 狀態顯示熔斷與待處理筆數', async () => {
+  it('degraded 狀態以園所聽得懂的詞顯示（不出現「熔斷」等工程術語）', async () => {
     vi.mocked(getIntegrationsHealth).mockResolvedValueOnce({ data: fakeDegraded() } as any)
     const wrapper = mount(IntegrationsHealthCard, mountOpts)
     await flushPromises()
     const text = wrapper.text()
-    expect(text).toContain('熔斷')
-    expect(text).toContain('恢復中')  // half_open
+    expect(text).not.toContain('熔斷')
+    expect(text).toContain('已暫停')          // open
+    expect(text).toContain('恢復中')          // half_open
+    expect(text).toContain('24 小時內發送失敗') // 取代「24h 終局失敗」
     expect(text).toContain('5 筆')    // retry_pending
     expect(text).toContain('1 筆')    // final_failed_24h
     expect(text).toContain('2 筆')    // pending_uploads
@@ -74,11 +76,12 @@ describe('IntegrationsHealthCard', () => {
     wrapper.unmount()
   })
 
-  it('API fail 顯示錯誤訊息', async () => {
+  it('API fail 顯示錯誤訊息並指向重新整理', async () => {
     vi.mocked(getIntegrationsHealth).mockRejectedValueOnce(new Error('500'))
     const wrapper = mount(IntegrationsHealthCard, mountOpts)
     await flushPromises()
     expect(wrapper.text()).toContain('載入失敗')
+    expect(wrapper.text()).toContain('重新整理')
     wrapper.unmount()
   })
 })

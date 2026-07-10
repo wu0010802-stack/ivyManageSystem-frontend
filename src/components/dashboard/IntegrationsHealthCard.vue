@@ -19,7 +19,7 @@
 
     <div v-if="pending && !data" class="loading-text" role="status" aria-live="polite">載入中…</div>
     <div v-else-if="error && !data" class="error-text" role="alert">
-      載入失敗，請稍後重試
+      整合狀態載入失敗，可點右上角「重新整理」重試
     </div>
 
     <template v-else-if="data">
@@ -32,7 +32,7 @@
       </div>
       <ul class="integration-detail">
         <li>
-          <span>Token 健康</span>
+          <span>連線憑證</span>
           <el-tag :type="data.line.token_healthy ? 'success' : 'danger'" size="small">
             {{ tokenHealthLabel(data.line.token_healthy) }}
           </el-tag>
@@ -42,7 +42,7 @@
           <el-tag type="warning" size="small">{{ data.line.retry_pending }} 筆</el-tag>
         </li>
         <li v-if="data.line.retry_final_failed_24h > 0">
-          <span>24h 終局失敗</span>
+          <span>24 小時內發送失敗</span>
           <el-tag type="danger" size="small">{{ data.line.retry_final_failed_24h }} 筆</el-tag>
         </li>
       </ul>
@@ -63,7 +63,7 @@
           <el-tag type="warning" size="small">{{ data.supabase.pending_uploads }} 筆</el-tag>
         </li>
         <li v-if="data.supabase.final_failed > 0">
-          <span>永久失敗</span>
+          <span>同步失敗（已停止重試）</span>
           <el-tag type="danger" size="small">{{ data.supabase.final_failed }} 筆</el-tag>
         </li>
       </ul>
@@ -102,7 +102,8 @@ function breakerTagType(state: BreakerState): 'success' | 'warning' | 'danger' {
 function breakerLabel(state: BreakerState): string {
   if (state === 'closed') return '正常'
   if (state === 'half_open') return '恢復中'
-  return '熔斷'
+  // circuit open：對園所使用者說「已暫停」，不用工程術語「熔斷」
+  return '已暫停'
 }
 
 function tokenHealthLabel(healthy: boolean | null): string {

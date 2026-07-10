@@ -67,10 +67,10 @@ export function useDashboardSections() {
   // isFirstLoad 不會回 true。給模板區別「畫骨架」與「靜默重整」。
   const isFirstLoad = ref(true)
   const deferredSections = reactive({
-    studentAttendance: { loading: false, loaded: false },
-    anomalies: { loading: false, loaded: false },
-    calendar: { loading: false, loaded: false },
-    probation: { loading: false, loaded: false },
+    studentAttendance: { loading: false, loaded: false, error: false },
+    anomalies: { loading: false, loaded: false, error: false },
+    calendar: { loading: false, loaded: false, error: false },
+    probation: { loading: false, loaded: false, error: false },
   })
   const deferredObserver = ref<IntersectionObserver | null>(null)
   const studentAttendanceSectionRef = ref(null)
@@ -95,8 +95,16 @@ export function useDashboardSections() {
     return { total, teachers, others: total - teachers }
   })
 
-  const studentCount = ref(0)
+  // 假零修復：初值 null（尚未載入/失敗），成功才是數字——失敗不得渲染成 0
+  const studentCount = ref<number | null>(null)
   const todayStats = ref(null)
+  // per-source 失敗旗標：讓模板能把「載入失敗」與「真實為零」區分開
+  const criticalErrors = reactive({
+    employees: false,
+    students: false,
+    todayStats: false,
+    approvals: false,
+  })
   const upcomingEvents = ref<{ event_date: string; [key: string]: unknown }[]>([])
   const attendanceAnomalies = ref<unknown>(null)
   const studentAttendanceSummary = ref<unknown>(null)
@@ -118,6 +126,9 @@ export function useDashboardSections() {
     return '晚安'
   })
 
+  // 週末感知：非上課日出勤區塊改顯示語境化文案，而非零的荒原
+  const isWeekend = computed(() => [0, 6].includes(new Date().getDay()))
+
   const userName = computed(() => {
     const info = getUserInfo()
     return info?.name || info?.display_name || info?.username || '管理員'
@@ -135,17 +146,17 @@ export function useDashboardSections() {
     absent: 'danger', late: 'warning', missing_punch: 'info',
   } as Record<string, string>)[type] || 'info'
 
-  const ignoreErrors = (promiseLike: unknown) => Promise.resolve(promiseLike).catch(() => {})
-
   const loadDeferredSection = async (key: string, loader: () => Promise<void>) => {
-    const section = (deferredSections as Record<string, { loading: boolean; loaded: boolean }>)[key]
+    const section = (deferredSections as Record<string, { loading: boolean; loaded: boolean; error: boolean }>)[key]
     if (!section || section.loading || section.loaded) return
 
     section.loading = true
+    section.error = false
     try {
       await loader()
     } catch {
-      // API interceptor handles message
+      // interceptor 已彈訊息；此處僅標記失敗，讓模板不把失敗渲染成「全清空」
+      section.error = true
     } finally {
       section.loading = false
       section.loaded = true
@@ -199,23 +210,54 @@ export function useDashboardSections() {
   //      notificationStore.fetchSummary 自帶 TTL + in-flight 去重，重複呼叫不會多打。
   const fetchTodoBoardData = () => {
     const jobs: Promise<unknown>[] = []
-    if (showApprovals) jobs.push(ignoreErrors(notificationStore.fetchSummary()))
+    if (showApprovals) {
+      criticalErrors.approvals = false
+      jobs.push(
+        Promise.resolve(notificationStore.fetchSummary())
+          .catch(() => { criticalErrors.approvals = true }),
+      )
+    }
     if (showAttendance) jobs.push(loadDeferredSection('anomalies', deferredLoaders.anomalies))
     if (showStudents) jobs.push(loadDeferredSection('studentAttendance', deferredLoaders.studentAttendance))
     return Promise.all(jobs)
   }
 
+  // 待辦板來源失敗後的重試：重設失敗來源的 loaded/error 再重抓一波
+  const retryTodoBoard = () => {
+    for (const key of ['anomalies', 'studentAttendance'] as const) {
+      const section = deferredSections[key]
+      if (section.error) {
+        section.loaded = false
+        section.error = false
+      }
+    }
+    const jobs: Promise<unknown>[] = [fetchTodoBoardData()]
+    if (showApprovals && criticalErrors.approvals) {
+      jobs.push(
+        Promise.resolve(notificationStore.fetchSummary({ force: true }))
+          .then(() => { criticalErrors.approvals = false })
+          .catch(() => { criticalErrors.approvals = true }),
+      )
+    }
+    return Promise.all(jobs)
+  }
+
   const fetchCriticalDashboardData = async () => {
     loading.value = true
+    criticalErrors.employees = false
+    criticalErrors.students = false
+    criticalErrors.todayStats = false
     // 注意：待審摘要 (notificationStore.fetchSummary) 已移至 fetchTodoBoardData 提前並行抓，
     //      此處不再重複，避免待辦板的資料源被綁在概況統計這一波。
+    // 失敗一律標旗標而非靜默：儀表板上「載入失敗」與「真實為零」必須可區分。
     await Promise.all([
-      ignoreErrors(employeeStore.fetchEmployees()),
+      Promise.resolve(employeeStore.fetchEmployees())
+        .catch(() => { criticalErrors.employees = true }),
       getStudents({ limit: 1 })
         .then(r => { studentCount.value = r.data.total })
-        .catch(() => {}),
+        .catch(() => { criticalErrors.students = true }),
       showAttendance
-        ? getToday().then(r => { todayStats.value = r.data }).catch(() => {})
+        ? getToday().then(r => { todayStats.value = r.data }).catch(() => { criticalErrors.todayStats = true })
         : null,
     ].filter(Boolean))
     loading.value = false
@@ -281,9 +323,13 @@ export function useDashboardSections() {
     probationEmployees,
     probationAlerts,
     approvalSummary,
+    criticalErrors,
+    retryCritical: fetchCriticalDashboardData,
+    retryTodoBoard,
     todayDateStr,
     greeting,
     userName,
+    isWeekend,
     groupedEvents,
     eventTagType,
     anomalyLabel,

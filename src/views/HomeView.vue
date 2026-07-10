@@ -53,9 +53,13 @@ const {
   attendanceAnomalies,
   studentAttendanceSummary,
   approvalSummary,
+  criticalErrors,
+  retryCritical,
+  retryTodoBoard,
   todayDateStr,
   greeting,
   userName,
+  isWeekend,
   groupedEvents,
   eventTagType,
   anomalyLabel,
@@ -104,7 +108,9 @@ const todoTiles = computed(() => {
 // 只依待辦板自己的三個資料源判斷，不再綁定 critical 概況統計的 loading flag——
 // 待辦三來源已在 mount 時並行 eager 抓取，到齊即可顯示，毋須等其餘概況統計那一波。
 const todoDataReady = computed(() => {
-  if (showApprovals && approvalSummary.value == null) return false
+  // 來源失敗（criticalErrors.approvals）也算「到齊」：改由 todoSourceFailed 示警，
+  // 不能讓失敗把待辦板卡在骨架狀態。
+  if (showApprovals && approvalSummary.value == null && !criticalErrors.approvals) return false
   if (showAttendance && !deferredSections.anomalies?.loaded) return false
   if (showStudents && !deferredSections.studentAttendance?.loaded) return false
   return true
@@ -113,6 +119,22 @@ const todoDataReady = computed(() => {
 const showTodoSection = computed(
   () => showApprovals || showAttendance || showStudents
 )
+
+// 待辦板任一資料源失敗：不得顯示「全部清空」的假 all-clear，改示警 + 重試
+const todoSourceFailed = computed(() =>
+  (showApprovals && criticalErrors.approvals) ||
+  (showAttendance && deferredSections.anomalies?.error) ||
+  (showStudents && deferredSections.studentAttendance?.error)
+)
+
+// 學校概況任一來源失敗：顯示「重新載入」；「—」與真零必須可區分
+const hasCriticalError = computed(
+  () => criticalErrors.employees || criticalErrors.students || criticalErrors.todayStats
+)
+
+// 假零修復：失敗來源渲染成「—」而非 0
+const statDisplay = (value: number | null | undefined, failed: boolean): string | number =>
+  failed || value == null ? '—' : value
 
 // Type helpers for composable data with loose types
 interface TodayStats { total_employees: number; present_count: number; late_count: number; missing_count: number }
@@ -166,14 +188,20 @@ const typedEventTagType = eventTagType as EventTagTypeMap
         </div>
       </div>
 
+      <!-- 資料到齊後：來源失敗示警優先於「全部清空」，避免假 all-clear -->
+      <div v-else-if="todoSourceFailed" class="todo-source-warning" role="alert">
+        <span>部分待辦來源載入失敗，以下清單可能不完整。</span>
+        <el-button link type="primary" size="small" @click="retryTodoBoard">重試</el-button>
+      </div>
+
       <!-- 全部清空 -->
       <div v-else-if="todoTiles.length === 0" class="todo-empty">
         <el-icon class="todo-empty__icon"><CircleCheckFilled /></el-icon>
-        <span>太好了！今天沒有待處理的工作。</span>
+        <span>{{ isWeekend ? '週末愉快！目前沒有待處理的工作。' : '太好了！今天沒有待處理的工作。' }}</span>
       </div>
 
       <!-- 待辦磚 -->
-      <div v-else class="todo-grid">
+      <div v-if="todoDataReady && todoTiles.length > 0" class="todo-grid">
         <button
           v-for="tile in todoTiles"
           :key="tile.key"
@@ -195,6 +223,15 @@ const typedEventTagType = eventTagType as EventTagTypeMap
     <!-- 學校概況 -->
     <div class="section-header section-header--top">
       <span class="section-title">學校概況</span>
+      <el-button
+        v-if="hasCriticalError"
+        link
+        type="primary"
+        size="small"
+        @click="retryCritical"
+      >
+        部分統計載入失敗，重新載入 →
+      </el-button>
     </div>
     <el-row v-if="isFirstLoad && loading" :gutter="20" class="stats-row" aria-busy="true">
       <el-col v-for="i in 4" :key="i" :xs="24" :sm="12" :md="6" class="mb-4">
@@ -209,16 +246,16 @@ const typedEventTagType = eventTagType as EventTagTypeMap
     </el-row>
     <el-row v-else :gutter="20" class="stats-row">
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教職員總數" :value="stats.total" icon="User" color="primary" />
+        <StatCard label="教職員總數" :value="statDisplay(stats.total, criticalErrors.employees)" icon="User" color="primary" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教師人數" :value="stats.teachers" icon="Reading" color="success" />
+        <StatCard label="教師人數" :value="statDisplay(stats.teachers, criticalErrors.employees)" icon="Reading" color="success" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="全校在籍人數" :value="studentCount" icon="UserFilled" color="warning" />
+        <StatCard label="全校在籍人數" :value="statDisplay(studentCount, criticalErrors.students)" icon="UserFilled" color="warning" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="其他人員" :value="stats.others" icon="More" color="info" />
+        <StatCard label="其他人員" :value="statDisplay(stats.others, criticalErrors.employees)" icon="More" color="info" />
       </el-col>
     </el-row>
 
@@ -256,6 +293,14 @@ const typedEventTagType = eventTagType as EventTagTypeMap
           <StatCard label="未打卡" :value="typedTodayStats.missing_count" icon="Warning" color="danger" />
         </el-col>
       </el-row>
+      <!-- 已載入但無資料：不能留孤兒標題（週末/失敗都要說清楚） -->
+      <el-card v-else class="no-hover dashboard-placeholder-card mb-4">
+        <div class="dashboard-placeholder-card__text text-secondary">
+          <template v-if="criticalErrors.todayStats">今日出勤統計載入失敗，請點上方「重新載入」重試</template>
+          <template v-else-if="isWeekend">今天是週末，園所休息。出勤統計將於下個上課日恢復</template>
+          <template v-else>暫無今日出勤統計資料</template>
+        </div>
+      </el-card>
     </template>
 
     <!-- 學生出勤狀況 -->
@@ -303,7 +348,10 @@ const typedEventTagType = eventTagType as EventTagTypeMap
       </template>
       <el-card v-else class="no-hover dashboard-placeholder-card mb-4">
         <div class="dashboard-placeholder-card__text text-secondary">
-          {{ deferredSections.studentAttendance.loaded ? '暫無學生出勤摘要資料' : '學生出勤摘要載入中...' }}
+          <template v-if="!deferredSections.studentAttendance.loaded">學生出勤摘要載入中...</template>
+          <template v-else-if="deferredSections.studentAttendance.error">學生出勤摘要載入失敗，可由上方「今日待辦」的重試再抓一次</template>
+          <template v-else-if="isWeekend">今天是週末，尚無點名資料</template>
+          <template v-else>暫無學生出勤摘要資料</template>
         </div>
       </el-card>
     </div>
@@ -733,6 +781,19 @@ const typedEventTagType = eventTagType as EventTagTypeMap
   border: 1px solid var(--color-success-soft);
   color: var(--color-success-darker);
   font-size: 13px;
+}
+
+.todo-source-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--color-warning-soft);
+  color: var(--neutral-700);
+  font-size: 13px;
+  margin-bottom: 14px;
 }
 
 /* dark 下 success-darker 是深綠在淺底會 OK，但 dark 我們的 success-soft 已改 alpha tint，
