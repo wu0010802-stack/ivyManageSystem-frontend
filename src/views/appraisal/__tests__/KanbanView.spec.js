@@ -47,6 +47,33 @@ const mountOpts = (props = {}) => ({
   global: { stubs, directives: { loading: () => {} } },
 })
 
+// ── 整鏈測試用（真 KanbanColumn + SummaryCard stub）─────────────
+// KanbanColumn 被 stub 掉時測不到「KanbanColumn → SummaryCard 的 prop 傳遞」，
+// 這組 stubs 保留真 KanbanColumn，只 stub SummaryCard 與 element-plus 元件。
+const SummaryCardStub = defineComponent({
+  name: 'SummaryCard',
+  // showMenu 必須宣告 Boolean 型別，bare `show-menu` attribute 才會如真元件
+  // （defineProps<{ showMenu?: boolean }>）一樣被 Vue cast 成 true。
+  props: { summary: Object, selected: Boolean, showMenu: Boolean },
+  emits: ['update:selected', 'action'],
+  setup(props, { emit }) {
+    return () => h('div', {
+      'data-test': `summary-card-${props.summary.id}`,
+      'data-show-menu': String(props.showMenu ?? false),
+      onClick: () => emit('action', { action: 'sign', summary: props.summary }),
+    })
+  },
+})
+const chainStubs = {
+  SummaryCard: SummaryCardStub,
+  ElCheckbox: stubs.ElCheckbox,
+  ElButton: { template: '<button><slot /></button>' },
+}
+const mountChainOpts = (props = {}) => ({
+  props: { cycleId: 3, ...props },
+  global: { stubs: chainStubs, directives: { loading: () => {} } },
+})
+
 const sampleData = {
   data: {
     counts: { DRAFT: 2, SUPERVISOR_SIGNED: 1, ACCOUNTING_SIGNED: 0, FINALIZED: 0 },
@@ -109,6 +136,27 @@ describe('KanbanView', () => {
     draftStubComp.vm.$emit('toggle-select', { summaryId: 1, selected: false })
     await nextTick()
     expect(wrapper.emitted('selected-changed').at(-1)[0]).toEqual([])
+  })
+
+  // Task 8 修繕：KanbanColumn 未傳 show-menu → SummaryCard dropdown（退簽/留言/
+  // 看 log）在唯一生產呼叫點恆隱藏（死碼）。整鏈掛真 KanbanColumn 驗證。
+  it('看板卡片啟用動作選單：KanbanColumn 對 SummaryCard 傳 show-menu', async () => {
+    api.getSignStatusSummary.mockResolvedValueOnce(sampleData)
+    const wrapper = mount(KanbanView, mountChainOpts())
+    await nextTick(); await nextTick()
+    const card = wrapper.find('[data-test="summary-card-1"]')
+    expect(card.exists()).toBe(true)
+    expect(card.attributes('data-show-menu')).toBe('true')
+  })
+
+  it('action 事件透傳鏈：SummaryCard → KanbanColumn → KanbanView emit action', async () => {
+    api.getSignStatusSummary.mockResolvedValueOnce(sampleData)
+    const wrapper = mount(KanbanView, mountChainOpts())
+    await nextTick(); await nextTick()
+    await wrapper.find('[data-test="summary-card-1"]').trigger('click')
+    const emitted = wrapper.emitted('action')
+    expect(emitted).toBeTruthy()
+    expect(emitted[0][0]).toMatchObject({ action: 'sign', summary: { id: 1 } })
   })
 
   it('reloads when cycleId changes', async () => {

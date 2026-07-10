@@ -48,6 +48,7 @@ function onSelectAll(v: string | number | boolean) {
         :key="summary.id"
         :summary="summary"
         :selected="(selectedIds ?? []).includes(summary.id)"
+        show-menu
         @update:selected="(v) => onCardSelectChange(summary.id, v as boolean)"
         @action="(payload) => emit('action', payload)"
       />
