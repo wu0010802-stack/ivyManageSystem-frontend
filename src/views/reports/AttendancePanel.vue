@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard } from '@/api/reports'
 import { LineChart, BarChart, MONTH_LABELS } from './chartSetup'
+import { computeReportPeriod } from './useReportPeriod'
 import AttendanceDetailDialog from './AttendanceDetailDialog.vue'
 
 const props = defineProps<{
@@ -66,6 +67,9 @@ function openClassroomDetail(arrIdx: number) {
   }
 }
 
+// 報表截止期間單一事實來源（spec §2）：cutoffMonth 之後的月份不畫（避免懸崖假 0）。
+const period = computed(() => computeReportPeriod(props.year))
+
 const attendanceChartData = computed(() => {
   const monthMap: Record<number, { rate?: number; late?: number; early_leave?: number; missing?: number }> = {}
   ;(data.value.attendance_monthly || []).forEach((d: { month: number; rate?: number; late?: number; early_leave?: number; missing?: number }) => { monthMap[d.month] = d })
@@ -74,6 +78,13 @@ const attendanceChartData = computed(() => {
   const early: (number | null)[] = []
   const miss: (number | null)[] = []
   for (let m = 1; m <= 12; m++) {
+    if (m > period.value.cutoffMonth) {
+      rates.push(null)
+      late.push(null)
+      early.push(null)
+      miss.push(null)
+      continue
+    }
     const d = monthMap[m]
     rates.push(d?.rate ?? null)
     late.push(d?.late ?? null)
@@ -84,9 +95,9 @@ const attendanceChartData = computed(() => {
     labels: MONTH_LABELS,
     datasets: [
       { label: '出勤率 (%)', data: rates, borderColor: '#409EFF', backgroundColor: 'rgba(64,158,255,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
-      { label: '遲到次數', data: late, borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', borderDash: [5, 5], tension: 0.3, yAxisID: 'y1' },
-      { label: '早退次數', data: early, borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', borderDash: [4, 4], tension: 0.3, yAxisID: 'y1' },
-      { label: '缺卡次數', data: miss, borderColor: '#F56C6C', backgroundColor: 'rgba(245,108,108,0.1)', borderDash: [3, 3], tension: 0.3, yAxisID: 'y1' },
+      { label: '遲到次數', data: late, borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
+      { label: '早退次數', data: early, borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
+      { label: '缺卡次數', data: miss, borderColor: '#F56C6C', backgroundColor: 'rgba(245,108,108,0.1)', borderWidth: 1.5, tension: 0.3, yAxisID: 'y1' },
     ],
   }
 })
@@ -187,7 +198,6 @@ const leaveChartOptions = {
           :value="opt.id"
         />
       </el-select>
-      <span class="filter-hint">此 filter 只影響右下「各班級出勤統計」圖</span>
     </div>
 
     <el-row :gutter="16">
@@ -199,14 +209,24 @@ const leaveChartOptions = {
       </el-col>
       <el-col :xs="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
-          <template #header><span class="chart-title">各班級出勤統計（點擊長條開明細）</span></template>
+          <template #header>
+            <div class="chart-header">
+              <span class="chart-title">各班級出勤統計（點擊長條開明細）</span>
+              <span class="threshold-legend" data-test="threshold-legend">
+                <span class="lg-item"><i class="sw sw-green" />≥95%</span>
+                <span class="lg-item"><i class="sw sw-orange" />90–95%</span>
+                <span class="lg-item"><i class="sw sw-red" />&lt;90%</span>
+              </span>
+              <span class="filter-hint" data-test="classroom-filter-hint">班級篩選只影響此圖</span>
+            </div>
+          </template>
           <div class="chart-container">
             <BarChart v-if="filteredClassroomData._rawData?.length" :data="filteredClassroomData" :options="classroomChartOptions" />
             <el-empty v-else description="無班級出勤資料" :image-size="60" />
           </div>
         </el-card>
       </el-col>
-      <el-col :xs="24" :lg="12">
+      <el-col :xs="24" :lg="24">
         <el-card class="chart-card" shadow="hover">
           <template #header><span class="chart-title">請假趨勢分析</span></template>
           <div class="chart-container"><BarChart :data="leaveChartData" :options="leaveChartOptions" /></div>
@@ -235,8 +255,12 @@ const leaveChartOptions = {
   margin-bottom: var(--space-4);
   flex-wrap: wrap;
 }
-.filter-hint {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
+.chart-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.threshold-legend { display: inline-flex; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.lg-item { display: inline-flex; align-items: center; gap: 3px; }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.sw-green { background: #67C23A; }
+.sw-orange { background: #E6A23C; }
+.sw-red { background: #F56C6C; }
+.filter-hint { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
 </style>
