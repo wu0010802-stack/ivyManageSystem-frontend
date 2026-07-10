@@ -394,7 +394,12 @@ const formatFetchedAt = (ts: number) => {
           v-if="!dashboardUnavailable"
           class="summary-card" shadow="never"
           data-test="attendance-summary-card"
+          role="button"
+          tabindex="0"
+          aria-label="查看出勤報表"
           @click="emit('navigate', { tab: 'attendance' })"
+          @keydown.enter.prevent="emit('navigate', { tab: 'attendance' })"
+          @keydown.space.prevent="emit('navigate', { tab: 'attendance' })"
         >
           <div class="kpi-label">年度出勤率（加權平均）</div>
           <div class="summary-value" data-test="attendance-rate">{{ weightedAttendanceRate != null ? `${weightedAttendanceRate}%` : '-' }}</div>
@@ -410,7 +415,12 @@ const formatFetchedAt = (ts: number) => {
           v-if="!financeUnavailable"
           class="summary-card" shadow="never"
           data-test="salary-summary-card"
+          role="button"
+          tabindex="0"
+          aria-label="查看薪資報表"
           @click="emit('navigate', { tab: 'salary' })"
+          @keydown.enter.prevent="emit('navigate', { tab: 'salary' })"
+          @keydown.space.prevent="emit('navigate', { tab: 'salary' })"
         >
           <div class="kpi-label">園方人事成本（本年）</div>
           <div class="summary-value">{{ money(salaryGross + employerBenefit) }}</div>
@@ -516,6 +526,11 @@ const formatFetchedAt = (ts: number) => {
 
 .summary-card { text-align: center; padding: 12px 8px; cursor: pointer; height: 100%; transition: border-color 0.2s; }
 .summary-card:hover { border-color: var(--el-color-primary); }
+/* 鍵盤可及性：可點卡片 role=button + tabindex=0，聚焦時給明顯 outline（比照 ClassroomView 卡片範式） */
+.summary-card:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
 .summary-card--static { cursor: default; }
 .summary-card--static:hover { border-color: var(--el-border-color-lighter); }
 .summary-value { font-size: 24px; font-weight: 700; color: var(--text-primary); margin: 4px 0; }
