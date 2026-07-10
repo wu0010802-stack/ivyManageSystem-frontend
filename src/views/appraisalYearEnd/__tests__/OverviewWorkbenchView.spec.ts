@@ -53,7 +53,8 @@ vi.mock('@/api/yearEnd', () => ({
 }))
 
 import OverviewWorkbenchView from '../OverviewWorkbenchView.vue'
-import { getSignStatusSummary } from '@/api/appraisal'
+import { getSignStatusSummary, getAppraisalCurrentCycle } from '@/api/appraisal'
+import { listYearEndCycles } from '@/api/yearEnd'
 import { hasPermission } from '@/utils/auth'
 
 const mountView = () =>
@@ -114,5 +115,40 @@ describe('OverviewWorkbenchView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-test="payout-card"]').text()).toContain('可發放 0 筆')
+  })
+
+  // ── 根把手（父層 Promise.allSettled）失敗顯式化：不得誤顯「尚未建立」空狀態 ──
+
+  it('考核根把手載入失敗 → 考核卡顯示載入失敗＋重試（非空狀態文案），年終卡照常', async () => {
+    vi.mocked(getAppraisalCurrentCycle).mockRejectedValueOnce(new Error('boom'))
+    const w = mountView()
+    await flushPromises()
+    const card = w.find('[data-test="appraisal-card"]')
+    expect(card.text()).toContain('載入失敗')
+    expect(card.text()).toContain('重試')
+    expect(card.text()).not.toContain('尚未建立考核週期')
+    expect(w.find('[data-test="year-end-card"]').text()).toContain('待簽核 1')
+  })
+
+  it('年終根把手載入失敗 → 年終卡顯示載入失敗＋重試（非空狀態文案），考核卡照常', async () => {
+    vi.mocked(listYearEndCycles).mockRejectedValueOnce(new Error('boom'))
+    const w = mountView()
+    await flushPromises()
+    const card = w.find('[data-test="year-end-card"]')
+    expect(card.text()).toContain('載入失敗')
+    expect(card.text()).toContain('重試')
+    expect(card.text()).not.toContain('尚未建立年終週期')
+    expect(w.find('[data-test="appraisal-card"]').text()).toContain('草稿 10')
+  })
+
+  it('根把手重試成功 → 卡片恢復正常渲染', async () => {
+    vi.mocked(getAppraisalCurrentCycle).mockRejectedValueOnce(new Error('boom'))
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-test="appraisal-card"]').text()).toContain('載入失敗')
+    await w.find('[data-test="appraisal-card"]').find('button').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="appraisal-card"]').text()).toContain('草稿 10')
+    expect(w.find('[data-test="appraisal-card"]').text()).not.toContain('載入失敗')
   })
 })
