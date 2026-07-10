@@ -246,5 +246,6 @@ const onSaved = async () => {
 /* 手機：左欄變頂部卡片、錨點變橫向 chip */
 .detail-layout.is-mobile { flex-direction: column; }
 .detail-layout.is-mobile .detail-aside { position: static; flex: 0 0 auto; width: 100%; }
+.detail-layout.is-mobile .detail-sections { width: 100%; }
 .detail-layout.is-mobile .anchor-nav { flex-direction: row; flex-wrap: wrap; gap: 10px; }
 </style>
