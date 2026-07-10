@@ -27,7 +27,8 @@ vi.mock('@/utils/auth', () => ({
 
 import * as configApi from '@/api/config'
 import * as employeesApi from '@/api/employees'
-import { ElMessageBox } from 'element-plus'
+import * as authApi from '@/utils/auth'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 type PanelVm = {
   afterClassAwardRows: { className: string; price: number }[]
@@ -102,7 +103,10 @@ async function mountPanel() {
   const wrapper = mount(YearEndRulesPanel, {
     global: {
       stubs: {
-        'el-button': true,
+        'el-button': {
+          props: ['disabled'],
+          template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+        },
         'el-card': true,
         'el-alert': true,
         'el-divider': true,
@@ -114,7 +118,9 @@ async function mountPanel() {
         'el-input-number': true,
         'el-select': true,
         'el-option': true,
-        'el-tooltip': true,
+        // 明確 template（非 true auto-stub）：VTU renderStubDefaultSlot 預設 false，
+        // auto-stub 不會渲染 default slot，儲存按鈕（被 el-tooltip 包住）會消失於 DOM。
+        'el-tooltip': { template: '<span><slot /></span>' },
       },
     },
   })
@@ -124,7 +130,10 @@ async function mountPanel() {
 }
 
 describe('YearEndRulesPanel', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(authApi.hasPermission).mockReturnValue(true)
+  })
 
   it('load: dict → afterClassAwardRows，list → artTeacherEmployeeIds', async () => {
     vi.mocked(configApi.getBonusConfig).mockResolvedValue({
@@ -430,6 +439,59 @@ describe('YearEndRulesPanel', () => {
       >
       expect(payload.teaching_extra_unit_price).toBeNull()
       expect(payload.teaching_extra_sessions_per_unit).toBeNull()
+    })
+  })
+
+  // 薪資模組稽核 P2：saveRules 送到 PUT /config/bonus，後端除 SETTINGS_WRITE 外
+  // 還額外要求 ACTIVITY_PAYMENT_APPROVE（見 ivy-backend api/config/bonus.py
+  // update_bonus_config）。前端 gate 需對齊，唯讀使用者不應能填完整張表、
+  // 過完異動原因提示才吃 403。
+  describe('儲存按鈕權限 gate（對齊 PUT /config/bonus）', () => {
+    beforeEach(() => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+    })
+
+    it('只有 SETTINGS_READ（無 WRITE/APPROVE）：儲存按鈕 disabled，直接呼叫 saveRules 也不送出', async () => {
+      vi.mocked(authApi.hasPermission).mockImplementation((p: string) => p === 'SETTINGS_READ')
+
+      const wrapper = await mountPanel()
+      const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
+      expect(button).toBeTruthy()
+      expect(button!.attributes('disabled')).toBeDefined()
+
+      const vm = wrapper.vm as unknown as PanelVm
+      await vm.saveRules()
+
+      expect(configApi.updateBonusConfig).not.toHaveBeenCalled()
+      expect(ElMessage.warning).toHaveBeenCalled()
+    })
+
+    it('只有 SETTINGS_WRITE（缺 ACTIVITY_PAYMENT_APPROVE）：儲存按鈕仍 disabled', async () => {
+      vi.mocked(authApi.hasPermission).mockImplementation(
+        (p: string) => p === 'SETTINGS_READ' || p === 'SETTINGS_WRITE',
+      )
+
+      const wrapper = await mountPanel()
+      const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
+      expect(button!.attributes('disabled')).toBeDefined()
+    })
+
+    it('具 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE：儲存按鈕可用且可正常送出', async () => {
+      vi.mocked(authApi.hasPermission).mockReturnValue(true)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
+      expect(button!.attributes('disabled')).toBeUndefined()
+
+      const vm = wrapper.vm as unknown as PanelVm
+      await vm.saveRules()
+
+      expect(configApi.updateBonusConfig).toHaveBeenCalled()
     })
   })
 })

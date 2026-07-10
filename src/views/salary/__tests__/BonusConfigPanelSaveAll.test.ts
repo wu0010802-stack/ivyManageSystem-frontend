@@ -28,14 +28,16 @@ vi.mock('@/api/config', () => ({
   updateTitle: (...a: unknown[]) => updateTitle(...a),
 }))
 
+const hasPermissionMock = vi.fn()
 vi.mock('@/utils/auth', () => ({
-  hasPermission: () => true,
+  hasPermission: (...a: unknown[]) => hasPermissionMock(...(a as [string])),
 }))
 
 vi.mock('element-plus', () => ({
   ElMessage: {
     success: vi.fn(),
     error: vi.fn(),
+    warning: vi.fn(),
   },
   ElMessageBox: {
     prompt: vi.fn(),
@@ -67,7 +69,10 @@ const GLOBAL_STUBS = {
   'el-tooltip': { template: '<span><slot /></span>' },
   'el-empty': true,
   'el-alert': { template: '<div><slot /></div>' },
-  'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+  'el-button': {
+    props: ['disabled'],
+    template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+  },
   'el-icon': { template: '<span><slot /></span>' },
 }
 
@@ -88,6 +93,7 @@ interface SetupState {
 describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    hasPermissionMock.mockReturnValue(true)
     getBonusConfig.mockResolvedValue({ data: {} })
     getGradeTargets.mockResolvedValue({ data: { 大班: {} } })
     getPositionSalary.mockResolvedValue({ data: {} })
@@ -153,5 +159,76 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
     )
     expect(updateGradeTargets).toHaveBeenCalled()
     expect(ElMessage.success).toHaveBeenCalledWith('所有薪資設定已儲存')
+  })
+})
+
+// 薪資模組稽核 P2：saveAllBonusSettings 最終送到 PUT /config/bonus，後端除
+// SETTINGS_WRITE 外還額外要求 ACTIVITY_PAYMENT_APPROVE（見 ivy-backend
+// api/config/bonus.py update_bonus_config）。前端 gate 需對齊，唯讀使用者
+// 不應能填完整張表、過完異動原因提示才吃 403。
+// panel 內有多個 <button>（儲存所有薪資設定 / 儲存職位底薪設定 等），
+// 以文字比對取目標按鈕，避免依賴 DOM 順序造成脆弱測試。
+function findSaveAllButton(wrapper: ReturnType<typeof mountPanel>) {
+  return wrapper.findAll('button').find((b) => b.text().includes('儲存所有薪資設定'))!
+}
+
+describe('BonusConfigPanel — 儲存按鈕權限 gate（對齊 PUT /config/bonus）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getBonusConfig.mockResolvedValue({ data: {} })
+    getGradeTargets.mockResolvedValue({ data: { 大班: {} } })
+    getPositionSalary.mockResolvedValue({ data: {} })
+    comparePositionSalary.mockResolvedValue({ data: { employees: [], out_of_sync: 0 } })
+    getTitles.mockResolvedValue({ data: [] })
+    updateBonusConfig.mockResolvedValue({ data: {} })
+    updateGradeTargets.mockResolvedValue({ data: {} })
+  })
+
+  it('只有 SETTINGS_READ（無 WRITE/APPROVE）：儲存按鈕 disabled，直接呼叫 saveAllBonusSettings 也不送出', async () => {
+    hasPermissionMock.mockImplementation((p: string) => p === 'SETTINGS_READ')
+
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    const button = findSaveAllButton(wrapper)
+    expect(button.exists()).toBe(true)
+    expect(button.attributes('disabled')).toBeDefined()
+
+    const state = wrapper.vm.$.setupState as unknown as SetupState
+    await state.saveAllBonusSettings()
+    await flushPromises()
+
+    expect(updateBonusConfig).not.toHaveBeenCalled()
+    expect(updateGradeTargets).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('只有 SETTINGS_WRITE（缺 ACTIVITY_PAYMENT_APPROVE）：儲存按鈕仍 disabled', async () => {
+    hasPermissionMock.mockImplementation((p: string) => p === 'SETTINGS_READ' || p === 'SETTINGS_WRITE')
+
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    const button = findSaveAllButton(wrapper)
+    expect(button.attributes('disabled')).toBeDefined()
+  })
+
+  it('具 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE：儲存按鈕可用且可正常送出', async () => {
+    hasPermissionMock.mockReturnValue(true)
+    ;(ElMessageBox.prompt as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      value: '這是一段足夠長度的異動原因說明',
+    })
+
+    const wrapper = mountPanel()
+    await flushPromises()
+
+    const button = findSaveAllButton(wrapper)
+    expect(button.attributes('disabled')).toBeUndefined()
+
+    const state = wrapper.vm.$.setupState as unknown as SetupState
+    await state.saveAllBonusSettings()
+    await flushPromises()
+
+    expect(updateBonusConfig).toHaveBeenCalled()
   })
 })

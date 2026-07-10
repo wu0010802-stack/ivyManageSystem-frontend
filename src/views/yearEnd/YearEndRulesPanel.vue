@@ -15,6 +15,13 @@ import {
 
 const loading = ref(false)
 const canRead = computed(() => hasPermission('SETTINGS_READ'))
+// 金流硬化（薪資模組稽核 P2）：saveRules 送到 PUT /config/bonus，
+// 後端除 SETTINGS_WRITE 外還額外要求 has_finance_approve（ACTIVITY_PAYMENT_APPROVE），
+// 見 ivy-backend api/config/bonus.py update_bonus_config。前端 gate 需對齊，
+// 否則唯讀（SETTINGS_READ）使用者會填完整張表、過完異動原因提示才吃 403。
+const canSaveRules = computed(
+  () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
+)
 
 // 年終規則欄位（型別對齊 ApiBody<'/config/bonus','put'> 的年終子集）
 const rules = reactive({
@@ -138,6 +145,12 @@ const removeAfterClassAwardRow = (index: number) => {
 }
 
 const saveRules = async () => {
+  // 防禦：按鈕已 disabled，但函式仍可能被直接呼叫（測試/程式化觸發），
+  // 需與 UI gate 同一道防線，避免繞過 disabled 直接打到後端吃 403。
+  if (!canSaveRules.value) {
+    ElMessage.warning('您沒有權限儲存年終規則（需 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）')
+    return
+  }
   // 與 BonusConfig PUT 對齊：變更影響全員年終規則，要求異動原因 ≥10 字（落 audit）。
   let reason
   try {
@@ -203,7 +216,20 @@ onMounted(() => {
 <template>
   <div v-if="canRead" v-loading="loading">
     <div class="rules-actions">
-      <el-button type="primary" size="large" @click="saveRules">儲存年終規則</el-button>
+      <el-tooltip
+        content="需要「系統設定寫入」與「金流簽核」權限（SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）"
+        :disabled="canSaveRules"
+        placement="top"
+      >
+        <span>
+          <el-button
+            type="primary"
+            size="large"
+            :disabled="!canSaveRules"
+            @click="saveRules"
+          >儲存年終規則</el-button>
+        </span>
+      </el-tooltip>
     </div>
 
     <p class="desc-text">
