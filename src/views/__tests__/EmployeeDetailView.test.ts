@@ -30,6 +30,7 @@ function buildDetail(overrides: {
   employee?: Record<string, unknown> | null
   certificates?: Record<string, unknown>[]
   contracts?: Record<string, unknown>[]
+  subResourceErrors?: number
 } = {}) {
   return {
     employee: ref(
@@ -43,7 +44,7 @@ function buildDetail(overrides: {
     classHistory: ref([]),
     loading: ref(false),
     error: ref(null),
-    subResourceErrors: ref(0),
+    subResourceErrors: ref(overrides.subResourceErrors ?? 0),
     load: vi.fn(),
     reloadCore: vi.fn(),
     reloadEducations: vi.fn(),
@@ -210,5 +211,36 @@ describe('EmployeeDetailView 員工待辦列', () => {
     await w.find('.employee-todos .el-tag').trigger('click')
     expect(getByIdSpy).toHaveBeenCalledWith('emp-sec-salary')
     getByIdSpy.mockRestore()
+  })
+
+  // ── 子資源載入失敗（reviewer Important）：certificates/contracts rejected 時停留空陣列，
+  // 待辦掃不到資料 → 必須在待辦列位置浮出「可能不完整」提示，否則是持久假陰性。
+  it('子資源載入失敗（subResourceErrors > 0）且無其他待辦 → 待辦列仍渲染並顯示不完整提示', () => {
+    const w = mountDetail({
+      employee: { id: 1, is_active: true, employee_type: 'regular', base_salary: 30000 },
+      subResourceErrors: 2,
+    })
+    const todos = w.find('.employee-todos')
+    expect(todos.exists()).toBe(true)
+    expect(todos.text()).toContain('部分資料載入失敗，待辦可能不完整')
+  })
+
+  it('子資源載入失敗且另有待辦 → 提示與待辦 tag 並存', () => {
+    const w = mountDetail({
+      employee: { id: 1, is_active: true, employee_type: 'regular', base_salary: 0 },
+      subResourceErrors: 1,
+    })
+    const tags = w.findAll('.employee-todos .el-tag').map((t) => t.text())
+    expect(tags).toContain('待補薪資')
+    expect(tags).toContain('部分資料載入失敗，待辦可能不完整')
+  })
+
+  it('子資源全數成功（subResourceErrors = 0）→ 不顯示不完整提示', () => {
+    const w = mountDetail({
+      employee: { id: 1, is_active: true, employee_type: 'regular', base_salary: 0 },
+      subResourceErrors: 0,
+    })
+    const tags = w.findAll('.employee-todos .el-tag').map((t) => t.text())
+    expect(tags).not.toContain('部分資料載入失敗，待辦可能不完整')
   })
 })

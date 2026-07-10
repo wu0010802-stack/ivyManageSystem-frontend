@@ -160,12 +160,15 @@ const onSaved = async () => {
 
       <!-- 右欄：單頁區塊 -->
       <main class="detail-sections">
-        <!-- 員工待辦列（finding #6）：待補薪資 / 證照到期 / 合約到期，全部條件不成立則不渲染 -->
-        <div v-if="employeeTodos.length" class="employee-todos">
+        <!-- 員工待辦列（finding #6）：待補薪資 / 證照到期 / 合約到期，全部條件不成立則不渲染。
+             子資源（證照/合約）載入失敗時 certificates/contracts 停留空陣列、待辦掃不到資料，
+             故 subResourceErrors > 0 時仍渲染本列並補「可能不完整」提示，避免持久假陰性。 -->
+        <div v-if="employeeTodos.length || subResourceErrors > 0" class="employee-todos">
           <el-tag
             v-for="todo in employeeTodos" :key="todo.key" :type="todo.type"
             class="todo-tag" @click="scrollToSection(todo.sectionKey)"
           >{{ todo.label }}</el-tag>
+          <el-tag v-if="subResourceErrors > 0" type="info">部分資料載入失敗，待辦可能不完整</el-tag>
         </div>
         <el-alert v-if="subResourceErrors > 0" type="warning" show-icon :closable="false"
           title="部分區塊載入失敗，顯示可能不完整" style="margin-bottom:12px" />
