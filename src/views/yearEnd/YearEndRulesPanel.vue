@@ -239,7 +239,7 @@ onMounted(() => {
 
     <!-- ① 才藝鼓勵 -->
     <div class="section-title">才藝鼓勵</div>
-    <el-card class="box-card mb-6" shadow="never">
+    <el-card class="mb-6" shadow="never">
       <el-row :gutter="20">
         <el-col :span="12">
           <el-form-item>
@@ -313,7 +313,7 @@ onMounted(() => {
 
     <!-- ⑥ 教課獎勵（②③ 為既有編號跳號留白，避免與其他意涵混淆改用下一個未用序號） -->
     <div class="section-title">教課獎勵</div>
-    <el-card class="box-card mb-6" shadow="never">
+    <el-card class="mb-6" shadow="never">
       <p class="desc-text">
         暫依 Excel 慣例（R1）：每滿 N 堂計 1 次 × 單價；留空＝沿用系統預設（65 元／4 堂）。
       </p>
@@ -347,7 +347,7 @@ onMounted(() => {
 
     <!-- ④ 學期紅利 -->
     <div class="section-title">學期紅利</div>
-    <el-card class="box-card mb-6" shadow="never">
+    <el-card class="mb-6" shadow="never">
       <p class="desc-text">舊生率 / 才藝率達門檻時，發放對應紅利。門檻為 0–1 小數（例：0.8 = 80%）。</p>
       <el-row :gutter="20">
         <el-col :span="6">
@@ -450,7 +450,7 @@ onMounted(() => {
 
     <!-- ⑤ 考勤扣款 -->
     <div class="section-title">考勤扣款</div>
-    <el-card class="box-card" shadow="never">
+    <el-card shadow="never">
       <p class="desc-text">年終結算時依考勤紀錄扣款的費率設定。</p>
       <el-row :gutter="20">
         <el-col :span="6">
@@ -511,11 +511,6 @@ onMounted(() => {
   color: var(--neutral-300);
   border-left: 4px solid var(--color-info);
   padding-left: 10px;
-}
-.box-card {
-  background-color: #2b303b;
-  border: 1px solid #4c4d4f;
-  color: #fff;
 }
 .label {
   margin-bottom: 5px;

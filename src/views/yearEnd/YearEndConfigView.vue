@@ -179,6 +179,13 @@ async function saveOrgSettings(row: OrgSettingsRow) {
   }
 }
 
+// ---- Navigate to year-end rules panel ----
+// 直達巢狀路由（非舊 query 相容層 `/appraisal-year-end?section=year-end-rules`），
+// 對齊 router/index.ts 的 `/appraisal-year-end/rules/year-end-rules`。
+function goToYearEndRules() {
+  router.push('/appraisal-year-end/rules/year-end-rules')
+}
+
 // ---- Save class target (per row) ----
 async function saveClassTarget(row: ClassTargetRow) {
   const edits = classEdits.value[row.id]
@@ -215,6 +222,7 @@ defineExpose({
   loadClassTargets,
   saveOrgSettings,
   saveClassTarget,
+  goToYearEndRules,
   cycleId,
 })
 
@@ -226,7 +234,6 @@ onMounted(async () => {
 <template>
   <div class="year-end-config-view">
     <header class="toolbar">
-      <el-button :icon="undefined" @click="router.back()">← 返回</el-button>
       <h2 class="title">本期設定（週期 {{ cycleId }}）</h2>
     </header>
 
@@ -430,7 +437,7 @@ onMounted(async () => {
         <el-button
           type="primary"
           plain
-          @click="router.push({ path: '/appraisal-year-end', query: { section: 'year-end-rules' } })"
+          @click="goToYearEndRules"
         >
           前往年終規則設定
         </el-button>
@@ -466,7 +473,7 @@ onMounted(async () => {
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 .org-settings-grid {
   display: flex;
@@ -475,7 +482,7 @@ onMounted(async () => {
 }
 .semester-block {
   flex: 1 1 320px;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 16px;
 }
@@ -483,23 +490,23 @@ onMounted(async () => {
   font-weight: 600;
   font-size: 14px;
   margin-bottom: 12px;
-  color: #409eff;
+  color: var(--color-primary);
 }
 .save-row {
   margin-top: 12px;
   text-align: right;
 }
 .readonly-val {
-  color: #606266;
+  color: var(--text-secondary);
 }
 .field-hint {
   margin-left: 8px;
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 .hint-icon {
   cursor: help;
-  color: #909399;
+  color: var(--text-tertiary);
 }
 .bonus-hint {
   margin-bottom: 12px;

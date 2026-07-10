@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import YearEndRulesPanel from '../YearEndRulesPanel.vue'
 
 vi.mock('@/api/config', () => ({
@@ -492,6 +494,28 @@ describe('YearEndRulesPanel', () => {
       await vm.saveRules()
 
       expect(configApi.updateBonusConfig).toHaveBeenCalled()
+    })
+  })
+
+  // 深色卡穿幫修復：全站淺色系中 .box-card 寫死 #2b303b 深底白字是暗色殘留，
+  // 改標準 el-card shadow="never" 預設外觀（兩主題自動相容）。
+  describe('深色卡穿幫修復（.box-card → 標準 el-card）', () => {
+    it('原始碼不含寫死深色卡樣式 #2b303b / #4c4d4f（scoped style 不進 wrapper.html()，故直接檢查原始碼才是有效回歸鎖）', () => {
+      const filePath = path.resolve(process.cwd(), 'src/views/yearEnd/YearEndRulesPanel.vue')
+      const source = readFileSync(filePath, 'utf-8')
+      expect(source).not.toContain('#2b303b')
+      expect(source).not.toContain('#4c4d4f')
+    })
+
+    it('render 後 html 不含寫死深色卡色碼', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: { after_class_award_unit_price: {}, art_teacher_employee_ids: [] },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+
+      expect(wrapper.html()).not.toContain('#2b303b')
     })
   })
 })

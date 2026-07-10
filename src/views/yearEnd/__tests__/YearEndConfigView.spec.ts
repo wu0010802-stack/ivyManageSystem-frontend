@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import YearEndConfigView from '../YearEndConfigView.vue'
 
 // ---- Mock API modules ----
@@ -32,9 +34,14 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+const { routerPushMock, routerBackMock } = vi.hoisted(() => ({
+  routerPushMock: vi.fn(),
+  routerBackMock: vi.fn(),
+}))
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '5' }, query: {} }),
-  useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock, back: routerBackMock }),
 }))
 
 vi.mock('@/utils/auth', () => ({
@@ -338,5 +345,38 @@ describe('YearEndConfigView', () => {
     await nextTick()
 
     expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('儲存失敗')
+  })
+
+  // Task 15：「前往年終規則設定」改直達巢狀路由（非舊 query 相容層）；
+  // 「← 返回」按鈕移除（shell 麵包屑已提供導航）。
+  describe('跳轉路徑更新（Task 15）', () => {
+    beforeEach(() => {
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+      stubSupportApis()
+    })
+
+    it('goToYearEndRules() 導向新巢狀路徑 /appraisal-year-end/rules/year-end-rules（非舊 query 形式）', async () => {
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as { goToYearEndRules: () => void }
+
+      vm.goToYearEndRules()
+
+      expect(routerPushMock).toHaveBeenCalledWith('/appraisal-year-end/rules/year-end-rules')
+    })
+
+    it('不再渲染「← 返回」按鈕（shell 麵包屑已提供導航）', async () => {
+      // el-button 在 mountView() 被 auto-stub（true）不渲染 default slot，
+      // wrapper.text() 驗證不出按鈕是否存在，故直接檢查原始碼才是有效回歸鎖。
+      const filePath = path.resolve(process.cwd(), 'src/views/yearEnd/YearEndConfigView.vue')
+      const source = readFileSync(filePath, 'utf-8')
+
+      expect(source).not.toContain('← 返回')
+      expect(source).not.toContain('router.back()')
+
+      // 確保沒有殘留路徑會意外觸發 back（即使測試沒點按鈕，也守住實作面）
+      await mountView()
+      expect(routerBackMock).not.toHaveBeenCalled()
+    })
   })
 })
