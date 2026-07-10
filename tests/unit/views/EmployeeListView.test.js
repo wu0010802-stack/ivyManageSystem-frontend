@@ -183,6 +183,38 @@ describe('EmployeeListView', () => {
     expect(wrapper.vm.todoFilter).toBe('missing_salary')
   })
 
+  // ── 篩選範圍提示更清楚（finding #4 後半）──
+  it('有篩選時顯示「顯示 N 筆／共 M 人」，無篩選時只顯示全園總數', async () => {
+    employeeStore.employees = [
+      { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 30000, resign_date: null },
+      { id: 2, name: 'B', is_active: false, employee_type: 'regular', base_salary: 30000, resign_date: '2020-01-01' },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.text()).toContain('共 2 人')
+    expect(wrapper.text()).not.toContain('顯示')
+
+    wrapper.vm.statusFilter = 'active'
+    await nextTick()
+    expect(wrapper.text()).toContain('顯示 1 筆')
+    expect(wrapper.text()).toContain('共 2 人')
+  })
+
+  it('todoFilter 生效時「待辦篩選不影響匯出」常駐可見（非僅 tooltip）', async () => {
+    employeeStore.employees = [
+      { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.text()).not.toContain('待辦篩選不影響匯出')
+
+    wrapper.vm.toggleTodoFilter('missing_salary')
+    await nextTick()
+    expect(wrapper.text()).toContain('待辦篩選不影響匯出')
+  })
+
   it('status filter narrows displayed rows while rosterStats counts the full roster', async () => {
     // active / pending(未來離職日) / resigned 各一
     employeeStore.employees = [

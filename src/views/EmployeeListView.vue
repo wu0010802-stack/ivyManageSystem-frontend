@@ -143,6 +143,11 @@ const rosterStats = computed(() => {
   return { total: list.length, ...counts }
 })
 
+// 任一篩選生效（含 todoFilter，因其影響 displayedEmployees）→ 顯示「顯示 N 筆」對比全園總數，讓範圍更清楚
+const hasActiveFilters = computed(() =>
+  !!searchQuery.value.trim() || statusFilter.value !== 'all' || titleFilter.value !== 'all' || todoFilter.value !== 'none'
+)
+
 const clearFilters = () => {
   searchQuery.value = ''
   statusFilter.value = 'all'
@@ -287,6 +292,7 @@ onMounted(async () => {
       <div class="page-header-left">
         <h2>員工管理</h2>
         <p v-if="!loading" class="roster-stats">
+          <template v-if="hasActiveFilters">顯示 {{ displayedEmployees.length }} 筆 <span class="stat-sep">·</span> </template>
           共 {{ rosterStats.total }} 人
           <span class="stat-sep">·</span> 在職 {{ rosterStats.active }}
           <template v-if="rosterStats.pending">
@@ -345,6 +351,7 @@ onMounted(async () => {
           <el-option label="全部職稱" value="all" />
           <el-option v-for="t in titleOptions" :key="t" :label="t" :value="t" />
         </el-select>
+        <span v-if="todoFilter !== 'none'" class="export-hint">待辦篩選不影響匯出</span>
         <el-tooltip :content="exportTooltip" placement="top">
           <el-button type="success" @click="exportEmployees">匯出 Excel</el-button>
         </el-tooltip>
@@ -507,6 +514,13 @@ onMounted(async () => {
 .search-input { width: 220px; }
 .status-filter { width: 132px; }
 .title-filter { width: 140px; }
+/* 匯出範圍提示：常駐可見（非僅 tooltip），讓觸控/鍵盤使用者也能看到「待辦篩選不影響匯出」 */
+.export-hint {
+  align-self: center;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
 
 /* 整列可點擊進詳情頁；已離職/待離職列淡化 */
 .el-table :deep(tbody tr) { cursor: pointer; }
