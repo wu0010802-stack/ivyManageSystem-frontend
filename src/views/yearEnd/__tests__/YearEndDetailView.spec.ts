@@ -472,6 +472,25 @@ describe('YearEndDetailView — Task 11 明細頁重整', () => {
     expect(wrapper.text()).toContain('陳老師')
   })
 
+  it('班級績效表 Decimal 字串欄綁 sort-method 數值比較（代表欄：經營績效%）', async () => {
+    setupApiMocks([makeSettlement()])
+    const wrapper = await mountView()
+
+    // el-table-column 的 sortable/sort-method 以 attrs 落在 stub 上；找「經營績效%」欄
+    const perfCol = wrapper
+      .findAllComponents(ElTableColumnStub)
+      .find((c) => c.vm.$attrs.label === '經營績效%')
+    expect(perfCol).toBeTruthy()
+    const sortMethod = perfCol!.vm.$attrs['sort-method'] as
+      | ((a: Record<string, unknown>, b: Record<string, unknown>) => number)
+      | undefined
+    // class_performance_rate 為後端 Decimal→JSON 字串，plain sortable 走字典序
+    // （"12.5" 排 "9.3" 前）誤排，必須綁數值比較的 sort-method
+    expect(typeof sortMethod).toBe('function')
+    expect(sortMethod!({ class_performance_rate: '9.3' }, { class_performance_rate: '12.5' })).toBeLessThan(0)
+    expect(sortMethod!({ class_performance_rate: '12.5' }, { class_performance_rate: '9.3' })).toBeGreaterThan(0)
+  })
+
   it('① 特別獎金表顯示員工姓名', async () => {
     setupApiMocks([makeSettlement()])
     vi.mocked(api.listSpecialBonuses).mockResolvedValue({

@@ -306,6 +306,20 @@ describe('InstitutionEventPanel 列表', () => {
   })
 })
 
+describe('InstitutionEventPanel 排序', () => {
+  it('時數欄 sort-method 走數值比較而非字典序（hours 為 Decimal 序列化字串）', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const vm = w.vm as unknown as {
+      sortByHours: (a: { hours: string }, b: { hours: string }) => number
+    }
+    expect(typeof vm.sortByHours).toBe('function')
+    // 字典序 "12" < "9.5"（誤排）；數值比較必須 9.5 < 12
+    expect(vm.sortByHours({ hours: '9.5' }, { hours: '12' })).toBeLessThan(0)
+    expect(vm.sortByHours({ hours: '12' }, { hours: '9.5' })).toBeGreaterThan(0)
+  })
+})
+
 describe('InstitutionEventPanel 建立', () => {
   it('建立活動：POST 主檔後以 PUT replace-set 送缺席名單（is_exempt 送 null 走自動豁免）', async () => {
     mockCreate.mockResolvedValue({ data: { ...EVENT_ROW, id: 33, title: '尾牙', absence_count: 0 } } as never)

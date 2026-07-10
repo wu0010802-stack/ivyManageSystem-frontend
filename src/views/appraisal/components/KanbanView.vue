@@ -7,7 +7,14 @@ import { apiError } from '@/utils/error'
 import { STATUS_LABEL } from '@/constants/appraisalYearEnd'
 import KanbanColumn from './KanbanColumn.vue'
 
-interface Summary { id: number; status: string; [key: string]: unknown }
+// 由 typed wrapper 推導 schema 形狀（SignStatusSummaryOut，比照 YearEndGridView 的
+// GridRow 慣例）。後端 SignStatusSummaryItem **本就沒有 per-item status**（bucket 的
+// status 語意上即桶內每筆的 status），但 SummaryCard.primaryAction 與 dropdown「簽核」
+// 的 stage 推導（CycleDetailPanel.onKanbanAction）都依賴 summary.status——由前端在
+// load() 攤平 buckets 時注入，型別以交集正確表達，不做 as unknown as 蓋錯。
+type SignStatusData = Awaited<ReturnType<typeof getSignStatusSummary>>['data']
+type BucketOut = SignStatusData['buckets'][number]
+type Summary = BucketOut['summaries'][number] & { status: string }
 interface Bucket { status: string; summaries: Summary[] }
 
 const props = defineProps<{ cycleId: number }>()
@@ -31,10 +38,15 @@ async function load() {
   loading.value = true
   try {
     const r = await getSignStatusSummary(props.cycleId)
-    // Task 16：getSignStatusSummary 補 AxiosResp<> 後 r.data 型別收斂為 OpenAPI schema
-    // 產生的形狀，與本檔既有本地精簡型別（{ counts; buckets: Bucket[] }）不足以重疊
-    // （TS2352）；本頁只取用 counts/buckets 兩欄，經 unknown 中介轉型不動 runtime 行為。
-    data.value = r.data as unknown as { counts: Record<string, number>; buckets: Bucket[] }
+    // 注入 status（見上方型別註解）：schema item 無此欄，SummaryCard 主按鈕與
+    // 簽核 stage 推導都吃 summary.status，漏注入 = 主按鈕永不顯示 + 簽核靜默 no-op。
+    data.value = {
+      counts: r.data.counts,
+      buckets: r.data.buckets.map((b) => ({
+        status: b.status,
+        summaries: b.summaries.map((s) => ({ ...s, status: b.status })),
+      })),
+    }
   } catch (e) {
     ElMessage.error(apiError(e, '載入看板失敗'))
   } finally {

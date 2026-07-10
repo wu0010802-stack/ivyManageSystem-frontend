@@ -11,6 +11,12 @@ vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn() },
 }))
 
+// 全鏈測試（真 SummaryCard）需要權限 mock；預設無任何權限，個別測試設定 grants
+const permState = { grants: new Set() }
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (name) => permState.grants.has(name),
+}))
+
 import * as api from '@/api/appraisal'
 
 const stubs = {
@@ -74,6 +80,23 @@ const mountChainOpts = (props = {}) => ({
   global: { stubs: chainStubs, directives: { loading: () => {} } },
 })
 
+// ── 全鏈測試用（真 KanbanColumn + 真 SummaryCard）───────────────
+// SummaryCard 的 primaryAction / dropdown 簽核依賴 summary.status——後端
+// SignStatusSummaryItem 本就無 per-item status，必須由 KanbanView 注入
+// bucket.status。stub 掉 SummaryCard 測不到這條注入鏈，故整鏈掛真元件。
+const fullChainStubs = {
+  ElCheckbox: stubs.ElCheckbox,
+  // 帶 $event：SummaryCard 主按鈕用 @click.stop（修飾子要對 event 呼叫 stopPropagation）
+  ElButton: { template: '<button @click="$emit(\'click\', $event)"><slot /></button>' },
+  ElDropdown: true,
+  ElTag: true,
+  ElIcon: true,
+}
+const mountFullChainOpts = (props = {}) => ({
+  props: { cycleId: 3, ...props },
+  global: { stubs: fullChainStubs, directives: { loading: () => {} } },
+})
+
 const sampleData = {
   data: {
     counts: { DRAFT: 2, SUPERVISOR_SIGNED: 1, ACCOUNTING_SIGNED: 0, FINALIZED: 0 },
@@ -92,7 +115,10 @@ const sampleData = {
 }
 
 describe('KanbanView', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    permState.grants = new Set()
+  })
 
   it('loads on mount with cycleId and renders 4 columns', async () => {
     api.getSignStatusSummary.mockResolvedValueOnce(sampleData)
@@ -157,6 +183,34 @@ describe('KanbanView', () => {
     const emitted = wrapper.emitted('action')
     expect(emitted).toBeTruthy()
     expect(emitted[0][0]).toMatchObject({ action: 'sign', summary: { id: 1 } })
+  })
+
+  // Task 16 fix#3：後端 SignStatusSummaryItem 無 per-item status（sampleData 逐欄抄
+  // 契約、items 皆不帶 status）。KanbanView 必須把 bucket.status 注入每筆 item，否則
+  // SummaryCard.primaryAction 恆 null（主按鈕永不顯示）、dropdown「簽核」在
+  // CycleDetailPanel.onKanbanAction 的 stage map 查無 status → 靜默 no-op。
+  it('注入 bucket status：DRAFT 桶卡片渲染「主管簽」主按鈕（守住注入鏈）', async () => {
+    permState.grants = new Set(['APPRAISAL_REVIEW'])
+    api.getSignStatusSummary.mockResolvedValueOnce(sampleData)
+    const wrapper = mount(KanbanView, mountFullChainOpts())
+    await nextTick(); await nextTick()
+
+    const btns = wrapper.findAll('[data-test="summary-primary-action"]')
+    // DRAFT 桶 2 筆 → 2 顆主管簽主按鈕；SUPERVISOR_SIGNED 桶 1 筆需 ACCOUNTING 權限 → 不顯示
+    expect(btns.length).toBe(2)
+    expect(btns[0].text()).toBe('主管簽')
+  })
+
+  it('注入 bucket status：卡片 action 事件的 summary 帶正確 status（簽核 stage 推導依據）', async () => {
+    permState.grants = new Set(['APPRAISAL_REVIEW'])
+    api.getSignStatusSummary.mockResolvedValueOnce(sampleData)
+    const wrapper = mount(KanbanView, mountFullChainOpts())
+    await nextTick(); await nextTick()
+
+    await wrapper.find('[data-test="summary-primary-action"]').trigger('click')
+    const emitted = wrapper.emitted('action')
+    expect(emitted).toBeTruthy()
+    expect(emitted[0][0]).toMatchObject({ action: 'sign', summary: { id: 1, status: 'DRAFT' } })
   })
 
   it('reloads when cycleId changes', async () => {

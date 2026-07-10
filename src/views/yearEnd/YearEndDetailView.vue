@@ -113,8 +113,11 @@ function classroomLabel(classroomId: number | null | undefined): string {
 // 金額/百分比欄位是後端 Decimal 序列化的字串或 template 渲染值，非 row 直接可比較的
 // 數字，plain sortable 會做字典序比較（"10000" 排到 "9000" 前）或直接失效
 // （欄位值來自 template slot 而非 prop）；一律走 sort-method 轉數字比較。
+// 泛型收 Record<string, unknown>：結算單（Settlement）、特別獎金（SpecialBonus）、
+// 班級績效（ClassTarget）三表共用。
 function sortByField(field: string) {
-  return (a: Settlement, b: Settlement) => Number(a[field] ?? 0) - Number(b[field] ?? 0)
+  return (a: Record<string, unknown>, b: Record<string, unknown>) =>
+    Number(a[field] ?? 0) - Number(b[field] ?? 0)
 }
 function sortBySettlementStatus(a: Settlement, b: Settlement) {
   const order = SIGN_STATUS_ORDER as readonly string[]
@@ -425,9 +428,10 @@ onMounted(load)
             </template>
           </el-table-column>
           <el-table-column label="編制人數" prop="head_count_target" width="100" sortable />
-          <el-table-column label="平均在籍" prop="avg_monthly_enrollment" width="100" sortable />
-          <el-table-column label="經營績效%" prop="class_performance_rate" width="120" sortable />
-          <el-table-column label="舊生註冊率" prop="returning_student_rate" width="120" sortable />
+          <!-- 下三欄為後端 Decimal→JSON 字串，plain sortable 走字典序（"12.5" 排 "9.3" 前）誤排，需 sort-method 數值比較 -->
+          <el-table-column label="平均在籍" prop="avg_monthly_enrollment" width="100" sortable :sort-method="sortByField('avg_monthly_enrollment')" />
+          <el-table-column label="經營績效%" prop="class_performance_rate" width="120" sortable :sort-method="sortByField('class_performance_rate')" />
+          <el-table-column label="舊生註冊率" prop="returning_student_rate" width="120" sortable :sort-method="sortByField('returning_student_rate')" />
         </el-table>
       </el-tab-pane>
     </el-tabs>

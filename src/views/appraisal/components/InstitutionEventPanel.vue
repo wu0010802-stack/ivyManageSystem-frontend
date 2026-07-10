@@ -85,6 +85,10 @@ async function fetchEvents() {
   }
 }
 
+// 「時數」為後端 Decimal 序列化字串（InstitutionEventOut.hours），plain sortable
+// 走字典序（"12" 排 "9.5" 前）誤排，改 sort-method 數值比較。
+const sortByHours = (a: EventRow, b: EventRow) => Number(a.hours) - Number(b.hours)
+
 watch(() => [termStore.school_year, termStore.semester], () => fetchEvents())
 
 onMounted(() => {
@@ -393,7 +397,7 @@ async function confirmSync() {
       <el-table-column label="類型" width="120">
         <template #default="{ row }">{{ EVENT_TYPE_LABEL[row.event_type] ?? row.event_type }}</template>
       </el-table-column>
-      <el-table-column label="時數" prop="hours" width="70" sortable />
+      <el-table-column label="時數" prop="hours" width="70" sortable :sort-method="sortByHours" />
       <el-table-column label="考核項目" width="130">
         <template #default="{ row }">
           <span v-if="row.score_item_code">{{ itemLabel(row.score_item_code) }}</span>
