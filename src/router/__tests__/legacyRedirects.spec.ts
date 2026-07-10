@@ -17,14 +17,22 @@ function follow(from: string) {
 }
 
 describe('考核/年終 舊路由 → 整合工作區 redirect', () => {
-  it.each([
-    ['/appraisal-management', 'appraisal'],
-    ['/year_end/cycles', 'year-end'],
-    ['/year-end/appraisal-payout', 'payout'],
-  ])('%s → /appraisal-year-end?section=%s', (from, section) => {
-    const r = follow(from)
+  it('/appraisal-management → section=appraisal', () => {
+    const r = follow('/appraisal-management')
     expect(r.path).toBe('/appraisal-year-end')
-    expect(r.query.section).toBe(section)
+    expect(r.query.section).toBe('appraisal')
+  })
+
+  // 2026-07-10 巢狀路由改版：/year_end/cycles、/year-end/appraisal-payout 改為直接
+  // redirect 到新巢狀路徑，不再繞經 /appraisal-year-end?section= 相容層（見 router/index.ts）。
+  it('/year_end/cycles → /appraisal-year-end/year-end（巢狀路由，直達不繞 query 相容層）', () => {
+    const r = follow('/year_end/cycles')
+    expect(r.path).toBe('/appraisal-year-end/year-end')
+  })
+
+  it('/year-end/appraisal-payout → /appraisal-year-end/year-end/payout（巢狀路由，query 透傳）', () => {
+    const r = follow('/year-end/appraisal-payout')
+    expect(r.path).toBe('/appraisal-year-end/year-end/payout')
   })
 
   it('/appraisal/cycles → section=appraisal&tab=history', () => {
@@ -39,8 +47,11 @@ describe('考核/年終 舊路由 → 整合工作區 redirect', () => {
     expect(r.query).toMatchObject({ section: 'appraisal', tab: 'settings' })
   })
 
-  it('年終下鑽路由維持獨立（不被 redirect）', () => {
-    expect(follow('/year_end/cycles/7').path).toBe('/year_end/cycles/7')
+  // 2026-07-10 巢狀路由改版：年終下鑽路由（cycle 明細/總表/本期設定）搬進
+  // /appraisal-year-end/year-end/cycles/:id* 巢狀 children，names 保留；舊路徑
+  // /year_end/cycles/:id* 反轉為 redirect（與改版前「維持獨立不被 redirect」相反）。
+  it('年終下鑽路由已巢狀化：舊路徑 redirect 到新巢狀路徑', () => {
+    expect(follow('/year_end/cycles/7').path).toBe('/appraisal-year-end/year-end/cycles/7')
   })
 
   it('/appraisal/cycles/:id → 內嵌明細（section=appraisal&tab=history&cycle=:id）', () => {

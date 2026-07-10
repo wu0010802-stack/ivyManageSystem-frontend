@@ -14,6 +14,8 @@ const router = createRouter({
     children: [
       { path: 'overview', component: Stub, meta: { title: '總覽' } },
       { path: 'appraisal/current', component: Stub, meta: { title: '考核', breadcrumb: ['考核', '當期總覽'] } },
+      // 無 meta.breadcrumb、只有 meta.title 的路由（fallback 分支）
+      { path: 'year-end', component: Stub, meta: { title: '年終' } },
     ],
   }],
 })
@@ -31,5 +33,16 @@ describe('AppraisalYearEndLayout', () => {
     const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
     await flushPromises()
     expect(w.find('.aye-breadcrumb').text()).toContain('當期總覽')
+  })
+  it('麵包屑 fallback：路由只有 meta.title（無 meta.breadcrumb）時顯示該 title', async () => {
+    await router.push('/appraisal-year-end/year-end')
+    await router.isReady()
+    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    await flushPromises()
+    // 用 .el-breadcrumb__inner 逐段比對，避免「考核與年終」子字串巧合覆蓋掉 fallback 判斷。
+    // 只在第一個 .aye-breadcrumb 內找（直接 mount 時內部 <router-view> 因缺少 depth
+    // context 會把自己重新渲染一次，與 AppraisalManagementView.spec.ts 的既知現象相同）。
+    const segments = w.find('.aye-breadcrumb').findAll('.el-breadcrumb__inner').map((n) => n.text())
+    expect(segments).toEqual(['考核與年終', '年終'])
   })
 })

@@ -165,11 +165,26 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
   // 考核年終 payout（路徑為 hyphen 與 /year_end 不同）：對齊後端 APPRAISAL_FINALIZE 守衛
   { path: '/year-end/appraisal-payout', permission: 'APPRAISAL_FINALIZE' },
-  // 考核 × 年終 整合工作區：承載三種權限，OR 語意（任一即可進頁，section 層再各自守門）
-  { path: '/appraisal-year-end', permission: 'SETTINGS_READ' },
-  { path: '/appraisal-year-end', permission: 'SALARY_READ' },
-  { path: '/appraisal-year-end', permission: 'YEAR_END_READ' },
-  { path: '/appraisal-year-end', permission: 'APPRAISAL_FINALIZE' },
+  // 考核 × 年終 整合工作區（2026-07-10 巢狀路由）：頂層 prefix 承載 OR 語意（含 overview），
+  // 子區塊以「最長匹配」細分——對齊各子頁實際呼叫的後端守衛，避免看得到分頁卻 API 403。
+  { path: '/appraisal-year-end', permission: 'SETTINGS_READ', prefix: true },
+  { path: '/appraisal-year-end', permission: 'SALARY_READ', prefix: true },
+  { path: '/appraisal-year-end', permission: 'YEAR_END_READ', prefix: true },
+  { path: '/appraisal-year-end', permission: 'APPRAISAL_FINALIZE', prefix: true },
+  { path: '/appraisal-year-end', permission: 'APPRAISAL_READ', prefix: true },
+  { path: '/appraisal-year-end/appraisal', permission: 'APPRAISAL_READ', prefix: true },
+  { path: '/appraisal-year-end/year-end', permission: 'YEAR_END_READ', prefix: true },
+  { path: '/appraisal-year-end/year-end/payout', permission: 'APPRAISAL_FINALIZE' },
+  { path: '/appraisal-year-end/rules', permission: 'APPRAISAL_READ', prefix: true },
+  { path: '/appraisal-year-end/rules', permission: 'SETTINGS_READ', prefix: true },
+  // 規則設定四個子頁對齊實際呼叫的 appraisal API（APPRAISAL_READ）；年終規則另見下方 exact 規則。
+  { path: '/appraisal-year-end/rules/scoring', permission: 'APPRAISAL_READ' },
+  { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
+  { path: '/appraisal-year-end/rules/catalog', permission: 'APPRAISAL_READ' },
+  { path: '/appraisal-year-end/rules/enrollment-targets', permission: 'APPRAISAL_READ' },
+  { path: '/appraisal-year-end/rules/year-end-rules', permission: 'SETTINGS_READ' },
+  { path: '/appraisal-year-end/exceptions', permission: 'APPRAISAL_READ' },
+  { path: '/appraisal-year-end/exceptions', permission: 'YEAR_END_READ' },
   // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
   { path: '/overtime', permission: 'OVERTIME_READ' },
   { path: '/overtime', permission: 'MEETINGS' },

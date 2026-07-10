@@ -1,9 +1,34 @@
-import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLocationNormalized } from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLocationNormalized, type RouteLocation, type RouteLocationRaw } from 'vue-router'
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
-import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth, hasPortalPermission } from '@/utils/auth'
+import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth, hasPortalPermission, hasPermission } from '@/utils/auth'
 
-const routes: RouteRecordRaw[] = [
+// 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
+function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
+    const q = { ...to.query }
+    const section = Array.isArray(q.section) ? q.section[0] : q.section
+    if (!section) return null
+    delete q.section
+    const tabRaw = Array.isArray(q.tab) ? q.tab[0] : q.tab
+    delete q.tab
+    if (section === 'appraisal') {
+        const tab = tabRaw === 'cycles' ? 'history' : tabRaw === 'institution_events' ? 'institution-events' : tabRaw
+        if (tab === 'settings') return { path: '/appraisal-year-end/rules/scoring' }
+        if (tab && ['current', 'history', 'institution-events', 'disciplinary'].includes(tab)) {
+            // cycle/view 只對 history 有意義，其餘子頁清掉避免殘留
+            if (tab !== 'history') { delete q.cycle; delete q.view }
+            return { path: `/appraisal-year-end/appraisal/${tab}`, query: q }
+        }
+        return { path: '/appraisal-year-end/appraisal/current' }
+    }
+    if (section === 'year-end') return { path: '/appraisal-year-end/year-end', query: q }
+    if (section === 'payout') return { path: '/appraisal-year-end/year-end/payout', query: q }
+    if (section === 'year-end-rules') return { path: '/appraisal-year-end/rules/year-end-rules' }
+    if (section === 'exceptions') return { path: '/appraisal-year-end/exceptions', query: q }
+    return null
+}
+
+export const routes: RouteRecordRaw[] = [
         // ============ Admin Routes ============
         {
             path: '/',
@@ -279,14 +304,50 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/admin/gov-reports/MonthlyReportView.vue'),
             meta: { title: '月度幼生在園統計' },
         },
-        // ============ 考核 × 年終 整合工作區 ============
+        // ============ 考核 × 年終 整合工作區（巢狀 shell，2026-07-10 UX 改版）============
         {
             path: '/appraisal-year-end',
-            name: 'appraisal-year-end',
-            component: () => import('../views/AppraisalYearEndView.vue'),
-            meta: { title: '考核與年終' }
+            component: () => import('../views/appraisalYearEnd/AppraisalYearEndLayout.vue'),
+            // 舊 query 導覽（?section=&tab=&cycle=&view=）與例外中心 deep_link 相容層
+            redirect: (to) => resolveLegacySectionQuery(to) ?? '/appraisal-year-end/overview',
+            children: [
+                { path: 'overview', name: 'aye-overview', component: () => import('../views/appraisalYearEnd/OverviewWorkbenchView.vue'), meta: { title: '總覽' } },
+                {
+                    path: 'appraisal',
+                    component: () => import('../views/AppraisalManagementView.vue'),
+                    redirect: '/appraisal-year-end/appraisal/current',
+                    meta: { title: '考核' },
+                    children: [
+                        { path: 'current', name: 'aye-appraisal-current', component: () => import('../views/appraisal/CurrentSemesterOverview.vue'), meta: { title: '當期總覽' } },
+                        { path: 'history', name: 'aye-appraisal-history', component: () => import('../views/appraisal/CycleListView.vue'), meta: { title: '歷史週期與簽核' } },
+                        { path: 'institution-events', name: 'aye-appraisal-events', component: () => import('../views/appraisal/components/InstitutionEventPanel.vue'), meta: { title: '活動出席' } },
+                        { path: 'disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處記錄' } },
+                    ],
+                },
+                { path: 'year-end', name: 'aye-year-end', component: () => import('../views/yearEnd/YearEndListView.vue'), meta: { title: '年終' } },
+                { path: 'year-end/cycles/:id', name: 'year-end-cycle-detail', component: () => import('../views/yearEnd/YearEndDetailView.vue'), meta: { title: '年終 › 結算明細' } },
+                { path: 'year-end/cycles/:id/grid', name: 'year-end-cycle-grid', component: () => import('../views/yearEnd/YearEndGridView.vue'), meta: { title: '年終 › 總表' } },
+                { path: 'year-end/cycles/:id/config', name: 'year-end-cycle-config', component: () => import('../views/yearEnd/YearEndConfigView.vue'), meta: { title: '年終 › 本期設定' } },
+                { path: 'year-end/payout', name: 'aye-payout', component: () => import('../views/yearEnd/AppraisalPayoutView.vue'), meta: { title: '考核年終發放' } },
+                {
+                    path: 'rules',
+                    component: () => import('../views/appraisalYearEnd/RulesSettingsLayout.vue'),
+                    // 權限感知預設落點（Task 4 審查裁決）：只持 SETTINGS_READ（無 APPRAISAL_READ）者
+                    // 進 /rules 應落在其實際看得到的年終規則頁，而非考核扣分規則（該頁需 APPRAISAL_READ）。
+                    redirect: () => hasPermission('APPRAISAL_READ') ? '/appraisal-year-end/rules/scoring' : '/appraisal-year-end/rules/year-end-rules',
+                    meta: { title: '規則設定' },
+                    children: [
+                        { path: 'scoring', name: 'aye-rules-scoring', component: () => import('../views/appraisal/components/ScoringRulesPanel.vue'), meta: { title: '考核扣分規則' } },
+                        { path: 'bonus-rates', name: 'aye-rules-bonus-rates', component: () => import('../views/appraisal/components/BonusRatesPanel.vue'), meta: { title: '年終獎金率' } },
+                        { path: 'catalog', name: 'aye-rules-catalog', component: () => import('../views/appraisal/components/PenaltyCatalogPanel.vue'), meta: { title: '扣分項目目錄' } },
+                        { path: 'enrollment-targets', name: 'aye-rules-enrollment', component: () => import('../views/appraisal/YearlyEnrollmentTargetSection.vue'), meta: { title: '學年目標人數' } },
+                        { path: 'year-end-rules', name: 'aye-rules-year-end', component: () => import('../views/yearEnd/YearEndRulesPanel.vue'), meta: { title: '年終規則' } },
+                    ],
+                },
+                { path: 'exceptions', name: 'aye-exceptions', component: () => import('../views/yearEnd/ExceptionCenterView.vue'), meta: { title: '例外中心' } },
+            ],
         },
-        // --- 舊路由 redirect（保留書籤 / 既有連結）---
+        // --- 舊路由 redirect（書籤 / 後端 deep_link 相容）---
         {
             path: '/appraisal-management',
             redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'appraisal' } }),
@@ -309,33 +370,23 @@ const routes: RouteRecordRaw[] = [
         },
         {
             path: '/year_end/cycles',
-            redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'year-end' } }),
+            redirect: '/appraisal-year-end/year-end',
         },
         {
             path: '/year_end/cycles/:id',
-            name: 'year-end-cycle-detail',
-            component: () => import('../views/yearEnd/YearEndDetailView.vue'),
-            meta: { title: '年終結算明細' }
+            redirect: (to) => `/appraisal-year-end/year-end/cycles/${to.params.id}`,
         },
         {
             path: '/year_end/cycles/:id/grid',
-            name: 'year-end-cycle-grid',
-            component: () => import('../views/yearEnd/YearEndGridView.vue'),
-            // 純 admin 路由：未登入走 guard 的 next('/login')；授權由 ROUTE_PERMISSION_RULES
-            // 的 /year_end prefix 規則（YEAR_END_READ）把關。不掛 portal-only 的 requiresAuth
-            // （否則未登入誤導向 /portal/login），也不掛不被 guard 消費的死碼 permission。
-            meta: { title: '年終總表' },
+            redirect: (to) => `/appraisal-year-end/year-end/cycles/${to.params.id}/grid`,
         },
         {
             path: '/year_end/cycles/:id/config',
-            name: 'year-end-cycle-config',
-            component: () => import('../views/yearEnd/YearEndConfigView.vue'),
-            // 純 admin 路由：同 grid，未登入走 next('/login')，授權靠 /year_end prefix 規則。
-            meta: { title: '年終本期設定' },
+            redirect: (to) => `/appraisal-year-end/year-end/cycles/${to.params.id}/config`,
         },
         {
             path: '/year-end/appraisal-payout',
-            redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'payout' } }),
+            redirect: (to) => ({ path: '/appraisal-year-end/year-end/payout', query: to.query }),
         },
 
         // ============ 離職管理（已整合進員工管理 /employees?section=offboarding）============

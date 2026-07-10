@@ -50,7 +50,7 @@
             <template #title>薪資管理</template>
           </el-menu-item>
           <el-menu-item
-            v-if="canView.SETTINGS_READ || canView.SALARY_READ || canView.YEAR_END_READ || canView.APPRAISAL_FINALIZE"
+            v-if="canView.SETTINGS_READ || canView.SALARY_READ || canView.YEAR_END_READ || canView.APPRAISAL_FINALIZE || canView.APPRAISAL_READ"
             index="/appraisal-year-end"
           >
             <el-icon><Trophy /></el-icon>
@@ -287,6 +287,8 @@ const canView = computed(() => {
 const activeMenu = computed(() => {
   // 薪資 IA 拆 5 路由後子頁（settle/history/simulate/settings）仍高亮「薪資管理」
   if (route.path.startsWith('/salary/')) return '/salary'
+  // 考核與年終巢狀路由（2026-07-10 改版）子頁仍高亮整合入口
+  if (route.path.startsWith('/appraisal-year-end/')) return '/appraisal-year-end'
   return route.path
 })
 
@@ -301,8 +303,8 @@ const hasVisibleLeaveItems = computed(() =>
   canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
   canView.value.OVERTIME_READ || canView.value.MEETINGS ||
   canView.value.SCHEDULE || canView.value.YEAR_END_READ || canView.value.APPRAISAL_FINALIZE ||
-  // 考核與年終整合入口含 SETTINGS_READ，群組需據此顯示
-  canView.value.SETTINGS_READ
+  // 考核與年終整合入口含 SETTINGS_READ / APPRAISAL_READ，群組需據此顯示
+  canView.value.SETTINGS_READ || canView.value.APPRAISAL_READ
 )
 
 const hasVisibleStudentItems = computed(() =>

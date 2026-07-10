@@ -73,6 +73,10 @@ describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
     expect(items(mountWith(['APPRAISAL_FINALIZE']))).toContain('/appraisal-year-end')
   })
 
+  it('只有 APPRAISAL_READ → 入口可見（2026-07-10 巢狀路由新增的頂層權限）', () => {
+    expect(items(mountWith(['APPRAISAL_READ']))).toContain('/appraisal-year-end')
+  })
+
   it('報名時間設定/修改紀錄 改掛課後才藝群組，不再出現在系統設定/報表', () => {
     const w = mountWith(['*'])
     const inGroup = (sub: string) =>
@@ -110,5 +114,11 @@ describe('AdminSidebar activeMenu 薪資子頁高亮', () => {
     routeState.path = '/employees'
     const w = mountWith(['*'])
     expect(w.find('nav').attributes('data-active')).toBe('/employees')
+  })
+
+  it('/appraisal-year-end/... 子頁（2026-07-10 巢狀路由）→ 高亮整合入口 (/appraisal-year-end)', () => {
+    routeState.path = '/appraisal-year-end/rules/scoring'
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/appraisal-year-end')
   })
 })

@@ -15,7 +15,9 @@ const TABS = [
 const route = useRoute()
 const router = useRouter()
 const visibleTabs = computed(() => TABS.filter((t) => t.can()))
-const activeTab = computed(() => route.path.split('/')[3] ?? 'scoring')
+// fallback 落在使用者實際看得到的第一個分頁，而非寫死 'scoring'（該頁需 APPRAISAL_READ）——
+// 否則只持 SETTINGS_READ 的使用者若因故落在此 fallback 分支，el-tabs 會指向他看不到的分頁。
+const activeTab = computed(() => route.path.split('/')[3] ?? visibleTabs.value[0]?.name ?? 'scoring')
 const onTabChange = (name: string | number) => {
   if (String(name) !== activeTab.value) router.push(`/appraisal-year-end/rules/${name}`)
 }
