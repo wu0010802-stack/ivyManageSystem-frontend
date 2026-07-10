@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
 import { listAppraisalCycles, getAppraisalCycleExceptions } from '@/api/appraisal'
 import { listYearEndCycles, getYearEndCycleExceptions } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 import { formatTimeTW } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
+import { exceptionTypeLabel } from '@/constants/appraisalYearEnd'
 
 // 例外中心 MVP：把後端兩支彙整端點（考核 / 年終）做成單一工作佇列頁——行政一頁看到
 // 「這批還有什麼要人工處理」，逐筆「前往處理」深連結到修復介面。唯讀彙整，不建新表；
@@ -59,8 +61,17 @@ const STATUS_LABELS: Record<string, string> = {
 type CycleFetcher = () => Promise<{ data: unknown }>
 type ExceptionsFetcher = (cycleId: number) => Promise<{ data: unknown }>
 
-/** 單一批次（考核／年終）的週期下拉 + 例外清單狀態，回傳單一 reactive 物件供 template 直接綁定。 */
-function useExceptionGroup(fetchCycles: CycleFetcher, fetchExceptions: ExceptionsFetcher) {
+/** 單一批次（考核／年終）的週期下拉 + 例外清單狀態，回傳單一 reactive 物件供 template 直接綁定。
+ *  週期選擇同步進 URL query（`queryKey`：考核 acycle / 年終 ycycle），F5 / 分享連結可保留篩選狀態：
+ *  初值讀 URL 優先；URL 值不在週期清單中（例如已刪除的週期）則 fallback 回預設「選最新」並用
+ *  router.replace 修正 URL。 */
+function useExceptionGroup(
+  fetchCycles: CycleFetcher,
+  fetchExceptions: ExceptionsFetcher,
+  queryKey: 'acycle' | 'ycycle',
+) {
+  const route = useRoute()
+  const router = useRouter()
   const cycles = ref<CycleOption[]>([])
   const cyclesLoading = ref(false)
   const selectedCycleId = ref<number | null>(null)
@@ -83,8 +94,19 @@ function useExceptionGroup(fetchCycles: CycleFetcher, fetchExceptions: Exception
       const res = await fetchCycles()
       cycles.value = (res.data as CycleOption[]) ?? []
       if (cycles.value.length > 0 && selectedCycleId.value == null) {
-        // 預設選最新一筆：以 id 最大者為準（後端遞增主鍵，較大 id = 較晚建立）
-        selectedCycleId.value = cycles.value.reduce((a, b) => (b.id > a.id ? b : a)).id
+        const queryRaw = route.query[queryKey]
+        const queryId = typeof queryRaw === 'string' ? Number(queryRaw) : NaN
+        const matched = cycles.value.find((c) => c.id === queryId)
+        if (matched) {
+          selectedCycleId.value = matched.id
+        } else {
+          // 預設選最新一筆：以 id 最大者為準（後端遞增主鍵，較大 id = 較晚建立）
+          selectedCycleId.value = cycles.value.reduce((a, b) => (b.id > a.id ? b : a)).id
+          if (queryRaw != null) {
+            // URL 帶的週期值不在清單中（例如已刪除的週期）→ fallback 回預設並修正 URL
+            router.replace({ query: { ...route.query, [queryKey]: String(selectedCycleId.value) } })
+          }
+        }
       }
     } catch (e) {
       errorMsg.value = apiError(e, '週期清單載入失敗')
@@ -111,6 +133,8 @@ function useExceptionGroup(fetchCycles: CycleFetcher, fetchExceptions: Exception
   function onCycleChange() {
     typeFilter.value = 'all'
     loadExceptions()
+    // 週期選擇變更 → 寫回 URL query，只動自己的 key、與其他 query 共存。
+    router.replace({ query: { ...route.query, [queryKey]: String(selectedCycleId.value) } })
   }
 
   return reactive({
@@ -123,10 +147,12 @@ function useExceptionGroup(fetchCycles: CycleFetcher, fetchExceptions: Exception
 const appraisal = useExceptionGroup(
   () => listAppraisalCycles(),
   (cycleId: number) => getAppraisalCycleExceptions(cycleId),
+  'acycle',
 )
 const yearEnd = useExceptionGroup(
   () => listYearEndCycles(),
   (cycleId: number) => getYearEndCycleExceptions(cycleId),
+  'ycycle',
 )
 
 function cycleLabel(c: CycleOption): string {
@@ -230,7 +256,7 @@ onMounted(() => {
             :data-test="`${group.key}-type-chip-${type}`"
             @click="group.g.typeFilter = type"
           >
-            {{ type }}
+            {{ exceptionTypeLabel(type) }}
             <span class="type-chip__count">{{ count }}</span>
           </button>
         </div>
@@ -255,7 +281,7 @@ onMounted(() => {
             <div class="exception-row__body">
               <div class="exception-row__title">
                 <strong>{{ item.target_name }}</strong>
-                <span class="exception-row__type">{{ item.type }}</span>
+                <span class="exception-row__type">{{ exceptionTypeLabel(item.type) }}</span>
               </div>
               <div class="exception-row__reason">{{ item.reason }}</div>
               <div class="exception-row__impact">影響：{{ item.impact }}</div>

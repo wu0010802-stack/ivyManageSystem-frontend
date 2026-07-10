@@ -27,6 +27,15 @@ vi.mock('@/utils/auth', () => ({
   hasPermission: (...args: unknown[]) => mockHasPermission(...args),
 }))
 
+// Task 14②③：週期選擇同步 URL query（acycle/ycycle），需要可觀察的 route.query / router.replace
+// （比照 AppraisalPayoutView.spec.ts 慣例：routeQuery 為可變殼、replaceMock 供斷言）。
+const routeQuery: { value: Record<string, unknown> } = { value: {} }
+const replaceMock = vi.fn()
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery.value }),
+  useRouter: () => ({ replace: replaceMock, push: vi.fn(), back: vi.fn() }),
+}))
+
 import * as appraisalApi from '@/api/appraisal'
 import * as yearEndApi from '@/api/yearEnd'
 import ExceptionCenterView from '../ExceptionCenterView.vue'
@@ -166,6 +175,7 @@ describe('ExceptionCenterView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
   })
 
   it('掛載後對兩批次分別載入週期清單並取最新一筆（id 最大）例外', async () => {
@@ -351,5 +361,71 @@ describe('ExceptionCenterView', () => {
     expect(wrapper.find('[data-test="group-appraisal"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="group-year-end"]').exists()).toBe(true)
     expect(appraisalApi.listAppraisalCycles).not.toHaveBeenCalled()
+  })
+
+  // Task 14①：type chips 與 row 標題以 exceptionTypeLabel 顯示中文，非 raw code。
+  it('type chips 與 row 標題顯示中文標籤而非 raw code', async () => {
+    vi.mocked(appraisalApi.listAppraisalCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({ data: [] } as never)
+    vi.mocked(appraisalApi.getAppraisalCycleExceptions).mockResolvedValue({
+      data: makeExceptionsOut({
+        counts_by_type: { qualification: 1 },
+        items: [makeItem({ type: 'qualification' })],
+      }),
+    } as never)
+
+    const wrapper = await mountView()
+    const group = wrapper.get('[data-test="group-appraisal"]')
+    // chip 顯示中文標籤，且 data-test 選擇器仍用 raw code（不影響既有測試穩定性）
+    const chip = group.get('[data-test="appraisal-type-chip-qualification"]')
+    expect(chip.text()).toContain('年資資格疑義')
+    expect(chip.text()).not.toContain('qualification')
+    // row 標題同樣顯示中文標籤
+    expect(group.get('.exception-row__type').text()).toBe('年資資格疑義')
+  })
+
+  // Task 14②：週期選擇同步 URL query（acycle/ycycle）——重載時以 URL 優先，變更時寫回、互不干擾。
+  it('週期選擇同步 URL query（acycle/ycycle），重載後保留', async () => {
+    routeQuery.value = { acycle: '3', ycycle: '10' }
+    vi.mocked(appraisalApi.listAppraisalCycles).mockResolvedValue({
+      data: [makeCycle({ id: 1 }), makeCycle({ id: 3 }), makeCycle({ id: 5 })],
+    } as never)
+    vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({
+      data: [makeCycle({ id: 10 }), makeCycle({ id: 12 })],
+    } as never)
+    vi.mocked(appraisalApi.getAppraisalCycleExceptions).mockResolvedValue({ data: makeExceptionsOut() } as never)
+    vi.mocked(yearEndApi.getYearEndCycleExceptions).mockResolvedValue({ data: makeExceptionsOut() } as never)
+
+    const wrapper = await mountView()
+
+    // 重載後保留：URL 值（3 / 10）優先於「選最新」預設值（5 / 12）
+    expect(appraisalApi.getAppraisalCycleExceptions).toHaveBeenCalledWith(3)
+    expect(yearEndApi.getYearEndCycleExceptions).toHaveBeenCalledWith(10)
+    expect(replaceMock).not.toHaveBeenCalled()
+
+    // 變更考核側週期 → 寫回 acycle，且不動 ycycle（兩參數互不干擾）
+    const group = wrapper.get('[data-test="group-appraisal"]')
+    const select = group.get('[data-test="appraisal-cycle-select"]')
+    await select.setValue('5')
+    await nextTick()
+
+    expect(replaceMock).toHaveBeenCalledWith({ query: expect.objectContaining({ acycle: '5', ycycle: '10' }) })
+  })
+
+  // Task 14③：URL 帶的週期值不在列表中（例如已刪除的週期）→ fallback 回預設「選最新」並用 replace 修正 URL。
+  it('URL 週期值不在列表中時 fallback 回預設並修正 URL', async () => {
+    routeQuery.value = { acycle: '999' }
+    vi.mocked(appraisalApi.listAppraisalCycles).mockResolvedValue({
+      data: [makeCycle({ id: 1 }), makeCycle({ id: 3 }), makeCycle({ id: 5 })],
+    } as never)
+    vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({ data: [] } as never)
+    vi.mocked(appraisalApi.getAppraisalCycleExceptions).mockResolvedValue({ data: makeExceptionsOut() } as never)
+
+    await mountView()
+
+    // fallback 回「選最新」（id 最大 = 5），而非停在無效的 999
+    expect(appraisalApi.getAppraisalCycleExceptions).toHaveBeenCalledWith(5)
+    // 並用 replace 修正 URL，避免地址列停留在已失效的週期值
+    expect(replaceMock).toHaveBeenCalledWith({ query: expect.objectContaining({ acycle: '5' }) })
   })
 })
