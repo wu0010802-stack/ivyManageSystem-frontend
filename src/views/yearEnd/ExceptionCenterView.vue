@@ -61,17 +61,23 @@ const STATUS_LABELS: Record<string, string> = {
 type CycleFetcher = () => Promise<{ data: unknown }>
 type ExceptionsFetcher = (cycleId: number) => Promise<{ data: unknown }>
 
+/** URL query 修正片段：URL 週期值失效時由 loadCycles 回傳、onMounted 合併後單次 replace。 */
+type QueryCorrection = Record<string, string>
+
+const route = useRoute()
+const router = useRouter()
+
 /** 單一批次（考核／年終）的週期下拉 + 例外清單狀態，回傳單一 reactive 物件供 template 直接綁定。
  *  週期選擇同步進 URL query（`queryKey`：考核 acycle / 年終 ycycle），F5 / 分享連結可保留篩選狀態：
- *  初值讀 URL 優先；URL 值不在週期清單中（例如已刪除的週期）則 fallback 回預設「選最新」並用
- *  router.replace 修正 URL。 */
+ *  初值讀 URL 優先；URL 值不在週期清單中（例如已刪除的週期）則 fallback 回預設「選最新」，並把
+ *  需要的 URL 修正以回傳值交給 onMounted **合併成單次 replace**——兩組各自 fire-and-forget 併發
+ *  replace 會被 vue-router pendingLocation 機制互相取消、後發起者的 spread 又是修正前快照，
+ *  其中一組修正會被靜默還原，故不可在此各自 replace。 */
 function useExceptionGroup(
   fetchCycles: CycleFetcher,
   fetchExceptions: ExceptionsFetcher,
   queryKey: 'acycle' | 'ycycle',
 ) {
-  const route = useRoute()
-  const router = useRouter()
   const cycles = ref<CycleOption[]>([])
   const cyclesLoading = ref(false)
   const selectedCycleId = ref<number | null>(null)
@@ -88,7 +94,7 @@ function useExceptionGroup(
     return items.filter((i) => i.type === typeFilter.value)
   })
 
-  async function loadCycles() {
+  async function loadCycles(): Promise<QueryCorrection | null> {
     cyclesLoading.value = true
     try {
       const res = await fetchCycles()
@@ -103,13 +109,16 @@ function useExceptionGroup(
           // 預設選最新一筆：以 id 最大者為準（後端遞增主鍵，較大 id = 較晚建立）
           selectedCycleId.value = cycles.value.reduce((a, b) => (b.id > a.id ? b : a)).id
           if (queryRaw != null) {
-            // URL 帶的週期值不在清單中（例如已刪除的週期）→ fallback 回預設並修正 URL
-            router.replace({ query: { ...route.query, [queryKey]: String(selectedCycleId.value) } })
+            // URL 帶的週期值不在清單中（例如已刪除的週期）→ fallback 回預設，
+            // 並回傳修正片段給 onMounted 合併成單次 replace（勿在此各自 replace，見上方註解）。
+            return { [queryKey]: String(selectedCycleId.value) }
           }
         }
       }
+      return null
     } catch (e) {
       errorMsg.value = apiError(e, '週期清單載入失敗')
+      return null
     } finally {
       cyclesLoading.value = false
     }
@@ -167,17 +176,27 @@ const groups = computed(() => (
   ].filter((group) => hasPermission(group.permission))
 ))
 
-async function bootGroup(group: ReturnType<typeof useExceptionGroup>, permission: string) {
-  if (!hasPermission(permission)) return
-  await group.loadCycles()
+async function bootGroup(
+  group: ReturnType<typeof useExceptionGroup>,
+  permission: string,
+): Promise<QueryCorrection | null> {
+  if (!hasPermission(permission)) return null
+  const correction = await group.loadCycles()
   await group.loadExceptions()
+  return correction
 }
 
-onMounted(() => {
-  Promise.all([
+onMounted(async () => {
+  const corrections = await Promise.all([
     bootGroup(appraisal, 'APPRAISAL_READ'),
     bootGroup(yearEnd, 'YEAR_END_READ'),
   ])
+  // 合併兩組的 URL 修正（可能 0/1/2 個 key），有修正才做**一次** replace——
+  // 併發兩次 replace 會經 vue-router pendingLocation 互相取消，其中一組修正被靜默還原。
+  const merged: QueryCorrection = Object.assign({}, ...corrections.filter(Boolean))
+  if (Object.keys(merged).length > 0) {
+    router.replace({ query: { ...route.query, ...merged } })
+  }
 })
 </script>
 

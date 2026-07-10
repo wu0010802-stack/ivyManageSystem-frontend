@@ -165,8 +165,9 @@ const stubs = {
 
 async function mountView() {
   const wrapper = mount(ExceptionCenterView, { global: { stubs } })
-  await nextTick()
-  await nextTick()
+  // 排乾掛載時的整條 async 鏈（loadCycles → loadExceptions → Promise.all 合併修正 → 單次 replace）：
+  // macrotask 會等所有 pending microtask 跑完才執行，比固定次數 nextTick 更穩。
+  await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
   return wrapper
 }
@@ -427,5 +428,31 @@ describe('ExceptionCenterView', () => {
     expect(appraisalApi.getAppraisalCycleExceptions).toHaveBeenCalledWith(5)
     // 並用 replace 修正 URL，避免地址列停留在已失效的週期值
     expect(replaceMock).toHaveBeenCalledWith({ query: expect.objectContaining({ acycle: '5' }) })
+  })
+
+  // Review fix：兩組 URL 值皆失效時，修正必須收斂為單次 replace——
+  // 兩個 fire-and-forget 的併發 replace 會被 vue-router pendingLocation 機制互相取消，
+  // 且後發起者的 query spread 是「修正前」快照，其中一組修正會被靜默還原成失效值。
+  it('兩組 URL 週期值皆失效時只做一次 replace 且合併兩個修正', async () => {
+    routeQuery.value = { acycle: '999', ycycle: '888' }
+    vi.mocked(appraisalApi.listAppraisalCycles).mockResolvedValue({
+      data: [makeCycle({ id: 1 }), makeCycle({ id: 3 }), makeCycle({ id: 5 })],
+    } as never)
+    vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({
+      data: [makeCycle({ id: 10 }), makeCycle({ id: 12 })],
+    } as never)
+    vi.mocked(appraisalApi.getAppraisalCycleExceptions).mockResolvedValue({ data: makeExceptionsOut() } as never)
+    vi.mocked(yearEndApi.getYearEndCycleExceptions).mockResolvedValue({ data: makeExceptionsOut() } as never)
+
+    await mountView()
+
+    // 兩組各自 fallback 回「選最新」（5 / 12）
+    expect(appraisalApi.getAppraisalCycleExceptions).toHaveBeenCalledWith(5)
+    expect(yearEndApi.getYearEndCycleExceptions).toHaveBeenCalledWith(12)
+    // 單次 replace、payload 同時含兩個修正後的 key（不可分兩次互相取消）
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+    expect(replaceMock).toHaveBeenCalledWith({
+      query: expect.objectContaining({ acycle: '5', ycycle: '12' }),
+    })
   })
 })
