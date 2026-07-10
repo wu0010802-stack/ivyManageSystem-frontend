@@ -315,13 +315,13 @@ async function createForSemester(semesterEnum: SemesterKey) {
 .yearly-target-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .year-label {
@@ -332,7 +332,7 @@ async function createForSemester(semesterEnum: SemesterKey) {
 .semester-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 @media (max-width: 720px) {
@@ -345,10 +345,10 @@ async function createForSemester(semesterEnum: SemesterKey) {
   background: var(--neutral-0);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 16px;
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 200px;
 }
 
@@ -366,7 +366,7 @@ async function createForSemester(semesterEnum: SemesterKey) {
 
 .semester-card__actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   justify-content: flex-end;
 }
 </style>

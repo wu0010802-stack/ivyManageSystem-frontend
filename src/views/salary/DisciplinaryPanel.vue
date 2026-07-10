@@ -161,6 +161,14 @@ const handleDelete = async (row: Record<string, unknown>) => {
   }
 }
 
+// 抵扣狀態欄非 prop 直接欄位（label 由 formatAppliedStatus 組字串），plain sortable
+// 抓不到有意義的值，改用 sort-method：未抵扣排前、已抵扣依抵扣金額排序。
+const sortByAppliedStatus = (a: Record<string, unknown>, b: Record<string, unknown>) => {
+  const av = a.applied_to_salary_id ? Number(a.applied_amount ?? 0) + 1 : 0
+  const bv = b.applied_to_salary_id ? Number(b.applied_amount ?? 0) + 1 : 0
+  return av - bv
+}
+
 const formatAppliedStatus = (row: Record<string, unknown>) => {
   if (!row.applied_to_salary_id) return '待抵扣'
   const amount = (row.applied_amount as number) || 0
@@ -217,7 +225,7 @@ onMounted(() => {
 
       <el-table :data="items" v-loading="loading" stripe style="width: 100%">
         <el-table-column prop="employee_name" label="員工" width="120" />
-        <el-table-column prop="action_date" label="發生日" width="120" />
+        <el-table-column prop="action_date" label="發生日" width="120" sortable />
         <el-table-column label="類型" width="100">
           <template #default="{ row }">
             <el-tag
@@ -227,14 +235,14 @@ onMounted(() => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="deduction_amount" label="扣款" width="100">
+        <el-table-column prop="deduction_amount" label="扣款" width="100" sortable>
           <template #default="{ row }">
             <span v-if="row.deduction_amount > 0">{{ row.deduction_amount }}</span>
             <span v-else class="muted">（用預設）</span>
           </template>
         </el-table-column>
         <el-table-column prop="reason" label="原因" min-width="180" show-overflow-tooltip />
-        <el-table-column label="抵扣狀態" min-width="180">
+        <el-table-column label="抵扣狀態" min-width="180" sortable :sort-method="sortByAppliedStatus">
           <template #default="{ row }">
             <span :class="row.applied_to_salary_id ? 'applied' : 'pending'">
               {{ formatAppliedStatus(row) }}

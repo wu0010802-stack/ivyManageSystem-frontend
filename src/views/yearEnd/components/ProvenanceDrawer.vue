@@ -178,8 +178,8 @@ function formatAmount(amount: string): string {
 
 <style scoped>
 .provenance-section {
-  margin-bottom: 24px;
-  padding-bottom: 20px;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-5);
   border-bottom: 1px solid #f0f0f0;
 }
 .provenance-section:last-child {
@@ -189,7 +189,7 @@ function formatAmount(amount: string): string {
 .section-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   margin-bottom: 10px;
 }
 .section-label {
@@ -198,15 +198,15 @@ function formatAmount(amount: string): string {
 }
 
 .section-error {
-  color: #f56c6c;
+  color: var(--el-color-danger);
   font-size: 13px;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 
 .formula-summary {
   font-size: 12px;
-  color: #909399;
-  margin-bottom: 8px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: var(--space-2);
 }
 
 .record-list {
@@ -216,7 +216,7 @@ function formatAmount(amount: string): string {
 }
 .record-item {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 6px 0;
   border-bottom: 1px solid #f5f5f5;
   font-size: 13px;
@@ -225,17 +225,17 @@ function formatAmount(amount: string): string {
   border-bottom: none;
 }
 .rec-date {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   white-space: nowrap;
   flex-shrink: 0;
 }
 .rec-label {
   flex: 1;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 .rec-amount {
   font-weight: 600;
-  color: #f56c6c;
+  color: var(--el-color-danger);
   white-space: nowrap;
 }
 

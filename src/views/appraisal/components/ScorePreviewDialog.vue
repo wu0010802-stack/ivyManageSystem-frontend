@@ -210,14 +210,14 @@ function tooltipLines(row: PreviewParticipant, code: string) {
 
 <style scoped>
 .preview-alert {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .preview-toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
   flex-wrap: wrap;
 }
 

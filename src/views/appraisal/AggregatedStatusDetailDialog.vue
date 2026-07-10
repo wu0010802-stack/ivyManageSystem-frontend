@@ -246,29 +246,29 @@ const fmtDelta = (v: unknown) => {
 .detail-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .meta {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .detail-tabs {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .discipline-summary {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   font-size: 13px;
   color: var(--text-secondary);
 }
 
 .discipline-summary strong {
   color: var(--text-primary);
-  margin-left: 4px;
+  margin-left: var(--space-1);
 }
 
 .delta {

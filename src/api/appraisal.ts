@@ -28,14 +28,6 @@ export const listAppraisalParticipants = (cycleId: number): AxiosResp<'/appraisa
 export const addAppraisalParticipant = (cycleId: number, payload: unknown) =>
     api.post(`/appraisal/cycles/${cycleId}/participants`, payload)
 
-// ============ Score Items ============
-
-export const listAppraisalScoreItems = (participantId: number) =>
-    api.get(`/appraisal/participants/${participantId}/score_items`)
-
-export const addAppraisalScoreItem = (participantId: number, payload: unknown) =>
-    api.post(`/appraisal/participants/${participantId}/score_items`, payload)
-
 // ============ Summaries ============
 
 export const listAppraisalSummaries = (cycleId: number) =>
@@ -90,14 +82,11 @@ export const exportAppraisalTransferRosterXlsxUrl = (cycleId: number) =>
 
 // ============ Current Semester（M5 重構：當期狀態彙整）============
 
-export const getAppraisalCurrentCycle = (params: Record<string, unknown> = {}) =>
+export const getAppraisalCurrentCycle = (params: Record<string, unknown> = {}): AxiosResp<'/appraisal/current', 'get'> =>
     api.get('/appraisal/current', { params })
 
 export const getAppraisalCyclesByYear = (academicYear: number) =>
     api.get(`/appraisal/by_year/${academicYear}`)
-
-export const getAppraisalAggregatedStatus = (cycleId: number) =>
-    api.get(`/appraisal/cycles/${cycleId}/aggregated_status`)
 
 export const syncAppraisalScoreItems = (cycleId: number, { dryRun = false } = {}) =>
     api.post(`/appraisal/cycles/${cycleId}/sync_score_items`, null, {
@@ -150,7 +139,7 @@ export const batchSignSummaries = (cycleId: number, summary_ids: number[], stage
 export const getSummaryLogs = (summaryId: number) =>
     api.get(`/appraisal/summaries/${summaryId}/logs`)
 
-export const getSignStatusSummary = (cycleId: number) =>
+export const getSignStatusSummary = (cycleId: number): AxiosResp<'/appraisal/cycles/{cycle_id}/sign_status_summary', 'get'> =>
     api.get(`/appraisal/cycles/${cycleId}/sign_status_summary`)
 
 // ============ Exception Center（例外中心：唯讀彙整待人工處理事項）============

@@ -449,58 +449,58 @@ onMounted(async () => {
 
 <style scoped>
 .year-end-config-view {
-  padding: 16px;
+  padding: var(--space-4);
 }
 .toolbar {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 .title {
   margin: 0;
   font-size: 18px;
 }
 .section-card {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 .section-title {
   font-weight: 600;
   font-size: 15px;
 }
 .sub-title {
-  margin: 0 0 12px;
+  margin: 0 0 var(--space-3);
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 .org-settings-grid {
   display: flex;
-  gap: 32px;
+  gap: var(--space-8);
   flex-wrap: wrap;
 }
 .semester-block {
   flex: 1 1 320px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  padding: 16px;
+  padding: var(--space-4);
 }
 .semester-header {
   font-weight: 600;
   font-size: 14px;
-  margin-bottom: 12px;
-  color: var(--color-primary);
+  margin-bottom: var(--space-3);
+  color: var(--el-color-primary);
 }
 .save-row {
-  margin-top: 12px;
+  margin-top: var(--space-3);
   text-align: right;
 }
 .readonly-val {
   color: var(--text-secondary);
 }
 .field-hint {
-  margin-left: 8px;
+  margin-left: var(--space-2);
   color: var(--text-tertiary);
   font-size: 12px;
 }
@@ -509,12 +509,12 @@ onMounted(async () => {
   color: var(--text-tertiary);
 }
 .bonus-hint {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 .bonus-link-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 </style>

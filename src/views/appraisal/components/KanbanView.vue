@@ -31,7 +31,10 @@ async function load() {
   loading.value = true
   try {
     const r = await getSignStatusSummary(props.cycleId)
-    data.value = r.data as { counts: Record<string, number>; buckets: Bucket[] }
+    // Task 16：getSignStatusSummary 補 AxiosResp<> 後 r.data 型別收斂為 OpenAPI schema
+    // 產生的形狀，與本檔既有本地精簡型別（{ counts; buckets: Bucket[] }）不足以重疊
+    // （TS2352）；本頁只取用 counts/buckets 兩欄，經 unknown 中介轉型不動 runtime 行為。
+    data.value = r.data as unknown as { counts: Record<string, number>; buckets: Bucket[] }
   } catch (e) {
     ElMessage.error(apiError(e, '載入看板失敗'))
   } finally {
@@ -84,8 +87,8 @@ function selectAll({ status, selected }: { status: string; selected: boolean }) 
 </template>
 
 <style scoped>
-.kanban-view { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
-               padding: 12px; overflow-x: auto; }
+.kanban-view { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3);
+               padding: var(--space-3); overflow-x: auto; }
 @media (max-width: 1000px) {
   .kanban-view { grid-template-columns: 1fr; }
 }

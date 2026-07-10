@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { statusLabel as labelStatus, gradeLabel } from '@/constants/appraisalYearEnd'
+import { statusLabel as labelStatus, gradeLabel, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 
 interface Summary { id: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
@@ -37,6 +37,25 @@ const emit = defineEmits<{
 
 const statusLabel = labelStatus
 
+// 排序：Summary 資料掛在 summaryByParticipant（非 row 直接欄位），plain sortable
+// 抓不到值，改用 sort-method 直接比較。無 Summary 的列排最前（視為最小值）。
+function sortByTotalScore(a: Participant, b: Participant) {
+  const av = hasSummary(a.id) ? Number(getSummary(a.id).total_score) : -Infinity
+  const bv = hasSummary(b.id) ? Number(getSummary(b.id).total_score) : -Infinity
+  return av - bv
+}
+function sortByBonusAmount(a: Participant, b: Participant) {
+  const av = hasSummary(a.id) ? Number(getSummary(a.id).bonus_amount) : -Infinity
+  const bv = hasSummary(b.id) ? Number(getSummary(b.id).bonus_amount) : -Infinity
+  return av - bv
+}
+function sortByStatus(a: Participant, b: Participant) {
+  const order = SIGN_STATUS_ORDER as readonly string[]
+  const av = hasSummary(a.id) ? order.indexOf(getSummary(a.id).status ?? '') : -1
+  const bv = hasSummary(b.id) ? order.indexOf(getSummary(b.id).status ?? '') : -1
+  return av - bv
+}
+
 function isSelected(summaryId: number) {
   return (props.selectedIds ?? []).includes(summaryId)
 }
@@ -69,7 +88,7 @@ function openLog(summary: Summary) { emit('open-log', summary) }
     </el-table-column>
     <el-table-column label="員工 ID" prop="employee_id" width="100" />
     <el-table-column label="角色群" prop="role_group" width="140" />
-    <el-table-column label="總分" width="100">
+    <el-table-column label="總分" width="100" sortable :sort-method="sortByTotalScore">
       <template #default="{ row }">
         <span v-if="hasSummary(row.id)">
           {{ Number(getSummary(row.id).total_score).toFixed(2) }}
@@ -81,14 +100,14 @@ function openLog(summary: Summary) { emit('open-log', summary) }
         <span v-if="hasSummary(row.id)">{{ gradeLabel(getSummary(row.id).grade as string ?? '') }}</span>
       </template>
     </el-table-column>
-    <el-table-column label="獎金" width="120">
+    <el-table-column label="獎金" width="120" sortable :sort-method="sortByBonusAmount">
       <template #default="{ row }">
         <span v-if="hasSummary(row.id)">
           {{ Number(getSummary(row.id).bonus_amount).toLocaleString() }}
         </span>
       </template>
     </el-table-column>
-    <el-table-column label="簽核狀態" width="140">
+    <el-table-column label="簽核狀態" width="140" sortable :sort-method="sortByStatus">
       <template #default="{ row }">
         <el-button
           v-if="hasSummary(row.id)"

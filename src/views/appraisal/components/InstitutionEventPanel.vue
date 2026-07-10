@@ -388,19 +388,19 @@ async function confirmSync() {
       empty-text="本學期尚無機構活動"
       data-test="event-table"
     >
-      <el-table-column label="日期" prop="event_date" width="110" />
+      <el-table-column label="日期" prop="event_date" width="110" sortable />
       <el-table-column label="活動名稱" prop="title" min-width="150" />
       <el-table-column label="類型" width="120">
         <template #default="{ row }">{{ EVENT_TYPE_LABEL[row.event_type] ?? row.event_type }}</template>
       </el-table-column>
-      <el-table-column label="時數" prop="hours" width="70" />
+      <el-table-column label="時數" prop="hours" width="70" sortable />
       <el-table-column label="考核項目" width="130">
         <template #default="{ row }">
           <span v-if="row.score_item_code">{{ itemLabel(row.score_item_code) }}</span>
           <span v-else class="text-muted">不進考核</span>
         </template>
       </el-table-column>
-      <el-table-column label="缺席" prop="absence_count" width="70" />
+      <el-table-column label="缺席" prop="absence_count" width="70" sortable />
       <el-table-column label="備註" prop="note" min-width="120" />
       <el-table-column label="操作" width="180">
         <template #default="{ row }">
@@ -638,13 +638,13 @@ async function confirmSync() {
 }
 
 .dialog-hint {
-  margin-left: 12px;
+  margin-left: var(--space-3);
   color: var(--text-tertiary);
   font-size: 12px;
 }
 
 .dialog-alert {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .employee-list {
@@ -659,7 +659,7 @@ async function confirmSync() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
+  padding: 10px var(--space-3);
   border: 1px solid var(--el-border-color-lighter, #ebeef5);
   border-radius: 10px;
 }
@@ -667,7 +667,7 @@ async function confirmSync() {
 .employee-item--column {
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .employee-row-main {
@@ -678,7 +678,7 @@ async function confirmSync() {
 
 .exempt-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 

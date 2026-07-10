@@ -82,8 +82,8 @@ const ACTION_COLOR: Record<string, TagType> = {
 </template>
 
 <style scoped>
-.log-entry { display: flex; flex-direction: column; gap: 4px; }
-.actor { margin-left: 8px; font-weight: 600; }
+.log-entry { display: flex; flex-direction: column; gap: var(--space-1); }
+.actor { margin-left: var(--space-2); font-weight: 600; }
 .transition { color: var(--el-text-color-regular); font-size: 13px; }
 .reason { color: var(--el-color-danger); font-size: 13px; }
 .comment { color: var(--el-text-color-secondary); font-size: 13px; }

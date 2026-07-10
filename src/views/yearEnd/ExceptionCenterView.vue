@@ -251,7 +251,7 @@ onMounted(async () => {
         type="error"
         show-icon
         :closable="false"
-        style="margin-bottom: 12px"
+        style="margin-bottom: var(--space-3)"
       />
 
       <template v-else-if="group.g.data">
@@ -319,36 +319,36 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.exception-center { padding: 16px; }
-.page-header { margin-bottom: 16px; }
-.page-header h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+.exception-center { padding: var(--space-4); }
+.page-header { margin-bottom: var(--space-4); }
+.page-header h2 { margin: 0 0 var(--space-1); font-size: 20px; font-weight: 600; }
 .page-sub { margin: 0; font-size: 13px; color: var(--text-tertiary); }
 
 .exception-group {
   background: var(--bg-color-overlay, #fff);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 .group-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 .group-title { font-size: 16px; font-weight: 600; }
 .group-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .generated-at { font-size: 12px; color: var(--text-tertiary); }
 
-.type-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.type-chips { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-3); }
 .type-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding: var(--space-1) var(--space-3);
   border-radius: 999px;
   border: 1px solid var(--border-color);
   background: transparent;
@@ -357,20 +357,20 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 .type-chip--active {
-  border-color: var(--color-primary, #409eff);
-  color: var(--color-primary, #409eff);
-  background: var(--color-primary-light-9, #ecf5ff);
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
 }
 .type-chip__count { font-weight: 600; }
 
-.no-match-hint { color: var(--text-tertiary); font-size: 13px; padding: 24px 0; text-align: center; }
+.no-match-hint { color: var(--text-tertiary); font-size: 13px; padding: var(--space-6) 0; text-align: center; }
 
-.exception-list { display: flex; flex-direction: column; gap: 8px; }
+.exception-list { display: flex; flex-direction: column; gap: var(--space-2); }
 .exception-row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--space-3);
+  padding: var(--space-3);
   border-radius: 6px;
   border: 1px solid var(--border-color);
 }
@@ -379,7 +379,7 @@ onMounted(async () => {
 .exception-row--info { border-left: 3px solid var(--color-info, #909399); }
 .severity-tag { margin-top: 2px; flex-shrink: 0; }
 .exception-row__body { flex: 1; min-width: 0; }
-.exception-row__title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.exception-row__title { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-1); }
 .exception-row__type { font-size: 12px; color: var(--text-tertiary); }
 .exception-row__reason { font-size: 13px; color: var(--text-primary); margin-bottom: 2px; }
 .exception-row__impact,
@@ -388,7 +388,7 @@ onMounted(async () => {
   flex-shrink: 0;
   font-size: 13px;
   font-weight: 600;
-  color: var(--color-primary, #409eff);
+  color: var(--el-color-primary);
   white-space: nowrap;
   text-decoration: none;
 }

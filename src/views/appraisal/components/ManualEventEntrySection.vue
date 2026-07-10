@@ -149,7 +149,7 @@ async function onInheritPrevious() {
 .manual-event-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .toolbar {
   display: flex;
@@ -158,14 +158,14 @@ async function onInheritPrevious() {
 }
 .toolbar-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 .title {
   font-weight: 600;
 }
 .banner {
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 .cell-with-orig {
   display: flex;

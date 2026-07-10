@@ -73,17 +73,6 @@ describe('appraisal api', () => {
     expect(mockPost).toHaveBeenCalledWith('/appraisal/cycles/7/participants', payload)
   })
 
-  it('listAppraisalScoreItems GET /appraisal/participants/:id/score_items', async () => {
-    await mod.listAppraisalScoreItems(33)
-    expect(mockGet).toHaveBeenCalledWith('/appraisal/participants/33/score_items')
-  })
-
-  it('addAppraisalScoreItem POST /appraisal/participants/:id/score_items', async () => {
-    const payload = { catalog_code: 'A1', delta: 2 }
-    await mod.addAppraisalScoreItem(33, payload)
-    expect(mockPost).toHaveBeenCalledWith('/appraisal/participants/33/score_items', payload)
-  })
-
   it('listAppraisalSummaries GET /appraisal/cycles/:id/summaries', async () => {
     await mod.listAppraisalSummaries(7)
     expect(mockGet).toHaveBeenCalledWith('/appraisal/cycles/7/summaries')
@@ -191,11 +180,6 @@ describe('appraisal api', () => {
   it('getAppraisalCyclesByYear GET /appraisal/by_year/:year', async () => {
     await mod.getAppraisalCyclesByYear(114)
     expect(mockGet).toHaveBeenCalledWith('/appraisal/by_year/114')
-  })
-
-  it('getAppraisalAggregatedStatus GET /appraisal/cycles/:id/aggregated_status', async () => {
-    await mod.getAppraisalAggregatedStatus(7)
-    expect(mockGet).toHaveBeenCalledWith('/appraisal/cycles/7/aggregated_status')
   })
 
   it('syncAppraisalScoreItems POST sync_score_items with default dry_run=false', async () => {

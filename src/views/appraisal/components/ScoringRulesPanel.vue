@@ -198,26 +198,26 @@ defineExpose({ load, disablePastDates })
 .rules-panel {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--space-4);
+  padding: var(--space-4);
 }
 .toolbar {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
 }
 .rules-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 .rule-card {
   border: 1px solid var(--el-border-color);
   border-radius: 8px;
-  padding: 12px;
+  padding: var(--space-3);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
   background: var(--el-bg-color);
 }
 .rule-card__header {
@@ -235,6 +235,6 @@ defineExpose({ load, disablePastDates })
 }
 .rule-card__actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 </style>

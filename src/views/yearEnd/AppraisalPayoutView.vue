@@ -188,7 +188,7 @@ watch(tab, (t) => {
       :closable="false"
       title="⚠️ 有未 finalized 的 cycle，建議先完成簽核再生成"
       data-test="not-finalized-warning"
-      style="margin: 12px 0;"
+      style="margin: var(--space-3) 0;"
     />
 
     <el-tabs v-model="tab">
@@ -258,11 +258,11 @@ watch(tab, (t) => {
 </template>
 
 <style scoped>
-.appraisal-payout-view { padding: 16px; }
-.footer { margin-top: 16px; text-align: right; }
-.generated-toolbar { margin-bottom: 12px; text-align: right; }
+.appraisal-payout-view { padding: var(--space-4); }
+.footer { margin-top: var(--space-4); text-align: right; }
+.generated-toolbar { margin-bottom: var(--space-3); text-align: right; }
 .warning-tag {
-  display: inline-block; margin-right: 4px; padding: 2px 6px;
+  display: inline-block; margin-right: var(--space-1); padding: 2px 6px;
   background: var(--color-warning-soft); color: var(--color-warning-darker);
   border-radius: 4px; font-size: 12px;
 }

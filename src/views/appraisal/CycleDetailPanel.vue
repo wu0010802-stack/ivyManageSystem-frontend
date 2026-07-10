@@ -367,8 +367,8 @@ onMounted(() => {
 
 <style scoped>
 .cycle-detail { padding: 0; }
-.meta { margin: 12px 0; padding: 12px; background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
-.sign-progress-wrap { margin: 0 0 12px; }
-.toolbar { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
+.sign-progress-wrap { margin: 0 0 var(--space-3); }
+.toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .batch-zone { display: flex; gap: 6px; }
 </style>

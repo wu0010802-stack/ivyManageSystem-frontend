@@ -421,13 +421,13 @@ defineExpose({ disablePastDates, validateTiersMonotonic })
 
 <style scoped>
 .hint {
-  margin-left: 8px;
+  margin-left: var(--space-2);
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
 .tier-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
   margin-bottom: 6px;
 }

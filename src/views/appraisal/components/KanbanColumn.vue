@@ -57,8 +57,8 @@ function onSelectAll(v: string | number | boolean) {
 </template>
 
 <style scoped>
-.kanban-column { display: flex; flex-direction: column; gap: 8px; min-width: 260px; }
-.col-header { display: flex; align-items: center; gap: 8px; padding: 8px;
+.kanban-column { display: flex; flex-direction: column; gap: var(--space-2); min-width: 260px; }
+.col-header { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2);
               border-bottom: 2px solid var(--el-border-color); background: var(--el-fill-color-light); }
 .col-label { flex: 1; font-weight: 600; }
 .col-body { display: flex; flex-direction: column; gap: 6px; max-height: 600px; overflow-y: auto; }

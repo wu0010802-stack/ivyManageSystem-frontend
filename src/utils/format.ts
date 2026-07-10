@@ -7,6 +7,7 @@
  * formatActivityDate() — ISO 字串轉 "YYYY-MM-DD HH:MM"，null → '-'
  * formatDateTimeTW()   — Asia/Taipei 時區的完整日期時間
  * formatTimeTW()       — Asia/Taipei 時區的 HH:MM
+ * fmtPct()             — 百分比格式化（isRatio 控制 0~1 小數 vs 已是百分比數值）
  * todayISO()           — 今日 YYYY-MM-DD（本地）
  * offsetISO()          — 今日 ± n 天的 YYYY-MM-DD
  */

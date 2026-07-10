@@ -244,8 +244,8 @@ onMounted(load)
 </template>
 
 <style scoped>
-.cycle-list { padding: 16px 0 0; }
-.toolbar { margin: 0 0 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cycle-list { padding: var(--space-4) 0 0; }
+.toolbar { margin: 0 0 var(--space-4); display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .cycle-select { width: 240px; }
-.import-fallback-alert { margin-bottom: 12px; }
+.import-fallback-alert { margin-bottom: var(--space-3); }
 </style>

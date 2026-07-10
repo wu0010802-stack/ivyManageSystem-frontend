@@ -21,7 +21,7 @@ import {
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
-import { CYCLE_STATUS_TAG, cycleStatusLabel, SIGN_STATUS_TAG } from '@/constants/appraisalYearEnd'
+import { CYCLE_STATUS_TAG, cycleStatusLabel, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
 import ProvenanceDrawer from './components/ProvenanceDrawer.vue'
 import type { ProvenanceKey } from './components/ProvenanceDrawer.vue'
@@ -56,12 +56,19 @@ const tab = ref('settlements')
 const provenanceDrawerVisible = ref(false)
 const provenanceEmployeeId = ref(0)
 
-const DEDUCTION_KEYS: ProvenanceKey[] = [
-  { key: 'attendance_late', label: '遲到/未打卡' },
-  { key: 'personal_leave', label: '事假' },
-  { key: 'sick_leave', label: '病假' },
-  { key: 'meeting_absence', label: '會議缺席' },
-]
+// Task 16 動態化：keys 對齊後端 services/provenance/base.py KNOWN_KEYS（唯一可被
+// /api/provenance/{key} 接受的 4 個 key，非本頁自訂）；label 走查表 + fallback raw
+// key，未來 KNOWN_KEYS 新增項目時只需補一筆查表，不會漏標籤整段消失。
+const DEDUCTION_KEY_LABELS: Record<string, string> = {
+  attendance_late: '遲到/未打卡',
+  personal_leave: '事假',
+  sick_leave: '病假',
+  meeting_absence: '會議缺席',
+}
+const DEDUCTION_KEYS: ProvenanceKey[] = Object.keys(DEDUCTION_KEY_LABELS).map((key) => ({
+  key,
+  label: DEDUCTION_KEY_LABELS[key] ?? key,
+}))
 
 function openProvenanceDrawer(employeeId: number) {
   provenanceEmployeeId.value = employeeId
@@ -86,6 +93,33 @@ const settlementCounts = computed(() => {
   }
   return counts
 })
+
+// T11-M1：特別獎金表「班級」欄原本只顯示裸 classroom_id——用同頁已載入的
+// class targets（載入 classTargets 時已含 classroom_name）建 id → name map；
+// 查無對應（未編班/資料缺口）時 fallback 顯示「班級 {id}」而非空白或裸 ID。
+const classroomNameById = computed(() => {
+  const map = new Map<number, string>()
+  for (const ct of classTargets.value) {
+    if (ct.classroom_name) map.set(ct.classroom_id, ct.classroom_name)
+  }
+  return map
+})
+function classroomLabel(classroomId: number | null | undefined): string {
+  if (classroomId == null) return '—'
+  return classroomNameById.value.get(classroomId) ?? `班級 ${classroomId}`
+}
+
+// ── 表格排序（Task 16）────────────────────────────────────────────
+// 金額/百分比欄位是後端 Decimal 序列化的字串或 template 渲染值，非 row 直接可比較的
+// 數字，plain sortable 會做字典序比較（"10000" 排到 "9000" 前）或直接失效
+// （欄位值來自 template slot 而非 prop）；一律走 sort-method 轉數字比較。
+function sortByField(field: string) {
+  return (a: Settlement, b: Settlement) => Number(a[field] ?? 0) - Number(b[field] ?? 0)
+}
+function sortBySettlementStatus(a: Settlement, b: Settlement) {
+  const order = SIGN_STATUS_ORDER as readonly string[]
+  return order.indexOf(a.status) - order.indexOf(b.status)
+}
 
 async function load() {
   loading.value = true
@@ -279,21 +313,21 @@ onMounted(load)
               <span :title="`ID ${row.employee_id}`">{{ row.employee_name }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="平均績效%" prop="avg_performance_rate" width="100" />
-          <el-table-column label="基本薪俸" width="100">
+          <el-table-column label="平均績效%" prop="avg_performance_rate" width="100" sortable :sort-method="sortByField('avg_performance_rate')" />
+          <el-table-column label="基本薪俸" width="100" sortable :sort-method="sortByField('base_salary')">
             <template #default="{ row }">{{ formatCurrency(row.base_salary) }}</template>
           </el-table-column>
-          <el-table-column label="節慶獎金" width="100">
+          <el-table-column label="節慶獎金" width="100" sortable :sort-method="sortByField('festival_total')">
             <template #default="{ row }">{{ formatCurrency(row.festival_total) }}</template>
           </el-table-column>
-          <el-table-column label="毛額" width="110">
+          <el-table-column label="毛額" width="110" sortable :sort-method="sortByField('gross_amount')">
             <template #default="{ row }">{{ formatCurrency(row.gross_amount) }}</template>
           </el-table-column>
-          <el-table-column label="達成%" prop="org_achievement_rate" width="80" />
-          <el-table-column label="小計" width="110">
+          <el-table-column label="達成%" prop="org_achievement_rate" width="80" sortable :sort-method="sortByField('org_achievement_rate')" />
+          <el-table-column label="小計" width="110" sortable :sort-method="sortByField('subtotal_amount')">
             <template #default="{ row }">{{ formatCurrency(row.subtotal_amount) }}</template>
           </el-table-column>
-          <el-table-column label="扣項合計" width="120">
+          <el-table-column label="扣項合計" width="120" sortable :sort-method="sortByField('deduction_total')">
             <template #default="{ row }">
               <el-button
                 type="primary"
@@ -305,19 +339,19 @@ onMounted(load)
               </el-button>
             </template>
           </el-table-column>
-          <el-table-column label="到職月" prop="hire_months" width="80" />
-          <el-table-column label="應領小計" width="120">
+          <el-table-column label="到職月" prop="hire_months" width="80" sortable :sort-method="sortByField('hire_months')" />
+          <el-table-column label="應領小計" width="120" sortable :sort-method="sortByField('payable_amount')">
             <template #default="{ row }">{{ formatCurrency(row.payable_amount) }}</template>
           </el-table-column>
-          <el-table-column label="特別獎金" width="110">
+          <el-table-column label="特別獎金" width="110" sortable :sort-method="sortByField('special_bonus_total')">
             <template #default="{ row }">{{ formatCurrency(row.special_bonus_total) }}</template>
           </el-table-column>
-          <el-table-column label="總額" width="120">
+          <el-table-column label="總額" width="120" sortable :sort-method="sortByField('total_amount')">
             <template #default="{ row }">
               <strong>{{ formatCurrency(row.total_amount) }}</strong>
             </template>
           </el-table-column>
-          <el-table-column label="狀態" width="120">
+          <el-table-column label="狀態" width="120" sortable :sort-method="sortBySettlementStatus">
             <template #default="{ row }">
               <el-tag size="small" :type="SIGN_STATUS_TAG[row.status]">{{ statusLabel(row.status) }}</el-tag>
             </template>
@@ -355,10 +389,14 @@ onMounted(load)
           </el-table-column>
           <el-table-column label="獎金類型" prop="bonus_type" width="220" />
           <el-table-column label="期間" prop="period_label" width="160" />
-          <el-table-column label="金額" width="120">
+          <el-table-column label="金額" width="120" sortable :sort-method="sortByField('amount')">
             <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
           </el-table-column>
-          <el-table-column label="班級" prop="classroom_id" width="80" />
+          <el-table-column label="班級" width="100">
+            <template #default="{ row }">
+              <span :title="row.classroom_id != null ? `ID ${row.classroom_id}` : ''">{{ classroomLabel(row.classroom_id) }}</span>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -386,10 +424,10 @@ onMounted(load)
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="編制人數" prop="head_count_target" width="100" />
-          <el-table-column label="平均在籍" prop="avg_monthly_enrollment" width="100" />
-          <el-table-column label="經營績效%" prop="class_performance_rate" width="120" />
-          <el-table-column label="舊生註冊率" prop="returning_student_rate" width="120" />
+          <el-table-column label="編制人數" prop="head_count_target" width="100" sortable />
+          <el-table-column label="平均在籍" prop="avg_monthly_enrollment" width="100" sortable />
+          <el-table-column label="經營績效%" prop="class_performance_rate" width="120" sortable />
+          <el-table-column label="舊生註冊率" prop="returning_student_rate" width="120" sortable />
         </el-table>
       </el-tab-pane>
     </el-tabs>
@@ -405,9 +443,9 @@ onMounted(load)
 </template>
 
 <style scoped>
-.ye-detail { padding: 16px; }
-.meta { margin: 12px 0; padding: 12px; background: #f5f7fa; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
-.sign-progress-wrap { margin: 0 0 12px; }
-.toolbar { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.batch-bar { margin: 0 0 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ye-detail { padding: var(--space-4); }
+.meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; display: flex; align-items: center; gap: var(--space-2); }
+.sign-progress-wrap { margin: 0 0 var(--space-3); }
+.toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.batch-bar { margin: 0 0 var(--space-2); display: flex; align-items: center; gap: var(--space-2); font-size: 13px; }
 </style>

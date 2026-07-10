@@ -58,6 +58,6 @@ watch(() => [props.visible, props.itemCode], ([v]) => { if (v) load() }, { immed
 </template>
 
 <style scoped>
-.version pre { background: var(--el-fill-color-light); padding: 8px; border-radius: 4px; font-size: 12px; }
-.notes { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 4px; }
+.version pre { background: var(--el-fill-color-light); padding: var(--space-2); border-radius: 4px; font-size: 12px; }
+.notes { color: var(--el-text-color-secondary); font-size: 12px; margin-top: var(--space-1); }
 </style>

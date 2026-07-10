@@ -6,7 +6,7 @@ import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCyc
 import { money } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
-import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG } from '@/constants/appraisalYearEnd'
+import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
@@ -106,6 +106,23 @@ const bonusColumns = computed(() => {
 })
 
 const baseUrl = computed(() => api.defaults.baseURL || '/api')
+
+// 排序：金額欄是後端 Decimal 序列化字串，plain sortable 會做字典序比較
+// （"10000" 排到 "9000" 前），一律走 sort-method 轉數字比較。
+function sortByPayable(a: GridRow, b: GridRow) {
+  return Number(a.payable_amount) - Number(b.payable_amount)
+}
+function sortByTotal(a: GridRow, b: GridRow) {
+  return Number(a.total_amount) - Number(b.total_amount)
+}
+function sortByStatus(a: GridRow, b: GridRow) {
+  const order = SIGN_STATUS_ORDER as readonly string[]
+  return order.indexOf(a.status) - order.indexOf(b.status)
+}
+// 動態獎金欄無固定 prop（值在 row.special_bonuses[key]），每欄各自 curry 一個比較函式。
+function sortByBonusCol(key: string) {
+  return (a: GridRow, b: GridRow) => Number(a.special_bonuses[key] ?? 0) - Number(b.special_bonuses[key] ?? 0)
+}
 
 // lastBuiltAt 是本地 Date（非後端 ISO 字串，BuildResultOut 無 timestamp），近複製
 // CurrentSemesterOverview.vue 的 formatTime 慣例但省去 ISO parse 這步。
@@ -395,7 +412,7 @@ onMounted(initGrid)
       />
 
       <!-- 主結算 -->
-      <el-table-column label="主結算" width="130" align="right" class-name="money-cell">
+      <el-table-column label="主結算" width="130" align="right" class-name="money-cell" sortable :sort-method="sortByPayable">
         <template #default="{ row }">
           {{ moneyInt(row.payable_amount) }}
         </template>
@@ -408,6 +425,8 @@ onMounted(initGrid)
         :label="col.label"
         width="118"
         align="right"
+        sortable
+        :sort-method="sortByBonusCol(col.key)"
         :class-name="`money-cell ${col.key === 'EXCESS_ENROLLMENT' || col.key === 'CUSTOM' ? 'yellow-col' : ''}`"
       >
         <template #header>
@@ -425,14 +444,14 @@ onMounted(initGrid)
       </el-table-column>
 
       <!-- 合計 -->
-      <el-table-column label="合計" width="145" align="right" class-name="money-cell">
+      <el-table-column label="合計" width="145" align="right" class-name="money-cell" sortable :sort-method="sortByTotal">
         <template #default="{ row }">
           <strong class="total-amount">{{ moneyInt(row.total_amount) }}</strong>
         </template>
       </el-table-column>
 
       <!-- 狀態 -->
-      <el-table-column label="狀態" width="110" align="center">
+      <el-table-column label="狀態" width="110" align="center" sortable :sort-method="sortByStatus">
         <template #default="{ row }">
           <el-tag :type="SIGN_STATUS_TAG[row.status] || 'info'" size="small">
             {{ (SIGN_STATUS_LABEL as Record<string, string>)[row.status] ?? row.status }}
@@ -546,26 +565,26 @@ onMounted(initGrid)
 
 <style scoped>
 .year-end-grid-view {
-  padding: 16px;
+  padding: var(--space-4);
 }
 .toolbar {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 .title {
   margin: 0;
   font-size: 18px;
 }
 .last-built {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
 }
 .actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   margin-left: auto;
 }
@@ -573,14 +592,14 @@ onMounted(initGrid)
   text-decoration: none;
 }
 .total-amount {
-  color: #409eff;
+  color: var(--el-color-primary);
   font-weight: 600;
 }
 .grid-alert {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 .grid-expand {
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 /* F-2：金額 cell 禁止在小數點/千分位逗號附近換行成兩行（稽核核對風險）；
    欄寬不足時交給 el-table 內建橫向捲動，不擠壓內容。 */
@@ -589,7 +608,7 @@ onMounted(initGrid)
 }
 .yellow-header {
   background: #fefce8;
-  padding: 2px 4px;
+  padding: 2px var(--space-1);
   border-radius: 3px;
 }
 .yellow-cell {
@@ -597,8 +616,8 @@ onMounted(initGrid)
   display: block;
 }
 .build-note {
-  color: #909399;
+  color: var(--el-text-color-secondary);
   font-size: 13px;
-  margin: 4px 0;
+  margin: var(--space-1) 0;
 }
 </style>

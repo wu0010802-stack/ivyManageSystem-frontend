@@ -206,7 +206,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.ye-list { padding: 16px; }
-.toolbar { margin: 16px 0; display: flex; gap: 8px; }
-.import-fallback-alert { margin-bottom: 12px; }
+.ye-list { padding: var(--space-4); }
+.toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); }
+.import-fallback-alert { margin-bottom: var(--space-3); }
 </style>

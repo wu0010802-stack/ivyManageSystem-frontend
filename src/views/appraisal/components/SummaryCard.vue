@@ -103,13 +103,13 @@ function onPrimaryAction() {
 <style scoped>
 .summary-card {
   border: 1px solid var(--el-border-color); border-radius: 6px;
-  padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+  padding: var(--space-2) 10px; display: flex; flex-direction: column; gap: 6px;
   background: var(--el-bg-color);
 }
 .summary-card.selected { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
-.card-header { display: flex; align-items: center; gap: 8px; }
+.card-header { display: flex; align-items: center; gap: var(--space-2); }
 .employee-name { flex: 1; font-weight: 600; }
-.menu-icon { cursor: pointer; padding: 4px; }
+.menu-icon { cursor: pointer; padding: var(--space-1); }
 .card-body { font-size: 12px; display: flex; flex-direction: column; gap: 2px; color: var(--el-text-color-regular); }
 .card-footer { display: flex; justify-content: flex-end; }
 </style>

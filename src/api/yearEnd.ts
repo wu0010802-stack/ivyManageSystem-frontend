@@ -4,7 +4,7 @@ import type { DerivedValue } from '@/types/provenance'
 
 // ============ Year-End Cycles 年終週期 ============
 
-export const listYearEndCycles = () => api.get('/year_end/cycles')
+export const listYearEndCycles = (): AxiosResp<'/year_end/cycles', 'get'> => api.get('/year_end/cycles')
 
 export const createYearEndCycle = (payload: unknown) =>
   api.post('/year_end/cycles', payload)

@@ -28,11 +28,6 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush, back: vi.fn() }),
 }))
 
-const mockHasPermission = vi.fn().mockReturnValue(true)
-vi.mock('@/utils/auth', () => ({
-  hasPermission: (...args: unknown[]) => mockHasPermission(...args),
-}))
-
 import * as api from '@/api/yearEnd'
 import { ElMessage } from 'element-plus'
 
@@ -135,7 +130,6 @@ async function mountView() {
   const wrapper = mount(YearEndListView, {
     global: {
       stubs: {
-        'el-page-header': true,
         'el-table': ElTableStub,
         'el-table-column': ElTableColumnStub,
         'el-button': ElButtonStub,
@@ -164,7 +158,6 @@ async function mountView() {
 describe('YearEndListView — Task 10 列表瘦身', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockHasPermission.mockReturnValue(true)
   })
 
   it.each([
@@ -267,7 +260,6 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     const wrapper = await mountView()
 
     expect(wrapper.findComponent({ name: 'PageHeader' }).exists()).toBe(true)
-    expect(wrapper.find('el-page-header-stub').exists()).toBe(false)
   })
 
   it('新增年度週期按鈕仍可用', async () => {
@@ -275,17 +267,6 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     const wrapper = await mountView()
 
     expect(wrapper.text()).toContain('新增年度週期')
-  })
-
-  it('無權限帳號仍可看到明細/總表/設定/匯出（無 canFinalize 權限守衛）', async () => {
-    mockHasPermission.mockReturnValue(false)
-    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
-
-    const wrapper = await mountView()
-
-    expect(wrapper.text()).toContain('明細')
-    expect(wrapper.text()).toContain('總表')
-    expect(wrapper.text()).toContain('設定')
   })
 
   it('提醒後端錯誤訊息（載入失敗時走 apiError）', async () => {
