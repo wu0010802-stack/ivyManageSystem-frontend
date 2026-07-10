@@ -44,4 +44,22 @@ describe('FunnelCard.vue', () => {
     await wrapper.trigger('click')
     expect(wrapper.emitted('click')).toBeTruthy()
   })
+
+  it('shows enrollment term badge when target year+semester present', () => {
+    const wrapper = mount(FunnelCard, {
+      props: {
+        card: { ...baseCard, target_school_year: 114, target_semester: 2 },
+        canDrag: true,
+      },
+    })
+    expect(wrapper.text()).toContain('114下')
+    expect(wrapper.find('.funnel-card__term').exists()).toBe(true)
+  })
+
+  it('omits enrollment term badge when semester missing', () => {
+    const wrapper = mount(FunnelCard, {
+      props: { card: { ...baseCard, target_school_year: 114 }, canDrag: true },
+    })
+    expect(wrapper.find('.funnel-card__term').exists()).toBe(false)
+  })
 })

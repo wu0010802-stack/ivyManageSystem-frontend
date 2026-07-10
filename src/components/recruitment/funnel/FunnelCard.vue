@@ -10,7 +10,12 @@
   >
     <div class="funnel-card__header">
       <span class="funnel-card__name">{{ card.child_name }}</span>
-      <el-tag v-if="card.grade" size="small" type="info">{{ card.grade }}</el-tag>
+      <span class="funnel-card__tags">
+        <el-tag v-if="card.grade" size="small" type="info">{{ card.grade }}</el-tag>
+        <el-tag v-if="termLabel" size="small" type="warning" class="funnel-card__term">
+          {{ termLabel }}
+        </el-tag>
+      </span>
     </div>
     <div v-if="card.phone" class="funnel-card__phone">{{ card.phone }}</div>
     <div class="funnel-card__meta">
@@ -22,11 +27,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { ElTag } from 'element-plus'
+import { formatSemesterShort } from '@/utils/classHistory'
 import type { FunnelCardData } from '@/stores/recruitmentFunnel'
 
-defineProps<{
-  card: FunnelCardData
+// TODO(codegen): schema.d.ts regen 後 FunnelCardData 會自帶 target_semester，屆時此擴充成為冗餘可移除
+type FunnelCardWithTerm = FunnelCardData & { target_semester?: number | null }
+
+const props = defineProps<{
+  card: FunnelCardWithTerm
   canDrag: boolean
   isPending?: boolean
 }>()
@@ -34,6 +44,12 @@ defineProps<{
 defineEmits<{
   (e: 'click'): void
 }>()
+
+const termLabel = computed((): string | null =>
+  props.card.target_school_year != null && props.card.target_semester != null
+    ? formatSemesterShort(props.card.target_school_year, props.card.target_semester)
+    : null,
+)
 </script>
 
 <style scoped>
@@ -65,6 +81,11 @@ defineEmits<{
 }
 .funnel-card__name {
   font-weight: 600;
+}
+.funnel-card__tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 .funnel-card__phone {
   font-size: 12px;
