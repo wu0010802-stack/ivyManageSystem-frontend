@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowLeft, User } from '@element-plus/icons-vue'
 import { useEmployeeDetail } from '@/composables/useEmployeeDetail'
 import { getEmployeeStatus, standardSalaryFor } from '@/utils/employeeDisplay'
+import { expiryStatus } from '@/utils/expiry'
 import { getPositionSalary } from '@/api/config'
 import { hasPermission } from '@/utils/auth'
 import { useEmployeeStore } from '@/stores/employee'
@@ -40,10 +41,53 @@ const standardSalary = computed(() =>
   employee.value ? standardSalaryFor(employee.value, positionSalaryConfig.value) : null
 )
 
-// 錨點導覽
+// 員工待辦列（finding #6）：掃描目前員工個資/證照/合約狀態，浮出待處理事項；
+// 全部條件不成立時整列不渲染（見 template v-if="employeeTodos.length"）。
+interface EmployeeTodo {
+  key: string
+  type: 'danger' | 'warning'
+  label: string
+  /** 點擊後 scrollToSection 的目標區塊 key */
+  sectionKey: string
+}
+const employeeTodos = computed<EmployeeTodo[]>(() => {
+  const todos: EmployeeTodo[] = []
+  const emp = employee.value
+  // 待補薪資：正職在職但底薪為 0（嚴格 === 0；遮罩後的 null／undefined 不觸發，避免無權限使用者誤判待辦）
+  if (emp && emp.is_active && emp.employee_type === 'regular' && emp.base_salary === 0) {
+    todos.push({ key: 'missing-salary', type: 'danger', label: '待補薪資', sectionKey: 'salary' })
+  }
+  // 證照到期：逾期與 30 天內到期分開計數顯示
+  let expiredCertCount = 0
+  let expiringCertCount = 0
+  for (const cert of certificates.value) {
+    const status = expiryStatus(typeof cert.expiry_date === 'string' ? cert.expiry_date : null)
+    if (status.kind === 'expired') expiredCertCount++
+    else if (status.kind === 'expiring') expiringCertCount++
+  }
+  if (expiredCertCount > 0) {
+    todos.push({ key: 'cert-expired', type: 'danger', label: `證照已逾期 ${expiredCertCount}`, sectionKey: 'credentials' })
+  }
+  if (expiringCertCount > 0) {
+    todos.push({ key: 'cert-expiring', type: 'warning', label: `證照 30 天內到期 ${expiringCertCount}`, sectionKey: 'credentials' })
+  }
+  // 合約到期：任一合約已逾期就顯示「已到期」（優先權高於「將到期」，故一遇到即 break）；
+  // 否則若有將到期則顯示「將到期」——迴圈中能走到 'expiring' 分支時 contractKind 必仍是 null（見上方 break）。
+  let contractKind: 'expired' | 'expiring' | null = null
+  for (const contract of contracts.value) {
+    const status = expiryStatus(typeof contract.end_date === 'string' ? contract.end_date : null)
+    if (status.kind === 'expired') { contractKind = 'expired'; break }
+    if (status.kind === 'expiring') contractKind = 'expiring'
+  }
+  if (contractKind === 'expired') todos.push({ key: 'contract-expired', type: 'danger', label: '合約已到期', sectionKey: 'credentials' })
+  else if (contractKind === 'expiring') todos.push({ key: 'contract-expiring', type: 'warning', label: '合約將到期', sectionKey: 'credentials' })
+  return todos
+})
+
+// 錨點導覽：職務優先、個資（含個資／隱私）預設收合下移一階，其餘沿用既有順序
 const SECTIONS = [
-  { key: 'basic', label: '基本資料' },
   { key: 'job', label: '職務・班級' },
+  { key: 'basic', label: '個資・聯絡' },
   { key: 'salary', label: '薪資・投保' },
   { key: 'credentials', label: '學歷・證照・合約' },
   { key: 'attendance', label: '出勤紀錄' },
@@ -116,17 +160,28 @@ const onSaved = async () => {
 
       <!-- 右欄：單頁區塊 -->
       <main class="detail-sections">
+        <!-- 員工待辦列（finding #6）：待補薪資 / 證照到期 / 合約到期，全部條件不成立則不渲染 -->
+        <div v-if="employeeTodos.length" class="employee-todos">
+          <el-tag
+            v-for="todo in employeeTodos" :key="todo.key" :type="todo.type"
+            class="todo-tag" @click="scrollToSection(todo.sectionKey)"
+          >{{ todo.label }}</el-tag>
+        </div>
         <el-alert v-if="subResourceErrors > 0" type="warning" show-icon :closable="false"
           title="部分區塊載入失敗，顯示可能不完整" style="margin-bottom:12px" />
-        <section :id="`emp-sec-basic`" class="detail-section">
-          <h3 class="section-title">基本資料</h3>
-          <BasicSection :employee="employee" />
-        </section>
         <section :id="`emp-sec-job`" class="detail-section">
           <h3 class="section-title">職務・班級</h3>
           <JobSection :employee="employee" />
           <h4 class="subsection-title">班級歷程</h4>
           <ClassHistorySection :rows="classHistory" :loading="loading" />
+        </section>
+        <section :id="`emp-sec-basic`" class="detail-section">
+          <h3 class="section-title">個資・聯絡</h3>
+          <el-collapse>
+            <el-collapse-item title="展開查看聯絡電話・身分證・地址・緊急聯絡人">
+              <BasicSection :employee="employee" />
+            </el-collapse-item>
+          </el-collapse>
         </section>
         <section :id="`emp-sec-salary`" class="detail-section">
           <h3 class="section-title">薪資・投保</h3>
@@ -167,6 +222,8 @@ const onSaved = async () => {
   border-radius: 8px; padding: 20px 16px; text-align: center;
 }
 .detail-sections { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.employee-todos { display: flex; flex-wrap: wrap; gap: 8px; }
+.employee-todos .todo-tag { cursor: pointer; }
 .detail-section { background: var(--el-bg-color); border: 1px solid var(--el-border-color-lighter); border-radius: 8px; padding: 16px 20px; scroll-margin-top: 12px; }
 .section-title { margin: 0 0 12px; font-size: 15px; }
 .subsection-title { margin: 16px 0 8px; font-size: 13px; color: var(--el-text-color-secondary); }
