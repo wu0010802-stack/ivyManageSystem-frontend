@@ -30,16 +30,22 @@ vi.mock('vue-router', () => ({
 }))
 
 // 「資料截至」badge：ReportsView 自己呼叫 getFinanceSummary（panel 全 stub 所以只有這裡會打到）
+// wrapper 延遲呼叫外層 mock（同 confirmMock 模式），讓個別測試能控制解析時序（競態回歸測試用）
+const financeSummaryMock = vi.fn()
 vi.mock('@/api/reports', () => ({
-  getFinanceSummary: vi.fn().mockResolvedValue({
+  getFinanceSummary: (...a: unknown[]) => financeSummaryMock(...a),
+}))
+
+function twoMonthTrendResp() {
+  return {
     data: {
       monthly_trend: [
         { month: 1, revenue: 100, refund: 0, expense: 50, net: 50 },
         { month: 2, revenue: 100, refund: 0, expense: 50, net: 50 },
       ],
     },
-  }),
-}))
+  }
+}
 
 // 把各 panel 換成輕量 stub，只讓 fixed-cost stub 能 emit update:dirty
 import ReportsView from '@/views/ReportsView.vue'
@@ -59,6 +65,8 @@ beforeEach(() => {
   confirmMock.mockReset()
   routeQuery.value = {}
   replaceMock.mockReset()
+  financeSummaryMock.mockReset()
+  financeSummaryMock.mockResolvedValue(twoMonthTrendResp())
 })
 
 function mountView() {
@@ -276,10 +284,54 @@ describe('tab 重組（spec §3）', () => {
 })
 
 describe('資料截至 badge', () => {
-  it('檢視過去年顯示「全年」；有資料的今年顯示「資料截至 N 月」', async () => {
+  it('檢視過去年顯示「全年」', async () => {
     routeQuery.value = { year: '2020' } // 相對測試當下必為過去年
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-test="data-cutoff-badge"]').text()).toContain('全年')
+  })
+
+  it('有資料的今年顯示「資料截至 N 月」', async () => {
+    routeQuery.value = { year: String(new Date().getFullYear()) }
+    const w = mountView()
+    await flushPromises()
+    // mock trend 有 1、2 月資料；N = min(2, 當前真實月) 隨測試執行月份而異，用 regex 斷言格式
+    expect(w.find('[data-test="data-cutoff-badge"]').text()).toMatch(/資料截至 \d+ 月/)
+  })
+
+  it('年度快速切換時，晚到的舊年度 response 不覆蓋 badge（stale guard 競態回歸）', async () => {
+    const currentYear = new Date().getFullYear()
+    // 初始 mount 用過去年，初始 fetch 走預設 mock 立即落定
+    routeQuery.value = { year: '2020' }
+    const w = mountView()
+    await flushPromises()
+    const vm = w.vm as unknown as ExposedVm
+
+    // 佈署兩個 deferred：先切的舊年度 response 晚到、後切的現年 response 先到
+    let resolveOld: ((v: unknown) => void) | undefined
+    let resolveNew: ((v: unknown) => void) | undefined
+    financeSummaryMock.mockImplementationOnce(
+      () => new Promise((res) => { resolveOld = res }),
+    )
+    financeSummaryMock.mockImplementationOnce(
+      () => new Promise((res) => { resolveNew = res }),
+    )
+
+    vm.selectedYear = 2021 // 觸發 fetch(2021) → pending
+    await flushPromises()
+    vm.selectedYear = currentYear // 觸發 fetch(currentYear) → pending
+    await flushPromises()
+
+    // 現年 response 先到：無資料 → 「尚無資料」
+    resolveNew?.({ data: { monthly_trend: [] } })
+    await flushPromises()
+    expect(w.find('[data-test="data-cutoff-badge"]').text()).toContain('尚無資料')
+
+    // 舊年度(2021) response 晚到（有 2 個月資料）：不得覆蓋現年 badge
+    resolveOld?.(twoMonthTrendResp())
+    await flushPromises()
+    const badgeText = w.find('[data-test="data-cutoff-badge"]').text()
+    expect(badgeText).toContain('尚無資料')
+    expect(badgeText).not.toMatch(/資料截至/)
   })
 })

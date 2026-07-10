@@ -46,12 +46,16 @@ watch([activeTab, selectedYear], ([tab, year]) => {
 const badgeTrend = ref<FinanceTrendRow[]>([])
 watch(selectedYear, async (y) => {
   badgeTrend.value = []
+  let rows: FinanceTrendRow[] = []
   try {
     const res = await getFinanceSummary(y)
-    badgeTrend.value = res.data?.monthly_trend || []
+    rows = res.data?.monthly_trend || []
   } catch {
-    badgeTrend.value = [] // badge 屬輔助資訊，載入失敗時顯示「—」不擋頁面
+    rows = [] // badge 屬輔助資訊，載入失敗時顯示「尚無資料」不擋頁面
   }
+  // stale guard：年度已再切換時丟棄晚到的舊 response，避免覆蓋新年度的 badge
+  if (y !== selectedYear.value) return
+  badgeTrend.value = rows
 }, { immediate: true })
 
 const period = computed(() => computeReportPeriod(selectedYear.value, badgeTrend.value))
