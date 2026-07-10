@@ -59,10 +59,6 @@ const props = defineProps<{
   year: number
   month: number
 }>()
-const emit = defineEmits<{
-  (e: 'preview-changed', value: { employee_id: unknown; simulated: unknown }): void
-  (e: 'reset', value: { employee_id: unknown }): void
-}>()
 
 interface EnrollmentInfo { total: number; snapshot_date?: string; classroom_name?: string; grade_name?: string }
 interface PreviewResult { net_pay?: number; festival_bonus?: number; overtime_bonus?: number }
@@ -111,12 +107,6 @@ const runSimulate = async () => {
       },
     })
     preview.value = ((resp.data as Record<string, unknown>)?.simulated ?? null) as PreviewResult | null
-    if (preview.value) {
-      emit('preview-changed', {
-        employee_id: props.row.employee_id,
-        simulated: preview.value,
-      })
-    }
   } catch (e) {
     console.warn('[SalaryBreakdown] simulate failed', e)
     ElMessage.error('試算失敗，請稍後重試')
@@ -128,7 +118,6 @@ const runSimulate = async () => {
 const resetPreview = () => {
   preview.value = null
   overrideCount.value = enrollment.value?.total ?? 0
-  emit('reset', { employee_id: props.row.employee_id })
 }
 </script>
 

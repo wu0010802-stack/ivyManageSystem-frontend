@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject, onMounted } from 'vue'
+import { ref, computed, inject, onMounted, onUnmounted, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { calculateAsync, getSalaryCalcJob, getEnrollmentSnapshot, type SalaryCalcJobStatus } from '@/api/salary'
 import { hasPermission } from '@/utils/auth'
@@ -79,7 +79,10 @@ const q = inject<{ year: number; month: number }>('settleQuery', {
     month: new Date().getMonth() + 1,
 })
 const { notify } = useErrorNotify()
-const calculating = ref(false)
+// P1 #6：計算中旗標為共享 ref（父層 SalarySettleView 若有 provide 則沿用，
+// 供父層 disable 年/月選擇器與步驟列避免使用者中途切換製造孤兒輪詢；
+// 未 provide 時（如單獨掛載測試）退回本地獨立 ref，行為不變）。
+const calculating = inject<Ref<boolean>>('settleCalculating', ref(false))
 const calcErrors = ref<{ employee_name?: string; error?: string }[]>([])
 // async 計算進度（done/total/current）；null = 未在計算
 const progress = ref<{ done: number; total: number; current: string } | null>(null)
@@ -130,13 +133,25 @@ const lastCalculatedAt = computed(() => {
 
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
+// P1 #6：元件卸載 / 使用者切走目前年月後，輪詢應視為孤兒並自行停止——
+// 不得在稍後 resolve 時靜默 emit('next') 把使用者導頁或彈出「計算完成」。
+class PollCancelledError extends Error {}
+let unmounted = false
+onUnmounted(() => {
+    unmounted = true
+})
+
 // 輪詢 job 至 completed/failed；過程中更新 progress。10 分鐘安全上限。
+// isStale：每輪檢查一次，為真就立刻停止輪詢（不再發下一次請求），拋 PollCancelledError
+// 讓呼叫端靜默丟棄結果。
 const POLL_INTERVAL_MS = 1000
 const POLL_TIMEOUT_MS = 10 * 60 * 1000
-const pollCalcJob = async (jobId: string): Promise<SalaryCalcJobStatus> => {
+const pollCalcJob = async (jobId: string, isStale: () => boolean): Promise<SalaryCalcJobStatus> => {
     const startedAt = Date.now()
     for (;;) {
+        if (isStale()) throw new PollCancelledError()
         const res = await getSalaryCalcJob(jobId)
+        if (isStale()) throw new PollCancelledError()
         const job = res.data as SalaryCalcJobStatus
         if (job.status === 'completed' || job.status === 'failed') return job
         progress.value = { done: job.done, total: job.total, current: job.current_employee }
@@ -160,30 +175,40 @@ const onCalculate = async () => {
     calculating.value = true
     calcErrors.value = []
     progress.value = null
+    // race guard（P1 #6）：輪詢啟動時記錄當下年/月，resolve 時若元件已卸載或年/月已切走，
+    // 一律視為孤兒輪詢結果丟棄——不 emit next、不彈訊息、不 notify 錯誤。
+    const startYear = q.year
+    const startMonth = q.month
+    const isStale = () => unmounted || q.year !== startYear || q.month !== startMonth
     try {
         // 走 async 端點：立即拿 job_id，背景計算 + 輪詢進度，避免大園所同步計算 HTTP 逾時
         const startRes = await calculateAsync(q.year, q.month)
         const started = startRes.data as { job_id: string; total: number }
         progress.value = { done: 0, total: started.total ?? 0, current: '' }
 
-        const job = await pollCalcJob(started.job_id)
+        const job = await pollCalcJob(started.job_id, isStale)
+        if (isStale()) return // 孤兒輪詢：靜默丟棄
         if (job.status === 'failed') {
             ElMessage.error(job.error_message || '薪資計算失敗')
             return
         }
         calcErrors.value = job.errors ?? []
         await settlement.refresh()
+        if (isStale()) return // refresh 期間也可能已切走
         if (calcErrors.value.length > 0) {
             return // 停留在計算步驟，持久警示列出失敗員工
         }
         ElMessage.success('薪資計算完成')
         emit('next') // 自動進入覆核
     } catch (e) {
+        if (e instanceof PollCancelledError || isStale()) return // 孤兒輪詢：靜默丟棄，不 notify
         // 409（同月已有進行中 job / 已封存）走 notify 顯示後端 detail
         notify(e, 'StepCalculate', null, { prefix: '計算失敗' })
     } finally {
-        calculating.value = false
-        progress.value = null
+        if (!unmounted) {
+            calculating.value = false
+            progress.value = null
+        }
     }
 }
 </script>

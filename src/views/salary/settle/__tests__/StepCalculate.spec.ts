@@ -184,4 +184,72 @@ describe('StepCalculate', () => {
         await flushPromises()
         expect(getSnapshotMock).not.toHaveBeenCalled()
     })
+
+    // P1 #6：孤兒輪詢 race — 元件卸載 / 切月後，稍後 resolve 的舊 job 不得靜默
+    // emit('next')（會觸發父層 router.replace 把使用者導頁）或彈出「計算完成」。
+    describe('孤兒輪詢 race guard（P1 #6）', () => {
+        it('元件卸載後輪詢才 resolve → 不 emit next、不彈成功訊息', async () => {
+            const settlement = makeSettlement('reviewing')
+            calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-orphan-1', total: 1 } })
+            let resolveJob!: (v: unknown) => void
+            getSalaryCalcJobMock.mockImplementation(
+                () => new Promise((resolve) => { resolveJob = resolve }),
+            )
+            const wrapper = mountStep(settlement)
+            const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+            await btn!.trigger('click')
+            await flushPromises() // 走完 confirm + calculateAsync，卡在第一次 getSalaryCalcJob（pending）
+
+            wrapper.unmount() // 使用者導航離開/元件被卸載
+
+            resolveJob({
+                data: {
+                    job_id: 'job-orphan-1',
+                    status: 'completed',
+                    errors: [],
+                    done: 1,
+                    total: 1,
+                    current_employee: '',
+                },
+            })
+            await flushPromises()
+
+            expect(wrapper.emitted('next')).toBeFalsy()
+            expect(ElMessage.success).not.toHaveBeenCalled()
+            expect(settlement.refresh).not.toHaveBeenCalled()
+        })
+
+        it('輪詢中途切換月份 → 舊 job resolve 後不 emit next、不彈成功訊息', async () => {
+            const settlement = makeSettlement('reviewing')
+            calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-orphan-2', total: 1 } })
+            let resolveJob!: (v: unknown) => void
+            getSalaryCalcJobMock.mockImplementation(
+                () => new Promise((resolve) => { resolveJob = resolve }),
+            )
+            const settleQuery = { year: 2026, month: 5 }
+            const wrapper = mount(StepCalculate, {
+                global: { stubs: STUBS, provide: { settlement, settleQuery } },
+            })
+            const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+            await btn!.trigger('click')
+            await flushPromises() // 卡在第一次 getSalaryCalcJob（pending）
+
+            settleQuery.month = 6 // 使用者在計算中切換月份
+
+            resolveJob({
+                data: {
+                    job_id: 'job-orphan-2',
+                    status: 'completed',
+                    errors: [],
+                    done: 1,
+                    total: 1,
+                    current_employee: '',
+                },
+            })
+            await flushPromises()
+
+            expect(wrapper.emitted('next')).toBeFalsy()
+            expect(ElMessage.success).not.toHaveBeenCalled()
+        })
+    })
 })

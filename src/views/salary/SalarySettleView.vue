@@ -2,24 +2,26 @@
   <div>
     <PageHeader :title="`${query.year} 年 ${query.month} 月結薪`" :subtitle="statusLabel">
       <template #actions>
-        <el-select v-model="query.year" style="width: 100px" aria-label="年份">
+        <el-select v-model="query.year" style="width: 100px" aria-label="年份" :disabled="calculating">
           <el-option v-for="y in yearOptions" :key="y" :value="y" :label="`${y} 年`" />
         </el-select>
-        <el-select v-model="query.month" style="width: 90px" aria-label="月份">
+        <el-select v-model="query.month" style="width: 90px" aria-label="月份" :disabled="calculating">
           <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
         </el-select>
         <el-button @click="$router.push('/salary')">← 回工作台</el-button>
       </template>
     </PageHeader>
 
-    <!-- 步驟列：可點擊跳轉，不強制線性（熟手可直跳） -->
+    <!-- 步驟列：可點擊跳轉，不強制線性（熟手可直跳）；計算進行中禁止手動切換，
+         避免中途切步驟/切月製造孤兒輪詢（P1 #6） -->
     <el-steps :active="stepIndex" align-center class="settle-steps">
       <el-step
         v-for="(s, i) in STEPS"
         :key="s.key"
         :title="s.title"
         class="settle-step"
-        @click="go(i)"
+        :class="{ 'settle-step--disabled': calculating }"
+        @click="goManual(i)"
       />
     </el-steps>
 
@@ -28,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, toRef, provide, onMounted, watch, type Component } from 'vue'
+import { reactive, computed, toRef, provide, onMounted, watch, ref, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StepPrecheck from './settle/StepPrecheck.vue'
@@ -66,6 +68,15 @@ const go = (i: number) => {
         query: { ...route.query, year: String(query.year), month: String(query.month), step: STEPS[i].key },
     })
 }
+// 計算進行中旗標：StepCalculate 寫入，此處用來 disable 年/月選擇器與步驟列（P1 #6）
+const calculating = ref(false)
+provide('settleCalculating', calculating)
+// 使用者手動點步驟列跳轉：計算進行中一律擋下（P1 #6），避免中途離開製造孤兒輪詢。
+// `go` 本身仍不擋——StepCalculate 計算成功時的 `@next` 走 go，讓自動前進不受此擋阻。
+const goManual = (i: number) => {
+    if (calculating.value) return
+    go(i)
+}
 // 年/月切換時同步到 URL（深連結可分享、重整不掉狀態）
 watch(() => [query.year, query.month], () => go(stepIndex.value))
 
@@ -94,5 +105,10 @@ const statusLabel = computed(() => `狀態：${STATUS_LABEL[settlement.status.va
 
 .settle-step :deep(.el-step__title) {
   font-size: var(--text-sm);
+}
+
+.settle-step--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 </style>
