@@ -25,7 +25,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
-import { statusLabel, MSG } from './labels'
+import { statusLabel, MSG } from '@/constants/appraisalYearEnd'
 
 import KanbanView from './components/KanbanView.vue'
 import ListView from './components/ListView.vue'

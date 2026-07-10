@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { rejectSummary } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
-import { REJECT_TARGET_LABEL, MSG } from '../labels'
+import { REJECT_TARGET_LABEL, MSG } from '@/constants/appraisalYearEnd'
 
 interface Summary { id?: number; status?: string; employee_name?: string; [key: string]: unknown }
 

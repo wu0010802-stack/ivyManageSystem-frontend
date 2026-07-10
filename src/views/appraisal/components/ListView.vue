@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { statusLabel as labelStatus } from '../labels'
+import { statusLabel as labelStatus, gradeLabel } from '@/constants/appraisalYearEnd'
 
 interface Summary { id: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
@@ -34,9 +34,6 @@ const emit = defineEmits<{
   'open-log': [summary: Summary]
   'update:selected-ids': [ids: number[]]
 }>()
-
-const gradeLabel = (g: string) =>
-  ({ OUTSTANDING: '優等', GOOD: '甲等', PASS: '乙等', WARN: '丙等', FAIL: '丁等' } as Record<string, string>)[g] || g
 
 const statusLabel = labelStatus
 

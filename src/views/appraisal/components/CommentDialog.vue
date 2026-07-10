@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { commentSummary } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
-import { MSG } from '../labels'
+import { MSG } from '@/constants/appraisalYearEnd'
 
 const props = defineProps<{
   visible?: boolean

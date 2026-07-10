@@ -4,7 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { batchSignSummaries } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
-import { STAGE_LABEL } from '../labels'
+import { STAGE_LABEL } from '@/constants/appraisalYearEnd'
 
 interface SummaryMapEntry { employee_name?: string; [key: string]: unknown }
 interface FailedItem { summary_id: number; error?: string }

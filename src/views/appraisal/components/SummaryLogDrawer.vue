@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus'
 import { getSummaryLogs } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { formatDateTimeTW } from '@/utils/format'
-import { ACTION_LABEL } from '../labels'
+import { ACTION_LABEL } from '@/constants/appraisalYearEnd'
 
 interface SummaryLog { id: number; action?: string; created_at?: string; actor_name?: string; actor_id?: number; from_status?: string; to_status?: string; reason?: string; comment?: string }
 

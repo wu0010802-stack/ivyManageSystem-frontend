@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { getSignStatusSummary } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
-import { STATUS_LABEL } from '../labels'
+import { STATUS_LABEL } from '@/constants/appraisalYearEnd'
 import KanbanColumn from './KanbanColumn.vue'
 
 interface Summary { id: number; status: string; [key: string]: unknown }
