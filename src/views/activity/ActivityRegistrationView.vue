@@ -971,7 +971,7 @@ async function handleBatchMarkPaid(isPaid: boolean) {
 
 // ── 審核工作流（單列 + 批量 + 逐筆精靈）：集中於 useActivityReview ──
 const review = useActivityReview({
-  onChanged: () => { fetchList() },
+  onChanged: () => fetchList(),
   clearSelection,
 })
 const {

@@ -45,7 +45,7 @@ function errDetail(err: unknown): string | undefined {
   return (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
 }
 
-export function useActivityReview(opts: { onChanged: () => void; clearSelection: () => void }) {
+export function useActivityReview(opts: { onChanged: () => void | Promise<void>; clearSelection: () => void }) {
   const batchProcessing = ref(false)
 
   // ── 手動匹配 dialog ────────────────────────────────────────────
@@ -276,7 +276,9 @@ export function useActivityReview(opts: { onChanged: () => void; clearSelection:
       const msg = `重新比對完成：自動綁定 ${matched} 筆、仍待審核 ${still} 筆` + (fail ? `、失敗 ${fail} 筆` : '')
       fail ? ElMessage.warning(msg) : ElMessage.success(msg)
       opts.clearSelection()
-      opts.onChanged()
+      // P3-1：await refetch 完成後才於 finally 解除 loading 態，避免短暫窗口內
+      // 按鈕可再次點擊、表格仍是舊資料。
+      await opts.onChanged()
     } finally {
       batchProcessing.value = false
     }
@@ -298,7 +300,9 @@ export function useActivityReview(opts: { onChanged: () => void; clearSelection:
       const { ok, fail } = await runBatch(rows, (row) => forceAcceptRegistration(row.id))
       fail === 0 ? ElMessage.success(`已強行收件 ${ok} 筆`) : ElMessage.warning(`強行收件完成：成功 ${ok} 筆、失敗 ${fail} 筆`)
       opts.clearSelection()
-      opts.onChanged()
+      // P3-1：await refetch 完成後才於 finally 解除 loading 態，避免短暫窗口內
+      // 按鈕可再次點擊、表格仍是舊資料。
+      await opts.onChanged()
     } finally {
       batchProcessing.value = false
     }
@@ -333,7 +337,9 @@ export function useActivityReview(opts: { onChanged: () => void; clearSelection:
       const { ok, fail } = await runBatch(rows, (row) => rejectRegistration(row.id, reason))
       fail === 0 ? ElMessage.success(`已批次拒絕 ${ok} 筆`) : ElMessage.warning(`批次拒絕完成：成功 ${ok} 筆、失敗 ${fail} 筆`)
       opts.clearSelection()
-      opts.onChanged()
+      // P3-1：await refetch 完成後才於 finally 解除 loading 態，避免短暫窗口內
+      // 按鈕可再次點擊、表格仍是舊資料。
+      await opts.onChanged()
     } finally {
       batchProcessing.value = false
     }
@@ -353,7 +359,9 @@ export function useActivityReview(opts: { onChanged: () => void; clearSelection:
       const { ok, fail } = await runBatch(rows, (row) => restoreRegistration(row.id))
       fail === 0 ? ElMessage.success(`已批次復原 ${ok} 筆`) : ElMessage.warning(`批次復原完成：成功 ${ok} 筆、失敗 ${fail} 筆`)
       opts.clearSelection()
-      opts.onChanged()
+      // P3-1：await refetch 完成後才於 finally 解除 loading 態，避免短暫窗口內
+      // 按鈕可再次點擊、表格仍是舊資料。
+      await opts.onChanged()
     } finally {
       batchProcessing.value = false
     }

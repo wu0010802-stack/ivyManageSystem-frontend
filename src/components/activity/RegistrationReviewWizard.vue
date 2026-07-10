@@ -47,7 +47,14 @@
       <div class="wizard-actions">
         <el-button :disabled="state.index === 0" @click="onPrev">上一筆</el-button>
         <el-button @click="onSkip">略過</el-button>
-        <el-button type="danger" plain :loading="state.submitting" @click="onReject">拒絕並下一筆</el-button>
+        <el-button
+          type="danger"
+          plain
+          :loading="state.submitting"
+          :disabled="rejectDisabled"
+          :title="rejectDisabled ? '此筆已有繳費，需先於報名詳情處理繳費後才能拒絕' : ''"
+          @click="onReject"
+        >拒絕並下一筆</el-button>
         <el-button type="danger" :loading="state.submitting" @click="onForce">強行收件並下一筆</el-button>
         <el-button type="primary" :loading="state.submitting" :disabled="!state.selected" @click="onMatch">匹配並下一筆</el-button>
         <el-button @click="state.visible = false">結束</el-button>
@@ -57,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import type { ReviewRow, StudentCandidate } from '@/composables/useActivityReview'
 
@@ -72,7 +80,7 @@ interface WizardState {
   done: { matched: number; forced: number; rejected: number; skipped: number }
 }
 
-defineProps<{
+const props = defineProps<{
   state: WizardState
   current: ReviewRow | null
   onSearch: () => void
@@ -83,6 +91,11 @@ defineProps<{
   onPrev: () => void
   onClose: () => void
 }>()
+
+// P3-2：與主列表 canReject 對齊——已有繳費（paid_amount>0）的待審核筆拒絕會被
+// 後端 409 擋下，故預先 disable 拒絕鈕（使用者可改走略過 / 強行收件 / 匹配）。
+const rejectDisabled = computed(() => ((props.current?.paid_amount ?? 0) > 0))
+defineExpose({ rejectDisabled })
 </script>
 
 <style scoped>
