@@ -1,0 +1,35 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import { createRouter, createMemoryHistory } from 'vue-router'
+import ElementPlus from 'element-plus'
+import AppraisalYearEndLayout from '../AppraisalYearEndLayout.vue'
+
+vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn((p: string) => p === 'APPRAISAL_READ') }))
+
+const Stub = { template: '<div />' }
+const router = createRouter({
+  history: createMemoryHistory(),
+  routes: [{
+    path: '/appraisal-year-end', component: AppraisalYearEndLayout, redirect: '/appraisal-year-end/overview',
+    children: [
+      { path: 'overview', component: Stub, meta: { title: '總覽' } },
+      { path: 'appraisal/current', component: Stub, meta: { title: '考核', breadcrumb: ['考核', '當期總覽'] } },
+    ],
+  }],
+})
+
+describe('AppraisalYearEndLayout', () => {
+  beforeEach(async () => { await router.push('/appraisal-year-end/appraisal/current'); await router.isReady() })
+  it('只顯示有權限的導覽項（APPRAISAL_READ → 總覽+考核+例外中心）', () => {
+    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    const text = w.text()
+    expect(text).toContain('考核')
+    expect(text).not.toContain('年終獎金率') // 規則設定內頁不出現在頂層
+    expect(w.findAll('.aye-nav [role="radio"], .aye-nav .el-segmented__item').length).toBeGreaterThan(0)
+  })
+  it('麵包屑顯示 目前 section 路徑', async () => {
+    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
+    await flushPromises()
+    expect(w.find('.aye-breadcrumb').text()).toContain('當期總覽')
+  })
+})
