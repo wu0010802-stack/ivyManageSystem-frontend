@@ -336,12 +336,38 @@ const employeeDraft = useFormDraft({
 const openCreate = async () => {
   handleAdd()
   await nextTick()
+  // 新增模式建立「空表單」dirty 快照，供離開保護判斷未儲存變更；
+  // 否則 originalForm 保持 null（見 useEmployeeFormDirty），dirty 恒空、攔不到誤關。
+  resetDirty(form)
   await employeeDraft.maybePromptRestore()
 }
 const openEdit = async (row: Record<string, unknown>) => {
   handleEdit(row)
   await nextTick()
   await employeeDraft.maybePromptRestore()
+}
+
+// ── 離開編輯保護（finding #1）────────────────────────
+// 有未儲存變更時攔截關閉；草稿刻意排除的敏感欄位（薪資/銀行/身分證）誤關即遺失，故補一道確認。
+// basicDirty/salaryDirty 合計涵蓋所有 tab 欄位；新增模式由 openCreate 的 resetDirty 建立空快照後同樣生效。
+const hasUnsavedChanges = computed(() =>
+  Object.keys(basicDirty.value).length > 0 || Object.keys(salaryDirty.value).length > 0
+)
+const confirmDiscardIfDirty = (): Promise<boolean> => {
+  if (!hasUnsavedChanges.value) return Promise.resolve(true)
+  return ElMessageBox.confirm(
+    '有未儲存的變更，離開將遺失未儲存內容（薪資、銀行、身分證等敏感欄位不會保留草稿）。',
+    '尚未儲存',
+    { confirmButtonText: '捨棄變更並離開', cancelButtonText: '繼續編輯', type: 'warning' },
+  ).then(() => true).catch(() => false)
+}
+// el-dialog before-close：攔截 X / Esc / 遮罩點擊
+const handleBeforeClose = (done: () => void) => {
+  confirmDiscardIfDirty().then((ok) => { if (ok) done() })
+}
+// footer「取消 / 關閉」按鈕：外部 set v-model 不觸發 before-close，需自行攔截
+const attemptClose = () => {
+  confirmDiscardIfDirty().then((ok) => { if (ok) closeDialog() })
 }
 
 defineExpose({ openCreate, openEdit })
@@ -523,6 +549,7 @@ onMounted(async () => {
     :fullscreen="isMobile"
     class="employee-form-dialog"
     destroy-on-close
+    :before-close="handleBeforeClose"
   >
     <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
       <p v-if="!isEdit" class="required-legend"><span class="req">*</span> 為必填，其餘可日後補</p>
@@ -563,11 +590,11 @@ onMounted(async () => {
     </el-form>
     <template #footer>
       <template v-if="!isEdit">
-        <el-button @click="closeDialog">取消</el-button>
+        <el-button @click="attemptClose">取消</el-button>
         <el-button type="primary" :loading="saving" @click="saveCreate">儲存</el-button>
       </template>
       <template v-else>
-        <el-button @click="closeDialog">關閉</el-button>
+        <el-button @click="attemptClose">關閉</el-button>
         <template v-if="activeTab === 'basic'">
           <el-button
             :disabled="Object.keys(basicDirty).length === 0"
