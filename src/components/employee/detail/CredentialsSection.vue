@@ -11,6 +11,7 @@ import { DEGREE_OPTIONS, CONTRACT_TYPE_OPTIONS } from '@/constants/employee'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { ApiBody } from '@/api/_generated/typed'
 import { expiryStatus } from '@/utils/expiry'
+import { hasPermission } from '@/utils/auth'
 
 const props = defineProps<{
   employeeId: number
@@ -19,6 +20,9 @@ const props = defineProps<{
   contracts: Record<string, unknown>[]
 }>()
 const emit = defineEmits<{ (e: 'reload', kind: 'education' | 'certificate' | 'contract'): void }>()
+
+// 學歷/證照/合約 CUD 後端皆守 EMPLOYEES_WRITE：無權限者隱藏新增與逐列編輯/刪除，與詳情頁頂部編輯鈕對齊
+const canWrite = computed(() => hasPermission('EMPLOYEES_WRITE'))
 
 // ── 學歷 / 證照 / 合約 共用子對話框 ──────────────────
 type SubDialogKind = 'education' | 'certificate' | 'contract' | null
@@ -144,7 +148,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
     <!-- 學歷 -->
     <div class="cred-header">
       <h4>學歷</h4>
-      <el-button type="primary" size="small" @click="openEduCreate">
+      <el-button v-if="canWrite" type="primary" size="small" @click="openEduCreate">
         <el-icon><Plus /></el-icon> 新增學歷
       </el-button>
     </div>
@@ -159,7 +163,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="備註" min-width="120" show-overflow-tooltip />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="120" fixed="right">
         <template #default="scope">
           <el-button link size="small" type="primary" @click="openEduEdit(scope.row)">編輯</el-button>
           <el-button link size="small" type="danger" @click="confirmDeleteSub('education', scope.row)">刪除</el-button>
@@ -173,7 +177,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
     <!-- 證照 -->
     <div class="cred-header">
       <h4>證照</h4>
-      <el-button type="primary" size="small" @click="openCertCreate">
+      <el-button v-if="canWrite" type="primary" size="small" @click="openCertCreate">
         <el-icon><Plus /></el-icon> 新增證照
       </el-button>
     </div>
@@ -195,7 +199,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="備註" min-width="120" show-overflow-tooltip />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="120" fixed="right">
         <template #default="scope">
           <el-button link size="small" type="primary" @click="openCertEdit(scope.row)">編輯</el-button>
           <el-button link size="small" type="danger" @click="confirmDeleteSub('certificate', scope.row)">刪除</el-button>
@@ -209,7 +213,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
     <!-- 合約 -->
     <div class="cred-header">
       <h4>合約</h4>
-      <el-button type="primary" size="small" @click="openContractCreate">
+      <el-button v-if="canWrite" type="primary" size="small" @click="openContractCreate">
         <el-icon><Plus /></el-icon> 新增合約
       </el-button>
     </div>
@@ -235,7 +239,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="備註" min-width="140" show-overflow-tooltip />
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="120" fixed="right">
         <template #default="scope">
           <el-button link size="small" type="primary" @click="openContractEdit(scope.row)">編輯</el-button>
           <el-button link size="small" type="danger" @click="confirmDeleteSub('contract', scope.row)">刪除</el-button>

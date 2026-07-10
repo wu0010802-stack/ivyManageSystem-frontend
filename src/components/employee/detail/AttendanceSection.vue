@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { summarizeCsvImportResult } from '@/utils/attendanceImport'
 import { thisMonthISO } from '@/utils/format'
+import { hasPermission } from '@/utils/auth'
 import type { ElTagType } from '@/utils/employeeDisplay'
 
 const props = defineProps<{ employee: Record<string, unknown> }>()
+
+// 出勤編輯/刪除後端守 ATTENDANCE_WRITE：無權限者隱藏操作欄（避免點下才被 API 拒絕）
+const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
 
 const attendanceRecords = ref<Record<string, unknown>[]>([])
 const attendanceMonth = ref(thisMonthISO()) // YYYY-MM
@@ -113,7 +117,7 @@ onMounted(fetchAttendance)
           <el-tag :type="getAttendanceStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="150">
+      <el-table-column v-if="canWrite" label="操作" width="150">
          <template #default="scope">
             <el-button link type="primary" @click="editAttendance(scope.row)">編輯</el-button>
             <el-button link type="danger" @click="deleteAttendance(scope.row)">刪除</el-button>

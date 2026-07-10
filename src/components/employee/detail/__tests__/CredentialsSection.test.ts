@@ -1,8 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import type { VNode } from 'vue'
 import CredentialsSection from '../CredentialsSection.vue'
+
+// 權限守衛：預設有權限（現有到期標籤測試不受影響）；權限 case 個別覆寫
+const mockHasPermission = vi.fn(() => true)
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (...a: unknown[]) => mockHasPermission(...a),
+}))
 
 // ── 可正確傳遞 row 資料的 el-table / el-table-column stub ──
 // 沿用 src/views/activity/__tests__/ActivityAttendanceView.test.ts 既有慣例：
@@ -64,7 +70,44 @@ function localISOOffset(days: number): string {
 
 const baseProps = { employeeId: 1, educations: [], certificates: [], contracts: [] }
 
+describe('CredentialsSection 操作權限守衛（EMPLOYEES_WRITE）', () => {
+  beforeEach(() => { mockHasPermission.mockReset(); mockHasPermission.mockReturnValue(true) })
+
+  it('以 EMPLOYEES_WRITE 查詢權限', () => {
+    mount(CredentialsSection, { props: { ...baseProps }, global: { stubs: GLOBAL_STUBS } })
+    expect(mockHasPermission).toHaveBeenCalledWith('EMPLOYEES_WRITE')
+  })
+
+  it('有權限 → 顯示新增與逐列編輯/刪除操作', () => {
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = mount(CredentialsSection, {
+      props: { ...baseProps, certificates: [{ id: 1, certificate_name: 'X', expiry_date: null }] },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    expect(wrapper.text()).toContain('新增學歷')
+    expect(wrapper.text()).toContain('新增證照')
+    expect(wrapper.text()).toContain('新增合約')
+    expect(wrapper.text()).toContain('編輯')
+    expect(wrapper.text()).toContain('刪除')
+  })
+
+  it('無權限 → 不顯示新增按鈕與逐列編輯/刪除操作', () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mount(CredentialsSection, {
+      props: { ...baseProps, certificates: [{ id: 1, certificate_name: 'X', expiry_date: null }] },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    expect(wrapper.text()).not.toContain('新增學歷')
+    expect(wrapper.text()).not.toContain('新增證照')
+    expect(wrapper.text()).not.toContain('新增合約')
+    expect(wrapper.text()).not.toContain('編輯')
+    expect(wrapper.text()).not.toContain('刪除')
+  })
+})
+
 describe('CredentialsSection 到期標籤', () => {
+  beforeEach(() => { mockHasPermission.mockReset(); mockHasPermission.mockReturnValue(true) })
+
   it('證照到期日已逾期 → danger tag「已逾期」', () => {
     const wrapper = mount(CredentialsSection, {
       props: {
