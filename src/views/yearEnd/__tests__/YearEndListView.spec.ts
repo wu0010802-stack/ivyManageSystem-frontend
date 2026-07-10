@@ -3,7 +3,8 @@ import { mount } from '@vue/test-utils'
 import { nextTick, defineComponent, h } from 'vue'
 import YearEndListView from '../YearEndListView.vue'
 
-// G2：年終週期狀態轉換（OPEN→LOCKED→CLOSED，亦允許倒退救援）—— PATCH /year_end/cycles/{cycle_id}
+// Task 10：列表瘦身——移除週期狀態機操作（鎖定/封存/退回，移至 Task 11 明細頁），
+// 動作欄收斂為 明細/總表/設定 + 匯出 dropdown；狀態 tag 文案改吃共用常數。
 vi.mock('@/api/yearEnd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/yearEnd')>()
   return {
@@ -22,8 +23,9 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: mockPush, back: vi.fn() }),
 }))
 
 const mockHasPermission = vi.fn().mockReturnValue(true)
@@ -32,7 +34,7 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 import * as api from '@/api/yearEnd'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 interface CycleRow {
   id: number
@@ -105,6 +107,30 @@ const ElButtonStub = defineComponent({
   },
 })
 
+const ElDropdownStub = defineComponent({
+  name: 'ElDropdownStub',
+  setup(_, { slots }) {
+    return () => h('div', { class: 'el-dropdown-stub' }, [
+      slots.default?.(),
+      slots.dropdown?.(),
+    ])
+  },
+})
+
+const ElDropdownMenuStub = defineComponent({
+  name: 'ElDropdownMenuStub',
+  setup(_, { slots }) {
+    return () => h('div', { class: 'el-dropdown-menu-stub' }, slots.default?.())
+  },
+})
+
+const ElDropdownItemStub = defineComponent({
+  name: 'ElDropdownItemStub',
+  setup(_, { attrs, slots }) {
+    return () => h('div', { ...attrs, class: 'el-dropdown-item-stub' }, slots.default?.())
+  },
+})
+
 async function mountView() {
   const wrapper = mount(YearEndListView, {
     global: {
@@ -122,6 +148,10 @@ async function mountView() {
         'el-upload': true,
         'el-radio-group': true,
         'el-radio': true,
+        'el-dropdown': ElDropdownStub,
+        'el-dropdown-menu': ElDropdownMenuStub,
+        'el-dropdown-item': ElDropdownItemStub,
+        'el-icon': true,
       },
       directives: { loading: () => {} },
     },
@@ -131,7 +161,7 @@ async function mountView() {
   return wrapper
 }
 
-describe('YearEndListView — G2 週期狀態操作', () => {
+describe('YearEndListView — Task 10 列表瘦身', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
@@ -141,7 +171,7 @@ describe('YearEndListView — G2 週期狀態操作', () => {
     ['OPEN', 'success', '開放'],
     ['LOCKED', 'warning', '已鎖定'],
     ['CLOSED', 'info', '已封存'],
-  ])('狀態 tag 對照：%s → type=%s、標籤=%s', async (status, expectedType, expectedLabel) => {
+  ])('狀態 tag 文案來自 CYCLE_STATUS_LABEL：%s → type=%s、標籤=%s', async (status, expectedType, expectedLabel) => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status })] } as never)
     const wrapper = await mountView()
 
@@ -162,123 +192,107 @@ describe('YearEndListView — G2 週期狀態操作', () => {
     expect(vm.importFallbackNotice).toContain('Excel 匯入僅供例外對稿')
   })
 
-  it('OPEN 狀態：顯示「鎖定」按鈕；點擊確認後呼叫 updateCycleStatus(id, {status: LOCKED})', async () => {
+  it('列動作不再包含「鎖定」按鈕（狀態機操作已移出至明細頁，Task 11）', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'OPEN' })] } as never)
-    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
-    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: makeCycle({ status: 'LOCKED' }) } as never)
 
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      lockCycle: (row: CycleRow) => Promise<void>
-      cycles: CycleRow[]
-    }
 
-    await vm.lockCycle(vm.cycles[0])
-    await nextTick()
-
-    expect(api.updateCycleStatus).toHaveBeenCalledWith(7, { status: 'LOCKED' })
-    expect(vi.mocked(ElMessage.success)).toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('鎖定')
+    expect(wrapper.text()).not.toContain('封存')
+    expect(wrapper.text()).not.toContain('退回開放')
+    expect(wrapper.text()).not.toContain('退回鎖定')
+    expect(wrapper.find('[data-test="lock-cycle-button"]').exists()).toBe(false)
   })
 
-  it('LOCKED 狀態：封存操作呼叫 updateCycleStatus(id, {status: CLOSED})', async () => {
-    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'LOCKED' })] } as never)
-    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
-    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: makeCycle({ status: 'CLOSED' }) } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      closeCycle: (row: CycleRow) => Promise<void>
-      cycles: CycleRow[]
-    }
-
-    await vm.closeCycle(vm.cycles[0])
-    await nextTick()
-
-    expect(api.updateCycleStatus).toHaveBeenCalledWith(7, { status: 'CLOSED' })
-    // 封存前提示需全數核定
-    expect(vi.mocked(ElMessageBox.confirm)).toHaveBeenCalledWith(
-      expect.stringContaining('全數核定'),
-      expect.anything(),
-      expect.anything(),
-    )
-  })
-
-  it('LOCKED 狀態：退回開放呼叫 updateCycleStatus(id, {status: OPEN})', async () => {
-    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'LOCKED' })] } as never)
-    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
-    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: makeCycle({ status: 'OPEN' }) } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      reopenToOpen: (row: CycleRow) => Promise<void>
-      cycles: CycleRow[]
-    }
-
-    await vm.reopenToOpen(vm.cycles[0])
-    await nextTick()
-
-    expect(api.updateCycleStatus).toHaveBeenCalledWith(7, { status: 'OPEN' })
-  })
-
-  it('CLOSED 狀態：退回鎖定呼叫 updateCycleStatus(id, {status: LOCKED})', async () => {
-    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'CLOSED' })] } as never)
-    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
-    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: makeCycle({ status: 'LOCKED' }) } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      reopenToLocked: (row: CycleRow) => Promise<void>
-      cycles: CycleRow[]
-    }
-
-    await vm.reopenToLocked(vm.cycles[0])
-    await nextTick()
-
-    expect(api.updateCycleStatus).toHaveBeenCalledWith(7, { status: 'LOCKED' })
-  })
-
-  it('使用者取消確認 dialog → 不呼叫 updateCycleStatus', async () => {
+  it('vm 上不再暴露狀態機函式（transitionStatus/lockCycle/closeCycle/reopenToLocked/reopenToOpen/canFinalize）', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'OPEN' })] } as never)
-    vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
-
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      lockCycle: (row: CycleRow) => Promise<void>
-      cycles: CycleRow[]
-    }
+    const vm = wrapper.vm as unknown as Record<string, unknown>
 
-    await vm.lockCycle(vm.cycles[0])
-    await nextTick()
-
-    expect(api.updateCycleStatus).not.toHaveBeenCalled()
+    expect(vm.lockCycle).toBeUndefined()
+    expect(vm.closeCycle).toBeUndefined()
+    expect(vm.reopenToLocked).toBeUndefined()
+    expect(vm.reopenToOpen).toBeUndefined()
+    expect(vm.transitionStatus).toBeUndefined()
+    expect(vm.canFinalize).toBeUndefined()
+    expect(vm.statusBusy).toBeUndefined()
   })
 
-  it('後端拒絕（如尚有結算未核定）→ 顯示後端 detail 而非通用錯誤', async () => {
-    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'LOCKED' })] } as never)
-    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
-    vi.mocked(api.updateCycleStatus).mockRejectedValue({
-      response: { data: { detail: '尚有結算單未核定，無法封存' } },
-    })
-
+  it('「明細」點擊 push 新巢狀路徑 /appraisal-year-end/year-end/cycles/{id}', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      closeCycle: (row: CycleRow) => Promise<void>
-      cycles: CycleRow[]
-    }
 
-    await vm.closeCycle(vm.cycles[0])
-    await nextTick()
+    const detailBtn = wrapper.findAll('button').find((b) => b.text() === '明細')
+    expect(detailBtn).toBeTruthy()
+    await detailBtn!.trigger('click')
 
-    expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('尚有結算單未核定，無法封存')
+    expect(mockPush).toHaveBeenCalledWith('/appraisal-year-end/year-end/cycles/1')
   })
 
-  it('無 YEAR_END_FINALIZE 權限：週期操作按鈕不顯示（canFinalize=false）', async () => {
+  it('「總表」點擊 push /appraisal-year-end/year-end/cycles/{id}/grid', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    const wrapper = await mountView()
+
+    const gridBtn = wrapper.findAll('button').find((b) => b.text() === '總表')
+    expect(gridBtn).toBeTruthy()
+    await gridBtn!.trigger('click')
+
+    expect(mockPush).toHaveBeenCalledWith('/appraisal-year-end/year-end/cycles/1/grid')
+  })
+
+  it('「設定」點擊 push /appraisal-year-end/year-end/cycles/{id}/config', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    const wrapper = await mountView()
+
+    const configBtn = wrapper.findAll('button').find((b) => b.text() === '設定')
+    expect(configBtn).toBeTruthy()
+    await configBtn!.trigger('click')
+
+    expect(mockPush).toHaveBeenCalledWith('/appraisal-year-end/year-end/cycles/1/config')
+  })
+
+  it('匯出 dropdown 內含總表 Excel 與轉帳名冊連結', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('年終獎金總表')
+    expect(wrapper.text()).toContain('轉帳名冊')
+    const links = wrapper.findAll('a')
+    expect(links.some((a) => a.attributes('href') === api.exportYearEndSummaryXlsxUrl(1))).toBe(true)
+    expect(links.some((a) => a.attributes('href') === api.exportYearEndTransferRosterXlsxUrl(1))).toBe(true)
+  })
+
+  it('頂部改用共用 PageHeader（無返回鍵）', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle()] } as never)
+    const wrapper = await mountView()
+
+    expect(wrapper.findComponent({ name: 'PageHeader' }).exists()).toBe(true)
+    expect(wrapper.find('el-page-header-stub').exists()).toBe(false)
+  })
+
+  it('新增年度週期按鈕仍可用', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [] } as never)
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('新增年度週期')
+  })
+
+  it('無權限帳號仍可看到明細/總表/設定/匯出（無 canFinalize 權限守衛）', async () => {
     mockHasPermission.mockReturnValue(false)
-    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'OPEN' })] } as never)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
 
     const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as { canFinalize: boolean }
 
-    expect(vm.canFinalize).toBe(false)
+    expect(wrapper.text()).toContain('明細')
+    expect(wrapper.text()).toContain('總表')
+    expect(wrapper.text()).toContain('設定')
+  })
+
+  it('提醒後端錯誤訊息（載入失敗時走 apiError）', async () => {
+    vi.mocked(api.listYearEndCycles).mockRejectedValue({ response: { data: { detail: '載入異常' } } })
+
+    await mountView()
+
+    expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('載入異常')
   })
 })
