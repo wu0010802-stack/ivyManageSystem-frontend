@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMonthlyPnL } from '@/api/reports'
 import { apiError } from '@/utils/error'
+import { computeReportPeriod } from './useReportPeriod'
 
 const props = defineProps<{
   year: number
@@ -43,6 +44,8 @@ async function load() {
   errorMsg.value = ''
   try {
     data.value = await getMonthlyPnL(props.year)
+    await nextTick()
+    if (currentMonthIdx.value != null) scrollToCurrentMonth()
   } catch (e) {
     errorMsg.value = apiError(e, '載入月度現金收支表失敗')
     ElMessage.error(errorMsg.value)
@@ -92,6 +95,33 @@ function netCellClass(v: number | null | undefined) {
   if (!Number.isFinite(num) || num === 0) return ''
   return num > 0 ? 'cell-positive' : 'cell-negative'
 }
+
+// 當月高亮／未來月淡化（spec §6）：cutoff 僅依年度與今天，不需 trend
+const period = computed(() => computeReportPeriod(props.year))
+const currentMonthIdx = computed(() =>
+  period.value.isCurrentYear && period.value.cutoffMonth >= 1 ? period.value.cutoffMonth - 1 : null)
+
+function monthColClass(idx: number): Record<string, boolean> {
+  return {
+    'col-current': currentMonthIdx.value === idx,
+    'col-future': idx + 1 > period.value.cutoffMonth,
+  }
+}
+
+// 結餘紅綠只給已發生月份；未來月（預登錄）中性
+function netCellClassAt(v: number | null | undefined, idx: number): string {
+  if (idx + 1 > period.value.cutoffMonth) return ''
+  return netCellClass(v)
+}
+
+const pnlScrollRef = ref<HTMLElement | null>(null)
+function scrollToCurrentMonth() {
+  const el = pnlScrollRef.value?.querySelector<HTMLElement>('thead th.col-current')
+  const stickyw = pnlScrollRef.value?.querySelector<HTMLElement>('thead th.col-label')?.offsetWidth ?? 0
+  if (el && pnlScrollRef.value) {
+    pnlScrollRef.value.scrollLeft = Math.max(0, el.offsetLeft - stickyw - 16)
+  }
+}
 </script>
 
 <template>
@@ -106,13 +136,22 @@ function netCellClass(v: number | null | undefined) {
     <div class="pnl-header">
       <h3 class="panel-title" data-test="pnl-title">月度現金收支表</h3>
       <el-tag type="info" effect="plain" size="small" data-test="pnl-cashbasis-badge">現金收付實現制</el-tag>
+      <el-button v-if="period.isCurrentYear" size="small" data-test="jump-to-current" @click="scrollToCurrentMonth">
+        跳到本月
+      </el-button>
     </div>
-    <div class="pnl-scroll">
+    <div class="pnl-scroll" ref="pnlScrollRef">
       <table class="pnl-table">
         <thead>
           <tr>
             <th class="col-label sticky-col">項目</th>
-            <th v-for="m in MONTHS" :key="m" class="col-month">{{ m }} 月</th>
+            <th
+              v-for="m in MONTHS"
+              :key="m"
+              class="col-month"
+              :class="monthColClass(m - 1)"
+              :title="m > period.cutoffMonth ? '預登錄（尚未發生）' : undefined"
+            >{{ m }} 月</th>
             <th class="col-total">合計</th>
           </tr>
         </thead>
@@ -135,6 +174,7 @@ function netCellClass(v: number | null | undefined) {
                 v-for="(value, idx) in (row.monthly || [])"
                 :key="idx"
                 class="cell-num"
+                :class="monthColClass(idx)"
               >
                 {{ formatCell(value, row.unit) }}
               </td>
@@ -157,7 +197,7 @@ function netCellClass(v: number | null | undefined) {
               v-for="(value, idx) in (row.monthly || [])"
               :key="idx"
               class="cell-num"
-              :class="row.kind === 'net' ? netCellClass(value) : ''"
+              :class="[monthColClass(idx), row.kind === 'net' ? netCellClassAt(value, idx) : '']"
             >
               {{ formatCell(value, 'amount') }}
             </td>
@@ -216,7 +256,7 @@ function netCellClass(v: number | null | undefined) {
   /* sticky 第一欄靠 overflow container 觸發 */
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 4px;
-  background: #fff;
+  background: var(--el-bg-color);
 }
 
 .pnl-table {
@@ -252,11 +292,26 @@ function netCellClass(v: number | null | undefined) {
   border-left: 1px solid var(--el-border-color-lighter);
 }
 
+/* 當月高亮／未來月淡化（spec §6） */
+.pnl-table .col-current {
+  background: var(--el-color-primary-light-9);
+}
+.pnl-table thead th.col-current {
+  background: var(--el-color-primary-light-8);
+}
+.pnl-table .col-future {
+  color: var(--el-text-color-placeholder);
+}
+.pnl-table thead th.col-future {
+  color: var(--el-text-color-placeholder);
+  font-weight: 400;
+}
+
 /* === sticky 第一欄（thead 也吃這條 + top） === */
 .sticky-col {
   position: sticky;
   left: 0;
-  background: #fff;
+  background: var(--el-bg-color);
   border-right: 1px solid var(--el-border-color-lighter);
   text-align: left;
   z-index: 1;

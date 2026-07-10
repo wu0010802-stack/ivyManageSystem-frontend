@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
@@ -65,5 +65,43 @@ describe('MonthlyPnLPanel pending 提醒引導', () => {
 
     expect(w.text()).toContain('畢冊費 3 筆待登錄')
     expect(w.text()).toContain('廠商水電費 1 筆待登錄')
+  })
+})
+
+describe('當月高亮與未來月淡化（spec §6）', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 10))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('檢視今年：7 月欄 col-current、8 月起 col-future', async () => {
+    const w = mountPanel() // year: 2026
+    await flushPromises()
+    const headers = w.findAll('thead th.col-month')
+    expect(headers[6].classes()).toContain('col-current')
+    expect(headers[7].classes()).toContain('col-future')
+    expect(headers[5].classes()).not.toContain('col-future')
+  })
+  it('未來月的結餘 cell 不上紅綠色（中性）', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const netRow = w.find('[data-row-key="net_cashflow"]')
+    const cells = netRow.findAll('td.cell-num')
+    // mock 全年 monthly 皆 1000（正值）：7 月內上綠、8 月起中性
+    expect(cells[6].classes()).toContain('cell-positive')
+    expect(cells[7].classes()).not.toContain('cell-positive')
+    expect(cells[7].classes()).toContain('col-future')
+  })
+  it('檢視今年顯示「跳到本月」按鈕；過去年不顯示', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('[data-test="jump-to-current"]').exists()).toBe(true)
+    const past = mount(MonthlyPnLPanel, { props: { year: 2020 }, global: { plugins: [ElementPlus], stubs: { 'router-link': RouterLinkStub } } })
+    await flushPromises()
+    expect(past.find('[data-test="jump-to-current"]').exists()).toBe(false)
   })
 })
