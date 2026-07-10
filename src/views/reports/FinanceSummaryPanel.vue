@@ -106,9 +106,8 @@ const trendChartData = computed(() => {
   if (selectedMonth.value == null) {
     return buildTrendChartData(trend.value, period.value, { includeRefund: true })
   }
-  type TrendRow = { month: number; revenue: number; refund: number; expense: number; net: number }
-  const byMonth: Record<number, TrendRow> = {}
-  trend.value.forEach((r: TrendRow) => { byMonth[r.month] = r })
+  const byMonth: Record<number, FinanceTrendRow> = {}
+  trend.value.forEach((r) => { byMonth[r.month] = r })
   const monthList = [selectedMonth.value]
   const labels = monthList.map(m => `${m}月`)
   const revenue = monthList.map(m => byMonth[m]?.revenue || 0)
@@ -366,8 +365,9 @@ const exportXlsx = async () => {
 .chart-hint { font-size: 12px; color: var(--text-secondary); margin-left: 12px; font-weight: normal; }
 .chart-container { height: 320px; position: relative; }
 .chart-container--tall { height: 380px; }
+/* 僅供本檔 template 直接渲染的節點（月度明細淨現金欄）使用；KPI 卡的語意色由
+   ReportKpiCard 自己的 style 定義（父層 scoped 規則打不進子元件內部節點）。 */
 .value-green { color: var(--color-success); }
-.value-orange { color: var(--color-warning); }
 .value-red { color: var(--color-danger); }
 
 .link-btn {

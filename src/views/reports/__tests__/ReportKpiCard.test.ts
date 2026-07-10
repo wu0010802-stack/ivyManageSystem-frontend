@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
@@ -41,5 +42,23 @@ describe('ReportKpiCard trend 顯示規則', () => {
     const w = mountCard({ note: '全年含預登錄：NT$9,408,206', noteTest: 'note' })
     expect(w.find('[data-test="note"]').text()).toContain('全年含預登錄')
     expect(mountCard({}).find('[data-test="note"]').exists()).toBe(false)
+  })
+})
+
+describe('ReportKpiCard valueClass 語意色（scoped CSS 邊界）', () => {
+  it('valueClass 傳入時 value div 帶上該 class', () => {
+    const w = mountCard({ valueClass: 'value-orange', valueTest: 'val' })
+    expect(w.find('[data-test="val"]').classes()).toContain('value-orange')
+  })
+  it('呼叫端使用的語意色 class 必須定義在本元件 style 內（父層 scoped 規則打不進子元件內部節點）', () => {
+    // Vue scoped CSS：父元件（Overview/FinanceSummary panel）的 scope-id 只落在
+    // 子元件根節點，`kpi-value` 是內部節點——父層定義的 .value-* 規則永遠打不到。
+    // 因此凡是呼叫端會透過 valueClass 傳入的語意色，規則本體必須在此元件內。
+    // vitest 預設不處理 <style>（css:false），無法斷言 computed style，退而斷言
+    // SFC 原始碼的 style 段含該規則（斷言 selector 而非註解字串）。
+    const src = readFileSync('src/views/reports/ReportKpiCard.vue', 'utf8')
+    for (const cls of ['value-green', 'value-red', 'value-orange']) {
+      expect(src, `缺 .kpi-value.${cls} 規則`).toMatch(new RegExp(`\\.kpi-value\\.${cls}\\s*\\{`))
+    }
   })
 })

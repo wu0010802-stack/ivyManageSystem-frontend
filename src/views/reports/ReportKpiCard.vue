@@ -84,7 +84,9 @@ const visibleTrends = () =>
 .kpi-note { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
 .kpi-sub  { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 
-/* 語意色（正負淨現金） */
-.kpi-value.value-green { color: var(--color-success); }
-.kpi-value.value-red   { color: var(--color-danger); }
+/* 語意色（正負淨現金／退款警示）。規則必須放在本元件內：呼叫端（父層 scoped）
+   的 .value-* 規則只落在本元件根節點，打不到內部的 kpi-value div。 */
+.kpi-value.value-green  { color: var(--color-success); }
+.kpi-value.value-red    { color: var(--color-danger); }
+.kpi-value.value-orange { color: var(--color-warning); }
 </style>
