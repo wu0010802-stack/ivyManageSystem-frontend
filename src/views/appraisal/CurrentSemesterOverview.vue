@@ -24,6 +24,7 @@ import {
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { fmtPct } from '@/utils/format'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
@@ -162,6 +163,8 @@ async function loadRules() {
 
 // ── 進頁即算：OPEN cycle 先 refresh 再 loadStatus ──────────
 const refreshing = ref(false)
+// 自動重算失敗不再靜默：改顯示 stale-warning banner（可關閉），提示使用者目前是舊資料
+const refreshFailed = ref(false)
 
 async function refreshIfOpen() {
   if (!currentCycle.value || currentCycle.value.status !== 'OPEN' || refreshing.value) return
@@ -169,13 +172,15 @@ async function refreshIfOpen() {
   try {
     await refreshAppraisalCycle(currentCycle.value.id)
   } catch (e) {
-    // 靜默降級：refresh 失敗不擋 loadStatus，總覽仍顯示既有彙整資料
+    // 失敗不擋 loadStatus，總覽仍顯示既有彙整資料，但需顯式告知使用者資料可能是舊的
+    refreshFailed.value = true
   } finally {
     refreshing.value = false
   }
 }
 
 async function reloadAll() {
+  refreshFailed.value = false
   await fetchCurrentCycle()
   await refreshIfOpen()
   await loadStatus()
@@ -236,7 +241,7 @@ const avgRetention = computed(() => {
   )
   if (!list.length) return '—'
   const sum = list.reduce((acc, p) => acc + Number(p.retention?.retention_rate || 0), 0)
-  return `${(sum / list.length).toFixed(1)}%`
+  return fmtPct(sum / list.length)
 })
 
 const totalDisciplinary = computed(() => {
@@ -245,6 +250,10 @@ const totalDisciplinary = computed(() => {
     return acc + (d.warning_count || 0) + (d.minor_count || 0) + (d.major_count || 0)
   }, 0)
 })
+
+// ── KPI 區載入狀態：statusLoading（彙整資料）或 refreshing（進頁重算中）
+// 皆視為 KPI 尚不可信，改顯示 skeleton 佔位，避免顯示過渡性的 0 值
+const kpiLoading = computed(() => statusLoading.value || refreshing.value)
 
 // ── 員工狀態表 row 格式化 ─────────────────────────────────
 const ROLE_GROUP_LABEL: Record<string, string> = {
@@ -262,28 +271,43 @@ function isClassroomScoped(row: ParticipantRow) {
   return !NON_CLASSROOM_ROLES.has(row.role_group ?? '')
 }
 
-function formatAttendance(row: ParticipantRow) {
+// 出缺勤欄：一格塞 5 個數字的字串已改拆 badge，只列非零項，全零顯示 —
+// 曠職自 2026-06-11 起與請假分流（−4/日），必須獨立可見（非零時單獨一顆 badge）
+interface AttnItem { key: keyof AttendanceInfo; label: string }
+const ATTN_ITEMS: AttnItem[] = [
+  { key: 'late_count', label: '遲' },
+  { key: 'early_leave_count', label: '早' },
+  { key: 'missing_punch_count', label: '未' },
+  { key: 'leave_days', label: '假' },
+  { key: 'absent_days', label: '曠' },
+]
+
+function attnBadges(row: ParticipantRow) {
   const a = row.attendance || {}
-  // 曠職自 2026-06-11 起與請假分流（−4/日），必須獨立可見
-  return `遲${a.late_count || 0}/早${a.early_leave_count || 0}/未${a.missing_punch_count || 0}/假${a.leave_days || 0}/曠${a.absent_days || 0}`
+  return ATTN_ITEMS.filter((i) => Number(a[i.key] ?? 0) > 0).map((i) => ({ ...i, count: Number(a[i.key]) }))
 }
 
 function formatRetention(row: ParticipantRow) {
   if (!isClassroomScoped(row) || !row.retention || row.retention.retention_rate == null) return '—'
-  return `${Number(row.retention.retention_rate).toFixed(1)}%`
+  return fmtPct(row.retention.retention_rate)
 }
 
 function formatActivity(row: ParticipantRow) {
   if (!isClassroomScoped(row) || !row.activity || row.activity.activity_rate == null) return '—'
-  return `${Number(row.activity.activity_rate).toFixed(1)}%`
+  return fmtPct(row.activity.activity_rate)
 }
 
-function formatDisciplinary(row: ParticipantRow) {
+// 功過欄：原字串 `過x／功x` 已改拆 badge（過=danger、功=success），非零才顯示，全零顯示 —
+// 功過雙向（2026-06-11 規章對齊）：只顯示過會與 suggested_score_delta 對不上帳
+interface MeritBadge { key: string; label: string; count: number; type: 'danger' | 'success' }
+function meritBadges(row: ParticipantRow): MeritBadge[] {
   const d = row.disciplinary || {}
   const demerit = (d.warning_count || 0) + (d.minor_count || 0) + (d.major_count || 0)
   const merit = (d.commend_count || 0) + (d.minor_merit_count || 0) + (d.major_merit_count || 0)
-  // 功過雙向（2026-06-11 規章對齊）：只顯示過會與 suggested_score_delta 對不上帳
-  return `過${demerit}／功${merit}`
+  const badges: MeritBadge[] = []
+  if (demerit > 0) badges.push({ key: 'demerit', label: '過', count: demerit, type: 'danger' })
+  if (merit > 0) badges.push({ key: 'merit', label: '功', count: merit, type: 'success' })
+  return badges
 }
 
 // ── 詳情 dialog ────────────────────────────────────────────
@@ -519,29 +543,44 @@ const scorePreviewDialogVisible = ref(false)
 
     <!-- cycle 存在 → KPI + 表格 -->
     <template v-if="currentCycle">
+      <el-alert
+        v-if="refreshFailed"
+        data-test="stale-banner"
+        type="warning"
+        closable
+        title="自動重算失敗，目前顯示的是上次成功計算的資料"
+        :description="`資料時間：${formatTime(lastRefreshedAt) || '—'}`"
+        class="banner"
+      />
+
       <div class="kpi-grid">
-        <StatCard label="員工總數" :value="employeeCount" :icon="Connection" color="primary" data-test="kpi-employees" />
-        <StatCard
-          label="平均出缺勤異常"
-          :value="avgAttendanceAbnormal"
-          :icon="Refresh"
-          color="warning"
-          data-test="kpi-attendance"
-        />
-        <StatCard
-          label="平均班級留校率"
-          :value="avgRetention"
-          :icon="Connection"
-          color="success"
-          data-test="kpi-retention"
-        />
-        <StatCard
-          label="懲處事件總數"
-          :value="totalDisciplinary"
-          :icon="Connection"
-          color="danger"
-          data-test="kpi-discipline"
-        />
+        <template v-if="kpiLoading">
+          <el-skeleton v-for="i in 4" :key="i" :rows="1" animated class="kpi-skeleton" />
+        </template>
+        <template v-else>
+          <StatCard label="員工總數" :value="employeeCount" :icon="Connection" color="primary" data-test="kpi-employees" />
+          <StatCard
+            label="平均出缺勤異常"
+            :value="avgAttendanceAbnormal"
+            :icon="Refresh"
+            color="warning"
+            data-test="kpi-attendance"
+          />
+          <StatCard
+            label="平均班級留校率"
+            :value="avgRetention"
+            :icon="Connection"
+            color="success"
+            data-test="kpi-retention"
+          />
+          <StatCard
+            label="懲處事件總數"
+            :value="totalDisciplinary"
+            :icon="Connection"
+            color="danger"
+            data-test="kpi-discipline"
+          />
+        </template>
       </div>
 
       <el-collapse class="manual-section" data-test="manual-section">
@@ -583,7 +622,14 @@ const scorePreviewDialogVisible = ref(false)
           </template>
         </el-table-column>
         <el-table-column label="遲早退/未打卡/請假/曠職" width="220">
-          <template #default="{ row }">{{ formatAttendance(row) }}</template>
+          <template #default="{ row }">
+            <span data-test="attn-cell">
+              <template v-if="attnBadges(row).length">
+                <el-tag v-for="b in attnBadges(row)" :key="b.key" size="small" type="warning" class="attn-badge">{{ b.label }} {{ b.count }}</el-tag>
+              </template>
+              <template v-else>—</template>
+            </span>
+          </template>
         </el-table-column>
         <el-table-column label="班級留校率" width="120">
           <template #default="{ row }">
@@ -596,7 +642,14 @@ const scorePreviewDialogVisible = ref(false)
           </template>
         </el-table-column>
         <el-table-column label="功過" width="110">
-          <template #default="{ row }">{{ formatDisciplinary(row) }}</template>
+          <template #default="{ row }">
+            <span data-test="merit-cell">
+              <template v-if="meritBadges(row).length">
+                <el-tag v-for="b in meritBadges(row)" :key="b.key" size="small" :type="b.type" class="attn-badge">{{ b.label }} {{ b.count }}</el-tag>
+              </template>
+              <template v-else>—</template>
+            </span>
+          </template>
         </el-table-column>
         <el-table-column label="考核狀態" width="160">
           <template #default="{ row }">
@@ -717,21 +770,21 @@ const scorePreviewDialogVisible = ref(false)
 .current-semester-overview {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .toolbar__left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -742,7 +795,7 @@ const scorePreviewDialogVisible = ref(false)
 
 .toolbar__actions {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .banner {
@@ -753,15 +806,19 @@ const scorePreviewDialogVisible = ref(false)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
+}
+
+.attn-badge + .attn-badge {
+  margin-left: 4px;
 }
 
 .manual-section {

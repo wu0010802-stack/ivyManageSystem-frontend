@@ -139,8 +139,22 @@ const GLOBAL_STUBS = {
       const dataAttrs = Object.fromEntries(
         Object.entries(attrs).filter(([k]) => k.startsWith('data-')),
       )
-      return () => h('div', { ...dataAttrs },
-        [slots.title?.(), slots.default?.()].filter(Boolean))
+      // 支援 slot 版（#title/#default）與 prop 版（title/description）兩種既有用法
+      return () => h('div', { ...dataAttrs }, [
+        slots.title?.() ?? attrs.title ?? null,
+        attrs.description ?? null,
+        slots.default?.(),
+      ].filter((v) => v !== null && v !== undefined))
+    },
+  }),
+  'el-skeleton': defineComponent({
+    name: 'ElSkeletonStub',
+    inheritAttrs: false,
+    setup(_, { attrs }) {
+      const dataAttrs = Object.fromEntries(
+        Object.entries(attrs).filter(([k]) => k.startsWith('data-')),
+      )
+      return () => h('div', { class: 'el-skeleton', ...dataAttrs })
     },
   }),
   'el-tag': defineComponent({
@@ -579,11 +593,12 @@ describe('CurrentSemesterOverview', () => {
     })
 
     const wrapper = await mountView()
-    // 出缺勤摘要：曠職分流後必須可見（曠2），不可再藏進請假
-    expect(wrapper.text()).toContain('曠2')
+    // 出缺勤摘要：曠職分流後必須可見（曠 2），不可再藏進請假
+    // Task 7 起改拆 badge（label 與 count 間有空格），格式由「曠2」改為「曠 2」
+    expect(wrapper.text()).toContain('曠 2')
     // 功過欄：過 1、功 2 都要呈現，否則與 suggested_score_delta 對不上帳
-    expect(wrapper.text()).toContain('過1')
-    expect(wrapper.text()).toContain('功2')
+    expect(wrapper.text()).toContain('過 1')
+    expect(wrapper.text()).toContain('功 2')
   })
 
 describe('CurrentSemesterOverview 清單篩選（Task 4）', () => {
@@ -672,7 +687,7 @@ describe('CurrentSemesterOverview 進頁即算 refresh（Task 8）', () => {
     expect(getAppraisalAllEmployeesStatus).toHaveBeenCalledWith(12)
   })
 
-  it('refreshAppraisalCycle reject 時仍呼叫 getAppraisalAllEmployeesStatus（靜默降級）', async () => {
+  it('refreshAppraisalCycle reject 時仍呼叫 getAppraisalAllEmployeesStatus，並顯示 stale-warning banner（Task 7 起不再靜默）', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     refreshAppraisalCycle.mockRejectedValueOnce(new Error('cycle not OPEN'))
     getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
@@ -681,8 +696,20 @@ describe('CurrentSemesterOverview 進頁即算 refresh（Task 8）', () => {
 
     expect(refreshAppraisalCycle).toHaveBeenCalledWith(12)
     expect(getAppraisalAllEmployeesStatus).toHaveBeenCalledWith(12)
-    // 降級：不噴未捕捉例外，元件仍正常渲染
+    // 不噴未捕捉例外，元件仍正常渲染 KPI
     expect(wrapper.find('[data-test="kpi-employees"]').exists()).toBe(true)
+    // Task 7：改顯示可關閉的 stale-warning banner，告知使用者目前是舊資料
+    expect(wrapper.find('[data-test="stale-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="stale-banner"]').text()).toContain('自動重算失敗')
+  })
+
+  it('refreshAppraisalCycle 成功時不顯示 stale-warning banner', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="stale-banner"]').exists()).toBe(false)
   })
 
   it('toolbar 顯示「已即時重算」與 generated_at 格式化時間', async () => {
@@ -694,5 +721,122 @@ describe('CurrentSemesterOverview 進頁即算 refresh（Task 8）', () => {
     const updated = wrapper.find('[data-test="last-refreshed-at"]')
     expect(updated.exists()).toBe(true)
     expect(updated.text()).toContain('已即時重算')
+  })
+})
+
+// ── Task 7：多值欄拆 badge、KPI loading skeleton ───────────
+describe('CurrentSemesterOverview 精修（Task 7）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('出缺勤欄：全零顯示 —，非零僅列非零項', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: {
+        cycle_id: 12,
+        academic_year: 114,
+        semester: 'FIRST',
+        start_date: '2025-08-01',
+        end_date: '2026-01-31',
+        generated_at: '2026-05-16T03:21:00Z',
+        participants: [
+          {
+            participant_id: 401,
+            employee_id: 41,
+            employee_name: '全零',
+            role_group: 'HEAD_TEACHER',
+            classroom_id: 3,
+            is_participant: true,
+            attendance: {
+              late_count: 0,
+              early_leave_count: 0,
+              missing_punch_count: 0,
+              leave_days: 0,
+              absent_days: 0,
+            },
+            retention: null,
+            activity: null,
+            disciplinary: { warning_count: 0, minor_count: 0, major_count: 0, commend_count: 0, minor_merit_count: 0, major_merit_count: 0, actions: [] },
+          },
+          {
+            participant_id: 402,
+            employee_id: 42,
+            employee_name: '遲到兩次',
+            role_group: 'HEAD_TEACHER',
+            classroom_id: 3,
+            is_participant: true,
+            attendance: {
+              late_count: 2,
+              early_leave_count: 0,
+              missing_punch_count: 0,
+              leave_days: 0,
+              absent_days: 0,
+            },
+            retention: null,
+            activity: null,
+            disciplinary: { warning_count: 0, minor_count: 0, major_count: 0, commend_count: 0, minor_merit_count: 0, major_merit_count: 0, actions: [] },
+          },
+        ],
+      },
+    })
+
+    const wrapper = await mountView()
+    const cells = wrapper.findAll('[data-test="attn-cell"]')
+    expect(cells).toHaveLength(2)
+    expect(cells[0].text()).toBe('—')
+    expect(cells[1].text()).toContain('遲 2')
+    expect(cells[1].text()).not.toContain('曠')
+  })
+
+  it('功過欄：全零顯示 —，過/功分別以 danger/success tag 顯示', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: makeStatusFixture({
+        extra: [
+          {
+            participant_id: 403,
+            employee_id: 43,
+            employee_name: '無功過',
+            role_group: 'HEAD_TEACHER',
+            classroom_id: 3,
+            is_participant: true,
+            attendance: { late_count: 0, early_leave_count: 0, missing_punch_count: 0, leave_days: 0, absent_days: 0 },
+            retention: null,
+            activity: null,
+            disciplinary: { warning_count: 0, minor_count: 0, major_count: 0, commend_count: 0, minor_merit_count: 0, major_merit_count: 0, actions: [] },
+          },
+        ],
+      }),
+    })
+
+    const wrapper = await mountView()
+    const cells = wrapper.findAll('[data-test="merit-cell"]')
+    // 第一列（王雅玲）有 warning_count: 1 → 過 1；新增列全零 → —
+    expect(cells[0].text()).toContain('過 1')
+    expect(cells[1].text()).toBe('—')
+  })
+
+  it('KPI 區載入中顯示 skeleton，載入完成後改渲染 StatCard', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    let resolveStatus
+    getAppraisalAllEmployeesStatus.mockReturnValueOnce(
+      new Promise((resolve) => { resolveStatus = resolve }),
+    )
+
+    const wrapper = mount(CurrentSemesterOverview, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+
+    // getAppraisalAllEmployeesStatus 仍 pending：statusLoading 為 true，KPI 區應顯示 skeleton
+    expect(wrapper.find('.el-skeleton').exists()).toBe(true)
+    expect(wrapper.find('[data-test="kpi-employees"]').exists()).toBe(false)
+
+    resolveStatus({ data: makeStatusFixture() })
+    await flushPromises()
+
+    expect(wrapper.find('.el-skeleton').exists()).toBe(false)
+    expect(wrapper.find('[data-test="kpi-employees"]').exists()).toBe(true)
   })
 })
