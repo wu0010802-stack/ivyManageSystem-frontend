@@ -358,6 +358,55 @@ describe('EmployeeListView', () => {
       expect(wrapper.vm.displayedEmployees).toHaveLength(1)
     })
 
+    it('chips 鍵盤可達：role/tabindex 可聚焦，Enter/Space 觸發 toggle，aria-pressed 隨選中態切換', async () => {
+      employeeStore.employees = [
+        { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null },
+        { id: 2, name: 'B', is_active: true, employee_type: 'regular', base_salary: 30000, resign_date: null },
+      ]
+      mockGetProbationAlerts.mockResolvedValueOnce({
+        data: {
+          employees: [
+            { id: 2, name: 'B', employee_id: 'E2', probation_end_date: '2026-08-01', days_remaining: 20 },
+          ],
+          alerts: { next_month: 1 },
+        },
+      })
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      // 兩個 chip 都要有 role="button" + tabindex="0"（鍵盤可聚焦）+ aria-pressed 初始 false
+      const chips = wrapper.findAll('.todo-chip')
+      expect(chips).toHaveLength(2)
+      for (const chip of chips) {
+        expect(chip.attributes('role')).toBe('button')
+        expect(chip.attributes('tabindex')).toBe('0')
+        expect(chip.attributes('aria-pressed')).toBe('false')
+      }
+      const [salaryChip, probationChip] = chips
+
+      // Enter 觸發待補薪資篩選；aria-pressed 跟著切 true
+      await salaryChip.trigger('keydown', { key: 'Enter' })
+      await nextTick()
+      expect(wrapper.vm.todoFilter).toBe('missing_salary')
+      expect(salaryChip.attributes('aria-pressed')).toBe('true')
+      expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1])
+
+      // Space 再按一次 → 取消篩選；aria-pressed 回 false
+      await salaryChip.trigger('keydown', { key: ' ' })
+      await nextTick()
+      expect(wrapper.vm.todoFilter).toBe('none')
+      expect(salaryChip.attributes('aria-pressed')).toBe('false')
+
+      // 試用期 chip 也走同一鍵盤路徑；兩 chip 互斥（切換後另一顆 aria-pressed 維持 false）
+      await probationChip.trigger('keydown', { key: ' ' })
+      await nextTick()
+      expect(wrapper.vm.todoFilter).toBe('probation')
+      expect(probationChip.attributes('aria-pressed')).toBe('true')
+      expect(salaryChip.attributes('aria-pressed')).toBe('false')
+      expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([2])
+    })
+
     it('clearFilters 一併重置 todoFilter', async () => {
       employeeStore.employees = [
         { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null },

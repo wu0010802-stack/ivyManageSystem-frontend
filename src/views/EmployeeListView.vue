@@ -273,20 +273,32 @@ onMounted(async () => {
             <span class="stat-sep">·</span> 已離職 {{ rosterStats.resigned }}
           </template>
         </p>
+        <!-- chips 為可 toggle 的篩選鈕：role="button" + tabindex 讓鍵盤可聚焦，
+             Enter/Space 與滑鼠點擊走同一 toggle，aria-pressed 播報選中態 -->
         <div v-if="!loading && (missingSalaryCount > 0 || probationAlertCount > 0)" class="todo-chips">
           <el-tag
             v-if="missingSalaryCount > 0"
             class="todo-chip"
             type="warning"
+            role="button"
+            tabindex="0"
+            :aria-pressed="todoFilter === 'missing_salary' ? 'true' : 'false'"
             :effect="todoFilter === 'missing_salary' ? 'dark' : 'plain'"
             @click="toggleTodoFilter('missing_salary')"
+            @keydown.enter.prevent="toggleTodoFilter('missing_salary')"
+            @keydown.space.prevent="toggleTodoFilter('missing_salary')"
           >待補薪資 {{ missingSalaryCount }}</el-tag>
           <el-tag
             v-if="probationAlertCount > 0"
             class="todo-chip"
             type="info"
+            role="button"
+            tabindex="0"
+            :aria-pressed="todoFilter === 'probation' ? 'true' : 'false'"
             :effect="todoFilter === 'probation' ? 'dark' : 'plain'"
             @click="toggleTodoFilter('probation')"
+            @keydown.enter.prevent="toggleTodoFilter('probation')"
+            @keydown.space.prevent="toggleTodoFilter('probation')"
           >試用期將到期 {{ probationAlertCount }}</el-tag>
         </div>
       </div>
