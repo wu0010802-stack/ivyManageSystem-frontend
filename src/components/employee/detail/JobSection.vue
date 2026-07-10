@@ -21,7 +21,7 @@ const staffRoleLabel = computed(() => {
 <template>
   <el-descriptions :column="2" border>
     <el-descriptions-item label="員工類型">{{ employeeTypeLabel }}</el-descriptions-item>
-    <el-descriptions-item label="職位">{{ employee.position || '—' }}</el-descriptions-item>
+    <el-descriptions-item label="園內職務">{{ employee.position || '—' }}</el-descriptions-item>
     <el-descriptions-item label="到職日">{{ employee.hire_date || '—' }}</el-descriptions-item>
     <el-descriptions-item label="試用期結束">{{ employee.probation_end_date || '—' }}</el-descriptions-item>
     <el-descriptions-item label="主管職">

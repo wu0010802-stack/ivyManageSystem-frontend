@@ -136,12 +136,12 @@ defineExpose({ applyValidationErrors })
     </div>
   </el-form-item>
 
-  <el-form-item label="教育局系統職稱" prop="job_title_id">
+  <el-form-item label="教育局職稱" prop="job_title_id">
     <template v-if="isLocked('job_title_id')">
       <span class="readonly-text">{{ jobTitleLabel }} <el-icon><Lock /></el-icon></span>
       <div class="lock-hint">此欄位影響薪資，請由 HR 修改</div>
     </template>
-    <el-select v-else v-model="form.job_title_id" placeholder="請選擇教育局系統職稱" style="width:100%">
+    <el-select v-else v-model="form.job_title_id" placeholder="請選擇教育局職稱" style="width:100%">
       <el-option v-for="item in bureauJobTitleOptions" :key="item.id" :label="item.name" :value="item.id" />
     </el-select>
   </el-form-item>
@@ -183,12 +183,12 @@ defineExpose({ applyValidationErrors })
   <!-- 職務細節 -->
   <FormSection ref="jobDetailRef" data-test="section-jobDetail" title="職務細節" collapsible :default-open="false"
     :badge-count="sectionErrors.jobDetail" badge-type="error">
-    <el-form-item label="職位" prop="position">
+    <el-form-item label="園內職務" prop="position">
       <template v-if="isLocked('position')">
         <span class="readonly-text">{{ fmt(form.position) }} <el-icon><Lock /></el-icon></span>
         <div class="lock-hint">此欄位影響薪資，請由 HR 修改</div>
       </template>
-      <el-select v-else v-model="form.position" filterable allow-create default-first-option placeholder="選擇或輸入職位" style="width:100%">
+      <el-select v-else v-model="form.position" filterable allow-create default-first-option placeholder="選擇或輸入園內職務" style="width:100%">
         <el-option v-for="p in POSITION_OPTIONS" :key="p" :label="p" :value="p" />
       </el-select>
     </el-form-item>
@@ -205,12 +205,12 @@ defineExpose({ applyValidationErrors })
         <span class="readonly-text">{{ fmt(form.bonus_grade) }} <el-icon><Lock /></el-icon></span>
       </template>
       <template v-else>
-        <el-select v-model="form.bonus_grade" clearable filterable allow-create placeholder="自動（依教育局系統）" style="width:100%">
+        <el-select v-model="form.bonus_grade" clearable filterable allow-create placeholder="自動（依教育局職稱）" style="width:100%">
           <el-option label="A 級（幼兒園教師）" value="A" />
           <el-option label="B 級（教保員）" value="B" />
           <el-option label="C 級（助理教保員）" value="C" />
         </el-select>
-        <div class="form-hint">空白表示依教育局系統自動判斷；保留手動覆蓋用於特例（A / B / C）</div>
+        <div class="form-hint">空白表示依教育局職稱自動判斷；保留手動覆蓋用於特例（A / B / C）</div>
       </template>
     </el-form-item>
     <el-form-item label="試用期結束">

@@ -188,7 +188,7 @@ const FIELD_LABELS = {
   insurance_salary_level: '投保級距', pension_self_rate: '勞退自提',
   bank_code: '銀行代碼', bank_account: '銀行帳號',
   bank_account_name: '戶名', birthday: '生日',
-  job_title_id: '教育局系統', position: '職位',
+  job_title_id: '教育局職稱', position: '園內職務',
   classroom_id: '班級', hire_date: '到職日',
   employee_type: '員工類型', supervisor_role: '主管職務',
   bonus_grade: '獎金等級',
@@ -451,7 +451,7 @@ const formAsBasicData = computed(() => form as unknown as EmployeeFormBasicData)
 const classroomOptions = computed(() => classroomStore.classrooms as { id: number; name: string }[])
 
 onMounted(async () => {
-  // 下拉資料：職稱（教育局系統）與班級選項，供基本資料 tab 使用。
+  // 下拉資料：職稱（教育局職稱）與班級選項，供基本資料 tab 使用。
   // 清單頁與詳情頁兩個父頁掛載本 dialog 都能自載，父頁 onMounted 不需重複 fetch。
   configStore.fetchJobTitles()
   classroomStore.fetchClassrooms()

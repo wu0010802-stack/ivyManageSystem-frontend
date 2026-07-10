@@ -97,8 +97,8 @@ const onSaved = async () => {
         <h3 class="emp-name">{{ employee.name || '—' }}</h3>
         <div class="emp-meta">
           <div><span class="meta-label">編號</span>{{ employee.employee_id || '—' }}</div>
-          <div><span class="meta-label">職稱</span>{{ employee.job_title_name || employee.title || '—' }}</div>
-          <div v-if="employee.position"><span class="meta-label">職位</span>{{ employee.position }}</div>
+          <div><span class="meta-label">教育局職稱</span>{{ employee.job_title_name || employee.title || '—' }}</div>
+          <div v-if="employee.position"><span class="meta-label">園內職務</span>{{ employee.position }}</div>
           <div v-if="employee.classroom_name"><span class="meta-label">班級</span>{{ employee.classroom_name }}</div>
           <div style="margin-top:12px">
             <el-tag :type="getEmployeeStatus(employee).type" size="small">{{ getEmployeeStatus(employee).label }}</el-tag>
@@ -173,7 +173,7 @@ const onSaved = async () => {
 .avatar-placeholder { width: 96px; height: 96px; border-radius: 50%; background: var(--el-color-info-light-9); display: flex; align-items: center; justify-content: center; margin: 4px auto 12px; }
 .emp-name { margin: 0 0 12px; font-size: 18px; }
 .emp-meta { text-align: left; font-size: 13px; color: var(--el-text-color-regular); line-height: 1.9; padding: 0 4px; }
-.emp-meta .meta-label { display: inline-block; width: 48px; color: var(--el-text-color-secondary); }
+.emp-meta .meta-label { display: inline-block; width: 72px; color: var(--el-text-color-secondary); }
 .aside-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
 .anchor-nav { margin-top: 16px; border-top: 1px solid var(--el-border-color-lighter); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
 .anchor-link { cursor: pointer; font-size: 13px; color: var(--el-text-color-regular); }

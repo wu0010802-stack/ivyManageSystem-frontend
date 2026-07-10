@@ -27,8 +27,8 @@ const { isMobile } = useIsMobile()
 // 手機卡片視圖欄位（__status 為 slot-only 欄，值由 #cell-__status slot 渲染）
 const employeeCardColumns = [
   { label: '編號', prop: 'employee_id' },
-  { label: '教育局系統', prop: 'title' },
-  { label: '職位', prop: 'position' },
+  { label: '教育局職稱', prop: 'title' },
+  { label: '園內職務', prop: 'position' },
   { label: '到職日', prop: 'hire_date' },
   { label: '狀態', prop: '__status' },
 ]
@@ -273,8 +273,8 @@ onMounted(async () => {
             <router-link :to="`/employees/${scope.row.id}`" class="name-link" @click.stop>{{ scope.row.name }}</router-link>
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="教育局系統" width="150" sortable />
-        <el-table-column prop="position" label="職位" width="120" />
+        <el-table-column prop="title" label="教育局職稱" width="150" sortable />
+        <el-table-column prop="position" label="園內職務" width="120" />
         <el-table-column prop="hire_date" label="到職日" width="120" sortable />
         <el-table-column label="狀態" width="160">
           <template #default="scope">
