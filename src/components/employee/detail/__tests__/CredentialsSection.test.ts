@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { defineComponent, h, ref } from 'vue'
 import type { VNode } from 'vue'
 import CredentialsSection from '../CredentialsSection.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 
 // 權限守衛：預設有權限（現有到期標籤測試不受影響）；權限 case 個別覆寫
 const mockHasPermission = vi.fn(() => true)
@@ -53,6 +54,8 @@ const GLOBAL_STUBS = {
   'el-table-column': ElTableColumnStub,
   'el-tag': { template: '<span class="el-tag" :data-type="type"><slot /></span>', props: ['type'] },
   'el-dialog': { name: 'ElDialog', props: ['fullscreen', 'modelValue', 'width'], template: '<div><slot /><slot name="footer" /></div>' },
+  'el-card': { template: '<div class="el-card"><slot /></div>' },
+  'el-skeleton': true,
   'el-form': { template: '<form><slot /></form>' },
   'el-form-item': { template: '<div><slot /></div>' },
   'el-input': { template: '<input />' },
@@ -122,6 +125,43 @@ describe('CredentialsSection 手機 RWD（子對話框 fullscreen）', () => {
     mockIsMobile.value = false
     const wrapper = mount(CredentialsSection, { props: { ...baseProps }, global: { stubs: GLOBAL_STUBS } })
     expect(wrapper.findComponent({ name: 'ElDialog' }).props('fullscreen')).toBe(false)
+  })
+
+  it('手機版學歷/證照/合約改用卡片列表（AdminListCards ×3），不用多欄表格', () => {
+    mockIsMobile.value = true
+    const wrapper = mount(CredentialsSection, { props: { ...baseProps }, global: { stubs: GLOBAL_STUBS } })
+    expect(wrapper.findAllComponents(AdminListCards)).toHaveLength(3)
+  })
+
+  it('桌機版維持多欄表格，不渲染卡片', () => {
+    mockIsMobile.value = false
+    const wrapper = mount(CredentialsSection, { props: { ...baseProps }, global: { stubs: GLOBAL_STUBS } })
+    expect(wrapper.findAllComponents(AdminListCards)).toHaveLength(0)
+  })
+
+  it('手機版證照卡片保留到期 tag 與（有權限時）編輯/刪除操作', () => {
+    mockIsMobile.value = true
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = mount(CredentialsSection, {
+      props: { ...baseProps, certificates: [{ id: 1, certificate_name: 'X', expiry_date: localISOOffset(-1) }] },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    const danger = wrapper.find('.el-tag[data-type="danger"]')
+    expect(danger.exists()).toBe(true)
+    expect(danger.text()).toBe('已逾期')
+    expect(wrapper.text()).toContain('編輯')
+    expect(wrapper.text()).toContain('刪除')
+  })
+
+  it('手機版無權限 → 卡片不顯示編輯/刪除操作', () => {
+    mockIsMobile.value = true
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mount(CredentialsSection, {
+      props: { ...baseProps, certificates: [{ id: 1, certificate_name: 'X', expiry_date: null }] },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    expect(wrapper.text()).not.toContain('編輯')
+    expect(wrapper.text()).not.toContain('刪除')
   })
 })
 

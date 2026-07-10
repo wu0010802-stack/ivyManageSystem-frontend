@@ -13,6 +13,7 @@ import type { ApiBody } from '@/api/_generated/typed'
 import { expiryStatus } from '@/utils/expiry'
 import { hasPermission } from '@/utils/auth'
 import { useIsMobile } from '@/composables/useIsMobile'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 
 const props = defineProps<{
   employeeId: number
@@ -27,6 +28,28 @@ const canWrite = computed(() => hasPermission('EMPLOYEES_WRITE'))
 
 // 手機版子對話框改 fullscreen（原固定 560px 在窄螢幕過寬、右側被裁切）
 const { isMobile } = useIsMobile()
+
+// 手機卡片欄位（桌機續用 el-table）：到期日/簽約薪資/最高學歷由 AdminListCards 的 cell slot 覆寫渲染
+const educationCardColumns = [
+  { label: '科系', prop: 'major' },
+  { label: '學位', prop: 'degree' },
+  { label: '畢業日期', prop: 'graduation_date' },
+  { label: '最高學歷', prop: 'is_highest' },
+  { label: '備註', prop: 'remark' },
+]
+const certificateCardColumns = [
+  { label: '頒發機構', prop: 'issuer' },
+  { label: '證照編號', prop: 'certificate_number' },
+  { label: '取得日期', prop: 'issued_date' },
+  { label: '到期日', prop: 'expiry_date' },
+  { label: '備註', prop: 'remark' },
+]
+const contractCardColumns = [
+  { label: '起始日', prop: 'start_date' },
+  { label: '結束日', prop: 'end_date' },
+  { label: '簽約薪資', prop: 'salary_at_contract' },
+  { label: '備註', prop: 'remark' },
+]
 
 // ── 學歷 / 證照 / 合約 共用子對話框 ──────────────────
 type SubDialogKind = 'education' | 'certificate' | 'contract' | null
@@ -156,7 +179,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         <el-icon><Plus /></el-icon> 新增學歷
       </el-button>
     </div>
-    <el-table :data="educations" border size="small">
+    <el-table v-if="!isMobile" :data="educations" border size="small">
       <el-table-column prop="school_name" label="學校" min-width="140" />
       <el-table-column prop="major" label="科系" min-width="120" />
       <el-table-column prop="degree" label="學位" width="90" />
@@ -177,6 +200,23 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         <EmptyState title="尚無學歷資料" description="點擊上方「新增學歷」開始建立" />
       </template>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="educations"
+      :columns="educationCardColumns"
+      row-key="id"
+      empty-text="尚無學歷資料"
+    >
+      <template #title="{ item }">{{ item.school_name || '—' }}</template>
+      <template #cell-is_highest="{ item }">
+        <el-tag v-if="item.is_highest" type="success" size="small">最高</el-tag>
+        <span v-else>—</span>
+      </template>
+      <template v-if="canWrite" #actions="{ item }">
+        <el-button link size="small" type="primary" @click="openEduEdit(item)">編輯</el-button>
+        <el-button link size="small" type="danger" @click="confirmDeleteSub('education', item)">刪除</el-button>
+      </template>
+    </AdminListCards>
 
     <!-- 證照 -->
     <div class="cred-header">
@@ -185,7 +225,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         <el-icon><Plus /></el-icon> 新增證照
       </el-button>
     </div>
-    <el-table :data="certificates" border size="small">
+    <el-table v-if="!isMobile" :data="certificates" border size="small">
       <el-table-column prop="certificate_name" label="證照名稱" min-width="160" />
       <el-table-column prop="issuer" label="頒發機構" min-width="140" />
       <el-table-column prop="certificate_number" label="證照編號" min-width="140" />
@@ -213,6 +253,29 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         <EmptyState title="尚無證照資料" description="點擊上方「新增證照」開始建立" />
       </template>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="certificates"
+      :columns="certificateCardColumns"
+      row-key="id"
+      empty-text="尚無證照資料"
+    >
+      <template #title="{ item }">{{ item.certificate_name || '—' }}</template>
+      <template #cell-expiry_date="{ item }">
+        <template v-if="item.expiry_date">
+          <el-tag v-if="credentialExpiryTag(item.expiry_date)?.type === 'danger'" size="small" type="danger">已逾期</el-tag>
+          <el-tag v-else-if="credentialExpiryTag(item.expiry_date)" size="small" type="warning">
+            {{ credentialExpiryTag(item.expiry_date)?.label }}
+          </el-tag>
+          <span v-else>{{ item.expiry_date }}</span>
+        </template>
+        <el-tag v-else size="small" type="info">永久</el-tag>
+      </template>
+      <template v-if="canWrite" #actions="{ item }">
+        <el-button link size="small" type="primary" @click="openCertEdit(item)">編輯</el-button>
+        <el-button link size="small" type="danger" @click="confirmDeleteSub('certificate', item)">刪除</el-button>
+      </template>
+    </AdminListCards>
 
     <!-- 合約 -->
     <div class="cred-header">
@@ -221,7 +284,7 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         <el-icon><Plus /></el-icon> 新增合約
       </el-button>
     </div>
-    <el-table :data="contracts" border size="small">
+    <el-table v-if="!isMobile" :data="contracts" border size="small">
       <el-table-column prop="contract_type" label="類型" width="90" />
       <el-table-column prop="start_date" label="起始日" width="130" />
       <el-table-column label="結束日" width="130">
@@ -253,6 +316,33 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
         <EmptyState title="尚無合約資料" description="點擊上方「新增合約」開始建立" />
       </template>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="contracts"
+      :columns="contractCardColumns"
+      row-key="id"
+      empty-text="尚無合約資料"
+    >
+      <template #title="{ item }">{{ item.contract_type || '—' }}</template>
+      <template #cell-end_date="{ item }">
+        <template v-if="item.end_date">
+          <el-tag v-if="credentialExpiryTag(item.end_date)?.type === 'danger'" size="small" type="danger">已逾期</el-tag>
+          <el-tag v-else-if="credentialExpiryTag(item.end_date)" size="small" type="warning">
+            {{ credentialExpiryTag(item.end_date)?.label }}
+          </el-tag>
+          <span v-else>{{ item.end_date }}</span>
+        </template>
+        <el-tag v-else size="small" type="info">未定</el-tag>
+      </template>
+      <template #cell-salary_at_contract="{ item }">
+        <span v-if="item.salary_at_contract != null">{{ Number(item.salary_at_contract).toLocaleString() }}</span>
+        <span v-else>-</span>
+      </template>
+      <template v-if="canWrite" #actions="{ item }">
+        <el-button link size="small" type="primary" @click="openContractEdit(item)">編輯</el-button>
+        <el-button link size="small" type="danger" @click="confirmDeleteSub('contract', item)">刪除</el-button>
+      </template>
+    </AdminListCards>
 
     <!-- 學歷 / 證照 / 合約 共用子對話框 -->
     <el-dialog

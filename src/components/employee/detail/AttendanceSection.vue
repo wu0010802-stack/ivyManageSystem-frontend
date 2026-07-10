@@ -5,12 +5,23 @@ import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord
 import { summarizeCsvImportResult } from '@/utils/attendanceImport'
 import { thisMonthISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
+import { useIsMobile } from '@/composables/useIsMobile'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 import type { ElTagType } from '@/utils/employeeDisplay'
 
 const props = defineProps<{ employee: Record<string, unknown> }>()
 
 // 出勤編輯/刪除後端守 ATTENDANCE_WRITE：無權限者隱藏操作欄（避免點下才被 API 拒絕）
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+
+// 手機改卡片列表（桌機續用 el-table）：狀態 tag 由 cell slot 覆寫
+const { isMobile } = useIsMobile()
+const attendanceCardColumns = [
+  { label: '星期', prop: 'weekday' },
+  { label: '上班', prop: 'punch_in' },
+  { label: '下班', prop: 'punch_out' },
+  { label: '狀態', prop: 'status' },
+]
 
 const attendanceRecords = ref<Record<string, unknown>[]>([])
 const attendanceMonth = ref(thisMonthISO()) // YYYY-MM
@@ -107,7 +118,7 @@ onMounted(fetchAttendance)
         @change="fetchAttendance"
       />
     </div>
-    <el-table :data="attendanceRecords" height="400" style="width: 100%; margin-top: 10px;">
+    <el-table v-if="!isMobile" :data="attendanceRecords" height="400" style="width: 100%; margin-top: 10px;">
       <el-table-column prop="date" label="日期" width="120" />
       <el-table-column prop="weekday" label="星期" width="80" />
       <el-table-column prop="punch_in" label="上班" />
@@ -124,5 +135,21 @@ onMounted(fetchAttendance)
          </template>
       </el-table-column>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="attendanceRecords"
+      :columns="attendanceCardColumns"
+      row-key="date"
+      empty-text="本月尚無出勤紀錄"
+    >
+      <template #title="{ item }">{{ item.date }}</template>
+      <template #cell-status="{ item }">
+        <el-tag :type="getAttendanceStatusType(String(item.status))">{{ item.status }}</el-tag>
+      </template>
+      <template v-if="canWrite" #actions="{ item }">
+        <el-button link type="primary" @click="editAttendance(item)">編輯</el-button>
+        <el-button link type="danger" @click="deleteAttendance(item)">刪除</el-button>
+      </template>
+    </AdminListCards>
   </div>
 </template>

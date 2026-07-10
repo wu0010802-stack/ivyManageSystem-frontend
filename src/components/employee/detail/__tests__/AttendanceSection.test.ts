@@ -3,9 +3,10 @@
 // 無權限者不應看到逐列「編輯/刪除」操作（避免點下才被 API 拒絕）。
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import type { VNode } from 'vue'
 import AttendanceSection from '../AttendanceSection.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 
 vi.mock('@/api/attendance', () => ({
   getRecords: vi.fn().mockResolvedValue({
@@ -19,6 +20,9 @@ const mockHasPermission = vi.fn(() => true)
 vi.mock('@/utils/auth', () => ({
   hasPermission: (...a: unknown[]) => mockHasPermission(...a),
 }))
+
+const mockIsMobile = ref(false)
+vi.mock('@/composables/useIsMobile', () => ({ useIsMobile: () => ({ isMobile: mockIsMobile }) }))
 
 // el-table 逐列轉發 data 給 column，column 依 data 呼叫 #default(scope.row)（同 CredentialsSection 慣例）
 const ElTableColumnStub = defineComponent({
@@ -43,6 +47,8 @@ const GLOBAL_STUBS = {
   'el-table-column': ElTableColumnStub,
   'el-tag': { template: '<span class="el-tag"><slot /></span>', props: ['type'] },
   'el-date-picker': { template: '<input />' },
+  'el-card': { template: '<div class="el-card"><slot /></div>' },
+  'el-skeleton': true,
 }
 
 async function mountSection() {
@@ -55,7 +61,7 @@ async function mountSection() {
 }
 
 describe('AttendanceSection 操作權限守衛（ATTENDANCE_WRITE）', () => {
-  beforeEach(() => { mockHasPermission.mockReset(); mockHasPermission.mockReturnValue(true) })
+  beforeEach(() => { mockHasPermission.mockReset(); mockHasPermission.mockReturnValue(true); mockIsMobile.value = false })
 
   it('以 ATTENDANCE_WRITE 查詢權限', async () => {
     await mountSection()
@@ -74,5 +80,30 @@ describe('AttendanceSection 操作權限守衛（ATTENDANCE_WRITE）', () => {
     const wrapper = await mountSection()
     expect(wrapper.text()).not.toContain('編輯')
     expect(wrapper.text()).not.toContain('刪除')
+  })
+})
+
+describe('AttendanceSection 手機 RWD（卡片列表）', () => {
+  beforeEach(() => { mockHasPermission.mockReset(); mockHasPermission.mockReturnValue(true); mockIsMobile.value = false })
+
+  it('手機版出勤改用卡片列表（AdminListCards），不用多欄表格', async () => {
+    mockIsMobile.value = true
+    const wrapper = await mountSection()
+    expect(wrapper.findAllComponents(AdminListCards)).toHaveLength(1)
+  })
+
+  it('桌機版維持出勤表格', async () => {
+    mockIsMobile.value = false
+    const wrapper = await mountSection()
+    expect(wrapper.findAllComponents(AdminListCards)).toHaveLength(0)
+  })
+
+  it('手機版卡片保留狀態 tag 與（有權限時）編輯/刪除', async () => {
+    mockIsMobile.value = true
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = await mountSection()
+    expect(wrapper.find('.el-tag').exists()).toBe(true)
+    expect(wrapper.text()).toContain('編輯')
+    expect(wrapper.text()).toContain('刪除')
   })
 })
