@@ -162,6 +162,29 @@ describe('useDashboardSections 假零修復（per-source error state）', () => 
   })
 })
 
+describe('useDashboardSections 資訊架構（行事曆 eager / probation 死碼移除）', () => {
+  beforeEach(() => {
+    mockHappyPath()
+  })
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('行事曆改 eager：mount 後即抓 upcoming events（不等 IntersectionObserver）', async () => {
+    const wrapper = mountHarness()
+    await flushPromises()
+    expect(getUpcomingEvents).toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('probation 死碼已移除：deferredSections 不含 probation 且不打 API', async () => {
+    const wrapper = mountHarness()
+    await flushPromises()
+    expect(Object.keys(sections.deferredSections)).not.toContain('probation')
+    wrapper.unmount()
+  })
+})
+
 describe('useDashboardSections 週末感知（isWeekend）', () => {
   beforeEach(() => {
     mockHappyPath()

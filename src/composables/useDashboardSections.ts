@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 
 import { getStudents } from '@/api/students'
 import { getToday, getTodayAnomalies } from '@/api/attendance'
-import { getUpcomingEvents, getStudentAttendanceSummary, getProbationAlerts } from '@/api/home'
+import { getUpcomingEvents, getStudentAttendanceSummary } from '@/api/home'
 import { useEmployeeStore } from '@/stores/employee'
 import { useNotificationStore } from '@/stores/notification'
 import { hasPermission, getUserInfo } from '@/utils/auth'
@@ -70,13 +70,11 @@ export function useDashboardSections() {
     studentAttendance: { loading: false, loaded: false, error: false },
     anomalies: { loading: false, loaded: false, error: false },
     calendar: { loading: false, loaded: false, error: false },
-    probation: { loading: false, loaded: false, error: false },
   })
   const deferredObserver = ref<IntersectionObserver | null>(null)
   const studentAttendanceSectionRef = ref(null)
   const anomaliesSectionRef = ref(null)
   const calendarSectionRef = ref(null)
-  const probationSectionRef = ref(null)
 
   const showAttendance = hasPermission('ATTENDANCE_READ')
   const showApprovals = hasPermission('APPROVALS')
@@ -108,8 +106,6 @@ export function useDashboardSections() {
   const upcomingEvents = ref<{ event_date: string; [key: string]: unknown }[]>([])
   const attendanceAnomalies = ref<unknown>(null)
   const studentAttendanceSummary = ref<unknown>(null)
-  const probationEmployees = ref<unknown[]>([])
-  const probationAlerts = ref<unknown>(null)
   const approvalSummary = computed(() => notificationStore.approvalSummary)
 
   const weekDays = ['日', '一', '二', '三', '四', '五', '六']
@@ -170,19 +166,12 @@ export function useDashboardSections() {
       .then(r => { attendanceAnomalies.value = r.data }),
     calendar: () => getUpcomingEvents()
       .then(r => { upcomingEvents.value = (r.data as typeof upcomingEvents.value) }),
-    probation: () => getProbationAlerts()
-      .then(r => {
-        const d = r.data as { employees: unknown[]; alerts: unknown }
-        probationEmployees.value = d.employees
-        probationAlerts.value = d.alerts
-      }),
   }
 
   const deferredTargets: Record<string, typeof studentAttendanceSectionRef> = {
     studentAttendance: studentAttendanceSectionRef,
     anomalies: anomaliesSectionRef,
     calendar: calendarSectionRef,
-    probation: probationSectionRef,
   }
 
   const observeDeferredSection = (key: string, enabled: boolean) => {
@@ -285,7 +274,6 @@ export function useDashboardSections() {
     observeDeferredSection('studentAttendance', showStudents)
     observeDeferredSection('anomalies', showAttendance)
     observeDeferredSection('calendar', showCalendar)
-    observeDeferredSection('probation', showEmployees)
   }
 
   const navigateTo = (path: string) => router.push(path)
@@ -293,6 +281,8 @@ export function useDashboardSections() {
   onMounted(async () => {
     // 今日待辦先行並行抓取（不 await，與下方 critical 同波發出）
     fetchTodoBoardData()
+    // 行事曆在 lg 首屏即可見，改 eager 與待辦同波抓，不再等 IntersectionObserver
+    if (showCalendar) loadDeferredSection('calendar', deferredLoaders.calendar)
     await fetchCriticalDashboardData()
     await setupDeferredDashboardData()
   })
@@ -309,7 +299,6 @@ export function useDashboardSections() {
     studentAttendanceSectionRef,
     anomaliesSectionRef,
     calendarSectionRef,
-    probationSectionRef,
     showAttendance,
     showApprovals,
     showCalendar,
@@ -320,8 +309,6 @@ export function useDashboardSections() {
     todayStats,
     attendanceAnomalies,
     studentAttendanceSummary,
-    probationEmployees,
-    probationAlerts,
     approvalSummary,
     criticalErrors,
     retryCritical: fetchCriticalDashboardData,

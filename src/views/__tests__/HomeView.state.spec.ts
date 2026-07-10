@@ -122,6 +122,73 @@ describe('HomeView 狀態層（孤兒標題 / 週末 / 假零）', () => {
     wrapper.unmount()
   })
 
+  it('資訊架構：本月無風險時不渲染右欄審核卡（數字不重複待辦磚）', () => {
+    const wrapper = mountHome(makeState({
+      approvalSummary: ref({
+        total: 5,
+        pending_leaves: 2,
+        pending_overtimes: 3,
+        this_month_pending_leaves: 0,
+        this_month_pending_overtimes: 0,
+      }),
+    }))
+    expect(wrapper.text()).not.toContain('待審核提醒')
+    expect(wrapper.text()).not.toContain('本月審核風險')
+    wrapper.unmount()
+  })
+
+  it('資訊架構：本月有待審風險時右欄顯示「本月審核風險」明細', () => {
+    const wrapper = mountHome(makeState({
+      approvalSummary: ref({
+        total: 5,
+        pending_leaves: 2,
+        pending_overtimes: 3,
+        this_month_pending_leaves: 1,
+        this_month_pending_overtimes: 2,
+      }),
+    }))
+    expect(wrapper.text()).toContain('本月審核風險')
+    expect(wrapper.text()).toContain('本月請假待審')
+    expect(wrapper.text()).toContain('本月加班待審')
+    wrapper.unmount()
+  })
+
+  it('資訊架構：學生出勤列第四卡是「請假」，「未點名」只留在待辦磚', () => {
+    const wrapper = mountHome(makeState({
+      studentAttendanceSummary: ref({
+        total_students: 30,
+        recorded_count: 27,
+        on_campus_count: 25,
+        unmarked_count: 3,
+        present_count: 24,
+        late_count: 1,
+        absent_count: 2,
+        leave_count: 2,
+        record_completion_rate: 90,
+      }),
+    }))
+    const labels = wrapper.findAll('.stat-card__label').map(e => e.text())
+    expect(labels).toContain('請假')
+    expect(labels).not.toContain('未點名')
+    wrapper.unmount()
+  })
+
+  it('資訊架構：學校概況壓縮卡不再有「其他人員」湊格指標', () => {
+    const wrapper = mountHome(makeState())
+    expect(wrapper.text()).toContain('學校概況')
+    expect(wrapper.text()).not.toContain('其他人員')
+    wrapper.unmount()
+  })
+
+  it('版面：打卡異常（左欄主內容）在快速操作（右欄）之前渲染', () => {
+    const wrapper = mountHome(makeState())
+    const text = wrapper.text()
+    expect(text.indexOf('今日打卡異常')).toBeGreaterThan(-1)
+    expect(text.indexOf('快速操作')).toBeGreaterThan(-1)
+    expect(text.indexOf('今日打卡異常')).toBeLessThan(text.indexOf('快速操作'))
+    wrapper.unmount()
+  })
+
   it('待辦來源失敗時不顯示「太好了」而顯示載入失敗警示與重試', async () => {
     const retryTodoBoard = vi.fn()
     const state = makeState({

@@ -220,45 +220,6 @@ const typedEventTagType = eventTagType as EventTagTypeMap
       </div>
     </section>
 
-    <!-- 學校概況 -->
-    <div class="section-header section-header--top">
-      <span class="section-title">學校概況</span>
-      <el-button
-        v-if="hasCriticalError"
-        link
-        type="primary"
-        size="small"
-        @click="retryCritical"
-      >
-        部分統計載入失敗，重新載入 →
-      </el-button>
-    </div>
-    <el-row v-if="isFirstLoad && loading" :gutter="20" class="stats-row" aria-busy="true">
-      <el-col v-for="i in 4" :key="i" :xs="24" :sm="12" :md="6" class="mb-4">
-        <div class="stat-skeleton">
-          <div class="skeleton-pulse stat-skeleton__icon" />
-          <div class="stat-skeleton__body">
-            <div class="skeleton-pulse stat-skeleton__label" />
-            <div class="skeleton-pulse stat-skeleton__value" />
-          </div>
-        </div>
-      </el-col>
-    </el-row>
-    <el-row v-else :gutter="20" class="stats-row">
-      <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教職員總數" :value="statDisplay(stats.total, criticalErrors.employees)" icon="User" color="primary" />
-      </el-col>
-      <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教師人數" :value="statDisplay(stats.teachers, criticalErrors.employees)" icon="Reading" color="success" />
-      </el-col>
-      <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="全校在籍人數" :value="statDisplay(studentCount, criticalErrors.students)" icon="UserFilled" color="warning" />
-      </el-col>
-      <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="其他人員" :value="statDisplay(stats.others, criticalErrors.employees)" icon="More" color="info" />
-      </el-col>
-    </el-row>
-
     <!-- 教師出勤狀況 -->
     <template v-if="showAttendance">
       <div class="section-header">
@@ -327,8 +288,9 @@ const typedEventTagType = eventTagType as EventTagTypeMap
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
             <StatCard label="到校" :value="typedStudentAttendanceSummary.on_campus_count" icon="CircleCheck" color="warning" />
           </el-col>
+          <!-- 「未點名」已升為今日待辦磚（一個數字一個家），此格改放中性的請假數 -->
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="未點名" :value="typedStudentAttendanceSummary.unmarked_count" icon="Warning" color="danger" />
+            <StatCard label="請假" :value="typedStudentAttendanceSummary.leave_count" icon="Document" color="info" />
           </el-col>
         </el-row>
         <el-card class="no-hover student-summary-bar">
@@ -337,7 +299,6 @@ const typedEventTagType = eventTagType as EventTagTypeMap
               <span><strong>{{ typedStudentAttendanceSummary.present_count }}</strong> 出席</span>
               <span><strong>{{ typedStudentAttendanceSummary.late_count }}</strong> 遲到</span>
               <span><strong>{{ typedStudentAttendanceSummary.absent_count }}</strong> 缺席</span>
-              <span><strong>{{ typedStudentAttendanceSummary.leave_count }}</strong> 請假</span>
               <span class="student-summary-bar__rate">點名完成率 <strong>{{ typedStudentAttendanceSummary.record_completion_rate }}%</strong></span>
             </div>
             <el-button link size="small" @click="navigateTo('/student-attendance')">
@@ -359,132 +320,8 @@ const typedEventTagType = eventTagType as EventTagTypeMap
     <!-- 主要內容 -->
     <el-row :gutter="20" style="margin-top: 8px;">
 
-      <!-- 左欄：快速操作 -->
+      <!-- 左欄（寬）：每天有新內容的名單型資料——今日打卡異常 + 近期行事曆 -->
       <el-col :xs="24" :lg="16" class="mb-4">
-        <el-card class="no-hover quick-actions-card">
-          <template #header>
-            <div class="card-header-row">
-              <span class="card-header-title">快速操作</span>
-            </div>
-          </template>
-          <div class="action-grid">
-            <router-link to="/employees" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><User /></el-icon>
-              </div>
-              <span>員工管理</span>
-            </router-link>
-            <router-link to="/students" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><UserFilled /></el-icon>
-              </div>
-              <span>學生管理</span>
-            </router-link>
-            <router-link to="/attendance" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><Clock /></el-icon>
-              </div>
-              <span>出勤查詢</span>
-            </router-link>
-            <router-link to="/salary" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><Wallet /></el-icon>
-              </div>
-              <span>薪資管理</span>
-            </router-link>
-            <router-link to="/leaves" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><Document /></el-icon>
-              </div>
-              <span>請假管理</span>
-            </router-link>
-            <router-link to="/activity/dashboard" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><Trophy /></el-icon>
-              </div>
-              <span>活動管理</span>
-            </router-link>
-            <router-link to="/reports" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><TrendCharts /></el-icon>
-              </div>
-              <span>報表統計</span>
-            </router-link>
-            <router-link to="/settings" class="action-item">
-              <div class="action-circle">
-                <el-icon :size="22"><Setting /></el-icon>
-              </div>
-              <span>系統設定</span>
-            </router-link>
-          </div>
-        </el-card>
-      </el-col>
-
-      <!-- 右欄 -->
-      <el-col :xs="24" :lg="8">
-
-        <!-- 待審核提醒 -->
-        <el-card v-if="showApprovals" class="no-hover side-card mb-4">
-          <template #header>
-            <div class="card-header-row">
-              <span class="card-header-title">待審核提醒</span>
-              <el-badge
-                v-if="approvalSummary.total > 0"
-                :value="approvalSummary.total"
-                type="danger"
-              />
-            </div>
-          </template>
-          <div v-if="approvalSummary.total === 0" class="approval-done">
-            <el-icon class="approval-done__icon"><CircleCheckFilled /></el-icon>
-            <span>所有申請已審核完畢</span>
-          </div>
-          <div v-else class="approval-list">
-            <div class="approval-item" v-if="approvalSummary.pending_leaves > 0">
-              <span class="approval-item__label">待審請假</span>
-              <el-tag type="warning" effect="plain" size="small">
-                {{ approvalSummary.pending_leaves }} 筆
-              </el-tag>
-            </div>
-            <div class="approval-item" v-if="approvalSummary.pending_overtimes > 0">
-              <span class="approval-item__label">待審加班</span>
-              <el-tag type="warning" effect="plain" size="small">
-                {{ approvalSummary.pending_overtimes }} 筆
-              </el-tag>
-            </div>
-            <template v-if="approvalSummary.this_month_pending_leaves > 0 || approvalSummary.this_month_pending_overtimes > 0">
-              <el-divider style="margin: 4px 0;" />
-              <div class="month-tag">本月</div>
-              <div class="approval-item" v-if="approvalSummary.this_month_pending_leaves > 0">
-                <span class="approval-item__label">本月請假待審</span>
-                <el-tag type="danger" effect="plain" size="small">
-                  {{ approvalSummary.this_month_pending_leaves }} 筆
-                </el-tag>
-              </div>
-              <div class="approval-item" v-if="approvalSummary.this_month_pending_overtimes > 0">
-                <span class="approval-item__label">本月加班待審</span>
-                <el-tag type="danger" effect="plain" size="small">
-                  {{ approvalSummary.this_month_pending_overtimes }} 筆
-                </el-tag>
-              </div>
-            </template>
-            <el-button
-              type="primary"
-              plain
-              size="small"
-              class="approval-btn"
-              @click="navigateTo('/approvals')"
-            >
-              前往審核工作台 →
-            </el-button>
-          </div>
-        </el-card>
-
-        <!-- 身障鑑定即將到期 -->
-        <DisabilityExpirySection />
-
-        <!-- 外部整合健康徽章（Phase 4 P1 resilience；AUDIT_LOGS 權限） -->
-        <IntegrationsHealthCard v-if="showIntegrationsHealth" />
 
         <!-- 今日打卡異常 -->
         <div
@@ -543,8 +380,11 @@ const typedEventTagType = eventTagType as EventTagTypeMap
               <el-button link size="small" @click="navigateTo('/calendar')">查看全部</el-button>
             </div>
           </template>
-          <div v-if="!deferredSections.calendar.loaded" class="dashboard-card-loading text-secondary">
-            正在載入近期行事曆...
+          <div v-if="!deferredSections.calendar.loaded" class="events-skeleton" aria-busy="true">
+            <div v-for="i in 3" :key="i" class="skeleton-pulse events-skeleton__line" />
+          </div>
+          <div v-else-if="deferredSections.calendar.error" class="events-empty text-secondary">
+            行事曆載入失敗，請重新整理頁面
           </div>
           <div v-else-if="groupedEvents.length === 0" class="events-empty text-secondary">
             近 7 天無排程活動
@@ -575,6 +415,154 @@ const typedEventTagType = eventTagType as EventTagTypeMap
           </div>
         </el-card>
         </div>
+
+      </el-col>
+
+      <!-- 右欄（窄）：導覽與低頻資訊 -->
+      <el-col :xs="24" :lg="8">
+
+        <!-- 快速操作 -->
+        <el-card class="no-hover quick-actions-card mb-4">
+          <template #header>
+            <div class="card-header-row">
+              <span class="card-header-title">快速操作</span>
+            </div>
+          </template>
+          <div class="action-grid">
+            <router-link to="/employees" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><User /></el-icon>
+              </div>
+              <span>員工管理</span>
+            </router-link>
+            <router-link to="/students" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><UserFilled /></el-icon>
+              </div>
+              <span>學生管理</span>
+            </router-link>
+            <router-link to="/attendance" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><Clock /></el-icon>
+              </div>
+              <span>出勤查詢</span>
+            </router-link>
+            <router-link to="/salary" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><Wallet /></el-icon>
+              </div>
+              <span>薪資管理</span>
+            </router-link>
+            <router-link to="/leaves" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><Document /></el-icon>
+              </div>
+              <span>請假管理</span>
+            </router-link>
+            <router-link to="/activity/dashboard" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><Trophy /></el-icon>
+              </div>
+              <span>活動管理</span>
+            </router-link>
+            <router-link to="/reports" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><TrendCharts /></el-icon>
+              </div>
+              <span>報表統計</span>
+            </router-link>
+            <router-link to="/settings" class="action-item">
+              <div class="action-circle">
+                <el-icon :size="22"><Setting /></el-icon>
+              </div>
+              <span>系統設定</span>
+            </router-link>
+          </div>
+        </el-card>
+
+        <!-- 學校概況：低頻靜態統計，壓縮為複合卡讓出黃金帶（「其他人員」湊格指標移除） -->
+        <el-card class="no-hover side-card mb-4">
+          <template #header>
+            <div class="card-header-row">
+              <span class="card-header-title">學校概況</span>
+              <el-button
+                v-if="hasCriticalError"
+                link
+                type="primary"
+                size="small"
+                @click="retryCritical"
+              >
+                重新載入
+              </el-button>
+            </div>
+          </template>
+          <div v-if="isFirstLoad && loading" class="overview-list" aria-busy="true">
+            <div v-for="i in 3" :key="i" class="overview-row">
+              <div class="skeleton-pulse overview-skeleton__label" />
+              <div class="skeleton-pulse overview-skeleton__value" />
+            </div>
+          </div>
+          <div v-else class="overview-list">
+            <div class="overview-row">
+              <span class="overview-row__label">教職員總數</span>
+              <span class="overview-row__value">{{ statDisplay(stats.total, criticalErrors.employees) }}</span>
+            </div>
+            <div class="overview-row">
+              <span class="overview-row__label">教師人數</span>
+              <span class="overview-row__value">{{ statDisplay(stats.teachers, criticalErrors.employees) }}</span>
+            </div>
+            <div class="overview-row">
+              <span class="overview-row__label">全校在籍人數</span>
+              <span class="overview-row__value">{{ statDisplay(studentCount, criticalErrors.students) }}</span>
+            </div>
+            <div v-if="hasCriticalError" class="overview-error text-secondary">部分統計載入失敗</div>
+          </div>
+        </el-card>
+
+        <!-- 本月審核風險：只保留待辦磚沒有的增量資訊；當前待審筆數以待辦磚為單一來源 -->
+        <el-card
+          v-if="showApprovals && (approvalSummary.this_month_pending_leaves > 0 || approvalSummary.this_month_pending_overtimes > 0)"
+          class="no-hover side-card mb-4"
+        >
+          <template #header>
+            <div class="card-header-row">
+              <span class="card-header-title">本月審核風險</span>
+              <el-badge
+                :value="approvalSummary.this_month_pending_leaves + approvalSummary.this_month_pending_overtimes"
+                type="danger"
+              />
+            </div>
+          </template>
+          <div class="approval-list">
+            <div class="approval-item" v-if="approvalSummary.this_month_pending_leaves > 0">
+              <span class="approval-item__label">本月請假待審</span>
+              <el-tag type="danger" effect="plain" size="small">
+                {{ approvalSummary.this_month_pending_leaves }} 筆
+              </el-tag>
+            </div>
+            <div class="approval-item" v-if="approvalSummary.this_month_pending_overtimes > 0">
+              <span class="approval-item__label">本月加班待審</span>
+              <el-tag type="danger" effect="plain" size="small">
+                {{ approvalSummary.this_month_pending_overtimes }} 筆
+              </el-tag>
+            </div>
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              class="approval-btn"
+              @click="navigateTo('/approvals')"
+            >
+              前往審核工作台 →
+            </el-button>
+          </div>
+        </el-card>
+
+        <!-- 身障鑑定即將到期 -->
+        <DisabilityExpirySection />
+
+        <!-- 外部整合健康徽章（ops 遙測，位階最低放最底；AUDIT_LOGS 權限） -->
+        <IntegrationsHealthCard v-if="showIntegrationsHealth" />
 
       </el-col>
     </el-row>
@@ -878,16 +866,11 @@ html.dark .todo-empty {
   padding: 20px 24px 24px;
 }
 
+/* 右欄窄卡 / 手機全寬皆自適應：窄欄約 2 欄、全寬自動增欄 */
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px 16px;
-}
-
-@media (max-width: 640px) {
-  .action-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px 12px;
 }
 
 .action-item {
@@ -992,12 +975,51 @@ html.dark .todo-empty {
   padding: 4px 0;
 }
 
-.month-tag {
+/* ── 學校概況（右欄壓縮複合卡） ── */
+.overview-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.overview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--bg-color-soft);
+}
+
+.overview-row:last-of-type {
+  border-bottom: none;
+}
+
+.overview-row__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.overview-row__value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.overview-error {
   font-size: 12px;
-  color: var(--text-tertiary);
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  margin: 2px 0;
+  padding-top: 6px;
+}
+
+.overview-skeleton__label {
+  width: 40%;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.overview-skeleton__value {
+  width: 20%;
+  height: 20px;
+  border-radius: 4px;
 }
 
 /* ── 異常 ── */
@@ -1032,6 +1054,22 @@ html.dark .todo-empty {
   font-size: 13px;
   padding: 4px 0;
 }
+
+.events-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.events-skeleton__line {
+  height: 14px;
+  border-radius: 4px;
+}
+
+.events-skeleton__line:nth-child(1) { width: 88%; }
+.events-skeleton__line:nth-child(2) { width: 70%; }
+.events-skeleton__line:nth-child(3) { width: 80%; }
 
 .events-list {
   display: flex;
