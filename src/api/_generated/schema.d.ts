@@ -16920,10 +16920,16 @@ export interface components {
             class_performance_rate: string;
             /** Classroom Id */
             classroom_id: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Deputy Teacher Name */
+            deputy_teacher_name?: string | null;
             /** Head Count Target */
             head_count_target: number;
             /** Head Teacher Employee Id */
             head_teacher_employee_id: number | null;
+            /** Head Teacher Name */
+            head_teacher_name?: string | null;
             /** Id */
             id: number;
             /** Returning Student Rate */
@@ -23266,6 +23272,8 @@ export interface components {
             };
             /** Employee Id */
             employee_id: number;
+            /** Employee Name */
+            employee_name: string;
             /** Id */
             id: number;
             /** Period Label */
@@ -28634,6 +28642,8 @@ export interface components {
             deduction_total: string;
             /** Employee Id */
             employee_id: number;
+            /** Employee Name */
+            employee_name: string;
             /** Festival Total */
             festival_total: string;
             /** Gross Amount */
@@ -28925,6 +28935,8 @@ export interface components {
             classroom_id: number | null;
             /** Employee Id */
             employee_id: number;
+            /** Employee Name */
+            employee_name: string;
             /** Id */
             id: number;
             /** Period Label */
