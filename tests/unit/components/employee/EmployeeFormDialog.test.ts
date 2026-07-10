@@ -3,6 +3,10 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus from 'element-plus'
 
+// 本檔以真 ElementPlus mount（需真渲染 el-tabs/el-form 才能斷言 tab 文字），happy-dom 下較慢；
+// 全套並行時偶觸預設 5s timeout。提高本檔 timeout 以消除環境負載造成的 flaky（非邏輯問題）。
+vi.setConfig({ testTimeout: 15000 })
+
 // ── API mocks（形狀抄真實契約：createEmployee/updateEmployeeBasic/updateEmployeeSalary 皆回 { data }）──
 const mockCreateEmployee = vi.fn(() => Promise.resolve({ data: { id: 99 } }))
 const mockUpdateEmployeeBasic = vi.fn(() => Promise.resolve({ data: {} }))
@@ -150,12 +154,11 @@ describe('EmployeeFormDialog', () => {
       id: 7, employee_id: 'EMP007', name: '正職員工', employee_type: 'regular',
       base_salary: 32000, hourly_rate: 0, insurance_salary_level: 32000,
     })
-    await nextTick()
-    await nextTick()
+    await flushPromises()
     vm.form.base_salary = 20000 // < 29500
-    await nextTick()
+    await flushPromises()
     vm.saveSalary()
-    await nextTick()
+    await flushPromises()
     expect(vm.previewDialog.visible).toBe(false)
   })
 
