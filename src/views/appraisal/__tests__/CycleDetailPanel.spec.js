@@ -19,6 +19,9 @@ vi.mock('@/api/appraisal', () => ({
   }),
   exportAppraisalCycleXlsxUrl: vi.fn().mockReturnValue('/x'),
   exportAppraisalTransferRosterXlsxUrl: vi.fn().mockReturnValue('/y'),
+  getSignStatusSummary: vi.fn().mockResolvedValue({
+    data: { cycle_id: 5, counts: { DRAFT: 2, SUPERVISOR_SIGNED: 1, ACCOUNTING_SIGNED: 0, FINALIZED: 3 }, buckets: [] },
+  }),
 }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
@@ -74,10 +77,17 @@ const stubs = {
   }),
   BatchSignButton: defineComponent({
     name: 'BatchSignButton',
-    props: ['cycleId', 'stage', 'selectedIds'],
+    props: ['cycleId', 'stage', 'selectedIds', 'disabled'],
     emits: ['done'],
-    setup() {
-      return () => h('button', { 'data-test': 'batch-btn-stub' }, 'BatchBtn')
+    setup(props) {
+      return () => h('button', { 'data-test': 'batch-btn-stub', disabled: props.disabled }, 'BatchBtn')
+    },
+  }),
+  SignProgressBar: defineComponent({
+    name: 'SignProgressBar',
+    props: ['counts'],
+    setup(props) {
+      return () => h('div', { 'data-test': 'sign-progress-bar-stub' }, JSON.stringify(props.counts))
     },
   }),
   SummaryLogDrawer: defineComponent({
@@ -151,13 +161,32 @@ describe('CycleDetailPanel', () => {
     expect(wrapper.text()).toContain('114 學年')
   })
 
-  it('shows batch-zone when selectedIds not empty', async () => {
+  it('batch-zone 常駐顯示；未勾選時 BatchSignButton disabled，勾選後 enabled', async () => {
     const wrapper = mountPanel()
     await flush()
-    expect(wrapper.find('[data-test="batch-zone"]').exists()).toBe(false)
+    // 常駐：即使 selectedIds 為空，batch-zone 仍渲染（不再 v-if 隱藏）
+    expect(wrapper.find('[data-test="batch-zone"]').exists()).toBe(true)
+    const btnsBefore = wrapper.findAll('[data-test="batch-btn-stub"]')
+    expect(btnsBefore.length).toBeGreaterThan(0)
+    for (const btn of btnsBefore) {
+      expect(btn.attributes('disabled')).toBeDefined()
+    }
+
     wrapper.vm.selectedIds = [1, 2]
     await nextTick()
-    expect(wrapper.find('[data-test="batch-zone"]').exists()).toBe(true)
+    const btnsAfter = wrapper.findAll('[data-test="batch-btn-stub"]')
+    for (const btn of btnsAfter) {
+      expect(btn.attributes('disabled')).toBeUndefined()
+    }
+  })
+
+  it('頂部渲染簽核進度列 SignProgressBar，counts 來自 getSignStatusSummary', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    const bar = wrapper.find('[data-test="sign-progress-bar-stub"]')
+    expect(bar.exists()).toBe(true)
+    expect(bar.text()).toContain('"DRAFT":2')
+    expect(bar.text()).toContain('"FINALIZED":3')
   })
 
   it('opens reject dialog via openReject', async () => {

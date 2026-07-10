@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { MoreFilled } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
+import { STAGE_LABEL, GRADE_TAG, gradeLabel } from '@/constants/appraisalYearEnd'
 
 interface Summary { id: number; employee_name?: string; status?: string; total_score?: number; grade?: string; bonus_amount?: number; [key: string]: unknown }
 
@@ -32,6 +33,23 @@ const canSign = computed(
   () => hasAnySignPerm.value && props.summary?.status !== 'FINALIZED',
 )
 const canReject = hasAnySignPerm
+
+// Task 8：卡尾「當前一步」主按鈕——依 summary.status 與 per-stage 權限判斷
+// 顯示哪一步；沿用既有單一 action 事件契約（{ action: 'sign', summary }），
+// stage 推導交回 CycleDetailPanel.onKanbanAction（依 status 映射），不新造事件名。
+const canSignSupervisor = computed(() => hasPermission('APPRAISAL_REVIEW'))
+const canSignAccounting = computed(() => hasPermission('APPRAISAL_ACCOUNTING'))
+const canFinalizeStage = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+const primaryAction = computed(() => {
+  const s = props.summary?.status
+  if (s === 'DRAFT' && canSignSupervisor.value) return { label: STAGE_LABEL.SUPERVISOR }
+  if (s === 'SUPERVISOR_SIGNED' && canSignAccounting.value) return { label: STAGE_LABEL.ACCOUNTING }
+  if (s === 'ACCOUNTING_SIGNED' && canFinalizeStage.value) return { label: STAGE_LABEL.FINALIZE }
+  return null
+})
+function onPrimaryAction() {
+  emit('action', { action: 'sign', summary: props.summary })
+}
 </script>
 
 <template>
@@ -62,8 +80,22 @@ const canReject = hasAnySignPerm
     </div>
     <div class="card-body">
       <div>總分：<strong>{{ Number(summary.total_score).toFixed(2) }}</strong></div>
-      <div>等第：<el-tag size="small">{{ summary.grade }}</el-tag></div>
+      <div>
+        等第：
+        <el-tag size="small" :type="GRADE_TAG[summary.grade as string]" data-test="grade-tag">
+          {{ gradeLabel(summary.grade as string ?? '') }}
+        </el-tag>
+      </div>
       <div>獎金：{{ Number(summary.bonus_amount).toLocaleString() }}</div>
+    </div>
+    <div v-if="primaryAction" class="card-footer">
+      <el-button
+        size="small"
+        type="primary"
+        class="summary-card__primary"
+        data-test="summary-primary-action"
+        @click.stop="onPrimaryAction"
+      >{{ primaryAction.label }}</el-button>
     </div>
   </div>
 </template>
@@ -79,4 +111,5 @@ const canReject = hasAnySignPerm
 .employee-name { flex: 1; font-weight: 600; }
 .menu-icon { cursor: pointer; padding: 4px; }
 .card-body { font-size: 12px; display: flex; flex-direction: column; gap: 2px; color: var(--el-text-color-regular); }
+.card-footer { display: flex; justify-content: flex-end; }
 </style>

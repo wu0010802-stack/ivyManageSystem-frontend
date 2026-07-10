@@ -22,6 +22,7 @@ import {
   listAppraisalCycles,
   exportAppraisalCycleXlsxUrl,
   exportAppraisalTransferRosterXlsxUrl,
+  getSignStatusSummary,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
@@ -33,6 +34,7 @@ import RejectDialog from './components/RejectDialog.vue'
 import CommentDialog from './components/CommentDialog.vue'
 import BatchSignButton from './components/BatchSignButton.vue'
 import SummaryLogDrawer from './components/SummaryLogDrawer.vue'
+import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
 
 interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; status?: string; [key: string]: unknown }
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
@@ -50,6 +52,19 @@ const summaries = ref<Summary[]>([])
 const catalog = ref<unknown[]>([])
 const loading = ref(false)
 const busy = ref(false)
+
+// Task 8：頂部簽核進度列 counts（getSignStatusSummary 獨立於 kanban 自己的
+// data，list view 沒有 kanban 可看，故獨立載入才能兩種 view 都顯示進度）。
+const signCounts = ref<Record<string, number>>({})
+async function loadSignCounts() {
+  try {
+    const r = await getSignStatusSummary(cycleId.value)
+    signCounts.value = (r.data as { counts?: Record<string, number> })?.counts ?? {}
+  } catch (e) {
+    // 進度列非關鍵路徑，載入失敗不擋頁面其餘功能。
+    console.error(e)
+  }
+}
 
 // P1-9：view 用 URL query 同步，F5 後保留、可分享。
 // 內嵌後預設 list（需求：進頁即列表模式），query 仍可覆寫成 kanban。
@@ -119,12 +134,15 @@ async function load() {
 const kanbanRef = ref<{ reload?: () => void } | null>(null)
 async function reload() {
   await load()
+  loadSignCounts()
   if (kanbanRef.value?.reload) kanbanRef.value.reload()
 }
 
 // P1-14：背景非阻塞重新整理 kanban，不動 summaries / participants /
 // catalog（這些只在初次載入或 reject/comment/recompute 後才需要重撈）。
+// Task 8：簽核進度列 counts 掛在同一個背景刷新點，簽核/退簽/留言後一併更新。
 function silentKanbanRefresh() {
+  loadSignCounts()
   if (kanbanRef.value?.reload) {
     // 不 await — 不阻塞 UI；錯誤交給 kanban 自己的 try/catch
     kanbanRef.value.reload()
@@ -236,7 +254,10 @@ defineExpose({
   summaries,
 })
 
-onMounted(load)
+onMounted(() => {
+  load()
+  loadSignCounts()
+})
 </script>
 
 <template>
@@ -248,6 +269,8 @@ onMounted(load)
       基礎分數 {{ Number(cycle.base_score).toFixed(2) }} ｜
       狀態 {{ statusLabel(cycle.status ?? '') }}
     </div>
+
+    <SignProgressBar :counts="signCounts" class="sign-progress-wrap" />
 
     <div class="toolbar">
       <el-button
@@ -262,25 +285,34 @@ onMounted(load)
       <el-button :icon="Download" tag="a" :href="exportAppraisalTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
 
       <span
-        v-if="selectedIds.length > 0 && canBatchSign"
+        v-if="canBatchSign"
         class="batch-zone"
         data-test="batch-zone"
       >
-        <BatchSignButton
-          v-if="canSignSupervisor"
-          :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds"
-          :summaries-map="summariesById" @done="reload"
-        />
-        <BatchSignButton
-          v-if="canSignAccounting"
-          :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds"
-          :summaries-map="summariesById" @done="reload"
-        />
-        <BatchSignButton
-          v-if="canFinalize"
-          :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds"
-          :summaries-map="summariesById" @done="reload"
-        />
+        <el-tooltip content="勾選列後可批次簽核" :disabled="selectedIds.length > 0">
+          <BatchSignButton
+            v-if="canSignSupervisor"
+            :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds"
+            :disabled="!selectedIds.length"
+            :summaries-map="summariesById" @done="reload"
+          />
+        </el-tooltip>
+        <el-tooltip content="勾選列後可批次簽核" :disabled="selectedIds.length > 0">
+          <BatchSignButton
+            v-if="canSignAccounting"
+            :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds"
+            :disabled="!selectedIds.length"
+            :summaries-map="summariesById" @done="reload"
+          />
+        </el-tooltip>
+        <el-tooltip content="勾選列後可批次簽核" :disabled="selectedIds.length > 0">
+          <BatchSignButton
+            v-if="canFinalize"
+            :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds"
+            :disabled="!selectedIds.length"
+            :summaries-map="summariesById" @done="reload"
+          />
+        </el-tooltip>
       </span>
 
       <el-radio-group v-model="view" data-test="view-toggle" style="margin-left: auto;">
@@ -336,6 +368,7 @@ onMounted(load)
 <style scoped>
 .cycle-detail { padding: 0; }
 .meta { margin: 12px 0; padding: 12px; background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
+.sign-progress-wrap { margin: 0 0 12px; }
 .toolbar { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .batch-zone { display: flex; gap: 6px; }
 </style>
