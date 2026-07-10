@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, User } from '@element-plus/icons-vue'
 import { useEmployeeDetail } from '@/composables/useEmployeeDetail'
-import { getEmployeeStatus, standardSalaryFor } from '@/utils/employeeDisplay'
+import { getEmployeeStatus, standardSalaryFor, isMissingSalary } from '@/utils/employeeDisplay'
 import { expiryStatus } from '@/utils/expiry'
 import { getPositionSalary } from '@/api/config'
 import { hasPermission } from '@/utils/auth'
@@ -53,8 +53,9 @@ interface EmployeeTodo {
 const employeeTodos = computed<EmployeeTodo[]>(() => {
   const todos: EmployeeTodo[] = []
   const emp = employee.value
-  // 待補薪資：正職在職但底薪為 0（嚴格 === 0；遮罩後的 null／undefined 不觸發，避免無權限使用者誤判待辦）
-  if (emp && emp.is_active && emp.employee_type === 'regular' && emp.base_salary === 0) {
+  // 待補薪資：單一來源 isMissingSalary（emp.utils）—— 在職 + 正職 + 底薪嚴格 === 0；
+  // 遮罩後的 null／undefined 不觸發，避免無權限使用者誤判待辦
+  if (emp && isMissingSalary(emp)) {
     todos.push({ key: 'missing-salary', type: 'danger', label: '待補薪資', sectionKey: 'salary' })
   }
   // 證照到期：逾期與 30 天內到期分開計數顯示

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   statusKeyOf, getEmployeeStatus, maskedMoney, insuranceLevelDisplay,
   pensionSelfRatePct, bankInfoDisplay, detectRole, standardSalaryFor,
+  isMissingSalary,
 } from '@/utils/employeeDisplay'
 
 describe('statusKeyOf / getEmployeeStatus', () => {
@@ -45,6 +46,25 @@ describe('薪資遮罩顯示（後端 role/self 遮罩回 null，嚴禁顯示成
     expect(bankInfoDisplay({ bank_code: '822', bank_account: '123', bank_account_name: '王' }))
       .toBe('822 - 123（王）')
     expect(bankInfoDisplay({ bank_code: '822', bank_account: '123' })).toBe('822 - 123')
+  })
+})
+
+describe('isMissingSalary（待補薪資單一來源：在職 + 正職 + 底薪嚴格 === 0）', () => {
+  it('正職 + 在職 + base_salary=0 → true', () => {
+    expect(isMissingSalary({ is_active: true, employee_type: 'regular', base_salary: 0 })).toBe(true)
+  })
+  it('base_salary 為 null/undefined（遮罩）→ false', () => {
+    expect(isMissingSalary({ is_active: true, employee_type: 'regular', base_salary: null })).toBe(false)
+    expect(isMissingSalary({ is_active: true, employee_type: 'regular', base_salary: undefined })).toBe(false)
+  })
+  it('非 regular（時薪制）→ false', () => {
+    expect(isMissingSalary({ is_active: true, employee_type: 'hourly', base_salary: 0 })).toBe(false)
+  })
+  it('非在職（已離職）→ false', () => {
+    expect(isMissingSalary({ is_active: false, employee_type: 'regular', base_salary: 0 })).toBe(false)
+  })
+  it('base_salary > 0 → false', () => {
+    expect(isMissingSalary({ is_active: true, employee_type: 'regular', base_salary: 30000 })).toBe(false)
   })
 })
 
