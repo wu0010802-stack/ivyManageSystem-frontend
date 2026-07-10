@@ -369,8 +369,12 @@ onMounted(initGrid)
       data-test="grid-table"
     >
       <!-- Task 12①：修 404——原「展開」按鈕 push 到不存在的 /settlements/:id 路由，
-           改列內 expand 就地展開，內容見 expandFields()。 -->
-      <el-table-column type="expand" width="40" data-test="expand-column">
+           改列內 expand 就地展開，內容見 expandFields()。
+           fixed="left" 必要（審查修繕）：Element Plus 欄位排序（watcher.mjs）會把所有
+           fixed:left 欄放最前、不保留模板宣告順序，未 fixed 的 expand 欄會被重排到姓名欄
+           （fixed="left"）之後；且本表欄寬總和 ~1767px 必觸發橫向捲動，未 fixed 的
+           expand 欄捲動後會滾出視窗，使用者失去展開把手。 -->
+      <el-table-column type="expand" width="40" fixed="left" data-test="expand-column">
         <template #default="{ row }">
           <el-descriptions :column="3" size="small" border class="grid-expand">
             <el-descriptions-item

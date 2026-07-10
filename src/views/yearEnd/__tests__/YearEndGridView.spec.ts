@@ -714,6 +714,23 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     expect(byLabel['備註']).toBe('114.08 到職')
   })
 
+  // 審查修繕（Important）：Element Plus 內部欄位排序（watcher.mjs）會把所有 fixed:left
+  // 欄放最前、不保留模板宣告順序——expand 欄若未 fixed，實際渲染會被重排到姓名欄
+  // （fixed="left"）之後；且本表欄寬總和 ~1767px 必觸發橫向捲動，未 fixed 的 expand 欄
+  // 捲動後會滾出視窗，使用者失去展開把手。expand 欄必須帶 fixed="left" 併入 fixed 群組。
+  it('展開欄（type=expand）帶 fixed="left"，避免被 Element Plus 重排到姓名欄後與橫向捲動流失', async () => {
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const expandCol = wrapper.find('[data-test="expand-column"]')
+    expect(expandCol.exists()).toBe(true)
+    expect(expandCol.attributes('type')).toBe('expand')
+    expect(expandCol.attributes('fixed')).toBe('left')
+  })
+
   it('展開列（type=expand）實際渲染 el-descriptions，內容含主結算/合計/備註', async () => {
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
