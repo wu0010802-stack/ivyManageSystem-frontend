@@ -364,7 +364,8 @@ async function showCreateGuidance(newEmployeeId: number | null) {
       cancelButtonText: '關閉',
       type: 'success',
     })
-    router.push({ name: 'employee-detail', params: { id: newEmployeeId } })
+    // .catch()：導航被 guard 攔截或重複導航時 push 會 reject，吞掉避免 unhandled rejection 雜訊
+    router.push({ name: 'employee-detail', params: { id: newEmployeeId } }).catch(() => {})
   } catch {
     // 使用者按「關閉」或 Esc：留在原頁，不導頁
   }
@@ -394,6 +395,9 @@ const saveCreate = async () => {
         return
       }
       const res = await createEmployee(form)
+      // 持久成功回饋（reviewer 裁定）：MessageBox 可被 Esc/點遮罩快速關閉，
+      // toast 與引導框並存，確保成功訊息不因引導框被關而消失。
+      ElMessage.success('員工已新增')
       employeeDraft.clear()
       closeDialog()
       emit('saved')

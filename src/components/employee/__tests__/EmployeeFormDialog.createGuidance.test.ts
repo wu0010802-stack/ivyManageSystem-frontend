@@ -1,5 +1,6 @@
 // src/components/employee/__tests__/EmployeeFormDialog.createGuidance.test.ts
 // 新增模式 saveCreate 成功後的下一步引導（finding #5 後半）：
+// - 成功後先發持久 toast「員工已新增」（reviewer 裁定：與引導框並存，MessageBox 可被 Esc 快速關閉）
 // - createEmployee response 含 id（真實契約 EmployeeCreateResultOut）→ MessageBox 引導 + 「前往詳情頁」按鈕，
 //   確認後導向 /employees/:id
 // - 使用者取消引導 → 不導頁
@@ -33,11 +34,12 @@ vi.mock('vue-router', () => ({
 
 const confirmMock = vi.hoisted(() => vi.fn())
 const notificationMock = vi.hoisted(() => vi.fn())
+const messageSuccessMock = vi.hoisted(() => vi.fn())
 vi.mock('element-plus', async (orig) => {
   const actual = await orig() as Record<string, unknown>
   return {
     ...actual,
-    ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+    ElMessage: { success: messageSuccessMock, error: vi.fn(), warning: vi.fn(), info: vi.fn() },
     ElMessageBox: { confirm: (...a: unknown[]) => confirmMock(...a) },
     ElNotification: (...a: unknown[]) => notificationMock(...a),
   }
@@ -70,7 +72,10 @@ describe('EmployeeFormDialog 新增後下一步引導', () => {
     createEmployeeMock.mockReset()
     confirmMock.mockReset()
     notificationMock.mockReset()
+    messageSuccessMock.mockReset()
     pushMock.mockReset()
+    // router.push 回傳 Promise（實作端鏈 .catch() 吞導航攔截 rejection），mock 需對齊真實契約
+    pushMock.mockResolvedValue(undefined)
   })
 
   it('response 含 id、使用者按「前往詳情頁」→ 導向 /employees/:id', async () => {
@@ -80,6 +85,8 @@ describe('EmployeeFormDialog 新增後下一步引導', () => {
     await fillAndSave(wrapper)
 
     expect(createEmployeeMock).toHaveBeenCalledOnce()
+    // 持久成功 toast 與引導框並存（reviewer 裁定）：引導框被快速關閉時成功回饋仍在
+    expect(messageSuccessMock).toHaveBeenCalledWith('員工已新增')
     expect(confirmMock).toHaveBeenCalledOnce()
     const [message, , options] = confirmMock.mock.calls[0] as [string, string, Record<string, unknown>]
     expect(message).toContain('薪資')
@@ -108,6 +115,7 @@ describe('EmployeeFormDialog 新增後下一步引導', () => {
 
     expect(confirmMock).not.toHaveBeenCalled()
     expect(notificationMock).toHaveBeenCalledOnce()
+    expect(messageSuccessMock).toHaveBeenCalledWith('員工已新增') // toast 在退化路徑同樣保留
     expect(pushMock).not.toHaveBeenCalled()
   })
 })
