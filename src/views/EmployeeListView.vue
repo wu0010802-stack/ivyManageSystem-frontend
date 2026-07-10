@@ -305,6 +305,8 @@ onMounted(async () => {
       <div class="header-actions">
         <el-input
           v-model="searchQuery"
+          type="search"
+          aria-label="搜尋員工姓名或編號"
           placeholder="搜尋姓名或編號"
           class="search-input"
           :prefix-icon="Search"

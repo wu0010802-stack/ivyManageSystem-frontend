@@ -100,6 +100,27 @@ describe('EmployeeFormBasic', () => {
     expect(text).not.toContain('部門')
   })
 
+  // ── 可存取性（finding #3）：聯絡欄位補正確的 input type / autocomplete / name ──
+  it('聯絡電話欄位為 type=tel 並帶 autocomplete/name', () => {
+    const input = mountForm().find('input[name="phone"]')
+    expect(input.exists()).toBe(true)
+    expect(input.attributes('type')).toBe('tel')
+    expect(input.attributes('autocomplete')).toBe('tel')
+  })
+
+  it('Email 欄位為 type=email 並帶 autocomplete/name', () => {
+    const input = mountForm().find('input[name="email"]')
+    expect(input.exists()).toBe(true)
+    expect(input.attributes('type')).toBe('email')
+    expect(input.attributes('autocomplete')).toBe('email')
+  })
+
+  it('身分證與教師證號欄位 autocomplete=off（不讓瀏覽器記憶敏感值）', () => {
+    const wrapper = mountForm()
+    expect(wrapper.find('input[name="id_number"]').attributes('autocomplete')).toBe('off')
+    expect(wrapper.find('input[name="teacher_cert_no"]').attributes('autocomplete')).toBe('off')
+  })
+
   it('收合區欄位仍被 el-form.validate 偵測（v-show 保持掛載）並可展開', async () => {
     // This test proves that v-show keeps the gov section's form-items mounted
     // (accessible to el-form.validate) even when the section is collapsed.

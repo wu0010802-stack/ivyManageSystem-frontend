@@ -243,4 +243,21 @@ describe('EmployeeDetailView 員工待辦列', () => {
     const tags = w.findAll('.employee-todos .el-tag').map((t) => t.text())
     expect(tags).not.toContain('部分資料載入失敗，待辦可能不完整')
   })
+
+  // ── 可存取性（finding #3）：待辦 tag 為可點控制項，需鍵盤可達 ──
+  it('待辦 tag 具鍵盤可達性（role=button、tabindex=0）', () => {
+    const w = mountDetail({ employee: { id: 1, is_active: true, employee_type: 'regular', base_salary: 0 } })
+    const tag = w.find('.employee-todos .todo-tag')
+    expect(tag.attributes('role')).toBe('button')
+    expect(tag.attributes('tabindex')).toBe('0')
+  })
+
+  it('待辦 tag 支援鍵盤 Enter 觸發捲動', async () => {
+    const scrollIntoView = vi.fn()
+    const getByIdSpy = vi.spyOn(document, 'getElementById').mockReturnValue({ scrollIntoView } as unknown as HTMLElement)
+    const w = mountDetail({ employee: { id: 1, is_active: true, employee_type: 'regular', base_salary: 0 } })
+    await w.find('.employee-todos .todo-tag').trigger('keydown.enter')
+    expect(getByIdSpy).toHaveBeenCalledWith('emp-sec-salary')
+    getByIdSpy.mockRestore()
+  })
 })

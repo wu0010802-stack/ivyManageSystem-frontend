@@ -80,7 +80,7 @@ const stubs = {
   Plus: true,
   Search: true,
   ArrowDown: true,
-  'el-input': { template: '<input />' },
+  'el-input': { template: '<input v-bind="$attrs" />' },
   'el-button': { template: '<button><slot /></button>' },
   'el-icon': true,
   'el-card': { template: '<div><slot /></div>' },
@@ -110,6 +110,16 @@ describe('EmployeeListView', () => {
     mockGetProbationAlerts.mockImplementation(() =>
       Promise.resolve({ data: { employees: [], alerts: { next_month: 0 } } }),
     )
+  })
+
+  it('搜尋框具無障礙屬性（aria-label + type=search）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    const search = wrapper.find('.search-input')
+    expect(search.exists()).toBe(true)
+    expect(search.attributes('aria-label')).toBeTruthy()
+    expect(search.attributes('type')).toBe('search')
   })
 
   it('onMounted honors store TTL by calling fetchEmployees(false)', async () => {

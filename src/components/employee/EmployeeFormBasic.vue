@@ -237,22 +237,22 @@ defineExpose({ applyValidationErrors })
       <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" style="width:100%" value-format="YYYY-MM-DD" clearable />
     </el-form-item>
     <el-form-item label="身分證字號">
-      <el-input v-model="form.id_number" placeholder="保留遮罩值將不會更新" />
+      <el-input v-model="form.id_number" name="id_number" autocomplete="off" placeholder="保留遮罩值將不會更新" />
       <div class="form-hint form-hint--example">例：A123456789</div>
     </el-form-item>
     <el-form-item label="聯絡電話">
-      <el-input v-model="form.phone" />
+      <el-input v-model="form.phone" type="tel" name="phone" autocomplete="tel" />
       <div class="form-hint form-hint--example">例：0912-345-678</div>
     </el-form-item>
     <el-form-item label="Email" prop="email">
-      <el-input v-model="form.email" placeholder="example@mail.com" maxlength="100" />
+      <el-input v-model="form.email" type="email" name="email" autocomplete="email" placeholder="example@mail.com" maxlength="100" />
     </el-form-item>
     <el-form-item label="眷屬人數" prop="dependents">
       <el-input-number v-model="form.dependents" :min="0" :max="9" :step="1" style="width:100%" />
     </el-form-item>
     <el-form-item label="通訊地址"><el-input v-model="form.address" type="textarea" :rows="2" /></el-form-item>
     <el-form-item label="緊急聯絡人"><el-input v-model="form.emergency_contact_name" /></el-form-item>
-    <el-form-item label="緊急聯絡電話"><el-input v-model="form.emergency_contact_phone" /></el-form-item>
+    <el-form-item label="緊急聯絡電話"><el-input v-model="form.emergency_contact_phone" type="tel" name="emergency_contact_phone" autocomplete="tel" /></el-form-item>
   </FormSection>
 
   <!-- 工作時間 -->
@@ -281,7 +281,7 @@ defineExpose({ applyValidationErrors })
       </el-select>
     </el-form-item>
     <el-form-item label="教師/教保員證號" prop="teacher_cert_no">
-      <el-input v-model="form.teacher_cert_no" maxlength="50" style="width:100%" />
+      <el-input v-model="form.teacher_cert_no" name="teacher_cert_no" autocomplete="off" maxlength="50" style="width:100%" />
     </el-form-item>
     <el-form-item label="證號類型">
       <el-select v-model="form.teacher_cert_type" clearable style="width:100%">

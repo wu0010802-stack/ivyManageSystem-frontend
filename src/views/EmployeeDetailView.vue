@@ -167,7 +167,10 @@ const onSaved = async () => {
         <div v-if="employeeTodos.length || subResourceErrors > 0" class="employee-todos">
           <el-tag
             v-for="todo in employeeTodos" :key="todo.key" :type="todo.type"
-            class="todo-tag" @click="scrollToSection(todo.sectionKey)"
+            class="todo-tag" role="button" tabindex="0"
+            @click="scrollToSection(todo.sectionKey)"
+            @keydown.enter.prevent="scrollToSection(todo.sectionKey)"
+            @keydown.space.prevent="scrollToSection(todo.sectionKey)"
           >{{ todo.label }}</el-tag>
           <el-tag v-if="subResourceErrors > 0" type="info">部分資料載入失敗，待辦可能不完整</el-tag>
         </div>
