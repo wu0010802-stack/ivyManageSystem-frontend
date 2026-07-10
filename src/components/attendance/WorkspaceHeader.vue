@@ -33,6 +33,7 @@
     </div>
 
     <div class="workspace-header__actions">
+      <el-button :icon="Monitor" @click="openKiosk">電子打卡</el-button>
       <el-button v-if="canWrite" @click="emit('import')">匯入</el-button>
       <el-button type="primary" @click="emit('export')">匯出月報</el-button>
     </div>
@@ -41,7 +42,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+import { ArrowLeft, ArrowRight, Monitor } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 
 interface Kpis {
@@ -65,6 +67,13 @@ const emit = defineEmits<{
 }>()
 
 const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
+
+const router = useRouter()
+
+// 電子打卡台為免登入、全屏、無側邊導航的獨立 kiosk 頁；新分頁開啟以免中斷後台操作
+function openKiosk() {
+  window.open(router.resolve({ name: 'kiosk-punch' }).href, '_blank')
+}
 
 const now = new Date()
 const yearOptions = computed(() => {
