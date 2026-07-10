@@ -31,16 +31,23 @@ const selectedEmployeeId = ref<number | null>(null)
 const historyMonths = ref(12)
 const historyData = ref<HistoryRow[]>([])
 
+// 防切員工/切區間 race：晚到的舊請求不得蓋掉新選取的資料（epoch 比對，
+// 比照 useSalarySettlement.refresh 的 refreshEpoch 寫法）
+let fetchEpoch = 0
+
 const fetchHistory = async () => {
   if (!selectedEmployeeId.value) return
+  const epoch = ++fetchEpoch
   historyLoading.value = true
   try {
     const response = await getHistory({ employee_id: selectedEmployeeId.value, months: historyMonths.value })
+    if (epoch !== fetchEpoch) return // 已被更新的請求取代，捨棄結果
     historyData.value = (response.data as HistoryRow[]).reverse()
   } catch {
+    if (epoch !== fetchEpoch) return
     ElMessage.error('載入歷史資料失敗')
   } finally {
-    historyLoading.value = false
+    if (epoch === fetchEpoch) historyLoading.value = false
   }
 }
 
