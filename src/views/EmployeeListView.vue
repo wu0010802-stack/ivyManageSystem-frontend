@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { getEmployees, deleteEmployee } from '@/api/employees'
-import { statusKeyOf, getEmployeeStatus, type EmployeeStatusKey } from '@/utils/employeeDisplay'
+import { getProbationAlerts } from '@/api/home'
+import { statusKeyOf, getEmployeeStatus, isMissingSalary, type EmployeeStatusKey } from '@/utils/employeeDisplay'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -103,9 +104,34 @@ const titleOptions = computed(() => {
 const matchesTitle = (emp: Record<string, unknown>) =>
   titleFilter.value === 'all' || emp.title === titleFilter.value
 
-// 表格實際渲染的清單：搜尋/store 結果 → 狀態篩選 → 職稱篩選（單一 chain，不開平行路徑）
+// ── HR 待辦 chips（finding #3 phase 1）：待補薪資／試用期將到期，roster-stats 旁可點篩選 ──
+type TodoFilter = 'none' | 'missing_salary' | 'probation'
+const todoFilter = ref<TodoFilter>('none')
+
+// 待補薪資：口徑同名冊列 tag（isMissingSalary，單一來源），以整份 store 名冊計數
+// （同 rosterStats 基準，不受搜尋/其他篩選影響，避免「共 N 人」式的誤讀）
+const missingSalaryCount = computed(() =>
+  (employeeStore.employees as Record<string, unknown>[]).filter(isMissingSalary).length
+)
+
+// 試用期將到期：onMounted 呼叫後端 alerts 端點取得 id 清單；API 失敗靜默（catch 後維持空陣列，
+// chip 因 n=0 天然不渲染，不擋名冊主流程、不跳錯誤訊息）
+const probationAlertIds = ref<number[]>([])
+const probationAlertCount = computed(() => probationAlertIds.value.length)
+
+const matchesTodo = (emp: Record<string, unknown>) => {
+  if (todoFilter.value === 'missing_salary') return isMissingSalary(emp)
+  if (todoFilter.value === 'probation') return probationAlertIds.value.includes(emp.id as number)
+  return true
+}
+
+const toggleTodoFilter = (filter: 'missing_salary' | 'probation') => {
+  todoFilter.value = todoFilter.value === filter ? 'none' : filter
+}
+
+// 表格實際渲染的清單：搜尋/store 結果 → 狀態篩選 → 職稱篩選 → HR 待辦篩選（單一 chain，不開平行路徑）
 const displayedEmployees = computed(() =>
-  (filteredEmployees.value as Record<string, unknown>[]).filter((e) => matchesStatus(e) && matchesTitle(e))
+  (filteredEmployees.value as Record<string, unknown>[]).filter((e) => matchesStatus(e) && matchesTitle(e) && matchesTodo(e))
 )
 
 // 名冊統計：永遠以整份 store 名冊為基準（不受搜尋/狀態篩選影響），
@@ -121,6 +147,7 @@ const clearFilters = () => {
   searchQuery.value = ''
   statusFilter.value = 'all'
   titleFilter.value = 'all'
+  todoFilter.value = 'none'
 }
 
 watch(debouncedSearch, async (val) => {
@@ -212,6 +239,10 @@ onMounted(async () => {
     searchQuery.value = kw
     debouncedSearch.value = kw
   }
+  // 試用期將到期 chip：非關鍵功能，失敗靜默（不跳錯誤訊息、不擋名冊載入）
+  getProbationAlerts()
+    .then((res) => { probationAlertIds.value = res.data.employees.map((e) => e.id) })
+    .catch(() => {})
 })
 </script>
 
@@ -230,6 +261,22 @@ onMounted(async () => {
             <span class="stat-sep">·</span> 已離職 {{ rosterStats.resigned }}
           </template>
         </p>
+        <div v-if="!loading && (missingSalaryCount > 0 || probationAlertCount > 0)" class="todo-chips">
+          <el-tag
+            v-if="missingSalaryCount > 0"
+            class="todo-chip"
+            type="warning"
+            :effect="todoFilter === 'missing_salary' ? 'dark' : 'plain'"
+            @click="toggleTodoFilter('missing_salary')"
+          >待補薪資 {{ missingSalaryCount }}</el-tag>
+          <el-tag
+            v-if="probationAlertCount > 0"
+            class="todo-chip"
+            type="info"
+            :effect="todoFilter === 'probation' ? 'dark' : 'plain'"
+            @click="toggleTodoFilter('probation')"
+          >試用期將到期 {{ probationAlertCount }}</el-tag>
+        </div>
       </div>
       <div class="header-actions">
         <el-input
@@ -282,7 +329,7 @@ onMounted(async () => {
               {{ getEmployeeStatus(scope.row).label }}
             </el-tag>
             <el-tag
-              v-if="scope.row.is_active && scope.row.employee_type === 'regular' && scope.row.base_salary === 0"
+              v-if="isMissingSalary(scope.row)"
               type="warning" size="small" effect="plain" style="margin-left:4px"
             >待補薪資</el-tag>
           </template>
@@ -319,7 +366,7 @@ onMounted(async () => {
         </el-table-column>
         <template #empty>
           <EmptyState
-            v-if="searchQuery || statusFilter !== 'all' || titleFilter !== 'all'"
+            v-if="searchQuery || statusFilter !== 'all' || titleFilter !== 'all' || todoFilter !== 'none'"
             title="查無符合條件的員工"
             description="試著調整搜尋關鍵字或篩選條件"
           >
@@ -344,7 +391,7 @@ onMounted(async () => {
       </template>
       <template #cell-__status="{ item }">
         <el-tag :type="getEmployeeStatus(item).type" size="small">{{ getEmployeeStatus(item).label }}</el-tag>
-        <el-tag v-if="item.is_active && item.employee_type === 'regular' && item.base_salary === 0" type="warning" size="small" effect="plain" style="margin-left:4px">待補薪資</el-tag>
+        <el-tag v-if="isMissingSalary(item)" type="warning" size="small" effect="plain" style="margin-left:4px">待補薪資</el-tag>
       </template>
       <template #actions="{ item }">
         <el-button v-if="canWriteEmployees" link type="primary" size="small" @click="openEdit(item)">編輯</el-button>
@@ -395,6 +442,16 @@ onMounted(async () => {
 .roster-stats .stat-sep {
   margin: 0 var(--space-1);
   color: var(--neutral-300);
+}
+/* HR 待辦 chips：可點擊，選中時 el-tag effect 切 dark 呈現選中態 */
+.todo-chips {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.todo-chip {
+  cursor: pointer;
+  user-select: none;
 }
 .search-input { width: 220px; }
 .status-filter { width: 132px; }

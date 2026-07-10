@@ -19,6 +19,13 @@ export const getEmployeeStatus = (emp: Record<string, unknown>): { label: string
   }
 }
 
+/**
+ * 「待補薪資」判定單一來源：在職 + 正職 + 底薪未設定（=0）。
+ * 名冊列 tag 與 HR 待辦 chip 計數/篩選皆呼叫此函式，避免兩處口徑漂移。
+ */
+export const isMissingSalary = (emp: Record<string, unknown>): boolean =>
+  Boolean(emp.is_active) && emp.employee_type === 'regular' && emp.base_salary === 0
+
 /** 薪資金額顯示：後端依 role/self 遮罩回 null → 顯示無檢視權限，嚴禁 Number(null)→0 */
 export const maskedMoney = (v: unknown): string => {
   if (v === null || v === undefined) return '無檢視權限'

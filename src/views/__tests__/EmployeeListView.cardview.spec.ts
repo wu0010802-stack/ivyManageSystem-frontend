@@ -10,6 +10,9 @@ const fakeEmployee = { employee_id: 'T001', name: '測試員工', title: '', pos
 vi.mock('@/stores/employee', () => ({ useEmployeeStore: () => ({ employees: [fakeEmployee], fetchEmployees: vi.fn(() => new Promise(() => {})) }) }))
 // vue-router mock（onMounted 讀 route.query.search）
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
+// onMounted 另會呼叫 getProbationAlerts（HR 待辦 chip）；此檔只關心手機/桌機切換，不需真的解析，
+// 用永不 resolve 的 promise 避免對 jsdom 發出真實網路請求。
+vi.mock('@/api/home', () => ({ getProbationAlerts: () => new Promise(() => {}) }))
 
 import EmployeeListView from '@/views/EmployeeListView.vue'
 

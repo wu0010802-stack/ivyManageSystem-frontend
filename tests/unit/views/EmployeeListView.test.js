@@ -10,6 +10,15 @@ const employeeStore = {
 
 const mockDeleteEmployee = vi.fn(() => Promise.resolve({ data: {} }))
 
+// 試用期到期 alerts：預設回空清單，個別測試用 mockResolvedValueOnce / mockRejectedValueOnce 覆寫
+const mockGetProbationAlerts = vi.fn(() =>
+  Promise.resolve({ data: { employees: [], alerts: { next_month: 0 } } }),
+)
+
+vi.mock('@/api/home', () => ({
+  getProbationAlerts: (...args) => mockGetProbationAlerts(...args),
+}))
+
 vi.mock('@/api/employees', () => ({
   getEmployees: vi.fn(() => Promise.resolve({ data: [] })),
   getEmployee: vi.fn(),
@@ -52,7 +61,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const flushPromises = async () => {
   await Promise.resolve()
@@ -94,6 +103,12 @@ describe('EmployeeListView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     employeeStore.employees = []
+    // clearAllMocks 不清 mockResolvedValueOnce/mockRejectedValueOnce 佇列，個別測試若中途拋錯
+    // 佇列可能殘留污染下一筆測試；每輪重設回預設實作，杜絕跨測試洩漏。
+    mockGetProbationAlerts.mockReset()
+    mockGetProbationAlerts.mockImplementation(() =>
+      Promise.resolve({ data: { employees: [], alerts: { next_month: 0 } } }),
+    )
   })
 
   it('onMounted honors store TTL by calling fetchEmployees(false)', async () => {
@@ -240,5 +255,124 @@ describe('EmployeeListView', () => {
     expect(link.exists()).toBe(true)
     expect(link.attributes('to')).toBe('/employees/7')
     expect(link.text()).toBe('王小明')
+  })
+
+  // ── Task 7：HR 待辦 chips（待補薪資／試用期將到期）───────────────
+  describe('HR 待辦 chips', () => {
+    it('待補薪資 chip 計數口徑同列 tag（在職+正職+底薪 0），不受離職/兼職/有底薪者影響', async () => {
+      employeeStore.employees = [
+        { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null },
+        { id: 2, name: 'B', is_active: true, employee_type: 'regular', base_salary: 30000, resign_date: null }, // 已有底薪，不算
+        { id: 3, name: 'C', is_active: false, employee_type: 'regular', base_salary: 0, resign_date: '2020-01-01' }, // 已離職，不算
+        { id: 4, name: 'D', is_active: true, employee_type: 'hourly', base_salary: 0, resign_date: null }, // 兼職，不算
+      ]
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      expect(wrapper.vm.missingSalaryCount).toBe(1)
+      expect(wrapper.text()).toContain('待補薪資 1')
+    })
+
+    it('待補薪資 n=0 時 chip 不渲染', async () => {
+      employeeStore.employees = [
+        { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 30000, resign_date: null },
+      ]
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      expect(wrapper.vm.missingSalaryCount).toBe(0)
+      expect(wrapper.text()).not.toContain('待補薪資')
+    })
+
+    it('點擊待補薪資 chip → toggle todoFilter，displayedEmployees 只剩符合者；再點一次取消篩選', async () => {
+      employeeStore.employees = [
+        { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null },
+        { id: 2, name: 'B', is_active: true, employee_type: 'regular', base_salary: 30000, resign_date: null },
+      ]
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.toggleTodoFilter('missing_salary')
+      await nextTick()
+      expect(wrapper.vm.todoFilter).toBe('missing_salary')
+      expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1])
+
+      // 再點一次 → 取消篩選
+      wrapper.vm.toggleTodoFilter('missing_salary')
+      await nextTick()
+      expect(wrapper.vm.todoFilter).toBe('none')
+      expect(wrapper.vm.displayedEmployees).toHaveLength(2)
+    })
+
+    it('試用期將到期 chip：onMounted 呼叫 getProbationAlerts，計數與篩選以回傳 id 為準', async () => {
+      employeeStore.employees = [
+        { id: 10, name: 'A', is_active: true, resign_date: null },
+        { id: 11, name: 'B', is_active: true, resign_date: null },
+      ]
+      mockGetProbationAlerts.mockResolvedValueOnce({
+        data: {
+          employees: [
+            { id: 10, name: 'A', employee_id: 'E10', probation_end_date: '2026-08-01', days_remaining: 20 },
+          ],
+          alerts: { next_month: 1 },
+        },
+      })
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      expect(mockGetProbationAlerts).toHaveBeenCalledTimes(1)
+      expect(wrapper.vm.probationAlertCount).toBe(1)
+      expect(wrapper.text()).toContain('試用期將到期 1')
+
+      wrapper.vm.toggleTodoFilter('probation')
+      await nextTick()
+      expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([10])
+    })
+
+    it('試用期 n=0 時 chip 不渲染', async () => {
+      employeeStore.employees = [{ id: 1, name: 'A', is_active: true, resign_date: null }]
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      expect(wrapper.vm.probationAlertCount).toBe(0)
+      expect(wrapper.text()).not.toContain('試用期將到期')
+    })
+
+    it('getProbationAlerts 失敗時靜默：不顯示 chip、不擋名冊載入、不跳 ElMessage.error', async () => {
+      mockGetProbationAlerts.mockRejectedValueOnce(new Error('network error'))
+      employeeStore.employees = [{ id: 1, name: 'A', is_active: true, resign_date: null }]
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      expect(wrapper.vm.probationAlertCount).toBe(0)
+      expect(wrapper.text()).not.toContain('試用期將到期')
+      expect(ElMessage.error).not.toHaveBeenCalled()
+      // 名冊主流程不受影響
+      expect(wrapper.vm.displayedEmployees).toHaveLength(1)
+    })
+
+    it('clearFilters 一併重置 todoFilter', async () => {
+      employeeStore.employees = [
+        { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null },
+      ]
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.toggleTodoFilter('missing_salary')
+      await nextTick()
+      expect(wrapper.vm.todoFilter).toBe('missing_salary')
+
+      wrapper.vm.clearFilters()
+      await nextTick()
+      expect(wrapper.vm.todoFilter).toBe('none')
+      expect(wrapper.vm.displayedEmployees).toHaveLength(1)
+    })
   })
 })
