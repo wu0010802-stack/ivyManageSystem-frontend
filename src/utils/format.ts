@@ -83,3 +83,11 @@ export const offsetISO = (days: number) => {
 
 // 今月 YYYY-MM（本地時區）
 export const thisMonthISO = () => dateToLocalISOMonth(new Date())
+
+// 百分比單一格式（預設一位小數）。isRatio=true 表示傳入為 0–1 比值（×100 後顯示）。
+// 取代各頁 .toFixed(1)/.toFixed(2)/pctNum/pctRatio 混用。null/非數字 → '—'。
+export const fmtPct = (val: unknown, opts: { isRatio?: boolean; digits?: number } = {}) => {
+  if (val == null || val === '' || Number.isNaN(Number(val))) return '—'
+  const n = Number(val) * (opts.isRatio ? 100 : 1)
+  return `${n.toFixed(opts.digits ?? 1)}%`
+}
