@@ -11699,12 +11699,13 @@ export interface paths {
         };
         /**
          * Get Finance Summary Detail
-         * @description 單月收支明細：學費 / 才藝 / 薪資三來源原始交易列表（下鑽用）。
+         * @description 單月收支明細：學費 / 才藝 / 薪資等七來源原始交易列表（下鑽用）。
          *
          *     F-031：薪資逐員金額（gross/net/festival/overtime/employer_benefit/real_cost）
          *     屬 SALARY_READ 範疇；REPORTS 持有者若非 admin/hr 不可下鑽到逐員實發/獎金，
          *     此處依角色層遮罩 salary[] 欄位。festival_bonus / overtime_bonus 同樣屬個薪敏感
-         *     （可推回個人總所得），必須一併遮罩。
+         *     （可推回個人總所得），必須一併遮罩。年終撥款 year_end[].amount 同屬個薪敏感
+         *     （2026-07-10 補齊下鑽明細，比照 salary 遮罩）。
          */
         get: operations["get_finance_summary_detail_api_reports_finance_summary_detail_get"];
         put?: never;
@@ -11726,11 +11727,12 @@ export interface paths {
          * Export Finance Summary
          * @description 匯出收支彙總為 Excel。
          *
-         *     指定 month 時，額外附六張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出）；
-         *     未指定 month 時只輸出月度彙總與分類統計兩張分頁。
+         *     指定 month 時，額外附七張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出、
+         *     年終撥款）；未指定 month 時只輸出月度彙總與分類統計兩張分頁。
          *
          *     F-031：薪資明細 Sheet 5 在非 admin/hr 角色下需以「—」遮罩金額欄位，
-         *     避免 supervisor / 自訂 REPORTS 角色透過匯出取得逐員實發名冊。
+         *     避免 supervisor / 自訂 REPORTS 角色透過匯出取得逐員實發名冊。年終撥款明細
+         *     Sheet 9 的金額欄同理遮罩（2026-07-10 補齊下鑽明細，比照薪資 Sheet 5）。
          */
         get: operations["export_finance_summary_api_reports_finance_summary_export_get"];
         put?: never;
@@ -26778,6 +26780,21 @@ export interface components {
             vendor_name: string;
         };
         /**
+         * ReportsFinanceDetailYearEndItemOut
+         * @description `get_year_end_payout_detail` 單筆（2026-07-10 補：下鑽明細原漏年終撥款這一筆）。
+         *
+         *     金額欄位比照 salary 明細，在非 admin/hr 角色下同樣會被
+         *     `mask_dict_fields(..., placeholder=None)` 遮罩（F-031 延伸），故 Optional[int]。
+         */
+        ReportsFinanceDetailYearEndItemOut: {
+            /** Amount */
+            amount?: number | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+        };
+        /**
          * ReportsFinancePeriodOut
          * @description `{"year": ..., "month": ...}` — /finance-summary 與 /finance-summary/detail 共用。
          */
@@ -26789,7 +26806,7 @@ export interface components {
         };
         /**
          * ReportsFinanceSummaryDetailOut
-         * @description GET /reports/finance-summary/detail 回應（下鑽六來源明細）。
+         * @description GET /reports/finance-summary/detail 回應（下鑽七來源明細）。
          */
         ReportsFinanceSummaryDetailOut: {
             /** Activity */
@@ -26805,6 +26822,8 @@ export interface components {
             tuition: components["schemas"]["ReportsFinanceDetailTuitionItemOut"][];
             /** Vendor Payment */
             vendor_payment: components["schemas"]["ReportsFinanceDetailVendorPaymentItemOut"][];
+            /** Year End */
+            year_end: components["schemas"]["ReportsFinanceDetailYearEndItemOut"][];
         };
         /**
          * ReportsFinanceSummaryOut
