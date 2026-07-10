@@ -25,7 +25,7 @@ const visible = computed({
 })
 
 const loading = ref(false)
-const data = ref<{ tuition?: unknown[]; activity?: unknown[]; misc_receipt?: unknown[]; salary?: unknown[]; vendor_payment?: unknown[]; fixed_cost?: unknown[] } | null>(null)
+const data = ref<{ tuition?: unknown[]; activity?: unknown[]; misc_receipt?: unknown[]; salary?: unknown[]; vendor_payment?: unknown[]; fixed_cost?: unknown[]; year_end?: unknown[] } | null>(null)
 const activeTab = ref('tuition')
 
 const load = async () => {
@@ -57,6 +57,11 @@ const miscRows = computed(() => data.value?.misc_receipt || [])
 const salaryRows = computed(() => data.value?.salary || [])
 const vendorRows = computed(() => data.value?.vendor_payment || [])
 const fixedCostRows = computed(() => data.value?.fixed_cost || [])
+// 年終 E 化撥款逐員明細（get_year_end_payout_detail：employee_name/amount，
+// 2026-07-10 build_finance_detail 補齊七來源後下鑽同步補上第 7 個 tab）。
+// amount 在非 admin/hr 角色下會被後端 mask_dict_fields 遮罩成 null（比照 salary），
+// money() 統一顯示既有 placeholder，故沿用 salary tab 寫法不用另做判斷。
+const yearEndRows = computed(() => data.value?.year_end || [])
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const kindLabel = (k: string) => (k === 'payment' ? '繳費' : k === 'refund' ? '退款' : k)
@@ -177,6 +182,15 @@ const fixedCostCategoryLabel = (c: string) => FIXED_COST_CATEGORY_LABEL[c] || c
             <template #default="{ row }">
               <el-tag v-if="row.is_finalized" size="small" type="info">已封存</el-tag>
             </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane :label="`年終 (${yearEndRows.length})`" name="year_end">
+        <el-table :data="yearEndRows" border stripe max-height="480" size="small" empty-text="無資料">
+          <el-table-column prop="employee_name" label="員工" width="120" fixed />
+          <el-table-column label="金額" width="110" align="right">
+            <template #default="{ row }">{{ money(row.amount) }}</template>
           </el-table-column>
         </el-table>
       </el-tab-pane>

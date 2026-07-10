@@ -4,6 +4,8 @@
  * 2026-07-05 報表重構：下鑽明細新增「固定支出」分頁（build_finance_detail 已補
  * fixed_cost 欄，見 ivy-backend services/finance_report_service.py）。
  * 2026-07-06 追加：「雜項收款」分頁（misc_receipt 已計入總收入卻無法下鑽的缺口）。
+ * 2026-07-10 追加：「年終」分頁（year_end，get_year_end_payout_detail 逐員明細；
+ * amount 在非 admin/hr 角色下會被後端遮罩成 null，比照 salary tab 走 money() placeholder）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -71,7 +73,7 @@ const globalConfig = {
 }
 
 function emptyDetail() {
-  return { tuition: [], activity: [], misc_receipt: [], salary: [], vendor_payment: [], fixed_cost: [] }
+  return { tuition: [], activity: [], misc_receipt: [], salary: [], vendor_payment: [], fixed_cost: [], year_end: [] }
 }
 
 // watch([modelValue, year, month]) 只在「變化」時觸發（非 immediate），故先以
@@ -155,5 +157,47 @@ describe('FinanceDetailDialog 雜項收款下鑽分頁', () => {
     const miscPane = panes.find(p => p.props('name') === 'misc_receipt')
     expect(miscPane).toBeTruthy()
     expect(miscPane.props('label')).toBe('雜項收款 (0)')
+  })
+})
+
+describe('FinanceDetailDialog 年終下鑽分頁', () => {
+  it('渲染 year_end 明細：分頁筆數、員工姓名、money() 金額', async () => {
+    const w = await mountDialog({
+      ...emptyDetail(),
+      year_end: [{ employee_id: 1, employee_name: '王小明', amount: 50000 }],
+    })
+
+    const panes = w.findAllComponents({ name: 'ElTabPane' })
+    const yearEndPane = panes.find(p => p.props('name') === 'year_end')
+    expect(yearEndPane).toBeTruthy()
+    expect(yearEndPane.props('label')).toBe('年終 (1)')
+
+    const text = yearEndPane.text()
+    expect(text).toContain('王小明')
+    expect(text).toContain('NT$50,000')
+  })
+
+  it('amount 遮罩為 null 時（非 admin/hr 角色）顯示 placeholder 不報錯', async () => {
+    const w = await mountDialog({
+      ...emptyDetail(),
+      year_end: [{ employee_id: 1, employee_name: '王小明', amount: null }],
+    })
+
+    const panes = w.findAllComponents({ name: 'ElTabPane' })
+    const yearEndPane = panes.find(p => p.props('name') === 'year_end')
+    expect(yearEndPane.props('label')).toBe('年終 (1)')
+    const text = yearEndPane.text()
+    expect(text).toContain('王小明')
+    expect(text).toContain('—')
+    expect(text).not.toContain('NT$')
+  })
+
+  it('year_end 為空陣列時分頁仍存在且筆數為 0（真零值非錯誤）', async () => {
+    const w = await mountDialog(emptyDetail())
+
+    const panes = w.findAllComponents({ name: 'ElTabPane' })
+    const yearEndPane = panes.find(p => p.props('name') === 'year_end')
+    expect(yearEndPane).toBeTruthy()
+    expect(yearEndPane.props('label')).toBe('年終 (0)')
   })
 })
