@@ -162,9 +162,21 @@ watch(debouncedSearch, async (val) => {
   }
 })
 
+// ── 匯出 Excel：帶入目前搜尋與 status/title 篩選（後端 Task 2 已支援）；
+// todoFilter（HR 待辦篩選）為純前端衍生資料，後端匯出端點不支援，不放進 params ──
+const exportTooltip = computed(() => {
+  const hasFilters = !!searchQuery.value.trim() || statusFilter.value !== 'all' || titleFilter.value !== 'all'
+  const base = hasFilters ? '匯出符合目前搜尋與篩選的名冊' : '匯出全部名冊'
+  return todoFilter.value !== 'none' ? `${base}（HR 待辦篩選不影響匯出）` : base
+})
+
 const exportEmployees = () => {
+  const params: Record<string, unknown> = {}
   const q = searchQuery.value.trim()
-  downloadFile('/exports/employees', '員工名冊.xlsx', q ? { search: q } : undefined)
+  if (q) params.search = q
+  if (statusFilter.value !== 'all') params.status = statusFilter.value
+  if (titleFilter.value !== 'all') params.title = titleFilter.value
+  downloadFile('/exports/employees', '員工名冊.xlsx', Object.keys(params).length ? params : undefined)
 }
 
 const fetchEmployees = async (force = true) => {
@@ -296,7 +308,9 @@ onMounted(async () => {
           <el-option label="全部職稱" value="all" />
           <el-option v-for="t in titleOptions" :key="t" :label="t" :value="t" />
         </el-select>
-        <el-button type="success" @click="exportEmployees">匯出 Excel</el-button>
+        <el-tooltip :content="exportTooltip" placement="top">
+          <el-button type="success" @click="exportEmployees">匯出 Excel</el-button>
+        </el-tooltip>
         <el-button type="primary" @click="openCreate">
           <el-icon><Plus /></el-icon> 新增員工
         </el-button>

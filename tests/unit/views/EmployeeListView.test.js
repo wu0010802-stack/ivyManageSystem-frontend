@@ -62,6 +62,7 @@ vi.mock('vue-router', () => ({
 }))
 
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { downloadFile } from '@/utils/download'
 
 const flushPromises = async () => {
   await Promise.resolve()
@@ -373,6 +374,93 @@ describe('EmployeeListView', () => {
       await nextTick()
       expect(wrapper.vm.todoFilter).toBe('none')
       expect(wrapper.vm.displayedEmployees).toHaveLength(1)
+    })
+  })
+
+  // ── Task 8：匯出帶篩選（finding #2 前端半）───────────────────────
+  describe('匯出帶篩選', () => {
+    it('無篩選：downloadFile 不帶 params；tooltip 顯示「匯出全部名冊」', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      expect(wrapper.vm.exportTooltip).toBe('匯出全部名冊')
+
+      wrapper.vm.exportEmployees()
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', undefined)
+    })
+
+    it('只有搜尋字串 → params 只帶 search；tooltip 顯示「匯出符合目前搜尋與篩選的名冊」', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.searchQuery = '王小明'
+      await nextTick()
+      expect(wrapper.vm.exportTooltip).toBe('匯出符合目前搜尋與篩選的名冊')
+
+      wrapper.vm.exportEmployees()
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { search: '王小明' })
+    })
+
+    it('statusFilter ≠ all → params 帶 status', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.statusFilter = 'active'
+      await nextTick()
+
+      wrapper.vm.exportEmployees()
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { status: 'active' })
+    })
+
+    it('titleFilter ≠ all → params 帶 title', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.titleFilter = '教師'
+      await nextTick()
+
+      wrapper.vm.exportEmployees()
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { title: '教師' })
+    })
+
+    it('search + status + title 同時疊加 → params 三者皆帶', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.searchQuery = '王小明'
+      wrapper.vm.statusFilter = 'resigned'
+      wrapper.vm.titleFilter = '教師'
+      await nextTick()
+
+      wrapper.vm.exportEmployees()
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', {
+        search: '王小明',
+        status: 'resigned',
+        title: '教師',
+      })
+    })
+
+    it('todoFilter 啟用不影響匯出 params（後端不支援），但 tooltip 額外提示「HR 待辦篩選不影響匯出」', async () => {
+      employeeStore.employees = [
+        { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null },
+      ]
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.toggleTodoFilter('missing_salary')
+      await nextTick()
+
+      expect(wrapper.vm.exportTooltip).toContain('HR 待辦篩選不影響匯出')
+
+      wrapper.vm.exportEmployees()
+      // todoFilter 非後端支援的 query 參數；無其他篩選時 params 仍應是 undefined
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', undefined)
     })
   })
 })
