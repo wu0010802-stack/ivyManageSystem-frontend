@@ -2,7 +2,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { createEmployee, updateEmployeeBasic, updateEmployeeSalary } from '@/api/employees'
 import { getPositionSalary } from '@/api/config'
 import { hasPermission, getUserInfo } from '@/utils/auth'
@@ -29,6 +30,7 @@ import EmployeeChangesPreviewDialog from '@/components/employee/EmployeeChangesP
 
 const emit = defineEmits<{ saved: [] }>()
 
+const router = useRouter()
 const configStore = useConfigStore()
 const classroomStore = useClassroomStore()
 
@@ -346,6 +348,28 @@ const salaryReadonlyReason = computed(() => {
   return ''
 })
 
+// ── 新增成功後的下一步引導（finding #5 後半）────────────
+// createEmployee 回傳 EmployeeCreateResultOut（含 id）；有 id 才能提供「前往詳情頁」導頁按鈕。
+// id 依契約為必填，此處 typeof 檢查是防禦性寫法：若未來 response 形狀異動，退化為純文案通知
+// 而非硬導頁到 /employees/undefined。
+const CREATE_GUIDANCE_MESSAGE = '員工已建立，後續可補：薪資/投保、證照與合約。'
+async function showCreateGuidance(newEmployeeId: number | null) {
+  if (newEmployeeId == null) {
+    ElNotification({ title: '新增成功', message: CREATE_GUIDANCE_MESSAGE, type: 'success' })
+    return
+  }
+  try {
+    await ElMessageBox.confirm(CREATE_GUIDANCE_MESSAGE, '新增成功', {
+      confirmButtonText: '前往詳情頁',
+      cancelButtonText: '關閉',
+      type: 'success',
+    })
+    router.push({ name: 'employee-detail', params: { id: newEmployeeId } })
+  } catch {
+    // 使用者按「關閉」或 Esc：留在原頁，不導頁
+  }
+}
+
 // ── 新增流程（CREATE）────────────────────────────────
 const saving = ref(false)
 const saveCreate = async () => {
@@ -369,11 +393,14 @@ const saveCreate = async () => {
         if (props[0]) formEl.scrollToField(props[0])
         return
       }
-      await createEmployee(form)
-      ElMessage.success('員工已新增')
+      const res = await createEmployee(form)
       employeeDraft.clear()
       closeDialog()
       emit('saved')
+      // 引導對話框需等使用者互動，不 await——避免拖住 finally 的 saving 重置
+      // （送出按鈕所屬 dialog 已 closeDialog，不會有殘留 loading 觀感問題）
+      const newEmployeeId = typeof res.data.id === 'number' ? res.data.id : null
+      void showCreateGuidance(newEmployeeId)
     } catch (err) {
       showError(err)
     } finally {

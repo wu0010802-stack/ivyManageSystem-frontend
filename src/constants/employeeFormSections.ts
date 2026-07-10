@@ -58,3 +58,19 @@ export function sectionsForInvalidFields(props: string[]): EmployeeFormSection[]
   for (const p of props) set.add(sectionForField(p))
   return [...set]
 }
+
+// 各區段「未填 n 項」info badge 用：計算每個區段中值為 ''/null/undefined 的欄位數。
+// 刻意排除 0 / false——這兩者是合法填寫值（例：眷屬人數 0、旗標關閉），不可誤判為未填。
+// 未登記於 EMPLOYEE_FIELD_SECTION 的 key 一律略過，不計入任何區段。
+export function countEmptyBySection(form: Record<string, unknown>): Record<EmployeeFormSection, number> {
+  const counts: Record<EmployeeFormSection, number> = {
+    core: 0, jobDetail: 0, personal: 0, worktime: 0, gov: 0, salary: 0,
+  }
+  for (const [field, section] of Object.entries(EMPLOYEE_FIELD_SECTION)) {
+    const value = form[field]
+    if (value === '' || value === null || value === undefined) {
+      counts[section] += 1
+    }
+  }
+  return counts
+}

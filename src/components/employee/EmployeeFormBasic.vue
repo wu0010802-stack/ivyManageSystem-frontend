@@ -7,7 +7,7 @@ import {
   POSITION_OPTIONS, SUPERVISOR_ROLE_OPTIONS, EMPLOYEE_TYPE_OPTIONS,
 } from '@/constants/employee'
 import FormSection from '@/components/common/FormSection.vue'
-import { sectionForField } from '@/constants/employeeFormSections'
+import { sectionForField, countEmptyBySection } from '@/constants/employeeFormSections'
 
 interface SelectOption {
   value?: string | number
@@ -120,6 +120,18 @@ function applyValidationErrors(invalidProps: string[]) {
   }
 }
 
+// 「未填 n 項」info badge：n = 該區段欄位中空值（''/null/undefined）數量，隨 props.form 即時重算。
+// 0/false 不算未填（見 countEmptyBySection 註解）。
+const sectionEmptyCounts = computed(() => countEmptyBySection(props.form as unknown as Record<string, unknown>))
+
+// 既有驗證失敗 error badge 優先於未填 info badge：sectionErrors[k] > 0 時顯示錯誤數，否則顯示未填數。
+function badgeCountFor(section: CollapsibleSection): number {
+  return sectionErrors[section] > 0 ? sectionErrors[section] : sectionEmptyCounts.value[section]
+}
+function badgeTypeFor(section: CollapsibleSection): 'error' | 'info' {
+  return sectionErrors[section] > 0 ? 'error' : 'info'
+}
+
 defineExpose({ applyValidationErrors })
 </script>
 
@@ -182,7 +194,7 @@ defineExpose({ applyValidationErrors })
 
   <!-- 職務細節 -->
   <FormSection ref="jobDetailRef" data-test="section-jobDetail" title="職務細節" collapsible :default-open="false"
-    :badge-count="sectionErrors.jobDetail" badge-type="error">
+    :badge-count="badgeCountFor('jobDetail')" :badge-type="badgeTypeFor('jobDetail')">
     <el-form-item label="園內職務" prop="position">
       <template v-if="isLocked('position')">
         <span class="readonly-text">{{ fmt(form.position) }} <el-icon><Lock /></el-icon></span>
@@ -220,7 +232,7 @@ defineExpose({ applyValidationErrors })
 
   <!-- 個資・聯絡・緊急聯絡 -->
   <FormSection ref="personalRef" data-test="section-personal" title="個資・聯絡・緊急聯絡" collapsible :default-open="false"
-    :badge-count="sectionErrors.personal" badge-type="error">
+    :badge-count="badgeCountFor('personal')" :badge-type="badgeTypeFor('personal')">
     <el-form-item label="生日">
       <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" style="width:100%" value-format="YYYY-MM-DD" clearable />
     </el-form-item>
@@ -245,7 +257,7 @@ defineExpose({ applyValidationErrors })
 
   <!-- 工作時間 -->
   <FormSection ref="worktimeRef" data-test="section-worktime" title="工作時間" collapsible :default-open="false"
-    :badge-count="sectionErrors.worktime" badge-type="error">
+    :badge-count="badgeCountFor('worktime')" :badge-type="badgeTypeFor('worktime')">
     <el-form-item label="上班時間">
       <el-time-select v-model="form.work_start_time" start="06:00" step="00:30" end="22:00" style="width:100%" />
     </el-form-item>
@@ -256,7 +268,7 @@ defineExpose({ applyValidationErrors })
 
   <!-- 教保身分・政府申報 -->
   <FormSection ref="govRef" data-test="section-gov" title="教保身分・政府申報" collapsible :default-open="false"
-    :badge-count="sectionErrors.gov" badge-type="error">
+    :badge-count="badgeCountFor('gov')" :badge-type="badgeTypeFor('gov')">
     <el-form-item label="教保身分別">
       <el-select v-model="form.staff_role_category" clearable placeholder="(未指定)" style="width:100%">
         <el-option label="幼教師（持幼教師證）" value="teacher_certified" />
