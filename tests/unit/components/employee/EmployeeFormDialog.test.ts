@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus from 'element-plus'
 
@@ -68,6 +68,8 @@ type DialogVm = {
   form: Record<string, unknown>
   saveCreate: () => Promise<void>
   saveBasic: () => Promise<void>
+  saveSalary: () => void
+  previewDialog: { visible: boolean }
 }
 
 describe('EmployeeFormDialog', () => {
@@ -114,6 +116,47 @@ describe('EmployeeFormDialog', () => {
     await vi.waitFor(() => {
       expect(w.emitted('saved')).toBeTruthy()
     })
+  })
+
+  // ── 最低工資 gate（次要 finding：validateBaseSalary/validateHourlyRate 接送出流程）──
+  it('新增：正職底薪低於基本工資（29500）→ 阻擋送出、不呼叫 createEmployee', async () => {
+    const w = mountDialog()
+    const vm = w.vm as unknown as DialogVm
+    await vm.openCreate()
+    vm.form.name = '測試員工'
+    vm.form.employee_type = 'regular'
+    vm.form.base_salary = 20000 // < 29500
+    await vm.saveCreate()
+    await flushPromises()
+    expect(mockCreateEmployee).not.toHaveBeenCalled()
+  })
+
+  it('新增：時薪制時薪低於基本時薪（196）→ 阻擋送出、不呼叫 createEmployee', async () => {
+    const w = mountDialog()
+    const vm = w.vm as unknown as DialogVm
+    await vm.openCreate()
+    vm.form.name = '兼職員工'
+    vm.form.employee_type = 'hourly'
+    vm.form.hourly_rate = 150 // < 196
+    await vm.saveCreate()
+    await flushPromises()
+    expect(mockCreateEmployee).not.toHaveBeenCalled()
+  })
+
+  it('編輯薪資：底薪改到低於基本工資 → saveSalary 不開啟預覽確認框', async () => {
+    const w = mountDialog()
+    const vm = w.vm as unknown as DialogVm
+    await vm.openEdit({
+      id: 7, employee_id: 'EMP007', name: '正職員工', employee_type: 'regular',
+      base_salary: 32000, hourly_rate: 0, insurance_salary_level: 32000,
+    })
+    await nextTick()
+    await nextTick()
+    vm.form.base_salary = 20000 // < 29500
+    await nextTick()
+    vm.saveSalary()
+    await nextTick()
+    expect(vm.previewDialog.visible).toBe(false)
   })
 
   // ── 自 EmployeeListView.test.js 遷移（生日欄位）──

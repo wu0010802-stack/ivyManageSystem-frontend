@@ -20,7 +20,7 @@ import {
   POSITION_SALARY_KEY,
 } from '@/constants/employee'
 import { detectRole } from '@/utils/employeeDisplay'
-import { validateInsuranceVsBase } from '@/validators/employeeForm'
+import { validateInsuranceVsBase, validateBaseSalary, validateHourlyRate } from '@/validators/employeeForm'
 import { mapEmployeeError } from '@/utils/error'
 import { useConfigStore } from '@/stores/config'
 import { useClassroomStore } from '@/stores/classroom'
@@ -180,6 +180,15 @@ const previewDialog = reactive({
 const dismissedSuggestion = ref(false)
 const insuranceError = computed(() =>
   validateInsuranceVsBase(form.insurance_salary_level, form.base_salary, form.employee_type)
+)
+
+// 送出前最低工資 gate：正職底薪 / 兼職時薪 / 投保級距三項合規檢查。
+// 於 saveCreate（新增）與 saveSalary（編輯薪資）送出前擋下，避免使用者提交後才收後端 422。
+// 各 validator 對「不適用型別 / 值為 0（未填）」皆回 null，故新增時無薪資權限（base_salary=0）不會誤擋。
+const salarySubmitError = computed(() =>
+  validateBaseSalary(form.base_salary, form.employee_type)
+  || validateHourlyRate(form.hourly_rate, form.employee_type)
+  || insuranceError.value
 )
 
 // ── 欄位標籤（預覽對話框用）──────────────────────────
@@ -383,6 +392,11 @@ const saveCreate = async () => {
     ElMessage.error('獎金等級覆蓋僅接受 A / B / C')
     return
   }
+  // 最低工資 gate：不合規直接擋，不進 el-form validate / createEmployee（saving 尚未設 true，安全 return）
+  if (salarySubmitError.value) {
+    ElMessage.error(salarySubmitError.value)
+    return
+  }
   // 同步設 saving（在 validate 前），否則 validate 的 async 間隙會讓第二次點擊穿過守衛。
   saving.value = true
   formEl.validate(async (valid, invalidFields) => {
@@ -453,6 +467,11 @@ const saveSalary = () => {
   const diff = salaryDirty.value
   if (Object.keys(diff).length === 0) {
     ElMessage.info('無變動')
+    return
+  }
+  // 最低工資 gate：不合規不開啟預覽確認框（同 saveCreate，避免提交後才收後端 422）
+  if (salarySubmitError.value) {
+    ElMessage.error(salarySubmitError.value)
     return
   }
   // 任一直接金額欄位（底薪/時薪/投保級距）有變動 → 後端會要求 adjustment_reason
