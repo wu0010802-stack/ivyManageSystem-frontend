@@ -53,12 +53,17 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
 }))
 
-// EmployeeListView onMounted 讀 route.query.search（全域搜尋導航帶入）、goDetail 用 router.push；
-// 測試未裝 router plugin，需 mock 兩者否則 route/router 為 undefined 拋 TypeError。
-const mockPush = vi.fn()
+// EmployeeListView onMounted 讀 route.query（還原篩選）、goDetail 用 router.push、篩選變化用 router.replace 寫回 URL；
+// 測試未裝 router plugin，需 mock 三者否則 route/router 為 undefined 拋 TypeError。
+// routeQuery 用可變容器讓個別測試灌入初始 query 驗證還原。
+const routerMocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(() => Promise.resolve()),
+  routeQuery: { value: {} },
+}))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {} }),
-  useRouter: () => ({ push: mockPush }),
+  useRoute: () => ({ query: routerMocks.routeQuery.value }),
+  useRouter: () => ({ push: routerMocks.push, replace: routerMocks.replace }),
 }))
 
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -104,6 +109,7 @@ describe('EmployeeListView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     employeeStore.employees = []
+    routerMocks.routeQuery.value = {}
     // clearAllMocks 不清 mockResolvedValueOnce/mockRejectedValueOnce 佇列，個別測試若中途拋錯
     // 佇列可能殘留污染下一筆測試；每輪重設回預設實作，杜絕跨測試洩漏。
     mockGetProbationAlerts.mockReset()
@@ -129,6 +135,52 @@ describe('EmployeeListView', () => {
 
     expect(employeeStore.fetchEmployees).toHaveBeenCalledTimes(1)
     expect(employeeStore.fetchEmployees).toHaveBeenCalledWith(false)
+  })
+
+  // ── 篩選 URL 化（finding #4）：可還原、可分享 ──
+  it('篩選變化寫回 URL query（status/title/todo/search）', async () => {
+    employeeStore.employees = [
+      { id: 1, name: 'A', is_active: true, employee_type: 'regular', base_salary: 0, resign_date: null, title: '教師' },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    routerMocks.replace.mockClear()
+
+    wrapper.vm.statusFilter = 'active'
+    wrapper.vm.titleFilter = '教師'
+    wrapper.vm.toggleTodoFilter('missing_salary')
+    await nextTick()
+
+    const lastQuery = routerMocks.replace.mock.calls.at(-1)[0].query
+    expect(lastQuery).toMatchObject({ status: 'active', title: '教師', todo: 'missing_salary' })
+  })
+
+  it('全部篩選回預設 → URL query 清空（不殘留參數）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+
+    wrapper.vm.statusFilter = 'active'
+    await nextTick()
+    routerMocks.replace.mockClear()
+
+    wrapper.vm.clearFilters()
+    await nextTick()
+
+    const lastQuery = routerMocks.replace.mock.calls.at(-1)[0].query
+    expect(lastQuery).toEqual({})
+  })
+
+  it('onMounted 從 URL query 還原篩選（status/title/todo）', async () => {
+    routerMocks.routeQuery.value = { status: 'resigned', title: '教師', todo: 'missing_salary' }
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.vm.statusFilter).toBe('resigned')
+    expect(wrapper.vm.titleFilter).toBe('教師')
+    expect(wrapper.vm.todoFilter).toBe('missing_salary')
   })
 
   it('status filter narrows displayed rows while rosterStats counts the full roster', async () => {

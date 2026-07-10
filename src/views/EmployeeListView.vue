@@ -150,6 +150,33 @@ const clearFilters = () => {
   todoFilter.value = 'none'
 }
 
+// ── 篩選 URL 化（finding #4）：篩選可還原、可分享 ──
+// 還原：onMounted 從 query 帶入（含全域搜尋導航帶入的 ?search=）；未知/非法值忽略
+function restoreFiltersFromQuery() {
+  const q = route.query
+  const search = typeof q.search === 'string' ? q.search : ''
+  if (search) { searchQuery.value = search; debouncedSearch.value = search }
+  if (typeof q.status === 'string' && ['all', 'active', 'pending', 'resigned'].includes(q.status)) {
+    statusFilter.value = q.status as StatusFilter
+  }
+  if (typeof q.title === 'string' && q.title) titleFilter.value = q.title
+  if (typeof q.todo === 'string' && ['missing_salary', 'probation'].includes(q.todo)) {
+    todoFilter.value = q.todo as TodoFilter
+  }
+}
+// 寫回：篩選變化用 replace 更新 URL（不堆疊 history back stack）；預設值不留參數
+function syncFiltersToQuery() {
+  const query: Record<string, string> = {}
+  const search = searchQuery.value.trim()
+  if (search) query.search = search
+  if (statusFilter.value !== 'all') query.status = statusFilter.value
+  if (titleFilter.value !== 'all') query.title = titleFilter.value
+  if (todoFilter.value !== 'none') query.todo = todoFilter.value
+  // replace 於測試 mock 可能回傳 undefined、實務上重複導航會 reject，統一吞掉避免 unhandled rejection
+  void Promise.resolve(router.replace({ query })).catch(() => {})
+}
+watch([searchQuery, statusFilter, titleFilter, todoFilter], syncFiltersToQuery)
+
 watch(debouncedSearch, async (val) => {
   if (!val) {
     resetEmployeeSearch()
@@ -245,12 +272,8 @@ onMounted(async () => {
   // Why: 切回此頁時走 store TTL（5 分鐘）避免每次重抓員工清單；CRUD 完成的 callback 仍會
   // force=true 觸發即時更新（quickResign / 表單儲存 / offboard 等路徑）。
   fetchEmployees(false)
-  // 全域搜尋導航帶入 ?search=<關鍵字>：預填搜尋框並觸發搜尋（debouncedSearch watcher）
-  const kw = typeof route.query.search === 'string' ? route.query.search : ''
-  if (kw) {
-    searchQuery.value = kw
-    debouncedSearch.value = kw
-  }
+  // 從 URL query 還原所有篩選（含全域搜尋導航帶入的 ?search=）；預填後 debouncedSearch watcher 觸發搜尋
+  restoreFiltersFromQuery()
   // 試用期將到期 chip：非關鍵功能，失敗靜默（不跳錯誤訊息、不擋名冊載入）
   getProbationAlerts()
     .then((res) => { probationAlertIds.value = res.data.employees.map((e) => e.id) })
