@@ -59,14 +59,18 @@ const isEdit = ref(false)
 const officialSync = ref<OfficialSync | null>(null)
 const searchText = ref('')
 
-// FC 當前可見區間（datesSet 維護），用於決定 admin_feed window + export 月份
+// FC 當前可見區間（datesSet 維護），用於決定 admin_feed window
 const viewRange = ref<{ start: Date; end: Date }>({
   start: new Date(),
   end: new Date(),
 })
 
-const currentYear = computed(() => viewRange.value.start.getFullYear())
-const currentMonth = computed(() => viewRange.value.start.getMonth() + 1)
+// 當前顯示月份錨點（view.currentStart）——月檢視的格線 start 常落在前月末尾，
+// 不能拿它推「顯示中的月份」，否則下方事件列表與匯出會撈到前一個月。
+const viewAnchor = ref<Date>(new Date())
+
+const currentYear = computed(() => viewAnchor.value.getFullYear())
+const currentMonth = computed(() => viewAnchor.value.getMonth() + 1)
 
 const eventTypes = EVENT_TYPES
 
@@ -273,6 +277,7 @@ const handleDelete = async (event: CalendarEvent) => {
 
 const onDatesSet = (arg: DatesSetArg) => {
   viewRange.value = { start: arg.start, end: arg.end }
+  viewAnchor.value = arg.view.currentStart
   // 月份變化時：若新月份和上次 fetchEvents 不同，重撈 events
   // 同時撈當前 view window 的 admin_feed
   fetchAdminFeed(arg.start, arg.end)
