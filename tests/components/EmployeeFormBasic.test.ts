@@ -74,7 +74,7 @@ describe('EmployeeFormBasic', () => {
     expect(locked.some(n => n.text().includes('園長'))).toBe(true)
   })
 
-  it('applyValidationErrors 設定該區徽章數', async () => {
+  it('applyValidationErrors 設定該區徽章數（error 優先於未填 info badge）', async () => {
     const wrapper = mount(EmployeeFormBasic, {
       global: { plugins: [ElementPlus], stubs: HEAVY_STUBS },
       props: { form: { name: '' } },
@@ -82,9 +82,14 @@ describe('EmployeeFormBasic', () => {
     ;(wrapper.vm as unknown as { applyValidationErrors: (p: string[]) => void })
       .applyValidationErrors(['teacher_cert_no'])
     await wrapper.vm.$nextTick()
-    const badge = wrapper.find('.form-section__badge')
+    // 未填 info badge 上線後（Task 6）各區段都可能有 badge，選擇器必須限定 gov 區段；
+    // 原本無範圍限定的 .find 在舊世界撿到唯一的 error badge，新語意下會先撿到
+    // jobDetail 的「未填 4 項」info badge。
+    const badge = wrapper.find('[data-test="section-gov"] .form-section__badge')
     expect(badge.exists()).toBe(true)
     expect(badge.text()).toBe('1')
+    // gov 區段本身也有未填欄位，但錯誤徽章優先——驗 is-error 鎖住優先序語意
+    expect(badge.classes()).toContain('is-error')
   })
 
   it('渲染性別與 Email 欄位，且不再有部門', () => {
