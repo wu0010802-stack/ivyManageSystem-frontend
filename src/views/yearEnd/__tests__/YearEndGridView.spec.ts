@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, defineComponent, h } from 'vue'
 import YearEndGridView from '../YearEndGridView.vue'
 
 vi.mock('@/api/yearEnd', async (importOriginal) => {
@@ -23,9 +23,13 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+// Task 12：router.push 改成共用 hoisted mock，讓「展開不再 push 到 404 路由」這件事
+// 可被斷言（openDetail 已整支刪除，理論上不會再有任何呼叫）。
+const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }))
+
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: '7' }, query: {} }),
-  useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
+  useRouter: () => ({ push: pushMock, back: vi.fn() }),
 }))
 
 vi.mock('@/utils/auth', () => ({
@@ -82,6 +86,12 @@ async function mountView() {
         'el-form': true,
         'el-form-item': true,
         'el-input-number': true,
+        // Task 12②③：頁頂新增 el-alert（build 摘要 / 失敗 banner）；既有 describe 區塊
+        // 都是 vm-layer 斷言，真渲染 el-alert 沒有必要也增加不相關的失敗面，比照其餘
+        // 元件一律 auto-stub。
+        'el-alert': true,
+        'el-descriptions': true,
+        'el-descriptions-item': true,
       },
     },
   })
@@ -568,5 +578,237 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 3 筆，略過已簽 1 筆')
     // getYearEndGrid: mount 的 initGrid 一次 + 手動 onBuild 一次 = 2 次
     expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
+  })
+})
+
+// ── Task 12：修 404（展開列內化）＋ build 摘要列／失敗降級 banner ──────────────
+// el-table / el-table-column 需要真的執行 scoped #default slot 才能斷言展開列內容；
+// 頂層 mountView() 的 true-stub 不會呼叫 scoped slot，只能驗證 vm 狀態。比照
+// YearEndDetailView.spec.ts／InstitutionEventPanel.spec.ts 慣例另開一個會真渲染
+// slot 的 mount helper，只給本區塊「渲染內容」相關案例用。
+const ElTableStubEx = defineComponent({
+  name: 'ElTableStubEx',
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots }) {
+    return () => h(
+      'div',
+      { class: 'el-table' },
+      (slots.default?.() || []).map((vnode, index) =>
+        // @ts-expect-error TODO(ts-strict): 測試 stub 需要動態轉發任意 vnode.props，型別無法精準表達
+        h(vnode.type, { ...(vnode.props ?? {}), data: props.data, key: index }, vnode.children),
+      ),
+    )
+  },
+})
+
+const ElTableColumnStubEx = defineComponent({
+  name: 'ElTableColumnStubEx',
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots }) {
+    return () => h(
+      'div',
+      { class: 'el-table-column-stub' },
+      (props.data as unknown[]).map((row: unknown, index: number) =>
+        h('div', { key: index }, slots.default ? slots.default({ row }) : []),
+      ),
+    )
+  },
+})
+
+const ElAlertStubEx = defineComponent({
+  name: 'ElAlertStubEx',
+  props: { title: { type: String, default: '' }, description: { type: String, default: '' } },
+  inheritAttrs: false,
+  setup(props, { attrs }) {
+    const dataAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([k]) => k.startsWith('data-')),
+    )
+    return () => h('div', { class: 'el-alert', ...dataAttrs }, [
+      h('div', { class: 'el-alert-title' }, props.title),
+      h('div', { class: 'el-alert-desc' }, props.description),
+    ])
+  },
+})
+
+const ElButtonStubEx = defineComponent({
+  name: 'ElButtonStubEx',
+  inheritAttrs: false,
+  setup(_, { attrs, emit, slots }) {
+    const dataAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([k]) => k.startsWith('data-')),
+    )
+    return () => h('button', { ...dataAttrs, onClick: () => emit('click') }, slots.default?.())
+  },
+})
+
+async function mountViewWithTable() {
+  const wrapper = mount(YearEndGridView, {
+    global: {
+      stubs: {
+        'el-table': ElTableStubEx,
+        'el-table-column': ElTableColumnStubEx,
+        'el-descriptions': { template: '<div class="el-descriptions"><slot /></div>' },
+        'el-descriptions-item': {
+          template: '<div class="el-descriptions-item">{{ $attrs.label }}:<slot /></div>',
+        },
+        'el-alert': ElAlertStubEx,
+        'el-button': ElButtonStubEx,
+        'el-tag': { template: '<span><slot /></span>' },
+        'el-dialog': true,
+        'el-form': true,
+        'el-form-item': true,
+        'el-input-number': true,
+      },
+    },
+  })
+  await flushPromises()
+  await nextTick()
+  await nextTick()
+  return wrapper
+}
+
+describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失敗降級 banner）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'OPEN' }],
+    } as never)
+  })
+
+  // 案①：原「展開」按鈕 push 到不存在的 /year_end/cycles/:id/settlements/:id
+  // （本輪最嚴重的 404 硬傷）。修復後：操作欄不再有 detail-button，也不再呼叫
+  // router.push。
+  it('不再有「展開」按鈕、不再 router.push（原 404 硬傷已移除）', async () => {
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+
+    expect(wrapper.find('[data-test="detail-button"]').exists()).toBe(false)
+    expect(pushMock).not.toHaveBeenCalled()
+  })
+
+  it('expandFields(row) 攤平主結算/動態獎金/合計/狀態/備註為 label-value pairs（formatCurrency 原始精度顯示）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow({ remark: '114.08 到職' })],
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      rows: GridRow[]
+      expandFields: (row: GridRow) => { label: string; value: string }[]
+    }
+
+    const fields = vm.expandFields(vm.rows[0]!)
+    const byLabel = Object.fromEntries(fields.map((f) => [f.label, f.value]))
+
+    // formatCurrency 不四捨五入（跟主表 moneyInt 不同——展開列供稽核核對用原始精度）
+    expect(byLabel['主結算']).toBe('NT$29,044.71')
+    expect(byLabel['考核上']).toBe('NT$3,312')
+    expect(byLabel['超額']).toBe('NT$2,000')
+    expect(byLabel['合計']).toBe('NT$40,106.71')
+    expect(byLabel['狀態']).toBe('草稿')
+    expect(byLabel['備註']).toBe('114.08 到職')
+  })
+
+  it('展開列（type=expand）實際渲染 el-descriptions，內容含主結算/合計/備註', async () => {
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow({ remark: '114.08 到職' })],
+    } as never)
+
+    const wrapper = await mountViewWithTable()
+    const text = wrapper.text()
+
+    expect(text).toContain('主結算')
+    expect(text).toContain('NT$29,044.71')
+    expect(text).toContain('合計')
+    expect(text).toContain('NT$40,106.71')
+    expect(text).toContain('114.08 到職')
+  })
+
+  // 案②：buildSettlements 回傳現在只彈一次 ElMessage——改為頁頂常駐摘要列，
+  // 欄位以 BuildResultOut schema.d.ts 為準（built/skipped_finalized/unmatched_count/
+  // fallback_classes/warnings）。既有 ElMessage.success 單次提示不受影響（仍保留）。
+  it('build 成功後頁頂顯示摘要列（built/skipped_finalized/unmatched_count/fallback_classes），既有 ElMessage 不受影響', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 5, skipped_finalized: 2, unmatched_count: 3, fallback_classes: 1, warnings: [] },
+    } as never)
+
+    const wrapper = await mountViewWithTable()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    await vm.onBuild()
+    await nextTick()
+
+    const banner = wrapper.find('[data-test="build-summary-banner"]')
+    expect(banner.exists()).toBe(true)
+    const bannerText = banner.text()
+    expect(bannerText).toContain('建立 5')
+    expect(bannerText).toContain('跳過已核定 2')
+    expect(bannerText).toContain('未匹配 3')
+    expect(bannerText).toContain('沿用舊生率 1')
+
+    // 既有「只彈一次」的 ElMessage.success 仍保留，摘要列是額外常駐提示，不是取代
+    expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 5 筆，略過已簽 2 筆')
+  })
+
+  // 案③：進頁自動 build 的 catch 原本完全靜默（不彈 dialog、不顯示訊息）；
+  // 改為顯示 stale banner，既有靜默（不噴 ElMessage）行為不變——只改「失敗回饋」。
+  it('進頁自動 build 失敗 → 顯示 stale banner（非靜默），仍不噴 ElMessage', async () => {
+    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('build failed'))
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const vm = wrapper.vm as unknown as { buildFailed: boolean }
+
+    expect(vm.buildFailed).toBe(true)
+    const banner = wrapper.find('[data-test="build-failed-banner"]')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('自動試算失敗，目前顯示上次試算資料')
+    // 尚未成功試算過（第一次就失敗）→ fallback 文案
+    expect(banner.text()).toContain('尚無成功試算紀錄')
+
+    // 既有靜默降級行為不變：仍不噴 ElMessage.error / warning
+    expect(vi.mocked(ElMessage.error)).not.toHaveBeenCalled()
+    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
+  })
+
+  it('buildFailedDescription：曾成功試算過時改顯示最後成功時間（非 fallback 文案）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('x'))
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      buildFailedDescription: string
+      lastBuiltAt: Date | null
+    }
+
+    expect(vm.buildFailedDescription).toContain('尚無成功試算紀錄')
+
+    vm.lastBuiltAt = new Date(2026, 0, 1, 9, 30)
+    await nextTick()
+    expect(vm.buildFailedDescription).toMatch(/09:30/)
+  })
+
+  // 案④（非 TDD 三案，但同批修繕）：狀態 tag/標籤改用單一來源常數
+  // SIGN_STATUS_LABEL/SIGN_STATUS_TAG（@/constants/appraisalYearEnd），不再各自
+  // 維護一份本地 STATUS_LABELS/STATUS_TAG_TYPE。
+  it('狀態欄位改用 SIGN_STATUS_LABEL／SIGN_STATUS_TAG 單一來源', async () => {
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow({ status: 'ACCOUNTING_SIGNED' })],
+    } as never)
+
+    const wrapper = await mountViewWithTable()
+    expect(wrapper.text()).toContain('會計已簽')
   })
 })

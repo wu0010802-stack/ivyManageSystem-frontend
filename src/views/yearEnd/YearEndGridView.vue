@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
 import { money } from '@/utils/format'
+import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
+import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
@@ -42,24 +44,11 @@ const SPECIAL_BONUS_LABELS: Record<string, string> = {
   CUSTOM: '其他',
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: '草稿',
-  SUPERVISOR_SIGNED: '主管已簽',
-  ACCOUNTING_SIGNED: '會計已簽',
-  FINALIZED: '已核定',
-}
-
-type ElTagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
-
-const STATUS_TAG_TYPE: Record<string, ElTagType> = {
-  DRAFT: 'info',
-  SUPERVISOR_SIGNED: 'warning',
-  ACCOUNTING_SIGNED: 'primary',
-  FINALIZED: 'success',
-}
+// Task 12④：狀態 tag/標籤改用單一來源常數（刪本地 STATUS_LABELS/STATUS_TAG_TYPE
+// 雙重定義——Task 1 已建立 @/constants/appraisalYearEnd 的 SIGN_STATUS_LABEL/
+// SIGN_STATUS_TAG，本檔原本各自維護一份，內容雖一致但屬未收斂的重複定義）。
 
 const route = useRoute()
-const router = useRouter()
 const cycleId = Number(route.params.id)
 
 const rows = ref<GridRow[]>([])
@@ -72,6 +61,18 @@ const canWrite = computed(() => hasPermission('YEAR_END_WRITE'))
 // ——失敗走靜默降級（見 initGrid），手動「↻ 重新試算」按鈕維持現狀不受影響。
 const cycleStatus = ref<string | null>(null)
 const lastBuiltAt = ref<Date | null>(null)
+
+// Task 12②③：build 結果摘要（成功，取代「只彈一次 ElMessage」的常駐頁頂摘要列）與
+// 失敗降級提示（進頁自動試算失敗時不再完全靜默，改顯示 stale banner）。
+interface BuildSummary {
+  built: number
+  skipped_finalized: number
+  unmatched_count: number
+  fallback_classes: number
+  warnings: string[]
+}
+const buildResult = ref<BuildSummary | null>(null)
+const buildFailed = ref(false)
 
 // ---- 重新試算 dialog ----
 const buildDialogVisible = ref(false)
@@ -115,6 +116,62 @@ function formatTime(d: Date | null) {
   return `${hh}:${mm}`
 }
 
+// Task 12②：build 成功摘要文案。欄位以 BuildResultOut（schema.d.ts／後端
+// schemas/year_end.py:257 起）為準：built/skipped_finalized/unmatched_count/
+// fallback_classes/warnings——unmatched_count/fallback_classes 為 B8 derive_report
+// 彙整欄位，供前端提醒用；warnings 另有既有 gap-message 彙整（見 onBuild），
+// 摘要列本身只顯示計數，不重複列 warnings 內文。
+const buildSummaryText = computed(() => {
+  const r = buildResult.value
+  if (!r) return ''
+  const parts = [
+    `建立 ${r.built} 筆`,
+    `跳過已核定 ${r.skipped_finalized} 筆`,
+    `未匹配 ${r.unmatched_count} 筆`,
+  ]
+  if (r.fallback_classes > 0) parts.push(`沿用舊生率 ${r.fallback_classes} 班`)
+  return `試算完成：${parts.join('、')}`
+})
+
+// Task 12③：stale banner 描述——曾成功試算過就顯示最後成功時間，否則給明確的
+// 「從未成功過」文案（lastBuiltAt 只在成功時寫入，見 initGrid/onBuild）。
+const buildFailedDescription = computed(() =>
+  lastBuiltAt.value
+    ? `最後成功試算時間 ${formatTime(lastBuiltAt.value)}`
+    : '尚無成功試算紀錄，目前顯示既有結算資料'
+)
+
+// Task 12①：原「展開」按鈕 push 到不存在的 /year_end/cycles/:id/settlements/:id
+// （本輪最嚴重的 404 硬傷）。改列內 expand（el-table-column type="expand"）就地
+// 展開，這裡把主結算全部欄位（含動態獎金欄，沿用 bonusColumns 既有定義）攤平成
+// label/value pairs 給 el-descriptions 用；金額改 formatCurrency（原始精度，供稽核
+// 核對），不用主表 moneyInt（顯示層四捨五入，見 F-2 註解）。
+interface ExpandField {
+  label: string
+  value: string
+}
+
+function expandFields(row: GridRow): ExpandField[] {
+  const fields: ExpandField[] = [
+    { label: '主結算', value: formatCurrency(row.payable_amount) },
+  ]
+  for (const col of bonusColumns.value) {
+    fields.push({ label: col.label, value: formatCurrency(row.special_bonuses[col.key] ?? 0) })
+  }
+  fields.push({ label: '合計', value: formatCurrency(row.total_amount) })
+  fields.push({ label: '狀態', value: (SIGN_STATUS_LABEL as Record<string, string>)[row.status] ?? row.status })
+  fields.push({ label: '備註', value: row.remark || '—' })
+  return fields
+}
+
+// Task 12②③共用：build 成功的副作用（記錄摘要 + 清 stale flag + 記時間戳）。
+// initGrid 的自動試算與 onBuild 的手動試算共用同一套「成功後怎麼辦」語意。
+function applyBuildSuccess(data: BuildSummary) {
+  buildResult.value = data
+  buildFailed.value = false
+  lastBuiltAt.value = new Date()
+}
+
 async function loadGrid() {
   loading.value = true
   try {
@@ -142,12 +199,15 @@ async function initGrid() {
   cycleStatus.value = cycle?.status ?? null
   if (canWrite.value && cycleStatus.value === 'OPEN') {
     try {
-      await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
-      // 成功後才記時間戳：語意是「最後成功試算」而非「嘗試」。build 失敗（catch）不設。
-      lastBuiltAt.value = new Date()
+      const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
+      // 成功後才記時間戳（+ 摘要 + 清 stale flag）：語意是「最後成功試算」而非「嘗試」。
+      applyBuildSuccess(res.data)
     } catch {
-      // 靜默降級：進頁自動試算失敗不打斷閱讀，沿用既有結算資料
-      // （不彈 dialog、不顯示訊息；手動「↻ 重新試算」按鈕維持現狀可兜底重試）
+      // Task 12③：進頁自動試算失敗不再完全靜默——仍不彈 dialog/ElMessage、仍照常
+      // loadGrid 沿用既有結算資料（不打斷閱讀），但改用頁頂 stale banner 讓使用者
+      // 知道目前看到的是上次試算資料而非「一切正常」的假象。手動「↻ 重新試算」按鈕
+      // 維持現狀可兜底重試（觸發條件不變，只改失敗時的回饋方式）。
+      buildFailed.value = true
     }
   }
   await loadGrid()
@@ -157,6 +217,9 @@ async function onBuild() {
   try {
     const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
     const { built, skipped_finalized, unmatched_count, fallback_classes, warnings } = res.data
+    // Task 12②：手動「↻ 重新試算」的成功結果也套用同一套「常駐摘要列」語意
+    // （原本只彈一次 ElMessage.success，看過就沒了；現在頁頂多一列可回顧的摘要）。
+    applyBuildSuccess(res.data)
     await loadGrid()
     ElMessage.success(`已試算 ${built} 筆，略過已簽 ${skipped_finalized} 筆`)
     // 附帶提醒：資料缺口（任一 > 0 才顯示）+ 後端明細 warnings（如超額覆寫、教課獎勵
@@ -220,15 +283,12 @@ async function submitEdit() {
   }
 }
 
-function openDetail(row: GridRow) {
-  router.push(`/year_end/cycles/${cycleId}/settlements/${row.settlement_id}`)
-}
-
 defineExpose({
   rows, loading, bonusColumns, canWrite,
   loadGrid, onBuild, openEdit, submitEdit,
   buildDialogVisible, editVisible, editingRow, editForm,
   cycleStatus, lastBuiltAt, initGrid,
+  expandFields, buildResult, buildFailed, buildSummaryText, buildFailedDescription,
 })
 
 onMounted(initGrid)
@@ -251,36 +311,53 @@ onMounted(initGrid)
         >
           ↻ 重新試算
         </el-button>
-        <a
+        <!-- Task 12④：匯出四鈕統一 el-button tag="a" :href 寫法（原本各自包一層 <a> 再塞
+             el-button，寫法不一致；比照 YearEndDetailView.vue 既有 tag="a" 慣例）。 -->
+        <el-button
+          tag="a"
           :href="`${baseUrl}/year_end/cycles/${cycleId}/summary.xlsx`"
           target="_blank"
-          class="export-link"
-        >
-          <el-button>總表 Excel</el-button>
-        </a>
-        <a
+        >總表 Excel</el-button>
+        <el-button
+          tag="a"
           :href="`${baseUrl}/year_end/cycles/${cycleId}/summary.pdf`"
           target="_blank"
-          class="export-link"
-        >
-          <el-button>總表 PDF</el-button>
-        </a>
-        <a
+        >總表 PDF</el-button>
+        <el-button
+          tag="a"
           :href="`${baseUrl}/year_end/cycles/${cycleId}/transfer_roster.xlsx`"
           target="_blank"
-          class="export-link"
-        >
-          <el-button>轉帳名冊 Excel</el-button>
-        </a>
-        <a
+        >轉帳名冊 Excel</el-button>
+        <el-button
+          tag="a"
           :href="`${baseUrl}/year_end/cycles/${cycleId}/transfer_roster.pdf`"
           target="_blank"
-          class="export-link"
-        >
-          <el-button>轉帳名冊 PDF</el-button>
-        </a>
+        >轉帳名冊 PDF</el-button>
       </div>
     </header>
+
+    <!-- Task 12③：進頁自動試算失敗 stale banner（原本完全靜默降級，見 initGrid） -->
+    <el-alert
+      v-if="buildFailed"
+      type="warning"
+      closable
+      title="自動試算失敗，目前顯示上次試算資料"
+      :description="buildFailedDescription"
+      data-test="build-failed-banner"
+      class="grid-alert"
+      @close="buildFailed = false"
+    />
+
+    <!-- Task 12②：build 成功摘要列（取代原本「只彈一次」的 ElMessage，常駐可回顧） -->
+    <el-alert
+      v-if="buildResult"
+      type="info"
+      closable
+      :title="buildSummaryText"
+      data-test="build-summary-banner"
+      class="grid-alert"
+      @close="buildResult = null"
+    />
 
     <!-- Grid table -->
     <el-table
@@ -291,6 +368,20 @@ onMounted(initGrid)
       max-height="640"
       data-test="grid-table"
     >
+      <!-- Task 12①：修 404——原「展開」按鈕 push 到不存在的 /settlements/:id 路由，
+           改列內 expand 就地展開，內容見 expandFields()。 -->
+      <el-table-column type="expand" width="40" data-test="expand-column">
+        <template #default="{ row }">
+          <el-descriptions :column="3" size="small" border class="grid-expand">
+            <el-descriptions-item
+              v-for="col in expandFields(row)"
+              :key="col.label"
+              :label="col.label"
+            >{{ col.value }}</el-descriptions-item>
+          </el-descriptions>
+        </template>
+      </el-table-column>
+
       <!-- 固定欄：姓名 -->
       <el-table-column
         prop="employee_name"
@@ -339,8 +430,8 @@ onMounted(initGrid)
       <!-- 狀態 -->
       <el-table-column label="狀態" width="110" align="center">
         <template #default="{ row }">
-          <el-tag :type="STATUS_TAG_TYPE[row.status] || 'info'" size="small">
-            {{ STATUS_LABELS[row.status] ?? row.status }}
+          <el-tag :type="SIGN_STATUS_TAG[row.status] || 'info'" size="small">
+            {{ (SIGN_STATUS_LABEL as Record<string, string>)[row.status] ?? row.status }}
           </el-tag>
         </template>
       </el-table-column>
@@ -363,13 +454,6 @@ onMounted(initGrid)
           >
             <el-button size="small">明細條</el-button>
           </a>
-          <el-button
-            size="small"
-            data-test="detail-button"
-            @click="openDetail(row)"
-          >
-            展開
-          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -481,13 +565,18 @@ onMounted(initGrid)
   flex-wrap: wrap;
   margin-left: auto;
 }
-.export-link,
 .slip-link {
   text-decoration: none;
 }
 .total-amount {
   color: #409eff;
   font-weight: 600;
+}
+.grid-alert {
+  margin-bottom: 12px;
+}
+.grid-expand {
+  margin: 4px 0;
 }
 /* F-2：金額 cell 禁止在小數點/千分位逗號附近換行成兩行（稽核核對風險）；
    欄寬不足時交給 el-table 內建橫向捲動，不擠壓內容。 */
