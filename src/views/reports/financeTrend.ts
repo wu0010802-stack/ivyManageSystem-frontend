@@ -46,3 +46,70 @@ export function pctChange(curr: number, prev: number): number | null {
   if (!prev) return null
   return ((curr - prev) / prev) * 100
 }
+
+export interface TrendSums { revenue: number; refund: number; expense: number; net: number }
+
+/**
+ * 「截至實際發生」口徑：只加總 month ≤ uptoMonth 的列。
+ * KPI 主數字用此結果，取代後端 summary 的全年（含未來月預登錄固定支出）口徑。
+ */
+export function sumTrendUpTo(trend: FinanceTrendRow[], uptoMonth: number): TrendSums {
+  const out: TrendSums = { revenue: 0, refund: 0, expense: 0, net: 0 }
+  for (const r of trend) {
+    if (r.month > uptoMonth) continue
+    out.revenue += r.revenue || 0
+    out.refund += r.refund || 0
+    out.expense += r.expense || 0
+    out.net += r.net || 0
+  }
+  return out
+}
+
+/** afterMonth 之後仍有 expense（= 預登錄固定支出）的月份與總額，供口徑副行/表尾說明。 */
+export function futurePreloggedExpense(
+  trend: FinanceTrendRow[],
+  afterMonth: number,
+): { total: number; months: number[] } {
+  const months: number[] = []
+  let total = 0
+  for (const r of trend) {
+    if (r.month <= afterMonth) continue
+    if ((r.expense || 0) > 0) {
+      months.push(r.month)
+      total += r.expense
+    }
+  }
+  months.sort((a, b) => a - b)
+  return { total, months }
+}
+
+/**
+ * 圖表 series 截斷：固定回傳 12 格，month > cutoffMonth 塞 null（chart.js 不畫），
+ * 消除「未來月掉到 0」的資料懸崖；≤ cutoff 的真實 0 照畫。
+ */
+export function cutSeries(
+  trend: FinanceTrendRow[],
+  key: 'revenue' | 'refund' | 'expense' | 'net',
+  cutoffMonth: number,
+): (number | null)[] {
+  const byMonth: Record<number, FinanceTrendRow> = {}
+  trend.forEach(r => { byMonth[r.month] = r })
+  const out: (number | null)[] = []
+  for (let m = 1; m <= 12; m++) {
+    if (m > cutoffMonth || !byMonth[m]) {
+      out.push(null)
+    } else {
+      out.push(byMonth[m][key])
+    }
+  }
+  return out
+}
+
+export type DeltaKind = 'up' | 'down' | 'flat'
+
+/** MoM/YoY 顯示語意：null=無資料不顯示；|v|<0.1% 視為持平（灰、無箭頭）。 */
+export function deltaKind(v: number | null): DeltaKind | null {
+  if (v == null || !Number.isFinite(v)) return null
+  if (Math.abs(v) < 0.1) return 'flat'
+  return v > 0 ? 'up' : 'down'
+}
