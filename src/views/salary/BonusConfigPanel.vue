@@ -676,7 +676,7 @@ onMounted(() => {
               <el-table :data="compareRows" size="small" border stripe>
                 <el-table-column label="姓名" prop="name" width="90" />
                 <el-table-column label="職稱" prop="title" width="90" />
-                <el-table-column label="職位" prop="position" width="80" />
+                <el-table-column label="園內職務" prop="position" width="96" />
                 <el-table-column label="等級" width="60">
                   <template #default="{ row }">{{ row.bonus_grade || '—' }}</template>
                 </el-table-column>
