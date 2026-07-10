@@ -379,4 +379,26 @@ describe('YearEndConfigView', () => {
       expect(routerBackMock).not.toHaveBeenCalled()
     })
   })
+
+  describe('百分比收斂至 fmtPct 單一格式（終審 Important-2）', () => {
+    beforeEach(() => {
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+      stubSupportApis()
+    })
+
+    it('pctNum/pctRatio 雙軌已移除，ratio 欄位改綁 fmtPct 帶 isRatio', async () => {
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as Record<string, unknown>
+      expect(vm.pctNum).toBeUndefined()
+      expect(vm.pctRatio).toBeUndefined()
+
+      // el-table 被 auto-stub 不渲染 cell，wrapper.text() 驗不到欄位輸出，
+      // 故以源碼綁定斷言守住：ratio 欄（0–1 比值）必帶 isRatio、雙軌零殘留。
+      const filePath = path.resolve(process.cwd(), 'src/views/yearEnd/YearEndConfigView.vue')
+      const source = readFileSync(filePath, 'utf-8')
+      expect(source).toContain('fmtPct(row.returning_student_rate, { isRatio: true })')
+      expect(source).not.toMatch(/pctNum\(|pctRatio\(/)
+    })
+  })
 })

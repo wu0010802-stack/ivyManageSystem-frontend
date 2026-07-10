@@ -7,6 +7,7 @@ import { getEmployees } from '@/api/employees'
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import { fmtPct } from '@/utils/format'
 
 // ---- Derive row types from typed API wrappers — no hand-written `any` ----
 type OrgSettingsRow = Awaited<ReturnType<typeof getOrgSettings>>['data'][number]
@@ -66,21 +67,8 @@ function semesterLabel(semesterFirst: boolean): string {
   return semesterFirst ? '上學期' : '下學期'
 }
 
-/** 顯示已是百分比形式的欄位（如 org_achievement_rate=83.6 → "83.6%"）。 */
-function pctNum(val: string | number | null | undefined): string {
-  if (val === null || val === undefined || val === '') return '-'
-  const n = Number(val)
-  if (isNaN(n)) return String(val)
-  return n.toFixed(1) + '%'
-}
-
-/** 顯示比率形式的欄位（如 returning_student_rate=0.926 → "92.6%"）。 */
-function pctRatio(val: string | number | null | undefined): string {
-  if (val === null || val === undefined || val === '') return '-'
-  const n = Number(val)
-  if (isNaN(n)) return String(val)
-  return (n * 100).toFixed(1) + '%'
-}
+// 百分比顯示統一走 utils/format.fmtPct（已是百分比形式的欄位直傳；
+// 0–1 比率形式的欄位帶 { isRatio: true }），取代原 pctNum/pctRatio 雙軌。
 
 function classroomName(id: number): string {
   return classroomMap.value[id] ?? `班級 ${id}`
@@ -275,7 +263,7 @@ onMounted(async () => {
               <span class="readonly-val">{{ row.enrollment_actual ?? '-' }}</span>
             </el-form-item>
             <el-form-item label="招生達成率（自動）">
-              <span class="readonly-val">{{ pctNum(row.school_achievement_rate) }}</span>
+              <span class="readonly-val">{{ fmtPct(row.school_achievement_rate) }}</span>
             </el-form-item>
             <el-form-item label="全校達成率（覆寫）">
               <el-input-number
@@ -286,16 +274,16 @@ onMounted(async () => {
                 :step="0.1"
                 :precision="1"
                 :value-on-clear="null"
-                :placeholder="pctNum(row.school_achievement_rate)"
+                :placeholder="fmtPct(row.school_achievement_rate)"
                 controls-position="right"
                 style="width: 180px"
                 :data-test="`input-school-rate-override-${row.semester_first}`"
               />
-              <span v-else>{{ pctNum(row.school_achievement_rate_override) }}</span>
-              <span class="field-hint">留空＝沿用系統建議值 {{ pctNum(row.school_achievement_rate) }}</span>
+              <span v-else>{{ fmtPct(row.school_achievement_rate_override) }}</span>
+              <span class="field-hint">留空＝沿用系統建議值 {{ fmtPct(row.school_achievement_rate) }}</span>
             </el-form-item>
             <el-form-item label="機構達成率">
-              <span class="readonly-val" :data-test="`display-org-rate-${row.semester_first}`">{{ pctNum(row.org_achievement_rate) }}</span>
+              <span class="readonly-val" :data-test="`display-org-rate-${row.semester_first}`">{{ fmtPct(row.org_achievement_rate) }}</span>
               <span class="field-hint">由系統依兩學期全校達成率平均自動計算（手動覆寫為後續階段）</span>
             </el-form-item>
             <el-form-item label="缺會議扣款（元）">
@@ -396,12 +384,12 @@ onMounted(async () => {
               size="small"
               :data-test="`input-returning-rate-${row.id}`"
             />
-            <span v-else>{{ pctRatio(row.returning_student_rate) }}</span>
+            <span v-else>{{ fmtPct(row.returning_student_rate, { isRatio: true }) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="班級績效%（自動）" width="130">
           <template #default="{ row }">
-            <span class="readonly-val">{{ pctNum(row.class_performance_rate) }}</span>
+            <span class="readonly-val">{{ fmtPct(row.class_performance_rate) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="110" fixed="right">

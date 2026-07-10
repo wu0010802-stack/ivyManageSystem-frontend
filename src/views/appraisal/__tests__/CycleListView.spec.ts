@@ -99,7 +99,7 @@ describe('CycleListView（dropdown + 內嵌明細）', () => {
     await flush()
     const options = wrapper.find('[data-test="cycle-select"]').findAll('[data-test="cycle-option"]')
     expect(options.map((o) => o.text())).toEqual([
-      '114 學年下學期（進行中）',
+      '114 學年下學期（開放）',
       '114 學年上學期（已封存）',
       '113 學年下學期（已封存）',
       '113 學年上學期（已封存）',

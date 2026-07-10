@@ -7,7 +7,7 @@ import { listYearEndCycles, getYearEndCycleExceptions } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 import { formatTimeTW } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
-import { exceptionTypeLabel } from '@/constants/appraisalYearEnd'
+import { CYCLE_STATUS_LABEL, exceptionTypeLabel } from '@/constants/appraisalYearEnd'
 
 // 例外中心 MVP：把後端兩支彙整端點（考核 / 年終）做成單一工作佇列頁——行政一頁看到
 // 「這批還有什麼要人工處理」，逐筆「前往處理」深連結到修復介面。唯讀彙整，不建新表；
@@ -52,12 +52,6 @@ const SEVERITY_LABEL: Record<Severity, string> = {
   warning: '警告',
   info: '提示',
 }
-const STATUS_LABELS: Record<string, string> = {
-  OPEN: '開放',
-  LOCKED: '已鎖定',
-  CLOSED: '已封存',
-}
-
 type CycleFetcher = () => Promise<{ data: unknown }>
 type ExceptionsFetcher = (cycleId: number) => Promise<{ data: unknown }>
 
@@ -165,7 +159,7 @@ const yearEnd = useExceptionGroup(
 )
 
 function cycleLabel(c: CycleOption): string {
-  const statusLabel = c.status ? `（${STATUS_LABELS[c.status] ?? c.status}）` : ''
+  const statusLabel = c.status ? `（${CYCLE_STATUS_LABEL[c.status] ?? c.status}）` : ''
   return `${c.academic_year} 學年度${statusLabel}`
 }
 

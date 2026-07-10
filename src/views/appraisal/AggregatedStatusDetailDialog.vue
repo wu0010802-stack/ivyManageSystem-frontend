@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { InfoFilled } from '@element-plus/icons-vue'
 
+import { fmtPct } from '@/utils/format'
 import { summarizeRule } from './ruleSummary'
 
 interface DisciplinaryInfo { warning_count?: number; minor_count?: number; major_count?: number; commend_count?: number; minor_merit_count?: number; major_merit_count?: number; suggested_score_delta?: number | string; actions?: Record<string, unknown>[]; [key: string]: unknown }
@@ -135,7 +136,7 @@ const fmtDelta = (v: unknown) => {
             <el-descriptions-item label="初始人數">{{ retention.initial_count ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="現況人數">{{ retention.final_count ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="留校率">
-              {{ retention.retention_rate != null ? `${Number(retention.retention_rate).toFixed(2)}%` : '—' }}
+              {{ fmtPct(retention.retention_rate) }}
             </el-descriptions-item>
             <el-descriptions-item label="建議加減分">
               <span :class="['delta', { negative: Number(retention.suggested_score_delta) < 0 }]">
@@ -163,7 +164,7 @@ const fmtDelta = (v: unknown) => {
             <el-descriptions-item label="班級在學人數">{{ activity.enrolled_students ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="才藝報名人數">{{ activity.registered_for_activity ?? '—' }}</el-descriptions-item>
             <el-descriptions-item label="報名率">
-              {{ activity.activity_rate != null ? `${Number(activity.activity_rate).toFixed(2)}%` : '—' }}
+              {{ fmtPct(activity.activity_rate) }}
             </el-descriptions-item>
             <el-descriptions-item label="建議加減分">
               <span :class="['delta', { negative: Number(activity.suggested_score_delta) < 0 }]">

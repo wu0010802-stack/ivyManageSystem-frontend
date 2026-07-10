@@ -17,6 +17,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { getCurrentAcademicTerm } from '@/utils/academic'
+import { cycleStatusLabel } from '@/constants/appraisalYearEnd'
 import CycleDetailPanel from './CycleDetailPanel.vue'
 import type { UploadRawFile } from 'element-plus'
 
@@ -46,9 +47,8 @@ const importForm = ref({
 })
 
 const semesterLabel = (v: string) => (v === 'FIRST' ? '上學期' : '下學期')
-const statusLabel = (v: string) => ({ OPEN: '進行中', LOCKED: '已鎖定', CLOSED: '已封存' } as Record<string, string>)[v] || v
 const cycleLabel = (c: Cycle) =>
-  `${c.academic_year} 學年${semesterLabel(c.semester ?? '')}（${statusLabel(c.status ?? '')}）`
+  `${c.academic_year} 學年${semesterLabel(c.semester ?? '')}（${cycleStatusLabel(c.status ?? '')}）`
 
 // 新到舊：學年 desc，同學年下學期在前（下學期時間較晚）
 const SEMESTER_RECENCY: Record<string, number> = { SECOND: 0, FIRST: 1 }

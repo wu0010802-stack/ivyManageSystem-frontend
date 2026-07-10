@@ -21,7 +21,7 @@ import {
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
-import { CYCLE_STATUS_TAG, cycleStatusLabel, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
+import { CYCLE_STATUS_TAG, cycleStatusLabel, SIGN_STATUS_TAG, SIGN_STATUS_ORDER, signStatusLabel } from '@/constants/appraisalYearEnd'
 import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
 import ProvenanceDrawer from './components/ProvenanceDrawer.vue'
 import type { ProvenanceKey } from './components/ProvenanceDrawer.vue'
@@ -76,13 +76,8 @@ function openProvenanceDrawer(employeeId: number) {
 }
 // ─────────────────────────────────────────────────────────────────
 
-const statusLabel = (s: string) =>
-  (({
-    DRAFT: '草稿',
-    SUPERVISOR_SIGNED: '主管已簽',
-    ACCOUNTING_SIGNED: '會計已簽',
-    FINALIZED: '已核定',
-  } as Record<string, string>)[s] || s)
+// 文案取自單一來源（constants/appraisalYearEnd.STATUS_LABEL），保留本地名供 template 與既有測試
+const statusLabel = signStatusLabel
 
 // Task 11②：頂部簽核進度列 counts —— 由已載入 settlements 的 status 本地聚合，
 // 不額外打 API（SignProgressBar 純顯示用元件，見 @/views/appraisalYearEnd/components/SignProgressBar.vue）

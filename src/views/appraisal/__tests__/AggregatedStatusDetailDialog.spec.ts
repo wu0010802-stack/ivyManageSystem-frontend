@@ -76,4 +76,10 @@ describe('AggregatedStatusDetailDialog 規章新欄位', () => {
         expect(wrapper.text()).toContain('小功')
         expect(wrapper.text()).toContain('大功')
     })
+
+    it('留校率以 fmtPct 統一一位小數（"90.00" → 90.0%，非 90.00%）', () => {
+        const wrapper = mountDialog()
+        expect(wrapper.text()).toContain('90.0%')
+        expect(wrapper.text()).not.toContain('90.00%')
+    })
 })
