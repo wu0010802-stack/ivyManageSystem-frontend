@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, defineComponent, h } from 'vue'
 import AppraisalPayoutView from '../AppraisalPayoutView.vue'
 
 vi.mock('@/api/yearEnd', async (importOriginal) => {
@@ -23,6 +23,15 @@ vi.mock('element-plus', async (importOriginal) => {
   }
 })
 
+// Task 13③：year 同步 URL query，需要可觀察的 route.query / router.replace
+// （比照 CycleListView.spec.ts 慣例：routeQuery 為可變殼、replaceMock 供斷言）。
+const routeQuery: { value: Record<string, unknown> } = { value: {} }
+const replaceMock = vi.fn()
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery.value }),
+  useRouter: () => ({ replace: replaceMock, push: vi.fn(), back: vi.fn() }),
+}))
+
 import * as api from '@/api/yearEnd'
 
 const mockPreviewRow = (overrides: Record<string, unknown> = {}) => ({
@@ -33,14 +42,80 @@ const mockPreviewRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
+const mockPayoutItem = (overrides: Record<string, unknown> = {}) => ({
+  id: 1, employee_id: 1, employee_name: '王主任', bonus_type: 'appraisal_year_end',
+  period_label: '113上', amount: '12345', source_ref: 'settlement:10', calc_meta: {},
+  ...overrides,
+})
+
+// el-table / el-table-column 需要真的執行 scoped #default slot 才能驗證表格內容
+// （比照 YearEndDetailView.spec.ts 慣例）；其餘元件用全域 auto-stub 即可。
+const ElTableColumnStub = defineComponent({
+  name: 'ElTableColumnStub',
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots }) {
+    return () => h(
+      'div',
+      { class: 'el-table-column-stub' },
+      props.data.map((row: unknown, index: number) =>
+        h('div', { key: index }, slots.default ? slots.default({ row }) : []),
+      ),
+    )
+  },
+})
+
+const ElTableStub = defineComponent({
+  name: 'ElTableStub',
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots }) {
+    return () => h(
+      'div',
+      { class: 'el-table' },
+      (slots.default?.() || []).map((vnode, index) =>
+        h(vnode.type, { ...vnode.props, data: props.data, key: index }, vnode.children),
+      ),
+    )
+  },
+})
+
+const ElButtonStub = defineComponent({
+  name: 'ElButtonStub',
+  inheritAttrs: false,
+  setup(_, { attrs, emit, slots }) {
+    const dataAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([k]) => k.startsWith('data-') || k === 'loading'),
+    )
+    return () => h(
+      'button',
+      { ...dataAttrs, onClick: () => emit('click') },
+      slots.default?.(),
+    )
+  },
+})
+
+const ElTabsStub = defineComponent({
+  name: 'ElTabsStub',
+  setup(_, { slots }) {
+    return () => h('div', { class: 'el-tabs-stub' }, slots.default?.())
+  },
+})
+const ElTabPaneStub = defineComponent({
+  name: 'ElTabPaneStub',
+  props: { name: { type: String, default: '' } },
+  setup(props, { slots }) {
+    return () => h('div', { class: 'el-tab-pane-stub', 'data-name': props.name }, slots.default?.())
+  },
+})
+
 async function mountView() {
   const wrapper = mount(AppraisalPayoutView, {
     global: {
       stubs: {
-        'el-input-number': true, 'el-button': true, 'el-alert': true,
-        'el-tabs': true, 'el-tab-pane': true, 'el-table': true,
-        'el-table-column': true, 'el-tag': true, 'el-checkbox': true,
+        'el-input-number': true, 'el-button': ElButtonStub, 'el-alert': true,
+        'el-tabs': ElTabsStub, 'el-tab-pane': ElTabPaneStub, 'el-table': ElTableStub,
+        'el-table-column': ElTableColumnStub, 'el-tag': true, 'el-checkbox': true,
       },
+      directives: { loading: () => {} },
     },
   })
   await nextTick()
@@ -49,7 +124,10 @@ async function mountView() {
 }
 
 describe('AppraisalPayoutView', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    routeQuery.value = {}
+  })
 
   it('loads preview rows on mount', async () => {
     vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
@@ -170,5 +248,51 @@ describe('AppraisalPayoutView', () => {
       year: expect.any(Number),
       included_inactive_employee_ids: [3],
     })
+  })
+
+  // Task 13①：已生成分頁改接 listAppraisalPayouts 真列表（切到該分頁時載入）。
+  it('已生成分頁渲染 listAppraisalPayouts 真列表（員工姓名/期別/金額）', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [] } as never)
+    vi.mocked(api.listAppraisalPayouts).mockResolvedValue({
+      data: [
+        mockPayoutItem({ id: 1, employee_id: 1, employee_name: '王主任', period_label: '113上', amount: '12345', source_ref: 'settlement:10' }),
+        mockPayoutItem({ id: 2, employee_id: 2, employee_name: '林老師', period_label: '113下', amount: '6000', source_ref: null }),
+      ],
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { tab: 'preview' | 'generated' }
+    vm.tab = 'generated'
+    await nextTick()
+    await nextTick()
+
+    expect(api.listAppraisalPayouts).toHaveBeenCalledWith(expect.any(Number))
+    const text = wrapper.text()
+    expect(text).toContain('王主任')
+    expect(text).toContain('113上')
+    expect(text).toContain('NT$12,345') // 金額千分位
+    expect(text).toContain('林老師')
+    expect(text).toContain('NT$6,000')
+    expect(text).toContain('—') // source_ref null → em dash
+  })
+
+  // Task 13②：預覽分頁 footer 大按鈕金額改 formatCurrency（修無千分位）。
+  it('金額以 formatCurrency 千分位呈現', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [mockPreviewRow({ employee_id: 1, total_amount: '12345', is_inactive: false })],
+    } as never)
+    const wrapper = await mountView()
+    const button = wrapper.find('[data-test="generate-button"]')
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toContain('NT$12,345')
+  })
+
+  // Task 13③：year 持久化進 URL query（F5 / 分享連結可保留篩選狀態）。
+  it('year 同步 URL query：改年份 → route.query.year 更新', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [] } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { year: number }
+    vm.year = 2027
+    await nextTick()
+    expect(replaceMock).toHaveBeenCalledWith({ query: expect.objectContaining({ year: '2027' }) })
   })
 })

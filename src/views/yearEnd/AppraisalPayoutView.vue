@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   previewAppraisalPayout, generateAppraisalPayout,
-  voidAppraisalPayouts,
+  listAppraisalPayouts, voidAppraisalPayouts,
 } from '@/api/yearEnd'
+import { formatCurrency } from '@/utils/currency'
+import PageHeader from '@/components/common/PageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface PreviewRow {
   employee_id: number
@@ -21,12 +25,27 @@ interface PreviewRow {
   warnings: string[]
 }
 
-const currentYear = new Date().getFullYear()
-const year = ref<number>(currentYear)
+interface PayoutItem {
+  id: number
+  employee_id: number
+  employee_name: string
+  bonus_type: string
+  period_label: string
+  amount: string
+  source_ref?: string | null
+  calc_meta: Record<string, unknown>
+}
+
+const route = useRoute()
+const router = useRouter()
+// year 持久化進 URL query，F5 / 分享連結可保留篩選狀態（比照 CycleListView 慣例）。
+const year = ref<number>(Number(route.query.year) || new Date().getFullYear())
 const loading = ref(false)
 const rows = ref<PreviewRow[]>([])
 const selected = ref<Set<number>>(new Set())
 const tab = ref<'preview' | 'generated'>('preview')
+const generatedRows = ref<PayoutItem[]>([])
+const generatedLoading = ref(false)
 
 // 考核年終 payout 兩分量 = 前一學年的上/下學期。後端 resolve_target_cycles：
 // source_academic_year = civil_year_to_target_academic_year(year) - 1 = year - 1913
@@ -54,6 +73,7 @@ const payoutRows = computed(() => [...activeRows.value, ...selectedInactiveRows.
 const payoutTotal = computed(() =>
   payoutRows.value.reduce((s, r) => s + Number(r.total_amount), 0)
 )
+const payoutTotalDisplay = computed(() => formatCurrency(payoutTotal.value))
 const includedInactiveIds = computed(() =>
   selectedInactiveRows.value.map((r) => r.employee_id)
 )
@@ -68,6 +88,18 @@ async function loadPreview() {
     ElMessage.error('preview 載入失敗')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadGenerated() {
+  generatedLoading.value = true
+  try {
+    const res = await listAppraisalPayouts(year.value)
+    generatedRows.value = res.data as PayoutItem[]
+  } catch {
+    ElMessage.error('已生成列表載入失敗')
+  } finally {
+    generatedLoading.value = false
   }
 }
 
@@ -87,7 +119,7 @@ async function onGenerate() {
   }
   try {
     await ElMessageBox.confirm(
-      `將為 ${payoutRows.value.length} 名員工生成 payout（全部在職 + 已勾選非在職，合計 NT$${payoutTotal.value}）`,
+      `將為 ${payoutRows.value.length} 名員工生成 payout（全部在職 + 已勾選非在職，合計 ${payoutTotalDisplay.value}）`,
       '確認生成',
       { confirmButtonText: '確認', cancelButtonText: '取消' }
     )
@@ -117,7 +149,7 @@ async function onVoid() {
     const res = await voidAppraisalPayouts(year.value)
     const data = res.data as { deleted_count: number }
     ElMessage.success(`已刪除 ${data.deleted_count} 筆`)
-    await loadPreview()
+    await loadGenerated()
   } catch {
     ElMessage.error('清空失敗')
   }
@@ -125,21 +157,30 @@ async function onVoid() {
 
 defineExpose({
   selected, anyCycleNotFinalized, onGenerate, onVoid, loadPreview, rows, year,
-  toggleSelect, payoutRows, payoutTotal,
+  toggleSelect, payoutRows, payoutTotal, payoutTotalDisplay,
+  tab, generatedRows, generatedLoading, loadGenerated,
 })
 
 onMounted(loadPreview)
-watch(year, loadPreview)
+watch(year, (v) => {
+  loadPreview()
+  if (tab.value === 'generated') loadGenerated()
+  // year 同步進 URL query（F5 / 分享連結可保留），保留其餘既有 query 欄位。
+  router.replace({ query: { ...route.query, year: String(v) } })
+})
+watch(tab, (t) => {
+  if (t === 'generated') loadGenerated()
+})
 </script>
 
 <template>
   <div class="appraisal-payout-view">
-    <header class="header">
-      <h2>考核年終獎金管理</h2>
-      <el-input-number v-model="year" :min="2024" :max="2099" />
-      <el-button type="primary" @click="loadPreview">重新載入</el-button>
-      <el-button type="danger" plain @click="onVoid">清空本年 payout</el-button>
-    </header>
+    <PageHeader title="考核年終獎金管理">
+      <template #actions>
+        <el-input-number v-model="year" :min="2024" :max="2099" />
+        <el-button type="primary" @click="loadPreview">重新載入</el-button>
+      </template>
+    </PageHeader>
 
     <el-alert
       v-if="anyCycleNotFinalized"
@@ -185,14 +226,32 @@ watch(year, loadPreview)
 
         <footer class="footer">
           <el-button type="primary" size="large" data-test="generate-button" @click="onGenerate">
-            確認生成 {{ payoutRows.length }} 筆 payout（合計 NT${{ payoutTotal }}）
+            確認生成 {{ payoutRows.length }} 筆 payout（合計 {{ payoutTotalDisplay }}）
           </el-button>
         </footer>
       </el-tab-pane>
 
       <el-tab-pane label="已生成" name="generated">
-        <!-- 列已生成 special_bonus_items via listAppraisalPayouts；implementer 可補 -->
-        <div>已生成列表（後續補充）</div>
+        <div class="generated-toolbar">
+          <el-button type="danger" plain data-test="void-button" @click="onVoid">清空本年 payout</el-button>
+        </div>
+        <el-table v-loading="generatedLoading" :data="generatedRows" border>
+          <template #empty>
+            <EmptyState title="本年尚未生成" />
+          </template>
+          <el-table-column label="員工">
+            <template #default="{ row }">{{ row.employee_name }}</template>
+          </el-table-column>
+          <el-table-column label="期別">
+            <template #default="{ row }">{{ row.period_label }}</template>
+          </el-table-column>
+          <el-table-column label="金額" align="right">
+            <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
+          </el-table-column>
+          <el-table-column label="來源">
+            <template #default="{ row }">{{ row.source_ref ?? '—' }}</template>
+          </el-table-column>
+        </el-table>
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -200,10 +259,11 @@ watch(year, loadPreview)
 
 <style scoped>
 .appraisal-payout-view { padding: 16px; }
-.header { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .footer { margin-top: 16px; text-align: right; }
+.generated-toolbar { margin-bottom: 12px; text-align: right; }
 .warning-tag {
   display: inline-block; margin-right: 4px; padding: 2px 6px;
-  background: #fef0c8; border-radius: 4px; font-size: 12px;
+  background: var(--color-warning-soft); color: var(--color-warning-darker);
+  border-radius: 4px; font-size: 12px;
 }
 </style>
