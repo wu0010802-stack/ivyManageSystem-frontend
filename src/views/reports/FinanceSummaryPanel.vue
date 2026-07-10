@@ -2,22 +2,27 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
-import { LineChart, PieChart } from './chartSetup'
+import { LineChart } from './chartSetup'
 import FinanceDetailDialog from './FinanceDetailDialog.vue'
+import ReportKpiCard from './ReportKpiCard.vue'
+import CategoryBarList from './CategoryBarList.vue'
 import { getFinanceSummary, financeSummaryExportUrl } from '@/api/reports'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 import { downloadFile } from '@/utils/download'
-import { lastMonthWithData, pctChange } from './financeTrend'
+import { computeReportPeriod } from './useReportPeriod'
+import { buildTrendChartData, inProgressIndex } from './trendChart'
+import { sumTrendUpTo, futurePreloggedExpense, pctChange, type FinanceTrendRow } from './financeTrend'
 import type { ChartOptions } from 'chart.js'
 
 const props = defineProps<{
   year: number
+  initialMonth?: number | null
 }>()
 
 const exporting = ref(false)
-const selectedMonth = ref<number | null>(null)
+const selectedMonth = ref<number | null>(props.initialMonth ?? null)
 const errorMsg = ref('')
 
 const detailVisible = ref(false)
@@ -79,12 +84,32 @@ const loading = computed(() => {
 
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 
+// 報表模組「資料截止月」單一事實來源（spec §2）；僅整年模式有意義（單月模式下
+// cutoff/lastActual 與截斷邏輯不適用，圖表與明細各自走既有單點/未截斷路徑）。
+const trend = computed<FinanceTrendRow[]>(() => data.value?.monthly_trend || [])
+const period = computed(() => computeReportPeriod(props.year, trend.value))
+
+// 整年模式 KPI 主數字：截至實際發生口徑（取代後端 summary 全年口徑——全年口徑含
+// 未來月預登錄固定支出，會讓「本年總支出」在年中就跳成年底金額）；單月模式沿用 summary。
+const actuals = computed(() => sumTrendUpTo(trend.value, period.value.cutoffMonth))
+const prelogged = computed(() => futurePreloggedExpense(trend.value, period.value.lastActualMonth ?? 0))
+const expenseNote = computed(() =>
+  selectedMonth.value == null && prelogged.value.total > 0
+    ? `全年含預登錄：${money(summary.value.total_expense)}` : undefined)
+const netNote = computed(() =>
+  selectedMonth.value == null && prelogged.value.total > 0
+    ? `全年口徑：${money(summary.value.net_cashflow)}` : undefined)
+
+// 趨勢圖：整年模式走共用 builder（含退款線＋cutoff 截斷＋進行中月標示，同
+// OverviewPanel）；單月模式維持既有單點組法（builder 是年度視角，不適用單月）。
 const trendChartData = computed(() => {
-  const trend = data.value?.monthly_trend || []
+  if (selectedMonth.value == null) {
+    return buildTrendChartData(trend.value, period.value, { includeRefund: true })
+  }
   type TrendRow = { month: number; revenue: number; refund: number; expense: number; net: number }
   const byMonth: Record<number, TrendRow> = {}
-  trend.forEach((r: TrendRow) => { byMonth[r.month] = r })
-  const monthList = selectedMonth.value ? [selectedMonth.value] : months
+  trend.value.forEach((r: TrendRow) => { byMonth[r.month] = r })
+  const monthList = [selectedMonth.value]
   const labels = monthList.map(m => `${m}月`)
   const revenue = monthList.map(m => byMonth[m]?.revenue || 0)
   const refund = monthList.map(m => byMonth[m]?.refund || 0)
@@ -108,6 +133,11 @@ const trendChartOptions = {
     legend: { position: 'top' as const },
     tooltip: {
       callbacks: {
+        title: (items: Array<{ label: string; dataIndex: number }>) => {
+          const idx = inProgressIndex(period.value)
+          const base = items[0]?.label ?? ''
+          return idx != null && items[0]?.dataIndex === idx ? `${base}（本月進行中）` : base
+        },
         label: (ctx: { dataset: { label: string }; parsed: { y: number } }) =>
           `${ctx.dataset.label}: ${money(ctx.parsed.y)}`,
       },
@@ -118,57 +148,29 @@ const trendChartOptions = {
   },
 } as unknown as ChartOptions<'line'>
 
-const revenuePieData = computed(() => {
-  const cats: Array<{ label: string; amount: number }> = data.value?.revenue_by_category || []
-  return {
-    labels: cats.map(c => c.label),
-    datasets: [{
-      data: cats.map(c => c.amount),
-      backgroundColor: ['#67c23a', '#409eff', '#9b59b6', '#e6a23c'],
-    }],
-  }
+// 月度明細：整年模式只列到 lastActualMonth（消除未來月「假紅字」列，配合表尾
+// 預登錄固定支出說明另行揭露）；單月模式維持原樣（單一列）。
+const trendTableData = computed(() => {
+  const rows = trend.value
+  if (selectedMonth.value != null) return rows
+  const last = period.value.lastActualMonth ?? 0
+  return rows.filter((r: FinanceTrendRow) => r.month <= last)
 })
-
-const expensePieData = computed(() => {
-  const cats: Array<{ label: string; amount: number }> = data.value?.expense_by_category || []
-  return {
-    labels: cats.map(c => c.label),
-    datasets: [{
-      data: cats.map(c => c.amount),
-      backgroundColor: ['#f56c6c', '#e6a23c', '#909399', '#9b59b6'],
-    }],
-  }
-})
-
-const pieOptions = {
-  responsive: true, maintainAspectRatio: false,
-  plugins: {
-    legend: { position: 'bottom' as const },
-    tooltip: {
-      callbacks: {
-        label: (ctx: { label: string; parsed: number }) => `${ctx.label}: ${money(ctx.parsed)}`,
-      },
-    },
-  },
-}
-
-const trendTableData = computed(() => data.value?.monthly_trend || [])
 
 const summary = computed(() => data.value?.summary || {
   total_revenue: 0, total_refund: 0, net_revenue: 0,
   total_expense: 0, net_cashflow: 0,
 })
 
-// MoM：錨定「所選年度內最後一個有資料的月份」（非瀏覽器當下真實月份），僅在檢視
-// 整年時顯示；選某月時不顯示（2026-07-05 修正錨定 bug，見 financeTrend.ts 註解）。
-type TrendItem = { month: number; revenue: number; refund: number; expense: number; net: number }
+// MoM：錨定「最後完整月」（進行中的當月不當錨點；預登錄月被 cutoff 夾住不會拉高
+// 錨點），僅在檢視整年時顯示；選某月時不顯示（取代舊版直接錨定 lastMonthWithData
+// 的 bug，見 useReportPeriod.ts／financeTrend.ts 註解）。
 const mom = computed(() => {
   if (selectedMonth.value != null) return null
-  const trend: TrendItem[] = data.value?.monthly_trend || []
-  const anchorMonth = lastMonthWithData(trend)
-  if (anchorMonth == null) return null
-  const curr = trend.find((r: TrendItem) => r.month === anchorMonth)
-  const prev = trend.find((r: TrendItem) => r.month === anchorMonth - 1)
+  const anchor = period.value.lastCompleteMonth
+  if (anchor == null) return null
+  const curr = trend.value.find(r => r.month === anchor)
+  const prev = trend.value.find(r => r.month === anchor - 1)
   if (!curr || !prev) return null
   return {
     revenue: pctChange(curr.revenue, prev.revenue),
@@ -177,12 +179,6 @@ const mom = computed(() => {
     net: pctChange(curr.net, prev.net),
   }
 })
-
-const formatPct = (v: number | null) => {
-  if (v == null || !Number.isFinite(v)) return null
-  const sign = v > 0 ? '+' : ''
-  return `${sign}${v.toFixed(1)}%`
-}
 
 type CategoryRow = { label: string; amount: number }
 const hasRevenue = computed(() =>
@@ -195,6 +191,15 @@ const hasExpense = computed(() =>
 const openMonthDetail = (m: number) => {
   detailMonth.value = m
   detailVisible.value = true
+}
+
+// el-select clearable 陷阱（memory feedback_elselect_clear_undefined_json_drops_field
+// 的防禦比照套用）：clearable 清空時 ElSelect 對 change/update:modelValue 都是送
+// `undefined` 非 `null`；用 :model-value + @change 明確正規化，避免 selectedMonth
+// 落入 `undefined`（此處雖是本地 state 非 API body，不會直接 JSON.stringify 掉欄位，
+// 但 `undefined` 混進 number|null 型別仍是型別不乾淨的來源，一律正規化）。
+function onMonthChange(val: number | undefined) {
+  selectedMonth.value = val ?? null
 }
 
 const exportXlsx = async () => {
@@ -218,7 +223,7 @@ const exportXlsx = async () => {
   </div>
   <div v-else class="finance-panel">
     <div class="controls">
-      <el-select v-model="selectedMonth" clearable placeholder="整年" style="width: 140px;">
+      <el-select :model-value="selectedMonth" clearable placeholder="整年" style="width: 140px;" @change="onMonthChange">
         <el-option v-for="m in months" :key="m" :label="`${m} 月`" :value="m" />
       </el-select>
       <span class="range-hint">
@@ -230,40 +235,38 @@ const exportXlsx = async () => {
 
     <el-row :gutter="16" class="summary-row">
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi kpi--green" shadow="hover">
-          <div class="kpi-label">總收入</div>
-          <div class="kpi-value value-green">{{ money(summary.total_revenue) }}</div>
-          <div v-if="mom?.revenue != null" class="kpi-trend" :class="mom.revenue >= 0 ? 'up' : 'down'">
-            {{ mom.revenue >= 0 ? '↑' : '↓' }} {{ formatPct(mom.revenue) }} <span class="kpi-trend-label">vs 上月</span>
-          </div>
-        </el-card>
+        <ReportKpiCard
+          label="總收入" accent="green" value-class="value-green"
+          :value="money(selectedMonth == null ? actuals.revenue : summary.total_revenue)"
+          value-test="kpi-total-revenue"
+          :trends="[{ label: 'vs 上月', delta: mom?.revenue ?? null, test: 'mom-revenue' }]"
+        />
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi kpi--orange" shadow="hover">
-          <div class="kpi-label">退款</div>
-          <div class="kpi-value value-orange">{{ money(summary.total_refund) }}</div>
-          <div v-if="mom?.refund != null" class="kpi-trend" :class="mom.refund >= 0 ? 'up-warn' : 'down-good'">
-            {{ mom.refund >= 0 ? '↑' : '↓' }} {{ formatPct(mom.refund) }} <span class="kpi-trend-label">vs 上月</span>
-          </div>
-        </el-card>
+        <ReportKpiCard
+          label="退款" accent="orange" value-class="value-orange"
+          :value="money(selectedMonth == null ? actuals.refund : summary.total_refund)"
+          value-test="kpi-total-refund"
+          :trends="[{ label: 'vs 上月', delta: mom?.refund ?? null, invert: true, test: 'mom-refund' }]"
+        />
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi kpi--red" shadow="hover">
-          <div class="kpi-label">總支出</div>
-          <div class="kpi-value value-red">{{ money(summary.total_expense) }}</div>
-          <div v-if="mom?.expense != null" class="kpi-trend" :class="mom.expense >= 0 ? 'up-warn' : 'down-good'">
-            {{ mom.expense >= 0 ? '↑' : '↓' }} {{ formatPct(mom.expense) }} <span class="kpi-trend-label">vs 上月</span>
-          </div>
-        </el-card>
+        <ReportKpiCard
+          label="總支出" accent="red" value-class="value-red"
+          :value="money(selectedMonth == null ? actuals.expense : summary.total_expense)"
+          value-test="kpi-total-expense"
+          :trends="[{ label: 'vs 上月', delta: mom?.expense ?? null, invert: true, test: 'mom-expense' }]"
+          :note="expenseNote" note-test="kpi-expense-note"
+        />
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi kpi--blue" shadow="hover">
-          <div class="kpi-label">淨現金</div>
-          <div class="kpi-value">{{ money(summary.net_cashflow) }}</div>
-          <div v-if="mom?.net != null" class="kpi-trend" :class="mom.net >= 0 ? 'up' : 'down'">
-            {{ mom.net >= 0 ? '↑' : '↓' }} {{ formatPct(mom.net) }} <span class="kpi-trend-label">vs 上月</span>
-          </div>
-        </el-card>
+        <ReportKpiCard
+          label="淨現金" accent="blue"
+          :value="money(selectedMonth == null ? actuals.net : summary.net_cashflow)"
+          value-test="kpi-net-cashflow"
+          :trends="[{ label: 'vs 上月', delta: mom?.net ?? null, test: 'mom-net' }]"
+          :note="netNote" note-test="kpi-net-note"
+        />
       </el-col>
     </el-row>
 
@@ -278,19 +281,23 @@ const exportXlsx = async () => {
       <el-col :xs="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <template #header><span class="chart-title">收入分類</span></template>
-          <div class="chart-container">
-            <PieChart v-if="hasRevenue" :data="revenuePieData" :options="pieOptions" />
-            <el-empty v-else description="無收入資料" :image-size="60" />
-          </div>
+          <CategoryBarList
+            v-if="hasRevenue"
+            :items="data.revenue_by_category"
+            :colors="['#67c23a', '#409eff', '#9b59b6', '#e6a23c']"
+          />
+          <el-empty v-else description="無收入資料" :image-size="60" />
         </el-card>
       </el-col>
       <el-col :xs="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <template #header><span class="chart-title">支出分類</span></template>
-          <div class="chart-container">
-            <PieChart v-if="hasExpense" :data="expensePieData" :options="pieOptions" />
-            <el-empty v-else description="無支出資料" :image-size="60" />
-          </div>
+          <CategoryBarList
+            v-if="hasExpense"
+            :items="data.expense_by_category"
+            :colors="['#f56c6c', '#e6a23c', '#909399', '#9b59b6']"
+          />
+          <el-empty v-else description="無支出資料" :image-size="60" />
         </el-card>
       </el-col>
     </el-row>
@@ -327,6 +334,14 @@ const exportXlsx = async () => {
           </template>
         </el-table-column>
       </el-table>
+      <div
+        v-if="selectedMonth == null && prelogged.total > 0"
+        class="prelogged-note"
+        data-test="prelogged-note"
+      >
+        {{ prelogged.months[0] }}–{{ prelogged.months[prelogged.months.length - 1] }} 月已預登錄固定支出共
+        {{ money(prelogged.total) }}，於「現金收支表」分頁檢視
+      </div>
     </el-card>
 
     <FinanceDetailDialog
@@ -345,22 +360,6 @@ const exportXlsx = async () => {
 .controls-spacer { flex: 1; }
 .range-hint { color: var(--text-secondary); font-size: 13px; }
 .summary-row { margin-bottom: var(--space-4); }
-.kpi {
-  text-align: center; padding: 12px 0 10px;
-  border-top: 3px solid transparent;
-}
-.kpi--green  { border-top-color: var(--color-success); }
-.kpi--orange { border-top-color: var(--color-warning); }
-.kpi--red    { border-top-color: var(--color-danger); }
-.kpi--blue   { border-top-color: var(--color-info); }
-.kpi-label { font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: 6px; }
-.kpi-value { font-size: 22px; font-weight: 700; color: var(--text-primary); }
-.kpi-trend { font-size: 12px; font-weight: 600; margin-top: 4px; }
-.kpi-trend.up,
-.kpi-trend.down-good { color: var(--color-success); }
-.kpi-trend.down,
-.kpi-trend.up-warn   { color: var(--color-danger); }
-.kpi-trend-label { font-weight: normal; color: var(--text-secondary); margin-left: 4px; }
 
 .chart-card { margin-bottom: var(--space-4); }
 .chart-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
@@ -376,6 +375,8 @@ const exportXlsx = async () => {
   color: var(--color-info); cursor: pointer; font: inherit;
 }
 .link-btn:hover { text-decoration: underline; }
+
+.prelogged-note { font-size: 12px; color: var(--text-secondary); padding: 8px 4px 0; }
 
 .finance-error { padding: 32px 0; }
 </style>

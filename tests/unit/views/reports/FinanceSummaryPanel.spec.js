@@ -2,11 +2,15 @@
  * FinanceSummaryPanel.spec.js
  *
  * 2026-07-05 報表重構：收支彙總頁補 P1 缺口（原本零測試覆蓋）。
+ * 2026-07-11 報表 UI/UX 改版 Task 8：兩張 PieChart 換成 CategoryBarList（spec §5
+ *   變更要點 4），下方「fixed_cost 分類渲染」描述區塊斷言隨之從 PieChart props
+ *   改為 CategoryBarList 的 `[data-test="cat-row"]` 條列；MoM／錯誤視覺兩區塊
+ *   行為未變，斷言原樣保留。
  *
  * 涵蓋：
- *  1. fixed_cost 新分類在支出圓餅圖正確渲染（後端 2026-07-05 修正 build_finance_summary
- *     納入固定支出後，expense_by_category 多一筆 fixed_cost；前端 expensePieData 為
- *     泛用映射，無需改動，此測試防止未來回歸）
+ *  1. fixed_cost 新分類在支出分類條列圖正確渲染（後端 2026-07-05 修正
+ *     build_finance_summary 納入固定支出後，expense_by_category 多一筆
+ *     fixed_cost；前端 CategoryBarList 為泛用映射，無需改動，此測試防止未來回歸）
  *  2. MoM 錨定「所選年度內最後一個有資料的月份」（同 OverviewPanel 的修正，共用
  *     financeTrend.ts）
  *  3. API 錯誤與零值視覺區分（持久性錯誤區塊 vs 全 0 KPI）
@@ -74,7 +78,7 @@ beforeEach(() => {
 })
 
 describe('FinanceSummaryPanel fixed_cost 分類渲染', () => {
-  it('expense_by_category 含 fixed_cost 時，支出圓餅圖與月度明細正確帶入固定支出', async () => {
+  it('expense_by_category 含 fixed_cost 時，支出分類條列圖與月度明細正確帶入固定支出', async () => {
     mockGetFinanceSummary.mockResolvedValue({
       data: {
         summary: { total_revenue: 500000, total_refund: 0, net_revenue: 500000, total_expense: 400000, net_cashflow: 100000 },
@@ -91,14 +95,15 @@ describe('FinanceSummaryPanel fixed_cost 分類渲染', () => {
     const w = mountPanel()
     await flushPromises()
 
-    const pie = w.findComponent({ name: 'PieChart' })
-    // 兩個 PieChart（收入/支出），取支出那個：data 含 4 類，含固定支出 70000
-    const pies = w.findAllComponents({ name: 'PieChart' })
-    expect(pies.length).toBe(2)
-    const expensePie = pies[1]
-    expect(expensePie.props('data').labels).toEqual(['員工應發', '雇主保費+勞退', '廠商付款', '固定支出'])
-    expect(expensePie.props('data').datasets[0].data).toEqual([200000, 50000, 80000, 70000])
-    expect(pie.exists()).toBe(true)
+    // 收入 1 列（學費）+ 支出 4 列（員工應發/雇主保費+勞退/廠商付款/固定支出）= 5
+    const rows = w.findAll('[data-test="cat-row"]')
+    expect(rows.length).toBe(5)
+    const rowTexts = rows.map(r => r.text())
+    expect(rowTexts.some(t => t.includes('學費') && t.includes('NT$500,000'))).toBe(true)
+    expect(rowTexts.some(t => t.includes('員工應發') && t.includes('NT$200,000'))).toBe(true)
+    expect(rowTexts.some(t => t.includes('雇主保費+勞退') && t.includes('NT$50,000'))).toBe(true)
+    expect(rowTexts.some(t => t.includes('廠商付款') && t.includes('NT$80,000'))).toBe(true)
+    expect(rowTexts.some(t => t.includes('固定支出') && t.includes('NT$70,000'))).toBe(true)
   })
 })
 
