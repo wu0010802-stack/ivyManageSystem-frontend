@@ -30,6 +30,9 @@ export const roleLabel = (role: string): string => ROLE_LABELS[role] ?? role
 export const formatSemester = (schoolYear: number, semester: number): string =>
   `${schoolYear} ${semester === 1 ? '上學期' : '下學期'}`
 
+export const formatSemesterShort = (schoolYear: number, semester: number): string =>
+  `${schoolYear}${semester === 1 ? '上' : '下'}`
+
 export const formatCoTeachers = (cos: ClassHistoryCoTeacher[]): string => {
   if (!cos.length) return '—'
   return cos.map(c => `${roleLabel(c.role)} ${c.name}`).join(' · ')

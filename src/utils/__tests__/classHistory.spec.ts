@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   formatSemester,
+  formatSemesterShort,
   roleLabel,
   formatCoTeachers,
   formatHeadcount,
@@ -12,6 +13,11 @@ describe('classHistory formatters', () => {
   it('formatSemester', () => {
     expect(formatSemester(114, 1)).toBe('114 上學期')
     expect(formatSemester(114, 2)).toBe('114 下學期')
+  })
+
+  it('formatSemesterShort', () => {
+    expect(formatSemesterShort(114, 1)).toBe('114上')
+    expect(formatSemesterShort(114, 2)).toBe('114下')
   })
 
   it('roleLabel', () => {
