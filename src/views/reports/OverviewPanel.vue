@@ -6,17 +6,24 @@ import { getMonthlyFixedCosts } from '@/api/monthlyFixedCost'
 import { getVendorPaymentSummary } from '@/api/vendorPayment'
 import { getMiscReceiptSummary } from '@/api/miscReceipt'
 import { hasPermission } from '@/utils/auth'
-import {
-  Money, Coin, Wallet, TrendCharts, Calendar, Check, DataAnalysis,
-  Warning, CircleCheck, Link as LinkIcon,
-} from '@element-plus/icons-vue'
+import { Warning, CircleCheck, Link as LinkIcon } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
 import { apiError } from '@/utils/error'
-import { lastMonthWithData, pctChange, type FinanceTrendRow } from './financeTrend'
+import { LineChart } from './chartSetup'
+import ReportKpiCard from './ReportKpiCard.vue'
+import SparkLine from './SparkLine.vue'
+import { computeReportPeriod } from './useReportPeriod'
+import { buildTrendChartData, inProgressIndex } from './trendChart'
+import {
+  pctChange, sumTrendUpTo, futurePreloggedExpense, type FinanceTrendRow,
+} from './financeTrend'
+import type { ChartOptions } from 'chart.js'
 
 const props = defineProps<{
   year: number
 }>()
+
+const emit = defineEmits<{ navigate: [{ tab: string; month?: number }] }>()
 
 // 註：ReportsView.vue 對每個 panel 都掛 `:key="selectedYear"`，年度切換時整個
 // OverviewPanel 會被銷毀重掛（非同一 instance 內改 prop），下面幾個
@@ -60,14 +67,27 @@ const summary = computed(() => finance.data.value?.summary || {
   net_cashflow: 0,
 })
 
-// MoM：錨定「所選年度內最後一個有資料的月份」，取代舊版錨定瀏覽器當下真實月份
-// 的 bug（瀏覽非當年時「vs 上月」會跟「現在」脫鉤，見 financeTrend.ts 註解）。
+// 報表截止期間單一事實來源（spec §2）：cutoffMonth／lastActualMonth／lastCompleteMonth。
+// 取代舊版本地 REAL_TODAY/cutoffMonth 計算——語意不變（今年→當月、過去年→12、未來年→0）。
+const trend = computed<FinanceTrendRow[]>(() => finance.data.value?.monthly_trend || [])
+const period = computed(() => computeReportPeriod(props.year, trend.value))
+
+// KPI 主數字：截至實際發生口徑（spec §4-1），取代直接顯示後端 summary 全年值
+// （全年值含未來月預登錄固定支出，會讓「本年總支出」在年中就跳成年底金額）。
+const actuals = computed(() => sumTrendUpTo(trend.value, period.value.cutoffMonth))
+const prelogged = computed(() => futurePreloggedExpense(trend.value, period.value.cutoffMonth))
+const expenseNote = computed(() =>
+  prelogged.value.total > 0 ? `全年含預登錄：${money(summary.value.total_expense)}` : undefined)
+const netNote = computed(() =>
+  prelogged.value.total > 0 ? `全年口徑：${money(summary.value.net_cashflow)}` : undefined)
+
+// MoM：錨定「最後完整月」（進行中的當月不當錨點；預登錄月被 cutoff 夾住不會拉高錨點），
+// 取代舊版直接錨定 lastMonthWithData 的 bug（會把「只有預登錄固定支出」的未來月當有資料）。
 const mom = computed(() => {
-  const trend: FinanceTrendRow[] = finance.data.value?.monthly_trend || []
-  const anchorMonth = lastMonthWithData(trend)
-  if (anchorMonth == null) return null
-  const curr = trend.find(r => r.month === anchorMonth)
-  const prev = trend.find(r => r.month === anchorMonth - 1)
+  const anchor = period.value.lastCompleteMonth
+  if (anchor == null) return null
+  const curr = trend.value.find(r => r.month === anchor)
+  const prev = trend.value.find(r => r.month === anchor - 1)
   if (!curr || !prev) return null
   return {
     revenue: pctChange(curr.revenue, prev.revenue),
@@ -89,12 +109,40 @@ const yoy = computed(() => {
   }
 })
 
+// netClass 動態：正數綠／負數紅，提示營運盈虧；對應主數字（actuals.net，非 summary 全年
+// 值），非裝飾性色，保留。
 const netClass = computed(() => {
-  const v = summary.value.net_cashflow || 0
+  const v = actuals.value.net || 0
   if (v > 0) return 'value-green'
   if (v < 0) return 'value-red'
   return ''
 })
+
+// 主趨勢圖（三線）＋點擊下鑽＋進行中月 tooltip 註記
+const trendChartData = computed(() => buildTrendChartData(trend.value, period.value))
+const trendChartOptions = computed(() => ({
+  responsive: true, maintainAspectRatio: false,
+  interaction: { mode: 'index' as const, intersect: false },
+  plugins: {
+    legend: { position: 'top' as const },
+    tooltip: {
+      callbacks: {
+        title: (items: Array<{ label: string; dataIndex: number }>) => {
+          const idx = inProgressIndex(period.value)
+          const base = items[0]?.label ?? ''
+          return idx != null && items[0]?.dataIndex === idx ? `${base}（本月進行中）` : base
+        },
+        label: (ctx: { dataset: { label: string }; parsed: { y: number } }) =>
+          `${ctx.dataset.label}: ${money(ctx.parsed.y)}`,
+      },
+    },
+  },
+  scales: { y: { ticks: { callback: (v: number | string) => '$' + (Number(v) / 1000).toFixed(0) + 'k' } } },
+  onClick: (_e: unknown, elements: Array<{ index: number }>) => {
+    if (!elements.length) return
+    emit('navigate', { tab: 'finance', month: elements[0].index + 1 })
+  },
+}) as unknown as ChartOptions<'line'>)
 
 // 年度出勤率：加權平均（Σ(total_records×rate)/Σtotal_records，等價 Σnormal/Σtotal），
 // 取代舊版「月度 rate 算術平均」（各月同權重，出勤紀錄筆數差異大時會失真，
@@ -112,11 +160,23 @@ const weightedAttendanceRate = computed(() => {
   return (weightedSum / totalRecords).toFixed(1)
 })
 
-const formatPct = (v: number | null): string | null => {
-  if (v == null || !Number.isFinite(v)) return null
-  const sign = v > 0 ? '+' : ''
-  return `${sign}${v.toFixed(1)}%`
-}
+// 出勤 sparkline：rate 依 cutoff 截斷（未來月不畫，消除資料懸崖）
+const attendanceRateSeries = computed<(number | null)[]>(() => {
+  const arr: Array<{ month: number; rate?: number }> = dashboard.data.value?.attendance_monthly || []
+  const byMonth: Record<number, number | undefined> = {}
+  arr.forEach(d => { byMonth[d.month] = d.rate })
+  const out: (number | null)[] = []
+  for (let m = 1; m <= 12; m++) out.push(m > period.value.cutoffMonth ? null : (byMonth[m] ?? null))
+  return out
+})
+
+// 薪資摘要（沿用 SalaryPanel 同款來源：expense_by_category）
+const expenseCategories = computed<Array<{ category?: string; amount?: number }>>(
+  () => finance.data.value?.expense_by_category || [])
+const salaryGross = computed(() =>
+  expenseCategories.value.find(c => c.category === 'salary_gross')?.amount || 0)
+const employerBenefit = computed(() =>
+  expenseCategories.value.find(c => c.category === 'employer_benefit')?.amount || 0)
 
 // ── 異常與待辦 ──────────────────────────────────────────────────────────
 // 僅用現有可靠來源；無現成 API 的待辦（如廠商付款/雜項收款簽收清單）一律
@@ -146,18 +206,9 @@ if (canCheckFixedCost) {
     .catch(() => { fixedCostCheckFailed.value = true })
 }
 
-// 「當前月份」只在瀏覽真實今年時有意義；瀏覽過去年度全年皆已「過去」，
-// 未來年度則尚無任何月份該登錄。
-const REAL_TODAY = new Date()
-const cutoffMonth = computed(() => {
-  if (props.year < REAL_TODAY.getFullYear()) return 12
-  if (props.year > REAL_TODAY.getFullYear()) return 0
-  return REAL_TODAY.getMonth() + 1
-})
-
 const missingFixedCostMonths = computed(() => {
   if (!canCheckFixedCost || fixedCostCheckFailed.value) return []
-  const cutoff = cutoffMonth.value
+  const cutoff = period.value.cutoffMonth
   if (cutoff <= 0) return []
   const sums: Record<number, number> = {}
   for (const e of fixedCostEntries.value) {
@@ -250,142 +301,130 @@ const formatFetchedAt = (ts: number) => {
 <template>
   <el-skeleton v-if="loading" :rows="10" animated />
   <div v-else class="overview">
-    <!-- a. KPI 帶 -->
     <div v-if="financeUnavailable" class="section-error" data-test="finance-error">
       <el-empty :description="financeErrorText" />
     </div>
     <template v-else>
       <el-row :gutter="16" class="kpi-row">
         <el-col :xs="12" :sm="6">
-          <el-card class="kpi-card kpi-card--blue" shadow="never">
-            <div class="kpi-icon"><el-icon :size="22"><Coin /></el-icon></div>
-            <div class="kpi-label">本年總收入</div>
-            <div class="kpi-value" data-test="kpi-total-revenue">{{ money(summary.total_revenue) }}</div>
-            <div v-if="mom?.revenue != null" class="kpi-trend" :class="mom.revenue >= 0 ? 'up' : 'down'" data-test="mom-revenue">
-              {{ mom.revenue >= 0 ? '↑' : '↓' }} {{ formatPct(mom.revenue) }}
-              <span class="kpi-trend-label">vs 上月</span>
-            </div>
-            <div class="kpi-trend" data-test="yoy-revenue">
-              <template v-if="yoy?.revenue != null">
-                <span :class="yoy.revenue >= 0 ? 'up' : 'down'">{{ yoy.revenue >= 0 ? '↑' : '↓' }} {{ formatPct(yoy.revenue) }}</span>
-                <span class="kpi-trend-label">vs 去年</span>
-              </template>
-              <span v-else-if="yoy" class="kpi-trend-label">無去年資料</span>
-            </div>
-            <div class="kpi-sub">（未扣退款）</div>
-          </el-card>
+          <ReportKpiCard
+            label="本年淨現金" accent="blue"
+            :value="money(actuals.net)" :value-class="netClass" value-test="kpi-net-cashflow"
+            :trends="[
+              { label: 'vs 上月', delta: mom?.net ?? null, test: 'mom-net' },
+              { label: 'vs 去年', delta: yoy?.net ?? null, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-net' },
+            ]"
+            :note="netNote" note-test="kpi-net-note" sub="（收入-退款-支出）"
+          />
         </el-col>
         <el-col :xs="12" :sm="6">
-          <el-card class="kpi-card kpi-card--orange" shadow="never">
-            <div class="kpi-icon"><el-icon :size="22"><Wallet /></el-icon></div>
-            <div class="kpi-label">本年退款</div>
-            <div class="kpi-value" data-test="kpi-total-refund">{{ money(summary.total_refund) }}</div>
-            <div class="kpi-sub">學費+才藝</div>
-          </el-card>
+          <ReportKpiCard
+            label="本年總收入" accent="green"
+            :value="money(actuals.revenue)" value-test="kpi-total-revenue"
+            :trends="[
+              { label: 'vs 上月', delta: mom?.revenue ?? null, test: 'mom-revenue' },
+              { label: 'vs 去年', delta: yoy?.revenue ?? null, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-revenue' },
+            ]"
+            sub="（未扣退款）"
+          />
         </el-col>
         <el-col :xs="12" :sm="6">
-          <el-card class="kpi-card kpi-card--red" shadow="never">
-            <div class="kpi-icon"><el-icon :size="22"><Money /></el-icon></div>
-            <div class="kpi-label">本年總支出</div>
-            <div class="kpi-value" data-test="kpi-total-expense">{{ money(summary.total_expense) }}</div>
-            <div v-if="mom?.expense != null" class="kpi-trend" :class="mom.expense >= 0 ? 'up-warn' : 'down-good'" data-test="mom-expense">
-              {{ mom.expense >= 0 ? '↑' : '↓' }} {{ formatPct(mom.expense) }}
-              <span class="kpi-trend-label">vs 上月</span>
-            </div>
-            <div class="kpi-trend" data-test="yoy-expense">
-              <template v-if="yoy?.expense != null">
-                <span :class="yoy.expense >= 0 ? 'up-warn' : 'down-good'">{{ yoy.expense >= 0 ? '↑' : '↓' }} {{ formatPct(yoy.expense) }}</span>
-                <span class="kpi-trend-label">vs 去年</span>
-              </template>
-              <span v-else-if="yoy" class="kpi-trend-label">無去年資料</span>
-            </div>
-          </el-card>
+          <ReportKpiCard
+            label="本年總支出" accent="red"
+            :value="money(actuals.expense)" value-test="kpi-total-expense"
+            :trends="[
+              { label: 'vs 上月', delta: mom?.expense ?? null, invert: true, test: 'mom-expense' },
+              { label: 'vs 去年', delta: yoy?.expense ?? null, invert: true, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-expense' },
+            ]"
+            :note="expenseNote" note-test="kpi-expense-note"
+          />
         </el-col>
         <el-col :xs="12" :sm="6">
-          <el-card class="kpi-card kpi-card--green" shadow="never">
-            <div class="kpi-icon"><el-icon :size="22"><TrendCharts /></el-icon></div>
-            <div class="kpi-label">本年淨現金</div>
-            <div class="kpi-value" :class="netClass" data-test="kpi-net-cashflow">{{ money(summary.net_cashflow) }}</div>
-            <div v-if="mom?.net != null" class="kpi-trend" :class="mom.net >= 0 ? 'up' : 'down'" data-test="mom-net">
-              {{ mom.net >= 0 ? '↑' : '↓' }} {{ formatPct(mom.net) }}
-              <span class="kpi-trend-label">vs 上月</span>
-            </div>
-            <div class="kpi-trend" data-test="yoy-net">
-              <template v-if="yoy?.net != null">
-                <span :class="yoy.net >= 0 ? 'up' : 'down'">{{ yoy.net >= 0 ? '↑' : '↓' }} {{ formatPct(yoy.net) }}</span>
-                <span class="kpi-trend-label">vs 去年</span>
-              </template>
-              <span v-else-if="yoy" class="kpi-trend-label">無去年資料</span>
-            </div>
-            <div class="kpi-sub">（收入-退款-支出）</div>
-          </el-card>
+          <ReportKpiCard
+            label="本年退款" accent="orange"
+            :value="money(actuals.refund)" value-test="kpi-total-refund"
+            sub="學費+才藝"
+          />
         </el-col>
       </el-row>
       <div class="kpi-band-note" data-test="kpi-band-note">
-        含固定支出、廠商付款；不含年終獎金（另行轉帳）
+        截至 {{ period.lastActualMonth ?? '—' }} 月實際發生；含固定支出、廠商付款；不含年終獎金（另行轉帳）
       </div>
+
+      <el-row :gutter="16">
+        <el-col :xs="24" :lg="16">
+          <el-card class="chart-card" shadow="never">
+            <template #header><span class="chart-title">年度收支趨勢（點擊資料點看該月明細）</span></template>
+            <div class="chart-container"><LineChart :data="trendChartData" :options="trendChartOptions" /></div>
+          </el-card>
+        </el-col>
+        <el-col :xs="24" :lg="8">
+          <!-- c. 異常與待辦 -->
+          <el-card class="todo-card" shadow="never">
+            <template #header><span class="chart-title">異常與待辦</span></template>
+            <ul class="todo-list" data-test="todo-list">
+              <li v-for="item in todoItems" :key="item.key" class="todo-item" :data-test="`todo-item-${item.key}`">
+                <el-icon :size="14" class="todo-icon-warn"><Warning /></el-icon>
+                <span>{{ item.text }}</span>
+              </li>
+              <li v-if="todoItems.length === 0" class="todo-item todo-empty" data-test="todo-empty">
+                <el-icon :size="14" class="todo-icon-ok"><CircleCheck /></el-icon>
+                <span>目前無異常待辦</span>
+              </li>
+            </ul>
+            <router-link
+              v-if="signoffLinkState === 'action' || signoffLinkState === 'neutral'"
+              class="todo-link"
+              :to="{ path: '/finance-signoffs' }"
+              data-test="todo-signoff-link"
+            >
+              <el-icon :size="14"><LinkIcon /></el-icon>
+              {{ signoffLinkState === 'action'
+                ? '前往「收支簽收」處理待簽收項目'
+                : '廠商付款／雜項收款簽收狀態請至「收支簽收」查看' }}
+            </router-link>
+          </el-card>
+        </el-col>
+      </el-row>
     </template>
 
-    <!-- c. 異常與待辦 -->
-    <el-card class="todo-card" shadow="never">
-      <template #header><span class="chart-title">異常與待辦</span></template>
-      <ul class="todo-list" data-test="todo-list">
-        <li v-for="item in todoItems" :key="item.key" class="todo-item" :data-test="`todo-item-${item.key}`">
-          <el-icon :size="14" class="todo-icon-warn"><Warning /></el-icon>
-          <span>{{ item.text }}</span>
-        </li>
-        <li v-if="todoItems.length === 0" class="todo-item todo-empty" data-test="todo-empty">
-          <el-icon :size="14" class="todo-icon-ok"><CircleCheck /></el-icon>
-          <span>目前無異常待辦</span>
-        </li>
-      </ul>
-      <router-link
-        v-if="signoffLinkState === 'action' || signoffLinkState === 'neutral'"
-        class="todo-link"
-        :to="{ path: '/finance-signoffs' }"
-        data-test="todo-signoff-link"
-      >
-        <el-icon :size="14"><LinkIcon /></el-icon>
-        {{ signoffLinkState === 'action'
-          ? '前往「收支簽收」處理待簽收項目'
-          : '廠商付款／雜項收款簽收狀態請至「收支簽收」查看' }}
-      </router-link>
-    </el-card>
-
-    <!-- d. 年度出勤率（加權）／淨營收／收支比 -->
     <el-row :gutter="16">
       <el-col :xs="24" :sm="8">
-        <div v-if="dashboardUnavailable" class="section-error" data-test="attendance-rate-error">
+        <el-card
+          v-if="!dashboardUnavailable"
+          class="summary-card" shadow="never"
+          data-test="attendance-summary-card"
+          @click="emit('navigate', { tab: 'attendance' })"
+        >
+          <div class="kpi-label">年度出勤率（加權平均）</div>
+          <div class="summary-value" data-test="attendance-rate">{{ weightedAttendanceRate != null ? `${weightedAttendanceRate}%` : '-' }}</div>
+          <SparkLine :values="attendanceRateSeries" />
+          <span class="summary-link">查看出勤 →</span>
+        </el-card>
+        <div v-else class="section-error" data-test="attendance-rate-error">
           <el-empty :description="dashboardErrorText" :image-size="50" />
         </div>
-        <el-card v-else class="kpi-card" shadow="never">
-          <div class="kpi-icon"><el-icon :size="22"><Check /></el-icon></div>
-          <div class="kpi-label">年度出勤率（加權平均）</div>
-          <div class="kpi-value" data-test="attendance-rate">{{ weightedAttendanceRate != null ? `${weightedAttendanceRate}%` : '-' }}</div>
+      </el-col>
+      <el-col :xs="24" :sm="8">
+        <el-card
+          v-if="!financeUnavailable"
+          class="summary-card" shadow="never"
+          data-test="salary-summary-card"
+          @click="emit('navigate', { tab: 'salary' })"
+        >
+          <div class="kpi-label">園方人事成本（本年）</div>
+          <div class="summary-value">{{ money(salaryGross + employerBenefit) }}</div>
+          <div class="summary-sub">應發 {{ money(salaryGross) }}＋雇主負擔 {{ money(employerBenefit) }}</div>
+          <span class="summary-link">查看薪資 →</span>
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="8">
-        <div v-if="financeUnavailable" class="section-error" data-test="net-revenue-error">
-          <el-empty :description="financeErrorText" :image-size="50" />
-        </div>
-        <el-card v-else class="kpi-card" shadow="never">
-          <div class="kpi-icon"><el-icon :size="22"><DataAnalysis /></el-icon></div>
-          <div class="kpi-label">淨營收</div>
-          <div class="kpi-value">{{ money(summary.net_revenue) }}</div>
-          <div class="kpi-sub">總收入 - 退款</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="8">
-        <div v-if="financeUnavailable" class="section-error" data-test="ratio-error">
-          <el-empty :description="financeErrorText" :image-size="50" />
-        </div>
-        <el-card v-else class="kpi-card" shadow="never">
-          <div class="kpi-icon"><el-icon :size="22"><Calendar /></el-icon></div>
-          <div class="kpi-label">收支比</div>
-          <div class="kpi-value">
-            {{ summary.total_expense ? (summary.net_revenue / summary.total_expense).toFixed(2) : '-' }}
+        <el-card v-if="!financeUnavailable" class="summary-card summary-card--static" shadow="never">
+          <div class="kpi-label">淨營收・收支比</div>
+          <div class="summary-value">{{ money(summary.net_revenue) }}</div>
+          <div class="summary-sub">
+            收支比 {{ summary.total_expense ? (summary.net_revenue / summary.total_expense).toFixed(2) : '-' }}（淨營收 / 總支出）
           </div>
-          <div class="kpi-sub">淨營收 / 總支出</div>
         </el-card>
       </el-col>
     </el-row>
@@ -410,6 +449,11 @@ const formatFetchedAt = (ts: number) => {
             薪資僅計入已封存且不需重算的紀錄（草稿/待重算不計入，避免中間態影響管理層數字）；
             廠商付款與雜項收款「待簽收」與「已簽收」皆計入；才藝收支僅計入未作廢紀錄。
           </dd>
+          <dt>KPI 口徑</dt>
+          <dd>
+            KPI 主數字為「截至實際發生月」加總（不含未來月預登錄固定支出）；
+            含未來月預登錄固定支出的全年口徑見各卡副行與 Excel 匯出。
+          </dd>
           <dt>已知缺漏（本次未納入）</dt>
           <dd>
             年終獎金 E 化撥款為表外獨立轉帳，未列入本頁任何數字（另行轉帳，非疏漏）；
@@ -429,56 +473,6 @@ const formatFetchedAt = (ts: number) => {
 <style scoped>
 .overview { display: flex; flex-direction: column; gap: var(--space-4); }
 .kpi-row { margin-bottom: 0; }
-.kpi-card {
-  text-align: center;
-  padding: 16px 8px 12px;
-  position: relative;
-  border-top: 3px solid transparent;
-  height: 100%;
-}
-.kpi-card--blue   { border-top-color: var(--color-info); }
-.kpi-card--orange { border-top-color: var(--color-warning); }
-.kpi-card--red    { border-top-color: var(--color-danger); }
-.kpi-card--green  { border-top-color: var(--color-success); }
-
-.kpi-icon {
-  opacity: 0.45;
-  margin-bottom: 4px;
-}
-.kpi-label {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin-bottom: 6px;
-}
-.kpi-value {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-.kpi-sub {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-.kpi-trend {
-  font-size: 12px;
-  font-weight: 600;
-  margin-top: 4px;
-  min-height: 16px;
-}
-.kpi-trend .up,
-.kpi-trend.up,
-.kpi-trend .down-good,
-.kpi-trend.down-good { color: var(--color-success); }
-.kpi-trend .down,
-.kpi-trend.down,
-.kpi-trend .up-warn,
-.kpi-trend.up-warn   { color: var(--color-danger); }
-.kpi-trend-label {
-  font-weight: normal;
-  color: var(--text-secondary);
-  margin-left: 4px;
-}
 
 .kpi-band-note {
   font-size: 12px;
@@ -492,6 +486,12 @@ const formatFetchedAt = (ts: number) => {
 .value-green { color: var(--color-success); }
 
 .section-error { padding: 16px 0; }
+
+.kpi-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
 
 .todo-card :deep(.el-card__body) { display: flex; flex-direction: column; gap: 10px; }
 .chart-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
@@ -513,4 +513,14 @@ const formatFetchedAt = (ts: number) => {
 .notes-dl dt { font-weight: 600; color: var(--text-primary); margin-top: 10px; }
 .notes-dl dt:first-child { margin-top: 0; }
 .notes-dl dd { margin: 2px 0 0 0; }
+
+.summary-card { text-align: center; padding: 12px 8px; cursor: pointer; height: 100%; transition: border-color 0.2s; }
+.summary-card:hover { border-color: var(--el-color-primary); }
+.summary-card--static { cursor: default; }
+.summary-card--static:hover { border-color: var(--el-border-color-lighter); }
+.summary-value { font-size: 24px; font-weight: 700; color: var(--text-primary); margin: 4px 0; }
+.summary-sub { font-size: 12px; color: var(--text-secondary); }
+.summary-link { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--el-color-primary); }
+.chart-container { height: 320px; position: relative; }
+.chart-card { height: 100%; }
 </style>

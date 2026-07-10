@@ -115,8 +115,10 @@ beforeEach(() => {
 })
 
 describe('OverviewPanel KPI 渲染', () => {
-  it('渲染本年總收入/退款/總支出/淨現金（來源 finance.summary）', async () => {
-    const trend = Array.from({ length: 12 }, (_, i) => makeTrendRow(i + 1, 0, 0, 0))
+  it('渲染本年總收入/退款/總支出/淨現金（KPI 主數字＝截至實際發生月的 monthly_trend 累加，2026-07-10 改版不再直讀 finance.summary）', async () => {
+    // 過去年度 cutoff=12（全年皆「已過去」），12 個月均攤出與 summary 相同的全年總額，
+    // 讓本測試同時涵蓋新舊口徑一致的情境（見 OverviewPanel.test.ts 覆蓋兩口徑分岔情境）。
+    const trend = Array.from({ length: 12 }, (_, i) => makeTrendRow(i + 1, 100000, 2500, 75000))
     mockGetFinanceSummary.mockImplementation((year) => Promise.resolve({
       data: makeFinanceFixture({
         trend,
@@ -168,8 +170,9 @@ describe('OverviewPanel MoM 錨定邏輯', () => {
     const momRevenue = w.find('[data-test="mom-revenue"]')
     expect(momRevenue.text()).toContain('50.0%')
     expect(momRevenue.text()).toContain('vs 上月')
-    // expense 兩月皆 60000 → 0.0%
-    expect(w.find('[data-test="mom-expense"]').text()).toContain('0.0%')
+    // expense 兩月皆 60000 → |Δ|<0.1% 視為持平，顯示「— 持平」而非 ↑/↓0.0%
+    // （2026-07-10 KPI 卡改版：ReportKpiCard deltaKind 語意，見 financeTrend.ts）
+    expect(w.find('[data-test="mom-expense"]').text()).toContain('— 持平')
   })
 
   it('全年皆無資料（monthly_trend 全 0）時 MoM 不顯示', async () => {
