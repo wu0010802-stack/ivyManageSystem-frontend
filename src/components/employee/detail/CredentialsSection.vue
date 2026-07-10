@@ -10,6 +10,7 @@ import {
 import { DEGREE_OPTIONS, CONTRACT_TYPE_OPTIONS } from '@/constants/employee'
 import EmptyState from '@/components/common/EmptyState.vue'
 import type { ApiBody } from '@/api/_generated/typed'
+import { expiryStatus } from '@/utils/expiry'
 
 const props = defineProps<{
   employeeId: number
@@ -127,6 +128,15 @@ interface ContractForm { contract_type?: string; start_date?: string | null; end
 const subEduForm = computed(() => subDialog.form as unknown as EduForm)
 const subCertForm = computed(() => subDialog.form as unknown as CertForm)
 const subContractForm = computed(() => subDialog.form as unknown as ContractForm)
+
+// 證照到期日 / 合約結束日共用的到期標籤：expired/expiring 才回傳 tag 資訊，
+// ok 時回 null（畫面只顯示純日期文字）；none（無日期）不經此函式，由既有「永久」「未定」tag 處理。
+function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; label: string } | null {
+  const status = expiryStatus(typeof dateStr === 'string' ? dateStr : null)
+  if (status.kind === 'expired') return { type: 'danger', label: '已逾期' }
+  if (status.kind === 'expiring') return { type: 'warning', label: `${status.days} 天後到期` }
+  return null
+}
 </script>
 
 <template>
@@ -174,7 +184,13 @@ const subContractForm = computed(() => subDialog.form as unknown as ContractForm
       <el-table-column prop="issued_date" label="取得日期" width="130" />
       <el-table-column label="到期日" width="130">
         <template #default="scope">
-          <span v-if="scope.row.expiry_date">{{ scope.row.expiry_date }}</span>
+          <template v-if="scope.row.expiry_date">
+            <el-tag v-if="credentialExpiryTag(scope.row.expiry_date)?.type === 'danger'" size="small" type="danger">已逾期</el-tag>
+            <el-tag v-else-if="credentialExpiryTag(scope.row.expiry_date)" size="small" type="warning">
+              {{ credentialExpiryTag(scope.row.expiry_date)?.label }}
+            </el-tag>
+            <span v-else>{{ scope.row.expiry_date }}</span>
+          </template>
           <el-tag v-else size="small" type="info">永久</el-tag>
         </template>
       </el-table-column>
@@ -202,7 +218,13 @@ const subContractForm = computed(() => subDialog.form as unknown as ContractForm
       <el-table-column prop="start_date" label="起始日" width="130" />
       <el-table-column label="結束日" width="130">
         <template #default="scope">
-          <span v-if="scope.row.end_date">{{ scope.row.end_date }}</span>
+          <template v-if="scope.row.end_date">
+            <el-tag v-if="credentialExpiryTag(scope.row.end_date)?.type === 'danger'" size="small" type="danger">已逾期</el-tag>
+            <el-tag v-else-if="credentialExpiryTag(scope.row.end_date)" size="small" type="warning">
+              {{ credentialExpiryTag(scope.row.end_date)?.label }}
+            </el-tag>
+            <span v-else>{{ scope.row.end_date }}</span>
+          </template>
           <el-tag v-else size="small" type="info">未定</el-tag>
         </template>
       </el-table-column>
