@@ -60,28 +60,28 @@ defineExpose({ refresh: fetchSummary })
 <template>
   <div v-loading="loading" class="summary-cards">
     <div class="cards">
-      <div class="card card-attendance" role="button" tabindex="0" @click="emit('jump-tab', 'attendance')">
+      <button type="button" class="card card-attendance" @click="emit('jump-tab', 'attendance')">
         <div class="card-label">本學期出席率</div>
         <div class="card-value">{{ ratePercent }}</div>
         <div class="card-sub">
           出席 {{ summary?.attendance_present ?? 0 }} / 共 {{ summary?.attendance_total ?? 0 }}
         </div>
-      </div>
-      <div class="card card-leave" role="button" tabindex="0" @click="emit('jump-section', 'leave')">
+      </button>
+      <button type="button" class="card card-leave" @click="emit('jump-section', 'leave')">
         <div class="card-label">本學期請假天</div>
         <div class="card-value">{{ summary?.leave_days ?? 0 }}</div>
         <div class="card-sub">家長代請</div>
-      </div>
-      <div class="card card-assessment" role="button" tabindex="0" @click="emit('jump-section', 'assessment')">
+      </button>
+      <button type="button" class="card card-assessment" @click="emit('jump-section', 'assessment')">
         <div class="card-label">本學期評量</div>
         <div class="card-value">{{ summary?.assessment_count ?? 0 }}</div>
         <div class="card-sub">期中／期末</div>
-      </div>
-      <div class="card card-incident" role="button" tabindex="0" @click="emit('jump-section', 'incident')">
+      </button>
+      <button type="button" class="card card-incident" @click="emit('jump-section', 'incident')">
         <div class="card-label">本學期事件</div>
         <div class="card-value">{{ summary?.incident_count ?? 0 }}</div>
         <div class="card-sub">行為／意外</div>
-      </div>
+      </button>
     </div>
     <div v-if="summary" class="period">學期區間：{{ periodLabel }}</div>
   </div>
@@ -97,12 +97,16 @@ defineExpose({ refresh: fetchSummary })
   gap: 10px;
 }
 .card {
+  width: 100%;
+  border: 0;
   border-radius: 8px;
   padding: 12px 14px;
   background: var(--el-fill-color-lighter);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: transform 120ms, box-shadow 120ms;
-  outline: none;
 }
 .card:hover,
 .card:focus-visible {

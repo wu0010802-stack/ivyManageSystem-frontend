@@ -387,10 +387,10 @@ onMounted(fetchAll)
         </el-table-column>
         <el-table-column label="操作" width="140" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" size="small" circle @click="approveLeave(row, true)" title="核准">
+            <el-button aria-label="核准請假申請" type="success" size="small" circle @click="approveLeave(row, true)" title="核准">
               <el-icon><Check /></el-icon>
             </el-button>
-            <el-button type="danger" size="small" circle @click="approveLeave(row, false)" title="駁回">
+            <el-button aria-label="駁回請假申請" type="danger" size="small" circle @click="approveLeave(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
           </template>
@@ -488,10 +488,10 @@ onMounted(fetchAll)
         </el-table-column>
         <el-table-column label="操作" width="140" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" size="small" circle @click="approveOvertime(row, true)" title="核准">
+            <el-button aria-label="核准加班申請" type="success" size="small" circle @click="approveOvertime(row, true)" title="核准">
               <el-icon><Check /></el-icon>
             </el-button>
-            <el-button type="danger" size="small" circle @click="approveOvertime(row, false)" title="駁回">
+            <el-button aria-label="駁回加班申請" type="danger" size="small" circle @click="approveOvertime(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
           </template>
@@ -565,10 +565,10 @@ onMounted(fetchAll)
         </el-table-column>
         <el-table-column label="操作" width="140" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="success" size="small" circle @click="approveCorrection(row, true)" title="核准">
+            <el-button aria-label="核准補打卡申請" type="success" size="small" circle @click="approveCorrection(row, true)" title="核准">
               <el-icon><Check /></el-icon>
             </el-button>
-            <el-button type="danger" size="small" circle @click="approveCorrection(row, false)" title="駁回">
+            <el-button aria-label="駁回補打卡申請" type="danger" size="small" circle @click="approveCorrection(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
           </template>

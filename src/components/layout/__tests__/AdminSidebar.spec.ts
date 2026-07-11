@@ -29,9 +29,13 @@ const stubs = {
   ElBadge: true,
 }
 
-function mountWith(perms: string[]) {
+function mountWith(
+  perms: string[],
+  props: { isMobile?: boolean; mobileOpen?: boolean } = {},
+  attachTo?: HTMLElement,
+) {
   getUserInfo.mockReturnValue({ role: 'admin', permission_names: perms })
-  return mount(AdminSidebar, { global: { stubs } })
+  return mount(AdminSidebar, { props, attachTo, global: { stubs } })
 }
 
 const items = (w: ReturnType<typeof mountWith>) =>
@@ -120,5 +124,29 @@ describe('AdminSidebar activeMenu 薪資子頁高亮', () => {
     routeState.path = '/appraisal-year-end/rules/scoring'
     const w = mountWith(['*'])
     expect(w.find('nav').attributes('data-active')).toBe('/appraisal-year-end')
+  })
+})
+
+describe('AdminSidebar 行動版無障礙互動', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('開啟時提供可聚焦的關閉按鈕，並可由 Escape 關閉', async () => {
+    const w = mountWith(['*'], { isMobile: true, mobileOpen: true }, document.body)
+    const closeButton = w.get('button[aria-label="關閉導覽選單"]')
+
+    ;(w.vm as unknown as { focusCloseButton: () => void }).focusCloseButton()
+    expect(document.activeElement).toBe(closeButton.element)
+
+    await closeButton.trigger('keydown.esc')
+    expect(w.emitted('close-sidebar')).toHaveLength(1)
+    w.unmount()
+  })
+
+  it('關閉的行動側欄從輔助技術與鍵盤焦點移除', () => {
+    const w = mountWith(['*'], { isMobile: true, mobileOpen: false })
+    const navigation = w.get('#admin-navigation')
+
+    expect(navigation.attributes('aria-hidden')).toBe('true')
+    expect(navigation.attributes('inert')).toBeDefined()
   })
 })

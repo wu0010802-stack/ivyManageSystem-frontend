@@ -410,10 +410,10 @@ watch(activeSection, async (value) => {
             <el-table-column prop="reason" label="原因" show-overflow-tooltip />
             <el-table-column label="操作" width="140" align="right">
               <template #default="{ row }">
-                <el-button type="success" size="small" circle @click="approveOvertime(row, true)">
+                <el-button aria-label="核准加班申請" type="success" size="small" circle @click="approveOvertime(row, true)">
                   <el-icon><Check /></el-icon>
                 </el-button>
-                <el-button type="danger" size="small" circle @click="approveOvertime(row, false)">
+                <el-button aria-label="駁回加班申請" type="danger" size="small" circle @click="approveOvertime(row, false)">
                   <el-icon><Close /></el-icon>
                 </el-button>
               </template>

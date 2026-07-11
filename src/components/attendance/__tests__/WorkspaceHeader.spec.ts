@@ -47,6 +47,12 @@ function mountHeader() {
 }
 
 describe('WorkspaceHeader — 電子打卡入口', () => {
+  it('月份切換圖示按鈕有清楚的可存取名稱', () => {
+    const wrapper = mountHeader()
+    expect(wrapper.get('button[aria-label="上個月"]').exists()).toBe(true)
+    expect(wrapper.get('button[aria-label="下個月"]').exists()).toBe(true)
+  })
+
   it('工具列渲染「電子打卡」按鈕', () => {
     const wrapper = mountHeader()
     const btn = wrapper.findAll('button').find((b) => b.text().includes('電子打卡'))

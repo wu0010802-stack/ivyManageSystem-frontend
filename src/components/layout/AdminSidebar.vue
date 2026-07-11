@@ -1,6 +1,24 @@
 
 <template>
-  <el-aside :width="isMobile ? '260px' : (isCollapse ? '64px' : '260px')" class="admin-sidebar" :class="{ 'is-collapsed': isCollapse && !isMobile, 'sidebar-mobile': isMobile, 'sidebar-mobile-open': isMobile && mobileOpen, 'sidebar-mobile-hidden': isMobile && !mobileOpen }">
+  <el-aside
+    id="admin-navigation"
+    :width="isMobile ? '260px' : (isCollapse ? '64px' : '260px')"
+    class="admin-sidebar"
+    :class="{ 'is-collapsed': isCollapse && !isMobile, 'sidebar-mobile': isMobile, 'sidebar-mobile-open': isMobile && mobileOpen, 'sidebar-mobile-hidden': isMobile && !mobileOpen }"
+    :aria-hidden="isMobile && !mobileOpen ? 'true' : undefined"
+    :inert="isMobile && !mobileOpen"
+    @keydown.esc.stop="requestClose"
+  >
+    <button
+      v-if="isMobile"
+      ref="closeButtonRef"
+      type="button"
+      class="mobile-sidebar-close"
+      aria-label="關閉導覽選單"
+      @click="requestClose"
+    >
+      <el-icon><Close /></el-icon>
+    </button>
     <div class="logo-container">
       <img src="/LOGO.png" class="logo-icon-img" alt="IVY" />
       <transition name="fade">
@@ -234,7 +252,7 @@ import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, Setting,
-  Expand, Fold, DataAnalysis, Files,
+  Expand, Fold, DataAnalysis, Files, Close,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Trophy, WarningFilled
 } from '@element-plus/icons-vue'
@@ -260,6 +278,7 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const isCollapse = ref(false)
+const closeButtonRef = ref<HTMLButtonElement | null>(null)
 
 const canView = computed(() => {
   route.path
@@ -334,6 +353,14 @@ const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
 }
 
+const requestClose = () => {
+  if (props.isMobile) emit('close-sidebar')
+}
+
+defineExpose({
+  focusCloseButton: () => closeButtonRef.value?.focus(),
+})
+
 const onMenuSelect = () => {
   if (props.isMobile) {
     emit('close-sidebar')
@@ -366,6 +393,32 @@ const onMenuSelect = () => {
   border-bottom: 1px solid var(--neutral-700);
   overflow: hidden;
   white-space: nowrap;
+}
+
+.mobile-sidebar-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--sidebar-text-hover);
+  cursor: pointer;
+}
+
+.mobile-sidebar-close:hover {
+  background-color: var(--sidebar-bg-active);
+}
+
+.sidebar-mobile .logo-container {
+  padding-right: 60px;
 }
 
 .is-collapsed .logo-container {
@@ -471,7 +524,7 @@ const onMenuSelect = () => {
   justify-content: center;
   color: var(--text-tertiary);
   border-top: 1px solid var(--neutral-700);
-  transition: all var(--transition-base);
+  transition: background-color var(--transition-base), color var(--transition-base);
 }
 
 .collapse-toggle:hover {

@@ -124,7 +124,7 @@ const avatarColor = computed(() => {
           trigger="click"
           @command="(cmd) => emit('goto-link', cmd)"
         >
-          <el-button size="small" :icon="MoreFilled" />
+          <el-button aria-label="更多學生操作" size="small" :icon="MoreFilled" />
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="edit">編輯基本資料</el-dropdown-item>

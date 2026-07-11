@@ -2,9 +2,16 @@
 <template>
   <el-container class="admin-layout" :class="{ 'is-mobile': isMobile }">
     <!-- Mobile overlay -->
-    <div v-if="isMobile && sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
+    <button
+      v-if="isMobile && sidebarOpen"
+      type="button"
+      class="sidebar-overlay"
+      aria-label="關閉導覽選單"
+      @click="closeSidebar"
+    ></button>
 
     <AdminSidebar
+      ref="sidebarRef"
       :pending-approvals="notificationStore.approvalCount"
       :pending-activity-inquiries="notificationStore.activityInquiryCount"
       :pending-high-risk-audit="unackHighRiskCount"
@@ -13,10 +20,21 @@
       @close-sidebar="closeSidebar"
     />
 
-    <el-container direction="vertical" class="main-content-wrapper">
-      <AdminHeader :is-mobile="isMobile" @toggle-sidebar="toggleSidebar" />
+    <el-container
+      direction="vertical"
+      class="main-content-wrapper"
+      :inert="isMobile && sidebarOpen"
+      :aria-hidden="isMobile && sidebarOpen ? 'true' : undefined"
+    >
+      <a class="skip-link" href="#admin-main">跳至主要內容</a>
+      <AdminHeader
+        ref="headerRef"
+        :is-mobile="isMobile"
+        :sidebar-open="sidebarOpen"
+        @toggle-sidebar="toggleSidebar"
+      />
 
-      <el-main>
+      <el-main id="admin-main" tabindex="-1">
         <div class="content-container">
           <RouterView />
         </div>
@@ -26,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { nextTick, ref, onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AdminSidebar from '../components/layout/AdminSidebar.vue'
 import AdminHeader from '../components/layout/AdminHeader.vue'
@@ -42,6 +60,8 @@ const notificationStore = useNotificationStore()
 const { unackCount: unackHighRiskCount } = useHighRiskAuditCount()
 const { isMobile } = useIsMobile()
 const sidebarOpen = ref(false)
+const sidebarRef = ref<InstanceType<typeof AdminSidebar> | null>(null)
+const headerRef = ref<InstanceType<typeof AdminHeader> | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 // 離開手機視窗時關閉手機側欄（原 checkMobile 的副作用）
@@ -49,12 +69,27 @@ watch(isMobile, (m) => {
   if (!m) sidebarOpen.value = false
 })
 
-const toggleSidebar = () => {
-  sidebarOpen.value = !sidebarOpen.value
+const openSidebar = async () => {
+  sidebarOpen.value = true
+  await nextTick()
+  sidebarRef.value?.focusCloseButton()
 }
 
-const closeSidebar = () => {
+const closeSidebar = async () => {
+  const shouldRestoreFocus = isMobile.value && sidebarOpen.value
   sidebarOpen.value = false
+  if (shouldRestoreFocus) {
+    await nextTick()
+    headerRef.value?.focusSidebarToggle()
+  }
+}
+
+const toggleSidebar = async () => {
+  if (sidebarOpen.value) {
+    await closeSidebar()
+  } else {
+    await openSidebar()
+  }
 }
 
 // AdminLayout 即使被 App.vue 用 v-else 守住仍可能在 router 尚未 resolve 的
@@ -113,6 +148,23 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-toast);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 .el-main {
   padding: 0;
   overflow-y: auto;
@@ -134,7 +186,10 @@ onUnmounted(() => {
   bottom: 0;
   background-color: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(2px);
+  border: 0;
+  padding: 0;
   z-index: 1999;
+  cursor: pointer;
 }
 
 @media (--to-sm) {

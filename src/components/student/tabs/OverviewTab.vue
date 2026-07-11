@@ -190,7 +190,7 @@ const formatDate = (iso: unknown) => {
   border: 1px solid var(--el-border-color-lighter);
   background: var(--el-bg-color);
   cursor: pointer;
-  transition: all 0.18s;
+  transition: transform 0.18s, box-shadow 0.18s;
 }
 .stat-card:hover {
   transform: translateY(-2px);

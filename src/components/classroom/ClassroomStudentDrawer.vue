@@ -413,10 +413,25 @@ const close = () => emit('update:visible', false)
                   </div>
                   <div v-if="canWriteStudents" class="roster-actions" @click.stop>
                     <el-tooltip content="編輯" placement="top">
-                      <el-button size="small" :icon="Edit" plain circle @click="handleStudentEdit(s)" />
+                      <el-button
+                        :aria-label="`編輯 ${s.name} 的資料`"
+                        size="small"
+                        :icon="Edit"
+                        plain
+                        circle
+                        @click="handleStudentEdit(s)"
+                      />
                     </el-tooltip>
                     <el-tooltip content="刪除" placement="top">
-                      <el-button size="small" :icon="Delete" type="danger" plain circle @click="handleStudentDelete(s)" />
+                      <el-button
+                        :aria-label="`刪除 ${s.name} 的資料`"
+                        size="small"
+                        :icon="Delete"
+                        type="danger"
+                        plain
+                        circle
+                        @click="handleStudentDelete(s)"
+                      />
                     </el-tooltip>
                   </div>
                 </li>

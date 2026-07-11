@@ -262,8 +262,8 @@ onMounted(() => {
 <style scoped>
 /* ── Trigger Button ─────────────────────────────── */
 .nf-trigger {
-  width: 40px;
-  height: 40px;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
   border: 1px solid var(--border-color-light);
   border-radius: 999px;
   background: var(--surface-color);
@@ -272,7 +272,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition: color var(--transition-base), border-color var(--transition-base), background-color var(--transition-base);
 }
 .nf-trigger:hover {
   color: var(--color-primary);

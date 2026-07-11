@@ -3,7 +3,16 @@
   <el-header height="64px" class="admin-header">
     <div class="header-content">
       <div class="header-left">
-        <button v-if="isMobile" class="hamburger-btn" @click="$emit('toggle-sidebar')">
+        <button
+          v-if="isMobile"
+          ref="sidebarToggleRef"
+          type="button"
+          class="hamburger-btn"
+          aria-label="開啟導覽選單"
+          aria-controls="admin-navigation"
+          :aria-expanded="sidebarOpen"
+          @click="$emit('toggle-sidebar')"
+        >
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
@@ -34,6 +43,7 @@
           size="small"
           plain
           :icon="Monitor"
+          aria-label="檢視老師教師端"
           :title="'檢視老師教師端'"
           @click="openTeacherPicker"
         >
@@ -47,6 +57,7 @@
           size="small"
           plain
           :icon="Monitor"
+          aria-label="進入前台"
           :title="'進入前台'"
           @click="goToPortal"
         >
@@ -54,14 +65,14 @@
         </el-button>
 
         <el-dropdown trigger="click" @command="handleCommand">
-          <div class="user-profile">
+          <button type="button" class="user-profile" aria-label="開啟帳號選單">
             <el-avatar :size="36" class="user-avatar" icon="UserFilled" />
             <div class="user-info">
               <span class="user-name">{{ displayName }}</span>
               <span class="user-role">{{ displayRole }}</span>
             </div>
             <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-          </div>
+          </button>
           <template #dropdown>
             <el-dropdown-menu class="user-dropdown">
               <el-dropdown-item command="profile">
@@ -89,17 +100,24 @@
         <el-radio v-if="canWriteImpersonate" label="write">代操作</el-radio>
       </el-radio-group>
     </div>
-    <el-input v-model="empSearch" placeholder="搜尋員工姓名 / 工號" clearable style="margin-bottom: 12px" />
+    <el-input
+      v-model="empSearch"
+      aria-label="搜尋員工姓名或工號"
+      placeholder="搜尋員工姓名 / 工號"
+      clearable
+      style="margin-bottom: 12px"
+    />
     <el-scrollbar max-height="320px">
-      <div
+      <button
         v-for="emp in filteredEmployees"
         :key="emp.id"
+        type="button"
         class="emp-picker-item"
         @click="doImpersonate(emp.id)"
       >
         <span>{{ emp.employee_id }} — {{ emp.name }}</span>
         <span class="emp-title">{{ emp.job_title || emp.title || emp.position || '' }}</span>
-      </div>
+      </button>
       <div v-if="filteredEmployees.length === 0" style="padding: 12px; color: var(--text-tertiary); text-align: center;">
         無符合條件的員工
       </div>
@@ -122,8 +140,10 @@ import A11yMenu from '@/components/common/A11yMenu.vue'
 
 withDefaults(defineProps<{
   isMobile?: boolean
+  sidebarOpen?: boolean
 }>(), {
   isMobile: false,
+  sidebarOpen: false,
 })
 
 interface EmployeeItem {
@@ -136,10 +156,15 @@ interface EmployeeItem {
 }
 
 const globalSearchRef = ref<InstanceType<typeof GlobalSearch> | null>(null)
+const sidebarToggleRef = ref<HTMLButtonElement | null>(null)
 const openSearch = () => globalSearchRef.value?.open()
 defineEmits<{
   'toggle-sidebar': []
 }>()
+
+defineExpose({
+  focusSidebarToggle: () => sidebarToggleRef.value?.focus(),
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -301,6 +326,10 @@ const handleCommand = (command: string) => {
   cursor: pointer;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-md);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
   transition: background-color var(--transition-base);
 }
 
@@ -337,8 +366,8 @@ const handleCommand = (command: string) => {
   justify-content: center;
   align-items: center;
   gap: 5px;
-  width: 40px;
-  height: 40px;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -351,11 +380,16 @@ const handleCommand = (command: string) => {
   height: 2px;
   background-color: var(--text-primary);
   border-radius: 2px;
-  transition: all var(--transition-slow);
 }
 
 /* Employee Picker */
 .emp-picker-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   padding: 8px 12px;
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -439,7 +473,8 @@ const handleCommand = (command: string) => {
   }
 
   .search-trigger {
-    min-width: unset;
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
     padding: 6px 8px;
   }
 

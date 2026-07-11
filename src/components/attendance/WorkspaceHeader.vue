@@ -1,7 +1,7 @@
 <template>
   <div class="workspace-header">
     <div class="workspace-header__nav">
-      <el-button :icon="ArrowLeft" circle size="small" @click="prevMonth" />
+      <el-button aria-label="上個月" :icon="ArrowLeft" circle size="small" @click="prevMonth" />
       <el-select
         :model-value="year"
         style="width: 100px"
@@ -18,7 +18,7 @@
       >
         <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
       </el-select>
-      <el-button :icon="ArrowRight" circle size="small" @click="nextMonth" />
+      <el-button aria-label="下個月" :icon="ArrowRight" circle size="small" @click="nextMonth" />
     </div>
 
     <div class="workspace-header__kpis">
