@@ -748,65 +748,51 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
 }
 
 // Auth guard
-router.beforeEach(async (to, _from, next) => {
+// return-style（Vue Router 4）：回傳路由目標＝redirect、回傳 true＝放行；
+// 不再用已 deprecated 的 next() callback（每次導航會噴 deprecation warning）。
+router.beforeEach(async (to) => {
     startRouteLoading()
 
-    let { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
+    const { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁
     if (loggedIn && userInfo?.must_change_password && !to.meta.mustChangePassword && !to.meta.noAuth) {
         const changeRoute = userInfo.role === 'teacher' ? '/portal/change-password' : '/change-password'
         if (to.path !== changeRoute) {
-            next(changeRoute)
-            return
+            return changeRoute
         }
     }
 
     // Portal routes
     if (to.meta.requiresAuth && !loggedIn) {
-        next('/portal/login')
-        return
+        return '/portal/login'
     }
 
     if (to.path === '/portal/login' && loggedIn) {
-        next('/portal/attendance')
-        return
+        return '/portal/attendance'
     }
 
     // Admin routes: require login unless marked noAuth or portal
     if (!to.meta.noAuth && !to.meta.portal && !loggedIn) {
-        next('/login')
-        return
+        return '/login'
     }
 
     if (to.path === '/login' && loggedIn) {
         // 已登入時根據角色導向
-        if (userInfo?.role === 'teacher') {
-            next('/portal/attendance')
-        } else {
-            next('/')
-        }
-        return
+        return userInfo?.role === 'teacher' ? '/portal/attendance' : '/'
     }
 
     // teacher 不可存取管理後台路由，強制導回 portal
     if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role === 'teacher') {
-        next('/portal/attendance')
-        return
+        return '/portal/attendance'
     }
 
     // 權限檢查：admin 路由且已登入（非 teacher）
     if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role !== 'teacher') {
         if (!canAccessRoute(to.path)) {
-            // 無權限，導向第一個有權限的路由
+            // 無權限，導向第一個有權限的路由；完全沒有權限時導向登入頁
             const allowedRoutes = getAllowedRoutes()
-            if (allowedRoutes.length > 0) {
-                next(allowedRoutes[0])
-            } else {
-                // 完全沒有權限時導向登入頁
-                next('/login')
-            }
-            return
+            return allowedRoutes.length > 0 ? allowedRoutes[0] : '/login'
         }
     }
 
@@ -819,13 +805,12 @@ router.beforeEach(async (to, _from, next) => {
     if (loggedIn && to.meta.portal && to.meta.permission) {
         if (!hasPortalPermission(to.meta.permission as string)) {
             if (to.path !== '/portal/home') {
-                next('/portal/home')
-                return
+                return '/portal/home'
             }
         }
     }
 
-    next()
+    return true
 })
 
 router.afterEach(() => {
