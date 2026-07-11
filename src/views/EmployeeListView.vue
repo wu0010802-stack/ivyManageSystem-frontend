@@ -36,6 +36,13 @@ const employeeCardColumns = [
 
 const loading = ref(false)
 
+// #4 收斂捲動語境：桌機表格高度改隨視口計算，取代寫死的 max-height="600"。
+// 固定 600 在矮視窗會讓「el-main 外捲 + 表格內捲」雙層疊加、在高視窗又留死空白；
+// 改用視口高度扣掉表格上方（AdminHeader＋Hub tab 列＋頁首）與下方留白後的實測 offset，
+// 讓清單頁本身不外捲、僅表格內部單一捲動、且表頭固定。offset 依 1470×700 實測校準；
+// 手機走卡片視圖（v-else）不套此表格，故不受影響。
+const tableMaxHeight = 'calc(100dvh - 352px)'
+
 // ── 權限 ──────────────────────────────────────────────
 const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
 const canResetPunchPin = computed(() => hasPermission('ATTENDANCE_WRITE'))
@@ -368,7 +375,7 @@ onMounted(async () => {
         v-loading="loading"
         stripe
         style="width: 100%"
-        max-height="600"
+        :max-height="tableMaxHeight"
         :row-class-name="rowClassName"
         @row-click="onRowClick"
       >
