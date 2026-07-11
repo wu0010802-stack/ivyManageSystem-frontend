@@ -297,10 +297,14 @@ const resetForm = () => {
 
 const populateForm = (row: Record<string, unknown>) => {
   Object.assign(form, row)
-  form.base_salary = Number(row.base_salary)
-  form.hourly_rate = Number(row.hourly_rate)
-  // 投保級距若為 0 或與底薪不一致，開啟編輯時自動對齊底薪
-  if (!form.insurance_salary_level || form.insurance_salary_level !== form.base_salary) {
+  // #9 遮罩薪資（無薪資權限）時後端把金額欄回 null；不可用 Number(null)=0 轉型，否則唯讀端
+  // fmtRO 收到 0 會顯示「NT$0」（把「看不到」誤呈現成「0 元」），且 0 帶進 dirty 快照有以 0
+  // 覆寫真實薪資的風險。保留 null，唯讀端才會顯示「—」。
+  const toAmountOrNull = (v: unknown) => (v == null || v === '' ? null : Number(v))
+  form.base_salary = toAmountOrNull(row.base_salary)
+  form.hourly_rate = toAmountOrNull(row.hourly_rate)
+  // 投保級距若為 0 或與底薪不一致，開啟編輯時自動對齊底薪；但底薪為 null（遮罩）時保持 null 不塞 0
+  if (form.base_salary != null && (!form.insurance_salary_level || form.insurance_salary_level !== form.base_salary)) {
     form.insurance_salary_level = form.base_salary
   }
   // 重置 tab + dirty 快照 + suggestion dismiss

@@ -29,4 +29,16 @@ describe('EmployeeFormSalary — A+C', () => {
     const wrapper = mountForm({ form: { base_salary: 30000 }, isReadonly: true })
     expect(wrapper.find('.readonly-text').exists()).toBe(true)
   })
+
+  // #9 遮罩不變量①：唯讀且值為 null（無薪資權限被後端遮罩）時，底薪須顯示「—」而非 0/NT$0，
+  // 避免把「無權限看不到」誤呈現成「底薪 0 元」。fmtRO 對 null 回「—」。
+  it('isReadonly 遮罩 null 底薪顯示「—」不顯示 0', () => {
+    const wrapper = mountForm({
+      form: { base_salary: null, hourly_rate: null, insurance_salary_level: null },
+      isReadonly: true,
+    })
+    const baseRO = wrapper.findAll('.readonly-text')[0] // 底薪為第一個唯讀欄
+    expect(baseRO.text()).toContain('—')
+    expect(baseRO.text()).not.toContain('0')
+  })
 })
