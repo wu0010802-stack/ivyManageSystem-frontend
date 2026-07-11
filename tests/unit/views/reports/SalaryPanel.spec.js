@@ -1,9 +1,11 @@
 /**
  * SalaryPanel.spec.js
  *
- * 2026-07-05 報表重構：「獎金」系列 label 澄清為「獎金合計（含已計入應發之績效/
- * 特殊獎金）」，並在 tooltip 註明不可與應發相加（避免使用者誤將「應發+獎金」
- * 相加算成實際成本）。
+ * 2026-07-05 報表重構：獎金相關 tooltip 加註不可與應發相加（避免使用者誤將
+ * 「應發+獎金」相加算成實際成本）。
+ * 2026-07-11（spec §8 圖表編碼重整，Task 11）：獎金/加班不再是獨立 dataset
+ * （改為 tooltip afterBody 顯示），警語隨之搬到 afterBody；本檔斷言同步更新，
+ * 新測試見兄弟樹 src/views/reports/__tests__/SalaryPanel.test.ts。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -43,7 +45,7 @@ beforeEach(() => {
 })
 
 describe('SalaryPanel 獎金 label 澄清', () => {
-  it('獎金資料集 label 含「不可相加」語意提示，且 tooltip 對獎金加註不可與應發相加', async () => {
+  it('只剩應發/實發兩個 dataset；tooltip afterBody 對獎金合計加註不可與應發相加', async () => {
     const w = mount(SalaryPanel, {
       props: { year: 2026 },
       // SalaryContributorsDialog（子元件，恆渲染但 modelValue=false 隱藏）用
@@ -54,17 +56,17 @@ describe('SalaryPanel 獎金 label 澄清', () => {
     await flushPromises()
 
     const bar = w.findComponent({ name: 'BarChart' })
-    const bonusDataset = bar.props('data').datasets.find(d => d.label.startsWith('獎金合計'))
-    expect(bonusDataset).toBeTruthy()
-    expect(bonusDataset.label).toContain('已計入應發之績效/特殊獎金')
+    expect(bar.props('data').datasets.map(d => d.label)).toEqual(['應發總額', '實發總額'])
 
+    // 應發/實發本身的 label callback 不應被誤加註不可相加警語
     const tooltipLabel = bar.props('options').plugins.tooltip.callbacks.label
-    const bonusLine = tooltipLabel({ dataset: { label: bonusDataset.label }, parsed: { y: 5000 } })
-    expect(bonusLine).toEqual(expect.arrayContaining([expect.stringContaining('不可與應發相加')]))
-
-    // 其他系列（應發總額）不應被誤加註
     const grossLine = tooltipLabel({ dataset: { label: '應發總額' }, parsed: { y: 100000 } })
     expect(typeof grossLine).toBe('string')
     expect(grossLine).not.toContain('不可與應發相加')
+
+    // 獎金合計改由 afterBody 顯示，警語隨之搬過去
+    const afterBody = bar.props('options').plugins.tooltip.callbacks.afterBody
+    const lines = afterBody([{ dataIndex: 0 }])
+    expect(lines).toEqual(expect.arrayContaining([expect.stringContaining('不可與應發相加')]))
   })
 })
