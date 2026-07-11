@@ -92,7 +92,10 @@ const period = computed(() => computeReportPeriod(props.year, trend.value))
 // 整年模式 KPI 主數字：截至實際發生口徑（取代後端 summary 全年口徑——全年口徑含
 // 未來月預登錄固定支出，會讓「本年總支出」在年中就跳成年底金額）；單月模式沿用 summary。
 const actuals = computed(() => sumTrendUpTo(trend.value, period.value.cutoffMonth))
-const prelogged = computed(() => futurePreloggedExpense(trend.value, period.value.lastActualMonth ?? 0))
+// afterMonth 統一用 cutoffMonth（與 actuals 加總邊界一致，OverviewPanel 同款；
+// 2026-07-11 review F4：舊版用 lastActualMonth 會在「cutoff 內最後一月尚無資料」
+// 時把 cutoff 內的空月也算進「未來預登錄」區間，口徑與 actuals 不對齊）。
+const prelogged = computed(() => futurePreloggedExpense(trend.value, period.value.cutoffMonth))
 const expenseNote = computed(() =>
   selectedMonth.value == null && prelogged.value.total > 0
     ? `全年含預登錄：${money(summary.value.total_expense)}` : undefined)

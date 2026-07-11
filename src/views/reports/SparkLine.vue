@@ -10,7 +10,9 @@ const W = 120
 const H = 36
 const PAD = 3
 
-// 只連有值的點；x 依 12 格均分，null 中斷
+// 單一 polyline；x 依 12 格均分，null 點直接跳過（不畫該點），前後有值的點會被
+// 直連——不是「中斷」成多段線。目前所有呼叫端（如出勤率 series）只在尾端塞
+// null（未來月），視覺上等同截斷；若中段出現 null，該處會被直線連過去，非空隙。
 const points = computed(() => {
   const vals = props.values
   const nums = vals.filter((v): v is number => v != null)

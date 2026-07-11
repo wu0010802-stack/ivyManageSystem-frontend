@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { deltaKind } from './financeTrend'
 
 export interface KpiTrendItem {
@@ -42,15 +43,15 @@ function trendText(item: KpiTrendItem): string {
   return `${kind === 'up' ? '↑' : '↓'} ${fmtPct(item.delta)}`
 }
 
-const visibleTrends = () =>
-  (props.trends || []).filter(t => t.delta != null || t.emptyText)
+const visibleTrends = computed(() =>
+  (props.trends || []).filter(t => t.delta != null || t.emptyText))
 </script>
 
 <template>
   <el-card class="report-kpi" :class="accent ? `report-kpi--${accent}` : ''" shadow="never">
     <div class="kpi-label">{{ label }}</div>
     <div class="kpi-value" :class="valueClass" :data-test="valueTest">{{ value }}</div>
-    <div v-for="item in visibleTrends()" :key="item.label" class="kpi-trend" :data-test="item.test">
+    <div v-for="item in visibleTrends" :key="item.label" class="kpi-trend" :data-test="item.test">
       <template v-if="item.delta != null">
         <span :class="trendClass(item)">{{ trendText(item) }}</span>
         <span class="kpi-trend-label">{{ item.label }}</span>
