@@ -38,8 +38,9 @@ const finance = useCachedAsync(
   () => getFinanceSummary(props.year).then(r => r.data),
   { ttl: 300_000 }
 )
-// YoY：整年對比去年同期（金額指標）。與 finance 共用同一把 cache key 格式，
-// 若使用者曾把年度切到去年，這裡會直接命中快取。
+// YoY：抓去年整年 monthly_trend，實際比較時再用 sumTrendUpTo 截到與今年同一個
+// cutoffMonth（見下方 yoy computed），故只需存一份去年資料即可算「去年同期」。
+// 與 finance 共用同一把 cache key 格式，若使用者曾把年度切到去年，這裡會直接命中快取。
 const prevYearFinance = useCachedAsync(
   `reports/finance:${props.year - 1}`,
   () => getFinanceSummary(props.year - 1).then(r => r.data),
@@ -96,16 +97,22 @@ const mom = computed(() => {
   }
 })
 
-// YoY：呼叫 getFinanceSummary(year-1) 取整年加總對比。去年無資料（分母為 0）
-// 時 pctChange 回 null，UI 顯示「無去年資料」而非 -100%/∞。
+// YoY：呼叫 getFinanceSummary(year-1) 取「去年同期」（非去年全年）對比，與 KPI
+// 主數字（actuals，截至 cutoffMonth）口徑對齊（2026-07-11 review F1）——舊版拿
+// finance.summary（全年口徑）比 prevYearFinance.summary（去年全年），年中檢視時
+// 支出/淨現金 YoY 分子會含未來月預登錄固定支出（本次改版要修的虛胖又跑回來），
+// 且「今年部分年 vs 去年完整年」會低估收入成長。改用 sumTrendUpTo 各自加總到同一
+// 個 cutoffMonth 再比較；過去年檢視 cutoff=12 等同全年（行為不變）。去年無資料
+// （trend 空陣列 → sumTrendUpTo 回全 0）時 pctChange 分母為 0 → 回 null，UI 顯示
+// 「無去年資料」路徑不變。
 const yoy = computed(() => {
-  const curr = finance.data.value?.summary
-  const prev = prevYearFinance.data.value?.summary
-  if (!curr || !prev) return null
+  if (!finance.data.value || !prevYearFinance.data.value) return null
+  const currYtd = actuals.value
+  const prevYtd = sumTrendUpTo(prevYearFinance.data.value?.monthly_trend || [], period.value.cutoffMonth)
   return {
-    revenue: pctChange(curr.total_revenue, prev.total_revenue),
-    expense: pctChange(curr.total_expense, prev.total_expense),
-    net: pctChange(curr.net_cashflow, prev.net_cashflow),
+    revenue: pctChange(currYtd.revenue, prevYtd.revenue),
+    expense: pctChange(currYtd.expense, prevYtd.expense),
+    net: pctChange(currYtd.net, prevYtd.net),
   }
 })
 
@@ -301,10 +308,7 @@ const formatFetchedAt = (ts: number) => {
 <template>
   <el-skeleton v-if="loading" :rows="10" animated />
   <div v-else class="overview">
-    <div v-if="financeUnavailable" class="section-error" data-test="finance-error">
-      <el-empty :description="financeErrorText" />
-    </div>
-    <template v-else>
+    <template v-if="!financeUnavailable">
       <el-row :gutter="16" class="kpi-row">
         <el-col :xs="12" :sm="6">
           <ReportKpiCard
@@ -312,7 +316,7 @@ const formatFetchedAt = (ts: number) => {
             :value="money(actuals.net)" :value-class="netClass" value-test="kpi-net-cashflow"
             :trends="[
               { label: 'vs 上月', delta: mom?.net ?? null, test: 'mom-net' },
-              { label: 'vs 去年', delta: yoy?.net ?? null, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-net' },
+              { label: 'vs 去年同期', delta: yoy?.net ?? null, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-net' },
             ]"
             :note="netNote" note-test="kpi-net-note" sub="（收入-退款-支出）"
           />
@@ -323,7 +327,7 @@ const formatFetchedAt = (ts: number) => {
             :value="money(actuals.revenue)" value-test="kpi-total-revenue"
             :trends="[
               { label: 'vs 上月', delta: mom?.revenue ?? null, test: 'mom-revenue' },
-              { label: 'vs 去年', delta: yoy?.revenue ?? null, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-revenue' },
+              { label: 'vs 去年同期', delta: yoy?.revenue ?? null, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-revenue' },
             ]"
             sub="（未扣退款）"
           />
@@ -334,7 +338,7 @@ const formatFetchedAt = (ts: number) => {
             :value="money(actuals.expense)" value-test="kpi-total-expense"
             :trends="[
               { label: 'vs 上月', delta: mom?.expense ?? null, invert: true, test: 'mom-expense' },
-              { label: 'vs 去年', delta: yoy?.expense ?? null, invert: true, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-expense' },
+              { label: 'vs 去年同期', delta: yoy?.expense ?? null, invert: true, emptyText: yoy ? '無去年資料' : undefined, test: 'yoy-expense' },
             ]"
             :note="expenseNote" note-test="kpi-expense-note"
           />
@@ -350,43 +354,47 @@ const formatFetchedAt = (ts: number) => {
       <div class="kpi-band-note" data-test="kpi-band-note">
         截至 {{ period.lastActualMonth ?? '—' }} 月實際發生；含固定支出、廠商付款；不含年終獎金（另行轉帳）
       </div>
-
-      <el-row :gutter="16">
-        <el-col :xs="24" :lg="16">
-          <el-card class="chart-card" shadow="never">
-            <template #header><span class="chart-title">年度收支趨勢（點擊資料點看該月明細）</span></template>
-            <div class="chart-container"><LineChart :data="trendChartData" :options="trendChartOptions" /></div>
-          </el-card>
-        </el-col>
-        <el-col :xs="24" :lg="8">
-          <!-- c. 異常與待辦 -->
-          <el-card class="todo-card" shadow="never">
-            <template #header><span class="chart-title">異常與待辦</span></template>
-            <ul class="todo-list" data-test="todo-list">
-              <li v-for="item in todoItems" :key="item.key" class="todo-item" :data-test="`todo-item-${item.key}`">
-                <el-icon :size="14" class="todo-icon-warn"><Warning /></el-icon>
-                <span>{{ item.text }}</span>
-              </li>
-              <li v-if="todoItems.length === 0" class="todo-item todo-empty" data-test="todo-empty">
-                <el-icon :size="14" class="todo-icon-ok"><CircleCheck /></el-icon>
-                <span>目前無異常待辦</span>
-              </li>
-            </ul>
-            <router-link
-              v-if="signoffLinkState === 'action' || signoffLinkState === 'neutral'"
-              class="todo-link"
-              :to="{ path: '/finance-signoffs' }"
-              data-test="todo-signoff-link"
-            >
-              <el-icon :size="14"><LinkIcon /></el-icon>
-              {{ signoffLinkState === 'action'
-                ? '前往「收支簽收」處理待簽收項目'
-                : '廠商付款／雜項收款簽收狀態請至「收支簽收」查看' }}
-            </router-link>
-          </el-card>
-        </el-col>
-      </el-row>
     </template>
+
+    <el-row :gutter="16">
+      <el-col :xs="24" :lg="16">
+        <div v-if="financeUnavailable" class="section-error" data-test="finance-error">
+          <el-empty :description="financeErrorText" />
+        </div>
+        <el-card v-else class="chart-card" shadow="never">
+          <template #header><span class="chart-title">年度收支趨勢（點擊資料點看該月明細）</span></template>
+          <div class="chart-container"><LineChart :data="trendChartData" :options="trendChartOptions" /></div>
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :lg="8">
+        <!-- c. 異常與待辦：資料源為 dashboard/fixedCost/signoff，與 finance 是否可用無關
+             （2026-07-11 review F2），故獨立於 financeUnavailable 之外渲染，不受連坐。 -->
+        <el-card class="todo-card" shadow="never">
+          <template #header><span class="chart-title">異常與待辦</span></template>
+          <ul class="todo-list" data-test="todo-list">
+            <li v-for="item in todoItems" :key="item.key" class="todo-item" :data-test="`todo-item-${item.key}`">
+              <el-icon :size="14" class="todo-icon-warn"><Warning /></el-icon>
+              <span>{{ item.text }}</span>
+            </li>
+            <li v-if="todoItems.length === 0" class="todo-item todo-empty" data-test="todo-empty">
+              <el-icon :size="14" class="todo-icon-ok"><CircleCheck /></el-icon>
+              <span>目前無異常待辦</span>
+            </li>
+          </ul>
+          <router-link
+            v-if="signoffLinkState === 'action' || signoffLinkState === 'neutral'"
+            class="todo-link"
+            :to="{ path: '/finance-signoffs' }"
+            data-test="todo-signoff-link"
+          >
+            <el-icon :size="14"><LinkIcon /></el-icon>
+            {{ signoffLinkState === 'action'
+              ? '前往「收支簽收」處理待簽收項目'
+              : '廠商付款／雜項收款簽收狀態請至「收支簽收」查看' }}
+          </router-link>
+        </el-card>
+      </el-col>
+    </el-row>
 
     <el-row :gutter="16">
       <el-col :xs="24" :sm="8">
