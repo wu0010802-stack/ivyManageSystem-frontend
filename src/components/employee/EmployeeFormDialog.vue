@@ -86,9 +86,10 @@ interface EmployeeForm {
   email: string
   insurance_effective_date: string
   classroom_id: number | null
-  base_salary: number
-  hourly_rate: number
-  insurance_salary_level: number
+  // #9 遮罩薪資：無薪資權限時後端把金額欄回 null，form 須容許 null（唯讀端才顯示「—」而非 0）
+  base_salary: number | null
+  hourly_rate: number | null
+  insurance_salary_level: number | null
   pension_self_rate: number
   dependents: number
   bank_code: string
@@ -449,7 +450,14 @@ const saveCreate = async () => {
         if (props[0]) formEl.scrollToField(props[0])
         return
       }
-      const res = await createEmployee(form)
+      // 建立新員工的薪資欄一律有值（初始 0；無薪資權限者也停在 0，不會是遮罩 null，
+      // 遮罩 null 只發生在編輯既有遮罩列）。此處 ?? 0 僅為滿足 API 型別的邊界收斂。
+      const res = await createEmployee({
+        ...form,
+        base_salary: form.base_salary ?? 0,
+        hourly_rate: form.hourly_rate ?? 0,
+        insurance_salary_level: form.insurance_salary_level ?? 0,
+      })
       // 持久成功回饋（reviewer 裁定）：MessageBox 可被 Esc/點遮罩快速關閉，
       // toast 與引導框並存，確保成功訊息不因引導框被關而消失。
       ElMessage.success('員工已新增')
