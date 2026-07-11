@@ -224,7 +224,11 @@ html.ivy-admin .el-table .el-table__cell {
 
 /* Dialog - responsive on mobile */
 @media (--to-sm) {
-  .el-dialog {
+  /* :not(.is-fullscreen)：手機下非滿版對話框收成 95% 置中；但對 :fullscreen="isMobile"
+     的滿版對話框（員工表單／證照 CredentialsSection）不可套此規則——否則 width:95%!important
+     會蓋掉 EP .is-fullscreen 的 --el-dialog-width:100%，變成露背景、留邊距的「假滿版」。
+     排除後滿版對話框回到 EP 原生 width:100% / margin:0 / border-radius:0 / height:100%。 */
+  .el-dialog:not(.is-fullscreen) {
     width: 95% !important;
     margin: var(--space-4) auto !important;
   }
