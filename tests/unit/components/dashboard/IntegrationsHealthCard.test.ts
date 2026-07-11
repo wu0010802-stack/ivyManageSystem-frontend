@@ -35,20 +35,20 @@ function makeHealth(supabaseOverrides: Record<string, unknown> = {}) {
 }
 
 describe('IntegrationsHealthCard — Supabase final_failed', () => {
-  it('final_failed > 0 時顯示「永久失敗」筆數並觸發整體告警', () => {
+  it('final_failed > 0 時顯示「同步失敗（已停止重試）」筆數並觸發整體告警', () => {
     state.data = makeHealth({ final_failed: 3 })
     const wrapper = mount(IntegrationsHealthCard)
     const text = wrapper.text()
-    expect(text).toContain('永久失敗')
+    expect(text).toContain('同步失敗（已停止重試）')
     expect(text).toContain('3')
     expect(text).toContain('部分整合異常')
   })
 
-  it('final_failed = 0 且無其他異常時不顯示「永久失敗」', () => {
+  it('final_failed = 0 且無其他異常時不顯示同步失敗列', () => {
     state.data = makeHealth()
     const wrapper = mount(IntegrationsHealthCard)
     const text = wrapper.text()
-    expect(text).not.toContain('永久失敗')
+    expect(text).not.toContain('同步失敗')
     expect(text).toContain('所有外部整合運作正常')
   })
 })

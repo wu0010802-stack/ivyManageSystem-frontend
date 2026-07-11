@@ -163,7 +163,7 @@ describe('HomeView', () => {
     delete window.IntersectionObserver
   })
 
-  it('今日待辦三來源在 mount 時即並行抓取（不等捲動進場），其餘次要區塊仍懶載', async () => {
+  it('今日待辦三來源與行事曆在 mount 時即並行抓取，無區塊需捲動懶載', async () => {
     shallowMount(HomeView, { global: globalConfig })
 
     await flushPromises()
@@ -181,17 +181,14 @@ describe('HomeView', () => {
     expect(getTodayAnomalies).toHaveBeenCalledTimes(1)
     expect(getStudentAttendanceSummary).toHaveBeenCalledTimes(1)
 
-    // 與待辦無關的次要區塊仍懶載，不在首屏一次轟
-    expect(getUpcomingEvents).not.toHaveBeenCalled()
+    // 行事曆在 lg 首屏即可見，2026-07-11 起改 eager 與待辦同波
+    expect(getUpcomingEvents).toHaveBeenCalledTimes(1)
+    // probation 死接線已移除（頁面從未渲染），dashboard 不再打此 API
     expect(getProbationAlerts).not.toHaveBeenCalled()
 
-    // 待辦兩支已 eager，不再 observe；只剩 calendar 需要捲動進場才抓
+    // 所有區塊皆 eager 或已在載入中，observer 建立但無任何目標需要 observe
     expect(intersectionObservers).toHaveLength(1)
-    expect(intersectionObservers[0].observe).toHaveBeenCalledTimes(1)
-
-    intersectionObservers[0].trigger([0])
-    await flushPromises()
-    expect(getUpcomingEvents).toHaveBeenCalledTimes(1)
+    expect(intersectionObservers[0].observe).not.toHaveBeenCalled()
   })
 
   it('快速操作 8 個磚塊都是可鍵盤聚焦的 <a> 元素，並有 href', async () => {
