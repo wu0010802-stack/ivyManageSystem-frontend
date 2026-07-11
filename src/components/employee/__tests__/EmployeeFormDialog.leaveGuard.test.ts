@@ -59,8 +59,12 @@ describe('EmployeeFormDialog 離開編輯保護', () => {
     confirmMock.mockReset()
   })
 
-  it('編輯模式有未儲存變更 → attemptClose 彈確認；選「繼續編輯」則不關閉', async () => {
-    confirmMock.mockRejectedValue('cancel')
+  // #6：確認框預設焦點須落在安全動作「繼續編輯」（confirm 為 primary＋預設焦點），
+  // 破壞性的「捨棄變更並離開」改為 danger 樣式的 cancel、不持預設焦點，Enter 不會誤丟資料。
+  // 語意：confirm(resolve)=繼續編輯→不關閉；cancel(reject 'cancel')=捨棄→關閉；
+  //       close(reject 'close', Esc/X)=安全預設→不關閉。
+  it('選「繼續編輯」（confirm/預設焦點）→ 不關閉、資料保留', async () => {
+    confirmMock.mockResolvedValue('confirm')
     const wrapper = mountDialog()
     const vm = wrapper.vm as unknown as Vm
     vm.openEdit({ ...EDIT_ROW })
@@ -73,8 +77,8 @@ describe('EmployeeFormDialog 離開編輯保護', () => {
     expect(vm.dialogVisible).toBe(true)
   })
 
-  it('編輯模式有未儲存變更 → 選「捨棄變更並離開」則關閉', async () => {
-    confirmMock.mockResolvedValue('confirm')
+  it('選「捨棄變更並離開」（danger cancel）→ 關閉', async () => {
+    confirmMock.mockRejectedValue('cancel')
     const wrapper = mountDialog()
     const vm = wrapper.vm as unknown as Vm
     vm.openEdit({ ...EDIT_ROW })
@@ -85,6 +89,36 @@ describe('EmployeeFormDialog 離開編輯保護', () => {
     await flushPromises()
     expect(confirmMock).toHaveBeenCalledOnce()
     expect(vm.dialogVisible).toBe(false)
+  })
+
+  it('Esc / 關閉鈕（close）→ 不關閉（安全預設，Enter/Esc 皆不丟資料）', async () => {
+    confirmMock.mockRejectedValue('close')
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as Vm
+    vm.openEdit({ ...EDIT_ROW })
+    await flushPromises()
+    vm.form.base_salary = 32000
+    await nextTick()
+    vm.attemptClose()
+    await flushPromises()
+    expect(vm.dialogVisible).toBe(true)
+  })
+
+  it('傳給 ElMessageBox 的選項：繼續編輯為 confirm、捨棄為 danger cancel、distinguishCancelAndClose', async () => {
+    confirmMock.mockResolvedValue('confirm')
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as Vm
+    vm.openEdit({ ...EDIT_ROW })
+    await flushPromises()
+    vm.form.phone = '0988-123-456'
+    await nextTick()
+    vm.attemptClose()
+    await flushPromises()
+    const opts = confirmMock.mock.calls[0][2] as Record<string, unknown>
+    expect(opts.confirmButtonText).toBe('繼續編輯')
+    expect(opts.cancelButtonText).toBe('捨棄變更並離開')
+    expect(String(opts.cancelButtonClass)).toContain('danger')
+    expect(opts.distinguishCancelAndClose).toBe(true)
   })
 
   it('編輯模式無變更 → attemptClose 直接關閉、不彈確認', async () => {
@@ -98,8 +132,8 @@ describe('EmployeeFormDialog 離開編輯保護', () => {
     expect(vm.dialogVisible).toBe(false)
   })
 
-  it('新增模式填入敏感欄位 → attemptClose 彈確認', async () => {
-    confirmMock.mockRejectedValue('cancel')
+  it('新增模式填入敏感欄位 → attemptClose 彈確認（選繼續編輯不關閉）', async () => {
+    confirmMock.mockResolvedValue('confirm')
     const wrapper = mountDialog()
     const vm = wrapper.vm as unknown as Vm
     vm.openCreate()

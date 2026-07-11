@@ -355,11 +355,22 @@ const hasUnsavedChanges = computed(() =>
 )
 const confirmDiscardIfDirty = (): Promise<boolean> => {
   if (!hasUnsavedChanges.value) return Promise.resolve(true)
+  // #6 破壞性動作不持預設焦點：把安全的「繼續編輯」設為 confirm（primary＋預設焦點，Enter 走此路），
+  // 破壞性的「捨棄變更並離開」改為 danger 樣式的 cancel；distinguishCancelAndClose 讓 Esc/X（close）
+  // 與明確點「捨棄」（cancel）可分辨——只有後者才真正離開，Enter/Esc 皆不會誤丟未儲存資料。
   return ElMessageBox.confirm(
     '有未儲存的變更，離開將遺失未儲存內容（薪資、銀行、身分證等敏感欄位不會保留草稿）。',
     '尚未儲存',
-    { confirmButtonText: '捨棄變更並離開', cancelButtonText: '繼續編輯', type: 'warning' },
-  ).then(() => true).catch(() => false)
+    {
+      confirmButtonText: '繼續編輯',
+      cancelButtonText: '捨棄變更並離開',
+      cancelButtonClass: 'el-button--danger',
+      distinguishCancelAndClose: true,
+      type: 'warning',
+    },
+  )
+    .then(() => false) // 繼續編輯 → 不離開
+    .catch((action) => action === 'cancel') // 捨棄變更並離開 → 離開；Esc/X（close）→ 不離開
 }
 // el-dialog before-close：攔截 X / Esc / 遮罩點擊
 const handleBeforeClose = (done: () => void) => {
