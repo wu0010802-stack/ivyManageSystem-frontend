@@ -7,6 +7,7 @@ import { defineComponent, h, ref } from 'vue'
 import type { VNode } from 'vue'
 import AttendanceSection from '../AttendanceSection.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import { getRecords } from '@/api/attendance'
 
 vi.mock('@/api/attendance', () => ({
   getRecords: vi.fn().mockResolvedValue({
@@ -105,5 +106,58 @@ describe('AttendanceSection 手機 RWD（卡片列表）', () => {
     expect(wrapper.find('.el-tag').exists()).toBe(true)
     expect(wrapper.text()).toContain('編輯')
     expect(wrapper.text()).toContain('刪除')
+  })
+})
+
+// #10：出勤狀態原為英文 raw（normal/late/early_leave/late+early_leave）直接渲染，
+// 一般使用者看不懂。改中文對照（fallback 顯示原值），桌機表格與手機卡片兩渲染點都套。
+describe('AttendanceSection 出勤狀態中文化', () => {
+  const mockGetRecords = getRecords as unknown as ReturnType<typeof vi.fn>
+  const CASES: [string, string][] = [
+    ['normal', '正常'],
+    ['late', '遲到'],
+    ['early_leave', '早退'],
+    ['late+early_leave', '遲到+早退'],
+  ]
+
+  function recordsFor(statuses: string[]) {
+    return statuses.map((s, i) => ({
+      date: `2026-07-${String(i + 1).padStart(2, '0')}`,
+      weekday: '三', punch_in: '08:00', punch_out: '17:00', status: s,
+    }))
+  }
+
+  async function mountWith(statuses: string[], mobile = false) {
+    mockGetRecords.mockResolvedValueOnce({ data: recordsFor(statuses) })
+    mockIsMobile.value = mobile
+    mockHasPermission.mockReturnValue(true)
+    const wrapper = mount(AttendanceSection, {
+      props: { employee: { id: 1, employee_id: 'EMP001', name: '王小明' } },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushPromises()
+    return wrapper
+  }
+
+  beforeEach(() => { mockGetRecords.mockReset(); mockHasPermission.mockReset(); mockIsMobile.value = false })
+
+  it('桌機表格：四值皆顯示中文標籤，無英文 raw', async () => {
+    const wrapper = await mountWith(CASES.map((c) => c[0]))
+    const tags = wrapper.findAll('.el-tag').map((t) => t.text())
+    for (const [, label] of CASES) expect(tags).toContain(label)
+    expect(wrapper.text()).not.toContain('early_leave')
+    expect(wrapper.text()).not.toContain('normal')
+  })
+
+  it('桌機表格：未知狀態 fallback 顯示原值', async () => {
+    const wrapper = await mountWith(['weird_status'])
+    expect(wrapper.find('.el-tag').text()).toBe('weird_status')
+  })
+
+  it('手機卡片：四值皆顯示中文標籤，無英文 raw', async () => {
+    const wrapper = await mountWith(CASES.map((c) => c[0]), true)
+    const tags = wrapper.findAll('.el-tag').map((t) => t.text())
+    for (const [, label] of CASES) expect(tags).toContain(label)
+    expect(wrapper.text()).not.toContain('early_leave')
   })
 })

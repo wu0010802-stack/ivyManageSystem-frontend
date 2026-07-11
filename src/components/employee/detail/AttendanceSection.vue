@@ -47,6 +47,17 @@ const getAttendanceStatusType = (status: string): ElTagType => {
   return 'danger'
 }
 
+// #10 出勤狀態中文化：後端 status 值域 normal/late/early_leave/late+early_leave（見
+// api/attendance/_shared.py），原直接渲染英文 raw 讓一般使用者看不懂。單一來源對照表，
+// 桌機表格與手機卡片兩渲染點共用；未知值 fallback 顯示原字串（不吞資料）。
+const ATTENDANCE_STATUS_LABELS: Record<string, string> = {
+  normal: '正常',
+  late: '遲到',
+  early_leave: '早退',
+  'late+early_leave': '遲到+早退',
+}
+const attendanceStatusLabel = (status: string): string => ATTENDANCE_STATUS_LABELS[status] ?? status
+
 const editAttendance = (row: Record<string, unknown>) => {
   ElMessageBox.prompt('請輸入新的上/下班時間 (格式: HH:MM,HH:MM)', '編輯出勤', {
     confirmButtonText: '確定',
@@ -125,7 +136,7 @@ onMounted(fetchAttendance)
       <el-table-column prop="punch_out" label="下班" />
       <el-table-column prop="status" label="狀態">
         <template #default="scope">
-          <el-tag :type="getAttendanceStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
+          <el-tag :type="getAttendanceStatusType(scope.row.status)">{{ attendanceStatusLabel(String(scope.row.status)) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column v-if="canWrite" label="操作" width="150">
@@ -144,7 +155,7 @@ onMounted(fetchAttendance)
     >
       <template #title="{ item }">{{ item.date }}</template>
       <template #cell-status="{ item }">
-        <el-tag :type="getAttendanceStatusType(String(item.status))">{{ item.status }}</el-tag>
+        <el-tag :type="getAttendanceStatusType(String(item.status))">{{ attendanceStatusLabel(String(item.status)) }}</el-tag>
       </template>
       <template v-if="canWrite" #actions="{ item }">
         <el-button link type="primary" @click="editAttendance(item)">編輯</el-button>
