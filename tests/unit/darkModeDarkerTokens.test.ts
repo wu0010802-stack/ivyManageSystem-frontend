@@ -84,3 +84,21 @@ describe('深色模式 *-darker 反向用法回歸防護（對抗式覆核 2026-
     expect(stats).not.toMatch(/html\.dark[^{]*\.kpi-card[^{]*\.kpi-value/)
   })
 })
+
+describe('報表當月欄高亮（.col-current）dark-mode 覆寫（瀏覽器驗證發現：html.ivy-admin 把 --el-color-primary-light-9/-8 釘死成 light hex，不隨 html.dark 翻轉，導致當月欄整欄白底疊淺字看不到）', () => {
+  it('MonthlyPnLPanel 的 .col-current light 預設仍是 primary-light-9/-8，且有 dark-mode 窄覆寫', () => {
+    const pnl = read('../../src/views/reports/MonthlyPnLPanel.vue')
+    expect(pnl).toMatch(/\.pnl-table \.col-current\s*\{[^}]*--el-color-primary-light-9/)
+    expect(pnl).toMatch(/\.pnl-table thead th\.col-current\s*\{[^}]*--el-color-primary-light-8/)
+    expect(pnl).toMatch(/html\.dark \.pnl-table \.col-current/)
+    expect(pnl).toMatch(/html\.dark \.pnl-table thead th\.col-current/)
+  })
+
+  it('MonthlyFixedCostPanel 的 .col-current light 預設仍是 primary-light-9/-8，且有 dark-mode 窄覆寫', () => {
+    const fc = read('../../src/views/reports/MonthlyFixedCostPanel.vue')
+    expect(fc).toMatch(/\.fc-table \.col-current\s*\{[^}]*--el-color-primary-light-9/)
+    expect(fc).toMatch(/\.fc-table thead th\.col-current\s*\{[^}]*--el-color-primary-light-8/)
+    expect(fc).toMatch(/html\.dark \.fc-table \.col-current/)
+    expect(fc).toMatch(/html\.dark \.fc-table thead th\.col-current/)
+  })
+})
