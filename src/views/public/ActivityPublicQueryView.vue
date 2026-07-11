@@ -224,14 +224,24 @@
           <h2>編輯報名資料</h2>
         </div>
 
-        <div v-if="canMutate" class="info-hint">
-          <strong>提示：</strong>您可以修改以下資料，完成後請點選「儲存修改」按鈕。
+        <!-- 已付款完結（含超繳）：整單前台唯讀鎖定，is_paid 由後端即時計算回傳 -->
+        <div
+          v-if="isPaymentLocked"
+          class="info-hint mutation-locked-hint"
+          data-test="payment-locked-hint"
+        >
+          🔒 此筆報名已完成付款，為保障金流與資料一致性，無法於前台直接修改，如需異動請聯繫校方協助處理。
         </div>
-        <!-- 資安 #5：三欄查詢（無 token）載入 token-bearing 報名時僅供檢視 -->
-        <div v-else class="info-hint mutation-locked-hint">
-          🔒 此報名需使用「報名時取得的查詢連結」才能修改。目前查詢僅供檢視；
-          如需修改，請改用查詢連結開啟本頁，或聯繫校方協助。
-        </div>
+        <template v-else>
+          <div v-if="canMutate" class="info-hint">
+            <strong>提示：</strong>您可以修改以下資料，完成後請點選「儲存修改」按鈕。
+          </div>
+          <!-- 資安 #5：三欄查詢（無 token）載入 token-bearing 報名時僅供檢視 -->
+          <div v-else class="info-hint mutation-locked-hint">
+            🔒 此報名需使用「報名時取得的查詢連結」才能修改。目前查詢僅供檢視；
+            如需修改，請改用查詢連結開啟本頁，或聯繫校方協助。
+          </div>
+        </template>
 
         <!-- 候補位次摘要：依 queryResult.courses 渲染，不依賴 options 列表 -->
         <div
@@ -262,6 +272,57 @@
           </div>
         </div>
 
+        <!-- 已付款鎖定：純文字唯讀摘要，不渲染任何表單控制項與動作按鈕 -->
+        <div
+          v-if="isPaymentLocked"
+          class="payment-locked-summary"
+          data-test="payment-locked-summary"
+        >
+          <div class="field-group">
+            <label>幼兒姓名</label>
+            <div class="readonly-text">{{ queryResult.name }}</div>
+          </div>
+          <div class="field-group">
+            <label>幼兒生日</label>
+            <div class="readonly-text">{{ queryResult.birthday || '—' }}</div>
+          </div>
+          <div class="field-group">
+            <label>寶貝班級</label>
+            <div class="readonly-text">{{ queryResult.class_name || '—' }}</div>
+          </div>
+          <div class="field-group">
+            <label>家長手機</label>
+            <div class="readonly-text">
+              {{ queryResult.parent_phone || normalizeMobile(queryForm.parent_phone) || '—' }}
+            </div>
+          </div>
+          <div class="field-group">
+            <label>才藝課班別</label>
+            <div v-if="(queryResult.courses || []).length === 0" class="readonly-text">無</div>
+            <ul v-else class="readonly-list">
+              <li v-for="c in queryResult.courses" :key="c.name">
+                {{ c.name }}
+                <span v-if="c.price != null" class="price-tag">${{ c.price }}</span>
+                <span v-if="c.status === 'waitlist'" class="badge badge-waitlist">候補中</span>
+                <span v-else-if="c.status === 'promoted_pending'" class="qty-display is-waiting">
+                  已升正式（待確認）
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div class="field-group">
+            <label>舞蹈班代辦品</label>
+            <div v-if="lockedSummarySupplies.length === 0" class="readonly-text">無</div>
+            <ul v-else class="readonly-list">
+              <li v-for="s in lockedSummarySupplies" :key="s.name">
+                {{ s.name }}
+                <span v-if="s.price != null" class="price-tag">${{ s.price }}</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <template v-else>
         <div class="field-group">
           <label>幼兒姓名</label>
           <input :value="queryResult.name" type="text" class="input-text" readonly />
@@ -415,6 +476,7 @@
             {{ editSubmitting ? '儲存中…' : '儲存修改 Save' }}
           </button>
         </div>
+        </template>
       </section>
     </div>
   </div>
@@ -477,6 +539,8 @@ interface QueryResult {
   // 資安 #5：此報名是否需帶 query_token 才能做破壞性 mutation（=後端有 query_token_hash）。
   // 三欄查詢（無 token）載入 token-bearing 報名時，前端據此顯示唯讀。
   query_token_required?: boolean
+  // 是否已完成付款（含超繳），後端即時計算後回傳（非快取值）；true 時整單唯讀鎖定。
+  is_paid?: boolean
 }
 
 const TOAST_ICONS: Record<string, string> = {
@@ -543,6 +607,17 @@ const activeQueryToken = computed(() =>
 // - 否則（舊報名 query_token_required=false）→ 沿用三欄，永遠可改
 const canMutate = computed(
   () => !queryResult.value?.query_token_required || !!activeQueryToken.value,
+)
+
+// 已付款完結（含超繳）整單鎖定：後端 public_update 對此情境一律 409，
+// 前端直接改渲染純文字唯讀摘要（不渲染表單控制項與儲存按鈕）。
+const isPaymentLocked = computed(() => Boolean(queryResult.value?.is_paid))
+
+// 鎖定唯讀摘要用：supplies 容錯舊資料 string，正規化成 {name, price?}
+const lockedSummarySupplies = computed(() =>
+  (queryResult.value?.supplies ?? []).map((s) =>
+    typeof s === 'string' ? { name: s, price: undefined } : s,
+  ),
 )
 
 const editForm = reactive({
@@ -1446,6 +1521,36 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
   background: var(--color-primary-soft);
   border-radius: var(--radius-full);
+}
+
+/* 已付款鎖定：純文字唯讀摘要 */
+.readonly-text {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  font-size: var(--fs-md);
+  color: var(--color-text-muted);
+  background: #f9fafb;
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+}
+.readonly-list {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+  background: #f9fafb;
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+}
+.readonly-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: var(--space-1) 0;
+  font-size: var(--fs-md);
+  color: var(--color-text-muted);
 }
 
 /* 候補位次摘要 */
