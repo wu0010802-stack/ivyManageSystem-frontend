@@ -172,10 +172,38 @@
                   <span class="form-card-header-title">{{ displayFormCardTitle }}</span>
                 </div>
                 <div class="form-card-body">
-                  <div class="form-section-step" :class="{ 'is-active': activeStep === 1 }">
+                  <nav class="registration-steps" aria-label="報名進度">
+                    <button
+                      v-for="step in registrationSteps"
+                      :key="step.number"
+                      type="button"
+                      class="registration-step-tab"
+                      :class="{
+                        'is-active': currentStep === step.number,
+                        'is-complete': highestVisitedStep > step.number,
+                      }"
+                      :disabled="highestVisitedStep < step.number"
+                      :aria-current="currentStep === step.number ? 'step' : undefined"
+                      @click="navigateToVisitedStep(step.number)"
+                    >
+                      <span class="registration-step-index" aria-hidden="true">
+                        {{ highestVisitedStep > step.number ? '✓' : step.number }}
+                      </span>
+                      <span>{{ step.label }}</span>
+                    </button>
+                  </nav>
+
+                  <section
+                    v-show="currentStep === 1"
+                    class="registration-step-panel"
+                    data-registration-step="1"
+                    aria-labelledby="registrationStep1Title"
+                    tabindex="-1"
+                  >
+                  <div class="form-section-step is-active">
                     <span class="step-num">1</span>
                     <div class="step-title-col">
-                      <span class="step-title">寶貝資料</span>
+                      <span id="registrationStep1Title" class="step-title">寶貝資料</span>
                       <span class="step-desc">填寫幼兒基本資訊與聯絡方式</span>
                     </div>
                   </div>
@@ -313,7 +341,15 @@
                     </div>
                   </div>
                   </div><!-- /.form-grid-2col -->
+                  </section>
 
+                  <section
+                    v-show="currentStep === 2"
+                    class="registration-step-panel"
+                    data-registration-step="2"
+                    aria-label="選擇課程與用品"
+                    tabindex="-1"
+                  >
                   <!-- A1-P7：Step 2 抽 CoursePickerSection 元件 -->
                   <CoursePickerSection
                     :courses="courses"
@@ -324,17 +360,17 @@
                     :availability-state="availabilityState"
                     :format-schedule="formatSchedule"
                     :course-advisory="courseAdvisory"
-                    :is-active-step="activeStep === 2"
+                    :is-active-step="currentStep === 2"
                     @toggle="(course) => { toggleCourse(course); clearError('courses') }"
                     @open-video="openVideoModal"
                   />
 
                   <template v-if="supplies.length > 0">
-                    <div class="form-section-step" :class="{ 'is-active': activeStep === 3 }">
-                      <span class="step-num">3</span>
+                    <div class="form-section-step form-subsection-heading">
+                      <span class="step-num" aria-hidden="true">＋</span>
                       <div class="step-title-col">
                         <span class="step-title">加購用品</span>
-                        <span class="step-desc">選填；學習所需材料、配件</span>
+                        <span class="step-desc">選填；需先選至少一門課程，用品可不加購</span>
                       </div>
                     </div>
                   </template>
@@ -363,12 +399,63 @@
                       </div>
                     </div>
                   </div>
+                  </section>
+
+                  <section
+                    v-show="currentStep === 3"
+                    class="registration-step-panel"
+                    data-registration-step="3"
+                    aria-labelledby="registrationStep3Title"
+                    tabindex="-1"
+                  >
+                    <div class="form-section-step is-active">
+                      <span class="step-num">3</span>
+                      <div class="step-title-col">
+                        <span id="registrationStep3Title" class="step-title">確認報名資料</span>
+                        <span class="step-desc">送出前再核對一次，避免聯絡資訊或課程選錯</span>
+                      </div>
+                    </div>
+
+                    <div class="registration-review">
+                      <section class="review-section" aria-labelledby="reviewStudentTitle">
+                        <div class="review-section-heading">
+                          <h4 id="reviewStudentTitle">寶貝與聯絡資料</h4>
+                          <button type="button" class="review-edit-button" @click="navigateToVisitedStep(1)">修改</button>
+                        </div>
+                        <dl class="review-details">
+                          <div><dt>幼兒姓名</dt><dd>{{ form.name }}</dd></div>
+                          <div><dt>幼兒生日</dt><dd>{{ form.birthday }}</dd></div>
+                          <div><dt>寶貝班級</dt><dd>{{ form.class_name }}</dd></div>
+                          <div><dt>家長手機</dt><dd>{{ form.parent_phone }}</dd></div>
+                          <div v-if="form.email"><dt>通知 Email</dt><dd>{{ form.email }}</dd></div>
+                        </dl>
+                      </section>
+
+                      <section class="review-section" aria-labelledby="reviewSelectionTitle">
+                        <div class="review-section-heading">
+                          <h4 id="reviewSelectionTitle">課程與用品</h4>
+                          <button type="button" class="review-edit-button" @click="navigateToVisitedStep(2)">修改</button>
+                        </div>
+                        <ul v-if="selectedCourseReview.length > 0" class="review-selection-list">
+                          <li v-for="item in selectedCourseReview" :key="`review-course-${item.name}`">
+                            <span>{{ item.name }}</span><strong>NT$ {{ item.price.toLocaleString() }}</strong>
+                          </li>
+                        </ul>
+                        <p v-else class="review-empty">尚未選擇課程，請返回上一步完成選課。</p>
+                        <ul v-if="selectedSupplyReview.length > 0" class="review-selection-list review-selection-list--supplies">
+                          <li v-for="item in selectedSupplyReview" :key="`review-supply-${item.name}`">
+                            <span>{{ item.name }} <small>用品</small></span><strong>NT$ {{ item.price.toLocaleString() }}</strong>
+                          </li>
+                        </ul>
+                      </section>
+                    </div>
+                  </section>
                 </div>
               </section>
 
               <transition name="fee-fade">
                 <aside
-                  v-if="selectedAdvisories.length > 0"
+                  v-if="currentStep === 2 && selectedAdvisories.length > 0"
                   class="advisory-panel"
                   role="status"
                   aria-live="polite"
@@ -399,7 +486,7 @@
                    底部，家長勾課程時不用回滾才看到金額 / 送出 -->
               <div class="checkout-stick">
                 <transition name="fee-fade">
-                  <aside v-if="feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
+                  <aside v-if="currentStep > 1 && feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
                     <div class="fee-preview-title">
                       <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-check" /></svg>
                       費用預估
@@ -434,8 +521,26 @@
                   </aside>
                 </transition>
 
-                <div class="submit-bar">
+                <div class="submit-bar registration-nav-actions">
                   <button
+                    v-if="currentStep > 1"
+                    type="button"
+                    class="btn btn-outline registration-back-button"
+                    @click="goToPreviousStep"
+                  >
+                    上一步
+                  </button>
+                  <button
+                    v-if="currentStep < 3"
+                    type="button"
+                    class="btn btn-primary btn-submit"
+                    :disabled="submitButtonDisabled"
+                    @click="continueRegistration"
+                  >
+                    {{ currentStep === 1 ? '下一步：選擇課程與用品' : '下一步：確認資料' }}
+                  </button>
+                  <button
+                    v-else
                     type="submit"
                     class="btn btn-primary btn-submit"
                     :disabled="submitButtonDisabled"
@@ -477,6 +582,10 @@ import { useActivityRegistrationTime } from '@/composables/useActivityRegistrati
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
+import {
+  usePublicRegistrationFlow,
+  type PublicRegistrationStep,
+} from '@/composables/usePublicRegistrationFlow'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
@@ -488,6 +597,11 @@ import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
 import CoursePickerSection from './components/CoursePickerSection.vue'
 
 const router = useRouter()
+const registrationSteps: ReadonlyArray<{ number: PublicRegistrationStep; label: string }> = [
+  { number: 1, label: '寶貝資料' },
+  { number: 2, label: '課程用品' },
+  { number: 3, label: '確認送出' },
+]
 
 // TOAST_ICONS 已搬至 ToastStack 元件（A1-P4）
 
@@ -573,6 +687,8 @@ const {
   maxBirthdayISO,
   minBirthdayISO,
   feePreview,
+  validatePersonalDetails,
+  validateSelections,
   validateForm,
   clearError,
   toggleCourse,
@@ -581,6 +697,15 @@ const {
   normalizeMobile,
   FIELD_FOCUS_ORDER,
 } = usePublicRegistrationForm({ courses, supplies, availability })
+
+const {
+  currentStep,
+  highestVisitedStep,
+  goToStep,
+  completeStep,
+  goToErrorField,
+  resetFlow,
+} = usePublicRegistrationFlow()
 
 const submitting = ref(false)
 const posterLoaded = ref(false)
@@ -670,13 +795,14 @@ const {
 // form.selectedSupplies 在 composable 內推斷為 never[]（空陣列無型別標注）；
 // 以強型別 computed 供模板 .includes() 使用，不改變實際 reactive 物件。
 const selectedSupplies = computed(() => form.selectedSupplies as string[])
-
-// 目前進行到的步驟（給 step header 用 .is-active 加亮，不影響表單行為）
-const activeStep = computed(() => {
-  if (!form.name || !form.birthday || !form.parent_phone || !form.class_name) return 1
-  if (form.selectedCourses.length === 0) return 2
-  return 3
-})
+const selectedCourseReview = computed(() => form.selectedCourses.map((name) => ({
+  name,
+  price: priceFromList(name, courses.value),
+})))
+const selectedSupplyReview = computed(() => form.selectedSupplies.map((name) => ({
+  name,
+  price: priceFromList(name, supplies.value),
+})))
 
 // 報名截止 48h 內彈出的 noticeState 改 sticky，家長滑到底勾課程時仍可見倒數
 const noticeIsUrgent = computed(() => noticeState.value?.title === '報名即將截止')
@@ -711,7 +837,7 @@ function goToQuery() {
 interface CourseItem { name: string; price: number }
 const successModal = reactive<{
   visible: boolean; studentName: string; parentPhone: string; message: string;
-  waitlisted: boolean; enrolledCourses: CourseItem[]; waitlistCourses: CourseItem[];
+  selectedCourses: CourseItem[];
   selectedSupplies: CourseItem[]; totalAmount: number; queryToken: string; editUrl: string; copyHint: string;
   email: string
 }>({
@@ -719,9 +845,7 @@ const successModal = reactive<{
   studentName: '',
   parentPhone: '',
   message: '',
-  waitlisted: false,
-  enrolledCourses: [],
-  waitlistCourses: [],
+  selectedCourses: [],
   selectedSupplies: [],
   totalAmount: 0,
   queryToken: '',
@@ -730,34 +854,24 @@ const successModal = reactive<{
   email: '',
 })
 
-function buildSuccessSummary({ name, parentPhone, email, message, waitlisted, waitlistCourses, queryToken }: {
-  name: string; parentPhone: string; email?: string; message: string; waitlisted?: boolean;
-  waitlistCourses?: string[]; queryToken?: string
+function buildSuccessSummary({ name, parentPhone, email, message, queryToken }: {
+  name: string; parentPhone: string; email?: string; message: string; queryToken?: string
 }) {
-  const waitlistSet = new Set(waitlistCourses || [])
-  const enrolledCourses: CourseItem[] = []
-  const waitlistOnes: CourseItem[] = []
-
-  // 新報名模式：無既有 snapshot，一律用目前 option 價（priceFromList 容錯查價）。
-  form.selectedCourses.forEach((courseName) => {
-    const price = priceFromList(courseName, courses.value)
-    const item: CourseItem = { name: courseName, price }
-    if (waitlistSet.has(courseName)) {
-      waitlistOnes.push(item)
-    } else {
-      enrolledCourses.push(item)
-    }
-  })
+  const selectedCourseItems = form.selectedCourses.map((courseName) => ({
+    name: courseName,
+    price: priceFromList(courseName, courses.value),
+  }))
 
   const supplyItems = form.selectedSupplies.map((supplyName) => ({
     name: supplyName,
     price: priceFromList(supplyName, supplies.value),
   }))
 
-  // 課程只算 enrolled（候補不計）、用品全計入——口徑與 query view feePreview 共用 util 對齊。
+  // Register response 為 anti-enumeration neutral response，不揭露錄取／候補；
+  // 此處只顯示家長本次選擇，金額為所有選項的上限估算。
   const total =
     sumCourseFees(form.selectedCourses, {
-      isEnrolled: (n) => !waitlistSet.has(n),
+      isEnrolled: () => true,
       resolvePrice: (n) => priceFromList(n, courses.value),
     }) +
     sumSupplyFees(form.selectedSupplies, {
@@ -767,9 +881,7 @@ function buildSuccessSummary({ name, parentPhone, email, message, waitlisted, wa
   successModal.studentName = name
   successModal.parentPhone = parentPhone
   successModal.message = message
-  successModal.waitlisted = !!waitlisted
-  successModal.enrolledCourses = enrolledCourses
-  successModal.waitlistCourses = waitlistOnes
+  successModal.selectedCourses = selectedCourseItems
   successModal.selectedSupplies = supplyItems
   successModal.totalAmount = total
   // 編修連結由前端用 window.location.origin 組（後端不知道 frontend host）。
@@ -803,6 +915,7 @@ const FIELD_ELEMENT_ID: Record<string, string> = {
 async function focusFirstError() {
   const field = FIELD_FOCUS_ORDER.find((f) => (errors as Record<string, string>)[f])
   if (!field) return
+  goToErrorField(field)
   await nextTick()
   const el = document.getElementById(FIELD_ELEMENT_ID[field])
   if (!el) return
@@ -812,8 +925,52 @@ async function focusFirstError() {
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
+async function focusStepPanel(step: PublicRegistrationStep) {
+  await nextTick()
+  const panel = document.querySelector<HTMLElement>(`[data-registration-step="${step}"]`)
+  panel?.focus({ preventScroll: true })
+  panel?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+async function navigateToVisitedStep(step: PublicRegistrationStep) {
+  if (!goToStep(step)) return false
+  await focusStepPanel(step)
+  return true
+}
+
+async function continueRegistration() {
+  if (!isRegistrationOpen.value) {
+    showToast('目前不在可報名時段內。', 'warning')
+    return
+  }
+
+  const valid = currentStep.value === 1
+    ? validatePersonalDetails()
+    : validateSelections()
+  if (!valid) {
+    showToast(
+      currentStep.value === 1 ? '請先完成紅字標示的寶貝資料。' : '請至少選一門課程後再繼續。',
+      'error',
+    )
+    await focusFirstError()
+    return
+  }
+
+  const completedStep = currentStep.value
+  if (completeStep(completedStep)) await focusStepPanel(currentStep.value)
+}
+
+async function goToPreviousStep() {
+  if (currentStep.value <= 1) return
+  await navigateToVisitedStep((currentStep.value - 1) as PublicRegistrationStep)
+}
+
 // ===== 送出報名 =====
 async function handleSubmitRegistration() {
+  if (currentStep.value < 3) {
+    await continueRegistration()
+    return
+  }
   if (!isRegistrationOpen.value) {
     showToast('目前不在可報名時段內。', 'warning')
     return
@@ -857,12 +1014,11 @@ async function handleSubmitRegistration() {
       parentPhone,
       email,
       message: result.message || '報名資料已送出',
-      waitlisted: result.waitlisted,
-      waitlistCourses: Array.isArray(result.waitlist_courses) ? result.waitlist_courses : [],
       queryToken: result.query_token,
     })
     showToast(result.message || '報名送出成功！', 'success')
     resetForm()
+    resetFlow()
     await refreshAvailability()
   } catch (err) {
     showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '送出失敗', 'error')
@@ -1271,6 +1427,105 @@ onUnmounted(() => {
 .form-card-header-title { font-weight: 700; font-size: var(--fs-md); color: var(--color-text); }
 .form-card-body { padding: var(--space-2) var(--space-5) var(--space-5); }
 
+.registration-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: var(--space-4) 0 var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.registration-step-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-subtle);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.registration-step-tab:disabled { cursor: not-allowed; opacity: 0.58; }
+.registration-step-tab.is-active {
+  color: var(--color-primary);
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  box-shadow: 0 4px 12px rgba(57, 42, 28, 0.08);
+}
+.registration-step-tab.is-complete:not(.is-active) { color: var(--color-success); }
+.registration-step-tab:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.registration-step-index {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  color: currentColor;
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  line-height: 1;
+}
+.registration-step-panel:focus { outline: none; }
+
+.registration-review {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+.review-section {
+  padding: var(--space-4);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.review-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.review-section-heading h4 { margin: 0; color: var(--color-text); font-size: var(--fs-md); }
+.review-edit-button {
+  padding: 4px 10px;
+  color: var(--color-primary);
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+.review-edit-button:hover { color: var(--color-primary-contrast); background: var(--color-primary); }
+.review-edit-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.review-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+.review-details div { min-width: 0; }
+.review-details dt { color: var(--color-text-subtle); font-size: var(--fs-xs); }
+.review-details dd { margin: 2px 0 0; color: var(--color-text); font-weight: 700; overflow-wrap: anywhere; }
+.review-selection-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.review-selection-list--supplies { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px dashed var(--color-border-strong); }
+.review-selection-list li { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.review-selection-list strong { flex: 0 0 auto; color: var(--color-text); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.review-selection-list small { color: var(--color-text-subtle); font-weight: 400; }
+.review-empty { margin: 0; color: var(--color-text-subtle); font-size: var(--fs-sm); }
+
 /* 區塊段標：① 寶貝資料 / ② 選擇課程 / ③ 加購用品 */
 .form-section-step {
   display: flex;
@@ -1337,12 +1592,11 @@ onUnmounted(() => {
   column-gap: var(--space-5);
 }
 .form-grid-2col .form-row { padding: var(--space-3) 0; }
-/* 4 個欄位 = 兩列：最後一列（item 3、4）拿掉 dashed border */
-.form-grid-2col .form-row:nth-child(n+3) { border-bottom: 0; padding-bottom: 0; }
+/* 第 5 個 Email 欄位獨占最後一列，僅最後一項拿掉 dashed border。 */
+.form-grid-2col .form-row:nth-child(n+5) { border-bottom: 0; padding-bottom: 0; }
 @media (--to-sm) {
   .form-grid-2col { grid-template-columns: 1fr; column-gap: 0; }
   .form-grid-2col .form-row { padding: var(--space-4) 0; }
-  .form-grid-2col .form-row:nth-child(n+3) { border-bottom: 1px dashed var(--color-border); padding-bottom: var(--space-4); }
   .form-grid-2col .form-row:last-child { border-bottom: 0; padding-bottom: 0; }
 }
 .form-label-col { display: flex; flex-direction: column; gap: 2px; }
@@ -1809,6 +2063,9 @@ onUnmounted(() => {
 .btn-primary:disabled { background-color: var(--neutral-300); border-color: var(--neutral-300); color: var(--text-secondary); cursor: not-allowed; box-shadow: none; }
 .submit-bar { margin-top: var(--space-3); }
 .btn-submit { width: 100%; min-height: 56px; font-size: var(--fs-lg); }
+.registration-nav-actions { display: flex; align-items: stretch; gap: var(--space-3); }
+.registration-nav-actions .btn-submit { flex: 1 1 auto; width: auto; }
+.registration-back-button { flex: 0 0 auto; min-width: 112px; }
 
 /* 桌機：fee-preview + submit-bar 一起 sticky 在 viewport 底，家長勾課程時不用
    回滾才看到金額；mobile 維持 inline。注意不用 backdrop-filter（避免落入
@@ -2315,6 +2572,10 @@ onUnmounted(() => {
   /* 為 sticky CTA 預留空間，避免遮擋頁尾文字 */
   .page-body { padding: var(--space-5); padding-bottom: 96px; }
   .form-card-body { padding: var(--space-1) var(--space-4) var(--space-4); }
+  .registration-steps { gap: 4px; padding: 4px; }
+  .registration-step-tab { flex-direction: column; gap: 3px; min-height: 56px; padding: 6px 3px; font-size: 11px; }
+  .registration-step-index { width: 21px; height: 21px; }
+  .review-details { grid-template-columns: 1fr; }
   .btn-actions-row { flex-direction: column; }
   .toast-container { top: auto; bottom: 96px; right: var(--space-3); left: var(--space-3); }
   .toast { min-width: 0; max-width: none; }
@@ -2335,6 +2596,7 @@ onUnmounted(() => {
     z-index: 50;
   }
   .btn-submit { min-height: 52px; font-size: var(--fs-md); }
+  .registration-back-button { min-width: 84px; padding-inline: var(--space-3); }
 
   /* 行動裝置 fee-preview 預留底部空間，避免被吸底 CTA 遮 */
   .fee-preview { margin-bottom: 0; }

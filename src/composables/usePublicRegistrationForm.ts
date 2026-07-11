@@ -112,13 +112,16 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     if (errors[field]) errors[field] = ''
   }
 
-  function validateForm() {
+  function clearPersonalDetailErrors() {
     errors.name = ''
     errors.birthday = ''
     errors.parent_phone = ''
     errors.class_name = ''
     errors.email = ''
-    errors.courses = ''
+  }
+
+  function validatePersonalDetails() {
+    clearPersonalDetailErrors()
 
     const name = form.name.trim()
     const birthday = form.birthday
@@ -158,12 +161,25 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
       errors.email = '請輸入有效的 Email，或留空不填'
     }
 
-    // 與後端 model_validator(_require_at_least_one_item) 對齊：
-    // 至少一門課程「或」一項用品即可送出（允許「只買用品」的合法流程）。
-    if (form.selectedCourses.length === 0 && form.selectedSupplies.length === 0)
-      errors.courses = '請至少選擇一門課程或一項用品'
+    return ['name', 'birthday', 'parent_phone', 'class_name', 'email'].every(
+      (field) => !errors[field as keyof typeof errors],
+    )
+  }
 
-    return FIELD_FOCUS_ORDER.every((f) => !errors[f as keyof typeof errors])
+  function validateSelections() {
+    errors.courses = ''
+    if (form.selectedCourses.length === 0)
+      errors.courses = '請至少選擇一門課程（用品為選填）'
+
+    return !errors.courses
+  }
+
+  function validateForm() {
+    // 兩段都執行，送出時一次呈現完整錯誤，不因第一段失敗而漏掉選課提示。
+    const detailsValid = validatePersonalDetails()
+    const selectionsValid = validateSelections()
+
+    return detailsValid && selectionsValid
   }
 
   /**
@@ -203,6 +219,8 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     maxBirthdayISO,
     minBirthdayISO,
     feePreview,
+    validatePersonalDetails,
+    validateSelections,
     validateForm,
     clearError,
     toggleCourse,

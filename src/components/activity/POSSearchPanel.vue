@@ -135,9 +135,9 @@
 
       <template v-else>
         <div class="pos-cal__nav">
-          <el-button size="small" :icon="ArrowLeft" circle @click="shiftMonth(-1)" />
+          <el-button aria-label="上個月" size="small" :icon="ArrowLeft" circle @click="shiftMonth(-1)" />
           <span class="pos-cal__month">{{ monthLabel }}</span>
-          <el-button size="small" :icon="ArrowRight" circle @click="shiftMonth(1)" />
+          <el-button aria-label="下個月" size="small" :icon="ArrowRight" circle @click="shiftMonth(1)" />
           <el-button size="small" plain @click="gotoToday">今日</el-button>
         </div>
 
@@ -718,7 +718,7 @@ function handleSingleToggle(row: RegistrationEntry) {
   border: 1px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: border-color 0.15s, background-color 0.15s;
   display: flex;
   flex-direction: column;
   gap: 2px;

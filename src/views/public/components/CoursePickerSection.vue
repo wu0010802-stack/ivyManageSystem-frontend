@@ -112,11 +112,11 @@ onUnmounted(cancelPreview)
 
 <template>
   <div class="form-section-step" :class="{ 'is-active': isActiveStep }">
-    <span class="step-num">2</span>
-    <div class="step-title-col">
-      <span class="step-title">選擇才藝課程</span>
-      <span class="step-desc">必選，至少一門；可複選、剩餘名額即時顯示</span>
-    </div>
+      <span class="step-num">2</span>
+      <div class="step-title-col">
+        <span class="step-title">選擇才藝課程</span>
+        <span class="step-desc">至少一門課程；可複選、用品選填、剩餘名額即時顯示</span>
+      </div>
   </div>
 
   <div class="form-row" :class="{ 'has-error': !!errorMessage }">

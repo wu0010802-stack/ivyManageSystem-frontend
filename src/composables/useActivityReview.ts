@@ -394,6 +394,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     }
   }
   function prevWizard() {
+    if (wizard.submitting) return
     if (wizard.index > 0) {
       wizard.index -= 1
       loadWizardRow()
@@ -407,6 +408,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     opts.onChanged()
   }
   async function wizardMatch() {
+    if (wizard.submitting) return
     const row = wizardCurrent.value
     if (!row || !wizard.selected) return
     wizard.submitting = true
@@ -421,6 +423,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     }
   }
   async function wizardForce() {
+    if (wizard.submitting) return
     const row = wizardCurrent.value
     if (!row) return
     wizard.submitting = true
@@ -435,6 +438,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     }
   }
   async function wizardReject() {
+    if (wizard.submitting) return
     const row = wizardCurrent.value
     if (!row) return
     let reason = ''
@@ -464,6 +468,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     }
   }
   function wizardSkip() {
+    if (wizard.submitting) return
     wizard.done.skipped += 1
     advanceWizard()
   }

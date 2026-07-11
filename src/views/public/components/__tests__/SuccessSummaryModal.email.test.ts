@@ -10,8 +10,7 @@ function makeSummary(overrides: Record<string, unknown> = {}) {
     message: '報名資料已送出',
     studentName: '王小明',
     parentPhone: '0912345678',
-    enrolledCourses: [{ name: '圍棋', price: 1000 }],
-    waitlistCourses: [],
+    selectedCourses: [{ name: '圍棋', price: 1000 }],
     selectedSupplies: [],
     totalAmount: 1000,
     queryToken: 'tok_ABC',
@@ -24,12 +23,24 @@ function makeSummary(overrides: Record<string, unknown> = {}) {
 const stubs = { KawaiiStar: true, BrandMark: true }
 
 describe('SuccessSummaryModal email 提示', () => {
-  it('summary.email 有值時顯示「將寄送至」提示（不可用「已寄送」）', () => {
+  it('neutral response 只列本次選擇，不宣稱已錄取或候補', () => {
+    const wrapper = mount(SuccessSummaryModal, {
+      props: { summary: makeSummary() },
+      global: { stubs },
+    })
+    expect(wrapper.text()).toContain('本次選擇課程')
+    expect(wrapper.text()).not.toContain('已報名課程')
+    expect(wrapper.text()).not.toContain('候補課程')
+    expect(wrapper.text()).toContain('錄取／候補')
+  })
+
+  it('summary.email 有值時以條件語氣說明通知信（不可承諾必定寄出）', () => {
     const wrapper = mount(SuccessSummaryModal, {
       props: { summary: makeSummary({ email: 'parent@example.com' }) },
       global: { stubs },
     })
-    expect(wrapper.text()).toContain('報名資訊將寄送至 parent@example.com')
+    expect(wrapper.text()).toContain('若本次報名資料成功建立')
+    expect(wrapper.text()).toContain('parent@example.com')
     expect(wrapper.text()).toContain('未收到請檢查垃圾郵件匣')
     expect(wrapper.text()).not.toContain('已寄送')
   })
@@ -40,6 +51,17 @@ describe('SuccessSummaryModal email 提示', () => {
       global: { stubs },
     })
     expect(wrapper.text()).not.toContain('將寄送至')
+  })
+
+  it('不允許點背景誤關，完成按鈕清楚說明需先保存', async () => {
+    const wrapper = mount(SuccessSummaryModal, {
+      props: { summary: makeSummary() },
+      global: { stubs },
+    })
+
+    await wrapper.get('.modal-overlay').trigger('click')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(wrapper.get('.btn-block').text()).toContain('我已保存')
   })
 })
 

@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { ref } from 'vue'
-import {
-  usePublicRegistrationForm,
-  PUBLIC_DRAFT_PII_FIELDS,
-} from '@/composables/usePublicRegistrationForm'
+import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
 
 function setup() {
   const courses = ref([{ name: '圍棋', price: 1000 }])
@@ -56,9 +53,5 @@ describe('公開報名表單 email 欄位', () => {
     form.email = 'parent@example.com'
     resetForm()
     expect(form.email).toBe('')
-  })
-
-  it('PUBLIC_DRAFT_PII_FIELDS 含 email（共用電腦 localStorage 不持久化）', () => {
-    expect(PUBLIC_DRAFT_PII_FIELDS).toContain('email')
   })
 })

@@ -1297,7 +1297,7 @@ onMounted(async () => {
 .batch-info { font-size: 14px; }
 
 .batch-bar-enter-active,
-.batch-bar-leave-active { transition: all 0.2s ease; }
+.batch-bar-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
 .batch-bar-enter-from,
 .batch-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(20px); }
 

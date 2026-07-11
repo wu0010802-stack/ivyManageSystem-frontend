@@ -140,14 +140,14 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       expect(f.errors.courses).toContain('至少')
     })
 
-    it('只選用品、無課程 → true（與後端 model_validator 對齊，可送出）', () => {
+    it('只選用品、無課程 → false（用品只能加購）', () => {
       f.form.name = '小明'
       f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       f.form.selectedSupplies = ['畫具組']
-      expect(f.validateForm()).toBe(true)
-      expect(f.errors.courses).toBe('')
+      expect(f.validateForm()).toBe(false)
+      expect(f.errors.courses).toContain('課程')
     })
 
     it('課程與用品皆空 → false,errors.courses 標記', () => {
@@ -159,6 +159,30 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       f.form.selectedSupplies = []
       expect(f.validateForm()).toBe(false)
       expect(f.errors.courses).toContain('至少')
+    })
+  })
+
+  describe('step validation', () => {
+    it('寶貝資料完整時可先進入選課，不要求先選課程', () => {
+      f.form.name = '小明'
+      f.form.birthday = '2022-01-15'
+      f.form.parent_phone = '0912345678'
+      f.form.class_name = '大班'
+
+      expect(f.validatePersonalDetails()).toBe(true)
+      expect(f.errors.courses).toBe('')
+    })
+
+    it('選課步驟至少要選一門課，用品為選填', () => {
+      expect(f.validateSelections()).toBe(false)
+      expect(f.errors.courses).toContain('課程')
+
+      f.form.selectedSupplies = ['畫具組']
+      expect(f.validateSelections()).toBe(false)
+
+      f.form.selectedCourses = ['美術']
+      expect(f.validateSelections()).toBe(true)
+      expect(f.errors.courses).toBe('')
     })
   })
 

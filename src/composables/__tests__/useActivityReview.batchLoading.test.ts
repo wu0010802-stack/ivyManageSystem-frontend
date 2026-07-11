@@ -10,11 +10,12 @@ vi.mock('element-plus', () => ({
 }))
 
 const rejectRegistration = vi.fn().mockResolvedValue({ data: {} })
+const matchRegistration = vi.fn().mockResolvedValue({ data: {} })
 const rematchRegistration = vi.fn().mockResolvedValue({ data: { matched: true } })
 const forceAcceptRegistration = vi.fn().mockResolvedValue({ data: {} })
 const restoreRegistration = vi.fn().mockResolvedValue({ data: {} })
 vi.mock('@/api/activity', () => ({
-  matchRegistration: vi.fn(),
+  matchRegistration: (...a: unknown[]) => matchRegistration(...a),
   rejectRegistration: (...a: unknown[]) => rejectRegistration(...a),
   rematchRegistration: (...a: unknown[]) => rematchRegistration(...a),
   forceAcceptRegistration: (...a: unknown[]) => forceAcceptRegistration(...a),
@@ -72,5 +73,32 @@ describe('useActivityReview 批量 loading 態時序（P3-1）', () => {
       await done
       expect(review.batchProcessing.value, `${name} 應在 refetch 後解除 loading`).toBe(false)
     }
+  })
+})
+
+describe('useActivityReview 逐筆精靈送出競態', () => {
+  it('匹配請求進行中略過不會讓索引前進兩次', async () => {
+    let resolveMatch!: () => void
+    matchRegistration.mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveMatch = () => resolve({ data: {} })
+      }),
+    )
+    const review = useActivityReview({ onChanged: vi.fn(), clearSelection: vi.fn() })
+    review.openWizard([{ id: 1 }, { id: 2 }, { id: 3 }])
+    review.wizard.selected = { id: 99 }
+
+    const done = review.wizardMatch()
+    await flush()
+    expect(review.wizard.submitting).toBe(true)
+
+    review.wizardSkip()
+    expect(review.wizard.index).toBe(0)
+    expect(review.wizard.done.skipped).toBe(0)
+
+    resolveMatch()
+    await done
+    expect(review.wizard.index).toBe(1)
+    expect(review.wizard.done.matched).toBe(1)
   })
 })

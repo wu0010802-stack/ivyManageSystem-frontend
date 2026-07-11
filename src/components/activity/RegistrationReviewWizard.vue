@@ -4,6 +4,8 @@
     title="逐筆審核"
     width="720px"
     :close-on-click-modal="false"
+    :close-on-press-escape="!state.submitting"
+    :show-close="!state.submitting"
     @close="onClose"
   >
     <div class="wizard-progress">
@@ -45,19 +47,19 @@
 
     <template #footer>
       <div class="wizard-actions">
-        <el-button :disabled="state.index === 0" @click="onPrev">上一筆</el-button>
-        <el-button @click="onSkip">略過</el-button>
+        <el-button :disabled="state.submitting || state.index === 0" @click="onPrev">上一筆</el-button>
+        <el-button :disabled="state.submitting" @click="onSkip">略過</el-button>
         <el-button
           type="danger"
           plain
           :loading="state.submitting"
-          :disabled="rejectDisabled"
+          :disabled="state.submitting || rejectDisabled"
           :title="rejectDisabled ? '此筆已有繳費，需先於報名詳情處理繳費後才能拒絕' : ''"
           @click="onReject"
         >拒絕並下一筆</el-button>
-        <el-button type="danger" :loading="state.submitting" @click="onForce">強行收件並下一筆</el-button>
-        <el-button type="primary" :loading="state.submitting" :disabled="!state.selected" @click="onMatch">匹配並下一筆</el-button>
-        <el-button @click="state.visible = false">結束</el-button>
+        <el-button type="danger" :loading="state.submitting" :disabled="state.submitting" @click="onForce">強行收件並下一筆</el-button>
+        <el-button type="primary" :loading="state.submitting" :disabled="state.submitting || !state.selected" @click="onMatch">匹配並下一筆</el-button>
+        <el-button :disabled="state.submitting" @click="state.visible = false">結束</el-button>
       </div>
     </template>
   </el-dialog>

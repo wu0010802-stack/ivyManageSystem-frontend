@@ -8,13 +8,15 @@
  *
  * Props:
  *   summary: { visible, message, studentName, parentPhone,
- *              enrolledCourses, waitlistCourses, selectedSupplies, totalAmount,
+ *              selectedCourses, selectedSupplies, totalAmount,
  *              queryToken, editUrl, copyHint, email? } — reactive
  * Emits:
  *   close
  */
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
+import { ref } from 'vue'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 interface CourseItem { name: string; price: number }
 interface Summary {
@@ -22,8 +24,7 @@ interface Summary {
   message: string
   studentName: string
   parentPhone: string
-  enrolledCourses: CourseItem[]
-  waitlistCourses: CourseItem[]
+  selectedCourses: CourseItem[]
   selectedSupplies: CourseItem[]
   totalAmount: number
   queryToken: string
@@ -36,9 +37,16 @@ interface Summary {
 const props = defineProps<{
   summary: Summary
 }>()
-defineEmits<{
+const emit = defineEmits<{
   (e: 'close'): void
 }>()
+const dialogRef = ref<HTMLElement | null>(null)
+
+const { onDialogKeydown } = useAccessibleDialog({
+  open: () => props.summary.visible,
+  dialogRef,
+  close: () => emit('close'),
+})
 
 async function copyToClipboard(text: string, label: string) {
   try {
@@ -81,12 +89,17 @@ async function copyToClipboard(text: string, label: string) {
   <div
     v-if="summary.visible"
     class="modal-overlay is-visible"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="successModalTitle"
-    @click.self="$emit('close')"
   >
-    <div class="modal-panel modal-panel--success">
+    <div
+      ref="dialogRef"
+      class="modal-panel modal-panel--success"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="successModalTitle"
+      aria-describedby="successModalDescription"
+      tabindex="-1"
+      @keydown="onDialogKeydown"
+    >
       <div class="modal-header">
         <h3 id="successModalTitle" class="modal-title">
           <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-check" /></svg>
@@ -102,36 +115,23 @@ async function copyToClipboard(text: string, label: string) {
           <BrandMark variant="mark-only" :size="64" />
           <KawaiiStar :size="18" expression="smile" decorative class="success-brand-star success-brand-star--r" />
         </div>
-        <p class="success-msg">{{ summary.message }}</p>
+        <p id="successModalDescription" class="success-msg">{{ summary.message }}</p>
 
         <div class="summary-block">
           <div class="summary-row"><span class="summary-label">幼兒姓名</span><span class="summary-value">{{ summary.studentName }}</span></div>
           <div class="summary-row"><span class="summary-label">家長手機</span><span class="summary-value">{{ summary.parentPhone }}</span></div>
         </div>
 
-        <div v-if="summary.enrolledCourses.length > 0" class="summary-section">
+        <div v-if="summary.selectedCourses.length > 0" class="summary-section">
           <div class="summary-section-title">
             <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-check" /></svg>
-            已報名課程（{{ summary.enrolledCourses.length }}）
+            本次選擇課程（{{ summary.selectedCourses.length }}）
           </div>
           <ul class="summary-list">
-            <li v-for="c in summary.enrolledCourses" :key="`e-${c.name}`">
+            <li v-for="c in summary.selectedCourses" :key="`c-${c.name}`">
               <span>{{ c.name }}</span><span class="summary-amount">${{ c.price }}</span>
             </li>
           </ul>
-        </div>
-
-        <div v-if="summary.waitlistCourses.length > 0" class="summary-section is-waitlist">
-          <div class="summary-section-title">
-            <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-alert" /></svg>
-            候補課程（{{ summary.waitlistCourses.length }}）
-          </div>
-          <ul class="summary-list">
-            <li v-for="c in summary.waitlistCourses" :key="`w-${c.name}`">
-              <span>{{ c.name }}</span><span class="summary-amount summary-amount--muted">候補中</span>
-            </li>
-          </ul>
-          <p class="summary-note">候補課程不計入應繳金額，校方將儘快與您聯繫。</p>
         </div>
 
         <div v-if="summary.selectedSupplies.length > 0" class="summary-section">
@@ -147,10 +147,10 @@ async function copyToClipboard(text: string, label: string) {
           <span>預估應繳金額</span>
           <strong>${{ summary.totalAmount }}</strong>
         </div>
-        <p class="summary-final-note">本金額不含候補課程；實際金額以園方確認後通知為準。</p>
+        <p class="summary-final-note">錄取／候補與實際應繳金額，以園方確認後通知為準。</p>
 
         <p v-if="summary.email" class="email-notice">
-          報名資訊將寄送至 {{ summary.email }}，未收到請檢查垃圾郵件匣。
+          若本次報名資料成功建立，系統會將報名資訊寄送至 {{ summary.email }}；未收到請檢查垃圾郵件匣。
         </p>
 
         <div v-if="summary.queryToken" class="success-token-box">
@@ -217,7 +217,7 @@ async function copyToClipboard(text: string, label: string) {
           <p class="token-warn">⚠ 連結含個資識別碼，請勿轉傳他人。</p>
         </div>
 
-        <button type="button" class="btn btn-primary btn-block" @click="$emit('close')">完成</button>
+        <button type="button" class="btn btn-primary btn-block" @click="$emit('close')">我已保存，完成</button>
       </div>
     </div>
   </div>

@@ -1,7 +1,10 @@
 <script setup lang="ts">
 // A1-P2：從 ActivityPublicView 抽出的影片預覽 modal。
 // 接受 youtubeId 優先（嵌入 iframe）否則 url（HTML5 video）。
-withDefaults(defineProps<{
+import { ref } from 'vue'
+import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
+
+const props = withDefaults(defineProps<{
   visible?: boolean
   title?: string
   url?: string
@@ -12,21 +15,34 @@ withDefaults(defineProps<{
   url: '',
   youtubeId: null,
 })
-defineEmits<{
+const emit = defineEmits<{
   (e: 'close'): void
 }>()
+const dialogRef = ref<HTMLElement | null>(null)
+
+const { onDialogKeydown } = useAccessibleDialog({
+  open: () => props.visible,
+  dialogRef,
+  close: () => emit('close'),
+})
 </script>
 
 <template>
   <div
     v-if="visible"
     class="modal-overlay is-visible"
-    role="dialog"
-    aria-modal="true"
     @click.self="$emit('close')"
   >
-    <div class="modal-panel modal-panel--video">
-      <h3 class="modal-title">{{ title }}</h3>
+    <div
+      ref="dialogRef"
+      class="modal-panel modal-panel--video"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="videoModalTitle"
+      tabindex="-1"
+      @keydown="onDialogKeydown"
+    >
+      <h3 id="videoModalTitle" class="modal-title">{{ title }}</h3>
       <button type="button" class="modal-close" aria-label="關閉影片" @click="$emit('close')">
         <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
       </button>
