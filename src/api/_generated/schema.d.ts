@@ -12064,6 +12064,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/salaries/calculate-jobs/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Stuck Salary Calc Job
+         * @description 人工清除卡死的 (year, month) async 計算 job，恢復重跑。
+         *
+         *     async worker 若中途被 kill/OOM（未走到 complete()/fail()），job 會永遠停在
+         *     running、finished_at=NULL，之後每次 POST /salaries/calculate-async 都因 find_active
+         *     命中而 409。系統本身有逾時自動回收（registry._reap_stale），admin 可用本端點
+         *     立即釋放該月卡死的 job，不必等自動回收窗。
+         *
+         *     僅清除仍 pending/running 的 job（標為 failed）；已完成/失敗的歷史 job 不受影響。
+         *     回傳 reset=清除筆數（0 代表該月本無卡死 job）。權限：SALARY_WRITE。
+         */
+        post: operations["reset_stuck_salary_calc_job_api_salaries_calculate_jobs_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/salaries/employee-salary-debug": {
         parameters: {
             query?: never;
@@ -19722,6 +19750,8 @@ export interface components {
             student_id: number | null;
             /** Target School Year */
             target_school_year?: number | null;
+            /** Target Semester */
+            target_semester?: number | null;
             /** Visit Id */
             visit_id: number;
         };
@@ -25232,11 +25262,10 @@ export interface components {
          * PublicRegisterResultOut
          * @description POST /public/register response（含 honeypot silent / silent-success / 真實成功 三 path 同 shape）。
          *
-         *     query_token 為明文 token 只在這次回給家長一次，後續走 /public/query-by-token 用。
+         *     不回傳 ActivityRegistration 資料庫主鍵，避免從靜默路徑與真實路徑的值差異
+         *     枚舉既有報名。query_token 為明文 token，家長後續以它走 /public/query-by-token。
          */
         PublicRegisterResultOut: {
-            /** Id */
-            id: number;
             /** Message */
             message: string;
             /** Query Token */
@@ -39653,6 +39682,10 @@ export interface operations {
         parameters: {
             query?: {
                 search?: string | null;
+                /** @description 在職狀態篩選：active=在職／pending=待離職／resigned=已離職 */
+                status?: ("active" | "pending" | "resigned") | null;
+                /** @description 職稱篩選（精確比對） */
+                title?: string | null;
             };
             header?: never;
             path?: never;
@@ -51264,6 +51297,38 @@ export interface operations {
             path: {
                 job_id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_stuck_salary_calc_job_api_salaries_calculate_jobs_reset_post: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
