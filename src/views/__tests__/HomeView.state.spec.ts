@@ -227,6 +227,33 @@ describe('HomeView 狀態層（孤兒標題 / 週末 / 假零）', () => {
     wrapper.unmount()
   })
 
+  it('打卡異常名單超過 12 筆時截斷，並顯示「還有 N 筆」出口', () => {
+    const anomalies = Array.from({ length: 15 }, (_, i) => ({
+      employee_id: i,
+      anomaly_type: 'absent',
+      employee_name: `員工${i}`,
+      late_minutes: 0,
+    }))
+    const wrapper = mountHome(makeState({ attendanceAnomalies: ref({ anomalies }) }))
+    expect(wrapper.findAll('.anomaly-item').length).toBe(12)
+    expect(wrapper.text()).toContain('還有 3 筆')
+    wrapper.unmount()
+  })
+
+  it('打卡異常 12 筆以內全列出，出口顯示查看出勤記錄', () => {
+    const anomalies = Array.from({ length: 3 }, (_, i) => ({
+      employee_id: i,
+      anomaly_type: 'absent',
+      employee_name: `員工${i}`,
+      late_minutes: 0,
+    }))
+    const wrapper = mountHome(makeState({ attendanceAnomalies: ref({ anomalies }) }))
+    expect(wrapper.findAll('.anomaly-item').length).toBe(3)
+    expect(wrapper.text()).not.toContain('還有')
+    expect(wrapper.text()).toContain('查看出勤記錄')
+    wrapper.unmount()
+  })
+
   it('待辦來源失敗時不顯示「太好了」而顯示載入失敗警示與重試', async () => {
     const retryTodoBoard = vi.fn()
     const state = makeState({

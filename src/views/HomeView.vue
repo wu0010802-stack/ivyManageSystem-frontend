@@ -146,6 +146,16 @@ const typedTodayStats = computed(() => todayStats.value as TodayStats | null)
 const typedStudentAttendanceSummary = computed(() => studentAttendanceSummary.value as StudentAttendanceSummaryData | null)
 const typedAttendanceAnomalies = computed(() => attendanceAnomalies.value as AttendanceAnomaliesData | null)
 const typedEventTagType = eventTagType as EventTagTypeMap
+
+// 異常名單截斷：全員未打卡的日子（如假日）會有數十筆，儀表板只給摘要，
+// 完整名單交給出勤頁
+const ANOMALY_DISPLAY_LIMIT = 12
+const displayedAnomalies = computed(
+  () => typedAttendanceAnomalies.value?.anomalies.slice(0, ANOMALY_DISPLAY_LIMIT) ?? []
+)
+const anomalyOverflow = computed(
+  () => Math.max(0, (typedAttendanceAnomalies.value?.anomalies.length ?? 0) - ANOMALY_DISPLAY_LIMIT)
+)
 </script>
 
 <template>
@@ -348,7 +358,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
           </div>
           <div v-else-if="typedAttendanceAnomalies" class="anomaly-list">
             <div
-              v-for="(item, idx) in typedAttendanceAnomalies.anomalies"
+              v-for="(item, idx) in displayedAnomalies"
               :key="`${item.employee_id}-${item.anomaly_type}-${idx}`"
               class="anomaly-item"
             >
@@ -360,7 +370,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
           </div>
           <div class="anomaly-hint text-secondary">
             <el-button link size="small" @click="navigateTo('/attendance')">
-              查看出勤記錄 →
+              {{ anomalyOverflow > 0 ? `還有 ${anomalyOverflow} 筆，查看全部 →` : '查看出勤記錄 →' }}
             </el-button>
           </div>
         </el-card>
