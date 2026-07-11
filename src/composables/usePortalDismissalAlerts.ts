@@ -45,10 +45,11 @@ let gestureHandler: (() => void) | null = null
 let visibilityHandler: (() => void) | null = null
 const WS_MAX_RETRIES = 5
 const WS_LIVENESS_TIMEOUT = 45000
-// beep（雙音門鈴約 0.43s）響完才唸，避免門鈴尾音與語音重疊
-const SPEECH_LEAD_MS = 450
-// 語速稍慢，班級/名字唸得更清楚
-const SPEECH_RATE = 0.95
+// 三音提示約 0.70s 響完才唸，避免尾音與語音重疊。
+const SPEECH_LEAD_MS = 720
+// 語速稍慢、音高微亮，讓班級與名字清楚又不顯得生硬。
+const SPEECH_RATE = 0.9
+const SPEECH_PITCH = 1.04
 const speechTimers = new Set<ReturnType<typeof setTimeout>>()
 
 // ── 聲音 / 震動 ──
@@ -71,12 +72,14 @@ function unlockAudio(): void {
   } catch { /* 解鎖失敗：audioUnlocked 維持 false，UI 顯示提示 */ }
 }
 
-// 雙音門鈴「叮-咚」（G5 784Hz → C6 1047Hz）：比單音 880Hz sine 悅耳不刺，
-// 也更像「通知音」。柔和包絡，兩音稍微銜接，總長約 0.43s。
-const BEEP_TONES = [
-  { freq: 784, at: 0, dur: 0.16 },     // 叮 G5
-  { freq: 1047, at: 0.15, dur: 0.28 }, // 咚 C6
+// 上行 C 大調三音（C5 → E5 → G5）。以 triangle 波形與低音量短包絡模擬木琴，
+// 保留通知辨識度、避開傳統高頻門鈴的尖銳感，適合幼兒園教室／走廊廣播。
+const DISMISSAL_CHIME_TONES = [
+  { freq: 523.25, at: 0, dur: 0.28 },  // C5
+  { freq: 659.25, at: 0.16, dur: 0.28 }, // E5
+  { freq: 783.99, at: 0.32, dur: 0.38 }, // G5
 ]
+const CHIME_PEAK_GAIN = 0.12
 function playBeep(): void {
   if (muted.value) return
   try {
@@ -87,14 +90,14 @@ function playBeep(): void {
     }
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {})
     const t0 = audioCtx.currentTime
-    for (const tone of BEEP_TONES) {
+    for (const tone of DISMISSAL_CHIME_TONES) {
       const osc = audioCtx.createOscillator()
       const gain = audioCtx.createGain()
-      osc.type = 'sine'
+      osc.type = 'triangle'
       osc.frequency.value = tone.freq
       const start = t0 + tone.at
       gain.gain.setValueAtTime(0, start)
-      gain.gain.linearRampToValueAtTime(0.2, start + 0.02)
+      gain.gain.linearRampToValueAtTime(CHIME_PEAK_GAIN, start + 0.02)
       gain.gain.exponentialRampToValueAtTime(0.001, start + tone.dur)
       osc.connect(gain).connect(audioCtx.destination)
       osc.start(start)
@@ -121,7 +124,7 @@ function unlockSpeech(): void {
   } catch { /* 解鎖失敗：維持靜默，beep 仍為保底 */ }
 }
 
-// 挑指定語言的 voice：優先精確匹配（zh-TW / en-US），否則同語系前綴（zh / en）。
+// 挑指定語言的 voice：優先精確匹配（zh-TW），否則同語系前綴（zh）。
 // hasVoices=false 代表 getVoices() 尚未載入（部分瀏覽器首呼回空，需 voiceschanged）。
 function pickVoice(exact: string, prefix: string): { hasVoices: boolean; voice: SpeechSynthesisVoice | null } {
   let voices: SpeechSynthesisVoice[] = []
@@ -133,35 +136,27 @@ function pickVoice(exact: string, prefix: string): { hasVoices: boolean; voice: 
   return { hasVoices: true, voice }
 }
 
-// 唸「班級 名」（zh-TW）+「time to go home」(en-US)，拆兩段避免混語發音不正確。
-// 班級/名皆缺退化為「學生」，與 liveAnnounce fallback 一致。
-// 每段顯式挑對應語言 voice：有 voice 清單但挑不到該語言 → 跳過該段（不用錯語言嗓子唸，
-// 否則中文會被英文 voice 唸得很怪）；清單尚未載入（空）→ 退化照唸並設 lang，至少有聲音。
+// 全中文播報，避免裝置的英文 voice 把學生姓名唸得不自然。
+// 班級／名字皆缺時退化為「學生」，與 liveAnnounce fallback 一致；若 voice 清單已載入但
+// 沒有中文 voice，寧可只保留提示音，不使用錯語系 voice。清單尚未載入時仍帶 lang 退化播報。
 function speakAnnouncement(call: { student_name?: string; classroom_name?: string }): void {
   if (muted.value) return
   if (!speechSupported()) return
   try {
-    const zhText = [call.classroom_name, call.student_name].filter(Boolean).join(' ') || '學生'
+    const studentLabel = [call.classroom_name, call.student_name].filter(Boolean).join(' ') || '學生'
     const zhPick = pickVoice('zh-TW', 'zh')
     if (!zhPick.hasVoices || zhPick.voice) {
-      const zh = new window.SpeechSynthesisUtterance(zhText)
+      const zh = new window.SpeechSynthesisUtterance(`${studentLabel}，請準備回家囉`)
       zh.lang = 'zh-TW'
       zh.rate = SPEECH_RATE
+      zh.pitch = SPEECH_PITCH
       if (zhPick.voice) zh.voice = zhPick.voice
       window.speechSynthesis.speak(zh)
-    }
-    const enPick = pickVoice('en-US', 'en')
-    if (!enPick.hasVoices || enPick.voice) {
-      const en = new window.SpeechSynthesisUtterance('time to go home')
-      en.lang = 'en-US'
-      en.rate = SPEECH_RATE
-      if (enPick.voice) en.voice = enPick.voice
-      window.speechSynthesis.speak(en)
     }
   } catch { /* ignore：beep 仍為保底 */ }
 }
 
-// 統一的「響鈴 + 播報」序列：beep 同步先響，SPEECH_LEAD_MS 後才唸（門鈴響完不重疊）。
+// 統一的「提示音 + 播報」序列：提示音同步先響，SPEECH_LEAD_MS 後才唸（不重疊）。
 // 真實通知（handleWsEvent）與測試按鈕（PortalDismissalCallsView.testSound）共用，時序一致。
 function playAlert(call: { student_name?: string; classroom_name?: string }): void {
   playBeep()
