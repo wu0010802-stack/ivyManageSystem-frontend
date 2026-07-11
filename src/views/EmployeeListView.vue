@@ -512,6 +512,11 @@ onMounted(async () => {
   user-select: none;
 }
 .search-input { width: 220px; }
+/* #2：隱藏 type=search 的瀏覽器原生清除鈕，統一保留 el-input 的 clearable ⊗（有 aria、樣式一致），避免雙清除鈕 */
+.search-input :deep(input[type='search']::-webkit-search-cancel-button) {
+  -webkit-appearance: none;
+  appearance: none;
+}
 .status-filter { width: 132px; }
 .title-filter { width: 140px; }
 /* 匯出範圍提示：常駐可見（非僅 tooltip），讓觸控/鍵盤使用者也能看到「待辦篩選不影響匯出」 */
