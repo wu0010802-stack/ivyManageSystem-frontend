@@ -9,6 +9,7 @@ import {
 } from '@/api/students'
 import { createKeyedFetchStore } from './_createKeyedFetchStore'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
+import { submitStudentCreateWithDuplicateConfirm } from '@/utils/studentDuplicateConflict'
 
 const baseStore = createKeyedFetchStore('student', getStudents, {
   errorMsg: '學生資料載入失敗',
@@ -38,7 +39,10 @@ export function useStudentStore() {
 function buildMutationActions(store: StoreWithMutations) {
   return {
     async createStudent(payload: Record<string, unknown>) {
-      const res = await apiCreateStudent(payload)
+      // 重複建檔查重（架構評估 D4）：命中 409 時彈確認框，使用者確認後帶
+      // allow_duplicate:true 重送；取消則拋出 StudentDuplicateCreateCancelled
+      // （呼叫端 catch 應以 isSilentError 靜默處理，不顯示錯誤 toast）。
+      const res = await submitStudentCreateWithDuplicateConfirm(apiCreateStudent, payload)
       const created = (res?.data ?? {}) as Record<string, unknown>
       domainBus.emit(STUDENT_EVENTS.CREATED, {
         id: created.id as number,

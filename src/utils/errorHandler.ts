@@ -97,8 +97,11 @@ export function getErrorMessage(error: unknown, fallback: string | null = null) 
 }
 
 /**
- * 判斷錯誤是否應該「靜默忽略」（例如 request 被 AbortController 取消）。
+ * 判斷錯誤是否應該「靜默忽略」（例如 request 被 AbortController 取消，
+ * 或使用者主動取消了某個後續確認框——見 `error.silent === true` 通用標記，
+ * 例如 StudentDuplicateCreateCancelled，src/utils/studentDuplicateConflict.ts）。
  */
 export function isSilentError(error: unknown) {
-  return classifyError(error) === ErrorType.CANCELED
+  if (classifyError(error) === ErrorType.CANCELED) return true
+  return (error as { silent?: unknown })?.silent === true
 }

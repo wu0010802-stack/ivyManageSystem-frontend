@@ -4,6 +4,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { createStudent } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { useQuickAddSubmit } from './useQuickAddSubmit'
+import { submitStudentCreateWithDuplicateConfirm } from '@/utils/studentDuplicateConflict'
 
 type ClassroomOption = { id: number; name: string }
 
@@ -79,7 +80,10 @@ const handleSubmit = async () => {
     listPath: '/students',
     listLabel: '學生管理',
     context: 'QuickStudentDialog:submit',
-    submit: () => createStudent(payload),
+    // 重複建檔查重（架構評估 D4）：命中 409 時彈確認框，使用者確認後帶
+    // allow_duplicate:true 重送；取消則拋出 StudentDuplicateCreateCancelled，
+    // run() 內部經 useErrorNotify 的 isSilentError 靜默處理（不顯示錯誤 toast）。
+    submit: () => submitStudentCreateWithDuplicateConfirm(createStudent, payload),
   })
   if (result) emit('update:visible', false)
 }

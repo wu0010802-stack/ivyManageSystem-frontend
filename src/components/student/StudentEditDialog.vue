@@ -5,6 +5,7 @@ import type { FormInstance } from 'element-plus'
 import { useStudentStore } from '@/stores/student'
 import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
 import { apiError } from '@/utils/error'
+import { isSilentError } from '@/utils/errorHandler'
 import FormSection from '@/components/common/FormSection.vue'
 import { sectionForStudentField } from '@/constants/studentFormSections'
 
@@ -181,6 +182,9 @@ const submit = async () => {
       emit('saved', payload)
       close()
     } catch (error) {
+      // 重複建檔確認框使用者按「取消」→ 靜默放棄，維持表單開啟、不顯示錯誤訊息
+      // （src/utils/studentDuplicateConflict.ts StudentDuplicateCreateCancelled）。
+      if (isSilentError(error)) return
       const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
       const msg = Array.isArray(detail)
         ? detail.map((e: { msg?: string }) => e.msg).join('；')

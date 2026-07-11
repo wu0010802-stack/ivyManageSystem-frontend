@@ -1,4 +1,5 @@
 import api from './index'
+import type { AxiosResp } from './_generated/typed'
 
 export const getStudents = (params: unknown) => api.get('/students', { params })
 
@@ -17,7 +18,11 @@ export interface MedicalFieldsOut {
 export const getStudentMedical = (id: number, reason: string) =>
   api.get<MedicalFieldsOut>(`/students/${id}/medical`, { params: { reason } })
 
-export const createStudent = (data: unknown) => api.post('/students', data)
+// 重複建檔查重（架構評估 D4，2026-07-11）：同名同生日既有「非終態」學生會回 409
+// （detail 純文字，含既有學生 id/班級/lifecycle_status）。可帶 allow_duplicate:true
+// 覆寫，見 src/utils/studentDuplicateConflict.ts 的確認流程包裝。
+export const createStudent = (data: Record<string, unknown>): AxiosResp<'/students', 'post'> =>
+  api.post('/students', data)
 
 export const updateStudent = (id: number, data: unknown) => api.put(`/students/${id}`, data)
 

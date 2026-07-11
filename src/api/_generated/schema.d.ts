@@ -12998,6 +12998,13 @@ export interface paths {
         /**
          * Create Student
          * @description 新增學生
+         *
+         *     重複建檔查重（架構評估 D4，2026-07-11）：建立前以 (name, birthday) 精確比對
+         *     既有學生（strip 後完全比對，無模糊比對）。命中「非終態」（prospect/enrolled/
+         *     active/on_leave）既有學生 → 409（detail 含既有學生 id/班級/lifecycle_status），
+         *     可帶 allow_duplicate=true 覆寫。只命中「終態」（graduated/transferred/
+         *     withdrawn）→ 不擋（復學/重讀屬合理情境），僅寫 log。birthday 為 None 時跳過
+         *     查重（單靠姓名太弱，誤傷同名機率高）。
          */
         post: operations["create_student_api_students_post"];
         delete?: never;
@@ -29255,6 +29262,11 @@ export interface components {
             address?: string | null;
             /** Allergy */
             allergy?: string | null;
+            /**
+             * Allow Duplicate
+             * @default false
+             */
+            allow_duplicate: boolean;
             /** Birthday */
             birthday?: string | null;
             /** Classroom Id */
