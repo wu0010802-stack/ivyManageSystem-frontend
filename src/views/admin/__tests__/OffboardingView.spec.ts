@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
 
@@ -53,7 +53,9 @@ function detailFixture(overrides: Record<string, unknown> = {}) {
 }
 
 function mountView() {
-    return mount(OffboardingView, { global: { plugins: [ElementPlus] } })
+    return mount(OffboardingView, {
+        global: { plugins: [ElementPlus], stubs: { RouterLink: RouterLinkStub } },
+    })
 }
 
 describe('OffboardingView 離職清單三態操作', () => {
@@ -86,6 +88,21 @@ describe('OffboardingView 離職清單三態操作', () => {
         expect(buttons[0].text()).toBe('開始離職檢核')
         expect(buttons[1].text()).toBe('繼續檢核')
         expect(buttons[2].text()).toBe('查看文件')
+    })
+
+    it('員工名為連結，導向該員工詳情頁 /employees/:id（與員工管理 tab 一致）', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 7, name: '離職連結員工', resign_date: '2026-07-01' }],
+        })
+        mockGetDetail.mockRejectedValue(new Error('404 no offboarding record'))
+
+        const w = mountView()
+        await flushPromises()
+
+        const link = w.findComponent(RouterLinkStub)
+        expect(link.exists()).toBe(true)
+        expect(link.props('to')).toBe('/employees/7')
+        expect(link.text()).toContain('離職連結員工')
     })
 
     it('no_record 列點擊「開始離職檢核」→ 開啟 OffboardingModal 並帶入該員工 id/name', async () => {

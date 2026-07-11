@@ -202,10 +202,12 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
             stripe
             empty-text="暫無離職員工"
         >
-            <!-- 員工名 -->
+            <!-- 員工名：連結至該員工詳情頁，與員工管理 tab 的姓名連結一致（#7） -->
             <el-table-column label="員工名" min-width="120">
                 <template #default="{ row }: { row: ResignedEmployee }">
-                    <span>{{ row.employee.name ?? `員工 #${row.employee.id}` }}</span>
+                    <router-link :to="`/employees/${row.employee.id}`" class="emp-name-link">
+                        {{ row.employee.name ?? `員工 #${row.employee.id}` }}
+                    </router-link>
                 </template>
             </el-table-column>
 
@@ -337,6 +339,15 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
 /* 已內嵌於 EmployeeHubView 整合頁，page padding 由 wrapper(.employee-hub-view) 提供，此處歸零避免雙重留白 */
 .offboarding-view {
     padding: 0;
+}
+
+/* 員工名連結：對齊員工管理 tab 的 .name-link 樣式（primary 色、hover 底線） */
+.emp-name-link {
+    color: var(--el-color-primary);
+    text-decoration: none;
+}
+.emp-name-link:hover {
+    text-decoration: underline;
 }
 
 .page-header {
