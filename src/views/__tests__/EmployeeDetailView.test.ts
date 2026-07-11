@@ -119,6 +119,18 @@ describe('EmployeeDetailView 第一屏重排', () => {
     expect(wrap.attributes('aria-hidden')).toBe('false')
     expect(w.find('.basic-content-marker').exists()).toBe(true)
   })
+
+  // #5：收合列文案須隨狀態變化——收合時提示可展開的內容，展開後改為可收合的動作文案，
+  // 否則展開後標題仍寫「展開查看…」與實際狀態矛盾、誤導使用者。
+  it('個資收合標題隨狀態切換（收合「展開查看…」→ 展開「收合個資」）', async () => {
+    const w = mountDetail()
+    const headerText = () => w.find('#emp-sec-basic .el-collapse-item__header').text()
+    expect(headerText()).toContain('展開查看聯絡電話・身分證・地址・緊急聯絡人')
+    await w.find('#emp-sec-basic .el-collapse-item__header').trigger('click')
+    await nextTick()
+    expect(headerText()).toContain('收合個資')
+    expect(headerText()).not.toContain('展開查看')
+  })
 })
 
 describe('EmployeeDetailView 員工待辦列', () => {

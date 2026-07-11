@@ -30,6 +30,10 @@ const { employee, educations, certificates, contracts, classHistory, loading, er
 
 const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
 
+// #5 個資收合狀態：追蹤 el-collapse active，讓收合列文案隨狀態切換（收合提示可展開、展開提示可收合），
+// 預設空陣列＝收合（維持既有「個資預設收合」行為）。
+const basicInfoActive = ref<string[]>([])
+
 // 標準薪比較（沿用清單頁的 position-salary 設定）
 const positionSalaryConfig = ref<Record<string, number> | null>(null)
 onMounted(async () => {
@@ -184,8 +188,11 @@ const onSaved = async () => {
         </section>
         <section :id="`emp-sec-basic`" class="detail-section">
           <h3 class="section-title">個資・聯絡</h3>
-          <el-collapse>
-            <el-collapse-item title="展開查看聯絡電話・身分證・地址・緊急聯絡人">
+          <el-collapse v-model="basicInfoActive">
+            <el-collapse-item name="basic">
+              <template #title>
+                {{ basicInfoActive.includes('basic') ? '收合個資' : '展開查看聯絡電話・身分證・地址・緊急聯絡人' }}
+              </template>
               <BasicSection :employee="employee" />
             </el-collapse-item>
           </el-collapse>
