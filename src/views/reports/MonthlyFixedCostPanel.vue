@@ -10,6 +10,7 @@ import { hasPermission } from '@/utils/auth'
 import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
+import { computeReportPeriod } from './useReportPeriod'
 
 const props = defineProps<{
   year: number
@@ -32,6 +33,9 @@ const CATEGORIES = [
 ]
 
 const canWrite = computed(() => hasPermission('VENDOR_PAYMENT_WRITE'))
+
+// 當月高亮（spec §9）：cutoff 僅依年度與今天，不需 trend
+const period = computed(() => computeReportPeriod(props.year))
 
 const loading = ref(false)
 const saving = ref(false)
@@ -98,8 +102,10 @@ function setCurrent(month: number, category: string, raw: string | number | null
   const entry = cellState.get(key)
   if (!entry) return
   let next = null
-  if (raw !== '' && raw != null) {
-    const num = Number(raw)
+  // 千分位輸入（spec §9）：input 為 text，使用者可能貼入含逗號字串（如 "500,000"）
+  const cleaned = raw == null ? raw : String(raw).replace(/,/g, '')
+  if (cleaned !== '' && cleaned != null) {
+    const num = Number(cleaned)
     if (Number.isFinite(num) && num >= 0) {
       // 整數金額（後端 Money 為整數型）
       next = Math.trunc(num)
@@ -109,6 +115,17 @@ function setCurrent(month: number, category: string, raw: string | number | null
     }
   }
   cellState.set(key, { original: entry.original, current: next })
+}
+
+// 千分位輸入（spec §9）：focus 中顯示純數字方便編輯，未 focus 顯示千分位方便閱讀
+const focusedKey = ref<string | null>(null)
+function rawText(month: number, category: string): string {
+  const v = getCurrent(month, category)
+  return v == null ? '' : String(v)
+}
+function displayText(month: number, category: string): string {
+  const v = getCurrent(month, category)
+  return v == null ? '' : amountFormatter.format(v)
 }
 
 function isDirty(month: number, category: string) {
@@ -308,7 +325,12 @@ async function saveAll() {
         <thead>
           <tr>
             <th class="col-label sticky-col">類別</th>
-            <th v-for="m in MONTHS" :key="m" class="col-month">{{ m }} 月</th>
+            <th
+              v-for="m in MONTHS"
+              :key="m"
+              class="col-month"
+              :class="{ 'col-current': period.isCurrentYear && m === period.cutoffMonth }"
+            >{{ m }} 月</th>
             <th class="col-total">合計</th>
           </tr>
         </thead>
@@ -328,21 +350,24 @@ async function saveAll() {
               v-for="(m, mi) in MONTHS"
               :key="m"
               class="cell-edit"
-              :class="{ 'cell-dirty': isDirty(m, c.key) }"
+              :class="{
+                'cell-dirty': isDirty(m, c.key),
+                'col-current': period.isCurrentYear && m === period.cutoffMonth,
+              }"
               :data-cell-key="`${m}-${c.key}`"
             >
               <input
-                type="number"
+                type="text"
                 inputmode="numeric"
-                min="0"
-                step="1"
                 class="cell-input"
                 :data-grid-row="ci"
                 :data-grid-col="mi"
-                :value="getCurrent(m, c.key) ?? ''"
+                :value="focusedKey === cellKey(m, c.key) ? rawText(m, c.key) : displayText(m, c.key)"
                 :disabled="!canWrite || saving"
                 :placeholder="c.defaultAmount != null ? amountFormatter.format(c.defaultAmount) : ''"
                 @input="setCurrent(m, c.key, ($event.target as HTMLInputElement).value)"
+                @focus="focusedKey = cellKey(m, c.key)"
+                @blur="focusedKey = null"
               />
               <span
                 v-if="isDirty(m, c.key)"
@@ -361,6 +386,7 @@ async function saveAll() {
               v-for="m in MONTHS"
               :key="m"
               class="cell-num"
+              :class="{ 'col-current': period.isCurrentYear && m === period.cutoffMonth }"
               :data-month-total="m"
             >
               {{ formatTotal(monthTotal(m)) }}
@@ -388,6 +414,11 @@ async function saveAll() {
   align-items: flex-start;
   gap: 16px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--el-bg-color);
+  padding: 8px 0;
 }
 .toolbar-left { display: flex; flex-direction: column; gap: 4px; }
 .panel-title { margin: 0; font-size: 16px; font-weight: 600; }
@@ -399,7 +430,7 @@ async function saveAll() {
   overflow-x: auto;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 4px;
-  background: #fff;
+  background: var(--el-bg-color);
 }
 .empty-hint { padding: 12px 12px 0 12px; }
 
@@ -433,10 +464,18 @@ async function saveAll() {
   border-left: 1px solid var(--el-border-color-lighter);
 }
 
+/* 當月高亮（spec §9） */
+.fc-table .col-current {
+  background: var(--el-color-primary-light-9);
+}
+.fc-table thead th.col-current {
+  background: var(--el-color-primary-light-8);
+}
+
 .sticky-col {
   position: sticky;
   left: 0;
-  background: #fff;
+  background: var(--el-bg-color);
   border-right: 1px solid var(--el-border-color-lighter);
   text-align: left;
   z-index: 1;

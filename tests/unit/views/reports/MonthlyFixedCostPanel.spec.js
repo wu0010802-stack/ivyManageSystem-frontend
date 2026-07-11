@@ -2,7 +2,7 @@
  * MonthlyFixedCostPanel.spec.js
  *
  * 驗證固定費用登錄面板：
- *  1. 渲染 8 category × 12 month = 96 cells（input[type=number]）
+ *  1. 渲染 8 category × 12 month = 96 cells（input.cell-input，type=text＋inputmode=numeric）
  *  2. 改一個 cell 變 dirty → save 按鈕 enabled → 點擊呼 batch 含正確 entries
  *  3. 多 cell dirty → batch 含全部 dirty entries
  *  4. 儲存成功後重抓 + dirty 清零 → save 按鈕 disabled
@@ -121,7 +121,7 @@ describe('MonthlyFixedCostPanel', () => {
     const w = mountPanel()
     await flushPromises()
 
-    const inputs = w.findAll('input[type="number"]')
+    const inputs = w.findAll('input.cell-input')
     expect(inputs.length).toBe(96)
 
     // 8 個 category row（不含月度合計列）
@@ -141,12 +141,12 @@ describe('MonthlyFixedCostPanel', () => {
     await flushPromises()
     expect(mockGet).toHaveBeenCalledWith(2026)
 
-    // 5-rent cell value = 500000
+    // 5-rent cell value = 500000（未 focus 顯示千分位，spec §9）
     const rentCell = w.find('[data-cell-key="5-rent"] input')
-    expect(rentCell.element.value).toBe('500000')
+    expect(rentCell.element.value).toBe('500,000')
     // 6-water cell value = 5989
     const waterCell = w.find('[data-cell-key="6-water"] input')
-    expect(waterCell.element.value).toBe('5989')
+    expect(waterCell.element.value).toBe('5,989')
     // 未登錄的 cell（1-rent）為空字串
     const emptyCell = w.find('[data-cell-key="1-rent"] input')
     expect(emptyCell.element.value).toBe('')
@@ -190,7 +190,8 @@ describe('MonthlyFixedCostPanel', () => {
     expect(mockGet).toHaveBeenCalledTimes(2)
     const cellAfter = w.find('[data-cell-key="3-electricity"]')
     expect(cellAfter.classes()).not.toContain('cell-dirty')
-    expect(cellAfter.find('input').element.value).toBe('12000')
+    // 未 focus 顯示千分位（spec §9）
+    expect(cellAfter.find('input').element.value).toBe('12,000')
     // 改完後一樣 disabled
     expect(w.find('[data-test="save-all-btn"]').attributes('disabled')).toBeDefined()
   })
@@ -247,7 +248,7 @@ describe('MonthlyFixedCostPanel', () => {
     const w = mountPanel({ year: 2026 })
     await flushPromises()
 
-    const inputs = w.findAll('input[type="number"]')
+    const inputs = w.findAll('input.cell-input')
     expect(inputs.length).toBe(96)
     for (const inp of inputs) {
       expect(inp.attributes('disabled')).toBeDefined()
