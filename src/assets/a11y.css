@@ -294,3 +294,16 @@ html.ivy-contrast-high button:focus-visible {
   outline: 3px solid currentColor;
   outline-offset: 2px;
 }
+
+/* ----- EP badge 對比修正（WCAG AA） -----
+ * EP 預設 danger #f56c6c / warning #e6a23c 上的白字僅 2.9:1 / 2.2:1。
+ * badge 是有語意的計數文字，改深一階讓白字 ≥ 4.5:1。
+ * 刻意用字面值：badge 底色不隨 dark mode 翻轉（深底白字在兩種模式都成立），
+ * 不能吃 --color-*-darker（該組 token 在 dark 會翻成淺色文字用途）。 */
+.el-badge__content--danger {
+  background-color: #dc2626; /* 白字 4.8:1 */
+}
+
+.el-badge__content--warning {
+  background-color: #b45309; /* 白字 5.0:1 */
+}

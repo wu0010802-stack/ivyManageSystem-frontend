@@ -59,6 +59,11 @@ const allItems: MenuItem[] = [
 
 const visibleItems = computed(() => allItems.filter((item) => hasPermission(item.permission)))
 
+// 跳頁項與彈窗項行為不同（會離開本頁），第一個跳頁項前加分隔線做視覺區分
+const firstNavigateKey = computed(
+  () => visibleItems.value.find((item) => item.action === 'navigate')?.key
+)
+
 const handleCommand = (key: string) => {
   const item = allItems.find((i) => i.key === key)
   if (!item) return
@@ -87,9 +92,15 @@ const handleCommand = (key: string) => {
           v-for="item in visibleItems"
           :key="item.key"
           :command="item.key"
+          :divided="item.key === firstNavigateKey"
         >
           <el-icon><component :is="item.icon" /></el-icon>
           <span>{{ item.label }}</span>
+          <span
+            v-if="item.action === 'navigate'"
+            class="quick-add-nav-hint"
+            aria-label="開啟頁面"
+          >→</span>
         </el-dropdown-item>
       </el-dropdown-menu>
     </template>
@@ -106,5 +117,11 @@ const handleCommand = (key: string) => {
 .quick-add-trigger__caret {
   font-size: 12px;
   opacity: 0.85;
+}
+
+.quick-add-nav-hint {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--text-secondary);
 }
 </style>

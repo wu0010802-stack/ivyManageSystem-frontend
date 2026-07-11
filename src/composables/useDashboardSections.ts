@@ -82,11 +82,17 @@ export function useDashboardSections() {
   const showEmployees = hasPermission('EMPLOYEES_READ')
   const showStudents = hasPermission('STUDENTS_READ')
 
+  // 「含師/導」的職稱推算會把廚師、護理師等非教學職也算進教師，先以排除清單修正；
+  // 職稱分類的正解是後端給 role taxonomy，屆時此推算應整段退場。
+  const NON_TEACHING_TITLES = ['廚師', '護理師', '營養師', '藥師', '技師', '工程師', '會計師']
   const stats = computed(() => {
-    const total = (employeeStore.employees as { title?: string; position?: string }[]).length
-    const teachers = (employeeStore.employees as { title?: string; position?: string }[]).filter(e => {
+    const employees = employeeStore.employees as { title?: string; position?: string }[]
+    const total = employees.length
+    const teachers = employees.filter(e => {
       const title = e.title || ''
       const position = e.position || ''
+      const combined = `${title} ${position}`
+      if (NON_TEACHING_TITLES.some(t => combined.includes(t))) return false
       return title.includes('師') || position.includes('師') ||
         title.includes('導') || position.includes('導')
     }).length
@@ -134,8 +140,9 @@ export function useDashboardSections() {
 
   const eventTagType: Record<string, string> = { meeting: '', activity: 'success', holiday: 'danger', general: 'info' }
 
+  // 用詞自解釋：「未打卡」「缺打卡」近義異指難以區分，改為整日未打卡 / 漏刷卡
   const anomalyLabel = (type: string, minutes: number) => ({
-    absent: '未打卡', late: `遲到 ${minutes} 分`, missing_punch: '缺打卡',
+    absent: '整日未打卡', late: `遲到 ${minutes} 分`, missing_punch: '漏刷卡',
   } as Record<string, string>)[type] || type
 
   const anomalyTagType = (type: string) => ({

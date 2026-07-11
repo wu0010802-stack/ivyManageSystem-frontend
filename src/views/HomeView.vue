@@ -173,7 +173,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
       <div class="section-header section-header--top">
         <div class="section-title-wrap">
           <span class="section-dot"></span>
-          <span class="section-title">今日待辦</span>
+          <h2 class="section-title">今日待辦</h2>
         </div>
         <span v-if="todoDataReady && todoTiles.length > 0" class="section-date-chip">
           {{ todoTiles.reduce((sum, t) => sum + t.count, 0) }} 筆需處理
@@ -225,9 +225,8 @@ const typedEventTagType = eventTagType as EventTagTypeMap
       <div class="section-header">
         <div class="section-title-wrap">
           <span class="section-dot"></span>
-          <span class="section-title">教師出勤狀況</span>
+          <h2 class="section-title">教師出勤狀況</h2>
         </div>
-        <span class="section-date-chip">{{ todayDateStr }}</span>
       </div>
       <el-row v-if="isFirstLoad && !typedTodayStats" :gutter="20" class="stats-row" aria-busy="true">
         <el-col v-for="i in 4" :key="i" :xs="24" :sm="12" :md="6" class="mb-4">
@@ -273,20 +272,20 @@ const typedEventTagType = eventTagType as EventTagTypeMap
       <div class="section-header">
         <div class="section-title-wrap">
           <span class="section-dot"></span>
-          <span class="section-title">今日學生出勤狀況</span>
+          <h2 class="section-title">今日學生出勤狀況</h2>
         </div>
-        <span class="section-date-chip">{{ todayDateStr }}</span>
       </div>
       <template v-if="typedStudentAttendanceSummary">
-        <el-row :gutter="20" class="stats-row">
+        <el-row :gutter="20" class="stats-row stats-row--tight">
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
             <StatCard label="今日在籍學生" :value="typedStudentAttendanceSummary.total_students" icon="UserFilled" color="primary" />
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="已點名" :value="typedStudentAttendanceSummary.recorded_count" icon="EditPen" color="success" />
+            <StatCard label="已點名" :value="typedStudentAttendanceSummary.recorded_count" icon="EditPen" color="primary" />
           </el-col>
+          <!-- 色彩語意：到校是好事給 success；warning/danger 保留給需要行動的指標 -->
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="到校" :value="typedStudentAttendanceSummary.on_campus_count" icon="CircleCheck" color="warning" />
+            <StatCard label="到校" :value="typedStudentAttendanceSummary.on_campus_count" icon="CircleCheck" color="success" />
           </el-col>
           <!-- 「未點名」已升為今日待辦磚（一個數字一個家），此格改放中性的請假數 -->
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
@@ -332,7 +331,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
         <el-card class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
-              <span class="card-header-title">今日打卡異常</span>
+              <h2 class="card-header-title">今日打卡異常</h2>
               <el-badge
                 v-if="typedAttendanceAnomalies && typedAttendanceAnomalies.anomalies.length > 0"
                 :value="typedAttendanceAnomalies.anomalies.length"
@@ -376,7 +375,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
         <el-card class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
-              <span class="card-header-title">近期行事曆</span>
+              <h2 class="card-header-title">近期行事曆</h2>
               <el-button link size="small" @click="navigateTo('/calendar')">查看全部</el-button>
             </div>
           </template>
@@ -425,7 +424,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
         <el-card class="no-hover quick-actions-card mb-4">
           <template #header>
             <div class="card-header-row">
-              <span class="card-header-title">快速操作</span>
+              <h2 class="card-header-title">快速操作</h2>
             </div>
           </template>
           <div class="action-grid">
@@ -484,7 +483,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
         <el-card class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
-              <span class="card-header-title">學校概況</span>
+              <h2 class="card-header-title">學校概況</h2>
               <el-button
                 v-if="hasCriticalError"
                 link
@@ -526,7 +525,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
         >
           <template #header>
             <div class="card-header-row">
-              <span class="card-header-title">本月審核風險</span>
+              <h2 class="card-header-title">本月審核風險</h2>
               <el-badge
                 :value="approvalSummary.this_month_pending_leaves + approvalSummary.this_month_pending_overtimes"
                 type="danger"
@@ -645,6 +644,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
 }
 
 .section-title {
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
@@ -693,7 +693,7 @@ const typedEventTagType = eventTagType as EventTagTypeMap
 }
 
 .todo-tile:focus-visible {
-  outline: 2px solid #4f46e5;
+  outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
 }
 
@@ -722,13 +722,14 @@ const typedEventTagType = eventTagType as EventTagTypeMap
 
 .todo-tile__cta {
   font-size: 12px;
-  color: var(--text-secondary);
+  /* text-secondary 在 warning-soft 底只有 4.3:1，改 neutral-600（≥6:1）過 AA */
+  color: var(--neutral-600);
   margin-top: auto;
 }
 
 .todo-tile--warning {
   background: var(--color-warning-soft);
-  border-color: #fde68a;
+  border-color: var(--color-warning-soft);
 }
 .todo-tile--warning .todo-tile__count-num { color: var(--color-warning-darker); }
 
@@ -836,8 +837,12 @@ html.dark .todo-empty {
 }
 
 /* ── 學生出勤摘要條 ── */
+/* stats-row--tight 讓上方統計列自帶 8px 間距，取代先前的負 margin hack */
+.stats-row--tight {
+  margin-bottom: 8px;
+}
+
 .student-summary-bar {
-  margin-top: calc(24px * -1 + 8px);
   margin-bottom: 28px;
 }
 
@@ -931,6 +936,7 @@ html.dark .todo-empty {
 }
 
 .card-header-title {
+  margin: 0;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
@@ -1080,7 +1086,8 @@ html.dark .todo-empty {
 .event-group__date {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-tertiary);
+  /* text-tertiary 白底僅 2.6:1，微型標籤仍是內容，改 text-secondary 過 AA */
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 6px;

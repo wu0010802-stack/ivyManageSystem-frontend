@@ -26,20 +26,15 @@ withDefaults(defineProps<{
 </script>
 
 <style scoped>
+/* 非互動元件：不做 hover 抬升（假 affordance——邀請點擊卻不可點） */
 .stat-card {
   background: var(--neutral-0);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 20px 24px;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   height: 100%;
   box-sizing: border-box;
-}
-
-.stat-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  border-color: var(--neutral-300);
 }
 
 .stat-card__body {
@@ -86,13 +81,15 @@ withDefaults(defineProps<{
 .stat-card--default.stat-card--danger  .stat-card__icon-wrap { background: var(--color-danger-soft); color: var(--color-danger); }
 .stat-card--default.stat-card--info    .stat-card__icon-wrap { background: var(--color-info-soft); color: var(--color-info); }
 
-/* ── filled variant (Material 3 tonal) ── */
+/* ── filled variant (Material 3 tonal) ──
+ * 一律走 token：primary 硬編 indigo 會與 admin 青藍 brand 脫鉤（html.ivy-admin 覆寫）。
+ * icon 底以 color-mix 從主色淡出，不再各自硬編 rgba。 */
 .stat-card--filled { border-color: transparent; }
 
-.stat-card--filled.stat-card--primary { background: #eef0fd; }
-.stat-card--filled.stat-card--success  { background: #e7faf3; }
-.stat-card--filled.stat-card--warning  { background: #fef8ec; }
-.stat-card--filled.stat-card--danger   { background: #fff1f1; }
+.stat-card--filled.stat-card--primary { background: var(--brand-primary-soft); }
+.stat-card--filled.stat-card--success  { background: var(--color-success-soft); }
+.stat-card--filled.stat-card--warning  { background: var(--color-warning-soft); }
+.stat-card--filled.stat-card--danger   { background: var(--color-danger-soft); }
 .stat-card--filled.stat-card--info     { background: var(--color-info-soft); }
 
 .stat-card--filled .stat-card__label { color: var(--neutral-600); }
@@ -103,13 +100,9 @@ withDefaults(defineProps<{
 .stat-card--filled.stat-card--danger   .stat-card__value { color: var(--color-danger-hover); }
 .stat-card--filled.stat-card--info     .stat-card__value { color: var(--color-info-hover); }
 
-.stat-card--filled.stat-card--primary .stat-card__icon-wrap { background: rgba(79,70,229,0.12);  color: var(--brand-primary-hover); }
-.stat-card--filled.stat-card--success  .stat-card__icon-wrap { background: rgba(16,185,129,0.12); color: var(--color-success-hover); }
-.stat-card--filled.stat-card--warning  .stat-card__icon-wrap { background: rgba(245,158,11,0.12); color: var(--color-warning-hover); }
-.stat-card--filled.stat-card--danger   .stat-card__icon-wrap { background: rgba(239,68,68,0.12);  color: var(--color-danger-hover); }
-.stat-card--filled.stat-card--info     .stat-card__icon-wrap { background: rgba(59,130,246,0.12); color: var(--color-info-hover); }
-
-.stat-card--filled:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-}
+.stat-card--filled.stat-card--primary .stat-card__icon-wrap { background: color-mix(in srgb, var(--brand-primary) 12%, transparent); color: var(--brand-primary-hover); }
+.stat-card--filled.stat-card--success  .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-success) 12%, transparent); color: var(--color-success-hover); }
+.stat-card--filled.stat-card--warning  .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-warning) 12%, transparent); color: var(--color-warning-hover); }
+.stat-card--filled.stat-card--danger   .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger-hover); }
+.stat-card--filled.stat-card--info     .stat-card__icon-wrap { background: color-mix(in srgb, var(--color-info) 12%, transparent); color: var(--color-info-hover); }
 </style>

@@ -177,6 +177,7 @@ const hasAnyIssue = computed(() => {
   color: var(--el-text-color-secondary);
 }
 .error-text {
-  color: var(--el-color-danger);
+  /* EP danger #f56c6c 白底僅 2.9:1；danger-darker 兩種模式都是文字用途色 */
+  color: var(--color-danger-darker);
 }
 </style>

@@ -189,6 +189,44 @@ describe('HomeView 狀態層（孤兒標題 / 週末 / 假零）', () => {
     wrapper.unmount()
   })
 
+  it('色彩語意：學生出勤「到校」為 success、「已點名」為 primary（好事不給警告色）', () => {
+    const wrapper = mountHome(makeState({
+      studentAttendanceSummary: ref({
+        total_students: 30,
+        recorded_count: 27,
+        on_campus_count: 25,
+        unmarked_count: 3,
+        present_count: 24,
+        late_count: 1,
+        absent_count: 2,
+        leave_count: 2,
+        record_completion_rate: 90,
+      }),
+    }))
+    const cards = wrapper.findAll('.stat-card')
+    const byLabel = (label: string) =>
+      cards.find(c => c.find('.stat-card__label').text() === label)
+    expect(byLabel('到校')!.classes()).toContain('stat-card--success')
+    expect(byLabel('已點名')!.classes()).toContain('stat-card--primary')
+    wrapper.unmount()
+  })
+
+  it('a11y：區塊標題使用 h2 語意（螢幕閱讀器可依標題導航）', () => {
+    const wrapper = mountHome(makeState())
+    const h2s = wrapper.findAll('h2').map(e => e.text())
+    expect(h2s).toContain('今日待辦')
+    expect(h2s).toContain('教師出勤狀況')
+    expect(h2s.some(t => t.includes('學生出勤'))).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('日期只在頁首出現一次，section 不再重複日期 chip', () => {
+    const wrapper = mountHome(makeState())
+    const matches = wrapper.text().match(/（星期六）/g) ?? []
+    expect(matches.length).toBe(1)
+    wrapper.unmount()
+  })
+
   it('待辦來源失敗時不顯示「太好了」而顯示載入失敗警示與重試', async () => {
     const retryTodoBoard = vi.fn()
     const state = makeState({

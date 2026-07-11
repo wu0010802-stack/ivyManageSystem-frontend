@@ -16,8 +16,12 @@ vi.mock('@/utils/auth', () => ({
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 const fetchEmployeesMock = vi.fn()
+const employeeStoreMock: { employees: unknown[]; fetchEmployees: typeof fetchEmployeesMock } = {
+  employees: [],
+  fetchEmployees: fetchEmployeesMock,
+}
 vi.mock('@/stores/employee', () => ({
-  useEmployeeStore: () => ({ employees: [], fetchEmployees: fetchEmployeesMock }),
+  useEmployeeStore: () => employeeStoreMock,
 }))
 vi.mock('@/stores/notification', () => ({
   useNotificationStore: () => ({
@@ -181,6 +185,39 @@ describe('useDashboardSections 資訊架構（行事曆 eager / probation 死碼
     const wrapper = mountHarness()
     await flushPromises()
     expect(Object.keys(sections.deferredSections)).not.toContain('probation')
+    wrapper.unmount()
+  })
+})
+
+describe('useDashboardSections 用詞與教師數推算', () => {
+  beforeEach(() => {
+    mockHappyPath()
+    employeeStoreMock.employees = []
+  })
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('打卡異常用詞自解釋：整日未打卡 / 漏刷卡', async () => {
+    const wrapper = mountHarness()
+    expect(sections.anomalyLabel('absent', 0)).toBe('整日未打卡')
+    expect(sections.anomalyLabel('missing_punch', 0)).toBe('漏刷卡')
+    expect(sections.anomalyLabel('late', 12)).toBe('遲到 12 分')
+    wrapper.unmount()
+  })
+
+  it('教師數推算排除非教學職稱（廚師/護理師/營養師不算教師）', async () => {
+    employeeStoreMock.employees = [
+      { title: '老師' },
+      { title: '廚師' },
+      { position: '班導' },
+      { title: '護理師' },
+      { title: '營養師' },
+      { title: '行政' },
+    ]
+    const wrapper = mountHarness()
+    expect(sections.stats.value.teachers).toBe(2)
+    expect(sections.stats.value.total).toBe(6)
     wrapper.unmount()
   })
 })
