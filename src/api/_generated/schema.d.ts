@@ -2809,7 +2809,13 @@ export interface paths {
         get: operations["get_approval_policies_api_approval_settings_policies_get"];
         /**
          * Update Approval Policies
-         * @description 批次更新審核政策（需 SETTINGS_WRITE / admin 權限）
+         * @description 批次更新審核政策（需 SETTINGS_WRITE / super_admin 權限）。
+         *
+         *     2026-07-13 放寬（spec §4.4）：移除 ROLE_HIERARCHY 四角色白名單 + 低審高層級檢查，
+         *     改驗證角色代碼存在於 DB roles 表、排除掛 parent flag 的角色（家長角色不可進入
+         *     審核鏈）。upsert 鍵改為 (submitter_role, doc_type) 複合鍵，支援 per doc_type
+         *     覆寫預設政策。異動與主交易同 commit 寫入 audit（鏈序=權力結構，不可只靠
+         *     fire-and-forget middleware）。
          */
         put: operations["update_approval_policies_api_approval_settings_policies_put"];
         post?: never;
@@ -6636,6 +6642,13 @@ export interface paths {
         /**
          * Batch Approve Leaves
          * @description 批次核准/駁回請假。兩階段原子提交：先全部驗證，再統一 commit。
+         *
+         *     逐級化（Task 8）：角色級資格快取（`_eligibility_cache`/`submitter_role_map` +
+         *     `_check_approval_eligibility`）已移除——逐級化後資格取決於每張單的當前關卡，
+         *     角色級快取假設失效（spec §4.3）。改為逐單呼叫 `resolve_stage_decision`；
+         *     中間關通過（`decision.is_final=False`）只寫本關 log，不觸發任何結案副作用
+         *     （業務守衛/薪資重算/考勤同步/補休 grant/通知），與單筆端點的中間關語意
+         *     一致（Task 7 review 裁定並以測試鎖定）。
          */
         post: operations["batch_approve_leaves_api_leaves_batch_approve_post"];
         delete?: never;
@@ -7439,6 +7452,13 @@ export interface paths {
         /**
          * Batch Approve Overtimes
          * @description 批次核准/駁回加班。兩階段原子提交：先全部驗證，再統一 commit。
+         *
+         *     逐級化（Task 8）：角色級資格快取（`_eligibility_cache`/`submitter_role_map` +
+         *     `_check_approval_eligibility`）已移除——逐級化後資格取決於每張單的當前關卡，
+         *     角色級快取假設失效（spec §4.3）。改為逐單呼叫 `resolve_stage_decision`；
+         *     中間關通過（`decision.is_final=False`）只寫本關 log，不觸發任何結案副作用
+         *     （守衛/薪資重算/補休配額/通知），與單筆端點的中間關語意一致（Task 7 review
+         *     裁定並以測試鎖定）。
          */
         post: operations["batch_approve_overtimes_api_overtimes_batch_approve_post"];
         delete?: never;
@@ -10869,6 +10889,13 @@ export interface paths {
          * Batch Approve Punch Corrections
          * @description 批次核准/駁回補打卡。Pass 1 純驗證收集 failed，Pass 2 逐筆 savepoint 套用，
          *     最後統一 commit。核准成功項會寫考勤 + 標薪資 stale。
+         *
+         *     逐級化（Task 8）：角色級資格快取（`_elig_cache`/`submitter_role_map` +
+         *     `_check_approval_eligibility`）已移除——逐級化後資格取決於每張單的當前關卡，
+         *     角色級快取假設失效（spec §4.3）。改為逐單呼叫 `resolve_stage_decision`；
+         *     中間關通過（`decision.is_final=False`）只寫本關 log，不呼叫
+         *     `_apply_correction_decision`（不動 status、不建 Attendance、不標薪資
+         *     stale），與單筆端點的中間關語意一致（Task 7 review 裁定並以測試鎖定）。
          */
         post: operations["batch_approve_punch_corrections_api_punch_corrections_batch_approve_post"];
         delete?: never;
@@ -15693,6 +15720,11 @@ export interface components {
             /** Approved */
             approved: boolean;
             /**
+             * Finalize All
+             * @default false
+             */
+            finalize_all: boolean;
+            /**
              * Force Overlap
              * @default false
              */
@@ -15711,6 +15743,11 @@ export interface components {
         api__punch_corrections__ApproveRequest: {
             /** Approved */
             approved: boolean;
+            /**
+             * Finalize All
+             * @default false
+             */
+            finalize_all: boolean;
             /** Rejection Reason */
             rejection_reason?: string | null;
         };
@@ -16126,6 +16163,11 @@ export interface components {
         AuthUserOut: {
             /** Employee Id */
             employee_id?: number | null;
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
             /** Id */
             id: number;
             /** Impersonation Mode */
@@ -16167,9 +16209,13 @@ export interface components {
         };
         /**
          * BatchApproveResultOut
-         * @description 批次核准/駁回回傳共用 shape — {succeeded, failed}。
+         * @description 批次核准/駁回回傳共用 shape — {succeeded, failed, succeeded_details}。
          *
          *     succeeded 為成功處理的紀錄 id 清單；failed 為失敗明細（id + 原因）。
+         *     succeeded_details（Task 8 逐級化）為每筆成功項的
+         *     {id, stage_approved, finalized, submitter_role}
+         *     明細——中間關通過（finalized=false）單據仍 pending，前端據此顯示「已過第 N 關」；
+         *     succeeded 維持原 id 清單形狀，既有消費端不受影響（原有欄位保留）。
          *     leaves / overtimes / punch_corrections 三個 batch-approve 端點回傳形狀一致，共用此 schema。
          */
         BatchApproveResultOut: {
@@ -16177,6 +16223,32 @@ export interface components {
             failed: components["schemas"]["BatchApproveFailItem"][];
             /** Succeeded */
             succeeded: number[];
+            /**
+             * Succeeded Details
+             * @default []
+             */
+            succeeded_details: components["schemas"]["BatchApproveSucceededDetail"][];
+        };
+        /**
+         * BatchApproveSucceededDetail
+         * @description 批次核准單筆成功明細（Task 8 逐級化新增）。
+         *
+         *     - stage_approved：本次簽核落在第幾關（1-based）；駁回路徑無關卡概念，為 None。
+         *     - finalized：本次操作是否為終局（最終關核准 / 駁回皆 True；中間關通過為
+         *       False，單據仍 pending 待下一關）。
+         *     - submitter_role：申請人角色稽核快照（review Important-1）。取
+         *       `decision.submitter_role`（單據 `submitter_role_snapshot` 快照優先，F2），
+         *       比舊制 `_get_submitter_roles` 即時查詢更準確——提單後被改角色不會重塑稽核值。
+         */
+        BatchApproveSucceededDetail: {
+            /** Finalized */
+            finalized: boolean;
+            /** Id */
+            id: number;
+            /** Stage Approved */
+            stage_approved?: number | null;
+            /** Submitter Role */
+            submitter_role: string;
         };
         /** BatchAttendanceUpdate */
         BatchAttendanceUpdate: {
@@ -20889,14 +20961,28 @@ export interface components {
         /**
          * LeaveApproveResultOut
          * @description PUT /leaves/{id}/approve 回傳。
+         *
+         *     逐級簽核（Task 7）：中間關通過只回 status="pending" + stage_approved /
+         *     next_stage_role / chain_length；最終關（含駁回、finalize_all、改判）維持
+         *     既有欄位（含既有結案副作用旗標）。
          */
         LeaveApproveResultOut: {
+            /** Chain Length */
+            chain_length?: number | null;
+            /** Id */
+            id?: number | null;
             /** Message */
             message: string;
+            /** Next Stage Role */
+            next_stage_role?: string | null;
             /** Salary Recalculated */
             salary_recalculated?: boolean | null;
             /** Salary Warning */
             salary_warning?: string | null;
+            /** Stage Approved */
+            stage_approved?: number | null;
+            /** Status */
+            status?: string | null;
             /** Warning */
             warning?: string | null;
         };
@@ -22409,6 +22495,11 @@ export interface components {
              * @default true
              */
             approved: boolean;
+            /**
+             * Finalize All
+             * @default false
+             */
+            finalize_all: boolean;
             /** Rejection Reason */
             rejection_reason?: string | null;
         };
@@ -22418,14 +22509,28 @@ export interface components {
          *
          *     核准 use_comp_leave=True 的單會發放補休配額（comp_leave_hours_granted）。
          *     後續薪資重算 → salary_recalculated + 可能 warning。
+         *
+         *     逐級簽核（Task 7）：中間關通過只回 status="pending" + stage_approved /
+         *     next_stage_role / chain_length；最終關（含駁回、finalize_all、改判）維持
+         *     既有欄位（含既有結案副作用旗標）。
          */
         OvertimeApproveResultOut: {
+            /** Chain Length */
+            chain_length?: number | null;
             /** Comp Leave Hours Granted */
             comp_leave_hours_granted?: number | null;
+            /** Id */
+            id?: number | null;
             /** Message */
             message: string;
+            /** Next Stage Role */
+            next_stage_role?: string | null;
             /** Salary Recalculated */
             salary_recalculated?: boolean | null;
+            /** Stage Approved */
+            stage_approved?: number | null;
+            /** Status */
+            status?: string | null;
             /** Warning */
             warning?: string | null;
         };
@@ -23757,6 +23862,11 @@ export interface components {
         PolicyItem: {
             /** Approver Roles */
             approver_roles: string;
+            /**
+             * Doc Type
+             * @default all
+             */
+            doc_type: string;
             /**
              * Is Active
              * @default true
@@ -25466,6 +25576,28 @@ export interface components {
              * @default []
              */
             supplies: components["schemas"]["PublicSupplyItem"][];
+        };
+        /**
+         * PunchCorrectionApproveResultOut
+         * @description PUT /punch-corrections/{id}/approve 回傳。
+         *
+         *     逐級簽核（Task 7）：中間關通過只回 status="pending" + stage_approved /
+         *     next_stage_role / chain_length；最終關（含駁回、finalize_all）維持既有
+         *     純 message 行為（考勤記錄已更新 / 已駁回）。
+         */
+        PunchCorrectionApproveResultOut: {
+            /** Chain Length */
+            chain_length?: number | null;
+            /** Id */
+            id?: number | null;
+            /** Message */
+            message: string;
+            /** Next Stage Role */
+            next_stage_role?: string | null;
+            /** Stage Approved */
+            stage_approved?: number | null;
+            /** Status */
+            status?: string | null;
         };
         /** PunchCorrectionBatchApproveRequest */
         PunchCorrectionBatchApproveRequest: {
@@ -27198,6 +27330,8 @@ export interface components {
         RoleUpdate: {
             /** Description */
             description?: string | null;
+            /** Flags */
+            flags?: string[] | null;
             /** Label */
             label?: string | null;
             /** Permissions */
@@ -49224,7 +49358,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DeleteResultOut"];
+                    "application/json": components["schemas"]["PunchCorrectionApproveResultOut"];
                 };
             };
             /** @description Validation Error */
