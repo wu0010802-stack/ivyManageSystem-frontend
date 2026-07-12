@@ -20,7 +20,7 @@ function makeSummary(overrides: Record<string, unknown> = {}) {
   }
 }
 
-const stubs = { KawaiiStar: true, BrandMark: true }
+const stubs = {}
 
 describe('SuccessSummaryModal email 提示', () => {
   it('neutral response 只列本次選擇，不宣稱已錄取或候補', () => {
@@ -50,7 +50,7 @@ describe('SuccessSummaryModal email 提示', () => {
       props: { summary: makeSummary() },
       global: { stubs },
     })
-    expect(wrapper.text()).not.toContain('將寄送至')
+    expect(wrapper.text()).not.toContain('將寄至')
   })
 
   it('不允許點背景誤關，完成按鈕清楚說明需先保存', async () => {
