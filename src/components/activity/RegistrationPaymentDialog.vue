@@ -146,9 +146,16 @@ watch(
 // 仍開著同一筆才套用。
 // fail-closed（audit F2）：載入失敗或回應缺 remaining_suggested_amount 時，不再保留全額
 // fallback，改歸 0 + 警告，強制人工輸入（form.amount=0 時送出鈕 :disabled 為 true）。
+// review P2#2（2026-07-12）：加請求序號守衛。同一筆報名關閉後快速重開會發出兩次載入，
+// 較慢的舊請求（可能是退費發生前的過時建議）最後 resolve 時若只比對 modelValue + reg id
+// 仍會覆寫較新請求的金額、其 finally 也會提前解鎖。stillCurrent 併驗序號、finally 僅
+// 最新請求解鎖。
+let refundSuggestionSeq = 0
 async function loadRefundSuggestion(registrationId: string | number) {
+  const seq = ++refundSuggestionSeq
   refundSuggestionLoading.value = true
   const stillCurrent = () =>
+    seq === refundSuggestionSeq &&
     props.modelValue && Number(props.registrationId) === Number(registrationId)
   const failClosed = () => {
     if (!stillCurrent()) return
@@ -168,7 +175,7 @@ async function loadRefundSuggestion(registrationId: string | number) {
   } catch {
     failClosed()
   } finally {
-    refundSuggestionLoading.value = false
+    if (seq === refundSuggestionSeq) refundSuggestionLoading.value = false
   }
 }
 

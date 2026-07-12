@@ -97,6 +97,31 @@ describe('POSSemesterReconciliation reload 序號守衛（F3）', () => {
     wrapper.unmount()
   })
 
+  it('班級選項 loadClassroomOptions 同守衛：舊學期班級不覆寫新學期（review P3）', async () => {
+    getReconMock.mockResolvedValue({
+      data: { items: [], totals: {}, truncated: false, total_active: 0 },
+    })
+    const c1 = deferred<unknown>() // mount 的 loadClassroomOptions（舊學期）
+    const c2 = deferred<unknown>() // 切學期後的 loadClassroomOptions（新學期）
+    getClassroomsMock.mockReturnValueOnce(c1.promise).mockReturnValueOnce(c2.promise)
+
+    const wrapper = mountRecon()
+    await flushPromises() // mount → loadClassroomOptions #1（c1 pending）
+
+    const termStore = useAcademicTermStore()
+    termStore.setTerm(termStore.school_year + 1, termStore.semester) // watch → #2
+    await flushPromises()
+
+    c2.resolve({ data: { items: [{ name: '新學期班' }] } }) // 新
+    await flushPromises()
+    c1.resolve({ data: { items: [{ name: '舊學期班' }] } }) // 舊（遲到）
+    await flushPromises()
+
+    const ss = wrapper.vm.$.setupState as { classroomOptions: string[] }
+    expect(ss.classroomOptions).toEqual(['新學期班'])
+    wrapper.unmount()
+  })
+
   it('最新請求正常寫入（無亂序時不受守衛影響）', async () => {
     getClassroomsMock.mockResolvedValue({ data: { items: [] } })
     getReconMock.mockResolvedValue({

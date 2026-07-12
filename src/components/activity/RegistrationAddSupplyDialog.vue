@@ -76,16 +76,23 @@ const availableSupplies = computed(() =>
   excludeAddedSupplies(supplies.value, props.existingSupplyIds ?? []),
 )
 
+// review P3（2026-07-12）：加請求序號守衛。[schoolYear, semester] watch 會清空 supplies
+// 快取，但在途的舊學期載入可在清空後 resolve、把舊學期用品塞回，接著 length>0 的快取短路
+// 使新學期永不重載 → 顯示錯學期用品。過期回應丟棄；學期 watch 同步 ++seq 使在途載入失效。
+let supplyLoadSeq = 0
 async function loadSupplies() {
   if (supplies.value.length > 0) return
+  const seq = ++supplyLoadSeq
   loadingSupplies.value = true
   try {
     const res = await getSupplies({ school_year: props.schoolYear, semester: props.semester })
+    if (seq !== supplyLoadSeq) return
     supplies.value = (res.data as { supplies?: Supply[] }).supplies || []
   } catch {
+    if (seq !== supplyLoadSeq) return
     ElMessage.warning('用品清單載入失敗')
   } finally {
-    loadingSupplies.value = false
+    if (seq === supplyLoadSeq) loadingSupplies.value = false
   }
 }
 
@@ -102,6 +109,7 @@ watch(
   () => [props.schoolYear, props.semester],
   () => {
     supplies.value = []
+    supplyLoadSeq++ // 使在途舊學期載入失效，避免其 resolve 後把舊學期用品塞回並被快取釘住
   }
 )
 

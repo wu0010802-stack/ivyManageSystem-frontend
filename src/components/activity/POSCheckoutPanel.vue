@@ -237,16 +237,22 @@ function formatTime(iso: string | null | undefined) {
 const termStore = useAcademicTermStore()
 
 const classroomOptions = ref<string[]>([])
+// review P3（2026-07-12）：加請求序號守衛。切學期時 watch 會重載班級選項，較慢的舊學期回應
+// 可最後覆寫 → POS 班級篩選顯示舊學期班級。過期回應丟棄不覆寫。
+let classroomOptionsSeq = 0
 async function loadClassroomOptions() {
+  const seq = ++classroomOptionsSeq
   try {
     const res = await getClassrooms({
       school_year: termStore.school_year,
       semester: termStore.semester,
     } as Parameters<typeof getClassrooms>[0])
+    if (seq !== classroomOptionsSeq) return
     const rows = (res.data as { items?: { name?: string }[] } | { name?: string }[] | null)
     const list = (rows as { items?: { name?: string }[] })?.items ?? (rows as { name?: string }[]) ?? []
     classroomOptions.value = list.map((c: { name?: string }) => c.name).filter((n): n is string => !!n)
   } catch {
+    if (seq !== classroomOptionsSeq) return
     classroomOptions.value = []
   }
 }

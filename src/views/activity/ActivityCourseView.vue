@@ -206,7 +206,7 @@
       <div class="promote-modal">
         <h3 class="promote-modal__title">確認手動升位</h3>
         <p class="promote-modal__body">
-          將<strong>跳過順序</strong>，立即升此候補為<strong>正式報名</strong>（不需家長 48h 確認窗）。系統會自動推送 LINE 告知家長。確定？
+          將<strong>跳過順序</strong>，立即升此候補為<strong>正式報名</strong>（不需家長 48h 確認窗）。系統會嘗試以 LINE 通知家長；若家長未綁定 LINE（如校外／未匹配報名），可能收不到通知，屆時請依 staff 通知中的提示改以電話主動告知新增費用。確定？
         </p>
         <div class="promote-modal__actions">
           <el-button @click="cancelPromote">取消</el-button>
@@ -394,31 +394,49 @@ function occupying(row: Course): number {
   return (row.enrolled || 0) + (row.promoted_pending || 0)
 }
 
+// review P1（2026-07-12）：候補/報名 Drawer 的載入需與 fetchCourses 同樣的請求序號守衛，
+// 否則快速切換不同課程時較慢的舊課回應會最後覆寫較新課程的清單 → Drawer 標題顯示新課、
+// 列卻屬舊課；此時 confirmPromote 以最新 waitlistCourse.id + 舊課列的 registration_id
+// 送出，同生同時候補兩課時該 (registration_id, course_id) pair 恰為合法 → 對錯課升位加費。
+let waitlistSeq = 0
+let enrolledSeq = 0
+
 async function openEnrolled(row: Course) {
+  const seq = ++enrolledSeq
   enrolledCourse.value = { id: row.id, name: row.name }
+  enrolledItems.value = [] // 切課先清空，避免新課標題下短暫顯示舊課清單
   enrolledDrawer.value = true
   enrolledLoading.value = true
   try {
     const res = await getCourseEnrolled(row.id)
+    if (seq !== enrolledSeq) return // 過期回應：已切到別課，丟棄不覆寫
     enrolledItems.value = (res.data as { items: EnrolledItem[] }).items
   } catch {
+    if (seq !== enrolledSeq) return
     ElMessage.error('載入報名名單失敗')
   } finally {
-    enrolledLoading.value = false
+    if (seq === enrolledSeq) enrolledLoading.value = false
   }
 }
 
 async function openWaitlist(row: Course) {
+  const seq = ++waitlistSeq
+  // 切課時重置殘留的手動升位確認框：el-drawer destroy-on-close 只拆 modal DOM、不清
+  // promoteDialog 狀態，換課重開 Drawer 會帶著舊課 registration 重現升位框（見上方 P1 註）。
+  cancelPromote()
   waitlistCourse.value = { id: row.id, name: row.name }
+  waitlistItems.value = [] // 切課先清空，避免新課標題下短暫顯示舊課候補列
   waitlistDrawer.value = true
   waitlistLoading.value = true
   try {
     const res = await getCourseWaitlist(row.id)
+    if (seq !== waitlistSeq) return // 過期回應：已切到別課，丟棄不覆寫（否則標題與清單錯配）
     waitlistItems.value = (res.data as { items: WaitlistItem[] }).items
   } catch {
+    if (seq !== waitlistSeq) return
     ElMessage.error('載入候補名單失敗')
   } finally {
-    waitlistLoading.value = false
+    if (seq === waitlistSeq) waitlistLoading.value = false
   }
 }
 
