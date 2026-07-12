@@ -37,6 +37,9 @@ vi.mock('@/utils/auth', () => ({
     APPRAISAL_READ: 'APPRAISAL_READ',
   },
   getUserInfo: () => ({ permission_names: ['*'], name: 'admin' }),
+  // AdminSidebar 的 canView 現直接委派 hasPermission（見 src/utils/auth.ts）；
+  // 本檔 getUserInfo mock 固定回傳 wildcard '*'，故 hasPermission 對任何權限名一律放行。
+  hasPermission: () => true,
 }))
 
 const router = createRouter({

@@ -256,7 +256,7 @@ import {
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Trophy, WarningFilled
 } from '@element-plus/icons-vue'
-import { PERMISSION_NAMES, getUserInfo } from '@/utils/auth'
+import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
 
 const props = withDefaults(defineProps<{
   pendingApprovals?: number
@@ -280,26 +280,14 @@ const route = useRoute()
 const isCollapse = ref(false)
 const closeButtonRef = ref<HTMLButtonElement | null>(null)
 
+// 直接委派 src/utils/auth.ts 的 hasPermission()（含 teacher 短路 / null-lockdown /
+// wildcard / bare 命中 / scope-qualified 後綴四段判斷），避免側欄自己重寫第二份權限實作
+// 而漏掉 scope-aware 分支（曾發生：持 'STUDENTS_READ:own_class' 者路由可達但選單被隱藏）。
 const canView = computed(() => {
   route.path
 
-  const userInfo = getUserInfo()
-  if (!userInfo || userInfo.role === 'teacher') {
-    return {}
-  }
-
-  const permNames = userInfo.permission_names as string[] | null | undefined
-  // 後端 resolve 失敗或刻意未設 → 視為無權限（lockdown），避免空 sidebar 反而誤露功能
-  if (!permNames) {
-    return Object.fromEntries(Object.keys(PERMISSION_NAMES).map((name) => [name, false]))
-  }
-  // wildcard：全開
-  if (permNames.includes('*')) {
-    return Object.fromEntries(Object.keys(PERMISSION_NAMES).map((name) => [name, true]))
-  }
-  const permSet = new Set(permNames)
   return Object.fromEntries(
-    Object.keys(PERMISSION_NAMES).map((name) => [name, permSet.has(name)])
+    Object.keys(PERMISSION_NAMES).map((name) => [name, hasPermission(name)])
   )
 })
 

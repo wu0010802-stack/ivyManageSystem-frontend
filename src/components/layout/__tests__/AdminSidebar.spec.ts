@@ -10,13 +10,12 @@ vi.mock('vue-router', () => ({
   }),
 }))
 
-const getUserInfo = vi.fn()
-vi.mock('@/utils/auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/utils/auth')>()
-  return { ...actual, getUserInfo: (...a: unknown[]) => getUserInfo(...a) }
-})
-
 import AdminSidebar from '../AdminSidebar.vue'
+// AdminSidebar 的 canView 直接委派真實 hasPermission()（見 src/utils/auth.ts），其內部呼叫
+// 的是模組自身的 getUserInfo 綁定，mock 匯出的 getUserInfo 攔截不到那條內部呼叫路徑
+// （ESM 具名匯出各自綁定，同模組內部呼叫不會走被覆寫的匯出物件）。改用真實 setUserInfo
+// 灌狀態，讓 getUserInfo/hasPermission 讀到同一份單例，測試才是對真實行為斷言。
+import { setUserInfo } from '@/utils/auth'
 
 const passthrough = { template: '<div><slot name="title" /><slot /></div>' }
 const stubs = {
@@ -34,7 +33,7 @@ function mountWith(
   props: { isMobile?: boolean; mobileOpen?: boolean } = {},
   attachTo?: HTMLElement,
 ) {
-  getUserInfo.mockReturnValue({ role: 'admin', permission_names: perms })
+  setUserInfo({ role: 'admin', permission_names: perms })
   return mount(AdminSidebar, { props, attachTo, global: { stubs } })
 }
 
@@ -99,6 +98,25 @@ describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
     expect(subs(w)).toContain('group-activity')
     expect(items(w)).toContain('/activity/changes')
     expect(subs(w)).not.toContain('group-reports')
+  })
+
+  it('只有 scope-qualified STUDENTS_READ:own_class（無裸 STUDENTS_READ）→ 學生選單仍可見（對齊 hasPermission 的 scope-aware 判斷，回歸修復）', () => {
+    const w = mountWith(['STUDENTS_READ:own_class'])
+    expect(subs(w)).toContain('group-students')
+    expect(items(w)).toContain('/students')
+  })
+
+  it('無效 scope 後綴（非 scope-aware code 帶 scope 後綴）→ fail-closed 不顯示對應選單', () => {
+    // EMPLOYEES_READ 不在 SCOPE_AWARE_CODES 內，帶 scope 後綴應視為無效（不可誤放行）
+    const w = mountWith(['EMPLOYEES_READ:own_class'])
+    expect(items(w)).not.toContain('/employees')
+  })
+
+  it('teacher 角色即使 permission_names 為 wildcard 仍完全看不到 admin 選單（短路防提權，不可移除）', () => {
+    setUserInfo({ role: 'teacher', permission_names: ['*'] })
+    const w = mount(AdminSidebar, { global: { stubs } })
+    expect(items(w)).toEqual([])
+    expect(subs(w)).toEqual([])
   })
 })
 
