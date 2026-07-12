@@ -14,17 +14,17 @@
 
 import { reactive, ref, computed } from 'vue'
 import { toggleArrayItem } from '@/utils/arrayUtils'
-
-const TW_MOBILE_RE = /^09\d{8}$/
+import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 // 保守 email 格式（與後端 EmailStr 寬嚴不必一致：打錯只是收不到信，無安全後果）
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 // 對齊後端 DB String(200)
 const EMAIL_MAX_LEN = 200
 
-export function normalizeMobile(raw: unknown) {
-  return String(raw || '').replace(/[\s\-().]/g, '')
-}
+// normalizeMobile 原本在此檔定義；F4 拆分時發現 ActivityPublicQueryView.vue 有一份
+// 一模一樣的重複，已收斂至 @/utils/phone 單一事實來源，此處 re-export 維持既有呼叫端
+// （import { normalizeMobile } from '@/composables/usePublicRegistrationForm'）相容。
+export { normalizeMobile }
 
 function toISODate(d: Date) {
   const y = d.getFullYear()

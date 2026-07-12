@@ -1,20 +1,6 @@
 <template>
   <div class="public-query-page">
-    <div class="toast-container" aria-live="polite" aria-atomic="true">
-      <div
-        v-for="t in toasts"
-        :key="t.id"
-        class="toast"
-        :class="t.type"
-        :role="t.type === 'error' ? 'alert' : 'status'"
-      >
-        <div class="toast-icon" v-html="TOAST_ICONS[t.type] || TOAST_ICONS.info" />
-        <div class="toast-content">
-          <div class="toast-message">{{ t.message }}</div>
-        </div>
-        <button type="button" class="toast-close" aria-label="關閉通知" @click="dismissToast(t.id)">&times;</button>
-      </div>
-    </div>
+    <ToastStack :toasts="toasts" @dismiss="dismissToast" />
 
     <div class="page-wrapper">
       <header class="page-header">
@@ -483,72 +469,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import {
-  publicQueryRegistration,
-  publicQueryByToken,
-  publicUpdateRegistration,
-  publicConfirmPromotion,
-  publicDeclinePromotion,
-  getPublicBootstrap,
-} from '@/api/activityPublic'
+import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { getPublicBootstrap } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
+import { usePublicRegistrationQuery } from '@/composables/usePublicRegistrationQuery'
+import { useRegistrationEditSave } from '@/composables/useRegistrationEditSave'
+import { usePromotionActions } from '@/composables/usePromotionActions'
 import { toggleArrayItem } from '@/utils/arrayUtils'
-import { estimateCourseStatus } from '@/utils/activityDisplay'
-import {
-  priceFromList,
-  buildSupplySnapshotMap,
-  resolveSupplyPrice,
-  sumCourseFees,
-  sumSupplyFees,
-} from '@/utils/activityPricing'
-import type { ApiBody } from '@/api/_generated/typed'
+import { normalizeMobile } from '@/utils/phone'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
+import ToastStack from './components/ToastStack.vue'
 
 interface Toast { id: number; message: string; type: string }
-interface CourseEntry {
-  name: string
-  status: string
-  waitlist_position?: number | null
-  waitlist_total?: number | null
-  confirm_deadline?: string | null
-  course_id?: number
-  price?: number | string
-}
-interface QueryResult {
-  id: number
-  name: string
-  birthday: string
-  class_name?: string
-  parent_phone?: string
-  total_amount?: number | string
-  paid_amount?: number | string
-  updated_at?: string
-  courses?: CourseEntry[]
-  // P2：supplies 回 {name, price}（price=報名當下 price_snapshot）；舊資料容錯為 string。
-  supplies?: Array<string | { name: string; price?: number }>
-  field_state?: {
-    class_source?: string
-    class_editable?: boolean
-    review_state?: string
-  }
-  // 資安 #5：此報名是否需帶 query_token 才能做破壞性 mutation（=後端有 query_token_hash）。
-  // 三欄查詢（無 token）載入 token-bearing 報名時，前端據此顯示唯讀。
-  query_token_required?: boolean
-  // 是否已完成付款（含超繳），後端即時計算後回傳（非快取值）；true 時整單唯讀鎖定。
-  is_paid?: boolean
-}
-
-const TOAST_ICONS: Record<string, string> = {
-  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-  error: '<svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
-  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-  info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1e3a8a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-}
 
 interface CourseOption { name: string; price?: string | number; [key: string]: unknown }
 interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
@@ -575,64 +510,6 @@ const courses = computed(() => _courses.value as CourseOption[])
 const supplies = computed(() => _supplies.value as SupplyOption[])
 const classes = computed(() => (_classes.value as unknown[]).map(String))
 
-// 查詢模式：'token' 用查詢碼+手機（Phase 3）；'fields' 用姓名+生日+手機（向後相容）
-// 預設 'fields'（最小驚訝：既有家長進來看到熟悉 UI）；URL 帶 ?token= 時 onMounted 切到 token 模式
-const route = useRoute()
-const queryMode = ref<'fields' | 'token'>('fields')
-
-const queryForm = reactive({ token: '', name: '', birthday: '', parent_phone: '' })
-const queryLoading = ref(false)
-const queryResult = ref<QueryResult | null>(null)
-const searchError = ref('')
-const nameTouched = ref(false)
-const birthdayTouched = ref(false)
-const phoneTouched = ref(false)
-const tokenTouched = ref(false)
-const tokenValid = computed(() => queryForm.token.trim().length >= 8)
-
-const TW_MOBILE_RE = /^09\d{8}$/
-function normalizeMobile(raw: string): string {
-  return String(raw || '').replace(/[\s\-().]/g, '')
-}
-const phoneValid = computed(() =>
-  TW_MOBILE_RE.test(normalizeMobile(queryForm.parent_phone))
-)
-
-// 資安 #5：以 token 模式載入時手上才有 query_token；三欄模式為 null。
-const activeQueryToken = computed(() =>
-  queryMode.value === 'token' && queryForm.token.trim() ? queryForm.token.trim() : null,
-)
-// 可否進行破壞性 mutation（修改/確認/放棄）：
-// - 後端標 query_token_required（token-bearing 報名）→ 必須手上有 token
-// - 否則（舊報名 query_token_required=false）→ 沿用三欄，永遠可改
-const canMutate = computed(
-  () => !queryResult.value?.query_token_required || !!activeQueryToken.value,
-)
-
-// 已付款完結（含超繳）整單鎖定：後端 public_update 對此情境一律 409，
-// 前端直接改渲染純文字唯讀摘要（不渲染表單控制項與儲存按鈕）。
-const isPaymentLocked = computed(() => Boolean(queryResult.value?.is_paid))
-
-// 鎖定唯讀摘要用：supplies 容錯舊資料 string，正規化成 {name, price?}
-const lockedSummarySupplies = computed(() =>
-  (queryResult.value?.supplies ?? []).map((s) =>
-    typeof s === 'string' ? { name: s, price: undefined } : s,
-  ),
-)
-
-const editForm = reactive({
-  class_name: '',
-  selectedCourses: [] as string[],
-  selectedSupplies: [] as string[],
-  new_parent_phone: '',
-})
-const editSubmitting = ref(false)
-const newPhoneTouched = ref(false)
-const newPhoneValid = computed(() => {
-  const raw = normalizeMobile(editForm.new_parent_phone)
-  return raw === '' || TW_MOBILE_RE.test(raw)
-})
-
 const toasts = ref<Toast[]>([])
 let toastSeq = 0
 function showToast(message: string, type = 'success', duration = 4500) {
@@ -644,435 +521,59 @@ function dismissToast(id: number) {
   toasts.value = toasts.value.filter((t) => t.id !== id)
 }
 
-const nameValid = computed(() => queryForm.name.trim().length > 0)
-const birthdayErrorMsg = ref('請選擇幼兒生日')
-const birthdayValid = computed(() => {
-  if (!queryForm.birthday) {
-    birthdayErrorMsg.value = '請選擇幼兒生日'
-    return false
-  }
-  const date = new Date(queryForm.birthday)
-  const now = new Date()
-  if (date > now) {
-    birthdayErrorMsg.value = '生日不能是未來的日期'
-    return false
-  }
-  // 與後端 20 年窗口同步：查詢時也擋明顯不合理的生日，避免 round-trip 才失敗
-  const earliest = new Date(now)
-  earliest.setFullYear(earliest.getFullYear() - 20)
-  if (date < earliest) {
-    birthdayErrorMsg.value = '生日超出合理範圍'
-    return false
-  }
-  return true
+// F4（2026-07-12）：查詢 / 編修草稿 / 費用試算 / 候補動作分別抽至 3 個 composable
+// （src/composables/usePublicRegistrationQuery.ts / useRegistrationEditSave.ts /
+// usePromotionActions.ts），詳細職責見各檔頂部說明。此檔只保留 options 載入、
+// toast、生命週期，其餘綁定名稱與拆分前完全相同，template 不需改動。
+const {
+  queryMode, queryForm, queryLoading, queryResult, searchError,
+  nameTouched, birthdayTouched, phoneTouched, tokenTouched,
+  tokenValid, phoneValid, nameValid, birthdayErrorMsg, birthdayValid,
+  activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
+  editForm, statusBadgeFor, waitlistCourses, classEditable,
+  handleQuery, hydrateResult, refetchCurrent, initFromRoute,
+} = usePublicRegistrationQuery({ refreshAvailability, startPolling })
+
+const {
+  editSubmitting, newPhoneTouched, newPhoneValid,
+  estimatedCourseStatus, courseLocked, onToggleCourse,
+  feePreview, saveBlocked, handleSaveChanges,
+} = useRegistrationEditSave({
+  editForm,
+  queryResult,
+  queryForm,
+  activeQueryToken,
+  courses,
+  supplies,
+  availability,
+  hydrateResult,
+  refetchCurrent,
+  showToast,
 })
+// estimatedCourseStatus 未在 template 直接使用（內部由 feePreview 消費），但既有測試
+// 透過 wrapper.vm.estimatedCourseStatus 檢視估算結果，需維持頂層綁定；void 只為滿足
+// noUnusedLocals，不影響 runtime（wrapper.vm 存取不受此列是否「被使用」影響）。
+void estimatedCourseStatus
 
-function statusBadgeFor(name: string): string {
-  if (!queryResult.value) return ''
-  const entry = (queryResult.value.courses || []).find((c) => c.name === name)
-  if (!entry) return ''
-  if (entry.status === 'waitlist') {
-    return `候補第 ${entry.waitlist_position ?? '?'} 位`
-  }
-  if (entry.status === 'promoted_pending') {
-    return '已升正式（待確認）'
-  }
-  return ''
-}
-
-// 候補位次清單：供獨立候補摘要區塊使用（不依賴 options 列表）
-const waitlistCourses = computed(() => {
-  if (!queryResult.value) return []
-  return (queryResult.value.courses || []).filter((c) => c.status === 'waitlist')
+const {
+  pendingPromotions, promotionSubmitting,
+  formatDeadline, formatCountdown,
+  handleConfirmPromotion, handleDeclinePromotion,
+} = usePromotionActions({
+  queryResult,
+  activeQueryToken,
+  queryForm,
+  refetchCurrent,
+  hydrateResult,
+  showToast,
 })
-
-// 候補已升正式待確認清單（供獨立確認區塊使用）
-const pendingPromotions = computed(() => {
-  if (!queryResult.value) return []
-  return (queryResult.value.courses || []).filter(
-    (c) => c.status === 'promoted_pending' && c.confirm_deadline,
-  )
-})
-
-// field_state 由後端決定。Fallback 預設為「已比對」，保守鎖住班級欄位避免
-// 舊版後端漏回此欄位時 UI 出現可改 → 後端覆寫的不一致。
-const fieldState = computed(() => {
-  const fs = queryResult.value?.field_state
-  return {
-    class_source: fs?.class_source ?? 'student_record',
-    class_editable: fs?.class_editable ?? false,
-    review_state: fs?.review_state ?? 'confirmed',
-  }
-})
-const classEditable = computed(() => fieldState.value.class_editable === true)
-
-// 估算修改後課程狀態 — 與後端 _attach_courses 對齊：刪後重插時依「現有名額」決定。
-// 當課程額滿（availability===0）且本生原本已 enrolled/promoted_pending 時，
-// 後端 update 排除本生自己重新計算，本生座位必然保留 → 估為 enrolled（修 P2 bug）。
-// availability[name]：>0 有名額（enrolled）、=0 無名額但開候補（依本生原狀態判定）、<0 已滿不開候補。
-function estimatedCourseStatus(courseName: string): string {
-  const availabilityMap = (availability.value as Record<string, number> | null) ?? {}
-  const existingCourses = queryResult.value?.courses ?? []
-  return estimateCourseStatus(courseName, availabilityMap, existingCourses)
-}
-
-// 滿額且不開放候補（availability===-1）的課程鎖定（修 P2）：
-// 後端 _attach_courses 對「滿額且 allow_waitlist=false」fail-closed raise 400，
-// 純前端契約缺口。此處 disable checkbox + 標示，避免家長勾了注定 400 的課。
-// **保留本生既有選擇例外**：本生原 enrolled/promoted_pending 的課後端 update 排除自己、
-// 座位保留，不可鎖（否則家長一存就被自己原課 400 卡死）。
-function courseLocked(courseName: string): boolean {
-  const availabilityMap = (availability.value as Record<string, number> | null) ?? {}
-  if (availabilityMap[courseName] !== -1) return false
-  const orig = (queryResult.value?.courses ?? []).find((c) => c.name === courseName)
-  if (orig?.status === 'enrolled' || orig?.status === 'promoted_pending') return false
-  return true
-}
-
-// checkbox change 守衛：鎖定且尚未勾選的課不可加入（已勾的可取消，避免卡死）
-function onToggleCourse(courseName: string): void {
-  if (courseLocked(courseName) && !editForm.selectedCourses.includes(courseName)) return
-  toggleArrayItem(editForm.selectedCourses, courseName)
-}
-
-// 儲存前費用預覽：估算新應繳並比對已繳，及早警示退費場景。
-// 價格來源須與後端 /public/update 的 diff 更新對齊（code review P2）：未變更的課程/用品
-// 後端保留原列與 price_snapshot（不重抓價），新增品項才以目前 DB 價建立 snapshot。因此
-// 既有品項用 queryResult 回的 snapshot（courses[].price / supplies[].price）估算，新增品項
-// 才用目前 option 價——否則後台調價後，家長保留原品項也會被誤判退費而擋下儲存。
-// 候補/promoted_pending 不計費；退費警告以「已繳 > 估算新應繳」為準（與後端 409 一致）。
-const feePreview = computed(() => {
-  if (!queryResult.value) return null
-  const existingCourses = queryResult.value.courses ?? []
-  // 既有用品的 snapshot 價 map（物件型保留、舊資料 string 跳過）；編修模式既有品項優先用此價。
-  const existingSupplyPrice = buildSupplySnapshotMap(queryResult.value.supplies ?? [])
-  // 課程：只算 enrolled；既有課用 snapshot 價（courses[].price），新增課才用目前 option 價。
-  const newCourseTotal = sumCourseFees(editForm.selectedCourses, {
-    // promoted_pending 佔位保留但未確認：後端 diff-keep 保留原 status 且計費只算
-    // enrolled；estimateCourseStatus 對本生原 pending 課回 'enrolled' 是「座位保留」
-    // 語意非計費語意，直接以原狀態排除。否則零改動即虛報「需補繳」、wouldOverpay
-    // 用虛胖 newTotal 漏擋退費場景吃後端 409（audit C-1，2026-07-02）。
-    isEnrolled: (name) => {
-      const orig = existingCourses.find((c) => c.name === name)
-      if (orig?.status === 'promoted_pending') return false
-      return estimatedCourseStatus(name) === 'enrolled'
-    },
-    resolvePrice: (name) => {
-      const existing = existingCourses.find((c) => c.name === name)
-      return existing
-        ? priceFromList(name, existingCourses)
-        : priceFromList(name, courses.value)
-    },
-  })
-  // 用品：既有品項用 snapshot 價、新增品項用目前 option 價。
-  const newSupplyTotal = sumSupplyFees(editForm.selectedSupplies, {
-    resolvePrice: (name) => resolveSupplyPrice(name, existingSupplyPrice, supplies.value),
-  })
-  const newTotal = newCourseTotal + newSupplyTotal
-  const originalTotal = Number(queryResult.value.total_amount || 0)
-  const paidAmount = Number(queryResult.value.paid_amount || 0)
-  const wouldOverpay = newTotal < paidAmount
-  return {
-    originalTotal,
-    newTotal,
-    paidAmount,
-    diff: newTotal - originalTotal,
-    additionalDue: newTotal > paidAmount ? newTotal - paidAmount : 0,
-    refundNeeded: wouldOverpay ? paidAmount - newTotal : 0,
-    wouldOverpay,
-    hasChange: newTotal !== originalTotal,
-  }
-})
-
-const saveBlocked = computed(() => Boolean(feePreview.value?.wouldOverpay))
-
-function formatDeadline(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${y}-${m}-${day} ${hh}:${mm}`
-}
-
-function formatCountdown(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const diffMs = new Date(iso).getTime() - Date.now()
-  if (diffMs <= 0) return '已逾期'
-  const hours = Math.floor(diffMs / 3600000)
-  const mins = Math.floor((diffMs % 3600000) / 60000)
-  return hours >= 1 ? `剩 ${hours} 小時` : `剩 ${mins} 分鐘`
-}
-
-const promotionSubmitting = ref<number | null>(null)
-
-async function handleConfirmPromotion(item: CourseEntry) {
-  promotionSubmitting.value = item.course_id ?? null
-  try {
-    const phonePayload = normalizeMobile(queryForm.parent_phone)
-    const res = await publicConfirmPromotion(queryResult.value!.id, item.course_id!, {
-      name: queryResult.value!.name,
-      birthday: queryResult.value!.birthday || queryForm.birthday,
-      parent_phone: phonePayload,
-      // 資安 #5：token-bearing 報名確認候補需帶 query_token（舊報名為 null）
-      query_token: activeQueryToken.value ?? undefined,
-    })
-    showToast((res as { data?: { message?: string } })?.data?.message || '已確認升為正式', 'success')
-    // 重新查詢以更新狀態：沿用當前查詢模式（token 模式用 token 查詢），避免硬用
-    // 三欄查詢在多筆跨學期 active 報名時跳到別的學期報名。
-    // 內層 try：mutation 已成功，刷新失敗（公開查詢限流 / 網路抖動）不可落到
-    // 外層 catch 誤報「確認失敗」——家長會重按吃 409（audit C-2，2026-07-02）
-    try {
-      hydrateResult(await refetchCurrent(phonePayload))
-    } catch {
-      showToast('已確認成功，但頁面刷新失敗，請稍後重新查詢查看最新狀態', 'warning', 6000)
-    }
-  } catch (err) {
-    showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '確認失敗', 'error')
-  } finally {
-    promotionSubmitting.value = null
-  }
-}
-
-async function handleDeclinePromotion(item: CourseEntry) {
-  if (!window.confirm(`確定要放棄「${item.name}」的正式名額？\n放棄後將遞補給下一位候補，無法復原。`)) {
-    return
-  }
-  promotionSubmitting.value = item.course_id ?? null
-  try {
-    const phonePayload = normalizeMobile(queryForm.parent_phone)
-    const res = await publicDeclinePromotion(queryResult.value!.id, item.course_id!, {
-      name: queryResult.value!.name,
-      birthday: queryResult.value!.birthday || queryForm.birthday,
-      parent_phone: phonePayload,
-      // 資安 #5：token-bearing 報名放棄候補需帶 query_token（舊報名為 null）
-      query_token: activeQueryToken.value ?? undefined,
-    })
-    showToast((res as { data?: { message?: string } })?.data?.message || '已放棄該名額', 'warning')
-    // 沿用當前查詢模式刷新（同 handleConfirmPromotion），避免三欄查詢跳學期。
-    // 內層 try：同 confirm——mutation 已成功，刷新失敗不可誤報「放棄失敗」
-    try {
-      hydrateResult(await refetchCurrent(phonePayload))
-    } catch {
-      showToast('已放棄成功，但頁面刷新失敗，請稍後重新查詢查看最新狀態', 'warning', 6000)
-    }
-  } catch (err) {
-    showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '放棄失敗', 'error')
-  } finally {
-    promotionSubmitting.value = null
-  }
-}
-
-async function handleQuery() {
-  // 兩種模式分流驗證 + 不同 API
-  phoneTouched.value = true
-  if (!phoneValid.value) return
-
-  if (queryMode.value === 'token') {
-    tokenTouched.value = true
-    if (!tokenValid.value) return
-    queryLoading.value = true
-    searchError.value = ''
-    queryResult.value = null
-    try {
-      const res = await publicQueryByToken(
-        queryForm.token.trim(),
-        normalizeMobile(queryForm.parent_phone),
-      )
-      hydrateResult((res as { data: QueryResult }).data)
-    } catch (err) {
-      searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-        || '查無對應報名，請確認查詢碼與手機號碼是否正確。'
-    } finally {
-      queryLoading.value = false
-    }
-    return
-  }
-
-  // 三欄模式（fields）— 向後相容
-  nameTouched.value = true
-  birthdayTouched.value = true
-  if (!nameValid.value || !birthdayValid.value) return
-
-  queryLoading.value = true
-  searchError.value = ''
-  queryResult.value = null
-  try {
-    const res = await publicQueryRegistration(
-      queryForm.name.trim(),
-      queryForm.birthday,
-      normalizeMobile(queryForm.parent_phone)
-    )
-    hydrateResult((res as { data: QueryResult }).data)
-  } catch (err) {
-    // 通用錯誤：404 / 403 均一律顯示同樣訊息，不透露哪一欄錯
-    searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-      || '查無對應報名，請確認三項資料是否與報名時一致。'
-  } finally {
-    queryLoading.value = false
-  }
-}
-
-function hydrateResult(data: QueryResult) {
-  queryResult.value = data
-  editForm.class_name = data.class_name || ''
-  editForm.selectedCourses = (data.courses || []).map((c) => c.name)
-  editForm.selectedSupplies = Array.isArray(data.supplies)
-    ? data.supplies.map((s) => (typeof s === 'string' ? s : s.name))
-    : []
-  editForm.new_parent_phone = ''
-  newPhoneTouched.value = false
-  // availability 只有「編輯課程」介面才用；查詢階段不輪詢。查詢命中→進入編輯介面時
-  // 才首次抓 availability 並起 30s 輪詢（avoid 查詢頁背景空轉）。
-  ensureAvailabilityPolling()
-}
-
-// availability 輪詢只起一次（家長可能多次重查，prevent 疊加 interval）
-const availabilityPollingStarted = ref(false)
-function ensureAvailabilityPolling() {
-  if (availabilityPollingStarted.value) return
-  availabilityPollingStarted.value = true
-  refreshAvailability()
-  startPolling(30000)
-}
-
-// 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
-async function refetchCurrent(phoneOverride?: string): Promise<QueryResult> {
-  const phone = phoneOverride || normalizeMobile(queryForm.parent_phone)
-  if (queryMode.value === 'token' && queryForm.token) {
-    const r = await publicQueryByToken(queryForm.token.trim(), phone)
-    return (r as { data: QueryResult }).data
-  }
-  const r = await publicQueryRegistration(
-    queryResult.value?.name || queryForm.name.trim(),
-    queryResult.value?.birthday || queryForm.birthday,
-    phone,
-  )
-  return (r as { data: QueryResult }).data
-}
-
-async function handleSaveChanges() {
-  if (!editForm.class_name) {
-    showToast('請選擇班級', 'error')
-    return
-  }
-  if (saveBlocked.value) {
-    showToast('此修改會產生退費，請聯繫校方協助處理', 'warning', 6000)
-    return
-  }
-
-  const oldPhone = normalizeMobile(queryForm.parent_phone)
-  const newPhoneRaw = normalizeMobile(editForm.new_parent_phone)
-  if (newPhoneRaw && !TW_MOBILE_RE.test(newPhoneRaw)) {
-    newPhoneTouched.value = true
-    showToast('新手機號碼格式錯誤', 'error')
-    return
-  }
-  const phoneWillChange = newPhoneRaw && newPhoneRaw !== oldPhone
-
-  editSubmitting.value = true
-  try {
-    // 契約 PublicCourseItem/PublicSupplyItem 只收 name（價格後端以 DB price_snapshot 為準）
-    const coursesPayload = editForm.selectedCourses.map((name) => ({ name }))
-    const suppliesPayload = editForm.selectedSupplies.map((name) => ({ name }))
-
-    const payload: ApiBody<'/activity/public/update', 'post'> = {
-      id: queryResult.value!.id,
-      name: queryResult.value!.name,
-      birthday: queryResult.value!.birthday || queryForm.birthday,
-      parent_phone: oldPhone,
-      class: editForm.class_name,
-      courses: coursesPayload,
-      supplies: suppliesPayload,
-      remark: '',
-    }
-    if (phoneWillChange) {
-      payload.new_parent_phone = newPhoneRaw
-    }
-    // 樂觀鎖：把當前查詢回來的 updated_at 帶回去，後端比對不符即拒（409）
-    if (queryResult.value!.updated_at) {
-      payload.if_unmodified_since = queryResult.value!.updated_at
-    }
-    // 資安 #5：token-bearing 報名修改需帶 query_token（舊報名為 null，後端沿用三欄）
-    if (activeQueryToken.value) {
-      payload.query_token = activeQueryToken.value
-    }
-    const res = await publicUpdateRegistration(payload)
-
-    showToast((res as { data?: { message?: string } })?.data?.message || '資料更新成功！', 'success')
-    if (phoneWillChange) {
-      queryForm.parent_phone = newPhoneRaw
-    }
-    // 2026-07-08：查詢碼由三欄位確定性派生 — 換手機後後端重派生並回新明文 token
-    // （rotated_query_token，僅此一次），立即替換手上舊 token，否則後續 mutation 全 404。
-    // （rotation 僅發生於 token 模式的換手機更新 — 無 token 的舊報名不重派生）
-    const rotatedToken = (res as { data?: { rotated_query_token?: string | null } })?.data?.rotated_query_token
-    if (rotatedToken) {
-      queryForm.token = rotatedToken
-    }
-    // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
-    // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。
-    hydrateResult((res as { data: QueryResult }).data)
-  } catch (err) {
-    const apiErr = err as { response?: { status?: number; data?: { detail?: string } } }
-    const status = apiErr.response?.status
-    const detail = apiErr.response?.data?.detail
-    // 409 stale：資料已被校方更新。提示家長 + 自動重抓最新狀態，但不自動重送
-    // （家長要重新確認新狀態下的修改是否仍合理）。
-    if (status === 409 && typeof detail === 'string' && detail.includes('資料已被校方更新')) {
-      showToast('資料已被校方更新，已為您重新整理最新狀態', 'warning', 6000)
-      // stale 時 update 並未成功，後端 reg.parent_phone 仍是舊號，重新查詢用 oldPhone
-      try {
-        const refreshed = await refetchCurrent(oldPhone)
-        hydrateResult(refreshed)
-      } catch (refreshErr) {
-        showToast((refreshErr as { response?: { data?: { detail?: string } } }).response?.data?.detail || '重新整理失敗，請手動重新查詢', 'error')
-      }
-      return
-    }
-    showToast(detail || '更新失敗', 'error')
-  } finally {
-    editSubmitting.value = false
-  }
-}
 
 function closeWindow() {
   window.close()
 }
 
-// Clear error once user edits inputs again
-watch(
-  () => [queryForm.token, queryForm.name, queryForm.birthday, queryForm.parent_phone, queryMode.value],
-  () => { searchError.value = '' }
-)
-
-// 編修連結上的 ?token= 會出現在 referer / 連結預覽縮圖等周邊；加 noindex 與
-// no-referrer，避免搜尋引擎索引 / 點外連結時把 token 帶到第三方站。
-function applyTokenPagePrivacyMeta() {
-  const ensureMeta = (name: string, content: string) => {
-    let m = document.head.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null
-    if (!m) {
-      m = document.createElement('meta')
-      m.setAttribute('name', name)
-      document.head.appendChild(m)
-    }
-    m.setAttribute('content', content)
-  }
-  ensureMeta('robots', 'noindex,nofollow')
-  ensureMeta('referrer', 'no-referrer')
-}
-
 onMounted(async () => {
-  applyTokenPagePrivacyMeta()
-  // URL ?token= 直接帶入 token 模式（家長從報名 success 頁的編修連結進來的常見情境）
-  const tokenFromUrl = typeof route.query.token === 'string' ? route.query.token.trim() : ''
-  if (tokenFromUrl) {
-    queryForm.token = tokenFromUrl
-    queryMode.value = 'token'
-  }
+  initFromRoute()
   try {
     // 僅載入課程/用品/班級選項；availability 輪詢延到查詢命中、進入編輯介面才啟動
     // （ensureAvailabilityPolling，於 hydrateResult），查詢階段不輪詢。
@@ -1669,50 +1170,6 @@ onBeforeUnmount(() => {
   color: var(--color-text-subtle);
 }
 
-/* Toast */
-.toast-container {
-  position: fixed;
-  top: var(--space-5);
-  right: var(--space-5);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  max-width: calc(100vw - 40px);
-  pointer-events: none;
-}
-.toast {
-  pointer-events: auto;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-width: 280px;
-  max-width: 420px;
-  padding: var(--space-4);
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  border-left: 4px solid var(--color-primary);
-}
-.toast.success { border-left-color: var(--color-success); }
-.toast.error { border-left-color: var(--color-danger); }
-.toast.warning { border-left-color: var(--color-warning); }
-.toast-icon { flex-shrink: 0; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; }
-.toast-content { flex: 1; min-width: 0; }
-.toast-message { font-size: var(--fs-sm); color: var(--color-text-muted); }
-.toast-close {
-  flex-shrink: 0;
-  width: 28px; height: 28px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-radius: var(--radius-full);
-  color: var(--color-text-subtle);
-  font-size: 20px;
-  cursor: pointer;
-}
-.toast-close:hover { background: var(--color-surface-muted); color: var(--color-text); }
-
 @media (max-width: 700px) {
   .page-header {
     grid-template-columns: 1fr;
@@ -1732,8 +1189,6 @@ onBeforeUnmount(() => {
   .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
   .page-brand-logo { width: 72px; height: 72px; }
   .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
-  .toast-container { top: auto; bottom: var(--space-3); right: var(--space-3); left: var(--space-3); }
-  .toast { min-width: 0; max-width: none; }
   .action-buttons { flex-direction: column; }
   .action-buttons .btn { max-width: none; }
 }
