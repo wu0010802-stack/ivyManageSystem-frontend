@@ -556,7 +556,14 @@ function onManualDateChange() {
   onFilterChange()
 }
 
+// 亂序回應守衛（request sequence guard）：快速切學期時，舊學期的 loadSessions /
+// loadCourses 慢回應可能晚於新學期回來，若無守衛會覆蓋新學期列表，使用者遂能依
+// row ID 誤刪/誤編舊學期場次。每次載入自增序號，回應到位時僅當序號仍最新才套用。
+let sessionsReqSeq = 0
+let coursesReqSeq = 0
+
 async function loadSessions() {
+  const seq = ++sessionsReqSeq
   loading.value = true
   try {
     const params: Record<string, unknown> = {
@@ -571,13 +578,16 @@ async function loadSessions() {
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getAttendanceSessions(params)
+    if (seq !== sessionsReqSeq) return // 已有更新的請求發出，此為過時回應 → 丟棄
     const data = res.data as { items?: SessionRow[]; total?: number } | SessionRow[]
     sessions.value = (data as { items?: SessionRow[] })?.items ?? (Array.isArray(data) ? data : [])
     total.value = (data as { total?: number })?.total ?? sessions.value.length
   } catch {
+    if (seq !== sessionsReqSeq) return
     ElMessage.error('載入場次失敗')
   } finally {
-    loading.value = false
+    // 僅最新請求可解除 loading，避免過時請求提早把 loading 態關掉
+    if (seq === sessionsReqSeq) loading.value = false
   }
 }
 
@@ -588,12 +598,14 @@ function onFilterChange() {
 }
 
 async function loadCourses() {
+  const seq = ++coursesReqSeq
   try {
     // 帶當前學期，與他頁 termStore 選定學期一致（否則課程下拉跟後端 current term 走、口徑漂移）。
     const res = await getCourses({
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
+    if (seq !== coursesReqSeq) return // 過時回應（已有更新的學期請求發出）→ 丟棄
     courses.value = (res.data as { courses?: CourseOption[] })?.courses ?? []
   } catch {
     // silent
@@ -605,6 +617,11 @@ async function loadCourses() {
 watch(
   () => [termStore.school_year, termStore.semester],
   () => {
+    // 立即清空舊學期課程/場次，避免載入期間仍顯示並操作舊學期資料
+    // （配合 loadCourses / loadSessions 的序號守衛，杜絕舊學期場次被誤刪/誤編）。
+    courses.value = []
+    sessions.value = []
+    total.value = 0
     loadCourses()
     // 清掉可能屬於舊學期的課程篩選，再重置分頁重載該學期場次
     filterCourseId.value = null

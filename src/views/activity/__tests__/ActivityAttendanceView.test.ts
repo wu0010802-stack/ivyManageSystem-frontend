@@ -47,6 +47,14 @@ import ActivityAttendanceView from '../ActivityAttendanceView.vue'
 
 const asMock = (fn: unknown): Mock => fn as Mock
 
+function makeDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
 // ── 可正確傳遞 row 資料的 table stubs ────────────────────────────────────
 const ElTableColumnStub = defineComponent({
   name: 'ElTableColumnStub',
@@ -316,6 +324,64 @@ describe('ActivityAttendanceView — 場次列表分頁（A3）', () => {
     })
     await flushPromises()
     expect(wrapper.findComponent(ElPaginationStub).exists()).toBe(false)
+  })
+})
+
+describe('ActivityAttendanceView — 切學期亂序回應守衛（P2）', () => {
+  it('舊學期 loadSessions 慢回應不得覆蓋新學期場次列表', async () => {
+    // 快速切學期時，舊學期的 loadSessions 慢回應可能晚於新學期回來；若無守衛會
+    // 覆蓋新學期列表，使用者遂能依 row ID 刪到舊學期場次。守衛須丟棄過時回應。
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      loadSessions: () => Promise<void>
+      sessions: Array<{ id: number }>
+    }
+
+    // 第一次（舊學期）：回應卡住
+    const deferredOld = makeDeferred<{ data: { items: Array<{ id: number }>; total: number } }>()
+    asMock(getAttendanceSessions).mockReturnValueOnce(deferredOld.promise)
+    vm.loadSessions()
+
+    // 第二次（新學期）：快速回應，帶新學期場次
+    asMock(getAttendanceSessions).mockResolvedValueOnce({
+      data: { items: [{ ...sampleSessionRow, id: 202, course_name: '新學期場次' }], total: 1 },
+    })
+    await vm.loadSessions()
+    await flushPromises()
+    expect(vm.sessions.map((s) => s.id)).toEqual([202])
+
+    // 舊學期慢回應此刻才回來
+    deferredOld.resolve({
+      data: { items: [{ ...sampleSessionRow, id: 101, course_name: '舊學期場次' }], total: 1 },
+    })
+    await flushPromises()
+
+    // 守衛應丟棄舊學期回應，列表仍為新學期
+    expect(vm.sessions.map((s) => s.id)).toEqual([202])
+  })
+
+  it('舊學期 loadCourses 慢回應不得覆蓋新學期課程下拉', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      loadCourses: () => Promise<void>
+      courses: Array<{ id: number }>
+    }
+
+    const deferredOld = makeDeferred<{ data: { courses: Array<{ id: number }> } }>()
+    asMock(getCourses).mockReturnValueOnce(deferredOld.promise)
+    vm.loadCourses()
+
+    asMock(getCourses).mockResolvedValueOnce({
+      data: { courses: [{ id: 2, name: '新學期課程' }] },
+    })
+    await vm.loadCourses()
+    await flushPromises()
+    expect(vm.courses.map((c) => c.id)).toEqual([2])
+
+    deferredOld.resolve({ data: { courses: [{ id: 1, name: '舊學期課程' }] } })
+    await flushPromises()
+
+    expect(vm.courses.map((c) => c.id)).toEqual([2])
   })
 })
 
