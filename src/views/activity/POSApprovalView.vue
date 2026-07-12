@@ -486,25 +486,37 @@ async function loadPending() {
   }
 }
 
+// 亂序回應守衛（request sequence guard）：快速切換 selectedDate 時，舊日期的慢回應
+// 可能晚於新日期回來，若無守衛會覆蓋新日 detail / cashInSystem，主管遂看到 A 日
+// 現金卻把盤點金額送去簽核 B 日（送出用的是當前 selectedDate）。每次載入自增序號，
+// 回應到位時僅當序號仍為最新才套用，否則丟棄過時回應。
+let detailReqSeq = 0
+let txReqSeq = 0
+
 async function loadDetail() {
   if (!selectedDate.value) return
+  const seq = ++detailReqSeq
   loadingDetail.value = true
   try {
     const res = await getPOSDailyCloseStatus(selectedDate.value)
+    if (seq !== detailReqSeq) return // 已有更新的請求發出，此為過時回應 → 丟棄
     detail.value = res.data as DailyDetail
     if (detail.value?.status === 'approved') {
       resetForm()
     }
   } catch (err) {
+    if (seq !== detailReqSeq) return
     detail.value = null
     ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取簽核狀態失敗')
   } finally {
-    loadingDetail.value = false
+    // 僅最新請求可解除 loading，避免過時請求提早把 loading 態關掉
+    if (seq === detailReqSeq) loadingDetail.value = false
   }
 }
 
 async function loadDailyTransactions() {
   if (!selectedDate.value) return
+  const seq = ++txReqSeq
   loadingTx.value = true
   try {
     const res = await getPOSRecentTransactions({
@@ -512,12 +524,14 @@ async function loadDailyTransactions() {
       limit: 100,
       include_system: true,
     })
+    if (seq !== txReqSeq) return
     dailyTransactions.value = (res.data as { transactions?: Record<string, unknown>[] })?.transactions || []
   } catch (err) {
+    if (seq !== txReqSeq) return
     dailyTransactions.value = []
     ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取當日交易失敗')
   } finally {
-    loadingTx.value = false
+    if (seq === txReqSeq) loadingTx.value = false
   }
 }
 
@@ -707,6 +721,10 @@ watch(selectedDate, () => {
   // 先清空表單，避免前一個日期輸入的盤點金額/備註串到新日期送出，
   // 污染日結 snapshot 的 actual_cash_count / cash_variance / note。
   resetForm()
+  // 立即清空前一日的 detail / 交易列表，避免新日載入期間仍顯示舊日現金資料
+  // （配合 loadDetail / loadDailyTransactions 的序號守衛，杜絕舊日資料誤導簽核）。
+  detail.value = null
+  dailyTransactions.value = []
   loadDetail()
   loadDailyTransactions()
 })

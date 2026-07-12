@@ -9,6 +9,15 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
+import { getPOSDailyCloseStatus } from '@/api/activity'
+
+function makeDeferred() {
+  let resolve
+  const promise = new Promise((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
 
 // ── API mocks ──────────────────────────────────────────────────────────────
 vi.mock('@/api/activity', () => ({
@@ -93,6 +102,45 @@ describe('POSApprovalView — 日結表單', () => {
 
     expect(state.form.actualCashCount).toBe(null)
     expect(state.form.note).toBe('')
+  })
+
+  it('切日期後舊日 detail 慢回應不得覆蓋新日資料（亂序回應守衛）', async () => {
+    // A 日（2026-06-20）回應「卡住」、B 日（2026-06-21）快速回應，
+    // 隨後 A 日的慢回應才姍姍來遲——過時回應不得覆蓋 B 日 detail / cashInSystem，
+    // 否則主管看 A 日現金卻簽核 B 日。
+    const deferredA = makeDeferred()
+    getPOSDailyCloseStatus.mockImplementation((date) => {
+      if (date === '2026-06-20') return deferredA.promise
+      if (date === '2026-06-21')
+        return Promise.resolve({
+          data: { status: 'pending', by_method: { 現金: 999 }, _marker: 'B' },
+        })
+      return Promise.resolve({ data: { status: 'pending', by_method: {} } })
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState
+
+    // 切到 A 日：detail 請求在途（卡住）
+    state.selectedDate = '2026-06-20'
+    await nextTick()
+
+    // 立刻切到 B 日：B 快速回應完成
+    state.selectedDate = '2026-06-21'
+    await nextTick()
+    await flushPromises()
+    expect(state.detail?._marker).toBe('B')
+
+    // A 日慢回應此刻才回來
+    deferredA.resolve({
+      data: { status: 'pending', by_method: { 現金: 111 }, _marker: 'A' },
+    })
+    await flushPromises()
+
+    // 守衛應丟棄過時的 A 回應，detail / cashInSystem 仍為 B 日
+    expect(state.detail?._marker).toBe('B')
+    expect(state.cashInSystem).toBe(999)
   })
 
   it('detail 載入中時停用簽核按鈕，避免用舊 context 簽核', async () => {
