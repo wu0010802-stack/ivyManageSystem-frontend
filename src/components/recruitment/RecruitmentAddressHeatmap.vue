@@ -82,234 +82,14 @@
       </div>
 
       <div class="heatmap-side">
-        <div class="nearby-section">
-          <div class="side-title-row">
-            <div class="side-title">附近幼兒園</div>
-            <div class="side-caption">
-              <template v-if="nearbySchoolsLoading">載入中</template>
-              <template v-else-if="schoolSearchQuery.trim()">
-                視野內符合 {{ filteredNearbySchools.length }} 間
-              </template>
-              <template v-else>目前視野 {{ sortedNearbySchools.length }} 間</template>
-            </div>
-          </div>
-
-          <!-- 搜尋輸入框 -->
-          <div class="school-search-row">
-            <el-input
-              v-model="schoolSearchQuery"
-              placeholder="搜尋幼兒園名稱…"
-              size="small"
-              clearable
-              @clear="clearSearch"
-            >
-              <template #prefix>
-                <span class="school-search-icon">🔍</span>
-              </template>
-            </el-input>
-          </div>
-
-          <!-- 類型圖例 -->
-          <div class="school-type-legend">
-            <span
-              v-for="(style, type) in SCHOOL_TYPE_STYLES"
-              :key="type"
-              class="legend-item"
-            >
-              <span class="legend-dot" :style="{ background: style.fill }" />{{ style.label }}
-            </span>
-            <span class="legend-item">
-              <span class="legend-dot" :style="{ background: DEFAULT_SCHOOL_STYLE.fill }" />其他
-            </span>
-          </div>
-
-          <el-select
-            v-if="mappedNearbySchools.length > 0"
-            v-model="setCampusSelected"
-            placeholder="設為本園中心點…"
-            size="small"
-            style="width: 100%; margin-bottom: 8px;"
-            clearable
-            @change="onSetCampusSelect"
-          >
-            <el-option
-              v-for="school in mappedNearbySchools"
-              :key="school.place_id || school.name"
-              :label="school.name || '未命名幼兒園'"
-              :value="school.place_id || school.name || ''"
-            />
-          </el-select>
-
-          <!-- loading -->
-          <div v-if="nearbyDisplayMode === 'loading'" class="nearby-message">
-            正在更新目前視野幼兒園…
-          </div>
-          <!-- provider 不可用 -->
-          <div v-else-if="nearbyDisplayMode === 'unavailable'" class="nearby-message">
-            {{ nearbySchoolsMessage }}
-          </div>
-          <!-- 視野無幼兒園 -->
-          <div v-else-if="nearbyDisplayMode === 'no-schools'" class="nearby-message">
-            {{ nearbySchoolsMessage || '目前視野內沒有附近幼兒園' }}
-          </div>
-          <!-- 視野有幼兒園但搜尋無符合 -->
-          <div v-else-if="nearbyDisplayMode === 'no-match'" class="nearby-message">
-            視野內找不到「{{ schoolSearchQuery }}」，請嘗試移動或縮放地圖後再搜尋。
-          </div>
-          <!-- 幼兒園清單 -->
-          <div v-else>
-            <div
-              v-for="school in topNearbySchools"
-              :key="school.place_id || `${school.name}-${school.lat}-${school.lng}`"
-              class="nearby-school-item nearby-school-item--clickable"
-              @click="panMapTo(school.lat!, school.lng!, school)"
-            >
-              <div class="nearby-school-header">
-                <div class="nearby-school-name">{{ school.name || '未命名幼兒園' }}</div>
-                <div class="nearby-school-badges">
-                  <span
-                    class="school-type-badge"
-                    :style="{ background: getSchoolTypeStyle(getSchoolType(school))?.fill }"
-                  >{{ getSchoolTypeStyle(getSchoolType(school))?.label }}</span>
-                  <span
-                    v-if="school.is_active === false"
-                    class="school-closed-badge"
-                  >已停辦</span>
-                  <span
-                    v-if="school.has_penalty"
-                    class="school-penalty-badge"
-                  >裁罰</span>
-                </div>
-              </div>
-              <div v-if="school.rating != null" class="nearby-school-rating">
-                <span class="rating-stars" :title="`${school.rating} 顆星`">
-                  <span
-                    v-for="i in 5"
-                    :key="i"
-                    class="star"
-                    :class="starClass(school.rating, i)"
-                  >★</span>
-                </span>
-                <span class="rating-score">{{ school.rating.toFixed(1) }}</span>
-                <span class="rating-count">（{{ school.user_rating_count != null ? school.user_rating_count.toLocaleString() : '?' }} 則）</span>
-              </div>
-              <div class="nearby-school-meta">
-                <span>{{ school.formatted_address || '未提供地址' }}</span>
-                <span v-if="school.distance_km != null">{{ school.distance_km.toFixed(1) }} km</span>
-              </div>
-              <!-- MOE 資料（由 API 直接回傳，無需 client-side DB 比對） -->
-              <div v-if="school.phone || school.approved_capacity || school.monthly_fee" class="nearby-school-gov-inline">
-                <span v-if="school.phone">📞 {{ school.phone }}</span>
-                <span v-if="school.approved_capacity">核定 {{ school.approved_capacity }} 人</span>
-                <span v-if="school.monthly_fee">月費 ${{ Number(school.monthly_fee).toLocaleString() }}</span>
-              </div>
-              <button
-                class="gov-data-btn"
-                :class="{ active: selectedGovDataKey === (school.place_id || school.name) }"
-                @click.stop="toggleGovData(school)"
-              >
-                {{ selectedGovDataKey === (school.place_id || school.name) ? '收起詳細資料 ▲' : '詳細資料 ▼' }}
-              </button>
-              <div
-                v-show="selectedGovDataKey === (school.place_id || school.name)"
-                class="preschool-gov-detail"
-              >
-                  <div v-if="preschoolGovDataLoading" class="gov-detail-loading">載入政府資料中…</div>
-                  <div v-else-if="!preschoolGovData" class="gov-detail-empty">查無政府登記資料（該園可能尚未收錄或名稱格式不同）</div>
-                  <template v-else>
-                    <div class="gov-detail-matched-name">
-                      政府登記名稱：{{ preschoolGovData.name }}
-                    </div>
-                    <div v-if="preschoolGovData.principal" class="gov-detail-row">
-                      <span class="gov-detail-label">負責人</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.principal }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.phone" class="gov-detail-row">
-                      <span class="gov-detail-label">電話</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.phone }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.address" class="gov-detail-row">
-                      <span class="gov-detail-label">住址</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.address }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.kind" class="gov-detail-row">
-                      <span class="gov-detail-label">類型</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.kind }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.capacity != null" class="gov-detail-row">
-                      <span class="gov-detail-label">核定人數</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.capacity }} 人</span>
-                    </div>
-                    <div v-if="preschoolGovData.prePublicType" class="gov-detail-row">
-                      <span class="gov-detail-label">準公共幼兒園</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.prePublicType }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.approvedDate" class="gov-detail-row">
-                      <span class="gov-detail-label">核准設立日期</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.approvedDate }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.totalAreaSqm != null" class="gov-detail-row">
-                      <span class="gov-detail-label">全園總面積</span>
-                      <span class="gov-detail-value">
-                        {{ sqmToPing(preschoolGovData.totalAreaSqm) }} 坪
-                        <template v-if="preschoolGovData.indoorAreaSqm != null || preschoolGovData.outdoorAreaSqm != null">
-                          （<template v-if="preschoolGovData.indoorAreaSqm != null">室內 {{ sqmToPing(preschoolGovData.indoorAreaSqm) }}</template>
-                          <template v-if="preschoolGovData.indoorAreaSqm != null && preschoolGovData.outdoorAreaSqm != null"> / </template>
-                          <template v-if="preschoolGovData.outdoorAreaSqm != null">室外 {{ sqmToPing(preschoolGovData.outdoorAreaSqm) }}</template> 坪）
-                        </template>
-                      </span>
-                    </div>
-                    <div v-if="preschoolGovData.floor" class="gov-detail-row">
-                      <span class="gov-detail-label">使用樓層</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.floor }}</span>
-                    </div>
-                    <div v-if="sanitizeHref(preschoolGovData.website)" class="gov-detail-row">
-                      <span class="gov-detail-label">園所網址</span>
-                      <a
-                        class="gov-detail-value gov-detail-link"
-                        :href="sanitizeHref(preschoolGovData.website)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >{{ preschoolGovData.website }}</a>
-                    </div>
-                    <div v-if="preschoolGovData.monthlyFee != null" class="gov-detail-row">
-                      <span class="gov-detail-label">每月收費</span>
-                      <span class="gov-detail-value">${{ Number(preschoolGovData.monthlyFee).toLocaleString() }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.shuttle" class="gov-detail-row">
-                      <span class="gov-detail-label">校車服務</span>
-                      <span class="gov-detail-value">{{ preschoolGovData.shuttle }}</span>
-                    </div>
-                    <div v-if="preschoolGovData.afterSchool" class="gov-detail-row">
-                      <span class="gov-detail-label">課後留園</span>
-                      <span class="gov-detail-value gov-status-open">有</span>
-                    </div>
-                    <div v-if="preschoolGovData.status" class="gov-detail-row">
-                      <span class="gov-detail-label">營業狀態</span>
-                      <span
-                        class="gov-detail-value"
-                        :class="String(preschoolGovData.status).includes('營業') ? 'gov-status-open' : 'gov-status-closed'"
-                      >{{ preschoolGovData.status }}</span>
-                    </div>
-                    <div class="gov-detail-row">
-                      <span class="gov-detail-label">裁罰記錄</span>
-                      <span
-                        class="gov-detail-value"
-                        :class="preschoolGovData.penalties?.length ? 'gov-status-warned' : (preschoolGovData.hasPenalty ? 'gov-status-warned' : 'gov-status-clean')"
-                      >
-                        <template v-if="preschoolGovData.penalties?.length">{{ preschoolGovData.penalties.length }} 筆</template>
-                        <template v-else-if="preschoolGovData.hasPenalty">有（詳細內容未收錄）</template>
-                        <template v-else>無</template>
-                      </span>
-                    </div>
-                  </template>
-              </div><!-- /preschool-gov-detail -->
-            </div>
-            <div v-if="hiddenNearbySchoolCount > 0" class="nearby-footnote">
-              其餘 {{ hiddenNearbySchoolCount }} 間仍在地圖上
-            </div>
-          </div><!-- /v-else: list -->
-        </div>
+        <RecruitmentNearbySchoolList
+          :schools="nearbySchools"
+          :loading="nearbySchoolsLoading"
+          :available="nearbySchoolsAvailable"
+          :message="nearbySchoolsMessage"
+          @select-school="handleSelectSchool"
+          @set-as-campus="(data) => emit('set-as-campus', data)"
+        />
       </div>
     </div>
 
@@ -332,8 +112,15 @@ import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 // kiang 前端查詢已移除，所有資料由 nearby-kindergartens API 一次回傳
-import { syncGovKindergartens, getGovKindergartensSyncStatus, getGeocodePendingCount, geocodeCompetitorSchools, syncKiangData } from '@/api/recruitment'
+import { syncKiangData } from '@/api/recruitment'
 import { sanitizeHref } from '@/utils/url'
+import type { NearbySchool } from '@/types/recruitmentHeatmap'
+import { DEFAULT_SCHOOL_STYLE, getSchoolType, getSchoolTypeStyle } from '@/utils/recruitmentSchoolType'
+import { useGovKindergartenSync } from '@/composables/useGovKindergartenSync'
+import { useCompetitorGeocoding } from '@/composables/useCompetitorGeocoding'
+// 顯式 import：新元件尚未跑過一次 vite dev/build，unplugin-vue-components 的
+// components.d.ts 全域自動註冊還沒收錄它，顯式 import 才能讓 vue-tsc 正確解析型別。
+import RecruitmentNearbySchoolList from './RecruitmentNearbySchoolList.vue'
 
 interface CampusProp {
   campus_name?: string
@@ -352,35 +139,6 @@ interface HotspotEntry {
   [key: string]: unknown
 }
 
-interface NearbySchool {
-  name?: string
-  place_id?: string
-  lat?: number
-  lng?: number
-  distance_km?: number
-  formatted_address?: string
-  school_type?: string
-  pre_public_type?: string
-  owner_name?: string | null
-  phone?: string | null
-  approved_capacity?: number | null
-  monthly_fee?: number | null
-  has_penalty?: boolean
-  approved_date?: string | null
-  total_area_sqm?: number | null
-  indoor_area_sqm?: number | null
-  outdoor_area_sqm?: number | null
-  floor?: number | null
-  website?: string | null
-  shuttle?: string | null
-  has_after_school?: boolean
-  is_active?: boolean
-  penalties?: unknown[]
-  rating?: number | null
-  user_rating_count?: number | null
-  [key: string]: unknown
-}
-
 interface BucketEntry {
   center_lat: number
   center_lng: number
@@ -392,28 +150,6 @@ interface BucketEntry {
 // Minimal typings for third-party map APIs (no @types/leaflet or google.maps declarations available)
 // Using unknown with casts is the TS-safe way to handle dynamic map API objects.
 declare global { interface Window { google?: { maps?: Record<string, unknown> } } }
-
-interface GovData {
-  name?: string
-  principal?: string | null
-  phone?: string | null
-  address?: string | null
-  kind?: string | null
-  capacity?: number | null
-  monthlyFee?: number | null
-  hasPenalty?: boolean
-  approvedDate?: string | null
-  totalAreaSqm?: number | null
-  indoorAreaSqm?: number | null
-  outdoorAreaSqm?: number | null
-  floor?: number | null
-  website?: string | null
-  prePublicType?: string | null
-  shuttle?: string | null
-  afterSchool?: boolean
-  status?: string
-  penalties?: unknown[]
-}
 
 const props = withDefaults(defineProps<{
   hotspots: HotspotEntry[]
@@ -471,114 +207,24 @@ const emit = defineEmits<{
   'set-as-campus': [data: Record<string, unknown>]
 }>()
 
-// ── 教育部幼兒園資料同步 ──
-const govSyncing = ref<boolean>(false)
-const govSyncedAt = ref<string | null>(null)
-const govSyncMessage = ref<string>('')
+// ── 教育部幼兒園資料同步 + 競爭者學校批次地理編碼 ──
+// 2026-07-12 拆分為 composable（useGovKindergartenSync / useCompetitorGeocoding），
+// 行為零改動：原本「教育部同步完成後自動檢查是否需要補全座標」的串接改用
+// onSyncComplete 回呼保留，其餘輪詢間隔 / while(true) 批次 loop / 卸載中止旗標邏輯逐行搬移。
+const {
+  geocodingCompetitors,
+  geocodeCompetitorResult,
+  autoGeocodeIfNeeded,
+} = useCompetitorGeocoding(computed(() => props.canWrite))
 
-const fetchGovSyncStatus = async () => {
-  try {
-    const res = await getGovKindergartensSyncStatus()
-    govSyncedAt.value = res.data?.last_synced_at ?? null
-    govSyncing.value = res.data?.sync_in_progress ?? false
-    if (res.data?.last_sync_status === 'error') {
-      govSyncMessage.value = res.data?.last_sync_message ?? '同步失敗'
-    } else {
-      govSyncMessage.value = ''
-    }
-  } catch {
-    // 靜默失敗，不影響主功能
-  }
-}
-
-let govSyncPoll: ReturnType<typeof setInterval> | null = null
-
-const handleGovSync = async () => {
-  if (govSyncing.value) return
-  try {
-    govSyncing.value = true
-    govSyncMessage.value = ''
-    await syncGovKindergartens(true)
-    // 背景作業已啟動，每 5 秒輪詢一次直到完成
-    govSyncPoll = setInterval(async () => {
-      await fetchGovSyncStatus()
-      if (!govSyncing.value) {
-        if (govSyncPoll !== null) clearInterval(govSyncPoll)
-        govSyncPoll = null
-        // 教育部同步完成後，自動檢查是否需要補全座標
-        autoGeocodeIfNeeded()
-      }
-    }, 5000)
-  } catch (e) {
-    govSyncing.value = false
-    govSyncMessage.value = '觸發失敗，請稍後再試'
-  }
-}
-
-// ── 競爭者學校批次地理編碼 ──
-const geocodingCompetitors = ref(false)
-const geocodeCompetitorResult = ref('')
-// 元件卸載旗標：while(true) 批次 loop 跨多個 await，卸載後若不中止會繼續打
-// API（浪費 Google 流量）並對已銷毀元件寫 reactive state。卸載時翻 true 即 break。
-let geocodeAborted = false
-
-const autoGeocodeIfNeeded = async () => {
-  if (!props.canWrite || geocodingCompetitors.value) return
-  try {
-    const res = await getGeocodePendingCount()
-    if ((res.data?.pending ?? 0) > 0) {
-      handleGeocodeCompetitors()
-    }
-  } catch {
-    // 靜默失敗
-  }
-}
-
-const handleGeocodeCompetitors = async () => {
-  if (geocodingCompetitors.value) return
-  geocodingCompetitors.value = true
-  geocodeCompetitorResult.value = ''
-  let totalGeocoded = 0
-  let totalFailed = 0
-  let batchCount = 0
-  try {
-    // 每批最多 500 筆，重複執行直到沒有剩餘待 geocode 的學校
-    while (true) {
-      // 卸載後中止：避免對已銷毀元件繼續打 API / 寫 reactive state
-      if (geocodeAborted) break
-      batchCount += 1
-      geocodeCompetitorResult.value = `第 ${batchCount} 批處理中…（累計成功 ${totalGeocoded} 筆）`
-      const res = await geocodeCompetitorSchools(500)
-      // await 期間可能已卸載，回來再檢查一次
-      if (geocodeAborted) break
-      const { geocoded = 0, failed = 0, total = 0 } = res.data ?? {}
-      totalGeocoded += geocoded
-      totalFailed += failed
-      // total === 0 表示已無待處理的學校；geocoded === 0 表示本批全失敗，停止避免無限迴圈
-      if (total === 0 || geocoded === 0) break
-    }
-    geocodeCompetitorResult.value = `完成：${totalGeocoded} 筆成功、${totalFailed} 筆失敗（共 ${batchCount} 批）`
-  } catch {
-    geocodeCompetitorResult.value = `地理編碼中斷：已成功 ${totalGeocoded} 筆、失敗 ${totalFailed} 筆`
-  } finally {
-    geocodingCompetitors.value = false
-  }
-}
-
-const GOV_SYNC_STALE_DAYS = 90
-
-const isGovSyncStale = () => {
-  if (!govSyncedAt.value) return true // 從未同步過
-  const lastSync = new Date(govSyncedAt.value)
-  const daysSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24)
-  return daysSince >= GOV_SYNC_STALE_DAYS
-}
-
-const govSyncedAtLabel = computed(() => {
-  if (!govSyncedAt.value) return null
-  const d = new Date(govSyncedAt.value)
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-})
+const {
+  govSyncing,
+  govSyncMessage,
+  govSyncedAtLabel,
+  fetchGovSyncStatus,
+  handleGovSync,
+  isGovSyncStale,
+} = useGovKindergartenSync({ onSyncComplete: () => autoGeocodeIfNeeded() })
 
 const MAP_TILE_URL = import.meta.env.VITE_MAP_TILE_URL
   || 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
@@ -608,31 +254,6 @@ const GOOGLE_MAP_STYLE = [
   { featureType: 'water', elementType: 'labels.text.fill',  stylers: [{ color: '#9e9e9e' }] },
   { featureType: 'administrative.land_parcel', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
 ]
-
-// ── 幼兒園類型色票 ──
-const SCHOOL_TYPE_STYLES = {
-  '常春藤': { fill: '#0f7b52', stroke: '#065f40', label: '常春藤' },
-  '公立':   { fill: '#eab308', stroke: '#ca8a04', label: '公立' },
-  '非營利': { fill: '#7c3aed', stroke: '#6d28d9', label: '非營利' },
-  '準公共': { fill: '#d97706', stroke: '#b45309', label: '準公共' },
-  '私立':   { fill: '#2563eb', stroke: '#1d4ed8', label: '私立' },
-}
-const DEFAULT_SCHOOL_STYLE = { fill: '#64748b', stroke: '#475569', label: '其他' }
-
-const getSchoolTypeStyle = (type: string | null | undefined) => SCHOOL_TYPE_STYLES[type as keyof typeof SCHOOL_TYPE_STYLES] ?? DEFAULT_SCHOOL_STYLE
-
-// ── 常春藤系列學校識別（最高優先） ──
-// 含「常春藤」或指定別名（如明華）的學校皆歸入此類
-const IVY_SCHOOL_KEYWORDS = ['常春藤']
-const IVY_SCHOOL_ALIASES  = ['明華幼兒園']
-
-const _isIvySchool = (name: unknown): boolean => {
-  if (!name) return false
-  const n = String(name).replace(/[\s　]/g, '')
-  if (IVY_SCHOOL_KEYWORDS.some((kw) => n.includes(kw))) return true
-  if (IVY_SCHOOL_ALIASES.some((alias) => n.includes(alias.replace(/[\s　]/g, '')))) return true
-  return false
-}
 
 // ── Google Maps：熱點 SVG 圖示（單一小圓點） ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -688,10 +309,6 @@ const makeGoogleNearbySchoolIcon = (mapsApi: any, style = DEFAULT_SCHOOL_STYLE) 
 
 const mapRef = ref<HTMLElement | null>(null)
 const mapInitialized = ref(false)
-const setCampusSelected = ref('')
-const selectedGovDataKey = ref('')
-const preschoolGovData = ref<GovData | null>(null)
-const preschoolGovDataLoading = ref(false)
 const mapRenderRequested = ref(0)
 const googleMapsLoadFailed = ref(false)
 const renderedMapProvider = ref('')
@@ -739,38 +356,8 @@ const mappedNearbySchools = computed(() =>
 
 // API 已回傳 school_type / pre_public_type / phone / capacity 等欄位，
 // 無需再對 govSchools 做 client-side 比對。
-
-/**
- * 從 API 回傳的 school 物件直接取得分類標籤（同步、無 async）。
- * 優先順序：常春藤系列 > 準公共 > school_type（公立/私立/非營利）
- */
-const getSchoolType = (school: NearbySchool | null | undefined): string | null => {
-  if (!school) return null
-  if (_isIvySchool(school.name)) return '常春藤'
-  if (school.pre_public_type) return '準公共'
-  return school.school_type || null
-}
-
-// ── 幼兒園搜尋（過濾現有清單） ──
-const schoolSearchQuery = ref('')
-
-const filteredNearbySchools = computed(() => {
-  const q = schoolSearchQuery.value.trim().toLowerCase()
-  if (!q) return sortedNearbySchools.value
-  return sortedNearbySchools.value.filter((s) =>
-    (s.name || '').toLowerCase().includes(q) ||
-    (s.formatted_address || '').toLowerCase().includes(q)
-  )
-})
-
-const clearSearch = () => {
-  schoolSearchQuery.value = ''
-}
-
-const topNearbySchools = computed(() => filteredNearbySchools.value.slice(0, 8))
-const hiddenNearbySchoolCount = computed(() =>
-  Math.max(filteredNearbySchools.value.length - 8, 0)
-)
+// getSchoolType／getSchoolTypeStyle 已抽到 @/utils/recruitmentSchoolType（地圖引擎與
+// RecruitmentNearbySchoolList 共用，避免色票定義兩處漂移）。
 
 const HIGHLIGHT_SVG = [
   '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42">',
@@ -826,24 +413,11 @@ const panMapTo = (lat: number, lng: number, school: NearbySchool | null | undefi
   }
 }
 
-// 搜尋過濾後，若只剩一間則自動移動地圖
-watch(filteredNearbySchools, (schools) => {
-  if (!schoolSearchQuery.value.trim()) return
-  if (schools.length !== 1) return
-  const s = schools[0]
-  if (Number.isFinite(s?.lat) && Number.isFinite(s?.lng)) {
-    panMapTo(s.lat!, s.lng!, s)
-  }
-})
-
-// 決定側欄顯示模式，避免 template 裡複雜的巢狀條件產生 Vue fragment anchor 問題
-const nearbyDisplayMode = computed(() => {
-  if (props.nearbySchoolsLoading) return 'loading'
-  if (!props.nearbySchoolsAvailable && props.nearbySchoolsMessage) return 'unavailable'
-  if (!sortedNearbySchools.value.length) return 'no-schools'
-  if (schoolSearchQuery.value.trim() && !filteredNearbySchools.value.length) return 'no-match'
-  return 'list'
-})
+// RecruitmentNearbySchoolList 的搜尋/排序/高亮 UI 已拆到子元件（自行處理「搜尋後僅剩一間
+// 自動選取」邏輯），子元件透過 select-school 事件回呼，這裡統一轉呼叫地圖 panMapTo。
+const handleSelectSchool = (school: NearbySchool) => {
+  panMapTo(school.lat!, school.lng!, school)
+}
 
 const baseMapSignature = computed(() => [
   mappedHotspots.value.map((hotspot) => `${hotspot.address}:${hotspot.lat}:${hotspot.lng}:${hotspot.visit}`).join('|'),
@@ -968,55 +542,8 @@ const ensureGoogleMaps = async () => {
   return googleMapsPromise
 }
 
-const onSetCampusSelect = (val: string | number | boolean | undefined) => {
-  if (!val) return
-  const school = mappedNearbySchools.value.find((s) => (s.place_id || s.name) === val)
-  if (school) {
-    emit('set-as-campus', { lat: school.lat, lng: school.lng, name: school.name, address: school.formatted_address })
-  }
-  setCampusSelected.value = ''
-}
-
-const toggleGovData = (school: NearbySchool) => {
-  const key = school.place_id || school.name || ''
-  if (selectedGovDataKey.value === key) {
-    selectedGovDataKey.value = ''
-    preschoolGovData.value = null
-    return
-  }
-  selectedGovDataKey.value = key
-
-  // 所有資料已由 nearby-kindergartens API 一次回傳（含 kiang 補充欄位）
-  preschoolGovData.value = {
-    name:           school.name,
-    principal:      school.owner_name ?? null,
-    phone:          school.phone ?? null,
-    address:        school.formatted_address ?? null,
-    kind:           school.pre_public_type ? '準公共' : (school.school_type ?? null),
-    capacity:       school.approved_capacity ?? null,
-    monthlyFee:     school.monthly_fee ?? null,
-    hasPenalty:     school.has_penalty ?? false,
-    approvedDate:   school.approved_date ?? null,
-    totalAreaSqm:   school.total_area_sqm ?? null,
-    indoorAreaSqm:  school.indoor_area_sqm ?? null,
-    outdoorAreaSqm: school.outdoor_area_sqm ?? null,
-    floor:          school.floor ?? null,
-    website:        school.website ?? null,
-    prePublicType:  school.pre_public_type ?? null,
-    shuttle:        school.shuttle ?? null,
-    afterSchool:    school.has_after_school ?? false,
-    status:         school.is_active === false ? '已停業' : '營業中',
-    penalties:      school.penalties ?? [],
-  }
-}
-
-const starClass = (rating: number, index: number) => {
-  if (rating >= index) return 'star-full'
-  if (rating >= index - 0.5) return 'star-half'
-  return 'star-empty'
-}
-
-const sqmToPing = (sqm: number | null | undefined) => (Number(sqm) / 3.30579).toFixed(1)
+// onSetCampusSelect／toggleGovData／starClass／sqmToPing 已隨「設為本園中心點」select 與
+// 政府登錄詳情面板一併拆到 RecruitmentNearbySchoolList / RecruitmentSchoolGovDetail。
 
 const escapeHtml = (text: unknown) => String(text ?? '')
   .replace(/&/g, '&amp;')
@@ -1349,12 +876,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  // 中止進行中的批次 geocode loop（while(true) 跨多個 await）
-  geocodeAborted = true
-  if (govSyncPoll) {
-    clearInterval(govSyncPoll)
-    govSyncPoll = null
-  }
+  // 中止進行中的批次 geocode loop、清除教育部同步輪詢已隨 composable 搬移，
+  // 各自在 useCompetitorGeocoding / useGovKindergartenSync 內部註冊自己的 onBeforeUnmount。
   destroyMap()
 })
 
@@ -1362,18 +885,6 @@ onBeforeUnmount(() => {
 onErrorCaptured((err) => {
   console.error('[RecruitmentAddressHeatmap] 元件內部錯誤（已隔離）', err)
   return false // false = 阻止錯誤繼續向上傳播
-})
-
-// 清單更新時收起展開中的詳細資料，避免 selectedGovDataKey 指向已不存在的節點
-watch(topNearbySchools, (newList) => {
-  if (!selectedGovDataKey.value) return
-  const stillExists = newList.some(
-    (s) => (s.place_id || s.name) === selectedGovDataKey.value,
-  )
-  if (!stillExists) {
-    selectedGovDataKey.value = ''
-    preschoolGovData.value = null
-  }
 })
 </script>
 
@@ -1507,27 +1018,8 @@ watch(topNearbySchools, (newList) => {
   scrollbar-color: var(--border-color) transparent;
 }
 
-.side-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--neutral-600);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.side-title-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  align-items: baseline;
-  padding-top: 4px;
-  border-top: 1px solid #F1F5F9;
-}
-
-.side-caption {
-  font-size: 0.72rem;
-  color: #94A3B8;
-}
+/* .side-title / .side-title-row / .side-caption 已隨附近幼兒園清單標題移到
+   RecruitmentNearbySchoolList.vue（2026-07-12）。 */
 
 /* ── 熱門地址卡片 ── */
 .hotspot-item {
@@ -1601,199 +1093,8 @@ watch(topNearbySchools, (newList) => {
   border-radius: 999px;
 }
 
-/* ── 附近幼兒園 ── */
-.nearby-section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.nearby-message {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
-  font-size: 0.78rem;
-  color: #64748B;
-}
-
-.nearby-school-item {
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: #FFFFFF;
-  border: 1px solid #DBEAFE;
-  transition: box-shadow 0.15s ease;
-}
-.nearby-school-item:hover {
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.10);
-}
-.nearby-school-item--clickable {
-  cursor: pointer;
-}
-.nearby-school-item--clickable:active {
-  background: var(--color-info-soft);
-}
-
-.nearby-school-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 6px;
-}
-.nearby-school-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-  flex-shrink: 0;
-}
-.school-type-badge {
-  flex-shrink: 0;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: white;
-  padding: 1px 6px;
-  border-radius: 999px;
-}
-.school-closed-badge {
-  flex-shrink: 0;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #7f1d1d;
-  background: var(--color-danger-soft);
-  border: 1px solid #fca5a5;
-  padding: 1px 6px;
-  border-radius: 999px;
-}
-.school-penalty-badge {
-  flex-shrink: 0;
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: var(--color-warning-darker);
-  background: var(--color-warning-soft);
-  border: 1px solid #fcd34d;
-  padding: 1px 6px;
-  border-radius: 999px;
-}
-.nearby-school-gov-inline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-  font-size: 0.74rem;
-  color: var(--neutral-600);
-}
-.school-type-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  margin-bottom: 8px;
-  font-size: 0.72rem;
-  color: var(--neutral-600);
-}
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.nearby-school-name {
-  font-size: 0.85rem;
-  color: var(--color-info-darker);
-  font-weight: 600;
-  flex: 1;
-  line-height: 1.4;
-}
-
-.gov-data-btn {
-  margin-top: 6px;
-  width: 100%;
-  padding: 4px 0;
-  border-radius: 8px;
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  background: #f0f7ff;
-  color: var(--color-info-darker);
-  font-size: 0.72rem;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.gov-data-btn:hover,
-.gov-data-btn.active {
-  background: var(--color-info-soft);
-}
-
-.preschool-gov-detail {
-  margin-top: 6px;
-  border-radius: 10px;
-  border: 1px solid rgba(59, 130, 246, 0.18);
-  background: #f8fbff;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.gov-detail-matched-name {
-  font-size: 0.72rem;
-  color: var(--text-tertiary);
-  margin-bottom: 6px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.gov-detail-loading,
-.gov-detail-empty {
-  font-size: 0.78rem;
-  color: var(--text-tertiary);
-  text-align: center;
-  padding: 4px 0;
-}
-
-.gov-detail-row {
-  display: flex;
-  gap: 6px;
-  font-size: 0.78rem;
-  align-items: flex-start;
-}
-
-.gov-detail-label {
-  flex: none;
-  width: 56px;
-  color: var(--text-secondary);
-}
-
-.gov-detail-value {
-  color: #1e3a5f;
-  word-break: break-word;
-  flex: 1;
-}
-
-.gov-detail-link { color: var(--color-info-darker); text-decoration: underline; word-break: break-all; }
-.gov-detail-link:hover { color: var(--color-info-darker); }
-
-.gov-status-open  { color: #166534; font-weight: 600; }
-.gov-status-closed { color: #991b1b; font-weight: 600; }
-.gov-status-clean  { color: #166534; }
-.gov-status-warned { color: var(--color-warning-darker); font-weight: 600; }
-
-/* v-show 展開動畫：直接在元素上做 max-height transition，不依賴 <Transition> */
-.preschool-gov-detail {
-  overflow: hidden;
-  transition: opacity 0.2s ease, max-height 0.25s ease;
-  max-height: 600px;
-}
-.preschool-gov-detail[style*="display: none"],
-.preschool-gov-detail[style*="display:none"] {
-  max-height: 0;
-  opacity: 0;
-}
+/* .nearby-section 與其子樹（搜尋/圖例/清單/gov 詳情）樣式已隨模板一併拆到
+   RecruitmentNearbySchoolList.vue / RecruitmentSchoolGovDetail.vue（2026-07-12）。 */
 
 .set-campus-btn {
   flex: none;
@@ -1810,67 +1111,6 @@ watch(topNearbySchools, (newList) => {
 }
 .set-campus-btn:hover {
   background: var(--color-info-soft);
-}
-
-.nearby-school-rating {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.rating-stars {
-  display: flex;
-  gap: 1px;
-  line-height: 1;
-}
-
-.star { font-size: 0.75rem; }
-.star-full  { color: var(--color-warning); }
-.star-half  { color: var(--color-warning); opacity: 0.6; }
-.star-empty { color: var(--neutral-300); }
-
-.rating-score {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--color-warning-darker);
-  font-family: 'Fira Code', ui-monospace, monospace;
-  font-variant-numeric: tabular-nums;
-}
-
-.rating-count {
-  font-size: 0.68rem;
-  color: var(--text-tertiary);
-}
-
-.nearby-school-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-}
-
-.nearby-footnote {
-  font-size: 0.72rem;
-  color: var(--text-tertiary);
-  text-align: center;
-  padding: 4px 0;
-}
-
-/* ── 幼兒園搜尋 ── */
-.school-search-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-bottom: 4px;
-}
-.school-search-row .el-input {
-  flex: 1;
-}
-.school-search-icon {
-  font-size: 0.78rem;
 }
 
 .db-search-results {
@@ -1937,13 +1177,7 @@ watch(topNearbySchools, (newList) => {
   }
 }
 
-/* dark mode：以下元素疊在不翻色的硬編淺底/白卡（finding #2 既有債，非本次範圍），上游
-   a11y.css 把 --color-*-darker 翻亮會讓文字塌對比。dark scope 窄覆寫還原可讀：疊白/淺底
-   的文字還原深字；自帶硬編淺藍底的 gov 按鈕改用會翻色的 *-soft 底（hover 本就用 *-soft）。 */
-html.dark .nearby-school-name { color: #1d4ed8; }
-html.dark .gov-data-btn { background: var(--color-info-soft); }
-html.dark .gov-detail-link,
-html.dark .gov-detail-link:hover { color: #1d4ed8; }
-html.dark .gov-status-warned { color: #b45309; }
-html.dark .rating-score { color: #b45309; }
+/* dark mode 覆寫（.nearby-school-name / .gov-data-btn / .gov-detail-link / .gov-status-warned /
+   .rating-score）已隨對應元素模板一併移到 RecruitmentNearbySchoolList.vue /
+   RecruitmentSchoolGovDetail.vue（2026-07-12），見各檔內同款註解。 */
 </style>

@@ -62,13 +62,19 @@ describe('深色模式 *-darker 反向用法回歸防護（對抗式覆核 2026-
   })
 
   it('AddressHeatmap 跨元素受害者（白卡/淺底上的 darker 文字）有 dark-mode 覆寫', () => {
-    const heatmap = read(
-      '../../src/components/recruitment/RecruitmentAddressHeatmap.vue',
+    // 2026-07-12 元件邊界拆分：nearby-school-name／rating-score 隨附近幼兒園清單移到
+    // RecruitmentNearbySchoolList.vue，gov-detail-link 隨政府登錄詳情面板移到
+    // RecruitmentSchoolGovDetail.vue（CSS 隨其擁有的 markup 一併搬移，覆寫本身未刪除）。
+    const nearbyList = read(
+      '../../src/components/recruitment/RecruitmentNearbySchoolList.vue',
+    )
+    const govDetail = read(
+      '../../src/components/recruitment/RecruitmentSchoolGovDetail.vue',
     )
     // 代表性鎖住：nearby-school-name（父白卡）、gov-detail-link（父 #f8fbff）、rating-score（父白卡）
-    expect(heatmap).toMatch(/html\.dark[^{]*\.nearby-school-name/)
-    expect(heatmap).toMatch(/html\.dark[^{]*\.gov-detail-link/)
-    expect(heatmap).toMatch(/html\.dark[^{]*\.rating-score/)
+    expect(nearbyList).toMatch(/html\.dark[^{]*\.nearby-school-name/)
+    expect(govDetail).toMatch(/html\.dark[^{]*\.gov-detail-link/)
+    expect(nearbyList).toMatch(/html\.dark[^{]*\.rating-score/)
   })
 
   it('RecruitmentAreaTab 的 .dc-stat-val（硬編白 .district-card 內的 darker 文字）有 dark-mode 覆寫', () => {
