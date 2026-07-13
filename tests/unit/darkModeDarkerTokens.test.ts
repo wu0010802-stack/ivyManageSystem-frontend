@@ -77,10 +77,15 @@ describe('深色模式 *-darker 反向用法回歸防護（對抗式覆核 2026-
     expect(nearbyList).toMatch(/html\.dark[^{]*\.rating-score/)
   })
 
-  it('RecruitmentAreaTab 的 .dc-stat-val（硬編白 .district-card 內的 darker 文字）有 dark-mode 覆寫', () => {
+  it('RecruitmentAreaTab 的 .district-card 背景已 tokenize，債務解除（不再硬編白卡、無需 dc-stat dark 覆寫）', () => {
+    // 2026-07-13 收斂：.district-card 背景由硬編 #fff 改 var(--neutral-0)（dark 自動翻深底），
+    // 卡內 --color-*-darker 統計值在 dark 由 a11y.css 翻亮＝正確對比，故舊的 html.dark .dc-stat 深字
+    // 覆寫（原本為救白卡上的亮字）反而會造成 dark-on-dark，一併移除。
     const area = read('../../src/components/recruitment/RecruitmentAreaTab.vue')
-    expect(area).toMatch(/html\.dark[^{]*\.dc-stat--ok\s+\.dc-stat-val/)
-    expect(area).toMatch(/html\.dark[^{]*\.dc-stat--warn\s+\.dc-stat-val/)
+    expect(area).not.toMatch(/\.district-card\s*\{[^}]*background:\s*#fff/)
+    expect(area).not.toMatch(/html\.dark[^{]*\.dc-stat--ok\s+\.dc-stat-val/)
+    // 側邊色條為 impeccable 絕對禁區，選中態不得使用
+    expect(area).not.toMatch(/border-left:\s*3px/)
   })
 
   // 反例守衛：StatsPanel/Chuannian/Ivykids 的 kpi-value 在「會翻深底的 el-card」內，
