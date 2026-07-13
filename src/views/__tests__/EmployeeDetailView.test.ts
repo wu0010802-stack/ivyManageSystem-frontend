@@ -273,3 +273,39 @@ describe('EmployeeDetailView 員工待辦列', () => {
     getByIdSpy.mockRestore()
   })
 })
+
+describe('EmployeeDetailView 錨點導覽升級', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('證照 30 天內到期 → 錨點「學歷・證照・合約」帶到期徽章', () => {
+    const w = mountDetail({ certificates: [{ id: 1, expiry_date: localISOOffset(10) }] })
+    const anchor = w.findAll('.anchor-link').find((a) => a.text().includes('學歷・證照・合約'))
+    expect(anchor!.text()).toContain('1 即將到期')
+  })
+
+  it('證照已逾期優先於將到期顯示', () => {
+    const w = mountDetail({
+      certificates: [
+        { id: 1, expiry_date: localISOOffset(-5) },
+        { id: 2, expiry_date: localISOOffset(10) },
+      ],
+    })
+    const anchor = w.findAll('.anchor-link').find((a) => a.text().includes('學歷・證照・合約'))
+    expect(anchor!.text()).toContain('1 已逾期')
+    expect(anchor!.text()).not.toContain('即將到期')
+  })
+
+  it('無到期證照 → 錨點無徽章（既有文字斷言不變）', () => {
+    const w = mountDetail()
+    const labels = w.findAll('.anchor-link').map((a) => a.text())
+    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄'])
+  })
+
+  it('點擊錨點 → 該錨點取得 is-active（預設第一個 active）', async () => {
+    const w = mountDetail()
+    expect(w.findAll('.anchor-link')[0].classes()).toContain('is-active')
+    await w.findAll('.anchor-link')[2].trigger('click')
+    expect(w.findAll('.anchor-link')[2].classes()).toContain('is-active')
+    expect(w.findAll('.anchor-link')[0].classes()).not.toContain('is-active')
+  })
+})

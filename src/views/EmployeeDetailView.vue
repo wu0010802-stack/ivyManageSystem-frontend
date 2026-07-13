@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toRef, onMounted } from 'vue'
+import { computed, ref, toRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, User } from '@element-plus/icons-vue'
@@ -54,6 +54,17 @@ interface EmployeeTodo {
   /** 點擊後 scrollToSection 的目標區塊 key */
   sectionKey: string
 }
+// 證照到期計數單一來源：employeeTodos 與錨點徽章共用，避免兩處口徑漂移
+const certExpiryCounts = computed(() => {
+  let expired = 0
+  let expiring = 0
+  for (const cert of certificates.value) {
+    const status = expiryStatus(typeof cert.expiry_date === 'string' ? cert.expiry_date : null)
+    if (status.kind === 'expired') expired++
+    else if (status.kind === 'expiring') expiring++
+  }
+  return { expired, expiring }
+})
 const employeeTodos = computed<EmployeeTodo[]>(() => {
   const todos: EmployeeTodo[] = []
   const emp = employee.value
@@ -62,19 +73,12 @@ const employeeTodos = computed<EmployeeTodo[]>(() => {
   if (emp && isMissingSalary(emp)) {
     todos.push({ key: 'missing-salary', type: 'danger', label: '待補薪資', sectionKey: 'salary' })
   }
-  // 證照到期：逾期與 30 天內到期分開計數顯示
-  let expiredCertCount = 0
-  let expiringCertCount = 0
-  for (const cert of certificates.value) {
-    const status = expiryStatus(typeof cert.expiry_date === 'string' ? cert.expiry_date : null)
-    if (status.kind === 'expired') expiredCertCount++
-    else if (status.kind === 'expiring') expiringCertCount++
+  // 證照到期：逾期與 30 天內到期分開計數顯示（單一來源見上方 certExpiryCounts）
+  if (certExpiryCounts.value.expired > 0) {
+    todos.push({ key: 'cert-expired', type: 'danger', label: `證照已逾期 ${certExpiryCounts.value.expired}`, sectionKey: 'credentials' })
   }
-  if (expiredCertCount > 0) {
-    todos.push({ key: 'cert-expired', type: 'danger', label: `證照已逾期 ${expiredCertCount}`, sectionKey: 'credentials' })
-  }
-  if (expiringCertCount > 0) {
-    todos.push({ key: 'cert-expiring', type: 'warning', label: `證照 30 天內到期 ${expiringCertCount}`, sectionKey: 'credentials' })
+  if (certExpiryCounts.value.expiring > 0) {
+    todos.push({ key: 'cert-expiring', type: 'warning', label: `證照 30 天內到期 ${certExpiryCounts.value.expiring}`, sectionKey: 'credentials' })
   }
   // 合約到期：任一合約已逾期就顯示「已到期」（優先權高於「將到期」，故一遇到即 break）；
   // 否則若有將到期則顯示「將到期」——迴圈中能走到 'expiring' 分支時 contractKind 必仍是 null（見上方 break）。
@@ -98,8 +102,32 @@ const SECTIONS = [
   { key: 'attendance', label: '出勤紀錄' },
 ] as const
 const scrollToSection = (key: string) => {
+  activeSectionKey.value = key
   document.getElementById(`emp-sec-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+
+// 錨點 active：IntersectionObserver 追蹤視口內最上方的 section；
+// happy-dom 無 IO（typeof 守衛跳過），測試環境退化為「點擊時設定」
+const activeSectionKey = ref<string>(SECTIONS[0].key)
+let sectionObserver: IntersectionObserver | null = null
+const observeSections = () => {
+  if (typeof IntersectionObserver === 'undefined') return
+  sectionObserver?.disconnect()
+  sectionObserver = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((e) => e.isIntersecting)
+      .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+    if (visible.length) activeSectionKey.value = visible[0].target.id.replace('emp-sec-', '')
+  }, { rootMargin: '-10% 0px -70% 0px' })
+  for (const s of SECTIONS) {
+    const el = document.getElementById(`emp-sec-${s.key}`)
+    if (el) sectionObserver.observe(el)
+  }
+}
+watch(employee, async (val) => {
+  if (val) { await nextTick(); observeSections() }
+}, { immediate: true })
+onUnmounted(() => sectionObserver?.disconnect())
 
 const goBack = () => {
   if (window.history.length > 1) router.back()
@@ -159,7 +187,15 @@ const onSaved = async () => {
           <el-button v-if="employee.is_active" type="warning" plain size="small" @click="offboardVisible = true">辦理離職</el-button>
         </div>
         <nav class="anchor-nav" aria-label="區塊導覽">
-          <a v-for="s in SECTIONS" :key="s.key" :href="`#emp-sec-${s.key}`" class="anchor-link" @click.prevent="scrollToSection(s.key)">{{ s.label }}</a>
+          <a
+            v-for="s in SECTIONS" :key="s.key" :href="`#emp-sec-${s.key}`"
+            :class="['anchor-link', { 'is-active': activeSectionKey === s.key }]"
+            @click.prevent="scrollToSection(s.key)"
+          >
+            {{ s.label }}
+            <span v-if="s.key === 'credentials' && certExpiryCounts.expired > 0" class="anchor-badge is-danger">{{ certExpiryCounts.expired }} 已逾期</span>
+            <span v-else-if="s.key === 'credentials' && certExpiryCounts.expiring > 0" class="anchor-badge is-warning">{{ certExpiryCounts.expiring }} 即將到期</span>
+          </a>
         </nav>
       </aside>
 
@@ -247,8 +283,17 @@ const onSaved = async () => {
 .emp-meta .meta-label { display: inline-block; width: 72px; color: var(--el-text-color-secondary); }
 .aside-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
 .anchor-nav { margin-top: 16px; border-top: 1px solid var(--el-border-color-lighter); padding-top: 12px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
-.anchor-link { cursor: pointer; font-size: 13px; color: var(--el-text-color-regular); }
+.anchor-link { cursor: pointer; font-size: 13px; color: var(--el-text-color-regular); padding: 4px 8px; border-radius: 6px; }
 .anchor-link:hover { color: var(--el-color-primary); }
+.anchor-link.is-active {
+  background: var(--crisp-accent-soft);
+  color: var(--brand-primary);
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--brand-primary);
+}
+.anchor-badge { font-size: 11px; margin-left: 4px; }
+.anchor-badge.is-danger { color: var(--color-danger-darker); }
+.anchor-badge.is-warning { color: var(--crisp-pill-warning-text); }
 
 /* 手機：左欄變頂部卡片、錨點變橫向 chip */
 .detail-layout.is-mobile { flex-direction: column; }
