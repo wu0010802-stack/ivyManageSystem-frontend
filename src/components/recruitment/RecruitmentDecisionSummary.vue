@@ -28,14 +28,14 @@
         <div class="dc-rates">
           <div class="dc-rate-item">
             <span class="dc-rate-label">預繳率</span>
-            <span class="dc-rate-value" :class="rateClass(item.snapshot.visit_to_deposit_rate)">
-              {{ fmtRate(item.snapshot.visit_to_deposit_rate) }}
+            <span class="dc-rate-value" :class="rateClass(item.snapshot)">
+              {{ rateText(item.snapshot, 'visit_to_deposit_rate') }}
             </span>
           </div>
           <div class="dc-rate-item">
             <span class="dc-rate-label">註冊率</span>
-            <span class="dc-rate-value" :class="rateClass(item.snapshot.visit_to_enrolled_rate)">
-              {{ fmtRate(item.snapshot.visit_to_enrolled_rate) }}
+            <span class="dc-rate-value" :class="rateClass(item.snapshot, 'visit_to_enrolled_rate')">
+              {{ rateText(item.snapshot, 'visit_to_enrolled_rate') }}
             </span>
           </div>
         </div>
@@ -45,8 +45,6 @@
           <span class="dc-sub-sep">·</span>
           <span>註冊 <strong>{{ item.snapshot.enrolled ?? 0 }}</strong></span>
         </div>
-
-        <div class="dc-accent-bar" />
       </div>
     </div>
   </div>
@@ -83,8 +81,15 @@ const momDelta   = computed(() => Number((momOverMonth?.visit_to_deposit_rate?.d
 const momArrow   = computed(() => momDelta.value > 0 ? '▲' : momDelta.value < 0 ? '▼' : '–')
 const momClass   = computed(() => momDelta.value > 0 ? 'mom-badge--up' : momDelta.value < 0 ? 'mom-badge--down' : '')
 
-const rateClass = (rate: unknown) => {
-  const n = Number(rate || 0)
+const hasVolume = (snapshot: Record<string, unknown>) => Number(snapshot.visit || 0) > 0
+
+/** 沒有參觀人次（分母為零）時比率無意義，顯示「—」避免假警訊的紅色 0% */
+const rateText = (snapshot: Record<string, unknown>, key: string) =>
+  hasVolume(snapshot) ? props.fmtRate(snapshot[key]) : '—'
+
+const rateClass = (snapshot: Record<string, unknown>, key = 'visit_to_deposit_rate') => {
+  if (!hasVolume(snapshot)) return 'dc-rate-value--none'
+  const n = Number(snapshot[key] || 0)
   if (n >= 60) return 'dc-rate-value--high'
   if (n >= 30) return 'dc-rate-value--mid'
   return 'dc-rate-value--low'
@@ -142,34 +147,19 @@ const rateClass = (rate: unknown) => {
   gap: 12px;
 }
 
-/* ── Card ── */
+/* ── Card：中性髮絲線卡，期間由 label 區分，不用裝飾色條 ── */
 .decision-card {
-  position: relative;
   background: var(--neutral-0);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px 16px 14px;
-  overflow: hidden;
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
+  transition: border-color 0.18s ease;
   cursor: default;
 }
 
 .decision-card:hover {
-  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.10);
-  transform: translateY(-1px);
+  border-color: var(--neutral-300);
 }
-
-/* accent top bar per period */
-.dc-accent-bar {
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  border-radius: 12px 12px 0 0;
-}
-.decision-card--current_month .dc-accent-bar { background: var(--color-info-darker); }
-.decision-card--rolling_30d   .dc-accent-bar { background: var(--color-info); }
-.decision-card--rolling_90d   .dc-accent-bar { background: #6366f1; }
-.decision-card--ytd           .dc-accent-bar { background: var(--color-warning-hover); }
 
 /* ── Label ── */
 .dc-label {
@@ -180,8 +170,6 @@ const rateClass = (rate: unknown) => {
   letter-spacing: 0.06em;
   margin-bottom: 8px;
 }
-.decision-card--current_month .dc-label { color: var(--color-info-darker); }
-.decision-card--ytd           .dc-label { color: var(--color-warning-darker); }
 
 /* ── Main value ── */
 .dc-main {
@@ -195,7 +183,7 @@ const rateClass = (rate: unknown) => {
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 2.1rem;
   font-weight: 700;
-  color: var(--color-info-darker);
+  color: var(--text-primary);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -234,6 +222,7 @@ const rateClass = (rate: unknown) => {
 .dc-rate-value--high { color: var(--color-success-darker); }
 .dc-rate-value--mid  { color: var(--color-warning-hover); }
 .dc-rate-value--low  { color: var(--color-danger-hover); }
+.dc-rate-value--none { color: var(--text-tertiary); font-weight: 500; }
 
 /* ── Sub row ── */
 .dc-sub {

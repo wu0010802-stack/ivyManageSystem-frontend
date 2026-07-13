@@ -10,8 +10,11 @@
         class="action-item"
         @click="$emit('select', item)"
       >
-        <div class="action-title">{{ item.title }}</div>
-        <div class="action-description">{{ item.description }}</div>
+        <div class="action-body">
+          <div class="action-title">{{ item.title }}</div>
+          <div class="action-description">{{ item.description }}</div>
+        </div>
+        <svg class="action-chevron" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
     </div>
   </el-card>
@@ -41,12 +44,35 @@ defineEmits<{ 'select': [item: ActionItem] }>()
 }
 
 .action-item {
-  border: 1px solid #dbe3ef;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background: var(--neutral-0);
   padding: 14px;
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.action-item:hover {
+  border-color: var(--brand-primary);
+}
+
+.action-item:hover .action-chevron {
+  color: var(--brand-primary);
+}
+
+.action-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.action-chevron {
+  flex-shrink: 0;
+  color: var(--neutral-300);
+  transition: color 0.2s ease;
 }
 
 .action-title {

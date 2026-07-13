@@ -1,6 +1,7 @@
 <template>
-  <div class="stats-panel" v-loading="loadingStats">
+  <div class="stats-panel crisp-surface" v-loading="loadingStats">
     <div class="panel-toolbar">
+      <span class="panel-toolbar-label">統計範圍</span>
       <el-select
         v-model="statsSchoolYear"
         size="small"
@@ -53,7 +54,6 @@
     <el-tabs v-model="activeStatsTab" @tab-click="onTabClick">
       <!-- ==================== 總覽 ==================== -->
       <el-tab-pane label="總覽" name="overview">
-        <AllChannelSummaryCard :internal-snapshot="statsFunnelSnapshot" />
         <RecruitmentOverviewTab
           :stats="stats"
           :reference-month="referenceMonth"
@@ -73,7 +73,11 @@
           :line-component="castLineComponent"
           :fmt-rate="castFmtRate"
           @navigate="(e) => handleDashboardTarget(e as Record<string, unknown>)"
-        />
+        >
+          <template #after-summary>
+            <AllChannelSummaryCard :internal-snapshot="statsFunnelSnapshot" />
+          </template>
+        </RecruitmentOverviewTab>
       </el-tab-pane>
 
       <!-- ==================== 班別分析 ==================== -->
@@ -570,6 +574,15 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   margin-bottom: 12px;
 }
 
+.panel-toolbar-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 2px;
+}
+
 .form-section-title {
   font-size: 12px;
   font-weight: 700;
@@ -582,44 +595,9 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 .form-section-title:first-child {
   margin-top: 0;
 }
-:deep(.kpi-row) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-:deep(.kpi-card) {
-  flex: 1;
-  min-width: 130px;
-  border-left: 4px solid var(--rv-primary, #1e40af);
-  transition: box-shadow 0.18s ease, transform 0.18s ease;
-}
-:deep(.kpi-card:hover) {
-  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.10);
-  transform: translateY(-1px);
-}
-:deep(.kpi-card.kpi-accent) { border-left-color: var(--color-warning-hover); }
-:deep(.kpi-card.kpi-blue)   { border-left-color: var(--color-info); }
-:deep(.kpi-card.kpi-teal)   { border-left-color: #0891b2; }
-:deep(.kpi-card.kpi-green)  { border-left-color: var(--color-success-hover); }
-:deep(.kpi-value) {
-  font-family: 'Fira Code', ui-monospace, monospace;
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--rv-primary, #1e3a8a);
-  font-variant-numeric: tabular-nums;
-}
-:deep(.kpi-card.kpi-accent .kpi-value) { color: var(--color-warning-darker); }
-:deep(.kpi-card.kpi-blue   .kpi-value) { color: var(--color-info-darker); }
-:deep(.kpi-card.kpi-teal   .kpi-value) { color: #0e7490; }
-:deep(.kpi-card.kpi-green  .kpi-value) { color: var(--color-success-darker); }
-:deep(.kpi-label) {
-  font-size: 0.78rem;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-:deep(.kpi-sub) { font-size: 0.78rem; color: var(--text-tertiary); }
+/* 註：舊 :deep(.kpi-row/.kpi-card/.kpi-value/.kpi-label/.kpi-sub) 已移除——
+   統計面板現有六個子分頁內無人使用（AreaTab 用自己的 .area-kpi-* 與 scoped .kpi-label），
+   使用 .kpi-card 的 Ivykids/Chuannian/Periods tab 皆不在本面板底下。 */
 :deep(.chart-row) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
