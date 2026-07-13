@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import ElementPlus, { ElMessageBox } from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 
 vi.mock('@/api/auth', () => {
   const mockPermissionDefinition = {
@@ -327,6 +327,17 @@ describe('SettingsAccountsTab — role card UX', () => {
       vm.onRowCommand('toggle-active', { id: 7, username: 'y', is_active: false })
       await flushPromises()
       expect(vi.mocked(updateUser)).toHaveBeenCalledWith(7, { is_active: true })
+    })
+
+    it('停用失敗：updateUser reject → 以 apiError 訊息顯示 ElMessage.error', async () => {
+      const vm = await mountPlain()
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      const errorSpy = vi.spyOn(ElMessage, 'error')
+      vi.mocked(updateUser).mockRejectedValueOnce({ response: { data: { detail: '不能停用自己的帳號' } } })
+      await vm.handleToggleActive({ id: 1, username: 'wang01', is_active: true })
+      expect(errorSpy).toHaveBeenCalledWith('不能停用自己的帳號')
+      confirmSpy.mockRestore()
+      errorSpy.mockRestore()
     })
   })
 })
