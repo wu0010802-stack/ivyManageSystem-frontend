@@ -62,6 +62,7 @@ vi.mock('@/api/permissions_admin', () => ({
 
 import SettingsAccountsTab from '../SettingsAccountsTab.vue'
 import { createUser } from '@/api/auth'
+import { formatDateTimeTW } from '@/utils/format'
 
 describe('SettingsAccountsTab — role card UX', () => {
   beforeEach(() => {
@@ -266,8 +267,19 @@ describe('SettingsAccountsTab — role card UX', () => {
     const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
     await flushPromises()
     const text = wrapper.text()
-    expect(text).toContain('2026/7/10')       // formatDateTimeTW 輸出
+    expect(text).toContain(formatDateTimeTW('2026-07-10T17:35:14.324936'))  // formatDateTimeTW 輸出（時區無關斷言）
     expect(text).not.toContain('T17:35')      // 原始 ISO 不再直出
     expect(text).toContain('從未登入')
+  })
+
+  it('accountCardColumns 最後登入 formatter：null → 從未登入、ISO → formatDateTimeTW', async () => {
+    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      accountCardColumns: { prop: string; formatter?: (i: Record<string, unknown>) => unknown }[]
+    }
+    const col = vm.accountCardColumns.find((c) => c.prop === 'last_login')
+    expect(col?.formatter?.({ last_login: null })).toBe('從未登入')
+    expect(col?.formatter?.({ last_login: '2026-07-10T17:35:14.324936' })).toBe(formatDateTimeTW('2026-07-10T17:35:14.324936'))
   })
 })

@@ -321,6 +321,7 @@ onMounted(() => {
 defineExpose({
   userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault,
   keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser,
+  accountCardColumns,
 })
 </script>
 
