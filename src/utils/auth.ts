@@ -356,6 +356,20 @@ export function hasWritePermission(moduleName: string): boolean {
   return hasPermission(`${moduleName}_WRITE`)
 }
 
+/**
+ * 目前登入者是否為超級管理員——僅供 UI 顯示/分流（終核按鈕、flag checkbox、
+ * 審核鏈編輯區的可見性）。授權判斷後端一律即時查 DB role_flags（spec §3.1 信任邊界），
+ * 前端誤放行只會拿到 4xx。優先讀 userInfo.flags 的 'super_admin'；flags 缺失
+ * （登入前、舊 localStorage userInfo、DB 未 seed）fallback role === 'admin'。
+ */
+export function isSuperAdmin(): boolean {
+  const userInfo = getUserInfo()
+  if (!userInfo) return false
+  const flags = userInfo['flags']
+  if (Array.isArray(flags) && (flags as unknown[]).includes('super_admin')) return true
+  return userInfo['role'] === 'admin'
+}
+
 // ── 權限名稱集合運算（取代舊 BigInt mask 版本） ──
 // 後端從 bigint mask 改為 text[]；前端統一在此檔做 Set 運算，
 // 不再散落各處 `& bit` / `BigInt(...)`。
