@@ -239,6 +239,7 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 - 一個 commit 只做一件事
 - Commit message 說明「為什麼」，程式碼本身說明「做了什麼」
 - 不 commit `.env.local`、`node_modules/`、`dist/`
+- **一律在 feature branch（worktree 內）上 commit，不直接 commit main**（2026-07-13 起零例外，含 docs 小修）；分支命名、worktree 用法（⚠ FE worktree 的 node_modules 問題見 memory `feedback_frontend_worktree_node_modules_symlink`）、收束方式（merge 回 local main、不 push）見 workspace CLAUDE.md「分支與 Worktree 規則」
 
 ---
 
