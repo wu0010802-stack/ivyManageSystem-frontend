@@ -26,9 +26,15 @@ const resolveTab = (raw: unknown): string => {
 
 const activeTab = ref(resolveTab(route.query.tab))
 
-// 缺漏 / 不合法 tab → 修正 URL（與 EmployeeHubView 一致）
-if (route.query.tab !== activeTab.value) {
-  router.replace({ query: { ...route.query, tab: activeTab.value } })
+// view key 只在 accounts 分頁有意義（SettingsAccountsTab 的 ?view= 契約）；離開 accounts 時要清掉，
+// 否則會殘留在非 accounts 分頁的 URL 上（如 ?tab=無效值&view=parent 被 normalize 成 ?tab=shifts&view=parent）
+const staleView = (tab: string): boolean => tab !== 'accounts' && route.query.view !== undefined
+
+// 缺漏 / 不合法 tab → 修正 URL（與 EmployeeHubView 一致）；非 accounts 分頁一併清掉殘留的 view key
+if (route.query.tab !== activeTab.value || staleView(activeTab.value)) {
+  const next: LocationQueryRaw = { ...route.query, tab: activeTab.value }
+  if (activeTab.value !== 'accounts') delete next.view
+  router.replace({ query: next })
 }
 
 watch(
@@ -36,6 +42,12 @@ watch(
   (next) => {
     const resolved = resolveTab(next)
     if (resolved !== activeTab.value) activeTab.value = resolved
+    // 外部（如瀏覽器上一頁）造成的 tab 變動不經 onTabChange，需在此一併清掉殘留 view key
+    if (staleView(resolved)) {
+      const q: LocationQueryRaw = { ...route.query, tab: resolved }
+      delete q.view
+      router.replace({ query: q })
+    }
   },
 )
 

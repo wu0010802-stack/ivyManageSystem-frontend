@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { reactive } from 'vue'
 import { shallowMount, flushPromises } from '@vue/test-utils'
 
 // --- Mock stores ---
@@ -15,8 +16,10 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 // --- Mock vue-router（提供 route.query / router.replace 供 URL 同步測試）---
+// mockQuery 用 reactive 包，讓 watch(() => route.query.tab, ...) 能在測試中被實際觸發
+// （模擬瀏覽器上一頁等非經 onTabChange 途徑造成的外部 query 變動）
 const replace = vi.fn()
-let mockQuery: Record<string, unknown> = {}
+let mockQuery: Record<string, unknown> = reactive({})
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: mockQuery }),
   useRouter: () => ({ replace }),
@@ -56,7 +59,7 @@ describe('SettingsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(false)
-    mockQuery = {}
+    mockQuery = reactive({})
     replace.mockClear()
   })
 
@@ -95,7 +98,7 @@ describe('SettingsView tab ↔ URL 同步', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(false)
-    mockQuery = {}
+    mockQuery = reactive({})
     replace.mockClear()
   })
 
@@ -107,7 +110,7 @@ describe('SettingsView tab ↔ URL 同步', () => {
   })
 
   it('deep link ?tab=accounts → 直接落在帳號分頁且不 replace', async () => {
-    mockQuery = { tab: 'accounts' }
+    mockQuery = reactive({ tab: 'accounts' })
     const w = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('accounts')
@@ -115,7 +118,7 @@ describe('SettingsView tab ↔ URL 同步', () => {
   })
 
   it('無權限者 deep link ?tab=dsr-requests → fallback shifts 並修正 URL', async () => {
-    mockQuery = { tab: 'dsr-requests' }
+    mockQuery = reactive({ tab: 'dsr-requests' })
     const w = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
@@ -124,19 +127,45 @@ describe('SettingsView tab ↔ URL 同步', () => {
 
   it('有 DSR_MANAGE 權限時 ?tab=dsr-requests 合法', async () => {
     mockHasPermission.mockImplementation((perm: string) => perm === 'DSR_MANAGE')
-    mockQuery = { tab: 'dsr-requests' }
+    mockQuery = reactive({ tab: 'dsr-requests' })
     const w = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('dsr-requests')
   })
 
   it('切換 tab → replace 更新 ?tab=；離開 accounts 時清掉 view', async () => {
-    mockQuery = { tab: 'accounts', view: 'parent' }
+    mockQuery = reactive({ tab: 'accounts', view: 'parent' })
     const w = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     replace.mockClear()
     w.findComponent({ name: 'ElTabs' }).vm.$emit('tab-change', 'shifts')
     await flushPromises()
+    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
+  })
+
+  it('無效 tab 且帶殘留 view → mount normalize 一併清掉 view（?view= 契約邊界）', async () => {
+    mockQuery = reactive({ tab: '無效值', view: 'parent' })
+    const w = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
+    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
+  })
+
+  it('合法非 accounts tab 但帶殘留 view → mount 時一併清掉 view', async () => {
+    mockQuery = reactive({ tab: 'shifts', view: 'parent' })
+    const w = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
+  })
+
+  it('外部（非 onTabChange）改變 route.query.tab 離開 accounts → watch 一併清掉殘留 view', async () => {
+    mockQuery = reactive({ tab: 'accounts', view: 'parent' })
+    const w = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    replace.mockClear()
+    mockQuery.tab = 'shifts' // 模擬瀏覽器上一頁等非經 onTabChange 途徑的外部變更
+    await flushPromises()
+    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
     expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
   })
 })
