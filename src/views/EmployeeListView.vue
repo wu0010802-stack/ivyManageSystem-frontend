@@ -298,15 +298,16 @@ onMounted(async () => {
     <div class="page-header">
       <div class="page-header-left">
         <h2>員工管理</h2>
+        <p class="page-subtitle">全園名冊、任職資料與離職作業</p>
         <p v-if="!loading" class="roster-stats">
-          <template v-if="hasActiveFilters">顯示 {{ displayedEmployees.length }} 筆 <span class="stat-sep">·</span> </template>
-          共 {{ rosterStats.total }} 人
-          <span class="stat-sep">·</span> 在職 {{ rosterStats.active }}
+          <template v-if="hasActiveFilters">顯示 <b>{{ displayedEmployees.length }}</b> 筆 <span class="stat-sep">·</span> </template>
+          共 <b>{{ rosterStats.total }}</b> 人
+          <span class="stat-sep">·</span> 在職 <b>{{ rosterStats.active }}</b>
           <template v-if="rosterStats.pending">
-            <span class="stat-sep">·</span> 待離職 {{ rosterStats.pending }}
+            <span class="stat-sep">·</span> 待離職 <b>{{ rosterStats.pending }}</b>
           </template>
           <template v-if="rosterStats.resigned">
-            <span class="stat-sep">·</span> 已離職 {{ rosterStats.resigned }}
+            <span class="stat-sep">·</span> 已離職 <b>{{ rosterStats.resigned }}</b>
           </template>
         </p>
         <!-- chips 為可 toggle 的篩選鈕：role="button" + tabindex 讓鍵盤可聚焦，
@@ -360,7 +361,7 @@ onMounted(async () => {
         </el-select>
         <span v-if="todoFilter !== 'none'" class="export-hint">待辦篩選不影響匯出</span>
         <el-tooltip :content="exportTooltip" placement="top">
-          <el-button type="success" @click="exportEmployees">匯出 Excel</el-button>
+          <el-button @click="exportEmployees">匯出 Excel</el-button>
         </el-tooltip>
         <el-button type="primary" @click="openCreate">
           <el-icon><Plus /></el-icon> 新增員工
