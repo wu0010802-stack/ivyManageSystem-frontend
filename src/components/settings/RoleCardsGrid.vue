@@ -3,15 +3,7 @@ import { computed } from 'vue'
 import { isSuperAdmin } from '@/utils/auth'
 import { FLAG_SUPER_ADMIN, FLAG_PARENT, type RolesDefinition } from './roles/types'
 
-// 核心角色的 emoji 與排序沿舊 UI；自訂角色一律 👤、code 字母序附後
-const ROLE_ICONS: Record<string, string> = {
-  admin: '👑',
-  principal: '🏫',
-  supervisor: '📋',
-  hr: '💼',
-  accountant: '💰',
-  teacher: '📚',
-}
+// 核心角色排序沿舊 UI；自訂角色 code 字母序附後（角色卡不放 icon——業主 2026-07-13 裁定移除）
 const CORE_ORDER = ['admin', 'principal', 'supervisor', 'hr', 'accountant', 'teacher']
 
 const props = defineProps<{
@@ -69,7 +61,6 @@ const onKeydown = (e: KeyboardEvent, code: string, locked: boolean) => {
       @click="select(opt.code, opt.locked)"
       @keydown="onKeydown($event, opt.code, opt.locked)"
     >
-      <div class="role-card__icon" aria-hidden="true">{{ ROLE_ICONS[opt.code] || '👤' }}</div>
       <div class="role-card__label">{{ opt.label }}</div>
       <div class="role-card__desc">{{ opt.description }}</div>
       <div class="role-card__count">
@@ -122,11 +113,6 @@ const onKeydown = (e: KeyboardEvent, code: string, locked: boolean) => {
 .role-card.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.role-card__icon {
-  font-size: 24px;
-  margin-bottom: 4px;
 }
 
 .role-card__label {

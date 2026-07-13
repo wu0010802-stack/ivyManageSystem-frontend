@@ -57,9 +57,10 @@ describe('RoleCardsGrid', () => {
     expect(w.emitted('update:modelValue')?.[1]).toEqual(['custom_x'])
   })
 
-  it('emoji aria-hidden', () => {
+  it('角色卡不放 icon（業主 2026-07-13 裁定移除）', () => {
     const w = mountGrid()
-    expect(w.find('[data-role="admin"] .role-card__icon').attributes('aria-hidden')).toBe('true')
+    expect(w.find('[data-role="admin"] .role-card__icon').exists()).toBe(false)
+    expect(w.find('[data-role="admin"] .role-card__label').text()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u)
   })
 
   it('非 super_admin：super_admin flag 角色卡 disabled、點擊不 emit', async () => {

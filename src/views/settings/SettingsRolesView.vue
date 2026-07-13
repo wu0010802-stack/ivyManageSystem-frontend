@@ -146,7 +146,7 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, createDialog
           </div>
           <div class="role-item__meta">
             <el-tag size="small" :type="row.is_core ? 'info' : 'warning'">{{ row.is_core ? '核心' : '自訂' }}</el-tag>
-            <el-tag v-if="row.flags.includes(FLAG_SUPER_ADMIN)" size="small" type="danger">👑 超級管理員</el-tag>
+            <el-tag v-if="row.flags.includes(FLAG_SUPER_ADMIN)" size="small" type="danger">超級管理員</el-tag>
             <el-tag v-if="row.flags.includes(FLAG_PARENT)" size="small">家長</el-tag>
             <span class="role-item__count">帳號數 {{ row.accountCount === null ? '—' : row.accountCount }}</span>
           </div>

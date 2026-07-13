@@ -125,7 +125,7 @@ defineExpose({ form, superAdminDisabled, superAdminTooltip, parentDisabled, pare
         <el-tooltip :content="superAdminTooltip" :disabled="!superAdminDisabled" placement="top">
           <span>
             <el-checkbox v-model="form.flagSuperAdmin" :disabled="superAdminDisabled" data-testid="flag-super-admin">
-              👑 超級管理員（任何關卡可代簽，並可終核整張）
+              超級管理員（任何關卡可代簽，並可終核整張）
             </el-checkbox>
           </span>
         </el-tooltip>

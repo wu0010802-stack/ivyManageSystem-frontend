@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Check, Close, Document, Link, Loading, Paperclip } from '@element-plus/icons-vue'
+import { ArrowRight, Check, Close, Document, Link, Loading, Paperclip, Stamp } from '@element-plus/icons-vue'
 import { getLeaves, approveLeave as approveLeaveApi, getLeaveAttachment, batchApproveLeaves } from '@/api/leaves'
 import { getOvertimes, approveOvertime as approveOvertimeApi, batchApproveOvertimes } from '@/api/overtimes'
 import { getCorrections, approveCorrection as approveCorrectionApi, batchApproveCorrections } from '@/api/punchCorrections'
@@ -465,7 +465,7 @@ onMounted(() => {
               circle
               title="核准整張（跨過所有未完成關卡）"
               @click="finalizeLeave(row)"
-            >👑</el-button>
+            ><el-icon><Stamp /></el-icon></el-button>
             <el-button aria-label="駁回請假申請" type="danger" size="small" circle @click="approveLeave(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
@@ -575,7 +575,7 @@ onMounted(() => {
               circle
               title="核准整張（跨過所有未完成關卡）"
               @click="finalizeOvertime(row)"
-            >👑</el-button>
+            ><el-icon><Stamp /></el-icon></el-button>
             <el-button aria-label="駁回加班申請" type="danger" size="small" circle @click="approveOvertime(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
@@ -661,7 +661,7 @@ onMounted(() => {
               circle
               title="核准整張（跨過所有未完成關卡）"
               @click="finalizeCorrection(row)"
-            >👑</el-button>
+            ><el-icon><Stamp /></el-icon></el-button>
             <el-button aria-label="駁回補打卡申請" type="danger" size="small" circle @click="approveCorrection(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>

@@ -54,7 +54,8 @@ describe('SettingsRolesView', () => {
     const text = w.text()
     expect(text).toContain('管理員')
     expect(text).toContain('custom_x')
-    expect(text).toContain('👑')
+    expect(text).toContain('超級管理員')
+    expect(text).not.toContain('👑')
     const vm = w.vm as unknown as { roleRows: { code: string; accountCount: number | null }[] }
     expect(vm.roleRows.find((r) => r.code === 'hr')?.accountCount).toBe(2)
     expect(vm.roleRows.find((r) => r.code === 'custom_x')?.accountCount).toBe(0)

@@ -184,7 +184,7 @@ defineExpose({ policies, activeDocType, chainDraft, overrideEditing, startOverri
     <el-alert v-if="loadError" type="warning" :closable="false" title="無法載入審核政策（需要一般設定讀取權限）" />
     <div v-else v-loading="loading">
       <el-alert v-if="!canEdit" type="info" :closable="false" title="僅超級管理員可修改審核流程，以下為唯讀檢視" class="chain-alert" />
-      <div class="superadmin-note">👑 超級管理員：任何關卡皆可代簽，並可終核整張（無需列入關卡鏈）</div>
+      <div class="superadmin-note">超級管理員：任何關卡皆可代簽，並可終核整張（無需列入關卡鏈）</div>
 
       <!-- 未覆寫的特定 doc_type：沿用 all 預覽 -->
       <template v-if="!showChainArea">
