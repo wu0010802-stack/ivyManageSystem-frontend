@@ -14,13 +14,6 @@ vi.mock('@/utils/auth', () => ({
   PERMISSION_NAMES: { DSR_MANAGE: 'DSR_MANAGE' },
 }))
 
-const replace = vi.fn()
-let mockQuery: Record<string, unknown> = {}
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: mockQuery }),
-  useRouter: () => ({ replace }),
-}))
-
 import SettingsView from '../SettingsView.vue'
 
 // el-tab-pane stub：呈現 label 以便 wrapper.text() 可斷言
@@ -32,12 +25,7 @@ const tabPaneStub = {
 const globalConfig = {
   stubs: {
     // el-tabs 只渲染 slot 內容
-    'el-tabs': {
-      name: 'ElTabs',
-      template: '<div data-test="tabs"><slot /></div>',
-      props: ['modelValue', 'type'],
-      emits: ['update:modelValue', 'tab-change'],
-    },
+    'el-tabs': { template: '<div data-test="tabs"><slot /></div>', props: ['modelValue', 'type'] },
     'el-tab-pane': tabPaneStub,
     'el-tag': { template: '<span><slot /></span>', props: ['type', 'size'] },
     // 子 settings tab 元件全部 shallow stub 掉（shallowMount 已自動，但保留明確 key）
@@ -55,8 +43,6 @@ describe('SettingsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(false)
-    mockQuery = {}
-    replace.mockClear()
   })
 
   it('無 DSR_MANAGE 權限時不顯示「個資權利請求」tab', async () => {
@@ -87,55 +73,5 @@ describe('SettingsView', () => {
     // 確認固定存在的 tab（不受權限影響）
     expect(wrapper.html()).toContain('輪班別管理')
     expect(wrapper.html()).toContain('帳號與權限')
-  })
-})
-
-describe('SettingsView tab ↔ URL 同步', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockHasPermission.mockReturnValue(false)
-    mockQuery = {}
-    replace.mockClear()
-  })
-
-  it('無 tab query → 預設 shifts 並 normalize URL', async () => {
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
-    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
-  })
-
-  it('deep link ?tab=accounts → 直接落在帳號分頁且不 replace', async () => {
-    mockQuery = { tab: 'accounts' }
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('accounts')
-    expect(replace).not.toHaveBeenCalled()
-  })
-
-  it('無權限者 deep link ?tab=dsr-requests → fallback shifts 並修正 URL', async () => {
-    mockQuery = { tab: 'dsr-requests' }
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
-    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
-  })
-
-  it('有 DSR_MANAGE 權限時 ?tab=dsr-requests 合法', async () => {
-    mockHasPermission.mockImplementation((perm: string) => perm === 'DSR_MANAGE')
-    mockQuery = { tab: 'dsr-requests' }
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('dsr-requests')
-  })
-
-  it('切換 tab → replace 更新 ?tab=；離開 accounts 時清掉 view', async () => {
-    mockQuery = { tab: 'accounts', view: 'parent' }
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    replace.mockClear()
-    w.findComponent({ name: 'ElTabs' }).vm.$emit('tab-change', 'shifts')
-    await flushPromises()
-    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
   })
 })

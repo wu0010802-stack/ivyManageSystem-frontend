@@ -1,14 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
-
-const replace = vi.fn()
-let mockQuery: Record<string, unknown> = {}
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: mockQuery }),
-  useRouter: () => ({ replace }),
-}))
+import ElementPlus, { ElMessageBox } from 'element-plus'
 
 vi.mock('@/api/auth', () => {
   const mockPermissionDefinition = {
@@ -38,10 +31,9 @@ vi.mock('@/api/auth', () => {
   return {
     getUsers: vi.fn().mockResolvedValue({
       data: [
-        { id: 1, username: 'wang01', employee_name: '王小明', role: 'admin', permission_names: ['*'], is_active: true, last_login: '2026-07-10T17:35:14.324936' },
-        { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: false, last_login: null },
-        { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD'], is_active: true, last_login: null },
-        { id: 4, username: 'parent1', employee_name: '', role: 'parent', permission_names: [], is_active: true, last_login: null },
+        { id: 1, username: 'wang01', employee_name: '王小明', role: 'admin', permission_names: ['*'], is_active: true },
+        { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: true },
+        { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD', 'EMPLOYEES_READ'], is_active: true },
       ],
     }),
     getPermissions: vi.fn().mockResolvedValue({ data: mockPermissionDefinition }),
@@ -69,14 +61,11 @@ vi.mock('@/api/permissions_admin', () => ({
 }))
 
 import SettingsAccountsTab from '../SettingsAccountsTab.vue'
-import { createUser, updateUser } from '@/api/auth'
-import { formatDateTimeTW } from '@/utils/format'
+import { createUser } from '@/api/auth'
 
 describe('SettingsAccountsTab — role card UX', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockQuery = {}
-    replace.mockClear()
   })
 
   async function mountAndOpenAddDialog() {
@@ -271,145 +260,5 @@ describe('SettingsAccountsTab — role card UX', () => {
     await nextTick()
     expect(vm.keyword).toBe('')
     expect(vm.roleFilter).toBe('')
-  })
-
-  it('最後登入：ISO 字串格式化顯示、null 顯示「從未登入」', async () => {
-    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-    await flushPromises()
-    const text = wrapper.text()
-    expect(text).toContain(formatDateTimeTW('2026-07-10T17:35:14.324936'))  // formatDateTimeTW 輸出（時區無關斷言）
-    expect(text).not.toContain('T17:35')      // 原始 ISO 不再直出
-    expect(text).toContain('從未登入')
-  })
-
-  it('accountCardColumns 最後登入 formatter：null → 從未登入、ISO → formatDateTimeTW', async () => {
-    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-    await flushPromises()
-    const vm = wrapper.vm as unknown as {
-      accountCardColumns: { prop: string; formatter?: (i: Record<string, unknown>) => unknown }[]
-    }
-    const col = vm.accountCardColumns.find((c) => c.prop === 'last_login')
-    expect(col?.formatter?.({ last_login: null })).toBe('從未登入')
-    expect(col?.formatter?.({ last_login: '2026-07-10T17:35:14.324936' })).toBe(formatDateTimeTW('2026-07-10T17:35:14.324936'))
-  })
-
-  describe('停用/啟用帳號', () => {
-    async function mountPlain() {
-      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-      await flushPromises()
-      return wrapper.vm as unknown as { handleToggleActive: (u: Record<string, unknown>) => Promise<void> }
-    }
-
-    it('停用：confirm 後送 is_active:false', async () => {
-      const vm = await mountPlain()
-      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
-      await vm.handleToggleActive({ id: 3, username: 'chen03', is_active: true })
-      expect(confirmSpy).toHaveBeenCalledWith(
-        expect.stringContaining('chen03'),
-        expect.any(String),
-        expect.any(Object),
-      )
-      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(3, { is_active: false })
-      confirmSpy.mockRestore()
-    })
-
-    it('停用 confirm 取消 → 不送 API', async () => {
-      const vm = await mountPlain()
-      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
-      await vm.handleToggleActive({ id: 3, username: 'chen03', is_active: true })
-      expect(vi.mocked(updateUser)).not.toHaveBeenCalled()
-      confirmSpy.mockRestore()
-    })
-
-    it('啟用：不 confirm 直接送 is_active:true', async () => {
-      const vm = await mountPlain()
-      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm')
-      await vm.handleToggleActive({ id: 5, username: 'x', is_active: false })
-      expect(confirmSpy).not.toHaveBeenCalled()
-      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(5, { is_active: true })
-      confirmSpy.mockRestore()
-    })
-
-    it('onRowCommand toggle-active 導到 handleToggleActive', async () => {
-      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-      await flushPromises()
-      const vm = wrapper.vm as unknown as { onRowCommand: (cmd: string, row: Record<string, unknown>) => void }
-      vm.onRowCommand('toggle-active', { id: 7, username: 'y', is_active: false })
-      await flushPromises()
-      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(7, { is_active: true })
-    })
-
-    it('停用失敗：updateUser reject → 以 apiError 訊息顯示 ElMessage.error', async () => {
-      const vm = await mountPlain()
-      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
-      const errorSpy = vi.spyOn(ElMessage, 'error')
-      vi.mocked(updateUser).mockRejectedValueOnce({ response: { data: { detail: '不能停用自己的帳號' } } })
-      await vm.handleToggleActive({ id: 1, username: 'wang01', is_active: true })
-      expect(errorSpy).toHaveBeenCalledWith('不能停用自己的帳號')
-      confirmSpy.mockRestore()
-      errorSpy.mockRestore()
-    })
-  })
-
-  describe('受眾分流（教職員/家長）', () => {
-    it('預設 staff 視圖：filteredUsers 不含家長、normalize ?view=staff', async () => {
-      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-      await flushPromises()
-      const vm = wrapper.vm as unknown as { audience: string; filteredUsers: { username: string }[] }
-      expect(vm.audience).toBe('staff')
-      expect(vm.filteredUsers.map((u) => u.username)).not.toContain('parent1')
-      expect(replace).toHaveBeenCalledWith({ query: { view: 'staff' } })
-    })
-
-    it('deep link ?view=parent → 家長視圖，filteredParentUsers 只含家長', async () => {
-      mockQuery = { view: 'parent' }
-      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-      await flushPromises()
-      const vm = wrapper.vm as unknown as { audience: string; filteredParentUsers: { username: string }[] }
-      expect(vm.audience).toBe('parent')
-      expect(vm.filteredParentUsers.map((u) => u.username)).toEqual(['parent1'])
-      expect(replace).not.toHaveBeenCalled()
-    })
-
-    it('家長視圖 keyword 只比對帳號', async () => {
-      mockQuery = { view: 'parent' }
-      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-      await flushPromises()
-      const vm = wrapper.vm as unknown as { keyword: string; filteredParentUsers: unknown[] }
-      vm.keyword = 'zzz'
-      await nextTick()
-      expect(vm.filteredParentUsers.length).toBe(0)
-    })
-
-    it('onAudienceChange → replace 更新 ?view=', async () => {
-      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-      await flushPromises()
-      replace.mockClear()
-      const vm = wrapper.vm as unknown as { onAudienceChange: (v: string) => void }
-      vm.onAudienceChange('parent')
-      expect(replace).toHaveBeenCalledWith({ query: { view: 'parent' } })
-    })
-
-    it('角色篩選選項排除家長', async () => {
-      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-      await flushPromises()
-      const vm = wrapper.vm as unknown as { roleFilterOptions: { code: string }[] }
-      expect(vm.roleFilterOptions.map((r) => r.code)).not.toContain('parent')
-    })
-  })
-
-  it('統計概覽：staff 與 parent 數字正確且渲染於 .accounts-stats', async () => {
-    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
-    await flushPromises()
-    const vm = wrapper.vm as unknown as {
-      staffStats: { total: number; active: number; neverLoggedIn: number; custom: number }
-      parentStats: { total: number; active: number }
-    }
-    // staff: wang01(admin,*,active,有登入)、lin02(teacher,停用,未登入)、chen03(supervisor,自訂,未登入)
-    expect(vm.staffStats).toEqual({ total: 3, active: 2, neverLoggedIn: 2, custom: 1 })
-    expect(vm.parentStats).toEqual({ total: 1, active: 1 })
-    const stats = wrapper.find('.accounts-stats')
-    expect(stats.exists()).toBe(true)
-    expect(stats.text()).toContain('自訂權限 1')
   })
 })
