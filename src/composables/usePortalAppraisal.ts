@@ -1,9 +1,13 @@
 import { ref, computed } from 'vue'
+import type { ApiResponse } from '@/api/_generated/typed'
 import {
   getMyAppraisals,
   getMyAppraisalTrend,
   getMyAppraisalDetail,
 } from '@/api/portalAppraisal'
+
+type AppraisalListItem = ApiResponse<'/portal/my-appraisals', 'get'>['items'][number]
+type AppraisalTrendPoint = ApiResponse<'/portal/my-appraisals/trend', 'get'>['points'][number]
 
 const GRADE_STYLES = {
   OUTSTANDING: { className: 'grade-outstanding', label: '優', color: '#1e7e34' },
@@ -39,7 +43,7 @@ export function gradeStyle(grade: string) {
  * 因此「上一期」是 index > current 中第一個 is_visible 的條目。
  * 回傳 number 或 null（無上期 / 自身非 visible）。
  */
-export function computeDelta(items: { is_visible?: boolean; total_score?: number | null }[], index: number) {
+export function computeDelta(items: { is_visible?: boolean; total_score?: number | string | null }[], index: number) {
   const current = items[index]
   if (!current || !current.is_visible) return null
   if (current.total_score == null) return null
@@ -66,8 +70,8 @@ export function resolveEmptyState(items: { is_visible?: boolean }[] | null | und
 }
 
 export function usePortalAppraisal() {
-  const items = ref<{ is_visible?: boolean; total_score?: number | null; [key: string]: unknown }[]>([])
-  const trend = ref<unknown[]>([])
+  const items = ref<AppraisalListItem[]>([])
+  const trend = ref<AppraisalTrendPoint[]>([])
   const loading = ref(false)
   const error = ref<unknown>(null)
 
@@ -87,8 +91,8 @@ export function usePortalAppraisal() {
         getMyAppraisals(),
         getMyAppraisalTrend(),
       ])
-      items.value = (listResp.data as { items: typeof items.value }).items
-      trend.value = (trendResp.data as { points: unknown[] }).points
+      items.value = listResp.data.items
+      trend.value = trendResp.data.points
     } catch (e) {
       error.value = e
     } finally {

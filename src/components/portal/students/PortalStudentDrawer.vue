@@ -5,6 +5,16 @@ import { View, Hide } from '@element-plus/icons-vue'
 import { usePortalStudent } from '@/composables/usePortalStudent'
 import { apiError } from '@/utils/error'
 import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
+import type { Schema } from '@/api/_generated/typed'
+
+// 後端 transfer_history 子欄位型別未收在 response_model 內（openapi-typescript 因而
+// 產出 unknown），依前端實際消費欄位補一個窄型別橋接；非既有 bug，是後端 schema 缺口。
+interface TransferHistoryEntry {
+  transferred_at?: string | null
+  from_classroom_name?: string | null
+  to_classroom_name?: string | null
+  [key: string]: unknown
+}
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -53,15 +63,19 @@ watch(
   { immediate: true },
 )
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const detailAny = computed(() => detail.value as any)
-const student = computed(() => detailAny.value?.student ?? {})
-const classroom = computed(() => detailAny.value?.classroom ?? null)
-const guardians = computed(() => detailAny.value?.guardians ?? [])
-const health = computed(() => detailAny.value?.health ?? { allergies: [], recent_medication_orders: [] })
-const attendanceMonth = computed(() => detailAny.value?.attendance_this_month ?? {})
-const attendance30d = computed(() => detailAny.value?.attendance_30d?.summary ?? {})
-const transferHistory = computed(() => detailAny.value?.transfer_history ?? [])
+const student = computed<Partial<Schema<'StudentDetailStudent'>>>(
+  () => detail.value?.student ?? {},
+)
+const classroom = computed(() => detail.value?.classroom ?? null)
+const guardians = computed(() => detail.value?.guardians ?? [])
+const health = computed(() => detail.value?.health ?? { allergies: [], recent_medication_orders: [] })
+const attendanceMonth = computed(() => detail.value?.attendance_this_month ?? {})
+const attendance30d = computed(
+  () => detail.value?.attendance_30d?.summary ?? { present: 0, absent: 0, leave: 0, late: 0 },
+)
+const transferHistory = computed(
+  () => (detail.value?.transfer_history ?? []) as TransferHistoryEntry[],
+)
 
 const ageLabel = computed(() => {
   const b = student.value.birthday
@@ -298,7 +312,7 @@ function isRevealed(target: string, guardianId: number | string | null = null) {
             <el-empty description="本生未在您管轄班級內有轉班紀錄" :image-size="80" />
           </div>
           <ul class="psd-timeline">
-            <li v-for="t in transferHistory" :key="t.transferred_at">
+            <li v-for="t in transferHistory" :key="t.transferred_at || ''">
               <span class="dot" />
               <div>
                 <strong>{{ (t.transferred_at || '').slice(0, 10) }}</strong>

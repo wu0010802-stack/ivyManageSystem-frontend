@@ -157,6 +157,19 @@ interface ClassroomEntry {
   [key: string]: unknown
 }
 
+// MessageBubble 的 `message` prop 為寬鬆 index-signature 型別（元件未收在本批型別化
+// 範圍內）；store 的 MessageItem 是具名 schema 型別，需在此橋接。
+interface DrawerMessage {
+  id?: number | string
+  sender_role?: string
+  created_at?: string | null
+  deleted?: boolean
+  body?: string
+  _pending?: boolean
+  attachments?: { id?: number | string; url?: string; original_filename?: string }[]
+  [key: string]: unknown
+}
+
 const props = withDefaults(defineProps<{
   modelValue?: boolean
   threadId?: number | null
@@ -197,10 +210,16 @@ const activeThread = computed(() =>
   typedThreads.value.find((t) => t.id === props.threadId),
 )
 const bucket = computed(
-  () => store.messagesByThread[props.threadId as unknown as string] || { items: [], hasMore: false },
+  () =>
+    store.messagesByThread[props.threadId as unknown as string] || {
+      items: [],
+      next_cursor: null,
+      hasMore: false,
+    },
 )
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const orderedMessages = computed(() => [...bucket.value.items].reverse() as any[])
+const orderedMessages = computed(
+  () => [...bucket.value.items].reverse() as unknown as DrawerMessage[],
+)
 
 // drawer 第一次開啟時 fetch threads；之後由 store 維持
 async function onOpen() {
@@ -306,8 +325,7 @@ async function submitNew() {
     newBody.value = ''
     selectedStudentId.value = null
     parentUserIdInput.value = ''
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    emit('open-thread', (data as any).thread.id)
+    emit('open-thread', data.thread.id)
   } catch (e) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ElMessage.error((e as any)?.response?.data?.detail || '發送失敗')

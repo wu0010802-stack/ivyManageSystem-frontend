@@ -9,6 +9,7 @@
  */
 
 import { ref, shallowRef } from 'vue'
+import type { ApiResponse } from '@/api/_generated/typed'
 import {
   getPortalStudentDetail,
   revealPortalStudentPhone,
@@ -16,8 +17,10 @@ import {
 
 const REVEAL_THROTTLE_MS = 5 * 60 * 1000 // 5 分鐘
 
+type StudentDetail = ApiResponse<'/portal/students/{student_id}/detail', 'get'>
+
 export function usePortalStudent() {
-  const detail = shallowRef<unknown>(null)
+  const detail = shallowRef<StudentDetail | null>(null)
   const loading = ref(false)
   const error = ref<unknown>(null)
   const isRevealing = ref(false)

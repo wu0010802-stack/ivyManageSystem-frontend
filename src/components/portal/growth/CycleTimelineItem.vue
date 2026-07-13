@@ -4,7 +4,9 @@ import { gradeStyle, cycleLabel } from '@/composables/usePortalAppraisal'
 import ItemRadarChart from './ItemRadarChart.vue'
 import ScoreItemsTable from './ScoreItemsTable.vue'
 
-interface ScoreItem { label?: string; sign?: string; score_delta?: number | string | null; raw_value?: unknown; note?: string | null; [key: string]: unknown }
+// ItemRadarChart / ScoreItemsTable 的 `items` prop 為寬鬆 index-signature 型別（兩元件
+// 未收在本批型別化範圍內）；後端 MyScoreItemOut 是具名 schema 型別，於指派 detail 時橋接。
+interface ScoreItem { label?: string; sign?: string; score_delta?: number | string; raw_value?: unknown; note?: string | null; [key: string]: unknown }
 
 interface AppraisalCycle {
   cycle_id?: number | string
@@ -21,12 +23,15 @@ interface AppraisalCycle {
 }
 
 interface CycleDetail {
-  score_items?: ScoreItem[]
+  score_items: ScoreItem[]
   [key: string]: unknown
 }
 
 const props = defineProps<{
   item: AppraisalCycle
+  // 上游 PortalGrowthView.vue 把 usePortalAppraisal().fetchDetail 用 `as unknown as`
+  // 橋接成 Promise<unknown>（該檔不在本批型別化範圍內，維持既有介面避免跨檔漂移）；
+  // 本元件內部再依實際回應形狀（AxiosResponse<MyAppraisalDetailOut>）窄化。
   fetchDetail: (cycleId: number | string) => Promise<unknown>
 }>()
 
@@ -46,8 +51,8 @@ const toggle = async () => {
     try {
       if (props.item.cycle_id == null) return
       const resp = await props.fetchDetail(props.item.cycle_id)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      detail.value = (resp as any)?.data ?? resp
+      const body = (resp as { data?: CycleDetail } | null | undefined)?.data
+      detail.value = body ?? (resp as CycleDetail)
     } catch (e: unknown) {
       const axErr = e as { response?: { data?: { detail?: string } } }
       error.value = axErr?.response?.data?.detail || '載入失敗'
@@ -83,10 +88,8 @@ const statusLabel = (item: AppraisalCycle) => {
       <div v-if="loading" class="loading">載入中…</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <template v-else-if="detail">
-        <!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
-        <ItemRadarChart :items="(detail.score_items ?? []) as any[]" />
-        <!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
-        <ScoreItemsTable :items="(detail.score_items ?? []) as any[]" />
+        <ItemRadarChart :items="detail.score_items" />
+        <ScoreItemsTable :items="detail.score_items" />
       </template>
     </div>
   </article>
