@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
 import { batchSaveAttendance, getDailyAttendance } from '@/api/studentAttendance'
+import type { Schema } from '@/api/_generated/typed'
 import { domainBus, ATTENDANCE_EVENTS } from '@/utils/domainBus'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 
@@ -38,21 +39,18 @@ const localDate = computed({
   set: (v) => emit('update:date', v),
 })
 
-interface AttendanceRecord {
-  student_id: number
-  student_no?: string
-  name?: string
-  id?: number
+type DailyRecord = Schema<'StudentAttendanceDailyRecordOut'>
+interface AttendanceRecord extends Omit<DailyRecord, 'status' | 'remark'> {
   status: string
   remark: string
-  [key: string]: unknown
 }
 const dailyRecords = ref<AttendanceRecord[]>([])
 const dailyLoading = ref(false)
 const saving = ref(false)
 
 const fetchDaily = async () => {
-  if (!localClassroomId.value || !localDate.value) {
+  const classroomId = Number(localClassroomId.value)
+  if (!localClassroomId.value || !localDate.value || Number.isNaN(classroomId)) {
     dailyRecords.value = []
     return
   }
@@ -60,10 +58,9 @@ const fetchDaily = async () => {
   try {
     const res = await getDailyAttendance({
       date: localDate.value,
-      classroom_id: localClassroomId.value,
+      classroom_id: classroomId,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dailyRecords.value = ((res as any).data?.records ?? []).map((record: any) => ({
+    dailyRecords.value = (res.data.records ?? []).map((record) => ({
       ...record,
       status: record.status ?? '出席',
       remark: record.remark ?? '',
@@ -175,8 +172,8 @@ defineExpose({ fetchDaily })
       <el-table-column label="姓名" width="110">
         <template #default="{ row }">
           <router-link
-            v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-            :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')!"
+            v-if="buildStudentProfileLink(row.student_id, 'attendance')"
+            :to="buildStudentProfileLink(row.student_id, 'attendance')!"
             class="student-link"
           >{{ row.name }}</router-link>
           <span v-else>{{ row.name }}</span>

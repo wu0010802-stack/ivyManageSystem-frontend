@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getAttendanceByStudent } from '@/api/studentAttendance'
+import type { Schema } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
 
 const props = withDefaults(defineProps<{
@@ -23,7 +24,9 @@ const ATTENDANCE_TAG: Record<string, ElTagType> = {
   遲到: 'warning',
 }
 
-const items = ref<Record<string, unknown>[]>([])
+type AttendanceItem = Schema<'StudentAttendanceByStudentItemOut'>
+
+const items = ref<AttendanceItem[]>([])
 const counts = ref<Record<string, number>>({})
 const loading = ref(false)
 const loaded = ref(false)
@@ -34,10 +37,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await getAttendanceByStudent(props.studentId, { limit: 200 })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = (res as any).data?.items || []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    counts.value = (res as any).data?.counts || {}
+    items.value = res.data.items || []
+    counts.value = res.data.counts || {}
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入每日出席失敗'))
@@ -68,11 +69,11 @@ watch(
 const filteredItems = computed(() => {
   if (!filterRange.value || filterRange.value.length !== 2) return items.value
   const [from, to] = filterRange.value
-  return items.value.filter((r) => (r.date as string) >= from && (r.date as string) <= to)
+  return items.value.filter((r) => (r.date ?? '') >= from && (r.date ?? '') <= to)
 })
 
-const isInRange = (date: string) => {
-  if (!filterRange.value || filterRange.value.length !== 2) return false
+const isInRange = (date: string | null | undefined) => {
+  if (!date || !filterRange.value || filterRange.value.length !== 2) return false
   return date >= filterRange.value[0] && date <= filterRange.value[1]
 }
 
@@ -120,7 +121,7 @@ defineExpose({ refresh: fetchData })
       <el-table-column label="日期" prop="date" width="130" />
       <el-table-column label="狀態" width="100">
         <template #default="{ row }">
-          <el-tag :type="ATTENDANCE_TAG[row.status as string] || 'info'" size="small">{{ row.status }}</el-tag>
+          <el-tag :type="ATTENDANCE_TAG[row.status ?? ''] || 'info'" size="small">{{ row.status }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="備註" prop="remark" min-width="200">

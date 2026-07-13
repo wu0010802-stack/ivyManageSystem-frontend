@@ -2,6 +2,7 @@
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiError } from '@/utils/error'
 import { getDailyAttendance } from '@/api/studentAttendance'
+import type { Schema } from '@/api/_generated/typed'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
 import { ATTENDANCE_EVENTS, domainBus } from '@/utils/domainBus'
 import AttendanceBatchPanel from './AttendanceBatchPanel.vue'
@@ -10,14 +11,7 @@ import SectionCard from './SectionCard.vue'
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('AttendanceSection 須在 TodayTasksPanel 內使用')
 
-interface AttendanceRow {
-  student_id?: number
-  student_no?: string
-  name?: string
-  status?: string
-  remark?: string
-  [key: string]: unknown
-}
+type AttendanceRow = Schema<'StudentAttendanceDailyRecordOut'>
 const records = ref<AttendanceRow[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
@@ -43,7 +37,7 @@ const summary = computed(() => {
   return s
 })
 
-const statusType = (status: string | undefined) => {
+const statusType = (status: string | null | undefined) => {
   if (status === '出席') return 'success'
   if (status === '遲到') return 'warning'
   if (status === '缺席') return 'danger'
@@ -52,7 +46,9 @@ const statusType = (status: string | undefined) => {
 }
 
 const fetchDaily = async () => {
-  if (!ctx.filters.classroomId || !refDate.value) {
+  const classroomId = ctx.filters.classroomId as number | null
+  const date = refDate.value
+  if (!classroomId || !date) {
     records.value = []
     return
   }
@@ -60,11 +56,10 @@ const fetchDaily = async () => {
   errorMessage.value = ''
   try {
     const res = await getDailyAttendance({
-      date: refDate.value,
-      classroom_id: ctx.filters.classroomId,
+      date,
+      classroom_id: classroomId,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    records.value = (res as any).data?.records ?? []
+    records.value = res.data.records ?? []
   } catch (error) {
     errorMessage.value = apiError(error, '載入出席資料失敗')
     records.value = []
