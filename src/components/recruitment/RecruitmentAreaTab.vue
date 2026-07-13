@@ -23,25 +23,13 @@
 
         <!-- KPI 條 -->
         <div class="area-kpi-strip">
-          <div class="kpi-item">
-            <span class="kpi-val">{{ hotspotsSummary.geocoded_hotspots ?? 0 }}</span>
-            <span class="kpi-label">已定位</span>
-          </div>
-          <div class="kpi-sep" />
-          <div class="kpi-item">
-            <span class="kpi-val">{{ activeDistrictCount }}</span>
-            <span class="kpi-label">覆蓋區</span>
-          </div>
-          <div class="kpi-sep" />
-          <div class="kpi-item">
-            <span class="kpi-val">{{ totalCompetitors }}</span>
-            <span class="kpi-label">競爭校</span>
-          </div>
-          <div class="kpi-sep" />
-          <div class="kpi-item">
-            <span class="kpi-val">{{ totalCapacity.toLocaleString() }}</span>
-            <span class="kpi-label">供給容量</span>
-          </div>
+          <template v-for="(kpi, i) in kpiItems" :key="kpi.label">
+            <div v-if="i > 0" class="kpi-sep" />
+            <div class="kpi-item">
+              <span class="kpi-val" :class="{ 'kpi-val--zero': kpi.value === 0 }">{{ kpi.display }}</span>
+              <span class="kpi-label">{{ kpi.label }}</span>
+            </div>
+          </template>
         </div>
 
         <!-- 行政區清單 -->
@@ -60,7 +48,7 @@
 
         <div class="district-list">
           <div
-            v-for="row in districts"
+            v-for="row in activeDistricts"
             :key="row.district"
             class="district-card"
             :class="{ 'district-card--active': row.district === selectedDistrict }"
@@ -140,6 +128,21 @@
                 <span class="dc-insight-icon">{{ opportunityIcon(row) }}</span>
                 <span class="dc-insight-text">{{ opportunityText(row) }}</span>
               </div>
+            </div>
+          </div>
+
+          <!-- 無市場情報的行政區收成精簡 chip 區，避免整排空卡佔版面 -->
+          <div v-if="mutedDistricts.length" class="district-muted">
+            <span class="district-muted-title">尚無市場情報（{{ mutedDistricts.length }}）</span>
+            <div class="district-muted-chips">
+              <button
+                v-for="row in mutedDistricts"
+                :key="row.district"
+                type="button"
+                class="district-chip"
+                :class="{ 'district-chip--active': row.district === selectedDistrict }"
+                @click="emit('update:selectedDistrict', row.district === selectedDistrict ? '' : (row.district || ''))"
+              >{{ row.district }}</button>
             </div>
           </div>
 
@@ -249,6 +252,12 @@ const emit = defineEmits<{
 
 const districts = computed((): DistrictRow[] => (props.marketSnapshot.districts as DistrictRow[]) || [])
 
+/** 有任何來源／競爭／人口資料才值得展開成完整卡片，否則收進精簡 chip 區 */
+const hasDistrictData = (r: DistrictRow) =>
+  (r.lead_count_90d || 0) > 0 || (r.competitor_count || 0) > 0 || (r.population_0_6 || 0) > 0
+const activeDistricts = computed(() => districts.value.filter(hasDistrictData))
+const mutedDistricts = computed(() => districts.value.filter(r => !hasDistrictData(r)))
+
 const activeDistrictCount = computed(() =>
   districts.value.filter(r => r.district !== '未填寫' && (r.lead_count_90d || 0) > 0).length
 )
@@ -260,6 +269,17 @@ const totalCompetitors = computed(() =>
 const totalCapacity = computed(() =>
   districts.value.reduce((sum, r) => sum + (r.competitor_capacity || 0), 0)
 )
+
+/** KPI 條四項；value 用於 0 值中性化，display 為格式化字串 */
+const kpiItems = computed(() => {
+  const geocoded = Number(hs.value.geocoded_hotspots ?? 0)
+  return [
+    { label: '已定位', value: geocoded, display: geocoded.toLocaleString() },
+    { label: '覆蓋區', value: activeDistrictCount.value, display: String(activeDistrictCount.value) },
+    { label: '競爭校', value: totalCompetitors.value, display: String(totalCompetitors.value) },
+    { label: '供給容量', value: totalCapacity.value, display: totalCapacity.value.toLocaleString() },
+  ]
+})
 
 const saturationRate = (row: DistrictRow) => {
   if (!row.population_0_6 || !row.competitor_capacity) return null
@@ -371,15 +391,15 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
   gap: 12px;
   align-items: center;
   padding: 10px 16px;
-  background: #fff;
-  border: 1px solid #DBEAFE;
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
 }
 .area-campus-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 180px; }
-.area-campus-name { font-weight: 700; font-size: 0.92rem; color: #1E293B; }
-.area-campus-addr { font-size: 0.78rem; color: #64748B; }
+.area-campus-name { font-weight: 700; font-size: 0.92rem; color: var(--text-primary); }
+.area-campus-addr { font-size: 0.78rem; color: var(--text-secondary); }
 .area-header-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.area-sync-time { font-size: 0.72rem; color: #94A3B8; }
+.area-sync-time { font-size: 0.72rem; color: var(--text-tertiary); }
 
 /* ── 主佈局 ── */
 .area-main {
@@ -424,11 +444,12 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
 .kpi-val {
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--color-info-darker);
+  color: var(--text-primary);
   font-family: 'Fira Code', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
+.kpi-val--zero { color: var(--text-tertiary); font-weight: 500; }
 .kpi-label { font-size: 0.68rem; color: var(--text-secondary); }
 .kpi-sep { width: 1px; height: 28px; background: var(--border-color); margin: 0 4px; }
 
@@ -450,7 +471,7 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
   font-size: 0.72rem;
   color: var(--color-info-darker);
   background: var(--color-info-soft);
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-info-soft);
   padding: 2px 8px;
   border-radius: 999px;
   display: flex;
@@ -486,19 +507,19 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
 .district-card {
   padding: 10px 12px;
   border-radius: 10px;
-  background: #fff;
+  background: var(--neutral-0);
   border: 1px solid var(--border-color);
   cursor: pointer;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: border-color 0.15s;
 }
 .district-card:hover {
-  border-color: var(--color-info-soft);
-  box-shadow: 0 1px 6px rgba(59, 130, 246, 0.08);
+  border-color: var(--color-info);
 }
+/* 選中態：邊框變主色 + 淺底 tint（不用側邊色條 — impeccable 絕對禁區） */
 .district-card--active {
   border-color: var(--color-info);
-  border-left: 3px solid var(--color-info);
-  background: #f0f7ff;
+  background: var(--color-info-soft);
+  box-shadow: inset 0 0 0 1px var(--color-info);
 }
 
 .dc-row-top {
@@ -575,10 +596,8 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
 .dc-stat--ok .dc-stat-val { color: var(--color-success-darker); }
 .dc-stat--warn .dc-stat-val { color: var(--color-warning-darker); }
 .dc-stat--danger .dc-stat-val { color: var(--color-danger-hover); }
-/* dark mode：.district-card 是硬編白卡（plain div，非 el-card 不翻底，finding #2 既有債），
-   上游 a11y.css 把 --color-*-darker 翻亮會讓統計值塌對比；還原可讀深字（danger 走 *-hover 不受影響）。 */
-html.dark .dc-stat--ok .dc-stat-val { color: #15803d; }
-html.dark .dc-stat--warn .dc-stat-val { color: #b45309; }
+/* 註：.district-card 背景已 tokenize（var(--neutral-0)，dark 自動翻深底），卡內 *-darker 統計值
+   在 dark 由 a11y.css 翻亮＝正確對比，故不再需要 html.dark 深字覆寫（原本為救硬編白卡）。 */
 
 /* 展開詳細 */
 .dc-detail {
@@ -610,13 +629,13 @@ html.dark .dc-stat--warn .dc-stat-val { color: #b45309; }
   margin-top: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #f0fdf4;
+  background: var(--color-success-soft);
   border: 1px solid var(--color-success-soft);
   display: flex;
   gap: 6px;
   align-items: flex-start;
   font-size: 0.72rem;
-  color: #166534;
+  color: var(--color-success-darker);
   line-height: 1.5;
 }
 .dc-insight-icon {
@@ -632,6 +651,49 @@ html.dark .dc-stat--warn .dc-stat-val { color: #b45309; }
   text-align: center;
   font-size: 0.82rem;
   color: var(--text-tertiary);
+}
+
+/* ── 無市場情報的行政區：精簡 chip 區 ── */
+.district-muted {
+  margin-top: 4px;
+  padding: 8px 2px 0;
+}
+.district-muted-title {
+  display: block;
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+.district-muted-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.district-chip {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.district-chip:hover {
+  border-color: var(--color-info);
+  color: var(--text-primary);
+}
+.district-chip--active {
+  border-color: var(--color-info);
+  background: var(--color-info-soft);
+  color: var(--color-info-darker);
+}
+.district-chip:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 1px;
 }
 
 /* ── 校區競爭分析 ── */
