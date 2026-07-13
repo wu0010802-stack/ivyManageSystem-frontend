@@ -46,7 +46,6 @@ const globalConfig = {
     'el-tag': { template: '<span><slot /></span>', props: ['type', 'size'] },
     // 子 settings tab 元件全部 shallow stub 掉（shallowMount 已自動，但保留明確 key）
     SettingsShiftTab: { template: '<div data-test="shift-tab" />' },
-    SettingsApprovalTab: { template: '<div data-test="approval-tab" />' },
     SettingsLineTab: { template: '<div data-test="line-tab" />' },
     SettingsObservabilityTab: { template: '<div data-test="observability-tab" />' },
     DsrRequestsView: { template: '<div data-test="dsr-view" />' },
@@ -95,6 +94,14 @@ describe('SettingsView', () => {
     const w = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     expect(w.find('[data-name="accounts"]').exists()).toBe(false)
+  })
+
+  it('審核流程分頁已移除（?tab=approval → fallback shifts）', async () => {
+    mockQuery = reactive({ tab: 'approval' })
+    const w = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
+    expect(w.find('[data-name="approval"]').exists()).toBe(false)
   })
 })
 

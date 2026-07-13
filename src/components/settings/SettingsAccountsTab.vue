@@ -11,10 +11,10 @@ import { apiError } from '@/utils/error'
 import { formatDateTimeTW } from '@/utils/format'
 import RoleCardsGrid from './RoleCardsGrid.vue'
 import type { RolesDefinition } from './roles/types'
-import RoleManagerDrawer from './RoleManagerDrawer.vue'
 import ParentAccountsList from './ParentAccountsList.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { hasPermission } from '@/utils/auth'
 
 interface EmployeeItem { id: number; name: string; employee_id: string }
 
@@ -62,9 +62,6 @@ const editUserForm = reactive<{ id: number | null; username: string; role: strin
 const credentialDialogVisible = ref<boolean>(false)
 const createdCredentials = ref<{ username: string; password: string }>({ username: '', password: '' })
 const permissionDefinition = ref<RolesDefinition>({ permissions: {}, groups: [], roles: {} })
-
-const roleDrawerVisible = ref<boolean>(false)
-const onRolesChanged = () => { fetchPermissionDefinition() }
 
 // 搜尋 / 角色篩選
 const keyword = ref<string>('')
@@ -436,7 +433,7 @@ defineExpose({
         </el-select>
       </div>
       <div class="toolbar-right">
-        <el-button @click="roleDrawerVisible = true">⚙ 管理角色</el-button>
+        <el-button v-if="hasPermission('ROLES_MANAGE')" data-testid="goto-roles" @click="router.push('/settings/roles')">⚙ 管理角色</el-button>
         <el-button type="primary" @click="handleAddUser">新增帳號</el-button>
       </div>
     </div>
@@ -545,14 +542,6 @@ defineExpose({
       :empty-text="parentEmptyText"
       style="margin-top: 20px;"
       @toggle-active="handleToggleActive"
-    />
-
-    <!-- 管理角色抽屜 -->
-    <RoleManagerDrawer
-      v-model:visible="roleDrawerVisible"
-      :definition="permissionDefinition"
-      :users="users"
-      @roles-changed="onRolesChanged"
     />
 
     <!-- Create User Dialog -->

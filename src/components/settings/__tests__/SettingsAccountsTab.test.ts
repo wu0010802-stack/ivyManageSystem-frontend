@@ -62,11 +62,23 @@ vi.mock('@/api/permissions_admin', () => ({
 }))
 
 const replace = vi.fn()
+const push = vi.fn()
 let mockQuery: Record<string, unknown> = {}
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: mockQuery }),
-  useRouter: () => ({ replace }),
+  useRouter: () => ({ replace, push }),
 }))
+
+// hasPermission 預設回 true（既有測試多假設「管理角色」按鈕無條件顯示）；
+// 保留其餘原始匯出（isSuperAdmin / permissionsHave 等集合運算），避免其他測試間接依賴的匯出消失。
+const mockHasPermission = vi.fn().mockReturnValue(true)
+vi.mock('@/utils/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/utils/auth')>()
+  return {
+    ...actual,
+    hasPermission: (name: string) => mockHasPermission(name),
+  }
+})
 
 import SettingsAccountsTab from '../SettingsAccountsTab.vue'
 import { createUser, updateUser, getUsers } from '@/api/auth'
@@ -77,6 +89,25 @@ describe('SettingsAccountsTab — role card UX', () => {
     vi.clearAllMocks()
     mockQuery = {}
     replace.mockClear()
+    push.mockClear()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('管理角色按鈕：有 ROLES_MANAGE 才顯示，點擊導向 /settings/roles', async () => {
+    mockHasPermission.mockImplementation((name: string) => name === 'ROLES_MANAGE')
+    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const btn = wrapper.find('[data-testid="goto-roles"]')
+    expect(btn.exists()).toBe(true)
+    await btn.trigger('click')
+    expect(push).toHaveBeenCalledWith('/settings/roles')
+  })
+
+  it('無 ROLES_MANAGE 權限時不顯示「管理角色」按鈕', async () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="goto-roles"]').exists()).toBe(false)
   })
 
   async function mountAndOpenAddDialog() {
