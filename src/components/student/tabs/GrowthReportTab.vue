@@ -7,6 +7,7 @@ import {
   downloadGrowthReportUrl,
 } from '@/api/studentGrowthReports'
 import GrowthReportGenerateDialog from '@/components/student/GrowthReportGenerateDialog.vue'
+import { apiError } from '@/utils/error'
 
 const props = defineProps<{
   studentId: number
@@ -71,8 +72,7 @@ async function onSendLine(row: Record<string, unknown>) {
     ElMessage.success(`已推送 ${(r as any).data?.sent_count} 位家長`)
     reload()
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any)?.response?.data?.detail || '推送失敗')
+    ElMessage.error(apiError(e, '推送失敗'))
   }
 }
 

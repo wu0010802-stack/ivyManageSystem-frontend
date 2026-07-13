@@ -28,6 +28,7 @@ import { ElMessage } from 'element-plus'
 import { generateCertificate } from '@/api/govMoe'
 import { hasPermission } from '@/utils/auth'
 import { todayISO } from '@/utils/format'
+import { apiError } from '@/utils/error'
 
 const props = defineProps<{ studentId: number }>()
 
@@ -60,8 +61,7 @@ async function submit() {
     ElMessage.success(`已開立 ${data.serial}`)
     open.value = false
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any).response?.data?.detail || '開立失敗')
+    ElMessage.error(apiError(e, '開立失敗'))
   } finally {
     loading.value = false
   }

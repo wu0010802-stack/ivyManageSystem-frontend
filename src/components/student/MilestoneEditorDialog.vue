@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createMilestone, updateMilestone, MILESTONE_TYPES } from '@/api/studentMilestones'
 import { todayISO } from '@/utils/format'
+import { apiError } from '@/utils/error'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -95,9 +96,7 @@ async function submit() {
     emit('update:modelValue', false)
     emit('saved', result.data)
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const msg = (e as any)?.response?.data?.detail || '儲存失敗，請稍後再試'
-    ElMessage.error(msg)
+    ElMessage.error(apiError(e, '儲存失敗，請稍後再試'))
   } finally {
     saving.value = false
   }

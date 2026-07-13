@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { getMeasurementsLatest, createMeasurement } from '@/api/portalMeasurements'
+import { apiError } from '@/utils/error'
 
 interface MeasurementRow {
   student_id: number | string
@@ -79,8 +80,7 @@ async function submitRow(row: MeasurementRow) {
     row.status = 'ok'
   } catch (e) {
     row.status = 'failed'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    row.error = (e as any)?.response?.data?.detail || '未知錯誤'
+    row.error = apiError(e, '未知錯誤')
   }
 }
 

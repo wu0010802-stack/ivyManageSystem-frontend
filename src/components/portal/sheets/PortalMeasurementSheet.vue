@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { createMeasurement } from '@/api/portalMeasurements'
+import { apiError } from '@/utils/error'
 
 interface Prefill {
   measured_on?: string
@@ -101,8 +102,7 @@ async function submit() {
     emit('done')
     ElMessage.success('已記錄量測')
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any)?.response?.data?.detail || '記錄失敗，請重試')
+    ElMessage.error(apiError(e, '記錄失敗，請重試'))
   } finally {
     submitting.value = false
   }

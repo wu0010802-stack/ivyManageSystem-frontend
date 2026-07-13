@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { listMilestones, deleteMilestone, MILESTONE_TYPES, autoDetectMilestones } from '@/api/studentMilestones'
 import { hasPermission } from '@/utils/auth'
 import MilestoneEditorDialog from '../MilestoneEditorDialog.vue'
+import { apiError } from '@/utils/error'
 
 const props = defineProps<{
   studentId: number
@@ -49,9 +50,7 @@ async function reload() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     list.value = (resp as any).data?.items || []
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const msg = (e as any)?.response?.data?.detail || '載入失敗'
-    ElMessage.error(msg)
+    ElMessage.error(apiError(e, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -89,9 +88,7 @@ async function handleDelete(item: Record<string, unknown>) {
     ElMessage.success('已刪除里程碑')
     await reload()
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const msg = (e as any)?.response?.data?.detail || '刪除失敗'
-    ElMessage.error(msg)
+    ElMessage.error(apiError(e, '刪除失敗'))
   }
 }
 

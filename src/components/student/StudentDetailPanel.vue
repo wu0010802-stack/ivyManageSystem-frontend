@@ -131,8 +131,7 @@ async function fetchProfile() {
     emit('profile-loaded', data)
   } catch (e) {
     profile.value = null
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any).displayMessage || apiError(e, '讀取學生檔案失敗'))
+    ElMessage.error(apiError(e, '讀取學生檔案失敗'))
   } finally {
     loading.value = false
   }

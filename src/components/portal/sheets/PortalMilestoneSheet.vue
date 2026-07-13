@@ -3,6 +3,7 @@ import { ref, watch, computed } from 'vue'
 import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { createMilestone } from '@/api/portalMilestones'
+import { apiError } from '@/utils/error'
 
 interface MilestoneType {
   value: string
@@ -89,8 +90,7 @@ async function submit() {
     emit('done')
     ElMessage.success('已記里程碑')
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any)?.response?.data?.detail || '記錄失敗')
+    ElMessage.error(apiError(e, '記錄失敗'))
   } finally {
     submitting.value = false
   }

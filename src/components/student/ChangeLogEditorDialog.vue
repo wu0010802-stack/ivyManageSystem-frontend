@@ -83,6 +83,7 @@ import { STUDENT_CHANGE_LOG_EVENT_TYPES } from '@/constants/studentChangeLogEven
 import { getStudents } from '@/api/students'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { todayISO, dateToLocalISO } from '@/utils/format'
+import { apiError } from '@/utils/error'
 
 const isFutureDate = (d: unknown) => {
   if (!(d instanceof Date)) return false
@@ -279,9 +280,7 @@ const submit = async () => {
     emit('submitted')
     emit('update:visible', false)
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const detail = (err as any)?.response?.data?.detail
-    ElMessage.error(detail || (props.mode === 'create' ? '補登失敗' : '更新失敗'))
+    ElMessage.error(apiError(err, props.mode === 'create' ? '補登失敗' : '更新失敗'))
   } finally {
     submitting.value = false
   }

@@ -6,6 +6,7 @@ import {
   uploadMyLeaveAttachments,
   getMyLeaveAttachment,
 } from '@/api/portal'
+import { apiError } from '@/utils/error'
 
 const props = withDefaults(defineProps<{
   refreshTrigger?: number
@@ -130,8 +131,7 @@ const submitSupplement = async () => {
     supplementDialogVisible.value = false
     fetchLeaves()
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any).response?.data?.detail || '上傳失敗')
+    ElMessage.error(apiError(e, '上傳失敗'))
   } finally {
     supplementLoading.value = false
   }

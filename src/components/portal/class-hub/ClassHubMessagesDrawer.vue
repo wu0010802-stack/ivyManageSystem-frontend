@@ -132,6 +132,7 @@ import { broadcastDashboardInvalidate } from '@/composables/usePortalDashboard'
 import { getMyStudents } from '@/api/portal'
 import MessageBubble from '@/components/portal/messages/MessageBubble.vue'
 import MessageComposer from '@/components/portal/messages/MessageComposer.vue'
+import { apiError } from '@/utils/error'
 
 interface Thread {
   id: number
@@ -255,8 +256,7 @@ async function onSend({ body, attachments, done }: { body: string; attachments: 
     await store.send(props.threadId as number, body, attachments)
     done?.(true)
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any)?.response?.data?.detail || '送出失敗')
+    ElMessage.error(apiError(e, '送出失敗'))
     done?.(false)
   }
 }
@@ -267,8 +267,7 @@ async function onRecall(messageId: number | string | undefined) {
     await store.recall(messageId as number)
     ElMessage.success('已撤回')
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any)?.response?.data?.detail || '撤回失敗')
+    ElMessage.error(apiError(e, '撤回失敗'))
   }
 }
 
@@ -327,8 +326,7 @@ async function submitNew() {
     parentUserIdInput.value = ''
     emit('open-thread', data.thread.id)
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any)?.response?.data?.detail || '發送失敗')
+    ElMessage.error(apiError(e, '發送失敗'))
   } finally {
     sending.value = false
   }

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createGrowthReport } from '@/api/studentGrowthReports'
+import { apiError } from '@/utils/error'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -58,8 +59,7 @@ async function onSubmit() {
     emit('created', r.data)
     visible.value = false
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((e as any)?.response?.data?.detail || '建立失敗')
+    ElMessage.error(apiError(e, '建立失敗'))
   } finally {
     submitting.value = false
   }

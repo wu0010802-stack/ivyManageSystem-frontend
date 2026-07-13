@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { createMeasurement, updateMeasurement } from '@/api/studentMeasurements'
 import FormSection from '@/components/common/FormSection.vue'
 import { todayISO } from '@/utils/format'
+import { apiError } from '@/utils/error'
 
 // 幼兒園學童常見範圍；超出時提示確認以避免誤輸入污染成長曲線
 const PLAUSIBLE_RANGES: Record<string, { min: number; max: number; label: string }> = {
@@ -140,9 +141,7 @@ async function submit() {
     emit('update:modelValue', false)
     emit('saved', result.data)
   } catch (e) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const msg = (e as any)?.response?.data?.detail || '儲存失敗，請稍後再試'
-    ElMessage.error(msg)
+    ElMessage.error(apiError(e, '儲存失敗，請稍後再試'))
   } finally {
     saving.value = false
   }

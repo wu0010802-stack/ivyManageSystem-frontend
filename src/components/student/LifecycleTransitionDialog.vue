@@ -111,6 +111,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { transitionStudentLifecycle } from '@/api/students'
 import { LIFECYCLE_LABELS_ADMIN as STATUS_LABELS, ALLOWED_TRANSITIONS } from '@/constants/lifecycle'
+import { apiError } from '@/utils/error'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -222,8 +223,7 @@ async function handleSubmit() {
     emit('transitioned', data)
     visible.value = false
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((err as any).displayMessage || '狀態轉移失敗')
+    ElMessage.error(apiError(err, '狀態轉移失敗'))
   } finally {
     submitting.value = false
   }
