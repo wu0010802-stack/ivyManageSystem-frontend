@@ -3,19 +3,9 @@ import { ref, onMounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 
 import { getHighRiskAudits, ackAudit, ackAllAudits } from "@/api/audit";
+import type { Schema } from "@/api/_generated/typed";
 
-interface Item {
-  id: number;
-  action: string;
-  entity_type: string;
-  entity_id: string | null;
-  summary: string;
-  username: string;
-  created_at: string;
-  acknowledged_at: string | null;
-  acknowledged_by: number | null;
-  risk_kind: "hard_delete" | "blocked" | "permission_change";
-}
+type Item = Schema<"AuditLogHighRiskItem">;
 
 const items = ref<Item[]>([]);
 const loading = ref(false);
@@ -41,8 +31,7 @@ async function load(): Promise<void> {
       unack_only: unackOnly.value,
       limit: 100,
     });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = ((res as any).data?.items ?? []) as Item[];
+    items.value = res.data.items ?? [];
   } catch (e) {
     ElMessage.error("讀取高風險事件失敗");
   } finally {
@@ -60,8 +49,7 @@ async function onAckAll(): Promise<void> {
   try {
     await ElMessageBox.confirm("確定把所有 7 天內高風險事件標為已讀？", "確認", { type: "warning" });
     const res = await ackAllAudits({ days: 7 });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const count = (res as any).data?.acknowledged_count ?? 0;
+    const count = res.data.acknowledged_count ?? 0;
     ElMessage.success(`已標 ${count} 筆為已讀`);
     await load();
   } catch (e) {

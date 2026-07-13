@@ -83,8 +83,7 @@ async function load() {
   loading.value = true
   try {
     const { data } = await govMoe.listDisabilityDocs(props.studentId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    docs.value = (data as any) || []
+    docs.value = data || []
   } finally {
     loading.value = false
   }

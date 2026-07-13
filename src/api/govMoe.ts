@@ -2,7 +2,9 @@ import api from './index'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // --- Disability Documents (Phase 1) ---
-export const listDisabilityDocs = (studentId: number) =>
+export const listDisabilityDocs = (
+  studentId: number,
+): AxiosResp<'/gov-moe/disability-documents', 'get'> =>
   api.get('/gov-moe/disability-documents', { params: { student_id: studentId } })
 
 export const createDisabilityDoc = (payload: unknown) =>

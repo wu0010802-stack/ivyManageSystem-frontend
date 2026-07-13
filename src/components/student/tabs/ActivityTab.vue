@@ -24,8 +24,7 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await getRegistrations({ student_id: props.studentId, limit: 100 })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = (res as any).data?.items || []
+    items.value = res.data.items || []
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入才藝報名紀錄失敗'))
