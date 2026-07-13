@@ -136,7 +136,7 @@ defineExpose({ toggle, setScope, toggleSplit, isChecked, currentScope, isSplitCh
 .perm-group {
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: #f8f9fa;
+  background: var(--el-fill-color-light);
   border-radius: 6px;
 }
 .perm-group-name {

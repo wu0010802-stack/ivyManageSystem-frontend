@@ -453,8 +453,8 @@ defineExpose({
     </div>
     <template v-if="audience === 'staff'">
     <el-table v-if="!isMobile" :data="filteredUsers" v-loading="loadingUsers" style="width: 100%; margin-top: 20px;">
-      <el-table-column prop="username" label="帳號" width="150" />
-      <el-table-column prop="employee_name" label="員工姓名" width="120" />
+      <el-table-column prop="username" label="帳號" min-width="150" />
+      <el-table-column prop="employee_name" label="員工姓名" min-width="130" />
       <el-table-column prop="role" label="角色" width="120">
         <template #default="{ row } = {}">
           <el-tag :type="getRoleTagType(row?.role)">{{ row?.role_label || row?.role }}</el-tag>
@@ -800,7 +800,7 @@ defineExpose({
   border-radius: 8px;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-  background: #fff;
+  background: var(--el-bg-color);
   text-align: center;
 }
 
