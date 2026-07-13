@@ -4,8 +4,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getPermissions, getUsers } from '@/api/auth'
 import { createRole, deleteRole } from '@/api/permissions_admin'
 import { apiError } from '@/utils/error'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import RoleDetailPanel from '@/components/settings/roles/RoleDetailPanel.vue'
-import ApprovalChainEditor from '@/components/settings/roles/ApprovalChainEditor.vue'
 import { FLAG_SUPER_ADMIN, FLAG_PARENT, type RolesDefinition } from '@/components/settings/roles/types'
 
 const definition = ref<RolesDefinition>({ permissions: {}, groups: [], roles: {} })
@@ -49,7 +49,6 @@ const roleRows = computed(() =>
   Object.entries(definition.value.roles).map(([code, r]) => ({
     code,
     label: r.label || code,
-    is_core: r.is_core,
     flags: r.flags ?? [],
     accountCount: accountCounts.value ? (accountCounts.value[code] ?? 0) : null,
   })),
@@ -59,6 +58,16 @@ const selectedRole = computed(() => definition.value.roles[selectedCode.value] ?
 const selectedAccountCount = computed(() =>
   accountCounts.value ? (accountCounts.value[selectedCode.value] ?? 0) : null,
 )
+
+// ── 未儲存變更保護：切換角色 / 離開路由 / 關分頁前，若右欄有未儲存變更則詢問 ──
+const panelRef = ref<InstanceType<typeof RoleDetailPanel> | null>(null)
+const { confirmDiscard } = useUnsavedChangesGuard(() => panelRef.value?.isDirty ?? false)
+
+const selectRole = async (code: string) => {
+  if (code === selectedCode.value) return
+  if (!(await confirmDiscard())) return
+  selectedCode.value = code
+}
 
 // ── 新增角色（先建 code/label，權限於右欄補設）──
 const createDialogVisible = ref(false)
@@ -121,7 +130,7 @@ onMounted(() => {
   fetchAccountCounts()
 })
 
-defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, createDialogVisible, createForm, openCreateDialog, handleCreateRole, handleDeleteRole, fetchDefinition })
+defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, panelRef, createDialogVisible, createForm, openCreateDialog, handleCreateRole, handleDeleteRole, fetchDefinition })
 </script>
 
 <template>
@@ -138,14 +147,13 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, createDialog
           class="role-item"
           :class="{ 'role-item--active': row.code === selectedCode }"
           :data-role-item="row.code"
-          @click="selectedCode = row.code"
+          @click="selectRole(row.code)"
         >
           <div class="role-item__main">
             <span class="role-item__label">{{ row.label }}</span>
             <code class="role-item__code">{{ row.code }}</code>
           </div>
           <div class="role-item__meta">
-            <el-tag size="small" :type="row.is_core ? 'info' : 'warning'">{{ row.is_core ? '核心' : '自訂' }}</el-tag>
             <el-tag v-if="row.flags.includes(FLAG_SUPER_ADMIN)" size="small" type="danger">超級管理員</el-tag>
             <el-tag v-if="row.flags.includes(FLAG_PARENT)" size="small">家長</el-tag>
             <span class="role-item__count">帳號數 {{ row.accountCount === null ? '—' : row.accountCount }}</span>
@@ -153,22 +161,18 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, createDialog
         </button>
       </aside>
 
-      <!-- 右欄：選中角色詳情（Task 3 於 RoleDetailPanel 之後、同一 template 內追加 ApprovalChainEditor） -->
+      <!-- 右欄：選中角色詳情 -->
       <section class="roles-detail">
         <template v-if="selectedRole">
           <RoleDetailPanel
+            ref="panelRef"
             :code="selectedCode"
             :role="selectedRole"
             :definition="definition"
             :account-count="selectedAccountCount"
+            :account-counts="accountCounts"
             @saved="fetchDefinition"
             @delete-role="handleDeleteRole"
-          />
-          <!-- 4. 簽呈審核（spec §6.1 右欄 4）：per doc_type 拖拉關卡鏈 -->
-          <ApprovalChainEditor
-            :submitter-role="selectedCode"
-            :definition="definition"
-            :account-counts="accountCounts"
           />
         </template>
         <el-empty v-else description="請選擇左側角色" />

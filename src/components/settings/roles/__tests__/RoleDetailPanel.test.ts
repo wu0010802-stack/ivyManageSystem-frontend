@@ -6,6 +6,22 @@ vi.mock('@/api/permissions_admin', () => ({
   updateRole: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
+// RoleDetailPanel 內嵌 ApprovalChainEditor，掛載時會呼叫此 API
+vi.mock('@/api/approvalSettings', () => ({
+  getApprovalPolicies: vi.fn().mockResolvedValue({ data: [] }),
+  updateApprovalPolicies: vi.fn().mockResolvedValue({ data: {} }),
+}))
+
+// vuedraggable stub（同 ApprovalChainEditor.test.ts）：拖拉重排非本檔測試重點
+vi.mock('vuedraggable', () => ({
+  default: {
+    name: 'draggable',
+    props: ['modelValue', 'itemKey', 'handle', 'disabled'],
+    emits: ['update:modelValue'],
+    template: `<div data-test="draggable"><template v-for="(el, i) in modelValue" :key="el.uid"><slot name="item" :element="el" :index="i" /></template></div>`,
+  },
+}))
+
 // PermissionPicker 也 import '@/utils/auth' 的集合運算，需保留原始實作只覆寫 isSuperAdmin
 const mockIsSuperAdmin = vi.fn().mockReturnValue(true)
 vi.mock('@/utils/auth', async (importOriginal) => {
@@ -21,16 +37,20 @@ const definition: RolesDefinition = {
   permissions: { DASHBOARD: { value: 'DASHBOARD', label: '儀表板' } },
   groups: [{ name: '一般', permissions: ['DASHBOARD'] }],
   roles: {
-    admin: { label: '管理員', description: '', permissions: ['*'], is_core: true, flags: ['super_admin'] },
-    hr: { label: '人資', description: '', permissions: ['DASHBOARD'], is_core: true, flags: [] },
-    parent: { label: '家長', description: '', permissions: [], is_core: true, flags: ['parent', 'portal_only'] },
-    custom_x: { label: '自訂X', description: '', permissions: ['DASHBOARD'], is_core: false, flags: [] },
+    admin: { label: '管理員', description: '', permissions: ['*'], flags: ['super_admin'] },
+    hr: { label: '人資', description: '', permissions: ['DASHBOARD'], flags: [] },
+    parent: { label: '家長', description: '', permissions: [], flags: ['parent', 'portal_only'] },
+    custom_x: { label: '自訂X', description: '', permissions: ['DASHBOARD'], flags: [] },
   },
 }
 
-const mountPanel = (code: string, accountCount: number | null = 0) =>
+const mountPanel = (
+  code: string,
+  accountCount: number | null = 0,
+  accountCounts: Record<string, number> | null = null,
+) =>
   mount(RoleDetailPanel, {
-    props: { code, role: definition.roles[code], definition, accountCount },
+    props: { code, role: definition.roles[code], definition, accountCount, accountCounts },
     global: { plugins: [ElementPlus] },
   })
 
@@ -67,7 +87,7 @@ describe('RoleDetailPanel', () => {
     expect((w.vm as unknown as { parentDisabled: boolean }).parentDisabled).toBe(true)
   })
 
-  it('儲存：confirm（含帳號數文案）→ updateRole payload 含 flags 且保留 portal_only；核心角色不送 permissions', async () => {
+  it('儲存：confirm（含帳號數文案）→ updateRole payload 含 flags 且保留 portal_only；一律送 permissions', async () => {
     const w = mountPanel('parent', 5)
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     await (w.vm as unknown as { handleSave: () => Promise<void> }).handleSave()
@@ -76,7 +96,7 @@ describe('RoleDetailPanel', () => {
     const payload = vi.mocked(updateRole).mock.calls[0][1] as { flags?: string[]; permissions?: string[] }
     expect(payload.flags).toContain('portal_only')
     expect(payload.flags).toContain('parent')
-    expect(payload.permissions).toBeUndefined()
+    expect(payload.permissions).toEqual([])
     confirmSpy.mockRestore()
   })
 
@@ -88,7 +108,7 @@ describe('RoleDetailPanel', () => {
     confirmSpy.mockRestore()
   })
 
-  it('自訂角色儲存：payload 含 permissions；成功 emit saved', async () => {
+  it('儲存：payload 含 permissions；成功 emit saved', async () => {
     const w = mountPanel('custom_x')
     const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     await (w.vm as unknown as { handleSave: () => Promise<void> }).handleSave()
@@ -99,9 +119,28 @@ describe('RoleDetailPanel', () => {
     confirmSpy.mockRestore()
   })
 
-  it('刪除保護：核心角色 deleteDisabled；自訂＋帳號數>0 也 disabled；自訂＋0 帳號可按並 emit', async () => {
-    expect((mountPanel('hr').vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(true)
+  it('isDirty：改動表單後為 true；儲存成功後回 false；切換角色重置為 false', async () => {
+    const w = mountPanel('custom_x')
+    const vm = w.vm as unknown as { form: { label: string; permissions: string[] }; isDirty: boolean; handleSave: () => Promise<void> }
+    expect(vm.isDirty).toBe(false)
+    vm.form.label = '改過的名稱'
+    expect(vm.isDirty).toBe(true)
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    await vm.handleSave()
+    await flushPromises()
+    expect(vm.isDirty).toBe(false)
+    confirmSpy.mockRestore()
+
+    vm.form.permissions = [...vm.form.permissions, 'EXTRA_PERM']
+    expect(vm.isDirty).toBe(true)
+    await w.setProps({ code: 'hr', role: definition.roles.hr, accountCount: 0 })
+    expect(vm.isDirty).toBe(false)
+  })
+
+  it('刪除保護：帳號數>0 disabled（系統預設與自訂角色同規則）；0 帳號可按並 emit', async () => {
+    expect((mountPanel('hr', 3).vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(true)
     expect((mountPanel('custom_x', 2).vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(true)
+    expect((mountPanel('hr', 0).vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(false)
     const w = mountPanel('custom_x', 0)
     expect((w.vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(false)
     ;(w.vm as unknown as { requestDelete: () => void }).requestDelete()

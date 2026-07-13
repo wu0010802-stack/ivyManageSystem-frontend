@@ -8,10 +8,10 @@ vi.mock('@/api/auth', () => ({
       permissions: { DASHBOARD: { value: 'DASHBOARD', label: '儀表板' } },
       groups: [{ name: '一般', permissions: ['DASHBOARD'] }],
       roles: {
-        admin: { label: '管理員', description: '', permissions: ['*'], is_core: true, flags: ['super_admin'] },
-        hr: { label: '人資', description: '', permissions: ['DASHBOARD'], is_core: true, flags: [] },
-        parent: { label: '家長', description: '', permissions: [], is_core: true, flags: ['parent', 'portal_only'] },
-        custom_x: { label: '自訂X', description: '', permissions: ['DASHBOARD'], is_core: false, flags: [] },
+        admin: { label: '管理員', description: '', permissions: ['*'], flags: ['super_admin'] },
+        hr: { label: '人資', description: '', permissions: ['DASHBOARD'], flags: [] },
+        parent: { label: '家長', description: '', permissions: [], flags: ['parent', 'portal_only'] },
+        custom_x: { label: '自訂X', description: '', permissions: ['DASHBOARD'], flags: [] },
       },
     },
   }),
@@ -49,7 +49,7 @@ const mountView = async () => {
 describe('SettingsRolesView', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('左欄列出角色：label/code/帳號數/核心自訂 tag/flag badge', async () => {
+  it('左欄列出角色：label/code/帳號數/flag badge', async () => {
     const w = await mountView()
     const text = w.text()
     expect(text).toContain('管理員')
@@ -74,7 +74,27 @@ describe('SettingsRolesView', () => {
     const vm = w.vm as unknown as { selectedCode: string }
     expect(vm.selectedCode).toBe('admin')
     await w.find('[data-role-item="custom_x"]').trigger('click')
+    await flushPromises()
     expect(vm.selectedCode).toBe('custom_x')
+  })
+
+  it('未儲存變更保護：右欄 isDirty 時切換角色會先詢問，取消則不切換、確定則切換', async () => {
+    const w = await mountView()
+    const vm = w.vm as unknown as { selectedCode: string; panelRef: { isDirty: boolean } | null }
+    // stub 出的 RoleDetailPanel 沒有真正的 isDirty 邏輯，直接覆寫模擬「有未儲存變更」
+    expect(vm.panelRef).not.toBeNull()
+    ;(vm.panelRef as { isDirty: boolean }).isDirty = true
+
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValueOnce('cancel')
+    await w.find('[data-role-item="custom_x"]').trigger('click')
+    await flushPromises()
+    expect(vm.selectedCode).toBe('admin') // 取消 → 不切換
+
+    confirmSpy.mockResolvedValueOnce('confirm' as never)
+    await w.find('[data-role-item="custom_x"]').trigger('click')
+    await flushPromises()
+    expect(vm.selectedCode).toBe('custom_x') // 確定 → 切換
+    confirmSpy.mockRestore()
   })
 
   it('新增角色：createRole payload {code,label,description,permissions:[]}，成功後選中新角色', async () => {
