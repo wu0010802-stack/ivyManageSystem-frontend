@@ -20,7 +20,7 @@
  * Emits:
  *   close
  */
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 interface CourseItem { name: string; price: number }
@@ -61,6 +61,21 @@ function fmtAmount(n: number) {
 const copiedKey = ref<'' | 'token' | 'link'>('')
 const hasCopiedAny = ref(false)
 const nudgeVisible = ref(false)
+
+function resetCopyState() {
+  copiedKey.value = ''
+  hasCopiedAny.value = false
+  nudgeVisible.value = false
+}
+
+watch(
+  [() => props.summary.visible, () => props.summary.queryToken],
+  ([visible, queryToken], [wasVisible, previousQueryToken]) => {
+    if (visible && (!wasVisible || queryToken !== previousQueryToken)) {
+      resetCopyState()
+    }
+  },
+)
 
 async function copyToClipboard(text: string, label: string, key: 'token' | 'link') {
   try {

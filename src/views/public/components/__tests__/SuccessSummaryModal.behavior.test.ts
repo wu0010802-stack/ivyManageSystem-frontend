@@ -91,6 +91,27 @@ describe('軟性保存守門', () => {
     await wrapper.get('.modal-close').trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
   })
+
+  it('複製後關閉並開啟第二筆報名時，恢復未保存提醒', async () => {
+    const wrapper = mountModal()
+    await wrapper.get('.btn-copy').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.btn-block').classes()).toContain('btn-primary')
+
+    await wrapper.get('.modal-close').trigger('click')
+    await wrapper.setProps({ summary: makeSummary({ visible: false }) })
+    await wrapper.setProps({
+      summary: makeSummary({
+        queryToken: 'tok_SECOND',
+        editUrl: 'https://ivy.example.tw/public.html#/activity/query?token=tok_SECOND',
+      }),
+    })
+
+    expect(wrapper.get('.btn-block').classes()).toContain('btn-outline')
+    await wrapper.get('.btn-block').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.find('.close-nudge').exists()).toBe(true)
+  })
 })
 
 describe('複製就地回饋', () => {
