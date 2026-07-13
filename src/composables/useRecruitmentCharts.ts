@@ -46,6 +46,9 @@ const shortPeriodLabel = (name: string) => {
 const truncateChartLabel = (label: unknown, max = 12) =>
   typeof label === 'string' && label.length > max ? `${label.slice(0, max)}…` : label
 
+/** 來源/接待人員可能是空字串（歷史資料未填），圖表與排名 label 統一顯示「未填寫」 */
+export const displayChartLabel = (label: string) => (label && label.trim() ? label : '未填寫')
+
 const extractChartValue = (context: Record<string, unknown>) => {
   const parsed = context?.parsed as Record<string, number> | number | undefined
   if (typeof parsed === 'number') return parsed
@@ -68,14 +71,21 @@ const commonChartOptions = {
   maintainAspectRatio: false,
 }
 
+/** 人數類 bar 圖共通：整數刻度（人數不出現 0.2/0.4 小數格線）＋限制 bar 厚度（單筆資料不變巨型色塊） */
+const COUNT_BAR_DATASET = { bar: { maxBarThickness: 36 } }
+
 const barOptions = {
   ...commonChartOptions,
+  datasets: COUNT_BAR_DATASET,
+  scales: { y: { ticks: { precision: 0 } } },
   plugins: { legend: { position: 'top' } },
 }
 
 const horizBarOptions = {
   ...commonChartOptions,
   indexAxis: 'y',
+  datasets: COUNT_BAR_DATASET,
+  scales: { x: { ticks: { precision: 0 } } },
   plugins: { legend: { display: false } },
 }
 
@@ -129,6 +139,8 @@ const noDepositGradeBarOptions = {
         minRotation: 0,
       },
     },
+    // 覆寫整份 scales，y 軸整數刻度須在此重申
+    y: { ticks: { precision: 0 } },
   },
 }
 
@@ -212,9 +224,11 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
 
   const sourceClickBarOptions = computed(() => ({
     ...horizBarOptions,
-    onClick: (...[_ev, elements, chart]: ChartClickArgs) => {
+    // label 可能被 displayChartLabel 改寫為「未填寫」，drill 一律取原始資料值
+    onClick: (...[_ev, elements]: ChartClickArgs) => {
       if (!elements.length) return
-      drillToDetail?.({ source: chart.data.labels[elements[0].index] })
+      const row = stats.value.by_source[elements[0].index]
+      if (row) drillToDetail?.({ source: row.source })
     },
   }))
 
@@ -222,6 +236,7 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
   const gradeByMap = computed(() => new Map(stats.value.by_grade.map((g) => [g.grade, g])))
 
   const classBarData = computed(() => {
+    if (!stats.value.by_grade.length) return null
     const gm = gradeByMap.value
     return {
       labels: GRADES_ORDER,
@@ -232,6 +247,7 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
   })
 
   const classRateData = computed(() => {
+    if (!stats.value.by_grade.length) return null
     const gm = gradeByMap.value
     return {
       labels: GRADES_ORDER,
@@ -257,7 +273,7 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
     const data = stats.value.by_source
     if (!data.length) return null
     return {
-      labels: data.map((d) => d.source),
+      labels: data.map((d) => displayChartLabel(d.source)),
       datasets: [{ label: '參觀人數', data: data.map((d) => d.visit), backgroundColor: '#52b788', borderRadius: 4 }],
     }
   })
@@ -266,7 +282,7 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
     const data = stats.value.by_source
     if (!data.length) return null
     return {
-      labels: data.map((d) => d.source),
+      labels: data.map((d) => displayChartLabel(d.source)),
       datasets: [{
         label: '預繳率 (%)',
         data: data.map((d) => (d.visit ? +(d.deposit / d.visit * 100).toFixed(1) : 0)),
@@ -281,7 +297,7 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
     const data = stats.value.by_referrer
     if (!data.length) return null
     return {
-      labels: data.map((d) => d.referrer),
+      labels: data.map((d) => displayChartLabel(d.referrer)),
       datasets: [{ label: '參觀人數', data: data.map((d) => d.visit), backgroundColor: '#74c69d', borderRadius: 4 }],
     }
   })
@@ -290,7 +306,7 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
     const data = stats.value.by_referrer
     if (!data.length) return null
     return {
-      labels: data.map((d) => d.referrer),
+      labels: data.map((d) => displayChartLabel(d.referrer)),
       datasets: [{
         label: '預繳率 (%)',
         data: data.map((d) => (d.visit ? +(d.deposit / d.visit * 100).toFixed(1) : 0)),
@@ -342,6 +358,12 @@ export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
   const noDepositGradeBarData = computed(() => {
     const data = stats.value.no_deposit_reasons
     if (!data || !data.length) return null
+    // 各年級全為零＝沒有可視化的分布，回 null 讓 template 顯示空狀態而非空白格線
+    const total = data.reduce(
+      (acc, d) => acc + GRADES_ORDER.reduce((a, g) => a + (d.by_grade?.[g] ?? 0), 0),
+      0,
+    )
+    if (!total) return null
     const colors = ['#74c69d', '#52b788', '#40916c', '#2d6a4f']
     return {
       labels: data.map((d) => d.reason),
