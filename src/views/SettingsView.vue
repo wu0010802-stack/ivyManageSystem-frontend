@@ -3,7 +3,6 @@ import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { useShiftStore } from '@/stores/shift'
 import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'
-import SettingsAccountsTab from '@/components/settings/SettingsAccountsTab.vue'
 import SettingsApprovalTab from '@/components/settings/SettingsApprovalTab.vue'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
 import SettingsObservabilityTab from '@/components/settings/SettingsObservabilityTab.vue'
@@ -14,7 +13,7 @@ import { hasPermission } from '@/utils/auth'
 const route = useRoute()
 const router = useRouter()
 
-const BASE_TABS = ['shifts', 'approval', 'accounts', 'line', 'observability']
+const BASE_TABS = ['shifts', 'approval', 'line', 'observability']
 
 const availableTabs = (): string[] =>
   hasPermission('DSR_MANAGE') ? [...BASE_TABS, 'dsr-requests', 'policy-versions'] : [...BASE_TABS]
@@ -26,15 +25,15 @@ const resolveTab = (raw: unknown): string => {
 
 const activeTab = ref(resolveTab(route.query.tab))
 
-// view key 只在 accounts 分頁有意義（SettingsAccountsTab 的 ?view= 契約）；離開 accounts 時要清掉，
-// 否則會殘留在非 accounts 分頁的 URL 上（如 ?tab=無效值&view=parent 被 normalize 成 ?tab=shifts&view=parent）
-const staleView = (tab: string): boolean => tab !== 'accounts' && route.query.view !== undefined
-
-// 缺漏 / 不合法 tab → 修正 URL（與 EmployeeHubView 一致）；非 accounts 分頁一併清掉殘留的 view key
-if (route.query.tab !== activeTab.value || staleView(activeTab.value)) {
-  const next: LocationQueryRaw = { ...route.query, tab: activeTab.value }
-  if (activeTab.value !== 'accounts') delete next.view
-  router.replace({ query: next })
+const rawTab = Array.isArray(route.query.tab) ? route.query.tab[0] : route.query.tab
+if (rawTab === 'accounts') {
+  // 舊深連結 ?tab=accounts → 新帳號設定頁（保留 ?view= 受眾分流參數）
+  const next: LocationQueryRaw = {}
+  if (route.query.view) next.view = route.query.view
+  router.replace({ path: '/settings/accounts', query: next })
+} else if (route.query.tab !== activeTab.value) {
+  // 缺漏 / 不合法 tab → 修正 URL（與 EmployeeHubView 一致）
+  router.replace({ query: { ...route.query, tab: activeTab.value } })
 }
 
 watch(
@@ -42,19 +41,11 @@ watch(
   (next) => {
     const resolved = resolveTab(next)
     if (resolved !== activeTab.value) activeTab.value = resolved
-    // 外部（如瀏覽器上一頁）造成的 tab 變動不經 onTabChange，需在此一併清掉殘留 view key
-    if (staleView(resolved)) {
-      const q: LocationQueryRaw = { ...route.query, tab: resolved }
-      delete q.view
-      router.replace({ query: q })
-    }
   },
 )
 
 const onTabChange = (name: string | number) => {
-  const next: LocationQueryRaw = { ...route.query, tab: String(name) }
-  if (String(name) !== 'accounts') delete next.view
-  router.replace({ query: next })
+  router.replace({ query: { ...route.query, tab: String(name) } })
 }
 
 const shiftStore = useShiftStore()
@@ -73,9 +64,6 @@ onMounted(() => {
       </el-tab-pane>
       <el-tab-pane label="審核流程設定" name="approval">
         <SettingsApprovalTab v-if="activeTab === 'approval'" />
-      </el-tab-pane>
-      <el-tab-pane label="帳號與權限" name="accounts">
-        <SettingsAccountsTab v-if="activeTab === 'accounts'" />
       </el-tab-pane>
       <el-tab-pane name="line">
         <template #label>LINE 通知設定 <el-tag type="warning" size="small" style="margin-left:4px;">Beta</el-tag></template>

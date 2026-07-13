@@ -168,3 +168,36 @@ describe('AdminSidebar 行動版無障礙互動', () => {
     expect(navigation.attributes('inert')).toBeDefined()
   })
 })
+
+describe('AdminSidebar 系統設定二級選單（路由拆分）', () => {
+  it('wildcard：帳號設定/角色設定/一般設定三子項全可見', () => {
+    const w = mountWith(['*'])
+    const all = items(w)
+    expect(all).toContain('/settings/accounts')
+    expect(all).toContain('/settings/roles')
+    expect(all).toContain('/settings')
+  })
+
+  it('只有 USER_MANAGEMENT_READ：群組顯示、僅帳號設定可見', () => {
+    const w = mountWith(['USER_MANAGEMENT_READ'])
+    expect(subs(w)).toContain('group-settings')
+    const all = items(w)
+    expect(all).toContain('/settings/accounts')
+    expect(all).not.toContain('/settings/roles')
+    expect(all).not.toContain('/settings')
+  })
+
+  it('只有 ROLES_MANAGE：群組顯示、僅角色設定可見', () => {
+    const w = mountWith(['ROLES_MANAGE'])
+    expect(subs(w)).toContain('group-settings')
+    const all = items(w)
+    expect(all).toContain('/settings/roles')
+    expect(all).not.toContain('/settings/accounts')
+    expect(all).not.toContain('/settings')
+  })
+
+  it('三權限皆無：系統設定群組整個不顯示', () => {
+    const w = mountWith(['SALARY_READ'])
+    expect(subs(w)).not.toContain('group-settings')
+  })
+})

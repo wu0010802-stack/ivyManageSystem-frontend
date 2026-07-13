@@ -46,7 +46,6 @@ const globalConfig = {
     'el-tag': { template: '<span><slot /></span>', props: ['type', 'size'] },
     // 子 settings tab 元件全部 shallow stub 掉（shallowMount 已自動，但保留明確 key）
     SettingsShiftTab: { template: '<div data-test="shift-tab" />' },
-    SettingsAccountsTab: { template: '<div data-test="accounts-tab" />' },
     SettingsApprovalTab: { template: '<div data-test="approval-tab" />' },
     SettingsLineTab: { template: '<div data-test="line-tab" />' },
     SettingsObservabilityTab: { template: '<div data-test="observability-tab" />' },
@@ -90,7 +89,12 @@ describe('SettingsView', () => {
     await flushPromises()
     // 確認固定存在的 tab（不受權限影響）
     expect(wrapper.html()).toContain('輪班別管理')
-    expect(wrapper.html()).toContain('帳號與權限')
+  })
+
+  it('帳號分頁已自 /settings 移除', async () => {
+    const w = shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(w.find('[data-name="accounts"]').exists()).toBe(false)
   })
 })
 
@@ -109,12 +113,18 @@ describe('SettingsView tab ↔ URL 同步', () => {
     expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
   })
 
-  it('deep link ?tab=accounts → 直接落在帳號分頁且不 replace', async () => {
-    mockQuery = reactive({ tab: 'accounts' })
-    const w = shallowMount(SettingsView, { global: globalConfig })
+  it('舊深連結 ?tab=accounts&view=parent → redirect /settings/accounts 並保留 view', async () => {
+    mockQuery = reactive({ tab: 'accounts', view: 'parent' })
+    shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('accounts')
-    expect(replace).not.toHaveBeenCalled()
+    expect(replace).toHaveBeenCalledWith({ path: '/settings/accounts', query: { view: 'parent' } })
+  })
+
+  it('舊深連結 ?tab=accounts（無 view）→ redirect /settings/accounts', async () => {
+    mockQuery = reactive({ tab: 'accounts' })
+    shallowMount(SettingsView, { global: globalConfig })
+    await flushPromises()
+    expect(replace).toHaveBeenCalledWith({ path: '/settings/accounts', query: {} })
   })
 
   it('無權限者 deep link ?tab=dsr-requests → fallback shifts 並修正 URL', async () => {
@@ -133,39 +143,13 @@ describe('SettingsView tab ↔ URL 同步', () => {
     expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('dsr-requests')
   })
 
-  it('切換 tab → replace 更新 ?tab=；離開 accounts 時清掉 view', async () => {
-    mockQuery = reactive({ tab: 'accounts', view: 'parent' })
+  it('切換 tab → replace 更新 ?tab=', async () => {
+    mockQuery = reactive({ tab: 'line' })
     const w = shallowMount(SettingsView, { global: globalConfig })
     await flushPromises()
     replace.mockClear()
     w.findComponent({ name: 'ElTabs' }).vm.$emit('tab-change', 'shifts')
     await flushPromises()
-    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
-  })
-
-  it('無效 tab 且帶殘留 view → mount normalize 一併清掉 view（?view= 契約邊界）', async () => {
-    mockQuery = reactive({ tab: '無效值', view: 'parent' })
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
-    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
-  })
-
-  it('合法非 accounts tab 但帶殘留 view → mount 時一併清掉 view', async () => {
-    mockQuery = reactive({ tab: 'shifts', view: 'parent' })
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
-  })
-
-  it('外部（非 onTabChange）改變 route.query.tab 離開 accounts → watch 一併清掉殘留 view', async () => {
-    mockQuery = reactive({ tab: 'accounts', view: 'parent' })
-    const w = shallowMount(SettingsView, { global: globalConfig })
-    await flushPromises()
-    replace.mockClear()
-    mockQuery.tab = 'shifts' // 模擬瀏覽器上一頁等非經 onTabChange 途徑的外部變更
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('shifts')
     expect(replace).toHaveBeenCalledWith({ query: { tab: 'shifts' } })
   })
 })
