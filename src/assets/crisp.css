@@ -5,6 +5,12 @@
  * 規則全部 scope 在 .crisp-surface 底下；推廣到其他模組＝在該模組路由根節點掛同 class。
  * 顏色一律走 --crisp-* 變數（html.dark 只覆寫變數值）；禁止在規則右值寫死淺色 hex
  * 或引用 EP --el-color-primary-light-N（dark 下會白底白字）。
+ *
+ * ⚠ Cascade 互動（推廣前必讀）：main.css 有多條全域 !important 會蓋過本檔無 !important 規則——
+ *   .el-card（border/box-shadow, main.css）、.el-tag--*:not(--dark) 文字色（main.css）、
+ *   el-table 表頭底色（main.css）；dark 下 a11y.css 的 html.dark el-tag/th 規則（更高 specificity）接管文字色。
+ *   本檔已對 el-card 與 el-tag--info 做 scope 內反制；其餘 light 值恰與 crisp token 相同（表頭 neutral-50）
+ *   或 dark 方向安全（a11y 亮色對比更高），刻意不反制。調整 --crisp-* 前先查 document.styleSheets 實際生效值。
  */
 
 .crisp-surface {
@@ -78,8 +84,8 @@ html.dark .crisp-surface {
 
 /* ── 卡片：去陰影、髮絲線 ── */
 .crisp-surface .el-card {
-  border: 1px solid var(--crisp-hairline);
-  box-shadow: none;
+  border: 1px solid var(--crisp-hairline) !important; /* 反制 main.css .el-card border:none !important（全域皮層規則，scope 內反制） */
+  box-shadow: none !important;
   background: var(--crisp-surface);
 }
 
@@ -126,6 +132,8 @@ html.dark .crisp-surface {
 /* type=info 用於「已離職」等中性狀態 → 灰 pill */
 .crisp-surface .el-tag--info { color: var(--crisp-pill-neutral-text); border-color: var(--crisp-pill-neutral-border); }
 .crisp-surface .el-tag--info::before { background: var(--crisp-pill-neutral-dot); }
+/* 反制 main.css 全域 .el-tag--info !important（--color-info-darker 藍）——crisp 內 info 型語意是中性灰（已離職等） */
+.crisp-surface .el-tag--info:not(.el-tag--dark) { color: var(--crisp-pill-neutral-text) !important; }
 /* 選中態（todo chips effect=dark）：淺色填底＋1px 內框，取代原黑底 */
 .crisp-surface .el-tag--dark.el-tag--warning {
   background: var(--crisp-pill-warning-soft);
@@ -184,6 +192,14 @@ html.dark .crisp-surface {
 }
 .crisp-surface .roster-stats { font-variant-numeric: tabular-nums; }
 .crisp-surface .roster-stats b { color: var(--crisp-text); font-weight: 650; }
+
+/* 詳情頁區塊小標（spec §3.2）：11px 間距字母的安靜標籤 */
+.crisp-surface .section-title {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 1.5px;
+  color: var(--crisp-text-faint);
+}
 
 /* ── 空值顯示（Task 6 消費）── */
 .crisp-surface .crisp-empty { color: var(--crisp-text-faint); }
