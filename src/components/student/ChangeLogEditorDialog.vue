@@ -207,9 +207,8 @@ const searchStudents = async (query: string) => {
   studentSearchLoading.value = true
   try {
      
-    const res = await getStudents({ search: query, page_size: 20 })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    studentOptions.value = (res as any).data?.items || []
+    const res = await getStudents({ search: query, limit: 20 })
+    studentOptions.value = res.data.items || []
   } catch {
     studentOptions.value = []
   } finally {

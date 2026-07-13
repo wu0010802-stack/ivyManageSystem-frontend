@@ -241,7 +241,9 @@ async function loadOverview() {
     const clsData = (clsRes?.data ?? clsRes) as Classroom[] | { items?: Classroom[] }
     classroomsList.value = Array.isArray(clsData) ? clsData : ((clsData as { items?: Classroom[] })?.items || [])
     const stuData = stuRes?.data ?? stuRes
-    studentsList.value = stuData?.items || []
+    // getStudents 型別化後 StudentListItemOut.classroom_id 含 null，與本檔寬鬆展示用
+    // Student.classroom_id?: number | string 不完全對齊；此處僅供表格展示，維持既有寬鬆轉型。
+    studentsList.value = (stuData?.items || []) as unknown as Student[]
   } catch (e) {
     const err = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(err.response?.data?.detail || '載入總覽失敗')

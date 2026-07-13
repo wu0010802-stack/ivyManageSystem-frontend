@@ -24,8 +24,7 @@ async function fetchSummary() {
   loading.value = true
   try {
     const { data } = await getAcademicSummary(props.studentId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    summary.value = (data as any) || null
+    summary.value = data || null
   } catch (e) {
     summary.value = null
     ElMessage.error(apiError(e, '讀取教務摘要失敗'))

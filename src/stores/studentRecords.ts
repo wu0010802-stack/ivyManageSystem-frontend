@@ -17,10 +17,17 @@ import {
 import { createKeyedFetchStore } from './_createKeyedFetchStore'
 import { domainBus, RECORD_EVENTS } from '@/utils/domainBus'
 
-const baseStore = createKeyedFetchStore('studentRecords', getStudentRecordsTimeline, {
-  ttl: 2 * 60 * 1000,
-  errorMsg: '學生紀錄載入失敗',
-})
+// createKeyedFetchStore 的 apiFn 簽名為 (params?: unknown) => Promise<unknown>（泛用快取層，
+// 不綁定特定端點型別）；getStudentRecordsTimeline 型別化後（api 層型別化批次2）簽名變窄，
+// 用薄 wrapper 在此邊界銜接，不影響 getStudentRecordsTimeline 本身或呼叫端型別。
+const baseStore = createKeyedFetchStore(
+  'studentRecords',
+  (params?: unknown) => getStudentRecordsTimeline(params as Parameters<typeof getStudentRecordsTimeline>[0]),
+  {
+    ttl: 2 * 60 * 1000,
+    errorMsg: '學生紀錄載入失敗',
+  },
+)
 
 type RecordKind = 'incident' | 'assessment' | 'change_log'
 

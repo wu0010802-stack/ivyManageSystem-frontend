@@ -11,9 +11,16 @@ import { createKeyedFetchStore } from './_createKeyedFetchStore'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 import { submitStudentCreateWithDuplicateConfirm } from '@/utils/studentDuplicateConflict'
 
-const baseStore = createKeyedFetchStore('student', getStudents, {
-  errorMsg: '學生資料載入失敗',
-})
+// createKeyedFetchStore 的 apiFn 簽名為 (params?: unknown) => Promise<unknown>（泛用快取層，
+// 不綁定特定端點型別）；getStudents 型別化後（api 層型別化批次2）簽名變窄，用薄 wrapper
+// 在此邊界銜接，不影響 getStudents 本身或呼叫端型別。
+const baseStore = createKeyedFetchStore(
+  'student',
+  (params?: unknown) => getStudents(params as Parameters<typeof getStudents>[0]),
+  {
+    errorMsg: '學生資料載入失敗',
+  },
+)
 
 // 動態附加 mutation actions 的 store 型別
 type StoreWithMutations = ReturnType<typeof baseStore> & {

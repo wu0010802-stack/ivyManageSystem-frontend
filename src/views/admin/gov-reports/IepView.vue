@@ -244,7 +244,9 @@ async function loadAll() {
     classroomStore.fetchClassrooms(false), getStudents({}), listIeps(),
   ])
   classrooms.value = classroomStore.classrooms as Array<{ id: number; name: string }>
-  students.value = (s as { data: unknown[] }).data
+  // getStudents 型別化前這裡誤把整個 { items, total, skip, limit } response body 當陣列存進
+  // students（filteredStudents 對它 .filter() 會在 runtime 炸 TypeError）；型別化後修正為取 .items。
+  students.value = s.data.items
   ieps.value = (i as { data: IepRecord[] }).data
 }
 

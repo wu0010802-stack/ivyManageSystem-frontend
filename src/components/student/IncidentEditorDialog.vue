@@ -197,8 +197,7 @@ const loadStudents = async (classroomId: number | null) => {
   try {
      
     const res = await getStudents({ classroom_id: classroomId, is_active: true })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    studentOptions.value = (res as any).data?.items || []
+    studentOptions.value = res.data.items || []
   } catch {
     ElMessage.error('載入學生資料失敗')
   } finally {

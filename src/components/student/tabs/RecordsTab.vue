@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { getStudentRecordsTimeline } from '@/api/studentRecords'
+import type { ApiQuery } from '@/api/_generated/typed'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { domainBus, RECORD_EVENTS, STUDENT_EVENTS } from '@/utils/domainBus'
 import { hasPermission } from '@/utils/auth'
@@ -59,12 +60,11 @@ async function fetchData() {
   if (!props.studentId) return
   loading.value = true
   try {
-    const params: Record<string, unknown> = { student_id: props.studentId, page: 1, page_size: 100 }
+    const params: ApiQuery<'/students/records', 'get'> = { student_id: props.studentId, page: 1, page_size: 100 }
     if (filterFrom.value) params.date_from = filterFrom.value
     if (filterTo.value) params.date_to = filterTo.value
     const res = await getStudentRecordsTimeline(params)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = (res as any).data?.items || []
+    items.value = res.data.items || []
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入紀錄失敗'))

@@ -1,7 +1,9 @@
 import api from './index'
-import type { AxiosResp } from './_generated/typed'
+import type { ApiQuery, AxiosResp } from './_generated/typed'
 
-export const getStudents = (params: unknown) => api.get('/students', { params })
+export const getStudents = (
+  params: ApiQuery<'/students', 'get'> = {},
+): AxiosResp<'/students', 'get'> => api.get('/students', { params })
 
 export const getStudent = (id: number) => api.get(`/students/${id}`)
 

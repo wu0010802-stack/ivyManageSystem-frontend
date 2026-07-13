@@ -92,7 +92,7 @@ const fetchStudents = async () => {
   }
   studentsLoading.value = true
   try {
-    const res = await getStudents({ classroom_id: filters.classroomId })
+    const res = await getStudents({ classroom_id: filters.classroomId as number | null })
     const raw = res.data ?? []
     students.value = (Array.isArray(raw) ? raw : (raw as { items?: StudentItem[] }).items ?? []) as StudentItem[]
   } catch (error) {
