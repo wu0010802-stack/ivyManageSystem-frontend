@@ -5,6 +5,13 @@ import { shallowMount } from '@vue/test-utils'
 const mockIsMobile = ref(false)
 vi.mock('@/composables/useIsMobile', () => ({ useIsMobile: () => ({ isMobile: mockIsMobile, cleanup: () => {} }) }))
 
+const replace = vi.fn()
+let mockQuery: Record<string, unknown> = {}
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: mockQuery }),
+  useRouter: () => ({ replace }),
+}))
+
 // 讓 shallowMount 不爆：mock 所有 onMounted 會拉的 store 與 API
 vi.mock('@/api/auth', () => ({
   getUsers: vi.fn(() => Promise.resolve({ data: [] })),

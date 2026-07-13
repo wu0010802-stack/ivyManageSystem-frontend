@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, nextTick, watch, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRoute, useRouter } from 'vue-router'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
@@ -11,6 +12,7 @@ import { formatDateTimeTW } from '@/utils/format'
 import PermissionPicker from './PermissionPicker.vue'
 import RoleManagerDrawer, { type RolesDefinition } from './RoleManagerDrawer.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import ParentAccountsList from './ParentAccountsList.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
 const ROLE_ICONS: Record<string, string> = {
@@ -28,6 +30,35 @@ const ROLE_ORDER = ['admin', 'principal', 'supervisor', 'hr', 'accountant', 'tea
 const advancedExpanded = ref<boolean>(false)
 
 interface EmployeeItem { id: number; name: string; employee_id: string }
+
+type Audience = 'staff' | 'parent'
+
+const route = useRoute()
+const router = useRouter()
+
+const resolveAudience = (raw: unknown): Audience => {
+  const r = Array.isArray(raw) ? raw[0] : raw
+  return r === 'parent' ? 'parent' : 'staff'
+}
+
+const audience = ref<Audience>(resolveAudience(route.query.view))
+
+// 缺漏 / 不合法 view → 修正 URL（與 EmployeeHubView 一致）
+if (route.query.view !== audience.value) {
+  router.replace({ query: { ...route.query, view: audience.value } })
+}
+
+watch(
+  () => route.query.view,
+  (next) => {
+    const resolved = resolveAudience(next)
+    if (resolved !== audience.value) audience.value = resolved
+  },
+)
+
+const onAudienceChange = (v: string | number) => {
+  router.replace({ query: { ...route.query, view: String(v) } })
+}
 
 const employeeStore = useEmployeeStore()
 const { employees } = storeToRefs(employeeStore) as unknown as { employees: Ref<EmployeeItem[]> }
@@ -51,17 +82,35 @@ const onRolesChanged = () => { fetchPermissionDefinition() }
 const keyword = ref<string>('')
 const roleFilter = ref<string>('')
 
+const staffUsers = computed(() => users.value.filter((u) => u.role !== 'parent'))
+const parentUsers = computed(() => users.value.filter((u) => u.role === 'parent'))
+
+const audienceOptions = computed(() => [
+  { label: `教職員（${staffUsers.value.length}）`, value: 'staff' },
+  { label: `家長（${parentUsers.value.length}）`, value: 'parent' },
+])
+
 const roleFilterOptions = computed(() =>
-  Object.entries(permissionDefinition.value.roles).map(([code, r]) => ({ code, label: r.label || code })),
+  Object.entries(permissionDefinition.value.roles)
+    .filter(([code]) => code !== 'parent')
+    .map(([code, r]) => ({ code, label: r.label || code })),
 )
 
 const filteredUsers = computed(() =>
-  users.value.filter((u) => {
+  staffUsers.value.filter((u) => {
     const matchRole = !roleFilter.value || u.role === roleFilter.value
     const hay = `${(u.username as string) ?? ''}${(u.employee_name as string) ?? ''}`
     const matchKw = !keyword.value || hay.includes(keyword.value.trim())
     return matchRole && matchKw
   }),
+)
+
+const filteredParentUsers = computed(() =>
+  parentUsers.value.filter((u) => !keyword.value || String(u.username ?? '').includes(keyword.value.trim())),
+)
+
+const parentEmptyText = computed(() =>
+  keyword.value ? '查無符合條件的帳號' : '家長帳號由家長端 LINE 綁定自動產生，不在此新增',
 )
 
 const fetchUsers = async () => {
@@ -345,15 +394,22 @@ defineExpose({
   userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault,
   keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser,
   handleToggleActive, accountCardColumns,
+  audience, staffUsers, parentUsers, filteredParentUsers, onAudienceChange, roleFilterOptions, parentEmptyText,
 })
 </script>
 
 <template>
   <div>
+    <el-segmented
+      :model-value="audience"
+      :options="audienceOptions"
+      class="audience-switcher"
+      @change="onAudienceChange"
+    />
     <div class="accounts-toolbar">
       <div class="toolbar-left">
-        <el-input v-model="keyword" placeholder="搜尋帳號 / 姓名" clearable style="width: 220px;" />
-        <el-select v-model="roleFilter" placeholder="全部角色" clearable style="width: 160px;">
+        <el-input v-model="keyword" :placeholder="audience === 'staff' ? '搜尋帳號 / 姓名' : '搜尋帳號'" clearable style="width: 220px;" />
+        <el-select v-if="audience === 'staff'" v-model="roleFilter" placeholder="全部角色" clearable style="width: 160px;">
           <el-option v-for="r in roleFilterOptions" :key="r.code" :label="r.label" :value="r.code" />
         </el-select>
       </div>
@@ -362,98 +418,108 @@ defineExpose({
         <el-button type="primary" @click="handleAddUser">新增帳號</el-button>
       </div>
     </div>
-    <el-table v-if="!isMobile" :data="filteredUsers" v-loading="loadingUsers" style="width: 100%; margin-top: 20px;">
-      <el-table-column prop="username" label="帳號" width="150" />
-      <el-table-column prop="employee_name" label="員工姓名" width="120" />
-      <el-table-column prop="role" label="角色" width="120">
-        <template #default="{ row } = {}">
-          <el-tag :type="getRoleTagType(row?.role)">{{ row?.role_label || row?.role }}</el-tag>
+    <template v-if="audience === 'staff'">
+      <el-table v-if="!isMobile" :data="filteredUsers" v-loading="loadingUsers" style="width: 100%; margin-top: 20px;">
+        <el-table-column prop="username" label="帳號" width="150" />
+        <el-table-column prop="employee_name" label="員工姓名" width="120" />
+        <el-table-column prop="role" label="角色" width="120">
+          <template #default="{ row } = {}">
+            <el-tag :type="getRoleTagType(row?.role)">{{ row?.role_label || row?.role }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="權限" width="120">
+          <template #default="{ row } = {}">
+            <template v-if="row?.role !== 'teacher'">
+              <el-tag v-if="Array.isArray(row?.permission_names) && row?.permission_names.includes('*')" type="success" size="small">全部</el-tag>
+              <el-tag v-else-if="row && isUsingRoleDefault(row)" type="info" size="small">預設</el-tag>
+              <el-tag v-else type="warning" size="small">自訂</el-tag>
+            </template>
+            <span v-else style="color: var(--text-tertiary);">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="is_active" label="狀態" width="80">
+          <template #default="{ row } = {}">
+            <el-tag :type="row?.is_active ? 'success' : 'info'" size="small">{{ row?.is_active ? '啟用' : '停用' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="最後登入" min-width="170">
+          <template #default="{ row } = {}">
+            <span v-if="row?.last_login">{{ formatDateTimeTW(row.last_login) }}</span>
+            <span v-else class="never-logged-in">從未登入</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="160">
+          <template #default="{ row } = {}">
+            <el-button v-if="row" link type="primary" @click="handleEditUser(row)">編輯</el-button>
+            <el-dropdown v-if="row" trigger="click" @command="(cmd: string) => onRowCommand(cmd, row)">
+              <el-button link type="primary">更多<el-icon class="el-icon--right"><arrow-down /></el-icon></el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
+                  <el-dropdown-item command="toggle-active">{{ row?.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <div class="accounts-empty">
+            <template v-if="keyword || roleFilter">
+              <span>查無符合條件的帳號</span>
+              <el-button link type="primary" data-testid="clear-filters" @click="clearFilters">清除篩選</el-button>
+            </template>
+            <span v-else>尚無帳號</span>
+          </div>
         </template>
-      </el-table-column>
-      <el-table-column label="權限" width="120">
-        <template #default="{ row } = {}">
-          <template v-if="row?.role !== 'teacher'">
-            <el-tag v-if="Array.isArray(row?.permission_names) && row?.permission_names.includes('*')" type="success" size="small">全部</el-tag>
-            <el-tag v-else-if="row && isUsingRoleDefault(row)" type="info" size="small">預設</el-tag>
+      </el-table>
+      <AdminListCards
+        v-else
+        :items="filteredUsers"
+        :columns="accountCardColumns"
+        row-key="username"
+        :loading="loadingUsers"
+        empty-text="尚無帳號"
+        style="margin-top: 20px;"
+      >
+        <template #title="{ item }">{{ item.username }}</template>
+        <template #cell-__role="{ item }">
+          <el-tag :type="getRoleTagType(item.role as string)">{{ item.role_label || item.role }}</el-tag>
+        </template>
+        <template #cell-__perm="{ item }">
+          <template v-if="item.role !== 'teacher'">
+            <el-tag v-if="Array.isArray(item.permission_names) && (item.permission_names as string[]).includes('*')" type="success" size="small">全部</el-tag>
+            <el-tag v-else-if="isUsingRoleDefault(item)" type="info" size="small">預設</el-tag>
             <el-tag v-else type="warning" size="small">自訂</el-tag>
           </template>
           <span v-else style="color: var(--text-tertiary);">-</span>
         </template>
-      </el-table-column>
-      <el-table-column prop="is_active" label="狀態" width="80">
-        <template #default="{ row } = {}">
-          <el-tag :type="row?.is_active ? 'success' : 'info'" size="small">{{ row?.is_active ? '啟用' : '停用' }}</el-tag>
+        <template #cell-__status="{ item }">
+          <el-tag :type="item.is_active ? 'success' : 'info'" size="small">{{ item.is_active ? '啟用' : '停用' }}</el-tag>
         </template>
-      </el-table-column>
-      <el-table-column label="最後登入" min-width="170">
-        <template #default="{ row } = {}">
-          <span v-if="row?.last_login">{{ formatDateTimeTW(row.last_login) }}</span>
-          <span v-else class="never-logged-in">從未登入</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="160">
-        <template #default="{ row } = {}">
-          <el-button v-if="row" link type="primary" @click="handleEditUser(row)">編輯</el-button>
-          <el-dropdown v-if="row" trigger="click" @command="(cmd: string) => onRowCommand(cmd, row)">
+        <template #actions="{ item }">
+          <el-button link type="primary" @click="handleEditUser(item)">編輯</el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => onRowCommand(cmd, item)">
             <el-button link type="primary">更多<el-icon class="el-icon--right"><arrow-down /></el-icon></el-button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
-                <el-dropdown-item command="toggle-active">{{ row?.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
+                <el-dropdown-item command="toggle-active">{{ item.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
                 <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
         </template>
-      </el-table-column>
-      <template #empty>
-        <div class="accounts-empty">
-          <template v-if="keyword || roleFilter">
-            <span>查無符合條件的帳號</span>
-            <el-button link type="primary" data-testid="clear-filters" @click="clearFilters">清除篩選</el-button>
-          </template>
-          <span v-else>尚無帳號</span>
-        </div>
-      </template>
-    </el-table>
-    <AdminListCards
+      </AdminListCards>
+    </template>
+    <ParentAccountsList
       v-else
-      :items="filteredUsers"
-      :columns="accountCardColumns"
-      row-key="username"
+      :items="filteredParentUsers"
       :loading="loadingUsers"
-      empty-text="尚無帳號"
+      :empty-text="parentEmptyText"
       style="margin-top: 20px;"
-    >
-      <template #title="{ item }">{{ item.username }}</template>
-      <template #cell-__role="{ item }">
-        <el-tag :type="getRoleTagType(item.role as string)">{{ item.role_label || item.role }}</el-tag>
-      </template>
-      <template #cell-__perm="{ item }">
-        <template v-if="item.role !== 'teacher'">
-          <el-tag v-if="Array.isArray(item.permission_names) && (item.permission_names as string[]).includes('*')" type="success" size="small">全部</el-tag>
-          <el-tag v-else-if="isUsingRoleDefault(item)" type="info" size="small">預設</el-tag>
-          <el-tag v-else type="warning" size="small">自訂</el-tag>
-        </template>
-        <span v-else style="color: var(--text-tertiary);">-</span>
-      </template>
-      <template #cell-__status="{ item }">
-        <el-tag :type="item.is_active ? 'success' : 'info'" size="small">{{ item.is_active ? '啟用' : '停用' }}</el-tag>
-      </template>
-      <template #actions="{ item }">
-        <el-button link type="primary" @click="handleEditUser(item)">編輯</el-button>
-        <el-dropdown trigger="click" @command="(cmd: string) => onRowCommand(cmd, item)">
-          <el-button link type="primary">更多<el-icon class="el-icon--right"><arrow-down /></el-icon></el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
-              <el-dropdown-item command="toggle-active">{{ item.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
-              <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </template>
-    </AdminListCards>
+      @toggle-active="handleToggleActive"
+    />
 
     <!-- 管理角色抽屜 -->
     <RoleManagerDrawer
@@ -658,6 +724,10 @@ defineExpose({
 </template>
 
 <style scoped>
+.audience-switcher {
+  margin-bottom: 12px;
+}
+
 .accounts-toolbar {
   display: flex;
   justify-content: space-between;

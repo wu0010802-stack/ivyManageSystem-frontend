@@ -3,6 +3,13 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 
+const replace = vi.fn()
+let mockQuery: Record<string, unknown> = {}
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: mockQuery }),
+  useRouter: () => ({ replace }),
+}))
+
 vi.mock('@/api/auth', () => {
   const mockPermissionDefinition = {
     permissions: {
@@ -34,6 +41,7 @@ vi.mock('@/api/auth', () => {
         { id: 1, username: 'wang01', employee_name: '王小明', role: 'admin', permission_names: ['*'], is_active: true, last_login: '2026-07-10T17:35:14.324936' },
         { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: true, last_login: null },
         { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD', 'EMPLOYEES_READ'], is_active: true, last_login: null },
+        { id: 4, username: 'parent1', employee_name: '', role: 'parent', permission_names: [], is_active: true, last_login: null },
       ],
     }),
     getPermissions: vi.fn().mockResolvedValue({ data: mockPermissionDefinition }),
@@ -67,6 +75,8 @@ import { formatDateTimeTW } from '@/utils/format'
 describe('SettingsAccountsTab — role card UX', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockQuery = {}
+    replace.mockClear()
   })
 
   async function mountAndOpenAddDialog() {
@@ -338,6 +348,53 @@ describe('SettingsAccountsTab — role card UX', () => {
       expect(errorSpy).toHaveBeenCalledWith('不能停用自己的帳號')
       confirmSpy.mockRestore()
       errorSpy.mockRestore()
+    })
+  })
+
+  describe('受眾分流（教職員/家長）', () => {
+    it('預設 staff 視圖：filteredUsers 不含家長、normalize ?view=staff', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { audience: string; filteredUsers: { username: string }[] }
+      expect(vm.audience).toBe('staff')
+      expect(vm.filteredUsers.map((u) => u.username)).not.toContain('parent1')
+      expect(replace).toHaveBeenCalledWith({ query: { view: 'staff' } })
+    })
+
+    it('deep link ?view=parent → 家長視圖，filteredParentUsers 只含家長', async () => {
+      mockQuery = { view: 'parent' }
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { audience: string; filteredParentUsers: { username: string }[] }
+      expect(vm.audience).toBe('parent')
+      expect(vm.filteredParentUsers.map((u) => u.username)).toEqual(['parent1'])
+      expect(replace).not.toHaveBeenCalled()
+    })
+
+    it('家長視圖 keyword 只比對帳號', async () => {
+      mockQuery = { view: 'parent' }
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { keyword: string; filteredParentUsers: unknown[] }
+      vm.keyword = 'zzz'
+      await nextTick()
+      expect(vm.filteredParentUsers.length).toBe(0)
+    })
+
+    it('onAudienceChange → replace 更新 ?view=', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      replace.mockClear()
+      const vm = wrapper.vm as unknown as { onAudienceChange: (v: string) => void }
+      vm.onAudienceChange('parent')
+      expect(replace).toHaveBeenCalledWith({ query: { view: 'parent' } })
+    })
+
+    it('角色篩選選項排除家長', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { roleFilterOptions: { code: string }[] }
+      expect(vm.roleFilterOptions.map((r) => r.code)).not.toContain('parent')
     })
   })
 })
