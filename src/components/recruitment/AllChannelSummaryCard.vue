@@ -55,23 +55,31 @@ const rows = computed(() => [
 }
 .channel-table th,
 .channel-table td {
-  border: 1px solid var(--el-border-color-lighter, #ebeef5);
-  padding: 6px 10px;
+  border-bottom: 1px solid var(--el-border-color-lighter, #ebeef5);
+  padding: 7px 10px;
+  text-align: left;
 }
 .channel-table th {
-  background: var(--el-fill-color-light, #f5f7fa);
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-tertiary);
 }
 .channel-table .num {
-  text-align: center;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.channel-table .total-row {
+.channel-table th:not(:first-child) {
+  text-align: right;
+}
+.channel-table .total-row td {
   font-weight: 700;
-  background: var(--el-fill-color-lighter, #fafafa);
+  border-bottom: none;
+  border-top: 1px solid var(--el-border-color, #dcdfe6);
 }
 .scope-note {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-tertiary);
 }
 </style>

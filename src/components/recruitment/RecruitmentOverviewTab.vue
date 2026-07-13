@@ -7,6 +7,9 @@
       :fmt-rate="fmtRate"
     />
 
+    <!-- 全管道彙整等參考資訊排在決策摘要之後（層級：先看結論、再看口徑） -->
+    <slot name="after-summary" />
+
     <RecruitmentAlertPanel
       :alerts="alerts"
       @select="$emit('navigate', $event)"
@@ -27,7 +30,10 @@
               <span class="funnel-step-value">{{ funnelSnapshot.visit ?? 0 }}</span>
             </div>
           </div>
-          <div class="funnel-connector" aria-hidden="true">▾</div>
+          <div class="funnel-connector" aria-hidden="true">
+            <span class="funnel-connector-arrow">↓</span>
+            <span class="funnel-connector-rate">轉預繳 {{ stageRate(funnelSnapshot.deposit, funnelSnapshot.visit) }}</span>
+          </div>
           <div class="funnel-step funnel-step--deposit">
             <div class="funnel-step-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
@@ -37,7 +43,10 @@
               <span class="funnel-step-value">{{ funnelSnapshot.deposit ?? 0 }}</span>
             </div>
           </div>
-          <div class="funnel-connector" aria-hidden="true">▾</div>
+          <div class="funnel-connector" aria-hidden="true">
+            <span class="funnel-connector-arrow">↓</span>
+            <span class="funnel-connector-rate">轉註冊 {{ stageRate(funnelSnapshot.enrolled, funnelSnapshot.deposit) }}</span>
+          </div>
           <div class="funnel-step funnel-step--enroll">
             <div class="funnel-step-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
@@ -47,13 +56,13 @@
               <span class="funnel-step-value">{{ funnelSnapshot.enrolled ?? 0 }}</span>
             </div>
           </div>
-          <div class="funnel-step funnel-step--pending">
+          <div class="funnel-pending">
             <div class="funnel-step-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             </div>
             <div class="funnel-step-body">
-              <span class="funnel-step-label">待轉換</span>
-              <span class="funnel-step-value funnel-step-value--warn">{{ funnelSnapshot.pending_deposit ?? 0 }}</span>
+              <span class="funnel-step-label">待轉換（預繳未註冊）</span>
+              <span class="funnel-step-value" :class="{ 'funnel-step-value--warn': Number(funnelSnapshot.pending_deposit ?? 0) > 0 }">{{ funnelSnapshot.pending_deposit ?? 0 }}</span>
             </div>
           </div>
         </div>
@@ -99,12 +108,14 @@
         <template #header>月度招生漏斗量體</template>
         <div class="chart-box">
           <component :is="barComponent" v-if="showCharts && monthlyBarData" :data="monthlyBarData" :options="monthlyBarOptions" />
+          <div v-else-if="showCharts" class="chart-empty">此區間尚無資料</div>
         </div>
       </el-card>
       <el-card class="chart-card">
         <template #header>月度轉換率走勢</template>
         <div class="chart-box">
           <component :is="lineComponent" v-if="showCharts && monthlyRateData" :data="monthlyRateData" :options="lineOptions" />
+          <div v-else-if="showCharts" class="chart-empty">此區間尚無資料</div>
         </div>
       </el-card>
     </div>
@@ -112,20 +123,20 @@
     <el-card>
       <template #header>月度明細表</template>
       <el-table :data="monthlyTableData" border stripe size="small">
-        <el-table-column prop="month" label="月份" width="90" />
-        <el-table-column prop="visit" label="參觀人數" align="center" width="90" />
-        <el-table-column prop="deposit" label="預繳人數" align="center" width="90" />
-        <el-table-column prop="enrolled" label="註冊人數" align="center" width="90" />
-        <el-table-column prop="transfer_term" label="轉其他學期" align="center" width="100" />
-        <el-table-column prop="effective_deposit" label="有效預繳" align="center" width="90" />
-        <el-table-column prop="pending_deposit" label="預繳未註冊" align="center" width="100" />
-        <el-table-column label="參觀→預繳率" align="center" width="100">
+        <el-table-column prop="month" label="月份" min-width="90" />
+        <el-table-column prop="visit" label="參觀人數" align="center" min-width="90" />
+        <el-table-column prop="deposit" label="預繳人數" align="center" min-width="90" />
+        <el-table-column prop="enrolled" label="註冊人數" align="center" min-width="90" />
+        <el-table-column prop="transfer_term" label="轉其他學期" align="center" min-width="100" />
+        <el-table-column prop="effective_deposit" label="有效預繳" align="center" min-width="90" />
+        <el-table-column prop="pending_deposit" label="預繳未註冊" align="center" min-width="100" />
+        <el-table-column label="參觀→預繳率" align="center" min-width="100">
           <template #default="{ row }">{{ fmtRate(row.visit_to_deposit_rate) }}</template>
         </el-table-column>
-        <el-table-column label="參觀→註冊率" align="center" width="100">
+        <el-table-column label="參觀→註冊率" align="center" min-width="100">
           <template #default="{ row }">{{ fmtRate(row.visit_to_enrolled_rate) }}</template>
         </el-table-column>
-        <el-table-column label="排除轉期→註冊率" align="center" width="120">
+        <el-table-column label="排除轉期→註冊率" align="center" min-width="120">
           <template #default="{ row }">{{ fmtRate(row.effective_to_enrolled_rate) }}</template>
         </el-table-column>
       </el-table>
@@ -134,21 +145,21 @@
     <el-card style="margin-top:16px">
       <template #header>年度統計</template>
       <el-table :data="typedStats.by_year || []" border stripe size="small">
-        <el-table-column label="年份" width="90">
+        <el-table-column label="年份" min-width="90">
           <template #default="{ row }">{{ row.year }}年</template>
         </el-table-column>
-        <el-table-column prop="visit" label="參觀人數" align="center" width="90" />
-        <el-table-column prop="deposit" label="預繳人數" align="center" width="90" />
-        <el-table-column prop="enrolled" label="註冊人數" align="center" width="90" />
-        <el-table-column prop="transfer_term" label="轉其他學期" align="center" width="100" />
-        <el-table-column prop="pending_deposit" label="預繳未註冊" align="center" width="100" />
-        <el-table-column label="參觀→預繳率" align="center" width="100">
+        <el-table-column prop="visit" label="參觀人數" align="center" min-width="90" />
+        <el-table-column prop="deposit" label="預繳人數" align="center" min-width="90" />
+        <el-table-column prop="enrolled" label="註冊人數" align="center" min-width="90" />
+        <el-table-column prop="transfer_term" label="轉其他學期" align="center" min-width="100" />
+        <el-table-column prop="pending_deposit" label="預繳未註冊" align="center" min-width="100" />
+        <el-table-column label="參觀→預繳率" align="center" min-width="100">
           <template #default="{ row }">{{ fmtRate(row.visit_to_deposit_rate) }}</template>
         </el-table-column>
-        <el-table-column label="參觀→註冊率" align="center" width="100">
+        <el-table-column label="參觀→註冊率" align="center" min-width="100">
           <template #default="{ row }">{{ fmtRate(row.visit_to_enrolled_rate) }}</template>
         </el-table-column>
-        <el-table-column label="排除轉期→註冊率" align="center" width="120">
+        <el-table-column label="排除轉期→註冊率" align="center" min-width="120">
           <template #default="{ row }">{{ fmtRate(row.effective_to_enrolled_rate) }}</template>
         </el-table-column>
       </el-table>
@@ -201,6 +212,13 @@ interface MonthOverMonthTyped {
 const typedMoM = computed((): MonthOverMonthTyped => (props.monthOverMonth as MonthOverMonthTyped) ?? {})
 const typedStats = computed((): { by_year?: unknown[] } => (props.stats as { by_year?: unknown[] }) ?? {})
 
+/** 漏斗步驟間轉換率；分母為零時顯示「—」 */
+const stageRate = (numerator: unknown, denominator: unknown) => {
+  const d = Number(denominator || 0)
+  if (!d) return '—'
+  return `${(Number(numerator || 0) / d * 100).toFixed(1)}%`
+}
+
 const formatDelta = (value: unknown) => {
   const num = Number(value || 0)
   const sign = num > 0 ? '+' : ''
@@ -247,34 +265,46 @@ const deltaArrow = (value: unknown) => {
   margin-bottom: 14px;
 }
 
-/* ── Funnel Steps ── */
+/* ── Funnel Steps：色彩由 icon chip 承載，步驟間顯示轉換率 ── */
 .funnel-steps {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 
 .funnel-connector {
-  text-align: center;
-  color: var(--neutral-300);
-  font-size: 0.65rem;
-  line-height: 1;
-  padding: 1px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0 4px 22px;
 }
 
-.funnel-step {
+.funnel-connector-arrow {
+  color: var(--neutral-300);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.funnel-connector-rate {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.funnel-step,
+.funnel-pending {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 8px;
-  border-left: 3px solid transparent;
 }
 
-.funnel-step--visit   { background: var(--color-info-soft); border-left-color: var(--color-info); }
-.funnel-step--deposit { background: #f0fdf4; border-left-color: var(--color-success-hover); }
-.funnel-step--enroll  { background: #eef2ff; border-left-color: #6366f1; }
-.funnel-step--pending { background: var(--color-warning-soft); border-left-color: var(--color-warning-hover); }
+.funnel-pending {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-color);
+  border-radius: 0;
+  padding-top: 12px;
+}
 
 .funnel-step-icon {
   display: flex;
@@ -288,7 +318,7 @@ const deltaArrow = (value: unknown) => {
 .funnel-step--visit   .funnel-step-icon { background: var(--color-info-soft); color: var(--color-info-darker); }
 .funnel-step--deposit .funnel-step-icon { background: var(--color-success-soft); color: var(--color-success-darker); }
 .funnel-step--enroll  .funnel-step-icon { background: var(--brand-primary-soft); color: var(--brand-primary); }
-.funnel-step--pending .funnel-step-icon { background: var(--color-warning-soft); color: var(--color-warning-darker); }
+.funnel-pending       .funnel-step-icon { background: var(--color-warning-soft); color: var(--color-warning-darker); }
 
 .funnel-step-body {
   display: flex;
@@ -348,5 +378,15 @@ const deltaArrow = (value: unknown) => {
   font-size: 0.82rem;
   color: var(--neutral-600);
   font-weight: 600;
+}
+
+/* ── 圖表空狀態 ── */
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
 }
 </style>
