@@ -44,12 +44,14 @@ function mountPanel() {
 }
 
 describe('RecruitmentStatsPanel', () => {
-  it('渲染 8 個統計次分頁', () => {
+  it('渲染 6 個統計次分頁', () => {
     const wrapper = mountPanel()
     const labels = wrapper.findAll('.el-tabs__item').map((n) => n.text())
     expect(labels).toEqual(
-      expect.arrayContaining(['總覽', '班別分析', '來源分析', '接待分析', '區域分析', '未預繳原因', '童年綠地', '近五年轉換']),
+      expect.arrayContaining(['總覽', '班別分析', '來源分析', '接待分析', '區域分析', '未預繳原因']),
     )
+    expect(labels).not.toContain('童年綠地')
+    expect(labels).not.toContain('近五年轉換')
   })
 
   it('overview navigate target=detail 時 emit drill-records', async () => {

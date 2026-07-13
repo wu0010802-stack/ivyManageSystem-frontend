@@ -7,7 +7,6 @@ type SourceRow = { source: string; visit: number; deposit: number }
 type ReferrerRow = { referrer: string; visit: number; deposit: number }
 type ChuannianExpectedRow = { expected_month: string; deposit: number; visit: number }
 type ChuannianGradeRow = { grade: string; deposit: number; visit: number }
-type TrendRow = { period_name: string; visit_to_deposit_rate: number; visit_to_enrolled_rate: number; deposit_to_enrolled_rate: number; visit_count: number; deposit_count: number; enrolled_count: number; not_enrolled_deposit?: number; enrolled_after_school?: number }
 type NoDepositReasonRow = { reason: string; count: number; by_grade?: Record<string, number> }
 type DistrictRow = { district: string; lead_count_90d?: number; deposit_rate_90d?: number }
 
@@ -33,7 +32,6 @@ type MarketSnapshotShape = {
  *
  * 輸入：
  *  - stats:          useRecruitmentDashboard().stats（Ref<object>）
- *  - periodsSummary: useRecruitmentPeriods().periodsSummary（Ref<object>）
  *  - marketSnapshot: useRecruitmentArea().marketSnapshot（Ref<object>）
  *  - drillToDetail:  callback(patch) 當使用者點選月度/班別/來源柱時觸發
  *
@@ -139,9 +137,8 @@ const doughnutOptions = {
   plugins: { legend: { position: 'bottom' } },
 }
 
-export function useRecruitmentCharts({ stats, periodsSummary, marketSnapshot, drillToDetail }: {
+export function useRecruitmentCharts({ stats, marketSnapshot, drillToDetail }: {
   stats: { value: StatsShape }
-  periodsSummary: { value: { trend?: TrendRow[] } | null | undefined }
   marketSnapshot: { value: MarketSnapshotShape }
   drillToDetail?: ((patch: Record<string, unknown>) => void) | null
 }) {
@@ -332,56 +329,6 @@ export function useRecruitmentCharts({ stats, periodsSummary, marketSnapshot, dr
     }
   })
 
-  // -------- 近五年轉換圖表 --------
-  const periodsTrendData = computed(() => {
-    const trend = periodsSummary.value?.trend
-    if (!trend || !trend.length) return null
-    return {
-      labels: trend.map((d) => shortPeriodLabel(d.period_name)),
-      datasets: [
-        {
-          label: '參觀→預繳率(%)',
-          data: trend.map((d) => d.visit_to_deposit_rate),
-          borderColor: '#52b788',
-          backgroundColor: 'rgba(82,183,136,0.15)',
-          tension: 0.3,
-          fill: false,
-        },
-        {
-          label: '參觀→註冊率(%)',
-          data: trend.map((d) => d.visit_to_enrolled_rate),
-          borderColor: '#40916c',
-          backgroundColor: 'rgba(64,145,108,0.15)',
-          tension: 0.3,
-          fill: false,
-        },
-        {
-          label: '預繳→註冊率(%)',
-          data: trend.map((d) => d.deposit_to_enrolled_rate),
-          borderColor: '#3182ce',
-          backgroundColor: 'rgba(49,130,206,0.15)',
-          tension: 0.3,
-          fill: false,
-        },
-      ],
-    }
-  })
-
-  const periodsCountBarData = computed(() => {
-    const trend = periodsSummary.value?.trend
-    if (!trend || !trend.length) return null
-    return {
-      labels: trend.map((d) => shortPeriodLabel(d.period_name)),
-      datasets: [
-        { label: '參觀', data: trend.map((d) => d.visit_count), backgroundColor: '#74c69d', borderRadius: 4 },
-        { label: '預繳', data: trend.map((d) => d.deposit_count), backgroundColor: '#52b788', borderRadius: 4 },
-        { label: '註冊', data: trend.map((d) => d.enrolled_count), backgroundColor: '#40916c', borderRadius: 4 },
-        { label: '未就讀退', data: trend.map((d) => d.not_enrolled_deposit ?? 0), backgroundColor: '#f59e0b', borderRadius: 4 },
-        { label: '註冊後退', data: trend.map((d) => d.enrolled_after_school ?? 0), backgroundColor: '#e76f51', borderRadius: 4 },
-      ],
-    }
-  })
-
   // -------- 未預繳原因圖表 --------
   const noDepositReasonBarData = computed(() => {
     const data = stats.value.no_deposit_reasons
@@ -489,9 +436,6 @@ export function useRecruitmentCharts({ stats, periodsSummary, marketSnapshot, dr
     chuannianNoDeposit,
     chuannianExpectedBarData,
     chuannianGradeBarData,
-    // 近五年
-    periodsTrendData,
-    periodsCountBarData,
     // 未預繳
     noDepositReasonBarData,
     noDepositGradeBarData,

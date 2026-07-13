@@ -173,53 +173,7 @@
         />
       </el-tab-pane>
 
-      <!-- ==================== 童年綠地分析 ==================== -->
-      <el-tab-pane label="童年綠地" name="chuannian" lazy>
-        <RecruitmentChuannianTab
-          :show-charts="isChartTabActive('chuannian')"
-          :stats="stats"
-          :chuannian-no-deposit="chuannianNoDeposit"
-          :chuannian-expected-bar-data="chuannianExpectedBarData"
-          :chuannian-grade-bar-data="chuannianGradeBarData"
-          :bar-options="(barOptions as Record<string, unknown>)"
-          :horiz-bar-options="(horizBarOptions as Record<string, unknown>)"
-          :chuannian-by-expected="chuannianByExpected"
-          :chuannian-by-grade="chuannianByGrade"
-          :fmt-pct="fmtPct"
-        />
-      </el-tab-pane>
-
-      <!-- ==================== 近五年轉換整合 ==================== -->
-      <el-tab-pane label="近五年轉換" name="periods" lazy>
-        <RecruitmentPeriodsTab
-          :can-write="canWrite"
-          :show-charts="isChartTabActive('periods')"
-          :periods-summary="(periodsSummary as unknown as Record<string, unknown> | null)"
-          :periods="(periods as Record<string, unknown>[])"
-          :loading-periods="loadingPeriods"
-          :periods-trend-data="periodsTrendData"
-          :periods-count-bar-data="periodsCountBarData"
-          :line-options="(percentLineOptions as Record<string, unknown>)"
-          :bar-options="(barOptions as Record<string, unknown>)"
-          :line-component="castLineComponent"
-          :bar-component="castBarComponent"
-          :fmt-rate="castFmtRate"
-          @open-add="openPeriodAdd"
-          @sync="(id) => handlePeriodSync(id as number)"
-          @edit="openPeriodEdit"
-          @delete="(id) => handlePeriodDelete(id as number)"
-        />
-      </el-tab-pane>
     </el-tabs>
-
-    <!-- ==================== 近五年期間 Dialog ==================== -->
-    <RecruitmentPeriodDialog
-      v-model:visible="periodDialogVisible"
-      :mode="periodDialogMode"
-      :form="periodForm"
-      :saving="savingPeriod"
-      @save="handlePeriodSave"
-    />
 
     <RecruitmentCampusDialog
       v-model:visible="campusDialogVisible"
@@ -233,29 +187,19 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { currentRocYear } from '@/utils/academic'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  getNoDepositAnalysis,
-  createPeriod,
-  updatePeriod,
-  deletePeriod,
-  syncPeriod,
-} from '@/api/recruitment'
+import { ElMessage } from 'element-plus'
+import { getNoDepositAnalysis } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useRecruitmentArea, createEmptyCampus } from '@/composables/useRecruitmentArea'
-import { useRecruitmentPeriods } from '@/composables/useRecruitmentPeriods'
 import { useRecruitmentCharts } from '@/composables/useRecruitmentCharts'
 import RecruitmentOverviewTab from '@/components/recruitment/RecruitmentOverviewTab.vue'
 import RecruitmentClassTab from '@/components/recruitment/RecruitmentClassTab.vue'
 import RecruitmentSourceTab from '@/components/recruitment/RecruitmentSourceTab.vue'
 import RecruitmentStaffTab from '@/components/recruitment/RecruitmentStaffTab.vue'
-import RecruitmentChuannianTab from '@/components/recruitment/RecruitmentChuannianTab.vue'
 import RecruitmentAreaTab from '@/components/recruitment/RecruitmentAreaTab.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
-import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
-import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodDialog.vue'
 import RecruitmentCampusDialog from '@/components/recruitment/RecruitmentCampusDialog.vue'
 import AllChannelSummaryCard from '@/components/recruitment/AllChannelSummaryCard.vue'
 import { LazyBar, LazyLine } from '@/components/recruitment/lazyChartComponents'
@@ -302,8 +246,6 @@ const activeStatsTab = ref('overview')
 const loadingND = ref(false)
 const ndLoaded = ref(false)
 const areaLoaded = ref(false)
-const periodsLoaded = ref(false)
-const savingPeriod = ref(false)
 
 const monthOptions = computed(() => (options.value.months as string[] | undefined) ?? [])
 
@@ -367,33 +309,12 @@ const {
   fallbackCampusLng: FALLBACK_SCHOOL_LNG,
 })
 
-const {
-  loadingPeriods,
-  periods,
-  periodsSummary,
-  fetchPeriods,
-} = useRecruitmentPeriods({
-  notifyError: (message) => ElMessage.error(message),
-})
-
 const invalidateLazyTabs = () => {
   ndLoaded.value = false
   areaLoaded.value = false
-  periodsLoaded.value = false
 }
 
 const isChartTabActive = (tabName: string) => activeStatsTab.value === tabName
-
-// -------- 近五年期間 Dialog --------
-const periodDialogVisible = ref(false)
-const periodDialogMode = ref('add')
-const editingPeriodId = ref<number | null>(null)
-const emptyPeriodForm = () => ({
-  period_name: '', visit_count: 0, deposit_count: 0,
-  enrolled_count: 0, transfer_term_count: 0, effective_deposit_count: 0,
-  not_enrolled_deposit: 0, enrolled_after_school: 0, notes: '', sort_order: 0,
-})
-const periodForm = ref(emptyPeriodForm())
 
 const fetchNoDeposit = async () => {
   loadingND.value = true
@@ -437,11 +358,6 @@ const loadAreaTab = async () => {
   }
 }
 
-const loadPeriodsTab = async () => {
-  const ok = await fetchPeriods()
-  if (ok) periodsLoaded.value = true
-}
-
 const handleAreaHotspotSync = async (mode = 'incremental') => {
   const ok = await syncAreaHotspotsAction(mode)
   if (ok) areaLoaded.value = true
@@ -480,7 +396,6 @@ const onTabClick = async (tab: { paneName?: string | number }) => {
   if (paneName) activeStatsTab.value = paneName
   if (paneName === 'nodeposit' && !ndLoaded.value) await loadNoDepositTab()
   if (paneName === 'area' && !areaLoaded.value) await loadAreaTab()
-  if (paneName === 'periods' && !periodsLoaded.value) await loadPeriodsTab()
 }
 
 // -------- 篩選 --------
@@ -526,76 +441,6 @@ const onNDPageChange = (page: number) => {
   fetchNoDeposit()
 }
 
-// -------- 近五年期間 CRUD --------
-const openPeriodAdd = () => {
-  periodForm.value = emptyPeriodForm()
-  periodDialogMode.value = 'add'
-  editingPeriodId.value = null
-  periodDialogVisible.value = true
-}
-
-const openPeriodEdit = (row: Record<string, unknown>) => {
-  periodForm.value = {
-    period_name: String(row.period_name ?? ''),
-    visit_count: Number(row.visit_count ?? 0),
-    deposit_count: Number(row.deposit_count ?? 0),
-    enrolled_count: Number(row.enrolled_count ?? 0),
-    transfer_term_count: Number(row.transfer_term_count ?? 0),
-    effective_deposit_count: Number(row.effective_deposit_count ?? 0),
-    not_enrolled_deposit: Number(row.not_enrolled_deposit ?? 0),
-    enrolled_after_school: Number(row.enrolled_after_school ?? 0),
-    notes: String(row.notes ?? ''),
-    sort_order: Number(row.sort_order ?? 0),
-  }
-  periodDialogMode.value = 'edit'
-  editingPeriodId.value = row.id as number | null
-  periodDialogVisible.value = true
-}
-
-const handlePeriodSave = async () => {
-  // Dialog 內部已經驗證過表單（RecruitmentPeriodDialog 的 handleSave）
-  savingPeriod.value = true
-  try {
-    if (periodDialogMode.value === 'add') {
-      await createPeriod(periodForm.value)
-      ElMessage.success('新增成功')
-    } else {
-      await updatePeriod(editingPeriodId.value!, periodForm.value)
-      ElMessage.success('更新成功')
-    }
-    periodDialogVisible.value = false
-    periodsLoaded.value = false
-    if (activeStatsTab.value === 'periods') await loadPeriodsTab()
-  } catch (e) {
-    ElMessage.error(apiError(e, '儲存失敗'))
-  } finally {
-    savingPeriod.value = false
-  }
-}
-
-const handlePeriodDelete = async (id: number) => {
-  await ElMessageBox.confirm('確定刪除此期間記錄？', '確認', { type: 'warning' })
-  try {
-    await deletePeriod(id)
-    ElMessage.success('刪除成功')
-    periodsLoaded.value = false
-    if (activeStatsTab.value === 'periods') await loadPeriodsTab()
-  } catch (e) {
-    ElMessage.error(apiError(e, '刪除失敗'))
-  }
-}
-
-const handlePeriodSync = async (id: number) => {
-  try {
-    await syncPeriod(id)
-    ElMessage.success('期間數據已從訪視明細更新')
-    periodsLoaded.value = false
-    if (activeStatsTab.value === 'periods') await loadPeriodsTab()
-  } catch (e) {
-    ElMessage.error(apiError(e, '同步失敗'))
-  }
-}
-
 // -------- 輔助函式 --------
 const fmtPct = (deposit: number, visit: number) => {
   if (!visit) return '0%'
@@ -623,11 +468,6 @@ const {
   sourceRateData,
   staffBarData,
   staffRateData,
-  chuannianNoDeposit,
-  chuannianExpectedBarData,
-  chuannianGradeBarData,
-  periodsTrendData,
-  periodsCountBarData,
   noDepositReasonBarData,
   noDepositGradeBarData,
   barOptions,
@@ -638,7 +478,6 @@ const {
   noDepositGradeBarOptions,
 } = useRecruitmentCharts({
   stats: stats as unknown as Parameters<typeof useRecruitmentCharts>[0]['stats'],
-  periodsSummary: periodsSummary as unknown as Parameters<typeof useRecruitmentCharts>[0]['periodsSummary'],
   marketSnapshot,
   drillToDetail: (patch) => emit('drill-records', patch),
 })
@@ -685,14 +524,6 @@ const statsAlerts = computed((): Record<string, unknown>[] =>
 )
 const statsTopActionQueue = computed((): Record<string, unknown>[] =>
   (stats.value.top_action_queue as Record<string, unknown>[] | undefined) ?? []
-)
-
-// -------- 未預繳：chuannian 相關 arrays（解決 stats.chuannian_by_expected 為 unknown 的問題）--------
-const chuannianByExpected = computed((): Record<string, unknown>[] =>
-  (stats.value.chuannian_by_expected as Record<string, unknown>[] | undefined) ?? []
-)
-const chuannianByGrade = computed((): Record<string, unknown>[] =>
-  (stats.value.chuannian_by_grade as Record<string, unknown>[] | undefined) ?? []
 )
 
 // -------- options 型別轉換 --------
