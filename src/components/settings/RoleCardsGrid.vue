@@ -110,6 +110,14 @@ const onKeydown = (e: KeyboardEvent, code: string, locked: boolean) => {
   background: var(--el-color-primary-light-9);
 }
 
+/* dark mode：html.ivy-admin（main.css）把 --el-color-primary-light-9 釘死成 light hex
+   （#e6f3f9），不隨 html.dark 翻轉，導致選中卡片背景幾乎融入白底、卡片內文字對比不足。
+   窄覆寫成 dark 下已翻好的 brand primary alpha tint（--brand-primary-soft，見
+   a11y.css 的 html.dark），與 MonthlyPnLPanel.vue 同一 pattern。 */
+html.dark .role-card--active {
+  background: var(--brand-primary-soft);
+}
+
 .role-card.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
