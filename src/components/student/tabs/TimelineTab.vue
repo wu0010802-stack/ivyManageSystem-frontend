@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { fetchTimeline } from '@/api/studentTimeline'
+import type { ApiQuery } from '@/api/_generated/typed'
 import TimelineFilters from '../timeline/TimelineFilters.vue'
 import TimelineItem from '../timeline/TimelineItem.vue'
 
@@ -18,18 +19,18 @@ const filters = ref<{ types: string[]; since: string | null; until: string | nul
 async function reload(append = false) {
   loading.value = true
   try {
-    const params: Record<string, unknown> = { limit: 30 }
+    const params: ApiQuery<'/students/{student_id}/timeline', 'get'> = { limit: 30 }
     if (filters.value.types?.length) params.types = filters.value.types.join(',')
     if (filters.value.since) params.since = filters.value.since
     if (filters.value.until) params.until = filters.value.until
     if (append && nextCursor.value) params.cursor = nextCursor.value
     const resp = await fetchTimeline(props.studentId, params)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const respData = (resp as any).data
+    const respData = resp.data
+    const newItems = (respData?.items ?? []) as unknown as Record<string, unknown>[]
     if (append) {
-      items.value = [...items.value, ...(respData?.items || [])]
+      items.value = [...items.value, ...newItems]
     } else {
-      items.value = respData?.items || []
+      items.value = newItems
     }
     nextCursor.value = respData?.next_cursor ?? null
     stats.value = respData?.stats || stats.value

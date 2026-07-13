@@ -72,10 +72,8 @@ async function fetchData() {
       getFeeRecords(recParams),
       getFeeAdjustments(adjParams).catch(() => ({ items: [] })),
     ])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    records.value = (recRes as any)?.items || []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    adjustments.value = (adjRes as any)?.items || []
+    records.value = (recRes?.items ?? []) as unknown as Record<string, unknown>[]
+    adjustments.value = (adjRes?.items ?? []) as unknown as Record<string, unknown>[]
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入學費紀錄失敗'))

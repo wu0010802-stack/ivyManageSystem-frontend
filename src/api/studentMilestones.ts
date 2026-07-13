@@ -1,8 +1,12 @@
 import api from './index'
+import type { ApiQuery, AxiosResp, Schema } from './_generated/typed'
 
 const base = (studentId: number) => `/students/${studentId}/milestones`
 
-export const listMilestones = (studentId: number, params: unknown = {}) =>
+export const listMilestones = (
+  studentId: number,
+  params: ApiQuery<'/students/{student_id}/milestones', 'get'> = {},
+): AxiosResp<'/students/{student_id}/milestones', 'get'> =>
   api.get(base(studentId), { params })
 
 export const createMilestone = (studentId: number, payload: unknown) =>
@@ -14,7 +18,13 @@ export const updateMilestone = (studentId: number, id: number, payload: unknown)
 export const deleteMilestone = (studentId: number, id: number) =>
   api.delete(`${base(studentId)}/${id}`)
 
-export const autoDetectMilestones = (studentId: number, payload: unknown = {}) =>
+// requestBody 為 `AutoDetectPayload | null`（optional body）：typed.ts 的 ApiBody helper
+// 對 optional requestBody 會收斂成 never（見 typed.d.ts 對 requiredBody 的推導），故此處
+// 改用 Schema<> 直接標註實際 payload 形狀。
+export const autoDetectMilestones = (
+  studentId: number,
+  payload: Schema<'AutoDetectPayload'> = {},
+): AxiosResp<'/students/{student_id}/milestones/auto-detect', 'post'> =>
   api.post(`/students/${studentId}/milestones/auto-detect`, payload)
 
 export const MILESTONE_TYPES = [

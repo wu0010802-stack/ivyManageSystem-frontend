@@ -1,6 +1,8 @@
 import api from './index'
+import type { AxiosResp } from './_generated/typed'
 
-export const getChangeLogOptions = () => api.get('/students/change-logs/options')
+export const getChangeLogOptions = (): AxiosResp<'/students/change-logs/options', 'get'> =>
+  api.get('/students/change-logs/options')
 
 export const getChangeLogsSummary = (params: unknown) =>
   api.get('/students/change-logs/summary', { params })

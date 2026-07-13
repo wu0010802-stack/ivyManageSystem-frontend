@@ -1,8 +1,12 @@
 import api from './index'
+import type { ApiQuery, AxiosResp } from './_generated/typed'
 
 const base = (studentId: number) => `/students/${studentId}/timeline`
 
-export const fetchTimeline = (studentId: number, params: unknown = {}) =>
+export const fetchTimeline = (
+  studentId: number,
+  params: ApiQuery<'/students/{student_id}/timeline', 'get'> = {},
+): AxiosResp<'/students/{student_id}/timeline', 'get'> =>
   api.get(base(studentId), { params })
 
 export const TIMELINE_SOURCE_TYPES = [

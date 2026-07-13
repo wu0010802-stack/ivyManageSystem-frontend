@@ -42,7 +42,13 @@ async function load() {
       types: enabledTypes.value.join(','),
       limit: 100,
     })
-    const data = resp?.data as { items?: TimelineItem[] } | undefined
+    // ⚠ 型別化 fetchTimeline 後揭露既有落差：本元件的 ALL_TYPES（funnel_event/change_log/
+    // classroom_transfer/payment/incident/assessment）與回傳形狀（record_type/record_id）
+    // 對應的其實是 GET /students/records（StudentRecordsTimelineOut），而非這裡呼叫的
+    // GET /students/{id}/timeline（TimelineOut，type 為 observation/incident/... 且欄位是
+    // type/id 不是 record_type/record_id）。維持既有執行期行為（雙轉型），實際應改接
+    // /students/records 端點——超出本次「api 型別化」範圍，回報待後續處理。
+    const data = resp?.data as unknown as { items?: TimelineItem[] } | undefined
     items.value = data?.items || []
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'load failed'

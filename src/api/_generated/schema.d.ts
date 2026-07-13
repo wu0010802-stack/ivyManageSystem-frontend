@@ -16901,6 +16901,22 @@ export interface components {
             /** To Classroom Id */
             to_classroom_id?: number | null;
         };
+        /**
+         * ChangeLogOptionsOut
+         * @description GET /students/change-logs/options 回傳（供前端下拉選單）。
+         *
+         *     對應 get_change_log_options：{event_types: EVENT_TYPES, reason_options:
+         *     CHANGE_LOG_REASON_OPTIONS}。reason_options 的 key 即 EVENT_TYPES 中文字串，
+         *     Pydantic dict[str, list[str]] 完整涵蓋、不遺漏任何選項。
+         */
+        ChangeLogOptionsOut: {
+            /** Event Types */
+            event_types: string[];
+            /** Reason Options */
+            reason_options: {
+                [key: string]: string[];
+            };
+        };
         /** ChangeLogUpdate */
         ChangeLogUpdate: {
             /** Classroom Id */
@@ -17519,6 +17535,51 @@ export interface components {
             student_id: number;
             /** Topic */
             topic?: string | null;
+        };
+        /**
+         * CommunicationListOut
+         * @description GET /students/communications 回傳（分頁）。
+         */
+        CommunicationListOut: {
+            /** Items */
+            items: components["schemas"]["CommunicationOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * CommunicationOut
+         * @description 單筆家長溝通紀錄（對應 _serialize）。
+         */
+        CommunicationOut: {
+            /** Communication Date */
+            communication_date?: string | null;
+            /** Communication Type */
+            communication_type: string;
+            /** Content */
+            content: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Follow Up */
+            follow_up?: string | null;
+            /** Id */
+            id: number;
+            /** Recorded By */
+            recorded_by?: number | null;
+            /** Student Id */
+            student_id: number;
+            /**
+             * Student Name
+             * @default
+             */
+            student_name: string;
+            /** Topic */
+            topic?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** CommunicationUpdate */
         CommunicationUpdate: {
@@ -19621,6 +19682,88 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * FeeAdjustmentListOut
+         * @description GET /fees/adjustments 回傳。
+         */
+        FeeAdjustmentListOut: {
+            /** Items */
+            items: components["schemas"]["FeeAdjustmentOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * FeeAdjustmentOut
+         * @description 單筆學費折抵（對應 _serialize）。
+         */
+        FeeAdjustmentOut: {
+            /** Adjustment Type */
+            adjustment_type: string;
+            /** Amount */
+            amount: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By */
+            created_by?: string | null;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Period */
+            period: string;
+            /** Reason */
+            reason?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * FeeRecordListOut
+         * @description GET /fees/records 回傳（分頁）。
+         */
+        FeeRecordListOut: {
+            /** Items */
+            items: components["schemas"]["FeeRecordOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * FeeRecordOut
+         * @description 單筆學費紀錄（對應 list_fee_records items dict literal）。
+         */
+        FeeRecordOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Fee Type */
+            fee_type?: string | null;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Payment Date */
+            payment_date?: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+        };
         /** FeeTemplateCreate */
         FeeTemplateCreate: {
             /** Amount */
@@ -20046,6 +20189,60 @@ export interface components {
             /** Total Amount */
             total_amount: string;
         };
+        /**
+         * GrowthReportListOut
+         * @description GET /students/{id}/growth-reports 回傳。
+         */
+        GrowthReportListOut: {
+            /** Items */
+            items: components["schemas"]["GrowthReportOut"][];
+        };
+        /**
+         * GrowthReportOut
+         * @description 單筆成長報告（對應 _row_to_dict）。
+         */
+        GrowthReportOut: {
+            /** Created At */
+            created_at?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** File Size */
+            file_size?: number | null;
+            /** Generated At */
+            generated_at?: string | null;
+            /** Generated By */
+            generated_by?: number | null;
+            /** Id */
+            id: number;
+            /** Line Sent At */
+            line_sent_at?: string | null;
+            /** Parent First Viewed At */
+            parent_first_viewed_at?: string | null;
+            /** Parent View Count */
+            parent_view_count?: number | null;
+            /** Period End */
+            period_end?: string | null;
+            /** Period Label */
+            period_label: string;
+            /** Period Start */
+            period_start?: string | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Teacher Narrative */
+            teacher_narrative?: string | null;
+        };
+        /**
+         * GrowthReportSendLineResultOut
+         * @description POST /students/{id}/growth-reports/{rid}/send-line 回傳。
+         */
+        GrowthReportSendLineResultOut: {
+            /** Line Sent At */
+            line_sent_at?: string | null;
+            /** Sent Count */
+            sent_count: number;
+        };
         /** GuardianCreate */
         GuardianCreate: {
             /**
@@ -20365,6 +20562,56 @@ export interface components {
             severity?: string | null;
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * IncidentListOut
+         * @description GET /student-incidents 回傳。
+         */
+        IncidentListOut: {
+            /** Items */
+            items: components["schemas"]["IncidentOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * IncidentOut
+         * @description 單筆學生事件紀錄（對應 incident_to_dict）。
+         */
+        IncidentOut: {
+            /** Action Taken */
+            action_taken?: string | null;
+            /** Appraisal Score Delta */
+            appraisal_score_delta?: string | null;
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Incident Type */
+            incident_type: string;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Parent Notified */
+            parent_notified: boolean;
+            /** Parent Notified At */
+            parent_notified_at?: string | null;
+            /** Recorded By */
+            recorded_by?: number | null;
+            /** Responsible Employee Id */
+            responsible_employee_id?: number | null;
+            /** Severity */
+            severity?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+            /** Student No */
+            student_no?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** IncidentUpdate */
         IncidentUpdate: {
@@ -21527,6 +21774,18 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * MilestoneAutoDetectResultOut
+         * @description POST /students/{id}/milestones/auto-detect 回傳。
+         */
+        MilestoneAutoDetectResultOut: {
+            /** Created Count */
+            created_count: number;
+            /** Skipped Existing */
+            skipped_existing: number;
+            /** Total Detected */
+            total_detected: number;
+        };
         /** MilestoneCreate */
         MilestoneCreate: {
             /**
@@ -21542,6 +21801,54 @@ export interface components {
             milestone_type: string;
             /** Title */
             title: string;
+        };
+        /**
+         * MilestoneListOut
+         * @description GET /students/{id}/milestones 回傳。
+         */
+        MilestoneListOut: {
+            /** Items */
+            items: components["schemas"]["MilestoneOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * MilestoneOut
+         * @description 單筆里程碑（對應 _milestone_to_dict）。
+         */
+        MilestoneOut: {
+            /** Achieved On */
+            achieved_on?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By */
+            created_by?: number | null;
+            /** Deleted At */
+            deleted_at?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Icon */
+            icon?: string | null;
+            /** Id */
+            id: number;
+            /** Milestone Type */
+            milestone_type: string;
+            /** Parent Acknowledged At */
+            parent_acknowledged_at?: string | null;
+            /** Parent Reaction */
+            parent_reaction?: string | null;
+            /** Source Ref Id */
+            source_ref_id?: number | null;
+            /** Source Ref Type */
+            source_ref_type?: string | null;
+            /** Source Type */
+            source_type: string;
+            /** Student Id */
+            student_id: number;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** MilestoneUpdate */
         MilestoneUpdate: {
@@ -29081,6 +29388,44 @@ export interface components {
             step: string;
         };
         /**
+         * StudentAttachmentListOut
+         * @description GET /students/{id}/attachments 回傳。
+         */
+        StudentAttachmentListOut: {
+            /** Items */
+            items: components["schemas"]["StudentAttachmentOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * StudentAttachmentOut
+         * @description 單筆附件（對應 api/attachments._attachment_to_dict）。
+         */
+        StudentAttachmentOut: {
+            /** Created At */
+            created_at?: string | null;
+            /** Display Url */
+            display_url?: string | null;
+            /** Id */
+            id: number;
+            /** Mime Type */
+            mime_type?: string | null;
+            /** Original Filename */
+            original_filename?: string | null;
+            /** Owner Id */
+            owner_id: number;
+            /** Owner Type */
+            owner_type: string;
+            /** Size Bytes */
+            size_bytes?: number | null;
+            /** Thumb Url */
+            thumb_url?: string | null;
+            /** Uploaded By */
+            uploaded_by?: number | null;
+            /** Url */
+            url?: string | null;
+        };
+        /**
          * StudentAttendanceBatchSaveResultOut
          * @description POST /student-attendance/batch — 批次 upsert 結果 ({message, saved})。
          */
@@ -29550,6 +29895,48 @@ export interface components {
             status: "已畢業" | "已轉出";
         };
         /**
+         * StudentLeaveListOut
+         * @description GET /student-leaves 回傳。
+         */
+        StudentLeaveListOut: {
+            /** Items */
+            items: components["schemas"]["StudentLeaveOut"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * StudentLeaveOut
+         * @description 單筆學生請假紀錄（對應 _serialize）。
+         */
+        StudentLeaveOut: {
+            /** Applicant User Id */
+            applicant_user_id?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Id */
+            id: number;
+            /** Leave Type */
+            leave_type?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Review Note */
+            review_note?: string | null;
+            /** Reviewed At */
+            reviewed_at?: string | null;
+            /** Reviewed By */
+            reviewed_by?: number | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /**
          * StudentListItemOut
          * @description GET /students items 內單筆學生欄位。
          *
@@ -29644,6 +30031,253 @@ export interface components {
             student_id: number;
         };
         /**
+         * StudentProfileAssessmentSummaryItemOut
+         * @description 對應 get_assessment_summary 單筆。
+         */
+        StudentProfileAssessmentSummaryItemOut: {
+            /** Assessment Date */
+            assessment_date?: string | null;
+            /** Assessment Type */
+            assessment_type?: string | null;
+            /** Content */
+            content?: string | null;
+            /** Domain */
+            domain?: string | null;
+            /** Id */
+            id: number;
+            /** Rating */
+            rating?: string | null;
+            /** Semester */
+            semester?: string | null;
+            /** Suggestions */
+            suggestions?: string | null;
+        };
+        /**
+         * StudentProfileAttendanceSummaryOut
+         * @description 對應 get_attendance_summary。by_status key 為中文出席狀態，動態但完整
+         *     保留（dict[str, int] 不過濾）。
+         */
+        StudentProfileAttendanceSummaryOut: {
+            /** By Status */
+            by_status: {
+                [key: string]: number;
+            };
+            /** Period End */
+            period_end: string;
+            /** Period Start */
+            period_start: string;
+            /** Total Records */
+            total_records: number;
+        };
+        /**
+         * StudentProfileBasicOut
+         * @description 對應 _serialize_basic。
+         */
+        StudentProfileBasicOut: {
+            /** Address */
+            address?: string | null;
+            /** Birthday */
+            birthday?: string | null;
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Gender */
+            gender?: string | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Notes */
+            notes?: string | null;
+            /** Parent Name */
+            parent_name?: string | null;
+            /** Parent Phone */
+            parent_phone?: string | null;
+            /** Status Tag */
+            status_tag?: string | null;
+            /** Student Id */
+            student_id: string;
+        };
+        /**
+         * StudentProfileFeeSummaryOut
+         * @description 對應 get_fee_summary。
+         */
+        StudentProfileFeeSummaryOut: {
+            /** Adjustment */
+            adjustment: number;
+            /** Item Count */
+            item_count: number;
+            /** Outstanding */
+            outstanding: number;
+            /** Period */
+            period?: string | null;
+            /** Total Due */
+            total_due: number;
+            /** Total Paid */
+            total_paid: number;
+        };
+        /**
+         * StudentProfileGuardianOut
+         * @description 對應 services/student_profile._serialize_guardian（**非** GuardianOut！）。
+         *
+         *     與 api/students.py 同名的 `_serialize_guardian` 是不同函式、不同 shape ——
+         *     此版本不含 `student_id`（實測 ResponseValidationError 抓到，見 git blame）。
+         *     誤用 GuardianOut 會因缺 student_id 直接 500，故獨立建此 schema。
+         */
+        StudentProfileGuardianOut: {
+            /** Can Pickup */
+            can_pickup: boolean;
+            /** Custody Note */
+            custody_note?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Id */
+            id: number;
+            /** Is Emergency */
+            is_emergency: boolean;
+            /** Is Primary */
+            is_primary: boolean;
+            /** Name */
+            name?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Relation */
+            relation?: string | null;
+            /** Sort Order */
+            sort_order?: number | null;
+        };
+        /**
+         * StudentProfileHealthOut
+         * @description 對應 _serialize_health。router 端 mask_student_health_fields 依權限把
+         *     allergy/medication/special_needs 設為 None（不刪 key），故皆為 Optional。
+         */
+        StudentProfileHealthOut: {
+            /** Allergy */
+            allergy?: string | null;
+            /** Emergency Contact Name */
+            emergency_contact_name?: string | null;
+            /** Emergency Contact Phone */
+            emergency_contact_phone?: string | null;
+            /** Emergency Contact Relation */
+            emergency_contact_relation?: string | null;
+            /** Medication */
+            medication?: string | null;
+            /** Special Needs */
+            special_needs?: string | null;
+        };
+        /**
+         * StudentProfileIncidentSummaryItemOut
+         * @description 對應 get_incident_summary 單筆。
+         */
+        StudentProfileIncidentSummaryItemOut: {
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Incident Type */
+            incident_type: string;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Parent Notified */
+            parent_notified: boolean;
+            /** Severity */
+            severity?: string | null;
+        };
+        /**
+         * StudentProfileLifecycleOut
+         * @description 對應 _serialize_lifecycle。
+         */
+        StudentProfileLifecycleOut: {
+            /** Enrollment Date */
+            enrollment_date?: string | null;
+            /** Enrollment School Year */
+            enrollment_school_year?: number | null;
+            /** Enrollment Semester */
+            enrollment_semester?: number | null;
+            /** Graduation Date */
+            graduation_date?: string | null;
+            /** Legacy Status */
+            legacy_status?: string | null;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Status */
+            status: string;
+            /** Withdrawal Date */
+            withdrawal_date?: string | null;
+        };
+        /**
+         * StudentProfileOut
+         * @description GET /students/{id}/profile 回傳（對應 assemble_profile）。
+         */
+        StudentProfileOut: {
+            /** Assessment Summary */
+            assessment_summary: components["schemas"]["StudentProfileAssessmentSummaryItemOut"][];
+            attendance_summary: components["schemas"]["StudentProfileAttendanceSummaryOut"];
+            basic: components["schemas"]["StudentProfileBasicOut"];
+            fee_summary: components["schemas"]["StudentProfileFeeSummaryOut"];
+            /** Guardians */
+            guardians: components["schemas"]["StudentProfileGuardianOut"][];
+            health: components["schemas"]["StudentProfileHealthOut"];
+            /** Incident Summary */
+            incident_summary: components["schemas"]["StudentProfileIncidentSummaryItemOut"][];
+            lifecycle: components["schemas"]["StudentProfileLifecycleOut"];
+            /** Timeline */
+            timeline: components["schemas"]["StudentProfileTimelineItemOut"][];
+            /** Timeline All */
+            timeline_all: components["schemas"]["StudentProfileTimelineAllItemOut"][];
+        };
+        /**
+         * StudentProfileTimelineAllItemOut
+         * @description 對應 _merged_timeline 單筆；payload 因 incident/assessment/change_log
+         *     三種來源異質，保留 dict[str, Any]（與 StudentRecordTimelineItem.payload
+         *     同一模式，不影響 non-breaking）。
+         */
+        StudentProfileTimelineAllItemOut: {
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** Record Id */
+            record_id: number;
+            /** Record Type */
+            record_type: string;
+            /** Summary */
+            summary: string;
+        };
+        /**
+         * StudentProfileTimelineItemOut
+         * @description 對應 get_timeline 單筆（StudentChangeLog）。
+         */
+        StudentProfileTimelineItemOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Event Date */
+            event_date?: string | null;
+            /** Event Type */
+            event_type: string;
+            /** From Classroom Id */
+            from_classroom_id?: number | null;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** To Classroom Id */
+            to_classroom_id?: number | null;
+        };
+        /**
          * StudentRecordsTimelineOut
          * @description GET /students/records 分頁回應。
          */
@@ -29686,6 +30320,23 @@ export interface components {
             student_name?: string | null;
             /** Summary */
             summary?: string | null;
+        };
+        /**
+         * StudentTimelineOut
+         * @description GET /students/{id}/timeline 回傳。
+         *
+         *     schema class 名刻意用 StudentTimelineOut（非通用 TimelineOut）——避免與
+         *     schemas/recruitment_timeline.py 的 TimelineOut 撞名，否則 openapi-typescript
+         *     會把兩者 disambiguate 成 schemas__*__TimelineOut，破壞前端既有引用。
+         */
+        StudentTimelineOut: {
+            /** Available Types */
+            available_types: string[];
+            /** Items */
+            items: components["schemas"]["TimelineItemOut"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            stats: components["schemas"]["TimelineStatsOut"];
         };
         /** StudentUpdate */
         StudentUpdate: {
@@ -30183,10 +30834,57 @@ export interface components {
             /** To Stage */
             to_stage: string | null;
         };
+        /**
+         * TimelineItemOut
+         * @description 單筆時間軸項目（九種來源共用信封 shape）。
+         */
+        TimelineItemOut: {
+            /** Extra */
+            extra: {
+                [key: string]: unknown;
+            };
+            /** Icon */
+            icon: string;
+            /** Id */
+            id: string;
+            /** Is Highlight */
+            is_highlight: boolean;
+            /** Occurred At */
+            occurred_at: string;
+            raw_ref: components["schemas"]["TimelineItemRawRefOut"];
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+            /** Type */
+            type: string;
+        };
+        /**
+         * TimelineItemRawRefOut
+         * @description timeline item 的來源指標（router 名 + 原始 id）。
+         */
+        TimelineItemRawRefOut: {
+            /** Id */
+            id: number;
+            /** Router */
+            router: string;
+        };
         /** TimelineOut */
         TimelineOut: {
             /** Events */
             events: components["schemas"]["TimelineEvent"][];
+        };
+        /**
+         * TimelineStatsOut
+         * @description 統計區塊。
+         */
+        TimelineStatsOut: {
+            /** By Type */
+            by_type: {
+                [key: string]: number;
+            };
+            /** Total Items */
+            total_items: number;
         };
         /**
          * TodayMedicationSummaryOut
@@ -39892,7 +40590,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeAdjustmentListOut"];
                 };
             };
             /** @description Validation Error */
@@ -40081,7 +40779,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FeeRecordListOut"];
                 };
             };
             /** @description Validation Error */
@@ -47666,7 +48364,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentAttendanceDailyOut"];
                 };
             };
             /** @description Validation Error */
@@ -52854,7 +53552,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["IncidentListOut"];
                 };
             };
             /** @description Validation Error */
@@ -52986,7 +53684,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentLeaveListOut"];
                 };
             };
             /** @description Validation Error */
@@ -53361,9 +54059,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StudentAttachmentListOut"];
                 };
             };
             /** @description Validation Error */
@@ -53432,9 +54128,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GrowthReportListOut"];
                 };
             };
             /** @description Validation Error */
@@ -53603,9 +54297,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["GrowthReportSendLineResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -54086,9 +54778,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MilestoneListOut"];
                 };
             };
             /** @description Validation Error */
@@ -54228,9 +54918,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MilestoneAutoDetectResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -54415,7 +55103,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentProfileOut"];
                 };
             };
             /** @description Validation Error */
@@ -54453,9 +55141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["StudentTimelineOut"];
                 };
             };
             /** @description Validation Error */
@@ -54723,7 +55409,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ChangeLogOptionsOut"];
                 };
             };
         };
@@ -54785,7 +55471,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CommunicationListOut"];
                 };
             };
             /** @description Validation Error */

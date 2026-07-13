@@ -1,8 +1,11 @@
 import api from './index'
+import type { ApiQuery, AxiosResp } from './_generated/typed'
 
 // 管理端 API
 
-export function getIncidents(params: unknown = {}) {
+export function getIncidents(
+  params: ApiQuery<'/student-incidents', 'get'> = {},
+): AxiosResp<'/student-incidents', 'get'> {
   return api.get('/student-incidents', { params })
 }
 

@@ -1,9 +1,12 @@
 import api from './index'
+import type { ApiQuery, AxiosResp } from './_generated/typed'
 
 export const getCommunicationOptions = () =>
   api.get('/students/communications/options')
 
-export const getCommunications = (params: unknown) =>
+export const getCommunications = (
+  params: ApiQuery<'/students/communications', 'get'>,
+): AxiosResp<'/students/communications', 'get'> =>
   api.get('/students/communications', { params })
 
 export const createCommunication = (data: unknown) =>

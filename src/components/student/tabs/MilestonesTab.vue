@@ -24,8 +24,7 @@ async function onAutoDetect() {
   autoDetecting.value = true
   try {
     const r = await autoDetectMilestones(props.studentId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { created_count, skipped_existing } = (r as any).data
+    const { created_count, skipped_existing } = r.data
     ElMessage.success(`偵測完成：新增 ${created_count} 筆，跳過 ${skipped_existing} 筆已存在`)
     await reload()
   } catch (e) {
@@ -47,8 +46,7 @@ async function reload() {
       limit: 200,
       milestone_type: filterType.value || undefined,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    list.value = (resp as any).data?.items || []
+    list.value = (resp.data?.items ?? []) as unknown as Record<string, unknown>[]
   } catch (e) {
     ElMessage.error(apiError(e, '載入失敗'))
   } finally {

@@ -53,10 +53,10 @@ const fetchLeaves = async () => {
   try {
     const res = await listStudentLeaves({
       status: 'approved',
-      classroom_id: ctx.filters.classroomId,
+      classroom_id: ctx.filters.classroomId as number | null,
       limit: 200,
     })
-    items.value = res.data?.items || []
+    items.value = (res.data?.items ?? []) as unknown as LeaveItem[]
   } catch (error) {
     errorMessage.value = apiError(error, '載入請假資料失敗')
     items.value = []

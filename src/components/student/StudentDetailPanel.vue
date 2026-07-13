@@ -127,7 +127,7 @@ async function fetchProfile() {
   loading.value = true
   try {
     const { data } = await getStudentProfile(props.studentId)
-    profile.value = data
+    profile.value = data as unknown as Record<string, unknown>
     emit('profile-loaded', data)
   } catch (e) {
     profile.value = null
@@ -276,8 +276,9 @@ const handleBack = () => {
 
 const breadcrumbItems = computed(() => {
   if (props.mode !== 'page') return []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const name = (profile.value?.basic as any)?.name
+  const name = (profile.value?.basic as Record<string, unknown> | undefined)?.name as
+    | string
+    | undefined
   if (props.fromContext === 'classroom') {
     return [
       { label: '班級學生管理', path: '/classrooms' },

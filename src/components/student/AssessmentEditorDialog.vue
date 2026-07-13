@@ -162,8 +162,7 @@ const loadIncidents = async (studentId: number | null) => {
   incidentsLoading.value = true
   try {
     const res = await getIncidents({ student_id: studentId, limit: 50 })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    incidentOptions.value = (res as any).data?.items || []
+    incidentOptions.value = (res.data?.items ?? []) as unknown as Record<string, unknown>[]
   } catch {
     incidentOptions.value = []
   } finally {

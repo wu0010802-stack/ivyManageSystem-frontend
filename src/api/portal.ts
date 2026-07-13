@@ -54,7 +54,6 @@ export const revealPortalStudentPhone = (
   api.post(`/portal/students/${studentId}/reveal-phone`, payload)
 
 // ----- 學生點名 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getMyClassAttendance = (
   params: ApiQuery<'/portal/my-class-attendance', 'get'>,
 ): AxiosResp<'/portal/my-class-attendance', 'get'> =>

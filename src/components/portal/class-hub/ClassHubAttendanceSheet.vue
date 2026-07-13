@@ -93,10 +93,8 @@ async function load() {
       date: cachedDate,
       classroom_id: cachedClassroomId,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw = res.data ?? (res as any)
-    const records: AttendanceRecord[] = (raw?.records ?? []).filter(
-      (r: AttendanceRecord) => !r.status,
+    const records: AttendanceRecord[] = (res.data.records ?? []).filter(
+      (r) => !r.status,
     )
     pendingRecords.value = records
     // Reset picks for students newly loaded

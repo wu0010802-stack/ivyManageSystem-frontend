@@ -14,8 +14,16 @@ vi.mock('@/api/govMoe', () => ({
   exportIepPdf: vi.fn(),
 }))
 vi.mock('@/api/students', () => ({
+  // getStudents 回 StudentListOut 形狀 { items, total, skip, limit }；IepView 取
+  // .data.items（型別化批次 208c7e03 修正了原本誤把整個 body 當陣列的 crash bug，
+  // 此 mock 同步為正確形狀）。
   getStudents: vi.fn().mockResolvedValue({
-    data: [{ id: 1, name: '王小明', classroom_id: 1, disability_type: '自閉症' }],
+    data: {
+      items: [{ id: 1, name: '王小明', classroom_id: 1, disability_type: '自閉症' }],
+      total: 1,
+      skip: 0,
+      limit: 50,
+    },
   }),
 }))
 const mockFetchClassrooms = vi.fn().mockResolvedValue(undefined)

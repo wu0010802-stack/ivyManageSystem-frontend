@@ -203,7 +203,7 @@ const fetchCommunications = async () => {
       date_to: dateToLocalISO(today),
       page_size: 100,
     })
-    communications.value = res.data.items
+    communications.value = res.data.items as unknown as CommunicationLog[]
   } catch (e) {
     notify(e, 'ChangeLogDrawer:loadCommunications', '載入家長溝通紀錄失敗')
   } finally {

@@ -25,12 +25,13 @@ async function fetchData() {
   if (!props.studentId) return
   loading.value = true
   try {
-    const { data } = await listStudentLeaves({
-      student_id: props.studentId,
-      limit: 200,
-    })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = (data as any).items || data || []
+    // ⚠ 後端 GET /student-leaves 不支援 student_id 查詢參數（僅 status/classroom_id/limit，
+    // 型別化後由編譯期揭露此既有落差）：改為抓回後前端按 student_id 篩選，
+    // 對齊 academic-affairs/LeaveSection.vue 既有作法。
+    const { data } = await listStudentLeaves({ limit: 200 })
+    items.value = (data.items ?? []).filter(
+      (it) => it.student_id === props.studentId,
+    ) as unknown as Record<string, unknown>[]
   } catch (e) {
     items.value = []
     ElMessage.error(apiError(e, '讀取請假紀錄失敗'))

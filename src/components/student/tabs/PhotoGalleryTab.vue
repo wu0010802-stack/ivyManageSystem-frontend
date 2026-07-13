@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listStudentAttachments, OWNER_TYPE_LABELS } from '@/api/studentAttachments'
+import type { ApiQuery } from '@/api/_generated/typed'
 import AttachmentGallery from '@/components/student/AttachmentGallery.vue'
 
 const props = defineProps<{
@@ -16,13 +17,11 @@ const filterType = ref('')
 async function reload() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = { limit: 200 }
+    const params: ApiQuery<'/students/{student_id}/attachments', 'get'> = { limit: 200 }
     if (filterType.value) params.owner_type = filterType.value
     const r = await listStudentAttachments(props.studentId, params)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = (r as any).data?.items || []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    total.value = (r as any).data?.total ?? 0
+    items.value = (r.data?.items ?? []) as unknown as Record<string, unknown>[]
+    total.value = r.data?.total ?? 0
   } catch {
     ElMessage.error('讀取照片牆失敗')
   } finally {

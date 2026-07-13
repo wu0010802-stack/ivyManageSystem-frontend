@@ -1,6 +1,10 @@
 import api from './index'
+import type { ApiQuery, AxiosResp } from './_generated/typed'
 
-export const listStudentAttachments = (studentId: number, params: unknown = {}) =>
+export const listStudentAttachments = (
+  studentId: number,
+  params: ApiQuery<'/students/{student_id}/attachments', 'get'> = {},
+): AxiosResp<'/students/{student_id}/attachments', 'get'> =>
   api.get(`/students/${studentId}/attachments`, { params })
 
 export const OWNER_TYPE_LABELS = {

@@ -37,8 +37,7 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await getCommunications({ student_id: props.studentId, page_size: 200 })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = (res as any).data?.items || []
+    items.value = (res.data?.items ?? []) as unknown as Record<string, unknown>[]
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入家長溝通紀錄失敗'))

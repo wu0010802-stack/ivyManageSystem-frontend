@@ -40,7 +40,10 @@ export const previewBonusImpact = (data: unknown) => api.post('/bonus-impact-pre
 // ============ 學生生命週期追蹤（Phase A） ============
 
 // 聚合檔案：basic + lifecycle + health + guardians + summaries + timeline
-export const getStudentProfile = (id: number, params: unknown = {}) =>
+export const getStudentProfile = (
+  id: number,
+  params: ApiQuery<'/students/{student_id}/profile', 'get'> = {},
+): AxiosResp<'/students/{student_id}/profile', 'get'> =>
   api.get(`/students/${id}/profile`, { params })
 
 // 生命週期狀態轉移（退學/休學/畢業/轉出/復學等）

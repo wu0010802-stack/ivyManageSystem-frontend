@@ -24,8 +24,7 @@ async function reload() {
   loading.value = true
   try {
     const r = await listGrowthReports(props.studentId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    items.value = (r as any).data?.items || []
+    items.value = (r.data?.items ?? []) as unknown as Record<string, unknown>[]
   } catch {
     ElMessage.error('讀取報告列表失敗')
   } finally {
@@ -68,8 +67,7 @@ async function onSendLine(row: Record<string, unknown>) {
   } catch { return }
   try {
     const r = await sendGrowthReportToLine(props.studentId, row.id as number)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.success(`已推送 ${(r as any).data?.sent_count} 位家長`)
+    ElMessage.success(`已推送 ${r.data?.sent_count} 位家長`)
     reload()
   } catch (e) {
     ElMessage.error(apiError(e, '推送失敗'))

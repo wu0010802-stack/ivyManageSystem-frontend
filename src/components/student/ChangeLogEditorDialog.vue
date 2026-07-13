@@ -183,12 +183,9 @@ const optionsLoaded = ref(false)
 const loadOptions = async () => {
   if (optionsLoaded.value) return
   try {
-     
     const res = await getChangeLogOptions()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    eventTypes.value = (res as any).data?.event_types || []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    reasonOptions.value = (res as any).data?.reason_options || {}
+    eventTypes.value = res.data?.event_types || []
+    reasonOptions.value = res.data?.reason_options || {}
   } catch {
     eventTypes.value = [...STUDENT_CHANGE_LOG_EVENT_TYPES]
   } finally {
