@@ -5,7 +5,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import { getEmployees, deleteEmployee } from '@/api/employees'
 import { getProbationAlerts } from '@/api/home'
-import { statusKeyOf, getEmployeeStatus, isMissingSalary, type EmployeeStatusKey } from '@/utils/employeeDisplay'
+import { statusKeyOf, getEmployeeStatus, isMissingSalary, tenureLabel, type EmployeeStatusKey } from '@/utils/employeeDisplay'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -31,6 +31,7 @@ const employeeCardColumns = [
   { label: '教育局職稱', prop: 'title' },
   { label: '園內職務', prop: 'position' },
   { label: '到職日', prop: 'hire_date' },
+  { label: '年資', prop: '__tenure', formatter: (item: Record<string, unknown>) => tenureLabel(item) },
   { label: '狀態', prop: '__status' },
 ]
 
@@ -386,9 +387,16 @@ onMounted(async () => {
             <router-link :to="`/employees/${scope.row.id}`" class="name-link" @click.stop>{{ scope.row.name }}</router-link>
           </template>
         </el-table-column>
-        <el-table-column prop="title" label="教育局職稱" width="150" sortable />
-        <el-table-column prop="position" label="園內職務" width="120" />
+        <el-table-column prop="title" label="教育局職稱 / 園內職務" min-width="170" sortable>
+          <template #default="scope">
+            <div class="col-title">{{ scope.row.title || '—' }}</div>
+            <div v-if="scope.row.position" class="col-position">{{ scope.row.position }}</div>
+          </template>
+        </el-table-column>
         <el-table-column prop="hire_date" label="到職日" width="120" sortable />
+        <el-table-column label="年資" width="90">
+          <template #default="scope">{{ tenureLabel(scope.row) }}</template>
+        </el-table-column>
         <el-table-column label="狀態" width="160">
           <template #default="scope">
             <el-tag :type="getEmployeeStatus(scope.row).type" size="small">
@@ -542,6 +550,10 @@ onMounted(async () => {
 .name-link { color: var(--el-color-primary); text-decoration: none; }
 .name-link:hover { text-decoration: underline; }
 .card-title-link { cursor: pointer; color: var(--el-color-primary); text-decoration: none; }
+
+/* 教育局職稱 / 園內職務合併雙行欄：主行職稱正常字重，副行職務較小、較淡 */
+.col-title { font-weight: 500; line-height: 1.35; }
+.col-position { font-size: 12px; color: var(--crisp-text-muted, var(--text-tertiary)); line-height: 1.35; }
 
 /* 窄螢幕：頂列改直向堆疊，搜尋/篩選撐滿好點 */
 @media (--to-sm) {
