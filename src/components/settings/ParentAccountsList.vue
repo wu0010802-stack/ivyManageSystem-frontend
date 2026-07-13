@@ -46,7 +46,7 @@ defineExpose({ currentPage, pagedItems })
 
 <template>
   <div class="parent-accounts">
-    <el-table v-if="!isMobile" :data="pagedItems" v-loading="loading" style="width: 100%;">
+    <el-table v-if="!isMobile" :data="pagedItems" v-loading="!!loading" style="width: 100%;">
       <el-table-column prop="username" label="帳號" min-width="180" />
       <el-table-column label="狀態" width="90">
         <template #default="{ row } = {}">
