@@ -202,6 +202,7 @@ declare module 'vue' {
     OverviewSummaryCard: typeof import('./src/components/gov-reports/OverviewSummaryCard.vue')['default']
     OverviewTab: typeof import('./src/components/student/tabs/OverviewTab.vue')['default']
     PageHeader: typeof import('./src/components/common/PageHeader.vue')['default']
+    ParentAccountsList: typeof import('./src/components/settings/ParentAccountsList.vue')['default']
     PendingActionsCard: typeof import('./src/components/portal/home/PendingActionsCard.vue')['default']
     PermissionPicker: typeof import('./src/components/settings/PermissionPicker.vue')['default']
     PhotoGalleryTab: typeof import('./src/components/student/tabs/PhotoGalleryTab.vue')['default']
