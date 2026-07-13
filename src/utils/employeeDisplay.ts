@@ -26,6 +26,24 @@ export const getEmployeeStatus = (emp: Record<string, unknown>): { label: string
 export const isMissingSalary = (emp: Record<string, unknown>): boolean =>
   Boolean(emp.is_active) && emp.employee_type === 'regular' && emp.base_salary === 0
 
+/**
+ * 年資顯示：在職者由到職日算至今日（X.Y 年）。
+ * 已離職、缺／不合法／未來到職日一律回「—」。
+ * 日期用本地時區逐欄 parse（勿用 new Date('YYYY-MM-DD')，UTC 偏移會差一天，同 utils/expiry 慣例）。
+ */
+export const tenureLabel = (emp: Record<string, unknown>, todayIso: string = todayISO()): string => {
+  if (!emp.is_active) return '—'
+  const hire = emp.hire_date
+  if (typeof hire !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(hire)) return '—'
+  const [y, m, d] = hire.split('-').map(Number)
+  const [ty, tm, td] = todayIso.split('-').map(Number)
+  const hireDate = new Date(y, m - 1, d)
+  const today = new Date(ty, tm - 1, td)
+  if (Number.isNaN(hireDate.getTime()) || hireDate.getTime() > today.getTime()) return '—'
+  const years = (today.getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
+  return `${years.toFixed(1)} 年`
+}
+
 /** 薪資金額顯示：後端依 role/self 遮罩回 null → 顯示無檢視權限，嚴禁 Number(null)→0 */
 export const maskedMoney = (v: unknown): string => {
   if (v === null || v === undefined) return '無檢視權限'

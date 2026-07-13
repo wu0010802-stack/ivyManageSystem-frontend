@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   statusKeyOf, getEmployeeStatus, maskedMoney, insuranceLevelDisplay,
   pensionSelfRatePct, bankInfoDisplay, detectRole, standardSalaryFor,
-  isMissingSalary,
+  isMissingSalary, tenureLabel,
 } from '@/utils/employeeDisplay'
 
 describe('statusKeyOf / getEmployeeStatus', () => {
@@ -81,5 +81,24 @@ describe('detectRole / standardSalaryFor（自舊員工頁搬出，行為不變�
   })
   it('cfg 為 null → null', () => {
     expect(standardSalaryFor({ position: '班導', bonus_grade: 'A' }, null)).toBeNull()
+  })
+})
+
+describe('tenureLabel', () => {
+  it('在職員工由到職日計算年資（X.Y 年）', () => {
+    expect(tenureLabel({ is_active: true, hire_date: '2019-08-01' }, '2026-07-13')).toBe('6.9 年')
+  })
+  it('當月到職 → 0.0 年', () => {
+    expect(tenureLabel({ is_active: true, hire_date: '2026-07-01' }, '2026-07-13')).toBe('0.0 年')
+  })
+  it('已離職 → —', () => {
+    expect(tenureLabel({ is_active: false, hire_date: '2019-08-01' }, '2026-07-13')).toBe('—')
+  })
+  it('缺 hire_date 或非法格式 → —', () => {
+    expect(tenureLabel({ is_active: true }, '2026-07-13')).toBe('—')
+    expect(tenureLabel({ is_active: true, hire_date: 'not-a-date' }, '2026-07-13')).toBe('—')
+  })
+  it('未來到職日 → —', () => {
+    expect(tenureLabel({ is_active: true, hire_date: '2026-08-01' }, '2026-07-13')).toBe('—')
   })
 })
