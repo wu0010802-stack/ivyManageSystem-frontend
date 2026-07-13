@@ -31,6 +31,13 @@ vi.mock('@/api/permissions_admin', () => ({
   deleteRole: vi.fn(() => Promise.resolve({ data: {} })),
 }))
 
+const replace = vi.fn()
+let mockQuery: Record<string, unknown> = {}
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: mockQuery }),
+  useRouter: () => ({ replace }),
+}))
+
 import SettingsAccountsTab from '@/components/settings/SettingsAccountsTab.vue'
 
 const globalStubs = {
