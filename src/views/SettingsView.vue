@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { useShiftStore } from '@/stores/shift'
 import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'
 import SettingsAccountsTab from '@/components/settings/SettingsAccountsTab.vue'
@@ -10,7 +11,40 @@ import DsrRequestsView from '@/views/DsrRequestsView.vue'
 import PolicyVersionsView from '@/views/PolicyVersionsView.vue'
 import { hasPermission } from '@/utils/auth'
 
-const activeTab = ref('shifts')
+const route = useRoute()
+const router = useRouter()
+
+const BASE_TABS = ['shifts', 'approval', 'accounts', 'line', 'observability']
+
+const availableTabs = (): string[] =>
+  hasPermission('DSR_MANAGE') ? [...BASE_TABS, 'dsr-requests', 'policy-versions'] : [...BASE_TABS]
+
+const resolveTab = (raw: unknown): string => {
+  const r = String(Array.isArray(raw) ? raw[0] : (raw ?? ''))
+  return availableTabs().includes(r) ? r : 'shifts'
+}
+
+const activeTab = ref(resolveTab(route.query.tab))
+
+// 缺漏 / 不合法 tab → 修正 URL（與 EmployeeHubView 一致）
+if (route.query.tab !== activeTab.value) {
+  router.replace({ query: { ...route.query, tab: activeTab.value } })
+}
+
+watch(
+  () => route.query.tab,
+  (next) => {
+    const resolved = resolveTab(next)
+    if (resolved !== activeTab.value) activeTab.value = resolved
+  },
+)
+
+const onTabChange = (name: string | number) => {
+  const next: LocationQueryRaw = { ...route.query, tab: String(name) }
+  if (String(name) !== 'accounts') delete next.view
+  router.replace({ query: next })
+}
+
 const shiftStore = useShiftStore()
 
 onMounted(() => {
@@ -21,7 +55,7 @@ onMounted(() => {
 <template>
   <div class="settings-page">
     <h2>系統設定</h2>
-    <el-tabs v-model="activeTab" type="card">
+    <el-tabs v-model="activeTab" type="card" @tab-change="onTabChange">
       <el-tab-pane label="輪班別管理" name="shifts">
         <SettingsShiftTab v-if="activeTab === 'shifts'" />
       </el-tab-pane>
