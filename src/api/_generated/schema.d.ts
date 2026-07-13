@@ -27887,6 +27887,21 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * SalaryJobResetOut
+         * @description POST /salaries/calculate-jobs/reset 回傳。
+         *
+         *     year/month：被重置的計算月份；reset：清除的卡死 job 筆數（0 代表該月本無
+         *     卡死 job）。
+         */
+        SalaryJobResetOut: {
+            /** Month */
+            month: number;
+            /** Reset */
+            reset: number;
+            /** Year */
+            year: number;
+        };
         /** SalaryManualAdjustRequest */
         SalaryManualAdjustRequest: {
             /** Absence Deduction */
@@ -52049,7 +52064,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryJobResetOut"];
                 };
             };
             /** @description Validation Error */
