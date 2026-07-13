@@ -19,6 +19,7 @@ import './assets/main.css'
 import './assets/a11y.css'
 import './styles/portal/soft-ui.css'
 import './styles/form-hint.css'
+import './assets/crisp.css'
 
 const app: VueApp = createApp(App)
 

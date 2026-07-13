@@ -129,7 +129,7 @@ const onSaved = async () => {
 </script>
 
 <template>
-  <div class="employee-detail-page">
+  <div class="employee-detail-page crisp-surface">
     <el-button link class="back-btn" @click="goBack">
       <el-icon><ArrowLeft /></el-icon> 返回員工列表
     </el-button>

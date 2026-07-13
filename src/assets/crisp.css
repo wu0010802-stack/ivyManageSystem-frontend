@@ -1,0 +1,189 @@
+/**
+ * Crisp 視覺皮層（精緻 SaaS）— 員工模組試點
+ * spec: docs/superpowers/specs/2026-07-13-employee-crisp-visual-pilot-design.md
+ *
+ * 規則全部 scope 在 .crisp-surface 底下；推廣到其他模組＝在該模組路由根節點掛同 class。
+ * 顏色一律走 --crisp-* 變數（html.dark 只覆寫變數值）；禁止在規則右值寫死淺色 hex
+ * 或引用 EP --el-color-primary-light-N（dark 下會白底白字）。
+ */
+
+.crisp-surface {
+  /* ── 皮層 token（light）── */
+  --crisp-surface: #ffffff;
+  --crisp-hairline: var(--neutral-200);
+  --crisp-hairline-soft: var(--neutral-100);
+  --crisp-head-bg: var(--neutral-50);
+  --crisp-text: var(--neutral-900);
+  --crisp-text-secondary: var(--neutral-600);
+  --crisp-text-muted: var(--neutral-500);
+  --crisp-text-faint: var(--neutral-400);
+  --crisp-accent-soft: #f0f9ff;
+  /* pill 語意色：邊框 / 文字 / 色點 / 選中底 */
+  --crisp-pill-success-border: #86efac;
+  --crisp-pill-success-text: #15803d;
+  --crisp-pill-success-dot: #22c55e;
+  --crisp-pill-warning-border: #fcd34d;
+  --crisp-pill-warning-text: #b45309;
+  --crisp-pill-warning-dot: #f59e0b;
+  --crisp-pill-warning-soft: #fffbeb;
+  --crisp-pill-danger-border: #fca5a5;
+  --crisp-pill-danger-text: #b91c1c;
+  --crisp-pill-danger-dot: #ef4444;
+  --crisp-pill-danger-soft: #fef2f2;
+  --crisp-pill-info-border: #bae6fd;
+  --crisp-pill-info-text: #0369a1;
+  --crisp-pill-info-dot: #0284c7;
+  --crisp-pill-info-soft: #f0f9ff;
+  --crisp-pill-neutral-border: var(--neutral-200);
+  --crisp-pill-neutral-text: var(--neutral-400);
+  --crisp-pill-neutral-dot: var(--neutral-300);
+
+  /* ── EP 變數橋接：scope 內所有 EP 元件統一髮絲線／文字階 ── */
+  --el-border-color: var(--crisp-hairline);
+  --el-border-color-light: var(--crisp-hairline);
+  --el-border-color-lighter: var(--crisp-hairline-soft);
+  --el-text-color-primary: var(--crisp-text);
+  --el-text-color-regular: var(--crisp-text-secondary);
+  --el-text-color-secondary: var(--crisp-text-muted);
+  --el-fill-color-light: var(--crisp-head-bg);
+  --el-table-row-hover-bg-color: var(--crisp-head-bg);
+  --el-card-border-color: var(--crisp-hairline);
+}
+
+html.dark .crisp-surface {
+  --crisp-surface: #1e293b;
+  --crisp-hairline: #334155;
+  --crisp-hairline-soft: #2b3a4f;
+  --crisp-head-bg: #253143;
+  --crisp-text: #e2e8f0;
+  --crisp-text-secondary: #cbd5e1;
+  --crisp-text-muted: #94a3b8;
+  --crisp-text-faint: #64748b;
+  --crisp-accent-soft: rgba(2, 132, 199, 0.16);
+  --crisp-pill-success-border: rgba(34, 197, 94, 0.4);
+  --crisp-pill-success-text: #4ade80;
+  --crisp-pill-warning-border: rgba(245, 158, 11, 0.4);
+  --crisp-pill-warning-text: #fbbf24;
+  --crisp-pill-warning-soft: rgba(245, 158, 11, 0.12);
+  --crisp-pill-danger-border: rgba(239, 68, 68, 0.4);
+  --crisp-pill-danger-text: #f87171;
+  --crisp-pill-danger-soft: rgba(239, 68, 68, 0.12);
+  --crisp-pill-info-border: rgba(2, 132, 199, 0.45);
+  --crisp-pill-info-text: #38bdf8;
+  --crisp-pill-info-soft: rgba(2, 132, 199, 0.12);
+  --crisp-pill-neutral-border: #334155;
+  --crisp-pill-neutral-text: #64748b;
+  --crisp-pill-neutral-dot: #475569;
+}
+
+/* ── 卡片：去陰影、髮絲線 ── */
+.crisp-surface .el-card {
+  border: 1px solid var(--crisp-hairline);
+  box-shadow: none;
+  background: var(--crisp-surface);
+}
+
+/* ── 表格 ── */
+.crisp-surface .el-table {
+  --el-table-border-color: var(--crisp-hairline-soft);
+  --el-table-header-bg-color: var(--crisp-head-bg);
+  font-size: 13px;
+}
+.crisp-surface .el-table th.el-table__cell {
+  background: var(--crisp-head-bg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--crisp-text-faint);
+}
+/* hover：整列淺灰（EP 變數已橋接）＋左緣 2px 主色條（不佔版面） */
+.crisp-surface .el-table__body tr:hover > td.el-table__cell:first-child {
+  box-shadow: inset 2px 0 0 var(--brand-primary);
+}
+
+/* ── el-tag → outline pill＋語意色點 ── */
+.crisp-surface .el-tag {
+  border-radius: 999px;
+  background: transparent;
+  font-weight: 500;
+}
+.crisp-surface .el-tag::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  margin-right: 5px;
+  vertical-align: middle;
+  background: var(--crisp-pill-info-dot);
+}
+.crisp-surface .el-tag--success { color: var(--crisp-pill-success-text); border-color: var(--crisp-pill-success-border); }
+.crisp-surface .el-tag--success::before { background: var(--crisp-pill-success-dot); }
+.crisp-surface .el-tag--warning { color: var(--crisp-pill-warning-text); border-color: var(--crisp-pill-warning-border); }
+.crisp-surface .el-tag--warning::before { background: var(--crisp-pill-warning-dot); }
+.crisp-surface .el-tag--danger { color: var(--crisp-pill-danger-text); border-color: var(--crisp-pill-danger-border); }
+.crisp-surface .el-tag--danger::before { background: var(--crisp-pill-danger-dot); }
+/* type=info 用於「已離職」等中性狀態 → 灰 pill */
+.crisp-surface .el-tag--info { color: var(--crisp-pill-neutral-text); border-color: var(--crisp-pill-neutral-border); }
+.crisp-surface .el-tag--info::before { background: var(--crisp-pill-neutral-dot); }
+/* 選中態（todo chips effect=dark）：淺色填底＋1px 內框，取代原黑底 */
+.crisp-surface .el-tag--dark.el-tag--warning {
+  background: var(--crisp-pill-warning-soft);
+  color: var(--crisp-pill-warning-text);
+  border-color: var(--crisp-pill-warning-dot);
+  box-shadow: inset 0 0 0 1px var(--crisp-pill-warning-dot);
+}
+.crisp-surface .el-tag--dark.el-tag--info {
+  background: var(--crisp-pill-info-soft);
+  color: var(--crisp-pill-info-text);
+  border-color: var(--crisp-pill-info-dot);
+  box-shadow: inset 0 0 0 1px var(--crisp-pill-info-dot);
+}
+
+/* ── el-descriptions（詳情頁 def-list）── */
+.crisp-surface .el-descriptions__label.is-bordered-label {
+  background: var(--crisp-head-bg);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--crisp-text-muted);
+}
+.crisp-surface .el-descriptions__content {
+  font-size: 13px;
+  color: var(--crisp-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── dialog 頁首頁尾分隔線 ── */
+.crisp-surface .el-dialog__header {
+  border-bottom: 1px solid var(--crisp-hairline-soft);
+  padding-bottom: 12px;
+}
+.crisp-surface .el-dialog__footer {
+  border-top: 1px solid var(--crisp-hairline-soft);
+  padding-top: 12px;
+}
+
+/* ── 分頁切換（Hub el-segmented）── */
+.crisp-surface .el-segmented {
+  background: var(--crisp-head-bg);
+  border: 1px solid var(--crisp-hairline);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+/* ── 頁首 ── */
+.crisp-surface .page-header h2 {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+}
+.crisp-surface .page-subtitle {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--crisp-text-muted);
+}
+.crisp-surface .roster-stats { font-variant-numeric: tabular-nums; }
+.crisp-surface .roster-stats b { color: var(--crisp-text); font-weight: 650; }
+
+/* ── 空值顯示（Task 6 消費）── */
+.crisp-surface .crisp-empty { color: var(--crisp-text-faint); }

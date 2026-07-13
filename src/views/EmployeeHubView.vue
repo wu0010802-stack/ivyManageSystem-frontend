@@ -46,7 +46,7 @@ const onSectionChange = (val: string | number) => {
 </script>
 
 <template>
-  <div class="employee-hub-view">
+  <div class="employee-hub-view crisp-surface">
     <el-segmented
       :model-value="activeSection"
       :options="segmentedOptions"
