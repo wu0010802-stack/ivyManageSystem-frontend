@@ -172,6 +172,28 @@ const handleDeleteUser = (user: Record<string, unknown>) => {
     })
 }
 
+const handleToggleActive = async (user: Record<string, unknown>) => {
+  const isActive = !!user.is_active
+  if (isActive) {
+    try {
+      await ElMessageBox.confirm(
+        `停用後該帳號將立即無法登入，既有登入將被登出。確定停用 ${user.username}？`,
+        '停用帳號',
+        { type: 'warning', confirmButtonText: '停用', cancelButtonText: '取消' },
+      )
+    } catch {
+      return
+    }
+  }
+  try {
+    await updateUser(user.id as number, { is_active: !isActive })
+    ElMessage.success(isActive ? '帳號已停用' : '帳號已啟用')
+    fetchUsers()
+  } catch (error) {
+    ElMessage.error(apiError(error, isActive ? '停用失敗' : '啟用失敗'))
+  }
+}
+
 const autoFillUsername = () => {
   if (userForm.employee_id) {
     const emp = employees.value.find(e => e.id === userForm.employee_id)
@@ -291,6 +313,7 @@ watch(deviationCount, (n) => { if (n > 0) advancedExpanded.value = true })
 
 function onRowCommand(cmd: string, row: Record<string, unknown>) {
   if (cmd === 'reset') handleResetPassword(row)
+  else if (cmd === 'toggle-active') handleToggleActive(row)
   else if (cmd === 'delete') handleDeleteUser(row)
 }
 
@@ -320,7 +343,7 @@ onMounted(() => {
 
 defineExpose({
   userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault,
-  keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser,
+  keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser, handleToggleActive,
 })
 </script>
 
@@ -375,6 +398,7 @@ defineExpose({
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
+                <el-dropdown-item command="toggle-active">{{ row?.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
                 <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -422,6 +446,7 @@ defineExpose({
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
+              <el-dropdown-item command="toggle-active">{{ item.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
               <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
             </el-dropdown-menu>
           </template>

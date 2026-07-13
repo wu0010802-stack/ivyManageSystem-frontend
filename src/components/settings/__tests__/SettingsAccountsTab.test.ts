@@ -61,7 +61,7 @@ vi.mock('@/api/permissions_admin', () => ({
 }))
 
 import SettingsAccountsTab from '../SettingsAccountsTab.vue'
-import { createUser } from '@/api/auth'
+import { createUser, updateUser } from '@/api/auth'
 
 describe('SettingsAccountsTab — role card UX', () => {
   beforeEach(() => {
@@ -269,5 +269,52 @@ describe('SettingsAccountsTab — role card UX', () => {
     expect(text).toContain('2026/7/10')       // formatDateTimeTW 輸出
     expect(text).not.toContain('T17:35')      // 原始 ISO 不再直出
     expect(text).toContain('從未登入')
+  })
+
+  describe('停用/啟用帳號', () => {
+    async function mountPlain() {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      return wrapper.vm as unknown as { handleToggleActive: (u: Record<string, unknown>) => Promise<void> }
+    }
+
+    it('停用：confirm 後送 is_active:false', async () => {
+      const vm = await mountPlain()
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+      await vm.handleToggleActive({ id: 3, username: 'chen03', is_active: true })
+      expect(confirmSpy).toHaveBeenCalledWith(
+        expect.stringContaining('chen03'),
+        expect.any(String),
+        expect.any(Object),
+      )
+      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(3, { is_active: false })
+      confirmSpy.mockRestore()
+    })
+
+    it('停用 confirm 取消 → 不送 API', async () => {
+      const vm = await mountPlain()
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+      await vm.handleToggleActive({ id: 3, username: 'chen03', is_active: true })
+      expect(vi.mocked(updateUser)).not.toHaveBeenCalled()
+      confirmSpy.mockRestore()
+    })
+
+    it('啟用：不 confirm 直接送 is_active:true', async () => {
+      const vm = await mountPlain()
+      const confirmSpy = vi.spyOn(ElMessageBox, 'confirm')
+      await vm.handleToggleActive({ id: 5, username: 'x', is_active: false })
+      expect(confirmSpy).not.toHaveBeenCalled()
+      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(5, { is_active: true })
+      confirmSpy.mockRestore()
+    })
+
+    it('onRowCommand toggle-active 導到 handleToggleActive', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { onRowCommand: (cmd: string, row: Record<string, unknown>) => void }
+      vm.onRowCommand('toggle-active', { id: 7, username: 'y', is_active: false })
+      await flushPromises()
+      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(7, { is_active: true })
+    })
   })
 })
