@@ -1,33 +1,20 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick, watch, type Ref } from 'vue'
+import { ref, reactive, onMounted, computed, watch, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
+import { createRole } from '@/api/permissions_admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
-import { shouldSendPermissionNames } from '@/utils/auth'
 import { formatDateTimeTW } from '@/utils/format'
-import PermissionPicker from './PermissionPicker.vue'
-import RoleManagerDrawer, { type RolesDefinition } from './RoleManagerDrawer.vue'
+import RoleCardsGrid from './RoleCardsGrid.vue'
+import type { RolesDefinition } from './roles/types'
+import RoleManagerDrawer from './RoleManagerDrawer.vue'
 import ParentAccountsList from './ParentAccountsList.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
-
-const ROLE_ICONS: Record<string, string> = {
-  admin: '👑',
-  principal: '🏫',
-  supervisor: '📋',
-  hr: '💼',
-  accountant: '💰',
-  teacher: '📚',
-  parent: '👨‍👩‍👧',
-}
-
-const ROLE_ORDER = ['admin', 'principal', 'supervisor', 'hr', 'accountant', 'teacher', 'parent']
-
-const advancedExpanded = ref<boolean>(false)
 
 interface EmployeeItem { id: number; name: string; employee_id: string }
 
@@ -66,11 +53,12 @@ const { employees } = storeToRefs(employeeStore) as unknown as { employees: Ref<
 const users = ref<Record<string, unknown>[]>([])
 const loadingUsers = ref<boolean>(false)
 const userDialogVisible = ref<boolean>(false)
-const userForm = reactive<{ employee_id: number | null; username: string; password: string; role: string; permission_names: string[] }>({ employee_id: null, username: '', password: '', role: 'teacher', permission_names: ['*'] })
+const userForm = reactive<{ employee_id: number | null; username: string; password: string; role: string }>({ employee_id: null, username: '', password: '', role: 'teacher' })
 const resetPasswordForm = reactive<{ user_id: number | null; username: string; new_password: string }>({ user_id: null, username: '', new_password: '' })
 const resetDialogVisible = ref<boolean>(false)
 const editUserDialogVisible = ref<boolean>(false)
-const editUserForm = reactive<{ id: number | null; username: string; role: string; permission_names: string[] }>({ id: null, username: '', role: 'teacher', permission_names: ['*'] })
+// editUserForm 保留 permission_names 欄位：僅供偏離摘要計算（唯讀），永不進 payload
+const editUserForm = reactive<{ id: number | null; username: string; role: string; permission_names: string[] | null }>({ id: null, username: '', role: 'teacher', permission_names: null })
 const credentialDialogVisible = ref<boolean>(false)
 const createdCredentials = ref<{ username: string; password: string }>({ username: '', password: '' })
 const permissionDefinition = ref<RolesDefinition>({ permissions: {}, groups: [], roles: {} })
@@ -172,8 +160,6 @@ const handleAddUser = () => {
   userForm.username = ''
   userForm.password = ''
   userForm.role = 'teacher'
-  userForm.permission_names = ['*']
-  advancedExpanded.value = false
   employeeStore.fetchEmployees()
   userDialogVisible.value = true
 }
@@ -192,9 +178,6 @@ const saveUser = async () => {
       username: userForm.username,
       password: userForm.password,
       role: userForm.role,
-    }
-    if (shouldSendPermissionNames(userForm.role, isUsingDefaultPermissions(userForm))) {
-      payload.permission_names = userForm.permission_names
     }
     await createUser(payload)
     userDialogVisible.value = false
@@ -283,18 +266,14 @@ const handleEditUser = (user: Record<string, unknown>) => {
   editUserForm.id = user.id as number
   editUserForm.username = user.username as string
   editUserForm.role = user.role as string
-  editUserForm.permission_names = (user.permission_names as string[] | null) ?? ['*']
+  editUserForm.permission_names = (user.permission_names as string[] | null) ?? null
   editUserDialogVisible.value = true
-  nextTick(() => _openEditExpander())
 }
 
 const saveEditUser = async () => {
   try {
-    const payload: Record<string, unknown> = { role: editUserForm.role }
-    if (shouldSendPermissionNames(editUserForm.role, isUsingDefaultPermissions(editUserForm))) {
-      payload.permission_names = editUserForm.permission_names
-    }
-    await updateUser(editUserForm.id!, payload)
+    // 只送 role：後端會把 permission_names 重置為新角色預設（偏離帳號換角色即脫離偏離）
+    await updateUser(editUserForm.id!, { role: editUserForm.role })
     ElMessage.success('使用者已更新')
     editUserDialogVisible.value = false
     fetchUsers()
@@ -313,23 +292,11 @@ const getRoleTagType = (role: string): 'primary' | 'success' | 'warning' | 'info
   return types[role] ?? 'info'
 }
 
-const onRoleChange = (form: { role: string; permission_names: string[] }) => {
-  const roleConfig = permissionDefinition.value.roles[form.role]
-  if (roleConfig) {
-    form.permission_names = [...roleConfig.permissions]
-  }
-}
-
 const _arraysEqualAsSet = (a: string[] | null | undefined, b: string[] | null | undefined): boolean => {
   if (!a || !b) return a === b
   if (a.length !== b.length) return false
   const setA = new Set(a)
   return b.every((x) => setA.has(x))
-}
-
-const isUsingDefaultPermissions = (form: { role: string; permission_names: string[] }) => {
-  const roleConfig = permissionDefinition.value.roles[form.role]
-  return !!roleConfig && _arraysEqualAsSet(form.permission_names, roleConfig.permissions)
 }
 
 const isUsingRoleDefault = (row: Record<string, unknown>) => {
@@ -340,52 +307,73 @@ const isUsingRoleDefault = (row: Record<string, unknown>) => {
   return _arraysEqualAsSet(row.permission_names as string[], roleConfig.permissions)
 }
 
-const _activeForm = computed<{ role: string; permission_names: string[] } | null>(() => {
-  if (userDialogVisible.value) return userForm
-  if (editUserDialogVisible.value) return editUserForm
-  return null
+const _splitCode = (key: string): string => {
+  const i = key.indexOf(':')
+  return i === -1 ? key : key.slice(0, i)
+}
+const _allCodes = () => Object.keys(permissionDefinition.value.permissions)
+const _expand = (perms: string[]): string[] => (perms.includes('*') ? _allCodes() : perms)
+
+// 編輯中帳號的偏離摘要（唯讀）：與角色預設比多/少哪幾條；scope-qualified 取 code 查 label
+const editingDeviation = computed<{ extra: string[]; missing: string[] } | null>(() => {
+  if (editUserForm.permission_names == null) return null // null = 後端以角色預設 resolve
+  const roleConfig = permissionDefinition.value.roles[editUserForm.role]
+  if (!roleConfig) return null
+  const current = _expand(editUserForm.permission_names)
+  const tpl = _expand(roleConfig.permissions)
+  const curSet = new Set(current.map(_splitCode))
+  const tplSet = new Set(tpl.map(_splitCode))
+  const label = (code: string) => permissionDefinition.value.permissions[code]?.label || code
+  const extra = [...curSet].filter((c) => !tplSet.has(c)).map(label)
+  const missing = [...tplSet].filter((c) => !curSet.has(c)).map(label)
+  if (extra.length === 0 && missing.length === 0) return null
+  return { extra, missing }
 })
 
-const deviationCount = computed<number>(() => {
-  const form = _activeForm.value
-  if (!form) return 0
-  const roleConfig = permissionDefinition.value.roles[form.role]
-  if (!roleConfig) return 0
-  const tpl = roleConfig.permissions
-  if (form.permission_names.includes('*')) {
-    return tpl.includes('*') ? 0 : Object.keys(permissionDefinition.value.permissions).length
+const saveAsRoleDialogVisible = ref(false)
+const saveAsRoleForm = reactive<{ code: string; label: string }>({ code: '', label: '' })
+const savingAsRole = ref(false)
+
+const openSaveAsRole = () => {
+  saveAsRoleForm.code = ''
+  saveAsRoleForm.label = ''
+  saveAsRoleDialogVisible.value = true
+}
+
+const submitSaveAsRole = async () => {
+  const code = saveAsRoleForm.code.trim()
+  const label = saveAsRoleForm.label.trim()
+  if (!code || !label) {
+    ElMessage.warning('請填寫 code 與名稱')
+    return
   }
-  if (tpl.includes('*')) {
-    // role 預設是 wildcard 但 form 是顯式清單
-    return Object.keys(permissionDefinition.value.permissions).length - form.permission_names.length
+  if (savingAsRole.value) return
+  savingAsRole.value = true
+  let roleCreated = false
+  try {
+    await createRole({ code, label, permissions: [...(editUserForm.permission_names ?? [])] })
+    roleCreated = true
+    // 只送 role：後端將 permission_names 重置為新角色預設（= 剛存進去的自訂集合）
+    await updateUser(editUserForm.id!, { role: code })
+    ElMessage.success('已建立自訂角色並指派給此帳號')
+    saveAsRoleDialogVisible.value = false
+    editUserDialogVisible.value = false
+    fetchUsers()
+    fetchPermissionDefinition()
+  } catch (error) {
+    if (roleCreated) {
+      // 兩段式中間態：角色已存在（code 已佔用），不可重走另存流程；
+      // refetch 讓新角色卡出現，引導使用者直接改選該角色儲存
+      ElMessage.error(apiError(error, `角色「${code}」已建立，但指派失敗；請在編輯視窗直接選擇該角色後儲存`))
+      saveAsRoleDialogVisible.value = false
+      fetchPermissionDefinition()
+    } else {
+      ElMessage.error(apiError(error, '建立自訂角色失敗'))
+    }
+  } finally {
+    savingAsRole.value = false
   }
-  const tplSet = new Set(tpl)
-  const formSet = new Set(form.permission_names)
-  let count = 0
-  for (const p of form.permission_names) if (!tplSet.has(p)) count++
-  for (const p of tpl) if (!formSet.has(p)) count++
-  return count
-})
-
-const selectRoleCard = (form: { role: string; permission_names: string[] }, roleKey: string) => {
-  if (roleKey === 'parent') return  // disabled
-  form.role = roleKey
-  onRoleChange(form)
-  advancedExpanded.value = false
 }
-
-const restoreDefault = (form: { role: string; permission_names: string[] }) => {
-  onRoleChange(form)
-  advancedExpanded.value = false
-}
-
-// 開啟編輯 dialog 時依偏離狀態決定 expander 初始
-const _openEditExpander = () => {
-  advancedExpanded.value = deviationCount.value > 0
-}
-
-// 偏離時自動展開 expander（取代舊版寫在 togglePermission 內的展開邏輯）
-watch(deviationCount, (n) => { if (n > 0) advancedExpanded.value = true })
 
 function onRowCommand(cmd: string, row: Record<string, unknown>) {
   if (cmd === 'reset') handleResetPassword(row)
@@ -418,7 +406,8 @@ onMounted(() => {
 })
 
 defineExpose({
-  userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault,
+  userForm, editUserForm, saveUser, saveEditUser, handleEditUser,
+  editingDeviation, openSaveAsRole, submitSaveAsRole, saveAsRoleForm, saveAsRoleDialogVisible,
   keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser, handleToggleActive,
   audience, staffUsers, parentUsers, filteredParentUsers, onAudienceChange, roleFilterOptions, parentEmptyText,
   staffStats, parentStats, loadError,
@@ -581,63 +570,7 @@ defineExpose({
           <el-input v-model="userForm.password" type="password" placeholder="初始密碼" show-password />
         </el-form-item>
         <el-form-item label="角色">
-          <div v-if="userDialogVisible" class="role-cards-grid">
-            <div
-              v-for="roleKey in ROLE_ORDER"
-              :key="roleKey"
-              class="role-card"
-              :data-role="roleKey"
-              :class="{
-                'role-card--active': userForm.role === roleKey,
-                'is-disabled': roleKey === 'parent',
-              }"
-              :title="roleKey === 'parent' ? '家長帳號請從家長端 LIFF 綁定' : ''"
-              @click="selectRoleCard(userForm, roleKey)"
-            >
-              <div class="role-card__icon">{{ ROLE_ICONS[roleKey] || '👤' }}</div>
-              <div class="role-card__label">{{ permissionDefinition.roles[roleKey]?.label || roleKey }}</div>
-              <div class="role-card__desc">{{ permissionDefinition.roles[roleKey]?.description || '' }}</div>
-              <div class="role-card__count">
-                <el-tag size="small" :type="roleKey === 'admin' ? 'danger' : 'info'">
-                  {{ permissionDefinition.roles[roleKey]?.permissions?.includes('*') ? '全部' : `${permissionDefinition.roles[roleKey]?.permissions?.length ?? 0} 條` }}
-                </el-tag>
-              </div>
-            </div>
-          </div>
-        </el-form-item>
-
-        <el-form-item v-if="userForm.role !== 'teacher' && userForm.role !== 'parent'" label="權限">
-          <div class="advanced-tuning">
-            <div class="advanced-tuning__header">
-              <button
-                type="button"
-                class="advanced-tuning-toggle"
-                @click="advancedExpanded = !advancedExpanded"
-              >
-                <span>{{ advancedExpanded ? '▼' : '▶' }} 進階微調</span>
-                <el-tag
-                  class="deviation-badge"
-                  :type="deviationCount > 0 ? 'warning' : 'info'"
-                  size="small"
-                >
-                  {{ deviationCount > 0 ? `已偏離 ${deviationCount} 項` : '預設' }}
-                </el-tag>
-              </button>
-              <el-button
-                v-if="deviationCount > 0"
-                class="restore-default-btn"
-                link
-                type="primary"
-                size="small"
-                @click="restoreDefault(userForm)"
-              >
-                ↻ 還原預設
-              </el-button>
-            </div>
-            <div v-show="advancedExpanded" class="advanced-tuning-content">
-              <PermissionPicker v-model="userForm.permission_names" :definition="permissionDefinition" />
-            </div>
-          </div>
+          <RoleCardsGrid v-model="userForm.role" :definition="permissionDefinition" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -667,63 +600,17 @@ defineExpose({
           <el-input :model-value="editUserForm.username" disabled />
         </el-form-item>
         <el-form-item label="角色">
-          <div v-if="editUserDialogVisible" class="role-cards-grid">
-            <div
-              v-for="roleKey in ROLE_ORDER"
-              :key="roleKey"
-              class="role-card"
-              :data-role="roleKey"
-              :class="{
-                'role-card--active': editUserForm.role === roleKey,
-                'is-disabled': roleKey === 'parent',
-              }"
-              :title="roleKey === 'parent' ? '家長帳號請從家長端 LIFF 綁定' : ''"
-              @click="selectRoleCard(editUserForm, roleKey)"
-            >
-              <div class="role-card__icon">{{ ROLE_ICONS[roleKey] || '👤' }}</div>
-              <div class="role-card__label">{{ permissionDefinition.roles[roleKey]?.label || roleKey }}</div>
-              <div class="role-card__desc">{{ permissionDefinition.roles[roleKey]?.description || '' }}</div>
-              <div class="role-card__count">
-                <el-tag size="small" :type="roleKey === 'admin' ? 'danger' : 'info'">
-                  {{ permissionDefinition.roles[roleKey]?.permissions?.includes('*') ? '全部' : `${permissionDefinition.roles[roleKey]?.permissions?.length ?? 0} 條` }}
-                </el-tag>
-              </div>
-            </div>
-          </div>
+          <RoleCardsGrid v-model="editUserForm.role" :definition="permissionDefinition" />
         </el-form-item>
 
-        <el-form-item v-if="editUserForm.role !== 'teacher' && editUserForm.role !== 'parent'" label="權限">
-          <div class="advanced-tuning">
-            <div class="advanced-tuning__header">
-              <button
-                type="button"
-                class="advanced-tuning-toggle"
-                @click="advancedExpanded = !advancedExpanded"
-              >
-                <span>{{ advancedExpanded ? '▼' : '▶' }} 進階微調</span>
-                <el-tag
-                  class="deviation-badge"
-                  :type="deviationCount > 0 ? 'warning' : 'info'"
-                  size="small"
-                >
-                  {{ deviationCount > 0 ? `已偏離 ${deviationCount} 項` : '預設' }}
-                </el-tag>
-              </button>
-              <el-button
-                v-if="deviationCount > 0"
-                class="restore-default-btn"
-                link
-                type="primary"
-                size="small"
-                @click="restoreDefault(editUserForm)"
-              >
-                ↻ 還原預設
-              </el-button>
-            </div>
-            <div v-show="advancedExpanded" class="advanced-tuning-content">
-              <PermissionPicker v-model="editUserForm.permission_names" :definition="permissionDefinition" />
-            </div>
-          </div>
+        <el-form-item v-if="editingDeviation" label="權限">
+          <el-alert type="warning" :closable="false" class="deviation-alert" data-testid="deviation-alert">
+            <template #title>此帳號的權限偏離角色預設（唯讀）</template>
+            <div v-if="editingDeviation.extra.length">較預設多：{{ editingDeviation.extra.join('、') }}</div>
+            <div v-if="editingDeviation.missing.length">較預設少：{{ editingDeviation.missing.join('、') }}</div>
+            <div class="deviation-note">變更角色並儲存後，將以新角色的預設權限取代自訂權限。</div>
+            <el-button size="small" data-testid="save-as-role" @click="openSaveAsRole">另存為自訂角色</el-button>
+          </el-alert>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -757,6 +644,25 @@ defineExpose({
         <el-button type="primary" @click="credentialDialogVisible = false">關閉</el-button>
       </template>
     </el-dialog>
+
+    <!-- 另存為自訂角色 -->
+    <el-dialog v-model="saveAsRoleDialogVisible" title="另存為自訂角色" width="440px" append-to-body>
+      <p style="margin: 0 0 12px; color: var(--text-tertiary); font-size: 13px;">
+        以此帳號目前的權限集合建立新角色，並指派給此帳號。
+      </p>
+      <el-form :model="saveAsRoleForm" label-width="60px">
+        <el-form-item label="code">
+          <el-input v-model="saveAsRoleForm.code" placeholder="例：custom_hr_plus" />
+        </el-form-item>
+        <el-form-item label="名稱">
+          <el-input v-model="saveAsRoleForm.label" placeholder="例：人資（含薪資）" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="saveAsRoleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingAsRole" data-testid="submit-save-as-role" @click="submitSaveAsRole">建立並指派</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -781,93 +687,14 @@ defineExpose({
   align-items: center;
 }
 
-.role-cards-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+.deviation-alert {
   width: 100%;
 }
 
-@media (max-width: 720px) {
-  .role-cards-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.role-card {
-  padding: 12px;
-  border: 2px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-  background: var(--el-bg-color);
-  text-align: center;
-}
-
-.role-card:hover:not(.is-disabled) {
-  border-color: var(--el-color-primary-light-5);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-.role-card--active {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-
-.role-card.is-disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.role-card__icon {
-  font-size: 24px;
-  margin-bottom: 4px;
-}
-
-.role-card__label {
-  font-weight: 600;
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.role-card__desc {
-  font-size: 12px;
+.deviation-note {
+  margin: 6px 0;
   color: var(--text-tertiary);
-  margin: 6px 0 8px;
-  min-height: 28px;
-  line-height: 1.3;
-}
-
-.role-card__count {
-  display: flex;
-  justify-content: center;
-}
-
-.advanced-tuning {
-  width: 100%;
-}
-
-.advanced-tuning__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.advanced-tuning-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: none;
-  border: none;
-  padding: 4px 0;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.advanced-tuning-toggle:hover {
-  color: var(--el-color-primary);
+  font-size: 12px;
 }
 
 .accounts-empty {

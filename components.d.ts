@@ -271,6 +271,7 @@ declare module 'vue' {
     RegistrationTimeline: typeof import('./src/components/activity/RegistrationTimeline.vue')['default']
     ReserveSeatDialog: typeof import('./src/components/recruitment/ReserveSeatDialog.vue')['default']
     ResolveCard: typeof import('./src/components/attendance/ResolveCard.vue')['default']
+    RoleCardsGrid: typeof import('./src/components/settings/RoleCardsGrid.vue')['default']
     RoleDetailPanel: typeof import('./src/components/settings/roles/RoleDetailPanel.vue')['default']
     RoleManagerDrawer: typeof import('./src/components/settings/RoleManagerDrawer.vue')['default']
     RosterColumn: typeof import('./src/components/attendance/RosterColumn.vue')['default']
