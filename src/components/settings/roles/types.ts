@@ -7,7 +7,6 @@ export interface RoleDef {
   label: string
   description: string
   permissions: string[]
-  is_core: boolean
   flags?: string[]
 }
 

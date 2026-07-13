@@ -14,11 +14,11 @@ const definition: RolesDefinition = {
   permissions: {},
   groups: [],
   roles: {
-    parent: { label: '家長', description: '', permissions: [], is_core: true, flags: ['parent', 'portal_only'] },
-    admin: { label: '管理員', description: '', permissions: ['*'], is_core: true, flags: ['super_admin'] },
-    teacher: { label: '教師', description: '', permissions: [], is_core: true, flags: ['portal_only'] },
-    hr: { label: '人資', description: '', permissions: ['DASHBOARD'], is_core: true, flags: [] },
-    custom_x: { label: '自訂X', description: '', permissions: ['DASHBOARD'], is_core: false, flags: [] },
+    parent: { label: '家長', description: '', permissions: [], flags: ['parent', 'portal_only'] },
+    admin: { label: '管理員', description: '', permissions: ['*'], flags: ['super_admin'] },
+    teacher: { label: '教師', description: '', permissions: [], flags: ['portal_only'] },
+    hr: { label: '人資', description: '', permissions: ['DASHBOARD'], flags: [] },
+    custom_x: { label: '自訂X', description: '', permissions: ['DASHBOARD'], flags: [] },
   },
 }
 

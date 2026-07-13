@@ -6,7 +6,6 @@ export interface Role {
   label: string
   description: string | null
   permissions: string[]
-  is_core: boolean
 }
 
 export interface RoleIn {

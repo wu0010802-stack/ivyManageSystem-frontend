@@ -19,13 +19,13 @@ vi.mock('@/api/auth', () => {
       { name: '基礎', permissions: ['DASHBOARD'] },
     ],
     roles: {
-      admin: { label: '系統管理員', description: '唯一能改帳號、系統設定', permissions: ['*'], is_core: true, flags: ['super_admin'] },
-      principal: { label: '園長', description: '業務全包 + 薪資審視，不動帳號', permissions: ['DASHBOARD', 'EMPLOYEES_READ', 'SALARY_READ'], is_core: true, flags: [] },
-      supervisor: { label: '主管', description: '教務管理、招生轉換、考核全程', permissions: ['DASHBOARD', 'EMPLOYEES_READ'], is_core: true, flags: [] },
-      hr: { label: '人事管理員', description: '員工資料、薪資發放、年終、廠商付款', permissions: ['DASHBOARD', 'EMPLOYEES_READ', 'EMPLOYEES_WRITE', 'SALARY_READ', 'SALARY_WRITE'], is_core: true, flags: [] },
-      accountant: { label: '會計', description: '純財務（薪資/學費/廠商/年終）', permissions: ['DASHBOARD', 'EMPLOYEES_READ', 'SALARY_READ', 'SALARY_WRITE'], is_core: true, flags: [] },
-      teacher: { label: '教師', description: '公告、考勤、放學接送、學生檔案', permissions: ['DASHBOARD'], is_core: true, flags: ['portal_only'] },
-      parent: { label: '家長', description: '家長端登入，無管理端權限', permissions: [], is_core: true, flags: ['parent', 'portal_only'] },
+      admin: { label: '系統管理員', description: '唯一能改帳號、系統設定', permissions: ['*'], flags: ['super_admin'] },
+      principal: { label: '園長', description: '業務全包 + 薪資審視，不動帳號', permissions: ['DASHBOARD', 'EMPLOYEES_READ', 'SALARY_READ'], flags: [] },
+      supervisor: { label: '主管', description: '教務管理、招生轉換、考核全程', permissions: ['DASHBOARD', 'EMPLOYEES_READ'], flags: [] },
+      hr: { label: '人事管理員', description: '員工資料、薪資發放、年終、廠商付款', permissions: ['DASHBOARD', 'EMPLOYEES_READ', 'EMPLOYEES_WRITE', 'SALARY_READ', 'SALARY_WRITE'], flags: [] },
+      accountant: { label: '會計', description: '純財務（薪資/學費/廠商/年終）', permissions: ['DASHBOARD', 'EMPLOYEES_READ', 'SALARY_READ', 'SALARY_WRITE'], flags: [] },
+      teacher: { label: '教師', description: '公告、考勤、放學接送、學生檔案', permissions: ['DASHBOARD'], flags: ['portal_only'] },
+      parent: { label: '家長', description: '家長端登入，無管理端權限', permissions: [], flags: ['parent', 'portal_only'] },
     },
   }
   return {

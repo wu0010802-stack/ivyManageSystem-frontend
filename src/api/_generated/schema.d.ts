@@ -27319,8 +27319,6 @@ export interface components {
             code: string;
             /** Description */
             description?: string | null;
-            /** Is Core */
-            is_core: boolean;
             /** Label */
             label: string;
             /** Permissions */
