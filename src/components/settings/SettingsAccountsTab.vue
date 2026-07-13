@@ -110,7 +110,11 @@ const filteredParentUsers = computed(() =>
 )
 
 const parentEmptyText = computed(() =>
-  keyword.value ? '查無符合條件的帳號' : '家長帳號由家長端 LINE 綁定自動產生，不在此新增',
+  loadError.value
+    ? '帳號載入失敗'
+    : keyword.value
+      ? '查無符合條件的帳號'
+      : '家長帳號由家長端 LINE 綁定自動產生，不在此新增',
 )
 
 const staffStats = computed(() => {
@@ -134,13 +138,15 @@ const parentStats = computed(() => ({
   active: parentUsers.value.filter((u) => !!u.is_active).length,
 }))
 
+const loadError = ref(false)
 const fetchUsers = async () => {
   loadingUsers.value = true
+  loadError.value = false
   try {
     const res = await getUsers()
     users.value = res.data
   } catch (error) {
-    // Admin token may not be set - silently fail
+    loadError.value = true
   } finally {
     loadingUsers.value = false
   }
@@ -415,7 +421,7 @@ defineExpose({
   userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault,
   keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser, handleToggleActive,
   audience, staffUsers, parentUsers, filteredParentUsers, onAudienceChange, roleFilterOptions, parentEmptyText,
-  staffStats, parentStats,
+  staffStats, parentStats, loadError,
 })
 </script>
 
@@ -492,7 +498,11 @@ defineExpose({
       </el-table-column>
       <template #empty>
         <div class="accounts-empty">
-          <template v-if="keyword || roleFilter">
+          <template v-if="loadError">
+            <span>帳號載入失敗</span>
+            <el-button link type="primary" data-testid="retry-fetch" @click="fetchUsers">重試</el-button>
+          </template>
+          <template v-else-if="keyword || roleFilter">
             <span>查無符合條件的帳號</span>
             <el-button link type="primary" data-testid="clear-filters" @click="clearFilters">清除篩選</el-button>
           </template>

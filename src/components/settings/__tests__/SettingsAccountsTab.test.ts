@@ -69,7 +69,7 @@ vi.mock('vue-router', () => ({
 }))
 
 import SettingsAccountsTab from '../SettingsAccountsTab.vue'
-import { createUser, updateUser } from '@/api/auth'
+import { createUser, updateUser, getUsers } from '@/api/auth'
 
 describe('SettingsAccountsTab — role card UX', () => {
   beforeEach(() => {
@@ -388,5 +388,19 @@ describe('SettingsAccountsTab — role card UX', () => {
     const stats = wrapper.find('.accounts-stats')
     expect(stats.exists()).toBe(true)
     expect(stats.text()).toContain('自訂權限 1')
+  })
+
+  it('fetchUsers 失敗 → 空狀態顯示「帳號載入失敗」與重試；重試成功恢復資料', async () => {
+    vi.mocked(getUsers).mockRejectedValueOnce(new Error('boom'))
+    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const retryBtn = wrapper.find('[data-testid="retry-fetch"]')
+    expect(retryBtn.exists()).toBe(true)
+    expect(wrapper.text()).toContain('帳號載入失敗')
+    await retryBtn.trigger('click')
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { filteredUsers: unknown[] }
+    expect(vm.filteredUsers.length).toBeGreaterThan(0)
+    expect(wrapper.find('[data-testid="retry-fetch"]').exists()).toBe(false)
   })
 })
