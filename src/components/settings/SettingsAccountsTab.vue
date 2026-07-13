@@ -7,6 +7,7 @@ import { ArrowDown } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 import { shouldSendPermissionNames } from '@/utils/auth'
+import { formatDateTimeTW } from '@/utils/format'
 import PermissionPicker from './PermissionPicker.vue'
 import RoleManagerDrawer, { type RolesDefinition } from './RoleManagerDrawer.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
@@ -305,7 +306,11 @@ const accountCardColumns = [
   { label: '角色', prop: '__role' },
   { label: '權限', prop: '__perm' },
   { label: '狀態', prop: '__status' },
-  { label: '最後登入', prop: 'last_login' },
+  {
+    label: '最後登入',
+    prop: 'last_login',
+    formatter: (item: Record<string, unknown>) => (item.last_login ? formatDateTimeTW(item.last_login) : '從未登入'),
+  },
 ]
 
 onMounted(() => {
@@ -356,7 +361,12 @@ defineExpose({
           <el-tag :type="row?.is_active ? 'success' : 'info'" size="small">{{ row?.is_active ? '啟用' : '停用' }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="last_login" label="最後登入" width="180" />
+      <el-table-column label="最後登入" min-width="170">
+        <template #default="{ row } = {}">
+          <span v-if="row?.last_login">{{ formatDateTimeTW(row.last_login) }}</span>
+          <span v-else class="never-logged-in">從未登入</span>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="160">
         <template #default="{ row } = {}">
           <el-button v-if="row" link type="primary" @click="handleEditUser(row)">編輯</el-button>
@@ -731,5 +741,9 @@ defineExpose({
   padding: 24px 0;
   color: var(--text-tertiary);
   font-size: 14px;
+}
+
+.never-logged-in {
+  color: var(--text-tertiary);
 }
 </style>

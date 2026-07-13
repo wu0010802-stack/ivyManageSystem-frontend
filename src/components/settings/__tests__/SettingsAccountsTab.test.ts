@@ -31,9 +31,9 @@ vi.mock('@/api/auth', () => {
   return {
     getUsers: vi.fn().mockResolvedValue({
       data: [
-        { id: 1, username: 'wang01', employee_name: '王小明', role: 'admin', permission_names: ['*'], is_active: true },
-        { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: true },
-        { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD', 'EMPLOYEES_READ'], is_active: true },
+        { id: 1, username: 'wang01', employee_name: '王小明', role: 'admin', permission_names: ['*'], is_active: true, last_login: '2026-07-10T17:35:14.324936' },
+        { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: true, last_login: null },
+        { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD', 'EMPLOYEES_READ'], is_active: true, last_login: null },
       ],
     }),
     getPermissions: vi.fn().mockResolvedValue({ data: mockPermissionDefinition }),
@@ -260,5 +260,14 @@ describe('SettingsAccountsTab — role card UX', () => {
     await nextTick()
     expect(vm.keyword).toBe('')
     expect(vm.roleFilter).toBe('')
+  })
+
+  it('最後登入：ISO 字串格式化顯示、null 顯示「從未登入」', async () => {
+    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const text = wrapper.text()
+    expect(text).toContain('2026/7/10')       // formatDateTimeTW 輸出
+    expect(text).not.toContain('T17:35')      // 原始 ISO 不再直出
+    expect(text).toContain('從未登入')
   })
 })
