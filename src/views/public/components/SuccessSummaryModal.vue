@@ -20,7 +20,7 @@
  * Emits:
  *   close
  */
-import { ref, watch } from 'vue'
+import { onUnmounted, ref, watch } from 'vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
 interface CourseItem { name: string; price: number }
@@ -61,11 +61,22 @@ function fmtAmount(n: number) {
 const copiedKey = ref<'' | 'token' | 'link'>('')
 const hasCopiedAny = ref(false)
 const nudgeVisible = ref(false)
+let copiedResetTimer: ReturnType<typeof setTimeout> | null = null
+let hintResetTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearCopyTimers() {
+  if (copiedResetTimer !== null) clearTimeout(copiedResetTimer)
+  if (hintResetTimer !== null) clearTimeout(hintResetTimer)
+  copiedResetTimer = null
+  hintResetTimer = null
+}
 
 function resetCopyState() {
+  clearCopyTimers()
   copiedKey.value = ''
   hasCopiedAny.value = false
   nudgeVisible.value = false
+  props.summary.copyHint = ''
 }
 
 watch(
@@ -78,19 +89,31 @@ watch(
 )
 
 async function copyToClipboard(text: string, label: string, key: 'token' | 'link') {
+  clearCopyTimers()
   try {
     await navigator.clipboard.writeText(text)
     hasCopiedAny.value = true
     nudgeVisible.value = false
     copiedKey.value = key
-    setTimeout(() => { if (copiedKey.value === key) copiedKey.value = '' }, 2000)
+    copiedResetTimer = setTimeout(() => {
+      if (copiedKey.value === key) copiedKey.value = ''
+      copiedResetTimer = null
+    }, 2000)
     props.summary.copyHint = `已複製${label}`
-    setTimeout(() => { props.summary.copyHint = '' }, 2500)
+    hintResetTimer = setTimeout(() => {
+      props.summary.copyHint = ''
+      hintResetTimer = null
+    }, 2500)
   } catch {
     props.summary.copyHint = '複製失敗，請手動長按文字選取'
-    setTimeout(() => { props.summary.copyHint = '' }, 4000)
+    hintResetTimer = setTimeout(() => {
+      props.summary.copyHint = ''
+      hintResetTimer = null
+    }, 4000)
   }
 }
+
+onUnmounted(clearCopyTimers)
 
 function handleDone() {
   // 有查詢碼卻沒複製過：第一次點擊只提醒，第二次（或複製後）才關閉

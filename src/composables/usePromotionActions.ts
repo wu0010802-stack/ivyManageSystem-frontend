@@ -1,7 +1,16 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { publicConfirmPromotion, publicDeclinePromotion } from '@/api/activityPublic'
 import { normalizeMobile } from '@/utils/phone'
-import type { CourseEntry, QueryCredentials, QueryResult } from './usePublicRegistrationQuery'
+import {
+  formatTaipeiDateTimeMinute,
+  parseTaipeiDateTime,
+} from '@/utils/format'
+import type {
+  CourseEntry,
+  QueryCredentials,
+  QueryHydrationGuard,
+  QueryResult,
+} from './usePublicRegistrationQuery'
 
 /**
  * F4（2026-07-12）：從 ActivityPublicQueryView 抽出的「候補已升正式待確認」動作。
@@ -16,14 +25,23 @@ export function usePromotionActions({
   activeQueryCredentials,
   activeQueryToken,
   refetchCurrent,
+  createHydrationGuard,
   hydrateResult,
   showToast,
 }: {
   queryResult: Ref<QueryResult | null>
   activeQueryCredentials: Ref<QueryCredentials | null>
   activeQueryToken: ComputedRef<string | null>
-  refetchCurrent: (phoneOverride?: string) => Promise<QueryResult>
-  hydrateResult: (data: QueryResult, credentials?: QueryCredentials) => void
+  refetchCurrent: (
+    phoneOverride?: string,
+    credentialsOverride?: QueryCredentials,
+  ) => Promise<QueryResult>
+  createHydrationGuard: () => QueryHydrationGuard | null
+  hydrateResult: (
+    data: QueryResult,
+    credentials?: QueryCredentials,
+    guard?: QueryHydrationGuard,
+  ) => boolean
   showToast: (message: string, type?: string, duration?: number) => void
 }) {
   // 候補已升正式待確認清單（供獨立確認區塊使用）
@@ -35,20 +53,14 @@ export function usePromotionActions({
   })
 
   function formatDeadline(iso: string | null | undefined): string {
-    if (!iso) return '—'
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return '—'
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hh = String(d.getHours()).padStart(2, '0')
-    const mm = String(d.getMinutes()).padStart(2, '0')
-    return `${y}-${m}-${day} ${hh}:${mm}`
+    return formatTaipeiDateTimeMinute(iso)
   }
 
   function formatCountdown(iso: string | null | undefined): string {
     if (!iso) return ''
-    const diffMs = new Date(iso).getTime() - Date.now()
+    const deadline = parseTaipeiDateTime(iso)
+    if (!deadline) return ''
+    const diffMs = deadline.getTime() - Date.now()
     if (diffMs <= 0) return '已逾期'
     const hours = Math.floor(diffMs / 3600000)
     const mins = Math.floor((diffMs % 3600000) / 60000)
@@ -61,6 +73,11 @@ export function usePromotionActions({
     const credentials = activeQueryCredentials.value
     if (!credentials) {
       showToast('查詢憑證已失效，請重新查詢', 'error')
+      return
+    }
+    const guard = createHydrationGuard()
+    if (!guard) {
+      showToast('查詢結果已變更，請重新操作', 'error')
       return
     }
     promotionSubmitting.value = item.course_id ?? null
@@ -79,7 +96,11 @@ export function usePromotionActions({
       // 內層 try：mutation 已成功，刷新失敗（公開查詢限流 / 網路抖動）不可落到
       // 外層 catch 誤報「確認失敗」——家長會重按吃 409（audit C-2，2026-07-02）
       try {
-        hydrateResult(await refetchCurrent(phonePayload))
+        hydrateResult(
+          await refetchCurrent(phonePayload, guard.credentials),
+          undefined,
+          guard,
+        )
       } catch {
         showToast('已確認成功，但頁面刷新失敗，請稍後重新查詢查看最新狀態', 'warning', 6000)
       }
@@ -99,6 +120,11 @@ export function usePromotionActions({
       showToast('查詢憑證已失效，請重新查詢', 'error')
       return
     }
+    const guard = createHydrationGuard()
+    if (!guard) {
+      showToast('查詢結果已變更，請重新操作', 'error')
+      return
+    }
     promotionSubmitting.value = item.course_id ?? null
     try {
       const phonePayload = normalizeMobile(credentials.parent_phone)
@@ -113,7 +139,11 @@ export function usePromotionActions({
       // 沿用當前查詢模式刷新（同 handleConfirmPromotion），避免三欄查詢跳學期。
       // 內層 try：同 confirm——mutation 已成功，刷新失敗不可誤報「放棄失敗」
       try {
-        hydrateResult(await refetchCurrent(phonePayload))
+        hydrateResult(
+          await refetchCurrent(phonePayload, guard.credentials),
+          undefined,
+          guard,
+        )
       } catch {
         showToast('已放棄成功，但頁面刷新失敗，請稍後重新查詢查看最新狀態', 'warning', 6000)
       }

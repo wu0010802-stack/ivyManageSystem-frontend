@@ -1,4 +1,8 @@
 import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue'
+import {
+  formatTaipeiDateTimeMinute,
+  parseTaipeiDateTime,
+} from '@/utils/format'
 
 /**
  * 公開報名頁的「報名時段」狀態子系統（A1-P7 從 ActivityPublicView 抽出）。
@@ -39,8 +43,8 @@ export function useRegistrationWindow({ timeInfo, submitting }: { timeInfo: Ref<
   const noticeState = computed(() => {
     const settings = timeInfo.value || {}
     const now = new Date(nowTick.value)
-    const openAt = settings.open_at ? new Date(settings.open_at) : null
-    const closeAt = settings.close_at ? new Date(settings.close_at) : null
+    const openAt = parseTaipeiDateTime(settings.open_at)
+    const closeAt = parseTaipeiDateTime(settings.close_at)
 
     if (!settings.is_open) {
       return { variant: 'is-warning', title: '報名尚未開放', message: '目前尚未開放線上報名，請稍後再試。', blocking: true }
@@ -49,7 +53,7 @@ export function useRegistrationWindow({ timeInfo, submitting }: { timeInfo: Ref<
       return {
         variant: 'is-warning',
         title: '報名尚未開始',
-        message: `報名開始時間：${openAt.toLocaleString('zh-TW')}，距離開放還有 ${formatCountdown(openAt.getTime(), now.getTime())}。`,
+        message: `報名開始時間：${formatTaipeiDateTimeMinute(openAt)}，距離開放還有 ${formatCountdown(openAt.getTime(), now.getTime())}。`,
         blocking: true,
       }
     }
@@ -64,7 +68,7 @@ export function useRegistrationWindow({ timeInfo, submitting }: { timeInfo: Ref<
         return {
           variant: 'is-warning',
           title: '報名即將截止',
-          message: `截止時間：${closeAt.toLocaleString('zh-TW')}，剩餘 ${formatCountdown(closeAt.getTime(), now.getTime())}，請儘速完成報名。`,
+          message: `截止時間：${formatTaipeiDateTimeMinute(closeAt)}，剩餘 ${formatCountdown(closeAt.getTime(), now.getTime())}，請儘速完成報名。`,
           blocking: false,
         }
       }

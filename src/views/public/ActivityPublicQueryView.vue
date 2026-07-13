@@ -141,6 +141,27 @@
         </div>
       </section>
 
+      <section
+        v-if="rotatedCredentialRecovery"
+        class="credential-recovery"
+        role="status"
+        aria-live="polite"
+      >
+        <div>
+          <strong>上一筆報名的手機已更新，請保存新查詢碼</strong>
+          <p>新手機：{{ rotatedCredentialRecovery.parentPhone }}</p>
+          <code>{{ rotatedCredentialRecovery.token }}</code>
+        </div>
+        <div class="credential-recovery-actions">
+          <button type="button" class="btn btn-primary" @click="copyRotatedCredential">
+            複製查詢碼
+          </button>
+          <button type="button" class="btn btn-secondary" @click="clearRotatedCredentialRecovery">
+            我已保存
+          </button>
+        </div>
+      </section>
+
       <section v-if="searchError" class="result-section">
         <div class="error-message">{{ searchError }}</div>
         <div class="not-found-help">
@@ -530,11 +551,12 @@ const {
   tokenValid, phoneValid, nameValid, birthdayErrorMsg, birthdayValid,
   activeQueryCredentials, activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
   editForm, statusBadgeFor, waitlistCourses, classEditable,
-  handleQuery, hydrateResult, refetchCurrent, initFromRoute,
+  handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
 
 const {
   editSubmitting, newPhoneTouched, newPhoneValid,
+  rotatedCredentialRecovery, clearRotatedCredentialRecovery,
   estimatedCourseStatus, courseLocked, onToggleCourse,
   feePreview, saveBlocked, handleSaveChanges,
 } = useRegistrationEditSave({
@@ -546,10 +568,22 @@ const {
   courses,
   supplies,
   availability,
+  createHydrationGuard,
   hydrateResult,
   refetchCurrent,
   showToast,
 })
+
+async function copyRotatedCredential() {
+  const token = rotatedCredentialRecovery.value?.token
+  if (!token) return
+  try {
+    await navigator.clipboard.writeText(token)
+    showToast('新查詢碼已複製')
+  } catch {
+    showToast('無法自動複製，請手動選取查詢碼', 'error')
+  }
+}
 // estimatedCourseStatus 未在 template 直接使用（內部由 feePreview 消費），但既有測試
 // 透過 wrapper.vm.estimatedCourseStatus 檢視估算結果，需維持頂層綁定；void 只為滿足
 // noUnusedLocals，不影響 runtime（wrapper.vm 存取不受此列是否「被使用」影響）。
@@ -564,6 +598,7 @@ const {
   activeQueryCredentials,
   activeQueryToken,
   refetchCurrent,
+  createHydrationGuard,
   hydrateResult,
   showToast,
 })
@@ -741,6 +776,32 @@ onBeforeUnmount(() => {
   border-color: var(--color-primary);
 }
 .mode-tab:not(.active):hover { background: var(--color-surface); }
+
+.credential-recovery {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin: var(--space-5) var(--space-6) 0;
+  padding: var(--space-4);
+  color: #78350f;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-md);
+}
+.credential-recovery p { margin: var(--space-1) 0; }
+.credential-recovery code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+}
+.credential-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
 
 .result-section { padding: var(--space-6); }
 

@@ -120,7 +120,7 @@
               @click="handleDelete(row)"
               :loading="deletingRegistrationId === row.id"
             >刪除</el-button>
-            <!-- 查詢碼由姓名+生日+家長手機確定性派生（後端反推），供家長遺失時補發 -->
+            <!-- 查詢碼由姓名+生日+家長手機及伺服器密鑰派生，供家長遺失時由後台補發 -->
             <el-tooltip v-if="row.query_token" :content="row.query_token" placement="top">
               <el-button
                 size="small"

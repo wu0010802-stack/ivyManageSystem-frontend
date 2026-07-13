@@ -141,6 +141,26 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       }
     })
 
+    it('瀏覽器時區落後台北時，台北今天仍可送出報名', () => {
+      const originalTZ = process.env.TZ
+      process.env.TZ = 'UTC'
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-12T16:30:00Z'))
+      try {
+        f.form.name = '小明'
+        f.form.birthday = '2026-07-13'
+        f.form.parent_phone = '0912345678'
+        f.form.class_name = '大班'
+        f.form.selectedCourses = ['美術']
+
+        expect(f.validateForm()).toBe(true)
+        expect(f.errors.birthday).toBe('')
+      } finally {
+        vi.useRealTimers()
+        process.env.TZ = originalTZ
+      }
+    })
+
     it('手機格式錯誤 → errors.parent_phone', () => {
       f.form.name = '小明'
       f.form.birthday = '2022-01-15'

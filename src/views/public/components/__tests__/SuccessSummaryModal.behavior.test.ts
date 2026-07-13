@@ -112,6 +112,34 @@ describe('軟性保存守門', () => {
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(wrapper.find('.close-nudge').exists()).toBe(true)
   })
+
+  it('第一筆的延遲 timer 不會清掉第二筆的複製狀態', async () => {
+    vi.useFakeTimers()
+    try {
+      const wrapper = mountModal()
+      await wrapper.get('.btn-copy').trigger('click')
+      await flushPromises()
+      vi.advanceTimersByTime(1000)
+
+      await wrapper.setProps({ summary: makeSummary({ visible: false }) })
+      await wrapper.setProps({
+        summary: makeSummary({
+          queryToken: 'tok_SECOND',
+          editUrl: 'https://ivy.example.tw/public.html#/activity/query?token=tok_SECOND',
+        }),
+      })
+      await wrapper.get('.btn-copy').trigger('click')
+      await flushPromises()
+
+      vi.advanceTimersByTime(1001)
+      expect(wrapper.get('.btn-copy').text()).toContain('已複製')
+      vi.advanceTimersByTime(500)
+      expect(wrapper.props('summary').copyHint).toBe('已複製查詢碼')
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('複製就地回饋', () => {

@@ -9,6 +9,7 @@
  * formatTimeTW()       — Asia/Taipei 時區的 HH:MM
  * fmtPct()             — 百分比格式化（isRatio 控制 0~1 小數 vs 已是百分比數值）
  * todayISO()           — 今日 YYYY-MM-DD（本地）
+ * todayTaipeiISO()     — 今日 YYYY-MM-DD（Asia/Taipei）
  * offsetISO()          — 今日 ± n 天的 YYYY-MM-DD
  */
 
@@ -84,6 +85,35 @@ export const parseLocalISODate = (value: unknown): Date | null => {
   return date
 }
 
+// 後端才藝模組的 naive ISO datetime（無 Z / offset）固定代表 Asia/Taipei wall time。
+// `new Date(naive)` 會依瀏覽器所在時區解讀，海外裝置會把報名開關與候補期限位移。
+// 已明示 Z / ±HH:MM 的字串則保留其原始 instant。
+export const parseTaipeiDateTime = (value: unknown): Date | null => {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const hasExplicitZone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(trimmed)
+  const date = new Date(hasExplicitZone ? trimmed : `${trimmed}+08:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+export const formatTaipeiDateTimeMinute = (value: unknown): string => {
+  const date = value instanceof Date ? value : parseTaipeiDateTime(value)
+  if (!date || Number.isNaN(date.getTime())) return '—'
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TAIPEI_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+  return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')} ${valueOf('hour')}:${valueOf('minute')}`
+}
+
 // 將 Date 物件轉為「本地時區」的 YYYY-MM
 export const dateToLocalISOMonth = (d: unknown) => {
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return ''
@@ -92,6 +122,20 @@ export const dateToLocalISOMonth = (d: unknown) => {
 
 // 今日 YYYY-MM-DD（本地時區）
 export const todayISO = () => dateToLocalISO(new Date())
+
+// 後端才藝公開 API 以 Asia/Taipei 判定生日的「今天」。瀏覽器可能位於其他時區，
+// 因此不可沿用 todayISO()，否則台北跨日後前端會把後端合法的今日生日誤判為未來。
+export const todayTaipeiISO = (now: Date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: TAIPEI_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const valueOf = (type: 'year' | 'month' | 'day') =>
+    parts.find((part) => part.type === type)?.value ?? ''
+  return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`
+}
 
 // 今日 ± n 天的 YYYY-MM-DD（本地時區）
 export const offsetISO = (days: number) => {

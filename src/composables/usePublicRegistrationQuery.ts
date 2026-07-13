@@ -1,7 +1,7 @@
 import { reactive, ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { publicQueryRegistration, publicQueryByToken } from '@/api/activityPublic'
-import { parseLocalISODate } from '@/utils/format'
+import { parseLocalISODate, todayTaipeiISO } from '@/utils/format'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 export interface CourseEntry {
@@ -44,6 +44,12 @@ export interface QueryCredentials {
   name: string
   birthday: string
   parent_phone: string
+}
+
+export interface QueryHydrationGuard {
+  requestId: number
+  registrationId: number
+  credentials: QueryCredentials
 }
 
 /**
@@ -128,10 +134,13 @@ export function usePublicRegistrationQuery({
       return false
     }
     const date = parseLocalISODate(queryForm.birthday)
-    const now = new Date()
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const today = parseLocalISODate(todayTaipeiISO())
     if (!date) {
       birthdayErrorMsg.value = '生日格式不正確'
+      return false
+    }
+    if (!today) {
+      birthdayErrorMsg.value = '無法判定今日日期，請稍後再試'
       return false
     }
     if (date > today) {
@@ -198,6 +207,30 @@ export function usePublicRegistrationQuery({
       && credentials.parent_phone === current.parent_phone
   }
 
+  function credentialsEqual(a: QueryCredentials, b: QueryCredentials): boolean {
+    return a.mode === b.mode
+      && a.token === b.token
+      && a.name === b.name
+      && a.birthday === b.birthday
+      && a.parent_phone === b.parent_phone
+  }
+
+  function createHydrationGuard(): QueryHydrationGuard | null {
+    if (!queryResult.value || !activeQueryCredentials.value) return null
+    return {
+      requestId: latestQueryRequestId,
+      registrationId: queryResult.value.id,
+      credentials: { ...activeQueryCredentials.value },
+    }
+  }
+
+  function hydrationGuardStillCurrent(guard: QueryHydrationGuard): boolean {
+    return guard.requestId === latestQueryRequestId
+      && queryResult.value?.id === guard.registrationId
+      && activeQueryCredentials.value !== null
+      && credentialsEqual(activeQueryCredentials.value, guard.credentials)
+  }
+
   async function handleQuery() {
     // 兩種模式分流驗證 + 不同 API
     phoneTouched.value = true
@@ -262,7 +295,12 @@ export function usePublicRegistrationQuery({
     }
   }
 
-  function hydrateResult(data: QueryResult, credentials?: QueryCredentials) {
+  function hydrateResult(
+    data: QueryResult,
+    credentials?: QueryCredentials,
+    guard?: QueryHydrationGuard,
+  ): boolean {
+    if (guard && !hydrationGuardStillCurrent(guard)) return false
     queryResult.value = data
     if (credentials) {
       activeQueryCredentials.value = {
@@ -280,6 +318,7 @@ export function usePublicRegistrationQuery({
     // availability 只有「編輯課程」介面才用；查詢階段不輪詢。查詢命中→進入編輯介面時
     // 才首次抓 availability 並起 30s 輪詢（avoid 查詢頁背景空轉）。
     ensureAvailabilityPolling()
+    return true
   }
 
   // availability 輪詢只起一次（家長可能多次重查，prevent 疊加 interval）
@@ -292,8 +331,11 @@ export function usePublicRegistrationQuery({
   }
 
   // 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
-  async function refetchCurrent(phoneOverride?: string): Promise<QueryResult> {
-    const credentials = activeQueryCredentials.value
+  async function refetchCurrent(
+    phoneOverride?: string,
+    credentialsOverride?: QueryCredentials,
+  ): Promise<QueryResult> {
+    const credentials = credentialsOverride ?? activeQueryCredentials.value
     if (!credentials) throw new Error('查詢憑證已失效，請重新查詢')
     const phone = phoneOverride || credentials.parent_phone
     if (credentials.mode === 'token' && credentials.token) {
@@ -301,8 +343,8 @@ export function usePublicRegistrationQuery({
       return (r as { data: QueryResult }).data
     }
     const r = await publicQueryRegistration(
-      queryResult.value?.name || credentials.name,
-      queryResult.value?.birthday || credentials.birthday,
+      credentials.name,
+      credentials.birthday,
       phone,
     )
     return (r as { data: QueryResult }).data
@@ -374,6 +416,7 @@ export function usePublicRegistrationQuery({
     fieldState,
     classEditable,
     handleQuery,
+    createHydrationGuard,
     hydrateResult,
     refetchCurrent,
     ensureAvailabilityPolling,

@@ -11,7 +11,11 @@ import {
   sumSupplyFees,
 } from '@/utils/activityPricing'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
-import type { QueryCredentials, QueryResult } from './usePublicRegistrationQuery'
+import type {
+  QueryCredentials,
+  QueryHydrationGuard,
+  QueryResult,
+} from './usePublicRegistrationQuery'
 
 interface CourseOption { name: string; price?: string | number; [key: string]: unknown }
 interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
@@ -20,6 +24,12 @@ interface EditForm {
   selectedCourses: string[]
   selectedSupplies: string[]
   new_parent_phone: string
+}
+
+export interface RotatedCredentialRecovery {
+  registrationId: number
+  token: string
+  parentPhone: string
 }
 
 /**
@@ -43,6 +53,7 @@ export function useRegistrationEditSave({
   courses,
   supplies,
   availability,
+  createHydrationGuard,
   hydrateResult,
   refetchCurrent,
   showToast,
@@ -55,11 +66,23 @@ export function useRegistrationEditSave({
   courses: Ref<CourseOption[]>
   supplies: Ref<SupplyOption[]>
   availability: Ref<Record<string, number> | null>
-  hydrateResult: (data: QueryResult, credentials?: QueryCredentials) => void
-  refetchCurrent: (phoneOverride?: string) => Promise<QueryResult>
+  createHydrationGuard: () => QueryHydrationGuard | null
+  hydrateResult: (
+    data: QueryResult,
+    credentials?: QueryCredentials,
+    guard?: QueryHydrationGuard,
+  ) => boolean
+  refetchCurrent: (
+    phoneOverride?: string,
+    credentialsOverride?: QueryCredentials,
+  ) => Promise<QueryResult>
   showToast: (message: string, type?: string, duration?: number) => void
 }) {
   const editSubmitting = ref(false)
+  const rotatedCredentialRecovery = ref<RotatedCredentialRecovery | null>(null)
+  const clearRotatedCredentialRecovery = () => {
+    rotatedCredentialRecovery.value = null
+  }
   const newPhoneTouched = ref(false)
   const newPhoneValid = computed(() => {
     const raw = normalizeMobile(editForm.new_parent_phone)
@@ -161,6 +184,11 @@ export function useRegistrationEditSave({
       showToast('查詢憑證已失效，請重新查詢', 'error')
       return
     }
+    const guard = createHydrationGuard()
+    if (!guard) {
+      showToast('查詢結果已變更，請重新操作', 'error')
+      return
+    }
     const oldPhone = credentials.parent_phone
     const newPhoneRaw = normalizeMobile(editForm.new_parent_phone)
     if (newPhoneRaw && !TW_MOBILE_RE.test(newPhoneRaw)) {
@@ -200,23 +228,31 @@ export function useRegistrationEditSave({
       const res = await publicUpdateRegistration(payload)
 
       showToast((res as { data?: { message?: string } })?.data?.message || '資料更新成功！', 'success')
-      if (phoneWillChange) {
-        queryForm.parent_phone = newPhoneRaw
-      }
-      // 2026-07-08：查詢碼由三欄位確定性派生 — 換手機後後端重派生並回新明文 token
+      // 查詢碼由三欄位 + server secret 派生；換手機後後端重派生並回新明文 token
       // （rotated_query_token，僅此一次），立即替換手上舊 token，否則後續 mutation 全 404。
       // （rotation 僅發生於 token 模式的換手機更新 — 無 token 的舊報名不重派生）
       const rotatedToken = (res as { data?: { rotated_query_token?: string | null } })?.data?.rotated_query_token
-      if (rotatedToken) {
-        queryForm.token = rotatedToken
-      }
       // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
       // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。
-      hydrateResult((res as { data: QueryResult }).data, {
+      const hydrated = hydrateResult((res as { data: QueryResult }).data, {
         ...credentials,
         token: rotatedToken || credentials.token,
         parent_phone: phoneWillChange ? newPhoneRaw : oldPhone,
-      })
+      }, guard)
+      if (hydrated) {
+        if (phoneWillChange) queryForm.parent_phone = newPhoneRaw
+        if (rotatedToken) queryForm.token = rotatedToken
+        rotatedCredentialRecovery.value = null
+      } else if (rotatedToken && phoneWillChange) {
+        // mutation 已成功但使用者已切到另一筆查詢：不能覆蓋新畫面，亦不能丟掉
+        // 僅回傳一次的新 token。獨立保存並由 view 顯示，讓家長可複製後再關閉。
+        rotatedCredentialRecovery.value = {
+          registrationId: guard.registrationId,
+          token: rotatedToken,
+          parentPhone: newPhoneRaw,
+        }
+        showToast('上一筆報名已更新手機，請先保存畫面上的新查詢碼', 'warning', 10000)
+      }
     } catch (err) {
       const apiErr = err as { response?: { status?: number; data?: { detail?: string } } }
       const status = apiErr.response?.status
@@ -227,8 +263,8 @@ export function useRegistrationEditSave({
         showToast('資料已被校方更新，已為您重新整理最新狀態', 'warning', 6000)
         // stale 時 update 並未成功，後端 reg.parent_phone 仍是舊號，重新查詢用 oldPhone
         try {
-          const refreshed = await refetchCurrent(oldPhone)
-          hydrateResult(refreshed)
+          const refreshed = await refetchCurrent(oldPhone, guard.credentials)
+          hydrateResult(refreshed, undefined, guard)
         } catch (refreshErr) {
           showToast((refreshErr as { response?: { data?: { detail?: string } } }).response?.data?.detail || '重新整理失敗，請手動重新查詢', 'error')
         }
@@ -242,6 +278,8 @@ export function useRegistrationEditSave({
 
   return {
     editSubmitting,
+    rotatedCredentialRecovery,
+    clearRotatedCredentialRecovery,
     newPhoneTouched,
     newPhoneValid,
     estimatedCourseStatus,

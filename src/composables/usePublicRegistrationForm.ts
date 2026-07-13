@@ -14,7 +14,7 @@
 
 import { reactive, ref, computed } from 'vue'
 import { toggleArrayItem } from '@/utils/arrayUtils'
-import { parseLocalISODate } from '@/utils/format'
+import { parseLocalISODate, todayTaipeiISO } from '@/utils/format'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 // 保守 email 格式（與後端 EmailStr 寬嚴不必一致：打錯只是收不到信，無安全後果）
@@ -74,9 +74,10 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
   })
 
   // 生日輸入上下限（與後端 _validate_birthday_str 同步：20 年內、不可未來）
-  const maxBirthdayISO = computed(() => toISODate(new Date()))
+  const maxBirthdayISO = computed(() => todayTaipeiISO())
   const minBirthdayISO = computed(() => {
-    const d = new Date()
+    const d = parseLocalISODate(todayTaipeiISO())
+    if (!d) return ''
     d.setFullYear(d.getFullYear() - 20)
     return toISODate(d)
   })
@@ -135,10 +136,11 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
       errors.birthday = '請選擇幼兒生日'
     } else {
       const inputDate = parseLocalISODate(birthday)
-      const now = new Date()
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const today = parseLocalISODate(todayTaipeiISO())
       if (!inputDate) {
         errors.birthday = '生日格式不正確'
+      } else if (!today) {
+        errors.birthday = '無法判定今日日期，請稍後再試'
       } else if (inputDate > today) {
         errors.birthday = '生日不可選擇未來日期'
       } else {

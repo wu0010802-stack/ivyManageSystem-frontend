@@ -8,9 +8,16 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api/activityPublic', () => ({
   publicQueryRegistration: vi.fn(),
   publicQueryByToken: vi.fn(),
+  publicConfirmPromotion: vi.fn(),
+  publicDeclinePromotion: vi.fn(),
 }))
 
-import { publicQueryByToken, publicQueryRegistration } from '@/api/activityPublic'
+import {
+  publicConfirmPromotion,
+  publicQueryByToken,
+  publicQueryRegistration,
+} from '@/api/activityPublic'
+import { usePromotionActions } from '@/composables/usePromotionActions'
 import { usePublicRegistrationQuery } from '@/composables/usePublicRegistrationQuery'
 
 function deferred() {
@@ -117,6 +124,52 @@ describe('usePublicRegistrationQuery 查詢亂序守衛', () => {
     expect(query.searchError.value).toBe('')
   })
 
+  it('舊報名 mutation 的遲到 refresh 不覆寫較新的查詢結果與憑證', async () => {
+    const oldRefresh = deferred()
+    const newQuery = deferred()
+    publicQueryByToken
+      .mockResolvedValueOnce(makeResult(1, '第一位幼兒'))
+      .mockImplementationOnce(() => oldRefresh.promise)
+      .mockImplementationOnce(() => newQuery.promise)
+    publicConfirmPromotion.mockResolvedValueOnce({ data: { message: '已確認' } })
+
+    const query = setup()
+    query.queryMode.value = 'token'
+    query.queryForm.token = 'token_FIRST'
+    await query.handleQuery()
+
+    const actions = usePromotionActions({
+      queryResult: query.queryResult,
+      activeQueryCredentials: query.activeQueryCredentials,
+      activeQueryToken: query.activeQueryToken,
+      refetchCurrent: query.refetchCurrent,
+      createHydrationGuard: query.createHydrationGuard,
+      hydrateResult: query.hydrateResult,
+      showToast: vi.fn(),
+    })
+    const promotionRun = actions.handleConfirmPromotion({
+      name: '美術',
+      status: 'promoted_pending',
+      course_id: 10,
+      confirm_deadline: '2026-07-14T00:00:00',
+    })
+    await vi.waitFor(() => {
+      expect(publicQueryByToken).toHaveBeenCalledTimes(2)
+    })
+
+    query.queryForm.token = 'token_SECOND'
+    const newQueryRun = query.handleQuery()
+    newQuery.resolve(makeResult(2, '第二位幼兒'))
+    await newQueryRun
+    expect(query.queryResult.value?.id).toBe(2)
+
+    oldRefresh.resolve(makeResult(1, '第一位幼兒'))
+    await promotionRun
+
+    expect(query.queryResult.value?.id).toBe(2)
+    expect(query.activeQueryCredentials.value?.token).toBe('token_SECOND')
+  })
+
   it('請求進行中修改成無效條件時，立即作廢舊請求且不回填舊結果', async () => {
     const first = deferred()
     publicQueryRegistration.mockImplementationOnce(() => first.promise)
@@ -167,6 +220,23 @@ describe('usePublicRegistrationQuery 查詢亂序守衛', () => {
 
       expect(query.birthdayValid.value).toBe(true)
       expect(query.birthdayErrorMsg.value).not.toContain('超出')
+    } finally {
+      vi.useRealTimers()
+      process.env.TZ = originalTZ
+    }
+  })
+
+  it('瀏覽器時區落後台北時，台北今天仍是合法生日', () => {
+    const originalTZ = process.env.TZ
+    process.env.TZ = 'UTC'
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-12T16:30:00Z'))
+    try {
+      const query = setup()
+      query.queryForm.birthday = '2026-07-13'
+
+      expect(query.birthdayValid.value).toBe(true)
+      expect(query.birthdayErrorMsg.value).not.toContain('未來')
     } finally {
       vi.useRealTimers()
       process.env.TZ = originalTZ
