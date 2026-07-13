@@ -32,8 +32,8 @@ vi.mock('@/api/auth', () => {
     getUsers: vi.fn().mockResolvedValue({
       data: [
         { id: 1, username: 'wang01', employee_name: '王小明', role: 'admin', permission_names: ['*'], is_active: true, last_login: '2026-07-10T17:35:14.324936' },
-        { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: true, last_login: null },
-        { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD', 'EMPLOYEES_READ'], is_active: true, last_login: null },
+        { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: false, last_login: null },
+        { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD'], is_active: true, last_login: null },
         { id: 4, username: 'parent1', employee_name: '', role: 'parent', permission_names: [], is_active: true, last_login: null },
       ],
     }),
@@ -373,5 +373,20 @@ describe('SettingsAccountsTab — role card UX', () => {
       const vm = wrapper.vm as unknown as { roleFilterOptions: { code: string }[] }
       expect(vm.roleFilterOptions.map((r) => r.code)).not.toContain('parent')
     })
+  })
+
+  it('統計概覽：staff 與 parent 數字正確且渲染於 .accounts-stats', async () => {
+    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      staffStats: { total: number; active: number; neverLoggedIn: number; custom: number }
+      parentStats: { total: number; active: number }
+    }
+    // staff: wang01(admin,*,active,有登入)、lin02(teacher,停用,未登入)、chen03(supervisor,自訂,未登入)
+    expect(vm.staffStats).toEqual({ total: 3, active: 2, neverLoggedIn: 2, custom: 1 })
+    expect(vm.parentStats).toEqual({ total: 1, active: 1 })
+    const stats = wrapper.find('.accounts-stats')
+    expect(stats.exists()).toBe(true)
+    expect(stats.text()).toContain('自訂權限 1')
   })
 })
