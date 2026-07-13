@@ -109,6 +109,27 @@ const filteredParentUsers = computed(() =>
   parentUsers.value.filter((u) => !keyword.value || String(u.username ?? '').includes(keyword.value.trim())),
 )
 
+const staffStats = computed(() => {
+  const list = staffUsers.value
+  return {
+    total: list.length,
+    active: list.filter((u) => !!u.is_active).length,
+    neverLoggedIn: list.filter((u) => !u.last_login).length,
+    custom: list.filter(
+      (u) =>
+        u.role !== 'teacher' &&
+        Array.isArray(u.permission_names) &&
+        !(u.permission_names as string[]).includes('*') &&
+        !isUsingRoleDefault(u),
+    ).length,
+  }
+})
+
+const parentStats = computed(() => ({
+  total: parentUsers.value.length,
+  active: parentUsers.value.filter((u) => !!u.is_active).length,
+}))
+
 const parentEmptyText = computed(() =>
   keyword.value ? '查無符合條件的帳號' : '家長帳號由家長端 LINE 綁定自動產生，不在此新增',
 )
@@ -395,6 +416,7 @@ defineExpose({
   keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser,
   handleToggleActive, accountCardColumns,
   audience, staffUsers, parentUsers, filteredParentUsers, onAudienceChange, roleFilterOptions, parentEmptyText,
+  staffStats, parentStats,
 })
 </script>
 
@@ -406,6 +428,12 @@ defineExpose({
       class="audience-switcher"
       @change="onAudienceChange"
     />
+    <div v-if="audience === 'staff'" class="accounts-stats">
+      教職員 <b>{{ staffStats.total }}</b>・啟用 <b>{{ staffStats.active }}</b>・從未登入 <b>{{ staffStats.neverLoggedIn }}</b>・自訂權限 <b>{{ staffStats.custom }}</b>
+    </div>
+    <div v-else class="accounts-stats">
+      家長 <b>{{ parentStats.total }}</b>・啟用 <b>{{ parentStats.active }}</b>
+    </div>
     <div class="accounts-toolbar">
       <div class="toolbar-left">
         <el-input v-model="keyword" :placeholder="audience === 'staff' ? '搜尋帳號 / 姓名' : '搜尋帳號'" clearable style="width: 220px;" />
@@ -726,6 +754,17 @@ defineExpose({
 <style scoped>
 .audience-switcher {
   margin-bottom: 12px;
+}
+
+.accounts-stats {
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.accounts-stats b {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .accounts-toolbar {
