@@ -193,8 +193,10 @@ html.dark .crisp-surface {
 .crisp-surface .roster-stats { font-variant-numeric: tabular-nums; }
 .crisp-surface .roster-stats b { color: var(--crisp-text); font-weight: 650; }
 
-/* 詳情頁區塊小標（spec §3.2）：11px 間距字母的安靜標籤 */
-.crisp-surface .section-title {
+/* 詳情頁區塊小標（spec §3.2）：11px 間距字母的安靜標籤
+   selector 含 .detail-section 是為壓過 SFC scoped 同名規則的 font-size
+  （EmployeeDetailView scoped .section-title[data-v-*] 為 (0,2,0) 且後注入，(0,3,0) 才穩贏） */
+.crisp-surface .detail-section .section-title {
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 1.5px;
