@@ -279,7 +279,7 @@
           <div class="field-group">
             <label>家長手機</label>
             <div class="readonly-text">
-              {{ queryResult.parent_phone || normalizeMobile(queryForm.parent_phone) || '—' }}
+              {{ queryResult.parent_phone || activeQueryCredentials?.parent_phone || '—' }}
             </div>
           </div>
           <div class="field-group">
@@ -477,7 +477,6 @@ import { usePublicRegistrationQuery } from '@/composables/usePublicRegistrationQ
 import { useRegistrationEditSave } from '@/composables/useRegistrationEditSave'
 import { usePromotionActions } from '@/composables/usePromotionActions'
 import { toggleArrayItem } from '@/utils/arrayUtils'
-import { normalizeMobile } from '@/utils/phone'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
@@ -529,7 +528,7 @@ const {
   queryMode, queryForm, queryLoading, queryResult, searchError,
   nameTouched, birthdayTouched, phoneTouched, tokenTouched,
   tokenValid, phoneValid, nameValid, birthdayErrorMsg, birthdayValid,
-  activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
+  activeQueryCredentials, activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
   editForm, statusBadgeFor, waitlistCourses, classEditable,
   handleQuery, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
@@ -542,6 +541,7 @@ const {
   editForm,
   queryResult,
   queryForm,
+  activeQueryCredentials,
   activeQueryToken,
   courses,
   supplies,
@@ -561,8 +561,8 @@ const {
   handleConfirmPromotion, handleDeclinePromotion,
 } = usePromotionActions({
   queryResult,
+  activeQueryCredentials,
   activeQueryToken,
-  queryForm,
   refetchCurrent,
   hydrateResult,
   showToast,

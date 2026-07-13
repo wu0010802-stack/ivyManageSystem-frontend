@@ -1,7 +1,7 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { publicConfirmPromotion, publicDeclinePromotion } from '@/api/activityPublic'
 import { normalizeMobile } from '@/utils/phone'
-import type { CourseEntry, QueryResult } from './usePublicRegistrationQuery'
+import type { CourseEntry, QueryCredentials, QueryResult } from './usePublicRegistrationQuery'
 
 /**
  * F4（2026-07-12）：從 ActivityPublicQueryView 抽出的「候補已升正式待確認」動作。
@@ -13,17 +13,17 @@ import type { CourseEntry, QueryResult } from './usePublicRegistrationQuery'
  */
 export function usePromotionActions({
   queryResult,
+  activeQueryCredentials,
   activeQueryToken,
-  queryForm,
   refetchCurrent,
   hydrateResult,
   showToast,
 }: {
   queryResult: Ref<QueryResult | null>
+  activeQueryCredentials: Ref<QueryCredentials | null>
   activeQueryToken: ComputedRef<string | null>
-  queryForm: { parent_phone: string; birthday: string }
   refetchCurrent: (phoneOverride?: string) => Promise<QueryResult>
-  hydrateResult: (data: QueryResult) => void
+  hydrateResult: (data: QueryResult, credentials?: QueryCredentials) => void
   showToast: (message: string, type?: string, duration?: number) => void
 }) {
   // 候補已升正式待確認清單（供獨立確認區塊使用）
@@ -58,12 +58,17 @@ export function usePromotionActions({
   const promotionSubmitting = ref<number | null>(null)
 
   async function handleConfirmPromotion(item: CourseEntry) {
+    const credentials = activeQueryCredentials.value
+    if (!credentials) {
+      showToast('查詢憑證已失效，請重新查詢', 'error')
+      return
+    }
     promotionSubmitting.value = item.course_id ?? null
     try {
-      const phonePayload = normalizeMobile(queryForm.parent_phone)
+      const phonePayload = normalizeMobile(credentials.parent_phone)
       const res = await publicConfirmPromotion(queryResult.value!.id, item.course_id!, {
         name: queryResult.value!.name,
-        birthday: queryResult.value!.birthday || queryForm.birthday,
+        birthday: queryResult.value!.birthday || credentials.birthday,
         parent_phone: phonePayload,
         // 資安 #5：token-bearing 報名確認候補需帶 query_token（舊報名為 null）
         query_token: activeQueryToken.value ?? undefined,
@@ -89,12 +94,17 @@ export function usePromotionActions({
     if (!window.confirm(`確定要放棄「${item.name}」的正式名額？\n放棄後將遞補給下一位候補，無法復原。`)) {
       return
     }
+    const credentials = activeQueryCredentials.value
+    if (!credentials) {
+      showToast('查詢憑證已失效，請重新查詢', 'error')
+      return
+    }
     promotionSubmitting.value = item.course_id ?? null
     try {
-      const phonePayload = normalizeMobile(queryForm.parent_phone)
+      const phonePayload = normalizeMobile(credentials.parent_phone)
       const res = await publicDeclinePromotion(queryResult.value!.id, item.course_id!, {
         name: queryResult.value!.name,
-        birthday: queryResult.value!.birthday || queryForm.birthday,
+        birthday: queryResult.value!.birthday || credentials.birthday,
         parent_phone: phonePayload,
         // 資安 #5：token-bearing 報名放棄候補需帶 query_token（舊報名為 null）
         query_token: activeQueryToken.value ?? undefined,

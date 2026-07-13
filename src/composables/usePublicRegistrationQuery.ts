@@ -1,6 +1,7 @@
 import { reactive, ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { publicQueryRegistration, publicQueryByToken } from '@/api/activityPublic'
+import { parseLocalISODate } from '@/utils/format'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 export interface CourseEntry {
@@ -37,6 +38,14 @@ export interface QueryResult {
   is_paid?: boolean
 }
 
+export interface QueryCredentials {
+  mode: 'fields' | 'token'
+  token: string
+  name: string
+  birthday: string
+  parent_phone: string
+}
+
 /**
  * F4（2026-07-12）：從 ActivityPublicQueryView 抽出的「查詢 + 編修草稿」狀態。
  *
@@ -66,7 +75,9 @@ export function usePublicRegistrationQuery({
   const queryForm = reactive({ token: '', name: '', birthday: '', parent_phone: '' })
   const queryLoading = ref(false)
   const queryResult = ref<QueryResult | null>(null)
+  const activeQueryCredentials = ref<QueryCredentials | null>(null)
   const searchError = ref('')
+  let latestQueryRequestId = 0
   const nameTouched = ref(false)
   const birthdayTouched = ref(false)
   const phoneTouched = ref(false)
@@ -77,9 +88,12 @@ export function usePublicRegistrationQuery({
     TW_MOBILE_RE.test(normalizeMobile(queryForm.parent_phone))
   )
 
-  // 資安 #5：以 token 模式載入時手上才有 query_token；三欄模式為 null。
+  // 成功查詢所使用的 credentials 與仍可編輯的搜尋欄分離。mutation 必須使用
+  // activeQueryCredentials，不能在結果已載入後又讀 queryForm 而混到另一筆條件。
   const activeQueryToken = computed(() =>
-    queryMode.value === 'token' && queryForm.token.trim() ? queryForm.token.trim() : null,
+    activeQueryCredentials.value?.mode === 'token'
+      ? activeQueryCredentials.value.token
+      : null,
   )
   // 可否進行破壞性 mutation（修改/確認/放棄）：
   // - 後端標 query_token_required（token-bearing 報名）→ 必須手上有 token
@@ -113,14 +127,19 @@ export function usePublicRegistrationQuery({
       birthdayErrorMsg.value = '請選擇幼兒生日'
       return false
     }
-    const date = new Date(queryForm.birthday)
+    const date = parseLocalISODate(queryForm.birthday)
     const now = new Date()
-    if (date > now) {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    if (!date) {
+      birthdayErrorMsg.value = '生日格式不正確'
+      return false
+    }
+    if (date > today) {
       birthdayErrorMsg.value = '生日不能是未來的日期'
       return false
     }
     // 與後端 20 年窗口同步：查詢時也擋明顯不合理的生日，避免 round-trip 才失敗
-    const earliest = new Date(now)
+    const earliest = new Date(today)
     earliest.setFullYear(earliest.getFullYear() - 20)
     if (date < earliest) {
       birthdayErrorMsg.value = '生日超出合理範圍'
@@ -160,6 +179,25 @@ export function usePublicRegistrationQuery({
   })
   const classEditable = computed(() => fieldState.value.class_editable === true)
 
+  function currentQueryCredentials(): QueryCredentials {
+    return {
+      mode: queryMode.value,
+      token: queryForm.token.trim(),
+      name: queryForm.name.trim(),
+      birthday: queryForm.birthday,
+      parent_phone: normalizeMobile(queryForm.parent_phone),
+    }
+  }
+
+  function credentialsStillCurrent(credentials: QueryCredentials): boolean {
+    const current = currentQueryCredentials()
+    return credentials.mode === current.mode
+      && credentials.token === current.token
+      && credentials.name === current.name
+      && credentials.birthday === current.birthday
+      && credentials.parent_phone === current.parent_phone
+  }
+
   async function handleQuery() {
     // 兩種模式分流驗證 + 不同 API
     phoneTouched.value = true
@@ -168,20 +206,27 @@ export function usePublicRegistrationQuery({
     if (queryMode.value === 'token') {
       tokenTouched.value = true
       if (!tokenValid.value) return
+      const credentials = currentQueryCredentials()
+      const requestId = ++latestQueryRequestId
       queryLoading.value = true
       searchError.value = ''
       queryResult.value = null
+      activeQueryCredentials.value = null
       try {
         const res = await publicQueryByToken(
-          queryForm.token.trim(),
-          normalizeMobile(queryForm.parent_phone),
+          credentials.token,
+          credentials.parent_phone,
         )
-        hydrateResult((res as { data: QueryResult }).data)
+        if (requestId === latestQueryRequestId && credentialsStillCurrent(credentials)) {
+          hydrateResult((res as { data: QueryResult }).data, credentials)
+        }
       } catch (err) {
-        searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-          || '查無對應報名，請確認查詢碼與手機號碼是否正確。'
+        if (requestId === latestQueryRequestId && credentialsStillCurrent(credentials)) {
+          searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+            || '查無對應報名，請確認查詢碼與手機號碼是否正確。'
+        }
       } finally {
-        queryLoading.value = false
+        if (requestId === latestQueryRequestId) queryLoading.value = false
       }
       return
     }
@@ -191,27 +236,41 @@ export function usePublicRegistrationQuery({
     birthdayTouched.value = true
     if (!nameValid.value || !birthdayValid.value) return
 
+    const credentials = currentQueryCredentials()
+    const requestId = ++latestQueryRequestId
     queryLoading.value = true
     searchError.value = ''
     queryResult.value = null
+    activeQueryCredentials.value = null
     try {
       const res = await publicQueryRegistration(
-        queryForm.name.trim(),
-        queryForm.birthday,
-        normalizeMobile(queryForm.parent_phone)
+        credentials.name,
+        credentials.birthday,
+        credentials.parent_phone,
       )
-      hydrateResult((res as { data: QueryResult }).data)
+      if (requestId === latestQueryRequestId && credentialsStillCurrent(credentials)) {
+        hydrateResult((res as { data: QueryResult }).data, credentials)
+      }
     } catch (err) {
       // 通用錯誤：404 / 403 均一律顯示同樣訊息，不透露哪一欄錯
-      searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-        || '查無對應報名，請確認三項資料是否與報名時一致。'
+      if (requestId === latestQueryRequestId && credentialsStillCurrent(credentials)) {
+        searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          || '查無對應報名，請確認三項資料是否與報名時一致。'
+      }
     } finally {
-      queryLoading.value = false
+      if (requestId === latestQueryRequestId) queryLoading.value = false
     }
   }
 
-  function hydrateResult(data: QueryResult) {
+  function hydrateResult(data: QueryResult, credentials?: QueryCredentials) {
     queryResult.value = data
+    if (credentials) {
+      activeQueryCredentials.value = {
+        ...credentials,
+        name: data.name,
+        birthday: data.birthday,
+      }
+    }
     editForm.class_name = data.class_name || ''
     editForm.selectedCourses = (data.courses || []).map((c) => c.name)
     editForm.selectedSupplies = Array.isArray(data.supplies)
@@ -234,14 +293,16 @@ export function usePublicRegistrationQuery({
 
   // 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
   async function refetchCurrent(phoneOverride?: string): Promise<QueryResult> {
-    const phone = phoneOverride || normalizeMobile(queryForm.parent_phone)
-    if (queryMode.value === 'token' && queryForm.token) {
-      const r = await publicQueryByToken(queryForm.token.trim(), phone)
+    const credentials = activeQueryCredentials.value
+    if (!credentials) throw new Error('查詢憑證已失效，請重新查詢')
+    const phone = phoneOverride || credentials.parent_phone
+    if (credentials.mode === 'token' && credentials.token) {
+      const r = await publicQueryByToken(credentials.token, phone)
       return (r as { data: QueryResult }).data
     }
     const r = await publicQueryRegistration(
-      queryResult.value?.name || queryForm.name.trim(),
-      queryResult.value?.birthday || queryForm.birthday,
+      queryResult.value?.name || credentials.name,
+      queryResult.value?.birthday || credentials.birthday,
       phone,
     )
     return (r as { data: QueryResult }).data
@@ -250,7 +311,14 @@ export function usePublicRegistrationQuery({
   // Clear error once user edits inputs again
   watch(
     () => [queryForm.token, queryForm.name, queryForm.birthday, queryForm.parent_phone, queryMode.value],
-    () => { searchError.value = '' }
+    () => {
+      searchError.value = ''
+      if (queryLoading.value) {
+        latestQueryRequestId += 1
+        queryLoading.value = false
+      }
+    },
+    { flush: 'sync' },
   )
 
   // 編修連結上的 ?token= 會出現在 referer / 連結預覽縮圖等周邊；加 noindex 與
@@ -285,6 +353,7 @@ export function usePublicRegistrationQuery({
     queryForm,
     queryLoading,
     queryResult,
+    activeQueryCredentials,
     searchError,
     nameTouched,
     birthdayTouched,

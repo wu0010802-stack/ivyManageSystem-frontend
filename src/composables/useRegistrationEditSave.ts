@@ -11,7 +11,7 @@ import {
   sumSupplyFees,
 } from '@/utils/activityPricing'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
-import type { QueryResult } from './usePublicRegistrationQuery'
+import type { QueryCredentials, QueryResult } from './usePublicRegistrationQuery'
 
 interface CourseOption { name: string; price?: string | number; [key: string]: unknown }
 interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
@@ -38,6 +38,7 @@ export function useRegistrationEditSave({
   editForm,
   queryResult,
   queryForm,
+  activeQueryCredentials,
   activeQueryToken,
   courses,
   supplies,
@@ -49,11 +50,12 @@ export function useRegistrationEditSave({
   editForm: EditForm
   queryResult: Ref<QueryResult | null>
   queryForm: { token: string; birthday: string; parent_phone: string }
+  activeQueryCredentials: Ref<QueryCredentials | null>
   activeQueryToken: ComputedRef<string | null>
   courses: Ref<CourseOption[]>
   supplies: Ref<SupplyOption[]>
   availability: Ref<Record<string, number> | null>
-  hydrateResult: (data: QueryResult) => void
+  hydrateResult: (data: QueryResult, credentials?: QueryCredentials) => void
   refetchCurrent: (phoneOverride?: string) => Promise<QueryResult>
   showToast: (message: string, type?: string, duration?: number) => void
 }) {
@@ -154,7 +156,12 @@ export function useRegistrationEditSave({
       return
     }
 
-    const oldPhone = normalizeMobile(queryForm.parent_phone)
+    const credentials = activeQueryCredentials.value
+    if (!credentials) {
+      showToast('查詢憑證已失效，請重新查詢', 'error')
+      return
+    }
+    const oldPhone = credentials.parent_phone
     const newPhoneRaw = normalizeMobile(editForm.new_parent_phone)
     if (newPhoneRaw && !TW_MOBILE_RE.test(newPhoneRaw)) {
       newPhoneTouched.value = true
@@ -172,7 +179,7 @@ export function useRegistrationEditSave({
       const payload: ApiBody<'/activity/public/update', 'post'> = {
         id: queryResult.value!.id,
         name: queryResult.value!.name,
-        birthday: queryResult.value!.birthday || queryForm.birthday,
+        birthday: queryResult.value!.birthday || credentials.birthday,
         parent_phone: oldPhone,
         class: editForm.class_name,
         courses: coursesPayload,
@@ -205,7 +212,11 @@ export function useRegistrationEditSave({
       }
       // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
       // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。
-      hydrateResult((res as { data: QueryResult }).data)
+      hydrateResult((res as { data: QueryResult }).data, {
+        ...credentials,
+        token: rotatedToken || credentials.token,
+        parent_phone: phoneWillChange ? newPhoneRaw : oldPhone,
+      })
     } catch (err) {
       const apiErr = err as { response?: { status?: number; data?: { detail?: string } } }
       const status = apiErr.response?.status

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 
 // ── 模擬 vue-router（view 用 useRoute 取 query.token）──────────────────────
 vi.mock('vue-router', () => ({
@@ -19,7 +19,11 @@ vi.mock('@/api/activityPublic', () => ({
   getPublicCoursesAvailability: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
-import { publicQueryByToken, getPublicBootstrap } from '@/api/activityPublic'
+import {
+  publicQueryByToken,
+  publicUpdateRegistration,
+  getPublicBootstrap,
+} from '@/api/activityPublic'
 
 vi.mock('@/utils/arrayUtils', () => ({
   toggleArrayItem: (arr: string[], item: string) => {
@@ -193,6 +197,50 @@ describe('ActivityPublicQueryView — is_paid=false 既有可編輯行為不受�
 
     expect(wrapper.find('[data-test="payment-locked-hint"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('儲存修改')
+  })
+
+  it('查詢後搜尋欄被改動，儲存仍使用命中結果的原始手機與 token', async () => {
+    seedPaidRegistration({
+      is_paid: false,
+      paid_amount: 0,
+      query_token_required: true,
+    })
+    vi.mocked(publicUpdateRegistration).mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [{ course_id: 1, name: '美術', status: 'enrolled', price: 3000 }],
+        supplies: [{ name: '舞鞋', price: 500 }],
+        total_amount: 3500,
+        paid_amount: 0,
+        is_paid: false,
+        query_token_required: true,
+      },
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+    const vm = wrapper.vm as unknown as {
+      queryForm: { token: string; parent_phone: string }
+      $nextTick: () => Promise<void>
+    }
+    vm.queryForm.token = 'TOKEN_CHANGED_AFTER_QUERY'
+    vm.queryForm.parent_phone = '0987654321'
+    await vm.$nextTick()
+
+    const save = wrapper.findAll('.action-buttons button').find((button) =>
+      button.text().includes('儲存修改'),
+    )
+    expect(save).toBeDefined()
+    await save!.trigger('click')
+    await flushPromises()
+
+    expect(publicUpdateRegistration).toHaveBeenCalledWith(expect.objectContaining({
+      parent_phone: '0912345678',
+      query_token: 'TESTTOKEN123',
+    }))
   })
 })
 
