@@ -101,7 +101,7 @@ const warnings = computed(() => {
     if (count === 0) {
       out.push(`「${label}」目前沒有任何帳號，該關卡僅超級管理員可代簽`)
     }
-    if (s.role === props.submitterRole && count <= 1) {
+    if (s.role === props.submitterRole && count === 1) {
       out.push(`「${label}」與申請人同角色且僅 ${count} 個帳號：本人送單時無人可簽（自審死鎖），需超級管理員終核`)
     }
   }
@@ -174,7 +174,6 @@ defineExpose({ policies, activeDocType, chainDraft, overrideEditing, startOverri
   <el-card shadow="never" class="chain-editor" :body-style="{ paddingTop: '12px' }">
     <template #header>
       <div class="chain-header">
-        <span class="chain-title">簽呈審核關卡鏈</span>
         <el-radio-group v-model="activeDocType" size="small">
           <el-radio-button v-for="dt in DOC_TYPES" :key="dt" :value="dt">{{ DOC_TYPE_LABELS[dt] }}</el-radio-button>
         </el-radio-group>
@@ -243,10 +242,6 @@ defineExpose({ policies, activeDocType, chainDraft, overrideEditing, startOverri
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.chain-title {
-  font-weight: 600;
 }
 
 .superadmin-note {

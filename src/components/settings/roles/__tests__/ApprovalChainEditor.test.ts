@@ -31,11 +31,11 @@ const definition: RolesDefinition = {
   permissions: {},
   groups: [],
   roles: {
-    admin: { label: '管理員', description: '', permissions: ['*'], is_core: true, flags: ['super_admin'] },
-    supervisor: { label: '主管', description: '', permissions: [], is_core: true, flags: [] },
-    hr: { label: '人資', description: '', permissions: [], is_core: true, flags: [] },
-    teacher: { label: '教師', description: '', permissions: [], is_core: true, flags: ['portal_only'] },
-    parent: { label: '家長', description: '', permissions: [], is_core: true, flags: ['parent', 'portal_only'] },
+    admin: { label: '管理員', description: '', permissions: ['*'], flags: ['super_admin'] },
+    supervisor: { label: '主管', description: '', permissions: [], flags: [] },
+    hr: { label: '人資', description: '', permissions: [], flags: [] },
+    teacher: { label: '教師', description: '', permissions: [], flags: ['portal_only'] },
+    parent: { label: '家長', description: '', permissions: [], flags: ['parent', 'portal_only'] },
   },
 }
 
@@ -154,6 +154,15 @@ describe('ApprovalChainEditor', () => {
     vm.addStage()
     expect(vm.warnings.some((x) => x.includes('沒有任何帳號'))).toBe(true)
     expect(vm.warnings.some((x) => x.includes('自審死鎖'))).toBe(true)
+  })
+
+  it('回歸：submitter 同角色但 0 帳號時，只出「沒有帳號」，不重複觸發「自審死鎖」', async () => {
+    const { vm } = await mountEditor('hr', { hr: 0, admin: 5 })
+    // hr 預設鏈已含 admin（5 帳號，不觸發警示）；再加 hr 自己（0 帳號，非「submitter 為唯一成員」情境）
+    vm.stageToAdd = 'hr'
+    vm.addStage()
+    expect(vm.warnings.filter((x) => x.includes('沒有任何帳號'))).toHaveLength(1)
+    expect(vm.warnings.some((x) => x.includes('自審死鎖'))).toBe(false)
   })
 
   it('accountCounts null：不出 warning', async () => {
