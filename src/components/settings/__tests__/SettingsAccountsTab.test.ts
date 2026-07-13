@@ -380,16 +380,35 @@ describe('SettingsAccountsTab — role card UX', () => {
       expect(vm.editingDeviation).toBeNull()
     })
 
-    it('saveEditUser：payload 只有 role、不含 permission_names', async () => {
+    it('saveEditUser：role 有變更時，payload 只有 role、不含 permission_names', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as {
+        handleEditUser: (u: Record<string, unknown>) => void
+        editUserForm: { role: string }
+        saveEditUser: () => Promise<void>
+      }
+      vm.handleEditUser({ id: 3, username: 'chen03', role: 'supervisor', permission_names: ['DASHBOARD'] })
+      vm.editUserForm.role = 'hr' // 使用者在 dialog 內實際切換了角色
+      await vm.saveEditUser()
+      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(3, { role: 'hr' })
+    })
+
+    // final review Critical-1 回歸測試：no-op 儲存（開 dialog 沒改角色）不可送出 { role }，
+    // 否則後端會把偏離帳號的自訂 permission_names 靜默重置為角色預設
+    it('saveEditUser：role 未變更時不呼叫 API，直接關閉 dialog（防偏離權限被靜默重置）', async () => {
       const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
       await flushPromises()
       const vm = wrapper.vm as unknown as {
         handleEditUser: (u: Record<string, unknown>) => void
         saveEditUser: () => Promise<void>
+        editUserDialogVisible: boolean
       }
       vm.handleEditUser({ id: 3, username: 'chen03', role: 'supervisor', permission_names: ['DASHBOARD'] })
+      expect(vm.editUserDialogVisible).toBe(true)
       await vm.saveEditUser()
-      expect(vi.mocked(updateUser)).toHaveBeenCalledWith(3, { role: 'supervisor' })
+      expect(vi.mocked(updateUser)).not.toHaveBeenCalled()
+      expect(vm.editUserDialogVisible).toBe(false)
     })
 
     it('另存自訂角色：createRole（permissions=現值）→ updateUser（role=新 code）', async () => {

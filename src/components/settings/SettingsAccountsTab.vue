@@ -59,6 +59,8 @@ const resetDialogVisible = ref<boolean>(false)
 const editUserDialogVisible = ref<boolean>(false)
 // editUserForm 保留 permission_names 欄位：僅供偏離摘要計算（唯讀），永不進 payload
 const editUserForm = reactive<{ id: number | null; username: string; role: string; permission_names: string[] | null }>({ id: null, username: '', role: 'teacher', permission_names: null })
+// 開 dialog 當下的角色快照：saveEditUser 判斷角色是否真的變更，避免 no-op 儲存把偏離權限靜默重置為角色預設
+const editUserOriginalRole = ref<string>('')
 const credentialDialogVisible = ref<boolean>(false)
 const createdCredentials = ref<{ username: string; password: string }>({ username: '', password: '' })
 const permissionDefinition = ref<RolesDefinition>({ permissions: {}, groups: [], roles: {} })
@@ -264,10 +266,17 @@ const handleEditUser = (user: Record<string, unknown>) => {
   editUserForm.username = user.username as string
   editUserForm.role = user.role as string
   editUserForm.permission_names = (user.permission_names as string[] | null) ?? null
+  editUserOriginalRole.value = user.role as string
   editUserDialogVisible.value = true
 }
 
 const saveEditUser = async () => {
+  if (editUserForm.role === editUserOriginalRole.value) {
+    // 角色未變更：不呼叫 API。後端只要收到 role 就會把 permission_names 重置為角色預設，
+    // no-op 儲存若照送會把偏離帳號的自訂權限靜默抹除（final review Critical-1）
+    editUserDialogVisible.value = false
+    return
+  }
   try {
     // 只送 role：後端會把 permission_names 重置為新角色預設（偏離帳號換角色即脫離偏離）
     await updateUser(editUserForm.id!, { role: editUserForm.role })
@@ -403,7 +412,7 @@ onMounted(() => {
 })
 
 defineExpose({
-  userForm, editUserForm, saveUser, saveEditUser, handleEditUser,
+  userForm, editUserForm, editUserDialogVisible, saveUser, saveEditUser, handleEditUser,
   editingDeviation, openSaveAsRole, submitSaveAsRole, saveAsRoleForm, saveAsRoleDialogVisible,
   keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser, handleToggleActive,
   audience, staffUsers, parentUsers, filteredParentUsers, onAudienceChange, roleFilterOptions, parentEmptyText,
