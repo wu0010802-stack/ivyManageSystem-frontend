@@ -39,7 +39,9 @@ export const tenureLabel = (emp: Record<string, unknown>, todayIso: string = tod
   const [ty, tm, td] = todayIso.split('-').map(Number)
   const hireDate = new Date(y, m - 1, d)
   const today = new Date(ty, tm - 1, td)
-  if (Number.isNaN(hireDate.getTime()) || hireDate.getTime() > today.getTime()) return '—'
+  // round-trip 驗證：JS Date 對溢位月/日靜默進位（'2026-13-45' → 合法日期），需驗回原值（同 utils/expiry.parseLocalDate 慣例）
+  if (hireDate.getFullYear() !== y || hireDate.getMonth() !== m - 1 || hireDate.getDate() !== d) return '—'
+  if (hireDate.getTime() > today.getTime()) return '—'
   const years = (today.getTime() - hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000)
   return `${years.toFixed(1)} 年`
 }

@@ -98,6 +98,10 @@ describe('tenureLabel', () => {
     expect(tenureLabel({ is_active: true }, '2026-07-13')).toBe('—')
     expect(tenureLabel({ is_active: true, hire_date: 'not-a-date' }, '2026-07-13')).toBe('—')
   })
+  it('曆法非法日期（月/日溢位）→ —', () => {
+    expect(tenureLabel({ is_active: true, hire_date: '2026-13-45' }, '2026-07-13')).toBe('—')
+    expect(tenureLabel({ is_active: true, hire_date: '2026-02-30' }, '2026-07-13')).toBe('—')
+  })
   it('未來到職日 → —', () => {
     expect(tenureLabel({ is_active: true, hire_date: '2026-08-01' }, '2026-07-13')).toBe('—')
   })
