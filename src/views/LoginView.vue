@@ -4,9 +4,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
-import { setUserInfo } from '@/utils/auth'
+import { setUserInfo, isPortalOnlyUser } from '@/utils/auth'
 import { apiError } from '@/utils/error'
-import { PORTAL_ONLY_ROLES } from '@/constants/permissions'
 import { IDLE_LOGOUT_FLAG_KEY } from '@/composables/useIdleTimeout'
 
 const router = useRouter()
@@ -53,8 +52,8 @@ const handleLogin = async () => {
   try {
     const res = await login(form.username, form.password)
 
-    const userData = res.data as { user: { role: string; name: string }; must_change_password?: boolean }
-    if (PORTAL_ONLY_ROLES.includes(userData.user.role)) {
+    const userData = res.data as { user: { role: string; name: string; flags?: string[] }; must_change_password?: boolean }
+    if (isPortalOnlyUser(userData.user)) {
       ElMessage.error('此帳號僅能從「教職員入口」登入')
       usernameInput.value?.focus?.()
       return

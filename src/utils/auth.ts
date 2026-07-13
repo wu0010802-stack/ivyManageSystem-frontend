@@ -8,6 +8,7 @@ import {
   TEACHER_PORTAL_ROUTES,
   PUBLIC_ROUTES,
   PUBLIC_ROUTE_PREFIXES,
+  PORTAL_ONLY_ROLES,
 } from '@/constants/permissions'
 
 export { PERMISSION_NAMES, ROUTE_PERMISSION_RULES }
@@ -235,6 +236,22 @@ export const SCOPE_AWARE_CODES: ReadonlySet<string> = new Set([
   'DISMISSAL_CALLS_READ', 'DISMISSAL_CALLS_WRITE',
 ])
 
+/** userInfo.flags 是否含 portal_only（防禦式讀取：flags 缺失/型別錯 → false）。 */
+function _hasPortalOnlyFlag(info: Record<string, unknown>): boolean {
+  const flags = info['flags']
+  return Array.isArray(flags) && (flags as unknown[]).includes('portal_only')
+}
+
+/**
+ * 使用者是否僅能走 Portal（教師 /portal、家長 parent app），不可用管理端登入。
+ * 優先讀 flags 的 portal_only（一期 seed：teacher/parent；自訂 portal_only 角色亦涵蓋），
+ * PORTAL_ONLY_ROLES 硬編碼保留為 flags 缺失時的 fail-safe fallback（spec §6.3）。
+ */
+export function isPortalOnlyUser(info: Record<string, unknown> | null | undefined): boolean {
+  if (!info) return false
+  return _hasPortalOnlyFlag(info) || PORTAL_ONLY_ROLES.includes(info['role'] as string)
+}
+
 /**
  * 檢查使用者是否擁有指定權限。
  * 支援 bare code（'STUDENTS_READ'）與 scope-qualified code（'STUDENTS_READ:own_class'）。
@@ -244,8 +261,10 @@ export function hasPermission(permissionName: string): boolean {
   const userInfo = getUserInfo()
   if (!userInfo) return false
 
-  // teacher 角色只能存取 Portal
-  if (userInfo['role'] === 'teacher') return false
+  // Portal-only 角色只能存取 Portal：優先讀 flags 的 portal_only，'teacher' 字面
+  // fallback 保留（登入前、舊 localStorage userInfo 無 flags、DB 未 seed）。
+  // OR 語意只會更嚴不會更鬆——勿移除任一邊（移除字面 fallback = flags 缺失時教師提權）。
+  if (userInfo['role'] === 'teacher' || _hasPortalOnlyFlag(userInfo)) return false
 
   return _permsHold(userInfo['permission_names'], permissionName)
 }
