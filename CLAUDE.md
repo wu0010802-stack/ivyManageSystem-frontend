@@ -29,7 +29,7 @@ npm run test:coverage  # 含覆蓋率報告
 ```
 
 ### CI/CD
-`.github/workflows/ci.yml`：push/PR 到 main 時自動執行 `npm run test` + `npm run build`。
+`.github/workflows/ci.yml`：push/PR 到 main 時跑 `audit`（`npm audit`）/ `test`（含 coverage / typecheck / eslint / build）/ `openapi-drift` 三個 job，細節見下方對應章節。
 
 ---
 
@@ -53,18 +53,7 @@ npm run test:coverage  # 含覆蓋率報告
 使用 `createWebHashHistory`（hash 模式）。管理端與教師入口（portal）路由共用同一 `router/index.ts`，以 `/portal/` 前綴區分。
 
 ### 招生模組（前端整合）
-附近幼兒園詳細資料由三個來源合併，前端 composable 負責合併邏輯，**優先順序由高至低**：
-
-| 優先 | 來源 | 提供欄位 |
-|------|------|---------|
-| 1 | `competitor_school` DB（後端教育部爬蟲快取） | 電話、住址、類型、核定人數、月費、裁罰 flag |
-| 2 | kiang.github.io | 月費備援、裁罰詳情文字 |
-| 3 | Google Places API | 名稱、座標、評分、Google Maps 連結 |
-
-**比對流程（`composables/usePreschoolGovData.ts`）：**
-1. **並行查詢** Google Places 名稱 → DB（`findPreschoolFromDb`）與 kiang（`findPreschoolByName`，含 geo 距離加分）
-2. **kiang 橋接**：DB 找不到時，用 kiang 的官方名稱（`p.title`）重試 DB 查詢
-3. **合併**：DB 欄位展開覆蓋 kiang；月費、裁罰依上述規則決定
+⚠ **已棄用**：舊版「附近幼兒園三來源前端合併」架構（`composables/usePreschoolGovData.ts` 並行查詢 DB/kiang/Google Places 再前端合併）已下沉後端，改由 `nearby-kindergartens` API 一次回傳合併結果；`usePreschoolGovData.ts` 現為零 caller 孤兒檔，待清理。現行入口為 `RecruitmentAddressHeatmap.vue` / `RecruitmentNearbySchoolList.vue` 兩支元件，直接呼叫 `recruitment.ts` 的 `getRecruitmentNearbyKindergartens`。
 
 ---
 
@@ -118,7 +107,7 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 1. `role === 'teacher'` 短路回 `false`（教師只走 Portal；**勿移除，否則提權**）
 2. wildcard：`permission_names` 含 `'*'` → true
 3. bare：`includes(name)` → true
-4. scope-qualified：`startsWith('<name>:')` → true（row-level scoping `<CODE>:own_class/all`，用 `getPermissionScope(name)` 取 scope，與後端 `resolve_grant` 對齊）
+4. scope-qualified：`startsWith('<name>:')` → true（row-level scoping `<CODE>:own_class/all`，用 `getPermissionScope(name)` 取 scope，與後端 `resolve_grant` 對齊）。**僅對 `SCOPE_AWARE_CODES`（`src/utils/auth.ts`，13 碼白名單，需與後端 scope-aware 集合手動同步）生效**；非白名單 code 帶 scope 後綴一律 fail-closed
 
 **教師專屬 Portal 功能**（如家園溝通收發）用 `hasPortalPermission`——跳過 teacher 短路、其餘比對相同；**僅限 Portal 端使用**，admin 端一律 `hasPermission`。
 
@@ -150,7 +139,7 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
   - **naive datetime**（無 tzinfo）：語意為「Asia/Taipei 牆上時間」
   - **aware datetime**（含 tzinfo）：通常為 UTC，後端序列化時帶 `+00:00` 或 `Z`
 - 前端**禁止**對 naive 字串自行 `new Date()` 後當成 UTC（瀏覽器會誤判時區）；可用以下兩種做法：
-  - 用 OpenAPI 型別搭配 `dayjs` / `date-fns-tz`，明確標明來源時區
+  - 處理台北牆鐘字串請用既有原生工具，**不要新增 `dayjs`/`date-fns-tz` 依賴**：顯示格式化用 `src/utils/format.ts` 的 `formatDateTimeTW`/`formatTimeTW`；需要以台北時區解析/取小時（如排序、時段分桶）用 `src/utils/taipeiTime.ts` 的 `parseTaipeiDate`/`taipeiHour`
   - 若 endpoint 已被後端統一為 aware UTC，前端直接 `new Date(isoString)` 顯示即可（瀏覽器自動轉本地時區）
 
 **送出 request body**：
@@ -158,7 +147,7 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 - 帶時刻（如打卡時間）：建議送 **ISO 8601 含 `+08:00`**（明確時區），讓後端走 `utils/taipei_time` 三函數正規化；避免送 naive ISO 字串（`2026-05-28T09:00:00`，後端不知時區意圖）
 
 **檢驗**：
-- 後端 `ruff` 已啟用 `DTZ` rule 防 naive 操作；前端**無等價 lint rule**，仰賴 code review 與本規範
+- 後端 `ruff` 已啟用 `DTZ` rule 防 naive 操作；前端已於 2026-06-12（commit `c1815cc2`）補上部分等價 lint rule：`eslint.config.js` 的 `no-restricted-syntax` 擋 `toISOString().slice/split` 取日期反模式（訊息導向 `todayISO`/`dateToLocalISO`）——僅涵蓋該反模式，非後端 `DTZ` 規則的全面等價物，仍需搭配 code review
 - 任何顯示「比實際晚 8 小時」的 bug，先檢查是否前端把 Asia/Taipei naive 當 UTC 解析
 
 ---
@@ -199,7 +188,7 @@ const resp: AxiosResp<'/employees', 'get'> = await api.get('/employees')
 
 **重要慣例**：
 - **dispatch path 不帶 `/api`**：`api.get('/employees')` 而非 `api.get('/api/employees')`；後端 `dump_openapi.py` 預設剝掉 `/api` prefix
-- **`AxiosResp` 而非 `Schema`**：axios wrapper 不自動解包 `.data`，return type 必須含 `AxiosResp`；少數例外（`fees.ts` / `portalClassHub.ts` / `reports.ts` 內部自己解包）保留手動處理
+- **`AxiosResp` 而非 `Schema`**：axios wrapper 不自動解包 `.data`，return type 必須含 `AxiosResp`；少數例外（如 `fees.ts` / `portalClassHub.ts` / `reports.ts` / `monthlyFixedCost.ts` 等內部自己解包）保留手動處理
 - **缺 `response_model=` 過渡寫法**：後端 router 未標 `response_model=` 時前端會收到 `unknown`，用 `as Shape // TODO(ts-strict): waiting on backend response_model`；後端補上後型別自動下放
 - **不換 `src/api/index.ts` axios wrapper**：dedupe / refresh / displayMessage / PII 過濾邏輯保留
 
@@ -267,30 +256,22 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 
 ---
 
-## 重點頁面範例：經營分析
+## 重點頁面範例：報表模組
 
-> `src/views/` 底下有 30+ 個 view（`portal/` / `salary/` / `leave/` / `activity/` / `parent-portal` 等），不一一列舉，依檔名語義即可定位。下面只記錄「跨多檔協作 + 跨權限 + 帶 composable」的代表性區塊作為新增類似功能時的範本。
+> `src/views/` 底下有 30+ 個 view（`portal/` / `salary/` / `leave/` / `activity/` 等），不一一列舉，依檔名語義即可定位；家長端為獨立 entry，見 `src/parent/views/`，非本目錄子集。下面只記錄「跨多檔協作 + 跨權限 + 帶 composable」的代表性區塊作為新增類似功能時的範本。
 
-### views/analytics/
+> ⚠ 舊版「經營分析」（`views/analytics/`、路由 `/analytics`）已於 2026-06-03（commit `4a3b4b29`）業主裁定整塊移除；`Permission.BUSINESS_ANALYTICS` 刻意保留為孤兒權限（角色管理 UI 仍列出但無對應功能），`src/composables/useAnalyticsTimeRange.ts` 為零 caller 孤兒檔待清理。
 
-經營分析頁面（路由 `/analytics`）。
-- `AnalyticsView.vue` — tab 框架（招生漏斗 / 流失預警），與 `RouterView` 搭配
-- `FunnelPanel.vue` — 6 階段漏斗 BarChart、no_deposit_reasons PieChart、依來源/班別切片
-- `ChurnPanel.vue` — at-risk 學生列表（含嚴重度 tag、訊號 detail）、12 月流失趨勢 LineChart、原因分布 BarChart
+### views/reports/
 
-支援 module：
-- `src/api/analytics.ts` — `fetchFunnel(params)`、`fetchAtRisk()`、`fetchChurnHistory(months)`
-- `src/composables/useAnalyticsTimeRange.ts` — 時間範圍 composable（本月/上月/本學期/上學期/本學年/自訂）
-
-權限：`Permission.BUSINESS_ANALYTICS`（str enum 值 = `"BUSINESS_ANALYTICS"`，列於 `src/constants/permissions.ts`，sidebar `canView` 透過 `hasPermission(string)` 自動處理）。
-依賴 `views/reports/chartSetup.ts` 的 vue-chartjs 共用初始化。
+報表模組（路由 `/reports`，入口 `src/views/ReportsView.vue`）。`src/views/reports/` 下為分頁 panel：`OverviewPanel.vue`（總覽 KPI）、`AttendancePanel.vue`、`SalaryPanel.vue`、`FinanceSummaryPanel.vue`、`MonthlyPnLPanel.vue`、`MonthlyFixedCostPanel.vue` 等，共用 `chartSetup.ts`（vue-chartjs 初始化）與 `useReportPeriod.ts`（期間 composable）。
 
 ---
 
 ## 開發注意事項
 - 回應語言：一律使用**繁體中文**
 - 權限檢查：一律走 `@/utils/auth` 的 `hasPermission(name: string)`（**非純 `includes`**：teacher 短路 → wildcard `*` → bare includes → scope-qualified 前綴，詳見上方「跨端權限與認證」段）；**禁止**任何 `BigInt` / `mask & PERMISSION_VALUES.X` 寫法（2026-05-21 起 Permission 已改 str enum，舊 BigInt helper 已移除）。決策見 `../ivyManageSystem/docs/adr/ADR-002_permission-intflag-to-str-enum.md`。
-- 升級依賴後必須跑 `npm audit --production --audit-level=moderate`；CI 會 enforce。dev-only 套件的 transitive CVE（如 `vite-plugin-pwa`）需評估是否要 force 升級。
+- 升級依賴後必須跑 `npm audit --omit=dev --audit-level=moderate`（與 CI 一致）；CI 會 enforce。dev-only 套件的 transitive CVE（如 `vite-plugin-pwa`）需評估是否要 force 升級。
 - **依賴版本釘選（升大版前先讀）**：`vite` 停在 7.x——vite 8 = Rolldown，不支援 `manualChunks`，升級需重寫成 `advancedChunks` 並對 baseline build 比對 chunk 產物；`vue-tsc` 停在 2.2.12——v3 對 composable + template ref 有 `noUnusedLocals` 誤報（上游 issue #1168）。
 
 ---
@@ -302,7 +283,7 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 - **啟用條件**：`VITE_SENTRY_DSN` 設定才生效；缺值時整支模組 no-op，三 entry boot 不受影響
 - **三 entry 都接上**：`src/main.ts`（admin）/ `src/parent/main.ts` / `src/public/main.ts`；每個 entry 用 `entry: 'admin'|'parent'|'public'` tag 區分
 - **axios 攔截器**：`src/api/index.ts` 對 `>=500` 與 network error 顯式上報；4xx（401/403/404/422 等）視為預期路徑由 UI errorHandler 處理，**不**送 Sentry
-- **PII 過濾**：60+ 欄位 denylist + URL path id sanitize + **query string PII 遮罩**（`?phone=0912 / ?email=x / ?id_number=A1` 等 value 自動 `[Filtered]`）+ **`event.user.id` FNV-1a hash**（擬個資去識別）；與後端 `_PII_KEY_SUBSTRINGS` 對齊。新增欄位同步前後端與測試（`tests/unit/utils/sentry.test.js`），backend 的 `tests/test_pii_denylist_parity.py` 在 CI enforce parity（讀前端 `sentry.ts` 比對 denylist + exempt list）
+- **PII 過濾**：55（現值，見 `PII_KEY_SUBSTRINGS`）欄位 denylist + URL path id sanitize + **query string PII 遮罩**（`?phone=0912 / ?email=x / ?id_number=A1` 等 value 自動 `[Filtered]`）+ **`event.user.id` FNV-1a hash**（擬個資去識別）；與後端 `_PII_KEY_SUBSTRINGS` 對齊。新增欄位同步前後端與測試（`tests/unit/utils/sentry.test.js`），backend 的 `tests/test_pii_denylist_parity.py` 在 CI enforce parity（讀前端 `sentry.ts` 比對 denylist + exempt list）
 - **`captureException` 內部 cache `_SentryRef`**：避免每次呼叫重複 dynamic import；init 前呼叫 → no-op（不再讀 env，純看 ref 是否存在）
 - **axios 攔截器使用 `sanitizeUrl(error.config?.url)` 才送 Sentry extra**：path id 去識別 + query PII 遮罩；不要直接送原始 url
 - **source map**：vite build 預設不產 .map（避免外洩程式結構）；需要 source map 給 Sentry 解 stack 時，在 build env 設 `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`，plugin 會用 `sourcemap: 'hidden'` 產 map → 上傳 Sentry → 從 dist 刪除。**`postbuild` npm script 額外 `find dist -name '*.map' -delete` 兜底**，即便 Sentry upload 失敗 .map 也不會留在 dist 進 CDN
