@@ -13,7 +13,7 @@
  *  - parentPhoneError（touched + value 組合）
  *  - maxBirthdayISO / minBirthdayISO 邊界
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ref } from 'vue'
 import { dateToLocalISO } from '@/utils/format'
 import {
@@ -119,6 +119,26 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       f.form.selectedCourses = ['美術']
       expect(f.validateForm()).toBe(false)
       expect(f.errors.birthday).toContain('未來')
+    })
+
+    it('台北凌晨時，生日等於今天不會因 UTC 解析被判成未來', () => {
+      const originalTZ = process.env.TZ
+      process.env.TZ = 'Asia/Taipei'
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2026, 6, 13, 0, 30))
+      try {
+        f.form.name = '小明'
+        f.form.birthday = '2026-07-13'
+        f.form.parent_phone = '0912345678'
+        f.form.class_name = '大班'
+        f.form.selectedCourses = ['美術']
+
+        expect(f.validateForm()).toBe(true)
+        expect(f.errors.birthday).toBe('')
+      } finally {
+        vi.useRealTimers()
+        process.env.TZ = originalTZ
+      }
     })
 
     it('手機格式錯誤 → errors.parent_phone', () => {

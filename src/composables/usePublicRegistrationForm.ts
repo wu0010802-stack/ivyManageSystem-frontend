@@ -14,6 +14,7 @@
 
 import { reactive, ref, computed } from 'vue'
 import { toggleArrayItem } from '@/utils/arrayUtils'
+import { parseLocalISODate } from '@/utils/format'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 // 保守 email 格式（與後端 EmailStr 寬嚴不必一致：打錯只是收不到信，無安全後果）
@@ -133,10 +134,10 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     if (!birthday) {
       errors.birthday = '請選擇幼兒生日'
     } else {
-      const inputDate = new Date(birthday)
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      if (Number.isNaN(inputDate.getTime())) {
+      const inputDate = parseLocalISODate(birthday)
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      if (!inputDate) {
         errors.birthday = '生日格式不正確'
       } else if (inputDate > today) {
         errors.birthday = '生日不可選擇未來日期'
