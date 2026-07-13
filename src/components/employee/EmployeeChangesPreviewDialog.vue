@@ -66,7 +66,7 @@ const onConfirm = () => {
 </script>
 
 <template>
-    <el-dialog v-model="visible" :title="title" width="540px" append-to-body>
+    <el-dialog v-model="visible" :title="title" width="540px" append-to-body class="crisp-surface">
         <p v-if="rows.length === 0" class="empty">尚無變動。</p>
         <el-table v-else :data="rows" size="small" border>
             <el-table-column prop="label" label="欄位" width="140" />

@@ -5,7 +5,10 @@ import { maskedMoney, insuranceLevelDisplay, pensionSelfRatePct, bankInfoDisplay
 const props = withDefaults(defineProps<{
   employee: Record<string, unknown>
   standardSalary?: number | null
-}>(), { standardSalary: null })
+  canFix?: boolean
+}>(), { standardSalary: null, canFix: false })
+
+const emit = defineEmits<{ (e: 'fix-salary'): void }>()
 
 const isHourly = computed(() => props.employee.employee_type === 'hourly')
 const baseSalaryNum = computed(() => {
@@ -35,22 +38,28 @@ const hasSplitInsurance = computed(() =>
 <template>
   <el-descriptions :column="2" border>
     <el-descriptions-item v-if="!isHourly" label="底薪">
-      <span>{{ maskedMoney(employee.base_salary) }}</span>
-      <template v-if="standardSalary !== null && baseSalaryNum !== null">
-        <span class="std-hint">標準：{{ standardSalary.toLocaleString() }}</span>
-        <el-tag
-          v-if="baseSalaryNum !== standardSalary"
-          size="small"
-          :type="baseSalaryNum > standardSalary ? 'success' : 'warning'"
-          style="margin-left:6px"
-        >{{ baseSalaryNum > standardSalary ? '↑ 高於標準' : '↓ 低於標準' }}</el-tag>
-        <el-tag v-else size="small" type="info" style="margin-left:6px">符合標準</el-tag>
+      <template v-if="baseSalaryNum === 0">
+        <span class="crisp-empty">尚未設定</span>
+        <el-button v-if="canFix" link type="primary" size="small" @click="emit('fix-salary')">前往補登</el-button>
+      </template>
+      <template v-else>
+        <span>{{ maskedMoney(employee.base_salary) }}</span>
+        <template v-if="standardSalary !== null && baseSalaryNum !== null">
+          <span class="std-hint">標準：{{ standardSalary.toLocaleString() }}</span>
+          <el-tag
+            v-if="baseSalaryNum !== standardSalary"
+            size="small"
+            :type="baseSalaryNum > standardSalary ? 'success' : 'warning'"
+            style="margin-left:6px"
+          >{{ baseSalaryNum > standardSalary ? '↑ 高於標準' : '↓ 低於標準' }}</el-tag>
+          <el-tag v-else size="small" type="info" style="margin-left:6px">符合標準</el-tag>
+        </template>
       </template>
     </el-descriptions-item>
     <el-descriptions-item v-else label="時薪">{{ maskedMoney(employee.hourly_rate) }}</el-descriptions-item>
     <el-descriptions-item label="投保級距">{{ insuranceLevelDisplay(employee.insurance_salary_level) }}</el-descriptions-item>
     <el-descriptions-item label="勞退自提">{{ pensionSelfRatePct(employee.pension_self_rate) }}</el-descriptions-item>
-    <el-descriptions-item label="加保生效日">{{ employee.insurance_effective_date || '—' }}</el-descriptions-item>
+    <el-descriptions-item label="加保生效日"><span :class="{ 'crisp-empty': !employee.insurance_effective_date }">{{ employee.insurance_effective_date || '未填寫' }}</span></el-descriptions-item>
     <el-descriptions-item label="銀行資訊" :span="2">{{ bankInfoDisplay(employee) }}</el-descriptions-item>
     <el-descriptions-item v-if="hasSplitInsurance" label="分項投保" :span="2">
       勞保 {{ maskedMoney(employee.labor_insured_salary ?? employee.insurance_salary_level) }}

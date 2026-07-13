@@ -346,9 +346,11 @@ const openCreate = async () => {
   resetDirty(form)
   await employeeDraft.maybePromptRestore()
 }
-const openEdit = async (row: Record<string, unknown>) => {
+const openEdit = async (row: Record<string, unknown>, tab: 'basic' | 'salary' = 'basic') => {
   handleEdit(row)
   await nextTick()
+  // handleEdit → populateForm 內會把 activeTab 重置為 basic，故在 nextTick 後指定目標 tab
+  activeTab.value = tab
   await employeeDraft.maybePromptRestore()
 }
 

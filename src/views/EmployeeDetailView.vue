@@ -150,6 +150,7 @@ const reloadSub = (kind: 'education' | 'certificate' | 'contract') => {
 // 編輯：接統一員工表單彈窗
 const formDialog = ref<InstanceType<typeof EmployeeFormDialog> | null>(null)
 const openEdit = () => { if (employee.value) formDialog.value?.openEdit(employee.value) }
+const openEditSalary = () => { if (employee.value) formDialog.value?.openEdit(employee.value, 'salary') }
 const onSaved = async () => {
   await detail.reloadCore().catch(() => ElMessage.error('重新載入失敗'))
   employeeStore.fetchEmployees(true)
@@ -235,7 +236,7 @@ const onSaved = async () => {
         </section>
         <section :id="`emp-sec-salary`" class="detail-section">
           <h3 class="section-title">薪資・投保</h3>
-          <SalarySection :employee="employee" :standard-salary="standardSalary" />
+          <SalarySection :employee="employee" :standard-salary="standardSalary" :can-fix="canWriteEmployees" @fix-salary="openEditSalary" />
         </section>
         <section :id="`emp-sec-credentials`" class="detail-section">
           <h3 class="section-title">學歷・證照・合約</h3>
