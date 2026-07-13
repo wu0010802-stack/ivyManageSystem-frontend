@@ -23,6 +23,7 @@ declare module 'vue' {
     AdmissionsRecordsPanel: typeof import('./src/components/recruitment/AdmissionsRecordsPanel.vue')['default']
     AllChannelSummaryCard: typeof import('./src/components/recruitment/AllChannelSummaryCard.vue')['default']
     AnomalyQueueColumn: typeof import('./src/components/attendance/AnomalyQueueColumn.vue')['default']
+    ApprovalChainEditor: typeof import('./src/components/settings/roles/ApprovalChainEditor.vue')['default']
     ApprovalLogDrawer: typeof import('./src/components/common/ApprovalLogDrawer.vue')['default']
     AssessmentEditorDialog: typeof import('./src/components/student/AssessmentEditorDialog.vue')['default']
     AssessmentSection: typeof import('./src/components/student/academic-affairs/AssessmentSection.vue')['default']

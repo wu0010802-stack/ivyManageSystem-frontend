@@ -5,6 +5,7 @@ import { getPermissions, getUsers } from '@/api/auth'
 import { createRole, deleteRole } from '@/api/permissions_admin'
 import { apiError } from '@/utils/error'
 import RoleDetailPanel from '@/components/settings/roles/RoleDetailPanel.vue'
+import ApprovalChainEditor from '@/components/settings/roles/ApprovalChainEditor.vue'
 import { FLAG_SUPER_ADMIN, FLAG_PARENT, type RolesDefinition } from '@/components/settings/roles/types'
 
 const definition = ref<RolesDefinition>({ permissions: {}, groups: [], roles: {} })
@@ -162,6 +163,12 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, createDialog
             :account-count="selectedAccountCount"
             @saved="fetchDefinition"
             @delete-role="handleDeleteRole"
+          />
+          <!-- 4. 簽呈審核（spec §6.1 右欄 4）：per doc_type 拖拉關卡鏈 -->
+          <ApprovalChainEditor
+            :submitter-role="selectedCode"
+            :definition="definition"
+            :account-counts="accountCounts"
           />
         </template>
         <el-empty v-else description="請選擇左側角色" />

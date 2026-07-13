@@ -37,6 +37,7 @@ import SettingsRolesView from '../SettingsRolesView.vue'
 // RoleDetailPanel 另有自己的測試；此處 stub 掉聚焦 view 邏輯
 const stubs = {
   RoleDetailPanel: { name: 'RoleDetailPanel', props: ['code', 'role', 'definition', 'accountCount'], template: '<div data-test="detail" :data-code="code" />' },
+  ApprovalChainEditor: { name: 'ApprovalChainEditor', props: ['submitterRole', 'definition', 'accountCounts'], template: '<div data-test="chain-editor" />' },
 }
 
 const mountView = async () => {
