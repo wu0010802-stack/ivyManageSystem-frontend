@@ -104,7 +104,7 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 ```
 
 **`hasPermission` 比對順序（非純 `includes`）**：
-1. `role === 'teacher'` 短路回 `false`（教師只走 Portal；**勿移除，否則提權**）
+1. `role === 'teacher'` 短路回 `false`（教師只走 Portal；**勿移除，否則提權**）。短路條件現為 `role === 'teacher' || flags 含 portal_only`（OR 語意只會更嚴不會更鬆；flags 缺失時 `'teacher'` 字面 fallback 仍生效）
 2. wildcard：`permission_names` 含 `'*'` → true
 3. bare：`includes(name)` → true
 4. scope-qualified：`startsWith('<name>:')` → true（row-level scoping `<CODE>:own_class/all`，用 `getPermissionScope(name)` 取 scope，與後端 `resolve_grant` 對齊）。**僅對 `SCOPE_AWARE_CODES`（`src/utils/auth.ts`，13 碼白名單，需與後端 scope-aware 集合手動同步）生效**；非白名單 code 帶 scope 後綴一律 fail-closed

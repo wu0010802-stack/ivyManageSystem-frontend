@@ -17,6 +17,9 @@ vi.mock('@/api/auth', () => ({
 const mockSetUserInfo = vi.fn()
 vi.mock('@/utils/auth', () => ({
   setUserInfo: (...args: unknown[]) => mockSetUserInfo(...args),
+  // 測試資料無 flags，簡化為硬編碼角色判斷（與 PORTAL_ONLY_ROLES fallback 語意一致）。
+  isPortalOnlyUser: (info: { role?: string } | null | undefined) =>
+    ['teacher', 'parent'].includes(info?.role ?? ''),
 }))
 
 const mockElMessageError = vi.fn()

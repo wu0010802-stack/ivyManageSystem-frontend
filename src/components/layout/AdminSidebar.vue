@@ -219,12 +219,20 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 9. 系統設定 (移除操作紀錄) -->
+        <!-- 9. 系統設定（路由拆分：帳號/角色/一般 三子項各自依權限顯示） -->
         <el-sub-menu v-if="hasVisibleSettingsItems" index="group-settings">
           <template #title>
             <el-icon><Setting /></el-icon>
             <span>系統設定</span>
           </template>
+          <el-menu-item v-if="canView.USER_MANAGEMENT_READ" index="/settings/accounts">
+            <el-icon><User /></el-icon>
+            <template #title>帳號設定</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ROLES_MANAGE" index="/settings/roles">
+            <el-icon><Key /></el-icon>
+            <template #title>角色設定</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
             <el-icon><Setting /></el-icon>
             <template #title>一般設定</template>
@@ -254,7 +262,7 @@ import {
   Money, User, School, OfficeBuilding, Bell, Setting,
   Expand, Fold, DataAnalysis, Files, Close,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Trophy, WarningFilled
+  Trophy, WarningFilled, Key
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
 
@@ -334,7 +342,7 @@ const hasVisibleReportsItems = computed(() =>
 )
 
 const hasVisibleSettingsItems = computed(() =>
-  canView.value.SETTINGS_READ
+  canView.value.SETTINGS_READ || canView.value.USER_MANAGEMENT_READ || canView.value.ROLES_MANAGE
 )
 
 const toggleCollapse = () => {

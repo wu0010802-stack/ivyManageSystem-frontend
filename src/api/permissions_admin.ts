@@ -6,7 +6,6 @@ export interface Role {
   label: string
   description: string | null
   permissions: string[]
-  is_core: boolean
 }
 
 export interface RoleIn {
@@ -20,6 +19,7 @@ export interface RoleUpdate {
   label?: string
   description?: string
   permissions?: string[]
+  flags?: string[]
 }
 
 export function createRole(payload: RoleIn): Promise<AxiosResponse<Role>> {

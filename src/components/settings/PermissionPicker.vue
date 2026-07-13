@@ -3,14 +3,13 @@ import { computed } from 'vue'
 import { permissionsAdd, permissionsRemove, permissionsCombine } from '@/utils/auth'
 
 export interface PermissionPickerDefinition {
-  permissions: Record<string, { value: string; label: string; is_core?: boolean; scope_options?: string[] | null }>
+  permissions: Record<string, { value: string; label: string; scope_options?: string[] | null }>
   groups: { name: string; permissions?: string[]; split_permissions?: { module: string; read: string; write: string }[] }[]
 }
 
 const props = defineProps<{
   modelValue: string[]
   definition: PermissionPickerDefinition
-  disabled?: boolean
 }>()
 const emit = defineEmits<{ 'update:modelValue': [next: string[]] }>()
 
@@ -91,41 +90,38 @@ defineExpose({ toggle, setScope, toggleSplit, isChecked, currentScope, isSplitCh
 
 <template>
   <div class="permission-picker">
-    <div v-if="disabled" class="readonly-hint">核心角色的權限不可修改</div>
-    <template v-else>
-      <div class="picker-actions">
-        <el-button size="small" @click="selectAll">全選</el-button>
-        <el-button size="small" @click="clearAll">清除</el-button>
-      </div>
-      <div v-for="group in definition.groups" :key="group.name" class="perm-group">
-        <div class="perm-group-name">{{ group.name }}</div>
-        <div v-for="code in (group.permissions || [])" :key="code" class="perm-row">
-          <el-checkbox :model-value="isChecked(code)" @change="(v) => toggle(code, !!v)">
-            {{ labelFor(code) }}
-          </el-checkbox>
-          <div
-            v-if="isChecked(code) && scopeOptionsFor(code).length > 0"
-            :data-perm-scope="code"
-            class="perm-scope-row"
+    <div class="picker-actions">
+      <el-button size="small" @click="selectAll">全選</el-button>
+      <el-button size="small" @click="clearAll">清除</el-button>
+    </div>
+    <div v-for="group in definition.groups" :key="group.name" class="perm-group">
+      <div class="perm-group-name">{{ group.name }}</div>
+      <div v-for="code in (group.permissions || [])" :key="code" class="perm-row">
+        <el-checkbox :model-value="isChecked(code)" @change="(v) => toggle(code, !!v)">
+          {{ labelFor(code) }}
+        </el-checkbox>
+        <div
+          v-if="isChecked(code) && scopeOptionsFor(code).length > 0"
+          :data-perm-scope="code"
+          class="perm-scope-row"
+        >
+          <el-radio-group
+            :model-value="currentScope(code) ?? undefined"
+            size="small"
+            @update:model-value="(v) => setScope(code, String(v))"
           >
-            <el-radio-group
-              :model-value="currentScope(code) ?? undefined"
-              size="small"
-              @update:model-value="(v) => setScope(code, String(v))"
-            >
-              <el-radio v-for="opt in scopeOptionsFor(code)" :key="opt" :value="opt">
-                {{ SCOPE_LABELS[opt] || opt }}
-              </el-radio>
-            </el-radio-group>
-          </div>
-        </div>
-        <div v-for="sp in (group.split_permissions || [])" :key="sp.read" class="split-row">
-          <span class="split-label">{{ sp.module }}</span>
-          <el-checkbox :model-value="isSplitChecked(sp.read)" @change="(v) => toggleSplit(sp.read, !!v)">檢視</el-checkbox>
-          <el-checkbox :model-value="isSplitChecked(sp.write)" @change="(v) => toggleSplit(sp.write, !!v)">編輯</el-checkbox>
+            <el-radio v-for="opt in scopeOptionsFor(code)" :key="opt" :value="opt">
+              {{ SCOPE_LABELS[opt] || opt }}
+            </el-radio>
+          </el-radio-group>
         </div>
       </div>
-    </template>
+      <div v-for="sp in (group.split_permissions || [])" :key="sp.read" class="split-row">
+        <span class="split-label">{{ sp.module }}</span>
+        <el-checkbox :model-value="isSplitChecked(sp.read)" @change="(v) => toggleSplit(sp.read, !!v)">檢視</el-checkbox>
+        <el-checkbox :model-value="isSplitChecked(sp.write)" @change="(v) => toggleSplit(sp.write, !!v)">編輯</el-checkbox>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -136,7 +132,7 @@ defineExpose({ toggle, setScope, toggleSplit, isChecked, currentScope, isSplitCh
 .perm-group {
   margin-bottom: 12px;
   padding: 8px 12px;
-  background: #f8f9fa;
+  background: var(--el-fill-color-light);
   border-radius: 6px;
 }
 .perm-group-name {
@@ -162,9 +158,5 @@ defineExpose({ toggle, setScope, toggleSplit, isChecked, currentScope, isSplitCh
   min-width: 80px;
   font-size: 14px;
   color: var(--text-secondary);
-}
-.readonly-hint {
-  color: var(--text-tertiary);
-  padding: 6px 0;
 }
 </style>

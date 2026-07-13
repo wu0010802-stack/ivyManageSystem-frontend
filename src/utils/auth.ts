@@ -8,6 +8,7 @@ import {
   TEACHER_PORTAL_ROUTES,
   PUBLIC_ROUTES,
   PUBLIC_ROUTE_PREFIXES,
+  PORTAL_ONLY_ROLES,
 } from '@/constants/permissions'
 
 export { PERMISSION_NAMES, ROUTE_PERMISSION_RULES }
@@ -235,6 +236,22 @@ export const SCOPE_AWARE_CODES: ReadonlySet<string> = new Set([
   'DISMISSAL_CALLS_READ', 'DISMISSAL_CALLS_WRITE',
 ])
 
+/** userInfo.flags 是否含 portal_only（防禦式讀取：flags 缺失/型別錯 → false）。 */
+function _hasPortalOnlyFlag(info: Record<string, unknown>): boolean {
+  const flags = info['flags']
+  return Array.isArray(flags) && (flags as unknown[]).includes('portal_only')
+}
+
+/**
+ * 使用者是否僅能走 Portal（教師 /portal、家長 parent app），不可用管理端登入。
+ * 優先讀 flags 的 portal_only（一期 seed：teacher/parent；自訂 portal_only 角色亦涵蓋），
+ * PORTAL_ONLY_ROLES 硬編碼保留為 flags 缺失時的 fail-safe fallback（spec §6.3）。
+ */
+export function isPortalOnlyUser(info: Record<string, unknown> | null | undefined): boolean {
+  if (!info) return false
+  return _hasPortalOnlyFlag(info) || PORTAL_ONLY_ROLES.includes(info['role'] as string)
+}
+
 /**
  * 檢查使用者是否擁有指定權限。
  * 支援 bare code（'STUDENTS_READ'）與 scope-qualified code（'STUDENTS_READ:own_class'）。
@@ -244,8 +261,10 @@ export function hasPermission(permissionName: string): boolean {
   const userInfo = getUserInfo()
   if (!userInfo) return false
 
-  // teacher 角色只能存取 Portal
-  if (userInfo['role'] === 'teacher') return false
+  // Portal-only 角色只能存取 Portal：優先讀 flags 的 portal_only，'teacher' 字面
+  // fallback 保留（登入前、舊 localStorage userInfo 無 flags、DB 未 seed）。
+  // OR 語意只會更嚴不會更鬆——勿移除任一邊（移除字面 fallback = flags 缺失時教師提權）。
+  if (userInfo['role'] === 'teacher' || _hasPortalOnlyFlag(userInfo)) return false
 
   return _permsHold(userInfo['permission_names'], permissionName)
 }
@@ -337,6 +356,20 @@ export function hasWritePermission(moduleName: string): boolean {
   return hasPermission(`${moduleName}_WRITE`)
 }
 
+/**
+ * 目前登入者是否為超級管理員——僅供 UI 顯示/分流（終核按鈕、flag checkbox、
+ * 審核鏈編輯區的可見性）。授權判斷後端一律即時查 DB role_flags（spec §3.1 信任邊界），
+ * 前端誤放行只會拿到 4xx。優先讀 userInfo.flags 的 'super_admin'；flags 缺失
+ * （登入前、舊 localStorage userInfo、DB 未 seed）fallback role === 'admin'。
+ */
+export function isSuperAdmin(): boolean {
+  const userInfo = getUserInfo()
+  if (!userInfo) return false
+  const flags = userInfo['flags']
+  if (Array.isArray(flags) && (flags as unknown[]).includes('super_admin')) return true
+  return userInfo['role'] === 'admin'
+}
+
 // ── 權限名稱集合運算（取代舊 BigInt mask 版本） ──
 // 後端從 bigint mask 改為 text[]；前端統一在此檔做 Set 運算，
 // 不再散落各處 `& bit` / `BigInt(...)`。
@@ -362,28 +395,6 @@ export function permissionsRemove(perms: string[], name: string): string[] {
 /** 把多個 array 合併去重；用於「全選」場景。 */
 export function permissionsCombine(arrays: string[][]): string[] {
   return Array.from(new Set(arrays.flat()))
-}
-
-/**
- * 帳號管理 UI 中不顯示權限編輯區的角色，
- * 其權限一律交由後端依角色預設 resolve。
- */
-export const ROLES_WITHOUT_PERMISSION_UI = ['teacher', 'parent']
-
-/**
- * 決定建立/編輯帳號時是否要把 permission_names 放進送出的 payload。
- *
- * 回傳 false 代表「省略 permission_names」→ 後端會以角色預設權限 resolve。
- *
- * Why: 新增帳號表單的 permission_names 預設為 `['*']`（`handleAddUser` 初始化）。
- * teacher / parent 的權限編輯 UI 被隱藏，使用者通常不會去動它；殘留的
- * `['*']` 若被當成「自訂權限」送出，會讓教師/家長帳號取得全權限（越權）。對這兩個
- * 無權限 UI 的角色一律省略 permission_names；其餘角色只在「偏離角色預設」時送出。
- * create 與 edit 共用此判定，避免兩條路徑分歧（本函式正是修補該分歧 P0）。
- */
-export function shouldSendPermissionNames(role: string, isUsingDefault: boolean): boolean {
-  if (ROLES_WITHOUT_PERMISSION_UI.includes(role)) return false
-  return !isUsingDefault
 }
 
 /**

@@ -15,10 +15,10 @@ const DEFINITION = {
   ],
 }
 
-function mountPicker(modelValue: string[], disabled = false) {
+function mountPicker(modelValue: string[]) {
   return mount(PermissionPicker, {
     attachTo: document.body,
-    props: { modelValue, definition: DEFINITION, disabled },
+    props: { modelValue, definition: DEFINITION },
     global: { plugins: [ElementPlus] },
   })
 }
@@ -99,12 +99,6 @@ describe('PermissionPicker', () => {
     expect((mountPicker(['*']).vm as unknown as Vm).isChecked('DASHBOARD')).toBe(true)
     expect((mountPicker(['STUDENTS_READ:all']).vm as unknown as Vm).isChecked('STUDENTS_READ')).toBe(true)
     expect((mountPicker([]).vm as unknown as Vm).isChecked('DASHBOARD')).toBe(false)
-  })
-
-  it('disabled renders readonly hint, no checkboxes', () => {
-    const w = mountPicker(['DASHBOARD'], true)
-    expect(w.find('.readonly-hint').exists()).toBe(true)
-    expect(w.find('.el-checkbox').exists()).toBe(false)
   })
 
   it('scope radio row does not render for non-scope permission', () => {

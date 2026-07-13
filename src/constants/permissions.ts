@@ -120,6 +120,11 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
   { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
   { path: '/settings', permission: 'SETTINGS_READ' },
+  // 系統設定路由拆分（spec §2.1）：三條 exact 獨立規則，權限對齊後端守衛——
+  // list_users → USER_MANAGEMENT_READ、permissions_admin → ROLES_MANAGE。
+  // /settings 不可改 prefix（子路由權限不同，外溢 = SETTINGS_READ 就能進帳號/角色頁）。
+  { path: '/settings/accounts', permission: 'USER_MANAGEMENT_READ' },
+  { path: '/settings/roles', permission: 'ROLES_MANAGE' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations', permission: 'ACTIVITY_READ' },

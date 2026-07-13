@@ -269,6 +269,18 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '系統設定' }
         },
         {
+            path: '/settings/accounts',
+            name: 'settings-accounts',
+            component: () => import('../views/settings/SettingsAccountsView.vue'),
+            meta: { title: '帳號設定' }
+        },
+        {
+            path: '/settings/roles',
+            name: 'settings-roles',
+            component: () => import('../views/settings/SettingsRolesView.vue'),
+            meta: { title: '角色設定' }
+        },
+        {
             path: '/profile',
             name: 'profile',
             component: () => import('../views/AdminProfileView.vue'),

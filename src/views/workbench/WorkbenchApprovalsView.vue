@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Check, Close, Document, Link, Loading, Paperclip } from '@element-plus/icons-vue'
+import { ArrowRight, Check, Close, Document, Link, Loading, Paperclip, Stamp } from '@element-plus/icons-vue'
 import { getLeaves, approveLeave as approveLeaveApi, getLeaveAttachment, batchApproveLeaves } from '@/api/leaves'
 import { getOvertimes, approveOvertime as approveOvertimeApi, batchApproveOvertimes } from '@/api/overtimes'
 import { getCorrections, approveCorrection as approveCorrectionApi, batchApproveCorrections } from '@/api/punchCorrections'
@@ -13,6 +13,8 @@ import { useApprovalModule } from '@/composables/useApprovalModule'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import LeaveBatchRejectDialog from '@/views/leave/LeaveBatchRejectDialog.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
+import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
+import { isSuperAdmin } from '@/utils/auth'
 
 const router = useRouter()
 
@@ -205,7 +207,72 @@ const overtimeTypeLabel = (type: string) => (overtimeTypeMap as StatusMap)[type]
 const correctionTypeTagType = (type: string): ElTagType => ((correctionTypeMap as StatusMap)[type]?.type as ElTagType) || 'info'
 const correctionTypeLabel = (type: string) => (correctionTypeMap as StatusMap)[type]?.label || type
 
-onMounted(fetchAll)
+// ── super_admin 核准整張（spec §6.2）──
+// 按鈕可見性走前端 flags（isSuperAdmin），資格權威在後端（finalize_all 非 super_admin 即 403）
+const showFinalize = isSuperAdmin()
+
+const CIRCLED_DIGITS = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩']
+const approvalPolicies = ref<ApprovalPolicyRow[]>([])
+
+const fetchPolicies = async () => {
+  try {
+    const res = await getApprovalPolicies()
+    approvalPolicies.value = res.data
+  } catch {
+    approvalPolicies.value = [] // 拿不到鏈資訊不阻擋終核，confirm 顯示降級文案
+  }
+}
+
+// doc_type 專屬優先、fallback all（對齊後端政策查詢優先序，spec §4.1 M6）
+const chainTextFor = (submitterRole: string, docType: string): string => {
+  const find = (dt: string) =>
+    approvalPolicies.value.find((p) => p.submitter_role === submitterRole && p.doc_type === dt && p.is_active)
+  const policy = find(docType) ?? find('all')
+  if (!policy) {
+    return approvalPolicies.value.length === 0
+      ? '（無法取得審核鏈資訊）'
+      : '未設定審核鏈（fail-safe：僅超級管理員可核准）'
+  }
+  return policy.approver_roles
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .map((r, i) => `${CIRCLED_DIGITS[i] || `${i + 1}.`}${formatSubmitterRole(r)}`)
+    .join(' → ')
+}
+
+const confirmFinalize = async (row: Record<string, unknown>, docType: string): Promise<boolean> => {
+  try {
+    await ElMessageBox.confirm(
+      `將以超級管理員身份跨過所有未完成關卡，直接核准整張單據（逐關補記留痕）。完整審核鏈：${chainTextFor(String(row.submitter_role ?? ''), docType)}`,
+      '核准整張（終核）',
+      { type: 'warning', confirmButtonText: '核准整張', cancelButtonText: '取消' },
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+const finalizeLeave = async (row: Record<string, unknown>) => {
+  if (!(await confirmFinalize(row, 'leave'))) return
+  await executeLeaveApproval(row.id, { approved: true, finalize_all: true }, '請假已核准（整張終核）')
+}
+const finalizeOvertime = async (row: Record<string, unknown>) => {
+  if (!(await confirmFinalize(row, 'overtime'))) return
+  await executeOvertimeApproval(row.id, { approved: true, finalize_all: true }, '加班已核准（整張終核）')
+}
+const finalizeCorrection = async (row: Record<string, unknown>) => {
+  if (!(await confirmFinalize(row, 'punch_correction'))) return
+  await executeCorrectionApproval(row.id, { approved: true, finalize_all: true }, '補打卡已核准（整張終核），考勤已更新')
+}
+
+defineExpose({ showFinalize, chainTextFor, finalizeLeave, finalizeOvertime, finalizeCorrection, fetchPolicies })
+
+onMounted(() => {
+  fetchAll()
+  if (showFinalize) fetchPolicies()
+})
 </script>
 
 <template>
@@ -390,6 +457,15 @@ onMounted(fetchAll)
             <el-button aria-label="核准請假申請" type="success" size="small" circle @click="approveLeave(row, true)" title="核准">
               <el-icon><Check /></el-icon>
             </el-button>
+            <el-button
+              v-if="showFinalize"
+              aria-label="核准整張請假申請"
+              type="warning"
+              size="small"
+              circle
+              title="核准整張（跨過所有未完成關卡）"
+              @click="finalizeLeave(row)"
+            ><el-icon><Stamp /></el-icon></el-button>
             <el-button aria-label="駁回請假申請" type="danger" size="small" circle @click="approveLeave(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
@@ -491,6 +567,15 @@ onMounted(fetchAll)
             <el-button aria-label="核准加班申請" type="success" size="small" circle @click="approveOvertime(row, true)" title="核准">
               <el-icon><Check /></el-icon>
             </el-button>
+            <el-button
+              v-if="showFinalize"
+              aria-label="核准整張加班申請"
+              type="warning"
+              size="small"
+              circle
+              title="核准整張（跨過所有未完成關卡）"
+              @click="finalizeOvertime(row)"
+            ><el-icon><Stamp /></el-icon></el-button>
             <el-button aria-label="駁回加班申請" type="danger" size="small" circle @click="approveOvertime(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
@@ -568,6 +653,15 @@ onMounted(fetchAll)
             <el-button aria-label="核准補打卡申請" type="success" size="small" circle @click="approveCorrection(row, true)" title="核准">
               <el-icon><Check /></el-icon>
             </el-button>
+            <el-button
+              v-if="showFinalize"
+              aria-label="核准整張補打卡申請"
+              type="warning"
+              size="small"
+              circle
+              title="核准整張（跨過所有未完成關卡）"
+              @click="finalizeCorrection(row)"
+            ><el-icon><Stamp /></el-icon></el-button>
             <el-button aria-label="駁回補打卡申請" type="danger" size="small" circle @click="approveCorrection(row, false)" title="駁回">
               <el-icon><Close /></el-icon>
             </el-button>
