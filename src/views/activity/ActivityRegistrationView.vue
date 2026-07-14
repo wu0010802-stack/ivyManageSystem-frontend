@@ -97,7 +97,13 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="備註" prop="remark" min-width="100" show-overflow-tooltip />
+      <!-- 備註（家長/櫃台填寫）+ 內部審核註記（審核工作流軌跡，唯讀；完整多行內容見詳情抽屜） -->
+      <el-table-column label="備註" min-width="100" show-overflow-tooltip>
+        <template #default="{ row }">
+          <div v-if="row.remark">{{ row.remark }}</div>
+          <div v-if="row.internal_note" class="internal-note-inline">{{ row.internal_note }}</div>
+        </template>
+      </el-table-column>
       <el-table-column label="報名時間" min-width="140">
         <template #default="{ row }">{{ formatActivityDate(row.created_at) }}</template>
       </el-table-column>
@@ -370,6 +376,12 @@
           <el-button size="small" @click="saveRemark" :loading="savingRemark">儲存備註</el-button>
         </div>
 
+        <!-- 內部審核註記：後端審核工作流寫入的軌跡文字（拒絕/強行收件/復原等），唯讀無編輯入口 -->
+        <template v-if="detail.internal_note">
+          <div class="section-title">內部審核註記</div>
+          <div class="internal-note-box" data-test="internal-note-box">{{ detail.internal_note }}</div>
+        </template>
+
         <div class="section-title">修改紀錄</div>
         <el-timeline>
           <el-timeline-item
@@ -511,6 +523,11 @@ interface RegistrationSupply { id: number; supply_id: number; name?: string; pri
 interface RegistrationDetail {
   id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string; query_token?: string | null
   total_amount?: number; courses?: RegistrationCourse[]; supplies?: RegistrationSupply[]; changes?: Record<string, unknown>[]
+  // TODO(codegen): 後端才藝報名審核 payload 新增 internal_note（多行內部審核軌跡，如
+  // 「[已拒絕 by …] 理由」「[強行收件 by …]」「[已還原 by …]」）；本介面為手動維護的
+  // 本地型別（getRegistrationDetail 回應在呼叫端已 cast 為 RegistrationDetail，非直接
+  // 走生成型別），故直接補欄位而非另開 intersection type。
+  internal_note?: string
   [key: string]: unknown
 }
 
@@ -1225,6 +1242,19 @@ onMounted(async () => {
 .section-header-title { font-weight: 600; font-size: 14px; color: var(--neutral-700); }
 .section-header :deep(.el-button--small) { gap: 4px; }
 .remark-row { display: flex; gap: 8px; align-items: flex-start; }
+.internal-note-box {
+  white-space: pre-wrap;
+  background: var(--bg-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--neutral-700);
+}
+.internal-note-inline {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
 .change-by { color: var(--text-tertiary); font-size: 12px; }
 .promotion-deadline-hint {
   font-size: 12px;

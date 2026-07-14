@@ -322,4 +322,45 @@ describe('ActivityRegistrationView', () => {
     wrapper.vm.openPaymentDialog('payment')
     expect(wrapper.vm.paymentDialogVisible).toBe(true)
   })
+
+  // ── 內部審核註記（internal_note，唯讀）─────────────────────────────────
+  it('detail.internal_note 非空時，詳情抽屜顯示唯讀內部審核註記區塊', async () => {
+    getRegistrationDetail.mockResolvedValue({
+      data: {
+        id: 9,
+        total_amount: 0,
+        courses: [],
+        supplies: [],
+        internal_note: '[已拒絕 by 王老師] 資料不符\n[已還原 by 李老師]',
+      },
+    })
+    getRegistrationPayments.mockResolvedValue({
+      data: { total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.vm.openDetail({ id: 9 })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('內部審核註記')
+    expect(wrapper.text()).toContain('[已拒絕 by 王老師] 資料不符')
+    expect(wrapper.text()).toContain('[已還原 by 李老師]')
+  })
+
+  it('detail.internal_note 為空/undefined 時，不顯示內部審核註記區塊', async () => {
+    getRegistrationDetail.mockResolvedValue({
+      data: { id: 10, total_amount: 0, courses: [], supplies: [] },
+    })
+    getRegistrationPayments.mockResolvedValue({
+      data: { total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.vm.openDetail({ id: 10 })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('內部審核註記')
+  })
 })
