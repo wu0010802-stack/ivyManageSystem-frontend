@@ -30,6 +30,8 @@ export interface QueryResult {
     class_source?: string
     class_editable?: boolean
     review_state?: string
+    // 待審核期間（pending_review=true）可由家長自行修改姓名/生日；審核完成後鎖定。
+    identity_editable?: boolean
   }
   // 資安 #5：此報名是否需帶 query_token 才能做破壞性 mutation（=後端有 query_token_hash）。
   // 三欄查詢（無 token）載入 token-bearing 報名時，前端據此顯示唯讀。
@@ -124,6 +126,8 @@ export function usePublicRegistrationQuery({
     selectedCourses: [] as string[],
     selectedSupplies: [] as string[],
     new_parent_phone: '',
+    new_name: '',
+    new_birthday: '',
   })
 
   const nameValid = computed(() => queryForm.name.trim().length > 0)
@@ -184,9 +188,11 @@ export function usePublicRegistrationQuery({
       class_source: fs?.class_source ?? 'student_record',
       class_editable: fs?.class_editable ?? false,
       review_state: fs?.review_state ?? 'confirmed',
+      identity_editable: fs?.identity_editable ?? false,
     }
   })
   const classEditable = computed(() => fieldState.value.class_editable === true)
+  const identityEditable = computed(() => fieldState.value.identity_editable === true)
 
   function currentQueryCredentials(): QueryCredentials {
     return {
@@ -315,6 +321,8 @@ export function usePublicRegistrationQuery({
       ? data.supplies.map((s) => (typeof s === 'string' ? s : s.name))
       : []
     editForm.new_parent_phone = ''
+    editForm.new_name = ''
+    editForm.new_birthday = ''
     // availability 只有「編輯課程」介面才用；查詢階段不輪詢。查詢命中→進入編輯介面時
     // 才首次抓 availability 並起 30s 輪詢（avoid 查詢頁背景空轉）。
     ensureAvailabilityPolling()
@@ -415,6 +423,7 @@ export function usePublicRegistrationQuery({
     waitlistCourses,
     fieldState,
     classEditable,
+    identityEditable,
     handleQuery,
     createHydrationGuard,
     hydrateResult,

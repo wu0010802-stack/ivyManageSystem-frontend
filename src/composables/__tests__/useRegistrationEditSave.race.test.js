@@ -44,6 +44,7 @@ describe('useRegistrationEditSave 查詢碼輪替競態', () => {
     })
     const queryForm = reactive({
       token: 'token_OLD',
+      name: '第一位幼兒',
       birthday: '2020-05-10',
       parent_phone: '0912345678',
     })
@@ -52,6 +53,8 @@ describe('useRegistrationEditSave 查詢碼輪替競態', () => {
       selectedCourses: ['圍棋'],
       selectedSupplies: [],
       new_parent_phone: '0987654321',
+      new_name: '',
+      new_birthday: '',
     })
     const actions = useRegistrationEditSave({
       editForm,

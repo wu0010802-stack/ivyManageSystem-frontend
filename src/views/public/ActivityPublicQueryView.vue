@@ -343,11 +343,39 @@
         <div class="field-group">
           <label>幼兒姓名</label>
           <input :value="queryResult.name" type="text" class="input-text" readonly />
+          <template v-if="identityEditable">
+            <label for="editNewName" class="field-sublabel">修改姓名（如有誤請填寫正確姓名）</label>
+            <input
+              id="editNewName"
+              v-model="editForm.new_name"
+              type="text"
+              class="input-text"
+              placeholder="留空表示不變更"
+              maxlength="50"
+            />
+          </template>
+          <div v-else class="field-hint field-hint-locked">
+            <span class="field-tag">已完成審核</span>
+            如姓名有誤，請聯繫校方協助更正
+          </div>
         </div>
 
         <div class="field-group">
           <label>幼兒生日</label>
           <input :value="queryResult.birthday" type="date" class="input-text" readonly />
+          <template v-if="identityEditable">
+            <label for="editNewBirthday" class="field-sublabel">修改生日（如有誤請填寫正確生日）</label>
+            <input
+              id="editNewBirthday"
+              v-model="editForm.new_birthday"
+              type="date"
+              class="input-text"
+            />
+          </template>
+          <div v-else class="field-hint field-hint-locked">
+            <span class="field-tag">已完成審核</span>
+            如生日有誤，請聯繫校方協助更正
+          </div>
         </div>
 
         <div class="field-group">
@@ -560,7 +588,7 @@ const {
   nameTouched, birthdayTouched, phoneTouched, tokenTouched,
   tokenValid, phoneValid, nameValid, birthdayErrorMsg, birthdayValid,
   activeQueryCredentials, activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
-  editForm, statusBadgeFor, waitlistCourses, fieldState, classEditable,
+  editForm, statusBadgeFor, waitlistCourses, fieldState, classEditable, identityEditable,
   handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
 
@@ -845,6 +873,14 @@ onBeforeUnmount(() => {
   margin-bottom: var(--space-2);
 }
 .required-mark { color: var(--color-required); font-weight: 700; }
+.field-sublabel {
+  display: block;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-1);
+}
 
 .input-text, .input-select {
   width: 100%;
