@@ -48,13 +48,14 @@ describe('offlineQueue', () => {
         })
         await updateOp(b.id, { status: OP_STATUS.NEEDS_REVIEW })
 
-        const pending = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE })
+        const pending = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE, userId: 1 })
         expect(pending).toHaveLength(1)
         expect(pending[0].id).toBe(a.id)
 
         const review = await listOps({
             kind: OP_KINDS.CLASS_ATTENDANCE,
             status: OP_STATUS.NEEDS_REVIEW,
+            userId: 1,
         })
         expect(review).toHaveLength(1)
         expect(review[0].id).toBe(b.id)
@@ -85,6 +86,17 @@ describe('offlineQueue', () => {
         const others = await listOtherUsersPendingOps(100, OP_KINDS.CLASS_ATTENDANCE)
         expect(others).toHaveLength(1)
         expect(others[0].user_id).toBe(200)
+    })
+
+    it('未提供 userId 時 fail-closed，不得列出或計入任何人的佇列', async () => {
+        await enqueueOp({
+            kind: OP_KINDS.CLASS_ATTENDANCE,
+            payload: { seq: 1 },
+            userId: 100,
+        })
+
+        expect(await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE })).toEqual([])
+        expect(await countPending(OP_KINDS.CLASS_ATTENDANCE, undefined)).toBe(0)
     })
 
     it('enqueueOp 少傳 userId 應拋錯', async () => {

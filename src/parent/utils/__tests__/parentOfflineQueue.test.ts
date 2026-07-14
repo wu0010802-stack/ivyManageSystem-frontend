@@ -56,6 +56,44 @@ describe('parentOfflineQueue', () => {
     expect(result.kept).toBe(0)
   })
 
+  it('未登入或 user_id 缺失時 fail-closed，不列出也不送出任何 op', async () => {
+    vi.mocked(useParentAuthStore).mockReturnValue({ user: null } as ReturnType<typeof useParentAuthStore>)
+    const saveFn = vi.fn().mockResolvedValue({ data: { id: 1 } })
+
+    const result = await flushParentQueue(OP_KINDS.PARENT_MESSAGE, saveFn)
+
+    expect(saveFn).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      succeeded: 0,
+      needs_review: 0,
+      kept: 0,
+      auth_failed: false,
+    })
+  })
+
+  it('flush 每筆送出前重新核對 owner，切換帳號後不得續送前一位家長的 op', async () => {
+    const authState: { user: { user_id: number } | null } = { user: { user_id: 7 } }
+    vi.mocked(useParentAuthStore).mockReturnValue(authState as ReturnType<typeof useParentAuthStore>)
+    await enqueueParent({
+      kind: OP_KINDS.PARENT_MESSAGE,
+      payload: { content: 'first' },
+    })
+    await enqueueParent({
+      kind: OP_KINDS.PARENT_MESSAGE,
+      payload: { content: 'second' },
+    })
+    const saveFn = vi.fn().mockImplementation(async () => {
+      authState.user = { user_id: 8 }
+      return { data: { id: 1 } }
+    })
+
+    const result = await flushParentQueue(OP_KINDS.PARENT_MESSAGE, saveFn)
+
+    expect(saveFn).toHaveBeenCalledTimes(1)
+    expect(result.succeeded).toBe(1)
+    expect(result.kept).toBe(1)
+  })
+
   it('flushParentQueue 409 視同成功（dedupe replay）', async () => {
     vi.mocked(useParentAuthStore).mockReturnValue({ user: { user_id: 7 } } as ReturnType<typeof useParentAuthStore>)
     const saveFn = vi.fn().mockRejectedValue({

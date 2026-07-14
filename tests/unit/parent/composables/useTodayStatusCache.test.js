@@ -91,17 +91,16 @@ describe('useTodayStatusCache — BroadcastChannel sync', () => {
     _resetForTest()
   })
 
-  it('收到其他 tab postMessage 時更新 status 並寫 cache', async () => {
+  it('收到其他 tab 更新通知時只失效本地資料，不跨帳號傳遞個人化 payload', async () => {
     const { status } = useTodayStatusCache()
 
     if (typeof BroadcastChannel !== 'undefined') {
       const peer = new BroadcastChannel('parent-today-status')
-      peer.postMessage({ type: 'updated', payload: { items: ['from-other-tab'] }, ts: Date.now() })
+      peer.postMessage({ type: 'invalidated', payload: { items: ['from-other-tab'] }, ts: Date.now() })
       peer.close()
       await new Promise((r) => setTimeout(r, 30))
-      expect(status.value).toEqual({ items: ['from-other-tab'] })
-      const cached = JSON.parse(sessionStorage.getItem('parent:today-status:v1'))
-      expect(cached.payload).toEqual({ items: ['from-other-tab'] })
+      expect(status.value).toBeNull()
+      expect(sessionStorage.getItem('parent:today-status:v1')).toBeNull()
     } else {
       console.warn('BroadcastChannel polyfill missing, sync test skipped')
     }

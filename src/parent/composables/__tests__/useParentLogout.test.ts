@@ -1,24 +1,62 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
+import { defineComponent, h, nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
 
-const { mockLiff, mockLogout } = vi.hoisted(() => ({
+const { mockLiff, mockLogout, mockGetMyChildren } = vi.hoisted(() => ({
   mockLiff: { isLoggedIn: vi.fn(() => true), logout: vi.fn() },
   mockLogout: vi.fn(),
+  mockGetMyChildren: vi.fn(),
 }))
 vi.mock('@/parent/services/liff', () => ({ liff: mockLiff }))
 vi.mock('@/parent/api/auth', () => ({ logout: mockLogout }))
+vi.mock('@/parent/api/profile', () => ({
+  getMyChildren: mockGetMyChildren,
+  getTodayStatus: vi.fn(),
+}))
+vi.mock('@/parent/api/messages', () => ({
+  listMessageThreads: vi.fn(),
+  listThreadMessages: vi.fn(),
+  sendThreadMessage: vi.fn(),
+  attachToMessage: vi.fn(),
+  markThreadRead: vi.fn(),
+  recallMessage: vi.fn(),
+  getMessageUnreadCount: vi.fn(),
+}))
 
-import { performParentLogout } from '@/parent/composables/useParentLogout'
+import {
+  _resetParentLogoutIsolationForTesting,
+  initParentSessionIsolation,
+  performParentLogout,
+  useParentLogoutState,
+} from '@/parent/composables/useParentLogout'
 import { useParentAuthStore } from '@/parent/stores/parentAuth'
+import { useChildrenStore } from '@/parent/stores/children'
+import { useMessagesStore } from '@/parent/stores/messages'
+import { useChildSelection } from '@/parent/composables/useChildSelection'
+import { useConsentGate } from '@/parent/composables/useConsentGate'
+import { useSnackbar } from '@/parent/composables/useSnackbar'
+import { useCachedAsync } from '@/composables/useCachedAsync'
+import ParentLogoutOverlay from '@/parent/components/ParentLogoutOverlay.vue'
 
 const CACHE_KEY = 'parent:today-status:v1'
 
 beforeEach(() => {
+  _resetParentLogoutIsolationForTesting()
+  // 不呼叫 vi.unstubAllGlobals()：tests/setup.js 以 stubGlobal 提供完整
+  // localStorage；全部解除會退回 Node 22 不完整的內建物件。
   setActivePinia(createPinia())
   mockLiff.isLoggedIn.mockReset().mockReturnValue(true)
   mockLiff.logout.mockReset()
   mockLogout.mockClear().mockResolvedValue(undefined)
+  mockGetMyChildren.mockReset()
   sessionStorage.clear()
+  localStorage.clear()
+  vi.stubGlobal('caches', {
+    keys: vi.fn().mockResolvedValue(['parent-home', 'portal-api', 'app-static-assets']),
+    delete: vi.fn().mockResolvedValue(true),
+  })
+  window.location.hash = ''
 })
 
 describe('performParentLogout（家長端統一登出清理）', () => {
@@ -51,5 +89,148 @@ describe('performParentLogout（家長端統一登出清理）', () => {
 
     expect(sessionStorage.getItem(CACHE_KEY)).toBeNull()
     expect(auth.user).toBeNull()
+  })
+
+  it('清除所有家長 store、全域狀態與舊版個人化 CacheStorage', async () => {
+    const auth = useParentAuthStore()
+    const children = useChildrenStore()
+    const messages = useMessagesStore()
+    const childSelection = useChildSelection()
+    const consent = useConsentGate()
+    const snackbar = useSnackbar()
+
+    auth.setUser({ user_id: 1, name: '家長甲' })
+    children.items = [{ student_id: 11, name: '甲小孩' }]
+    children.loaded = true
+    messages.threads = [{ id: 21, title: '甲的對話' }]
+    messages.messagesByThread = {
+      21: { items: [{ id: 22, body: '甲的訊息' }], next_cursor: null, hasMore: false },
+    }
+    messages.unreadCount = 3
+    childSelection.setSelected(11)
+    consent.require('contact_book')
+    snackbar.show({ message: '甲的提示' })
+    sessionStorage.setItem('parent_faq_v1', JSON.stringify({ private: '甲' }))
+    sessionStorage.setItem('parent_message_prefill', '甲的草稿')
+    sessionStorage.setItem('parent_api_timings', JSON.stringify([{ u: '/parent/students/11' }]))
+
+    await performParentLogout()
+
+    expect(auth.user).toBeNull()
+    expect(children.items).toEqual([])
+    expect(children.loaded).toBe(false)
+    expect(messages.threads).toEqual([])
+    expect(messages.messagesByThread).toEqual({})
+    expect(messages.unreadCount).toBe(0)
+    expect(childSelection.selectedId.value).toBeNull()
+    expect(consent.visible.value).toBe(false)
+    expect(snackbar.snackbars.value).toEqual([])
+    expect(sessionStorage.getItem('parent_faq_v1')).toBeNull()
+    expect(sessionStorage.getItem('parent_message_prefill')).toBeNull()
+    expect(sessionStorage.getItem('parent_api_timings')).toBeNull()
+    expect(caches.delete).toHaveBeenCalledWith('parent-home')
+    expect(caches.delete).toHaveBeenCalledWith('portal-api')
+    expect(caches.delete).not.toHaveBeenCalledWith('app-static-assets')
+  })
+
+  it('A 的舊請求在登出後才完成時，不得覆蓋 B 的子女資料', async () => {
+    let resolveA: ((value: { data: { items: unknown[] } }) => void) | undefined
+    const requestA = new Promise<{ data: { items: unknown[] } }>((resolve) => {
+      resolveA = resolve
+    })
+    mockGetMyChildren
+      .mockReturnValueOnce(requestA)
+      .mockResolvedValueOnce({ data: { items: [{ student_id: 22, name: '乙小孩' }] } })
+
+    const auth = useParentAuthStore()
+    const children = useChildrenStore()
+    auth.setUser({ user_id: 1, name: '家長甲' })
+    const loadA = children.load()
+    await vi.waitFor(() => expect(mockGetMyChildren).toHaveBeenCalledTimes(1))
+
+    await performParentLogout()
+    auth.setUser({ user_id: 2, name: '家長乙' })
+    await children.load()
+    expect(children.items).toEqual([{ student_id: 22, name: '乙小孩' }])
+
+    resolveA?.({ data: { items: [{ student_id: 11, name: '甲小孩' }] } })
+    await loadA
+    expect(children.items).toEqual([{ student_id: 22, name: '乙小孩' }])
+  })
+
+  it('後端 logout 尚未完成時就同步清空 active cache，並以 blocking overlay 蓋住舊畫面', async () => {
+    let resolveLogout: (() => void) | undefined
+    mockLogout.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveLogout = resolve }),
+    )
+
+    let cached: ReturnType<typeof useCachedAsync<Record<string, unknown>>> | undefined
+    const CacheHarness = defineComponent({
+      setup() {
+        cached = useCachedAsync(
+          'parent/home/summary',
+          vi.fn().mockResolvedValue({ owner: '家長甲', fee: 1234 }),
+          { ttl: 60_000 },
+        )
+        return () => h('div', JSON.stringify(cached?.data.value ?? null))
+      },
+    })
+    const cacheWrapper = mount(CacheHarness)
+    await vi.waitFor(() => expect(cached?.data.value).toEqual({ owner: '家長甲', fee: 1234 }))
+    const overlay = mount(ParentLogoutOverlay)
+
+    const pendingLogout = performParentLogout()
+
+    expect(cached?.data.value).toBeNull()
+    await nextTick()
+    expect(overlay.get('[data-testid="parent-logout-shield"]').attributes('aria-busy')).toBe('true')
+
+    resolveLogout?.()
+    await pendingLogout
+    await nextTick()
+    expect(overlay.find('[data-testid="parent-logout-shield"]').exists()).toBe(false)
+
+    overlay.unmount()
+    cacheWrapper.unmount()
+  })
+
+  it('收到其他分頁 logout-start 時只做本地清理，不呼叫後端也不重播 broadcast', async () => {
+    class FakeBroadcastChannel {
+      static instances: FakeBroadcastChannel[] = []
+      readonly name: string
+      onmessage: ((event: MessageEvent) => void) | null = null
+      postMessage = vi.fn()
+      close = vi.fn()
+
+      constructor(name: string) {
+        this.name = name
+        FakeBroadcastChannel.instances.push(this)
+      }
+    }
+
+    vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel)
+    _resetParentLogoutIsolationForTesting()
+    initParentSessionIsolation()
+    const channel = FakeBroadcastChannel.instances.at(-1)
+    expect(channel).toBeDefined()
+
+    const auth = useParentAuthStore()
+    const children = useChildrenStore()
+    auth.setUser({ user_id: 1, name: '家長甲' })
+    children.items = [{ student_id: 11, name: '甲小孩' }]
+
+    channel?.onmessage?.({ data: { type: 'logout-start' } } as MessageEvent)
+
+    expect(useParentLogoutState().inProgress.value).toBe(true)
+    expect(auth.user).toBeNull()
+    expect(children.items).toEqual([])
+    expect(mockLogout).not.toHaveBeenCalled()
+    expect(channel?.postMessage).not.toHaveBeenCalled()
+
+    channel?.onmessage?.({ data: { type: 'logout-complete' } } as MessageEvent)
+    await nextTick()
+    expect(useParentLogoutState().inProgress.value).toBe(false)
+    expect(window.location.hash).toBe('#/login')
+    expect(channel?.postMessage).not.toHaveBeenCalled()
   })
 })

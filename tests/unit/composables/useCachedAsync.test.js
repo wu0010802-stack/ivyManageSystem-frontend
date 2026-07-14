@@ -165,4 +165,47 @@ describe('useCachedAsync', () => {
     // admin/ 沒被清 → 不會再 fetch
     expect(f2b).toHaveBeenCalledTimes(0)
   })
+
+  it('invalidateCachedAsync(prefix) 會中止舊身分 inflight，舊結果不得覆蓋新 cache', async () => {
+    let resolveOld
+    const oldFetcher = vi.fn().mockImplementation(
+      () => new Promise((resolve) => { resolveOld = resolve }),
+    )
+    makeHarness('parent/home', oldFetcher, { ttl: 60_000 })
+    await vi.waitFor(() => expect(oldFetcher).toHaveBeenCalledTimes(1))
+
+    invalidateCachedAsync('parent/')
+    const current = makeHarness(
+      'parent/home',
+      vi.fn().mockResolvedValue({ owner: 'B' }),
+      { ttl: 60_000 },
+    )
+    await vi.waitFor(() => expect(current.captured.data.value).toEqual({ owner: 'B' }))
+
+    resolveOld({ owner: 'A' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const shouldNotRun = vi.fn().mockResolvedValue({ owner: 'unexpected' })
+    const reread = makeHarness('parent/home', shouldNotRun, { ttl: 60_000 })
+    await nextTick()
+    expect(reread.captured.data.value).toEqual({ owner: 'B' })
+    expect(shouldNotRun).not.toHaveBeenCalled()
+  })
+
+  it('invalidateCachedAsync(prefix) 會同步清空仍掛載 caller 的個人化 data ref', async () => {
+    const active = makeHarness(
+      'parent/home/summary',
+      vi.fn().mockResolvedValue({ owner: 'A', fee: 1234 }),
+      { ttl: 60_000 },
+    )
+    await vi.waitFor(() => {
+      expect(active.captured.data.value).toEqual({ owner: 'A', fee: 1234 })
+    })
+
+    invalidateCachedAsync('parent/')
+
+    expect(active.captured.data.value).toBeNull()
+    expect(active.captured.pending.value).toBe(false)
+    expect(active.captured.error.value).toBeNull()
+  })
 })

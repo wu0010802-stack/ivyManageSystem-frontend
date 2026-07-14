@@ -39,12 +39,12 @@ describe('flushClassAttendanceQueue', () => {
         await makeOp({ classroom_name: 'B' })
         const saveFn = vi.fn().mockResolvedValue({ data: { saved: 0 } })
 
-        const result = await flushClassAttendanceQueue(saveFn)
+        const result = await flushClassAttendanceQueue(saveFn, { userId: 1 })
 
         expect(saveFn).toHaveBeenCalledTimes(2)
         expect(result.succeeded).toBe(2)
         expect(result.kept).toBe(0)
-        const remain = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE })
+        const remain = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE, userId: 1 })
         expect(remain).toHaveLength(0)
     })
 
@@ -54,14 +54,14 @@ describe('flushClassAttendanceQueue', () => {
         await makeOp()
         const saveFn = vi.fn().mockRejectedValue(httpError(401, 'Unauthorized'))
 
-        const result = await flushClassAttendanceQueue(saveFn)
+        const result = await flushClassAttendanceQueue(saveFn, { userId: 1 })
 
         expect(saveFn).toHaveBeenCalledTimes(1)
         expect(result.auth_failed).toBe(true)
         expect(result.succeeded).toBe(0)
         // 第一筆被計為 kept，剩下兩筆也不被 flush
         expect(result.kept).toBe(3)
-        const remain = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE })
+        const remain = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE, userId: 1 })
         expect(remain).toHaveLength(3)
     })
 
@@ -73,13 +73,14 @@ describe('flushClassAttendanceQueue', () => {
             .mockRejectedValueOnce(httpError(403, '學生已轉班'))
             .mockResolvedValueOnce({ data: { saved: 0 } })
 
-        const result = await flushClassAttendanceQueue(saveFn)
+        const result = await flushClassAttendanceQueue(saveFn, { userId: 1 })
 
         expect(result.needs_review).toBe(1)
         expect(result.succeeded).toBe(1)
         const review = await listOps({
             kind: OP_KINDS.CLASS_ATTENDANCE,
             status: OP_STATUS.NEEDS_REVIEW,
+            userId: 1,
         })
         expect(review).toHaveLength(1)
         expect(review[0].last_error).toContain('學生已轉班')
@@ -89,11 +90,11 @@ describe('flushClassAttendanceQueue', () => {
         const op = await makeOp()
         const saveFn = vi.fn().mockRejectedValue(networkError())
 
-        const result = await flushClassAttendanceQueue(saveFn)
+        const result = await flushClassAttendanceQueue(saveFn, { userId: 1 })
 
         expect(result.kept).toBe(1)
         expect(result.auth_failed).toBe(false)
-        const pending = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE })
+        const pending = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE, userId: 1 })
         expect(pending).toHaveLength(1)
         expect(pending[0].attempts).toBe(1)
         expect(pending[0].last_error).toContain('網路')
@@ -107,12 +108,13 @@ describe('flushClassAttendanceQueue', () => {
         await updateOp(op.id, { attempts: 4 })
         const saveFn = vi.fn().mockRejectedValue(httpError(500, 'Server Error'))
 
-        const result = await flushClassAttendanceQueue(saveFn)
+        const result = await flushClassAttendanceQueue(saveFn, { userId: 1 })
 
         expect(result.needs_review).toBe(1)
         const review = await listOps({
             kind: OP_KINDS.CLASS_ATTENDANCE,
             status: OP_STATUS.NEEDS_REVIEW,
+            userId: 1,
         })
         expect(review).toHaveLength(1)
         expect(review[0].attempts).toBe(5)
@@ -131,6 +133,7 @@ describe('flushClassAttendanceQueue', () => {
         const remain = await listOps({
             kind: OP_KINDS.CLASS_ATTENDANCE,
             status: OP_STATUS.PENDING,
+            userId: 200,
         })
         expect(remain).toHaveLength(1)
         expect(remain[0].user_id).toBe(200)
