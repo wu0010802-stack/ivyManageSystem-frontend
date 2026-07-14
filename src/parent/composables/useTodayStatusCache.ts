@@ -22,6 +22,7 @@ const loading = ref(false)
 const error = ref<unknown>(null)
 let channel: BroadcastChannel | null = null
 let inflight: Promise<unknown> | null = null
+let cacheGeneration = 0
 
 function readCache() {
   try {
@@ -40,21 +41,38 @@ function writeCache(payload: unknown) {
 function age(cache: { cachedAt: number } | null) { return cache ? Date.now() - cache.cachedAt : Infinity }
 
 async function _fetch() {
+  const generation = cacheGeneration
   loading.value = true
   try {
     const res = await getTodayStatus()
+    if (generation !== cacheGeneration) return null
     const data = res.data
     status.value = data
     writeCache(data)
     error.value = null
-    channel?.postMessage({ type: 'updated', payload: data, ts: Date.now() })
+    // BroadcastChannel 不傳個人化 payload，僅通知同帳號分頁重新驗證；共享裝置切換
+    // LINE 帳號時，另一分頁的舊資料不能直接灌進目前記憶體。
+    channel?.postMessage({ type: 'invalidated', ts: Date.now() })
     return data
   } catch (e) {
+    if (generation !== cacheGeneration) return null
     error.value = e
     throw e
   } finally {
-    loading.value = false
+    if (generation === cacheGeneration) loading.value = false
   }
+}
+
+function startFetch(): Promise<unknown> {
+  if (inflight) return inflight
+  const request = _fetch()
+  inflight = request
+  request
+    .finally(() => {
+      if (inflight === request) inflight = null
+    })
+    .catch(() => {})
+  return request
 }
 
 function ensureChannel() {
@@ -62,9 +80,9 @@ function ensureChannel() {
   try {
     channel = new BroadcastChannel(CHANNEL_NAME)
     channel.onmessage = (msg) => {
-      if (msg.data?.type === 'updated' && msg.data.payload) {
-        status.value = msg.data.payload
-        writeCache(msg.data.payload)
+      if (msg.data?.type === 'invalidated') {
+        try { sessionStorage.removeItem(CACHE_KEY) } catch { /* ignore */ }
+        status.value = null
       }
     }
   } catch {/* ignore */}
@@ -78,7 +96,7 @@ function ensureVisibility() {
       const cache = readCache()
       if (age(cache) > FRESH_TTL_MS) {
         if (!inflight) {
-          inflight = _fetch().finally(() => { inflight = null })
+          void startFetch()
         }
       }
     }
@@ -109,14 +127,14 @@ export function useTodayStatusCache() {
       // SWR：先給 stale 再背景 fetch
       status.value = cache.payload
       if (!inflight) {
-        inflight = _fetch().finally(() => { inflight = null })
+        void startFetch()
       }
       return cache.payload
     }
 
     // 無 cache 或太舊：等 fetch
     if (!inflight) {
-      inflight = _fetch().finally(() => { inflight = null })
+      void startFetch()
     }
     return inflight
   }
@@ -136,18 +154,25 @@ export function useTodayStatusCache() {
  * 不關閉 BroadcastChannel（下次 useTodayStatusCache() 會沿用）。
  */
 export function clearTodayStatusCache() {
+  cacheGeneration += 1
   try {
     sessionStorage.removeItem(CACHE_KEY)
   } catch {
     /* ignore */
   }
   status.value = null
+  loading.value = false
   error.value = null
   inflight = null
+  if (channel) {
+    channel.close?.()
+    channel = null
+  }
 }
 
 // 測試用：重置 module-level state
 export function _resetForTest() {
+  cacheGeneration += 1
   status.value = null
   loading.value = false
   error.value = null

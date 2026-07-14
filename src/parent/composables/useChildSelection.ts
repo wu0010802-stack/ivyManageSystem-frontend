@@ -31,6 +31,12 @@ const selectedId = ref<number | null>(loadStored())
 
 watch(selectedId, (v) => saveStored(v))
 
+/** 登出時清除跨 PWA session 的孩子選擇，避免下一位家長短暫看到舊 student id。 */
+export function clearChildSelection(): void {
+  selectedId.value = null
+  saveStored(null)
+}
+
 export function useChildSelection() {
   const setSelected = (id: number | null | undefined): void => {
     selectedId.value = id ? Number(id) : null

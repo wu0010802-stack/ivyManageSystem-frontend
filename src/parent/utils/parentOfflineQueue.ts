@@ -44,15 +44,31 @@ export interface FlushResult {
   auth_failed: boolean
 }
 
+function emptyFlushResult(): FlushResult {
+  return {
+    succeeded: 0,
+    needs_review: 0,
+    kept: 0,
+    auth_failed: false,
+  }
+}
+
+function currentParentUserId(): number | string | null {
+  const authStore = useParentAuthStore()
+  const userId = (authStore.user as Record<string, unknown> | null)?.['user_id']
+  if (typeof userId === 'number' && Number.isFinite(userId) && userId > 0) return userId
+  if (typeof userId === 'string' && userId.trim()) return userId
+  return null
+}
+
 function genClientRequestId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return `${Date.now()}-${Math.random().toString(36).slice(2, 14)}`
 }
 
 export async function enqueueParent(args: ParentEnqueueArgs) {
-  const authStore = useParentAuthStore()
-  const userId = (authStore.user as Record<string, unknown> | null)?.['user_id'] as number | string | undefined
-  if (!userId) throw new Error('enqueueParent 需要已登入家長 user_id')
+  const userId = currentParentUserId()
+  if (userId === null) throw new Error('enqueueParent 需要已登入家長 user_id')
   const payloadWithUuid = {
     ...args.payload,
     client_request_id: args.payload['client_request_id'] ?? genClientRequestId(),
@@ -81,20 +97,21 @@ export async function flushParentQueue(
   saveFn?: (payload: Record<string, unknown>) => Promise<unknown>
 ): Promise<FlushResult> {
   const fn = saveFn ?? SAVE_FN_BY_KIND[kind]
-  const authStore = useParentAuthStore()
-  const userId = (authStore.user as Record<string, unknown> | null)?.['user_id'] as number | string | undefined
+  const userId = currentParentUserId()
+  if (userId === null) return emptyFlushResult()
   const ops = await listOps({
     kind,
     status: OP_STATUS.PENDING,
     userId,
   })
-  const result: FlushResult = {
-    succeeded: 0,
-    needs_review: 0,
-    kept: 0,
-    auth_failed: false,
-  }
-  for (const op of ops) {
+  const result = emptyFlushResult()
+  for (const [index, op] of ops.entries()) {
+    // 每筆送出前都重新核對目前登入者與 record owner，避免 flush 途中登出/換帳號後
+    // 繼續用新 cookie 送出前一位家長的離線操作。
+    if (currentParentUserId() !== userId || op['user_id'] !== userId) {
+      result.kept += ops.length - index
+      break
+    }
     try {
       await fn(op.payload as Record<string, unknown>)
       await removeOp(op.id as string)
@@ -155,19 +172,32 @@ export async function flushParentQueue(
 
 let _flushAllDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let _flushAllInFlight: Promise<FlushResult> | null = null
+let _flushAllResolve: ((result: FlushResult) => void) | null = null
+let _flushGeneration = 0
+
+/** 登出時取消尚未開始的 debounce，並讓執行中的 flush 在下一筆 owner check 停止。 */
+export function resetParentOfflineQueueRuntime(): void {
+  _flushGeneration += 1
+  if (_flushAllDebounceTimer) clearTimeout(_flushAllDebounceTimer)
+  _flushAllDebounceTimer = null
+  const resolve = _flushAllResolve
+  _flushAllResolve = null
+  _flushAllInFlight = null
+  resolve?.(emptyFlushResult())
+}
 
 export function flushAllParent(): Promise<FlushResult> {
   if (_flushAllInFlight) return _flushAllInFlight
   if (_flushAllDebounceTimer) clearTimeout(_flushAllDebounceTimer)
-  _flushAllInFlight = new Promise((resolve) => {
+  const generation = _flushGeneration
+  let promise: Promise<FlushResult>
+  promise = new Promise((resolve) => {
+    _flushAllResolve = resolve
     _flushAllDebounceTimer = setTimeout(async () => {
-      const total: FlushResult = {
-        succeeded: 0,
-        needs_review: 0,
-        kept: 0,
-        auth_failed: false,
-      }
+      _flushAllDebounceTimer = null
+      const total = emptyFlushResult()
       for (const kind of PARENT_KINDS) {
+        if (generation !== _flushGeneration) break
         const r = await flushParentQueue(kind)
         total.succeeded += r.succeeded
         total.needs_review += r.needs_review
@@ -175,11 +205,15 @@ export function flushAllParent(): Promise<FlushResult> {
         total.auth_failed = total.auth_failed || r.auth_failed
         if (r.auth_failed) break
       }
-      _flushAllInFlight = null
+      if (_flushAllInFlight === promise) {
+        _flushAllInFlight = null
+        _flushAllResolve = null
+      }
       resolve(total)
     }, 1000)
   })
-  return _flushAllInFlight
+  _flushAllInFlight = promise
+  return promise
 }
 
 export { PARENT_KINDS, type ParentOpKind }

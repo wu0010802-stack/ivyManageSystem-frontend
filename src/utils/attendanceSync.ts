@@ -23,7 +23,7 @@ import { isNetworkError } from '@/composables/useOnlineStatus'
 /**
  * @param {Function} saveFn - 例如 `batchSaveClassAttendance`，吃 payload，回傳 Promise
  * @param {Object} [opts]
- * @param {number|string} [opts.userId] - 只 flush 此 user 建立的 ops（共享平板場景必傳）
+ * @param {number|string} opts.userId - 只 flush 此 user 建立的 ops；缺失時 fail-closed 不送出
  * @returns {Promise<FlushResult>}
  */
 export async function flushClassAttendanceQueue(saveFn: (payload: unknown) => Promise<unknown>, opts: { userId?: number | string } = {}) {

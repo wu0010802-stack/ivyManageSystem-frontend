@@ -38,6 +38,7 @@ function buildKey(method: string, url: unknown, payload: unknown) {
 
 const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
 const READ_METHODS = new Set(['get', 'head'])
+const _inflightByInstance = new WeakMap<AxiosInstance, Map<string, Promise<unknown>>>()
 
 /**
  * 在 axios instance 上套用「同 key in-flight 請求去重」。
@@ -50,12 +51,16 @@ const READ_METHODS = new Set(['get', 'head'])
  */
 export function applyDedupe(instance: AxiosInstance) {
   const inflight = new Map<string, Promise<unknown>>()
+  _inflightByInstance.set(instance, inflight)
 
   const run = (key: string, config: AxiosRequestConfig & { meta?: { allowConcurrent?: boolean } }, original: () => Promise<unknown>) => {
     if ((config as Record<string, unknown>)?.['meta'] && ((config as Record<string, unknown>)['meta'] as Record<string, unknown>)?.['allowConcurrent']) return original()
     const existing = inflight.get(key)
     if (existing) return existing
-    const p = original().finally(() => inflight.delete(key))
+    const p = original().finally(() => {
+      // 登出 clear 後，新帳號可能已建立同 key 請求；舊 promise 完成時不可刪掉新項目。
+      if (inflight.get(key) === p) inflight.delete(key)
+    })
     inflight.set(key, p)
     return p
   }
@@ -110,6 +115,11 @@ export function applyDedupe(instance: AxiosInstance) {
   }
 
   return instance
+}
+
+/** 清掉指定 axios instance 的 dedupe map，讓新身分不會共用前一位使用者的 promise。 */
+export function clearDedupe(instance: AxiosInstance): void {
+  _inflightByInstance.get(instance)?.clear()
 }
 
 export { stableStringify }

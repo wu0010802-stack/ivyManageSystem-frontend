@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
 import { getTodayContactBook, type ContactBookEntry } from '../api/contactBook'
-import { useParentAuthStore } from '../stores/parentAuth'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
 import { useTodayTimeline } from '../composables/useTodayTimeline'
@@ -22,7 +21,6 @@ import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 
 const router = useRouter()
-const authStore = useParentAuthStore()
 const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
 
 const { status: todayStatus, refresh: refreshToday } = useTodayStatusCache()
@@ -38,7 +36,6 @@ const {
   'parent/today/summary',
   async () => {
     const res = await getHomeSummary()
-    if (res.data?.me) authStore.setUser(res.data.me)
     return res.data
   },
   { ttl: 60_000 },

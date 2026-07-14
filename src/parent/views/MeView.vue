@@ -18,7 +18,7 @@ const router = useRouter()
 const authStore = useParentAuthStore()
 const childrenStore = useChildrenStore()
 
-const me = ref<Record<string, unknown> | null>(null)
+const me = computed(() => authStore.user as Record<string, unknown> | null)
 const showLogoutConfirm = ref(false)
 const loggingOut = ref(false)
 
@@ -44,7 +44,6 @@ const { data: summaryData } = useCachedAsync(
   'parent/home/summary',
   async () => {
     const res = await getHomeSummary()
-    if (res.data?.me) authStore.setUser(res.data.me)
     return res.data
   },
   { ttl: 60_000 },
@@ -73,7 +72,6 @@ async function doLogout() {
 }
 
 onMounted(async () => {
-  me.value = authStore.user as Record<string, unknown> | null
   await childrenStore.load()
 })
 

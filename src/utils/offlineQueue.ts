@@ -13,6 +13,13 @@ const STORE = 'pending_ops'
 
 let _dbPromise: Promise<IDBPDatabase> | null = null
 
+type QueueUserId = number | string
+
+function isValidUserId(userId: unknown): userId is QueueUserId {
+    if (typeof userId === 'number') return Number.isFinite(userId) && userId > 0
+    return typeof userId === 'string' && userId.trim().length > 0
+}
+
 function getDB() {
     if (!_dbPromise) {
         _dbPromise = openDB(DB_NAME, DB_VERSION, {
@@ -48,7 +55,7 @@ function genId() {
  * @returns {Promise<Object>} 含 id、created_at、status='pending'
  */
 export async function enqueueOp({ kind, payload, userId, meta = {} }: { kind: string; payload: unknown; userId: number | string; meta?: Record<string, unknown> }) {
-    if (userId === undefined || userId === null) {
+    if (!isValidUserId(userId)) {
         throw new Error('enqueueOp 需要 userId 以避免共享裝置跨使用者送出')
     }
     const db = await getDB()
@@ -76,15 +83,16 @@ export async function enqueueOp({ kind, payload, userId, meta = {} }: { kind: st
  * @param {Object} [opts]
  * @param {string} [opts.kind]
  * @param {string} [opts.status] - 預設只回傳 'pending'，傳入 null 取全部
- * @param {number|string} [opts.userId] - 指定過濾的使用者 id；傳 null 表示不過濾
+ * @param {number|string} opts.userId - 必填的目前使用者 id；缺失時 fail-closed 回空陣列
  */
 export async function listOps({ kind, status = 'pending', userId }: { kind?: string; status?: string | null; userId?: number | string | null } = {}) {
+    if (!isValidUserId(userId)) return []
     const db = await getDB()
     const all = await db.getAll(STORE)
     return all.filter((op: Record<string, unknown>) => {
         if (status && op['status'] !== status) return false
         if (kind && op['kind'] !== kind) return false
-        if (userId !== undefined && userId !== null && op['user_id'] !== userId) return false
+        if (op['user_id'] !== userId) return false
         return true
     }).sort((a: Record<string, unknown>, b: Record<string, unknown>) => (a['created_at'] as string).localeCompare(b['created_at'] as string))
 }
@@ -125,6 +133,7 @@ export async function countPending(kind: string, userId: number | string | undef
  * @returns {Promise<Array>} 不屬於 currentUserId 的 pending ops
  */
 export async function listOtherUsersPendingOps(currentUserId: number | string, kind?: string) {
+    if (!isValidUserId(currentUserId)) return []
     const db = await getDB()
     const all = await db.getAll(STORE)
     return all.filter((op: Record<string, unknown>) => {

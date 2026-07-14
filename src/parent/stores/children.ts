@@ -14,26 +14,40 @@ export const useChildrenStore = defineStore('parentChildren', () => {
   const loaded = ref(false)
   const loading = ref(false)
   const error = ref('')
+  let requestVersion = 0
 
   async function load(force = false) {
     if (loading.value) return
     if (loaded.value && !force) return
+    const version = ++requestVersion
     loading.value = true
     error.value = ''
     try {
       const { data } = await getMyChildren()
+      if (version !== requestVersion) return
       items.value = data?.items || []
       loaded.value = true
     } catch (err) {
+      if (version !== requestVersion) return
       error.value = (err as { displayMessage?: string })?.displayMessage || '載入失敗'
     } finally {
-      loading.value = false
+      if (version === requestVersion) loading.value = false
     }
   }
 
   function invalidate() {
+    requestVersion += 1
     loaded.value = false
+    loading.value = false
   }
 
-  return { items, loaded, loading, error, load, invalidate }
+  function clear() {
+    requestVersion += 1
+    items.value = []
+    loaded.value = false
+    loading.value = false
+    error.value = ''
+  }
+
+  return { items, loaded, loading, error, load, invalidate, clear }
 })

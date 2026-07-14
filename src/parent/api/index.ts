@@ -6,7 +6,7 @@
  */
 
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
-import { applyDedupe } from '@/utils/apiDedupe'
+import { applyDedupe, clearDedupe } from '@/utils/apiDedupe'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { toast } from '@/parent/utils/toast'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
@@ -33,7 +33,7 @@ declare module 'axios' {
     errorDetail?: unknown
   }
   interface InternalAxiosRequestConfig {
-    metadata?: { startedAt: number }
+    metadata?: { startedAt: number; sessionGeneration: number }
     _retried?: boolean
   }
 }
@@ -50,9 +50,15 @@ applyDedupe(api)
 
 const TIMING_BUFFER_KEY = 'parent_api_timings'
 const TIMING_BUFFER_MAX = 50
+let _refreshing: Promise<boolean> | null = null
+let _refreshController: AbortController | null = null
+let _apiSessionGeneration = 0
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  config.metadata = { startedAt: performance.now() }
+  config.metadata = {
+    startedAt: performance.now(),
+    sessionGeneration: _apiSessionGeneration,
+  }
   return config
 })
 
@@ -80,24 +86,48 @@ function _recordTiming(method: string, url: string, status: number, durationMs: 
   }
 }
 
-let _refreshing: Promise<boolean> | null = null
-
 function _doRefresh(): Promise<boolean> {
   // 回傳 boolean (true=成功)；rotation 5s race 視窗內同 family 第二次 refresh 會回 409，
   // 等同「已被同 family 完成 rotation」→ 仍視為成功（後續重打原請求會帶到新 cookie）。
+  const controller = new AbortController()
+  _refreshController = controller
   return axios
-    .post('/api/parent/auth/refresh', null, { withCredentials: true, timeout: 30000 })
+    .post('/api/parent/auth/refresh', null, {
+      withCredentials: true,
+      timeout: 30000,
+      signal: controller.signal,
+    })
     .then(() => true)
     .catch((err) => {
       if (err?.response?.status === 409) return true
       throw err
     })
+    .finally(() => {
+      if (_refreshController === controller) _refreshController = null
+    })
+}
+
+/** 登出時中止 refresh、清 dedupe 與可能含路徑 id 的 timing buffer。 */
+export function resetParentApiSessionState(): void {
+  _apiSessionGeneration += 1
+  _refreshController?.abort()
+  _refreshController = null
+  _refreshing = null
+  clearDedupe(api)
+  try {
+    sessionStorage.removeItem(TIMING_BUFFER_KEY)
+  } catch {
+    /* ignore disabled storage */
+  }
 }
 
 api.interceptors.response.use(
   (response) => {
     const startedAt = response.config?.metadata?.startedAt
-    if (startedAt != null) {
+    if (
+      startedAt != null &&
+      response.config.metadata?.sessionGeneration === _apiSessionGeneration
+    ) {
       _recordTiming(
         (response.config.method || 'get').toUpperCase(),
         response.config.url || '',
@@ -109,11 +139,19 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined
+    if (
+      originalRequest?.metadata?.sessionGeneration !== undefined &&
+      originalRequest.metadata.sessionGeneration !== _apiSessionGeneration
+    ) {
+      // 前一位使用者的舊請求不可在登出後啟動 refresh 或其他全域 side effect。
+      return Promise.reject(error)
+    }
     const url = originalRequest?.url || ''
     const isAuthEndpoint =
       url.includes('/parent/auth/liff-login') ||
       url.includes('/parent/auth/bind') ||
-      url.includes('/parent/auth/refresh')
+      url.includes('/parent/auth/refresh') ||
+      url.includes('/parent/auth/logout')
 
     const startedAt = originalRequest?.metadata?.startedAt
     if (startedAt != null) {
@@ -133,9 +171,11 @@ api.interceptors.response.use(
       if (originalRequest) originalRequest._retried = true
       try {
         if (!_refreshing) {
-          _refreshing = _doRefresh().finally(() => {
-            _refreshing = null
+          const refresh = _doRefresh()
+          const tracked = refresh.finally(() => {
+            if (_refreshing === tracked) _refreshing = null
           })
+          _refreshing = tracked
         }
         await _refreshing
         // 不論 refresh 是本請求發起或共享自其他並發請求，都要重打原請求；

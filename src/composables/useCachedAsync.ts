@@ -30,11 +30,61 @@ interface CacheEntry<T> {
   inflight: Promise<T | null | undefined> | null
 }
 
+interface ActiveCacheConsumer {
+  clear: () => void
+}
+
 const _cache = new Map<string, CacheEntry<unknown>>()
+const _activeControllers = new Map<string, Set<AbortController>>()
+const _activeConsumers = new Map<string, Set<ActiveCacheConsumer>>()
 //   key -> { data, fetchedAt, inflight }
 
 export function _resetCacheForTesting() {
+  for (const controllers of _activeControllers.values()) {
+    controllers.forEach((controller) => controller.abort())
+  }
+  _activeControllers.clear()
+  for (const consumers of _activeConsumers.values()) {
+    consumers.forEach((consumer) => consumer.clear())
+  }
+  _activeConsumers.clear()
   _cache.clear()
+}
+
+function trackController(key: string, controller: AbortController): void {
+  const controllers = _activeControllers.get(key) ?? new Set<AbortController>()
+  controllers.add(controller)
+  _activeControllers.set(key, controllers)
+}
+
+function untrackController(key: string, controller: AbortController): void {
+  const controllers = _activeControllers.get(key)
+  if (!controllers) return
+  controllers.delete(controller)
+  if (controllers.size === 0) _activeControllers.delete(key)
+}
+
+function abortControllers(key: string): void {
+  const controllers = _activeControllers.get(key)
+  controllers?.forEach((controller) => controller.abort())
+  _activeControllers.delete(key)
+}
+
+function trackConsumer(key: string, consumer: ActiveCacheConsumer): void {
+  const consumers = _activeConsumers.get(key) ?? new Set<ActiveCacheConsumer>()
+  consumers.add(consumer)
+  _activeConsumers.set(key, consumers)
+}
+
+function untrackConsumer(key: string, consumer: ActiveCacheConsumer): void {
+  const consumers = _activeConsumers.get(key)
+  if (!consumers) return
+  consumers.delete(consumer)
+  if (consumers.size === 0) _activeConsumers.delete(key)
+}
+
+function clearConsumers(key: string): void {
+  _activeConsumers.get(key)?.forEach((consumer) => consumer.clear())
 }
 
 export function useCachedAsync<T = unknown>(
@@ -55,12 +105,23 @@ export function useCachedAsync<T = unknown>(
   const pending = ref(false)
   const fetchedAt = ref(entry.fetchedAt)
 
+  let controller: AbortController | null = null
+  const consumer: ActiveCacheConsumer = {
+    clear: () => {
+      controller?.abort()
+      controller = null
+      data.value = null
+      error.value = null
+      pending.value = false
+      fetchedAt.value = 0
+    },
+  }
+  trackConsumer(key, consumer)
+
   const isStale = computed(() => {
     if (!fetchedAt.value) return true
     return Date.now() - fetchedAt.value > ttl
   })
-
-  let controller: AbortController | null = null
 
   function _syncFromCache() {
     const currentKey = resolveKey()
@@ -96,24 +157,27 @@ export function useCachedAsync<T = unknown>(
     // 有舊資料就不要顯示 spinner（SWR 行為）；無舊資料才顯示 loading
     pending.value = data.value == null
 
-    controller = new AbortController()
+    const requestController = new AbortController()
+    controller = requestController
+    trackController(currentKey, requestController)
     const promise: Promise<T | null | undefined> = (async () => {
       const k = resolveKey()
       try {
-        const result = await fetcher(controller!.signal)
-        if (controller!.signal.aborted) return data.value
+        const result = await fetcher(requestController.signal)
+        if (requestController.signal.aborted) return data.value
         data.value = result
         fetchedAt.value = Date.now()
         _cache.set(k, { data: result as unknown, fetchedAt: fetchedAt.value, inflight: null })
         return result
       } catch (err) {
-        if (controller!.signal.aborted) return data.value
+        if (requestController.signal.aborted) return data.value
         error.value = err
         // 失敗時不更新 cache（保留舊資料）
         const cur = _cache.get(k)
         if (cur) cur.inflight = null
         throw err
       } finally {
+        untrackController(k, requestController)
         pending.value = false
       }
     })()
@@ -131,8 +195,10 @@ export function useCachedAsync<T = unknown>(
   }
 
   function invalidate() {
-    _cache.delete(resolveKey())
-    fetchedAt.value = 0
+    const currentKey = resolveKey()
+    abortControllers(currentKey)
+    _cache.delete(currentKey)
+    clearConsumers(currentKey)
   }
 
   if (immediate) {
@@ -142,6 +208,7 @@ export function useCachedAsync<T = unknown>(
 
   onUnmounted(() => {
     if (controller) controller.abort()
+    untrackConsumer(key, consumer)
   })
 
   return { data, error, pending, fetchedAt, isStale, refresh, invalidate }
@@ -153,8 +220,16 @@ export function useCachedAsync<T = unknown>(
  */
 export function invalidateCachedAsync(prefix?: string) {
   if (!prefix) {
+    for (const key of [..._activeControllers.keys()]) abortControllers(key)
+    for (const key of [..._activeConsumers.keys()]) clearConsumers(key)
     _cache.clear()
     return
+  }
+  for (const key of [..._activeControllers.keys()]) {
+    if (key.startsWith(prefix)) abortControllers(key)
+  }
+  for (const key of [..._activeConsumers.keys()]) {
+    if (key.startsWith(prefix)) clearConsumers(key)
   }
   for (const key of [..._cache.keys()]) {
     if (typeof key === 'string' && key.startsWith(prefix)) _cache.delete(key)

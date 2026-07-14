@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ParentLayout from './layouts/ParentLayout.vue'
 import ConsentModal from './components/ConsentModal.vue'
+import ParentLogoutOverlay from './components/ParentLogoutOverlay.vue'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import { useConsentGate } from './composables/useConsentGate'
 import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
@@ -83,6 +84,9 @@ router.beforeEach((to, from) => {
     :policy="consentPolicy"
     @consented="gate.resolve()"
   />
+
+  <!-- 登出網路/LIFF 清理期間以不透明遮罩阻擋舊帳號 PII 與任何互動。 -->
+  <ParentLogoutOverlay />
 </template>
 
 <style>

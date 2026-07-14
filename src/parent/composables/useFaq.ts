@@ -2,6 +2,16 @@ import { ref } from 'vue'
 import { getFaq } from '@/parent/api/assistant'
 
 const STORAGE_KEY = 'parent_faq_v1'
+let cacheGeneration = 0
+
+export function clearFaqCache(): void {
+  cacheGeneration += 1
+  try {
+    sessionStorage.removeItem(STORAGE_KEY)
+  } catch {
+    /* ignore disabled storage */
+  }
+}
 
 export function useFaq() {
   const faq = ref<unknown>(null)
@@ -18,16 +28,19 @@ export function useFaq() {
   }
 
   async function load() {
+    const generation = cacheGeneration
     const cached = readCache()
     if (cached) {
       // 先用快取，背景刷新 sessionStorage（不覆寫當前 faq.value）
       faq.value = cached
       getFaq()
         .then((fresh) => {
-          sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fresh))
+          if (generation === cacheGeneration) {
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fresh))
+          }
         })
         .catch((e) => {
-          error.value = e
+          if (generation === cacheGeneration) error.value = e
         })
       return
     }
@@ -36,12 +49,13 @@ export function useFaq() {
     error.value = null
     try {
       const fresh = await getFaq()
+      if (generation !== cacheGeneration) return
       faq.value = fresh
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(fresh))
     } catch (e) {
-      error.value = e
+      if (generation === cacheGeneration) error.value = e
     } finally {
-      loading.value = false
+      if (generation === cacheGeneration) loading.value = false
     }
   }
 

@@ -38,3 +38,8 @@ export function useSnackbar() {
     dismiss: (id: number) => store.dismiss(id),
   }
 }
+
+export function clearSnackbarQueue(): void {
+  useSnackbarStore().$reset()
+  nextId = 1
+}
