@@ -23835,6 +23835,8 @@ export interface components {
             email?: string | null;
             /** Id */
             id: number;
+            /** Internal Note */
+            internal_note: string;
             /** Match Status */
             match_status?: string | null;
             /** Parent Phone */
@@ -26726,6 +26728,8 @@ export interface components {
             email?: string | null;
             /** Id */
             id: number;
+            /** Internal Note */
+            internal_note: string;
             /** Is Paid */
             is_paid: boolean;
             /** Match Status */
@@ -26795,6 +26799,8 @@ export interface components {
             email?: string | null;
             /** Id */
             id: number;
+            /** Internal Note */
+            internal_note: string;
             /** Is Active */
             is_active: boolean;
             /** Is Paid */

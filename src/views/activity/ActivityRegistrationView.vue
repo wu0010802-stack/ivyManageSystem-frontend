@@ -523,10 +523,7 @@ interface RegistrationSupply { id: number; supply_id: number; name?: string; pri
 interface RegistrationDetail {
   id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string; query_token?: string | null
   total_amount?: number; courses?: RegistrationCourse[]; supplies?: RegistrationSupply[]; changes?: Record<string, unknown>[]
-  // TODO(codegen): 後端才藝報名審核 payload 新增 internal_note（多行內部審核軌跡，如
-  // 「[已拒絕 by …] 理由」「[強行收件 by …]」「[已還原 by …]」）；本介面為手動維護的
-  // 本地型別（getRegistrationDetail 回應在呼叫端已 cast 為 RegistrationDetail，非直接
-  // 走生成型別），故直接補欄位而非另開 intersection type。
+  // internal_note = 內部審核軌跡（僅 admin payload 回傳，公開查詢端點不含此欄）
   internal_note?: string
   [key: string]: unknown
 }
