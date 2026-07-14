@@ -77,7 +77,6 @@ export const SALARY_TAB_FIELDS = Object.freeze([
   'skip_payroll_bonuses',
   'skip_payroll_transfer',
   'unreported_for_tax',
-  'extra_dependents_quarterly',
   'insurance_salary_override_reason',
   // 議題 A 選項 3：底薪標準化覆寫
   'bypass_standard_base',

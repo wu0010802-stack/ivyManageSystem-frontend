@@ -44,7 +44,6 @@ export const EMPLOYEE_FIELD_SECTION: Record<string, EmployeeFormSection> = {
   labor_insured_salary: 'salary',
   health_insured_salary: 'salary',
   pension_insured_salary: 'salary',
-  extra_dependents_quarterly: 'salary',
   insurance_salary_override_reason: 'salary',
   insurance_effective_date: 'salary',
 }

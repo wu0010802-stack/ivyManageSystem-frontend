@@ -20,7 +20,6 @@ export interface EmployeeFormSalaryData {
   bypass_standard_base?: boolean
   skip_payroll_transfer?: boolean
   unreported_for_tax?: boolean
-  extra_dependents_quarterly?: number | null
   insurance_salary_override_reason?: string
   labor_insured_salary?: number | null
   health_insured_salary?: number | null
@@ -173,7 +172,7 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
 
     <!-- 進階特殊投保／獎金狀態（預設摺疊，僅特殊個案需設定）-->
     <FormSection data-test="section-advanced" title="進階特殊狀況" collapsible :default-open="false" style="margin-top: 12px;">
-        <div class="form-hint" style="margin-bottom: 8px;">免就保 / 健保豁免 / 不發紅利 / 季扣眷屬 / 分項投保 / 個人合約底薪</div>
+        <div class="form-hint" style="margin-bottom: 8px;">免就保 / 健保豁免 / 不發紅利 / 分項投保 / 個人合約底薪</div>
 
         <!-- 計薪行為旗標 -->
         <el-row :gutter="20">
@@ -249,24 +248,9 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
             </el-col>
         </el-row>
 
-        <!-- 季扣眷屬人數 + 投保覆蓋原因 -->
+        <!-- 投保覆蓋原因 -->
         <el-row :gutter="20">
-            <el-col :span="8">
-                <el-form-item>
-                    <template #label>
-                        <el-tooltip content="第 2 名以上眷屬季扣（4/7/10/1 月加扣 health × N × 3）" placement="top">
-                            <span>季扣眷屬人數</span>
-                        </el-tooltip>
-                    </template>
-                    <el-input-number
-                        v-model="form.extra_dependents_quarterly"
-                        :min="0" :max="10" :step="1"
-                        controls-position="right" style="width: 100%"
-                        :disabled="isReadonly"
-                    />
-                </el-form-item>
-            </el-col>
-            <el-col :span="16">
+            <el-col :span="24">
                 <el-form-item label="投保金額調整原因">
                     <el-input
                         v-model="form.insurance_salary_override_reason"

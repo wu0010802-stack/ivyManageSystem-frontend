@@ -19020,11 +19020,6 @@ export interface components {
              * @default regular
              */
             employee_type: string;
-            /**
-             * Extra Dependents Quarterly
-             * @default 0
-             */
-            extra_dependents_quarterly: number;
             /** Gender */
             gender?: string | null;
             /**
@@ -19170,11 +19165,6 @@ export interface components {
             employee_id: string;
             /** Employee Type */
             employee_type: string;
-            /**
-             * Extra Dependents Quarterly
-             * @default 0
-             */
-            extra_dependents_quarterly: number;
             /** Gender */
             gender?: string | null;
             /**
@@ -19287,8 +19277,6 @@ export interface components {
             emergency_contact_phone?: string | null;
             /** Employee Type */
             employee_type?: string | null;
-            /** Extra Dependents Quarterly */
-            extra_dependents_quarterly?: number | null;
             /** Gender */
             gender?: string | null;
             /** Health Exempt */

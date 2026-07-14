@@ -49,7 +49,6 @@ const rules: FormRules = {
   supervisor_role: [{ pattern: /^(園長|主任|組長|副組長)$/, message: '主管職不正確', trigger: 'change' }],
   bonus_grade: [{ pattern: /^[ABC]$/, message: '獎金等級僅接受 A / B / C', trigger: 'change' }],
   pension_self_rate: [{ type: 'number', min: 0, max: 0.06, message: '勞退自提率需介於 0–0.06', trigger: 'blur' }],
-  extra_dependents_quarterly: [{ type: 'number', min: 0, max: 10, message: '加保眷屬數需介於 0–10', trigger: 'blur' }],
   insurance_salary_override_reason: [{ max: 200, message: '不可超過 200 字', trigger: 'blur' }],
   teacher_cert_no: [{ max: 50, message: '不可超過 50 字', trigger: 'blur' }],
   email: [{ type: 'email', message: 'Email 格式不正確', trigger: 'blur' }],
@@ -102,7 +101,6 @@ interface EmployeeForm {
   skip_payroll_bonuses: boolean
   skip_payroll_transfer: boolean
   unreported_for_tax: boolean
-  extra_dependents_quarterly: number
   insurance_salary_override_reason: string
   bypass_standard_base: boolean
   labor_insured_salary: number | null
@@ -150,7 +148,6 @@ const form = reactive<EmployeeForm>({
   skip_payroll_bonuses: false,
   skip_payroll_transfer: false,
   unreported_for_tax: false,
-  extra_dependents_quarterly: 0,
   insurance_salary_override_reason: '',
   bypass_standard_base: false,
   // 議題 B 分項投保（null=沿用 insurance_salary_level）
@@ -325,7 +322,7 @@ const EMPLOYEE_DRAFT_EXCLUDE = [
   'base_salary', 'hourly_rate', 'insurance_salary_level', 'pension_self_rate',
   'labor_insured_salary', 'health_insured_salary', 'pension_insured_salary',
   'insurance_salary_override_reason', 'bypass_standard_base',
-  'dependents', 'extra_dependents_quarterly',
+  'dependents',
   'bank_code', 'bank_account', 'bank_account_name',
   'teacher_cert_no',
 ]
