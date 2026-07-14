@@ -33,6 +33,8 @@ const PII_KEY_SUBSTRINGS = [
   'refresh_token', 'access_token', 'api_key',
   'resign_reason', 'exclude_reason', 'leave_balance_snapshot', 'certificate_pdf_path',
   'exempt_reason',
+  // 才藝報名內部審核軌跡：含審核人帳號與駁回理由自由輸入（與 BE _PII_KEY_SUBSTRINGS 同步）
+  'internal_note',
 ]
 
 const FILTERED = '[Filtered]'

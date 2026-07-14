@@ -167,6 +167,15 @@ describe('scrubMapping', () => {
     expect(res.title).toBe('園務會議')
   })
 
+  it('filters internal_note (才藝報名內部審核軌跡，含審核人帳號與駁回理由，對齊既有 exempt_reason 先例)', () => {
+    const res = scrubMapping({
+      internal_note: '[已拒絕 by admin] 家長要求延後入學，健康因素',
+      title: '報名審核',
+    })
+    expect(res.internal_note).toBe('[Filtered]')
+    expect(res.title).toBe('報名審核')
+  })
+
   it('recurses into nested dict and list', () => {
     const res = scrubMapping({
       meta: { id_number: 'A1', ok: 'yes' },
