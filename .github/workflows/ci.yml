@@ -15,6 +15,8 @@ on:
       - 'docs/**'
       - 'LICENSE*'
       - '.gitignore'
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -39,7 +41,9 @@ jobs:
           cache: npm
 
       - name: Run npm audit
-        run: npm audit --omit=dev --audit-level=moderate
+        # Build/CI 依賴可讀取原始碼、token 與生成物；不可省略 devDependencies，
+        # 否則會漏掉此信任邊界的供應鏈漏洞。
+        run: npm audit --audit-level=moderate
 
   test:
     name: Tests & Build
@@ -71,11 +75,15 @@ jobs:
         run: npm run lint:tokens
         continue-on-error: true
 
-      - name: Build check
+      - name: Build check (PR, no Sentry secrets)
+        if: github.event_name == 'pull_request'
+        run: npm run build
+
+      - name: Build check (trusted main/release)
+        if: github.event_name != 'pull_request'
         env:
-          # Sentry sourcemap 上傳：vite.config.js 用 SENTRY_AUTH_TOKEN 作為 enable gate；
-          # 三 secret 全空時 sentryVitePlugin disable=true、sourcemap=false（dist 不含 .map）。
-          # User 在 Settings → Secrets 各別設好後自動開啟上傳。
+          # 只有受信任的 main push / published release 會進此 step；PR step 完全不引用 secrets。
+          SENTRY_UPLOAD_TRUSTED: 'true'
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}

@@ -7,9 +7,13 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
 
-// Sentry source map 上傳：只有設好 SENTRY_AUTH_TOKEN/ORG/PROJECT 才實際上傳；
-// 缺 token 時 plugin disable，build 也不產 source map（避免 dist 留下 .map）。
-const SENTRY_UPLOAD_ENABLED = !!process.env.SENTRY_AUTH_TOKEN
+// Sentry source map 上傳採雙重 gate：CI 明確標記 trusted main/release，且三個 secret
+// 全部存在才啟用。PR 即使是同 repo 分支也不應取得可外傳 source map 的 auth token。
+const SENTRY_UPLOAD_ENABLED =
+    process.env.SENTRY_UPLOAD_TRUSTED === 'true' &&
+    !!process.env.SENTRY_AUTH_TOKEN &&
+    !!process.env.SENTRY_ORG &&
+    !!process.env.SENTRY_PROJECT
 
 function manualChunks(id) {
     // Vite SFC helper（plugin-vue:export-helper）固定到 vue-core。
@@ -398,189 +402,23 @@ export default defineConfig({
                             cacheableResponse: { statuses: [200] },
                         },
                     },
-                    // Portal 點名 GET：離線仍能看到名單（教師場景主線）
+                    // ─── 個人化 API ─────────────────────────────────────
+                    // Cookie 身分隔離無法成為 CacheStorage key 的一部分；任何 Portal / Parent
+                    // response cache 都可能在共享裝置切換帳號後回放前一位的 PII。因此只走網路，
+                    // 離線寫入由 IndexedDB owner-partition queue 負責，app shell/靜態資產仍可快取。
                     {
                         urlPattern: ({ url, request }) =>
-                            url.pathname.startsWith('/api/portal/my-class-attendance') &&
-                            request.method === 'GET',
-                        handler: 'StaleWhileRevalidate',
-                        options: {
-                            cacheName: 'portal-class-attendance',
-                            expiration: {
-                                maxEntries: 60,
-                                maxAgeSeconds: 60 * 60 * 24, // 1 天（跨日點名用）
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
-                    },
-                    // Portal 班級/學生清單：含學生個資 → NetworkFirst，離線才走快取
-                    {
-                        urlPattern: ({ url, request }) =>
-                            url.pathname === '/api/portal/my-students' &&
-                            request.method === 'GET',
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'portal-my-students',
-                            networkTimeoutSeconds: 5,
-                            expiration: {
-                                maxEntries: 5,
-                                maxAgeSeconds: 60 * 60 * 24, // 1 天
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
-                    },
-                    // Portal 敏感唯讀資料（薪資、班級出席、個人假別/加班）：NetworkFirst 降低共享裝置殘留
-                    {
-                        urlPattern: ({ url, request }) => {
-                            if (request.method !== 'GET') return false
-                            const p = url.pathname
-                            return (
-                                p.startsWith('/api/portal/salary-preview') ||
-                                p.startsWith('/api/portal/attendance-sheet') ||
-                                p.startsWith('/api/portal/my-leaves') ||
-                                p.startsWith('/api/portal/my-overtimes') ||
-                                p.startsWith('/api/portal/my-schedule')
-                            )
-                        },
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'portal-sensitive',
-                            networkTimeoutSeconds: 5,
-                            expiration: {
-                                maxEntries: 30,
-                                maxAgeSeconds: 60 * 60 * 2, // 2 小時
-                            },
-                            cacheableResponse: { statuses: [200] },  // 不快取 401/403/0
-                        },
-                    },
-                    // 公告、行事曆等低敏內容：保留 StaleWhileRevalidate 提供離線體驗
-                    {
-                        urlPattern: ({ url, request }) => {
-                            if (request.method !== 'GET') return false
-                            const p = url.pathname
-                            return (
-                                p.startsWith('/api/portal/announcements') ||
-                                p.startsWith('/api/portal/calendar')
-                            )
-                        },
-                        handler: 'StaleWhileRevalidate',
-                        options: {
-                            cacheName: 'portal-public',
-                            expiration: {
-                                maxEntries: 20,
-                                maxAgeSeconds: 60 * 60 * 12,
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
-                    },
-                    // 其他 Portal GET API：NetworkFirst，避免未知敏感端點被預設快取
-                    {
-                        urlPattern: ({ url, request }) =>
+                            url.origin === self.location.origin &&
                             url.pathname.startsWith('/api/portal') &&
                             request.method === 'GET',
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'portal-api',
-                            networkTimeoutSeconds: 5,
-                            expiration: {
-                                maxEntries: 30,
-                                maxAgeSeconds: 60 * 60 * 2,
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
+                        handler: 'NetworkOnly',
                     },
-                    // ─── 家長端 /api/parent/* ───────────────────────────
-                    // 家長首頁彙總：個資 + 摘要 → NetworkFirst，3 秒 timeout 兜離線
                     {
                         urlPattern: ({ url, request }) =>
-                            url.pathname === '/api/parent/home/summary' &&
-                            request.method === 'GET',
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'parent-home',
-                            networkTimeoutSeconds: 3,
-                            expiration: {
-                                maxEntries: 5,
-                                maxAgeSeconds: 60 * 60 * 2,
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
-                    },
-                    // 家長個資 / 子女清單：含個資 → NetworkFirst
-                    {
-                        urlPattern: ({ url, request }) => {
-                            if (request.method !== 'GET') return false
-                            const p = url.pathname
-                            return (
-                                p === '/api/parent/me' ||
-                                p === '/api/parent/my-children'
-                            )
-                        },
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'parent-profile',
-                            networkTimeoutSeconds: 5,
-                            expiration: {
-                                maxEntries: 5,
-                                maxAgeSeconds: 60 * 60 * 24,
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
-                    },
-                    // 家長端敏感唯讀（出席 / 費用 / 請假 / 才藝 / 事件）：NetworkFirst
-                    {
-                        urlPattern: ({ url, request }) => {
-                            if (request.method !== 'GET') return false
-                            const p = url.pathname
-                            return (
-                                p.startsWith('/api/parent/attendance') ||
-                                p.startsWith('/api/parent/fees') ||
-                                p.startsWith('/api/parent/student-leaves') ||
-                                p.startsWith('/api/parent/activity') ||
-                                p.startsWith('/api/parent/events')
-                            )
-                        },
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'parent-sensitive',
-                            networkTimeoutSeconds: 5,
-                            expiration: {
-                                maxEntries: 40,
-                                maxAgeSeconds: 60 * 60 * 2,
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
-                    },
-                    // 公告（家長 scope）：StaleWhileRevalidate，離線體驗最優
-                    {
-                        urlPattern: ({ url, request }) =>
-                            url.pathname.startsWith('/api/parent/announcements') &&
-                            request.method === 'GET',
-                        handler: 'StaleWhileRevalidate',
-                        options: {
-                            cacheName: 'parent-public',
-                            expiration: {
-                                maxEntries: 10,
-                                maxAgeSeconds: 60 * 60 * 12,
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
-                    },
-                    // 其他 /api/parent/* GET：NetworkFirst 兜底（避免新端點意外被預設快取）
-                    {
-                        urlPattern: ({ url, request }) =>
+                            url.origin === self.location.origin &&
                             url.pathname.startsWith('/api/parent') &&
                             request.method === 'GET',
-                        handler: 'NetworkFirst',
-                        options: {
-                            cacheName: 'parent-api-fallback',
-                            networkTimeoutSeconds: 5,
-                            expiration: {
-                                maxEntries: 30,
-                                maxAgeSeconds: 60 * 60,
-                            },
-                            cacheableResponse: { statuses: [200] },
-                        },
+                        handler: 'NetworkOnly',
                     },
                     // 注意：POST（請假/加班申請）由 Workbox 預設排除，不會快取
                 ],
