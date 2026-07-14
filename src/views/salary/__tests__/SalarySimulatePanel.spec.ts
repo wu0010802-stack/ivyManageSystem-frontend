@@ -28,6 +28,15 @@ type VmShape = {
   runSimulate: (opts?: { useCache?: boolean }) => Promise<void>
 }
 
+describe('SalarySimulatePanel 請假政策提示', () => {
+  it('不再顯示事病假超過 40 小時會讓獎金歸零的舊全勤規則', () => {
+    const wrapper = mount(SalarySimulatePanel)
+
+    expect(wrapper.text()).not.toContain('40 小時')
+    expect(wrapper.text()).not.toContain('獎金歸零')
+  })
+})
+
 describe('SalarySimulatePanel 試算失敗訊息', () => {
   beforeEach(() => {
     vi.clearAllMocks()
