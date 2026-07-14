@@ -321,8 +321,11 @@ export function usePublicRegistrationQuery({
       ? data.supplies.map((s) => (typeof s === 'string' ? s : s.name))
       : []
     editForm.new_parent_phone = ''
-    editForm.new_name = ''
-    editForm.new_birthday = ''
+    // 比照 class_name：欄位與顯示合併，一律預填目前值（不可編輯時單純唯讀顯示
+    // 這個值；可編輯時直接在原地修改，是否送出 new_name/new_birthday 由送出時
+    // 與 queryResult 原值比對決定，不是「留空=不變更」的獨立欄位）。
+    editForm.new_name = data.name || ''
+    editForm.new_birthday = data.birthday || ''
     // availability 只有「編輯課程」介面才用；查詢階段不輪詢。查詢命中→進入編輯介面時
     // 才首次抓 availability 並起 30s 輪詢（avoid 查詢頁背景空轉）。
     ensureAvailabilityPolling()

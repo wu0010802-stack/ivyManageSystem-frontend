@@ -176,6 +176,17 @@ export function useRegistrationEditSave({
       showToast('請選擇班級', 'error')
       return
     }
+    // 姓名/生日欄位與顯示合併（比照 class_name）：不可編輯時單純唯讀顯示現值，
+    // 一定非空；可編輯時使用者可能手滑清空，此時不可靜默視為「不變更」，否則
+    // 畫面顯示空白但儲存後又跳回舊值，會讓人誤以為送出失敗。
+    if (!editForm.new_name.trim()) {
+      showToast('請填寫學生姓名', 'error')
+      return
+    }
+    if (!editForm.new_birthday) {
+      showToast('請選擇學生生日', 'error')
+      return
+    }
     if (saveBlocked.value) {
       showToast('此修改會產生退費，請聯繫校方協助處理', 'warning', 6000)
       return
