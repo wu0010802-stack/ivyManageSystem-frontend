@@ -231,6 +231,16 @@
           <h2>編輯報名資料</h2>
         </div>
 
+        <!-- 審核中：校方尚未核對就讀資料，課程/班級可能因核對而調整 -->
+        <div
+          v-if="fieldState.review_state === 'school_review'"
+          class="info-hint review-pending-hint"
+          role="status"
+          data-test="review-pending-hint"
+        >
+          此報名尚待校方核對就讀資料，課程與班級以校方確認結果為準。
+        </div>
+
         <!-- 已付款完結（含超繳）：整單前台唯讀鎖定，is_paid 由後端即時計算回傳 -->
         <div
           v-if="isPaymentLocked"
@@ -550,7 +560,7 @@ const {
   nameTouched, birthdayTouched, phoneTouched, tokenTouched,
   tokenValid, phoneValid, nameValid, birthdayErrorMsg, birthdayValid,
   activeQueryCredentials, activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
-  editForm, statusBadgeFor, waitlistCourses, classEditable,
+  editForm, statusBadgeFor, waitlistCourses, fieldState, classEditable,
   handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
 
