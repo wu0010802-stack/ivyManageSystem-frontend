@@ -5,7 +5,7 @@ import SuccessSummaryModal from '../SuccessSummaryModal.vue'
 function makeSummary(overrides: Record<string, unknown> = {}) {
   return {
     visible: true,
-    message: '報名資料已送出，校方將於 1-2 個工作天確認後主動與您聯繫。',
+    message: '報名資料已送出。1-2 個工作天後，您可使用查詢碼或編修連結查詢處理結果；如有疑問歡迎聯繫校方。',
     studentName: '王小明',
     parentPhone: '0912345678',
     selectedCourses: [{ name: '幼兒體適能', price: 2600 }],
