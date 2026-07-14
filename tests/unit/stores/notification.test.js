@@ -64,6 +64,7 @@ describe('notification store', () => {
     expect(store.badgeCount).toBe(5)
     expect(store.approvalCount).toBe(4)
     expect(store.activityInquiryCount).toBe(1)
+    expect(store.activityPendingReviewCount).toBe(0)
     expect(store.approvalSummary).toEqual({
       pending_leaves: 2,
       pending_overtimes: 1,
@@ -74,6 +75,25 @@ describe('notification store', () => {
     })
     expect(store.actionItems).toHaveLength(2)
     expect(store.reminders).toHaveLength(1)
+  })
+
+  it('才藝待審核積壓量比照家長提問走 action_items（type=activity_pending_review）', async () => {
+    getNotificationSummary.mockResolvedValue({
+      data: {
+        total_badge: 6,
+        action_items: [
+          { type: 'activity_inquiry', count: 1, route: '/activity/inquiries' },
+          { type: 'activity_pending_review', count: 5, route: '/activity/registrations' },
+        ],
+        reminders: [],
+      },
+    })
+
+    const store = useNotificationStore()
+    await store.fetchSummary()
+
+    expect(store.activityPendingReviewCount).toBe(5)
+    expect(store.activityInquiryCount).toBe(1)
   })
 
   it('reminders passthrough: type 與 items 原封保留', async () => {

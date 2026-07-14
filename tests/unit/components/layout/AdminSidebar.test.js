@@ -200,3 +200,21 @@ describe('AdminSidebar workbenchBadge', () => {
     expect(badgeValues).toContain('4')
   })
 })
+
+describe('AdminSidebar 才藝報名待審核 badge（報名管理選單項）', () => {
+  it('pendingActivityReview > 0 時「報名管理」顯示 badge', async () => {
+    const wrapper = await mountSidebar({ pendingActivityReview: 3 })
+    const item = wrapper.find('[data-index="/activity/registrations"]')
+    expect(item.exists()).toBe(true)
+    const badge = item.find('.mock-badge')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('3')
+  })
+
+  it('pendingActivityReview 為 0（預設）時不顯示 badge', async () => {
+    const wrapper = await mountSidebar()
+    const item = wrapper.find('[data-index="/activity/registrations"]')
+    expect(item.exists()).toBe(true)
+    expect(item.find('.mock-badge').exists()).toBe(false)
+  })
+})

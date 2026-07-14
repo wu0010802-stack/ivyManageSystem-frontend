@@ -20,6 +20,7 @@ vi.mock('@/stores/notification', () => ({
   useNotificationStore: () => ({
     approvalCount: 0,
     activityInquiryCount: 0,
+    activityPendingReviewCount: 0,
     fetchSummary,
   }),
 }))

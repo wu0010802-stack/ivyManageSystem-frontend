@@ -14,6 +14,7 @@
       ref="sidebarRef"
       :pending-approvals="notificationStore.approvalCount"
       :pending-activity-inquiries="notificationStore.activityInquiryCount"
+      :pending-activity-review="notificationStore.activityPendingReviewCount"
       :pending-high-risk-audit="unackHighRiskCount"
       :is-mobile="isMobile"
       :mobile-open="sidebarOpen"

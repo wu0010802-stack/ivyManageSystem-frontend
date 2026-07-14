@@ -156,7 +156,10 @@
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/registrations">
             <el-icon><Document /></el-icon>
-            <template #title>報名管理</template>
+            <template #title>
+              報名管理
+              <el-badge v-if="pendingActivityReview > 0" :value="pendingActivityReview" :max="99" class="menu-badge" />
+            </template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
             <el-icon><Timer /></el-icon>
@@ -269,12 +272,14 @@ import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
 const props = withDefaults(defineProps<{
   pendingApprovals?: number
   pendingActivityInquiries?: number
+  pendingActivityReview?: number
   pendingHighRiskAudit?: number
   isMobile?: boolean
   mobileOpen?: boolean
 }>(), {
   pendingApprovals: 0,
   pendingActivityInquiries: 0,
+  pendingActivityReview: 0,
   pendingHighRiskAudit: 0,
   isMobile: false,
   mobileOpen: false,

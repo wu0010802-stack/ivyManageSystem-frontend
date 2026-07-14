@@ -26,6 +26,9 @@ export const useNotificationStore = defineStore('notification', {
     reminders: (state) => state.summary?.reminders || [],
     approvalCount: (state) => findActionItem(state.summary, 'approval')?.count || 0,
     activityInquiryCount: (state) => findActionItem(state.summary, 'activity_inquiry')?.count || 0,
+    // 才藝報名待審核積壓量（AdminSidebar「報名管理」badge），比照 activityInquiryCount
+    // 走 action_items（後端 type='activity_pending_review'）。
+    activityPendingReviewCount: (state) => findActionItem(state.summary, 'activity_pending_review')?.count || 0,
     approvalSummary: (state) => {
       const approval = findActionItem(state.summary, 'approval')
       const breakdown = approval?.breakdown || {}
