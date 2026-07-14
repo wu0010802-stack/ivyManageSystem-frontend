@@ -24,6 +24,8 @@ interface EditForm {
   selectedCourses: string[]
   selectedSupplies: string[]
   new_parent_phone: string
+  new_name: string
+  new_birthday: string
 }
 
 export interface RotatedCredentialRecovery {
@@ -60,7 +62,7 @@ export function useRegistrationEditSave({
 }: {
   editForm: EditForm
   queryResult: Ref<QueryResult | null>
-  queryForm: { token: string; birthday: string; parent_phone: string }
+  queryForm: { token: string; name: string; birthday: string; parent_phone: string }
   activeQueryCredentials: Ref<QueryCredentials | null>
   activeQueryToken: ComputedRef<string | null>
   courses: Ref<CourseOption[]>
@@ -174,6 +176,17 @@ export function useRegistrationEditSave({
       showToast('請選擇班級', 'error')
       return
     }
+    // 姓名/生日欄位與顯示合併（比照 class_name）：不可編輯時單純唯讀顯示現值，
+    // 一定非空；可編輯時使用者可能手滑清空，此時不可靜默視為「不變更」，否則
+    // 畫面顯示空白但儲存後又跳回舊值，會讓人誤以為送出失敗。
+    if (!editForm.new_name.trim()) {
+      showToast('請填寫學生姓名', 'error')
+      return
+    }
+    if (!editForm.new_birthday) {
+      showToast('請選擇學生生日', 'error')
+      return
+    }
     if (saveBlocked.value) {
       showToast('此修改會產生退費，請聯繫校方協助處理', 'warning', 6000)
       return
@@ -198,6 +211,16 @@ export function useRegistrationEditSave({
     }
     const phoneWillChange = newPhoneRaw && newPhoneRaw !== oldPhone
 
+    // 待審核期間家長自助更正姓名/生日（field_state.identity_editable 才會出現這兩個
+    // 輸入框；後端仍會以 pending_review 權威覆核，前端這裡只做「有無填寫且與現值
+    // 不同」的判斷，不重複做審核狀態檢查）。
+    const newNameRaw = editForm.new_name.trim()
+    const nameWillChange = Boolean(newNameRaw && newNameRaw !== queryResult.value!.name)
+    const newBirthdayRaw = editForm.new_birthday
+    const birthdayWillChange = Boolean(
+      newBirthdayRaw && newBirthdayRaw !== queryResult.value!.birthday,
+    )
+
     editSubmitting.value = true
     try {
       // 契約 PublicCourseItem/PublicSupplyItem 只收 name（價格後端以 DB price_snapshot 為準）
@@ -217,6 +240,12 @@ export function useRegistrationEditSave({
       if (phoneWillChange) {
         payload.new_parent_phone = newPhoneRaw
       }
+      if (nameWillChange) {
+        payload.new_name = newNameRaw
+      }
+      if (birthdayWillChange) {
+        payload.new_birthday = newBirthdayRaw
+      }
       // 樂觀鎖：把當前查詢回來的 updated_at 帶回去，後端比對不符即拒（409）
       if (queryResult.value!.updated_at) {
         payload.if_unmodified_since = queryResult.value!.updated_at
@@ -228,12 +257,15 @@ export function useRegistrationEditSave({
       const res = await publicUpdateRegistration(payload)
 
       showToast((res as { data?: { message?: string } })?.data?.message || '資料更新成功！', 'success')
-      // 查詢碼由三欄位 + server secret 派生；換手機後後端重派生並回新明文 token
-      // （rotated_query_token，僅此一次），立即替換手上舊 token，否則後續 mutation 全 404。
-      // （rotation 僅發生於 token 模式的換手機更新 — 無 token 的舊報名不重派生）
+      // 查詢碼由三欄位 + server secret 派生；換手機或改姓名/生日後後端重派生並回
+      // 新明文 token（rotated_query_token，僅此一次），立即替換手上舊 token，否則
+      // 後續 mutation 全 404。（無 token 的舊報名不重派生，見後端 helper docstring）
       const rotatedToken = (res as { data?: { rotated_query_token?: string | null } })?.data?.rotated_query_token
       // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
-      // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。
+      // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。hydrateResult 內部
+      // 已用 response 的 name/birthday 覆寫 credentials，姓名/生日異動不需要在這裡
+      // 額外處理；只有 parent_phone 需要在此手動接手（hydrateResult 不會從 data
+      // 覆寫 phone，沿用呼叫端傳入值）。
       const hydrated = hydrateResult((res as { data: QueryResult }).data, {
         ...credentials,
         token: rotatedToken || credentials.token,
@@ -241,17 +273,21 @@ export function useRegistrationEditSave({
       }, guard)
       if (hydrated) {
         if (phoneWillChange) queryForm.parent_phone = newPhoneRaw
+        if (nameWillChange) queryForm.name = newNameRaw
+        if (birthdayWillChange) queryForm.birthday = newBirthdayRaw
         if (rotatedToken) queryForm.token = rotatedToken
         rotatedCredentialRecovery.value = null
-      } else if (rotatedToken && phoneWillChange) {
+      } else if (rotatedToken && (phoneWillChange || nameWillChange || birthdayWillChange)) {
         // mutation 已成功但使用者已切到另一筆查詢：不能覆蓋新畫面，亦不能丟掉
         // 僅回傳一次的新 token。獨立保存並由 view 顯示，讓家長可複製後再關閉。
+        // parentPhone 沿用實際生效的手機（電話沒變時仍是 oldPhone，token 是因姓名/
+        // 生日異動而重派生，並非電話變了）。
         rotatedCredentialRecovery.value = {
           registrationId: guard.registrationId,
           token: rotatedToken,
-          parentPhone: newPhoneRaw,
+          parentPhone: phoneWillChange ? newPhoneRaw : oldPhone,
         }
-        showToast('上一筆報名已更新手機，請先保存畫面上的新查詢碼', 'warning', 10000)
+        showToast('上一筆報名的查詢碼已更新，請先保存畫面上的新查詢碼', 'warning', 10000)
       }
     } catch (err) {
       const apiErr = err as { response?: { status?: number; data?: { detail?: string } } }

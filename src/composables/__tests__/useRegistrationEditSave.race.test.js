@@ -44,6 +44,7 @@ describe('useRegistrationEditSave 查詢碼輪替競態', () => {
     })
     const queryForm = reactive({
       token: 'token_OLD',
+      name: '第一位幼兒',
       birthday: '2020-05-10',
       parent_phone: '0912345678',
     })
@@ -52,6 +53,9 @@ describe('useRegistrationEditSave 查詢碼輪替競態', () => {
       selectedCourses: ['圍棋'],
       selectedSupplies: [],
       new_parent_phone: '0987654321',
+      // 比照 hydrateResult 實際行為：欄位與顯示合併後一律預填目前值，非空字串。
+      new_name: '第一位幼兒',
+      new_birthday: '2020-05-10',
     })
     const actions = useRegistrationEditSave({
       editForm,

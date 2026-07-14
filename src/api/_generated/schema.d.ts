@@ -25643,13 +25643,15 @@ export interface components {
         };
         /**
          * PublicFieldStateOut
-         * @description 前端 UI hint：班級欄位可改/不可改的衍生狀態。
+         * @description 前端 UI hint：班級/身分欄位可改/不可改的衍生狀態。
          */
         PublicFieldStateOut: {
             /** Class Editable */
             class_editable: boolean;
             /** Class Source */
             class_source: string;
+            /** Identity Editable */
+            identity_editable: boolean;
             /** Review State */
             review_state: string;
         };
@@ -25857,6 +25859,10 @@ export interface components {
             if_unmodified_since?: string | null;
             /** Name */
             name: string;
+            /** New Birthday */
+            new_birthday?: string | null;
+            /** New Name */
+            new_name?: string | null;
             /** New Parent Phone */
             new_parent_phone?: string | null;
             /** Parent Phone */

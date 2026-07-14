@@ -342,12 +342,32 @@
         <template v-else>
         <div class="field-group">
           <label>幼兒姓名</label>
-          <input :value="queryResult.name" type="text" class="input-text" readonly />
+          <template v-if="identityEditable">
+            <input v-model="editForm.new_name" type="text" class="input-text" maxlength="50" />
+            <div class="field-hint">如有誤可直接修正；經校方審核確認後將無法再自行修改</div>
+          </template>
+          <template v-else>
+            <input :value="editForm.new_name" type="text" class="input-text" readonly />
+            <div class="field-hint field-hint-locked">
+              <span class="field-tag">已完成審核</span>
+              如姓名有誤，請聯繫校方協助更正
+            </div>
+          </template>
         </div>
 
         <div class="field-group">
           <label>幼兒生日</label>
-          <input :value="queryResult.birthday" type="date" class="input-text" readonly />
+          <template v-if="identityEditable">
+            <input v-model="editForm.new_birthday" type="date" class="input-text" />
+            <div class="field-hint">如有誤可直接修正；經校方審核確認後將無法再自行修改</div>
+          </template>
+          <template v-else>
+            <input :value="editForm.new_birthday" type="date" class="input-text" readonly />
+            <div class="field-hint field-hint-locked">
+              <span class="field-tag">已完成審核</span>
+              如生日有誤，請聯繫校方協助更正
+            </div>
+          </template>
         </div>
 
         <div class="field-group">
@@ -560,7 +580,7 @@ const {
   nameTouched, birthdayTouched, phoneTouched, tokenTouched,
   tokenValid, phoneValid, nameValid, birthdayErrorMsg, birthdayValid,
   activeQueryCredentials, activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
-  editForm, statusBadgeFor, waitlistCourses, fieldState, classEditable,
+  editForm, statusBadgeFor, waitlistCourses, fieldState, classEditable, identityEditable,
   handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
 
