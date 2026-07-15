@@ -20,11 +20,11 @@ describe('BasicSection 顯示規範', () => {
     expect(w.text()).toContain('a@b.c')
   })
 
-  it('空 employee → 各欄 fallback 顯示 —', () => {
+  it('空 employee → 各欄 fallback 顯示「未填寫」', () => {
     const w = mountWith({})
     // BasicSection 共 9 個欄位（聯絡電話/生日/身分證/眷屬人數/Email/性別/通訊地址/緊急聯絡人/緊急聯絡電話），
-    // 全空時每欄各 fallback 一個「—」；labels 不含「—」故計數即欄位數
-    expect((w.text().match(/—/g) || []).length).toBe(9)
+    // 全空時每欄各 fallback 顯示文字「未填寫」（非 em-dash）；labels 不含「未填寫」故計數即欄位數
+    expect((w.text().match(/未填寫/g) || []).length).toBe(9)
     expect(w.text()).toContain('生日')
     expect(w.text()).not.toContain('undefined')
     expect(w.text()).not.toContain('null')
