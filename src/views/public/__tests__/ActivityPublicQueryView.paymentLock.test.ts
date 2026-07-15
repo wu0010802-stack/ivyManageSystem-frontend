@@ -204,6 +204,12 @@ describe('ActivityPublicQueryView — is_paid=false 既有可編輯行為不受�
       is_paid: false,
       paid_amount: 0,
       query_token_required: true,
+      // v3（4c58baa4）起 editorReady 依 school_year/semester 判斷 catalog 是否已
+      // 載入對應學期，缺此二欄會讓 editorReady 永遠為 false → saveBlocked 誤鎖，
+      // 儲存按鈕被 disabled、click 不觸發 handler（此為本測試失敗根因，非儲存
+      // mutation 邏輯本身的 bug）。
+      school_year: 113,
+      semester: 1,
     })
     vi.mocked(publicUpdateRegistration).mockResolvedValue({
       data: {
