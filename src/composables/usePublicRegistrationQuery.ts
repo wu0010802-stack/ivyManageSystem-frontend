@@ -18,6 +18,8 @@ export interface QueryResult {
   id: number
   name: string
   birthday: string
+  school_year?: number
+  semester?: number
   class_name?: string
   parent_phone?: string
   total_amount?: number | string

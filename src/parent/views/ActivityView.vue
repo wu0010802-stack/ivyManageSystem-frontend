@@ -154,13 +154,18 @@ const conflictCourseIds = computed(() =>
 // 報名表單衝堂：以「報名表單學期」的既有佔位 + 本次同時勾選的其他新課互比，
 // 標出衝堂課程（code review #6 part 2：表單複選互比，advisory 不擋報名）。
 const formBusySlots = computed(() =>
-  collectBusySlots(filteredRegs.value, {
+  collectBusySlots(
+    form.value.student_id == null
+      ? []
+      : myRegs.value.filter((r) => r.student_id === Number(form.value.student_id)),
+    {
     schoolYear: form.value.school_year ?? undefined,
     semester:
       form.value.semester != null && form.value.semester !== ''
         ? Number(form.value.semester)
         : undefined,
-  }),
+    },
+  ),
 )
 const formConflictIds = computed(() =>
   buildFormConflictCourseIds(

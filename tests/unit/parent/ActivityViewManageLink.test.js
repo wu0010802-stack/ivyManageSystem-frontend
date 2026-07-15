@@ -78,4 +78,21 @@ describe('ActivityView 管理連結 (#2)', () => {
     expect(w.text()).not.toContain('管理連結')
     w.unmount()
   })
+
+  it('後端對非手機家長明確回 query_token=null 時不顯示無法使用的管理連結', async () => {
+    registerCourses.mockResolvedValueOnce({
+      data: { id: 3, query_token: null, courses: [] },
+    })
+    const w = mountView()
+    await flushPromises()
+
+    w.vm.form.student_id = 1
+    w.vm.form.course_ids = [10]
+    await w.vm.submitRegister()
+    await flushPromises()
+
+    expect(w.text()).not.toContain('管理連結')
+    expect(w.vm.manageUrl).toBe('')
+    w.unmount()
+  })
 })

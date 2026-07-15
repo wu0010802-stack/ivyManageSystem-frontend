@@ -248,6 +248,27 @@ describe('ActivityAttendanceView — 分組點名單一資料源（A1）', () =>
     expect(records.map(r => r.registration_id).sort()).toEqual([11, 12])
     expect(records.every(r => r.is_present === true)).toBe(true)
   })
+
+  it('部分成功時 admin 入口重抓權威名冊，且不以被略過的輸入刷新列表統計', async () => {
+    const wrapper = await mountView()
+    await openDrawer(wrapper)
+    asMock(getAttendanceSessions).mockClear()
+    asMock(batchUpdateAttendance).mockResolvedValueOnce({
+      data: { ok: true, updated: 0, skipped: 1 },
+    })
+    asMock(getAttendanceSession).mockResolvedValueOnce({ data: buildSessionDetail() })
+
+    const allPresent = wrapper.findAll('button').find(b => b.text() === '全部出席')
+    await allPresent!.trigger('click')
+    const saveBtn = wrapper.findAll('button').find(b => b.text() === '儲存點名')
+    await saveBtn!.trigger('click')
+    await flushPromises()
+
+    expect(getAttendanceSession).toHaveBeenCalledTimes(2)
+    expect(getAttendanceSessions).toHaveBeenCalledTimes(1)
+    expect((wrapper.vm as unknown as { drawerVisible: boolean }).drawerVisible).toBe(true)
+    expect((wrapper.vm as unknown as { drawerPresentCount: number }).drawerPresentCount).toBe(0)
+  })
 })
 
 describe('ActivityAttendanceView — drawer 寫入按鈕蓋 canWrite（A2）', () => {

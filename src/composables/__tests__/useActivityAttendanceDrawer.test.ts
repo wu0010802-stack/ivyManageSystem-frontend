@@ -5,6 +5,7 @@ vi.mock('element-plus', () => ({
 }))
 
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
+import { ElMessage } from 'element-plus'
 
 interface StudentSeed {
   registration_id: number
@@ -324,5 +325,48 @@ describe('useActivityAttendanceDrawer — F4 handleSave 過期儲存競態守衛
     expect(updateFn).toHaveBeenCalledTimes(1)
     expect(drawer.drawerVisible.value).toBe(false)
     expect(drawer.isDirty()).toBe(false)
+  })
+})
+
+describe('useActivityAttendanceDrawer — 部分成功須以伺服器名冊為準', () => {
+  it('skipped > 0 時先重抓場次，再讓 callback 讀權威狀態且不宣告全成功', async () => {
+    const before = buildApiResponse([
+      { registration_id: 11, classroom_id: 1, class_name: '蘋果班', student_name: '甲' },
+    ])
+    const authoritative = buildApiResponse([
+      {
+        registration_id: 11,
+        classroom_id: 1,
+        class_name: '蘋果班',
+        student_name: '甲',
+        is_present: null,
+      },
+    ])
+    const getSessionFn = vi.fn()
+      .mockResolvedValueOnce(before)
+      .mockResolvedValueOnce(authoritative)
+    const updateFn = vi.fn().mockResolvedValue({
+      data: { ok: true, updated: 0, skipped: 1 },
+    })
+    let callbackPresentCount = -1
+    const onSuccess = vi.fn(() => {
+      callbackPresentCount = drawer.drawerPresentCount.value
+    })
+    const drawer = useActivityAttendanceDrawer({ getSessionFn, updateFn })
+
+    await drawer.openDrawer({ id: 101 })
+    vi.mocked(ElMessage.success).mockClear()
+    vi.mocked(ElMessage.warning).mockClear()
+    drawer.drawerSession.value!.students[0].is_present = true
+    await drawer.handleSave(onSuccess)
+
+    expect(getSessionFn).toHaveBeenCalledTimes(2)
+    expect(drawer.drawerSession.value!.students[0].is_present).toBeNull()
+    expect(drawer.drawerVisible.value).toBe(true)
+    expect(drawer.isDirty()).toBe(false)
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+    expect(callbackPresentCount).toBe(0)
+    expect(ElMessage.success).not.toHaveBeenCalledWith('點名儲存成功')
+    expect(ElMessage.warning).toHaveBeenCalledWith('已更新 0 筆，略過 1 筆；名冊已重新載入')
   })
 })

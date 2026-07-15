@@ -225,5 +225,35 @@ describe('activity store', () => {
       expect(store.attendanceTermKey).toBe('114-2')
       expect(store.loadingAttendance).toBe(false)
     })
+
+    it.each([
+      ['summary', 'fetchSummary', getActivityStatsSummary, 'summary', 'summaryTermKey', (name) => ({ totalRegistrations: name })],
+      ['charts', 'fetchCharts', getActivityStatsCharts, 'charts', 'chartsTermKey', (name) => ({ label: name })],
+      ['attendance', 'fetchAttendanceStats', getActivityStats, 'attendance', 'attendanceTermKey', (name) => ({ attendance_stats: { label: name } })],
+      ['dashboard table', 'fetchDashboardTable', getActivityDashboardTable, 'dashboardTable', 'dashboardTableTermKey', (name) => ({ courses: [{ name }] })],
+    ])('A 已快取、B pending、再選 A cache hit：B 晚回不得覆寫 %s', async (_label, action, apiMock, stateKey, termKey, body) => {
+      const store = useActivityStore()
+      apiMock.mockResolvedValueOnce({ data: body('A') })
+      await store[action]({ school_year: 114, semester: 1 })
+
+      let resolveB
+      apiMock.mockReturnValueOnce(new Promise((resolve) => { resolveB = resolve }))
+      const pendingB = store[action]({ school_year: 114, semester: 2 })
+
+      // A 仍在 TTL，這次不打 API；但它必須成為最新的畫面目標。
+      await store[action]({ school_year: 114, semester: 1 })
+      resolveB({ data: body('B') })
+      await pendingB
+
+      const actual = stateKey === 'attendance'
+        ? store[stateKey]?.label
+        : stateKey === 'dashboardTable'
+          ? store[stateKey]?.courses?.[0]?.name
+          : stateKey === 'summary'
+            ? store[stateKey]?.totalRegistrations
+            : store[stateKey]?.label
+      expect(actual).toBe('A')
+      expect(store[termKey]).toBe('114-1')
+    })
   })
 })

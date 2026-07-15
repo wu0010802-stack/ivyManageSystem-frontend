@@ -31,6 +31,20 @@ describe('useActivityAvailability', () => {
     expect(availability.value).toEqual(mockData)
   })
 
+  it('setTerm 後 refresh 以該學期查 availability，並清掉前一學期資料', async () => {
+    const { availability, refresh, setTerm } = useActivityAvailability()
+    availability.value = { 本學期課程: 3 }
+
+    setTerm({ school_year: 113, semester: 2 })
+    expect(availability.value).toEqual({})
+    await refresh()
+
+    expect(getPublicCoursesAvailability).toHaveBeenCalledWith({
+      school_year: 113,
+      semester: 2,
+    })
+  })
+
   it('refresh 成功後更新 lastUpdate', async () => {
     const before = Date.now()
     const { lastUpdate, refresh } = useActivityAvailability()
@@ -44,9 +58,31 @@ describe('useActivityAvailability', () => {
   it('refresh API 失敗時靜默（不拋出異常）', async () => {
     getPublicCoursesAvailability.mockRejectedValue(new Error('API 失敗'))
 
-    const { refresh } = useActivityAvailability()
+    const { error, loading, ready, refresh } = useActivityAvailability()
 
     await expect(refresh()).resolves.toBeUndefined()
+    expect(error.value).toBeInstanceOf(Error)
+    expect(loading.value).toBe(false)
+    expect(ready.value).toBe(false)
+  })
+
+  it('同學期 refresh 完成前 ready=false，成功後才標記該學期可用', async () => {
+    let resolve
+    getPublicCoursesAvailability.mockReturnValueOnce(new Promise((r) => { resolve = r }))
+    const { loading, ready, requestedTermKey, loadedTermKey, setTerm, refresh } = useActivityAvailability()
+    setTerm({ school_year: 113, semester: 2 })
+
+    const pending = refresh()
+    expect(loading.value).toBe(true)
+    expect(ready.value).toBe(false)
+    expect(requestedTermKey.value).toBe('113-2')
+    expect(loadedTermKey.value).toBeNull()
+
+    resolve({ data: { 歷史仍開放課: 5 } })
+    await pending
+    expect(loading.value).toBe(false)
+    expect(ready.value).toBe(true)
+    expect(loadedTermKey.value).toBe('113-2')
   })
 
   it('startPolling 設定計時器（呼叫 startPolling 後 advance 30000ms 確認 refresh 被呼叫）', async () => {

@@ -60,6 +60,12 @@ export const useActivityStore = defineStore('activity', {
     chartsTermKey: '',
     attendanceTermKey: '',
     dashboardTableTermKey: '',
+    // 「目前畫面最後要求的學期」與已落地 cache term 分開。A 已快取、B pending、
+    // 再切回 A 時雖不會再打 API，仍須把 A 記為最新目標，讓 B 晚回被丟棄。
+    summaryRequestedTermKey: '',
+    chartsRequestedTermKey: '',
+    attendanceRequestedTermKey: '',
+    dashboardTableRequestedTermKey: '',
     lastSummaryFetchedAt: 0,
     lastChartsFetchedAt: 0,
     lastAttendanceFetchedAt: 0,
@@ -82,12 +88,14 @@ export const useActivityStore = defineStore('activity', {
   actions: {
     async fetchSummary({ force = false, school_year, semester }: FetchOptions = {}) {
       const termKey = termKeyOf({ school_year, semester })
+      this.summaryRequestedTermKey = termKey
       if (
         !force &&
         this.summaryTermKey === termKey &&
         this.lastSummaryFetchedAt &&
         Date.now() - this.lastSummaryFetchedAt < SUMMARY_TTL_MS
       ) {
+        this.loadingSummary = false
         return this.summary
       }
 
@@ -101,7 +109,9 @@ export const useActivityStore = defineStore('activity', {
       entry.promise = getActivityStatsSummary(termParamsOf({ school_year, semester }))
         .then((res) => {
           // 僅最新一筆請求可 commit，避免切學期競態讓舊學期回應覆寫新學期
-          if (inflightSummary !== entry) return this.summary
+          if (inflightSummary !== entry || this.summaryRequestedTermKey !== termKey) {
+            return this.summary
+          }
           this.summary = res.data
           this.unreadInquiries = res.data?.unreadInquiries || 0
           this.summaryTermKey = termKey
@@ -109,7 +119,9 @@ export const useActivityStore = defineStore('activity', {
           return this.summary
         })
         .catch((err) => {
-          this.error = err?.message || '載入課後才藝摘要失敗'
+          if (this.summaryRequestedTermKey === termKey) {
+            this.error = err?.message || '載入課後才藝摘要失敗'
+          }
           return this.summary
         })
         .finally(() => {
@@ -125,12 +137,14 @@ export const useActivityStore = defineStore('activity', {
 
     async fetchCharts({ force = false, school_year, semester }: FetchOptions = {}) {
       const termKey = termKeyOf({ school_year, semester })
+      this.chartsRequestedTermKey = termKey
       if (
         !force &&
         this.chartsTermKey === termKey &&
         this.lastChartsFetchedAt &&
         Date.now() - this.lastChartsFetchedAt < CHARTS_TTL_MS
       ) {
+        this.loadingCharts = false
         return this.charts
       }
 
@@ -142,14 +156,18 @@ export const useActivityStore = defineStore('activity', {
       const entry: InflightEntry = { key: termKey, promise: Promise.resolve() }
       entry.promise = getActivityStatsCharts(termParamsOf({ school_year, semester }))
         .then((res) => {
-          if (inflightCharts !== entry) return this.charts
+          if (inflightCharts !== entry || this.chartsRequestedTermKey !== termKey) {
+            return this.charts
+          }
           this.charts = res.data
           this.chartsTermKey = termKey
           this.lastChartsFetchedAt = Date.now()
           return this.charts
         })
         .catch((err) => {
-          this.error = err?.message || '載入課後才藝圖表失敗'
+          if (this.chartsRequestedTermKey === termKey) {
+            this.error = err?.message || '載入課後才藝圖表失敗'
+          }
           return this.charts
         })
         .finally(() => {
@@ -165,12 +183,14 @@ export const useActivityStore = defineStore('activity', {
 
     async fetchAttendanceStats({ force = false, school_year, semester }: FetchOptions = {}) {
       const termKey = termKeyOf({ school_year, semester })
+      this.attendanceRequestedTermKey = termKey
       if (
         !force &&
         this.attendanceTermKey === termKey &&
         this.lastAttendanceFetchedAt &&
         Date.now() - this.lastAttendanceFetchedAt < ATTENDANCE_TTL_MS
       ) {
+        this.loadingAttendance = false
         return this.attendance
       }
 
@@ -183,7 +203,9 @@ export const useActivityStore = defineStore('activity', {
       // 出席率沒有獨立端點：後端契約為 GET /activity/stats 聚合回應的頂層 key attendance_stats
       entry.promise = getActivityStats(termParamsOf({ school_year, semester }))
         .then((res) => {
-          if (inflightAttendance !== entry) return this.attendance
+          if (inflightAttendance !== entry || this.attendanceRequestedTermKey !== termKey) {
+            return this.attendance
+          }
           this.attendance = res.data?.attendance_stats ?? null
           this.attendanceTermKey = termKey
           this.lastAttendanceFetchedAt = Date.now()
@@ -191,7 +213,9 @@ export const useActivityStore = defineStore('activity', {
         })
         .catch((err) => {
           // 出席率統計為輔助區塊：載入失敗不擋 dashboard 其他區塊（區塊 v-if 自然隱藏）
-          this.error = err?.message || '載入課程出席率統計失敗'
+          if (this.attendanceRequestedTermKey === termKey) {
+            this.error = err?.message || '載入課程出席率統計失敗'
+          }
           return this.attendance
         })
         .finally(() => {
@@ -207,12 +231,14 @@ export const useActivityStore = defineStore('activity', {
 
     async fetchDashboardTable({ force = false, school_year, semester }: FetchOptions = {}) {
       const termKey = termKeyOf({ school_year, semester })
+      this.dashboardTableRequestedTermKey = termKey
       if (
         !force &&
         this.dashboardTableTermKey === termKey &&
         this.lastDashboardTableFetchedAt &&
         Date.now() - this.lastDashboardTableFetchedAt < DASHBOARD_TABLE_TTL_MS
       ) {
+        this.loadingDashboardTable = false
         return this.dashboardTable
       }
 
@@ -225,14 +251,21 @@ export const useActivityStore = defineStore('activity', {
       entry.promise = getActivityDashboardTable(termParamsOf({ school_year, semester }))
         .then((res) => {
           // 僅最新一筆請求可 commit，避免切學期競態讓舊學期回應覆寫新學期
-          if (inflightDashboardTable !== entry) return this.dashboardTable
+          if (
+            inflightDashboardTable !== entry ||
+            this.dashboardTableRequestedTermKey !== termKey
+          ) {
+            return this.dashboardTable
+          }
           this.dashboardTable = res.data
           this.dashboardTableTermKey = termKey
           this.lastDashboardTableFetchedAt = Date.now()
           return this.dashboardTable
         })
         .catch((err) => {
-          this.error = err?.message || '載入課後才藝統計表失敗'
+          if (this.dashboardTableRequestedTermKey === termKey) {
+            this.error = err?.message || '載入課後才藝統計表失敗'
+          }
           return this.dashboardTable
         })
         .finally(() => {

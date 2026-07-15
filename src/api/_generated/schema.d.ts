@@ -1158,10 +1158,13 @@ export interface paths {
         put?: never;
         /**
          * Add Registration Course
-         * @description 後台為既有報名追加一筆課程（額滿時自動候補）。
+         * @description 後台為既有報名追加一筆課程。
          *
          *     併發保護：鎖 reg 行，與 remove_registration_supply 對稱，避免與
          *     POS checkout / update_payment 並發時 is_paid 旗標短暫錯誤。
+         *
+         *     待審核 registration 的新課程只保留意向（pending_review），
+         *     不查佔位數也不進候補隊列；審核通過時才在課程鎖下重新分配。
          */
         post: operations["add_registration_course_api_activity_registrations__registration_id__courses_post"];
         delete?: never;
@@ -25610,6 +25613,8 @@ export interface components {
         };
         /** PublicCourseItem */
         PublicCourseItem: {
+            /** Course Id */
+            course_id?: number | null;
             /** Name */
             name: string;
         };
@@ -25746,6 +25751,10 @@ export interface components {
             remark: string;
             /** Rotated Query Token */
             rotated_query_token?: string | null;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
             /** Supplies */
             supplies: components["schemas"]["PublicRegistrationSupplyOut"][];
             /** Total Amount */
@@ -25803,6 +25812,8 @@ export interface components {
             name: string;
             /** Price */
             price: number;
+            /** Supply Id */
+            supply_id: number;
         };
         /**
          * PublicRegistrationTimeOut
@@ -25844,6 +25855,8 @@ export interface components {
         PublicSupplyItem: {
             /** Name */
             name: string;
+            /** Supply Id */
+            supply_id?: number | null;
         };
         /** PublicUpdatePayload */
         PublicUpdatePayload: {
@@ -32738,7 +32751,10 @@ export interface operations {
     };
     get_public_bootstrap_api_activity_public_bootstrap_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -32752,6 +32768,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicBootstrapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -32778,7 +32803,10 @@ export interface operations {
     };
     get_public_course_videos_api_activity_public_course_videos_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -32796,11 +32824,23 @@ export interface operations {
                     };
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_public_courses_api_activity_public_courses_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -32816,11 +32856,23 @@ export interface operations {
                     "application/json": components["schemas"]["PublicCoursesItemOut"][];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     get_public_courses_availability_api_activity_public_courses_availability_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -32836,6 +32888,15 @@ export interface operations {
                     "application/json": {
                         [key: string]: number;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -33097,7 +33158,10 @@ export interface operations {
     };
     get_public_supplies_api_activity_public_supplies_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -33111,6 +33175,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicSuppliesItemOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

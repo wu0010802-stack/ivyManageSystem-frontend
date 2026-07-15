@@ -55,6 +55,7 @@ export function useRegistrationEditSave({
   courses,
   supplies,
   availability,
+  editorReady = computed(() => true),
   createHydrationGuard,
   hydrateResult,
   refetchCurrent,
@@ -68,6 +69,7 @@ export function useRegistrationEditSave({
   courses: Ref<CourseOption[]>
   supplies: Ref<SupplyOption[]>
   availability: Ref<Record<string, number> | null>
+  editorReady?: Readonly<Ref<boolean>>
   createHydrationGuard: () => QueryHydrationGuard | null
   hydrateResult: (
     data: QueryResult,
@@ -108,8 +110,11 @@ export function useRegistrationEditSave({
   // 座位保留，不可鎖（否則家長一存就被自己原課 400 卡死）。
   function courseLocked(courseName: string): boolean {
     const availabilityMap = (availability.value as Record<string, number> | null) ?? {}
-    if (availabilityMap[courseName] !== -1) return false
     const orig = (queryResult.value?.courses ?? []).find((c) => c.name === courseName)
+    // 名額尚未取得、學期不相符或 catalog 載入失敗時，未知不可視為可新增；
+    // 既有課仍可取消，避免把使用者卡死。
+    if (!editorReady.value || availabilityMap[courseName] === undefined) return !orig
+    if (availabilityMap[courseName] !== -1) return false
     if (orig?.status === 'enrolled' || orig?.status === 'promoted_pending') return false
     return true
   }
@@ -169,7 +174,9 @@ export function useRegistrationEditSave({
     }
   })
 
-  const saveBlocked = computed(() => Boolean(feePreview.value?.wouldOverpay))
+  const saveBlocked = computed(
+    () => !editorReady.value || Boolean(feePreview.value?.wouldOverpay),
+  )
 
   async function handleSaveChanges() {
     if (!editForm.class_name) {
@@ -185,6 +192,10 @@ export function useRegistrationEditSave({
     }
     if (!editForm.new_birthday) {
       showToast('請選擇學生生日', 'error')
+      return
+    }
+    if (!editorReady.value) {
+      showToast('課程與名額資料尚未就緒，請稍後再試', 'warning', 6000)
       return
     }
     if (saveBlocked.value) {

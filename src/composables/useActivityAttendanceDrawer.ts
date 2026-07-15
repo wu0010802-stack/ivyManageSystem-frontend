@@ -63,6 +63,7 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
   // 回應，過期回應不得覆寫 B 的名冊或使用者已輸入內容。每次載入遞增序號，回應
   // 落地前比對序號，非當前載入即丟棄。
   let loadSeq = 0
+  let currentSessionParams: Record<string, unknown> = {}
 
   function serializeAttendanceInputs(session: SessionData | null): string {
     if (!session) return ''
@@ -157,6 +158,7 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
       const res = await getSessionFn(row.id, params)
       if (seq !== loadSeq) return // 過期回應：已有更新的開啟，丟棄不覆寫
       drawerSession.value = res.data
+      currentSessionParams = { ...params }
       captureBaseline()
       captureSnapshot()
     } catch {
@@ -168,20 +170,25 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     }
   }
 
-  async function reloadCurrentSession(params: Record<string, unknown> = {}) {
-    if (!drawerSession.value) return
+  async function reloadCurrentSession(
+    params: Record<string, unknown> = currentSessionParams,
+  ): Promise<boolean> {
+    if (!drawerSession.value) return false
     const seq = ++loadSeq
     drawerLoading.value = true
     const sid = drawerSession.value.id
     try {
       const res = await getSessionFn(sid, params)
-      if (seq !== loadSeq) return
+      if (seq !== loadSeq) return false
       drawerSession.value = res.data
+      currentSessionParams = { ...params }
       captureBaseline()
       captureSnapshot()
+      return true
     } catch {
-      if (seq !== loadSeq) return
+      if (seq !== loadSeq) return false
       ElMessage.error('重新載入點名資料失敗')
+      return false
     } finally {
       if (seq === loadSeq) drawerLoading.value = false
     }
@@ -222,9 +229,29 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     }
     saveLoading.value = true
     try {
-      await updateFn(drawerSession.value.id, records)
+      const response = await updateFn(drawerSession.value.id, records)
       // F4：儲存期間已切換/重載場次 → 不動現行（另一）場次的 UI 與基準。
       if (seq !== loadSeq) return
+      const result = (response as {
+        data?: { updated?: number; skipped?: number }
+      })?.data
+      const skipped = Number(result?.skipped ?? 0)
+      if (skipped > 0) {
+        const updated = Number(result?.updated ?? Math.max(records.length - skipped, 0))
+        // 後端可能因報名已退課等權威狀態略過部分列。此時本地輸入不能當成
+        // 已成功資料，也不能觸發 call site 的樂觀統計；重抓同場次並保留 drawer，
+        // 讓使用者看見實際落地結果。
+        const reloaded = await reloadCurrentSession()
+        if (reloaded) {
+          ElMessage.warning(`已更新 ${updated} 筆，略過 ${skipped} 筆；名冊已重新載入`)
+          // callback 只能在權威名冊已重抓後執行：admin 會重抓列表，portal 則以
+          // 此刻 drawer 的實際 counts 更新該列，兩者都不會採用被 skipped 的輸入。
+          if (onSuccess) onSuccess()
+        } else {
+          ElMessage.warning(`已更新 ${updated} 筆，略過 ${skipped} 筆；請重新載入名冊`)
+        }
+        return
+      }
       captureBaseline()
       captureSnapshot()
       ElMessage.success('點名儲存成功')

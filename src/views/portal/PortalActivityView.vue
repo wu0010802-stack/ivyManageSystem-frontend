@@ -49,7 +49,7 @@
         :drawer-unmarked-count="drawerUnmarkedCount"
         :before-close="handleRollcallBeforeClose"
         @set-all-present="setAllPresent"
-        @save="handleSave(optimisticUpdateSessionCounts)"
+        @save="handleSave(loadAttendanceSessions)"
       />
     </template>
   </div>
@@ -166,19 +166,24 @@ function applyFilter() {
   loadAttendanceSessions()
 }
 
+let attendanceRequestSeq = 0
+
 async function loadAttendanceSessions() {
+  const seq = ++attendanceRequestSeq
   attendanceLoading.value = true
   try {
     const params: Record<string, string> = {}
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getPortalAttendanceSessions(params)
+    if (seq !== attendanceRequestSeq) return
     sessions.value = res.data
     attendanceLoaded.value = true
   } catch {
+    if (seq !== attendanceRequestSeq) return
     ElMessage.error('載入場次失敗')
   } finally {
-    attendanceLoading.value = false
+    if (seq === attendanceRequestSeq) attendanceLoading.value = false
   }
 }
 
@@ -190,18 +195,6 @@ function ensureAttendanceLoaded() {
 
 function openRollcall(session: PortalSessionRow) {
   openDrawer(session)
-}
-
-// 點名儲存後樂觀就地更新該列 count，免整批重抓全月場次。
-// 後端 PUT 僅回 {ok,updated,skipped} 不含 counts，故走前端 composable 已算好的
-// drawerPresentCount/drawerAbsentCount（recorded = present + absent，未點名不計）。
-function optimisticUpdateSessionCounts() {
-  const sid = drawerSession.value?.id
-  if (sid == null) return
-  const row = sessions.value.find((s) => s.id === sid)
-  if (!row) return
-  row.present_count = drawerPresentCount.value
-  row.recorded_count = drawerPresentCount.value + drawerAbsentCount.value
 }
 
 // 未存點名守衛：ESC/X 關閉時若有未儲存的出席/備註異動，先確認再關。

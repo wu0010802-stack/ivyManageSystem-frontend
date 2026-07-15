@@ -61,6 +61,15 @@ describe('activityPublic api', () => {
     expect(mockGet).toHaveBeenCalledWith('/activity/public/courses/availability')
   })
 
+  it('公開 bootstrap / availability 可指定歷史學期', async () => {
+    const term = { school_year: 113, semester: 2 }
+    await mod.getPublicBootstrap(term)
+    await mod.getPublicCoursesAvailability(term)
+
+    expect(mockGet).toHaveBeenCalledWith('/activity/public/bootstrap', { params: term })
+    expect(mockGet).toHaveBeenCalledWith('/activity/public/courses/availability', { params: term })
+  })
+
   it('publicRegister POST /activity/public/register', async () => {
     const payload = { name: '小明', courses: [1] }
     await mod.publicRegister(payload)

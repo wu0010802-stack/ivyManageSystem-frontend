@@ -18,25 +18,48 @@ const canRead = computed(() => hasPermission('ACTIVITY_READ'))
 const items = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const loaded = ref(false)
+let requestSeq = 0
 
 async function fetchData() {
   if (!props.studentId || !canRead.value) return
+  const seq = ++requestSeq
+  const studentId = props.studentId
   loading.value = true
   try {
-    const res = await getRegistrations({ student_id: props.studentId, limit: 100 })
+    const res = await getRegistrations({ student_id: studentId, limit: 100 })
+    if (seq !== requestSeq || props.studentId !== studentId) return
     items.value = res.data.items || []
     loaded.value = true
   } catch (e) {
+    if (seq !== requestSeq || props.studentId !== studentId) return
     ElMessage.error(apiError(e, '載入才藝報名紀錄失敗'))
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
 watch(
-  () => [props.active, props.studentId],
-  ([active]) => {
-    if (active && !loaded.value) fetchData()
+  () => props.studentId,
+  () => {
+    // detail panel 可能重用同一個 ActivityTab 實例切換學生；舊資料不可留在
+    // 新學生標頭下，也不可讓舊學生的慢回應覆寫新學生。
+    requestSeq += 1
+    items.value = []
+    loaded.value = false
+    loading.value = false
+    if (props.active) fetchData()
+  },
+)
+
+watch(
+  () => props.active,
+  (active) => {
+    if (!active) {
+      requestSeq += 1
+      loading.value = false
+      return
+    }
+    if (!loaded.value && !loading.value) fetchData()
   },
   { immediate: true },
 )

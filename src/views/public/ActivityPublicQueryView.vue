@@ -340,6 +340,16 @@
         </div>
 
         <template v-else>
+        <div
+          v-if="!editorReady"
+          class="info-hint review-pending-hint"
+          role="status"
+          data-test="editor-data-status"
+        >
+          <template v-if="optionsError">無法載入該學期課程資料，請稍後重試。</template>
+          <template v-else-if="availabilityError">無法取得該學期名額，請稍後重試。</template>
+          <template v-else>正在載入該學期課程與名額，請稍候。</template>
+        </div>
         <div class="field-group">
           <label>幼兒姓名</label>
           <template v-if="identityEditable">
@@ -419,12 +429,18 @@
                 type="checkbox"
                 :value="course.name"
                 :checked="editForm.selectedCourses.includes(course.name)"
-                :disabled="courseLocked(course.name) && !editForm.selectedCourses.includes(course.name)"
-                @change="onToggleCourse(course.name)"
+                :disabled="
+                  (courseLocked(course.name) || course.existing_only)
+                    && !editForm.selectedCourses.includes(course.name)
+                "
+                @change="onToggleCourseOption(course)"
               />
               <span class="course-text">
                 {{ course.name }}
                 <span class="price-tag">${{ course.price }}</span>
+                <span v-if="course.existing_only" class="qty-display is-locked">
+                  已停用，僅可取消
+                </span>
                 <span v-if="statusBadgeFor(course.name)" class="qty-display is-waiting">
                   {{ statusBadgeFor(course.name) }}
                 </span>
@@ -453,11 +469,15 @@
                 type="checkbox"
                 :value="supply.name"
                 :checked="editForm.selectedSupplies.includes(supply.name)"
-                @change="toggleArrayItem(editForm.selectedSupplies, supply.name)"
+                :disabled="supply.existing_only && !editForm.selectedSupplies.includes(supply.name)"
+                @change="onToggleSupplyOption(supply)"
               />
               <span class="course-text">
                 {{ supply.name }}
                 <span class="price-tag">${{ supply.price }}</span>
+                <span v-if="supply.existing_only" class="qty-display is-locked">
+                  已停用，僅可取消
+                </span>
               </span>
             </label>
           </div>
@@ -504,6 +524,8 @@
             :title="
               !canMutate
                 ? '此報名需使用報名時取得的查詢連結才能修改'
+                : !editorReady
+                  ? '課程與名額資料尚未就緒，請稍後再試'
                 : saveBlocked
                   ? '此修改會產生退費，請聯繫校方'
                   : ''
@@ -520,11 +542,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { getPublicBootstrap } from '@/api/activityPublic'
+import type { PublicActivityTermParams } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { usePublicRegistrationQuery } from '@/composables/usePublicRegistrationQuery'
+import type { QueryResult } from '@/composables/usePublicRegistrationQuery'
 import { useRegistrationEditSave } from '@/composables/useRegistrationEditSave'
 import { usePromotionActions } from '@/composables/usePromotionActions'
 import { toggleArrayItem } from '@/utils/arrayUtils'
@@ -535,24 +559,107 @@ import ToastStack from './components/ToastStack.vue'
 
 interface Toast { id: number; message: string; type: string }
 
-interface CourseOption { name: string; price?: string | number; [key: string]: unknown }
-interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
+interface CourseOption { name: string; price?: string | number; existing_only?: boolean; [key: string]: unknown }
+interface SupplyOption { name: string; price?: string | number; existing_only?: boolean; [key: string]: unknown }
 
 const { courses: _courses, supplies: _supplies, classes: _classes, applyOptions } = usePublicActivityOptions()
 
 // 此頁僅需 courses/supplies/classes（不用 videos）。用 bootstrap 單支 GET 取代
 // loadOptions 的 4 支並行 GET，削報名尖峰對單 worker 後端的請求放大。
-async function loadOptions() {
-  const res = await getPublicBootstrap()
-  const b = res.data
+let optionsLoadSeq = 0
+const optionsLoading = ref(false)
+const optionsError = ref<unknown>(null)
+const loadedOptionsTermKey = ref<string | null>(null)
+
+function termKey(term?: PublicActivityTermParams): string {
+  return term ? `${term.school_year}-${term.semester}` : ''
+}
+
+function applyExistingOnlyOptions(existing?: QueryResult) {
   applyOptions({
-    courses: b.courses,
-    supplies: b.supplies,
-    classes: b.classes,
-    videos: b.course_videos,
+    courses: (existing?.courses ?? []).map((course) => ({
+      name: course.name,
+      price: course.price,
+      existing_only: true,
+    })),
+    supplies: (existing?.supplies ?? []).map((supply) => ({
+      ...(typeof supply === 'string' ? { name: supply } : supply),
+      existing_only: true,
+    })),
+    classes: existing?.class_name ? [existing.class_name] : [],
+    videos: {},
   })
 }
-const { availability, refresh: refreshAvailability, startPolling, stopPolling } =
+
+async function loadOptions(
+  term?: PublicActivityTermParams,
+  existing?: QueryResult,
+) {
+  const seq = ++optionsLoadSeq
+  const key = termKey(term)
+  loadedOptionsTermKey.value = null
+  optionsLoading.value = true
+  optionsError.value = null
+  // await 前立即清除上一學期 catalog；只留下本報名既有品項且標成僅可取消。
+  applyExistingOnlyOptions(existing)
+  try {
+    const res = await getPublicBootstrap(term)
+    if (seq !== optionsLoadSeq) return
+    const b = res.data
+    const bootstrapCourses = Array.isArray(b.courses)
+      ? [...b.courses] as CourseOption[]
+      : []
+    const bootstrapSupplies = Array.isArray(b.supplies)
+      ? [...b.supplies] as SupplyOption[]
+      : []
+    const courseNames = new Set(bootstrapCourses.map((c) => c.name))
+    const supplyNames = new Set(bootstrapSupplies.map((s) => s.name))
+
+    // 歷史報名的既有品項可能已停用，因此不會出現在該學期 public bootstrap。
+    // 仍合併成「僅可取消」選項，避免只改手機時被 UI 靜默從 payload 移除。
+    for (const course of existing?.courses ?? []) {
+      if (!courseNames.has(course.name)) {
+        bootstrapCourses.push({
+          name: course.name,
+          price: course.price,
+          existing_only: true,
+        })
+      }
+    }
+    for (const supply of existing?.supplies ?? []) {
+      const normalized = typeof supply === 'string' ? { name: supply } : supply
+      if (!supplyNames.has(normalized.name)) {
+        bootstrapSupplies.push({
+          ...normalized,
+          existing_only: true,
+        })
+      }
+    }
+    applyOptions({
+      courses: bootstrapCourses,
+      supplies: bootstrapSupplies,
+      classes: b.classes,
+      videos: b.course_videos,
+    })
+    loadedOptionsTermKey.value = key
+  } catch (err) {
+    // 已有較新的學期請求時，舊失敗不得顯示錯誤或污染新結果。
+    if (seq !== optionsLoadSeq) return
+    optionsError.value = err
+    throw err
+  } finally {
+    if (seq === optionsLoadSeq) optionsLoading.value = false
+  }
+}
+const {
+  availability,
+  error: availabilityError,
+  ready: availabilityReady,
+  setTerm: setAvailabilityTerm,
+  refresh: refreshAvailability,
+  startPolling,
+  stopPolling,
+} =
   useActivityAvailability()
 
 // 強型別轉換：composable 回傳 unknown[]，view 以強型別 computed 供模板 / 函式使用
@@ -584,6 +691,43 @@ const {
   handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
 
+const queryTermKey = computed(() => {
+  const data = queryResult.value
+  return data && data.school_year != null && data.semester != null
+    ? `${data.school_year}-${data.semester}`
+    : null
+})
+const catalogReady = computed(
+  () => queryTermKey.value !== null
+    && loadedOptionsTermKey.value === queryTermKey.value
+    && optionsError.value === null
+    && !optionsLoading.value,
+)
+const editorReady = computed(() => catalogReady.value && availabilityReady.value)
+
+let hydratedTermKey = ''
+watch(
+  () => queryResult.value,
+  (data) => {
+    if (!data || data.school_year == null || data.semester == null) return
+    const term = { school_year: data.school_year, semester: data.semester }
+    const nextKey = `${term.school_year}-${term.semester}`
+    const termChangedAfterFirstResult = hydratedTermKey !== '' && hydratedTermKey !== nextKey
+    hydratedTermKey = nextKey
+    // flush:'sync' 確保 hydrateResult 隨後啟動 availability refresh 前，學期已切換。
+    setAvailabilityTerm(term)
+    if (termChangedAfterFirstResult) void refreshAvailability()
+    void loadOptions(term, data).catch((err: unknown) => {
+      showToast(
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+          || '無法載入該學期課程資料',
+        'error',
+      )
+    })
+  },
+  { flush: 'sync' },
+)
+
 const {
   editSubmitting, newPhoneTouched, newPhoneValid,
   rotatedCredentialRecovery, clearRotatedCredentialRecovery,
@@ -598,11 +742,23 @@ const {
   courses,
   supplies,
   availability,
+  editorReady,
   createHydrationGuard,
   hydrateResult,
   refetchCurrent,
   showToast,
 })
+
+function onToggleCourseOption(course: CourseOption) {
+  if (course.existing_only && !editForm.selectedCourses.includes(course.name)) return
+  if (!editorReady.value && !queryResult.value?.courses?.some((c) => c.name === course.name)) return
+  onToggleCourse(course.name)
+}
+
+function onToggleSupplyOption(supply: SupplyOption) {
+  if (supply.existing_only && !editForm.selectedSupplies.includes(supply.name)) return
+  toggleArrayItem(editForm.selectedSupplies, supply.name)
+}
 
 async function copyRotatedCredential() {
   const token = rotatedCredentialRecovery.value?.token
