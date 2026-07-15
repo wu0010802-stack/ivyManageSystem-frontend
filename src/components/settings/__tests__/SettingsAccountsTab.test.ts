@@ -83,6 +83,7 @@ vi.mock('@/utils/auth', async (importOriginal) => {
 import SettingsAccountsTab from '../SettingsAccountsTab.vue'
 import { createUser, updateUser, getUsers } from '@/api/auth'
 import { createRole } from '@/api/permissions_admin'
+import { formatDateTimeTW } from '@/utils/format'
 
 describe('SettingsAccountsTab — role card UX', () => {
   beforeEach(() => {
@@ -225,7 +226,10 @@ describe('SettingsAccountsTab — role card UX', () => {
     const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
     await flushPromises()
     const text = wrapper.text()
-    expect(text).toContain('2026/7/10')       // formatDateTimeTW 輸出
+    // 用元件實際採用的 formatDateTimeTW 計算期望值，避免 offset-less ISO
+    // （'2026-07-10T17:35:14.324936' 無時區後綴）在不同 runner 時區下
+    // 因跨日而寫死的日期字串斷言失準。
+    expect(text).toContain(formatDateTimeTW('2026-07-10T17:35:14.324936'))
     expect(text).not.toContain('T17:35')      // 原始 ISO 不再直出
     expect(text).toContain('從未登入')
   })
