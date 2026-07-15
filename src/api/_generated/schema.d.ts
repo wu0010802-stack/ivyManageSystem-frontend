@@ -7068,8 +7068,8 @@ export interface paths {
         };
         /**
          * Get Signature Image
-         * @description 回傳簽名影像（binary）。response_model=None：FileResponse 繞過 response_model
-         *     驗證，掛假 schema 反而讓 OpenAPI 騙人（聲明 JSON 但實回 binary）。慣例對齊
+         * @description 回傳簽名影像（binary）。response_model=None：繞過 response_model 驗證，
+         *     掛假 schema 反而讓 OpenAPI 騙人（聲明 JSON 但實回 binary）。慣例對齊
          *     api/portfolio/reports.py:download_growth_report。
          */
         get: operations["get_signature_image_api_misc_receipts__receipt_id__signature_get"];
