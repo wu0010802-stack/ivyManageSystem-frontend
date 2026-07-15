@@ -82,6 +82,10 @@ describe('ActivityPublicQueryView — 退費預警價格來源（P2）', () => {
         name: '王小明',
         birthday: '2020-01-01',
         class_name: '大班',
+        // v3（4c58baa4）起 editorReady 依 school_year/semester 判斷 catalog 是否已載入
+        // 對應學期，缺此二欄會讓 editorReady 永遠為 false → saveBlocked 誤鎖。
+        school_year: 113,
+        semester: 1,
         courses: [{ course_id: 1, name: '美術', status: 'enrolled', price: 3000 }],
         supplies: [{ name: '彩色筆', price: 300 }],
         total_amount: 3300,
@@ -111,6 +115,9 @@ describe('ActivityPublicQueryView — 退費預警價格來源（P2）', () => {
         name: '王小明',
         birthday: '2020-01-01',
         class_name: '大班',
+        // 同上：editorReady 需要 school_year/semester 才會判定 catalog 已對齊本學期。
+        school_year: 113,
+        semester: 1,
         courses: [{ course_id: 1, name: '美術', status: 'enrolled', price: 3000 }],
         supplies: [],
         total_amount: 3000,
