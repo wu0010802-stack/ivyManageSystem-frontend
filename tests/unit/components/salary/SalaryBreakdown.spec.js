@@ -145,7 +145,11 @@ describe('SalaryBreakdown', () => {
     })
   })
 
-  it('shows preview row after simulate response and emits preview-changed', async () => {
+  // SalaryBreakdown.vue 無 defineEmits——runSimulate/resetPreview 只操作本地
+  // preview ref，預覽是元件自足的行內試算，沒有任何 caller 監聽
+  // preview-changed/reset（StepReview.vue 用 <SalaryBreakdown> 時未接任何監聽）。
+  // 故改為驗證實際渲染出的 .bd-preview DOM 內容，而非不存在的 emit 契約。
+  it('shows preview row (.bd-preview) with formatted 節慶/超額/實領 after simulate response', async () => {
     simulateSalary.mockResolvedValueOnce({
       data: {
         simulated: { festival_bonus: 13500, overtime_bonus: 6000, net_pay: 38000 },
@@ -157,14 +161,14 @@ describe('SalaryBreakdown', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).toContain('預覽')
-    expect(wrapper.emitted('preview-changed')).toBeTruthy()
-    expect(wrapper.emitted('preview-changed')[0][0]).toMatchObject({
-      employee_id: 42,
-      simulated: { net_pay: 38000 },
-    })
+    const previewEl = wrapper.find('.bd-preview')
+    expect(previewEl.exists()).toBe(true)
+    expect(previewEl.text()).toContain('NT$13,500') // 節慶
+    expect(previewEl.text()).toContain('NT$6,000')  // 超額
+    expect(previewEl.text()).toContain('NT$38,000') // 實領
   })
 
-  it('reset button clears preview and emits reset', async () => {
+  it('reset button clears preview (.bd-preview 消失並還原假設在籍人數)', async () => {
     simulateSalary.mockResolvedValueOnce({
       data: {
         simulated: { festival_bonus: 13500, overtime_bonus: 6000, net_pay: 38000 },
@@ -174,13 +178,17 @@ describe('SalaryBreakdown', () => {
     await wrapper.find('button.el-button--primary').trigger('click')
     await wrapper.vm.$nextTick()
     await wrapper.vm.$nextTick()
+    expect(wrapper.find('.bd-preview').exists()).toBe(true)
 
     const resetBtn = wrapper.findAll('button').find((b) => b.text().includes('重設回'))
     await resetBtn.trigger('click')
+    await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).not.toContain('預覽：')
-    expect(wrapper.emitted('reset')).toBeTruthy()
-    expect(wrapper.emitted('reset')[0][0]).toEqual({ employee_id: 42 })
+    expect(wrapper.find('.bd-preview').exists()).toBe(false)
+    // resetPreview 同時把假設在籍人數還原成 enrollment.total（teacherRow 為 23）
+    const input = wrapper.findComponent({ name: 'ElInputNumber' })
+    expect(input.props('modelValue')).toBe(23)
   })
 
   it('shows generic error message when simulate fails (no backend detail leak)', async () => {
