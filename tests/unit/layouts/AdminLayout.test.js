@@ -30,7 +30,12 @@ vi.mock('@/composables/useIsMobile', () => ({
 }))
 
 const stubs = {
-  AdminSidebar: true,
+  AdminSidebar: {
+    name: 'AdminSidebar',
+    template: '<div />',
+    props: ['pendingApprovals', 'pendingActivityInquiries', 'pendingActivityReview', 'pendingHighRiskAudit', 'isMobile', 'mobileOpen'],
+    methods: { focusCloseButton() {} },
+  },
   AdminHeader: true,
   'el-container': true,
   'el-main': true,
