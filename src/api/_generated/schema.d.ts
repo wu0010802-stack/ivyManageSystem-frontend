@@ -868,7 +868,7 @@ export interface paths {
          * @description 公開端點：回傳已上傳的活動海報圖。
          *
          *     防穿越：檔名只允許純 hex + 白名單副檔名。
-         *     backend 為 local：直接 stream bytes；supabase：302 redirect 到 CDN URL。
+         *     backend 為 local：直接 stream bytes；R2：302 redirect 到 CDN URL。
          */
         get: operations["get_public_poster_api_activity_public_poster__filename__get"];
         put?: never;
@@ -6177,7 +6177,7 @@ export interface paths {
          *           "components": {
          *             "db": {...},
          *             "line": {...},
-         *             "supabase": {...},
+         *             "storage": {...},
          *             "db_pool": {...},
          *           },
          *         }
@@ -6622,7 +6622,7 @@ export interface paths {
          * @description 取得假單附件（管理後台）。
          *
          *     backend 為 local：直接 stream bytes（既有行為）
-         *     backend 為 supabase：302 redirect 到 signed URL（TTL 預設 1 小時）
+         *     backend 為 R2：302 redirect 到 signed URL（TTL 預設 1 小時）
          */
         get: operations["get_leave_attachment_api_leaves__leave_id__attachments__filename__get"];
         put?: never;
@@ -7233,6 +7233,10 @@ export interface paths {
          *
          *     gated by EMPLOYEES_READ；record 不存在或 certificate_pdf_path 空
          *     → 404 CERTIFICATE_NOT_FOUND；檔案不存在 → 404 CERTIFICATE_FILE_MISSING。
+         *
+         *     certificate_pdf_path 現為 storage backend 的 key（module "portfolio"）：
+         *     - 雲端後端（非 LocalStorage）→ 302 導向 signed URL（強制 attachment 下載）
+         *     - local 後端 → 直接讀檔回傳 bytes
          */
         get: operations["get_certificate_pdf_api_offboarding__employee_id__certificate_pdf_get"];
         put?: never;
@@ -10143,7 +10147,7 @@ export interface paths {
          * @description 取得個人假單附件（僅限本人）。
          *
          *     backend 為 local：直接 stream bytes（既有行為）
-         *     backend 為 supabase：302 redirect 到 signed URL（TTL 預設 1 小時）
+         *     backend 為 R2：302 redirect 到 signed URL（TTL 預設 1 小時）
          */
         get: operations["get_leave_attachment_api_portal_my_leaves__leave_id__attachments__filename__get"];
         put?: never;
@@ -14921,8 +14925,8 @@ export interface components {
          * @description POST /settings/poster 海報上傳 200 回應。
          *
          *     回 {message, poster_url}：poster_url 為 backend.public_url 產出的對外網址
-         *     （local 模式：/api/activity/public/poster/<file>；supabase 模式：
-         *     https://<project>.supabase.co/.../activity-posters/<file>）。
+         *     （local 模式：/api/activity/public/poster/<file>；r2 模式：
+         *     R2 公開 CDN base 下的 activity-posters/<file>）。
          *     不用 _common.MutationResultOut（後者欄位為 id）— 重用會 silent rename。
          */
         ActivityPosterUploadResultOut: {
@@ -21079,7 +21083,7 @@ export interface components {
         IntegrationsHealthResponse: {
             external_http: components["schemas"]["ExternalHttpHealth"];
             line: components["schemas"]["LineHealth"];
-            supabase: components["schemas"]["SupabaseHealth"];
+            storage: components["schemas"]["StorageHealth"];
         };
         /**
          * IssueOut
@@ -29547,6 +29551,15 @@ export interface components {
             /** Step */
             step: string;
         };
+        /** StorageHealth */
+        StorageHealth: {
+            /** Breaker */
+            breaker: string;
+            /** Final Failed */
+            final_failed: number;
+            /** Pending Uploads */
+            pending_uploads: number;
+        };
         /**
          * StudentAttachmentListOut
          * @description GET /students/{id}/attachments 回傳。
@@ -30721,15 +30734,6 @@ export interface components {
          * @enum {string}
          */
         SummaryStatus: "DRAFT" | "SUPERVISOR_SIGNED" | "ACCOUNTING_SIGNED" | "FINALIZED";
-        /** SupabaseHealth */
-        SupabaseHealth: {
-            /** Breaker */
-            breaker: string;
-            /** Final Failed */
-            final_failed: number;
-            /** Pending Uploads */
-            pending_uploads: number;
-        };
         /** SupplyCreate */
         SupplyCreate: {
             /** Name */
