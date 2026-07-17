@@ -261,10 +261,10 @@ export function hasPermission(permissionName: string): boolean {
   const userInfo = getUserInfo()
   if (!userInfo) return false
 
-  // Portal-only 角色只能存取 Portal：優先讀 flags 的 portal_only，'teacher' 字面
-  // fallback 保留（登入前、舊 localStorage userInfo 無 flags、DB 未 seed）。
-  // OR 語意只會更嚴不會更鬆——勿移除任一邊（移除字面 fallback = flags 缺失時教師提權）。
-  if (userInfo['role'] === 'teacher' || _hasPortalOnlyFlag(userInfo)) return false
+  // Portal-only 角色只能存取 Portal：優先讀 flags 的 portal_only，PORTAL_ONLY_ROLES
+  // （teacher + parent）字面 fallback 保留（登入前、舊 localStorage 無 flags、DB 未 seed）。
+  // 用 isPortalOnlyUser 統一涵蓋 flag + 全部 portal-only 角色，勿只短路 'teacher' 而漏 parent。
+  if (isPortalOnlyUser(userInfo)) return false
 
   return _permsHold(userInfo['permission_names'], permissionName)
 }
@@ -322,9 +322,10 @@ export function getPermissionScope(code: string): 'all' | 'own_class' | null {
   const userInfo = getUserInfo()
   if (!userInfo) return null
 
-  // portal-only 角色只能存取 Portal，與 hasPermission 同一短路（含 flags.portal_only 的
-  // 自訂角色，非僅字面 'teacher'）——否則 portal_only 帳號會取得非 null scope 被誤判有權。
-  if (userInfo['role'] === 'teacher' || _hasPortalOnlyFlag(userInfo)) return null
+  // portal-only 角色只能存取 Portal，與 hasPermission 同一短路（isPortalOnlyUser 涵蓋
+  // flags.portal_only + PORTAL_ONLY_ROLES 全部角色）——否則 portal_only 帳號會取得非 null
+  // scope 被誤判有權。
+  if (isPortalOnlyUser(userInfo)) return null
 
   const perms = userInfo['permission_names'] as string[] | null | undefined
   if (perms == null) return null
