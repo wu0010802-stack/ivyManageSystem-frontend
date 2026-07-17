@@ -9,6 +9,7 @@ import { formatDateTimeTW } from '@/utils/format'
 import MagicLinkPanel from '@/components/offboarding/MagicLinkPanel.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import type { ApiResponse } from '@/api/_generated/typed'
 
 // ── 型別 ────────────────────────────────────────────────
@@ -36,6 +37,9 @@ type OffboardingProcessResult = ApiResponse<'/offboarding/{employee_id}/process'
 // ── Store ────────────────────────────────────────────────
 
 const store = useOffboardingStore()
+
+// 手機（≤767.98px）：drawer 改滿版
+const { isMobile } = useIsMobile()
 
 // ── 狀態 ─────────────────────────────────────────────────
 
@@ -416,7 +420,7 @@ function confirmInitiate(): void {
         <el-drawer
             v-model="drawerVisible"
             :title="`離職管理 — ${selectedRow?.employee.name ?? ''}`"
-            size="480px"
+            :size="isMobile ? '100%' : '480px'"
             destroy-on-close
         >
             <template v-if="selectedRow">

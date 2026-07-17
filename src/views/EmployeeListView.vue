@@ -544,10 +544,11 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-/* 整列可點擊進詳情頁；已離職/待離職列淡化 */
+/* 整列可點擊進詳情頁；已離職/待離職列以底色區分（不用 opacity 淡化——
+   0.55 會把 13px 小字對比壓破 WCAG AA；狀態語意由「狀態」欄 tag 文字承載） */
 .el-table :deep(tbody tr) { cursor: pointer; }
-:deep(.el-table .row-resigned) { opacity: 0.55; }
-:deep(.el-table .row-pending) { opacity: 0.8; }
+:deep(.el-table .row-resigned td) { background-color: var(--el-fill-color-light); }
+:deep(.el-table .row-pending td) { background-color: var(--el-fill-color-lighter); }
 .name-link { color: var(--el-color-primary); text-decoration: none; }
 .name-link:hover { text-decoration: underline; }
 .card-title-link { cursor: pointer; color: var(--el-color-primary); text-decoration: none; }

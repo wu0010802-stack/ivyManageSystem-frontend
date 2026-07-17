@@ -28,6 +28,17 @@ const hasFailure = computed(() => props.steps.some((s) => s.status === 'failed')
 function stepLabel(step: string): string {
     return STEP_LABELS[step] ?? step
 }
+
+/** 狀態的可見文字：語意不得只靠 icon 顏色（螢幕報讀器/色弱皆讀文字） */
+const STATUS_LABELS: Record<string, string> = {
+    completed: '完成',
+    skipped: '已略過',
+    failed: '失敗',
+}
+
+function statusLabel(status: string): string {
+    return STATUS_LABELS[status] ?? status
+}
 </script>
 
 <template>
@@ -40,17 +51,20 @@ function stepLabel(step: string): string {
                 :class="`status-${step.status}`"
             >
                 <span class="step-icon">
-                    <el-icon v-if="step.status === 'completed'" color="#67c23a">
+                    <el-icon v-if="step.status === 'completed'" class="icon-completed" aria-hidden="true">
                         <Check />
                     </el-icon>
-                    <el-icon v-else-if="step.status === 'skipped'" color="#e6a23c">
+                    <el-icon v-else-if="step.status === 'skipped'" class="icon-skipped" aria-hidden="true">
                         <Minus />
                     </el-icon>
-                    <el-icon v-else color="#f56c6c">
+                    <el-icon v-else class="icon-failed" aria-hidden="true">
                         <Close />
                     </el-icon>
                 </span>
                 <span class="step-label">{{ stepLabel(step.step) }}</span>
+                <span class="step-status" :class="`step-status--${step.status}`">
+                    {{ statusLabel(step.status) }}
+                </span>
                 <span v-if="step.status === 'failed' && step.error" class="step-error">
                     {{ step.error }}
                 </span>
@@ -103,9 +117,34 @@ function stepLabel(step: string): string {
     color: var(--el-text-color-primary, #303133);
 }
 
+/* 狀態色走 EP semantic token（dark mode 自動翻轉）；文字色用 dark-2 保 AA 對比 */
+.icon-completed {
+    color: var(--el-color-success);
+}
+.icon-skipped {
+    color: var(--el-color-warning);
+}
+.icon-failed {
+    color: var(--el-color-danger);
+}
+
+.step-status {
+    font-size: 12px;
+    font-weight: 500;
+}
+.step-status--completed {
+    color: var(--el-color-success-dark-2);
+}
+.step-status--skipped {
+    color: var(--el-color-warning-dark-2);
+}
+.step-status--failed {
+    color: var(--el-color-danger-dark-2);
+}
+
 .step-error {
     font-size: 12px;
-    color: #f56c6c;
+    color: var(--el-color-danger-dark-2);
     margin-left: 8px;
 }
 

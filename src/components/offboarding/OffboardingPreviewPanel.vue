@@ -77,7 +77,7 @@ const inFlightCycles = computed(() => props.preview.preview.appraisal_in_flight_
         </el-descriptions>
 
         <div v-if="preview.warnings && preview.warnings.length > 0" class="warning-box">
-            <el-icon color="#f56c6c" style="margin-right: 4px;">
+            <el-icon class="warning-icon" aria-hidden="true">
                 <WarningFilled />
             </el-icon>
             <span>注意事項：</span>
@@ -99,20 +99,26 @@ const inFlightCycles = computed(() => props.preview.preview.appraisal_in_flight_
     padding: 4px 0;
 }
 
+/* 色彩走 EP semantic token：dark mode 自動翻轉；文字用 dark-2 保 AA 對比 */
 .warning-box {
     margin-top: 16px;
     padding: 12px 16px;
-    background: #fff2f0;
-    border: 1px solid #ffccc7;
+    background: var(--el-color-danger-light-9);
+    border: 1px solid var(--el-color-danger-light-5);
     border-radius: 4px;
     display: flex;
     align-items: flex-start;
     flex-wrap: wrap;
 }
 
+.warning-icon {
+    margin-right: 4px;
+    color: var(--el-color-danger);
+}
+
 .warning-box span {
     font-weight: 600;
-    color: #f56c6c;
+    color: var(--el-color-danger-dark-2);
 }
 
 .warning-box ul {
@@ -122,7 +128,7 @@ const inFlightCycles = computed(() => props.preview.preview.appraisal_in_flight_
 }
 
 .warning-text {
-    color: #f56c6c;
+    color: var(--el-color-danger-dark-2);
     margin-bottom: 4px;
 }
 </style>
