@@ -43,6 +43,12 @@ let audioCtx: AudioContext | null = null
 let initialized = false
 let gestureHandler: (() => void) | null = null
 let visibilityHandler: (() => void) | null = null
+// fetchCalls 的發出序號（每次呼叫遞增）。用途有二：①丟棄 out-of-order 的過時快照
+// ②標記 WS 新增卡是「哪一批 fetch 之後」到達的，供合併時判斷保留與否。
+let fetchDispatchSeq = 0
+// WS 新增卡的追蹤表：id → 加入當下的 fetchDispatchSeq。fetchCalls 合併時，快照缺席但
+// createdSeq >= 該 fetch 序號的卡（＝快照發出後才由 WS 加入）須保留，不可被晚到的快照抹除。
+const wsRecentlyCreated = new Map<number, number>()
 const WS_MAX_RETRIES = 5
 const WS_LIVENESS_TIMEOUT = 45000
 // 三音提示約 0.70s 響完才唸，避免尾音與語音重疊。
@@ -204,13 +210,39 @@ function requestNotificationPermission(): void {
 }
 
 // ── HTTP ──
+function isActiveStatus(status?: string): boolean {
+  return status !== 'completed' && status !== 'cancelled'
+}
+
+// server 快照為權威基準，但【保留】在此 fetch 發出之後才由 WS 加入、快照尚未涵蓋、且仍在
+// 進行中的接送卡——否則晚到的 HTTP 快照會抹除剛由 WS 新增/播報過的卡（純 fetch-vs-fetch
+// seq guard 不足，因 WS created 事件不會 bump fetch seq）。反之，快照缺席但於 fetch 發出
+// 【之前】即存在的卡（createdSeq < mySeq，或非 WS 新增）代表 server 端已移除/完成，予以丟棄，
+// 維持 onopen resync「丟棄斷線期間已完成卡」的語意。
+function mergeSnapshotWithLiveCalls(snapshot: DismissalCall[], mySeq: number): DismissalCall[] {
+  const snapshotIds = new Set(snapshot.map((c) => c.id))
+  const preserved = activeCalls.value.filter((c) => {
+    if (snapshotIds.has(c.id)) return false
+    const createdSeq = wsRecentlyCreated.get(c.id)
+    return createdSeq !== undefined && createdSeq >= mySeq && isActiveStatus(c.status)
+  })
+  // 收斂追蹤表：已被 server 快照確認、或早於本次 fetch 而未獲保留的卡不再需要特別追蹤。
+  for (const [id, seq] of wsRecentlyCreated) {
+    if (snapshotIds.has(id) || seq < mySeq) wsRecentlyCreated.delete(id)
+  }
+  return [...preserved, ...snapshot]
+}
+
 async function fetchCalls(): Promise<void> {
+  const mySeq = ++fetchDispatchSeq
   loading.value = true
   try {
     const res = await getPortalDismissalCalls()
-    activeCalls.value = res.data || []
+    // 已有更新的 fetch 發出 → 丟棄這個過時快照（避免 out-of-order 覆蓋新資料）
+    if (mySeq !== fetchDispatchSeq) return
+    activeCalls.value = mergeSnapshotWithLiveCalls(res.data || [], mySeq)
   } catch { /* 靜默：UI 由 connectionState 呈現 */ } finally {
-    loading.value = false
+    if (mySeq === fetchDispatchSeq) loading.value = false
   }
 }
 
@@ -282,6 +314,8 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
   const { type, payload } = event
   if (type === 'dismissal_call_created') {
     activeCalls.value.unshift(payload)
+    // 記錄「加入當下的 fetch 序號」，讓 in-flight fetch 的晚到快照不會把這張新卡抹除。
+    wsRecentlyCreated.set(payload.id, fetchDispatchSeq)
     notifyBrowser(payload)
     playAlert(payload)
     liveAnnounce.value = `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`
@@ -289,10 +323,12 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
     const idx = activeCalls.value.findIndex((c) => c.id === payload.id)
     if (payload.status === 'completed' || payload.status === 'cancelled') {
       if (idx !== -1) activeCalls.value.splice(idx, 1)
+      wsRecentlyCreated.delete(payload.id)
     } else if (idx !== -1) activeCalls.value.splice(idx, 1, payload)
-    else activeCalls.value.unshift(payload)
+    else { activeCalls.value.unshift(payload); wsRecentlyCreated.set(payload.id, fetchDispatchSeq) }
   } else if (type === 'dismissal_call_cancelled') {
     activeCalls.value = activeCalls.value.filter((c) => c.id !== payload.id)
+    wsRecentlyCreated.delete(payload.id)
   }
 }
 
@@ -338,6 +374,8 @@ export function teardownPortalDismissalAlerts(): void {
   wsReconnectCount.value = 0
   wsExhausted.value = false
   activeCalls.value = []
+  wsRecentlyCreated.clear()
+  fetchDispatchSeq = 0
   // muted 偏好持久化於 localStorage；重讀當前值（與 toggleMute 寫入保持同步，正常情況為 no-op）
   muted.value = localStorage.getItem(SOUND_PREF_KEY) === '1'
   liveAnnounce.value = ''
