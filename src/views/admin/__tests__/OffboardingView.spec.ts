@@ -29,6 +29,13 @@ const mockGetDetail = getOffboardingDetail as unknown as ReturnType<typeof vi.fn
 const mockPatchNhi = patchNhiUnenroll as unknown as ReturnType<typeof vi.fn>
 const mockClose = closeOffboarding as unknown as ReturnType<typeof vi.fn>
 
+/** 後端「查無離職紀錄」的 axios 錯誤形狀（GET /offboarding/{id} 回 404） */
+function notFoundError() {
+    return Object.assign(new Error('Request failed with status code 404'), {
+        response: { status: 404, data: { detail: 'OFFBOARDING_RECORD_NOT_FOUND' } },
+    })
+}
+
 /** OffboardingDetailResponse 節錄 fixture（欄位齊全，照 schema.d.ts） */
 function detailFixture(overrides: Record<string, unknown> = {}) {
     return {
@@ -75,7 +82,7 @@ describe('OffboardingView 離職清單三態操作', () => {
             ],
         })
         mockGetDetail.mockImplementation((id: number) => {
-            if (id === 1) return Promise.reject(new Error('404 no offboarding record'))
+            if (id === 1) return Promise.reject(notFoundError())
             if (id === 2) return Promise.resolve({ data: detailFixture({ employee_id: 2, closed_at: null }) })
             return Promise.resolve({
                 data: detailFixture({ employee_id: 3, closed_at: '2026-07-05T00:00:00' }),
@@ -96,7 +103,7 @@ describe('OffboardingView 離職清單三態操作', () => {
         mockGetEmployees.mockResolvedValue({
             data: [{ id: 7, name: '離職連結員工', resign_date: '2026-07-01' }],
         })
-        mockGetDetail.mockRejectedValue(new Error('404 no offboarding record'))
+        mockGetDetail.mockRejectedValue(notFoundError())
 
         const w = mountView()
         await flushPromises()
@@ -111,7 +118,7 @@ describe('OffboardingView 離職清單三態操作', () => {
         mockGetEmployees.mockResolvedValue({
             data: [{ id: 1, name: '未建立紀錄員工', resign_date: '2026-07-01' }],
         })
-        mockGetDetail.mockRejectedValue(new Error('404 no offboarding record'))
+        mockGetDetail.mockRejectedValue(notFoundError())
 
         const w = mountView()
         await flushPromises()
@@ -275,5 +282,62 @@ describe('OffboardingView 檢核結案（手動結案鈕）', () => {
         const closedInfo = w.find('.closed-at-info')
         expect(closedInfo.exists()).toBe(true)
         expect(closedInfo.text()).toContain('2026')
+    })
+})
+
+describe('OffboardingView detail 載入失敗第四態（load_failed）', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        setActivePinia(createPinia())
+    })
+
+    it('非 404 的載入失敗 → 顯示「載入失敗」與「重試載入」，不得誤標為未建立紀錄', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 5, name: '網路抖動員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockRejectedValue(new Error('Network Error'))
+
+        const w = mountView()
+        await flushPromises()
+
+        expect(w.text()).toContain('載入失敗')
+        expect(w.text()).not.toContain('未建立紀錄')
+        expect(w.find('.offboard-action-btn').text()).toBe('重試載入')
+    })
+
+    it('點「重試載入」成功 → 該列更新為真實狀態（未結案）', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 5, name: '網路抖動員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail
+            .mockRejectedValueOnce(new Error('Network Error'))
+            .mockResolvedValueOnce({ data: detailFixture({ employee_id: 5, closed_at: null }) })
+
+        const w = mountView()
+        await flushPromises()
+
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+
+        expect(mockGetDetail).toHaveBeenCalledTimes(2)
+        expect(w.find('.offboard-action-btn').text()).toBe('繼續檢核')
+    })
+
+    it('點「重試載入」後端回 404 → 該列轉為未建立紀錄', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 5, name: '網路抖動員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail
+            .mockRejectedValueOnce(new Error('Network Error'))
+            .mockRejectedValueOnce(notFoundError())
+
+        const w = mountView()
+        await flushPromises()
+
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+
+        expect(w.find('.offboard-action-btn').text()).toBe('開始離職檢核')
+        expect(w.text()).toContain('未建立紀錄')
     })
 })

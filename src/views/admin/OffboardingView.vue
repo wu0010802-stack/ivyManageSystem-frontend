@@ -22,7 +22,13 @@ interface EmployeeRow {
 interface ResignedEmployee {
     employee: EmployeeRow
     detail: OffboardingDetail | null
+    /** detail 載入失敗（非 404）；true 時列狀態為 load_failed，不可與 no_record 混同 */
+    loadFailed?: boolean
 }
+
+/** 後端 GET /offboarding/{id} 對「查無紀錄」回 404；其餘錯誤視為載入失敗 */
+const isNotFound = (err: unknown): boolean =>
+    (err as { response?: { status?: number } } | null)?.response?.status === 404
 
 type OffboardingProcessResult = ApiResponse<'/offboarding/{employee_id}/process', 'post'>
 
@@ -58,8 +64,10 @@ onMounted(async () => {
 
         rows.value = resigned.map((emp, i) => {
             const settled = results[i]
-            const detail = settled.status === 'fulfilled' ? settled.value : null
-            return { employee: emp, detail }
+            if (settled.status === 'fulfilled') return { employee: emp, detail: settled.value }
+            // 404＝真的沒有離職紀錄（no_record）；其餘失敗標 load_failed，
+            // 不可折疊成 no_record（會誘導對已辦理員工重跑離職流程）
+            return { employee: emp, detail: null, loadFailed: !isNotFound(settled.reason) }
         })
     } catch {
         ElMessage.error('載入離職員工清單失敗')
@@ -70,9 +78,10 @@ onMounted(async () => {
 
 // ── Checklist 狀態 ────────────────────────────────────────
 
-type ChecklistStatus = 'no_record' | 'closed' | 'open'
+type ChecklistStatus = 'no_record' | 'closed' | 'open' | 'load_failed'
 
 function getChecklistStatus(row: ResignedEmployee): ChecklistStatus {
+    if (row.loadFailed) return 'load_failed'
     if (!row.detail) return 'no_record'
     if (row.detail.closed_at) return 'closed'
     return 'open'
@@ -82,32 +91,55 @@ const checklistLabel: Record<ChecklistStatus, string> = {
     no_record: '未建立紀錄',
     closed: '已結案',
     open: '未結案',
+    load_failed: '載入失敗',
 }
 
 const checklistTagType: Record<ChecklistStatus, string> = {
     no_record: 'info',
     closed: 'success',
     open: 'warning',
+    load_failed: 'danger',
 }
 
-// 操作欄按鈕文案：依三態決定（no_record 進 modal 走辦理流程；open/closed 都是進既有 drawer）
+// 操作欄按鈕文案：依四態決定（no_record 進 modal 走辦理流程；open/closed 進既有 drawer；
+// load_failed 重抓 detail）
 const actionButtonLabel: Record<ChecklistStatus, string> = {
     no_record: '開始離職檢核',
     open: '繼續檢核',
     closed: '查看文件',
+    load_failed: '重試載入',
 }
 
-/** closed 狀態為次要動作（查看文件），其餘兩態為主要動作（進行中的檢核流程） */
+/** closed（查看文件）與 load_failed（重試載入）為次要動作，其餘為主要動作 */
 function isPrimaryAction(row: ResignedEmployee): boolean {
-    return getChecklistStatus(row) !== 'closed'
+    const status = getChecklistStatus(row)
+    return status !== 'closed' && status !== 'load_failed'
 }
 
-/** 依三態決定操作欄按鈕行為：no_record → 開辦理離職 modal；open/closed → 開既有管理 drawer */
+/** 依四態決定操作欄按鈕行為 */
 function handleAction(row: ResignedEmployee): void {
-    if (getChecklistStatus(row) === 'no_record') {
+    const status = getChecklistStatus(row)
+    if (status === 'load_failed') {
+        retryLoadDetail(row)
+    } else if (status === 'no_record') {
         openOffboardModal(row)
     } else {
         openManage(row)
+    }
+}
+
+/** load_failed 列重抓 detail：成功轉真實狀態；404 轉 no_record；其餘維持 load_failed */
+async function retryLoadDetail(row: ResignedEmployee): Promise<void> {
+    const id = row.employee.id
+    try {
+        await syncRow(id)
+    } catch (err) {
+        const idx = rows.value.findIndex((r) => r.employee.id === id)
+        if (isNotFound(err)) {
+            if (idx !== -1) rows.value[idx] = { ...rows.value[idx], detail: null, loadFailed: false }
+        } else {
+            ElMessage.error('載入離職詳情失敗，請稍後再試')
+        }
     }
 }
 
@@ -140,10 +172,10 @@ async function syncRow(id: number): Promise<void> {
     const detail = await store.refreshDetail(id)
     const idx = rows.value.findIndex((r) => r.employee.id === id)
     if (idx !== -1) {
-        rows.value[idx] = { ...rows.value[idx], detail }
+        rows.value[idx] = { ...rows.value[idx], detail, loadFailed: false }
     }
     if (selectedRow.value?.employee.id === id) {
-        selectedRow.value = { ...selectedRow.value, detail }
+        selectedRow.value = { ...selectedRow.value, detail, loadFailed: false }
     }
 }
 
@@ -255,7 +287,7 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
             <!-- 離職檢核 -->
             <el-table-column label="離職檢核" min-width="110">
                 <template #default="{ row }: { row: ResignedEmployee }">
-                    <el-tag :type="(checklistTagType[getChecklistStatus(row)] as 'success' | 'warning' | 'info')">
+                    <el-tag :type="(checklistTagType[getChecklistStatus(row)] as 'success' | 'warning' | 'info' | 'danger')">
                         {{ checklistLabel[getChecklistStatus(row)] }}
                     </el-tag>
                 </template>
