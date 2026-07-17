@@ -257,6 +257,7 @@ const onSaved = async () => {
       v-model="offboardVisible"
       :employee-id="id"
       :employee-name="(employee.name as string) || ''"
+      :initial-resign-date="(employee.resign_date as string | undefined) ?? null"
       @success="onOffboarded"
     />
 

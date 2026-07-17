@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import OffboardingPreviewPanel from './OffboardingPreviewPanel.vue'
 import OffboardingStepsResult from './OffboardingStepsResult.vue'
 import { useOffboardingStore } from '@/stores/offboarding'
@@ -15,6 +15,8 @@ const props = defineProps<{
     modelValue: boolean
     employeeId: number
     employeeName: string
+    /** 既有離職日（待離職者重開時預填，避免前後填不一致） */
+    initialResignDate?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -38,15 +40,32 @@ watch(
     () => props.modelValue,
     (val) => {
         if (val) {
-            // 開啟時重置 state
+            // 開啟時重置 state；resign_date 預填既有離職日（若有）
             stage.value = 'input'
             loading.value = false
             preview.value = null
             processResult.value = null
-            form.value = { resign_date: '', resign_reason: '' }
+            form.value = { resign_date: props.initialResignDate ?? '', resign_reason: '' }
         }
     },
+    // immediate：掛載當下已是開啟狀態（v-if + modelValue=true 同時成立）也要吃到預填
+    { immediate: true },
 )
+
+/** 使用者已填了與初始值不同的資料（關閉時要攔） */
+const isDirty = computed(
+    () =>
+        form.value.resign_date !== (props.initialResignDate ?? '') ||
+        !!form.value.resign_reason,
+)
+
+/** 合理離職日範圍：過去 2 年 ~ 未來 1 年，擋「誤選十年前」類 typo */
+function disabledResignDate(d: Date): boolean {
+    const now = new Date()
+    const min = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate())
+    const max = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate())
+    return d.getTime() < min.getTime() || d.getTime() > max.getTime()
+}
 
 async function handlePreview() {
     if (!form.value.resign_date) {
@@ -85,12 +104,40 @@ async function handleProcess() {
     }
 }
 
-function retry() {
-    stage.value = 'preview'
+/** 重試失敗步驟：直接重呼 process（後端 steps 具冪等/skipped 語意，已完成步驟自動跳過），
+ *  停留在結果頁原地更新，不跳回預覽（跳回會讓失敗資訊消失、逼使用者記住哪步失敗）。 */
+async function retry() {
+    await handleProcess()
+}
+
+/** 統一關閉守衛：process 進行中不可關；input/preview 已填資料先確認；result 直接關 */
+async function guardClose(): Promise<boolean> {
+    if (loading.value) return false
+    if (stage.value !== 'result' && isDirty.value) {
+        try {
+            await ElMessageBox.confirm(
+                '尚未完成離職辦理，關閉將遺失已填的資料。確定關閉？',
+                '關閉確認',
+                { type: 'warning', confirmButtonText: '確定關閉', cancelButtonText: '繼續填寫' },
+            )
+        } catch {
+            return false
+        }
+    }
+    return true
+}
+
+/** el-dialog before-close（X / Esc 走這裡）；通過守衛後自行 emit，
+ *  不依賴 EP done() 之後的內部 emit（transition 環境下不可靠） */
+async function handleBeforeClose(done: () => void): Promise<void> {
+    if (await guardClose()) {
+        done()
+        emit('update:modelValue', false)
+    }
 }
 
 function handleClose() {
-    emit('update:modelValue', false)
+    void handleBeforeClose(() => {})
 }
 
 const stageTitles: Record<Stage, string> = {
@@ -106,7 +153,8 @@ const stageTitles: Record<Stage, string> = {
         :title="`${stageTitles[stage]} — ${employeeName}`"
         width="560px"
         :close-on-click-modal="false"
-        @update:model-value="handleClose"
+        :before-close="handleBeforeClose"
+        @update:model-value="(v: boolean) => emit('update:modelValue', v)"
     >
         <!-- input stage -->
         <div v-if="stage === 'input'" class="offboarding-input-stage">
@@ -118,6 +166,7 @@ const stageTitles: Record<Stage, string> = {
                         placeholder="請選擇離職日期"
                         format="YYYY-MM-DD"
                         value-format="YYYY-MM-DD"
+                        :disabled-date="disabledResignDate"
                         style="width: 100%"
                     />
                 </el-form-item>
@@ -142,6 +191,7 @@ const stageTitles: Record<Stage, string> = {
             <OffboardingStepsResult
                 v-if="processResult"
                 :steps="processResult.steps"
+                :retrying="loading"
                 @retry="retry"
             />
         </div>
@@ -149,6 +199,15 @@ const stageTitles: Record<Stage, string> = {
         <template #footer>
             <div class="dialog-footer">
                 <el-button @click="handleClose">關閉</el-button>
+
+                <el-button
+                    v-if="stage === 'preview'"
+                    class="back-button"
+                    :disabled="loading"
+                    @click="stage = 'input'"
+                >
+                    上一步
+                </el-button>
 
                 <el-button
                     v-if="stage === 'input'"

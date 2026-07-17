@@ -15,6 +15,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import {
+  closeOffboarding,
   getOffboardingDetail,
   previewOffboarding,
   processOffboarding,
@@ -26,6 +27,7 @@ export type OffboardingPreviewPayload = ApiBody<'/offboarding/{employee_id}/prev
 export type OffboardingPreviewResult = ApiResponse<'/offboarding/{employee_id}/preview', 'post'>
 export type OffboardingProcessPayload = ApiBody<'/offboarding/{employee_id}/process', 'post'>
 export type OffboardingProcessResult = ApiResponse<'/offboarding/{employee_id}/process', 'post'>
+export type OffboardingCloseResult = ApiResponse<'/offboarding/{employee_id}/close', 'post'>
 
 export const useOffboardingStore = defineStore('offboarding', () => {
   // Map cache by employee_id
@@ -68,6 +70,13 @@ export const useOffboardingStore = defineStore('offboarding', () => {
     return res.data
   }
 
+  /** 人工結案（成功後清除該員工 cache，呼叫端 refresh 取最新 closed 狀態） */
+  async function close(id: number): Promise<OffboardingCloseResult> {
+    const res = await closeOffboarding(id)
+    invalidate(id)
+    return res.data
+  }
+
   /** 清除快取。
    *  - 傳 id：清單一員工。
    *  - 不傳 id：清空整個快取（clearAuth → _resetStores 對 setup store 的零參數重置會走這條；
@@ -102,6 +111,7 @@ export const useOffboardingStore = defineStore('offboarding', () => {
     refreshDetail,
     preview,
     process,
+    close,
     invalidate,
   }
 })

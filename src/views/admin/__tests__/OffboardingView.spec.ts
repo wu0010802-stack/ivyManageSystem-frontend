@@ -16,16 +16,25 @@ vi.mock('@/api/offboarding', () => ({
     patchNhiUnenroll: vi.fn(),
     postMagicLink: vi.fn(),
     deleteMagicLink: vi.fn(),
+    closeOffboarding: vi.fn(),
 }))
 
 import { getEmployees } from '@/api/employees'
-import { getOffboardingDetail, patchNhiUnenroll } from '@/api/offboarding'
+import { getOffboardingDetail, patchNhiUnenroll, closeOffboarding } from '@/api/offboarding'
 import OffboardingView from '../OffboardingView.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 
 const mockGetEmployees = getEmployees as unknown as ReturnType<typeof vi.fn>
 const mockGetDetail = getOffboardingDetail as unknown as ReturnType<typeof vi.fn>
 const mockPatchNhi = patchNhiUnenroll as unknown as ReturnType<typeof vi.fn>
+const mockClose = closeOffboarding as unknown as ReturnType<typeof vi.fn>
+
+/** 後端「查無離職紀錄」的 axios 錯誤形狀（GET /offboarding/{id} 回 404） */
+function notFoundError() {
+    return Object.assign(new Error('Request failed with status code 404'), {
+        response: { status: 404, data: { detail: 'OFFBOARDING_RECORD_NOT_FOUND' } },
+    })
+}
 
 /** OffboardingDetailResponse 節錄 fixture（欄位齊全，照 schema.d.ts） */
 function detailFixture(overrides: Record<string, unknown> = {}) {
@@ -73,7 +82,7 @@ describe('OffboardingView 離職清單三態操作', () => {
             ],
         })
         mockGetDetail.mockImplementation((id: number) => {
-            if (id === 1) return Promise.reject(new Error('404 no offboarding record'))
+            if (id === 1) return Promise.reject(notFoundError())
             if (id === 2) return Promise.resolve({ data: detailFixture({ employee_id: 2, closed_at: null }) })
             return Promise.resolve({
                 data: detailFixture({ employee_id: 3, closed_at: '2026-07-05T00:00:00' }),
@@ -85,8 +94,8 @@ describe('OffboardingView 離職清單三態操作', () => {
 
         const buttons = w.findAll('.offboard-action-btn')
         expect(buttons).toHaveLength(3)
-        expect(buttons[0].text()).toBe('開始離職檢核')
-        expect(buttons[1].text()).toBe('繼續檢核')
+        expect(buttons[0].text()).toBe('辦理離職')
+        expect(buttons[1].text()).toBe('繼續辦理')
         expect(buttons[2].text()).toBe('查看文件')
     })
 
@@ -94,7 +103,7 @@ describe('OffboardingView 離職清單三態操作', () => {
         mockGetEmployees.mockResolvedValue({
             data: [{ id: 7, name: '離職連結員工', resign_date: '2026-07-01' }],
         })
-        mockGetDetail.mockRejectedValue(new Error('404 no offboarding record'))
+        mockGetDetail.mockRejectedValue(notFoundError())
 
         const w = mountView()
         await flushPromises()
@@ -109,7 +118,7 @@ describe('OffboardingView 離職清單三態操作', () => {
         mockGetEmployees.mockResolvedValue({
             data: [{ id: 1, name: '未建立紀錄員工', resign_date: '2026-07-01' }],
         })
-        mockGetDetail.mockRejectedValue(new Error('404 no offboarding record'))
+        mockGetDetail.mockRejectedValue(notFoundError())
 
         const w = mountView()
         await flushPromises()
@@ -124,6 +133,24 @@ describe('OffboardingView 離職清單三態操作', () => {
         expect(modal.props('modelValue')).toBe(true)
         expect(modal.props('employeeId')).toBe(1)
         expect(modal.props('employeeName')).toBe('未建立紀錄員工')
+    })
+
+    it('drawer 術語：下載連結區用「離職證明下載連結」而非 Magic Link；退保 switch 附人工記錄說明', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 2, name: '未結案員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({ employee_id: 2, closed_at: null }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+
+        expect(w.text()).toContain('離職證明下載連結')
+        expect(w.text()).not.toContain('Magic Link')
+        expect(w.text()).toContain('仍需自行向健保署辦理')
     })
 
     it('open 列開啟 drawer 後切換 NHI 退保申報 → 呼叫 patchNhiUnenroll 並刷新該列', async () => {
@@ -175,5 +202,215 @@ describe('OffboardingView 離職清單三態操作', () => {
         expect(nhiSwitch.props('disabled')).toBe(true)
 
         expect(w.find('.drawer-download-cert-btn').exists()).toBe(true)
+    })
+})
+
+describe('OffboardingView 檢核結案（手動結案鈕）', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        setActivePinia(createPinia())
+    })
+
+    async function openDrawer(w: ReturnType<typeof mountView>) {
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+    }
+
+    it('前置條件齊備（退保已申報＋證明已產生）→ 結案按鈕可按，確認後呼叫 closeOffboarding 並刷新該列', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 2, name: '未結案員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({
+                employee_id: 2,
+                closed_at: null,
+                nhi_unenroll_submitted_at: '2026-07-01T10:00:00',
+                certificate_pdf_path: '/tmp/cert-2.pdf',
+            }),
+        })
+        mockClose.mockResolvedValue({
+            data: { employee_id: 2, closed_at: '2026-07-17T12:00:00', closed_by_user_id: 1 },
+        })
+        const { ElMessageBox } = await import('element-plus')
+        const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
+
+        const w = mountView()
+        await flushPromises()
+        await openDrawer(w)
+
+        const closeBtn = w.find('.close-offboarding-btn')
+        expect(closeBtn.exists()).toBe(true)
+        expect(closeBtn.attributes('disabled')).toBeUndefined()
+
+        await closeBtn.trigger('click')
+        await flushPromises()
+
+        expect(confirmSpy).toHaveBeenCalled()
+        expect(mockClose).toHaveBeenCalledWith(2)
+        // 初次載入 + 結案後 refreshDetail 各一次
+        expect(mockGetDetail).toHaveBeenCalledTimes(2)
+        confirmSpy.mockRestore()
+    })
+
+    it('前置條件未滿足 → 結案按鈕 disabled，並列出缺項說明', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 2, name: '未結案員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({
+                employee_id: 2,
+                closed_at: null,
+                nhi_unenroll_submitted_at: null,
+                certificate_pdf_path: null,
+            }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+        await openDrawer(w)
+
+        const closeBtn = w.find('.close-offboarding-btn')
+        expect(closeBtn.exists()).toBe(true)
+        expect(closeBtn.attributes('disabled')).toBeDefined()
+
+        const hint = w.find('.close-prereq-hint')
+        expect(hint.exists()).toBe(true)
+        expect(hint.text()).toContain('健保退保')
+        expect(hint.text()).toContain('離職證明')
+    })
+
+    it('已結案 → 不顯示結案按鈕，顯示結案時間', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 3, name: '已結案員工', resign_date: '2026-05-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({
+                employee_id: 3,
+                closed_at: '2026-07-05T09:30:00',
+                nhi_unenroll_submitted_at: '2026-07-01T10:00:00',
+                certificate_pdf_path: '/tmp/cert-3.pdf',
+            }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+        await openDrawer(w)
+
+        expect(w.find('.close-offboarding-btn').exists()).toBe(false)
+        const closedInfo = w.find('.closed-at-info')
+        expect(closedInfo.exists()).toBe(true)
+        expect(closedInfo.text()).toContain('2026')
+    })
+})
+
+describe('OffboardingView detail 載入失敗第四態（load_failed）', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        setActivePinia(createPinia())
+    })
+
+    it('非 404 的載入失敗 → 顯示「載入失敗」與「重試載入」，不得誤標為未建立紀錄', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 5, name: '網路抖動員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockRejectedValue(new Error('Network Error'))
+
+        const w = mountView()
+        await flushPromises()
+
+        expect(w.text()).toContain('載入失敗')
+        expect(w.text()).not.toContain('未建立紀錄')
+        expect(w.find('.offboard-action-btn').text()).toBe('重試載入')
+    })
+
+    it('點「重試載入」成功 → 該列更新為真實狀態（未結案）', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 5, name: '網路抖動員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail
+            .mockRejectedValueOnce(new Error('Network Error'))
+            .mockResolvedValueOnce({ data: detailFixture({ employee_id: 5, closed_at: null }) })
+
+        const w = mountView()
+        await flushPromises()
+
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+
+        expect(mockGetDetail).toHaveBeenCalledTimes(2)
+        expect(w.find('.offboard-action-btn').text()).toBe('繼續辦理')
+    })
+
+    it('點「重試載入」後端回 404 → 該列轉為未建立紀錄', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 5, name: '網路抖動員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail
+            .mockRejectedValueOnce(new Error('Network Error'))
+            .mockRejectedValueOnce(notFoundError())
+
+        const w = mountView()
+        await flushPromises()
+
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+
+        expect(w.find('.offboard-action-btn').text()).toBe('辦理離職')
+        expect(w.text()).toContain('未建立紀錄')
+    })
+})
+
+describe('OffboardingView 發起離職動線', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        setActivePinia(createPinia())
+    })
+
+    it('頁頭「辦理離職」主按鈕：選擇在職員工後開啟 OffboardingModal', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [
+                { id: 11, name: '在職甲', is_active: true },
+                { id: 12, name: '在職乙', is_active: true },
+                { id: 3, name: '已離職員工', is_active: false, resign_date: '2026-05-01' },
+            ],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({ employee_id: 3, closed_at: '2026-07-05T00:00:00' }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+
+        const initiateBtn = w.find('.initiate-offboard-btn')
+        expect(initiateBtn.exists()).toBe(true)
+
+        await initiateBtn.trigger('click')
+        await flushPromises()
+
+        const select = w.findComponent({ name: 'ElSelect' })
+        expect(select.exists()).toBe(true)
+        select.vm.$emit('update:modelValue', 11)
+        await flushPromises()
+
+        await w.find('.initiate-confirm-btn').trigger('click')
+        await flushPromises()
+
+        const modal = w.findComponent(OffboardingModal)
+        expect(modal.exists()).toBe(true)
+        expect(modal.props('modelValue')).toBe(true)
+        expect(modal.props('employeeId')).toBe(11)
+        expect(modal.props('employeeName')).toBe('在職甲')
+    })
+
+    it('空清單顯示引導文案（含發起入口指引），不再是死路', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 11, name: '在職甲', is_active: true }],
+        })
+
+        const w = mountView()
+        await flushPromises()
+
+        expect(w.text()).toContain('目前沒有離職中的員工')
+        expect(w.text()).toContain('辦理離職')
     })
 })
