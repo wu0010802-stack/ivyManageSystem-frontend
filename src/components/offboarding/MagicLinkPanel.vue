@@ -126,15 +126,12 @@ async function handleRevoke(): Promise<void> {
                     <el-descriptions-item label="下載連結">
                         <span class="token-url">{{ newToken.download_url }}</span>
                     </el-descriptions-item>
-                    <el-descriptions-item label="Token">
-                        <span class="token-text">{{ newToken.token }}</span>
-                    </el-descriptions-item>
                     <el-descriptions-item label="到期時間">
                         {{ formatDateTime(newToken.expires_at) }}
                     </el-descriptions-item>
                 </el-descriptions>
                 <el-alert
-                    title="請立即複製並傳送給員工，關閉後無法再次查看 Token"
+                    title="請立即複製連結並傳送給離職員工；關閉此視窗後將無法再次查看，如遺失可重新產生。"
                     type="warning"
                     :closable="false"
                     style="margin-top: 12px;"
@@ -178,8 +175,7 @@ async function handleRevoke(): Promise<void> {
     margin: 0 0 12px;
 }
 
-.token-url,
-.token-text {
+.token-url {
     word-break: break-all;
     font-family: monospace;
     font-size: 13px;

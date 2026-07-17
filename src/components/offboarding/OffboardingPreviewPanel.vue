@@ -64,7 +64,7 @@ const inFlightCycles = computed(() => props.preview.preview.appraisal_in_flight_
             <el-descriptions-item label="離職當月薪資">
                 <span>{{ salaryStatusText }}</span>
                 <el-tag v-if="salaryTarget.will_be_marked_stale" type="warning" size="small" style="margin-left: 6px;">
-                    將標 stale
+                    將標記為需重算
                 </el-tag>
             </el-descriptions-item>
 

@@ -135,6 +135,24 @@ describe('OffboardingView 離職清單三態操作', () => {
         expect(modal.props('employeeName')).toBe('未建立紀錄員工')
     })
 
+    it('drawer 術語：下載連結區用「離職證明下載連結」而非 Magic Link；退保 switch 附人工記錄說明', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 2, name: '未結案員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({ employee_id: 2, closed_at: null }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+
+        expect(w.text()).toContain('離職證明下載連結')
+        expect(w.text()).not.toContain('Magic Link')
+        expect(w.text()).toContain('仍需自行向健保署辦理')
+    })
+
     it('open 列開啟 drawer 後切換 NHI 退保申報 → 呼叫 patchNhiUnenroll 並刷新該列', async () => {
         mockGetEmployees.mockResolvedValue({
             data: [{ id: 2, name: '未結案員工', resign_date: '2026-06-01' }],

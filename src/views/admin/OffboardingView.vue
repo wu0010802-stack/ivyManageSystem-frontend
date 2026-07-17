@@ -272,7 +272,7 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
             <el-table-column label="員工名" min-width="120">
                 <template #default="{ row }: { row: ResignedEmployee }">
                     <router-link :to="`/employees/${row.employee.id}`" class="emp-name-link">
-                        {{ row.employee.name ?? `員工 #${row.employee.id}` }}
+                        {{ row.employee.name ?? `未填姓名（編號 ${row.employee.id}）` }}
                     </router-link>
                 </template>
             </el-table-column>
@@ -344,7 +344,8 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
         >
             <template v-if="selectedRow">
                 <div class="drawer-section">
-                    <h4 class="drawer-section-title">Magic Link 下載連結</h4>
+                    <h4 class="drawer-section-title">離職證明下載連結</h4>
+                    <p class="drawer-section-desc">提供給離職員工免登入下載離職文件包（含離職證明）</p>
                     <MagicLinkPanel
                         v-if="selectedRow.detail"
                         :employee-id="selectedRow.employee.id"
@@ -354,7 +355,7 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
                         :last-used-at="selectedRow.detail.magic_link_last_used_at ?? null"
                         @update="onMagicLinkUpdate"
                     />
-                    <p v-else class="text-muted">此員工尚無離職紀錄，無法管理 Magic Link。</p>
+                    <p v-else class="text-muted">此員工尚無離職紀錄，無法產生下載連結。</p>
                 </div>
 
                 <template v-if="selectedRow.detail">
@@ -369,6 +370,7 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
                             :disabled="getChecklistStatus(selectedRow) === 'closed'"
                             @change="handleNhiUnenrollToggle"
                         />
+                        <p class="nhi-hint">此為人工申報進度記錄，仍需自行向健保署辦理退保。</p>
                     </div>
 
                     <!-- 離職證明 -->
@@ -416,7 +418,7 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
             v-if="offboardModalRow"
             v-model="offboardModalVisible"
             :employee-id="offboardModalRow.employee.id"
-            :employee-name="offboardModalRow.employee.name ?? `員工 #${offboardModalRow.employee.id}`"
+            :employee-name="offboardModalRow.employee.name ?? `未填姓名（編號 ${offboardModalRow.employee.id}）`"
             @success="onOffboardSuccess"
         />
     </div>
@@ -477,6 +479,18 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
 }
 
 .close-prereq-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-tertiary, #909399);
+}
+
+.drawer-section-desc {
+    margin: -8px 0 12px;
+    font-size: 13px;
+    color: var(--text-tertiary, #909399);
+}
+
+.nhi-hint {
     margin: 8px 0 0;
     font-size: 13px;
     color: var(--text-tertiary, #909399);
