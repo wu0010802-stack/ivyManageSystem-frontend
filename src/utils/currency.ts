@@ -10,7 +10,11 @@
  */
 const EMPTY = '—'
 
+// module 級單例：財務大表每 render 會呼叫數百次，避免每次重建 Intl 物件。
+// 等價於 Number(val).toLocaleString('zh-Hant')（相同 locale、無 options → 預設值）。
+const _twd = new Intl.NumberFormat('zh-Hant')
+
 export function formatCurrency(val: unknown): string {
   if (val == null || val === '' || Number.isNaN(Number(val))) return EMPTY
-  return 'NT$' + Number(val).toLocaleString('zh-Hant')
+  return 'NT$' + _twd.format(Number(val))
 }

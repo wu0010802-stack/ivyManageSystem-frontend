@@ -19,6 +19,25 @@ const TAIPEI_TZ = 'Asia/Taipei'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
+// module 級單例：options 皆為靜態，每次呼叫重建 Intl.DateTimeFormat 成本高，
+// 大量渲染（才藝報名/日曆等）時重用同一實例，輸出完全一致。
+const _taipeiMinuteFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TAIPEI_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+const _taipeiDateFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: TAIPEI_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
 // 委派至全站單一金額 helper（NT$1,234 / —），保留 money 名稱供既有 22 處 call site。
 export const money = (val: unknown) => formatCurrency(val)
 
@@ -100,15 +119,7 @@ export const parseTaipeiDateTime = (value: unknown): Date | null => {
 export const formatTaipeiDateTimeMinute = (value: unknown): string => {
   const date = value instanceof Date ? value : parseTaipeiDateTime(value)
   if (!date || Number.isNaN(date.getTime())) return '—'
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TAIPEI_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(date)
+  const parts = _taipeiMinuteFmt.formatToParts(date)
   const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? ''
   return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')} ${valueOf('hour')}:${valueOf('minute')}`
@@ -126,12 +137,7 @@ export const todayISO = () => dateToLocalISO(new Date())
 // 後端才藝公開 API 以 Asia/Taipei 判定生日的「今天」。瀏覽器可能位於其他時區，
 // 因此不可沿用 todayISO()，否則台北跨日後前端會把後端合法的今日生日誤判為未來。
 export const todayTaipeiISO = (now: Date = new Date()) => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: TAIPEI_TZ,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now)
+  const parts = _taipeiDateFmt.formatToParts(now)
   const valueOf = (type: 'year' | 'month' | 'day') =>
     parts.find((part) => part.type === type)?.value ?? ''
   return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`
