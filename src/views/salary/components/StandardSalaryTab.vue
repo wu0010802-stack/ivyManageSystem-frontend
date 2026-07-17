@@ -298,9 +298,8 @@ onMounted(() => {
   padding-left: 10px;
 }
 .box-card {
-  background-color: #2b303b;
-  border: 1px solid #4c4d4f;
-  color: #fff;
+  background-color: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
 }
 .label {
   margin-bottom: 5px;

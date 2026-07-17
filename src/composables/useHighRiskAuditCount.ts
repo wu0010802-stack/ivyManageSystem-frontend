@@ -16,8 +16,7 @@ export function useHighRiskAuditCount() {
     loading.value = true;
     try {
       const res = await getHighRiskAudits({ days: 7, limit: 1 });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      unackCount.value = (res as any).data?.unack_count ?? 0;
+      unackCount.value = res.data?.unack_count ?? 0;
     } catch (e) {
       // 靜默失敗：紅點消失優於假數字
       unackCount.value = 0;
