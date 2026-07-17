@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getEmployees } from '@/api/employees'
 import { getOffboardingCertificate, patchNhiUnenroll } from '@/api/offboarding'
 import { useOffboardingStore } from '@/stores/offboarding'
 import type { OffboardingDetail } from '@/stores/offboarding'
+import { formatDateTimeTW } from '@/utils/format'
 import MagicLinkPanel from '@/components/offboarding/MagicLinkPanel.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import type { ApiResponse } from '@/api/_generated/typed'
@@ -171,6 +172,39 @@ async function handleNhiUnenrollToggle(value: string | number | boolean): Promis
     }
 }
 
+// ── 檢核結案（手動結案鈕）─────────────────────────────────
+
+/** 結案前置條件缺項（中文說明，供 disabled 按鈕旁列出） */
+const closeMissingItems = computed<string[]>(() => {
+    const detail = selectedRow.value?.detail
+    if (!detail) return []
+    const missing: string[] = []
+    if (!detail.nhi_unenroll_submitted_at) missing.push('健保退保申報')
+    if (!detail.certificate_pdf_path) missing.push('產生離職證明')
+    return missing
+})
+
+async function handleCloseChecklist(): Promise<void> {
+    if (!selectedRow.value) return
+    const id = selectedRow.value.employee.id
+    try {
+        await ElMessageBox.confirm(
+            '結案代表此員工的離職作業已全部完成；結案後健保退保申報狀態將鎖定，無法再修改。確定結案？',
+            '結案確認',
+            { type: 'warning', confirmButtonText: '確定結案', cancelButtonText: '取消' },
+        )
+    } catch {
+        return
+    }
+    try {
+        await store.close(id)
+        await syncRow(id)
+        ElMessage.success('已結案')
+    } catch {
+        ElMessage.error('結案失敗，請稍後再試')
+    }
+}
+
 // ── 開始離職檢核 Modal ────────────────────────────────────
 
 function openOffboardModal(row: ResignedEmployee): void {
@@ -320,6 +354,27 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
                         </el-button>
                         <span v-else class="text-muted">未產生</span>
                     </div>
+
+                    <!-- 檢核結案 -->
+                    <div class="drawer-section">
+                        <h4 class="drawer-section-title">檢核結案</h4>
+                        <p v-if="selectedRow.detail.closed_at" class="closed-at-info">
+                            已於 {{ formatDateTimeTW(selectedRow.detail.closed_at) }} 結案
+                        </p>
+                        <template v-else>
+                            <el-button
+                                class="close-offboarding-btn"
+                                type="primary"
+                                :disabled="closeMissingItems.length > 0"
+                                @click="handleCloseChecklist"
+                            >
+                                結案
+                            </el-button>
+                            <p v-if="closeMissingItems.length > 0" class="close-prereq-hint">
+                                結案前需完成：{{ closeMissingItems.join('、') }}
+                            </p>
+                        </template>
+                    </div>
                 </template>
             </template>
         </el-drawer>
@@ -381,5 +436,17 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
     font-weight: 600;
     margin: 0 0 12px;
     color: var(--text-primary, #303133);
+}
+
+.closed-at-info {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary, #606266);
+}
+
+.close-prereq-hint {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: var(--text-tertiary, #909399);
 }
 </style>

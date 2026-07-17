@@ -25,6 +25,9 @@ export const patchNhiUnenroll = (
 ): AxiosResp<'/offboarding/{employee_id}/nhi-unenroll', 'patch'> =>
     api.patch(`/offboarding/${id}/nhi-unenroll`, data)
 
+export const closeOffboarding = (id: number): AxiosResp<'/offboarding/{employee_id}/close', 'post'> =>
+    api.post(`/offboarding/${id}/close`)
+
 export const postMagicLink = (id: number): AxiosResp<'/offboarding/{employee_id}/magic-link', 'post'> =>
     api.post(`/offboarding/${id}/magic-link`)
 

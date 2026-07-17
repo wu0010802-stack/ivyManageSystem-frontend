@@ -16,16 +16,18 @@ vi.mock('@/api/offboarding', () => ({
     patchNhiUnenroll: vi.fn(),
     postMagicLink: vi.fn(),
     deleteMagicLink: vi.fn(),
+    closeOffboarding: vi.fn(),
 }))
 
 import { getEmployees } from '@/api/employees'
-import { getOffboardingDetail, patchNhiUnenroll } from '@/api/offboarding'
+import { getOffboardingDetail, patchNhiUnenroll, closeOffboarding } from '@/api/offboarding'
 import OffboardingView from '../OffboardingView.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 
 const mockGetEmployees = getEmployees as unknown as ReturnType<typeof vi.fn>
 const mockGetDetail = getOffboardingDetail as unknown as ReturnType<typeof vi.fn>
 const mockPatchNhi = patchNhiUnenroll as unknown as ReturnType<typeof vi.fn>
+const mockClose = closeOffboarding as unknown as ReturnType<typeof vi.fn>
 
 /** OffboardingDetailResponse 節錄 fixture（欄位齊全，照 schema.d.ts） */
 function detailFixture(overrides: Record<string, unknown> = {}) {
@@ -175,5 +177,103 @@ describe('OffboardingView 離職清單三態操作', () => {
         expect(nhiSwitch.props('disabled')).toBe(true)
 
         expect(w.find('.drawer-download-cert-btn').exists()).toBe(true)
+    })
+})
+
+describe('OffboardingView 檢核結案（手動結案鈕）', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        setActivePinia(createPinia())
+    })
+
+    async function openDrawer(w: ReturnType<typeof mountView>) {
+        await w.find('.offboard-action-btn').trigger('click')
+        await flushPromises()
+    }
+
+    it('前置條件齊備（退保已申報＋證明已產生）→ 結案按鈕可按，確認後呼叫 closeOffboarding 並刷新該列', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 2, name: '未結案員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({
+                employee_id: 2,
+                closed_at: null,
+                nhi_unenroll_submitted_at: '2026-07-01T10:00:00',
+                certificate_pdf_path: '/tmp/cert-2.pdf',
+            }),
+        })
+        mockClose.mockResolvedValue({
+            data: { employee_id: 2, closed_at: '2026-07-17T12:00:00', closed_by_user_id: 1 },
+        })
+        const { ElMessageBox } = await import('element-plus')
+        const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
+
+        const w = mountView()
+        await flushPromises()
+        await openDrawer(w)
+
+        const closeBtn = w.find('.close-offboarding-btn')
+        expect(closeBtn.exists()).toBe(true)
+        expect(closeBtn.attributes('disabled')).toBeUndefined()
+
+        await closeBtn.trigger('click')
+        await flushPromises()
+
+        expect(confirmSpy).toHaveBeenCalled()
+        expect(mockClose).toHaveBeenCalledWith(2)
+        // 初次載入 + 結案後 refreshDetail 各一次
+        expect(mockGetDetail).toHaveBeenCalledTimes(2)
+        confirmSpy.mockRestore()
+    })
+
+    it('前置條件未滿足 → 結案按鈕 disabled，並列出缺項說明', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 2, name: '未結案員工', resign_date: '2026-06-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({
+                employee_id: 2,
+                closed_at: null,
+                nhi_unenroll_submitted_at: null,
+                certificate_pdf_path: null,
+            }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+        await openDrawer(w)
+
+        const closeBtn = w.find('.close-offboarding-btn')
+        expect(closeBtn.exists()).toBe(true)
+        expect(closeBtn.attributes('disabled')).toBeDefined()
+
+        const hint = w.find('.close-prereq-hint')
+        expect(hint.exists()).toBe(true)
+        expect(hint.text()).toContain('健保退保')
+        expect(hint.text()).toContain('離職證明')
+    })
+
+    it('已結案 → 不顯示結案按鈕，顯示結案時間', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 3, name: '已結案員工', resign_date: '2026-05-01' }],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({
+                employee_id: 3,
+                closed_at: '2026-07-05T09:30:00',
+                nhi_unenroll_submitted_at: '2026-07-01T10:00:00',
+                certificate_pdf_path: '/tmp/cert-3.pdf',
+            }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+        await openDrawer(w)
+
+        expect(w.find('.close-offboarding-btn').exists()).toBe(false)
+        const closedInfo = w.find('.closed-at-info')
+        expect(closedInfo.exists()).toBe(true)
+        expect(closedInfo.text()).toContain('2026')
     })
 })
