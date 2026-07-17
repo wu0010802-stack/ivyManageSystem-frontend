@@ -495,6 +495,7 @@ onMounted(async () => {
       v-model="offboardVisible"
       :employee-id="offboardTarget.id"
       :employee-name="offboardTarget.name || ''"
+      :initial-resign-date="offboardTarget.resign_date ?? null"
       @success="() => fetchEmployees()"
     />
   </div>

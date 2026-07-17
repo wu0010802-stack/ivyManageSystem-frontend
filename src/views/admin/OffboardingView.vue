@@ -419,6 +419,7 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
             v-model="offboardModalVisible"
             :employee-id="offboardModalRow.employee.id"
             :employee-name="offboardModalRow.employee.name ?? `未填姓名（編號 ${offboardModalRow.employee.id}）`"
+            :initial-resign-date="offboardModalRow.employee.resign_date ?? null"
             @success="onOffboardSuccess"
         />
     </div>
