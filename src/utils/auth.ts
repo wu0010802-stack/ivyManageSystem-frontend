@@ -315,15 +315,16 @@ function _permsHold(rawPerms: unknown, permissionName: string): boolean {
  * - scope-qualified code → 對應 scope（僅接受已知 scope，未知視為無效）
  * - 同時持有多個 scope 時回傳最寬者（all > own_class）
  * - 未持有任何有效 scope → null（fail-closed）
- * teacher 角色回傳 null（與 hasPermission 邏輯一致）。
+ * portal-only 帳號（teacher 字面 + flags.portal_only）回傳 null（與 hasPermission 短路一致）。
  * @param code - 權限基礎代碼 (如 'STUDENTS_READ')
  */
 export function getPermissionScope(code: string): 'all' | 'own_class' | null {
   const userInfo = getUserInfo()
   if (!userInfo) return null
 
-  // teacher 角色只能存取 Portal
-  if (userInfo['role'] === 'teacher') return null
+  // portal-only 角色只能存取 Portal，與 hasPermission 同一短路（含 flags.portal_only 的
+  // 自訂角色，非僅字面 'teacher'）——否則 portal_only 帳號會取得非 null scope 被誤判有權。
+  if (userInfo['role'] === 'teacher' || _hasPortalOnlyFlag(userInfo)) return null
 
   const perms = userInfo['permission_names'] as string[] | null | undefined
   if (perms == null) return null

@@ -53,6 +53,19 @@ describe('getPermissionScope', () => {
     })
     expect(getPermissionScope('STUDENTS_READ')).toBeNull()
   })
+
+  it('returns null for portal_only-flagged account (與 hasPermission 短路對齊)', () => {
+    // 帳號 role 字面非 'teacher'，但 flags 含 portal_only（自訂 portal_only 角色）。
+    // hasPermission 正確回 false；getPermissionScope 亦應回 null，勿分歧（否則以其驅動
+    // row-level scope 的消費者會把 portal_only 帳號誤判為有權）。
+    setUserInfo({
+      role: 'custom_portal',
+      flags: ['portal_only'],
+      permission_names: ['STUDENTS_READ:own_class'],
+    })
+    expect(hasPermission('STUDENTS_READ')).toBe(false)
+    expect(getPermissionScope('STUDENTS_READ')).toBeNull()
+  })
 })
 
 describe('hasPermission with scoped codes', () => {
