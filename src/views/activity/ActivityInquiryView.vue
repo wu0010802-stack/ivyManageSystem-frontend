@@ -6,7 +6,7 @@
         <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" style="margin-left: 8px" />
       </h2>
       <div class="filters">
-        <el-select v-model="readFilter" placeholder="讀取狀態" clearable style="width: 130px" @change="fetchList">
+        <el-select v-model="readFilter" placeholder="讀取狀態" clearable style="width: 130px" @change="onFilterChange">
           <el-option label="未讀" :value="false" />
           <el-option label="已讀" :value="true" />
         </el-select>
@@ -134,7 +134,11 @@ async function handleReply() {
   }
 }
 
+// request-sequence guard：快速切換篩選/分頁時，較慢的舊回應可能在新回應之後才到並
+// 覆寫新結果。以遞增序號認領，只有最新一次查詢的回應能寫入 list/total。
+let fetchSeq = 0
 async function fetchList() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const params: Record<string, unknown> = {
@@ -145,15 +149,24 @@ async function fetchList() {
       params.is_read = readFilter.value
     }
     const res = await getInquiries(params)
+    if (seq !== fetchSeq) return // 已有更新的查詢發出，丟棄這次較舊回應
     const data = res.data as { items: Inquiry[]; total: number; unread_count?: number }
     list.value = data.items
     total.value = data.total
     serverUnreadCount.value = typeof data.unread_count === 'number' ? data.unread_count : null
   } catch {
+    if (seq !== fetchSeq) return // 舊查詢的錯誤不干擾較新查詢
     ElMessage.error('載入失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
+}
+
+// 切換讀取狀態篩選：先把頁碼重置回第 1 頁再查，否則原本停在第 3 頁、新篩選結果不足
+// 3 頁時會落在越界空白頁。分頁本身的 @change 不走此函式（page 已由 v-model 更新）。
+function onFilterChange() {
+  page.value = 1
+  fetchList()
 }
 
 async function handleMarkRead(row: Inquiry) {
