@@ -296,13 +296,14 @@ const closeButtonRef = ref<HTMLButtonElement | null>(null)
 // 直接委派 src/utils/auth.ts 的 hasPermission()（含 teacher 短路 / null-lockdown /
 // wildcard / bare 命中 / scope-qualified 後綴四段判斷），避免側欄自己重寫第二份權限實作
 // 而漏掉 scope-aware 分支（曾發生：持 'STUDENTS_READ:own_class' 者路由可達但選單被隱藏）。
-const canView = computed(() => {
-  route.path
-
-  return Object.fromEntries(
+const canView = computed(() =>
+  // hasPermission() 讀 auth.ts 的 _userInfoRef（shallowRef），login / 權限變更
+  // （setUserInfo 整物件替換）會自動觸發本 computed 重算，無需靠 route.path 強制重算。
+  // 不依賴 route.path，避免每次路由導航都重跑 ~74 個權限檢查並讓下游 hasVisibleX 全失效。
+  Object.fromEntries(
     Object.keys(PERMISSION_NAMES).map((name) => [name, hasPermission(name)])
   )
-})
+)
 
 const activeMenu = computed(() => {
   // 薪資 IA 拆 5 路由後子頁（settle/history/simulate/settings）仍高亮「薪資管理」

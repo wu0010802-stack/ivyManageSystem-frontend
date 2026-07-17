@@ -86,9 +86,8 @@ defineProps<{
   gap: var(--space-5);
 }
 .box-card {
-  background-color: #2b303b;
-  border: 1px solid #4c4d4f;
-  color: #fff;
+  background-color: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
 }
 .card-header {
   font-weight: bold;

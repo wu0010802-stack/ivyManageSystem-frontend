@@ -7,7 +7,7 @@
  *  - 課程清單 v-for(含名額狀態、衝堂 advisory chip、影片預覽 btn)
  *  - 影片 chip hover 600ms 後浮現 muted autoplay preview (YouTube-style)
  */
-import { reactive, onUnmounted } from 'vue'
+import { reactive, computed, onUnmounted } from 'vue'
 
 interface CourseItem {
   name: string
@@ -40,11 +40,24 @@ defineEmits<{
   (e: 'open-video', title: string, url: string): void
 }>()
 
+// C4：每列的 availabilityState 以 name 為鍵記憶一次，避免模板在同一 render
+// 對每門課呼叫 availabilityState ~6 次（各 new 物件）→ 任何 reactive 變動
+// （如 hover 預覽）觸發 re-render 就整列重算 O(6N)。key 用 course.name 與
+// v-for :key="course.name" 一致（name 為課程唯一鍵）。computed 追蹤
+// availabilityState 內部的 availability ref 與 courses，依賴變動即重算。
+const courseStates = computed(() => {
+  const map = new Map<string, AvailabilityResult>()
+  for (const course of props.courses) {
+    map.set(course.name, props.availabilityState(course))
+  }
+  return map
+})
+
 // 額滿鎖定只擋「新加」：已勾選的課保留可取消，否則 30s 輪詢後名額翻轉
 // （-1）時該課卡死在表單、送出必 400（audit C-3，2026-07-02；與
 // usePublicRegistrationForm.toggleCourse 守衛及查詢頁 courseLocked 對齊）
 function courseLocked(course: CourseItem): boolean {
-  return props.availabilityState(course).full && !props.selectedCourses.includes(course.name)
+  return !!courseStates.value.get(course.name)?.full && !props.selectedCourses.includes(course.name)
 }
 
 const PREVIEW_W = 320
@@ -157,11 +170,11 @@ onUnmounted(cancelPreview)
               <span class="course-row-main">
                 <span class="course-name">{{ course.name }}</span>
                 <span
-                  v-if="availabilityState(course).text"
+                  v-if="courseStates.get(course.name)?.text"
                   class="qty-display"
-                  :class="availabilityState(course).cssClass"
+                  :class="courseStates.get(course.name)?.cssClass"
                 >
-                  {{ availabilityState(course).text }}
+                  {{ courseStates.get(course.name)?.text }}
                 </span>
               </span>
               <span class="course-row-meta">
