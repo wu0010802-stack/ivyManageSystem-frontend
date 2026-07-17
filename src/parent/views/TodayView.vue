@@ -66,23 +66,38 @@ const selectedChild = computed(() => {
 })
 
 const contactBookEntry = ref<ContactBookEntry | null>(null)
-const contactBookLoading = ref(false)
+// request-sequence guard：切子女時，較舊 sid 的慢回應不得覆寫最新選中子女的
+// 聯絡簿。原本的 `if (contactBookLoading.value) return` 方向錯誤——A 的請求還在
+// 飛行中時切到 B，B 會被 loading-guard 丟棄且不重試，畫面卡在前一個孩子；A 慢
+// 回來又把 A 蓋上。改以 seq 比對只套用「最新」請求的回應（見
+// composables/useLatestSearch.ts、useAbortableFetch.ts 樣板），並以 in-flight sid
+// 去重，保留 mount 時 onMounted 直呼 + ensureSelected 觸發 watch 會以「同 sid」
+// 呼叫兩次卻只發一次請求的行為。
+let contactBookSeq = 0
+let contactBookInflightSid: number | null = null
 
-async function loadContactBook(_force = false) {
+async function loadContactBook(force = false) {
   const sid = selectedChild.value?.student_id
   if (!sid) {
+    contactBookSeq++ // 使任何 in-flight 回應失效
+    contactBookInflightSid = null
     contactBookEntry.value = null
     return
   }
-  if (contactBookLoading.value) return
-  contactBookLoading.value = true
+  // 同一 sid 已在請求中 → 去重（mount 雙呼）；切到「不同」子女時不去重，
+  // force（下拉刷新）一律重抓。
+  if (!force && contactBookInflightSid === sid) return
+  const mySeq = ++contactBookSeq
+  contactBookInflightSid = sid
   try {
     const res = await getTodayContactBook(sid)
+    if (mySeq !== contactBookSeq) return // 已有更新請求，丟棄此舊回應
     contactBookEntry.value = res.data?.entry || null
   } catch {
+    if (mySeq !== contactBookSeq) return // 較舊請求的錯誤靜默忽略
     contactBookEntry.value = null
   } finally {
-    contactBookLoading.value = false
+    if (mySeq === contactBookSeq) contactBookInflightSid = null
   }
 }
 

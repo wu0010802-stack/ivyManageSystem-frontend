@@ -135,17 +135,23 @@ async function fetchSummary() {
 }
 
 async function fetchRecords() {
-  if (!selectedId.value) return
+  // race guard：切子女時捕捉當下 id，晚到的舊子女回應（selectedId 已變）一律丟棄，
+  // 避免慢回應覆蓋新子女費用。樣板同 PortalActivityView 的 attendanceRequestSeq。
+  const reqId = selectedId.value
+  if (!reqId) return
   loading.value = true
   try {
-    const { data } = await listFeeRecords(selectedId.value)
+    const { data } = await listFeeRecords(reqId)
+    if (selectedId.value !== reqId) return
     records.value = (data as { items?: FeeRecord[] })?.items || []
   } catch (err) {
+    if (selectedId.value !== reqId) return
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
     throw err
   } finally {
-    loading.value = false
+    // 僅當仍是最新請求才關閉 loading，避免 stale 回應誤關新請求的 spinner
+    if (selectedId.value === reqId) loading.value = false
   }
 }
 

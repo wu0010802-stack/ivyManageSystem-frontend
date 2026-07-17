@@ -42,7 +42,14 @@ const yearLevel = useCachedAsync(
 const monthData = ref<unknown>(null)
 const monthLoading = ref(false)
 
+// request-sequence guard（樣板同 useLatestSearch / PortalActivityView.attendanceRequestSeq）：
+// 單月分支直接 await axios，快速切月時晚到的舊回應會覆蓋成錯月。每次 loadData 遞增
+// epoch；在頂端遞增可同時使「切回整年」時仍在途的舊單月請求失效（整年分支本身仍走
+// useCachedAsync 不動，只是不再被過時單月回應污染共用的 monthData / errorMsg）。
+let loadEpoch = 0
+
 async function loadData() {
+  const my = ++loadEpoch
   errorMsg.value = ''
   if (selectedMonth.value == null) {
     // 注意：useCachedAsync.refresh() 內部把 fetcher 的 reject 吞掉（只更新
@@ -61,12 +68,14 @@ async function loadData() {
     monthData.value = null
     try {
       const res = await getFinanceSummary(props.year, selectedMonth.value)
+      if (my !== loadEpoch) return // 已有更新的載入，丟棄此過時回應
       monthData.value = res.data
     } catch (e) {
+      if (my !== loadEpoch) return // 過時請求的錯誤，靜默忽略（勿覆蓋共用 errorMsg）
       errorMsg.value = apiError(e, '載入收支資料失敗')
       ElMessage.error(errorMsg.value)
     } finally {
-      monthLoading.value = false
+      if (my === loadEpoch) monthLoading.value = false // 過時請求勿誤關最新載入的 spinner
     }
   }
 }

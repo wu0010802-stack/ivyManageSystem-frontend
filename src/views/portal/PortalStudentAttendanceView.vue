@@ -125,14 +125,19 @@ const fetchClassrooms = async () => {
   }
 }
 
+// request-sequence guard：快速切班/切日時，較舊的慢回應不得覆寫最新名冊
+let dailyRequestSeq = 0
+
 const fetchDailyAttendance = async () => {
   if (!classroomId.value || !dailyDate.value) return
+  const seq = ++dailyRequestSeq
   dailyLoading.value = true
   try {
     const res = await getMyClassAttendance({
       date: dailyDate.value,
       classroom_id: classroomId.value,
     })
+    if (seq !== dailyRequestSeq) return
     // 後端缺 response_model，res.data 為 unknown，narrow 取 records。
     const records = (res.data as { records?: AttendanceRecord[] }).records ?? []
     dailyRecords.value = records.map((record) => ({
@@ -141,9 +146,10 @@ const fetchDailyAttendance = async () => {
       remark: record.remark || '',
     }))
   } catch (error) {
+    if (seq !== dailyRequestSeq) return
     ElMessage.error(apiError(error, '載入點名資料失敗'))
   } finally {
-    dailyLoading.value = false
+    if (seq === dailyRequestSeq) dailyLoading.value = false
   }
 }
 
@@ -206,9 +212,13 @@ const saveDailyAttendance = async () => {
   }
 }
 
+// request-sequence guard：快速切班/切月時，較舊的慢回應不得覆寫最新月度統計
+let monthlyRequestSeq = 0
+
 const fetchMonthly = async () => {
   if (!classroomId.value || !monthPicker.value) return
   const [year, month] = monthPicker.value.split('-')
+  const seq = ++monthlyRequestSeq
   monthlyLoading.value = true
   try {
     const res = await getMyClassAttendanceMonthly({
@@ -216,12 +226,14 @@ const fetchMonthly = async () => {
       year: Number(year),
       month: Number(month),
     })
+    if (seq !== monthlyRequestSeq) return
     // 後端缺 response_model，res.data 為 unknown，narrow 成月度物件。
     monthlyData.value = res.data as Record<string, unknown> | null
   } catch (error) {
+    if (seq !== monthlyRequestSeq) return
     ElMessage.error(apiError(error, '載入月統計失敗'))
   } finally {
-    monthlyLoading.value = false
+    if (seq === monthlyRequestSeq) monthlyLoading.value = false
   }
 }
 

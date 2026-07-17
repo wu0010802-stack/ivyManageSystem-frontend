@@ -30,19 +30,27 @@ export function usePortalStudent() {
 
   const _key = (target: string, guardianId: unknown) => `${target}:${guardianId ?? ''}`
 
+  // request-sequence guard：快速切換學生時，較舊（慢）的詳情回應可能晚於較新（快）的
+  // 到達，若無守衛會用過期學生的資料覆寫畫面。每次載入 ++loadSeq，await 後只有仍是最新
+  // 世代的回應才寫入 detail/error/loading。
+  let loadSeq = 0
+
   async function loadDetail(studentId: unknown) {
     if (!studentId) return
+    const my = ++loadSeq
     loading.value = true
     error.value = null
     try {
       const res = await getPortalStudentDetail(studentId as number)
+      if (my !== loadSeq) return // 過期回應：已有更新的載入，丟棄不覆寫
       detail.value = res.data
     } catch (e) {
+      if (my !== loadSeq) return // 過期錯誤：不覆寫較新載入的狀態
       error.value = e
       detail.value = null
       throw e
     } finally {
-      loading.value = false
+      if (my === loadSeq) loading.value = false
     }
   }
 
