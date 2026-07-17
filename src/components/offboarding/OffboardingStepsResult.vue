@@ -15,6 +15,8 @@ const STEP_LABELS: Record<string, string> = {
 
 const props = defineProps<{
     steps: StepResultModel[]
+    /** 重試進行中（父層 process 呼叫中），重試鈕顯示 loading 防連點 */
+    retrying?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -59,7 +61,7 @@ function stepLabel(step: string): string {
         </ul>
 
         <div v-if="hasFailure" class="retry-section">
-            <el-button type="danger" class="retry-button" @click="emit('retry')">
+            <el-button type="danger" class="retry-button" :loading="retrying" @click="emit('retry')">
                 重試失敗步驟
             </el-button>
         </div>

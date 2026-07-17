@@ -85,8 +85,10 @@ async function handleProcess() {
     }
 }
 
-function retry() {
-    stage.value = 'preview'
+/** 重試失敗步驟：直接重呼 process（後端 steps 具冪等/skipped 語意，已完成步驟自動跳過），
+ *  停留在結果頁原地更新，不跳回預覽（跳回會讓失敗資訊消失、逼使用者記住哪步失敗）。 */
+async function retry() {
+    await handleProcess()
 }
 
 function handleClose() {
@@ -142,6 +144,7 @@ const stageTitles: Record<Stage, string> = {
             <OffboardingStepsResult
                 v-if="processResult"
                 :steps="processResult.steps"
+                :retrying="loading"
                 @retry="retry"
             />
         </div>
