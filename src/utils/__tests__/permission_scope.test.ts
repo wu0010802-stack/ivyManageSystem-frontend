@@ -95,4 +95,17 @@ describe('hasPermission with scoped codes', () => {
     setUserInfo({ role: 'admin', permission_names: ['DASHBOARD'] })
     expect(hasPermission('STUDENTS_READ')).toBe(false)
   })
+
+  it('parent role without portal_only flag is still fail-safed (勿因缺 flag 提權)', () => {
+    // 字面 fail-safe 須涵蓋 PORTAL_ONLY_ROLES 全部（teacher + parent），與 flags 缺失
+    // （舊 localStorage / DB 未 seed）情境對齊，勿只短路 'teacher' 而讓 parent 落回
+    // permission_names 比對提權。
+    setUserInfo({ role: 'parent', permission_names: ['STUDENTS_READ'] })
+    expect(hasPermission('STUDENTS_READ')).toBe(false)
+  })
+
+  it('teacher role literal fail-safe still holds', () => {
+    setUserInfo({ role: 'teacher', permission_names: ['STUDENTS_READ'] })
+    expect(hasPermission('STUDENTS_READ')).toBe(false)
+  })
 })
