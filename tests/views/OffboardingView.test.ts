@@ -1,7 +1,9 @@
 /**
  * tests/views/OffboardingView.test.ts
  *
- * 驗證：OffboardingView 只列出有 resign_date 的員工
+ * 驗證：OffboardingView 表格資料來自單一 GET /offboarding/ list 端點。
+ * 「只列已設離職日員工」的過濾職責已移至後端（tests/test_offboarding_api_list.py），
+ * 前端不再抓全員工過濾；掛載時也不得打 getEmployees（發起選擇器為懶載）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -12,24 +14,13 @@ import OffboardingView from '@/views/admin/OffboardingView.vue'
 
 const ElTableStub = {
     name: 'ElTable',
-    props: ['data', 'border', 'stripe', 'emptyText'],
+    props: ['data', 'border', 'stripe'],
     template: '<div class="el-table-stub" />',
 }
 
 const ElTableColumnStub = {
     name: 'ElTableColumn',
     template: '<div><slot /></div>',
-}
-
-const ElTagStub = {
-    name: 'ElTag',
-    props: ['type'],
-    template: '<span class="el-tag">{{ $slots.default?.() }}</span>',
-}
-
-const ElButtonStub = {
-    name: 'ElButton',
-    template: '<button><slot /></button>',
 }
 
 const ElDrawerStub = {
@@ -50,6 +41,7 @@ vi.mock('@/api/employees', () => ({
 }))
 
 vi.mock('@/api/offboarding', () => ({
+    getOffboardingList: vi.fn(),
     getOffboardingDetail: vi.fn(),
     previewOffboarding: vi.fn(),
     processOffboarding: vi.fn(),
@@ -57,36 +49,31 @@ vi.mock('@/api/offboarding', () => ({
     patchNhiUnenroll: vi.fn(),
     postMagicLink: vi.fn(),
     deleteMagicLink: vi.fn(),
+    closeOffboarding: vi.fn(),
 }))
 
 import * as employeesApi from '@/api/employees'
 import * as offboardingApi from '@/api/offboarding'
 
-// ── 測試資料 ──────────────────────────────────────────────
+// ── 測試資料（OffboardingListItem 形狀照 schema.d.ts 契約）──
 
-const activeEmployee = { id: 1, name: '在職員工', resign_date: null, is_active: true }
-const resignedEmployee1 = { id: 2, name: '離職員工A', resign_date: '2026-03-01', is_active: false }
-const resignedEmployee2 = { id: 3, name: '離職員工B', resign_date: '2026-04-15', is_active: false }
-
-const mockDetail = {
+const listItemA = {
     employee_id: 2,
     employee_name: '離職員工A',
     resign_date: '2026-03-01',
-    resign_reason: null,
-    opened_at: '2026-02-01T00:00:00',
-    opened_by_user_id: 1,
+    has_record: true,
     closed_at: null,
-    certificate_pdf_path: null,
-    certificate_generated_at: null,
-    magic_link_active: false,
-    magic_link_download_count: 0,
-    magic_link_expires_at: null,
-    magic_link_last_used_at: null,
-    leave_balance_snapshot: null,
-    leave_snapshot_at: null,
     nhi_unenroll_submitted_at: null,
-    appraisal_marked_at: null,
-    user_revoked_at: null,
+    certificate_pdf_path: null,
+    magic_link_active: false,
+}
+
+const listItemB = {
+    ...listItemA,
+    employee_id: 3,
+    employee_name: '離職員工B',
+    resign_date: '2026-04-15',
+    has_record: false,
 }
 
 // ── Mount Helper ──────────────────────────────────────────
@@ -101,8 +88,6 @@ function mountView() {
             stubs: {
                 ElTable: ElTableStub,
                 ElTableColumn: ElTableColumnStub,
-                ElTag: ElTagStub,
-                ElButton: ElButtonStub,
                 ElDrawer: ElDrawerStub,
                 MagicLinkPanel: MagicLinkPanelStub,
                 ElMessage: true,
@@ -119,19 +104,10 @@ describe('OffboardingView', () => {
         vi.clearAllMocks()
     })
 
-    it('只顯示有 resign_date 的員工，不顯示在職員工', async () => {
-        // 回傳 3 筆：1 在職、2 離職
-        vi.mocked(employeesApi.getEmployees).mockResolvedValue({
-            data: [activeEmployee, resignedEmployee1, resignedEmployee2],
+    it('表格資料來自單一 list 請求；掛載不打 getEmployees、不逐列打 detail', async () => {
+        vi.mocked(offboardingApi.getOffboardingList).mockResolvedValue({
+            data: { items: [listItemA, listItemB], total: 2 },
         } as never)
-
-        // fetchDetail 針對離職員工回傳 detail（在職員工不會被呼叫）
-        vi.mocked(offboardingApi.getOffboardingDetail).mockImplementation((id: number) => {
-            if (id === resignedEmployee1.id) {
-                return Promise.resolve({ data: mockDetail }) as never
-            }
-            return Promise.resolve({ data: { ...mockDetail, employee_id: id } }) as never
-        })
 
         const wrapper = mountView()
 
@@ -139,15 +115,14 @@ describe('OffboardingView', () => {
         await new Promise((resolve) => setTimeout(resolve, 0))
         await wrapper.vm.$nextTick()
 
-        // table data 應為 2 筆（只含離職員工），不含在職員工
         const tableStub = wrapper.findComponent(ElTableStub)
-        const tableData = tableStub.props('data') as Array<{ employee: typeof activeEmployee }>
+        const tableData = tableStub.props('data') as Array<{ employee_name: string }>
 
         expect(tableData).toHaveLength(2)
+        expect(tableData.map((r) => r.employee_name)).toEqual(['離職員工A', '離職員工B'])
 
-        const names = tableData.map((r) => r.employee.name)
-        expect(names).toContain('離職員工A')
-        expect(names).toContain('離職員工B')
-        expect(names).not.toContain('在職員工')
+        expect(offboardingApi.getOffboardingList).toHaveBeenCalledTimes(1)
+        expect(employeesApi.getEmployees).not.toHaveBeenCalled()
+        expect(offboardingApi.getOffboardingDetail).not.toHaveBeenCalled()
     })
 })

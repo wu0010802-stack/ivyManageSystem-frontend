@@ -7198,6 +7198,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/offboarding/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Offboarding
+         * @description 離職清單（Phase 3 list，2026-07-17 UX 審查 N+1 修復）。
+         *
+         *     已設離職日員工 left join 離職紀錄，一次回傳離職管理表所需列摘要
+         *     （原前端 2N+1 請求 → 1）；drawer 細節仍走 GET /offboarding/{employee_id}。
+         *     依離職日新到舊排序。gated by EMPLOYEES_READ。
+         */
+        get: operations["list_offboarding_api_offboarding__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/offboarding/{employee_id}": {
         parameters: {
             query?: never;
@@ -22661,6 +22685,38 @@ export interface components {
             resign_reason: string | null;
             /** User Revoked At */
             user_revoked_at: string | null;
+        };
+        /** OffboardingListItem */
+        OffboardingListItem: {
+            /** Certificate Pdf Path */
+            certificate_pdf_path?: string | null;
+            /** Closed At */
+            closed_at?: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Has Record */
+            has_record: boolean;
+            /**
+             * Magic Link Active
+             * @default false
+             */
+            magic_link_active: boolean;
+            /** Nhi Unenroll Submitted At */
+            nhi_unenroll_submitted_at?: string | null;
+            /**
+             * Resign Date
+             * Format: date
+             */
+            resign_date: string;
+        };
+        /** OffboardingListResponse */
+        OffboardingListResponse: {
+            /** Items */
+            items: components["schemas"]["OffboardingListItem"][];
+            /** Total */
+            total: number;
         };
         /** OffboardingPreview */
         OffboardingPreview: {
@@ -44403,6 +44459,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_offboarding_api_offboarding__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffboardingListResponse"];
                 };
             };
         };

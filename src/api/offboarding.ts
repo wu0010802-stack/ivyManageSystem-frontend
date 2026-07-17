@@ -13,6 +13,9 @@ export const processOffboarding = (
 ): AxiosResp<'/offboarding/{employee_id}/process', 'post'> =>
     api.post(`/offboarding/${id}/process`, data)
 
+export const getOffboardingList = (): AxiosResp<'/offboarding/', 'get'> =>
+    api.get('/offboarding/')
+
 export const getOffboardingDetail = (id: number): AxiosResp<'/offboarding/{employee_id}', 'get'> =>
     api.get(`/offboarding/${id}`)
 
