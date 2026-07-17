@@ -83,20 +83,26 @@ async function fetchClassrooms() {
   }
 }
 
+// request-sequence guard：快速切班/切日時，較舊的慢回應不得覆寫最新列表
+let classDayRequestSeq = 0
+
 async function fetchClassDay() {
   if (!selectedClassroomId.value || !selectedDate.value) return
+  const seq = ++classDayRequestSeq
   listLoading.value = true
   try {
     const res = await getClassDay({
       classroom_id: selectedClassroomId.value,
       log_date: selectedDate.value,
     })
+    if (seq !== classDayRequestSeq) return
     items.value = res.data?.items || []
     completion.value = res.data?.completion || { roster: 0, draft: 0, published: 0, missing: 0 }
   } catch (err) {
+    if (seq !== classDayRequestSeq) return
     notify(err, 'PortalContactBook:loadEntries', '載入聯絡簿失敗')
   } finally {
-    listLoading.value = false
+    if (seq === classDayRequestSeq) listLoading.value = false
   }
 }
 

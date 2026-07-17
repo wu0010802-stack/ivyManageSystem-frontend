@@ -97,17 +97,19 @@ const toSemesterEnum = (n: number | string) => (Number(n) === 1 ? 'FIRST' : 'SEC
 const currentCycle = ref<CurrentCycle | null>(null)
 const cycleLoading = ref(false)
 
-async function fetchCurrentCycle() {
+// 回傳當次載入的 cycle（不直接寫 currentCycle.value）——由 reloadAll 在 epoch
+// 守衛通過後才提交，避免晚到的舊學期請求覆寫新學期。
+async function fetchCurrentCycle(): Promise<CurrentCycle | null> {
   cycleLoading.value = true
   try {
     const { data } = await getAppraisalCurrentCycle({
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
-    currentCycle.value = data as CurrentCycle
+    return data as CurrentCycle
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:fetchCycle', '載入當期週期失敗')
-    currentCycle.value = null
+    return null
   } finally {
     cycleLoading.value = false
   }
@@ -118,17 +120,24 @@ const aggregatedStatus = ref<AggregatedStatus | null>(null)
 const statusLoading = ref(false)
 const lastRefreshedAt = ref<string | null>(null)
 
-async function loadStatus() {
-  if (!currentCycle.value) {
+// cycle 以區域變數傳入（預設沿用 currentCycle.value 供其他 caller）；isStale 讓
+// reloadAll 在切學期後判定本次載入已過期，await 後不再提交舊資料。
+async function loadStatus(
+  cycle: CurrentCycle | null = currentCycle.value,
+  isStale: () => boolean = () => false,
+) {
+  if (!cycle) {
     aggregatedStatus.value = null
     return
   }
   statusLoading.value = true
   try {
-    const { data } = await getAppraisalAllEmployeesStatus(currentCycle.value.id)
+    const { data } = await getAppraisalAllEmployeesStatus(cycle.id)
+    if (isStale()) return
     aggregatedStatus.value = data as AggregatedStatus
     lastRefreshedAt.value = (data as AggregatedStatus)?.generated_at ?? null
   } catch (e) {
+    if (isStale()) return
     notify(e, 'CurrentSemesterOverview:fetchStatus', '載入彙整狀態失敗')
   } finally {
     statusLoading.value = false
@@ -146,17 +155,22 @@ function formatTime(iso: string | null | undefined) {
 
 // ── 載入扣分規則（給 detail dialog tooltip 顯示）──────────
 const rulesByCode = ref<Record<string, unknown>>({})
-async function loadRules() {
-  if (!currentCycle.value) {
+async function loadRules(
+  cycle: CurrentCycle | null = currentCycle.value,
+  isStale: () => boolean = () => false,
+) {
+  if (!cycle) {
     rulesByCode.value = {}
     return
   }
   try {
-    const { data } = await listScoringRules(currentCycle.value.base_score_calc_date ?? "")
+    const { data } = await listScoringRules(cycle.base_score_calc_date ?? "")
+    if (isStale()) return
     const list: { item_code?: string; [key: string]: unknown }[] = Array.isArray(data) ? data : ((data as { rules?: unknown[] })?.rules || [])
     rulesByCode.value = Object.fromEntries(list.map((r) => [r.item_code, r]))
   } catch (e) {
     // 失敗不影響主流程，rulesByCode 留空 dict tooltip 自動隱藏
+    if (isStale()) return
     rulesByCode.value = {}
   }
 }
@@ -166,25 +180,43 @@ const refreshing = ref(false)
 // 自動重算失敗不再靜默：改顯示 stale-warning banner（可關閉），提示使用者目前是舊資料
 const refreshFailed = ref(false)
 
-async function refreshIfOpen() {
-  if (!currentCycle.value || currentCycle.value.status !== 'OPEN' || refreshing.value) return
+async function refreshIfOpen(
+  cycle: CurrentCycle | null = currentCycle.value,
+  isStale: () => boolean = () => false,
+) {
+  if (!cycle || cycle.status !== 'OPEN' || refreshing.value) return
   refreshing.value = true
   try {
-    await refreshAppraisalCycle(currentCycle.value.id)
+    await refreshAppraisalCycle(cycle.id)
   } catch (e) {
     // 失敗不擋 loadStatus，總覽仍顯示既有彙整資料，但需顯式告知使用者資料可能是舊的
-    refreshFailed.value = true
+    // （切學期後本次已過期則不再彈 stale banner，避免誤標新學期資料為舊）
+    if (!isStale()) refreshFailed.value = true
   } finally {
     refreshing.value = false
   }
 }
 
+// 防切學期 race：晚到的舊 reloadAll 不得蓋掉新學期資料（epoch 比對）。
+// 各子步驟以區域變數 cycle 鎖定該次呼叫，並在每個 await 後檢查 isStale。
+let reloadEpoch = 0
+
 async function reloadAll() {
+  const epoch = ++reloadEpoch
+  const isStale = () => epoch !== reloadEpoch
   refreshFailed.value = false
-  await fetchCurrentCycle()
-  await refreshIfOpen()
-  await loadStatus()
-  await loadRules()
+
+  const cycle = await fetchCurrentCycle()
+  if (isStale()) return
+  currentCycle.value = cycle
+
+  await refreshIfOpen(cycle, isStale)
+  if (isStale()) return
+
+  await loadStatus(cycle, isStale)
+  if (isStale()) return
+
+  await loadRules(cycle, isStale)
 }
 
 watch(

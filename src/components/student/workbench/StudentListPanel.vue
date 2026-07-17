@@ -135,7 +135,12 @@ const fetchActiveCallIds = async () => {
   }
 }
 
+// request-sequence guard：12 個觸發點（切班級 / 學年 / 學期 / 分頁 / 分頁大小 / 搜尋 /
+// tab / route.query / domainBus 刷新等）可能併發搶答，晚到的舊回應不得覆寫最新 students/totalStudents。
+let fetchSeq = 0
+
 const fetchStudents = async () => {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const skip = (currentPage.value - 1) * pageSize.value
@@ -148,15 +153,17 @@ const fetchStudents = async () => {
       classroom_id: filterClassroomId.value || undefined,
       search: debouncedSearch.value || undefined,
     })
+    if (seq !== fetchSeq) return
     students.value = response.data.items
     totalStudents.value = response.data.total
     if (activeTab.value === 'active') {
       fetchActiveCallIds()
     }
   } catch (error) {
+    if (seq !== fetchSeq) return
     ElMessage.error('載入學生資料失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 

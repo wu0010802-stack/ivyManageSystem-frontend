@@ -164,9 +164,14 @@ const currentEmployeeId = computed<number | null>(() => {
 // ── 監聽 [currentEmployeeId, year, month]：換月先清快取再載入 ──────────────
 // 合併為單一 watch 避免換月時 Watch1（載入）先跑命中舊快取、Watch2（清快取）後跑的競態。
 // 邏輯：若 year 或 month 有變化，先清快取；再針對當前 empId 執行 cache-miss 載入。
+// request-sequence guard（recSeq）：換月/換員工時，舊一次 in-flight 的 getRecords 回應
+// 可能在較新一次之後才 resolve；若無守衛會用舊月資料回填快取覆寫最新月，造成顯示與快取不一致。
+// 每次觸發遞增 recSeq 並在 await 後比對，過期回應直接丟棄。
+let recSeq = 0
 watch(
   [currentEmployeeId, () => query.year, () => query.month] as const,
   async ([empId, y, m], [, oldY, oldM]) => {
+    const seq = ++recSeq
     // 換月或換年 → 清快取（確保不命中舊月資料）
     if (y !== oldY || m !== oldM) {
       recordsCache.value = new Map()
@@ -175,6 +180,8 @@ watch(
     if (recordsCache.value.has(empId)) return
     try {
       const res = await getRecords({ year: y, month: m, employee_id: empId })
+      // 較新一次 watch 觸發已使本次回應過期 → 丟棄，避免舊月 in-flight 回填快取
+      if (seq !== recSeq) return
       const rows = (res.data ?? []) as RecordRow[]
       recordsCache.value = new Map(recordsCache.value).set(empId, rows)
     } catch (err) {

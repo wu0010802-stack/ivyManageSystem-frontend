@@ -119,11 +119,19 @@ const canReject = computed(() => canBatchSign.value)
 async function load() {
   loading.value = true
   try {
-    const cycles = (await listAppraisalCycles()).data as unknown as Cycle[]
+    // 四支彼此無資料依賴（皆只吃 cycleId 或無參）→ 併發載入，首載等待取最慢者
+    // 而非四次 round-trip 相加（比照 yearEnd/YearEndDetailView.vue load()）。
+    const [cyclesRes, participantsRes, summariesRes, catalogRes] = await Promise.all([
+      listAppraisalCycles(),
+      listAppraisalParticipants(cycleId.value),
+      listAppraisalSummaries(cycleId.value),
+      listAppraisalCatalog(),
+    ])
+    const cycles = cyclesRes.data as unknown as Cycle[]
     cycle.value = cycles.find((c) => c.id === cycleId.value) || null
-    participants.value = (await listAppraisalParticipants(cycleId.value)).data as Participant[]
-    summaries.value = (await listAppraisalSummaries(cycleId.value)).data as Summary[]
-    catalog.value = (await listAppraisalCatalog()).data as unknown[]
+    participants.value = participantsRes.data as Participant[]
+    summaries.value = summariesRes.data as Summary[]
+    catalog.value = catalogRes.data as unknown[]
   } catch (e) {
     ElMessage.error(apiError(e, MSG.load_failed))
   } finally {

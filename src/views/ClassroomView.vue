@@ -155,7 +155,10 @@ const loadReservedCounts = async () => {
   }
 }
 
+// 舊請求後回不得覆寫較新請求的結果（切學期時舊回應覆寫新資料）。
+let fetchSeq = 0
 const fetchClassrooms = async () => {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const response = await getClassrooms({
@@ -163,12 +166,16 @@ const fetchClassrooms = async () => {
       school_year: normalizeSchoolYear(filterSchoolYear.value),
       semester: filterSemester.value,
     })
+    if (seq !== fetchSeq) return // 過期回應：已切到別學期，丟棄不覆寫
     classrooms.value = response.data as ClassroomRow[]
   } catch (error) {
+    if (seq !== fetchSeq) return
     ElMessage.error(apiError(error, '載入班級資料失敗'))
   } finally {
-    loading.value = false
-    void loadReservedCounts()
+    if (seq === fetchSeq) {
+      loading.value = false
+      void loadReservedCounts()
+    }
   }
 }
 

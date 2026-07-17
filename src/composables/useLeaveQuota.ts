@@ -19,11 +19,17 @@ export function useLeaveQuota({ form, fetchFn = null }: { form: Record<string, u
     return new Date().getFullYear()
   }
 
+  // request-sequence guard：切員工/假別會快速觸發多個請求（debounce 只能減少而非消除競態），
+  // 較慢的舊請求若晚於較快的新請求回來，會把 quotaInfo 覆蓋成過時額度。只套用「最新一次」回應。
+  let seq = 0
+
   const fetchQuotaInfo = async () => {
     if (!form.employee_id || !QUOTA_TYPES.has(form.leave_type as string)) {
+      seq++ // 使 in-flight 回應失效，避免舊請求稍後回來重新填入
       quotaInfo.value = null
       return
     }
+    const my = ++seq
     quotaLoading.value = true
     try {
       let info = null
@@ -33,11 +39,13 @@ export function useLeaveQuota({ form, fetchFn = null }: { form: Record<string, u
         const res = await getLeaveQuotas({ employee_id: form.employee_id, year: resolveYear(), leave_type: form.leave_type })
         info = (res.data as ({ remaining_hours: number; [key: string]: unknown } | null)[])[0] || null
       }
+      if (my !== seq) return // 已有更新請求，丟棄此 stale 回應（不寫 quotaInfo/quotaLoading）
       quotaInfo.value = info
     } catch {
+      if (my !== seq) return // 較舊請求的錯誤，靜默忽略，不清掉最新結果
       quotaInfo.value = null
     } finally {
-      quotaLoading.value = false
+      if (my === seq) quotaLoading.value = false // 僅最新請求掌控 loading，stale 不干擾
     }
   }
 
