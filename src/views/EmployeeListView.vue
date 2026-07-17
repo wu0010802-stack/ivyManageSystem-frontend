@@ -248,7 +248,7 @@ const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
 const quickResign = (row: Record<string, unknown>) => {
   ElMessageBox.confirm(
     h('div', null, [
-      h('p', null, `確定將「${row.name}」快速標記離職？此操作會：`),
+      h('p', null, `確定僅停用「${row.name}」的帳號（不跑離職流程）？此操作會：`),
       h('ul', { style: 'margin:8px 0 8px 18px; line-height:1.9' }, [
         h('li', null, '立即設定離職（今日）並撤銷登入帳號'),
         h('li', null, '不產生離職證明、不做假別結算快照'),
@@ -256,12 +256,12 @@ const quickResign = (row: Record<string, unknown>) => {
       ]),
       h('p', { style: 'color:var(--el-color-warning)' }, '正式離職請優先走「辦理離職」完整流程；本功能適用於誤建帳號或極簡情境。'),
     ]),
-    '快速標記離職',
-    { type: 'warning', confirmButtonText: '確認標記離職', cancelButtonText: '取消' },
+    '僅停用帳號',
+    { type: 'warning', confirmButtonText: '確認停用', cancelButtonText: '取消' },
   ).then(async () => {
     try {
       await deleteEmployee(row.id as number)
-      ElMessage.success('已標記離職')
+      ElMessage.success('已停用帳號並標記離職')
       fetchEmployees()
     } catch (err) {
       showError(err)
@@ -432,7 +432,7 @@ onMounted(async () => {
                 <el-dropdown-menu>
                   <el-dropdown-item v-if="scope.row.is_active" command="offboard">辦理離職</el-dropdown-item>
                   <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
-                  <el-dropdown-item v-if="scope.row.is_active" command="quick-resign" divided>快速標記離職</el-dropdown-item>
+                  <el-dropdown-item v-if="scope.row.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -479,7 +479,7 @@ onMounted(async () => {
             <el-dropdown-menu>
               <el-dropdown-item v-if="item.is_active" command="offboard">辦理離職</el-dropdown-item>
               <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
-              <el-dropdown-item v-if="item.is_active" command="quick-resign" divided>快速標記離職</el-dropdown-item>
+              <el-dropdown-item v-if="item.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>

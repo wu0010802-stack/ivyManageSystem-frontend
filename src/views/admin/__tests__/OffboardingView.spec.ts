@@ -94,8 +94,8 @@ describe('OffboardingView 離職清單三態操作', () => {
 
         const buttons = w.findAll('.offboard-action-btn')
         expect(buttons).toHaveLength(3)
-        expect(buttons[0].text()).toBe('開始離職檢核')
-        expect(buttons[1].text()).toBe('繼續檢核')
+        expect(buttons[0].text()).toBe('辦理離職')
+        expect(buttons[1].text()).toBe('繼續辦理')
         expect(buttons[2].text()).toBe('查看文件')
     })
 
@@ -338,7 +338,7 @@ describe('OffboardingView detail 載入失敗第四態（load_failed）', () => 
         await flushPromises()
 
         expect(mockGetDetail).toHaveBeenCalledTimes(2)
-        expect(w.find('.offboard-action-btn').text()).toBe('繼續檢核')
+        expect(w.find('.offboard-action-btn').text()).toBe('繼續辦理')
     })
 
     it('點「重試載入」後端回 404 → 該列轉為未建立紀錄', async () => {
@@ -355,7 +355,62 @@ describe('OffboardingView detail 載入失敗第四態（load_failed）', () => 
         await w.find('.offboard-action-btn').trigger('click')
         await flushPromises()
 
-        expect(w.find('.offboard-action-btn').text()).toBe('開始離職檢核')
+        expect(w.find('.offboard-action-btn').text()).toBe('辦理離職')
         expect(w.text()).toContain('未建立紀錄')
+    })
+})
+
+describe('OffboardingView 發起離職動線', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        setActivePinia(createPinia())
+    })
+
+    it('頁頭「辦理離職」主按鈕：選擇在職員工後開啟 OffboardingModal', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [
+                { id: 11, name: '在職甲', is_active: true },
+                { id: 12, name: '在職乙', is_active: true },
+                { id: 3, name: '已離職員工', is_active: false, resign_date: '2026-05-01' },
+            ],
+        })
+        mockGetDetail.mockResolvedValue({
+            data: detailFixture({ employee_id: 3, closed_at: '2026-07-05T00:00:00' }),
+        })
+
+        const w = mountView()
+        await flushPromises()
+
+        const initiateBtn = w.find('.initiate-offboard-btn')
+        expect(initiateBtn.exists()).toBe(true)
+
+        await initiateBtn.trigger('click')
+        await flushPromises()
+
+        const select = w.findComponent({ name: 'ElSelect' })
+        expect(select.exists()).toBe(true)
+        select.vm.$emit('update:modelValue', 11)
+        await flushPromises()
+
+        await w.find('.initiate-confirm-btn').trigger('click')
+        await flushPromises()
+
+        const modal = w.findComponent(OffboardingModal)
+        expect(modal.exists()).toBe(true)
+        expect(modal.props('modelValue')).toBe(true)
+        expect(modal.props('employeeId')).toBe(11)
+        expect(modal.props('employeeName')).toBe('在職甲')
+    })
+
+    it('空清單顯示引導文案（含發起入口指引），不再是死路', async () => {
+        mockGetEmployees.mockResolvedValue({
+            data: [{ id: 11, name: '在職甲', is_active: true }],
+        })
+
+        const w = mountView()
+        await flushPromises()
+
+        expect(w.text()).toContain('目前沒有離職中的員工')
+        expect(w.text()).toContain('辦理離職')
     })
 })

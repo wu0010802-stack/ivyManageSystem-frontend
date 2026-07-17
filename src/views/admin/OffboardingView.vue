@@ -8,6 +8,7 @@ import type { OffboardingDetail } from '@/stores/offboarding'
 import { formatDateTimeTW } from '@/utils/format'
 import MagicLinkPanel from '@/components/offboarding/MagicLinkPanel.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import type { ApiResponse } from '@/api/_generated/typed'
 
 // ── 型別 ────────────────────────────────────────────────
@@ -41,6 +42,9 @@ const store = useOffboardingStore()
 const rows = ref<ResignedEmployee[]>([])
 const loading = ref(false)
 
+// 可發起離職的在職員工（頁頭「辦理離職」選擇器用）
+const activeEmployees = ref<EmployeeRow[]>([])
+
 // Drawer
 const drawerVisible = ref(false)
 const selectedRow = ref<ResignedEmployee | null>(null)
@@ -57,6 +61,7 @@ onMounted(async () => {
         const res = await getEmployees()
         const all = (res.data ?? []) as EmployeeRow[]
         const resigned = all.filter((emp) => !!emp.resign_date)
+        activeEmployees.value = all.filter((emp) => !!emp.is_active && !emp.resign_date)
 
         const results = await Promise.allSettled(
             resigned.map((emp) => store.fetchDetail(emp.id)),
@@ -102,10 +107,11 @@ const checklistTagType: Record<ChecklistStatus, string> = {
 }
 
 // 操作欄按鈕文案：依四態決定（no_record 進 modal 走辦理流程；open/closed 進既有 drawer；
-// load_failed 重抓 detail）
+// load_failed 重抓 detail）。動詞統一「辦理離職／繼續辦理」，與員工管理 tab 的入口同名，
+// 避免同一流程出現「檢核」「辦理」兩套語彙
 const actionButtonLabel: Record<ChecklistStatus, string> = {
-    no_record: '開始離職檢核',
-    open: '繼續檢核',
+    no_record: '辦理離職',
+    open: '繼續辦理',
     closed: '查看文件',
     load_failed: '重試載入',
 }
@@ -237,7 +243,7 @@ async function handleCloseChecklist(): Promise<void> {
     }
 }
 
-// ── 開始離職檢核 Modal ────────────────────────────────────
+// ── 辦理離職 Modal ────────────────────────────────────────
 
 function openOffboardModal(row: ResignedEmployee): void {
     offboardModalRow.value = row
@@ -246,19 +252,52 @@ function openOffboardModal(row: ResignedEmployee): void {
 
 async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<void> {
     if (!offboardModalRow.value) return
+    const id = offboardModalRow.value.employee.id
     try {
-        await syncRow(offboardModalRow.value.employee.id)
+        if (rows.value.some((r) => r.employee.id === id)) {
+            await syncRow(id)
+        } else {
+            // 從頁頭發起的在職員工：辦理成功後補進清單、自選擇器移除
+            const detail = await store.refreshDetail(id)
+            rows.value.unshift({
+                employee: { ...offboardModalRow.value.employee, resign_date: detail.resign_date },
+                detail,
+            })
+            activeEmployees.value = activeEmployees.value.filter((e) => e.id !== id)
+        }
     } catch {
         ElMessage.error('更新離職檢核狀態失敗')
     }
+}
+
+// ── 頁頭發起離職（員工選擇器）──────────────────────────────
+
+const initiateVisible = ref(false)
+const initiateEmployeeId = ref<number | null>(null)
+
+function openInitiate(): void {
+    initiateEmployeeId.value = null
+    initiateVisible.value = true
+}
+
+function confirmInitiate(): void {
+    const emp = activeEmployees.value.find((e) => e.id === initiateEmployeeId.value)
+    if (!emp) return
+    initiateVisible.value = false
+    openOffboardModal({ employee: emp, detail: null })
 }
 </script>
 
 <template>
     <div class="offboarding-view">
         <div class="page-header">
-            <h2 class="page-title">離職管理</h2>
-            <p class="page-subtitle">已設定離職日期的員工清單</p>
+            <div class="page-header-left">
+                <h2 class="page-title">離職管理</h2>
+                <p class="page-subtitle">已設定離職日期的員工清單</p>
+            </div>
+            <el-button class="initiate-offboard-btn" type="primary" @click="openInitiate">
+                辦理離職
+            </el-button>
         </div>
 
         <el-table
@@ -266,7 +305,6 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
             :data="rows"
             border
             stripe
-            empty-text="暫無離職員工"
         >
             <!-- 員工名：連結至該員工詳情頁，與員工管理 tab 的姓名連結一致（#7） -->
             <el-table-column label="員工名" min-width="120">
@@ -333,7 +371,46 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
                     </el-button>
                 </template>
             </el-table-column>
+            <template #empty>
+                <EmptyState
+                    title="目前沒有離職中的員工"
+                    description="點擊右上角「辦理離職」，選擇在職員工即可開始離職流程"
+                >
+                    <template #action>
+                        <el-button size="small" type="primary" @click="openInitiate">辦理離職</el-button>
+                    </template>
+                </EmptyState>
+            </template>
         </el-table>
+
+        <!-- 發起離職：在職員工選擇器 -->
+        <el-dialog v-model="initiateVisible" title="辦理離職" width="420px">
+            <p class="initiate-desc">選擇要辦理離職的在職員工</p>
+            <el-select
+                v-model="initiateEmployeeId"
+                filterable
+                placeholder="搜尋姓名"
+                style="width: 100%"
+            >
+                <el-option
+                    v-for="e in activeEmployees"
+                    :key="e.id"
+                    :label="e.name ?? `未填姓名（編號 ${e.id}）`"
+                    :value="e.id"
+                />
+            </el-select>
+            <template #footer>
+                <el-button @click="initiateVisible = false">取消</el-button>
+                <el-button
+                    class="initiate-confirm-btn"
+                    type="primary"
+                    :disabled="initiateEmployeeId == null"
+                    @click="confirmInitiate"
+                >
+                    下一步
+                </el-button>
+            </template>
+        </el-dialog>
 
         <!-- 管理 Drawer -->
         <el-drawer
@@ -442,6 +519,16 @@ async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<voi
 
 .page-header {
     margin-bottom: 20px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.initiate-desc {
+    margin: 0 0 12px;
+    font-size: 14px;
+    color: var(--text-secondary, #606266);
 }
 
 .page-title {
