@@ -37,21 +37,24 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
+let fetchSeq = 0
 
 async function fetchList() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await getChanges({
       skip: (page.value - 1) * pageSize.value,
       limit: pageSize.value,
     })
+    if (seq !== fetchSeq) return
     const data = res.data as { items: Record<string, unknown>[]; total: number }
     list.value = data.items
     total.value = data.total
   } catch {
-    ElMessage.error('載入失敗')
+    if (seq === fetchSeq) ElMessage.error('載入失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 
