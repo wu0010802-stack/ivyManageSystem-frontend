@@ -134,6 +134,12 @@ export function useRegistrationEditSave({
   const feePreview = computed(() => {
     if (!queryResult.value) return null
     const existingCourses = queryResult.value.courses ?? []
+    // 待審核報名（field_state.identity_editable === 後端 pending_review）：後端對此類
+    // 報名所有課程 status 一律 pending_review、total_amount 的課程部分為 0（見後端
+    // _build_public_query_payload）。家長修改期間即使某課有名額，後端也不會計費，除非
+    // 同時改身分資料觸發 re-match 成功（前端無從預測）。故課程一律不計費，避免零改動
+    // 就虛報「需補繳」（P2 code review）。用品與審核狀態無關，照後端仍計費。
+    const isPendingReviewReg = queryResult.value.field_state?.identity_editable === true
     // 既有用品的 snapshot 價 map（物件型保留、舊資料 string 跳過）；編修模式既有品項優先用此價。
     const existingSupplyPrice = buildSupplySnapshotMap(queryResult.value.supplies ?? [])
     // 課程：只算 enrolled；既有課用 snapshot 價（courses[].price），新增課才用目前 option 價。
@@ -143,8 +149,12 @@ export function useRegistrationEditSave({
       // 語意非計費語意，直接以原狀態排除。否則零改動即虛報「需補繳」、wouldOverpay
       // 用虛胖 newTotal 漏擋退費場景吃後端 409（audit C-1，2026-07-02）。
       isEnrolled: (name) => {
+        // 整筆待審核 → 既有與新增課程一律不計費（涵蓋新增課：estimateCourseStatus
+        // 對有名額新課會回 'enrolled'，僅靠 per-course orig 判斷擋不住）。
+        if (isPendingReviewReg) return false
         const orig = existingCourses.find((c) => c.name === name)
-        if (orig?.status === 'promoted_pending') return false
+        // 舊後端未回 field_state 時的容錯：既有 pending_review 課仍以原狀態排除計費。
+        if (orig?.status === 'promoted_pending' || orig?.status === 'pending_review') return false
         return estimatedCourseStatus(name) === 'enrolled'
       },
       resolvePrice: (name) => {
