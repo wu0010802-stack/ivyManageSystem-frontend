@@ -24,9 +24,9 @@
       <el-table-column label="姓名" prop="name" width="90" />
       <el-table-column label="電話" prop="phone" width="120" />
       <el-table-column label="問題" prop="question" min-width="200" show-overflow-tooltip />
-      <el-table-column label="回覆" width="80" align="center">
+      <el-table-column label="聯繫紀錄" width="90" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.reply" type="success" size="small">已回覆</el-tag>
+          <el-tag v-if="row.reply" type="success" size="small">已記錄</el-tag>
           <span v-else style="color: #94a3b8">—</span>
         </template>
       </el-table-column>
@@ -36,7 +36,7 @@
       <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canWrite" size="small" @click="openReplyDialog(row)">
-            {{ row.reply ? '編輯回覆' : '回覆' }}
+            {{ row.reply ? '編輯聯繫紀錄' : '記錄聯繫結果' }}
           </el-button>
           <el-button
             v-if="!row.is_read"
@@ -58,7 +58,7 @@
       @change="fetchList"
     />
 
-    <el-dialog v-model="replyDialog" title="回覆家長提問"
+    <el-dialog v-model="replyDialog" title="記錄聯繫結果"
                width="440px" destroy-on-close>
       <div v-if="replyTarget" style="margin-bottom: 12px;">
         <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">原始問題：</div>
@@ -66,12 +66,19 @@
           {{ replyTarget.question }}
         </div>
       </div>
+      <el-alert
+        title="此處只記錄人工聯繫結果，不會自動傳送訊息給家長。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
       <el-input v-model="replyText" type="textarea" :rows="4"
-                placeholder="請輸入回覆內容..." />
+                placeholder="例如：已於 7/17 電話聯繫，家長確認了解。" />
       <template #footer>
         <el-button @click="replyDialog = false">取消</el-button>
         <el-button type="primary" :loading="replying" @click="handleReply">
-          送出回覆
+          儲存紀錄
         </el-button>
       </template>
     </el-dialog>
@@ -91,7 +98,8 @@ interface Inquiry { id: number; is_read: boolean; reply?: string; [key: string]:
 
 const activityStore = useActivityStore()
 
-// 對齊 ActivityRegistrationView 慣例：READ-only 隱藏回覆/刪除（標記已讀後端只要 ACTIVITY_READ，不蓋）
+// 對齊 ActivityRegistrationView 慣例：READ-only 隱藏聯繫紀錄/刪除
+// （標記已讀後端只要 ACTIVITY_READ，不蓋）。
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 const list = ref<Inquiry[]>([])
 const total = ref(0)
@@ -119,16 +127,16 @@ function openReplyDialog(row: Inquiry) {
 }
 
 async function handleReply() {
-  if (!replyText.value.trim()) return ElMessage.warning('請輸入回覆內容')
+  if (!replyText.value.trim()) return ElMessage.warning('請輸入聯繫結果')
   replying.value = true
   try {
     await replyInquiry(replyTarget.value!.id, { reply: replyText.value.trim() })
-    ElMessage.success('回覆成功')
+    ElMessage.success('聯繫結果已記錄')
     replyDialog.value = false
     fetchList()
     activityStore.fetchSummary({ force: true })
   } catch {
-    ElMessage.error('回覆失敗')
+    ElMessage.error('記錄聯繫結果失敗')
   } finally {
     replying.value = false
   }

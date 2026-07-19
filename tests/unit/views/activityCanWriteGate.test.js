@@ -99,8 +99,11 @@ const GLOBAL_STUBS = {
   'el-table': ElTableStub,
   'el-table-column': ElTableColumnStub,
   'el-drawer': { template: '<div><slot /></div>' },
-  // dialog 渲染空殼：未開啟的 dialog footer（取消/送出回覆）不應干擾文字斷言
-  'el-dialog': { template: '<div />' },
+  // 未開啟的 dialog 不渲染；開啟後可驗證內容與 footer 語意。
+  'el-dialog': {
+    props: ['modelValue'],
+    template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>',
+  },
   'el-form': { template: '<form><slot /></form>' },
   'el-form-item': { template: '<label><slot /></label>' },
   'el-input': { template: '<input />' },
@@ -113,7 +116,7 @@ const GLOBAL_STUBS = {
   'el-icon': { template: '<span />' },
   'el-empty': { template: '<div />' },
   'el-divider': { template: '<hr />' },
-  'el-alert': { template: '<div />' },
+  'el-alert': { props: ['title'], template: '<div>{{ title }}<slot /></div>' },
   'el-radio-group': { template: '<div><slot /></div>' },
   'el-radio': { template: '<label><slot /></label>' },
   'el-badge': { template: '<span><slot /></span>' },
@@ -202,22 +205,30 @@ describe('課後才藝 canWrite 閘（READ-only 隱藏 mutation 按鈕）', () =
   })
 
   describe('ActivityInquiryView', () => {
-    it('READ-only：回覆/刪除隱藏，標記已讀保留（後端只要 READ）', async () => {
+    it('READ-only：記錄聯繫結果/刪除隱藏，標記已讀保留（後端只要 READ）', async () => {
       mockHasPermission.mockReturnValue(false)
       const wrapper = mount(ActivityInquiryView, MOUNT_OPTS)
       await flushPromises()
 
-      expect(wrapper.text()).not.toContain('回覆')
+      expect(wrapper.text()).not.toContain('記錄聯繫結果')
       expect(wrapper.text()).not.toContain('刪除')
       expect(wrapper.text()).toContain('標記已讀')
     })
 
-    it('有 ACTIVITY_WRITE：回覆/刪除可見', async () => {
+    it('有 ACTIVITY_WRITE：記錄聯繫結果/刪除可見', async () => {
       mockHasPermission.mockReturnValue(true)
       const wrapper = mount(ActivityInquiryView, MOUNT_OPTS)
       await flushPromises()
 
-      expect(wrapper.text()).toContain('回覆')
+      expect(wrapper.text()).toContain('記錄聯繫結果')
+      expect(wrapper.text()).not.toContain('送出回覆')
+      const contactResultButton = wrapper.findAll('button').find((button) =>
+        button.text().includes('記錄聯繫結果'),
+      )
+      expect(contactResultButton).toBeTruthy()
+      await contactResultButton.trigger('click')
+      await flushPromises()
+      expect(wrapper.text()).toContain('不會自動傳送訊息給家長')
       expect(wrapper.text()).toContain('刪除')
     })
   })

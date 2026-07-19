@@ -500,7 +500,7 @@ export interface paths {
         get?: never;
         /**
          * Reply Inquiry
-         * @description 回覆家長提問
+         * @description 記錄人工聯繫結果（不會自動傳送訊息給家長）。
          */
         put: operations["reply_inquiry_api_activity_inquiries__inquiry_id__reply_put"];
         post?: never;
@@ -21132,7 +21132,7 @@ export interface components {
         IntegrationsHealthResponse: {
             external_http: components["schemas"]["ExternalHttpHealth"];
             line: components["schemas"]["LineHealth"];
-            supabase: components["schemas"]["SupabaseHealth"];
+            storage: components["schemas"]["StorageHealth"];
         };
         /**
          * IssueOut
@@ -29644,6 +29644,15 @@ export interface components {
             /** Step */
             step: string;
         };
+        /** StorageHealth */
+        StorageHealth: {
+            /** Breaker */
+            breaker: string;
+            /** Final Failed */
+            final_failed: number;
+            /** Pending Uploads */
+            pending_uploads: number;
+        };
         /**
          * StudentAttachmentListOut
          * @description GET /students/{id}/attachments 回傳。
@@ -30818,15 +30827,6 @@ export interface components {
          * @enum {string}
          */
         SummaryStatus: "DRAFT" | "SUPERVISOR_SIGNED" | "ACCOUNTING_SIGNED" | "FINALIZED";
-        /** SupabaseHealth */
-        SupabaseHealth: {
-            /** Breaker */
-            breaker: string;
-            /** Final Failed */
-            final_failed: number;
-            /** Pending Uploads */
-            pending_uploads: number;
-        };
         /** SupplyCreate */
         SupplyCreate: {
             /** Name */
