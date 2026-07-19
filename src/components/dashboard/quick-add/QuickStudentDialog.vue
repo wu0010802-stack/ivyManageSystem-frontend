@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { createStudent } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
@@ -37,12 +37,15 @@ const loadClassrooms = async () => {
     const res = await getClassrooms({})
     const data = (res?.data ?? []) as unknown
     classrooms.value = Array.isArray(data) ? (data as ClassroomOption[]) : []
+  } catch (err) {
+    // 對話框在 HomeView 一律預先掛載（visible 前 el-dialog 內容未顯示），此元件的
+    // onMounted 不主動 fetch；此處 catch 是防止使用者打開對話框當下缺權限（403）時，
+    // 未捕捉的 rejection 冒泡到 App 層級 ErrorBoundary 拖垮整頁。
+    console.error('[QuickStudentDialog] 載入班級清單失敗', err)
   } finally {
     classroomsLoading.value = false
   }
 }
-
-onMounted(loadClassrooms)
 
 const { submitting, run } = useQuickAddSubmit()
 

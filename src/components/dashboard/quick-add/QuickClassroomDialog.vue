@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { createClassroom, getGrades } from '@/api/classrooms'
 import { useQuickAddSubmit } from './useQuickAddSubmit'
@@ -32,12 +32,15 @@ const loadGrades = async () => {
   try {
     const res = await getGrades()
     grades.value = Array.isArray(res.data) ? res.data : []
+  } catch (err) {
+    // 對話框在 HomeView 一律預先掛載，此元件的 onMounted 不主動 fetch；此處 catch 是
+    // 防止使用者打開對話框當下缺權限（403）時，未捕捉的 rejection 冒泡到 App 層級
+    // ErrorBoundary 拖垮整頁。
+    console.error('[QuickClassroomDialog] 載入年級清單失敗', err)
   } finally {
     gradesLoading.value = false
   }
 }
-
-onMounted(loadGrades)
 
 const { submitting, run } = useQuickAddSubmit()
 
