@@ -41,6 +41,10 @@ describe('deriveNextStep 優先序', () => {
     const s = deriveNextStep({ ...base, appraisalCycle: null })
     expect(s?.key).toBe('create-appraisal')
   })
+  it('考核週期已建立但缺年終週期時引導建立年終', () => {
+    const s = deriveNextStep({ ...base, yearEndCycle: null })
+    expect(s?.key).toBe('create-year-end')
+  })
   it('全部完成回 done', () => {
     expect(deriveNextStep(base)?.key).toBe('done')
   })

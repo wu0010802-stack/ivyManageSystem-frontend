@@ -6,6 +6,7 @@ import { CYCLE_STATUS_LABEL, CYCLE_STATUS_TAG } from '@/constants/appraisalYearE
 import SignProgressBar from './SignProgressBar.vue'
 
 const props = defineProps<{ cycle: { id: number; label: string; status: string } | null }>()
+const emit = defineEmits<{ stats: [n: number]; 'stats-error': [] }>()
 const loading = ref(false)
 const error = ref('')
 const counts = ref<Record<string, number>>({})
@@ -13,7 +14,10 @@ const pendingCount = ref(0)
 
 // getYearEndGrid 回傳裸陣列 GridRowOut[]（非 { rows: [...] }，見 schema.d.ts grid_endpoint_...）
 async function load() {
-  if (!props.cycle) return
+  if (!props.cycle) {
+    emit('stats', 0)
+    return
+  }
   loading.value = true
   error.value = ''
   try {
@@ -22,8 +26,10 @@ async function load() {
     for (const r of rows) acc[r.status] = (acc[r.status] ?? 0) + 1
     counts.value = acc
     pendingCount.value = rows.filter((r) => r.status !== 'FINALIZED').length
+    emit('stats', pendingCount.value)
   } catch (e) {
     error.value = apiError(e, '載入失敗')
+    emit('stats-error')
   } finally {
     loading.value = false
   }
@@ -41,6 +47,7 @@ watch(() => props.cycle?.id, load, { immediate: true })
           {{ cycle.label }}（{{ CYCLE_STATUS_LABEL[cycle.status] ?? cycle.status }}）
         </el-tag>
       </div>
+      <p class="wb-card__subtitle">年度結算與兩關簽核</p>
     </template>
     <el-skeleton v-if="loading" :rows="2" animated />
     <div v-else-if="error" class="wb-card__error">
@@ -51,7 +58,7 @@ watch(() => props.cycle?.id, load, { immediate: true })
     </el-empty>
     <template v-else>
       <SignProgressBar :counts="counts" />
-      <p class="wb-card__pending">待簽核 {{ pendingCount }}</p>
+      <p class="wb-card__pending">尚未核定 {{ pendingCount }} 筆（含草稿與簽核中，進度條為各階段分布）</p>
       <div class="wb-card__cta-group">
         <router-link class="wb-card__cta" :to="`/appraisal-year-end/year-end/cycles/${cycle.id}/grid`">前往總表 →</router-link>
         <router-link class="wb-card__cta" :to="`/appraisal-year-end/year-end/cycles/${cycle.id}`">結算明細</router-link>
@@ -63,6 +70,7 @@ watch(() => props.cycle?.id, load, { immediate: true })
 <style scoped>
 .wb-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .wb-card__title { font-weight: 600; }
+.wb-card__subtitle { font-size: var(--text-xs); color: var(--text-secondary); margin: 2px 0 0; }
 .wb-card__error { display: flex; align-items: center; gap: var(--space-2); color: var(--el-color-danger); font-size: var(--text-sm); }
 .wb-card__pending { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--text-secondary); }
 .wb-card__cta-group { display: flex; gap: var(--space-4); margin-top: var(--space-3); }
