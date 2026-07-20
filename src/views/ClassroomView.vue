@@ -272,9 +272,11 @@ const submitForm = async () => {
       semester: form.semester,
       grade_id: form.grade_id,
       capacity: form.capacity,
-      head_teacher_id: form.head_teacher_id,
-      assistant_teacher_id: form.assistant_teacher_id,
-      english_teacher_id: form.english_teacher_id,
+      // clearable 的教師下拉清空時 el-select emit undefined；顯式 ?? null，
+      // 否則 JSON 丟欄 + 後端 exclude_unset 會讓「清除指派」靜默失敗。
+      head_teacher_id: form.head_teacher_id ?? null,
+      assistant_teacher_id: form.assistant_teacher_id ?? null,
+      english_teacher_id: form.english_teacher_id ?? null,
       is_active: form.is_active,
     }
 
