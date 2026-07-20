@@ -6633,6 +6633,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/leaves/{leave_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel My Pending Leave
+         * @description 教師自撤本人「待審核」假單。
+         *
+         *     與 delete_leave 的差異與存在理由（2026-07-20 新增）：
+         *     - delete_leave（守衛 LEAVES_WRITE）對本人假單一律 403（is_self_approval 守衛），
+         *       因為持 LEAVES_WRITE 的 supervisor/hr 自刪本人「已核准」扣薪假單會觸發薪資重算
+         *       撤銷扣款＝替自己加薪，繞過 approve 的自我核准守衛。
+         *     - 但「待審核」假單尚未核准、未產生任何扣款/考勤同步，本人自撤是安全的（無扣款
+         *       可撤銷 → 無自我加薪風險）。故獨立此端點，僅開放 pending + 本人自撤，**不放寬
+         *       delete_leave 守衛**（避免連帶開放已核准假單自刪）。
+         *
+         *     授權：get_current_user（有效 JWT 即可，教師本來就能建立本人假單，對齊 portal
+         *     create_my_leave 的授權層級）；再於 handler 內強制「呼叫者 == 假單本人」
+         *     （employee_id 相符）。他人假單 → 403、不存在 → 404、非 pending → 409。
+         *
+         *     語意：待審假單無下游副作用 → 直接 hard delete（withdraw 語意乾淨）。
+         *     ApprovalStatus 無 cancelled 狀態，刻意不新增（避免報表/前端 status switch 全面
+         *     改動）；pending 一撤即無痕，符合「尚未進入審核流程的申請」直接收回的直覺。
+         */
+        post: operations["cancel_my_pending_leave_api_leaves__leave_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leaves/batch-approve": {
         parameters: {
             query?: never;
@@ -21232,6 +21268,17 @@ export interface components {
             ids: number[];
             /** Rejection Reason */
             rejection_reason?: string | null;
+        };
+        /**
+         * LeaveCancelResultOut
+         * @description POST /leaves/{id}/cancel 回傳（教師自撤本人待審假單）。
+         *
+         *     待審假單自撤為 hard delete，無下游副作用（尚未核准 → 無扣款、無考勤同步、
+         *     無薪資重算、無補休 grant 消耗），故僅回 message，不含 salary_* 欄位。
+         */
+        LeaveCancelResultOut: {
+            /** Message */
+            message: string;
         };
         /** LeaveCreate */
         LeaveCreate: {
@@ -43283,6 +43330,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_my_pending_leave_api_leaves__leave_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                leave_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveCancelResultOut"];
                 };
             };
             /** @description Validation Error */
