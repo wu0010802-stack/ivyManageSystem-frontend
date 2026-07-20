@@ -32,25 +32,43 @@ const loading = ref(false)
 const loaded = ref(false)
 const filterRange = ref<string[]>([])
 
+let requestSeq = 0
 async function fetchData() {
   if (!props.studentId) return
+  const seq = ++requestSeq
+  const sid = props.studentId
   loading.value = true
   try {
-    const res = await getAttendanceByStudent(props.studentId, { limit: 200 })
+    const res = await getAttendanceByStudent(sid, { limit: 200 })
+    if (seq !== requestSeq || props.studentId !== sid) return
     items.value = res.data.items || []
     counts.value = res.data.counts || {}
     loaded.value = true
   } catch (e) {
+    if (seq !== requestSeq || props.studentId !== sid) return
     ElMessage.error(apiError(e, '載入每日出席失敗'))
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
+// detail panel 切換學生時會重用同一分頁實例，須重置 loaded 並重載；requestSeq
+// 防舊學生的慢回應覆寫新學生（同 ActivityTab）。
 watch(
-  () => [props.active, props.studentId],
-  ([active]) => {
-    if (active && !loaded.value) fetchData()
+  () => props.studentId,
+  () => {
+    requestSeq += 1
+    items.value = []
+    counts.value = {}
+    loaded.value = false
+    loading.value = false
+    if (props.active) fetchData()
+  },
+)
+watch(
+  () => props.active,
+  (active) => {
+    if (active && !loaded.value && !loading.value) fetchData()
   },
   { immediate: true },
 )

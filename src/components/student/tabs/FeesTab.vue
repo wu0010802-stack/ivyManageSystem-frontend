@@ -57,13 +57,16 @@ async function loadPeriods() {
   }
 }
 
+let requestSeq = 0
 async function fetchData() {
   if (!props.studentId || !canRead.value) return
+  const seq = ++requestSeq
+  const sid = props.studentId
   loading.value = true
   try {
     // page_size 上限對齊後端 api/fees/records.py 的 le=200（超過直接 422）
-    const recParams: Record<string, unknown> = { student_id: props.studentId, page_size: 200 }
-    const adjParams: Record<string, unknown> = { student_id: props.studentId }
+    const recParams: Record<string, unknown> = { student_id: sid, page_size: 200 }
+    const adjParams: Record<string, unknown> = { student_id: sid }
     if (period.value && period.value !== ALL_PERIODS) {
       recParams.period = period.value
       adjParams.period = period.value
@@ -72,25 +75,42 @@ async function fetchData() {
       getFeeRecords(recParams),
       getFeeAdjustments(adjParams).catch(() => ({ items: [] })),
     ])
+    if (seq !== requestSeq || props.studentId !== sid) return
     records.value = (recRes?.items ?? []) as unknown as Record<string, unknown>[]
     adjustments.value = (adjRes?.items ?? []) as unknown as Record<string, unknown>[]
     loaded.value = true
   } catch (e) {
+    if (seq !== requestSeq || props.studentId !== sid) return
     ElMessage.error(apiError(e, '載入學費紀錄失敗'))
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
+// 先取 period 清單，loadPeriods 可能把 period 從 ALL_PERIODS 切到本學期，
+// 之後 fetchData 才能用正確 period 發第一次請求（避免 race 出兩次請求）。
+async function loadThenFetch() {
+  await loadPeriods()
+  fetchData()
+}
+
+// detail panel 切換學生時會重用同一分頁實例，須重置 loaded 並重載；requestSeq
+// 防舊學生的慢回應覆寫新學生。
 watch(
-  () => [props.active, props.studentId],
-  async ([active]) => {
-    if (active && !loaded.value) {
-      // 先取 period 清單，loadPeriods 可能把 period 從 ALL_PERIODS 切到本學期，
-      // 之後 fetchData 才能用正確 period 發第一次請求（避免 race 出兩次請求）
-      await loadPeriods()
-      fetchData()
-    }
+  () => props.studentId,
+  () => {
+    requestSeq += 1
+    records.value = []
+    adjustments.value = []
+    loaded.value = false
+    loading.value = false
+    if (props.active) void loadThenFetch()
+  },
+)
+watch(
+  () => props.active,
+  (active) => {
+    if (active && !loaded.value && !loading.value) void loadThenFetch()
   },
   { immediate: true },
 )
