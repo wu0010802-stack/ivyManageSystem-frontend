@@ -1,25 +1,50 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, type Component } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
+import {
+  Search,
+  Close,
+  Sunny,
+  Timer,
+  Clock,
+  Refresh,
+  Money,
+  Calendar,
+  View,
+  ChatDotRound,
+  Bell,
+  HomeFilled,
+  User,
+  UserFilled,
+  Notebook,
+} from '@element-plus/icons-vue'
 import { searchPortal } from '@/api/portalSearch'
 import { usePortalSearch } from '@/composables/usePortalSearch'
 
 const router = useRouter()
 const { isOpen, closePalette } = usePortalSearch()
 
-const COMMANDS = [
-  { id: 'leave', keywords: ['請假', '請假申請', 'leave'], label: '申請請假', icon: '🏖️', route: '/portal/leave' },
-  { id: 'punch', keywords: ['補打卡', 'punch'], label: '補打卡申請', icon: '✋', route: '/portal/punch-correction' },
-  { id: 'overtime', keywords: ['加班', '加班申請', 'overtime'], label: '加班申請', icon: '⏰', route: '/portal/overtime' },
-  { id: 'swap', keywords: ['換班', '代課', 'swap'], label: '換班 / 代課', icon: '🔄', route: '/portal/schedule' },
-  { id: 'salary', keywords: ['薪資', '薪水', 'salary'], label: '薪資預覽', icon: '💰', route: '/portal/salary' },
-  { id: 'calendar', keywords: ['行事曆', 'calendar'], label: '行事曆', icon: '📅', route: '/portal/calendar' },
-  { id: 'observation', keywords: ['觀察', '新增觀察', 'observation'], label: '新增觀察', icon: '👁️', route: '/portal/observations' },
-  { id: 'messages', keywords: ['訊息', '家長訊息', 'messages'], label: '家長訊息', icon: '💬', route: '/portal/messages' },
-  { id: 'announcement', keywords: ['公告', 'announcement'], label: '公告通知', icon: '📢', route: '/portal/announcements' },
-  { id: 'hub', keywords: ['今日', '工作台', 'hub', 'today'], label: '今日工作台', icon: '🏠', route: '/portal/class-hub' },
+const COMMANDS: { id: string; keywords: string[]; label: string; icon: Component; route: string }[] = [
+  { id: 'leave', keywords: ['請假', '請假申請', 'leave'], label: '申請請假', icon: Sunny, route: '/portal/leave' },
+  { id: 'punch', keywords: ['補打卡', 'punch'], label: '補打卡申請', icon: Timer, route: '/portal/punch-correction' },
+  { id: 'overtime', keywords: ['加班', '加班申請', 'overtime'], label: '加班申請', icon: Clock, route: '/portal/overtime' },
+  { id: 'swap', keywords: ['換班', '代課', 'swap'], label: '換班 / 代課', icon: Refresh, route: '/portal/schedule' },
+  { id: 'salary', keywords: ['薪資', '薪水', 'salary'], label: '薪資預覽', icon: Money, route: '/portal/salary' },
+  { id: 'calendar', keywords: ['行事曆', 'calendar'], label: '行事曆', icon: Calendar, route: '/portal/calendar' },
+  { id: 'observation', keywords: ['觀察', '新增觀察', 'observation'], label: '新增觀察', icon: View, route: '/portal/observations' },
+  { id: 'messages', keywords: ['訊息', '家長訊息', 'messages'], label: '家長訊息', icon: ChatDotRound, route: '/portal/messages' },
+  { id: 'announcement', keywords: ['公告', 'announcement'], label: '公告通知', icon: Bell, route: '/portal/announcements' },
+  { id: 'hub', keywords: ['今日', '工作台', 'hub', 'today'], label: '今日工作台', icon: HomeFilled, route: '/portal/class-hub' },
 ]
+
+// 結果分類圖示（對齊 EP icon 系統，取代原本的裝飾 emoji）
+const KIND_ICON: Record<string, Component> = {
+  student: User,
+  guardian: UserFilled,
+  message: ChatDotRound,
+  contact_book: Notebook,
+  announcement: Bell,
+}
 
 const query = ref('')
 const results = ref<{
@@ -38,6 +63,19 @@ const results = ref<{
 const loading = ref(false)
 const activeIndex = ref(0)
 const inputRef = ref<HTMLInputElement | null>(null)
+const modalRef = ref<HTMLElement | null>(null)
+// 開啟前的焦點元素，關閉時還原（a11y：焦點不遺失到 document.body）
+let previouslyFocused: HTMLElement | null = null
+
+// 各分類在扁平清單中的起始 index（供 role=option 的 aria-selected / id 定位）
+const stuBase = computed(() => commandResults.value.length)
+const guaBase = computed(() => stuBase.value + results.value.students.length)
+const msgBase = computed(() => guaBase.value + results.value.guardians.length)
+const cbBase = computed(() => msgBase.value + results.value.messages.length)
+const annBase = computed(() => cbBase.value + results.value.contact_book.length)
+const activeDescId = computed(() =>
+  flatItems.value.length ? `psp-opt-${activeIndex.value}` : undefined,
+)
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -64,12 +102,24 @@ const flatItems = computed(() => {
 
 watch(isOpen, async (v) => {
   if (v) {
+    previouslyFocused = (document.activeElement as HTMLElement) ?? null
     query.value = ''
     results.value = { students: [], guardians: [], messages: [], contact_book: [], announcements: [] }
     activeIndex.value = 0
     await nextTick()
     inputRef.value?.focus()
+  } else {
+    // 關閉時把焦點還給開啟前的元素（搜尋觸發鈕 / FAB）
+    previouslyFocused?.focus?.()
+    previouslyFocused = null
   }
+})
+
+// 鍵盤移動 active 項時，捲入可視區（清單可能超出 psp-results 視窗）
+watch(activeIndex, async () => {
+  await nextTick()
+  const el = document.getElementById(`psp-opt-${activeIndex.value}`)
+  el?.scrollIntoView?.({ block: 'nearest' })
 })
 
 watch(query, (q) => {
@@ -107,19 +157,27 @@ function selectItem(item: { kind: string; payload: Record<string, unknown> } | n
       router.push(item.payload.route as any)
       break
     case 'student':
-      router.push(`/portal/students/${item.payload.id}/detail`)
+      // 路由為 students/:studentId（name=portal-student-detail），原本多加的 /detail
+      // 段不匹配任何路由 → 點了沒反應。改用 named route。
+      router.push({ name: 'portal-student-detail', params: { studentId: String(item.payload.id) } })
       break
     case 'guardian':
-      router.push(`/portal/students/${item.payload.student_id}/detail#guardians`)
+      router.push({
+        name: 'portal-student-detail',
+        params: { studentId: String(item.payload.student_id) },
+        query: { tab: 'guardians' },
+      })
       break
     case 'message':
-      router.push({ path: '/portal/messages', query: { thread_id: item.payload.thread_id as string } })
+      // /portal/messages 靜態 redirect 會丟棄 query；改走 messages/:threadId
+      // redirect（會把 threadId 轉為 class-hub ?panel=messages&thread=<id>）。
+      router.push(`/portal/messages/${item.payload.thread_id}`)
       break
     case 'contact_book':
-      router.push({ path: '/portal/contact-book', query: { log_date: item.payload.log_date as string } })
+      router.push({ name: 'portal-contact-book', query: { log_date: item.payload.log_date as string } })
       break
     case 'announcement':
-      router.push({ path: '/portal/announcements', query: { id: item.payload.id as string } })
+      router.push({ name: 'portal-announcements', query: { id: item.payload.id as string } })
       break
   }
 }
@@ -140,13 +198,38 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+// 焦點陷阱：Tab 在 modal 內（輸入框 ↔ 關閉鈕）循環，不逃逸到背景
+function trapTab(e: KeyboardEvent) {
+  if (e.key !== 'Tab') return
+  const focusables = modalRef.value?.querySelectorAll<HTMLElement>(
+    'input, button, [tabindex]:not([tabindex="-1"])',
+  )
+  if (!focusables || focusables.length === 0) return
+  const first = focusables[0]
+  const last = focusables[focusables.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
 defineExpose({ activeIndex })
 </script>
 
 <template>
   <Teleport to="body">
     <div v-if="isOpen" class="psp-overlay" @click.self="closePalette">
-      <div class="psp-modal" role="dialog" aria-modal="true" aria-label="搜尋">
+      <div
+        ref="modalRef"
+        class="psp-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="搜尋"
+        @keydown="trapTab"
+      >
         <div class="psp-input-wrap">
           <el-icon class="psp-icon"><Search /></el-icon>
           <input
@@ -155,99 +238,125 @@ defineExpose({ activeIndex })
             class="psp-input"
             placeholder="搜尋學生 / 家長 / 訊息 / 聯絡簿 / 公告…"
             autocomplete="off"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="psp-listbox"
+            aria-label="搜尋學生、家長、訊息、聯絡簿、公告"
+            :aria-activedescendant="activeDescId"
             data-test="search-input"
             @keydown="onKeydown"
           />
-          <span v-if="loading" class="psp-spinner"></span>
-          <kbd class="psp-esc" @click="closePalette">esc</kbd>
+          <span v-if="loading" class="psp-spinner" role="status" aria-label="搜尋中"></span>
+          <kbd class="psp-esc" aria-hidden="true">esc</kbd>
+          <button type="button" class="psp-close" aria-label="關閉搜尋" @click="closePalette">
+            <el-icon><Close /></el-icon>
+          </button>
         </div>
 
-        <div class="psp-results">
+        <div id="psp-listbox" class="psp-results" role="listbox" aria-label="搜尋結果">
           <template v-if="commandResults.length">
-            <div class="psp-section">快捷</div>
+            <div class="psp-section" role="presentation">快捷</div>
             <div
               v-for="(c, i) in commandResults"
+              :id="`psp-opt-${i}`"
               :key="`cmd-${c.id}`"
+              role="option"
+              :aria-selected="activeIndex === i"
               :class="['psp-item', { active: activeIndex === i }]"
               :data-test="`command-${c.id}`"
               @click="selectItem({ kind: 'command', payload: c })"
               @mouseenter="activeIndex = i"
             >
-              <span class="psp-item-icon">{{ c.icon }}</span>
+              <el-icon class="psp-item-icon"><component :is="c.icon" /></el-icon>
               <span class="psp-item-label">{{ c.label }}</span>
             </div>
           </template>
 
           <template v-if="results.students.length">
-            <div class="psp-section">學生</div>
+            <div class="psp-section" role="presentation">學生</div>
             <div
               v-for="(s, i) in results.students"
+              :id="`psp-opt-${stuBase + i}`"
               :key="`stu-${s.id}`"
-              :class="['psp-item', { active: activeIndex === commandResults.length + i }]"
+              role="option"
+              :aria-selected="activeIndex === stuBase + i"
+              :class="['psp-item', { active: activeIndex === stuBase + i }]"
               @click="selectItem({ kind: 'student', payload: s })"
-              @mouseenter="activeIndex = commandResults.length + i"
+              @mouseenter="activeIndex = stuBase + i"
             >
-              <span class="psp-item-icon">👤</span>
+              <el-icon class="psp-item-icon"><component :is="KIND_ICON.student" /></el-icon>
               <span class="psp-item-label">{{ s.name }}</span>
               <span class="psp-item-sub">{{ s.classroom_name }} · 家長 {{ s.parent_name || '—' }}</span>
             </div>
           </template>
 
           <template v-if="results.guardians.length">
-            <div class="psp-section">家長</div>
+            <div class="psp-section" role="presentation">家長</div>
             <div
               v-for="(g, i) in results.guardians"
+              :id="`psp-opt-${guaBase + i}`"
               :key="`gua-${g.id}`"
-              :class="['psp-item', { active: activeIndex === commandResults.length + results.students.length + i }]"
+              role="option"
+              :aria-selected="activeIndex === guaBase + i"
+              :class="['psp-item', { active: activeIndex === guaBase + i }]"
               @click="selectItem({ kind: 'guardian', payload: g })"
-              @mouseenter="activeIndex = commandResults.length + results.students.length + i"
+              @mouseenter="activeIndex = guaBase + i"
             >
-              <span class="psp-item-icon">👪</span>
+              <el-icon class="psp-item-icon"><component :is="KIND_ICON.guardian" /></el-icon>
               <span class="psp-item-label">{{ g.name }}</span>
               <span class="psp-item-sub">{{ g.child_name }} · {{ g.phone_masked }}</span>
             </div>
           </template>
 
           <template v-if="results.messages.length">
-            <div class="psp-section">親師訊息</div>
+            <div class="psp-section" role="presentation">親師訊息</div>
             <div
               v-for="(m, i) in results.messages"
+              :id="`psp-opt-${msgBase + i}`"
               :key="`msg-${m.thread_id}`"
-              :class="['psp-item', { active: activeIndex === commandResults.length + results.students.length + results.guardians.length + i }]"
+              role="option"
+              :aria-selected="activeIndex === msgBase + i"
+              :class="['psp-item', { active: activeIndex === msgBase + i }]"
               @click="selectItem({ kind: 'message', payload: m })"
-              @mouseenter="activeIndex = commandResults.length + results.students.length + results.guardians.length + i"
+              @mouseenter="activeIndex = msgBase + i"
             >
-              <span class="psp-item-icon">💬</span>
+              <el-icon class="psp-item-icon"><component :is="KIND_ICON.message" /></el-icon>
               <span class="psp-item-label">{{ m.student_name }}</span>
               <span class="psp-item-sub">{{ m.snippet }}</span>
             </div>
           </template>
 
           <template v-if="results.contact_book.length">
-            <div class="psp-section">聯絡簿</div>
+            <div class="psp-section" role="presentation">聯絡簿</div>
             <div
               v-for="(e, i) in results.contact_book"
+              :id="`psp-opt-${cbBase + i}`"
               :key="`cb-${e.entry_id}`"
-              :class="['psp-item', { active: activeIndex === commandResults.length + results.students.length + results.guardians.length + results.messages.length + i }]"
+              role="option"
+              :aria-selected="activeIndex === cbBase + i"
+              :class="['psp-item', { active: activeIndex === cbBase + i }]"
               @click="selectItem({ kind: 'contact_book', payload: e })"
-              @mouseenter="activeIndex = commandResults.length + results.students.length + results.guardians.length + results.messages.length + i"
+              @mouseenter="activeIndex = cbBase + i"
             >
-              <span class="psp-item-icon">📓</span>
+              <el-icon class="psp-item-icon"><component :is="KIND_ICON.contact_book" /></el-icon>
               <span class="psp-item-label">{{ e.log_date }} · {{ e.student_name }}</span>
               <span class="psp-item-sub">{{ e.snippet }}</span>
             </div>
           </template>
 
           <template v-if="results.announcements.length">
-            <div class="psp-section">公告</div>
+            <div class="psp-section" role="presentation">公告</div>
             <div
               v-for="(a, i) in results.announcements"
+              :id="`psp-opt-${annBase + i}`"
               :key="`ann-${a.id}`"
-              :class="['psp-item', { active: activeIndex === commandResults.length + results.students.length + results.guardians.length + results.messages.length + results.contact_book.length + i }]"
+              role="option"
+              :aria-selected="activeIndex === annBase + i"
+              :class="['psp-item', { active: activeIndex === annBase + i }]"
               @click="selectItem({ kind: 'announcement', payload: a })"
-              @mouseenter="activeIndex = commandResults.length + results.students.length + results.guardians.length + results.messages.length + results.contact_book.length + i"
+              @mouseenter="activeIndex = annBase + i"
             >
-              <span class="psp-item-icon">📢</span>
+              <el-icon class="psp-item-icon"><component :is="KIND_ICON.announcement" /></el-icon>
               <span class="psp-item-label">{{ a.title }}</span>
             </div>
           </template>
@@ -276,7 +385,10 @@ defineExpose({ activeIndex })
   width: 100%;
   max-width: 600px;
   max-height: 70vh;
-  background: white;
+  /* 主題感知表面色（teleport 到 body，脫離 .portal-layout 鎖定範圍，
+   * dark 模式下不再白底亮字） */
+  background: var(--el-bg-color-overlay);
+  color: var(--el-text-color-primary);
   border-radius: 12px;
   overflow: hidden;
   display: flex;
@@ -310,6 +422,8 @@ defineExpose({ activeIndex })
   border: none;
   outline: none;
   font-size: 16px;
+  background: transparent;
+  color: var(--el-text-color-primary);
 }
 .psp-spinner {
   width: 14px;
@@ -329,7 +443,35 @@ defineExpose({ activeIndex })
   border: 1px solid var(--el-border-color);
   border-radius: 4px;
   font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+/* 明確的關閉鈕（≥44px 觸控目標）：手機滿版時是唯一可靠的關閉方式 */
+.psp-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--el-text-color-secondary);
   cursor: pointer;
+  border-radius: 8px;
+  -webkit-tap-highlight-color: transparent;
+}
+.psp-close:hover {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+}
+.psp-close:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
+}
+/* 桌面隱藏 esc 提示以外的重複關閉鈕不需要；手機才特別需要大關閉鈕 */
+@media (min-width: 768px) {
+  .psp-close {
+    display: none;
+  }
 }
 .psp-results {
   overflow-y: auto;
@@ -353,14 +495,16 @@ defineExpose({ activeIndex })
   background: var(--el-color-primary-light-9);
 }
 .psp-item-icon {
-  font-size: 20px;
+  font-size: 18px;
   width: 24px;
-  text-align: center;
+  flex: 0 0 24px;
+  color: var(--el-text-color-secondary);
 }
 .psp-item-label {
   flex: 0 0 auto;
   font-size: 14px;
   font-weight: 500;
+  color: var(--el-text-color-primary);
 }
 .psp-item-sub {
   flex: 1;
