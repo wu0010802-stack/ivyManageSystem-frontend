@@ -9,6 +9,7 @@ import { getStudents } from '@/api/students'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
 import { closeWebSocketSafely } from '@/utils/ws'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
+import PageHeader from '@/components/common/PageHeader.vue'
 import {
   useNowClock,
   sortByOldestFirst,
@@ -407,15 +408,14 @@ onUnmounted(() => {
 
 <template>
   <div class="dismissal-queue-view">
-    <div class="page-header">
-      <h2 class="page-header__title">
-        接送通知
+    <PageHeader title="接送通知">
+      <template #title-extra>
         <span
           v-if="isActiveView && sortedCalls.length"
           class="page-header__count"
         >待接送 {{ sortedCalls.length }}</span>
-      </h2>
-      <div class="header-actions">
+      </template>
+      <template #actions>
         <el-tag
           :type="wsConnected ? 'success' : 'warning'"
           size="small"
@@ -425,8 +425,8 @@ onUnmounted(() => {
           {{ wsConnected ? '即時同步中' : '連線不穩' }}
         </el-tag>
         <el-button type="primary" :icon="Plus" @click="openCreateDialog">建立通知</el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）：耗盡重連後
          fallback 輪詢，提醒使用者重新整理避免漏接（對齊 PortalDismissalCallsView）-->
@@ -635,25 +635,8 @@ onUnmounted(() => {
   padding: var(--space-5);
 }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-4);
-}
-
-.page-header__title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
-}
-/* 待接送即時計數：與教師端 portal 一致，一眼掌握還有幾位待處理 */
+/* 待接送即時計數：與教師端 portal 一致，一眼掌握還有幾位待處理
+   （置於 PageHeader #title-extra slot，slot 內容持有本檔 scope id，樣式可達） */
 .page-header__count {
   display: inline-block;
   padding: 2px 10px;
@@ -665,11 +648,6 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
 .conn-tag {
   /* gap 由 .header-actions 負責，移除舊 inline margin */
   flex-shrink: 0;

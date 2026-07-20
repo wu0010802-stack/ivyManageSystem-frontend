@@ -20,6 +20,7 @@ import { mapEmployeeError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useResetPunchPin } from '@/composables/useResetPunchPin'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const employeeStore = useEmployeeStore()
 
@@ -297,10 +298,7 @@ onMounted(async () => {
 
 <template>
   <div class="employees-page">
-    <div class="page-header">
-      <div class="page-header-left">
-        <h2>員工管理</h2>
-        <p class="page-subtitle">全園名冊、任職資料與離職作業</p>
+    <PageHeader title="員工管理" subtitle="全園名冊、任職資料與離職作業">
         <p v-if="!loading" class="roster-stats">
           <template v-if="hasActiveFilters">顯示 <b>{{ displayedEmployees.length }}</b> 筆 <span class="stat-sep">·</span> </template>
           共 <b>{{ rosterStats.total }}</b> 人
@@ -340,8 +338,7 @@ onMounted(async () => {
             @keydown.space.prevent="toggleTodoFilter('probation')"
           >試用期將到期 {{ probationAlertCount }}</el-tag>
         </div>
-      </div>
-      <div class="header-actions">
+      <template #actions>
         <el-input
           v-model="searchQuery"
           type="search"
@@ -368,8 +365,8 @@ onMounted(async () => {
         <el-button type="primary" @click="openCreate">
           <el-icon><Plus /></el-icon> 新增員工
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <TableSkeleton v-if="loading && !employeeStore.employees.length" :columns="7" />
     <el-card v-else-if="!isMobile" class="no-hover">
@@ -504,12 +501,6 @@ onMounted(async () => {
 
 <style scoped>
 /* ── 列表頁頂列 ── */
-.page-header-left {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-}
 .roster-stats {
   margin: 0;
   font-size: var(--text-sm);
@@ -558,14 +549,8 @@ onMounted(async () => {
 .col-title { font-weight: 500; line-height: 1.35; }
 .col-position { font-size: 12px; color: var(--crisp-text-muted, var(--text-tertiary)); line-height: 1.35; }
 
-/* 窄螢幕：頂列改直向堆疊，搜尋/篩選撐滿好點 */
+/* 窄螢幕：搜尋/篩選撐滿好點（頂列堆疊/換行由 PageHeader 元件的窄斷點規則負責） */
 @media (--to-sm) {
-  .employees-page .page-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-3);
-  }
-  .employees-page .header-actions { flex-wrap: wrap; }
   .employees-page .search-input { flex: 1 1 160px; width: auto; }
   .employees-page .status-filter { flex: 1 1 120px; width: auto; }
   .employees-page .title-filter { flex: 1 1 120px; width: auto; }

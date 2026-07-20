@@ -1,11 +1,6 @@
 <template>
   <div class="student-fee-view">
-    <div class="page-header">
-      <div class="title-row">
-        <h2>學費管理</h2>
-        <p class="subtitle">查看與管理本學期各班級學生的應收費用與繳費狀態</p>
-      </div>
-    </div>
+    <PageHeader title="學費管理" subtitle="查看與管理本學期各班級學生的應收費用與繳費狀態" />
 
     <el-tabs v-model="activeTab" type="card">
       <!-- ================================================================
@@ -46,6 +41,7 @@ import { useClassroomStore } from '@/stores/classroom'
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
 // 預設「繳費記錄」（日常工作面板）；範本/總覽為輔助檢視
@@ -91,28 +87,5 @@ onMounted(() => {
 <style scoped>
 .student-fee-view {
   padding: var(--space-5);
-}
-
-.page-header {
-  margin-bottom: var(--space-4);
-}
-
-.page-header .title-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  color: var(--text-primary, #1e293b);
-}
-
-.page-header .subtitle {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--text-secondary, #64748b);
 }
 </style>

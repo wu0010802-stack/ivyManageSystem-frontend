@@ -9,6 +9,7 @@ import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import { hasPermission } from '@/utils/auth'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -219,10 +220,11 @@ onMounted(() => {
 
 <template>
   <div class="page-container">
-    <div class="page-header">
-      <h2>學生事件紀錄</h2>
-      <el-button v-if="canWrite" type="primary" @click="openCreate">＋ 新增事件</el-button>
-    </div>
+    <PageHeader title="學生事件紀錄">
+      <template #actions>
+        <el-button v-if="canWrite" type="primary" @click="openCreate">＋ 新增事件</el-button>
+      </template>
+    </PageHeader>
 
     <!-- 篩選列 -->
     <el-card class="filter-card" shadow="never">
@@ -396,17 +398,6 @@ onMounted(() => {
 <style scoped>
 .page-container {
   padding: 0;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.page-header h2 {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: 600;
 }
 .filter-card {
   margin-bottom: 0;

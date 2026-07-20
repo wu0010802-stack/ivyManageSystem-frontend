@@ -8,6 +8,7 @@ import { apiError } from '@/utils/error'
 import { formatTimeTW } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { CYCLE_STATUS_LABEL, exceptionTypeLabel } from '@/constants/appraisalYearEnd'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 // 例外中心 MVP：把後端兩支彙整端點（考核 / 年終）做成單一工作佇列頁——行政一頁看到
 // 「這批還有什麼要人工處理」，逐筆「前往處理」深連結到修復介面。唯讀彙整，不建新表；
@@ -196,10 +197,7 @@ onMounted(async () => {
 
 <template>
   <div class="exception-center">
-    <div class="page-header">
-      <h2>例外中心</h2>
-      <p class="page-sub">一頁彙整這批還有什麼要人工處理，逐筆「前往處理」直達修復介面。</p>
-    </div>
+    <PageHeader title="例外中心" subtitle="一頁彙整這批還有什麼要人工處理，逐筆「前往處理」直達修復介面。" />
 
     <section
       v-for="group in groups"
@@ -314,9 +312,6 @@ onMounted(async () => {
 
 <style scoped>
 .exception-center { padding: var(--space-4); }
-.page-header { margin-bottom: var(--space-4); }
-.page-header h2 { margin: 0 0 var(--space-1); font-size: 20px; font-weight: 600; }
-.page-sub { margin: 0; font-size: 13px; color: var(--text-tertiary); }
 
 .exception-group {
   background: var(--bg-color-overlay, #fff);

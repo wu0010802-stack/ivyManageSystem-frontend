@@ -8,6 +8,7 @@ import SettingsObservabilityTab from '@/components/settings/SettingsObservabilit
 import DsrRequestsView from '@/views/DsrRequestsView.vue'
 import PolicyVersionsView from '@/views/PolicyVersionsView.vue'
 import { hasPermission } from '@/utils/auth'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,7 +57,7 @@ onMounted(() => {
 
 <template>
   <div class="settings-page">
-    <h2>系統設定</h2>
+    <PageHeader title="系統設定" subtitle="輪班別、通知、排程觀測與個資治理設定" />
     <el-tabs v-model="activeTab" type="card" @tab-change="onTabChange">
       <el-tab-pane label="輪班別管理" name="shifts">
         <SettingsShiftTab v-if="activeTab === 'shifts'" />

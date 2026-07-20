@@ -18,6 +18,7 @@ import { buildStudentProfileLink } from '@/utils/studentLinks'
 import AttendanceBatchPanel from '@/components/student/academic-affairs/AttendanceBatchPanel.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const TODAY = todayISO()
 
@@ -379,20 +380,18 @@ onMounted(async () => {
 
 <template>
   <div class="sa-page">
-    <div class="page-header">
-      <div>
-        <h2>學生出席紀錄</h2>
-        <p class="page-subtitle">此頁主要查看各班出席狀況；點名編修保留為次要管理功能。</p>
-      </div>
-      <el-select v-model="selectedTermKey" style="width: 220px">
-        <el-option
-          v-for="t in termOptions"
-          :key="t.key"
-          :label="t.label"
-          :value="t.key"
-        />
-      </el-select>
-    </div>
+    <PageHeader title="學生出席紀錄" subtitle="此頁主要查看各班出席狀況；點名編修保留為次要管理功能。">
+      <template #actions>
+        <el-select v-model="selectedTermKey" style="width: 220px">
+          <el-option
+            v-for="t in termOptions"
+            :key="t.key"
+            :label="t.label"
+            :value="t.key"
+          />
+        </el-select>
+      </template>
+    </PageHeader>
 
     <el-tabs v-model="activeTab" class="main-tabs">
       <el-tab-pane label="今日班級總覽" name="overview">
@@ -679,19 +678,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.page-subtitle {
-  margin-top: 4px;
-  color: var(--text-secondary);
-}
-
 .main-tabs {
   margin-top: 16px;
 }

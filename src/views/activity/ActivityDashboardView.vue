@@ -1,16 +1,17 @@
 <template>
   <div class="activity-dashboard">
-    <div class="page-header">
-      <h2 class="page-title">課後才藝統計儀表板</h2>
-      <el-select v-model="selectedTermKey" style="width: 220px">
-        <el-option
-          v-for="t in semesterOptions"
-          :key="t.key"
-          :label="t.label"
-          :value="t.key"
-        />
-      </el-select>
-    </div>
+    <PageHeader title="課後才藝統計儀表板">
+      <template #actions>
+        <el-select v-model="selectedTermKey" style="width: 220px">
+          <el-option
+            v-for="t in semesterOptions"
+            :key="t.key"
+            :label="t.label"
+            :value="t.key"
+          />
+        </el-select>
+      </template>
+    </PageHeader>
 
     <el-row :gutter="16" class="stat-cards" v-loading="loading">
       <el-col :xs="12" :sm="8" :lg="4" v-for="card in statCards" :key="card.label">
@@ -144,6 +145,7 @@ import { exportDashboardTable } from '@/api/activity'
 import { FULL_ATTENDANCE_BONUS } from '@/constants/activity'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 interface DashboardClassroom { courses?: Record<number, number>; [key: string]: unknown }
 interface DashboardGrade {
@@ -359,8 +361,6 @@ async function handleExportTable() {
 
 <style scoped>
 .activity-dashboard { padding: 16px; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
-.page-title { margin: 0; font-size: 20px; font-weight: 600; }
 .stat-cards { margin-bottom: 16px; }
 .stat-card { text-align: center; padding: 8px 0; }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--color-primary, #4f46e5); }

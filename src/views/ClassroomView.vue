@@ -22,6 +22,7 @@ import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogDrawer.vue'
 import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
@@ -336,9 +337,8 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 
 <template>
   <div class="classroom-page">
-    <div class="page-header">
-      <h2>班級學生管理</h2>
-      <div class="header-actions">
+    <PageHeader title="班級學生管理">
+      <template #actions>
         <el-select v-model="selectedTermKey" style="width: 220px">
           <el-option
             v-for="t in termOptions"
@@ -355,8 +355,8 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
         />
         <el-button :icon="RefreshRight" @click="fetchClassrooms">重新整理</el-button>
         <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <PlanStatusCard />
 
@@ -618,20 +618,6 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-4);
-  margin-bottom: var(--space-5);
-}
-
-.header-actions {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-}
-
 .classroom-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -812,15 +798,6 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 }
 
 @media (--to-sm) {
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .header-actions {
-    flex-wrap: wrap;
-  }
-
   /* 觸控目標：卡片動作按鈕在手機上加大到 ≥44px，降低誤觸 */
   .card-actions :deep(.el-button) {
     min-height: 44px;

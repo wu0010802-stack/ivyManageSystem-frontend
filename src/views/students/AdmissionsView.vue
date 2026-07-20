@@ -1,18 +1,14 @@
 <template>
   <div class="admissions-view">
-    <div class="page-header">
-      <div class="page-header-left">
-        <div class="page-header-icon" aria-hidden="true">
+    <PageHeader title="招生入學" subtitle="參觀 → 預繳 → 報到 → 開學 · 統計分析">
+      <template #icon>
+        <div class="page-header-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
           </svg>
         </div>
-        <div>
-          <h2 class="page-title">招生入學</h2>
-          <p class="page-subtitle">參觀 → 預繳 → 報到 → 開學 · 統計分析</p>
-        </div>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-tabs v-model="activeTab" class="admissions-tabs" @tab-change="onTabChange">
       <el-tab-pane label="漏斗看板" name="funnel">
@@ -56,6 +52,7 @@ import AdmissionsRecordsPanel from '@/components/recruitment/AdmissionsRecordsPa
 import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
 import RecruitmentStatsPanel from '@/components/recruitment/RecruitmentStatsPanel.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const VALID_TABS = ['funnel', 'records', 'intake', 'ivykids', 'stats'] as const
 type AdmissionsTab = (typeof VALID_TABS)[number]
@@ -114,17 +111,7 @@ onMounted(() => {
 .admissions-view {
   padding: 8px 0;
 }
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-4, 16px);
-}
-.page-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+/* 置於 PageHeader #icon slot（slot 內容持有本檔 scope id，樣式可達） */
 .page-header-icon {
   display: flex;
   align-items: center;
@@ -138,14 +125,5 @@ onMounted(() => {
   background: var(--brand-primary-soft);
   color: var(--brand-primary);
   flex-shrink: 0;
-}
-.page-title {
-  margin: 0;
-  font-size: 18px;
-}
-.page-subtitle {
-  margin: 0;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 </style>

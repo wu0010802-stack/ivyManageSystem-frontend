@@ -1,20 +1,13 @@
 <template>
   <div class="medication-today">
-    <div class="page-header">
-      <h2>今日用藥任務</h2>
-      <div>
+    <PageHeader title="今日用藥任務">
+      <template #actions>
         <el-tag type="warning" size="large">待餵 {{ summary.pending }}</el-tag>
-        <el-tag type="success" size="large" style="margin-left: 6px">
-          已餵 {{ summary.administered }}
-        </el-tag>
-        <el-tag type="info" size="large" style="margin-left: 6px">
-          跳過 {{ summary.skipped }}
-        </el-tag>
-        <el-button style="margin-left: 12px" @click="reload" :loading="loading">
-          重新整理
-        </el-button>
-      </div>
-    </div>
+        <el-tag type="success" size="large">已餵 {{ summary.administered }}</el-tag>
+        <el-tag type="info" size="large">跳過 {{ summary.skipped }}</el-tag>
+        <el-button @click="reload" :loading="loading">重新整理</el-button>
+      </template>
+    </PageHeader>
 
     <div v-if="!loading && loadError" class="med-load-error">
       <el-alert
@@ -118,6 +111,7 @@ import {
 } from '@/api/studentHealth'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 interface MedicationLog {
   id: number | string
@@ -244,12 +238,6 @@ onMounted(reload)
 <style scoped>
 .medication-today {
   padding: 20px;
-}
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
 }
 .order-list {
   display: flex;

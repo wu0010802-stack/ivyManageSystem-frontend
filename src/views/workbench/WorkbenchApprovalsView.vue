@@ -17,6 +17,7 @@ import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS
 import { MODULE_TERMS } from '@/constants/moduleTerms'
 import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
 import { isSuperAdmin } from '@/utils/auth'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const router = useRouter()
 
@@ -284,12 +285,8 @@ onMounted(() => {
     上加 :loading 屬性局部遮罩。頂部進度條（App.vue）足以表示 navigation。
   -->
   <div class="approval-page">
-    <div class="page-header">
-      <div>
-        <h2>審核工作台</h2>
-        <p class="page-subtitle">集中查看待審請假、加班與補打卡，並可直接跳到對應管理頁處理。</p>
-      </div>
-      <div class="page-header__actions">
+    <PageHeader title="審核工作台" subtitle="集中查看待審請假、加班與補打卡，並可直接跳到對應管理頁處理。">
+      <template #actions>
         <el-tag v-if="totalPending > 0" type="danger" effect="dark" size="large">
           {{ totalPending }} 項待審核
         </el-tag>
@@ -297,8 +294,8 @@ onMounted(() => {
           全部已處理
         </el-tag>
         <el-button @click="fetchAll">重新整理</el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <div class="shortcut-grid">
       <el-card class="shortcut-card" shadow="hover">
@@ -721,30 +718,6 @@ onMounted(() => {
   padding: 0;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0 0 6px;
-}
-
-.page-subtitle {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.page-header__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 .shortcut-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -880,10 +853,6 @@ onMounted(() => {
 }
 
 @media (max-width: 900px) {
-  .page-header {
-    flex-direction: column;
-  }
-
   .card-header {
     align-items: flex-start;
     flex-direction: column;

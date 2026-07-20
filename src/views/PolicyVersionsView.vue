@@ -78,8 +78,10 @@ onMounted(fetchList)
 
 <template>
   <div class="policy-versions-view">
-    <div class="page-header">
-      <h2 class="page-title">隱私政策版本管理</h2>
+    <!-- 本 view 僅內嵌於 SettingsView tab（未獨立路由），用 tab 層級 section 標題，
+         不用 PageHeader 以免與外層「系統設定」頁首形成雙頁標題 -->
+    <div class="tab-section-header">
+      <h3 class="tab-section-title">隱私政策版本管理</h3>
       <el-button type="primary" @click="openCreateDialog">新增版本</el-button>
     </div>
 
@@ -153,16 +155,16 @@ onMounted(fetchList)
   padding: 24px;
 }
 
-.page-header {
+.tab-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
 }
 
-.page-title {
+.tab-section-title {
   margin: 0;
-  font-size: 20px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
 }

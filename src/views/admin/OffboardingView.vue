@@ -11,6 +11,7 @@ import { formatDateTimeTW } from '@/utils/format'
 import MagicLinkPanel from '@/components/offboarding/MagicLinkPanel.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import type { ApiResponse } from '@/api/_generated/typed'
 
@@ -292,12 +293,8 @@ function confirmInitiate(): void {
 
 <template>
     <div class="offboarding-view">
-        <div class="page-header">
-            <div class="page-header-left">
-                <h2 class="page-title">離職管理</h2>
-                <p class="page-subtitle">已設定離職日期的員工清單</p>
-            </div>
-            <div class="header-actions">
+        <PageHeader title="離職管理" subtitle="已設定離職日期的員工清單">
+            <template #actions>
                 <el-input
                     v-model="searchQuery"
                     class="offboard-search"
@@ -315,8 +312,8 @@ function confirmInitiate(): void {
                 <el-button class="initiate-offboard-btn" type="primary" @click="openInitiate">
                     辦理離職
                 </el-button>
-            </div>
-        </div>
+            </template>
+        </PageHeader>
 
         <!-- 整表錯誤態：載入失敗不得偽裝成空清單 -->
         <el-alert
@@ -576,22 +573,6 @@ function confirmInitiate(): void {
     text-decoration: underline;
 }
 
-.page-header {
-    margin-bottom: 20px;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.header-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
 .offboard-search {
     width: 180px;
 }
@@ -604,19 +585,6 @@ function confirmInitiate(): void {
     margin: 0 0 12px;
     font-size: 14px;
     color: var(--text-secondary, #606266);
-}
-
-.page-title {
-    font-size: 20px;
-    font-weight: 600;
-    margin: 0 0 4px;
-    color: var(--text-primary, #303133);
-}
-
-.page-subtitle {
-    margin: 0;
-    color: var(--text-secondary, #606266);
-    font-size: 14px;
 }
 
 .text-muted {

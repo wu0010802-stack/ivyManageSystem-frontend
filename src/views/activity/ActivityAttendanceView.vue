@@ -1,8 +1,7 @@
 <template>
   <div class="attendance-view">
-    <div class="page-header">
-      <h2>點名管理</h2>
-      <el-space>
+    <PageHeader title="點名管理">
+      <template #actions>
         <el-button
           v-if="canWrite"
           :icon="Calendar"
@@ -14,8 +13,8 @@
           :icon="Plus"
           @click="openCreateDialog"
         >新增場次</el-button>
-      </el-space>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- 篩選列 -->
     <el-card class="filter-card" shadow="never">
@@ -380,6 +379,7 @@ import {
   getCourses,
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
@@ -756,13 +756,6 @@ onMounted(() => {
 
 <style scoped>
 .attendance-view { padding: 0; }
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .filter-card { margin-bottom: 0; }
 .batch-hint { margin: 4px 0 0; color: var(--text-tertiary); font-size: 12px; }
 .no-record { color: var(--text-tertiary); font-size: 13px; }

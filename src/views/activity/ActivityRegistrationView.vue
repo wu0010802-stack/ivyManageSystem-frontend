@@ -1,8 +1,6 @@
 <template>
   <div class="activity-registrations">
-    <div class="page-header">
-      <h2>報名管理</h2>
-    </div>
+    <PageHeader title="報名管理" />
 
     <div class="mode-list">
     <div class="toolbar">
@@ -502,6 +500,7 @@ import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBa
 import { formatActivityDate } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 // 6 個彈窗/時間軸都綁在 v-model/drawer 後，互動才顯示 → 改 async 拆出主 chunk，加速首載。
 const RegistrationPaymentDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationPaymentDialog.vue'))
 const RegistrationTimeline = defineAsyncComponent(() => import('@/components/activity/RegistrationTimeline.vue'))
@@ -1219,8 +1218,6 @@ onMounted(async () => {
 .reject-btn-wrap { display: inline-flex; margin-left: 12px; vertical-align: middle; }
 .reject-btn-wrap + .el-button { margin-left: 12px; }
 .activity-registrations { padding: 16px; }
-.page-header { margin-bottom: 16px; }
-.page-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .toolbar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 

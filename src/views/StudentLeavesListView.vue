@@ -5,6 +5,7 @@ import { listStudentLeaves } from '@/api/studentLeaves'
 import { useClassroomStore } from '@/stores/classroom'
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const STATUS_OPTIONS: { value: string; label: string; type: ElTagType }[] = [
@@ -46,10 +47,7 @@ onMounted(() => {
 
 <template>
   <div class="student-leaves-list-view">
-    <div class="page-header">
-      <h2>學生請假紀錄</h2>
-      <p class="hint">家長端提交即自動成立，此頁僅供查閱。如需修改考勤請至「學生考勤」介面。</p>
-    </div>
+    <PageHeader title="學生請假紀錄" subtitle="家長端提交即自動成立，此頁僅供查閱。如需修改考勤請至「學生考勤」介面。" />
 
     <el-form :inline="true" class="filter-bar">
       <el-form-item label="狀態">
@@ -120,16 +118,6 @@ onMounted(() => {
 <style scoped>
 .student-leaves-list-view {
   padding: 0;
-}
-
-.page-header {
-  margin-bottom: 16px;
-}
-
-.page-header .hint {
-  color: var(--text-tertiary);
-  font-size: 13px;
-  margin-top: 4px;
 }
 
 .filter-bar {

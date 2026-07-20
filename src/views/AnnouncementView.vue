@@ -20,6 +20,7 @@ import { Top, Document } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
 import { useTableFilters } from '@/composables/useTableFilters'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -394,10 +395,11 @@ onMounted(() => {
 
 <template>
   <div class="announcement-view">
-    <div class="page-header">
-      <h2>公告管理</h2>
-      <el-button type="primary" @click="openAdd">新增公告</el-button>
-    </div>
+    <PageHeader title="公告管理">
+      <template #actions>
+        <el-button type="primary" @click="openAdd">新增公告</el-button>
+      </template>
+    </PageHeader>
 
     <AdminListToolbar
       v-model:search="annSearch"

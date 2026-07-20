@@ -13,6 +13,7 @@ import MonthlyPnLPanel from './reports/MonthlyPnLPanel.vue'
 import MonthlyFixedCostPanel from './reports/MonthlyFixedCostPanel.vue'
 import AttendancePanel from './reports/AttendancePanel.vue'
 import SalaryPanel from './reports/SalaryPanel.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -117,18 +118,17 @@ defineExpose({
 
 <template>
   <div class="reports-page">
-    <div class="page-header">
-      <div class="page-title">
-        <h2>報表統計</h2>
+    <PageHeader title="報表統計">
+      <template #title-extra>
         <span class="viewer-tag">{{ viewerName }} 的報表統計</span>
-      </div>
-      <div class="page-controls">
+      </template>
+      <template #actions>
         <el-tag type="info" effect="plain" size="small" data-test="data-cutoff-badge">{{ cutoffBadgeText }}</el-tag>
         <el-select :model-value="selectedYear" style="width: 120px;" @change="onYearChange">
           <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
         </el-select>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-tabs v-model="activeTab" type="card" class="reports-tabs" :before-leave="onTabBeforeLeave">
       <el-tab-pane label="經營總覽" name="overview">
@@ -163,22 +163,7 @@ defineExpose({
 
 <style scoped>
 .reports-page { padding: 0; }
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-4);
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.page-title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-}
 .viewer-tag { font-size: 13px; color: var(--el-text-color-secondary); }
-.page-controls { display: flex; align-items: center; gap: 10px; }
 .tab-entry-label { display: inline-flex; align-items: center; gap: 4px; }
 .reports-tabs :deep(.el-tabs__item) { font-weight: 600; }
 </style>

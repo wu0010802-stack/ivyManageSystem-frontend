@@ -1,17 +1,17 @@
 <template>
   <div class="year-plan-workspace">
-    <div class="page-header">
-      <div class="header-main">
-        <h2>新學年預編班</h2>
+    <PageHeader title="新學年預編班">
+      <template #title-extra>
         <template v-if="status">
           <span class="term-range">
             {{ status.source_school_year }} 學年下學期 → {{ status.target_school_year }} 學年上學期
           </span>
           <span class="status-badge" :class="`status-${state}`">{{ stateLabel }}</span>
         </template>
-      </div>
+      </template>
       <!-- mutation in-flight（loading=true）期間鎖住所有互動觸發點：雙擊會以同一
            base_version 送第二發、撞 409 誤導使用者「有別人在動草稿」 -->
+      <template #actions>
       <div v-if="status" class="actions">
         <el-badge v-if="isNarrow && plan" :value="totalIssueCount" :hidden="totalIssueCount === 0" class="drawer-badge">
           <el-button class="btn-side-drawer" @click="drawerVisible = true">問題與名單</el-button>
@@ -38,7 +38,8 @@
           </template>
         </el-dropdown>
       </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <div v-if="loading && !plan" class="loading-skeleton">
       <div class="skeleton-row" v-for="i in 4" :key="i"></div>
@@ -141,6 +142,7 @@ import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.
 import PlanClassEditDialog from '@/components/enrollment/planning/PlanClassEditDialog.vue'
 import PlanPublishDialog from '@/components/enrollment/planning/PlanPublishDialog.vue'
 import type { Schema } from '@/api/_generated/typed'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 // 新學年預編班工作台（Task 11 唯讀渲染層 + Task 12 互動編輯/批次/發布）。
 // 所有互動 mutation 共用 useYearPlanWorkspace 單一狀態來源：成功後 reload() 取得新
@@ -452,22 +454,6 @@ async function onStudentMove(payload: {
 </script>
 
 <style scoped>
-.page-header {
-  margin-bottom: var(--space-5);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.header-main {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
 .term-range {
   color: var(--text-secondary);
   font-size: var(--text-sm);
