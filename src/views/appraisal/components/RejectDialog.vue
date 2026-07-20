@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { rejectSummary } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
-import { REJECT_TARGET_LABEL, MSG } from '@/constants/appraisalYearEnd'
+import { REJECT_TARGET_LABEL, MSG, statusLabel } from '@/constants/appraisalYearEnd'
 
 interface Summary { id?: number; status?: string; employee_name?: string; [key: string]: unknown }
 
@@ -87,7 +87,7 @@ async function submit() {
   >
     <el-form label-width="100px">
       <el-form-item label="當前狀態">
-        <el-tag>{{ summary?.status }}</el-tag>
+        <el-tag>{{ statusLabel(summary?.status ?? '') }}</el-tag>
       </el-form-item>
       <el-form-item label="退簽目標">
         <el-radio-group v-model="toStatus" data-test="to-status-radio">

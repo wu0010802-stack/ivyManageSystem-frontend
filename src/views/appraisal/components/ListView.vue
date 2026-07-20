@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { statusLabel as labelStatus, gradeLabel, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
+import { statusLabel as labelStatus, gradeLabel, SIGN_STATUS_ORDER, ROLE_GROUP_LABEL } from '@/constants/appraisalYearEnd'
 
 interface Summary { id: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
@@ -86,8 +86,12 @@ function openLog(summary: Summary) { emit('open-log', summary) }
         />
       </template>
     </el-table-column>
-    <el-table-column label="員工 ID" prop="employee_id" width="100" />
-    <el-table-column label="角色群" prop="role_group" width="140" />
+    <el-table-column label="員工" width="120">
+      <template #default="{ row }">{{ row.employee_name ?? `員工 ${row.employee_id}` }}</template>
+    </el-table-column>
+    <el-table-column label="角色群" width="140">
+      <template #default="{ row }">{{ ROLE_GROUP_LABEL[row.role_group ?? ''] || row.role_group }}</template>
+    </el-table-column>
     <el-table-column label="總分" width="100" sortable :sort-method="sortByTotalScore">
       <template #default="{ row }">
         <span v-if="hasSummary(row.id)">
