@@ -19,7 +19,8 @@
         <span class="attn-row__name">{{ rec.name }}</span>
         <el-radio-group
           v-model="picks[rec.student_id]"
-          size="small"
+          class="attn-row__picks"
+          :aria-label="`${rec.name} 出勤狀態`"
           @change="onPick(rec.student_id)"
         >
           <el-radio-button label="出席" />
@@ -160,6 +161,33 @@ function onOpen() {
 .attn-row__name {
   font-weight: 500;
   flex-shrink: 0;
+}
+/* 觸控目標：radio 按鈕 ≥44px（點名是每日高頻主行動，size small 24px 太小） */
+.attn-row__picks :deep(.el-radio-button__inner) {
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+}
+/* 窄幕：姓名上、5 等寬 radio 佔滿下方一列（避免擠壓截斷） */
+@media (max-width: 600px) {
+  .attn-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .attn-row__picks {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+  }
+  .attn-row__picks :deep(.el-radio-button) {
+    display: block;
+  }
+  .attn-row__picks :deep(.el-radio-button__inner) {
+    width: 100%;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 .attn-error {
   color: var(--el-color-danger);

@@ -225,7 +225,8 @@ function close() {
   padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid var(--el-border-color);
-  background: white;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
   cursor: pointer;
   font-size: 14px;
 }
@@ -256,6 +257,8 @@ function close() {
   border-radius: 6px;
   font-size: 16px;
   font-family: inherit;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
 }
 .actions {
   display: flex;
@@ -266,7 +269,8 @@ function close() {
   padding: 10px 18px;
   border-radius: 8px;
   border: 1px solid var(--el-border-color);
-  background: white;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
   cursor: pointer;
 }
 .actions button.primary {

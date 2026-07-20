@@ -237,6 +237,8 @@ function close() {
   border: 1px solid var(--el-border-color, #dcdfe6);
   border-radius: 6px;
   font-size: 16px;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
 }
 .advanced-toggle {
   align-self: flex-start;
@@ -263,7 +265,8 @@ function close() {
   padding: 10px 18px;
   border-radius: 8px;
   border: 1px solid var(--el-border-color, #dcdfe6);
-  background: white;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
   cursor: pointer;
 }
 .actions button.primary {

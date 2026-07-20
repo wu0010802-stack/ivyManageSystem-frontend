@@ -134,7 +134,7 @@ function close() {
     direction="btt"
     size="90%"
     :show-close="true"
-    title="📏 全班量體位"
+    title="全班量體位"
     @update:model-value="(v) => emit('update:modelValue', v)"
   >
     <div class="batch-sheet">
@@ -286,7 +286,8 @@ function close() {
   padding: 10px 16px;
   border-radius: 8px;
   border: 1px solid var(--el-border-color);
-  background: white;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
   cursor: pointer;
 }
 .actions button.primary {

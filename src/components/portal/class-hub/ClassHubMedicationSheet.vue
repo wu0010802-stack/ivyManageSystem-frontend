@@ -23,14 +23,15 @@
         <div class="med-row__actions">
           <el-button
             type="success"
-            size="small"
+            class="med-action-btn"
+            :icon="Check"
             :loading="working === item.log_id"
             @click="onAdminister(item.log_id)"
           >
-            ✓ 已執行
+            已執行
           </el-button>
           <el-button
-            size="small"
+            class="med-action-btn"
             :loading="working === item.log_id"
             @click="onSkip(item.log_id)"
           >
@@ -46,6 +47,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Check } from '@element-plus/icons-vue'
 import { listToday, administer, skipLog } from '@/api/portalMedications'
 
 interface MedItem {
@@ -170,6 +172,10 @@ function onOpen() {
 .med-row__actions {
   display: flex;
   gap: 8px;
+}
+/* 觸控目標：用藥為安全關鍵操作，按鈕 ≥44px */
+.med-action-btn {
+  min-height: var(--touch-target-min, 44px);
 }
 .med-error {
   color: var(--el-color-danger);
