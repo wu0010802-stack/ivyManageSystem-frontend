@@ -24,8 +24,16 @@
       </el-button>
     </div>
 
+    <!-- 載入失敗（error）與「今日沒有任務」（empty）必須分辨：
+         原本一律顯示空狀態，會讓網路失敗被誤讀為「今天沒有用藥/任務」（安全隱患）。 -->
+    <PortalErrorState
+      v-if="error && !data"
+      message="工作台載入失敗，請確認網路後重試"
+      @retry="manualRefresh"
+    />
+
     <div
-      v-if="!data || data.classroom_id === 0"
+      v-else-if="!data || data.classroom_id === 0"
       class="class-hub__empty"
     >
       <el-empty description="目前沒有班級任務" />
@@ -88,11 +96,13 @@ import ClassHubCommBar from '@/components/portal/class-hub/ClassHubCommBar.vue'
 import ClassHubMessagesDrawer from '@/components/portal/class-hub/ClassHubMessagesDrawer.vue'
 import ClassHubBatchMeasurementCard from '@/components/portal/class-hub/ClassHubBatchMeasurementCard.vue'
 import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
+import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 import { getMeasurementsLatest } from '@/api/portalMeasurements'
 
-const { data, loading, refresh, decrementCount } = usePortalClassHub() as {
+const { data, loading, error, refresh, decrementCount } = usePortalClassHub() as {
   data: import('vue').Ref<Record<string, unknown> | null>
   loading: import('vue').Ref<boolean>
+  error: import('vue').Ref<unknown>
   refresh: () => Promise<void>
   decrementCount: (key: string) => void
 }

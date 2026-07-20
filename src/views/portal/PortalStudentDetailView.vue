@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref, watch, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getStudentDetail } from '@/api/portalStudentDetail'
+import { Odometer, Star } from '@element-plus/icons-vue'
 import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
 import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
+import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
 
 const props = defineProps({
@@ -15,6 +17,7 @@ interface Guardian { id?: number; name?: string; relation?: string; is_primary?:
 interface StudentDetail { student?: Record<string, unknown>; classroom?: { name?: string; [key: string]: unknown }; health?: Record<string, unknown>; guardians?: Guardian[]; attendance_30d?: Record<string, unknown>; recent_observations_30d?: Record<string, unknown>[]; recent_assessments?: Record<string, unknown>[]; recent_incidents_30d?: Record<string, unknown>[]; contact_book_recent?: Record<string, unknown>[]; [key: string]: unknown }
 
 const router = useRouter()
+const route = useRoute()
 const detail = ref<StudentDetail | null>(null)
 const sheets = ref({ measurement: false, milestone: false })
 
@@ -26,24 +29,30 @@ function openMilestoneSheet() {
 }
 const loading = ref(false)
 const error = ref<unknown>(null)
-const activeTab = ref('health')
+// 支援 deep-link 指定分頁（如搜尋面板家長結果帶 ?tab=guardians）
+const activeTab = ref((route.query.tab as string) || 'health')
 
 // 教師端受眾用語；原本直接顯示 raw lifecycle_status（無 label）→ 補上中文 label
 function lifecycleLabel(s: string | undefined | null) {
   return (s && LIFECYCLE_LABELS_PORTAL[s]) || s || ''
 }
 
+// request-sequence guard：快速切換學生時，慢回應不得覆蓋新學生的畫面
+let loadSeq = 0
 async function load() {
+  const seq = ++loadSeq
   loading.value = true
   error.value = null
   try {
     const { data } = await getStudentDetail(Number(props.studentId))
+    if (seq !== loadSeq) return
     detail.value = data
   } catch (e) {
+    if (seq !== loadSeq) return
     error.value = e
     ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '讀取失敗')
   } finally {
-    loading.value = false
+    if (seq === loadSeq) loading.value = false
   }
 }
 
@@ -101,6 +110,13 @@ function back() {
       <div class="pt-shimmer skeleton-block"></div>
     </div>
 
+    <!-- 載入失敗改渲染持久錯誤區塊 + 重試（原本失敗只剩返回鍵的白頁） -->
+    <PortalErrorState
+      v-else-if="error"
+      message="學生資料載入失敗，請確認網路後重試"
+      @retry="load"
+    />
+
     <template v-else-if="detail">
       <!-- Header -->
       <div class="header pt-card-elevated">
@@ -125,8 +141,8 @@ function back() {
         <div class="actions">
           <el-button @click="goMessages">發訊息給家長</el-button>
           <el-button @click="goObservation">新增觀察</el-button>
-          <el-button @click="openMeasurementSheet">📏 記量測</el-button>
-          <el-button @click="openMilestoneSheet">⭐ 記里程碑</el-button>
+          <el-button :icon="Odometer" @click="openMeasurementSheet">記量測</el-button>
+          <el-button :icon="Star" @click="openMilestoneSheet">記里程碑</el-button>
         </div>
       </div>
 
