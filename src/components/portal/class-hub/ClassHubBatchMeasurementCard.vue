@@ -54,7 +54,7 @@ const props = withDefaults(defineProps<{
 .btn {
   padding: 6px 14px;
   border: 1px solid var(--el-color-primary);
-  background: white;
+  background: var(--el-fill-color-blank);
   color: var(--el-color-primary);
   border-radius: 6px;
   cursor: pointer;

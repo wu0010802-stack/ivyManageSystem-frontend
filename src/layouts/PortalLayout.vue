@@ -625,15 +625,14 @@ const submitPassword = async () => {
 
 <style scoped>
 .portal-layout {
-  /* 顯式鎖定亮色 token：防 PWA 快取殘留 / 跨入口 CSS 殘留 / OS 暗模式偏好把表面色改深 */
-  --bg-color: var(--bg-color);
+  /* 亮色（預設）表面/文字 token。原本 --bg-color: var(--bg-color) 是自我循環
+   * 引用（CSS 規格下無效），移除後由 :root 繼承；dark 覆寫見下方 html.dark 區塊。 */
   --bg-color-soft: #f3f4f6;
   --surface-color: var(--neutral-0);
   --pt-surface-app: #f8fafc;
   --pt-surface-card: #ffffff;
   --pt-surface-mute: #f3f4f6;
   --pt-surface-mute-soft: #f9fafb;
-  /* 文字鎖深色：避免 OS dark / 跨入口殘留把 strong/body 改成白色 */
   --pt-text-strong: #0f172a;
   --pt-text-body: #1e293b;
   /* 次級文字 slate-700 (#334155, 10.4:1 AAA on #fff)：業主反映過淡，再往深調一階 */
@@ -643,6 +642,24 @@ const submitPassword = async () => {
   height: 100vh;
   background-color: var(--bg-color);
   color: var(--pt-text-body);
+}
+
+/* Dark mode（教師經 A11yMenu 切 html.dark）：portal 走一致的深色表面 + 亮文字。
+ * 原本亮色 token 硬鎖 + --pt-text-* 鎖深字但 --text-* 未鎖，造成 dark 下深底深字/
+ * 白底亮字對比崩壞。此處以更高特異性（html.dark .portal-layout）覆寫為協調深色。 */
+html.dark .portal-layout {
+  --bg-color: #0f172a;
+  --bg-color-soft: #1e293b;
+  --surface-color: #1e293b;
+  --pt-surface-app: #0f172a;
+  --pt-surface-card: #1e293b;
+  --pt-surface-mute: #263449;
+  --pt-surface-mute-soft: #1e293b;
+  --pt-text-strong: #f1f5f9;
+  --pt-text-body: #e2e8f0;
+  --pt-text-muted: #cbd5e1;
+  --pt-text-soft: #cbd5e1;
+  --pt-text-faint: #94a3b8;
 }
 
 /* Sidebar Styling */
@@ -1017,7 +1034,7 @@ const submitPassword = async () => {
   padding: 6px 12px;
   border: 1px solid var(--el-border-color);
   border-radius: 6px;
-  background: white;
+  background: var(--el-fill-color-blank);
   cursor: pointer;
   color: var(--el-text-color-secondary);
 }

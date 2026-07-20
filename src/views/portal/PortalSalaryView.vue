@@ -325,7 +325,8 @@ onMounted(fetchSalary)
 }
 
 .net-value {
-  color: var(--surface-color);
+  /* 白字固定於 indigo 漸層盒（原 --surface-color 在 dark 翻深 → 深字疊深底崩對比） */
+  color: #fff;
   font-size: 32px;
   font-weight: 700;
   letter-spacing: 0.5px;

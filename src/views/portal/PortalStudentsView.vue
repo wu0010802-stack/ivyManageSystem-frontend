@@ -360,7 +360,7 @@ onMounted(fetchStudents)
   padding: 40px 0;
 }
 .student-card {
-  background: #fff;
+  background: var(--pt-surface-card);
   border: 1px solid var(--border-color-light, #eef0f3);
   border-radius: 14px;
   padding: 14px;
