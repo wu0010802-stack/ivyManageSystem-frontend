@@ -10,6 +10,7 @@ import { InfoFilled } from '@element-plus/icons-vue'
 
 import { fmtPct } from '@/utils/format'
 import { summarizeRule } from './ruleSummary'
+import { ROLE_GROUP_LABEL } from '@/constants/appraisalYearEnd'
 
 interface DisciplinaryInfo { warning_count?: number; minor_count?: number; major_count?: number; commend_count?: number; minor_merit_count?: number; major_merit_count?: number; suggested_score_delta?: number | string; actions?: Record<string, unknown>[]; [key: string]: unknown }
 interface Participant { employee_name?: string; role_group?: string; reinstate_count?: number; attendance?: Record<string, unknown>; retention?: Record<string, unknown> | null; activity?: Record<string, unknown> | null; disciplinary?: DisciplinaryInfo; [key: string]: unknown }
@@ -25,13 +26,6 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
 
 const NON_CLASSROOM_ROLES = new Set(['SUPERVISOR', 'STAFF', 'COOK'])
-const ROLE_GROUP_LABEL: Record<string, string> = {
-  HEAD_TEACHER: '正導師',
-  ASSISTANT_TEACHER: '副導師',
-  SUPERVISOR: '主管',
-  STAFF: '行政',
-  COOK: '廚工',
-}
 
 const ACTION_TYPE_LABEL: Record<string, string> = {
   warning: '警告',

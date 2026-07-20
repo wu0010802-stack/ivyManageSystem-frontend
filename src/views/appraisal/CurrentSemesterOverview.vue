@@ -25,6 +25,7 @@ import {
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { fmtPct } from '@/utils/format'
+import { ROLE_GROUP_LABEL } from '@/constants/appraisalYearEnd'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
@@ -288,14 +289,6 @@ const totalDisciplinary = computed(() => {
 const kpiLoading = computed(() => statusLoading.value || refreshing.value)
 
 // ── 員工狀態表 row 格式化 ─────────────────────────────────
-const ROLE_GROUP_LABEL: Record<string, string> = {
-  HEAD_TEACHER: '正導師',
-  ASSISTANT_TEACHER: '副導師',
-  SUPERVISOR: '主管',
-  STAFF: '行政',
-  COOK: '廚工',
-}
-
 // 不屬於班級 scope 的 role（不顯示留校率 / 才藝報名率）
 const NON_CLASSROOM_ROLES = new Set(['SUPERVISOR', 'STAFF', 'COOK'])
 

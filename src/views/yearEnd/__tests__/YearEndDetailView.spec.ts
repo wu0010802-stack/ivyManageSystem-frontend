@@ -640,3 +640,52 @@ describe('YearEndDetailView — Task 11 明細頁重整', () => {
     expect(wrapper.find('[data-test="reopen-locked-button"]').exists()).toBe(false)
   })
 })
+
+/**
+ * Task 4 code review Important finding：canReject(row) 為三條件 AND
+ * （rejectableStages 矩陣命中 && hasPermission(perm) && cycle.status === 'OPEN'），
+ * 但既有測試只覆蓋 rejectableStages 純物件矩陣（YearEndDetailView.reject.spec.ts），
+ * 缺 mount-level 測試釘住組合邏輯——尤其「cycle 非 OPEN（LOCKED/CLOSED）時即使矩陣命中
+ * 且有權限，也不出現退回按鈕」這個防死路 gate。
+ *
+ * 行內「退回」按鈕文字為精確比對（非 substring）：cycle header 在 LOCKED/CLOSED 狀態下
+ * 另有「退回開放」「退回鎖定」按鈕，text() 皆含子字串「退回」，若用 includes 比對會誤命中，
+ * 故一律用 `text() === '退回'` 篩選列級按鈕。
+ */
+describe('YearEndDetailView — 退回按鈕 canReject 閘門', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  function findRejectButtons(wrapper: Awaited<ReturnType<typeof mountView>>) {
+    return wrapper.findAll('button').filter((b) => b.text() === '退回')
+  }
+
+  it('cycle=OPEN + ACCOUNTING_SIGNED + 具備 YEAR_END_ACCOUNTING 權限 → 退回按鈕出現', async () => {
+    setupApiMocks([makeSettlement({ status: 'ACCOUNTING_SIGNED' })], { status: 'OPEN' })
+    mockHasPermission.mockImplementation((p: string) => p === 'YEAR_END_ACCOUNTING')
+
+    const wrapper = await mountView()
+
+    expect(findRejectButtons(wrapper)).toHaveLength(1)
+  })
+
+  it('cycle=LOCKED（矩陣命中且有權限）→ 退回按鈕不出現（防死路 gate 核心）', async () => {
+    setupApiMocks([makeSettlement({ status: 'ACCOUNTING_SIGNED' })], { status: 'LOCKED' })
+    mockHasPermission.mockImplementation((p: string) => p === 'YEAR_END_ACCOUNTING')
+
+    const wrapper = await mountView()
+
+    expect(findRejectButtons(wrapper)).toHaveLength(0)
+  })
+
+  it('cycle=OPEN + ACCOUNTING_SIGNED + 不具備 YEAR_END_ACCOUNTING 權限 → 退回按鈕不出現', async () => {
+    setupApiMocks([makeSettlement({ status: 'ACCOUNTING_SIGNED' })], { status: 'OPEN' })
+    mockHasPermission.mockImplementation((p: string) => p !== 'YEAR_END_ACCOUNTING')
+
+    const wrapper = await mountView()
+
+    expect(findRejectButtons(wrapper)).toHaveLength(0)
+  })
+})

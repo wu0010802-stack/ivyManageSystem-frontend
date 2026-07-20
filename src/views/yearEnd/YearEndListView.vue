@@ -13,6 +13,8 @@ import {
 import { apiError } from '@/utils/error'
 import { CYCLE_STATUS_LABEL, CYCLE_STATUS_TAG } from '@/constants/appraisalYearEnd'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { useAcademicTermStore } from '@/stores/academicTerm'
+import { hasPermission } from '@/utils/auth'
 
 interface YearEndCycleRow {
   id: number
@@ -30,29 +32,47 @@ const importDialog = ref(false)
 const busy = ref(false)
 const importFallbackNotice = '系統已自動試算並產生轉帳清冊；Excel 匯入僅供例外對稿或歷史資料修復。'
 
+const term = useAcademicTermStore()
+const canCreate = hasPermission('YEAR_END_FINALIZE')
+const canImport = hasPermission('YEAR_END_WRITE')
+
 const form = ref({
-  academic_year: 114,
+  academic_year: 0,
   start_date: '',
   end_date: '',
   bonus_calc_date: '',
 })
 
+/** 新增年度週期：開窗時依當前學年動態推算預設值（避免捕捉過期的學年常數）。 */
+function openCreate() {
+  const y = term.school_year
+  const west = y + 1911
+  form.value = {
+    academic_year: y,
+    start_date: `${west}-08-01`,
+    end_date: `${west + 1}-07-31`,
+    bonus_calc_date: `${west + 1}-01-15`,
+  }
+  createDialog.value = true
+}
+
+const importWest = term.school_year + 1911
 const importForm = ref<{
   file: File | null
   start_date: string
   end_date: string
   bonus_calc_date: string
-  org_rate_first: number
-  org_rate_second: number
-  enrollment_target: number
+  org_rate_first: number | null
+  org_rate_second: number | null
+  enrollment_target: number | null
 }>({
   file: null,
-  start_date: '',
-  end_date: '',
-  bonus_calc_date: '',
-  org_rate_first: 83.6,
-  org_rate_second: 91.5,
-  enrollment_target: 160,
+  start_date: `${importWest}-08-01`,
+  end_date: `${importWest + 1}-07-31`,
+  bonus_calc_date: `${importWest + 1}-01-15`,
+  org_rate_first: null,
+  org_rate_second: null,
+  enrollment_target: null,
 })
 
 async function load() {
@@ -87,14 +107,24 @@ async function doImport() {
   }
   busy.value = true
   try {
-    const { data } = await importYearEndExcel(importForm.value.file, {
+    // 三個歷史魔數欄位留空時不帶入 payload，讓後端沿用自己的系統預設值。
+    const params: {
+      startDate: string
+      endDate: string
+      bonusCalcDate: string
+      orgRateFirst?: number
+      orgRateSecond?: number
+      enrollmentTarget?: number
+    } = {
       startDate: importForm.value.start_date,
       endDate: importForm.value.end_date,
       bonusCalcDate: importForm.value.bonus_calc_date,
-      orgRateFirst: importForm.value.org_rate_first,
-      orgRateSecond: importForm.value.org_rate_second,
-      enrollmentTarget: importForm.value.enrollment_target,
-    })
+    }
+    if (importForm.value.org_rate_first != null) params.orgRateFirst = importForm.value.org_rate_first
+    if (importForm.value.org_rate_second != null) params.orgRateSecond = importForm.value.org_rate_second
+    if (importForm.value.enrollment_target != null) params.enrollmentTarget = importForm.value.enrollment_target
+
+    const { data } = await importYearEndExcel(importForm.value.file, params)
     ElMessage.success(
       `匯入完成：settlements ${data.settlements_upserted}、特別獎金 ${data.special_bonuses_upserted}、` +
         `班級績效 ${data.class_targets_upserted}、跳過 ${data.skipped_unresolved_names.length}`
@@ -115,12 +145,17 @@ onMounted(load)
   <div class="ye-list">
     <PageHeader title="年終獎金" subtitle="年度結算週期管理">
       <template #actions>
-        <el-button type="primary" :icon="Plus" @click="createDialog = true">新增年度週期</el-button>
-        <el-dropdown trigger="click">
+        <el-tooltip content="需要年終核定權限" :disabled="canCreate">
+          <span>
+            <el-button type="primary" :icon="Plus" :disabled="!canCreate" @click="openCreate">新增年度週期</el-button>
+          </span>
+        </el-tooltip>
+        <el-dropdown v-if="canImport" trigger="click">
           <el-button :icon="MoreFilled">更多操作</el-button>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item
+                v-if="canImport"
                 :icon="Upload"
                 data-test="year-end-import-fallback-action"
                 @click="importDialog = true"
@@ -193,9 +228,9 @@ onMounted(load)
         <el-form-item label="開始日"><el-date-picker v-model="importForm.start_date" value-format="YYYY-MM-DD" /></el-form-item>
         <el-form-item label="結束日"><el-date-picker v-model="importForm.end_date" value-format="YYYY-MM-DD" /></el-form-item>
         <el-form-item label="結算基準日"><el-date-picker v-model="importForm.bonus_calc_date" value-format="YYYY-MM-DD" /></el-form-item>
-        <el-form-item label="上學期達成比率%"><el-input-number v-model="importForm.org_rate_first" :precision="2" /></el-form-item>
-        <el-form-item label="下學期達成比率%"><el-input-number v-model="importForm.org_rate_second" :precision="2" /></el-form-item>
-        <el-form-item label="招生目標"><el-input-number v-model="importForm.enrollment_target" /></el-form-item>
+        <el-form-item label="上學期達成比率%"><el-input-number v-model="importForm.org_rate_first" :precision="2" placeholder="留空＝沿用系統自動值" /></el-form-item>
+        <el-form-item label="下學期達成比率%"><el-input-number v-model="importForm.org_rate_second" :precision="2" placeholder="留空＝沿用系統自動值" /></el-form-item>
+        <el-form-item label="招生目標"><el-input-number v-model="importForm.enrollment_target" placeholder="留空＝沿用系統自動值" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="importDialog = false">取消</el-button>

@@ -17,6 +17,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { getCurrentAcademicTerm } from '@/utils/academic'
+import { useAcademicTermStore } from '@/stores/academicTerm'
 import { cycleStatusLabel } from '@/constants/appraisalYearEnd'
 import CycleDetailPanel from './CycleDetailPanel.vue'
 import type { UploadRawFile } from 'element-plus'
@@ -32,18 +33,22 @@ const importDialog = ref(false)
 const submitting = ref(false)
 const importFallbackNotice = '系統已支援進頁重算與手動事件維護；Excel 匯入僅供例外對稿或歷史資料修復。'
 
+const term = useAcademicTermStore()
+const west = term.school_year + 1911 // 學年起始西元年
+
 const form = ref({
-  academic_year: 114,
-  semester: 'FIRST' as 'FIRST' | 'SECOND',
-  enrollment_target: 160,
+  academic_year: term.school_year,
+  semester: (term.semester === 2 ? 'SECOND' : 'FIRST') as 'FIRST' | 'SECOND',
+  enrollment_target: null as number | null,
   enrollment_actual: null as number | null,
 })
 
+// 匯入日期預設依學期推算（僅供修改的建議值；基準日對齊 9/15、3/15 口徑）
 const importForm = ref({
   file: null as UploadRawFile | null,
-  start_date: '',
-  end_date: '',
-  base_score_calc_date: '',
+  start_date: term.semester === 2 ? `${west + 1}-02-01` : `${west}-08-01`,
+  end_date: term.semester === 2 ? `${west + 1}-07-31` : `${west + 1}-01-31`,
+  base_score_calc_date: term.semester === 2 ? `${west + 1}-03-15` : `${west}-09-15`,
 })
 
 const semesterLabel = (v: string) => (v === 'FIRST' ? '上學期' : '下學期')
@@ -110,7 +115,7 @@ async function load() {
 async function submit() {
   submitting.value = true
   try {
-    await createAppraisalCycle({ ...form.value })
+    await createAppraisalCycle({ ...form.value, enrollment_target: form.value.enrollment_target ?? 0 })
     ElMessage.success('建立成功')
     createDialog.value = false
     await load()
@@ -206,7 +211,7 @@ onMounted(load)
             <el-radio-button value="SECOND">下學期</el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="招生目標"><el-input-number v-model="form.enrollment_target" :min="0" /></el-form-item>
+        <el-form-item label="招生目標"><el-input-number v-model="form.enrollment_target" :min="0" placeholder="可稍後於規則設定→學年目標人數補填" /></el-form-item>
         <el-form-item label="實際註冊"><el-input-number v-model="form.enrollment_actual" :min="0" /></el-form-item>
       </el-form>
       <template #footer>

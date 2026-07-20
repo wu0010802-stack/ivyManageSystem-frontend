@@ -17,7 +17,9 @@ import {
   updateCycleStatus,
   exportYearEndSummaryXlsxUrl,
   exportYearEndTransferRosterXlsxUrl,
+  rejectSettlement,
 } from '@/api/yearEnd'
+import { rejectableStages, formatBatchFailures } from './settlementReject'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
@@ -162,8 +164,40 @@ async function sign(s: Settlement, stage: string) {
   }
 }
 
+// ── 退回草稿（含 FINALIZED 警示）─────────────────────────────────
+const rejectDialog = ref(false)
+const rejectTarget = ref<Settlement | null>(null)
+const rejectReason = ref('')
+
+function canReject(row: { status: string }): boolean {
+  const perm = rejectableStages[row.status]
+  return !!perm && hasPermission(perm) && cycle.value?.status === 'OPEN'
+}
+
+function openReject(row: Settlement) {
+  rejectTarget.value = row
+  rejectReason.value = ''
+  rejectDialog.value = true
+}
+
+async function submitReject() {
+  if (!rejectTarget.value || !rejectReason.value.trim()) return
+  busy.value = true
+  try {
+    await rejectSettlement(rejectTarget.value.id, rejectReason.value.trim())
+    ElMessage.success('已退回草稿，可重新手動調整或試算')
+    rejectDialog.value = false
+    await load()
+  } catch (e) {
+    ElMessage.error(apiError(e, '退回失敗'))
+  } finally {
+    busy.value = false
+  }
+}
+
 // ── 批次簽核/核定 ────────────────────────────────────────────────
 const selectedSettlements = ref<Settlement[]>([])
+const batchFailures = ref<string[]>([])
 function handleSelectionChange(rows: Settlement[]) {
   selectedSettlements.value = rows
 }
@@ -181,9 +215,10 @@ async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
           : await finalizeBatch(ids)
     const data = res.data as { succeeded_count?: number; failed?: { settlement_id: number; reason: string }[] }
     const done = data?.succeeded_count ?? 0
-    const failed = data?.failed?.length ?? 0
-    if (failed) {
-      ElMessage.warning(`完成 ${done} 筆，${failed} 筆未處理（狀態不符/職責分離等，明細見伺服器回應）`)
+    const failedItems = data?.failed ?? []
+    batchFailures.value = formatBatchFailures(failedItems, settlements.value)
+    if (failedItems.length) {
+      ElMessage.warning(`完成 ${done} 筆，${failedItems.length} 筆未處理（明細見下方清單）`)
     } else {
       ElMessage.success(`已完成 ${done} 筆`)
     }
@@ -304,6 +339,19 @@ onMounted(load)
           <el-button v-if="hasPermission('YEAR_END_ACCOUNTING')" size="small" :loading="busy" @click="signBatch('accounting')">批次會計簽核</el-button>
           <el-button v-if="hasPermission('YEAR_END_FINALIZE')" size="small" type="primary" :loading="busy" @click="signBatch('finalize')">批次核定</el-button>
         </div>
+        <el-alert
+          v-if="batchFailures.length"
+          type="warning"
+          :closable="true"
+          show-icon
+          title="以下結算單未完成批次簽核"
+          style="margin: 8px 0"
+          @close="batchFailures = []"
+        >
+          <ul style="margin: 4px 0 0; padding-left: 18px">
+            <li v-for="line in batchFailures" :key="line">{{ line }}</li>
+          </ul>
+        </el-alert>
         <el-table :data="settlements" v-loading="loading" stripe size="small" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="44" />
           <el-table-column label="員工" width="110">
@@ -373,6 +421,13 @@ onMounted(load)
                 type="success"
                 size="small"
               >已核定</el-tag>
+              <el-button
+                v-if="canReject(row)"
+                size="small"
+                type="warning"
+                plain
+                @click="openReject(row)"
+              >退回</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -438,6 +493,28 @@ onMounted(load)
       :employee-id="provenanceEmployeeId"
       :provenance-keys="DEDUCTION_KEYS"
     />
+
+    <!-- 退回草稿 dialog -->
+    <el-dialog v-model="rejectDialog" title="退回草稿" width="480px">
+      <el-alert
+        v-if="rejectTarget?.status === 'FINALIZED'"
+        type="warning" :closable="false" show-icon
+        title="此筆已核定：退回後將自財務報表移除，需重新完成簽核與核定。"
+        style="margin-bottom: 12px"
+      />
+      <el-form label-width="80px">
+        <el-form-item label="員工">{{ rejectTarget?.employee_name }}</el-form-item>
+        <el-form-item label="原因" required>
+          <el-input v-model="rejectReason" type="textarea" :rows="3"
+            placeholder="退回原因（必填，寫入簽核軌跡）" maxlength="500" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rejectDialog = false">取消</el-button>
+        <el-button type="warning" :loading="busy" :disabled="!rejectReason.trim()"
+          @click="submitReject">確認退回</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 

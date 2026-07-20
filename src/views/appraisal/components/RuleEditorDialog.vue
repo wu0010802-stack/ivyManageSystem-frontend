@@ -58,10 +58,10 @@ const dialogVisible = computed({
 })
 
 const RULE_TYPE_OPTIONS = [
-  { value: 'PER_UNIT', label: '每次扣分（PER_UNIT）' },
-  { value: 'TIER', label: '階梯式（TIER）' },
-  { value: 'FLAT_THRESHOLD', label: '單一閾值（FLAT_THRESHOLD）' },
-  { value: 'DISCIPLINARY_TIERED', label: '懲處分級（REWARD_PUNISH 專用）' },
+  { value: 'PER_UNIT', label: '每次扣分' },
+  { value: 'TIER', label: '階梯式' },
+  { value: 'FLAT_THRESHOLD', label: '單一閾值' },
+  { value: 'DISCIPLINARY_TIERED', label: '懲處分級' },
 ]
 
 // P2-FE-5：input_field 限定枚舉，避免 free text 與後端 rule_applier 取值不同步。
@@ -257,6 +257,12 @@ defineExpose({ disablePastDates, validateTiersMonotonic })
             :label="o.label"
           />
         </el-select>
+        <div class="rule-type-hint">
+          <template v-if="form.rule_type === 'PER_UNIT'">每發生 1 次扣固定分。例：遲到 1 次扣 0.5 分。</template>
+          <template v-else-if="form.rule_type === 'TIER'">依數值落在哪個區間給對應分數。例：留校率 90–95% 扣 1 分、低於 90% 扣 2 分。</template>
+          <template v-else-if="form.rule_type === 'FLAT_THRESHOLD'">超過（或低於）單一門檻時一次性加減分。</template>
+          <template v-else-if="form.rule_type === 'DISCIPLINARY_TIERED'">依懲處（嘉獎/申誡/記過…）分級對應分值，功過相抵。</template>
+        </div>
       </el-form-item>
 
       <template v-if="form.rule_type === 'PER_UNIT'">
@@ -431,4 +437,5 @@ defineExpose({ disablePastDates, validateTiersMonotonic })
   align-items: center;
   margin-bottom: 6px;
 }
+.rule-type-hint { font-size: var(--text-sm); color: var(--text-secondary); margin: 4px 0 8px; }
 </style>

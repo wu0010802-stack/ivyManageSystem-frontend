@@ -123,3 +123,12 @@ export function cycleStatusLabel(s: string) { return CYCLE_STATUS_LABEL[s] || s 
 export function signStatusLabel(s: string) { return statusLabel(s) }
 export function gradeLabel(g: string) { return GRADE_LABEL[g] || g }
 export function exceptionTypeLabel(t: string) { return EXCEPTION_TYPE_LABEL[t] || t }
+
+// ── 員工角色群（對齊 CurrentSemesterOverview / AggregatedStatusDetailDialog 原本各自定義的同名物件，hoist 為單一來源）──
+export const ROLE_GROUP_LABEL: Record<string, string> = {
+  HEAD_TEACHER: '正導師',
+  ASSISTANT_TEACHER: '副導師',
+  SUPERVISOR: '主管',
+  STAFF: '行政',
+  COOK: '廚工',
+}
