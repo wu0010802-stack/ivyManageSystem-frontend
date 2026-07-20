@@ -5,7 +5,6 @@ import { ElMessage } from 'element-plus'
 import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
-import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
 import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
@@ -162,8 +161,10 @@ const buildFailedDescription = computed(() =>
 // Task 12①：原「展開」按鈕 push 到不存在的 /year_end/cycles/:id/settlements/:id
 // （本輪最嚴重的 404 硬傷）。改列內 expand（el-table-column type="expand"）就地
 // 展開，這裡把主結算全部欄位（含動態獎金欄，沿用 bonusColumns 既有定義）攤平成
-// label/value pairs 給 el-descriptions 用；金額改 formatCurrency（原始精度，供稽核
-// 核對），不用主表 moneyInt（顯示層四捨五入，見 F-2 註解）。
+// label/value pairs 給 el-descriptions 用。
+// Task 8③：金額改用 moneyInt（與主列一致，見 F-2 註解），原本用 formatCurrency
+// 顯示原始精度會與同一筆金額的主列（已四捨五入）不一致，造成使用者誤以為兩者
+// 是不同數字；展開列與主列本就同源同筆資料，理應顯示同一個數字。
 interface ExpandField {
   label: string
   value: string
@@ -171,12 +172,12 @@ interface ExpandField {
 
 function expandFields(row: GridRow): ExpandField[] {
   const fields: ExpandField[] = [
-    { label: '主結算', value: formatCurrency(row.payable_amount) },
+    { label: '主結算', value: moneyInt(row.payable_amount) },
   ]
   for (const col of bonusColumns.value) {
-    fields.push({ label: col.label, value: formatCurrency(row.special_bonuses[col.key] ?? 0) })
+    fields.push({ label: col.label, value: moneyInt(row.special_bonuses[col.key] ?? 0) })
   }
-  fields.push({ label: '合計', value: formatCurrency(row.total_amount) })
+  fields.push({ label: '合計', value: moneyInt(row.total_amount) })
   fields.push({ label: '狀態', value: (SIGN_STATUS_LABEL as Record<string, string>)[row.status] ?? row.status })
   fields.push({ label: '備註', value: row.remark || '—' })
   return fields
@@ -355,6 +356,16 @@ onMounted(initGrid)
         >轉帳名冊 PDF</el-button>
       </div>
     </header>
+
+    <!-- Task 8②：非 OPEN 週期提示——本頁為最後一次試算結果，開啟不會重新試算
+         （呼應 initGrid 的 fail-closed 語意：LOCKED/CLOSED 不再自動 build）。 -->
+    <el-alert
+      v-if="cycleStatus && cycleStatus !== 'OPEN'"
+      type="info" :closable="false" show-icon
+      :title="`週期${cycleStatus === 'LOCKED' ? '已鎖定' : '已封存'}：本頁為最後一次試算結果，開啟頁面不會重新試算。`"
+      class="grid-alert"
+      data-test="non-open-banner"
+    />
 
     <!-- Task 12③：進頁自動試算失敗 stale banner（原本完全靜默降級，見 initGrid） -->
     <el-alert

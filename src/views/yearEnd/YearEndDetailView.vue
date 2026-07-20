@@ -292,6 +292,14 @@ onMounted(load)
       <el-tag :type="CYCLE_STATUS_TAG[cycle.status] || 'info'" size="small">{{ cycleStatusLabel(cycle.status) }}</el-tag>
     </div>
 
+    <!-- Task 8①：LOCKED 週期語意明示——鎖定後僅可簽核/核定，不可再試算/手動調整/改設定 -->
+    <el-alert
+      v-if="cycle?.status === 'LOCKED'"
+      type="info" :closable="false" show-icon
+      title="週期已鎖定：僅可簽核與核定；不可再試算、手動調整或修改設定。"
+      style="margin-bottom: 12px"
+    />
+
     <!-- Task 11②：頂部簽核進度列，counts 由已載入 settlements 本地聚合 -->
     <SignProgressBar :counts="settlementCounts" class="sign-progress-wrap" />
 

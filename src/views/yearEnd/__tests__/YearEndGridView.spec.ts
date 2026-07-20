@@ -691,7 +691,9 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     expect(pushMock).not.toHaveBeenCalled()
   })
 
-  it('expandFields(row) 攤平主結算/動態獎金/合計/狀態/備註為 label-value pairs（formatCurrency 原始精度顯示）', async () => {
+  // Task 8③：展開列金額格式改對齊主列（moneyInt，顯示層四捨五入到整數元），
+  // 不再用 formatCurrency 顯示原始精度——同一筆金額主列/展開列應顯示同一個數字。
+  it('expandFields(row) 攤平主結算/動態獎金/合計/狀態/備註為 label-value pairs（moneyInt 對齊主列，四捨五入到整數元）', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
       data: [makeRow({ remark: '114.08 到職' })],
     } as never)
@@ -705,11 +707,11 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     const fields = vm.expandFields(vm.rows[0]!)
     const byLabel = Object.fromEntries(fields.map((f) => [f.label, f.value]))
 
-    // formatCurrency 不四捨五入（跟主表 moneyInt 不同——展開列供稽核核對用原始精度）
-    expect(byLabel['主結算']).toBe('NT$29,044.71')
+    // moneyInt 四捨五入到整數元（29044.71 → 29045），與主列同一筆金額顯示一致
+    expect(byLabel['主結算']).toBe('NT$29,045')
     expect(byLabel['考核上']).toBe('NT$3,312')
     expect(byLabel['超額']).toBe('NT$2,000')
-    expect(byLabel['合計']).toBe('NT$40,106.71')
+    expect(byLabel['合計']).toBe('NT$40,107')
     expect(byLabel['狀態']).toBe('草稿')
     expect(byLabel['備註']).toBe('114.08 到職')
   })
@@ -731,7 +733,7 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     expect(expandCol.attributes('fixed')).toBe('left')
   })
 
-  it('展開列（type=expand）實際渲染 el-descriptions，內容含主結算/合計/備註', async () => {
+  it('展開列（type=expand）實際渲染 el-descriptions，內容含主結算/合計/備註（moneyInt 對齊主列）', async () => {
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
     } as never)
@@ -743,9 +745,9 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     const text = wrapper.text()
 
     expect(text).toContain('主結算')
-    expect(text).toContain('NT$29,044.71')
+    expect(text).toContain('NT$29,045')
     expect(text).toContain('合計')
-    expect(text).toContain('NT$40,106.71')
+    expect(text).toContain('NT$40,107')
     expect(text).toContain('114.08 到職')
   })
 
