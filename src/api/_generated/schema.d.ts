@@ -14593,6 +14593,30 @@ export interface paths {
         patch: operations["manual_patch_settlement_api_year_end_settlements__settlement_id__manual_patch"];
         trace?: never;
     };
+    "/year_end/settlements/{settlement_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Settlement
+         * @description 退回草稿：任一已簽核狀態 → DRAFT，清除全部簽核欄位。
+         *
+         *     與簽核不同，退回是「重開計算輸入」的入口，因此 LOCKED（結構凍結）與
+         *     CLOSED 一律拒絕（不走 allow_when_locked）。先 unlocked read 做守衛，
+         *     通過後才 with_for_update mutation（見 appraisal reject 同模式註解）。
+         */
+        post: operations["reject_settlement_api_year_end_settlements__settlement_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/settlements/{settlement_id}/sign_accounting": {
         parameters: {
             query?: never;
@@ -29273,6 +29297,14 @@ export interface components {
             year_end_cycle_id: number;
         };
         /**
+         * SettlementRejectRequest
+         * @description 單筆退回草稿；原因必填（寫入 settlement log 供稽核）。
+         */
+        SettlementRejectRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /**
          * ShiftAssignmentOut
          * @description 每週排班單筆 (GET /assignments)。
          */
@@ -31542,7 +31574,7 @@ export interface components {
          * @description 年終 settlement 軌跡動作型別。
          * @enum {string}
          */
-        YearEndSettlementLogAction: "BUILD" | "MANUAL_PATCH" | "SIGN_SUPERVISOR" | "SIGN_ACCOUNTING" | "FINALIZE";
+        YearEndSettlementLogAction: "BUILD" | "MANUAL_PATCH" | "SIGN_SUPERVISOR" | "SIGN_ACCOUNTING" | "FINALIZE" | "REJECT";
         /** YearEndSettlementLogOut */
         YearEndSettlementLogOut: {
             action: components["schemas"]["YearEndSettlementLogAction"];
@@ -57435,6 +57467,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ManualPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_settlement_api_year_end_settlements__settlement_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementRejectRequest"];
             };
         };
         responses: {

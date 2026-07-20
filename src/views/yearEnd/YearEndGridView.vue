@@ -3,6 +3,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
+import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
@@ -295,8 +296,10 @@ async function submitEdit() {
     await loadGrid()
     ElMessage.success('已更新')
     editVisible.value = false
-  } catch {
-    ElMessage.error('更新失敗，請確認結算單狀態')
+  } catch (e) {
+    ElMessage.error(
+      apiError(e, '更新失敗：僅草稿狀態可手動調整；已簽核者請先到「結算明細」將該筆退回草稿')
+    )
   }
 }
 

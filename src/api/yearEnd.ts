@@ -61,6 +61,13 @@ export const signAccountingSettlement = (settlementId: number) =>
 export const finalizeSettlement = (settlementId: number) =>
   api.post(`/year_end/settlements/${settlementId}/finalize`)
 
+/** 退回草稿：任一已簽核狀態 → DRAFT，清除全部簽核欄位（reason 必填，寫入簽核軌跡）。 */
+export const rejectSettlement = (
+  settlementId: number,
+  reason: string,
+): AxiosResp<'/year_end/settlements/{settlement_id}/reject', 'post'> =>
+  api.post(`/year_end/settlements/${settlementId}/reject`, { reason })
+
 // 批次簽核/核定（新端點，push 前 gen:api 補 schema.d.ts）；回 {succeeded_ids, succeeded_count, failed:[{settlement_id,reason}]}
 export const signSupervisorBatch = (settlementIds: number[]) =>
   api.post('/year_end/settlements/sign_supervisor_batch', { settlement_ids: settlementIds })
