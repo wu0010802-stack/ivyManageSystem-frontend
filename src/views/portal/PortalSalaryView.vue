@@ -307,15 +307,17 @@ onMounted(fetchSalary)
   font-weight: 600;
 }
 
+/* 實發金額強調列：保留品牌漸層強調（薪資 headline 數字的情緒收尾），
+ * 但移除 floating box-shadow —— 該陰影讓它像卡中卡（嵌在 salary-card 內的
+ * 浮動卡片），改為卡片內的強調頁尾列。 */
 .net-salary-box {
   margin-top: var(--space-6);
-  padding: var(--space-6);
+  padding: var(--space-5) var(--space-6);
   background: linear-gradient(135deg, var(--color-primary) 0%, #4338ca 100%);
   border-radius: var(--radius-lg);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
 }
 
 .net-label {

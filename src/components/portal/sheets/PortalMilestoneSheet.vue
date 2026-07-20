@@ -142,7 +142,7 @@ function close() {
 
         <div class="row">
           <label>達成日</label>
-          <input type="date" :max="today()" v-model="form.achieved_on" />
+          <input type="date" aria-label="達成日" :max="today()" v-model="form.achieved_on" />
         </div>
 
         <div class="row">
@@ -150,6 +150,7 @@ function close() {
           <input
             type="text"
             maxlength="120"
+            aria-label="里程碑標題"
             data-test="input-title"
             placeholder="例：第一次自己穿鞋"
             v-model="form.title"
@@ -158,7 +159,7 @@ function close() {
 
         <div class="row">
           <label>描述</label>
-          <textarea rows="3" v-model="form.description" />
+          <textarea rows="3" aria-label="里程碑描述" v-model="form.description" />
         </div>
 
         <div class="section">
