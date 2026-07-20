@@ -29,20 +29,25 @@ export function useClassroomProspects(opts: Ref<ClassroomKey>) {
   const reservedCount = ref(0)
   const prospects = ref<ProspectRow[]>([])
   const loading = ref(false)
+  // 快速切年級時舊回應不得覆寫較新請求的結果。
+  let reloadSeq = 0
 
   async function reload(): Promise<void> {
     const { grade_id, school_year, semester } = opts.value
     if (grade_id == null || school_year == null) {
+      reloadSeq += 1
       reservedCount.value = 0
       prospects.value = []
       return
     }
+    const seq = ++reloadSeq
     loading.value = true
     try {
       const [planResp, recResp] = await Promise.all([
         getIntakePlan({ school_year, semester: semester ?? 1 }),
         getRecruitmentRecords({ has_deposit: true, page_size: 200 }),
       ])
+      if (seq !== reloadSeq) return // 過期回應：已切到別年級，丟棄不覆寫
       const planRows = ((planResp.data as { rows?: PlanRowLite[] }).rows ?? []) as PlanRowLite[]
       reservedCount.value = planRows.find((r) => r.grade_id === grade_id)?.reserved_count ?? 0
       const records = ((recResp.data as { records?: ProspectRow[] }).records ?? []) as ProspectRow[]
@@ -56,7 +61,7 @@ export function useClassroomProspects(opts: Ref<ClassroomKey>) {
           !r.enrolled,
       )
     } finally {
-      loading.value = false
+      if (seq === reloadSeq) loading.value = false
     }
   }
 

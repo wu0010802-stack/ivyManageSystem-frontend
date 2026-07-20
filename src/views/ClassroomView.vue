@@ -213,6 +213,8 @@ const openCreate = async () => {
   dialogVisible.value = true
 }
 
+// 快速切班時舊 getClassroom 回應不得覆寫較新的 drawer/edit 目標。
+let drawerSeq = 0
 const openStudentDrawer = async (classroom: ClassroomRow) => {
   if (!canReadStudents.value) {
     if (canWrite.value) await openEdit(classroom)
@@ -220,13 +222,16 @@ const openStudentDrawer = async (classroom: ClassroomRow) => {
   }
   classroomDrawerVisible.value = true
   classroomDrawerLoading.value = true
+  const seq = ++drawerSeq
   try {
     const response = await getClassroom(classroom.id)
+    if (seq !== drawerSeq) return
     drawerClassroom.value = response.data as ClassroomRow
   } catch (error) {
+    if (seq !== drawerSeq) return
     ElMessage.error(apiError(error, '載入班級學生資料失敗'))
   } finally {
-    classroomDrawerLoading.value = false
+    if (seq === drawerSeq) classroomDrawerLoading.value = false
   }
 }
 
@@ -239,19 +244,23 @@ const handleStudentUpdated = async () => {
   if (drawerClassroom.value) await openStudentDrawer(drawerClassroom.value)
 }
 
+let editSeq = 0
 const openEdit = async (classroom: ClassroomRow) => {
   detailLoading.value = true
+  const seq = ++editSeq
   try {
     await fetchOptions()
     const response = await getClassroom(classroom.id)
+    if (seq !== editSeq) return
     currentClassroom.value = response.data as ClassroomRow
     populateForm(response.data as ClassroomRow)
     isEdit.value = true
     dialogVisible.value = true
   } catch (error) {
+    if (seq !== editSeq) return
     ElMessage.error(apiError(error, '載入班級詳情失敗'))
   } finally {
-    detailLoading.value = false
+    if (seq === editSeq) detailLoading.value = false
   }
 }
 
