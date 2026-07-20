@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { CircleCheck } from '@element-plus/icons-vue'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
 

@@ -2,6 +2,7 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'

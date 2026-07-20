@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { InfoFilled } from '@element-plus/icons-vue'
+import { InfoFilled, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 import { computeIndependentBonusNet } from './portalSalaryBonus'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -67,9 +67,9 @@ onMounted(fetchSalary)
     <div class="page-header">
       <h2>薪資查詢</h2>
       <div class="month-nav">
-        <el-button :icon="'ArrowLeft'" circle size="small" @click="prevMonth" />
+        <el-button class="month-nav-btn" :icon="ArrowLeft" circle aria-label="上個月" @click="prevMonth" />
         <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-        <el-button :icon="'ArrowRight'" circle size="small" @click="nextMonth" />
+        <el-button class="month-nav-btn" :icon="ArrowRight" circle aria-label="下個月" @click="nextMonth" />
       </div>
     </div>
 
@@ -228,6 +228,12 @@ onMounted(fetchSalary)
   display: flex;
   align-items: center;
   gap: var(--space-4);
+}
+
+/* 月份切換鈕：達 44px 觸控目標（手機主要互動元素） */
+.month-nav-btn {
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
 }
 
 .month-label {
