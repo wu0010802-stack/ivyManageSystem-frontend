@@ -165,11 +165,13 @@ const onVisibilityChange = () => {
 const deferredPrompt = ref<Event | null>(null)
 const showInstallBanner = ref(false)
 
-window.addEventListener('beforeinstallprompt', (e) => {
+// 具名 handler：於 onMounted 註冊、onUnmounted 移除（原本於 setup 直接註冊且
+// 從不移除，登入登出循環會累積重複 listener）。
+const onBeforeInstallPrompt = (e: Event) => {
   e.preventDefault()
   deferredPrompt.value = e
   showInstallBanner.value = true
-})
+}
 
 const installPWA = async () => {
   if (!deferredPrompt.value) return
@@ -187,6 +189,7 @@ const dismissInstallBanner = () => {
 
 onMounted(() => {
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.addEventListener('visibilitychange', onVisibilityChange)
   refreshPortalCounts({ force: true })
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
@@ -219,6 +222,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   teardownPortalDismissalAlerts()
 })

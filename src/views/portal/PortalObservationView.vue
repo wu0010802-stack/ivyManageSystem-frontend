@@ -57,11 +57,15 @@ async function loadStudents() {
   }
 }
 
+// request-sequence guard：快速切換學生時，慢回應不得把別的學生的近 7 日觀察
+// 寫進畫面（本 codebase 已知 watch→loadX defect class）。
+let recentSeq = 0
 async function loadRecent() {
   if (!studentId.value) {
     recent.value = []
     return
   }
+  const seq = ++recentSeq
   loadingRecent.value = true
   try {
     const from = new Date()
@@ -71,11 +75,12 @@ async function loadRecent() {
       from: fromStr,
       to: today,
     })
+    if (seq !== recentSeq) return
     recent.value = data?.items || data || []
   } catch (e) {
-    recent.value = []
+    if (seq === recentSeq) recent.value = []
   } finally {
-    loadingRecent.value = false
+    if (seq === recentSeq) loadingRecent.value = false
   }
 }
 
