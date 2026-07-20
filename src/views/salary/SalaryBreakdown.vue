@@ -1,7 +1,7 @@
 <template>
   <div class="salary-breakdown">
     <section v-if="enrollment" class="bd-section">
-      <h4>📊 人數來源</h4>
+      <h4>人數來源</h4>
       <p>
         <a :href="classroomLink" target="_blank" rel="noopener noreferrer">
           {{ enrollment.classroom_name }}</a><span v-if="enrollment.grade_name">（{{ enrollment.grade_name }}）</span>
@@ -11,12 +11,12 @@
     </section>
 
     <section v-if="assistantNames.length" class="bd-section">
-      <h4>🏫 兼任班級</h4>
+      <h4>兼任班級</h4>
       <p>{{ assistantNames.join('、') }}</p>
     </section>
 
     <section v-if="enrollment" class="bd-section">
-      <h4>🎚️ 行內試算</h4>
+      <h4>行內試算</h4>
       <div class="bd-controls">
         <span>假設在籍人數：</span>
         <el-input-number
@@ -133,8 +133,8 @@ const resetPreview = () => {
   margin-top: 8px;
   padding: 8px 12px;
   background: var(--el-color-primary-light-9);
-  border-left: 3px solid var(--el-color-primary);
-  border-radius: 2px;
+  border: 1px solid var(--el-color-primary-light-7);
+  border-radius: 4px;
 }
 .bd-diff { margin-left: 6px; font-weight: 600; }
 .bd-diff-up { color: var(--el-color-success); }

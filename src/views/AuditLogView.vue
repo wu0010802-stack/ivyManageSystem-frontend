@@ -484,7 +484,7 @@ defineExpose({ formatOperator })
         <el-button size="small" link @click="setQuickRange('7d')">近 7 日</el-button>
         <el-button size="small" link @click="setQuickRange('month')">本月</el-button>
         <span v-if="!filters.start_at && !filters.end_at" class="risk-hint">
-          ℹ️ 未設定起訖時間時預設只顯示最近 30 天；要查更早的紀錄請設定起始時間或用快捷時段
+          未設定起訖時間時預設只顯示最近 30 天；要查更早的紀錄請設定起始時間或用快捷時段
         </span>
       </div>
       <div class="quick-ranges">
@@ -502,7 +502,7 @@ defineExpose({ formatOperator })
           清除
         </el-button>
         <span v-if="activeRiskFilter && !RISK_QUICK_FILTERS.find(f => f.key === activeRiskFilter)?.entityType" class="risk-hint">
-          ⚠ 純客端過濾：僅在當頁 {{ logs.length }} 筆中比對；如需全庫掃描請放大 page_size 或切換伺服端條件
+          純客端過濾：僅在當頁 {{ logs.length }} 筆中比對；如需全庫掃描請放大 page_size 或切換伺服端條件
         </span>
       </div>
     </el-card>
@@ -602,8 +602,8 @@ defineExpose({ formatOperator })
             <span class="summary-text" :title="row.summary">{{ row.summary }}</span>
             <div v-if="getRiskBadges(row).length > 0" class="risk-badges">
               <el-tag
-                v-for="(b, i) in getRiskBadges(row)"
-                :key="i"
+                v-for="b in getRiskBadges(row)"
+                :key="b.label"
                 :type="b.type"
                 size="small"
                 effect="dark"

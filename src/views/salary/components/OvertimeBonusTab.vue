@@ -77,8 +77,8 @@ defineProps<{
   font-weight: bold;
   margin: var(--space-5) 0 10px 0;
   color: var(--neutral-300);
-  border-left: 4px solid var(--color-info);
-  padding-left: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 .config-grid {
   display: grid;

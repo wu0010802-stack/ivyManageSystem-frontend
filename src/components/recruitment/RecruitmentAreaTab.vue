@@ -73,7 +73,7 @@
                 <div
                   class="dc-rate-bar-fill"
                   :class="rateClass(row.deposit_rate_90d)"
-                  :style="{ width: `${Math.min(row.deposit_rate_90d ?? 0, 100)}%` }"
+                  :style="{ transform: `scaleX(${Math.min(row.deposit_rate_90d ?? 0, 100) / 100})` }"
                 />
               </div>
               <span class="dc-rate-label">{{ fmtRate(row.deposit_rate_90d) }}</span>
@@ -565,8 +565,12 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
 }
 .dc-rate-bar-fill {
   height: 100%;
+  width: 100%;
   border-radius: 3px;
-  transition: width 0.3s ease;
+  /* 進度以 transform: scaleX 呈現（compositor-only，取代 width 動畫）；
+     外層 .dc-rate-bar-bg 已 overflow: hidden 處理圓角裁切 */
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 .dc-rate-bar-fill--green  { background: var(--color-success); }
 .dc-rate-bar-fill--yellow { background: var(--color-warning); }

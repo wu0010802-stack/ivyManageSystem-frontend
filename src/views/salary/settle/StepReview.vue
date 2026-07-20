@@ -78,8 +78,8 @@
         <template #default="scope">
           <el-tag v-if="scope.row.is_finalized" size="small" type="success" class="attn-tag">已封存</el-tag>
           <el-tag
-            v-for="(r, i) in reasonsFor(scope.row)"
-            :key="i"
+            v-for="r in reasonsFor(scope.row)"
+            :key="reasonKey(r)"
             size="small"
             type="warning"
             class="attn-tag"
@@ -397,6 +397,8 @@ const { searchQuery: reviewSearch, filtered: visibleRecords } = useClientTableFi
 const reasonsFor = (row: SettlementRecord): AnomalyReason[] =>
     settlement.anomalies.value.get(row.employee_id) ?? []
 const FIELD_LABELS: Record<string, string> = { net_salary: '實領', gross_salary: '應發' }
+// v-for 穩定 key：同一列的 reasons 內 type（diff 加 field）唯一
+const reasonKey = (r: AnomalyReason): string => (r.type === 'diff' ? `diff-${r.field}` : r.type)
 const reasonLabel = (r: AnomalyReason): string => {
     if (r.type === 'manual') return '手動調整過'
     if (r.type === 'new') return '本月新進'
@@ -548,10 +550,8 @@ const renderFieldBreakdownValue = (row: Record<string, unknown>, column: { key: 
 :deep(.attention-row > td) {
   background-color: var(--color-warning-soft) !important;
 }
-
-:deep(.attention-row > td:first-child) {
-  border-left: 3px solid var(--color-warning);
-}
+/* 注意列的彩色左條已移除（design system 禁區 pattern）：
+   整列 warning-soft 底色 + 「注意」欄 tag 已足以標示狀態。 */
 
 .step-actions {
   margin-top: var(--space-6);

@@ -194,7 +194,10 @@ const sqmToPing = (sqm: number | null | undefined) => (Number(sqm) / 3.30579).to
 .gov-status-clean  { color: #166534; }
 .gov-status-warned { color: var(--color-warning-darker); font-weight: 600; }
 
-/* v-show 展開動畫：直接在元素上做 max-height transition，不依賴 <Transition> */
+/* v-show 展開動畫：直接在元素上做 max-height transition，不依賴 <Transition>。
+   2026-07-20 UI 稽核評估：不改 grid-template-rows 動畫——該法需插入中介 wrapper 且
+   對 v-show 的 display:none 切換一樣無法平滑補間，風險大於收益；max-height 動畫僅
+   0.25s、面板高度上限 600px 已知，layout 動畫成本可接受，維持現狀。 */
 .preschool-gov-detail {
   overflow: hidden;
   transition: opacity 0.2s ease, max-height 0.25s ease;

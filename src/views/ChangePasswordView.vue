@@ -143,7 +143,8 @@ const handleSubmit = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+  /* 藍漸層背景改平面 token 底色（與 LoginView 的冷色淺底一致的安靜基調） */
+  background: var(--bg-color-soft);
 }
 
 .change-password-card {
@@ -151,7 +152,8 @@ const handleSubmit = async () => {
   padding: 40px;
   background: var(--surface-color);
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 
 .header {

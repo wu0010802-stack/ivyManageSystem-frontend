@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="gs-fade">
       <div v-if="visible" class="gs-overlay" @click.self="close">
-        <div class="gs-modal" role="dialog" aria-modal="true" aria-label="全局搜尋">
+        <div ref="modalRef" class="gs-modal" role="dialog" aria-modal="true" aria-label="全局搜尋" @keydown="onKeydown">
           <div class="gs-input-wrap">
             <el-icon class="gs-input-icon"><Search /></el-icon>
             <input
@@ -11,7 +11,6 @@
               class="gs-input"
               placeholder="搜尋學生、員工、家長、班級、學費、才藝、招生、公告、頁面…"
               autocomplete="off"
-              @keydown="onKeydown"
             />
             <span v-if="isLoading" class="gs-spinner"></span>
             <kbd class="gs-esc-hint" @click="close">esc</kbd>
@@ -85,6 +84,7 @@ const activeIndex = ref(-1)
 const isLoading = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 const resultsRef = ref<HTMLElement | null>(null)
+const modalRef = ref<HTMLElement | null>(null)
 
 type Item = Record<string, unknown>
 const data = ref<Record<string, Item[]>>({})
@@ -218,6 +218,31 @@ function onKeydown(e: KeyboardEvent) {
     if (activeIndex.value >= 0 && activeIndex.value < total) selectByFlat(activeIndex.value)
   } else if (e.key === 'Escape') {
     close()
+  } else if (e.key === 'Tab') {
+    // focus trap：Tab / Shift+Tab 在 modal 內循環，不讓焦點外洩到背景頁面
+    const root = modalRef.value
+    if (!root) return
+    const focusables = Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'input, button, [href], select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute('disabled'))
+    if (focusables.length === 0) {
+      e.preventDefault()
+      return
+    }
+    const first = focusables[0]
+    const last = focusables[focusables.length - 1]
+    const active = document.activeElement
+    if (e.shiftKey) {
+      if (active === first || !root.contains(active)) {
+        e.preventDefault()
+        last.focus()
+      }
+    } else if (active === last || !root.contains(active)) {
+      e.preventDefault()
+      first.focus()
+    }
   }
 }
 
@@ -300,11 +325,17 @@ defineExpose({ open })
 .gs-input {
   flex: 1;
   border: none;
+  /* outline 移除的可見替代：聚焦時由 .gs-input-wrap:focus-within 亮起底線 accent */
   outline: none;
   font-size: 15px;
   padding: 16px 0;
   background: transparent;
   color: var(--text-primary, #111827);
+}
+
+.gs-input-wrap:focus-within {
+  border-bottom-color: var(--color-primary, #4f46e5);
+  box-shadow: inset 0 -1px 0 var(--color-primary, #4f46e5);
 }
 
 .gs-input::placeholder {

@@ -758,14 +758,14 @@ const doughnutChartOptions = {
   background: var(--neutral-100);
 }
 
+/* 雙段比例條（男/女相鄰兩段）無法以單一 scaleX 表達，width transition 會觸發
+   layout 動畫故直接移除動效；資料換頁時比例條瞬間切換即可。 */
 .ratio-male {
   background: var(--color-info);
-  transition: width 0.3s ease;
 }
 
 .ratio-female {
   background: #f56c6c;
-  transition: width 0.3s ease;
 }
 
 .ratio-text {

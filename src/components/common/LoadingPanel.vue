@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
   height: 8px;
   border-radius: 50%;
   background: #f4b43f;
-  animation: loading-panel-bounce 1s infinite ease-in-out both;
+  animation: loading-panel-bounce 1s infinite cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .loading-panel-dot:nth-child(1) { animation-delay: -0.3s; }
 .loading-panel-dot:nth-child(2) { animation-delay: -0.15s; }

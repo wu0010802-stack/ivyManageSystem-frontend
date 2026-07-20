@@ -634,7 +634,9 @@ watch(activeSection, async (value) => {
 }
 .pending-card {
   margin-bottom: var(--space-5);
-  border-left: 3px solid var(--color-warning) !important;
+  /* 待審卡由彩色左條改為 1px 全框 warning（design system 禁區 pattern）；
+     內含表格故不加底色 tint，避免壓縮內容對比 */
+  border: 1px solid var(--color-warning);
 }
 .card-header {
   display: flex;

@@ -2,7 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowRight, Loading } from '@element-plus/icons-vue'
+import { ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
 import { getMonthWeeks } from '@/utils/scheduleUtils'
 import { useEmployeeStore } from '@/stores/employee'
 import { useShiftStore } from '@/stores/shift'
@@ -589,7 +589,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
         :disabled="shiftImportLoading"
       >
         <div style="padding: 20px 0;">
-          <div style="font-size: 28px; margin-bottom: 8px;">📊</div>
+          <el-icon :size="28" style="margin-bottom: 8px; color: var(--text-tertiary);"><UploadFilled /></el-icon>
           <div>拖曳或點擊上傳 .xlsx 檔案</div>
         </div>
       </el-upload>

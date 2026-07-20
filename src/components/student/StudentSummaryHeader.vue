@@ -243,7 +243,7 @@ const avatarColor = computed(() => {
   margin-top: 10px;
   padding: 8px 10px;
   background: var(--el-color-warning-light-9);
-  border-left: 3px solid var(--el-color-warning);
+  border: 1px solid var(--el-color-warning-light-5);
   border-radius: 4px;
   flex-wrap: wrap;
 }

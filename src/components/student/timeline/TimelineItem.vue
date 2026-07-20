@@ -10,7 +10,7 @@ defineProps<{
     <div class="body">
       <div class="row-top">
         <span class="title">{{ item.title }}</span>
-        <span v-if="item.is_highlight" class="badge">✨ 亮點</span>
+        <span v-if="item.is_highlight" class="badge">亮點</span>
         <span class="date">{{ item.occurred_at }}</span>
       </div>
       <div v-if="item.summary" class="summary">{{ item.summary }}</div>

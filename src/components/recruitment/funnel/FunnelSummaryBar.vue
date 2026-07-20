@@ -48,9 +48,11 @@ const activeRate = computed(() => pct(props.summary.active_count, props.summary.
   flex-direction: column;
   gap: 2px;
   padding: 8px 16px;
-  border-left: 4px solid;
+  /* 彩色左條改 1px 全框（design system 禁區 pattern）；
+     階段色沿用 :style borderColor，多階段分級視覺通道保留 */
+  border: 1px solid;
   border-radius: 4px;
-  background: #fafafa;
+  background: var(--el-fill-color-lighter);
 }
 .funnel-summary-label {
   font-size: 12px;

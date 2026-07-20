@@ -619,7 +619,7 @@ defineExpose({
 
     <!-- Credential Dialog -->
     <el-dialog v-model="credentialDialogVisible" title="帳號已建立" width="480px" @closed="createdCredentials = { username: '', password: '' }">
-      <div style="margin-bottom: 16px; color: #67c23a; font-weight: 500;">✅ 帳號建立成功，請將以下資訊提供給員工：</div>
+      <div style="margin-bottom: 16px; color: #67c23a; font-weight: 500;">帳號建立成功，請將以下資訊提供給員工：</div>
       <el-descriptions :column="1" border>
         <el-descriptions-item label="帳號">
           <div style="display: flex; align-items: center; gap: 8px;">

@@ -201,25 +201,32 @@
       </el-table-column>
     </el-table>
 
-    <!-- 手動升位確認 dialog -->
-    <div v-if="promoteDialog.open" class="promote-backdrop" @click.self="cancelPromote">
-      <div class="promote-modal">
-        <h3 class="promote-modal__title">確認手動升位</h3>
-        <p class="promote-modal__body">
-          將<strong>跳過順序</strong>，立即升此候補為<strong>正式報名</strong>（不需家長 48h 確認窗）。系統會嘗試以 LINE 通知家長；若家長未綁定 LINE（如校外／未匹配報名），可能收不到通知，屆時請依 staff 通知中的提示改以電話主動告知新增費用。確定？
-        </p>
-        <div class="promote-modal__actions">
-          <el-button @click="cancelPromote">取消</el-button>
-          <el-button
-            data-test="promote-confirm"
-            type="primary"
-            :loading="promoteDialog.submitting"
-            @click="confirmPromote"
-          >確認升位</el-button>
-        </div>
-        <p v-if="promoteDialog.error" class="promote-modal__error">{{ promoteDialog.error }}</p>
-      </div>
-    </div>
+    <!-- 手動升位確認 dialog（el-dialog：具 role="dialog"/aria-modal/focus 管理/Esc，
+         取代原手刻 backdrop + modal；append-to-body 讓層級疊在 Drawer 之上） -->
+    <el-dialog
+      v-model="promoteDialog.open"
+      title="確認手動升位"
+      width="440px"
+      append-to-body
+      :close-on-click-modal="!promoteDialog.submitting"
+      :close-on-press-escape="!promoteDialog.submitting"
+      :show-close="!promoteDialog.submitting"
+      @close="cancelPromote"
+    >
+      <p class="promote-modal__body">
+        將<strong>跳過順序</strong>，立即升此候補為<strong>正式報名</strong>（不需家長 48h 確認窗）。系統會嘗試以 LINE 通知家長；若家長未綁定 LINE（如校外／未匹配報名），可能收不到通知，屆時請依 staff 通知中的提示改以電話主動告知新增費用。確定？
+      </p>
+      <p v-if="promoteDialog.error" class="promote-modal__error">{{ promoteDialog.error }}</p>
+      <template #footer>
+        <el-button @click="cancelPromote">取消</el-button>
+        <el-button
+          data-test="promote-confirm"
+          type="primary"
+          :loading="promoteDialog.submitting"
+          @click="confirmPromote"
+        >確認升位</el-button>
+      </template>
+    </el-dialog>
     <div v-if="!waitlistLoading && waitlistItems.length === 0"
          style="text-align:center; padding: 32px; color: var(--text-tertiary);">
       目前無候補學生
@@ -634,39 +641,13 @@ onMounted(() => {
 </style>
 
 <style>
-.promote-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2100;
-}
-.promote-modal {
-  background: #fff;
-  border-radius: 8px;
-  padding: 24px 28px;
-  width: 400px;
-  max-width: 92vw;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-}
-.promote-modal__title {
-  margin: 0 0 12px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary, #303133);
-}
+/* 升位 dialog 內容（append-to-body 脫離 scoped 範圍，維持 global；
+   backdrop/modal 外殼已改用 el-dialog，僅保留內文樣式） */
 .promote-modal__body {
   font-size: 14px;
   color: var(--text-regular, #606266);
   line-height: 1.6;
-  margin: 0 0 20px;
-}
-.promote-modal__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  margin: 0;
 }
 .promote-modal__error {
   margin: 12px 0 0;

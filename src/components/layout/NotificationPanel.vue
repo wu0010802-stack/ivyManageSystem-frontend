@@ -150,7 +150,7 @@ const handleNavigate = (route: string | null | undefined) => {
 .nf-hero {
   padding: 16px 18px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #eef5ff 0%, #e8f0fd 100%);
+  background: var(--color-info-soft);
   border: 1px solid rgba(59, 130, 246, 0.14);
   margin-bottom: 18px;
 }
@@ -356,7 +356,7 @@ const handleNavigate = (route: string | null | undefined) => {
   height: 52px;
   font-size: 22px;
   color: var(--color-info-hover);
-  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+  background: var(--color-info-soft);
   border-radius: 16px;
   display: inline-flex;
   align-items: center;

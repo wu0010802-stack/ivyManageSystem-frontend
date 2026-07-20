@@ -13,6 +13,7 @@ import { useApprovalModule } from '@/composables/useApprovalModule'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import LeaveBatchRejectDialog from '@/views/leave/LeaveBatchRejectDialog.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
+import { MODULE_TERMS } from '@/constants/moduleTerms'
 import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
 import { isSuperAdmin } from '@/utils/auth'
 
@@ -329,14 +330,14 @@ onMounted(() => {
 
       <el-card class="shortcut-card" shadow="hover">
         <div class="shortcut-card__meta">
-          <span class="shortcut-card__title">考勤管理</span>
+          <span class="shortcut-card__title">{{ MODULE_TERMS.attendance }}</span>
           <el-tag :type="pendingPunchCorrections.length > 0 ? 'warning' : 'success'" effect="plain">
             {{ pendingPunchCorrections.length }} 筆待審
           </el-tag>
         </div>
-        <p class="shortcut-card__desc">補打卡欄位已帶出補正類型、申請時段與原因，可快速切去考勤管理追查。</p>
+        <p class="shortcut-card__desc">補打卡欄位已帶出補正類型、申請時段與原因，可快速切去出勤管理追查。</p>
         <el-button link type="primary" @click="goToAttendanceManagement">
-          前往考勤管理
+          前往{{ MODULE_TERMS.attendance }}
           <el-icon><ArrowRight /></el-icon>
         </el-button>
       </el-card>
@@ -591,14 +592,14 @@ onMounted(() => {
         <div class="card-header">
           <div>
             <div class="card-header__title">待審補打卡</div>
-            <div class="card-header__hint">帶出補打卡類型、申請時間與說明，並可直接切到考勤管理追查</div>
+            <div class="card-header__hint">帶出補打卡類型、申請時間與說明，並可直接切到出勤管理追查</div>
           </div>
           <div class="card-header__actions">
             <el-badge :value="pendingPunchCorrections.length" :type="pendingPunchCorrections.length > 0 ? 'warning' : 'success'" />
             <el-button v-if="selectedCorrections.length > 0" type="success" size="small" :loading="batchLoadingC" @click="approveBatchC">批次核准 ({{ selectedCorrections.length }})</el-button>
             <el-button v-if="selectedCorrections.length > 0" type="danger" size="small" :loading="batchLoadingC" @click="openBatchRejectC">批次駁回 ({{ selectedCorrections.length }})</el-button>
             <el-button link type="primary" @click="goToAttendanceManagement">
-              考勤管理
+              {{ MODULE_TERMS.attendance }}
               <el-icon><ArrowRight /></el-icon>
             </el-button>
           </div>
@@ -778,17 +779,8 @@ onMounted(() => {
   margin-bottom: var(--space-5);
 }
 
-.leave-card {
-  border-left: 4px solid var(--color-info);
-}
-
-.overtime-card {
-  border-left: 4px solid var(--color-warning);
-}
-
-.correction-card {
-  border-left: 4px solid #67c23a;
-}
+/* 三張模組卡的彩色左條已移除（design system 禁區 pattern）：
+   卡片各有標題與計數區分模組，色條非唯一辨識通道，統一走 el-card 預設 1px 框。 */
 
 .card-header {
   display: flex;

@@ -739,49 +739,9 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   font-size: 0.72rem;
   color: var(--text-tertiary);
 }
-.area-kpi-bar-bg {
-  height: 5px;
-  background: var(--border-color);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.area-kpi-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-.area-kpi-bar-fill--blue { background: var(--color-info); }
-
-/* -------- 預繳率進度條 -------- */
-.rate-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.rate-bar-bg {
-  flex: 1;
-  height: 6px;
-  background: var(--bg-color-soft);
-  border-radius: 3px;
-  overflow: hidden;
-  min-width: 40px;
-}
-.rate-bar-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.4s ease;
-}
-.rate-bar-fill--green  { background: var(--color-success); }
-.rate-bar-fill--yellow { background: var(--color-warning); }
-.rate-bar-fill--red    { background: #f87171; }
-.rate-label {
-  font-size: 0.8rem;
-  font-family: 'Fira Code', ui-monospace, monospace;
-  color: var(--text-primary);
-  white-space: nowrap;
-  min-width: 42px;
-  text-align: right;
-}
+/* 註：舊 .area-kpi-bar-* 與 .rate-cell/.rate-bar-*/.rate-label 已移除——
+   scoped 且本面板 template 無任何消費者（AreaTab 用自己的 .dc-rate-* 進度條），
+   屬區域分頁抽離後殘留的死 CSS（2026-07-20 UI 稽核清除，含被點名的 width transition）。 */
 
 /* -------- 通勤時間 badge -------- */
 .travel-badge {

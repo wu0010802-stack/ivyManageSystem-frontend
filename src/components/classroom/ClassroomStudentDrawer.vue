@@ -515,7 +515,7 @@ const close = () => emit('update:visible', false)
   justify-content: space-between;
   align-items: center;
   padding: 18px 22px;
-  background: linear-gradient(135deg, var(--el-color-primary) 0%, var(--el-color-primary-light-3) 100%);
+  background: var(--el-color-primary);
   color: #fff;
   gap: 12px;
   flex-shrink: 0;
@@ -676,8 +676,8 @@ const close = () => emit('update:visible', false)
 }
 .roster-item.selected {
   background: var(--el-color-primary-light-9);
-  border-left: 3px solid var(--el-color-primary);
-  padding-left: 9px;
+  /* 選取態由彩色左條改為 inset 1px 全框（不佔版面、不需 padding 補償） */
+  box-shadow: inset 0 0 0 1px var(--el-color-primary-light-5);
 }
 @media (prefers-reduced-motion: reduce) {
   .roster-item { transition: none; }
