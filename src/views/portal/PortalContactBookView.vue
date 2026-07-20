@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { getMyStudents } from '@/api/portal'
@@ -41,10 +42,21 @@ const MOOD_EMOJI = {
   sick: '🤒',
 }
 
+const route = useRoute()
 const classrooms = ref<ClassroomEntry[]>([])
 const classroomLoading = ref(false)
 const selectedClassroomId = ref<number | null>(null)
 const selectedDate = ref(todayISO())
+
+// deep-link 預選：來自首頁班級卡（classroom_id）或搜尋面板聯絡簿結果（log_date）。
+// 在 fetchClassrooms 設預設值「前」先吃 query，避免多班教師落到錯的班。
+{
+  const qClassroom = Number(route.query.classroom_id)
+  if (Number.isFinite(qClassroom) && qClassroom > 0) selectedClassroomId.value = qClassroom
+  if (typeof route.query.log_date === 'string' && route.query.log_date) {
+    selectedDate.value = route.query.log_date
+  }
+}
 
 const items = ref<ItemEntry[]>([]) // [{ student_id, student_name, entry }]
 const completion = ref<Completion>({ roster: 0, draft: 0, published: 0, missing: 0 })

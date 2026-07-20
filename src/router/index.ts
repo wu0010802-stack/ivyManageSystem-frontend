@@ -782,7 +782,7 @@ router.beforeEach(async (to) => {
     }
 
     if (to.path === '/portal/login' && loggedIn) {
-        return '/portal/attendance'
+        return '/portal/home'
     }
 
     // Admin routes: require login unless marked noAuth or portal
@@ -792,12 +792,12 @@ router.beforeEach(async (to) => {
 
     if (to.path === '/login' && loggedIn) {
         // 已登入時根據角色導向
-        return userInfo?.role === 'teacher' ? '/portal/attendance' : '/'
+        return userInfo?.role === 'teacher' ? '/portal/home' : '/'
     }
 
     // teacher 不可存取管理後台路由，強制導回 portal
     if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role === 'teacher') {
-        return '/portal/attendance'
+        return '/portal/home'
     }
 
     // 權限檢查：admin 路由且已登入（非 teacher）

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { InfoFilled } from '@element-plus/icons-vue'
+import { InfoFilled, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 import { computeIndependentBonusNet } from './portalSalaryBonus'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -67,9 +67,9 @@ onMounted(fetchSalary)
     <div class="page-header">
       <h2>薪資查詢</h2>
       <div class="month-nav">
-        <el-button :icon="'ArrowLeft'" circle size="small" @click="prevMonth" />
+        <el-button class="month-nav-btn" :icon="ArrowLeft" circle aria-label="上個月" @click="prevMonth" />
         <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-        <el-button :icon="'ArrowRight'" circle size="small" @click="nextMonth" />
+        <el-button class="month-nav-btn" :icon="ArrowRight" circle aria-label="下個月" @click="nextMonth" />
       </div>
     </div>
 
@@ -230,6 +230,12 @@ onMounted(fetchSalary)
   gap: var(--space-4);
 }
 
+/* 月份切換鈕：達 44px 觸控目標（手機主要互動元素） */
+.month-nav-btn {
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
+}
+
 .month-label {
   font-size: var(--text-xl);
   font-weight: 600;
@@ -301,15 +307,17 @@ onMounted(fetchSalary)
   font-weight: 600;
 }
 
+/* 實發金額強調列：保留品牌漸層強調（薪資 headline 數字的情緒收尾），
+ * 但移除 floating box-shadow —— 該陰影讓它像卡中卡（嵌在 salary-card 內的
+ * 浮動卡片），改為卡片內的強調頁尾列。 */
 .net-salary-box {
   margin-top: var(--space-6);
-  padding: var(--space-6);
+  padding: var(--space-5) var(--space-6);
   background: linear-gradient(135deg, var(--color-primary) 0%, #4338ca 100%);
   border-radius: var(--radius-lg);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
 }
 
 .net-label {
@@ -319,7 +327,8 @@ onMounted(fetchSalary)
 }
 
 .net-value {
-  color: var(--surface-color);
+  /* 白字固定於 indigo 漸層盒（原 --surface-color 在 dark 翻深 → 深字疊深底崩對比） */
+  color: #fff;
   font-size: 32px;
   font-weight: 700;
   letter-spacing: 0.5px;

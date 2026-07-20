@@ -117,6 +117,12 @@ export const createMyLeave = (
   data: ApiBody<'/portal/my-leaves', 'post'>,
 ): AxiosResp<'/portal/my-leaves', 'post'> => api.post('/portal/my-leaves', data)
 
+// 教師自撤本人「待審核」假單（後端僅開放 pending + 本人；已核准/駁回回 409）
+export const cancelMyLeave = (
+  leaveId: number,
+): AxiosResp<'/leaves/{leave_id}/cancel', 'post'> =>
+  api.post(`/leaves/${leaveId}/cancel`)
+
 export const uploadMyLeaveAttachments = (leaveId: number, formData: FormData) =>
   api.post(`/portal/my-leaves/${leaveId}/attachments`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },

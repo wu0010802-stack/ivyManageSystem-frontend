@@ -55,7 +55,7 @@ const handleLogin = async () => {
     // Token 已由後端透過 httpOnly Cookie 設定，前端只需儲存 userInfo
     setUserInfo({ ...res.data.user, must_change_password: !!res.data.must_change_password })
     ElMessage.success(`歡迎回來，${res.data.user.name}`)
-    router.push(res.data.must_change_password ? '/portal/change-password' : '/portal/attendance')
+    router.push(res.data.must_change_password ? '/portal/change-password' : '/portal/home')
   } catch (error) {
     ElMessage.error(apiError(error, '登入失敗'))
     usernameInput.value?.focus?.()

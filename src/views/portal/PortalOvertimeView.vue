@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyOvertimes, createMyOvertime, deleteMyOvertime } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
@@ -19,6 +19,11 @@ const now = new Date()
 const query = reactive({
     year: now.getFullYear(),
     month: now.getMonth() + 1,
+})
+// 動態年份（避免硬編 [2024..2027] 於 2028 斷頭）
+const yearOptions = computed(() => {
+    const y = now.getFullYear()
+    return [y - 2, y - 1, y, y + 1]
 })
 
 const showForm = ref(false)
@@ -98,7 +103,7 @@ onMounted(fetchOvertimes)
         <el-card v-loading="loading">
             <div class="query-row">
                 <el-select v-model="query.year" style="width: 100px;" @change="fetchOvertimes">
-                    <el-option v-for="y in [2024,2025,2026,2027]" :key="y" :label="`${y}年`" :value="y" />
+                    <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
                 </el-select>
                 <el-select v-model="query.month" style="width: 100px;" @change="fetchOvertimes">
                     <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
@@ -108,7 +113,40 @@ onMounted(fetchOvertimes)
                 </div>
             </div>
 
-            <div style="overflow-x: auto">
+            <!-- 手機：卡片視圖（原本 8 欄桌面表在手機只能橫捲） -->
+            <div v-if="isMobile && overtimes.length" class="ot-cards">
+                <div v-for="row in overtimes" :key="(row.id as number)" class="ot-card">
+                    <div class="ot-card__top">
+                        <span class="ot-card__date">{{ row.overtime_date }}</span>
+                        <el-tag v-if="row.status === 'approved'" type="success" size="small">已核准</el-tag>
+                        <el-tag v-else-if="row.status === 'rejected'" type="danger" size="small">已駁回</el-tag>
+                        <el-tag v-else type="warning" size="small">待核准</el-tag>
+                    </div>
+                    <div class="ot-card__time">
+                        {{ row.overtime_type_label }} · {{ row.start_time }}~{{ row.end_time }}
+                        <span class="ot-card__hours">{{ row.hours }} 小時</span>
+                    </div>
+                    <div class="ot-card__pay">
+                        <el-tag v-if="row.use_comp_leave" type="success" size="small">補休</el-tag>
+                        <template v-else>加班費 NT$ {{ row.overtime_pay }}</template>
+                    </div>
+                    <div v-if="row.reason" class="ot-card__reason">{{ row.reason }}</div>
+                    <div v-if="row.status === 'pending'" class="ot-card__actions">
+                        <el-popconfirm
+                            title="確定撤回此加班申請？"
+                            confirm-button-text="撤回"
+                            cancel-button-text="取消"
+                            @confirm="withdrawOvertime(row.id as number)"
+                        >
+                            <template #reference>
+                                <el-button type="danger" size="small" plain>撤回</el-button>
+                            </template>
+                        </el-popconfirm>
+                    </div>
+                </div>
+            </div>
+
+            <div v-else-if="!isMobile" style="overflow-x: auto">
                 <el-table :data="overtimes" border stripe style="margin-top: 12px;">
                     <el-table-column prop="overtime_date" label="日期" width="120" />
                     <el-table-column prop="overtime_type_label" label="類型" width="100" />
@@ -215,6 +253,53 @@ onMounted(fetchOvertimes)
     margin-left: auto;
     font-weight: 600;
     color: var(--color-primary);
+}
+
+/* 手機加班卡片 */
+.ot-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: 12px;
+}
+.ot-card {
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    background: var(--el-bg-color);
+}
+.ot-card__top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: 6px;
+}
+.ot-card__date {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--el-text-color-primary);
+}
+.ot-card__time {
+    font-size: 13px;
+    color: var(--el-text-color-regular);
+}
+.ot-card__hours {
+    margin-left: 8px;
+    color: var(--el-text-color-secondary);
+}
+.ot-card__pay {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--el-text-color-regular);
+}
+.ot-card__reason {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--el-text-color-secondary);
+}
+.ot-card__actions {
+    margin-top: 8px;
 }
 
 @media (--to-sm) {

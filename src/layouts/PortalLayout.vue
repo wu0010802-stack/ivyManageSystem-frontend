@@ -15,7 +15,22 @@ import A11yMenu from '@/components/common/A11yMenu.vue'
 import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
 import { useIsMobile } from '@/composables/useIsMobile'
-import { Search, Fold } from '@element-plus/icons-vue'
+import {
+  Search,
+  Fold,
+  UserFilled,
+  HomeFilled,
+  Calendar,
+  Timer,
+  Money,
+  User,
+  Document,
+  School,
+  Warning,
+  Brush,
+  Bell,
+  Clock,
+} from '@element-plus/icons-vue'
 
 interface UserInfo {
   name?: string
@@ -150,11 +165,13 @@ const onVisibilityChange = () => {
 const deferredPrompt = ref<Event | null>(null)
 const showInstallBanner = ref(false)
 
-window.addEventListener('beforeinstallprompt', (e) => {
+// 具名 handler：於 onMounted 註冊、onUnmounted 移除（原本於 setup 直接註冊且
+// 從不移除，登入登出循環會累積重複 listener）。
+const onBeforeInstallPrompt = (e: Event) => {
   e.preventDefault()
   deferredPrompt.value = e
   showInstallBanner.value = true
-})
+}
 
 const installPWA = async () => {
   if (!deferredPrompt.value) return
@@ -172,6 +189,7 @@ const dismissInstallBanner = () => {
 
 onMounted(() => {
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.addEventListener('visibilitychange', onVisibilityChange)
   refreshPortalCounts({ force: true })
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
@@ -204,6 +222,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   teardownPortalDismissalAlerts()
 })
@@ -504,7 +523,7 @@ const submitPassword = async () => {
 
             <span class="user-name">{{ userInfo.name || '' }}</span>
             <el-dropdown @command="handleCommand">
-              <el-avatar :size="32" icon="UserFilled" />
+              <el-avatar :size="32" :icon="UserFilled" />
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="changePassword">修改密碼</el-dropdown-item>
@@ -521,34 +540,64 @@ const submitPassword = async () => {
       </el-main>
 
       <!-- Bottom Navigation (mobile only) -->
-      <div v-if="isMobile" class="bottom-nav">
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }" @click="router.push('/portal/home')">
+      <nav v-if="isMobile" class="bottom-nav" aria-label="主要導覽">
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }"
+          :aria-current="route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') ? 'page' : undefined"
+          @click="router.push('/portal/home')"
+        >
           <div class="tab-icon-wrapper">
             <el-icon><HomeFilled /></el-icon>
             <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
           </div>
           <span>工作台</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/attendance') }" @click="router.push('/portal/attendance')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/attendance') }"
+          :aria-current="route.path.startsWith('/portal/attendance') ? 'page' : undefined"
+          @click="router.push('/portal/attendance')"
+        >
           <el-icon><Calendar /></el-icon>
           <span>出勤</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/schedule') }" @click="router.push('/portal/schedule')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/schedule') }"
+          :aria-current="route.path.startsWith('/portal/schedule') ? 'page' : undefined"
+          @click="router.push('/portal/schedule')"
+        >
           <div class="tab-icon-wrapper">
             <el-icon><Clock /></el-icon>
             <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="tab-badge" />
           </div>
           <span>排班</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }" @click="router.push('/portal/students')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }"
+          :aria-current="route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') ? 'page' : undefined"
+          @click="router.push('/portal/students')"
+        >
           <el-icon><User /></el-icon>
           <span>學生</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/profile') }" @click="router.push('/portal/profile')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/profile') }"
+          :aria-current="route.path.startsWith('/portal/profile') ? 'page' : undefined"
+          @click="router.push('/portal/profile')"
+        >
           <el-icon><UserFilled /></el-icon>
           <span>我的</span>
-        </div>
-      </div>
+        </button>
+      </nav>
       <button v-if="isMobile" class="psp-fab" @click="openPalette" aria-label="搜尋">
         <el-icon><Search /></el-icon>
       </button>
@@ -580,15 +629,14 @@ const submitPassword = async () => {
 
 <style scoped>
 .portal-layout {
-  /* 顯式鎖定亮色 token：防 PWA 快取殘留 / 跨入口 CSS 殘留 / OS 暗模式偏好把表面色改深 */
-  --bg-color: var(--bg-color);
+  /* 亮色（預設）表面/文字 token。原本 --bg-color: var(--bg-color) 是自我循環
+   * 引用（CSS 規格下無效），移除後由 :root 繼承；dark 覆寫見下方 html.dark 區塊。 */
   --bg-color-soft: #f3f4f6;
   --surface-color: var(--neutral-0);
   --pt-surface-app: #f8fafc;
   --pt-surface-card: #ffffff;
   --pt-surface-mute: #f3f4f6;
   --pt-surface-mute-soft: #f9fafb;
-  /* 文字鎖深色：避免 OS dark / 跨入口殘留把 strong/body 改成白色 */
   --pt-text-strong: #0f172a;
   --pt-text-body: #1e293b;
   /* 次級文字 slate-700 (#334155, 10.4:1 AAA on #fff)：業主反映過淡，再往深調一階 */
@@ -598,6 +646,24 @@ const submitPassword = async () => {
   height: 100vh;
   background-color: var(--bg-color);
   color: var(--pt-text-body);
+}
+
+/* Dark mode（教師經 A11yMenu 切 html.dark）：portal 走一致的深色表面 + 亮文字。
+ * 原本亮色 token 硬鎖 + --pt-text-* 鎖深字但 --text-* 未鎖，造成 dark 下深底深字/
+ * 白底亮字對比崩壞。此處以更高特異性（html.dark .portal-layout）覆寫為協調深色。 */
+html.dark .portal-layout {
+  --bg-color: #0f172a;
+  --bg-color-soft: #1e293b;
+  --surface-color: #1e293b;
+  --pt-surface-app: #0f172a;
+  --pt-surface-card: #1e293b;
+  --pt-surface-mute: #263449;
+  --pt-surface-mute-soft: #1e293b;
+  --pt-text-strong: #f1f5f9;
+  --pt-text-body: #e2e8f0;
+  --pt-text-muted: #cbd5e1;
+  --pt-text-soft: #cbd5e1;
+  --pt-text-faint: #94a3b8;
 }
 
 /* Sidebar Styling */
@@ -853,6 +919,11 @@ const submitPassword = async () => {
   align-items: center;
   justify-content: center;
   gap: 3px;
+  /* button reset：清除瀏覽器預設外觀，維持原視覺 */
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
   font-size: 12px;
   color: var(--pt-text-muted, #64748b);
   cursor: pointer;
@@ -862,6 +933,12 @@ const submitPassword = async () => {
 
 .bottom-tab:active {
   background-color: var(--bg-color-soft);
+}
+
+.bottom-tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 
 .bottom-tab.active {
@@ -961,7 +1038,7 @@ const submitPassword = async () => {
   padding: 6px 12px;
   border: 1px solid var(--el-border-color);
   border-radius: 6px;
-  background: white;
+  background: var(--el-fill-color-blank);
   cursor: pointer;
   color: var(--el-text-color-secondary);
 }

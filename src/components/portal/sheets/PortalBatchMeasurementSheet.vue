@@ -134,13 +134,13 @@ function close() {
     direction="btt"
     size="90%"
     :show-close="true"
-    title="📏 全班量體位"
+    title="全班量體位"
     @update:model-value="(v) => emit('update:modelValue', v)"
   >
     <div class="batch-sheet">
       <div class="header-row">
-        <label>量測日期</label>
-        <input type="date" :max="today()" v-model="measuredOn" />
+        <label for="batch-measured-on">量測日期</label>
+        <input id="batch-measured-on" type="date" :max="today()" v-model="measuredOn" />
       </div>
 
       <div v-if="loading" class="loading">載入中…</div>
@@ -170,6 +170,7 @@ function close() {
             class="col-num"
             type="number"
             step="0.1"
+            :aria-label="`${row.name} 身高（公分）`"
             :data-test="`height-${row.student_id}`"
             v-model="row.height_cm"
             :disabled="submitting"
@@ -178,6 +179,7 @@ function close() {
             class="col-num"
             type="number"
             step="0.1"
+            :aria-label="`${row.name} 體重（公斤）`"
             :data-test="`weight-${row.student_id}`"
             v-model="row.weight_kg"
             :disabled="submitting"
@@ -185,10 +187,12 @@ function close() {
           <span class="col-status">
             <template v-if="row.status === 'sending'">…</template>
             <template v-else-if="row.status === 'ok'">✓</template>
-            <template v-else-if="row.status === 'failed'">
-              <span class="failed" :title="row.error">✗</span>
-            </template>
+            <span v-else-if="row.status === 'failed'" class="failed" aria-hidden="true">✗</span>
           </span>
+          <!-- 失敗原因改內聯可見（原本僅 :title hover，手機無 hover 看不到） -->
+          <div v-if="row.status === 'failed' && row.error" class="row-error">
+            {{ row.error }}
+          </div>
         </div>
       </div>
 
@@ -270,6 +274,13 @@ function close() {
   color: var(--el-color-danger);
   font-weight: 700;
 }
+.row-error {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-color-danger);
+}
 .status-ok {
   opacity: 0.6;
 }
@@ -286,7 +297,8 @@ function close() {
   padding: 10px 16px;
   border-radius: 8px;
   border: 1px solid var(--el-border-color);
-  background: white;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
   cursor: pointer;
 }
 .actions button.primary {

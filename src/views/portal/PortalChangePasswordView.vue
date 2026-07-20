@@ -2,6 +2,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
+import { Lock } from '@element-plus/icons-vue'
 import { changePassword } from '@/api/auth'
 import { clearMustChangePassword, getUserInfo } from '@/utils/auth'
 import { PASSWORD_RULES, validatePasswordStrength } from '@/utils/passwordRules'
@@ -52,8 +53,8 @@ const handleSubmit = async () => {
       new_password: form.new_password,
     })
     clearMustChangePassword()
-    ElMessage.success('密碼修改成功！')
-    router.push('/portal/attendance')
+    ElMessage.success('密碼修改成功')
+    router.push('/portal/home')
   } catch (error) {
     ElMessage.error(apiError(error, '修改失敗，請確認目前密碼是否正確'))
   } finally {
@@ -66,7 +67,7 @@ const handleSubmit = async () => {
   <div class="change-password-page">
     <div class="change-password-card">
       <div class="header">
-        <div class="lock-icon">🔒</div>
+        <el-icon class="lock-icon" aria-hidden="true"><Lock /></el-icon>
         <h2>請修改初始密碼</h2>
         <p>為確保帳號安全，請立即設定您的新密碼</p>
       </div>
@@ -139,19 +140,35 @@ const handleSubmit = async () => {
 
 <style scoped>
 .change-password-page {
+  box-sizing: border-box;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: clamp(24px, 6vw, 56px) 20px;
+  /* 對齊 LoginView 的教師端 brand 背景：暖奶油黃 + 極淡 IvyKids 綠 halo，
+   * 取代原本與品牌脫鉤的預設紫漸層。 */
+  background:
+    radial-gradient(
+      ellipse 75% 55% at 18% 12%,
+      rgba(90, 168, 66, 0.12) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 88% 90%,
+      rgba(255, 222, 81, 0.18) 0%,
+      transparent 60%
+    ),
+    #fff9e8;
 }
 
 .change-password-card {
-  width: 440px;
-  padding: 40px;
+  box-sizing: border-box;
+  width: min(440px, 100%);
+  padding: clamp(24px, 5vw, 40px);
   background: var(--surface-color);
   border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
 }
 
 .header {
@@ -161,6 +178,7 @@ const handleSubmit = async () => {
 
 .lock-icon {
   font-size: 40px;
+  color: var(--color-primary);
   margin-bottom: 12px;
 }
 

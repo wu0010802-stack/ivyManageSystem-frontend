@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { InfoFilled, Loading, Upload } from '@element-plus/icons-vue'
 import {
   createMyLeave,
   uploadMyLeaveAttachments,

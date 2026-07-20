@@ -97,7 +97,7 @@ const statusLabel = (item: AppraisalCycle) => {
 
 <style scoped>
 .timeline-item {
-  background: var(--surface-card, #fff);
+  background: var(--pt-surface-card);
   border-radius: var(--radius-md, 8px);
   margin-bottom: var(--space-2, 8px);
 }

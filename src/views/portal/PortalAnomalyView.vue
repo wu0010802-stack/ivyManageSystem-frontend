@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { CircleCheck } from '@element-plus/icons-vue'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
 
@@ -12,6 +13,11 @@ const now = new Date()
 const query = reactive({
   year: now.getFullYear(),
   month: now.getMonth() + 1,
+})
+// 動態年份（避免硬編 [2024..2027] 於 2028 斷頭）
+const yearOptions = computed(() => {
+  const y = now.getFullYear()
+  return [y - 2, y - 1, y, y + 1]
 })
 
 const fetchAnomalies = async () => {
@@ -56,7 +62,7 @@ onMounted(fetchAnomalies)
       <h2>出勤異常確認</h2>
       <div class="query-row">
         <el-select v-model="query.year" style="width: 100px;" @change="fetchAnomalies">
-          <el-option v-for="y in [2024,2025,2026,2027]" :key="y" :label="`${y}年`" :value="y" />
+          <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
         </el-select>
         <el-select v-model="query.month" style="width: 100px;" @change="fetchAnomalies">
           <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />

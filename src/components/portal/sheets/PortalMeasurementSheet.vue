@@ -133,6 +133,7 @@ function close() {
           <label>日期</label>
           <input
             type="date"
+            aria-label="量測日期"
             data-test="input-date"
             :max="today()"
             v-model="form.measured_on"
@@ -146,6 +147,7 @@ function close() {
             step="0.1"
             min="0.01"
             max="200"
+            aria-label="身高（公分）"
             data-test="input-height"
             :placeholder="prefillHint('height_cm')"
             v-model="form.height_cm"
@@ -158,6 +160,7 @@ function close() {
             step="0.1"
             min="0.01"
             max="100"
+            aria-label="體重（公斤）"
             data-test="input-weight"
             :placeholder="prefillHint('weight_kg')"
             v-model="form.weight_kg"
@@ -170,21 +173,21 @@ function close() {
         <div v-if="advancedOpen" class="advanced">
           <div class="row">
             <label>頭圍 (cm)</label>
-            <input type="number" step="0.1" v-model="form.head_circumference_cm" />
+            <input type="number" step="0.1" aria-label="頭圍（公分）" v-model="form.head_circumference_cm" />
           </div>
           <div class="row">
             <label>視力 左</label>
-            <input type="number" step="0.01" min="0.1" max="2" v-model="form.vision_left" />
+            <input type="number" step="0.01" min="0.1" max="2" aria-label="視力 左" v-model="form.vision_left" />
           </div>
           <div class="row">
             <label>視力 右</label>
-            <input type="number" step="0.01" min="0.1" max="2" v-model="form.vision_right" />
+            <input type="number" step="0.01" min="0.1" max="2" aria-label="視力 右" v-model="form.vision_right" />
           </div>
         </div>
 
         <div class="row">
           <label>備註</label>
-          <input type="text" maxlength="200" v-model="form.note" />
+          <input type="text" maxlength="200" aria-label="備註" v-model="form.note" />
         </div>
 
         <div class="actions">
@@ -237,6 +240,8 @@ function close() {
   border: 1px solid var(--el-border-color, #dcdfe6);
   border-radius: 6px;
   font-size: 16px;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
 }
 .advanced-toggle {
   align-self: flex-start;
@@ -263,7 +268,8 @@ function close() {
   padding: 10px 18px;
   border-radius: 8px;
   border: 1px solid var(--el-border-color, #dcdfe6);
-  background: white;
+  background: var(--el-fill-color-blank);
+  color: var(--el-text-color-primary);
   cursor: pointer;
 }
 .actions button.primary {

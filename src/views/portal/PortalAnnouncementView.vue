@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Document, Top } from '@element-plus/icons-vue'
 import { getPortalAnnouncements, markAnnouncementRead } from '@/api/portal'
@@ -95,7 +96,17 @@ const openAttachment = (att: AttachmentItem) => {
   window.open(att.url, '_blank', 'noopener')
 }
 
-onMounted(fetchAnnouncements)
+const route = useRoute()
+
+onMounted(async () => {
+  await fetchAnnouncements()
+  // deep-link：搜尋面板公告結果帶 ?id=，載入後自動展開該則（並標為已讀）
+  const qId = Number(route.query.id)
+  if (Number.isFinite(qId) && qId > 0) {
+    const target = announcements.value.find((a) => a.id === qId)
+    if (target && expandedId.value !== qId) toggleExpand(target)
+  }
+})
 </script>
 
 <template>
@@ -116,6 +127,9 @@ onMounted(fetchAnnouncements)
         v-for="ann in announcements"
         :key="ann.id"
         class="ann-card"
+        role="button"
+        tabindex="0"
+        :aria-expanded="expandedId === ann.id"
         :class="{
           'ann-unread': !ann.is_read,
           'ann-expanded': expandedId === ann.id,
@@ -123,6 +137,8 @@ onMounted(fetchAnnouncements)
           'ann-urgent': ann.priority === 'urgent',
         }"
         @click="toggleExpand(ann)"
+        @keydown.enter.prevent="toggleExpand(ann)"
+        @keydown.space.prevent="toggleExpand(ann)"
       >
         <div class="ann-header">
           <div class="ann-title-row">

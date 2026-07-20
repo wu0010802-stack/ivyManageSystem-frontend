@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import { Loading } from '@element-plus/icons-vue'
 import { getMyWorkdayHours } from '@/api/portal'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 

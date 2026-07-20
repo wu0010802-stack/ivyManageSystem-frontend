@@ -57,7 +57,7 @@ const deltaClass = computed(() => {
 
 <style scoped>
 .latest-card {
-  background: var(--surface-card, #fff);
+  background: var(--pt-surface-card);
   border-radius: var(--radius-lg, 12px);
   padding: var(--space-4, 16px);
   box-shadow: var(--shadow-card, 0 1px 3px rgba(0, 0, 0, 0.06));

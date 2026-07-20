@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
@@ -115,11 +116,21 @@ const dismissReviewOp = async (id: number | string) => {
   })
 }
 
+const route = useRoute()
+
 const fetchClassrooms = async () => {
   try {
     const res = await getMyStudents()
     classrooms.value = res.data.classrooms || []
-    if (classrooms.value.length > 0) classroomId.value = classrooms.value[0].classroom_id ?? null
+    if (classrooms.value.length > 0) {
+      // deep-link 預選：首頁班級卡帶 classroom_id 時落在該班（多班教師不再落錯班）
+      const qId = Number(route.query.classroom_id)
+      const target =
+        Number.isFinite(qId) && classrooms.value.some((c) => c.classroom_id === qId)
+          ? qId
+          : classrooms.value[0].classroom_id ?? null
+      classroomId.value = target
+    }
   } catch {
     ElMessage.error('載入班級資料失敗')
   }

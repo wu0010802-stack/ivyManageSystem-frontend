@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, computed, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Document, Loading, Paperclip, UploadFilled } from '@element-plus/icons-vue'
 import {
   getMyLeaves,
+  cancelMyLeave,
   uploadMyLeaveAttachments,
   getMyLeaveAttachment,
 } from '@/api/portal'
 import { apiError } from '@/utils/error'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const props = withDefaults(defineProps<{
   refreshTrigger?: number
@@ -14,14 +17,46 @@ const props = withDefaults(defineProps<{
   refreshTrigger: 0,
 })
 
+const { isMobile } = useIsMobile()
+
 const now = new Date()
 const query = reactive({
   year: now.getFullYear(),
   month: now.getMonth() + 1,
 })
 
+// 動態年份選項（避免硬編 [2024..2027] 於 2028 斷頭）
+const yearOptions = computed(() => {
+  const y = now.getFullYear()
+  return [y - 2, y - 1, y, y + 1]
+})
+
 const loading = ref(false)
 const leaves = ref<Record<string, unknown>[]>([])
+const cancellingId = ref<number | null>(null)
+
+// 撤回本人待審假單（送出後可反悔的唯一入口）
+const cancelLeave = async (row: Record<string, unknown>) => {
+  try {
+    await ElMessageBox.confirm(
+      '確定要撤回這張待審假單嗎？撤回後如仍需請假須重新申請。',
+      '撤回請假',
+      { confirmButtonText: '撤回', cancelButtonText: '不撤回', type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  cancellingId.value = row.id as number
+  try {
+    await cancelMyLeave(row.id as number)
+    ElMessage.success('已撤回')
+    fetchLeaves()
+  } catch (e) {
+    ElMessage.error(apiError(e, '撤回失敗'))
+  } finally {
+    cancellingId.value = null
+  }
+}
 
 const substituteStatusLabel = (status: unknown) => {
   const s = String(status ?? '')
@@ -145,14 +180,58 @@ defineExpose({ fetchLeaves })
   <el-card v-loading="loading">
     <div class="query-row">
       <el-select v-model="query.year" style="width: 100px;" @change="fetchLeaves">
-        <el-option v-for="y in [2024,2025,2026,2027]" :key="y" :label="`${y}年`" :value="y" />
+        <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
       </el-select>
       <el-select v-model="query.month" style="width: 100px;" @change="fetchLeaves">
         <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
       </el-select>
     </div>
 
-    <div style="overflow-x: auto">
+    <!-- 手機：卡片視圖（原本 8 欄桌面表在手機只能橫捲，狀態欄在第 6 欄看不到） -->
+    <div v-if="isMobile && leaves.length" class="leave-cards">
+      <div v-for="row in leaves" :key="(row.id as number)" class="leave-card">
+        <div class="leave-card__top">
+          <span class="leave-card__type">{{ row.leave_type_label }}</span>
+          <el-tag v-if="row.status === 'approved'" type="success" size="small">已核准</el-tag>
+          <el-tag v-else-if="row.status === 'rejected'" type="danger" size="small">已駁回</el-tag>
+          <el-tag v-else type="warning" size="small">待核准</el-tag>
+        </div>
+        <div class="leave-card__time">
+          {{ row.start_date }} {{ row.start_time || '' }} ~ {{ row.end_date }} {{ row.end_time || '' }}
+          <span class="leave-card__hours">{{ row.leave_hours }} 小時</span>
+        </div>
+        <div v-if="row.reason" class="leave-card__reason">{{ row.reason }}</div>
+        <div v-if="row.status === 'rejected' && row.rejection_reason" class="leave-card__rejected">
+          駁回原因：{{ row.rejection_reason }}
+        </div>
+        <div
+          v-if="row.substitute_status && row.substitute_status !== 'not_required'"
+          class="leave-card__sub"
+        >
+          代理：
+          <el-tag :type="substituteStatusType(row.substitute_status)" size="small">
+            {{ substituteStatusLabel(row.substitute_status) }}
+          </el-tag>
+        </div>
+        <div class="leave-card__actions">
+          <el-button
+            v-if="row.attachment_paths && (row.attachment_paths as unknown[]).length > 0"
+            link type="primary" size="small" @click="viewAttachments(row)"
+          >
+            <el-icon><Paperclip /></el-icon>附件 {{ (row.attachment_paths as unknown[]).length }}
+          </el-button>
+          <el-button v-if="row.status === 'pending'" link type="primary" size="small" @click="openSupplement(row)">補件</el-button>
+          <el-button
+            v-if="row.status === 'pending'"
+            link type="danger" size="small"
+            :loading="cancellingId === row.id"
+            @click="cancelLeave(row)"
+          >撤回</el-button>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="!isMobile" style="overflow-x: auto">
       <el-table :data="leaves" border stripe style="margin-top: 12px;" max-height="600">
         <el-table-column prop="leave_type_label" label="假別" width="100" />
         <el-table-column label="開始時間" width="140">
@@ -180,14 +259,15 @@ defineExpose({ fetchLeaves })
             >補件</el-button>
           </template>
         </el-table-column>
-        <el-table-column label="狀態" width="120">
+        <el-table-column label="狀態" min-width="150">
           <template #default="{ row }">
             <el-tag v-if="row.status === 'approved'" type="success" size="small">已核准</el-tag>
             <template v-else-if="row.status === 'rejected'">
               <el-tag type="danger" size="small">已駁回</el-tag>
-              <el-tooltip v-if="row.rejection_reason" :content="`駁回原因：${row.rejection_reason}`" placement="top">
-                <el-icon style="margin-left:4px;color:var(--el-color-danger);cursor:help;vertical-align:middle;"><InfoFilled /></el-icon>
-              </el-tooltip>
+              <!-- 駁回原因改內聯紅字（原本藏 hover tooltip，手機不可 hover） -->
+              <div v-if="row.rejection_reason" class="reject-reason">
+                駁回原因：{{ row.rejection_reason }}
+              </div>
             </template>
             <el-tag v-else type="warning" size="small">待核准</el-tag>
           </template>
@@ -205,6 +285,17 @@ defineExpose({ fetchLeaves })
         <el-table-column prop="approved_by" label="核准人" width="100">
           <template #default="{ row }">
             {{ row.approved_by === 'Admin' ? '管理員' : row.approved_by }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" align="center">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'pending'"
+              link type="danger" size="small"
+              :loading="cancellingId === row.id"
+              @click="cancelLeave(row)"
+            >撤回</el-button>
+            <span v-else class="text-secondary" style="font-size: 12px;">—</span>
           </template>
         </el-table-column>
       </el-table>
@@ -269,6 +360,68 @@ defineExpose({ fetchLeaves })
 .query-row {
   display: flex;
   gap: var(--space-3);
+}
+
+.reject-reason {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-color-danger);
+}
+
+/* 手機請假卡片 */
+.leave-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: 12px;
+}
+.leave-card {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  background: var(--el-bg-color);
+}
+.leave-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: 6px;
+}
+.leave-card__type {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--el-text-color-primary);
+}
+.leave-card__time {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+.leave-card__hours {
+  margin-left: 8px;
+  color: var(--el-text-color-secondary);
+}
+.leave-card__reason {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+.leave-card__rejected {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--el-color-danger);
+}
+.leave-card__sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.leave-card__actions {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .attach-loading {

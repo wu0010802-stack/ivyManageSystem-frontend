@@ -127,7 +127,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 }
 
 .calendar-cell.no-shift {
-  background: #fff;
+  background: var(--pt-surface-card);
 }
 
 .cell-day {

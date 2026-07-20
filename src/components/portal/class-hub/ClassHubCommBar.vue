@@ -72,7 +72,8 @@ const canMessages = computed(() => hasPortalPermission('PARENT_MESSAGES_WRITE'))
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: var(--pt-tint);
+  /* 原 var(--pt-tint) 無定義（死 token）→ icon 圓底靜默透明；改用有定義的 tint */
+  background: var(--pt-tint-message, var(--el-fill-color-light));
   color: var(--color-primary);
   font-size: 20px;
   flex-shrink: 0;

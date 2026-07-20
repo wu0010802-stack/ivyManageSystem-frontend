@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
@@ -20,6 +21,11 @@ const now = new Date()
 const query = reactive({
   year: now.getFullYear(),
   month: now.getMonth() + 1,
+})
+// 動態年份（避免硬編 [2024..2027] 於 2028 斷頭）
+const yearOptions = computed(() => {
+  const y = now.getFullYear()
+  return [y - 2, y - 1, y, y + 1]
 })
 
 const correctionTypes = [
@@ -127,7 +133,7 @@ onMounted(fetchCorrections)
     <el-card v-loading="loading">
       <div class="query-row">
         <el-select v-model="query.year" style="width: 100px;">
-          <el-option v-for="y in [2024,2025,2026,2027]" :key="y" :label="`${y}年`" :value="y" />
+          <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
         </el-select>
         <el-select v-model="query.month" style="width: 100px;">
           <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
