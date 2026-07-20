@@ -19,7 +19,7 @@ import {
   exportYearEndTransferRosterXlsxUrl,
   rejectSettlement,
 } from '@/api/yearEnd'
-import { rejectableStages } from './settlementReject'
+import { rejectableStages, formatBatchFailures } from './settlementReject'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
@@ -197,6 +197,7 @@ async function submitReject() {
 
 // ── 批次簽核/核定 ────────────────────────────────────────────────
 const selectedSettlements = ref<Settlement[]>([])
+const batchFailures = ref<string[]>([])
 function handleSelectionChange(rows: Settlement[]) {
   selectedSettlements.value = rows
 }
@@ -214,9 +215,10 @@ async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
           : await finalizeBatch(ids)
     const data = res.data as { succeeded_count?: number; failed?: { settlement_id: number; reason: string }[] }
     const done = data?.succeeded_count ?? 0
-    const failed = data?.failed?.length ?? 0
-    if (failed) {
-      ElMessage.warning(`完成 ${done} 筆，${failed} 筆未處理（狀態不符/職責分離等，明細見伺服器回應）`)
+    const failedItems = data?.failed ?? []
+    batchFailures.value = formatBatchFailures(failedItems, settlements.value)
+    if (failedItems.length) {
+      ElMessage.warning(`完成 ${done} 筆，${failedItems.length} 筆未處理（明細見下方清單）`)
     } else {
       ElMessage.success(`已完成 ${done} 筆`)
     }
@@ -337,6 +339,19 @@ onMounted(load)
           <el-button v-if="hasPermission('YEAR_END_ACCOUNTING')" size="small" :loading="busy" @click="signBatch('accounting')">批次會計簽核</el-button>
           <el-button v-if="hasPermission('YEAR_END_FINALIZE')" size="small" type="primary" :loading="busy" @click="signBatch('finalize')">批次核定</el-button>
         </div>
+        <el-alert
+          v-if="batchFailures.length"
+          type="warning"
+          :closable="true"
+          show-icon
+          title="以下結算單未完成批次簽核"
+          style="margin: 8px 0"
+          @close="batchFailures = []"
+        >
+          <ul style="margin: 4px 0 0; padding-left: 18px">
+            <li v-for="line in batchFailures" :key="line">{{ line }}</li>
+          </ul>
+        </el-alert>
         <el-table :data="settlements" v-loading="loading" stripe size="small" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="44" />
           <el-table-column label="員工" width="110">
