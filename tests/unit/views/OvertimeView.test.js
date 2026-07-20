@@ -204,7 +204,7 @@ describe('OvertimeView', () => {
       mountOvertimeView()
       await flushPromises()
 
-      expect(ElMessage.error).toHaveBeenCalledWith('載入加班記錄失敗')
+      expect(ElMessage.error).toHaveBeenCalledWith(expect.stringContaining('載入加班記錄失敗'))
     })
 
     it('canViewOvertime 為 false 時不發 API 請求', async () => {

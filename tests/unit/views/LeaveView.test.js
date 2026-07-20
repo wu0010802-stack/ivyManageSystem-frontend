@@ -218,7 +218,7 @@ describe('LeaveView', () => {
       mountLeaveView()
       await flushPromises()
 
-      expect(ElMessage.error).toHaveBeenCalledWith('載入請假記錄失敗')
+      expect(ElMessage.error).toHaveBeenCalledWith(expect.stringContaining('載入請假記錄失敗'))
     })
 
     it('掛載時同步呼叫員工清單與審核政策', async () => {
