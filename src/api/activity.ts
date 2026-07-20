@@ -163,6 +163,14 @@ export const getRegistrationTime = (): AxiosResp<'/activity/settings/registratio
 export const updateRegistrationTime = (data: ApiBody<'/activity/settings/registration-time', 'post'>): AxiosResp<'/activity/settings/registration-time', 'post'> =>
   api.post('/activity/settings/registration-time', data)
 
+// 候補直升正式通知信樣板
+export const getWaitlistPromotedEmailTemplate = (): AxiosResp<'/activity/settings/waitlist-promoted-email', 'get'> =>
+  api.get('/activity/settings/waitlist-promoted-email')
+export const updateWaitlistPromotedEmailTemplate = (data: ApiBody<'/activity/settings/waitlist-promoted-email', 'put'>): AxiosResp<'/activity/settings/waitlist-promoted-email', 'put'> =>
+  api.put('/activity/settings/waitlist-promoted-email', data)
+export const testSendWaitlistPromotedEmail = (data: ApiBody<'/activity/settings/waitlist-promoted-email/test-send', 'post'>): AxiosResp<'/activity/settings/waitlist-promoted-email/test-send', 'post'> =>
+  api.post('/activity/settings/waitlist-promoted-email/test-send', data)
+
 // 海報上傳（multipart）
 export const uploadActivityPoster = (file: File): AxiosResp<'/activity/settings/poster', 'post'> => {
   const form = new FormData()
