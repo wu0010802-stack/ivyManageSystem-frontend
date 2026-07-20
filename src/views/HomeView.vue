@@ -18,6 +18,7 @@ import { useDashboardSections } from '@/composables'
 import DisabilityExpirySection from '@/components/dashboard/DisabilityExpirySection.vue'
 import IntegrationsHealthCard from '@/components/dashboard/IntegrationsHealthCard.vue'
 import { hasPermission } from '@/utils/auth'
+import { MODULE_TERMS } from '@/constants/moduleTerms'
 import QuickAddMenu, { type QuickAddDialogType } from '@/components/dashboard/QuickAddMenu.vue'
 import QuickOvertimeDialog from '@/components/dashboard/quick-add/QuickOvertimeDialog.vue'
 import QuickLeaveDialog from '@/components/dashboard/quick-add/QuickLeaveDialog.vue'
@@ -454,7 +455,7 @@ const anomalyOverflow = computed(
               <div class="action-circle">
                 <el-icon :size="22"><Clock /></el-icon>
               </div>
-              <span>出勤查詢</span>
+              <span>{{ MODULE_TERMS.attendance }}</span>
             </router-link>
             <router-link to="/salary" class="action-item">
               <div class="action-circle">
@@ -472,7 +473,7 @@ const anomalyOverflow = computed(
               <div class="action-circle">
                 <el-icon :size="22"><Trophy /></el-icon>
               </div>
-              <span>活動管理</span>
+              <span>{{ MODULE_TERMS.activity }}</span>
             </router-link>
             <router-link to="/reports" class="action-item">
               <div class="action-circle">

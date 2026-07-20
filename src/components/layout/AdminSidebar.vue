@@ -56,7 +56,7 @@
         <!-- 3. 人事薪資 -->
         <el-sub-menu v-if="hasVisibleLeaveItems" index="group-leave">
           <template #title>
-            <el-icon><Clock /></el-icon>
+            <el-icon><Suitcase /></el-icon>
             <span>人事薪資</span>
           </template>
           <el-menu-item v-if="canView.EMPLOYEES_READ" index="/employees">
@@ -76,7 +76,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
             <el-icon><Clock /></el-icon>
-            <template #title>出勤管理</template>
+            <template #title>{{ MODULE_TERMS.attendance }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.LEAVES_READ" index="/leaves">
             <el-icon><Document /></el-icon>
@@ -88,7 +88,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.SCHEDULE" index="/schedule">
             <el-icon><Timer /></el-icon>
-            <template #title>排班管理</template>
+            <template #title>{{ MODULE_TERMS.schedule }}</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -107,7 +107,7 @@
             <template #title>學生</template>
           </el-menu-item>
           <el-menu-item v-if="canView.RECRUITMENT_READ" index="/students/admissions">
-            <el-icon><DataAnalysis /></el-icon>
+            <el-icon><Promotion /></el-icon>
             <template #title>招生入學</template>
           </el-menu-item>
           <!-- 在籍統計已折入「學生」頁的分頁（/students?tab=enrollment）；舊路徑 redirect 保留 -->
@@ -139,7 +139,7 @@
             v-if="canView.VENDOR_PAYMENT_READ || canView.MISC_RECEIPT_READ"
             index="/finance-signoffs"
           >
-            <el-icon><Money /></el-icon>
+            <el-icon><Wallet /></el-icon>
             <template #title>收支簽收</template>
           </el-menu-item>
         </el-sub-menu>
@@ -148,14 +148,14 @@
         <el-sub-menu v-if="hasVisibleActivityItems" index="group-activity">
           <template #title>
             <el-icon><Star /></el-icon>
-            <span>課後才藝</span>
+            <span>{{ MODULE_TERMS.activity }}</span>
           </template>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/dashboard">
-            <el-icon><DataAnalysis /></el-icon>
+            <el-icon><TrendCharts /></el-icon>
             <template #title>統計儀表板</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/registrations">
-            <el-icon><Document /></el-icon>
+            <el-icon><Tickets /></el-icon>
             <template #title>
               報名管理
               <el-badge v-if="pendingActivityReview > 0" :value="pendingActivityReview" :max="99" class="menu-badge" />
@@ -166,11 +166,11 @@
             <template #title>報名時間設定</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/pos">
-            <el-icon><Money /></el-icon>
+            <el-icon><Coin /></el-icon>
             <template #title>POS 收銀</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_PAYMENT_APPROVE" index="/activity/pos/approval">
-            <el-icon><Finished /></el-icon>
+            <el-icon><CircleCheck /></el-icon>
             <template #title>收款簽核</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/catalog">
@@ -201,7 +201,7 @@
             <span>報表</span>
           </template>
           <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
-            <el-icon><Document /></el-icon>
+            <el-icon><Memo /></el-icon>
             <template #title>操作紀錄</template>
           </el-menu-item>
           <el-menu-item v-if="canView.DATA_QUALITY_READ" index="/data-quality">
@@ -209,15 +209,15 @@
             <template #title>資料品質</template>
           </el-menu-item>
           <el-menu-item v-if="canView.SALARY_READ" index="/admin/gov-reports/monthly">
-            <el-icon><DataAnalysis /></el-icon>
+            <el-icon><Histogram /></el-icon>
             <template #title>月度月報</template>
           </el-menu-item>
           <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
-            <el-icon><Files /></el-icon>
+            <el-icon><Stamp /></el-icon>
             <template #title>政府申報匯出</template>
           </el-menu-item>
           <el-menu-item v-if="canView.REPORTS" index="/reports">
-            <el-icon><Files /></el-icon>
+            <el-icon><PieChart /></el-icon>
             <template #title>報表統計</template>
           </el-menu-item>
         </el-sub-menu>
@@ -237,7 +237,7 @@
             <template #title>角色設定</template>
           </el-menu-item>
           <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
-            <el-icon><Setting /></el-icon>
+            <el-icon><Tools /></el-icon>
             <template #title>一般設定</template>
           </el-menu-item>
         </el-sub-menu>
@@ -265,9 +265,12 @@ import {
   Money, User, School, OfficeBuilding, Bell, Setting,
   Expand, Fold, DataAnalysis, Files, Close,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Trophy, WarningFilled, Key
+  Trophy, WarningFilled, Key,
+  Suitcase, Promotion, Wallet, TrendCharts, Tickets, Coin, CircleCheck,
+  Memo, Histogram, Stamp, PieChart, Tools
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
+import { MODULE_TERMS } from '@/constants/moduleTerms'
 
 const props = withDefaults(defineProps<{
   pendingApprovals?: number

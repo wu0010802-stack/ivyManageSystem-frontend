@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLoca
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth, hasPortalPermission, hasPermission } from '@/utils/auth'
+import { MODULE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
 function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
@@ -163,7 +164,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/attendance',
             name: 'attendance',
             component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),
-            meta: { title: '考勤管理' }
+            meta: { title: MODULE_TERMS.attendance }
         },
         {
             path: '/leaves',
@@ -181,7 +182,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/schedule',
             name: 'schedule',
             component: () => import('../views/ScheduleView.vue'),
-            meta: { title: '班表管理' }
+            meta: { title: MODULE_TERMS.schedule }
         },
         {
             path: '/salary',

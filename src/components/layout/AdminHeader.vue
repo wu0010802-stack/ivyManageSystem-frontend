@@ -137,6 +137,7 @@ import GlobalSearch from '@/components/GlobalSearch.vue'
 import { apiError } from '@/utils/error'
 import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue'
 import A11yMenu from '@/components/common/A11yMenu.vue'
+import { roleDisplayLabel } from '@/constants/roleDisplay'
 
 withDefaults(defineProps<{
   isMobile?: boolean
@@ -174,7 +175,10 @@ const parentTitle = computed(() => (route.meta?.parentTitle as string) || '')
 
 const userInfo = computed(() => (getUserInfo() || {}) as Record<string, unknown>)
 const displayName = computed(() => (userInfo.value.name as string | undefined) || '管理員')
-const displayRole = computed(() => userInfo.value.role === 'admin' ? 'Administrator' : (userInfo.value.role as string | undefined) || '')
+// 角色中文顯示：role_label（DB 單一來源）優先，缺時走 ROLE_DISPLAY_LABELS 保底
+const displayRole = computed(() =>
+  roleDisplayLabel(userInfo.value as { role_label?: string; role?: string })
+)
 
 // 是否有員工記錄（行政/園長/主任）
 const hasEmployee = computed(() => userInfo.value.employee_id != null)

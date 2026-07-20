@@ -13,7 +13,7 @@
         <el-option :value="180" label="近 180 天" />
       </el-select>
       <span class="operator-activity__hint">
-        💡 共用帳號筆數異常高、個人帳號筆數零？請落實「個人帳號登入」政策（見 docs/sop/pos-operator-policy.md）
+        共用帳號筆數偏高、個人帳號筆數為零時，請落實「個人帳號登入」政策：每位收銀人員以自己的帳號登入操作 POS，勿共用帳號
       </span>
     </div>
 
