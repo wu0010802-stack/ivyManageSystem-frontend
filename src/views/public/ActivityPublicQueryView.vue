@@ -231,6 +231,17 @@
           <h2>編輯報名資料</h2>
         </div>
 
+        <!-- F5：報名時段非阻斷式提醒（如 48h 內即將截止）；已鎖定時不重複顯示 -->
+        <div
+          v-if="noticeState && !isEditLocked"
+          class="registration-window-notice"
+          :class="noticeState.variant"
+          role="status"
+          data-test="registration-window-notice"
+        >
+          {{ noticeState.title }}：{{ noticeState.message }}
+        </div>
+
         <!-- 審核中：校方尚未核對就讀資料，課程/班級可能因核對而調整 -->
         <div
           v-if="fieldState.review_state === 'school_review'"
@@ -248,6 +259,15 @@
           data-test="payment-locked-hint"
         >
           🔒 此筆報名已完成付款，為保障金流與資料一致性，無法於前台直接修改，如需異動請聯繫校方協助處理。
+        </div>
+        <!-- F5：報名時段不可修改（已截止／尚未開放／尚未開始，付款鎖定優先於此判斷）；
+             文案直接沿用 noticeState，避免不同關閉原因都被誤標成「已截止」 -->
+        <div
+          v-else-if="isRegistrationWindowClosed"
+          class="info-hint mutation-locked-hint"
+          data-test="registration-closed-hint"
+        >
+          🔒 {{ noticeState?.title }}：{{ noticeState?.message }}
         </div>
         <template v-else>
           <div v-if="canMutate" class="info-hint">
@@ -289,9 +309,9 @@
           </div>
         </div>
 
-        <!-- 已付款鎖定：純文字唯讀摘要，不渲染任何表單控制項與動作按鈕 -->
+        <!-- 已付款鎖定或報名時段截止：純文字唯讀摘要，不渲染任何表單控制項與動作按鈕 -->
         <div
-          v-if="isPaymentLocked"
+          v-if="isEditLocked"
           class="payment-locked-summary"
           data-test="payment-locked-summary"
         >
@@ -550,6 +570,7 @@ import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { usePublicRegistrationQuery } from '@/composables/usePublicRegistrationQuery'
 import type { QueryResult } from '@/composables/usePublicRegistrationQuery'
 import { useRegistrationEditSave } from '@/composables/useRegistrationEditSave'
+import { useRegistrationWindow, type RegistrationTimeSettings } from '@/composables/useRegistrationWindow'
 import { usePromotionActions } from '@/composables/usePromotionActions'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
@@ -570,6 +591,13 @@ let optionsLoadSeq = 0
 const optionsLoading = ref(false)
 const optionsError = ref<unknown>(null)
 const loadedOptionsTermKey = ref<string | null>(null)
+
+// F5：報名時段守衛。預設 is_open=true → fail-open（比照 parent/views/ActivityView.vue
+// 既有先例）：bootstrap 資料回來前，若查到報名不該誤鎖一個實際仍開放的視窗。
+const timeInfo = ref<RegistrationTimeSettings>({ is_open: true, open_at: null, close_at: null })
+function applyRegistrationTime(data: RegistrationTimeSettings | null | undefined) {
+  if (data) timeInfo.value = data
+}
 
 function termKey(term?: PublicActivityTermParams): string {
   return term ? `${term.school_year}-${term.semester}` : ''
@@ -606,6 +634,7 @@ async function loadOptions(
     const res = await getPublicBootstrap(term)
     if (seq !== optionsLoadSeq) return
     const b = res.data
+    applyRegistrationTime(b.registration_time)
     const bootstrapCourses = Array.isArray(b.courses)
       ? [...b.courses] as CourseOption[]
       : []
@@ -705,6 +734,17 @@ const catalogReady = computed(
 )
 const editorReady = computed(() => catalogReady.value && availabilityReady.value)
 
+// F5：報名時段守衛。本頁不需要 submitButtonLabel/submitButtonDisabled（無單一
+// 送出按鈕語意），僅取 noticeState / isRegistrationOpen；submitting 恆為 false
+// （本頁無「送出中」狀態需與時段守衛互斥）。
+const { noticeState, isRegistrationOpen } = useRegistrationWindow({
+  timeInfo,
+  submitting: ref(false),
+})
+const isRegistrationWindowClosed = computed(() => !isRegistrationOpen.value)
+// 已付款鎖定與報名時段截止皆走同一套「唯讀摘要 + 隱藏儲存按鈕」UI pattern。
+const isEditLocked = computed(() => isPaymentLocked.value || isRegistrationWindowClosed.value)
+
 let hydratedTermKey = ''
 watch(
   () => queryResult.value,
@@ -743,6 +783,8 @@ const {
   supplies,
   availability,
   editorReady,
+  isRegistrationOpen,
+  timeInfo,
   createHydrationGuard,
   hydrateResult,
   refetchCurrent,
@@ -1008,6 +1050,26 @@ onBeforeUnmount(() => {
   font-size: var(--fs-sm);
   color: var(--color-text-muted);
   margin-bottom: var(--space-4);
+}
+
+/* F5：報名時段非阻斷式提醒（48h 內即將截止等），比照 ActivityPublicView.vue 的 .notice */
+.registration-window-notice {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(217, 119, 6, 0.35);
+  background-color: var(--color-warning-soft);
+  font-size: var(--fs-sm);
+  margin-bottom: var(--space-4);
+}
+.registration-window-notice.is-warning {
+  border-color: rgba(217, 119, 6, 0.35);
+  background-color: var(--color-warning-soft);
+  color: var(--color-warning-darker);
+}
+.registration-window-notice.is-danger {
+  border-color: rgba(220, 38, 38, 0.35);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
 }
 
 .field-group { margin-bottom: var(--space-4); }

@@ -1,6 +1,7 @@
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { publicUpdateRegistration } from '@/api/activityPublic'
 import type { ApiBody } from '@/api/_generated/typed'
+import { computeNoticeState, type RegistrationTimeSettings } from './useRegistrationWindow'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 import { estimateCourseStatus } from '@/utils/activityDisplay'
 import {
@@ -56,6 +57,8 @@ export function useRegistrationEditSave({
   supplies,
   availability,
   editorReady = computed(() => true),
+  isRegistrationOpen = computed(() => true),
+  timeInfo,
   createHydrationGuard,
   hydrateResult,
   refetchCurrent,
@@ -70,6 +73,11 @@ export function useRegistrationEditSave({
   supplies: Ref<SupplyOption[]>
   availability: Ref<Record<string, number> | null>
   editorReady?: Readonly<Ref<boolean>>
+  // 報名時段守衛（F5）：預設 fail-open（永遠 true / undefined），既有呼叫端
+  // 不傳這兩個參數時行為完全不變。timeInfo 用於 handleSaveChanges 內以
+  // 真實 Date.now() 二次確認（見下方說明），isRegistrationOpen 疊加進 saveBlocked。
+  isRegistrationOpen?: Readonly<Ref<boolean>>
+  timeInfo?: Ref<RegistrationTimeSettings | null | undefined>
   createHydrationGuard: () => QueryHydrationGuard | null
   hydrateResult: (
     data: QueryResult,
@@ -175,10 +183,19 @@ export function useRegistrationEditSave({
   })
 
   const saveBlocked = computed(
-    () => !editorReady.value || Boolean(feePreview.value?.wouldOverpay),
+    () => !editorReady.value || Boolean(feePreview.value?.wouldOverpay) || !isRegistrationOpen.value,
   )
 
   async function handleSaveChanges() {
+    // F5：報名時段二次確認（先於既有欄位檢查）。isRegistrationOpen 依賴
+    // useRegistrationWindow 的 30s reactive tick，家長開著分頁很久時可能還沒
+    // 反映最新截止狀態；此處用真實 Date.now() 重新算一次 timeInfo，攔下「畫面
+    // 尚未鎖但實際已截止」的邊界情況。timeInfo 未傳（呼叫端未接線）時跳過，
+    // 完全 fail-open、不影響既有呼叫端行為。
+    if (timeInfo && computeNoticeState(timeInfo.value || {}, Date.now())?.blocking) {
+      showToast('報名時段已變更（可能已截止），請重新查詢以確認目前狀態。', 'warning', 6000)
+      return
+    }
     if (!editForm.class_name) {
       showToast('請選擇班級', 'error')
       return
