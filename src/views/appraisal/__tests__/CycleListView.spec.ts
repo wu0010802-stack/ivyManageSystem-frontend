@@ -4,6 +4,7 @@ import { defineComponent, h, nextTick } from 'vue'
 
 import CycleListView from '@/views/appraisal/CycleListView.vue'
 import { getCurrentAcademicTerm } from '@/utils/academic'
+import { createAppraisalCycle } from '@/api/appraisal'
 
 const CYCLES = [
   { id: 3, academic_year: 114, semester: 'FIRST', base_score_calc_date: '2025-09-15', base_score: 75.0, status: 'CLOSED' },
@@ -25,6 +26,10 @@ vi.mock('element-plus', () => ({
 }))
 vi.mock('@/utils/academic', () => ({
   getCurrentAcademicTerm: vi.fn().mockReturnValue({ school_year: 114, semester: 2 }),
+}))
+// Task 7：form/importForm 動態預設改讀 useAcademicTermStore（民國學年 114、下學期）
+vi.mock('@/stores/academicTerm', () => ({
+  useAcademicTermStore: () => ({ school_year: 114, semester: 2, setTerm: vi.fn() }),
 }))
 
 const routeQuery: { value: Record<string, unknown> } = { value: {} }
@@ -156,5 +161,32 @@ describe('CycleListView（dropdown + 內嵌明細）', () => {
     await flush()
     expect(wrapper.find('[data-test="empty-stub"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="detail-panel-stub"]').exists()).toBe(false)
+  })
+
+  it('Task 7：建立/匯入表單預設值依當前學年（useAcademicTermStore）動態推算，非寫死 114/160', async () => {
+    const wrapper = mountView()
+    await flush()
+    const vm = wrapper.vm as unknown as {
+      form: { academic_year: number; semester: string; enrollment_target: number | null; enrollment_actual: number | null }
+      importForm: { start_date: string; end_date: string; base_score_calc_date: string }
+    }
+    expect(vm.form.academic_year).toBe(114)
+    expect(vm.form.semester).toBe('SECOND')
+    expect(vm.form.enrollment_target).toBeNull()
+    expect(vm.form.enrollment_actual).toBeNull()
+    // school_year 114 → 西元 2025；下學期 → 隔年 2026 起算
+    expect(vm.importForm.start_date).toBe('2026-02-01')
+    expect(vm.importForm.end_date).toBe('2026-07-31')
+    expect(vm.importForm.base_score_calc_date).toBe('2026-03-15')
+  })
+
+  it('Task 7：建立時 enrollment_target 為 null 送出 0（維持既有 API 契約）', async () => {
+    const wrapper = mountView()
+    await flush()
+    const vm = wrapper.vm as unknown as { submit: () => Promise<void> }
+    await vm.submit()
+    expect(vi.mocked(createAppraisalCycle)).toHaveBeenCalledWith(
+      expect.objectContaining({ enrollment_target: 0 }),
+    )
   })
 })

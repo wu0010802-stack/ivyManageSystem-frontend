@@ -11,6 +11,15 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     ...actual,
     listYearEndCycles: vi.fn(),
     updateCycleStatus: vi.fn(),
+    createYearEndCycle: vi.fn().mockResolvedValue({ data: {} }),
+    importYearEndExcel: vi.fn().mockResolvedValue({
+      data: {
+        settlements_upserted: 0,
+        special_bonuses_upserted: 0,
+        class_targets_upserted: 0,
+        skipped_unresolved_names: [],
+      },
+    }),
   }
 })
 
@@ -26,6 +35,23 @@ vi.mock('element-plus', async (importOriginal) => {
 const mockPush = vi.fn()
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush, back: vi.fn() }),
+}))
+
+// Task 7：建立/匯入表單動態預設改讀 useAcademicTermStore（民國學年 114）
+vi.mock('@/stores/academicTerm', () => ({
+  useAcademicTermStore: () => ({ school_year: 114, semester: 1, setTerm: vi.fn() }),
+}))
+
+// Task 7：權限前置——canCreate/canImport 依 hasPermission 決定；預設兩者皆 true
+// 以維持既有測試（更多操作 dropdown 可見、新增按鈕非 disabled）不受影響，
+// 專屬的權限關閉行為另有獨立測試切換 permState。
+const permState = { canCreate: true, canImport: true }
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn((name: string) => {
+    if (name === 'YEAR_END_FINALIZE') return permState.canCreate
+    if (name === 'YEAR_END_WRITE') return permState.canImport
+    return false
+  }),
 }))
 
 import * as api from '@/api/yearEnd'
@@ -91,12 +117,13 @@ const ElButtonStub = defineComponent({
   name: 'ElButtonStub',
   inheritAttrs: false,
   setup(_, { attrs, emit, slots }) {
-    const dataAttrs = Object.fromEntries(
-      Object.entries(attrs).filter(([k]) => k.startsWith('data-')),
+    // Task 7：新增保留 disabled 供權限前置斷言（原僅轉發 data-* attrs）。
+    const passthroughAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([k]) => k.startsWith('data-') || k === 'disabled'),
     )
     return () => h(
       'button',
-      { ...dataAttrs, onClick: () => emit('click') },
+      { ...passthroughAttrs, onClick: () => emit('click') },
       slots.default?.(),
     )
   },
@@ -126,6 +153,20 @@ const ElDropdownItemStub = defineComponent({
   },
 })
 
+// Task 7：權限前置——保留 content/disabled 供斷言 tooltip 是否處於「需要權限」提示狀態。
+const ElTooltipStub = defineComponent({
+  name: 'ElTooltipStub',
+  props: { content: { type: String, default: '' }, disabled: { type: Boolean, default: false } },
+  setup(props, { slots }) {
+    return () =>
+      h(
+        'div',
+        { class: 'el-tooltip-stub', 'data-content': props.content, 'data-disabled': String(props.disabled) },
+        slots.default?.(),
+      )
+  },
+})
+
 async function mountView() {
   const wrapper = mount(YearEndListView, {
     global: {
@@ -145,6 +186,7 @@ async function mountView() {
         'el-dropdown': ElDropdownStub,
         'el-dropdown-menu': ElDropdownMenuStub,
         'el-dropdown-item': ElDropdownItemStub,
+        'el-tooltip': ElTooltipStub,
         'el-icon': true,
       },
       directives: { loading: () => {} },
@@ -158,6 +200,8 @@ async function mountView() {
 describe('YearEndListView — Task 10 列表瘦身', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permState.canCreate = true
+    permState.canImport = true
   })
 
   it.each([
@@ -275,5 +319,134 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     await mountView()
 
     expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('載入異常')
+  })
+})
+
+describe('YearEndListView — Task 7 動態預設 + 權限前置', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    permState.canCreate = true
+    permState.canImport = true
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [] } as never)
+  })
+
+  it('openCreate() 依當前學年（useAcademicTermStore school_year=114）動態推算表單預設，非寫死 114', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      openCreate: () => void
+      form: { academic_year: number; start_date: string; end_date: string; bonus_calc_date: string }
+    }
+
+    vm.openCreate()
+
+    // school_year 114 → 西元 2025 起算
+    expect(vm.form.academic_year).toBe(114)
+    expect(vm.form.start_date).toBe('2025-08-01')
+    expect(vm.form.end_date).toBe('2026-07-31')
+    expect(vm.form.bonus_calc_date).toBe('2026-01-15')
+  })
+
+  it('匯入表單日期預設同公式推算（非空字串），三個歷史魔數改 null', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      importForm: {
+        start_date: string
+        end_date: string
+        bonus_calc_date: string
+        org_rate_first: number | null
+        org_rate_second: number | null
+        enrollment_target: number | null
+      }
+    }
+
+    expect(vm.importForm.start_date).toBe('2025-08-01')
+    expect(vm.importForm.end_date).toBe('2026-07-31')
+    expect(vm.importForm.bonus_calc_date).toBe('2026-01-15')
+    expect(vm.importForm.org_rate_first).toBeNull()
+    expect(vm.importForm.org_rate_second).toBeNull()
+    expect(vm.importForm.enrollment_target).toBeNull()
+  })
+
+  it('doImport()：三個歷史魔數欄位留空（null）時不帶入 payload，讓後端沿用系統預設', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      importForm: { file: File | null }
+      doImport: () => Promise<void>
+    }
+    vm.importForm.file = new File(['x'], 'test.xls')
+
+    await vm.doImport()
+
+    expect(vi.mocked(api.importYearEndExcel)).toHaveBeenCalledTimes(1)
+    const [, params] = vi.mocked(api.importYearEndExcel).mock.calls[0]
+    expect(params).not.toHaveProperty('orgRateFirst')
+    expect(params).not.toHaveProperty('orgRateSecond')
+    expect(params).not.toHaveProperty('enrollmentTarget')
+    expect(params).toMatchObject({
+      startDate: '2025-08-01',
+      endDate: '2026-07-31',
+      bonusCalcDate: '2026-01-15',
+    })
+  })
+
+  it('doImport()：使用者填寫魔數值時正常帶入 payload', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      importForm: {
+        file: File | null
+        org_rate_first: number | null
+        org_rate_second: number | null
+        enrollment_target: number | null
+      }
+      doImport: () => Promise<void>
+    }
+    vm.importForm.file = new File(['x'], 'test.xls')
+    vm.importForm.org_rate_first = 85
+    vm.importForm.org_rate_second = 90
+    vm.importForm.enrollment_target = 150
+
+    await vm.doImport()
+
+    const [, params] = vi.mocked(api.importYearEndExcel).mock.calls[0]
+    expect(params).toMatchObject({ orgRateFirst: 85, orgRateSecond: 90, enrollmentTarget: 150 })
+  })
+
+  it('無 YEAR_END_FINALIZE 權限時「新增年度週期」按鈕 disabled，tooltip 顯示提示文案', async () => {
+    permState.canCreate = false
+    const wrapper = await mountView()
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text() === '新增年度週期')
+    expect(addBtn).toBeTruthy()
+    expect(addBtn!.attributes('disabled')).not.toBeUndefined()
+
+    const tooltip = wrapper.find('.el-tooltip-stub')
+    expect(tooltip.exists()).toBe(true)
+    expect(tooltip.attributes('data-content')).toBe('需要年終核定權限')
+    expect(tooltip.attributes('data-disabled')).toBe('false')
+  })
+
+  it('有 YEAR_END_FINALIZE 權限時「新增年度週期」按鈕非 disabled', async () => {
+    const wrapper = await mountView()
+
+    const addBtn = wrapper.findAll('button').find((b) => b.text() === '新增年度週期')
+    expect(addBtn!.attributes('disabled')).toBeUndefined()
+
+    const tooltip = wrapper.find('.el-tooltip-stub')
+    expect(tooltip.attributes('data-disabled')).toBe('true')
+  })
+
+  it('無 YEAR_END_WRITE 權限時「更多操作」dropdown 整組隱藏（含例外匯入 Excel）', async () => {
+    permState.canImport = false
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).not.toContain('更多操作')
+    expect(wrapper.text()).not.toContain('例外匯入 Excel')
+  })
+
+  it('有 YEAR_END_WRITE 權限時「更多操作」dropdown 正常顯示', async () => {
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('更多操作')
+    expect(wrapper.text()).toContain('例外匯入 Excel')
   })
 })
