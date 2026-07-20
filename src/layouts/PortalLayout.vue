@@ -536,34 +536,64 @@ const submitPassword = async () => {
       </el-main>
 
       <!-- Bottom Navigation (mobile only) -->
-      <div v-if="isMobile" class="bottom-nav">
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }" @click="router.push('/portal/home')">
+      <nav v-if="isMobile" class="bottom-nav" aria-label="主要導覽">
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }"
+          :aria-current="route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') ? 'page' : undefined"
+          @click="router.push('/portal/home')"
+        >
           <div class="tab-icon-wrapper">
             <el-icon><HomeFilled /></el-icon>
             <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
           </div>
           <span>工作台</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/attendance') }" @click="router.push('/portal/attendance')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/attendance') }"
+          :aria-current="route.path.startsWith('/portal/attendance') ? 'page' : undefined"
+          @click="router.push('/portal/attendance')"
+        >
           <el-icon><Calendar /></el-icon>
           <span>出勤</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/schedule') }" @click="router.push('/portal/schedule')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/schedule') }"
+          :aria-current="route.path.startsWith('/portal/schedule') ? 'page' : undefined"
+          @click="router.push('/portal/schedule')"
+        >
           <div class="tab-icon-wrapper">
             <el-icon><Clock /></el-icon>
             <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="tab-badge" />
           </div>
           <span>排班</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }" @click="router.push('/portal/students')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }"
+          :aria-current="route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') ? 'page' : undefined"
+          @click="router.push('/portal/students')"
+        >
           <el-icon><User /></el-icon>
           <span>學生</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/profile') }" @click="router.push('/portal/profile')">
+        </button>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/profile') }"
+          :aria-current="route.path.startsWith('/portal/profile') ? 'page' : undefined"
+          @click="router.push('/portal/profile')"
+        >
           <el-icon><UserFilled /></el-icon>
           <span>我的</span>
-        </div>
-      </div>
+        </button>
+      </nav>
       <button v-if="isMobile" class="psp-fab" @click="openPalette" aria-label="搜尋">
         <el-icon><Search /></el-icon>
       </button>
@@ -868,6 +898,11 @@ const submitPassword = async () => {
   align-items: center;
   justify-content: center;
   gap: 3px;
+  /* button reset：清除瀏覽器預設外觀，維持原視覺 */
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
   font-size: 12px;
   color: var(--pt-text-muted, #64748b);
   cursor: pointer;
@@ -877,6 +912,12 @@ const submitPassword = async () => {
 
 .bottom-tab:active {
   background-color: var(--bg-color-soft);
+}
+
+.bottom-tab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 
 .bottom-tab.active {
