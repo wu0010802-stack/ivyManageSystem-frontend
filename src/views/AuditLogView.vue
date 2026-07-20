@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getAuditLogs, getAuditLogsMeta, exportAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -162,7 +163,7 @@ const fetchLogs = async () => {
     if ((error as { response?: { status?: number } }).response?.status === 403) {
       ElMessage.error('需要管理員權限')
     } else {
-      ElMessage.error('載入操作紀錄失敗')
+      ElMessage.error(friendlyError('載入操作紀錄失敗', error))
     }
   } finally {
     loading.value = false

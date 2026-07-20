@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
 import { createRole } from '@/api/permissions_admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
@@ -225,7 +226,7 @@ const handleDeleteUser = (user: Record<string, unknown>) => {
         ElMessage.success('帳號已刪除')
         fetchUsers()
       } catch (error) {
-        ElMessage.error('刪除失敗')
+        ElMessage.error(friendlyError('刪除帳號失敗', error))
       }
     })
 }

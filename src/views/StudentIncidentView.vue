@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/api/studentIncidents'
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
@@ -75,8 +76,8 @@ const fetchIncidents = async () => {
     const res = await getIncidents(params)
     incidents.value = res.data.items
     total.value = res.data.total
-  } catch {
-    ElMessage.error('載入事件紀錄失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入事件紀錄失敗', e))
   } finally {
     loading.value = false
   }
@@ -101,8 +102,8 @@ const onDialogClassroomChange = async (cid: number | null) => {
   try {
     const res = await getStudents({ classroom_id: cid, is_active: true })
     dialogStudents.value = res.data.items || []
-  } catch {
-    ElMessage.error('載入學生資料失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入學生資料失敗', e))
   } finally {
     dialogStudentsLoading.value = false
   }
@@ -180,8 +181,8 @@ const toggleParentNotified = async (row: Record<string, unknown>) => {
     row.parent_notified = newVal
     row.parent_notified_at = newVal ? new Date().toISOString() : null
     ElMessage.success(newVal ? '已標記通知家長' : '已取消通知標記')
-  } catch {
-    ElMessage.error('更新失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('更新家長通知狀態失敗', e))
   }
 }
 

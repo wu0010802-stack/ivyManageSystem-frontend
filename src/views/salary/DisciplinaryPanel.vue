@@ -2,6 +2,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { todayISO } from '@/utils/format'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import {
   listDisciplinaryActions,
@@ -10,7 +11,6 @@ import {
   deleteDisciplinaryAction,
 } from '@/api/disciplinary'
 import { useEmployeeStore } from '@/stores/employee'
-import { apiError } from '@/utils/error'
 
 const TYPE_OPTIONS = [
   { value: 'warning', label: '警告', defaultAmount: 1000 },
@@ -82,7 +82,7 @@ const fetchList = async () => {
     const res = await listDisciplinaryActions(params)
     items.value = res.data.items || []
   } catch (e) {
-    ElMessage.error('載入懲處列表失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('載入懲處列表失敗', e))
   } finally {
     loading.value = false
   }
@@ -138,7 +138,7 @@ const handleSave = async () => {
     dialogVisible.value = false
     fetchList()
   } catch (e) {
-    ElMessage.error('儲存失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('儲存懲處紀錄失敗', e))
   }
 }
 
@@ -157,7 +157,7 @@ const handleDelete = async (row: Record<string, unknown>) => {
     ElMessage.success('刪除成功')
     fetchList()
   } catch (e) {
-    ElMessage.error('刪除失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('刪除懲處紀錄失敗', e))
   }
 }
 

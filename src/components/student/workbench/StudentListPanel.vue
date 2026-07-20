@@ -5,6 +5,7 @@ import { getStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Search, Plus, Edit, Warning, ArrowDown } from '@element-plus/icons-vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useConfirmDelete } from '@/composables'
@@ -161,7 +162,7 @@ const fetchStudents = async () => {
     }
   } catch (error) {
     if (seq !== fetchSeq) return
-    ElMessage.error('載入學生資料失敗')
+    ElMessage.error(friendlyError('載入學生資料失敗', error))
   } finally {
     if (seq === fetchSeq) loading.value = false
   }
@@ -375,8 +376,8 @@ const loadClassrooms = async () => {
   try {
     const res = await getClassrooms({ current_only: false })
     classrooms.value = res.data as ClassroomRow[]
-  } catch {
-    ElMessage.error('載入班級資料失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入班級資料失敗', e))
   }
 }
 

@@ -7,6 +7,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary } from '@/api/config'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 
 const positionSalary = reactive({
   head_teacher_a: 39240,
@@ -46,7 +47,7 @@ const fetchPositionSalary = async () => {
     const response = await getPositionSalary()
     Object.assign(positionSalary, response.data)
   } catch (error) {
-    ElMessage.error('職位底薪設定載入失敗')
+    ElMessage.error(friendlyError('職位底薪設定載入失敗', error))
   } finally {
     loadingPositionSalary.value = false
   }
@@ -59,7 +60,7 @@ const savePositionSalary = async () => {
     ElMessage.success('職位標準底薪設定已儲存')
     await fetchCompare()
   } catch (error) {
-    ElMessage.error('職位底薪設定儲存失敗')
+    ElMessage.error(friendlyError('職位底薪設定儲存失敗', error))
   } finally {
     loadingPositionSalary.value = false
   }
@@ -71,8 +72,8 @@ const fetchCompare = async () => {
     const res = await comparePositionSalary()
     compareRows.value = res.data.employees
     compareOutOfSync.value = res.data.out_of_sync
-  } catch {
-    ElMessage.error('載入比對資料失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入比對資料失敗', e))
   } finally {
     loadingCompare.value = false
   }
@@ -84,8 +85,8 @@ const syncOne = async (row: Record<string, unknown>) => {
     await syncPositionSalary([row.employee_id as number])
     ElMessage.success(`${row.name} 底薪已更新為 $${(row.standard_salary as number).toLocaleString()}`)
     await fetchCompare()
-  } catch {
-    ElMessage.error('同步失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('同步底薪失敗', e))
   } finally {
     const s = new Set(syncingIds.value)
     s.delete(row.employee_id as number)
@@ -99,8 +100,8 @@ const syncAll = async () => {
     const res = await syncPositionSalary([])
     ElMessage.success(`已同步 ${res.data.total_updated} 位員工底薪至職位標準`)
     await fetchCompare()
-  } catch {
-    ElMessage.error('批次同步失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('批次同步底薪失敗', e))
   } finally {
     syncingAll.value = false
   }

@@ -2,6 +2,7 @@
 import { computed, reactive } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import {
   createEmployeeEducation, updateEmployeeEducation, deleteEmployeeEducation,
   createEmployeeCertificate, updateEmployeeCertificate, deleteEmployeeCertificate,
@@ -133,8 +134,7 @@ const submitSub = async () => {
     subDialog.visible = false
     ElMessage.success('儲存成功')
   } catch (err) {
-    const e = err as { response?: { data?: { detail?: string } }; message?: string }
-    ElMessage.error('儲存失敗：' + (e.response?.data?.detail || e.message))
+    ElMessage.error(friendlyError('儲存證照資料失敗', err))
   }
 }
 
@@ -147,8 +147,7 @@ const confirmDeleteSub = (kind: string, row: Record<string, unknown>) => {
       else if (kind === 'contract') { await deleteEmployeeContract(id, row.id as number); emit('reload', 'contract') }
       ElMessage.success('已刪除')
     } catch (err) {
-      const e = err as { response?: { data?: { detail?: string } }; message?: string }
-      ElMessage.error('刪除失敗：' + (e.response?.data?.detail || e.message))
+        ElMessage.error(friendlyError('刪除證照資料失敗', err))
     }
   }).catch(() => {})
 }

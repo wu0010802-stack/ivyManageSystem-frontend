@@ -29,6 +29,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getChanges } from '@/api/activity'
 import { formatActivityDate } from '@/utils/format'
 
@@ -51,8 +52,8 @@ async function fetchList() {
     const data = res.data as { items: Record<string, unknown>[]; total: number }
     list.value = data.items
     total.value = data.total
-  } catch {
-    if (seq === fetchSeq) ElMessage.error('載入失敗')
+  } catch (e) {
+    if (seq === fetchSeq) ElMessage.error(friendlyError('載入異動紀錄失敗', e))
   } finally {
     if (seq === fetchSeq) loading.value = false
   }

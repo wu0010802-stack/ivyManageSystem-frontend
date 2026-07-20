@@ -366,6 +366,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Check, Delete, Printer, Calendar } from '@element-plus/icons-vue'
 import {
   getAttendanceSessions,
@@ -582,9 +583,9 @@ async function loadSessions() {
     const data = res.data as { items?: SessionRow[]; total?: number } | SessionRow[]
     sessions.value = (data as { items?: SessionRow[] })?.items ?? (Array.isArray(data) ? data : [])
     total.value = (data as { total?: number })?.total ?? sessions.value.length
-  } catch {
+  } catch (e) {
     if (seq !== sessionsReqSeq) return
-    ElMessage.error('載入場次失敗')
+    ElMessage.error(friendlyError('載入場次失敗', e))
   } finally {
     // 僅最新請求可解除 loading，避免過時請求提早把 loading 態關掉
     if (seq === sessionsReqSeq) loading.value = false
@@ -724,8 +725,8 @@ async function handleDelete(row: SessionRow) {
     await deleteAttendanceSession(row.id)
     ElMessage.success('已刪除')
     loadSessions()
-  } catch {
-    ElMessage.error('刪除失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('刪除場次失敗', e))
   } finally {
     deletingId.value = null
   }
@@ -742,8 +743,8 @@ async function handleExport() {
     a.download = `點名_${session.course_name}_${session.session_date}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
-  } catch {
-    ElMessage.error('匯出失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('匯出點名資料失敗', e))
   }
 }
 

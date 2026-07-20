@@ -284,6 +284,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
          getCourseWaitlist, getCourseEnrolled, promoteWaitlist } from '@/api/activity'
@@ -418,9 +419,9 @@ async function openEnrolled(row: Course) {
     const res = await getCourseEnrolled(row.id)
     if (seq !== enrolledSeq) return // 過期回應：已切到別課，丟棄不覆寫
     enrolledItems.value = (res.data as { items: EnrolledItem[] }).items
-  } catch {
+  } catch (e) {
     if (seq !== enrolledSeq) return
-    ElMessage.error('載入報名名單失敗')
+    ElMessage.error(friendlyError('載入報名名單失敗', e))
   } finally {
     if (seq === enrolledSeq) enrolledLoading.value = false
   }
@@ -439,9 +440,9 @@ async function openWaitlist(row: Course) {
     const res = await getCourseWaitlist(row.id)
     if (seq !== waitlistSeq) return // 過期回應：已切到別課，丟棄不覆寫（否則標題與清單錯配）
     waitlistItems.value = (res.data as { items: WaitlistItem[] }).items
-  } catch {
+  } catch (e) {
     if (seq !== waitlistSeq) return
-    ElMessage.error('載入候補名單失敗')
+    ElMessage.error(friendlyError('載入候補名單失敗', e))
   } finally {
     if (seq === waitlistSeq) waitlistLoading.value = false
   }
@@ -494,12 +495,12 @@ async function fetchCourses() {
     })
     if (seq !== fetchSeq) return // 過期回應：已有更新的載入，丟棄不覆寫
     courses.value = (res.data as { courses: Course[] }).courses
-  } catch {
+  } catch (e) {
     if (seq !== fetchSeq) return
     // F4：載入失敗須清空清單，否則切學期失敗時畫面留著上一學期的資料且編輯/停用
     // 按鈕仍可操作（學期選擇器顯示新學期但資料屬舊學期），易誤改到舊學期資料。
     courses.value = []
-    ElMessage.error('載入失敗')
+    ElMessage.error(friendlyError('載入課程失敗', e))
   } finally {
     if (seq === fetchSeq) loading.value = false
   }

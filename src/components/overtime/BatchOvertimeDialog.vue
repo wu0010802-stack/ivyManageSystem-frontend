@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { batchCreateOvertimes } from '@/api/overtimes'
-import { apiError } from '@/utils/error'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 
 const props = defineProps<{
@@ -111,7 +111,7 @@ const submit = async () => {
   } catch (error) {
     applyBatchErrors(error)
     if (batchErrors.value.length === 0) {
-      ElMessage.error('建立失敗: ' + apiError(error))
+      ElMessage.error(friendlyError('建立批次加班單失敗', error))
     } else {
       ElMessage.error('整批未建立，請修正下列項目')
     }

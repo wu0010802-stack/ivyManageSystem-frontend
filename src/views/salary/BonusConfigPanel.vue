@@ -3,6 +3,7 @@ import { reactive, ref, computed, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets } from '@/api/config'
 import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
 import OvertimeBonusTab from './components/OvertimeBonusTab.vue'
 import FestivalBonusTab from './components/FestivalBonusTab.vue'
@@ -57,7 +58,7 @@ const fetchBonusConfig = async () => {
     const data = response.data as Record<string, unknown>
     Object.assign(bonusConfig, data)
   } catch (error) {
-    ElMessage.error('薪資設定載入失敗')
+    ElMessage.error(friendlyError('薪資設定載入失敗', error))
   } finally {
     loadingBonus.value = false
   }
@@ -71,7 +72,7 @@ const fetchGradeTargets = async () => {
       ...data,
     }))
   } catch (error) {
-    ElMessage.error('年級目標載入失敗')
+    ElMessage.error(friendlyError('年級目標載入失敗', error))
   }
 }
 
@@ -139,7 +140,7 @@ const saveGradeTargets = async (): Promise<boolean> => {
     await Promise.all(updatePromises)
     return true
   } catch (error) {
-    ElMessage.error('年級目標儲存失敗')
+    ElMessage.error(friendlyError('年級目標儲存失敗', error))
     return false
   }
 }

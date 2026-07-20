@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getSalaryLogic } from '@/api/salary'
 
 const loading = ref(false)
@@ -28,8 +29,7 @@ const fetchLogic = async () => {
     const res = await getSalaryLogic()
     logicData.value = res.data as Record<string, unknown>
   } catch (e) {
-    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-    ElMessage.error('載入失敗: ' + (detail || (e as Error).message))
+    ElMessage.error(friendlyError('載入薪資邏輯資料失敗', e))
   } finally {
     loading.value = false
   }

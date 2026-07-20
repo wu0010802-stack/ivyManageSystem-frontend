@@ -2,6 +2,7 @@
 import { computed, ref, toRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { ArrowLeft, User } from '@element-plus/icons-vue'
 import { useEmployeeDetail } from '@/composables/useEmployeeDetail'
 import { getEmployeeStatus, standardSalaryFor, isMissingSalary } from '@/utils/employeeDisplay'
@@ -137,14 +138,14 @@ const goBack = () => {
 // 辦理離職
 const offboardVisible = ref(false)
 const onOffboarded = async () => {
-  await detail.reloadCore().catch(() => ElMessage.error('重新載入失敗'))
+  await detail.reloadCore().catch((e) => ElMessage.error(friendlyError('重新載入員工資料失敗', e)))
   employeeStore.fetchEmployees(true)
 }
 
 const reloadSub = (kind: 'education' | 'certificate' | 'contract') => {
-  if (kind === 'education') detail.reloadEducations().catch(() => ElMessage.error('重新載入失敗'))
-  else if (kind === 'certificate') detail.reloadCertificates().catch(() => ElMessage.error('重新載入失敗'))
-  else detail.reloadContracts().catch(() => ElMessage.error('重新載入失敗'))
+  if (kind === 'education') detail.reloadEducations().catch((e) => ElMessage.error(friendlyError('重新載入員工資料失敗', e)))
+  else if (kind === 'certificate') detail.reloadCertificates().catch((e) => ElMessage.error(friendlyError('重新載入員工資料失敗', e)))
+  else detail.reloadContracts().catch((e) => ElMessage.error(friendlyError('重新載入員工資料失敗', e)))
 }
 
 // 編輯：接統一員工表單彈窗
@@ -152,7 +153,7 @@ const formDialog = ref<InstanceType<typeof EmployeeFormDialog> | null>(null)
 const openEdit = () => { if (employee.value) formDialog.value?.openEdit(employee.value) }
 const openEditSalary = () => { if (employee.value) formDialog.value?.openEdit(employee.value, 'salary') }
 const onSaved = async () => {
-  await detail.reloadCore().catch(() => ElMessage.error('重新載入失敗'))
+  await detail.reloadCore().catch((e) => ElMessage.error(friendlyError('重新載入員工資料失敗', e)))
   employeeStore.fetchEmployees(true)
 }
 </script>

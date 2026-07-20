@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { ArrowRight, Check, Close, Document, Link, Loading, Paperclip, Stamp } from '@element-plus/icons-vue'
 import { getLeaves, approveLeave as approveLeaveApi, getLeaveAttachment, batchApproveLeaves } from '@/api/leaves'
 import { getOvertimes, approveOvertime as approveOvertimeApi, batchApproveOvertimes } from '@/api/overtimes'
@@ -189,8 +190,8 @@ const viewAttachments = async (row: Record<string, unknown>) => {
           }))
       )
     )
-  } catch {
-    ElMessage.error('載入附件失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入附件失敗', e))
   } finally {
     attachLoading.value = false
   }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { listStudentAttachments, OWNER_TYPE_LABELS } from '@/api/studentAttachments'
 import type { ApiQuery } from '@/api/_generated/typed'
 import AttachmentGallery from '@/components/student/AttachmentGallery.vue'
@@ -22,8 +23,8 @@ async function reload() {
     const r = await listStudentAttachments(props.studentId, params)
     items.value = (r.data?.items ?? []) as unknown as Record<string, unknown>[]
     total.value = r.data?.total ?? 0
-  } catch {
-    ElMessage.error('讀取照片牆失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入照片牆失敗', e))
   } finally {
     loading.value = false
   }

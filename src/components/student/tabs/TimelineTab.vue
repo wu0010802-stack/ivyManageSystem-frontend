@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { fetchTimeline } from '@/api/studentTimeline'
 import type { ApiQuery } from '@/api/_generated/typed'
 import TimelineFilters from '../timeline/TimelineFilters.vue'
@@ -34,8 +35,8 @@ async function reload(append = false) {
     }
     nextCursor.value = respData?.next_cursor ?? null
     stats.value = respData?.stats || stats.value
-  } catch {
-    ElMessage.error('讀取時間軸失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入時間軸失敗', e))
   } finally {
     loading.value = false
   }

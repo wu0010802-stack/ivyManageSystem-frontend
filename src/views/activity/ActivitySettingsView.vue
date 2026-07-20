@@ -123,6 +123,7 @@
 <script setup lang="ts">
 import { h, ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import type { UploadRawFile } from 'element-plus'
 import {
   getRegistrationTime,
@@ -200,8 +201,8 @@ async function fetchSettings() {
       poster_url: d.poster_url || '',
     }
     posterBroken.value = false
-  } catch {
-    ElMessage.error('載入設定失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入才藝設定失敗', e))
   } finally {
     loading.value = false
   }

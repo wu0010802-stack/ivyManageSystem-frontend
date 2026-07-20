@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { getLeaves } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { ArrowLeft, ArrowRight, Loading } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
@@ -78,8 +79,8 @@ const fetchCalendar = async () => {
     if (calFilterEmp.value) params.employee_id = calFilterEmp.value
     const res = await getLeaves(params)
     calendarLeaves.value = res.data
-  } catch {
-    ElMessage.error('載入行事曆失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入行事曆失敗', e))
   } finally {
     calLoading.value = false
   }

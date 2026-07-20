@@ -2,9 +2,9 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { getMeetings, getMeetingSummary, createBatch, updateMeeting, deleteMeeting } from '@/api/meetings'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { money } from '@/utils/format'
 import { useEmployeeStore } from '@/stores/employee'
-import { apiError } from '@/utils/error'
 
 withDefaults(defineProps<{
   embedded?: boolean
@@ -54,7 +54,7 @@ const fetchRecords = async () => {
     const res = await getMeetings({ year: query.year, month: query.month })
     meetingRecords.value = res.data
   } catch (error) {
-    ElMessage.error('載入園務會議記錄失敗')
+    ElMessage.error(friendlyError('載入園務會議記錄失敗', error))
   } finally {
     loading.value = false
   }
@@ -66,7 +66,7 @@ const fetchSummary = async () => {
     const res = await getMeetingSummary({ year: query.year, month: query.month })
     summaryData.value = res.data
   } catch (error) {
-    ElMessage.error('載入統計資料失敗')
+    ElMessage.error(friendlyError('載入會議統計資料失敗', error))
   } finally {
     loading.value = false
   }
@@ -151,7 +151,7 @@ const submitBatch = async () => {
     fetchRecords()
     if (activeTab.value === 'summary') fetchSummary()
   } catch (error) {
-    ElMessage.error(`建立失敗: ${apiError(error, (error as Error).message)}`)
+    ElMessage.error(friendlyError('建立會議紀錄失敗', error))
   } finally {
     loading.value = false
   }
@@ -177,7 +177,7 @@ const submitEdit = async () => {
     fetchRecords()
     if (activeTab.value === 'summary') fetchSummary()
   } catch (error) {
-    ElMessage.error('更新失敗')
+    ElMessage.error(friendlyError('更新會議紀錄失敗', error))
   }
 }
 
@@ -191,7 +191,7 @@ const handleDelete = (row: Record<string, unknown>) => {
       fetchRecords()
       if (activeTab.value === 'summary') fetchSummary()
     } catch (error) {
-      ElMessage.error('刪除失敗')
+      ElMessage.error(friendlyError('刪除會議紀錄失敗', error))
     }
   })
 }
@@ -206,7 +206,7 @@ const handleDeleteDate = (dateStr: string) => {
       ElMessage.success('刪除成功')
       fetchRecords()
     } catch (error) {
-      ElMessage.error('刪除失敗')
+      ElMessage.error(friendlyError('刪除會議紀錄失敗', error))
     }
   })
 }

@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { List, Plus, Paperclip, InfoFilled, Calendar, Loading } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -10,7 +11,6 @@ import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator, useApprovalOperation } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import { downloadFile } from '@/utils/download'
-import { apiError } from '@/utils/error'
 import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS, validateLeaveRules } from '@/utils/leaves'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
 import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
@@ -195,8 +195,8 @@ const downloadImportTemplate = async () => {
     link.download = '請假匯入範本.xlsx'
     link.click()
     URL.revokeObjectURL(link.href)
-  } catch {
-    ElMessage.error('下載範本失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('下載請假匯入範本失敗', e))
   }
 }
 
@@ -214,8 +214,7 @@ const handleImportFile = async (file: { raw?: File }) => {
       fetchLeaves()
     }
   } catch (err) {
-    const e = err as { response?: { data?: { detail?: string } }; message?: string }
-    ElMessage.error('匯入失敗：' + (e.response?.data?.detail || e.message))
+    ElMessage.error(friendlyError('匯入請假資料失敗', err))
   } finally {
     importLoading.value = false
   }
@@ -231,7 +230,7 @@ const fetchLeaves = async () => {
     const response = await getLeaves(params)
     leaveRecords.value = response.data
   } catch (error) {
-    ElMessage.error('載入請假記錄失敗')
+    ElMessage.error(friendlyError('載入請假記錄失敗', error))
   } finally {
     loading.value = false
   }
@@ -330,7 +329,7 @@ const saveLeave = async () => {
     closeDialog()
     fetchLeaves()
   } catch (error) {
-    ElMessage.error('儲存失敗: ' + apiError(error, (error as Error).message))
+    ElMessage.error(friendlyError('儲存請假單失敗', error))
   } finally {
     saveLoading.value = false
   }

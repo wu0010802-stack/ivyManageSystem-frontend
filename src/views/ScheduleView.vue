@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
 import { getMonthWeeks } from '@/utils/scheduleUtils'
 import { useEmployeeStore } from '@/stores/employee'
@@ -63,8 +64,8 @@ const fetchAssignments = async () => {
       map[a.employee_id] = { shift_type_id: a.shift_type_id, notes: a.notes }
     }
     assignments.value = map
-  } catch {
-    ElMessage.error('載入排班失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入排班失敗', e))
   } finally {
     loading.value = false
   }
@@ -146,8 +147,8 @@ const copyFromWeek = async (sourceWeekStart: string) => {
     }
     assignments.value = map
     ElMessage.success('已複製，請確認後儲存')
-  } catch {
-    ElMessage.error('複製失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('複製排班失敗', e))
   }
 }
 
@@ -216,8 +217,8 @@ const copyPrevMonth = async () => {
     }
     ElMessage.success(`已複製 ${copied} 週排班`)
     fetchAssignments() // 重新載入當前週
-  } catch {
-    ElMessage.error('月複製失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('整月複製排班失敗', e))
   } finally {
     monthCopyLoading.value = false
   }
@@ -282,8 +283,8 @@ const fetchDailyShiftsForDialog = async () => {
       map[ds.date as string] = ds
     }
     dailyShiftMap.value = map
-  } catch {
-    ElMessage.error('載入每日排班失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入每日排班失敗', e))
   }
 }
 
@@ -316,8 +317,8 @@ const fetchSwapHistory = async () => {
     if (swapFilter.status) params.status = swapFilter.status
     const res = await getSwapHistory(params)
     swapHistory.value = res.data
-  } catch {
-    ElMessage.error('載入換班紀錄失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入換班紀錄失敗', e))
   } finally {
     swapLoading.value = false
   }
@@ -353,8 +354,8 @@ const downloadShiftTemplate = async () => {
     a.download = '排班匯入範本.xlsx'
     a.click()
     URL.revokeObjectURL(url)
-  } catch {
-    ElMessage.error('下載範本失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('下載排班範本失敗', e))
   }
 }
 
@@ -367,8 +368,8 @@ const exportCurrentWeekShifts = async () => {
     a.download = `排班表_${weekStart.value}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
-  } catch {
-    ElMessage.error('匯出失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('匯出排班失敗', e))
   }
 }
 
@@ -417,7 +418,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
     // Refresh
     await fetchDailyShiftsForDialog()
   } catch (error) {
-    ElMessage.error('更新失敗')
+    ElMessage.error(friendlyError('更新排班失敗', error))
   }
 }
 </script>

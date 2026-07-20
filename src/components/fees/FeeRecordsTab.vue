@@ -168,6 +168,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import type { FormInstance } from 'element-plus'
 import { getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
 import { todayISO } from '@/utils/format'
@@ -247,8 +248,8 @@ async function fetchRecords() {
     feeRecords.value = (res as { items: FeeRow[] }).items
     recordTotal.value = (res as { total: number }).total
     summary.value = sum as FeeSummary
-  } catch {
-    ElMessage.error('載入費用記錄失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入費用記錄失敗', e))
   } finally {
     recordsLoading.value = false
   }

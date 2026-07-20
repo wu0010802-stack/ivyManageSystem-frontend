@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { summarizeCsvImportResult } from '@/utils/attendanceImport'
 import { thisMonthISO } from '@/utils/format'
@@ -37,7 +38,7 @@ const fetchAttendance = async () => {
     })
     attendanceRecords.value = response.data as Record<string, unknown>[]
   } catch (error) {
-    ElMessage.error('載入出勤紀錄失敗')
+    ElMessage.error(friendlyError('載入出勤紀錄失敗', error))
   }
 }
 
@@ -95,7 +96,7 @@ const editAttendance = (row: Record<string, unknown>) => {
         }
         fetchAttendance()
      } catch (err) {
-        ElMessage.error('更新失敗')
+        ElMessage.error(friendlyError('更新出勤紀錄失敗', err))
      }
   }).catch(() => {})
 }
@@ -109,7 +110,7 @@ const deleteAttendance = (row: Record<string, unknown>) => {
          ElMessage.success('已刪除')
          fetchAttendance()
       } catch (err) {
-         ElMessage.error('刪除失敗')
+         ElMessage.error(friendlyError('刪除出勤紀錄失敗', err))
       }
    })
 }

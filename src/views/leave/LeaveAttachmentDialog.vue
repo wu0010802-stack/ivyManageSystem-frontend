@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { getLeaveAttachment } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Loading, Document } from '@element-plus/icons-vue'
 
 interface AttachItem { name: string; url: string; isImage: boolean }
@@ -25,8 +26,8 @@ const viewAttachments = async (row: { id: number; attachment_paths: string[] }) 
           }))
       )
     )
-  } catch {
-    ElMessage.error('載入附件失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入附件失敗', e))
   } finally {
     attachLoading.value = false
   }

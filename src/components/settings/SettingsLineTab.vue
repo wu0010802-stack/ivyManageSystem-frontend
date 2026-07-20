@@ -2,6 +2,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { getLineConfig, updateLineConfig, testLineNotify } from '@/api/lineConfig'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { apiError } from '@/utils/error'
 
 const lineConfig = reactive({
@@ -26,7 +27,7 @@ const fetchLineConfig = async () => {
     lineConfig.channel_access_token = ''
     lineConfig.channel_secret = ''
   } catch (error) {
-    ElMessage.error('載入 LINE 設定失敗')
+    ElMessage.error(friendlyError('載入 LINE 設定失敗', error))
   } finally {
     loadingLine.value = false
   }

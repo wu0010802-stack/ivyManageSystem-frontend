@@ -5,13 +5,13 @@ import { getOvertimes, createOvertime, updateOvertime, approveOvertime as approv
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { hasPermission } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Check, Close, UploadFilled, Loading, Warning } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery, useFetchPending, useApprovalOperation } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
-import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
 import MeetingManagementPanel from '@/components/overtime/MeetingManagementPanel.vue'
@@ -118,7 +118,7 @@ const fetchOvertimes = async () => {
     const response = await getOvertimes(params)
     overtimeRecords.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
-    ElMessage.error('載入加班記錄失敗')
+    ElMessage.error(friendlyError('載入加班記錄失敗', error))
   } finally {
     loading.value = false
   }
@@ -178,7 +178,7 @@ const saveOvertime = async () => {
     closeDialog()
     await refreshAllData()
   } catch (error) {
-    ElMessage.error('儲存失敗: ' + apiError(error, (error as Error).message))
+    ElMessage.error(friendlyError('儲存加班單失敗', error))
   } finally {
     saveOvertimeLoading.value = false
   }
@@ -270,8 +270,8 @@ const downloadImportTemplate = async () => {
     link.download = '加班匯入範本.xlsx'
     link.click()
     URL.revokeObjectURL(link.href)
-  } catch {
-    ElMessage.error('下載範本失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('下載加班匯入範本失敗', e))
   }
 }
 
@@ -293,8 +293,7 @@ const handleImportFile = async (file: { raw?: File }) => {
       await refreshAllData()
     }
   } catch (err) {
-    const e = err as { response?: { data?: { detail?: string } }; message?: string }
-    ElMessage.error('匯入失敗：' + (e.response?.data?.detail || e.message))
+    ElMessage.error(friendlyError('匯入加班資料失敗', err))
   } finally {
     importLoading.value = false
   }

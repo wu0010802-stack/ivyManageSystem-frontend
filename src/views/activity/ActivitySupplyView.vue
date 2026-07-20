@@ -41,6 +41,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getSupplies, createSupply, updateSupply, deleteSupply } from '@/api/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -73,12 +74,12 @@ async function fetchSupplies() {
     })
     if (seq !== fetchSeq) return // 過期回應：已有更新的載入，丟棄不覆寫
     supplies.value = (res.data as { supplies: Supply[] }).supplies
-  } catch {
+  } catch (e) {
     if (seq !== fetchSeq) return
     // F4：載入失敗須清空清單，否則切學期失敗時畫面留著上一學期的資料且編輯/停用
     // 按鈕仍可操作（學期選擇器顯示新學期但資料屬舊學期），易誤改到舊學期資料。
     supplies.value = []
-    ElMessage.error('載入失敗')
+    ElMessage.error(friendlyError('載入用品資料失敗', e))
   } finally {
     if (seq === fetchSeq) loading.value = false
   }

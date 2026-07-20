@@ -49,6 +49,7 @@ import {
   ElButton,
   ElMessage,
 } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { reserveSeat } from '@/api/recruitmentIntake'
 import { getGrades } from '@/api/classrooms'
 import { currentRocYear } from '@/utils/academic'
@@ -137,8 +138,8 @@ async function release(): Promise<void> {
     ElMessage.success('已釋放保留')
     emit('reserved')
     visible.value = false
-  } catch {
-    ElMessage.error('釋放失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('釋放保留名額失敗', e))
   } finally {
     busy.value = false
   }

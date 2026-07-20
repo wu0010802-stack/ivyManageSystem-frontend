@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
 import {
   listGrowthReports, deleteGrowthReport, sendGrowthReportToLine,
@@ -25,8 +26,8 @@ async function reload() {
   try {
     const r = await listGrowthReports(props.studentId)
     items.value = (r.data?.items ?? []) as unknown as Record<string, unknown>[]
-  } catch {
-    ElMessage.error('讀取報告列表失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入成長報告列表失敗', e))
   } finally {
     loading.value = false
   }
@@ -85,8 +86,8 @@ async function onDelete(row: Record<string, unknown>) {
     await deleteGrowthReport(props.studentId, row.id as number)
     ElMessage.success('已刪除')
     reload()
-  } catch {
-    ElMessage.error('刪除失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('刪除成長報告失敗', e))
   }
 }
 

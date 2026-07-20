@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Check, Refresh } from '@element-plus/icons-vue'
 import {
   listSystemConfigs,
   updateSystemConfig,
 } from '@/api/systemConfig'
-import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 
 interface BankConfig {
@@ -35,7 +35,7 @@ const fetchBankConfigs = async () => {
       _dirty: false,
     })) as BankConfig[]
   } catch (e) {
-    ElMessage.error('載入失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('載入系統設定失敗', e))
   } finally {
     loading.value = false
   }
@@ -58,7 +58,7 @@ const saveConfig = async (cfg: BankConfig) => {
     })
     ElMessage.success(`已更新「${cfg.description || cfg.config_key}」`)
   } catch (e) {
-    ElMessage.error('儲存失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('儲存系統設定失敗', e))
   } finally {
     savingKey.value = null
   }

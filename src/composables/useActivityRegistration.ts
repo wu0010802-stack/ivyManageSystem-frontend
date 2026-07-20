@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import {
   getRegistrations,
   batchUpdatePayment,
@@ -107,8 +108,8 @@ export function useActivityRegistration() {
       if (seq !== fetchSeq.value) return
       list.value = (res.data as { items: unknown[]; total: number }).items
       total.value = (res.data as { items: unknown[]; total: number }).total
-    } catch {
-      if (seq === fetchSeq.value) ElMessage.error('載入失敗')
+    } catch (e) {
+      if (seq === fetchSeq.value) ElMessage.error(friendlyError('載入報名資料失敗', e))
     } finally {
       if (seq === fetchSeq.value) loading.value = false
     }

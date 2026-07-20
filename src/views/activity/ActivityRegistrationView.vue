@@ -479,6 +479,7 @@
 import { ref, computed, nextTick, onMounted, watch, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Edit, Link } from '@element-plus/icons-vue'
 import {
   getRegistrationDetail,
@@ -785,8 +786,8 @@ async function saveRemark() {
     // Why: await 期間使用者可能關閉 drawer 或切換到別人，避免把備註寫到錯的學生身上
     if (detail.value?.id === targetId) detail.value.remark = text
     ElMessage.success('備註已儲存')
-  } catch {
-    ElMessage.error('儲存失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('儲存備註失敗', e))
   } finally {
     savingRemark.value = false
   }
@@ -1039,8 +1040,8 @@ async function handleExport() {
     a.download = `activity_registrations_${localDate}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
-  } catch {
-    ElMessage.error('匯出失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('匯出報名資料失敗', e))
   } finally {
     exporting.value = false
   }

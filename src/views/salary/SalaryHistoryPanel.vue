@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { getHistory } from '@/api/salary'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { useEmployeeStore } from '@/stores/employee'
 import { money } from '@/utils/format'
 import { LineChart } from '@/composables/useChartJs'
@@ -43,9 +44,9 @@ const fetchHistory = async () => {
     const response = await getHistory({ employee_id: selectedEmployeeId.value, months: historyMonths.value })
     if (epoch !== fetchEpoch) return // 已被更新的請求取代，捨棄結果
     historyData.value = (response.data as HistoryRow[]).reverse()
-  } catch {
+  } catch (e) {
     if (epoch !== fetchEpoch) return
-    ElMessage.error('載入歷史資料失敗')
+    ElMessage.error(friendlyError('載入薪資歷史失敗', e))
   } finally {
     if (epoch === fetchEpoch) historyLoading.value = false
   }

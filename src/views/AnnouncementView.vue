@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import {
   getAnnouncements,
   createAnnouncement,
@@ -361,7 +362,7 @@ const handleDelete = async (row: AnnouncementItem) => {
     fetchAnnouncements()
   } catch (e) {
     if (e !== 'cancel' && (e as { message?: string })?.message !== 'cancel') {
-      ElMessage.error('刪除失敗')
+      ElMessage.error(friendlyError('刪除公告失敗', e))
     }
   }
 }
@@ -372,7 +373,7 @@ const togglePin = async (row: AnnouncementItem) => {
     ElMessage.success(row.is_pinned ? '已取消置頂' : '已置頂')
     fetchAnnouncements()
   } catch (error) {
-    ElMessage.error('操作失敗')
+    ElMessage.error(friendlyError('更新置頂狀態失敗', error))
   }
 }
 

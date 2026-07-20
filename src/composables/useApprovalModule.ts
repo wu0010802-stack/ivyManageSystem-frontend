@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getApprovalLogs } from '@/api/approvalSettings'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { getUserInfo } from '@/utils/auth'
@@ -53,10 +54,9 @@ export function useApprovalModule({ docType, batchApproveFn, fetchFn, recordLabe
       }
       fetchFn()
     } catch (err) {
-      const e = err as { response?: { data?: { detail?: string } }; message?: string }
       // ElMessageBox 取消鈕 reject 'cancel'、X/ESC reject 'close'，皆為使用者關閉非錯誤
       if (err !== 'cancel' && err !== 'close')
-        ElMessage.error('批次核准失敗：' + (e?.response?.data?.detail || e?.message || ''))
+        ElMessage.error(friendlyError('批次核准失敗', err))
     } finally {
       batchLoading.value = false
     }
@@ -85,8 +85,7 @@ export function useApprovalModule({ docType, batchApproveFn, fetchFn, recordLabe
       }
       fetchFn()
     } catch (err) {
-      const e = err as { response?: { data?: { detail?: string } }; message?: string }
-      ElMessage.error('批次駁回失敗：' + (e?.response?.data?.detail || e?.message || ''))
+      ElMessage.error(friendlyError('批次駁回失敗', err))
     } finally {
       batchLoading.value = false
     }
@@ -104,8 +103,8 @@ export function useApprovalModule({ docType, batchApproveFn, fetchFn, recordLabe
     try {
       const res = await getApprovalLogs(docType, row.id as number)
       approvalLogs.value = res.data
-    } catch {
-      ElMessage.error('載入簽核記錄失敗')
+    } catch (e) {
+      ElMessage.error(friendlyError('載入簽核記錄失敗', e))
     } finally {
       approvalLogLoading.value = false
     }

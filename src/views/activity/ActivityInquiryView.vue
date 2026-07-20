@@ -88,6 +88,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Check } from '@element-plus/icons-vue'
 import { getInquiries, markInquiryRead, deleteInquiry, replyInquiry } from '@/api/activity'
 import { useActivityStore } from '@/stores/activity'
@@ -135,8 +136,8 @@ async function handleReply() {
     replyDialog.value = false
     fetchList()
     activityStore.fetchSummary({ force: true })
-  } catch {
-    ElMessage.error('記錄聯繫結果失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('記錄聯繫結果失敗', e))
   } finally {
     replying.value = false
   }
@@ -162,9 +163,9 @@ async function fetchList() {
     list.value = data.items
     total.value = data.total
     serverUnreadCount.value = typeof data.unread_count === 'number' ? data.unread_count : null
-  } catch {
+  } catch (e) {
     if (seq !== fetchSeq) return // 舊查詢的錯誤不干擾較新查詢
-    ElMessage.error('載入失敗')
+    ElMessage.error(friendlyError('載入提問清單失敗', e))
   } finally {
     if (seq === fetchSeq) loading.value = false
   }
@@ -187,8 +188,8 @@ async function handleMarkRead(row: Inquiry) {
     }
     ElMessage.success('已標記為已讀')
     activityStore.fetchSummary({ force: true })
-  } catch {
-    ElMessage.error('操作失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('標記已讀失敗', e))
   }
 }
 
@@ -208,8 +209,8 @@ async function handleDelete(row: Inquiry) {
     ElMessage.success('已刪除')
     fetchList()
     activityStore.fetchSummary({ force: true })
-  } catch {
-    ElMessage.error('刪除失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('刪除提問失敗', e))
   } finally {
     deletingId.value = null
   }

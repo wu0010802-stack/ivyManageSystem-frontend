@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 
 export interface AttendanceStudent {
   registration_id: unknown
@@ -161,9 +162,9 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
       currentSessionParams = { ...params }
       captureBaseline()
       captureSnapshot()
-    } catch {
+    } catch (e) {
       if (seq !== loadSeq) return
-      ElMessage.error('載入點名資料失敗')
+      ElMessage.error(friendlyError('載入點名資料失敗', e))
       drawerVisible.value = false
     } finally {
       if (seq === loadSeq) drawerLoading.value = false
@@ -185,9 +186,9 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
       captureBaseline()
       captureSnapshot()
       return true
-    } catch {
+    } catch (e) {
       if (seq !== loadSeq) return false
-      ElMessage.error('重新載入點名資料失敗')
+      ElMessage.error(friendlyError('重新載入點名資料失敗', e))
       return false
     } finally {
       if (seq === loadSeq) drawerLoading.value = false

@@ -40,6 +40,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getFeePeriods } from '@/api/fees'
 import { useClassroomStore } from '@/stores/classroom'
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
@@ -65,8 +66,8 @@ const classrooms = computed(() => classroomStore.classrooms)
 async function fetchFeePeriods() {
   try {
     periodOptions.value = (await getFeePeriods()) as string[]
-  } catch {
-    ElMessage.error('載入學期列表失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入學期列表失敗', e))
   }
 }
 

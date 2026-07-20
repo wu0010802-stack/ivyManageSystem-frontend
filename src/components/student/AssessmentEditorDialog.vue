@@ -92,6 +92,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS } from '@/constants/studentRecords'
 import { getStudents } from '@/api/students'
 import { getIncidents } from '@/api/studentIncidents'
@@ -185,8 +186,8 @@ const loadStudents = async (classroomId: number | null) => {
      
     const res = await getStudents({ classroom_id: classroomId, is_active: true })
     studentOptions.value = res.data.items || []
-  } catch {
-    ElMessage.error('載入學生資料失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入學生資料失敗', e))
   } finally {
     studentsLoading.value = false
   }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Edit, Delete, Download, Upload } from '@element-plus/icons-vue'
 import {
   listArtPayroll,
@@ -11,7 +12,6 @@ import {
 } from '@/api/artTeacherPayroll'
 import { useEmployeeStore } from '@/stores/employee'
 import { downloadFile } from '@/utils/download'
-import { apiError } from '@/utils/error'
 
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
@@ -82,7 +82,7 @@ const fetchList = async () => {
     const res = await listArtPayroll(query.year, query.month)
     items.value = res.data.items || []
   } catch (e) {
-    ElMessage.error('載入失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('載入美語老師薪資資料失敗', e))
   } finally {
     loading.value = false
   }
@@ -161,7 +161,7 @@ const handleSave = async () => {
     dialogVisible.value = false
     fetchList()
   } catch (e) {
-    ElMessage.error('儲存失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('儲存美語老師薪資失敗', e))
   }
 }
 
@@ -180,7 +180,7 @@ const handleDelete = async (row: Record<string, unknown>) => {
     ElMessage.success('刪除成功')
     fetchList()
   } catch (e) {
-    ElMessage.error('刪除失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('刪除美語老師薪資失敗', e))
   }
 }
 
@@ -238,7 +238,7 @@ const handleImport = async () => {
     }
     fetchList()
   } catch (e) {
-    ElMessage.error('匯入失敗：' + apiError(e, (e as Error).message))
+    ElMessage.error(friendlyError('匯入美語老師薪資失敗', e))
   } finally {
     importLoading.value = false
   }

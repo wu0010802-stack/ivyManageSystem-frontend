@@ -2,6 +2,7 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
 import { money } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
@@ -194,8 +195,8 @@ async function loadGrid() {
   try {
     const res = await getYearEndGrid(cycleId)
     rows.value = res.data
-  } catch {
-    ElMessage.error('總表載入失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('總表載入失敗', e))
   } finally {
     loading.value = false
   }
@@ -254,8 +255,8 @@ async function onBuild() {
     if (gapParts.length > 0) {
       ElMessage.warning(gapParts.join('；'))
     }
-  } catch {
-    ElMessage.error('試算失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('年終試算失敗', e))
   } finally {
     buildDialogVisible.value = false
   }

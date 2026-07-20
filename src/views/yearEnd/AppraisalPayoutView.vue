@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import {
   previewAppraisalPayout, generateAppraisalPayout,
   listAppraisalPayouts, voidAppraisalPayouts,
@@ -84,8 +85,8 @@ async function loadPreview() {
     const res = await previewAppraisalPayout(year.value)
     rows.value = res.data as PreviewRow[]
     selected.value = new Set(rows.value.filter((r) => !r.is_inactive).map((r) => r.employee_id))
-  } catch {
-    ElMessage.error('preview 載入失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入發放預覽失敗', e))
   } finally {
     loading.value = false
   }
@@ -96,8 +97,8 @@ async function loadGenerated() {
   try {
     const res = await listAppraisalPayouts(year.value)
     generatedRows.value = res.data as PayoutItem[]
-  } catch {
-    ElMessage.error('已生成列表載入失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入已生成列表失敗', e))
   } finally {
     generatedLoading.value = false
   }
@@ -133,8 +134,8 @@ async function onGenerate() {
     })
     ElMessage.success('已生成')
     tab.value = 'generated'
-  } catch {
-    ElMessage.error('生成失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('生成發放名單失敗', e))
   }
 }
 
@@ -150,8 +151,8 @@ async function onVoid() {
     const data = res.data as { deleted_count: number }
     ElMessage.success(`已刪除 ${data.deleted_count} 筆`)
     await loadGenerated()
-  } catch {
-    ElMessage.error('清空失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('清空發放名單失敗', e))
   }
 }
 

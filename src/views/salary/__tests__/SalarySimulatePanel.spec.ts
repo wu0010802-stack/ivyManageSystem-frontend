@@ -74,9 +74,9 @@ describe('SalarySimulatePanel 試算失敗訊息', () => {
     expect(msg).not.toContain('[object Object]')
   })
 
-  // fallback：無 displayMessage（例如非 axios 錯誤）→ 退回 Error.message，
-  // 仍不得把整個物件字串化進訊息。
-  it('無 displayMessage 時 fallback 到 Error.message', async () => {
+  // fallback：無 displayMessage（例如非 axios 錯誤）→ friendlyError 不直出英文技術
+  // 訊息，改給「網路連線異常」等分類原因＋下一步，仍不得把整個物件字串化進訊息。
+  it('無 displayMessage 時 fallback 到分類後的友善訊息（不直出 Error.message）', async () => {
     getEmployeeSalaryDebugMock.mockResolvedValue({ data: null })
     simulateSalaryMock.mockRejectedValue(new Error('network error'))
 
@@ -88,7 +88,8 @@ describe('SalarySimulatePanel 試算失敗訊息', () => {
 
     expect(vi.mocked(ElMessage.error)).toHaveBeenCalledTimes(1)
     const msg = vi.mocked(ElMessage.error).mock.calls[0]![0] as string
-    expect(msg).toContain('network error')
+    expect(msg).not.toContain('network error')
+    expect(msg).toContain('網路連線異常')
     expect(msg).not.toContain('[object Object]')
   })
 })

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getAssessments, createAssessment, updateAssessment, deleteAssessment } from '@/api/studentAssessments'
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
@@ -74,8 +75,8 @@ const fetchAssessments = async () => {
     const res = await getAssessments(params)
     assessments.value = res.data.items
     total.value = res.data.total
-  } catch {
-    ElMessage.error('載入評量記錄失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入評量記錄失敗', e))
   } finally {
     loading.value = false
   }
@@ -100,8 +101,8 @@ const onDialogClassroomChange = async (cid: number | null) => {
   try {
     const res = await getStudents({ classroom_id: cid, is_active: true })
     dialogStudents.value = res.data.items || []
-  } catch {
-    ElMessage.error('載入學生資料失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入學生資料失敗', e))
   } finally {
     dialogStudentsLoading.value = false
   }

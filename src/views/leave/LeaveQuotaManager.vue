@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { getLeaveQuotas, initLeaveQuotas, updateLeaveQuota } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Warning, QuestionFilled } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
@@ -54,8 +55,8 @@ const loadQuotaMgr = async () => {
     } else {
       earliestExpiringGrant.value = null
     }
-  } catch {
-    ElMessage.error('載入配額失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('載入配額失敗', e))
   } finally {
     quotaMgrLoading.value = false
   }
@@ -69,7 +70,7 @@ const initQuotas = async () => {
     quotaRows.value = (res as { data: Omit<QuotaRow, '_editing' | '_newTotal'>[] }).data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
     ElMessage.success('已依勞基法初始化配額')
   } catch (err) {
-    ElMessage.error('初始化失敗：' + ((err as { response?: { data?: { detail?: string }; message?: string } }).response?.data?.detail || (err as Error).message))
+    ElMessage.error(friendlyError('初始化配額失敗', err))
   } finally {
     quotaMgrLoading.value = false
   }
@@ -88,7 +89,7 @@ const saveQuotaRow = async (row: QuotaRow) => {
     Object.assign(row, (res as { data: QuotaRow }).data, { _editing: false, _newTotal: (res as { data: QuotaRow }).data.total_hours })
     ElMessage.success('已儲存')
   } catch (err) {
-    ElMessage.error('儲存失敗：' + ((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || (err as Error).message))
+    ElMessage.error(friendlyError('儲存配額失敗', err))
   } finally {
     quotaSaving.value = false
   }

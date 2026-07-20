@@ -4,6 +4,7 @@ import { getBonusConfig, updateBonusConfig } from '@/api/config'
 import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
 import {
   DIVIDEND_ACTIVITY_GRADES,
@@ -119,8 +120,8 @@ const fetchRules = async () => {
     const teachingSessionsRaw = data.teaching_extra_sessions_per_unit
     teachingExtraSessionsPerUnit.value =
       typeof teachingSessionsRaw === 'number' ? teachingSessionsRaw : null
-  } catch {
-    ElMessage.error('年終規則載入失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('年終規則載入失敗', e))
   } finally {
     loading.value = false
   }

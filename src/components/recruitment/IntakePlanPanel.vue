@@ -57,6 +57,7 @@ import {
   ElInputNumber,
   ElMessage,
 } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getIntakePlan, setIntakeTargets } from '@/api/recruitmentIntake'
 import { getGrades } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
@@ -129,8 +130,8 @@ async function save(): Promise<void> {
     })
     ElMessage.success('已儲存計畫名額')
     await reload()
-  } catch {
-    ElMessage.error('儲存失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('儲存招生名額計畫失敗', e))
   } finally {
     saving.value = false
   }

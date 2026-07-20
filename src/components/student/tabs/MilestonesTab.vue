@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { listMilestones, deleteMilestone, MILESTONE_TYPES, autoDetectMilestones } from '@/api/studentMilestones'
 import { hasPermission } from '@/utils/auth'
 import MilestoneEditorDialog from '../MilestoneEditorDialog.vue'
@@ -28,7 +29,7 @@ async function onAutoDetect() {
     ElMessage.success(`偵測完成：新增 ${created_count} 筆，跳過 ${skipped_existing} 筆已存在`)
     await reload()
   } catch (e) {
-    ElMessage.error('自動偵測失敗')
+    ElMessage.error(friendlyError('自動偵測里程碑失敗', e))
   } finally {
     autoDetecting.value = false
   }

@@ -9,6 +9,7 @@
  */
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import {
   listUpcomingGrants,
   listUpcomingAnniversaries,
@@ -35,7 +36,7 @@ const refresh = async () => {
     anniversaries.value = (anv.data as { anniversaries: Array<Record<string, unknown>> }).anniversaries
     logs.value = (hist.data as { logs: Array<Record<string, unknown>> }).logs
   } catch (_e) {
-    ElMessage.error('讀取失敗')
+    ElMessage.error(friendlyError('載入配額到期資料失敗', _e))
   } finally {
     loading.value = false
   }
@@ -64,7 +65,7 @@ const runNow = async () => {
     if (err.response?.status === 409) {
       ElMessage.warning('scheduler 今日已跑過或正在執行，請稍後再試')
     } else {
-      ElMessage.error('結算失敗')
+      ElMessage.error(friendlyError('執行配額結算失敗', e))
     }
   } finally {
     running.value = false

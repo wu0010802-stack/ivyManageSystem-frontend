@@ -8,6 +8,7 @@ import { getProbationAlerts } from '@/api/home'
 import { statusKeyOf, getEmployeeStatus, isMissingSalary, tenureLabel, type EmployeeStatusKey } from '@/utils/employeeDisplay'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
@@ -197,8 +198,8 @@ watch(debouncedSearch, async (val) => {
   }
   try {
     await runEmployeeSearch(val)
-  } catch {
-    ElMessage.error('搜尋員工失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('搜尋員工失敗', e))
   }
 })
 
@@ -224,7 +225,7 @@ const fetchEmployees = async (force = true) => {
   try {
     await employeeStore.fetchEmployees(force)
   } catch (error) {
-    ElMessage.error('載入員工資料失敗')
+    ElMessage.error(friendlyError('載入員工資料失敗', error))
   } finally {
     loading.value = false
   }

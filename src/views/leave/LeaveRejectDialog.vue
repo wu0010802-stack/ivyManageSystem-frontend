@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { approveLeave } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
-import { apiError } from '@/utils/error'
+import { friendlyError } from '@/utils/errorMessages'
 
 const emit = defineEmits<{
   (e: 'rejected'): void
@@ -34,7 +34,7 @@ const confirmReject = async () => {
     rejectDialogVisible.value = false
     emit('rejected')
   } catch (error) {
-    ElMessage.error('操作失敗：' + apiError(error, (error as Error).message))
+    ElMessage.error(friendlyError('駁回請假申請失敗', error))
   } finally {
     rejectLoading.value = false
   }

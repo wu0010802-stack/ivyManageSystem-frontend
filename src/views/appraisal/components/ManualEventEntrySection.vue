@@ -9,6 +9,7 @@ import { MANUAL_DELTA_RANGES } from '../scoreItemLabels'
 import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 
 const props = defineProps<{
   cycleId?: number | null
@@ -50,8 +51,8 @@ async function onInheritPrevious() {
     )
     if (res == null) { ElMessage.info('找不到上一週期'); return }
     ElMessage.success(`已帶入 ${res.applied} 筆；略過 ${res.skipped} 筆（對映不到員工）`)
-  } catch {
-    ElMessage.error('沿用上一週期失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('沿用上一週期失敗', e))
   } finally {
     inheriting.value = false
   }

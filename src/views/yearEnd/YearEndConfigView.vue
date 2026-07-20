@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { getOrgSettings, postOrgSettings, getClassTargets, upsertClassTarget } from '@/api/yearEnd'
 import { getEmployees } from '@/api/employees'
 import { getClassrooms } from '@/api/classrooms'
@@ -93,8 +94,8 @@ async function loadOrgSettings() {
             : Number(row.school_achievement_rate_override),
       }
     }
-  } catch {
-    ElMessage.error('全校設定載入失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('全校設定載入失敗', e))
   } finally {
     orgLoading.value = false
   }
@@ -113,8 +114,8 @@ async function loadClassTargets() {
         assistant_employee_id: row.assistant_employee_id,
       }
     }
-  } catch {
-    ElMessage.error('班級設定載入失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('班級設定載入失敗', e))
   } finally {
     classLoading.value = false
   }

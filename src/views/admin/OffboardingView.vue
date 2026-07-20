@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Search } from '@element-plus/icons-vue'
 import { getEmployees } from '@/api/employees'
 import { getOffboardingCertificate, getOffboardingList, patchNhiUnenroll } from '@/api/offboarding'
@@ -135,8 +136,8 @@ async function handleDownloadCertificate(id: number, name: string): Promise<void
         a.download = `離職證明_${name || id}.pdf`
         a.click()
         URL.revokeObjectURL(url)
-    } catch {
-        ElMessage.error('下載離職證明失敗')
+    } catch (e) {
+        ElMessage.error(friendlyError('下載離職證明失敗', e))
     }
 }
 
@@ -190,8 +191,8 @@ async function handleNhiUnenrollToggle(value: string | number | boolean): Promis
     try {
         await patchNhiUnenroll(id, { submitted })
         await syncAfterMutation(id)
-    } catch {
-        ElMessage.error('更新健保退保申報狀態失敗')
+    } catch (e) {
+        ElMessage.error(friendlyError('更新健保退保申報狀態失敗', e))
     }
 }
 
@@ -270,8 +271,8 @@ async function openInitiate(): Promise<void> {
         const res = await getEmployees()
         const all = (res.data ?? []) as ActiveEmployee[]
         activeEmployees.value = all.filter((e) => !!e.is_active && !e.resign_date)
-    } catch {
-        ElMessage.error('載入在職員工清單失敗')
+    } catch (e) {
+        ElMessage.error(friendlyError('載入在職員工清單失敗', e))
     } finally {
         initiateLoading.value = false
     }

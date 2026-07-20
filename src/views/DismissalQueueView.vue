@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { Search, Plus, Check, Loading, Refresh } from '@element-plus/icons-vue'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { useClassroomStore } from '@/stores/classroom'
@@ -131,7 +132,7 @@ const fetchCalls = async () => {
     const res = await getDismissalCalls(params)
     calls.value = (res.data || []) as DismissalCall[]
   } catch (e) {
-    ElMessage.error('載入接送通知失敗')
+    ElMessage.error(friendlyError('載入接送通知失敗', e))
   } finally {
     loading.value = false
   }
@@ -160,8 +161,7 @@ const loadStudents = async () => {
     const res = await getStudents({ is_active: true, limit: 500 })
     students.value = ((res.data as { items?: StudentItem[] }).items || []) as StudentItem[]
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } }; message?: string }
-    ElMessage.error('載入學生清單失敗：' + (err.response?.data?.detail || err.message))
+    ElMessage.error(friendlyError('載入學生清單失敗', e))
   }
 }
 

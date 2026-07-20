@@ -6,6 +6,7 @@
 import { ref, onMounted } from 'vue'
 import { getTitles, updateTitle } from '@/api/config'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 
 const jobTitles = ref<Record<string, unknown>[]>([])
 const loadingTitles = ref(false)
@@ -14,8 +15,8 @@ const fetchJobTitles = async () => {
   try {
     const res = await getTitles()
     jobTitles.value = res.data
-  } catch {
-    ElMessage.error('職稱載入失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('職稱載入失敗', e))
   } finally {
     loadingTitles.value = false
   }
@@ -24,8 +25,8 @@ const updateTitleGrade = async (title: Record<string, unknown>) => {
   try {
     await updateTitle(title.id as number, { name: title.name, bonus_grade: title.bonus_grade || null })
     ElMessage.success(`${title.name} 等級已更新`)
-  } catch {
-    ElMessage.error(`${title.name} 更新失敗`)
+  } catch (e) {
+    ElMessage.error(friendlyError(`更新職稱 ${title.name} 失敗`, e))
     await fetchJobTitles()  // 失敗時重抓還原
   }
 }

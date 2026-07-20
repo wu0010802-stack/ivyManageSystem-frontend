@@ -143,6 +143,7 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 import { exportDashboardTable } from '@/api/activity'
 import { FULL_ATTENDANCE_BONUS } from '@/constants/activity'
 import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 
 interface DashboardClassroom { courses?: Record<number, number>; [key: string]: unknown }
 interface DashboardGrade {
@@ -348,8 +349,8 @@ async function handleExportTable() {
     a.click()
     URL.revokeObjectURL(url)
     ElMessage.success('匯出成功')
-  } catch {
-    ElMessage.error('匯出失敗')
+  } catch (e) {
+    ElMessage.error(friendlyError('匯出統計資料失敗', e))
   } finally {
     exportingTable.value = false
   }
