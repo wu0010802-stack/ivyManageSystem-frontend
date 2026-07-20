@@ -299,16 +299,15 @@ function scrollToCurrentMonth() {
 .pnl-table thead th.col-current {
   background: var(--el-color-primary-light-8);
 }
-/* dark mode：html.ivy-admin（main.css）把 --el-color-primary-light-* 釘死成 light hex
-   （#e6f3f9 / #cce6f4），不隨 html.dark 翻轉——EP 的 dark css-vars.css 反而先被蓋掉，
-   導致當月欄整欄淺底疊翻亮後的淺色文字幾乎看不到。窄覆寫成 dark 下已翻好的 brand
-   primary alpha tint（--brand-primary-soft，見 a11y.css 的 html.dark），thead 疊色
-   加深一階呼應 light 的 -8 比 -9 更濃。 */
+/* dark mode：歷史上 html.ivy-admin（main.css）曾把 --el-color-primary-light-* 釘死成
+   light hex 不隨 html.dark 翻轉，此處因而需要窄覆寫。根因已修（main.css 改
+   html.ivy-admin:not(.dark) 限定 + a11y.css 的 html.dark.ivy-admin 補齊 dark 色階），
+   selector 保留、值改回 token 與 base 規則等值。 */
 html.dark .pnl-table .col-current {
-  background: var(--brand-primary-soft);
+  background: var(--el-color-primary-light-9);
 }
 html.dark .pnl-table thead th.col-current {
-  background: rgba(129, 140, 248, 0.28);
+  background: var(--el-color-primary-light-8);
 }
 .pnl-table .col-future {
   color: var(--el-text-color-placeholder);

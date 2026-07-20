@@ -362,6 +362,7 @@ async function saveAll() {
                 class="cell-input"
                 :data-grid-row="ci"
                 :data-grid-col="mi"
+                :aria-label="`${m}月 ${c.label}`"
                 :value="focusedKey === cellKey(m, c.key) ? rawText(m, c.key) : displayText(m, c.key)"
                 :disabled="!canWrite || saving"
                 :placeholder="c.defaultAmount != null ? amountFormatter.format(c.defaultAmount) : ''"
@@ -471,16 +472,16 @@ async function saveAll() {
 .fc-table thead th.col-current {
   background: var(--el-color-primary-light-8);
 }
-/* dark mode：html.ivy-admin（main.css）把 --el-color-primary-light-* 釘死成 light hex
-   （#e6f3f9 / #cce6f4），不隨 html.dark 翻轉——EP 的 dark css-vars.css 反而先被蓋掉，
-   導致當月欄整欄淺底疊翻亮後的淺色文字幾乎看不到。窄覆寫成 dark 下已翻好的 brand
-   primary alpha tint（--brand-primary-soft，見 a11y.css 的 html.dark），thead 疊色
-   加深一階呼應 light 的 -8 比 -9 更濃。 */
+/* dark mode 窄覆寫（守衛測試：tests/unit/darkModeDarkerTokens.test.ts）：
+   根因已修——main.css 的 light-N 釘值改 scope `html.ivy-admin:not(.dark)`，且
+   a11y.css `html.dark.ivy-admin` 提供青藍深底色階（light-9 #13283f / light-8 #173853，
+   對 EP dark 主文字對比 ≥ 10:1，驗算見該處註解）。本覆寫值已與 base 規則等值，
+   保留作回歸防護錨點（防 main.css 釘值範圍再度外溢至 dark）。 */
 html.dark .fc-table .col-current {
-  background: var(--brand-primary-soft);
+  background: var(--el-color-primary-light-9);
 }
 html.dark .fc-table thead th.col-current {
-  background: rgba(129, 140, 248, 0.28);
+  background: var(--el-color-primary-light-8);
 }
 
 .sticky-col {
@@ -522,10 +523,18 @@ html.dark .fc-table thead th.col-current {
 .cell-input:hover:not(:disabled) {
   border-color: var(--el-border-color-light);
 }
+/* 可見 focus 指示（沿用 a11y.css :focus-visible 全站規格；text input 在各主流瀏覽器
+   任何 focus 途徑都匹配 :focus-visible，故鍵盤與滑鼠聚焦皆有 2px 外框）。
+   背景用 --el-color-primary-light-9：light = #e6f3f9（main.css ivy-admin:not(.dark)），
+   dark = #13283f（a11y.css html.dark.ivy-admin），皆與 --el-text-color-primary
+   對比 ≥ 10:1（驗算見 a11y.css 色階註解）。 */
 .cell-input:focus {
-  outline: none;
   border-color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
+}
+.cell-input:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 1px;
 }
 .cell-input:disabled {
   background: var(--el-fill-color-lighter);

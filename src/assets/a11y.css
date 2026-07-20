@@ -119,7 +119,10 @@ html.dark {
   --color-danger-darker: #fca5a5;
   --color-info-darker: #93c5fd;
 
-  /* brand 在深底用淺一階確保對比 */
+  /* brand 在深底用淺一階確保對比。
+   * 此處 indigo 僅適用 portal（portal light 品牌即 indigo，見 soft-ui.css）；
+   * admin 品牌是青藍 #0284c7（design-tokens.css html.ivy-admin），dark 下由
+   * 下方 html.dark.ivy-admin 區塊改釘 sky 亮階，保持色相一致。 */
   --brand-primary: #818cf8;       /* indigo-400 */
   --brand-primary-hover: #a5b4fc; /* indigo-300 */
   --brand-primary-soft: rgba(129, 140, 248, 0.18);
@@ -189,6 +192,57 @@ html.dark .el-button--primary.is-plain {
 html.dark .el-button--primary.is-plain:hover {
   background-color: rgba(129, 140, 248, 0.28) !important;
   color: #c7d2fe !important;
+}
+
+/* ===== Admin 深色（html.dark.ivy-admin）：品牌色相統一青藍 =====
+ * light admin 品牌主色是青藍 #0284c7（design-tokens.css html.ivy-admin 有決策註解），
+ * 上方 html.dark 的 indigo 是 portal 用；admin dark 若吃 indigo 會整站換色相。
+ * 這裡以 sky 亮階釘住 admin dark，specificity (0,2,1) > html.dark (0,1,1)，
+ * 且 main.css 的 light 釘值已 :not(.dark) 排除，不會回頭蓋掉本區塊。
+ *
+ * 對比驗算（WCAG 相對亮度；深色頁底 --bg-color=#0f172a L≈0.0088、
+ * 卡面 --surface-color=#1e293b L≈0.0218）：
+ *   #38bdf8 (sky-400, L≈0.440) on #0f172a = 8.3:1 ✓ / on #1e293b = 6.8:1 ✓
+ *   #7dd3fc (sky-300, L≈0.580) on #0f172a = 10.7:1 ✓ */
+html.dark.ivy-admin {
+  --color-primary-light: #38bdf8;
+  --brand-primary: #38bdf8;       /* sky-400，與 light #0284c7 同色相 */
+  --brand-primary-hover: #7dd3fc; /* sky-300 */
+  --brand-primary-soft: rgba(56, 189, 248, 0.18);
+  --el-color-primary: #38bdf8;
+  --el-color-primary-dark-2: #7dd3fc;
+
+  /* dark 版 light-N 色階：dark 下「light-N」語意是深底色階（比照 EP dark css-vars
+   * 的 mix-with-bg 算法，換成 admin 品牌色相）：mix(#38bdf8, #0f172a, N×10% 朝底色)。
+   *   light-3 = 70% sky + 30% bg = #2c8bba
+   *   light-5 = 50% sky + 50% bg = #246a91
+   *   light-7 = 30% sky + 70% bg = #1b4968
+   *   light-8 = 20% sky + 80% bg = #173853
+   *   light-9 = 10% sky + 90% bg = #13283f
+   * 消費點對比驗算（light-9 #13283f L≈0.0202 為最常用 tinted 背景——stat-card--filled、
+   * .col-current、.cell-input:focus、EP hover/menu active 等）：
+   *   --text-secondary #cbd5e1 (L≈0.657) on #13283f = 10.1:1 ✓（stat-card label）
+   *   --brand-primary #38bdf8 on #13283f = 7.0:1 ✓（stat-card value）
+   *   EP dark 主文字 #E5EAF3 (L≈0.777) on #13283f ≈ 11.8:1 ✓（表格/輸入格文字）
+   *   light-8 #173853 (L≈0.0263) 疊 #E5EAF3 ≈ 10.8:1 ✓（thead 當月欄）
+   * light-3 #2c8bba (L≈0.225) 僅作漸層/hover/步驟點等裝飾底（graphical object，
+   * WCAG 1.4.11 門檻 3:1），其上白字 = 3.8:1 ✓；與 EP dark 對 #409eff 的同法混色
+   * 亮度相當，非本組色階引入的新限制。 */
+  --el-color-primary-light-3: #2c8bba;
+  --el-color-primary-light-5: #246a91;
+  --el-color-primary-light-7: #1b4968;
+  --el-color-primary-light-8: #173853;
+  --el-color-primary-light-9: #13283f;
+}
+/* plain primary button：admin dark 用 sky（蓋掉上方 indigo 版；specificity 多一個 class） */
+html.dark.ivy-admin .el-button--primary.is-plain {
+  background-color: rgba(56, 189, 248, 0.16) !important;
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  color: #7dd3fc !important; /* on #0f172a = 10.7:1 ✓（tint 底更高） */
+}
+html.dark.ivy-admin .el-button--primary.is-plain:hover {
+  background-color: rgba(56, 189, 248, 0.28) !important;
+  color: #bae6fd !important; /* sky-200 (L≈0.741) on #0f172a = 13.4:1 ✓ */
 }
 
 /* AdminSidebar / PortalLayout 側欄在 light 下故意用 neutral 深階做「暗色側欄」

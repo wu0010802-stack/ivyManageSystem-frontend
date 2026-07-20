@@ -30,8 +30,12 @@
 }
 
 /* Admin（html.ivy-admin，由 AdminLayout 掛載）：Element Plus 主色變數組對齊青藍品牌色。
- * 只在 admin scope 覆寫，portal/parent/login 不受影響；dark mode 由 a11y.css 後載維持原樣。 */
-html.ivy-admin {
+ * 只在 admin scope 覆寫，portal/parent/login 不受影響。
+ * ⚠ 必須帶 :not(.dark)：main.css 後載於 EP dark css-vars（見 main.ts import 順序），
+ * 若不排除 dark，這組 light 字面值（#e6f3f9 等淺 hex）會以同 specificity 蓋掉 EP dark
+ * 的深色 light-N，造成 dark mode 淺底淺字（stat-card / .col-current / EP hover 等 30+
+ * 消費點對比塌陷）。dark 版青藍色階由 a11y.css 的 html.dark.ivy-admin 提供。 */
+html.ivy-admin:not(.dark) {
   --color-primary-light: #38bdf8;
   --el-color-primary: var(--brand-primary);
   --el-color-primary-light-3: #4ea9d8;

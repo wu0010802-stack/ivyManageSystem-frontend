@@ -140,8 +140,9 @@ const sortedFiltered = computed<RosterRow[]>(() => {
 }
 
 .roster-item--selected {
-  background-color: var(--brand-primary-soft, #eff6ff);
-  border-left: 3px solid var(--brand-primary, #3b82f6);
+  /* fallback 與 token 真值對齊（design-tokens.css html.ivy-admin） */
+  background-color: var(--brand-primary-soft, #e0f2fe);
+  border-left: 3px solid var(--brand-primary, #0284c7);
 }
 
 .roster-item__info {

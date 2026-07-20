@@ -108,12 +108,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* ── Design Tokens（對齊 RecruitmentView）── */
+/* 顏色一律走全域 admin brand token（design-tokens.css html.ivy-admin 青藍 #0284c7）。
+ * 舊 --rv-* 海軍藍 local palette（#1e40af 系，抄自 RecruitmentView）已移除——與 admin
+ * 品牌色相漂移，且 --rv-text/--rv-text-2 本檔並無消費者。 */
 .admissions-view {
-  --rv-primary:    #1e40af;
-  --rv-primary-lt: #dbeafe;
-  --rv-text:       #1e293b;
-  --rv-text-2:     #64748b;
   padding: 8px 0;
 }
 .page-header {
@@ -134,8 +132,11 @@ onMounted(() => {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: var(--rv-primary-lt);
-  color: var(--rv-primary);
+  /* 圖示屬 graphical object（WCAG 1.4.11 門檻 3:1）：
+   * light #0284c7 on --brand-primary-soft #e0f2fe = 3.6:1 ✓
+   * dark  #38bdf8 on rgba(56,189,248,.18) 疊 #0f172a（等效 ~#16354f）= 5.9:1 ✓ */
+  background: var(--brand-primary-soft);
+  color: var(--brand-primary);
   flex-shrink: 0;
 }
 .page-title {
