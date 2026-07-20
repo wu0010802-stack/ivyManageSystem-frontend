@@ -34,9 +34,17 @@ export function usePortalStudent() {
   // 到達，若無守衛會用過期學生的資料覆寫畫面。每次載入 ++loadSeq，await 後只有仍是最新
   // 世代的回應才寫入 detail/error/loading。
   let loadSeq = 0
+  // 已揭露電話快取的 key 不含 studentId（parent/emergency 的 guardianId 為 null），
+  // 抽屜若不關直接換學生會露出前一位學生的電話並繞過 reveal 稽核。追蹤當前 studentId，
+  // 切換時清空 revealedPhones。
+  let currentStudentId: unknown = null
 
   async function loadDetail(studentId: unknown) {
     if (!studentId) return
+    if (studentId !== currentStudentId) {
+      revealedPhones.value = new Map()
+      currentStudentId = studentId
+    }
     const my = ++loadSeq
     loading.value = true
     error.value = null

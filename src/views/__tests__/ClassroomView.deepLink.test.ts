@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-// P3：openStudentDrawer / openEdit 無請求序號守衛。快速點兩張班級卡片時，較慢
-// （舊）的 getClassroom 回應可能覆寫較新的 drawerClassroom / currentClassroom。
-// 修正：加序號，過期回應丟棄不覆寫。
+// P3：從學生完整檔案「返回班級」帶 ?selected=<classroom_id> 回來，ClassroomView 原本
+// 不讀 route.query → 死參數，抽屜不重開、回不到原班。修正：onMounted 讀 ?selected= 並
+// 重新開啟該班學生抽屜。
 
 const getClassroomMock = vi.hoisted(() => vi.fn())
 const getClassroomsMock = vi.hoisted(() => vi.fn())
@@ -43,19 +43,14 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },
 }))
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
+// 深連結：回來時帶 ?selected=5
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: { selected: '5' } }) }))
 
 import ClassroomView from '../ClassroomView.vue'
 
-function deferred<T>() {
-  let resolve!: (v: T) => void
-  const promise = new Promise<T>((res) => { resolve = res })
-  return { promise, resolve }
-}
-
 interface SetupState {
-  openStudentDrawer: (c: { id: number }) => Promise<void>
   drawerClassroom: { id: number } | null
+  classroomDrawerVisible: boolean
 }
 
 const STUBS = {
@@ -86,41 +81,25 @@ const STUBS = {
   'el-descriptions-item': { template: '<div><slot /></div>' },
 }
 
-async function mountView() {
-  getClassroomsMock.mockResolvedValue({ data: [] })
-  getGradesMock.mockResolvedValue({ data: [] })
-  getTeacherOptionsMock.mockResolvedValue({ data: [] })
-  getIntakePlanMock.mockResolvedValue({ data: { rows: [] } })
-  const wrapper = mount(ClassroomView, {
-    global: { stubs: STUBS, directives: { loading: () => {} } },
-  })
-  await flushPromises()
-  return wrapper
-}
-
-describe('ClassroomView openStudentDrawer 請求序號守衛（P3）', () => {
+describe('ClassroomView 深連結 ?selected= 還原抽屜（P3）', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('快速開 A(慢)→B(快)：較舊 A 回應遲到後不得覆寫 drawerClassroom', async () => {
-    const wrapper = await mountView()
+  it('mount 時帶 ?selected=5 → 自動開啟該班學生抽屜', async () => {
+    getClassroomsMock.mockResolvedValue({ data: [] })
+    getGradesMock.mockResolvedValue({ data: [] })
+    getTeacherOptionsMock.mockResolvedValue({ data: [] })
+    getIntakePlanMock.mockResolvedValue({ data: { rows: [] } })
+    getClassroomMock.mockResolvedValue({ data: { id: 5, name: '大班A' } })
+
+    const wrapper = mount(ClassroomView, {
+      global: { stubs: STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+
+    expect(getClassroomMock).toHaveBeenCalledWith(5)
     const ss = wrapper.vm.$.setupState as SetupState
-
-    const dA = deferred<{ data: { id: number } }>()
-    const dB = deferred<{ data: { id: number } }>()
-    getClassroomMock.mockReturnValueOnce(dA.promise).mockReturnValueOnce(dB.promise)
-
-    const runA = ss.openStudentDrawer({ id: 1 })
-    const runB = ss.openStudentDrawer({ id: 2 })
-
-    dB.resolve({ data: { id: 2 } })
-    await flushPromises()
-    await runB
-    expect(ss.drawerClassroom?.id).toBe(2)
-
-    dA.resolve({ data: { id: 1 } })
-    await flushPromises()
-    await runA
-    expect(ss.drawerClassroom?.id).toBe(2) // 未被較舊 A 覆寫
+    expect(ss.classroomDrawerVisible).toBe(true)
+    expect(ss.drawerClassroom?.id).toBe(5)
     wrapper.unmount()
   })
 })

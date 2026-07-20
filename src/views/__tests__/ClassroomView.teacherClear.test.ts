@@ -46,6 +46,7 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },
 }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
 
 import ClassroomView from '../ClassroomView.vue'
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   createClassroom,
   deleteClassroom,
@@ -336,9 +337,18 @@ watch([filterSchoolYear, filterSemester], () => {
   fetchClassrooms()
 })
 
+const route = useRoute()
+
 onMounted(async () => {
   // fetchOptions 與 fetchClassrooms 彼此無依賴，並行避免序列瀑布（省一個 round-trip）
   await Promise.all([fetchOptions(), fetchClassrooms()])
+  // 深連結還原：從學生完整檔案「返回班級」會帶 ?selected=<classroom_id> 回來
+  // （StudentDetailPanel.handleBack），重新開啟該班學生抽屜，回到原班上下文。
+  // openStudentDrawer 只需 id（內部自行 getClassroom），故不必等 classrooms 清單。
+  const selected = Number(route.query?.selected)
+  if (Number.isFinite(selected) && selected > 0) {
+    void openStudentDrawer({ id: selected } as ClassroomRow)
+  }
 })
 
 interface ClassroomDrawerProp { id?: number; name?: string; grade_name?: string; semester_label?: string; is_active?: boolean; capacity?: number; students?: { id: number; name?: string; gender?: string; [key: string]: unknown }[] }
