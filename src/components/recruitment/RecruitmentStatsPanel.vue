@@ -739,7 +739,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   font-size: 0.72rem;
   color: var(--text-tertiary);
 }
-/* 註：舊 .area-kpi-bar-* 與 .rate-cell/.rate-bar-*/.rate-label 已移除——
+/* 註：舊 .area-kpi-bar-* 與 .rate-cell、.rate-bar-*、.rate-label 已移除——
    scoped 且本面板 template 無任何消費者（AreaTab 用自己的 .dc-rate-* 進度條），
    屬區域分頁抽離後殘留的死 CSS（2026-07-20 UI 稽核清除，含被點名的 width transition）。 */
 
