@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import OverviewWorkbenchView from '../OverviewWorkbenchView.vue'
+import { hasPermission } from '@/utils/auth'
 
 // mock 兩支把手 API（沿用既有 spec 的 vi.mock 寫法與回傳形狀，見 OverviewWorkbenchView.spec.ts）
 vi.mock('@/api/appraisal', () => ({
@@ -13,7 +14,14 @@ vi.mock('@/api/yearEnd', () => ({
     data: [{ id: 9, academic_year: 114, status: 'OPEN' }],
   }),
 }))
-vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+// 依權限名可切換的 mock（沿用 OverviewWorkbenchView.spec.ts 既有做法），
+// 讓部分權限測試可用 mockImplementation 針對單一權限碼回 false
+vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
+
+beforeEach(() => {
+  vi.mocked(hasPermission).mockReset()
+  vi.mocked(hasPermission).mockReturnValue(true)
+})
 
 describe('OverviewWorkbenchView 下一步主卡', () => {
   it('卡片 stats 到齊後主卡依優先序顯示年終待簽', async () => {
@@ -62,5 +70,29 @@ describe('OverviewWorkbenchView 下一步主卡', () => {
     wrapper.findComponent({ name: 'WorkbenchYearEndCard' }).vm.$emit('stats', 5)
     await wrapper.vm.$nextTick()
     expect(card.text()).not.toContain('部分卡片載入失敗')
+  })
+
+  it('缺 APPRAISAL_FINALIZE 權限（發放卡不 render）→ 主卡仍能算出下一步，不永久卡在 skeleton', async () => {
+    vi.mocked(hasPermission).mockImplementation((p: string) => p !== 'APPRAISAL_FINALIZE')
+    const wrapper = mount(OverviewWorkbenchView, {
+      global: {
+        stubs: {
+          WorkbenchAppraisalCard: true,
+          WorkbenchYearEndCard: true,
+          WorkbenchExceptionsCard: true,
+          WorkbenchPayoutCard: true,
+        },
+      },
+    })
+    await new Promise((r) => setTimeout(r))
+    // 發放卡因權限不足未 render，父層應已對其 seed stat=0，不需（也無法）手動 emit
+    expect(wrapper.findComponent({ name: 'WorkbenchPayoutCard' }).exists()).toBe(false)
+    wrapper.findComponent({ name: 'WorkbenchAppraisalCard' }).vm.$emit('stats', 0)
+    wrapper.findComponent({ name: 'WorkbenchYearEndCard' }).vm.$emit('stats', 0)
+    wrapper.findComponent({ name: 'WorkbenchExceptionsCard' }).vm.$emit('stats', 0)
+    await wrapper.vm.$nextTick()
+    const card = wrapper.find('[data-test="next-step-card"]')
+    expect(card.find('.el-skeleton').exists()).toBe(false)
+    expect(card.text()).toContain('目前沒有待辦')
   })
 })

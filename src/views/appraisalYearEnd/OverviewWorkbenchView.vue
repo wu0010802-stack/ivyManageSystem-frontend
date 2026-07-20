@@ -83,7 +83,21 @@ async function loadHandles() {
     onStatsError('yearEnd')
   }
 }
+const canAppraisal = computed(() => hasPermission('APPRAISAL_READ'))
+const canYearEnd = computed(() => hasPermission('YEAR_END_READ'))
+const canExceptions = computed(() => hasPermission('APPRAISAL_READ') || hasPermission('YEAR_END_READ'))
+const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+
 onMounted(loadHandles)
+// 權限不足的卡片完全不 render → 永不 emit stats → 對應欄位永遠 undefined →
+// deriveNextStep 永久回 null → 主卡永久卡在 skeleton。對「因權限不 render」
+// 的卡把 stat 視為已解決（0 待辦），讓主卡能算出下一步（見 task-11 review Important finding）。
+onMounted(() => {
+  if (!canAppraisal.value) onStats('appraisal', 0)
+  if (!canYearEnd.value) onStats('yearEnd', 0)
+  if (!canExceptions.value) onStats('exceptions', 0)
+  if (!canPayout.value) onStats('payout', 0)
+})
 
 // 固定卡序（原依年終 OPEN 換位——破壞空間記憶，移除）
 const CARD_ORDER = ['appraisal', 'year-end', 'exceptions', 'payout'] as const
@@ -96,13 +110,11 @@ const nextStep = computed(() =>
     yearEndPendingSign: cardStats.value.yearEnd,
     appraisalPendingSign: cardStats.value.appraisal,
     payoutReadyCount: cardStats.value.payout,
+    canAppraisal: canAppraisal.value,
+    canYearEnd: canYearEnd.value,
+    payoutYear,
   }),
 )
-
-const canAppraisal = computed(() => hasPermission('APPRAISAL_READ'))
-const canYearEnd = computed(() => hasPermission('YEAR_END_READ'))
-const canExceptions = computed(() => hasPermission('APPRAISAL_READ') || hasPermission('YEAR_END_READ'))
-const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 </script>
 
 <template>

@@ -16,6 +16,12 @@ export interface WorkbenchStats {
   yearEndPendingSign: number | undefined
   appraisalPendingSign: number | undefined
   payoutReadyCount: number | undefined
+  // 權限旗標：無權限時對應卡片不 render，appraisalCycle/yearEndCycle 可能為 null
+  // 只是「這個使用者看不到」而非「真的沒有週期」，建立引導分支須吃這兩旗標才不會
+  // 對缺權限使用者給出誤導性的「去建立」CTA（見 task-11 review Important finding）
+  canAppraisal: boolean
+  canYearEnd: boolean
+  payoutYear: number
 }
 
 export interface NextStep {
@@ -41,6 +47,9 @@ export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
     yearEndPendingSign,
     appraisalPendingSign,
     payoutReadyCount,
+    canAppraisal,
+    canYearEnd,
+    payoutYear,
   } = stats
   if (
     blockingExceptions === undefined ||
@@ -83,10 +92,10 @@ export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
       title: `${payoutReadyCount} 筆考核年終可發放`,
       reason: '簽核已完成，可產生轉帳資料。',
       ctaLabel: '前往發放',
-      to: '/appraisal-year-end/year-end/payout',
+      to: `/appraisal-year-end/year-end/payout?year=${payoutYear}`,
     }
   }
-  if (!appraisalCycle) {
+  if (!appraisalCycle && canAppraisal) {
     return {
       key: 'create-appraisal',
       title: '建立本學期考核週期',
@@ -95,7 +104,7 @@ export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
       to: '/appraisal-year-end/appraisal',
     }
   }
-  if (!yearEndCycle) {
+  if (!yearEndCycle && canYearEnd) {
     return {
       key: 'create-year-end',
       title: '建立年終結算週期',

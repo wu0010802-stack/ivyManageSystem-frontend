@@ -8,6 +8,9 @@ const base: WorkbenchStats = {
   yearEndPendingSign: 0,
   appraisalPendingSign: 0,
   payoutReadyCount: 0,
+  canAppraisal: true,
+  canYearEnd: true,
+  payoutYear: 2026,
 }
 
 describe('deriveNextStep 優先序', () => {
@@ -36,6 +39,7 @@ describe('deriveNextStep 優先序', () => {
   it('可發放次於簽核', () => {
     const s = deriveNextStep({ ...base, payoutReadyCount: 4 })
     expect(s?.key).toBe('payout')
+    expect(s?.to).toBe('/appraisal-year-end/year-end/payout?year=2026')
   })
   it('缺考核週期時引導建立', () => {
     const s = deriveNextStep({ ...base, appraisalCycle: null })
@@ -47,5 +51,15 @@ describe('deriveNextStep 優先序', () => {
   })
   it('全部完成回 done', () => {
     expect(deriveNextStep(base)?.key).toBe('done')
+  })
+  it('缺考核週期但使用者無 APPRAISAL_READ 權限（考核卡未 render）時不應誤導去建立考核週期', () => {
+    const s = deriveNextStep({ ...base, appraisalCycle: null, canAppraisal: false })
+    expect(s?.key).not.toBe('create-appraisal')
+    expect(s?.key).toBe('done')
+  })
+  it('缺年終週期但使用者無 YEAR_END_READ 權限（年終卡未 render）時不應誤導去建立年終週期', () => {
+    const s = deriveNextStep({ ...base, yearEndCycle: null, canYearEnd: false })
+    expect(s?.key).not.toBe('create-year-end')
+    expect(s?.key).toBe('done')
   })
 })
