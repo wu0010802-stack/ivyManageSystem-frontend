@@ -63,11 +63,15 @@ vi.mock('@/composables/useErrorNotify', () => ({
 }))
 
 // ── hasPermission mock（Task A4：分數同步 dialog 的「確認寫入」footer 需
-// APPRAISAL_EVENT_WRITE，本檔測的是 CurrentSemesterOverview 把權限判定結果傳給
-// child dialog 的 wiring，不是權限矩陣本身——canWrite 分歧行為已在
-// ScorePreviewDialog.spec.ts 用真實 prop 矩陣測過，此處固定 true 即可）───
+// APPRAISAL_EVENT_WRITE）。CurrentSemesterOverview 目前只查這一個權限字串
+// （見元件內 `canSyncWrite = computed(() => hasPermission('APPRAISAL_EVENT_WRITE'))`），
+// 用可調 permState 矩陣取代寫死 `() => true`：canWrite 分歧行為本身已在
+// ScorePreviewDialog.spec.ts 用真實 prop 矩陣測過，此處只驗證 wiring——但 wiring
+// 測試必須能覆蓋「無寫入權限」分支，否則測不出 hasPermission 回傳值真的有被
+// 讀取並正確傳遞（比照 AppraisalYearEndLayout.spec.ts 的 permState 寫法）。
+const permState = { eventWrite: true }
 vi.mock('@/utils/auth', () => ({
-  hasPermission: vi.fn(() => true),
+  hasPermission: vi.fn((p) => p === 'APPRAISAL_EVENT_WRITE' && permState.eventWrite),
 }))
 
 import {
@@ -79,6 +83,7 @@ import {
   refreshAppraisalCycle,
   getSignStatusSummary,
 } from '@/api/appraisal'
+import { hasPermission } from '@/utils/auth'
 
 import CurrentSemesterOverview from '../CurrentSemesterOverview.vue'
 
@@ -220,11 +225,12 @@ const GLOBAL_STUBS = {
   // ScorePreviewDialog.spec.ts 測（該元件自己直接 mount 真實邏輯）。這裡 stub 加一顆
   // 按鈕讓測試能模擬「dialog 內確認寫入完成」emit synced，驗證 parent wiring。
   ScorePreviewDialog: {
-    props: ['visible', 'cycleId', 'canWrite', 'hasNonParticipant'],
+    props: ['visible', 'cycleId', 'canWrite', 'cycleStatus', 'hasNonParticipant'],
     emits: ['update:visible', 'synced'],
     template:
       '<div v-if="visible" data-test="score-preview-dialog-stub" ' +
-      ':data-can-write="canWrite" :data-has-non-participant="hasNonParticipant">' +
+      ':data-can-write="canWrite" :data-cycle-status="cycleStatus" ' +
+      ':data-has-non-participant="hasNonParticipant">' +
       '<button data-test="score-preview-dialog-stub-synced-btn" @click="$emit(\'synced\')" />' +
       '</div>',
   },
@@ -312,6 +318,7 @@ describe('CurrentSemesterOverview', () => {
     vi.clearAllMocks()
     termState.school_year = 114
     termState.semester = 1
+    permState.eventWrite = true
   })
 
   it('cycle 為 null 時顯示 banner 與建立按鈕', async () => {
@@ -341,9 +348,9 @@ describe('CurrentSemesterOverview', () => {
   // Task A4：預覽分數 + 同步分數合併為單一 ScorePreviewDialog；dry-run 載入與
   // 確認寫入的實際 API 呼叫改在 ScorePreviewDialog.spec.ts 測試（該元件直接
   // mount 真實邏輯）。這裡只驗證 CurrentSemesterOverview 對 child dialog 的 wiring：
-  // 點合併按鈕開 dialog 並帶入正確的 canWrite/hasNonParticipant，dialog emit
-  // synced 後會重新拉 aggregated_status。
-  it('點「預覽並同步分數」開啟合併 dialog 並帶入 canWrite/hasNonParticipant', async () => {
+  // 點合併按鈕開 dialog 並帶入正確的 canWrite/cycleStatus/hasNonParticipant，dialog
+  // emit synced 後會重新拉 aggregated_status。
+  it('點「預覽並同步分數」開啟合併 dialog 並帶入 canWrite/cycleStatus/hasNonParticipant', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     getAppraisalAllEmployeesStatus.mockResolvedValue({
       data: makeStatusFixture({ extra: [nonParticipantRow] }),
@@ -358,7 +365,28 @@ describe('CurrentSemesterOverview', () => {
     const dialogStub = wrapper.find('[data-test="score-preview-dialog-stub"]')
     expect(dialogStub.exists()).toBe(true)
     expect(dialogStub.attributes('data-can-write')).toBe('true')
+    // SAMPLE_CYCLE.status === 'OPEN'
+    expect(dialogStub.attributes('data-cycle-status')).toBe('OPEN')
     expect(dialogStub.attributes('data-has-non-participant')).toBe('true')
+    // 防 typo 成 READ：canSyncWrite 必須查的是 APPRAISAL_EVENT_WRITE
+    expect(hasPermission).toHaveBeenCalledWith('APPRAISAL_EVENT_WRITE')
+  })
+
+  // Important #2：權限矩陣鐵律——無寫入權限時 wiring 必須把 canWrite=false 正確
+  // 傳給 child dialog（不可寫死 true 讓這個分支永遠測不到）。
+  it('無 APPRAISAL_EVENT_WRITE 權限時，傳給 ScorePreviewDialog 的 can-write 為 false', async () => {
+    permState.eventWrite = false
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="preview-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="score-preview-dialog-stub"]')
+    expect(dialogStub.exists()).toBe(true)
+    expect(dialogStub.attributes('data-can-write')).toBe('false')
+    expect(hasPermission).toHaveBeenCalledWith('APPRAISAL_EVENT_WRITE')
   })
 
   it('合併 dialog emit synced 後重新拉 aggregated_status', async () => {
@@ -624,6 +652,7 @@ describe('CurrentSemesterOverview', () => {
 describe('CurrentSemesterOverview 清單篩選（Task 4）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permState.eventWrite = true
   })
 
   it('overviewSearch 以姓名過濾 filteredParticipants', async () => {
@@ -665,6 +694,7 @@ describe('CurrentSemesterOverview 清單篩選（Task 4）', () => {
 describe('CurrentSemesterOverview 進頁即算 refresh（Task 8）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permState.eventWrite = true
   })
 
   it('OPEN cycle mount 時，refreshAppraisalCycle 在 getAppraisalAllEmployeesStatus 之前被呼叫', async () => {
@@ -748,6 +778,7 @@ describe('CurrentSemesterOverview 進頁即算 refresh（Task 8）', () => {
 describe('CurrentSemesterOverview 精修（Task 7）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permState.eventWrite = true
   })
 
   it('出缺勤欄：全零顯示 —，非零僅列非零項', async () => {
@@ -865,6 +896,7 @@ describe('CurrentSemesterOverview 精修（Task 7）', () => {
 describe('CurrentSemesterOverview 引導條（Task A3）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    permState.eventWrite = true
     guidePushMock.mockClear()
     getSignStatusSummary.mockResolvedValue({ data: { counts: {} } })
   })

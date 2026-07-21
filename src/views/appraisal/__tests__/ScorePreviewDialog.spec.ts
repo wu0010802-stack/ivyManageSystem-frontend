@@ -88,30 +88,58 @@ describe('統一分數同步 dialog', () => {
   beforeEach(() => { previewMock.mockClear(); syncMock.mockClear() })
 
   it('開啟即載入 26 欄預覽與同步差異摘要', async () => {
-    mount(ScorePreviewDialog, mountOpts({ canWrite: true, hasNonParticipant: false }))
+    mount(ScorePreviewDialog, mountOpts({ canWrite: true, hasNonParticipant: false, cycleStatus: 'OPEN' }))
     await flushPromises()
     expect(previewMock).toHaveBeenCalledWith(1)
     expect(syncMock).toHaveBeenCalledWith(1, { dryRun: true })
   })
 
-  it('無寫入權限不顯示確認寫入', async () => {
-    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: false, hasNonParticipant: false }))
+  it('無寫入權限不顯示確認寫入，且不觸發 sync dry-run', async () => {
+    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: false, hasNonParticipant: false, cycleStatus: 'OPEN' }))
     await flushPromises()
     expect(w.find('[data-test="confirm-sync-btn"]').exists()).toBe(false)
+    expect(syncMock).not.toHaveBeenCalled()
   })
 
   it('有非成員時確認寫入 disabled', async () => {
-    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: true, hasNonParticipant: true }))
+    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: true, hasNonParticipant: true, cycleStatus: 'OPEN' }))
     await flushPromises()
     expect(w.find('[data-test="confirm-sync-btn"]').attributes('disabled')).toBeDefined()
   })
 
   it('確認寫入呼叫 dry_run=false 並 emit synced', async () => {
-    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: true, hasNonParticipant: false }))
+    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: true, hasNonParticipant: false, cycleStatus: 'OPEN' }))
     await flushPromises()
     await w.find('[data-test="confirm-sync-btn"]').trigger('click')
     await flushPromises()
     expect(syncMock).toHaveBeenCalledWith(1, { dryRun: false })
     expect(w.emitted('synced')).toBeTruthy()
+  })
+
+  // Important #1（真回歸）：score_preview 只需 APPRAISAL_READ、不檢查 cycle 狀態，
+  // 但 sync_score_items（含 dry_run）後端一律要求 APPRAISAL_EVENT_WRITE 且 cycle
+  // 非 OPEN 直接 400。只有 READ 沒有 WRITE 權限、或 cycle 非 OPEN 的使用者一開
+  // dialog 不該撞 403/400——唯讀矩陣仍要載入，sync dry-run 必須跳過且不可誤顯示
+  // 成「可重試的錯誤」，而是中性訊息。
+  it('canWrite 但週期非 OPEN 時：仍載入唯讀矩陣、不觸發 sync dry-run、無錯誤 banner、顯示中性唯讀訊息', async () => {
+    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: true, hasNonParticipant: false, cycleStatus: 'LOCKED' }))
+    await flushPromises()
+    expect(previewMock).toHaveBeenCalledWith(1)
+    expect(syncMock).not.toHaveBeenCalled()
+    expect(w.find('[data-test="sync-diff-error-alert"]').exists()).toBe(false)
+    expect(w.find('[data-test="sync-diff-banner"]').exists()).toBe(false)
+    expect(w.find('[data-test="confirm-sync-btn"]').exists()).toBe(false)
+    const note = w.find('[data-test="sync-diff-skipped-note"]')
+    expect(note.exists()).toBe(true)
+    expect(note.text()).toContain('無寫入權限或此週期非進行中，僅顯示唯讀分數矩陣')
+  })
+
+  it('無寫入權限但週期為 OPEN 時：同樣跳過 sync dry-run、顯示中性唯讀訊息', async () => {
+    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: false, hasNonParticipant: false, cycleStatus: 'OPEN' }))
+    await flushPromises()
+    expect(previewMock).toHaveBeenCalledWith(1)
+    expect(syncMock).not.toHaveBeenCalled()
+    expect(w.find('[data-test="sync-diff-error-alert"]').exists()).toBe(false)
+    expect(w.find('[data-test="sync-diff-skipped-note"]').exists()).toBe(true)
   })
 })

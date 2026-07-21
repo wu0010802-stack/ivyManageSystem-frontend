@@ -4,13 +4,16 @@
  *
  * Task A4：把原本分離的「預覽分數」（唯讀 26 欄矩陣，`score_preview`）與
  * 「同步分數」（`sync_score_items` dry-run → 確認寫入）合併為單一 dialog。
- * 開啟即並行載入兩者：
- *   - `previewAppraisalScore(cycleId)` → 每位參與者 × 14 個 ScoreItemCode 的 delta，
- *     表格顯示；紅色 = current_db_value 與 delta 不同。
+ *   - `previewAppraisalScore(cycleId)` → 每位參與者 × 24 個 ScoreItemCode 的 delta
+ *     （加上員工欄與合計欄共 26 欄），表格顯示；紅色 = current_db_value 與 delta 不同。
+ *     此端點僅需 `APPRAISAL_READ`、不檢查 cycle 狀態，開啟即**永遠**載入。
  *   - `syncAppraisalScoreItems(cycleId, { dryRun: true })` → 同步差異摘要
- *     （deleted_count / inserted_count / skipped_manual_count）。
- * 底部「確認寫入」（僅 canWrite 才顯示）呼叫 `syncAppraisalScoreItems(cycleId, { dryRun: false })`
- * 實際寫入，成功後 emit `synced` 讓 parent refresh。
+ *     （deleted_count / inserted_count / skipped_manual_count）。此端點後端一律要求
+ *     `APPRAISAL_EVENT_WRITE` 且 cycle 非 OPEN 直接 400——**只有** `canWrite &&
+ *     cycleStatus === 'OPEN'` 時才呼叫，否則顯示中性唯讀訊息（不可誤判為錯誤）。
+ * 底部「確認寫入」與同步差異摘要 banner 同樣只在 `canWrite && cycleStatus === 'OPEN'`
+ * 時 render；呼叫 `syncAppraisalScoreItems(cycleId, { dryRun: false })` 實際寫入，
+ * 成功後 emit `synced` 讓 parent refresh。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -35,6 +38,7 @@ const props = withDefaults(
     cycleId?: number | null
     canWrite?: boolean
     hasNonParticipant?: boolean
+    cycleStatus?: 'OPEN' | 'LOCKED' | 'CLOSED'
   }>(),
   { visible: false, cycleId: null, canWrite: false, hasNonParticipant: false },
 )
@@ -59,10 +63,16 @@ const syncError = ref(false)
 const syncDry = ref<SyncResultData | null>(null)
 const writing = ref(false)
 
+// canSync：只有有寫入權限「且」cycle 正在 OPEN 才可打 sync 端點（後端 sync_score_items
+// 一律要求 APPRAISAL_EVENT_WRITE，且 cycle 非 OPEN 直接 400）。score_preview 端點僅需
+// APPRAISAL_READ、不檢查 cycle 狀態，因此唯讀矩陣不受此限制。
+const canSync = computed(() => props.canWrite && props.cycleStatus === 'OPEN')
+
 async function loadPreview() {
   if (!props.cycleId) return
   loading.value = true
   previewError.value = false
+  data.value = null
   try {
     const r = await previewAppraisalScore(props.cycleId)
     data.value = r.data as PreviewData
@@ -78,6 +88,7 @@ async function loadSyncDryRun() {
   if (!props.cycleId) return
   syncLoading.value = true
   syncError.value = false
+  syncDry.value = null
   try {
     const r = await syncAppraisalScoreItems(props.cycleId, { dryRun: true })
     syncDry.value = r.data as SyncResultData
@@ -92,7 +103,18 @@ async function loadSyncDryRun() {
 
 async function onOpen() {
   if (!props.cycleId) return
-  await Promise.all([loadPreview(), loadSyncDryRun()])
+  // 唯讀矩陣永遠載入（任何有 APPRAISAL_READ 的人都能看）；sync dry-run 只有
+  // canSync（有寫入權限且 cycle 為 OPEN）才打，避免只有 READ 權限或 cycle
+  // 非 OPEN 的使用者一開 dialog 就撞後端 403/400。
+  const tasks: Promise<void>[] = [loadPreview()]
+  if (canSync.value) {
+    tasks.push(loadSyncDryRun())
+  } else {
+    // 明確清空，避免切換 cycle/canWrite 後殘留上一次的同步差異或錯誤狀態
+    syncDry.value = null
+    syncError.value = false
+  }
+  await Promise.all(tasks)
 }
 
 watch(
@@ -220,7 +242,7 @@ function tooltipLines(row: PreviewParticipant, code: string) {
         同步差異摘要載入失敗，暫不可確認寫入，請重新開啟本視窗再試一次。
       </el-alert>
       <el-alert
-        v-else-if="syncDry"
+        v-else-if="canSync && syncDry"
         type="info"
         :closable="false"
         class="sync-alert"
@@ -228,6 +250,15 @@ function tooltipLines(row: PreviewParticipant, code: string) {
       >
         本次同步將寫入 {{ syncDry.inserted_count ?? 0 }} 筆、移除 {{ syncDry.deleted_count ?? 0 }} 筆、
         保留手動 {{ syncDry.skipped_manual_count ?? 0 }} 筆
+      </el-alert>
+      <el-alert
+        v-else-if="!canSync"
+        type="info"
+        :closable="false"
+        class="sync-alert"
+        data-test="sync-diff-skipped-note"
+      >
+        無寫入權限或此週期非進行中，僅顯示唯讀分數矩陣
       </el-alert>
 
       <div class="preview-toolbar">
@@ -299,7 +330,7 @@ function tooltipLines(row: PreviewParticipant, code: string) {
       <el-tooltip content="請先把所有教師加入考核再同步" :disabled="!hasNonParticipant">
         <span>
           <el-button
-            v-if="canWrite"
+            v-if="canSync"
             data-test="confirm-sync-btn"
             type="primary"
             :disabled="confirmDisabled"

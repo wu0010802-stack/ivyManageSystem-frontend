@@ -5,7 +5,8 @@
  * 對應 M5 重構：以 AcademicTermSelector 切換當前學期，
  * 自動取對應 cycle、4 個 KPI、員工狀態表 + 詳情 dialog。
  * Task A4：原本分離的「預覽分數」與「同步分數」（dry-run → 確認寫入）已合併為
- * 單一 ScorePreviewDialog，本頁只負責開關 dialog 與傳入 canWrite/hasNonParticipant。
+ * 單一 ScorePreviewDialog，本頁只負責開關 dialog 與傳入 canWrite/cycleStatus/
+ * hasNonParticipant（cycleStatus 讓 dialog 判斷是否可打 sync 端點，見該元件內註解）。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -383,6 +384,13 @@ const hasNonParticipant = computed(() =>
 // 分數同步 dialog 的「確認寫入」footer 是否顯示（無此元件層守衛，動作純靠路由 gate +
 // 後端；此處補寫入型動作前置守衛，比照 CLAUDE.md §已確認的現況事實）。
 const canSyncWrite = computed(() => hasPermission('APPRAISAL_EVENT_WRITE'))
+
+// 傳給 ScorePreviewDialog 的 cycleStatus：後端 sync_score_items 一律要求 cycle 為
+// OPEN，dialog 內部靠 canWrite && cycleStatus==='OPEN' 決定是否打 sync dry-run，
+// 避免只有 READ 權限或 cycle 非 OPEN 的使用者一開 dialog 就撞 403/400。
+const scorePreviewCycleStatus = computed(
+  () => currentCycle.value?.status as 'OPEN' | 'LOCKED' | 'CLOSED' | undefined,
+)
 
 const addingRowEmployeeId = ref<number | null>(null)
 const bulkAdding = ref(false)
@@ -771,6 +779,7 @@ function onGuideNavigate(key: AppraisalStepKey) {
       v-model:visible="scorePreviewDialogVisible"
       :cycle-id="currentCycle?.id ?? null"
       :can-write="canSyncWrite"
+      :cycle-status="scorePreviewCycleStatus"
       :has-non-participant="hasNonParticipant"
       @synced="handleSynced"
     />
