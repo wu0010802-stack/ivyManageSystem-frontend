@@ -338,9 +338,9 @@ export const routes: RouteRecordRaw[] = [
                     ],
                 },
                 { path: 'year-end', name: 'aye-year-end', component: () => import('../views/yearEnd/YearEndListView.vue'), meta: { title: '年終' } },
-                { path: 'year-end/cycles/:id', name: 'year-end-cycle-detail', component: () => import('../views/yearEnd/YearEndDetailView.vue'), meta: { title: '年終 › 結算明細' } },
-                { path: 'year-end/cycles/:id/grid', name: 'year-end-cycle-grid', component: () => import('../views/yearEnd/YearEndGridView.vue'), meta: { title: '年終 › 總表' } },
-                { path: 'year-end/cycles/:id/config', name: 'year-end-cycle-config', component: () => import('../views/yearEnd/YearEndConfigView.vue'), meta: { title: '年終 › 本期設定' } },
+                { path: 'year-end/cycles/:id', name: 'year-end-cycle-workspace', component: () => import('../views/yearEnd/YearEndWorkspaceView.vue'), meta: { title: '年終 › 結算工作區' } },
+                { path: 'year-end/cycles/:id/grid', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'grid' } }) },
+                { path: 'year-end/cycles/:id/config', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'config' } }) },
                 { path: 'year-end/payout', name: 'aye-payout', component: () => import('../views/yearEnd/AppraisalPayoutView.vue'), meta: { title: '考核年終發放' } },
                 {
                     path: 'rules',

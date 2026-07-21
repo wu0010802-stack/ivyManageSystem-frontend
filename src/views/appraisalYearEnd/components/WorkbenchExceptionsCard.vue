@@ -23,6 +23,7 @@ const props = defineProps<{
   appraisalCycle: { id: number; label: string; status: string } | null
   yearEndCycle: { id: number; label: string; status: string } | null
 }>()
+const emit = defineEmits<{ stats: [n: number]; 'stats-error': [] }>()
 
 const loading = ref(false)
 const error = ref('')
@@ -48,8 +49,10 @@ async function load() {
       sev[key] = (sev[key] ?? 0) + 1
     }
     severityCounts.value = sev
+    emit('stats', sev.blocking ?? 0)
   } catch (e) {
     error.value = apiError(e, '載入失敗')
+    emit('stats-error')
   } finally {
     loading.value = false
   }
@@ -66,6 +69,7 @@ const total = computed(() => appraisalCount.value + yearEndCount.value)
       <div class="wb-card__head">
         <span class="wb-card__title">例外待辦</span>
       </div>
+      <p class="wb-card__subtitle">試算與簽核前需要處理的資料缺口</p>
     </template>
     <el-skeleton v-if="loading" :rows="2" animated />
     <div v-else-if="error" class="wb-card__error">
@@ -94,6 +98,7 @@ const total = computed(() => appraisalCount.value + yearEndCount.value)
 <style scoped>
 .wb-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .wb-card__title { font-weight: 600; }
+.wb-card__subtitle { font-size: var(--text-xs); color: var(--text-secondary); margin: 2px 0 0; }
 .wb-card__error { display: flex; align-items: center; gap: var(--space-2); color: var(--el-color-danger); font-size: var(--text-sm); }
 .wb-card__success { color: var(--el-color-success); font-size: var(--text-sm); }
 .wb-card__counts { font-size: var(--text-sm); color: var(--text-secondary); margin: 0 0 var(--space-2); }

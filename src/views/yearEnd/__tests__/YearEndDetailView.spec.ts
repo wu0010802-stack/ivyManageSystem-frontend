@@ -17,27 +17,18 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     signSupervisorBatch: vi.fn(),
     signAccountingBatch: vi.fn(),
     finalizeBatch: vi.fn(),
-    updateCycleStatus: vi.fn(),
     exportYearEndSummaryXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/summary.xlsx'),
     exportYearEndTransferRosterXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/roster.xlsx'),
   }
 })
 
-// Task 11③：狀態機搬入本頁 — 需要 ElMessageBox.confirm（狀態轉換確認）與
-// ElMessageBox.alert（封存前置檢核阻擋提示）。
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('element-plus')>()
   return {
     ...actual,
     ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-    ElMessageBox: { confirm: vi.fn().mockResolvedValue(true), alert: vi.fn() },
   }
 })
-
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '1' } }),
-  useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
-}))
 
 // hasPermission returns true by default; individual tests override as needed
 const mockHasPermission = vi.fn().mockReturnValue(true)
@@ -50,7 +41,7 @@ vi.mock('@/api/index', () => ({
 }))
 
 import * as api from '@/api/yearEnd'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 // ---- helpers ----
 
@@ -163,9 +154,9 @@ const ElTabPaneStub = defineComponent({
 
 async function mountView() {
   const wrapper = mount(YearEndDetailView, {
+    props: { cycleId: 1 },
     global: {
       stubs: {
-        'el-page-header': true,
         'el-table': ElTableStub,
         'el-table-column': ElTableColumnStub,
         'el-button': ElButtonStub,
@@ -414,17 +405,15 @@ describe('YearEndDetailView.load — 併發載入（Promise.all）', () => {
 })
 
 /**
- * Task 11：明細頁重整 —— 四案：
+ * Task 11：明細頁重整（Task 7 起③狀態機/週期頭已上移 shell，見 YearEndWorkspaceView.spec.ts）：
  * ① 三個表顯示姓名（employee_name / classroom_name / head_teacher_name / deputy_teacher_name）
- * ② 頂部簽核進度列 + 統一狀態標籤
- * ③ 狀態機（鎖定/封存/退回）搬入本頁 header，含封存前置檢核
+ * ② 頂部簽核進度列
  * ④ 簽核狀態 tag 上色 + 金額 formatCurrency
  */
 describe('YearEndDetailView — Task 11 明細頁重整', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
-    vi.mocked(ElMessageBox.confirm).mockResolvedValue(true as never)
   })
 
   it('① 結算單顯示員工姓名而非裸 ID，金額欄用 formatCurrency，簽核 tag 依 SIGN_STATUS_TAG 上色', async () => {
@@ -529,116 +518,6 @@ describe('YearEndDetailView — Task 11 明細頁重整', () => {
     expect(api.listYearEndSettlements).toHaveBeenCalledTimes(1)
   })
 
-  it('② .meta 列狀態改用 cycleStatusLabel + CYCLE_STATUS_TAG（非 raw code）', async () => {
-    setupApiMocks([makeSettlement()], { status: 'LOCKED' })
-
-    const wrapper = await mountView()
-
-    expect(wrapper.text()).not.toContain('狀態 LOCKED')
-    const cycleTag = wrapper.findAll('.el-tag-stub').find((t) => t.text() === '已鎖定')
-    expect(cycleTag).toBeTruthy()
-    expect(cycleTag!.attributes('data-type')).toBe('warning')
-  })
-
-  it('③ OPEN 週期 header 顯示「鎖定」按鈕，點擊後 confirm + updateCycleStatus(LOCKED) + reload', async () => {
-    setupApiMocks([makeSettlement()], { status: 'OPEN' })
-
-    const wrapper = await mountView()
-
-    const lockBtn = wrapper.find('[data-test="lock-cycle-button"]')
-    expect(lockBtn.exists()).toBe(true)
-    expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(false)
-
-    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: {} } as never)
-    await lockBtn.trigger('click')
-    await nextTick()
-    await nextTick()
-
-    expect(ElMessageBox.confirm).toHaveBeenCalled()
-    expect(api.updateCycleStatus).toHaveBeenCalledWith(1, { status: 'LOCKED' })
-    // 成功後 reload 本頁資料（cycle meta + settlements 皆重打）
-    expect(api.listYearEndCycles).toHaveBeenCalledTimes(2)
-    expect(api.listYearEndSettlements).toHaveBeenCalledTimes(2)
-  })
-
-  it('③ LOCKED 週期 header 顯示「封存」與「退回開放」按鈕', async () => {
-    setupApiMocks([makeSettlement({ status: 'FINALIZED' })], { status: 'LOCKED' })
-
-    const wrapper = await mountView()
-
-    expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="reopen-open-button"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="lock-cycle-button"]').exists()).toBe(false)
-  })
-
-  it('③ CLOSED 週期 header 顯示「退回鎖定」按鈕', async () => {
-    setupApiMocks([makeSettlement({ status: 'FINALIZED' })], { status: 'CLOSED' })
-
-    const wrapper = await mountView()
-
-    expect(wrapper.find('[data-test="reopen-locked-button"]').exists()).toBe(true)
-  })
-
-  it('③ 封存前置檢核：有未核定結算單時點「封存」被阻擋並列出筆數，不呼叫 updateCycleStatus', async () => {
-    setupApiMocks([
-      makeSettlement({ id: 1, status: 'FINALIZED' }),
-      makeSettlement({ id: 2, status: 'ACCOUNTING_SIGNED' }),
-      makeSettlement({ id: 3, status: 'DRAFT' }),
-    ], { status: 'LOCKED' })
-
-    const wrapper = await mountView()
-
-    const closeBtn = wrapper.find('[data-test="close-cycle-button"]')
-    expect(closeBtn.exists()).toBe(true)
-    await closeBtn.trigger('click')
-    await nextTick()
-
-    expect(ElMessageBox.alert).toHaveBeenCalledWith(
-      expect.stringContaining('2'),
-      '無法封存',
-      expect.objectContaining({ type: 'error' }),
-    )
-    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
-    expect(api.updateCycleStatus).not.toHaveBeenCalled()
-  })
-
-  it('③ 封存前置檢核通過（全數 FINALIZED）：confirm + updateCycleStatus(CLOSED)', async () => {
-    setupApiMocks([
-      makeSettlement({ id: 1, status: 'FINALIZED' }),
-      makeSettlement({ id: 2, status: 'FINALIZED' }),
-    ], { status: 'LOCKED' })
-
-    const wrapper = await mountView()
-
-    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: {} } as never)
-    const closeBtn = wrapper.find('[data-test="close-cycle-button"]')
-    await closeBtn.trigger('click')
-    await nextTick()
-    await nextTick()
-
-    expect(ElMessageBox.alert).not.toHaveBeenCalled()
-    expect(ElMessageBox.confirm).toHaveBeenCalled()
-    expect(api.updateCycleStatus).toHaveBeenCalledWith(1, { status: 'CLOSED' })
-  })
-
-  it('③ statusBusy 為單一 boolean ref（單週期頁非 per-row map）', async () => {
-    setupApiMocks([makeSettlement()], { status: 'OPEN' })
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as { statusBusy: boolean }
-    expect(typeof vm.statusBusy).toBe('boolean')
-  })
-
-  it('③ 無 YEAR_END_FINALIZE 權限 → 不顯示任何狀態機按鈕', async () => {
-    mockHasPermission.mockReturnValue(false)
-    setupApiMocks([makeSettlement()], { status: 'OPEN' })
-
-    const wrapper = await mountView()
-
-    expect(wrapper.find('[data-test="lock-cycle-button"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="reopen-open-button"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="reopen-locked-button"]').exists()).toBe(false)
-  })
 })
 
 /**

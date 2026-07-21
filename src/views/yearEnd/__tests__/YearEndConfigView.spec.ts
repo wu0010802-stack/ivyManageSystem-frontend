@@ -14,6 +14,7 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     postOrgSettings: vi.fn(),
     getClassTargets: vi.fn(),
     upsertClassTarget: vi.fn(),
+    upsertClassTargetsBatch: vi.fn(),
   }
 })
 
@@ -121,6 +122,7 @@ function stubSupportApis() {
 
 async function mountView() {
   const wrapper = mount(YearEndConfigView, {
+    props: { cycleId: 5 },
     global: {
       stubs: {
         'el-table': true,
@@ -281,6 +283,134 @@ describe('YearEndConfigView', () => {
       }),
     )
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalled()
+  })
+
+  // Task 8：「全部儲存」一次送出當前所有班級列（緩衝值），走批次端點
+  it('全部儲存呼叫 upsertClassTargetsBatch 帶當前所有列（含各列編輯後的值）', async () => {
+    const row10 = makeClassRow({ id: 10, classroom_id: 3, semester_first: true, head_count_target: 25 })
+    const row11 = makeClassRow({ id: 11, classroom_id: 4, semester_first: false, head_count_target: 22 })
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({
+      data: [row10, row11],
+    } as never)
+    vi.mocked(yearEndApi.upsertClassTargetsBatch).mockResolvedValue({
+      data: { succeeded_count: 2, failed: [] },
+    } as never)
+    stubSupportApis()
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      classEdits: Record<number, { head_count_target: number; head_teacher_employee_id: number | null; returning_student_rate: number; assistant_employee_id: number | null }>
+      saveAllClassTargets: () => Promise<void>
+    }
+
+    // Edit both rows in the buffer
+    vm.classEdits[10].head_count_target = 28
+    vm.classEdits[11].head_count_target = 30
+    await vm.saveAllClassTargets()
+    await nextTick()
+
+    expect(yearEndApi.upsertClassTargetsBatch).toHaveBeenCalledWith(
+      5,
+      expect.arrayContaining([
+        expect.objectContaining({
+          semester_first: true,
+          classroom_id: 3,
+          head_count_target: 28,
+          assistant_employee_id: null,
+        }),
+        expect.objectContaining({
+          semester_first: false,
+          classroom_id: 4,
+          head_count_target: 30,
+          assistant_employee_id: null,
+        }),
+      ]),
+    )
+    const callArgs = vi.mocked(yearEndApi.upsertClassTargetsBatch).mock.calls[0]
+    expect(callArgs[1]).toHaveLength(2)
+    expect(vi.mocked(ElMessage.success)).toHaveBeenCalled()
+  })
+
+  it('全部儲存有 failed 項目時顯示 ElMessage.warning 含 classroom 名稱與 reason', async () => {
+    const row10 = makeClassRow({ id: 10, classroom_id: 3, semester_first: true, head_count_target: 25 })
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({
+      data: [row10],
+    } as never)
+    vi.mocked(yearEndApi.upsertClassTargetsBatch).mockResolvedValue({
+      data: { succeeded_count: 0, failed: [{ classroom_id: 3, semester_first: true, reason: '週期已鎖定' }] },
+    } as never)
+    stubSupportApis()
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      classEdits: Record<number, { head_count_target: number }>
+      saveAllClassTargets: () => Promise<void>
+    }
+
+    vm.classEdits[10].head_count_target = 28
+    await vm.saveAllClassTargets()
+    await nextTick()
+
+    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith(
+      expect.stringContaining('大班A'),
+    )
+    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith(
+      expect.stringContaining('週期已鎖定'),
+    )
+  })
+
+  // 語意澄清（code review Important）：classEdits 由 loadClassTargets() 對每列無條件
+  // seed，故「全部儲存」不是「只送手動改過的列」，而是送當前所有已載入列的緩衝值
+  // （upsertClassTarget 為 upsert，對未變更列重寫同值屬 idempotent）。此測試証明：
+  // 只手動改其中一列，另一列仍原封不動被一併送出。
+  it('全部儲存送出當前所有載入的列（不論是否手動改過）', async () => {
+    const row10 = makeClassRow({ id: 10, classroom_id: 3, semester_first: true, head_count_target: 25 })
+    const row11 = makeClassRow({ id: 11, classroom_id: 4, semester_first: false, head_count_target: 22 })
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({
+      data: [row10, row11],
+    } as never)
+    vi.mocked(yearEndApi.upsertClassTargetsBatch).mockResolvedValue({
+      data: { succeeded_count: 2, failed: [] },
+    } as never)
+    stubSupportApis()
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      classEdits: Record<number, { head_count_target: number }>
+      saveAllClassTargets: () => Promise<void>
+    }
+
+    // 只手動改其中一列（row 10）；row 11 維持載入時 seed 的緩衝值，未被使用者碰過
+    vm.classEdits[10].head_count_target = 28
+    await vm.saveAllClassTargets()
+    await nextTick()
+
+    const callArgs = vi.mocked(yearEndApi.upsertClassTargetsBatch).mock.calls[0]
+    // 兩列都送出——證明「全部儲存」是送當前所有列，非僅送使用者手動改過的列
+    expect(callArgs[1]).toHaveLength(2)
+    expect(callArgs[1]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ classroom_id: 3, head_count_target: 28 }),
+        expect.objectContaining({ classroom_id: 4, head_count_target: 22 }),
+      ]),
+    )
+  })
+
+  it('classTargets 為空陣列時「全部儲存」不呼叫批次端點（early return）', async () => {
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+    stubSupportApis()
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { saveAllClassTargets: () => Promise<void> }
+
+    await vm.saveAllClassTargets()
+    await nextTick()
+
+    expect(yearEndApi.upsertClassTargetsBatch).not.toHaveBeenCalled()
   })
 
   // 兩處寫死「儲存失敗」改用 apiError 讀後端 detail（LOCKED/CLOSED 拒絕時使用者要看得到原因）

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
 import {
   listYearEndCycles,
@@ -14,7 +13,6 @@ import {
   signSupervisorBatch,
   signAccountingBatch,
   finalizeBatch,
-  updateCycleStatus,
   exportYearEndSummaryXlsxUrl,
   exportYearEndTransferRosterXlsxUrl,
   rejectSettlement,
@@ -23,7 +21,7 @@ import { rejectableStages, formatBatchFailures } from './settlementReject'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
-import { CYCLE_STATUS_TAG, cycleStatusLabel, SIGN_STATUS_TAG, SIGN_STATUS_ORDER, signStatusLabel } from '@/constants/appraisalYearEnd'
+import { SIGN_STATUS_TAG, SIGN_STATUS_ORDER, signStatusLabel } from '@/constants/appraisalYearEnd'
 import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
 import ProvenanceDrawer from './components/ProvenanceDrawer.vue'
 import type { ProvenanceKey } from './components/ProvenanceDrawer.vue'
@@ -42,9 +40,8 @@ interface ClassTarget {
 }
 interface YearEndCycle { id: number; academic_year: number; bonus_calc_date: string; status: string }
 
-const route = useRoute()
-const router = useRouter()
-const cycleId = Number(route.params.id)
+const props = defineProps<{ cycleId: number }>()
+const cycleId = props.cycleId
 
 const cycle = ref<YearEndCycle | null>(null)
 const settlements = ref<Settlement[]>([])
@@ -231,67 +228,11 @@ async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
   }
 }
 
-// ── Task 11③：週期狀態轉換（OPEN→LOCKED→CLOSED；亦允許倒退救援）────────────
-// 自 YearEndListView（Task 10 瘦身時移出）搬入本頁 header；單週期頁故
-// statusBusy 簡化為單一 ref（不再是 Task 10 原本的 per-row Record<id, boolean>）。
-const canFinalize = computed(() => hasPermission('YEAR_END_FINALIZE'))
-const statusBusy = ref(false)
-
-async function transitionStatus(newStatus: 'OPEN' | 'LOCKED' | 'CLOSED', confirmMessage: string) {
-  if (!cycle.value) return
-  try {
-    await ElMessageBox.confirm(confirmMessage, '確認狀態變更', { type: 'warning' })
-  } catch {
-    return // 使用者按取消
-  }
-  statusBusy.value = true
-  try {
-    await updateCycleStatus(cycle.value.id, { status: newStatus })
-    ElMessage.success('週期狀態已更新')
-    await load()
-  } catch (e) {
-    ElMessage.error(apiError(e, '狀態更新失敗'))
-  } finally {
-    statusBusy.value = false
-  }
-}
-
-function lockCycle() {
-  return transitionStatus('LOCKED', `確定要鎖定「${cycle.value?.academic_year} 學年度」週期嗎？鎖定後將無法再自動重新試算。`)
-}
-
-// Task 11③：封存前置檢核 —— 尚有結算單未核定（FINALIZED）時直接阻擋，不進入 confirm 流程。
-async function closeCycle() {
-  const notFinalized = settlements.value.filter((s) => s.status !== 'FINALIZED')
-  if (notFinalized.length > 0) {
-    ElMessageBox.alert(
-      `尚有 ${notFinalized.length} 筆結算單未核定（FINALIZED），無法封存。請先完成簽核。`,
-      '無法封存',
-      { type: 'error' },
-    )
-    return
-  }
-  return transitionStatus('CLOSED', `封存前請確認：此週期所有結算單須全數核定（FINALIZED）。確定要封存「${cycle.value?.academic_year} 學年度」週期嗎？`)
-}
-function reopenToLocked() {
-  return transitionStatus('LOCKED', `確定要將「${cycle.value?.academic_year} 學年度」退回鎖定狀態嗎？（救援用途）`)
-}
-function reopenToOpen() {
-  return transitionStatus('OPEN', `確定要將「${cycle.value?.academic_year} 學年度」退回開放狀態嗎？（救援用途）`)
-}
-
 onMounted(load)
 </script>
 
 <template>
   <div class="ye-detail">
-    <el-page-header @back="router.back()" content="年終獎金明細" />
-    <div v-if="cycle" class="meta">
-      <strong>{{ cycle.academic_year }} 學年度</strong> ｜
-      基準日 {{ cycle.bonus_calc_date }} ｜
-      <el-tag :type="CYCLE_STATUS_TAG[cycle.status] || 'info'" size="small">{{ cycleStatusLabel(cycle.status) }}</el-tag>
-    </div>
-
     <!-- Task 11②：頂部簽核進度列，counts 由已載入 settlements 本地聚合 -->
     <SignProgressBar :counts="settlementCounts" class="sign-progress-wrap" />
 
@@ -299,36 +240,6 @@ onMounted(load)
       <el-button :icon="Refresh" @click="load">重新載入</el-button>
       <el-button :icon="Download" tag="a" :href="exportYearEndSummaryXlsxUrl(cycleId)">年終獎金總表</el-button>
       <el-button :icon="Download" tag="a" :href="exportYearEndTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
-
-      <!-- Task 11③：週期狀態機（自 YearEndListView 搬入），須 YEAR_END_FINALIZE 權限 -->
-      <template v-if="canFinalize && cycle">
-        <el-button
-          v-if="cycle.status === 'OPEN'"
-          type="warning"
-          :loading="statusBusy"
-          data-test="lock-cycle-button"
-          @click="lockCycle"
-        >鎖定</el-button>
-        <template v-else-if="cycle.status === 'LOCKED'">
-          <el-button
-            type="primary"
-            :loading="statusBusy"
-            data-test="close-cycle-button"
-            @click="closeCycle"
-          >封存</el-button>
-          <el-button
-            :loading="statusBusy"
-            data-test="reopen-open-button"
-            @click="reopenToOpen"
-          >退回開放</el-button>
-        </template>
-        <el-button
-          v-else-if="cycle.status === 'CLOSED'"
-          :loading="statusBusy"
-          data-test="reopen-locked-button"
-          @click="reopenToLocked"
-        >退回鎖定</el-button>
-      </template>
     </div>
 
     <el-tabs v-model="tab">
@@ -520,7 +431,6 @@ onMounted(load)
 
 <style scoped>
 .ye-detail { padding: var(--space-4); }
-.meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; display: flex; align-items: center; gap: var(--space-2); }
 .sign-progress-wrap { margin: 0 0 var(--space-3); }
 .toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .batch-bar { margin: 0 0 var(--space-2); display: flex; align-items: center; gap: var(--space-2); font-size: 13px; }

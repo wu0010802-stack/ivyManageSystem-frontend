@@ -73,7 +73,7 @@ describe('OverviewWorkbenchView', () => {
     await flushPromises()
     expect(w.text()).toContain('草稿 10')
     expect(w.text()).toContain('已核定 2 / 共 20')
-    expect(w.text()).toContain('待簽核 1') // grid 2 列中 1 列非 FINALIZED
+    expect(w.text()).toContain('尚未核定 1 筆') // grid 2 列中 1 列非 FINALIZED
     expect(w.text()).toContain('例外待辦')
     expect(w.text()).toContain('考核 0 筆 / 年終 1 筆')
   })
@@ -83,7 +83,7 @@ describe('OverviewWorkbenchView', () => {
     const w = mountView()
     await flushPromises()
     expect(w.find('[data-test="appraisal-card"]').text()).toContain('載入失敗')
-    expect(w.find('[data-test="year-end-card"]').text()).toContain('待簽核')
+    expect(w.find('[data-test="year-end-card"]').text()).toContain('尚未核定')
   })
 
   it('無 APPRAISAL_READ 權限 → 不渲染考核卡，其餘卡仍渲染', async () => {
@@ -103,18 +103,20 @@ describe('OverviewWorkbenchView', () => {
     expect(w.findAll('.wb-card').length).toBe(0)
   })
 
-  it('年終週期 status=OPEN 時，年終卡排在考核卡之前', async () => {
+  it('固定卡序：即使年終週期 status=OPEN，考核卡仍排在年終卡之前（不再依狀態換位）', async () => {
     const w = mountView()
     await flushPromises()
     const cards = w.findAll('.wb-card')
-    expect(cards[0].attributes('data-test')).toBe('year-end-card')
-    expect(cards[1].attributes('data-test')).toBe('appraisal-card')
+    expect(cards[0].attributes('data-test')).toBe('appraisal-card')
+    expect(cards[1].attributes('data-test')).toBe('year-end-card')
   })
 
-  it('發放卡顯示可發放筆數與合計金額', async () => {
+  it('發放卡預覽為空時顯示真空狀態（非「可發放 0 筆」文案）', async () => {
     const w = mountView()
     await flushPromises()
-    expect(w.find('[data-test="payout-card"]').text()).toContain('可發放 0 筆')
+    const card = w.find('[data-test="payout-card"]')
+    expect(card.text()).toContain('本年度尚無可發放的考核年終')
+    expect(card.text()).not.toContain('可發放 0 筆')
   })
 
   // ── 根把手（父層 Promise.allSettled）失敗顯式化：不得誤顯「尚未建立」空狀態 ──
@@ -127,7 +129,7 @@ describe('OverviewWorkbenchView', () => {
     expect(card.text()).toContain('載入失敗')
     expect(card.text()).toContain('重試')
     expect(card.text()).not.toContain('尚未建立考核週期')
-    expect(w.find('[data-test="year-end-card"]').text()).toContain('待簽核 1')
+    expect(w.find('[data-test="year-end-card"]').text()).toContain('尚未核定 1 筆')
   })
 
   it('年終根把手載入失敗 → 年終卡顯示載入失敗＋重試（非空狀態文案），考核卡照常', async () => {

@@ -16,6 +16,12 @@ export const updateCycleStatus = (
 ): AxiosResp<'/year_end/cycles/{cycle_id}', 'patch'> =>
   api.patch(`/year_end/cycles/${cycleId}`, data)
 
+/** 工作區左導軌用的唯讀進度彙總（設定缺漏數/試算筆數/未匹配數/待簽核數/已核定數）。 */
+export const getCycleProgress = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/progress', 'get'> =>
+  api.get(`/year_end/cycles/${cycleId}/progress`)
+
 // ============ Org Year Settings ============
 
 export const listOrgYearSettings = (cycleId: number) =>
@@ -160,6 +166,16 @@ export const upsertClassTarget = (
   data: ApiBody<'/year_end/cycles/{cycle_id}/class_targets', 'post'>,
 ): AxiosResp<'/year_end/cycles/{cycle_id}/class_targets', 'post'> =>
   api.post(`/year_end/cycles/${cycleId}/class_targets`, data)
+
+/**
+ * 批次 upsert 多列班級編制（部分成功；guard 一次、逐列套用）。
+ * 供設定頁「全部儲存」使用，取代逐列呼叫 `upsertClassTarget`。
+ */
+export const upsertClassTargetsBatch = (
+  cycleId: number,
+  items: ApiBody<'/year_end/cycles/{cycle_id}/class_targets/batch', 'post'>['items'],
+): AxiosResp<'/year_end/cycles/{cycle_id}/class_targets/batch', 'post'> =>
+  api.post(`/year_end/cycles/${cycleId}/class_targets/batch`, { items })
 
 // ============ Appraisal Payout ============
 

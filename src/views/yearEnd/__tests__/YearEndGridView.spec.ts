@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { nextTick, defineComponent, h } from 'vue'
+import { nextTick, defineComponent, h, Fragment } from 'vue'
 import YearEndGridView from '../YearEndGridView.vue'
+import { BONUS_COL_KEYS, loadVisibleBonusCols } from '../gridColumns'
 
 vi.mock('@/api/yearEnd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/yearEnd')>()
@@ -76,6 +77,7 @@ function makeRow(overrides: Partial<GridRow> = {}): GridRow {
 
 async function mountView() {
   const wrapper = mount(YearEndGridView, {
+    props: { cycleId: 7 },
     global: {
       stubs: {
         'el-table': true,
@@ -92,6 +94,16 @@ async function mountView() {
         'el-alert': true,
         'el-descriptions': true,
         'el-descriptions-item': true,
+        // Task 4（批次2b-1）：GridRowDetailDrawer 是真元件子節點（非 GridView 自己的
+        // template），它內部用到的 el-drawer/el-input 這裡也要 stub，否則會有
+        // 「Failed to resolve component」的噪音警告（el-tag/el-button/el-form/
+        // el-form-item/el-input-number 上面已涵蓋，tree-wide stub 對子元件同樣生效）。
+        'el-drawer': true,
+        'el-input': true,
+        // Task 7（批次2b-2）：GridRowDetailDrawer 新增「怎麼算的」下鑽用到
+        // el-skeleton/el-empty，同上理由 stub。
+        'el-skeleton': true,
+        'el-empty': true,
       },
     },
   })
@@ -294,124 +306,53 @@ describe('YearEndGridView', () => {
     expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith('某筆超額獎金已被手動覆寫，未隨試算更新')
   })
 
-  // Case 3: manual edit dialog patches and reloads (user sets deduction → IS sent)
-  it('manual edit dialog patches settlement and reloads', async () => {
+  // Task 4（批次2b-1）：手改 dialog（openEdit/submitEdit/editForm）已整支移除，
+  // 就地編輯的預填/diff-only 送出邏輯改由 GridRowDetailDrawer 承接，完整覆蓋見
+  // GridRowDetailDrawer.spec.ts。這裡只驗證 grid 層「開抽屜」的接線本身。
+  it('openDrawer(row) 設定 drawerRow/drawerVisible，供「明細」按鈕觸發', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
       data: [makeRow()],
-    } as never)
-    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
-      data: {},
     } as never)
 
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
       rows: GridRow[]
-      openEdit: (row: GridRow) => void
-      submitEdit: () => Promise<void>
-      editForm: {
-        deduction_disciplinary: number | null
-        excess_amount: number | null
-        hire_months_override: number | null
-        remark: string | null
-      }
+      drawerVisible: boolean
+      drawerRow: GridRow | null
+      openDrawer: (row: GridRow) => void
     }
 
-    // Open edit for the first DRAFT row
-    vm.openEdit(vm.rows[0])
+    expect(vm.drawerVisible).toBe(false)
+    expect(vm.drawerRow).toBeNull()
+
+    vm.openDrawer(vm.rows[0])
     await nextTick()
 
-    // Set deduction (user explicitly enters -6000)
-    vm.editForm.deduction_disciplinary = -6000
+    expect(vm.drawerVisible).toBe(true)
+    expect(vm.drawerRow).toBe(vm.rows[0])
+  })
 
-    // Submit
-    await vm.submitEdit()
+  // 明細抽屜 @saved 觸發 loadGrid 重新載入（取代舊 submitEdit 內直接 await loadGrid()）。
+  it('drawer 的 saved 事件觸發 loadGrid 重新載入 grid', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow()],
+    } as never)
+
+    const wrapper = await mountView()
+    const drawer = wrapper.findComponent({ name: 'GridRowDetailDrawer' })
+    expect(drawer.exists()).toBe(true)
+
+    drawer.vm.$emit('saved')
     await nextTick()
 
-    // When user sets a value, it IS sent
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({ deduction_disciplinary: -6000 })
-    )
-    // getYearEndGrid called on mount + after patch = 2 times
+    // mount 的 initGrid 一次 + saved 事件觸發一次 = 2 次
     expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
   })
 
-  it('manual edit can update remark without touching amount fields', async () => {
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({
-      data: [makeRow({ remark: '舊備註' })],
-    } as never)
-    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
-      data: {},
-    } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      rows: GridRow[]
-      openEdit: (row: GridRow) => void
-      submitEdit: () => Promise<void>
-      editForm: {
-        deduction_disciplinary: number | null
-        excess_amount: number | null
-        hire_months_override: number | null
-        remark: string | null
-      }
-    }
-
-    vm.openEdit(vm.rows[0])
-    await nextTick()
-    expect(vm.editForm.remark).toBe('舊備註')
-
-    vm.editForm.remark = '114.08 到職'
-    await vm.submitEdit()
-    await nextTick()
-
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { remark: '114.08 到職' })
-  })
-
-  // Case 5: manual patch omits untouched deduction/excess (no silent zero-wipe)
-  it('manual patch omits untouched deduction/excess (no silent zero-wipe)', async () => {
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({
-      data: [makeRow()],
-    } as never)
-    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
-      data: {},
-    } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      rows: GridRow[]
-      openEdit: (row: GridRow) => void
-      submitEdit: () => Promise<void>
-      editForm: { deduction_disciplinary: number | null; excess_amount: number | null; hire_months_override: number | null }
-    }
-
-    // Open edit for a DRAFT row
-    vm.openEdit(vm.rows[0])
-    await nextTick()
-
-    // Only set hire_months_override — leave deduction/excess untouched (null)
-    expect(vm.editForm.deduction_disciplinary).toBeNull()
-    expect(vm.editForm.excess_amount).toBeNull()
-    vm.editForm.hire_months_override = 8
-
-    // Submit
-    await vm.submitEdit()
-    await nextTick()
-
-    expect(api.manualPatchSettlement).toHaveBeenCalledOnce()
-    const arg = vi.mocked(api.manualPatchSettlement).mock.calls[0]![1]
-
-    // hire_months_override IS sent
-    expect(arg).toHaveProperty('hire_months_override', 8)
-
-    // deduction_disciplinary and excess_amount must NOT be in the payload at all
-    // (so backend keeps its prior persisted value — no silent zero-wipe)
-    expect('deduction_disciplinary' in arg).toBe(false)
-    expect('excess_amount' in arg).toBe(false)
-  })
-
-  // Case 4: finalized row hides manual edit button
-  it('exposes canWrite=true but FINALIZED row must not show edit button (vm check)', async () => {
+  // Case 4（改版）：「明細」按鈕不再受 DRAFT 狀態或 canWrite 限制——所有 status
+  // 皆可開抽屜看 breakdown，就地編輯區的顯示/隱藏改由 GridRowDetailDrawer 內部
+  // canEdit 負責（見 GridRowDetailDrawer.spec.ts），grid 層不再需要重複這道判斷。
+  it('FINALIZED row 仍可 openDrawer（明細按鈕不受狀態限制）', async () => {
     const finalizedRow = makeRow({ status: 'FINALIZED', settlement_id: 99 })
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
       data: [finalizedRow],
@@ -420,18 +361,26 @@ describe('YearEndGridView', () => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
       rows: GridRow[]
-      canWrite: boolean
+      drawerVisible: boolean
+      drawerRow: GridRow | null
+      openDrawer: (row: GridRow) => void
     }
 
-    expect(vm.rows[0].status).toBe('FINALIZED')
-    // canWrite is true (mocked), but template guards with `row.status === 'DRAFT' && canWrite`
-    // we verify the DRAFT condition is false → button should NOT render
-    expect(vm.rows[0].status === 'DRAFT' && vm.canWrite).toBe(false)
+    vm.openDrawer(vm.rows[0])
+    await nextTick()
+
+    expect(vm.drawerVisible).toBe(true)
+    expect(vm.drawerRow?.status).toBe('FINALIZED')
   })
 })
 
-// ── Task 9：進頁自動 build（依 cycle 狀態 + canWrite）─────────────────────
-describe('YearEndGridView 進頁自動 build（Task 9）', () => {
+// ── Task 5（批次2b-1）：移除進頁 auto-build，改顯式「開始試算」CTA ──────────
+// 原 Task 9「進頁自動 build（依 cycle 狀態 + canWrite）」已整支移除：進頁一律只
+// loadGrid，不再自動呼叫 buildSettlements（避免非預期的 DB 寫入/封存/覆寫）。
+// 以下沿用原 Task 9 對 cycleStatus 判斷（LOCKED/CLOSED/無權限/清單載入失敗）的
+// 迴歸覆蓋——這些情境下行為現在一致（一律不 build），但 cycleStatus 派生邏輯本身
+// （供 banner/CTA 顯示條件使用）仍值得個別驗證。
+describe('YearEndGridView 進頁不自動試算，改顯式「開始試算」CTA（Task 5，批次2b-1）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(hasPermission).mockReturnValue(true)
@@ -440,28 +389,51 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     } as never)
   })
 
-  it('OPEN + canWrite：mount 時 buildSettlements 在 getYearEndGrid 之前被呼叫', async () => {
-    const callOrder: string[] = []
-    vi.mocked(api.buildSettlements).mockImplementationOnce(async () => {
-      callOrder.push('build')
-      return {
-        data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
-      } as never
-    })
-    vi.mocked(api.getYearEndGrid).mockImplementationOnce(async () => {
-      callOrder.push('grid')
-      return { data: [makeRow()] } as never
-    })
+  it('OPEN + canWrite：mount 時不自動呼叫 buildSettlements，只 loadGrid（避免非預期 DB 寫入）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
-    await mountView()
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[]; cycleStatus: string | null }
 
-    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
-    expect(callOrder).toEqual(['build', 'grid'])
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+    expect(vm.cycleStatus).toBe('OPEN')
   })
 
-  // 年終批次2 G2：後端 build-settlements 現在對 LOCKED cycle 一律拒絕（cycle_guard），
-  // 故前端不應再對 LOCKED cycle 自動觸發 build——這與舊行為（LOCKED 仍視為 buildable）相反。
-  it('LOCKED + canWrite：後端現一律拒絕 build（cycle_guard），mount 時不觸發 buildSettlements', async () => {
+  // 開始試算 CTA 點擊 → 開啟確認 dialog（buildDialogVisible）→ 確認（onBuild）→
+  // buildSettlements 才被呼叫。el-dialog 為全域 auto-stub（'el-dialog': true），不會
+  // 渲染其 footer 內容，故「確認」動作沿用本檔既有慣例改直接呼叫 vm.onBuild()
+  // （見下方既有其他 onBuild 測試案），等同模擬使用者點下 dialog 內「確認試算」。
+  it('開始試算 CTA：點擊開啟確認 dialog，確認後才呼叫 buildSettlements', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      buildDialogVisible: boolean
+      onBuild: () => Promise<void>
+    }
+
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+
+    const button = wrapper.find('[data-test="build-button"]')
+    expect(button.exists()).toBe(true)
+
+    await button.trigger('click')
+    expect(vm.buildDialogVisible).toBe(true)
+    // 只是開啟確認 dialog，尚未真正觸發試算
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+
+    // 確認（模擬點擊 dialog 內「確認試算」）
+    await vm.onBuild()
+
+    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
+  })
+
+  it('LOCKED：mount 時不呼叫 buildSettlements（進頁本就不再自動試算），cycleStatus 正確派生供 banner 使用', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'LOCKED' }],
     } as never)
@@ -503,21 +475,6 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(vm.rows).toHaveLength(1)
   })
 
-  it('buildSettlements reject 時仍 loadGrid（靜默降級，不噴錯誤訊息）', async () => {
-    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('build failed'))
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as { rows: GridRow[] }
-
-    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
-    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
-    expect(vm.rows).toHaveLength(1)
-    // 靜默降級：不彈 dialog、不顯示訊息
-    expect(vi.mocked(ElMessage.error)).not.toHaveBeenCalled()
-    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
-  })
-
   it('listYearEndCycles 失敗時 fail-closed：不 build，仍 loadGrid（不白屏，狀態未知不重算）', async () => {
     vi.mocked(api.listYearEndCycles).mockRejectedValue(new Error('network error'))
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
@@ -548,13 +505,20 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(vm.cycleStatus).toBeNull()
   })
 
-  it('toolbar 於試算後顯示「最後試算」與格式化時間（HH:MM）', async () => {
+  it('toolbar 於手動試算後才顯示「最後試算」與格式化時間（HH:MM）；mount 時尚未出現', async () => {
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
     } as never)
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
     const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    // 進頁不再自動試算，「最後試算」時間戳只在手動試算成功後才出現
+    expect(wrapper.find('[data-test="last-built-at"]').exists()).toBe(false)
+
+    await vm.onBuild()
+    await nextTick()
 
     const el = wrapper.find('[data-test="last-built-at"]')
     expect(el.exists()).toBe(true)
@@ -562,7 +526,7 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(el.text()).toMatch(/\d{2}:\d{2}/)
   })
 
-  it('手動「↻ 重新試算」按鈕維持現狀（onBuild 邏輯不受 initGrid 影響）', async () => {
+  it('手動「開始試算」CTA 觸發 onBuild 邏輯不受 initGrid 影響（不再自動試算）', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 3, skipped_finalized: 1, unmatched_count: 0, fallback_classes: 0, warnings: [] },
@@ -571,7 +535,7 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
 
-    // mount 已自動觸發一次 build + loadGrid；手動再觸發一次
+    // mount 只 loadGrid 一次（不再自動 build）；手動觸發一次 onBuild
     await vm.onBuild()
     await nextTick()
 
@@ -586,6 +550,24 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
 // 頂層 mountView() 的 true-stub 不會呼叫 scoped slot，只能驗證 vm 狀態。比照
 // YearEndDetailView.spec.ts／InstitutionEventPanel.spec.ts 慣例另開一個會真渲染
 // slot 的 mount helper，只給本區塊「渲染內容」相關案例用。
+// Task 3（批次2b-1）：獎金欄改條件渲染（v-for over visibleBonusColumns，長度可能為 0）
+// 後，Vue 編譯器把帶 v-for 的元件子節點包成單一 Fragment vnode（.children 才是真正
+// 逐項的 el-table-column vnode 陣列）。原本 slots.default() 攤平邏輯只認頂層 vnode，
+// 直接把 Fragment 整個當一個 vnode 轉送給 h(vnode.type, { data, ... })——data 這個
+// prop 因此從未落到 Fragment 內真正的各個 el-table-column 子 vnode 上（Fragment 不會
+// 像元件一樣把 props 轉發給 children），造成 v-for 產生的欄位縱使數量對了、內容卻是
+// 空的（ElTableColumnStubEx 的 data prop 退回宣告的 default: []）。normalize() 遞迴
+// 展開 Fragment，讓 data 能正確轉送到每個實際欄位 vnode。
+function normalizeColumnVnodes(vnodes: unknown[]): { type: unknown; props: Record<string, unknown> | null; children: unknown }[] {
+  return vnodes.flatMap((vnode) => {
+    const v = vnode as { type: unknown; props: Record<string, unknown> | null; children: unknown }
+    if (v.type === Fragment) {
+      return normalizeColumnVnodes(Array.isArray(v.children) ? v.children : [])
+    }
+    return [v]
+  })
+}
+
 const ElTableStubEx = defineComponent({
   name: 'ElTableStubEx',
   props: { data: { type: Array, default: () => [] } },
@@ -593,7 +575,7 @@ const ElTableStubEx = defineComponent({
     return () => h(
       'div',
       { class: 'el-table' },
-      (slots.default?.() || []).map((vnode, index) =>
+      normalizeColumnVnodes(slots.default?.() || []).map((vnode, index) =>
         // @ts-expect-error TODO(ts-strict): 測試 stub 需要動態轉發任意 vnode.props，型別無法精準表達
         h(vnode.type, { ...(vnode.props ?? {}), data: props.data, key: index }, vnode.children),
       ),
@@ -643,6 +625,7 @@ const ElButtonStubEx = defineComponent({
 
 async function mountViewWithTable() {
   const wrapper = mount(YearEndGridView, {
+    props: { cycleId: 7 },
     global: {
       stubs: {
         'el-table': ElTableStubEx,
@@ -658,6 +641,12 @@ async function mountViewWithTable() {
         'el-form': true,
         'el-form-item': true,
         'el-input-number': true,
+        // Task 4（批次2b-1）：GridRowDetailDrawer 子節點內部用到，見 mountView() 同款註解。
+        'el-drawer': true,
+        'el-input': true,
+        // Task 7（批次2b-2）：同上，見 mountView() 同款註解。
+        'el-skeleton': true,
+        'el-empty': true,
       },
     },
   })
@@ -667,7 +656,7 @@ async function mountViewWithTable() {
   return wrapper
 }
 
-describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失敗降級 banner）', () => {
+describe('YearEndGridView（Task 12：展開列修 404／build 摘要列；Task 5：開始試算 CTA／空 grid 引導）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(hasPermission).mockReturnValue(true)
@@ -691,62 +680,19 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     expect(pushMock).not.toHaveBeenCalled()
   })
 
-  it('expandFields(row) 攤平主結算/動態獎金/合計/狀態/備註為 label-value pairs（formatCurrency 原始精度顯示）', async () => {
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({
-      data: [makeRow({ remark: '114.08 到職' })],
-    } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      rows: GridRow[]
-      expandFields: (row: GridRow) => { label: string; value: string }[]
-    }
-
-    const fields = vm.expandFields(vm.rows[0]!)
-    const byLabel = Object.fromEntries(fields.map((f) => [f.label, f.value]))
-
-    // formatCurrency 不四捨五入（跟主表 moneyInt 不同——展開列供稽核核對用原始精度）
-    expect(byLabel['主結算']).toBe('NT$29,044.71')
-    expect(byLabel['考核上']).toBe('NT$3,312')
-    expect(byLabel['超額']).toBe('NT$2,000')
-    expect(byLabel['合計']).toBe('NT$40,106.71')
-    expect(byLabel['狀態']).toBe('草稿')
-    expect(byLabel['備註']).toBe('114.08 到職')
-  })
-
-  // 審查修繕（Important）：Element Plus 內部欄位排序（watcher.mjs）會把所有 fixed:left
-  // 欄放最前、不保留模板宣告順序——expand 欄若未 fixed，實際渲染會被重排到姓名欄
-  // （fixed="left"）之後；且本表欄寬總和 ~1767px 必觸發橫向捲動，未 fixed 的 expand 欄
-  // 捲動後會滾出視窗，使用者失去展開把手。expand 欄必須帶 fixed="left" 併入 fixed 群組。
-  it('展開欄（type=expand）帶 fixed="left"，避免被 Element Plus 重排到姓名欄後與橫向捲動流失', async () => {
+  // Task 3（批次2b-1）：expand 欄已移除（改列內就地展開讓位給明細抽屜，Task 4 承接），
+  // el-table 不再渲染 type="expand" 欄。原 expandFields()/ExpandField（Task 12①
+  // 的展開列攤平邏輯）已於 code review 折入修時整支刪除——Task 4 的
+  // GridRowDetailDrawer 是自建 specialBonusItems，從未沿用這支函式，留著只是
+  // 死碼＋誤導註解（見 GridRowDetailDrawer.vue 的 specialBonusItems computed）。
+  it('el-table 不再渲染 expand 欄（改摘要表 + 明細另由 Task 4 抽屜承接）', async () => {
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
     } as never)
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
     const wrapper = await mountViewWithTable()
-    const expandCol = wrapper.find('[data-test="expand-column"]')
-    expect(expandCol.exists()).toBe(true)
-    expect(expandCol.attributes('type')).toBe('expand')
-    expect(expandCol.attributes('fixed')).toBe('left')
-  })
-
-  it('展開列（type=expand）實際渲染 el-descriptions，內容含主結算/合計/備註', async () => {
-    vi.mocked(api.buildSettlements).mockResolvedValue({
-      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
-    } as never)
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({
-      data: [makeRow({ remark: '114.08 到職' })],
-    } as never)
-
-    const wrapper = await mountViewWithTable()
-    const text = wrapper.text()
-
-    expect(text).toContain('主結算')
-    expect(text).toContain('NT$29,044.71')
-    expect(text).toContain('合計')
-    expect(text).toContain('NT$40,106.71')
-    expect(text).toContain('114.08 到職')
+    expect(wrapper.find('[data-test="expand-column"]').exists()).toBe(false)
   })
 
   // 案②：buildSettlements 回傳現在只彈一次 ElMessage——改為頁頂常駐摘要列，
@@ -776,42 +722,39 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 5 筆，略過已簽 2 筆')
   })
 
-  // 案③：進頁自動 build 的 catch 原本完全靜默（不彈 dialog、不顯示訊息）；
-  // 改為顯示 stale banner，既有靜默（不噴 ElMessage）行為不變——只改「失敗回饋」。
-  it('進頁自動 build 失敗 → 顯示 stale banner（非靜默），仍不噴 ElMessage', async () => {
-    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('build failed'))
+  // Task 5（批次2b-1）：原「進頁自動 build 失敗 → stale banner」（buildFailed/
+  // buildFailedDescription）已隨 auto-build 整支移除——進頁不再自動試算，自然不會
+  // 有「自動試算失敗」這種狀態，兩個舊測試案（stale banner／buildFailedDescription
+  // 曾成功試算過文案）已隨之刪除，不再適用。
+
+  // Task 5：CTA 文案改「開始試算」（原「↻ 重新試算」），OPEN + canWrite 才顯示。
+  it('開始試算 CTA：文案為「開始試算」', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
     const wrapper = await mountViewWithTable()
-    const vm = wrapper.vm as unknown as { buildFailed: boolean }
+    const button = wrapper.find('[data-test="build-button"]')
 
-    expect(vm.buildFailed).toBe(true)
-    const banner = wrapper.find('[data-test="build-failed-banner"]')
-    expect(banner.exists()).toBe(true)
-    expect(banner.text()).toContain('自動試算失敗，目前顯示上次試算資料')
-    // 尚未成功試算過（第一次就失敗）→ fallback 文案
-    expect(banner.text()).toContain('尚無成功試算紀錄')
-
-    // 既有靜默降級行為不變：仍不噴 ElMessage.error / warning
-    expect(vi.mocked(ElMessage.error)).not.toHaveBeenCalled()
-    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toBe('開始試算')
   })
 
-  it('buildFailedDescription：曾成功試算過時改顯示最後成功時間（非 fallback 文案）', async () => {
+  // Task 5：進頁不再自動試算，尚未試算過（rows 為空）時明確引導使用者點「開始試算」。
+  it('空 grid（未試算過）+ OPEN + canWrite：顯示「尚未試算」引導文字', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const hint = wrapper.find('[data-test="empty-grid-hint"]')
+
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('尚未試算')
+    expect(hint.text()).toContain('開始試算')
+  })
+
+  it('已有結算資料（rows 非空）：不顯示空 grid 引導', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
-    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('x'))
 
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      buildFailedDescription: string
-      lastBuiltAt: Date | null
-    }
-
-    expect(vm.buildFailedDescription).toContain('尚無成功試算紀錄')
-
-    vm.lastBuiltAt = new Date(2026, 0, 1, 9, 30)
-    await nextTick()
-    expect(vm.buildFailedDescription).toMatch(/09:30/)
+    const wrapper = await mountViewWithTable()
+    expect(wrapper.find('[data-test="empty-grid-hint"]').exists()).toBe(false)
   })
 
   // 案④（非 TDD 三案，但同批修繕）：狀態 tag/標籤改用單一來源常數
@@ -827,5 +770,118 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
 
     const wrapper = await mountViewWithTable()
     expect(wrapper.text()).toContain('會計已簽')
+  })
+})
+
+// ── Task 3（批次2b-1）：grid 改 6 欄摘要表＋獎金欄位開關 chips ──────────────
+// 7 欄 + 9 個常駐獎金欄 ≈1767px 必橫捲；改預設全不顯示獎金欄（只 6 欄摘要：姓名/
+// 主結算/特別獎金合計/合計/狀態/操作，零橫捲），勾選表頭上方 chip 才插回該獎金欄，
+// 勾選狀態存 localStorage。
+//
+// 注意：ElTableColumnStubEx（見上方）只呼叫 slots.default（每列 cell 內容），不會
+// 渲染 label / #header——因此「欄位是否存在」改用兩種可靠訊號斷言：① 直接數
+// `.el-table-column-stub` 的渲染數量（等同實際欄數）② 該獎金欄唯一的金額字串是否
+// 出現在 grid-table 範圍內（chips 本身在 el-table 外，不會誤命中）。
+describe('YearEndGridView（Task 3：grid 6 欄摘要表＋獎金欄位開關 chips）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'OPEN' }],
+    } as never)
+  })
+
+  it('預設 visibleBonusCols 為空集合，主表只渲染 6 欄（零橫捲）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const vm = wrapper.vm as unknown as { visibleBonusCols: Set<string> }
+
+    expect(vm.visibleBonusCols.size).toBe(0)
+    // 姓名/主結算/特別獎金合計/合計/狀態/操作 = 6 欄，動態獎金欄 0 個
+    expect(wrapper.findAll('.el-table-column-stub')).toHaveLength(6)
+    // 該筆列的考核上金額（NT$3,312）不應出現在表格範圍內（欄位未渲染）
+    expect(wrapper.find('[data-test="grid-table"]').text()).not.toContain('NT$3,312')
+  })
+
+  it('特別獎金合計欄加總 special_bonuses 各項（3312+2000=5312）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const vm = wrapper.vm as unknown as {
+      rows: GridRow[]
+      specialBonusTotal: (row: GridRow) => number
+    }
+
+    expect(vm.specialBonusTotal(vm.rows[0]!)).toBe(5312)
+    expect(wrapper.find('[data-test="grid-table"]').text()).toContain('NT$5,312')
+  })
+
+  it('勾選 chip 後該獎金欄插回主表（7 欄），並持久化到 localStorage；再次勾選還原 6 欄', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const vm = wrapper.vm as unknown as {
+      visibleBonusCols: Set<string>
+      toggleBonusCol: (key: string) => void
+    }
+
+    vm.toggleBonusCol('APPRAISAL_HALF_BONUS_FIRST')
+    await nextTick()
+
+    expect(vm.visibleBonusCols.has('APPRAISAL_HALF_BONUS_FIRST')).toBe(true)
+    expect(wrapper.findAll('.el-table-column-stub')).toHaveLength(7)
+    expect(wrapper.find('[data-test="grid-table"]').text()).toContain('NT$3,312')
+    // 持久化：獨立重讀 localStorage（不透過 vm）驗證真的寫入，非僅記憶體 ref
+    expect(loadVisibleBonusCols().has('APPRAISAL_HALF_BONUS_FIRST')).toBe(true)
+
+    // 再點一次 toggle 回去
+    vm.toggleBonusCol('APPRAISAL_HALF_BONUS_FIRST')
+    await nextTick()
+
+    expect(vm.visibleBonusCols.has('APPRAISAL_HALF_BONUS_FIRST')).toBe(false)
+    expect(wrapper.findAll('.el-table-column-stub')).toHaveLength(6)
+    expect(loadVisibleBonusCols().has('APPRAISAL_HALF_BONUS_FIRST')).toBe(false)
+  })
+
+  it('mount 時讀取既有 localStorage 勾選狀態（跨頁/重整記得住）', async () => {
+    localStorage.setItem('ye-grid-visible-bonus-cols', JSON.stringify(['EXCESS_ENROLLMENT']))
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const vm = wrapper.vm as unknown as { visibleBonusCols: Set<string> }
+
+    expect(vm.visibleBonusCols.has('EXCESS_ENROLLMENT')).toBe(true)
+    expect(wrapper.findAll('.el-table-column-stub')).toHaveLength(7)
+  })
+
+  it('BONUS_COL_KEYS 9 個 key 各渲染一個 chip，label 對應中文標籤', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+
+    expect(BONUS_COL_KEYS).toHaveLength(9)
+    for (const key of BONUS_COL_KEYS) {
+      expect(wrapper.find(`[data-test="bonus-col-chip-${key}"]`).exists()).toBe(true)
+    }
+    expect(wrapper.findAll('[data-test^="bonus-col-chip-"]')).toHaveLength(9)
+
+    const chipsText = wrapper.find('[data-test="bonus-col-chips"]').text()
+    expect(chipsText).toContain('考核上')
+    expect(chipsText).toContain('其他')
+  })
+
+  it('el-table 不再有 max-height 以外的橫捲隱患：預設狀態下欄寬總和遠小於原本 ~1767px', async () => {
+    // 迴歸防線：6 欄的既有 width（120+130+140+145+110+200）遠小於原本 7+9 欄總和，
+    // 不需要真的量測 DOM 寬度，只需確認動態欄位為 0（見上方測試）＋欄數為 6 即可
+    // 代表零橫捲——此案僅作意圖說明，實際斷言已由「只渲染 6 欄」涵蓋，故此處只
+    // 再次確認 visibleBonusColumns 預設為空陣列（供 template v-for 直接消費）。
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const vm = wrapper.vm as unknown as { visibleBonusColumns: { key: string; label: string }[] }
+
+    expect(vm.visibleBonusColumns).toEqual([])
   })
 })

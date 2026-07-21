@@ -32,8 +32,10 @@ const CASES: Array<[string, string, Record<string, string>?]> = [
   ['/appraisal/settings', '/appraisal-year-end/rules/scoring'],
   ['/year_end/cycles', '/appraisal-year-end/year-end'],
   ['/year_end/cycles/5', '/appraisal-year-end/year-end/cycles/5'],
-  ['/year_end/cycles/5/grid', '/appraisal-year-end/year-end/cycles/5/grid'],
-  ['/year_end/cycles/5/config', '/appraisal-year-end/year-end/cycles/5/config'],
+  // 2026-07-21 工作區 shell 合併：grid/config 巢狀路由改 redirect 帶 step，
+  // 舊 legacy 頂層路徑會鏈式 redirect 兩次最終落在工作區 + ?step=
+  ['/year_end/cycles/5/grid', '/appraisal-year-end/year-end/cycles/5', { step: 'grid' }],
+  ['/year_end/cycles/5/config', '/appraisal-year-end/year-end/cycles/5', { step: 'config' }],
   ['/year-end/appraisal-payout?year=2026', '/appraisal-year-end/year-end/payout', { year: '2026' }],
 ]
 

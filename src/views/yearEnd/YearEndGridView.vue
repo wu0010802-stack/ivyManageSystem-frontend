@@ -1,21 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { friendlyError } from '@/utils/errorMessages'
-import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
-import { apiError } from '@/utils/error'
-import { money } from '@/utils/format'
-import { formatCurrency } from '@/utils/currency'
+import { getYearEndGrid, buildSettlements, listYearEndCycles } from '@/api/yearEnd'
+import { moneyInt } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
 import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
+import { BONUS_COL_KEYS, SPECIAL_BONUS_LABELS, loadVisibleBonusCols, saveVisibleBonusCols } from './gridColumns'
+import GridRowDetailDrawer from './components/GridRowDetailDrawer.vue'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
 
 // listYearEndCycles() 無單筆 cycle-by-id 端點，沿用 YearEndDetailView.vue 的
-// listYearEndCycles().find() 慣例；只取 grid 進頁 auto-build 判斷需要的最小欄位集。
+// listYearEndCycles().find() 慣例；只取 banner/CTA 顯示條件判斷需要的最小欄位集。
 interface YearEndCycleLite {
   id: number
   status: string
@@ -23,49 +21,33 @@ interface YearEndCycleLite {
 
 // F-2：總表金額統一顯示為整數元（僅顯示層四捨五入，row.* 原始資料值不動、
 // 送出/核對仍用原始精度）。「主結算」「合計」帶兩位小數與「考核上」「紅利上」
-// 等整數欄並列時視覺突兀，也讓欄寬更容易不夠而在小數點附近換行。
-// GridRowOut 的金額欄位（payable_amount / total_amount / special_bonuses[key]）
-// 是後端 Decimal 序列化的字串，先 Number() 轉換再四捨五入。null/'' 直接交給
-// money() 走既有「—」fallback（Number(null)===0 / Number('')===0 會誤判成
-// 有效值，故先排除）。
-const moneyInt = (val: unknown) => {
-  if (val == null || val === '') return money(val)
-  const n = Number(val)
-  return Number.isFinite(n) ? money(Math.round(n)) : money(val)
-}
+// 等整數欄並列時視覺突兀，也讓欄寬更容易不夠而在小數點附近換行。moneyInt 已
+// 收斂至 @/utils/currency（單一來源，Task 4 起 GridRowDetailDrawer 亦共用）。
 
-const SPECIAL_BONUS_LABELS: Record<string, string> = {
-  APPRAISAL_HALF_BONUS_FIRST: '考核上',
-  APPRAISAL_HALF_BONUS_SECOND: '考核下',
-  SEMESTER_DIVIDEND_FIRST: '紅利上',
-  SEMESTER_DIVIDEND_SECOND: '紅利下',
-  AFTER_CLASS_AWARD: '才藝鼓勵',
-  TEACHING_EXTRA: '教課獎勵',
-  EXCESS_ENROLLMENT: '超額',
-  FESTIVAL_DIFF: '節慶差額',
-  CUSTOM: '其他',
-}
+// SPECIAL_BONUS_LABELS 已收斂至 ./gridColumns（單一來源，Task 4 起
+// GridRowDetailDrawer 亦共用）。
 
 // Task 12④：狀態 tag/標籤改用單一來源常數（刪本地 STATUS_LABELS/STATUS_TAG_TYPE
 // 雙重定義——Task 1 已建立 @/constants/appraisalYearEnd 的 SIGN_STATUS_LABEL/
 // SIGN_STATUS_TAG，本檔原本各自維護一份，內容雖一致但屬未收斂的重複定義）。
 
-const route = useRoute()
-const cycleId = Number(route.params.id)
+const props = defineProps<{ cycleId: number }>()
+const cycleId = props.cycleId
 
 const rows = ref<GridRow[]>([])
 const loading = ref(false)
 
 const canWrite = computed(() => hasPermission('YEAR_END_WRITE'))
 
-// 進頁自動 build（Task 9）：cycle 狀態（判斷是否為封存 CLOSED）+ 最後一次觸發試算的
-// 本地時間戳。後端 BuildResultOut 無 timestamp，這裡只記「有嘗試過」，不代表一定成功
-// ——失敗走靜默降級（見 initGrid），手動「↻ 重新試算」按鈕維持現狀不受影響。
+// Task 5（批次2b-1）：cycle 狀態（判斷 OPEN/LOCKED/CLOSED）+ 最後一次成功試算的
+// 本地時間戳。後端 BuildResultOut 無 timestamp，這裡只記「有成功過」。進頁不再自動
+// build（原 Task 9 auto-build 已移除，避免非預期的 DB 寫入/封存/覆寫）——試算改由
+// 頁頂顯式「開始試算」CTA 觸發（見 onBuild）。
 const cycleStatus = ref<string | null>(null)
 const lastBuiltAt = ref<Date | null>(null)
 
-// Task 12②③：build 結果摘要（成功，取代「只彈一次 ElMessage」的常駐頁頂摘要列）與
-// 失敗降級提示（進頁自動試算失敗時不再完全靜默，改顯示 stale banner）。
+// Task 12②：build 結果摘要（取代「只彈一次 ElMessage」的常駐頁頂摘要列），手動試算
+// 成功後顯示。
 interface BuildSummary {
   built: number
   skipped_finalized: number
@@ -74,20 +56,18 @@ interface BuildSummary {
   warnings: string[]
 }
 const buildResult = ref<BuildSummary | null>(null)
-const buildFailed = ref(false)
 
 // ---- 重新試算 dialog ----
 const buildDialogVisible = ref(false)
 
-// ---- 手改 dialog ----
-const editVisible = ref(false)
-const editingRow = ref<GridRow | null>(null)
-const editForm = reactive({
-  deduction_disciplinary: null as number | null,
-  excess_amount: null as number | null,
-  hire_months_override: null as number | null,
-  remark: null as string | null,
-})
+// ---- 明細抽屜（Task 4：取代舊手改 dialog，見 GridRowDetailDrawer.vue）----
+const drawerVisible = ref(false)
+const drawerRow = ref<GridRow | null>(null)
+
+function openDrawer(row: GridRow) {
+  drawerRow.value = row
+  drawerVisible.value = true
+}
 
 // ---- Derived columns ----
 const bonusColumns = computed(() => {
@@ -106,6 +86,40 @@ const bonusColumns = computed(() => {
   }
   return ordered.map((key) => ({ key, label: SPECIAL_BONUS_LABELS[key] ?? key }))
 })
+
+// Task 3（批次2b-1）：獎金欄開關 chips——總表原本 7 欄＋9 個常駐獎金欄 ≈1767px 必橫捲，
+// 改預設全不顯示獎金欄（零橫捲摘要表），使用者勾選 chip 才插回該欄；勾選狀態存
+// localStorage（單一來源見 gridColumns.ts），重整/跨頁記得住。
+const visibleBonusCols = ref<Set<string>>(loadVisibleBonusCols())
+
+function toggleBonusCol(key: string) {
+  const next = new Set(visibleBonusCols.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  visibleBonusCols.value = next
+  saveVisibleBonusCols(next)
+}
+
+// 主表實際渲染的獎金欄：bonusColumns（資料裡實際出現過的 key）交集使用者已勾選
+// 顯示的 key（visibleBonusCols）——兩者都要滿足，未發放過的獎金種類不會因為使用者
+// 誤勾而生出空欄。
+const visibleBonusColumns = computed(() =>
+  bonusColumns.value.filter((col) => visibleBonusCols.value.has(col.key))
+)
+
+// 特別獎金合計：9 個常駐獎金欄摘要成單一欄，是摘要表零橫捲的關鍵——使用者要看
+// 細項才勾 chip 插回單欄，預設只看合計。金額為後端 Decimal 序列化字串，逐一
+// Number() 加總；row.special_bonuses 只含實際發放的 key，未發放的欄位不存在，
+// 視同 0（沿用既有 `?? 0` 慣例，見下方動態獎金欄 cell）。
+function specialBonusTotal(row: GridRow): number {
+  return Object.values(row.special_bonuses).reduce((sum: number, v) => sum + Number(v), 0)
+}
+function sortBySpecialBonusTotal(a: GridRow, b: GridRow) {
+  return specialBonusTotal(a) - specialBonusTotal(b)
+}
 
 const baseUrl = computed(() => api.defaults.baseURL || '/api')
 
@@ -152,42 +166,10 @@ const buildSummaryText = computed(() => {
   return `試算完成：${parts.join('、')}`
 })
 
-// Task 12③：stale banner 描述——曾成功試算過就顯示最後成功時間，否則給明確的
-// 「從未成功過」文案（lastBuiltAt 只在成功時寫入，見 initGrid/onBuild）。
-const buildFailedDescription = computed(() =>
-  lastBuiltAt.value
-    ? `最後成功試算時間 ${formatTime(lastBuiltAt.value)}`
-    : '尚無成功試算紀錄，目前顯示既有結算資料'
-)
-
-// Task 12①：原「展開」按鈕 push 到不存在的 /year_end/cycles/:id/settlements/:id
-// （本輪最嚴重的 404 硬傷）。改列內 expand（el-table-column type="expand"）就地
-// 展開，這裡把主結算全部欄位（含動態獎金欄，沿用 bonusColumns 既有定義）攤平成
-// label/value pairs 給 el-descriptions 用；金額改 formatCurrency（原始精度，供稽核
-// 核對），不用主表 moneyInt（顯示層四捨五入，見 F-2 註解）。
-interface ExpandField {
-  label: string
-  value: string
-}
-
-function expandFields(row: GridRow): ExpandField[] {
-  const fields: ExpandField[] = [
-    { label: '主結算', value: formatCurrency(row.payable_amount) },
-  ]
-  for (const col of bonusColumns.value) {
-    fields.push({ label: col.label, value: formatCurrency(row.special_bonuses[col.key] ?? 0) })
-  }
-  fields.push({ label: '合計', value: formatCurrency(row.total_amount) })
-  fields.push({ label: '狀態', value: (SIGN_STATUS_LABEL as Record<string, string>)[row.status] ?? row.status })
-  fields.push({ label: '備註', value: row.remark || '—' })
-  return fields
-}
-
-// Task 12②③共用：build 成功的副作用（記錄摘要 + 清 stale flag + 記時間戳）。
-// initGrid 的自動試算與 onBuild 的手動試算共用同一套「成功後怎麼辦」語意。
+// Task 12②：build 成功的副作用（記錄摘要 + 記時間戳）。手動「開始試算」CTA
+// （onBuild）觸發成功後套用此語意。
 function applyBuildSuccess(data: BuildSummary) {
   buildResult.value = data
-  buildFailed.value = false
   lastBuiltAt.value = new Date()
 }
 
@@ -196,39 +178,25 @@ async function loadGrid() {
   try {
     const res = await getYearEndGrid(cycleId)
     rows.value = res.data
-  } catch (e) {
-    ElMessage.error(friendlyError('總表載入失敗', e))
+  } catch {
+    ElMessage.error('總表載入失敗')
   } finally {
     loading.value = false
   }
 }
 
-// 進頁自動 build（Task 9）：**fail-closed** — 只在正向確認為 OPEN 狀態
-// 且可寫時才自動試算，再讀。
-// 後端 build-settlements 現在對 LOCKED cycle 一律拒絕（cycle_guard，年終批次2 G2
-// 週期鎖定），故僅 OPEN 才自動重算；一次網路抖動讓 listYearEndCycles 失敗
-// （.catch → []）或 cycleId 找不到時 cycleStatus 退為 null，若誤判為可重算會對
-// 已鎖定/封存 cycle 發出注定失敗的 build 請求。故狀態未知（null）/LOCKED/CLOSED
-// 一律跳過只 loadGrid。
+// Task 5（批次2b-1）：進頁不再自動 build（原 Task 9 auto-build 已移除）——只讀
+// cycle 狀態供 banner/CTA 顯示條件判斷，再載入現有結算資料；試算一律改由使用者
+// 主動點頁頂「開始試算」CTA 觸發 onBuild，避免每次進頁都對 DB 產生寫入/可能覆寫
+// 既有結算的副作用。cycleId 找不到、或 listYearEndCycles 失敗（.catch → []）時
+// cycleStatus 退為 null，CTA/banner 一併不顯示（fail-closed），但仍照常 loadGrid
+// 沿用既有結算資料，不影響閱讀。
 async function initGrid() {
   const cycles = await listYearEndCycles()
     .then((res) => res.data as YearEndCycleLite[])
     .catch(() => [] as YearEndCycleLite[])
   const cycle = cycles.find((c) => c.id === cycleId)
   cycleStatus.value = cycle?.status ?? null
-  if (canWrite.value && cycleStatus.value === 'OPEN') {
-    try {
-      const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
-      // 成功後才記時間戳（+ 摘要 + 清 stale flag）：語意是「最後成功試算」而非「嘗試」。
-      applyBuildSuccess(res.data)
-    } catch {
-      // Task 12③：進頁自動試算失敗不再完全靜默——仍不彈 dialog/ElMessage、仍照常
-      // loadGrid 沿用既有結算資料（不打斷閱讀），但改用頁頂 stale banner 讓使用者
-      // 知道目前看到的是上次試算資料而非「一切正常」的假象。手動「↻ 重新試算」按鈕
-      // 維持現狀可兜底重試（觸發條件不變，只改失敗時的回饋方式）。
-      buildFailed.value = true
-    }
-  }
   await loadGrid()
 }
 
@@ -236,7 +204,7 @@ async function onBuild() {
   try {
     const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
     const { built, skipped_finalized, unmatched_count, fallback_classes, warnings } = res.data
-    // Task 12②：手動「↻ 重新試算」的成功結果也套用同一套「常駐摘要列」語意
+    // Task 12②：手動「開始試算」的成功結果也套用同一套「常駐摘要列」語意
     // （原本只彈一次 ElMessage.success，看過就沒了；現在頁頂多一列可回顧的摘要）。
     applyBuildSuccess(res.data)
     await loadGrid()
@@ -256,60 +224,24 @@ async function onBuild() {
     if (gapParts.length > 0) {
       ElMessage.warning(gapParts.join('；'))
     }
-  } catch (e) {
-    ElMessage.error(friendlyError('年終試算失敗', e))
+  } catch {
+    ElMessage.error('試算失敗')
   } finally {
     buildDialogVisible.value = false
   }
 }
 
-function openEdit(row: GridRow) {
-  editingRow.value = row
-  editForm.deduction_disciplinary = null
-  editForm.excess_amount = null
-  editForm.hire_months_override = null
-  editForm.remark = row.remark ?? null
-  editVisible.value = true
-}
-
-async function submitEdit() {
-  if (!editingRow.value) return
-  const payload: {
-    deduction_disciplinary?: number
-    excess_amount?: number
-    hire_months_override?: number
-    remark?: string
-  } = {}
-  if (editForm.deduction_disciplinary !== null) {
-    payload.deduction_disciplinary = editForm.deduction_disciplinary
-  }
-  if (editForm.excess_amount !== null) {
-    payload.excess_amount = editForm.excess_amount
-  }
-  if (editForm.hire_months_override !== null) {
-    payload.hire_months_override = editForm.hire_months_override
-  }
-  if (editForm.remark !== null) {
-    payload.remark = editForm.remark
-  }
-  try {
-    await manualPatchSettlement(editingRow.value.settlement_id, payload)
-    await loadGrid()
-    ElMessage.success('已更新')
-    editVisible.value = false
-  } catch (e) {
-    ElMessage.error(
-      apiError(e, '更新失敗：僅草稿狀態可手動調整；已簽核者請先到「結算明細」將該筆退回草稿')
-    )
-  }
-}
-
 defineExpose({
   rows, loading, bonusColumns, canWrite,
-  loadGrid, onBuild, openEdit, submitEdit,
-  buildDialogVisible, editVisible, editingRow, editForm,
+  loadGrid, onBuild,
+  buildDialogVisible,
   cycleStatus, lastBuiltAt, initGrid,
-  expandFields, buildResult, buildFailed, buildSummaryText, buildFailedDescription,
+  buildResult, buildSummaryText,
+  // Task 3（批次2b-1）：獎金欄開關 chips 供測試直接驅動（避免透過 stub 層模擬點擊的脆弱性）。
+  visibleBonusCols, toggleBonusCol, visibleBonusColumns, specialBonusTotal,
+  // Task 4（批次2b-1）：舊手改 dialog（editVisible/editForm/editingRow/openEdit/submitEdit）
+  // 已移除，改由 GridRowDetailDrawer 承接（含就地編輯）；grid 這層只保留開關抽屜狀態。
+  drawerVisible, drawerRow, openDrawer,
 })
 
 onMounted(initGrid)
@@ -325,12 +257,12 @@ onMounted(initGrid)
       </span>
       <div class="actions">
         <el-button
-          v-if="canWrite"
+          v-if="canWrite && cycleStatus === 'OPEN'"
           type="primary"
           data-test="build-button"
           @click="buildDialogVisible = true"
         >
-          ↻ 重新試算
+          開始試算
         </el-button>
         <!-- Task 12④：匯出四鈕統一 el-button tag="a" :href 寫法（原本各自包一層 <a> 再塞
              el-button，寫法不一致；比照 YearEndDetailView.vue 既有 tag="a" 慣例）。 -->
@@ -357,16 +289,15 @@ onMounted(initGrid)
       </div>
     </header>
 
-    <!-- Task 12③：進頁自動試算失敗 stale banner（原本完全靜默降級，見 initGrid） -->
+    <!-- Task 8②：非 OPEN 週期提示——本頁為最後一次試算結果，開啟不會重新試算
+         （Task 5 起進頁本就不再自動試算，此提示著重說明 LOCKED/CLOSED 週期連
+         「開始試算」CTA 也不會顯示，只能看既有結算資料）。 -->
     <el-alert
-      v-if="buildFailed"
-      type="warning"
-      closable
-      title="自動試算失敗，目前顯示上次試算資料"
-      :description="buildFailedDescription"
-      data-test="build-failed-banner"
+      v-if="cycleStatus && cycleStatus !== 'OPEN'"
+      type="info" :closable="false" show-icon
+      :title="`週期${cycleStatus === 'LOCKED' ? '已鎖定' : '已封存'}：本頁為最後一次試算結果，開啟頁面不會重新試算。`"
       class="grid-alert"
-      @close="buildFailed = false"
+      data-test="non-open-banner"
     />
 
     <!-- Task 12②：build 成功摘要列（取代原本「只彈一次」的 ElMessage，常駐可回顧） -->
@@ -380,7 +311,38 @@ onMounted(initGrid)
       @close="buildResult = null"
     />
 
-    <!-- Grid table -->
+    <!-- Task 5（批次2b-1）：進頁不再自動試算，尚未試算過（rows 為空）時明確引導使用者
+         點「開始試算」，避免誤以為系統忘記載入資料。 -->
+    <el-alert
+      v-if="!rows.length && canWrite && cycleStatus === 'OPEN'"
+      type="info"
+      :closable="false"
+      show-icon
+      title="尚未試算，點『開始試算』產生結算"
+      data-test="empty-grid-hint"
+      class="grid-alert"
+    />
+
+    <!-- Task 3（批次2b-1）：獎金欄開關 chips——原 7 欄＋9 個常駐獎金欄總寬 ~1767px 必
+         橫向捲動；改預設全不顯示獎金欄（下方 6 欄零橫捲摘要），勾選 chip 才插回該欄。
+         勾選狀態存 localStorage（gridColumns.ts 單一來源），重整/跨頁記得住。 -->
+    <div class="bonus-col-chips" data-test="bonus-col-chips">
+      <span class="chips-label">顯示獎金欄：</span>
+      <el-tag
+        v-for="key in BONUS_COL_KEYS"
+        :key="key"
+        class="bonus-col-chip"
+        :data-test="`bonus-col-chip-${key}`"
+        :type="visibleBonusCols.has(key) ? 'primary' : 'info'"
+        :effect="visibleBonusCols.has(key) ? 'dark' : 'plain'"
+        style="cursor: pointer"
+        @click="toggleBonusCol(key)"
+      >{{ SPECIAL_BONUS_LABELS[key] ?? key }}</el-tag>
+    </div>
+
+    <!-- Grid table：6 欄摘要（姓名/主結算/特別獎金合計/合計/狀態/操作），零橫捲。
+         原「展開」欄（Task 12①修 404 用）已移除——明細改由 Task 4 GridRowDetailDrawer
+         抽屜承接（抽屜自建 specialBonusItems，未沿用本檔案任何舊 expand 邏輯）。 -->
     <el-table
       v-loading="loading"
       :data="rows"
@@ -389,24 +351,6 @@ onMounted(initGrid)
       max-height="640"
       data-test="grid-table"
     >
-      <!-- Task 12①：修 404——原「展開」按鈕 push 到不存在的 /settlements/:id 路由，
-           改列內 expand 就地展開，內容見 expandFields()。
-           fixed="left" 必要（審查修繕）：Element Plus 欄位排序（watcher.mjs）會把所有
-           fixed:left 欄放最前、不保留模板宣告順序，未 fixed 的 expand 欄會被重排到姓名欄
-           （fixed="left"）之後；且本表欄寬總和 ~1767px 必觸發橫向捲動，未 fixed 的
-           expand 欄捲動後會滾出視窗，使用者失去展開把手。 -->
-      <el-table-column type="expand" width="40" fixed="left" data-test="expand-column">
-        <template #default="{ row }">
-          <el-descriptions :column="3" size="small" border class="grid-expand">
-            <el-descriptions-item
-              v-for="col in expandFields(row)"
-              :key="col.label"
-              :label="col.label"
-            >{{ col.value }}</el-descriptions-item>
-          </el-descriptions>
-        </template>
-      </el-table-column>
-
       <!-- 固定欄：姓名 -->
       <el-table-column
         prop="employee_name"
@@ -422,9 +366,10 @@ onMounted(initGrid)
         </template>
       </el-table-column>
 
-      <!-- 動態獎金欄 -->
+      <!-- 動態獎金欄：只渲染使用者勾選 chip 的 key（visibleBonusColumns），
+           預設空集合 → 零欄，摘要表零橫捲。 -->
       <el-table-column
-        v-for="col in bonusColumns"
+        v-for="col in visibleBonusColumns"
         :key="col.key"
         :label="col.label"
         width="118"
@@ -447,6 +392,14 @@ onMounted(initGrid)
         </template>
       </el-table-column>
 
+      <!-- 特別獎金合計：9 個常駐獎金欄的合計摘要，chips 全不勾時仍看得到總額
+           （零橫捲摘要表的關鍵，明細留給展開 chip 或 Task 4 抽屜）。 -->
+      <el-table-column label="特別獎金合計" width="140" align="right" class-name="money-cell" sortable :sort-method="sortBySpecialBonusTotal">
+        <template #default="{ row }">
+          {{ moneyInt(specialBonusTotal(row)) }}
+        </template>
+      </el-table-column>
+
       <!-- 合計 -->
       <el-table-column label="合計" width="145" align="right" class-name="money-cell" sortable :sort-method="sortByTotal">
         <template #default="{ row }">
@@ -466,13 +419,14 @@ onMounted(initGrid)
       <!-- 操作 -->
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
+          <!-- Task 4（批次2b-1）：「手改」改「明細」——所有 status 皆可開抽屜看 breakdown，
+               就地編輯區僅 DRAFT 顯示（見 GridRowDetailDrawer 內 canEdit）。 -->
           <el-button
-            v-if="row.status === 'DRAFT' && canWrite"
             size="small"
-            data-test="edit-button"
-            @click="openEdit(row)"
+            data-test="detail-drawer-button"
+            @click="openDrawer(row)"
           >
-            手改
+            明細
           </el-button>
           <a
             :href="`${baseUrl}/year_end/cycles/${cycleId}/settlements/${row.settlement_id}/slip.pdf`"
@@ -501,69 +455,14 @@ onMounted(initGrid)
       </template>
     </el-dialog>
 
-    <!-- 手改 dialog -->
-    <el-dialog
-      v-model="editVisible"
-      :title="`手動調整 — ${editingRow?.employee_name ?? ''}`"
-      width="420px"
-      data-test="edit-dialog"
-    >
-      <el-form label-width="130px" label-position="right">
-        <el-form-item label="獎懲扣項（≤0）">
-          <el-input-number
-            v-model="editForm.deduction_disciplinary"
-            :max="0"
-            :step="100"
-            controls-position="right"
-            style="width: 200px"
-            placeholder="留空=不覆寫"
-            :value-on-clear="null"
-            data-test="input-deduction"
-          />
-        </el-form-item>
-        <el-form-item label="超額獎金（≥0）">
-          <el-input-number
-            v-model="editForm.excess_amount"
-            :min="0"
-            :step="100"
-            controls-position="right"
-            style="width: 200px"
-            placeholder="留空=不覆寫"
-            :value-on-clear="null"
-            data-test="input-excess"
-          />
-        </el-form-item>
-        <el-form-item label="到職月數覆寫">
-          <el-input-number
-            v-model="editForm.hire_months_override"
-            :min="0"
-            :max="12"
-            :step="0.5"
-            :precision="1"
-            controls-position="right"
-            style="width: 200px"
-            placeholder="留空=不覆寫"
-            :value-on-clear="null"
-            data-test="input-hire-months"
-          />
-        </el-form-item>
-        <el-form-item label="備註">
-          <el-input
-            v-model="editForm.remark"
-            type="textarea"
-            :rows="3"
-            maxlength="500"
-            show-word-limit
-            placeholder="留空=清除備註"
-            data-test="input-remark"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" data-test="edit-submit-button" @click="submitEdit">確認更新</el-button>
-      </template>
-    </el-dialog>
+    <!-- Task 4（批次2b-1）：明細抽屜（breakdown ＋ 就地編輯），取代舊手改 dialog -->
+    <GridRowDetailDrawer
+      v-model="drawerVisible"
+      :row="drawerRow"
+      :can-write="canWrite"
+      :cycle-id="cycleId"
+      @saved="loadGrid"
+    />
   </div>
 </template>
 
@@ -604,6 +503,20 @@ onMounted(initGrid)
 }
 .grid-expand {
   margin: var(--space-1) 0;
+}
+.bonus-col-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.chips-label {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.bonus-col-chip {
+  user-select: none;
 }
 /* F-2：金額 cell 禁止在小數點/千分位逗號附近換行成兩行（稽核核對風險）；
    欄寬不足時交給 el-table 內建橫向捲動，不擠壓內容。 */

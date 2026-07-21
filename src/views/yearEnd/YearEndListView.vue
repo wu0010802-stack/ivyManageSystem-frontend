@@ -9,7 +9,9 @@ import {
   importYearEndExcel,
   exportYearEndSummaryXlsxUrl,
   exportYearEndTransferRosterXlsxUrl,
+  getCycleProgress,
 } from '@/api/yearEnd'
+import type { Schema } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
 import { CYCLE_STATUS_LABEL, CYCLE_STATUS_TAG } from '@/constants/appraisalYearEnd'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -24,9 +26,43 @@ interface YearEndCycleRow {
   [key: string]: unknown
 }
 
+type CycleProgress = Schema<'CycleProgressOut'>
+
 const router = useRouter()
 const cycles = ref<YearEndCycleRow[]>([])
 const loading = ref(false)
+
+// Task 9：清單每列的迷你進度——CLOSED 週期依業務規則（closeCycle 前置守衛見
+// YearEndWorkspaceView）必為全數核定，靜態顯示即可、不打 API；OPEN/LOCKED 才並發抓取，
+// 各列各自 loading/失敗降級，不阻塞整表（cycles 到位即渲染，progress 之後才補上）。
+const progressMap = ref<Record<number, CycleProgress | null>>({})
+const progressLoading = ref<Record<number, boolean>>({})
+
+function progressPercent(p: CycleProgress): number {
+  if (p.total_count <= 0) return 0
+  return Math.round((p.finalized_count / p.total_count) * 100)
+}
+
+function progressText(row: YearEndCycleRow): string {
+  if (row.status === 'CLOSED') return '已核定'
+  if (progressLoading.value[row.id]) return '載入中…'
+  const p = progressMap.value[row.id]
+  if (p == null) return '—'
+  if (p.total_count === 0) return '尚無結算單'
+  if (p.finalized_count >= p.total_count) return `已核定 ${p.finalized_count}/${p.total_count}`
+  return `${p.finalized_count}/${p.total_count} 未核定`
+}
+
+async function loadProgress(rows: YearEndCycleRow[]) {
+  const targets = rows.filter((r) => r.status !== 'CLOSED')
+  targets.forEach((r) => { progressLoading.value[r.id] = true })
+  const results = await Promise.allSettled(targets.map((r) => getCycleProgress(r.id)))
+  results.forEach((result, i) => {
+    const id = targets[i].id
+    progressLoading.value[id] = false
+    progressMap.value[id] = result.status === 'fulfilled' ? result.value.data : null
+  })
+}
 const createDialog = ref(false)
 const importDialog = ref(false)
 const busy = ref(false)
@@ -79,6 +115,8 @@ async function load() {
   loading.value = true
   try {
     cycles.value = (await listYearEndCycles()).data
+    // 進度欄不阻塞整表載入：fire-and-forget，各列各自顯示 loading／完成後才補上。
+    void loadProgress(cycles.value)
   } catch (e) {
     ElMessage.error(apiError(e, '載入失敗'))
   } finally {
@@ -179,11 +217,25 @@ onMounted(load)
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="進度" width="180">
+        <template #default="{ row }">
+          <div class="ye-progress-cell" data-test="progress-cell">
+            <el-progress
+              v-if="row.status !== 'CLOSED' && progressMap[row.id]"
+              :percentage="progressPercent(progressMap[row.id]!)"
+              :stroke-width="6"
+              :show-text="false"
+              class="ye-progress-bar"
+            />
+            <span class="ye-progress-text">{{ progressText(row) }}</span>
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="320">
         <template #default="{ row }">
           <el-button link type="primary" @click="router.push(`/appraisal-year-end/year-end/cycles/${row.id}`)">明細</el-button>
-          <el-button link type="primary" @click="router.push(`/appraisal-year-end/year-end/cycles/${row.id}/grid`)">總表</el-button>
-          <el-button link @click="router.push(`/appraisal-year-end/year-end/cycles/${row.id}/config`)">設定</el-button>
+          <el-button link type="primary" @click="router.push({ path: `/appraisal-year-end/year-end/cycles/${row.id}`, query: { step: 'grid' } })">總表</el-button>
+          <el-button link @click="router.push({ path: `/appraisal-year-end/year-end/cycles/${row.id}`, query: { step: 'config' } })">設定</el-button>
           <el-dropdown>
             <el-button link>匯出<el-icon><ArrowDown /></el-icon></el-button>
             <template #dropdown>
@@ -244,4 +296,7 @@ onMounted(load)
 .ye-list { padding: var(--space-4); }
 .toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); }
 .import-fallback-alert { margin-bottom: var(--space-3); }
+.ye-progress-cell { display: flex; align-items: center; gap: var(--space-2); }
+.ye-progress-bar { width: 64px; flex-shrink: 0; }
+.ye-progress-text { font-size: var(--text-xs); color: var(--text-secondary); white-space: nowrap; }
 </style>

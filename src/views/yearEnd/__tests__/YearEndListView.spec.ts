@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick, defineComponent, h } from 'vue'
 import YearEndListView from '../YearEndListView.vue'
 
@@ -18,6 +18,21 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
         special_bonuses_upserted: 0,
         class_targets_upserted: 0,
         skipped_unresolved_names: [],
+      },
+    }),
+    // Task 9：進度欄——各測試預設回一組安全值，避免既有（不關心進度欄的）測試打到真實 axios。
+    getCycleProgress: vi.fn().mockResolvedValue({
+      data: {
+        cycle_status: 'OPEN',
+        exception_count: 0,
+        finalized_count: 0,
+        pending_sign_count: 0,
+        settings_complete: true,
+        settings_missing_count: 0,
+        settlement_count: 0,
+        sign_counts: {},
+        total_count: 0,
+        unmatched_count: 0,
       },
     }),
   }
@@ -188,6 +203,7 @@ async function mountView() {
         'el-dropdown-item': ElDropdownItemStub,
         'el-tooltip': ElTooltipStub,
         'el-icon': true,
+        'el-progress': true,
       },
       directives: { loading: () => {} },
     },
@@ -266,7 +282,8 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     expect(mockPush).toHaveBeenCalledWith('/appraisal-year-end/year-end/cycles/1')
   })
 
-  it('「總表」點擊 push /appraisal-year-end/year-end/cycles/{id}/grid', async () => {
+  // Task 9：改直連工作區 ?step= query，省去舊 /grid、/config 路徑的 redirect hop。
+  it('「總表」點擊直連工作區並帶 step=grid query（不再靠 /grid redirect）', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
     const wrapper = await mountView()
 
@@ -274,10 +291,13 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     expect(gridBtn).toBeTruthy()
     await gridBtn!.trigger('click')
 
-    expect(mockPush).toHaveBeenCalledWith('/appraisal-year-end/year-end/cycles/1/grid')
+    expect(mockPush).toHaveBeenCalledWith({
+      path: '/appraisal-year-end/year-end/cycles/1',
+      query: { step: 'grid' },
+    })
   })
 
-  it('「設定」點擊 push /appraisal-year-end/year-end/cycles/{id}/config', async () => {
+  it('「設定」點擊直連工作區並帶 step=config query（不再靠 /config redirect）', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
     const wrapper = await mountView()
 
@@ -285,7 +305,10 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     expect(configBtn).toBeTruthy()
     await configBtn!.trigger('click')
 
-    expect(mockPush).toHaveBeenCalledWith('/appraisal-year-end/year-end/cycles/1/config')
+    expect(mockPush).toHaveBeenCalledWith({
+      path: '/appraisal-year-end/year-end/cycles/1',
+      query: { step: 'config' },
+    })
   })
 
   it('匯出 dropdown 內含總表 Excel 與轉帳名冊連結', async () => {
@@ -319,6 +342,129 @@ describe('YearEndListView — Task 10 列表瘦身', () => {
     await mountView()
 
     expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('載入異常')
+  })
+})
+
+describe('YearEndListView — Task 9 進度欄', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    permState.canCreate = true
+    permState.canImport = true
+  })
+
+  it('OPEN 週期：載入清單後並發抓 getCycleProgress，顯示「已核定/總數 未核定」文字', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1, status: 'OPEN' })] } as never)
+    vi.mocked(api.getCycleProgress).mockResolvedValue({
+      data: {
+        cycle_status: 'OPEN',
+        exception_count: 0,
+        finalized_count: 4,
+        pending_sign_count: 1,
+        settings_complete: true,
+        settings_missing_count: 0,
+        settlement_count: 5,
+        sign_counts: {},
+        total_count: 5,
+        unmatched_count: 0,
+      },
+    } as never)
+    const wrapper = await mountView()
+    await flushPromises()
+    await nextTick()
+
+    expect(api.getCycleProgress).toHaveBeenCalledWith(1)
+    const cell = wrapper.find('[data-test="progress-cell"]')
+    expect(cell.exists()).toBe(true)
+    expect(cell.text()).toContain('4/5 未核定')
+  })
+
+  it('全數核定：顯示「已核定 N/N」', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 2, status: 'LOCKED' })] } as never)
+    vi.mocked(api.getCycleProgress).mockResolvedValue({
+      data: {
+        cycle_status: 'LOCKED',
+        exception_count: 0,
+        finalized_count: 5,
+        pending_sign_count: 0,
+        settings_complete: true,
+        settings_missing_count: 0,
+        settlement_count: 5,
+        sign_counts: {},
+        total_count: 5,
+        unmatched_count: 0,
+      },
+    } as never)
+    const wrapper = await mountView()
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.find('[data-test="progress-cell"]').text()).toContain('已核定 5/5')
+  })
+
+  it('該列抓取失敗時只顯示「—」，不拋出、不影響其他列渲染', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 3, status: 'OPEN' })] } as never)
+    vi.mocked(api.getCycleProgress).mockRejectedValue(new Error('network down'))
+    const wrapper = await mountView()
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.find('[data-test="progress-cell"]').text()).toContain('—')
+  })
+
+  it('CLOSED 週期不再打 getCycleProgress（已封存週期依業務規則必為全數核定，省一支請求）', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 4, status: 'CLOSED' })] } as never)
+    const wrapper = await mountView()
+    await flushPromises()
+    await nextTick()
+
+    expect(api.getCycleProgress).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-test="progress-cell"]').text()).toContain('已核定')
+  })
+
+  it('N 支 progress 請求並發（非序列瀑布）：多列 getCycleProgress 幾乎同時觸發', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [makeCycle({ id: 10, status: 'OPEN' }), makeCycle({ id: 11, status: 'LOCKED' })],
+    } as never)
+    const callOrder: number[] = []
+    vi.mocked(api.getCycleProgress).mockImplementation(async (cycleId: number) => {
+      callOrder.push(cycleId)
+      return {
+        data: {
+          cycle_status: 'OPEN', exception_count: 0, finalized_count: 0, pending_sign_count: 0,
+          settings_complete: true, settings_missing_count: 0, settlement_count: 0,
+          sign_counts: {}, total_count: 0, unmatched_count: 0,
+        },
+      } as never
+    })
+    await mountView()
+    await flushPromises()
+
+    // 兩支呼叫都在同一輪微任務內派出（Promise.allSettled 並發），而非等前一筆 resolve 才發下一筆。
+    expect(callOrder).toEqual([10, 11])
+  })
+
+  it('進度請求不阻塞整表載入：cycles 到位即渲染列，不等 progress resolve', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 5, status: 'OPEN' })] } as never)
+    let resolveProgress: (v: unknown) => void = () => {}
+    vi.mocked(api.getCycleProgress).mockReturnValue(
+      new Promise((resolve) => { resolveProgress = resolve }) as never,
+    )
+    const wrapper = await mountView()
+
+    // progress 尚未 resolve，但列本身（含操作欄按鈕）已渲染。
+    expect(wrapper.findAll('button').some((b) => b.text() === '明細')).toBe(true)
+    expect(wrapper.find('[data-test="progress-cell"]').text()).toContain('載入中')
+
+    resolveProgress({
+      data: {
+        cycle_status: 'OPEN', exception_count: 0, finalized_count: 1, pending_sign_count: 0,
+        settings_complete: true, settings_missing_count: 0, settlement_count: 1,
+        sign_counts: {}, total_count: 1, unmatched_count: 0,
+      },
+    })
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.find('[data-test="progress-cell"]').text()).toContain('已核定 1/1')
   })
 })
 

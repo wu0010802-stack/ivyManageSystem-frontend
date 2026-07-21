@@ -6,10 +6,12 @@ import { getAppraisalCurrentCycle } from '@/api/appraisal'
 import { listYearEndCycles } from '@/api/yearEnd'
 import type { Schema } from '@/api/_generated/typed'
 import { hasPermission } from '@/utils/auth'
+import { deriveNextStep } from './nextStep'
 import WorkbenchAppraisalCard from './components/WorkbenchAppraisalCard.vue'
 import WorkbenchYearEndCard from './components/WorkbenchYearEndCard.vue'
 import WorkbenchExceptionsCard from './components/WorkbenchExceptionsCard.vue'
 import WorkbenchPayoutCard from './components/WorkbenchPayoutCard.vue'
+import WorkbenchNextStepCard from './components/WorkbenchNextStepCard.vue'
 
 interface CycleHandle { id: number; label: string; status: string }
 
@@ -21,6 +23,31 @@ const payoutYear = new Date().getFullYear()
 // 「尚未建立考核週期／年終週期」空狀態，使用者會誤判系統真的沒有週期
 const appraisalRootError = ref(false)
 const yearEndRootError = ref(false)
+
+// 各卡 emit 的統計數字（考核/年終＝未核定筆數、例外＝blocking 筆數、發放＝可發放筆數）。
+// undefined＝尚在載入，deriveNextStep 會回 null（主卡顯示 skeleton）。
+const cardStats = ref<{
+  appraisal: number | undefined
+  yearEnd: number | undefined
+  exceptions: number | undefined
+  payout: number | undefined
+}>({ appraisal: undefined, yearEnd: undefined, exceptions: undefined, payout: undefined })
+const statsErrors = ref(new Set<string>())
+
+function onStats(key: 'appraisal' | 'yearEnd' | 'exceptions' | 'payout', n: number) {
+  cardStats.value = { ...cardStats.value, [key]: n }
+  // 成功（含重試成功）時清除該卡的失敗標記，避免「部分載入失敗」警示永久殘留
+  if (statsErrors.value.has(key)) {
+    const next = new Set(statsErrors.value)
+    next.delete(key)
+    statsErrors.value = next
+  }
+}
+function onStatsError(key: 'appraisal' | 'yearEnd' | 'exceptions' | 'payout') {
+  statsErrors.value = new Set(statsErrors.value).add(key)
+  // 直接設 0，不經 onStats（否則會立即清除剛加入的失敗標記）
+  cardStats.value = { ...cardStats.value, [key]: 0 }
+}
 
 // CycleOut.semester 是字串 enum 'FIRST'|'SECOND'（見 schema.d.ts Semester；非數字 1/2，
 // 與 termStore.semester 是不同欄位，不要混淆）
@@ -38,6 +65,7 @@ async function loadHandles() {
       : null
   } else {
     appraisalRootError.value = true
+    onStatsError('appraisal')
   }
 
   if (yearEndRes.status === 'fulfilled') {
@@ -52,26 +80,47 @@ async function loadHandles() {
     }
   } else {
     yearEndRootError.value = true
+    onStatsError('yearEnd')
   }
 }
-onMounted(loadHandles)
-
-// 年終週期為 OPEN 時（結算進行中）優先排年終卡；否則考核卡優先（平時考核簽核較常用）
-const cardOrder = computed(() =>
-  yearEndCycle.value?.status === 'OPEN'
-    ? (['year-end', 'appraisal', 'exceptions', 'payout'] as const)
-    : (['appraisal', 'year-end', 'exceptions', 'payout'] as const),
-)
-
 const canAppraisal = computed(() => hasPermission('APPRAISAL_READ'))
 const canYearEnd = computed(() => hasPermission('YEAR_END_READ'))
 const canExceptions = computed(() => hasPermission('APPRAISAL_READ') || hasPermission('YEAR_END_READ'))
 const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+
+onMounted(loadHandles)
+// 權限不足的卡片完全不 render → 永不 emit stats → 對應欄位永遠 undefined →
+// deriveNextStep 永久回 null → 主卡永久卡在 skeleton。對「因權限不 render」
+// 的卡把 stat 視為已解決（0 待辦），讓主卡能算出下一步（見 task-11 review Important finding）。
+onMounted(() => {
+  if (!canAppraisal.value) onStats('appraisal', 0)
+  if (!canYearEnd.value) onStats('yearEnd', 0)
+  if (!canExceptions.value) onStats('exceptions', 0)
+  if (!canPayout.value) onStats('payout', 0)
+})
+
+// 固定卡序（原依年終 OPEN 換位——破壞空間記憶，移除）
+const CARD_ORDER = ['appraisal', 'year-end', 'exceptions', 'payout'] as const
+
+const nextStep = computed(() =>
+  deriveNextStep({
+    appraisalCycle: appraisalCycle.value,
+    yearEndCycle: yearEndCycle.value,
+    blockingExceptions: cardStats.value.exceptions,
+    yearEndPendingSign: cardStats.value.yearEnd,
+    appraisalPendingSign: cardStats.value.appraisal,
+    payoutReadyCount: cardStats.value.payout,
+    canAppraisal: canAppraisal.value,
+    canYearEnd: canYearEnd.value,
+    payoutYear,
+  }),
+)
 </script>
 
 <template>
   <div class="wb-grid">
-    <template v-for="key in cardOrder" :key="key">
+    <WorkbenchNextStepCard :step="nextStep" :partial-error="statsErrors.size > 0" class="wb-next-slot" />
+    <template v-for="key in CARD_ORDER" :key="key">
       <template v-if="key === 'appraisal' && canAppraisal">
         <!-- 根把手失敗 → 顯式錯誤卡（重試重跑父層 loadHandles），不得落入子卡的「尚未建立」空狀態 -->
         <el-card v-if="appraisalRootError" shadow="never" data-test="appraisal-card" class="wb-card">
@@ -82,7 +131,12 @@ const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
             載入失敗 <el-button size="small" text type="primary" @click="loadHandles">重試</el-button>
           </div>
         </el-card>
-        <WorkbenchAppraisalCard v-else :cycle="appraisalCycle" />
+        <WorkbenchAppraisalCard
+          v-else
+          :cycle="appraisalCycle"
+          @stats="(n) => onStats('appraisal', n)"
+          @stats-error="onStatsError('appraisal')"
+        />
       </template>
       <template v-else-if="key === 'year-end' && canYearEnd">
         <el-card v-if="yearEndRootError" shadow="never" data-test="year-end-card" class="wb-card">
@@ -93,14 +147,26 @@ const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
             載入失敗 <el-button size="small" text type="primary" @click="loadHandles">重試</el-button>
           </div>
         </el-card>
-        <WorkbenchYearEndCard v-else :cycle="yearEndCycle" />
+        <WorkbenchYearEndCard
+          v-else
+          :cycle="yearEndCycle"
+          @stats="(n) => onStats('yearEnd', n)"
+          @stats-error="onStatsError('yearEnd')"
+        />
       </template>
       <WorkbenchExceptionsCard
         v-else-if="key === 'exceptions' && canExceptions"
         :appraisal-cycle="appraisalCycle"
         :year-end-cycle="yearEndCycle"
+        @stats="(n) => onStats('exceptions', n)"
+        @stats-error="onStatsError('exceptions')"
       />
-      <WorkbenchPayoutCard v-else-if="key === 'payout' && canPayout" :year="payoutYear" />
+      <WorkbenchPayoutCard
+        v-else-if="key === 'payout' && canPayout"
+        :year="payoutYear"
+        @stats="(n) => onStats('payout', n)"
+        @stats-error="onStatsError('payout')"
+      />
     </template>
   </div>
 </template>
@@ -111,6 +177,7 @@ const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--space-4);
 }
+.wb-next-slot { grid-column: 1 / -1; }
 /* 根把手錯誤卡：與子卡同視覺（子卡 scoped style 不外溢，父層需自備同名樣式） */
 .wb-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .wb-card__title { font-weight: 600; }

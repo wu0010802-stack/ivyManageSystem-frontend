@@ -14372,6 +14372,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/cycles/{cycle_id}/class_targets/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upsert Class Targets Batch
+         * @description 一次 upsert 多列班級編制（部分成功；guard 一次、逐列套用）。
+         *
+         *     供設定頁「全部儲存」使用，取代逐列呼叫單列端點。guard（404 + 週期狀態）
+         *     只在批次入口做一次；逐列違規（例如個別列觸發的 HTTPException）記入
+         *     failed，不影響其餘列，最後一次 commit。
+         */
+        post: operations["upsert_class_targets_batch_api_year_end_cycles__cycle_id__class_targets_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/cycles/{cycle_id}/exceptions": {
         parameters: {
             query?: never;
@@ -14426,6 +14450,23 @@ export interface paths {
         put?: never;
         /** Upsert Org Settings */
         post: operations["upsert_org_settings_api_year_end_cycles__cycle_id__org_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/cycles/{cycle_id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cycle Progress */
+        get: operations["get_cycle_progress_api_year_end_cycles__cycle_id__progress_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -17681,6 +17722,27 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** ClassTargetBatchFailedItem */
+        ClassTargetBatchFailedItem: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Reason */
+            reason: string;
+            /** Semester First */
+            semester_first: boolean;
+        };
+        /** ClassTargetBatchRequest */
+        ClassTargetBatchRequest: {
+            /** Items */
+            items: components["schemas"]["ClassEnrollmentTargetUpsert"][];
+        };
+        /** ClassTargetBatchResultOut */
+        ClassTargetBatchResultOut: {
+            /** Failed */
+            failed: components["schemas"]["ClassTargetBatchFailedItem"][];
+            /** Succeeded Count */
+            succeeded_count: number;
+        };
         /**
          * ClassUpdateRequest
          * @description 部分更新：「有給才改」語意（router 端以 `exclude_unset` 判斷）。教師三欄位
@@ -18626,6 +18688,34 @@ export interface components {
              */
             start_date: string;
             status: components["schemas"]["CycleStatus"];
+        };
+        /**
+         * CycleProgressOut
+         * @description 年終工作區左導軌用的唯讀進度彙總（不新增表，全部由既有查詢組裝）。
+         */
+        CycleProgressOut: {
+            /** Cycle Status */
+            cycle_status: string;
+            /** Exception Count */
+            exception_count: number;
+            /** Finalized Count */
+            finalized_count: number;
+            /** Pending Sign Count */
+            pending_sign_count: number;
+            /** Settings Complete */
+            settings_complete: boolean;
+            /** Settings Missing Count */
+            settings_missing_count: number;
+            /** Settlement Count */
+            settlement_count: number;
+            /** Sign Counts */
+            sign_counts: {
+                [key: string]: number;
+            };
+            /** Total Count */
+            total_count: number;
+            /** Unmatched Count */
+            unmatched_count: number;
         };
         /**
          * CycleStatus
@@ -20346,10 +20436,14 @@ export interface components {
         };
         /** GridRowOut */
         GridRowOut: {
+            /** Deduction Disciplinary */
+            deduction_disciplinary: string;
             /** Employee Id */
             employee_id: number;
             /** Employee Name */
             employee_name: string;
+            /** Hire Months */
+            hire_months: string;
             /** Payable Amount */
             payable_amount: string;
             /** Remark */
@@ -57053,6 +57147,41 @@ export interface operations {
             };
         };
     };
+    upsert_class_targets_batch_api_year_end_cycles__cycle_id__class_targets_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassTargetBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassTargetBatchResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_year_end_exceptions_api_year_end_cycles__cycle_id__exceptions_get: {
         parameters: {
             query?: never;
@@ -57168,6 +57297,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgYearSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cycle_progress_api_year_end_cycles__cycle_id__progress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleProgressOut"];
                 };
             };
             /** @description Validation Error */

@@ -18,3 +18,20 @@ export function formatCurrency(val: unknown): string {
   if (val == null || val === '' || Number.isNaN(Number(val))) return EMPTY
   return 'NT$' + _twd.format(Number(val))
 }
+
+/**
+ * 顯示層專用：金額先四捨五入到整數元，再走 `formatCurrency`（NT$ 千分位）。
+ *
+ * 用於彙總大表等「畫面顯示」場景（金額欄與整數欄並列時，小數點易造成欄寬不足
+ * 而換行，稽核核對時視覺突兀）；**不可**用於送出/核對用的原始精度資料——呼叫端
+ * 仍應保留 Decimal 序列化字串原值，只在顯示時套用本函式（原始資料不因顯示層
+ * 四捨五入而改變）。
+ *
+ * null / '' 直接交給 `formatCurrency` 既有「—」fallback（`Number(null) === 0`／
+ * `Number('') === 0` 會誤判成有效值，故先排除，不進 `Math.round`）。
+ */
+export function moneyInt(val: unknown): string {
+  if (val == null || val === '') return formatCurrency(val)
+  const n = Number(val)
+  return Number.isFinite(n) ? formatCurrency(Math.round(n)) : formatCurrency(val)
+}
