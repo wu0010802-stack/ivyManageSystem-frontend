@@ -16,6 +16,12 @@ export const updateCycleStatus = (
 ): AxiosResp<'/year_end/cycles/{cycle_id}', 'patch'> =>
   api.patch(`/year_end/cycles/${cycleId}`, data)
 
+/** 工作區左導軌用的唯讀進度彙總（設定缺漏數/試算筆數/未匹配數/待簽核數/已核定數）。 */
+export const getCycleProgress = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/progress', 'get'> =>
+  api.get(`/year_end/cycles/${cycleId}/progress`)
+
 // ============ Org Year Settings ============
 
 export const listOrgYearSettings = (cycleId: number) =>
