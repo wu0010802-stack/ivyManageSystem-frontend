@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-// C3c（正確性）：fetchClassrooms 原本無請求序號守衛。快速切學期 A(慢)→B(快) 時，
-// 較舊的 A 學期回應在 B 之後才 resolve，會覆寫掉最新 B 學期的班級清單 →
-// 學期選擇器顯示 B 學期、卡片卻是 A 學期的班級。
-// 修正：加 fetchSeq，await getClassrooms 後 if(seq !== fetchSeq) return 才寫 classrooms / loading。
+// P3：openStudentDrawer / openEdit 無請求序號守衛。快速點兩張班級卡片時，較慢
+// （舊）的 getClassroom 回應可能覆寫較新的 drawerClassroom / currentClassroom。
+// 修正：加序號，過期回應丟棄不覆寫。
 
+const getClassroomMock = vi.hoisted(() => vi.fn())
 const getClassroomsMock = vi.hoisted(() => vi.fn())
 const getGradesMock = vi.hoisted(() => vi.fn())
 const getTeacherOptionsMock = vi.hoisted(() => vi.fn())
@@ -15,14 +15,12 @@ vi.mock('@/api/classrooms', () => ({
   getClassrooms: getClassroomsMock,
   getGrades: getGradesMock,
   getTeacherOptions: getTeacherOptionsMock,
-  getClassroom: vi.fn(),
+  getClassroom: getClassroomMock,
   createClassroom: vi.fn(),
   updateClassroom: vi.fn(),
   deleteClassroom: vi.fn(),
 }))
-vi.mock('@/api/recruitmentIntake', () => ({
-  getIntakePlan: getIntakePlanMock,
-}))
+vi.mock('@/api/recruitmentIntake', () => ({ getIntakePlan: getIntakePlanMock }))
 vi.mock('@/utils/academic', () => ({
   getCurrentAcademicTerm: () => ({ school_year: 114, semester: 1 }),
   normalizeSchoolYear: (v: number) => v,
@@ -36,9 +34,7 @@ vi.mock('@/utils/classroomCapacity', () => ({
   capacityStatus: () => 'normal',
   capacityPercent: () => 0,
 }))
-vi.mock('@/stores/classroom', () => ({
-  useClassroomStore: () => ({ refresh: vi.fn() }),
-}))
+vi.mock('@/stores/classroom', () => ({ useClassroomStore: () => ({ refresh: vi.fn() }) }))
 vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
 }))
@@ -58,9 +54,8 @@ function deferred<T>() {
 }
 
 interface SetupState {
-  fetchClassrooms: () => Promise<void>
-  classrooms: { id: number; name: string }[]
-  loading: boolean
+  openStudentDrawer: (c: { id: number }) => Promise<void>
+  drawerClassroom: { id: number } | null
 }
 
 const STUBS = {
@@ -103,46 +98,29 @@ async function mountView() {
   return wrapper
 }
 
-const classA = [{ id: 1, name: 'A 學期班' }]
-const classB = [{ id: 2, name: 'B 學期班' }]
-
-describe('ClassroomView fetchClassrooms 請求序號守衛（C3c）', () => {
+describe('ClassroomView openStudentDrawer 請求序號守衛（P3）', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('切學期 A(慢)→B(快)：較舊的 A 回應遲到 resolve 後不得覆寫最新 B 清單', async () => {
+  it('快速開 A(慢)→B(快)：較舊 A 回應遲到後不得覆寫 drawerClassroom', async () => {
     const wrapper = await mountView()
     const ss = wrapper.vm.$.setupState as SetupState
 
-    const dA = deferred<{ data: typeof classA }>()
-    const dB = deferred<{ data: typeof classB }>()
-    getClassroomsMock.mockReturnValueOnce(dA.promise).mockReturnValueOnce(dB.promise)
+    const dA = deferred<{ data: { id: number } }>()
+    const dB = deferred<{ data: { id: number } }>()
+    getClassroomMock.mockReturnValueOnce(dA.promise).mockReturnValueOnce(dB.promise)
 
-    const runA = ss.fetchClassrooms() // seq1（A 學期，慢）
-    const runB = ss.fetchClassrooms() // seq2（B 學期，快）
+    const runA = ss.openStudentDrawer({ id: 1 })
+    const runB = ss.openStudentDrawer({ id: 2 })
 
-    dB.resolve({ data: classB })
+    dB.resolve({ data: { id: 2 } })
     await flushPromises()
     await runB
-    expect(ss.classrooms.map((c) => c.id)).toEqual([2])
+    expect(ss.drawerClassroom?.id).toBe(2)
 
-    dA.resolve({ data: classA }) // 遲到的舊回應
+    dA.resolve({ data: { id: 1 } })
     await flushPromises()
     await runA
-    // 仍為 B 學期，未被較舊的 A 回應覆寫
-    expect(ss.classrooms.map((c) => c.id)).toEqual([2])
-    wrapper.unmount()
-  })
-
-  it('無競態單一請求時仍正常寫入並收掉 loading', async () => {
-    const wrapper = await mountView()
-    const ss = wrapper.vm.$.setupState as SetupState
-
-    getClassroomsMock.mockResolvedValueOnce({ data: classB })
-    await ss.fetchClassrooms()
-    await flushPromises()
-
-    expect(ss.classrooms.map((c) => c.id)).toEqual([2])
-    expect(ss.loading).toBe(false)
+    expect(ss.drawerClassroom?.id).toBe(2) // 未被較舊 A 覆寫
     wrapper.unmount()
   })
 })

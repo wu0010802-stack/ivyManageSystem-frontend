@@ -119,21 +119,28 @@ const TAB_DEFS = computed(() => [
 
 const visibleTabs = computed(() => TAB_DEFS.value.filter((t) => t.show))
 
+// 快速切換學生時，較舊學生的慢回應不得覆寫新學生的 profile（標頭/PII 競態）。
+let profileSeq = 0
 async function fetchProfile() {
   if (!props.studentId) {
+    profileSeq += 1
     profile.value = null
     return
   }
+  const seq = ++profileSeq
+  const sid = props.studentId
   loading.value = true
   try {
-    const { data } = await getStudentProfile(props.studentId)
+    const { data } = await getStudentProfile(sid)
+    if (seq !== profileSeq || props.studentId !== sid) return
     profile.value = data as unknown as Record<string, unknown>
     emit('profile-loaded', data)
   } catch (e) {
+    if (seq !== profileSeq || props.studentId !== sid) return
     profile.value = null
     ElMessage.error(apiError(e, '讀取學生檔案失敗'))
   } finally {
-    loading.value = false
+    if (seq === profileSeq) loading.value = false
   }
 }
 

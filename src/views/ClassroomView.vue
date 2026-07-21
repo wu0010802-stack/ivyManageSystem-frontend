@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   createClassroom,
   deleteClassroom,
@@ -214,6 +215,8 @@ const openCreate = async () => {
   dialogVisible.value = true
 }
 
+// 快速切班時舊 getClassroom 回應不得覆寫較新的 drawer/edit 目標。
+let drawerSeq = 0
 const openStudentDrawer = async (classroom: ClassroomRow) => {
   if (!canReadStudents.value) {
     if (canWrite.value) await openEdit(classroom)
@@ -221,13 +224,16 @@ const openStudentDrawer = async (classroom: ClassroomRow) => {
   }
   classroomDrawerVisible.value = true
   classroomDrawerLoading.value = true
+  const seq = ++drawerSeq
   try {
     const response = await getClassroom(classroom.id)
+    if (seq !== drawerSeq) return
     drawerClassroom.value = response.data as ClassroomRow
   } catch (error) {
+    if (seq !== drawerSeq) return
     ElMessage.error(apiError(error, '載入班級學生資料失敗'))
   } finally {
-    classroomDrawerLoading.value = false
+    if (seq === drawerSeq) classroomDrawerLoading.value = false
   }
 }
 
@@ -240,19 +246,23 @@ const handleStudentUpdated = async () => {
   if (drawerClassroom.value) await openStudentDrawer(drawerClassroom.value)
 }
 
+let editSeq = 0
 const openEdit = async (classroom: ClassroomRow) => {
   detailLoading.value = true
+  const seq = ++editSeq
   try {
     await fetchOptions()
     const response = await getClassroom(classroom.id)
+    if (seq !== editSeq) return
     currentClassroom.value = response.data as ClassroomRow
     populateForm(response.data as ClassroomRow)
     isEdit.value = true
     dialogVisible.value = true
   } catch (error) {
+    if (seq !== editSeq) return
     ElMessage.error(apiError(error, '載入班級詳情失敗'))
   } finally {
-    detailLoading.value = false
+    if (seq === editSeq) detailLoading.value = false
   }
 }
 
@@ -273,9 +283,11 @@ const submitForm = async () => {
       semester: form.semester,
       grade_id: form.grade_id,
       capacity: form.capacity,
-      head_teacher_id: form.head_teacher_id,
-      assistant_teacher_id: form.assistant_teacher_id,
-      english_teacher_id: form.english_teacher_id,
+      // clearable 的教師下拉清空時 el-select emit undefined；顯式 ?? null，
+      // 否則 JSON 丟欄 + 後端 exclude_unset 會讓「清除指派」靜默失敗。
+      head_teacher_id: form.head_teacher_id ?? null,
+      assistant_teacher_id: form.assistant_teacher_id ?? null,
+      english_teacher_id: form.english_teacher_id ?? null,
       is_active: form.is_active,
     }
 
@@ -326,9 +338,18 @@ watch([filterSchoolYear, filterSemester], () => {
   fetchClassrooms()
 })
 
+const route = useRoute()
+
 onMounted(async () => {
   // fetchOptions 與 fetchClassrooms 彼此無依賴，並行避免序列瀑布（省一個 round-trip）
   await Promise.all([fetchOptions(), fetchClassrooms()])
+  // 深連結還原：從學生完整檔案「返回班級」會帶 ?selected=<classroom_id> 回來
+  // （StudentDetailPanel.handleBack），重新開啟該班學生抽屜，回到原班上下文。
+  // openStudentDrawer 只需 id（內部自行 getClassroom），故不必等 classrooms 清單。
+  const selected = Number(route.query?.selected)
+  if (Number.isFinite(selected) && selected > 0) {
+    void openStudentDrawer({ id: selected } as ClassroomRow)
+  }
 })
 
 interface ClassroomDrawerProp { id?: number; name?: string; grade_name?: string; semester_label?: string; is_active?: boolean; capacity?: number; students?: { id: number; name?: string; gender?: string; [key: string]: unknown }[] }

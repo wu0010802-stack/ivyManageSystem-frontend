@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
-// C3c（正確性）：fetchClassrooms 原本無請求序號守衛。快速切學期 A(慢)→B(快) 時，
-// 較舊的 A 學期回應在 B 之後才 resolve，會覆寫掉最新 B 學期的班級清單 →
-// 學期選擇器顯示 B 學期、卡片卻是 A 學期的班級。
-// 修正：加 fetchSeq，await getClassrooms 後 if(seq !== fetchSeq) return 才寫 classrooms / loading。
+// P1（正確性）：編輯班級時把 clearable 的教師下拉清空 → el-select emit undefined →
+// form.head_teacher_id = undefined。submitForm 直接放進 payload，JSON.stringify 丟掉
+// undefined 鍵 → 後端 exclude_unset=True 跳過該欄 → 教師沒被移除（靜默失敗）。
+// 修正：payload 三個教師欄補 `?? null`，清空時顯式送 null 讓後端寫入 None。
 
+const updateClassroomMock = vi.hoisted(() => vi.fn())
 const getClassroomsMock = vi.hoisted(() => vi.fn())
 const getGradesMock = vi.hoisted(() => vi.fn())
 const getTeacherOptionsMock = vi.hoisted(() => vi.fn())
@@ -17,12 +18,10 @@ vi.mock('@/api/classrooms', () => ({
   getTeacherOptions: getTeacherOptionsMock,
   getClassroom: vi.fn(),
   createClassroom: vi.fn(),
-  updateClassroom: vi.fn(),
+  updateClassroom: updateClassroomMock,
   deleteClassroom: vi.fn(),
 }))
-vi.mock('@/api/recruitmentIntake', () => ({
-  getIntakePlan: getIntakePlanMock,
-}))
+vi.mock('@/api/recruitmentIntake', () => ({ getIntakePlan: getIntakePlanMock }))
 vi.mock('@/utils/academic', () => ({
   getCurrentAcademicTerm: () => ({ school_year: 114, semester: 1 }),
   normalizeSchoolYear: (v: number) => v,
@@ -50,18 +49,6 @@ vi.mock('element-plus', () => ({
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }) }))
 
 import ClassroomView from '../ClassroomView.vue'
-
-function deferred<T>() {
-  let resolve!: (v: T) => void
-  const promise = new Promise<T>((res) => { resolve = res })
-  return { promise, resolve }
-}
-
-interface SetupState {
-  fetchClassrooms: () => Promise<void>
-  classrooms: { id: number; name: string }[]
-  loading: boolean
-}
 
 const STUBS = {
   PlanStatusCard: true,
@@ -91,6 +78,13 @@ const STUBS = {
   'el-descriptions-item': { template: '<div><slot /></div>' },
 }
 
+interface SetupState {
+  form: Record<string, unknown>
+  isEdit: boolean
+  formRef: unknown
+  submitForm: () => Promise<void>
+}
+
 async function mountView() {
   getClassroomsMock.mockResolvedValue({ data: [] })
   getGradesMock.mockResolvedValue({ data: [] })
@@ -103,46 +97,42 @@ async function mountView() {
   return wrapper
 }
 
-const classA = [{ id: 1, name: 'A 學期班' }]
-const classB = [{ id: 2, name: 'B 學期班' }]
-
-describe('ClassroomView fetchClassrooms 請求序號守衛（C3c）', () => {
+describe('ClassroomView submitForm 清除教師指派（P1）', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('切學期 A(慢)→B(快)：較舊的 A 回應遲到 resolve 後不得覆寫最新 B 清單', async () => {
+  it('編輯班級時清空教師下拉（undefined）→ payload 應送 null 而非丟欄', async () => {
+    updateClassroomMock.mockResolvedValue({ data: {} })
     const wrapper = await mountView()
     const ss = wrapper.vm.$.setupState as SetupState
 
-    const dA = deferred<{ data: typeof classA }>()
-    const dB = deferred<{ data: typeof classB }>()
-    getClassroomsMock.mockReturnValueOnce(dA.promise).mockReturnValueOnce(dB.promise)
+    // 模擬：進入編輯、載入了已指派班導的班，使用者把三個教師下拉都清空
+    ss.isEdit = true
+    Object.assign(ss.form, {
+      id: 5,
+      name: '小班A',
+      class_code: 'A1',
+      school_year: 114,
+      semester: 1,
+      grade_id: 1,
+      capacity: 30,
+      head_teacher_id: undefined,
+      assistant_teacher_id: undefined,
+      english_teacher_id: undefined,
+      is_active: true,
+    })
+    // el-form 被 stub，注入可用的 validate
+    ss.formRef = { validate: async (cb: (v: boolean) => unknown) => cb(true) }
 
-    const runA = ss.fetchClassrooms() // seq1（A 學期，慢）
-    const runB = ss.fetchClassrooms() // seq2（B 學期，快）
-
-    dB.resolve({ data: classB })
-    await flushPromises()
-    await runB
-    expect(ss.classrooms.map((c) => c.id)).toEqual([2])
-
-    dA.resolve({ data: classA }) // 遲到的舊回應
-    await flushPromises()
-    await runA
-    // 仍為 B 學期，未被較舊的 A 回應覆寫
-    expect(ss.classrooms.map((c) => c.id)).toEqual([2])
-    wrapper.unmount()
-  })
-
-  it('無競態單一請求時仍正常寫入並收掉 loading', async () => {
-    const wrapper = await mountView()
-    const ss = wrapper.vm.$.setupState as SetupState
-
-    getClassroomsMock.mockResolvedValueOnce({ data: classB })
-    await ss.fetchClassrooms()
+    await ss.submitForm()
     await flushPromises()
 
-    expect(ss.classrooms.map((c) => c.id)).toEqual([2])
-    expect(ss.loading).toBe(false)
+    expect(updateClassroomMock).toHaveBeenCalledTimes(1)
+    const [id, payload] = updateClassroomMock.mock.calls[0] as [number, Record<string, unknown>]
+    expect(id).toBe(5)
+    // 關鍵：清空後不可丟欄（undefined），要顯式 null 才能讓後端清除指派
+    expect(payload.head_teacher_id).toBeNull()
+    expect(payload.assistant_teacher_id).toBeNull()
+    expect(payload.english_teacher_id).toBeNull()
     wrapper.unmount()
   })
 })

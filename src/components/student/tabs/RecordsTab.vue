@@ -56,27 +56,44 @@ const grouped = computed(() => {
   return g
 })
 
+let requestSeq = 0
 async function fetchData() {
   if (!props.studentId) return
+  const seq = ++requestSeq
+  const sid = props.studentId
   loading.value = true
   try {
-    const params: ApiQuery<'/students/records', 'get'> = { student_id: props.studentId, page: 1, page_size: 100 }
+    const params: ApiQuery<'/students/records', 'get'> = { student_id: sid, page: 1, page_size: 100 }
     if (filterFrom.value) params.date_from = filterFrom.value
     if (filterTo.value) params.date_to = filterTo.value
     const res = await getStudentRecordsTimeline(params)
+    if (seq !== requestSeq || props.studentId !== sid) return
     items.value = res.data.items || []
     loaded.value = true
   } catch (e) {
+    if (seq !== requestSeq || props.studentId !== sid) return
     ElMessage.error(apiError(e, '載入紀錄失敗'))
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
+// detail panel 切換學生時會重用同一分頁實例，須重置 loaded 並重載；requestSeq
+// 防舊學生的慢回應覆寫新學生。
 watch(
-  () => [props.active, props.studentId],
-  ([active]) => {
-    if (active && !loaded.value) fetchData()
+  () => props.studentId,
+  () => {
+    requestSeq += 1
+    items.value = []
+    loaded.value = false
+    loading.value = false
+    if (props.active) fetchData()
+  },
+)
+watch(
+  () => props.active,
+  (active) => {
+    if (active && !loaded.value && !loading.value) fetchData()
   },
   { immediate: true },
 )
