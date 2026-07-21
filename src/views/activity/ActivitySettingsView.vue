@@ -117,6 +117,78 @@
         style="margin-top: 8px"
       />
     </el-card>
+
+    <el-card style="max-width: 720px; margin-top: 16px" v-loading="emailTemplateLoading">
+      <template #header>候補直升正式通知信樣板</template>
+      <p class="email-template-hint">
+        管理員從報名管理刪除正式報名後，候補依序遞補時會直接升為正式報名（略過家長 48
+        小時確認）並寄送這封通知信。可用佔位符：<code>{student_name}</code>、
+        <code>{course_name}</code>、<code>{query_token}</code>、<code>{edit_url}</code>；
+        留空即恢復預設樣板。
+      </p>
+      <el-alert
+        v-if="!emailTemplate.email_enabled"
+        type="warning"
+        title="目前環境尚未啟用 Email 寄送（ACTIVITY_EMAIL_ENABLED / RESEND_API_KEY 未設定），測試寄送與正式通知都不會真的送出"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px"
+      />
+      <el-form label-width="80px">
+        <el-form-item label="主旨">
+          <el-input
+            v-model="emailTemplate.subject"
+            data-test="waitlist-email-subject-input"
+            :placeholder="emailTemplate.subject_default"
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item label="內文">
+          <el-input
+            v-model="emailTemplate.body"
+            data-test="waitlist-email-body-input"
+            type="textarea"
+            :rows="10"
+            :placeholder="emailTemplate.body_default"
+            maxlength="4000"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button
+            type="primary"
+            data-test="waitlist-email-save-btn"
+            @click="handleSaveEmailTemplate"
+            :loading="savingEmailTemplate"
+          >儲存樣板</el-button>
+        </el-form-item>
+
+        <el-divider content-position="left">測試寄送</el-divider>
+        <el-form-item label="收件信箱">
+          <el-input
+            v-model="testSendEmail"
+            data-test="waitlist-email-test-send-input"
+            placeholder="輸入要試寄的信箱"
+            style="max-width: 320px"
+          />
+          <el-button
+            style="margin-left: 8px"
+            data-test="waitlist-email-test-send-btn"
+            @click="handleTestSend"
+            :loading="testSending"
+          >測試寄送</el-button>
+        </el-form-item>
+      </el-form>
+
+      <el-alert
+        v-if="emailTemplateSavedAt"
+        type="success"
+        :title="`已於 ${emailTemplateSavedAt} 儲存`"
+        :closable="false"
+        style="margin-top: 8px"
+      />
+    </el-card>
   </div>
 </template>
 
@@ -129,6 +201,9 @@ import {
   getRegistrationTime,
   updateRegistrationTime,
   uploadActivityPoster,
+  getWaitlistPromotedEmailTemplate,
+  updateWaitlistPromotedEmailTemplate,
+  testSendWaitlistPromotedEmail,
 } from '@/api/activity'
 import {
   buildSaveConfirmLines,
@@ -145,6 +220,14 @@ interface SettingsForm {
   target_audience: string
   form_card_title: string
   poster_url: string
+}
+
+interface WaitlistPromotedEmailTemplateForm {
+  subject: string | null
+  body: string | null
+  subject_default: string
+  body_default: string
+  email_enabled: boolean
 }
 
 const DEFAULT_POSTER = '/images/activity-poster.jpg'
@@ -290,7 +373,75 @@ async function handleSave() {
   }
 }
 
-onMounted(fetchSettings)
+// ── 候補直升正式通知信樣板 ─────────────────────────────────────────
+const emailTemplateLoading = ref(false)
+const savingEmailTemplate = ref(false)
+const testSending = ref(false)
+const emailTemplateSavedAt = ref('')
+const testSendEmail = ref('')
+const emailTemplate = ref<WaitlistPromotedEmailTemplateForm>({
+  subject: null,
+  body: null,
+  subject_default: '',
+  body_default: '',
+  email_enabled: false,
+})
+
+async function fetchEmailTemplate() {
+  emailTemplateLoading.value = true
+  try {
+    const res = await getWaitlistPromotedEmailTemplate()
+    emailTemplate.value = res.data as WaitlistPromotedEmailTemplateForm
+  } catch {
+    ElMessage.error('載入候補直升正式通知信樣板失敗')
+  } finally {
+    emailTemplateLoading.value = false
+  }
+}
+
+async function handleSaveEmailTemplate() {
+  savingEmailTemplate.value = true
+  try {
+    const res = await updateWaitlistPromotedEmailTemplate({
+      subject: emailTemplate.value.subject || null,
+      body: emailTemplate.value.body || null,
+    })
+    emailTemplate.value = res.data as WaitlistPromotedEmailTemplateForm
+    ElMessage.success('樣板已儲存')
+    emailTemplateSavedAt.value = new Date().toLocaleString('zh-TW')
+  } catch (e) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '儲存失敗')
+  } finally {
+    savingEmailTemplate.value = false
+  }
+}
+
+async function handleTestSend() {
+  if (!testSendEmail.value.trim()) {
+    ElMessage.warning('請輸入測試收件信箱')
+    return
+  }
+  testSending.value = true
+  try {
+    const res = await testSendWaitlistPromotedEmail({
+      to_email: testSendEmail.value.trim(),
+      subject: emailTemplate.value.subject || undefined,
+      body: emailTemplate.value.body || undefined,
+    })
+    ElMessage.success((res.data as { message: string }).message)
+  } catch (e) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '測試寄送失敗')
+  } finally {
+    testSending.value = false
+  }
+}
+
+onMounted(() => {
+  fetchSettings()
+  fetchEmailTemplate()
+})
 </script>
 
 <style scoped>
@@ -319,5 +470,17 @@ onMounted(fetchSettings)
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.email-template-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+.email-template-hint code {
+  background: var(--el-fill-color-light, #f3f4f6);
+  padding: 1px 4px;
+  border-radius: 3px;
 }
 </style>
