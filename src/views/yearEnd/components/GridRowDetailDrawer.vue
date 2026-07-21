@@ -193,7 +193,11 @@ async function fetchProvenance(key: string) {
 
 // 展開/收合切換；只在「首次展開且尚未抓過」時才打 API（lazy + 快取，重複展開
 // 不重打）。async 是為了讓測試可以 `await vm.toggleProvenance(key)`。
+// 函式層 guard（不只靠模板 v-if）：非 7-key 白名單一律不動作，即使呼叫端繞過
+// UI（例如直接呼叫 vm.toggleProvenance('FESTIVAL_DIFF')）也不會觸發
+// getProvenance——單一 gate 來源為 isProvenanceKey/PROVENANCE_BONUS_KEYS。
 async function toggleProvenance(key: string) {
+  if (!isProvenanceKey(key)) return
   const state = ensureProvenanceState(key)
   state.expanded = !state.expanded
   if (state.expanded && !state.fetched && !state.loading) {

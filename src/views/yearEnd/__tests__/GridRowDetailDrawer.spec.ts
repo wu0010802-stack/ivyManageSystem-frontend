@@ -31,6 +31,7 @@ vi.mock('vue-router', () => ({
 import * as api from '@/api/yearEnd'
 import { ElMessage } from 'element-plus'
 import type { DerivedValue } from '@/types/provenance'
+import { PROVENANCE_BONUS_KEYS } from '../gridColumns'
 
 // ---- helpers ----
 
@@ -479,6 +480,22 @@ describe('GridRowDetailDrawer（怎麼算的 provenance 下鑽，vm-layer）', (
     expect(vm.isProvenanceKey('CUSTOM')).toBe(false)
   })
 
+  it('PROVENANCE_BONUS_KEYS 恰為 7 個 key（防未來 BONUS_COL_KEYS 新增獎金項時漂移未被發現）', () => {
+    // size 斷言 + 逐一列出完整比對：未來 gridColumns.ts 的 BONUS_COL_KEYS 新增獎金項時
+    // （若忘記同步評估是否要建 BE provenance provider），此測試會立即炸，而不是等到
+    // staging 上點「怎麼算的」按鈕打 400 才被發現。
+    expect(PROVENANCE_BONUS_KEYS.size).toBe(7)
+    expect(PROVENANCE_BONUS_KEYS).toEqual(new Set([
+      'APPRAISAL_HALF_BONUS_FIRST',
+      'APPRAISAL_HALF_BONUS_SECOND',
+      'SEMESTER_DIVIDEND_FIRST',
+      'SEMESTER_DIVIDEND_SECOND',
+      'AFTER_CLASS_AWARD',
+      'TEACHING_EXTRA',
+      'EXCESS_ENROLLMENT',
+    ]))
+  })
+
   it('點「怎麼算的」→ 呼叫 getProvenance(該key, cycleId, employeeId)，展開後顯示 formula_summary + 逐筆 source_records', async () => {
     vi.mocked(api.getProvenance).mockResolvedValue({ data: makeDerivedValue() } as never)
 
@@ -545,7 +562,7 @@ describe('GridRowDetailDrawer（怎麼算的 provenance 下鑽，vm-layer）', (
     expect(state.data).toBeNull()
   })
 
-  it('FESTIVAL_DIFF/CUSTOM：toggleProvenance 仍可呼叫但不觸發 getProvenance（gate 在 UI 層擋按鈕，函式本身不假設呼叫端一定守規則——這裡驗證即使誤呼叫也不送出非法 key 的請求）', async () => {
+  it('FESTIVAL_DIFF/CUSTOM：函式層 guard 擋下，即使繞過 UI 直接呼叫 toggleProvenance 也不觸發 getProvenance', async () => {
     const wrapper = mountVm({
       modelValue: true,
       row: makeRow({ special_bonuses: { FESTIVAL_DIFF: '500' } }),
@@ -557,6 +574,13 @@ describe('GridRowDetailDrawer（怎麼算的 provenance 下鑽，vm-layer）', (
     // isProvenanceKey 是 UI 層 v-if 用的 gate；specialBonusItems 仍會列出 FESTIVAL_DIFF，
     // 但因為 isProvenanceKey('FESTIVAL_DIFF') === false，模板不會渲染出對應的展開按鈕。
     expect(vm.isProvenanceKey('FESTIVAL_DIFF')).toBe(false)
+
+    // 繞過 UI，直接呼叫 toggleProvenance——驗證 toggleProvenance 函式本身也有 guard
+    // （不只靠模板 v-if），非白名單 key 一律不動作、不觸發 getProvenance。
+    await vm.toggleProvenance('FESTIVAL_DIFF')
+
+    expect(api.getProvenance).not.toHaveBeenCalled()
+    expect(vm.provenanceState['FESTIVAL_DIFF']).toBeUndefined()
   })
 
   it('有 deep_link 時 goDeepLink 呼叫 router.push', async () => {
