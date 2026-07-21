@@ -1,7 +1,8 @@
 /**
  * scoreItemLabels — ScoreItemCode 的中文標籤與顯示順序（共用）。
  *
- * 對應後端 models/appraisal.py 的 ScoreItemCode enum。任何前端視圖
+ * 對應後端 models/appraisal.py 的 ScoreItemCode enum，共 24 碼（加上分數預覽表的
+ * 員工欄與合計欄共 26 欄，見 `scorePreviewColumns.ts`）。任何前端視圖
  * 要顯示這些 code 的人話名稱都應從此載入，避免同 code 多版本標籤。
  *
  * （例外：useManualEventEntry.ts 的精簡版標籤，因卡片區塊 UI 需求保留。）

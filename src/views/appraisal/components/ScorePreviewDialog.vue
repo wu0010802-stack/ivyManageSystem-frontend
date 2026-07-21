@@ -14,6 +14,13 @@
  * 底部「確認寫入」與同步差異摘要 banner 同樣只在 `canWrite && cycleStatus === 'OPEN'`
  * 時 render；呼叫 `syncAppraisalScoreItems(cycleId, { dryRun: false })` 實際寫入，
  * 成功後 emit `synced` 讓 parent refresh。
+ *
+ * Task A5：26 欄矩陣加欄位開關 chips（比照批次 2b-1 `yearEnd/gridColumns.ts` +
+ * `YearEndGridView.vue` pattern，見 `scorePreviewColumns.ts`）。預設只顯示「有異動的
+ * 欄」（`computeChangedColumns`），使用者可經 chips 增減，覆寫存 localStorage
+ * （`loadVisibleScoreColOverride` 回傳 `null` 代表未曾覆寫過，才落回異動欄預設；一旦
+ * 使用者點過 chip，即使結果變成空集合也視為「已覆寫」，不再套用異動欄預設）。員工欄與
+ * 合計欄不受此開關控制、恆顯示。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -21,6 +28,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { previewAppraisalScore, syncAppraisalScoreItems } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { ITEM_CODE_LABELS, ITEM_CODES_ORDER } from '@/views/appraisal/scoreItemLabels'
+import {
+  loadVisibleScoreColOverride,
+  saveVisibleScoreColOverride,
+  computeChangedColumns,
+  type ScorePreviewParticipant,
+} from '@/views/appraisal/scorePreviewColumns'
 
 interface ScoreItem { item_code?: string; delta?: number | string | null; current_db_value?: number | string | null; raw_value?: unknown; note?: string }
 interface PreviewParticipant { participant_id?: number; employee_name?: string; items?: ScoreItem[] }
@@ -67,6 +80,50 @@ const writing = ref(false)
 // 一律要求 APPRAISAL_EVENT_WRITE，且 cycle 非 OPEN 直接 400）。score_preview 端點僅需
 // APPRAISAL_READ、不檢查 cycle 狀態，因此唯讀矩陣不受此限制。
 const canSync = computed(() => props.canWrite && props.cycleStatus === 'OPEN')
+
+// Task A5：26 欄矩陣的欄位開關。載入 preview 後（見 onOpen → applyVisibleColsDefault）
+// 才會有實質內容；初始空集合只是佔位，避免 dialog 尚未載入資料時就出現一閃而過的空表。
+const visibleCols = ref<Set<string>>(new Set())
+
+function toggleCol(code: string) {
+  const next = new Set(visibleCols.value)
+  if (next.has(code)) {
+    next.delete(code)
+  } else {
+    next.add(code)
+  }
+  visibleCols.value = next
+  saveVisibleScoreColOverride(next)
+}
+
+// 26 欄矩陣實際渲染的欄：ITEM_CODES_ORDER 交集 visibleCols，比照
+// `YearEndGridView.vue` 的 `visibleBonusColumns` 既有寫法（先算好過濾後的陣列再單純
+// v-for），刻意不在 el-table-column 上同時寫 v-for + v-if——Vue 3 起同一元素上
+// v-if 優先權高於 v-for，會讀不到 v-for 迴圈變數，是已知反樣式。
+const visibleItemCodes = computed(() =>
+  ITEM_CODES_ORDER.filter((code) => visibleCols.value.has(code)),
+)
+
+// 載入 26 欄矩陣後套用欄位開關預設：使用者曾覆寫過（loadVisibleScoreColOverride
+// 非 null，即使覆寫結果是空集合也算）就沿用覆寫；否則預設只顯示「有異動的欄」
+// （computeChangedColumns），避免 26 欄一次全展開造成橫向捲動。
+function applyVisibleColsDefault() {
+  const override = loadVisibleScoreColOverride()
+  if (override) {
+    visibleCols.value = override
+    return
+  }
+  const participants: ScorePreviewParticipant[] = (data.value?.participants ?? []).map((p) => ({
+    participant_id: p.participant_id ?? 0,
+    employee_name: p.employee_name ?? '',
+    items: (p.items ?? []).map((it) => ({
+      item_code: it.item_code ?? '',
+      delta: Number(it.delta ?? 0),
+      current_db_value: Number(it.current_db_value ?? 0),
+    })),
+  }))
+  visibleCols.value = computeChangedColumns(participants)
+}
 
 async function loadPreview() {
   if (!props.cycleId) return
@@ -115,6 +172,7 @@ async function onOpen() {
     syncError.value = false
   }
   await Promise.all(tasks)
+  applyVisibleColsDefault()
 }
 
 watch(
@@ -275,6 +333,24 @@ function tooltipLines(row: PreviewParticipant, code: string) {
           顯示 {{ filteredParticipants.length }} / {{ data?.participants?.length ?? 0 }} 人
         </span>
       </div>
+
+      <!-- Task A5：26 欄開關 chips——預設只顯示有異動的欄（applyVisibleColsDefault），
+           使用者可點 chip 增減，覆寫存 localStorage（scorePreviewColumns.ts 單一來源）。
+           比照 YearEndGridView 獎金欄開關 chips 樣式。 -->
+      <div v-if="data" class="score-col-chips" data-test="score-col-chips">
+        <span class="chips-label">顯示分數欄：</span>
+        <el-tag
+          v-for="code in ITEM_CODES_ORDER"
+          :key="code"
+          class="score-col-chip"
+          :data-test="`score-col-chip-${code}`"
+          :type="visibleCols.has(code) ? 'primary' : 'info'"
+          :effect="visibleCols.has(code) ? 'dark' : 'plain'"
+          style="cursor: pointer"
+          @click="toggleCol(code)"
+        >{{ (ITEM_CODE_LABELS as Record<string, string>)[code] || code }}</el-tag>
+      </div>
+
       <el-table
         v-if="data"
         :data="filteredParticipants"
@@ -285,7 +361,7 @@ function tooltipLines(row: PreviewParticipant, code: string) {
       >
         <el-table-column label="員工" prop="employee_name" width="100" fixed />
         <el-table-column
-          v-for="code in ITEM_CODES_ORDER"
+          v-for="code in visibleItemCodes"
           :key="code"
           :label="(ITEM_CODE_LABELS as Record<string, string>)[code] || code"
           :min-width="110"
@@ -366,6 +442,23 @@ function tooltipLines(row: PreviewParticipant, code: string) {
   color: var(--el-text-color-secondary);
   font-size: var(--text-sm);
   margin-left: auto;
+}
+
+.score-col-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.chips-label {
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
+}
+
+.score-col-chip {
+  user-select: none;
 }
 
 .diff {

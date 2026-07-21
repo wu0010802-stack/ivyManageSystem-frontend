@@ -11,6 +11,7 @@ vi.mock('@/api/appraisal', () => ({
 vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() }, ElMessageBox: { confirm: vi.fn(async () => true) } }))
 
 import ScorePreviewDialog from '../components/ScorePreviewDialog.vue'
+import { loadVisibleScoreColOverride, SCORE_COL_LS_KEY } from '../scorePreviewColumns'
 
 // ⚠ 本 repo `vitest.config.js`（獨立於 `vite.config.js`，vitest 不會 merge 兩者）未掛
 // unplugin-vue-components，`el-*` 標籤在測試環境下不會解析成真元件。直接 mount 只 stub
@@ -77,6 +78,7 @@ const STUBS = {
   'el-radio-group': { template: '<div><slot /></div>' },
   'el-radio-button': { template: '<button><slot /></button>' },
   'el-tooltip': { template: '<span class="el-tooltip-stub"><slot /></span>' },
+  'el-tag': { template: '<span class="el-tag"><slot /></span>' },
 }
 
 const mountOpts = (props: Record<string, unknown>) => ({
@@ -141,5 +143,64 @@ describe('統一分數同步 dialog', () => {
     expect(syncMock).not.toHaveBeenCalled()
     expect(w.find('[data-test="sync-diff-error-alert"]').exists()).toBe(false)
     expect(w.find('[data-test="sync-diff-skipped-note"]').exists()).toBe(true)
+  })
+})
+
+// Task A5：26 欄開關 chips——預設只顯示有異動的欄，使用者可點 chip 增減並持久化。
+describe('26 欄分數預覽開關 chips', () => {
+  beforeEach(() => {
+    previewMock.mockClear()
+    syncMock.mockClear()
+    localStorage.clear()
+  })
+
+  const participantsWithOneChangedItem = [
+    {
+      participant_id: 1,
+      employee_name: 'A',
+      items: [
+        { item_code: 'LATE_EARLY', delta: -2, current_db_value: 0 },
+        { item_code: 'MISSING_PUNCH', delta: 0, current_db_value: 0 },
+      ],
+    },
+  ]
+
+  it('預設只顯示有異動的欄；未異動欄的欄位不 render、chip 為 info', async () => {
+    previewMock.mockResolvedValueOnce({ data: { participants: participantsWithOneChangedItem } })
+    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: false, cycleStatus: 'OPEN' }))
+    await flushPromises()
+
+    // 有異動的 LATE_EARLY：chip 為 primary、欄位有 render
+    const changedChip = w.find('[data-test="score-col-chip-LATE_EARLY"]')
+    expect(changedChip.attributes('type')).toBe('primary')
+    expect(w.find('[data-test="delta-1-LATE_EARLY"]').exists()).toBe(true)
+
+    // 無異動的 MISSING_PUNCH：chip 為 info、欄位不 render（非 CSS 隱藏）
+    const unchangedChip = w.find('[data-test="score-col-chip-MISSING_PUNCH"]')
+    expect(unchangedChip.attributes('type')).toBe('info')
+    expect(w.find('[data-test="delta-1-MISSING_PUNCH"]').exists()).toBe(false)
+
+    // 員工欄與合計欄恆顯示
+    expect(w.text()).toContain('員工')
+    expect(w.find('[data-test="total-1"]').exists()).toBe(true)
+  })
+
+  it('點 chip 切換可見欄並持久化到 localStorage（獨立重讀驗證）', async () => {
+    previewMock.mockResolvedValueOnce({ data: { participants: participantsWithOneChangedItem } })
+    const w = mount(ScorePreviewDialog, mountOpts({ canWrite: false, cycleStatus: 'OPEN' }))
+    await flushPromises()
+
+    expect(w.find('[data-test="delta-1-MISSING_PUNCH"]').exists()).toBe(false)
+    await w.find('[data-test="score-col-chip-MISSING_PUNCH"]').trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-test="delta-1-MISSING_PUNCH"]').exists()).toBe(true)
+    expect(w.find('[data-test="score-col-chip-MISSING_PUNCH"]').attributes('type')).toBe('primary')
+
+    // 獨立重讀 localStorage（不透過 vm）確認覆寫已持久化，且原本的異動欄仍在覆寫集合中
+    expect(localStorage.getItem(SCORE_COL_LS_KEY)).not.toBeNull()
+    const persisted = loadVisibleScoreColOverride()
+    expect(persisted?.has('MISSING_PUNCH')).toBe(true)
+    expect(persisted?.has('LATE_EARLY')).toBe(true)
   })
 })
