@@ -52,7 +52,7 @@ export function deriveAppraisalStepStatuses(
     participants: !hasCycle ? 'disabled' : participantsDone ? 'done' : 'current',
     manual: !participantsDone ? 'disabled' : 'todo',
     sync: !participantsDone ? 'disabled' : synced ? 'done' : 'todo',
-    recompute: !synced ? 'disabled' : 'todo',
+    recompute: !synced ? 'disabled' : allFinalized ? 'done' : 'todo',
     sign: !synced ? 'disabled' : allFinalized ? 'done' : 'todo',
   }
 
@@ -65,10 +65,11 @@ export function deriveAppraisalStepStatuses(
 }
 
 export function deriveCurrentAppraisalStep(input: AppraisalStepInput): AppraisalStepKey {
-  const { hasCycle, participantCount, hasNonParticipant, summaryCount, finalizedCount, totalCount, pendingSignCount } = input
+  const { hasCycle, participantCount, hasNonParticipant, summaryCount } = input
   if (!hasCycle) return 'create'
   if (participantCount === 0 || hasNonParticipant) return 'participants'
   if (summaryCount === 0) return 'sync'
-  if (!(totalCount > 0 && finalizedCount === totalCount && pendingSignCount === 0)) return 'sign'
+  // 已同步(summaries 已存在=已重算)後的線性里程碑為 sign；
+  // manual/recompute 為選配步驟，透過 deriveAppraisalStepStatuses 的 status 呈現(todo/done)，不作為 current milestone。
   return 'sign'
 }

@@ -50,6 +50,14 @@ describe('deriveAppraisalStepStatuses', () => {
     })
     expect(s.sign).toBe('done')
   })
+
+  it('全員定稿後 recompute=done', () => {
+    const s = deriveAppraisalStepStatuses({
+      ...base, hasCycle: true, cycleStatus: 'CLOSED', participantCount: 10, hasNonParticipant: false,
+      summaryCount: 10, pendingSignCount: 0, finalizedCount: 10, totalCount: 10,
+    })
+    expect(s.recompute).toBe('done')
+  })
 })
 
 describe('deriveCurrentAppraisalStep', () => {
@@ -62,5 +70,12 @@ describe('deriveCurrentAppraisalStep', () => {
       summaryCount: 0,
     })
     expect(['manual', 'sync', 'recompute']).toContain(cur)
+  })
+  it('已同步但未全員定稿→sign', () => {
+    const cur = deriveCurrentAppraisalStep({
+      ...base, hasCycle: true, cycleStatus: 'OPEN', participantCount: 10, hasNonParticipant: false,
+      summaryCount: 10, finalizedCount: 5, totalCount: 10, pendingSignCount: 5,
+    })
+    expect(cur).toBe('sign')
   })
 })
