@@ -181,6 +181,55 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已更新')
   })
 
+  // Minor 1（code review 追加）：只改 excess_amount 也要有一條真的「改值→送出→
+  // 斷言 payload 正確值」，先前只測了預填與「完全未動不送」，缺了「動了這欄」本身。
+  it('只改 excess：submit 只送 excess_amount，其餘未改動欄不送', async () => {
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({ data: {} } as never)
+
+    const wrapper = mountVm({ modelValue: true, row: makeRow(), canWrite: true })
+    await nextTick()
+    const vm = wrapper.vm as unknown as DrawerVm
+
+    // 預填值是 2000（來自 row.special_bonuses.EXCESS_ENROLLMENT），改成 3500
+    vm.editForm.excess_amount = 3500
+    await vm.submit()
+    await nextTick()
+
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { excess_amount: 3500 })
+  })
+
+  // 邊界：excess 現值為 0（special_bonuses 無 EXCESS_ENROLLMENT key）時，
+  // 「維持 0」不送、「改成非 0」才送——驗證 0 這個 falsy 值沒有被 `!== null` 之外
+  // 的邏輯誤判（例如誤用 `if (editForm.excess_amount)` 之類的 truthy 判斷）。
+  it('excess 邊界：現值 0 維持不變不送；現值 0 改為非 0 才送', async () => {
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({ data: {} } as never)
+
+    const rowWithZeroExcess = makeRow({ special_bonuses: { APPRAISAL_HALF_BONUS_FIRST: '3312' } })
+
+    // Case A：現值 0，使用者沒動它，但動了另一欄——excess_amount 不該出現在 payload
+    const wrapperA = mountVm({ modelValue: true, row: rowWithZeroExcess, canWrite: true })
+    await nextTick()
+    const vmA = wrapperA.vm as unknown as DrawerVm
+    expect(vmA.editForm.excess_amount).toBe(0)
+    vmA.editForm.hire_months_override = 6
+    await vmA.submit()
+    await nextTick()
+    const [, payloadA] = vi.mocked(api.manualPatchSettlement).mock.calls[0]!
+    expect(payloadA).toEqual({ hire_months_override: 6 })
+    expect('excess_amount' in payloadA).toBe(false)
+
+    vi.mocked(api.manualPatchSettlement).mockClear()
+
+    // Case B：現值 0，使用者改成 500——excess_amount 該出現在 payload
+    const wrapperB = mountVm({ modelValue: true, row: rowWithZeroExcess, canWrite: true })
+    await nextTick()
+    const vmB = wrapperB.vm as unknown as DrawerVm
+    vmB.editForm.excess_amount = 500
+    await vmB.submit()
+    await nextTick()
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { excess_amount: 500 })
+  })
+
   it('改多欄：submit 只送有改動的欄位集合', async () => {
     vi.mocked(api.manualPatchSettlement).mockResolvedValue({ data: {} } as never)
 
@@ -352,7 +401,7 @@ function mountDom(props: { modelValue: boolean; row: GridRow | null; canWrite: b
         'el-form': { template: '<form><slot /></form>' },
         'el-form-item': { template: '<div class="el-form-item"><slot /></div>' },
         'el-input-number': {
-          props: ['modelValue'],
+          props: ['modelValue', 'valueOnClear'],
           template: '<div class="el-input-number-stub">{{ modelValue }}</div>',
         },
         'el-input': {
@@ -395,6 +444,31 @@ describe('GridRowDetailDrawer（DOM 渲染：breakdown 文字＋非 DRAFT 隱藏
     expect(wrapper.find('[data-test="input-hire-months"]').text()).toBe('12')
     expect(wrapper.find('[data-test="input-excess"]').text()).toBe('2000')
     expect(wrapper.find('[data-test="readonly-hint"]').exists()).toBe(false)
+  })
+
+  // Minor 2（code review 追加）：三個 el-input-number 都要有 :value-on-clear="null"
+  // （對齊舊 dialog）。缺這個 prop 時，使用者清空輸入框後 EP 預設 clear 值可能不是
+  // null（例如 undefined），會讓 editForm.x !== null 的守衛誤判「已改動」，把一個
+  // undefined 值的 key 塞進 payload——JSON.stringify 雖會丟掉該 key（wire payload
+  // 無損），但「尚未變更任何欄位」的警示邏輯會被繞過，UX 誤導。這裡鎖定三個欄位的
+  // valueOnClear prop 皆為 null，防止未來重構時被誤刪。
+  it('三個 el-input-number 皆設 :value-on-clear="null"（避免清空誤判為已改動）', async () => {
+    const wrapper = mountDom({ modelValue: true, row: makeRow(), canWrite: true })
+    await nextTick()
+
+    // findComponent（非 find）：value-on-clear 是元件 prop，不是 DOM attribute，
+    // 要拿到 VueWrapper 才能讀 .props()；CSS selector 會比對該 stub 元件根節點。
+    const deduction = wrapper.findComponent('[data-test="input-deduction"]')
+    const excess = wrapper.findComponent('[data-test="input-excess"]')
+    const hireMonths = wrapper.findComponent('[data-test="input-hire-months"]')
+
+    expect(deduction.exists()).toBe(true)
+    expect(excess.exists()).toBe(true)
+    expect(hireMonths.exists()).toBe(true)
+
+    expect(deduction.props('valueOnClear')).toBeNull()
+    expect(excess.props('valueOnClear')).toBeNull()
+    expect(hireMonths.props('valueOnClear')).toBeNull()
   })
 
   it('非 DRAFT：編輯區不渲染，改顯示唯讀提示', async () => {

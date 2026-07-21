@@ -256,6 +256,7 @@ defineExpose({
               :step="100"
               controls-position="right"
               style="width: 200px"
+              :value-on-clear="null"
               data-test="input-deduction"
             />
           </el-form-item>
@@ -266,6 +267,7 @@ defineExpose({
               :step="100"
               controls-position="right"
               style="width: 200px"
+              :value-on-clear="null"
               data-test="input-excess"
             />
           </el-form-item>
@@ -278,6 +280,7 @@ defineExpose({
               :precision="1"
               controls-position="right"
               style="width: 200px"
+              :value-on-clear="null"
               data-test="input-hire-months"
             />
           </el-form-item>
