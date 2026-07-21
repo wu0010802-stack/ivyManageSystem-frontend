@@ -167,6 +167,16 @@ export const upsertClassTarget = (
 ): AxiosResp<'/year_end/cycles/{cycle_id}/class_targets', 'post'> =>
   api.post(`/year_end/cycles/${cycleId}/class_targets`, data)
 
+/**
+ * 批次 upsert 多列班級編制（部分成功；guard 一次、逐列套用）。
+ * 供設定頁「全部儲存」使用，取代逐列呼叫 `upsertClassTarget`。
+ */
+export const upsertClassTargetsBatch = (
+  cycleId: number,
+  items: ApiBody<'/year_end/cycles/{cycle_id}/class_targets/batch', 'post'>['items'],
+): AxiosResp<'/year_end/cycles/{cycle_id}/class_targets/batch', 'post'> =>
+  api.post(`/year_end/cycles/${cycleId}/class_targets/batch`, { items })
+
 // ============ Appraisal Payout ============
 
 export const previewAppraisalPayout = (year: number): AxiosResp<'/year_end/appraisal-payout/preview', 'get'> =>

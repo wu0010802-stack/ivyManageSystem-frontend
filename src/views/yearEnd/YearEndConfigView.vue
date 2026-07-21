@@ -2,7 +2,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getOrgSettings, postOrgSettings, getClassTargets, upsertClassTarget } from '@/api/yearEnd'
+import {
+  getOrgSettings,
+  postOrgSettings,
+  getClassTargets,
+  upsertClassTarget,
+  upsertClassTargetsBatch,
+} from '@/api/yearEnd'
 import { getEmployees } from '@/api/employees'
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
@@ -61,6 +67,7 @@ const classroomMap = ref<Record<number, string>>({})
 // ---- Save-in-progress flags (per semester / per row) ----
 const orgSaving = ref<Record<string, boolean>>({})
 const classSaving = ref<Record<number, boolean>>({})
+const classAllSaving = ref(false)
 
 // ---- Helpers ----
 function semesterLabel(semesterFirst: boolean): string {
@@ -198,6 +205,47 @@ async function saveClassTarget(row: ClassTargetRow) {
   }
 }
 
+// ---- Save all class targets at once (batch endpoint) ----
+// 全部儲存＝送出當前所有班級列的緩衝值（classEdits，非僅手動改過的列）；
+// upsertClassTarget 是 upsert，對未變更列重寫同值為 idempotent、無副作用。
+// loadClassTargets() 已對每列無條件 seed classEdits，故下方 filter 不是
+// 「跳過未編輯列」——是防禦性守衛，只擋列真的沒有 classEdits entry 的理論異常。
+// 逐列「儲存此列」保留不動——此為額外的一次送出選項。
+async function saveAllClassTargets() {
+  const items = classTargets.value
+    .filter((row) => classEdits.value[row.id])
+    .map((row) => {
+      const edits = classEdits.value[row.id]
+      return {
+        semester_first: row.semester_first,
+        classroom_id: row.classroom_id,
+        head_count_target: edits.head_count_target,
+        head_teacher_employee_id: edits.head_teacher_employee_id,
+        returning_student_rate: edits.returning_student_rate,
+        assistant_employee_id: edits.assistant_employee_id,
+      }
+    })
+  if (!items.length) return
+  classAllSaving.value = true
+  try {
+    const res = await upsertClassTargetsBatch(cycleId, items)
+    const failed = res.data.failed ?? []
+    if (failed.length) {
+      const detail = failed
+        .map((f) => `${classroomName(f.classroom_id)}（${semesterLabel(f.semester_first)}）：${f.reason}`)
+        .join('；')
+      ElMessage.warning(`已儲存 ${res.data.succeeded_count} 筆，${failed.length} 筆失敗（${detail}）`)
+    } else {
+      ElMessage.success(`已儲存 ${res.data.succeeded_count} 筆`)
+    }
+    await loadClassTargets()
+  } catch (e) {
+    ElMessage.error(apiError(e, '全部儲存失敗'))
+  } finally {
+    classAllSaving.value = false
+  }
+}
+
 defineExpose({
   orgSettings,
   classTargets,
@@ -210,6 +258,7 @@ defineExpose({
   loadClassTargets,
   saveOrgSettings,
   saveClassTarget,
+  saveAllClassTargets,
   goToYearEndRules,
   cycleId,
 })
@@ -317,7 +366,19 @@ onMounted(async () => {
       <el-divider />
 
       <!-- 各班編制 (class_targets) -->
-      <h3 class="sub-title">各班編制</h3>
+      <div class="class-targets-header">
+        <h3 class="sub-title">各班編制</h3>
+        <el-button
+          v-if="canWrite"
+          type="success"
+          size="small"
+          :loading="classAllSaving"
+          data-test="save-all-class-targets"
+          @click="saveAllClassTargets"
+        >
+          全部儲存
+        </el-button>
+      </div>
       <el-table
         v-loading="classLoading"
         :data="classTargets"
@@ -462,6 +523,15 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.class-targets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.class-targets-header .sub-title {
+  margin: 0;
 }
 .org-settings-grid {
   display: flex;
