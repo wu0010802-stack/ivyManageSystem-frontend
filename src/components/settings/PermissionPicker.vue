@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { permissionsAdd, permissionsRemove, permissionsCombine } from '@/utils/auth'
+import { permissionsCombine } from '@/utils/auth'
 
 export interface PermissionPickerDefinition {
   permissions: Record<string, { value: string; label: string; scope_options?: string[] | null }>
@@ -45,9 +45,11 @@ function currentScope(code: string): string | null {
   return splitPermKey(found).scope ?? 'all'
 }
 
+// split-row 的 perm 也是 plain code，須認 scoped token（'STUDENTS_READ:own_class' 等）
+// 為已勾選——精確字串比對會把 scoped 授權顯示成未勾選，誘導 admin 重勾出 bare token
+// （後端 _normalize_permissions 轉 :all → 自班靜默升全園）。
 function isSplitChecked(perm: string): boolean {
-  if (isWildcard.value) return true
-  return props.modelValue.includes(perm)
+  return isChecked(perm)
 }
 
 function toggle(code: string, checked: boolean) {
@@ -69,9 +71,17 @@ function setScope(code: string, scope: string) {
   emit('update:modelValue', base.map((k) => (splitPermKey(k).code === code ? `${code}:${scope}` : k)))
 }
 
+// 委派 toggle：勾選時 scope-aware 碼預設 own_class（最小授權，全園須經 scope radio 顯式選取）、
+// 取消時清掉該 code 的所有形態（bare 與 scoped），撤權才撤得乾淨。
 function toggleSplit(perm: string, checked: boolean) {
-  const base = isWildcard.value ? expandWildcard() : [...props.modelValue]
-  emit('update:modelValue', checked ? permissionsAdd(base, perm) : permissionsRemove(base, perm))
+  toggle(perm, checked)
+}
+
+function splitEntries(sp: { read: string; write: string }): { perm: string; label: string }[] {
+  return [
+    { perm: sp.read, label: '檢視' },
+    { perm: sp.write, label: '編輯' },
+  ]
 }
 
 function selectAll() {
@@ -118,8 +128,26 @@ defineExpose({ toggle, setScope, toggleSplit, isChecked, currentScope, isSplitCh
       </div>
       <div v-for="sp in (group.split_permissions || [])" :key="sp.read" class="split-row">
         <span class="split-label">{{ sp.module }}</span>
-        <el-checkbox :model-value="isSplitChecked(sp.read)" @change="(v) => toggleSplit(sp.read, !!v)">檢視</el-checkbox>
-        <el-checkbox :model-value="isSplitChecked(sp.write)" @change="(v) => toggleSplit(sp.write, !!v)">編輯</el-checkbox>
+        <template v-for="entry in splitEntries(sp)" :key="entry.perm">
+          <el-checkbox :model-value="isSplitChecked(entry.perm)" @change="(v) => toggleSplit(entry.perm, !!v)">
+            {{ entry.label }}
+          </el-checkbox>
+          <div
+            v-if="isSplitChecked(entry.perm) && scopeOptionsFor(entry.perm).length > 0"
+            :data-perm-scope="entry.perm"
+            class="split-scope-row"
+          >
+            <el-radio-group
+              :model-value="currentScope(entry.perm) ?? undefined"
+              size="small"
+              @update:model-value="(v) => setScope(entry.perm, String(v))"
+            >
+              <el-radio v-for="opt in scopeOptionsFor(entry.perm)" :key="opt" :value="opt">
+                {{ SCOPE_LABELS[opt] || opt }}
+              </el-radio>
+            </el-radio-group>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -152,7 +180,12 @@ defineExpose({ toggle, setScope, toggleSplit, isChecked, currentScope, isSplitCh
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
   padding: 4px 0;
+}
+.split-scope-row {
+  display: inline-flex;
+  align-items: center;
 }
 .split-label {
   min-width: 80px;
