@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
 import {
@@ -42,9 +42,9 @@ interface ClassTarget {
 }
 interface YearEndCycle { id: number; academic_year: number; bonus_calc_date: string; status: string }
 
-const route = useRoute()
+const props = defineProps<{ cycleId: number }>()
 const router = useRouter()
-const cycleId = Number(route.params.id)
+const cycleId = props.cycleId
 
 const cycle = ref<YearEndCycle | null>(null)
 const settlements = ref<Settlement[]>([])

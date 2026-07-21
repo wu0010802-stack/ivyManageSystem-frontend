@@ -121,6 +121,7 @@ function stubSupportApis() {
 
 async function mountView() {
   const wrapper = mount(YearEndConfigView, {
+    props: { cycleId: 5 },
     global: {
       stubs: {
         'el-table': true,

@@ -76,6 +76,7 @@ function makeRow(overrides: Partial<GridRow> = {}): GridRow {
 
 async function mountView() {
   const wrapper = mount(YearEndGridView, {
+    props: { cycleId: 7 },
     global: {
       stubs: {
         'el-table': true,
@@ -643,6 +644,7 @@ const ElButtonStubEx = defineComponent({
 
 async function mountViewWithTable() {
   const wrapper = mount(YearEndGridView, {
+    props: { cycleId: 7 },
     global: {
       stubs: {
         'el-table': ElTableStubEx,

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
@@ -48,8 +47,8 @@ const SPECIAL_BONUS_LABELS: Record<string, string> = {
 // 雙重定義——Task 1 已建立 @/constants/appraisalYearEnd 的 SIGN_STATUS_LABEL/
 // SIGN_STATUS_TAG，本檔原本各自維護一份，內容雖一致但屬未收斂的重複定義）。
 
-const route = useRoute()
-const cycleId = Number(route.params.id)
+const props = defineProps<{ cycleId: number }>()
+const cycleId = props.cycleId
 
 const rows = ref<GridRow[]>([])
 const loading = ref(false)

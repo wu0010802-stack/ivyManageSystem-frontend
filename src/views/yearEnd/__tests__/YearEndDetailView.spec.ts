@@ -163,6 +163,7 @@ const ElTabPaneStub = defineComponent({
 
 async function mountView() {
   const wrapper = mount(YearEndDetailView, {
+    props: { cycleId: 1 },
     global: {
       stubs: {
         'el-page-header': true,

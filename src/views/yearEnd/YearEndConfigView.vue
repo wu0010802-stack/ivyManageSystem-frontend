@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getOrgSettings, postOrgSettings, getClassTargets, upsertClassTarget } from '@/api/yearEnd'
 import { getEmployees } from '@/api/employees'
@@ -15,9 +15,9 @@ type ClassTargetRow = Awaited<ReturnType<typeof getClassTargets>>['data'][number
 type EmployeeOption = { id: number; name: unknown }
 type ClassroomOption = { id: number; name: unknown }
 
-const route = useRoute()
+const props = defineProps<{ cycleId: number }>()
 const router = useRouter()
-const cycleId = Number(route.params.id)
+const cycleId = props.cycleId
 
 const canWrite = computed(() => hasPermission('YEAR_END_WRITE'))
 
