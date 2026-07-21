@@ -6,7 +6,6 @@ import { defineComponent, h } from 'vue'
 vi.mock('@/api/appraisal', () => ({
   getAppraisalCurrentCycle: vi.fn(),
   getAppraisalAllEmployeesStatus: vi.fn(),
-  syncAppraisalScoreItems: vi.fn(),
   createAppraisalCycle: vi.fn(),
   addAppraisalParticipant: vi.fn(),
   bulkAddAppraisalParticipantsFromActive: vi.fn(),
@@ -27,6 +26,15 @@ vi.mock('@/api/appraisal', () => ({
   getManualEventCounts: vi.fn().mockResolvedValue({ data: { entries: [] } }),
   batchUpsertManualEventCounts: vi.fn().mockResolvedValue({ data: { ok: true } }),
   listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
+  // Task A3：流程引導條簽核統計（sync/recompute/sign 步驟判定用），預設「尚無簽核資料」
+  getSignStatusSummary: vi.fn().mockResolvedValue({ data: { counts: {} } }),
+}))
+
+// ── vue-router mock（Task A3：引導條 sign 步驟導向簽核歷史頁）──
+const guidePushMock = vi.fn()
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: guidePushMock, replace: vi.fn() }),
+  useRoute: () => ({ query: {}, params: {} }),
 }))
 
 // ── Pinia store mock（可動態調整 school_year / semester）─
@@ -54,14 +62,22 @@ vi.mock('@/composables/useErrorNotify', () => ({
   useErrorNotify: () => ({ notify: vi.fn() }),
 }))
 
+// ── hasPermission mock（Task A4：分數同步 dialog 的「確認寫入」footer 需
+// APPRAISAL_EVENT_WRITE，本檔測的是 CurrentSemesterOverview 把權限判定結果傳給
+// child dialog 的 wiring，不是權限矩陣本身——canWrite 分歧行為已在
+// ScorePreviewDialog.spec.ts 用真實 prop 矩陣測過，此處固定 true 即可）───
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn(() => true),
+}))
+
 import {
   getAppraisalCurrentCycle,
   getAppraisalAllEmployeesStatus,
-  syncAppraisalScoreItems,
   createAppraisalCycle,
   addAppraisalParticipant,
   bulkAddAppraisalParticipantsFromActive,
   refreshAppraisalCycle,
+  getSignStatusSummary,
 } from '@/api/appraisal'
 
 import CurrentSemesterOverview from '../CurrentSemesterOverview.vue'
@@ -199,9 +215,18 @@ const GLOBAL_STUBS = {
     props: ['cycleId', 'participants', 'readonly'],
     template: '<div data-test="manual-event-section" />',
   },
+  // Task A4：預覽分數 + 同步分數合併為單一 dialog，CurrentSemesterOverview 只負責傳
+  // canWrite/hasNonParticipant 與監聽 synced；dry-run/確認寫入的實際行為改在
+  // ScorePreviewDialog.spec.ts 測（該元件自己直接 mount 真實邏輯）。這裡 stub 加一顆
+  // 按鈕讓測試能模擬「dialog 內確認寫入完成」emit synced，驗證 parent wiring。
   ScorePreviewDialog: {
-    props: ['visible', 'cycleId'],
-    template: '<div v-if="visible" data-test="score-preview-dialog-stub" />',
+    props: ['visible', 'cycleId', 'canWrite', 'hasNonParticipant'],
+    emits: ['update:visible', 'synced'],
+    template:
+      '<div v-if="visible" data-test="score-preview-dialog-stub" ' +
+      ':data-can-write="canWrite" :data-has-non-participant="hasNonParticipant">' +
+      '<button data-test="score-preview-dialog-stub-synced-btn" @click="$emit(\'synced\')" />' +
+      '</div>',
   },
 }
 
@@ -313,49 +338,41 @@ describe('CurrentSemesterOverview', () => {
     expect(getAppraisalAllEmployeesStatus).toHaveBeenCalledWith(12)
   })
 
-  it('點同步分數按鈕觸發 dry_run 並開啟 preview dialog', async () => {
+  // Task A4：預覽分數 + 同步分數合併為單一 ScorePreviewDialog；dry-run 載入與
+  // 確認寫入的實際 API 呼叫改在 ScorePreviewDialog.spec.ts 測試（該元件直接
+  // mount 真實邏輯）。這裡只驗證 CurrentSemesterOverview 對 child dialog 的 wiring：
+  // 點合併按鈕開 dialog 並帶入正確的 canWrite/hasNonParticipant，dialog emit
+  // synced 後會重新拉 aggregated_status。
+  it('點「預覽並同步分數」開啟合併 dialog 並帶入 canWrite/hasNonParticipant', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
-    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
-    syncAppraisalScoreItems.mockResolvedValueOnce({
-      data: {
-        cycle_id: 12,
-        dry_run: true,
-        deleted_count: 30,
-        inserted_count: 28,
-        skipped_manual_count: 4,
-        items: [],
-      },
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: makeStatusFixture({ extra: [nonParticipantRow] }),
     })
 
     const wrapper = await mountView()
-    await wrapper.find('[data-test="sync-score-btn"]').trigger('click')
+    expect(wrapper.find('[data-test="score-preview-dialog-stub"]').exists()).toBe(false)
+
+    await wrapper.find('[data-test="preview-btn"]').trigger('click')
     await flushPromises()
 
-    expect(syncAppraisalScoreItems).toHaveBeenCalledWith(12, { dryRun: true })
-    expect(wrapper.find('[data-test="sync-preview-dialog"]').exists()).toBe(true)
+    const dialogStub = wrapper.find('[data-test="score-preview-dialog-stub"]')
+    expect(dialogStub.exists()).toBe(true)
+    expect(dialogStub.attributes('data-can-write')).toBe('true')
+    expect(dialogStub.attributes('data-has-non-participant')).toBe('true')
   })
 
-  it('preview dialog 確認後呼叫 sync_score_items dry_run=false 並重新載入', async () => {
+  it('合併 dialog emit synced 後重新拉 aggregated_status', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
-    syncAppraisalScoreItems
-      .mockResolvedValueOnce({
-        data: { cycle_id: 12, dry_run: true, deleted_count: 1, inserted_count: 1, skipped_manual_count: 0, items: [] },
-      })
-      .mockResolvedValueOnce({
-        data: { cycle_id: 12, dry_run: false, deleted_count: 1, inserted_count: 1, skipped_manual_count: 0, items: [] },
-      })
 
     const wrapper = await mountView()
-    await wrapper.find('[data-test="sync-score-btn"]').trigger('click')
+    await wrapper.find('[data-test="preview-btn"]').trigger('click')
+    await flushPromises()
+    expect(getAppraisalAllEmployeesStatus).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('[data-test="score-preview-dialog-stub-synced-btn"]').trigger('click')
     await flushPromises()
 
-    await wrapper.find('[data-test="sync-confirm-btn"]').trigger('click')
-    await flushPromises()
-
-    expect(syncAppraisalScoreItems).toHaveBeenCalledTimes(2)
-    expect(syncAppraisalScoreItems).toHaveBeenLastCalledWith(12, { dryRun: false })
-    // 確認後重新拉 aggregated_status
     expect(getAppraisalAllEmployeesStatus).toHaveBeenCalledTimes(2)
   })
 
@@ -502,27 +519,30 @@ describe('CurrentSemesterOverview', () => {
     expect(bulkAddAppraisalParticipantsFromActive).toHaveBeenCalledWith(12, null)
   })
 
-  it('所有員工都已加入考核時「一鍵加入」按鈕不顯示，且「同步分數」未 disabled', async () => {
+  it('所有員工都已加入考核時「一鍵加入」按鈕不顯示，「預覽並同步分數」仍可點開', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
     const wrapper = await mountView()
 
     expect(wrapper.find('[data-test="bulk-add-btn"]').exists()).toBe(false)
-    const syncBtn = wrapper.find('[data-test="sync-score-btn"]')
-    expect(syncBtn.exists()).toBe(true)
-    expect(syncBtn.attributes('disabled')).toBeFalsy()
+    // Task A4 起「同步分數」按鈕已併入「預覽並同步分數」，且不論 hasNonParticipant
+    // 都可開 dialog 看預覽——真正擋寫入的 disabled 邏輯移入 dialog footer 的
+    // 確認寫入按鈕（見 ScorePreviewDialog.spec.ts 的 hasNonParticipant 矩陣）。
+    const previewBtn = wrapper.find('[data-test="preview-btn"]')
+    expect(previewBtn.exists()).toBe(true)
+    expect(previewBtn.attributes('disabled')).toBeFalsy()
   })
 
-  it('有未加入員工時「同步分數」按鈕 disabled', async () => {
+  it('有未加入員工時「預覽並同步分數」按鈕仍可點開（disabled 邏輯已移入 dialog）', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     getAppraisalAllEmployeesStatus.mockResolvedValue({
       data: makeStatusFixture({ extra: [nonParticipantRow] }),
     })
     const wrapper = await mountView()
 
-    const syncBtn = wrapper.find('[data-test="sync-score-btn"]')
-    expect(syncBtn.exists()).toBe(true)
-    expect(syncBtn.attributes('disabled')).toBeDefined()
+    const previewBtn = wrapper.find('[data-test="preview-btn"]')
+    expect(previewBtn.exists()).toBe(true)
+    expect(previewBtn.attributes('disabled')).toBeFalsy()
   })
 
   // ── ScorePreviewDialog + ManualEventEntrySection 整合 ────
@@ -838,5 +858,130 @@ describe('CurrentSemesterOverview 精修（Task 7）', () => {
 
     expect(wrapper.find('.el-skeleton').exists()).toBe(false)
     expect(wrapper.find('[data-test="kpi-employees"]').exists()).toBe(true)
+  })
+})
+
+// ── 流程引導條接線 + 跨頁跳轉（Task A3）─────────────────────
+describe('CurrentSemesterOverview 引導條（Task A3）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    guidePushMock.mockClear()
+    getSignStatusSummary.mockResolvedValue({ data: { counts: {} } })
+  })
+
+  const nonParticipantExtra = {
+    participant_id: null,
+    employee_id: 9,
+    employee_name: '張新進',
+    role_group: 'ASSISTANT',
+    classroom_id: 5,
+    is_participant: false,
+    attendance: { late_count: 0, early_leave_count: 0, missing_punch_count: 0, leave_days: 0, absent_days: 0 },
+    retention: null,
+    activity: null,
+    disciplinary: { warning_count: 0, minor_count: 0, major_count: 0, actions: [] },
+  }
+
+  it('掛載時渲染 AppraisalProcessGuide，有非成員時 participants 高亮 current', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: makeStatusFixture({ extra: [nonParticipantExtra] }),
+    })
+    const wrapper = await mountView()
+
+    const guide = wrapper.findComponent({ name: 'AppraisalProcessGuide' })
+    expect(guide.exists()).toBe(true)
+    expect(guide.props('statuses').participants).toBe('current')
+  })
+
+  it('無週期時點 create 引導步驟，呼叫既有建立週期流程', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: null })
+    createAppraisalCycle.mockResolvedValue({ data: { id: 12 } })
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="guide-step-create"]').attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-test="guide-step-create"]').trigger('click')
+    await flushPromises()
+
+    expect(createAppraisalCycle).toHaveBeenCalledTimes(1)
+  })
+
+  it('成員齊全時點 participants 引導步驟，捲動至成員區（非觸發一鍵加入寫入）', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    const scrollIntoView = vi.fn()
+    const getByIdSpy = vi.spyOn(document, 'getElementById').mockReturnValue({ scrollIntoView })
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="guide-step-participants"]').trigger('click')
+    await flushPromises()
+
+    expect(getByIdSpy).toHaveBeenCalledWith('appraisal-participants-section')
+    expect(scrollIntoView).toHaveBeenCalled()
+    expect(bulkAddAppraisalParticipantsFromActive).not.toHaveBeenCalled()
+    getByIdSpy.mockRestore()
+  })
+
+  it('成員齊全時點 manual 引導步驟，展開手填 collapse 並捲動', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    const scrollIntoView = vi.fn()
+    const getByIdSpy = vi.spyOn(document, 'getElementById').mockReturnValue({ scrollIntoView })
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="guide-step-manual"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.vm.manualActiveNames).toContain('manual')
+    expect(getByIdSpy).toHaveBeenCalledWith('appraisal-manual-section')
+    getByIdSpy.mockRestore()
+  })
+
+  // Task A4：sync 步驟改開統一 ScorePreviewDialog（原本直接觸發 openSyncPreview
+  // dry-run 呼叫已移入該元件本身，見 ScorePreviewDialog.spec.ts）。
+  it('成員齊全時點 sync 引導步驟，開啟統一分數同步 dialog', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="score-preview-dialog-stub"]').exists()).toBe(false)
+
+    await wrapper.find('[data-test="guide-step-sync"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="score-preview-dialog-stub"]').exists()).toBe(true)
+  })
+
+  it('成員齊全時點 recompute 引導步驟，觸發既有重新整理（重算彙整）', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    // recompute 步驟需 synced（summaryCount>0）才非 disabled，比照 sign 測試給簽核統計
+    getSignStatusSummary.mockResolvedValue({
+      data: { counts: { DRAFT: 1, SUPERVISOR_SIGNED: 0, ACCOUNTING_SIGNED: 0, FINALIZED: 0 } },
+    })
+
+    const wrapper = await mountView()
+    expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('[data-test="guide-step-recompute"]').trigger('click')
+    await flushPromises()
+
+    expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(2)
+  })
+
+  it('已同步時點 sign 引導步驟，導向 /appraisal-year-end/appraisal/history', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    getSignStatusSummary.mockResolvedValue({
+      data: { counts: { DRAFT: 1, SUPERVISOR_SIGNED: 0, ACCOUNTING_SIGNED: 0, FINALIZED: 0 } },
+    })
+
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="guide-step-sign"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.find('[data-test="guide-step-sign"]').trigger('click')
+    await flushPromises()
+
+    expect(guidePushMock).toHaveBeenCalledWith('/appraisal-year-end/appraisal/history')
   })
 })

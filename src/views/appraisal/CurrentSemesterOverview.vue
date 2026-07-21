@@ -3,34 +3,39 @@
  * CurrentSemesterOverview — 當期考核狀態總覽
  *
  * 對應 M5 重構：以 AcademicTermSelector 切換當前學期，
- * 自動取對應 cycle、4 個 KPI、員工狀態表 + 詳情 dialog、
- * 同步分數（dry-run preview → 確認寫入）。
+ * 自動取對應 cycle、4 個 KPI、員工狀態表 + 詳情 dialog。
+ * Task A4：原本分離的「預覽分數」與「同步分數」（dry-run → 確認寫入）已合併為
+ * 單一 ScorePreviewDialog，本頁只負責開關 dialog 與傳入 canWrite/hasNonParticipant。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Connection, Plus, DataAnalysis } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { useClientTableFilter } from '@/composables/useClientTableFilter'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 
 import {
   getAppraisalCurrentCycle,
   getAppraisalAllEmployeesStatus,
-  syncAppraisalScoreItems,
   createAppraisalCycle,
   addAppraisalParticipant,
   bulkAddAppraisalParticipantsFromActive,
   listScoringRules,
   refreshAppraisalCycle,
+  getSignStatusSummary,
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { fmtPct } from '@/utils/format'
+import { hasPermission } from '@/utils/auth'
 import { ROLE_GROUP_LABEL } from '@/constants/appraisalYearEnd'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
 import ManualEventEntrySection from './components/ManualEventEntrySection.vue'
 import ScorePreviewDialog from './components/ScorePreviewDialog.vue'
+import AppraisalProcessGuide from './components/AppraisalProcessGuide.vue'
+import { deriveAppraisalStepStatuses, type AppraisalStepInput, type AppraisalStepKey } from './appraisalSteps'
 
 interface CurrentCycle {
   id: number
@@ -81,15 +86,9 @@ interface ParticipantRow {
 
 interface AggregatedStatus { participants?: ParticipantRow[]; generated_at?: string }
 
-interface SyncPreviewData {
-  deleted_count?: number
-  inserted_count?: number
-  skipped_manual_count?: number
-  items?: Record<string, unknown>[]
-}
-
 const termStore = useAcademicTermStore()
 const { notify } = useErrorNotify()
+const router = useRouter()
 
 // ── 後端 semester enum ────────────────────────────────────
 const toSemesterEnum = (n: number | string) => (Number(n) === 1 ? 'FIRST' : 'SECOND')
@@ -176,6 +175,27 @@ async function loadRules(
   }
 }
 
+// ── 簽核統計（給流程引導條 sync/recompute/sign 步驟判定用，Task A3）───
+const signSummary = ref<{ counts: Record<string, number> } | null>(null)
+async function loadSignSummary(
+  cycle: CurrentCycle | null = currentCycle.value,
+  isStale: () => boolean = () => false,
+) {
+  if (!cycle) {
+    signSummary.value = null
+    return
+  }
+  try {
+    const { data } = await getSignStatusSummary(cycle.id)
+    if (isStale()) return
+    signSummary.value = { counts: (data as { counts?: Record<string, number> })?.counts ?? {} }
+  } catch (e) {
+    // 失敗不影響主流程；引導條沿用保守值（summaryCount 落回 0，顯示較早步驟，不誤判 done）
+    if (isStale()) return
+    signSummary.value = null
+  }
+}
+
 // ── 進頁即算：OPEN cycle 先 refresh 再 loadStatus ──────────
 const refreshing = ref(false)
 // 自動重算失敗不再靜默：改顯示 stale-warning banner（可關閉），提示使用者目前是舊資料
@@ -218,6 +238,9 @@ async function reloadAll() {
   if (isStale()) return
 
   await loadRules(cycle, isStale)
+  if (isStale()) return
+
+  await loadSignSummary(cycle, isStale)
 }
 
 watch(
@@ -344,44 +367,12 @@ function openDetail(row: ParticipantRow) {
   detailDialogVisible.value = true
 }
 
-// ── 同步分數流程 ──────────────────────────────────────────
-const previewDialogVisible = ref(false)
-const previewLoading = ref(false)
-const previewData = ref<SyncPreviewData | null>(null)
-const confirmLoading = ref(false)
-
-async function openSyncPreview() {
-  if (!currentCycle.value) return
-  previewLoading.value = true
-  previewDialogVisible.value = true
-  previewData.value = null
-  try {
-    const { data } = await syncAppraisalScoreItems(currentCycle.value.id, { dryRun: true })
-    previewData.value = data as SyncPreviewData
-  } catch (e) {
-    notify(e, 'CurrentSemesterOverview:syncPreview', '預覽同步分數失敗')
-    previewDialogVisible.value = false
-  } finally {
-    previewLoading.value = false
-  }
-}
-
-async function confirmSync() {
-  if (!currentCycle.value) return
-  confirmLoading.value = true
-  try {
-    const { data } = await syncAppraisalScoreItems(currentCycle.value.id, { dryRun: false })
-    const d = data as SyncPreviewData
-    ElMessage.success(
-      `同步完成：刪除 ${d.deleted_count} 筆、新增 ${d.inserted_count} 筆、保留人工 ${d.skipped_manual_count} 筆`,
-    )
-    previewDialogVisible.value = false
-    await loadStatus()
-  } catch (e) {
-    notify(e, 'CurrentSemesterOverview:syncConfirm', '同步分數失敗')
-  } finally {
-    confirmLoading.value = false
-  }
+// ── 分數同步（Task A4：預覽 + 同步已合併進 ScorePreviewDialog 內部，
+// 此處只負責開關 dialog 與寫入權限判定；dry-run/確認寫入呼叫全移入該元件）──
+async function handleSynced() {
+  // 同步只新增/覆寫 auto: 開頭的 AppraisalScoreItem，不動 cycle/rules/簽核狀態，
+  // 沿用既有 confirmSync 的窄範圍 refresh（避免不必要的整頁 reloadAll）。
+  await loadStatus()
 }
 
 // ── 加入考核 per-row + 一鍵加入 bulk ───────────────────────
@@ -389,9 +380,9 @@ const hasNonParticipant = computed(() =>
   participants.value.some((p) => p.is_participant === false),
 )
 
-const syncDisabledReason = computed(() =>
-  hasNonParticipant.value ? '請先把所有教師加入考核再同步' : '',
-)
+// 分數同步 dialog 的「確認寫入」footer 是否顯示（無此元件層守衛，動作純靠路由 gate +
+// 後端；此處補寫入型動作前置守衛，比照 CLAUDE.md §已確認的現況事實）。
+const canSyncWrite = computed(() => hasPermission('APPRAISAL_EVENT_WRITE'))
 
 const addingRowEmployeeId = ref<number | null>(null)
 const bulkAdding = ref(false)
@@ -473,6 +464,59 @@ async function createCurrentCycle() {
 
 // ── 預覽分數 dialog（與同步分數 preview 區隔）────────────
 const scorePreviewDialogVisible = ref(false)
+
+// ── 流程引導條（Task A3）：組 AppraisalStepInput + navigate 跨頁跳轉 ──
+// 手填 collapse 的展開狀態改由 v-model 控制，讓 onGuideNavigate('manual') 可展開它
+const manualActiveNames = ref<string[]>([])
+
+const stepInput = computed<AppraisalStepInput>(() => {
+  const counts = signSummary.value?.counts ?? {}
+  const totalSignCount = Object.values(counts).reduce((acc, n) => acc + (n || 0), 0)
+  const finalizedSignCount = counts.FINALIZED || 0
+  return {
+    hasCycle: !!currentCycle.value,
+    cycleStatus: (currentCycle.value?.status as 'OPEN' | 'LOCKED' | 'CLOSED' | undefined) ?? null,
+    participantCount: employeeCount.value,
+    hasNonParticipant: hasNonParticipant.value,
+    // summaryCount/totalCount 皆取自簽核統計總數（未載入時保守回落 0，顯示較早步驟）
+    summaryCount: totalSignCount,
+    pendingSignCount: totalSignCount - finalizedSignCount,
+    finalizedCount: finalizedSignCount,
+    totalCount: totalSignCount,
+  }
+})
+
+const stepStatuses = computed(() => deriveAppraisalStepStatuses(stepInput.value))
+
+function scrollToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// navigate 只接「現在已存在」的動作；create 之後會改走 A7 統一 dialog，屆時再更新此處 wiring。
+// sync 步驟（Task A4）：預覽/同步已合併進單一 ScorePreviewDialog，改為開該 dialog。
+function onGuideNavigate(key: AppraisalStepKey) {
+  switch (key) {
+    case 'create':
+      createCurrentCycle()
+      break
+    case 'participants':
+      scrollToSection('appraisal-participants-section')
+      break
+    case 'manual':
+      manualActiveNames.value = ['manual']
+      scrollToSection('appraisal-manual-section')
+      break
+    case 'sync':
+      scorePreviewDialogVisible.value = true
+      break
+    case 'recompute':
+      reloadAll()
+      break
+    case 'sign':
+      router.push('/appraisal-year-end/appraisal/history')
+      break
+  }
+}
 </script>
 
 <template>
@@ -502,31 +546,13 @@ const scorePreviewDialogVisible = ref(false)
         </el-button>
         <el-button
           v-if="currentCycle"
-          type="info"
+          type="primary"
           :icon="DataAnalysis"
           data-test="preview-btn"
           @click="scorePreviewDialogVisible = true"
         >
-          預覽分數
+          預覽並同步分數
         </el-button>
-        <el-tooltip
-          v-if="currentCycle"
-          :content="syncDisabledReason"
-          :disabled="!hasNonParticipant"
-          placement="top"
-        >
-          <span>
-            <el-button
-              type="primary"
-              :icon="Connection"
-              :disabled="hasNonParticipant"
-              data-test="sync-score-btn"
-              @click="openSyncPreview"
-            >
-              同步分數
-            </el-button>
-          </span>
-        </el-tooltip>
         <el-button
           :icon="Refresh"
           :loading="cycleLoading || refreshing || statusLoading"
@@ -537,6 +563,8 @@ const scorePreviewDialogVisible = ref(false)
         </el-button>
       </div>
     </div>
+
+    <AppraisalProcessGuide :statuses="stepStatuses" @navigate="onGuideNavigate" />
 
     <!-- cycle 不存在 banner -->
     <el-alert
@@ -608,7 +636,12 @@ const scorePreviewDialogVisible = ref(false)
         </template>
       </div>
 
-      <el-collapse class="manual-section" data-test="manual-section">
+      <el-collapse
+        id="appraisal-manual-section"
+        v-model="manualActiveNames"
+        class="manual-section"
+        data-test="manual-section"
+      >
         <el-collapse-item title="手填事件次數" name="manual">
           <ManualEventEntrySection
             :cycle-id="currentCycle.id"
@@ -628,6 +661,7 @@ const scorePreviewDialogVisible = ref(false)
       />
 
       <el-table
+        id="appraisal-participants-section"
         :data="filteredParticipants"
         v-loading="statusLoading"
         stripe
@@ -724,56 +758,6 @@ const scorePreviewDialogVisible = ref(false)
       </el-table>
     </template>
 
-    <!-- 同步分數預覽 dialog -->
-    <el-dialog
-      v-model="previewDialogVisible"
-      title="同步分數預覽"
-      width="720px"
-      data-test="sync-preview-dialog"
-    >
-      <div v-loading="previewLoading">
-        <template v-if="previewData">
-          <el-alert type="info" :closable="false" class="preview-alert">
-            <template #title>
-              本次同步將：
-              <strong>刪除自動產生 {{ previewData.deleted_count }} 筆</strong>、
-              <strong>新增 {{ previewData.inserted_count }} 筆</strong>、
-              <strong>保留人工調整 {{ previewData.skipped_manual_count }} 筆</strong>
-            </template>
-            <template #default>
-              <small>自動 row（source_ref 開頭 auto:）將被覆寫；人工 row 受保護不會動。</small>
-            </template>
-          </el-alert>
-          <el-table
-            :data="previewData.items || []"
-            stripe
-            max-height="320"
-            empty-text="無新增/變更項目"
-            class="preview-table"
-            data-test="sync-preview-table"
-          >
-            <el-table-column label="員工" prop="employee_name" width="120" />
-            <el-table-column label="項目" prop="item_code" width="140" />
-            <el-table-column label="舊分" prop="old_score_delta" width="80" />
-            <el-table-column label="新分" prop="new_score_delta" width="80" />
-            <el-table-column label="來源" prop="source_ref" />
-          </el-table>
-        </template>
-      </div>
-      <template #footer>
-        <el-button @click="previewDialogVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="confirmLoading"
-          :disabled="!previewData || previewLoading"
-          data-test="sync-confirm-btn"
-          @click="confirmSync"
-        >
-          確認寫入
-        </el-button>
-      </template>
-    </el-dialog>
-
     <!-- 員工詳情 dialog -->
     <AggregatedStatusDetailDialog
       v-model:visible="detailDialogVisible"
@@ -782,11 +766,13 @@ const scorePreviewDialogVisible = ref(false)
       :rules="rulesByCode"
     />
 
-    <!-- 預覽分數計算 dialog -->
+    <!-- 分數同步 dialog（Task A4：合併原「預覽分數」+「同步分數」兩個分離流程）-->
     <ScorePreviewDialog
       v-model:visible="scorePreviewDialogVisible"
       :cycle-id="currentCycle?.id ?? null"
-      @request-sync="openSyncPreview"
+      :can-write="canSyncWrite"
+      :has-non-participant="hasNonParticipant"
+      @synced="handleSynced"
     />
   </div>
 </template>
@@ -851,14 +837,6 @@ const scorePreviewDialogVisible = ref(false)
 }
 
 .status-table {
-  width: 100%;
-}
-
-.preview-alert {
-  margin-bottom: 12px;
-}
-
-.preview-table {
   width: 100%;
 }
 </style>

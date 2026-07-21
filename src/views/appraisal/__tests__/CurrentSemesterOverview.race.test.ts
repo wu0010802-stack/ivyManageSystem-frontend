@@ -19,6 +19,8 @@ vi.mock('@/api/appraisal', () => ({
   bulkAddAppraisalParticipantsFromActive: vi.fn(),
   listScoringRules: vi.fn(),
   refreshAppraisalCycle: vi.fn(),
+  // Task A3：流程引導條讀取簽核統計；本檔聚焦切學期競態，用無害預設值消化
+  getSignStatusSummary: vi.fn(),
 }))
 
 vi.mock('element-plus', () => ({
@@ -42,6 +44,7 @@ import {
   getAppraisalAllEmployeesStatus,
   listScoringRules,
   refreshAppraisalCycle,
+  getSignStatusSummary,
 } from '@/api/appraisal'
 import CurrentSemesterOverview from '../CurrentSemesterOverview.vue'
 
@@ -80,6 +83,7 @@ async function mountView() {
   } as never)
   vi.mocked(listScoringRules).mockResolvedValue({ data: [] } as never)
   vi.mocked(refreshAppraisalCycle).mockResolvedValue({ data: {} } as never)
+  vi.mocked(getSignStatusSummary).mockResolvedValue({ data: { counts: {} } } as never)
 
   const wrapper = mount(CurrentSemesterOverview, {
     global: {
