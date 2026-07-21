@@ -31,4 +31,8 @@ describe('scorePreviewColumns', () => {
     expect(changed.has('LATE_EARLY')).toBe(true)
     expect(changed.has('RETENTION')).toBe(false)
   })
+
+  it('computeChangedColumns([]) 回傳空 Set', () => {
+    expect(computeChangedColumns([]).size).toBe(0)
+  })
 })

@@ -181,7 +181,7 @@ describe('26 欄分數預覽開關 chips', () => {
     expect(w.find('[data-test="delta-1-MISSING_PUNCH"]').exists()).toBe(false)
 
     // 員工欄與合計欄恆顯示
-    expect(w.text()).toContain('員工')
+    expect(w.find('[prop="employee_name"]').exists()).toBe(true)
     expect(w.find('[data-test="total-1"]').exists()).toBe(true)
   })
 

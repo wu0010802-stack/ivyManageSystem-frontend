@@ -346,7 +346,6 @@ function tooltipLines(row: PreviewParticipant, code: string) {
           :data-test="`score-col-chip-${code}`"
           :type="visibleCols.has(code) ? 'primary' : 'info'"
           :effect="visibleCols.has(code) ? 'dark' : 'plain'"
-          style="cursor: pointer"
           @click="toggleCol(code)"
         >{{ (ITEM_CODE_LABELS as Record<string, string>)[code] || code }}</el-tag>
       </div>
@@ -458,6 +457,7 @@ function tooltipLines(row: PreviewParticipant, code: string) {
 }
 
 .score-col-chip {
+  cursor: pointer;
   user-select: none;
 }
 
