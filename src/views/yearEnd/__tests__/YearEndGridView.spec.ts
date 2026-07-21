@@ -94,6 +94,12 @@ async function mountView() {
         'el-alert': true,
         'el-descriptions': true,
         'el-descriptions-item': true,
+        // Task 4（批次2b-1）：GridRowDetailDrawer 是真元件子節點（非 GridView 自己的
+        // template），它內部用到的 el-drawer/el-input 這裡也要 stub，否則會有
+        // 「Failed to resolve component」的噪音警告（el-tag/el-button/el-form/
+        // el-form-item/el-input-number 上面已涵蓋，tree-wide stub 對子元件同樣生效）。
+        'el-drawer': true,
+        'el-input': true,
       },
     },
   })
@@ -611,6 +617,9 @@ async function mountViewWithTable() {
         'el-form': true,
         'el-form-item': true,
         'el-input-number': true,
+        // Task 4（批次2b-1）：GridRowDetailDrawer 子節點內部用到，見 mountView() 同款註解。
+        'el-drawer': true,
+        'el-input': true,
       },
     },
   })
