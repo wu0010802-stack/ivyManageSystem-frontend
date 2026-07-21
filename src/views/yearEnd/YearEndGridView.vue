@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
-import { apiError } from '@/utils/error'
-import { money } from '@/utils/format'
+import { getYearEndGrid, buildSettlements, listYearEndCycles } from '@/api/yearEnd'
+import { moneyInt } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
 import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
-import { BONUS_COL_KEYS, loadVisibleBonusCols, saveVisibleBonusCols } from './gridColumns'
+import { BONUS_COL_KEYS, SPECIAL_BONUS_LABELS, loadVisibleBonusCols, saveVisibleBonusCols } from './gridColumns'
+import GridRowDetailDrawer from './components/GridRowDetailDrawer.vue'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
@@ -21,28 +21,11 @@ interface YearEndCycleLite {
 
 // F-2：總表金額統一顯示為整數元（僅顯示層四捨五入，row.* 原始資料值不動、
 // 送出/核對仍用原始精度）。「主結算」「合計」帶兩位小數與「考核上」「紅利上」
-// 等整數欄並列時視覺突兀，也讓欄寬更容易不夠而在小數點附近換行。
-// GridRowOut 的金額欄位（payable_amount / total_amount / special_bonuses[key]）
-// 是後端 Decimal 序列化的字串，先 Number() 轉換再四捨五入。null/'' 直接交給
-// money() 走既有「—」fallback（Number(null)===0 / Number('')===0 會誤判成
-// 有效值，故先排除）。
-const moneyInt = (val: unknown) => {
-  if (val == null || val === '') return money(val)
-  const n = Number(val)
-  return Number.isFinite(n) ? money(Math.round(n)) : money(val)
-}
+// 等整數欄並列時視覺突兀，也讓欄寬更容易不夠而在小數點附近換行。moneyInt 已
+// 收斂至 @/utils/currency（單一來源，Task 4 起 GridRowDetailDrawer 亦共用）。
 
-const SPECIAL_BONUS_LABELS: Record<string, string> = {
-  APPRAISAL_HALF_BONUS_FIRST: '考核上',
-  APPRAISAL_HALF_BONUS_SECOND: '考核下',
-  SEMESTER_DIVIDEND_FIRST: '紅利上',
-  SEMESTER_DIVIDEND_SECOND: '紅利下',
-  AFTER_CLASS_AWARD: '才藝鼓勵',
-  TEACHING_EXTRA: '教課獎勵',
-  EXCESS_ENROLLMENT: '超額',
-  FESTIVAL_DIFF: '節慶差額',
-  CUSTOM: '其他',
-}
+// SPECIAL_BONUS_LABELS 已收斂至 ./gridColumns（單一來源，Task 4 起
+// GridRowDetailDrawer 亦共用）。
 
 // Task 12④：狀態 tag/標籤改用單一來源常數（刪本地 STATUS_LABELS/STATUS_TAG_TYPE
 // 雙重定義——Task 1 已建立 @/constants/appraisalYearEnd 的 SIGN_STATUS_LABEL/
@@ -77,15 +60,14 @@ const buildFailed = ref(false)
 // ---- 重新試算 dialog ----
 const buildDialogVisible = ref(false)
 
-// ---- 手改 dialog ----
-const editVisible = ref(false)
-const editingRow = ref<GridRow | null>(null)
-const editForm = reactive({
-  deduction_disciplinary: null as number | null,
-  excess_amount: null as number | null,
-  hire_months_override: null as number | null,
-  remark: null as string | null,
-})
+// ---- 明細抽屜（Task 4：取代舊手改 dialog，見 GridRowDetailDrawer.vue）----
+const drawerVisible = ref(false)
+const drawerRow = ref<GridRow | null>(null)
+
+function openDrawer(row: GridRow) {
+  drawerRow.value = row
+  drawerVisible.value = true
+}
 
 // ---- Derived columns ----
 const bonusColumns = computed(() => {
@@ -297,55 +279,17 @@ async function onBuild() {
   }
 }
 
-function openEdit(row: GridRow) {
-  editingRow.value = row
-  editForm.deduction_disciplinary = null
-  editForm.excess_amount = null
-  editForm.hire_months_override = null
-  editForm.remark = row.remark ?? null
-  editVisible.value = true
-}
-
-async function submitEdit() {
-  if (!editingRow.value) return
-  const payload: {
-    deduction_disciplinary?: number
-    excess_amount?: number
-    hire_months_override?: number
-    remark?: string
-  } = {}
-  if (editForm.deduction_disciplinary !== null) {
-    payload.deduction_disciplinary = editForm.deduction_disciplinary
-  }
-  if (editForm.excess_amount !== null) {
-    payload.excess_amount = editForm.excess_amount
-  }
-  if (editForm.hire_months_override !== null) {
-    payload.hire_months_override = editForm.hire_months_override
-  }
-  if (editForm.remark !== null) {
-    payload.remark = editForm.remark
-  }
-  try {
-    await manualPatchSettlement(editingRow.value.settlement_id, payload)
-    await loadGrid()
-    ElMessage.success('已更新')
-    editVisible.value = false
-  } catch (e) {
-    ElMessage.error(
-      apiError(e, '更新失敗：僅草稿狀態可手動調整；已簽核者請先到「結算明細」將該筆退回草稿')
-    )
-  }
-}
-
 defineExpose({
   rows, loading, bonusColumns, canWrite,
-  loadGrid, onBuild, openEdit, submitEdit,
-  buildDialogVisible, editVisible, editingRow, editForm,
+  loadGrid, onBuild,
+  buildDialogVisible,
   cycleStatus, lastBuiltAt, initGrid,
   expandFields, buildResult, buildFailed, buildSummaryText, buildFailedDescription,
   // Task 3（批次2b-1）：獎金欄開關 chips 供測試直接驅動（避免透過 stub 層模擬點擊的脆弱性）。
   visibleBonusCols, toggleBonusCol, visibleBonusColumns, specialBonusTotal,
+  // Task 4（批次2b-1）：舊手改 dialog（editVisible/editForm/editingRow/openEdit/submitEdit）
+  // 已移除，改由 GridRowDetailDrawer 承接（含就地編輯）；grid 這層只保留開關抽屜狀態。
+  drawerVisible, drawerRow, openDrawer,
 })
 
 onMounted(initGrid)
@@ -522,13 +466,14 @@ onMounted(initGrid)
       <!-- 操作 -->
       <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
+          <!-- Task 4（批次2b-1）：「手改」改「明細」——所有 status 皆可開抽屜看 breakdown，
+               就地編輯區僅 DRAFT 顯示（見 GridRowDetailDrawer 內 canEdit）。 -->
           <el-button
-            v-if="row.status === 'DRAFT' && canWrite"
             size="small"
-            data-test="edit-button"
-            @click="openEdit(row)"
+            data-test="detail-drawer-button"
+            @click="openDrawer(row)"
           >
-            手改
+            明細
           </el-button>
           <a
             :href="`${baseUrl}/year_end/cycles/${cycleId}/settlements/${row.settlement_id}/slip.pdf`"
@@ -557,69 +502,13 @@ onMounted(initGrid)
       </template>
     </el-dialog>
 
-    <!-- 手改 dialog -->
-    <el-dialog
-      v-model="editVisible"
-      :title="`手動調整 — ${editingRow?.employee_name ?? ''}`"
-      width="420px"
-      data-test="edit-dialog"
-    >
-      <el-form label-width="130px" label-position="right">
-        <el-form-item label="獎懲扣項（≤0）">
-          <el-input-number
-            v-model="editForm.deduction_disciplinary"
-            :max="0"
-            :step="100"
-            controls-position="right"
-            style="width: 200px"
-            placeholder="留空=不覆寫"
-            :value-on-clear="null"
-            data-test="input-deduction"
-          />
-        </el-form-item>
-        <el-form-item label="超額獎金（≥0）">
-          <el-input-number
-            v-model="editForm.excess_amount"
-            :min="0"
-            :step="100"
-            controls-position="right"
-            style="width: 200px"
-            placeholder="留空=不覆寫"
-            :value-on-clear="null"
-            data-test="input-excess"
-          />
-        </el-form-item>
-        <el-form-item label="到職月數覆寫">
-          <el-input-number
-            v-model="editForm.hire_months_override"
-            :min="0"
-            :max="12"
-            :step="0.5"
-            :precision="1"
-            controls-position="right"
-            style="width: 200px"
-            placeholder="留空=不覆寫"
-            :value-on-clear="null"
-            data-test="input-hire-months"
-          />
-        </el-form-item>
-        <el-form-item label="備註">
-          <el-input
-            v-model="editForm.remark"
-            type="textarea"
-            :rows="3"
-            maxlength="500"
-            show-word-limit
-            placeholder="留空=清除備註"
-            data-test="input-remark"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" data-test="edit-submit-button" @click="submitEdit">確認更新</el-button>
-      </template>
-    </el-dialog>
+    <!-- Task 4（批次2b-1）：明細抽屜（breakdown ＋ 就地編輯），取代舊手改 dialog -->
+    <GridRowDetailDrawer
+      v-model="drawerVisible"
+      :row="drawerRow"
+      :can-write="canWrite"
+      @saved="loadGrid"
+    />
   </div>
 </template>
 

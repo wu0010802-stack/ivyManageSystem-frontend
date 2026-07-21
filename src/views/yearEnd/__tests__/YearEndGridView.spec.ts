@@ -296,124 +296,53 @@ describe('YearEndGridView', () => {
     expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith('某筆超額獎金已被手動覆寫，未隨試算更新')
   })
 
-  // Case 3: manual edit dialog patches and reloads (user sets deduction → IS sent)
-  it('manual edit dialog patches settlement and reloads', async () => {
+  // Task 4（批次2b-1）：手改 dialog（openEdit/submitEdit/editForm）已整支移除，
+  // 就地編輯的預填/diff-only 送出邏輯改由 GridRowDetailDrawer 承接，完整覆蓋見
+  // GridRowDetailDrawer.spec.ts。這裡只驗證 grid 層「開抽屜」的接線本身。
+  it('openDrawer(row) 設定 drawerRow/drawerVisible，供「明細」按鈕觸發', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
       data: [makeRow()],
-    } as never)
-    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
-      data: {},
     } as never)
 
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
       rows: GridRow[]
-      openEdit: (row: GridRow) => void
-      submitEdit: () => Promise<void>
-      editForm: {
-        deduction_disciplinary: number | null
-        excess_amount: number | null
-        hire_months_override: number | null
-        remark: string | null
-      }
+      drawerVisible: boolean
+      drawerRow: GridRow | null
+      openDrawer: (row: GridRow) => void
     }
 
-    // Open edit for the first DRAFT row
-    vm.openEdit(vm.rows[0])
+    expect(vm.drawerVisible).toBe(false)
+    expect(vm.drawerRow).toBeNull()
+
+    vm.openDrawer(vm.rows[0])
     await nextTick()
 
-    // Set deduction (user explicitly enters -6000)
-    vm.editForm.deduction_disciplinary = -6000
+    expect(vm.drawerVisible).toBe(true)
+    expect(vm.drawerRow).toBe(vm.rows[0])
+  })
 
-    // Submit
-    await vm.submitEdit()
+  // 明細抽屜 @saved 觸發 loadGrid 重新載入（取代舊 submitEdit 內直接 await loadGrid()）。
+  it('drawer 的 saved 事件觸發 loadGrid 重新載入 grid', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow()],
+    } as never)
+
+    const wrapper = await mountView()
+    const drawer = wrapper.findComponent({ name: 'GridRowDetailDrawer' })
+    expect(drawer.exists()).toBe(true)
+
+    drawer.vm.$emit('saved')
     await nextTick()
 
-    // When user sets a value, it IS sent
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(
-      1,
-      expect.objectContaining({ deduction_disciplinary: -6000 })
-    )
-    // getYearEndGrid called on mount + after patch = 2 times
+    // mount 的 initGrid 一次 + saved 事件觸發一次 = 2 次
     expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
   })
 
-  it('manual edit can update remark without touching amount fields', async () => {
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({
-      data: [makeRow({ remark: '舊備註' })],
-    } as never)
-    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
-      data: {},
-    } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      rows: GridRow[]
-      openEdit: (row: GridRow) => void
-      submitEdit: () => Promise<void>
-      editForm: {
-        deduction_disciplinary: number | null
-        excess_amount: number | null
-        hire_months_override: number | null
-        remark: string | null
-      }
-    }
-
-    vm.openEdit(vm.rows[0])
-    await nextTick()
-    expect(vm.editForm.remark).toBe('舊備註')
-
-    vm.editForm.remark = '114.08 到職'
-    await vm.submitEdit()
-    await nextTick()
-
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { remark: '114.08 到職' })
-  })
-
-  // Case 5: manual patch omits untouched deduction/excess (no silent zero-wipe)
-  it('manual patch omits untouched deduction/excess (no silent zero-wipe)', async () => {
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({
-      data: [makeRow()],
-    } as never)
-    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
-      data: {},
-    } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      rows: GridRow[]
-      openEdit: (row: GridRow) => void
-      submitEdit: () => Promise<void>
-      editForm: { deduction_disciplinary: number | null; excess_amount: number | null; hire_months_override: number | null }
-    }
-
-    // Open edit for a DRAFT row
-    vm.openEdit(vm.rows[0])
-    await nextTick()
-
-    // Only set hire_months_override — leave deduction/excess untouched (null)
-    expect(vm.editForm.deduction_disciplinary).toBeNull()
-    expect(vm.editForm.excess_amount).toBeNull()
-    vm.editForm.hire_months_override = 8
-
-    // Submit
-    await vm.submitEdit()
-    await nextTick()
-
-    expect(api.manualPatchSettlement).toHaveBeenCalledOnce()
-    const arg = vi.mocked(api.manualPatchSettlement).mock.calls[0]![1]
-
-    // hire_months_override IS sent
-    expect(arg).toHaveProperty('hire_months_override', 8)
-
-    // deduction_disciplinary and excess_amount must NOT be in the payload at all
-    // (so backend keeps its prior persisted value — no silent zero-wipe)
-    expect('deduction_disciplinary' in arg).toBe(false)
-    expect('excess_amount' in arg).toBe(false)
-  })
-
-  // Case 4: finalized row hides manual edit button
-  it('exposes canWrite=true but FINALIZED row must not show edit button (vm check)', async () => {
+  // Case 4（改版）：「明細」按鈕不再受 DRAFT 狀態或 canWrite 限制——所有 status
+  // 皆可開抽屜看 breakdown，就地編輯區的顯示/隱藏改由 GridRowDetailDrawer 內部
+  // canEdit 負責（見 GridRowDetailDrawer.spec.ts），grid 層不再需要重複這道判斷。
+  it('FINALIZED row 仍可 openDrawer（明細按鈕不受狀態限制）', async () => {
     const finalizedRow = makeRow({ status: 'FINALIZED', settlement_id: 99 })
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
       data: [finalizedRow],
@@ -422,13 +351,16 @@ describe('YearEndGridView', () => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
       rows: GridRow[]
-      canWrite: boolean
+      drawerVisible: boolean
+      drawerRow: GridRow | null
+      openDrawer: (row: GridRow) => void
     }
 
-    expect(vm.rows[0].status).toBe('FINALIZED')
-    // canWrite is true (mocked), but template guards with `row.status === 'DRAFT' && canWrite`
-    // we verify the DRAFT condition is false → button should NOT render
-    expect(vm.rows[0].status === 'DRAFT' && vm.canWrite).toBe(false)
+    vm.openDrawer(vm.rows[0])
+    await nextTick()
+
+    expect(vm.drawerVisible).toBe(true)
+    expect(vm.drawerRow?.status).toBe('FINALIZED')
   })
 })
 

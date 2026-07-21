@@ -8,6 +8,19 @@ export const BONUS_COL_KEYS = [
 
 export type BonusColKey = (typeof BONUS_COL_KEYS)[number]
 
+/** 9 個獎金 key → 中文標籤（單一來源；YearEndGridView 與 GridRowDetailDrawer 共用）。 */
+export const SPECIAL_BONUS_LABELS: Record<string, string> = {
+  APPRAISAL_HALF_BONUS_FIRST: '考核上',
+  APPRAISAL_HALF_BONUS_SECOND: '考核下',
+  SEMESTER_DIVIDEND_FIRST: '紅利上',
+  SEMESTER_DIVIDEND_SECOND: '紅利下',
+  AFTER_CLASS_AWARD: '才藝鼓勵',
+  TEACHING_EXTRA: '教課獎勵',
+  EXCESS_ENROLLMENT: '超額',
+  FESTIVAL_DIFF: '節慶差額',
+  CUSTOM: '其他',
+}
+
 const LS_KEY = 'ye-grid-visible-bonus-cols'
 
 /** 讀取使用者勾選要顯示的獎金欄（預設全不顯示——摘要表零橫捲）。 */
