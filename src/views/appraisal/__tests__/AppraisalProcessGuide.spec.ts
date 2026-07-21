@@ -9,14 +9,14 @@ const statuses = {
 
 describe('AppraisalProcessGuide', () => {
   it('渲染六步且標示 current/done/disabled', () => {
-    const w = mount(AppraisalProcessGuide, { props: { statuses, current: 'manual' } })
+    const w = mount(AppraisalProcessGuide, { props: { statuses } })
     expect(w.find('[data-test="guide-step-create"]').classes()).toContain('is-done')
     expect(w.find('[data-test="guide-step-manual"]').classes()).toContain('is-current')
     expect(w.find('[data-test="guide-step-recompute"]').attributes('disabled')).toBeDefined()
   })
 
   it('點可用步驟 emit navigate；點 disabled 不 emit', async () => {
-    const w = mount(AppraisalProcessGuide, { props: { statuses, current: 'manual' } })
+    const w = mount(AppraisalProcessGuide, { props: { statuses } })
     await w.find('[data-test="guide-step-sync"]').trigger('click')
     expect(w.emitted('navigate')?.[0]).toEqual(['sync'])
     await w.find('[data-test="guide-step-recompute"]').trigger('click')

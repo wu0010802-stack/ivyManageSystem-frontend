@@ -4,7 +4,6 @@ import { APPRAISAL_STEPS, type AppraisalStepKey, type AppraisalStepStatus } from
 
 const props = defineProps<{
   statuses: Record<AppraisalStepKey, AppraisalStepStatus>
-  current: AppraisalStepKey
 }>()
 const emit = defineEmits<{ navigate: [key: AppraisalStepKey] }>()
 
@@ -40,17 +39,17 @@ function onClick(key: AppraisalStepKey) {
 .ap-guide {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-xs, 8px);
+  gap: var(--space-2, 8px);
   align-items: stretch;
-  padding: var(--space-sm, 12px);
+  padding: var(--space-3, 12px);
   background: var(--el-fill-color-lighter);
   border-radius: 8px;
 }
 .ap-guide__step {
   display: flex;
   align-items: center;
-  gap: var(--space-xs, 8px);
-  padding: var(--space-xs, 8px) var(--space-sm, 12px);
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
   border: 1px solid var(--el-border-color-lighter);
   border-bottom: 3px solid transparent;
   border-radius: 6px;
