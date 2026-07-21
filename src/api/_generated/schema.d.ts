@@ -20400,10 +20400,14 @@ export interface components {
         };
         /** GridRowOut */
         GridRowOut: {
+            /** Deduction Disciplinary */
+            deduction_disciplinary: string;
             /** Employee Id */
             employee_id: number;
             /** Employee Name */
             employee_name: string;
+            /** Hire Months */
+            hire_months: string;
             /** Payable Amount */
             payable_amount: string;
             /** Remark */

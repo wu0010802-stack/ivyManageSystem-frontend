@@ -7,6 +7,7 @@ import { money } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
+import { BONUS_COL_KEYS, loadVisibleBonusCols, saveVisibleBonusCols } from './gridColumns'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
@@ -103,6 +104,40 @@ const bonusColumns = computed(() => {
   }
   return ordered.map((key) => ({ key, label: SPECIAL_BONUS_LABELS[key] ?? key }))
 })
+
+// Task 3（批次2b-1）：獎金欄開關 chips——總表原本 7 欄＋9 個常駐獎金欄 ≈1767px 必橫捲，
+// 改預設全不顯示獎金欄（零橫捲摘要表），使用者勾選 chip 才插回該欄；勾選狀態存
+// localStorage（單一來源見 gridColumns.ts），重整/跨頁記得住。
+const visibleBonusCols = ref<Set<string>>(loadVisibleBonusCols())
+
+function toggleBonusCol(key: string) {
+  const next = new Set(visibleBonusCols.value)
+  if (next.has(key)) {
+    next.delete(key)
+  } else {
+    next.add(key)
+  }
+  visibleBonusCols.value = next
+  saveVisibleBonusCols(next)
+}
+
+// 主表實際渲染的獎金欄：bonusColumns（資料裡實際出現過的 key）交集使用者已勾選
+// 顯示的 key（visibleBonusCols）——兩者都要滿足，未發放過的獎金種類不會因為使用者
+// 誤勾而生出空欄。
+const visibleBonusColumns = computed(() =>
+  bonusColumns.value.filter((col) => visibleBonusCols.value.has(col.key))
+)
+
+// 特別獎金合計：9 個常駐獎金欄摘要成單一欄，是摘要表零橫捲的關鍵——使用者要看
+// 細項才勾 chip 插回單欄，預設只看合計。金額為後端 Decimal 序列化字串，逐一
+// Number() 加總；row.special_bonuses 只含實際發放的 key，未發放的欄位不存在，
+// 視同 0（沿用既有 `?? 0` 慣例，見下方動態獎金欄 cell）。
+function specialBonusTotal(row: GridRow): number {
+  return Object.values(row.special_bonuses).reduce((sum: number, v) => sum + Number(v), 0)
+}
+function sortBySpecialBonusTotal(a: GridRow, b: GridRow) {
+  return specialBonusTotal(a) - specialBonusTotal(b)
+}
 
 const baseUrl = computed(() => api.defaults.baseURL || '/api')
 
@@ -309,6 +344,8 @@ defineExpose({
   buildDialogVisible, editVisible, editingRow, editForm,
   cycleStatus, lastBuiltAt, initGrid,
   expandFields, buildResult, buildFailed, buildSummaryText, buildFailedDescription,
+  // Task 3（批次2b-1）：獎金欄開關 chips 供測試直接驅動（避免透過 stub 層模擬點擊的脆弱性）。
+  visibleBonusCols, toggleBonusCol, visibleBonusColumns, specialBonusTotal,
 })
 
 onMounted(initGrid)
@@ -389,7 +426,26 @@ onMounted(initGrid)
       @close="buildResult = null"
     />
 
-    <!-- Grid table -->
+    <!-- Task 3（批次2b-1）：獎金欄開關 chips——原 7 欄＋9 個常駐獎金欄總寬 ~1767px 必
+         橫向捲動；改預設全不顯示獎金欄（下方 6 欄零橫捲摘要），勾選 chip 才插回該欄。
+         勾選狀態存 localStorage（gridColumns.ts 單一來源），重整/跨頁記得住。 -->
+    <div class="bonus-col-chips" data-test="bonus-col-chips">
+      <span class="chips-label">顯示獎金欄：</span>
+      <el-tag
+        v-for="key in BONUS_COL_KEYS"
+        :key="key"
+        class="bonus-col-chip"
+        :data-test="`bonus-col-chip-${key}`"
+        :type="visibleBonusCols.has(key) ? 'primary' : 'info'"
+        :effect="visibleBonusCols.has(key) ? 'dark' : 'plain'"
+        style="cursor: pointer"
+        @click="toggleBonusCol(key)"
+      >{{ SPECIAL_BONUS_LABELS[key] ?? key }}</el-tag>
+    </div>
+
+    <!-- Grid table：6 欄摘要（姓名/主結算/特別獎金合計/合計/狀態/操作），零橫捲。
+         原「展開」欄（Task 12①修 404 用）已移除——明細改由 Task 4 抽屜承接
+         （expandFields() 函式保留供其沿用，見上方定義）。 -->
     <el-table
       v-loading="loading"
       :data="rows"
@@ -398,24 +454,6 @@ onMounted(initGrid)
       max-height="640"
       data-test="grid-table"
     >
-      <!-- Task 12①：修 404——原「展開」按鈕 push 到不存在的 /settlements/:id 路由，
-           改列內 expand 就地展開，內容見 expandFields()。
-           fixed="left" 必要（審查修繕）：Element Plus 欄位排序（watcher.mjs）會把所有
-           fixed:left 欄放最前、不保留模板宣告順序，未 fixed 的 expand 欄會被重排到姓名欄
-           （fixed="left"）之後；且本表欄寬總和 ~1767px 必觸發橫向捲動，未 fixed 的
-           expand 欄捲動後會滾出視窗，使用者失去展開把手。 -->
-      <el-table-column type="expand" width="40" fixed="left" data-test="expand-column">
-        <template #default="{ row }">
-          <el-descriptions :column="3" size="small" border class="grid-expand">
-            <el-descriptions-item
-              v-for="col in expandFields(row)"
-              :key="col.label"
-              :label="col.label"
-            >{{ col.value }}</el-descriptions-item>
-          </el-descriptions>
-        </template>
-      </el-table-column>
-
       <!-- 固定欄：姓名 -->
       <el-table-column
         prop="employee_name"
@@ -431,9 +469,10 @@ onMounted(initGrid)
         </template>
       </el-table-column>
 
-      <!-- 動態獎金欄 -->
+      <!-- 動態獎金欄：只渲染使用者勾選 chip 的 key（visibleBonusColumns），
+           預設空集合 → 零欄，摘要表零橫捲。 -->
       <el-table-column
-        v-for="col in bonusColumns"
+        v-for="col in visibleBonusColumns"
         :key="col.key"
         :label="col.label"
         width="118"
@@ -453,6 +492,14 @@ onMounted(initGrid)
           >
             {{ moneyInt(row.special_bonuses[col.key] ?? 0) }}
           </span>
+        </template>
+      </el-table-column>
+
+      <!-- 特別獎金合計：9 個常駐獎金欄的合計摘要，chips 全不勾時仍看得到總額
+           （零橫捲摘要表的關鍵，明細留給展開 chip 或 Task 4 抽屜）。 -->
+      <el-table-column label="特別獎金合計" width="140" align="right" class-name="money-cell" sortable :sort-method="sortBySpecialBonusTotal">
+        <template #default="{ row }">
+          {{ moneyInt(specialBonusTotal(row)) }}
         </template>
       </el-table-column>
 
@@ -613,6 +660,20 @@ onMounted(initGrid)
 }
 .grid-expand {
   margin: var(--space-1) 0;
+}
+.bonus-col-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+.chips-label {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+.bonus-col-chip {
+  user-select: none;
 }
 /* F-2：金額 cell 禁止在小數點/千分位逗號附近換行成兩行（稽核核對風險）；
    欄寬不足時交給 el-table 內建橫向捲動，不擠壓內容。 */
