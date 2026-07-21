@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { reactive, computed, watch, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { manualPatchSettlement } from '@/api/yearEnd'
+import { manualPatchSettlement, getProvenance } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 import { moneyInt } from '@/utils/currency'
 import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG } from '@/constants/appraisalYearEnd'
-import { SPECIAL_BONUS_LABELS } from '../gridColumns'
+import { SPECIAL_BONUS_LABELS, PROVENANCE_BONUS_KEYS } from '../gridColumns'
 import type { Schema } from '@/api/_generated/typed'
+import type { DerivedValue } from '@/types/provenance'
 
 export type GridRow = Schema<'GridRowOut'>
 
@@ -18,6 +20,8 @@ const props = defineProps<{
   modelValue: boolean
   row: GridRow | null
   canWrite: boolean
+  /** 供「怎麼算的」逐項下鑽呼叫 getProvenance(key, cycleId, employeeId)。 */
+  cycleId: number
 }>()
 
 const emit = defineEmits<{
@@ -135,13 +139,95 @@ function resetEditForm(row: GridRow | null) {
   original.remark = remark
 }
 
+// ─────────────────────────────────────────
+// 逐項下鑽「怎麼算的」（僅 7 個正向獎金 key 有 BE provenance provider，
+// 見 PROVENANCE_BONUS_KEYS；FESTIVAL_DIFF/CUSTOM 不提供、按鈕不顯示）。
+// ─────────────────────────────────────────
+
+interface ProvenanceItemState {
+  expanded: boolean
+  loading: boolean
+  data: DerivedValue | null
+  error: string | null
+  fetched: boolean
+}
+
+const provenanceState = reactive<Record<string, ProvenanceItemState>>({})
+
+// 每個 key 各自序列化，防止「已切換到別列/別 key 又重新展開」時，較舊的飛行中
+// 回應覆蓋較新的狀態（比照 ProvenanceDrawer.vue 的 fetchSeq，但改成 per-key，
+// 因為這裡是使用者各自 lazy 觸發，不是像 ProvenanceDrawer 那樣一次批次抓全部）。
+const provenanceFetchSeq: Record<string, number> = {}
+
+function isProvenanceKey(key: string): boolean {
+  return PROVENANCE_BONUS_KEYS.has(key)
+}
+
+function ensureProvenanceState(key: string): ProvenanceItemState {
+  if (!provenanceState[key]) {
+    provenanceState[key] = { expanded: false, loading: false, data: null, error: null, fetched: false }
+  }
+  return provenanceState[key]
+}
+
+async function fetchProvenance(key: string) {
+  const row = props.row
+  if (!row) return
+  const state = ensureProvenanceState(key)
+  const mySeq = (provenanceFetchSeq[key] ?? 0) + 1
+  provenanceFetchSeq[key] = mySeq
+  state.loading = true
+  state.error = null
+  try {
+    const res = await getProvenance(key, props.cycleId, row.employee_id)
+    if (provenanceFetchSeq[key] !== mySeq) return // 已有更新的請求（或已切換列），丟棄此回應
+    state.data = res.data
+    state.fetched = true
+  } catch (e) {
+    if (provenanceFetchSeq[key] !== mySeq) return
+    state.error = apiError(e, '載入失敗')
+  } finally {
+    if (provenanceFetchSeq[key] === mySeq) state.loading = false
+  }
+}
+
+// 展開/收合切換；只在「首次展開且尚未抓過」時才打 API（lazy + 快取，重複展開
+// 不重打）。async 是為了讓測試可以 `await vm.toggleProvenance(key)`。
+async function toggleProvenance(key: string) {
+  const state = ensureProvenanceState(key)
+  state.expanded = !state.expanded
+  if (state.expanded && !state.fetched && !state.loading) {
+    await fetchProvenance(key)
+  }
+}
+
+function resetProvenanceState() {
+  for (const key of Object.keys(provenanceState)) {
+    delete provenanceState[key]
+  }
+  // 對飛行中但尚未回應的舊請求做 seq bump，讓 fetchProvenance 的回應守衛擋下
+  // 它、不再寫回（已被上面 delete 掉、與畫面脫鉤的）舊 state 物件。
+  for (const key of Object.keys(provenanceFetchSeq)) {
+    provenanceFetchSeq[key] = (provenanceFetchSeq[key] ?? 0) + 1
+  }
+}
+
+const router = useRouter()
+
+function goDeepLink(link: string) {
+  router.push(link)
+}
+
 // 開抽屜（modelValue 由 false→true）或切換到不同 settlement 時重新預填。
 // 不 watch row 整個物件（每次 loadGrid 都會是新 reference），只認 settlement_id，
 // 避免同一筆資料因物件參照變化而誤重置使用者正在編輯中的值。
 watch(
   [() => props.modelValue, () => props.row?.settlement_id],
   ([v, id]) => {
-    if (v && id != null) resetEditForm(props.row)
+    if (v && id != null) {
+      resetEditForm(props.row)
+      resetProvenanceState()
+    }
   },
   { immediate: true },
 )
@@ -206,6 +292,7 @@ async function submit() {
 defineExpose({
   visible, canEdit, specialBonusItems, specialBonusTotal, statusLabel, statusTagType,
   editForm, original, submit, saving,
+  provenanceState, isProvenanceKey, toggleProvenance, goDeepLink,
 })
 </script>
 
@@ -224,14 +311,80 @@ defineExpose({
           <span class="breakdown-value">{{ moneyInt(row.payable_amount) }}</span>
         </div>
 
-        <div
-          v-for="item in specialBonusItems"
-          :key="item.key"
-          class="breakdown-row"
-          :data-test="`breakdown-bonus-${item.key}`"
-        >
-          <span class="breakdown-label">{{ item.label }}</span>
-          <span class="breakdown-value">{{ moneyInt(item.amount) }}</span>
+        <div v-for="item in specialBonusItems" :key="item.key" class="breakdown-bonus-block">
+          <div class="breakdown-row" :data-test="`breakdown-bonus-${item.key}`">
+            <span class="breakdown-label">{{ item.label }}</span>
+            <span class="breakdown-value-group">
+              <span class="breakdown-value">{{ moneyInt(item.amount) }}</span>
+              <el-button
+                v-if="isProvenanceKey(item.key)"
+                type="primary"
+                link
+                size="small"
+                :data-test="`provenance-toggle-${item.key}`"
+                @click="toggleProvenance(item.key)"
+              >
+                {{ provenanceState[item.key]?.expanded ? '收合' : '怎麼算的' }}
+              </el-button>
+            </span>
+          </div>
+
+          <div
+            v-if="isProvenanceKey(item.key) && provenanceState[item.key]?.expanded"
+            class="provenance-panel"
+            :data-test="`provenance-panel-${item.key}`"
+          >
+            <el-skeleton
+              v-if="provenanceState[item.key]?.loading"
+              :rows="2"
+              animated
+              :data-test="`provenance-loading-${item.key}`"
+            />
+
+            <div
+              v-else-if="provenanceState[item.key]?.error"
+              class="provenance-error"
+              :data-test="`provenance-error-${item.key}`"
+            >
+              {{ provenanceState[item.key]?.error }}
+            </div>
+
+            <el-empty
+              v-else-if="!provenanceState[item.key]?.data || provenanceState[item.key]?.data?.source_records.length === 0"
+              description="無紀錄"
+              :image-size="32"
+            />
+
+            <div v-else class="provenance-body">
+              <div class="provenance-summary" :data-test="`provenance-summary-${item.key}`">
+                {{ provenanceState[item.key]?.data?.formula_summary }}
+              </div>
+
+              <ul class="provenance-records" :data-test="`provenance-records-${item.key}`">
+                <li
+                  v-for="(rec, idx) in provenanceState[item.key]?.data?.source_records"
+                  :key="idx"
+                  class="provenance-record"
+                >
+                  <span class="rec-date">{{ rec.date }}</span>
+                  <span class="rec-label">{{ rec.label }}</span>
+                  <span class="rec-amount">{{ moneyInt(rec.amount) }}</span>
+                </li>
+              </ul>
+
+              <div v-if="provenanceState[item.key]?.data?.deep_link" class="provenance-deep-link">
+                <el-button
+                  type="primary"
+                  link
+                  size="small"
+                  :data-test="`provenance-link-${item.key}`"
+                  @click="goDeepLink(provenanceState[item.key]!.data!.deep_link!)"
+                >
+                  在來源模組查看 →
+                </el-button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="breakdown-row" data-test="breakdown-bonus-total">
@@ -348,6 +501,64 @@ defineExpose({
 }
 .breakdown-value {
   font-variant-numeric: tabular-nums;
+}
+.breakdown-bonus-block {
+  border-bottom: 1px solid #f5f5f5;
+}
+.breakdown-bonus-block:last-child {
+  border-bottom: none;
+}
+.breakdown-bonus-block .breakdown-row {
+  border-bottom: none;
+}
+.breakdown-value-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.provenance-panel {
+  padding: var(--space-3) 0 var(--space-3) var(--space-3);
+  background: var(--el-fill-color-lighter);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.provenance-error {
+  color: var(--el-color-danger);
+  font-size: 13px;
+  padding: 4px 0;
+}
+.provenance-summary {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: var(--space-2);
+}
+.provenance-records {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.provenance-record {
+  display: flex;
+  gap: var(--space-2);
+  padding: 4px 0;
+  font-size: 12px;
+}
+.rec-date {
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rec-label {
+  flex: 1;
+  color: var(--el-text-color-primary);
+}
+.rec-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.provenance-deep-link {
+  margin-top: 6px;
 }
 .edit-section {
   padding-top: var(--space-4);

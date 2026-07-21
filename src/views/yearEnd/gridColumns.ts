@@ -21,6 +21,16 @@ export const SPECIAL_BONUS_LABELS: Record<string, string> = {
   CUSTOM: '其他',
 }
 
+/**
+ * 7 個有 BE provenance provider（`GET /provenance/{key}`）的正向獎金 key
+ * （批次 2b-2 Task 2-6 已建好，見 task-7-brief.md）。不含 FESTIVAL_DIFF/CUSTOM
+ * ——這兩個 key 呼叫 getProvenance 會 400/KeyError，故 GridRowDetailDrawer 的
+ * 「怎麼算的」下鑽只對本清單內的 key 顯示展開按鈕。
+ */
+export const PROVENANCE_BONUS_KEYS = new Set<string>(
+  BONUS_COL_KEYS.filter((k) => k !== 'FESTIVAL_DIFF' && k !== 'CUSTOM'),
+)
+
 const LS_KEY = 'ye-grid-visible-bonus-cols'
 
 /** 讀取使用者勾選要顯示的獎金欄（預設全不顯示——摘要表零橫捲）。 */

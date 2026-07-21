@@ -100,6 +100,10 @@ async function mountView() {
         // el-form-item/el-input-number 上面已涵蓋，tree-wide stub 對子元件同樣生效）。
         'el-drawer': true,
         'el-input': true,
+        // Task 7（批次2b-2）：GridRowDetailDrawer 新增「怎麼算的」下鑽用到
+        // el-skeleton/el-empty，同上理由 stub。
+        'el-skeleton': true,
+        'el-empty': true,
       },
     },
   })
@@ -640,6 +644,9 @@ async function mountViewWithTable() {
         // Task 4（批次2b-1）：GridRowDetailDrawer 子節點內部用到，見 mountView() 同款註解。
         'el-drawer': true,
         'el-input': true,
+        // Task 7（批次2b-2）：同上，見 mountView() 同款註解。
+        'el-skeleton': true,
+        'el-empty': true,
       },
     },
   })

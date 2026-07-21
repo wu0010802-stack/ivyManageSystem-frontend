@@ -460,6 +460,7 @@ onMounted(initGrid)
       v-model="drawerVisible"
       :row="drawerRow"
       :can-write="canWrite"
+      :cycle-id="cycleId"
       @saved="loadGrid"
     />
   </div>
