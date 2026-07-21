@@ -13,7 +13,7 @@ import GridRowDetailDrawer from './components/GridRowDetailDrawer.vue'
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
 
 // listYearEndCycles() 無單筆 cycle-by-id 端點，沿用 YearEndDetailView.vue 的
-// listYearEndCycles().find() 慣例；只取 grid 進頁 auto-build 判斷需要的最小欄位集。
+// listYearEndCycles().find() 慣例；只取 banner/CTA 顯示條件判斷需要的最小欄位集。
 interface YearEndCycleLite {
   id: number
   status: string
@@ -39,14 +39,15 @@ const loading = ref(false)
 
 const canWrite = computed(() => hasPermission('YEAR_END_WRITE'))
 
-// 進頁自動 build（Task 9）：cycle 狀態（判斷是否為封存 CLOSED）+ 最後一次觸發試算的
-// 本地時間戳。後端 BuildResultOut 無 timestamp，這裡只記「有嘗試過」，不代表一定成功
-// ——失敗走靜默降級（見 initGrid），手動「↻ 重新試算」按鈕維持現狀不受影響。
+// Task 5（批次2b-1）：cycle 狀態（判斷 OPEN/LOCKED/CLOSED）+ 最後一次成功試算的
+// 本地時間戳。後端 BuildResultOut 無 timestamp，這裡只記「有成功過」。進頁不再自動
+// build（原 Task 9 auto-build 已移除，避免非預期的 DB 寫入/封存/覆寫）——試算改由
+// 頁頂顯式「開始試算」CTA 觸發（見 onBuild）。
 const cycleStatus = ref<string | null>(null)
 const lastBuiltAt = ref<Date | null>(null)
 
-// Task 12②③：build 結果摘要（成功，取代「只彈一次 ElMessage」的常駐頁頂摘要列）與
-// 失敗降級提示（進頁自動試算失敗時不再完全靜默，改顯示 stale banner）。
+// Task 12②：build 結果摘要（取代「只彈一次 ElMessage」的常駐頁頂摘要列），手動試算
+// 成功後顯示。
 interface BuildSummary {
   built: number
   skipped_finalized: number
@@ -55,7 +56,6 @@ interface BuildSummary {
   warnings: string[]
 }
 const buildResult = ref<BuildSummary | null>(null)
-const buildFailed = ref(false)
 
 // ---- 重新試算 dialog ----
 const buildDialogVisible = ref(false)
@@ -166,14 +166,6 @@ const buildSummaryText = computed(() => {
   return `試算完成：${parts.join('、')}`
 })
 
-// Task 12③：stale banner 描述——曾成功試算過就顯示最後成功時間，否則給明確的
-// 「從未成功過」文案（lastBuiltAt 只在成功時寫入，見 initGrid/onBuild）。
-const buildFailedDescription = computed(() =>
-  lastBuiltAt.value
-    ? `最後成功試算時間 ${formatTime(lastBuiltAt.value)}`
-    : '尚無成功試算紀錄，目前顯示既有結算資料'
-)
-
 // Task 12①：原「展開」按鈕 push 到不存在的 /year_end/cycles/:id/settlements/:id
 // （本輪最嚴重的 404 硬傷）。改列內 expand（el-table-column type="expand"）就地
 // 展開，這裡把主結算全部欄位（含動態獎金欄，沿用 bonusColumns 既有定義）攤平成
@@ -199,11 +191,10 @@ function expandFields(row: GridRow): ExpandField[] {
   return fields
 }
 
-// Task 12②③共用：build 成功的副作用（記錄摘要 + 清 stale flag + 記時間戳）。
-// initGrid 的自動試算與 onBuild 的手動試算共用同一套「成功後怎麼辦」語意。
+// Task 12②：build 成功的副作用（記錄摘要 + 記時間戳）。手動「開始試算」CTA
+// （onBuild）觸發成功後套用此語意。
 function applyBuildSuccess(data: BuildSummary) {
   buildResult.value = data
-  buildFailed.value = false
   lastBuiltAt.value = new Date()
 }
 
@@ -219,32 +210,18 @@ async function loadGrid() {
   }
 }
 
-// 進頁自動 build（Task 9）：**fail-closed** — 只在正向確認為 OPEN 狀態
-// 且可寫時才自動試算，再讀。
-// 後端 build-settlements 現在對 LOCKED cycle 一律拒絕（cycle_guard，年終批次2 G2
-// 週期鎖定），故僅 OPEN 才自動重算；一次網路抖動讓 listYearEndCycles 失敗
-// （.catch → []）或 cycleId 找不到時 cycleStatus 退為 null，若誤判為可重算會對
-// 已鎖定/封存 cycle 發出注定失敗的 build 請求。故狀態未知（null）/LOCKED/CLOSED
-// 一律跳過只 loadGrid。
+// Task 5（批次2b-1）：進頁不再自動 build（原 Task 9 auto-build 已移除）——只讀
+// cycle 狀態供 banner/CTA 顯示條件判斷，再載入現有結算資料；試算一律改由使用者
+// 主動點頁頂「開始試算」CTA 觸發 onBuild，避免每次進頁都對 DB 產生寫入/可能覆寫
+// 既有結算的副作用。cycleId 找不到、或 listYearEndCycles 失敗（.catch → []）時
+// cycleStatus 退為 null，CTA/banner 一併不顯示（fail-closed），但仍照常 loadGrid
+// 沿用既有結算資料，不影響閱讀。
 async function initGrid() {
   const cycles = await listYearEndCycles()
     .then((res) => res.data as YearEndCycleLite[])
     .catch(() => [] as YearEndCycleLite[])
   const cycle = cycles.find((c) => c.id === cycleId)
   cycleStatus.value = cycle?.status ?? null
-  if (canWrite.value && cycleStatus.value === 'OPEN') {
-    try {
-      const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
-      // 成功後才記時間戳（+ 摘要 + 清 stale flag）：語意是「最後成功試算」而非「嘗試」。
-      applyBuildSuccess(res.data)
-    } catch {
-      // Task 12③：進頁自動試算失敗不再完全靜默——仍不彈 dialog/ElMessage、仍照常
-      // loadGrid 沿用既有結算資料（不打斷閱讀），但改用頁頂 stale banner 讓使用者
-      // 知道目前看到的是上次試算資料而非「一切正常」的假象。手動「↻ 重新試算」按鈕
-      // 維持現狀可兜底重試（觸發條件不變，只改失敗時的回饋方式）。
-      buildFailed.value = true
-    }
-  }
   await loadGrid()
 }
 
@@ -252,7 +229,7 @@ async function onBuild() {
   try {
     const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
     const { built, skipped_finalized, unmatched_count, fallback_classes, warnings } = res.data
-    // Task 12②：手動「↻ 重新試算」的成功結果也套用同一套「常駐摘要列」語意
+    // Task 12②：手動「開始試算」的成功結果也套用同一套「常駐摘要列」語意
     // （原本只彈一次 ElMessage.success，看過就沒了；現在頁頂多一列可回顧的摘要）。
     applyBuildSuccess(res.data)
     await loadGrid()
@@ -284,7 +261,7 @@ defineExpose({
   loadGrid, onBuild,
   buildDialogVisible,
   cycleStatus, lastBuiltAt, initGrid,
-  expandFields, buildResult, buildFailed, buildSummaryText, buildFailedDescription,
+  expandFields, buildResult, buildSummaryText,
   // Task 3（批次2b-1）：獎金欄開關 chips 供測試直接驅動（避免透過 stub 層模擬點擊的脆弱性）。
   visibleBonusCols, toggleBonusCol, visibleBonusColumns, specialBonusTotal,
   // Task 4（批次2b-1）：舊手改 dialog（editVisible/editForm/editingRow/openEdit/submitEdit）
@@ -305,12 +282,12 @@ onMounted(initGrid)
       </span>
       <div class="actions">
         <el-button
-          v-if="canWrite"
+          v-if="canWrite && cycleStatus === 'OPEN'"
           type="primary"
           data-test="build-button"
           @click="buildDialogVisible = true"
         >
-          ↻ 重新試算
+          開始試算
         </el-button>
         <!-- Task 12④：匯出四鈕統一 el-button tag="a" :href 寫法（原本各自包一層 <a> 再塞
              el-button，寫法不一致；比照 YearEndDetailView.vue 既有 tag="a" 慣例）。 -->
@@ -338,25 +315,14 @@ onMounted(initGrid)
     </header>
 
     <!-- Task 8②：非 OPEN 週期提示——本頁為最後一次試算結果，開啟不會重新試算
-         （呼應 initGrid 的 fail-closed 語意：LOCKED/CLOSED 不再自動 build）。 -->
+         （Task 5 起進頁本就不再自動試算，此提示著重說明 LOCKED/CLOSED 週期連
+         「開始試算」CTA 也不會顯示，只能看既有結算資料）。 -->
     <el-alert
       v-if="cycleStatus && cycleStatus !== 'OPEN'"
       type="info" :closable="false" show-icon
       :title="`週期${cycleStatus === 'LOCKED' ? '已鎖定' : '已封存'}：本頁為最後一次試算結果，開啟頁面不會重新試算。`"
       class="grid-alert"
       data-test="non-open-banner"
-    />
-
-    <!-- Task 12③：進頁自動試算失敗 stale banner（原本完全靜默降級，見 initGrid） -->
-    <el-alert
-      v-if="buildFailed"
-      type="warning"
-      closable
-      title="自動試算失敗，目前顯示上次試算資料"
-      :description="buildFailedDescription"
-      data-test="build-failed-banner"
-      class="grid-alert"
-      @close="buildFailed = false"
     />
 
     <!-- Task 12②：build 成功摘要列（取代原本「只彈一次」的 ElMessage，常駐可回顧） -->
@@ -368,6 +334,18 @@ onMounted(initGrid)
       data-test="build-summary-banner"
       class="grid-alert"
       @close="buildResult = null"
+    />
+
+    <!-- Task 5（批次2b-1）：進頁不再自動試算，尚未試算過（rows 為空）時明確引導使用者
+         點「開始試算」，避免誤以為系統忘記載入資料。 -->
+    <el-alert
+      v-if="!rows.length && canWrite && cycleStatus === 'OPEN'"
+      type="info"
+      :closable="false"
+      show-icon
+      title="尚未試算，點『開始試算』產生結算"
+      data-test="empty-grid-hint"
+      class="grid-alert"
     />
 
     <!-- Task 3（批次2b-1）：獎金欄開關 chips——原 7 欄＋9 個常駐獎金欄總寬 ~1767px 必

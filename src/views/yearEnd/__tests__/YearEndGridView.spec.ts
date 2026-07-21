@@ -370,8 +370,13 @@ describe('YearEndGridView', () => {
   })
 })
 
-// ── Task 9：進頁自動 build（依 cycle 狀態 + canWrite）─────────────────────
-describe('YearEndGridView 進頁自動 build（Task 9）', () => {
+// ── Task 5（批次2b-1）：移除進頁 auto-build，改顯式「開始試算」CTA ──────────
+// 原 Task 9「進頁自動 build（依 cycle 狀態 + canWrite）」已整支移除：進頁一律只
+// loadGrid，不再自動呼叫 buildSettlements（避免非預期的 DB 寫入/封存/覆寫）。
+// 以下沿用原 Task 9 對 cycleStatus 判斷（LOCKED/CLOSED/無權限/清單載入失敗）的
+// 迴歸覆蓋——這些情境下行為現在一致（一律不 build），但 cycleStatus 派生邏輯本身
+// （供 banner/CTA 顯示條件使用）仍值得個別驗證。
+describe('YearEndGridView 進頁不自動試算，改顯式「開始試算」CTA（Task 5，批次2b-1）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(hasPermission).mockReturnValue(true)
@@ -380,28 +385,51 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     } as never)
   })
 
-  it('OPEN + canWrite：mount 時 buildSettlements 在 getYearEndGrid 之前被呼叫', async () => {
-    const callOrder: string[] = []
-    vi.mocked(api.buildSettlements).mockImplementationOnce(async () => {
-      callOrder.push('build')
-      return {
-        data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
-      } as never
-    })
-    vi.mocked(api.getYearEndGrid).mockImplementationOnce(async () => {
-      callOrder.push('grid')
-      return { data: [makeRow()] } as never
-    })
+  it('OPEN + canWrite：mount 時不自動呼叫 buildSettlements，只 loadGrid（避免非預期 DB 寫入）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
-    await mountView()
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[]; cycleStatus: string | null }
 
-    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
-    expect(callOrder).toEqual(['build', 'grid'])
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+    expect(vm.cycleStatus).toBe('OPEN')
   })
 
-  // 年終批次2 G2：後端 build-settlements 現在對 LOCKED cycle 一律拒絕（cycle_guard），
-  // 故前端不應再對 LOCKED cycle 自動觸發 build——這與舊行為（LOCKED 仍視為 buildable）相反。
-  it('LOCKED + canWrite：後端現一律拒絕 build（cycle_guard），mount 時不觸發 buildSettlements', async () => {
+  // 開始試算 CTA 點擊 → 開啟確認 dialog（buildDialogVisible）→ 確認（onBuild）→
+  // buildSettlements 才被呼叫。el-dialog 為全域 auto-stub（'el-dialog': true），不會
+  // 渲染其 footer 內容，故「確認」動作沿用本檔既有慣例改直接呼叫 vm.onBuild()
+  // （見下方既有其他 onBuild 測試案），等同模擬使用者點下 dialog 內「確認試算」。
+  it('開始試算 CTA：點擊開啟確認 dialog，確認後才呼叫 buildSettlements', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      buildDialogVisible: boolean
+      onBuild: () => Promise<void>
+    }
+
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+
+    const button = wrapper.find('[data-test="build-button"]')
+    expect(button.exists()).toBe(true)
+
+    await button.trigger('click')
+    expect(vm.buildDialogVisible).toBe(true)
+    // 只是開啟確認 dialog，尚未真正觸發試算
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+
+    // 確認（模擬點擊 dialog 內「確認試算」）
+    await vm.onBuild()
+
+    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
+  })
+
+  it('LOCKED：mount 時不呼叫 buildSettlements（進頁本就不再自動試算），cycleStatus 正確派生供 banner 使用', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'LOCKED' }],
     } as never)
@@ -443,21 +471,6 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(vm.rows).toHaveLength(1)
   })
 
-  it('buildSettlements reject 時仍 loadGrid（靜默降級，不噴錯誤訊息）', async () => {
-    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('build failed'))
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as { rows: GridRow[] }
-
-    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
-    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
-    expect(vm.rows).toHaveLength(1)
-    // 靜默降級：不彈 dialog、不顯示訊息
-    expect(vi.mocked(ElMessage.error)).not.toHaveBeenCalled()
-    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
-  })
-
   it('listYearEndCycles 失敗時 fail-closed：不 build，仍 loadGrid（不白屏，狀態未知不重算）', async () => {
     vi.mocked(api.listYearEndCycles).mockRejectedValue(new Error('network error'))
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
@@ -488,13 +501,20 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(vm.cycleStatus).toBeNull()
   })
 
-  it('toolbar 於試算後顯示「最後試算」與格式化時間（HH:MM）', async () => {
+  it('toolbar 於手動試算後才顯示「最後試算」與格式化時間（HH:MM）；mount 時尚未出現', async () => {
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
     } as never)
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
     const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    // 進頁不再自動試算，「最後試算」時間戳只在手動試算成功後才出現
+    expect(wrapper.find('[data-test="last-built-at"]').exists()).toBe(false)
+
+    await vm.onBuild()
+    await nextTick()
 
     const el = wrapper.find('[data-test="last-built-at"]')
     expect(el.exists()).toBe(true)
@@ -502,7 +522,7 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(el.text()).toMatch(/\d{2}:\d{2}/)
   })
 
-  it('手動「↻ 重新試算」按鈕維持現狀（onBuild 邏輯不受 initGrid 影響）', async () => {
+  it('手動「開始試算」CTA 觸發 onBuild 邏輯不受 initGrid 影響（不再自動試算）', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 3, skipped_finalized: 1, unmatched_count: 0, fallback_classes: 0, warnings: [] },
@@ -511,7 +531,7 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
 
-    // mount 已自動觸發一次 build + loadGrid；手動再觸發一次
+    // mount 只 loadGrid 一次（不再自動 build）；手動觸發一次 onBuild
     await vm.onBuild()
     await nextTick()
 
@@ -629,7 +649,7 @@ async function mountViewWithTable() {
   return wrapper
 }
 
-describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失敗降級 banner）', () => {
+describe('YearEndGridView（Task 12：展開列修 404／build 摘要列；Task 5：開始試算 CTA／空 grid 引導）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(hasPermission).mockReturnValue(true)
@@ -718,42 +738,39 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列／失�
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 5 筆，略過已簽 2 筆')
   })
 
-  // 案③：進頁自動 build 的 catch 原本完全靜默（不彈 dialog、不顯示訊息）；
-  // 改為顯示 stale banner，既有靜默（不噴 ElMessage）行為不變——只改「失敗回饋」。
-  it('進頁自動 build 失敗 → 顯示 stale banner（非靜默），仍不噴 ElMessage', async () => {
-    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('build failed'))
+  // Task 5（批次2b-1）：原「進頁自動 build 失敗 → stale banner」（buildFailed/
+  // buildFailedDescription）已隨 auto-build 整支移除——進頁不再自動試算，自然不會
+  // 有「自動試算失敗」這種狀態，兩個舊測試案（stale banner／buildFailedDescription
+  // 曾成功試算過文案）已隨之刪除，不再適用。
+
+  // Task 5：CTA 文案改「開始試算」（原「↻ 重新試算」），OPEN + canWrite 才顯示。
+  it('開始試算 CTA：文案為「開始試算」', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
     const wrapper = await mountViewWithTable()
-    const vm = wrapper.vm as unknown as { buildFailed: boolean }
+    const button = wrapper.find('[data-test="build-button"]')
 
-    expect(vm.buildFailed).toBe(true)
-    const banner = wrapper.find('[data-test="build-failed-banner"]')
-    expect(banner.exists()).toBe(true)
-    expect(banner.text()).toContain('自動試算失敗，目前顯示上次試算資料')
-    // 尚未成功試算過（第一次就失敗）→ fallback 文案
-    expect(banner.text()).toContain('尚無成功試算紀錄')
-
-    // 既有靜默降級行為不變：仍不噴 ElMessage.error / warning
-    expect(vi.mocked(ElMessage.error)).not.toHaveBeenCalled()
-    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toBe('開始試算')
   })
 
-  it('buildFailedDescription：曾成功試算過時改顯示最後成功時間（非 fallback 文案）', async () => {
+  // Task 5：進頁不再自動試算，尚未試算過（rows 為空）時明確引導使用者點「開始試算」。
+  it('空 grid（未試算過）+ OPEN + canWrite：顯示「尚未試算」引導文字', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [] } as never)
+
+    const wrapper = await mountViewWithTable()
+    const hint = wrapper.find('[data-test="empty-grid-hint"]')
+
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('尚未試算')
+    expect(hint.text()).toContain('開始試算')
+  })
+
+  it('已有結算資料（rows 非空）：不顯示空 grid 引導', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
-    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('x'))
 
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      buildFailedDescription: string
-      lastBuiltAt: Date | null
-    }
-
-    expect(vm.buildFailedDescription).toContain('尚無成功試算紀錄')
-
-    vm.lastBuiltAt = new Date(2026, 0, 1, 9, 30)
-    await nextTick()
-    expect(vm.buildFailedDescription).toMatch(/09:30/)
+    const wrapper = await mountViewWithTable()
+    expect(wrapper.find('[data-test="empty-grid-hint"]').exists()).toBe(false)
   })
 
   // 案④（非 TDD 三案，但同批修繕）：狀態 tag/標籤改用單一來源常數
