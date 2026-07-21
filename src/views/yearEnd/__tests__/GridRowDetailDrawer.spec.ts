@@ -261,6 +261,38 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith('尚未變更任何欄位')
   })
 
+  // code review 折入（finite 守衛回歸測試）：row 缺 deduction_disciplinary/
+  // hire_months 時（例如 BE 尚未部署該欄，或未來回傳 null），`Number(undefined)`
+  // 會是 NaN。若 resetEditForm 沒有 finite 守衛，original/editForm 都會是 NaN，
+  // 而 `NaN !== NaN` 恆為 true，會讓 submit() 誤判「每次都已改動」，架空「尚未
+  // 變更任何欄位」守衛（未加守衛前這條會紅：manualPatchSettlement 會被誤呼叫）。
+  // 型別上 GridRowOut 兩欄皆非 optional，此處刻意用雙重斷言模擬「後端契約與型別
+  // 宣告不一致」的防禦性情境，而非真實可達路徑。
+  it('row 缺 deduction_disciplinary/hire_months（NaN 防禦）：finite 守衛讓未改動時仍視為未改動，不誤送', async () => {
+    const rowMissingFields = {
+      ...makeRow(),
+      deduction_disciplinary: undefined,
+      hire_months: undefined,
+    } as unknown as GridRow
+
+    const wrapper = mountVm({ modelValue: true, row: rowMissingFields, canWrite: true })
+    await nextTick()
+    const vm = wrapper.vm as unknown as DrawerVm
+
+    // finite 守衛：缺欄 fallback 0，而非 NaN
+    expect(vm.editForm.deduction_disciplinary).toBe(0)
+    expect(vm.editForm.hire_months_override).toBe(0)
+    expect(vm.original.deduction_disciplinary).toBe(0)
+    expect(vm.original.hire_months_override).toBe(0)
+
+    // 完全不動任何欄位直接按儲存
+    await vm.submit()
+    await nextTick()
+
+    expect(api.manualPatchSettlement).not.toHaveBeenCalled()
+    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith('尚未變更任何欄位')
+  })
+
   it('改回原值（等於預填值）：視為未改動，不送該欄', async () => {
     const wrapper = mountVm({ modelValue: true, row: makeRow(), canWrite: true })
     await nextTick()

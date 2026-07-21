@@ -166,31 +166,6 @@ const buildSummaryText = computed(() => {
   return `試算完成：${parts.join('、')}`
 })
 
-// Task 12①：原「展開」按鈕 push 到不存在的 /year_end/cycles/:id/settlements/:id
-// （本輪最嚴重的 404 硬傷）。改列內 expand（el-table-column type="expand"）就地
-// 展開，這裡把主結算全部欄位（含動態獎金欄，沿用 bonusColumns 既有定義）攤平成
-// label/value pairs 給 el-descriptions 用。
-// Task 8③：金額改用 moneyInt（與主列一致，見 F-2 註解），原本用 formatCurrency
-// 顯示原始精度會與同一筆金額的主列（已四捨五入）不一致，造成使用者誤以為兩者
-// 是不同數字；展開列與主列本就同源同筆資料，理應顯示同一個數字。
-interface ExpandField {
-  label: string
-  value: string
-}
-
-function expandFields(row: GridRow): ExpandField[] {
-  const fields: ExpandField[] = [
-    { label: '主結算', value: moneyInt(row.payable_amount) },
-  ]
-  for (const col of bonusColumns.value) {
-    fields.push({ label: col.label, value: moneyInt(row.special_bonuses[col.key] ?? 0) })
-  }
-  fields.push({ label: '合計', value: moneyInt(row.total_amount) })
-  fields.push({ label: '狀態', value: (SIGN_STATUS_LABEL as Record<string, string>)[row.status] ?? row.status })
-  fields.push({ label: '備註', value: row.remark || '—' })
-  return fields
-}
-
 // Task 12②：build 成功的副作用（記錄摘要 + 記時間戳）。手動「開始試算」CTA
 // （onBuild）觸發成功後套用此語意。
 function applyBuildSuccess(data: BuildSummary) {
@@ -261,7 +236,7 @@ defineExpose({
   loadGrid, onBuild,
   buildDialogVisible,
   cycleStatus, lastBuiltAt, initGrid,
-  expandFields, buildResult, buildSummaryText,
+  buildResult, buildSummaryText,
   // Task 3（批次2b-1）：獎金欄開關 chips 供測試直接驅動（避免透過 stub 層模擬點擊的脆弱性）。
   visibleBonusCols, toggleBonusCol, visibleBonusColumns, specialBonusTotal,
   // Task 4（批次2b-1）：舊手改 dialog（editVisible/editForm/editingRow/openEdit/submitEdit）
@@ -366,8 +341,8 @@ onMounted(initGrid)
     </div>
 
     <!-- Grid table：6 欄摘要（姓名/主結算/特別獎金合計/合計/狀態/操作），零橫捲。
-         原「展開」欄（Task 12①修 404 用）已移除——明細改由 Task 4 抽屜承接
-         （expandFields() 函式保留供其沿用，見上方定義）。 -->
+         原「展開」欄（Task 12①修 404 用）已移除——明細改由 Task 4 GridRowDetailDrawer
+         抽屜承接（抽屜自建 specialBonusItems，未沿用本檔案任何舊 expand 邏輯）。 -->
     <el-table
       v-loading="loading"
       :data="rows"

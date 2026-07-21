@@ -108,9 +108,20 @@ const original = reactive({
 
 function resetEditForm(row: GridRow | null) {
   if (!row) return
-  const deduction = Number(row.deduction_disciplinary)
-  const hire = Number(row.hire_months)
-  const excess = Number(row.special_bonuses.EXCESS_ENROLLMENT ?? 0)
+  // finite 守衛（防禦）：若 row 缺 deduction_disciplinary/hire_months（例如 BE
+  // 尚未部署該欄、或未來回 null），`Number(undefined)` 會是 NaN——若不擋下來，
+  // original/editForm 都會是 NaN，而 `NaN !== NaN` 恆為 true，會讓 submit() 的
+  // diff 判斷誤以為「每次都已改動」，架空「尚未變更任何欄位」的守衛（送出 NaN
+  // 雖經 JSON.stringify 變 null、後端視為未提供、無金流損壞，但 UX 是錯的：
+  // 使用者完全沒動任何欄位卻彈「已更新」+ 觸發 reload）。非 finite 一律 fallback 0。
+  const rawDeduction = Number(row.deduction_disciplinary)
+  const rawHire = Number(row.hire_months)
+  // special_bonuses 本身理論上必為物件（GridRowOut 非 optional 欄位），但 `?.`
+  // 防禦性保留——與 deduction/hire 同一套「缺欄不炸」的保守假設一致。
+  const rawExcess = Number(row.special_bonuses?.EXCESS_ENROLLMENT ?? 0)
+  const deduction = Number.isFinite(rawDeduction) ? rawDeduction : 0
+  const hire = Number.isFinite(rawHire) ? rawHire : 0
+  const excess = Number.isFinite(rawExcess) ? rawExcess : 0
   const remark = row.remark ?? null
 
   editForm.deduction_disciplinary = deduction

@@ -673,34 +673,11 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列；Task 
     expect(pushMock).not.toHaveBeenCalled()
   })
 
-  // Task 8③：展開列金額格式改對齊主列（moneyInt，顯示層四捨五入到整數元），
-  // 不再用 formatCurrency 顯示原始精度——同一筆金額主列/展開列應顯示同一個數字。
-  it('expandFields(row) 攤平主結算/動態獎金/合計/狀態/備註為 label-value pairs（moneyInt 對齊主列，四捨五入到整數元）', async () => {
-    vi.mocked(api.getYearEndGrid).mockResolvedValue({
-      data: [makeRow({ remark: '114.08 到職' })],
-    } as never)
-
-    const wrapper = await mountView()
-    const vm = wrapper.vm as unknown as {
-      rows: GridRow[]
-      expandFields: (row: GridRow) => { label: string; value: string }[]
-    }
-
-    const fields = vm.expandFields(vm.rows[0]!)
-    const byLabel = Object.fromEntries(fields.map((f) => [f.label, f.value]))
-
-    // moneyInt 四捨五入到整數元（29044.71 → 29045），與主列同一筆金額顯示一致
-    expect(byLabel['主結算']).toBe('NT$29,045')
-    expect(byLabel['考核上']).toBe('NT$3,312')
-    expect(byLabel['超額']).toBe('NT$2,000')
-    expect(byLabel['合計']).toBe('NT$40,107')
-    expect(byLabel['狀態']).toBe('草稿')
-    expect(byLabel['備註']).toBe('114.08 到職')
-  })
-
   // Task 3（批次2b-1）：expand 欄已移除（改列內就地展開讓位給明細抽屜，Task 4 承接），
-  // el-table 不再渲染 type="expand" 欄；expandFields() 函式本身仍保留供 Task 4 抽屜沿用
-  // （見下方 vm-layer 測試），這裡只驗證 DOM 不再有 expand 把手。
+  // el-table 不再渲染 type="expand" 欄。原 expandFields()/ExpandField（Task 12①
+  // 的展開列攤平邏輯）已於 code review 折入修時整支刪除——Task 4 的
+  // GridRowDetailDrawer 是自建 specialBonusItems，從未沿用這支函式，留著只是
+  // 死碼＋誤導註解（見 GridRowDetailDrawer.vue 的 specialBonusItems computed）。
   it('el-table 不再渲染 expand 欄（改摘要表 + 明細另由 Task 4 抽屜承接）', async () => {
     vi.mocked(api.buildSettlements).mockResolvedValue({
       data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
