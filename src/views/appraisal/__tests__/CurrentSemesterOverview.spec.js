@@ -27,6 +27,15 @@ vi.mock('@/api/appraisal', () => ({
   getManualEventCounts: vi.fn().mockResolvedValue({ data: { entries: [] } }),
   batchUpsertManualEventCounts: vi.fn().mockResolvedValue({ data: { ok: true } }),
   listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
+  // Task A3：流程引導條簽核統計（sync/recompute/sign 步驟判定用），預設「尚無簽核資料」
+  getSignStatusSummary: vi.fn().mockResolvedValue({ data: { counts: {} } }),
+}))
+
+// ── vue-router mock（Task A3：引導條 sign 步驟導向簽核歷史頁）──
+const guidePushMock = vi.fn()
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: guidePushMock, replace: vi.fn() }),
+  useRoute: () => ({ query: {}, params: {} }),
 }))
 
 // ── Pinia store mock（可動態調整 school_year / semester）─
@@ -62,6 +71,7 @@ import {
   addAppraisalParticipant,
   bulkAddAppraisalParticipantsFromActive,
   refreshAppraisalCycle,
+  getSignStatusSummary,
 } from '@/api/appraisal'
 
 import CurrentSemesterOverview from '../CurrentSemesterOverview.vue'
@@ -838,5 +848,130 @@ describe('CurrentSemesterOverview 精修（Task 7）', () => {
 
     expect(wrapper.find('.el-skeleton').exists()).toBe(false)
     expect(wrapper.find('[data-test="kpi-employees"]').exists()).toBe(true)
+  })
+})
+
+// ── 流程引導條接線 + 跨頁跳轉（Task A3）─────────────────────
+describe('CurrentSemesterOverview 引導條（Task A3）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    guidePushMock.mockClear()
+    getSignStatusSummary.mockResolvedValue({ data: { counts: {} } })
+  })
+
+  const nonParticipantExtra = {
+    participant_id: null,
+    employee_id: 9,
+    employee_name: '張新進',
+    role_group: 'ASSISTANT',
+    classroom_id: 5,
+    is_participant: false,
+    attendance: { late_count: 0, early_leave_count: 0, missing_punch_count: 0, leave_days: 0, absent_days: 0 },
+    retention: null,
+    activity: null,
+    disciplinary: { warning_count: 0, minor_count: 0, major_count: 0, actions: [] },
+  }
+
+  it('掛載時渲染 AppraisalProcessGuide，有非成員時 participants 高亮 current', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: makeStatusFixture({ extra: [nonParticipantExtra] }),
+    })
+    const wrapper = await mountView()
+
+    const guide = wrapper.findComponent({ name: 'AppraisalProcessGuide' })
+    expect(guide.exists()).toBe(true)
+    expect(guide.props('statuses').participants).toBe('current')
+  })
+
+  it('無週期時點 create 引導步驟，呼叫既有建立週期流程', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: null })
+    createAppraisalCycle.mockResolvedValue({ data: { id: 12 } })
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="guide-step-create"]').attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-test="guide-step-create"]').trigger('click')
+    await flushPromises()
+
+    expect(createAppraisalCycle).toHaveBeenCalledTimes(1)
+  })
+
+  it('成員齊全時點 participants 引導步驟，捲動至成員區（非觸發一鍵加入寫入）', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    const scrollIntoView = vi.fn()
+    const getByIdSpy = vi.spyOn(document, 'getElementById').mockReturnValue({ scrollIntoView })
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="guide-step-participants"]').trigger('click')
+    await flushPromises()
+
+    expect(getByIdSpy).toHaveBeenCalledWith('appraisal-participants-section')
+    expect(scrollIntoView).toHaveBeenCalled()
+    expect(bulkAddAppraisalParticipantsFromActive).not.toHaveBeenCalled()
+    getByIdSpy.mockRestore()
+  })
+
+  it('成員齊全時點 manual 引導步驟，展開手填 collapse 並捲動', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    const scrollIntoView = vi.fn()
+    const getByIdSpy = vi.spyOn(document, 'getElementById').mockReturnValue({ scrollIntoView })
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="guide-step-manual"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.vm.manualActiveNames).toContain('manual')
+    expect(getByIdSpy).toHaveBeenCalledWith('appraisal-manual-section')
+    getByIdSpy.mockRestore()
+  })
+
+  it('成員齊全時點 sync 引導步驟，觸發既有同步分數 dry_run 預覽', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    syncAppraisalScoreItems.mockResolvedValueOnce({
+      data: { deleted_count: 0, inserted_count: 0, skipped_manual_count: 0, items: [] },
+    })
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="guide-step-sync"]').trigger('click')
+    await flushPromises()
+
+    expect(syncAppraisalScoreItems).toHaveBeenCalledWith(12, { dryRun: true })
+    expect(wrapper.find('[data-test="sync-preview-dialog"]').exists()).toBe(true)
+  })
+
+  it('成員齊全時點 recompute 引導步驟，觸發既有重新整理（重算彙整）', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    // recompute 步驟需 synced（summaryCount>0）才非 disabled，比照 sign 測試給簽核統計
+    getSignStatusSummary.mockResolvedValue({
+      data: { counts: { DRAFT: 1, SUPERVISOR_SIGNED: 0, ACCOUNTING_SIGNED: 0, FINALIZED: 0 } },
+    })
+
+    const wrapper = await mountView()
+    expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('[data-test="guide-step-recompute"]').trigger('click')
+    await flushPromises()
+
+    expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(2)
+  })
+
+  it('已同步時點 sign 引導步驟，導向 /appraisal-year-end/appraisal/history', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    getSignStatusSummary.mockResolvedValue({
+      data: { counts: { DRAFT: 1, SUPERVISOR_SIGNED: 0, ACCOUNTING_SIGNED: 0, FINALIZED: 0 } },
+    })
+
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="guide-step-sign"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.find('[data-test="guide-step-sign"]').trigger('click')
+    await flushPromises()
+
+    expect(guidePushMock).toHaveBeenCalledWith('/appraisal-year-end/appraisal/history')
   })
 })

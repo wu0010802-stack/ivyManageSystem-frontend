@@ -9,6 +9,7 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Connection, Plus, DataAnalysis } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import { useClientTableFilter } from '@/composables/useClientTableFilter'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 
@@ -21,6 +22,7 @@ import {
   bulkAddAppraisalParticipantsFromActive,
   listScoringRules,
   refreshAppraisalCycle,
+  getSignStatusSummary,
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -31,6 +33,8 @@ import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
 import ManualEventEntrySection from './components/ManualEventEntrySection.vue'
 import ScorePreviewDialog from './components/ScorePreviewDialog.vue'
+import AppraisalProcessGuide from './components/AppraisalProcessGuide.vue'
+import { deriveAppraisalStepStatuses, type AppraisalStepInput, type AppraisalStepKey } from './appraisalSteps'
 
 interface CurrentCycle {
   id: number
@@ -90,6 +94,7 @@ interface SyncPreviewData {
 
 const termStore = useAcademicTermStore()
 const { notify } = useErrorNotify()
+const router = useRouter()
 
 // ── 後端 semester enum ────────────────────────────────────
 const toSemesterEnum = (n: number | string) => (Number(n) === 1 ? 'FIRST' : 'SECOND')
@@ -176,6 +181,27 @@ async function loadRules(
   }
 }
 
+// ── 簽核統計（給流程引導條 sync/recompute/sign 步驟判定用，Task A3）───
+const signSummary = ref<{ counts: Record<string, number> } | null>(null)
+async function loadSignSummary(
+  cycle: CurrentCycle | null = currentCycle.value,
+  isStale: () => boolean = () => false,
+) {
+  if (!cycle) {
+    signSummary.value = null
+    return
+  }
+  try {
+    const { data } = await getSignStatusSummary(cycle.id)
+    if (isStale()) return
+    signSummary.value = { counts: (data as { counts?: Record<string, number> })?.counts ?? {} }
+  } catch (e) {
+    // 失敗不影響主流程；引導條沿用保守值（summaryCount 落回 0，顯示較早步驟，不誤判 done）
+    if (isStale()) return
+    signSummary.value = null
+  }
+}
+
 // ── 進頁即算：OPEN cycle 先 refresh 再 loadStatus ──────────
 const refreshing = ref(false)
 // 自動重算失敗不再靜默：改顯示 stale-warning banner（可關閉），提示使用者目前是舊資料
@@ -218,6 +244,9 @@ async function reloadAll() {
   if (isStale()) return
 
   await loadRules(cycle, isStale)
+  if (isStale()) return
+
+  await loadSignSummary(cycle, isStale)
 }
 
 watch(
@@ -473,6 +502,59 @@ async function createCurrentCycle() {
 
 // ── 預覽分數 dialog（與同步分數 preview 區隔）────────────
 const scorePreviewDialogVisible = ref(false)
+
+// ── 流程引導條（Task A3）：組 AppraisalStepInput + navigate 跨頁跳轉 ──
+// 手填 collapse 的展開狀態改由 v-model 控制，讓 onGuideNavigate('manual') 可展開它
+const manualActiveNames = ref<string[]>([])
+
+const stepInput = computed<AppraisalStepInput>(() => {
+  const counts = signSummary.value?.counts ?? {}
+  const totalSignCount = Object.values(counts).reduce((acc, n) => acc + (n || 0), 0)
+  const finalizedSignCount = counts.FINALIZED || 0
+  return {
+    hasCycle: !!currentCycle.value,
+    cycleStatus: (currentCycle.value?.status as 'OPEN' | 'LOCKED' | 'CLOSED' | undefined) ?? null,
+    participantCount: employeeCount.value,
+    hasNonParticipant: hasNonParticipant.value,
+    // summaryCount/totalCount 皆取自簽核統計總數（未載入時保守回落 0，顯示較早步驟）
+    summaryCount: totalSignCount,
+    pendingSignCount: totalSignCount - finalizedSignCount,
+    finalizedCount: finalizedSignCount,
+    totalCount: totalSignCount,
+  }
+})
+
+const stepStatuses = computed(() => deriveAppraisalStepStatuses(stepInput.value))
+
+function scrollToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+// navigate 只接「現在已存在」的動作；sync 之後會改走 A4 統一 dialog、
+// create 之後會改走 A7 統一 dialog，屆時再更新此處 wiring。
+function onGuideNavigate(key: AppraisalStepKey) {
+  switch (key) {
+    case 'create':
+      createCurrentCycle()
+      break
+    case 'participants':
+      scrollToSection('appraisal-participants-section')
+      break
+    case 'manual':
+      manualActiveNames.value = ['manual']
+      scrollToSection('appraisal-manual-section')
+      break
+    case 'sync':
+      openSyncPreview()
+      break
+    case 'recompute':
+      reloadAll()
+      break
+    case 'sign':
+      router.push('/appraisal-year-end/appraisal/history')
+      break
+  }
+}
 </script>
 
 <template>
@@ -537,6 +619,8 @@ const scorePreviewDialogVisible = ref(false)
         </el-button>
       </div>
     </div>
+
+    <AppraisalProcessGuide :statuses="stepStatuses" @navigate="onGuideNavigate" />
 
     <!-- cycle 不存在 banner -->
     <el-alert
@@ -608,7 +692,12 @@ const scorePreviewDialogVisible = ref(false)
         </template>
       </div>
 
-      <el-collapse class="manual-section" data-test="manual-section">
+      <el-collapse
+        id="appraisal-manual-section"
+        v-model="manualActiveNames"
+        class="manual-section"
+        data-test="manual-section"
+      >
         <el-collapse-item title="手填事件次數" name="manual">
           <ManualEventEntrySection
             :cycle-id="currentCycle.id"
@@ -628,6 +717,7 @@ const scorePreviewDialogVisible = ref(false)
       />
 
       <el-table
+        id="appraisal-participants-section"
         :data="filteredParticipants"
         v-loading="statusLoading"
         stripe
