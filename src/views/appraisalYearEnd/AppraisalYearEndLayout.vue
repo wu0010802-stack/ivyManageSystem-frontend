@@ -12,6 +12,8 @@ const SECTIONS: SectionDef[] = [
   { key: 'appraisal', label: '考核', to: '/appraisal-year-end/appraisal/current', can: () => hasPermission('APPRAISAL_READ') },
   { key: 'year-end', label: '年終', to: '/appraisal-year-end/year-end',
     can: () => hasPermission('YEAR_END_READ') || hasPermission('APPRAISAL_FINALIZE') },
+  { key: 'payout', label: '發放', to: '/appraisal-year-end/year-end/payout',
+    can: () => hasPermission('APPRAISAL_FINALIZE') },
   { key: 'rules', label: '規則設定', to: '/appraisal-year-end/rules',
     can: () => hasPermission('APPRAISAL_READ') || hasPermission('SETTINGS_READ') },
   { key: 'exceptions', label: '例外中心', to: '/appraisal-year-end/exceptions',
@@ -21,7 +23,13 @@ const SECTIONS: SectionDef[] = [
 const route = useRoute()
 const router = useRouter()
 const sections = computed(() => SECTIONS.filter((s) => s.can()))
-const activeKey = computed(() => route.path.split('/')[2] ?? 'overview')
+// payout 路由 path 第 3 段是 'year-end'（/appraisal-year-end/year-end/payout），
+// 若沿用純 split 邏輯會誤停「年終」；特判優先於既有規則。年終週期工作區
+// （/year-end/cycles/:id）不受影響，仍落在 path[2]='year-end'。
+const activeKey = computed(() => {
+  if (route.path.startsWith('/appraisal-year-end/year-end/payout')) return 'payout'
+  return route.path.split('/')[2] ?? 'overview'
+})
 const segmentedOptions = computed(() => sections.value.map((s) => ({ label: s.label, value: s.key })))
 const onSectionChange = (val: string | number) => {
   const target = SECTIONS.find((s) => s.key === String(val))
