@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * ScoringRulesPanel — 14 規則卡 + 切換生效日 + 開編輯 dialog / 歷史 drawer
+ * ScoringRulesPanel — 24 規則卡（依性質分五組：考勤/招生/才藝/懲處/加分）+ 切換生效日 + 開編輯 dialog / 歷史 drawer
  *
  * 對應 Task 18 規格：
- * - 14 個 ScoreItemCode 各一張卡，顯示當前生效規則摘要
+ * - 24 個 ScoreItemCode 各一張卡，依 ITEM_DOMAIN_GROUPS 分組顯示，顯示當前生效規則摘要
  * - 切換生效日重抓 listScoringRules
  * - 點 [編輯] 開 RuleEditorDialog（建立新版規則）
  * - 點 [歷史] 開 RuleHistoryDrawer（Task 19 實作完整版）
@@ -19,6 +19,7 @@ import { hasPermission } from '@/utils/auth'
 import {
   ITEM_CODE_LABELS,
   AUTO_ITEM_CODES as AUTO_CODES,
+  ITEM_DOMAIN_GROUPS,
 } from '@/views/appraisal/scoreItemLabels'
 import RuleEditorDialog from './RuleEditorDialog.vue'
 import RuleHistoryDrawer from './RuleHistoryDrawer.vue'
@@ -60,8 +61,6 @@ const rulesByCode = computed(() => {
   for (const r of rules.value) if (r.item_code) m[r.item_code] = r
   return m
 })
-
-const itemCodes = Object.keys(ITEM_CODE_LABELS)
 
 async function load() {
   loading.value = true
@@ -137,45 +136,55 @@ defineExpose({ load, disablePastDates })
       </el-button>
     </div>
 
-    <div v-loading="loading" class="rules-grid" data-test="rules-grid">
+    <div v-loading="loading" data-test="rules-grid">
       <div
-        v-for="code in itemCodes"
-        :key="code"
-        class="rule-card"
-        :data-test="`rule-card-${code}`"
+        v-for="g in ITEM_DOMAIN_GROUPS"
+        :key="g.domain"
+        class="rule-domain-group"
+        :data-test="`rule-domain-group-${g.domain}`"
       >
-        <div class="rule-card__header">
-          <span class="rule-card__label">{{ (ITEM_CODE_LABELS as Record<string, string>)[code] }}</span>
-          <el-tag
-            size="small"
-            :type="AUTO_CODES.has(code) ? 'success' : 'info'"
-            :data-test="`rule-tag-${code}`"
+        <h4 class="rule-domain-group__title">{{ g.domain }}</h4>
+        <div class="rules-grid">
+          <div
+            v-for="code in g.codes"
+            :key="code"
+            class="rule-card"
+            :data-test="`rule-card-${code}`"
           >
-            {{ AUTO_CODES.has(code) ? 'auto' : 'manual' }}
-          </el-tag>
-        </div>
-        <div class="rule-card__body" :data-test="`rule-summary-${code}`">
-          {{ fmtRuleSummary(rulesByCode[code]) }}
-        </div>
-        <div class="rule-card__actions">
-          <el-button
-            v-if="canEditRules"
-            size="small"
-            :icon="Edit"
-            :data-test="`edit-btn-${code}`"
-            @click="openEditor(code)"
-          >
-            編輯
-          </el-button>
-          <el-button
-            size="small"
-            text
-            :icon="Clock"
-            :data-test="`history-btn-${code}`"
-            @click="openHistory(code)"
-          >
-            歷史
-          </el-button>
+            <div class="rule-card__header">
+              <span class="rule-card__label">{{ (ITEM_CODE_LABELS as Record<string, string>)[code] }}</span>
+              <el-tag
+                size="small"
+                :type="AUTO_CODES.has(code) ? 'success' : 'info'"
+                :data-test="`rule-tag-${code}`"
+              >
+                {{ AUTO_CODES.has(code) ? 'auto' : 'manual' }}
+              </el-tag>
+            </div>
+            <div class="rule-card__body" :data-test="`rule-summary-${code}`">
+              {{ fmtRuleSummary(rulesByCode[code]) }}
+            </div>
+            <div class="rule-card__actions">
+              <el-button
+                v-if="canEditRules"
+                size="small"
+                :icon="Edit"
+                :data-test="`edit-btn-${code}`"
+                @click="openEditor(code)"
+              >
+                編輯
+              </el-button>
+              <el-button
+                size="small"
+                text
+                :icon="Clock"
+                :data-test="`history-btn-${code}`"
+                @click="openHistory(code)"
+              >
+                歷史
+              </el-button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -205,6 +214,15 @@ defineExpose({ load, disablePastDates })
   display: flex;
   gap: var(--space-3);
   align-items: center;
+}
+.rule-domain-group + .rule-domain-group {
+  margin-top: var(--space-4);
+}
+.rule-domain-group__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 .rules-grid {
   display: grid;
