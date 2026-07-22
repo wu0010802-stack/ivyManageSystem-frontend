@@ -2,14 +2,14 @@ name: Frontend CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - 'LICENSE*'
       - '.gitignore'
   pull_request:
-    branches: [main]
+    branches: [main, staging]
     paths-ignore:
       - '**.md'
       - 'docs/**'
@@ -106,16 +106,30 @@ jobs:
           repository: ${{ github.repository_owner }}/ivyManageSystem-backend
           path: ivy-backend
 
+      - name: Prefer companion backend ref when it exists
+        working-directory: ivy-backend
+        env:
+          CANDIDATE_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ -n "${CANDIDATE_REF:-}" ] && \
+             git fetch --no-tags origin "refs/heads/${CANDIDATE_REF}:refs/remotes/origin/companion"; then
+            git checkout --detach refs/remotes/origin/companion
+            echo "Using companion backend ref: ${CANDIDATE_REF}"
+          else
+            echo "Companion backend ref unavailable; using backend main"
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
           cache: pip
-          cache-dependency-path: ivy-backend/requirements.txt
+          cache-dependency-path: ivy-backend/requirements.lock
 
       - name: Install backend deps
         working-directory: ivy-backend
-        run: pip install -r requirements.txt
+        run: pip install --require-hashes -r requirements.lock
 
       - name: Dump openapi.json
         working-directory: ivy-backend

@@ -30,7 +30,8 @@ npm run test:coverage     # 含覆蓋率報告
 測試檔案位於 `tests/unit/`。
 
 ### 推送至遠端
-本 repo 為獨立 git repo，直接 `git push origin main` 即可。
+本 repo 為獨立 git repo。功能分支先落 `staging` 並通過 CI／測試環境驗證，再把同一
+SHA 升 `main`；禁止未經 staging 直接 push main。
 
 ---
 
@@ -64,4 +65,4 @@ npm run test:coverage     # 含覆蓋率報告
 **前端：**
 - API 呼叫統一透過 `src/api/` 下的模組，不在元件內直接 `fetch`/`axios`
 - 狀態管理用 Pinia store，不在元件間傳遞複雜狀態
-- 權限位元遮罩超過 32-bit 時必須用 `BigInt` 處理
+- 權限為字串 enum／`string[]`，一律走 `hasPermission()`；禁止 BigInt 或位元遮罩 helper
