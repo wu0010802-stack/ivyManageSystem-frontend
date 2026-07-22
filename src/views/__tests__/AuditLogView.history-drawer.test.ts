@@ -159,4 +159,48 @@ describe('AuditLogView 歷史軌跡 drawer', () => {
     expect(document.body.textContent).not.toContain('甲的紀錄')
     wrapper.unmount()
   })
+
+  it('載入更早失敗後重試不跳頁（成功才 commit page）', async () => {
+    const router = makeRouter()
+    await router.push('/audit-logs')
+    await router.isReady()
+    const wrapper = mount(AuditLogView, {
+      attachTo: document.body,
+      global: { plugins: [ElementPlus, router] },
+    })
+    await flushPromises()
+
+    // 開 drawer：page1 成功，total 設大於一頁 → 顯示「載入更早」
+    getAuditLogs.mockResolvedValueOnce({
+      data: { items: [rows[0]], total: 2 },
+    })
+    const historyBtn = wrapper.findAll('button').find((b) => b.text().includes('歷史'))
+    await historyBtn!.trigger('click')
+    await flushPromises()
+
+    const findMoreBtn = () =>
+      Array.from(document.querySelectorAll('button')).find((b) => b.textContent?.includes('載入更早'))
+    expect(findMoreBtn(), '找不到「載入更早」按鈕').toBeTruthy()
+
+    // 第一次點「載入更早」→ 暫時性錯誤：page 不應被 commit 成 2
+    getAuditLogs.mockRejectedValueOnce(new Error('network blip'))
+    findMoreBtn()!.click()
+    await flushPromises()
+
+    // 按鈕仍在（items 未 append，total 仍 > items.length）→ 再點一次，這次成功
+    expect(findMoreBtn(), '重試前「載入更早」按鈕應仍在').toBeTruthy()
+    getAuditLogs.mockResolvedValueOnce({
+      data: {
+        items: [{ id: 4, entity_type: 'student', entity_id: '77', action: 'CREATE', username: 'bob', summary: '重試後補回的紀錄', created_at: '2026-04-01T09:00:00' }],
+        total: 2,
+      },
+    })
+    findMoreBtn()!.click()
+    await flushPromises()
+
+    const params = getAuditLogs.mock.calls.at(-1)![0] as Record<string, unknown>
+    expect(params.page).toBe(2) // 不是 3——失敗那次沒有 commit page，重試仍從 page 1+1 起算
+    expect(document.body.textContent).toContain('重試後補回的紀錄')
+    wrapper.unmount()
+  })
 })

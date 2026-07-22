@@ -401,7 +401,7 @@ const openHistory = async (row: AuditLog) => {
 // 歷史軌跡請求序號：丟棄過期回應（連點/換列時舊請求後到，避免跨資源污染）
 let historyRequestSeq = 0
 
-const fetchHistoryPage = async () => {
+const fetchHistoryPage = async (targetPage: number = historyDrawer.page) => {
   const seq = ++historyRequestSeq
   historyDrawer.loading = true
   try {
@@ -410,10 +410,11 @@ const fetchHistoryPage = async () => {
     const res = await getAuditLogs({
       entity_type: historyDrawer.entityType,
       entity_id: historyDrawer.entityId,
-      page: historyDrawer.page,
+      page: targetPage,
       page_size: HISTORY_PAGE_SIZE,
     })
     if (seq !== historyRequestSeq) return
+    historyDrawer.page = targetPage // 成功才 commit，失敗重試不跳頁
     const d = res.data as { items: AuditLog[]; total: number }
     historyDrawer.items.push(...d.items)
     historyDrawer.total = d.total
@@ -425,8 +426,7 @@ const fetchHistoryPage = async () => {
 }
 
 const loadOlderHistory = async () => {
-  historyDrawer.page += 1
-  await fetchHistoryPage()
+  await fetchHistoryPage(historyDrawer.page + 1)
 }
 
 const historyHasMore = computed(() => historyDrawer.items.length < historyDrawer.total)
