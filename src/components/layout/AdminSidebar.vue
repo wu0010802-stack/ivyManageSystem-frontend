@@ -514,6 +514,26 @@ const onMenuSelect = () => {
   color: #fff !important;
 }
 
+/* 收合（64px）時：自訂左右 margin 12px 讓項目只剩 40px 寬，EP collapse 仍套
+ * padding-left 20px → 圖示被推到 x=32..56、超出 active 底塊右緣。歸零 padding
+ * 改用 flex 置中，圖示與底塊才會同軸。 */
+.is-collapsed :deep(.el-menu--collapse > .el-menu-item),
+.is-collapsed :deep(.el-menu--collapse > .el-sub-menu > .el-sub-menu__title) {
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* EP collapse 把 menu-item 內容包進 absolute 的 tooltip trigger（自帶 padding 0 20px），
+ * icon 實際位置由它決定，須一併歸零置中 */
+.is-collapsed :deep(.el-menu--collapse .el-menu-tooltip__trigger) {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .collapse-toggle {
   appearance: none;
   -webkit-appearance: none;
