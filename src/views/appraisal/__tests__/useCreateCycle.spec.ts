@@ -71,6 +71,32 @@ describe('useCreateCycle', () => {
     })
   })
 
+  it('Task A7 fix：resetToCurrentTerm(year, semester) 帶參數時優先用參數，不讀 termStore', () => {
+    // termStore 仍是 114/FIRST，但呼叫方（如 YearlyEnrollmentTargetSection）傳入
+    // 115/SECOND（selectedYear + 點擊的卡片）——必須用參數值，不可被 termStore 蓋掉。
+    const { form, resetToCurrentTerm } = useCreateCycle()
+    resetToCurrentTerm(115, 'SECOND')
+    expect(form.value).toEqual({
+      academic_year: 115,
+      semester: 'SECOND',
+      enrollment_target: null,
+      enrollment_actual: null,
+    })
+  })
+
+  it('Task A7 fix：resetToCurrentTerm() 不帶參數時 fallback 讀 termStore（既有行為不回歸）', () => {
+    termState.school_year = 116
+    termState.semester = 2
+    const { form, resetToCurrentTerm } = useCreateCycle()
+    resetToCurrentTerm()
+    expect(form.value).toEqual({
+      academic_year: 116,
+      semester: 'SECOND',
+      enrollment_target: null,
+      enrollment_actual: null,
+    })
+  })
+
   it('submit 呼叫 createAppraisalCycle(buildCreateCyclePayload(form)) 並回傳建立結果', async () => {
     vi.mocked(createAppraisalCycle).mockResolvedValue({ data: { id: 12 } } as never)
     const { form, submit } = useCreateCycle()

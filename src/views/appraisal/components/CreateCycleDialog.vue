@@ -14,6 +14,11 @@
  * 資料，本 task **不做任何建議值預帶**：開啟時只重置為當前學年學期，target/actual
  * 一律留空由使用者手動填（`resetToCurrentTerm`，見 useCreateCycle.ts）。
  *
+ * ⚠ 修正記錄（code review Task A7，真 UX 回歸）：`defaultYear`/`defaultSemester` 為
+ * 可選 props，讓呼叫方（例如 YearlyEnrollmentTargetSection 本頁的 selectedYear 學年
+ * 下拉 + 點擊的卡片學期）能覆寫開啟時的預設值；未傳時 fallback 全域 termStore 當前值
+ * （CurrentSemesterOverview/CycleListView 兩入口維持原行為，不傳這兩個 prop）。
+ *
  * canWrite 對齊後端 `POST /appraisal/cycles` 守衛（`Permission.APPRAISAL_FINALIZE`，
  * 見 ivy-backend api/appraisal/cycles.py:create_cycle）；tooltip 包 span pattern
  * 比照 YearEndListView.vue。
@@ -21,14 +26,16 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
-import { useCreateCycle, type CreatedCycle } from '../composables/useCreateCycle'
+import { useCreateCycle, type CreatedCycle, type SemesterEnum } from '../composables/useCreateCycle'
 
 const props = withDefaults(
   defineProps<{
     visible: boolean
     canWrite: boolean
+    defaultYear?: number
+    defaultSemester?: SemesterEnum
   }>(),
-  { visible: false, canWrite: false },
+  { visible: false, canWrite: false, defaultYear: undefined, defaultSemester: undefined },
 )
 
 const emit = defineEmits<{
@@ -44,11 +51,13 @@ const dialogVisible = computed({
 const { form, submit, resetToCurrentTerm } = useCreateCycle()
 const submitting = ref(false)
 
-// 開啟時（false → true）重置為當前學年學期，不預帶任何建議值（見上方決策記錄）。
+// 開啟時（false → true）重置為呼叫方指定的學年學期（defaultYear/defaultSemester），
+// 未傳才 fallback 全域 termStore 當前值；target/actual 一律留空，不預帶任何建議值
+// （見上方決策記錄）。
 watch(
   () => props.visible,
   (v) => {
-    if (v) resetToCurrentTerm()
+    if (v) resetToCurrentTerm(props.defaultYear, props.defaultSemester)
   },
 )
 

@@ -133,6 +133,49 @@ describe('CreateCycleDialog', () => {
     expect((actual.element as HTMLInputElement).value).toBe('')
   })
 
+  it('Task A7 fix：傳入 defaultYear/defaultSemester 時開啟後表單預帶該值，非 termStore 的值', async () => {
+    // termStore mock 為 114/FIRST，但呼叫方（YearlyEnrollmentTargetSection）傳入
+    // 115/SECOND（selectedYear + 點擊的卡片）——回歸前 dialog 會忽略這兩個 prop 一律
+    // 重置為 termStore 值，此案驗證 override 生效。
+    const wrapper = mount(CreateCycleDialog, {
+      props: { visible: false, canWrite: true, defaultYear: 115, defaultSemester: 'SECOND' },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushPromises()
+
+    await wrapper.setProps({ visible: true })
+    await flushPromises()
+
+    const year = wrapper.find('[data-test="create-cycle-year"]')
+    expect((year.element as HTMLInputElement).value).toBe('115')
+    const semesterGroup = wrapper.find('[data-test="create-cycle-semester"]')
+    // el-radio-group stub 本身不回顯 modelValue（見上方 stub），改由送出 payload 驗證語意正確。
+    expect(semesterGroup.exists()).toBe(true)
+
+    await wrapper.find('[data-test="create-cycle-submit"]').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(createAppraisalCycle)).toHaveBeenCalledWith(
+      expect.objectContaining({ academic_year: 115, semester: 'SECOND' }),
+    )
+  })
+
+  it('Task A7 fix：未傳 defaultYear/defaultSemester 時維持 fallback termStore 當前值（另兩入口不回歸）', async () => {
+    const wrapper = mount(CreateCycleDialog, {
+      props: { visible: false, canWrite: true },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushPromises()
+
+    await wrapper.setProps({ visible: true })
+    await flushPromises()
+
+    await wrapper.find('[data-test="create-cycle-submit"]').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(createAppraisalCycle)).toHaveBeenCalledWith(
+      expect.objectContaining({ academic_year: 114, semester: 'FIRST' }),
+    )
+  })
+
   it('送出呼叫 createAppraisalCycle(buildCreateCyclePayload(form))，成功 emit created 與 update:visible(false)', async () => {
     vi.mocked(createAppraisalCycle).mockResolvedValue({ data: { id: 99 } } as never)
     const wrapper = mountDialog()

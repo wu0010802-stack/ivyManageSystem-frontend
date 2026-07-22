@@ -8,6 +8,12 @@
 // ⚠ 決策記錄（使用者 2026-07-21 裁定，見 batch3/task-A7-brief.md）：
 // 招生目標**不做任何建議值預帶**——resetToCurrentTerm 只帶入當前學年學期，
 // enrollment_target/enrollment_actual 一律留空（null）由使用者手動填。
+//
+// ⚠ 修正記錄（code review Task A7，真 UX 回歸）：三入口收斂後 resetToCurrentTerm
+// 原本一律讀全域 termStore，遺失各入口自身語境（例如 YearlyEnrollmentTargetSection
+// 本頁的 selectedYear 學年下拉 + 點擊的卡片學期）。改為可選參數 override：呼叫方
+// 傳入 year/semester 時優先採用，不傳才 fallback 讀 termStore（維持另兩入口
+// CurrentSemesterOverview/CycleListView 既有正確行為）。
 import { ref } from 'vue'
 import { createAppraisalCycle } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -45,11 +51,15 @@ export function buildCreateCyclePayload(form: CreateCycleForm) {
   }
 }
 
-function currentTermDefaults(): CreateCycleForm {
+/**
+ * 組出 reset 用的學年/學期預設值。有傳 `year`/`semester` 時優先採用（呼叫方自身語境，
+ * 例如 selectedYear + 點擊的卡片）；未傳才 fallback 讀全域 termStore 當前值。
+ */
+function currentTermDefaults(year?: number, semester?: SemesterEnum): CreateCycleForm {
   const termStore = useAcademicTermStore()
   return {
-    academic_year: termStore.school_year,
-    semester: toSemesterEnum(termStore.semester),
+    academic_year: year ?? termStore.school_year,
+    semester: semester ?? toSemesterEnum(termStore.semester),
     enrollment_target: null,
     enrollment_actual: null,
   }
@@ -58,9 +68,12 @@ function currentTermDefaults(): CreateCycleForm {
 export function useCreateCycle() {
   const form = ref<CreateCycleForm>(currentTermDefaults())
 
-  /** 重置為當前學年學期；target/actual 留空——不預帶任何建議值。 */
-  function resetToCurrentTerm() {
-    form.value = currentTermDefaults()
+  /**
+   * 重置為指定學年學期（不傳則 fallback termStore 當前值）；target/actual 一律
+   * 留空——不預帶任何建議值。
+   */
+  function resetToCurrentTerm(year?: number, semester?: SemesterEnum) {
+    form.value = currentTermDefaults(year, semester)
   }
 
   async function submit(): Promise<CreatedCycle> {

@@ -105,7 +105,15 @@ const createDialogVisible = ref(false)
 // canWrite gate 對齊後端 POST /appraisal/cycles 守衛（Permission.APPRAISAL_FINALIZE）
 const canCreateCycle = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 
-function openCreateDialog() {
+// ⚠ 修正記錄（code review Task A7，真 UX 回歸）：openCreateDialog 原本無參數，dialog
+// 一律 fallback 重置為全域 termStore 當前值，與本頁自己的 selectedYear（可 ±5 年瀏覽）
+// 及使用者點擊的卡片（FIRST/SECOND）context 脫節。改為記錄被點擊卡片的學期，連同
+// selectedYear 一起以 defaultYear/defaultSemester 傳給 CreateCycleDialog，讓 dialog
+// 預帶值與畫面上下文一致。
+const pendingCreateSemester = ref<SemesterKey>('FIRST')
+
+function openCreateDialog(semester: SemesterKey) {
+  pendingCreateSemester.value = semester
   createDialogVisible.value = true
 }
 
@@ -205,7 +213,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               type="primary"
               :icon="Plus"
               data-test="create-first-btn"
-              @click="openCreateDialog"
+              @click="openCreateDialog('FIRST')"
             >
               建立本學期週期
             </el-button>
@@ -284,7 +292,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               type="primary"
               :icon="Plus"
               data-test="create-second-btn"
-              @click="openCreateDialog"
+              @click="openCreateDialog('SECOND')"
             >
               建立本學期週期
             </el-button>
@@ -294,11 +302,14 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
     </div>
 
     <!-- 建立考核週期 dialog（Task A7：統一 3 入口；本區兩顆「建立本學期週期」按鈕
-    共用同一 dialog，開啟時一律重置為當前學年學期，非點擊當下卡片所屬學期——
-    使用者可在完整表單內自行調整，見 useCreateCycle.ts resetToCurrentTerm）-->
+    共用同一 dialog，開啟時預帶本頁 selectedYear + 點擊當下卡片所屬學期，與畫面
+    上下文一致——使用者仍可在完整表單內自行調整，見 useCreateCycle.ts
+    resetToCurrentTerm）-->
     <CreateCycleDialog
       v-model:visible="createDialogVisible"
       :can-write="canCreateCycle"
+      :default-year="selectedYear"
+      :default-semester="pendingCreateSemester"
       @created="handleCycleCreated"
     />
   </div>

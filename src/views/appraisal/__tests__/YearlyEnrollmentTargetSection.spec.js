@@ -87,10 +87,11 @@ const GLOBAL_STUBS = {
   // canWrite gate/送出流程已在 CreateCycleDialog.spec.ts 用真實元件測過，這裡只驗證
   // parent wiring（開關 + canWrite 傳遞 + @created 觸發 reload）。
   CreateCycleDialog: {
-    props: ['visible', 'canWrite'],
+    props: ['visible', 'canWrite', 'defaultYear', 'defaultSemester'],
     emits: ['update:visible', 'created'],
     template:
-      '<div v-if="visible" data-test="create-cycle-dialog-stub" :data-can-write="canWrite">' +
+      '<div v-if="visible" data-test="create-cycle-dialog-stub" :data-can-write="canWrite" ' +
+      ':data-default-year="defaultYear" :data-default-semester="defaultSemester">' +
       '<button data-test="create-cycle-dialog-stub-created-btn" ' +
       '@click="$emit(\'created\', { id: 12, academic_year: 114, semester: \'SECOND\' })" />' +
       '</div>',
@@ -191,6 +192,39 @@ describe('YearlyEnrollmentTargetSection', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').attributes('data-can-write')).toBe('false')
+  })
+
+  it('Task A7 fix：點上學期卡建立 → default-year 用 selectedYear、default-semester 為 FIRST（非 termStore 值）', async () => {
+    // cycles 只有 SECOND_CYCLE → 上學期卡顯示「建立」按鈕。
+    getAppraisalCyclesByYear.mockResolvedValue({ data: [SECOND_CYCLE] })
+    // termStore 刻意設為與 selectedYear(114，來自 getCurrentAcademicTerm mock)及
+    // 點擊卡片語意(FIRST)皆不同的值，用來抓回歸：bug 版會把 dialog 重置為
+    // termStore 的 113/SECOND，與畫面上下文（114 學年度／上學期卡）不符。
+    termState.school_year = 113
+    termState.semester = 2 // SECOND
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="create-first-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.attributes('data-default-year')).toBe('114')
+    expect(dialogStub.attributes('data-default-semester')).toBe('FIRST')
+  })
+
+  it('Task A7 fix：點下學期卡建立 → default-year 用 selectedYear、default-semester 為 SECOND（非 termStore 值）', async () => {
+    // cycles 只有 FIRST_CYCLE → 下學期卡顯示「建立」按鈕。
+    getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
+    termState.school_year = 113
+    termState.semester = 1 // FIRST
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.attributes('data-default-year')).toBe('114')
+    expect(dialogStub.attributes('data-default-semester')).toBe('SECOND')
   })
 
   it('Task A7：CreateCycleDialog emit created 後 reload 清單', async () => {
