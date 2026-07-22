@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch, computed } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   createClassroom,
@@ -36,6 +36,7 @@ const grades = ref<GradeRow[]>([])
 const teachers = ref<TeacherOption[]>([])
 const loading = ref(false)
 const detailLoading = ref(false)
+const submitting = ref(false)
 const dialogVisible = ref(false)
 const formRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
 const isEdit = ref(false)
@@ -207,7 +208,10 @@ const populateForm = (data: ClassroomRow) => {
   form.is_active = data.is_active ?? true
 }
 
+let editSeq = 0
 const openCreate = async () => {
+  editSeq += 1
+  detailLoading.value = false
   resetForm()
   isEdit.value = false
   await fetchOptions()
@@ -245,7 +249,6 @@ const handleStudentUpdated = async () => {
   if (drawerClassroom.value) await openStudentDrawer(drawerClassroom.value)
 }
 
-let editSeq = 0
 const openEdit = async (classroom: ClassroomRow) => {
   detailLoading.value = true
   const seq = ++editSeq
@@ -270,12 +273,14 @@ const closeDialog = () => {
 }
 
 const submitForm = async () => {
+  if (submitting.value) return
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
     if (!valid) return
+    if (submitting.value) return
 
-    const payload = {
+    const fullPayload: Record<string, unknown> = {
       name: form.name,
       class_code: form.class_code || null,
       school_year: normalizeSchoolYear(form.school_year),
@@ -289,7 +294,28 @@ const submitForm = async () => {
       english_teacher_id: form.english_teacher_id ?? null,
       is_active: form.is_active,
     }
+    const payload = { ...fullPayload }
+    if (isEdit.value && currentClassroom.value) {
+      const initial: Record<string, unknown> = {
+        name: currentClassroom.value.name,
+        class_code: currentClassroom.value.class_code ?? null,
+        school_year: normalizeSchoolYear(currentClassroom.value.school_year),
+        semester: currentClassroom.value.semester,
+        grade_id: currentClassroom.value.grade_id ?? null,
+        capacity: currentClassroom.value.capacity ?? 30,
+        head_teacher_id: currentClassroom.value.head_teacher_id ?? null,
+        assistant_teacher_id: currentClassroom.value.assistant_teacher_id ?? null,
+        english_teacher_id: currentClassroom.value.english_teacher_id
+          ?? currentClassroom.value.art_teacher_id
+          ?? null,
+        is_active: currentClassroom.value.is_active ?? true,
+      }
+      for (const key of Object.keys(payload)) {
+        if (Object.is(payload[key], initial[key])) delete payload[key]
+      }
+    }
 
+    submitting.value = true
     try {
       if (isEdit.value) {
         await updateClassroom(form.id!, payload)
@@ -302,6 +328,8 @@ const submitForm = async () => {
       await classroomStore.refresh()
     } catch (error) {
       ElMessage.error(apiError(error, '操作失敗'))
+    } finally {
+      submitting.value = false
     }
   })
 }
@@ -349,6 +377,12 @@ onMounted(async () => {
   if (Number.isFinite(selected) && selected > 0) {
     void openStudentDrawer({ id: selected } as ClassroomRow)
   }
+})
+
+onUnmounted(() => {
+  fetchSeq += 1
+  drawerSeq += 1
+  editSeq += 1
 })
 
 interface ClassroomDrawerProp { id?: number; name?: string; grade_name?: string; semester_label?: string; is_active?: boolean; capacity?: number; students?: { id: number; name?: string; gender?: string; [key: string]: unknown }[] }
@@ -620,7 +654,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 
       <template #footer>
         <el-button @click="closeDialog">取消</el-button>
-        <el-button v-if="canWrite" type="primary" @click="submitForm">儲存</el-button>
+        <el-button v-if="canWrite" type="primary" :loading="submitting" @click="submitForm">儲存</el-button>
       </template>
     </el-dialog>
 

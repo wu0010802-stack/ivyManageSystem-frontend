@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getStudents } from '@/api/students'
+import { getStudent, getStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import { ElMessage } from 'element-plus'
@@ -33,6 +33,7 @@ const debouncedSearch = ref('')
 const activeTab = ref('active')  // 'active' | 'graduated'
 const transferDialogVisible = ref(false)
 const transferTargetClassroomId = ref<number | null>(null)
+const transferSubmitting = ref(false)
 const transferSourceClassroomId = computed(() => {
   if (!selectedStudents.value.length) return null
   return selectedStudents.value[0].classroom_id ?? null
@@ -51,6 +52,7 @@ const semesterOptions = [
 
 // 畢業/轉出 dialog（單筆 graduateTarget；批次則 graduateBatchMode + selectedStudents）
 const graduateDialogVisible = ref(false)
+const graduateSubmitting = ref(false)
 const graduateTarget = ref<StudentRow | null>(null)
 const graduateBatchMode = ref(false)
 const graduateFormRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
@@ -78,6 +80,7 @@ const editDialogVisible = ref(false)
 const editMode = ref('create') // 'create' | 'edit'
 const editInitial = ref<StudentRow | null>(null)
 const pendingClassroomId = ref<number | null>(null) // 從 route action create 帶入的預設班級
+let editLoadSeq = 0
 
 const schoolYearOptions = computed(() => {
   const years = new Set(buildSchoolYearOptions(currentAcademicTerm.school_year))
@@ -212,9 +215,12 @@ const openBatchGraduateDialog = () => {
 }
 
 const submitGraduate = async () => {
+  if (graduateSubmitting.value) return
   if (!graduateFormRef.value) return
   await graduateFormRef.value.validate(async (valid) => {
     if (!valid) return
+    if (graduateSubmitting.value) return
+    graduateSubmitting.value = true
     const studentStore = useStudentStore()
     try {
       if (graduateBatchMode.value) {
@@ -237,6 +243,8 @@ const submitGraduate = async () => {
       fetchStudents()
     } catch (error) {
       ElMessage.error(apiError(error, '操作失敗'))
+    } finally {
+      graduateSubmitting.value = false
     }
   })
 }
@@ -257,15 +265,22 @@ const handleSelectionChange = (rows: StudentRow[]) => {
   selectedStudents.value = rows
 }
 const openTransferDialog = () => {
+  const sourceIds = new Set(selectedStudents.value.map((student) => student.classroom_id ?? null))
+  if (sourceIds.size > 1) {
+    ElMessage.warning('批次轉班請選擇同一來源班級的學生')
+    return
+  }
   transferTargetClassroomId.value = null
   transferDialogVisible.value = true
 }
 const submitTransfer = async () => {
+  if (transferSubmitting.value) return
   if (!selectedStudents.value.length) return
   if (!transferTargetClassroomId.value) {
     ElMessage.warning('請先選擇目標班級')
     return
   }
+  transferSubmitting.value = true
   try {
     const studentStore = useStudentStore()
     await studentStore.bulkTransfer({
@@ -279,6 +294,8 @@ const submitTransfer = async () => {
     fetchStudents()
   } catch (error) {
     ElMessage.error(apiError(error, '轉班失敗'))
+  } finally {
+    transferSubmitting.value = false
   }
 }
 
@@ -287,17 +304,26 @@ const openProfile = (row: StudentRow) => {
 }
 
 const handleAdd = () => {
+  editLoadSeq += 1
   editInitial.value = null
   pendingClassroomId.value = null
   editMode.value = 'create'
   editDialogVisible.value = true
 }
 
-const handleEdit = (row: StudentRow) => {
-  editInitial.value = { ...row }
-  pendingClassroomId.value = row.classroom_id || null
-  editMode.value = 'edit'
-  editDialogVisible.value = true
+const handleEdit = async (row: StudentRow) => {
+  const seq = ++editLoadSeq
+  try {
+    const response = await getStudent(row.id)
+    if (seq !== editLoadSeq) return
+    editInitial.value = { ...row, ...(response.data as StudentRow) }
+    pendingClassroomId.value = editInitial.value.classroom_id || null
+    editMode.value = 'edit'
+    editDialogVisible.value = true
+  } catch (error) {
+    if (seq !== editLoadSeq) return
+    ElMessage.error(apiError(error, '載入學生完整資料失敗'))
+  }
 }
 
 const handleEditSaved = () => {
@@ -346,6 +372,7 @@ const handleRouteAction = async () => {
   if (handledRouteActionKey.value === actionKey) return
 
   if (route.query.action === 'create' && route.query.classroom_id) {
+    editLoadSeq += 1
     pendingClassroomId.value = Number(route.query.classroom_id)
     editInitial.value = { id: 0, classroom_id: pendingClassroomId.value }
     editMode.value = 'create'
@@ -410,6 +437,7 @@ const busEvents = [
 ]
 busEvents.forEach((evt) => domainBus.on(evt, onBusRefresh))
 onUnmounted(() => {
+  editLoadSeq += 1
   busEvents.forEach((evt) => domainBus.off(evt, onBusRefresh))
 })
 
@@ -642,7 +670,7 @@ onMounted(async () => {
       />
       <template #footer>
         <el-button @click="graduateDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitGraduate">確認離園</el-button>
+        <el-button type="primary" :loading="graduateSubmitting" @click="submitGraduate">確認離園</el-button>
       </template>
     </el-dialog>
 
@@ -674,7 +702,7 @@ onMounted(async () => {
       />
       <template #footer>
         <el-button @click="transferDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitTransfer">確認轉班</el-button>
+        <el-button type="primary" :loading="transferSubmitting" @click="submitTransfer">確認轉班</el-button>
       </template>
     </el-dialog>
   </div>

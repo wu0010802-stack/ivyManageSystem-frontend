@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Money, Calendar, User, Warning, ArrowRight } from '@element-plus/icons-vue'
 import { formatSemester } from '@/utils/classHistory'
+import { hasPermission } from '@/utils/auth'
 
 const props = defineProps<{
   profile: Record<string, unknown>
@@ -18,6 +19,7 @@ const guardians = computed(() => (props.profile?.guardians as Record<string, unk
 const incidents = computed(() => (props.profile?.incident_summary as Record<string, unknown>[]) || [])
 
 const recentIncidents = computed(() => incidents.value.slice(0, 3))
+const canFeesRead = computed(() => hasPermission('FEES_READ'))
 
 const attendanceCount = (status: string) => (attendance.value?.by_status as Record<string, number>)?.[status] || 0
 
@@ -63,6 +65,7 @@ const formatDate = (iso: unknown) => {
       </div>
 
       <div
+        v-if="canFeesRead"
         class="stat-card stat-card--success"
         role="button"
         tabindex="0"

@@ -16,6 +16,7 @@ const initialTab = computed(() => String(route.query.tab || ''))
 
 <template>
   <StudentDetailPanel
+    :key="studentId"
     :student-id="studentId"
     mode="page"
     context="students"

@@ -29862,6 +29862,8 @@ export interface components {
         };
         /** StudentBulkTransfer */
         StudentBulkTransfer: {
+            /** Source Classroom Id */
+            source_classroom_id?: number | null;
             /** Student Ids */
             student_ids: number[];
             /** Target Classroom Id */
@@ -29932,6 +29934,8 @@ export interface components {
             parent_phone?: string | null;
             /** Special Needs */
             special_needs?: string | null;
+            /** Source Classroom Id */
+            source_classroom_id?: number | null;
             /** Status Tag */
             status_tag?: string | null;
         };

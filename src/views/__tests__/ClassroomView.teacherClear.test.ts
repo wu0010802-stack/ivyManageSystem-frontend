@@ -81,6 +81,7 @@ const STUBS = {
 interface SetupState {
   form: Record<string, unknown>
   isEdit: boolean
+  currentClassroom: Record<string, unknown> | null
   formRef: unknown
   submitForm: () => Promise<void>
 }
@@ -107,6 +108,19 @@ describe('ClassroomView submitForm 清除教師指派（P1）', () => {
 
     // 模擬：進入編輯、載入了已指派班導的班，使用者把三個教師下拉都清空
     ss.isEdit = true
+    ss.currentClassroom = {
+      id: 5,
+      name: '小班A',
+      class_code: 'A1',
+      school_year: 114,
+      semester: 1,
+      grade_id: 1,
+      capacity: 30,
+      head_teacher_id: 11,
+      assistant_teacher_id: 12,
+      english_teacher_id: 13,
+      is_active: true,
+    }
     Object.assign(ss.form, {
       id: 5,
       name: '小班A',
@@ -133,6 +147,8 @@ describe('ClassroomView submitForm 清除教師指派（P1）', () => {
     expect(payload.head_teacher_id).toBeNull()
     expect(payload.assistant_teacher_id).toBeNull()
     expect(payload.english_teacher_id).toBeNull()
+    expect(payload).not.toHaveProperty('name')
+    expect(payload).not.toHaveProperty('is_active')
     wrapper.unmount()
   })
 })

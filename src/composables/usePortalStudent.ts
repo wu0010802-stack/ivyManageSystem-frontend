@@ -25,25 +25,35 @@ export function usePortalStudent() {
   const error = ref<unknown>(null)
   const isRevealing = ref(false)
 
-  // key: `${target}:${guardianId ?? ''}` -> { phone, revealedAt: number }
+  // key: `${studentId}:${target}:${guardianId ?? ''}` -> { phone, revealedAt: number }
   const revealedPhones = ref(new Map())
 
-  const _key = (target: string, guardianId: unknown) => `${target}:${guardianId ?? ''}`
+  const _key = (studentId: unknown, target: string, guardianId: unknown) => (
+    `${studentId ?? ''}:${target}:${guardianId ?? ''}`
+  )
 
   // request-sequence guard：快速切換學生時，較舊（慢）的詳情回應可能晚於較新（快）的
   // 到達，若無守衛會用過期學生的資料覆寫畫面。每次載入 ++loadSeq，await 後只有仍是最新
   // 世代的回應才寫入 detail/error/loading。
   let loadSeq = 0
-  // 已揭露電話快取的 key 不含 studentId（parent/emergency 的 guardianId 為 null），
-  // 抽屜若不關直接換學生會露出前一位學生的電話並繞過 reveal 稽核。追蹤當前 studentId，
-  // 切換時清空 revealedPhones。
+  // 電話快取以 studentId 隔離；另追蹤目前學生與 reveal generation，切換時清空快取
+  // 並讓舊學生仍在途的 reveal 回應失效，避免遲到回應污染新學生畫面／稽核狀態。
   let currentStudentId: unknown = null
+  let revealGeneration = 0
+  let pendingReveals = 0
+
+  function resetRevealState(nextStudentId: unknown) {
+    revealGeneration += 1
+    pendingReveals = 0
+    isRevealing.value = false
+    revealedPhones.value = new Map()
+    currentStudentId = nextStudentId
+  }
 
   async function loadDetail(studentId: unknown) {
     if (!studentId) return
     if (studentId !== currentStudentId) {
-      revealedPhones.value = new Map()
-      currentStudentId = studentId
+      resetRevealState(studentId)
     }
     const my = ++loadSeq
     loading.value = true
@@ -63,7 +73,7 @@ export function usePortalStudent() {
   }
 
   async function revealPhone({ studentId, target, guardianId = null }: { studentId: unknown; target: string; guardianId?: unknown }) {
-    const key = _key(target, guardianId)
+    const key = _key(studentId, target, guardianId)
     const cached = revealedPhones.value.get(key)
     const now = Date.now()
     // 節流：5 分鐘內已揭露過 → 沿用快取，不再打 audit
@@ -71,6 +81,8 @@ export function usePortalStudent() {
       return cached.phone
     }
 
+    const generation = revealGeneration
+    pendingReveals += 1
     isRevealing.value = true
     try {
       const res = await revealPortalStudentPhone(studentId as number, {
@@ -80,6 +92,7 @@ export function usePortalStudent() {
         guardian_id: guardianId == null ? null : Number(guardianId),
       })
       const phone = res.data?.phone
+      if (generation !== revealGeneration || studentId !== currentStudentId) return null
       if (phone) {
         const next = new Map(revealedPhones.value)
         next.set(key, { phone, revealedAt: Date.now() })
@@ -87,18 +100,24 @@ export function usePortalStudent() {
       }
       return phone
     } finally {
-      isRevealing.value = false
+      if (generation === revealGeneration) {
+        pendingReveals = Math.max(0, pendingReveals - 1)
+        isRevealing.value = pendingReveals > 0
+      }
     }
   }
 
   function getRevealedPhone(target: string, guardianId: unknown = null) {
-    return revealedPhones.value.get(_key(target, guardianId))?.phone ?? null
+    if (currentStudentId == null) return null
+    return revealedPhones.value.get(_key(currentStudentId, target, guardianId))?.phone ?? null
   }
 
   function reset() {
+    loadSeq += 1
     detail.value = null
     error.value = null
-    revealedPhones.value = new Map()
+    loading.value = false
+    resetRevealState(null)
   }
 
   return {
