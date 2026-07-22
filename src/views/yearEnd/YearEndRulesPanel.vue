@@ -98,8 +98,8 @@ const fetchRules = async () => {
       }
     }
     // 舊生率/才藝率門檻：後端存 fraction（0–1），UI 一律顯示百分比（0–100）。
-    rules.dividend_returning_threshold = fractionToPercent(rules.dividend_returning_threshold)
-    rules.dividend_activity_threshold = fractionToPercent(rules.dividend_activity_threshold)
+    rules.dividend_returning_threshold = fractionToPercent(rules.dividend_returning_threshold ?? 0)
+    rules.dividend_activity_threshold = fractionToPercent(rules.dividend_activity_threshold ?? 0)
     const dict = data.after_class_award_unit_price
     afterClassAwardRows.value =
       dict && typeof dict === 'object'

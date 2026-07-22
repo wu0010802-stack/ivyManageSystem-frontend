@@ -43,7 +43,7 @@ function onClick(key: AppraisalStepKey) {
   align-items: stretch;
   padding: var(--space-3, 12px);
   background: var(--el-fill-color-lighter);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
 }
 .ap-guide__step {
   display: flex;
@@ -52,10 +52,10 @@ function onClick(key: AppraisalStepKey) {
   padding: var(--space-2, 8px) var(--space-3, 12px);
   border: 1px solid var(--el-border-color-lighter);
   border-bottom: 3px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-md, 6px);
   background: var(--el-bg-color);
   color: var(--text-secondary, var(--el-text-color-regular));
-  font-size: var(--text-sm, 14px);
+  font-size: var(--text-sm, 13px);
   cursor: pointer;
 }
 .ap-guide__step.is-current {
