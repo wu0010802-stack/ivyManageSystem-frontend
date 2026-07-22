@@ -17,6 +17,7 @@ import {
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
+import { injectOpenCycleHint } from './composables/useOpenCycleHint'
 import CreateCycleDialog from './components/CreateCycleDialog.vue'
 import type { CreatedCycle } from './composables/useCreateCycle'
 import { confirmWithReason } from './confirmWithReason'
@@ -34,6 +35,10 @@ interface CycleEntry {
 type SemesterKey = 'FIRST' | 'SECOND'
 
 const { notify } = useErrorNotify()
+
+// Task B5：規則變更影響提示——目標人數修改成功後，若有 OPEN 週期
+// 則提示「此變更於下次試算/重算生效」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 const currentTerm = getCurrentAcademicTerm()
 const selectedYear = ref(currentTerm.school_year)
@@ -105,7 +110,7 @@ async function saveEdit(cycle: CycleEntry) {
       enrollment_target: editForm.value[semester].enrollment_target,
       enrollment_actual: editForm.value[semester].enrollment_actual,
     })
-    ElMessage.success('已更新目標人數')
+    notifyRuleChanged('已更新目標人數')
     editing.value[semester] = false
     await load()
   } catch (e) {

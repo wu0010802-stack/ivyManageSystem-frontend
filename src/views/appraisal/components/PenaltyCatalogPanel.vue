@@ -13,6 +13,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 
 type CatalogItem = Schema<'CatalogOut'>
@@ -31,6 +32,10 @@ interface CatalogEdit {
 
 // P0-A 對齊 ScoringRulesPanel：目錄中繼資料編輯由後端 APPRAISAL_RULE_WRITE 守衛。
 const canEdit = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
+
+// Task B5：規則變更影響提示——目錄停用/啟用或中繼資料編輯成功後，若有 OPEN 週期
+// 則提示「此變更於下次試算/重算生效」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 const items = ref<CatalogItem[]>([])
 const loading = ref(false)
@@ -123,7 +128,7 @@ async function saveRow(row: CatalogItem) {
     const idx = items.value.findIndex((i) => i.id === updated.id)
     if (idx >= 0) items.value[idx] = updated
     edits[updated.id] = snapshotFromItem(updated)
-    ElMessage.success('已更新')
+    notifyRuleChanged('已更新')
   } catch (error) {
     ElMessage.error(apiError(error, '更新失敗'))
   } finally {
@@ -159,7 +164,7 @@ async function toggleActive(row: CatalogItem, val: boolean) {
     const idx = items.value.findIndex((i) => i.id === updated.id)
     if (idx >= 0) items.value[idx] = updated
     edits[updated.id] = snapshotFromItem(updated)
-    ElMessage.success(val ? '已啟用' : '已停用')
+    notifyRuleChanged(val ? '已啟用' : '已停用')
   } catch (error) {
     ElMessage.error(apiError(error, '切換失敗'))
   }

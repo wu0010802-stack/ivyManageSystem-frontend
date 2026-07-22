@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { defineComponent, h, provide, inject, computed, type InjectionKey } from 'vue'
+import { defineComponent, h, provide, inject, computed, ref, type InjectionKey, type Ref } from 'vue'
 
 // ── API mocks（先 mock 再 import 元件）────────────────────
 vi.mock('@/api/appraisal', () => ({
@@ -16,6 +16,19 @@ vi.mock('@/utils/auth', () => ({
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) },
+}))
+
+// Task B5：mock useOpenCycleHint，允許測試驗證 notifyRuleChanged 被呼叫
+const mockNotifyRuleChanged = vi.fn()
+vi.mock('../composables/useOpenCycleHint', () => ({
+  injectOpenCycleHint: () => ({
+    openCycle: ref(null) as Ref<{ id: number; status?: string | null; [key: string]: unknown } | null>,
+    refresh: vi.fn(),
+    notifyRuleChanged: mockNotifyRuleChanged,
+  }),
+  provideOpenCycleHint: vi.fn(),
+  useOpenCycleHint: vi.fn(),
+  OPEN_CYCLE_HINT_KEY: Symbol('open-cycle-hint'),
 }))
 
 import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal'
@@ -468,5 +481,49 @@ describe('PenaltyCatalogPanel', () => {
     await flushPromises()
 
     expect(ElMessage.error).toHaveBeenCalledWith('default_weight 超出範圍')
+  })
+
+  describe('Task B5：規則變更影響提示', () => {
+    it('編輯中繼資料儲存成功後呼叫 notifyRuleChanged', async () => {
+      vi.mocked(patchAppraisalCatalogItem).mockResolvedValue({
+        data: { ...makeCatalog()[0], label: '遲到早退（更新）' },
+      } as never)
+
+      const wrapper = await mountPanel()
+      await wrapper.find('[data-test="label-input-LATE_EARLY"]').setValue('遲到早退（更新）')
+      await flushPromises()
+      await wrapper.find('[data-test="save-btn-LATE_EARLY"]').trigger('click')
+      await flushPromises()
+
+      expect(mockNotifyRuleChanged).toHaveBeenCalledTimes(1)
+      expect(mockNotifyRuleChanged).toHaveBeenCalledWith('已更新')
+    })
+
+    it('停用項目成功後呼叫 notifyRuleChanged（帶「已停用」文案）', async () => {
+      vi.mocked(patchAppraisalCatalogItem).mockResolvedValue({
+        data: { ...makeCatalog()[0], is_active: false },
+      } as never)
+
+      const wrapper = await mountPanel()
+      await wrapper.find('[data-test="active-switch-LATE_EARLY"]').trigger('click')
+      await flushPromises()
+
+      expect(mockNotifyRuleChanged).toHaveBeenCalledTimes(1)
+      expect(mockNotifyRuleChanged).toHaveBeenCalledWith('已停用')
+    })
+
+    it('啟用項目成功後呼叫 notifyRuleChanged（帶「已啟用」文案）', async () => {
+      vi.mocked(patchAppraisalCatalogItem).mockResolvedValue({
+        data: { ...makeCatalog()[1], is_active: true },
+      } as never)
+
+      const wrapper = await mountPanel()
+      // CLASS_HEADCOUNT_BONUS 原為 is_active=false，啟用後回傳 true
+      await wrapper.find('[data-test="active-switch-CLASS_HEADCOUNT_BONUS"]').trigger('click')
+      await flushPromises()
+
+      expect(mockNotifyRuleChanged).toHaveBeenCalledTimes(1)
+      expect(mockNotifyRuleChanged).toHaveBeenCalledWith('已啟用')
+    })
   })
 })

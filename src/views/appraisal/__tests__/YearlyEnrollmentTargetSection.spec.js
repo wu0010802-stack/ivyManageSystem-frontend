@@ -43,6 +43,19 @@ vi.mock('@/composables/useErrorNotify', () => ({
   useErrorNotify: () => ({ notify: vi.fn() }),
 }))
 
+// Task B5：mock useOpenCycleHint，允許測試驗證 notifyRuleChanged 被呼叫
+const mockNotifyRuleChanged = vi.fn()
+vi.mock('../composables/useOpenCycleHint', () => ({
+  injectOpenCycleHint: () => ({
+    openCycle: { value: null },
+    refresh: vi.fn(),
+    notifyRuleChanged: mockNotifyRuleChanged,
+  }),
+  provideOpenCycleHint: vi.fn(),
+  useOpenCycleHint: vi.fn(),
+  OPEN_CYCLE_HINT_KEY: Symbol('open-cycle-hint'),
+}))
+
 // Task B4：目標人數修改改走共用 confirmWithReason（確認＋原因）；mock 掉以獨立驗證
 // saveEdit() 有呼叫它、以及取消時（回傳 null）不送 PATCH。
 const confirmWithReasonMock = vi.fn()
@@ -361,6 +374,26 @@ describe('YearlyEnrollmentTargetSection', () => {
       expect(patchAppraisalCycle).not.toHaveBeenCalled()
       // 仍在編輯模式（未被 saveEdit 的 editing.value[semester] = false 關閉）
       expect(wrapper.find('[data-test="edit-first-target"]').exists()).toBe(true)
+    })
+  })
+
+  describe('Task B5：規則變更影響提示', () => {
+    it('修改目標人數成功後呼叫 notifyRuleChanged（帶「已更新目標人數」文案）', async () => {
+      getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      patchAppraisalCycle.mockResolvedValue({ data: { ...FIRST_CYCLE, enrollment_target: 120 } })
+      getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [{ ...FIRST_CYCLE, enrollment_target: 120 }, SECOND_CYCLE] })
+
+      const wrapper = await mountView()
+      await wrapper.find('[data-test="edit-first-btn"]').trigger('click')
+      await flushPromises()
+
+      wrapper.vm.editForm.FIRST.enrollment_target = 120
+      await flushPromises()
+      await wrapper.find('[data-test="save-first-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(mockNotifyRuleChanged).toHaveBeenCalledTimes(1)
+      expect(mockNotifyRuleChanged).toHaveBeenCalledWith('已更新目標人數')
     })
   })
 })
