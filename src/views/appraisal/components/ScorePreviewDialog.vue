@@ -4,13 +4,23 @@
  *
  * Task A4：把原本分離的「預覽分數」（唯讀 26 欄矩陣，`score_preview`）與
  * 「同步分數」（`sync_score_items` dry-run → 確認寫入）合併為單一 dialog。
- * 開啟即並行載入兩者：
- *   - `previewAppraisalScore(cycleId)` → 每位參與者 × 14 個 ScoreItemCode 的 delta，
- *     表格顯示；紅色 = current_db_value 與 delta 不同。
+ *   - `previewAppraisalScore(cycleId)` → 每位參與者 × 24 個 ScoreItemCode 的 delta
+ *     （加上員工欄與合計欄共 26 欄），表格顯示；紅色 = current_db_value 與 delta 不同。
+ *     此端點僅需 `APPRAISAL_READ`、不檢查 cycle 狀態，開啟即**永遠**載入。
  *   - `syncAppraisalScoreItems(cycleId, { dryRun: true })` → 同步差異摘要
- *     （deleted_count / inserted_count / skipped_manual_count）。
- * 底部「確認寫入」（僅 canWrite 才顯示）呼叫 `syncAppraisalScoreItems(cycleId, { dryRun: false })`
- * 實際寫入，成功後 emit `synced` 讓 parent refresh。
+ *     （deleted_count / inserted_count / skipped_manual_count）。此端點後端一律要求
+ *     `APPRAISAL_EVENT_WRITE` 且 cycle 非 OPEN 直接 400——**只有** `canWrite &&
+ *     cycleStatus === 'OPEN'` 時才呼叫，否則顯示中性唯讀訊息（不可誤判為錯誤）。
+ * 底部「確認寫入」與同步差異摘要 banner 同樣只在 `canWrite && cycleStatus === 'OPEN'`
+ * 時 render；呼叫 `syncAppraisalScoreItems(cycleId, { dryRun: false })` 實際寫入，
+ * 成功後 emit `synced` 讓 parent refresh。
+ *
+ * Task A5：26 欄矩陣加欄位開關 chips（比照批次 2b-1 `yearEnd/gridColumns.ts` +
+ * `YearEndGridView.vue` pattern，見 `scorePreviewColumns.ts`）。預設只顯示「有異動的
+ * 欄」（`computeChangedColumns`），使用者可經 chips 增減，覆寫存 localStorage
+ * （`loadVisibleScoreColOverride` 回傳 `null` 代表未曾覆寫過，才落回異動欄預設；一旦
+ * 使用者點過 chip，即使結果變成空集合也視為「已覆寫」，不再套用異動欄預設）。員工欄與
+ * 合計欄不受此開關控制、恆顯示。
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -18,6 +28,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { previewAppraisalScore, syncAppraisalScoreItems } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { ITEM_CODE_LABELS, ITEM_CODES_ORDER } from '@/views/appraisal/scoreItemLabels'
+import {
+  loadVisibleScoreColOverride,
+  saveVisibleScoreColOverride,
+  computeChangedColumns,
+  type ScorePreviewParticipant,
+} from '@/views/appraisal/scorePreviewColumns'
 
 interface ScoreItem { item_code?: string; delta?: number | string | null; current_db_value?: number | string | null; raw_value?: unknown; note?: string }
 interface PreviewParticipant { participant_id?: number; employee_name?: string; items?: ScoreItem[] }
@@ -35,6 +51,7 @@ const props = withDefaults(
     cycleId?: number | null
     canWrite?: boolean
     hasNonParticipant?: boolean
+    cycleStatus?: 'OPEN' | 'LOCKED' | 'CLOSED'
   }>(),
   { visible: false, cycleId: null, canWrite: false, hasNonParticipant: false },
 )
@@ -59,10 +76,60 @@ const syncError = ref(false)
 const syncDry = ref<SyncResultData | null>(null)
 const writing = ref(false)
 
+// canSync：只有有寫入權限「且」cycle 正在 OPEN 才可打 sync 端點（後端 sync_score_items
+// 一律要求 APPRAISAL_EVENT_WRITE，且 cycle 非 OPEN 直接 400）。score_preview 端點僅需
+// APPRAISAL_READ、不檢查 cycle 狀態，因此唯讀矩陣不受此限制。
+const canSync = computed(() => props.canWrite && props.cycleStatus === 'OPEN')
+
+// Task A5：26 欄矩陣的欄位開關。載入 preview 後（見 onOpen → applyVisibleColsDefault）
+// 才會有實質內容；初始空集合只是佔位，避免 dialog 尚未載入資料時就出現一閃而過的空表。
+const visibleCols = ref<Set<string>>(new Set())
+
+function toggleCol(code: string) {
+  const next = new Set(visibleCols.value)
+  if (next.has(code)) {
+    next.delete(code)
+  } else {
+    next.add(code)
+  }
+  visibleCols.value = next
+  saveVisibleScoreColOverride(next)
+}
+
+// 26 欄矩陣實際渲染的欄：ITEM_CODES_ORDER 交集 visibleCols，比照
+// `YearEndGridView.vue` 的 `visibleBonusColumns` 既有寫法（先算好過濾後的陣列再單純
+// v-for），刻意不在 el-table-column 上同時寫 v-for + v-if——Vue 3 起同一元素上
+// v-if 優先權高於 v-for，會讀不到 v-for 迴圈變數，是已知反樣式。
+const visibleItemCodes = computed(() =>
+  ITEM_CODES_ORDER.filter((code) => visibleCols.value.has(code)),
+)
+
+// 載入 26 欄矩陣後套用欄位開關預設：使用者曾覆寫過（loadVisibleScoreColOverride
+// 非 null，即使覆寫結果是空集合也算）就沿用覆寫；否則預設只顯示「有異動的欄」
+// （computeChangedColumns），避免 26 欄一次全展開造成橫向捲動。
+function applyVisibleColsDefault() {
+  const override = loadVisibleScoreColOverride()
+  if (override) {
+    visibleCols.value = override
+    return
+  }
+  const participants: ScorePreviewParticipant[] = (data.value?.participants ?? []).map((p) => ({
+    participant_id: p.participant_id ?? 0,
+    employee_name: p.employee_name ?? '',
+    items: (p.items ?? []).map((it) => ({
+      item_code: it.item_code ?? '',
+      delta: Number(it.delta ?? 0),
+      current_db_value: Number(it.current_db_value ?? 0),
+    })),
+  }))
+  visibleCols.value = computeChangedColumns(participants)
+}
+
 async function loadPreview() {
   if (!props.cycleId) return
   loading.value = true
   previewError.value = false
+  data.value = null
   try {
     const r = await previewAppraisalScore(props.cycleId)
     data.value = r.data as PreviewData
@@ -78,6 +145,7 @@ async function loadSyncDryRun() {
   if (!props.cycleId) return
   syncLoading.value = true
   syncError.value = false
+  syncDry.value = null
   try {
     const r = await syncAppraisalScoreItems(props.cycleId, { dryRun: true })
     syncDry.value = r.data as SyncResultData
@@ -92,7 +160,19 @@ async function loadSyncDryRun() {
 
 async function onOpen() {
   if (!props.cycleId) return
-  await Promise.all([loadPreview(), loadSyncDryRun()])
+  // 唯讀矩陣永遠載入（任何有 APPRAISAL_READ 的人都能看）；sync dry-run 只有
+  // canSync（有寫入權限且 cycle 為 OPEN）才打，避免只有 READ 權限或 cycle
+  // 非 OPEN 的使用者一開 dialog 就撞後端 403/400。
+  const tasks: Promise<void>[] = [loadPreview()]
+  if (canSync.value) {
+    tasks.push(loadSyncDryRun())
+  } else {
+    // 明確清空，避免切換 cycle/canWrite 後殘留上一次的同步差異或錯誤狀態
+    syncDry.value = null
+    syncError.value = false
+  }
+  await Promise.all(tasks)
+  applyVisibleColsDefault()
 }
 
 watch(
@@ -220,7 +300,7 @@ function tooltipLines(row: PreviewParticipant, code: string) {
         同步差異摘要載入失敗，暫不可確認寫入，請重新開啟本視窗再試一次。
       </el-alert>
       <el-alert
-        v-else-if="syncDry"
+        v-else-if="canSync && syncDry"
         type="info"
         :closable="false"
         class="sync-alert"
@@ -228,6 +308,15 @@ function tooltipLines(row: PreviewParticipant, code: string) {
       >
         本次同步將寫入 {{ syncDry.inserted_count ?? 0 }} 筆、移除 {{ syncDry.deleted_count ?? 0 }} 筆、
         保留手動 {{ syncDry.skipped_manual_count ?? 0 }} 筆
+      </el-alert>
+      <el-alert
+        v-else-if="!canSync"
+        type="info"
+        :closable="false"
+        class="sync-alert"
+        data-test="sync-diff-skipped-note"
+      >
+        無寫入權限或此週期非進行中，僅顯示唯讀分數矩陣
       </el-alert>
 
       <div class="preview-toolbar">
@@ -244,6 +333,23 @@ function tooltipLines(row: PreviewParticipant, code: string) {
           顯示 {{ filteredParticipants.length }} / {{ data?.participants?.length ?? 0 }} 人
         </span>
       </div>
+
+      <!-- Task A5：26 欄開關 chips——預設只顯示有異動的欄（applyVisibleColsDefault），
+           使用者可點 chip 增減，覆寫存 localStorage（scorePreviewColumns.ts 單一來源）。
+           比照 YearEndGridView 獎金欄開關 chips 樣式。 -->
+      <div v-if="data" class="score-col-chips" data-test="score-col-chips">
+        <span class="chips-label">顯示分數欄：</span>
+        <el-tag
+          v-for="code in ITEM_CODES_ORDER"
+          :key="code"
+          class="score-col-chip"
+          :data-test="`score-col-chip-${code}`"
+          :type="visibleCols.has(code) ? 'primary' : 'info'"
+          :effect="visibleCols.has(code) ? 'dark' : 'plain'"
+          @click="toggleCol(code)"
+        >{{ (ITEM_CODE_LABELS as Record<string, string>)[code] || code }}</el-tag>
+      </div>
+
       <el-table
         v-if="data"
         :data="filteredParticipants"
@@ -254,7 +360,7 @@ function tooltipLines(row: PreviewParticipant, code: string) {
       >
         <el-table-column label="員工" prop="employee_name" width="100" fixed />
         <el-table-column
-          v-for="code in ITEM_CODES_ORDER"
+          v-for="code in visibleItemCodes"
           :key="code"
           :label="(ITEM_CODE_LABELS as Record<string, string>)[code] || code"
           :min-width="110"
@@ -299,7 +405,7 @@ function tooltipLines(row: PreviewParticipant, code: string) {
       <el-tooltip content="請先把所有教師加入考核再同步" :disabled="!hasNonParticipant">
         <span>
           <el-button
-            v-if="canWrite"
+            v-if="canSync"
             data-test="confirm-sync-btn"
             type="primary"
             :disabled="confirmDisabled"
@@ -335,6 +441,24 @@ function tooltipLines(row: PreviewParticipant, code: string) {
   color: var(--el-text-color-secondary);
   font-size: var(--text-sm);
   margin-left: auto;
+}
+
+.score-col-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
+}
+
+.chips-label {
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
+}
+
+.score-col-chip {
+  cursor: pointer;
+  user-select: none;
 }
 
 .diff {

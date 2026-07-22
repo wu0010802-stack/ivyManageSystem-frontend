@@ -7,16 +7,21 @@
  * 起訖日/基準日由後端依 academic_year+semester 固定推算。
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Check } from '@element-plus/icons-vue'
 
 import {
   getAppraisalCyclesByYear,
-  createAppraisalCycle,
   patchAppraisalCycle,
 } from '@/api/appraisal'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
+import { injectOpenCycleHint } from './composables/useOpenCycleHint'
+import CreateCycleDialog from './components/CreateCycleDialog.vue'
+import TargetCrossRef from './components/TargetCrossRef.vue'
+import type { CreatedCycle } from './composables/useCreateCycle'
+import { confirmWithReason } from './confirmWithReason'
 
 interface CycleEntry {
   id: number
@@ -31,6 +36,10 @@ interface CycleEntry {
 type SemesterKey = 'FIRST' | 'SECOND'
 
 const { notify } = useErrorNotify()
+
+// Task B5：規則變更影響提示——目標人數修改成功後，若有 OPEN 週期
+// 則提示「此變更於下次試算/重算生效」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 const currentTerm = getCurrentAcademicTerm()
 const selectedYear = ref(currentTerm.school_year)
@@ -66,7 +75,15 @@ const editForm = ref<Record<SemesterKey, { enrollment_target: number; enrollment
 })
 const savingSemester = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
 
+// Task B4：目標人數修改（PATCH /appraisal/cycles/{id}）與 CreateCycleDialog
+// 的建立週期共用同一後端守衛（Permission.APPRAISAL_FINALIZE，見
+// ivy-backend api/appraisal/cycles.py update_cycle），故沿用同一權限字串；
+// 獨立命名 canEditTarget 以對應「編輯已存在週期」這個不同的使用者動作。
+const canEditTarget = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+
 function startEdit(cycle: CycleEntry) {
+  // 防禦：UI 已用 disabled + tooltip 擋，仍保留一道守衛避免繞過。
+  if (!canEditTarget.value) return
   const semester = cycle.semester as SemesterKey
   editForm.value[semester] = {
     enrollment_target: cycle.enrollment_target ?? 0,
@@ -80,14 +97,21 @@ function cancelEdit(semester: SemesterKey) {
 }
 
 async function saveEdit(cycle: CycleEntry) {
+  if (!canEditTarget.value) return
   const semester = cycle.semester as SemesterKey
+  const reason = await confirmWithReason({
+    title: '確認更新目標人數',
+    message: '此變更會影響考核基礎分數計算，請確認並填寫原因。',
+    minLength: 10,
+  })
+  if (reason == null) return
   savingSemester.value[semester] = true
   try {
     await patchAppraisalCycle(cycle.id, {
       enrollment_target: editForm.value[semester].enrollment_target,
       enrollment_actual: editForm.value[semester].enrollment_actual,
     })
-    ElMessage.success('已更新目標人數')
+    notifyRuleChanged('已更新目標人數')
     editing.value[semester] = false
     await load()
   } catch (e) {
@@ -97,40 +121,33 @@ async function saveEdit(cycle: CycleEntry) {
   }
 }
 
-// ── 建立學期 cycle（日期由後端依 academic_year+semester 自動推算）──
-const creating = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
+// ── 建立學期 cycle（Task A7：改開統一 CreateCycleDialog，本區只負責開關 dialog
+// 與 @created 後 reload；建立/日期推算/寫入權限全移入該共用元件）──
+const createDialogVisible = ref(false)
+// canWrite gate 對齊後端 POST /appraisal/cycles 守衛（Permission.APPRAISAL_FINALIZE）
+const canCreateCycle = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 
-async function createForSemester(semesterEnum: SemesterKey) {
-  const label = semesterEnum === 'FIRST' ? '上' : '下'
-  try {
-    await ElMessageBox.confirm(
-      `將為 ${selectedYear.value} 學年度${label}學期建立考核週期，確定嗎？`,
-      '建立考核週期',
-      { type: 'info' },
-    )
-  } catch {
-    return
-  }
-  creating.value[semesterEnum] = true
-  try {
-    await createAppraisalCycle({
-      academic_year: selectedYear.value,
-      semester: semesterEnum,
-      enrollment_target: 0,
-      enrollment_actual: null,
-    })
-    ElMessage.success('已建立')
-    await load()
-  } catch (e) {
-    notify(e, 'YearlyEnrollmentTargetSection:create', '建立失敗')
-  } finally {
-    creating.value[semesterEnum] = false
-  }
+// ⚠ 修正記錄（code review Task A7，真 UX 回歸）：openCreateDialog 原本無參數，dialog
+// 一律 fallback 重置為全域 termStore 當前值，與本頁自己的 selectedYear（可 ±5 年瀏覽）
+// 及使用者點擊的卡片（FIRST/SECOND）context 脫節。改為記錄被點擊卡片的學期，連同
+// selectedYear 一起以 defaultYear/defaultSemester 傳給 CreateCycleDialog，讓 dialog
+// 預帶值與畫面上下文一致。
+const pendingCreateSemester = ref<SemesterKey>('FIRST')
+
+function openCreateDialog(semester: SemesterKey) {
+  pendingCreateSemester.value = semester
+  createDialogVisible.value = true
+}
+
+// CreateCycleDialog 自身已在 submit 成功時彈「考核週期已建立」toast，此處僅需 reload。
+async function handleCycleCreated(_cycle: CreatedCycle) {
+  await load()
 }
 </script>
 
 <template>
   <div class="yearly-target-section" v-loading="loading">
+    <ReadonlyBadge permission-label="考核核定" :show="!canEditTarget" />
     <div class="toolbar">
       <label class="year-label">學年度</label>
       <el-select
@@ -171,15 +188,27 @@ async function createForSemester(semesterEnum: SemesterKey) {
                 {{ firstCycle.base_score_calc_date || '—' }}
               </el-descriptions-item>
             </el-descriptions>
+            <!-- Task B6：三處目標人數對照（本頁僅取得考核週期目標/實際註冊，
+            年終 org_settings 目標須至「年終結算 → 本期設定」核對，此處傳 null） -->
+            <TargetCrossRef
+              :cycle-target="firstCycle.enrollment_target ?? null"
+              :org-setting-target="null"
+              :actual="firstCycle.enrollment_actual ?? null"
+            />
             <div class="semester-card__actions">
-              <el-button
-                size="small"
-                type="primary"
-                data-test="edit-first-btn"
-                @click="startEdit(firstCycle)"
-              >
-                編輯
-              </el-button>
+              <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">
+                <span>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :disabled="!canEditTarget"
+                    data-test="edit-first-btn"
+                    @click="startEdit(firstCycle)"
+                  >
+                    編輯
+                  </el-button>
+                </span>
+              </el-tooltip>
             </div>
           </template>
           <template v-else>
@@ -218,9 +247,8 @@ async function createForSemester(semesterEnum: SemesterKey) {
             <el-button
               type="primary"
               :icon="Plus"
-              :loading="creating.FIRST"
               data-test="create-first-btn"
-              @click="createForSemester('FIRST')"
+              @click="openCreateDialog('FIRST')"
             >
               建立本學期週期
             </el-button>
@@ -251,15 +279,26 @@ async function createForSemester(semesterEnum: SemesterKey) {
                 {{ secondCycle.base_score_calc_date || '—' }}
               </el-descriptions-item>
             </el-descriptions>
+            <!-- Task B6：三處目標人數對照（理由同上學期卡，見上方註解） -->
+            <TargetCrossRef
+              :cycle-target="secondCycle.enrollment_target ?? null"
+              :org-setting-target="null"
+              :actual="secondCycle.enrollment_actual ?? null"
+            />
             <div class="semester-card__actions">
-              <el-button
-                size="small"
-                type="primary"
-                data-test="edit-second-btn"
-                @click="startEdit(secondCycle)"
-              >
-                編輯
-              </el-button>
+              <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">
+                <span>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :disabled="!canEditTarget"
+                    data-test="edit-second-btn"
+                    @click="startEdit(secondCycle)"
+                  >
+                    編輯
+                  </el-button>
+                </span>
+              </el-tooltip>
             </div>
           </template>
           <template v-else>
@@ -298,9 +337,8 @@ async function createForSemester(semesterEnum: SemesterKey) {
             <el-button
               type="primary"
               :icon="Plus"
-              :loading="creating.SECOND"
               data-test="create-second-btn"
-              @click="createForSemester('SECOND')"
+              @click="openCreateDialog('SECOND')"
             >
               建立本學期週期
             </el-button>
@@ -308,6 +346,18 @@ async function createForSemester(semesterEnum: SemesterKey) {
         </template>
       </div>
     </div>
+
+    <!-- 建立考核週期 dialog（Task A7：統一 3 入口；本區兩顆「建立本學期週期」按鈕
+    共用同一 dialog，開啟時預帶本頁 selectedYear + 點擊當下卡片所屬學期，與畫面
+    上下文一致——使用者仍可在完整表單內自行調整，見 useCreateCycle.ts
+    resetToCurrentTerm）-->
+    <CreateCycleDialog
+      v-model:visible="createDialogVisible"
+      :can-write="canCreateCycle"
+      :default-year="selectedYear"
+      :default-semester="pendingCreateSemester"
+      @created="handleCycleCreated"
+    />
   </div>
 </template>
 

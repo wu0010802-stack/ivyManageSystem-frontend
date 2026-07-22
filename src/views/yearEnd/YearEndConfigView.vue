@@ -8,18 +8,29 @@ import {
   getClassTargets,
   upsertClassTarget,
   upsertClassTargetsBatch,
+  listYearEndCycles,
 } from '@/api/yearEnd'
+import { getAppraisalCyclesByYear } from '@/api/appraisal'
 import { getEmployees } from '@/api/employees'
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { fmtPct } from '@/utils/format'
+import TargetCrossRef from '@/views/appraisal/components/TargetCrossRef.vue'
 
 // ---- Derive row types from typed API wrappers — no hand-written `any` ----
 type OrgSettingsRow = Awaited<ReturnType<typeof getOrgSettings>>['data'][number]
 type ClassTargetRow = Awaited<ReturnType<typeof getClassTargets>>['data'][number]
 type EmployeeOption = { id: number; name: unknown }
 type ClassroomOption = { id: number; name: unknown }
+
+// getAppraisalCyclesByYear（src/api/appraisal.ts）未標注 AxiosResp（既有寫法，
+// 見 YearlyEnrollmentTargetSection.vue 同款 CycleEntry pattern）；比照該檔案
+// 定義最小欄位介面接住回傳，避免手寫 any。
+interface AppraisalCycleEntry {
+  semester?: string
+  enrollment_target?: number | null
+}
 
 const props = defineProps<{ cycleId: number }>()
 const router = useRouter()
@@ -69,9 +80,25 @@ const orgSaving = ref<Record<string, boolean>>({})
 const classSaving = ref<Record<number, boolean>>({})
 const classAllSaving = ref(false)
 
+// ---- Task B6 橋接：考核週期目標（cycleTarget）----
+// TargetCrossRef 三處目標對照原本此頁只傳「年終設定目標」與「實際」，考核週期
+// 目標寫死 null——「不一致警示」永遠不會觸發。此頁 cycleId 對應 year_end_cycles.id，
+// 考核週期目標存在另一張表（AppraisalCycle.enrollment_target），兩表以
+// academic_year + semester 間接關聯（無直接 FK，資料模型整併不在本案範圍）。
+// 橋接路徑：year_end_cycles.id → academic_year（listYearEndCycles 找同 id 那筆）
+// → getAppraisalCyclesByYear(academic_year) → 依 semester 相符（沿用既有
+// semester_first→FIRST/SECOND 映射慣例）→ enrollment_target。任一步查無或失敗
+// 一律回退 null（不 crash、不誤導）——TargetCrossRef 對 null 已容忍，只是無法顯示對照。
+// keyed by String(semester_first)，對齊 orgEdits/orgSaving 既有 key 慣例。
+const cycleTargets = ref<Record<string, number | null>>({})
+
 // ---- Helpers ----
 function semesterLabel(semesterFirst: boolean): string {
   return semesterFirst ? '上學期' : '下學期'
+}
+
+function semesterCode(semesterFirst: boolean): 'FIRST' | 'SECOND' {
+  return semesterFirst ? 'FIRST' : 'SECOND'
 }
 
 // 百分比顯示統一走 utils/format.fmtPct（已是百分比形式的欄位直傳；
@@ -124,6 +151,30 @@ async function loadClassTargets() {
     ElMessage.error('班級設定載入失敗')
   } finally {
     classLoading.value = false
+  }
+}
+
+// Task B6 橋接（見上方 cycleTargets 宣告處註解）：非本頁核心資料，失敗不影響
+// 招生/班級設定的載入與編輯——靜默降級，比照 loadSupportData 的降級精神，但
+// 這裡連 dropdown 都不涉及、純粹是對照顯示用，故不額外彈 ElMessage 干擾。
+async function loadCycleTargets() {
+  try {
+    const { data: yearEndCycles } = await listYearEndCycles()
+    const yearEndCycle = yearEndCycles.find((c) => c.id === cycleId)
+    if (!yearEndCycle) {
+      cycleTargets.value = {}
+      return
+    }
+    const { data } = await getAppraisalCyclesByYear(yearEndCycle.academic_year)
+    const appraisalCycles = (Array.isArray(data) ? data : []) as AppraisalCycleEntry[]
+    const bridged: Record<string, number | null> = {}
+    for (const semesterFirst of [true, false]) {
+      const match = appraisalCycles.find((c) => c.semester === semesterCode(semesterFirst))
+      bridged[String(semesterFirst)] = match?.enrollment_target ?? null
+    }
+    cycleTargets.value = bridged
+  } catch {
+    cycleTargets.value = {}
   }
 }
 
@@ -254,8 +305,10 @@ defineExpose({
   employeeOptions,
   classroomMap,
   canWrite,
+  cycleTargets,
   loadOrgSettings,
   loadClassTargets,
+  loadCycleTargets,
   saveOrgSettings,
   saveClassTarget,
   saveAllClassTargets,
@@ -264,7 +317,7 @@ defineExpose({
 })
 
 onMounted(async () => {
-  await Promise.all([loadOrgSettings(), loadClassTargets(), loadSupportData()])
+  await Promise.all([loadOrgSettings(), loadClassTargets(), loadSupportData(), loadCycleTargets()])
 })
 </script>
 
@@ -348,6 +401,14 @@ onMounted(async () => {
               <span v-else>{{ row.meeting_absence_deduction }}</span>
             </el-form-item>
           </el-form>
+          <!-- Task B6：三處目標人數對照——此頁「全校目標」是年終 org_settings
+          目標的實際編輯來源；cycleTarget（考核週期目標）由 cycleTargets 橋接
+          取得（見 <script> loadCycleTargets 註解），查無/失敗時為 null，元件容忍。 -->
+          <TargetCrossRef
+            :cycle-target="cycleTargets[String(row.semester_first)] ?? null"
+            :org-setting-target="orgEdits[String(row.semester_first)]?.enrollment_target ?? row.enrollment_target"
+            :actual="row.enrollment_actual ?? null"
+          />
           <div class="save-row">
             <el-button
               v-if="canWrite"

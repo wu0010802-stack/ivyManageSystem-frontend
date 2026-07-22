@@ -10,8 +10,11 @@ vi.mock('@/api/appraisal', () => ({
 }))
 
 // P0-A 守衛：spec 需 mock hasPermission，否則 canEditRules=false 隱藏編輯按鈕
+// Task B7：改用可調 mockHasPermission（權限矩陣鐵律），驗證無 APPRAISAL_RULE_WRITE 時
+// 面板頂部顯示 ReadonlyBadge。
+const mockHasPermission = vi.fn().mockReturnValue(true)
 vi.mock('@/utils/auth', () => ({
-  hasPermission: vi.fn().mockReturnValue(true),
+  hasPermission: (name) => mockHasPermission(name),
 }))
 
 vi.mock('element-plus', () => ({
@@ -173,7 +176,8 @@ function makeRules() {
   ]
 }
 
-async function mountPanel({ rulesData = makeRules() } = {}) {
+async function mountPanel({ rulesData = makeRules(), canEdit = true } = {}) {
+  mockHasPermission.mockReturnValue(canEdit)
   listScoringRules.mockResolvedValue({ data: rulesData })
   const wrapper = mount(ScoringRulesPanel, {
     global: {
@@ -187,10 +191,11 @@ async function mountPanel({ rulesData = makeRules() } = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockHasPermission.mockReturnValue(true)
 })
 
 describe('ScoringRulesPanel', () => {
-  it('載入後渲染 14 張規則卡', async () => {
+  it('載入後渲染 24 張規則卡', async () => {
     const wrapper = await mountPanel()
     const codes = [
       'LATE_EARLY', 'MISSING_PUNCH', 'LEAVE',
@@ -218,17 +223,17 @@ describe('ScoringRulesPanel', () => {
     expect(wrapper.find('[data-test="rule-summary-RETURNING_RATE_0915"]').text())
       .toContain('階梯式（3 階）')
 
-    // FLAT_THRESHOLD
+    // FLAT_THRESHOLD（改用 summarizeRule 單一來源後格式為「≥ 50 → +1 分」，非舊私有版「≥50」無空格）
     const flatText = wrapper.find('[data-test="rule-summary-AFTER_CLASS_RATE"]').text()
-    expect(flatText).toContain('≥50')
-    expect(flatText).toContain('1')
-    expect(flatText).toContain('-1')
+    expect(flatText).toContain('≥ 50')
+    expect(flatText).toContain('+1 分')
+    expect(flatText).toContain('-1 分')
 
-    // DISCIPLINARY_TIERED
+    // DISCIPLINARY_TIERED（改用 summarizeRule 單一來源後格式為「警告：-1 分」，非舊私有版「警告 -1」無冒號）
     const discText = wrapper.find('[data-test="rule-summary-REWARD_PUNISH"]').text()
-    expect(discText).toContain('警告 -1')
-    expect(discText).toContain('小過 -3')
-    expect(discText).toContain('大過 -9')
+    expect(discText).toContain('警告：-1 分')
+    expect(discText).toContain('小過：-3 分')
+    expect(discText).toContain('大過：-9 分')
 
     // 沒有規則的項目顯示「尚未設定」
     expect(wrapper.find('[data-test="rule-summary-OTHER"]').text())
@@ -282,5 +287,20 @@ describe('ScoringRulesPanel', () => {
     await flushPromises()
 
     expect(listScoringRules).toHaveBeenCalledTimes(2)
+  })
+
+  // Task B7：面板頂部唯讀徽章，對齊 canEditRules（APPRAISAL_RULE_WRITE）。
+  describe('唯讀徽章（Task B7）', () => {
+    it('canEdit=false：面板頂部顯示唯讀徽章', async () => {
+      const wrapper = await mountPanel({ canEdit: false })
+      const badge = wrapper.find('[data-test="readonly-badge"]')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('考核規則設定')
+    })
+
+    it('canEdit=true：面板頂部不顯示唯讀徽章', async () => {
+      const wrapper = await mountPanel({ canEdit: true })
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
+    })
   })
 })

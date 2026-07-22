@@ -3,12 +3,17 @@ import { reactive, ref, computed, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig } from '@/api/config'
 import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
+import { confirmWithReason } from '@/views/appraisal/confirmWithReason'
+import { injectOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
 import {
   DIVIDEND_ACTIVITY_GRADES,
   emptyGradeThresholdPercents,
+  fractionToPercent,
+  percentToFraction,
   gradeThresholdsFromApi,
   gradeThresholdsToApi,
   type GradeThresholdPercents,
@@ -23,6 +28,10 @@ const canRead = computed(() => hasPermission('SETTINGS_READ'))
 const canSaveRules = computed(
   () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
 )
+
+// Task B5：規則變更影響提示——儲存成功訊息改走 notifyRuleChanged，OPEN 週期
+// 存在時提示「此變更於下次試算/重算生效」，取代原本固定的「年終規則已儲存」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 // 年終規則欄位（型別對齊 ApiBody<'/config/bonus','put'> 的年終子集）
 const rules = reactive({
@@ -89,6 +98,9 @@ const fetchRules = async () => {
         ;(rules as Record<string, unknown>)[f] = v
       }
     }
+    // 舊生率/才藝率門檻：後端存 fraction（0–1），UI 一律顯示百分比（0–100）。
+    rules.dividend_returning_threshold = fractionToPercent(rules.dividend_returning_threshold ?? 0)
+    rules.dividend_activity_threshold = fractionToPercent(rules.dividend_activity_threshold ?? 0)
     const dict = data.after_class_award_unit_price
     afterClassAwardRows.value =
       dict && typeof dict === 'object'
@@ -153,27 +165,13 @@ const saveRules = async () => {
     return
   }
   // 與 BonusConfig PUT 對齊：變更影響全員年終規則，要求異動原因 ≥10 字（落 audit）。
-  let reason
-  try {
-    const result = await ElMessageBox.prompt(
-      '此變更會影響全員年終規則，請輸入異動原因（至少 10 個字）：',
-      '年終規則變更原因',
-      {
-        confirmButtonText: '確認儲存',
-        cancelButtonText: '取消',
-        inputType: 'textarea',
-        inputValidator: (val) => {
-          if (!val || val.trim().length < 10) {
-            return '原因至少 10 個字'
-          }
-          return true
-        },
-      },
-    )
-    reason = (result as { value: string }).value.trim()
-  } catch {
-    return // 使用者按取消
-  }
+  // Task B4：改走共用 confirmWithReason（含常用原因快選提示），移除重複 prompt 樣板。
+  const reason = await confirmWithReason({
+    title: '年終規則變更原因',
+    message: '此變更會影響全員年終規則，請輸入異動原因（至少 10 個字）：',
+    minLength: 10,
+  })
+  if (reason == null) return // 使用者按取消
 
   // 年終 JSON 欄位序列化：dict（班名→單價，略過空班名）+ id list
   const afterClassAwardDict: Record<string, number> = {}
@@ -184,6 +182,9 @@ const saveRules = async () => {
   // 只送年終欄位；後端 PUT /config/bonus 為部分更新，會保留超額/節慶/底薪等其他設定。
   const payload: ApiBody<'/config/bonus', 'put'> & { reason: string } = {
     ...rules,
+    // 舊生率/才藝率門檻：UI 百分比（0–100）→ 送後端仍為 fraction（0–1），覆寫 ...rules 展開值。
+    dividend_returning_threshold: percentToFraction(rules.dividend_returning_threshold),
+    dividend_activity_threshold: percentToFraction(rules.dividend_activity_threshold),
     after_class_award_unit_price: afterClassAwardDict,
     art_teacher_employee_ids: [...artTeacherEmployeeIds.value],
     // G15：逐年級門檻換算回 fraction dict（全空 → null 回退單一門檻）+ 堂數條件（null＝停用）。
@@ -198,7 +199,7 @@ const saveRules = async () => {
   loading.value = true
   try {
     await updateBonusConfig(payload)
-    ElMessage.success('年終規則已儲存')
+    notifyRuleChanged('年終規則已儲存')
   } catch (error) {
     const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
     ElMessage.error(typeof detail === 'string' ? detail : '年終規則儲存失敗')
@@ -216,6 +217,7 @@ onMounted(() => {
 
 <template>
   <div v-if="canRead" v-loading="loading">
+    <ReadonlyBadge permission-label="年終規則設定" :show="!canSaveRules" />
     <div class="rules-actions">
       <el-tooltip
         content="需要「系統設定寫入」與「金流簽核」權限（SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）"
@@ -349,20 +351,21 @@ onMounted(() => {
     <!-- ④ 學期紅利 -->
     <div class="section-title">學期紅利</div>
     <el-card class="mb-6" shadow="never">
-      <p class="desc-text">舊生率 / 才藝率達門檻時，發放對應紅利。門檻為 0–1 小數（例：0.8 = 80%）。</p>
+      <p class="desc-text">舊生率 / 才藝率達門檻時，發放對應紅利。門檻為百分比（0–100，例：80 代表 80%）。</p>
       <el-row :gutter="20">
         <el-col :span="6">
           <el-form-item>
             <template #label>
-              <el-tooltip content="舊生率達此門檻發放紅利（0–1 小數）" placement="top">
+              <el-tooltip content="舊生率達此門檻發放紅利（百分比，0–100）" placement="top">
                 <span>舊生率門檻</span>
               </el-tooltip>
             </template>
             <el-input-number
               v-model="rules.dividend_returning_threshold"
-              :min="0" :max="1" :step="0.05" :precision="2"
+              :min="0" :max="100" :step="1"
               controls-position="right" style="width: 100%"
             />
+            <span class="unit-hint">%</span>
           </el-form-item>
         </el-col>
         <el-col :span="6">
@@ -378,15 +381,16 @@ onMounted(() => {
         <el-col :span="6">
           <el-form-item>
             <template #label>
-              <el-tooltip content="才藝率達此門檻發放紅利（0–1 小數）" placement="top">
+              <el-tooltip content="才藝率達此門檻發放紅利（百分比，0–100）" placement="top">
                 <span>才藝率門檻</span>
               </el-tooltip>
             </template>
             <el-input-number
               v-model="rules.dividend_activity_threshold"
-              :min="0" :max="1" :step="0.05" :precision="2"
+              :min="0" :max="100" :step="1"
               controls-position="right" style="width: 100%"
             />
+            <span class="unit-hint">%</span>
           </el-form-item>
         </el-col>
         <el-col :span="6">

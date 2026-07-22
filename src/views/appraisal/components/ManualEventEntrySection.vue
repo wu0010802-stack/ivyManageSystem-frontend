@@ -5,6 +5,7 @@ import {
   MANUAL_ITEM_CODES,
   MANUAL_LABEL,
 } from '../composables/useManualEventEntry'
+import { MANUAL_COLUMN_GROUPS } from '../manualColumnGroups'
 import { MANUAL_DELTA_RANGES } from '../scoreItemLabels'
 import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
@@ -33,6 +34,9 @@ const LABEL = MANUAL_LABEL
 // MANUAL_DELTA 類手填「分值」項（如幼兒意外 −10~0），其餘為次數/時數（min 0）
 const minFor = (code: string) => MANUAL_DELTA_RANGES[code]?.min ?? 0
 const maxFor = (code: string) => MANUAL_DELTA_RANGES[code]?.max ?? Infinity
+
+// 分組表頭：巢狀 el-table-column 內仍需扁平欄位序（跨組連續）供鍵盤導航 data-grid-col 使用
+const colIndexOf = (code: string) => ITEM_CODES.indexOf(code)
 
 // 鍵盤導航容器
 const gridRef = ref<HTMLElement | null>(null)
@@ -98,49 +102,56 @@ async function onInheritPrevious() {
       <el-table-column label="員工" prop="employee_name" min-width="100" fixed />
       <el-table-column label="角色" width="80" prop="role_group" />
       <el-table-column
-        v-for="(code, colIdx) in ITEM_CODES"
-        :key="code"
-        :label="LABEL[code]"
-        width="110"
+        v-for="g in MANUAL_COLUMN_GROUPS"
+        :key="g.label"
+        :label="g.label"
+        align="center"
       >
-        <template #default="{ row, $index }">
-          <div v-if="row.participant_id" class="cell-with-orig">
-            <el-input-number
-              :model-value="getCount(row.participant_id, code)"
-              :step="1"
-              :min="minFor(code)"
-              :max="maxFor(code)"
-              :precision="0"
-              :disabled="readonly"
-              :data-grid-row="$index"
-              :data-grid-col="colIdx"
-              :data-test="`count-${row.participant_id}-${code}`"
-              @update:model-value="(v) => setCount(row.participant_id!, code, v as number)"
-            />
-            <span
-              v-if="getCount(row.participant_id, code) !== getOriginal(row.participant_id, code)"
-              class="cell-orig"
-              :data-test="`orig-${row.participant_id}-${code}`"
-            >
-              原 {{ getOriginal(row.participant_id, code) }}
-            </span>
-            <el-tooltip
-              v-if="syncedNote(row.participant_id, code)"
-              :content="`${syncedNote(row.participant_id, code)}——此數字來自機構活動出席同步，人工覆寫前請留意`"
-              placement="top"
-            >
-              <el-tag
-                size="small"
-                type="info"
-                class="cell-sync-tag"
-                :data-test="`synced-tag-${row.participant_id}-${code}`"
+        <el-table-column
+          v-for="code in g.codes"
+          :key="code"
+          :label="LABEL[code]"
+          width="110"
+        >
+          <template #default="{ row, $index }">
+            <div v-if="row.participant_id" class="cell-with-orig">
+              <el-input-number
+                :model-value="getCount(row.participant_id, code)"
+                :step="1"
+                :min="minFor(code)"
+                :max="maxFor(code)"
+                :precision="0"
+                :disabled="readonly"
+                :data-grid-row="$index"
+                :data-grid-col="colIndexOf(code)"
+                :data-test="`count-${row.participant_id}-${code}`"
+                @update:model-value="(v) => setCount(row.participant_id!, code, v as number)"
+              />
+              <span
+                v-if="getCount(row.participant_id, code) !== getOriginal(row.participant_id, code)"
+                class="cell-orig"
+                :data-test="`orig-${row.participant_id}-${code}`"
               >
-                自動同步
-              </el-tag>
-            </el-tooltip>
-          </div>
-          <span v-else>—</span>
-        </template>
+                原 {{ getOriginal(row.participant_id, code) }}
+              </span>
+              <el-tooltip
+                v-if="syncedNote(row.participant_id, code)"
+                :content="`${syncedNote(row.participant_id, code)}——此數字來自機構活動出席同步，人工覆寫前請留意`"
+                placement="top"
+              >
+                <el-tag
+                  size="small"
+                  type="info"
+                  class="cell-sync-tag"
+                  :data-test="`synced-tag-${row.participant_id}-${code}`"
+                >
+                  自動同步
+                </el-tag>
+              </el-tooltip>
+            </div>
+            <span v-else>—</span>
+          </template>
+        </el-table-column>
       </el-table-column>
     </el-table>
   </div>

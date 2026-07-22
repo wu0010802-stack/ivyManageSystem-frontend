@@ -61,18 +61,35 @@ const ElAlertStub = defineComponent({
   },
 })
 
+// 支援分組表頭（Task A6）：group column（無 #default 純巢狀 el-table-column 子項）與
+// leaf column（`#default="{ row, $index }"` 逐列 cell 樣板）用同一個 `el-table-column` tag，
+// 靠「探測 slot 輸出型別」分辨——leaf 樣板的 row=={} 會落入既有 v-else 分支（不會 throw），
+// 探測結果若清一色是巢狀 ElTableColumnStub vnode，視為 group：只渲染一次、把 data 轉發給子欄位。
 const ElTableColumnStub = defineComponent({
   name: 'ElTableColumnStub',
   props: { data: { type: Array, default: () => [] } },
   setup(props, { slots }) {
-    return () =>
-      h(
+    return () => {
+      if (!slots.default) {
+        return h('div', {}, props.data.map((_row, index) => h('div', { key: index })))
+      }
+      const probe = flattenSlotVnodes(slots.default({ row: {}, $index: 0 }))
+      const isGroup = probe.length > 0 && probe.every((v) => v?.type?.name === 'ElTableColumnStub')
+      if (isGroup) {
+        return h(
+          'div',
+          {},
+          probe.map((vnode, i) =>
+            h(vnode.type, { ...vnode.props, data: props.data, key: i }, vnode.children),
+          ),
+        )
+      }
+      return h(
         'div',
         {},
-        props.data.map((row, index) =>
-          h('div', { key: index }, slots.default ? slots.default({ row, $index: index }) : []),
-        ),
+        props.data.map((row, index) => h('div', { key: index }, slots.default({ row, $index: index }))),
       )
+    }
   },
 })
 

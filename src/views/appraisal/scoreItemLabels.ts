@@ -1,7 +1,8 @@
 /**
  * scoreItemLabels — ScoreItemCode 的中文標籤與顯示順序（共用）。
  *
- * 對應後端 models/appraisal.py 的 ScoreItemCode enum。任何前端視圖
+ * 對應後端 models/appraisal.py 的 ScoreItemCode enum，共 24 碼（加上分數預覽表的
+ * 員工欄與合計欄共 26 欄，見 `scorePreviewColumns.ts`）。任何前端視圖
  * 要顯示這些 code 的人話名稱都應從此載入，避免同 code 多版本標籤。
  *
  * （例外：useManualEventEntry.ts 的精簡版標籤，因卡片區塊 UI 需求保留。）
@@ -59,3 +60,59 @@ export const MANUAL_DELTA_RANGES: Record<string, { min: number; max: number }> =
   RECRUIT_SCORE: { min: 0, max: 20 },
   SUPERVISOR_SCORE: { min: 0, max: 10 },
 }
+
+/**
+ * ITEM_DOMAIN_GROUPS — 24 碼依性質分五組（考勤/招生/才藝/懲處/加分），供規則設定頁
+ * （ScoringRulesPanel.vue）卡片分組渲染。前後端目前皆無 domain 欄位，此為前端靜態 map。
+ *
+ * 分組依據：對應後端 models/appraisal.py ScoreItemCode 的規章第六篇條號分群
+ * （第五條(二)出勤／(五)學籍異動＋(四)招生＋(七)留校率／(九)才藝班＋(三)檢測／(十)獎懲＋(六)幼兒意外／
+ * (八)(十一)(十二)加分類），每碼恰屬一組、涵蓋全部 24 碼（見同檔 __tests__/scoreItemDomainGroups.spec.ts
+ * 完整性守衛）。
+ */
+export type ScoreDomain = '考勤' | '招生' | '才藝' | '懲處' | '加分'
+
+export interface ScoreDomainGroup {
+  domain: ScoreDomain
+  codes: string[]
+}
+
+export const ITEM_DOMAIN_GROUPS: ScoreDomainGroup[] = [
+  {
+    domain: '考勤',
+    codes: [
+      'LATE_EARLY',
+      'MISSING_PUNCH',
+      'LEAVE',
+      'ABSENTEEISM',
+      'SCHOOL_MEETING_ABSENCE',
+      'INSTITUTION_MEETING_0913',
+      'INSTITUTION_MEETING_1115',
+      'SELF_IMPROVEMENT_ACTIVITY',
+    ],
+  },
+  {
+    domain: '招生',
+    codes: [
+      'RETURNING_RATE_0915',
+      'RETURNING_RATE_0315',
+      'RECRUIT_SCORE',
+      'STUDENT_WITHDRAWAL',
+      'STUDENT_REINSTATE',
+      'TRIAL_LEAVE',
+      'CLASS_TRANSFER',
+    ],
+  },
+  {
+    domain: '才藝',
+    codes: ['AFTER_CLASS_RATE', 'EXAM_RESULT'],
+  },
+  {
+    domain: '懲處',
+    codes: ['REWARD_PUNISH', 'CHILD_ACCIDENT'],
+  },
+  {
+    domain: '加分',
+    codes: ['CLASS_HEADCOUNT_BONUS', 'SPED', 'SUPERVISOR_SCORE', 'EXCELLENCE_NOMINATION', 'OTHER'],
+  },
+]

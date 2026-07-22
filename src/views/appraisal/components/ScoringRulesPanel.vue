@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * ScoringRulesPanel — 14 規則卡 + 切換生效日 + 開編輯 dialog / 歷史 drawer
+ * ScoringRulesPanel — 24 規則卡（依性質分五組：考勤/招生/才藝/懲處/加分）+ 切換生效日 + 開編輯 dialog / 歷史 drawer
  *
  * 對應 Task 18 規格：
- * - 14 個 ScoreItemCode 各一張卡，顯示當前生效規則摘要
+ * - 24 個 ScoreItemCode 各一張卡，依 ITEM_DOMAIN_GROUPS 分組顯示，顯示當前生效規則摘要
  * - 切換生效日重抓 listScoringRules
  * - 點 [編輯] 開 RuleEditorDialog（建立新版規則）
  * - 點 [歷史] 開 RuleHistoryDrawer（Task 19 實作完整版）
@@ -16,9 +16,12 @@ import { Refresh, Edit, Clock } from '@element-plus/icons-vue'
 import { listScoringRules } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
+import { summarizeRuleOneLine } from '../ruleSummary'
 import {
   ITEM_CODE_LABELS,
   AUTO_ITEM_CODES as AUTO_CODES,
+  ITEM_DOMAIN_GROUPS,
 } from '@/views/appraisal/scoreItemLabels'
 import RuleEditorDialog from './RuleEditorDialog.vue'
 import RuleHistoryDrawer from './RuleHistoryDrawer.vue'
@@ -61,8 +64,6 @@ const rulesByCode = computed(() => {
   return m
 })
 
-const itemCodes = Object.keys(ITEM_CODE_LABELS)
-
 async function load() {
   loading.value = true
   try {
@@ -91,25 +92,6 @@ function onRuleCreated() {
   load()
 }
 
-function fmtRuleSummary(rule: ScoringRule | null | undefined) {
-  if (!rule) return '尚未設定'
-  const cfg = rule.rule_config || {}
-  if (rule.rule_type === 'PER_UNIT') {
-    return `每次 ${cfg.per_unit_delta} 分`
-  }
-  if (rule.rule_type === 'TIER') {
-    const n = Array.isArray(cfg.tiers) ? (cfg.tiers as unknown[]).length : 0
-    return `階梯式（${n} 階）`
-  }
-  if (rule.rule_type === 'FLAT_THRESHOLD') {
-    return `≥${cfg.threshold} → ${cfg.above_delta} / <${cfg.threshold} → ${cfg.below_delta}`
-  }
-  if (rule.rule_type === 'DISCIPLINARY_TIERED') {
-    return `警告 ${cfg.warning_delta} / 小過 ${cfg.minor_delta} / 大過 ${cfg.major_delta}`
-  }
-  return ''
-}
-
 onMounted(load)
 
 defineExpose({ load, disablePastDates })
@@ -117,6 +99,7 @@ defineExpose({ load, disablePastDates })
 
 <template>
   <div class="rules-panel">
+    <ReadonlyBadge permission-label="考核規則設定" :show="!canEditRules" />
     <div class="toolbar">
       <el-form-item label="生效日期">
         <el-date-picker
@@ -137,45 +120,55 @@ defineExpose({ load, disablePastDates })
       </el-button>
     </div>
 
-    <div v-loading="loading" class="rules-grid" data-test="rules-grid">
+    <div v-loading="loading" data-test="rules-grid">
       <div
-        v-for="code in itemCodes"
-        :key="code"
-        class="rule-card"
-        :data-test="`rule-card-${code}`"
+        v-for="g in ITEM_DOMAIN_GROUPS"
+        :key="g.domain"
+        class="rule-domain-group"
+        :data-test="`rule-domain-group-${g.domain}`"
       >
-        <div class="rule-card__header">
-          <span class="rule-card__label">{{ (ITEM_CODE_LABELS as Record<string, string>)[code] }}</span>
-          <el-tag
-            size="small"
-            :type="AUTO_CODES.has(code) ? 'success' : 'info'"
-            :data-test="`rule-tag-${code}`"
+        <h4 class="rule-domain-group__title">{{ g.domain }}</h4>
+        <div class="rules-grid">
+          <div
+            v-for="code in g.codes"
+            :key="code"
+            class="rule-card"
+            :data-test="`rule-card-${code}`"
           >
-            {{ AUTO_CODES.has(code) ? 'auto' : 'manual' }}
-          </el-tag>
-        </div>
-        <div class="rule-card__body" :data-test="`rule-summary-${code}`">
-          {{ fmtRuleSummary(rulesByCode[code]) }}
-        </div>
-        <div class="rule-card__actions">
-          <el-button
-            v-if="canEditRules"
-            size="small"
-            :icon="Edit"
-            :data-test="`edit-btn-${code}`"
-            @click="openEditor(code)"
-          >
-            編輯
-          </el-button>
-          <el-button
-            size="small"
-            text
-            :icon="Clock"
-            :data-test="`history-btn-${code}`"
-            @click="openHistory(code)"
-          >
-            歷史
-          </el-button>
+            <div class="rule-card__header">
+              <span class="rule-card__label">{{ (ITEM_CODE_LABELS as Record<string, string>)[code] }}</span>
+              <el-tag
+                size="small"
+                :type="AUTO_CODES.has(code) ? 'success' : 'info'"
+                :data-test="`rule-tag-${code}`"
+              >
+                {{ AUTO_CODES.has(code) ? 'auto' : 'manual' }}
+              </el-tag>
+            </div>
+            <div class="rule-card__body" :data-test="`rule-summary-${code}`">
+              {{ summarizeRuleOneLine(rulesByCode[code]) }}
+            </div>
+            <div class="rule-card__actions">
+              <el-button
+                v-if="canEditRules"
+                size="small"
+                :icon="Edit"
+                :data-test="`edit-btn-${code}`"
+                @click="openEditor(code)"
+              >
+                編輯
+              </el-button>
+              <el-button
+                size="small"
+                text
+                :icon="Clock"
+                :data-test="`history-btn-${code}`"
+                @click="openHistory(code)"
+              >
+                歷史
+              </el-button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -205,6 +198,15 @@ defineExpose({ load, disablePastDates })
   display: flex;
   gap: var(--space-3);
   align-items: center;
+}
+.rule-domain-group + .rule-domain-group {
+  margin-top: var(--space-4);
+}
+.rule-domain-group__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 .rules-grid {
   display: grid;

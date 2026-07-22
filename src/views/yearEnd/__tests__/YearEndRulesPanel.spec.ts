@@ -158,8 +158,58 @@ describe('YearEndRulesPanel', () => {
     ])
     expect(vm.artTeacherEmployeeIds).toEqual([7, 9])
     expect(vm.rules.art_teacher_unit_price).toBe(30)
-    expect(vm.rules.dividend_returning_threshold).toBe(0.8)
+    // B3：後端 fraction(0.8) → UI 顯示百分比(80)
+    expect(vm.rules.dividend_returning_threshold).toBe(80)
     expect(vm.employeeOptions).toHaveLength(2)
+  })
+
+  // B3（考核年終規則設定百分比統一）：紅利門檻/舊生率 0-1 fraction ↔ UI 0-100% 邊界換算
+  describe('B3 紅利門檻 / 舊生率百分比邊界換算', () => {
+    it('load: 後端 0.8/0.75 → UI 顯示 80/75', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          dividend_activity_threshold: 0.8,
+          dividend_returning_threshold: 0.75,
+        },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.rules.dividend_activity_threshold).toBe(80)
+      expect(vm.rules.dividend_returning_threshold).toBe(75)
+    })
+
+    it('save: UI 改為 90 → payload 送出 0.9（不是 90、不是 0.009）', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          dividend_activity_threshold: 0.8,
+          dividend_returning_threshold: 0.75,
+        },
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.rules.dividend_activity_threshold).toBe(80)
+      vm.rules.dividend_activity_threshold = 90
+      await nextTick()
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      expect(payload.dividend_activity_threshold).toBe(0.9)
+      // 舊生率未改動：75 → 0.75 往返一致
+      expect(payload.dividend_returning_threshold).toBe(0.75)
+    })
   })
 
   it('load: 缺 JSON 欄位時 graceful 退成空（不炸）', async () => {
@@ -457,13 +507,18 @@ describe('YearEndRulesPanel', () => {
       vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
     })
 
-    it('只有 SETTINGS_READ（無 WRITE/APPROVE）：儲存按鈕 disabled，直接呼叫 saveRules 也不送出', async () => {
+    it('只有 SETTINGS_READ（無 WRITE/APPROVE）：儲存按鈕 disabled，直接呼叫 saveRules 也不送出；顯示唯讀徽章', async () => {
       vi.mocked(authApi.hasPermission).mockImplementation((p: string) => p === 'SETTINGS_READ')
 
       const wrapper = await mountPanel()
       const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
       expect(button).toBeTruthy()
       expect(button!.attributes('disabled')).toBeDefined()
+
+      // Task B7：面板頂部唯讀徽章，對齊 canSaveRules（SETTINGS_WRITE 且 ACTIVITY_PAYMENT_APPROVE 雙權限）。
+      const badge = wrapper.find('[data-test="readonly-badge"]')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('年終規則設定')
 
       const vm = wrapper.vm as unknown as PanelVm
       await vm.saveRules()
@@ -472,7 +527,7 @@ describe('YearEndRulesPanel', () => {
       expect(ElMessage.warning).toHaveBeenCalled()
     })
 
-    it('只有 SETTINGS_WRITE（缺 ACTIVITY_PAYMENT_APPROVE）：儲存按鈕仍 disabled', async () => {
+    it('只有 SETTINGS_WRITE（缺 ACTIVITY_PAYMENT_APPROVE）：儲存按鈕仍 disabled；仍顯示唯讀徽章（雙權限缺一不可）', async () => {
       vi.mocked(authApi.hasPermission).mockImplementation(
         (p: string) => p === 'SETTINGS_READ' || p === 'SETTINGS_WRITE',
       )
@@ -480,15 +535,17 @@ describe('YearEndRulesPanel', () => {
       const wrapper = await mountPanel()
       const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
       expect(button!.attributes('disabled')).toBeDefined()
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(true)
     })
 
-    it('具 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE：儲存按鈕可用且可正常送出', async () => {
+    it('具 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE：儲存按鈕可用且可正常送出；不顯示唯讀徽章', async () => {
       vi.mocked(authApi.hasPermission).mockReturnValue(true)
       vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
 
       const wrapper = await mountPanel()
       const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
       expect(button!.attributes('disabled')).toBeUndefined()
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
 
       const vm = wrapper.vm as unknown as PanelVm
       await vm.saveRules()

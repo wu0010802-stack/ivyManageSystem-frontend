@@ -1,4 +1,14 @@
 <script setup lang="ts">
+/**
+ * BonusRatesPanel — 年終獎金率版本維護
+ *
+ * ⚠ 權限 gate（Task B4）：POST /appraisal/bonus_rates 後端守衛為
+ * `Permission.APPRAISAL_FINALIZE`（見 ivy-backend api/appraisal/rules.py
+ * create_bonus_rate；非目錄面板用的 APPRAISAL_RULE_WRITE，兩者不可混用）。
+ * 新增版本會影響後續獎金計算，額外要求 confirmWithReason 二次確認＋填寫原因
+ * （BonusRateCreate schema 無 reason 欄位，故原因僅作前端確認閘，不隨 payload
+ * 送出，亦不落 audit）。
+ */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
@@ -7,6 +17,14 @@ import {
   createAppraisalBonusRate,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
+import { confirmWithReason } from '../confirmWithReason'
+import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
+
+// Task B5：規則變更影響提示——新增版本成功訊息改走 notifyRuleChanged，OPEN
+// 週期存在時提示「此變更於下次試算/重算生效」，取代原本固定的「已新增版本」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 type ApiErr = { response?: { data?: { detail?: string } } }
 interface BonusRate { effective_from?: string; role_group?: string; grade?: string; base_amount?: number }
@@ -15,6 +33,9 @@ const rates = ref<BonusRate[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
+
+// 對齊後端 POST /appraisal/bonus_rates 守衛（Permission.APPRAISAL_FINALIZE）
+const canWrite = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 
 const roleGroupOptions = [
   { value: 'SUPERVISOR', label: '主管' },
@@ -77,11 +98,15 @@ const fetchRates = async () => {
 }
 
 const openCreate = () => {
+  // 防禦：UI 已用 disabled + tooltip 擋，仍保留一道守衛避免繞過（比照
+  // CreateCycleDialog.handleSubmit 的權限前置 pattern）。
+  if (!canWrite.value) return
   resetForm()
   dialogVisible.value = true
 }
 
 const submitForm = async () => {
+  if (!canWrite.value) return
   if (!form.effective_from) {
     ElMessage.warning('請選擇生效日')
     return
@@ -90,6 +115,12 @@ const submitForm = async () => {
     ElMessage.warning('金額不可為負')
     return
   }
+  const reason = await confirmWithReason({
+    title: '新增獎金率版本',
+    message: '將建立新版本並套用於後續計算，舊版本仍保留供歷史對齊。',
+    minLength: 10,
+  })
+  if (reason == null) return
   submitting.value = true
   try {
     await createAppraisalBonusRate({
@@ -98,7 +129,7 @@ const submitForm = async () => {
       grade: form.grade,
       base_amount: form.base_amount,
     })
-    ElMessage.success('已新增版本')
+    notifyRuleChanged('已新增版本')
     dialogVisible.value = false
     fetchRates()
   } catch (error) {
@@ -118,6 +149,7 @@ onMounted(fetchRates)
 
 <template>
   <div class="bonus-rates-panel">
+    <ReadonlyBadge permission-label="考核核定" :show="!canWrite" />
     <div class="panel-head">
       <div>
         <p class="hint">
@@ -129,9 +161,19 @@ onMounted(fetchRates)
         <el-button :icon="Refresh" @click="fetchRates" :loading="loading">
           重新整理
         </el-button>
-        <el-button type="primary" :icon="Plus" @click="openCreate">
-          新增版本
-        </el-button>
+        <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canWrite" placement="top">
+          <span>
+            <el-button
+              type="primary"
+              :icon="Plus"
+              :disabled="!canWrite"
+              data-test="open-create-btn"
+              @click="openCreate"
+            >
+              新增版本
+            </el-button>
+          </span>
+        </el-tooltip>
       </div>
     </div>
 
@@ -210,7 +252,12 @@ onMounted(fetchRates)
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">
+        <el-button
+          type="primary"
+          :loading="submitting"
+          data-test="submit-btn"
+          @click="submitForm"
+        >
           建立
         </el-button>
       </template>

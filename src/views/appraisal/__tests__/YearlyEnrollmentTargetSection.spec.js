@@ -19,6 +19,21 @@ vi.mock('@/utils/academic', () => ({
   },
 }))
 
+// Task A7：CreateCycleDialog（經 useCreateCycle）需要 academicTerm store 帶當前學年學期。
+const termState = { school_year: 114, semester: 1 }
+vi.mock('@/stores/academicTerm', () => ({
+  useAcademicTermStore: () => ({
+    get school_year() { return termState.school_year },
+    get semester() { return termState.semester },
+  }),
+}))
+
+// Task A7：canCreateCycle 對齊 APPRAISAL_FINALIZE（傳給共用 CreateCycleDialog 的 canWrite）
+const permState = { finalize: true }
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn((p) => p === 'APPRAISAL_FINALIZE' && permState.finalize),
+}))
+
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) },
@@ -28,9 +43,31 @@ vi.mock('@/composables/useErrorNotify', () => ({
   useErrorNotify: () => ({ notify: vi.fn() }),
 }))
 
+// Task B5：mock useOpenCycleHint，允許測試驗證 notifyRuleChanged 被呼叫
+const mockNotifyRuleChanged = vi.fn()
+vi.mock('../composables/useOpenCycleHint', () => ({
+  injectOpenCycleHint: () => ({
+    openCycle: { value: null },
+    refresh: vi.fn(),
+    notifyRuleChanged: mockNotifyRuleChanged,
+  }),
+  provideOpenCycleHint: vi.fn(),
+  useOpenCycleHint: vi.fn(),
+  OPEN_CYCLE_HINT_KEY: Symbol('open-cycle-hint'),
+}))
+
+// Task B4：目標人數修改改走共用 confirmWithReason（確認＋原因）；mock 掉以獨立驗證
+// saveEdit() 有呼叫它、以及取消時（回傳 null）不送 PATCH。
+const confirmWithReasonMock = vi.fn()
+vi.mock('../confirmWithReason', () => ({
+  confirmWithReason: (...args) => confirmWithReasonMock(...args),
+  RULE_CHANGE_REASON_TEMPLATES: ['年度政策調整', '主管裁示', '校正錯誤設定', '配合法規更新'],
+}))
+
 import {
   getAppraisalCyclesByYear,
   createAppraisalCycle,
+  patchAppraisalCycle,
 } from '@/api/appraisal'
 
 import YearlyEnrollmentTargetSection from '../YearlyEnrollmentTargetSection.vue'
@@ -38,14 +75,33 @@ import YearlyEnrollmentTargetSection from '../YearlyEnrollmentTargetSection.vue'
 // ── Element Plus 元件 stubs ───────────────────────────────
 const ElButtonStub = defineComponent({
   name: 'ElButtonStub',
+  props: ['disabled', 'loading'],
   inheritAttrs: false,
-  setup(_, { attrs, emit, slots }) {
+  setup(props, { attrs, emit, slots }) {
     const dataAttrs = Object.fromEntries(
       Object.entries(attrs).filter(([k]) => k.startsWith('data-')),
     )
     return () => h(
       'button',
-      { ...dataAttrs, onClick: () => emit('click') },
+      {
+        ...dataAttrs,
+        ...(props.disabled ? { disabled: 'disabled' } : {}),
+        onClick: () => emit('click'),
+      },
+      slots.default?.(),
+    )
+  },
+})
+
+// Task B4：編輯按鈕改用 el-tooltip 包 disabled span（比照 CreateCycleDialog.spec.ts stub）
+const ElTooltipStub = defineComponent({
+  name: 'ElTooltipStub',
+  props: ['content', 'disabled'],
+  inheritAttrs: false,
+  setup(props, { slots }) {
+    return () => h(
+      'div',
+      { class: 'el-tooltip-stub', 'data-content': props.content, 'data-disabled': String(!!props.disabled) },
       slots.default?.(),
     )
   },
@@ -53,6 +109,7 @@ const ElButtonStub = defineComponent({
 
 const GLOBAL_STUBS = {
   'el-button': ElButtonStub,
+  'el-tooltip': ElTooltipStub,
   'el-select': {
     template: '<select><slot /></select>',
   },
@@ -68,6 +125,19 @@ const GLOBAL_STUBS = {
   'el-form-item': { template: '<label><slot /></label>' },
   'el-input': { template: '<input />' },
   'el-input-number': { template: '<input />' },
+  // Task A7：兩顆「建立本學期週期」按鈕改開共用 CreateCycleDialog；實際表單/
+  // canWrite gate/送出流程已在 CreateCycleDialog.spec.ts 用真實元件測過，這裡只驗證
+  // parent wiring（開關 + canWrite 傳遞 + @created 觸發 reload）。
+  CreateCycleDialog: {
+    props: ['visible', 'canWrite', 'defaultYear', 'defaultSemester'],
+    emits: ['update:visible', 'created'],
+    template:
+      '<div v-if="visible" data-test="create-cycle-dialog-stub" :data-can-write="canWrite" ' +
+      ':data-default-year="defaultYear" :data-default-semester="defaultSemester">' +
+      '<button data-test="create-cycle-dialog-stub-created-btn" ' +
+      '@click="$emit(\'created\', { id: 12, academic_year: 114, semester: \'SECOND\' })" />' +
+      '</div>',
+  },
 }
 
 const FIRST_CYCLE = {
@@ -110,6 +180,10 @@ async function mountView() {
 describe('YearlyEnrollmentTargetSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    termState.school_year = 114
+    termState.semester = 1
+    permState.finalize = true
+    confirmWithReasonMock.mockReset().mockResolvedValue('年度政策調整：目標人數校正')
   })
 
   it('兩學期都有 cycle 時兩張卡都渲染目標人數', async () => {
@@ -138,22 +212,194 @@ describe('YearlyEnrollmentTargetSection', () => {
     expect(wrapper.find('[data-test="edit-second-btn"]').exists()).toBe(false)
   })
 
-  it('點 placeholder 建立 → 呼叫 createAppraisalCycle（日期不再由前端計算送出，交由後端推算）', async () => {
+  it('Task A7：點 placeholder 建立 → 開啟統一 CreateCycleDialog（不再直接呼叫 API/自算日期）', async () => {
     getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
-    createAppraisalCycle.mockResolvedValue({ data: SECOND_CYCLE })
+
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').exists()).toBe(false)
+    await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.exists()).toBe(true)
+    expect(dialogStub.attributes('data-can-write')).toBe('true')
+    expect(createAppraisalCycle).not.toHaveBeenCalled()
+  })
+
+  it('Task A7：canWrite 反映 hasPermission(APPRAISAL_FINALIZE)（矩陣：false 態）', async () => {
+    getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
+    permState.finalize = false
 
     const wrapper = await mountView()
     await wrapper.find('[data-test="create-second-btn"]').trigger('click')
     await flushPromises()
 
-    expect(createAppraisalCycle).toHaveBeenCalledTimes(1)
-    const arg = createAppraisalCycle.mock.calls[0][0]
-    expect(arg).toMatchObject({
-      academic_year: 114,
-      semester: 'SECOND',
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').attributes('data-can-write')).toBe('false')
+  })
+
+  it('Task A7 fix：點上學期卡建立 → default-year 用 selectedYear、default-semester 為 FIRST（非 termStore 值）', async () => {
+    // cycles 只有 SECOND_CYCLE → 上學期卡顯示「建立」按鈕。
+    getAppraisalCyclesByYear.mockResolvedValue({ data: [SECOND_CYCLE] })
+    // termStore 刻意設為與 selectedYear(114，來自 getCurrentAcademicTerm mock)及
+    // 點擊卡片語意(FIRST)皆不同的值，用來抓回歸：bug 版會把 dialog 重置為
+    // termStore 的 113/SECOND，與畫面上下文（114 學年度／上學期卡）不符。
+    termState.school_year = 113
+    termState.semester = 2 // SECOND
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="create-first-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.attributes('data-default-year')).toBe('114')
+    expect(dialogStub.attributes('data-default-semester')).toBe('FIRST')
+  })
+
+  it('Task A7 fix：點下學期卡建立 → default-year 用 selectedYear、default-semester 為 SECOND（非 termStore 值）', async () => {
+    // cycles 只有 FIRST_CYCLE → 下學期卡顯示「建立」按鈕。
+    getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
+    termState.school_year = 113
+    termState.semester = 1 // FIRST
+
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.attributes('data-default-year')).toBe('114')
+    expect(dialogStub.attributes('data-default-semester')).toBe('SECOND')
+  })
+
+  it('Task A7：CreateCycleDialog emit created 後 reload 清單', async () => {
+    getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [FIRST_CYCLE] })
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+    await flushPromises()
+
+    getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+    await wrapper.find('[data-test="create-cycle-dialog-stub-created-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(getAppraisalCyclesByYear).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="card-second"]').text()).toContain('110')
+  })
+
+  // Task B4：目標人數修改（PATCH /appraisal/cycles/{id}）補權限 gate + 確認＋原因，
+  // 對齊後端 update_cycle 守衛（Permission.APPRAISAL_FINALIZE，同 CreateCycleDialog）。
+  describe('Task B4：目標人數編輯權限 gate（矩陣：APPRAISAL_FINALIZE true/false）', () => {
+    it('canEditTarget=true：編輯按鈕可用；不顯示唯讀徽章', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      permState.finalize = true
+
+      const wrapper = await mountView()
+
+      const btn = wrapper.find('[data-test="edit-first-btn"]')
+      expect(btn.exists()).toBe(true)
+      expect(btn.attributes('disabled')).toBeUndefined()
+      // Task B7
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
     })
-    expect(arg).not.toHaveProperty('start_date')
-    expect(arg).not.toHaveProperty('end_date')
-    expect(arg).not.toHaveProperty('base_score_calc_date')
+
+    it('canEditTarget=false：編輯按鈕 disabled；顯示唯讀徽章（考核核定）', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      permState.finalize = false
+
+      const wrapper = await mountView()
+
+      const btn = wrapper.find('[data-test="edit-first-btn"]')
+      expect(btn.exists()).toBe(true)
+      expect(btn.attributes('disabled')).toBeDefined()
+      // Task B7：面板頂部唯讀徽章，對齊 canEditTarget（APPRAISAL_FINALIZE）。
+      const badge = wrapper.find('[data-test="readonly-badge"]')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('考核核定')
+    })
+
+    it('canEditTarget=false：直接呼叫 startEdit() 也不進入編輯模式（防止繞過 disabled）', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      permState.finalize = false
+
+      const wrapper = await mountView()
+      wrapper.vm.startEdit(FIRST_CYCLE)
+      await flushPromises()
+
+      expect(wrapper.find('[data-test="edit-first-target"]').exists()).toBe(false)
+    })
+
+    it('canEditTarget=false：直接呼叫 saveEdit() 也不送出（防止繞過 disabled）', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      permState.finalize = false
+
+      const wrapper = await mountView()
+      await wrapper.vm.saveEdit(FIRST_CYCLE)
+      await flushPromises()
+
+      expect(confirmWithReasonMock).not.toHaveBeenCalled()
+      expect(patchAppraisalCycle).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('Task B4：儲存目標人數前 confirmWithReason 確認＋原因', () => {
+    it('點編輯 → 改目標人數 → 點儲存：先呼叫 confirmWithReason，確認後才送 PATCH', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      patchAppraisalCycle.mockResolvedValue({ data: { ...FIRST_CYCLE, enrollment_target: 120 } })
+
+      const wrapper = await mountView()
+      await wrapper.find('[data-test="edit-first-btn"]').trigger('click')
+      await flushPromises()
+
+      // el-input-number stub 未接 v-model 事件，直接改內部 reactive state
+      // （比照本 repo 其餘 script-setup 元件測試慣例，經 wrapper.vm 存取）。
+      wrapper.vm.editForm.FIRST.enrollment_target = 120
+      await flushPromises()
+      await wrapper.find('[data-test="save-first-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(confirmWithReasonMock).toHaveBeenCalledTimes(1)
+      const opts = confirmWithReasonMock.mock.calls[0][0]
+      expect(opts.minLength).toBe(10)
+      expect(patchAppraisalCycle).toHaveBeenCalledTimes(1)
+      expect(patchAppraisalCycle).toHaveBeenCalledWith(
+        FIRST_CYCLE.id,
+        expect.objectContaining({ enrollment_target: 120 }),
+      )
+    })
+
+    it('使用者取消原因輸入（confirmWithReason 回 null）→ 不送 PATCH，維持編輯模式', async () => {
+      getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      confirmWithReasonMock.mockResolvedValue(null)
+
+      const wrapper = await mountView()
+      await wrapper.find('[data-test="edit-first-btn"]').trigger('click')
+      await flushPromises()
+
+      await wrapper.find('[data-test="save-first-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(confirmWithReasonMock).toHaveBeenCalledTimes(1)
+      expect(patchAppraisalCycle).not.toHaveBeenCalled()
+      // 仍在編輯模式（未被 saveEdit 的 editing.value[semester] = false 關閉）
+      expect(wrapper.find('[data-test="edit-first-target"]').exists()).toBe(true)
+    })
+  })
+
+  describe('Task B5：規則變更影響提示', () => {
+    it('修改目標人數成功後呼叫 notifyRuleChanged（帶「已更新目標人數」文案）', async () => {
+      getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+      patchAppraisalCycle.mockResolvedValue({ data: { ...FIRST_CYCLE, enrollment_target: 120 } })
+      getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [{ ...FIRST_CYCLE, enrollment_target: 120 }, SECOND_CYCLE] })
+
+      const wrapper = await mountView()
+      await wrapper.find('[data-test="edit-first-btn"]').trigger('click')
+      await flushPromises()
+
+      wrapper.vm.editForm.FIRST.enrollment_target = 120
+      await flushPromises()
+      await wrapper.find('[data-test="save-first-btn"]').trigger('click')
+      await flushPromises()
+
+      expect(mockNotifyRuleChanged).toHaveBeenCalledTimes(1)
+      expect(mockNotifyRuleChanged).toHaveBeenCalledWith('已更新目標人數')
+    })
   })
 })

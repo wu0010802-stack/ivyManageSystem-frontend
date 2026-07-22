@@ -75,3 +75,27 @@ FE 升 staging 時，`YearEndConfigView.vue` 與 `YearEndGridView.vue` 兩檔的
 2. **升 prod（staging→main）前逐筆核對 `main..staging`** 只含已驗證工作（staging 是共用分支、含多平行 session commit）。
 3. prod cold-start 跑 alembic migration——本批次 migration 僅 `yereject01`（已在 staging DB），單一 head。
 4. 升 prod 後移除 feature worktree `feat-yereject`/`feat-ayx-taskflow`。
+
+---
+
+## 批次 3（考核流程 + 規則設定，2026-07-22 完成）延後 follow-up
+
+全部非阻擋，最終全分支審查判為 follow-up。
+
+### 需另開任務 / 待業主口徑
+- **A3 authz（建議另開獨立任務）**：為 `CurrentSemesterOverview.vue` 全部寫入型動作補元件層 `hasPermission` 守衛——涵蓋引導條 `recompute`（reloadAll→POST refresh）、既有「重新整理」按鈕、以及進頁 `watch(termStore,{immediate})` 的 auto-refresh。目前只讀使用者觸發後端會 403、前端顯 stale banner 降級（不崩不洩漏），無新攻擊面；piecemeal 只補引導條反而不一致，故整體處理。
+- **PenaltyCatalog 目錄停用「確認 + 原因」**：spec §5.2 將「目錄停用」列入統一「確認+原因」組，但後端 catalog PATCH 無 reason/audit 欄位（填了不存＝theater），B4 刻意只用 `ElMessageBox.confirm`。待業主決定是否為一致性加前端原因（會被丟棄）。
+
+### 純整潔 / UI 一致性（低優先）
+- A1：`deriveAppraisalStepStatuses` 與 `deriveCurrentAppraisalStep` done/todo 判斷雙軌，可收斂單一狀態機；`AppraisalStepInput.cycleStatus` 死欄位可移除。
+- A6：`assertGroupsCoverAllCodes` 可加 `import.meta.env.DEV` runtime 防呆；`colIndexOf` 可改一次性 `Map`。
+- B2：`RuleHistoryDrawer.spec.js` 補元件層斷言（`data-test="rule-summary-lines"` / `el-collapse` 折疊）。
+- B3：`RuleEditorDialog` tier min（rate 型）補 `:min/:max/%` unit hint（correctness 已對）。
+- B4：`YearlyEnrollmentTargetSection.spec.js` 轉 `.ts`。
+- B5：OPEN 週期 banner 顯學年/學期（非只 cycle id）；「前往重算」改具名路由。
+- B6：TargetCrossRef「來源」以可點連結取代 tooltip 文字；appraisal 側 org-target 亦橋接（目前恆 null）。
+- B7：ReadonlyBadge doc typo「statelesss」；`permLabel` 中文字串在 TABS 與各面板去重為共用常數。
+- B8：TIER 範例「留校率過低是否倒扣」極性待業主口徑。
+
+### ⚠ plan/brief 已知錯誤（code 已正確，防未來照 brief 字面重做）
+- 批次 3 plan `docs/superpowers/plans/2026-07-21-appraisal-yearend-batch3-process-rules.md` 的 **Task B3** 誤要求 RuleEditorDialog tier min 做 0-100↔0-1 換算（後端本就 0-100，換算會塌 TIER 到最低階）；**Task B4** 誤標 BonusRatesPanel 權限為 `APPRAISAL_RULE_WRITE`（實為 `APPRAISAL_FINALIZE`）。實作已修正並加 code 註解。

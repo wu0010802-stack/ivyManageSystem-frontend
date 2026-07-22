@@ -8,11 +8,13 @@
  * display_order / is_active。PATCH 採 exclude_unset 語意，前端建 payload 時只送異動欄位。
  */
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
+import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 
 type CatalogItem = Schema<'CatalogOut'>
@@ -31,6 +33,10 @@ interface CatalogEdit {
 
 // P0-A 對齊 ScoringRulesPanel：目錄中繼資料編輯由後端 APPRAISAL_RULE_WRITE 守衛。
 const canEdit = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
+
+// Task B5：規則變更影響提示——目錄停用/啟用或中繼資料編輯成功後，若有 OPEN 週期
+// 則提示「此變更於下次試算/重算生效」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 const items = ref<CatalogItem[]>([])
 const loading = ref(false)
@@ -123,7 +129,7 @@ async function saveRow(row: CatalogItem) {
     const idx = items.value.findIndex((i) => i.id === updated.id)
     if (idx >= 0) items.value[idx] = updated
     edits[updated.id] = snapshotFromItem(updated)
-    ElMessage.success('已更新')
+    notifyRuleChanged('已更新')
   } catch (error) {
     ElMessage.error(apiError(error, '更新失敗'))
   } finally {
@@ -136,14 +142,30 @@ function cancelRow(row: CatalogItem) {
 }
 
 // is_active 為獨立即時切換（非併入編輯列），只送 is_active 一個欄位。
+// Task B4：切換前需二次確認——el-switch 綁定為單向 `:model-value="row.is_active"`
+// （非 v-model），Element Plus 內部 checked 態純由 props 推導、不會自行 optimistic
+// 翻轉（見 element-plus switch.vue2.mjs：checked = computed(() => actualValue ===
+// activeValue)，actualValue 只讀 props.modelValue）；取消時本函式直接 return，
+// row.is_active 未變動，switch 顯示自然維持原狀，不需額外手動「復原」程式碼。
 async function toggleActive(row: CatalogItem, val: boolean) {
+  try {
+    await ElMessageBox.confirm(
+      val
+        ? '確定要啟用此項目？啟用後將計入後續分數計算。'
+        : '確定要停用此項目？停用後將不再計入新分數，既有歷史分數不受影響。',
+      '確認變更啟用狀態',
+      { confirmButtonText: '確認', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 使用者取消：不送 PATCH，switch 維持原狀
+  }
   try {
     const res = await patchAppraisalCatalogItem(row.id, { is_active: val })
     const updated = res.data
     const idx = items.value.findIndex((i) => i.id === updated.id)
     if (idx >= 0) items.value[idx] = updated
     edits[updated.id] = snapshotFromItem(updated)
-    ElMessage.success(val ? '已啟用' : '已停用')
+    notifyRuleChanged(val ? '已啟用' : '已停用')
   } catch (error) {
     ElMessage.error(apiError(error, '切換失敗'))
   }
@@ -158,6 +180,7 @@ onMounted(fetchItems)
 
 <template>
   <div class="penalty-catalog-panel">
+    <ReadonlyBadge permission-label="考核規則設定" :show="!canEdit" />
     <div class="panel-head">
       <p class="hint" data-test="panel-hint">
         扣分項目目錄僅維護顯示用中繼資料（名稱／預設權重／資料來源／說明／排序／啟用）；

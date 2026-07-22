@@ -4,7 +4,7 @@ import { defineComponent, h, nextTick } from 'vue'
 
 import ScorePreviewDialog from '@/views/appraisal/components/ScorePreviewDialog.vue'
 
-vi.mock('@/api/appraisal', () => ({ previewAppraisalScore: vi.fn() }))
+vi.mock('@/api/appraisal', () => ({ previewAppraisalScore: vi.fn(), syncAppraisalScoreItems: vi.fn() }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn() } }))
 
 import * as api from '@/api/appraisal'

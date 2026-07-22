@@ -18,6 +18,11 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import { createScoringRule } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
+
+// Task B5：規則變更影響提示——建立成功訊息改走 notifyRuleChanged，OPEN 週期
+// 存在時提示「此變更於下次試算/重算生效」，取代原本固定的「已建立新版規則」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 interface ExistingRule {
   rule_type?: string
@@ -67,6 +72,24 @@ const RULE_TYPE_OPTIONS = [
 // P2-FE-5：input_field 限定枚舉，避免 free text 與後端 rule_applier 取值不同步。
 // 後端 services/appraisal/rule_applier.py 雖以 item_code 分流取值（input_field
 // 目前是 informational），但已知的合法值僅這 4 個；改為下拉避免錯字。
+//
+// ⚠ B3（考核年終規則設定百分比統一，2026-07-22）核實後**刻意不**對
+// retention_rate/activity_rate 做 0–1 fraction 換算：這兩個 input_field
+// 對應的後端數值（ClassRetentionAggregate.retention_rate、
+// ActivityRateAggregate.activity_rate，見 services/appraisal/
+// status_aggregator.py:100/111 註解「0-100，2 位小數」）**本就是 0–100
+// 百分比尺度**，與 apply_tier()/apply_flat_threshold() 直接比較
+// （rule_applier.py:85/112）；既有回歸測試
+// RuleEditorDialog.spec.js「submit 帶出 TIER 正確 payload」與
+// tests/test_appraisal_score_preview.py 的 seed 資料（tiers min:
+// 100/95/90/80/0、threshold: 80）皆證實 tier min/threshold 送出即為
+// 0–100 原值。這與 YearEndRulesPanel.vue 的
+// dividend_activity_threshold/dividend_returning_threshold（後端存
+// fraction 0–1，見 ivy-backend models/config.py + services/year_end/
+// auto_derive/returning_rate.py「小數 3 位」）是完全不同的兩套尺度慣例
+// ——若對本檔 tier min 加 percentToFraction 換算會把 80 存成 0.8，
+// 直接壞掉考核評分比對。批次 3 SDD brief 原假設此處也需換算，已核實
+// 為誤判，故不比照 YearEndRulesPanel 做邊界換算。
 const INPUT_FIELD_OPTIONS = [
   { value: 'retention_rate', label: '留校率 retention_rate' },
   { value: 'activity_rate', label: '才藝報名率 activity_rate' },
@@ -218,7 +241,7 @@ async function submit() {
   submitting.value = true
   try {
     await createScoringRule(buildPayload())
-    ElMessage.success('已建立新版規則')
+    notifyRuleChanged('已建立新版規則')
     emit('created')
   } catch (e) {
     ElMessage.error(apiError(e, '建立失敗'))
@@ -258,10 +281,10 @@ defineExpose({ disablePastDates, validateTiersMonotonic })
           />
         </el-select>
         <div class="rule-type-hint">
-          <template v-if="form.rule_type === 'PER_UNIT'">每發生 1 次扣固定分。例：遲到 1 次扣 0.5 分。</template>
-          <template v-else-if="form.rule_type === 'TIER'">依數值落在哪個區間給對應分數。例：留校率 90–95% 扣 1 分、低於 90% 扣 2 分。</template>
-          <template v-else-if="form.rule_type === 'FLAT_THRESHOLD'">超過（或低於）單一門檻時一次性加減分。</template>
-          <template v-else-if="form.rule_type === 'DISCIPLINARY_TIERED'">依懲處（嘉獎/申誡/記過…）分級對應分值，功過相抵。</template>
+          <template v-if="form.rule_type === 'PER_UNIT'">每發生 1 次扣固定分。範例：每遲到一次扣 0.5 分。</template>
+          <template v-else-if="form.rule_type === 'TIER'">依數值落在哪個區間給對應分數，需先選擇比較用的輸入欄位。範例：留校率 ≥90% 加 5 分、≥80% 加 3 分，低於 80% 不加分。</template>
+          <template v-else-if="form.rule_type === 'FLAT_THRESHOLD'">超過（或低於）單一門檻時一次性加減分，需先選擇比較用的輸入欄位。範例：才藝報名率達 80% 加 3 分，未達則不加分。</template>
+          <template v-else-if="form.rule_type === 'DISCIPLINARY_TIERED'">依懲處（嘉獎/申誡/記過…）分級對應分值，功過相抵。範例：申誡扣 2 分、記過扣 5 分。</template>
         </div>
       </el-form-item>
 
