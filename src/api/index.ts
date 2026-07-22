@@ -1,9 +1,15 @@
 import axios from 'axios'
-import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
+import type { AxiosInstance, AxiosError, GenericAbortSignal, InternalAxiosRequestConfig } from 'axios'
 import { setUserInfo, clearAuth } from '@/utils/auth'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
-import { applyDedupe } from '@/utils/apiDedupe'
+import { applyDedupe, clearDedupe } from '@/utils/apiDedupe'
 import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
+import {
+    getAdminSessionGeneration,
+    getAdminSessionSignal,
+    isAdminSessionCurrent,
+    onAdminSessionReset,
+} from '@/utils/adminSession'
 
 // Lazy router import：直接 top-level import 會把 createRouter side effect 拉進
 // 所有 import @/api 的測試（不少測試只 partial-mock vue-router 而沒 export
@@ -30,6 +36,7 @@ declare module 'axios' {
     }
     interface InternalAxiosRequestConfig {
         _retried?: boolean
+        _adminSessionGeneration?: number
     }
 }
 
@@ -56,18 +63,43 @@ const api: AxiosInstance = axios.create({
 // 對 mutating 請求做同 key 去重，防止按鈕連點送出多筆
 applyDedupe(api)
 
-// 不再需要 request interceptor 注入 Authorization header
-// Token 改由瀏覽器自動攜帶 httpOnly Cookie
+function combineAbortSignals(existing: GenericAbortSignal | undefined, session: AbortSignal): AbortSignal {
+    if (!existing) return session
+    if (existing.aborted || session.aborted) return AbortSignal.abort()
+    const combined = new AbortController()
+    const abort = () => combined.abort()
+    existing.addEventListener?.('abort', abort, { once: true })
+    session.addEventListener('abort', abort, { once: true })
+    return combined.signal
+}
+
+// Token 改由瀏覽器自動攜帶 httpOnly Cookie；request interceptor 只綁定
+// session generation + AbortSignal，讓舊帳號 IO 在登入/登出/代操作切換時立即失效。
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+    config._adminSessionGeneration = getAdminSessionGeneration()
+    config.signal = combineAbortSignals(config.signal, getAdminSessionSignal())
+    return config
+})
 
 // ---------- Token refresh logic ----------
 let _refreshing: Promise<boolean> | null = null // 單一 refresh promise，避免併發多次刷新
 
+onAdminSessionReset(() => {
+    _refreshing = null
+    clearDedupe(api)
+})
+
 function _doRefresh(): Promise<boolean> {
+    const generation = getAdminSessionGeneration()
     // Cookie 會自動帶出，不需手動設定 header
     return axios.post(buildRefreshUrl(), null, {
         withCredentials: true,
         timeout: 30000,
+        signal: getAdminSessionSignal(),
     }).then(res => {
+        if (!isAdminSessionCurrent(generation)) {
+            throw new axios.CanceledError('Admin session changed during refresh')
+        }
         // 後端已透過 Set-Cookie 更新 access_token，前端只需更新 userInfo
         const { user } = res.data
         if (user) setUserInfo(user)
@@ -77,9 +109,22 @@ function _doRefresh(): Promise<boolean> {
 
 // Handle errors + 401 auto-refresh + redirect
 api.interceptors.response.use(
-    response => response,
+    response => {
+        if (!isAdminSessionCurrent(response.config._adminSessionGeneration)) {
+            return Promise.reject(new axios.CanceledError('Stale admin session response'))
+        }
+        return response
+    },
     async (error: AxiosError) => {
         const originalRequest = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined
+
+        // 前一位使用者的請求不得觸發 refresh、redirect、Sentry 或其他全域 side effect。
+        if (
+            originalRequest?._adminSessionGeneration !== undefined
+            && !isAdminSessionCurrent(originalRequest._adminSessionGeneration)
+        ) {
+            return Promise.reject(error)
+        }
 
         // 只對 401 且非登入/refresh 請求嘗試刷新
         const isAuthEndpoint = originalRequest?.url?.includes('/auth/login')
@@ -91,16 +136,27 @@ api.interceptors.response.use(
             try {
                 // 併發請求共用同一個 refresh promise
                 if (!_refreshing) {
-                    _refreshing = _doRefresh().finally(() => { _refreshing = null })
+                    const refresh = _doRefresh()
+                    const tracked = refresh.finally(() => {
+                        if (_refreshing === tracked) _refreshing = null
+                    })
+                    _refreshing = tracked
                 }
                 await _refreshing
 
+                if (!isAdminSessionCurrent(originalRequest?._adminSessionGeneration)) {
+                    throw new axios.CanceledError('Admin session changed before request retry')
+                }
+
                 // 用新 Cookie 重試原本的請求（Cookie 自動帶出，不需手動設定 header）
                 return api(originalRequest!)
-            } catch {
+            } catch (refreshError) {
+                if (!isAdminSessionCurrent(originalRequest?._adminSessionGeneration)) {
+                    return Promise.reject(refreshError)
+                }
                 // Refresh 也失敗，清除登入狀態並導向登入頁
                 _redirectToLogin()
-                return Promise.reject(error)
+                return Promise.reject(refreshError)
             }
         }
 

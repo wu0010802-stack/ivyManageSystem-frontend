@@ -2,6 +2,7 @@
 // 保留函式簽名供向下相容，但不再操作 localStorage。
 import { shallowRef } from 'vue'
 import { getActivePinia } from 'pinia'
+import { advanceAdminSession, onAdminSessionReset } from '@/utils/adminSession'
 import {
   PERMISSION_NAMES,
   ROUTE_PERMISSION_RULES,
@@ -22,6 +23,9 @@ export const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
 // 閒置逾時（useIdleTimeout）與登入時效判定（isLoggedIn）共用同一基準，避免魔法數字重複定義。
 export const SESSION_MAX_AGE_MS = 14 * 60 * 1000
+const LOGOUT_TIMEOUT_MS = 10_000
+let _pendingServerLogout: Promise<void> | null = null
+let _pendingClientCleanup: Promise<void> = Promise.resolve()
 
 // 響應式 user info 來源：refresh / setUserInfo 後，任何 computed(() => hasPermission(...))
 // 或 computed(() => getUserInfo()) 會自動重算，不需要 F5。
@@ -95,8 +99,69 @@ export function hasStoredUserInfo() {
   return _userInfoRef.value !== null
 }
 
-export function clearAuth(options: { notifyServer?: boolean } = {}) {
+/** 新登入必須先等這個 barrier，避免舊 logout 的 Set-Cookie 晚到清掉新 cookie。 */
+export function waitForPendingLogout(): Promise<void> {
+  return _pendingServerLogout ?? Promise.resolve()
+}
+
+/** 等待所有已排程的本地身分資料清理（含前一個 generation）。 */
+export function waitForAdminSessionCleanup(): Promise<void> {
+  return _pendingClientCleanup
+}
+
+/**
+ * 純本地的身分切換 cleanup。不清 userInfo、不送 logout，因此可安全用於
+ * login / impersonate / end-impersonate 發出前，也不會在新身分回應後反向清狀態。
+ */
+function _resetAdminSessionRuntimeState(): void {
+  // Pinia 是同步 in-memory state，先立即清掉，不留一個 render tick 的 PII。
+  _resetStores()
+
+  // CacheStorage / IndexedDB 是 async；世代間串行，且新身分請求會 await
+  // 這個 barrier，避免舊 cleanup 晚到刪掉新身分剛寫入的 cache / queue。
+  _pendingClientCleanup = _pendingClientCleanup
+    .catch(() => undefined)
+    .then(async () => {
+      await Promise.all([
+        _purgeOfflineQueue(),
+        _purgePortalCaches(),
+      ])
+    })
+}
+
+onAdminSessionReset(_resetAdminSessionRuntimeState)
+
+function _notifyServerLogout(): Promise<void> {
+  if (_pendingServerLogout) return _pendingServerLogout
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), LOGOUT_TIMEOUT_MS)
+    const baseURL = import.meta.env?.VITE_API_BASE_URL || '/api'
+    const request = fetch(`${baseURL}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+      signal: controller.signal,
+    })
+      .then(() => undefined)
+      .catch(() => undefined)
+      .finally(() => clearTimeout(timeout))
+
+    let tracked: Promise<void>
+    tracked = request.finally(() => {
+      if (_pendingServerLogout === tracked) _pendingServerLogout = null
+    })
+    _pendingServerLogout = tracked
+    return tracked
+  } catch {
+    return Promise.resolve()
+  }
+}
+
+export function clearAuth(options: { notifyServer?: boolean } = {}): Promise<void> {
   const { notifyServer = true } = options
+  advanceAdminSession()
+  const clientCleanup = waitForAdminSessionCleanup()
   _userInfoRef.value = null
   localStorage.removeItem(USER_INFO_KEY)
   _clearSessionValidatedAt()
@@ -105,25 +170,10 @@ export function clearAuth(options: { notifyServer?: boolean } = {}) {
     sessionStorage.removeItem('activity_draft')
     localStorage.removeItem('activity_draft')  // 清舊版殘留
   } catch { /* silent */ }
-  // 離線點名佇列：登出時清乾淨，避免共享裝置上殘留前一位教師的學生名單
-  _purgeOfflineQueue()
-  // 通知後端清除 httpOnly Cookie（fire-and-forget）
-  if (notifyServer) {
-    try {
-      const baseURL = import.meta.env?.VITE_API_BASE_URL || '/api'
-      fetch(`${baseURL}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      }).catch(() => { /* silent */ })
-    } catch { /* silent */ }
-  }
-  // 共享裝置：清掉 SW 為此 user 快取的 Portal 私人資料
-  // （薪資、班級名單、公告等），避免下一位登入者看到上一位的內容。
-  _purgePortalCaches()
-  // 共享裝置：重置所有已實例化的 Pinia store state，避免下一位登入者在 refetch 前的
-  // render tick（keyed-fetch entries TTL 數分鐘、notification.summary 等）短暫看到上一位
-  // 的快取業務資料。登出/登入皆 router.push 不 reload，記憶體不會被自然清掉。
-  _resetStores()
+  // 立即清本地狀態，但保留一個可 await 的 server logout barrier。
+  // login / impersonation 會等它完成，避免舊 logout 回應晚到覆蓋新 cookie。
+  const serverLogout = notifyServer ? _notifyServerLogout() : Promise.resolve()
+  return Promise.all([serverLogout, clientCleanup]).then(() => undefined)
 }
 
 function _resetStores() {
@@ -134,7 +184,8 @@ function _resetStores() {
   // setup store（如 portalMessages / portalDashboard）含家長對話、學生過敏/用藥/缺席等 PII，
   // 共享平板登出時必須清乾淨；登出/登入皆 SPA router.push 不 reload，記憶體不會被自然清掉。
   // 泛型涵蓋所有已實例化 store（不在此 import 個別 store，避免循環依賴）。
-  // 不清 module-level inflight 變數（僅持 promise、非 PII，且會以新 session 資料 resolve）。
+  // module-level inflight 由 advanceAdminSession() 的 reset listeners 統一清理，
+  // 這裡只處理 Pinia store，避免兩套 session cleanup 次序漂移。
   const pinia = getActivePinia() as
     | {
         _s?: Map<
@@ -165,19 +216,25 @@ const _PORTAL_USER_CACHES = [
   'portal-api',
 ]
 
-function _purgePortalCaches() {
+async function _purgePortalCaches(): Promise<void> {
   if (typeof caches === 'undefined' || !caches.delete) return
-  // fire-and-forget：不阻塞登出流程
-  Promise.all(
-    _PORTAL_USER_CACHES.map((name) => caches.delete(name).catch(() => false))
-  ).catch(() => { /* silent */ })
+  try {
+    await Promise.all(
+      _PORTAL_USER_CACHES.map((name) => caches.delete(name).catch(() => false))
+    )
+  } catch {
+    /* CacheStorage 不可用時仍解開 session barrier */
+  }
 }
 
-function _purgeOfflineQueue() {
+async function _purgeOfflineQueue(): Promise<void> {
   // 動態 import 避免冷啟動就載入 idb 函式庫
-  import('@/utils/offlineQueue')
-    .then((mod) => mod.clearAll?.().catch(() => {}))
-    .catch(() => { /* silent */ })
+  try {
+    const mod = await import('@/utils/offlineQueue')
+    await mod.clearAll?.()
+  } catch {
+    /* IndexedDB 不可用時仍解開 session barrier */
+  }
 }
 
 export function clearMustChangePassword() {

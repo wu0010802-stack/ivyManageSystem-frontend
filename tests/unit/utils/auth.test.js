@@ -1,15 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
+import { mount } from '@vue/test-utils'
 import { getToken, setToken, removeToken, getUserInfo, setUserInfo, clearAuth, isLoggedIn } from '@/utils/auth'
+import { useCachedAsync, _resetCacheForTesting } from '@/composables/useCachedAsync'
 
 describe('auth utilities', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
         vi.clearAllMocks()
         vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
         // 清除 localStorage 與模組層級快取：先呼叫 clearAuth 可同步重置 cache，
         // 再 clear 掉任何殘留的 localStorage 項目（clearAuth 只 removeItem 不 clear）。
-        clearAuth()
+        await clearAuth()
         localStorage.clear()
         sessionStorage.clear()
+        _resetCacheForTesting()
         fetch.mockClear()
     })
 
@@ -70,6 +74,46 @@ describe('auth utilities', () => {
             expect(getUserInfo()).toBeNull()
             expect(isLoggedIn()).toBe(false)
             expect(fetch).not.toHaveBeenCalled()
+        })
+
+        it('會同步清空已掛載的 useCachedAsync 管理端個人化資料', async () => {
+            const captured = {}
+            const Harness = defineComponent({
+                setup() {
+                    Object.assign(captured, useCachedAsync(
+                        'admin/dashboard',
+                        vi.fn().mockResolvedValue({ owner: 'A' }),
+                        { ttl: 60_000 },
+                    ))
+                    return () => h('div')
+                },
+            })
+            const wrapper = mount(Harness)
+            await vi.waitFor(() => expect(captured.data.value).toEqual({ owner: 'A' }))
+
+            clearAuth({ notifyServer: false })
+
+            expect(captured.data.value).toBeNull()
+            wrapper.unmount()
+        })
+
+        it('clearAuth 回傳的 Promise 會等待 client cache cleanup 完成', async () => {
+            let releaseCleanup
+            const cleanup = new Promise((resolve) => { releaseCleanup = resolve })
+            vi.stubGlobal('caches', { delete: vi.fn(() => cleanup) })
+            let settled = false
+
+            const pendingClear = clearAuth({ notifyServer: false }).then(() => {
+                settled = true
+            })
+            await Promise.resolve()
+            await Promise.resolve()
+
+            expect(settled).toBe(false)
+
+            releaseCleanup(true)
+            await pendingClear
+            expect(settled).toBe(true)
         })
     })
 

@@ -5,9 +5,15 @@
  * 而非管理端 /login）。Cookie httpOnly 由瀏覽器自動攜帶，路徑 /api 共用。
  */
 
-import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
+import axios, {
+  type AxiosError,
+  type AxiosInstance,
+  type GenericAbortSignal,
+  type InternalAxiosRequestConfig,
+} from 'axios'
 import { applyDedupe, clearDedupe } from '@/utils/apiDedupe'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
+import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
 import { toast } from '@/parent/utils/toast'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
 
@@ -38,8 +44,14 @@ declare module 'axios' {
   }
 }
 
+export const PARENT_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+export function buildParentRefreshUrl(base: string = PARENT_API_BASE): string {
+  return `${base}/parent/auth/refresh`
+}
+
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: PARENT_API_BASE,
   // 30s：手機端網路較慢；在 nginx upstream timeout（60s）前先 abort 即可。
   timeout: 30000,
   withCredentials: true,
@@ -53,12 +65,31 @@ const TIMING_BUFFER_MAX = 50
 let _refreshing: Promise<boolean> | null = null
 let _refreshController: AbortController | null = null
 let _apiSessionGeneration = 0
+let _apiSessionController = new AbortController()
+
+function combineAbortSignals(
+  existing: GenericAbortSignal | undefined,
+  session: AbortSignal,
+): AbortSignal {
+  if (!existing) return session
+  if (existing.aborted || session.aborted) {
+    const aborted = new AbortController()
+    aborted.abort()
+    return aborted.signal
+  }
+  const combined = new AbortController()
+  const abort = () => combined.abort()
+  existing.addEventListener?.('abort', abort, { once: true })
+  session.addEventListener('abort', abort, { once: true })
+  return combined.signal
+}
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   config.metadata = {
     startedAt: performance.now(),
     sessionGeneration: _apiSessionGeneration,
   }
+  config.signal = combineAbortSignals(config.signal, _apiSessionController.signal)
   return config
 })
 
@@ -90,14 +121,20 @@ function _doRefresh(): Promise<boolean> {
   // 回傳 boolean (true=成功)；rotation 5s race 視窗內同 family 第二次 refresh 會回 409，
   // 等同「已被同 family 完成 rotation」→ 仍視為成功（後續重打原請求會帶到新 cookie）。
   const controller = new AbortController()
+  const generation = _apiSessionGeneration
   _refreshController = controller
   return axios
-    .post('/api/parent/auth/refresh', null, {
+    .post(buildParentRefreshUrl(), null, {
       withCredentials: true,
       timeout: 30000,
-      signal: controller.signal,
+      signal: combineAbortSignals(controller.signal, _apiSessionController.signal),
     })
-    .then(() => true)
+    .then(() => {
+      if (generation !== _apiSessionGeneration) {
+        throw new axios.CanceledError('Parent session changed during refresh')
+      }
+      return true
+    })
     .catch((err) => {
       if (err?.response?.status === 409) return true
       throw err
@@ -110,6 +147,8 @@ function _doRefresh(): Promise<boolean> {
 /** 登出時中止 refresh、清 dedupe 與可能含路徑 id 的 timing buffer。 */
 export function resetParentApiSessionState(): void {
   _apiSessionGeneration += 1
+  _apiSessionController.abort()
+  _apiSessionController = new AbortController()
   _refreshController?.abort()
   _refreshController = null
   _refreshing = null
@@ -124,6 +163,13 @@ export function resetParentApiSessionState(): void {
 api.interceptors.response.use(
   (response) => {
     const startedAt = response.config?.metadata?.startedAt
+    const responseGeneration = response.config?.metadata?.sessionGeneration
+    if (
+      responseGeneration !== undefined
+      && responseGeneration !== _apiSessionGeneration
+    ) {
+      return Promise.reject(new axios.CanceledError('Stale parent session response'))
+    }
     if (
       startedAt != null &&
       response.config.metadata?.sessionGeneration === _apiSessionGeneration
@@ -178,12 +224,18 @@ api.interceptors.response.use(
           _refreshing = tracked
         }
         await _refreshing
+        if (originalRequest?.metadata?.sessionGeneration !== _apiSessionGeneration) {
+          throw new axios.CanceledError('Parent session changed before request retry')
+        }
         // 不論 refresh 是本請求發起或共享自其他並發請求，都要重打原請求；
         // 重打若仍 401 才落到下方的 _redirectToLogin。
         return api(originalRequest!)
       } catch (refreshErr) {
+        if (originalRequest?.metadata?.sessionGeneration !== _apiSessionGeneration) {
+          return Promise.reject(refreshErr)
+        }
         // refresh 真的失敗（過期 / 撤銷）才導去登入
-        _redirectToLogin()
+        await _redirectToLogin()
         return Promise.reject(refreshErr)
       }
     }
@@ -195,7 +247,7 @@ api.interceptors.response.use(
     ) {
       // 重打仍 401 才導去登入；先前邏輯會在第三、四個並發請求拿不到 refresh
       // share 而誤登出，這裡僅針對「真正重試後仍失敗」的請求觸發。
-      _redirectToLogin()
+      await _redirectToLogin()
     }
 
     // Phase 4 kill switch（spec §4.4）：
@@ -244,22 +296,49 @@ api.interceptors.response.use(
     // 取代原本顯示 axios 預設 "Request failed with status code 500"。
     const data = error.response?.data as { detail?: unknown; message?: string } | undefined
     const rawDetail = data?.detail
-    const friendlyFallback = DEFAULT_MESSAGES[classifyError(error)] ?? null
-    if (rawDetail && typeof rawDetail === 'object' && (rawDetail as Record<string, unknown>).message) {
+    error.errorType = classifyError(error)
+    const friendlyFallback = DEFAULT_MESSAGES[error.errorType] ?? null
+    if (
+      rawDetail
+      && !Array.isArray(rawDetail)
+      && typeof rawDetail === 'object'
+      && typeof (rawDetail as Record<string, unknown>).message === 'string'
+    ) {
       const obj = rawDetail as Record<string, unknown>
       error.displayMessage = (obj.message as string) || friendlyFallback
       error.errorDetail = obj
     } else {
-      error.displayMessage = (rawDetail as string | null | undefined) || data?.message || friendlyFallback
+      const detailString = typeof rawDetail === 'string' ? rawDetail : null
+      error.displayMessage = detailString || data?.message || friendlyFallback
       error.errorDetail = null
+    }
+
+    // 與管理端一致：預期的 4xx 留給 UI；非預期 5xx／network 才上報，且 URL
+    // 必須先遮 path id 與 phone/email/id_number 等 query PII。
+    const status = error.response?.status
+    if (!error.response || (typeof status === 'number' && status >= 500)) {
+      sentryCapture(error, {
+        url: sanitizeUrl(error.config?.url),
+        method: error.config?.method,
+        status,
+      }).catch(() => {})
     }
     return Promise.reject(error)
   },
 )
 
-function _redirectToLogin() {
-  if (window.location.hash !== '#/login' && !window.location.hash.startsWith('#/login')) {
-    window.location.hash = '#/login'
+async function _redirectToLogin(): Promise<void> {
+  try {
+    // 共用「主動登出」的本地清理單一來源；用 dynamic import 避免
+    // useParentLogout -> api/index 的靜態循環依賴。
+    const { clearParentLocalState } = await import('@/parent/composables/useParentLogout')
+    await clearParentLocalState()
+  } catch {
+    /* 清理的某個瀏覽器 API 不可用時仍要回登入頁 */
+  } finally {
+    if (window.location.hash !== '#/login' && !window.location.hash.startsWith('#/login')) {
+      window.location.hash = '#/login'
+    }
   }
 }
 

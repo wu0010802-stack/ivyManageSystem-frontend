@@ -29,6 +29,7 @@ const PERSONALIZED_CACHE_PREFIXES = ['parent-', 'portal-'] as const
 const PARENT_SESSION_CHANNEL = 'ivy-parent-session-v1'
 const logoutInProgress = ref(false)
 let parentSessionChannel: BroadcastChannel | null = null
+let remoteTabCleanup: Promise<void> = Promise.resolve()
 
 type ParentSessionMessage = {
   type: 'logout-start' | 'logout-complete'
@@ -61,7 +62,7 @@ async function purgePersonalizedRuntimeCaches(): Promise<void> {
   }
 }
 
-function clearParentLocalState(): void {
+export function clearParentLocalState(): Promise<void> {
   const authStore = useParentAuthStore()
   // 先讓舊 async 工作失效，再清畫面資料；後端 logout 網路等待期間也不能回填 A 的 PII。
   resetParentApiSessionState()
@@ -81,6 +82,7 @@ function clearParentLocalState(): void {
     /* ignore disabled storage */
   }
   authStore.clear()
+  return purgePersonalizedRuntimeCaches()
 }
 
 /**
@@ -95,11 +97,22 @@ export function initParentSessionIsolation(): void {
       if (!isParentSessionMessage(event.data)) return
       if (event.data.type === 'logout-start') {
         logoutInProgress.value = true
-        clearParentLocalState()
+        try {
+          remoteTabCleanup = clearParentLocalState()
+        } catch {
+          // Pinia／storage 尚未初始化等同步失敗仍須允許後續 complete 收尾。
+          remoteTabCleanup = Promise.resolve()
+        }
         return
       }
-      logoutInProgress.value = false
-      redirectRemoteTabToLogin()
+      const cleanup = remoteTabCleanup
+      const finishRemoteLogout = () => {
+        // 若新的 logout-start 已開始，舊 complete 不得提前解除新一輪遮罩。
+        if (remoteTabCleanup !== cleanup) return
+        logoutInProgress.value = false
+        redirectRemoteTabToLogin()
+      }
+      void cleanup.then(finishRemoteLogout, finishRemoteLogout)
     }
     parentSessionChannel = channel
   } catch {
@@ -124,8 +137,7 @@ export function useParentLogoutState() {
 export async function performParentLogout(): Promise<void> {
   logoutInProgress.value = true
   broadcastParentSession({ type: 'logout-start' })
-  clearParentLocalState()
-  const cacheCleanup = purgePersonalizedRuntimeCaches()
+  const cacheCleanup = clearParentLocalState()
   try {
     await logout()
   } catch {
@@ -147,5 +159,6 @@ export async function performParentLogout(): Promise<void> {
 export function _resetParentLogoutIsolationForTesting(): void {
   parentSessionChannel?.close()
   parentSessionChannel = null
+  remoteTabCleanup = Promise.resolve()
   logoutInProgress.value = false
 }

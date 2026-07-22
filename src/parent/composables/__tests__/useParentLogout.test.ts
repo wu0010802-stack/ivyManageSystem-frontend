@@ -228,9 +228,45 @@ describe('performParentLogout（家長端統一登出清理）', () => {
     expect(channel?.postMessage).not.toHaveBeenCalled()
 
     channel?.onmessage?.({ data: { type: 'logout-complete' } } as MessageEvent)
-    await nextTick()
-    expect(useParentLogoutState().inProgress.value).toBe(false)
+    await vi.waitFor(() => expect(useParentLogoutState().inProgress.value).toBe(false))
     expect(window.location.hash).toBe('#/login')
     expect(channel?.postMessage).not.toHaveBeenCalled()
+  })
+
+  it('其他分頁 logout-complete 會等待本分頁個人化 cache 清完才解除遮罩', async () => {
+    class FakeBroadcastChannel {
+      static instances: FakeBroadcastChannel[] = []
+      onmessage: ((event: MessageEvent) => void) | null = null
+      postMessage = vi.fn()
+      close = vi.fn()
+
+      constructor(readonly name: string) {
+        FakeBroadcastChannel.instances.push(this)
+      }
+    }
+
+    let releaseDelete: (() => void) | undefined
+    vi.stubGlobal('caches', {
+      keys: vi.fn().mockResolvedValue(['parent-home']),
+      delete: vi.fn(() => new Promise<boolean>((resolve) => {
+        releaseDelete = () => resolve(true)
+      })),
+    })
+    vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel)
+    _resetParentLogoutIsolationForTesting()
+    initParentSessionIsolation()
+    const channel = FakeBroadcastChannel.instances.at(-1)
+
+    channel?.onmessage?.({ data: { type: 'logout-start' } } as MessageEvent)
+    await vi.waitFor(() => expect(caches.delete).toHaveBeenCalledWith('parent-home'))
+    channel?.onmessage?.({ data: { type: 'logout-complete' } } as MessageEvent)
+    await nextTick()
+
+    expect(useParentLogoutState().inProgress.value).toBe(true)
+    expect(window.location.hash).not.toBe('#/login')
+
+    releaseDelete?.()
+    await vi.waitFor(() => expect(useParentLogoutState().inProgress.value).toBe(false))
+    expect(window.location.hash).toBe('#/login')
   })
 })

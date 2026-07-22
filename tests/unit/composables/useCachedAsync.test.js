@@ -208,4 +208,33 @@ describe('useCachedAsync', () => {
     expect(active.captured.pending.value).toBe(false)
     expect(active.captured.error.value).toBeNull()
   })
+
+  it('invalidateCachedAsync() 會清空所有管理端 cache 並阻止舊身分回應覆寫新 cache', async () => {
+    let resolveOld
+    const old = makeHarness(
+      'admin/dashboard',
+      vi.fn().mockImplementation(() => new Promise((resolve) => { resolveOld = resolve })),
+      { ttl: 60_000 },
+    )
+    await vi.waitFor(() => expect(old.captured.pending.value).toBe(true))
+
+    invalidateCachedAsync()
+    expect(old.captured.data.value).toBeNull()
+
+    const current = makeHarness(
+      'admin/dashboard',
+      vi.fn().mockResolvedValue({ owner: 'B' }),
+      { ttl: 60_000 },
+    )
+    await vi.waitFor(() => expect(current.captured.data.value).toEqual({ owner: 'B' }))
+
+    resolveOld({ owner: 'A' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const shouldNotRun = vi.fn().mockResolvedValue({ owner: 'unexpected' })
+    const reread = makeHarness('admin/dashboard', shouldNotRun, { ttl: 60_000 })
+    await nextTick()
+    expect(reread.captured.data.value).toEqual({ owner: 'B' })
+    expect(shouldNotRun).not.toHaveBeenCalled()
+  })
 })
