@@ -5,6 +5,7 @@ import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { confirmWithReason } from '@/views/appraisal/confirmWithReason'
 import { injectOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
 import {
@@ -215,6 +216,7 @@ onMounted(() => {
 
 <template>
   <div v-if="canRead" v-loading="loading">
+    <ReadonlyBadge permission-label="年終規則設定" :show="!canSaveRules" />
     <div class="rules-actions">
       <el-tooltip
         content="需要「系統設定寫入」與「金流簽核」權限（SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE）"

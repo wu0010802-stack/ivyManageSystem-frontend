@@ -3,14 +3,50 @@ import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { hasPermission } from '@/utils/auth'
 import { provideOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 
-// 子頁權限對齊實際呼叫的 API：前四頁走 appraisal API（APPRAISAL_READ）、年終規則走 SETTINGS_READ
+// 子頁權限對齊實際呼叫的 API：前四頁走 appraisal API（APPRAISAL_READ）、年終規則走 SETTINGS_READ。
+// Task B7：另加 canWrite/permLabel——各 tab 實際「寫入」權限對齊各面板真實 gate（B4 已向後端核實），
+// 用於 tab 標題旁的唯讀徽章，與「能否看到分頁」的 can（讀權限）分開判定。
+// - scoring / catalog：面板編輯走 APPRAISAL_RULE_WRITE（ScoringRulesPanel canEditRules / PenaltyCatalogPanel canEdit）
+// - bonus-rates / enrollment-targets：面板寫入走 APPRAISAL_FINALIZE（BonusRatesPanel canWrite / YearlyEnrollmentTargetSection canEditTarget）
+// - year-end-rules：面板儲存走 SETTINGS_WRITE 且 ACTIVITY_PAYMENT_APPROVE 雙權限（YearEndRulesPanel canSaveRules）
 const TABS = [
-  { name: 'scoring', label: '考核扣分規則', can: () => hasPermission('APPRAISAL_READ') },
-  { name: 'bonus-rates', label: '年終獎金率', can: () => hasPermission('APPRAISAL_READ') },
-  { name: 'catalog', label: '扣分項目目錄', can: () => hasPermission('APPRAISAL_READ') },
-  { name: 'enrollment-targets', label: '學年目標人數', can: () => hasPermission('APPRAISAL_READ') },
-  { name: 'year-end-rules', label: '年終規則', can: () => hasPermission('SETTINGS_READ') },
+  {
+    name: 'scoring',
+    label: '考核扣分規則',
+    can: () => hasPermission('APPRAISAL_READ'),
+    canWrite: () => hasPermission('APPRAISAL_RULE_WRITE'),
+    permLabel: '考核規則設定',
+  },
+  {
+    name: 'bonus-rates',
+    label: '年終獎金率',
+    can: () => hasPermission('APPRAISAL_READ'),
+    canWrite: () => hasPermission('APPRAISAL_FINALIZE'),
+    permLabel: '考核核定',
+  },
+  {
+    name: 'catalog',
+    label: '扣分項目目錄',
+    can: () => hasPermission('APPRAISAL_READ'),
+    canWrite: () => hasPermission('APPRAISAL_RULE_WRITE'),
+    permLabel: '考核規則設定',
+  },
+  {
+    name: 'enrollment-targets',
+    label: '學年目標人數',
+    can: () => hasPermission('APPRAISAL_READ'),
+    canWrite: () => hasPermission('APPRAISAL_FINALIZE'),
+    permLabel: '考核核定',
+  },
+  {
+    name: 'year-end-rules',
+    label: '年終規則',
+    can: () => hasPermission('SETTINGS_READ'),
+    canWrite: () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
+    permLabel: '年終規則設定',
+  },
 ]
 
 const route = useRoute()
@@ -48,7 +84,14 @@ onMounted(refresh)
     </template>
   </el-alert>
   <el-tabs :model-value="activeTab" type="card" @tab-change="onTabChange">
-    <el-tab-pane v-for="t in visibleTabs" :key="t.name" :label="t.label" :name="t.name" />
+    <el-tab-pane v-for="t in visibleTabs" :key="t.name" :name="t.name">
+      <template #label>
+        <span class="rules-tab-label" :data-test="`tab-label-${t.name}`">
+          {{ t.label }}
+          <ReadonlyBadge :permission-label="t.permLabel" :show="!t.canWrite()" />
+        </span>
+      </template>
+    </el-tab-pane>
   </el-tabs>
   <router-view />
 </template>
@@ -61,5 +104,9 @@ onMounted(refresh)
   margin-left: var(--space-2);
   font-weight: 600;
   color: var(--el-color-primary);
+}
+.rules-tab-label {
+  display: inline-flex;
+  align-items: center;
 }
 </style>

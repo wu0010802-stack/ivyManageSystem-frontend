@@ -16,6 +16,7 @@ import { Refresh, Edit, Clock } from '@element-plus/icons-vue'
 import { listScoringRules } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { summarizeRuleOneLine } from '../ruleSummary'
 import {
   ITEM_CODE_LABELS,
@@ -98,6 +99,7 @@ defineExpose({ load, disablePastDates })
 
 <template>
   <div class="rules-panel">
+    <ReadonlyBadge permission-label="考核規則設定" :show="!canEditRules" />
     <div class="toolbar">
       <el-form-item label="生效日期">
         <el-date-picker

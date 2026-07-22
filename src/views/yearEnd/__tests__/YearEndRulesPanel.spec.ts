@@ -507,13 +507,18 @@ describe('YearEndRulesPanel', () => {
       vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
     })
 
-    it('只有 SETTINGS_READ（無 WRITE/APPROVE）：儲存按鈕 disabled，直接呼叫 saveRules 也不送出', async () => {
+    it('只有 SETTINGS_READ（無 WRITE/APPROVE）：儲存按鈕 disabled，直接呼叫 saveRules 也不送出；顯示唯讀徽章', async () => {
       vi.mocked(authApi.hasPermission).mockImplementation((p: string) => p === 'SETTINGS_READ')
 
       const wrapper = await mountPanel()
       const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
       expect(button).toBeTruthy()
       expect(button!.attributes('disabled')).toBeDefined()
+
+      // Task B7：面板頂部唯讀徽章，對齊 canSaveRules（SETTINGS_WRITE 且 ACTIVITY_PAYMENT_APPROVE 雙權限）。
+      const badge = wrapper.find('[data-test="readonly-badge"]')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('年終規則設定')
 
       const vm = wrapper.vm as unknown as PanelVm
       await vm.saveRules()
@@ -522,7 +527,7 @@ describe('YearEndRulesPanel', () => {
       expect(ElMessage.warning).toHaveBeenCalled()
     })
 
-    it('只有 SETTINGS_WRITE（缺 ACTIVITY_PAYMENT_APPROVE）：儲存按鈕仍 disabled', async () => {
+    it('只有 SETTINGS_WRITE（缺 ACTIVITY_PAYMENT_APPROVE）：儲存按鈕仍 disabled；仍顯示唯讀徽章（雙權限缺一不可）', async () => {
       vi.mocked(authApi.hasPermission).mockImplementation(
         (p: string) => p === 'SETTINGS_READ' || p === 'SETTINGS_WRITE',
       )
@@ -530,15 +535,17 @@ describe('YearEndRulesPanel', () => {
       const wrapper = await mountPanel()
       const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
       expect(button!.attributes('disabled')).toBeDefined()
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(true)
     })
 
-    it('具 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE：儲存按鈕可用且可正常送出', async () => {
+    it('具 SETTINGS_WRITE + ACTIVITY_PAYMENT_APPROVE：儲存按鈕可用且可正常送出；不顯示唯讀徽章', async () => {
       vi.mocked(authApi.hasPermission).mockReturnValue(true)
       vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
 
       const wrapper = await mountPanel()
       const button = wrapper.findAll('button').find((b) => b.text().includes('儲存年終規則'))
       expect(button!.attributes('disabled')).toBeUndefined()
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
 
       const vm = wrapper.vm as unknown as PanelVm
       await vm.saveRules()

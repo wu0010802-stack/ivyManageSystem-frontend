@@ -18,6 +18,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { confirmWithReason } from '../confirmWithReason'
 import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
 
@@ -148,6 +149,7 @@ onMounted(fetchRates)
 
 <template>
   <div class="bonus-rates-panel">
+    <ReadonlyBadge permission-label="考核核定" :show="!canWrite" />
     <div class="panel-head">
       <div>
         <p class="hint">

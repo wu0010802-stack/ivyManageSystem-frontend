@@ -15,6 +15,7 @@ import {
 } from '@/api/appraisal'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
 import { injectOpenCycleHint } from './composables/useOpenCycleHint'
 import CreateCycleDialog from './components/CreateCycleDialog.vue'
@@ -146,6 +147,7 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
 
 <template>
   <div class="yearly-target-section" v-loading="loading">
+    <ReadonlyBadge permission-label="考核核定" :show="!canEditTarget" />
     <div class="toolbar">
       <label class="year-label">學年度</label>
       <el-select

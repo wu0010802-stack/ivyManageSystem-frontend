@@ -287,7 +287,7 @@ describe('YearlyEnrollmentTargetSection', () => {
   // Task B4：目標人數修改（PATCH /appraisal/cycles/{id}）補權限 gate + 確認＋原因，
   // 對齊後端 update_cycle 守衛（Permission.APPRAISAL_FINALIZE，同 CreateCycleDialog）。
   describe('Task B4：目標人數編輯權限 gate（矩陣：APPRAISAL_FINALIZE true/false）', () => {
-    it('canEditTarget=true：編輯按鈕可用', async () => {
+    it('canEditTarget=true：編輯按鈕可用；不顯示唯讀徽章', async () => {
       getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
       permState.finalize = true
 
@@ -296,9 +296,11 @@ describe('YearlyEnrollmentTargetSection', () => {
       const btn = wrapper.find('[data-test="edit-first-btn"]')
       expect(btn.exists()).toBe(true)
       expect(btn.attributes('disabled')).toBeUndefined()
+      // Task B7
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
     })
 
-    it('canEditTarget=false：編輯按鈕 disabled', async () => {
+    it('canEditTarget=false：編輯按鈕 disabled；顯示唯讀徽章（考核核定）', async () => {
       getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE, SECOND_CYCLE] })
       permState.finalize = false
 
@@ -307,6 +309,10 @@ describe('YearlyEnrollmentTargetSection', () => {
       const btn = wrapper.find('[data-test="edit-first-btn"]')
       expect(btn.exists()).toBe(true)
       expect(btn.attributes('disabled')).toBeDefined()
+      // Task B7：面板頂部唯讀徽章，對齊 canEditTarget（APPRAISAL_FINALIZE）。
+      const badge = wrapper.find('[data-test="readonly-badge"]')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('考核核定')
     })
 
     it('canEditTarget=false：直接呼叫 startEdit() 也不進入編輯模式（防止繞過 disabled）', async () => {

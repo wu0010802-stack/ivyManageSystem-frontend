@@ -317,6 +317,9 @@ describe('PenaltyCatalogPanel', () => {
 
     expect(wrapper.find('[data-test="weight-input-LATE_EARLY"]').attributes('value')).toBe('-0.5')
     expect(wrapper.find('[data-test="order-input-LATE_EARLY"]').attributes('value')).toBe('1')
+
+    // Task B7：canEdit=true（mountPanel 預設）時面板頂部不顯示唯讀徽章。
+    expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
   })
 
   it('label input 有 maxlength=60；default_weight input-number 有 min/max/step；display_order min=0', async () => {
@@ -379,8 +382,13 @@ describe('PenaltyCatalogPanel', () => {
     expect(vi.mocked(ElMessageBox.confirm).mock.calls[1][0]).toContain('啟用')
   })
 
-  it('無權限時不渲染任何編輯輸入框/switch/儲存按鈕，改顯示純文字與啟用狀態 tag', async () => {
+  it('無權限時不渲染任何編輯輸入框/switch/儲存按鈕，改顯示純文字與啟用狀態 tag；面板頂部顯示唯讀徽章', async () => {
     const wrapper = await mountPanel({ canEdit: false })
+
+    // Task B7：面板頂部唯讀徽章，對齊 canEdit（APPRAISAL_RULE_WRITE）。
+    const badge = wrapper.find('[data-test="readonly-badge"]')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toContain('考核規則設定')
 
     expect(wrapper.find('[data-test="label-input-LATE_EARLY"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="label-text-LATE_EARLY"]').text()).toBe('遲到早退')

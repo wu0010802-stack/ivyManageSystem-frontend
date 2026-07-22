@@ -10,8 +10,11 @@ vi.mock('@/api/appraisal', () => ({
 }))
 
 // P0-A 守衛：spec 需 mock hasPermission，否則 canEditRules=false 隱藏編輯按鈕
+// Task B7：改用可調 mockHasPermission（權限矩陣鐵律），驗證無 APPRAISAL_RULE_WRITE 時
+// 面板頂部顯示 ReadonlyBadge。
+const mockHasPermission = vi.fn().mockReturnValue(true)
 vi.mock('@/utils/auth', () => ({
-  hasPermission: vi.fn().mockReturnValue(true),
+  hasPermission: (name) => mockHasPermission(name),
 }))
 
 vi.mock('element-plus', () => ({
@@ -173,7 +176,8 @@ function makeRules() {
   ]
 }
 
-async function mountPanel({ rulesData = makeRules() } = {}) {
+async function mountPanel({ rulesData = makeRules(), canEdit = true } = {}) {
+  mockHasPermission.mockReturnValue(canEdit)
   listScoringRules.mockResolvedValue({ data: rulesData })
   const wrapper = mount(ScoringRulesPanel, {
     global: {
@@ -187,6 +191,7 @@ async function mountPanel({ rulesData = makeRules() } = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockHasPermission.mockReturnValue(true)
 })
 
 describe('ScoringRulesPanel', () => {
@@ -282,5 +287,20 @@ describe('ScoringRulesPanel', () => {
     await flushPromises()
 
     expect(listScoringRules).toHaveBeenCalledTimes(2)
+  })
+
+  // Task B7：面板頂部唯讀徽章，對齊 canEditRules（APPRAISAL_RULE_WRITE）。
+  describe('唯讀徽章（Task B7）', () => {
+    it('canEdit=false：面板頂部顯示唯讀徽章', async () => {
+      const wrapper = await mountPanel({ canEdit: false })
+      const badge = wrapper.find('[data-test="readonly-badge"]')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('考核規則設定')
+    })
+
+    it('canEdit=true：面板頂部不顯示唯讀徽章', async () => {
+      const wrapper = await mountPanel({ canEdit: true })
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
+    })
   })
 })

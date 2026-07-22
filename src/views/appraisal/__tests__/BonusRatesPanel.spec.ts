@@ -116,6 +116,19 @@ describe('BonusRatesPanel', () => {
       expect(confirmWithReasonMock).not.toHaveBeenCalled()
       expect(createAppraisalBonusRate).not.toHaveBeenCalled()
     })
+
+    // Task B7：面板頂部唯讀徽章，對齊 canWrite（APPRAISAL_FINALIZE，非 APPRAISAL_RULE_WRITE）。
+    it('canWrite=false：面板頂部顯示唯讀徽章（考核核定）', async () => {
+      const wrapper = await mountPanel({ canWrite: false })
+      const badge = wrapper.find('[data-test="readonly-badge"]')
+      expect(badge.exists()).toBe(true)
+      expect(badge.text()).toContain('考核核定')
+    })
+
+    it('canWrite=true：面板頂部不顯示唯讀徽章', async () => {
+      const wrapper = await mountPanel({ canWrite: true })
+      expect(wrapper.find('[data-test="readonly-badge"]').exists()).toBe(false)
+    })
   })
 
   describe('新版本確認＋原因（confirmWithReason）', () => {

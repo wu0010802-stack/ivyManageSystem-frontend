@@ -13,6 +13,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 
@@ -179,6 +180,7 @@ onMounted(fetchItems)
 
 <template>
   <div class="penalty-catalog-panel">
+    <ReadonlyBadge permission-label="考核規則設定" :show="!canEdit" />
     <div class="panel-head">
       <p class="hint" data-test="panel-hint">
         扣分項目目錄僅維護顯示用中繼資料（名稱／預設權重／資料來源／說明／排序／啟用）；
