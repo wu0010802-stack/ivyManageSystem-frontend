@@ -156,9 +156,12 @@ const sizeOptions: { value: string; label: string; preview: string }[] = [
   color: var(--el-text-color-primary);
 }
 
+/* 選中底不可用 --el-color-primary-light-N：dark 下該系列未覆寫時仍近白，
+ * 疊上淺色文字即白底白字（同 crisp.css 檔頭警告的 defect class）。
+ * 半透明 primary 疊底在 light/dark 都保有對比。 */
 .a11y-size-btn.active {
   border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9, #ecf5ff);
+  background: color-mix(in srgb, var(--el-color-primary) 14%, transparent);
 }
 
 .a11y-size-label {
