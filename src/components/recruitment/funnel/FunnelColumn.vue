@@ -75,6 +75,7 @@ function onDragChange(evt: DragChangeEvent) {
   display: flex;
   flex-direction: column;
   flex: 1;
+  position: relative;
 }
 .funnel-column__header {
   display: flex;
@@ -89,10 +90,17 @@ function onDragChange(evt: DragChangeEvent) {
   flex: 1;
   min-height: 200px;
 }
+/* 空狀態蓋在拖曳區（flex:1 的 __body）上垂直置中；原本作為 body 的兄弟節點
+ * 被推到欄底。pointer-events:none 讓拖入空欄不被擋。 */
 .funnel-column-empty {
+  position: absolute;
+  inset: 52px 12px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   color: #ccc;
-  padding: 32px 0;
+  pointer-events: none;
 }
 .funnel-card-ghost {
   opacity: 0.3;
