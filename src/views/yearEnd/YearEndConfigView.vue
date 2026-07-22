@@ -14,6 +14,7 @@ import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { fmtPct } from '@/utils/format'
+import TargetCrossRef from '@/views/appraisal/components/TargetCrossRef.vue'
 
 // ---- Derive row types from typed API wrappers — no hand-written `any` ----
 type OrgSettingsRow = Awaited<ReturnType<typeof getOrgSettings>>['data'][number]
@@ -348,6 +349,15 @@ onMounted(async () => {
               <span v-else>{{ row.meeting_absence_deduction }}</span>
             </el-form-item>
           </el-form>
+          <!-- Task B6：三處目標人數對照——此頁「全校目標」是年終 org_settings
+          目標的實際編輯來源，與考核週期目標（AppraisalCycle.enrollment_target，
+          另一張表，且與此頁 year_end_cycle_id 無直接對應關係）互相標註；
+          cycleTarget 此處無法取得（資料模型整併不在本案範圍）傳 null，元件容忍。 -->
+          <TargetCrossRef
+            :cycle-target="null"
+            :org-setting-target="orgEdits[String(row.semester_first)]?.enrollment_target ?? row.enrollment_target"
+            :actual="row.enrollment_actual ?? null"
+          />
           <div class="save-row">
             <el-button
               v-if="canWrite"

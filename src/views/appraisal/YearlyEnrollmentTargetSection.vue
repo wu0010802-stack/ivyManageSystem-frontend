@@ -19,6 +19,7 @@ import { hasPermission } from '@/utils/auth'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
 import { injectOpenCycleHint } from './composables/useOpenCycleHint'
 import CreateCycleDialog from './components/CreateCycleDialog.vue'
+import TargetCrossRef from './components/TargetCrossRef.vue'
 import type { CreatedCycle } from './composables/useCreateCycle'
 import { confirmWithReason } from './confirmWithReason'
 
@@ -186,6 +187,13 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 {{ firstCycle.base_score_calc_date || '—' }}
               </el-descriptions-item>
             </el-descriptions>
+            <!-- Task B6：三處目標人數對照（本頁僅取得考核週期目標/實際註冊，
+            年終 org_settings 目標須至「年終結算 → 本期設定」核對，此處傳 null） -->
+            <TargetCrossRef
+              :cycle-target="firstCycle.enrollment_target ?? null"
+              :org-setting-target="null"
+              :actual="firstCycle.enrollment_actual ?? null"
+            />
             <div class="semester-card__actions">
               <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">
                 <span>
@@ -270,6 +278,12 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
                 {{ secondCycle.base_score_calc_date || '—' }}
               </el-descriptions-item>
             </el-descriptions>
+            <!-- Task B6：三處目標人數對照（理由同上學期卡，見上方註解） -->
+            <TargetCrossRef
+              :cycle-target="secondCycle.enrollment_target ?? null"
+              :org-setting-target="null"
+              :actual="secondCycle.enrollment_actual ?? null"
+            />
             <div class="semester-card__actions">
               <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">
                 <span>
