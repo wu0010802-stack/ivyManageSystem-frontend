@@ -15,8 +15,10 @@
  *  2. 從種子出發，遞迴解析每個 JS chunk 開頭的「靜態」import / export-from 述句
  *     （動態 import("./x.js") 有括號、不含 from，天然被排除），求靜態可達 chunk 集合。
  *  3. 斷言：index / public 的可達集合不含 parent-app-* 與 liff-*；
+ *          index 也不含 portal / activity-admin / fullcalendar / qrcode lazy feature；
  *          parent 的可達集合不含 admin-core-*。
- *  4. 任一違規 → 印出「哪個 entry 經哪條邊到達哪個違規 chunk」的完整路徑，exit 1。
+ *  4. 斷言三個 entry 各自只有一個正確 manifest，且 start_url 符合該 entry。
+ *  5. 任一違規 → 印出「哪個 entry 經哪條邊到達哪個違規 chunk」的完整路徑，exit 1。
  *
  * 注意：.mjs 為前端 TS-only 規範明列的允許例外（build 工具腳本）。
  */
@@ -34,20 +36,42 @@ const ENTRIES = [
   {
     name: 'index',
     html: join(DIST, 'index.html'),
-    forbidden: [/^parent-app-/, /^liff-/],
-    reason: '管理端 index 不得靜態可達家長 App / LIFF chunk',
+    forbidden: [
+      /^parent-app-/,
+      /^liff-/,
+      // Activity / Portal 不再強制併成單一 manual chunk，Rollup 會沿用
+      // route view / composable 檔名產生 PortalHomeView-* / activity-* /
+      // usePortal*-* 等 lazy chunk。必須禁整個前綴族群，否則只禁舊的
+      // portal-* / activity-admin-* 會漏接改名後的 feature 首屏漂移。
+      /^(?:Portal|portal|Activity|activity|usePortal|useActivity)/,
+      /^fullcalendar-/,
+      /^qrcode-/,
+    ],
+    reason: '管理端 index 不得靜態可達家長 App / LIFF 或 lazy feature chunk',
+    manifestHref: '/manifest.webmanifest',
+    manifestName: '常春藤管理系統',
+    manifestStartUrl: './',
+    manifestScope: './',
   },
   {
     name: 'public',
     html: join(DIST, 'public.html'),
     forbidden: [/^parent-app-/, /^liff-/],
     reason: '公開報名 public 不得靜態可達家長 App / LIFF chunk',
+    manifestHref: '/public.webmanifest',
+    manifestName: '常春藤公開報名',
+    manifestStartUrl: '/public.html',
+    manifestScope: '/public.html',
   },
   {
     name: 'parent',
     html: join(DIST, 'parent.html'),
     forbidden: [/^admin-core-/],
     reason: '家長端 parent 不得靜態可達 admin-core chunk',
+    manifestHref: '/parent.webmanifest',
+    manifestName: '常春藤家長 App',
+    manifestStartUrl: '/parent.html',
+    manifestScope: '/parent.html',
   },
 ]
 
@@ -55,11 +79,11 @@ const ENTRIES = [
 // 預算（KB）。超出即 exit 1，防止首屏體積悄悄漂大的回歸（例如 admin index 曾漂到含
 // portal+activity-admin+fullcalendar+qrcode 的 eager 載入）。數值以本次真實 build 的
 // 印出值 + ~12% headroom 校準；刻意成長時對照印出值上調。
-// 校準基準（真實 build 首屏 gz）：index 675.7 / public 174.5（2026-07-02）；
-// parent 216.5（2026-07-03，useParentLogout 改 lazy liff 後由 245.9 降下）。
-// 下方為 +~12% headroom；刻意成長時對照 build 印出值上調。
+// 校準基準（真實 build 首屏 gz）：index 276.2（2026-07-20，Element Plus 改依
+// import graph 自然分塊，不再把 lazy route 元件全塞入首屏）；public 175.5；
+// parent 219.0。下方為約 12% headroom；刻意成長時對照 build 印出值上調。
 const ENTRY_BUDGETS_KB = {
-  index: 760,
+  index: 310,
   public: 200,
   parent: 245,
 }
@@ -97,6 +121,19 @@ function seedAssetsFromHtml(htmlPath) {
     if (a) seeds.add(a)
   }
   return seeds
+}
+
+/** 收集 entry HTML 宣告的 web manifest；多入口必須恰好一個且指向該 entry 自己的 manifest。 */
+function manifestHrefsFromHtml(htmlPath) {
+  const html = readFileSync(htmlPath, 'utf8')
+  const hrefs = []
+  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+    const tag = m[0]
+    if (!/\brel=["']manifest["']/i.test(tag)) continue
+    const href = /\bhref=["']([^"']+)["']/i.exec(tag)?.[1]
+    if (href) hrefs.push(href)
+  }
+  return hrefs
 }
 
 /** 解析單一 chunk 開頭的「靜態」import / export-from 目標 chunk（動態 import 不含 from、不以裸引號緊接，天然排除）。 */
@@ -168,6 +205,42 @@ for (const entry of ENTRIES) {
     failed = true
     continue
   }
+
+  const manifestHrefs = manifestHrefsFromHtml(entry.html)
+  if (manifestHrefs.length !== 1 || manifestHrefs[0] !== entry.manifestHref) {
+    failed = true
+    console.error(
+      `\n[check-entry-chunks] ✗ ${entry.name}：manifest 必須唯一且為 ${entry.manifestHref}；` +
+        `實際為 ${manifestHrefs.length ? manifestHrefs.join(', ') : '(無)'}`
+    )
+  } else {
+    const manifestPath = join(DIST, entry.manifestHref.replace(/^\//, ''))
+    if (!existsSync(manifestPath)) {
+      failed = true
+      console.error(`\n[check-entry-chunks] ✗ ${entry.name}：找不到 manifest ${manifestPath}`)
+    } else {
+      try {
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+        const expectedFields = {
+          name: entry.manifestName,
+          start_url: entry.manifestStartUrl,
+          scope: entry.manifestScope,
+        }
+        for (const [field, expected] of Object.entries(expectedFields)) {
+          if (manifest[field] === expected) continue
+          failed = true
+          console.error(
+            `\n[check-entry-chunks] ✗ ${entry.name}：manifest ${field} 必須為 ` +
+              `${expected}；實際為 ${String(manifest[field])}`
+          )
+        }
+      } catch (error) {
+        failed = true
+        console.error(`\n[check-entry-chunks] ✗ ${entry.name}：manifest 不是合法 JSON：${String(error)}`)
+      }
+    }
+  }
+
   const { visited, edgeFrom } = computeReachable(entry)
 
   // C2：量測此 entry 靜態可達集合的 gz 總量（≈ 首屏阻塞 JS 體積）。budget=0 為量測模式
@@ -207,9 +280,9 @@ for (const entry of ENTRIES) {
 
 if (failed) {
   console.error('\n[check-entry-chunks] 失敗：entry chunk 邊界漂移。')
-  console.error('  修法：在 vite.config.js manualChunks 把跨端共用檔 pin 進 shared-common，')
-  console.error('  切斷其他 entry 對 parent-app / liff / admin-core 的靜態橋接。')
+  console.error('  修法：檢查 vite.config.js manualChunks 與靜態 import 邊；跨端共用檔')
+  console.error('  放入 shared-common，lazy feature 不要用過寬的 feature-wide manual chunk 併塊。')
   process.exit(1)
 }
 
-console.log('\n[check-entry-chunks] 全部通過：三 entry chunk 邊界隔離正確。')
+console.log('\n[check-entry-chunks] 全部通過：三 entry chunk 邊界與 manifest 隔離正確。')

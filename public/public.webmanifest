@@ -1,0 +1,16 @@
+{
+  "name": "常春藤公開報名",
+  "short_name": "公開報名",
+  "description": "常春藤幼兒園公開活動報名",
+  "theme_color": "#0d9053",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/public.html",
+  "scope": "/public.html",
+  "icons": [
+    { "src": "/pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/maskable-icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
