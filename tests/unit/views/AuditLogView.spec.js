@@ -23,7 +23,8 @@ vi.mock('@/api/audit', () => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRoute: () => ({ query: {} }),
 }))
 
 vi.mock('element-plus', () => ({
