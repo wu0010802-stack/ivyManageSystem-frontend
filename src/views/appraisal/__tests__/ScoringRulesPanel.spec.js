@@ -190,7 +190,7 @@ beforeEach(() => {
 })
 
 describe('ScoringRulesPanel', () => {
-  it('載入後渲染 14 張規則卡', async () => {
+  it('載入後渲染 24 張規則卡', async () => {
     const wrapper = await mountPanel()
     const codes = [
       'LATE_EARLY', 'MISSING_PUNCH', 'LEAVE',
@@ -218,17 +218,17 @@ describe('ScoringRulesPanel', () => {
     expect(wrapper.find('[data-test="rule-summary-RETURNING_RATE_0915"]').text())
       .toContain('階梯式（3 階）')
 
-    // FLAT_THRESHOLD
+    // FLAT_THRESHOLD（改用 summarizeRule 單一來源後格式為「≥ 50 → +1 分」，非舊私有版「≥50」無空格）
     const flatText = wrapper.find('[data-test="rule-summary-AFTER_CLASS_RATE"]').text()
-    expect(flatText).toContain('≥50')
-    expect(flatText).toContain('1')
-    expect(flatText).toContain('-1')
+    expect(flatText).toContain('≥ 50')
+    expect(flatText).toContain('+1 分')
+    expect(flatText).toContain('-1 分')
 
-    // DISCIPLINARY_TIERED
+    // DISCIPLINARY_TIERED（改用 summarizeRule 單一來源後格式為「警告：-1 分」，非舊私有版「警告 -1」無冒號）
     const discText = wrapper.find('[data-test="rule-summary-REWARD_PUNISH"]').text()
-    expect(discText).toContain('警告 -1')
-    expect(discText).toContain('小過 -3')
-    expect(discText).toContain('大過 -9')
+    expect(discText).toContain('警告：-1 分')
+    expect(discText).toContain('小過：-3 分')
+    expect(discText).toContain('大過：-9 分')
 
     // 沒有規則的項目顯示「尚未設定」
     expect(wrapper.find('[data-test="rule-summary-OTHER"]').text())

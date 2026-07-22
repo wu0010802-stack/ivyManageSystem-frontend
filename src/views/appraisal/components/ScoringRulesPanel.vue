@@ -16,6 +16,7 @@ import { Refresh, Edit, Clock } from '@element-plus/icons-vue'
 import { listScoringRules } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { summarizeRuleOneLine } from '../ruleSummary'
 import {
   ITEM_CODE_LABELS,
   AUTO_ITEM_CODES as AUTO_CODES,
@@ -90,25 +91,6 @@ function onRuleCreated() {
   load()
 }
 
-function fmtRuleSummary(rule: ScoringRule | null | undefined) {
-  if (!rule) return '尚未設定'
-  const cfg = rule.rule_config || {}
-  if (rule.rule_type === 'PER_UNIT') {
-    return `每次 ${cfg.per_unit_delta} 分`
-  }
-  if (rule.rule_type === 'TIER') {
-    const n = Array.isArray(cfg.tiers) ? (cfg.tiers as unknown[]).length : 0
-    return `階梯式（${n} 階）`
-  }
-  if (rule.rule_type === 'FLAT_THRESHOLD') {
-    return `≥${cfg.threshold} → ${cfg.above_delta} / <${cfg.threshold} → ${cfg.below_delta}`
-  }
-  if (rule.rule_type === 'DISCIPLINARY_TIERED') {
-    return `警告 ${cfg.warning_delta} / 小過 ${cfg.minor_delta} / 大過 ${cfg.major_delta}`
-  }
-  return ''
-}
-
 onMounted(load)
 
 defineExpose({ load, disablePastDates })
@@ -162,7 +144,7 @@ defineExpose({ load, disablePastDates })
               </el-tag>
             </div>
             <div class="rule-card__body" :data-test="`rule-summary-${code}`">
-              {{ fmtRuleSummary(rulesByCode[code]) }}
+              {{ summarizeRuleOneLine(rulesByCode[code]) }}
             </div>
             <div class="rule-card__actions">
               <el-button

@@ -83,3 +83,22 @@ export function summarizeRule(rule: ScoringRule | null | undefined | unknown) {
   }
   return lines
 }
+
+/**
+ * summarizeRuleOneLine — summarizeRule 的單行版，供規則卡片 body 顯示。
+ *
+ * 復用 summarizeRule 的多行明細（同一份型別判斷邏輯），不另寫第二份 4 型別 switch。
+ * TIER 額外標注「共 N 階」（讀 rule_config.tiers.length），其餘型別以「；」串接多行明細。
+ */
+export function summarizeRuleOneLine(rule: ScoringRule | null | undefined | unknown): string {
+  const r = rule as ScoringRule | null | undefined
+  const lines = summarizeRule(rule)
+  if (lines.length === 0) return '尚未設定'
+  if (r?.rule_type === 'TIER') {
+    const cfg: RuleConfig = r.rule_config || {}
+    const tierCount = Array.isArray(cfg.tiers) ? cfg.tiers.length : 0
+    const detail = lines.slice(1).map((l) => l.trim()).join('、')
+    return `階梯式（${tierCount} 階）${detail ? '：' + detail : ''}`
+  }
+  return lines.map((l) => l.trim()).join('；')
+}

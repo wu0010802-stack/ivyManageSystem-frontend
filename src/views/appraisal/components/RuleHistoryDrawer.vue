@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { getScoringRuleHistory } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { summarizeRule } from '../ruleSummary'
 
 interface RuleVersion { id: number; rule_type?: string; rule_config?: Record<string, unknown>; effective_from?: string; notes?: string }
 
@@ -48,7 +49,14 @@ watch(() => [props.visible, props.itemCode], ([v]) => { if (v) load() }, { immed
       >
         <div class="version">
           <div><strong>{{ v.rule_type }}</strong></div>
-          <pre>{{ JSON.stringify(v.rule_config, null, 2) }}</pre>
+          <div class="version__summary" data-test="rule-summary-lines">
+            <div v-for="line in summarizeRule(v)" :key="line">{{ line }}</div>
+          </div>
+          <el-collapse>
+            <el-collapse-item title="進階：原始設定 JSON">
+              <pre>{{ JSON.stringify(v.rule_config, null, 2) }}</pre>
+            </el-collapse-item>
+          </el-collapse>
           <div v-if="v.notes" class="notes">備註：{{ v.notes }}</div>
         </div>
       </el-timeline-item>
@@ -59,5 +67,6 @@ watch(() => [props.visible, props.itemCode], ([v]) => { if (v) load() }, { immed
 
 <style scoped>
 .version pre { background: var(--el-fill-color-light); padding: var(--space-2); border-radius: 4px; font-size: 12px; }
+.version__summary { font-size: var(--text-sm); color: var(--el-text-color-regular); margin: var(--space-1) 0; }
 .notes { color: var(--el-text-color-secondary); font-size: 12px; margin-top: var(--space-1); }
 </style>
