@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { createRouter, createMemoryHistory } from 'vue-router'
 
 /**
  * 回歸守衛（對抗式覆核 2026-06-27）：interceptor 新增「下載 blob 錯誤還原」後，
@@ -26,6 +27,12 @@ vi.mock('element-plus', async () => {
 
 import AuditLogView from '../AuditLogView.vue'
 
+const makeRouter = () =>
+  createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/audit-logs', component: AuditLogView }, { path: '/', redirect: '/audit-logs' }],
+  })
+
 describe('AuditLogView 匯出超量錯誤（interceptor blob 解碼後仍保留引導）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -37,8 +44,11 @@ describe('AuditLogView 匯出超量錯誤（interceptor blob 解碼後仍保留�
     exportAuditLogs.mockRejectedValueOnce({
       response: { status: 400, data: { detail: '匯出筆數超過 10000 上限' } },
     })
+    const router = makeRouter()
+    await router.push('/audit-logs')
+    await router.isReady()
     const wrapper = mount(AuditLogView, {
-      global: { plugins: [ElementPlus], stubs: { 'el-table': true, 'el-table-column': true } },
+      global: { plugins: [ElementPlus, router], stubs: { 'el-table': true, 'el-table-column': true } },
     })
     await flushPromises()
     await wrapper.findAll('button').find((b) => b.text().includes('匯出 CSV'))!.trigger('click')

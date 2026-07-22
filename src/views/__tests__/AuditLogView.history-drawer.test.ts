@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
+import { createRouter, createMemoryHistory } from 'vue-router'
 
 const { getAuditLogs, getAuditLogsMeta, exportAuditLogs } = vi.hoisted(() => ({
   getAuditLogs: vi.fn(),
@@ -10,6 +11,12 @@ const { getAuditLogs, getAuditLogsMeta, exportAuditLogs } = vi.hoisted(() => ({
 vi.mock('@/api/audit', () => ({ getAuditLogs, getAuditLogsMeta, exportAuditLogs }))
 
 import AuditLogView from '../AuditLogView.vue'
+
+const makeRouter = () =>
+  createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/audit-logs', component: AuditLogView }, { path: '/', redirect: '/audit-logs' }],
+  })
 
 // drawer 測試需要真的渲染 el-table 的列 slot 才能點「歷史」，
 // 不 stub el-table（el-drawer 預設 teleport，mount 時 attachTo document.body 或
@@ -28,9 +35,12 @@ describe('AuditLogView 歷史軌跡 drawer', () => {
   })
 
   it('點「歷史」→ 以 entity 條件查詢（無 start_at）並開 drawer', async () => {
+    const router = makeRouter()
+    await router.push('/audit-logs')
+    await router.isReady()
     const wrapper = mount(AuditLogView, {
       attachTo: document.body,
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, router] },
     })
     await flushPromises()
 
@@ -60,9 +70,12 @@ describe('AuditLogView 歷史軌跡 drawer', () => {
   })
 
   it('筆數超過一頁時顯示「載入更早」並 append', async () => {
+    const router = makeRouter()
+    await router.push('/audit-logs')
+    await router.isReady()
     const wrapper = mount(AuditLogView, {
       attachTo: document.body,
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, router] },
     })
     await flushPromises()
 
@@ -93,9 +106,12 @@ describe('AuditLogView 歷史軌跡 drawer', () => {
   })
 
   it('換列連點：過期回應被丟棄，只顯示後點資源的歷史', async () => {
+    const router = makeRouter()
+    await router.push('/audit-logs')
+    await router.isReady()
     const wrapper = mount(AuditLogView, {
       attachTo: document.body,
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus, router] },
     })
     await flushPromises()
 

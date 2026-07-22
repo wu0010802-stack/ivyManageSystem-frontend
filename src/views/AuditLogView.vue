@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getAuditLogs, getAuditLogsMeta, exportAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -28,6 +28,7 @@ interface MetaOption {
 }
 
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -81,6 +82,36 @@ const RISK_QUICK_FILTERS: {
 ]
 
 const activeRiskFilter = ref('')
+
+// URL 同步的篩選 key（page_size 不進 URL——非分享語意）
+const URL_FILTER_KEYS = [
+  'entity_type', 'action', 'username', 'entity_id', 'ip_address',
+  'risk_tag', 'start_at', 'end_at',
+] as const
+
+const hydrateFromQuery = () => {
+  for (const k of URL_FILTER_KEYS) {
+    const v = route.query[k]
+    if (typeof v === 'string' && v) filters[k] = v
+  }
+  const page = Number(route.query.page)
+  if (Number.isInteger(page) && page >= 1) filters.page = page
+  const risk = route.query.risk
+  if (typeof risk === 'string' && RISK_QUICK_FILTERS.some((f) => f.key === risk)) {
+    activeRiskFilter.value = risk
+  }
+}
+
+const syncQueryToUrl = () => {
+  const query: Record<string, string> = {}
+  for (const k of URL_FILTER_KEYS) {
+    if (filters[k]) query[k] = String(filters[k])
+  }
+  if (filters.page > 1) query.page = String(filters.page)
+  if (activeRiskFilter.value) query.risk = activeRiskFilter.value
+  // replace 不進 history stack，避免每次查詢都多一筆返回紀錄
+  router.replace({ query })
+}
 
 const applyRiskFilter = (key: string) => {
   const clearQuickParams = () => {
@@ -142,6 +173,7 @@ const fetchLogs = async () => {
     const d = res.data as { items: AuditLog[]; total: number }
     logs.value = d.items
     total.value = d.total
+    syncQueryToUrl()
   } catch (error) {
     if ((error as { response?: { status?: number } }).response?.status === 403) {
       ElMessage.error('需要管理員權限')
@@ -333,6 +365,7 @@ const goToEntity = (row: AuditLog) => {
 }
 
 onMounted(async () => {
+  hydrateFromQuery()
   await fetchMeta()
   fetchLogs()
 })
