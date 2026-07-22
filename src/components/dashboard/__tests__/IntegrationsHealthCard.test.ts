@@ -20,7 +20,7 @@ function fakeHealthy() {
       retry_pending: 0,
       retry_final_failed_24h: 0,
     },
-    supabase: { breaker: 'closed', pending_uploads: 0 },
+    storage: { breaker: 'closed', pending_uploads: 0, final_failed: 0 },
     external_http: { breaker: 'closed' },
   }
 }
@@ -35,7 +35,7 @@ function fakeDegraded() {
       retry_pending: 5,
       retry_final_failed_24h: 1,
     },
-    supabase: { breaker: 'half_open', pending_uploads: 2 },
+    storage: { breaker: 'half_open', pending_uploads: 2, final_failed: 0 },
     external_http: { breaker: 'closed' },
   }
 }

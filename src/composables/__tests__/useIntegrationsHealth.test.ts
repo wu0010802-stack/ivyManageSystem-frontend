@@ -19,7 +19,7 @@ function fakeHealthy() {
       retry_pending: 0,
       retry_final_failed_24h: 0,
     },
-    supabase: { breaker: 'closed', pending_uploads: 0 },
+    storage: { breaker: 'closed', pending_uploads: 0, final_failed: 0 },
     external_http: { breaker: 'closed' },
   }
 }

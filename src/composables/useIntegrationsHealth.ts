@@ -2,8 +2,8 @@
  * useIntegrationsHealth — 後台首頁外部整合健康徽章資料
  *
  * 對應 backend GET /api/internal/integrations/health（Phase 4 P1 resilience）。
- * 三 breaker state（LINE / Supabase / external_http）+ LINE token healthy +
- * LINE retry pending / final_failed_24h + Supabase pending_uploads count。
+ * 三 breaker state（LINE / storage / external_http）+ LINE token healthy +
+ * LINE retry pending / final_failed_24h + storage pending_uploads count。
  *
  * - 60s TTL；isStale 後元件可選 refresh 按鈕觸發
  * - AUDIT_LOGS 權限 gate（caller 自查；本 composable 不主動 check 避免
