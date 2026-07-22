@@ -246,6 +246,35 @@ describe('scrubMapping', () => {
     expect(res.measurement_value).toBe('[Filtered]')
     expect(res.measurement_height).toBe('[Filtered]')
   })
+
+  // D2（課後才藝上線 bug 修復，2026-07-22）：ParentInquiry.name（家長真實姓名）改欄名
+  // parent_name 根治（DB column/ORM attribute 改名，API 對外欄位仍叫 name）；
+  // question/reply 為新增 substring，與後端同步。
+  it('filters parent inquiry parent_name / question / reply (D2 2026-07-22)', () => {
+    const res = scrubMapping({
+      parent_name: '王家長',
+      phone: '0912345678',
+      question: '請問還有名額嗎？',
+      reply: '已電話聯繫，家長確認了解上課時間。',
+      is_read: false,
+    })
+    expect(res.parent_name).toBe('[Filtered]')
+    expect(res.phone).toBe('[Filtered]')
+    expect(res.question).toBe('[Filtered]')
+    expect(res.reply).toBe('[Filtered]')
+    expect(res.is_read).toBe(false)
+  })
+
+  it('does not over-match bare name fields like course_name (D2 2026-07-22)', () => {
+    const res = scrubMapping({
+      name: 'Alice',
+      course_name: '手作陶藝',
+      classroom_name: '向日葵班',
+    })
+    expect(res.name).toBe('Alice')
+    expect(res.course_name).toBe('手作陶藝')
+    expect(res.classroom_name).toBe('向日葵班')
+  })
 })
 
 describe('scrubEvent', () => {

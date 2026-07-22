@@ -35,6 +35,8 @@ const PII_KEY_SUBSTRINGS = [
   'exempt_reason',
   // 才藝報名內部審核軌跡：含審核人帳號與駁回理由自由輸入（與 BE _PII_KEY_SUBSTRINGS 同步）
   'internal_note',
+  // D2（2026-07-22）：家長提問 ParentInquiry.question/reply 自由文字（與 BE 同步）
+  'question', 'reply',
 ]
 
 const FILTERED = '[Filtered]'

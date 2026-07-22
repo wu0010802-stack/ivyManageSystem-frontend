@@ -72,9 +72,10 @@
       </header>
 
       <main class="page-body">
-        <!-- Registration Time Notice -->
+        <!-- Registration Time Notice：僅在 initState==='ready' 顯示——loading 期間 timeInfo
+             仍是預設值（is_open:false），若不擋住會先誤閃「報名尚未開放」（P2 flash 修正） -->
         <div
-          v-if="noticeState"
+          v-if="initState === 'ready' && noticeState"
           class="notice is-visible"
           :class="[noticeState.variant, { 'is-sticky': noticeIsUrgent }]"
           role="status"
@@ -86,9 +87,21 @@
           </div>
         </div>
 
+        <!-- 初始化中：中性載入態，不渲染報名表／時段提示，對齊下方 initState 註解原意
+             （避免家長在資料回來前先看到誤導性的「尚未開放」+ 空殼表單） -->
+        <div
+          v-if="initState === 'loading'"
+          class="init-loading-panel"
+          role="status"
+          aria-live="polite"
+        >
+          <span class="init-loading-spinner" aria-hidden="true"></span>
+          <p class="init-loading-text">頁面載入中…</p>
+        </div>
+
         <!-- 初始化失敗：頁內錯誤 + 重試（避免 toast 一閃但表單空殼） -->
         <div
-          v-if="initState === 'error'"
+          v-else-if="initState === 'error'"
           class="init-error-panel"
           role="alert"
           aria-live="assertive"
@@ -1281,6 +1294,36 @@ onUnmounted(() => {
 .init-error-content { flex: 1; min-width: 200px; }
 .init-error-title { font-weight: 700; font-size: var(--fs-lg); color: var(--color-text); margin-bottom: 4px; }
 .init-error-message { font-size: var(--fs-sm); color: var(--color-text-muted); }
+
+/* 初始化中：中性載入態（P2 flash 修正——loading 期間不渲染表單／時段提示，避免誤導） */
+.init-loading-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-10) var(--space-6);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+}
+.init-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid var(--color-border-strong);
+  border-top-color: var(--color-primary);
+  animation: init-loading-spin 0.8s linear infinite;
+}
+.init-loading-text { margin: 0; font-size: var(--fs-sm); }
+@keyframes init-loading-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .init-loading-spinner { animation-duration: 2.4s; }
+}
 
 /* Left Column */
 .col-left { display: flex; flex-direction: column; gap: var(--space-5); }
