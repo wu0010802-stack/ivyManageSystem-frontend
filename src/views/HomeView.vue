@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import {
+  AlarmClock,
+  Calendar,
+  CircleCheck,
   CircleCheckFilled,
   Clock,
   Document,
+  EditPen,
   Location,
   Select,
   Setting,
@@ -12,6 +16,7 @@ import {
   User,
   UserFilled,
   Wallet,
+  Warning,
 } from '@element-plus/icons-vue'
 import StatCard from '@/components/common/StatCard.vue'
 import { useDashboardSections } from '@/composables'
@@ -252,16 +257,16 @@ const anomalyOverflow = computed(
       </el-row>
       <el-row v-else-if="typedTodayStats" :gutter="20" class="stats-row">
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="今日應出勤" :value="typedTodayStats.total_employees" icon="Calendar" color="primary" />
+          <StatCard label="今日應出勤" :value="typedTodayStats.total_employees" :icon="Calendar" color="primary" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
           <StatCard label="已出勤" :value="typedTodayStats.present_count" :icon="Select" color="success" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="遲到" :value="typedTodayStats.late_count" icon="AlarmClock" color="warning" />
+          <StatCard label="遲到" :value="typedTodayStats.late_count" :icon="AlarmClock" color="warning" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="未打卡" :value="typedTodayStats.missing_count" icon="Warning" color="danger" />
+          <StatCard label="未打卡" :value="typedTodayStats.missing_count" :icon="Warning" color="danger" />
         </el-col>
       </el-row>
       <!-- 已載入但無資料：不能留孤兒標題（週末/失敗都要說清楚） -->
@@ -289,18 +294,18 @@ const anomalyOverflow = computed(
       <template v-if="typedStudentAttendanceSummary">
         <el-row :gutter="20" class="stats-row stats-row--tight">
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="今日在籍學生" :value="typedStudentAttendanceSummary.total_students" icon="UserFilled" color="primary" />
+            <StatCard label="今日在籍學生" :value="typedStudentAttendanceSummary.total_students" :icon="UserFilled" color="primary" />
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="已點名" :value="typedStudentAttendanceSummary.recorded_count" icon="EditPen" color="primary" />
+            <StatCard label="已點名" :value="typedStudentAttendanceSummary.recorded_count" :icon="EditPen" color="primary" />
           </el-col>
           <!-- 色彩語意：到校是好事給 success；warning/danger 保留給需要行動的指標 -->
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="到校" :value="typedStudentAttendanceSummary.on_campus_count" icon="CircleCheck" color="success" />
+            <StatCard label="到校" :value="typedStudentAttendanceSummary.on_campus_count" :icon="CircleCheck" color="success" />
           </el-col>
           <!-- 「未點名」已升為今日待辦磚（一個數字一個家），此格改放中性的請假數 -->
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="請假" :value="typedStudentAttendanceSummary.leave_count" icon="Document" color="info" />
+            <StatCard label="請假" :value="typedStudentAttendanceSummary.leave_count" :icon="Document" color="info" />
           </el-col>
         </el-row>
         <el-card class="no-hover student-summary-bar">

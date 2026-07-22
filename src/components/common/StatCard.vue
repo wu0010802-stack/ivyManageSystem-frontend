@@ -13,10 +13,14 @@
 </template>
 
 <script setup lang="ts">
+import type { Component } from 'vue'
+
+// icon 只收元件物件：字串名走 <component :is> 需全域註冊，局部 import 的
+// EP icon 傳字串會靜默渲染成空色塊
 withDefaults(defineProps<{
   label: string
   value: string | number
-  icon: string | object
+  icon: Component
   color?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   variant?: 'default' | 'filled'
 }>(), {
