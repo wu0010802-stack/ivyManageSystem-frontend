@@ -7,7 +7,6 @@
  * 起訖日/基準日由後端依 academic_year+semester 固定推算。
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { Plus, Check } from '@element-plus/icons-vue'
 
 import {
