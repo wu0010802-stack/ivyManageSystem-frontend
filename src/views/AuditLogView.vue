@@ -365,7 +365,11 @@ const openHistory = async (row: AuditLog) => {
   await fetchHistoryPage()
 }
 
+// 歷史軌跡請求序號：丟棄過期回應（連點/換列時舊請求後到，避免跨資源污染）
+let historyRequestSeq = 0
+
 const fetchHistoryPage = async () => {
+  const seq = ++historyRequestSeq
   historyDrawer.loading = true
   try {
     // 不帶 start_at/end_at：後端對 entity_type+entity_id 查詢不套 30 天窗，
@@ -376,13 +380,14 @@ const fetchHistoryPage = async () => {
       page: historyDrawer.page,
       page_size: HISTORY_PAGE_SIZE,
     })
+    if (seq !== historyRequestSeq) return
     const d = res.data as { items: AuditLog[]; total: number }
     historyDrawer.items.push(...d.items)
     historyDrawer.total = d.total
   } catch {
-    ElMessage.error('載入歷史軌跡失敗')
+    if (seq === historyRequestSeq) ElMessage.error('載入歷史軌跡失敗')
   } finally {
-    historyDrawer.loading = false
+    if (seq === historyRequestSeq) historyDrawer.loading = false
   }
 }
 
@@ -578,7 +583,7 @@ defineExpose({ formatOperator })
           </el-timeline-item>
         </el-timeline>
         <div v-if="historyHasMore" class="history-more">
-          <el-button size="small" @click="loadOlderHistory">載入更早</el-button>
+          <el-button size="small" :disabled="historyDrawer.loading" @click="loadOlderHistory">載入更早</el-button>
         </div>
         <div v-if="!historyDrawer.loading && historyDrawer.items.length === 0" class="no-changes">
           此資源尚無稽核紀錄。
