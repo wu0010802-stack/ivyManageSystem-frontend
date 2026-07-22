@@ -37655,6 +37655,7 @@ export interface operations {
                 ip_address?: string | null;
                 page?: number;
                 page_size?: number;
+                risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
                 start_at?: string | null;
                 username?: string | null;
             };
@@ -37754,6 +37755,7 @@ export interface operations {
                 entity_id?: string | null;
                 entity_type?: string | null;
                 ip_address?: string | null;
+                risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
                 start_at?: string | null;
                 username?: string | null;
             };
