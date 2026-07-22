@@ -174,6 +174,7 @@ const onSaved = async () => {
       <aside class="detail-aside">
         <div class="avatar-placeholder"><el-icon :size="64" color="#909399"><User /></el-icon></div>
         <h3 class="emp-name">{{ employee.name || '—' }}</h3>
+        <div v-if="employee.english_name" class="emp-english-name">{{ employee.english_name }}</div>
         <div class="emp-meta">
           <div><span class="meta-label">編號</span>{{ employee.employee_id || '—' }}</div>
           <div><span class="meta-label">教育局職稱</span>{{ employee.job_title_name || employee.title || '—' }}</div>
@@ -282,6 +283,7 @@ const onSaved = async () => {
 .subsection-title { margin: 16px 0 8px; font-size: 13px; color: var(--el-text-color-secondary); }
 .avatar-placeholder { width: 96px; height: 96px; border-radius: 50%; background: var(--el-color-info-light-9); display: flex; align-items: center; justify-content: center; margin: 4px auto 12px; }
 .emp-name { margin: 0 0 12px; font-size: 18px; }
+.emp-english-name { font-size: 13px; color: var(--el-text-color-secondary); margin-top: 2px; }
 .emp-meta { text-align: left; font-size: 13px; color: var(--el-text-color-regular); line-height: 1.9; padding: 0 4px; }
 .emp-meta .meta-label { display: inline-block; width: 72px; color: var(--el-text-color-secondary); }
 .aside-actions { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }

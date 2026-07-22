@@ -4415,7 +4415,17 @@ export interface paths {
         get: operations["get_insurance_rates_api_config_insurance_rates_get"];
         /**
          * Update Insurance Rates
-         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）
+         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）。
+         *
+         *     金流硬化（資安 R-13 mitigation (a) InsuranceRate 分支，2026-07-21）：
+         *     - 只有 SETTINGS_WRITE 不夠（HR 行政都有）→ 額外要求 has_finance_approve
+         *       （ACTIVITY_PAYMENT_APPROVE）。否則持 SETTINGS_WRITE 的 admin 可建立惡意金額
+         *       的費率版本（甚至 is_active=False 的歷史 rate_year），被 `_select_active_at` /
+         *       歷史補算以 id desc 撿到且無稽核軌跡（見 SPEC-002 R-13 / SPEC-001 §18）。
+         *       與 PUT /bonus（api/config/bonus.py）、PUT/DELETE /insurance/brackets
+         *       （api/insurance.py）三處守衛對齊。
+         *     - reason 必填，會與 changed_fields 一併寫入 audit_logs.changes。
+         *     - 守衛置於 try 之外：try 內 except 會經 raise_safe_500 把 403 洗成 500。
          */
         put: operations["update_insurance_rates_api_config_insurance_rates_put"];
         post?: never;
@@ -9263,7 +9273,10 @@ export interface paths {
         get?: never;
         /**
          * Portal Batch Update Attendance
-         * @description 批次點名：限課程指定老師；具 ACTIVITY_WRITE 者可代為處理。
+         * @description 批次點名：任何教師可點整堂跨班名冊；無效報名略過（對齊 admin）。
+         *
+         *     ``ActivityCourse.instructor_employee_id`` 僅供年終教課獎勵金歸屬，不能作為
+         *     點名授權來源；既有課程與外聘老師課程都可能合法為 NULL。
          */
         put: operations["portal_batch_update_attendance_api_portal_activity_attendance_sessions__session_id__records_put"];
         post?: never;
@@ -17577,7 +17590,7 @@ export interface components {
         };
         /**
          * ClassroomDetailStudentOut
-         * @description GET /classrooms/{id} 內學生單筆（健康欄位由 router 端依權限遮罩成 None）。
+         * @description GET /classrooms/{id} 學生單筆；名冊、健康及家長 PII 由 router 依權限遮罩。
          */
         ClassroomDetailStudentOut: {
             /** Allergy */
@@ -19430,6 +19443,8 @@ export interface components {
             employee_id: string;
             /** Employee Type */
             employee_type: string;
+            /** English Name */
+            english_name?: string | null;
             /** Gender */
             gender?: string | null;
             /**
@@ -21286,6 +21301,11 @@ export interface components {
             pension_employer_rate?: number | null;
             /** Rate Year */
             rate_year?: number | null;
+            /**
+             * Reason
+             * @description 變更原因（必填，落入 audit）
+             */
+            reason?: string | null;
         };
         /** IntakePlanOut */
         IntakePlanOut: {
@@ -30172,8 +30192,6 @@ export interface components {
             parent_phone?: string | null;
             /** Special Needs */
             special_needs?: string | null;
-            /** Source Classroom Id */
-            source_classroom_id?: number | null;
             /** Status Tag */
             status_tag?: string | null;
         };
@@ -30904,6 +30922,8 @@ export interface components {
             parent_name?: string | null;
             /** Parent Phone */
             parent_phone?: string | null;
+            /** Source Classroom Id */
+            source_classroom_id?: number | null;
             /** Special Needs */
             special_needs?: string | null;
             /** Status Tag */

@@ -309,3 +309,21 @@ describe('EmployeeDetailView 錨點導覽升級', () => {
     expect(w.findAll('.anchor-link')[0].classes()).not.toContain('is-active')
   })
 })
+
+describe('EmployeeDetailView 英文名顯示', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('aside 顯示員工英文名', () => {
+    const w = mountDetail({
+      employee: { id: 1, name: '王小明', english_name: 'Ming Wang', is_active: true, employee_type: 'regular', base_salary: 30000 },
+    })
+    expect(w.find('.detail-aside').text()).toContain('Ming Wang')
+  })
+
+  it('無英文名（null）時 aside 不渲染英文名區塊', () => {
+    const w = mountDetail({
+      employee: { id: 1, name: '王小明', english_name: null, is_active: true, employee_type: 'regular', base_salary: 30000 },
+    })
+    expect(w.find('.emp-english-name').exists()).toBe(false)
+  })
+})
