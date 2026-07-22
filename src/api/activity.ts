@@ -171,6 +171,14 @@ export const updateWaitlistPromotedEmailTemplate = (data: ApiBody<'/activity/set
 export const testSendWaitlistPromotedEmail = (data: ApiBody<'/activity/settings/waitlist-promoted-email/test-send', 'post'>): AxiosResp<'/activity/settings/waitlist-promoted-email/test-send', 'post'> =>
   api.post('/activity/settings/waitlist-promoted-email/test-send', data)
 
+// 報名成功通知信樣板
+export const getRegistrationSuccessEmailTemplate = (): AxiosResp<'/activity/settings/registration-success-email', 'get'> =>
+  api.get('/activity/settings/registration-success-email')
+export const updateRegistrationSuccessEmailTemplate = (data: ApiBody<'/activity/settings/registration-success-email', 'put'>): AxiosResp<'/activity/settings/registration-success-email', 'put'> =>
+  api.put('/activity/settings/registration-success-email', data)
+export const testSendRegistrationSuccessEmail = (data: ApiBody<'/activity/settings/registration-success-email/test-send', 'post'>): AxiosResp<'/activity/settings/registration-success-email/test-send', 'post'> =>
+  api.post('/activity/settings/registration-success-email/test-send', data)
+
 // 海報上傳（multipart）
 export const uploadActivityPoster = (file: File): AxiosResp<'/activity/settings/poster', 'post'> => {
   const form = new FormData()

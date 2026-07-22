@@ -2,198 +2,183 @@
   <div class="activity-settings">
     <h2>報名時間 & 前台顯示設定</h2>
 
-    <el-card style="max-width: 720px" v-loading="loading">
-      <el-form :model="form" label-width="120px">
-        <el-divider content-position="left">報名開關</el-divider>
+    <el-tabs v-model="activeTab" class="settings-tabs" @tab-change="handleTabChange">
+      <el-tab-pane label="報名設定" name="registration">
+        <el-card style="max-width: 720px" v-loading="loading">
+          <el-form :model="form" label-width="120px">
+            <el-divider content-position="left">報名開關</el-divider>
 
-        <el-form-item label="開放報名">
-          <el-switch v-model="form.is_open" active-text="開放" inactive-text="關閉" />
-        </el-form-item>
-        <el-form-item label="開放時間">
-          <el-date-picker
-            v-model="form.open_at"
-            type="datetime"
-            placeholder="選擇開放時間"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DDTHH:mm"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="截止時間">
-          <el-date-picker
-            v-model="form.close_at"
-            type="datetime"
-            placeholder="選擇截止時間"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DDTHH:mm"
-            style="width: 100%"
-          />
-        </el-form-item>
+            <el-form-item label="開放報名">
+              <el-switch v-model="form.is_open" active-text="開放" inactive-text="關閉" />
+            </el-form-item>
+            <el-form-item label="開放時間">
+              <el-date-picker
+                v-model="form.open_at"
+                type="datetime"
+                placeholder="選擇開放時間"
+                format="YYYY-MM-DD HH:mm"
+                value-format="YYYY-MM-DDTHH:mm"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-form-item label="截止時間">
+              <el-date-picker
+                v-model="form.close_at"
+                type="datetime"
+                placeholder="選擇截止時間"
+                format="YYYY-MM-DD HH:mm"
+                value-format="YYYY-MM-DDTHH:mm"
+                style="width: 100%"
+              />
+            </el-form-item>
 
-        <el-divider content-position="left">前台顯示文字</el-divider>
+            <el-divider content-position="left">前台顯示文字</el-divider>
 
-        <el-form-item label="頁面主標題">
-          <el-input
-            v-model="form.page_title"
-            maxlength="200"
-            show-word-limit
-            placeholder="例：114 下藝童趣｜課後才藝報名"
-          />
-        </el-form-item>
-        <el-form-item label="學期徽章">
-          <el-input
-            v-model="form.term_label"
-            maxlength="50"
-            show-word-limit
-            placeholder="例：114 下學期"
-          />
-        </el-form-item>
-        <el-form-item label="活動日期">
-          <el-input
-            v-model="form.event_date_label"
-            maxlength="50"
-            show-word-limit
-            placeholder="例：2026-02-23"
-          />
-        </el-form-item>
-        <el-form-item label="對象說明">
-          <el-input
-            v-model="form.target_audience"
-            maxlength="100"
-            show-word-limit
-            placeholder="例：本園在學幼兒"
-          />
-        </el-form-item>
-        <el-form-item label="表單卡片標題">
-          <el-input
-            v-model="form.form_card_title"
-            maxlength="200"
-            show-word-limit
-            placeholder="例：114 下藝童趣 · 2026-02-23"
-          />
-        </el-form-item>
+            <el-form-item label="頁面主標題">
+              <el-input
+                v-model="form.page_title"
+                maxlength="200"
+                show-word-limit
+                placeholder="例：114 下藝童趣｜課後才藝報名"
+              />
+            </el-form-item>
+            <el-form-item label="學期徽章">
+              <el-input
+                v-model="form.term_label"
+                maxlength="50"
+                show-word-limit
+                placeholder="例：114 下學期"
+              />
+            </el-form-item>
+            <el-form-item label="活動日期">
+              <el-input
+                v-model="form.event_date_label"
+                maxlength="50"
+                show-word-limit
+                placeholder="例：2026-02-23"
+              />
+            </el-form-item>
+            <el-form-item label="對象說明">
+              <el-input
+                v-model="form.target_audience"
+                maxlength="100"
+                show-word-limit
+                placeholder="例：本園在學幼兒"
+              />
+            </el-form-item>
+            <el-form-item label="表單卡片標題">
+              <el-input
+                v-model="form.form_card_title"
+                maxlength="200"
+                show-word-limit
+                placeholder="例：114 下藝童趣 · 2026-02-23"
+              />
+            </el-form-item>
 
-        <el-divider content-position="left">活動海報</el-divider>
+            <el-divider content-position="left">活動海報</el-divider>
 
-        <el-form-item label="目前海報">
-          <div class="poster-row">
-            <img
-              :src="posterPreview"
-              alt="目前活動海報"
-              class="poster-img"
-              @error="onPosterLoadError"
-            />
-            <div class="poster-actions">
-              <el-upload
-                :auto-upload="true"
-                :show-file-list="false"
-                :http-request="handlePosterUpload"
-                accept=".jpg,.jpeg,.png,.gif,.webp"
-                :before-upload="beforePosterUpload"
-              >
-                <el-button type="primary" :loading="uploading">
-                  上傳新海報
-                </el-button>
-              </el-upload>
-              <div class="poster-hint">
-                支援 jpg / jpeg / png / gif / webp，單檔 ≤ 10MB。
+            <el-form-item label="目前海報">
+              <div class="poster-row">
+                <img
+                  :src="posterPreview"
+                  alt="目前活動海報"
+                  class="poster-img"
+                  @error="onPosterLoadError"
+                />
+                <div class="poster-actions">
+                  <el-upload
+                    :auto-upload="true"
+                    :show-file-list="false"
+                    :http-request="handlePosterUpload"
+                    accept=".jpg,.jpeg,.png,.gif,.webp"
+                    :before-upload="beforePosterUpload"
+                  >
+                    <el-button type="primary" :loading="uploading">
+                      上傳新海報
+                    </el-button>
+                  </el-upload>
+                  <div class="poster-hint">
+                    支援 jpg / jpeg / png / gif / webp，單檔 ≤ 10MB。
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </el-form-item>
+            </el-form-item>
 
-        <el-form-item>
-          <el-button type="primary" @click="handleSave" :loading="saving">
-            儲存設定
-          </el-button>
-        </el-form-item>
-      </el-form>
+            <el-form-item>
+              <el-button type="primary" @click="handleSave" :loading="saving">
+                儲存設定
+              </el-button>
+            </el-form-item>
+          </el-form>
 
-      <el-alert
-        v-if="savedAt"
-        type="success"
-        :title="`已於 ${savedAt} 儲存`"
-        :closable="false"
-        style="margin-top: 8px"
-      />
-    </el-card>
-
-    <el-card style="max-width: 720px; margin-top: 16px" v-loading="emailTemplateLoading">
-      <template #header>候補直升正式通知信樣板</template>
-      <p class="email-template-hint">
-        管理員從報名管理刪除正式報名後，候補依序遞補時會直接升為正式報名（略過家長 48
-        小時確認）並寄送這封通知信。可用佔位符：<code>{student_name}</code>、
-        <code>{course_name}</code>、<code>{query_token}</code>、<code>{edit_url}</code>；
-        留空即恢復預設樣板。
-      </p>
-      <el-alert
-        v-if="!emailTemplate.email_enabled"
-        type="warning"
-        title="目前環境尚未啟用 Email 寄送（ACTIVITY_EMAIL_ENABLED / RESEND_API_KEY 未設定），測試寄送與正式通知都不會真的送出"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 12px"
-      />
-      <el-form label-width="80px">
-        <el-form-item label="主旨">
-          <el-input
-            v-model="emailTemplate.subject"
-            data-test="waitlist-email-subject-input"
-            :placeholder="emailTemplate.subject_default"
-            maxlength="200"
-            show-word-limit
+          <el-alert
+            v-if="savedAt"
+            type="success"
+            :title="`已於 ${savedAt} 儲存`"
+            :closable="false"
+            style="margin-top: 8px"
           />
-        </el-form-item>
-        <el-form-item label="內文">
-          <el-input
-            v-model="emailTemplate.body"
-            data-test="waitlist-email-body-input"
-            type="textarea"
-            :rows="10"
-            :placeholder="emailTemplate.body_default"
-            maxlength="4000"
-            show-word-limit
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            data-test="waitlist-email-save-btn"
-            @click="handleSaveEmailTemplate"
-            :loading="savingEmailTemplate"
-          >儲存樣板</el-button>
-        </el-form-item>
+        </el-card>
+      </el-tab-pane>
 
-        <el-divider content-position="left">測試寄送</el-divider>
-        <el-form-item label="收件信箱">
-          <el-input
-            v-model="testSendEmail"
-            data-test="waitlist-email-test-send-input"
-            placeholder="輸入要試寄的信箱"
-            style="max-width: 320px"
-          />
-          <el-button
-            style="margin-left: 8px"
-            data-test="waitlist-email-test-send-btn"
-            @click="handleTestSend"
-            :loading="testSending"
-          >測試寄送</el-button>
-        </el-form-item>
-      </el-form>
+      <el-tab-pane label="候補轉正信模板" name="waitlistEmail">
+        <EmailTemplateEditor
+          title="候補直升正式通知信樣板"
+          hint-text="管理員從報名管理刪除正式報名後，候補依序遞補時會直接升為正式報名（略過家長 48 小時確認）並寄送這封通知信。"
+          :placeholders="['student_name', 'course_name', 'query_token', 'edit_url']"
+          :loading="emailTemplateLoading"
+          v-model:subject="emailTemplate.subject"
+          v-model:body="emailTemplate.body"
+          :subject-default="emailTemplate.subject_default"
+          :body-default="emailTemplate.body_default"
+          :email-enabled="emailTemplate.email_enabled"
+          :saving="savingEmailTemplate"
+          :saved-at="emailTemplateSavedAt"
+          v-model:test-email="testSendEmail"
+          :test-sending="testSending"
+          data-test-prefix="waitlist-email"
+          @save="handleSaveEmailTemplate"
+          @test-send="handleTestSend"
+        />
+      </el-tab-pane>
 
-      <el-alert
-        v-if="emailTemplateSavedAt"
-        type="success"
-        :title="`已於 ${emailTemplateSavedAt} 儲存`"
-        :closable="false"
-        style="margin-top: 8px"
-      />
-    </el-card>
+      <el-tab-pane label="報名成功模板" name="successEmail">
+        <EmailTemplateEditor
+          title="報名成功通知信樣板"
+          hint-text="家長於前台完成報名並留下 email 時，系統會寄送這封通知信確認已收到報名資料。"
+          :placeholders="[
+            'student_name',
+            'class_name',
+            'school_year',
+            'semester',
+            'courses_list',
+            'supplies_section',
+            'total_amount',
+            'query_token',
+            'edit_url',
+          ]"
+          :loading="successEmailTemplateLoading"
+          v-model:subject="successEmailTemplate.subject"
+          v-model:body="successEmailTemplate.body"
+          :subject-default="successEmailTemplate.subject_default"
+          :body-default="successEmailTemplate.body_default"
+          :email-enabled="successEmailTemplate.email_enabled"
+          :saving="savingSuccessEmailTemplate"
+          :saved-at="successEmailTemplateSavedAt"
+          v-model:test-email="successTestSendEmail"
+          :test-sending="successTestSending"
+          data-test-prefix="success-email"
+          @save="handleSaveSuccessEmailTemplate"
+          @test-send="handleSuccessTestSend"
+        />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { h, ref, computed, onMounted } from 'vue'
+import { h, ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import type { UploadRawFile } from 'element-plus'
@@ -204,11 +189,15 @@ import {
   getWaitlistPromotedEmailTemplate,
   updateWaitlistPromotedEmailTemplate,
   testSendWaitlistPromotedEmail,
+  getRegistrationSuccessEmailTemplate,
+  updateRegistrationSuccessEmailTemplate,
+  testSendRegistrationSuccessEmail,
 } from '@/api/activity'
 import {
   buildSaveConfirmLines,
   taipeiNowMinuteString,
 } from './registrationSettingsConfirm'
+import EmailTemplateEditor from './EmailTemplateEditor.vue'
 
 interface SettingsForm {
   is_open: boolean
@@ -222,13 +211,44 @@ interface SettingsForm {
   poster_url: string
 }
 
-interface WaitlistPromotedEmailTemplateForm {
+interface EmailTemplateForm {
   subject: string | null
   body: string | null
   subject_default: string
   body_default: string
   email_enabled: boolean
 }
+
+const route = useRoute()
+const router = useRouter()
+
+const VALID_TABS = ['registration', 'waitlistEmail', 'successEmail']
+const queryTab = route.query.tab as string | undefined
+const initialTab = queryTab && VALID_TABS.includes(queryTab) ? queryTab : 'registration'
+const activeTab = ref(initialTab)
+
+function handleTabChange(tab: string | number) {
+  const tabStr = String(tab)
+  const nextQuery = { ...route.query }
+  if (tabStr === 'registration') {
+    delete nextQuery.tab
+  } else {
+    nextQuery.tab = tabStr
+  }
+  router.replace({ query: nextQuery })
+}
+
+watch(
+  () => route.query.tab,
+  (next) => {
+    const nextStr = next as string | undefined
+    if (nextStr && VALID_TABS.includes(nextStr) && nextStr !== activeTab.value) {
+      activeTab.value = nextStr
+    } else if (!nextStr && activeTab.value !== 'registration') {
+      activeTab.value = 'registration'
+    }
+  }
+)
 
 const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -379,7 +399,7 @@ const savingEmailTemplate = ref(false)
 const testSending = ref(false)
 const emailTemplateSavedAt = ref('')
 const testSendEmail = ref('')
-const emailTemplate = ref<WaitlistPromotedEmailTemplateForm>({
+const emailTemplate = ref<EmailTemplateForm>({
   subject: null,
   body: null,
   subject_default: '',
@@ -391,7 +411,7 @@ async function fetchEmailTemplate() {
   emailTemplateLoading.value = true
   try {
     const res = await getWaitlistPromotedEmailTemplate()
-    emailTemplate.value = res.data as WaitlistPromotedEmailTemplateForm
+    emailTemplate.value = res.data as EmailTemplateForm
   } catch {
     ElMessage.error('載入候補直升正式通知信樣板失敗')
   } finally {
@@ -406,7 +426,7 @@ async function handleSaveEmailTemplate() {
       subject: emailTemplate.value.subject || null,
       body: emailTemplate.value.body || null,
     })
-    emailTemplate.value = res.data as WaitlistPromotedEmailTemplateForm
+    emailTemplate.value = res.data as EmailTemplateForm
     ElMessage.success('樣板已儲存')
     emailTemplateSavedAt.value = new Date().toLocaleString('zh-TW')
   } catch (e) {
@@ -438,15 +458,89 @@ async function handleTestSend() {
   }
 }
 
+// ── 報名成功通知信樣板 ───────────────────────────────────────────────
+const successEmailTemplateLoading = ref(false)
+const savingSuccessEmailTemplate = ref(false)
+const successTestSending = ref(false)
+const successEmailTemplateSavedAt = ref('')
+const successTestSendEmail = ref('')
+const successEmailTemplate = ref<EmailTemplateForm>({
+  subject: null,
+  body: null,
+  subject_default: '',
+  body_default: '',
+  email_enabled: false,
+})
+
+async function fetchSuccessEmailTemplate() {
+  successEmailTemplateLoading.value = true
+  try {
+    const res = await getRegistrationSuccessEmailTemplate()
+    successEmailTemplate.value = res.data as EmailTemplateForm
+  } catch {
+    ElMessage.error('載入報名成功通知信樣板失敗')
+  } finally {
+    successEmailTemplateLoading.value = false
+  }
+}
+
+async function handleSaveSuccessEmailTemplate() {
+  savingSuccessEmailTemplate.value = true
+  try {
+    const res = await updateRegistrationSuccessEmailTemplate({
+      subject: successEmailTemplate.value.subject || null,
+      body: successEmailTemplate.value.body || null,
+    })
+    successEmailTemplate.value = res.data as EmailTemplateForm
+    ElMessage.success('樣板已儲存')
+    successEmailTemplateSavedAt.value = new Date().toLocaleString('zh-TW')
+  } catch (e) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '儲存失敗')
+  } finally {
+    savingSuccessEmailTemplate.value = false
+  }
+}
+
+async function handleSuccessTestSend() {
+  if (!successTestSendEmail.value.trim()) {
+    ElMessage.warning('請輸入測試收件信箱')
+    return
+  }
+  successTestSending.value = true
+  try {
+    const res = await testSendRegistrationSuccessEmail({
+      to_email: successTestSendEmail.value.trim(),
+      subject: successEmailTemplate.value.subject || undefined,
+      body: successEmailTemplate.value.body || undefined,
+    })
+    ElMessage.success((res.data as { message: string }).message)
+  } catch (e) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '測試寄送失敗')
+  } finally {
+    successTestSending.value = false
+  }
+}
+
 onMounted(() => {
   fetchSettings()
   fetchEmailTemplate()
+  fetchSuccessEmailTemplate()
 })
 </script>
 
 <style scoped>
 .activity-settings { padding: 16px; }
 .activity-settings h2 { margin-bottom: 16px; font-size: 20px; font-weight: 600; }
+
+.settings-tabs :deep(.el-tabs__header) {
+  margin-bottom: 8px;
+}
+.settings-tabs :deep(.el-tabs__item) {
+  font-size: 15px;
+  font-weight: 600;
+}
 
 .poster-row {
   display: flex;
@@ -470,17 +564,5 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.5;
-}
-
-.email-template-hint {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0 0 12px;
-}
-.email-template-hint code {
-  background: var(--el-fill-color-light, #f3f4f6);
-  padding: 1px 4px;
-  border-radius: 3px;
 }
 </style>
