@@ -69,9 +69,14 @@ vi.mock('@/composables/useErrorNotify', () => ({
 // ScorePreviewDialog.spec.ts 用真實 prop 矩陣測過，此處只驗證 wiring——但 wiring
 // 測試必須能覆蓋「無寫入權限」分支，否則測不出 hasPermission 回傳值真的有被
 // 讀取並正確傳遞（比照 AppraisalYearEndLayout.spec.ts 的 permState 寫法）。
-const permState = { eventWrite: true }
+// Task A7：新增 finalize 旗標——CreateCycleDialog 的 canWrite 對齊後端
+// POST /appraisal/cycles 守衛（Permission.APPRAISAL_FINALIZE）。
+const permState = { eventWrite: true, finalize: true }
 vi.mock('@/utils/auth', () => ({
-  hasPermission: vi.fn((p) => p === 'APPRAISAL_EVENT_WRITE' && permState.eventWrite),
+  hasPermission: vi.fn(
+    (p) => (p === 'APPRAISAL_EVENT_WRITE' && permState.eventWrite)
+      || (p === 'APPRAISAL_FINALIZE' && permState.finalize),
+  ),
 }))
 
 import {
@@ -234,6 +239,18 @@ const GLOBAL_STUBS = {
       '<button data-test="score-preview-dialog-stub-synced-btn" @click="$emit(\'synced\')" />' +
       '</div>',
   },
+  // Task A7：3 入口統一改開 CreateCycleDialog；實際表單/canWrite gate/送出流程已在
+  // CreateCycleDialog.spec.ts 用真實元件測過，這裡只驗證 parent wiring——canWrite 傳遞
+  // 是否正確、開關與 @created 後續處理（reload / setTerm）是否被觸發。
+  CreateCycleDialog: {
+    props: ['visible', 'canWrite'],
+    emits: ['update:visible', 'created'],
+    template:
+      '<div v-if="visible" data-test="create-cycle-dialog-stub" :data-can-write="canWrite">' +
+      '<button data-test="create-cycle-dialog-stub-created-btn" ' +
+      '@click="$emit(\'created\', { id: 12, academic_year: 114, semester: \'FIRST\' })" />' +
+      '</div>',
+  },
 }
 
 const SAMPLE_CYCLE = {
@@ -319,6 +336,7 @@ describe('CurrentSemesterOverview', () => {
     termState.school_year = 114
     termState.semester = 1
     permState.eventWrite = true
+    permState.finalize = true
   })
 
   it('cycle 為 null 時顯示 banner 與建立按鈕', async () => {
@@ -653,6 +671,7 @@ describe('CurrentSemesterOverview 清單篩選（Task 4）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     permState.eventWrite = true
+    permState.finalize = true
   })
 
   it('overviewSearch 以姓名過濾 filteredParticipants', async () => {
@@ -695,6 +714,7 @@ describe('CurrentSemesterOverview 進頁即算 refresh（Task 8）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     permState.eventWrite = true
+    permState.finalize = true
   })
 
   it('OPEN cycle mount 時，refreshAppraisalCycle 在 getAppraisalAllEmployeesStatus 之前被呼叫', async () => {
@@ -779,6 +799,7 @@ describe('CurrentSemesterOverview 精修（Task 7）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     permState.eventWrite = true
+    permState.finalize = true
   })
 
   it('出缺勤欄：全零顯示 —，非零僅列非零項', async () => {
@@ -897,6 +918,7 @@ describe('CurrentSemesterOverview 引導條（Task A3）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     permState.eventWrite = true
+    permState.finalize = true
     guidePushMock.mockClear()
     getSignStatusSummary.mockResolvedValue({ data: { counts: {} } })
   })
@@ -926,16 +948,66 @@ describe('CurrentSemesterOverview 引導條（Task A3）', () => {
     expect(guide.props('statuses').participants).toBe('current')
   })
 
-  it('無週期時點 create 引導步驟，呼叫既有建立週期流程', async () => {
+  it('Task A7：無週期時點 create 引導步驟，開啟統一建週期 dialog（不再直接呼叫 API）', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: null })
-    createAppraisalCycle.mockResolvedValue({ data: { id: 12 } })
     const wrapper = await mountView()
 
     expect(wrapper.find('[data-test="guide-step-create"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').exists()).toBe(false)
     await wrapper.find('[data-test="guide-step-create"]').trigger('click')
     await flushPromises()
 
-    expect(createAppraisalCycle).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').exists()).toBe(true)
+    expect(createAppraisalCycle).not.toHaveBeenCalled()
+  })
+
+  it('Task A7：建立按鈕（banner）也開啟同一 CreateCycleDialog，canWrite 反映 hasPermission(APPRAISAL_FINALIZE)', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: null })
+    permState.finalize = false
+    const wrapper = await mountView()
+
+    await wrapper.find('[data-test="create-cycle-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.exists()).toBe(true)
+    expect(dialogStub.attributes('data-can-write')).toBe('false')
+  })
+
+  it('Task A7：CreateCycleDialog emit created（同學期）後 reloadAll 讓 cycle 生效，引導條前進至 participants', async () => {
+    getAppraisalCurrentCycle.mockResolvedValueOnce({ data: null })
+    const wrapper = await mountView()
+
+    // 建立前：無週期 banner 存在
+    expect(wrapper.find('[data-test="no-cycle-banner"]').exists()).toBe(true)
+
+    // 建立後 reloadAll 應重新取得 cycle（且無成員 → participants 步驟高亮 current）
+    getAppraisalCurrentCycle.mockResolvedValueOnce({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture({ extra: [] }) })
+
+    await wrapper.find('[data-test="guide-step-create"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="create-cycle-dialog-stub-created-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="no-cycle-banner"]').exists()).toBe(false)
+    expect(setTermMock).not.toHaveBeenCalled()
+  })
+
+  it('Task A7：CreateCycleDialog emit created（跨學期）後改呼叫 setTerm 切換當期', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: null })
+    const wrapper = await mountView()
+
+    await wrapper.find('[data-test="guide-step-create"]').trigger('click')
+    await flushPromises()
+    // stub 固定 emit { id: 12, academic_year: 114, semester: 'FIRST' }；模擬使用者把
+    // termState 停在 115 學年（等同 dialog 內把學年改成 114，與目前檢視中的 115 不同）
+    termState.school_year = 115
+    await wrapper.find('[data-test="create-cycle-dialog-stub-created-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(setTermMock).toHaveBeenCalledWith(114, 1)
   })
 
   it('成員齊全時點 participants 引導步驟，捲動至成員區（非觸發一鍵加入寫入）', async () => {

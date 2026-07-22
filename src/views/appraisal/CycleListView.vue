@@ -12,14 +12,16 @@ import { ElMessage } from 'element-plus'
 import { Plus, Refresh, Upload, MoreFilled } from '@element-plus/icons-vue'
 import {
   listAppraisalCycles,
-  createAppraisalCycle,
   importAppraisalExcel,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { hasPermission } from '@/utils/auth'
 import { cycleStatusLabel } from '@/constants/appraisalYearEnd'
 import CycleDetailPanel from './CycleDetailPanel.vue'
+import CreateCycleDialog from './components/CreateCycleDialog.vue'
+import type { CreatedCycle } from './composables/useCreateCycle'
 import type { UploadRawFile } from 'element-plus'
 
 interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; enrollment_actual?: number | null; enrollment_target?: number | null; status?: string }
@@ -28,20 +30,17 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const cycles = ref<Cycle[]>([])
-const createDialog = ref(false)
+// Task A7：自帶「新增週期」dialog 改用共用 CreateCycleDialog（本頁只負責開關 +
+// @created 後 reload）；canWrite gate 對齊後端 POST /appraisal/cycles 守衛
+// （Permission.APPRAISAL_FINALIZE）。
+const createDialogVisible = ref(false)
+const canCreateCycle = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 const importDialog = ref(false)
 const submitting = ref(false)
 const importFallbackNotice = '系統已支援進頁重算與手動事件維護；Excel 匯入僅供例外對稿或歷史資料修復。'
 
 const term = useAcademicTermStore()
 const west = term.school_year + 1911 // 學年起始西元年
-
-const form = ref({
-  academic_year: term.school_year,
-  semester: (term.semester === 2 ? 'SECOND' : 'FIRST') as 'FIRST' | 'SECOND',
-  enrollment_target: null as number | null,
-  enrollment_actual: null as number | null,
-})
 
 // 匯入日期預設依學期推算（僅供修改的建議值；基準日對齊 9/15、3/15 口徑）
 const importForm = ref({
@@ -112,18 +111,9 @@ async function load() {
   }
 }
 
-async function submit() {
-  submitting.value = true
-  try {
-    await createAppraisalCycle({ ...form.value, enrollment_target: form.value.enrollment_target ?? 0 })
-    ElMessage.success('建立成功')
-    createDialog.value = false
-    await load()
-  } catch (e) {
-    ElMessage.error(apiError(e, '建立失敗'))
-  } finally {
-    submitting.value = false
-  }
+// CreateCycleDialog 自身已在 submit 成功時彈「考核週期已建立」toast，此處僅需 reload。
+async function handleCycleCreated(_cycle: CreatedCycle) {
+  await load()
 }
 
 async function doImport() {
@@ -172,7 +162,7 @@ onMounted(load)
           :label="cycleLabel(c)"
         />
       </el-select>
-      <el-button type="primary" :icon="Plus" @click="createDialog = true">新增週期</el-button>
+      <el-button type="primary" :icon="Plus" @click="createDialogVisible = true">新增週期</el-button>
       <el-dropdown trigger="click">
         <el-button :icon="MoreFilled">更多操作</el-button>
         <template #dropdown>
@@ -196,29 +186,15 @@ onMounted(load)
       :cycle-id="selectedCycleId"
     />
     <el-empty v-else-if="!loading" description="尚未建立任何考核週期">
-      <el-button type="primary" :icon="Plus" @click="createDialog = true">新增週期</el-button>
+      <el-button type="primary" :icon="Plus" @click="createDialogVisible = true">新增週期</el-button>
     </el-empty>
 
-    <!-- 新增 -->
-    <el-dialog v-model="createDialog" title="新增半年考核週期" width="520px">
-      <el-form :model="form" label-width="120px">
-        <el-form-item label="學年">
-          <el-input-number v-model="form.academic_year" :min="100" :max="200" />
-        </el-form-item>
-        <el-form-item label="學期">
-          <el-radio-group v-model="form.semester">
-            <el-radio-button value="FIRST">上學期</el-radio-button>
-            <el-radio-button value="SECOND">下學期</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="招生目標"><el-input-number v-model="form.enrollment_target" :min="0" placeholder="可稍後於規則設定→學年目標人數補填" /></el-form-item>
-        <el-form-item label="實際註冊"><el-input-number v-model="form.enrollment_actual" :min="0" /></el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="createDialog = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submit">建立</el-button>
-      </template>
-    </el-dialog>
+    <!-- 新增（Task A7：改用統一 CreateCycleDialog，取代原本自帶的完整表單）-->
+    <CreateCycleDialog
+      v-model:visible="createDialogVisible"
+      :can-write="canCreateCycle"
+      @created="handleCycleCreated"
+    />
 
     <!-- 上傳 Excel -->
     <el-dialog v-model="importDialog" title="例外匯入半年考核 Excel" width="560px">

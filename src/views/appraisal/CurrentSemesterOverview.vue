@@ -18,7 +18,6 @@ import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import {
   getAppraisalCurrentCycle,
   getAppraisalAllEmployeesStatus,
-  createAppraisalCycle,
   addAppraisalParticipant,
   bulkAddAppraisalParticipantsFromActive,
   listScoringRules,
@@ -35,8 +34,10 @@ import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
 import ManualEventEntrySection from './components/ManualEventEntrySection.vue'
 import ScorePreviewDialog from './components/ScorePreviewDialog.vue'
+import CreateCycleDialog from './components/CreateCycleDialog.vue'
 import AppraisalProcessGuide from './components/AppraisalProcessGuide.vue'
 import { deriveAppraisalStepStatuses, type AppraisalStepInput, type AppraisalStepKey } from './appraisalSteps'
+import type { CreatedCycle } from './composables/useCreateCycle'
 
 interface CurrentCycle {
   id: number
@@ -90,9 +91,6 @@ interface AggregatedStatus { participants?: ParticipantRow[]; generated_at?: str
 const termStore = useAcademicTermStore()
 const { notify } = useErrorNotify()
 const router = useRouter()
-
-// ── 後端 semester enum ────────────────────────────────────
-const toSemesterEnum = (n: number | string) => (Number(n) === 1 ? 'FIRST' : 'SECOND')
 
 // ── 取得 current cycle（依 termStore 切換）────────────────
 const currentCycle = ref<CurrentCycle | null>(null)
@@ -440,34 +438,31 @@ async function bulkAddAll() {
   }
 }
 
-// ── 建立本學期週期（日期由後端依 academic_year+semester 自動推算）──
-const creatingCycle = ref(false)
+// ── 建立本學期週期（Task A7：3 入口統一改開共用 CreateCycleDialog，本頁只負責
+// 開關 dialog 與 @created 後續處理；建立/日期推算/寫入權限全移入該元件）──
+const createDialogVisible = ref(false)
+// canWrite gate 對齊後端 POST /appraisal/cycles 守衛（Permission.APPRAISAL_FINALIZE）
+const canCreateCycle = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 
-async function createCurrentCycle() {
-  try {
-    await ElMessageBox.confirm(
-      `將為 ${termStore.school_year} 學年度 ${termStore.semester === 1 ? '上' : '下'}學期建立考核週期，確定嗎？`,
-      '建立考核週期',
-      { type: 'info' },
-    )
-  } catch {
+function openCreateDialog() {
+  createDialogVisible.value = true
+}
+
+// 建立成功後「設當期」：若使用者在 dialog 內把學年學期改成非目前檢視中的學期，
+// 切換 termStore 讓總覽跟著新週期走（既有 watch(termStore...) 會自動觸發 reloadAll）；
+// 未改動（最常見）則直接 reloadAll 讓 banner 消失、KPI/表格出現。引導條下一步
+// participants 高亮無需額外處理——currentCycle 更新後 stepStatuses 會自動重新推導。
+async function handleCycleCreated(cycle: CreatedCycle) {
+  const academicYear = Number(cycle.academic_year)
+  const semesterInt = String(cycle.semester) === 'FIRST' ? 1 : 2
+  if (
+    Number.isFinite(academicYear)
+    && (academicYear !== termStore.school_year || semesterInt !== termStore.semester)
+  ) {
+    termStore.setTerm(academicYear, semesterInt)
     return
   }
-  creatingCycle.value = true
-  try {
-    await createAppraisalCycle({
-      academic_year: termStore.school_year,
-      semester: toSemesterEnum(termStore.semester),
-      enrollment_target: 0,
-      enrollment_actual: null,
-    })
-    ElMessage.success('考核週期已建立')
-    await reloadAll()
-  } catch (e) {
-    notify(e, 'CurrentSemesterOverview:createCycle', '建立週期失敗')
-  } finally {
-    creatingCycle.value = false
-  }
+  await reloadAll()
 }
 
 // ── 預覽分數 dialog（與同步分數 preview 區隔）────────────
@@ -500,12 +495,14 @@ function scrollToSection(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-// navigate 只接「現在已存在」的動作；create 之後會改走 A7 統一 dialog，屆時再更新此處 wiring。
+// navigate 只接「現在已存在」的動作。
 // sync 步驟（Task A4）：預覽/同步已合併進單一 ScorePreviewDialog，改為開該 dialog。
+// create 步驟（Task A7）：改開統一 CreateCycleDialog（原本直接呼叫 createCurrentCycle
+// 已隨三入口收斂移除）。
 function onGuideNavigate(key: AppraisalStepKey) {
   switch (key) {
     case 'create':
-      createCurrentCycle()
+      openCreateDialog()
       break
     case 'participants':
       scrollToSection('appraisal-participants-section')
@@ -592,9 +589,8 @@ function onGuideNavigate(key: AppraisalStepKey) {
           <el-button
             type="primary"
             :icon="Plus"
-            :loading="creatingCycle"
             data-test="create-cycle-btn"
-            @click="createCurrentCycle"
+            @click="openCreateDialog"
           >
             建立本學期週期
           </el-button>
@@ -782,6 +778,13 @@ function onGuideNavigate(key: AppraisalStepKey) {
       :cycle-status="scorePreviewCycleStatus"
       :has-non-participant="hasNonParticipant"
       @synced="handleSynced"
+    />
+
+    <!-- 建立考核週期 dialog（Task A7：統一 3 入口）-->
+    <CreateCycleDialog
+      v-model:visible="createDialogVisible"
+      :can-write="canCreateCycle"
+      @created="handleCycleCreated"
     />
   </div>
 </template>

@@ -7,16 +7,18 @@
  * 起訖日/基準日由後端依 academic_year+semester 固定推算。
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus, Check } from '@element-plus/icons-vue'
 
 import {
   getAppraisalCyclesByYear,
-  createAppraisalCycle,
   patchAppraisalCycle,
 } from '@/api/appraisal'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { hasPermission } from '@/utils/auth'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
+import CreateCycleDialog from './components/CreateCycleDialog.vue'
+import type { CreatedCycle } from './composables/useCreateCycle'
 
 interface CycleEntry {
   id: number
@@ -97,35 +99,19 @@ async function saveEdit(cycle: CycleEntry) {
   }
 }
 
-// ── 建立學期 cycle（日期由後端依 academic_year+semester 自動推算）──
-const creating = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
+// ── 建立學期 cycle（Task A7：改開統一 CreateCycleDialog，本區只負責開關 dialog
+// 與 @created 後 reload；建立/日期推算/寫入權限全移入該共用元件）──
+const createDialogVisible = ref(false)
+// canWrite gate 對齊後端 POST /appraisal/cycles 守衛（Permission.APPRAISAL_FINALIZE）
+const canCreateCycle = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 
-async function createForSemester(semesterEnum: SemesterKey) {
-  const label = semesterEnum === 'FIRST' ? '上' : '下'
-  try {
-    await ElMessageBox.confirm(
-      `將為 ${selectedYear.value} 學年度${label}學期建立考核週期，確定嗎？`,
-      '建立考核週期',
-      { type: 'info' },
-    )
-  } catch {
-    return
-  }
-  creating.value[semesterEnum] = true
-  try {
-    await createAppraisalCycle({
-      academic_year: selectedYear.value,
-      semester: semesterEnum,
-      enrollment_target: 0,
-      enrollment_actual: null,
-    })
-    ElMessage.success('已建立')
-    await load()
-  } catch (e) {
-    notify(e, 'YearlyEnrollmentTargetSection:create', '建立失敗')
-  } finally {
-    creating.value[semesterEnum] = false
-  }
+function openCreateDialog() {
+  createDialogVisible.value = true
+}
+
+// CreateCycleDialog 自身已在 submit 成功時彈「考核週期已建立」toast，此處僅需 reload。
+async function handleCycleCreated(_cycle: CreatedCycle) {
+  await load()
 }
 </script>
 
@@ -218,9 +204,8 @@ async function createForSemester(semesterEnum: SemesterKey) {
             <el-button
               type="primary"
               :icon="Plus"
-              :loading="creating.FIRST"
               data-test="create-first-btn"
-              @click="createForSemester('FIRST')"
+              @click="openCreateDialog"
             >
               建立本學期週期
             </el-button>
@@ -298,9 +283,8 @@ async function createForSemester(semesterEnum: SemesterKey) {
             <el-button
               type="primary"
               :icon="Plus"
-              :loading="creating.SECOND"
               data-test="create-second-btn"
-              @click="createForSemester('SECOND')"
+              @click="openCreateDialog"
             >
               建立本學期週期
             </el-button>
@@ -308,6 +292,15 @@ async function createForSemester(semesterEnum: SemesterKey) {
         </template>
       </div>
     </div>
+
+    <!-- 建立考核週期 dialog（Task A7：統一 3 入口；本區兩顆「建立本學期週期」按鈕
+    共用同一 dialog，開啟時一律重置為當前學年學期，非點擊當下卡片所屬學期——
+    使用者可在完整表單內自行調整，見 useCreateCycle.ts resetToCurrentTerm）-->
+    <CreateCycleDialog
+      v-model:visible="createDialogVisible"
+      :can-write="canCreateCycle"
+      @created="handleCycleCreated"
+    />
   </div>
 </template>
 

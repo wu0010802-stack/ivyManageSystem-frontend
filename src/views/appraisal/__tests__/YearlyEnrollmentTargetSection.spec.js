@@ -19,6 +19,21 @@ vi.mock('@/utils/academic', () => ({
   },
 }))
 
+// Task A7：CreateCycleDialog（經 useCreateCycle）需要 academicTerm store 帶當前學年學期。
+const termState = { school_year: 114, semester: 1 }
+vi.mock('@/stores/academicTerm', () => ({
+  useAcademicTermStore: () => ({
+    get school_year() { return termState.school_year },
+    get semester() { return termState.semester },
+  }),
+}))
+
+// Task A7：canCreateCycle 對齊 APPRAISAL_FINALIZE（傳給共用 CreateCycleDialog 的 canWrite）
+const permState = { finalize: true }
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn((p) => p === 'APPRAISAL_FINALIZE' && permState.finalize),
+}))
+
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) },
@@ -68,6 +83,18 @@ const GLOBAL_STUBS = {
   'el-form-item': { template: '<label><slot /></label>' },
   'el-input': { template: '<input />' },
   'el-input-number': { template: '<input />' },
+  // Task A7：兩顆「建立本學期週期」按鈕改開共用 CreateCycleDialog；實際表單/
+  // canWrite gate/送出流程已在 CreateCycleDialog.spec.ts 用真實元件測過，這裡只驗證
+  // parent wiring（開關 + canWrite 傳遞 + @created 觸發 reload）。
+  CreateCycleDialog: {
+    props: ['visible', 'canWrite'],
+    emits: ['update:visible', 'created'],
+    template:
+      '<div v-if="visible" data-test="create-cycle-dialog-stub" :data-can-write="canWrite">' +
+      '<button data-test="create-cycle-dialog-stub-created-btn" ' +
+      '@click="$emit(\'created\', { id: 12, academic_year: 114, semester: \'SECOND\' })" />' +
+      '</div>',
+  },
 }
 
 const FIRST_CYCLE = {
@@ -110,6 +137,9 @@ async function mountView() {
 describe('YearlyEnrollmentTargetSection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    termState.school_year = 114
+    termState.semester = 1
+    permState.finalize = true
   })
 
   it('兩學期都有 cycle 時兩張卡都渲染目標人數', async () => {
@@ -138,22 +168,42 @@ describe('YearlyEnrollmentTargetSection', () => {
     expect(wrapper.find('[data-test="edit-second-btn"]').exists()).toBe(false)
   })
 
-  it('點 placeholder 建立 → 呼叫 createAppraisalCycle（日期不再由前端計算送出，交由後端推算）', async () => {
+  it('Task A7：點 placeholder 建立 → 開啟統一 CreateCycleDialog（不再直接呼叫 API/自算日期）', async () => {
     getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
-    createAppraisalCycle.mockResolvedValue({ data: SECOND_CYCLE })
+
+    const wrapper = await mountView()
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').exists()).toBe(false)
+    await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+    await flushPromises()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.exists()).toBe(true)
+    expect(dialogStub.attributes('data-can-write')).toBe('true')
+    expect(createAppraisalCycle).not.toHaveBeenCalled()
+  })
+
+  it('Task A7：canWrite 反映 hasPermission(APPRAISAL_FINALIZE)（矩陣：false 態）', async () => {
+    getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
+    permState.finalize = false
 
     const wrapper = await mountView()
     await wrapper.find('[data-test="create-second-btn"]').trigger('click')
     await flushPromises()
 
-    expect(createAppraisalCycle).toHaveBeenCalledTimes(1)
-    const arg = createAppraisalCycle.mock.calls[0][0]
-    expect(arg).toMatchObject({
-      academic_year: 114,
-      semester: 'SECOND',
-    })
-    expect(arg).not.toHaveProperty('start_date')
-    expect(arg).not.toHaveProperty('end_date')
-    expect(arg).not.toHaveProperty('base_score_calc_date')
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').attributes('data-can-write')).toBe('false')
+  })
+
+  it('Task A7：CreateCycleDialog emit created 後 reload 清單', async () => {
+    getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [FIRST_CYCLE] })
+    const wrapper = await mountView()
+    await wrapper.find('[data-test="create-second-btn"]').trigger('click')
+    await flushPromises()
+
+    getAppraisalCyclesByYear.mockResolvedValueOnce({ data: [FIRST_CYCLE, SECOND_CYCLE] })
+    await wrapper.find('[data-test="create-cycle-dialog-stub-created-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(getAppraisalCyclesByYear).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-test="card-second"]').text()).toContain('110')
   })
 })

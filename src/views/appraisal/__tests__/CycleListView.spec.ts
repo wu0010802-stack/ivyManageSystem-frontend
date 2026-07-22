@@ -31,6 +31,11 @@ vi.mock('@/utils/academic', () => ({
 vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => ({ school_year: 114, semester: 2, setTerm: vi.fn() }),
 }))
+// Task A7：canCreateCycle 對齊 APPRAISAL_FINALIZE（傳給共用 CreateCycleDialog 的 canWrite）
+const permState = { finalize: true }
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn((p: string) => p === 'APPRAISAL_FINALIZE' && permState.finalize),
+}))
 
 const routeQuery: { value: Record<string, unknown> } = { value: {} }
 const replaceMock = vi.fn()
@@ -81,6 +86,24 @@ const stubs = {
   ElInputNumber: { template: '<input />' },
   ElDatePicker: { template: '<input />' },
   ElUpload: { template: '<div><slot /></div>' },
+  // Task A7：「新增週期」自帶 dialog 改用共用 CreateCycleDialog；實際表單/canWrite
+  // gate/送出流程已在 CreateCycleDialog.spec.ts 用真實元件測過，這裡只驗證 parent
+  // wiring（開關 + canWrite 傳遞 + @created 觸發 reload）。
+  CreateCycleDialog: defineComponent({
+    name: 'CreateCycleDialog',
+    props: ['visible', 'canWrite'],
+    emits: ['update:visible', 'created'],
+    setup(props, { emit }) {
+      return () => props.visible
+        ? h('div', { 'data-test': 'create-cycle-dialog-stub', 'data-can-write': String(props.canWrite) }, [
+            h('button', {
+              'data-test': 'create-cycle-dialog-stub-created-btn',
+              onClick: () => emit('created', { id: 12, academic_year: 114, semester: 'FIRST' }),
+            }),
+          ])
+        : null
+    },
+  }),
 }
 
 const flush = async () => {
@@ -97,6 +120,7 @@ describe('CycleListView（dropdown + 內嵌明細）', () => {
     routeQuery.value = {}
     listCyclesMock.mockResolvedValue({ data: CYCLES })
     vi.mocked(getCurrentAcademicTerm).mockReturnValue({ school_year: 114, semester: 2 })
+    permState.finalize = true
   })
 
   it('dropdown 渲染所有週期選項，新到舊排序', async () => {
@@ -163,30 +187,61 @@ describe('CycleListView（dropdown + 內嵌明細）', () => {
     expect(wrapper.find('[data-test="detail-panel-stub"]').exists()).toBe(false)
   })
 
-  it('Task 7：建立/匯入表單預設值依當前學年（useAcademicTermStore）動態推算，非寫死 114/160', async () => {
+  it('Task 7：匯入表單預設值依當前學年（useAcademicTermStore）動態推算，非寫死 114/160', async () => {
     const wrapper = mountView()
     await flush()
     const vm = wrapper.vm as unknown as {
-      form: { academic_year: number; semester: string; enrollment_target: number | null; enrollment_actual: number | null }
       importForm: { start_date: string; end_date: string; base_score_calc_date: string }
     }
-    expect(vm.form.academic_year).toBe(114)
-    expect(vm.form.semester).toBe('SECOND')
-    expect(vm.form.enrollment_target).toBeNull()
-    expect(vm.form.enrollment_actual).toBeNull()
     // school_year 114 → 西元 2025；下學期 → 隔年 2026 起算
     expect(vm.importForm.start_date).toBe('2026-02-01')
     expect(vm.importForm.end_date).toBe('2026-07-31')
     expect(vm.importForm.base_score_calc_date).toBe('2026-03-15')
   })
 
-  it('Task 7：建立時 enrollment_target 為 null 送出 0（維持既有 API 契約）', async () => {
+  // ── Task A7：新增週期改開共用 CreateCycleDialog（不再自帶 form/submit）───
+  // 表單欄位/target 留空送 0/canWrite gate 的實際行為已在 CreateCycleDialog.spec.ts
+  // 與 useCreateCycle.spec.ts 用真實元件/純函式測過；此處只驗證本頁 wiring。
+  it('Task A7：點「新增週期」開啟共用 CreateCycleDialog，canWrite 反映 hasPermission(APPRAISAL_FINALIZE)', async () => {
     const wrapper = mountView()
     await flush()
-    const vm = wrapper.vm as unknown as { submit: () => Promise<void> }
-    await vm.submit()
-    expect(vi.mocked(createAppraisalCycle)).toHaveBeenCalledWith(
-      expect.objectContaining({ enrollment_target: 0 }),
-    )
+
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').exists()).toBe(false)
+    const createBtn = wrapper.findAll('button').find((b) => b.text() === '新增週期')
+    expect(createBtn).toBeTruthy()
+    await createBtn!.trigger('click')
+    await flush()
+
+    const dialogStub = wrapper.find('[data-test="create-cycle-dialog-stub"]')
+    expect(dialogStub.exists()).toBe(true)
+    expect(dialogStub.attributes('data-can-write')).toBe('true')
+    expect(createAppraisalCycle).not.toHaveBeenCalled()
+  })
+
+  it('Task A7：canWrite=false（無 APPRAISAL_FINALIZE）時仍可開啟 dialog，但 canWrite 傳 false', async () => {
+    permState.finalize = false
+    const wrapper = mountView()
+    await flush()
+
+    const createBtn = wrapper.findAll('button').find((b) => b.text() === '新增週期')
+    await createBtn!.trigger('click')
+    await flush()
+
+    expect(wrapper.find('[data-test="create-cycle-dialog-stub"]').attributes('data-can-write')).toBe('false')
+  })
+
+  it('Task A7：CreateCycleDialog emit created 後 reload 週期清單', async () => {
+    const wrapper = mountView()
+    await flush()
+
+    const createBtn = wrapper.findAll('button').find((b) => b.text() === '新增週期')
+    await createBtn!.trigger('click')
+    await flush()
+
+    listCyclesMock.mockClear()
+    await wrapper.find('[data-test="create-cycle-dialog-stub-created-btn"]').trigger('click')
+    await flush()
+
+    expect(listCyclesMock).toHaveBeenCalledTimes(1)
   })
 })
