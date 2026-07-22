@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { getAuditLogs, getAuditLogsMeta, exportAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
+import AuditChangesDetail from '@/components/AuditChangesDetail.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -35,6 +36,7 @@ const total = ref(0)
 
 const entityTypes = ref<MetaOption[]>([])
 const actionTypes = ref<MetaOption[]>([])
+const fieldLabels = ref<Record<string, string>>({})
 
 const filters = reactive({
   entity_type: '',
@@ -139,9 +141,10 @@ const buildFilterParams = () => {
 const fetchMeta = async () => {
   try {
     const res = await getAuditLogsMeta()
-    const d = res.data as { entity_types: MetaOption[]; actions: MetaOption[] }
+    const d = res.data as { entity_types: MetaOption[]; actions: MetaOption[]; field_labels?: Record<string, string> }
     entityTypes.value = d.entity_types
     actionTypes.value = d.actions
+    fieldLabels.value = d.field_labels || {}
   } catch {
     // meta 抓不到不影響查詢
   }
@@ -359,61 +362,6 @@ const formatTime = (iso: string | undefined) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-const formatValue = (v: unknown) => {
-  if (v === null || v === undefined) return '—'
-  if (typeof v === 'boolean') return v ? '是' : '否'
-  if (typeof v === 'object') return JSON.stringify(v)
-  return String(v)
-}
-
-const hasChanges = (row: AuditLog) => {
-  const c = row.changes
-  return c && typeof c === 'object' && Object.keys(c).length > 0
-}
-
-// changes 結構不一致：舊紀錄是 {field: {before, after}}（auth/employees/classrooms），
-// 新紀錄則是 {action, ..., diff: {...}, risk_tags: [...]}（leave/overtime/fee）。
-// 此 helper 把兩種都拆成 nested-diff（before/after）+ flat-fields（單值），讓 expand 一致。
-const splitChanges = (row: AuditLog) => {
-  const c = (row.changes || {}) as Record<string, unknown>
-  const nestedDiff: { field: string; before: unknown; after: unknown }[] = []
-  const flatFields: { field: string; value: unknown }[] = []
-  const meta: Record<string, unknown> = {}
-  // 先處理新格式：c.diff 內為 {field: {before, after}}
-  if (c.diff && typeof c.diff === 'object') {
-    for (const [field, v] of Object.entries(c.diff as Record<string, unknown>)) {
-      if (v && typeof v === 'object' && 'before' in v && 'after' in v) {
-        const entry = v as { before: unknown; after: unknown }
-        nestedDiff.push({ field, before: entry.before, after: entry.after })
-      }
-    }
-  }
-  // 處理新/舊混合：頂層 {field: {before, after}} 也視為 diff
-  for (const [k, v] of Object.entries(c)) {
-    if (k === 'diff' || k === 'before' || k === 'after') continue
-    if (v && typeof v === 'object' && 'before' in v && 'after' in v) {
-      const entry = v as { before: unknown; after: unknown }
-      nestedDiff.push({ field: k, before: entry.before, after: entry.after })
-    } else if (k === 'risk_tags' || k === 'failed' || k === 'requested_ids' || k === 'succeeded_ids' || k === 'approval_log_ids' || k === 'sampled_student_ids') {
-      // 這些是結構化資料，放 meta 分區呈現
-      meta[k] = v
-    } else {
-      flatFields.push({ field: k, value: v })
-    }
-  }
-  // 新格式專用：if c.before/c.after 都是物件，攤平成 nestedDiff
-  if (c.before && c.after && typeof c.before === 'object' && typeof c.after === 'object') {
-    const before = c.before as Record<string, unknown>
-    const after = c.after as Record<string, unknown>
-    for (const k of Object.keys(before)) {
-      if (before[k] !== after[k]) {
-        nestedDiff.push({ field: k, before: before[k], after: after[k] })
-      }
-    }
-  }
-  return { nestedDiff, flatFields, meta }
-}
-
 const resolveRoute = (row: AuditLog) => {
   const fn = ENTITY_ROUTES[row.entity_type]
   if (!fn) return null
@@ -518,49 +466,7 @@ defineExpose({ formatOperator })
     >
       <el-table-column type="expand">
         <template #default="{ row }">
-          <div class="changes-detail">
-            <template v-if="hasChanges(row)">
-              <!-- before/after 欄位差異表 -->
-              <template v-if="splitChanges(row).nestedDiff.length > 0">
-                <div class="diff-header">變更欄位</div>
-                <el-table :data="splitChanges(row).nestedDiff" size="small" border>
-                  <el-table-column prop="field" label="欄位" width="180" />
-                  <el-table-column label="變更前">
-                    <template #default="{ row: r }">
-                      <span class="diff-before">{{ formatValue(r.before) }}</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="變更後">
-                    <template #default="{ row: r }">
-                      <span class="diff-after">{{ formatValue(r.after) }}</span>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </template>
-
-              <!-- 平面結構化欄位（新格式 changes 的 metadata） -->
-              <template v-if="splitChanges(row).flatFields.length > 0">
-                <div class="diff-header" style="margin-top: 12px;">操作上下文</div>
-                <el-table :data="splitChanges(row).flatFields" size="small" border>
-                  <el-table-column prop="field" label="欄位" width="220" />
-                  <el-table-column label="值">
-                    <template #default="{ row: r }">
-                      <span class="diff-after">{{ formatValue(r.value) }}</span>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </template>
-
-              <!-- 結構化清單（risk_tags / failed / approval_log_ids 等） -->
-              <template v-for="(v, k) in splitChanges(row).meta" :key="k">
-                <div class="diff-header" style="margin-top: 12px;">{{ k }}</div>
-                <pre class="meta-json">{{ formatValue(v) }}</pre>
-              </template>
-            </template>
-            <div v-else class="no-changes">
-              此紀錄未記錄欄位變更詳情（較早的紀錄或未接入 diff 的 endpoint）。
-            </div>
-          </div>
+          <AuditChangesDetail :changes="row.changes" :field-labels="fieldLabels" />
         </template>
       </el-table-column>
       <el-table-column label="時間" width="170">
@@ -666,29 +572,6 @@ defineExpose({ formatOperator })
   font-size: var(--text-sm);
   font-family: monospace;
 }
-.changes-detail {
-  padding: var(--space-3);
-  background: var(--background-secondary, #fafafa);
-}
-.diff-header {
-  margin-bottom: var(--space-2);
-  font-weight: 600;
-}
-.no-changes {
-  color: var(--text-secondary, #888);
-  padding: var(--space-2);
-  font-style: italic;
-}
-.diff-before {
-  color: var(--color-danger-darker);
-  text-decoration: line-through;
-  font-family: monospace;
-}
-.diff-after {
-  color: var(--color-success-darker);
-  font-family: monospace;
-  font-weight: 500;
-}
 .summary-cell {
   display: flex;
   flex-direction: column;
@@ -703,16 +586,5 @@ defineExpose({ formatOperator })
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
-}
-.meta-json {
-  background: #f5f5f5;
-  padding: 8px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
-  max-height: 200px;
-  overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 </style>
