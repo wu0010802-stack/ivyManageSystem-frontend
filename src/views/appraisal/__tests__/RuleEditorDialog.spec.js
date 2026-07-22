@@ -369,4 +369,38 @@ describe('RuleEditorDialog', () => {
       })
     })
   })
+
+  // ── B8：input_field 依型別隱藏 + 範例文字（微調）─────────
+  describe('input_field 隱藏規則 + 範例文字', () => {
+    it('選 PER_UNIT 時不顯示 input_field 欄', async () => {
+      const wrapper = await mountDialog()
+      expect(wrapper.find('[data-test="tier-input-field"]').exists()).toBe(false)
+      expect(wrapper.find('[data-test="flat-input-field"]').exists()).toBe(false)
+    })
+
+    it('選 DISCIPLINARY_TIERED 時不顯示 input_field 欄', async () => {
+      const wrapper = await mountDialog()
+      await setRuleType(wrapper, 'DISCIPLINARY_TIERED')
+      expect(wrapper.find('[data-test="tier-input-field"]').exists()).toBe(false)
+      expect(wrapper.find('[data-test="flat-input-field"]').exists()).toBe(false)
+    })
+
+    it('切到 TIER/FLAT_THRESHOLD 時仍顯示 input_field 欄', async () => {
+      const wrapper = await mountDialog()
+      await setRuleType(wrapper, 'TIER')
+      expect(wrapper.find('[data-test="tier-input-field"]').exists()).toBe(true)
+      await setRuleType(wrapper, 'FLAT_THRESHOLD')
+      expect(wrapper.find('[data-test="flat-input-field"]').exists()).toBe(true)
+    })
+
+    it('每型別的規則類型說明皆含「範例」字樣', async () => {
+      const wrapper = await mountDialog()
+      expect(wrapper.text()).toContain('範例')
+
+      for (const type of ['TIER', 'FLAT_THRESHOLD', 'DISCIPLINARY_TIERED']) {
+        await setRuleType(wrapper, type)
+        expect(wrapper.text()).toContain('範例')
+      }
+    })
+  })
 })

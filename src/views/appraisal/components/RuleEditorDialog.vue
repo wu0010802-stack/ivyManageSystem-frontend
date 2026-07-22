@@ -281,10 +281,10 @@ defineExpose({ disablePastDates, validateTiersMonotonic })
           />
         </el-select>
         <div class="rule-type-hint">
-          <template v-if="form.rule_type === 'PER_UNIT'">每發生 1 次扣固定分。例：遲到 1 次扣 0.5 分。</template>
-          <template v-else-if="form.rule_type === 'TIER'">依數值落在哪個區間給對應分數。例：留校率 90–95% 扣 1 分、低於 90% 扣 2 分。</template>
-          <template v-else-if="form.rule_type === 'FLAT_THRESHOLD'">超過（或低於）單一門檻時一次性加減分。</template>
-          <template v-else-if="form.rule_type === 'DISCIPLINARY_TIERED'">依懲處（嘉獎/申誡/記過…）分級對應分值，功過相抵。</template>
+          <template v-if="form.rule_type === 'PER_UNIT'">每發生 1 次扣固定分。範例：每遲到一次扣 0.5 分。</template>
+          <template v-else-if="form.rule_type === 'TIER'">依數值落在哪個區間給對應分數，需先選擇比較用的輸入欄位。範例：留校率 ≥90% 加 5 分、≥80% 加 3 分，低於 80% 不加分。</template>
+          <template v-else-if="form.rule_type === 'FLAT_THRESHOLD'">超過（或低於）單一門檻時一次性加減分，需先選擇比較用的輸入欄位。範例：才藝報名率達 80% 加 3 分，未達則不加分。</template>
+          <template v-else-if="form.rule_type === 'DISCIPLINARY_TIERED'">依懲處（嘉獎/申誡/記過…）分級對應分值，功過相抵。範例：申誡扣 2 分、記過扣 5 分。</template>
         </div>
       </el-form-item>
 
