@@ -342,6 +342,57 @@ const formatOperator = (row: Pick<AuditLog, 'username' | 'impersonated_by_name'>
   return row.impersonated_by_name ? `${base}（代操作：${row.impersonated_by_name}）` : base
 }
 
+const HISTORY_PAGE_SIZE = 200
+
+const historyDrawer = reactive({
+  visible: false,
+  entityType: '',
+  entityId: '' as string | number,
+  items: [] as AuditLog[],
+  total: 0,
+  page: 1,
+  loading: false,
+})
+
+const openHistory = async (row: AuditLog) => {
+  if (!row.entity_id) return
+  historyDrawer.entityType = row.entity_type
+  historyDrawer.entityId = row.entity_id
+  historyDrawer.items = []
+  historyDrawer.total = 0
+  historyDrawer.page = 1
+  historyDrawer.visible = true
+  await fetchHistoryPage()
+}
+
+const fetchHistoryPage = async () => {
+  historyDrawer.loading = true
+  try {
+    // 不帶 start_at/end_at：後端對 entity_type+entity_id 查詢不套 30 天窗，
+    // 才能看到完整歷史（走 ix_audit_entity 索引）
+    const res = await getAuditLogs({
+      entity_type: historyDrawer.entityType,
+      entity_id: historyDrawer.entityId,
+      page: historyDrawer.page,
+      page_size: HISTORY_PAGE_SIZE,
+    })
+    const d = res.data as { items: AuditLog[]; total: number }
+    historyDrawer.items.push(...d.items)
+    historyDrawer.total = d.total
+  } catch {
+    ElMessage.error('載入歷史軌跡失敗')
+  } finally {
+    historyDrawer.loading = false
+  }
+}
+
+const loadOlderHistory = async () => {
+  historyDrawer.page += 1
+  await fetchHistoryPage()
+}
+
+const historyHasMore = computed(() => historyDrawer.items.length < historyDrawer.total)
+
 defineExpose({ formatOperator })
 </script>
 
@@ -476,6 +527,13 @@ defineExpose({ formatOperator })
         </template>
       </el-table-column>
       <el-table-column prop="ip_address" label="IP" width="130" />
+      <el-table-column label="歷史" width="70" align="center" fixed="right">
+        <template #default="{ row }">
+          <el-button v-if="row.entity_id" link type="primary" size="small" @click="openHistory(row)">
+            歷史
+          </el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <div class="pagination-wrapper">
@@ -489,6 +547,44 @@ defineExpose({ formatOperator })
         @size-change="handlePageSizeChange"
       />
     </div>
+
+    <el-drawer
+      v-model="historyDrawer.visible"
+      :title="`${getEntityLabel(historyDrawer.entityType)} #${historyDrawer.entityId} 歷史軌跡`"
+      size="50%"
+    >
+      <div v-loading="historyDrawer.loading">
+        <el-timeline>
+          <el-timeline-item
+            v-for="item in historyDrawer.items"
+            :key="item.id"
+            :timestamp="formatTime(item.created_at)"
+            placement="top"
+          >
+            <div class="history-node">
+              <div class="history-head">
+                <el-tag :type="getActionTag(item.action).type" size="small">
+                  {{ getActionTag(item.action).label }}
+                </el-tag>
+                <span class="history-operator">{{ formatOperator(item) }}</span>
+              </div>
+              <div class="history-summary">{{ item.summary }}</div>
+              <AuditChangesDetail
+                v-if="item.changes && Object.keys(item.changes).length > 0"
+                :changes="item.changes"
+                :field-labels="fieldLabels"
+              />
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+        <div v-if="historyHasMore" class="history-more">
+          <el-button size="small" @click="loadOlderHistory">載入更早</el-button>
+        </div>
+        <div v-if="!historyDrawer.loading && historyDrawer.items.length === 0" class="no-changes">
+          此資源尚無稽核紀錄。
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -540,5 +636,31 @@ defineExpose({ formatOperator })
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+}
+.history-node {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.history-head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.history-operator {
+  font-size: var(--text-sm);
+  color: var(--text-secondary, #666);
+}
+.history-summary {
+  font-size: var(--text-sm);
+}
+.history-more {
+  margin-top: var(--space-3);
+  text-align: center;
+}
+.no-changes {
+  color: var(--text-secondary, #888);
+  padding: var(--space-2);
+  font-style: italic;
 }
 </style>
