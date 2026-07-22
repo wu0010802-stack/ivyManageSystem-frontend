@@ -42,9 +42,8 @@ export function useActivityRegistration() {
   // ── 下拉選項 ─────────────────────────────────────────────────
   const courseOptions = ref<unknown[]>([])
   const classroomOptions = ref<unknown[]>([])
-  // 班級清單近乎靜態（getClassOptions 無學期參數），mutation 後刷新名額只需重抓課程。
-  // 載入成功後標記，避免每次 loadOptions 連帶重抓不會變的班級清單。
-  const classroomOptionsLoaded = ref(false)
+  // 班級清單依學期載入；同學期 mutation 後重抓名額時不必重抓班級。
+  const classroomOptionsTermKey = ref('')
 
   // ── 批次操作 ─────────────────────────────────────────────────
   // 選取的 row 由使用端（view）持有（需依 match_status 分群、限同狀態）；
@@ -177,20 +176,32 @@ export function useActivityRegistration() {
         school_year: termStore.school_year,
         semester: termStore.semester,
       })
-      const classP = classroomOptionsLoaded.value ? null : getClassOptions()
+      const termKey = `${termStore.school_year}-${termStore.semester}`
+      const classP = classroomOptionsTermKey.value === termKey
+        ? null
+        : getClassOptions({
+            school_year: termStore.school_year,
+            semester: termStore.semester,
+          })
       const [coursesRes, classRes] = await Promise.all([coursesP, classP])
       if (seq !== loadOptionsSeq.value) return
       courseOptions.value = (coursesRes.data as { courses?: unknown[] }).courses || []
       if (classRes) {
         classroomOptions.value = (classRes.data as { options?: unknown[] }).options || []
-        classroomOptionsLoaded.value = true
+        classroomOptionsTermKey.value = termKey
       }
     } catch {
       if (seq === loadOptionsSeq.value) {
         // 失敗時清空 courseOptions（2026-06-29 audit F4）：切學期載入失敗若保留舊課程，
         // 篩選器與「新增課程」視窗會展示錯誤學期的選項（後端雖拒跨學期寫入不致錯帳，
-        // 但不應誤導操作者）。classroomOptions 非學期專屬、且只載一次，保留不動。
+        // 但不應誤導操作者）。班級同樣是學期專屬，載入失敗時不可保留舊學期選項。
         courseOptions.value = []
+        if (
+          classroomOptionsTermKey.value !==
+          `${termStore.school_year}-${termStore.semester}`
+        ) {
+          classroomOptions.value = []
+        }
         ElMessage.warning('篩選選項載入失敗，部分篩選功能暫不可用')
       }
     }
@@ -202,6 +213,7 @@ export function useActivityRegistration() {
     () => {
       page.value = 1
       courseFilter.value = null
+      classroomFilter.value = ''
       loadOptions()
       fetchList()
     }
