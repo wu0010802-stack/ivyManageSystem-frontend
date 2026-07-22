@@ -8,7 +8,7 @@
  * display_order / is_active。PATCH 採 exclude_unset 語意，前端建 payload 時只送異動欄位。
  */
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
@@ -136,7 +136,23 @@ function cancelRow(row: CatalogItem) {
 }
 
 // is_active 為獨立即時切換（非併入編輯列），只送 is_active 一個欄位。
+// Task B4：切換前需二次確認——el-switch 綁定為單向 `:model-value="row.is_active"`
+// （非 v-model），Element Plus 內部 checked 態純由 props 推導、不會自行 optimistic
+// 翻轉（見 element-plus switch.vue2.mjs：checked = computed(() => actualValue ===
+// activeValue)，actualValue 只讀 props.modelValue）；取消時本函式直接 return，
+// row.is_active 未變動，switch 顯示自然維持原狀，不需額外手動「復原」程式碼。
 async function toggleActive(row: CatalogItem, val: boolean) {
+  try {
+    await ElMessageBox.confirm(
+      val
+        ? '確定要啟用此項目？啟用後將計入後續分數計算。'
+        : '確定要停用此項目？停用後將不再計入新分數，既有歷史分數不受影響。',
+      '確認變更啟用狀態',
+      { confirmButtonText: '確認', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return // 使用者取消：不送 PATCH，switch 維持原狀
+  }
   try {
     const res = await patchAppraisalCatalogItem(row.id, { is_active: val })
     const updated = res.data

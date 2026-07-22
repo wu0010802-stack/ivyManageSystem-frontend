@@ -15,9 +15,11 @@ vi.mock('@/utils/auth', () => ({
 
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) },
 }))
 
 import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal'
+import { ElMessageBox } from 'element-plus'
 import PenaltyCatalogPanel from '../components/PenaltyCatalogPanel.vue'
 
 // ── Element Plus stubs（沿用 ManualEventEntrySection.spec.js 的 el-table 展平慣例）──
@@ -320,7 +322,7 @@ describe('PenaltyCatalogPanel', () => {
     expect(orderInput.attributes('step')).toBe('1')
   })
 
-  it('is_active 切換送 PATCH 且僅含 is_active 一個異動欄', async () => {
+  it('is_active 切換先跳確認對話框，確認後才送 PATCH（僅含 is_active 一個異動欄）', async () => {
     vi.mocked(patchAppraisalCatalogItem).mockResolvedValue({
       data: { ...makeCatalog()[0], is_active: false },
     } as never)
@@ -329,8 +331,39 @@ describe('PenaltyCatalogPanel', () => {
     await wrapper.find('[data-test="active-switch-LATE_EARLY"]').trigger('click')
     await flushPromises()
 
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
     expect(patchAppraisalCatalogItem).toHaveBeenCalledTimes(1)
     expect(patchAppraisalCatalogItem).toHaveBeenCalledWith(1, { is_active: false })
+  })
+
+  it('Task B4：取消確認對話框時不送 PATCH，switch 維持原狀', async () => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+
+    const wrapper = await mountPanel()
+    await wrapper.find('[data-test="active-switch-LATE_EARLY"]').trigger('click')
+    await flushPromises()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+    expect(patchAppraisalCatalogItem).not.toHaveBeenCalled()
+    // row.is_active 未變動 → switch stub 的 data-checked 仍反映原始 catalog 值（LATE_EARLY 原為 true）
+    expect(wrapper.find('[data-test="active-switch-LATE_EARLY"]').attributes('data-checked')).toBe('true')
+  })
+
+  it('Task B4：停用切換的確認訊息包含「停用」字樣；啟用切換包含「啟用」字樣', async () => {
+    const wrapper = await mountPanel()
+
+    // LATE_EARLY 目前 is_active=true，點擊即為「停用」流程
+    await wrapper.find('[data-test="active-switch-LATE_EARLY"]').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(ElMessageBox.confirm).mock.calls[0][0]).toContain('停用')
+
+    // CLASS_HEADCOUNT_BONUS 目前 is_active=false，點擊即為「啟用」流程
+    vi.mocked(patchAppraisalCatalogItem).mockResolvedValue({
+      data: { ...makeCatalog()[1], is_active: true },
+    } as never)
+    await wrapper.find('[data-test="active-switch-CLASS_HEADCOUNT_BONUS"]').trigger('click')
+    await flushPromises()
+    expect(vi.mocked(ElMessageBox.confirm).mock.calls[1][0]).toContain('啟用')
   })
 
   it('無權限時不渲染任何編輯輸入框/switch/儲存按鈕，改顯示純文字與啟用狀態 tag', async () => {

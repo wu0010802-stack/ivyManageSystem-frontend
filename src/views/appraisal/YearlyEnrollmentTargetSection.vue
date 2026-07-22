@@ -19,6 +19,7 @@ import { hasPermission } from '@/utils/auth'
 import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
 import CreateCycleDialog from './components/CreateCycleDialog.vue'
 import type { CreatedCycle } from './composables/useCreateCycle'
+import { confirmWithReason } from './confirmWithReason'
 
 interface CycleEntry {
   id: number
@@ -68,7 +69,15 @@ const editForm = ref<Record<SemesterKey, { enrollment_target: number; enrollment
 })
 const savingSemester = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
 
+// Task B4：目標人數修改（PATCH /appraisal/cycles/{id}）與 CreateCycleDialog
+// 的建立週期共用同一後端守衛（Permission.APPRAISAL_FINALIZE，見
+// ivy-backend api/appraisal/cycles.py update_cycle），故沿用同一權限字串；
+// 獨立命名 canEditTarget 以對應「編輯已存在週期」這個不同的使用者動作。
+const canEditTarget = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+
 function startEdit(cycle: CycleEntry) {
+  // 防禦：UI 已用 disabled + tooltip 擋，仍保留一道守衛避免繞過。
+  if (!canEditTarget.value) return
   const semester = cycle.semester as SemesterKey
   editForm.value[semester] = {
     enrollment_target: cycle.enrollment_target ?? 0,
@@ -82,7 +91,14 @@ function cancelEdit(semester: SemesterKey) {
 }
 
 async function saveEdit(cycle: CycleEntry) {
+  if (!canEditTarget.value) return
   const semester = cycle.semester as SemesterKey
+  const reason = await confirmWithReason({
+    title: '確認更新目標人數',
+    message: '此變更會影響考核基礎分數計算，請確認並填寫原因。',
+    minLength: 10,
+  })
+  if (reason == null) return
   savingSemester.value[semester] = true
   try {
     await patchAppraisalCycle(cycle.id, {
@@ -166,14 +182,19 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               </el-descriptions-item>
             </el-descriptions>
             <div class="semester-card__actions">
-              <el-button
-                size="small"
-                type="primary"
-                data-test="edit-first-btn"
-                @click="startEdit(firstCycle)"
-              >
-                編輯
-              </el-button>
+              <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">
+                <span>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :disabled="!canEditTarget"
+                    data-test="edit-first-btn"
+                    @click="startEdit(firstCycle)"
+                  >
+                    編輯
+                  </el-button>
+                </span>
+              </el-tooltip>
             </div>
           </template>
           <template v-else>
@@ -245,14 +266,19 @@ async function handleCycleCreated(_cycle: CreatedCycle) {
               </el-descriptions-item>
             </el-descriptions>
             <div class="semester-card__actions">
-              <el-button
-                size="small"
-                type="primary"
-                data-test="edit-second-btn"
-                @click="startEdit(secondCycle)"
-              >
-                編輯
-              </el-button>
+              <el-tooltip content="需要考核核定權限（APPRAISAL_FINALIZE）" :disabled="canEditTarget" placement="top">
+                <span>
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :disabled="!canEditTarget"
+                    data-test="edit-second-btn"
+                    @click="startEdit(secondCycle)"
+                  >
+                    編輯
+                  </el-button>
+                </span>
+              </el-tooltip>
             </div>
           </template>
           <template v-else>

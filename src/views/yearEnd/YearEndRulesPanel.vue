@@ -3,8 +3,9 @@ import { reactive, ref, computed, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig } from '@/api/config'
 import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
+import { confirmWithReason } from '@/views/appraisal/confirmWithReason'
 import {
   DIVIDEND_ACTIVITY_GRADES,
   emptyGradeThresholdPercents,
@@ -157,27 +158,13 @@ const saveRules = async () => {
     return
   }
   // 與 BonusConfig PUT 對齊：變更影響全員年終規則，要求異動原因 ≥10 字（落 audit）。
-  let reason
-  try {
-    const result = await ElMessageBox.prompt(
-      '此變更會影響全員年終規則，請輸入異動原因（至少 10 個字）：',
-      '年終規則變更原因',
-      {
-        confirmButtonText: '確認儲存',
-        cancelButtonText: '取消',
-        inputType: 'textarea',
-        inputValidator: (val) => {
-          if (!val || val.trim().length < 10) {
-            return '原因至少 10 個字'
-          }
-          return true
-        },
-      },
-    )
-    reason = (result as { value: string }).value.trim()
-  } catch {
-    return // 使用者按取消
-  }
+  // Task B4：改走共用 confirmWithReason（含常用原因快選提示），移除重複 prompt 樣板。
+  const reason = await confirmWithReason({
+    title: '年終規則變更原因',
+    message: '此變更會影響全員年終規則，請輸入異動原因（至少 10 個字）：',
+    minLength: 10,
+  })
+  if (reason == null) return // 使用者按取消
 
   // 年終 JSON 欄位序列化：dict（班名→單價，略過空班名）+ id list
   const afterClassAwardDict: Record<string, number> = {}
