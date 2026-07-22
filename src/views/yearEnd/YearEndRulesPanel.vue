@@ -8,6 +8,8 @@ import { hasPermission } from '@/utils/auth'
 import {
   DIVIDEND_ACTIVITY_GRADES,
   emptyGradeThresholdPercents,
+  fractionToPercent,
+  percentToFraction,
   gradeThresholdsFromApi,
   gradeThresholdsToApi,
   type GradeThresholdPercents,
@@ -88,6 +90,9 @@ const fetchRules = async () => {
         ;(rules as Record<string, unknown>)[f] = v
       }
     }
+    // 舊生率/才藝率門檻：後端存 fraction（0–1），UI 一律顯示百分比（0–100）。
+    rules.dividend_returning_threshold = fractionToPercent(rules.dividend_returning_threshold)
+    rules.dividend_activity_threshold = fractionToPercent(rules.dividend_activity_threshold)
     const dict = data.after_class_award_unit_price
     afterClassAwardRows.value =
       dict && typeof dict === 'object'
@@ -183,6 +188,9 @@ const saveRules = async () => {
   // 只送年終欄位；後端 PUT /config/bonus 為部分更新，會保留超額/節慶/底薪等其他設定。
   const payload: ApiBody<'/config/bonus', 'put'> & { reason: string } = {
     ...rules,
+    // 舊生率/才藝率門檻：UI 百分比（0–100）→ 送後端仍為 fraction（0–1），覆寫 ...rules 展開值。
+    dividend_returning_threshold: percentToFraction(rules.dividend_returning_threshold),
+    dividend_activity_threshold: percentToFraction(rules.dividend_activity_threshold),
     after_class_award_unit_price: afterClassAwardDict,
     art_teacher_employee_ids: [...artTeacherEmployeeIds.value],
     // G15：逐年級門檻換算回 fraction dict（全空 → null 回退單一門檻）+ 堂數條件（null＝停用）。
@@ -348,20 +356,21 @@ onMounted(() => {
     <!-- ④ 學期紅利 -->
     <div class="section-title">學期紅利</div>
     <el-card class="mb-6" shadow="never">
-      <p class="desc-text">舊生率 / 才藝率達門檻時，發放對應紅利。門檻為 0–1 小數（例：0.8 = 80%）。</p>
+      <p class="desc-text">舊生率 / 才藝率達門檻時，發放對應紅利。門檻為百分比（0–100，例：80 代表 80%）。</p>
       <el-row :gutter="20">
         <el-col :span="6">
           <el-form-item>
             <template #label>
-              <el-tooltip content="舊生率達此門檻發放紅利（0–1 小數）" placement="top">
+              <el-tooltip content="舊生率達此門檻發放紅利（百分比，0–100）" placement="top">
                 <span>舊生率門檻</span>
               </el-tooltip>
             </template>
             <el-input-number
               v-model="rules.dividend_returning_threshold"
-              :min="0" :max="1" :step="0.05" :precision="2"
+              :min="0" :max="100" :step="1"
               controls-position="right" style="width: 100%"
             />
+            <span class="unit-hint">%</span>
           </el-form-item>
         </el-col>
         <el-col :span="6">
@@ -377,15 +386,16 @@ onMounted(() => {
         <el-col :span="6">
           <el-form-item>
             <template #label>
-              <el-tooltip content="才藝率達此門檻發放紅利（0–1 小數）" placement="top">
+              <el-tooltip content="才藝率達此門檻發放紅利（百分比，0–100）" placement="top">
                 <span>才藝率門檻</span>
               </el-tooltip>
             </template>
             <el-input-number
               v-model="rules.dividend_activity_threshold"
-              :min="0" :max="1" :step="0.05" :precision="2"
+              :min="0" :max="100" :step="1"
               controls-position="right" style="width: 100%"
             />
+            <span class="unit-hint">%</span>
           </el-form-item>
         </el-col>
         <el-col :span="6">

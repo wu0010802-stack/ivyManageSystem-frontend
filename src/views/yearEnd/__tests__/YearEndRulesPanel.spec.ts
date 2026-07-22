@@ -158,8 +158,58 @@ describe('YearEndRulesPanel', () => {
     ])
     expect(vm.artTeacherEmployeeIds).toEqual([7, 9])
     expect(vm.rules.art_teacher_unit_price).toBe(30)
-    expect(vm.rules.dividend_returning_threshold).toBe(0.8)
+    // B3：後端 fraction(0.8) → UI 顯示百分比(80)
+    expect(vm.rules.dividend_returning_threshold).toBe(80)
     expect(vm.employeeOptions).toHaveLength(2)
+  })
+
+  // B3（考核年終規則設定百分比統一）：紅利門檻/舊生率 0-1 fraction ↔ UI 0-100% 邊界換算
+  describe('B3 紅利門檻 / 舊生率百分比邊界換算', () => {
+    it('load: 後端 0.8/0.75 → UI 顯示 80/75', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          dividend_activity_threshold: 0.8,
+          dividend_returning_threshold: 0.75,
+        },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.rules.dividend_activity_threshold).toBe(80)
+      expect(vm.rules.dividend_returning_threshold).toBe(75)
+    })
+
+    it('save: UI 改為 90 → payload 送出 0.9（不是 90、不是 0.009）', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          dividend_activity_threshold: 0.8,
+          dividend_returning_threshold: 0.75,
+        },
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.rules.dividend_activity_threshold).toBe(80)
+      vm.rules.dividend_activity_threshold = 90
+      await nextTick()
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      expect(payload.dividend_activity_threshold).toBe(0.9)
+      // 舊生率未改動：75 → 0.75 往返一致
+      expect(payload.dividend_returning_threshold).toBe(0.75)
+    })
   })
 
   it('load: 缺 JSON 欄位時 graceful 退成空（不炸）', async () => {

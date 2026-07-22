@@ -67,6 +67,24 @@ const RULE_TYPE_OPTIONS = [
 // P2-FE-5：input_field 限定枚舉，避免 free text 與後端 rule_applier 取值不同步。
 // 後端 services/appraisal/rule_applier.py 雖以 item_code 分流取值（input_field
 // 目前是 informational），但已知的合法值僅這 4 個；改為下拉避免錯字。
+//
+// ⚠ B3（考核年終規則設定百分比統一，2026-07-22）核實後**刻意不**對
+// retention_rate/activity_rate 做 0–1 fraction 換算：這兩個 input_field
+// 對應的後端數值（ClassRetentionAggregate.retention_rate、
+// ActivityRateAggregate.activity_rate，見 services/appraisal/
+// status_aggregator.py:100/111 註解「0-100，2 位小數」）**本就是 0–100
+// 百分比尺度**，與 apply_tier()/apply_flat_threshold() 直接比較
+// （rule_applier.py:85/112）；既有回歸測試
+// RuleEditorDialog.spec.js「submit 帶出 TIER 正確 payload」與
+// tests/test_appraisal_score_preview.py 的 seed 資料（tiers min:
+// 100/95/90/80/0、threshold: 80）皆證實 tier min/threshold 送出即為
+// 0–100 原值。這與 YearEndRulesPanel.vue 的
+// dividend_activity_threshold/dividend_returning_threshold（後端存
+// fraction 0–1，見 ivy-backend models/config.py + services/year_end/
+// auto_derive/returning_rate.py「小數 3 位」）是完全不同的兩套尺度慣例
+// ——若對本檔 tier min 加 percentToFraction 換算會把 80 存成 0.8，
+// 直接壞掉考核評分比對。批次 3 SDD brief 原假設此處也需換算，已核實
+// 為誤判，故不比照 YearEndRulesPanel 做邊界換算。
 const INPUT_FIELD_OPTIONS = [
   { value: 'retention_rate', label: '留校率 retention_rate' },
   { value: 'activity_rate', label: '才藝報名率 activity_rate' },
