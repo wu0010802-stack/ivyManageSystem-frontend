@@ -1638,6 +1638,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/settings/registration-success-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Registration Success Email Template
+         * @description 取得報名成功通知信樣板設定（管理後台用）。
+         *
+         *     subject/body 為 None 代表尚未自訂，目前實際寄送使用 *_default 樣板。
+         */
+        get: operations["get_registration_success_email_template_api_activity_settings_registration_success_email_get"];
+        /**
+         * Update Registration Success Email Template
+         * @description 更新報名成功通知信樣板；subject/body 傳空字串或省略皆視為清除覆寫
+         *     （恢復預設樣板）。
+         */
+        put: operations["update_registration_success_email_template_api_activity_settings_registration_success_email_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/settings/registration-success-email/test-send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Send Registration Success Email
+         * @description 後台試寄一封報名成功通知信（固定測試資料渲染，不查真實報名）。
+         *
+         *     subject/body 省略時採用 DB 已儲存樣板（或預設樣板），可用於「先存檔再試寄」；
+         *     帶入時直接用表單目前內容試寄，讓管理員能在存檔前先預覽措辭與排版。
+         */
+        post: operations["test_send_registration_success_email_api_activity_settings_registration_success_email_test_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/settings/registration-time": {
         parameters: {
             query?: never;
@@ -26955,6 +27005,57 @@ export interface components {
             /** Parent Phone */
             parent_phone?: string | null;
         };
+        /**
+         * RegistrationSuccessEmailTemplateOut
+         * @description GET /settings/registration-success-email 回應。
+         *
+         *     subject/body 為 None 代表尚未自訂、目前寄送使用下方 *_default 樣板；
+         *     非 None 時為後台已儲存的覆寫樣板。email_enabled 反映當前環境是否真的會
+         *     寄出（ACTIVITY_EMAIL_ENABLED + RESEND_API_KEY + from_address 皆需設定），
+         *     供前端在未啟用時提示「測試寄送」不會真的送出。
+         */
+        RegistrationSuccessEmailTemplateOut: {
+            /** Body */
+            body?: string | null;
+            /** Body Default */
+            body_default: string;
+            /** Email Enabled */
+            email_enabled: boolean;
+            /** Subject */
+            subject?: string | null;
+            /** Subject Default */
+            subject_default: string;
+        };
+        /**
+         * RegistrationSuccessEmailTemplateUpdate
+         * @description PUT /settings/registration-success-email 請求體。
+         *
+         *     留空字串或 None 皆視為「清除覆寫、恢復預設樣板」（寫回 DB 為 NULL）。
+         */
+        RegistrationSuccessEmailTemplateUpdate: {
+            /** Body */
+            body?: string | null;
+            /** Subject */
+            subject?: string | null;
+        };
+        /**
+         * RegistrationSuccessEmailTestSendIn
+         * @description POST /settings/registration-success-email/test-send 請求體。
+         *
+         *     subject/body 可選：帶入時用「表單目前內容」試寄（不需先儲存），省略時
+         *     用 DB 已儲存樣板（或預設樣板）試寄，讓管理員能在存檔前先預覽措辭。
+         */
+        RegistrationSuccessEmailTestSendIn: {
+            /** Body */
+            body?: string | null;
+            /** Subject */
+            subject?: string | null;
+            /**
+             * To Email
+             * Format: email
+             */
+            to_email: string;
+        };
         /** RegistrationSummaryOut */
         RegistrationSummaryOut: {
             /** Courses */
@@ -34230,6 +34331,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityPosterUploadResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_registration_success_email_template_api_activity_settings_registration_success_email_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationSuccessEmailTemplateOut"];
+                };
+            };
+        };
+    };
+    update_registration_success_email_template_api_activity_settings_registration_success_email_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationSuccessEmailTemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationSuccessEmailTemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_send_registration_success_email_api_activity_settings_registration_success_email_test_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationSuccessEmailTestSendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
