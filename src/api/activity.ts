@@ -185,8 +185,8 @@ export const getChanges = (params?: ApiQuery<'/activity/changes', 'get'>): Axios
   api.get('/activity/changes', { params })
 
 // 班級選項
-export const getClassOptions = (): AxiosResp<'/activity/class-options', 'get'> =>
-  api.get('/activity/class-options')
+export const getClassOptions = (params?: ApiQuery<'/activity/class-options', 'get'>): AxiosResp<'/activity/class-options', 'get'> =>
+  api.get('/activity/class-options', { params })
 
 // 統計表匯出
 export const exportDashboardTable = (params?: ApiQuery<'/activity/dashboard-table/export', 'get'>): Promise<AxiosResponse<Blob>> =>

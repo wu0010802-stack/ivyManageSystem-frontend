@@ -267,7 +267,7 @@ export interface paths {
         };
         /**
          * Get Class Options
-         * @description 從 Classroom 表動態取得班級名稱選項
+         * @description 依學期取得啟用中的班級名稱選項。
          */
         get: operations["get_class_options_api_activity_class_options_get"];
         put?: never;
@@ -1458,7 +1458,8 @@ export interface paths {
          * Add Registration Supply
          * @description 後台為既有報名追加一筆用品。
          *
-         *     併發保護：鎖 reg 行，與 remove_registration_supply 對稱。
+         *     併發保護：依 supply → registration 的固定鎖序取行鎖，與停用品流程共用
+         *     ActivitySupply 鎖，避免在停用檢查與 commit 之間插入 RegistrationSupply。
          */
         post: operations["add_registration_supply_api_activity_registrations__registration_id__supplies_post"];
         delete?: never;
@@ -9262,10 +9263,7 @@ export interface paths {
         get?: never;
         /**
          * Portal Batch Update Attendance
-         * @description 批次點名：任何老師可點整堂跨班名冊；無效報名略過（對齊 admin）。
-         *
-         *     放寬前限定自班並對非自班 reg 整批 403；現移除自班限制，僅保留
-         *     『該 reg 確實有效報了本場次課程』的有效性檢查（無效者略過、不整批拒絕）。
+         * @description 批次點名：限課程指定老師；具 ACTIVITY_WRITE 者可代為處理。
          */
         put: operations["portal_batch_update_attendance_api_portal_activity_attendance_sessions__session_id__records_put"];
         post?: never;
@@ -32293,7 +32291,10 @@ export interface operations {
     };
     get_class_options_api_activity_class_options_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -32307,6 +32308,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityClassOptionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -33175,7 +33185,10 @@ export interface operations {
     };
     get_public_classes_api_activity_public_classes_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -33189,6 +33202,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

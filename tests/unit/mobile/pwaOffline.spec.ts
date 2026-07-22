@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const cfg = () => readFileSync(resolve(process.cwd(), 'vite.config.js'), 'utf-8')
+const adminManifest = () => readFileSync(resolve(process.cwd(), 'public/manifest.webmanifest'), 'utf-8')
 
 describe('PWA 離線收斂', () => {
   it('navigateFallbackDenylist 排除 /public.html 與 /public/ 兩種路徑', () => {
@@ -18,7 +19,9 @@ describe('PWA 離線收斂', () => {
   })
 
   it('PWA manifest theme_color 與 index.html meta 對齊 (#4f46e5)', () => {
-    expect(cfg()).toContain("theme_color: '#4f46e5'")
+    expect(JSON.parse(adminManifest()).theme_color).toBe('#4f46e5')
+    expect(readFileSync(resolve(process.cwd(), 'index.html'), 'utf-8'))
+      .toContain('<meta name="theme-color" content="#4f46e5">')
   })
 
   it('所有家長/Portal 個人化 GET API 只走 NetworkOnly，不建立 response cache', () => {

@@ -1,4 +1,4 @@
-import { vi, afterEach } from 'vitest'
+import { vi, beforeEach, afterEach } from 'vitest'
 import { enableAutoUnmount } from '@vue/test-utils'
 import 'fake-indexeddb/auto'
 
@@ -17,7 +17,35 @@ const localStorageMock = {
     key: vi.fn((i) => Object.keys(store)[i] ?? null),
 }
 
-vi.stubGlobal('localStorage', localStorageMock)
+class BlockedXMLHttpRequest {
+    constructor() {
+        // Axios selects the browser XHR adapter in happy-dom. Throwing at construction
+        // keeps an unmocked request deterministic and guarantees no socket can be opened.
+        throw new Error('Unexpected unmocked XMLHttpRequest in Vitest')
+    }
+}
+
+function installHarnessGlobals() {
+    // Unit tests must never fall through to Node/happy-dom's real fetch. Besides making
+    // tests depend on a developer server, concurrent logout cleanup used to open hundreds
+    // of localhost connections and turn unrelated assertions into timeouts. Tests that
+    // exercise fetch install their own mock in their local beforeEach (after this hook).
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(
+        new Error('Unexpected unmocked fetch in Vitest'),
+    )))
+    // Tests that intentionally cover an XHR adapter can replace this in their own
+    // beforeEach; setup-file hooks run first, so the test-scoped implementation wins.
+    vi.stubGlobal('XMLHttpRequest', BlockedXMLHttpRequest)
+    vi.stubGlobal('localStorage', localStorageMock)
+}
+
+installHarnessGlobals()
+
+// A few interaction tests call vi.unstubAllGlobals(). Reinstall the harness boundary
+// before every following test so file scheduling cannot leak real network/storage state.
+beforeEach(() => {
+    installHarnessGlobals()
+})
 
 // happy-dom 預設沒有 matchMedia；提供可被測試 override 的 stub
 if (typeof window !== 'undefined' && !window.matchMedia) {

@@ -36,6 +36,14 @@ function manualChunks(id) {
         return 'vue-core'
     }
 
+    // Rollup CommonJS interop helper is a virtual module shared by Vue's compiler
+    // dependencies and generic vendor packages. Letting it fall through makes Rollup
+    // place it in vendor, producing vue-core -> vendor while vendor already imports
+    // Vue APIs: a circular chunk that can expose initialization-order failures.
+    if (id.includes('commonjsHelpers.js')) {
+        return 'vue-core'
+    }
+
     if (!id.includes('node_modules') && !id.includes('/src/')) {
         return
     }
@@ -144,21 +152,10 @@ function manualChunks(id) {
         return 'admin-core'
     }
 
-    if (
-        id.includes('/src/views/activity/') ||
-        id.includes('/src/api/activity.ts') ||
-        id.includes('/src/stores/activity.ts')
-    ) {
-        return 'activity-admin'
-    }
-
-    // Portal（教師入口）獨立 chunk，管理端不需要下載
-    if (
-        id.includes('/src/views/portal/') ||
-        id.includes('/src/api/portal.ts')
-    ) {
-        return 'portal'
-    }
+    // Activity / Portal 皆已由 router dynamic import 切分。不再把整個來源樹
+    // 強制併成 manual chunk：這兩個 feature 與 admin shell 有共用 module，人工
+    // 併塊會產生 shell -> feature 的靜態邊，使 Vite 把 portal / activity-admin
+    // 以及它們的 fullcalendar / qrcode 依賴全部 modulepreload 到 index 首屏。
 
     // LIFF：@line/liff SDK + @liff/* + services/liff.ts wrapper，僅 lazy LoginView/MeView
     // 用到（router 兩者皆 () => import(...)）。原本 services/liff.ts 被下方 /src/parent/
@@ -267,7 +264,11 @@ function manualChunks(id) {
     }
 
     if (id.includes('element-plus') || id.includes('@element-plus')) {
-        return 'element-plus'
+        // 不強制合併：Element Plus 元件散布在大量 lazy routes。全部塞進同一塊會讓
+        // admin shell 因共用少數元件而首屏載入所有 route 的元件（實測 258.4KB gz）。
+        // 提前回傳 undefined 可避開下方 vendor catch-all，交由 Rollup 依 import graph
+        // 抽共用塊；首屏降至約 276KB gz，route 專屬元件仍隨 route lazy 載入。
+        return undefined
     }
 
     if (
@@ -294,6 +295,9 @@ export default defineConfig({
         }),
         Components({
             resolvers: [ElementPlusResolver()],
+            // 這兩個名稱各自存在於多個 feature；實際 template 皆顯式 import。
+            // 禁止全域 auto-resolve，避免掃描順序決定錯誤元件與每次 build 衝突警告。
+            excludeNames: [/^(AttendanceSection|LeaveSection)$/],
             dts: true,
         }),
         VitePWA({
@@ -303,24 +307,10 @@ export default defineConfig({
             // 圖檔仍由 vite 自動複製 public/ 下到 dist，App.vue 用到時即可取得。
             includeAssets: ['favicon.ico', 'LOGO.png', 'apple-touch-icon-180x180.png', 'logo.svg'],
 
-            manifest: {
-                name: '常春藤管理系統',
-                short_name: '常春藤管理',
-                description: '常春藤幼兒園管理與教師入口系統',
-                theme_color: '#4f46e5',
-                background_color: '#ffffff',
-                display: 'standalone',
-                orientation: 'portrait',
-                start_url: './',
-                scope: './',
-                icons: [
-                    { src: 'pwa-64x64.png', sizes: '64x64', type: 'image/png' },
-                    { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-                    { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-                    { src: 'maskable-icon-512x512.png', sizes: '512x512',
-                      type: 'image/png', purpose: 'maskable' },
-                ],
-            },
+            // VitePWA 的 manifest 注入會套用到每個 HTML entry，無法區分
+            // admin / parent / public。三個 entry 改由各自 HTML 明確連結 public/
+            // 下的靜態 manifest；plugin 仍負責 service worker 產生與註冊。
+            manifest: false,
 
             workbox: {
                 // 新 SW 一就緒就接管，避免舊 SW 繼續攔截到已不存在的 chunk hash → 404 白屏。
@@ -335,6 +325,8 @@ export default defineConfig({
                     'public.html',
                     'registerSW.js',
                     'manifest.webmanifest',
+                    'parent.webmanifest',
+                    'public.webmanifest',
                     'assets/main-*.css',
                     'assets/main-*.js',
                     'assets/vue-core-*.js',

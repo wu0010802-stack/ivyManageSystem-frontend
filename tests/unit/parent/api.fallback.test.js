@@ -1,5 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MockAdapter from 'axios-mock-adapter'
+
+const { captureExceptionMock, sanitizeUrlMock } = vi.hoisted(() => ({
+  captureExceptionMock: vi.fn(() => Promise.resolve()),
+  sanitizeUrlMock: vi.fn(() => '/children/:id?phone=%5BFiltered%5D'),
+}))
+
+vi.mock('@/utils/sentry', () => ({
+  captureException: captureExceptionMock,
+  sanitizeUrl: sanitizeUrlMock,
+}))
 
 // 家長端 axios instance
 import api from '@/parent/api/index'
@@ -9,6 +19,8 @@ describe('parent api interceptor — friendly fallback (Phase 5)', () => {
   let mock
 
   beforeEach(() => {
+    captureExceptionMock.mockClear()
+    sanitizeUrlMock.mockClear()
     mock = new MockAdapter(api)
   })
 
@@ -57,5 +69,35 @@ describe('parent api interceptor — friendly fallback (Phase 5)', () => {
     mock.onGet('/missing').reply(404)
     const err = await api.get('/missing').catch((e) => e)
     expect(err.displayMessage).toBe(DEFAULT_MESSAGES[ErrorType.NOT_FOUND])
+  })
+
+  it('422 detail 為 FastAPI validation array 時不把陣列交給 UI', async () => {
+    mock.onPost('/validation-422').reply(422, {
+      detail: [{ loc: ['body', 'name'], msg: 'field required', type: 'missing' }],
+    })
+
+    const err = await api.post('/validation-422').catch((e) => e)
+
+    expect(Array.isArray(err.displayMessage)).toBe(false)
+    expect(err.displayMessage).toBe(DEFAULT_MESSAGES[ErrorType.VALIDATION])
+    expect(err.errorDetail).toBeNull()
+  })
+
+  it('5xx 會以去識別 URL 上報 Sentry，4xx 不上報', async () => {
+    const privateUrl = '/children/123?phone=0912345678'
+    mock.onGet(privateUrl).reply(500)
+    const serverErr = await api.get(privateUrl).catch((e) => e)
+
+    expect(sanitizeUrlMock).toHaveBeenCalledWith(privateUrl)
+    expect(captureExceptionMock).toHaveBeenCalledWith(serverErr, {
+      url: '/children/:id?phone=%5BFiltered%5D',
+      method: 'get',
+      status: 500,
+    })
+
+    captureExceptionMock.mockClear()
+    mock.onGet('/missing-child').reply(404)
+    await api.get('/missing-child').catch((e) => e)
+    expect(captureExceptionMock).not.toHaveBeenCalled()
   })
 })

@@ -45,6 +45,7 @@ vi.mock('element-plus', () => ({
 // ────────────────────────────────────────────────────────────────── //
 
 import { useActivityRegistration } from '@/composables/useActivityRegistration'
+import { useAcademicTermStore } from '@/stores/academicTerm'
 
 describe('useActivityRegistration', () => {
   beforeEach(() => {
@@ -229,9 +230,14 @@ describe('useActivityRegistration', () => {
 
     expect(courseOptions.value).toEqual(courses)
     expect(classroomOptions.value).toEqual(options)
+    const termStore = useAcademicTermStore()
+    expect(getClassOptions).toHaveBeenCalledWith({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
   })
 
-  it('班級清單守衛：第二次 loadOptions 只重抓課程（名額），不重抓班級', async () => {
+  it('同學期第二次 loadOptions 不重抓班級，切換學期後會重抓', async () => {
     getCourses.mockResolvedValue({ data: { courses: [{ id: 1, name: '美術' }] } })
     getClassOptions.mockResolvedValue({ data: { options: ['大班'] } })
 
@@ -242,7 +248,15 @@ describe('useActivityRegistration', () => {
 
     await loadOptions() // mutation 後刷新名額：只重抓課程
     expect(getCourses).toHaveBeenCalledTimes(2)
-    expect(getClassOptions).toHaveBeenCalledTimes(1) // 班級不再重抓
+    expect(getClassOptions).toHaveBeenCalledTimes(1)
+
+    const termStore = useAcademicTermStore()
+    termStore.setTerm(termStore.school_year + 1, termStore.semester)
+    await vi.waitFor(() => expect(getClassOptions).toHaveBeenCalledTimes(2))
+    expect(getClassOptions).toHaveBeenLastCalledWith({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
   })
 
   it('班級守衛：首次 getClassOptions 失敗則下次仍會重試（未標記已載入）', async () => {
