@@ -131,7 +131,7 @@ defineExpose({ fetchDaily })
       style="width: 100%; margin-top: 12px"
       max-height="320"
     >
-      <el-table-column prop="student_no" label="學號" width="80" />
+      <el-table-column prop="student_no" label="學號" width="100" />
       <el-table-column prop="name" label="姓名" width="100" />
       <el-table-column label="狀態" width="90" align="center">
         <template #default="{ row }">

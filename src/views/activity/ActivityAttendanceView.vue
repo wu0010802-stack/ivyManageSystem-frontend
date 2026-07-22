@@ -99,7 +99,7 @@
       </el-table-column>
       <el-table-column label="備註" prop="notes" min-width="120" show-overflow-tooltip />
       <el-table-column label="建立者" prop="created_by" width="100" align="center" />
-      <el-table-column label="操作" width="200" align="center" fixed="right">
+      <el-table-column label="操作" width="240" align="center" fixed="right">
         <template #default="{ row }">
           <el-button
             type="primary"

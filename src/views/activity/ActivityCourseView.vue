@@ -71,7 +71,7 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="canWrite" label="操作" width="130" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="160" align="center" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openEdit(row)">編輯</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">停用</el-button>

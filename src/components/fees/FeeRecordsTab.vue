@@ -63,7 +63,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="繳費日期" width="105">
+      <el-table-column label="繳費日期" width="120">
         <template #default="{ row }">{{ row.payment_date || '—' }}</template>
       </el-table-column>
       <el-table-column label="繳費方式" width="90">

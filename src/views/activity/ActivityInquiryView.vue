@@ -33,7 +33,7 @@
       <el-table-column label="提問時間" min-width="130">
         <template #default="{ row }">{{ formatActivityDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="200" align="center" fixed="right">
+      <el-table-column label="操作" width="300" align="center" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canWrite" size="small" @click="openReplyDialog(row)">
             {{ row.reply ? '編輯聯繫紀錄' : '記錄聯繫結果' }}
