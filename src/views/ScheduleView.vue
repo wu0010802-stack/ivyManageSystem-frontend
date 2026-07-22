@@ -470,7 +470,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
               {{ row.classroom_name || '-' }}
             </template>
           </el-table-column>
-          <el-table-column label="班別" min-width="200">
+          <el-table-column label="班別" min-width="240">
             <template #default="{ row }">
               <el-select
                 :model-value="getAssignment(row.id)"
@@ -488,7 +488,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
               </el-select>
             </template>
           </el-table-column>
-          <el-table-column label="上班時間" width="120">
+          <el-table-column label="上班時間" min-width="120">
             <template #default="{ row }">
               <template v-if="getAssignment(row.id)">
                 {{ getShiftInfo(getAssignment(row.id))?.work_start || '' }}
@@ -496,7 +496,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
               <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="下班時間" width="120">
+          <el-table-column label="下班時間" min-width="120">
             <template #default="{ row }">
               <template v-if="getAssignment(row.id)">
                 {{ getShiftInfo(getAssignment(row.id))?.work_end || '' }}
@@ -504,7 +504,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
               <span v-else class="text-muted">-</span>
             </template>
           </el-table-column>
-          <el-table-column label="每日調整" width="100" align="center">
+          <el-table-column label="每日調整" min-width="100" align="center">
             <template #default="{ row }">
               <el-button size="small" @click="openDailyDialog(row)">調整</el-button>
             </template>
