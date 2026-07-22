@@ -15,6 +15,12 @@ vi.mock('@/api/portal', () => ({
 
 import { usePortalStudent } from '../usePortalStudent'
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => { resolve = res })
+  return { promise, resolve }
+}
+
 describe('usePortalStudent 揭露電話快取隔離（P3）', () => {
   beforeEach(() => vi.clearAllMocks())
 
@@ -48,5 +54,21 @@ describe('usePortalStudent 揭露電話快取隔離（P3）', () => {
     await s.revealPhone({ studentId: 2, target: 'parent' })
     // 新學生須重新打 reveal（寫 audit），不得因舊 key 快取被節流
     expect(revealPortalStudentPhoneMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('學生 A 的揭露回應在切到 B 後才完成時，不得寫進 B 的電話快取', async () => {
+    getPortalStudentDetailMock.mockResolvedValue({ data: {} })
+    const revealA = deferred<{ data: { phone: string } }>()
+    revealPortalStudentPhoneMock.mockReturnValueOnce(revealA.promise)
+
+    const s = usePortalStudent()
+    await s.loadDetail(1)
+    const pendingReveal = s.revealPhone({ studentId: 1, target: 'parent' })
+
+    await s.loadDetail(2)
+    revealA.resolve({ data: { phone: '0912-111-111' } })
+    await pendingReveal
+
+    expect(s.getRevealedPhone('parent')).toBeNull()
   })
 })

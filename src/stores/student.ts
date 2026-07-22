@@ -90,6 +90,7 @@ function buildMutationActions(store: StoreWithMutations) {
       const res = await apiBulkTransferStudents({
         student_ids,
         target_classroom_id,
+        source_classroom_id,
       })
       domainBus.emit(STUDENT_EVENTS.TRANSFERRED, {
         ids: student_ids,

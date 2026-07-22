@@ -8,6 +8,8 @@ import { apiError } from '@/utils/error'
 import { isSilentError } from '@/utils/errorHandler'
 import FormSection from '@/components/common/FormSection.vue'
 import { sectionForStudentField } from '@/constants/studentFormSections'
+import { hasPermission } from '@/utils/auth'
+import { buildStudentMutationPayload } from './studentEditPayload'
 
 const props = withDefaults(defineProps<{
   visible?: boolean
@@ -30,6 +32,28 @@ const emit = defineEmits<{
 }>()
 
 const isEdit = computed(() => props.mode === 'edit')
+const canHealthWrite = computed(() => (
+  hasPermission('STUDENTS_HEALTH_WRITE')
+  && (!isEdit.value || hasPermission('STUDENTS_HEALTH_READ'))
+))
+const canSpecialNeedsWrite = computed(() => (
+  hasPermission('STUDENTS_SPECIAL_NEEDS_WRITE')
+  && (!isEdit.value || hasPermission('STUDENTS_SPECIAL_NEEDS_READ'))
+))
+const canGuardianWrite = computed(() => (
+  hasPermission('GUARDIANS_WRITE')
+  && (!isEdit.value || hasPermission('GUARDIANS_READ'))
+))
+const showGovSection = computed(() => {
+  if (!isEdit.value) return true
+  const initial = props.initial ?? {}
+  return [
+    'id_number', 'nationality', 'household_address', 'is_disadvantaged',
+    'low_income_status', 'indigenous_status', 'is_special_education',
+    'disability_type', 'disability_level', 'disability_cert_no',
+    'disability_cert_expiry',
+  ].some((key) => Object.prototype.hasOwnProperty.call(initial, key))
+})
 
 const formatClassroomLabel = (c: Record<string, unknown> | null) => {
   if (!c) return ''
@@ -158,6 +182,7 @@ watch(
 const close = () => emit('update:visible', false)
 
 const submit = async () => {
+  if (submitting.value) return
   const formEl = formRef.value
   if (!formEl) return
   formEl.validate(async (valid, invalidFields) => {
@@ -168,10 +193,17 @@ const submit = async () => {
       if (invalidProps[0]) formEl.scrollToField(invalidProps[0])
       return
     }
+    if (submitting.value) return
     submitting.value = true
     try {
       const studentStore = useStudentStore()
-      const payload: Record<string, unknown> = { ...form }
+      const payload = buildStudentMutationPayload(form, {
+        isEdit: isEdit.value,
+        initial: props.initial,
+        canHealthWrite: canHealthWrite.value,
+        canSpecialNeedsWrite: canSpecialNeedsWrite.value,
+        canGuardianWrite: canGuardianWrite.value,
+      })
       if (payload.is_special_education == null) Reflect.deleteProperty(payload, 'is_special_education')
       if (isEdit.value) {
         await studentStore.updateStudent(form.id as number, payload)
@@ -243,7 +275,7 @@ const submit = async () => {
       </el-form-item>
 
       <!-- 家長資訊 -->
-      <FormSection ref="parentRef" data-test="section-parent" title="家長資訊" collapsible :default-open="false" :badge-count="sectionErrors.parent" badge-type="error">
+      <FormSection v-if="canGuardianWrite" ref="parentRef" data-test="section-parent" title="家長資訊" collapsible :default-open="false" :badge-count="sectionErrors.parent" badge-type="error">
         <el-form-item label="家長姓名"><el-input v-model="form.parent_name" /></el-form-item>
         <el-form-item label="電話" prop="parent_phone">
           <el-input v-model="form.parent_phone" />
@@ -253,7 +285,7 @@ const submit = async () => {
       </FormSection>
 
       <!-- 緊急聯絡人 -->
-      <FormSection ref="emergencyRef" data-test="section-emergency" title="緊急聯絡人" collapsible :default-open="false" :badge-count="sectionErrors.emergency" badge-type="error">
+      <FormSection v-if="canGuardianWrite" ref="emergencyRef" data-test="section-emergency" title="緊急聯絡人" collapsible :default-open="false" :badge-count="sectionErrors.emergency" badge-type="error">
         <el-form-item label="姓名"><el-input v-model="form.emergency_contact_name" placeholder="例: 王奶奶" /></el-form-item>
         <el-form-item label="電話" prop="emergency_contact_phone">
           <el-input v-model="form.emergency_contact_phone" />
@@ -263,10 +295,10 @@ const submit = async () => {
       </FormSection>
 
       <!-- 健康資訊 -->
-      <FormSection ref="healthRef" data-test="section-health" title="健康資訊" collapsible :default-open="false" :badge-count="sectionErrors.health" badge-type="error">
-        <el-form-item label="過敏原"><el-input v-model="form.allergy" type="textarea" :rows="2" placeholder="例: 花生、塵蟎" /></el-form-item>
-        <el-form-item label="用藥說明"><el-input v-model="form.medication" type="textarea" :rows="2" /></el-form-item>
-        <el-form-item label="特殊需求"><el-input v-model="form.special_needs" type="textarea" :rows="2" /></el-form-item>
+      <FormSection v-if="canHealthWrite || canSpecialNeedsWrite" ref="healthRef" data-test="section-health" title="健康資訊" collapsible :default-open="false" :badge-count="sectionErrors.health" badge-type="error">
+        <el-form-item v-if="canHealthWrite" label="過敏原"><el-input v-model="form.allergy" type="textarea" :rows="2" placeholder="例: 花生、塵蟎" /></el-form-item>
+        <el-form-item v-if="canHealthWrite" label="用藥說明"><el-input v-model="form.medication" type="textarea" :rows="2" /></el-form-item>
+        <el-form-item v-if="canSpecialNeedsWrite" label="特殊需求"><el-input v-model="form.special_needs" type="textarea" :rows="2" /></el-form-item>
       </FormSection>
 
       <!-- 其他標記 -->
@@ -279,12 +311,12 @@ const submit = async () => {
       </FormSection>
 
       <!-- 政府申報資料 -->
-      <FormSection ref="govRef" data-test="section-gov" title="政府申報資料" collapsible :default-open="false" :badge-count="sectionErrors.gov" badge-type="error">
+      <FormSection v-if="showGovSection" ref="govRef" data-test="section-gov" title="政府申報資料" collapsible :default-open="false" :badge-count="sectionErrors.gov" badge-type="error">
         <el-form-item label="身分證字號"><el-input v-model="form.id_number" maxlength="20" /></el-form-item>
         <el-form-item label="國籍"><el-input v-model="form.nationality" maxlength="20" placeholder="本國" /></el-form-item>
         <el-form-item label="戶籍地址"><el-input v-model="form.household_address" type="textarea" :rows="2" /></el-form-item>
         <el-form-item label="弱勢標記"><el-switch v-model="form.is_disadvantaged" /></el-form-item>
-        <el-form-item label="特教標記">
+        <el-form-item v-if="canSpecialNeedsWrite" label="特教標記">
           <el-switch
             :model-value="form.is_special_education ?? false"
             :disabled="form.is_special_education == null"
@@ -298,7 +330,7 @@ const submit = async () => {
           </el-select>
         </el-form-item>
         <el-form-item label="原住民族"><el-input v-model="form.indigenous_status" placeholder="阿美/泰雅/..." /></el-form-item>
-        <el-form-item label="身障類型">
+        <el-form-item v-if="canSpecialNeedsWrite" label="身障類型">
           <el-select v-model="form.disability_type" clearable>
             <el-option label="智能障礙" value="智能障礙" />
             <el-option label="聽覺障礙" value="聽覺障礙" />
@@ -311,7 +343,7 @@ const submit = async () => {
             <el-option label="多重障礙" value="多重障礙" />
           </el-select>
         </el-form-item>
-        <el-form-item label="身障等級">
+        <el-form-item v-if="canSpecialNeedsWrite" label="身障等級">
           <el-select v-model="form.disability_level" clearable>
             <el-option label="輕度" value="輕度" />
             <el-option label="中度" value="中度" />
@@ -319,8 +351,8 @@ const submit = async () => {
             <el-option label="極重度" value="極重度" />
           </el-select>
         </el-form-item>
-        <el-form-item label="鑑定文號"><el-input v-model="form.disability_cert_no" maxlength="50" /></el-form-item>
-        <el-form-item label="鑑定到期日">
+        <el-form-item v-if="canSpecialNeedsWrite" label="鑑定文號"><el-input v-model="form.disability_cert_no" maxlength="50" /></el-form-item>
+        <el-form-item v-if="canSpecialNeedsWrite" label="鑑定到期日">
           <el-date-picker v-model="form.disability_cert_expiry" type="date" placeholder="(無則永久)" value-format="YYYY-MM-DD" />
         </el-form-item>
       </FormSection>

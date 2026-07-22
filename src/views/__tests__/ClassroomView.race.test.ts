@@ -10,12 +10,13 @@ const getClassroomsMock = vi.hoisted(() => vi.fn())
 const getGradesMock = vi.hoisted(() => vi.fn())
 const getTeacherOptionsMock = vi.hoisted(() => vi.fn())
 const getIntakePlanMock = vi.hoisted(() => vi.fn())
+const getClassroomMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/classrooms', () => ({
   getClassrooms: getClassroomsMock,
   getGrades: getGradesMock,
   getTeacherOptions: getTeacherOptionsMock,
-  getClassroom: vi.fn(),
+  getClassroom: getClassroomMock,
   createClassroom: vi.fn(),
   updateClassroom: vi.fn(),
   deleteClassroom: vi.fn(),
@@ -61,6 +62,11 @@ interface SetupState {
   fetchClassrooms: () => Promise<void>
   classrooms: { id: number; name: string }[]
   loading: boolean
+  openEdit: (classroom: { id: number; name: string }) => Promise<void>
+  openCreate: () => Promise<void>
+  dialogVisible: boolean
+  isEdit: boolean
+  form: { id: number | null; name: string }
 }
 
 const STUBS = {
@@ -143,6 +149,26 @@ describe('ClassroomView fetchClassrooms 請求序號守衛（C3c）', () => {
 
     expect(ss.classrooms.map((c) => c.id)).toEqual([2])
     expect(ss.loading).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('編輯詳情未完成時改點新增：遲到詳情不得覆寫新增表單', async () => {
+    const wrapper = await mountView()
+    const ss = wrapper.vm.$.setupState as SetupState
+    const slowEdit = deferred<{ data: { id: number; name: string; school_year: number; semester: number } }>()
+    getClassroomMock.mockReturnValueOnce(slowEdit.promise)
+
+    const editRun = ss.openEdit({ id: 7, name: '舊班' })
+    await ss.openCreate()
+    expect(ss.dialogVisible).toBe(true)
+    expect(ss.isEdit).toBe(false)
+    expect(ss.form.id).toBeNull()
+
+    slowEdit.resolve({ data: { id: 7, name: '舊班', school_year: 114, semester: 1 } })
+    await editRun
+
+    expect(ss.isEdit).toBe(false)
+    expect(ss.form.id).toBeNull()
     wrapper.unmount()
   })
 })

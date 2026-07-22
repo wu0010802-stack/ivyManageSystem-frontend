@@ -121,6 +121,8 @@ const visibleTabs = computed(() => TAB_DEFS.value.filter((t) => t.show))
 
 // 快速切換學生時，較舊學生的慢回應不得覆寫新學生的 profile（標頭/PII 競態）。
 let profileSeq = 0
+// 編輯資料是另一條獨立請求；同樣要在切換學生時失效，避免在 B 畫面開啟 A 的表單。
+let editSeq = 0
 async function fetchProfile() {
   if (!props.studentId) {
     profileSeq += 1
@@ -146,7 +148,16 @@ async function fetchProfile() {
 
 watch(
   () => props.studentId,
-  (id) => { if (id) fetchProfile() },
+  (id, previousId) => {
+    if (id !== previousId) {
+      editSeq += 1
+      editDialogVisible.value = false
+      editInitial.value = null
+      editLoading.value = false
+      lifecycleDialogVisible.value = false
+    }
+    if (id) fetchProfile()
+  },
   { immediate: true },
 )
 
@@ -219,15 +230,19 @@ const handleLifecycleClick = () => { lifecycleDialogVisible.value = true }
 
 const openEditDialog = async () => {
   if (!props.studentId) return
+  const sid = props.studentId
+  const seq = ++editSeq
   editLoading.value = true
   try {
-    const { data } = await getStudent(props.studentId)
+    const { data } = await getStudent(sid)
+    if (seq !== editSeq || props.studentId !== sid) return
     editInitial.value = data
     editDialogVisible.value = true
   } catch (e) {
+    if (seq !== editSeq || props.studentId !== sid) return
     ElMessage.error(apiError(e, '讀取學生資料失敗'))
   } finally {
-    editLoading.value = false
+    if (seq === editSeq) editLoading.value = false
   }
 }
 

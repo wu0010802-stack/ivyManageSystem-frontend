@@ -464,6 +464,7 @@ const close = () => emit('update:visible', false)
             </div>
             <StudentDetailPanel
               v-if="selectedStudent"
+              :key="selectedStudent.id"
               :student-id="selectedStudent.id"
               mode="drawer"
               context="classroom"

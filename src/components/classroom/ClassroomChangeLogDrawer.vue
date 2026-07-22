@@ -13,6 +13,7 @@ import { getClassroomEnrollmentComposition } from '@/api/classrooms'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { dateToLocalISO } from '@/utils/format'
 import { STUDENT_CHANGE_LOG_EVENT_TYPES, CHANGE_LOG_TAG_TYPE, type ChangeLogTagType } from '@/constants/studentChangeLogEventTypes'
+import { hasPermission } from '@/utils/auth'
 
 const { notify } = useErrorNotify()
 
@@ -88,6 +89,10 @@ const selectedTermKey = computed({
 
 // ── Tabs ──────────────────────────────────────
 const activeTab = ref('timeline')
+const canViewComposition = computed(() => (
+  hasPermission('STUDENTS_SPECIAL_NEEDS_READ')
+  && hasPermission('GOV_REPORTS_VIEW')
+))
 
 // ── 異動時間軸 ─────────────────────────────────
 const EVENT_TYPES = [...STUDENT_CHANGE_LOG_EVENT_TYPES]
@@ -414,7 +419,7 @@ watch(activeTab, (tab) => {
       </el-tab-pane>
 
       <!-- ════ Tab 3: 身分比例 ════ -->
-      <el-tab-pane label="身分比例" name="composition">
+      <el-tab-pane v-if="canViewComposition" label="身分比例" name="composition">
         <div v-loading="compLoading" class="comp-wrap">
           <el-empty v-if="!compLoading && !doughnutData" description="尚無資料" />
           <template v-else>

@@ -6,10 +6,11 @@ import { shallowMount, flushPromises } from '@vue/test-utils'
 // 顯示 A，但名冊高亮的是 B。修正：加 profileSeq，過期回應丟棄不覆寫。
 
 const getStudentProfileMock = vi.hoisted(() => vi.fn())
+const getStudentMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/students', () => ({
   getStudentProfile: getStudentProfileMock,
-  getStudent: vi.fn().mockResolvedValue({ data: {} }),
+  getStudent: getStudentMock,
 }))
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
 vi.mock('@/utils/domainBus', () => ({
@@ -32,10 +33,18 @@ function deferred<T>() {
 
 interface SetupState {
   profile: Record<string, unknown> | null
+  editDialogVisible: boolean
+  editInitial: Record<string, unknown> | null
+  openEditDialog: () => Promise<void>
 }
 
 describe('StudentDetailPanel.fetchProfile 請求序號守衛（P2）', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getStudentProfileMock.mockReset()
+    getStudentMock.mockReset()
+    getStudentMock.mockResolvedValue({ data: {} })
+  })
 
   it('切學生 A(慢)→B(快)：較舊 A 回應遲到後不得覆寫最新 B 的 profile', async () => {
     const dA = deferred<{ data: { id: number } }>()
@@ -56,6 +65,28 @@ describe('StudentDetailPanel.fetchProfile 請求序號守衛（P2）', () => {
     dA.resolve({ data: { id: 1 } }) // 遲到的舊回應
     await flushPromises()
     expect(ss.profile?.id).toBe(2) // 未被較舊 A 覆寫
+    wrapper.unmount()
+  })
+
+  it('切學生 A→B 時，遲到的 A 編輯回應不得在 B 畫面開啟', async () => {
+    getStudentProfileMock.mockResolvedValue({ data: { id: 1 } })
+    const editA = deferred<{ data: { id: number; name: string } }>()
+    getStudentMock.mockReturnValueOnce(editA.promise)
+
+    const wrapper = shallowMount(StudentDetailPanel, {
+      props: { studentId: 1, mode: 'drawer', syncUrl: false },
+    })
+    await flushPromises()
+    const ss = wrapper.vm.$.setupState as SetupState
+
+    const editPromise = ss.openEditDialog()
+    await wrapper.setProps({ studentId: 2 })
+    editA.resolve({ data: { id: 1, name: '學生 A' } })
+    await editPromise
+    await flushPromises()
+
+    expect(ss.editDialogVisible).toBe(false)
+    expect(ss.editInitial).toBeNull()
     wrapper.unmount()
   })
 })
