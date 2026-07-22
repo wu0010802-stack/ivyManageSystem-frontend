@@ -44,6 +44,7 @@ const filters = reactive({
   username: '',
   entity_id: '',
   ip_address: '',
+  risk_tag: '',
   start_at: '',
   end_at: '',
   page: 1,
@@ -61,70 +62,48 @@ const ENTITY_ROUTES: Record<string, (id: number | string | null | undefined) => 
     id ? { path: '/finance-signoffs', query: { tab: 'misc', highlight: String(id) } } : null,
 }
 
-// 高風險事件快篩：name → predicate(row) → boolean
-// 客端過濾（changes 是 JSONB，server 端篩成本較高）；同時回傳該按鈕是否要先設 entity_type。
-// Why: 業主驗收要求「請假/加班/學費/退款/大額異動/強制放行/已核准後修改」可一鍵篩出
-const RISK_QUICK_FILTERS: { key: string; label: string; entityType: string; predicate: (row: AuditLog) => boolean }[] = [
-  { key: 'leave', label: '請假', entityType: 'leave', predicate: () => true },
-  { key: 'overtime', label: '加班', entityType: 'overtime', predicate: () => true },
-  { key: 'fee', label: '學費', entityType: 'fee', predicate: () => true },
-  {
-    key: 'refund',
-    label: '退款',
-    entityType: 'fee',
-    predicate: (row) => (row.changes as { action?: string })?.action === 'fee_refund',
-  },
-  {
-    key: 'large_amount',
-    label: '大額金流',
-    entityType: '',
-    predicate: (row) => {
-      const c = (row.changes || {}) as Record<string, unknown>
-      // 任何金額類欄位 > 5000 視為大額；含 fee_pay/fee_refund/cumulative_refund_after
-      const candidates = [c.delta, c.refund_amount, c.cumulative_refund_after, c.new_paid]
-      return candidates.some((v) => typeof v === 'number' && Math.abs(v) >= 5000)
-    },
-  },
-  {
-    key: 'force_overlay',
-    label: '強制放行',
-    entityType: '',
-    predicate: (row) => {
-      const tags = ((row.changes as { risk_tags?: string[] })?.risk_tags) || []
-      return tags.includes('force_overlap') || tags.includes('force_without_substitute')
-    },
-  },
-  {
-    key: 'reject_approved',
-    label: '已核准後修改',
-    entityType: '',
-    predicate: (row) => {
-      const c = (row.changes || {}) as Record<string, unknown>
-      // 三條軌跡都算：(1) approve 流程中駁回已核准 (2) 修改觸發退審 (3) 批次中含此類
-      if (c.is_reject_of_approved) return true
-      if (c.action === 'leave_update' || c.action === 'overtime_update') {
-        return c.was_approved === true
-      }
-      if (c.high_risk_count && (c.high_risk_count as number) > 0) return true
-      return false
-    },
-  },
-  {
-    key: 'login_failed',
-    label: '登入失敗',
-    entityType: 'auth',
-    predicate: (row) => row.action === 'LOGIN_FAILED',
-  },
-  {
-    key: 'login_blocked',
-    label: '登入限流/鎖定',
-    entityType: 'auth',
-    predicate: (row) =>
-      row.action === 'LOGIN_RATE_LIMITED' || row.action === 'LOGIN_LOCKED',
-  },
+// 快篩：宣告式伺服端參數 patch（changes 類條件由後端 risk_tags 欄過濾，
+// 全庫一致、total 正確；舊客端 predicate 已移除）
+const RISK_QUICK_FILTERS: {
+  key: string
+  label: string
+  params: { entity_type?: string; action?: string; risk_tag?: string }
+}[] = [
+  { key: 'leave', label: '請假', params: { entity_type: 'leave' } },
+  { key: 'overtime', label: '加班', params: { entity_type: 'overtime' } },
+  { key: 'fee', label: '學費', params: { entity_type: 'fee' } },
+  { key: 'refund', label: '退款', params: { risk_tag: 'refund' } },
+  { key: 'large_amount', label: '大額金流', params: { risk_tag: 'large_amount' } },
+  { key: 'force_overlay', label: '強制放行', params: { risk_tag: 'force_overlay' } },
+  { key: 'reject_approved', label: '已核准後修改', params: { risk_tag: 'reject_approved' } },
+  { key: 'login_failed', label: '登入失敗', params: { entity_type: 'auth', action: 'LOGIN_FAILED' } },
+  { key: 'login_blocked', label: '登入限流/鎖定', params: { risk_tag: 'login_blocked' } },
 ]
 
 const activeRiskFilter = ref('')
+
+const applyRiskFilter = (key: string) => {
+  const clearQuickParams = () => {
+    filters.entity_type = ''
+    filters.action = ''
+    filters.risk_tag = ''
+  }
+  if (activeRiskFilter.value === key) {
+    activeRiskFilter.value = ''
+    clearQuickParams()
+  } else {
+    activeRiskFilter.value = key
+    const def = RISK_QUICK_FILTERS.find((f) => f.key === key)
+    clearQuickParams()
+    if (def) {
+      if (def.params.entity_type) filters.entity_type = def.params.entity_type
+      if (def.params.action) filters.action = def.params.action
+      if (def.params.risk_tag) filters.risk_tag = def.params.risk_tag
+    }
+  }
+  filters.page = 1
+  fetchLogs()
+}
 
 const buildFilterParams = () => {
   const params: Record<string, unknown> = {}
@@ -133,6 +112,7 @@ const buildFilterParams = () => {
   if (filters.username) params.username = filters.username
   if (filters.entity_id && filters.entity_type) params.entity_id = filters.entity_id
   if (filters.ip_address) params.ip_address = filters.ip_address
+  if (filters.risk_tag) params.risk_tag = filters.risk_tag
   if (filters.start_at) params.start_at = filters.start_at
   if (filters.end_at) params.end_at = filters.end_at
   return params
@@ -188,36 +168,13 @@ const handleReset = () => {
   filters.username = ''
   filters.entity_id = ''
   filters.ip_address = ''
+  filters.risk_tag = ''
   filters.start_at = ''
   filters.end_at = ''
   filters.page = 1
   activeRiskFilter.value = ''
   fetchLogs()
 }
-
-const applyRiskFilter = (key: string) => {
-  if (activeRiskFilter.value === key) {
-    // 再次點擊取消
-    activeRiskFilter.value = ''
-    return
-  }
-  activeRiskFilter.value = key
-  const def = RISK_QUICK_FILTERS.find((f) => f.key === key)
-  if (def && def.entityType) {
-    filters.entity_type = def.entityType
-    filters.page = 1
-    fetchLogs()
-  }
-  // 純客端過濾（如「強制放行」）不重打 API，僅切換 displayedLogs
-}
-
-// 客端套用 risk filter 後的最終列表；無風險篩選時直接回 logs
-const displayedLogs = computed(() => {
-  if (!activeRiskFilter.value) return logs.value
-  const def = RISK_QUICK_FILTERS.find((f) => f.key === activeRiskFilter.value)
-  if (!def) return logs.value
-  return logs.value.filter(def.predicate)
-})
 
 // 高風險旗標：用於行內顯示警示徽章
 const getRiskBadges = (row: AuditLog) => {
@@ -447,17 +404,14 @@ defineExpose({ formatOperator })
         >
           {{ rf.label }}
         </el-button>
-        <el-button v-if="activeRiskFilter" size="small" link @click="activeRiskFilter = ''">
+        <el-button v-if="activeRiskFilter" size="small" link @click="applyRiskFilter(activeRiskFilter)">
           清除
         </el-button>
-        <span v-if="activeRiskFilter && !RISK_QUICK_FILTERS.find(f => f.key === activeRiskFilter)?.entityType" class="risk-hint">
-          純客端過濾：僅在當頁 {{ logs.length }} 筆中比對；如需全庫掃描請放大 page_size 或切換伺服端條件
-        </span>
       </div>
     </el-card>
 
     <el-table
-      :data="displayedLogs"
+      :data="logs"
       border
       stripe
       style="width: 100%; margin-top: 20px;"
