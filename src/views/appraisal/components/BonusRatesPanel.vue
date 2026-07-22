@@ -19,6 +19,11 @@ import {
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { confirmWithReason } from '../confirmWithReason'
+import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
+
+// Task B5：規則變更影響提示——新增版本成功訊息改走 notifyRuleChanged，OPEN
+// 週期存在時提示「此變更於下次試算/重算生效」，取代原本固定的「已新增版本」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 type ApiErr = { response?: { data?: { detail?: string } } }
 interface BonusRate { effective_from?: string; role_group?: string; grade?: string; base_amount?: number }
@@ -123,7 +128,7 @@ const submitForm = async () => {
       grade: form.grade,
       base_amount: form.base_amount,
     })
-    ElMessage.success('已新增版本')
+    notifyRuleChanged('已新增版本')
     dialogVisible.value = false
     fetchRates()
   } catch (error) {

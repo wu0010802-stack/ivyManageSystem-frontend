@@ -6,6 +6,12 @@ import RulesSettingsLayout from '../RulesSettingsLayout.vue'
 const hasPermissionMock = vi.hoisted(() => vi.fn((_: string) => true))
 vi.mock('@/utils/auth', () => ({ hasPermission: (p: string) => hasPermissionMock(p) }))
 
+// Task B5：layout onMounted 會呼叫 refresh()（打 listAppraisalCycles），
+// 需 mock 掉避免既有測試打到真實 axios（happy-dom 下無後端會 reject）。
+// 預設回傳空陣列＝無 OPEN 週期，維持既有 5 個測試（未斷言 banner）行為不變。
+const listAppraisalCyclesMock = vi.hoisted(() => vi.fn())
+vi.mock('@/api/appraisal', () => ({ listAppraisalCycles: (...a: unknown[]) => listAppraisalCyclesMock(...a) }))
+
 const ScoringStub = { template: '<div class="stub-scoring" />' }
 const BonusStub = { template: '<div class="stub-bonus" />' }
 const CatalogStub = { template: '<div class="stub-catalog" />' }
@@ -20,6 +26,12 @@ const stubs = {
     template: '<div class="stub-tabs"><slot /></div>',
   },
   ElTabPane: { name: 'ElTabPane', props: ['label', 'name'], template: '<div><slot /></div>' },
+  // Task B5：比照既有慣例（ManualEventEntrySection.spec.js 等）顯式 stub el-alert，
+  // 保留具名 title slot 讓 banner 內文（含 router-link）可被斷言。
+  'el-alert': {
+    name: 'ElAlert',
+    template: '<div class="el-alert" data-test="open-cycle-alert"><slot name="title" /></div>',
+  },
 }
 
 // 同 AppraisalManagementView.spec.ts 的既知現象：RulesSettingsLayout 自身即為路由 component，
@@ -57,6 +69,9 @@ describe('RulesSettingsLayout', () => {
   beforeEach(() => {
     hasPermissionMock.mockReset()
     hasPermissionMock.mockReturnValue(true)
+    listAppraisalCyclesMock.mockReset()
+    // 預設無 OPEN 週期，維持既有測試（未斷言 banner）行為不變。
+    listAppraisalCyclesMock.mockResolvedValue({ data: [] })
   })
 
   it('持 APPRAISAL_READ + SETTINGS_READ → 5 個分頁全顯示', async () => {
@@ -103,5 +118,34 @@ describe('RulesSettingsLayout', () => {
     // 掛在無 leaf segment 的 bare 'rules' 路徑，模擬 route.path.split('/')[3] 為 undefined 的情境
     const { w } = await mountAt('/appraisal-year-end/rules')
     expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('year-end-rules')
+  })
+
+  // Task B5：規則變更影響提示——頂部常駐 OPEN 週期 banner。
+  describe('OPEN 週期 banner', () => {
+    it('無 OPEN 週期時不顯示 banner', async () => {
+      listAppraisalCyclesMock.mockResolvedValue({ data: [{ id: 2, status: 'CLOSED' }] })
+      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+      expect(w.find('[data-test="open-cycle-alert"]').exists()).toBe(false)
+    })
+
+    it('有 OPEN 週期時顯示 banner 且含週期 ID 與「前往重算」連結', async () => {
+      listAppraisalCyclesMock.mockResolvedValue({
+        data: [{ id: 9, status: 'OPEN' }, { id: 8, status: 'CLOSED' }],
+      })
+      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+      const alert = w.find('[data-test="open-cycle-alert"]')
+      expect(alert.exists()).toBe(true)
+      expect(alert.text()).toContain('9')
+      expect(alert.text()).toContain('重算')
+      const link = w.find('.rules-open-cycle-alert__link')
+      expect(link.exists()).toBe(true)
+      expect(link.attributes('href')).toBe('/appraisal-year-end/appraisal/current')
+    })
+
+    it('listAppraisalCycles 失敗時不顯示 banner（靜默回退，不干擾主流程）', async () => {
+      listAppraisalCyclesMock.mockRejectedValue(new Error('network error'))
+      const { w } = await mountAt('/appraisal-year-end/rules/scoring')
+      expect(w.find('[data-test="open-cycle-alert"]').exists()).toBe(false)
+    })
   })
 })

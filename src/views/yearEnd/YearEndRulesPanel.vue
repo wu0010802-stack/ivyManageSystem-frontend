@@ -6,6 +6,7 @@ import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 import { confirmWithReason } from '@/views/appraisal/confirmWithReason'
+import { injectOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
 import {
   DIVIDEND_ACTIVITY_GRADES,
   emptyGradeThresholdPercents,
@@ -25,6 +26,10 @@ const canRead = computed(() => hasPermission('SETTINGS_READ'))
 const canSaveRules = computed(
   () => hasPermission('SETTINGS_WRITE') && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
 )
+
+// Task B5：規則變更影響提示——儲存成功訊息改走 notifyRuleChanged，OPEN 週期
+// 存在時提示「此變更於下次試算/重算生效」，取代原本固定的「年終規則已儲存」。
+const { notifyRuleChanged } = injectOpenCycleHint()
 
 // 年終規則欄位（型別對齊 ApiBody<'/config/bonus','put'> 的年終子集）
 const rules = reactive({
@@ -192,7 +197,7 @@ const saveRules = async () => {
   loading.value = true
   try {
     await updateBonusConfig(payload)
-    ElMessage.success('年終規則已儲存')
+    notifyRuleChanged('年終規則已儲存')
   } catch (error) {
     const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
     ElMessage.error(typeof detail === 'string' ? detail : '年終規則儲存失敗')
