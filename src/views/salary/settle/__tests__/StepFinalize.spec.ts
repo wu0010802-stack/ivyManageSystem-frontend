@@ -149,6 +149,14 @@ describe('StepFinalize', () => {
         const nextBtn = wrapper.findAll('button').find((b) => b.text().includes('下一步'))
         expect(nextBtn!.attributes('disabled')).toBeUndefined()
     })
+
+    it('總實發納入未休假折現', () => {
+        const wrapper = mountStep(
+            makeSettlement([rec({ net_salary: 36000, unused_leave_payout: 5000 })]),
+        )
+        const vm = wrapper.vm as unknown as { totalNet: number }
+        expect(vm.totalNet).toBe(41000)
+    })
 })
 
 describe('StepFinalize 退回防連點', () => {

@@ -17,6 +17,8 @@ const detail: PayslipDetail = {
   deductions: [{ key: 'labor_insurance_employee', label: '勞保', amount: 600 }],
   deduction_subtotal: 4604,
   net_salary: 3346,
+  unused_leave_payout: 1200,
+  base_transfer_amount: 4546,
 }
 
 describe('salaryHistoryDetail helper', () => {

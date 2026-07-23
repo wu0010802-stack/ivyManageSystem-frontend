@@ -24,6 +24,8 @@ const detail: PayslipDetail = {
   ],
   deduction_subtotal: 4604,
   net_salary: 3346,
+  unused_leave_payout: 1200,
+  base_transfer_amount: 4546,
 }
 
 describe('SalaryHistoryDetail.vue', () => {
@@ -34,6 +36,9 @@ describe('SalaryHistoryDetail.vue', () => {
     expect(text).toContain('健保')
     expect(text).toContain('其中：二代健保補充保費')
     expect(text).toContain('實發')
+    expect(text).toContain('$4,546')
+    expect(text).toContain('併入主薪轉')
+    expect(text).not.toContain('不進實發')
   })
 
   it('隱藏金額為 0 的列（超額獎金/績效/other_income）', () => {

@@ -43,6 +43,8 @@ type HistoryRow = {
   year: number
   month: number
   net_salary: number
+  unused_leave_payout: number
+  base_transfer_amount: number
   gross_salary: number
   base_salary: number
   total_bonus: number
@@ -55,10 +57,12 @@ type HistoryRow = {
   total_deduction: number
 }
 
-const row = (netSalary: number): HistoryRow => ({
+const row = (netSalary: number, unusedLeavePayout = 0): HistoryRow => ({
   year: 2026,
   month: 1,
   net_salary: netSalary,
+  unused_leave_payout: unusedLeavePayout,
+  base_transfer_amount: netSalary + unusedLeavePayout,
   gross_salary: netSalary,
   base_salary: netSalary,
   total_bonus: 0,
@@ -85,6 +89,7 @@ type VmShape = {
   historyMonths: number
   historyData: HistoryRow[]
   historyLoading: boolean
+  chartData: { datasets: Array<{ data: number[] }> } | null
 }
 
 const mountPanel = () => mount(SalaryHistoryPanel, { global: { stubs: STUBS } })
@@ -92,6 +97,15 @@ const mountPanel = () => mount(SalaryHistoryPanel, { global: { stubs: STUBS } })
 describe('SalaryHistoryPanel fetchHistory race guard', () => {
   beforeEach(() => {
     getHistoryMock.mockReset()
+  })
+
+  it('歷史圖表實發使用主薪轉金額（淨薪 + 未休折現）', async () => {
+    getHistoryMock.mockResolvedValue({ data: [row(30000, 5000)] })
+    const wrapper = mountPanel()
+    const vm = wrapper.vm as unknown as VmShape
+    vm.selectedEmployeeId = 1
+    await flushPromises()
+    expect(vm.chartData?.datasets[0].data).toEqual([35000])
   })
 
   // P1 #5：切換員工時若先選的員工（慢請求）晚於後選的員工（快請求）resolve，

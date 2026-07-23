@@ -33,7 +33,7 @@
       <div v-if="preview" class="bd-preview">
         預覽：節慶 {{ money(preview.festival_bonus) }} ／
         超額 {{ money(preview.overtime_bonus) }} ／
-        實領 {{ money(preview.net_pay) }}
+        試算淨薪 {{ money(preview.net_pay) }}
         <span class="bd-diff" :class="diffClass">（{{ netDiffLabel }}）</span>
       </div>
       <el-button v-if="preview" size="small" plain @click="resetPreview" style="margin-top:6px">

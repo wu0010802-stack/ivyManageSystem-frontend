@@ -98,6 +98,8 @@ describe('scrubMapping', () => {
       base_salary: 50000,
       insured_amount: 45800,
       bonus_amount: 1000,
+      unused_leave_payout: 5000,
+      base_transfer_amount: 35000,
       id_number: 'A123456789',
       phone: '0912345678',
       child_name: '小明',
@@ -111,6 +113,8 @@ describe('scrubMapping', () => {
     expect(res.base_salary).toBe('[Filtered]')
     expect(res.insured_amount).toBe('[Filtered]')
     expect(res.bonus_amount).toBe('[Filtered]')
+    expect(res.unused_leave_payout).toBe('[Filtered]')
+    expect(res.base_transfer_amount).toBe('[Filtered]')
     expect(res.id_number).toBe('[Filtered]')
     expect(res.phone).toBe('[Filtered]')
     expect(res.child_name).toBe('[Filtered]')

@@ -13,7 +13,7 @@ const showSeparate = computed(() => hasSeparateTransfer(props.detail))
 <template>
   <div class="sh-detail">
     <section class="sh-region">
-      <h4>進帳收入（計入應發/實發）</h4>
+      <h4>應發收入（計入 gross/net）</h4>
       <div v-for="line in income" :key="line.key" class="sh-line">
         <span>{{ line.label }}<small v-if="line.note">（{{ line.note }}）</small></span>
         <span>{{ money(line.amount) }}</span>
@@ -24,12 +24,12 @@ const showSeparate = computed(() => hasSeparateTransfer(props.detail))
     </section>
 
     <section v-if="showSeparate" class="sh-region">
-      <h4>另行轉帳（不進實發，另一條金流）</h4>
+      <h4>獨立轉帳（不含主薪轉）</h4>
       <div v-for="line in separate" :key="line.key" class="sh-line">
         <span>{{ line.label }}</span><span>{{ money(line.amount) }}</span>
       </div>
       <div class="sh-line sh-subtotal">
-        <span>另行轉帳小計</span><span>{{ money(detail.separate_subtotal) }}</span>
+        <span>獨立轉帳小計</span><span>{{ money(detail.separate_subtotal) }}</span>
       </div>
     </section>
 
@@ -49,8 +49,16 @@ const showSeparate = computed(() => hasSeparateTransfer(props.detail))
       </div>
     </section>
 
+    <section v-if="detail.unused_leave_payout" class="sh-region">
+      <h4>主薪轉加給</h4>
+      <div class="sh-line">
+        <span>未休假折現（併入主薪轉）</span>
+        <span>{{ money(detail.unused_leave_payout) }}</span>
+      </div>
+    </section>
+
     <div class="sh-line sh-net">
-      <span>實發</span><span>{{ money(detail.net_salary) }}</span>
+      <span>實發（主薪轉）</span><span>{{ money(detail.base_transfer_amount) }}</span>
     </div>
   </div>
 </template>

@@ -236,7 +236,7 @@
       </el-table-column>
       <el-table-column label="實領" width="120" align="right" class-name="num-cell">
         <template #default="scope">
-          <strong>{{ money(scope.row.net_pay) }}</strong>
+          <strong>{{ money(computeBaseTransferAmount(scope.row)) }}</strong>
         </template>
       </el-table-column>
       <el-table-column width="130" align="right" class-name="num-cell">
@@ -247,7 +247,7 @@
         </template>
         <template #default="scope">
           <strong class="text-success-strong">
-            {{ money((scope.row.net_pay || 0) + (scope.row.festival_bonus || 0) + (scope.row.overtime_bonus || 0)) }}
+            {{ money(computeTotalTakeHomeAmount(scope.row)) }}
           </strong>
         </template>
       </el-table-column>
@@ -343,6 +343,10 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import UnusedLeavePayoutTooltip from '@/components/salary/UnusedLeavePayoutTooltip.vue'
 import { hasPermission } from '@/utils/auth'
 import { money } from '@/utils/format'
+import {
+    computeBaseTransferAmount,
+    computeTotalTakeHomeAmount,
+} from '@/utils/salaryAmounts'
 import { downloadFile } from '@/utils/download'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useClientTableFilter } from '@/composables/useClientTableFilter'
