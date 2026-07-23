@@ -53,6 +53,7 @@ import { isLoggedIn } from '@/utils/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useHighRiskAuditCount } from '@/composables/useHighRiskAuditCount'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { useInboxNotifications } from '@/composables/useInboxNotifications'
 
 const NOTIFICATION_POLL_MS = 60_000
 
@@ -64,6 +65,12 @@ const sidebarOpen = ref(false)
 const sidebarRef = ref<InstanceType<typeof AdminSidebar> | null>(null)
 const headerRef = ref<InstanceType<typeof AdminHeader> | null>(null)
 let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const inboxNotifications = useInboxNotifications(() => {
+  if (isLoggedIn() && isAdminContext(route.path)) {
+    return notificationStore.fetchSummary({ force: true })
+  }
+})
 
 // 離開手機視窗時關閉手機側欄（原 checkMobile 的副作用）
 watch(isMobile, (m) => {
@@ -122,6 +129,7 @@ onMounted(() => {
   // 掛在 <html> 讓 teleport 到 body 的 dialog/message 也吃到
   document.documentElement.classList.add('ivy-admin')
   refreshNotifications()
+  if (isLoggedIn() && isAdminContext(route.path)) inboxNotifications.start()
   // Why: 切頁不再觸發 fetchSummary（避免每次 navigation 多一支 API 等待），改用
   // 固定 60 秒輪詢；store 本身有 10s TTL + in-flight dedupe 守住，重複請求不會炸後端。
   pollTimer = setInterval(pollNotifications, NOTIFICATION_POLL_MS)
@@ -129,6 +137,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.documentElement.classList.remove('ivy-admin')
+  inboxNotifications.stop()
   if (pollTimer !== null) {
     clearInterval(pollTimer)
     pollTimer = null

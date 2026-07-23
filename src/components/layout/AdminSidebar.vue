@@ -110,7 +110,7 @@
             <el-icon><Promotion /></el-icon>
             <template #title>招生入學</template>
           </el-menu-item>
-          <!-- 在籍統計已折入「學生」頁的分頁（/students?tab=enrollment）；舊路徑 redirect 保留 -->
+          <!-- 在籍統計已折入「班級學生管理」頁的第一個分頁 -->
           <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
             <template #title>接送通知</template>

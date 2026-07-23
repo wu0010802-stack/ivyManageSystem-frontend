@@ -27,7 +27,69 @@
     </div>
 
     <el-tabs v-model="activeTab" @tab-click="onTabClick" class="enrollment-tabs">
-      <!-- ============ Tab 1：統計圖表 ============ -->
+      <!-- ============ Tab 1：在籍記錄表 ============ -->
+      <el-tab-pane label="在籍記錄表" name="roster">
+        <div v-loading="rosterLoading">
+          <template v-if="roster">
+            <!-- 工具列 -->
+            <div class="roster-toolbar">
+              <el-select
+                v-model="gradeFilter"
+                multiple
+                collapse-tags
+                placeholder="年級"
+                clearable
+                style="min-width: 160px"
+              >
+                <el-option v-for="g in gradeOptions" :key="g" :label="g" :value="g" />
+              </el-select>
+              <el-select
+                v-model="classFilter"
+                multiple
+                collapse-tags
+                placeholder="班級"
+                clearable
+                style="min-width: 160px"
+              >
+                <el-option
+                  v-for="c in classOptions"
+                  :key="c.classroom_id"
+                  :label="c.class_name"
+                  :value="c.classroom_id"
+                />
+              </el-select>
+              <el-input
+                v-model="searchInput"
+                placeholder="搜尋學生姓名"
+                clearable
+                style="max-width: 200px"
+                :prefix-icon="Search"
+              />
+              <div class="tag-chips">
+                <span class="chip chip-new">● 新生 {{ displayTagCounts.新生 }}</span>
+                <span class="chip chip-underage">● 不足齡 {{ displayTagCounts.不足齡 }}</span>
+                <span class="chip chip-special">● 特教 {{ displayTagCounts.特教生 }}</span>
+                <span class="chip chip-indigenous">● 原民 {{ displayTagCounts.原住民 }}</span>
+              </div>
+              <el-button :icon="Download" @click="exportXlsx">匯出 Excel</el-button>
+              <el-button v-if="canWriteClassrooms" class="btn-year-plan" @click="goYearPlan">新學年預編班</el-button>
+            </div>
+            <EnrollmentRosterTable
+              v-if="displayRoster"
+              :roster="displayRoster"
+              :highlight-keyword="searchKeyword"
+              @select-student="onSelectStudent"
+            />
+          </template>
+          <el-empty
+            v-else-if="!rosterLoading"
+            description="尚未載入在籍記錄表，點擊上方「重新整理」載入資料"
+            :image-size="80"
+          />
+        </div>
+      </el-tab-pane>
+
+      <!-- ============ Tab 2：統計圖表 ============ -->
       <el-tab-pane label="統計圖表" name="stats">
         <!-- Summary cards -->
         <el-row :gutter="16" class="summary-cards">
@@ -138,68 +200,6 @@
         </el-row>
       </el-tab-pane>
 
-      <!-- ============ Tab 2：在籍記錄表 ============ -->
-      <el-tab-pane label="在籍記錄表" name="roster">
-        <div v-loading="rosterLoading">
-          <template v-if="roster">
-            <!-- 工具列 -->
-            <div class="roster-toolbar">
-              <el-select
-                v-model="gradeFilter"
-                multiple
-                collapse-tags
-                placeholder="年級"
-                clearable
-                style="min-width: 160px"
-              >
-                <el-option v-for="g in gradeOptions" :key="g" :label="g" :value="g" />
-              </el-select>
-              <el-select
-                v-model="classFilter"
-                multiple
-                collapse-tags
-                placeholder="班級"
-                clearable
-                style="min-width: 160px"
-              >
-                <el-option
-                  v-for="c in classOptions"
-                  :key="c.classroom_id"
-                  :label="c.class_name"
-                  :value="c.classroom_id"
-                />
-              </el-select>
-              <el-input
-                v-model="searchInput"
-                placeholder="搜尋學生姓名"
-                clearable
-                style="max-width: 200px"
-                :prefix-icon="Search"
-              />
-              <div class="tag-chips">
-                <span class="chip chip-new">● 新生 {{ displayTagCounts.新生 }}</span>
-                <span class="chip chip-underage">● 不足齡 {{ displayTagCounts.不足齡 }}</span>
-                <span class="chip chip-special">● 特教 {{ displayTagCounts.特教生 }}</span>
-                <span class="chip chip-indigenous">● 原民 {{ displayTagCounts.原住民 }}</span>
-              </div>
-              <el-button :icon="Download" @click="exportXlsx">匯出 Excel</el-button>
-              <el-button v-if="canWriteClassrooms" class="btn-year-plan" @click="goYearPlan">新學年預編班</el-button>
-            </div>
-            <EnrollmentRosterTable
-              v-if="displayRoster"
-              :roster="displayRoster"
-              :highlight-keyword="searchKeyword"
-              @select-student="onSelectStudent"
-            />
-          </template>
-          <el-empty
-            v-else-if="!rosterLoading"
-            description="尚未載入在籍記錄表，點擊上方「重新整理」載入資料"
-            :image-size="80"
-          />
-        </div>
-      </el-tab-pane>
-
     </el-tabs>
   </div>
 </template>
@@ -268,7 +268,7 @@ const rosterLoading = ref(false)
 const stats = ref<EnrollmentStats | null>(null)
 const roster = ref<Roster | null>(null)
 const termOptions = ref<TermOption[]>([])
-const activeTab = ref('stats')
+const activeTab = ref('roster')
 
 // 工具列狀態
 const gradeFilter = ref<string[]>([])
@@ -340,6 +340,7 @@ const fetchRoster = async () => {
 
 watch(selectedTerm, () => {
   roster.value = null
+  stats.value = null
   if (activeTab.value === 'stats') fetchStats()
   else fetchRoster()
 })
@@ -355,6 +356,8 @@ const onTabClick = (pane: unknown) => {
   const tab = pane as { paneName?: string }
   if (tab.paneName === 'roster' && !roster.value) {
     fetchRoster()
+  } else if (tab.paneName === 'stats' && !stats.value) {
+    fetchStats()
   }
 }
 
@@ -400,7 +403,7 @@ const printRoster = async () => {
 
 onMounted(async () => {
   await fetchOptions()
-  await fetchStats()
+  await fetchRoster()
 })
 
 // ---------------------------------------------------------------------------

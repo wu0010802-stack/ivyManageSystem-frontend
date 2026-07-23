@@ -84,6 +84,9 @@ export const routes: RouteRecordRaw[] = [
             path: '/students',
             name: 'students',
             component: () => import('../views/StudentWorkbenchView.vue'),
+            beforeEnter: (to) => to.query.tab === 'enrollment'
+                ? ({ path: '/classrooms', query: { ...to.query, tab: 'enrollment' }, replace: true })
+                : true,
             meta: { title: '學生' }
         },
         {
@@ -127,9 +130,9 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '今日用藥' }
         },
         {
-            // 在籍統計已折入學生模組（/students 的「在籍統計」分頁）；舊連結 redirect 並保留 query
+            // 在籍統計已移至班級學生管理；舊連結 redirect 並保留 query
             path: '/student-enrollment',
-            redirect: (to) => ({ path: '/students', query: { ...to.query, tab: 'enrollment' } }),
+            redirect: (to) => ({ path: '/classrooms', query: { ...to.query, tab: 'enrollment' } }),
         },
         {
             path: '/students/admissions',
@@ -157,7 +160,7 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/classrooms',
             name: 'classrooms',
-            component: () => import('../views/ClassroomView.vue'),
+            component: () => import('../views/ClassroomWorkbenchView.vue'),
             meta: { title: '班級學生管理' }
         },
         {

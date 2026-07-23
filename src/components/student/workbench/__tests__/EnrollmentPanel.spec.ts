@@ -129,6 +129,19 @@ describe('EnrollmentPanel 入口按鈕', () => {
     })
   })
 
+  it('在籍記錄表排在統計圖表前並為預設分頁', async () => {
+    const w = mount(EnrollmentPanel, {
+      attachTo: document.body,
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+
+    const tabs = w.findAll('.el-tabs__item')
+    expect(tabs.map(tab => tab.text())).toEqual(['在籍記錄表', '統計圖表'])
+    expect(tabs[0].classes()).toContain('is-active')
+    expect(mockGetRoster).toHaveBeenCalledTimes(1)
+  })
+
   it('有 CLASSROOMS_WRITE 權限時，在籍記錄表工具列顯示「新學年預編班」按鈕', async () => {
     const w = await mountPanelOnRosterTab()
     const btn = w.findAll('.btn-year-plan')

@@ -18,13 +18,23 @@ describe('student workbench routing', () => {
     expect(testRouter.currentRoute.value.path).toBe('/students')
   })
 
-  it('/student-enrollment redirects to /students with tab=enrollment query', async () => {
+  it('/students?tab=enrollment legacy deep link redirects to /classrooms', async () => {
+    const testRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: router.options.routes,
+    })
+    await testRouter.push('/students?tab=enrollment')
+    expect(testRouter.currentRoute.value.path).toBe('/classrooms')
+    expect(testRouter.currentRoute.value.query.tab).toBe('enrollment')
+  })
+
+  it('/student-enrollment redirects to /classrooms with tab=enrollment query', async () => {
     const testRouter = createRouter({
       history: createMemoryHistory(),
       routes: router.options.routes,
     })
     await testRouter.push('/student-enrollment')
-    expect(testRouter.currentRoute.value.path).toBe('/students')
+    expect(testRouter.currentRoute.value.path).toBe('/classrooms')
     expect(testRouter.currentRoute.value.query.tab).toBe('enrollment')
   })
 })

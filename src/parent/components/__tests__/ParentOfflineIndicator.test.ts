@@ -36,9 +36,10 @@ describe('ParentOfflineIndicator', () => {
     const wrapper = mount(ParentOfflineIndicator, {
       global: { plugins: [ElementPlus] },
     })
-    await new Promise((r) => setTimeout(r, 100))
-    expect(wrapper.text()).not.toContain('等待同步')
-    expect(wrapper.text()).not.toContain('無法同步')
+    await vi.waitFor(() => {
+      expect(wrapper.text()).not.toContain('等待同步')
+      expect(wrapper.text()).not.toContain('無法同步')
+    })
   })
 
   it('N pending → 顯示「N 筆等待同步」', async () => {
@@ -52,8 +53,9 @@ describe('ParentOfflineIndicator', () => {
     const wrapper = mount(ParentOfflineIndicator, {
       global: { plugins: [ElementPlus] },
     })
-    await new Promise((r) => setTimeout(r, 100))
-    expect(wrapper.text()).toContain('3 筆等待同步')
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('3 筆等待同步')
+    })
   })
 
   it('K needs_review → 顯示「K 筆無法同步」', async () => {
@@ -66,8 +68,9 @@ describe('ParentOfflineIndicator', () => {
     const wrapper = mount(ParentOfflineIndicator, {
       global: { plugins: [ElementPlus] },
     })
-    await new Promise((r) => setTimeout(r, 100))
-    expect(wrapper.text()).toContain('無法同步')
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain('無法同步')
+    })
   })
 
   it('review 對話框內 last_error 被 HTML escape（C47 防 XSS）', async () => {
@@ -88,7 +91,9 @@ describe('ParentOfflineIndicator', () => {
     const wrapper = mount(ParentOfflineIndicator, {
       global: { plugins: [ElementPlus] },
     })
-    await new Promise((r) => setTimeout(r, 100))
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-testid="open-review"]').exists()).toBe(true)
+    })
     await wrapper.find('[data-testid="open-review"]').trigger('click')
     await new Promise((r) => setTimeout(r, 50))
 
@@ -107,7 +112,9 @@ describe('ParentOfflineIndicator', () => {
     const wrapper = mount(ParentOfflineIndicator, {
       global: { plugins: [ElementPlus] },
     })
-    await new Promise((r) => setTimeout(r, 100))
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-testid="manual-flush"]').exists()).toBe(true)
+    })
     await wrapper.find('[data-testid="manual-flush"]').trigger('click')
     expect(flushAllParent).toHaveBeenCalled()
   })

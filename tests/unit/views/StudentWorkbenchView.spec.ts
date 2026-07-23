@@ -21,11 +21,12 @@ describe('StudentWorkbenchView', () => {
     vi.clearAllMocks()
   })
 
-  it('renders both TodayTasksPanel and StudentListPanel', () => {
+  it('renders TodayTasksPanel and StudentListPanel without enrollment statistics', () => {
     const wrapper = shallowMount(StudentWorkbenchView, { global: { stubs } })
 
     expect(wrapper.findComponent({ name: 'TodayTasksPanel' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'StudentListPanel' }).exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('在籍統計')
   })
 
   it('defaults activeTab to "tasks" with no query', () => {
@@ -39,9 +40,9 @@ describe('StudentWorkbenchView', () => {
     expect(wrapper.vm.$.setupState.activeTab).toBe('roster')
   })
 
-  it('selects "enrollment" tab when deep-linked with tab=enrollment query', () => {
+  it('ignores the retired tab=enrollment query', () => {
     routeMock.query = { tab: 'enrollment' }
     const wrapper = shallowMount(StudentWorkbenchView, { global: { stubs } })
-    expect(wrapper.vm.$.setupState.activeTab).toBe('enrollment')
+    expect(wrapper.vm.$.setupState.activeTab).toBe('tasks')
   })
 })
