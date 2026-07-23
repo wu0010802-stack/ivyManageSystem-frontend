@@ -143,9 +143,11 @@ export const ROUTE_PERMISSION_RULES = [
   // POS 日結解鎖稽核軌跡：對齊後端 api/activity/pos_approval.py 的 ACTIVITY_PAYMENT_APPROVE。
   { path: '/activity/audit/pos-unlock', permission: 'ACTIVITY_PAYMENT_APPROVE' },
   { path: '/fees', permission: 'FEES_READ' },
-  // 在籍統計已移至班級學生管理；舊路徑會 redirect 至 /classrooms?tab=enrollment。
+  // 在籍記錄表已折入班級學生管理頁的「統計表」modal；舊路徑一律 redirect 至 /classrooms。
   // 此規則保留供 redirect 解析與 getAllowedRoutes 一致性，權限也對齊目標頁。
   { path: '/student-enrollment', permission: 'CLASSROOMS_READ' },
+  // 統計圖表：獨立頁面，資料同源於在籍統計 API，權限對齊學生模組的 STUDENTS_READ。
+  { path: '/enrollment-stats', permission: 'STUDENTS_READ' },
   // 招生入學（/recruitment 重構搬遷至學生模組）。/students 是 exact 匹配不涵蓋此路由，
   // 缺這條會被 canAccessRoute default-deny 鎖死（含 super admin）。
   { path: '/students/admissions', permission: 'RECRUITMENT_READ' },

@@ -73,6 +73,7 @@ const STUBS = {
   PlanStatusCard: true,
   ClassroomStudentDrawer: true,
   ClassroomChangeLogDrawer: true,
+  EnrollmentRosterDialog: true,
   'el-select': { template: '<div><slot /></div>' },
   'el-option': true,
   'el-switch': { template: '<input type="checkbox" />' },

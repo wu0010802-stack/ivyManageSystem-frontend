@@ -102,6 +102,12 @@
             <el-icon><OfficeBuilding /></el-icon>
             <template #title>班級學生管理</template>
           </el-menu-item>
+          <!-- 在籍記錄表（Excel 式花名冊）已折入「班級學生管理」頁的「統計表」modal；
+               統計圖表則獨立為本選單項目。 -->
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/enrollment-stats">
+            <el-icon><PieChart /></el-icon>
+            <template #title>統計圖表</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
             <el-icon><User /></el-icon>
             <template #title>學生</template>
@@ -110,7 +116,6 @@
             <el-icon><Promotion /></el-icon>
             <template #title>招生入學</template>
           </el-menu-item>
-          <!-- 在籍統計已折入「班級學生管理」頁的第一個分頁 -->
           <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
             <template #title>接送通知</template>

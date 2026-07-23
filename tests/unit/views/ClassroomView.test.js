@@ -32,6 +32,7 @@ const getClassrooms = vi.fn(() => Promise.resolve({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
+  useRoute: () => ({ query: {} }),
 }))
 
 vi.mock('@/api/classrooms', () => ({
@@ -111,6 +112,9 @@ describe('ClassroomView', () => {
           'el-drawer': { template: '<div><slot /></div>' },
           'el-table': { template: '<div><slot /></div>' },
           'el-table-column': true,
+          ClassroomStudentDrawer: true,
+          ClassroomChangeLogDrawer: true,
+          EnrollmentRosterDialog: true,
         },
       },
     })

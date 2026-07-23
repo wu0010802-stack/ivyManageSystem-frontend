@@ -10,7 +10,7 @@ let classroomsResponse: () => Promise<{ data: unknown[] }> = () => Promise.resol
 const getClassrooms = vi.fn(() => classroomsResponse())
 const getClassroom = vi.fn(() => Promise.resolve({ data: { id: 1, students: [] } }))
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push }), useRoute: () => ({ query: {} }) }))
 
 vi.mock('@/api/classrooms', () => ({
   createClassroom: vi.fn(),
@@ -99,6 +99,7 @@ const stubs = {
   'el-collapse-item': { template: '<div><slot /></div>' },
   ClassroomStudentDrawer: true,
   ClassroomChangeLogDrawer: true,
+  EnrollmentRosterDialog: true,
 }
 
 function mountView() {
