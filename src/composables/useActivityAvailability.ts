@@ -67,6 +67,14 @@ export function useActivityAvailability() {
   // trackAge：是否每秒更新 secondsSinceUpdate（給「N 秒前更新」UI 用）。
   // 兩個公開頁都沒消費 secondsSinceUpdate → 預設 false，不建每秒 tickTimer（省一個 interval）。
   function startPolling(intervalMs = 30000, { trackAge = false }: { trackAge?: boolean } = {}) {
+    // 防重入：先清掉既有 timer 與 visibilitychange listener 再重新註冊。
+    // Why: 原本直接覆寫 handle，重複呼叫即洩漏一個 interval + 一個 listener，
+    // 且 stopPolling 只清得掉最後一次註冊的那組。同 repo 的
+    // usePortalDismissalAlerts.startPolling 即為 `stopPolling(); setInterval(...)`，
+    // 本 composable 少了這道；防護原本落在呼叫端
+    // （usePublicRegistrationQuery 的 availabilityPollingStarted 旗標），
+    // 層級不對——新增呼叫端就會踩到。收回 composable 自身負責。
+    stopPolling()
     availabilityTimer = setInterval(refresh, intervalMs)
 
     function startTick() {
