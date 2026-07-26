@@ -4636,6 +4636,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/data-quality/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Summary
+         * @description 全站待處理數 + 最後掃描日（dqview01）。
+         *
+         *     刻意與 list_reports 的篩選解耦：標題統計要回答「總共還有幾筆沒處理」，
+         *     跟使用者當下篩到哪一頁無關。
+         */
+        get: operations["get_summary_api_data_quality_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -18648,6 +18671,22 @@ export interface components {
             work_end: string;
             /** Work Start */
             work_start: string;
+        };
+        /**
+         * DataQualitySummaryOut
+         * @description 刻意不叫 SummaryOut：schemas/appraisal.py 已有同名 model，撞名會讓
+         *     FastAPI 把兩者都改成 `<模組>__SummaryOut` 限定名，連帶改掉 appraisal
+         *     既有的 codegen 型別名（無謂的跨模組破壞）。
+         */
+        DataQualitySummaryOut: {
+            /** Last Run At */
+            last_run_at?: string | null;
+            /** Open By Severity */
+            open_by_severity: {
+                [key: string]: number;
+            };
+            /** Total Open */
+            total_open: number;
         };
         /** DeductionTypeCreate */
         DeductionTypeCreate: {
@@ -39393,6 +39432,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunNowOut"];
+                };
+            };
+        };
+    };
+    get_summary_api_data_quality_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataQualitySummaryOut"];
                 };
             };
         };
