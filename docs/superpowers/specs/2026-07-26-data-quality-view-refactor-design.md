@@ -63,14 +63,17 @@ class SummaryOut(BaseModel):
 
 - `open_by_severity`：對 `status == "open"` 做 `group_by(severity)` 聚合；
   P0/P1/P2 三鍵**恆存在**（無資料補 0），避免前端做鍵存在性判斷。
-- `last_run_at`：讀排程器 watermark。`services/data_quality_scheduler._load_last_run_date`
-  改名為公開的 `load_last_run_date`（純改名，不改行為）——api 層需呼叫，而
-  services 不得反向 import api，故由 api 層向下呼叫 services。
+- `last_run_at`：讀排程器 watermark。新增公開薄殼 `get_last_run_date(session)` 供 api 層呼叫。
+  **不**把既有的 `_load_last_run_date` 改名：該私有名在 `finance_reconciliation` /
+  `medication_reminder` 三個 scheduler 是一致慣例，且已被 offload 測試 monkeypatch，
+  改名會破壞兩者。
 
-**補齊 5 條規則的 `description`。** `Rule` 基類已有此欄位但 5 條全為空字串。
-填入中文說明供 log 與 Sentry 使用。**前端不依賴此欄位**（見 3.2）。
+不修改任何規則判定邏輯、不修改既有端點。5 條規則的 `description` 經確認**已全部填妥**，
+無需補寫；前端亦不依賴此欄位（見 3.2）。
 
-不修改任何規則判定邏輯、不修改既有端點。
+#### 實際 `entity_type` 值（前端跳轉對照用）
+
+`student`、`employee`、`contact_book_entry`、`guardian`、`salary_record`
 
 ### 3.2 前端（ivy-frontend）
 
