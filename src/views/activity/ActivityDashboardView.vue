@@ -142,7 +142,7 @@ import { useActivityStore } from '@/stores/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import { exportDashboardTable } from '@/api/activity'
-import { FULL_ATTENDANCE_BONUS } from '@/constants/activity'
+import { buildBonusLabel } from './activityDashboardTable'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -229,7 +229,7 @@ const flattenedTableData = computed(() => {
         const classCount = grade.classrooms.length
         if (classCount === 0) continue
         const rowSpan = classCount + 1 // +1 給該年級的小計列
-        const bonusLabel = grade.subtotal.bonus === FULL_ATTENDANCE_BONUS ? '100%' : ''
+        const bonusLabel = buildBonusLabel(grade.subtotal.bonus)
         const pointsLabel = grade.subtotal.points || ''
 
         grade.classrooms.forEach((cls, idx) => {

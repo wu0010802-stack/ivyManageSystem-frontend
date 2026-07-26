@@ -129,6 +129,11 @@ export const UNLOCK_REASON_PATTERN = new RegExp(
   `.{${FIELD_RULES.unlockReasonMin},}`
 )
 
-// 滿勤獎金門檻（後端 grade.subtotal.bonus 達此值代表達成 100% 出席）。
-// 須與後端 ivy-backend utils/activity_constants.py GRADE_TARGET_BONUS 一致。
-export const FULL_ATTENDANCE_BONUS = 1000
+// 年級才藝達標獎金額：年級「報名達標率」>= 該年級 target_percent 時，後端
+// grade.subtotal.bonus 會回此值（大班 100% / 中班 90% / 小班 80% / 幼幼班 70%）。
+// 須與後端 ivy-backend utils/activity_constants.py GRADE_TARGET_BONUS 同名同值。
+//
+// ⚠ 舊名 FULL_ATTENDANCE_BONUS（「滿勤獎金／達成 100% 出席」）是語意漂移的誤命名：
+// 本值與出席率無關、與 100% 無關，只是「達到該年級報名率門檻」的獎金額。該誤名
+// 直接導致儀表板把達標渲染成 '100%'（2026-07-26 修正）。改名對齊後端以杜絕再犯。
+export const GRADE_TARGET_BONUS = 1000

@@ -40,7 +40,7 @@ export const SHARED_CONSTANTS = [
   },
   {
     label: "才藝達標獎金",
-    fe: { file: "src/constants/activity.ts", symbol: "FULL_ATTENDANCE_BONUS" },
+    fe: { file: "src/constants/activity.ts", symbol: "GRADE_TARGET_BONUS" },
     be: { file: "utils/activity_constants.py", symbol: "GRADE_TARGET_BONUS" },
   },
 ];

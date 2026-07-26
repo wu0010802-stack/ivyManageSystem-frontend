@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { MINIMUM_MONTHLY_WAGE, MINIMUM_HOURLY_WAGE } from '../laborCompliance'
 import { REFUND_APPROVAL_THRESHOLD } from '../pos'
-import { FULL_ATTENDANCE_BONUS } from '../activity'
+import { GRADE_TARGET_BONUS } from '../activity'
 
 // 這些常數與後端「各寫一份」（無共用 package）。本測試鎖定前端側 canonical 值——
 // 改了前端常數卻沒同步更新本檔即 fail，強迫做有意識的決策（並提醒同步後端）。
@@ -20,6 +20,6 @@ describe('跨 repo 雙寫常數 — 前端側 canonical 鎖定', () => {
   })
 
   it('才藝達標獎金與後端 utils/activity_constants.py GRADE_TARGET_BONUS 一致', () => {
-    expect(FULL_ATTENDANCE_BONUS).toBe(1000)
+    expect(GRADE_TARGET_BONUS).toBe(1000)
   })
 })
