@@ -32,6 +32,7 @@
               type="button"
               role="tab"
               :aria-selected="queryMode === 'token'"
+              aria-controls="queryPanelToken"
               :class="['mode-tab', { active: queryMode === 'token' }]"
               @click="queryMode = 'token'"
             >查詢碼 + 手機</button>
@@ -39,12 +40,13 @@
               type="button"
               role="tab"
               :aria-selected="queryMode === 'fields'"
+              aria-controls="queryPanelFields"
               :class="['mode-tab', { active: queryMode === 'fields' }]"
               @click="queryMode = 'fields'"
             >姓名 + 生日 + 手機</button>
           </div>
 
-          <template v-if="queryMode === 'token'">
+          <div v-if="queryMode === 'token'" id="queryPanelToken" role="tabpanel">
             <div class="field-group">
               <label for="searchToken">查詢碼 <span class="required-mark">*</span></label>
               <input
@@ -55,10 +57,11 @@
                 :class="{ valid: tokenValid, invalid: tokenTouched && !tokenValid }"
                 placeholder="請貼上報名後收到的查詢碼"
                 autocomplete="off"
-                @keyup.enter="handleQuery"
+                aria-required="true"
+                @keyup.enter="onQuerySubmit"
                 @blur="tokenTouched = true"
               />
-              <div v-if="tokenTouched && !tokenValid" class="validation-msg error">
+              <div v-if="tokenTouched && !tokenValid" class="validation-msg error" role="alert">
                 請輸入查詢碼
               </div>
             </div>
@@ -72,16 +75,17 @@
                 :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
                 placeholder="09xx-xxx-xxx"
                 maxlength="15"
-                @keyup.enter="handleQuery"
+                aria-required="true"
+                @keyup.enter="onQuerySubmit"
                 @blur="phoneTouched = true"
               />
-              <div v-if="phoneTouched && !phoneValid" class="validation-msg error">
+              <div v-if="phoneTouched && !phoneValid" class="validation-msg error" role="alert">
                 請輸入 09 開頭的 10 碼手機號碼
               </div>
             </div>
-          </template>
+          </div>
 
-          <template v-else>
+          <div v-else id="queryPanelFields" role="tabpanel">
             <div class="field-group">
               <label for="searchName">幼兒姓名 <span class="required-mark">*</span></label>
               <input
@@ -91,10 +95,11 @@
                 class="input-text"
                 :class="{ valid: nameValid, invalid: nameTouched && !nameValid }"
                 placeholder="請輸入幼兒姓名"
-                @keyup.enter="handleQuery"
+                aria-required="true"
+                @keyup.enter="onQuerySubmit"
                 @blur="nameTouched = true"
               />
-              <div v-if="nameTouched && !nameValid" class="validation-msg error">請輸入幼兒姓名</div>
+              <div v-if="nameTouched && !nameValid" class="validation-msg error" role="alert">請輸入幼兒姓名</div>
             </div>
             <div class="field-group">
               <label for="searchBirthday">幼兒生日 <span class="required-mark">*</span></label>
@@ -104,9 +109,10 @@
                 type="date"
                 class="input-text"
                 :class="{ valid: birthdayValid, invalid: birthdayTouched && !birthdayValid }"
+                aria-required="true"
                 @blur="birthdayTouched = true"
               />
-              <div v-if="birthdayTouched && !birthdayValid" class="validation-msg error">
+              <div v-if="birthdayTouched && !birthdayValid" class="validation-msg error" role="alert">
                 {{ birthdayErrorMsg }}
               </div>
             </div>
@@ -120,21 +126,22 @@
                 :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
                 placeholder="09xx-xxx-xxx"
                 maxlength="15"
-                @keyup.enter="handleQuery"
+                aria-required="true"
+                @keyup.enter="onQuerySubmit"
                 @blur="phoneTouched = true"
               />
-              <div v-if="phoneTouched && !phoneValid" class="validation-msg error">
+              <div v-if="phoneTouched && !phoneValid" class="validation-msg error" role="alert">
                 請輸入 09 開頭的 10 碼手機號碼
               </div>
             </div>
-          </template>
+          </div>
 
           <button
             type="button"
             class="btn btn-primary btn-block"
             :disabled="queryLoading"
             data-test="query-submit"
-            @click="handleQuery"
+            @click="onQuerySubmit"
           >
             {{ queryLoading ? '查詢中…' : '查詢 Search' }}
           </button>
@@ -162,7 +169,14 @@
         </div>
       </section>
 
-      <section v-if="searchError" class="result-section">
+      <!-- #3 a11y：查詢結果與錯誤共用同一 aria-live wrapper，避免結果/錯誤互換時雙重播報 -->
+      <div aria-live="polite">
+      <section
+        v-if="searchError"
+        ref="searchErrorRef"
+        class="result-section"
+        tabindex="-1"
+      >
         <div class="error-message">{{ searchError }}</div>
         <div class="not-found-help">
           <div class="not-found-title">常見原因</div>
@@ -226,7 +240,12 @@
       </section>
 
       <!-- 結果編輯區 -->
-      <section v-if="queryResult" class="result-section">
+      <section
+        v-if="queryResult"
+        ref="queryResultRef"
+        class="result-section"
+        tabindex="-1"
+      >
         <div class="result-header">
           <h2>編輯報名資料</h2>
         </div>
@@ -410,7 +429,7 @@
             maxlength="15"
             @blur="newPhoneTouched = true"
           />
-          <div v-if="newPhoneTouched && !newPhoneValid" class="validation-msg error">
+          <div v-if="newPhoneTouched && !newPhoneValid" class="validation-msg error" role="alert">
             請輸入 09 開頭的 10 碼手機號碼
           </div>
         </div>
@@ -537,12 +556,13 @@
         </div>
         </template>
       </section>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { getPublicBootstrap } from '@/api/activityPublic'
 import type { PublicActivityTermParams } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
@@ -691,6 +711,22 @@ const {
   handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
 } = usePublicRegistrationQuery({ refreshAvailability, startPolling })
 
+// #3 a11y：查詢完成（成功或失敗）後把 focus 移到結果/錯誤區塊（同目錄
+// ActivityPublicView.vue 的 focusFirstError 範式：await nextTick() 待 DOM 更新
+// 後再 focus，兩者互斥不會同時渲染，故共用同一組 ref 邏輯即可）。
+const searchErrorRef = ref<HTMLElement | null>(null)
+const queryResultRef = ref<HTMLElement | null>(null)
+
+async function onQuerySubmit() {
+  await handleQuery()
+  await nextTick()
+  if (searchError.value) {
+    searchErrorRef.value?.focus()
+  } else if (queryResult.value) {
+    queryResultRef.value?.focus()
+  }
+}
+
 const queryTermKey = computed(() => {
   const data = queryResult.value
   return data && data.school_year != null && data.semester != null
@@ -727,6 +763,30 @@ watch(
   },
   { flush: 'sync' },
 )
+
+// #6：多步表單無離開防護。dirty 判定＝已進入「編輯報名」狀態（有 queryResult
+// 且可修改、非已付款鎖定）且 editForm 與最近一次 hydrate 進來的基準值不同。
+// flush:'post' 確保 baseline 快照時，hydrateResult（查詢命中／儲存成功後）已
+// 同步寫完 editForm.* 才擷取，不會誤把「剛查到、尚未編輯」判定成 dirty。
+const editFormBaseline = ref('')
+watch(
+  () => queryResult.value,
+  (data) => {
+    editFormBaseline.value = data ? JSON.stringify(editForm) : ''
+  },
+  { flush: 'post' },
+)
+const isEditingRegistration = computed(
+  () => !!queryResult.value && canMutate.value && !isPaymentLocked.value,
+)
+const isEditFormDirty = computed(
+  () => isEditingRegistration.value && JSON.stringify(editForm) !== editFormBaseline.value,
+)
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!isEditFormDirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
 
 const {
   editSubmitting, newPhoneTouched, newPhoneValid,
@@ -795,6 +855,9 @@ function closeWindow() {
 
 onMounted(async () => {
   initFromRoute()
+  // #6：離開防護；handleBeforeUnload 內部依 isEditFormDirty 判斷，非編輯中或
+  // 無異動時直接放行，不需要動態掛載/移除監聽。
+  window.addEventListener('beforeunload', handleBeforeUnload)
   try {
     // 僅載入課程/用品/班級選項；availability 輪詢延到查詢命中、進入編輯介面才啟動
     // （ensureAvailabilityPolling，於 hydrateResult），查詢階段不輪詢。
@@ -806,6 +869,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopPolling()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -814,16 +878,25 @@ onBeforeUnmount(() => {
   --color-bg: #fffbeb;
   --color-surface: #ffffff;
   --color-surface-muted: #fff8e1;
-  --color-primary: #15803d;
+  /* #7：既有 4 處裸寫 #f9fafb（唯讀/停用底色）抽成 local token；
+     刻意不沿用 --color-surface-muted 名稱，該 token 已是不同色值（暖黃 #fff8e1） */
+  --color-surface-readonly: #f9fafb;
+  /* #5：CTA/主色對齊 ActivityPublicView 已裁定的品牌綠系，不再用橙色 */
+  --color-primary: #0d9053;
   --color-primary-hover: #166534;
   --color-primary-soft: #dcfce7;
   --color-primary-contrast: #ffffff;
-  --color-cta: #ea580c;
-  --color-cta-hover: #c2410c;
+  --color-cta: #0d9053;
+  --color-cta-hover: #0caf76;
   --color-cta-contrast: #ffffff;
   --color-text: #1f2937;
   --color-text-muted: #4b5563;
   --color-text-subtle: #6b7280;
+  /* #1：public bundle 只 import design-tokens.css，main.css 的 --text-secondary/
+     --text-tertiary 未定義（見 spec #1）；此處對齊本檔既有文字色票補上，
+     不 import main.css（會拖入 Element Plus 覆寫，public 端無 EP） */
+  --text-secondary: var(--color-text-muted);
+  --text-tertiary: var(--color-text-subtle);
   --color-border: #f2e6c9;
   --color-border-muted: #e5e7eb;
   --color-danger: #dc2626;
@@ -839,7 +912,7 @@ onBeforeUnmount(() => {
   --shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.10);
   --dur-fast: 150ms; --dur-slow: 320ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --focus-ring: 0 0 0 3px rgba(21, 128, 61, 0.28);
+  --focus-ring: 0 0 0 3px rgba(13, 144, 83, 0.28);
 
   min-height: 100vh;
   padding: clamp(12px, 3vw, 20px);
@@ -944,7 +1017,7 @@ onBeforeUnmount(() => {
 }
 .mode-tab {
   flex: 1;
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 12px;
   font-family: inherit;
   font-size: var(--fs-sm);
@@ -1039,7 +1112,7 @@ onBeforeUnmount(() => {
   border-color: var(--color-primary);
   box-shadow: var(--focus-ring);
 }
-.input-text:read-only { background-color: #f9fafb; color: var(--color-text-muted); }
+.input-text:read-only { background-color: var(--color-surface-readonly); color: var(--color-text-muted); }
 .input-text.valid { border-color: var(--color-success); }
 .input-text.invalid { border-color: var(--color-danger); }
 .validation-msg { font-size: var(--fs-xs); margin-top: var(--space-1); }
@@ -1061,7 +1134,7 @@ onBeforeUnmount(() => {
   max-height: 320px;
   overflow-y: auto;
   padding: var(--space-3);
-  background: #f9fafb;
+  background: var(--color-surface-readonly);
   border: 1px solid var(--color-border-muted);
   border-radius: var(--radius-md);
 }
@@ -1197,7 +1270,7 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
 }
 .btn.btn-sm {
-  min-height: 40px;
+  min-height: 44px;
   padding: 8px 16px;
   font-size: var(--fs-sm);
   flex: 1;
@@ -1279,7 +1352,7 @@ onBeforeUnmount(() => {
   padding: 10px 14px;
   font-size: var(--fs-md);
   color: var(--color-text-muted);
-  background: #f9fafb;
+  background: var(--color-surface-readonly);
   border: 1.5px solid var(--color-border-muted);
   border-radius: var(--radius-sm);
 }
@@ -1287,7 +1360,7 @@ onBeforeUnmount(() => {
   margin: 0;
   padding: var(--space-3) var(--space-4);
   list-style: none;
-  background: #f9fafb;
+  background: var(--color-surface-readonly);
   border: 1.5px solid var(--color-border-muted);
   border-radius: var(--radius-sm);
 }
