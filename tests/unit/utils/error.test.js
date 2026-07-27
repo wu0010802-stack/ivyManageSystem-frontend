@@ -55,4 +55,38 @@ describe('apiError()', () => {
     expect(apiError(err)).toBe('操作失敗')
     expect(apiError(err, 'my fb')).toBe('my fb')
   })
+
+  // 後端 detail 不只是字串：BusinessError 回 {code, message, request_id} 物件，
+  // FastAPI 422 回 [{loc,msg,type}] 陣列。生產環境 interceptor 已正規化成
+  // displayMessage，但這裡是 interceptor 未觸發時的備援路徑，型別要誠實。
+  it('detail 為 BusinessError 物件時取其 message，不回傳整個物件', () => {
+    const err = {
+      response: {
+        data: {
+          detail: { code: 'INSURANCE_BELOW_BASE', message: '投保薪資低於基本薪資' },
+          message: '不該用這個',
+        },
+      },
+    }
+    const result = apiError(err)
+    expect(result).toBe('投保薪資低於基本薪資')
+    expect(result).not.toContain('[object Object]')
+  })
+
+  it('detail 為 422 陣列時跳過，落到下一層而非渲染成陣列', () => {
+    const err = {
+      response: {
+        data: {
+          detail: [{ loc: ['body', 'name'], msg: 'field required', type: 'missing' }],
+          message: '後備 message',
+        },
+      },
+    }
+    expect(apiError(err)).toBe('後備 message')
+  })
+
+  it('detail 是無 message 的物件時落到 fallback', () => {
+    const err = { response: { data: { detail: { code: 'SOME_CODE' } } } }
+    expect(apiError(err, '預設文案')).toBe('預設文案')
+  })
 })
