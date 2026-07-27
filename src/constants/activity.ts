@@ -25,12 +25,18 @@ export const COURSE_STATUS_TAG_TYPE = {
   enrolled: 'success',
   waitlist: 'info',
   promoted_pending: 'warning',
+  pending_review: 'warning',
+  pending_review_waitlist: 'info',
 }
 
+// 後端 rc.status 有五種值（schemas/activity_admin.py:1850）；缺項時
+// ActivityRegistrationView 的 fallback 會直接顯示英文 raw 值，勿刪減。
 export const COURSE_STATUS_LABEL = {
   enrolled: '正式',
   waitlist: '候補',
   promoted_pending: '待家長確認',
+  pending_review: '待審核',
+  pending_review_waitlist: '待審核候補',
 }
 
 // 匹配狀態（match_status）收斂：原本散落在 ActivityRegistrationView（短文案）與

@@ -57,7 +57,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { MATCH_STATUS_LABEL_LONG } from '@/constants/activity'
+import { COURSE_STATUS_LABEL, MATCH_STATUS_LABEL_LONG } from '@/constants/activity'
 
 interface TimelineEvent {
   kind?: string
@@ -219,10 +219,10 @@ const coursesNode = computed((): TimelineNode => {
   }
 
   const meta = courses.map((c) => {
-    const tag = c.status === 'enrolled' ? '正式'
-      : c.status === 'waitlist' ? '候補'
-      : c.status === 'promoted_pending' ? '待確認'
-      : c.status
+    // timeline 慣用短文案：promoted_pending 顯示「待確認」而非集中常數的
+    // 「待家長確認」（欄寬考量）；其餘走 COURSE_STATUS_LABEL 避免吐英文 raw 值
+    const tag = c.status === 'promoted_pending' ? '待確認'
+      : (COURSE_STATUS_LABEL as Record<string, string>)[c.status] || c.status
     const price = c.price ? ` $${c.price}` : ''
     const deadline = c.status === 'promoted_pending' && c.confirm_deadline
       ? `（截止 ${fmtDate(c.confirm_deadline)}）`
