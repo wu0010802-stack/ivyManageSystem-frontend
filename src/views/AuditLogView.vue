@@ -37,6 +37,7 @@ const entityTypes = ref<MetaOption[]>([])
 const actionTypes = ref<MetaOption[]>([])
 
 const filters = reactive({
+  search: '',
   entity_type: '',
   action: '',
   username: '',
@@ -126,6 +127,7 @@ const activeRiskFilter = ref('')
 
 const buildFilterParams = () => {
   const params: Record<string, unknown> = {}
+  if (filters.search) params.search = filters.search
   if (filters.entity_type) params.entity_type = filters.entity_type
   if (filters.action) params.action = filters.action
   if (filters.username) params.username = filters.username
@@ -181,6 +183,7 @@ const handleSearch = () => {
 
 const handleReset = () => {
   filters.entity_type = ''
+  filters.search = ''
   filters.action = ''
   filters.username = ''
   filters.entity_id = ''
@@ -210,6 +213,7 @@ const applyRiskFilter = (key: string) => {
 
 // 空狀態文案判斷：查詢條件（篩選欄位或高風險快篩）是否有任一生效
 const hasActiveFilter = computed(() =>
+  Boolean(filters.search) ||
   Boolean(filters.entity_type) ||
   Boolean(filters.action) ||
   Boolean(filters.username) ||
@@ -458,6 +462,14 @@ defineExpose({ formatOperator })
 
     <el-card class="filter-card">
       <div class="filters">
+        <el-input
+          v-model="filters.search"
+          placeholder="關鍵字（操作者或摘要）"
+          clearable
+          style="width: 200px;"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        />
         <el-select v-model="filters.entity_type" placeholder="資源類型" clearable style="width: 130px;">
           <el-option v-for="et in entityTypes" :key="et.value" :label="et.label" :value="et.value" />
         </el-select>

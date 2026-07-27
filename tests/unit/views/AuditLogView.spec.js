@@ -130,6 +130,39 @@ describe('AuditLogView — formatOperator 代操作者顯示', () => {
   })
 })
 
+describe('AuditLogView — 伺服端關鍵字搜尋', () => {
+  it('search 有值時 handleSearch 將 search 參數送往 API 並重設頁碼', async () => {
+    const { getAuditLogs } = await import('@/api/audit')
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+    getAuditLogs.mockClear()
+
+    wrapper.vm.$.setupState.filters.search = '王小明'
+    wrapper.vm.$.setupState.filters.page = 3
+    wrapper.vm.$.setupState.handleSearch()
+    await flushPromises()
+
+    expect(getAuditLogs).toHaveBeenCalledWith(
+      expect.objectContaining({ search: '王小明', page: 1 }),
+    )
+  })
+
+  it('handleReset 清空 search 並重新查詢（不帶 search 參數）', async () => {
+    const { getAuditLogs } = await import('@/api/audit')
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+
+    wrapper.vm.$.setupState.filters.search = '王小明'
+    getAuditLogs.mockClear()
+    wrapper.vm.$.setupState.handleReset()
+    await flushPromises()
+
+    expect(wrapper.vm.$.setupState.filters.search).toBe('')
+    const params = getAuditLogs.mock.calls[0][0]
+    expect(params).not.toHaveProperty('search')
+  })
+})
+
 describe('AuditLogView — 空狀態文案', () => {
   it('無篩選、查無紀錄時顯示「尚無操作紀錄」', async () => {
     const wrapper = mount(AuditLogView, mountOptions)
