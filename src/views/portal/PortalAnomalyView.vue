@@ -31,10 +31,19 @@ const confirmAnomaly = async (anomaly: AnomalyEntry) => {
     ElMessage.warning('請選擇處理方式')
     return
   }
+  // 申訴理由是唯一會送進後端稽核軌跡的自由文字，空白送出等於提交一筆管理員無從處理的申訴
+  if (anomaly.selected_action === 'dispute' && !anomaly.remark?.trim()) {
+    ElMessage.warning('請說明申訴原因')
+    return
+  }
 
   anomaly.submitting = true
   try {
-    const res = await confirmAnomalyApi(anomaly.id, anomaly.selected_action)
+    const res = await confirmAnomalyApi(
+      anomaly.id,
+      anomaly.selected_action,
+      anomaly.remark?.trim() || undefined,
+    )
     // 後端缺 response_model，res.data 為 unknown，narrow 取回應訊息。
     ElMessage.success((res.data as { message: string }).message)
     anomaly.confirmed = true

@@ -82,11 +82,17 @@ export const getAnomalies = (
 ): AxiosResp<'/portal/anomalies', 'get'> => api.get('/portal/anomalies', { params })
 
 // TODO(ts-strict): 後端缺 response_model
+// remark：申訴理由。後端 AnomalyConfirm 早就收這個欄位（寫成「 [申訴: {remark}]」），
+// 只在有值時放進 body，避免對既有的 accept / use_pto 呼叫端造成 payload 變化。
 export const confirmAnomaly = (
   id: number,
   action: string,
+  remark?: string,
 ): AxiosResp<'/portal/anomalies/{attendance_id}/confirm', 'post'> =>
-  api.post(`/portal/anomalies/${id}/confirm`, { action })
+  api.post(
+    `/portal/anomalies/${id}/confirm`,
+    remark ? { action, remark } : { action },
+  )
 
 // ----- 薪資 -----
 // TODO(ts-strict): 後端缺 response_model
