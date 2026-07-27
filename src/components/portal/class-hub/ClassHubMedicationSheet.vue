@@ -121,7 +121,7 @@ async function onSkip(logId: number | string) {
   }
   working.value = logId
   try {
-    await skipLog(Number(logId), { reason })
+    await skipLog(Number(logId), { skipped_reason: reason })
     pending.value = pending.value.filter((i) => i.log_id !== logId)
     emit('done')
     ElMessage.success('已標記為未執行')

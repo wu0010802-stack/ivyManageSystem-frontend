@@ -81,7 +81,7 @@ async function onSkip(item: MedicationItem) {
     return
   }
   try {
-    await skipLog(item.log_id as number, { reason })
+    await skipLog(item.log_id as number, { skipped_reason: reason.trim() })
     ElMessage.success('已略過')
     broadcastDashboardInvalidate()
     await load()
