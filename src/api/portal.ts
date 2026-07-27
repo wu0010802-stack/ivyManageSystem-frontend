@@ -223,3 +223,9 @@ export const setPunchPin = (
   data: ApiBody<'/portal/me/punch-pin', 'put'>,
 ): AxiosResp<'/portal/me/punch-pin', 'put'> =>
   api.put('/portal/me/punch-pin', data)
+
+/** 在職同事清單（請假表單的職務代理人下拉用）。
+ *  教師端專用：先前走管理端 GET /employees 需要 EMPLOYEES_READ，教師一定 403，
+ *  代理人下拉因此永遠空白。 */
+export const getMyColleagues = (): AxiosResp<'/portal/colleagues', 'get'> =>
+  api.get('/portal/colleagues')

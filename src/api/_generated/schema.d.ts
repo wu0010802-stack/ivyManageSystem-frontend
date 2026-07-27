@@ -9400,6 +9400,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/colleagues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Colleagues
+         * @description 在職同事清單（供請假表單的職務代理人下拉），排除自己。
+         *
+         *     Why 需要教師端專用端點：前端原本走 useEmployeeStore → GET /api/employees，
+         *     那是管理端端點（require_staff_permission(EMPLOYEES_READ)），教師一定 403，
+         *     實測連 principal / supervisor 也沒有該權限 —— 代理人下拉因此永遠空白，
+         *     而錯誤又被 store 吞掉沒有 toast，老師會以為園所沒建員工資料。
+         *
+         *     ⚠ 篩選條件必須與 _validate_substitute 一致（非自己、在職），
+         *     否則會變成「下拉選得到但送出被擋」，比空白更難理解。
+         */
+        get: operations["get_colleagues_api_portal_colleagues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/contact-book": {
         parameters: {
             query?: never;
@@ -24349,6 +24377,21 @@ export interface components {
         PortalBatchAttendanceUpdate: {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
+        };
+        /**
+         * PortalColleagueOut
+         * @description GET /portal/colleagues 單筆同事（僅供代理人下拉）。
+         *
+         *     只回下拉必要欄位，不外洩其他人事 PII。條件與送單時的 _validate_substitute 一致
+         *     （非自己、在職），避免出現「下拉選得到但送出被擋」。
+         */
+        PortalColleagueOut: {
+            /** Employee Id */
+            employee_id: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /**
          * PortalMyDataExportOut
@@ -47832,6 +47875,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassHubTodayResponse"];
+                };
+            };
+        };
+    };
+    get_colleagues_api_portal_colleagues_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalColleagueOut"][];
                 };
             };
         };
