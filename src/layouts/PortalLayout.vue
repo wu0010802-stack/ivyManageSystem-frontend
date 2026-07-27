@@ -15,7 +15,7 @@ import A11yMenu from '@/components/common/A11yMenu.vue'
 import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
 import { useIsMobile } from '@/composables/useIsMobile'
-import { Search, Fold } from '@element-plus/icons-vue'
+import { Bell, Brush, Calendar, Clock, Document, Fold, HomeFilled, Money, School, Search, Timer, User, UserFilled, Warning } from '@element-plus/icons-vue'
 
 interface UserInfo {
   name?: string
@@ -504,7 +504,7 @@ const submitPassword = async () => {
 
             <span class="user-name">{{ userInfo.name || '' }}</span>
             <el-dropdown @command="handleCommand">
-              <el-avatar :size="32" icon="UserFilled" />
+              <el-avatar :size="32" :icon="UserFilled" />
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="changePassword">修改密碼</el-dropdown-item>

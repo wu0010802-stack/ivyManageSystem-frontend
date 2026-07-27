@@ -9,6 +9,7 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import PortalPunchCorrectionForm from '@/components/portal/PortalPunchCorrectionForm.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import { Warning } from '@element-plus/icons-vue'
 
 const { isMobile } = useIsMobile()
 

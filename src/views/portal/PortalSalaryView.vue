@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { InfoFilled } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowRight, InfoFilled } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 import { computeIndependentBonusNet } from './portalSalaryBonus'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -67,9 +67,9 @@ onMounted(fetchSalary)
     <div class="page-header">
       <h2>薪資查詢</h2>
       <div class="month-nav">
-        <el-button :icon="'ArrowLeft'" circle size="small" @click="prevMonth" />
+        <el-button :icon="ArrowLeft" circle size="small" @click="prevMonth" />
         <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-        <el-button :icon="'ArrowRight'" circle size="small" @click="nextMonth" />
+        <el-button :icon="ArrowRight" circle size="small" @click="nextMonth" />
       </div>
     </div>
 
