@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
@@ -8,10 +9,17 @@ interface AnomalyEntry { id: number; type?: string; confirmed?: boolean; date?: 
 const loading = ref(false)
 const anomalies = ref<AnomalyEntry[]>([])
 
+// 首頁「異常待確認」badge 統計的是全期間，但本頁只查單月。若不讀網址帶進來的年月，
+// 舊月份的待確認異常就永遠走不到，badge 數字也永遠消不掉（UI 完全沒提示該翻哪個月）。
+const route = useRoute()
 const now = new Date()
+const _queryInt = (v: unknown, fallback: number) => {
+  const n = Number(Array.isArray(v) ? v[0] : v)
+  return Number.isInteger(n) && n > 0 ? n : fallback
+}
 const query = reactive({
-  year: now.getFullYear(),
-  month: now.getMonth() + 1,
+  year: _queryInt(route.query.year, now.getFullYear()),
+  month: _queryInt(route.query.month, now.getMonth() + 1),
 })
 
 const fetchAnomalies = async () => {

@@ -11,6 +11,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
+// 本頁會讀 route.query 決定查詢年月（見 PortalAnomalyMonthQuery.test.ts）
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ params: {}, query: {} }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}))
+
 vi.mock('@/api/portal', () => ({
   getAnomalies: vi.fn().mockResolvedValue({
     data: [
