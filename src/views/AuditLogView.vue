@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getAuditLogs, getAuditLogsMeta, exportAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -206,6 +207,18 @@ const applyRiskFilter = (key: string) => {
   }
   // 純客端過濾（如「強制放行」）不重打 API，僅切換 displayedLogs
 }
+
+// 空狀態文案判斷：查詢條件（篩選欄位或高風險快篩）是否有任一生效
+const hasActiveFilter = computed(() =>
+  Boolean(filters.entity_type) ||
+  Boolean(filters.action) ||
+  Boolean(filters.username) ||
+  Boolean(filters.entity_id) ||
+  Boolean(filters.ip_address) ||
+  Boolean(filters.start_at) ||
+  Boolean(filters.end_at) ||
+  Boolean(activeRiskFilter.value)
+)
 
 // 客端套用 risk filter 後的最終列表；無風險篩選時直接回 logs
 const displayedLogs = computed(() => {
@@ -515,6 +528,13 @@ defineExpose({ formatOperator })
       v-loading="loading"
       max-height="600"
     >
+      <template #empty>
+        <EmptyState
+          :title="hasActiveFilter ? '目前篩選條件下沒有紀錄' : '尚無操作紀錄'"
+          :description="hasActiveFilter ? '試著調整篩選條件或高風險快篩後再查詢' : ''"
+          variant="inline"
+        />
+      </template>
       <el-table-column type="expand">
         <template #default="{ row }">
           <div class="changes-detail">
@@ -648,7 +668,7 @@ defineExpose({ formatOperator })
   align-items: center;
 }
 .quick-label {
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary, var(--neutral-600));
   font-size: var(--text-sm);
 }
 .risk-hint {
@@ -667,14 +687,14 @@ defineExpose({ formatOperator })
 }
 .changes-detail {
   padding: var(--space-3);
-  background: var(--background-secondary, #fafafa);
+  background: var(--background-secondary, var(--neutral-50));
 }
 .diff-header {
   margin-bottom: var(--space-2);
   font-weight: 600;
 }
 .no-changes {
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary, var(--neutral-500));
   padding: var(--space-2);
   font-style: italic;
 }
@@ -704,7 +724,7 @@ defineExpose({ formatOperator })
   flex-wrap: wrap;
 }
 .meta-json {
-  background: #f5f5f5;
+  background: var(--neutral-100);
   padding: 8px;
   border-radius: 4px;
   font-family: monospace;
