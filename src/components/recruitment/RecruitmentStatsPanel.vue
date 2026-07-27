@@ -550,18 +550,20 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 <style scoped>
 /* ── Design Tokens ── */
 .stats-panel {
+  /* --rv-primary / --rv-primary-lt：跨檔（RecruitmentChuannianTab.vue、AdmissionsView.vue）
+     以 var(--rv-primary, #1e40af) 參照的招生模組專屬強調色，非通用語意色，保留寫死值 */
   --rv-primary:      #1e40af;
   --rv-primary-lt:   #dbeafe;
-  --rv-secondary:    #3b82f6;
-  --rv-accent:       #d97706;
-  --rv-bg:           #f8fafc;
-  --rv-surface:      #ffffff;
+  --rv-secondary:    var(--color-info);
+  --rv-accent:       var(--color-warning-hover);
+  --rv-bg:           var(--neutral-50);
+  --rv-surface:      var(--neutral-0);
   --rv-muted:        #e9eef6;
-  --rv-border:       #dbeafe;
-  --rv-text:         #1e293b;
-  --rv-text-2:       #64748b;
+  --rv-border:       var(--color-info-soft);
+  --rv-text:         var(--neutral-800);
+  --rv-text-2:       var(--neutral-500);
   --rv-success:      #16a34a;
-  --rv-danger:       #dc2626;
+  --rv-danger:       var(--color-danger-hover);
   --rv-font-num:     'Fira Code', ui-monospace, monospace;
 }
 
@@ -586,7 +588,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 .form-section-title {
   font-size: 12px;
   font-weight: 700;
-  color: #475569;
+  color: var(--neutral-600);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin: 12px 0 8px;
@@ -619,13 +621,13 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 :deep(.record-count) {
   margin-left: auto;
   font-size: 0.85rem;
-  color: #718096;
+  color: var(--neutral-500);
 }
 :deep(.pagination) {
   margin-top: 12px;
   justify-content: flex-end;
 }
-:deep(.deposit-row) { background: #f0fff4 !important; }
+:deep(.deposit-row) { background: var(--color-success-soft) !important; }
 
 /* -------- 區域分析：標頭 -------- */
 .area-header-bar {
@@ -635,8 +637,8 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   align-items: center;
   padding: 14px 18px;
   margin-bottom: 16px;
-  background: var(--rv-surface, #fff);
-  border: 1px solid var(--rv-border, #DBEAFE);
+  background: var(--rv-surface);
+  border: 1px solid var(--rv-border);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(30, 64, 175, 0.06);
 }
@@ -650,11 +652,11 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 .area-campus-name {
   font-weight: 700;
   font-size: 0.97rem;
-  color: var(--rv-text, #1e293b);
+  color: var(--rv-text);
 }
 .area-campus-addr {
   font-size: 0.8rem;
-  color: var(--rv-text-2, #64748b);
+  color: var(--rv-text-2);
 }
 .area-campus-coord {
   font-size: 0.75rem;
@@ -675,7 +677,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 
 /* -------- 園所座標狀態 -------- */
 .area-campus-coord-warn {
-  color: #c05621 !important;
+  color: var(--color-warning-darker) !important;
   font-weight: 600;
 }
 
@@ -683,13 +685,13 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   margin-bottom: 12px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: #f0fff4;
-  border: 1px solid #c6f6d5;
+  background: var(--color-success-soft);
+  border: 1px solid var(--color-success);
   font-size: 0.8rem;
-  color: #276749;
+  color: var(--color-success-darker);
 }
 .campus-coord-preview a {
-  color: #276749;
+  color: var(--color-success-darker);
 }
 
 /* -------- 區域 KPI 卡片 -------- */
@@ -705,7 +707,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 }
 
 .area-kpi-card {
-  background: #fff;
+  background: var(--neutral-0);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 14px 16px;
@@ -773,7 +775,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 }
 .rate-bar-fill--green  { background: var(--color-success); }
 .rate-bar-fill--yellow { background: var(--color-warning); }
-.rate-bar-fill--red    { background: #f87171; }
+.rate-bar-fill--red    { background: var(--color-danger); }
 .rate-label {
   font-size: 0.8rem;
   font-family: 'Fira Code', ui-monospace, monospace;
@@ -815,7 +817,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 }
 .area-table-hint {
   font-size: 0.75rem;
-  color: #a0aec0;
+  color: var(--text-tertiary);
   font-weight: 400;
 }
 .area-table-filter-tag {
@@ -824,18 +826,18 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   gap: 2px;
   padding: 2px 8px 2px 10px;
   background: var(--color-info-soft);
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-info);
   border-radius: 12px;
   font-size: 0.75rem;
   color: var(--color-info-darker);
   font-weight: 600;
 }
 :deep(.district-row-selected td) {
-  background: #f0fff4 !important;
+  background: var(--color-success-soft) !important;
   font-weight: 600;
 }
 :deep(.district-row-selected td .cell) {
-  color: #22543d;
+  color: var(--color-success-darker);
 }
 
 @media (--to-sm) {
