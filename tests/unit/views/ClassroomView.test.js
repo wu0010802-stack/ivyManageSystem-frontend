@@ -32,6 +32,9 @@ const getClassrooms = vi.fn(() => Promise.resolve({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
+  // ClassroomView 以 route.query.selected 還原「返回班級」深連結（e08b108d），
+  // 未 mock useRoute 會讓元件 setup 直接拋錯。
+  useRoute: () => ({ query: {} }),
 }))
 
 vi.mock('@/api/classrooms', () => ({

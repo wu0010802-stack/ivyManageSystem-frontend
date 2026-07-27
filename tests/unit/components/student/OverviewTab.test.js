@@ -1,6 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import OverviewTab from '@/components/student/tabs/OverviewTab.vue'
+
+// 學費統計卡受 FEES_READ 權限遮罩控制（193a966a）；本檔驗證的是 stat-card 的
+// a11y 屬性與鍵盤行為，需要四張卡全部渲染，故一律給權限。
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn(() => true),
+}))
 
 // 模擬 Element Plus 元件
 const ElIcon = {
