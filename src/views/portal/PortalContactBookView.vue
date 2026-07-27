@@ -17,6 +17,8 @@ import {
 } from '@/api/contactBook'
 import { useContactBookTemplates } from '@/composables/useContactBookTemplates'
 import { todayISO } from '@/utils/format'
+import { useRoute } from 'vue-router'
+import { pickClassroomIdFromQuery, pickDateFromQuery } from '@/utils/portalQuery'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import ContactBookFilterBar from './components/contactBook/ContactBookFilterBar.vue'
 
@@ -44,7 +46,9 @@ const MOOD_EMOJI = {
 const classrooms = ref<ClassroomEntry[]>([])
 const classroomLoading = ref(false)
 const selectedClassroomId = ref<number | null>(null)
-const selectedDate = ref(todayISO())
+const route = useRoute()
+// 搜尋面板點某天的聯絡簿會帶 ?log_date=；不讀的話日期永遠跳回今天
+const selectedDate = ref(pickDateFromQuery(route.query, 'log_date', todayISO()))
 
 const items = ref<ItemEntry[]>([]) // [{ student_id, student_name, entry }]
 const completion = ref<Completion>({ roster: 0, draft: 0, published: 0, missing: 0 })
@@ -74,7 +78,12 @@ async function fetchClassrooms() {
     const res = await getMyStudents()
     classrooms.value = res.data?.classrooms || []
     if (classrooms.value.length > 0 && !selectedClassroomId.value) {
-      selectedClassroomId.value = classrooms.value[0].classroom_id ?? null
+      // 首頁班級卡會帶 ?classroom_id=；多班老師不讀就會開到第一班（誤寫聯絡簿）
+      selectedClassroomId.value = pickClassroomIdFromQuery(
+        route.query,
+        classrooms.value,
+        classrooms.value[0].classroom_id ?? null,
+      )
     }
   } catch (err) {
     notify(err, 'PortalContactBook:loadClassrooms', '載入班級失敗')
