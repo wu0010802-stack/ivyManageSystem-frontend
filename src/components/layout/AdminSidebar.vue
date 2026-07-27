@@ -111,7 +111,7 @@
             <template #title>招生入學</template>
           </el-menu-item>
           <!-- 在籍統計已折入「班級學生管理」頁的第一個分頁 -->
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
+          <el-menu-item v-if="canView.DISMISSAL_CALLS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
             <template #title>接送通知</template>
           </el-menu-item>
@@ -208,11 +208,11 @@
             <el-icon><WarningFilled /></el-icon>
             <template #title>資料品質</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/admin/gov-reports/monthly">
+          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/monthly">
             <el-icon><Histogram /></el-icon>
             <template #title>月度月報</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
+          <el-menu-item v-if="canView.REPORTS" index="/gov-reports">
             <el-icon><Stamp /></el-icon>
             <template #title>政府申報匯出</template>
           </el-menu-item>
