@@ -80,7 +80,8 @@ const initialTab = VALID_TABS.includes(route.query.tab as string) ? (route.query
 const mainTab = ref(initialTab)
 
 // ── 課程報名 Tab ──
-interface RegistrationData { classrooms: string[]; [key: string]: unknown }
+// 後端已補 response_model（PortalRegistrationsOut）→ 直接用 codegen 型別
+type RegistrationData = Schema<'PortalRegistrationsOut'>
 const loading = ref(false)
 const data = ref<RegistrationData | null>(null)
 const activeClass = ref('')
@@ -89,8 +90,7 @@ async function loadRegistrations() {
   loading.value = true
   try {
     const res = await getPortalActivityRegistrations()
-    // TODO(ts-strict): /portal/activity/registrations 後端尚無 response_model → codegen 回 unknown
-    const d = res.data as RegistrationData
+    const d = res.data
     data.value = d
     if (d.classrooms.length > 0) {
       activeClass.value = d.classrooms[0]
