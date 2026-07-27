@@ -825,8 +825,9 @@ const doughnutChartOptions = {
   white-space: nowrap;
 }
 
-.chip-new        { color: var(--color-success); }
-.chip-underage   { color: var(--color-warning); }
-.chip-special    { color: #7c3aed; }
-.chip-indigenous { color: var(--color-info); }
+/* 與 EnrollmentRosterTable 的標籤色共用（:root 變數，AA 對比） */
+.chip-new        { color: var(--roster-tag-new); }
+.chip-underage   { color: var(--roster-tag-underage); }
+.chip-special    { color: var(--roster-tag-special); }
+.chip-indigenous { color: var(--roster-tag-indigenous); }
 </style>
