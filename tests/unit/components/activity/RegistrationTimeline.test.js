@@ -171,4 +171,26 @@ describe('RegistrationTimeline', () => {
     expect(wrapper.text()).not.toContain('報名已撤銷')
     expect(wrapper.text()).toContain('報名完成')
   })
+
+  it('待審核狀態顯示中文標籤，不吐英文 raw 值（2026-07-27 回歸）', () => {
+    const wrapper = mount(RegistrationTimeline, {
+      props: {
+        registration: makeReg({
+          pending_review: true,
+          match_status: 'pending',
+          courses: [
+            { course_id: 10, name: '美術', price: 1500, status: 'pending_review' },
+            { course_id: 11, name: '律動', price: 1500, status: 'pending_review_waitlist' },
+          ],
+        }),
+        payments: [],
+        paidAmount: 0,
+        paymentStatus: 'unpaid',
+      },
+    })
+    const text = wrapper.text()
+    expect(text).toContain('[待審核] 美術')
+    expect(text).toContain('[待審核候補] 律動')
+    expect(text).not.toContain('pending_review')
+  })
 })
