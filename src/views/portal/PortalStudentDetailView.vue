@@ -11,7 +11,11 @@ const props = defineProps({
   studentId: { type: [String, Number], required: true },
 })
 
-interface Guardian { id?: number; name?: string; relation?: string; is_primary?: boolean; is_emergency?: boolean; can_pickup?: boolean; phone?: string; email?: string; user_id?: number; [key: string]: unknown }
+// phone_masked：後端 schemas/portal_students.StudentDetailGuardian 只回遮罩後的電話，
+// 沒有 `phone` 這個欄位。本 interface 帶 index signature，寫錯欄位名不會被 vue-tsc 抓到，
+// 因此欄位名以後端 schema 為準（要看完整號碼須另接 revealStudentPhone，
+// 作法見 PortalStudentDrawer.vue）。
+interface Guardian { id?: number; name?: string; relation?: string; is_primary?: boolean; is_emergency?: boolean; can_pickup?: boolean; phone_masked?: string | null; email?: string; user_id?: number; [key: string]: unknown }
 interface StudentDetail { student?: Record<string, unknown>; classroom?: { name?: string; [key: string]: unknown }; health?: Record<string, unknown>; guardians?: Guardian[]; attendance_30d?: Record<string, unknown>; recent_observations_30d?: Record<string, unknown>[]; recent_assessments?: Record<string, unknown>[]; recent_incidents_30d?: Record<string, unknown>[]; contact_book_recent?: Record<string, unknown>[]; [key: string]: unknown }
 
 const router = useRouter()
@@ -114,7 +118,7 @@ function back() {
         <p class="meta">
           班級：{{ classroomInfo?.name || '—' }}
           ｜ 生日：{{ (studentInfo as Record<string, unknown>)?.birthday || '—' }}
-          ｜ 主要家長：{{ primaryGuardian?.name || '—' }}（{{ primaryGuardian?.phone || '—' }}）
+          ｜ 主要家長：{{ primaryGuardian?.name || '—' }}（{{ primaryGuardian?.phone_masked || '—' }}）
         </p>
         <div v-if="(healthInfo?.allergies as Record<string, unknown>[] | undefined)?.length" class="warn-row">
           ⚠ 過敏：
@@ -250,7 +254,7 @@ function back() {
                 <span v-if="g.is_primary" class="badge primary">主要</span>
                 <span v-if="g.is_emergency" class="badge danger">緊急</span>
                 <span v-if="g.can_pickup" class="badge ok">可接送</span>
-                <p class="meta">電話：{{ g.phone || '—' }} ｜ Email：{{ g.email || '—' }}</p>
+                <p class="meta">電話：{{ g.phone_masked || '—' }} ｜ Email：{{ g.email || '—' }}</p>
                 <p v-if="g.user_id" class="meta">user_id: {{ g.user_id }}</p>
               </li>
             </ul>
