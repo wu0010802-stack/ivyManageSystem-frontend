@@ -1,5 +1,17 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "//": [
+    "2026-07-27 起停用。原因：Renovate 與 Dependabot 兩套並行，同一個漏洞會各開",
+    "一份 PR（例：dompurify 3.4.12 同時有 renovate/npm-dompurify-vulnerability 與",
+    "dependabot/npm_and_yarn/dompurify-3.4.12），且 5 個 renovate PR 全部修改同一個",
+    "package-lock.json，逐一合併必然連環衝突。",
+    "",
+    "下方設定全數保留，恢復時把 enabled 改回 true 即可。",
+    "改為人工定期升級：npm audit 與 npm outdated，處理後走一般 PR 流程。",
+    "CVE 可見度由 CI 的依賴掃描 gate 維持（見 .github/workflows/ci.yml 的 audit job",
+    "與 .github/audit-allowlist.json），不依賴 bot 開 PR 才知道有漏洞。"
+  ],
+  "enabled": false,
   "extends": [
     "config:recommended",
     ":semanticCommits",
