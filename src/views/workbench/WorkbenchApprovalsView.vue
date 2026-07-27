@@ -8,9 +8,10 @@ import { getOvertimes, approveOvertime as approveOvertimeApi, batchApproveOverti
 import { getCorrections, approveCorrection as approveCorrectionApi, batchApproveCorrections } from '@/api/punchCorrections'
 import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatDate, formatTime } from '@/utils/format'
-import { useFetchPending, useApprovalOperation } from '@/composables'
+import { useFetchPending, useApprovalOperation, useClientTableFilter } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import LeaveBatchRejectDialog from '@/views/leave/LeaveBatchRejectDialog.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
 import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
@@ -26,6 +27,43 @@ const isFirstLoad = ref(true)
 const { items: pendingLeaves,          fetch: fetchPendingLeaves    } = useFetchPending(getLeaves)
 const { items: pendingOvertimes,       fetch: fetchPendingOvertimes } = useFetchPending(getOvertimes)
 const { items: pendingPunchCorrections, fetch: fetchPendingCorrections } = useFetchPending(getCorrections)
+
+// 跨佇列關鍵字搜尋：三佇列各自客端過濾（比對員工姓名），共用同一個輸入框
+// 與搜尋字串（approvalSearch），寫入時同步灌到三個 composable 的 searchQuery
+const {
+  searchQuery: leaveSearchQuery,
+  filtered: filteredLeaves,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => pendingLeaves.value as Record<string, unknown>[],
+  searchFields: (r) => [r.employee_name as string | undefined],
+})
+const {
+  searchQuery: overtimeSearchQuery,
+  filtered: filteredOvertimes,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => pendingOvertimes.value as Record<string, unknown>[],
+  searchFields: (r) => [r.employee_name as string | undefined],
+})
+const {
+  searchQuery: correctionSearchQuery,
+  filtered: filteredCorrections,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => pendingPunchCorrections.value as Record<string, unknown>[],
+  searchFields: (r) => [r.employee_name as string | undefined],
+})
+
+const approvalSearch = computed<string>({
+  get: () => leaveSearchQuery.value,
+  set: (v: string) => {
+    leaveSearchQuery.value = v
+    overtimeSearchQuery.value = v
+    correctionSearchQuery.value = v
+  },
+})
+
+const approvalShown = computed(() =>
+  filteredLeaves.value.length + filteredOvertimes.value.length + filteredCorrections.value.length
+)
 
 type BatchFn = (ids: unknown[], approved: boolean, reason?: string) => Promise<{ data: { succeeded: { length: number }[]; failed: { id: unknown; reason: string }[] } }>
 
@@ -342,6 +380,13 @@ onMounted(() => {
       </el-card>
     </div>
 
+    <AdminListToolbar
+      v-model:search="approvalSearch"
+      search-placeholder="搜尋員工姓名"
+      :total="totalPending"
+      :shown="approvalShown"
+    />
+
     <el-card class="section-card leave-card" shadow="hover">
       <template #header>
         <div class="card-header">
@@ -365,13 +410,16 @@ onMounted(() => {
       <el-table
         v-else-if="pendingLeaves.length > 0"
         v-loading="loading && !isFirstLoad"
-        :data="pendingLeaves"
+        :data="filteredLeaves"
         stripe
         size="small"
         style="width: 100%"
         max-height="520"
         @selection-change="handleSelectionChangeL"
       >
+        <template #empty>
+          <el-empty description="沒有符合搜尋條件的請假申請" :image-size="60" />
+        </template>
         <el-table-column type="selection" width="45" :selectable="canApproveL" />
         <el-table-column label="員工" min-width="140">
           <template #default="{ row }">
@@ -473,7 +521,7 @@ onMounted(() => {
         </el-table-column>
       </el-table>
 
-      <el-empty v-else-if="!isFirstLoad" description="沒有待審核的請假申請" :image-size="60" />
+      <el-empty v-else-if="!isFirstLoad" description="目前沒有待簽核的請假申請" :image-size="60" />
     </el-card>
 
     <el-card class="section-card overtime-card" shadow="hover">
@@ -499,13 +547,16 @@ onMounted(() => {
       <el-table
         v-else-if="pendingOvertimes.length > 0"
         v-loading="loading && !isFirstLoad"
-        :data="pendingOvertimes"
+        :data="filteredOvertimes"
         stripe
         size="small"
         style="width: 100%"
         max-height="520"
         @selection-change="handleSelectionChangeO"
       >
+        <template #empty>
+          <el-empty description="沒有符合搜尋條件的加班申請" :image-size="60" />
+        </template>
         <el-table-column type="selection" width="45" :selectable="canApproveO" />
         <el-table-column label="員工" min-width="140">
           <template #default="{ row }">
@@ -583,7 +634,7 @@ onMounted(() => {
         </el-table-column>
       </el-table>
 
-      <el-empty v-else-if="!isFirstLoad" description="沒有待審核的加班申請" :image-size="60" />
+      <el-empty v-else-if="!isFirstLoad" description="目前沒有待簽核的加班申請" :image-size="60" />
     </el-card>
 
     <el-card class="section-card correction-card" shadow="hover">
@@ -609,13 +660,16 @@ onMounted(() => {
       <el-table
         v-else-if="pendingPunchCorrections.length > 0"
         v-loading="loading && !isFirstLoad"
-        :data="pendingPunchCorrections"
+        :data="filteredCorrections"
         stripe
         size="small"
         style="width: 100%"
         max-height="520"
         @selection-change="handleSelectionChangeC"
       >
+        <template #empty>
+          <el-empty description="沒有符合搜尋條件的補打卡申請" :image-size="60" />
+        </template>
         <el-table-column type="selection" width="45" :selectable="canApproveC" />
         <el-table-column prop="employee_name" label="員工" min-width="120" />
         <el-table-column prop="attendance_date" label="考勤日期" width="120" />
@@ -669,7 +723,7 @@ onMounted(() => {
         </el-table-column>
       </el-table>
 
-      <el-empty v-else-if="!isFirstLoad" description="沒有待審核的補打卡申請" :image-size="60" />
+      <el-empty v-else-if="!isFirstLoad" description="目前沒有待簽核的補打卡申請" :image-size="60" />
     </el-card>
 
     <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleL" v-model:reason="batchRejectReasonL" :loading="batchLoadingL" @confirm="confirmBatchRejectL" />
