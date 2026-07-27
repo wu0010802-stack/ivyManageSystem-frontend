@@ -267,7 +267,7 @@ export interface paths {
         };
         /**
          * Get Class Options
-         * @description 從 Classroom 表動態取得班級名稱選項
+         * @description 依學期取得啟用中的班級名稱選項。
          */
         get: operations["get_class_options_api_activity_class_options_get"];
         put?: never;
@@ -359,7 +359,8 @@ export interface paths {
         };
         /**
          * Get Course Waitlist
-         * @description 取得課程候補名單（按報名序排列）
+         * @description 取得課程候補名單（按報名序排列，含一般候補與待審核候補
+         *     pending_review_waitlist，全域依 RegistrationCourse.id 排序）
          */
         get: operations["get_course_waitlist_api_activity_courses__course_id__waitlist_get"];
         put?: never;
@@ -994,6 +995,7 @@ export interface paths {
          * @description 家長確認接受候補轉正（三欄驗證）。
          *
          *     錯誤碼：
+         *     - 400 PENDING_REVIEW_NOT_ALLOWED：報名尚未通過人工審核，不可走候補確認流程
          *     - 403 STUDENT_TERMINAL：學生已離校/畢業/轉出，不可升為正式
          *     - 404：查無對應報名（身份驗證失敗）
          *     - 409 ALREADY_CONFIRMED：已是正式
@@ -1163,8 +1165,9 @@ export interface paths {
          *     併發保護：鎖 reg 行，與 remove_registration_supply 對稱，避免與
          *     POS checkout / update_payment 並發時 is_paid 旗標短暫錯誤。
          *
-         *     待審核 registration 的新課程只保留意向（pending_review），
-         *     不查佔位數也不進候補隊列；審核通過時才在課程鎖下重新分配。
+         *     2026-07-19 業主決策（問題3）：待審核 registration 的新課程視同已正式報名占用
+         *     容量（pending_review）；額滿且開放候補時進入 pending_review_waitlist，
+         *     容量判斷與一般報名對稱（enrolled/waitlist/額滿拒絕三分支）。
          */
         post: operations["add_registration_course_api_activity_registrations__registration_id__courses_post"];
         delete?: never;
@@ -1209,8 +1212,9 @@ export interface paths {
          * Force Accept Registration
          * @description 跳過三欄比對，強行將報名插入正式課後才藝報名管理並加上 `forced` 標記。
          *
-         *     body 與 rematch 相同三欄可選：校方可同時修正家長打錯的 name/birthday/phone。
-         *     用途：家長是校外生或資料永遠比對不上，但校方決定收這筆報名。
+         *     body 與 rematch 相同可選欄位：校方可同時修正家長打錯的 name/birthday/class
+         *     （業主決策 2026-07-19：比對鍵已改為姓名+生日+班級，parent_phone 僅供聯絡修正
+         *     不影響比對/去重）。用途：家長是校外生或資料永遠比對不上，但校方決定收這筆報名。
          */
         post: operations["force_accept_registration_api_activity_registrations__registration_id__force_accept_post"];
         delete?: never;
@@ -1404,7 +1408,8 @@ export interface paths {
         put?: never;
         /**
          * Rematch Registration
-         * @description 後台重跑三欄比對（可同時修正 name/birthday/parent_phone）。
+         * @description 後台重跑三欄比對（可同時修正 name/birthday/class；parent_phone 亦可修正但
+         *     純聯絡用途、不影響比對——業主決策 2026-07-19：比對鍵改為姓名+生日+班級）。
          *
          *     body 任一欄位非 None 時先寫回 registration，再用新值跑比對。
          *     即使比對仍失敗，編輯的欄位也會保留，避免校方白打一次。
@@ -1453,7 +1458,8 @@ export interface paths {
          * Add Registration Supply
          * @description 後台為既有報名追加一筆用品。
          *
-         *     併發保護：鎖 reg 行，與 remove_registration_supply 對稱。
+         *     併發保護：依 supply → registration 的固定鎖序取行鎖，與停用品流程共用
+         *     ActivitySupply 鎖，避免在停用檢查與 commit 之間插入 RegistrationSupply。
          */
         post: operations["add_registration_supply_api_activity_registrations__registration_id__supplies_post"];
         delete?: never;
@@ -1597,6 +1603,12 @@ export interface paths {
          *     status=pending：pending_review=true、is_active=true
          *     status=rejected：match_status='rejected'、is_active=false
          *     status=all（預設）：兩者聯集，前端以 match_status / is_active 判斷顯示
+         *
+         *     2026-07-19 業主決策（問題3附帶調整）：待審核現在視同已正式報名占用容量，
+         *     越早送出的待審核應越早被審核（避免占位越久、後審才知道要不要收），故
+         *     pending 子集合改為 created_at 升冪（先到先審）；rejected 子集合維持
+         *     reviewed_at 對應的 created_at 降冪（近期優先，符合「最近拒絕的先被看到」
+         *     既有慣例，行政人員通常想先確認剛拒絕的處理是否正確）。
          */
         get: operations["list_pending_registrations_api_activity_registrations_pending_get"];
         put?: never;
@@ -1627,6 +1639,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/settings/registration-success-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Registration Success Email Template
+         * @description 取得報名成功通知信樣板設定（管理後台用）。
+         *
+         *     subject/body 為 None 代表尚未自訂，目前實際寄送使用 *_default 樣板。
+         */
+        get: operations["get_registration_success_email_template_api_activity_settings_registration_success_email_get"];
+        /**
+         * Update Registration Success Email Template
+         * @description 更新報名成功通知信樣板；subject/body 傳空字串或省略皆視為清除覆寫
+         *     （恢復預設樣板）。
+         */
+        put: operations["update_registration_success_email_template_api_activity_settings_registration_success_email_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/settings/registration-success-email/test-send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Send Registration Success Email
+         * @description 後台試寄一封報名成功通知信（固定測試資料渲染，不查真實報名）。
+         *
+         *     subject/body 省略時採用 DB 已儲存樣板（或預設樣板），可用於「先存檔再試寄」；
+         *     帶入時直接用表單目前內容試寄，讓管理員能在存檔前先預覽措辭與排版。
+         */
+        post: operations["test_send_registration_success_email_api_activity_settings_registration_success_email_test_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/settings/registration-time": {
         parameters: {
             query?: never;
@@ -1645,6 +1707,56 @@ export interface paths {
          * @description 更新報名開放設定與前台顯示設定
          */
         post: operations["update_registration_time_api_activity_settings_registration_time_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/settings/waitlist-promoted-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Waitlist Promoted Email Template
+         * @description 取得候補直升正式通知信樣板設定（管理後台用）。
+         *
+         *     subject/body 為 None 代表尚未自訂，目前實際寄送使用 *_default 樣板。
+         */
+        get: operations["get_waitlist_promoted_email_template_api_activity_settings_waitlist_promoted_email_get"];
+        /**
+         * Update Waitlist Promoted Email Template
+         * @description 更新候補直升正式通知信樣板；subject/body 傳空字串或省略皆視為清除覆寫
+         *     （恢復預設樣板）。
+         */
+        put: operations["update_waitlist_promoted_email_template_api_activity_settings_waitlist_promoted_email_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/settings/waitlist-promoted-email/test-send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Send Waitlist Promoted Email
+         * @description 後台試寄一封候補直升正式通知信（固定測試資料渲染，不查真實報名）。
+         *
+         *     subject/body 省略時採用 DB 已儲存樣板（或預設樣板），可用於「先存檔再試寄」；
+         *     帶入時直接用表單目前內容試寄，讓管理員能在存檔前先預覽措辭與排版。
+         */
+        post: operations["test_send_waitlist_promoted_email_api_activity_settings_waitlist_promoted_email_test_send_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4353,7 +4465,17 @@ export interface paths {
         get: operations["get_insurance_rates_api_config_insurance_rates_get"];
         /**
          * Update Insurance Rates
-         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）
+         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）。
+         *
+         *     金流硬化（資安 R-13 mitigation (a) InsuranceRate 分支，2026-07-21）：
+         *     - 只有 SETTINGS_WRITE 不夠（HR 行政都有）→ 額外要求 has_finance_approve
+         *       （ACTIVITY_PAYMENT_APPROVE）。否則持 SETTINGS_WRITE 的 admin 可建立惡意金額
+         *       的費率版本（甚至 is_active=False 的歷史 rate_year），被 `_select_active_at` /
+         *       歷史補算以 id desc 撿到且無稽核軌跡（見 SPEC-002 R-13 / SPEC-001 §18）。
+         *       與 PUT /bonus（api/config/bonus.py）、PUT/DELETE /insurance/brackets
+         *       （api/insurance.py）三處守衛對齊。
+         *     - reason 必填，會與 changed_fields 一併寫入 audit_logs.changes。
+         *     - 守衛置於 try 之外：try 內 except 會經 raise_safe_500 把 403 洗成 500。
          */
         put: operations["update_insurance_rates_api_config_insurance_rates_put"];
         post?: never;
@@ -6627,6 +6749,42 @@ export interface paths {
         get: operations["get_leave_attachment_api_leaves__leave_id__attachments__filename__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leaves/{leave_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel My Pending Leave
+         * @description 教師自撤本人「待審核」假單。
+         *
+         *     與 delete_leave 的差異與存在理由（2026-07-20 新增）：
+         *     - delete_leave（守衛 LEAVES_WRITE）對本人假單一律 403（is_self_approval 守衛），
+         *       因為持 LEAVES_WRITE 的 supervisor/hr 自刪本人「已核准」扣薪假單會觸發薪資重算
+         *       撤銷扣款＝替自己加薪，繞過 approve 的自我核准守衛。
+         *     - 但「待審核」假單尚未核准、未產生任何扣款/考勤同步，本人自撤是安全的（無扣款
+         *       可撤銷 → 無自我加薪風險）。故獨立此端點，僅開放 pending + 本人自撤，**不放寬
+         *       delete_leave 守衛**（避免連帶開放已核准假單自刪）。
+         *
+         *     授權：get_current_user（有效 JWT 即可，教師本來就能建立本人假單，對齊 portal
+         *     create_my_leave 的授權層級）；再於 handler 內強制「呼叫者 == 假單本人」
+         *     （employee_id 相符）。他人假單 → 403、不存在 → 404、非 pending → 409。
+         *
+         *     語意：待審假單無下游副作用 → 直接 hard delete（withdraw 語意乾淨）。
+         *     ApprovalStatus 無 cancelled 狀態，刻意不新增（避免報表/前端 status switch 全面
+         *     改動）；pending 一撤即無痕，符合「尚未進入審核流程的申請」直接收回的直覺。
+         */
+        post: operations["cancel_my_pending_leave_api_leaves__leave_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9165,10 +9323,10 @@ export interface paths {
         get?: never;
         /**
          * Portal Batch Update Attendance
-         * @description 批次點名：任何老師可點整堂跨班名冊；無效報名略過（對齊 admin）。
+         * @description 批次點名：任何教師可點整堂跨班名冊；無效報名略過（對齊 admin）。
          *
-         *     放寬前限定自班並對非自班 reg 整批 403；現移除自班限制，僅保留
-         *     『該 reg 確實有效報了本場次課程』的有效性檢查（無效者略過、不整批拒絕）。
+         *     ``ActivityCourse.instructor_employee_id`` 僅供年終教課獎勵金歸屬，不能作為
+         *     點名授權來源；既有課程與外聘老師課程都可能合法為 NULL。
          */
         put: operations["portal_batch_update_attendance_api_portal_activity_attendance_sessions__session_id__records_put"];
         post?: never;
@@ -14336,6 +14494,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/cycles/{cycle_id}/class_targets/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upsert Class Targets Batch
+         * @description 一次 upsert 多列班級編制（部分成功；guard 一次、逐列套用）。
+         *
+         *     供設定頁「全部儲存」使用，取代逐列呼叫單列端點。guard（404 + 週期狀態）
+         *     只在批次入口做一次；逐列違規（例如個別列觸發的 HTTPException）記入
+         *     failed，不影響其餘列，最後一次 commit。
+         */
+        post: operations["upsert_class_targets_batch_api_year_end_cycles__cycle_id__class_targets_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/cycles/{cycle_id}/exceptions": {
         parameters: {
             query?: never;
@@ -14390,6 +14572,23 @@ export interface paths {
         put?: never;
         /** Upsert Org Settings */
         post: operations["upsert_org_settings_api_year_end_cycles__cycle_id__org_settings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/cycles/{cycle_id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cycle Progress */
+        get: operations["get_cycle_progress_api_year_end_cycles__cycle_id__progress_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -14591,6 +14790,30 @@ export interface paths {
          * @description 手動微調結算：獎懲扣項、超額獎金、在職月數覆寫。自動重算受影響的結算單。
          */
         patch: operations["manual_patch_settlement_api_year_end_settlements__settlement_id__manual_patch"];
+        trace?: never;
+    };
+    "/year_end/settlements/{settlement_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Settlement
+         * @description 退回草稿：任一已簽核狀態 → DRAFT，清除全部簽核欄位。
+         *
+         *     與簽核不同，退回是「重開計算輸入」的入口，因此 LOCKED（結構凍結）與
+         *     CLOSED 一律拒絕（不走 allow_when_locked）。先 unlocked read 做守衛，
+         *     通過後才 with_for_update mutation（見 appraisal reject 同模式註解）。
+         */
+        post: operations["reject_settlement_api_year_end_settlements__settlement_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/year_end/settlements/{settlement_id}/sign_accounting": {
@@ -17417,7 +17640,7 @@ export interface components {
         };
         /**
          * ClassroomDetailStudentOut
-         * @description GET /classrooms/{id} 內學生單筆（健康欄位由 router 端依權限遮罩成 None）。
+         * @description GET /classrooms/{id} 學生單筆；名冊、健康及家長 PII 由 router 依權限遮罩。
          */
         ClassroomDetailStudentOut: {
             /** Allergy */
@@ -17620,6 +17843,27 @@ export interface components {
             male: number;
             /** Total */
             total: number;
+        };
+        /** ClassTargetBatchFailedItem */
+        ClassTargetBatchFailedItem: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Reason */
+            reason: string;
+            /** Semester First */
+            semester_first: boolean;
+        };
+        /** ClassTargetBatchRequest */
+        ClassTargetBatchRequest: {
+            /** Items */
+            items: components["schemas"]["ClassEnrollmentTargetUpsert"][];
+        };
+        /** ClassTargetBatchResultOut */
+        ClassTargetBatchResultOut: {
+            /** Failed */
+            failed: components["schemas"]["ClassTargetBatchFailedItem"][];
+            /** Succeeded Count */
+            succeeded_count: number;
         };
         /**
          * ClassUpdateRequest
@@ -18568,6 +18812,34 @@ export interface components {
             status: components["schemas"]["CycleStatus"];
         };
         /**
+         * CycleProgressOut
+         * @description 年終工作區左導軌用的唯讀進度彙總（不新增表，全部由既有查詢組裝）。
+         */
+        CycleProgressOut: {
+            /** Cycle Status */
+            cycle_status: string;
+            /** Exception Count */
+            exception_count: number;
+            /** Finalized Count */
+            finalized_count: number;
+            /** Pending Sign Count */
+            pending_sign_count: number;
+            /** Settings Complete */
+            settings_complete: boolean;
+            /** Settings Missing Count */
+            settings_missing_count: number;
+            /** Settlement Count */
+            settlement_count: number;
+            /** Sign Counts */
+            sign_counts: {
+                [key: string]: number;
+            };
+            /** Total Count */
+            total_count: number;
+            /** Unmatched Count */
+            unmatched_count: number;
+        };
+        /**
          * CycleStatus
          * @enum {string}
          */
@@ -19221,6 +19493,8 @@ export interface components {
             employee_id: string;
             /** Employee Type */
             employee_type: string;
+            /** English Name */
+            english_name?: string | null;
             /** Gender */
             gender?: string | null;
             /**
@@ -20286,10 +20560,14 @@ export interface components {
         };
         /** GridRowOut */
         GridRowOut: {
+            /** Deduction Disciplinary */
+            deduction_disciplinary: string;
             /** Employee Id */
             employee_id: number;
             /** Employee Name */
             employee_name: string;
+            /** Hire Months */
+            hire_months: string;
             /** Payable Amount */
             payable_amount: string;
             /** Remark */
@@ -21073,6 +21351,11 @@ export interface components {
             pension_employer_rate?: number | null;
             /** Rate Year */
             rate_year?: number | null;
+            /**
+             * Reason
+             * @description 變更原因（必填，落入 audit）
+             */
+            reason?: string | null;
         };
         /** IntakePlanOut */
         IntakePlanOut: {
@@ -21285,6 +21568,17 @@ export interface components {
             ids: number[];
             /** Rejection Reason */
             rejection_reason?: string | null;
+        };
+        /**
+         * LeaveCancelResultOut
+         * @description POST /leaves/{id}/cancel 回傳（教師自撤本人待審假單）。
+         *
+         *     待審假單自撤為 hard delete，無下游副作用（尚未核准 → 無扣款、無考勤同步、
+         *     無薪資重算、無補休 grant 消耗），故僅回 message，不含 salary_* 欄位。
+         */
+        LeaveCancelResultOut: {
+            /** Message */
+            message: string;
         };
         /** LeaveCreate */
         LeaveCreate: {
@@ -26972,18 +27266,75 @@ export interface components {
         };
         /**
          * RegistrationRematchRequest
-         * @description 重新比對可選欄位：校方可即時修正家長打錯的 name/birthday/parent_phone。
+         * @description 重新比對可選欄位：校方可即時修正家長打錯的 name/birthday/class。
          *
-         *     三欄皆可選——未提供時沿用 registration 原值。提供的欄位會在比對前寫回 reg，
+         *     欄位皆可選——未提供時沿用 registration 原值。提供的欄位會在比對前寫回 reg，
          *     即使比對仍失敗也保留修改內容，避免校方白打一次字。
+         *
+         *     業主決策（2026-07-19）：比對鍵由「姓名+生日+家長電話」改為「姓名+生日+班級」，
+         *     parent_phone 完全退出比對，僅保留純聯絡用途（提供時仍會寫回 reg.parent_phone，
+         *     但不影響比對結果）。
          */
         RegistrationRematchRequest: {
             /** Birthday */
             birthday?: string | null;
+            /** Class */
+            class?: string | null;
             /** Name */
             name?: string | null;
             /** Parent Phone */
             parent_phone?: string | null;
+        };
+        /**
+         * RegistrationSuccessEmailTemplateOut
+         * @description GET /settings/registration-success-email 回應。
+         *
+         *     subject/body 為 None 代表尚未自訂、目前寄送使用下方 *_default 樣板；
+         *     非 None 時為後台已儲存的覆寫樣板。email_enabled 反映當前環境是否真的會
+         *     寄出（ACTIVITY_EMAIL_ENABLED + RESEND_API_KEY + from_address 皆需設定），
+         *     供前端在未啟用時提示「測試寄送」不會真的送出。
+         */
+        RegistrationSuccessEmailTemplateOut: {
+            /** Body */
+            body?: string | null;
+            /** Body Default */
+            body_default: string;
+            /** Email Enabled */
+            email_enabled: boolean;
+            /** Subject */
+            subject?: string | null;
+            /** Subject Default */
+            subject_default: string;
+        };
+        /**
+         * RegistrationSuccessEmailTemplateUpdate
+         * @description PUT /settings/registration-success-email 請求體。
+         *
+         *     留空字串或 None 皆視為「清除覆寫、恢復預設樣板」（寫回 DB 為 NULL）。
+         */
+        RegistrationSuccessEmailTemplateUpdate: {
+            /** Body */
+            body?: string | null;
+            /** Subject */
+            subject?: string | null;
+        };
+        /**
+         * RegistrationSuccessEmailTestSendIn
+         * @description POST /settings/registration-success-email/test-send 請求體。
+         *
+         *     subject/body 可選：帶入時用「表單目前內容」試寄（不需先儲存），省略時
+         *     用 DB 已儲存樣板（或預設樣板）試寄，讓管理員能在存檔前先預覽措辭。
+         */
+        RegistrationSuccessEmailTestSendIn: {
+            /** Body */
+            body?: string | null;
+            /** Subject */
+            subject?: string | null;
+            /**
+             * To Email
+             * Format: email
+             */
+            to_email: string;
         };
         /** RegistrationSummaryOut */
         RegistrationSummaryOut: {
@@ -29273,6 +29624,14 @@ export interface components {
             year_end_cycle_id: number;
         };
         /**
+         * SettlementRejectRequest
+         * @description 單筆退回草稿；原因必填（寫入 settlement log 供稽核）。
+         */
+        SettlementRejectRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /**
          * ShiftAssignmentOut
          * @description 每週排班單筆 (GET /assignments)。
          */
@@ -29862,6 +30221,8 @@ export interface components {
         };
         /** StudentBulkTransfer */
         StudentBulkTransfer: {
+            /** Source Classroom Id */
+            source_classroom_id?: number | null;
             /** Student Ids */
             student_ids: number[];
             /** Target Classroom Id */
@@ -30662,6 +31023,8 @@ export interface components {
             parent_name?: string | null;
             /** Parent Phone */
             parent_phone?: string | null;
+            /** Source Classroom Id */
+            source_classroom_id?: number | null;
             /** Special Needs */
             special_needs?: string | null;
             /** Status Tag */
@@ -31418,6 +31781,57 @@ export interface components {
             reason: string;
         };
         /**
+         * WaitlistPromotedEmailTemplateOut
+         * @description GET /settings/waitlist-promoted-email 回應。
+         *
+         *     subject/body 為 None 代表尚未自訂、目前寄送使用下方 *_default 樣板；
+         *     非 None 時為後台已儲存的覆寫樣板。email_enabled 反映當前環境是否真的會
+         *     寄出（ACTIVITY_EMAIL_ENABLED + RESEND_API_KEY + from_address 皆需設定），
+         *     供前端在未啟用時提示「測試寄送」不會真的送出。
+         */
+        WaitlistPromotedEmailTemplateOut: {
+            /** Body */
+            body?: string | null;
+            /** Body Default */
+            body_default: string;
+            /** Email Enabled */
+            email_enabled: boolean;
+            /** Subject */
+            subject?: string | null;
+            /** Subject Default */
+            subject_default: string;
+        };
+        /**
+         * WaitlistPromotedEmailTemplateUpdate
+         * @description PUT /settings/waitlist-promoted-email 請求體。
+         *
+         *     留空字串或 None 皆視為「清除覆寫、恢復預設樣板」（寫回 DB 為 NULL）。
+         */
+        WaitlistPromotedEmailTemplateUpdate: {
+            /** Body */
+            body?: string | null;
+            /** Subject */
+            subject?: string | null;
+        };
+        /**
+         * WaitlistPromotedEmailTestSendIn
+         * @description POST /settings/waitlist-promoted-email/test-send 請求體。
+         *
+         *     subject/body 可選：帶入時用「表單目前內容」試寄（不需先儲存），省略時
+         *     用 DB 已儲存樣板（或預設樣板）試寄，讓管理員能在存檔前先預覽措辭。
+         */
+        WaitlistPromotedEmailTestSendIn: {
+            /** Body */
+            body?: string | null;
+            /** Subject */
+            subject?: string | null;
+            /**
+             * To Email
+             * Format: email
+             */
+            to_email: string;
+        };
+        /**
          * WaitlistSweepResultOut
          * @description POST /waitlist/sweep-expired 候補過期掃描結果。
          *
@@ -31542,7 +31956,7 @@ export interface components {
          * @description 年終 settlement 軌跡動作型別。
          * @enum {string}
          */
-        YearEndSettlementLogAction: "BUILD" | "MANUAL_PATCH" | "SIGN_SUPERVISOR" | "SIGN_ACCOUNTING" | "FINALIZE";
+        YearEndSettlementLogAction: "BUILD" | "MANUAL_PATCH" | "SIGN_SUPERVISOR" | "SIGN_ACCOUNTING" | "FINALIZE" | "REJECT";
         /** YearEndSettlementLogOut */
         YearEndSettlementLogOut: {
             action: components["schemas"]["YearEndSettlementLogAction"];
@@ -31998,7 +32412,10 @@ export interface operations {
     };
     get_class_options_api_activity_class_options_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -32012,6 +32429,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityClassOptionsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -32880,7 +33306,10 @@ export interface operations {
     };
     get_public_classes_api_activity_public_classes_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -32894,6 +33323,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -34222,6 +34660,92 @@ export interface operations {
             };
         };
     };
+    get_registration_success_email_template_api_activity_settings_registration_success_email_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationSuccessEmailTemplateOut"];
+                };
+            };
+        };
+    };
+    update_registration_success_email_template_api_activity_settings_registration_success_email_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationSuccessEmailTemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationSuccessEmailTemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_send_registration_success_email_api_activity_settings_registration_success_email_test_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrationSuccessEmailTestSendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_registration_time_api_activity_settings_registration_time_get: {
         parameters: {
             query?: never;
@@ -34252,6 +34776,92 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RegistrationTimeSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_waitlist_promoted_email_template_api_activity_settings_waitlist_promoted_email_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistPromotedEmailTemplateOut"];
+                };
+            };
+        };
+    };
+    update_waitlist_promoted_email_template_api_activity_settings_waitlist_promoted_email_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistPromotedEmailTemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistPromotedEmailTemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_send_waitlist_promoted_email_api_activity_settings_waitlist_promoted_email_test_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaitlistPromotedEmailTestSendIn"];
             };
         };
         responses: {
@@ -37232,6 +37842,8 @@ export interface operations {
                 ip_address?: string | null;
                 page?: number;
                 page_size?: number;
+                risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
+                search?: string | null;
                 start_at?: string | null;
                 username?: string | null;
             };
@@ -37331,6 +37943,8 @@ export interface operations {
                 entity_id?: string | null;
                 entity_type?: string | null;
                 ip_address?: string | null;
+                risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
+                search?: string | null;
                 start_at?: string | null;
                 username?: string | null;
             };
@@ -43380,6 +43994,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_my_pending_leave_api_leaves__leave_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                leave_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveCancelResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -56943,6 +57588,41 @@ export interface operations {
             };
         };
     };
+    upsert_class_targets_batch_api_year_end_cycles__cycle_id__class_targets_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassTargetBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassTargetBatchResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_year_end_exceptions_api_year_end_cycles__cycle_id__exceptions_get: {
         parameters: {
             query?: never;
@@ -57058,6 +57738,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgYearSettingsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cycle_progress_api_year_end_cycles__cycle_id__progress_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CycleProgressOut"];
                 };
             };
             /** @description Validation Error */
@@ -57435,6 +58146,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ManualPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_settlement_api_year_end_settlements__settlement_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementRejectRequest"];
             };
         };
         responses: {
