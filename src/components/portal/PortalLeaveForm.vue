@@ -214,9 +214,12 @@ const submitLeave = async () => {
     const res = await createMyLeave({
       leave_type: form.leave_type,
       start_date: sd,
-      start_time: st,
+      // 「整天」模式的 picker 是 YYYY-MM-DD（長度 10），上面的 length > 10 判斷因此
+      // 恆為 false、st/et 為空字串。後端 validate_hhmm_format 只放行 null，空字串會
+      // raise ValueError → 422，整天請假永遠送不出去。與管理端 LeaveView.vue 一致補 || null。
+      start_time: st || null,
       end_date: ed,
-      end_time: et,
+      end_time: et || null,
       leave_hours: form.leave_hours,
       reason: form.reason,
       substitute_employee_id: form.substitute_employee_id || null,
