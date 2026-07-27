@@ -72,6 +72,17 @@ function _doRefresh(): Promise<boolean> {
         const { user } = res.data
         if (user) setUserInfo(user)
         return true
+    }).catch((err) => {
+        // 409：staff refresh token rotation 的併發保護。後端 services/staff_refresh.py
+        // 在 5 秒 race 視窗內對同一 token 的第二次請求回 409「rotation in progress」，
+        // 意思是「另一條路徑已經刷新成功、session 仍有效，請重打原請求」——不是登入失效。
+        // router guard / useIdleTimeout / axios 攔截器三條路會同時發 refresh，因此這個
+        // 409 在正常使用下就會出現；當成失敗會把使用中的老師踢回登入頁。
+        // 對齊 src/router/index.ts 與 src/parent/api/index.ts 對同一情境的既有處理。
+        if ((err as { response?: { status?: number } })?.response?.status === 409) {
+            return true
+        }
+        throw err
     })
 }
 
