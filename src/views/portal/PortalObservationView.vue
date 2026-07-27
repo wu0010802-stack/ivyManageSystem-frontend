@@ -106,7 +106,8 @@ async function submit() {
       domain: formDomain.value,
       narrative: formNarrative.value.trim(),
       is_highlight: formIsHighlight.value,
-      rating: formRating.value,
+      // clearable 清空後 el-rate 給的是 0，後端 ge=1 會 422；0 一律轉 null（同管理端）
+      rating: formRating.value || null,
     })
     ElMessage.success('已記錄')
     formNarrative.value = ''
@@ -174,7 +175,9 @@ async function submit() {
         </el-form-item>
 
         <el-form-item label="評分">
-          <el-rate v-model="(formRating as number)" :max="5" allow-half clearable />
+          <!-- 不可開 allow-half：後端 ObservationCreate.rating 是 int（ge=1, le=5），
+               2.5 會被 Pydantic 拒絕。與管理端 PortfolioTab.vue 的寫法一致。 -->
+          <el-rate v-model="(formRating as number)" :max="5" clearable />
           <span class="hint">（選填）</span>
         </el-form-item>
 
