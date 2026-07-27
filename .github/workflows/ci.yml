@@ -75,6 +75,9 @@ jobs:
         run: npm run lint:tokens
         continue-on-error: true
 
+      - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
+        run: npm run check:error-detail
+
       - name: Build check (PR, no Sentry secrets)
         if: github.event_name == 'pull_request'
         run: npm run build
