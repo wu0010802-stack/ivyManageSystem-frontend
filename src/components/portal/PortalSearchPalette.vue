@@ -106,14 +106,28 @@ function selectItem(item: { kind: string; payload: Record<string, unknown> } | n
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       router.push(item.payload.route as any)
       break
+    // 一律用具名路由：先前這裡把「後端 API 路徑」/portal/students/{id}/detail 當成前端
+    // route 貼上，而 router 只有 students/:studentId（沒有 /detail）。無匹配時 to.meta
+    // 為空物件，剛好命中「teacher 不可存取管理後台」的守衛被靜默導到 /portal/attendance——
+    // 沒有紅字也沒有 404，老師只會以為自己點錯。具名路由寫錯會當場拋錯。
     case 'student':
-      router.push(`/portal/students/${item.payload.id}/detail`)
+      router.push({
+        name: 'portal-student-detail',
+        params: { studentId: String(item.payload.id) },
+      })
       break
     case 'guardian':
-      router.push(`/portal/students/${item.payload.student_id}/detail#guardians`)
+      router.push({
+        name: 'portal-student-detail',
+        params: { studentId: String(item.payload.student_id) },
+        hash: '#guardians',
+      })
       break
     case 'message':
-      router.push({ path: '/portal/messages', query: { thread_id: item.payload.thread_id as string } })
+      // 走既有的 messages/:threadId function redirect，它會正確轉成
+      // ?panel=messages&thread=<id>。先前送 { path: '/portal/messages', query: {...} }
+      // 會被該路由的靜態物件 redirect 整包覆蓋掉 query，thread id 直接遺失。
+      router.push(`/portal/messages/${item.payload.thread_id}`)
       break
     case 'contact_book':
       router.push({ path: '/portal/contact-book', query: { log_date: item.payload.log_date as string } })
