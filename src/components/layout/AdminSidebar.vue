@@ -212,7 +212,7 @@
             <el-icon><DataAnalysis /></el-icon>
             <template #title>月度月報</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
+          <el-menu-item v-if="canView.GOV_REPORTS_EXPORT" index="/gov-reports">
             <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>
           </el-menu-item>
@@ -344,7 +344,8 @@ const hasVisibleActivityItems = computed(() =>
 
 const hasVisibleReportsItems = computed(() =>
   canView.value.AUDIT_LOGS ||
-  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.DATA_QUALITY_READ
+  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.DATA_QUALITY_READ ||
+  canView.value.GOV_REPORTS_EXPORT
 )
 
 const hasVisibleSettingsItems = computed(() =>
