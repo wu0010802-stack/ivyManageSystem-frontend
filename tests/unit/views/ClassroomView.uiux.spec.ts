@@ -10,7 +10,18 @@ let classroomsResponse: () => Promise<{ data: unknown[] }> = () => Promise.resol
 const getClassrooms = vi.fn(() => classroomsResponse())
 const getClassroom = vi.fn(() => Promise.resolve({ data: { id: 1, students: [] } }))
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+  // ClassroomView 以 route.query.selected 還原「返回班級」深連結（e08b108d），
+  // 未 mock useRoute 會讓元件 setup 直接拋錯。
+  useRoute: () => ({ query: {} }),
+}))
+
+// 班級卡片的學生抽屜入口與「新增班級」CTA 受權限遮罩控制（193a966a），
+// 本檔驗證的是 UI/UX 呈現，故一律給權限。
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn(() => true),
+}))
 
 vi.mock('@/api/classrooms', () => ({
   createClassroom: vi.fn(),
