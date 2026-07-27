@@ -8,6 +8,7 @@ import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import { hasPermission } from '@/utils/auth'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -20,6 +21,10 @@ const classrooms = computed(() => classroomStore.classrooms as { id: number; nam
 const filterClassroom = ref<number | null>(null)
 const filterType = ref<string | null>(null)
 const filterDateRange = ref<string[]>([])
+// 空狀態文案判斷：是否有任一篩選條件生效（區分「無資料」與「篩選無結果」）
+const hasActiveFilter = computed(() =>
+  Boolean(filterClassroom.value) || Boolean(filterType.value) || filterDateRange.value.length === 2
+)
 
 // ── 表格 ────────────────────────────────────────────────
 const incidents = ref<Record<string, unknown>[]>([])
@@ -257,6 +262,13 @@ onMounted(() => {
     <!-- 表格 -->
     <el-card shadow="never" style="margin-top: 16px">
       <el-table :data="incidents" v-loading="loading" stripe>
+        <template #empty>
+          <EmptyState
+            :title="hasActiveFilter ? '目前篩選條件下沒有紀錄' : '尚無事件紀錄'"
+            :description="hasActiveFilter ? '試著調整班級或事件類型' : ''"
+            variant="inline"
+          />
+        </template>
         <el-table-column label="發生時間" width="155" prop="occurred_at">
           <template #default="{ row }">
             {{ row.occurred_at ? row.occurred_at.slice(0, 16).replace('T', ' ') : '-' }}
