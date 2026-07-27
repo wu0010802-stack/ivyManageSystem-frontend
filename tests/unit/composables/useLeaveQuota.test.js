@@ -136,12 +136,23 @@ describe('useLeaveQuota', () => {
     expect(fetchFn).toHaveBeenCalledWith('annual', 2024)
   })
 
-  it('沒 employee_id 時不 fetch', async () => {
+  // ⚠ 2026-07-27 更正：本例原本斷言「有 fetchFn 但沒 employee_id → 不 fetch」，
+  // 而 fetchFn 只有教師端會傳（管理端 LeaveView 不傳），教師端表單又沒有 employee_id
+  // 這個欄位，等於把「教師端永遠查不到配額」這個 bug 釘成期望值。
+  // fetchFn（portal 的 getMyQuotas）身分取自 token，本來就不需要 employee_id。
+  // 詳見 tests/unit/composables/useLeaveQuotaPortal.test.ts。
+  it('沒 employee_id 但有 fetchFn（教師端）時仍要 fetch', async () => {
     const fetchFn = makeFetch({ remaining_hours: 1 })
     const form = reactive({ employee_id: null, leave_type: 'annual', start_date: '2026-05-01', leave_hours: 4 })
-    const { quotaInfo } = useLeaveQuota({ form, fetchFn })
+    useLeaveQuota({ form, fetchFn })
     await Promise.resolve()
-    expect(fetchFn).not.toHaveBeenCalled()
+    expect(fetchFn).toHaveBeenCalledWith('annual', 2026)
+  })
+
+  it('沒 employee_id 也沒 fetchFn（管理端未選員工）時不 fetch', async () => {
+    const form = reactive({ employee_id: null, leave_type: 'annual', start_date: '2026-05-01', leave_hours: 4 })
+    const { quotaInfo } = useLeaveQuota({ form })
+    await Promise.resolve()
     expect(quotaInfo.value).toBe(null)
   })
 })
