@@ -7,7 +7,8 @@ import { List, Plus, Paperclip, InfoFilled, Calendar, Loading } from '@element-p
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
-import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator, useApprovalOperation } from '@/composables'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator, useApprovalOperation, useClientTableFilter } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
@@ -151,6 +152,17 @@ const openEditWithDraft = async (row: Record<string, unknown>) => {
 }
 
 const statusFilter = ref('')
+
+// 客端關鍵字過濾：單月資料已全載，姓名/原因即打即濾，與上方年月/員工/狀態下拉（伺服器端）交集
+const {
+  searchQuery: leaveSearch,
+  filtered: filteredLeaves,
+  total: leaveTotal,
+  shown: leaveShown,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => leaveRecords.value,
+  searchFields: (r) => [r.employee_name as string | undefined, r.reason as string | undefined],
+})
 
 const saveLoading = ref(false)
 
@@ -467,6 +479,13 @@ onMounted(() => {
       </div>
     </el-card>
 
+    <AdminListToolbar
+      v-model:search="leaveSearch"
+      search-placeholder="搜尋員工姓名或請假原因"
+      :total="leaveTotal"
+      :shown="leaveShown"
+    />
+
     <LoadingPanel
       :loading="loading && !leaveRecords.length"
       :empty="!loading && !leaveRecords.length"
@@ -475,7 +494,10 @@ onMounted(() => {
     >
       <template #skeleton><TableSkeleton :columns="8" /></template>
       <template #empty><el-empty description="尚無請假紀錄" /></template>
-      <el-table :data="leaveRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+      <el-table :data="filteredLeaves" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+      <template #empty>
+        <el-empty :description="leaveSearch ? '沒有符合搜尋條件的請假紀錄' : '尚無請假紀錄'" />
+      </template>
       <el-table-column type="selection" width="45" />
       <el-table-column prop="employee_name" label="員工" width="100" />
       <el-table-column label="假別" width="100">

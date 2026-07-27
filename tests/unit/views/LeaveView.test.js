@@ -54,7 +54,9 @@ const mockCloseDialog = vi.fn()
 const mockResetCalculatorState = vi.fn()
 const mockPopulateFormFromRecord = vi.fn()
 
-vi.mock('@/composables', () => ({
+vi.mock('@/composables', async () => ({
+  // 客端過濾走真實實作：搜尋收斂行為是本元件的受測邏輯之一
+  useClientTableFilter: (await vi.importActual('@/composables/useClientTableFilter')).useClientTableFilter,
   useDateQuery: () => ({
     currentYear: 2026,
     query: { year: 2026, month: 3, employee_id: null },
@@ -128,6 +130,7 @@ vi.mock('element-plus', () => ({
 // ── global stubs ───────────────────────────────────────────────────────────
 const GLOBAL_STUBS = {
   TableSkeleton: true,
+  AdminListToolbar: true,
   LeaveAttachmentDialog: true,
   LeaveBatchRejectDialog: true,
   LeaveImportDialog: true,
@@ -227,6 +230,45 @@ describe('LeaveView', () => {
 
       expect(mockFetchEmployees).toHaveBeenCalled()
       expect(getApprovalPolicies).toHaveBeenCalled()
+    })
+  })
+
+  // ── 關鍵字搜尋（客端過濾）─────────────────────────────────────────────────
+
+  describe('關鍵字搜尋', () => {
+    const records = [
+      { id: 1, employee_name: '王小明', reason: '家事', leave_type: 'personal' },
+      { id: 2, employee_name: '李大華', reason: '回診複查', leave_type: 'annual' },
+    ]
+
+    it('依員工姓名收斂 filteredLeaves', async () => {
+      getLeaves.mockResolvedValue({ data: records })
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.leaveSearch = '王小'
+      expect(wrapper.vm.$.setupState.filteredLeaves).toEqual([records[0]])
+      expect(wrapper.vm.$.setupState.leaveShown).toBe(1)
+      expect(wrapper.vm.$.setupState.leaveTotal).toBe(2)
+    })
+
+    it('依請假原因也可命中', async () => {
+      getLeaves.mockResolvedValue({ data: records })
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.leaveSearch = '回診'
+      expect(wrapper.vm.$.setupState.filteredLeaves).toEqual([records[1]])
+    })
+
+    it('清空搜尋字串時還原全部資料', async () => {
+      getLeaves.mockResolvedValue({ data: records })
+      const wrapper = mountLeaveView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.leaveSearch = '王小'
+      wrapper.vm.$.setupState.leaveSearch = ''
+      expect(wrapper.vm.$.setupState.filteredLeaves).toEqual(records)
     })
   })
 
