@@ -9,7 +9,8 @@ import { Plus, Check, Close, UploadFilled, Loading, Warning } from '@element-plu
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
-import { useCrudDialog, useConfirmDelete, useDateQuery, useFetchPending, useApprovalOperation } from '@/composables'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import { useCrudDialog, useConfirmDelete, useDateQuery, useFetchPending, useApprovalOperation, useClientTableFilter } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
@@ -31,6 +32,17 @@ const activeSection = ref('overtime')
 const loading = ref(false)
 const overtimeRecords = ref<Record<string, unknown>[]>([])
 const { items: pendingRecords, fetch: silentFetchPending } = useFetchPending(getOvertimes)
+
+// 客端關鍵字過濾：單月資料已全載，姓名/事由即打即濾，與上方年月/員工下拉（伺服器端）交集
+const {
+  searchQuery: overtimeSearch,
+  filtered: filteredOvertimes,
+  total: overtimeTotal,
+  shown: overtimeShown,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => overtimeRecords.value,
+  searchFields: (r) => [r.employee_name as string | undefined, r.reason as string | undefined],
+})
 
 
 const form = reactive<{
@@ -421,6 +433,13 @@ watch(activeSection, async (value) => {
           </el-table>
         </el-card>
 
+        <AdminListToolbar
+          v-model:search="overtimeSearch"
+          search-placeholder="搜尋員工姓名或加班事由"
+          :total="overtimeTotal"
+          :shown="overtimeShown"
+        />
+
         <LoadingPanel
           :loading="loading && !overtimeRecords.length"
           :empty="!loading && !overtimeRecords.length"
@@ -429,7 +448,10 @@ watch(activeSection, async (value) => {
         >
           <template #skeleton><TableSkeleton :columns="8" /></template>
           <template #empty><el-empty description="尚無加班紀錄" /></template>
-          <el-table :data="overtimeRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+          <el-table :data="filteredOvertimes" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+          <template #empty>
+            <el-empty :description="overtimeSearch ? '沒有符合搜尋條件的加班紀錄' : '尚無加班紀錄'" />
+          </template>
           <el-table-column type="selection" width="45" />
           <el-table-column prop="employee_name" label="員工" width="100" />
           <el-table-column prop="overtime_date" label="日期" width="120" />

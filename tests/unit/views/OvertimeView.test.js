@@ -51,7 +51,9 @@ vi.mock('@/stores/employee', () => ({
 }))
 
 // ── composables mock ───────────────────────────────────────────────────────
-vi.mock('@/composables', () => ({
+vi.mock('@/composables', async () => ({
+  // 客端過濾走真實實作：搜尋收斂行為是本元件的受測邏輯之一
+  useClientTableFilter: (await vi.importActual('@/composables/useClientTableFilter')).useClientTableFilter,
   useDateQuery: () => ({
     currentYear: 2026,
     query: { year: 2026, month: 3, employee_id: null },
@@ -116,6 +118,7 @@ vi.mock('element-plus', () => ({
 // ── global stubs ───────────────────────────────────────────────────────────
 const GLOBAL_STUBS = {
   TableSkeleton: true,
+  AdminListToolbar: true,
   MeetingManagementPanel: true,
   'el-tabs': { template: '<div><slot /></div>' },
   'el-tab-pane': { template: '<div><slot /></div>' },
@@ -216,6 +219,45 @@ describe('OvertimeView', () => {
 
       // getOvertimes 不應被呼叫（pending 與正常查詢都跳過）
       expect(getOvertimes).not.toHaveBeenCalled()
+    })
+  })
+
+  // ── 關鍵字搜尋（客端過濾）─────────────────────────────────────────────────
+
+  describe('關鍵字搜尋', () => {
+    const records = [
+      { id: 1, employee_name: '王小明', reason: '專案趕工', hours: 2 },
+      { id: 2, employee_name: '李大華', reason: '月底盤點', hours: 3 },
+    ]
+
+    it('依員工姓名收斂 filteredOvertimes', async () => {
+      getOvertimes.mockResolvedValue({ data: records })
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.overtimeSearch = '王小'
+      expect(wrapper.vm.$.setupState.filteredOvertimes).toEqual([records[0]])
+      expect(wrapper.vm.$.setupState.overtimeShown).toBe(1)
+      expect(wrapper.vm.$.setupState.overtimeTotal).toBe(2)
+    })
+
+    it('依事由也可命中', async () => {
+      getOvertimes.mockResolvedValue({ data: records })
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.overtimeSearch = '盤點'
+      expect(wrapper.vm.$.setupState.filteredOvertimes).toEqual([records[1]])
+    })
+
+    it('清空搜尋字串時還原全部資料', async () => {
+      getOvertimes.mockResolvedValue({ data: records })
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.overtimeSearch = '王小'
+      wrapper.vm.$.setupState.overtimeSearch = ''
+      expect(wrapper.vm.$.setupState.filteredOvertimes).toEqual(records)
     })
   })
 
