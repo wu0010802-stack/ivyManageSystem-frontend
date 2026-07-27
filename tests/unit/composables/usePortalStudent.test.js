@@ -49,8 +49,12 @@ describe('usePortalStudent', () => {
     revealPortalStudentPhone.mockResolvedValue({
       data: { phone: '0912345678' },
     })
+    getPortalStudentDetail.mockResolvedValue({ data: { student: { id: 5 } } })
 
     const ps = usePortalStudent()
+    // 電話快取以 studentId 隔離（e08b108d）：currentStudentId 只在 loadDetail 設定，
+    // 未先載入學生時 revealPhone 會被 request-sequence guard 判為過期而 return null。
+    await ps.loadDetail(5)
     const phone = await ps.revealPhone({
       studentId: 5,
       target: 'parent',
@@ -69,7 +73,10 @@ describe('usePortalStudent', () => {
       .mockResolvedValueOnce({ data: { phone: '0911111111' } })
       .mockResolvedValueOnce({ data: { phone: '0922222222' } })
 
+    getPortalStudentDetail.mockResolvedValue({ data: { student: { id: 1 } } })
+
     const ps = usePortalStudent()
+    await ps.loadDetail(1) // 建立 currentStudentId，否則 reveal 一律被 guard 擋掉
     await ps.revealPhone({ studentId: 1, target: 'guardian', guardianId: 10 })
     await ps.revealPhone({ studentId: 1, target: 'guardian', guardianId: 11 })
 
@@ -83,7 +90,10 @@ describe('usePortalStudent', () => {
       data: { phone: '0912345678' },
     })
 
+    getPortalStudentDetail.mockResolvedValue({ data: { student: { id: 1 } } })
+
     const ps = usePortalStudent()
+    await ps.loadDetail(1) // 建立 currentStudentId，否則 reveal 不會寫入快取、節流測不到
     await ps.revealPhone({ studentId: 1, target: 'parent' })
     expect(revealPortalStudentPhone).toHaveBeenCalledTimes(1)
 
