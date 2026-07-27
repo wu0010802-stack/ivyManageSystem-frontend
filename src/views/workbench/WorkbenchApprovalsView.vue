@@ -10,14 +10,19 @@ import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatDate, formatTime } from '@/utils/format'
 import { useFetchPending, useApprovalOperation, useClientTableFilter } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
+import { useIsMobile } from '@/composables/useIsMobile'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 import LeaveBatchRejectDialog from '@/views/leave/LeaveBatchRejectDialog.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
 import { getApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
 import { isSuperAdmin } from '@/utils/auth'
 
 const router = useRouter()
+
+// 手機版（≤767.98px）：三個待簽核佇列改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 // 首載完成後翻為 false；按「重新整理」雖然 loading 會再 true，isFirstLoad 不會回 true。
@@ -245,6 +250,31 @@ const overtimeTypeLabel = (type: string) => (overtimeTypeMap as StatusMap)[type]
 const correctionTypeTagType = (type: string): ElTagType => ((correctionTypeMap as StatusMap)[type]?.type as ElTagType) || 'info'
 const correctionTypeLabel = (type: string) => (correctionTypeMap as StatusMap)[type]?.label || type
 
+// ── 手機卡片視圖欄位（三佇列各挑 4-5 個關鍵欄，沿用桌機表格既有格式化函式與 map）──
+const leaveCardColumns = [
+  { label: '假別', prop: '__leaveType', formatter: (item: Record<string, unknown>) => (leaveTypeMap as StatusMap)[item.leave_type as string]?.label || (item.leave_type as string) },
+  { label: '請假區間', prop: '__leaveRange', formatter: (item: Record<string, unknown>) => `${item.start_date as string} ${(item.start_time as string) || ''} ~ ${item.end_date as string} ${(item.end_time as string) || ''}` },
+  { label: '時數 / 扣薪', prop: '__leaveHours', formatter: (item: Record<string, unknown>) => `${item.leave_hours}h・${formatDeductionRatio(item.deduction_ratio as number | null | undefined)}` },
+  { label: '代理人', prop: '__substitute', formatter: (item: Record<string, unknown>) => (item.substitute_employee_name as string) || '未指定代理人' },
+  { label: '申請時間', prop: '__appliedAt', formatter: (item: Record<string, unknown>) => formatDateTime(item.created_at as string | null | undefined) },
+]
+
+const overtimeCardColumns = [
+  { label: '日期', prop: 'overtime_date' },
+  { label: '類型 / 時段', prop: '__overtimeType', formatter: (item: Record<string, unknown>) => `${overtimeTypeLabel(item.overtime_type as string)}・${(item.start_time as string) || '-'} ~ ${(item.end_time as string) || '-'}` },
+  { label: '時數 / 補休', prop: '__overtimeHours', formatter: (item: Record<string, unknown>) => `${item.hours}h・${item.use_comp_leave ? '換補休' : '領加班費'}` },
+  { label: '加班費', prop: '__overtimePay', formatter: (item: Record<string, unknown>) => money(item.overtime_pay) },
+  { label: '申請時間', prop: '__appliedAt', formatter: (item: Record<string, unknown>) => formatDateTime(item.created_at as string | null | undefined) },
+]
+
+const correctionCardColumns = [
+  { label: '考勤日期', prop: 'attendance_date' },
+  { label: '補正類型', prop: '__correctionType', formatter: (item: Record<string, unknown>) => correctionTypeLabel(item.correction_type as string) || (item.correction_type_label as string) },
+  { label: '申請時段', prop: '__correctionShift', formatter: (item: Record<string, unknown>) => `上班 ${formatTime(item.requested_punch_in)}・下班 ${formatTime(item.requested_punch_out)}` },
+  { label: '說明原因', prop: 'reason' },
+  { label: '申請時間', prop: '__appliedAt', formatter: (item: Record<string, unknown>) => formatDateTime(item.created_at as string | null | undefined) },
+]
+
 // ── super_admin 核准整張（spec §6.2）──
 // 按鈕可見性走前端 flags（isSuperAdmin），資格權威在後端（finalize_all 非 super_admin 即 403）
 const showFinalize = isSuperAdmin()
@@ -406,6 +436,26 @@ onMounted(() => {
         </div>
       </template>
 
+      <AdminListCards
+        v-if="isMobile"
+        :items="filteredLeaves"
+        :columns="leaveCardColumns"
+        row-key="id"
+        :loading="isFirstLoad && loading"
+        empty-text="目前沒有待簽核的請假申請"
+      >
+        <template #title="{ item }">
+          <span>{{ item.employee_name }}</span>
+          <el-tag size="small" effect="plain" :type="submitterRoleType(item.submitter_role as string)">
+            {{ formatSubmitterRole(item.submitter_role as string) }}
+          </el-tag>
+        </template>
+        <template #actions="{ item }">
+          <el-button type="success" size="small" @click="approveLeave(item, true)">核准</el-button>
+          <el-button type="danger" size="small" @click="approveLeave(item, false)">駁回</el-button>
+        </template>
+      </AdminListCards>
+      <template v-else>
       <TableSkeleton v-if="isFirstLoad && loading" :columns="9" :rows="3" />
       <el-table
         v-else-if="pendingLeaves.length > 0"
@@ -522,6 +572,7 @@ onMounted(() => {
       </el-table>
 
       <el-empty v-else-if="!isFirstLoad" description="目前沒有待簽核的請假申請" :image-size="60" />
+      </template>
     </el-card>
 
     <el-card class="section-card overtime-card" shadow="hover">
@@ -543,6 +594,26 @@ onMounted(() => {
         </div>
       </template>
 
+      <AdminListCards
+        v-if="isMobile"
+        :items="filteredOvertimes"
+        :columns="overtimeCardColumns"
+        row-key="id"
+        :loading="isFirstLoad && loading"
+        empty-text="目前沒有待簽核的加班申請"
+      >
+        <template #title="{ item }">
+          <span>{{ item.employee_name }}</span>
+          <el-tag size="small" effect="plain" :type="submitterRoleType(item.submitter_role as string)">
+            {{ formatSubmitterRole(item.submitter_role as string) }}
+          </el-tag>
+        </template>
+        <template #actions="{ item }">
+          <el-button type="success" size="small" @click="approveOvertime(item, true)">核准</el-button>
+          <el-button type="danger" size="small" @click="approveOvertime(item, false)">駁回</el-button>
+        </template>
+      </AdminListCards>
+      <template v-else>
       <TableSkeleton v-if="isFirstLoad && loading" :columns="9" :rows="3" />
       <el-table
         v-else-if="pendingOvertimes.length > 0"
@@ -635,6 +706,7 @@ onMounted(() => {
       </el-table>
 
       <el-empty v-else-if="!isFirstLoad" description="目前沒有待簽核的加班申請" :image-size="60" />
+      </template>
     </el-card>
 
     <el-card class="section-card correction-card" shadow="hover">
@@ -656,6 +728,23 @@ onMounted(() => {
         </div>
       </template>
 
+      <AdminListCards
+        v-if="isMobile"
+        :items="filteredCorrections"
+        :columns="correctionCardColumns"
+        row-key="id"
+        :loading="isFirstLoad && loading"
+        empty-text="目前沒有待簽核的補打卡申請"
+      >
+        <template #title="{ item }">
+          <span>{{ item.employee_name }}</span>
+        </template>
+        <template #actions="{ item }">
+          <el-button type="success" size="small" @click="approveCorrection(item, true)">核准</el-button>
+          <el-button type="danger" size="small" @click="approveCorrection(item, false)">駁回</el-button>
+        </template>
+      </AdminListCards>
+      <template v-else>
       <TableSkeleton v-if="isFirstLoad && loading" :columns="8" :rows="3" />
       <el-table
         v-else-if="pendingPunchCorrections.length > 0"
@@ -724,6 +813,7 @@ onMounted(() => {
       </el-table>
 
       <el-empty v-else-if="!isFirstLoad" description="目前沒有待簽核的補打卡申請" :image-size="60" />
+      </template>
     </el-card>
 
     <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleL" v-model:reason="batchRejectReasonL" :loading="batchLoadingL" @confirm="confirmBatchRejectL" />
