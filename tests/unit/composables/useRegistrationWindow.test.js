@@ -51,7 +51,7 @@ describe('useRegistrationWindow', () => {
     const { wrapper, get } = mountWithComposable({ timeInfo, submitting })
     expect(get().noticeState.value).toBeNull()
     expect(get().isRegistrationOpen.value).toBe(true)
-    expect(get().submitButtonLabel.value).toBe('確認報名資料')
+    expect(get().submitButtonLabel.value).toBe('送出報名')
     expect(get().submitButtonDisabled.value).toBe(false)
     wrapper.unmount()
   })
@@ -69,7 +69,7 @@ describe('useRegistrationWindow', () => {
     expect(get().noticeState.value?.variant).toBe('is-warning')
     // 回歸：截止前提醒只是提示，報名視窗仍開放，送出按鈕不得鎖死
     expect(get().isRegistrationOpen.value).toBe(true)
-    expect(get().submitButtonLabel.value).toBe('確認報名資料')
+    expect(get().submitButtonLabel.value).toBe('送出報名')
     expect(get().submitButtonDisabled.value).toBe(false)
     wrapper.unmount()
   })

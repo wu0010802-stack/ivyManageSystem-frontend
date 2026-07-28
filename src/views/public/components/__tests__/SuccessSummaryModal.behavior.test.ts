@@ -157,3 +157,24 @@ describe('複製就地回饋', () => {
     expect(wrapper.find('[aria-live="polite"]').exists()).toBe(true)
   })
 })
+
+describe('候補快照標註（critique 2026-07-28）', () => {
+  it('waitlisted 課程顯示「依序候補」徽章與合計說明', () => {
+    const wrapper = mountModal({
+      selectedCourses: [
+        { name: '幼兒體適能', price: 2600 },
+        { name: '額滿舞蹈班', price: 1800, waitlisted: true },
+      ],
+      totalAmount: 3550,
+    })
+    expect(wrapper.text()).toContain('依序候補')
+    expect(wrapper.find('.receipt-waitlist-note').exists()).toBe(true)
+    expect(wrapper.find('.receipt-amount.is-waitlisted').exists()).toBe(true)
+  })
+
+  it('無候補課程時不顯示徽章與說明', () => {
+    const wrapper = mountModal()
+    expect(wrapper.text()).not.toContain('依序候補')
+    expect(wrapper.find('.receipt-waitlist-note').exists()).toBe(false)
+  })
+})

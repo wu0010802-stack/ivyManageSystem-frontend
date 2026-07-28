@@ -20,7 +20,6 @@ interface AdvisoryChip { severity: string; message: string }
 
 const props = withDefaults(defineProps<{
   courses: CourseItem[]
-  optionsLoading?: boolean
   selectedCourses: string[]
   videos?: Record<string, string>
   errorMessage?: string
@@ -29,7 +28,6 @@ const props = withDefaults(defineProps<{
   courseAdvisory: (course: CourseItem) => AdvisoryChip[]
   isActiveStep?: boolean
 }>(), {
-  optionsLoading: false,
   videos: () => ({}),
   errorMessage: '',
   isActiveStep: false,
@@ -147,8 +145,10 @@ onUnmounted(cancelPreview)
         aria-label="才藝課程選項"
         tabindex="-1"
       >
-        <div v-if="optionsLoading" class="empty-hint">載入中…</div>
-        <div v-else-if="courses.length === 0" class="empty-hint">目前尚無可報名課程</div>
+        <!-- 死 prop 清理（critique 2026-07-28）：optionsLoading 一路綁到
+             usePublicActivityOptions 內從未 set true 的 ref；bootstrap 載入期間
+             母頁已改中性 init-loading 面板、不會渲染到這裡，載入分支不可達 -->
+        <div v-if="courses.length === 0" class="empty-hint">目前尚無可報名課程</div>
         <div
           v-for="course in courses"
           v-else
@@ -386,7 +386,9 @@ onUnmounted(cancelPreview)
   margin: 3px 0 0 0;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--color-success-soft);
+  /* 未勾邊框需達 WCAG 1.4.11 非文字對比 3:1；舊 --color-success-soft（#dcfce7）
+     對白底僅 1.07:1，家長看不出卡片可勾選 */
+  border: 2px solid var(--color-text-subtle);
   border-radius: 5px;
   background-color: var(--color-surface);
   background-position: center;

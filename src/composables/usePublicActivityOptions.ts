@@ -11,8 +11,6 @@ export function usePublicActivityOptions() {
   const supplies = ref<PublicSupplyOption[]>([])
   const classes = ref<string[]>([])
   const videos = ref<PublicCourseVideos>({})
-  const loading = ref(false)
-  const error = ref<unknown>(null)
 
   // 共用填值邏輯：兩公開頁都由 /public/bootstrap 合併端點取資料後用此填入 refs。
   // （原 loadOptions 的 4 支並行個別 GET 已下線，bootstrap 單支 GET 取代。）
@@ -30,5 +28,7 @@ export function usePublicActivityOptions() {
     videos.value = (payload.videos as PublicCourseVideos) ?? {}
   }
 
-  return { courses, supplies, classes, videos, loading, error, applyOptions }
+  // loading/error 已移除（critique 2026-07-28）：自 bootstrap 單支 GET 取代個別
+  // loadOptions 後，兩者從未被寫入，卻讓 view 誤以為有真實的載入狀態可綁
+  return { courses, supplies, classes, videos, applyOptions }
 }

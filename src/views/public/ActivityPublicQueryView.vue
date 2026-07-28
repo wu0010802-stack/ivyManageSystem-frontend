@@ -1,5 +1,13 @@
 <template>
   <div class="public-query-page">
+    <!-- SVG Sprite（與報名頁同語彙的 lucide 線稿；取代 emoji 標題 icon） -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+      <symbol id="q-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
+      <symbol id="q-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></symbol>
+      <symbol id="q-star" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M11.05 2.6a1 1 0 0 1 1.9 0l1.93 4.53 4.9.42a1 1 0 0 1 .59 1.75l-3.72 3.23 1.12 4.8a1 1 0 0 1-1.55 1.06L12 15.9l-4.22 2.5a1 1 0 0 1-1.55-1.07l1.12-4.8-3.72-3.22a1 1 0 0 1 .59-1.75l4.9-.42z" /></symbol>
+      <symbol id="q-back" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></symbol>
+    </svg>
+
     <ToastStack :toasts="toasts" @dismiss="dismissToast" />
 
     <div class="page-wrapper">
@@ -21,28 +29,37 @@
         <div class="page-meta">
           <h1 class="page-title-main">查詢 / 修改報名資料</h1>
           <div class="page-subtitle">Query &amp; Edit Registration</div>
+          <!-- 死巷修正：本頁任何狀態都要有回報名頁的顯式路徑 -->
+          <button type="button" class="page-backlink" @click="goBackToRegistration">
+            <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#q-back" /></svg>
+            回才藝報名頁
+          </button>
         </div>
       </header>
 
       <!-- 搜尋區 -->
       <section class="search-section">
         <div class="search-box">
-          <div class="mode-tabs" role="tablist">
+          <div class="mode-tabs" role="tablist" @keydown="onTablistKeydown">
             <button
+              ref="tokenTabRef"
               type="button"
               role="tab"
               :aria-selected="queryMode === 'token'"
               aria-controls="queryPanelToken"
+              :tabindex="queryMode === 'token' ? 0 : -1"
               :class="['mode-tab', { active: queryMode === 'token' }]"
-              @click="queryMode = 'token'"
+              @click="switchQueryMode('token')"
             >查詢碼 + 手機</button>
             <button
+              ref="fieldsTabRef"
               type="button"
               role="tab"
               :aria-selected="queryMode === 'fields'"
               aria-controls="queryPanelFields"
+              :tabindex="queryMode === 'fields' ? 0 : -1"
               :class="['mode-tab', { active: queryMode === 'fields' }]"
-              @click="queryMode = 'fields'"
+              @click="switchQueryMode('fields')"
             >姓名 + 生日 + 手機</button>
           </div>
 
@@ -195,7 +212,10 @@
       <!-- 候補已升正式待確認 -->
       <section v-if="pendingPromotions.length > 0" class="result-section">
         <div class="result-header promotion-header">
-          <h2>🎉 您有候補已升為正式</h2>
+          <h2>
+            <svg class="icon icon-star" width="20" height="20" aria-hidden="true"><use href="#q-star" /></svg>
+            您有候補已升為正式
+          </h2>
         </div>
         <div class="info-hint promotion-hint">
           <strong>須於期限前確認：</strong>請於各項目截止時間前完成確認，
@@ -214,7 +234,7 @@
             截止：{{ formatDeadline(item.confirm_deadline) }}
             <span class="promotion-countdown">（{{ formatCountdown(item.confirm_deadline) }}）</span>
           </div>
-          <div v-if="canMutate" class="promotion-card-actions">
+          <div v-if="canMutate && pendingDeclineFor !== item.name" class="promotion-card-actions">
             <button
               type="button"
               class="btn btn-primary btn-sm"
@@ -227,14 +247,43 @@
               type="button"
               class="btn btn-outline btn-sm"
               :disabled="promotionSubmitting === item.course_id"
-              @click="handleDeclinePromotion(item)"
+              @click="requestDeclinePromotion(item.name)"
             >
               放棄此位
             </button>
           </div>
+          <!-- 放棄＝不可逆（名額立即釋出），就地二段確認取代 modal -->
+          <div
+            v-else-if="canMutate"
+            class="decline-confirm"
+            role="alert"
+            data-test="decline-confirm"
+          >
+            <p class="decline-confirm-text">
+              確定放棄「{{ item.name }}」的候補位置？名額將釋出給下一位候補，此動作無法復原。
+            </p>
+            <div class="decline-confirm-actions">
+              <button
+                type="button"
+                class="btn btn-danger-outline btn-sm"
+                :disabled="promotionSubmitting === item.course_id"
+                @click="confirmDeclinePromotion(item)"
+              >
+                {{ promotionSubmitting === item.course_id ? '處理中…' : '確定放棄' }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                @click="cancelDeclinePromotion"
+              >
+                保留候補
+              </button>
+            </div>
+          </div>
           <!-- 資安 #5：三欄查詢（無 token）載入 token-bearing 報名時，候補確認/放棄須改用查詢連結 -->
           <div v-else class="info-hint mutation-locked-hint">
-            🔒 確認 / 放棄候補需使用「報名時取得的查詢連結」。請改用查詢連結開啟本頁，或聯繫校方協助。
+            <svg class="icon icon-lock" width="13" height="13" aria-hidden="true"><use href="#q-lock" /></svg>
+            確認 / 放棄候補需使用「報名時取得的查詢連結」。請改用查詢連結開啟本頁，或聯繫校方協助。
           </div>
         </div>
       </section>
@@ -277,7 +326,8 @@
           class="info-hint mutation-locked-hint"
           data-test="payment-locked-hint"
         >
-          🔒 此筆報名已完成付款，為保障金流與資料一致性，無法於前台直接修改，如需異動請聯繫校方協助處理。
+          <svg class="icon icon-lock" width="13" height="13" aria-hidden="true"><use href="#q-lock" /></svg>
+          此筆報名已完成付款，為保障金流與資料一致性，無法於前台直接修改，如需異動請聯繫校方協助處理。
         </div>
         <!-- F5：報名時段不可修改（已截止／尚未開放／尚未開始，付款鎖定優先於此判斷）；
              文案直接沿用 noticeState，避免不同關閉原因都被誤標成「已截止」 -->
@@ -286,7 +336,8 @@
           class="info-hint mutation-locked-hint"
           data-test="registration-closed-hint"
         >
-          🔒 {{ noticeState?.title }}：{{ noticeState?.message }}
+          <svg class="icon icon-lock" width="13" height="13" aria-hidden="true"><use href="#q-lock" /></svg>
+          {{ noticeState?.title }}：{{ noticeState?.message }}
         </div>
         <template v-else>
           <div v-if="canMutate" class="info-hint">
@@ -294,7 +345,8 @@
           </div>
           <!-- 資安 #5：三欄查詢（無 token）載入 token-bearing 報名時僅供檢視 -->
           <div v-else class="info-hint mutation-locked-hint">
-            🔒 此報名需使用「報名時取得的查詢連結」才能修改。目前查詢僅供檢視；
+            <svg class="icon icon-lock" width="13" height="13" aria-hidden="true"><use href="#q-lock" /></svg>
+            此報名需使用「報名時取得的查詢連結」才能修改。目前查詢僅供檢視；
             如需修改，請改用查詢連結開啟本頁，或聯繫校方協助。
           </div>
         </template>
@@ -305,7 +357,10 @@
           class="waitlist-summary"
           data-test="waitlist-summary"
         >
-          <div class="waitlist-summary-title">⏳ 候補狀態</div>
+          <div class="waitlist-summary-title">
+            <svg class="icon icon-clock" width="14" height="14" aria-hidden="true"><use href="#q-clock" /></svg>
+            候補狀態
+          </div>
           <div
             v-for="wc in waitlistCourses"
             :key="wc.course_id"
@@ -555,7 +610,7 @@
         </div>
 
         <div class="action-buttons">
-          <button type="button" class="btn btn-outline" @click="closeWindow">取消 Cancel</button>
+          <button type="button" class="btn btn-outline" @click="goBackToRegistration">回報名頁</button>
           <button
             type="button"
             class="btn btn-primary"
@@ -583,6 +638,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+// 公開頁設計 token 唯一權威（與報名頁共用，禁止頁內重定義同名變數）
+import '@/assets/public-theme.css'
 import { getPublicBootstrap } from '@/api/activityPublic'
 import type { PublicActivityTermParams } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
@@ -891,8 +949,42 @@ const {
   showToast,
 })
 
-function closeWindow() {
-  window.close()
+// 死巷修正（critique 2026-07-28）：本頁由報名頁 router.push 同窗導入或 LINE
+// 直開，皆非 script 開窗——舊 window.close() 會靜默失敗，按鈕形同虛設。
+// 改為顯式導回報名頁；編輯中有未存異動時沿用 beforeunload 同語意先確認。
+const router = useRouter()
+function goBackToRegistration() {
+  if (isEditFormDirty.value && !window.confirm('尚有未儲存的修改，確定要離開嗎？')) return
+  router.push({ name: 'public-activity' })
+}
+
+// 放棄候補＝不可逆（名額立即釋出給下一位），加一層就地二段確認，不用 modal。
+// 以 name 當 pending key（course_id 契約上可為 undefined，name 恆存在）
+const pendingDeclineFor = ref<string | null>(null)
+function requestDeclinePromotion(courseName: string) {
+  pendingDeclineFor.value = courseName
+}
+function cancelDeclinePromotion() {
+  pendingDeclineFor.value = null
+}
+async function confirmDeclinePromotion(item: Parameters<typeof handleDeclinePromotion>[0]) {
+  pendingDeclineFor.value = null
+  await handleDeclinePromotion(item)
+}
+
+// mode-tabs 完整 ARIA tabs 鍵盤語意：roving tabindex + 左右鍵切換
+const tokenTabRef = ref<HTMLButtonElement | null>(null)
+const fieldsTabRef = ref<HTMLButtonElement | null>(null)
+function switchQueryMode(mode: 'token' | 'fields') {
+  queryMode.value = mode
+  void nextTick(() => {
+    ;(mode === 'token' ? tokenTabRef : fieldsTabRef).value?.focus()
+  })
+}
+function onTablistKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  switchQueryMode(queryMode.value === 'token' ? 'fields' : 'token')
 }
 
 onMounted(async () => {
@@ -916,46 +1008,10 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* 設計 token 一律來自 assets/public-theme.css（公開頁唯一權威，於 <script> import；
+   曾經頁內複製一份而長期漂移成整套冷灰＋橙 CTA，critique 2026-07-28 判 P1），
+   此處只保留本頁私有的布局值。 */
 .public-query-page {
-  --color-bg: #fffbeb;
-  --color-surface: #ffffff;
-  --color-surface-muted: #fff8e1;
-  /* #7：既有 4 處裸寫 #f9fafb（唯讀/停用底色）抽成 local token；
-     刻意不沿用 --color-surface-muted 名稱，該 token 已是不同色值（暖黃 #fff8e1） */
-  --color-surface-readonly: #f9fafb;
-  /* #5：CTA/主色對齊 ActivityPublicView 已裁定的品牌綠系，不再用橙色 */
-  --color-primary: #0d9053;
-  --color-primary-hover: #166534;
-  --color-primary-soft: #dcfce7;
-  --color-primary-contrast: #ffffff;
-  --color-cta: #0d9053;
-  --color-cta-hover: #0caf76;
-  --color-cta-contrast: #ffffff;
-  --color-text: #1f2937;
-  --color-text-muted: #4b5563;
-  --color-text-subtle: #6b7280;
-  /* #1：public bundle 只 import design-tokens.css，main.css 的 --text-secondary/
-     --text-tertiary 未定義（見 spec #1）；此處對齊本檔既有文字色票補上，
-     不 import main.css（會拖入 Element Plus 覆寫，public 端無 EP） */
-  --text-secondary: var(--color-text-muted);
-  --text-tertiary: var(--color-text-subtle);
-  --color-border: #f2e6c9;
-  --color-border-muted: #e5e7eb;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fee2e2;
-  --color-warning: #d97706;
-  --color-success: #15803d;
-  --color-required: #e11d48;
-  --font-sans: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 15px; --fs-md: 16px; --fs-lg: 18px; --fs-xl: 22px;
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
-  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-full: 999px;
-  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
-  --shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.10);
-  --dur-fast: 150ms; --dur-slow: 320ms;
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --focus-ring: 0 0 0 3px rgba(13, 144, 83, 0.28);
-
   min-height: 100vh;
   padding: clamp(12px, 3vw, 20px);
   background-color: var(--color-bg);
@@ -1043,6 +1099,25 @@ onBeforeUnmount(() => {
   margin-top: var(--space-1);
 }
 
+/* 回報名頁：text-link 視覺（不與查詢主 CTA 搶重量） */
+.page-backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--space-2);
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.page-backlink:hover { background: var(--color-primary-soft); }
+.page-backlink .icon { flex-shrink: 0; }
+
 .search-section {
   padding: var(--space-6) var(--space-6);
   border-bottom: 1px solid var(--color-border);
@@ -1123,6 +1198,44 @@ onBeforeUnmount(() => {
   font-size: var(--fs-sm);
   color: var(--color-text-muted);
   margin-bottom: var(--space-4);
+}
+/* sprite icon 對齊行內文字（取代 emoji 後的基線調整） */
+.info-hint .icon-lock,
+.waitlist-summary-title .icon-clock {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.promotion-header h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.promotion-header .icon-star { color: var(--ivy-crown-gold); flex-shrink: 0; }
+
+/* 放棄候補的就地二段確認 */
+.decline-confirm {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: var(--radius-md);
+}
+.decline-confirm-text {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+.decline-confirm-actions { display: flex; gap: var(--space-3); }
+.btn-danger-outline {
+  background: var(--color-surface);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+.btn-danger-outline:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: #fff;
+  border-color: var(--color-danger);
 }
 
 /* F5：報名時段非阻斷式提醒（48h 內即將截止等），比照 ActivityPublicView.vue 的 .notice */
@@ -1340,7 +1453,8 @@ onBeforeUnmount(() => {
 
 .error-message {
   background: var(--color-danger-soft);
-  border-left: 4px solid var(--color-danger);
+  /* full border + tint，對齊報名頁的 side-stripe ban（不用單側粗邊） */
+  border: 1px solid rgba(220, 38, 38, 0.35);
   padding: var(--space-4);
   border-radius: var(--radius-md);
   color: var(--color-danger);

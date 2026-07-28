@@ -10,6 +10,7 @@ import { mount } from '@vue/test-utils'
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
+  useRouter: () => ({ push: vi.fn() }),
 }))
 
 vi.mock('@/api/activityPublic', () => ({
