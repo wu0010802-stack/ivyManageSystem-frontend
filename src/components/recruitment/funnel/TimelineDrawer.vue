@@ -99,7 +99,7 @@ function humanizeEventType(t: string): string {
 }
 .empty-area {
   text-align: center;
-  color: #999;
+  color: var(--text-tertiary);
   padding: 32px 0;
 }
 .timeline-list {
@@ -109,11 +109,11 @@ function humanizeEventType(t: string): string {
 }
 .timeline-item {
   padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--border-color-light);
 }
 .timeline-time {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 .timeline-event {
   display: flex;
@@ -127,12 +127,12 @@ function humanizeEventType(t: string): string {
 .timeline-stage {
   margin-top: 4px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
 }
 .timeline-reason {
   margin-top: 4px;
   font-size: 13px;
-  color: #555;
+  color: var(--text-secondary);
   font-style: italic;
 }
 </style>

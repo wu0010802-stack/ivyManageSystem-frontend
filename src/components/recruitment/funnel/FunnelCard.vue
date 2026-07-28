@@ -54,7 +54,7 @@ const termLabel = computed((): string | null =>
 
 <style scoped>
 .funnel-card {
-  background: #fff;
+  background: var(--surface-color);
   border-radius: 6px;
   padding: 10px 12px;
   margin-bottom: 8px;
@@ -89,7 +89,7 @@ const termLabel = computed((): string | null =>
 }
 .funnel-card__phone {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
   margin-top: 4px;
 }
 .funnel-card__meta {
@@ -97,14 +97,14 @@ const termLabel = computed((): string | null =>
   gap: 8px;
   margin-top: 4px;
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 .student-id-badge {
   display: inline-block;
   margin-top: 6px;
   padding: 2px 6px;
-  background: #ecf5ff;
-  color: #1989fa;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
   border-radius: 3px;
   font-size: 11px;
 }

@@ -8,6 +8,9 @@ const props = defineProps<{ year: number }>()
 const emit = defineEmits<{ stats: [n: number]; 'stats-error': [] }>()
 const loading = ref(false)
 const error = ref('')
+// 422 = 資料態尚未就緒（來源學年 cycle 未建立），非載入失敗：顯示後端 detail
+// 的引導空狀態，且不 emit stats-error（避免點亮父層「部分卡片載入失敗」橫幅）
+const notReady = ref(false)
 const count = ref(0)
 const totalAmount = ref(0)
 
@@ -16,14 +19,22 @@ const totalAmount = ref(0)
 async function load() {
   loading.value = true
   error.value = ''
+  notReady.value = false
   try {
     const rows = (await previewAppraisalPayout(props.year)).data
     count.value = rows.length
     totalAmount.value = rows.reduce((sum, r) => sum + Number(r.total_amount), 0)
     emit('stats', count.value)
   } catch (e) {
-    error.value = apiError(e, '載入失敗')
-    emit('stats-error')
+    const status = (e as { response?: { status?: number } } | null)?.response?.status
+    if (status === 422) {
+      notReady.value = true
+      error.value = apiError(e, '尚未建立來源考核週期')
+      emit('stats', 0)
+    } else {
+      error.value = apiError(e, '載入失敗')
+      emit('stats-error')
+    }
   } finally {
     loading.value = false
   }
@@ -41,8 +52,9 @@ onMounted(load)
       <p class="wb-card__subtitle">考核年終獎金 E 化轉帳</p>
     </template>
     <el-skeleton v-if="loading" :rows="2" animated />
+    <el-empty v-else-if="notReady" :description="error" :image-size="48" />
     <div v-else-if="error" class="wb-card__error">
-      載入失敗 <el-button size="small" text type="primary" @click="load">重試</el-button>
+      {{ error }} <el-button size="small" text type="primary" @click="load">重試</el-button>
     </div>
     <el-empty v-else-if="count === 0" description="本年度尚無可發放的考核年終" :image-size="48" />
     <template v-else>
