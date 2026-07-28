@@ -1,9 +1,11 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 
-// ── 模擬 vue-router（view 用 useRoute 取 query.token）──────────────────────
+// ── 模擬 vue-router（view 用 useRoute 取 query.token、useRouter 導回報名頁）──
+const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
+  useRouter: () => ({ push: routerPushMock }),
 }))
 
 // ── 模擬 API ──────────────────────────────────────────────────────────────
@@ -161,5 +163,38 @@ describe('ActivityPublicQueryView — a11y（#3/#4）', () => {
     const liveWrapper = resultSection?.closest('[aria-live="polite"]')
     expect(liveWrapper).not.toBeNull()
     expect(focusSpy).toHaveBeenCalled()
+  })
+})
+
+/**
+ * 死巷修正（critique 2026-07-28）：本頁由報名頁同窗導入或 LINE 直開，
+ * 舊「取消 Cancel」的 window.close() 靜默失敗；改為顯式導回報名頁，
+ * 且 header 常駐返回連結（查詢前也要有路徑可回）。
+ */
+describe('ActivityPublicQueryView — 回報名頁導航', () => {
+  it('header 返回連結存在，點擊導回 public-activity 路由', async () => {
+    const wrapper = await mountView()
+    await flushPromises()
+
+    const backlink = wrapper.find('.page-backlink')
+    expect(backlink.exists()).toBe(true)
+    await backlink.trigger('click')
+    expect(routerPushMock).toHaveBeenCalledWith({ name: 'public-activity' })
+  })
+
+  it('mode tab 支援左右方向鍵切換（roving tabindex）', async () => {
+    const wrapper = await mountView()
+    await flushPromises()
+
+    // 預設 queryMode='fields'：右側 tab 為 active（tabindex=0）
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs[0].attributes('tabindex')).toBe('-1')
+    expect(tabs[1].attributes('tabindex')).toBe('0')
+
+    await wrapper.find('[role="tablist"]').trigger('keydown', { key: 'ArrowLeft' })
+    await flushPromises()
+    expect(tabs[0].attributes('aria-selected')).toBe('true')
+    expect(tabs[0].attributes('tabindex')).toBe('0')
+    expect(tabs[1].attributes('aria-selected')).toBe('false')
   })
 })

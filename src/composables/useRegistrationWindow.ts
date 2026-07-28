@@ -101,7 +101,9 @@ export function useRegistrationWindow({ timeInfo, submitting }: { timeInfo: Ref<
   const submitButtonLabel = computed(() => {
     if (submitting.value) return '送出中…'
     if (!isRegistrationOpen.value) return noticeState.value?.title || '報名未開放'
-    return '確認報名資料'
+    // 不可與 Step 3 的步驟標題「確認報名資料」同字——按鈕必須表達「這是不可逆
+    // 的提交動作」，否則家長會以為只是再檢查一次
+    return '送出報名'
   })
 
   const submitButtonDisabled = computed(() => submitting.value || !isRegistrationOpen.value)
