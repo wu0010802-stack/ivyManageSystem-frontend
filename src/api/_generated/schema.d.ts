@@ -7869,6 +7869,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/activity/registrations/{registration_id}/decline-promotion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Promotion
+         * @description 家長放棄候補升位：刪除 promoted_pending 該列、清點名、遞補下一位。
+         *
+         *     設計審查 2026-07-28：LIFF 端原本只有 confirm 沒有 decline——不想上課的家長
+         *     只能放到 48h 確認窗過期（名額多卡 48h 才遞補）；Guardian 無有效手機的報名
+         *     （parent_phone=NULL、無 query_token）連公開端三欄/token 驗證都過不了，任何
+         *     管道都無法放棄。與公開端 public_decline_promotion 共用同一 service helper。
+         */
+        post: operations["decline_promotion_api_parent_activity_registrations__registration_id__decline_promotion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/activity/registrations/{registration_id}/payments": {
         parameters: {
             query?: never;
@@ -9581,6 +9606,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/colleagues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Colleagues
+         * @description 在職同事清單（供請假表單的職務代理人下拉），排除自己。
+         *
+         *     Why 需要教師端專用端點：前端原本走 useEmployeeStore → GET /api/employees，
+         *     那是管理端端點（require_staff_permission(EMPLOYEES_READ)），教師一定 403，
+         *     實測連 principal / supervisor 也沒有該權限 —— 代理人下拉因此永遠空白，
+         *     而錯誤又被 store 吞掉沒有 toast，老師會以為園所沒建員工資料。
+         *
+         *     ⚠ 篩選條件必須與 _validate_substitute 一致（非自己、在職），
+         *     否則會變成「下拉選得到但送出被擋」，比空白更難理解。
+         */
+        get: operations["get_colleagues_api_portal_colleagues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/contact-book": {
         parameters: {
             query?: never;
@@ -9818,6 +9871,14 @@ export interface paths {
         /**
          * Promote To Shared
          * @description 把個人範本升級為園所共用（需 PORTFOLIO_PUBLISH 權限）。
+         *
+         *     ⚠ 授權語意（2026-07-28 釐清）：持有 PORTFOLIO_PUBLISH 者**可以升級任何人的**個人
+         *     範本，不限於自己的。升級會把 owner_user_id 清成 NULL，原擁有者的個人清單中該範本
+         *     會消失（內容仍在，變成全園共用）。
+         *
+         *     這是目前的實際行為，非疏漏——本函式的 dependency 已要求 PORTFOLIO_PUBLISH
+         *     （管理員／主管層級），視同其職權範圍。若日後要收緊為「僅能升級自己的範本」，
+         *     需同時調整下方的檢查與 tests/test_contact_book_template_promote_scope_2026_07_28.py。
          */
         post: operations["promote_to_shared_api_portal_contact_book_templates__template_id__promote_post"];
         delete?: never;
@@ -18632,6 +18693,8 @@ export interface components {
             meeting_weekday?: number | null;
             /** Name */
             name: string;
+            /** Pending Review */
+            pending_review: number;
             /** Price */
             price: number;
             /** Promoted Pending */
@@ -18959,6 +19022,11 @@ export interface components {
             };
             /** Total Open */
             total_open: number;
+        };
+        /** DeclinePromotionPayload */
+        DeclinePromotionPayload: {
+            /** Course Id */
+            course_id: number;
         };
         /** DeductionTypeCreate */
         DeductionTypeCreate: {
@@ -24682,6 +24750,21 @@ export interface components {
         PortalBatchAttendanceUpdate: {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
+        };
+        /**
+         * PortalColleagueOut
+         * @description GET /portal/colleagues 單筆同事（僅供代理人下拉）。
+         *
+         *     只回下拉必要欄位，不外洩其他人事 PII。條件與送單時的 _validate_substitute 一致
+         *     （非自己、在職），避免出現「下拉選得到但送出被擋」。
+         */
+        PortalColleagueOut: {
+            /** Employee Id */
+            employee_id: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /**
          * PortalMyDataExportOut
@@ -33959,7 +34042,7 @@ export interface operations {
             query?: {
                 /** @description 若報名已有繳費金額，需顯式帶 true 才允許刪除並自動寫退費沖帳紀錄 */
                 force_refund?: boolean;
-                /** @description 當 force_refund 觸發實際退費時必填（≥5 字），原因會寫入 notes 供稽核 */
+                /** @description 當 force_refund 觸發實際退費時必填（≥ 15 字），原因會寫入 notes 供稽核 */
                 refund_reason?: string | null;
             };
             header?: never;
@@ -34030,7 +34113,7 @@ export interface operations {
             query?: {
                 /** @description 退課後若出現超繳，需顯式帶 true 才允許退課並自動寫退費沖帳紀錄 */
                 force_refund?: boolean;
-                /** @description 當 force_refund 觸發實際退費時必填（≥5 字），原因會寫入 notes 供稽核 */
+                /** @description 當 force_refund 觸發實際退費時必填（≥ 15 字），原因會寫入 notes 供稽核 */
                 refund_reason?: string | null;
             };
             header?: never;
@@ -34476,7 +34559,7 @@ export interface operations {
             query?: {
                 /** @description 移除用品後若出現超繳，需顯式帶 true 才允許移除並自動寫退費沖帳紀錄 */
                 force_refund?: boolean;
-                /** @description 當 force_refund 觸發實際退費時必填（≥5 字），原因會寫入 notes 供稽核 */
+                /** @description 當 force_refund 觸發實際退費時必填（≥ 15 字），原因會寫入 notes 供稽核 */
                 refund_reason?: string | null;
             };
             header?: never;
@@ -43002,7 +43085,7 @@ export interface operations {
                 /** @description 投保單位名稱 */
                 employer_name?: string;
                 /** @description xlsx（Excel）或 txt（純文字） */
-                fmt?: string;
+                fmt?: "xlsx" | "txt";
                 /** @description 繞過封存守衛（需金流簽核權限+force_reason） */
                 force?: boolean;
                 /** @description force=true 時必填的繞過原因 */
@@ -45938,6 +46021,41 @@ export interface operations {
             };
         };
     };
+    decline_promotion_api_parent_activity_registrations__registration_id__decline_promotion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registration_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclinePromotionPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     registration_payments_api_parent_activity_registrations__registration_id__payments_get: {
         parameters: {
             query?: never;
@@ -48554,6 +48672,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassHubTodayResponse"];
+                };
+            };
+        };
+    };
+    get_colleagues_api_portal_colleagues_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalColleagueOut"][];
                 };
             };
         };
