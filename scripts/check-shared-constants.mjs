@@ -43,15 +43,33 @@ export const SHARED_CONSTANTS = [
     fe: { file: "src/constants/activity.ts", symbol: "FULL_ATTENDANCE_BONUS" },
     be: { file: "utils/activity_constants.py", symbol: "GRADE_TARGET_BONUS" },
   },
+  // 2026-07-28 設計審查：原因字數門檻原本只靠註解人工同步，納入單側漂移守衛。
+  // 前端符號是 FIELD_RULES 物件屬性（`voidReasonMin: 5`），parseNumericConst
+  // 已支援冒號格式。
+  {
+    label: "軟刪繳費原因最短字數",
+    fe: { file: "src/constants/activity.ts", symbol: "voidReasonMin" },
+    be: { file: "utils/activity_constants.py", symbol: "MIN_VOID_REASON_LENGTH" },
+  },
+  {
+    label: "退費原因最短字數",
+    fe: { file: "src/constants/activity.ts", symbol: "refundReasonMin" },
+    be: { file: "utils/activity_constants.py", symbol: "MIN_REFUND_REASON_LENGTH" },
+  },
+  {
+    label: "日結解鎖原因最短字數",
+    fe: { file: "src/constants/activity.ts", symbol: "unlockReasonMin" },
+    be: { file: "schemas/activity_admin.py", symbol: "_UNLOCK_REASON_MIN_LENGTH" },
+  },
 ];
 
 /**
- * 解析 `export const NAME = 12345` / python `NAME = 12345`（允許 1_000 底線分隔、小數）。
- * 解析不到回 null（呼叫端視為失敗，不可靜默通過）。
+ * 解析 `export const NAME = 12345` / python `NAME = 12345` / 物件屬性 `name: 12345`
+ * （允許 1_000 底線分隔、小數）。解析不到回 null（呼叫端視為失敗，不可靜默通過）。
  */
 export function parseNumericConst(source, symbol) {
   const re = new RegExp(
-    `(?:export\\s+const\\s+)?\\b${symbol}\\b\\s*=\\s*([0-9_]+(?:\\.[0-9]+)?)`,
+    `(?:export\\s+const\\s+)?\\b${symbol}\\b\\s*[:=]\\s*([0-9_]+(?:\\.[0-9]+)?)`,
   );
   const m = source.match(re);
   if (!m) return null;
