@@ -10,7 +10,7 @@
           <el-input v-model="employer.name" placeholder="例：○○幼兒園" style="width:220px" />
         </el-form-item>
         <el-form-item label="統一編號 / 代碼">
-          <el-input v-model="employer.code" placeholder="8 位數統一編號" style="width:180px" />
+          <el-input v-model="employer.code" placeholder="8 位數統一編號" maxlength="8" style="width:180px" />
         </el-form-item>
       </el-form>
     </el-card>
@@ -92,7 +92,7 @@
             />
           </el-form-item>
           <el-form-item label="扣繳單位">
-            <el-input v-model="withholding.employerId" placeholder="統一編號" style="width:160px" />
+            <el-input v-model="withholding.employerId" placeholder="預設同上方統一編號" maxlength="8" style="width:180px" />
           </el-form-item>
           <el-form-item>
             <el-button
@@ -151,8 +151,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { AxiosResponse } from 'axios'
 import { Document, Money, Wallet } from '@element-plus/icons-vue'
 import { getLaborInsurance, getHealthInsurance, getWithholding, getPension } from '@/api/govReports'
 
@@ -162,15 +163,50 @@ import PageHeader from '@/components/common/PageHeader.vue'
 
 type ReportType = 'labor' | 'health' | 'withholding' | 'pension'
 
-const employer = reactive({ name: '', code: '' })
+// 雇主基本資料屬「填一次、長期不變」的設定，記在 localStorage 免每次進頁重填
+const EMPLOYER_STORAGE_KEY = 'gov-reports.employer'
+const TAX_ID_RE = /^\d{8}$/
+
+function _loadEmployer(): { name: string; code: string } {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(EMPLOYER_STORAGE_KEY) ?? '{}')
+    if (parsed && typeof parsed === 'object') {
+      const p = parsed as Record<string, unknown>
+      return {
+        name: typeof p.name === 'string' ? p.name : '',
+        code: typeof p.code === 'string' ? p.code : '',
+      }
+    }
+  } catch {
+    // 壞資料視同未儲存
+  }
+  return { name: '', code: '' }
+}
+
+const employer = reactive(_loadEmployer())
+
+watch(employer, () => {
+  localStorage.setItem(EMPLOYER_STORAGE_KEY, JSON.stringify({ name: employer.name, code: employer.code }))
+})
 
 // 目前作用中的申報項目（取代原 4 張並排 card 的 identical-grid 視覺）
 const activeReport = ref('labor')
 
-const labor = reactive<{ period: string | null; fmt: string }>({ period: null, fmt: 'xlsx' })
-const health = reactive<{ period: string | null }>({ period: null })
-const withholding = reactive<{ year: string | null; employerId: string }>({ year: null, employerId: '' })
-const pension = reactive<{ period: string | null }>({ period: null })
+// 申報常態：月報表報上個月、扣繳憑單報去年，預設帶好省去每次點選
+function _lastMonthPeriod(): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+const labor = reactive<{ period: string | null; fmt: string }>({ period: _lastMonthPeriod(), fmt: 'xlsx' })
+const health = reactive<{ period: string | null }>({ period: _lastMonthPeriod() })
+const withholding = reactive<{ year: string | null; employerId: string }>({
+  year: String(new Date().getFullYear() - 1),
+  employerId: '',
+})
+const pension = reactive<{ period: string | null }>({ period: _lastMonthPeriod() })
 
 const loading = reactive<Record<ReportType, boolean>>({ labor: false, health: false, withholding: false, pension: false })
 
@@ -188,60 +224,89 @@ function _triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+const _ym = (year: number, month: number) => `${year}${String(month).padStart(2, '0')}`
+
+function _employerParams() {
+  return {
+    employer_name: employer.name || undefined,
+    employer_code: employer.code || undefined,
+  }
+}
+
+// 各申報項目的請求與檔名組法；period/year 由按鈕 :disabled 保證非空
+const REPORT_BUILDERS: Record<ReportType, () => { request: Promise<AxiosResponse<Blob>>; filename: string }> = {
+  labor: () => {
+    const { year, month } = _parsePeriod(labor.period!)
+    const ext = labor.fmt === 'txt' ? 'txt' : 'xlsx'
+    return {
+      request: getLaborInsurance({ year, month, fmt: labor.fmt, ..._employerParams() }),
+      filename: `勞保投保薪資申報_${_ym(year, month)}.${ext}`,
+    }
+  },
+  health: () => {
+    const { year, month } = _parsePeriod(health.period!)
+    return {
+      request: getHealthInsurance({ year, month, ..._employerParams() }),
+      filename: `健保被保險人名冊_${_ym(year, month)}.xlsx`,
+    }
+  },
+  withholding: () => ({
+    request: getWithholding({
+      year: parseInt(withholding.year!),
+      employer_name: employer.name || undefined,
+      // 扣繳單位未另填時沿用上方統一編號，免重複輸入
+      employer_id: withholding.employerId || employer.code || undefined,
+    }),
+    filename: `扣繳憑單_${withholding.year}.xlsx`,
+  }),
+  pension: () => {
+    const { year, month } = _parsePeriod(pension.period!)
+    return {
+      request: getPension({ year, month, ..._employerParams() }),
+      filename: `勞退提繳明細_${_ym(year, month)}.xlsx`,
+    }
+  },
+}
+
+function _validTaxId(value: string, label: string): boolean {
+  if (value && !TAX_ID_RE.test(value)) {
+    ElMessage.warning(`${label}需為 8 位數字`)
+    return false
+  }
+  return true
+}
+
+// responseType: 'blob' 下後端 4xx 的 JSON detail 也會被包成 Blob，需解開才能給出具體訊息
+async function _blobErrorDetail(err: unknown): Promise<string | null> {
+  const data = (err as { response?: { data?: unknown } }).response?.data
+  if (data instanceof Blob && data.type.includes('application/json')) {
+    try {
+      const parsed: unknown = JSON.parse(await data.text())
+      const detail = (parsed as { detail?: unknown }).detail
+      if (typeof detail === 'string') return detail
+    } catch {
+      // 非 JSON 內容，交給通用訊息
+    }
+  }
+  return null
+}
+
 async function download(type: ReportType) {
+  if (!_validTaxId(employer.code, '統一編號')) return
+  if (type === 'withholding' && !_validTaxId(withholding.employerId, '扣繳單位統編')) return
+
   loading[type] = true
   try {
-    let res: { data: Blob } | undefined
-    let filename: string | undefined
-
-    if (type === 'labor') {
-      const { year, month } = _parsePeriod(labor.period!)
-      res = await getLaborInsurance({
-        year, month,
-        fmt: labor.fmt,
-        employer_name: employer.name || undefined,
-        employer_code: employer.code || undefined,
-      })
-      const ext = labor.fmt === 'txt' ? 'txt' : 'xlsx'
-      filename = `勞保投保薪資申報_${year}${String(month).padStart(2,'0')}.${ext}`
-
-    } else if (type === 'health') {
-      const { year, month } = _parsePeriod(health.period!)
-      res = await getHealthInsurance({
-        year, month,
-        employer_name: employer.name || undefined,
-        employer_code: employer.code || undefined,
-      })
-      filename = `健保被保險人名冊_${year}${String(month).padStart(2,'0')}.xlsx`
-
-    } else if (type === 'withholding') {
-      res = await getWithholding({
-        year: parseInt(withholding.year!),
-        employer_name: employer.name || undefined,
-        employer_id: withholding.employerId || undefined,
-      })
-      filename = `扣繳憑單_${withholding.year}.xlsx`
-
-    } else if (type === 'pension') {
-      const { year, month } = _parsePeriod(pension.period!)
-      res = await getPension({
-        year, month,
-        employer_name: employer.name || undefined,
-        employer_code: employer.code || undefined,
-      })
-      filename = `勞退提繳明細_${year}${String(month).padStart(2,'0')}.xlsx`
-    }
-
-    if (res && filename) {
-      _triggerDownload(res.data, filename)
-      ElMessage.success('下載成功')
-    }
+    const { request, filename } = REPORT_BUILDERS[type]()
+    const res = await request
+    _triggerDownload(res.data, filename)
+    ElMessage.success('下載成功')
   } catch (err) {
     const status = (err as { response?: { status?: number } }).response?.status
     if (status === 429) {
       ElMessage.warning('匯出過於頻繁，請稍後再試')
     } else {
-      ElMessage.error('下載失敗，請稍後再試')
+      ElMessage.error((await _blobErrorDetail(err)) ?? '下載失敗，請稍後再試')
     }
   } finally {
     loading[type] = false

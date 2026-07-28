@@ -212,8 +212,8 @@
             <el-icon><Histogram /></el-icon>
             <template #title>月度月報</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.REPORTS" index="/gov-reports">
-            <el-icon><Stamp /></el-icon>
+          <el-menu-item v-if="canView.GOV_REPORTS_EXPORT" index="/gov-reports">
+            <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>
           </el-menu-item>
           <el-menu-item v-if="canView.REPORTS" index="/reports">
@@ -267,7 +267,7 @@ import {
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Trophy, WarningFilled, Key,
   Suitcase, Promotion, Wallet, TrendCharts, Tickets, Coin, CircleCheck,
-  Memo, Histogram, Stamp, PieChart, Tools
+  Memo, Histogram, PieChart, Tools
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
 import { MODULE_TERMS } from '@/constants/moduleTerms'
@@ -347,7 +347,8 @@ const hasVisibleActivityItems = computed(() =>
 
 const hasVisibleReportsItems = computed(() =>
   canView.value.AUDIT_LOGS ||
-  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.DATA_QUALITY_READ
+  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.DATA_QUALITY_READ ||
+  canView.value.GOV_REPORTS_EXPORT
 )
 
 const hasVisibleSettingsItems = computed(() =>

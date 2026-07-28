@@ -56,3 +56,26 @@ describe('ROUTE_PERMISSION_RULES：/admin/gov-reports/* 子路徑', () => {
     expect(canAccessRoute('/admin/gov-reports/monthly')).toBe(false)
   })
 })
+
+describe('ROUTE_PERMISSION_RULES：/gov-reports（政府申報匯出）', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
+    clearAuth({ notifyServer: false })
+    localStorage.clear()
+    sessionStorage.clear()
+  })
+
+  it('權限對齊後端 api/gov_reports.py 的 GOV_REPORTS_EXPORT 守衛', () => {
+    const rule = ROUTE_PERMISSION_RULES.find((r) => r.path === '/gov-reports')
+    expect(rule).toBeDefined()
+    expect(rule.permission).toBe('GOV_REPORTS_EXPORT')
+  })
+
+  it('有 GOV_REPORTS_EXPORT 可進；僅 SALARY_READ 或 REPORTS 不可進', () => {
+    setUserInfo({ role: 'admin', permission_names: ['GOV_REPORTS_EXPORT'] })
+    expect(canAccessRoute('/gov-reports')).toBe(true)
+
+    setUserInfo({ role: 'admin', permission_names: ['SALARY_READ', 'REPORTS'] })
+    expect(canAccessRoute('/gov-reports')).toBe(false)
+  })
+})
