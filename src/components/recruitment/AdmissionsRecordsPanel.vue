@@ -139,7 +139,7 @@ function openJourney(row: Record<string, unknown>) {
 
 async function openConvertDialog(row: Record<string, unknown>) {
   if (row?.enrolled) {
-    ElMessage.warning('此訪視已標記為已報到')
+    ElMessage.warning('此訪視已標記為已註冊')
     return
   }
   convertTargetVisit.value = row

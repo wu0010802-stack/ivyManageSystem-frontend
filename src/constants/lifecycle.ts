@@ -28,7 +28,7 @@ export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number]
 
 export const LIFECYCLE_LABELS_ADMIN: Record<string, string> = {
   prospect: '招生中',
-  enrolled: '已報到',
+  enrolled: '已註冊',
   active: '在學',
   on_leave: '休學',
   transferred: '轉出',
@@ -38,7 +38,7 @@ export const LIFECYCLE_LABELS_ADMIN: Record<string, string> = {
 
 export const LIFECYCLE_LABELS_PORTAL: Record<string, string> = {
   prospect: '招生中',
-  enrolled: '已報到',
+  enrolled: '已註冊',
   active: '在學',
   on_leave: '休學',
   transferred: '轉學',

@@ -438,11 +438,11 @@ const close = () => emit('update:visible', false)
               </ul>
             </div>
 
-            <!-- 準新生／保留座位（尚未報到、不計入在學人數）-->
+            <!-- 準新生／保留座位（尚未註冊、不計入在學人數）-->
             <div v-if="prospects.length" class="prospect-section">
               <el-collapse>
                 <el-collapse-item
-                  :title="`準新生／保留座位（${prospects.length}）— 尚未報到、不計入在學人數`"
+                  :title="`準新生／保留座位（${prospects.length}）— 尚未註冊、不計入在學人數`"
                 >
                   <ul class="prospect-items">
                     <li v-for="p in prospects" :key="p.id" class="prospect-item">

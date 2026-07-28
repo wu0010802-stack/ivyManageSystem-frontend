@@ -105,8 +105,8 @@ const title = computed(() => {
   const labels: Record<Stage, string> = {
     visited: '已訪視',
     deposited: '已預繳',
-    enrolled: '已報到',
-    active: '已開學',
+    enrolled: '已註冊',
+    active: '退預繳／退註冊',
   }
   return `${labels[props.fromStage]} → ${labels[props.toStage]}`
 })

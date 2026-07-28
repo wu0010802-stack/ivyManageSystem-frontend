@@ -6,8 +6,8 @@
     </div>
     <div class="funnel-conversion-rates">
       <span>{{ depositRate }}% 預繳率</span>
-      <span>{{ enrollRate }}% 報到率</span>
-      <span>{{ activeRate }}% 開學率</span>
+      <span>{{ enrollRate }}% 註冊率</span>
+      <span>{{ activeRate }}% 退費率</span>
     </div>
   </div>
 </template>
@@ -21,8 +21,8 @@ const props = defineProps<{ summary: FunnelSummaryData }>()
 const items = computed(() => [
   { stage: 'visited', label: '已訪視', count: props.summary.visited_count, color: '#909399' },
   { stage: 'deposited', label: '已預繳', count: props.summary.deposited_count, color: '#e6a23c' },
-  { stage: 'enrolled', label: '已報到', count: props.summary.enrolled_count, color: '#67c23a' },
-  { stage: 'active', label: '已開學', count: props.summary.active_count, color: '#409eff' },
+  { stage: 'enrolled', label: '已註冊', count: props.summary.enrolled_count, color: '#67c23a' },
+  { stage: 'active', label: '退預繳／退註冊', count: props.summary.active_count, color: '#409eff' },
 ])
 
 function pct(num: number, denom: number): string {

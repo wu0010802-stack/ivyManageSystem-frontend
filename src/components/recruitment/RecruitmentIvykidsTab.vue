@@ -50,7 +50,7 @@
         <div class="kpi-sub">有效預繳</div>
       </div>
       <div class="kpi-card kpi-card--indigo">
-        <div class="kpi-label">已報到人數</div>
+        <div class="kpi-label">已註冊人數</div>
         <div class="kpi-value">{{ ivkStats.total_enrolled }}</div>
         <div class="kpi-sub">完成入學</div>
       </div>

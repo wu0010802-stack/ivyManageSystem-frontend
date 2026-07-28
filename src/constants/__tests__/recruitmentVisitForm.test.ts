@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { emptyVisitForm } from '@/constants/recruitment'
 
 describe('emptyVisitForm', () => {
-  it('回傳全空白、未預繳/未報到的訪視表單預設值', () => {
+  it('回傳全空白、未預繳/未註冊的訪視表單預設值', () => {
     const f = emptyVisitForm()
     expect(f.child_name).toBe('')
     expect(f.month).toBe('')

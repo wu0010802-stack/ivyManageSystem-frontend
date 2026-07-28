@@ -51,7 +51,7 @@ export function useClassroomProspects(opts: Ref<ClassroomKey>) {
       const planRows = ((planResp.data as { rows?: PlanRowLite[] }).rows ?? []) as PlanRowLite[]
       reservedCount.value = planRows.find((r) => r.grade_id === grade_id)?.reserved_count ?? 0
       const records = ((recResp.data as { records?: ProspectRow[] }).records ?? []) as ProspectRow[]
-      // 與 compute_intake_plan 的 reserved_count 同 scope（grade + 學年 + 學期 + 未報到），
+      // 與 compute_intake_plan 的 reserved_count 同 scope（grade + 學年 + 學期 + 未註冊），
       // 使名單與容量 pill 的「保留 N」一致。
       prospects.value = records.filter(
         (r) =>

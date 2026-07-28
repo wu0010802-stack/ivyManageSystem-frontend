@@ -467,7 +467,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
                   type="warning"
                   effect="plain"
                   size="small"
-                  :title="`同年級暫定編班（未報到）${reservedCountFor(reservedByGrade, classroom)} 人`"
+                  :title="`同年級暫定編班（未註冊）${reservedCountFor(reservedByGrade, classroom)} 人`"
                 >保留 {{ reservedCountFor(reservedByGrade, classroom) }}</el-tag>
                 <el-tag v-if="getCapacityStatus(classroom) === 'full'" type="danger" size="small">已滿</el-tag>
                 <el-tag v-else-if="getCapacityStatus(classroom) === 'warning'" type="warning" size="small">接近額滿</el-tag>

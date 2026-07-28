@@ -17,7 +17,7 @@
     <el-alert
       v-if="visit?.enrolled"
       type="warning"
-      title="此訪視已標記為已報到，重複轉化將被後端拒絕"
+      title="此訪視已標記為已註冊，重複轉化將被後端拒絕"
       :closable="false"
       style="margin-bottom: 12px"
     />
