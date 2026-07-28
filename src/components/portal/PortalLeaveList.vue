@@ -10,7 +10,6 @@ import {
 } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import { useIsMobile } from '@/composables/useIsMobile'
-import { InfoFilled } from '@element-plus/icons-vue'
 
 const props = withDefaults(defineProps<{
   refreshTrigger?: number

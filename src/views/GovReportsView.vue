@@ -200,7 +200,7 @@ function _lastMonthPeriod(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
-const labor = reactive<{ period: string | null; fmt: string }>({ period: _lastMonthPeriod(), fmt: 'xlsx' })
+const labor = reactive<{ period: string | null; fmt: 'xlsx' | 'txt' }>({ period: _lastMonthPeriod(), fmt: 'xlsx' })
 const health = reactive<{ period: string | null }>({ period: _lastMonthPeriod() })
 const withholding = reactive<{ year: string | null; employerId: string }>({
   year: String(new Date().getFullYear() - 1),
