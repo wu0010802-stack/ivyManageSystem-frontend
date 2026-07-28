@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Bell, Camera, Delete } from '@element-plus/icons-vue'
+import { Bell, Camera, Collection, Delete } from '@element-plus/icons-vue'
 import type { UploadRequestOptions } from 'element-plus'
 import { useIsMobile } from '@/composables/useIsMobile'
 
@@ -16,6 +16,7 @@ const props = defineProps({
 const emit = defineEmits([
   'update:modelValue',
   'save-draft',    // (formPayload, version)
+  'save-as-template',  // (fields) — 形狀同後端 TemplateFields
   'publish',       // ()
   'upload-photo',  // (opts) — el-upload style { file }
   'delete-photo',  // (photo)
@@ -112,6 +113,12 @@ function buildPayload() {
 
 function handleSaveDraft() {
   emit('save-draft', buildPayload(), props.entry?.version ?? 0)
+}
+
+// 存為範本：buildPayload() 產出的形狀與後端 TemplateFields 完全同構，
+// 且只讀 form 不依賴 entry.id，因此尚未存成草稿時也能用。
+function handleSaveAsTemplate() {
+  emit('save-as-template', buildPayload())
 }
 
 function handlePublish() {
@@ -253,6 +260,9 @@ function handleClose() {
     <template #footer>
       <div class="drawer-footer">
         <el-button @click="handleClose">關閉</el-button>
+        <el-button :icon="Collection" @click="handleSaveAsTemplate">
+          存為範本
+        </el-button>
         <el-button
           type="primary"
           :loading="saving"

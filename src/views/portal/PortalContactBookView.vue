@@ -314,6 +314,48 @@ async function handleCopyYesterday() {
   }
 }
 
+// 建立範本：個人範本只需 PORTFOLIO_WRITE，本來就該由老師自己在教師端建立。
+// 先前 create / update / archive / promote 四支 API 都包好了卻 runtime 零 caller，
+// 空狀態還寫著「可先到管理介面建立」——而全 repo 根本沒有那個管理介面。
+async function handleSaveAsTemplate(fields: Record<string, unknown>) {
+  let name = ''
+  try {
+    const res = await ElMessageBox.prompt('範本名稱', '存為範本', {
+      confirmButtonText: '建立',
+      cancelButtonText: '取消',
+      inputValidator: (v: string) => (v && v.trim() ? true : '請輸入名稱'),
+    })
+    name = (res as { value: string }).value.trim()
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    await tpls.create({ name, scope: 'personal', fields })
+    ElMessage.success('已建立個人範本')
+    await tpls.load()
+  } catch (err) {
+    notify(err, 'PortalContactBook:createTemplate', '建立範本失敗')
+  }
+}
+
+async function handleArchiveTemplate(id: number) {
+  try {
+    await ElMessageBox.confirm('封存後將不再出現在套用清單，確定嗎？', '封存範本', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  try {
+    await tpls.archive(id)
+    ElMessage.success('已封存')
+    if (selectedTemplateId.value === id) selectedTemplateId.value = null
+    await tpls.load()
+  } catch (err) {
+    notify(err, 'PortalContactBook:archiveTemplate', '封存失敗')
+  }
+}
+
 async function openTemplateDialog() {
   showTemplateDialog.value = true
   if (!tpls.loaded.value) {
@@ -464,6 +506,7 @@ watch([selectedClassroomId, selectedDate], () => {
       :publishing="drawerPublishing"
       :photo-uploading="drawerPhotoUploading"
       @save-draft="handleSaveDraft"
+      @save-as-template="handleSaveAsTemplate"
       @publish="handlePublish"
       @upload-photo="handlePhotoUpload"
       @delete-photo="handleDeletePhoto"
@@ -477,7 +520,7 @@ watch([selectedClassroomId, selectedDate], () => {
         v-else-if="!tpls.templates.value.length"
         variant="default"
         title="尚無範本"
-        description="可先到管理介面建立個人或園所共用範本。"
+        description="開啟任一位學生的聯絡簿，填好內容後按「存為範本」即可建立個人範本。"
       />
       <el-radio-group v-else v-model="(selectedTemplateId as string | number | boolean | undefined)" class="tpl-list">
         <el-radio
@@ -489,6 +532,16 @@ watch([selectedClassroomId, selectedDate], () => {
           <strong>{{ t.name }}</strong>
           <el-tag v-if="t.scope === 'shared'" size="small" type="success">共用</el-tag>
           <el-tag v-else size="small">個人</el-tag>
+          <el-button
+            v-if="t.scope !== 'shared'"
+            link
+            type="danger"
+            size="small"
+            class="tpl-archive"
+            @click.stop.prevent="handleArchiveTemplate(t.id as number)"
+          >
+            封存
+          </el-button>
         </el-radio>
       </el-radio-group>
       <p class="hint">套用規則：只填入空欄位，已填值不會被覆蓋。</p>
