@@ -253,7 +253,7 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 **前端：**
 - API 呼叫統一透過 `src/api/` 下的模組，不在元件內直接 `fetch`/`axios`
 - 狀態管理用 Pinia store，不在元件間傳遞複雜狀態
-- 權限：用 `src/utils/auth.ts` 的 `hasPermission(name: string)`；2026-05-21 起 Permission 已改 str enum，**不再有 BigInt 需求**（見下方「跨端權限與認證」段）
+- 權限：用 `src/utils/auth.ts` 的 `hasPermission(name: string)`；2026-05-21 起 Permission 已改 str enum，**不再有 BigInt 需求**（見上方「跨端權限與認證」段）
 
 ---
 
