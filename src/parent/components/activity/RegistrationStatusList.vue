@@ -10,6 +10,8 @@
  *
  * Emits:
  *  - confirm-promotion(reg, course): 確認轉正式按鈕點擊
+ *  - decline-promotion(reg, course): 放棄候補升位按鈕點擊（設計審查 2026-07-28：
+ *    原本只有確認鈕，不想上課的家長只能放到 48h 確認窗過期才釋出名額）
  *
  * 根節點帶 id="act-active" 提供 hero scrollIntoView 錨點。
  */
@@ -53,6 +55,7 @@ withDefaults(defineProps<{
 })
 const emit = defineEmits<{
   'confirm-promotion': [reg: Registration, course: RegCourse]
+  'decline-promotion': [reg: Registration, course: RegCourse]
 }>()
 
 /**
@@ -133,6 +136,13 @@ function courseStatusLabel(
           :disabled="confirmingKey === `${reg.id}:${rc.course_id}`"
           @click="emit('confirm-promotion', reg, rc)"
         >確認轉正式</button>
+        <button
+          v-if="rc.status === 'promoted_pending'"
+          type="button"
+          class="decline-btn"
+          :disabled="confirmingKey === `${reg.id}:${rc.course_id}`"
+          @click="emit('decline-promotion', reg, rc)"
+        >放棄</button>
       </div>
     </div>
   </div>
@@ -208,5 +218,22 @@ function courseStatusLabel(
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
+}
+
+/* 放棄：次要危險動作，描邊樣式與確認鈕區隔，避免誤觸 */
+.decline-btn {
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--m3-error, #ba1a1a);
+  border: 1px solid var(--m3-error, #ba1a1a);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.confirm-btn:disabled,
+.decline-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

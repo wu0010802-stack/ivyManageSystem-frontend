@@ -14,9 +14,11 @@ import {
   myRegistrations,
   registerCourses,
   confirmPromotion,
+  declinePromotion,
   getActivityBootstrap,
   getUpcomingSessions,
 } from '../api/activity'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
 import {
@@ -338,6 +340,37 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   }
 }
 
+// 放棄候補升位（設計審查 2026-07-28）：破壞性且不可逆（刪列、名額讓給下一位），
+// 先開 ConfirmDialog 二次確認，確認後才打 API；busy key 與確認流程共用防互踩。
+// open 與 target 分開持有：ConfirmDialog 的 confirm 會先 emit update:open(false)
+// 再 emit confirm，若以 target 派生 open、關閉時清 target，confirm 時就讀不到了。
+const declineDialogOpen = ref(false)
+const declineTarget = ref<{ reg: Registration; rc: RegCourse } | null>(null)
+
+function onDeclinePromotion(reg: Registration, rc: RegCourse) {
+  if (confirmingKey.value) return
+  declineTarget.value = { reg, rc }
+  declineDialogOpen.value = true
+}
+
+async function onDeclineConfirmed() {
+  const target = declineTarget.value
+  declineTarget.value = null
+  if (!target || confirmingKey.value) return
+  confirmingKey.value = `${target.reg.id}:${target.rc.course_id}`
+  try {
+    await declinePromotion(target.reg.id, target.rc.course_id)
+    toast.success('已放棄，名額將由下一位候補遞補')
+    // 放棄釋出名額（is_full / 候補順位 / hero 皆受影響），與確認同套刷新。
+    await Promise.all([fetchMy(), fetchCourses(), fetchUpcoming()])
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '放棄失敗'))
+  } finally {
+    confirmingKey.value = null
+  }
+}
+
 function onScrollSection(key: string) {
   if (key === 'active') {
     tab.value = 'my'
@@ -419,6 +452,16 @@ async function pullRefresh() {
         :course-status-map="COURSE_STATUS"
         :confirming-key="confirmingKey"
         @confirm-promotion="onConfirmPromotion"
+        @decline-promotion="onDeclinePromotion"
+      />
+      <ConfirmDialog
+        v-model:open="declineDialogOpen"
+        title="放棄候補升位？"
+        :message="`放棄「${declineTarget?.rc.course_name ?? ''}」後，名額將讓給下一位候補，且無法復原。`"
+        confirm-label="確定放棄"
+        destructive
+        @cancel="declineTarget = null"
+        @confirm="onDeclineConfirmed"
       />
     </template>
 
