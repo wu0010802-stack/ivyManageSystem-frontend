@@ -11,7 +11,8 @@
         </el-select>
       </div>
       <div class="view-actions">
-        <!-- TODO(fees-overview): FeeQuickEditDialog 子元件在 stash 半成品內未隨附，先移除「編輯費用設定」入口 -->
+        <el-button type="primary" @click="manageVisible = true">管理範本</el-button>
+        <el-button @click="generateVisible = true">產生費用單</el-button>
         <el-button text @click="expandAll">展開全部</el-button>
         <el-button text @click="collapseAll">收合全部</el-button>
         <el-button @click="loadOverview">重新載入</el-button>
@@ -103,6 +104,15 @@
         </section>
       </div>
     </div>
+
+    <FeeTemplateManageDrawer
+      v-model="manageVisible"
+      :school-year="filterYear"
+      :semester="filterSemester"
+      :grades="drawerGrades"
+      @changed="loadOverview"
+    />
+    <FeeGenerateModal v-model="generateVisible" @generated="loadOverview" />
   </div>
 </template>
 
@@ -114,6 +124,8 @@ import { getGrades, getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import { getCurrentAcademicTerm, currentRocYear } from '@/utils/academic'
 import { formatCurrency } from '@/utils/currency'
+import FeeTemplateManageDrawer from '@/components/fees/FeeTemplateManageDrawer.vue'
+import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
 
 interface FeeTemplate {
   grade_id: number | null
@@ -176,6 +188,15 @@ interface GradeGroup {
 const _initTerm = getCurrentAcademicTerm()
 const filterYear = ref(_initTerm.school_year)
 const filterSemester = ref(_initTerm.semester)
+
+const manageVisible = ref(false)
+const generateVisible = ref(false)
+// 本檔 Grade.id 為 number | string（展示用寬鬆型別），Drawer/Dialog 需 number
+const drawerGrades = computed(() =>
+  grades.value
+    .filter((g) => typeof g.id === 'number')
+    .map((g) => ({ id: g.id as number, name: g.name })),
+)
 
 // 各年級下哪些班級被展開（key = grade_id 或 grade_name，value = classroom_id 陣列）
 const expandedClassrooms = ref<Record<string | number, (string | number)[]>>({})
