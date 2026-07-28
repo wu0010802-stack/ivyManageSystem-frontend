@@ -3,7 +3,6 @@ import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, InfoFilled } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
-import { computeIndependentBonusNet } from './portalSalaryBonus'
 import { useIsMobile } from '@/composables/useIsMobile'
 
 const loading = ref(false)
@@ -55,9 +54,44 @@ const nextMonth = () => {
 const attendanceStats = computed(() => salaryData.value?.attendance_stats as Record<string, unknown> | undefined)
 const salary = computed(() => salaryData.value?.salary as Record<string, unknown> | undefined)
 
-// 獨立獎金淨額：festival_bonus 已在後端發放月扣除會議缺席扣款，此處僅加總不可再減
-// （計算與「不可雙重扣減」的原因註解見 ./portalSalaryBonus）。
-const independentBonusNet = computed(() => computeIndependentBonusNet(salary.value))
+// 三區明細（income / separate_transfer / deductions）由後端 build_history_breakdown
+// 產出，與管理端薪資歷史同源；小計一律取 persisted 值，因此
+// 「收入各項相加 == 應發」「扣款各項相加 == 扣款合計」「應發 − 扣款 == 實發」恆成立。
+interface BreakdownLine {
+  key: string
+  label: string
+  amount: number
+  note?: string | null
+  informational?: boolean
+  children?: BreakdownLine[] | null
+}
+interface SalaryBreakdown {
+  income: BreakdownLine[]
+  income_subtotal: number
+  separate_transfer: BreakdownLine[]
+  separate_subtotal: number
+  deductions: BreakdownLine[]
+  deduction_subtotal: number
+  net_salary: number
+}
+const EMPTY_BREAKDOWN: SalaryBreakdown = {
+  income: [],
+  income_subtotal: 0,
+  separate_transfer: [],
+  separate_subtotal: 0,
+  deductions: [],
+  deduction_subtotal: 0,
+  net_salary: 0,
+}
+const salaryBreakdown = computed<SalaryBreakdown>(
+  () => (salary.value as unknown as SalaryBreakdown) ?? EMPTY_BREAKDOWN,
+)
+// 金額為 0 的列不顯示，避免整頁被一堆 NT$ 0 淹沒；但小計一律取後端權威值，
+// 所以隱藏零列不會讓加總對不起來。
+const _nonZero = (lines: BreakdownLine[]) => lines.filter((l) => l.amount !== 0)
+const incomeLines = computed(() => _nonZero(salaryBreakdown.value.income))
+const deductionLines = computed(() => _nonZero(salaryBreakdown.value.deductions))
+const separateLines = computed(() => _nonZero(salaryBreakdown.value.separate_transfer))
 
 onMounted(fetchSalary)
 </script>
@@ -107,103 +141,78 @@ onMounted(fetchSalary)
 
       <!-- Salary Breakdown -->
       <el-card v-if="salary" class="salary-card">
-        <h3>薪資明細</h3>
+        <!-- 三區明細由後端 build_history_breakdown 產出，與管理端薪資歷史同源。
+             改版前是手工挑欄位，導致：節慶／超額獎金同時出現在「獎金合計」與
+             「獨立獎金」（同一筆錢畫面上出現三次）、時薪制老師底薪顯示 0、
+             補充保費重複列、曠職扣款漏列、應發合計完全沒顯示。 -->
+        <h3>收入明細</h3>
         <el-descriptions :column="isMobile ? 1 : 2" border>
-          <el-descriptions-item label="底薪">
-            NT$ {{ salary?.base_salary?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="獎金合計（不含主管紅利）">
-            NT$ {{ salary?.total_bonus?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="主管紅利">
-            NT$ {{ salary?.supervisor_dividend?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="加班費">
-            NT$ {{ salary?.overtime_pay?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="園務會議加班">
-            NT$ {{ salary?.meeting_overtime_pay?.toLocaleString() || 0 }}
+          <el-descriptions-item
+            v-for="line in incomeLines"
+            :key="line.key"
+            :label="line.label"
+          >
+            NT$ {{ line.amount.toLocaleString() }}
+            <span v-if="line.note" class="line-note">（{{ line.note }}）</span>
           </el-descriptions-item>
         </el-descriptions>
+        <div class="subtotal-row">
+          <span>應發合計</span>
+          <strong>NT$ {{ salaryBreakdown.income_subtotal.toLocaleString() }}</strong>
+        </div>
 
         <h4 style="margin-top: 20px;">扣款明細</h4>
         <el-descriptions :column="isMobile ? 1 : 2" border>
-          <el-descriptions-item label="勞保費">
-            -NT$ {{ salary?.labor_insurance?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="健保費">
-            -NT$ {{ salary?.health_insurance?.toLocaleString() || 0 }}
-          </el-descriptions-item>
           <el-descriptions-item
-            v-if="(salary?.supplementary_health_employee as number) > 0"
-            label="二代健保補充保費"
+            v-for="line in deductionLines"
+            :key="line.key"
+            :label="line.label"
           >
-            -NT$ {{ (salary?.supplementary_health_employee as number)?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="勞退自提">
-            -NT$ {{ salary?.pension_employee?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="遲到扣款">
-            -NT$ {{ salary?.late_deduction?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="早退扣款">
-            -NT$ {{ salary?.early_leave_deduction?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="請假扣款">
-            -NT$ {{ salary?.leave_deduction?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="其他扣款">
-            -NT$ {{ salary?.other_deduction?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="扣款合計">
-            <span class="text-danger">-NT$ {{ salary?.total_deduction?.toLocaleString() || 0 }}</span>
+            <span class="text-warning">-NT$ {{ line.amount.toLocaleString() }}</span>
+            <!-- 補充保費已併入健保費，僅作資訊列不重複計入合計 -->
+            <div v-for="child in (line.children || [])" :key="child.key" class="line-child">
+              {{ child.label }} NT$ {{ child.amount.toLocaleString() }}
+              <span class="line-note">（已含於上列，不重複計）</span>
+            </div>
           </el-descriptions-item>
         </el-descriptions>
-
-        <!-- 未休折現加給：後端回傳 unused_leave_payout > 0 時才顯示 -->
-        <template v-if="(salary?.unused_leave_payout as number) > 0">
-          <h4 style="margin-top: 20px;">未休假折現</h4>
-          <el-descriptions :column="isMobile ? 1 : 2" border>
-            <el-descriptions-item label="未休折現加給">
-              <el-tooltip
-                content="補休到期、特休週年或離職結算折算的未休假加給，已計入實發金額"
-                placement="top"
-                effect="light"
-              >
-                <span style="cursor: help;">
-                  NT$ {{ (salary?.unused_leave_payout as number)?.toLocaleString() || 0 }}
-                  <el-icon style="vertical-align: middle; color: var(--el-color-info); width: 12px; height: 12px;">
-                    <InfoFilled />
-                  </el-icon>
-                </span>
-              </el-tooltip>
-            </el-descriptions-item>
-          </el-descriptions>
-        </template>
-
-        <h4 style="margin-top: 20px;">節慶 / 獨立獎金調整</h4>
-        <el-descriptions :column="isMobile ? 1 : 2" border>
-          <el-descriptions-item label="節慶獎金">
-            NT$ {{ salary?.festival_bonus?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item label="超額獎金">
-            NT$ {{ salary?.overtime_bonus?.toLocaleString() || 0 }}
-          </el-descriptions-item>
-          <el-descriptions-item
-            v-if="(salary?.meeting_absence_deduction as number) > 0"
-            label="會議缺席扣減（已自節慶獎金扣除）"
-          >
-            <span class="text-warning">-NT$ {{ (salary?.meeting_absence_deduction as number)?.toLocaleString() || 0 }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="獨立獎金淨額">
-            NT$ {{ independentBonusNet.toLocaleString() }}
-          </el-descriptions-item>
-        </el-descriptions>
+        <div class="subtotal-row">
+          <span>扣款合計</span>
+          <strong class="text-warning">-NT$ {{ salaryBreakdown.deduction_subtotal.toLocaleString() }}</strong>
+        </div>
 
         <div class="net-salary-box">
           <span class="net-label">實發金額</span>
-          <span class="net-value">NT$ {{ salary?.net_salary?.toLocaleString() || 0 }}</span>
+          <span class="net-value">NT$ {{ salaryBreakdown.net_salary.toLocaleString() }}</span>
         </div>
+        <p class="net-formula">應發合計 − 扣款合計 = 實發金額</p>
+
+        <!-- 另行轉帳：這幾項不在實發金額內，會另外匯款 -->
+        <template v-if="separateLines.length">
+          <h4 style="margin-top: 20px;">
+            另行轉帳
+            <el-tooltip
+              content="以下項目不計入上方「實發金額」，由園所另行匯款"
+              placement="top"
+              effect="light"
+            >
+              <el-icon class="hint-icon"><InfoFilled /></el-icon>
+            </el-tooltip>
+          </h4>
+          <el-descriptions :column="isMobile ? 1 : 2" border>
+            <el-descriptions-item
+              v-for="line in separateLines"
+              :key="line.key"
+              :label="line.label"
+            >
+              NT$ {{ line.amount.toLocaleString() }}
+            </el-descriptions-item>
+          </el-descriptions>
+          <div class="subtotal-row">
+            <span>另行轉帳合計</span>
+            <strong>NT$ {{ salaryBreakdown.separate_subtotal.toLocaleString() }}</strong>
+          </div>
+        </template>
 
         <el-tag type="success" style="margin-top: 12px;">已結算</el-tag>
       </el-card>
@@ -223,6 +232,41 @@ onMounted(fetchSalary)
 </template>
 
 <style scoped>
+.subtotal-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: var(--el-fill-color-light);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.net-formula {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.line-note {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.line-child {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.hint-icon {
+  vertical-align: middle;
+  color: var(--el-color-info);
+  cursor: help;
+}
+
 
 .month-nav {
   display: flex;
