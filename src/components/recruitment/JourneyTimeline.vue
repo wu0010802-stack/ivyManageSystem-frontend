@@ -36,10 +36,10 @@ const EVENT_LABELS: Record<string, string> = {
   created: '建立訪視',
   deposit_added: '加上預繳',
   deposit_removed: '取消預繳',
-  converted: '報到（轉學生）',
-  revert_converted: '退回報到（刪學生）',
-  activated: '開學',
-  revert_activated: '退回開學',
+  converted: '註冊（轉學生）',
+  revert_converted: '取消註冊（刪學生）',
+  activated: '退預繳／退註冊',
+  revert_activated: '取消退預繳／退註冊',
 }
 const humanize = (t: string): string => EVENT_LABELS[t] ?? t
 const formatTime = (iso: string): string =>

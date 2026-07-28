@@ -79,7 +79,7 @@
         <el-form-item label="收預繳人員">
           <el-input v-model="form.deposit_collector" :disabled="!form.has_deposit" placeholder="預繳時填寫" />
         </el-form-item>
-        <el-form-item label="已報到/註冊">
+        <el-form-item label="已註冊">
           <el-switch v-model="form.enrolled" active-text="是" inactive-text="否" />
         </el-form-item>
         <el-form-item label="轉其他學期">

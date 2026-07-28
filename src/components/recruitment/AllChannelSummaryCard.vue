@@ -4,7 +4,7 @@
     <!-- 用純 HTML table（el-table 在 jsdom 不渲染 row，且此處不需互動）-->
     <table class="channel-table">
       <thead>
-        <tr><th>管道</th><th>參觀/報名</th><th>預繳</th><th>報到</th></tr>
+        <tr><th>管道</th><th>參觀/報名</th><th>預繳</th><th>註冊</th></tr>
       </thead>
       <tbody>
         <tr v-for="r in rows" :key="r.channel" :class="{ 'total-row': r.channel === '合計' }">

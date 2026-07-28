@@ -97,8 +97,8 @@ async function onRefresh() {
 const columnConfigs: Array<{ stage: Stage; title: string; color: string }> = [
   { stage: 'visited', title: '已訪視', color: '#909399' },
   { stage: 'deposited', title: '已預繳', color: '#e6a23c' },
-  { stage: 'enrolled', title: '已報到', color: '#67c23a' },
-  { stage: 'active', title: '已開學', color: '#409eff' },
+  { stage: 'enrolled', title: '已註冊', color: '#67c23a' },
+  { stage: 'active', title: '退預繳／退註冊', color: '#409eff' },
 ]
 
 // === 權限控管 ===
@@ -130,7 +130,7 @@ const dialogOpen = ref(false)
 function needsDialog(from: Stage, to: Stage): boolean {
   // deposited → enrolled：需選教室（dropdown mode）
   if (from === 'deposited' && to === 'enrolled') return true
-  // 退回已開學或已報到：destructive
+  // 自「退預繳／退註冊」或「已註冊」往前退：destructive
   const order: Stage[] = ['visited', 'deposited', 'enrolled', 'active']
   if (
     (from === 'enrolled' || from === 'active') &&

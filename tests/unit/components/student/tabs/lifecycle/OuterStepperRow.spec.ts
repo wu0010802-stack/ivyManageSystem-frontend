@@ -10,7 +10,7 @@ const baseOverview = {
   outer_steps: [
     { key: 'visited', label: '參觀', status: 'done', occurred_at: '2024-07-12', meta: null },
     { key: 'deposited', label: '預繳', status: 'done', occurred_at: '2024-08-01', meta: null },
-    { key: 'enrolled', label: '報到', status: 'done', occurred_at: '2024-08-15', meta: null },
+    { key: 'enrolled', label: '註冊', status: 'done', occurred_at: '2024-08-15', meta: null },
     { key: 'active', label: '在學', status: 'current', occurred_at: '2024-09-01', meta: null },
     { key: 'terminal', label: '終態', status: 'future', occurred_at: null, meta: null },
   ],

@@ -135,7 +135,7 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="已報到" align="center" width="70">
+      <el-table-column label="已註冊" align="center" width="70">
         <template #default="{ row }">
           <el-tag v-if="row.enrolled" type="success" size="small">是</el-tag>
           <span v-else>—</span>
