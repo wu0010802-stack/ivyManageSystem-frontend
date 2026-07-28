@@ -4,6 +4,7 @@
       <h2>課程管理</h2>
       <div class="toolbar__actions">
         <AcademicTermSelector />
+        <el-button v-if="canWrite" data-test="sweep-expired-btn" :loading="sweeping" @click="handleSweepExpired">掃描過期候補</el-button>
         <el-button v-if="canWrite" @click="openCopyDialog" :icon="CopyDocument">複製上學期</el-button>
         <el-button v-if="canWrite" type="primary" @click="openCreate">新增課程</el-button>
       </div>
@@ -290,7 +291,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
-         getCourseWaitlist, getCourseEnrolled, promoteWaitlist } from '@/api/activity'
+         getCourseWaitlist, getCourseEnrolled, promoteWaitlist, sweepExpiredWaitlist } from '@/api/activity'
 import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
@@ -628,6 +629,33 @@ async function handleDelete(row: Course) {
     ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '停用失敗')
   } finally {
     deletingId.value = null
+  }
+}
+
+// 手動觸發候補過期掃描（排程備援；後端冪等，重複執行安全）
+const sweeping = ref(false)
+async function handleSweepExpired() {
+  try {
+    await ElMessageBox.confirm(
+      '將刪除逾期未確認的候補轉正、依序遞補下一位，並補發 24h／6h 提醒（與排程掃描結果相同）。確定執行？',
+      '掃描過期候補',
+      { type: 'warning', confirmButtonText: '執行掃描' },
+    )
+  } catch {
+    return
+  }
+  sweeping.value = true
+  try {
+    const res = await sweepExpiredWaitlist()
+    const { expired, reminded, final_reminded } = res.data
+    ElMessage.success(
+      `掃描完成：逾期釋出 ${expired} 筆、寄出提醒 ${reminded + final_reminded} 筆`,
+    )
+    fetchCourses()
+  } catch (e) {
+    ElMessage.error(friendlyError('候補過期掃描失敗', e))
+  } finally {
+    sweeping.value = false
   }
 }
 
