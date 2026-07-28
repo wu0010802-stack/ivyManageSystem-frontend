@@ -55,6 +55,7 @@ import { deleteFeeTemplate, getFeeTemplates } from '@/api/fees'
 import FeeTemplateDialog from '@/components/fees/FeeTemplateDialog.vue'
 import { FEE_TYPE_LABELS } from '@/components/fees/feeTypes'
 import { formatCurrency } from '@/utils/currency'
+import { apiError } from '@/utils/error'
 
 interface TemplateRow {
   id: number
@@ -95,8 +96,7 @@ async function loadTemplates() {
     const list = await getFeeTemplates({ school_year: props.schoolYear, semester: props.semester })
     templates.value = (list || []) as TemplateRow[]
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '載入範本失敗')
+    ElMessage.error(apiError(e, '載入範本失敗'))
   } finally {
     loading.value = false
   }
@@ -134,8 +134,7 @@ async function onDeactivate(row: TemplateRow) {
     await loadTemplates()
     emit('changed')
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '停用失敗')
+    ElMessage.error(apiError(e, '停用失敗'))
   }
 }
 

@@ -92,6 +92,7 @@ import { createFeeTemplate, updateFeeTemplate } from '@/api/fees'
 import FormSection from '@/components/common/FormSection.vue'
 import { formatCurrency } from '@/utils/currency'
 import { FEE_TYPES } from '@/components/fees/feeTypes'
+import { apiError } from '@/utils/error'
 
 interface Grade {
   id: number
@@ -162,7 +163,8 @@ const canSave = computed(() => {
   if (form.fee_type === 'monthly') {
     return breakdownSum.value === form.amount && form.amount > 0
   }
-  return form.amount >= 0
+  // 與後端 FeeTemplateCreate.amount 的 ge=1 對齊，避免前端誤放行 0 元範本
+  return form.amount >= 1
 })
 
 const needsFinanceApprove = computed(() => {
@@ -184,9 +186,13 @@ function formatMoney(n: number | null | undefined): string {
   return formatCurrency(n ?? 0)
 }
 
+// F-2: 原本只 watch props.template，父層連續兩次 openCreate()（template 皆為 null）
+// 時值不變不會觸發 watcher，導致表單殘留上一輪輸入。改為同時 watch modelValue：
+// 開啟（modelValue 轉 true）且 template 為 null 時視為「新增模式重新開啟」，整表單重置；
+// template 非 null 時照舊填入（不論開關狀態，涵蓋 props.template 本身變動的情境）。
 watch(
-  () => props.template,
-  (t) => {
+  [() => props.modelValue, () => props.template],
+  ([visible, t]) => {
     if (t) {
       Object.assign(form, {
         grade_id: t.grade_id,
@@ -206,7 +212,7 @@ watch(
         breakdown.meal = 0
         breakdown.transport = 0
       }
-    } else {
+    } else if (visible) {
       Object.assign(form, {
         grade_id: null,
         school_year: 114,
@@ -247,8 +253,7 @@ async function onSave() {
     ElMessage.success(isEdit.value ? '已更新' : '已建立')
     emit('saved')
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } }; displayMessage?: string }
-    ElMessage.error(err.response?.data?.detail || err.displayMessage || '儲存失敗')
+    ElMessage.error(apiError(e, '儲存失敗'))
   } finally {
     saving.value = false
   }

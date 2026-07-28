@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { defineComponent, h, nextTick, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import FeeTemplateManageDrawer from '@/components/fees/FeeTemplateManageDrawer.vue'
 
@@ -15,9 +15,16 @@ vi.mock('@/api/fees', () => ({
   updateFeeTemplate: vi.fn(),
 }))
 
+// F-5: production 唯一載入路徑是 el-drawer 的 @open（modelValue 由 false 轉 true 時觸發）；
+// 舊 stub 從不 emit open，導致這條路徑完全沒被測到。補上 emits + watch 還原真實 el-drawer 行為。
 const ElDrawerStub = defineComponent({
   props: { modelValue: { type: Boolean, default: false } },
-  setup(props, { slots }) {
+  emits: ['open'],
+  setup(props, { slots, emit }) {
+    watch(
+      () => props.modelValue,
+      (v, oldV) => { if (v && !oldV) emit('open') },
+    )
     return () => (props.modelValue ? h('div', {}, slots.default?.()) : null)
   },
 })
@@ -65,5 +72,28 @@ describe('FeeTemplateManageDrawer', () => {
     await flushPromises()
     expect(deleteFeeTemplate).toHaveBeenCalledWith(7)
     expect(wrapper.emitted('changed')).toBeTruthy()
+  })
+
+  it('F-5: 初始關閉、父層開啟（modelValue false→true）→ 透過 @open 載入範本（production 唯一載入路徑）', async () => {
+    const wrapper = mount(FeeTemplateManageDrawer, {
+      props: { modelValue: false, schoolYear: 115, semester: 1, grades: [{ id: 2, name: '中班' }] },
+      global: {
+        stubs: {
+          'el-drawer': ElDrawerStub,
+          'el-table': ElTableStub,
+          'el-table-column': ElTableColumnStub,
+          FeeTemplateDialog: true,
+        },
+      },
+    })
+    await flushPromises(); await nextTick()
+    // 初始 modelValue: false → el-drawer 內容不渲染，component 內的初始 fallback（if props.modelValue）不觸發
+    expect(getFeeTemplates).not.toHaveBeenCalled()
+
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises(); await nextTick()
+
+    // 唯一觸發來源是 stub 模擬 el-drawer 真實行為送出的 @open
+    expect(getFeeTemplates).toHaveBeenCalledWith({ school_year: 115, semester: 1 })
   })
 })

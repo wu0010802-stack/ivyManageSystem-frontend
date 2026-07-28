@@ -65,11 +65,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateFeeRecords } from '@/api/fees'
 import { currentRocYear } from '@/utils/academic'
 import { FEE_TYPES } from '@/components/fees/feeTypes'
+import { apiError } from '@/utils/error'
 
 // 批次產單可選類型：僅 source === 'record'（正金額應收，與 FeeTemplateDialog 一致）
 const TEMPLATE_FEE_TYPES = FEE_TYPES.filter((t) => t.source === 'record')
@@ -86,7 +87,7 @@ interface FormState {
   fee_types: string[]
 }
 
-defineProps<{
+const props = defineProps<{
   modelValue: boolean
 }>()
 const emit = defineEmits<{
@@ -109,6 +110,11 @@ function formatAmount(value: unknown): string {
   return typeof value === 'number' ? value.toLocaleString() : '0'
 }
 
+// F-1: 表單（學年／學期／類型）一旦變動，舊 preview 對應的參數已過期，須清空避免用過期參數送出確認
+watch(form, () => { preview.value = null }, { deep: true })
+// F-1: 每次重新開啟 modal 都視為新一輪操作，清掉上一輪殘留的 preview
+watch(() => props.modelValue, (v) => { if (v) preview.value = null })
+
 async function onPreview() {
   if (!form.fee_types.length) {
     ElMessage.warning('請至少選一項費用類型')
@@ -118,8 +124,7 @@ async function onPreview() {
   try {
     preview.value = await generateFeeRecords({ ...form, dry_run: true })
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '預覽失敗')
+    ElMessage.error(apiError(e, '預覽失敗'))
   } finally {
     loading.value = false
   }
@@ -133,8 +138,7 @@ async function onConfirm() {
     emit('generated', result)
     emit('update:modelValue', false)
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '產生失敗')
+    ElMessage.error(apiError(e, '產生失敗'))
   } finally {
     confirming.value = false
   }
