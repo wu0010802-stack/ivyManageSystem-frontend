@@ -67,7 +67,7 @@ function onDragChange(evt: DragChangeEvent) {
 
 <style scoped>
 .funnel-column {
-  background: #f8f9fa;
+  background: var(--bg-color-soft);
   border-top: 3px solid var(--accent);
   border-radius: 4px;
   min-height: 400px;
@@ -99,7 +99,7 @@ function onDragChange(evt: DragChangeEvent) {
   align-items: center;
   justify-content: center;
   text-align: center;
-  color: #ccc;
+  color: var(--text-tertiary);
   pointer-events: none;
 }
 .funnel-card-ghost {

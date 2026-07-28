@@ -172,6 +172,6 @@ function onCancel() {
 
 <style scoped>
 .destructive-warning { margin-bottom: 12px; }
-.child-info { margin: 8px 0 16px; color: #555; }
+.child-info { margin: 8px 0 16px; color: var(--text-secondary); }
 .classroom-select { width: 100%; }
 </style>

@@ -56,7 +56,7 @@ const activeRate = computed(() => pct(props.summary.active_count, props.summary.
 }
 .funnel-summary-label {
   font-size: 12px;
-  color: #666;
+  color: var(--text-secondary);
 }
 .funnel-summary-count {
   font-size: 24px;
@@ -67,6 +67,6 @@ const activeRate = computed(() => pct(props.summary.active_count, props.summary.
   display: flex;
   gap: 16px;
   font-size: 13px;
-  color: #555;
+  color: var(--text-secondary);
 }
 </style>
