@@ -3,9 +3,9 @@ import { computed } from 'vue'
 import { COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
 import { formatActivityDate } from '@/utils/format'
 
-interface Registration { class_name?: string; [key: string]: unknown }
+interface Registration { class_name?: string | null; [key: string]: unknown }
 interface ActivityData {
-  summary?: Record<string, unknown>
+  summary?: Record<string, unknown> | null
   registrations?: Registration[]
   classrooms?: string[]
   [key: string]: unknown
