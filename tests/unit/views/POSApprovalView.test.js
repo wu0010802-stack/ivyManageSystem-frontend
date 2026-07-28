@@ -9,7 +9,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import { getPOSDailyCloseStatus } from '@/api/activity'
+import { getPOSDailyCloseStatus, getPOSRecentTransactions } from '@/api/activity'
 
 function makeDeferred() {
   let resolve
@@ -53,6 +53,7 @@ const GLOBAL_STUBS = {
   PageHeader: true,
   POSSemesterReconciliation: true,
   StatCard: true,
+  AdminListToolbar: true,
   'el-tabs': { template: '<div><slot /></div>' },
   'el-tab-pane': { template: '<div><slot /></div>' },
   'el-card': { template: '<div><slot name="header" /><slot /></div>' },
@@ -155,5 +156,50 @@ describe('POSApprovalView — 日結表單', () => {
     state.loadingDetail = true
     await nextTick()
     expect(state.approveDisabled).toBe(true)
+  })
+})
+
+// ── 當日交易明細關鍵字搜尋（客端過濾）───────────────────────────────────────
+describe('POSApprovalView 當日交易明細搜尋', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const transactions = [
+    { id: 1, receipt_no: 'R-001', student_names: ['王小明'], type: 'payment', total: 3000 },
+    { id: 2, receipt_no: 'R-002', student_names: ['李大華', '陳小美'], type: 'payment', total: 1500 },
+  ]
+
+  it('依學生姓名收斂 filteredTransactions', async () => {
+    getPOSRecentTransactions.mockResolvedValueOnce({ data: { transactions } })
+    const wrapper = mountView()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState
+
+    state.txSearch = '王小明'
+    expect(state.filteredTransactions).toEqual([transactions[0]])
+    expect(state.txShown).toBe(1)
+    expect(state.txTotal).toBe(2)
+  })
+
+  it('依收據編號也可命中', async () => {
+    getPOSRecentTransactions.mockResolvedValueOnce({ data: { transactions } })
+    const wrapper = mountView()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState
+
+    state.txSearch = 'R-002'
+    expect(state.filteredTransactions).toEqual([transactions[1]])
+  })
+
+  it('清空搜尋字串時還原全部交易', async () => {
+    getPOSRecentTransactions.mockResolvedValueOnce({ data: { transactions } })
+    const wrapper = mountView()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState
+
+    state.txSearch = '王小明'
+    state.txSearch = ''
+    expect(state.filteredTransactions).toEqual(transactions)
   })
 })

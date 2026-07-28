@@ -236,6 +236,7 @@
                         type="text"
                         class="input-text"
                         :class="{ 'is-invalid': !!errors.name }"
+                        aria-required="true"
                         :aria-invalid="!!errors.name"
                         :aria-describedby="errors.name ? 'studentName-err' : undefined"
                         placeholder="請輸入幼兒姓名"
@@ -264,6 +265,7 @@
                         :class="{ 'is-invalid': !!errors.birthday }"
                         :min="minBirthdayISO"
                         :max="maxBirthdayISO"
+                        aria-required="true"
                         :aria-invalid="!!errors.birthday"
                         :aria-describedby="errors.birthday ? 'studentBirthday-err' : undefined"
                         enterkeyhint="next"
@@ -287,6 +289,7 @@
                         type="tel"
                         class="input-text"
                         :class="{ 'is-invalid': !!parentPhoneError }"
+                        aria-required="true"
                         :aria-invalid="!!parentPhoneError"
                         :aria-describedby="parentPhoneError ? 'parentPhone-err' : undefined"
                         placeholder="09xx-xxx-xxx"
@@ -314,6 +317,7 @@
                         v-model="form.class_name"
                         class="input-select"
                         :class="{ 'is-invalid': !!errors.class_name }"
+                        aria-required="true"
                         :aria-invalid="!!errors.class_name"
                         :aria-describedby="errors.class_name ? 'studentClass-err' : undefined"
                         @change="clearError('class_name')"
@@ -1042,13 +1046,29 @@ async function handleSubmitRegistration() {
 
 // resetForm 已抽至 usePublicRegistrationForm（A1-P1）
 
+// ===== 離開防護（spec #6）=====
+// dirty 判定：任一必填欄位（姓名/生日/家長手機/班級）已有值。
+// 送出成功後 handleSubmitRegistration 會呼叫 resetForm() 清空這些欄位，
+// isFormDirty 隨之回 false，beforeunload 自然不再攔截，不需額外的
+// 「已送出」旗標。
+function isFormDirty(): boolean {
+  return Boolean(form.name || form.birthday || form.parent_phone || form.class_name)
+}
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!isFormDirty()) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
 onMounted(async () => {
   await runInit()
   startPolling()
   // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 onUnmounted(() => {
   stopPolling()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -1090,6 +1110,12 @@ onUnmounted(() => {
   --color-text: #392a1c;          /* IvyKids 暖深咖啡（不用純黑） */
   --color-text-muted: #5b5b5b;
   --color-text-subtle: #8a7e6e;
+
+  /* public bundle 只 import design-tokens.css，main.css 的 --text-secondary/
+     --text-tertiary 未定義（見 spec #1）；此處對齊本檔既有文字色票補上，
+     不 import main.css（會拖入 Element Plus 覆寫，public 端無 EP） */
+  --text-secondary: var(--color-text-muted);
+  --text-tertiary: var(--color-text-subtle);
 
   --color-border: #f2e6c9;
   --color-border-strong: #e8d9a8;
@@ -1537,6 +1563,13 @@ onUnmounted(() => {
 }
 .review-section-heading h4 { margin: 0; color: var(--color-text); font-size: var(--fs-md); }
 .review-edit-button {
+  /* 觸控區 ≥44px（spec #2）：min-height 撐開點擊區，負 margin 抵消對
+     .review-section-heading 排版高度的影響，維持原本視覺 chip 大小觀感 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  margin: -11px 0;
   padding: 4px 10px;
   color: var(--color-primary);
   background: var(--color-surface);
@@ -1807,7 +1840,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 .course-item-disabled .course-name { color: var(--text-tertiary); text-decoration: line-through; text-decoration-color: rgba(156, 163, 175, 0.6); }
-.course-item-disabled .meta-chip { color: #b0b7bf; background-color: transparent; border-color: #e5e7eb; }
+.course-item-disabled .meta-chip { color: #b0b7bf; background-color: transparent; border-color: var(--color-border-muted); }
 .course-item-disabled .qty-display { display: none; }
 .course-item-disabled:hover { border-color: var(--neutral-300); background-color: #f5f6f8; }
 .course-item-disabled .course-label { cursor: not-allowed; }
@@ -1900,7 +1933,7 @@ onUnmounted(() => {
 .qty-display.is-available { background-color: var(--color-surface-muted); color: var(--color-text-muted); }
 .qty-display.is-low { background-color: var(--color-danger-soft); color: var(--color-danger-darker); }
 .qty-display.is-waiting { background-color: var(--color-warning-soft); color: var(--color-warning-darker); }
-.qty-display.is-full { background-color: #e5e7eb; color: var(--text-secondary); }
+.qty-display.is-full { background-color: var(--color-border-muted); color: var(--text-secondary); }
 
 .empty-hint {
   grid-column: 1 / -1;
@@ -2142,10 +2175,11 @@ onUnmounted(() => {
   flex-wrap: wrap;
   margin-top: var(--space-3);
 }
-/* 副按鈕視覺壓低：text-link 風格，不跟主 submit 搶視覺重量 */
+/* 副按鈕視覺壓低：text-link 風格，不跟主 submit 搶視覺重量；
+   min-height 44px 撐開觸控區（spec #2），padding 維持不變以保留壓低觀感 */
 .btn-actions-row .btn {
   flex: 0 0 auto;
-  min-height: auto;
+  min-height: 44px;
   padding: 8px 12px;
   background: transparent;
   border: 1px solid transparent;

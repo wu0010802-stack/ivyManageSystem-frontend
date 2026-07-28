@@ -48,7 +48,7 @@ const GLOBAL_STUBS = {
   'el-card': { template: '<div><slot /></div>' },
   'el-row': { template: '<div><slot /></div>' },
   'el-col': { template: '<div><slot /></div>' },
-  'el-table': { template: '<div><slot /></div>' },
+  'el-table': { template: '<div><slot /><slot name="empty" /></div>' },
   'el-table-column': true,
   'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
   'el-input': { template: '<input />' },
@@ -176,5 +176,28 @@ describe('StudentIncidentView', () => {
 
     expect(wrapper.vm.$.setupState.currentPage).toBe(1)
     expect(getIncidents).toHaveBeenCalled()
+  })
+
+  // ── 空狀態文案 ─────────────────────────────────────────────────────────────
+
+  describe('空狀態文案', () => {
+    it('無篩選、查無紀錄時顯示「尚無事件紀錄」', async () => {
+      getIncidents.mockResolvedValue({ data: { items: [], total: 0 } })
+      const wrapper = mountView()
+      await flushPromises()
+
+      expect(wrapper.text()).toContain('尚無事件紀錄')
+    })
+
+    it('有篩選條件、查無紀錄時顯示「目前篩選條件下沒有紀錄」', async () => {
+      getIncidents.mockResolvedValue({ data: { items: [], total: 0 } })
+      const wrapper = mountView()
+      await flushPromises()
+
+      wrapper.vm.$.setupState.filterType = '行為觀察'
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.text()).toContain('目前篩選條件下沒有紀錄')
+    })
   })
 })
