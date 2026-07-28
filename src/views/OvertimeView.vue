@@ -19,6 +19,7 @@ import MeetingManagementPanel from '@/components/overtime/MeetingManagementPanel
 import BatchOvertimeDialog from '@/components/overtime/BatchOvertimeDialog.vue'
 import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
@@ -356,7 +357,7 @@ watch(activeSection, async (value) => {
 
 <template>
   <div class="overtime-page">
-    <h2>加班 / 園務會議</h2>
+    <h2>{{ PAGE_TERMS.overtime }}</h2>
 
     <el-tabs v-model="activeSection" class="overtime-section-tabs">
       <el-tab-pane v-if="canViewOvertime" label="一般加班" name="overtime">

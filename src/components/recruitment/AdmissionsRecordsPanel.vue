@@ -2,7 +2,7 @@
   <div class="records-panel">
     <div class="panel-toolbar">
       <el-button v-if="canWrite" size="small" @click="openMonthDialog">管理月份</el-button>
-      <el-button v-if="canWrite" type="primary" size="small" @click="openAddDialog">新增訪視記錄</el-button>
+      <el-button v-if="canWrite" type="primary" size="small" @click="openAddDialog">新增訪視紀錄</el-button>
     </div>
 
     <RecruitmentDetailTab

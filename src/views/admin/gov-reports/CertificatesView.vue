@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <PageHeader
-      title="在學證明 開立紀錄"
+      :title="PAGE_TERMS.govCertificates"
       subtitle="查詢已開立的在學證明；開立入口在學生資料頁"
     >
       <template #filters>
@@ -63,6 +63,7 @@ import { listCertificateHistory } from '@/api/govMoe'
 import { getStudents } from '@/api/students'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getErrorMessage } from '@/utils/errorHandler'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 後端 list_history 以 .limit(200) 截斷且無分頁，達上限時需提示使用者縮小範圍
 const HISTORY_LIMIT = 200

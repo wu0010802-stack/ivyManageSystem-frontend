@@ -16,6 +16,7 @@ import { hasPermission } from '@/utils/auth'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 import { injectOpenCycleHint } from '../composables/useOpenCycleHint'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 type CatalogItem = Schema<'CatalogOut'>
 type ScoreSign = CatalogItem['sign']
@@ -183,7 +184,7 @@ onMounted(fetchItems)
     <ReadonlyBadge permission-label="考核規則設定" :show="!canEdit" />
     <div class="panel-head">
       <p class="hint" data-test="panel-hint">
-        扣分項目目錄僅維護顯示用中繼資料（名稱／預設權重／資料來源／說明／排序／啟用）；
+        {{ PAGE_TERMS.appraisalCatalog }}僅維護顯示用中繼資料（名稱／預設權重／資料來源／說明／排序／啟用）；
         項目集合與加減分性質由系統治理，不可新增或刪除。預設權重為顯示用預設值，
         實際計分依規則版本；停用項目仍保留歷史分數對照。
       </p>

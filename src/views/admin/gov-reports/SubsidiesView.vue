@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <PageHeader
-      title="特教加給 / 助理鐘點費"
+      :title="PAGE_TERMS.govSubsidies"
       subtitle="申領流程：草稿 → 送審 → 核准 → 撥款"
     >
       <template #actions>
@@ -147,6 +147,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import { formatCurrency } from '@/utils/currency'
 import { saveBlobResponse } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errorHandler'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 interface SubsidyRow {
   id: number

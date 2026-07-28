@@ -23,7 +23,7 @@ import { useDashboardSections } from '@/composables'
 import DisabilityExpirySection from '@/components/dashboard/DisabilityExpirySection.vue'
 import IntegrationsHealthCard from '@/components/dashboard/IntegrationsHealthCard.vue'
 import { hasPermission } from '@/utils/auth'
-import { MODULE_TERMS } from '@/constants/moduleTerms'
+import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 import QuickAddMenu, { type QuickAddDialogType } from '@/components/dashboard/QuickAddMenu.vue'
 import QuickOvertimeDialog from '@/components/dashboard/quick-add/QuickOvertimeDialog.vue'
 import QuickLeaveDialog from '@/components/dashboard/quick-add/QuickLeaveDialog.vue'
@@ -484,7 +484,7 @@ const anomalyOverflow = computed(
               <div class="action-circle">
                 <el-icon :size="22"><TrendCharts /></el-icon>
               </div>
-              <span>報表統計</span>
+              <span>{{ PAGE_TERMS.reports }}</span>
             </router-link>
             <router-link to="/settings" class="action-item">
               <div class="action-circle">

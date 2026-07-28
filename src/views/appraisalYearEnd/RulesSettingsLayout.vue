@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { hasPermission } from '@/utils/auth'
 import { provideOpenCycleHint } from '@/views/appraisal/composables/useOpenCycleHint'
 import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 子頁權限對齊實際呼叫的 API：前四頁走 appraisal API（APPRAISAL_READ）、年終規則走 SETTINGS_READ。
 // Task B7：另加 canWrite/permLabel——各 tab 實際「寫入」權限對齊各面板真實 gate（B4 已向後端核實），
@@ -14,7 +15,7 @@ import ReadonlyBadge from '@/components/common/ReadonlyBadge.vue'
 const TABS = [
   {
     name: 'scoring',
-    label: '考核扣分規則',
+    label: PAGE_TERMS.appraisalScoringRules,
     can: () => hasPermission('APPRAISAL_READ'),
     canWrite: () => hasPermission('APPRAISAL_RULE_WRITE'),
     permLabel: '考核規則設定',
@@ -28,7 +29,7 @@ const TABS = [
   },
   {
     name: 'catalog',
-    label: '扣分項目目錄',
+    label: PAGE_TERMS.appraisalCatalog,
     can: () => hasPermission('APPRAISAL_READ'),
     canWrite: () => hasPermission('APPRAISAL_RULE_WRITE'),
     permLabel: '考核規則設定',

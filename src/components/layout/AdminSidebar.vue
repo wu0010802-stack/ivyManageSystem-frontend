@@ -48,7 +48,7 @@
         <el-menu-item v-if="canView.APPROVALS" index="/workbench">
           <el-icon><Finished /></el-icon>
           <template #title>
-            工作台
+            {{ PAGE_TERMS.workbench }}
             <el-badge v-if="workbenchBadge > 0" :value="workbenchBadge" :max="99" class="menu-badge" />
           </template>
         </el-menu-item>
@@ -84,7 +84,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.OVERTIME_READ || canView.MEETINGS" index="/overtime">
             <el-icon><Watch /></el-icon>
-            <template #title>加班 / 會議</template>
+            <template #title>{{ PAGE_TERMS.overtime }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.SCHEDULE" index="/schedule">
             <el-icon><Timer /></el-icon>
@@ -100,11 +100,11 @@
           </template>
           <el-menu-item v-if="canView.CLASSROOMS_READ" index="/classrooms">
             <el-icon><OfficeBuilding /></el-icon>
-            <template #title>班級學生管理</template>
+            <template #title>{{ PAGE_TERMS.classrooms }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
             <el-icon><User /></el-icon>
-            <template #title>學生</template>
+            <template #title>{{ PAGE_TERMS.students }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.RECRUITMENT_READ" index="/students/admissions">
             <el-icon><Promotion /></el-icon>
@@ -113,7 +113,7 @@
           <!-- 在籍統計已折入「班級學生管理」頁的第一個分頁 -->
           <el-menu-item v-if="canView.DISMISSAL_CALLS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
-            <template #title>接送通知</template>
+            <template #title>{{ PAGE_TERMS.dismissalQueue }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.FEES_READ" index="/fees">
             <el-icon><CreditCard /></el-icon>
@@ -133,7 +133,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.CALENDAR" index="/calendar">
             <el-icon><Calendar /></el-icon>
-            <template #title>行事曆</template>
+            <template #title>{{ PAGE_TERMS.calendar }}</template>
           </el-menu-item>
           <el-menu-item
             v-if="canView.VENDOR_PAYMENT_READ || canView.MISC_RECEIPT_READ"
@@ -152,7 +152,7 @@
           </template>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/dashboard">
             <el-icon><TrendCharts /></el-icon>
-            <template #title>統計儀表板</template>
+            <template #title>{{ PAGE_TERMS.activityDashboard }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/registrations">
             <el-icon><Tickets /></el-icon>
@@ -163,7 +163,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
             <el-icon><Timer /></el-icon>
-            <template #title>報名時間設定</template>
+            <template #title>{{ PAGE_TERMS.activitySettings }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/pos">
             <el-icon><Coin /></el-icon>
@@ -171,11 +171,11 @@
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_PAYMENT_APPROVE" index="/activity/pos/approval">
             <el-icon><CircleCheck /></el-icon>
-            <template #title>收款簽核</template>
+            <template #title>{{ PAGE_TERMS.activityPosApproval }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/catalog">
             <el-icon><Collection /></el-icon>
-            <template #title>課程與用品</template>
+            <template #title>{{ PAGE_TERMS.activityCatalog }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/inquiries">
             <el-icon><ChatDotRound /></el-icon>
@@ -190,7 +190,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
             <el-icon><List /></el-icon>
-            <template #title>修改紀錄</template>
+            <template #title>{{ PAGE_TERMS.activityChanges }}</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -206,21 +206,21 @@
           </el-menu-item>
           <el-menu-item v-if="canView.DATA_QUALITY_READ" index="/data-quality">
             <el-icon><WarningFilled /></el-icon>
-            <template #title>資料品質</template>
+            <template #title>{{ PAGE_TERMS.dataQuality }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/monthly">
             <el-icon><Histogram /></el-icon>
-            <template #title>月度月報</template>
+            <template #title>{{ PAGE_TERMS.govMonthly }}</template>
           </el-menu-item>
           <!-- 以下三頁先前只有路由沒有選單入口，僅能靠直接輸入網址進入。
                權限用 GOV_REPORTS_VIEW 對齊 permissions.ts 的 /admin/gov-reports prefix guard。 -->
           <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/certificates">
             <el-icon><Document /></el-icon>
-            <template #title>在學證明紀錄</template>
+            <template #title>{{ PAGE_TERMS.govCertificates }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/subsidies">
             <el-icon><Document /></el-icon>
-            <template #title>特教加給</template>
+            <template #title>{{ PAGE_TERMS.govSubsidies }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/iep">
             <el-icon><Document /></el-icon>
@@ -228,11 +228,11 @@
           </el-menu-item>
           <el-menu-item v-if="canView.GOV_REPORTS_EXPORT" index="/gov-reports">
             <el-icon><Files /></el-icon>
-            <template #title>政府申報匯出</template>
+            <template #title>{{ PAGE_TERMS.govExport }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.REPORTS" index="/reports">
             <el-icon><PieChart /></el-icon>
-            <template #title>報表統計</template>
+            <template #title>{{ PAGE_TERMS.reports }}</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -252,7 +252,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
             <el-icon><Tools /></el-icon>
-            <template #title>一般設定</template>
+            <template #title>{{ PAGE_TERMS.settingsGeneral }}</template>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -284,7 +284,7 @@ import {
   Memo, Histogram, PieChart, Tools
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
-import { MODULE_TERMS } from '@/constants/moduleTerms'
+import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 
 const props = withDefaults(defineProps<{
   pendingApprovals?: number

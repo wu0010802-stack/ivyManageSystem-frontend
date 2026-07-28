@@ -2,7 +2,7 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLoca
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth, hasPortalPermission, hasPermission } from '@/utils/auth'
-import { MODULE_TERMS } from '@/constants/moduleTerms'
+import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
 function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
@@ -45,7 +45,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/workbench',
             component: () => import('../views/workbench/WorkbenchLayout.vue'),
             redirect: '/workbench/approvals',
-            meta: { title: '工作台' },
+            meta: { title: PAGE_TERMS.workbench },
             children: [
                 {
                     path: 'approvals',
@@ -65,7 +65,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/reports',
             name: 'reports',
             component: () => import('../views/ReportsView.vue'),
-            meta: { title: '報表統計' }
+            meta: { title: PAGE_TERMS.reports }
         },
         {
             path: '/employees',
@@ -87,7 +87,7 @@ export const routes: RouteRecordRaw[] = [
             beforeEnter: (to) => to.query.tab === 'enrollment'
                 ? ({ path: '/classrooms', query: { ...to.query, tab: 'enrollment' }, replace: true })
                 : true,
-            meta: { title: '學生' }
+            meta: { title: PAGE_TERMS.students }
         },
         {
             path: '/students/profile/:id',
@@ -111,7 +111,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/student-assessments',
             name: 'student-assessments',
             component: () => import('../views/StudentAssessmentView.vue'),
-            meta: { title: '學生評量紀錄' }
+            meta: { title: PAGE_TERMS.studentAssessments }
         },
         {
             path: '/student-incidents',
@@ -161,7 +161,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/classrooms',
             name: 'classrooms',
             component: () => import('../views/ClassroomWorkbenchView.vue'),
-            meta: { title: '班級學生管理' }
+            meta: { title: PAGE_TERMS.classrooms }
         },
         {
             path: '/attendance',
@@ -179,7 +179,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/overtime',
             name: 'overtime',
             component: () => import('../views/OvertimeView.vue'),
-            meta: { title: '加班管理' }
+            meta: { title: PAGE_TERMS.overtime }
         },
         {
             path: '/schedule',
@@ -197,7 +197,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/salary/settle',
             name: 'salary-settle',
             component: () => import('../views/salary/SalarySettleView.vue'),
-            meta: { title: '月結', parentTitle: '薪資管理' }
+            meta: { title: PAGE_TERMS.salarySettle, parentTitle: '薪資管理' }
         },
         {
             path: '/salary/history',
@@ -221,7 +221,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/calendar',
             name: 'calendar',
             component: () => import('../views/CalendarView.vue'),
-            meta: { title: '學校行事曆' }
+            meta: { title: PAGE_TERMS.calendar }
         },
         {
             path: '/meetings',
@@ -264,13 +264,13 @@ export const routes: RouteRecordRaw[] = [
             path: '/data-quality',
             name: 'data-quality',
             component: () => import('../views/DataQualityView.vue'),
-            meta: { title: '資料品質報告' }
+            meta: { title: PAGE_TERMS.dataQuality }
         },
         {
             path: '/settings',
             name: 'settings',
             component: () => import('../views/SettingsView.vue'),
-            meta: { title: '系統設定' }
+            meta: { title: PAGE_TERMS.settingsGeneral }
         },
         {
             path: '/settings/accounts',
@@ -294,19 +294,19 @@ export const routes: RouteRecordRaw[] = [
             path: '/gov-reports',
             name: 'gov-reports',
             component: () => import('../views/GovReportsView.vue'),
-            meta: { title: '政府申報匯出' }
+            meta: { title: PAGE_TERMS.govExport }
         },
         {
             path: '/admin/gov-reports/certificates',
             name: 'AdminGovReportsCertificates',
             component: () => import('../views/admin/gov-reports/CertificatesView.vue'),
-            meta: { title: '在學證明開立紀錄' }
+            meta: { title: PAGE_TERMS.govCertificates }
         },
         {
             path: '/admin/gov-reports/subsidies',
             name: 'AdminGovReportsSubsidies',
             component: () => import('@/views/admin/gov-reports/SubsidiesView.vue'),
-            meta: { title: '特教加給' },
+            meta: { title: PAGE_TERMS.govSubsidies },
         },
         {
             path: '/admin/gov-reports/iep',
@@ -318,7 +318,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/admin/gov-reports/monthly',
             name: 'AdminGovReportsMonthly',
             component: () => import('@/views/admin/gov-reports/MonthlyReportView.vue'),
-            meta: { title: '月度幼生在園統計' },
+            meta: { title: PAGE_TERMS.govMonthly },
         },
         // ============ 考核 × 年終 整合工作區（巢狀 shell，2026-07-10 UX 改版）============
         {
@@ -337,7 +337,7 @@ export const routes: RouteRecordRaw[] = [
                         { path: 'current', name: 'aye-appraisal-current', component: () => import('../views/appraisal/CurrentSemesterOverview.vue'), meta: { title: '當期總覽' } },
                         { path: 'history', name: 'aye-appraisal-history', component: () => import('../views/appraisal/CycleListView.vue'), meta: { title: '歷史週期與簽核' } },
                         { path: 'institution-events', name: 'aye-appraisal-events', component: () => import('../views/appraisal/components/InstitutionEventPanel.vue'), meta: { title: '活動出席' } },
-                        { path: 'disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處記錄' } },
+                        { path: 'disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處紀錄' } },
                     ],
                 },
                 { path: 'year-end', name: 'aye-year-end', component: () => import('../views/yearEnd/YearEndListView.vue'), meta: { title: '年終' } },
@@ -353,14 +353,14 @@ export const routes: RouteRecordRaw[] = [
                     redirect: () => hasPermission('APPRAISAL_READ') ? '/appraisal-year-end/rules/scoring' : '/appraisal-year-end/rules/year-end-rules',
                     meta: { title: '規則設定' },
                     children: [
-                        { path: 'scoring', name: 'aye-rules-scoring', component: () => import('../views/appraisal/components/ScoringRulesPanel.vue'), meta: { title: '考核扣分規則' } },
+                        { path: 'scoring', name: 'aye-rules-scoring', component: () => import('../views/appraisal/components/ScoringRulesPanel.vue'), meta: { title: PAGE_TERMS.appraisalScoringRules } },
                         { path: 'bonus-rates', name: 'aye-rules-bonus-rates', component: () => import('../views/appraisal/components/BonusRatesPanel.vue'), meta: { title: '年終獎金率' } },
-                        { path: 'catalog', name: 'aye-rules-catalog', component: () => import('../views/appraisal/components/PenaltyCatalogPanel.vue'), meta: { title: '扣分項目目錄' } },
+                        { path: 'catalog', name: 'aye-rules-catalog', component: () => import('../views/appraisal/components/PenaltyCatalogPanel.vue'), meta: { title: PAGE_TERMS.appraisalCatalog } },
                         { path: 'enrollment-targets', name: 'aye-rules-enrollment', component: () => import('../views/appraisal/YearlyEnrollmentTargetSection.vue'), meta: { title: '學年目標人數' } },
                         { path: 'year-end-rules', name: 'aye-rules-year-end', component: () => import('../views/yearEnd/YearEndRulesPanel.vue'), meta: { title: '年終規則' } },
                     ],
                 },
-                { path: 'exceptions', name: 'aye-exceptions', component: () => import('../views/yearEnd/ExceptionCenterView.vue'), meta: { title: '例外中心' } },
+                { path: 'exceptions', name: 'aye-exceptions', component: () => import('../views/yearEnd/ExceptionCenterView.vue'), meta: { title: PAGE_TERMS.yearEndExceptions } },
             ],
         },
         // --- 舊路由 redirect（書籤 / 後端 deep_link 相容）---
@@ -424,7 +424,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/dismissal-queue',
             name: 'dismissal-queue',
             component: () => import('../views/DismissalQueueView.vue'),
-            meta: { title: '接送通知' }
+            meta: { title: PAGE_TERMS.dismissalQueue }
         },
 
         // ============ 課後才藝 ============
@@ -432,37 +432,37 @@ export const routes: RouteRecordRaw[] = [
             path: '/activity/dashboard',
             name: 'activity-dashboard',
             component: () => import('../views/activity/ActivityDashboardView.vue'),
-            meta: { title: '才藝統計儀表板' }
+            meta: { title: PAGE_TERMS.activityDashboard, parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/registrations',
             name: 'activity-registrations',
             component: () => import('../views/activity/ActivityRegistrationView.vue'),
-            meta: { title: '報名管理' }
+            meta: { title: '報名管理', parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/pos',
             name: 'activity-pos',
             component: () => import('../views/activity/POSView.vue'),
-            meta: { title: 'POS 收銀' }
+            meta: { title: 'POS 收銀', parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/pos/approval',
             name: 'activity-pos-approval',
             component: () => import('../views/activity/POSApprovalView.vue'),
-            meta: { title: 'POS 收款簽核' }
+            meta: { title: PAGE_TERMS.activityPosApproval, parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/audit/pos-unlock',
             name: 'POSAuditEvents',
             component: () => import('../views/activity/POSAuditEventsView.vue'),
-            meta: { title: 'POS 日結異常稽核軌跡' }
+            meta: { title: PAGE_TERMS.activityPosAudit, parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/catalog',
             name: 'activity-catalog',
             component: () => import('../views/activity/ActivityCatalogView.vue'),
-            meta: { title: '課程與用品管理' }
+            meta: { title: PAGE_TERMS.activityCatalog, parentTitle: MODULE_TERMS.activity }
         },
         // 舊路徑保留相容：自動導向新整合頁
         {
@@ -477,25 +477,25 @@ export const routes: RouteRecordRaw[] = [
             path: '/activity/inquiries',
             name: 'activity-inquiries',
             component: () => import('../views/activity/ActivityInquiryView.vue'),
-            meta: { title: '家長提問' }
+            meta: { title: '家長提問', parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/settings',
             name: 'activity-settings',
             component: () => import('../views/activity/ActivitySettingsView.vue'),
-            meta: { title: '報名時間設定' }
+            meta: { title: PAGE_TERMS.activitySettings, parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/changes',
             name: 'activity-changes',
             component: () => import('../views/activity/ActivityChangesView.vue'),
-            meta: { title: '修改紀錄' }
+            meta: { title: PAGE_TERMS.activityChanges, parentTitle: MODULE_TERMS.activity }
         },
         {
             path: '/activity/attendance',
             name: 'activity-attendance',
             component: () => import('../views/activity/ActivityAttendanceView.vue'),
-            meta: { title: '點名管理' }
+            meta: { title: '點名管理', parentTitle: MODULE_TERMS.activity }
         },
         // ============ 公開前台 ============
         {

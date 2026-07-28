@@ -14,6 +14,7 @@ import MonthlyFixedCostPanel from './reports/MonthlyFixedCostPanel.vue'
 import AttendancePanel from './reports/AttendancePanel.vue'
 import SalaryPanel from './reports/SalaryPanel.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 const route = useRoute()
 const router = useRouter()
@@ -118,9 +119,9 @@ defineExpose({
 
 <template>
   <div class="reports-page">
-    <PageHeader title="報表統計">
+    <PageHeader :title="PAGE_TERMS.reports">
       <template #title-extra>
-        <span class="viewer-tag">{{ viewerName }} 的報表統計</span>
+        <span class="viewer-tag">{{ viewerName }} 的{{ PAGE_TERMS.reports }}</span>
       </template>
       <template #actions>
         <el-tag type="info" effect="plain" size="small" data-test="data-cutoff-badge">{{ cutoffBadgeText }}</el-tag>

@@ -84,7 +84,8 @@ describe('DataQualityView', () => {
   it('renders title and severity counters', async () => {
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('資料品質報告')
+    // 原「資料品質報告」讀起來像報表，實際是可確認／標記已修正／忽略的待辦佇列
+    expect(wrapper.text()).toContain('資料異常待辦')
     expect(wrapper.text()).toContain('P0')
     expect(wrapper.text()).toContain('P1')
     expect(wrapper.text()).toContain('P2')
@@ -126,7 +127,7 @@ describe('DataQualityView', () => {
   it('預設篩選下無資料時顯示健康的空狀態', async () => {
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('目前沒有待處理的資料品質問題')
+    expect(wrapper.text()).toContain('目前沒有待處理的資料異常')
   })
 
   it('有篩選條件時空狀態改為提示放寬條件', async () => {

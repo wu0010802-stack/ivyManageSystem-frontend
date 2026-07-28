@@ -10,6 +10,7 @@ import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
 import { closeWebSocketSafely } from '@/utils/ws'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 import {
   useNowClock,
   sortByOldestFirst,
@@ -408,7 +409,7 @@ onUnmounted(() => {
 
 <template>
   <div class="dismissal-queue-view">
-    <PageHeader title="接送通知">
+    <PageHeader :title="PAGE_TERMS.dismissalQueue">
       <template #title-extra>
         <span
           v-if="isActiveView && sortedCalls.length"

@@ -2,7 +2,7 @@
   <div class="pos-audit">
     <el-card>
       <template #header>
-        <h2 class="pos-audit__title">POS 異常稽核軌跡</h2>
+        <h2 class="pos-audit__title">{{ PAGE_TERMS.activityPosAudit }}</h2>
       </template>
 
       <el-tabs v-model="activeTab">
@@ -64,6 +64,7 @@ import { ElMessage } from 'element-plus'
 
 import OperatorActivityTab from '@/components/activity/OperatorActivityTab.vue'
 import { getPOSUnlockEvents } from '@/api/activity'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 interface UnlockEvent { id: string | number; occurred_at?: string; action?: string; close_date?: string; unlocker_username?: string; unlocker_role?: string; comment?: string }
 

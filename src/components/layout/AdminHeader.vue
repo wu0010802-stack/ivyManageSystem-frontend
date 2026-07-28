@@ -79,7 +79,7 @@
                 <el-icon><User /></el-icon>個人資料
               </el-dropdown-item>
               <el-dropdown-item command="settings">
-                <el-icon><Setting /></el-icon>系統設定
+                <el-icon><Setting /></el-icon>{{ PAGE_TERMS.settingsGeneral }}
               </el-dropdown-item>
               <el-dropdown-item divided command="logout">
                 <el-icon><SwitchButton /></el-icon>登出
@@ -138,6 +138,7 @@ import { apiError } from '@/utils/error'
 import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue'
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import { roleDisplayLabel } from '@/constants/roleDisplay'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 withDefaults(defineProps<{
   isMobile?: boolean
