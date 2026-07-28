@@ -44,6 +44,9 @@
           <div v-if="(row.promoted_pending || 0) > 0" class="pending-occupancy-hint">
             含 {{ row.promoted_pending }} 待確認
           </div>
+          <div v-if="(row.pending_review || 0) > 0" class="pending-occupancy-hint">
+            含 {{ row.pending_review }} 待審核
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="候補" width="70" align="center">
@@ -302,7 +305,7 @@ interface Course {
   instructor_name?: string | null
   // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
   instructor_employee_id?: number | null
-  enrolled?: number; promoted_pending?: number; waitlist_count?: number
+  enrolled?: number; promoted_pending?: number; pending_review?: number; waitlist_count?: number
 }
 interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
 interface EnrolledItem { position?: number; student_name?: string; class_name?: string }
@@ -396,10 +399,11 @@ const enrolledCourse = ref<{ id: number; name: string } | null>(null)
 const enrolledItems = ref<EnrolledItem[]>([])
 const enrolledLoading = ref(false)
 
-// 佔位數 = enrolled + promoted_pending（與後端手動升位容量閘同口徑，
-// courses.py 的 remaining 亦以此計）
+// 佔位數 = enrolled + promoted_pending + pending_review（OCCUPYING_STATUSES，
+// 與後端容量閘同口徑，courses.py 的 remaining 亦以此計；2026-07-19 業主決策
+// 待審核占位也占容量）
 function occupying(row: Course): number {
-  return (row.enrolled || 0) + (row.promoted_pending || 0)
+  return (row.enrolled || 0) + (row.promoted_pending || 0) + (row.pending_review || 0)
 }
 
 // review P1（2026-07-12）：候補/報名 Drawer 的載入需與 fetchCourses 同樣的請求序號守衛，

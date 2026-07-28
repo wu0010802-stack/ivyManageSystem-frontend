@@ -163,11 +163,16 @@ export function usePublicRegistrationQuery({
     return true
   })
 
+  // 候補家族：一般候補 + 待審核候補。後端對兩者都回 waitlist_position（
+  // QUEUE_STATUSES 全域排序），家長端順位顯示同格式、不透露審核狀態差異
+  // （公開端隱私口徑：不洩漏比對細節）。
+  const WAITLIST_FAMILY = ['waitlist', 'pending_review_waitlist']
+
   function statusBadgeFor(name: string): string {
     if (!queryResult.value) return ''
     const entry = (queryResult.value.courses || []).find((c) => c.name === name)
     if (!entry) return ''
-    if (entry.status === 'waitlist') {
+    if (WAITLIST_FAMILY.includes(entry.status)) {
       return `候補第 ${entry.waitlist_position ?? '?'} 位`
     }
     if (entry.status === 'promoted_pending') {
@@ -179,7 +184,9 @@ export function usePublicRegistrationQuery({
   // 候補位次清單：供獨立候補摘要區塊使用（不依賴 options 列表）
   const waitlistCourses = computed(() => {
     if (!queryResult.value) return []
-    return (queryResult.value.courses || []).filter((c) => c.status === 'waitlist')
+    return (queryResult.value.courses || []).filter((c) =>
+      WAITLIST_FAMILY.includes(c.status),
+    )
   })
 
   // field_state 由後端決定。Fallback 預設為「已比對」，保守鎖住班級欄位避免

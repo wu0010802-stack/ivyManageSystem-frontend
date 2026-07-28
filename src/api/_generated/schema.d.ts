@@ -18609,6 +18609,8 @@ export interface components {
             meeting_weekday?: number | null;
             /** Name */
             name: string;
+            /** Pending Review */
+            pending_review: number;
             /** Price */
             price: number;
             /** Promoted Pending */
@@ -28401,6 +28403,8 @@ export interface components {
          * @description 單月薪條三區明細 + 權威小計（小計取 persisted gross/total_deduction/net）。
          */
         SalaryHistoryBreakdownOut: {
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
             /** Deduction Subtotal */
             deduction_subtotal: number;
             /** Deductions */
@@ -28415,6 +28419,8 @@ export interface components {
             separate_subtotal: number;
             /** Separate Transfer */
             separate_transfer: components["schemas"]["SalaryHistoryLineOut"][];
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
         };
         /**
          * SalaryHistoryItemOut
@@ -28427,6 +28433,8 @@ export interface components {
             attendance_deduction: number;
             /** Base Salary */
             base_salary: number;
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
             /** Gross Salary */
             gross_salary: number;
             /** Health Insurance */
@@ -28456,6 +28464,8 @@ export interface components {
             total_deduction: number;
             /** Total Deductions */
             total_deductions: number;
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
             /** Year */
             year: number;
         };
@@ -28895,6 +28905,11 @@ export interface components {
          *     `captured_at` 由 service 用 ``.isoformat()`` 轉成 str；無 tz 處理交由 service。
          */
         SalarySnapshotSummaryOut: {
+            /**
+             * Base Transfer Amount
+             * @default 0
+             */
+            base_transfer_amount: number;
             /** Captured At */
             captured_at?: string | null;
             /** Captured By */
@@ -28922,6 +28937,11 @@ export interface components {
             snapshot_type: string;
             /** Source Version */
             source_version?: number | null;
+            /**
+             * Unused Leave Payout
+             * @default 0
+             */
+            unused_leave_payout: number;
         };
         /**
          * ScheduleDayItem
@@ -33902,7 +33922,7 @@ export interface operations {
             query?: {
                 /** @description 若報名已有繳費金額，需顯式帶 true 才允許刪除並自動寫退費沖帳紀錄 */
                 force_refund?: boolean;
-                /** @description 當 force_refund 觸發實際退費時必填（≥5 字），原因會寫入 notes 供稽核 */
+                /** @description 當 force_refund 觸發實際退費時必填（≥ 15 字），原因會寫入 notes 供稽核 */
                 refund_reason?: string | null;
             };
             header?: never;
@@ -33973,7 +33993,7 @@ export interface operations {
             query?: {
                 /** @description 退課後若出現超繳，需顯式帶 true 才允許退課並自動寫退費沖帳紀錄 */
                 force_refund?: boolean;
-                /** @description 當 force_refund 觸發實際退費時必填（≥5 字），原因會寫入 notes 供稽核 */
+                /** @description 當 force_refund 觸發實際退費時必填（≥ 15 字），原因會寫入 notes 供稽核 */
                 refund_reason?: string | null;
             };
             header?: never;
@@ -34419,7 +34439,7 @@ export interface operations {
             query?: {
                 /** @description 移除用品後若出現超繳，需顯式帶 true 才允許移除並自動寫退費沖帳紀錄 */
                 force_refund?: boolean;
-                /** @description 當 force_refund 觸發實際退費時必填（≥5 字），原因會寫入 notes 供稽核 */
+                /** @description 當 force_refund 觸發實際退費時必填（≥ 15 字），原因會寫入 notes 供稽核 */
                 refund_reason?: string | null;
             };
             header?: never;
