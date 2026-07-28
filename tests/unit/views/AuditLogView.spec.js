@@ -41,8 +41,9 @@ import AuditLogView from '@/views/AuditLogView.vue'
 const mountOptions = {
   global: {
     stubs: {
-      // 表格相關：不渲染 slot，避免 scoped-slot row 為 undefined 拋錯
-      'el-table': { template: '<div/>' },
+      // 表格相關：不渲染預設 slot（含 scoped row），避免 row 為 undefined 拋錯；
+      // #empty 具名 slot 不帶 row，安全渲染以利空狀態文案斷言
+      'el-table': { template: '<div><slot name="empty" /></div>' },
       'el-table-column': { template: '<div/>' },
       // 其他 Element Plus 元件
       'el-card': { template: '<div><slot/></div>' },
@@ -127,5 +128,54 @@ describe('AuditLogView — formatOperator 代操作者顯示', () => {
     const row = { username: '老師A' }
     const text = wrapper.vm.formatOperator(row)
     expect(text).toBe('老師A')
+  })
+})
+
+describe('AuditLogView — 伺服端關鍵字搜尋', () => {
+  it('search 有值時 handleSearch 將 search 參數送往 API 並重設頁碼', async () => {
+    const { getAuditLogs } = await import('@/api/audit')
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+    getAuditLogs.mockClear()
+
+    wrapper.vm.$.setupState.filters.search = '王小明'
+    wrapper.vm.$.setupState.filters.page = 3
+    wrapper.vm.$.setupState.handleSearch()
+    await flushPromises()
+
+    expect(getAuditLogs).toHaveBeenCalledWith(
+      expect.objectContaining({ search: '王小明', page: 1 }),
+    )
+  })
+
+  it('handleReset 清空 search 並重新查詢（不帶 search 參數）', async () => {
+    const { getAuditLogs } = await import('@/api/audit')
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+
+    wrapper.vm.$.setupState.filters.search = '王小明'
+    getAuditLogs.mockClear()
+    wrapper.vm.$.setupState.handleReset()
+    await flushPromises()
+
+    expect(wrapper.vm.$.setupState.filters.search).toBe('')
+    const params = getAuditLogs.mock.calls[0][0]
+    expect(params).not.toHaveProperty('search')
+  })
+})
+
+describe('AuditLogView — 空狀態文案', () => {
+  it('無篩選、查無紀錄時顯示「尚無操作紀錄」', async () => {
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+    expect(wrapper.html()).toContain('尚無操作紀錄')
+  })
+
+  it('已套用篩選條件、查無紀錄時顯示「目前篩選條件下沒有紀錄」', async () => {
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+    wrapper.vm.$.setupState.filters.username = '王小明'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.html()).toContain('目前篩選條件下沒有紀錄')
   })
 })

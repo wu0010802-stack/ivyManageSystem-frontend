@@ -5,6 +5,7 @@ import { getAuditLogs, getAuditLogsMeta, exportAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import AuditChangesDetail from '@/components/AuditChangesDetail.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -40,6 +41,7 @@ const actionTypes = ref<MetaOption[]>([])
 const fieldLabels = ref<Record<string, string>>({})
 
 const filters = reactive({
+  search: '',
   entity_type: '',
   action: '',
   username: '',
@@ -138,6 +140,7 @@ const applyRiskFilter = (key: string) => {
 
 const buildFilterParams = () => {
   const params: Record<string, unknown> = {}
+  if (filters.search) params.search = filters.search
   if (filters.entity_type) params.entity_type = filters.entity_type
   if (filters.action) params.action = filters.action
   if (filters.username) params.username = filters.username
@@ -196,6 +199,7 @@ const handleSearch = () => {
 
 const handleReset = () => {
   filters.entity_type = ''
+  filters.search = ''
   filters.action = ''
   filters.username = ''
   filters.entity_id = ''
@@ -207,6 +211,20 @@ const handleReset = () => {
   activeRiskFilter.value = ''
   fetchLogs()
 }
+
+// 空狀態文案判斷：查詢條件（篩選欄位或高風險快篩）是否有任一生效
+const hasActiveFilter = computed(() =>
+  Boolean(filters.search) ||
+  Boolean(filters.entity_type) ||
+  Boolean(filters.action) ||
+  Boolean(filters.username) ||
+  Boolean(filters.entity_id) ||
+  Boolean(filters.ip_address) ||
+  Boolean(filters.risk_tag) ||
+  Boolean(filters.start_at) ||
+  Boolean(filters.end_at) ||
+  Boolean(activeRiskFilter.value)
+)
 
 // 高風險旗標：用於行內顯示警示徽章
 const getRiskBadges = (row: AuditLog) => {
@@ -440,6 +458,14 @@ defineExpose({ formatOperator })
 
     <el-card class="filter-card">
       <div class="filters">
+        <el-input
+          v-model="filters.search"
+          placeholder="關鍵字（操作者或摘要）"
+          clearable
+          style="width: 200px;"
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
+        />
         <el-select v-model="filters.entity_type" placeholder="資源類型" clearable style="width: 130px;">
           <el-option v-for="et in entityTypes" :key="et.value" :label="et.label" :value="et.value" />
         </el-select>
@@ -507,6 +533,13 @@ defineExpose({ formatOperator })
       v-loading="loading"
       max-height="600"
     >
+      <template #empty>
+        <EmptyState
+          :title="hasActiveFilter ? '目前篩選條件下沒有紀錄' : '尚無操作紀錄'"
+          :description="hasActiveFilter ? '試著調整篩選條件或高風險快篩後再查詢' : ''"
+          variant="inline"
+        />
+      </template>
       <el-table-column type="expand">
         <template #default="{ row }">
           <AuditChangesDetail :changes="row.changes" :field-labels="fieldLabels" />
@@ -643,7 +676,7 @@ defineExpose({ formatOperator })
   align-items: center;
 }
 .quick-label {
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary, var(--neutral-600));
   font-size: var(--text-sm);
 }
 .risk-hint {
@@ -687,7 +720,7 @@ defineExpose({ formatOperator })
 }
 .history-operator {
   font-size: var(--text-sm);
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary, var(--neutral-600));
 }
 .history-summary {
   font-size: var(--text-sm);
@@ -697,7 +730,7 @@ defineExpose({ formatOperator })
   text-align: center;
 }
 .no-changes {
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary, var(--neutral-500));
   padding: var(--space-2);
   font-style: italic;
 }

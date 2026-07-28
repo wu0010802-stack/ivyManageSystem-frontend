@@ -10,7 +10,17 @@
       </div>
     </div>
 
-    <el-table :data="courses" v-loading="loading" border>
+    <AdminListToolbar
+      v-model:search="courseSearch"
+      search-placeholder="搜尋課程名稱或負責老師"
+      :total="courseTotal"
+      :shown="courseShown"
+    />
+
+    <el-table :data="filteredCourses" v-loading="loading" border>
+      <template #empty>
+        <el-empty :description="courseSearch ? '沒有符合搜尋條件的課程' : '尚無課程資料'" />
+      </template>
       <el-table-column label="課程名稱" prop="name" min-width="140" />
       <el-table-column label="價格" prop="price" width="90" align="right">
         <template #default="{ row }">${{ row.price?.toLocaleString() }}</template>
@@ -79,12 +89,6 @@
         </template>
       </el-table-column>
     </el-table>
-
-    <el-empty
-      v-if="!loading && courses.length === 0"
-      description="尚無課程資料"
-      style="padding: 40px 0"
-    />
 
     <!-- 新增/編輯對話框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '編輯課程' : '新增課程'" width="480px" destroy-on-close>
@@ -292,7 +296,9 @@ import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, delete
 import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { sanitizeHref } from '@/utils/url'
 
@@ -374,6 +380,18 @@ function instructorName(row: Course): string {
   const emp = employeeOptions.value.find((e) => e.id === row.instructor_employee_id)
   return emp ? String(emp.name) : `員工 #${row.instructor_employee_id}`
 }
+
+// 客端關鍵字過濾：課程清單已全載，課程名稱/負責老師（依 instructor_employee_id 解析
+// 出的姓名，與「負責老師」欄一致）即打即濾
+const {
+  searchQuery: courseSearch,
+  filtered: filteredCourses,
+  total: courseTotal,
+  shown: courseShown,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => courses.value as unknown as Record<string, unknown>[],
+  searchFields: (r) => [r.name as string | undefined, instructorName(r as unknown as Course)],
+})
 
 const waitlistDrawer = ref(false)
 const waitlistCourse = ref<{ id: number; name: string } | null>(null)

@@ -17,8 +17,10 @@ import { downloadFile } from '@/utils/download'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import AttendanceBatchPanel from '@/components/student/academic-affairs/AttendanceBatchPanel.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { useClientTableFilter } from '@/composables'
 
 const TODAY = todayISO()
 
@@ -148,6 +150,17 @@ const overviewCards = computed(() => ([
 
 const monthlyStudents = computed(() => monthlyData.value?.students ?? [])
 const alertStudents = computed(() => monthlyData.value?.alerts ?? [])
+
+// 客端關鍵字過濾：月分析單月學生清單已全載，姓名即打即濾，與上方班級/月份下拉（伺服器端）交集
+const {
+  searchQuery: monthlyStudentSearch,
+  filtered: filteredMonthlyStudents,
+  total: monthlyStudentTotal,
+  shown: monthlyStudentShown,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => monthlyStudents.value,
+  searchFields: (r) => [r.name as string | undefined],
+})
 const monthlySummaryCards = computed(() => {
   if (!monthlyData.value) return []
   return [
@@ -561,12 +574,22 @@ onMounted(async () => {
               <el-empty v-else description="本月沒有連續缺席告警" :image-size="60" />
             </el-card>
 
+            <AdminListToolbar
+              v-model:search="monthlyStudentSearch"
+              search-placeholder="搜尋學生姓名"
+              :total="monthlyStudentTotal"
+              :shown="monthlyStudentShown"
+            />
+
             <el-table
-              :data="monthlyStudents"
+              :data="filteredMonthlyStudents"
               stripe
               style="width: 100%; margin-top: 16px"
               max-height="520"
             >
+              <template #empty>
+                <el-empty :description="monthlyStudentSearch ? '沒有符合搜尋條件的學生' : '本月尚無學生出席資料'" />
+              </template>
               <el-table-column prop="student_no" label="學號" width="90" />
               <el-table-column label="姓名" width="110">
                 <template #default="{ row }">

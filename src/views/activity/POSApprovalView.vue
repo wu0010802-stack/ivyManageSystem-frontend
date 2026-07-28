@@ -137,13 +137,22 @@
               description="當日無交易"
               :image-size="48"
             />
-            <el-table
-              v-else
-              :data="dailyTransactions"
-              size="small"
-              :max-height="260"
-            >
-              <el-table-column type="expand">
+            <template v-else>
+              <AdminListToolbar
+                v-model:search="txSearch"
+                search-placeholder="搜尋學生姓名或收據編號"
+                :total="txTotal"
+                :shown="txShown"
+              />
+              <el-table
+                :data="filteredTransactions"
+                size="small"
+                :max-height="260"
+              >
+                <template #empty>
+                  <el-empty description="沒有符合搜尋條件的交易" :image-size="48" />
+                </template>
+                <el-table-column type="expand">
                 <template #default="{ row }">
                   <div class="pos-approval__tx-items">
                     <div
@@ -192,7 +201,8 @@
               <el-table-column label="金額" width="100" align="right">
                 <template #default="{ row }">{{ formatTWD(row.total) }}</template>
               </el-table-column>
-            </el-table>
+              </el-table>
+            </template>
           </div>
 
           <!-- 已簽核：展示結果 + 解鎖按鈕 -->
@@ -394,6 +404,8 @@ import {
 import PageHeader from '@/components/common/PageHeader.vue'
 import POSSemesterReconciliation from '@/components/activity/POSSemesterReconciliation.vue'
 import StatCard from '@/components/common/StatCard.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import { useClientTableFilter } from '@/composables'
 import { CASH_METHOD, formatTWD } from '@/constants/pos'
 import {
   approvePOSDailyClose,
@@ -442,6 +454,22 @@ const approveDisabled = computed(
 
 const dailyTransactions = ref<Record<string, unknown>[]>([])
 const loadingTx = ref(false)
+
+// 客端關鍵字過濾：當日交易明細已全載，學生姓名/收據編號即打即濾。
+// 「近 30 天對帳」（reconciliation.items）與「待簽核日期」（pending）皆以日期為
+// 彙總維度、無姓名/課程名稱欄，不適用同一套搜尋 recipe，故不納入。
+const {
+  searchQuery: txSearch,
+  filtered: filteredTransactions,
+  total: txTotal,
+  shown: txShown,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => dailyTransactions.value,
+  searchFields: (r) => [
+    (r.student_names as string[] | undefined)?.join('、'),
+    r.receipt_no as string | undefined,
+  ],
+})
 
 const reconciliation = reactive<{ items: ReconItem[]; totals: Partial<ReconTotals> }>({ items: [], totals: {} })
 const loadingRecon = ref(false)
