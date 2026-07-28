@@ -500,7 +500,7 @@ const submitPassword = async () => {
             >
               <el-icon><Fold /></el-icon>
             </button>
-            <h3>常春藤義華幼兒園 - 教職員考勤系統</h3>
+            <h3>常春藤教育機構 - 教職員考勤系統</h3>
           </div>
           <button class="psp-trigger-portal" @click="openPalette" title="搜尋 (Cmd+K)">
             <el-icon><Search /></el-icon>

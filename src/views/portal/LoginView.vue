@@ -67,7 +67,7 @@ const handleLogin = async () => {
 
 <template>
   <div class="login-page">
-    <main class="login-shell" aria-label="常春藤義華幼兒園教職員登入">
+    <main class="login-shell" aria-label="常春藤教育機構教職員登入">
       <section class="login-brand">
         <div class="brand-mark" aria-hidden="true"></div>
       </section>
@@ -130,8 +130,8 @@ const handleLogin = async () => {
     </main>
 
     <footer class="login-footer">
-      <p class="footer-tagline">常春藤義華幼兒園 ・ 教職員入口</p>
-      <p class="footer-copy">© {{ new Date().getFullYear() }} 常春藤義華幼兒園 版權所有</p>
+      <p class="footer-tagline">常春藤教育機構 ・ 教職員入口</p>
+      <p class="footer-copy">© {{ new Date().getFullYear() }} 常春藤教育機構 版權所有</p>
     </footer>
   </div>
 </template>
