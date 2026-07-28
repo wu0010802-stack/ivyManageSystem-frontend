@@ -23,7 +23,8 @@
         "check:shared-constants": "node scripts/check-shared-constants.mjs",
         "lint": "eslint .",
         "lint:css": "stylelint 'src/**/*.{css,vue}'",
-        "lint:tokens": "node scripts/lint-tokens.mjs"
+        "lint:tokens": "node scripts/lint-tokens.mjs",
+        "check:error-detail": "node scripts/check-error-detail-ratchet.mjs"
     },
     "dependencies": {
         "@fullcalendar/core": "^6.1.21",
