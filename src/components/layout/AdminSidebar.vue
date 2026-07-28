@@ -111,7 +111,7 @@
             <template #title>招生入學</template>
           </el-menu-item>
           <!-- 在籍統計已折入「班級學生管理」頁的第一個分頁 -->
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
+          <el-menu-item v-if="canView.DISMISSAL_CALLS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
             <template #title>接送通知</template>
           </el-menu-item>
@@ -208,12 +208,26 @@
             <el-icon><WarningFilled /></el-icon>
             <template #title>資料品質</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/admin/gov-reports/monthly">
+          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/monthly">
             <el-icon><Histogram /></el-icon>
             <template #title>月度月報</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
-            <el-icon><Stamp /></el-icon>
+          <!-- 以下三頁先前只有路由沒有選單入口，僅能靠直接輸入網址進入。
+               權限用 GOV_REPORTS_VIEW 對齊 permissions.ts 的 /admin/gov-reports prefix guard。 -->
+          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/certificates">
+            <el-icon><Document /></el-icon>
+            <template #title>在學證明紀錄</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/subsidies">
+            <el-icon><Document /></el-icon>
+            <template #title>特教加給</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/iep">
+            <el-icon><Document /></el-icon>
+            <template #title>IEP 個別化教育計畫</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.GOV_REPORTS_EXPORT" index="/gov-reports">
+            <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>
           </el-menu-item>
           <el-menu-item v-if="canView.REPORTS" index="/reports">
@@ -267,7 +281,7 @@ import {
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Trophy, WarningFilled, Key,
   Suitcase, Promotion, Wallet, TrendCharts, Tickets, Coin, CircleCheck,
-  Memo, Histogram, Stamp, PieChart, Tools
+  Memo, Histogram, PieChart, Tools
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
 import { MODULE_TERMS } from '@/constants/moduleTerms'
@@ -347,7 +361,10 @@ const hasVisibleActivityItems = computed(() =>
 
 const hasVisibleReportsItems = computed(() =>
   canView.value.AUDIT_LOGS ||
-  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.DATA_QUALITY_READ
+  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.DATA_QUALITY_READ ||
+  canView.value.GOV_REPORTS_EXPORT ||
+  // 教育部類子頁走 GOV_REPORTS_VIEW；漏掉這條的話只有該權限的使用者會整個「報表」子選單消失
+  canView.value.GOV_REPORTS_VIEW
 )
 
 const hasVisibleSettingsItems = computed(() =>

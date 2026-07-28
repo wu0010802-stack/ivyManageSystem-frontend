@@ -53,7 +53,7 @@ npm run test:coverage  # 含覆蓋率報告
 使用 `createWebHashHistory`（hash 模式）。管理端與教師入口（portal）路由共用同一 `router/index.ts`，以 `/portal/` 前綴區分。
 
 ### 招生模組（前端整合）
-⚠ **已棄用**：舊版「附近幼兒園三來源前端合併」架構（`composables/usePreschoolGovData.ts` 並行查詢 DB/kiang/Google Places 再前端合併）已下沉後端，改由 `nearby-kindergartens` API 一次回傳合併結果；`usePreschoolGovData.ts` 現為零 caller 孤兒檔，待清理。現行入口為 `RecruitmentAddressHeatmap.vue` / `RecruitmentNearbySchoolList.vue` 兩支元件，直接呼叫 `recruitment.ts` 的 `getRecruitmentNearbyKindergartens`。
+⚠ **已棄用**：舊版「附近幼兒園三來源前端合併」架構（`composables/usePreschoolGovData.ts` 並行查詢 DB/kiang/Google Places 再前端合併）已下沉後端，改由 `nearby-kindergartens` API 一次回傳合併結果；`usePreschoolGovData.ts` 孤兒檔已於 2026-07-28 清理移除。現行入口為 `RecruitmentAddressHeatmap.vue` / `RecruitmentNearbySchoolList.vue` 兩支元件，直接呼叫 `recruitment.ts` 的 `getRecruitmentNearbyKindergartens`。
 
 ---
 
@@ -253,7 +253,7 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 **前端：**
 - API 呼叫統一透過 `src/api/` 下的模組，不在元件內直接 `fetch`/`axios`
 - 狀態管理用 Pinia store，不在元件間傳遞複雜狀態
-- 權限：用 `src/utils/auth.ts` 的 `hasPermission(name: string)`；2026-05-21 起 Permission 已改 str enum，**不再有 BigInt 需求**（見下方「跨端權限與認證」段）
+- 權限：用 `src/utils/auth.ts` 的 `hasPermission(name: string)`；2026-05-21 起 Permission 已改 str enum，**不再有 BigInt 需求**（見上方「跨端權限與認證」段）
 
 ---
 
@@ -261,7 +261,7 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 
 > `src/views/` 底下有 30+ 個 view（`portal/` / `salary/` / `leave/` / `activity/` 等），不一一列舉，依檔名語義即可定位；家長端為獨立 entry，見 `src/parent/views/`，非本目錄子集。下面只記錄「跨多檔協作 + 跨權限 + 帶 composable」的代表性區塊作為新增類似功能時的範本。
 
-> ⚠ 舊版「經營分析」（`views/analytics/`、路由 `/analytics`）已於 2026-06-03（commit `4a3b4b29`）業主裁定整塊移除；`Permission.BUSINESS_ANALYTICS` 刻意保留為孤兒權限（角色管理 UI 仍列出但無對應功能），`src/composables/useAnalyticsTimeRange.ts` 為零 caller 孤兒檔待清理。
+> ⚠ 舊版「經營分析」（`views/analytics/`、路由 `/analytics`）已於 2026-06-03（commit `4a3b4b29`）業主裁定整塊移除；`Permission.BUSINESS_ANALYTICS` 刻意保留為孤兒權限（角色管理 UI 仍列出但無對應功能），`src/composables/useAnalyticsTimeRange.ts` 孤兒檔已於 2026-07-28 清理移除。
 
 ### views/reports/
 

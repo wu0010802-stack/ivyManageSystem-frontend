@@ -41,11 +41,21 @@ describe('activity constants', () => {
   describe('COURSE_STATUS_TAG_TYPE', () => {
     it('enrolled → success', () => expect(COURSE_STATUS_TAG_TYPE.enrolled).toBe('success'))
     it('waitlist → info', () => expect(COURSE_STATUS_TAG_TYPE.waitlist).toBe('info'))
+    it('pending_review → warning（待審占位）', () =>
+      expect(COURSE_STATUS_TAG_TYPE.pending_review).toBe('warning'))
+    it('pending_review_waitlist → info（候補家族）', () =>
+      expect(COURSE_STATUS_TAG_TYPE.pending_review_waitlist).toBe('info'))
   })
 
   describe('COURSE_STATUS_LABEL', () => {
     it('enrolled → 正式', () => expect(COURSE_STATUS_LABEL.enrolled).toBe('正式'))
     it('waitlist → 候補', () => expect(COURSE_STATUS_LABEL.waitlist).toBe('候補'))
+    // 後端 rc.status 有五種值（schemas/activity_admin.py），缺 label 時
+    // ActivityRegistrationView fallback 會直接吐英文 raw 值（2026-07-27 回歸）
+    it('pending_review → 待審核', () =>
+      expect(COURSE_STATUS_LABEL.pending_review).toBe('待審核'))
+    it('pending_review_waitlist → 待審核候補', () =>
+      expect(COURSE_STATUS_LABEL.pending_review_waitlist).toBe('待審核候補'))
   })
 
   describe('MATCH_STATUS 收斂（admin 短文案 + timeline 長文案，共用 tag type）', () => {

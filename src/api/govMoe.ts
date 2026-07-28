@@ -1,3 +1,4 @@
+import type { AxiosResponse } from 'axios'
 import api from './index'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
@@ -42,7 +43,8 @@ export const markSubsidyPaid = (id: number, payload: unknown) =>
   api.put(`/gov-moe/subsidies/${id}/mark_paid`, payload)
 export const rejectSubsidy = (id: number) =>
   api.put(`/gov-moe/subsidies/${id}/reject`)
-export const exportSubsidies = (params: unknown) =>
+// 檔案類 endpoint 一律回 Blob；標明型別讓呼叫端能直接交給 saveBlobResponse
+export const exportSubsidies = (params: unknown): Promise<AxiosResponse<Blob>> =>
   api.get('/gov-moe/subsidies/export', { params, responseType: 'blob' })
 
 // --- IEP (Phase 4A) ---
@@ -53,7 +55,7 @@ export const submitIep = (id: number) => api.put(`/gov-moe/iep/${id}/submit`)
 export const approveIep = (id: number) => api.put(`/gov-moe/iep/${id}/approve`)
 export const closeIep = (id: number) => api.put(`/gov-moe/iep/${id}/close`)
 export const cloneIep = (id: number, payload: unknown) => api.post(`/gov-moe/iep/${id}/clone`, payload)
-export const exportIepPdf = (id: number) =>
+export const exportIepPdf = (id: number): Promise<AxiosResponse<Blob>> =>
   api.get(`/gov-moe/iep/${id}/export`, { responseType: 'blob' })
 
 // --- Monthly Enrollment Report (Phase 2) ---
@@ -67,7 +69,9 @@ export const getMonthlyReport = (
 ): AxiosResp<'/gov-moe/monthly', 'get'> =>
   api.get('/gov-moe/monthly', { params })
 
-export const exportMonthlyReport = (params: { year: number; month: number }) =>
+export const exportMonthlyReport = (
+  params: { year: number; month: number },
+): Promise<AxiosResponse<Blob>> =>
   api.get('/gov-moe/monthly/export', {
     params: { ...params, format: 'xlsx' },
     responseType: 'blob',

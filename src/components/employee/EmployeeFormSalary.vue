@@ -127,6 +127,7 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
         </template>
         <template v-else>
             <el-input-number v-model="form.insurance_salary_level" :min="0" :step="1000" controls-position="right" style="width: 100%" />
+            <div class="hint" style="text-align:left">存檔時自動向上對齊官方投保級距（如 37,160 → 38,200）</div>
             <el-button
                 v-if="insuranceError"
                 size="small"

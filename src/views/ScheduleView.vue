@@ -9,6 +9,8 @@ import { useEmployeeStore } from '@/stores/employee'
 import { useShiftStore } from '@/stores/shift'
 import { storeToRefs } from 'pinia'
 import { apiError } from '@/utils/error'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import { useClientTableFilter } from '@/composables'
 
 // --- State ---
 interface AssignmentEntry { shift_type_id: number | null; notes: string | null }
@@ -308,6 +310,17 @@ const swapFilter = reactive({
   status: '',
 })
 
+// 客端關鍵字過濾：查詢區間內資料已全載，發起人/對象姓名即打即濾，與上方日期/狀態下拉（伺服器端）交集
+const {
+  searchQuery: swapSearch,
+  filtered: filteredSwapHistory,
+  total: swapTotal,
+  shown: swapShown,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => swapHistory.value,
+  searchFields: (r) => [r.requester_name as string | undefined, r.target_name as string | undefined],
+})
+
 const fetchSwapHistory = async () => {
   swapLoading.value = true
   try {
@@ -541,7 +554,17 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
           </div>
         </el-card>
 
-        <el-table :data="swapHistory" v-loading="swapLoading" style="width: 100%; margin-top: 16px;" stripe>
+        <AdminListToolbar
+          v-model:search="swapSearch"
+          search-placeholder="搜尋發起人或對象姓名"
+          :total="swapTotal"
+          :shown="swapShown"
+        />
+
+        <el-table :data="filteredSwapHistory" v-loading="swapLoading" style="width: 100%; margin-top: 16px;" stripe>
+          <template #empty>
+            <el-empty :description="swapSearch ? '沒有符合搜尋條件的換班紀錄' : '尚無換班紀錄'" />
+          </template>
           <el-table-column prop="swap_date" label="換班日期" width="120" />
           <el-table-column prop="requester_name" label="發起人" width="100" />
           <el-table-column prop="requester_shift" label="發起人班別" width="110" />

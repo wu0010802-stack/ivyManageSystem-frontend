@@ -18,6 +18,7 @@ import {
 } from '@/api/contactBook'
 import { useContactBookTemplates } from '@/composables/useContactBookTemplates'
 import { todayISO } from '@/utils/format'
+import { pickClassroomIdFromQuery, pickDateFromQuery } from '@/utils/portalQuery'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import ContactBookFilterBar from './components/contactBook/ContactBookFilterBar.vue'
 
@@ -46,17 +47,8 @@ const route = useRoute()
 const classrooms = ref<ClassroomEntry[]>([])
 const classroomLoading = ref(false)
 const selectedClassroomId = ref<number | null>(null)
-const selectedDate = ref(todayISO())
-
-// deep-link 預選：來自首頁班級卡（classroom_id）或搜尋面板聯絡簿結果（log_date）。
-// 在 fetchClassrooms 設預設值「前」先吃 query，避免多班教師落到錯的班。
-{
-  const qClassroom = Number(route.query.classroom_id)
-  if (Number.isFinite(qClassroom) && qClassroom > 0) selectedClassroomId.value = qClassroom
-  if (typeof route.query.log_date === 'string' && route.query.log_date) {
-    selectedDate.value = route.query.log_date
-  }
-}
+// 搜尋面板點某天的聯絡簿會帶 ?log_date=；不讀的話日期永遠跳回今天
+const selectedDate = ref(pickDateFromQuery(route.query, 'log_date', todayISO()))
 
 const items = ref<ItemEntry[]>([]) // [{ student_id, student_name, entry }]
 const completion = ref<Completion>({ roster: 0, draft: 0, published: 0, missing: 0 })
@@ -86,7 +78,12 @@ async function fetchClassrooms() {
     const res = await getMyStudents()
     classrooms.value = res.data?.classrooms || []
     if (classrooms.value.length > 0 && !selectedClassroomId.value) {
-      selectedClassroomId.value = classrooms.value[0].classroom_id ?? null
+      // 首頁班級卡會帶 ?classroom_id=；多班老師不讀就會開到第一班（誤寫聯絡簿）
+      selectedClassroomId.value = pickClassroomIdFromQuery(
+        route.query,
+        classrooms.value,
+        classrooms.value[0].classroom_id ?? null,
+      )
     }
   } catch (err) {
     notify(err, 'PortalContactBook:loadClassrooms', '載入班級失敗')
@@ -317,6 +314,48 @@ async function handleCopyYesterday() {
   }
 }
 
+// 建立範本：個人範本只需 PORTFOLIO_WRITE，本來就該由老師自己在教師端建立。
+// 先前 create / update / archive / promote 四支 API 都包好了卻 runtime 零 caller，
+// 空狀態還寫著「可先到管理介面建立」——而全 repo 根本沒有那個管理介面。
+async function handleSaveAsTemplate(fields: Record<string, unknown>) {
+  let name = ''
+  try {
+    const res = await ElMessageBox.prompt('範本名稱', '存為範本', {
+      confirmButtonText: '建立',
+      cancelButtonText: '取消',
+      inputValidator: (v: string) => (v && v.trim() ? true : '請輸入名稱'),
+    })
+    name = (res as { value: string }).value.trim()
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    await tpls.create({ name, scope: 'personal', fields })
+    ElMessage.success('已建立個人範本')
+    await tpls.load()
+  } catch (err) {
+    notify(err, 'PortalContactBook:createTemplate', '建立範本失敗')
+  }
+}
+
+async function handleArchiveTemplate(id: number) {
+  try {
+    await ElMessageBox.confirm('封存後將不再出現在套用清單，確定嗎？', '封存範本', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  try {
+    await tpls.archive(id)
+    ElMessage.success('已封存')
+    if (selectedTemplateId.value === id) selectedTemplateId.value = null
+    await tpls.load()
+  } catch (err) {
+    notify(err, 'PortalContactBook:archiveTemplate', '封存失敗')
+  }
+}
+
 async function openTemplateDialog() {
   showTemplateDialog.value = true
   if (!tpls.loaded.value) {
@@ -467,6 +506,7 @@ watch([selectedClassroomId, selectedDate], () => {
       :publishing="drawerPublishing"
       :photo-uploading="drawerPhotoUploading"
       @save-draft="handleSaveDraft"
+      @save-as-template="handleSaveAsTemplate"
       @publish="handlePublish"
       @upload-photo="handlePhotoUpload"
       @delete-photo="handleDeletePhoto"
@@ -480,7 +520,7 @@ watch([selectedClassroomId, selectedDate], () => {
         v-else-if="!tpls.templates.value.length"
         variant="default"
         title="尚無範本"
-        description="可先到管理介面建立個人或園所共用範本。"
+        description="開啟任一位學生的聯絡簿，填好內容後按「存為範本」即可建立個人範本。"
       />
       <el-radio-group v-else v-model="(selectedTemplateId as string | number | boolean | undefined)" class="tpl-list">
         <el-radio
@@ -492,6 +532,16 @@ watch([selectedClassroomId, selectedDate], () => {
           <strong>{{ t.name }}</strong>
           <el-tag v-if="t.scope === 'shared'" size="small" type="success">共用</el-tag>
           <el-tag v-else size="small">個人</el-tag>
+          <el-button
+            v-if="t.scope !== 'shared'"
+            link
+            type="danger"
+            size="small"
+            class="tpl-archive"
+            @click.stop.prevent="handleArchiveTemplate(t.id as number)"
+          >
+            封存
+          </el-button>
         </el-radio>
       </el-radio-group>
       <p class="hint">套用規則：只填入空欄位，已填值不會被覆蓋。</p>

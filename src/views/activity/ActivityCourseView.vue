@@ -10,7 +10,17 @@
       </div>
     </div>
 
-    <el-table :data="courses" v-loading="loading" border>
+    <AdminListToolbar
+      v-model:search="courseSearch"
+      search-placeholder="搜尋課程名稱或負責老師"
+      :total="courseTotal"
+      :shown="courseShown"
+    />
+
+    <el-table :data="filteredCourses" v-loading="loading" border>
+      <template #empty>
+        <el-empty :description="courseSearch ? '沒有符合搜尋條件的課程' : '尚無課程資料'" />
+      </template>
       <el-table-column label="課程名稱" prop="name" min-width="140" />
       <el-table-column label="價格" prop="price" width="90" align="right">
         <template #default="{ row }">${{ row.price?.toLocaleString() }}</template>
@@ -44,6 +54,9 @@
           <span v-else>0/{{ row.capacity }}</span>
           <div v-if="(row.promoted_pending || 0) > 0" class="pending-occupancy-hint">
             含 {{ row.promoted_pending }} 待確認
+          </div>
+          <div v-if="(row.pending_review || 0) > 0" class="pending-occupancy-hint">
+            含 {{ row.pending_review }} 待審核
           </div>
         </template>
       </el-table-column>
@@ -79,12 +92,6 @@
         </template>
       </el-table-column>
     </el-table>
-
-    <el-empty
-      v-if="!loading && courses.length === 0"
-      description="尚無課程資料"
-      style="padding: 40px 0"
-    />
 
     <!-- 新增/編輯對話框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '編輯課程' : '新增課程'" width="480px" destroy-on-close>
@@ -292,7 +299,9 @@ import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, delete
 import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { sanitizeHref } from '@/utils/url'
 
@@ -303,7 +312,7 @@ interface Course {
   instructor_name?: string | null
   // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
   instructor_employee_id?: number | null
-  enrolled?: number; promoted_pending?: number; waitlist_count?: number
+  enrolled?: number; promoted_pending?: number; pending_review?: number; waitlist_count?: number
 }
 interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
 interface EnrolledItem { position?: number; student_name?: string; class_name?: string }
@@ -375,6 +384,18 @@ function instructorName(row: Course): string {
   return emp ? String(emp.name) : `員工 #${row.instructor_employee_id}`
 }
 
+// 客端關鍵字過濾：課程清單已全載，課程名稱/負責老師（依 instructor_employee_id 解析
+// 出的姓名，與「負責老師」欄一致）即打即濾
+const {
+  searchQuery: courseSearch,
+  filtered: filteredCourses,
+  total: courseTotal,
+  shown: courseShown,
+} = useClientTableFilter<Record<string, unknown>>({
+  source: () => courses.value as unknown as Record<string, unknown>[],
+  searchFields: (r) => [r.name as string | undefined, instructorName(r as unknown as Course)],
+})
+
 const waitlistDrawer = ref(false)
 const waitlistCourse = ref<{ id: number; name: string } | null>(null)
 const waitlistItems = ref<WaitlistItem[]>([])
@@ -397,10 +418,11 @@ const enrolledCourse = ref<{ id: number; name: string } | null>(null)
 const enrolledItems = ref<EnrolledItem[]>([])
 const enrolledLoading = ref(false)
 
-// 佔位數 = enrolled + promoted_pending（與後端手動升位容量閘同口徑，
-// courses.py 的 remaining 亦以此計）
+// 佔位數 = enrolled + promoted_pending + pending_review（OCCUPYING_STATUSES，
+// 與後端容量閘同口徑，courses.py 的 remaining 亦以此計；2026-07-19 業主決策
+// 待審核占位也占容量）
 function occupying(row: Course): number {
-  return (row.enrolled || 0) + (row.promoted_pending || 0)
+  return (row.enrolled || 0) + (row.promoted_pending || 0) + (row.pending_review || 0)
 }
 
 // review P1（2026-07-12）：候補/報名 Drawer 的載入需與 fetchCourses 同樣的請求序號守衛，

@@ -18,12 +18,14 @@ import { Clock, Delete, Edit, Plus, RefreshRight, User, Reading, MoreFilled } fr
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogDrawer.vue'
 import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
@@ -51,6 +53,19 @@ const changeLogClassroom = ref<ClassroomRow | null>(null)
 const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 const canReadStudents = computed(() => hasPermission('STUDENTS_READ'))
 const reservedByGrade = ref<Record<number, number>>({})
+
+// 客端關鍵字過濾：班級清單已全載，班級名稱/班導姓名即打即濾。
+// 用 ClassroomRow（而非 recipe 常見的 Record<string, unknown>）避免 filteredClassrooms
+// 流入模板後對 openStudentDrawer 等既有函式簽章造成型別破口（該幾支函式吃 ClassroomRow）。
+const {
+  searchQuery: classroomSearch,
+  filtered: filteredClassrooms,
+  total: classroomTotal,
+  shown: classroomShown,
+} = useClientTableFilter<ClassroomRow>({
+  source: () => classrooms.value,
+  searchFields: (r) => [r.name, r.head_teacher_name],
+})
 
 const filterSchoolYear = computed({
   get: () => termStore.school_year,
@@ -422,9 +437,18 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
       </el-card>
     </div>
 
-    <div class="classroom-grid" v-else-if="classrooms.length > 0" v-loading="loading">
+    <template v-else>
+    <AdminListToolbar
+      v-if="classrooms.length > 0"
+      v-model:search="classroomSearch"
+      search-placeholder="搜尋班級名稱或帶班老師"
+      :total="classroomTotal"
+      :shown="classroomShown"
+    />
+
+    <div class="classroom-grid" v-if="filteredClassrooms.length > 0" v-loading="loading">
       <el-card
-        v-for="classroom in classrooms"
+        v-for="classroom in filteredClassrooms"
         :key="classroom.id"
         class="classroom-card"
         shadow="hover"
@@ -532,11 +556,14 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
       </el-card>
     </div>
 
+    <el-empty v-else-if="classrooms.length > 0" description="沒有符合搜尋條件的班級" />
+
     <el-empty v-else description="尚無班級資料">
       <el-button v-if="canWrite" type="primary" :icon="Plus" class="empty-create-btn" @click="openCreate">
         新增班級
       </el-button>
     </el-empty>
+    </template>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="720px">
       <div v-loading="detailLoading">

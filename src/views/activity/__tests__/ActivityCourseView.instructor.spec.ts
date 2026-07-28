@@ -41,6 +41,7 @@ import * as employeesApi from '@/api/employees'
 
 const STUBS = {
   'AcademicTermSelector': true,
+  'AdminListToolbar': true,
   'el-table': true,
   'el-table-column': true,
   'el-button': true,
@@ -234,5 +235,67 @@ describe('ActivityCourseView — G8 課程負責老師選擇器', () => {
       1,
       expect.objectContaining({ instructor_employee_id: null }),
     )
+  })
+})
+
+// ── 關鍵字搜尋（客端過濾）─────────────────────────────────────────────────
+describe('ActivityCourseView 課程清單關鍵字搜尋', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const courses = [
+    { ...sampleCourse, id: 1, name: '音樂律動', instructor_employee_id: 7 },
+    { ...sampleCourse, id: 2, name: '美術創作', instructor_employee_id: 9 },
+  ]
+
+  interface SearchState {
+    courseSearch: string
+    filteredCourses: typeof sampleCourse[]
+    courseTotal: number
+    courseShown: number
+  }
+
+  it('依課程名稱收斂 filteredCourses', async () => {
+    vi.mocked(getCourses).mockResolvedValue({ data: { courses } } as never)
+    stubEmployees()
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as SearchState
+
+    vm.courseSearch = '音樂'
+    await nextTick()
+
+    expect(vm.filteredCourses).toEqual([courses[0]])
+    expect(vm.courseShown).toBe(1)
+    expect(vm.courseTotal).toBe(2)
+  })
+
+  it('依負責老師姓名（依 instructor_employee_id 解析）也可命中', async () => {
+    vi.mocked(getCourses).mockResolvedValue({ data: { courses } } as never)
+    stubEmployees()
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as SearchState
+
+    vm.courseSearch = '王老師'
+    await nextTick()
+
+    expect(vm.filteredCourses).toEqual([courses[1]])
+  })
+
+  it('清空搜尋字串時還原全部課程', async () => {
+    vi.mocked(getCourses).mockResolvedValue({ data: { courses } } as never)
+    stubEmployees()
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as SearchState
+
+    vm.courseSearch = '音樂'
+    await nextTick()
+    vm.courseSearch = ''
+    await nextTick()
+
+    expect(vm.filteredCourses).toEqual(courses)
   })
 })

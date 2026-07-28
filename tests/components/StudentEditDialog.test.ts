@@ -1,8 +1,15 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import { createPinia, setActivePinia } from 'pinia'
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
+
+// 家長／緊急聯絡人區段受 GUARDIANS_WRITE 權限遮罩控制（193a966a）；本檔驗證的是
+// 收合區段與驗證徽章行為，需要這些區段渲染出來。保留其他匯出，避免影響 store。
+vi.mock('@/utils/auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/utils/auth')>()),
+  hasPermission: vi.fn(() => true),
+}))
 
 // el-dialog teleports content to body; stub it to render inline so we can query the form.
 const ElDialogStub = {

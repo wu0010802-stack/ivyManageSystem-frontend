@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import api from '@/api/index'
@@ -25,6 +25,10 @@ const classLoading = ref(false)
 // ── 事件列表 ──────────────────────────────────────────
 const incidents = ref<Record<string, unknown>[]>([])
 const total = ref(0)
+// 先前寫死 limit=100 且無分頁，卻顯示未截斷的 total：畫面寫「共 350 筆」但只有
+// 100 列，第 101 筆之後永遠看不到。後端早就支援 skip/limit（le=200）。
+const currentPage = ref(1)
+const pageSize = ref(20)
 const loading = ref(false)
 const filterType = ref<string | null>(null)
 const filterDateRange = ref<string[]>([])
@@ -67,6 +71,7 @@ const onTabChange = (cid: string | number) => {
   currentStudents.value = cr ? cr.students : []
   filterType.value = null
   filterDateRange.value = []
+  currentPage.value = 1
   fetchIncidents()
 }
 
@@ -74,7 +79,11 @@ const fetchIncidents = async () => {
   if (!activeClassroom.value) return
   loading.value = true
   try {
-    const params: { classroom_id: number; limit: number; incident_type?: string; start_date?: string; end_date?: string } = { classroom_id: Number(activeClassroom.value), limit: 100 }
+    const params: { classroom_id: number; skip: number; limit: number; incident_type?: string; start_date?: string; end_date?: string } = {
+      classroom_id: Number(activeClassroom.value),
+      skip: (currentPage.value - 1) * pageSize.value,
+      limit: pageSize.value,
+    }
     if (filterType.value) params.incident_type = filterType.value
     if (filterDateRange.value?.length === 2) {
       params.start_date = filterDateRange.value[0]
@@ -89,6 +98,9 @@ const fetchIncidents = async () => {
     loading.value = false
   }
 }
+
+// currentPage / pageSize 變動時重新查詢（宣告須晚於 fetchIncidents，否則 TDZ）
+watch([currentPage, pageSize], fetchIncidents)
 
 const openCreate = () => {
   Object.assign(form, emptyForm())
@@ -261,8 +273,17 @@ onMounted(async () => {
       </template>
     </AdminListCards>
 
-    <div style="margin-top: 8px; font-size: 13px; color: var(--pt-text-muted)">
-      共 {{ total }} 筆紀錄
+    <div class="pt-list-footer">
+      <span class="pt-list-total">共 {{ total }} 筆紀錄</span>
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[20, 50, 100]"
+        layout="sizes, prev, pager, next"
+        background
+        small
+      />
     </div>
 
     <!-- 新增 Dialog -->
@@ -321,6 +342,20 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.pt-list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pt-list-total {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .from-hub-bar {
   margin: 0 0 12px;
   padding: 4px 0;

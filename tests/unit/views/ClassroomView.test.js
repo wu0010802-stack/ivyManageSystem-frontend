@@ -32,6 +32,9 @@ const getClassrooms = vi.fn(() => Promise.resolve({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
+  // ClassroomView 以 route.query.selected 還原「返回班級」深連結（e08b108d），
+  // 未 mock useRoute 會讓元件 setup 直接拋錯。
+  useRoute: () => ({ query: {} }),
 }))
 
 vi.mock('@/api/classrooms', () => ({
@@ -78,42 +81,49 @@ const flushPromises = async () => {
   await Promise.resolve()
 }
 
+const STUBS = {
+  AdminListToolbar: true,
+  'el-select': { template: '<div><slot /></div>' },
+  'el-option': true,
+  'el-switch': true,
+  'el-button': { template: '<button><slot /></button>' },
+  'el-card': { template: '<div><slot /><slot name="header" /></div>' },
+  'el-tag': { template: '<span><slot /></span>' },
+  'el-alert': { template: '<div><slot name="title" />{{ title }}<slot /></div>', props: ['title'] },
+  'el-link': { template: '<a><slot /></a>' },
+  'el-empty': { template: '<div><slot /></div>' },
+  'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+  'el-form': { template: '<form><slot /></form>' },
+  'el-form-item': { template: '<div><slot /></div>' },
+  'el-row': { template: '<div><slot /></div>' },
+  'el-col': { template: '<div><slot /></div>' },
+  'el-input': true,
+  'el-input-number': true,
+  'el-descriptions': { template: '<div><slot /></div>' },
+  'el-descriptions-item': { template: '<div><slot /></div>' },
+  'el-drawer': { template: '<div><slot /></div>' },
+  'el-table': { template: '<div><slot /></div>' },
+  'el-table-column': true,
+}
+
+function mountView() {
+  return mount(ClassroomView, {
+    global: {
+      directives: {
+        loading: () => {},
+      },
+      stubs: STUBS,
+    },
+  })
+}
+
 describe('ClassroomView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
   it('renders classroom card with class info and teacher assignments', async () => {
-    const wrapper = mount(ClassroomView, {
-      global: {
-        directives: {
-          loading: () => {},
-        },
-        stubs: {
-          'el-select': { template: '<div><slot /></div>' },
-          'el-option': true,
-          'el-switch': true,
-          'el-button': { template: '<button><slot /></button>' },
-          'el-card': { template: '<div><slot /><slot name="header" /></div>' },
-          'el-tag': { template: '<span><slot /></span>' },
-          'el-alert': { template: '<div><slot name="title" />{{ title }}<slot /></div>', props: ['title'] },
-          'el-link': { template: '<a><slot /></a>' },
-          'el-empty': true,
-          'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
-          'el-form': { template: '<form><slot /></form>' },
-          'el-form-item': { template: '<div><slot /></div>' },
-          'el-row': { template: '<div><slot /></div>' },
-          'el-col': { template: '<div><slot /></div>' },
-          'el-input': true,
-          'el-input-number': true,
-          'el-descriptions': { template: '<div><slot /></div>' },
-          'el-descriptions-item': { template: '<div><slot /></div>' },
-          'el-drawer': { template: '<div><slot /></div>' },
-          'el-table': { template: '<div><slot /></div>' },
-          'el-table-column': true,
-        },
-      },
-    })
+    const wrapper = mountView()
 
     await flushPromises()
     await nextTick()
@@ -124,5 +134,84 @@ describe('ClassroomView', () => {
     expect(wrapper.text()).toContain('王老師')
     expect(wrapper.text()).toContain('林老師')
     expect(wrapper.text()).toContain('向日葵班')
+  })
+})
+
+// ── 班級卡片格關鍵字搜尋（客端過濾）─────────────────────────────────────────
+describe('ClassroomView 班級搜尋', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const classrooms = [
+    {
+      id: 1,
+      name: '向日葵班',
+      class_code: 'SUN-01',
+      school_year: 114,
+      semester: 1,
+      semester_label: '114學年度上學期',
+      grade_name: '中班',
+      capacity: 30,
+      current_count: 4,
+      head_teacher_name: '王老師',
+      is_active: true,
+    },
+    {
+      id: 2,
+      name: '玫瑰班',
+      class_code: 'ROSE-01',
+      school_year: 114,
+      semester: 1,
+      semester_label: '114學年度上學期',
+      grade_name: '大班',
+      capacity: 25,
+      current_count: 10,
+      head_teacher_name: '林老師',
+      is_active: true,
+    },
+  ]
+
+  it('依班級名稱收斂 filteredClassrooms', async () => {
+    getClassrooms.mockResolvedValueOnce({ data: classrooms })
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    const state = wrapper.vm.$.setupState
+
+    state.classroomSearch = '玫瑰'
+    await nextTick()
+
+    expect(state.filteredClassrooms).toEqual([classrooms[1]])
+    expect(state.classroomShown).toBe(1)
+    expect(state.classroomTotal).toBe(2)
+  })
+
+  it('依帶班老師（班導）姓名也可命中', async () => {
+    getClassrooms.mockResolvedValueOnce({ data: classrooms })
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    const state = wrapper.vm.$.setupState
+
+    state.classroomSearch = '林老師'
+    await nextTick()
+
+    expect(state.filteredClassrooms).toEqual([classrooms[1]])
+  })
+
+  it('清空搜尋字串時還原全部班級', async () => {
+    getClassrooms.mockResolvedValueOnce({ data: classrooms })
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    const state = wrapper.vm.$.setupState
+
+    state.classroomSearch = '玫瑰'
+    await nextTick()
+    state.classroomSearch = ''
+    await nextTick()
+
+    expect(state.filteredClassrooms).toEqual(classrooms)
   })
 })

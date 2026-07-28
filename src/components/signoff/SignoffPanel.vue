@@ -790,7 +790,7 @@ onMounted(async () => {
 .so-header__sub {
   margin: 4px 0 0;
   font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, var(--neutral-500));
 }
 
 /* ── 彙總 KPI（對齊 FeesTab .kpi-card 慣例） ── */
@@ -803,47 +803,47 @@ onMounted(async () => {
   gap: var(--space-3, 12px);
 }
 .kpi-card {
-  border: 1px solid var(--neutral-200, #e2e8f0);
+  border: 1px solid var(--neutral-200);
   border-radius: var(--radius-lg, 12px);
   padding: var(--space-4, 16px) var(--space-5, 20px);
-  background: var(--neutral-0, #fff);
+  background: var(--neutral-0);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 .kpi-label {
   font-size: var(--text-xs, 12px);
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, var(--neutral-500));
 }
 .kpi-value {
   font-size: 26px;
   font-weight: var(--font-weight-bold, 700);
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary, var(--neutral-800));
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 .kpi-meta {
   font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 /* 待簽收：唯一注意力焦點（有待簽時才亮 amber，沿用 FeesTab 條件上色慣例） */
 .kpi-warning {
-  border-color: var(--color-warning, #f59e0b);
-  background: var(--color-warning-soft, #fef3c7);
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
 }
 .kpi-warning .kpi-value {
-  color: var(--color-warning-darker, #b45309);
+  color: var(--color-warning-darker);
 }
 .kpi-warning .kpi-label {
-  color: var(--color-warning-darker, #b45309);
+  color: var(--color-warning-darker);
 }
 .kpi-success .kpi-value {
-  color: var(--color-success-darker, #15803d);
+  color: var(--color-success-darker);
 }
 .so-summary__period {
   margin: var(--space-2, 8px) 0 0;
   font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 
 /* ── 篩選 ── */
@@ -872,23 +872,23 @@ onMounted(async () => {
 }
 .so-party {
   font-weight: var(--font-weight-medium, 500);
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary, var(--neutral-800));
 }
 .so-amount {
   font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-semibold, 600);
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary, var(--neutral-800));
 }
 .so-muted {
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 .so-signer {
   font-size: var(--text-sm, 13px);
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary, var(--neutral-800));
 }
 .so-signer__meta {
   font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 
 /* 狀態：用低彩度 soft 底，pending 為待辦語意（amber）、signed 完成（green） */
@@ -901,12 +901,12 @@ onMounted(async () => {
   line-height: 1.6;
 }
 .so-status--pending {
-  background: var(--color-warning-soft, #fef3c7);
-  color: var(--color-warning-darker, #b45309);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 .so-status--signed {
-  background: var(--color-success-soft, #dcfce7);
-  color: var(--color-success-darker, #15803d);
+  background: var(--color-success-soft);
+  color: var(--color-success-darker);
 }
 
 .so-attach-chip {
@@ -914,12 +914,12 @@ onMounted(async () => {
   align-items: center;
   gap: 2px;
   font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, var(--neutral-500));
   font-variant-numeric: tabular-nums;
 }
 .so-attach-chip__clip {
   font-size: 14px;
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 
 .so-actions {
@@ -946,12 +946,12 @@ onMounted(async () => {
   margin: 0;
   font-size: var(--text-base, 14px);
   font-weight: var(--font-weight-medium, 500);
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, var(--neutral-500));
 }
 .so-empty__hint {
   margin: 0 0 var(--space-2, 8px);
   font-size: var(--text-sm, 13px);
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 
 .so-pagination {
@@ -964,7 +964,7 @@ onMounted(async () => {
 .so-form__section {
   padding-bottom: var(--space-4, 16px);
   margin-bottom: var(--space-4, 16px);
-  border-bottom: 1px solid var(--neutral-100, #f1f5f9);
+  border-bottom: 1px solid var(--neutral-100);
 }
 .so-form__section:last-of-type {
   border-bottom: none;
@@ -974,7 +974,7 @@ onMounted(async () => {
 .so-form__section-title {
   font-size: var(--text-sm, 13px);
   font-weight: var(--font-weight-semibold, 600);
-  color: var(--text-primary, #1e293b);
+  color: var(--text-primary, var(--neutral-800));
   margin-bottom: var(--space-3, 12px);
   display: flex;
   align-items: baseline;
@@ -983,7 +983,7 @@ onMounted(async () => {
 .so-form__section-hint {
   font-size: var(--text-xs, 12px);
   font-weight: var(--font-weight-regular, 400);
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 .so-form__grid {
   display: grid;
@@ -996,13 +996,13 @@ onMounted(async () => {
 .so-form__amount-echo {
   margin-left: var(--space-3, 12px);
   font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, var(--neutral-500));
   font-variant-numeric: tabular-nums;
 }
 .so-form__audit {
   margin: var(--space-3, 12px) 0 0;
   font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 
 /* 簽收憑證區 */
@@ -1026,9 +1026,9 @@ onMounted(async () => {
 .so-signed-block__thumb img {
   max-width: 180px;
   max-height: 90px;
-  border: 1px solid var(--neutral-200, #e2e8f0);
+  border: 1px solid var(--neutral-200);
   border-radius: var(--radius-md, 8px);
-  background: #fff;
+  background: var(--neutral-0);
   display: block;
 }
 
@@ -1054,10 +1054,10 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   height: 80px;
-  border: 1px solid var(--neutral-200, #e2e8f0);
+  border: 1px solid var(--neutral-200);
   border-radius: var(--radius-md, 8px);
   overflow: hidden;
-  background: var(--neutral-50, #f8fafc);
+  background: var(--neutral-50);
 }
 .so-att__preview img {
   width: 100%;
@@ -1067,7 +1067,7 @@ onMounted(async () => {
 .so-att__doc {
   font-size: var(--text-sm, 13px);
   font-weight: var(--font-weight-semibold, 600);
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, var(--neutral-500));
   letter-spacing: 0.05em;
 }
 .so-att__meta {
@@ -1079,10 +1079,10 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary, var(--neutral-500));
 }
 .so-att__size {
-  color: var(--text-tertiary, #94a3b8);
+  color: var(--text-tertiary, var(--neutral-400));
 }
 .so-att__remove {
   align-self: flex-start;

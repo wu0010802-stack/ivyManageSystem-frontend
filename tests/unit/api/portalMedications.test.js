@@ -46,7 +46,7 @@ describe('portalMedications api', () => {
 
   it('skipLog posts to /medication-logs/{id}/skip with payload', async () => {
     api.post.mockResolvedValue({ data: {} })
-    const payload = { reason: '家長取消' }
+    const payload = { skipped_reason: '家長取消' }
     await skipLog(99, payload)
     expect(api.post).toHaveBeenCalledWith('/medication-logs/99/skip', payload)
   })

@@ -27,7 +27,15 @@ export function usePortalDashboard({ autoFetch = true } = {}) {
   const { summary, loading, error } = storeToRefs(store)
 
   async function refresh() {
-    return store.fetchSummary({ force: true })
+    // 必須吞例外：refresh 被 PortalHomeView 直接當 @click handler 使用，往外拋會變成
+    // 未處理的 rejection 冒到 App.vue 的 ErrorBoundary，把含側邊欄與 header 的整個
+    // 教師端殼層換成錯誤頁（只能重載瀏覽器）。錯誤已由 store 記進 error，
+    // 畫面靠既有的 error banner 降級即可。store 的 rethrow 保留給需要它的 caller。
+    try {
+      return await store.fetchSummary({ force: true })
+    } catch {
+      /* error 由 store 紀錄，UI 以 error banner 呈現 */
+    }
   }
 
   function onInvalidateExternal() {

@@ -93,7 +93,8 @@ describe('MonthlyReportView', () => {
     vi.mocked(getMonthlyReport).mockRejectedValue({ response: { status: 404 } })
     const wrapper = mount(MonthlyReportView, mountOptions)
     await flushPromises()
-    expect(wrapper.text()).toContain('尚未產生本月月報')
+    // 空狀態文案改帶月份（如「2026-06 尚未產生月報」），此處只斷言不變的語意部分
+    expect(wrapper.text()).toContain('尚未產生月報')
   })
 
   it('calls generate when button clicked (no existing report)', async () => {

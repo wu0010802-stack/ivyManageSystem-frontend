@@ -25,6 +25,13 @@ export const confirmPromotion = (registrationId: number, courseId: number) =>
     course_id: courseId,
   })
 
+// 放棄候補升位：刪除該課程報名並釋出名額給下一位候補（設計審查 2026-07-28 補；
+// 原本 LIFF 端只能 confirm，不想上課只能放到 48h 確認窗過期才遞補下一位）。
+export const declinePromotion = (registrationId: number, courseId: number) =>
+  api.post(`/parent/activity/registrations/${registrationId}/decline-promotion`, {
+    course_id: courseId,
+  })
+
 export const getRegistrationPayments = (registrationId: number) =>
   api.get(`/parent/activity/registrations/${registrationId}/payments`)
 

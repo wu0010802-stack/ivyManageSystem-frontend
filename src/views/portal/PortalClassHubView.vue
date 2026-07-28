@@ -81,7 +81,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { usePortalClassHub } from '@/composables/usePortalClassHub'
 import { useClassHubPanelQuery } from '@/composables/useClassHubPanelQuery'
@@ -158,6 +158,20 @@ const sheets = reactive({
   medication: false,
   incident: false,
 })
+
+// 後端 sticky_next 的 deep_link 是 /portal/class-hub?sheet=medication&id=<log_id>，
+// 但使用者通常已經在本頁，push 只會改動 query 而不會重新掛載元件。沒有這個 watch，
+// 置頂「下一件：… 處理 →」按下去就只有網址變、抽屜不開（時段卡那列另有 handler
+// 所以還開得起來，症狀因此更難察覺）。immediate 讓直接貼網址進來也有效。
+const route = useRoute()
+watch(
+  () => route.query.sheet,
+  (name) => {
+    const key = Array.isArray(name) ? name[0] : name
+    if (key && key in sheets) sheets[key as keyof typeof sheets] = true
+  },
+  { immediate: true },
+)
 
 // 訊息未讀也要主動拉一次（store 沒有 auto-fetch）
 async function refreshMessagesUnread() {

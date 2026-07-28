@@ -114,7 +114,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/salary', permission: 'SALARY_READ', prefix: true },
   { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
   { path: '/reports', permission: 'REPORTS' },
-  { path: '/gov-reports', permission: 'REPORTS' },
+  // 對齊後端 api/gov_reports.py 四端點的 GOV_REPORTS_EXPORT 守衛
+  { path: '/gov-reports', permission: 'GOV_REPORTS_EXPORT' },
   // /admin/gov-reports/{monthly,certificates,subsidies,iep} 對齊後端 GOV_REPORTS_VIEW 守衛
   { path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true },
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },

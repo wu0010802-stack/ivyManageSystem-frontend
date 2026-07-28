@@ -3,44 +3,22 @@ import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import AdminSidebar from '@/components/layout/AdminSidebar.vue'
 
-// 提供足夠覆蓋本檔斷言用到的 sub-menu 權限鍵（v-if 用 canView.<KEY>）
-// permission_names: ['*'] 走 unrestricted 短路（見 AdminSidebar.vue computed canView 邏輯）
-vi.mock('@/utils/auth', () => ({
-  PERMISSION_NAMES: {
-    DASHBOARD: 'DASHBOARD',
-    APPROVALS: 'APPROVALS',
-    EMPLOYEES_READ: 'EMPLOYEES_READ',
-    SALARY_READ: 'SALARY_READ',
-    SALARY_WRITE: 'SALARY_WRITE',
-    SETTINGS_READ: 'SETTINGS_READ',
-    YEAR_END_READ: 'YEAR_END_READ',
-    ATTENDANCE_READ: 'ATTENDANCE_READ',
-    LEAVES_READ: 'LEAVES_READ',
-    OVERTIME_READ: 'OVERTIME_READ',
-    MEETINGS: 'MEETINGS',
-    SCHEDULE: 'SCHEDULE',
-    STUDENTS_READ: 'STUDENTS_READ',
-    CLASSROOMS_READ: 'CLASSROOMS_READ',
-    FEES_READ: 'FEES_READ',
-    RECRUITMENT_READ: 'RECRUITMENT_READ',
-    REPORTS: 'REPORTS',
-    BUSINESS_ANALYTICS: 'BUSINESS_ANALYTICS',
-    ANNOUNCEMENTS_READ: 'ANNOUNCEMENTS_READ',
-    CALENDAR: 'CALENDAR',
-    VENDOR_PAYMENT_READ: 'VENDOR_PAYMENT_READ',
-    MISC_RECEIPT_READ: 'MISC_RECEIPT_READ',
-    ACTIVITY_READ: 'ACTIVITY_READ',
-    ACTIVITY_WRITE: 'ACTIVITY_WRITE',
-    ACTIVITY_PAYMENT_APPROVE: 'ACTIVITY_PAYMENT_APPROVE',
-    AUDIT_LOGS: 'AUDIT_LOGS',
-    APPRAISAL_FINALIZE: 'APPRAISAL_FINALIZE',
-    APPRAISAL_READ: 'APPRAISAL_READ',
-  },
-  getUserInfo: () => ({ permission_names: ['*'], name: 'admin' }),
-  // AdminSidebar 的 canView 現直接委派 hasPermission（見 src/utils/auth.ts）；
-  // 本檔 getUserInfo mock 固定回傳 wildcard '*'，故 hasPermission 對任何權限名一律放行。
-  hasPermission: () => true,
-}))
+// canView 是 Object.keys(PERMISSION_NAMES) 的映射，故此處直接用**真實**的權限清單。
+// 原本是手工列舉的子集，等於側欄權限的第三份手工維護表：漏一個 key 該選單項就
+// 靜默消失，測試紅在「選單項不存在」上，看不出真正原因是 mock 沒跟上
+// （2026-07-27 改 gov-reports gate 時實際踩到）。
+// getUserInfo 回 wildcard '*' + hasPermission 一律 true，所以權限值不影響斷言，
+// 只有 key 的集合有影響——那正好該用真的。
+vi.mock('@/utils/auth', async () => {
+  const { PERMISSION_NAMES } = await import('@/constants/permissions')
+  return {
+    PERMISSION_NAMES,
+    getUserInfo: () => ({ permission_names: ['*'], name: 'admin' }),
+    // AdminSidebar 的 canView 直接委派 hasPermission（見 src/utils/auth.ts）；
+    // 固定回 true，本檔專注驗 IA 結構而非權限判定。
+    hasPermission: () => true,
+  }
+})
 
 const router = createRouter({
   history: createMemoryHistory(),

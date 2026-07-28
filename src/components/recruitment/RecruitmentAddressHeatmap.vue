@@ -939,7 +939,7 @@ onErrorCaptured((err) => {
   color: var(--text-secondary);
 }
 
-.summary-pill--warn  { background: var(--color-warning-soft); border-color: #fde68a; }
+.summary-pill--warn  { background: var(--color-warning-soft); border-color: var(--color-warning); }
 .summary-pill--warn strong { color: var(--color-warning-darker); }
 
 /* ── 狀態列 ── */
@@ -1025,7 +1025,8 @@ onErrorCaptured((err) => {
 .hotspot-item {
   padding: 10px 12px;
   border-radius: 10px;
-  background: #FFFFFF;
+  background: var(--neutral-0);
+  /* 邊框沿用地圖橘色熱點識別色系（同頁 marker 橘色家族），非既有 semantic token，保留 */
   border: 1px solid #FED7AA;
   transition: box-shadow 0.15s ease;
 }
@@ -1100,7 +1101,7 @@ onErrorCaptured((err) => {
   flex: none;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-info);
   background: var(--color-info-soft);
   color: var(--color-info-darker);
   font-size: 0.68rem;
@@ -1133,7 +1134,7 @@ onErrorCaptured((err) => {
 
 .heatmap-note {
   font-size: 0.78rem;
-  color: #718096;
+  color: var(--text-tertiary);
 }
 
 :deep(.leaflet-container) {
@@ -1143,7 +1144,7 @@ onErrorCaptured((err) => {
 :deep(.leaflet-popup-content) {
   margin: 10px 12px;
   line-height: 1.6;
-  color: #2d3748;
+  color: var(--neutral-700);
 }
 
 :deep(.popup-rating) {

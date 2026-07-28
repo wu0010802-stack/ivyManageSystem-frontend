@@ -42,8 +42,15 @@ jobs:
 
       - name: Run npm audit
         # Build/CI 依賴可讀取原始碼、token 與生成物；不可省略 devDependencies，
-        # 否則會漏掉此信任邊界的供應鏈漏洞。
-        run: npm audit --audit-level=moderate
+        # 否則會漏掉此信任邊界的供應鏈漏洞。（守則見
+        # tests/unit/ci/sentryWorkflow.test.ts）
+        #
+        # 掃描維持全樹 `npm audit --audit-level=moderate`，只是改由 script 判定
+        # 結果：少數「上游鎖死、確認無版本可升」的 advisory 可在
+        # .github/audit-allowlist.json 具名豁免。若不給豁免機制，gate 會因為修不掉
+        # 的漏洞永遠紅燈，main 的必要檢查等同卡死、任何 PR 都合不進來，所有掃描
+        # 反而一起失效。每筆豁免都有到期日，過期即轉紅強制重新檢討。
+        run: node scripts/check-audit-allowlist.mjs
 
   test:
     name: Tests & Build
@@ -75,6 +82,9 @@ jobs:
         run: npm run lint:tokens
         continue-on-error: true
 
+      - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
+        run: npm run check:error-detail
+
       - name: Build check (PR, no Sentry secrets)
         if: github.event_name == 'pull_request'
         run: npm run build
@@ -105,6 +115,12 @@ jobs:
         with:
           repository: ${{ github.repository_owner }}/ivyManageSystem-backend
           path: ivy-backend
+          # 預設的 GITHUB_TOKEN 只對「當前 repo」有效，無法 checkout 另一個私有
+          # repo——這一步從設定之初就一直失敗，後面 8 個步驟全被 skip，等於這個
+          # gate 從未真正跑過。需要一顆對 ivyManageSystem-backend 有 Contents:
+          # Read 的 fine-grained PAT，存成本 repo 的 BACKEND_REPO_TOKEN secret。
+          # 尚未設定時回退到預設 token，行為與現況相同（不會更糟）。
+          token: ${{ secrets.BACKEND_REPO_TOKEN || github.token }}
 
       - name: Prefer companion backend ref when it exists
         working-directory: ivy-backend

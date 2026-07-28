@@ -2,11 +2,11 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
+  getMyColleagues,
   getMyLeaveStats,
   getMySubstituteRequests,
   respondToSubstitute,
 } from '@/api/portal'
-import { useEmployeeStore } from '@/stores/employee'
 import PortalLeaveForm from '@/components/portal/PortalLeaveForm.vue'
 import PortalLeaveList from '@/components/portal/PortalLeaveList.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -16,8 +16,18 @@ import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 const { isMobile } = useIsMobile()
 
 // ── 代理人相關 ──
-const employeeStore = useEmployeeStore()
-const allEmployees = computed(() => employeeStore.employees)
+// 代理人下拉改走教師端專用端點：useEmployeeStore 打的是管理端 GET /employees
+// （require EMPLOYEES_READ），教師一定 403 且錯誤被 store 吞掉不 toast，
+// 下拉因此永遠空白、老師以為園所沒建員工資料。
+const allEmployees = ref<Record<string, unknown>[]>([])
+const loadColleagues = async () => {
+  try {
+    const res = await getMyColleagues()
+    allEmployees.value = (res.data ?? []) as Record<string, unknown>[]
+  } catch {
+    allEmployees.value = []
+  }
+}
 interface SubstituteRequest { id: number | string; requester_name?: string; leave_type_label?: string; substitute_status?: string; start_date?: string; end_date?: string; leave_hours?: number | string; reason?: string | null; created_at?: string; [key: string]: unknown }
 const mySubstituteRequests = ref<SubstituteRequest[]>([])
 const substituteLoading = ref(false)
@@ -122,7 +132,7 @@ onMounted(() => {
   Promise.all([
     leaveListRef.value?.fetchLeaves?.() ?? Promise.resolve(),
     fetchLeaveStats(),
-    employeeStore.fetchEmployees(),
+    loadColleagues(),
     fetchSubstituteRequests(),
   ])
 })

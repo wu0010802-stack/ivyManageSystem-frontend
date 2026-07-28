@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { View, Hide, Warning, MoreFilled } from '@element-plus/icons-vue'
+import { Hide, MoreFilled, Search, View, Warning } from '@element-plus/icons-vue'
 import { getMyStudents, revealPortalStudentPhone } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import PortalStudentDrawer from '@/components/portal/students/PortalStudentDrawer.vue'
@@ -202,7 +202,7 @@ onMounted(fetchStudents)
           placeholder="搜尋學生 / 學號 / 家長姓名"
           clearable
           style="width: 260px"
-          prefix-icon="Search"
+          :prefix-icon="Search"
         />
       </div>
 

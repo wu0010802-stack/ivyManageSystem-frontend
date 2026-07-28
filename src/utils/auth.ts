@@ -178,9 +178,13 @@ export function clearAuth(options: { notifyServer?: boolean } = {}): Promise<voi
 
 function _resetStores() {
   // option store 的 $reset() 會把 state 回到 state() 預設，直接呼叫即可。
-  // ⚠ setup store 也帶 $reset()（typeof === 'function'），但 Pinia 對 setup store 的
-  // $reset 是「呼叫即 throw」的佔位實作，故不能用 typeof 判斷分流。改為：先試 $reset()，
-  // throw 表示是 setup store → fallback 呼叫其自帶 invalidate()（清空快取 state / TTL）。
+  // setup store 沒有可用的 $reset，改呼叫其自帶 invalidate()（清空快取 state / TTL）。
+  // ⚠ 不可用「$reset() 會不會 throw」來分流：Pinia 那個會 throw 的佔位實作只存在於
+  // 非 production build（pinia.mjs 內 `(process.env.NODE_ENV !== 'production') ? throw : noop`），
+  // vite build 後變成 noop → 不 throw → 舊版的 catch 分支永不執行 → invalidate() 從未被呼叫，
+  // 正式版登出時 PII 全數殘留（vitest 跑在 NODE_ENV=test，恰好走會 throw 的分支而測不出來）。
+  // 故改為兩者都無條件嘗試、各自吞例外：option store 的 invalidate 為 undefined 自然略過，
+  // setup store 的 $reset 在 dev 會 throw、在 prod 是 noop，兩種情形都不影響 invalidate 已完成。
   // setup store（如 portalMessages / portalDashboard）含家長對話、學生過敏/用藥/缺席等 PII，
   // 共享平板登出時必須清乾淨；登出/登入皆 SPA router.push 不 reload，記憶體不會被自然清掉。
   // 泛型涵蓋所有已實例化 store（不在此 import 個別 store，避免循環依賴）。
@@ -197,14 +201,14 @@ function _resetStores() {
   if (!pinia || !pinia._s) return
   pinia._s.forEach((store) => {
     try {
+      store.invalidate?.()
+    } catch {
+      /* 略過：invalidate 不存在或自身丟例外，不阻擋後續 store 的清除 */
+    }
+    try {
       store.$reset?.()
     } catch {
-      // setup store：$reset throw，改走 invalidate()
-      try {
-        store.invalidate?.()
-      } catch {
-        /* 略過：無 $reset 亦無 invalidate 的 setup store */
-      }
+      /* 略過：setup store 在 dev build 的 $reset 佔位實作會 throw */
     }
   })
 }

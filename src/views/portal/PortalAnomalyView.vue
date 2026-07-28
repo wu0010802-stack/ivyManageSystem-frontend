@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { CircleCheck } from '@element-plus/icons-vue'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
@@ -9,10 +10,17 @@ interface AnomalyEntry { id: number; type?: string; confirmed?: boolean; date?: 
 const loading = ref(false)
 const anomalies = ref<AnomalyEntry[]>([])
 
+// 首頁「異常待確認」badge 統計的是全期間，但本頁只查單月。若不讀網址帶進來的年月，
+// 舊月份的待確認異常就永遠走不到，badge 數字也永遠消不掉（UI 完全沒提示該翻哪個月）。
+const route = useRoute()
 const now = new Date()
+const _queryInt = (v: unknown, fallback: number) => {
+  const n = Number(Array.isArray(v) ? v[0] : v)
+  return Number.isInteger(n) && n > 0 ? n : fallback
+}
 const query = reactive({
-  year: now.getFullYear(),
-  month: now.getMonth() + 1,
+  year: _queryInt(route.query.year, now.getFullYear()),
+  month: _queryInt(route.query.month, now.getMonth() + 1),
 })
 // 動態年份（避免硬編 [2024..2027] 於 2028 斷頭）
 const yearOptions = computed(() => {
@@ -37,10 +45,19 @@ const confirmAnomaly = async (anomaly: AnomalyEntry) => {
     ElMessage.warning('請選擇處理方式')
     return
   }
+  // 申訴理由是唯一會送進後端稽核軌跡的自由文字，空白送出等於提交一筆管理員無從處理的申訴
+  if (anomaly.selected_action === 'dispute' && !anomaly.remark?.trim()) {
+    ElMessage.warning('請說明申訴原因')
+    return
+  }
 
   anomaly.submitting = true
   try {
-    const res = await confirmAnomalyApi(anomaly.id, anomaly.selected_action)
+    const res = await confirmAnomalyApi(
+      anomaly.id,
+      anomaly.selected_action,
+      anomaly.remark?.trim() || undefined,
+    )
     // 後端缺 response_model，res.data 為 unknown，narrow 取回應訊息。
     ElMessage.success((res.data as { message: string }).message)
     anomaly.confirmed = true
