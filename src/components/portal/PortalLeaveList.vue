@@ -10,7 +10,7 @@ import {
 } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import { useIsMobile } from '@/composables/useIsMobile'
-import { Document, InfoFilled, Loading, Paperclip, UploadFilled } from '@element-plus/icons-vue'
+import { InfoFilled } from '@element-plus/icons-vue'
 
 const props = withDefaults(defineProps<{
   refreshTrigger?: number

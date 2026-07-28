@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import type { AxiosError } from 'axios'
 import { simulateSalary, getEmployeeSalaryDebug } from '@/api/salary'
+import { friendlyError } from '@/utils/errorMessages'
 import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
@@ -170,8 +170,7 @@ const runSimulate = async ({ useCache = true }: { useCache?: boolean } = {}) => 
     // 錯誤訊息一律讀攔截器正規化後的 displayMessage（src/api/index.ts），
     // 不再自己解析 response.data.detail——detail 在後端 500 envelope 下是物件
     // （{code,message,request_id}），直接字串串接會顯示 [object Object]。
-    const err = e as AxiosError
-    ElMessage.error('試算失敗: ' + (err.displayMessage || err.message))
+    ElMessage.error(friendlyError('試算失敗', e))
   } finally {
     loading.value = false
   }
@@ -221,19 +220,6 @@ const resetOverrides = () => {
 }
 
 const hasActual = computed(() => result.value?.actual != null)
-
-// engine.py:1442 — 事假+病假合計 > 40 小時時，當月節慶獎金與超額獎金歸零（主管紅利不受影響）。
-// 試算結果若節慶+超額同時為 0，且原本應該有獎金（actual 有值），多半是這條規則觸發。
-const bonusLikelyZeroedByLeave = computed(() => {
-  if (!result.value) return false
-  const s = result.value.simulated as SimRow | undefined
-  if (!s) return false
-  const bonusSum = (s.festival_bonus || 0) + (s.overtime_bonus || 0)
-  if (bonusSum !== 0) return false
-  // 沒填額外請假就跳過（避免員工本來就無獎金時誤報）
-  const extra = (form.extra_personal_leave_hours || 0) + (form.extra_sick_leave_hours || 0)
-  return extra > 0
-})
 
 // 「試算淨薪＋獨立獎金」= net_pay + festival_bonus + overtime_bonus。
 // net_salary 的公式 = gross_salary - 扣款，而 gross_salary 不含 festival_bonus /
@@ -415,10 +401,6 @@ onMounted(() => {
             </el-tag>
           </el-divider>
 
-          <div class="cliff-note">
-            事/病假合計（DB + 額外） > 40 小時 → 節慶與超額獎金歸零（主管紅利不受影響）
-          </div>
-
           <el-form-item label="+ 事假時數">
             <el-input-number v-model="form.extra_personal_leave_hours" :min="0" :step="1" controls-position="right" style="width: 100%" />
           </el-form-item>
@@ -502,21 +484,6 @@ onMounted(() => {
           </el-alert>
 
           <!-- 事/病假 > 40h 清零獎金的 cliff 觸發提示 -->
-          <el-alert
-            v-if="bonusLikelyZeroedByLeave"
-            type="warning"
-            :closable="false"
-            show-icon
-            style="margin-top: 8px;"
-          >
-            <template #title>
-              <span style="font-size: 12px;">
-                試算結果節慶+超額獎金為 0。可能因事/病假合計 > 40 小時觸發歸零規則
-                （engine.py:1442）。如需保留獎金，請降低額外請假時數。
-              </span>
-            </template>
-          </el-alert>
-
           <!-- 三大金額卡：應發 / 扣款 / 試算淨薪＋獨立獎金（不含未休折現） -->
           <el-row :gutter="12" style="margin-top: 12px;">
             <el-col :span="8">

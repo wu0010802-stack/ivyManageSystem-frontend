@@ -12,7 +12,6 @@ import {
 import type { ApiBody } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
-import { useRoute } from 'vue-router'
 import { pickClassroomIdFromQuery } from '@/utils/portalQuery'
 import {
   enqueueOp,
@@ -118,8 +117,6 @@ const dismissReviewOp = async (id: number | string) => {
     ElMessage.success('已丟棄')
   })
 }
-
-const route = useRoute()
 
 const fetchClassrooms = async () => {
   try {

@@ -19,7 +19,6 @@ import {
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
 import FormSection from '@/components/common/FormSection.vue'
-import { InfoFilled, Loading, Upload } from '@element-plus/icons-vue'
 
 withDefaults(defineProps<{
   allEmployees?: Record<string, unknown>[]

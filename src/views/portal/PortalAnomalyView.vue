@@ -5,7 +5,6 @@ import { ElMessage } from 'element-plus'
 import { CircleCheck } from '@element-plus/icons-vue'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
-import { CircleCheck } from '@element-plus/icons-vue'
 
 interface AnomalyEntry { id: number; type?: string; confirmed?: boolean; date?: string; weekday?: string; type_label?: string; detail?: string; estimated_deduction?: number | string; selected_action?: string; remark?: string; submitting?: boolean; [key: string]: unknown }
 const loading = ref(false)
