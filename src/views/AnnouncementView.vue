@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getAnnouncements,
@@ -13,6 +13,12 @@ import {
   uploadAnnouncementAttachment,
   deleteAnnouncementAttachment,
 } from '@/api/announcements'
+import { getStudents } from '@/api/students'
+import {
+  buildParentRecipientsPayload,
+  resolveParentScope,
+  type ParentRecipientItem,
+} from '@/utils/announcementScope'
 import { useEmployeeStore } from '@/stores/employee'
 import { useClassroomStore } from '@/stores/classroom'
 import { Top, Document } from '@element-plus/icons-vue'
@@ -157,9 +163,9 @@ const ensureReadersLoaded = async (annId: number, force = false) => {
   }
 }
 
-// parent_visibility: 'off' | 'all' | 'classroom'
-// 後端 scope 支援 all/classroom/student/guardian；前端先涵蓋常用三種，
-// student/guardian 細粒度待後續補（model 已就位，PUT 結構可向下相容）
+// parent_visibility: 'off' | 'all' | 'classroom' | 'custom'
+// 後端 scope 支援 all/classroom/student/guardian；custom 對應 student 層級，
+// guardian／混排 rows 以 preservedParentItems 原樣保留避免 replace-all 洗掉既有設定
 const form = reactive<{
   id: number | null
   title: string
@@ -170,6 +176,7 @@ const form = reactive<{
   target_employee_ids: number[]
   parent_visibility: string
   parent_target_classroom_ids: number[]
+  parent_target_student_ids: number[]
   publish_at: string | null
   expires_at: string | null
 }>({
@@ -182,8 +189,42 @@ const form = reactive<{
   target_employee_ids: [],
   parent_visibility: 'off',
   parent_target_classroom_ids: [],
+  parent_target_student_ids: [],
   publish_at: null,
   expires_at: null,
+})
+
+const preservedParentItems = ref<ParentRecipientItem[]>([])
+
+// 學生選項：首次切到「指定學生」才載入（名冊百人級，全量 + 班級分組本地過濾）
+const studentOptionsLoading = ref(false)
+const studentOptionsLoaded = ref(false)
+const studentOptionGroups = ref<{ label: string; options: { value: number; label: string }[] }[]>([])
+
+const ensureStudentOptions = async () => {
+  if (studentOptionsLoaded.value) return
+  studentOptionsLoading.value = true
+  try {
+    const res = await getStudents({ is_active: true, limit: 500, skip: 0 })
+    const items = ((res.data as { items?: { id: number; name?: string | null; classroom_id?: number | null }[] })?.items) || []
+    const classroomLabel = new Map(classroomOptions.value.map((c) => [c.value, c.label]))
+    const byClass = new Map<string, { value: number; label: string }[]>()
+    for (const s of items) {
+      const key = (s.classroom_id != null && classroomLabel.get(s.classroom_id)) || '未分班'
+      if (!byClass.has(key)) byClass.set(key, [])
+      byClass.get(key)!.push({ value: s.id, label: s.name || `#${s.id}` })
+    }
+    studentOptionGroups.value = [...byClass.entries()].map(([label, options]) => ({ label, options }))
+    studentOptionsLoaded.value = true
+  } catch (error) {
+    ElMessage.warning(apiError(error, '載入學生名單失敗'))
+  } finally {
+    studentOptionsLoading.value = false
+  }
+}
+
+watch(() => form.parent_visibility, (v) => {
+  if (v === 'custom') void ensureStudentOptions()
 })
 
 const resetForm = () => {
@@ -196,8 +237,10 @@ const resetForm = () => {
   form.target_employee_ids = []
   form.parent_visibility = 'off'
   form.parent_target_classroom_ids = []
+  form.parent_target_student_ids = []
   form.publish_at = null
   form.expires_at = null
+  preservedParentItems.value = []
   pendingAttachments.value = []
   existingAttachments.value = []
   attachmentsToDelete.value = []
@@ -222,6 +265,8 @@ const openEdit = async (row: AnnouncementItem) => {
   form.restrict_recipients = false
   form.parent_visibility = 'off'
   form.parent_target_classroom_ids = []
+  form.parent_target_student_ids = []
+  preservedParentItems.value = []
   pendingAttachments.value = []
   attachmentsToDelete.value = []
   existingAttachments.value = (row.attachments as AttachmentItem[]) ?? []
@@ -237,35 +282,24 @@ const openEdit = async (row: AnnouncementItem) => {
     form.target_employee_ids = empIds
     form.restrict_recipients = empIds.length > 0
 
-    const items: { scope: string; classroom_id?: number }[] = (parentRes.data as { items?: { scope: string; classroom_id?: number }[] })?.items || []
-    if (items.length === 0) {
-      form.parent_visibility = 'off'
-    } else if (items.some(it => it.scope === 'all')) {
-      form.parent_visibility = 'all'
-    } else if (items.every(it => it.scope === 'classroom' && it.classroom_id)) {
-      form.parent_visibility = 'classroom'
-      form.parent_target_classroom_ids = items.map(it => it.classroom_id as number)
-    } else {
-      // 含 student/guardian scope 的進階設定，前端 UI 暫無對應，視為「自訂」唯讀
-      form.parent_visibility = 'custom'
-    }
+    const items = ((parentRes.data as { items?: ParentRecipientItem[] })?.items) || []
+    const scope = resolveParentScope(items)
+    form.parent_visibility = scope.visibility
+    form.parent_target_classroom_ids = scope.classroomIds
+    form.parent_target_student_ids = scope.studentIds
+    preservedParentItems.value = scope.preservedItems
   } catch (error) {
     ElMessage.warning('讀取設定失敗，部分欄位可能未填入')
     form.parent_visibility = 'unchanged'
   }
 }
 
-const buildParentRecipients = () => {
-  if (form.parent_visibility === 'off') return []
-  if (form.parent_visibility === 'all') return [{ scope: 'all' }]
-  if (form.parent_visibility === 'classroom') {
-    return form.parent_target_classroom_ids.map(cid => ({
-      scope: 'classroom',
-      classroom_id: cid,
-    }))
-  }
-  return null // 'custom' / 'unchanged'：不變更
-}
+const buildParentRecipients = () => buildParentRecipientsPayload({
+  visibility: form.parent_visibility,
+  classroomIds: form.parent_target_classroom_ids,
+  studentIds: form.parent_target_student_ids,
+  preservedItems: preservedParentItems.value,
+})
 
 const submitLoading = ref(false)
 
@@ -279,6 +313,14 @@ const handleSubmit = async () => {
     && form.parent_target_classroom_ids.length === 0
   ) {
     ElMessage.warning('已選「指定班級」對家長公開，請至少勾選一個班級')
+    return
+  }
+  if (
+    form.parent_visibility === 'custom'
+    && form.parent_target_student_ids.length === 0
+    && preservedParentItems.value.length === 0
+  ) {
+    ElMessage.warning('已選「指定學生」對家長公開，請至少選擇一位學生')
     return
   }
   submitLoading.value = true
@@ -634,9 +676,7 @@ onMounted(() => {
             <el-radio value="off">不對家長公開</el-radio>
             <el-radio value="all">全部家長</el-radio>
             <el-radio value="classroom">指定班級</el-radio>
-            <el-radio v-if="form.parent_visibility === 'custom'" value="custom" disabled>
-              進階（細粒度，含學生/監護人）
-            </el-radio>
+            <el-radio value="custom" data-test="parent-custom-radio">指定學生</el-radio>
             <el-radio v-if="form.parent_visibility === 'unchanged'" value="unchanged" disabled>
               讀取失敗，將不變更
             </el-radio>
@@ -658,11 +698,23 @@ onMounted(() => {
             />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="form.parent_visibility === 'custom'" label="提示">
-          <span class="text-muted">
-            此公告對家長端的發送對象包含學生或監護人精細設定，目前介面尚未支援編輯；
-            可透過後端 API 維護，或選擇上方選項覆蓋既有設定。
-          </span>
+        <el-form-item v-if="form.parent_visibility === 'custom'" label="指定學生">
+          <el-select
+            v-model="form.parent_target_student_ids"
+            multiple
+            filterable
+            placeholder="請選擇學生（該生所有已綁定家長都會收到）"
+            :loading="studentOptionsLoading"
+            style="width: 100%;"
+            data-test="parent-student-select"
+          >
+            <el-option-group v-for="grp in studentOptionGroups" :key="grp.label" :label="grp.label">
+              <el-option v-for="opt in grp.options" :key="opt.value" :label="opt.label" :value="opt.value" />
+            </el-option-group>
+          </el-select>
+          <div v-if="preservedParentItems.length" class="text-muted" data-test="preserved-scope-hint">
+            另含 {{ preservedParentItems.length }} 筆進階設定（班級／監護人層級），儲存時將原樣保留。
+          </div>
         </el-form-item>
 
         <el-form-item label="內容">
