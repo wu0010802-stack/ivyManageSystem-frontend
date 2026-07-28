@@ -124,6 +124,7 @@ import { getGrades, getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import { getCurrentAcademicTerm, currentRocYear } from '@/utils/academic'
 import { formatCurrency } from '@/utils/currency'
+import { FEE_TYPES } from '@/components/fees/feeTypes'
 import FeeTemplateManageDrawer from '@/components/fees/FeeTemplateManageDrawer.vue'
 import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
 
@@ -226,21 +227,12 @@ const availableYears = computed(() => {
   return [current - 1, current, current + 1]
 })
 
-// 註：學費等同於註冊費，不另設欄位
-const FEE_TYPE_LABELS: Record<string, string> = {
-  registration: '註冊費',
-  miscellaneous: '雜費',
-  monthly: '月費',
-  transport: '交通費',
-  summer_uniform: '夏制',
-  summer_sports: '夏運',
-}
-
-// 月費仍是唯一會展開為 6 個月的類型
-const OVERVIEW_FEE_TYPES = [
-  'registration', 'miscellaneous', 'monthly', 'transport',
-  'summer_uniform', 'summer_sports',
-]
+// 總覽欄位＝可建立範本的費別，與 FeeTemplateDialog 同源（皆取 FEE_TYPES 的 record 類），
+// 避免兩份清單漂移。此處原本自帶一份 6 項的硬編碼清單，漏了代購品與保險費，
+// 造成這兩類建得出範本、卻不會出現在總覽表格，每生小計也漏算。
+// 註：學費等同於註冊費，不另設欄位（tuition 是月費 breakdown 的 key，不是獨立費別）。
+// 月費仍是唯一會展開為 6 個月的類型。
+const OVERVIEW_FEE_COLUMNS = FEE_TYPES.filter((t) => t.source === 'record')
 
 async function loadOverview() {
   overviewLoading.value = true
@@ -303,19 +295,19 @@ function buildClassroomSection(cls: Classroom) {
       (String(a.name || '')).localeCompare(String(b.name || ''), 'zh-Hant'),
     )
 
-  const columns = OVERVIEW_FEE_TYPES.map((ft) => {
-    const tpl = templateByGradeType.value.get(`${cls.grade_id}:${ft}`)
-    if (!tpl) return { fee_type: ft, label: FEE_TYPE_LABELS[ft], amount: null, detail: '無範本' }
-    if (ft === 'monthly') {
+  const columns = OVERVIEW_FEE_COLUMNS.map((ft) => {
+    const tpl = templateByGradeType.value.get(`${cls.grade_id}:${ft.value}`)
+    if (!tpl) return { fee_type: ft.value, label: ft.label, amount: null, detail: '無範本' }
+    if (ft.value === 'monthly') {
       const total = (tpl.amount || 0) * MONTHS_PER_SEMESTER
       return {
-        fee_type: ft,
-        label: FEE_TYPE_LABELS[ft],
+        fee_type: ft.value,
+        label: ft.label,
         amount: total,
         detail: `${formatCurrency(tpl.amount)} × ${MONTHS_PER_SEMESTER} 月`,
       }
     }
-    return { fee_type: ft, label: FEE_TYPE_LABELS[ft], amount: tpl.amount, detail: null }
+    return { fee_type: ft.value, label: ft.label, amount: tpl.amount, detail: null }
   })
   const perStudentTotal = columns.reduce((s: number, c: Column) => s + (c.amount || 0), 0)
   const hasAnyTemplate = columns.some((c: Column) => c.amount != null)
