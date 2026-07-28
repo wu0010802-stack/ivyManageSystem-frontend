@@ -14,6 +14,8 @@ interface HistoryRow {
   year: number
   month: number
   net_salary: number
+  unused_leave_payout: number
+  base_transfer_amount: number
   gross_salary: number
   base_salary: number
   total_bonus: number
@@ -67,7 +69,7 @@ const chartData = computed(() => {
     datasets: [
       {
         label: '實發金額',
-        data: historyData.value.map(r => r.net_salary),
+        data: historyData.value.map(r => r.base_transfer_amount),
         borderColor: '#409eff',
         backgroundColor: 'rgba(64, 158, 255, 0.1)',
         fill: true,
@@ -179,7 +181,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="實發" width="120">
           <template #default="scope">
-            <strong>{{ money(scope.row.net_salary) }}</strong>
+            <strong>{{ money(scope.row.base_transfer_amount) }}</strong>
           </template>
         </el-table-column>
       </el-table>

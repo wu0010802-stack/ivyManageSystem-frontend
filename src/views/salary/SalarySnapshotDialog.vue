@@ -9,6 +9,7 @@ import {
 } from '@/api/salary'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
+import { computeBaseTransferAmount } from '@/utils/salaryAmounts'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -137,7 +138,8 @@ const DETAIL_ROWS: [string, string][] = [
   ['meeting_absence_deduction', '會議缺席扣'],
   ['gross_salary', '應發總額'],
   ['total_deduction', '扣款總額'],
-  ['net_salary', '實發金額'],
+  ['net_salary', '淨薪（未含未休折現）'],
+  ['unused_leave_payout', '未休折現（併主薪轉）'],
 ]
 
 const FIELD_LABEL: Record<string, string> = Object.fromEntries(DETAIL_ROWS)
@@ -178,7 +180,7 @@ const formatDiffValue = (v: unknown) => (v == null ? '-' : money(v as number))
         <template #default="{ row }">v{{ row.source_version ?? '-' }}</template>
       </el-table-column>
       <el-table-column label="實發金額" width="110">
-        <template #default="{ row }">{{ money(row.net_salary) }}</template>
+        <template #default="{ row }">{{ money(computeBaseTransferAmount(row)) }}</template>
       </el-table-column>
       <el-table-column prop="snapshot_remark" label="備註" min-width="140" />
       <el-table-column label="操作" width="170" fixed="right">
@@ -216,6 +218,9 @@ const formatDiffValue = (v: unknown) => (v == null ? '-' : money(v as number))
             :label="label"
           >
             {{ money(detailData[key] as number | null | undefined) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="實發金額（主薪轉）" :span="2">
+            {{ money(computeBaseTransferAmount(detailData)) }}
           </el-descriptions-item>
         </el-descriptions>
       </div>

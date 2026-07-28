@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { InfoFilled, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 import { computeIndependentBonusNet } from './portalSalaryBonus'
+import { computeBaseTransferAmount } from '@/utils/salaryAmounts'
 import { useIsMobile } from '@/composables/useIsMobile'
 
 const loading = ref(false)
@@ -58,6 +59,7 @@ const salary = computed(() => salaryData.value?.salary as Record<string, unknown
 // 獨立獎金淨額：festival_bonus 已在後端發放月扣除會議缺席扣款，此處僅加總不可再減
 // （計算與「不可雙重扣減」的原因註解見 ./portalSalaryBonus）。
 const independentBonusNet = computed(() => computeIndependentBonusNet(salary.value))
+const baseTransferAmount = computed(() => computeBaseTransferAmount(salary.value))
 
 onMounted(fetchSalary)
 </script>
@@ -202,7 +204,7 @@ onMounted(fetchSalary)
 
         <div class="net-salary-box">
           <span class="net-label">實發金額</span>
-          <span class="net-value">NT$ {{ salary?.net_salary?.toLocaleString() || 0 }}</span>
+          <span class="net-value">NT$ {{ baseTransferAmount.toLocaleString() }}</span>
         </div>
 
         <el-tag type="success" style="margin-top: 12px;">已結算</el-tag>

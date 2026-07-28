@@ -17,6 +17,8 @@ export interface PayslipDetail {
   deductions: BreakdownLine[]
   deduction_subtotal: number
   net_salary: number
+  unused_leave_payout: number
+  base_transfer_amount: number
 }
 
 /** 過濾掉金額為 0 的列（other_income、未發生的獎金/扣款不顯示，降噪）。 */

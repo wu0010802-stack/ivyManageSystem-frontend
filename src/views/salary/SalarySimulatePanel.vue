@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import type { AxiosError } from 'axios'
 import { simulateSalary, getEmployeeSalaryDebug } from '@/api/salary'
 import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
-import { friendlyError } from '@/utils/errorMessages'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
 
@@ -170,7 +170,8 @@ const runSimulate = async ({ useCache = true }: { useCache?: boolean } = {}) => 
     // 錯誤訊息一律讀攔截器正規化後的 displayMessage（src/api/index.ts），
     // 不再自己解析 response.data.detail——detail 在後端 500 envelope 下是物件
     // （{code,message,request_id}），直接字串串接會顯示 [object Object]。
-    ElMessage.error(friendlyError('薪資試算失敗', e))
+    const err = e as AxiosError
+    ElMessage.error('試算失敗: ' + (err.displayMessage || err.message))
   } finally {
     loading.value = false
   }
@@ -221,11 +222,24 @@ const resetOverrides = () => {
 
 const hasActual = computed(() => result.value?.actual != null)
 
-// 「含獎金實領」= net_pay + festival_bonus + overtime_bonus。
+// engine.py:1442 — 事假+病假合計 > 40 小時時，當月節慶獎金與超額獎金歸零（主管紅利不受影響）。
+// 試算結果若節慶+超額同時為 0，且原本應該有獎金（actual 有值），多半是這條規則觸發。
+const bonusLikelyZeroedByLeave = computed(() => {
+  if (!result.value) return false
+  const s = result.value.simulated as SimRow | undefined
+  if (!s) return false
+  const bonusSum = (s.festival_bonus || 0) + (s.overtime_bonus || 0)
+  if (bonusSum !== 0) return false
+  // 沒填額外請假就跳過（避免員工本來就無獎金時誤報）
+  const extra = (form.extra_personal_leave_hours || 0) + (form.extra_sick_leave_hours || 0)
+  return extra > 0
+})
+
+// 「試算淨薪＋獨立獎金」= net_pay + festival_bonus + overtime_bonus。
 // net_salary 的公式 = gross_salary - 扣款，而 gross_salary 不含 festival_bonus /
 // overtime_bonus（engine.py:1764-1770），所以員工在發放月實際拿到的總額 = net_pay
-// + festival + overtime（festival/overtime 走獨立轉帳名冊）。與月結覆核（StepReview）「含獎金實領」
-// 同公式，讓試算結果可直接對照員工最終到手金額。
+// + festival + overtime（festival/overtime 走獨立轉帳名冊）。simulate 沒有 persisted
+// unused_leave_payout，因此只能顯示「不含未休折現」的比較值，不宣稱是最終到手。
 const computeTotalWithBonus = (obj: SimRow | undefined | null): number => {
   if (!obj) return 0
   return (obj.net_pay || 0) + (obj.festival_bonus || 0) + (obj.overtime_bonus || 0)
@@ -401,6 +415,10 @@ onMounted(() => {
             </el-tag>
           </el-divider>
 
+          <div class="cliff-note">
+            事/病假合計（DB + 額外） > 40 小時 → 節慶與超額獎金歸零（主管紅利不受影響）
+          </div>
+
           <el-form-item label="+ 事假時數">
             <el-input-number v-model="form.extra_personal_leave_hours" :min="0" :step="1" controls-position="right" style="width: 100%" />
           </el-form-item>
@@ -483,7 +501,23 @@ onMounted(() => {
             </template>
           </el-alert>
 
-          <!-- 三大金額卡：應發 / 扣款 / 含獎金實領（員工最終到手） -->
+          <!-- 事/病假 > 40h 清零獎金的 cliff 觸發提示 -->
+          <el-alert
+            v-if="bonusLikelyZeroedByLeave"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-top: 8px;"
+          >
+            <template #title>
+              <span style="font-size: 12px;">
+                試算結果節慶+超額獎金為 0。可能因事/病假合計 > 40 小時觸發歸零規則
+                （engine.py:1442）。如需保留獎金，請降低額外請假時數。
+              </span>
+            </template>
+          </el-alert>
+
+          <!-- 三大金額卡：應發 / 扣款 / 試算淨薪＋獨立獎金（不含未休折現） -->
           <el-row :gutter="12" style="margin-top: 12px;">
             <el-col :span="8">
               <el-card class="summary-card" shadow="never" body-style="padding: 14px; text-align: center;">
@@ -514,10 +548,10 @@ onMounted(() => {
             <el-col :span="8">
               <el-card class="summary-card net-card" shadow="never" body-style="padding: 14px; text-align: center;">
                 <el-tooltip
-                  content="主帳戶實領 + 節慶獎金 + 超額獎金（後兩者獨立轉帳，員工最終到手總額）"
+                  content="試算淨薪 + 節慶獎金 + 超額獎金；未休折現只存在已結算記錄，本試算不含未休折現"
                   placement="top"
                 >
-                  <div class="sum-label">含獎金實領（試算）</div>
+                  <div class="sum-label">試算淨薪＋獨立獎金（不含未休折現）</div>
                 </el-tooltip>
                 <div class="sum-value text-green">{{ money(augmentedSimulated?.total_with_bonus) }}</div>
                 <div
@@ -795,6 +829,17 @@ onMounted(() => {
   font-size: 12px;
   color: var(--el-text-color-secondary);
   margin-left: 6px;
+}
+
+.cliff-note {
+  font-size: 11px;
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9);
+  border-left: 3px solid var(--el-color-warning);
+  padding: 6px 10px;
+  margin: 0 0 12px 0;
+  border-radius: 2px;
+  line-height: 1.5;
 }
 
 .form-actions {

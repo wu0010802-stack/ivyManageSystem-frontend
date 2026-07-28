@@ -22,8 +22,9 @@ describe('StepReview appraisal_year_end_bonus removal', () => {
         expect(src).not.toContain('考核年終獎金')
     })
 
-    it('含獎金實領公式只含 net_pay + festival + overtime_bonus', () => {
-        expect(src).toMatch(/scope\.row\.net_pay.*festival_bonus.*overtime_bonus/s)
+    it('含獎金實領公式透過共用 helper 納入未休折現，且不納入考核年終', () => {
+        expect(src).toContain('computeTotalTakeHomeAmount(scope.row)')
+        expect(src).toContain('computeBaseTransferAmount(scope.row)')
         expect(src).not.toMatch(/net_pay.*appraisal_year_end_bonus/s)
     })
 

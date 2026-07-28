@@ -64,7 +64,7 @@
       <el-table :data="finalizedRecords" border stripe max-height="320">
         <el-table-column prop="employee_name" label="姓名" width="120" />
         <el-table-column label="實領" width="140" align="right" class-name="num-cell">
-          <template #default="scope">{{ money(scope.row.net_pay) }}</template>
+          <template #default="scope">{{ money(computeBaseTransferAmount(scope.row)) }}</template>
         </el-table-column>
         <el-table-column prop="finalized_by" label="封存人" width="120" />
         <el-table-column label="封存時間" min-width="160">
@@ -107,6 +107,7 @@ import StatCard from '@/components/common/StatCard.vue'
 import { finalizeMonth, unfinalizeSalary } from '@/api/salary'
 import { hasPermission } from '@/utils/auth'
 import { money } from '@/utils/format'
+import { computeBaseTransferAmount } from '@/utils/salaryAmounts'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { SalarySettlement, SettlementRecord } from '@/composables/useSalarySettlement'
 
@@ -126,7 +127,7 @@ const totalGross = computed(() =>
     settlement.records.value.reduce((s, r) => s + Number(r.gross_salary || 0), 0),
 )
 const totalNet = computed(() =>
-    settlement.records.value.reduce((s, r) => s + Number(r.net_salary || 0), 0),
+    settlement.records.value.reduce((s, r) => s + computeBaseTransferAmount(r), 0),
 )
 const finalizedRecords = computed(() => settlement.records.value.filter((r) => r.is_finalized))
 
