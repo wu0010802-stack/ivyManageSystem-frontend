@@ -51,4 +51,23 @@ describe('EnrollmentRosterTable', () => {
     expect(ev).toBeTruthy()
     expect(ev![0][0]).toMatchObject({ id: 11, name: '甲' })
   })
+
+  it('學生連結是可鍵盤聚焦的 button', () => {
+    const w = mount(EnrollmentRosterTable, { props: { roster } })
+    const link = w.find('.student-cell .student-link')
+    expect(link.element.tagName).toBe('BUTTON')
+    expect(link.attributes('type')).toBe('button')
+  })
+
+  it('狀態標籤除顏色外另有右上標記（a11y）', () => {
+    const w = mount(EnrollmentRosterTable, { props: { roster } })
+    const marks = w.findAll('.student-cell .status-mark')
+    expect(marks.map(m => m.text())).toEqual(['新', '特'])
+  })
+
+  it('表頭與列標籤使用語意化 th', () => {
+    const w = mount(EnrollmentRosterTable, { props: { roster } })
+    expect(w.find('th.class-num-cell').attributes('scope')).toBe('col')
+    expect(w.find('tbody th.seq-cell').attributes('scope')).toBe('row')
+  })
 })
