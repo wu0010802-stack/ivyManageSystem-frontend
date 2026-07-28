@@ -12,6 +12,8 @@ import {
 import type { ApiBody } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
+import { useRoute } from 'vue-router'
+import { pickClassroomIdFromQuery } from '@/utils/portalQuery'
 import {
   enqueueOp,
   countPending,
@@ -34,6 +36,7 @@ import StudentOfflinePanel from './components/studentAttendance/StudentOfflinePa
 interface ClassroomEntry { classroom_id?: number; classroom_name?: string; [key: string]: unknown }
 interface AttendanceRecord { student_id?: number; status?: string; remark?: string; [key: string]: unknown }
 
+const route = useRoute()
 const classrooms = ref<ClassroomEntry[]>([])
 const activeTab = ref('daily')
 const classroomId = ref<number | null>(null)
@@ -122,14 +125,13 @@ const fetchClassrooms = async () => {
   try {
     const res = await getMyStudents()
     classrooms.value = res.data.classrooms || []
-    if (classrooms.value.length > 0) {
-      // deep-link 預選：首頁班級卡帶 classroom_id 時落在該班（多班教師不再落錯班）
-      const qId = Number(route.query.classroom_id)
-      const target =
-        Number.isFinite(qId) && classrooms.value.some((c) => c.classroom_id === qId)
-          ? qId
-          : classrooms.value[0].classroom_id ?? null
-      classroomId.value = target
+    // 首頁班級卡會帶 ?classroom_id=；先前無條件覆寫成第一班，多班老師因此會點錯班的名
+    if (classrooms.value.length > 0 && !classroomId.value) {
+      classroomId.value = pickClassroomIdFromQuery(
+        route.query,
+        classrooms.value,
+        classrooms.value[0].classroom_id ?? null,
+      )
     }
   } catch {
     ElMessage.error('載入班級資料失敗')

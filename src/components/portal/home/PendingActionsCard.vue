@@ -7,6 +7,9 @@ interface PendingActions {
   pending_substitute?: number
   pending_swap?: number
   pending_anomaly_confirms?: number
+  /** 最早一筆待確認異常所在年月；badge 統計全期間、異常頁一次只看一個月，
+   *  沒有它就無從把老師帶到看得到那筆異常的月份 */
+  pending_anomaly_earliest?: { year: number; month: number } | null
   unread_announcements?: number
   [key: string]: unknown
 }
@@ -16,6 +19,12 @@ const props = defineProps<{
 }>()
 
 const router = useRouter()
+
+// 帶上最早待確認月份，否則點進去固定看當月、舊的異常永遠找不到，badge 也消不掉
+const anomalyTarget = computed(() => {
+  const e = props.actions?.pending_anomaly_earliest
+  return e ? `/portal/anomalies?year=${e.year}&month=${e.month}` : '/portal/anomalies'
+})
 
 const items = computed(() => [
   {
@@ -43,7 +52,7 @@ const items = computed(() => [
     key: 'pending_anomaly_confirms',
     label: '異常待確認',
     count: props.actions?.pending_anomaly_confirms || 0,
-    to: '/portal/anomalies',
+    to: anomalyTarget.value,
     tint: 'announcement',
   },
   {

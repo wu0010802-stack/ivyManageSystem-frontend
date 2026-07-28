@@ -4,6 +4,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { Loading } from '@element-plus/icons-vue'
 import { getMyWorkdayHours } from '@/api/portal'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
+import { Loading } from '@element-plus/icons-vue'
 
 const emit = defineEmits<{
   'submit': [payload: Record<string, unknown>]

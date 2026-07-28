@@ -58,7 +58,9 @@ const form = reactive({
   // 永遠是 0，調整缺卡次數不影響任何計算結果（會誤導用戶以為有效）。
   total_late_minutes: null,
   total_early_minutes: null,
-  work_days: null,
+  // work_days 已移除：它只流向 AttendanceResult.total_days/normal_days，
+  // 而那兩個欄位全 codebase 無 reader，改它對任何金額都沒有影響
+  // （見 backend tests/test_salary_simulate_work_days_noop_2026_07_28.py）。
   extra_personal_leave_hours: 0,
   extra_sick_leave_hours: 0,
   enrollment_override: null,
@@ -83,7 +85,6 @@ const buildCacheKey = () => {
     ec: form.early_leave_count,
     lm: form.total_late_minutes,
     em: form.total_early_minutes,
-    wd: form.work_days,
     pl: form.extra_personal_leave_hours || 0,
     sl: form.extra_sick_leave_hours || 0,
     en: form.enrollment_override,
@@ -147,7 +148,6 @@ const runSimulate = async ({ useCache = true }: { useCache?: boolean } = {}) => 
           early_leave_count: form.early_leave_count,
           total_late_minutes: form.total_late_minutes,
           total_early_minutes: form.total_early_minutes,
-          work_days: form.work_days,
           extra_personal_leave_hours: form.extra_personal_leave_hours || 0,
           extra_sick_leave_hours: form.extra_sick_leave_hours || 0,
           enrollment_override: form.enrollment_override,
@@ -206,7 +206,6 @@ const resetOverrides = () => {
   form.early_leave_count = null
   form.total_late_minutes = null
   form.total_early_minutes = null
-  form.work_days = null
   form.extra_personal_leave_hours = 0
   form.extra_sick_leave_hours = 0
   form.enrollment_override = null
@@ -382,9 +381,6 @@ onMounted(() => {
             </el-tag>
           </el-divider>
 
-          <el-form-item label="出勤天數">
-            <el-input-number v-model="form.work_days" :min="0" :max="31" :precision="0" controls-position="right" placeholder="自動" style="width: 100%" />
-          </el-form-item>
           <el-form-item label="遲到次數">
             <el-input-number v-model="form.late_count" :min="0" :max="31" :precision="0" controls-position="right" placeholder="自動" style="width: 100%" />
           </el-form-item>
@@ -588,7 +584,6 @@ onMounted(() => {
           <el-card shadow="never" style="margin-top: 12px;">
             <template #header><span>考勤統計（試算輸入值）</span></template>
             <el-descriptions :column="3" border size="small">
-              <el-descriptions-item label="出勤天數">{{ form.work_days ?? '自動' }}</el-descriptions-item>
               <el-descriptions-item label="遲到次數">{{ augmentedSimulated?.late_count }}</el-descriptions-item>
               <el-descriptions-item label="早退次數">{{ augmentedSimulated?.early_leave_count }}</el-descriptions-item>
               <el-descriptions-item label="遲到扣款">

@@ -22,15 +22,18 @@ describe('useLeaveQuota request-sequence guard（防 out-of-order 覆蓋）', ()
     // fetchFn 依呼叫順序回傳不同 deferred，模擬慢 A、快 B
     const fetchFn = vi.fn(() => calls[i++].promise)
 
-    // 用純物件 form：避免 watch/debounce 介入，直接手動驅動 fetchQuotaInfo
+    // 用純物件 form：避免 watch/debounce 介入，直接手動驅動 fetchQuotaInfo。
+    // 起始用「非配額假別」讓 composable 初始化時的自動 fetch 早退、不消耗 deferred
+    // （2026-07-27 起不能再用 employee_id=null 達成：有 fetchFn 時教師端本來就該 fetch）。
     const form: Record<string, unknown> = {
       employee_id: null,
-      leave_type: 'annual',
+      leave_type: 'official',
       start_date: '2026-01-01',
     }
     const { quotaInfo, fetchQuotaInfo, quotaLoading } = useLeaveQuota({ form, fetchFn })
 
     // 切到員工 A → 觸發慢請求
+    form.leave_type = 'annual'
     form.employee_id = 'A'
     const pA = fetchQuotaInfo()
 
@@ -76,14 +79,16 @@ describe('useLeaveQuota request-sequence guard（防 out-of-order 覆蓋）', ()
     const calls = [dA, dB]
     let i = 0
     const fetchFn = vi.fn(() => calls[i++].promise)
-    // 起始 employee_id=null，讓 composable 初始化時的自動 fetch 早退、不消耗 deferred
+    // 起始用「非配額假別」，讓 composable 初始化時的自動 fetch 早退、不消耗 deferred
+    // （2026-07-27 起不能再用 employee_id=null 達成：有 fetchFn 時教師端本來就該 fetch）
     const form: Record<string, unknown> = {
       employee_id: null,
-      leave_type: 'annual',
+      leave_type: 'official',
       start_date: '2026-01-01',
     }
     const { quotaInfo, fetchQuotaInfo } = useLeaveQuota({ form, fetchFn })
 
+    form.leave_type = 'annual'
     form.employee_id = 'A'
     const pA = fetchQuotaInfo() // seq 慢
     form.employee_id = 'B'

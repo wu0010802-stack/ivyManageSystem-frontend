@@ -24,7 +24,14 @@ export function useLeaveQuota({ form, fetchFn = null }: { form: Record<string, u
   let seq = 0
 
   const fetchQuotaInfo = async () => {
-    if (!form.employee_id || !QUOTA_TYPES.has(form.leave_type as string)) {
+    // 教師端沒有 form.employee_id（老師只能幫自己請假，身分從 token 取），改由 fetchFn
+    // 走 portal 的 getMyQuotas。原本無條件要求 employee_id 會讓教師端每次都 early return，
+    // 下方的 fetchFn 分支永遠走不到 —— 配額顯示與「配額不足」守衛整組失效。
+    // 對照 useWorkdayCalculator 既有的 `if (empId || fetchFn)` 逃生門。
+    if (
+      (!form.employee_id && !fetchFn) ||
+      !QUOTA_TYPES.has(form.leave_type as string)
+    ) {
       seq++ // 使 in-flight 回應失效，避免舊請求稍後回來重新填入
       quotaInfo.value = null
       return

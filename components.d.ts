@@ -252,7 +252,6 @@ declare module 'vue' {
     RecruitmentNearbySchoolList: typeof import('./src/components/recruitment/RecruitmentNearbySchoolList.vue')['default']
     RecruitmentNoDepositTab: typeof import('./src/components/recruitment/RecruitmentNoDepositTab.vue')['default']
     RecruitmentOverviewTab: typeof import('./src/components/recruitment/RecruitmentOverviewTab.vue')['default']
-    RecruitmentPeriodDialog: typeof import('./src/components/recruitment/RecruitmentPeriodDialog.vue')['default']
     RecruitmentPeriodsTab: typeof import('./src/components/recruitment/RecruitmentPeriodsTab.vue')['default']
     RecruitmentRecordDialog: typeof import('./src/components/recruitment/RecruitmentRecordDialog.vue')['default']
     RecruitmentSchoolGovDetail: typeof import('./src/components/recruitment/RecruitmentSchoolGovDetail.vue')['default']

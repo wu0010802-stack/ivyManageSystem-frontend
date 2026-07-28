@@ -1,6 +1,12 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// 本頁自 2026-07-27 起會讀 route.query.classroom_id（首頁班級卡的 deep link），
+// 沒有 router 也沒有 mock 時 useRoute() 會回 undefined，setup 階段就爆。
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ params: {}, query: {} }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}))
 vi.mock('@/api/portal', () => ({
   getMyStudents: vi.fn(),
   getMyClassAttendance: vi.fn(),
