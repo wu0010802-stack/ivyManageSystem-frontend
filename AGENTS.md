@@ -1,67 +1,10 @@
 # AGENTS.md
 
-This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
+> **本檔不承載規則，單一權威來源是同目錄的 [`CLAUDE.md`](./CLAUDE.md)。** 任何 agent（Codex、Claude Code、其他 AI 工具）在本 repo 工作前，請完整讀取並遵循 `CLAUDE.md`；跨前後端任務另見 `../ivyManageSystem/CLAUDE.md`。
 
-## 專案概述
-幼稚園考勤與薪資管理系統的前端（Vue 3 SPA）。後端為獨立 repo：`ivyManageSystem-backend`。
+本檔過去是 CLAUDE.md 的獨立複本，長期未同步導致規則漂移，2026-07-28 起改為純指向。若在歷史版本或快取中看到以下舊規則，一律無效：
 
-## 技術棧
-- Vue 3 (Composition API), Vite, Vitest
-- Element Plus, Pinia, Vue Router
-
----
-
-## 開發指令
-
-### 啟動前端（port 5173）
-```bash
-npm install
-npm run dev
-npm run build
-```
-
-### 測試（Vitest）
-```bash
-npm run test              # 執行一次
-npm run test:watch        # 監視模式
-npm run test:coverage     # 含覆蓋率報告
-```
-
-測試檔案位於 `tests/unit/`。
-
-### 推送至遠端
-本 repo 為獨立 git repo，直接 `git push origin main` 即可。
-
----
-
-## 架構重點
-
-### 前端路由
-使用 `createWebHashHistory`（hash 模式）。管理端與教師入口（portal）路由共用同一 `router/index.js`，以 `/portal/` 前綴區分。
-
----
-
-## 開發注意事項
-- 回應語言：一律使用**繁體中文**
-
----
-
-## 開發規範
-
-### Git Commit 規範
-
-使用 Conventional Commits 格式（`feat` / `fix` / `refactor` / `test` / `docs` / `chore`）。
-
-**原則：**
-- 一個 commit 只做一件事
-- Commit message 說明「為什麼」
-- 不 commit `.env.local`、`node_modules/`、`dist/`
-
----
-
-### 程式碼品質規範
-
-**前端：**
-- API 呼叫統一透過 `src/api/` 下的模組，不在元件內直接 `fetch`/`axios`
-- 狀態管理用 Pinia store，不在元件間傳遞複雜狀態
-- 權限位元遮罩超過 32-bit 時必須用 `BigInt` 處理
+- ~~「權限位元遮罩超過 32-bit 時必須用 `BigInt` 處理」~~ → 2026-05-21 起 Permission 為 **str enum**，**禁止**任何 BigInt／位元遮罩寫法，權限檢查一律走 `src/utils/auth.ts` 的 `hasPermission`。
+- ~~「直接 `git push origin main` 即可」~~ → 2026-07-13 起一律在 feature branch（worktree 內）commit，收束走 staging 閘門 promotion 流程（見 workspace `CLAUDE.md`「分支與 Worktree 規則」）。
+- ~~`router/index.js`~~ → 全 codebase TS-only（2026-05-19 起），業務檔一律 `.ts`，現為 `router/index.ts`。
+- ~~後端 repo 名 `ivyManageSystem-backend`~~ → 後端為 `~/Desktop/ivy-backend`。
