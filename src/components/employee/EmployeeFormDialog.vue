@@ -301,8 +301,9 @@ const populateForm = (row: Record<string, unknown>) => {
   const toAmountOrNull = (v: unknown) => (v == null || v === '' ? null : Number(v))
   form.base_salary = toAmountOrNull(row.base_salary)
   form.hourly_rate = toAmountOrNull(row.hourly_rate)
-  // 投保級距若為 0 或與底薪不一致，開啟編輯時自動對齊底薪；但底薪為 null（遮罩）時保持 null 不塞 0
-  if (form.base_salary != null && (!form.insurance_salary_level || form.insurance_salary_level !== form.base_salary)) {
+  // 投保級距未設定（0）時預設帶入底薪（存檔時後端會向上對齊官方級距）；底薪為 null（遮罩）時保持 null 不塞 0。
+  // 已有值則保留——不可強制對齊底薪，否則合法級距（如底薪 37160 → 級距 38200）每次開窗都被蓋回非法值。
+  if (form.base_salary != null && !form.insurance_salary_level) {
     form.insurance_salary_level = form.base_salary
   }
   // 重置 tab + dirty 快照 + suggestion dismiss
