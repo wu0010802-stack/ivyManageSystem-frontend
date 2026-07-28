@@ -2,6 +2,7 @@
  * 才藝系統共用常數
  * 集中定義所有狀態對應的 tag type 與 label，避免各元件重複定義。
  */
+import { CASH_METHOD } from './pos'
 
 export const PAYMENT_STATUS_TAG_TYPE = {
   paid:    'success',
@@ -73,7 +74,8 @@ export const MATCH_STATUS_LABEL_LONG = {
 
 // 後端才藝 POS 為 cash-only（payment_method: Literal["現金"]）；選非現金送出會 422。
 // 收斂成只剩現金與後端契約對齊；未來後端支援多付款方式時再加回轉帳/其他。
-export const PAYMENT_METHODS = ['現金']
+// 2026-07-28：改引用 pos.ts 的 CASH_METHOD，消除同值雙寫。
+export const PAYMENT_METHODS = [CASH_METHOD]
 
 export const APPROVAL_STATUS_LABEL = {
   fully_approved:     '已簽核',

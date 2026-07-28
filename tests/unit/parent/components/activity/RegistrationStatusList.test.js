@@ -217,4 +217,31 @@ describe('RegistrationStatusList', () => {
     expect(ev[0][0]).toEqual(registrations[0])
     expect(ev[0][1]).toEqual(registrations[0].courses[1])
   })
+
+  // 設計審查 2026-07-28：LIFF 端補「放棄候補升位」——原本只有確認鈕，
+  // 不想上課的家長只能放到 48h 確認窗過期，名額多卡 48h 才遞補下一位。
+  it('promoted_pending 同列顯示放棄按鈕，點擊 emit decline-promotion(reg, course)', async () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations, courseStatusMap: COURSE_STATUS },
+    })
+    const buttons = wrapper.findAll('.decline-btn')
+    expect(buttons).toHaveLength(1)
+    await buttons[0].trigger('click')
+    const ev = wrapper.emitted('decline-promotion')
+    expect(ev).toBeTruthy()
+    expect(ev[0][0]).toEqual(registrations[0])
+    expect(ev[0][1]).toEqual(registrations[0].courses[1])
+  })
+
+  it('confirmingKey 命中該列時，確認與放棄按鈕一併停用（防併發互踩）', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: {
+        registrations,
+        courseStatusMap: COURSE_STATUS,
+        confirmingKey: '10:101',
+      },
+    })
+    expect(wrapper.find('.confirm-btn').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.decline-btn').attributes('disabled')).toBeDefined()
+  })
 })

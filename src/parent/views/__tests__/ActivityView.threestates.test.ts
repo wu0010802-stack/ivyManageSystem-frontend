@@ -15,6 +15,8 @@ vi.mock('@/parent/api/activity', () => ({
   myRegistrations: vi.fn().mockResolvedValue({ data: { items: [] } }),
   registerCourses: vi.fn().mockResolvedValue({ data: {} }),
   confirmPromotion: vi.fn().mockResolvedValue({ data: {} }),
+  declinePromotion: vi.fn().mockResolvedValue({ data: {} }),
+  getUpcomingSessions: vi.fn().mockResolvedValue({ data: { items: [] } }),
   getActivityBootstrap: (...args: unknown[]) => bootstrapMock(...args),
 }))
 
@@ -69,6 +71,7 @@ const STUBS = {
   RegistrationStatusList: true,
   ChildContextHeader: true,
   ParentIcon: true,
+  ConfirmDialog: true,
   PullToRefresh: { template: '<div class="ptr"><slot /></div>' },
 }
 

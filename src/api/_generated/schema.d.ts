@@ -7846,6 +7846,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/activity/registrations/{registration_id}/decline-promotion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Promotion
+         * @description 家長放棄候補升位：刪除 promoted_pending 該列、清點名、遞補下一位。
+         *
+         *     設計審查 2026-07-28：LIFF 端原本只有 confirm 沒有 decline——不想上課的家長
+         *     只能放到 48h 確認窗過期（名額多卡 48h 才遞補）；Guardian 無有效手機的報名
+         *     （parent_phone=NULL、無 query_token）連公開端三欄/token 驗證都過不了，任何
+         *     管道都無法放棄。與公開端 public_decline_promotion 共用同一 service helper。
+         */
+        post: operations["decline_promotion_api_parent_activity_registrations__registration_id__decline_promotion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/activity/registrations/{registration_id}/payments": {
         parameters: {
             query?: never;
@@ -18950,6 +18975,11 @@ export interface components {
             work_end: string;
             /** Work Start */
             work_start: string;
+        };
+        /** DeclinePromotionPayload */
+        DeclinePromotionPayload: {
+            /** Course Id */
+            course_id: number;
         };
         /** DeductionTypeCreate */
         DeductionTypeCreate: {
@@ -45899,6 +45929,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ConfirmPromotionPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_promotion_api_parent_activity_registrations__registration_id__decline_promotion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registration_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclinePromotionPayload"];
             };
         };
         responses: {
