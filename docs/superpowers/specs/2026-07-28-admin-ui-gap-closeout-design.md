@@ -94,4 +94,4 @@ Dialog 與 Drawer 內固定 `el-alert`：「範本修改僅影響**之後**產�
 
 - 行政人員可在公告表單直接選「指定學生」發送，該生所有已綁定家長收到推播並可在 LIFF 看到公告；既有監護人層級設定經編輯儲存後仍保留。
 - 行政人員可在費用總覽頁完成範本新增／修改／停用與批次產單，全程不需打 API 工具。
-- `npm run test`、`npm run type-check`、`npm run lint` 全綠（既有紅字不惡化）。
+- `npm run test`、`npm run typecheck`、`npm run lint` 全綠（既有紅字不惡化）。
