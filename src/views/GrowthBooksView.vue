@@ -151,6 +151,9 @@ function onSearch() {
 
 async function onGenerate(row: BatchStatusItem) {
   if (!canPublish.value) return
+  // 批次生成／推播進行到一半時，未輪到的學生列按鈕也要鎖住，避免使用者手動點擊
+  // 造成重複送出（後端 409、彈出誤導性錯誤）；:disabled 已擋 UI，這裡再擋一層防呆。
+  if (batchGenerating.value || batchSending.value) return
   if (rowLoading.value[row.student_id]) return
   rowLoading.value[row.student_id] = true
   try {
@@ -172,6 +175,7 @@ function onDownload(row: BatchStatusItem) {
 async function onSendLine(row: BatchStatusItem) {
   if (!canPublish.value) return
   if (row.report_id == null) return
+  if (batchGenerating.value || batchSending.value) return
   if (rowLoading.value[row.student_id]) return
   rowLoading.value[row.student_id] = true
   try {
@@ -322,6 +326,7 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
             v-if="canPublish && row.status === 'none'"
             size="small" link
             :loading="rowLoading[row.student_id]"
+            :disabled="batchGenerating || batchSending"
             @click="onGenerate(row)"
           >
             一鍵生成
@@ -337,6 +342,7 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
             v-if="canPublish && row.status === 'ready'"
             size="small" link
             :loading="rowLoading[row.student_id]"
+            :disabled="batchGenerating || batchSending"
             @click="onSendLine(row)"
           >
             推播 LINE
