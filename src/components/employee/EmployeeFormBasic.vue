@@ -34,6 +34,7 @@ export interface EmployeeFormBasicData {
   birth_date?: string
   national_id?: string
   classroom_id?: number | null
+  classroom_name?: string
   phone?: string
   dependents?: number | null
   email?: string
@@ -88,11 +89,14 @@ const jobTitleLabel = computed(() => {
   return found ? found.name : fmt(props.form.job_title_id)
 })
 
-// classroom 顯示用 name
+// classroom 顯示用 name。此欄位一律唯讀：Employee.classroom_id 由後端
+// classroom_teacher_sync 從班級教師指派反算，指派入口只在班級管理頁。
 const classroomLabel = computed(() => {
   const found = props.classroomOptions.find(c => c.id === props.form.classroom_id)
   if (found) return `${found.name} (${found.grade_name || ''})`
-  return fmt(props.form.classroom_id)
+  if (props.form.classroom_name) return props.form.classroom_name
+  if (props.form.classroom_id == null) return '未指派'
+  return String(props.form.classroom_id)
 })
 
 // 可收合區段 refs
@@ -184,12 +188,8 @@ defineExpose({ applyValidationErrors })
   </el-form-item>
 
   <el-form-item label="班級">
-    <template v-if="isLocked('classroom_id')">
-      <span class="readonly-text">{{ classroomLabel }} <el-icon><Lock /></el-icon></span>
-    </template>
-    <el-select v-else v-model="form.classroom_id" placeholder="選擇班級" clearable style="width:100%">
-      <el-option v-for="c in classroomOptions" :key="c.id" :label="`${c.name} (${c.grade_name || ''})`" :value="c.id" />
-    </el-select>
+    <span class="readonly-text" data-test="classroom-readonly">{{ classroomLabel }}</span>
+    <div class="form-hint">由「班級管理」頁指派老師決定，此處僅顯示結果</div>
   </el-form-item>
 
   <!-- 職務細節 -->

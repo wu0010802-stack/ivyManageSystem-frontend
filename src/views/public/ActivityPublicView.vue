@@ -370,7 +370,6 @@
                   <!-- A1-P7：Step 2 抽 CoursePickerSection 元件 -->
                   <CoursePickerSection
                     :courses="courses"
-                    :options-loading="optionsLoading"
                     :selected-courses="form.selectedCourses"
                     :videos="videos"
                     :error-message="errors.courses"
@@ -538,7 +537,30 @@
                   </aside>
                 </transition>
 
+                <div
+                  v-if="submitError"
+                  class="submit-error-panel"
+                  role="alert"
+                  data-test="submit-error-banner"
+                >
+                  <svg class="notice-icon" width="22" height="22" aria-hidden="true"><use href="#i-alert" /></svg>
+                  <div class="submit-error-content">
+                    <strong>報名尚未送出</strong>
+                    <p>{{ submitError }}</p>
+                  </div>
+                </div>
+
                 <div class="submit-bar registration-nav-actions">
+                  <!-- 手機版吸底 CTA 帶合計：桌機有 sticky fee-preview，手機的費用
+                       預估留在內文流裡，勾完課要回滾才看得到金額，這裡補一行。
+                       金額變動已由 fee-preview 的 aria-live 播報，此處 aria-hidden 防雙報 -->
+                  <div
+                    v-if="currentStep > 1 && feePreview"
+                    class="submit-bar-total"
+                    aria-hidden="true"
+                  >
+                    預估合計 <strong>NT$ {{ feePreview.total.toLocaleString() }}</strong>
+                  </div>
                   <button
                     v-if="currentStep > 1"
                     type="button"
@@ -592,6 +614,8 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+// 公開頁設計 token 唯一權威（與查詢頁共用，禁止頁內重定義同名變數）
+import '@/assets/public-theme.css'
 import { publicRegister, getPublicBootstrap } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { priceFromList, sumCourseFees, sumSupplyFees } from '@/utils/activityPricing'
@@ -625,7 +649,7 @@ const registrationSteps: ReadonlyArray<{ number: PublicRegistrationStep; label: 
 // composable 已用 codegen 契約型別（PublicCourseOption/PublicSupplyOption），
 // 不再是 unknown[]；此處僅放寬到 view 子元件（CoursePickerSection/SuccessSummaryModal）
 // 接受的 CourseItem/CourseOption（sessions string|number，無 null）。
-const { courses: _courses, supplies: _supplies, classes, videos, loading: optionsLoading, applyOptions } = usePublicActivityOptions()
+const { courses: _courses, supplies: _supplies, classes, videos, applyOptions } = usePublicActivityOptions()
 const { timeInfo, applyTime } = useActivityRegistrationTime()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } = useActivityAvailability()
 
@@ -725,6 +749,9 @@ const {
 } = usePublicRegistrationFlow()
 
 const submitting = ref(false)
+// 送出失敗的持久錯誤（非 toast）：手機上家長低頭填表會錯過 4.5s toast，
+// 誤以為已報名成功——失敗訊息必須就地留在送出鈕旁直到下一次嘗試。
+const submitError = ref('')
 const posterLoaded = ref(false)
 function onPosterLoad() { posterLoaded.value = true }
 
@@ -851,7 +878,7 @@ function goToQuery() {
 }
 
 // ===== 送出成功 modal =====
-interface CourseItem { name: string; price: number }
+interface CourseItem { name: string; price: number; waitlisted?: boolean }
 const successModal = reactive<{
   visible: boolean; studentName: string; parentPhone: string; message: string;
   selectedCourses: CourseItem[];
@@ -874,9 +901,21 @@ const successModal = reactive<{
 function buildSuccessSummary({ name, parentPhone, email, message, queryToken }: {
   name: string; parentPhone: string; email?: string; message: string; queryToken?: string
 }) {
+  // Register response 為 anti-enumeration neutral response，不揭露後端錄取結果；
+  // 但 client 送出前本來就拿著即時名額（feePreview 同一判定：剩餘 <=0 即進候補
+  // 序列），成功畫面按「送出當下快照」標註候補課並將其排除於合計外，與費用
+  // 預估的「候補實際不收費」文案一致，不增加 enumeration 面。
+  const waitlistedAtSubmit = new Set(
+    form.selectedCourses.filter((courseName) => {
+      const remaining = availability.value[courseName]
+      return remaining !== undefined && remaining <= 0
+    }),
+  )
+
   const selectedCourseItems = form.selectedCourses.map((courseName) => ({
     name: courseName,
     price: priceFromList(courseName, courses.value),
+    waitlisted: waitlistedAtSubmit.has(courseName),
   }))
 
   const supplyItems = form.selectedSupplies.map((supplyName) => ({
@@ -884,11 +923,9 @@ function buildSuccessSummary({ name, parentPhone, email, message, queryToken }: 
     price: priceFromList(supplyName, supplies.value),
   }))
 
-  // Register response 為 anti-enumeration neutral response，不揭露錄取／候補；
-  // 此處只顯示家長本次選擇，金額為所有選項的上限估算。
   const total =
     sumCourseFees(form.selectedCourses, {
-      isEnrolled: () => true,
+      isEnrolled: (courseName) => !waitlistedAtSubmit.has(courseName),
       resolvePrice: (n) => priceFromList(n, courses.value),
     }) +
     sumSupplyFees(form.selectedSupplies, {
@@ -1010,6 +1047,7 @@ async function handleSubmitRegistration() {
   const email = form.email.trim()
 
   submitting.value = true
+  submitError.value = ''
   try {
     const res = await publicRegister({
       name,
@@ -1038,7 +1076,10 @@ async function handleSubmitRegistration() {
     resetFlow()
     await refreshAvailability()
   } catch (err) {
-    showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '送出失敗', 'error')
+    const detail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+    submitError.value = detail || '送出失敗，請確認網路連線後再試一次；您填寫的資料都還在。'
+    await nextTick()
+    document.querySelector('.submit-error-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   } finally {
     submitting.value = false
   }
@@ -1073,79 +1114,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 重置容器字型（使頁面獨立於 admin 全域樣式） */
+/* 重置容器字型（使頁面獨立於 admin 全域樣式）。
+   設計 token 一律來自 assets/public-theme.css（公開頁唯一權威，於 <script> import），
+   此處只保留本頁私有的布局值。 */
 .public-activity-page {
-  /* IvyKids 官方色票（reference_ivykids_brand.md） */
-  --color-bg: #fffce8;            /* 奶油黃 page bg */
-  --color-surface: #ffffff;
-  --color-surface-muted: #fff8e1; /* 暖黃 soft tint */
-  --color-surface-mint: #f5fbe6;  /* 嫩綠 soft tint */
-
-  --color-primary: #0d9053;       /* IvyKids 深綠主色 */
-  --color-primary-hover: #0caf76; /* 亮綠 hover */
-  --color-primary-soft: #d4ffe7;  /* 淺綠 tint */
-  --color-primary-contrast: #ffffff;
-
-  /* CTA 改為品牌綠系一致；不再用橙色（移除舊 coral/sky 殘留） */
-  --color-cta: #0d9053;
-  --color-cta-hover: #0caf76;
-  --color-cta-contrast: #ffffff;
-
-  /* 童彩 6 色（裝飾、badge、強調） */
-  --ivy-star-yellow: #ffde51;
-  --ivy-crown-gold: #f3c630;
-  --ivy-coral: #f3958c;
-  --ivy-rose: #f65265;
-  --ivy-purple: #9f89bd;
-  --ivy-laurel: #5aa842;
-  --ivy-green-laurel: #5aa842;    /* 與 LaurelWreath SVG 內 var 對齊 */
-  --ivy-teal: #33aaaa;            /* 藍綠次色（次要 CTA、tag） */
-
-  --color-festive: var(--ivy-crown-gold);
-  --color-festive-soft: #fff4c8;
-
-  --color-accent: #1e3a8a;
-  --color-accent-soft: #e0e7ff;
-
-  --color-text: #392a1c;          /* IvyKids 暖深咖啡（不用純黑） */
-  --color-text-muted: #5b5b5b;
-  --color-text-subtle: #8a7e6e;
-
-  /* public bundle 只 import design-tokens.css，main.css 的 --text-secondary/
-     --text-tertiary 未定義（見 spec #1）；此處對齊本檔既有文字色票補上，
-     不 import main.css（會拖入 Element Plus 覆寫，public 端無 EP） */
-  --text-secondary: var(--color-text-muted);
-  --text-tertiary: var(--color-text-subtle);
-
-  --color-border: #f2e6c9;
-  --color-border-strong: #e8d9a8;
-  --color-border-muted: #e5e7eb;
-
-  --color-danger: #dc2626;
-  --color-danger-soft: #fee2e2;
-  --color-warning: #d97706;
-  --color-warning-soft: #fef3c7;
-  --color-success: #0d9053;
-  --color-required: #f65265;      /* 童彩粉紅紅 */
-
-  --font-sans: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
-  --font-display: 'Baloo 2', 'Noto Sans TC', -apple-system, sans-serif;
-
-  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 15px; --fs-md: 16px; --fs-lg: 18px; --fs-xl: 22px;
-
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
-
-  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-full: 999px;
-
-  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
-  --shadow-md: 0 4px 12px rgba(17, 24, 39, 0.08);
-  --shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.10);
-  --shadow-xl: 0 20px 48px rgba(17, 24, 39, 0.14);
-
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-fast: 150ms; --dur-base: 220ms; --dur-slow: 320ms;
-  --focus-ring: 0 0 0 3px rgba(13, 144, 83, 0.28);
-
   min-height: 100vh;
   padding: clamp(12px, 3vw, 28px);
   font-family: var(--font-sans);
@@ -1797,7 +1769,9 @@ onUnmounted(() => {
   margin: 3px 0 0 0;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--color-success-soft);
+  /* 未勾邊框需達 WCAG 1.4.11 非文字對比 3:1；舊 --color-success-soft（#dcfce7）
+     對白底僅 1.07:1，家長看不出卡片可勾選 */
+  border: 2px solid var(--color-text-subtle);
   border-radius: 5px;
   background-color: var(--color-surface);
   background-position: center;
@@ -2136,6 +2110,34 @@ onUnmounted(() => {
 .submit-bar { margin-top: var(--space-3); }
 .btn-submit { width: 100%; min-height: 56px; font-size: var(--fs-lg); }
 .registration-nav-actions { display: flex; align-items: stretch; gap: var(--space-3); }
+
+/* 送出失敗的持久錯誤：full border + tint（side-stripe ban），置於送出鈕正上方 */
+.submit-error-panel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  border-radius: var(--radius-md);
+}
+.submit-error-panel .notice-icon { flex-shrink: 0; color: var(--color-danger); }
+.submit-error-content strong {
+  display: block;
+  font-size: var(--fs-md);
+  color: var(--color-danger);
+  margin-bottom: 2px;
+}
+.submit-error-content p {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+/* 手機吸底 CTA 的合計列：桌機由 sticky fee-preview 呈現，預設隱藏 */
+.submit-bar-total { display: none; }
 .registration-nav-actions .btn-submit { flex: 1 1 auto; width: auto; }
 .registration-back-button { flex: 0 0 auto; min-width: 112px; }
 
@@ -2440,6 +2442,24 @@ onUnmounted(() => {
   }
   .btn-submit { min-height: 52px; font-size: var(--fs-md); }
   .registration-back-button { min-width: 84px; padding-inline: var(--space-3); }
+
+  /* 手機吸底 CTA 帶合計：fee-preview 在內文流會被滾出視野，家長勾完課
+     不用回滾就能看到金額（桌機由 sticky fee-preview 負責，此列僅手機顯示） */
+  .registration-nav-actions { flex-wrap: wrap; }
+  .submit-bar-total {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex: 1 0 100%;
+    margin-bottom: var(--space-2);
+    font-size: var(--fs-sm);
+    color: var(--color-text-muted);
+  }
+  .submit-bar-total strong {
+    color: var(--color-primary);
+    font-size: var(--fs-md);
+    font-variant-numeric: tabular-nums;
+  }
 
   /* 行動裝置 fee-preview 預留底部空間，避免被吸底 CTA 遮 */
   .fee-preview { margin-bottom: 0; }

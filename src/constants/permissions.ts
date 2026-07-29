@@ -77,6 +77,9 @@ export const PERMISSION_NAMES = {
   PORTAL_IMPERSONATE: 'PORTAL_IMPERSONATE',
   DATA_QUALITY_READ: 'DATA_QUALITY_READ',
   DATA_QUALITY_WRITE: 'DATA_QUALITY_WRITE',
+  // 班級相簿（教師端，Task 9）：對齊後端 utils/permissions.py 新增的兩碼。
+  CLASS_ALBUMS_READ: 'CLASS_ALBUMS_READ',
+  CLASS_ALBUMS_WRITE: 'CLASS_ALBUMS_WRITE',
 } as const
 
 export type PermissionName = typeof PERMISSION_NAMES[keyof typeof PERMISSION_NAMES]

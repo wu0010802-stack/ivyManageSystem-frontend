@@ -20,10 +20,12 @@
  * Emits:
  *   close
  */
-import { onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 
-interface CourseItem { name: string; price: number }
+// waitlisted＝送出當下名額快照判定為候補（parent buildSuccessSummary 標註）；
+// 候補課顯示徽章並排除於 totalAmount 外，與費用預估的「候補不收費」口徑一致
+interface CourseItem { name: string; price: number; waitlisted?: boolean }
 interface Summary {
   visible: boolean
   message: string
@@ -56,6 +58,10 @@ const { onDialogKeydown } = useAccessibleDialog({
 function fmtAmount(n: number) {
   return `$${n.toLocaleString('en-US')}`
 }
+
+const hasWaitlistedCourse = computed(() =>
+  props.summary.selectedCourses.some((c) => c.waitlisted),
+)
 
 // 軟性保存守門狀態（僅存在於本元件，不進 summary 物件）
 const copiedKey = ref<'' | 'token' | 'link'>('')
@@ -240,7 +246,11 @@ function handleDone() {
           <div v-if="summary.selectedCourses.length > 0" class="receipt-group">
             <div class="receipt-group-title">本次選擇課程（{{ summary.selectedCourses.length }}）</div>
             <div v-for="c in summary.selectedCourses" :key="`c-${c.name}`" class="receipt-row">
-              <span class="receipt-value">{{ c.name }}</span><span class="receipt-amount">{{ fmtAmount(c.price) }}</span>
+              <span class="receipt-value">
+                {{ c.name }}
+                <span v-if="c.waitlisted" class="receipt-waitlist-badge">依序候補</span>
+              </span>
+              <span class="receipt-amount" :class="{ 'is-waitlisted': c.waitlisted }">{{ fmtAmount(c.price) }}</span>
             </div>
           </div>
 
@@ -255,6 +265,10 @@ function handleDone() {
             <span>預估應繳金額</span>
             <strong>{{ fmtAmount(summary.totalAmount) }}</strong>
           </div>
+          <p v-if="hasWaitlistedCourse" class="receipt-waitlist-note">
+            標示「依序候補」的課程（依送出當下名額估計）暫不計入合計；
+            升為正式後校方會另行通知繳費。
+          </p>
         </section>
 
         <p class="summary-final-note">
@@ -431,6 +445,31 @@ function handleDone() {
   color: var(--color-primary);
   font-size: var(--fs-xl);
   font-variant-numeric: tabular-nums;
+}
+.receipt-waitlist-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-warning-darker);
+  background: var(--color-warning-soft);
+  border-radius: var(--radius-full);
+  vertical-align: 1px;
+}
+.receipt-amount.is-waitlisted {
+  color: var(--color-text-subtle);
+  font-weight: 500;
+  text-decoration: line-through;
+  text-decoration-color: rgba(122, 110, 94, 0.6);
+}
+.receipt-waitlist-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-warning-darker);
+  line-height: 1.6;
 }
 
 .summary-final-note {

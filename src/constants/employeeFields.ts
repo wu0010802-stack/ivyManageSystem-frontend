@@ -42,7 +42,8 @@ export const BASIC_TAB_FIELDS = Object.freeze([
   'position',
   'supervisor_role',
   'bonus_grade',
-  'classroom_id',
+  // classroom_id 不在此列：2026-07-28 起員工表單唯讀顯示班級，
+  // 後端 PUT 也不再接受（唯一維護者 = 班級頁指派觸發的 classroom_teacher_sync）
   'gender',
   'email',
   'phone',

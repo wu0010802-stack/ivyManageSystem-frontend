@@ -16048,6 +16048,11 @@ export interface components {
         AnomalyConfirm: {
             /** Action */
             action: string;
+            /**
+             * Anomaly Type
+             * @default late
+             */
+            anomaly_type: string;
             /** Remark */
             remark?: string | null;
         };
@@ -19437,8 +19442,6 @@ export interface components {
              * @default false
              */
             bypass_standard_base: boolean;
-            /** Classroom Id */
-            classroom_id?: number | null;
             /**
              * Dependents
              * @default 0
@@ -19702,8 +19705,6 @@ export interface components {
             bonus_grade?: string | null;
             /** Bypass Standard Base */
             bypass_standard_base?: boolean | null;
-            /** Classroom Id */
-            classroom_id?: number | null;
             /** Dependents */
             dependents?: number | null;
             /** Email */

@@ -295,6 +295,7 @@ export const SCOPE_AWARE_CODES: ReadonlySet<string> = new Set([
   'STUDENTS_SPECIAL_NEEDS_READ', 'STUDENTS_SPECIAL_NEEDS_WRITE',
   'PORTFOLIO_READ', 'PORTFOLIO_WRITE', 'PORTFOLIO_PUBLISH',
   'DISMISSAL_CALLS_READ', 'DISMISSAL_CALLS_WRITE',
+  'CLASS_ALBUMS_READ', 'CLASS_ALBUMS_WRITE',
 ])
 
 /** userInfo.flags 是否含 portal_only（防禦式讀取：flags 缺失/型別錯 → false）。 */
