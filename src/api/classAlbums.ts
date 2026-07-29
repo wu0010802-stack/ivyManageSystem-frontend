@@ -21,22 +21,52 @@ export interface AlbumClassroomOption {
   name: string
 }
 
+export interface AlbumTaggedStudent {
+  id: number
+  name: string
+}
+
+export interface AlbumPhoto {
+  id: number
+  thumb_url: string
+  display_url: string
+  original_filename: string
+  created_at: string
+  students: AlbumTaggedStudent[]
+}
+
+export interface AlbumDetail extends AlbumSummary {
+  photos: AlbumPhoto[]
+}
+
+export interface PhotoUploadResultItem {
+  filename: string
+  ok: boolean
+  photo?: AlbumPhoto
+  error?: string
+}
+
+export interface PhotoUploadResponse {
+  items: PhotoUploadResultItem[]
+}
+
 export const listAlbums = () =>
   api.get('/portal/class-albums') as Promise<AxiosResponse<AlbumSummary[]>> // TODO(ts-strict): waiting on backend response_model
 export const getAlbumClassrooms = () =>
   api.get('/portal/class-albums/my-classrooms') as Promise<AxiosResponse<AlbumClassroomOption[]>> // TODO(ts-strict): waiting on backend response_model
 export const createAlbum = (data: { classroom_id: number; title: string; event_date: string; description?: string }) =>
   api.post('/portal/class-albums', data) as Promise<AxiosResponse<AlbumSummary>> // TODO(ts-strict): waiting on backend response_model
-export const getAlbum = (albumId: number) => api.get(`/portal/class-albums/${albumId}`)
+export const getAlbum = (albumId: number) =>
+  api.get(`/portal/class-albums/${albumId}`) as Promise<AxiosResponse<AlbumDetail>> // TODO(ts-strict): waiting on backend response_model
 export const updateAlbum = (albumId: number, data: { title?: string; description?: string; event_date?: string }) =>
   api.patch(`/portal/class-albums/${albumId}`, data)
 export const deleteAlbum = (albumId: number) => api.delete(`/portal/class-albums/${albumId}`)
 export const uploadAlbumPhotos = (albumId: number, formData: FormData) =>
   api.post(`/portal/class-albums/${albumId}/photos`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-  })
+  }) as Promise<AxiosResponse<PhotoUploadResponse>> // TODO(ts-strict): waiting on backend response_model
 export const deleteAlbumPhoto = (albumId: number, attachmentId: number) =>
-  api.delete(`/portal/class-albums/${albumId}/photos/${attachmentId}`)
+  api.delete(`/portal/class-albums/${albumId}/photos/${attachmentId}`) as Promise<AxiosResponse<unknown>> // TODO(ts-strict): waiting on backend response_model
 export const setPhotoTags = (albumId: number, items: Array<{ attachment_id: number; student_ids: number[] }>) =>
   api.put(`/portal/class-albums/${albumId}/photos/tags`, { items })
 export const publishAlbum = (albumId: number) => api.post(`/portal/class-albums/${albumId}/publish`)
