@@ -25,6 +25,9 @@
           <el-option v-for="n in classroomOptions" :key="n" :label="n" :value="n" />
         </el-select>
       </el-form-item>
+      <el-form-item label="家長電話">
+        <el-input v-model="form.parentPhone" placeholder="選填，09 開頭 10 碼" maxlength="30" />
+      </el-form-item>
       <el-form-item label="課程">
         <el-select
           v-model="form.courseNames"
@@ -126,6 +129,7 @@ const form = reactive<{
   name: string
   birthday: string
   class_: string
+  parentPhone: string
   email: string
   courseNames: string[]
   supplyNames: string[]
@@ -134,6 +138,7 @@ const form = reactive<{
   name: '',
   birthday: '',
   class_: '',
+  parentPhone: '',
   email: '',
   courseNames: [],
   supplyNames: [],
@@ -144,6 +149,7 @@ function resetForm() {
   form.name = ''
   form.birthday = ''
   form.class_ = ''
+  form.parentPhone = ''
   form.email = ''
   form.courseNames = []
   form.supplyNames = []
@@ -211,6 +217,7 @@ async function handleCreate() {
       name: form.name.trim(),
       birthday: form.birthday,
       class: form.class_,
+      parent_phone: form.parentPhone?.trim() || null,
       email: form.email?.trim() || null,
       remark: form.remark || '',
       courses: form.courseNames.map((name) => ({ name, price: '' })),
