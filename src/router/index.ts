@@ -601,6 +601,12 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '課堂觀察', permission: 'STUDENTS_READ' },
                 },
                 {
+                    path: 'work-samples',
+                    name: 'portal-work-samples',
+                    component: () => import('../views/portal/PortalWorkSampleView.vue'),
+                    meta: { title: '作品上傳', permission: 'STUDENTS_READ' },
+                },
+                {
                     path: 'leave',
                     name: 'portal-leave',
                     component: () => import('../views/portal/PortalLeaveView.vue'),
