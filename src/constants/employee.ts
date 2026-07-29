@@ -10,10 +10,13 @@ export const OFFICIAL_JOB_TITLE_NAMES = [
   '司機', '廚工', '職員',
 ]
 
+// 職等（與後端 services/salary/config_defaults.POSITION_GRADE_MAP 同一套）：
+// A=有教師證、B=教保員（含助理教保員）、C=非教保員。業主職等薪資表 2026-07-29。
 export const TITLE_TO_GRADE = {
   '幼兒園教師': 'A',
   '教保員': 'B',
-  '助理教保員': 'C',
+  '助理教保員': 'B',
+  '職員': 'C',
 }
 
 // 其他職位 → position_salary 設定欄位 key

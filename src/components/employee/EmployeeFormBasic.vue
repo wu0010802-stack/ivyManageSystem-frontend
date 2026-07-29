@@ -218,9 +218,9 @@ defineExpose({ applyValidationErrors })
       </template>
       <template v-else>
         <el-select v-model="form.bonus_grade" clearable filterable allow-create placeholder="自動（依教育局職稱）" style="width:100%">
-          <el-option label="A 級（幼兒園教師）" value="A" />
-          <el-option label="B 級（教保員）" value="B" />
-          <el-option label="C 級（助理教保員）" value="C" />
+          <el-option label="A 級（有教師證）" value="A" />
+          <el-option label="B 級（教保員／助理教保員）" value="B" />
+          <el-option label="C 級（非教保員）" value="C" />
         </el-select>
         <div class="form-hint">空白表示依教育局職稱自動判斷；保留手動覆蓋用於特例（A / B / C）</div>
       </template>
