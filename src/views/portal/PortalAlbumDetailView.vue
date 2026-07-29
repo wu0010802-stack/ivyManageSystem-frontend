@@ -128,7 +128,13 @@ async function submitUpload(): Promise<void> {
 }
 
 async function removePhoto(photoId: number): Promise<void> {
-  await ElMessageBox.confirm('確定刪除這張照片？', '刪除照片', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm('確定刪除這張照片？', '刪除照片', { type: 'warning' })
+  } catch (e) {
+    // 使用者按取消 → 靜默返回；非 cancel 的例外照舊往外拋，讓既有全域 handler（Sentry unhandledrejection）接住
+    if (e !== 'cancel') throw e
+    return
+  }
   await deleteAlbumPhoto(albumId, photoId)
   await load()
 }

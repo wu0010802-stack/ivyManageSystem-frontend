@@ -85,4 +85,18 @@ describe('PortalAlbumDetailView', () => {
     expect(deleteAlbumPhoto).toHaveBeenCalledWith(1, 11)
     expect(getAlbum).toHaveBeenCalledTimes(2)
   })
+
+  it('刪除照片 confirm 取消時不呼叫 deleteAlbumPhoto 也不拋出例外', async () => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
+
+    const wrapper = mount(PortalAlbumDetailView)
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { removePhoto: (photoId: number) => Promise<void> }
+
+    await expect(vm.removePhoto(11)).resolves.toBeUndefined()
+    await flushPromises()
+
+    expect(deleteAlbumPhoto).not.toHaveBeenCalled()
+    expect(getAlbum).toHaveBeenCalledTimes(1)
+  })
 })
