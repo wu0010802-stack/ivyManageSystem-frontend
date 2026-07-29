@@ -1619,6 +1619,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/registrations/rematch-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rematch Batch Registrations
+         * @description 對目前學期所有待審核（pending_review=True, is_active=True）報名逐筆重新比對。
+         *
+         *     2026-07-23：報名管理頁工具列「重新比對」由單列動作改為一鍵批次，取代原本
+         *     需先勾選才能觸發的「批量重新比對」（且原批量僅能處理當前頁面已勾選/已載入
+         *     的列，非「全部」待審核）。單筆處理沿用 ``_rematch_one_registration``（與單筆
+         *     route 完全相同的鎖序與比對邏輯）；某一筆失敗（如撞到唯一性衝突）僅計入
+         *     failed，不影響其餘筆數的處理，session 於單筆失敗後 rollback 仍可安全繼續。
+         */
+        post: operations["rematch_batch_registrations_api_activity_registrations_rematch_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/settings/poster": {
         parameters: {
             query?: never;
@@ -15754,6 +15780,8 @@ export interface components {
             email?: string | null;
             /** Name */
             name: string;
+            /** Parent Phone */
+            parent_phone?: string | null;
             /**
              * Remark
              * @default
@@ -24366,6 +24394,29 @@ export interface components {
             total: number;
         };
         /**
+         * PendingRegistrationRematchBatchResultOut
+         * @description POST /registrations/rematch-batch 回應（2026-07-23，工具列「重新比對」批次化）。
+         *
+         *     對目前學期所有待審核（pending_review=True, is_active=True）報名逐筆重新比對；
+         *     單筆失敗（例如撞到唯一性衝突）不影響其他筆，計入 failed 並繼續處理下一筆。
+         */
+        PendingRegistrationRematchBatchResultOut: {
+            /** Failed */
+            failed: components["schemas"]["RegistrationRematchBatchFailureItemOut"][];
+            /** Matched */
+            matched: number;
+            /** Message */
+            message: string;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Still Pending */
+            still_pending: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * PendingRegistrationRematchResultOut
          * @description POST /registrations/{id}/rematch 回應。
          *
@@ -27385,6 +27436,16 @@ export interface components {
         RegistrationRejectRequest: {
             /** Reason */
             reason: string;
+        };
+        /**
+         * RegistrationRematchBatchFailureItemOut
+         * @description POST /registrations/rematch-batch failed[] 單筆：哪一筆比對時出錯及原因。
+         */
+        RegistrationRematchBatchFailureItemOut: {
+            /** Detail */
+            detail: string;
+            /** Registration Id */
+            registration_id: number;
         };
         /**
          * RegistrationRematchRequest
@@ -34754,6 +34815,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PendingRegistrationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rematch_batch_registrations_api_activity_registrations_rematch_batch_post: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingRegistrationRematchBatchResultOut"];
                 };
             };
             /** @description Validation Error */

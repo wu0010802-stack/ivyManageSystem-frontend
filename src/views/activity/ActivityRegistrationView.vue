@@ -4,7 +4,7 @@
 
     <div class="mode-list">
     <div class="toolbar">
-      <div class="filters">
+      <div class="toolbar-row toolbar-row--filters">
         <AcademicTermSelector />
         <el-input
           v-model="searchText"
@@ -32,6 +32,15 @@
         </el-select>
         <el-button :loading="loading" :disabled="loading" @click="handleSearch">搜尋</el-button>
         <el-button @click="resetFilters">重置</el-button>
+      </div>
+      <div class="toolbar-row toolbar-row--actions">
+        <el-button
+          v-if="canWrite"
+          type="warning"
+          :loading="rematchAllLoading"
+          :disabled="rematchAllLoading"
+          @click="onRematchAllPending"
+        >重新比對</el-button>
         <el-button type="success" :loading="exporting" :disabled="exporting" @click="handleExport">匯出 Excel</el-button>
         <el-button v-if="canWrite" type="primary" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>
@@ -134,10 +143,10 @@
               >複製查詢碼</el-button>
             </el-tooltip>
           </div>
-          <!-- 第二行：僅「待審核」列顯示四顆審核鈕；其他狀態不顯示 -->
-          <div v-if="!isRejectedRow(row) && canWrite && isPending(row)" class="op-row op-row--audit">
+          <!-- 第二行：「待審核」與「未比對」列顯示三顆審核鈕；其他狀態不顯示。
+               重新比對已移至頁面工具列，改為一鍵批次處理全部待審核（2026-07-23）。 -->
+          <div v-if="!isRejectedRow(row) && canWrite && showReviewButtons(row)" class="op-row op-row--audit">
             <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
-            <el-button size="small" type="warning" @click="openRematchDialog(row)">重新比對</el-button>
             <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
             <el-tooltip
               :disabled="!((row.paid_amount || 0) > 0)"
@@ -989,25 +998,29 @@ const review = useActivityReview({
   clearSelection,
 })
 const {
-  batchProcessing,
+  batchProcessing, rematchAllLoading,
   matchDialog, editDialog, wizard, wizardCurrent,
   debouncedMatchSearch, debouncedWizardSearch,
-  openMatchDialog, confirmMatch, openRematchDialog, openForceDialog, confirmEdit,
-  handleReject, handleRestore,
+  openMatchDialog, confirmMatch, openForceDialog, confirmEdit,
+  handleReject, handleRestore, handleRematchAllPending,
   handleBatchRematch, handleBatchForceAccept, handleBatchReject, handleBatchRestore,
   openWizard, prevWizard, finishWizard, wizardMatch, wizardForce, wizardReject, wizardSkip,
 } = review
 
-// 是否為待審核列（四顆審核鈕僅此時 enabled）
-function isPending(row: RegistrationRow): boolean {
-  return row.match_status === 'pending'
+// 待審核／未比對列（審核鈕僅此二態 enabled；重新比對已移至頁面工具列一鍵批次
+// 處理全部待審核，2026-07-23，不再是單列動作）
+function showReviewButtons(row: RegistrationRow): boolean {
+  return row.match_status === 'pending' || row.match_status === 'unmatched'
 }
 function isRejectedRow(row: RegistrationRow): boolean {
   return row.match_status === 'rejected'
 }
 // 拒絕鈕在已有繳費時 disable（對齊後端 reject 的 paid_amount 守衛，避免必然 409）
 function canReject(row: RegistrationRow): boolean {
-  return canWrite.value && isPending(row) && !((row.paid_amount as number) > 0)
+  return canWrite.value && showReviewButtons(row) && !((row.paid_amount as number) > 0)
+}
+function onRematchAllPending() {
+  handleRematchAllPending({ school_year: termStore.school_year, semester: termStore.semester })
 }
 
 // 批量列動作（以 selectedRows 為輸入；cast 到 ReviewRow）
@@ -1218,13 +1231,14 @@ onMounted(async () => {
 .reject-btn-wrap { display: inline-flex; margin-left: 12px; vertical-align: middle; }
 .reject-btn-wrap + .el-button { margin-left: 12px; }
 .activity-registrations { padding: 16px; }
-.toolbar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+/* 兩列工具列（2026-07-23）：第一列搜尋/篩選、第二列動作按鈕（含重新比對），
+   兩列皆靠左對齊。 */
+.toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.toolbar-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-start; }
 
 @media (--to-sm) {
-  .toolbar { flex-direction: column; align-items: stretch; }
-  .filters { flex-direction: column; }
-  .filters > * { width: 100% !important; }
+  .toolbar-row { flex-direction: column; align-items: stretch; }
+  .toolbar-row > * { width: 100% !important; }
 }
 .detail-body { padding: 0 4px; }
 .section-title { font-weight: 600; margin: 16px 0 8px; font-size: 14px; color: var(--neutral-700); }

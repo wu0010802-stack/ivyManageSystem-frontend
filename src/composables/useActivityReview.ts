@@ -4,6 +4,7 @@ import {
   matchRegistration,
   rejectRegistration,
   rematchRegistration,
+  rematchAllPendingRegistrations,
   forceAcceptRegistration,
   restoreRegistration,
   searchActivityStudents,
@@ -47,6 +48,7 @@ function errDetail(err: unknown): string | undefined {
 
 export function useActivityReview(opts: { onChanged: () => void | Promise<void>; clearSelection: () => void }) {
   const batchProcessing = ref(false)
+  const rematchAllLoading = ref(false)
 
   // ── 手動匹配 dialog ────────────────────────────────────────────
   const matchDialog = reactive<{
@@ -239,6 +241,33 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
       opts.onChanged()
     } catch (err) {
       ElMessage.error(errDetail(err) || '復原失敗')
+    }
+  }
+
+  // ── 工具列：一鍵重新比對全部待審核（2026-07-23）─────────────────
+  // 取代原本「重新比對」單列動作：頁面工具列的按鈕不需勾選，直接對後端目前
+  // 學期全部待審核報名批次重新比對（後端 POST /registrations/rematch-batch）。
+  async function handleRematchAllPending(params?: { school_year?: number; semester?: number }) {
+    try {
+      await ElMessageBox.confirm(
+        '將對目前學期所有「待審核」報名重新執行自動比對（姓名 + 生日 + 班級）。比對成功者自動綁定在校生，其餘維持待審核。',
+        '重新比對',
+        { confirmButtonText: '確定重新比對', cancelButtonText: '取消', type: 'info' },
+      )
+    } catch {
+      return
+    }
+    rematchAllLoading.value = true
+    try {
+      const res = await rematchAllPendingRegistrations(params)
+      const data = res.data as { message?: string; failed?: unknown[] }
+      const msg = data.message || '重新比對完成'
+      ;(data.failed?.length ?? 0) > 0 ? ElMessage.warning(msg) : ElMessage.success(msg)
+      await opts.onChanged()
+    } catch (err) {
+      ElMessage.error(errDetail(err) || '重新比對失敗')
+    } finally {
+      rematchAllLoading.value = false
     }
   }
 
@@ -475,6 +504,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
 
   return {
     batchProcessing,
+    rematchAllLoading,
     // 狀態
     matchDialog, editDialog, wizard, wizardCurrent,
     // 搜尋
@@ -482,6 +512,8 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     // 單列
     openMatchDialog, confirmMatch, openRematchDialog, openForceDialog, confirmEdit,
     handleReject, handleRestore,
+    // 工具列：一鍵重新比對全部待審核
+    handleRematchAllPending,
     // 批量
     handleBatchRematch, handleBatchForceAccept, handleBatchReject, handleBatchRestore,
     // 精靈
