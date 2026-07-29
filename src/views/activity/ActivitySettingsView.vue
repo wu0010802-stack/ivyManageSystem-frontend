@@ -609,26 +609,4 @@ onMounted(() => {
   color: var(--text-secondary);
   line-height: 1.5;
 }
-
-.template-group {
-  margin-bottom: 18px;
-}
-.template-group__title {
-  margin: 0 0 6px 120px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.template-hint {
-  margin: 0 0 12px 120px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.8;
-}
-.template-hint code {
-  display: inline-block;
-  margin: 2px 4px 2px 0;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--el-fill-color-light);
-}
 </style>
