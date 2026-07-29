@@ -12,12 +12,14 @@ vi.mock('element-plus', () => ({
 const rejectRegistration = vi.fn().mockResolvedValue({ data: {} })
 const matchRegistration = vi.fn().mockResolvedValue({ data: {} })
 const rematchRegistration = vi.fn().mockResolvedValue({ data: { matched: true } })
+const rematchAllPendingRegistrations = vi.fn().mockResolvedValue({ data: { message: '完成', failed: [] } })
 const forceAcceptRegistration = vi.fn().mockResolvedValue({ data: {} })
 const restoreRegistration = vi.fn().mockResolvedValue({ data: {} })
 vi.mock('@/api/activity', () => ({
   matchRegistration: (...a: unknown[]) => matchRegistration(...a),
   rejectRegistration: (...a: unknown[]) => rejectRegistration(...a),
   rematchRegistration: (...a: unknown[]) => rematchRegistration(...a),
+  rematchAllPendingRegistrations: (...a: unknown[]) => rematchAllPendingRegistrations(...a),
   forceAcceptRegistration: (...a: unknown[]) => forceAcceptRegistration(...a),
   restoreRegistration: (...a: unknown[]) => restoreRegistration(...a),
   searchActivityStudents: vi.fn(),
@@ -73,6 +75,41 @@ describe('useActivityReview 批量 loading 態時序（P3-1）', () => {
       await done
       expect(review.batchProcessing.value, `${name} 應在 refetch 後解除 loading`).toBe(false)
     }
+  })
+})
+
+// 2026-07-23：報名管理頁工具列「重新比對」改為一鍵批次（不需勾選），呼叫新的
+// POST /registrations/rematch-batch；沿用同款 P3-1 loading 時序規範。
+describe('useActivityReview 工具列一鍵重新比對（rematchAllLoading）', () => {
+  it('rematchAllLoading 維持 true 直到 onChanged (refetch) resolve', async () => {
+    let resolveRefetch!: () => void
+    const refetch = new Promise<void>((r) => {
+      resolveRefetch = r
+    })
+    const onChanged = vi.fn(() => refetch)
+    const review = useActivityReview({ onChanged, clearSelection: vi.fn() })
+
+    const done = review.handleRematchAllPending({ school_year: 114, semester: 1 })
+    await flush()
+
+    expect(rematchAllPendingRegistrations).toHaveBeenCalledWith({ school_year: 114, semester: 1 })
+    expect(review.rematchAllLoading.value).toBe(true)
+
+    resolveRefetch()
+    await done
+    expect(review.rematchAllLoading.value).toBe(false)
+  })
+
+  it('使用者取消確認對話框時不呼叫 API、不進入 loading', async () => {
+    rematchAllPendingRegistrations.mockClear()
+    const { ElMessageBox } = await import('element-plus')
+    ;(ElMessageBox.confirm as ReturnType<typeof vi.fn>).mockRejectedValueOnce('cancel')
+    const review = useActivityReview({ onChanged: vi.fn(), clearSelection: vi.fn() })
+
+    await review.handleRematchAllPending({ school_year: 114, semester: 1 })
+
+    expect(rematchAllPendingRegistrations).not.toHaveBeenCalled()
+    expect(review.rematchAllLoading.value).toBe(false)
   })
 })
 

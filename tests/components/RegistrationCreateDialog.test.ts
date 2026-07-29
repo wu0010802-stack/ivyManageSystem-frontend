@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
 vi.mock('@/api/activity', () => ({
@@ -142,5 +142,53 @@ describe('RegistrationCreateDialog — 候補課程不納入目前預估應繳',
     expect(currentEstimate.text()).toContain('NT$ 800')
     expect(wrapper.find('[data-test="estimated-total"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="waitlist-unbilled"]').exists()).toBe(false)
+  })
+})
+
+// 2026-07-23：後台手動新增報名補上家長電話輸入框（選填，對齊前台家長自行報名
+// 已收集的同一欄位）。
+describe('RegistrationCreateDialog — 家長電話（選填）', () => {
+  type Wrapper = ReturnType<typeof mountDialog>
+
+  async function fillRequired(wrapper: Wrapper) {
+    const form = (wrapper.vm as unknown as { form: Record<string, unknown> }).form
+    form.name = '王小明'
+    form.birthday = '2020-01-01'
+    form.class_ = '大班'
+    form.courseNames = ['美術']
+    await wrapper.vm.$nextTick()
+  }
+
+  async function submit(wrapper: Wrapper) {
+    const btn = wrapper.findAll('button').find((b) => b.text().includes('確認新增'))
+    if (!btn) throw new Error('找不到「確認新增」按鈕')
+    await btn.trigger('click')
+    await flushPromises()
+  }
+
+  it('顯示家長電話輸入框', () => {
+    const wrapper = mountDialog()
+    expect(wrapper.text()).toContain('家長電話')
+  })
+
+  it('未填家長電話時，送出 payload 的 parent_phone 為 null（選填不擋送出）', async () => {
+    const { createRegistration } = await import('@/api/activity')
+    ;(createRegistration as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { message: '新增成功' } })
+    const wrapper = mountDialog()
+    await fillRequired(wrapper)
+    await submit(wrapper)
+    expect(createRegistration).toHaveBeenCalledWith(expect.objectContaining({ parent_phone: null }))
+  })
+
+  it('填寫家長電話時，送出 payload 會帶上 trim 後的值', async () => {
+    const { createRegistration } = await import('@/api/activity')
+    ;(createRegistration as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { message: '新增成功' } })
+    const wrapper = mountDialog()
+    await fillRequired(wrapper)
+    const form = (wrapper.vm as unknown as { form: Record<string, unknown> }).form
+    form.parentPhone = ' 0912345678 '
+    await wrapper.vm.$nextTick()
+    await submit(wrapper)
+    expect(createRegistration).toHaveBeenCalledWith(expect.objectContaining({ parent_phone: '0912345678' }))
   })
 })

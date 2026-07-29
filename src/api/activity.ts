@@ -34,6 +34,11 @@ export const rejectRegistration = (id: number, reason = ''): AxiosResp<'/activit
 // （optional requestBody → ApiBody 推導為 never），故直接引用具名 component schema。
 export const rematchRegistration = (id: number, data?: Schema<'RegistrationRematchRequest'>): AxiosResp<'/activity/registrations/{registration_id}/rematch', 'post'> =>
   api.post(`/activity/registrations/${id}/rematch`, data)
+// 批次重新比對目前學期所有待審核報名（工具列一鍵「重新比對」，2026-07-23）；
+// 不傳 params 時後端用當前學期。取代原本需先勾選才觸發、且僅處理已勾選/已載入
+// 列的前端迴圈版「批量重新比對」。
+export const rematchAllPendingRegistrations = (params?: ApiQuery<'/activity/registrations/rematch-batch', 'post'>): AxiosResp<'/activity/registrations/rematch-batch', 'post'> =>
+  api.post('/activity/registrations/rematch-batch', null, { params })
 export const forceAcceptRegistration = (id: number, data?: Schema<'RegistrationRematchRequest'>): AxiosResp<'/activity/registrations/{registration_id}/force-accept', 'post'> =>
   api.post(`/activity/registrations/${id}/force-accept`, data)
 export const restoreRegistration = (id: number): AxiosResp<'/activity/registrations/{registration_id}/restore', 'post'> =>
