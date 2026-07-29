@@ -63,6 +63,9 @@ async function load() {
 }
 
 function onCategoryChange(v: string) {
+  // 篩選後陣列可能變短，先關掉 lightbox（含 clamp previewIdx）避免殘留的
+  // previewIdx 指向已不存在的項目，template 讀 items[previewIdx] 炸掉。
+  closePreview()
   category.value = v
   load()
 }
@@ -140,11 +143,11 @@ onMounted(load)
         :key="item.id"
         type="button"
         class="thumb"
-        :aria-label="`查看第 ${idx + 1} 張照片`"
+        :aria-label="item.category === 'work' ? `查看第 ${idx + 1} 張照片（作品）` : `查看第 ${idx + 1} 張照片`"
         @click="openPreview(idx)"
       >
         <img :src="item.thumb_url || item.display_url || item.url" :alt="item.filename" loading="lazy" decoding="async" />
-        <span v-if="item.category === 'work'" class="photo-badge">作品</span>
+        <span v-if="item.category === 'work'" class="photo-badge" aria-hidden="true">作品</span>
       </button>
       <!-- 漸進渲染哨兵：捲動到底時 IntersectionObserver 自動載入下一批 -->
       <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
@@ -221,8 +224,8 @@ onMounted(load)
   bottom: 6px;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #FFD75E;
-  color: var(--pt-text-strong, #1a1a1a);
+  background: var(--color-warning-soft, #fff3e0);
+  color: var(--pt-warning-text, #8a5d00);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.6;

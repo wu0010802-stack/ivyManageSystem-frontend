@@ -153,8 +153,8 @@ onMounted(load)
   line-height: 1.6;
 }
 .report-type-chip.yearbook {
-  background: #FFD75E;
-  color: var(--pt-text-strong, #1a1a1a);
+  background: var(--color-warning-soft, #fff3e0);
+  color: var(--pt-warning-text, #8a5d00);
 }
 .report-period {
   margin: 2px 0 0;
