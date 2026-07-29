@@ -145,4 +145,38 @@ describe('PortalAlbumDetailView - 標記與發布', () => {
     expect(publishAlbum).not.toHaveBeenCalled()
     expect(ElMessage.error).not.toHaveBeenCalled()
   })
+
+  it('批次標記 dialog 顯示覆蓋提示；單張標記不顯示', async () => {
+    const wrapper = mount(PortalAlbumDetailView)
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      toggleSelect: (id: number) => void
+      openTagDialog: (photoId?: number) => void
+    }
+
+    vm.toggleSelect(11)
+    vm.toggleSelect(12)
+    vm.openTagDialog()
+    await wrapper.vm.$nextTick()
+
+    const alert = wrapper.find('[data-test="tag-overwrite-alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('2 張')
+
+    vm.toggleSelect(12) // 取消選取，剩 11 一張 → 切回單張模式
+    vm.openTagDialog()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('[data-test="tag-overwrite-alert"]').exists()).toBe(false)
+  })
+
+  it('getMyStudents 失敗時顯示 warning 且 students 清空', async () => {
+    vi.mocked(getMyStudents).mockRejectedValue(new Error('network'))
+    const wrapper = mount(PortalAlbumDetailView)
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { students: Array<{ id: number; name: string }> }
+
+    expect(ElMessage.warning).toHaveBeenCalledWith('學生名單載入失敗，標記功能暫不可用')
+    expect(vm.students).toEqual([])
+  })
 })

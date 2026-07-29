@@ -71,6 +71,16 @@
     </div>
 
     <el-dialog v-model="tagDialogVisible" title="標記學生" width="420px">
+      <el-alert
+        v-if="selectedIds.size > 1"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="tag-overwrite-alert"
+        data-test="tag-overwrite-alert"
+      >
+        套用後將覆蓋所選 {{ selectedIds.size }} 張照片目前的標記
+      </el-alert>
       <el-select v-model="tagForm.studentIds" multiple filterable placeholder="選擇學生" style="width: 100%">
         <el-option v-for="s in students" :key="s.id" :label="s.name" :value="s.id" />
       </el-select>
@@ -179,8 +189,9 @@ async function loadStudents(): Promise<void> {
       (c.students ?? []).map((s) => ({ id: s.id, name: s.name })),
     )
   } catch {
-    // 學生名單是標記 dialog 的輔助資料，載入失敗不應擋掉相簿主頁面；標記 dialog 會暫時無選項可選
+    // 學生名單是標記 dialog 的輔助資料，載入失敗不應擋掉相簿主頁面；提示一次後降級為空清單
     students.value = []
+    ElMessage.warning('學生名單載入失敗，標記功能暫不可用')
   }
 }
 
@@ -257,6 +268,7 @@ defineExpose({
   applyTags,
   handlePublish,
   tagForm,
+  students,
 })
 </script>
 
@@ -276,4 +288,5 @@ defineExpose({
 .photo-thumb { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 4px; cursor: pointer; }
 .photo-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; min-height: 24px; }
 .photo-actions { display: flex; justify-content: space-between; margin-top: 4px; }
+.tag-overwrite-alert { margin-bottom: 12px; }
 </style>
