@@ -720,7 +720,7 @@ defineExpose({ formatOperator })
 }
 .history-operator {
   font-size: var(--text-sm);
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary, var(--neutral-600));
 }
 .history-summary {
   font-size: var(--text-sm);
@@ -730,7 +730,7 @@ defineExpose({ formatOperator })
   text-align: center;
 }
 .no-changes {
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary, var(--neutral-500));
   padding: var(--space-2);
   font-style: italic;
 }
