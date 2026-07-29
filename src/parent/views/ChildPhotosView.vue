@@ -6,6 +6,7 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 interface PhotoItem {
@@ -14,10 +15,18 @@ interface PhotoItem {
   display_url?: string
   url?: string
   filename?: string
+  category?: string
 }
 
 const route = useRoute()
 const studentId = computed(() => Number(route.params.studentId))
+
+const categoryItems = [
+  { value: 'all', label: '全部' },
+  { value: 'life', label: '生活照' },
+  { value: 'work', label: '作品' },
+]
+const category = ref('all')
 
 const items = ref<PhotoItem[]>([])
 const total = ref(0)
@@ -39,7 +48,10 @@ async function load() {
   if (!studentId.value) return
   loading.value = true
   try {
-    const r = await fetchChildPhotos(studentId.value, { limit: 200 })
+    const r = await fetchChildPhotos(studentId.value, {
+      limit: 200,
+      ...(category.value !== 'all' ? { category: category.value } : {}),
+    })
     items.value = r.data.items || []
     total.value = r.data.total || 0
   } catch (e) {
@@ -48,6 +60,11 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function onCategoryChange(v: string) {
+  category.value = v
+  load()
 }
 
 async function openPreview(idx: number) {
@@ -96,6 +113,13 @@ onMounted(load)
       <p class="pt-page-hero-note">老師為您拍下的學校點滴</p>
     </header>
 
+    <M3SegmentedButton
+      :model-value="category"
+      :items="categoryItems"
+      class="category-segmented pt-section-pad-x"
+      @update:model-value="onCategoryChange($event as string)"
+    />
+
     <template v-if="loading">
       <div class="skeleton-wrap">
         <SkeletonBlock variant="card" />
@@ -120,6 +144,7 @@ onMounted(load)
         @click="openPreview(idx)"
       >
         <img :src="item.thumb_url || item.display_url || item.url" :alt="item.filename" loading="lazy" decoding="async" />
+        <span v-if="item.category === 'work'" class="photo-badge">作品</span>
       </button>
       <!-- 漸進渲染哨兵：捲動到底時 IntersectionObserver 自動載入下一批 -->
       <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
@@ -161,12 +186,15 @@ onMounted(load)
 }
 .skeleton-wrap { padding: 0 16px; }
 
+.category-segmented { align-self: flex-start; }
+
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px;
 }
 .thumb {
+  position: relative;
   aspect-ratio: 1;
   overflow: hidden;
   background: var(--pt-border-light, #ecf5f9);
@@ -186,6 +214,19 @@ onMounted(load)
   height: 100%;
   object-fit: cover;
   display: block;
+}
+.photo-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #FFD75E;
+  color: var(--pt-text-strong, #1a1a1a);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+  pointer-events: none;
 }
 
 .lightbox {
