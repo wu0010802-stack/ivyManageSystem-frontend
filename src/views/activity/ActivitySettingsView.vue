@@ -223,10 +223,6 @@ interface SettingsForm {
   target_audience: string
   form_card_title: string
   poster_url: string
-  registration_success_email_subject: string
-  registration_success_email_body: string
-  waitlist_promoted_email_subject: string
-  waitlist_promoted_email_body: string
 }
 
 interface EmailTemplateForm {
@@ -289,10 +285,6 @@ const form = ref<SettingsForm>({
   target_audience: '',
   form_card_title: '',
   poster_url: '',
-  registration_success_email_subject: '',
-  registration_success_email_body: '',
-  waitlist_promoted_email_subject: '',
-  waitlist_promoted_email_body: '',
 })
 
 const posterBroken = ref(false)
@@ -329,10 +321,6 @@ async function fetchSettings() {
       target_audience: d.target_audience || '',
       form_card_title: d.form_card_title || '',
       poster_url: d.poster_url || '',
-      registration_success_email_subject: d.registration_success_email_subject || '',
-      registration_success_email_body: d.registration_success_email_body || '',
-      waitlist_promoted_email_subject: d.waitlist_promoted_email_subject || '',
-      waitlist_promoted_email_body: d.waitlist_promoted_email_body || '',
     }
     posterBroken.value = false
     settingsLoaded.value = true
@@ -438,14 +426,6 @@ async function handleSave() {
       target_audience: form.value.target_audience.trim() || null,
       form_card_title: form.value.form_card_title.trim() || null,
       poster_url: form.value.poster_url || null,
-      registration_success_email_subject:
-        form.value.registration_success_email_subject.trim() || null,
-      registration_success_email_body:
-        form.value.registration_success_email_body.trim() || null,
-      waitlist_promoted_email_subject:
-        form.value.waitlist_promoted_email_subject.trim() || null,
-      waitlist_promoted_email_body:
-        form.value.waitlist_promoted_email_body.trim() || null,
     }
     await updateRegistrationTime(payload)
     ElMessage.success('設定已儲存')

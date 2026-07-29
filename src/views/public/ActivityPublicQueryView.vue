@@ -427,7 +427,7 @@
                   class="qty-display"
                   :class="{ 'is-waiting': c.status !== 'enrolled' }"
                 >
-                  {{ COURSE_STATUS_LABEL[c.status] }}
+                  {{ (COURSE_STATUS_LABEL as Record<string, string>)[c.status] || c.status }}
                 </span>
               </li>
             </ul>

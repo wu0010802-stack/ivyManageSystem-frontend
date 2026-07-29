@@ -51,9 +51,6 @@
             @click="openEnrolled(row)"
           >{{ occupying(row) }}/{{ row.capacity }}</el-button>
           <span v-else>0/{{ row.capacity }}</span>
-          <div v-if="(row.pending_review || 0) > 0" class="pending-occupancy-hint">
-            含 {{ row.pending_review }} 待審核
-          </div>
           <div v-if="(row.promoted_pending || 0) > 0" class="pending-occupancy-hint">
             含 {{ row.promoted_pending }} 待確認
           </div>
@@ -65,7 +62,6 @@
             class="pending-occupancy-hint pending-occupancy-hint--waitlist"
           >
             {{ row.pending_review_waitlist }} 待審候補（不佔位）
-          </div>
           </div>
         </template>
       </el-table-column>
