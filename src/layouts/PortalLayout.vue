@@ -396,6 +396,9 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/assessments">
             <span>學期評量</span>
           </el-menu-item>
+          <el-menu-item index="/portal/albums">
+            <span>班級相簿</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- ============ 班級 — 管理 ============ -->

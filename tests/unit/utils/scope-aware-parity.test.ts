@@ -34,6 +34,8 @@ const EXPECTED_SCOPE_AWARE_CODES = new Set([
   'PORTFOLIO_PUBLISH',
   'DISMISSAL_CALLS_READ',
   'DISMISSAL_CALLS_WRITE',
+  'CLASS_ALBUMS_READ',
+  'CLASS_ALBUMS_WRITE',
 ])
 
 describe('scope-aware code parity 前後端同步 (RA-HIGH-1c)', () => {
@@ -41,7 +43,7 @@ describe('scope-aware code parity 前後端同步 (RA-HIGH-1c)', () => {
     expect(new Set(SCOPE_AWARE_CODES)).toEqual(EXPECTED_SCOPE_AWARE_CODES)
   })
 
-  it('剛好 13 筆（漂移 canary）', () => {
-    expect(SCOPE_AWARE_CODES.size).toBe(13)
+  it('剛好 15 筆（漂移 canary）', () => {
+    expect(SCOPE_AWARE_CODES.size).toBe(15)
   })
 })

@@ -636,6 +636,18 @@ export const routes: RouteRecordRaw[] = [
                     meta: { permission: 'STUDENTS_READ' },
                 },
                 {
+                    path: 'albums',
+                    name: 'portal-albums',
+                    component: () => import('../views/portal/PortalAlbumsView.vue'),
+                    meta: { title: '班級相簿', permission: 'CLASS_ALBUMS_READ' },
+                },
+                {
+                    path: 'albums/:id',
+                    name: 'portal-album-detail',
+                    component: () => import('../views/portal/PortalAlbumDetailView.vue'),
+                    meta: { title: '相簿內容', permission: 'CLASS_ALBUMS_READ' },
+                },
+                {
                     path: 'incidents',
                     name: 'portal-incidents',
                     component: () => import('../views/portal/PortalIncidentView.vue'),
