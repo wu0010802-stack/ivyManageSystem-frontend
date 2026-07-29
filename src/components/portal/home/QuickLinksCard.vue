@@ -7,6 +7,7 @@ const router = useRouter()
 const links = [
   { label: '班級學生', to: '/portal/students', tint: 'message' },
   { label: '課堂觀察', to: '/portal/observations', tint: 'event' },
+  { label: '作品上傳', to: '/portal/work-samples', tint: 'event' },
   { label: '用藥執行', to: '/portal/medications', tint: 'medication' },
   { label: '事件紀錄', to: '/portal/incidents', tint: 'announcement' },
   { label: '學期評量', to: '/portal/assessments', tint: 'contact' },

@@ -164,6 +164,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: PAGE_TERMS.classrooms }
         },
         {
+            path: '/growth-books',
+            name: 'growth-books',
+            component: () => import('../views/GrowthBooksView.vue'),
+            meta: { title: '成長冊工作台' }
+        },
+        {
             path: '/attendance',
             name: 'attendance',
             component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),
@@ -603,6 +609,12 @@ export const routes: RouteRecordRaw[] = [
                     name: 'portal-observations',
                     component: () => import('../views/portal/PortalObservationView.vue'),
                     meta: { title: '課堂觀察', permission: 'STUDENTS_READ' },
+                },
+                {
+                    path: 'work-samples',
+                    name: 'portal-work-samples',
+                    component: () => import('../views/portal/PortalWorkSampleView.vue'),
+                    meta: { title: '作品上傳', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'leave',
