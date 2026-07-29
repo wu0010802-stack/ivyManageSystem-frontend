@@ -59,10 +59,14 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-// 生成／推播動作對齊後端 Permission.PORTFOLIO_PUBLISH 守衛；測試環境無登入 session，
-// 需顯式 stub 為 true 才能渲染出這些操作按鈕（比照 WorkSamplesSection.spec.ts 慣例）。
+// 生成／推播（含策展，Task 13 審查後補上 canPublish gate）動作對齊後端
+// Permission.PORTFOLIO_PUBLISH 守衛；測試環境無登入 session，需顯式 stub 為 true
+// 才能渲染出這些操作按鈕（比照 WorkSamplesSection.spec.ts 慣例）。宣告成具名
+// const 而非直接 inline 在 factory 內，讓個別測試可用 mockReturnValueOnce
+// 覆寫成 false 模擬 READ-only 帳號。
+const hasPermission = vi.fn(() => true)
 vi.mock('@/utils/auth', () => ({
-  hasPermission: vi.fn(() => true),
+  hasPermission: (...a: unknown[]) => hasPermission(...a),
 }))
 
 import GrowthBooksView from '../GrowthBooksView.vue'
@@ -213,6 +217,19 @@ describe('GrowthBooksView', () => {
     await flushPromises()
     expect(draftGrowthBook).toHaveBeenCalledWith(1, { academic_year: expect.any(Number) })
     expect(w.text()).toContain('策展：王小明')
+  })
+
+  it('無 PORTFOLIO_PUBLISH 權限（READ-only 帳號）不應看到「策展」按鈕', async () => {
+    // 審查發現：策展按鈕原本只看 row.status，READ-only 帳號點開會 403 死路抽屜。
+    // 比照同檔其他動作按鈕（一鍵生成／推播 LINE）補上 canPublish gate。
+    hasPermission.mockReturnValueOnce(false)
+    const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
+    const vm = w.vm as unknown as VM
+    vm.classroomId = 1
+    await vm.load()
+    await flushPromises()
+    const curationBtn = w.findAll('button').find((b) => b.text().trim() === '策展')
+    expect(curationBtn).toBeUndefined()
   })
 
   it('批次生成進行中，尚未輪到的學生列按鈕鎖住防止重複送出', async () => {

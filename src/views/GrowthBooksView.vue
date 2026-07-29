@@ -330,7 +330,7 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
       <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <el-button
-            v-if="row.status === 'ready' || row.status === 'none'"
+            v-if="canPublish && (row.status === 'ready' || row.status === 'none')"
             size="small" link
             @click="openCuration(row)"
           >

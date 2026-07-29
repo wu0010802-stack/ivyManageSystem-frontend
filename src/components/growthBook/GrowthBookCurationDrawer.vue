@@ -10,6 +10,20 @@ const OBS_PER_DOMAIN_LIMIT = 3
 const WORK_SAMPLE_LIMIT = 12
 const COLLAGE_LIMIT = 24
 
+// 領域白名單對齊後端 models/portfolio.py::OBSERVATION_DOMAINS。不在白名單內的字串
+// （髒資料／未知 domain，含 null）比照後端 select_observation_ids 的正規化規則
+// 一律併入「綜合」——否則異常 domain 值會被拆成獨立分組，讓「每領域 ≤3」的前端
+// 防呆失真：使用者可能因此勾選超過 21 筆（7 域 × 3）觀察，送出後才被後端
+// Pydantic max_length 422 擋下。
+const FALLBACK_DOMAIN = '綜合'
+const OBSERVATION_DOMAIN_WHITELIST: readonly string[] = [
+  '身體動作與健康', '語文', '認知', '社會', '情緒', '美感', FALLBACK_DOMAIN,
+]
+
+function normalizeDomain(domain: string | null): string {
+  return domain && OBSERVATION_DOMAIN_WHITELIST.includes(domain) ? domain : FALLBACK_DOMAIN
+}
+
 interface AttachmentThumb {
   id: number
   thumb_url: string | null
@@ -170,7 +184,7 @@ const coverCandidates = computed<AttachmentThumb[]>(() => {
 const observationsByDomain = computed<Record<string, CandidateObservation[]>>(() => {
   const out: Record<string, CandidateObservation[]> = {}
   for (const o of candidates.value.observations) {
-    const domain = o.domain || '綜合'
+    const domain = normalizeDomain(o.domain)
     out[domain] = out[domain] || []
     out[domain].push(o)
   }

@@ -90,8 +90,10 @@ describe('GrowthBookCurationDrawer', () => {
     )
   })
 
-  it('每領域已勾滿 3 筆觀察時，該領域其餘 checkbox 應被 disable', async () => {
-    draftGrowthBook.mockImplementationOnce(() => Promise.resolve({
+  // 4 筆同域（美感）觀察，manifest 預選 [1,2,3]（已滿 OBS_PER_DOMAIN_LIMIT=3），
+  // id=4 未選——供「已滿 disable」與「取消後恢復可勾」兩個測試共用。
+  function makeFourObsSameDomainResponse() {
+    return {
       data: {
         manifest: {
           version: 1, cover_attachment_id: null, observation_ids: [1, 2, 3],
@@ -112,7 +114,11 @@ describe('GrowthBookCurationDrawer', () => {
         },
         period: { start: '2025-08-01', end: '2026-07-31', label: '114學年度成長冊' },
       },
-    }))
+    }
+  }
+
+  it('每領域已勾滿 3 筆觀察時，該領域其餘 checkbox 應被 disable', async () => {
+    draftGrowthBook.mockImplementationOnce(() => Promise.resolve(makeFourObsSameDomainResponse()))
     const w = mountDrawer()
     await flushPromises()
     // 用 el-checkbox 專屬 class 篩選（排除「成長曲線」el-switch 底層也是
@@ -124,6 +130,22 @@ describe('GrowthBookCurationDrawer', () => {
     for (const c of disabledUnchecked) {
       expect((c.element as HTMLInputElement).disabled).toBe(true)
     }
+  })
+
+  it('勾滿 3 筆後取消其中一筆，同領域第 4 筆應恢復可勾選', async () => {
+    draftGrowthBook.mockImplementationOnce(() => Promise.resolve(makeFourObsSameDomainResponse()))
+    const w = mountDrawer()
+    await flushPromises()
+    const vm = w.vm as unknown as VM
+    // 取消 id=1（原本已勾滿 3 筆之一），同域選取數降到 2 → id=4 應解除 disable
+    // （早退分支 isObservationCheckboxDisabled 對「已選取」項目直接回 false，
+    // 但本測試驗證的是「取消後，未選取的第 4 筆重新計算 disabled」這條路徑）。
+    vm.selectedObservationIds = vm.selectedObservationIds.filter((id) => id !== 1)
+    await w.vm.$nextTick()
+    const checkboxes = w.findAll('input.el-checkbox__original')
+    const fourthCheckbox = checkboxes.find((c) => (c.element as HTMLInputElement).value === '4')
+    expect(fourthCheckbox).toBeTruthy()
+    expect((fourthCheckbox!.element as HTMLInputElement).disabled).toBe(false)
   })
 
   it('全部取消勾選且無封面時，生成鈕 disabled 並提示至少選擇一項素材', async () => {
