@@ -160,6 +160,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '班級學生管理' }
         },
         {
+            path: '/growth-books',
+            name: 'growth-books',
+            component: () => import('../views/GrowthBooksView.vue'),
+            meta: { title: '成長冊工作台' }
+        },
+        {
             path: '/attendance',
             name: 'attendance',
             component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),

@@ -106,6 +106,12 @@
             <el-icon><User /></el-icon>
             <template #title>學生</template>
           </el-menu-item>
+          <!-- 成長冊工作台：權限對齊後端 GET /growth-books/batch-status 的 PORTFOLIO_READ 守衛
+               （非 STUDENTS_READ），避免無作品集權限者看得到選單卻進頁面即 403。 -->
+          <el-menu-item v-if="canView.PORTFOLIO_READ" index="/growth-books">
+            <el-icon><Collection /></el-icon>
+            <template #title>成長冊工作台</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.RECRUITMENT_READ" index="/students/admissions">
             <el-icon><DataAnalysis /></el-icon>
             <template #title>招生入學</template>
@@ -330,7 +336,7 @@ const hasVisibleLeaveItems = computed(() =>
 
 const hasVisibleStudentItems = computed(() =>
   canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ ||
-  canView.value.RECRUITMENT_READ
+  canView.value.RECRUITMENT_READ || canView.value.PORTFOLIO_READ
 )
 
 const hasVisibleAdminItems = computed(() =>

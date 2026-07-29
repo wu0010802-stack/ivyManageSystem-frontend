@@ -110,6 +110,10 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/student-incidents', permission: 'STUDENTS_READ' },
   { path: '/student-academic-affairs', permission: 'STUDENTS_READ' },
   { path: '/classrooms', permission: 'CLASSROOMS_READ' },
+  // 成長冊工作台（班級批次）：對齊後端 GET /growth-books/batch-status 與
+  // POST /students/{id}/growth-books 的 require_permission(Permission.PORTFOLIO_READ) 守衛。
+  // 漏這條會讓 canAccessRoute default-deny 把所有人（含 super admin）擋在頁外。
+  { path: '/growth-books', permission: 'PORTFOLIO_READ' },
   // prefix: 薪資 IA 拆分（2026-06-12）後涵蓋 /salary/settle|history|simulate|settings 全部子頁
   { path: '/salary', permission: 'SALARY_READ', prefix: true },
   { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
