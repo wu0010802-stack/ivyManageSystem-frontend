@@ -203,7 +203,7 @@ async function onSendLine(row: BatchStatusItem) {
 async function onBatchGenerate() {
   if (!canPublish.value) return
   if (batchGenerating.value) return
-  const targets = items.value.filter((i) => i.status === 'none')
+  const targets = items.value.filter((i) => ['none', 'failed'].includes(i.status))
   if (targets.length === 0) {
     ElMessage.info('目前沒有需要生成的學生')
     return
@@ -330,14 +330,14 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
       <el-table-column label="操作" width="280">
         <template #default="{ row }">
           <el-button
-            v-if="canPublish && (row.status === 'ready' || row.status === 'none')"
+            v-if="canPublish && (row.status === 'ready' || row.status === 'none' || row.status === 'failed')"
             size="small" link
             @click="openCuration(row)"
           >
             策展
           </el-button>
           <el-button
-            v-if="canPublish && row.status === 'none'"
+            v-if="canPublish && (row.status === 'none' || row.status === 'failed')"
             size="small" link
             :loading="rowLoading[row.student_id]"
             :disabled="batchGenerating || batchSending"
