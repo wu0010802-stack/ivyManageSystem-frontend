@@ -23,11 +23,27 @@ const getGrowthBookBatchStatus = vi.fn(() =>
     },
   }))
 const createGrowthBook = vi.fn(() => Promise.resolve({ data: { id: 8 } }))
+// Task 13：策展抽屜（GrowthBookCurationDrawer）開啟即呼叫 draftGrowthBook，需回傳
+// 可解析的 shape（即使本檔測試多半不主動點開抽屜）避免真的點開時掛掉。
+const draftGrowthBook = vi.fn(() => Promise.resolve({
+  data: {
+    manifest: {
+      version: 1, cover_attachment_id: null, observation_ids: [],
+      work_sample_ids: [], collage_attachment_ids: [], milestone_ids: [],
+      include_measurements: false,
+    },
+    candidates: {
+      observations: [], work_samples: [], collage_pool: [], milestones: [],
+      measurement_count: 0,
+    },
+    period: { start: '2025-08-01', end: '2026-07-31', label: '114學年度成長冊' },
+  },
+}))
 // 成長報告族沿用既有 @/api/studentGrowthReports（Task 9 審查後定案），本檔 mock 對應調整
 vi.mock('@/api/growthBooks', () => ({
   getGrowthBookBatchStatus: (...a: unknown[]) => getGrowthBookBatchStatus(...a),
   createGrowthBook: (...a: unknown[]) => createGrowthBook(...a),
-  draftGrowthBook: vi.fn(),
+  draftGrowthBook: (...a: unknown[]) => draftGrowthBook(...a),
 }))
 
 const sendGrowthReportToLine = vi.fn(() => Promise.resolve({ data: { sent_count: 1 } }))
@@ -183,6 +199,20 @@ describe('GrowthBooksView', () => {
     expect(createGrowthBook).toHaveBeenCalledTimes(1)
     expect(createGrowthBook).toHaveBeenCalledWith(1, { academic_year: expect.any(Number) })
     expect(getGrowthBookBatchStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('點擊「策展」開啟策展抽屜並帶入該生 id／姓名', async () => {
+    const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
+    const vm = w.vm as unknown as VM
+    vm.classroomId = 1
+    await vm.load()
+    await flushPromises()
+    const curationBtn = w.findAll('button').find((b) => b.text().trim() === '策展')
+    expect(curationBtn).toBeTruthy()
+    await curationBtn!.trigger('click')
+    await flushPromises()
+    expect(draftGrowthBook).toHaveBeenCalledWith(1, { academic_year: expect.any(Number) })
+    expect(w.text()).toContain('策展：王小明')
   })
 
   it('批次生成進行中，尚未輪到的學生列按鈕鎖住防止重複送出', async () => {

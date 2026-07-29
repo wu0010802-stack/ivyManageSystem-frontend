@@ -7,6 +7,7 @@ import { getGrowthBookBatchStatus, createGrowthBook } from '@/api/growthBooks'
 // 成長報告族（下載／LINE 推播）沿用既有 src/api/studentGrowthReports.ts（Task 9 審查後定案），
 // 不在 growthBooks.ts 重複這組 API surface。
 import { sendGrowthReportToLine, downloadGrowthReportUrl } from '@/api/studentGrowthReports'
+import GrowthBookCurationDrawer from '@/components/growthBook/GrowthBookCurationDrawer.vue'
 import { apiError } from '@/utils/error'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
@@ -62,6 +63,16 @@ const batchGenerating = ref(false)
 const batchSending = ref(false)
 const generateProgress = ref<{ done: number; total: number } | null>(null)
 const sendProgress = ref<{ done: number; total: number } | null>(null)
+
+const curation = ref<{ visible: boolean; studentId: number | null; studentName: string }>({
+  visible: false,
+  studentId: null,
+  studentName: '',
+})
+
+function openCuration(row: BatchStatusItem) {
+  curation.value = { visible: true, studentId: row.student_id, studentName: row.student_name }
+}
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -318,8 +329,11 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
       </el-table-column>
       <el-table-column label="操作" width="280">
         <template #default="{ row }">
-          <!-- TODO(Task 13): 點擊開啟策展抽屜（curation drawer），本 task 僅放 placeholder -->
-          <el-button v-if="row.status === 'ready' || row.status === 'none'" size="small" link disabled>
+          <el-button
+            v-if="row.status === 'ready' || row.status === 'none'"
+            size="small" link
+            @click="openCuration(row)"
+          >
             策展
           </el-button>
           <el-button
@@ -350,6 +364,14 @@ defineExpose({ classroomId, academicYear, load, items, classrooms })
         </template>
       </el-table-column>
     </el-table>
+
+    <GrowthBookCurationDrawer
+      v-model="curation.visible"
+      :student-id="curation.studentId ?? 0"
+      :student-name="curation.studentName"
+      :academic-year="academicYear"
+      @generated="load"
+    />
   </div>
 </template>
 
