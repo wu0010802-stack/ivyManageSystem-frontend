@@ -55,9 +55,9 @@ onMounted(() => {
             style="width: 200px;"
             @change="updateTitleGrade(scope.row)"
           >
-            <el-option label="A 級（幼兒園教師）" value="A" />
-            <el-option label="B 級（教保員）" value="B" />
-            <el-option label="C 級（助理教保員）" value="C" />
+            <el-option label="A 級（有教師證）" value="A" />
+            <el-option label="B 級（教保員／助理教保員）" value="B" />
+            <el-option label="C 級（非教保員）" value="C" />
           </el-select>
         </template>
       </el-table-column>
