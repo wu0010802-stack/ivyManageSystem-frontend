@@ -102,6 +102,12 @@
             <el-icon><OfficeBuilding /></el-icon>
             <template #title>{{ PAGE_TERMS.classrooms }}</template>
           </el-menu-item>
+          <!-- 在籍記錄表（Excel 式花名冊）已折入「班級學生管理」頁的「統計表」modal；
+               統計圖表則獨立為本選單項目。 -->
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/enrollment-stats">
+            <el-icon><PieChart /></el-icon>
+            <template #title>統計圖表</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
             <el-icon><User /></el-icon>
             <template #title>{{ PAGE_TERMS.students }}</template>

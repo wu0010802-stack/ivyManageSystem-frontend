@@ -14,7 +14,7 @@ import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } f
 import { getIntakePlan } from '@/api/recruitmentIntake'
 import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/utils/classroomReserved'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Clock, Delete, Edit, Plus, RefreshRight, User, Reading, MoreFilled } from '@element-plus/icons-vue'
+import { Clock, Delete, Edit, Grid, Plus, RefreshRight, User, Reading, MoreFilled } from '@element-plus/icons-vue'
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -27,6 +27,7 @@ import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import EnrollmentRosterDialog from '@/components/enrollment/EnrollmentRosterDialog.vue'
 
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
@@ -51,6 +52,7 @@ const classroomDrawerLoading = ref(false)
 const drawerClassroom = ref<ClassroomRow | null>(null)
 const changeLogDrawerVisible = ref(false)
 const changeLogClassroom = ref<ClassroomRow | null>(null)
+const statsDialogVisible = ref(false)
 const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 const canReadStudents = computed(() => hasPermission('STUDENTS_READ'))
 const reservedByGrade = ref<Record<number, number>>({})
@@ -425,6 +427,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           inactive-text="僅顯示啟用"
         />
         <el-button :icon="RefreshRight" @click="fetchClassrooms">重新整理</el-button>
+        <el-button :icon="Grid" @click="statsDialogVisible = true">統計表</el-button>
         <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </template>
     </PageHeader>
@@ -697,6 +700,8 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
       v-model:visible="changeLogDrawerVisible"
       :classroom="changeLogClassroom"
     />
+
+    <EnrollmentRosterDialog v-model:visible="statsDialogVisible" />
   </div>
 </template>
 

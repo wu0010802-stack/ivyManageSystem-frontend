@@ -25,16 +25,22 @@ describe('student workbench routing', () => {
     })
     await testRouter.push('/students?tab=enrollment')
     expect(testRouter.currentRoute.value.path).toBe('/classrooms')
-    expect(testRouter.currentRoute.value.query.tab).toBe('enrollment')
+    expect(testRouter.currentRoute.value.query.tab).toBeUndefined()
   })
 
-  it('/student-enrollment redirects to /classrooms with tab=enrollment query', async () => {
+  it('/student-enrollment redirects to /classrooms', async () => {
     const testRouter = createRouter({
       history: createMemoryHistory(),
       routes: router.options.routes,
     })
     await testRouter.push('/student-enrollment')
     expect(testRouter.currentRoute.value.path).toBe('/classrooms')
-    expect(testRouter.currentRoute.value.query.tab).toBe('enrollment')
+    expect(testRouter.currentRoute.value.query.tab).toBeUndefined()
+  })
+
+  it('/enrollment-stats resolves to EnrollmentStatsView', () => {
+    const resolved = router.resolve('/enrollment-stats')
+    expect(resolved.matched[0]?.components?.default).toBeDefined()
+    expect(resolved.name).toBe('enrollment-stats')
   })
 })

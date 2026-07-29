@@ -1,4 +1,4 @@
-/** 在籍花名冊共用型別（供 EnrollmentRosterTable / EnrollmentPanel / rosterFilter 共用）。 */
+/** 在籍花名冊共用型別（供 EnrollmentRosterTable / EnrollmentRosterDialog / rosterFilter 共用）。 */
 
 export interface RosterStudent {
   seq?: number

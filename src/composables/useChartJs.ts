@@ -27,6 +27,9 @@ export const BarChart = defineAsyncComponent(() =>
 export const PieChart = defineAsyncComponent(() =>
   ensureChartReady().then(() => import('vue-chartjs').then(m => m.Pie)),
 )
+export const DoughnutChart = defineAsyncComponent(() =>
+  ensureChartReady().then(() => import('vue-chartjs').then(m => m.Doughnut)),
+)
 export const RadarChart = defineAsyncComponent(() =>
   ensureChartReady().then(() => import('vue-chartjs').then(m => m.Radar)),
 )

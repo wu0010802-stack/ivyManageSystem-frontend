@@ -110,6 +110,7 @@ const stubs = {
   'el-collapse-item': { template: '<div><slot /></div>' },
   ClassroomStudentDrawer: true,
   ClassroomChangeLogDrawer: true,
+  EnrollmentRosterDialog: true,
 }
 
 function mountView() {

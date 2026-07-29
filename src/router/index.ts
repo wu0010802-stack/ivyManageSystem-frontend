@@ -84,8 +84,9 @@ export const routes: RouteRecordRaw[] = [
             path: '/students',
             name: 'students',
             component: () => import('../views/StudentWorkbenchView.vue'),
+            // 舊 ?tab=enrollment 深連結：在籍統計已移至班級學生管理／統計圖表，導回班級學生管理即可
             beforeEnter: (to) => to.query.tab === 'enrollment'
-                ? ({ path: '/classrooms', query: { ...to.query, tab: 'enrollment' }, replace: true })
+                ? ({ path: '/classrooms', replace: true })
                 : true,
             meta: { title: PAGE_TERMS.students }
         },
@@ -130,9 +131,16 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '今日用藥' }
         },
         {
-            // 在籍統計已移至班級學生管理；舊連結 redirect 並保留 query
+            // 在籍記錄表已折入班級學生管理頁的「統計表」modal；統計圖表獨立為 /enrollment-stats。
+            // 舊連結一律導回班級學生管理（不再有 tab query）。
             path: '/student-enrollment',
-            redirect: (to) => ({ path: '/classrooms', query: { ...to.query, tab: 'enrollment' } }),
+            redirect: '/classrooms',
+        },
+        {
+            path: '/enrollment-stats',
+            name: 'enrollment-stats',
+            component: () => import('../views/students/EnrollmentStatsView.vue'),
+            meta: { title: '統計圖表' }
         },
         {
             path: '/students/admissions',

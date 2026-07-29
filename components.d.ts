@@ -140,7 +140,7 @@ declare module 'vue' {
     EmployeeFormSalary: typeof import('./src/components/employee/EmployeeFormSalary.vue')['default']
     EmployeeMonthPanel: typeof import('./src/components/attendance/EmployeeMonthPanel.vue')['default']
     EmptyState: typeof import('./src/components/common/EmptyState.vue')['default']
-    EnrollmentPanel: typeof import('./src/components/student/workbench/EnrollmentPanel.vue')['default']
+    EnrollmentRosterDialog: typeof import('./src/components/enrollment/EnrollmentRosterDialog.vue')['default']
     EnrollmentRosterTable: typeof import('./src/components/enrollment/EnrollmentRosterTable.vue')['default']
     ErrorBoundary: typeof import('./src/components/common/ErrorBoundary.vue')['default']
     FeeGenerateModal: typeof import('./src/components/fees/FeeGenerateModal.vue')['default']
