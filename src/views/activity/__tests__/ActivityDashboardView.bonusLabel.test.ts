@@ -26,7 +26,8 @@ describe('才藝儀表板達成獎金欄位', () => {
     const label = buildBonusLabel(GRADE_TARGET_BONUS)
 
     expect(label).not.toBe('100%')
-    expect(label).toBe(`+${GRADE_TARGET_BONUS}`)
+    // FE-3 canonical 金額格式化：千分位
+    expect(label).toBe(`+${GRADE_TARGET_BONUS.toLocaleString('en-US')}`)
   })
 
   it('未達標顯示空字串', () => {
@@ -38,7 +39,7 @@ describe('才藝儀表板達成獎金欄位', () => {
   })
 
   it('非 0 的其他金額仍照實顯示（後端日後調整獎金額不需改前端）', () => {
-    expect(buildBonusLabel(1500)).toBe('+1500')
+    expect(buildBonusLabel(1500)).toBe('+1,500')
   })
 })
 
