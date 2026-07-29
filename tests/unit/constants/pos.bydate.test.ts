@@ -136,14 +136,30 @@ describe('POSPaymentPanel — by-date 模式課程品名渲染（真實資料流
     expect(text).toContain('NT$800')
   })
 
+  it.each([
+    ['waitlist', '候補'],
+    ['promoted_pending', '待家長確認'],
+    ['pending_review', '待審核'],
+    ['pending_review_waitlist', '待審核候補'],
+  ])('非計費狀態 %s 顯示「%s／未計費」，不顯示課程金額', (status, label) => {
+    const normalized = normalizeByDateRow(makeByStudentRow({
+      courses: [{ name: '美術', price: 1500, status }],
+    }))
+    const wrapper = mountPanel(normalized as Record<string, unknown>)
+
+    expect(wrapper.text()).toContain(label)
+    expect(wrapper.text()).toContain('未計費')
+    expect(wrapper.text()).not.toContain('NT$1,500')
+  })
+
   it('by-date price:0 的課程不顯示金額（v-if="c.price" 藏 price span，但品名存在）', () => {
     const normalized = normalizeByDateRow(makeByDateRow())
     const wrapper = mountPanel(normalized as Record<string, unknown>)
     // 品名存在
     const nameSpans = wrapper.findAll('.pos-payment__selected-line-name')
     const names = nameSpans.map(s => s.text())
-    expect(names).toContain('美術')
-    expect(names).toContain('鋼琴')
+    expect(names.some(name => name.includes('美術'))).toBe(true)
+    expect(names.some(name => name.includes('鋼琴'))).toBe(true)
     // 價格 span 不出現（price:0 → v-if 為 false）
     const priceSpans = wrapper.findAll('.pos-payment__selected-line-price')
     expect(priceSpans).toHaveLength(0)

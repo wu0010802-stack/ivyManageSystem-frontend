@@ -49,8 +49,9 @@ vi.mock('@/api/activity', () => ({
 }))
 
 // ── Pinia store mock ───────────────────────────────────────────────────────
+const mockTermStore = vi.hoisted(() => ({ school_year: 114, semester: 1 }))
 vi.mock('@/stores/academicTerm', () => ({
-  useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
+  useAcademicTermStore: () => mockTermStore,
 }))
 
 // ── auth util mock（hasPermission 固定回傳 true）─────────────────────────────
@@ -140,7 +141,12 @@ vi.mock('element-plus', () => ({
 }))
 
 // ── import mocked api / element-plus bindings for per-test control ──────────
-import { getRegistrationDetail, getRegistrationPayments } from '@/api/activity'
+import {
+  exportRegistrations,
+  getRegistrationDetail,
+  getRegistrationPayments,
+  updateRemark,
+} from '@/api/activity'
 import { ElMessage } from 'element-plus'
 
 // ── import View after mocks ────────────────────────────────────────────────
@@ -167,6 +173,10 @@ const GLOBAL_STUBS = {
   'el-descriptions-item': true,
   'el-timeline': { template: '<div><slot /></div>' },
   'el-timeline-item': { template: '<div><slot /></div>' },
+  'el-alert': {
+    props: ['title'],
+    template: '<div><span>{{ title }}</span><slot /></div>',
+  },
   'el-icon': { template: '<span />' },
   RegistrationPaymentDialog: true,
   RegistrationTimeline: true,
@@ -200,6 +210,9 @@ describe('ActivityRegistrationView', () => {
     mockFetchList.mockResolvedValue(undefined)
     mockLoadOptions.mockResolvedValue(undefined)
     mockBatchMarkPaid.mockResolvedValue(undefined)
+    mockLoading.value = false
+    mockTermStore.school_year = 114
+    mockTermStore.semester = 1
   })
 
   it('載入後呼叫 fetchList 和 loadOptions', async () => {
@@ -230,6 +243,18 @@ describe('ActivityRegistrationView', () => {
     expect(wrapper.find('.batch-toolbar').exists()).toBe(false)
   })
 
+  it('列表載入中忽略勾選，避免批次操作舊列表', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    mockLoading.value = true
+
+    wrapper.vm.handleSelectionChange([{ id: 1, match_status: 'matched' }])
+    await flushPromises()
+
+    expect(wrapper.vm.selectedRows).toEqual([])
+    expect(wrapper.find('.batch-toolbar').exists()).toBe(false)
+  })
+
   it('已收件群組點擊「標記已繳費」呼叫 batchMarkPaid(true, ids, fn)', async () => {
     const wrapper = mountView()
     await flushPromises()
@@ -244,6 +269,41 @@ describe('ActivityRegistrationView', () => {
     await flushPromises()
 
     expect(mockBatchMarkPaid).toHaveBeenCalledWith(true, [1, 2], expect.any(Function))
+  })
+
+  it('選取後若學期已切換，批次送出會 fail-closed 並清除選取', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.handleSelectionChange([{ id: 1, match_status: 'matched' }])
+    expect(wrapper.vm.selectedRows).toHaveLength(1)
+
+    mockTermStore.semester = 2
+    await wrapper.vm.handleBatchMarkPaid(true)
+
+    expect(mockBatchMarkPaid).not.toHaveBeenCalled()
+    expect(wrapper.vm.selectedRows).toEqual([])
+  })
+
+  it('Excel 匯出帶入畫面報名狀態與 include_inactive 口徑', async () => {
+    vi.mocked(exportRegistrations).mockResolvedValue({ data: new Blob() })
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    const wrapper = mountView()
+    await flushPromises()
+
+    mockMatchStatusFilter.value = 'rejected'
+    await wrapper.vm.handleExport()
+
+    expect(exportRegistrations).toHaveBeenCalledWith(expect.objectContaining({
+      match_status: 'rejected',
+      include_inactive: true,
+      school_year: 114,
+      semester: 1,
+    }))
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
+    click.mockRestore()
   })
 
   // ── 批量勾選分類收斂（回歸）──────────────────────────────────────────────
@@ -362,5 +422,70 @@ describe('ActivityRegistrationView', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('內部審核註記')
+  })
+
+  it('課程明細只有 enrolled 顯示金額，其餘配位狀態一律顯示未計費', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.vm.courseBillingLabel({ status: 'enrolled', price: 1500 })).toBe('$1500')
+    for (const status of [
+      'waitlist',
+      'promoted_pending',
+      'pending_review',
+      'pending_review_waitlist',
+    ]) {
+      expect(wrapper.vm.courseBillingLabel({ status, price: 9876 })).toBe('未計費')
+    }
+  })
+
+  it('inactive/rejected 詳情只供查閱，隱藏一般 mutation 並在方法邊界 fail-closed', async () => {
+    getRegistrationDetail.mockResolvedValue({
+      data: {
+        id: 11,
+        is_active: false,
+        match_status: 'rejected',
+        student_name: '已拒絕學生',
+        remark: '保留的歷史備註',
+        total_amount: 0,
+        courses: [
+          { id: 1, course_id: 10, name: '美術', price: 1500, status: 'pending_review' },
+        ],
+        supplies: [],
+        changes: [],
+      },
+    })
+    getRegistrationPayments.mockResolvedValue({
+      data: { total_amount: 0, paid_amount: 0, payment_status: 'no_fee', records: [] },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.vm.openDetail({ id: 11 })
+    await flushPromises()
+
+    expect(wrapper.vm.isDetailReadOnly).toBe(true)
+    expect(wrapper.vm.canMutateDetail).toBe(false)
+    const alert = wrapper.get('[data-test="inactive-detail-alert"]')
+    expect(alert.text()).toContain('已拒絕')
+    expect(alert.text()).toContain('唯讀')
+    expect(wrapper.get('[data-test="readonly-remark"]').text()).toContain('保留的歷史備註')
+    expect(wrapper.text()).not.toContain('課程（總計')
+
+    for (const label of ['新增繳費', '新增退費', '新增課程', '新增用品', '儲存備註']) {
+      expect(wrapper.findAll('button').some((button) => button.text().includes(label))).toBe(false)
+    }
+
+    wrapper.vm.openPaymentDialog('payment')
+    wrapper.vm.openEditBasicDialog()
+    await wrapper.vm.openAddCourseDialog()
+    wrapper.vm.openAddSupplyDialog()
+    await wrapper.vm.saveRemark()
+
+    expect(wrapper.vm.paymentDialogVisible).toBe(false)
+    expect(wrapper.vm.editBasicDialogVisible).toBe(false)
+    expect(wrapper.vm.addCourseDialogVisible).toBe(false)
+    expect(wrapper.vm.addSupplyDialogVisible).toBe(false)
+    expect(updateRemark).not.toHaveBeenCalled()
   })
 })

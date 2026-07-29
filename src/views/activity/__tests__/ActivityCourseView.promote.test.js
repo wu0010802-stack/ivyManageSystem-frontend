@@ -14,6 +14,10 @@ vi.mock('@/api/activity', () => ({
   copyCoursesFromPrevious: vi.fn(),
 }))
 
+vi.mock('@/api/employees', () => ({
+  getEmployees: vi.fn(() => Promise.resolve({ data: [] })),
+}))
+
 // ── Pinia store mock ──────────────────────────────────────────────────────
 vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
@@ -30,7 +34,12 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
-import { promoteWaitlist, getCourseWaitlist, getCourses } from '@/api/activity'
+import {
+  promoteWaitlist,
+  getCourseWaitlist,
+  getCourseEnrolled,
+  getCourses,
+} from '@/api/activity'
 import ActivityCourseView from '../ActivityCourseView.vue'
 
 // ── 可正確傳遞 row 資料的 table stubs ────────────────────────────────────
@@ -235,5 +244,96 @@ describe('ActivityCourseView — 容量欄含 promoted_pending 佔位（audit C-
     const text = wrapper.text()
     expect(text).toContain('12/20')
     expect(text).not.toContain('待確認')
+  })
+
+  it('pending_review 與 promoted_pending 納入容量；pending_review_waitlist 獨立顯示但不佔位', async () => {
+    const wrapper = await mountList({
+      ...sampleCourse,
+      capacity: 30,
+      enrolled: 27,
+      promoted_pending: 1,
+      pending_review: 2,
+      pending_review_waitlist: 3,
+      waitlist_count: 0,
+    })
+
+    const text = wrapper.text()
+    expect(text).toContain('30/30')
+    expect(text).toContain('2 待審核')
+    expect(text).toContain('1 待確認')
+    expect(text).toContain('3 待審候補（不佔位）')
+  })
+})
+
+describe('ActivityCourseView — 容量佔位名單 drilldown', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('點擊 3/30 後顯示三種佔位者與中文狀態，不再只顯示 enrolled', async () => {
+    getCourses.mockResolvedValue({
+      data: {
+        courses: [{
+          ...sampleCourse,
+          capacity: 30,
+          enrolled: 1,
+          promoted_pending: 1,
+          pending_review: 1,
+          waitlist_count: 0,
+        }],
+      },
+    })
+    getCourseEnrolled.mockResolvedValue({
+      data: {
+        course_id: 1,
+        course_name: '音樂律動',
+        items: [
+          {
+            position: 1,
+            course_record_id: 101,
+            registration_id: 201,
+            student_name: '正式生',
+            class_name: '大班',
+            status: 'enrolled',
+          },
+          {
+            position: 2,
+            course_record_id: 102,
+            registration_id: 202,
+            student_name: '待確認生',
+            class_name: '中班',
+            status: 'promoted_pending',
+          },
+          {
+            position: 3,
+            course_record_id: 103,
+            registration_id: 203,
+            student_name: '待審核生',
+            class_name: '小班',
+            status: 'pending_review',
+          },
+        ],
+      },
+    })
+
+    const wrapper = mount(ActivityCourseView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+
+    const occupiedButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '3/30')
+    expect(occupiedButton).toBeDefined()
+    await occupiedButton.trigger('click')
+    await flushPromises()
+
+    expect(getCourseEnrolled).toHaveBeenCalledWith(1)
+    expect(wrapper.text()).toContain('正式生')
+    expect(wrapper.text()).toContain('待確認生')
+    expect(wrapper.text()).toContain('待審核生')
+    expect(wrapper.get('[data-test="occupancy-status-201"]').text()).toContain('正式')
+    expect(wrapper.get('[data-test="occupancy-status-202"]').text()).toContain('待家長確認')
+    expect(wrapper.get('[data-test="occupancy-status-203"]').text()).toContain('待審核')
   })
 })

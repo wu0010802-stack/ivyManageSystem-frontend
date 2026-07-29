@@ -4,7 +4,20 @@ import ActivityRegistrationPanel from '@/views/portal/components/activity/Activi
 
 // Mock dependencies
 vi.mock('@/constants/activity', () => ({
-  COURSE_STATUS_TAG_TYPE: { enrolled: 'success', waitlist: 'warning' },
+  COURSE_STATUS_TAG_TYPE: {
+    enrolled: 'success',
+    waitlist: 'warning',
+    promoted_pending: 'warning',
+    pending_review: 'warning',
+    pending_review_waitlist: 'info',
+  },
+  COURSE_STATUS_LABEL: {
+    enrolled: '正式',
+    waitlist: '候補',
+    promoted_pending: '待家長確認',
+    pending_review: '待審核',
+    pending_review_waitlist: '待審核候補',
+  },
 }))
 vi.mock('@/utils/format', () => ({
   formatActivityDate: (d) => d,
@@ -127,5 +140,31 @@ describe('ActivityRegistrationPanel', () => {
     const table = w.findComponent({ name: 'ElTable' })
     expect(table.props('data').length).toBe(1)
     expect(table.props('data')[0].class_name).toBe('小白兔')
+  })
+
+  it.each([
+    ['enrolled', '正式'],
+    ['waitlist', '候補'],
+    ['promoted_pending', '待家長確認'],
+    ['pending_review', '待審核'],
+    ['pending_review_waitlist', '待審核候補'],
+  ])('課程狀態 %s 顯示可辨識文字「%s」', (status, label) => {
+    const data = {
+      ...DATA,
+      registrations: [{
+        ...DATA.registrations[0],
+        courses: [{
+          course_name: '畫畫',
+          status,
+          waitlist_position: status === 'waitlist' ? 2 : null,
+        }],
+      }],
+    }
+    const w = mount(ActivityRegistrationPanel, {
+      props: { data, activeClass: null },
+      global: GLOBAL,
+    })
+
+    expect(w.vm.courseStatusLabel(status)).toBe(label)
   })
 })

@@ -19,3 +19,4 @@ frontend.log
 .superpowers/
 vite.config.js.timestamp-*
 CLAUDE.md.before-*
+.playwright-cli/

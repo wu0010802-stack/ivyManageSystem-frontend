@@ -201,4 +201,31 @@ describe('ActivityView 三態（Task 7）', () => {
 
     w.unmount()
   })
+
+  it('只有待家長確認課程時，hero 仍計為一筆進行中報名', async () => {
+    bootstrapMock.mockResolvedValue({
+      data: {
+        ...SUCCESS_RESP.data,
+        registrations: {
+          items: [{
+            id: 9,
+            student_id: 1,
+            courses: [{ status: 'promoted_pending' }],
+          }],
+        },
+      },
+    })
+
+    setActivePinia(createPinia())
+    const ActivityView = (await import('@/parent/views/ActivityView.vue')).default
+    const w = mount(ActivityView, {
+      global: { stubs: STUBS },
+    })
+    await flushPromises()
+
+    expect(
+      w.findComponent({ name: 'ActivityHero' }).props('activeRegistrations'),
+    ).toBe(1)
+    w.unmount()
+  })
 })

@@ -97,6 +97,32 @@ describe('RegistrationStatusList', () => {
     expect(pill.text()).toContain('待您確認')
   })
 
+  it('pending_review 系列使用中文標籤，並區分待審 warning 與待審候補 info tone', () => {
+    const regs = [{
+      id: 30,
+      student_id: 7,
+      student_name: '待審生',
+      school_year: 114,
+      semester: 2,
+      is_paid: false,
+      courses: [
+        { course_id: 401, course_name: '美術', status: 'pending_review' },
+        { course_id: 402, course_name: '足球', status: 'pending_review_waitlist' },
+      ],
+    }]
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: regs },
+    })
+
+    const pending = wrapper.find('[data-status="pending_review"].status-pill')
+    const pendingWaitlist = wrapper.find('[data-status="pending_review_waitlist"].status-pill')
+    expect(pending.text()).toContain('待審核')
+    expect(pending.classes()).toContain('tone-warn')
+    expect(pendingWaitlist.text()).toContain('待審核候補')
+    expect(pendingWaitlist.classes()).toContain('tone-info')
+    expect(wrapper.text()).not.toContain('pending_review')
+  })
+
   it('payment_status=no_fee（全候補）顯示「免繳」而非「未繳費」', () => {
     // ④ 全候補 total=0 時後端回 no_fee；badge 不可沿用 is_paid 顯示「未繳費」。
     const regs = [

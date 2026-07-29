@@ -88,11 +88,14 @@ export const confirmAnomaly = (
   id: number,
   action: string,
   remark?: string,
+  anomalyType?: string,
 ): AxiosResp<'/portal/anomalies/{attendance_id}/confirm', 'post'> =>
-  api.post(
-    `/portal/anomalies/${id}/confirm`,
-    remark ? { action, remark } : { action },
-  )
+  api.post(`/portal/anomalies/${id}/confirm`, {
+    action,
+    ...(remark ? { remark } : {}),
+    // 確認粒度為「逐異常項目」：同一天最多 4 項，不帶會讓後端只認預設的 late
+    ...(anomalyType ? { anomaly_type: anomalyType } : {}),
+  })
 
 // ----- 薪資 -----
 // TODO(ts-strict): 後端缺 response_model

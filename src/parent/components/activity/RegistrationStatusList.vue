@@ -63,6 +63,8 @@ const emit = defineEmits<{
  * enrolled        → ok（已確認報名）
  * waitlist        → warn（候補中，待確認）
  * promoted_pending → danger（需要家長確認轉正式）
+ * pending_review  → warn（待校方審核）
+ * pending_review_waitlist → info（待審核候補，尚非正式候補順位）
  * finished        → neutral（已結束）
  * refunded        → neutral（已退費）
  * 其他            → neutral
@@ -72,6 +74,8 @@ function courseStatusTone(status: string): StatusPillTone {
     case 'enrolled':        return 'ok'
     case 'waitlist':        return 'warn'
     case 'promoted_pending': return 'danger'
+    case 'pending_review':  return 'warn'
+    case 'pending_review_waitlist': return 'info'
     case 'finished':        return 'neutral'
     case 'refunded':        return 'neutral'
     default:                return 'neutral'
@@ -86,6 +90,8 @@ const STATUS_LABEL_FALLBACK: Record<string, string> = {
   enrolled: '已報名',
   waitlist: '候補中',
   promoted_pending: '待您確認',
+  pending_review: '待審核',
+  pending_review_waitlist: '待審核候補',
   finished: '已結束',
   refunded: '已退費',
 }
@@ -133,7 +139,7 @@ function courseStatusLabel(
           v-if="rc.status === 'promoted_pending'"
           type="button"
           class="confirm-btn"
-          :disabled="confirmingKey === `${reg.id}:${rc.course_id}`"
+          :disabled="Boolean(confirmingKey)"
           @click="emit('confirm-promotion', reg, rc)"
         >確認轉正式</button>
         <button

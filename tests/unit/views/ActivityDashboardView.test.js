@@ -100,4 +100,80 @@ describe('ActivityDashboardView — 學期接線', () => {
     expect(getActivityStats).toHaveBeenCalledWith(prev)
     expect(getActivityDashboardTable).toHaveBeenCalledWith(prev)
   })
+
+  it('獎金欄顯示實際金額，不把 1000 元誤標為 100%', async () => {
+    getActivityDashboardTable.mockResolvedValueOnce({
+      data: {
+        courses: [],
+        grades: [{
+          grade_name: '幼幼班',
+          target_percent: 40,
+          classrooms: [{
+            classroom_name: '幼幼一班',
+            teacher_name: '王老師',
+            student_count: 10,
+            total_enrollments: 4,
+            ratio: 40,
+            courses: {},
+          }],
+          subtotal: { bonus: 1000, points: 1 },
+        }],
+        grand_total: {},
+      },
+    })
+
+    const wrapper = mount(ActivityDashboardView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+
+    expect(wrapper.vm.flattenedTableData[0].bonus).toBe('+1,000')
+  })
+
+  it('新學期載入失敗時隱藏舊學期卡片與統計表，不把舊資料誤當新資料', async () => {
+    getActivityStatsSummary.mockResolvedValueOnce({
+      data: { totalRegistrations: 41, unreadInquiries: 0 },
+    })
+    getActivityDashboardTable.mockResolvedValueOnce({
+      data: {
+        courses: [],
+        grades: [{
+          grade_name: '舊學期',
+          target_percent: 40,
+          classrooms: [{
+            classroom_name: '舊學期班級',
+            teacher_name: '王老師',
+            student_count: 10,
+            total_enrollments: 4,
+            ratio: 40,
+            courses: {},
+          }],
+          subtotal: { bonus: 0, points: 0 },
+        }],
+        grand_total: {},
+      },
+    })
+
+    const wrapper = mount(ActivityDashboardView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('41')
+    expect(wrapper.vm.dashboardData.grades[0].classrooms[0].classroom_name).toBe('舊學期班級')
+
+    getActivityStatsSummary.mockRejectedValueOnce(new Error('new term failed'))
+    getActivityStatsCharts.mockRejectedValueOnce(new Error('new term failed'))
+    getActivityStats.mockRejectedValueOnce(new Error('new term failed'))
+    getActivityDashboardTable.mockRejectedValueOnce(new Error('new term failed'))
+
+    const { school_year, semester } = getCurrentAcademicTerm()
+    const next = semester === 1
+      ? { school_year, semester: 2 }
+      : { school_year: school_year + 1, semester: 1 }
+    useAcademicTermStore().setTerm(next.school_year, next.semester)
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('41')
+    expect(wrapper.vm.dashboardData).toBe(null)
+  })
 })

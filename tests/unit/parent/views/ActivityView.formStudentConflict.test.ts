@@ -7,6 +7,7 @@ vi.mock('@/parent/api/activity', () => ({
   myRegistrations: vi.fn(),
   registerCourses: vi.fn(),
   confirmPromotion: vi.fn(),
+  declinePromotion: vi.fn(),
   getUpcomingSessions: vi.fn(),
   getActivityBootstrap: vi.fn(),
 }))

@@ -41,10 +41,9 @@
           <span v-else style="color: var(--text-tertiary);">未設定</span>
         </template>
       </el-table-column>
-      <!-- 容量以佔位數（enrolled + promoted_pending）計：後端容量閘同口徑擋
-           手動升位，只顯示 enrolled 會出現「看似有位、升位卻 400 容量已滿」
-           的矛盾（audit C-5，2026-07-02） -->
-      <el-table-column label="容量" width="90" align="center">
+      <!-- 容量顯示含正式、待審核與待家長確認，並拆開標示各狀態，避免管理者
+           只看到正式人數而誤判仍可收件。 -->
+      <el-table-column label="容量" width="140" align="center">
         <template #default="{ row }">
           <el-button
             v-if="occupying(row) > 0"
@@ -52,11 +51,21 @@
             @click="openEnrolled(row)"
           >{{ occupying(row) }}/{{ row.capacity }}</el-button>
           <span v-else>0/{{ row.capacity }}</span>
+          <div v-if="(row.pending_review || 0) > 0" class="pending-occupancy-hint">
+            含 {{ row.pending_review }} 待審核
+          </div>
           <div v-if="(row.promoted_pending || 0) > 0" class="pending-occupancy-hint">
             含 {{ row.promoted_pending }} 待確認
           </div>
           <div v-if="(row.pending_review || 0) > 0" class="pending-occupancy-hint">
             含 {{ row.pending_review }} 待審核
+          </div>
+          <div
+            v-if="(row.pending_review_waitlist || 0) > 0"
+            class="pending-occupancy-hint pending-occupancy-hint--waitlist"
+          >
+            {{ row.pending_review_waitlist }} 待審候補（不佔位）
+          </div>
           </div>
         </template>
       </el-table-column>
@@ -241,20 +250,37 @@
     </div>
   </el-drawer>
 
-  <!-- 正式報名名單 Drawer -->
+  <!-- 容量佔位名單 Drawer（正式／待家長確認／待審核） -->
   <el-drawer
     v-model="enrolledDrawer"
-    :title="`報名名單 — ${enrolledCourse?.name ?? ''}`"
+    :title="`容量佔位名單 — ${enrolledCourse?.name ?? ''}`"
     direction="rtl" size="420px" destroy-on-close
   >
     <el-table :data="enrolledItems" v-loading="enrolledLoading" border size="small">
       <el-table-column label="序號" prop="position" width="60" align="center" />
-      <el-table-column label="學生姓名" prop="student_name" min-width="90" />
+      <el-table-column label="學生姓名" prop="student_name" min-width="90">
+        <template #default="{ row }">
+          <span :data-test="`occupancy-student-${row.registration_id}`">
+            {{ row.student_name }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column label="班級" prop="class_name" width="90" />
+      <el-table-column label="佔位狀態" width="110" align="center">
+        <template #default="{ row }">
+          <el-tag
+            :data-test="`occupancy-status-${row.registration_id}`"
+            :type="occupancyStatusTagType(row.status)"
+            size="small"
+          >
+            {{ occupancyStatusLabel(row.status) }}
+          </el-tag>
+        </template>
+      </el-table-column>
     </el-table>
     <div v-if="!enrolledLoading && enrolledItems.length === 0"
          style="text-align:center; padding: 32px; color: var(--text-tertiary);">
-      目前無正式報名學生
+      目前無容量佔位學生
     </div>
   </el-drawer>
 
@@ -296,8 +322,13 @@ import { friendlyError } from '@/utils/errorMessages'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
          getCourseWaitlist, getCourseEnrolled, promoteWaitlist, sweepExpiredWaitlist } from '@/api/activity'
+import type {
+  ActivityCourseOccupancyItem,
+  ActivityCourseOccupancyStatus,
+} from '@/api/activity'
 import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
+import { COURSE_STATUS_LABEL, COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -312,10 +343,13 @@ interface Course {
   instructor_name?: string | null
   // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
   instructor_employee_id?: number | null
-  enrolled?: number; promoted_pending?: number; pending_review?: number; waitlist_count?: number
+  enrolled?: number
+  pending_review?: number
+  pending_review_waitlist?: number
+  promoted_pending?: number
+  waitlist_count?: number
 }
 interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
-interface EnrolledItem { position?: number; student_name?: string; class_name?: string }
 
 interface CourseForm {
   name: string; price: number; sessions: number | null; capacity: number; allow_waitlist: boolean
@@ -415,12 +449,20 @@ const promoteDialog = reactive<{
 
 const enrolledDrawer = ref(false)
 const enrolledCourse = ref<{ id: number; name: string } | null>(null)
-const enrolledItems = ref<EnrolledItem[]>([])
+const enrolledItems = ref<ActivityCourseOccupancyItem[]>([])
 const enrolledLoading = ref(false)
+
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+function occupancyStatusLabel(status: ActivityCourseOccupancyStatus): string {
+  return COURSE_STATUS_LABEL[status]
+}
+function occupancyStatusTagType(status: ActivityCourseOccupancyStatus): ElTagType {
+  return COURSE_STATUS_TAG_TYPE[status] as ElTagType
+}
 
 // 佔位數 = enrolled + promoted_pending + pending_review（OCCUPYING_STATUSES，
 // 與後端容量閘同口徑，courses.py 的 remaining 亦以此計；2026-07-19 業主決策
-// 待審核占位也占容量）
+// 待審核占位也占容量）。pending_review_waitlist 不佔位，於欄位下方分開標示。
 function occupying(row: Course): number {
   return (row.enrolled || 0) + (row.promoted_pending || 0) + (row.pending_review || 0)
 }
@@ -441,7 +483,7 @@ async function openEnrolled(row: Course) {
   try {
     const res = await getCourseEnrolled(row.id)
     if (seq !== enrolledSeq) return // 過期回應：已切到別課，丟棄不覆寫
-    enrolledItems.value = (res.data as { items: EnrolledItem[] }).items
+    enrolledItems.value = res.data.items
   } catch (e) {
     if (seq !== enrolledSeq) return
     ElMessage.error(friendlyError('載入報名名單失敗', e))
@@ -689,6 +731,7 @@ onMounted(() => {
 .toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .toolbar__actions { display: flex; gap: 8px; align-items: center; }
 .pending-occupancy-hint { font-size: 11px; color: var(--el-color-warning); line-height: 1.2; }
+.pending-occupancy-hint--waitlist { color: var(--el-color-info); }
 </style>
 
 <style>

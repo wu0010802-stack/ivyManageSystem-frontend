@@ -25,7 +25,7 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn(), alert: vi.fn() },
 }))
 
-import { getRefundSuggestion } from '@/api/activity'
+import { getPOSOutstandingByStudent, getRefundSuggestion } from '@/api/activity'
 import { ElMessage } from 'element-plus'
 import { usePOSCheckout } from '@/composables/usePOSCheckout'
 
@@ -69,7 +69,12 @@ const COURSE_ITEM = {
 }
 
 describe('usePOSCheckout 退費預填建議值（P2-B / F1 / F2）', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(getPOSOutstandingByStudent).mockResolvedValue({
+      data: { groups: [], truncated: false, total_active: 0 },
+    } as never)
+  })
   afterEach(() => vi.clearAllMocks())
 
   it('退費選取：預填剩餘建議額（按出席比例），非全額已繳', async () => {
@@ -161,6 +166,91 @@ describe('usePOSCheckout 退費預填建議值（P2-B / F1 / F2）', () => {
     expect(vi.mocked(getRefundSuggestion)).not.toHaveBeenCalled()
     // 收款預填欠費 owed = 1000 - 200 = 800
     expect(api.selectedItem.value?.amount_applied).toBe(800)
+    wrapper.unmount()
+  })
+
+  it('退款建議 pending 時切回收款並重選同 registration id，不得覆寫收款金額', async () => {
+    let resolveSuggestion!: (value: ReturnType<typeof suggestion>) => void
+    vi.mocked(getRefundSuggestion).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSuggestion = resolve
+      }) as never,
+    )
+    const { api, wrapper } = mountComposable()
+    const row = {
+      id: 42,
+      student_name: '王小明',
+      total_amount: 1000,
+      paid_amount: 200,
+    }
+
+    api.checkoutType.value = 'refund'
+    await flushPromises()
+    api.selectItem(row, '王小明')
+    expect(api.refundSuggestionLoading.value).toBe(true)
+
+    api.checkoutType.value = 'payment'
+    await flushPromises()
+    api.selectItem(row, '王小明')
+    expect(api.selectedItem.value?.amount_applied).toBe(800)
+
+    resolveSuggestion(suggestion(125, [COURSE_ITEM], { remaining: 125 }))
+    await flushPromises()
+
+    expect(api.selectedItem.value?.amount_applied).toBe(800)
+    expect(api.refundSuggestionLoading.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('清除選取會立即讓 pending 退款建議失效', async () => {
+    let resolveSuggestion!: (value: ReturnType<typeof suggestion>) => void
+    vi.mocked(getRefundSuggestion).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSuggestion = resolve
+      }) as never,
+    )
+    const { api, wrapper } = mountComposable()
+    api.checkoutType.value = 'refund'
+    await flushPromises()
+    api.selectItem(
+      { id: 42, student_name: '王小明', total_amount: 900, paid_amount: 900 },
+      '王小明',
+    )
+
+    api.clearSelection()
+
+    expect(api.selectedItem.value).toBeNull()
+    expect(api.refundSuggestionLoading.value).toBe(false)
+
+    resolveSuggestion(suggestion(300, [COURSE_ITEM]))
+    await flushPromises()
+    expect(api.selectedItem.value).toBeNull()
+    wrapper.unmount()
+  })
+
+  it('重新搜尋會立即讓 pending 退款建議失效', async () => {
+    let resolveSuggestion!: (value: ReturnType<typeof suggestion>) => void
+    vi.mocked(getRefundSuggestion).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSuggestion = resolve
+      }) as never,
+    )
+    const { api, wrapper } = mountComposable()
+    api.checkoutType.value = 'refund'
+    await flushPromises()
+    api.selectItem(
+      { id: 42, student_name: '王小明', total_amount: 900, paid_amount: 900 },
+      '王小明',
+    )
+
+    await api.runSearch()
+
+    expect(api.selectedItem.value).toBeNull()
+    expect(api.refundSuggestionLoading.value).toBe(false)
+
+    resolveSuggestion(suggestion(300, [COURSE_ITEM]))
+    await flushPromises()
+    expect(api.selectedItem.value).toBeNull()
     wrapper.unmount()
   })
 })

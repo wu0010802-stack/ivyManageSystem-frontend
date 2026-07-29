@@ -40,6 +40,7 @@ describe('excludeAddedSupplies', () => {
 describe('estimateCourseStatus', () => {
   const enrolledCourses = [{ name: '鋼琴', status: 'enrolled' }]
   const promotedCourses = [{ name: '美術', status: 'promoted_pending' }]
+  const pendingReviewCourses = [{ name: '直排輪', status: 'pending_review' }]
 
   it('(a) 課程額滿（availability===0）+ 本生原狀態 enrolled → 應估為 enrolled（修前錯回 waitlist）', () => {
     // availability[name]===0 在修前會直接 return 'waitlist'；修後應先檢查本生既有座位
@@ -51,6 +52,12 @@ describe('estimateCourseStatus', () => {
   it('(a2) 課程額滿 + 本生原狀態 promoted_pending → 應估為 enrolled（後端 update 亦視同佔位）', () => {
     expect(
       estimateCourseStatus('美術', { 美術: 0 }, promotedCourses),
+    ).toBe('enrolled')
+  })
+
+  it('(a3) 課程額滿 + 本生原狀態 pending_review → 應估為 enrolled（保留自己的待審座位）', () => {
+    expect(
+      estimateCourseStatus('直排輪', { 直排輪: 0 }, pendingReviewCourses),
     ).toBe('enrolled')
   })
 
@@ -95,6 +102,12 @@ describe('estimateCourseStatus', () => {
   it('(c) availability<0（滿且不開候補）+ 本生原 promoted_pending → 仍 enrolled（保留座位）', () => {
     expect(
       estimateCourseStatus('美術', { 美術: -1 }, promotedCourses),
+    ).toBe('enrolled')
+  })
+
+  it('(c2) availability<0（滿且不開候補）+ 本生原 pending_review → 仍 enrolled（保留座位）', () => {
+    expect(
+      estimateCourseStatus('直排輪', { 直排輪: -1 }, pendingReviewCourses),
     ).toBe('enrolled')
   })
 

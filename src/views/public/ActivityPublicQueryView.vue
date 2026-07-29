@@ -238,7 +238,7 @@
             <button
               type="button"
               class="btn btn-primary btn-sm"
-              :disabled="promotionSubmitting === item.course_id"
+              :disabled="promotionSubmitting !== null"
               @click="handleConfirmPromotion(item)"
             >
               {{ promotionSubmitting === item.course_id ? '處理中…' : '確認參加' }}
@@ -367,8 +367,17 @@
             class="waitlist-row"
           >
             <span class="waitlist-course-name">{{ wc.name }}</span>
-            <span class="badge badge-waitlist">候補中</span>
-            <template v-if="wc.waitlist_position != null">
+            <span
+              v-if="wc.status === 'pending_review_waitlist'"
+              class="badge badge-waitlist"
+            >候補資格待校方審核</span>
+            <span v-else class="badge badge-waitlist">候補中</span>
+            <template
+              v-if="
+                wc.status === 'waitlist'
+                  && wc.waitlist_position != null
+              "
+            >
               <span v-if="wc.waitlist_total === 1" class="waitlist-position waitlist-position--solo">
                 您是目前唯一候補者
               </span>
@@ -413,10 +422,12 @@
             <ul v-else class="readonly-list">
               <li v-for="c in queryResult.courses" :key="c.name">
                 {{ c.name }}
-                <span v-if="c.price != null" class="price-tag">${{ c.price }}</span>
-                <span v-if="c.status === 'waitlist'" class="badge badge-waitlist">候補中</span>
-                <span v-else-if="c.status === 'promoted_pending'" class="qty-display is-waiting">
-                  已升正式（待確認）
+                <span class="price-tag">{{ courseBillingLabel(c) }}</span>
+                <span
+                  class="qty-display"
+                  :class="{ 'is-waiting': c.status !== 'enrolled' }"
+                >
+                  {{ COURSE_STATUS_LABEL[c.status] }}
                 </span>
               </li>
             </ul>
@@ -585,7 +596,9 @@
               <dd>{{ formatCurrency(feePreview.originalTotal) }}</dd>
             </div>
             <div class="fee-row">
-              <dt>新應繳</dt>
+              <dt>
+                {{ feePreview.pricingMayChangeAfterReview ? '目前已確定應繳' : '新應繳' }}
+              </dt>
               <dd>{{ formatCurrency(feePreview.newTotal) }}</dd>
             </div>
             <div class="fee-row">
@@ -601,10 +614,18 @@
               <dd>{{ formatCurrency(feePreview.refundNeeded) }}</dd>
             </div>
           </dl>
+          <div
+            v-if="feePreview.pricingMayChangeAfterReview"
+            class="fee-preview-review-note"
+            data-test="pending-review-pricing-note"
+          >
+            課程仍待校方審核；若資料媒合成功，將依審核結果與當下名額轉為正式或候補，
+            實際應繳金額會在結果確認後更新。上方目前只計入已確定的費用。
+          </div>
           <div v-if="feePreview.wouldOverpay" class="fee-preview-msg">
             <strong>此修改會產生退費</strong>，無法於前台直接沖帳，請聯繫校方協助處理。
           </div>
-          <div v-else class="fee-preview-note">
+          <div v-else-if="!feePreview.pricingMayChangeAfterReview" class="fee-preview-note">
             * 估算值，候補課程升正式時才會計入應繳。
           </div>
         </div>
@@ -651,6 +672,8 @@ import { useRegistrationEditSave } from '@/composables/useRegistrationEditSave'
 import { useRegistrationWindow, type RegistrationTimeSettings } from '@/composables/useRegistrationWindow'
 import { usePromotionActions } from '@/composables/usePromotionActions'
 import { toggleArrayItem } from '@/utils/arrayUtils'
+import { COURSE_STATUS_LABEL } from '@/constants/activity'
+import { courseBillingLabel } from '@/utils/activityDisplay'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
@@ -827,7 +850,6 @@ const catalogReady = computed(
     && !optionsLoading.value,
 )
 const editorReady = computed(() => catalogReady.value && availabilityReady.value)
-
 // F5：報名時段守衛。本頁不需要 submitButtonLabel/submitButtonDisabled（無單一
 // 送出按鈕語意），僅取 noticeState / isRegistrationOpen；submitting 恆為 false
 // （本頁無「送出中」狀態需與時段守衛互斥）。
@@ -1659,6 +1681,15 @@ onBeforeUnmount(() => {
   font-size: var(--fs-sm);
   color: var(--color-danger);
   line-height: 1.6;
+}
+.fee-preview-review-note {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  color: #78350f;
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  font-size: var(--fs-sm);
 }
 .fee-preview-note {
   margin-top: var(--space-2);

@@ -59,6 +59,19 @@ describe('RegistrationTimeline', () => {
     expect(text).toContain('報名已撤銷')
   })
 
+  it('一般軟刪報名顯示「報名已撤銷／報名軟刪」', () => {
+    const wrapper = mount(RegistrationTimeline, {
+      props: {
+        registration: makeReg({ match_status: 'matched', is_active: false }),
+        payments: [],
+        paidAmount: 0,
+        paymentStatus: 'unpaid',
+      },
+    })
+    expect(wrapper.text()).toContain('報名已撤銷')
+    expect(wrapper.text()).toContain('報名軟刪')
+  })
+
   it('待校方審核：審核節點為 current 狀態', () => {
     const wrapper = mount(RegistrationTimeline, {
       props: {
@@ -89,6 +102,92 @@ describe('RegistrationTimeline', () => {
     expect(text).toContain('1 門待家長確認')
     expect(text).toContain('截止')
     expect(text).toContain('2026-05-15 18:00')
+  })
+
+  it('非正式課程只顯示狀態與「未計費」，不把課程牌價冒充應繳', () => {
+    const wrapper = mount(RegistrationTimeline, {
+      props: {
+        registration: makeReg({
+          courses: [
+            { course_id: 10, name: '候補美術', price: 9101, status: 'waitlist' },
+            { course_id: 11, name: '待確認律動', price: 9102, status: 'promoted_pending' },
+            { course_id: 12, name: '待審核足球', price: 9103, status: 'pending_review' },
+            { course_id: 13, name: '待審候補直排輪', price: 9104, status: 'pending_review_waitlist' },
+          ],
+        }),
+        payments: [],
+        paidAmount: 0,
+        paymentStatus: 'unpaid',
+      },
+    })
+
+    const coursesNode = wrapper.findAll('.rt-node')[2]
+    expect(coursesNode.text()).toContain('[候補] 候補美術 未計費')
+    expect(coursesNode.text()).toContain('[待確認] 待確認律動 未計費')
+    expect(coursesNode.text()).toContain('[待審核] 待審核足球 未計費')
+    expect(coursesNode.text()).toContain('[待審核候補] 待審候補直排輪 未計費')
+    expect(coursesNode.text()).not.toMatch(/\$910[1-4]/)
+  })
+
+  it('正式課程仍顯示課程金額', () => {
+    const wrapper = mount(RegistrationTimeline, {
+      props: {
+        registration: makeReg({
+          courses: [
+            { course_id: 10, name: '正式美術', price: 1500, status: 'enrolled' },
+          ],
+        }),
+        payments: [],
+        paidAmount: 0,
+        paymentStatus: 'unpaid',
+      },
+    })
+
+    const coursesNode = wrapper.findAll('.rt-node')[2]
+    expect(coursesNode.text()).toContain('[正式] 正式美術 $1500')
+    expect(coursesNode.text()).not.toContain('未計費')
+  })
+
+  it('待審核課程狀態顯示中文，不直接洩漏 raw status', () => {
+    const wrapper = mount(RegistrationTimeline, {
+      props: {
+        registration: makeReg({
+          courses: [
+            { course_id: 10, name: '美術', price: 1500, status: 'pending_review' },
+            { course_id: 11, name: '律動', price: 1500, status: 'pending_review_waitlist' },
+          ],
+        }),
+        payments: [],
+        paidAmount: 0,
+        paymentStatus: 'unpaid',
+      },
+    })
+
+    expect(wrapper.text()).toContain('待審核')
+    expect(wrapper.text()).toContain('待審核候補')
+    expect(wrapper.text()).not.toContain('pending_review')
+    const coursesNode = wrapper.findAll('.rt-node')[2]
+    expect(coursesNode.classes()).toContain('rt-warning')
+    expect(coursesNode.text()).toContain('1 待審核・1 待審核候補')
+  })
+
+  it('只有 pending_review 課程時，課程配位節點維持 current 而非誤標完成', () => {
+    const wrapper = mount(RegistrationTimeline, {
+      props: {
+        registration: makeReg({
+          courses: [
+            { course_id: 10, name: '美術', price: 1500, status: 'pending_review' },
+          ],
+        }),
+        payments: [],
+        paidAmount: 0,
+        paymentStatus: 'unpaid',
+      },
+    })
+
+    const coursesNode = wrapper.findAll('.rt-node')[2]
+    expect(coursesNode.classes()).toContain('rt-current')
+    expect(coursesNode.text()).toContain('1 門待審核')
   })
 
   it('退費分支：refund record 顯示退費節點', () => {
@@ -153,9 +252,8 @@ describe('RegistrationTimeline', () => {
     expect(wrapper.find('.rt-warning').exists()).toBe(true)
   })
 
-  it('is_active 欄位缺失（後端 detail endpoint 不回傳）：不應誤判為撤銷', () => {
-    // 後端 get_registration_detail 已 filter is_active=True，response 不含此欄位。
-    // 此案 reproduce 該情境：完整繳費 + is_active 為 undefined。
+  it('is_active 欄位缺失的舊 payload 不應誤判為撤銷', () => {
+    // 相容舊快照／測試 fixture：只有明確 false 才視為撤銷。
     const reg = makeReg({ is_paid: true })
     delete reg.is_active
     const wrapper = mount(RegistrationTimeline, {

@@ -78,3 +78,69 @@ describe('RegistrationCreateDialog — 至少一項課程或用品', () => {
     expect(submitDisabled(wrapper)).toBe(false)
   })
 })
+
+describe('RegistrationCreateDialog — 候補課程不納入目前預估應繳', () => {
+  it('零名額且允候補的已選課不計入目前預估應繳，另列候補未計費與轉正預估', async () => {
+    const wrapper = mountDialog({
+      courseOptions: [
+        {
+          id: 1,
+          name: '額滿美術',
+          price: 1200,
+          remaining: 0,
+          capacity: 10,
+          allow_waitlist: true,
+        },
+        {
+          id: 2,
+          name: '有位律動',
+          price: 800,
+          remaining: 2,
+          capacity: 10,
+          allow_waitlist: true,
+        },
+      ],
+    })
+    const form = (wrapper.vm as unknown as {
+      form: { courseNames: string[] }
+    }).form
+    form.courseNames = ['額滿美術', '有位律動']
+    await wrapper.vm.$nextTick()
+
+    const currentEstimate = wrapper.get('[data-test="current-estimated-total"]')
+    expect(currentEstimate.text()).toContain('目前預估應繳')
+    expect(currentEstimate.text()).toContain('NT$ 800')
+    expect(wrapper.text()).toContain('實際依送出時名額')
+    expect(wrapper.get('[data-test="estimated-total"]').text()).toContain('NT$ 2,000')
+    const waitlist = wrapper.get('[data-test="waitlist-unbilled"]')
+    expect(waitlist.text()).toContain('候補未計費')
+    expect(waitlist.text()).toContain('額滿美術')
+    expect(waitlist.text()).toContain('NT$ 1,200')
+  })
+
+  it('仍有名額的已選課全部計入目前預估應繳，不顯示候補預估', async () => {
+    const wrapper = mountDialog({
+      courseOptions: [
+        {
+          id: 2,
+          name: '有位律動',
+          price: 800,
+          remaining: 2,
+          capacity: 10,
+          allow_waitlist: true,
+        },
+      ],
+    })
+    const form = (wrapper.vm as unknown as {
+      form: { courseNames: string[] }
+    }).form
+    form.courseNames = ['有位律動']
+    await wrapper.vm.$nextTick()
+
+    const currentEstimate = wrapper.get('[data-test="current-estimated-total"]')
+    expect(currentEstimate.text()).toContain('目前預估應繳')
+    expect(currentEstimate.text()).toContain('NT$ 800')
+    expect(wrapper.find('[data-test="estimated-total"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="waitlist-unbilled"]').exists()).toBe(false)
+  })
+})

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { computed, effectScope, nextTick, ref } from 'vue'
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
@@ -187,6 +187,30 @@ describe('usePublicRegistrationQuery 查詢亂序守衛', () => {
     expect(query.queryResult.value).toBeNull()
   })
 
+  it('查詢 pending 時 scope 卸載，遲到成功不得 hydrate 或啟動名額輪詢', async () => {
+    const pending = deferred()
+    publicQueryRegistration.mockReturnValueOnce(pending.promise)
+    const startPolling = vi.fn()
+    const refreshAvailability = vi.fn()
+    const scope = effectScope()
+    let query
+    scope.run(() => {
+      query = usePublicRegistrationQuery({ refreshAvailability, startPolling })
+      query.queryForm.name = '第一位幼兒'
+      query.queryForm.birthday = '2020-05-10'
+      query.queryForm.parent_phone = '0912345678'
+    })
+
+    const run = query.handleQuery()
+    scope.stop()
+    pending.resolve(makeResult(1, '第一位幼兒'))
+    await run
+
+    expect(query.queryResult.value).toBeNull()
+    expect(refreshAvailability).not.toHaveBeenCalled()
+    expect(startPolling).not.toHaveBeenCalled()
+  })
+
   it('成功查詢的身分憑證與可編輯搜尋欄分離', async () => {
     publicQueryByToken.mockResolvedValueOnce(makeResult(1, '第一位幼兒'))
     const query = setup()
@@ -241,5 +265,54 @@ describe('usePublicRegistrationQuery 查詢亂序守衛', () => {
       vi.useRealTimers()
       process.env.TZ = originalTZ
     }
+  })
+
+  it('候補操作進行中時阻止另一門課同時送出，避免跨課程 mutation 互踩', async () => {
+    const mutation = deferred()
+    publicConfirmPromotion.mockReturnValue(mutation.promise)
+    const queryResult = ref({
+      id: 1,
+      name: '第一位幼兒',
+      birthday: '2020-05-10',
+      courses: [],
+      supplies: [],
+    })
+    const credentials = ref({
+      mode: 'token',
+      token: 'token_FIRST',
+      name: '第一位幼兒',
+      birthday: '2020-05-10',
+      parent_phone: '0912345678',
+    })
+    const actions = usePromotionActions({
+      queryResult,
+      activeQueryCredentials: credentials,
+      activeQueryToken: computed(() => credentials.value.token),
+      refetchCurrent: vi.fn().mockResolvedValue(queryResult.value),
+      createHydrationGuard: () => ({
+        requestId: 1,
+        registrationId: 1,
+        credentials: { ...credentials.value },
+      }),
+      hydrateResult: vi.fn(() => true),
+      showToast: vi.fn(),
+    })
+
+    const first = actions.handleConfirmPromotion({
+      name: '美術',
+      status: 'promoted_pending',
+      course_id: 10,
+      confirm_deadline: '2099-12-31T00:00:00+08:00',
+    })
+    const second = actions.handleConfirmPromotion({
+      name: '足球',
+      status: 'promoted_pending',
+      course_id: 11,
+      confirm_deadline: '2099-12-31T00:00:00+08:00',
+    })
+
+    expect(publicConfirmPromotion).toHaveBeenCalledTimes(1)
+    mutation.resolve({ data: { message: '已確認' } })
+    await Promise.all([first, second])
   })
 })

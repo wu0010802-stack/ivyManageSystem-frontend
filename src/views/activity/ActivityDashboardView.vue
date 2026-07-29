@@ -99,7 +99,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="16" class="charts-row" v-if="stats" v-loading="loading" style="margin-top: 16px;">
+    <el-row :gutter="16" class="charts-row" v-if="_statsAny" v-loading="loading" style="margin-top: 16px;">
       <el-col :xs="24" :md="14">
         <el-card>
           <template #header>每日報名趨勢</template>
@@ -190,10 +190,42 @@ const exportingTable = ref(false)
 
 // dashboard 統計表搬進 store（學期感知 TTL 60s + inflight dedupe + 競態守衛），
 // view 不再持有 local dashboardData/onMounted 無條件重抓。
-const { stats, dashboardTable, loadingDashboardTable: loadingTable } = storeToRefs(activityStore)
-// 模板沿用 dashboardData 名稱（型別窄化為本檔 DashboardData）
-const dashboardData = computed(() => dashboardTable.value as DashboardData | null)
-const _statsAny = computed(() => stats.value as unknown as Record<string, unknown> | null)
+const {
+  summary,
+  charts,
+  attendance,
+  dashboardTable,
+  summaryTermKey,
+  chartsTermKey,
+  attendanceTermKey,
+  dashboardTableTermKey,
+  loadingDashboardTable: loadingTable,
+} = storeToRefs(activityStore)
+const currentTermKey = computed(() => `${termStore.school_year}-${termStore.semester}`)
+const currentSummary = computed(() =>
+  summaryTermKey.value === currentTermKey.value ? summary.value : null,
+)
+const currentCharts = computed(() =>
+  chartsTermKey.value === currentTermKey.value ? charts.value : null,
+)
+const currentAttendance = computed(() =>
+  attendanceTermKey.value === currentTermKey.value ? attendance.value : null,
+)
+// Store 保留上一學期快取供快速切回；畫面只能顯示已提交給目前學期的資料。
+// 新學期尚在載入或載入失敗時回 null，避免舊學期數字被誤認為新學期。
+const dashboardData = computed(() =>
+  dashboardTableTermKey.value === currentTermKey.value
+    ? dashboardTable.value as DashboardData | null
+    : null,
+)
+const _statsAny = computed(() => {
+  if (!currentSummary.value && !currentCharts.value && !currentAttendance.value) return null
+  return {
+    statistics: currentSummary.value,
+    charts: currentCharts.value,
+    attendance_stats: currentAttendance.value,
+  } as Record<string, unknown>
+})
 const statistics = computed(() => (_statsAny.value?.statistics as Record<string, unknown> | undefined) || {})
 const dailyStats = computed(() => (_statsAny.value?.charts as { daily?: { date: string; count: number }[] } | undefined)?.daily || [])
 const topCourses = computed(() => (_statsAny.value?.charts as { topCourses?: { name: string; count: number }[] } | undefined)?.topCourses || [])
@@ -301,16 +333,20 @@ const objectSpanMethod = ({ row, column }: { row: Record<string, unknown>; colum
 }
 
 const fetchTable = async (force = false) => {
-  const before = activityStore.lastDashboardTableFetchedAt
+  const requestedTermKey = `${termStore.school_year}-${termStore.semester}`
   await activityStore.fetchDashboardTable({
     force,
     school_year: termStore.school_year,
     semester: termStore.semester,
   })
-  // 失敗判定不靠共享的 store.error（會被其他 action 污染）：成功一定推進 fetchedAt
-  // 時戳，且資料就緒。若時戳未推進且仍無資料即視為本次表格載入失敗。
-  const stale = activityStore.lastDashboardTableFetchedAt === before
-  if (stale && !dashboardTable.value) ElMessage.error('資料載入失敗，請重新整理')
+  // 失敗判定不靠共享 store.error：只有本次學期成功提交後 term key 才會一致。
+  // 即使 store 中仍留有舊學期快取，也要提示且不可把舊表格顯示在新學期下。
+  if (
+    currentTermKey.value === requestedTermKey
+    && activityStore.dashboardTableTermKey !== requestedTermKey
+  ) {
+    ElMessage.error('資料載入失敗，請重新整理')
+  }
 }
 
 // 卡片 / 圖表 / 出席率三組統計皆帶選定學期（契約同 dashboard-table 的 school_year/semester）；

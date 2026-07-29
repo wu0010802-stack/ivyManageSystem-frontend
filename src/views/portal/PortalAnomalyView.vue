@@ -53,10 +53,13 @@ const confirmAnomaly = async (anomaly: AnomalyEntry) => {
 
   anomaly.submitting = true
   try {
+    // 必須帶 anomaly_type：同一天最多 4 個異常項目，只帶 attendance_id 會讓後端
+    // 把整天標成已處理（老師從未處理過其他項目，也無法只針對早退申訴）。
     const res = await confirmAnomalyApi(
       anomaly.id,
       anomaly.selected_action,
       anomaly.remark?.trim() || undefined,
+      anomaly.type as string,
     )
     // 後端缺 response_model，res.data 為 unknown，narrow 取回應訊息。
     ElMessage.success((res.data as { message: string }).message)
@@ -99,7 +102,7 @@ onMounted(fetchAnomalies)
     <div v-loading="loading">
       <el-card
         v-for="anomaly in anomalies"
-        :key="`${anomaly.id}-${anomaly.type}`"
+        :key="`${anomaly.id}-${anomaly.type}`"  
         class="anomaly-card"
         :class="{ confirmed: anomaly.confirmed }"
       >

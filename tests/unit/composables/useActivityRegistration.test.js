@@ -75,6 +75,29 @@ describe('useActivityRegistration', () => {
     expect(total.value).toBe(1)
   })
 
+  it('新查詢開始即清空舊列表，失敗後維持空資料避免操作上一學期', async () => {
+    getRegistrations.mockResolvedValueOnce({
+      data: { items: [{ id: 1, student_name: '舊學期學生' }], total: 1 },
+    })
+    const { list, total, fetchList } = useActivityRegistration()
+    await fetchList()
+    expect(list.value).toHaveLength(1)
+
+    let rejectNext
+    getRegistrations.mockReturnValueOnce(new Promise((_, reject) => {
+      rejectNext = reject
+    }))
+    const pending = fetchList()
+
+    expect(list.value).toEqual([])
+    expect(total.value).toBe(0)
+
+    rejectNext(new Error('network'))
+    await pending
+    expect(list.value).toEqual([])
+    expect(total.value).toBe(0)
+  })
+
   it('handleSearch 重置 page=1 並呼叫 fetchList', async () => {
     vi.useFakeTimers()
     const { page, handleSearch } = useActivityRegistration()

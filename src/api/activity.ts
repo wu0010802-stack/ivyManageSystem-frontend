@@ -58,6 +58,7 @@ export const removeRegistrationSupply = (
   api.delete(`/activity/registrations/${registrationId}/supplies/${supplyRecordId}`, {
     params: buildForceRefundParams({ forceRefund, refundReason }),
   })
+// staff 可唯讀查詢 inactive/rejected 歷史列；is_active 已由 OpenAPI 明確保證。
 export const getRegistrationDetail = (id: number): AxiosResp<'/activity/registrations/{registration_id}', 'get'> =>
   api.get(`/activity/registrations/${id}`)
 export const updateRemark = (id: number, data: ApiBody<'/activity/registrations/{registration_id}/remark', 'put'>): AxiosResp<'/activity/registrations/{registration_id}/remark', 'put'> =>
@@ -116,6 +117,7 @@ export const deleteRegistrationPayment = (registrationId: number, paymentId: num
   api.delete(`/activity/registrations/${registrationId}/payments/${paymentId}`, {
     data: { reason },
   })
+
 export const exportRegistrations = (params?: ApiQuery<'/activity/registrations/export', 'get'>): Promise<AxiosResponse<Blob>> =>
   api.get('/activity/registrations/export', { params, responseType: 'blob' })
 
@@ -126,6 +128,10 @@ export const getCourseDetail = (id: number): AxiosResp<'/activity/courses/{cours
   api.get(`/activity/courses/${id}`)
 export const getCourseWaitlist = (courseId: number): AxiosResp<'/activity/courses/{course_id}/waitlist', 'get'> =>
   api.get(`/activity/courses/${courseId}/waitlist`)
+// URL 為向下相容仍叫 /enrolled，但 response 已是「容量佔位名單」：
+// enrolled / promoted_pending / pending_review 三態都會回傳。
+export type ActivityCourseOccupancyItem = Schema<'CourseEnrolledItemOut'>
+export type ActivityCourseOccupancyStatus = ActivityCourseOccupancyItem['status']
 export const getCourseEnrolled = (courseId: number): AxiosResp<'/activity/courses/{course_id}/enrolled', 'get'> =>
   api.get(`/activity/courses/${courseId}/enrolled`)
 export const createCourse = (data: ApiBody<'/activity/courses', 'post'>): AxiosResp<'/activity/courses', 'post'> =>
@@ -157,10 +163,11 @@ export const replyInquiry = (id: number, data: ApiBody<'/activity/inquiries/{inq
 export const deleteInquiry = (id: number): AxiosResp<'/activity/inquiries/{inquiry_id}', 'delete'> =>
   api.delete(`/activity/inquiries/${id}`)
 
-// 報名時間設定
+// 報名時間與四個通知模板欄位皆由 OpenAPI 產生，不再維護手寫交集型別。
+export type ActivityRegistrationSettingsPayload = ApiBody<'/activity/settings/registration-time', 'post'>
 export const getRegistrationTime = (): AxiosResp<'/activity/settings/registration-time', 'get'> =>
   api.get('/activity/settings/registration-time')
-export const updateRegistrationTime = (data: ApiBody<'/activity/settings/registration-time', 'post'>): AxiosResp<'/activity/settings/registration-time', 'post'> =>
+export const updateRegistrationTime = (data: ActivityRegistrationSettingsPayload): AxiosResp<'/activity/settings/registration-time', 'post'> =>
   api.post('/activity/settings/registration-time', data)
 
 // 候補直升正式通知信樣板

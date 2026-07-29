@@ -38,9 +38,25 @@ function mockBootstrap({
   courses = [] as Array<{ name: string; price: number }>,
   supplies = [] as Array<{ name: string; price: number }>,
   classes = ['大班'],
+  registrationTime,
+}: {
+  courses?: Array<{ name: string; price: number }>
+  supplies?: Array<{ name: string; price: number }>
+  classes?: string[]
+  registrationTime?: {
+    is_open?: boolean
+    open_at?: string | null
+    close_at?: string | null
+  }
 } = {}) {
   vi.mocked(getPublicBootstrap).mockResolvedValue({
-    data: { courses, supplies, classes, course_videos: {} },
+    data: {
+      courses,
+      supplies,
+      classes,
+      course_videos: {},
+      registration_time: registrationTime,
+    },
   })
 }
 
@@ -200,6 +216,40 @@ describe('ActivityPublicQueryView — is_paid=false 既有可編輯行為不受�
     expect(wrapper.text()).toContain('儲存修改')
   })
 
+  it('待審核候補明示課程費須待審核結果，不把目前 0 元當成最終應繳', async () => {
+    seedPaidRegistration({
+      is_paid: false,
+      paid_amount: 0,
+      total_amount: 0,
+      school_year: 114,
+      semester: 2,
+      courses: [{
+        course_id: 9,
+        name: '鋼琴',
+        status: 'pending_review_waitlist',
+        price: 1200,
+      }],
+      supplies: [],
+      field_state: {
+        identity_editable: true,
+        class_editable: true,
+        review_state: 'school_review',
+      },
+    })
+    mockBootstrap({
+      courses: [{ name: '鋼琴', price: 1200 }],
+      classes: ['大班'],
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    const note = wrapper.get('[data-test="pending-review-pricing-note"]')
+    expect(note.text()).toContain('審核結果')
+    expect(note.text()).toContain('實際應繳')
+    expect(wrapper.text()).toContain('目前已確定應繳')
+  })
+
   it('查詢後搜尋欄被改動，儲存仍使用命中結果的原始手機與 token', async () => {
     seedPaidRegistration({
       is_paid: false,
@@ -251,6 +301,34 @@ describe('ActivityPublicQueryView — is_paid=false 既有可編輯行為不受�
   })
 })
 
+describe('ActivityPublicQueryView — 報名截止後唯讀', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('close_at 已過期時顯示截止提示與唯讀摘要，不渲染儲存控制項', async () => {
+    mockBootstrap({
+      courses: [{ name: '美術', price: 3000 }],
+      supplies: [{ name: '舞鞋', price: 500 }],
+      registrationTime: {
+        is_open: true,
+        open_at: null,
+        close_at: '2000-01-01T00:00:00Z',
+      },
+    })
+    seedPaidRegistration({ is_paid: false, paid_amount: 0 })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    expect(wrapper.find('[data-test="registration-closed-hint"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('報名已截止')
+    expect(wrapper.find('[data-test="payment-locked-summary"]').exists()).toBe(true)
+    expect(wrapper.find('.action-buttons').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('儲存修改')
+  })
+})
+
 describe('ActivityPublicQueryView — is_paid=true 時候補相關區塊不受鎖定影響', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -283,6 +361,63 @@ describe('ActivityPublicQueryView — is_paid=true 時候補相關區塊不受�
     expect(summary.text()).toContain('陶藝')
     expect(summary.text()).toMatch(/第\s*2\s*位/)
     expect(summary.text()).toMatch(/共\s*6\s*位/)
+  })
+
+  it('待審核候補在唯讀摘要顯示審核語意，不冒用正式候補順位', async () => {
+    seedPaidRegistration({
+      courses: [
+        {
+          course_id: 4,
+          name: '直排輪',
+          status: 'pending_review_waitlist',
+          waitlist_position: 1,
+          waitlist_total: 2,
+        },
+      ],
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    const lockedSummary = wrapper.get('[data-test="payment-locked-summary"]')
+    expect(lockedSummary.text()).toContain('直排輪')
+    expect(lockedSummary.text()).toContain('待審核候補')
+    expect(wrapper.text()).not.toMatch(/目前第\s*1\s*位/)
+  })
+
+  it('唯讀課程摘要只有正式課程顯示金額，其餘狀態明示未計費', async () => {
+    seedPaidRegistration({
+      courses: [
+        { course_id: 1, name: '美術', status: 'enrolled', price: 3000 },
+        { course_id: 2, name: '足球', status: 'promoted_pending', price: 2800 },
+        { course_id: 3, name: '鋼琴', status: 'pending_review', price: 2600 },
+        {
+          course_id: 4,
+          name: '直排輪',
+          status: 'pending_review_waitlist',
+          price: 2400,
+        },
+        { course_id: 5, name: '陶藝', status: 'waitlist', price: 2200 },
+      ],
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    const rows = wrapper
+      .get('[data-test="payment-locked-summary"]')
+      .findAll('.readonly-list')[0]
+      .findAll('li')
+      .map((row) => row.text())
+
+    expect(rows).toEqual([
+      expect.stringMatching(/美術.*\$3000.*正式/),
+      expect.stringMatching(/足球.*未計費.*待家長確認/),
+      expect.stringMatching(/鋼琴.*未計費.*待審核/),
+      expect.stringMatching(/直排輪.*未計費.*待審核候補/),
+      expect.stringMatching(/陶藝.*未計費.*候補/),
+    ])
+    expect(rows.slice(1).join(' ')).not.toMatch(/\$(?:2800|2600|2400|2200)/)
   })
 
   it('候補已升正式待確認的確認/放棄按鈕照常顯示（非目標範圍）', async () => {

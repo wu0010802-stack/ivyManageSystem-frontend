@@ -83,6 +83,12 @@ export function usePOSCheckout() {
   // ── 退費建議值載入（按出席比例，避免預填全額已繳超退；P2-B）─────────
   const refundSuggestionLoading = ref(false)
   let refundSuggestionSeq = 0
+  let refundSuggestionGeneration = 0
+
+  function invalidateRefundSuggestion() {
+    refundSuggestionGeneration += 1
+    refundSuggestionLoading.value = false
+  }
 
   // ── 收款 ────────────────────────────────────────────────────────
   // 永遠是現金（spec 2026-05-06-pos-cash-only）；保留 ref 以便未來擴充時最小改動
@@ -125,7 +131,7 @@ export function usePOSCheckout() {
   )
 
   const canSubmit = computed(() => {
-    if (submitting.value) return false
+    if (submitting.value || searching.value) return false
     const item = selectedItem.value
     if (!item) return false
     const applied = Number(item.amount_applied) || 0
@@ -145,10 +151,13 @@ export function usePOSCheckout() {
   // 切換繳費 / 退費時：清空選取（兩模式邏輯不同，避免混淆）
   watch(checkoutType, (next, prev) => {
     if (next === prev) return
+    invalidateRefundSuggestion()
     selectedItem.value = null
     notes.value = ''
     // 搜尋結果也重新拉（退費模式要看已繳金額 > 0 的）
-    if (searchQuery.value) runSearch()
+    // 空搜尋代表「全部」而非「尚未搜尋」；首次載入後從收款切退款時也必須重抓，
+    // 否則會繼續顯示收款模式的未繳名單。
+    runSearch()
   })
 
   // ── 搜尋 ──────────────────────────────────────────────────────
@@ -161,10 +170,16 @@ export function usePOSCheckout() {
   }
 
   async function runSearch() {
+    invalidateRefundSuggestion()
     const q = (searchQuery.value || '').trim()
     const classroom = (classroomFilter.value || '').trim()
     const seq = ++searchSeq
     searching.value = true
+    // fail-closed：新條件／新學期請求開始後，不保留上一批可操作資料。若請求失敗，
+    // 清單維持空白，避免櫃台對上一學期的報名收款或退款。
+    searchGroups.value = []
+    searchRegistrations.value = []
+    selectedItem.value = null
     // 重置截斷旗標；取回資料後再依當次回應重新判定（seq 守衛擋下過期寫入）
     searchTruncation.truncated = false
     searchTruncation.total = 0
@@ -293,18 +308,24 @@ export function usePOSCheckout() {
    * 退費模式：以後端「剩餘建議額」（remaining_suggested_amount = 按出席比例建議總額
    * 扣已退、夾 0）覆寫 buildSelection 的全額預填，避免簽核者盲簽「全額已繳」造成超退
    * （2026-06-29 audit P2-B）；多次退費時不會把累積建議總額重複預填（audit F1）。
-   * seq 守衛防快速切換選取時舊建議覆寫。
+   * seq + 操作世代守衛防快速切換模式／選取／搜尋時舊建議覆寫。
    * fail-closed（audit F2）：載入失敗或回應缺 remaining_suggested_amount 時，不再保留
    * buildSelection 的全額 paid fallback，改歸 0 + 警告，強制人工輸入金額（amount_applied
    * <=0 時 canSubmit 為 false，送出鈕被擋）。
    */
   async function applyRefundSuggestion(registrationId: unknown) {
     const seq = ++refundSuggestionSeq
+    const generation = refundSuggestionGeneration
+    const selection = selectedItem.value
     refundSuggestionLoading.value = true
-    // 仍是同一筆選取、且無較新請求才套用（成功 / 失敗共用守衛）
+    // 仍是發出請求時的退款模式／操作世代／選取物件，且無較新請求才套用。
+    // 僅比 registration id 不足：切回收款後可能重選同一筆，舊退款回應仍會撞 ID。
     const stillCurrent = () =>
       seq === refundSuggestionSeq &&
-      !!selectedItem.value &&
+      generation === refundSuggestionGeneration &&
+      checkoutType.value === 'refund' &&
+      !!selection &&
+      selectedItem.value === selection &&
       Number(selectedItem.value.id) === Number(registrationId)
     const failClosed = () => {
       if (!stillCurrent()) return
@@ -324,13 +345,19 @@ export function usePOSCheckout() {
     } catch {
       failClosed()
     } finally {
-      if (seq === refundSuggestionSeq) refundSuggestionLoading.value = false
+      if (
+        seq === refundSuggestionSeq &&
+        generation === refundSuggestionGeneration
+      ) {
+        refundSuggestionLoading.value = false
+      }
     }
   }
 
   /** 點擊搜尋結果：同 id 再點 → 取消；不同 id → 取代 */
   function selectItem(row: Record<string, unknown>, studentName: string) {
     if (!row) return
+    invalidateRefundSuggestion()
     if (selectedItem.value && selectedItem.value.id === row.id) {
       selectedItem.value = null
       return
@@ -343,6 +370,7 @@ export function usePOSCheckout() {
   }
 
   function clearSelection() {
+    invalidateRefundSuggestion()
     selectedItem.value = null
   }
 
@@ -355,7 +383,7 @@ export function usePOSCheckout() {
   }
 
   function resetTransactionInputs() {
-    selectedItem.value = null
+    clearSelection()
     notes.value = ''
   }
 
@@ -565,6 +593,7 @@ export function usePOSCheckout() {
     }
     // 讓 inflight seq 過期，結果不會再覆蓋
     searchSeq = Number.MAX_SAFE_INTEGER
+    invalidateRefundSuggestion()
   })
 
   return {

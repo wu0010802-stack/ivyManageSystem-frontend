@@ -140,4 +140,98 @@ describe('ActivityInquiryView — 未讀 badge', () => {
 
     expect(wrapper.find('[data-test="unread-badge"]').text()).toBe('34')
   })
+
+  it('同一列標記已讀 pending 時忽略重複操作，badge 只扣一次', async () => {
+    const items = [
+      { id: 91, is_read: false, question: 'q91' },
+      { id: 92, is_read: true, question: 'q92' },
+    ]
+    getInquiries.mockResolvedValue({
+      data: { items, total: 2, unread_count: 5 },
+    })
+    let resolveMark
+    markInquiryRead.mockReturnValue(new Promise((resolve) => {
+      resolveMark = resolve
+    }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const row = wrapper.vm.list[0]
+    const first = wrapper.vm.handleMarkRead(row)
+    const second = wrapper.vm.handleMarkRead(row)
+    expect(markInquiryRead).toHaveBeenCalledTimes(1)
+
+    resolveMark({ data: {} })
+    await Promise.all([first, second])
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="unread-badge"]').text()).toBe('4')
+  })
+
+  it('標記已讀 pending 期間刷新已取得最新計數時，不會再重複扣 badge', async () => {
+    const staleRow = { id: 93, is_read: false, question: 'q93' }
+    const refreshedRow = { id: 93, is_read: true, question: 'q93' }
+    getInquiries
+      .mockResolvedValueOnce({
+        data: { items: [staleRow], total: 1, unread_count: 5 },
+      })
+      .mockResolvedValueOnce({
+        data: { items: [refreshedRow], total: 1, unread_count: 4 },
+      })
+    let resolveMark
+    markInquiryRead.mockReturnValue(new Promise((resolve) => {
+      resolveMark = resolve
+    }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const pendingMark = wrapper.vm.handleMarkRead(wrapper.vm.list[0])
+    await wrapper.vm.fetchList()
+    expect(wrapper.find('[data-test="unread-badge"]').text()).toBe('4')
+
+    resolveMark({ data: {} })
+    await pendingMark
+    await flushPromises()
+
+    expect(wrapper.vm.list[0]).toStrictEqual(refreshedRow)
+    expect(wrapper.vm.list[0].is_read).toBe(true)
+    expect(wrapper.find('[data-test="unread-badge"]').text()).toBe('4')
+  })
+
+  it('標記已讀 pending 期間切頁使該列消失，成功後重抓權威未讀數', async () => {
+    const staleRow = { id: 94, is_read: false, question: 'q94' }
+    getInquiries
+      .mockResolvedValueOnce({
+        data: { items: [staleRow], total: 21, unread_count: 5 },
+      })
+      // 模擬 mutation commit 前，使用者已切到不含該列的下一頁。
+      .mockResolvedValueOnce({
+        data: { items: [], total: 21, unread_count: 5 },
+      })
+      // mutation 成功後重新取得權威全量計數。
+      .mockResolvedValueOnce({
+        data: { items: [], total: 21, unread_count: 4 },
+      })
+    let resolveMark
+    markInquiryRead.mockReturnValue(new Promise((resolve) => {
+      resolveMark = resolve
+    }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const pendingMark = wrapper.vm.handleMarkRead(wrapper.vm.list[0])
+    await wrapper.vm.fetchList()
+    expect(wrapper.vm.list).toHaveLength(0)
+    expect(wrapper.find('[data-test="unread-badge"]').text()).toBe('5')
+
+    resolveMark({ data: {} })
+    await pendingMark
+    await flushPromises()
+
+    expect(getInquiries).toHaveBeenCalledTimes(3)
+    expect(wrapper.find('[data-test="unread-badge"]').text()).toBe('4')
+  })
 })

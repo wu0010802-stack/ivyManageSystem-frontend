@@ -1619,6 +1619,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/registrations/rematch-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rematch Batch Registrations
+         * @description 對目前學期所有待審核（pending_review=True, is_active=True）報名逐筆重新比對。
+         *
+         *     2026-07-23：報名管理頁工具列「重新比對」由單列動作改為一鍵批次，取代原本
+         *     需先勾選才能觸發的「批量重新比對」（且原批量僅能處理當前頁面已勾選/已載入
+         *     的列，非「全部」待審核）。單筆處理沿用 ``_rematch_one_registration``（與單筆
+         *     route 完全相同的鎖序與比對邏輯）；某一筆失敗（如撞到唯一性衝突）僅計入
+         *     failed，不影響其餘筆數的處理，session 於單筆失敗後 rollback 仍可安全繼續。
+         */
+        post: operations["rematch_batch_registrations_api_activity_registrations_rematch_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/settings/poster": {
         parameters: {
             query?: never;
@@ -6212,23 +6238,6 @@ export interface paths {
         patch: operations["update_grade_api_grades__grade_id__patch"];
         trace?: never;
     };
-    "/growth-books/batch-status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Growth Book Batch Status */
-        get: operations["growth_book_batch_status_api_growth_books_batch_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/guardians/{guardian_id}/binding-code": {
         parameters: {
             query?: never;
@@ -7385,7 +7394,7 @@ export interface paths {
         };
         /**
          * Get Notification Summary
-         * @description 聚合後台待辦與提醒通知。
+         * @description 聚合後台待辦與提醒通知（2026-07-28 緊縮：teacher/parent 皆擋，見 require_staff_role）。
          */
         get: operations["get_notification_summary_api_notifications_summary_get"];
         put?: never;
@@ -9573,6 +9582,150 @@ export interface paths {
          * @description 取得學校行事曆（與後台同步的教師檢視）。
          */
         get: operations["get_portal_calendar_api_portal_calendar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/class-albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Albums */
+        get: operations["list_albums_api_portal_class_albums_get"];
+        put?: never;
+        /** Create Album */
+        post: operations["create_album_api_portal_class_albums_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/class-albums/{album_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Album */
+        get: operations["get_album_api_portal_class_albums__album_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Album */
+        delete: operations["delete_album_api_portal_class_albums__album_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Album */
+        patch: operations["update_album_api_portal_class_albums__album_id__patch"];
+        trace?: never;
+    };
+    "/portal/class-albums/{album_id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Photos
+         * @description 批次上傳；逐張回報成敗，權限／相簿存在檢查在迴圈前（不存在或他班直接整包擋）。
+         */
+        post: operations["upload_photos_api_portal_class_albums__album_id__photos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/class-albums/{album_id}/photos/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Photo */
+        delete: operations["delete_photo_api_portal_class_albums__album_id__photos__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/class-albums/{album_id}/photos/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Photo Tags
+         * @description 照片學生標記——整組覆蓋（replace）語意：每個 item 的 ``student_ids``
+         *     是該照片標記的最終狀態（非增量），``[]`` 表清除、重送同一組冪等不報錯。
+         *
+         *     cross-border consent 檢查（設計偏差，見 spec §5）：標記時對「被標學生」
+         *     逐一呼叫 ``enforce_student_cross_border``，不在上傳時對全班檢查——上傳時
+         *     照片尚未關聯任何學生，標記時檢查語意更精確，也不會因班上一人未同意就
+         *     擋整班照片。
+         *
+         *     驗證迴圈與寫入迴圈分開：先把 payload 全部驗完（照片屬於本相簿、學生在
+         *     本班在籍名冊、cross-border consent）才動 DB，避免驗證中途失敗造成部分
+         *     item 已覆蓋、部分未覆蓋的不一致狀態。
+         */
+        put: operations["set_photo_tags_api_portal_class_albums__album_id__photos_tags_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/class-albums/{album_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Album Endpoint
+         * @description 發布相簿：draft → published（單向轉移，已發布不可重複發布）。
+         *
+         *     發布成功後對被標記學生的家長 fan-out LINE 推播（services/class_album_service.py，
+         *     best-effort，失敗不影響本次發布結果）。
+         */
+        post: operations["publish_album_endpoint_api_portal_class_albums__album_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/class-albums/my-classrooms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Classrooms */
+        get: operations["my_classrooms_api_portal_class_albums_my_classrooms_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13501,40 +13654,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/students/{student_id}/growth-books": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Growth Book */
-        post: operations["create_growth_book_api_students__student_id__growth_books_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/{student_id}/growth-books/draft": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Draft Growth Book */
-        post: operations["draft_growth_book_api_students__student_id__growth_books_draft_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/students/{student_id}/growth-reports": {
         parameters: {
             query?: never;
@@ -13941,54 +14060,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/students/{student_id}/work-samples": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Work Samples
-         * @description 查詢某學生的作品清單。
-         */
-        get: operations["list_work_samples_api_students__student_id__work_samples_get"];
-        put?: never;
-        /**
-         * Create Work Sample
-         * @description 新增作品。
-         */
-        post: operations["create_work_sample_api_students__student_id__work_samples_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/{student_id}/work-samples/{ws_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Work Sample
-         * @description 軟刪除作品；其附件一併軟刪。
-         */
-        delete: operations["delete_work_sample_api_students__student_id__work_samples__ws_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Work Sample
-         * @description 編輯作品。
-         */
-        patch: operations["update_work_sample_api_students__student_id__work_samples__ws_id__patch"];
         trace?: never;
     };
     "/students/bulk-graduate": {
@@ -15853,6 +15924,8 @@ export interface components {
             email?: string | null;
             /** Name */
             name: string;
+            /** Parent Phone */
+            parent_phone?: string | null;
             /**
              * Remark
              * @default
@@ -15892,6 +15965,29 @@ export interface components {
              * Format: date
              */
             start_date: string;
+        };
+        /** AlbumCreate */
+        AlbumCreate: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Description */
+            description?: string | null;
+            /**
+             * Event Date
+             * Format: date
+             */
+            event_date: string;
+            /** Title */
+            title: string;
+        };
+        /** AlbumUpdate */
+        AlbumUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Event Date */
+            event_date?: string | null;
+            /** Title */
+            title?: string | null;
         };
         /** AllergyCreate */
         AllergyCreate: {
@@ -16943,7 +17039,7 @@ export interface components {
              * Owner Type
              * @enum {string}
              */
-            owner_type: "observation" | "report" | "medication_order" | "work_sample";
+            owner_type: "observation" | "report" | "medication_order";
         };
         /** Body_upload_attachment_api_misc_receipts__receipt_id__attachments_post */
         Body_upload_attachment_api_misc_receipts__receipt_id__attachments_post: {
@@ -16979,6 +17075,11 @@ export interface components {
         Body_upload_photo_api_portal_contact_book__entry_id__photos_post: {
             /** File */
             file: string;
+        };
+        /** Body_upload_photos_api_portal_class_albums__album_id__photos_post */
+        Body_upload_photos_api_portal_class_albums__album_id__photos_post: {
+            /** Files */
+            files: string[];
         };
         /**
          * BonusConfigUpdate
@@ -20790,45 +20891,6 @@ export interface components {
             /** Total Amount */
             total_amount: string;
         };
-        /** GrowthBookCreatePayload */
-        GrowthBookCreatePayload: {
-            /** Academic Year */
-            academic_year: number;
-            manifest?: components["schemas"]["GrowthBookManifest"] | null;
-            /** Teacher Narrative */
-            teacher_narrative?: string | null;
-        };
-        /** GrowthBookDraftPayload */
-        GrowthBookDraftPayload: {
-            /**
-             * Academic Year
-             * @description 民國學年
-             */
-            academic_year: number;
-        };
-        /** GrowthBookManifest */
-        GrowthBookManifest: {
-            /** Collage Attachment Ids */
-            collage_attachment_ids?: number[];
-            /** Cover Attachment Id */
-            cover_attachment_id?: number | null;
-            /**
-             * Include Measurements
-             * @default true
-             */
-            include_measurements: boolean;
-            /** Milestone Ids */
-            milestone_ids?: number[];
-            /** Observation Ids */
-            observation_ids?: number[];
-            /**
-             * Version
-             * @default 1
-             */
-            version: number;
-            /** Work Sample Ids */
-            work_sample_ids?: number[];
-        };
         /**
          * GrowthReportListOut
          * @description GET /students/{id}/growth-reports 回傳。
@@ -20866,8 +20928,6 @@ export interface components {
             period_label: string;
             /** Period Start */
             period_start?: string | null;
-            /** Report Type */
-            report_type?: string | null;
             /** Status */
             status: string;
             /** Student Id */
@@ -24507,6 +24567,29 @@ export interface components {
             total: number;
         };
         /**
+         * PendingRegistrationRematchBatchResultOut
+         * @description POST /registrations/rematch-batch 回應（2026-07-23，工具列「重新比對」批次化）。
+         *
+         *     對目前學期所有待審核（pending_review=True, is_active=True）報名逐筆重新比對；
+         *     單筆失敗（例如撞到唯一性衝突）不影響其他筆，計入 failed 並繼續處理下一筆。
+         */
+        PendingRegistrationRematchBatchResultOut: {
+            /** Failed */
+            failed: components["schemas"]["RegistrationRematchBatchFailureItemOut"][];
+            /** Matched */
+            matched: number;
+            /** Message */
+            message: string;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Still Pending */
+            still_pending: number;
+            /** Total */
+            total: number;
+        };
+        /**
          * PendingRegistrationRematchResultOut
          * @description POST /registrations/{id}/rematch 回應。
          *
@@ -24673,6 +24756,18 @@ export interface components {
         PermissionAdminOkOut: {
             /** Ok */
             ok: boolean;
+        };
+        /** PhotoTagsItem */
+        PhotoTagsItem: {
+            /** Attachment Id */
+            attachment_id: number;
+            /** Student Ids */
+            student_ids: number[];
+        };
+        /** PhotoTagsPayload */
+        PhotoTagsPayload: {
+            /** Items */
+            items: components["schemas"]["PhotoTagsItem"][];
         };
         /** PlanActionRequest */
         PlanActionRequest: {
@@ -27528,6 +27623,16 @@ export interface components {
             reason: string;
         };
         /**
+         * RegistrationRematchBatchFailureItemOut
+         * @description POST /registrations/rematch-batch failed[] 單筆：哪一筆比對時出錯及原因。
+         */
+        RegistrationRematchBatchFailureItemOut: {
+            /** Detail */
+            detail: string;
+            /** Registration Id */
+            registration_id: number;
+        };
+        /**
          * RegistrationRematchRequest
          * @description 重新比對可選欄位：校方可即時修正家長打錯的 name/birthday/class。
          *
@@ -28664,6 +28769,8 @@ export interface components {
          * @description 單月薪條三區明細 + 權威小計（小計取 persisted gross/total_deduction/net）。
          */
         SalaryHistoryBreakdownOut: {
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
             /** Deduction Subtotal */
             deduction_subtotal: number;
             /** Deductions */
@@ -28678,6 +28785,8 @@ export interface components {
             separate_subtotal: number;
             /** Separate Transfer */
             separate_transfer: components["schemas"]["SalaryHistoryLineOut"][];
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
         };
         /**
          * SalaryHistoryItemOut
@@ -28690,6 +28799,8 @@ export interface components {
             attendance_deduction: number;
             /** Base Salary */
             base_salary: number;
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
             /** Gross Salary */
             gross_salary: number;
             /** Health Insurance */
@@ -28719,6 +28830,8 @@ export interface components {
             total_deduction: number;
             /** Total Deductions */
             total_deductions: number;
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
             /** Year */
             year: number;
         };
@@ -29158,6 +29271,11 @@ export interface components {
          *     `captured_at` 由 service 用 ``.isoformat()`` 轉成 str；無 tz 處理交由 service。
          */
         SalarySnapshotSummaryOut: {
+            /**
+             * Base Transfer Amount
+             * @default 0
+             */
+            base_transfer_amount: number;
             /** Captured At */
             captured_at?: string | null;
             /** Captured By */
@@ -29185,6 +29303,11 @@ export interface components {
             snapshot_type: string;
             /** Source Version */
             source_version?: number | null;
+            /**
+             * Unused Leave Payout
+             * @default 0
+             */
+            unused_leave_payout: number;
         };
         /**
          * ScheduleDayItem
@@ -31719,7 +31842,7 @@ export interface components {
         };
         /**
          * TimelineItemOut
-         * @description 單筆時間軸項目（十種來源共用信封 shape）。
+         * @description 單筆時間軸項目（九種來源共用信封 shape）。
          */
         TimelineItemOut: {
             /** Extra */
@@ -32132,31 +32255,6 @@ export interface components {
             message: string;
             /** Week Start */
             week_start: string;
-        };
-        /** WorkSampleCreate */
-        WorkSampleCreate: {
-            /** Description */
-            description?: string | null;
-            /** Domain */
-            domain?: string | null;
-            /** Title */
-            title: string;
-            /**
-             * Work Date
-             * Format: date
-             */
-            work_date: string;
-        };
-        /** WorkSampleUpdate */
-        WorkSampleUpdate: {
-            /** Description */
-            description?: string | null;
-            /** Domain */
-            domain?: string | null;
-            /** Title */
-            title?: string | null;
-            /** Work Date */
-            work_date?: string | null;
         };
         /** YearEndCycleCreate */
         YearEndCycleCreate: {
@@ -34902,6 +35000,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PendingRegistrationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rematch_batch_registrations_api_activity_registrations_rematch_batch_post: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingRegistrationRematchBatchResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -43399,40 +43529,6 @@ export interface operations {
             };
         };
     };
-    growth_book_batch_status_api_growth_books_batch_status_get: {
-        parameters: {
-            query: {
-                academic_year: number;
-                classroom_id: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     create_binding_code_api_guardians__guardian_id__binding_code_post: {
         parameters: {
             query?: never;
@@ -48090,8 +48186,6 @@ export interface operations {
     parent_list_photos_api_parent_photos_get: {
         parameters: {
             query: {
-                /** @description work=作品照片；life=其餘生活照（觀察/聯絡簿/成長報告/餵藥） */
-                category?: ("work" | "life") | null;
                 limit?: number;
                 skip?: number;
                 student_id: number;
@@ -48803,6 +48897,305 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_albums_api_portal_class_albums_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    create_album_api_portal_class_albums_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_album_api_portal_class_albums__album_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_album_api_portal_class_albums__album_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_album_api_portal_class_albums__album_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_photos_api_portal_class_albums__album_id__photos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_photos_api_portal_class_albums__album_id__photos_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_photo_api_portal_class_albums__album_id__photos__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: number;
+                attachment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_photo_tags_api_portal_class_albums__album_id__photos_tags_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PhotoTagsPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_album_endpoint_api_portal_class_albums__album_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                album_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_classrooms_api_portal_class_albums_my_classrooms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -55520,85 +55913,10 @@ export interface operations {
             };
         };
     };
-    create_growth_book_api_students__student_id__growth_books_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrowthBookCreatePayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    draft_growth_book_api_students__student_id__growth_books_draft_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GrowthBookDraftPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_growth_reports_api_students__student_id__growth_reports_get: {
         parameters: {
             query?: {
                 limit?: number;
-                report_type?: ("semester" | "yearbook") | null;
                 skip?: number;
             };
             header?: never;
@@ -56629,154 +56947,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudentTimelineOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_work_samples_api_students__student_id__work_samples_get: {
-        parameters: {
-            query?: {
-                date_from?: string | null;
-                date_to?: string | null;
-                domain?: string | null;
-                limit?: number;
-                skip?: number;
-            };
-            header?: never;
-            path: {
-                student_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_work_sample_api_students__student_id__work_samples_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkSampleCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_work_sample_api_students__student_id__work_samples__ws_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_id: number;
-                ws_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_work_sample_api_students__student_id__work_samples__ws_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_id: number;
-                ws_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["WorkSampleUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
                 };
             };
             /** @description Validation Error */

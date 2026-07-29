@@ -102,7 +102,8 @@ export function useRegistrationEditSave({
   })
 
   // 估算修改後課程狀態 — 與後端 _attach_courses 對齊：刪後重插時依「現有名額」決定。
-  // 當課程額滿（availability===0）且本生原本已 enrolled/promoted_pending 時，
+  // 當課程額滿（availability===0）且本生原本已 enrolled/promoted_pending/
+  // pending_review 時，
   // 後端 update 排除本生自己重新計算，本生座位必然保留 → 估為 enrolled（修 P2 bug）。
   // availability[name]：>0 有名額（enrolled）、=0 無名額但開候補（依本生原狀態判定）、<0 已滿不開候補。
   function estimatedCourseStatus(courseName: string): string {
@@ -114,8 +115,8 @@ export function useRegistrationEditSave({
   // 滿額且不開放候補（availability===-1）的課程鎖定（修 P2）：
   // 後端 _attach_courses 對「滿額且 allow_waitlist=false」fail-closed raise 400，
   // 純前端契約缺口。此處 disable checkbox + 標示，避免家長勾了注定 400 的課。
-  // **保留本生既有選擇例外**：本生原 enrolled/promoted_pending 的課後端 update 排除自己、
-  // 座位保留，不可鎖（否則家長一存就被自己原課 400 卡死）。
+  // **保留本生既有選擇例外**：本生原 enrolled/promoted_pending/pending_review
+  // 的課後端 update 排除自己、座位保留，不可鎖（否則家長一存就被自己原課 400 卡死）。
   function courseLocked(courseName: string): boolean {
     const availabilityMap = (availability.value as Record<string, number> | null) ?? {}
     const orig = (queryResult.value?.courses ?? []).find((c) => c.name === courseName)
@@ -123,7 +124,11 @@ export function useRegistrationEditSave({
     // 既有課仍可取消，避免把使用者卡死。
     if (!editorReady.value || availabilityMap[courseName] === undefined) return !orig
     if (availabilityMap[courseName] !== -1) return false
-    if (orig?.status === 'enrolled' || orig?.status === 'promoted_pending') return false
+    if (
+      orig?.status === 'enrolled'
+      || orig?.status === 'promoted_pending'
+      || orig?.status === 'pending_review'
+    ) return false
     return true
   }
 
@@ -148,6 +153,11 @@ export function useRegistrationEditSave({
     // 同時改身分資料觸發 re-match 成功（前端無從預測）。故課程一律不計費，避免零改動
     // 就虛報「需補繳」（P2 code review）。用品與審核狀態無關，照後端仍計費。
     const isPendingReviewReg = queryResult.value.field_state?.identity_editable === true
+      || existingCourses.some(
+        (course) =>
+          course.status === 'pending_review'
+          || course.status === 'pending_review_waitlist',
+      )
     // 既有用品的 snapshot 價 map（物件型保留、舊資料 string 跳過）；編修模式既有品項優先用此價。
     const existingSupplyPrice = buildSupplySnapshotMap(queryResult.value.supplies ?? [])
     // 課程：只算 enrolled；既有課用 snapshot 價（courses[].price），新增課才用目前 option 價。
@@ -162,7 +172,11 @@ export function useRegistrationEditSave({
         if (isPendingReviewReg) return false
         const orig = existingCourses.find((c) => c.name === name)
         // 舊後端未回 field_state 時的容錯：既有 pending_review 課仍以原狀態排除計費。
-        if (orig?.status === 'promoted_pending' || orig?.status === 'pending_review') return false
+        if (
+          orig?.status === 'promoted_pending'
+          || orig?.status === 'pending_review'
+          || orig?.status === 'pending_review_waitlist'
+        ) return false
         return estimatedCourseStatus(name) === 'enrolled'
       },
       resolvePrice: (name) => {
@@ -189,6 +203,9 @@ export function useRegistrationEditSave({
       refundNeeded: wouldOverpay ? paidAmount - newTotal : 0,
       wouldOverpay,
       hasChange: newTotal !== originalTotal,
+      // pending 報名每次更新都可能在後端重跑媒合；一旦媒合成功，課程會依當下
+      // 名額轉 enrolled / waitlist，實際課程費因此只能在審核結果後確定。
+      pricingMayChangeAfterReview: isPendingReviewReg,
     }
   })
 
