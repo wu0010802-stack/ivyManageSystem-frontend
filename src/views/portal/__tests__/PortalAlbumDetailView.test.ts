@@ -78,6 +78,27 @@ describe('PortalAlbumDetailView', () => {
     expect(getAlbum).toHaveBeenCalledTimes(2)
   })
 
+  it('submitUpload 整批請求失敗（網路斷線／500）時顯示錯誤訊息、保留 pendingFiles 不清空、且不拋出 unhandled rejection', async () => {
+    const fileA = new File(['a'], 'a.jpg', { type: 'image/jpeg' })
+    vi.mocked(uploadAlbumPhotos).mockRejectedValue(new Error('network error'))
+
+    const wrapper = mount(PortalAlbumDetailView)
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      pendingFiles: File[]
+      submitUpload: () => Promise<void>
+    }
+
+    vm.pendingFiles.push(fileA)
+
+    await expect(vm.submitUpload()).resolves.toBeUndefined()
+    await flushPromises()
+
+    expect(ElMessage.error).toHaveBeenCalledWith('上傳失敗，請重試')
+    expect(vm.pendingFiles).toEqual([fileA])
+    expect(getAlbum).toHaveBeenCalledTimes(1) // 只有 mount 時的初次載入，失敗不觸發重載
+  })
+
   it('刪除照片呼叫 deleteAlbumPhoto 並重載', async () => {
     vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
     vi.mocked(deleteAlbumPhoto).mockResolvedValue({ data: {} } as never)

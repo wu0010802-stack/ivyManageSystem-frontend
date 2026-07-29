@@ -135,8 +135,8 @@ function handleFileRemove(uploadFile: UploadFile): void {
   pendingFiles.value = pendingFiles.value.filter((f) => f !== uploadFile.raw)
 }
 
-async function handleUpload(files: File[]): Promise<void> {
-  if (files.length === 0) return
+async function handleUpload(files: File[]): Promise<boolean> {
+  if (files.length === 0) return true
   uploading.value = true
   try {
     const formData = new FormData()
@@ -150,15 +150,20 @@ async function handleUpload(files: File[]): Promise<void> {
       ElMessage.success(`已上傳 ${items.length} 張照片`)
     }
     await load()
+    return true
+  } catch {
+    // 整個上傳請求失敗（網路斷線／伺服器 500，非個別檔案失敗）：回報失敗讓 submitUpload 保留 pendingFiles，
+    // 使用者不必重新選檔即可重試（比照 applyTags 的錯誤處理慣例）
+    ElMessage.error('上傳失敗，請重試')
+    return false
   } finally {
     uploading.value = false
   }
 }
 
 async function submitUpload(): Promise<void> {
-  const files = pendingFiles.value
-  pendingFiles.value = []
-  await handleUpload(files)
+  const ok = await handleUpload(pendingFiles.value)
+  if (ok) pendingFiles.value = []
 }
 
 async function removePhoto(photoId: number): Promise<void> {
@@ -260,6 +265,8 @@ onMounted(async () => {
 })
 defineExpose({
   handleUpload,
+  submitUpload,
+  pendingFiles,
   removePhoto,
   toggleSelect,
   selectedIds,
