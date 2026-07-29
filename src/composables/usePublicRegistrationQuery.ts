@@ -1,18 +1,19 @@
-import { reactive, ref, computed, watch } from 'vue'
+import {
+  reactive,
+  ref,
+  computed,
+  watch,
+  getCurrentScope,
+  onScopeDispose,
+} from 'vue'
 import { useRoute } from 'vue-router'
 import { publicQueryRegistration, publicQueryByToken } from '@/api/activityPublic'
+import type { Schema } from '@/api/_generated/typed'
 import { parseLocalISODate, todayTaipeiISO } from '@/utils/format'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
-export interface CourseEntry {
-  name: string
-  status: string
-  waitlist_position?: number | null
-  waitlist_total?: number | null
-  confirm_deadline?: string | null
-  course_id?: number
-  price?: number | string
-}
+export type CourseEntry =
+  Schema<'PublicRegistrationDetailOut'>['courses'][number]
 
 export interface QueryResult {
   id: number
@@ -56,6 +57,17 @@ export interface QueryHydrationGuard {
   credentials: QueryCredentials
 }
 
+// 兩種狀態都集中在候補摘要，但顯示文案必須分流：pending_review_waitlist
+// 尚未取得正式順位，只能提示「候補資格待校方審核」。
+export const WAITLIST_COURSE_STATUSES = [
+  'waitlist',
+  'pending_review_waitlist',
+] as const
+
+export function isWaitlistCourseStatus(status: string): boolean {
+  return (WAITLIST_COURSE_STATUSES as readonly string[]).includes(status)
+}
+
 /**
  * F4（2026-07-12）：從 ActivityPublicQueryView 抽出的「查詢 + 編修草稿」狀態。
  *
@@ -88,6 +100,7 @@ export function usePublicRegistrationQuery({
   const activeQueryCredentials = ref<QueryCredentials | null>(null)
   const searchError = ref('')
   let latestQueryRequestId = 0
+  let disposed = false
   const nameTouched = ref(false)
   const birthdayTouched = ref(false)
   const phoneTouched = ref(false)
@@ -167,6 +180,11 @@ export function usePublicRegistrationQuery({
     if (!queryResult.value) return ''
     const entry = (queryResult.value.courses || []).find((c) => c.name === name)
     if (!entry) return ''
+    // pending_review_waitlist 尚未進入正式候補佇列，後端也不保證有順位；
+    // 即使舊資料殘留 waitlist_position，也不可把它冒充一般候補名次。
+    if (entry.status === 'pending_review_waitlist') {
+      return '候補資格待校方審核'
+    }
     if (entry.status === 'waitlist') {
       return `候補第 ${entry.waitlist_position ?? '?'} 位`
     }
@@ -179,7 +197,9 @@ export function usePublicRegistrationQuery({
   // 候補位次清單：供獨立候補摘要區塊使用（不依賴 options 列表）
   const waitlistCourses = computed(() => {
     if (!queryResult.value) return []
-    return (queryResult.value.courses || []).filter((c) => c.status === 'waitlist')
+    return (queryResult.value.courses || []).filter((c) =>
+      isWaitlistCourseStatus(c.status),
+    )
   })
 
   // field_state 由後端決定。Fallback 預設為「已比對」，保守鎖住班級欄位避免
@@ -308,6 +328,7 @@ export function usePublicRegistrationQuery({
     credentials?: QueryCredentials,
     guard?: QueryHydrationGuard,
   ): boolean {
+    if (disposed) return false
     if (guard && !hydrationGuardStillCurrent(guard)) return false
     queryResult.value = data
     if (credentials) {
@@ -337,10 +358,19 @@ export function usePublicRegistrationQuery({
   // availability 輪詢只起一次（家長可能多次重查，prevent 疊加 interval）
   const availabilityPollingStarted = ref(false)
   function ensureAvailabilityPolling() {
-    if (availabilityPollingStarted.value) return
+    if (disposed || availabilityPollingStarted.value) return
     availabilityPollingStarted.value = true
     refreshAvailability()
     startPolling(30000)
+  }
+
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true
+      // 作廢仍在等待的查詢；Promise 完成後 requestId guard 不會 hydrate。
+      latestQueryRequestId += 1
+      queryLoading.value = false
+    })
   }
 
   // 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
@@ -426,6 +456,7 @@ export function usePublicRegistrationQuery({
     editForm,
     statusBadgeFor,
     waitlistCourses,
+    isWaitlistCourseStatus,
     fieldState,
     classEditable,
     identityEditable,

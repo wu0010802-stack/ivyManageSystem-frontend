@@ -49,8 +49,24 @@
           class="pos-payment__selected-line"
         >
           <span class="pos-payment__selected-dot" />
-          <span class="pos-payment__selected-line-name">{{ c.name }}</span>
-          <span v-if="c.price" class="pos-payment__selected-line-price">{{ formatTWD(c.price) }}</span>
+          <span class="pos-payment__selected-line-name">
+            {{ c.name }}
+            <small v-if="c.status" class="pos-payment__selected-line-status">
+              {{ courseStatusLabel(c.status) }}
+            </small>
+          </span>
+          <span
+            v-if="c.status === 'enrolled' && c.price"
+            class="pos-payment__selected-line-price"
+          >
+            {{ formatTWD(c.price) }}
+          </span>
+          <span
+            v-else-if="c.status && c.status !== 'enrolled'"
+            class="pos-payment__selected-line-price pos-payment__selected-line-price--muted"
+          >
+            未計費
+          </span>
         </div>
         <div
           v-for="(s, i) in selectedItemTyped.supplies"
@@ -148,12 +164,18 @@
 import { computed } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 
+import { COURSE_STATUS_LABEL } from '@/constants/activity'
 import { formatTWD } from '@/constants/pos'
 
 interface SelectedCourse {
   name?: string
   price?: number | string
+  status?: string
   [key: string]: unknown
+}
+
+function courseStatusLabel(status: string): string {
+  return (COURSE_STATUS_LABEL as Record<string, string>)[status] || status
 }
 
 interface SelectedItem {
@@ -316,9 +338,19 @@ function onCheckoutTypeChange(v: string | number | boolean | undefined) {
   flex: 1;
 }
 
+.pos-payment__selected-line-status {
+  margin-left: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
 .pos-payment__selected-line-price {
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+.pos-payment__selected-line-price--muted {
+  color: var(--text-tertiary);
 }
 
 .pos-payment__selected-footer {

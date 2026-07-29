@@ -42,6 +42,8 @@
             v-if="!row.is_read"
             size="small"
             type="primary"
+            :loading="markingReadIds.has(row.id)"
+            :disabled="markingReadIds.has(row.id)"
             @click="handleMarkRead(row)"
           >標記已讀</el-button>
           <el-button v-if="canWrite" size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">刪除</el-button>
@@ -86,7 +88,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 import { getInquiries, markInquiryRead, deleteInquiry, replyInquiry } from '@/api/activity'
@@ -104,6 +106,8 @@ const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 const list = ref<Inquiry[]>([])
 const total = ref(0)
 const deletingId = ref<number | null>(null)
+// 逐列 pending lock：避免慢網路下同一列連點，API 重送且 unread badge 重複遞減。
+const markingReadIds = reactive(new Set<number>())
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
@@ -178,17 +182,30 @@ function onFilterChange() {
 }
 
 async function handleMarkRead(row: Inquiry) {
+  if (row.is_read || markingReadIds.has(row.id)) return
+  markingReadIds.add(row.id)
   try {
     await markInquiryRead(row.id)
-    row.is_read = true
-    // 全量未讀數本地遞減（不重抓 list；下次 fetchList 會以後端為準）
-    if (serverUnreadCount.value != null) {
-      serverUnreadCount.value = Math.max(0, serverUnreadCount.value - 1)
+    // API pending 期間 fetchList 可能已換成新列並帶回最新 unread_count；只更新目前
+    // 清單仍存在且仍未讀的列，避免拿舊 row 再扣一次最新的全量計數。
+    const currentRow = list.value.find((item) => item.id === row.id)
+    if (currentRow && !currentRow.is_read) {
+      currentRow.is_read = true
+      // 全量未讀數本地遞減（不重抓 list；下次 fetchList 會以後端為準）
+      if (serverUnreadCount.value != null) {
+        serverUnreadCount.value = Math.max(0, serverUnreadCount.value - 1)
+      }
+    } else if (!currentRow) {
+      // 切頁／切篩選後本列可能已不在畫面；mutation 成功後重抓目前頁，
+      // 由後端 unread_count 校正頁首 badge，避免沿用 commit 前的舊總數。
+      await fetchList()
     }
     ElMessage.success('已標記為已讀')
     activityStore.fetchSummary({ force: true })
   } catch {
     ElMessage.error('操作失敗')
+  } finally {
+    markingReadIds.delete(row.id)
   }
 }
 

@@ -74,7 +74,7 @@
       <main class="page-body">
         <!-- Registration Time Notice -->
         <div
-          v-if="noticeState"
+          v-if="initState === 'ready' && noticeState"
           class="notice is-visible"
           :class="[noticeState.variant, { 'is-sticky': noticeIsUrgent }]"
           role="status"
@@ -716,12 +716,16 @@ function onPosterLoad() { posterLoaded.value = true }
 const initState = ref('loading')
 const initErrorMessage = ref('')
 const retryingInit = ref(false)
+let disposed = false
 
-async function runInit() {
+async function runInit(): Promise<boolean> {
   try {
     // 一次取回靜態資料（bootstrap，後端 30s 快取）+ 即時名額；6 支 GET 降為 2 支，
     // 削報名開放尖峰對單 worker 後端的請求放大（穩定度稽核 2026-06-23）。
     const [bootRes] = await Promise.all([getPublicBootstrap(), refreshAvailability()])
+    // Vue 不會取消 setup 內已發出的 Promise；離頁後的遲到回應不可再寫 state，
+    // 更不可讓 onMounted / retryInit 的 continuation 重啟 polling。
+    if (disposed) return false
     const b = bootRes.data
     applyOptions({
       courses: b.courses,
@@ -735,10 +739,14 @@ async function runInit() {
     if (classes.value.length === 0) {
       showToast('目前沒有可選班級，請稍後再試或聯絡園方。', 'warning')
     }
+    return true
   } catch (err) {
+    if (disposed) return false
+    stopPolling()
     initState.value = 'error'
     initErrorMessage.value =
       (err as { response?: { data?: { detail?: string }; message?: string }; message?: string })?.response?.data?.detail || (err as Error)?.message || '頁面初始化失敗，請稍後再試。'
+    return false
   }
 }
 
@@ -747,7 +755,7 @@ async function retryInit() {
   retryingInit.value = true
   initState.value = 'loading'
   try {
-    await runInit()
+    if (await runInit()) startPolling()
   } finally {
     retryingInit.value = false
   }
@@ -1030,11 +1038,11 @@ async function handleSubmitRegistration() {
 // resetForm 已抽至 usePublicRegistrationForm（A1-P1）
 
 onMounted(async () => {
-  await runInit()
-  startPolling()
+  if (await runInit()) startPolling()
   // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
 })
 onUnmounted(() => {
+  disposed = true
   stopPolling()
 })
 </script>

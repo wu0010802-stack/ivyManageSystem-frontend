@@ -57,7 +57,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { MATCH_STATUS_LABEL_LONG } from '@/constants/activity'
+import { COURSE_STATUS_LABEL, MATCH_STATUS_LABEL_LONG } from '@/constants/activity'
+import { courseBillingLabel } from '@/utils/activityDisplay'
 
 interface TimelineEvent {
   kind?: string
@@ -200,6 +201,10 @@ const coursesNode = computed((): TimelineNode => {
   const enrolled = courses.filter((c) => c.status === 'enrolled')
   const waiting = courses.filter((c) => c.status === 'waitlist')
   const pendingConfirm = courses.filter((c) => c.status === 'promoted_pending')
+  const pendingReview = courses.filter((c) => c.status === 'pending_review')
+  const pendingReviewWaitlist = courses.filter(
+    (c) => c.status === 'pending_review_waitlist',
+  )
 
   let state = 'done'
   let badge = null
@@ -207,6 +212,17 @@ const coursesNode = computed((): TimelineNode => {
   if (pendingConfirm.length) {
     state = 'warning'
     badge = `${pendingConfirm.length} 門待家長確認`
+    badgeType = 'warning'
+  } else if (pendingReviewWaitlist.length) {
+    state = 'warning'
+    badge = [
+      pendingReview.length ? `${pendingReview.length} 待審核` : null,
+      `${pendingReviewWaitlist.length} 待審核候補`,
+    ].filter(Boolean).join('・')
+    badgeType = 'warning'
+  } else if (pendingReview.length) {
+    state = 'current'
+    badge = `${pendingReview.length} 門待審核`
     badgeType = 'warning'
   } else if (waiting.length && !enrolled.length) {
     state = 'current'
@@ -219,15 +235,13 @@ const coursesNode = computed((): TimelineNode => {
   }
 
   const meta = courses.map((c) => {
-    const tag = c.status === 'enrolled' ? '正式'
-      : c.status === 'waitlist' ? '候補'
-      : c.status === 'promoted_pending' ? '待確認'
-      : c.status
-    const price = c.price ? ` $${c.price}` : ''
+    const tag = c.status === 'promoted_pending' ? '待確認'
+      : (COURSE_STATUS_LABEL as Record<string, string>)[c.status] || c.status
+    const billing = courseBillingLabel(c)
     const deadline = c.status === 'promoted_pending' && c.confirm_deadline
       ? `（截止 ${fmtDate(c.confirm_deadline)}）`
       : ''
-    return `[${tag}] ${c.name}${price}${deadline}`
+    return `[${tag}] ${c.name} ${billing}${deadline}`
   })
 
   return {

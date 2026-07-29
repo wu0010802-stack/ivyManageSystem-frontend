@@ -73,6 +73,60 @@
           />
         </el-form-item>
 
+        <el-divider content-position="left">Email 通知模板</el-divider>
+
+        <section class="template-group">
+          <h3 class="template-group__title">報名成功通知信</h3>
+          <p class="template-hint">
+            可用變數：
+            <code v-for="token in REGISTRATION_EMAIL_PLACEHOLDERS" :key="token">{{ token }}</code>
+          </p>
+          <el-form-item label="信件主旨">
+            <el-input
+              v-model="form.registration_success_email_subject"
+              maxlength="200"
+              show-word-limit
+              placeholder="留空時使用系統預設主旨"
+            />
+          </el-form-item>
+          <el-form-item label="信件內文">
+            <el-input
+              v-model="form.registration_success_email_body"
+              type="textarea"
+              :rows="7"
+              maxlength="10000"
+              show-word-limit
+              placeholder="留空時使用系統預設內文；變數由後端寄信時安全替換"
+            />
+          </el-form-item>
+        </section>
+
+        <section class="template-group">
+          <h3 class="template-group__title">候補轉正通知信</h3>
+          <p class="template-hint">
+            可用變數：
+            <code v-for="token in WAITLIST_EMAIL_PLACEHOLDERS" :key="token">{{ token }}</code>
+          </p>
+          <el-form-item label="信件主旨">
+            <el-input
+              v-model="form.waitlist_promoted_email_subject"
+              maxlength="200"
+              show-word-limit
+              placeholder="留空時使用系統預設主旨"
+            />
+          </el-form-item>
+          <el-form-item label="信件內文">
+            <el-input
+              v-model="form.waitlist_promoted_email_body"
+              type="textarea"
+              :rows="7"
+              maxlength="10000"
+              show-word-limit
+              placeholder="留空時使用系統預設內文；變數由後端寄信時安全替換"
+            />
+          </el-form-item>
+        </section>
+
         <el-divider content-position="left">活動海報</el-divider>
 
         <el-form-item label="目前海報">
@@ -103,8 +157,20 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="handleSave" :loading="saving">
+          <el-button
+            type="primary"
+            @click="handleSave"
+            :loading="saving"
+            :disabled="!settingsLoaded || saving"
+          >
             儲存設定
+          </el-button>
+          <el-button
+            v-if="settingsLoadFailed"
+            :loading="loading"
+            @click="fetchSettings"
+          >
+            重新載入
           </el-button>
         </el-form-item>
       </el-form>
@@ -129,6 +195,7 @@ import {
   updateRegistrationTime,
   uploadActivityPoster,
 } from '@/api/activity'
+import type { ActivityRegistrationSettingsPayload } from '@/api/activity'
 import {
   buildSaveConfirmLines,
   taipeiNowMinuteString,
@@ -144,15 +211,41 @@ interface SettingsForm {
   target_audience: string
   form_card_title: string
   poster_url: string
+  registration_success_email_subject: string
+  registration_success_email_body: string
+  waitlist_promoted_email_subject: string
+  waitlist_promoted_email_body: string
 }
 
 const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+const REGISTRATION_EMAIL_PLACEHOLDERS = [
+  '{{student_name}}',
+  '{{class_name}}',
+  '{{school_year}}',
+  '{{semester}}',
+  '{{course_list}}',
+  '{{supply_list}}',
+  '{{total_amount}}',
+  '{{query_token}}',
+  '{{edit_url}}',
+]
+const WAITLIST_EMAIL_PLACEHOLDERS = [
+  '{{student_name}}',
+  '{{course_name}}',
+  '{{confirm_deadline}}',
+  '{{query_token}}',
+  '{{edit_url}}',
+]
 
 const loading = ref(false)
 const saving = ref(false)
 const uploading = ref(false)
 const savedAt = ref('')
+// 初次 GET 失敗時不可讓預設空表單回寫，否則會把既有模板清成 null，甚至關閉報名。
+// 只有完整載入成功後才開放儲存；失敗時提供同頁重試。
+const settingsLoaded = ref(false)
+const settingsLoadFailed = ref(false)
 
 const form = ref<SettingsForm>({
   is_open: false,
@@ -164,6 +257,10 @@ const form = ref<SettingsForm>({
   target_audience: '',
   form_card_title: '',
   poster_url: '',
+  registration_success_email_subject: '',
+  registration_success_email_body: '',
+  waitlist_promoted_email_subject: '',
+  waitlist_promoted_email_body: '',
 })
 
 const posterBroken = ref(false)
@@ -185,6 +282,8 @@ function onPosterLoadError() {
 
 async function fetchSettings() {
   loading.value = true
+  settingsLoaded.value = false
+  settingsLoadFailed.value = false
   try {
     const res = await getRegistrationTime()
     const d = res.data as Partial<SettingsForm>
@@ -198,13 +297,40 @@ async function fetchSettings() {
       target_audience: d.target_audience || '',
       form_card_title: d.form_card_title || '',
       poster_url: d.poster_url || '',
+      registration_success_email_subject: d.registration_success_email_subject || '',
+      registration_success_email_body: d.registration_success_email_body || '',
+      waitlist_promoted_email_subject: d.waitlist_promoted_email_subject || '',
+      waitlist_promoted_email_body: d.waitlist_promoted_email_body || '',
     }
     posterBroken.value = false
+    settingsLoaded.value = true
   } catch {
+    settingsLoadFailed.value = true
     ElMessage.error('載入設定失敗')
   } finally {
     loading.value = false
   }
+}
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  const detail = (
+    error as { response?: { data?: { detail?: unknown } } }
+  )?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object' && 'msg' in item) {
+          const msg = (item as { msg?: unknown }).msg
+          return typeof msg === 'string' ? msg : ''
+        }
+        return ''
+      })
+      .filter(Boolean)
+    if (messages.length) return messages.join('；')
+  }
+  return fallback
 }
 
 function beforePosterUpload(file: UploadRawFile) {
@@ -229,14 +355,17 @@ async function handlePosterUpload({ file }: { file: UploadRawFile }) {
     posterBroken.value = false
     ElMessage.success('海報已更新')
   } catch (e) {
-    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    ElMessage.error(detail || '上傳失敗')
+    ElMessage.error(apiErrorMessage(e, '上傳失敗'))
   } finally {
     uploading.value = false
   }
 }
 
 async function handleSave() {
+  if (!settingsLoaded.value) {
+    ElMessage.error('設定尚未載入完成，請先重新載入後再儲存')
+    return
+  }
   if (form.value.open_at && form.value.close_at && form.value.close_at <= form.value.open_at) {
     ElMessage.error('截止時間必須晚於開放時間')
     return
@@ -267,7 +396,7 @@ async function handleSave() {
 
   saving.value = true
   try {
-    const payload = {
+    const payload: ActivityRegistrationSettingsPayload = {
       is_open: form.value.is_open,
       open_at: form.value.open_at,
       close_at: form.value.close_at,
@@ -277,13 +406,20 @@ async function handleSave() {
       target_audience: form.value.target_audience.trim() || null,
       form_card_title: form.value.form_card_title.trim() || null,
       poster_url: form.value.poster_url || null,
+      registration_success_email_subject:
+        form.value.registration_success_email_subject.trim() || null,
+      registration_success_email_body:
+        form.value.registration_success_email_body.trim() || null,
+      waitlist_promoted_email_subject:
+        form.value.waitlist_promoted_email_subject.trim() || null,
+      waitlist_promoted_email_body:
+        form.value.waitlist_promoted_email_body.trim() || null,
     }
     await updateRegistrationTime(payload)
     ElMessage.success('設定已儲存')
     savedAt.value = new Date().toLocaleString('zh-TW')
   } catch (e) {
-    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    ElMessage.error(detail || '儲存失敗')
+    ElMessage.error(apiErrorMessage(e, '儲存失敗'))
   } finally {
     saving.value = false
   }
@@ -318,5 +454,27 @@ onMounted(fetchSettings)
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.template-group {
+  margin-bottom: 18px;
+}
+.template-group__title {
+  margin: 0 0 6px 120px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.template-hint {
+  margin: 0 0 12px 120px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.8;
+}
+.template-hint code {
+  display: inline-block;
+  margin: 2px 4px 2px 0;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
 }
 </style>

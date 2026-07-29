@@ -9,6 +9,7 @@ vi.mock('@/parent/api/activity', () => ({
   myRegistrations: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
   registerCourses: vi.fn(),
   confirmPromotion: vi.fn(),
+  declinePromotion: vi.fn(),
   getRegistrationTime: vi.fn(() => Promise.resolve({ data: { is_open: true } })),
 }))
 vi.mock('@/parent/utils/toast', () => ({

@@ -25,6 +25,11 @@ export const confirmPromotion = (registrationId: number, courseId: number) =>
     course_id: courseId,
   })
 
+export const declinePromotion = (registrationId: number, courseId: number) =>
+  api.post(`/parent/activity/registrations/${registrationId}/decline-promotion`, {
+    course_id: courseId,
+  })
+
 export const getRegistrationPayments = (registrationId: number) =>
   api.get(`/parent/activity/registrations/${registrationId}/payments`)
 

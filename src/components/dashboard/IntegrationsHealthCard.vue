@@ -47,24 +47,24 @@
         </li>
       </ul>
 
-      <!-- Supabase -->
+      <!-- Object storage (目前後端由 R2 breaker 提供) -->
       <div class="integration-row">
-        <span class="integration-name">Supabase 儲存</span>
-        <el-tag :type="breakerTagType(data.supabase.breaker)" size="small" effect="dark">
-          {{ breakerLabel(data.supabase.breaker) }}
+        <span class="integration-name">檔案儲存</span>
+        <el-tag :type="breakerTagType(data.storage.breaker)" size="small" effect="dark">
+          {{ breakerLabel(data.storage.breaker) }}
         </el-tag>
       </div>
       <ul
-        v-if="data.supabase.pending_uploads > 0 || data.supabase.final_failed > 0"
+        v-if="data.storage.pending_uploads > 0 || data.storage.final_failed > 0"
         class="integration-detail"
       >
-        <li v-if="data.supabase.pending_uploads > 0">
+        <li v-if="data.storage.pending_uploads > 0">
           <span>待同步上傳</span>
-          <el-tag type="warning" size="small">{{ data.supabase.pending_uploads }} 筆</el-tag>
+          <el-tag type="warning" size="small">{{ data.storage.pending_uploads }} 筆</el-tag>
         </li>
-        <li v-if="data.supabase.final_failed > 0">
+        <li v-if="data.storage.final_failed > 0">
           <span>同步失敗（已停止重試）</span>
-          <el-tag type="danger" size="small">{{ data.supabase.final_failed }} 筆</el-tag>
+          <el-tag type="danger" size="small">{{ data.storage.final_failed }} 筆</el-tag>
         </li>
       </ul>
 
@@ -116,13 +116,13 @@ const hasAnyIssue = computed(() => {
   const d = data.value
   return (
     d.line.breaker !== 'closed' ||
-    d.supabase.breaker !== 'closed' ||
+    d.storage.breaker !== 'closed' ||
     d.external_http.breaker !== 'closed' ||
     d.line.token_healthy === false ||
     d.line.retry_pending > 0 ||
     d.line.retry_final_failed_24h > 0 ||
-    d.supabase.pending_uploads > 0 ||
-    d.supabase.final_failed > 0
+    d.storage.pending_uploads > 0 ||
+    d.storage.final_failed > 0
   )
 })
 </script>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
+import { COURSE_STATUS_LABEL, COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
 import { formatActivityDate } from '@/utils/format'
 
 interface Registration { class_name?: string; [key: string]: unknown }
@@ -27,6 +27,10 @@ const registrations = computed(() => {
 })
 const classrooms = computed(() => props.data?.classrooms || [])
 const showClassTabs = computed(() => classrooms.value.length > 1)
+
+function courseStatusLabel(status: string): string {
+  return (COURSE_STATUS_LABEL as Record<string, string>)[status] || status
+}
 </script>
 
 <template>
@@ -95,7 +99,11 @@ const showClassTabs = computed(() => classrooms.value.length > 1)
             style="margin: 2px"
           >
             {{ c.course_name }}
-            <span v-if="c.status === 'waitlist'">（候補 #{{ c.waitlist_position }}）</span>
+            <span>
+              （{{ courseStatusLabel(c.status) }}<template
+                v-if="c.status === 'waitlist' && c.waitlist_position"
+              > #{{ c.waitlist_position }}</template>）
+            </span>
           </el-tag>
         </template>
       </el-table-column>

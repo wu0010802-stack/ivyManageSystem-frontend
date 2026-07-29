@@ -179,7 +179,10 @@
 
     <!-- 批次操作浮動工具列（依所選群組的報名狀態切換動作）-->
     <transition name="batch-bar">
-      <div v-if="selectedRows.length > 0" class="batch-toolbar">
+      <div
+        v-if="selectedRows.length > 0 && !loading && selectionBelongsToCurrentTerm"
+        class="batch-toolbar"
+      >
         <span class="batch-info">已選 {{ selectedRows.length }} 筆 · 狀態：{{ selectionCategoryLabel }}</span>
 
         <!-- 待審核分類：批量審核（含批量通過的兩條路徑）+ 逐筆精靈 -->
@@ -210,9 +213,18 @@
         <el-skeleton :rows="6" animated />
       </div>
       <div v-else-if="detail" class="detail-body">
+        <el-alert
+          v-if="isDetailReadOnly"
+          data-test="inactive-detail-alert"
+          :title="inactiveDetailMessage"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 12px"
+        />
         <div class="section-header">
           <span class="section-header-title">基本資料</span>
-          <el-button v-if="canWrite" size="small" type="primary" link @click="openEditBasicDialog">
+          <el-button v-if="canMutateDetail" size="small" type="primary" link @click="openEditBasicDialog">
             <el-icon><Edit /></el-icon>編輯
           </el-button>
         </div>
@@ -284,7 +296,7 @@
                 軟刪原因：{{ rec.void_reason }}
               </span>
               <el-button
-                v-if="canVoidPayment && !rec.is_voided"
+                v-if="canVoidPayment && canMutateDetail && !rec.is_voided"
                 link
                 type="danger"
                 size="small"
@@ -295,22 +307,26 @@
           </div>
           <div v-else class="no-payment-hint">尚無繳費記錄</div>
 
-          <div v-if="canWrite" class="payment-actions">
+          <div v-if="canMutateDetail" class="payment-actions">
             <el-button size="small" type="success" @click="openPaymentDialog('payment')" :disabled="loadingPayments || paymentLoadFailed">新增繳費</el-button>
             <el-button size="small" type="danger" @click="openPaymentDialog('refund')" :disabled="!paymentInfo.paid_amount || loadingPayments || paymentLoadFailed">新增退費</el-button>
           </div>
         </div>
 
         <div class="section-header">
-          <span class="section-header-title">課程（總計：${{ detail.total_amount?.toLocaleString() }}）</span>
-          <el-button v-if="canWrite" size="small" type="primary" link @click="openAddCourseDialog">
+          <span class="section-header-title">課程</span>
+          <el-button v-if="canMutateDetail" size="small" type="primary" link @click="openAddCourseDialog">
             <el-icon><Plus /></el-icon>新增課程
           </el-button>
         </div>
         <el-table :data="detail.courses" size="small" border>
           <el-table-column label="課程名稱" prop="name" />
           <el-table-column label="金額" prop="price" width="80" align="right">
-            <template #default="{ row }">{{ row.price ? `$${row.price}` : '-' }}</template>
+            <template #default="{ row }">
+              <span :data-test="`course-billing-${row.course_id}`">
+                {{ courseBillingLabel(row) }}
+              </span>
+            </template>
           </el-table-column>
           <el-table-column label="狀態" width="150" align="center">
             <template #default="{ row }">
@@ -325,7 +341,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column v-if="canWrite" label="操作" width="160" align="center">
+          <el-table-column v-if="canMutateDetail" label="操作" width="160" align="center">
             <template #default="{ row }">
               <el-button
                 v-if="row.status === 'waitlist' || row.status === 'promoted_pending'"
@@ -348,7 +364,7 @@
 
         <div class="section-header">
           <span class="section-header-title">用品</span>
-          <el-button v-if="canWrite" size="small" type="primary" link @click="openAddSupplyDialog">
+          <el-button v-if="canMutateDetail" size="small" type="primary" link @click="openAddSupplyDialog">
             <el-icon><Plus /></el-icon>新增用品
           </el-button>
         </div>
@@ -357,7 +373,7 @@
           <el-table-column label="金額" prop="price" width="80" align="right">
             <template #default="{ row }">{{ row.price ? `$${row.price}` : '-' }}</template>
           </el-table-column>
-          <el-table-column v-if="canWrite" label="操作" width="80" align="center">
+          <el-table-column v-if="canMutateDetail" label="操作" width="80" align="center">
             <template #default="{ row }">
               <el-button
                 size="small"
@@ -371,9 +387,12 @@
         </el-table>
 
         <div class="section-title">備註</div>
-        <div class="remark-row">
+        <div v-if="canMutateDetail" class="remark-row">
           <el-input v-model="remarkText" type="textarea" :rows="2" />
           <el-button size="small" @click="saveRemark" :loading="savingRemark">儲存備註</el-button>
+        </div>
+        <div v-else data-test="readonly-remark" class="readonly-remark">
+          {{ detail.remark || '—' }}
         </div>
 
         <!-- 內部審核註記：後端審核工作流寫入的軌跡文字（拒絕/強行收件/復原等），唯讀無編輯入口 -->
@@ -398,7 +417,7 @@
 
     <!-- 新增繳費/退費 Dialog -->
     <RegistrationPaymentDialog
-      v-if="paymentDialogVisible"
+      v-if="paymentDialogVisible && canMutateDetail"
       v-model="paymentDialogVisible"
       :type="paymentDialogType"
       :registration-id="detail?.id"
@@ -419,7 +438,7 @@
     />
 
     <RegistrationEditBasicDialog
-      v-if="editBasicDialogVisible"
+      v-if="editBasicDialogVisible && canMutateDetail"
       v-model="editBasicDialogVisible"
       :registration-id="detail?.id"
       :initial="detail || {}"
@@ -429,7 +448,7 @@
 
     <!-- 新增課程 Dialog -->
     <RegistrationAddCourseDialog
-      v-if="addCourseDialogVisible"
+      v-if="addCourseDialogVisible && canMutateDetail"
       v-model="addCourseDialogVisible"
       :registration-id="detail?.id"
       :course-options="courseOptions"
@@ -438,7 +457,7 @@
     />
 
     <RegistrationAddSupplyDialog
-      v-if="addSupplyDialogVisible"
+      v-if="addSupplyDialogVisible && canMutateDetail"
       v-model="addSupplyDialogVisible"
       :registration-id="detail?.id"
       :school-year="termStore.school_year"
@@ -499,6 +518,7 @@ import { useActivityRegistration } from '@/composables/useActivityRegistration'
 import { useActivityReview, type ReviewRow } from '@/composables/useActivityReview'
 import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBanner'
 import { formatActivityDate } from '@/utils/format'
+import { courseBillingLabel as formatCourseBillingLabel } from '@/utils/activityDisplay'
 import { hasPermission } from '@/utils/auth'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 // 6 個彈窗/時間軸都綁在 v-model/drawer 後，互動才顯示 → 改 async 拆出主 chunk，加速首載。
@@ -521,11 +541,15 @@ interface PaymentInfo { total_amount?: number; paid_amount?: number; payment_sta
 interface RegistrationCourse { id: number; course_id: number; name: string; price?: number; status: string; confirm_deadline?: string }
 interface RegistrationSupply { id: number; supply_id: number; name?: string; price?: number }
 interface RegistrationDetail {
-  id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string; query_token?: string | null
+  id: number; is_active?: boolean; match_status?: string; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string; query_token?: string | null
   total_amount?: number; courses?: RegistrationCourse[]; supplies?: RegistrationSupply[]; changes?: Record<string, unknown>[]
   // internal_note = 內部審核軌跡（僅 admin payload 回傳，公開查詢端點不含此欄）
   internal_note?: string
   [key: string]: unknown
+}
+
+function courseBillingLabel(course: RegistrationCourse): string {
+  return formatCourseBillingLabel(course)
 }
 
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
@@ -603,6 +627,12 @@ watch(
 // 選取的 row 由 view 持有（批量勾選需依 match_status 分群）；selectedIds 供批量繳費端點。
 const selectedRows = ref<RegistrationRow[]>([])
 const selectedIds = computed(() => selectedRows.value.map((r) => r.id))
+const currentTermKey = computed(() => `${termStore.school_year}-${termStore.semester}`)
+// 勾選當下綁定學期；所有批次 mutation 送出前再次核對，避免切學期後舊 id 被操作。
+const selectionTermKey = ref<string | null>(null)
+const selectionBelongsToCurrentTerm = computed(
+  () => selectionTermKey.value !== null && selectionTermKey.value === currentTermKey.value,
+)
 // Cast composable's unknown[] to the specific types expected by child components
 interface CourseOptionItem { id: number | string; name: string; price?: number | string; remaining?: number; capacity?: number; [key: string]: unknown }
 const courseOptions = _courseOptions as import('vue').Ref<CourseOptionItem[]>
@@ -637,6 +667,24 @@ const regTimeBanner = computed(() => {
 
 const drawerVisible = ref(false)
 const detail = ref<RegistrationDetail | null>(null)
+const isDetailReadOnly = computed(
+  () => detail.value?.is_active === false || detail.value?.match_status === 'rejected',
+)
+const canMutateDetail = computed(
+  () => canWrite.value && detail.value !== null && !isDetailReadOnly.value,
+)
+const inactiveDetailMessage = computed(() =>
+  detail.value?.match_status === 'rejected'
+    ? '此報名已拒絕，以下為唯讀歷史詳情；如需恢復請使用列表的「復原」動作'
+    : '此報名已撤銷，以下為唯讀歷史詳情',
+)
+
+function ensureMutableDetail(): boolean {
+  if (canMutateDetail.value) return true
+  ElMessage.warning('此報名已撤銷或拒絕，詳情僅供查閱')
+  return false
+}
+
 const loadingDetail = ref(false)
 // Why: 防止使用者快速點兩列、或關閉 drawer 後 in-flight 請求覆蓋 detail/paymentInfo
 const drawerSeq = ref(0)
@@ -710,6 +758,7 @@ async function loadPayments(registrationId: number, seq = drawerSeq.value) {
 }
 
 function openPaymentDialog(type: 'payment' | 'refund') {
+  if (!ensureMutableDetail()) return
   // Why: 繳費資訊未載入完成時，computeOwed 會用到 paid_amount=0 預填全額，
   // 使用者誤送出將造成超繳。
   if (loadingPayments.value) {
@@ -735,6 +784,7 @@ async function onPaymentSubmitted() {
 }
 
 async function handleDeletePayment(rec: PaymentRecord) {
+  if (!ensureMutableDetail()) return
   // 軟刪除（voiding）：需具備「才藝課收款簽核」權限，且強制填寫原因（≥5 字）
   // 原紀錄會保留供稽核；paid_amount 會重新計算排除已 voided 的紀錄。
   let reasonResult: { value: string }
@@ -776,7 +826,7 @@ async function handleDeletePayment(rec: PaymentRecord) {
 }
 
 async function saveRemark() {
-  if (!detail.value) return
+  if (!detail.value || !ensureMutableDetail()) return
   const targetId = detail.value.id
   const text = remarkText.value
   savingRemark.value = true
@@ -793,7 +843,7 @@ async function saveRemark() {
 }
 
 async function handlePromote(course: RegistrationCourse) {
-  if (!detail.value) return
+  if (!detail.value || !ensureMutableDetail()) return
   const targetId = detail.value.id
   const seq = drawerSeq.value
   savingPromote.value = true
@@ -817,7 +867,7 @@ async function handlePromote(course: RegistrationCourse) {
 }
 
 async function handleWithdrawCourse(course: RegistrationCourse) {
-  if (!detail.value) return
+  if (!detail.value || !ensureMutableDetail()) return
   try {
     await ElMessageBox.confirm(
       `確定要退出課程「${course.name}」？退課後將無法復原，若為正式報名則自動升位候補。`,
@@ -948,13 +998,25 @@ const selectionCategoryLabel = computed(() =>
   selectionCategory.value ? SELECTION_CATEGORY_LABEL[selectionCategory.value] : '—'
 )
 function isRowSelectable(row: RegistrationRow): boolean {
+  if (loading.value) return false
   return selectionCategory.value === null || selectionCategoryOf(row.match_status as string | undefined) === selectionCategory.value
 }
 let clamping = false
 function handleSelectionChange(rows: RegistrationRow[]) {
   if (clamping) return
+  if (loading.value) {
+    selectedRows.value = []
+    selectionTermKey.value = null
+    return
+  }
   if (rows.length === 0) {
     selectedRows.value = []
+    selectionTermKey.value = null
+    return
+  }
+  // 若 table 在切學期 DOM 更新前送出一個舊 selection-change event，直接丟棄。
+  if (selectionTermKey.value && selectionTermKey.value !== currentTermKey.value) {
+    clearSelection()
     return
   }
   const anchorCategory = selectionCategoryOf(rows[0].match_status as string | undefined)
@@ -962,6 +1024,7 @@ function handleSelectionChange(rows: RegistrationRow[]) {
   if (sameGroup.length !== rows.length) {
     // 只會來自表頭全選（逐一勾選時其他分類已 disabled）→ 收斂到錨定分類
     selectedRows.value = sameGroup
+    selectionTermKey.value = currentTermKey.value
     clamping = true
     nextTick(() => {
       tableRef.value?.clearSelection()
@@ -971,17 +1034,41 @@ function handleSelectionChange(rows: RegistrationRow[]) {
     })
   } else {
     selectedRows.value = sameGroup
+    selectionTermKey.value = currentTermKey.value
   }
 }
 
 function clearSelection() {
   tableRef.value?.clearSelection()
   selectedRows.value = []
+  selectionTermKey.value = null
+}
+
+function ensureCurrentTermSelection(): boolean {
+  // 直接讀 store（不只依賴 computed cache），讓 mutation 邊界永遠以呼叫當下學期判斷。
+  const liveTermKey = `${termStore.school_year}-${termStore.semester}`
+  if (
+    loading.value
+    || selectedRows.value.length === 0
+    || selectionTermKey.value !== liveTermKey
+  ) {
+    clearSelection()
+    ElMessage.warning('學期或清單已變更，請重新勾選後再操作')
+    return false
+  }
+  return true
 }
 
 async function handleBatchMarkPaid(isPaid: boolean) {
+  if (!ensureCurrentTermSelection()) return
   await batchMarkPaid(isPaid, selectedIds.value, () => { clearSelection() })
 }
+
+// 切學期當下先撤銷 view 內的勾選；列表本身由 useActivityRegistration.fetchList
+// 在新請求開始時同步清空，兩層共同 fail-closed。
+watch(currentTermKey, () => {
+  clearSelection()
+})
 
 // ── 審核工作流（單列 + 批量 + 逐筆精靈）：集中於 useActivityReview ──
 const review = useActivityReview({
@@ -1012,13 +1099,25 @@ function canReject(row: RegistrationRow): boolean {
 
 // 批量列動作（以 selectedRows 為輸入；cast 到 ReviewRow）
 const selectedReviewRows = computed<ReviewRow[]>(() => selectedRows.value as unknown as ReviewRow[])
-function onBatchRematch() { handleBatchRematch(selectedReviewRows.value) }
-function onBatchForceAccept() { handleBatchForceAccept(selectedReviewRows.value) }
-function onBatchReject() { handleBatchReject(selectedReviewRows.value) }
-function onBatchRestore() { handleBatchRestore(selectedReviewRows.value) }
+function onBatchRematch() {
+  if (ensureCurrentTermSelection()) handleBatchRematch(selectedReviewRows.value)
+}
+function onBatchForceAccept() {
+  if (ensureCurrentTermSelection()) handleBatchForceAccept(selectedReviewRows.value)
+}
+function onBatchReject() {
+  if (ensureCurrentTermSelection()) handleBatchReject(selectedReviewRows.value)
+}
+function onBatchRestore() {
+  if (ensureCurrentTermSelection()) handleBatchRestore(selectedReviewRows.value)
+}
 // 精靈首次開啟後保持掛載（async chunk 只載一次），讓 el-dialog @close 能正常結算刷新。
 const wizardEverOpened = ref(false)
-function onOpenWizard() { wizardEverOpened.value = true; openWizard(selectedReviewRows.value) }
+function onOpenWizard() {
+  if (!ensureCurrentTermSelection()) return
+  wizardEverOpened.value = true
+  openWizard(selectedReviewRows.value)
+}
 
 async function handleExport() {
   exporting.value = true
@@ -1026,6 +1125,11 @@ async function handleExport() {
     const res = await exportRegistrations({
       search: searchText.value || undefined,
       payment_status: paymentFilter.value || undefined,
+      match_status: matchStatusFilter.value || undefined,
+      include_inactive:
+        (!matchStatusFilter.value || matchStatusFilter.value === 'rejected')
+          ? true
+          : undefined,
       course_id: courseFilter.value || undefined,
       classroom_name: classroomFilter.value || undefined,
       // 帶上目前選取學期，避免匯出傾印所有 active 學期（與列表查詢一致）
@@ -1062,7 +1166,7 @@ async function onRegistrationCreated() {
 const editBasicDialogVisible = ref(false)
 
 function openEditBasicDialog() {
-  if (!detail.value) return
+  if (!detail.value || !ensureMutableDetail()) return
   editBasicDialogVisible.value = true
 }
 
@@ -1077,6 +1181,7 @@ async function onEditBasicSaved() {
 const addCourseDialogVisible = ref(false)
 
 async function openAddCourseDialog() {
+  if (!ensureMutableDetail()) return
   addCourseDialogVisible.value = true
   if (courseOptions.value.length === 0) await loadOptions()
 }
@@ -1100,6 +1205,7 @@ const addSupplyDialogVisible = ref(false)
 const deletingSupplyId = ref<number | null>(null)
 
 function openAddSupplyDialog() {
+  if (!ensureMutableDetail()) return
   addSupplyDialogVisible.value = true
 }
 
@@ -1117,7 +1223,7 @@ async function onSupplyAdded() {
 }
 
 async function handleRemoveSupply(row: RegistrationSupply) {
-  if (!detail.value) return
+  if (!detail.value || !ensureMutableDetail()) return
   try {
     await ElMessageBox.confirm(
       `確定要移除用品「${row.name}」？`,
@@ -1239,6 +1345,14 @@ onMounted(async () => {
 .section-header-title { font-weight: 600; font-size: 14px; color: var(--neutral-700); }
 .section-header :deep(.el-button--small) { gap: 4px; }
 .remark-row { display: flex; gap: 8px; align-items: flex-start; }
+.readonly-remark {
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
 .internal-note-box {
   white-space: pre-wrap;
   background: var(--bg-color);

@@ -88,6 +88,10 @@ export function useActivityRegistration() {
     syncToQuery()
     const seq = ++fetchSeq.value
     loading.value = true
+    // fail-closed：切學期／換篩選後立即撤下舊列表。若新請求失敗，維持空資料，
+    // 不讓 view 的勾選與批次工具繼續指向上一學期的 registration id。
+    list.value = []
+    total.value = 0
     try {
       const res = await getRegistrations({
         skip: (page.value - 1) * pageSize.value,

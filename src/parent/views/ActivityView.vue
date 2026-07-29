@@ -14,6 +14,7 @@ import {
   myRegistrations,
   registerCourses,
   confirmPromotion,
+  declinePromotion,
   getActivityBootstrap,
   getUpcomingSessions,
 } from '../api/activity'
@@ -24,6 +25,7 @@ import {
   buildConflictCourseIds,
   buildFormConflictCourseIds,
   countUpcomingWithinDays,
+  OCCUPYING_STATUSES,
   type UpcomingSessionLike,
 } from '../utils/activitySchedule'
 import { todayISO } from '@/utils/format'
@@ -107,13 +109,15 @@ const COURSE_STATUS = {
   enrolled: { label: '已報名', color: { bg: 'var(--brand-primary-soft)', color: 'var(--m3-primary, var(--pt-success-text))' } },
   waitlist: { label: '候補中', color: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' } },
   promoted_pending: { label: '待您確認', color: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' } },
+  pending_review: { label: '待審核', color: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' } },
+  pending_review_waitlist: { label: '待審核候補', color: { bg: 'var(--color-info-soft)', color: 'var(--pt-info-text)' } },
 }
 
 // hero stats
 const activeRegistrations = computed(() =>
   filteredRegs.value.filter((r) =>
     (r.courses || []).some(
-      (c) => c.status === 'enrolled' || c.status === 'confirmed',
+      (c) => OCCUPYING_STATUSES.includes(c.status),
     ),
   ).length,
 )
@@ -175,66 +179,71 @@ const formConflictIds = computed(() =>
   ),
 )
 
-async function fetchMy() {
-  regsLoading.value = true
-  try {
-    const { data } = await myRegistrations()
-    myRegs.value = data?.items || []
-  } catch (err: unknown) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
-  } finally {
-    regsLoading.value = false
-  }
+// Bootstrap 與 mutation 後的三支局部刷新共用同一個 epoch。只要較新的快照開始，
+// 任何較早請求即使最後才回來，也只能結束自己的 Promise，不能再寫入畫面狀態。
+let activitySnapshotEpoch = 0
+function beginActivitySnapshot(): number {
+  activitySnapshotEpoch += 1
+  return activitySnapshotEpoch
+}
+function isCurrentActivitySnapshot(epoch: number): boolean {
+  return epoch === activitySnapshotEpoch
 }
 
-async function fetchCourses() {
+async function refreshActivitySnapshot() {
+  const epoch = beginActivitySnapshot()
+  regsLoading.value = true
   coursesLoading.value = true
   try {
-    const { data } = await listCourses()
-    courses.value = data?.items || []
+    // 三支先只取資料，不各自落地；任一失敗就保留整份舊快照，避免出現
+    // 「新報名狀態 + 舊課程容量」的永久混合畫面。
+    const [regsResponse, coursesResponse, upcomingResponse] = await Promise.all([
+      myRegistrations(),
+      listCourses(),
+      getUpcomingSessions(),
+    ])
+    if (!isCurrentActivitySnapshot(epoch)) return
+    myRegs.value = regsResponse.data?.items || []
+    courses.value = coursesResponse.data?.items || []
+    upcomingSessions.value = upcomingResponse.data?.items || []
   } catch (err: unknown) {
+    if (!isCurrentActivitySnapshot(epoch)) return
     const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    toast.error(String(e?.displayMessage || '重新整理才藝資料失敗'))
   } finally {
-    coursesLoading.value = false
-  }
-}
-
-// Low（2026-06-24 code review）：報名/轉正後 hero 的「即將開課」（upcomingSessions）
-// 也要刷新——剛報名/轉正的課要立即出現在即將開課與下次上課。原本局部刷新只走
-// fetchMy/fetchCourses 會漏掉這塊。獨立輕量 GET，不重抓 registration_time。
-async function fetchUpcoming() {
-  try {
-    const { data } = await getUpcomingSessions()
-    upcomingSessions.value = data?.items || []
-  } catch (err: unknown) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    if (isCurrentActivitySnapshot(epoch)) {
+      regsLoading.value = false
+      coursesLoading.value = false
+    }
   }
 }
 
 // 首屏聚合：courses + my-registrations + upcoming-sessions + registration-time
 // 一次取回（取代原本 4 支並行 GET，削報名尖峰對單 worker 後端的請求放大）。
-// 報名/轉正後的局部刷新走 fetchMy/fetchCourses/fetchUpcoming（不重抓 registration_time）。
+// 報名/轉正後的局部刷新走 refreshActivitySnapshot（不重抓 registration_time）。
 async function fetchBootstrap() {
+  const epoch = beginActivitySnapshot()
   regsLoading.value = true
   coursesLoading.value = true
   loadError.value = false
   try {
     const { data } = await getActivityBootstrap()
+    if (!isCurrentActivitySnapshot(epoch)) return
     myRegs.value = data?.registrations?.items || []
     courses.value = data?.courses?.items || []
     upcomingSessions.value = data?.upcoming_sessions?.items || []
     if (data?.registration_time) regTimeInfo.value = data.registration_time
     loadError.value = false
   } catch (err: unknown) {
+    if (!isCurrentActivitySnapshot(epoch)) return
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
     loadError.value = true
   } finally {
-    regsLoading.value = false
-    coursesLoading.value = false
+    if (isCurrentActivitySnapshot(epoch)) {
+      regsLoading.value = false
+      coursesLoading.value = false
+    }
   }
 }
 
@@ -295,8 +304,9 @@ async function submitRegister() {
     toast.success('報名成功')
     showRegister.value = false
     tab.value = 'my'
-    // 報名會改變課程容量/額滿狀態 + hero 即將開課 → 並行重抓（pullRefresh 同 pattern）
-    Promise.all([fetchMy(), fetchCourses(), fetchUpcoming()])
+    // 報名會改變課程容量/額滿狀態 + hero 即將開課；await 同一 epoch 的完整
+    // 快照後才解除 submitting，避免舊 bootstrap 回寫或按鈕提早恢復。
+    await refreshActivitySnapshot()
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '報名失敗'))
@@ -329,10 +339,31 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
     // 轉正會佔用容量 + 影響 hero 即將開課 → 並行重抓課程清單與 upcoming sessions。
     // 稽核 finding 4：await 刷新後才在 finally 解鎖，避免慢網路下舊「確認」按鈕在
     // 列表尚未更新前提早恢復、二次點擊命中已轉正課程得到 409。
-    await Promise.all([fetchMy(), fetchCourses(), fetchUpcoming()])
+    await refreshActivitySnapshot()
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '確認失敗'))
+  } finally {
+    confirmingKey.value = null
+  }
+}
+
+async function onDeclinePromotion(reg: Registration, rc: RegCourse) {
+  if (confirmingKey.value) return
+  if (!window.confirm(`確定放棄「${rc.course_name || '此課程'}」的遞補名額？放棄後無法復原。`)) {
+    return
+  }
+
+  const key = `${reg.id}:${rc.course_id}`
+  confirmingKey.value = key
+  try {
+    await declinePromotion(reg.id, rc.course_id)
+    toast.success('已放棄遞補名額')
+    // 放棄後名額會遞補給下一位，三塊資料都必須等刷新完成後才解鎖。
+    await refreshActivitySnapshot()
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '放棄失敗'))
   } finally {
     confirmingKey.value = null
   }
@@ -419,6 +450,7 @@ async function pullRefresh() {
         :course-status-map="COURSE_STATUS"
         :confirming-key="confirmingKey"
         @confirm-promotion="onConfirmPromotion"
+        @decline-promotion="onDeclinePromotion"
       />
     </template>
 

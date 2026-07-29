@@ -70,6 +70,13 @@ export function usePromotionActions({
   const promotionSubmitting = ref<number | null>(null)
 
   async function handleConfirmPromotion(item: CourseEntry) {
+    // 同一筆報名的候補操作會改容量與後續遞補；任何一門處理中時，全區只允許
+    // 一個 mutation，避免 A 課與 B 課並發後刷新順序互蓋。
+    if (promotionSubmitting.value !== null) return
+    if (item.course_id == null) {
+      showToast('課程資料不完整，請重新查詢', 'error')
+      return
+    }
     const credentials = activeQueryCredentials.value
     if (!credentials) {
       showToast('查詢憑證已失效，請重新查詢', 'error')
@@ -80,7 +87,7 @@ export function usePromotionActions({
       showToast('查詢結果已變更，請重新操作', 'error')
       return
     }
-    promotionSubmitting.value = item.course_id ?? null
+    promotionSubmitting.value = item.course_id
     try {
       const phonePayload = normalizeMobile(credentials.parent_phone)
       const res = await publicConfirmPromotion(queryResult.value!.id, item.course_id!, {
@@ -112,6 +119,11 @@ export function usePromotionActions({
   }
 
   async function handleDeclinePromotion(item: CourseEntry) {
+    if (promotionSubmitting.value !== null) return
+    if (item.course_id == null) {
+      showToast('課程資料不完整，請重新查詢', 'error')
+      return
+    }
     if (!window.confirm(`確定要放棄「${item.name}」的正式名額？\n放棄後將遞補給下一位候補，無法復原。`)) {
       return
     }
@@ -125,7 +137,7 @@ export function usePromotionActions({
       showToast('查詢結果已變更，請重新操作', 'error')
       return
     }
-    promotionSubmitting.value = item.course_id ?? null
+    promotionSubmitting.value = item.course_id
     try {
       const phonePayload = normalizeMobile(credentials.parent_phone)
       const res = await publicDeclinePromotion(queryResult.value!.id, item.course_id!, {

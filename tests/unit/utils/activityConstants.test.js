@@ -41,11 +41,19 @@ describe('activity constants', () => {
   describe('COURSE_STATUS_TAG_TYPE', () => {
     it('enrolled → success', () => expect(COURSE_STATUS_TAG_TYPE.enrolled).toBe('success'))
     it('waitlist → info', () => expect(COURSE_STATUS_TAG_TYPE.waitlist).toBe('info'))
+    it('pending_review 系列有明確 tag，不回退成未知狀態', () => {
+      expect(COURSE_STATUS_TAG_TYPE.pending_review).toBe('warning')
+      expect(COURSE_STATUS_TAG_TYPE.pending_review_waitlist).toBe('info')
+    })
   })
 
   describe('COURSE_STATUS_LABEL', () => {
     it('enrolled → 正式', () => expect(COURSE_STATUS_LABEL.enrolled).toBe('正式'))
     it('waitlist → 候補', () => expect(COURSE_STATUS_LABEL.waitlist).toBe('候補'))
+    it('pending_review 系列顯示中文', () => {
+      expect(COURSE_STATUS_LABEL.pending_review).toBe('待審核')
+      expect(COURSE_STATUS_LABEL.pending_review_waitlist).toBe('待審核候補')
+    })
   })
 
   describe('MATCH_STATUS 收斂（admin 短文案 + timeline 長文案，共用 tag type）', () => {

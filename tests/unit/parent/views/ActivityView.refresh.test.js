@@ -10,6 +10,7 @@ vi.mock('@/parent/api/activity', () => ({
   myRegistrations: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
   registerCourses: vi.fn(),
   confirmPromotion: vi.fn(() => Promise.resolve({ data: { status: 'ok' } })),
+  declinePromotion: vi.fn(() => Promise.resolve({ data: { status: 'declined' } })),
   getRegistrationTime: vi.fn(() => Promise.resolve({ data: { is_open: true } })),
   getUpcomingSessions: vi.fn(() => Promise.resolve({ data: { items: [] } })),
   getActivityBootstrap: vi.fn(() =>
@@ -39,9 +40,13 @@ vi.mock('@/parent/composables/useChildSelection', () => ({
 import {
   registerCourses,
   confirmPromotion,
+  declinePromotion,
+  getActivityBootstrap,
   getUpcomingSessions,
+  listCourses,
   myRegistrations,
 } from '@/parent/api/activity'
+import { toast } from '@/parent/utils/toast'
 import ActivityView from '@/parent/views/ActivityView.vue'
 
 function mountView() {
@@ -63,7 +68,7 @@ function mountView() {
 
 describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
   beforeEach(() => {
-    getUpcomingSessions.mockClear()
+    vi.clearAllMocks()
   })
 
   it('報名成功後刷新 upcoming sessions（hero 即將開課）', async () => {
@@ -91,6 +96,22 @@ describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
 
     expect(confirmPromotion).toHaveBeenCalledWith(5, 10)
     expect(getUpcomingSessions).toHaveBeenCalled()
+    w.unmount()
+  })
+
+  it('放棄候補遞補成功後刷新報名、課程容量與 upcoming sessions', async () => {
+    vi.stubGlobal('confirm', vi.fn(() => true))
+    const w = mountView()
+    await flushPromises()
+    getUpcomingSessions.mockClear()
+
+    await w.vm.onDeclinePromotion({ id: 5, courses: [] }, { course_id: 10 })
+    await flushPromises()
+
+    expect(declinePromotion).toHaveBeenCalledWith(5, 10)
+    expect(myRegistrations).toHaveBeenCalled()
+    expect(getUpcomingSessions).toHaveBeenCalled()
+    expect(w.vm.confirmingKey).toBe(null)
     w.unmount()
   })
 
@@ -124,6 +145,133 @@ describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
 
     // 刷新完成後才解鎖
     expect(w.vm.confirmingKey).toBe(null)
+    w.unmount()
+  })
+
+  it('舊 bootstrap 晚回時，不得覆寫轉正後局部刷新取得的新快照', async () => {
+    let resolveBootstrap
+    getActivityBootstrap.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveBootstrap = resolve
+        }),
+    )
+
+    const w = mountView()
+    await flushPromises()
+
+    const newReg = {
+      id: 21,
+      student_id: 1,
+      school_year: 114,
+      semester: 2,
+      is_paid: false,
+      courses: [{ course_id: 10, course_name: '美術', status: 'enrolled' }],
+    }
+    myRegistrations.mockResolvedValueOnce({ data: { items: [newReg], total: 1 } })
+    listCourses.mockResolvedValueOnce({
+      data: { items: [{ id: 10, name: '美術', school_year: 114, semester: 2 }] },
+    })
+    getUpcomingSessions.mockResolvedValueOnce({ data: { items: [] } })
+
+    await w.vm.onConfirmPromotion(
+      { id: 21, courses: [] },
+      { course_id: 10, course_name: '美術' },
+    )
+    expect(w.vm.myRegs).toEqual([newReg])
+
+    resolveBootstrap({
+      data: {
+        registrations: {
+          items: [{
+            ...newReg,
+            courses: [{ course_id: 10, course_name: '美術', status: 'promoted_pending' }],
+          }],
+        },
+        courses: { items: [] },
+        upcoming_sessions: { items: [] },
+        registration_time: { is_open: true },
+      },
+    })
+    await flushPromises()
+
+    expect(w.vm.myRegs).toEqual([newReg])
+    w.unmount()
+  })
+
+  it('局部刷新任一 API 失敗時保留整份舊快照，不留下新報名搭配舊容量', async () => {
+    const oldReg = {
+      id: 40,
+      student_id: 1,
+      school_year: 114,
+      semester: 2,
+      is_paid: false,
+      courses: [{ course_id: 10, course_name: '美術', status: 'promoted_pending' }],
+    }
+    const oldCourse = {
+      id: 10,
+      name: '美術',
+      school_year: 114,
+      semester: 2,
+      capacity: 1,
+      enrolled_count: 0,
+      is_full: false,
+      allow_waitlist: true,
+    }
+    getActivityBootstrap.mockResolvedValueOnce({
+      data: {
+        registrations: { items: [oldReg] },
+        courses: { items: [oldCourse] },
+        upcoming_sessions: { items: [] },
+        registration_time: { is_open: true },
+      },
+    })
+    const w = mountView()
+    await flushPromises()
+
+    const newReg = {
+      ...oldReg,
+      courses: [{ course_id: 10, course_name: '美術', status: 'enrolled' }],
+    }
+    myRegistrations.mockResolvedValueOnce({ data: { items: [newReg], total: 1 } })
+    listCourses.mockRejectedValueOnce(new Error('course refresh failed'))
+
+    await w.vm.onConfirmPromotion(oldReg, oldReg.courses[0])
+    await flushPromises()
+
+    expect(w.vm.myRegs).toEqual([oldReg])
+    expect(w.vm.courses).toEqual([oldCourse])
+    expect(w.vm.regsLoading).toBe(false)
+    expect(w.vm.coursesLoading).toBe(false)
+    expect(w.vm.confirmingKey).toBe(null)
+    expect(toast.error).toHaveBeenCalledWith('重新整理才藝資料失敗')
+    w.unmount()
+  })
+
+  it('報名 Promise 會等局部刷新完成才結束並解除 submitting', async () => {
+    let resolveMy
+    myRegistrations.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveMy = resolve
+        }),
+    )
+    registerCourses.mockResolvedValueOnce({ data: { id: 31, courses: [] } })
+
+    const w = mountView()
+    await flushPromises()
+    w.vm.form.student_id = 1
+    w.vm.form.school_year = 114
+    w.vm.form.semester = '2'
+    w.vm.form.course_ids = [10]
+
+    const saving = w.vm.submitRegister()
+    await flushPromises()
+    expect(w.vm.submitting).toBe(true)
+
+    resolveMy({ data: { items: [], total: 0 } })
+    await saving
+    expect(w.vm.submitting).toBe(false)
     w.unmount()
   })
 })

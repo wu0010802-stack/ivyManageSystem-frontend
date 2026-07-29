@@ -70,8 +70,29 @@
       </FormSection>
     </el-form>
     <div class="create-summary">
-      總計：<strong>NT$ {{ totalAmount.toLocaleString() }}</strong>
-      <span v-if="totalAmount === 0" class="create-hint">（未選擇課程或用品）</span>
+      <div data-test="current-estimated-total">
+        目前預估應繳：<strong>NT$ {{ totalAmount.toLocaleString() }}</strong>
+        <span
+          v-if="form.courseNames.length === 0 && form.supplyNames.length === 0"
+          class="create-hint"
+        >（未選擇課程或用品）</span>
+      </div>
+      <div class="create-estimate-note">實際依送出時名額與配位結果計費</div>
+      <template v-if="waitlistCourses.length > 0">
+        <div data-test="estimated-total" class="create-estimate">
+          候補全數轉正式後預估：<strong>NT$ {{ estimatedTotalAmount.toLocaleString() }}</strong>
+        </div>
+        <div data-test="waitlist-unbilled" class="create-waitlist">
+          <span class="create-waitlist__label">候補未計費：</span>
+          <span
+            v-for="(course, index) in waitlistCourses"
+            :key="String(course.id ?? course.name)"
+          >
+            {{ index > 0 ? '、' : '' }}{{ course.name }}
+            （NT$ {{ (Number(course.price) || 0).toLocaleString() }}）
+          </span>
+        </div>
+      </template>
     </div>
     <template #footer>
       <el-button @click="emit('update:modelValue', false)">取消</el-button>
@@ -98,6 +119,7 @@ interface OptionItem {
   price?: number | string
   remaining?: number
   capacity?: number
+  allow_waitlist?: boolean
   [key: string]: unknown
 }
 
@@ -190,18 +212,39 @@ const isValid = computed(
     (form.courseNames.length > 0 || form.supplyNames.length > 0),
 )
 
+const selectedCourses = computed(() =>
+  form.courseNames
+    .map((name) => props.courseOptions.find((course) => course.name === name))
+    .filter((course): course is OptionItem => course !== undefined),
+)
+
+const waitlistCourses = computed(() =>
+  selectedCourses.value.filter(
+    (course) => course.remaining === 0 && course.allow_waitlist === true,
+  ),
+)
+
 const totalAmount = computed(() => {
-  let sum = 0
-  for (const n of form.courseNames) {
-    const c = props.courseOptions.find((x) => x.name === n)
-    if (c) sum += Number(c.price) || 0
-  }
+  const waitlistNames = new Set(waitlistCourses.value.map((course) => course.name))
+  let sum = selectedCourses.value.reduce(
+    (total, course) =>
+      waitlistNames.has(course.name) ? total : total + (Number(course.price) || 0),
+    0,
+  )
   for (const n of form.supplyNames) {
     const s = supplyOptions.value.find((x) => x.name === n)
     if (s) sum += Number(s.price) || 0
   }
   return sum
 })
+
+const estimatedTotalAmount = computed(() =>
+  totalAmount.value
+  + waitlistCourses.value.reduce(
+    (total, course) => total + (Number(course.price) || 0),
+    0,
+  ),
+)
 
 async function handleCreate() {
   if (!isValid.value || creating.value) return
@@ -240,5 +283,13 @@ async function handleCreate() {
   margin-top: 8px;
   color: var(--neutral-700);
 }
+.create-estimate { margin-top: 4px; color: var(--text-secondary); }
+.create-estimate-note { margin-top: 2px; color: var(--text-tertiary); font-size: 12px; }
+.create-waitlist {
+  margin-top: 6px;
+  color: var(--el-color-warning-dark-2);
+  font-size: 13px;
+}
+.create-waitlist__label { font-weight: 600; }
 .create-hint { color: var(--text-tertiary); margin-left: 8px; font-size: 13px; }
 </style>

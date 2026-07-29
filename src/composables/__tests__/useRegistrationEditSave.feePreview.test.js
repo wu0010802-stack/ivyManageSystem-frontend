@@ -32,7 +32,7 @@ function setup({
     new_name: queryResult.name || '幼兒',
     new_birthday: queryResult.birthday || '2020-01-01',
   })
-  return useRegistrationEditSave({
+  const actions = useRegistrationEditSave({
     editForm,
     queryResult: ref(queryResult),
     queryForm: reactive({
@@ -55,9 +55,46 @@ function setup({
     refetchCurrent: vi.fn(),
     showToast: vi.fn(),
   })
+  return { ...actions, editForm }
 }
 
 describe('useRegistrationEditSave feePreview — 待審核報名不虛報課程費用', () => {
+  it('滿額且不開候補時，既有 pending_review 課程仍可取消／保留，但 pending_review_waitlist 不視為佔位', () => {
+    const pending = setup({
+      queryResult: {
+        id: 10,
+        name: '待審幼兒',
+        birthday: '2020-01-01',
+        total_amount: 0,
+        paid_amount: 0,
+        courses: [{ name: '鋼琴', status: 'pending_review', price: 1200 }],
+        supplies: [],
+        field_state: { identity_editable: true },
+      },
+      selectedCourses: ['鋼琴'],
+      availability: { 鋼琴: -1 },
+      courses: [{ name: '鋼琴', price: 1200 }],
+    })
+    const pendingWaitlist = setup({
+      queryResult: {
+        id: 11,
+        name: '待審候補幼兒',
+        birthday: '2020-01-01',
+        total_amount: 0,
+        paid_amount: 0,
+        courses: [{ name: '鋼琴', status: 'pending_review_waitlist', price: 1200 }],
+        supplies: [],
+        field_state: { identity_editable: true },
+      },
+      selectedCourses: ['鋼琴'],
+      availability: { 鋼琴: -1 },
+      courses: [{ name: '鋼琴', price: 1200 }],
+    })
+
+    expect(pending.courseLocked('鋼琴')).toBe(false)
+    expect(pendingWaitlist.courseLocked('鋼琴')).toBe(true)
+  })
+
   it('待審核報名（identity_editable）既有課程即使有名額也不計費，避免零改動虛報需補繳', () => {
     const actions = setup({
       queryResult: {
@@ -101,6 +138,50 @@ describe('useRegistrationEditSave feePreview — 待審核報名不虛報課程�
       ],
     })
     expect(actions.feePreview.value.newTotal).toBe(0)
+  })
+
+  it('待審核候補的課程費標示為審核後才能確定，避免把目前 0 元誤認為最終應繳', () => {
+    const actions = setup({
+      queryResult: {
+        id: 5,
+        name: '待審幼兒',
+        birthday: '2020-01-01',
+        class_name: '象班',
+        total_amount: 0,
+        paid_amount: 0,
+        courses: [{ name: '鋼琴', status: 'pending_review_waitlist', price: 1200 }],
+        supplies: [],
+        field_state: { identity_editable: true },
+      },
+      selectedCourses: ['鋼琴'],
+      availability: { 鋼琴: 1 },
+      courses: [{ name: '鋼琴', price: 1200 }],
+    })
+
+    actions.editForm.new_name = '已更正幼兒'
+
+    expect(actions.feePreview.value.newTotal).toBe(0)
+    expect(actions.feePreview.value.pricingMayChangeAfterReview).toBe(true)
+  })
+
+  it('field_state 缺漏時仍由 pending_review_waitlist 狀態辨識待審費用，不誤算成正式學費', () => {
+    const actions = setup({
+      queryResult: {
+        id: 6,
+        name: '待審幼兒',
+        birthday: '2020-01-01',
+        total_amount: 0,
+        paid_amount: 0,
+        courses: [{ name: '鋼琴', status: 'pending_review_waitlist', price: 1200 }],
+        supplies: [],
+      },
+      selectedCourses: ['鋼琴'],
+      availability: { 鋼琴: 1 },
+      courses: [{ name: '鋼琴', price: 1200 }],
+    })
+
+    expect(actions.feePreview.value.newTotal).toBe(0)
+    expect(actions.feePreview.value.pricingMayChangeAfterReview).toBe(true)
   })
 
   it('待審核報名的用品照後端仍計費（用品與課程審核狀態無關）', () => {

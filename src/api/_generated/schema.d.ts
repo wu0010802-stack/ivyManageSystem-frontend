@@ -339,7 +339,7 @@ export interface paths {
         };
         /**
          * Get Course Enrolled
-         * @description 取得課程正式報名名單（按報名序排列）
+         * @description 取得課程容量佔位名單（沿用既有 /enrolled URL，按報名序排列）。
          */
         get: operations["get_course_enrolled_api_activity_courses__course_id__enrolled_get"];
         put?: never;
@@ -1404,7 +1404,7 @@ export interface paths {
         put?: never;
         /**
          * Rematch Registration
-         * @description 後台重跑三欄比對（可同時修正 name/birthday/parent_phone）。
+         * @description 後台重跑姓名、生日、班級比對（可同時修正聯絡資料）。
          *
          *     body 任一欄位非 None 時先寫回 registration，再用新值跑比對。
          *     即使比對仍失敗，編輯的欄位也會保留，避免校方白打一次。
@@ -1453,7 +1453,8 @@ export interface paths {
          * Add Registration Supply
          * @description 後台為既有報名追加一筆用品。
          *
-         *     併發保護：鎖 reg 行，與 remove_registration_supply 對稱。
+         *     併發保護：固定 supply advisory → supply row → registration，與停用品流程
+         *     共用鎖，避免停用檢查與 commit 之間插入 RegistrationSupply。
          */
         post: operations["add_registration_supply_api_activity_registrations__registration_id__supplies_post"];
         delete?: never;
@@ -1545,8 +1546,8 @@ export interface paths {
          * @description 匯出報名名單為 Excel（含 _export_limiter：5/60s，對齊 payment-report，
          *     避免重複打 Excel 生成造成資源壓力）
          *
-         *     school_year / semester：與列表端點一致，未提供時預設當前學期
-         *     （resolve_academic_term_filters），避免匯出傾印所有 active 學期。
+         *     school_year / semester、match_status / include_inactive：與列表端點使用相同
+         *     篩選口徑；未提供學期時預設當前學期，避免畫面與匯出內容不一致。
          */
         get: operations["export_registrations_api_activity_registrations_export_get"];
         put?: never;
@@ -7688,6 +7689,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/activity/registrations/{registration_id}/decline-promotion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Promotion
+         * @description 家長放棄候補升位，並立即遞補下一位候補。
+         *
+         *     ownership 驗證仍在 parent RLS session 執行；刪除本家庭 RC 後的自動遞補
+         *     可能寫入另一家庭資料，故驗證完成後改由主庫 session 呼叫與公開端共用的
+         *     canonical service。
+         */
+        post: operations["decline_promotion_api_parent_activity_registrations__registration_id__decline_promotion_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/activity/registrations/{registration_id}/payments": {
         parameters: {
             query?: never;
@@ -9665,6 +9690,14 @@ export interface paths {
         /**
          * Promote To Shared
          * @description 把個人範本升級為園所共用（需 PORTFOLIO_PUBLISH 權限）。
+         *
+         *     ⚠ 授權語意（2026-07-28 釐清）：持有 PORTFOLIO_PUBLISH 者**可以升級任何人的**個人
+         *     範本，不限於自己的。升級會把 owner_user_id 清成 NULL，原擁有者的個人清單中該範本
+         *     會消失（內容仍在，變成全園共用）。
+         *
+         *     這是目前的實際行為，非疏漏——本函式的 dependency 已要求 PORTFOLIO_PUBLISH
+         *     （管理員／主管層級），視同其職權範圍。若日後要收緊為「僅能升級自己的範本」，
+         *     需同時調整下方的檢查與 tests/test_contact_book_template_promote_scope_2026_07_28.py。
          */
         post: operations["promote_to_shared_api_portal_contact_book_templates__template_id__promote_post"];
         delete?: never;
@@ -15086,10 +15119,18 @@ export interface components {
             page_title?: string | null;
             /** Poster Url */
             poster_url?: string | null;
+            /** Registration Success Email Body */
+            registration_success_email_body?: string | null;
+            /** Registration Success Email Subject */
+            registration_success_email_subject?: string | null;
             /** Target Audience */
             target_audience?: string | null;
             /** Term Label */
             term_label?: string | null;
+            /** Waitlist Promoted Email Body */
+            waitlist_promoted_email_body?: string | null;
+            /** Waitlist Promoted Email Subject */
+            waitlist_promoted_email_subject?: string | null;
         };
         /**
          * ActivitySessionBatchCreateResultOut
@@ -15341,8 +15382,11 @@ export interface components {
             paid_amount: number;
             /** Payment Status */
             payment_status: string;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "enrolled" | "waitlist" | "promoted_pending" | "pending_review" | "pending_review_waitlist";
             /** Total Amount */
             total_amount: number;
         };
@@ -15769,6 +15813,11 @@ export interface components {
         AnomalyConfirm: {
             /** Action */
             action: string;
+            /**
+             * Anomaly Type
+             * @default late
+             */
+            anomaly_type: string;
             /** Remark */
             remark?: string | null;
         };
@@ -18336,7 +18385,7 @@ export interface components {
         };
         /**
          * CourseEnrolledItemOut
-         * @description GET /courses/{course_id}/enrolled 單筆正式報名名單條目。
+         * @description GET /courses/{course_id}/enrolled 單筆容量佔位名單條目。
          */
         CourseEnrolledItemOut: {
             /** Class Name */
@@ -18347,12 +18396,17 @@ export interface components {
             position: number;
             /** Registration Id */
             registration_id: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "enrolled" | "promoted_pending" | "pending_review";
             /** Student Name */
             student_name: string;
         };
         /**
          * CourseEnrolledOut
-         * @description GET /courses/{course_id}/enrolled 完整回應。
+         * @description GET /courses/{course_id}/enrolled 容量佔位名單完整回應（URL 向下相容）。
          */
         CourseEnrolledOut: {
             /** Course Id */
@@ -18393,6 +18447,10 @@ export interface components {
             meeting_weekday?: number | null;
             /** Name */
             name: string;
+            /** Pending Review */
+            pending_review: number;
+            /** Pending Review Waitlist */
+            pending_review_waitlist: number;
             /** Price */
             price: number;
             /** Promoted Pending */
@@ -18676,6 +18734,11 @@ export interface components {
             work_end: string;
             /** Work Start */
             work_start: string;
+        };
+        /** DeclinePromotionPayload */
+        DeclinePromotionPayload: {
+            /** Course Id */
+            course_id: number;
         };
         /** DeductionTypeCreate */
         DeductionTypeCreate: {
@@ -24645,8 +24708,11 @@ export interface components {
         PortalRegistrationCourseOut: {
             /** Course Name */
             course_name: string;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "enrolled" | "waitlist" | "promoted_pending" | "pending_review" | "pending_review_waitlist";
             /** Waitlist Position */
             waitlist_position?: number | null;
         };
@@ -24866,8 +24932,11 @@ export interface components {
             name: string;
             /** Price */
             price: number;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "enrolled" | "waitlist" | "promoted_pending" | "pending_review" | "pending_review_waitlist";
         };
         /**
          * PosDailyCloseApproveOut
@@ -25849,8 +25918,11 @@ export interface components {
             name: string;
             /** Price */
             price: number;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "enrolled" | "waitlist" | "promoted_pending" | "pending_review" | "pending_review_waitlist";
             /** Waitlist Position */
             waitlist_position?: number | null;
             /** Waitlist Total */
@@ -26803,8 +26875,11 @@ export interface components {
             promoted_at?: string | null;
             /** Registration Course Id */
             registration_course_id: number;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "enrolled" | "waitlist" | "promoted_pending" | "pending_review" | "pending_review_waitlist";
         };
         /**
          * RegistrationCreateResultOut
@@ -26851,8 +26926,11 @@ export interface components {
             name: string;
             /** Price */
             price: number;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "enrolled" | "waitlist" | "promoted_pending" | "pending_review" | "pending_review_waitlist";
         };
         /**
          * RegistrationDetailOut
@@ -26877,6 +26955,8 @@ export interface components {
             id: number;
             /** Internal Note */
             internal_note: string;
+            /** Is Active */
+            is_active: boolean;
             /** Is Paid */
             is_paid: boolean;
             /** Match Status */
@@ -27078,10 +27158,18 @@ export interface components {
             page_title?: string | null;
             /** Poster Url */
             poster_url?: string | null;
+            /** Registration Success Email Body */
+            registration_success_email_body?: string | null;
+            /** Registration Success Email Subject */
+            registration_success_email_subject?: string | null;
             /** Target Audience */
             target_audience?: string | null;
             /** Term Label */
             term_label?: string | null;
+            /** Waitlist Promoted Email Body */
+            waitlist_promoted_email_body?: string | null;
+            /** Waitlist Promoted Email Subject */
+            waitlist_promoted_email_subject?: string | null;
         };
         /** RejectIn */
         RejectIn: {
@@ -34127,6 +34215,8 @@ export interface operations {
             query?: {
                 classroom_name?: string | null;
                 course_id?: number | null;
+                include_inactive?: boolean;
+                match_status?: string | null;
                 payment_status?: string | null;
                 school_year?: number | null;
                 search?: string | null;
@@ -45236,6 +45326,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ConfirmPromotionPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_promotion_api_parent_activity_registrations__registration_id__decline_promotion_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registration_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeclinePromotionPayload"];
             };
         };
         responses: {
