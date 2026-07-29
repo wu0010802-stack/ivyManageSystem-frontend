@@ -81,6 +81,26 @@ describe('PortalAlbumDetailView - 標記與發布', () => {
     expect(getAlbum).toHaveBeenCalledTimes(2)
   })
 
+  it('批次標記 API 失敗時顯示錯誤訊息且不重載', async () => {
+    vi.mocked(setPhotoTags).mockRejectedValue({ response: { status: 400 } })
+    const wrapper = mount(PortalAlbumDetailView)
+    await flushPromises()
+    const vm = wrapper.vm as unknown as {
+      toggleSelect: (id: number) => void
+      tagForm: { studentIds: number[] }
+      applyTags: () => Promise<void>
+    }
+
+    vm.toggleSelect(11)
+    vm.toggleSelect(12)
+    vm.tagForm.studentIds = [5]
+    await vm.applyTags()
+    await flushPromises()
+
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(getAlbum).toHaveBeenCalledTimes(1)
+  })
+
   it('發布時未標記數出現在確認文案，確認後呼叫 publishAlbum', async () => {
     vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
     vi.mocked(publishAlbum).mockResolvedValue({ data: {} } as never)

@@ -205,10 +205,15 @@ async function applyTags(): Promise<void> {
     attachment_id: attachmentId,
     student_ids: tagForm.value.studentIds,
   }))
-  await setPhotoTags(albumId, items)
-  ElMessage.success('標記已更新')
-  tagDialogVisible.value = false
-  await load()
+  try {
+    await setPhotoTags(albumId, items)
+    ElMessage.success('標記已更新')
+    tagDialogVisible.value = false
+    await load()
+  } catch {
+    // dialog 保持開啟方便使用者重試（比照 PortalAlbumsView.submitCreate 的錯誤處理慣例）
+    ElMessage.error('標記失敗，請稍後再試')
+  }
 }
 
 async function handlePublish(): Promise<void> {
