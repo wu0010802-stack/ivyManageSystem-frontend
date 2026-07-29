@@ -26,6 +26,7 @@ import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogD
 import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
@@ -407,7 +408,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 
 <template>
   <div class="classroom-page">
-    <PageHeader title="班級學生管理">
+    <PageHeader :title="PAGE_TERMS.classrooms">
       <template #actions>
         <el-select v-model="selectedTermKey" style="width: 220px">
           <el-option

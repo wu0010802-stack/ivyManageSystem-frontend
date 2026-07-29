@@ -1,6 +1,6 @@
 <template>
   <div class="activity-settings">
-    <h2>報名時間 & 前台顯示設定</h2>
+    <h2>{{ PAGE_TERMS.activitySettings }}</h2>
 
     <el-tabs v-model="activeTab" class="settings-tabs" @tab-change="handleTabChange">
       <el-tab-pane label="報名設定" name="registration">
@@ -198,6 +198,7 @@ import {
   taipeiNowMinuteString,
 } from './registrationSettingsConfirm'
 import EmailTemplateEditor from './EmailTemplateEditor.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 interface SettingsForm {
   is_open: boolean

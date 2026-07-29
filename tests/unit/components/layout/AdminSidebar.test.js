@@ -111,11 +111,12 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(changesItem.text()).toContain('修改紀錄')
   })
 
-  it('「報表」含月度月報 /admin/gov-reports/monthly', async () => {
+  it('「報表」含月度幼生在園統計 /admin/gov-reports/monthly', async () => {
     const wrapper = await mountSidebar()
     const item = wrapper.find('[data-index="/admin/gov-reports/monthly"]')
     expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('月度月報')
+    // 原「月度月報」疊詞且未說是什麼月報（實為教育部幼生通報），2026-07-28 命名稽核改名
+    expect(item.text()).toContain('月度幼生在園統計')
   })
 
   it('「系統設定」不再含考核管理（已整併至人事薪資「考核與年終」）', async () => {
@@ -124,11 +125,12 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(items.length).toBe(0)
   })
 
-  it('「系統設定」含報名時間設定 /activity/settings', async () => {
+  it('「課後才藝」含報名與通知設定 /activity/settings', async () => {
     const wrapper = await mountSidebar()
     const item = wrapper.find('[data-index="/activity/settings"]')
     expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('報名時間設定')
+    // 原「報名時間設定」漏掉這頁實際還管的前台顯示與兩種通知信模板，2026-07-28 命名稽核改名
+    expect(item.text()).toContain('報名與通知設定')
   })
 
   it('「人事薪資」含「考核與年終」整合入口 /appraisal-year-end', async () => {

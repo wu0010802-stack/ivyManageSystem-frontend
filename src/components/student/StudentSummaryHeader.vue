@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Warning, Phone, MoreFilled, SwitchButton, ArrowRight } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { LIFECYCLE_LABELS_ADMIN as LIFECYCLE_LABELS, LIFECYCLE_TAG_TYPE as LIFECYCLE_TAG } from '@/constants/lifecycle'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 const props = withDefaults(defineProps<{
   profile?: Record<string, unknown> | null
@@ -130,7 +131,7 @@ const avatarColor = computed(() => {
               <el-dropdown-item command="edit">編輯基本資料</el-dropdown-item>
               <el-dropdown-item divided command="attendance">學生出席紀錄頁</el-dropdown-item>
               <el-dropdown-item command="fees">學費管理頁</el-dropdown-item>
-              <el-dropdown-item v-if="context === 'students'" command="classrooms">班級學生管理</el-dropdown-item>
+              <el-dropdown-item v-if="context === 'students'" command="classrooms">{{ PAGE_TERMS.classrooms }}</el-dropdown-item>
               <el-dropdown-item v-else command="students">回到學生列表</el-dropdown-item>
             </el-dropdown-menu>
           </template>

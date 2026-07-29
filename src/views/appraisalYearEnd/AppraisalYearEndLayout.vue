@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { hasPermission } from '@/utils/auth'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 interface SectionDef { key: string; label: string; to: string; can: () => boolean }
 
@@ -16,7 +17,7 @@ const SECTIONS: SectionDef[] = [
     can: () => hasPermission('APPRAISAL_FINALIZE') },
   { key: 'rules', label: '規則設定', to: '/appraisal-year-end/rules',
     can: () => hasPermission('APPRAISAL_READ') || hasPermission('SETTINGS_READ') },
-  { key: 'exceptions', label: '例外中心', to: '/appraisal-year-end/exceptions',
+  { key: 'exceptions', label: PAGE_TERMS.yearEndExceptions, to: '/appraisal-year-end/exceptions',
     can: () => hasPermission('APPRAISAL_READ') || hasPermission('YEAR_END_READ') },
 ]
 

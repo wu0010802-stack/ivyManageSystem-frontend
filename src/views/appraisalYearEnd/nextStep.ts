@@ -3,6 +3,8 @@
  * 優先序（spec §3.3）：阻斷例外 > 年終待簽（OPEN）> 考核待簽 > 可發放 > 建立缺失週期 > 全部完成。
  * 任一統計 undefined = 尚在載入 → 回 null，呼叫端顯示 skeleton。
  */
+import { PAGE_TERMS } from '@/constants/moduleTerms'
+
 export interface CycleHandle {
   id: number
   label: string
@@ -64,7 +66,7 @@ export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
       key: 'exceptions',
       title: `處理 ${blockingExceptions} 筆阻斷級例外`,
       reason: '阻斷級例外會讓試算與簽核出錯，建議最先處理。',
-      ctaLabel: '前往例外中心',
+      ctaLabel: `前往${PAGE_TERMS.yearEndExceptions}`,
       to: '/appraisal-year-end/exceptions',
     }
   }

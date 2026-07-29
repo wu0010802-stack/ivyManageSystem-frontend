@@ -10,6 +10,7 @@ import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import { hasPermission } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -202,7 +203,7 @@ onMounted(() => {
 
 <template>
   <div class="page-container">
-    <PageHeader title="學期評量記錄">
+    <PageHeader :title="PAGE_TERMS.studentAssessments">
       <template #actions>
         <el-button v-if="canWrite" type="primary" @click="openCreate">＋ 新增評量</el-button>
       </template>

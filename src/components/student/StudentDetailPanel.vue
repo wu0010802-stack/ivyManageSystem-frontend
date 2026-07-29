@@ -7,6 +7,7 @@ import { getStudent, getStudentProfile } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
 import { domainBus, STUDENT_EVENTS, RECORD_EVENTS } from '@/utils/domainBus'
 import { apiError } from '@/utils/error'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 import StudentSummaryHeader from './StudentSummaryHeader.vue'
 import StudentEditDialog from './StudentEditDialog.vue'
@@ -303,7 +304,7 @@ const breadcrumbItems = computed(() => {
     | undefined
   if (props.fromContext === 'classroom') {
     return [
-      { label: '班級學生管理', path: '/classrooms' },
+      { label: PAGE_TERMS.classrooms, path: '/classrooms' },
       { label: name || '學生檔案' },
     ]
   }

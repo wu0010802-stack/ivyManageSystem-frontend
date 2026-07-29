@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :model-value="visible"
-    :title="mode === 'add' ? '新增訪視記錄' : '編輯訪視記錄'"
+    :title="mode === 'add' ? '新增訪視紀錄' : '編輯訪視紀錄'"
     width="680px"
     destroy-on-close
     @update:model-value="$emit('update:visible', $event)"

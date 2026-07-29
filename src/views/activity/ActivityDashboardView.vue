@@ -1,6 +1,6 @@
 <template>
   <div class="activity-dashboard">
-    <PageHeader title="課後才藝統計儀表板">
+    <PageHeader :title="PAGE_TERMS.activityDashboard">
       <template #actions>
         <el-select v-model="selectedTermKey" style="width: 220px">
           <el-option
@@ -146,6 +146,7 @@ import { buildBonusLabel } from './activityDashboardTable'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 interface DashboardClassroom { courses?: Record<number, number>; [key: string]: unknown }
 interface DashboardGrade {

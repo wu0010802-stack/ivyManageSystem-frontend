@@ -18,6 +18,7 @@ import type { RecurrenceRule } from '@/components/calendar/types'
 import type { CalendarLayer } from '@/api/calendar'
 import CalendarBoard from '@/components/calendar/CalendarBoard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 import CalendarEventDetailDialog from '@/components/calendar/CalendarEventDetailDialog.vue'
 import { EVENT_TYPES, eventTypeColor } from '@/constants/calendarEventTypes'
 
@@ -368,7 +369,7 @@ const onEventDrop = async (info: EventDropArg) => {
 
 <template>
   <div class="calendar-page" v-loading="loading">
-    <PageHeader title="學校行事曆">
+    <PageHeader :title="PAGE_TERMS.calendar">
       <template #actions>
         <el-button type="success" @click="exportCalendar">匯出行事曆</el-button>
         <el-button @click="exportHolidays">匯出假日</el-button>

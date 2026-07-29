@@ -1,7 +1,7 @@
 <template>
   <div class="activity-changes">
     <div class="toolbar">
-      <h2>報名修改紀錄</h2>
+      <h2>{{ PAGE_TERMS.activityChanges }}</h2>
       <el-button @click="fetchList">重新整理</el-button>
     </div>
 
@@ -32,6 +32,7 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getChanges } from '@/api/activity'
 import { formatActivityDate } from '@/utils/format'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 const list = ref<Record<string, unknown>[]>([])
 const total = ref(0)

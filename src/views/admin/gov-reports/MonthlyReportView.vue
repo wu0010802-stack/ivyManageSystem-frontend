@@ -14,6 +14,7 @@ import StudentDetailTable from '@/components/gov-reports/StudentDetailTable.vue'
 import { saveBlobResponse } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errorHandler'
 import { formatDateTimeTW } from '@/utils/format'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 const today = new Date()
 // 預設「上個完整月份」
@@ -119,7 +120,7 @@ onMounted(refresh)
 <template>
   <div class="monthly-report-view" v-loading="loading">
     <PageHeader
-      title="月度幼生在園統計"
+      :title="PAGE_TERMS.govMonthly"
       subtitle="教育部申報用；對照 ece.moe.edu.tw → 幼生通報 → 月報"
     >
       <template #actions>

@@ -1,6 +1,6 @@
 <template>
   <div class="pos-approval">
-    <PageHeader title="POS 收款簽核" subtitle="日結：老闆核對單日流水後簽核；學期對帳：跨學期檢視繳費與簽核狀況" />
+    <PageHeader :title="PAGE_TERMS.activityPosApproval" subtitle="日結：老闆核對單日流水後簽核；學期對帳：跨學期檢視繳費與簽核狀況" />
 
     <div class="pos-approval__audit-link">
       <el-button
@@ -402,6 +402,7 @@ import {
 } from '@element-plus/icons-vue'
 
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 import POSSemesterReconciliation from '@/components/activity/POSSemesterReconciliation.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'

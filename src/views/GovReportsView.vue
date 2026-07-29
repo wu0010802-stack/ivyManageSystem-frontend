@@ -1,6 +1,6 @@
 <template>
   <div class="page-container">
-    <PageHeader title="政府申報匯出" subtitle="產生勞保局、健保局、國稅局、勞退提繳等申報格式檔案" />
+    <PageHeader :title="PAGE_TERMS.govExport" subtitle="產生勞保局、健保局、國稅局、勞退提繳等申報格式檔案" />
 
     <!-- 雇主基本資料 -->
     <el-card class="section-card" shadow="never">
@@ -160,6 +160,7 @@ import { getLaborInsurance, getHealthInsurance, getWithholding, getPension } fro
 // 補 Element Plus 未直接 export 的 icon
 import { FirstAidKit } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 type ReportType = 'labor' | 'health' | 'withholding' | 'pension'
 
