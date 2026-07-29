@@ -100,12 +100,13 @@ describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
   })
 
   it('放棄候補遞補成功後刷新報名、課程容量與 upcoming sessions', async () => {
-    vi.stubGlobal('confirm', vi.fn(() => true))
     const w = mountView()
     await flushPromises()
     getUpcomingSessions.mockClear()
 
-    await w.vm.onDeclinePromotion({ id: 5, courses: [] }, { course_id: 10 })
+    // 設計審查 2026-07-28：放棄改走 ConfirmDialog 兩段式（開 dialog → confirm）
+    w.vm.onDeclinePromotion({ id: 5, courses: [] }, { course_id: 10 })
+    await w.vm.onDeclineConfirmed()
     await flushPromises()
 
     expect(declinePromotion).toHaveBeenCalledWith(5, 10)

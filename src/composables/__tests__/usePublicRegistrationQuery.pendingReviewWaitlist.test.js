@@ -32,7 +32,9 @@ function setupWithCourses(courses) {
 }
 
 describe('usePublicRegistrationQuery 待審核候補順位顯示', () => {
-  it('pending_review_waitlist 顯示候補順位徽章，與一般 waitlist 同格式', () => {
+  it('pending_review_waitlist 顯示審核中文案，不把殘留 waitlist_position 冒充候補順位', () => {
+    // 2026-07-28 收尾包口徑：pending_review_waitlist 尚未進入正式候補佇列，
+    // 後端不保證順位；舊資料殘留 waitlist_position 也不可顯示成一般候補名次。
     const query = setupWithCourses([
       {
         name: '圍棋',
@@ -42,7 +44,7 @@ describe('usePublicRegistrationQuery 待審核候補順位顯示', () => {
       },
     ])
 
-    expect(query.statusBadgeFor('圍棋')).toBe('候補第 2 位')
+    expect(query.statusBadgeFor('圍棋')).toBe('候補資格待校方審核')
   })
 
   it('waitlistCourses 候補摘要包含 pending_review_waitlist 課程', () => {

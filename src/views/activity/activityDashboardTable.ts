@@ -17,5 +17,6 @@
  */
 export function buildBonusLabel(bonus: number | undefined | null): string {
   if (!bonus || bonus <= 0) return ''
-  return `+${bonus}`
+  // FE-3 canonical 金額格式化：千分位，避免大額紅利可讀性差
+  return `+${bonus.toLocaleString('en-US')}`
 }
