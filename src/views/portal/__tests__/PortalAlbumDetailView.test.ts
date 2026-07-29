@@ -12,12 +12,16 @@ vi.mock('@/api/classAlbums', () => ({
   setPhotoTags: vi.fn(),
   publishAlbum: vi.fn(),
 }))
+vi.mock('@/api/portal', () => ({
+  getMyStudents: vi.fn(),
+}))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },
 }))
 
 import { deleteAlbumPhoto, getAlbum, uploadAlbumPhotos } from '@/api/classAlbums'
+import { getMyStudents } from '@/api/portal'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PortalAlbumDetailView from '../PortalAlbumDetailView.vue'
 
@@ -34,6 +38,9 @@ describe('PortalAlbumDetailView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(getAlbum).mockResolvedValue({ data: detailFixture } as never)
+    vi.mocked(getMyStudents).mockResolvedValue({
+      data: { classrooms: [], employee_name: '', total_students: 0 },
+    } as never)
   })
 
   it('載入後渲染照片與標記 chips', async () => {
