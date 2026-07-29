@@ -1,6 +1,9 @@
 import api from './index'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
+// 成長報告族（list / download / send-line）沿用既有 src/api/studentGrowthReports.ts，
+// 本檔只放三個真正新增的成長冊端點，避免重複 API surface。
+
 export const draftGrowthBook = (
   studentId: number,
   data: ApiBody<'/students/{student_id}/growth-books/draft', 'post'>,
@@ -17,15 +20,3 @@ export const getGrowthBookBatchStatus = (
   params: ApiQuery<'/growth-books/batch-status', 'get'>,
 ): AxiosResp<'/growth-books/batch-status', 'get'> =>
   api.get('/growth-books/batch-status', { params })
-
-export const listGrowthReports = (
-  studentId: number,
-  params: ApiQuery<'/students/{student_id}/growth-reports', 'get'> = {},
-): AxiosResp<'/students/{student_id}/growth-reports', 'get'> =>
-  api.get(`/students/${studentId}/growth-reports`, { params })
-
-export const sendGrowthReportLine = (studentId: number, reportId: number) =>
-  api.post(`/students/${studentId}/growth-reports/${reportId}/send-line`)
-
-export const growthReportDownloadUrl = (studentId: number, reportId: number) =>
-  `${api.defaults.baseURL}/students/${studentId}/growth-reports/${reportId}/download`

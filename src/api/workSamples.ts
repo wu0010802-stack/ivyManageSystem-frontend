@@ -22,7 +22,10 @@ export const updateWorkSample = (
 ): AxiosResp<'/students/{student_id}/work-samples/{ws_id}', 'patch'> =>
   api.patch(`/students/${studentId}/work-samples/${wsId}`, data)
 
-export const deleteWorkSample = (studentId: number, wsId: number) =>
+export const deleteWorkSample = (
+  studentId: number,
+  wsId: number,
+): AxiosResp<'/students/{student_id}/work-samples/{ws_id}', 'delete'> =>
   api.delete(`/students/${studentId}/work-samples/${wsId}`)
 
 export const uploadWorkSamplePhoto = (
