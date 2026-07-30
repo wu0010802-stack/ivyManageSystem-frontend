@@ -6,7 +6,13 @@ import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/a
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
-import { closeWebSocketSafely } from '@/utils/ws'
+import {
+  classifyWebSocketClose,
+  closeWebSocketSafely,
+  WS_LIVENESS_TIMEOUT_MS,
+  WS_RECOVERY_RETRY_MS,
+  type WebSocketCloseInfo,
+} from '@/utils/ws'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import {
   useNowClock,
@@ -101,15 +107,14 @@ const studentLabel = (s: StudentItem) => {
 // WebSocket
 let ws: WebSocket | null = null
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+let wsRecoveryTimer: ReturnType<typeof setTimeout> | null = null
 let wsLivenessTimer: ReturnType<typeof setTimeout> | null = null
 let pollingTimer: ReturnType<typeof setInterval> | null = null
 const wsReconnectCount = ref(0)
 const WS_MAX_RETRIES = 5
-// 後端每 30s 主動 ping；逾 1.5×（45s）未收到任何訊息即視為半開死連線
-// （TCP 半開時 onclose/onerror 可能永不觸發），主動踢掉重連避免靜默漏接。
-const WS_LIVENESS_TIMEOUT = 45000
 const wsConnected = ref(false)
 const wsExhausted = ref(false) // 已達重試上限，fallback 至 polling
+const lastWsClose = ref<WebSocketCloseInfo | null>(null)
 
 // 連線體感狀態：normal / reconnecting / exhausted（對齊 PortalDismissalCallsView）
 const connectionState = computed(() => {
@@ -117,6 +122,9 @@ const connectionState = computed(() => {
   if (wsExhausted.value) return 'exhausted'
   return 'reconnecting'
 })
+const connectionMessage = computed(() =>
+  lastWsClose.value?.message || '網路可能暫時不穩，系統會自動重連',
+)
 
 // ─── HTTP 載入 ───────────────────────────────────────────
 const fetchCalls = async () => {
@@ -253,6 +261,7 @@ const clearLiveness = () => {
 // 每收到任何訊息（含後端 ping）就續命；逾時代表連線已半開死亡，主動踢掉重連。
 const bumpLiveness = () => {
   clearLiveness()
+  if (document.visibilityState === 'hidden') return
   wsLivenessTimer = setTimeout(() => {
     if (!ws) return
     // 半開連線的 onclose/onerror 可能永不觸發，先卸掉 handler 避免之後又重複排程重連，
@@ -264,8 +273,9 @@ const bumpLiveness = () => {
     try { dead.close() } catch { /* ignore */ }
     ws = null
     wsConnected.value = false
+    lastWsClose.value = classifyWebSocketClose({ code: 1006, reason: '' })
     scheduleReconnect()
-  }, WS_LIVENESS_TIMEOUT)
+  }, WS_LIVENESS_TIMEOUT_MS)
 }
 
 const stopPolling = () => {
@@ -281,17 +291,29 @@ const scheduleReconnect = () => {
   if (wsReconnectCount.value < WS_MAX_RETRIES) {
     const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
     wsReconnectCount.value++
+    if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
     wsReconnectTimer = setTimeout(connectWs, delay)
   } else {
-    // 超過重試上限，改用 polling，並升級 banner 提醒使用者重新整理
-    // （對齊 PortalDismissalCallsView，避免耗盡後靜默停止漏接通知）
+    // 快速重試耗盡後維持 HTTP polling，並持續低頻嘗試恢復 WebSocket。
     wsExhausted.value = true
     startPolling()
+    if (!wsRecoveryTimer) {
+      wsRecoveryTimer = setTimeout(() => {
+        wsRecoveryTimer = null
+        connectWs()
+      }, WS_RECOVERY_RETRY_MS)
+    }
   }
 }
 
-const reloadPage = () => {
-  location.reload()
+const retryWsNow = () => {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+  if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
+  closeWebSocketSafely(ws)
+  ws = null
+  wsReconnectCount.value = 0
+  wsExhausted.value = false
+  connectWs()
 }
 
 const connectWs = () => {
@@ -299,40 +321,64 @@ const connectWs = () => {
 
   // 透過 Vite proxy（/api/ws/*），cookie 由瀏覽器自動攜帶
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  ws = new WebSocket(`${proto}://${location.host}/api/ws/admin/dismissal-calls`)
+  const socket = new WebSocket(`${proto}://${location.host}/api/ws/admin/dismissal-calls`)
+  ws = socket
 
-  ws.onopen = () => {
+  socket.onopen = () => {
+    if (ws !== socket) return
     wsConnected.value = true
     wsReconnectCount.value = 0
     wsExhausted.value = false
+    lastWsClose.value = null
     stopPolling()
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+    if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
     bumpLiveness()
     // 重連後重新 fetch，補回斷線期間的更新
     fetchCalls()
   }
 
-  ws.onmessage = (e) => {
+  socket.onmessage = (e) => {
+    if (ws !== socket) return
     bumpLiveness()
     try {
       const event = JSON.parse(e.data)
       // 後端 _recv_loop 等 client 任何訊息回應，90 秒沒收就主動斷線。
       // ping 來時必須回送任意訊息以維持連線存活。
       if (event.type === 'ping') {
-        ws!.send(JSON.stringify({ type: 'pong' }))
+        socket.send(JSON.stringify({ type: 'pong' }))
         return
       }
       handleWsEvent(event)
     } catch { /* ignore */ }
   }
 
-  ws.onerror = () => { wsConnected.value = false }
-
-  ws.onclose = () => {
+  socket.onerror = () => {
+    if (ws !== socket) return
     wsConnected.value = false
+  }
+
+  socket.onclose = (event) => {
+    if (ws !== socket) return
+    ws = null
+    wsConnected.value = false
+    lastWsClose.value = classifyWebSocketClose(event)
     clearLiveness()
     scheduleReconnect()
   }
+}
+
+const onVisibility = () => {
+  if (document.visibilityState !== 'visible') {
+    clearLiveness()
+    return
+  }
+  fetchCalls()
+  if (ws?.readyState === WebSocket.OPEN) {
+    bumpLiveness()
+    return
+  }
+  retryWsNow()
 }
 
 const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
@@ -390,16 +436,19 @@ const formatTime = (dt: string | undefined) => formatTaipeiClock(dt) ?? '-'
 
 // ─── Lifecycle ────────────────────────────────────────────
 onMounted(async () => {
+  document.addEventListener('visibilitychange', onVisibility)
   await Promise.all([fetchCalls(), classroomStore.fetchClassrooms(), loadStudents()])
   connectWs()
 })
 
 onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibility)
   // 先卸 handler 再 close，避免 close() 觸發 onclose → scheduleReconnect 在卸載後
   // 建殭屍重連（QA 2026-06-04 P2-5）。
   closeWebSocketSafely(ws)
   ws = null
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+  if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
   clearLiveness()
   stopPolling()
 })
@@ -428,8 +477,8 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）：耗盡重連後
-         fallback 輪詢，提醒使用者重新整理避免漏接（對齊 PortalDismissalCallsView）-->
+    <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）：耗盡後維持
+         fallback 輪詢與低頻 WS 恢復（對齊 PortalDismissalCallsView）-->
     <div
       v-if="connectionState !== 'normal'"
       class="conn-banner"
@@ -440,11 +489,11 @@ onUnmounted(() => {
       <div class="conn-banner__text">
         <template v-if="connectionState === 'reconnecting'">
           <span>即時連線中斷，正在重新連線</span>
-          <span class="conn-banner__sub">第 {{ wsReconnectCount }} / {{ WS_MAX_RETRIES }} 次嘗試</span>
+          <span class="conn-banner__sub">{{ connectionMessage }}（第 {{ wsReconnectCount }} / {{ WS_MAX_RETRIES }} 次）</span>
         </template>
         <template v-else>
           <span>即時連線失敗，目前改用備援接收（每 15 秒更新一次）</span>
-          <span class="conn-banner__sub">為避免漏接通知，建議重新整理頁面</span>
+          <span class="conn-banner__sub">{{ connectionMessage }}；系統會持續低頻重連</span>
         </template>
       </div>
       <el-button
@@ -453,9 +502,9 @@ onUnmounted(() => {
         size="small"
         :icon="Refresh"
         class="conn-banner__btn"
-        data-testid="dismissal-conn-reload"
-        @click="reloadPage"
-      >重新整理</el-button>
+        data-testid="dismissal-conn-retry"
+        @click="retryWsNow"
+      >立即重連</el-button>
     </div>
 
     <!-- 篩選 -->

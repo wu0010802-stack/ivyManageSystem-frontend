@@ -40,7 +40,9 @@ const mockWs = {
   onerror: null,
   onclose: null,
 }
-vi.stubGlobal('WebSocket', vi.fn(function () { return mockWs }))
+const MockWebSocket = vi.fn(function () { return mockWs })
+Object.assign(MockWebSocket, { CONNECTING: 0, OPEN: 1, CLOSING: 2, CLOSED: 3 })
+vi.stubGlobal('WebSocket', MockWebSocket)
 
 const SAMPLE_CALL = {
   id: 1,
@@ -86,7 +88,12 @@ describe('DismissalQueueView WS 韌性（F4）', () => {
     vi.useFakeTimers()
     mockWs.send.mockClear()
     mockWs.close.mockClear()
+    mockWs.readyState = WebSocket.OPEN
     getDismissalCalls.mockResolvedValue({ data: [] })
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    })
   })
 
   afterEach(() => {
@@ -142,5 +149,107 @@ describe('DismissalQueueView WS 韌性（F4）', () => {
     if (typeof mockWs.onopen === 'function') mockWs.onopen()
     await nextTick()
     expect(wrapper.vm.connectionState).toBe('normal')
+  })
+
+  it('保留並分類 close code，UI 顯示可行動原因而非原始敏感 reason', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    mockWs.onclose?.({
+      code: 4001,
+      reason: 'token=secret phone=0912345678',
+    })
+    await nextTick()
+
+    expect(wrapper.vm.lastWsClose).toMatchObject({ code: 4001, kind: 'auth' })
+    expect(wrapper.get('[data-testid="dismissal-conn-banner"]').text()).toContain('重新登入')
+    expect(wrapper.html()).not.toContain('secret')
+    expect(wrapper.html()).not.toContain('0912345678')
+  })
+
+  it('快速重試耗盡後維持 polling，60 秒後仍會低頻自動恢復 WS', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    for (let i = 0; i < 6; i++) wrapper.vm.scheduleReconnect()
+    await nextTick()
+    const beforeWsAttempts = WebSocket.mock.calls.length
+    const beforeFetches = getDismissalCalls.mock.calls.length
+    mockWs.readyState = WebSocket.CLOSED
+
+    vi.advanceTimersByTime(60000)
+    await flushPromises()
+
+    expect(WebSocket.mock.calls.length).toBeGreaterThan(beforeWsAttempts)
+    expect(getDismissalCalls.mock.calls.length).toBeGreaterThan(beforeFetches)
+  })
+
+  it('背景頁不因 timer throttling 誤殺，回前景補抓並重連', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    mockWs.onopen?.()
+    mockWs.close.mockClear()
+    getDismissalCalls.mockClear()
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+    vi.advanceTimersByTime(120000)
+    expect(mockWs.close).not.toHaveBeenCalled()
+
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    })
+    mockWs.readyState = WebSocket.CLOSED
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flushPromises()
+
+    expect(getDismissalCalls).toHaveBeenCalled()
+    expect(WebSocket.mock.calls.length).toBeGreaterThan(1)
+    wrapper.unmount()
+  })
+
+  it('前景替換 socket 後，舊 socket 延遲 close 不污染新連線', async () => {
+    class RaceSocket {
+      static CONNECTING = 0
+      static OPEN = 1
+      static CLOSING = 2
+      static CLOSED = 3
+      static instances = []
+      readyState = RaceSocket.CONNECTING
+      onopen = null
+      onmessage = null
+      onerror = null
+      onclose = null
+      constructor() { RaceSocket.instances.push(this) }
+      close() { this.readyState = RaceSocket.CLOSING }
+      send() {}
+      open() {
+        this.readyState = RaceSocket.OPEN
+        this.onopen?.()
+      }
+    }
+    vi.stubGlobal('WebSocket', RaceSocket)
+
+    const wrapper = mountView()
+    await flushPromises()
+    const socketA = RaceSocket.instances[0]
+    socketA.open()
+    const delayedClose = socketA.onclose
+    socketA.readyState = RaceSocket.CLOSING
+
+    document.dispatchEvent(new Event('visibilitychange'))
+    const socketB = RaceSocket.instances[1]
+    socketB.open()
+    delayedClose?.({ code: 1006, reason: '' })
+    await nextTick()
+
+    expect(wrapper.vm.wsConnected).toBe(true)
+    expect(wrapper.vm.connectionState).toBe('normal')
+    wrapper.unmount()
+    vi.stubGlobal('WebSocket', MockWebSocket)
   })
 })

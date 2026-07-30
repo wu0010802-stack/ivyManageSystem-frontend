@@ -6,7 +6,6 @@ const getCallsMock = vi.fn(() => Promise.resolve({ data: [] }))
 vi.mock('@/api/dismissalCalls', () => ({
   getPortalDismissalCalls: () => getCallsMock(),
 }))
-vi.mock('@/utils/ws', () => ({ closeWebSocketSafely: vi.fn() }))
 
 // ── mock WebSocket ──
 let lastWs: MockWS | null = null
@@ -142,15 +141,15 @@ describe('usePortalDismissalAlerts', () => {
     expect(lastWs!.sent).toContain(JSON.stringify({ type: 'pong' }))
   })
 
-  it('liveness timeout：45s 無訊息 → ws 被關閉並排程重連', async () => {
+  it('liveness timeout：90s 無訊息 → ws 被關閉並排程重連', async () => {
     vi.useFakeTimers()
     try {
       const m = await import('@/composables/usePortalDismissalAlerts')
       m.initPortalDismissalAlerts()
       const firstWs = lastWs!
       firstWs.open()
-      // 推進 45s，觸發 bumpLiveness callback → dead.close() + scheduleReconnect
-      vi.advanceTimersByTime(45000)
+      // 推進 90s，觸發 bumpLiveness callback → dead.close() + scheduleReconnect
+      vi.advanceTimersByTime(90000)
       expect(firstWs.readyState).toBe(3)
       // 再推進 backoff（第一次 delay = 1000ms）→ connectWs 建立新 MockWS
       vi.advanceTimersByTime(1000)
@@ -167,14 +166,73 @@ describe('usePortalDismissalAlerts', () => {
       m.initPortalDismissalAlerts()
       const firstWs = lastWs!
       firstWs.open()
-      // 推進 30s（未到 45s timeout），送 ping → bumpLiveness 重置計時器
+      // 推進 30s（未到 90s timeout），送 ping → bumpLiveness 重置計時器
       vi.advanceTimersByTime(30000)
       firstWs.emit({ type: 'ping' })
-      // 再推進 30s（ping 後僅 30s，距新 timeout 還有 15s）
+      // 再推進 30s（ping 後僅 30s，距新 timeout 還有 60s）
       vi.advanceTimersByTime(30000)
       // ws 應仍為 OPEN，無新 WebSocket 建立
       expect(firstWs.readyState).toBe(1)
       expect(lastWs).toBe(firstWs)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('close code 會分類並提供安全、可行動原因', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    m.initPortalDismissalAlerts()
+    lastWs!.onclose?.({
+      code: 4007,
+      reason: 'permission denied token=secret',
+    } as CloseEvent)
+
+    const { lastWsClose, connectionMessage } = m.usePortalDismissalAlerts()
+    expect(lastWsClose.value).toMatchObject({ code: 4007, kind: 'permission' })
+    expect(connectionMessage.value).toContain('權限')
+    expect(JSON.stringify(lastWsClose.value)).not.toContain('secret')
+  })
+
+  it('快速重試耗盡後保留 polling，並以低頻 recovery retry 自動建新 socket', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+
+      for (const delay of [1000, 2000, 4000, 8000, 16000]) {
+        lastWs!.onclose?.({ code: 1006, reason: '' } as CloseEvent)
+        vi.advanceTimersByTime(delay)
+      }
+      lastWs!.onclose?.({ code: 1006, reason: '' } as CloseEvent)
+      const exhaustedSocket = lastWs
+      vi.advanceTimersByTime(60000)
+
+      expect(lastWs).not.toBe(exhaustedSocket)
+      expect(m.usePortalDismissalAlerts().connectionState.value).toBe('exhausted')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('hidden 時暫停 liveness；visible 時補抓並恢復連線', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      const firstWs = lastWs!
+      firstWs.open()
+
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      vi.advanceTimersByTime(120000)
+      expect(firstWs.readyState).toBe(1)
+
+      getCallsMock.mockClear()
+      firstWs.readyState = MockWS.CLOSED
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+      expect(getCallsMock).toHaveBeenCalled()
+      expect(lastWs).not.toBe(firstWs)
     } finally {
       vi.useRealTimers()
     }

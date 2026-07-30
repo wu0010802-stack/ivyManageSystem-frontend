@@ -11,7 +11,13 @@
  */
 import { ref, computed } from 'vue'
 import { getPortalDismissalCalls } from '@/api/dismissalCalls'
-import { closeWebSocketSafely } from '@/utils/ws'
+import {
+  classifyWebSocketClose,
+  closeWebSocketSafely,
+  WS_LIVENESS_TIMEOUT_MS,
+  WS_RECOVERY_RETRY_MS,
+  type WebSocketCloseInfo,
+} from '@/utils/ws'
 import { sortByOldestFirst, type DismissalCallView } from '@/composables/useDismissalUrgency'
 
 type DismissalCall = DismissalCallView
@@ -23,6 +29,7 @@ const liveAnnounce = ref('')
 const wsConnected = ref(false)
 const wsReconnectCount = ref(0)
 const wsExhausted = ref(false)
+const lastWsClose = ref<WebSocketCloseInfo | null>(null)
 const audioUnlocked = ref(false)
 const SOUND_PREF_KEY = 'portal_dismissal_sound_muted'
 const muted = ref(localStorage.getItem(SOUND_PREF_KEY) === '1')
@@ -33,10 +40,14 @@ const pendingCount = computed(() => activeCalls.value.length)
 const connectionState = computed<'normal' | 'reconnecting' | 'exhausted'>(() =>
   wsConnected.value ? 'normal' : wsExhausted.value ? 'exhausted' : 'reconnecting',
 )
+const connectionMessage = computed(() =>
+  lastWsClose.value?.message || '網路可能暫時不穩，系統會自動重連',
+)
 
 // ── module-scoped 非響應式 ──
 let ws: WebSocket | null = null
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+let wsRecoveryTimer: ReturnType<typeof setTimeout> | null = null
 let pollingTimer: ReturnType<typeof setInterval> | null = null
 let wsLivenessTimer: ReturnType<typeof setTimeout> | null = null
 let audioCtx: AudioContext | null = null
@@ -50,7 +61,6 @@ let fetchDispatchSeq = 0
 // createdSeq >= 該 fetch 序號的卡（＝快照發出後才由 WS 加入）須保留，不可被晚到的快照抹除。
 const wsRecentlyCreated = new Map<number, number>()
 const WS_MAX_RETRIES = 5
-const WS_LIVENESS_TIMEOUT = 45000
 // 三音提示約 0.70s 響完才唸，避免尾音與語音重疊。
 const SPEECH_LEAD_MS = 720
 // 語速稍慢、音高微亮，讓班級與名字清楚又不顯得生硬。
@@ -254,6 +264,7 @@ function startPolling(): void { stopPolling(); pollingTimer = setInterval(fetchC
 function clearLiveness(): void { if (wsLivenessTimer) { clearTimeout(wsLivenessTimer); wsLivenessTimer = null } }
 function bumpLiveness(): void {
   clearLiveness()
+  if (document.visibilityState === 'hidden') return
   wsLivenessTimer = setTimeout(() => {
     if (!ws) return
     const dead = ws
@@ -261,18 +272,35 @@ function bumpLiveness(): void {
     try { dead.close() } catch { /* ignore */ }
     ws = null
     wsConnected.value = false
+    lastWsClose.value = classifyWebSocketClose({ code: 1006, reason: '' })
     scheduleReconnect()
-  }, WS_LIVENESS_TIMEOUT)
+  }, WS_LIVENESS_TIMEOUT_MS)
 }
 function scheduleReconnect(): void {
   if (wsReconnectCount.value < WS_MAX_RETRIES) {
     const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
     wsReconnectCount.value++
+    if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
     wsReconnectTimer = setTimeout(connectWs, delay)
   } else {
     wsExhausted.value = true
     startPolling()
+    if (!wsRecoveryTimer) {
+      wsRecoveryTimer = setTimeout(() => {
+        wsRecoveryTimer = null
+        connectWs()
+      }, WS_RECOVERY_RETRY_MS)
+    }
   }
+}
+function retryWebSocket(): void {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+  if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
+  closeWebSocketSafely(ws)
+  ws = null
+  wsReconnectCount.value = 0
+  wsExhausted.value = false
+  connectWs()
 }
 function connectWs(): void {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
@@ -287,8 +315,10 @@ function connectWs(): void {
     wsConnected.value = true
     wsReconnectCount.value = 0
     wsExhausted.value = false
+    lastWsClose.value = null
     stopPolling()
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+    if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
     bumpLiveness()
     fetchCalls()
   }
@@ -302,9 +332,11 @@ function connectWs(): void {
     } catch { /* ignore */ }
   }
   socket.onerror = () => { if (ws !== socket) return; wsConnected.value = false }
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     if (ws !== socket) return
+    ws = null
     wsConnected.value = false
+    lastWsClose.value = classifyWebSocketClose(event)
     clearLiveness()
     scheduleReconnect()
   }
@@ -334,15 +366,17 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
 
 // ── visibilitychange：回前景補抓 + 必要時重連 ──
 function onVisibility(): void {
-  if (document.visibilityState !== 'visible') return
+  if (document.visibilityState !== 'visible') {
+    clearLiveness()
+    return
+  }
   fetchCalls()
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     // 卸除舊 socket 的 handler 再關閉（與 teardown / bumpLiveness 同 idiom）；否則舊 socket
     // 延遲送達的 onclose 會排程殭屍重連並把替換後的新連線標為斷線。
-    closeWebSocketSafely(ws)
-    ws = null
-    wsReconnectCount.value = 0
-    connectWs()
+    retryWebSocket()
+  } else {
+    bumpLiveness()
   }
 }
 
@@ -363,6 +397,7 @@ export function teardownPortalDismissalAlerts(): void {
   closeWebSocketSafely(ws)
   ws = null
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+  if (wsRecoveryTimer) { clearTimeout(wsRecoveryTimer); wsRecoveryTimer = null }
   clearLiveness()
   cancelPendingSpeech()
   stopPolling()
@@ -373,6 +408,7 @@ export function teardownPortalDismissalAlerts(): void {
   wsConnected.value = false
   wsReconnectCount.value = 0
   wsExhausted.value = false
+  lastWsClose.value = null
   activeCalls.value = []
   wsRecentlyCreated.clear()
   fetchDispatchSeq = 0
@@ -386,7 +422,9 @@ export function teardownPortalDismissalAlerts(): void {
 export function usePortalDismissalAlerts() {
   return {
     activeCalls, sortedCalls, pendingCount, loading, liveAnnounce,
-    wsConnected, connectionState, muted, audioUnlocked, notificationSupported,
+    wsConnected, connectionState, lastWsClose, connectionMessage,
+    muted, audioUnlocked, notificationSupported,
     toggleMute, unlockAudio, unlockSpeech, playBeep, speakAnnouncement, playAlert, cancelPendingSpeech, triggerHaptic, fetchCalls,
+    retryWebSocket,
   }
 }

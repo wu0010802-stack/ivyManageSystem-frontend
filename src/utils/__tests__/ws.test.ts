@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { closeWebSocketSafely } from '../ws'
+import {
+  classifyWebSocketClose,
+  closeWebSocketSafely,
+  WS_LIVENESS_TIMEOUT_MS,
+  WS_RECOVERY_RETRY_MS,
+} from '../ws'
 
 // QA 2026-06-04 P2-5：dismissal view onUnmounted 直接 ws.close() 會觸發 onclose →
 // scheduleReconnect，在元件卸載後建立殭屍重連 / 輪詢。closeWebSocketSafely 須先卸
@@ -40,5 +45,39 @@ describe('closeWebSocketSafely', () => {
 
   it('傳 null 安全 no-op', () => {
     expect(() => closeWebSocketSafely(null)).not.toThrow()
+  })
+})
+
+describe('WebSocket 關閉原因與恢復時序', () => {
+  it.each([
+    [4001, 'token missing', 'auth'],
+    [4003, 'token expired', 'auth'],
+    [4007, 'permission denied', 'permission'],
+    [4403, 'origin forbidden', 'permission'],
+    [4029, 'handshake rate limited', 'rate-limit'],
+    [1008, 'too many connections', 'rate-limit'],
+    [1006, '', 'transport'],
+  ] as const)('code=%i reason=%s 分類為 %s', (code, reason, expectedKind) => {
+    expect(classifyWebSocketClose({ code, reason })).toMatchObject({
+      code,
+      kind: expectedKind,
+    })
+  })
+
+  it('1006 顯示握手／網路提示，且不回傳可能含 token 或個資的原始 reason', () => {
+    const info = classifyWebSocketClose({
+      code: 1006,
+      reason: 'token=secret phone=0912345678',
+    })
+
+    expect(info.message).toContain('握手')
+    expect(info.message).toContain('網路')
+    expect(JSON.stringify(info)).not.toContain('secret')
+    expect(JSON.stringify(info)).not.toContain('0912345678')
+  })
+
+  it('liveness 至少容忍兩個 30 秒 ping 週期，耗盡後以低頻恢復', () => {
+    expect(WS_LIVENESS_TIMEOUT_MS).toBeGreaterThanOrEqual(90000)
+    expect(WS_RECOVERY_RETRY_MS).toBeGreaterThanOrEqual(60000)
   })
 })

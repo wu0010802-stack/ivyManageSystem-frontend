@@ -39,6 +39,7 @@ vi.mock('@/composables/usePortalDismissalAlerts', () => ({
     liveAnnounce: ref(''),
     wsConnected: ref(true),
     connectionState: computed(() => 'normal'),
+    connectionMessage: computed(() => '網路可能暫時不穩'),
     muted: ref(false),
     audioUnlocked: ref(true),
     notificationSupported: ref(false),
@@ -47,6 +48,7 @@ vi.mock('@/composables/usePortalDismissalAlerts', () => ({
     playBeep: vi.fn(),
     triggerHaptic: vi.fn(),
     fetchCalls: fetchCallsMock,
+    retryWebSocket: vi.fn(),
   }),
 }))
 
