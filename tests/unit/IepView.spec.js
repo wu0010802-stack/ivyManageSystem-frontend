@@ -27,8 +27,9 @@ vi.mock('@/api/students', () => ({
   }),
 }))
 const mockFetchClassrooms = vi.fn().mockResolvedValue(undefined)
-vi.mock('@/stores/classroom', () => ({
-  useClassroomStore: () => ({
+// IepView 改吃跨學期班級清單（見 src/stores/classroomAll.ts）
+vi.mock('@/stores/classroomAll', () => ({
+  useAllClassroomStore: () => ({
     classrooms: [{ id: 1, name: 'A 班' }],
     fetchClassrooms: mockFetchClassrooms,
   }),

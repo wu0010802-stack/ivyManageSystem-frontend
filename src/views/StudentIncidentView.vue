@@ -3,7 +3,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/api/studentIncidents'
-import { useClassroomStore } from '@/stores/classroom'
+import { useAllClassroomStore } from '@/stores/classroomAll'
+import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { getStudents } from '@/api/students'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
 import { apiError } from '@/utils/error'
@@ -18,8 +19,12 @@ type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefin
 const canWrite = computed(() => hasPermission('STUDENTS_WRITE'))
 
 // ── 篩選 ────────────────────────────────────────────────
-const classroomStore = useClassroomStore()
-const classrooms = computed(() => classroomStore.classrooms as { id: number; name: string }[])
+const classroomStore = useAllClassroomStore()
+// 跨學期班級：dialog 會把既有紀錄的 classroom_id 塞回下拉，且「選班級→抓學生」
+// 依賴這份清單。只給當期班級時，學生已編入下學年班級就整段斷掉（2026-07-30 根因）。
+const classrooms = computed(() =>
+  labelClassroomsByTerm(classroomStore.classrooms as ClassroomLike[]),
+)
 const filterClassroom = ref<number | null>(null)
 const filterType = ref<string | null>(null)
 const filterDateRange = ref<string[]>([])
@@ -236,7 +241,7 @@ onMounted(() => {
       <el-row :gutter="12" align="middle">
         <el-col :xs="24" :sm="6">
           <el-select v-model="filterClassroom" placeholder="篩選班級" clearable style="width: 100%">
-            <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+            <el-option v-for="c in classrooms" :key="c.id" :label="c.label" :value="c.id" />
           </el-select>
         </el-col>
         <el-col :xs="24" :sm="5">
@@ -347,7 +352,7 @@ onMounted(() => {
             @change="onDialogClassroomChange"
             style="width: 100%"
           >
-            <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+            <el-option v-for="c in classrooms" :key="c.id" :label="c.label" :value="c.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="學生 *">

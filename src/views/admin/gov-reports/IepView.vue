@@ -9,7 +9,7 @@
       <aside class="left-pane">
         <h3>身障幼生</h3>
         <el-select v-model="filterClassroom" placeholder="班級" clearable size="small">
-          <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+          <el-option v-for="c in classrooms" :key="c.id" :label="c.label" :value="c.id" />
         </el-select>
         <ul class="student-list">
           <li v-for="s in filteredStudents" :key="s.id"
@@ -156,7 +156,8 @@ import {
 import { getStudents } from '@/api/students'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PERMISSION_NAMES } from '@/constants/permissions'
-import { useClassroomStore } from '@/stores/classroom'
+import { useAllClassroomStore } from '@/stores/classroomAll'
+import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { getCurrentAcademicTerm, toAdYear } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { saveBlobResponse } from '@/utils/download'
@@ -202,8 +203,9 @@ const canApprove = computed(() =>
   hasPermission(PERMISSION_NAMES.STUDENTS_IEP_APPROVE)
 )
 
-const classroomStore = useClassroomStore()
-const classrooms = ref<Array<{ id: number; name: string }>>([])
+const classroomStore = useAllClassroomStore()
+// 跨學期：篩的是既有身障幼生名單，班級清單只給當期會篩不到已升班的孩子。
+const classrooms = ref<Array<{ id: number; name: string; label: string }>>([])
 const students = ref<Array<{ id: number; name: string; disability_type?: string; classroom_id?: number }>>([])
 const ieps = ref<IepRecord[]>([])
 const filterClassroom = ref<number | null>(null)
@@ -286,7 +288,7 @@ async function loadAll() {
       getStudents({ limit: STUDENT_FETCH_LIMIT }),
       listIeps(),
     ])
-    classrooms.value = classroomStore.classrooms as Array<{ id: number; name: string }>
+    classrooms.value = labelClassroomsByTerm(classroomStore.classrooms as ClassroomLike[])
     // getStudents 回的是 { items, total, skip, limit }，要取 .items
     students.value = s.data.items as typeof students.value
     ieps.value = (i as { data: IepRecord[] }).data

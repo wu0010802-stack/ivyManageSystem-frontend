@@ -20,8 +20,9 @@ vi.mock('element-plus', async (orig) => {
 vi.mock('@/stores/employee', () => ({
   useEmployeeStore: () => ({ employees: [], fetchEmployees: vi.fn() }),
 }))
-vi.mock('@/stores/classroom', () => ({
-  useClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }),
+// 公告頁改吃跨學期班級清單（見 stores/classroomAll.ts）
+vi.mock('@/stores/classroomAll', () => ({
+  useAllClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }),
 }))
 
 import AnnouncementView from '@/views/AnnouncementView.vue'

@@ -6,6 +6,12 @@
  * 可單獨測試，元件只負責渲染與互動（搜尋字串、建立中 inFlight）。
  */
 
+import {
+  labelClassroomsByTerm,
+  type ClassroomLike,
+  type ClassroomLabeled,
+} from '@/utils/classroomTerm'
+
 export type RosterCallStatus = 'pending' | 'acknowledged' | 'completed' | 'cancelled' | string
 
 /** 進行中通知的最小形狀（取自看板的 DismissalCallOut）。 */
@@ -22,21 +28,11 @@ export interface RosterStudentInput {
   [key: string]: unknown
 }
 
-export interface ClassroomInput {
-  id: number
-  name: string
-  /** 以下三欄供跨學年同名班級加標籤區分（getClassrooms 已回傳）。 */
-  school_year?: number
-  semester?: number
-  semester_label?: string
-}
+/** 班級輸入形狀與標籤產生一律以 utils/classroomTerm 為單一來源，避免兩份定義漂移。 */
+export type ClassroomInput = ClassroomLike
 
 /** 班級篩選下拉的一個選項；label 在同名班並存時帶學期標籤。 */
-export interface ClassroomOption {
-  id: number
-  name: string
-  label: string
-}
+export type ClassroomOption = ClassroomLabeled
 
 export interface RosterStudent {
   id: number
@@ -164,18 +160,11 @@ export function buildRoster(
   return result
 }
 
-/** 同名班級的區分後綴：優先用後端 semester_label，退回 `114-2` 這種組字。 */
-function termSuffix(c: ClassroomInput): string | null {
-  if (c.semester_label) return c.semester_label
-  if (c.school_year != null && c.semester != null) return `${c.school_year}-${c.semester}`
-  return null
-}
-
 /**
  * 產生班級篩選選項：只列出「實際有在籍學生」的班級，依 classrooms 給定順序。
  *
  * 班級清單改抓跨學期後會含歷年班級，全部倒進下拉沒有意義；同名班（不同學年同班名）
- * 則補學期標籤才分得出來。
+ * 的標籤由 labelClassroomsByTerm 統一處理。
  */
 export function classroomOptionsForStudents(
   students: RosterStudentInput[],
@@ -185,13 +174,5 @@ export function classroomOptionsForStudents(
   for (const s of students) {
     if (s.classroom_id != null) used.add(s.classroom_id)
   }
-  const inUse = classrooms.filter(c => used.has(c.id))
-
-  const nameCount = new Map<string, number>()
-  for (const c of inUse) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1)
-
-  return inUse.map(c => {
-    const suffix = (nameCount.get(c.name) ?? 0) > 1 ? termSuffix(c) : null
-    return { id: c.id, name: c.name, label: suffix ? `${c.name}（${suffix}）` : c.name }
-  })
+  return labelClassroomsByTerm(classrooms.filter(c => used.has(c.id)))
 }

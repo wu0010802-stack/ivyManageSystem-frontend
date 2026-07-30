@@ -37,7 +37,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getFeePeriods } from '@/api/fees'
-import { useClassroomStore } from '@/stores/classroom'
+import { useAllClassroomStore } from '@/stores/classroomAll'
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
@@ -56,7 +56,8 @@ const feeRecordsTabRef = ref<{
 } | null>(null)
 
 // ─── 班級列表（供子元件下拉選單） ──────────────────────────────────────────
-const classroomStore = useClassroomStore()
+// 繳費記錄篩的是既有帳單（班名不跟學期）→ 班級清單要跨學期，FeeRecordsTab 再按班名去重。
+const classroomStore = useAllClassroomStore()
 const classrooms = computed(() => classroomStore.classrooms)
 
 async function fetchFeePeriods() {
