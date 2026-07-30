@@ -21,7 +21,8 @@ import {
   type ParentRecipientItem,
 } from '@/utils/announcementScope'
 import { useEmployeeStore } from '@/stores/employee'
-import { useClassroomStore } from '@/stores/classroom'
+import { useAllClassroomStore } from '@/stores/classroomAll'
+import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { Top, Document } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
 import { useTableFilters } from '@/composables/useTableFilters'
@@ -79,17 +80,19 @@ const onAnnFilterChange = (v: Record<string, unknown>) => {
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const employeeStore = useEmployeeStore()
-const classroomStore = useClassroomStore()
+const classroomStore = useAllClassroomStore()
 const employeeOptions = computed(() =>
   (employeeStore.employees as { id: number; name: string; department?: string; job_title?: string }[]).map(e => ({
     value: e.id,
     label: `${e.name}（${e.department || e.job_title || ''}）`,
   }))
 )
+// 跨學期班級：公告要發給「學生現在所在的班」，而學生名單不跟學期。只拿當期班級的話，
+// 暑假期間學生已編入下學年班級 → 指定班級選不到人、學生分組全變「未分班」。
 const classroomOptions = computed(() =>
-  ((classroomStore.classrooms || []) as { id: number; name: string }[]).map(c => ({
+  labelClassroomsByTerm((classroomStore.classrooms || []) as ClassroomLike[]).map(c => ({
     value: c.id,
-    label: c.name,
+    label: c.label,
   }))
 )
 
@@ -212,7 +215,12 @@ const ensureStudentOptions = async () => {
     const classroomLabel = new Map(classroomOptions.value.map((c) => [c.value, c.label]))
     const byClass = new Map<string, { value: number; label: string }[]>()
     for (const s of items) {
-      const key = (s.classroom_id != null && classroomLabel.get(s.classroom_id)) || '未分班'
+      // 「查不到班級」≠「沒有班級」：前者仍是有班的孩子（停用班／清單未涵蓋的學期），
+      // 混標成「未分班」會讓人以為名冊壞了。
+      const key =
+        s.classroom_id == null
+          ? '未分班'
+          : classroomLabel.get(s.classroom_id) ?? '其他班級'
       if (!byClass.has(key)) byClass.set(key, [])
       byClass.get(key)!.push({ value: s.id, label: s.name || `#${s.id}` })
     }

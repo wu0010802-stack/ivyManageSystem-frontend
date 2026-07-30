@@ -22,10 +22,11 @@
           style="width: 130px"
         >
           <el-option
-            v-for="cls in classrooms"
+            v-for="cls in classroomNameOptions"
             :key="cls.id"
             :label="cls.name"
             :value="cls.name"
+            data-testid="fee-classroom-option"
           />
         </el-select>
         <el-input
@@ -166,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import type { FormInstance } from 'element-plus'
@@ -205,12 +206,23 @@ interface FeeSummary {
   total_unpaid: number
 }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   periodOptions?: string[]
   classrooms?: Classroom[]
 }>(), {
   periodOptions: () => [],
   classrooms: () => [],
+})
+
+// 這個篩選的值是 classroom_name（後端按班名比對），而班級清單是跨學期的，
+// 114-2 與 115-1 的同名班會變成兩個同名同值的選項 → 按班名去重，保留先出現者。
+const classroomNameOptions = computed(() => {
+  const seen = new Set<string>()
+  return props.classrooms.filter(c => {
+    if (seen.has(c.name)) return false
+    seen.add(c.name)
+    return true
+  })
 })
 
 // ─── 繳費記錄 ─────────────────────────────────────────────────────────────────

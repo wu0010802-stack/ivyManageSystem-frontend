@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listStudentLeaves } from '@/api/studentLeaves'
-import { useClassroomStore } from '@/stores/classroom'
+import { useAllClassroomStore } from '@/stores/classroomAll'
+import { labelClassroomsByTerm, type ClassroomLike } from '@/utils/classroomTerm'
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -20,7 +21,11 @@ const filters = reactive<{ status: string; classroom_id: number | null }>({
 })
 const loading = ref(false)
 const items = ref<Record<string, unknown>[]>([])
-const classroomStore = useClassroomStore()
+const classroomStore = useAllClassroomStore()
+// 篩的是既有請假紀錄，其 classroom_id 不跟學期 → 班級清單必須跨學期，否則想篩的班不在下拉裡。
+const classrooms = computed(() =>
+  labelClassroomsByTerm(classroomStore.classrooms as ClassroomLike[]),
+)
 
 const fetchLeaves = async () => {
   loading.value = true
@@ -69,9 +74,9 @@ onMounted(() => {
           @change="fetchLeaves"
         >
           <el-option
-            v-for="c in classroomStore.classrooms"
+            v-for="c in classrooms"
             :key="c.id"
-            :label="c.name"
+            :label="c.label"
             :value="c.id"
           />
         </el-select>
