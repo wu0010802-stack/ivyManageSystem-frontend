@@ -197,7 +197,7 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
       for (const stage of STAGES) {
         const card = this.board.stages[stage].find(c => c.visit_id === visitId)
         if (card) {
-          if (result.student_id != null) card.student_id = result.student_id
+          card.student_id = result.student_id ?? null
           card.current_stage = result.to_stage
           break
         }

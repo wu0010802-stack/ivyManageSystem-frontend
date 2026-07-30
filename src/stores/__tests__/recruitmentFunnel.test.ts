@@ -196,6 +196,7 @@ describe('transition domainBus 廣播', () => {
     const emitSpy = vi.spyOn(domainBus, 'emit')
     await store.transition(22, 'withdrawn', { reason: '退註冊費' })
     expect(emitSpy).toHaveBeenCalledWith(STUDENT_EVENTS.DELETED, { id: 77 })
+    expect(store.getCardByVisitId(22)?.student_id).toBeNull()
   })
 
   it('transition 失敗 → 不 emit', async () => {
