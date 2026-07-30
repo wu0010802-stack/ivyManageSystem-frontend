@@ -23,6 +23,7 @@ const {
   liveAnnounce,
   wsConnected,
   connectionState,
+  connectionMessage,
   muted,
   audioUnlocked,
   notificationSupported,
@@ -32,6 +33,7 @@ const {
   playAlert,
   cancelPendingSpeech,
   fetchCalls,
+  retryWebSocket,
 } = usePortalDismissalAlerts()
 
 // 等候時間活著跳（單一 30s 時鐘，供 DismissalCallCard urgency 計算）
@@ -51,8 +53,6 @@ const testSound = () => {
   cancelPendingSpeech()
   playAlert({ student_name: '測試', classroom_name: '小班' })
 }
-
-const reloadPage = () => location.reload()
 
 // ─── 確認已收到 ──────────────────────────────────────────
 const handleAcknowledge = async (call: DismissalCall) => {
@@ -159,11 +159,11 @@ onMounted(() => {
       <div class="conn-banner__text">
         <template v-if="connectionState === 'reconnecting'">
           <span>即時連線中斷，正在重新連線</span>
-          <span class="conn-banner__sub">系統自動重試中，請稍候</span>
+          <span class="conn-banner__sub">{{ connectionMessage }}</span>
         </template>
         <template v-else>
           <span>即時連線失敗，目前改用備援接收（每 15 秒更新一次）</span>
-          <span class="conn-banner__sub">為避免漏接通知，建議重新整理頁面</span>
+          <span class="conn-banner__sub">{{ connectionMessage }}；系統會持續低頻重連</span>
         </template>
       </div>
       <el-button
@@ -172,8 +172,8 @@ onMounted(() => {
         size="small"
         :icon="Refresh"
         class="conn-banner__btn"
-        @click="reloadPage"
-      >重新整理</el-button>
+        @click="retryWebSocket"
+      >立即重連</el-button>
     </div>
 
     <div class="dismissal-body" v-loading="loading">

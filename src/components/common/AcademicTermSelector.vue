@@ -1,8 +1,8 @@
 <template>
   <el-select
     :model-value="termKey"
-    size="default"
-    style="width: 150px"
+    :size="size"
+    style="width: 190px"
     @change="handleChange"
   >
     <el-option
@@ -18,6 +18,12 @@
 import { computed } from 'vue'
 
 import { useAcademicTermStore } from '@/stores/academicTerm'
+
+withDefaults(defineProps<{
+  size?: 'small' | 'default' | 'large'
+}>(), {
+  size: 'default',
+})
 
 const termStore = useAcademicTermStore()
 

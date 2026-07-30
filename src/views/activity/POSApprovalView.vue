@@ -1,17 +1,17 @@
 <template>
   <div class="pos-approval">
-    <PageHeader :title="PAGE_TERMS.activityPosApproval" subtitle="日結：老闆核對單日流水後簽核；學期對帳：跨學期檢視繳費與簽核狀況" />
-
-    <div class="pos-approval__audit-link">
-      <el-button
-        v-if="canApprove"
-        size="small"
-        :icon="Warning"
-        @click="$router.push('/activity/audit/pos-unlock')"
-      >
-        異常稽核軌跡
-      </el-button>
-    </div>
+    <PageHeader :title="PAGE_TERMS.activityPosApproval" subtitle="日結：老闆核對單日流水後簽核；學期對帳：跨學期檢視繳費與簽核狀況">
+      <template #actions>
+        <el-button
+          v-if="canApprove"
+          size="small"
+          :icon="Warning"
+          @click="$router.push('/activity/audit/pos-unlock')"
+        >
+          異常稽核軌跡
+        </el-button>
+      </template>
+    </PageHeader>
 
     <el-tabs v-model="activeTab" class="pos-approval__tabs">
       <el-tab-pane label="日結簽核" name="daily">
@@ -767,12 +767,6 @@ onMounted(refreshAll)
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.pos-approval__audit-link {
-  margin-bottom: 4px;
-  display: flex;
-  justify-content: flex-end;
 }
 
 .pos-approval__tabs :deep(.el-tabs__content) {

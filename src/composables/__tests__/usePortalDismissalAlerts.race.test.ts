@@ -18,7 +18,6 @@ let getCallsImpl: () => Promise<{ data: unknown[] }> = () => Promise.resolve({ d
 vi.mock('@/api/dismissalCalls', () => ({
   getPortalDismissalCalls: () => getCallsImpl(),
 }))
-vi.mock('@/utils/ws', () => ({ closeWebSocketSafely: vi.fn() }))
 
 class FakeWebSocket {
   static CONNECTING = 0
