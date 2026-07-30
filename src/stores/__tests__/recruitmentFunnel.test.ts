@@ -228,6 +228,28 @@ describe('withdrawn 三欄位樂觀同步', () => {
     expect(card?.withdrawn_from).toBe('enrolled')
     expect(card?.withdraw_reason).toBe('家長退註冊費')
     expect(card?.withdrawn_at).toBeTruthy()
+    // 後端 recruitment_visits.withdrawn_at 是 Asia/Taipei naive（now_taipei_naive()），
+    // 樂觀寫入若用 new Date().toISOString() 會是 UTC 帶 Z → 重載前後跳 8 小時。
+    expect(card?.withdrawn_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
+    expect(card?.withdrawn_at).not.toContain('Z')
+  })
+
+  it('樂觀寫入的 withdrawn_at 是台北牆鐘 naive 字串（與後端同格式，不帶 Z）', async () => {
+    // 台北 = UTC+8：UTC 2026-07-30T11:05:00Z → 台北 2026-07-30T19:05:00
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-30T11:05:00Z'))
+    try {
+      const store = useRecruitmentFunnelStore()
+      store.board = boardWith({ stage: 'deposited', visit_id: 35 })
+      mockedTransitionVisit.mockResolvedValue({
+        data: { visit_id: 35, from_stage: 'deposited', to_stage: 'withdrawn',
+                student_id: null, event_log_id: 5, warnings: [] },
+      })
+      await store.transition(35, 'withdrawn', { reason: '家長退訂金' })
+      expect(store.getCardByVisitId(35)?.withdrawn_at).toBe('2026-07-30T19:05:00')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('退預繳（deposited→withdrawn）後卡片帶 withdrawn_from=deposited', async () => {

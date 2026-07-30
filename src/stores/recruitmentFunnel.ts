@@ -12,6 +12,7 @@ import {
 } from '@/api/recruitmentFunnel'
 import type { Schema } from '@/api/_generated/typed'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
+import { nowTaipeiNaiveISO } from '@/utils/format'
 import { FUNNEL_STAGES, type FunnelStage } from '@/constants/recruitmentFunnel'
 
 export type Stage = FunnelStage
@@ -223,7 +224,10 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
           card.current_stage = result.to_stage
           card.withdrawn_from = withdrawnFrom
           card.withdraw_reason = isWithdrawn ? reason : null
-          card.withdrawn_at = isWithdrawn ? new Date().toISOString() : null
+          // 後端 recruitment_visits.withdrawn_at 是 Asia/Taipei naive（now_taipei_naive()），
+          // 這裡必須產同格式字串。用 new Date().toISOString() 會寫進 UTC 帶 Z 的值，
+          // 一旦有元件開始顯示這欄，重載前後就會跳 8 小時。
+          card.withdrawn_at = isWithdrawn ? nowTaipeiNaiveISO() : null
           break
         }
       }

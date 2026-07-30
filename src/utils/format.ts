@@ -10,6 +10,7 @@
  * fmtPct()             — 百分比格式化（isRatio 控制 0~1 小數 vs 已是百分比數值）
  * todayISO()           — 今日 YYYY-MM-DD（本地）
  * todayTaipeiISO()     — 今日 YYYY-MM-DD（Asia/Taipei）
+ * nowTaipeiNaiveISO()  — 現在 YYYY-MM-DDTHH:mm:ss（Asia/Taipei naive，與後端同格式）
  * offsetISO()          — 今日 ± n 天的 YYYY-MM-DD
  */
 
@@ -36,6 +37,17 @@ const _taipeiDateFmt = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
   month: '2-digit',
   day: '2-digit',
+})
+
+const _taipeiSecondFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: TAIPEI_TZ,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
 })
 
 // 委派至全站單一金額 helper（NT$1,234 / —），保留 money 名稱供既有 22 處 call site。
@@ -141,6 +153,20 @@ export const todayTaipeiISO = (now: Date = new Date()) => {
   const valueOf = (type: 'year' | 'month' | 'day') =>
     parts.find((part) => part.type === type)?.value ?? ''
   return `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`
+}
+
+// 後端 naive DateTime 欄位（utils/taipei_time.now_taipei_naive()）的同格式字串：
+// `YYYY-MM-DDTHH:mm:ss`，無 Z、無 offset，語意為 Asia/Taipei 牆鐘。
+// 用於樂觀更新時自行補上後端 response 沒帶回來的 naive 時間欄位——用
+// `new Date().toISOString()` 會寫進 UTC 帶 Z 的值，重載後被後端值覆蓋即跳 8 小時。
+export const nowTaipeiNaiveISO = (now: Date = new Date()) => {
+  const parts = _taipeiSecondFmt.formatToParts(now)
+  const valueOf = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? ''
+  const date = `${valueOf('year')}-${valueOf('month')}-${valueOf('day')}`
+  // hourCycle h23 在部分引擎午夜仍會回 '24'，統一歸 00
+  const hour = valueOf('hour') === '24' ? '00' : valueOf('hour')
+  return `${date}T${hour}:${valueOf('minute')}:${valueOf('second')}`
 }
 
 // 今日 ± n 天的 YYYY-MM-DD（本地時區）

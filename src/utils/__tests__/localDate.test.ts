@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  nowTaipeiNaiveISO,
   parseLocalISODate,
   parseTaipeiDateTime,
   todayTaipeiISO,
@@ -29,6 +30,21 @@ describe('parseLocalISODate', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('nowTaipeiNaiveISO', () => {
+  it('產出後端 now_taipei_naive() 同格式字串（無 Z、無 offset）', () => {
+    // UTC 11:05 → 台北 19:05
+    const iso = nowTaipeiNaiveISO(new Date('2026-07-30T11:05:07Z'))
+
+    expect(iso).toBe('2026-07-30T19:05:07')
+    expect(iso).not.toContain('Z')
+    expect(iso).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
+  })
+
+  it('跨日：UTC 16:30 已是台北隔日，午夜小時為 00 而非 24', () => {
+    expect(nowTaipeiNaiveISO(new Date('2026-07-12T16:30:00Z'))).toBe('2026-07-13T00:30:00')
   })
 })
 
