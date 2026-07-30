@@ -62,4 +62,37 @@ describe('FunnelCard.vue', () => {
     })
     expect(wrapper.find('.funnel-card__term').exists()).toBe(false)
   })
+
+  it('renders 退註冊 danger tag + reason when withdrawn_from is enrolled', () => {
+    const wrapper = mount(FunnelCard, {
+      props: {
+        card: {
+          ...baseCard,
+          current_stage: 'withdrawn',
+          withdrawn_from: 'enrolled',
+          withdraw_reason: '家長退註冊費',
+        },
+        canDrag: true,
+      },
+    })
+    expect(wrapper.text()).toContain('退註冊')
+    expect(wrapper.find('.el-tag--danger').exists()).toBe(true)
+    expect(wrapper.text()).toContain('家長退註冊費')
+  })
+
+  it('renders 退預繳 tag when withdrawn_from is deposited', () => {
+    const wrapper = mount(FunnelCard, {
+      props: {
+        card: {
+          ...baseCard,
+          current_stage: 'withdrawn',
+          withdrawn_from: 'deposited',
+          withdraw_reason: '家長取消保留',
+        },
+        canDrag: true,
+      },
+    })
+    expect(wrapper.text()).toContain('退預繳')
+    expect(wrapper.find('.el-tag--danger').exists()).toBe(true)
+  })
 })
