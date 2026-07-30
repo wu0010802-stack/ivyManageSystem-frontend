@@ -208,3 +208,72 @@ describe('transition domainBus 廣播', () => {
     expect(emitSpy).not.toHaveBeenCalled()
   })
 })
+
+describe('withdrawn 三欄位樂觀同步', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('退註冊（enrolled→withdrawn）後卡片帶 withdrawn_from=enrolled ＋ 原因 ＋ 時間', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = boardWith({ stage: 'enrolled', visit_id: 31, student_id: 91 })
+    mockedTransitionVisit.mockResolvedValue({
+      data: { visit_id: 31, from_stage: 'enrolled', to_stage: 'withdrawn',
+              student_id: null, event_log_id: 1, warnings: [] },
+    })
+    await store.transition(31, 'withdrawn', { reason: '家長退註冊費' })
+    const card = store.getCardByVisitId(31)
+    // 該 tag 是區分「退預繳／退註冊」的唯一 UI 依據，成功後不 reload 就必須自行推導
+    expect(card?.withdrawn_from).toBe('enrolled')
+    expect(card?.withdraw_reason).toBe('家長退註冊費')
+    expect(card?.withdrawn_at).toBeTruthy()
+  })
+
+  it('退預繳（deposited→withdrawn）後卡片帶 withdrawn_from=deposited', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = boardWith({ stage: 'deposited', visit_id: 32 })
+    mockedTransitionVisit.mockResolvedValue({
+      data: { visit_id: 32, from_stage: 'deposited', to_stage: 'withdrawn',
+              student_id: null, event_log_id: 2, warnings: [] },
+    })
+    await store.transition(32, 'withdrawn', { reason: '家長退訂金' })
+    const card = store.getCardByVisitId(32)
+    expect(card?.withdrawn_from).toBe('deposited')
+    expect(card?.withdraw_reason).toBe('家長退訂金')
+  })
+
+  it('取消退費（withdrawn→deposited）後三欄位清空，不殘留紅色 tag 與舊原因', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = boardWith({
+      stage: 'withdrawn',
+      visit_id: 33,
+      withdrawn_from: 'deposited',
+      withdraw_reason: '家長退訂金',
+      withdrawn_at: '2026-07-20T10:00:00',
+    })
+    mockedTransitionVisit.mockResolvedValue({
+      data: { visit_id: 33, from_stage: 'withdrawn', to_stage: 'deposited',
+              student_id: null, event_log_id: 3, warnings: [] },
+    })
+    await store.transition(33, 'deposited', {})
+    const card = store.getCardByVisitId(33)
+    expect(card?.current_stage).toBe('deposited')
+    expect(card?.withdrawn_from).toBeNull()
+    expect(card?.withdraw_reason).toBeNull()
+    expect(card?.withdrawn_at).toBeNull()
+  })
+
+  it('非 withdrawn 的一般轉換（visited→deposited）也不會誤填三欄位', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = boardWith({ stage: 'visited', visit_id: 34 })
+    mockedTransitionVisit.mockResolvedValue({
+      data: { visit_id: 34, from_stage: 'visited', to_stage: 'deposited',
+              student_id: null, event_log_id: 4, warnings: [] },
+    })
+    await store.transition(34, 'deposited', {})
+    const card = store.getCardByVisitId(34)
+    expect(card?.withdrawn_from).toBeNull()
+    expect(card?.withdrawn_at).toBeNull()
+  })
+})

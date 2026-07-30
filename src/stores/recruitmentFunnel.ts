@@ -124,7 +124,7 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
           classroom_id: opts.classroomId ?? null,
           reason: opts.reason ?? null,
         })
-        this._applyServerResult(visitId, resp.data)
+        this._applyServerResult(visitId, resp.data, opts.reason ?? null)
         this.invalidateTimeline(visitId)
 
         const hadStudent = snapshot.card.student_id != null
@@ -191,14 +191,39 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
       this.board.stages[toStage].push(movedCard)
     },
 
-    _applyServerResult(visitId: number, result: Schema<'TransitionOut'>): void {
+    /**
+     * 把 server 回來的結果寫回卡片。
+     *
+     * `TransitionOut` 不含 withdrawn_from / withdraw_reason / withdrawn_at，
+     * 成功後也不 reload board，所以這三欄必須由 (from_stage, to_stage, reason)
+     * 自行推導 —— 否則：
+     *  - 拖進第四欄後卡片不會長出「退預繳／退註冊」danger tag（該 tag 是區分
+     *    兩種退費的唯一 UI 依據），也沒有原因列；
+     *  - 取消退費後 withdrawn_from 殘留 → 卡片坐在「已預繳」欄卻掛紅色
+     *    「退預繳」tag ＋ 舊原因，顯示錯誤資訊。
+     * 下一次 loadBoard 會以後端值覆蓋，此處只求樂觀顯示與後端一致。
+     */
+    _applyServerResult(
+      visitId: number,
+      result: Schema<'TransitionOut'>,
+      reason: string | null = null,
+    ): void {
       if (!this.board) return
+      const isWithdrawn = result.to_stage === 'withdrawn'
+      // withdrawn_from 只可能是 deposited／enrolled（後端 visited→withdrawn 直接拒絕）
+      const withdrawnFrom =
+        isWithdrawn && (result.from_stage === 'deposited' || result.from_stage === 'enrolled')
+          ? result.from_stage
+          : null
       // Find the card wherever it ended up after optimistic move
       for (const stage of STAGES) {
         const card = this.board.stages[stage].find(c => c.visit_id === visitId)
         if (card) {
           card.student_id = result.student_id ?? null
           card.current_stage = result.to_stage
+          card.withdrawn_from = withdrawnFrom
+          card.withdraw_reason = isWithdrawn ? reason : null
+          card.withdrawn_at = isWithdrawn ? new Date().toISOString() : null
           break
         }
       }
