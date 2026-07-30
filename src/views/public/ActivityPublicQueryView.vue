@@ -30,7 +30,7 @@
           <h1 class="page-title-main">查詢 / 修改報名資料</h1>
           <div class="page-subtitle">Query &amp; Edit Registration</div>
           <!-- 死巷修正：本頁任何狀態都要有回報名頁的顯式路徑 -->
-          <button type="button" class="page-backlink" @click="goBackToRegistration">
+          <button type="button" class="page-backlink tap-target" @click="goBackToRegistration">
             <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#q-back" /></svg>
             回才藝報名頁
           </button>
@@ -1666,7 +1666,7 @@ onBeforeUnmount(() => {
   color: var(--color-text-subtle);
 }
 
-@media (max-width: 700px) {
+@media (--to-md) {
   .page-header {
     grid-template-columns: 1fr;
     gap: var(--space-5);
@@ -1679,7 +1679,7 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid var(--color-border);
   }
 }
-@media (max-width: 600px) {
+@media (--to-sm) {
   .public-query-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }

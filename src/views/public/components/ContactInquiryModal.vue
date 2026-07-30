@@ -132,7 +132,7 @@ async function handleSubmit() {
           <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-phone" /></svg>
           聯絡主辦單位
         </h3>
-        <button type="button" class="modal-close" aria-label="關閉視窗" @click="close">
+        <button type="button" class="modal-close tap-target" aria-label="關閉視窗" @click="close">
           <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
         </button>
       </div>

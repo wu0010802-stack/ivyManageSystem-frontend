@@ -201,7 +201,7 @@ onUnmounted(cancelPreview)
           <button
             v-if="videos[course.name]"
             type="button"
-            class="video-btn"
+            class="video-btn tap-target"
             :aria-label="`觀看 ${course.name} 介紹影片`"
             @click="$emit('open-video', course.name, videos[course.name])"
             @mouseenter="schedulePreview(course.name, videos[course.name], $event)"
@@ -589,7 +589,7 @@ onUnmounted(cancelPreview)
 }
 
 /* 行動裝置：course-item 內換行讓 video-btn 落到下一列 */
-@media (max-width: 640px) {
+@media (--to-sm) {
   .course-item { flex-wrap: wrap; }
   .course-item-disabled::after { top: 6px; right: 6px; padding: 1px 6px; font-size: 9px; }
   .video-btn { margin: 0 var(--space-4) var(--space-3); }

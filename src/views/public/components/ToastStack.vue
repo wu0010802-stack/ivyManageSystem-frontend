@@ -40,7 +40,7 @@ const TOAST_ICONS: Record<string, string> = {
       </div>
       <button
         type="button"
-        class="toast-close"
+        class="toast-close tap-target"
         aria-label="關閉通知"
         @click="$emit('dismiss', t.id)"
       >&times;</button>
