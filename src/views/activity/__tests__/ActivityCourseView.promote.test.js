@@ -34,6 +34,16 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+// ── vuedraggable stub：渲染 item slot（佔位名單 Drawer 改拖拉列表後需要）────
+vi.mock('vuedraggable', () => ({
+  default: {
+    name: 'draggable',
+    props: ['modelValue', 'itemKey', 'group', 'disabled', 'animation', 'ghostClass'],
+    emits: ['update:modelValue', 'end'],
+    template: `<div><template v-for="(el, i) in modelValue" :key="i"><slot name="item" :element="el" :index="i" /></template></div>`,
+  },
+}))
+
 import {
   promoteWaitlist,
   getCourseWaitlist,

@@ -139,6 +139,11 @@ export type ActivityCourseOccupancyItem = Schema<'CourseEnrolledItemOut'>
 export type ActivityCourseOccupancyStatus = ActivityCourseOccupancyItem['status']
 export const getCourseEnrolled = (courseId: number): AxiosResp<'/activity/courses/{course_id}/enrolled', 'get'> =>
   api.get(`/activity/courses/${courseId}/enrolled`)
+// 容量佔位名單拖拉排序（enrollsort01）：兩區 ids 合併需為當前名單（佔位＋候補）
+// course_record_id 的完整排列；跨區移動即身分轉換（候補轉正／正式轉候補，由後端
+// 套用狀態轉移與通知）。名單過期（並發報名/退課/審核）回 409，前端應重載後再排
+export const reorderCourseEnrolled = (courseId: number, occupyingIds: number[], waitlistIds: number[]): AxiosResp<'/activity/courses/{course_id}/enrolled/order', 'put'> =>
+  api.put(`/activity/courses/${courseId}/enrolled/order`, { occupying_ids: occupyingIds, waitlist_ids: waitlistIds })
 export const createCourse = (data: ApiBody<'/activity/courses', 'post'>): AxiosResp<'/activity/courses', 'post'> =>
   api.post('/activity/courses', data)
 export const updateCourse = (id: number, data: ApiBody<'/activity/courses/{course_id}', 'put'>): AxiosResp<'/activity/courses/{course_id}', 'put'> =>

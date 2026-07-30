@@ -339,14 +339,43 @@ export interface paths {
         };
         /**
          * Get Course Enrolled
-         * @description 取得課程容量佔位名單（沿用既有 /enrolled URL，按報名序排列）。
+         * @description 取得課程容量佔位名單（沿用既有 /enrolled URL）。
          *
-         *     enrolled / promoted_pending / pending_review（OCCUPYING_STATUSES）三態
-         *     都回傳並帶 status，前端 drawer 分色標示——只列 enrolled 會讓承辦人
-         *     誤判尚有收件空間。
+         *     enrollsort01 起同時回傳候補：佔位（OCCUPYING_STATUSES）在前、候補
+         *     （QUEUE_STATUSES）在後，position 連續編號；各區內手動排過的
+         *     （sort_order 非 NULL）在前、依 sort_order 遞增，未排過的依 id（報名
+         *     先後）接在其後——排序後新增的報名自然落在該區尾端，不會插進手排
+         *     順序中間。前端 drawer 以 status 分色標示（含候補），並據此分「正式
+         *     佔位／候補」兩區拖拉。
          */
         get: operations["get_course_enrolled_api_activity_courses__course_id__enrolled_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/courses/{course_id}/enrolled/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder Course Enrolled
+         * @description 儲存容量佔位名單拖拉排序，含跨區身分轉換（enrollsort01）。
+         *
+         *     occupying_ids + waitlist_ids 必須恰為當前名單（佔位＋候補）的完整排列，
+         *     集合不符回 409——前端名單過期（並發報名/退課/審核）時要求重載再排。
+         *     跨區拖拉觸發候補轉正（waitlist 走完整手動升位副作用：容量閘、家長通知、
+         *     email 備援）／正式轉候補（前端已二次確認）；商業規則細節見
+         *     activity_service.reorder_course_roster docstring。
+         */
+        put: operations["reorder_course_enrolled_api_activity_courses__course_id__enrolled_order_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -18948,8 +18977,8 @@ export interface components {
          * @description GET /courses/{course_id}/enrolled 單筆容量佔位名單條目。
          *
          *     URL 為向下相容仍叫 /enrolled，但 response 已是「容量佔位名單」：
-         *     enrolled / promoted_pending / pending_review 三態（OCCUPYING_STATUSES）
-         *     都會回傳，前端以 status 分色標示。
+         *     佔位三態（OCCUPYING_STATUSES）在前，enrollsort01 起亦回傳候補二態
+         *     （QUEUE_STATUSES）接於其後，前端以 status 分色標示並分兩區拖拉排序。
          */
         CourseEnrolledItemOut: {
             /** Class Name */
@@ -18964,7 +18993,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "enrolled" | "promoted_pending" | "pending_review";
+            status: "enrolled" | "promoted_pending" | "pending_review" | "waitlist" | "pending_review_waitlist";
             /** Student Name */
             student_name: string;
         };
@@ -18979,6 +19008,21 @@ export interface components {
             course_name: string;
             /** Items */
             items: components["schemas"]["CourseEnrolledItemOut"][];
+        };
+        /**
+         * CourseEnrolledReorderIn
+         * @description PUT /courses/{course_id}/enrolled/order 請求（enrollsort01）。
+         *
+         *     occupying_ids（正式佔位區）＋ waitlist_ids（候補區）合併必須是該課
+         *     「當前名單」（佔位＋候補）course_record_id 的完整排列——缺漏或多出即
+         *     409，防止前端名單過期時把並發新增的報名默默排到未定義位置。跨區移動
+         *     即身分轉換（候補轉正／正式轉候補），由後端依目標區套用狀態轉移。
+         */
+        CourseEnrolledReorderIn: {
+            /** Occupying Ids */
+            occupying_ids: number[];
+            /** Waitlist Ids */
+            waitlist_ids: number[];
         };
         /**
          * CourseListItemOut
@@ -33195,6 +33239,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CourseEnrolledOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_course_enrolled_api_activity_courses__course_id__enrolled_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseEnrolledReorderIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */

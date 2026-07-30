@@ -90,8 +90,9 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="canWrite" label="操作" width="160" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="240" align="center" fixed="right">
         <template #default="{ row }">
+          <el-button size="small" :data-test="`reorder-enrolled-btn-${row.id}`" @click="openEnrolled(row)">報名排序</el-button>
           <el-button size="small" @click="openEdit(row)">編輯</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">停用</el-button>
         </template>
@@ -246,37 +247,105 @@
     </div>
   </el-drawer>
 
-  <!-- 容量佔位名單 Drawer（正式／待家長確認／待審核） -->
+  <!-- 容量佔位名單 Drawer（enrollsort01：正式佔位＋候補兩區，可拖拉排序；
+       拖放後立即儲存，跨區拖拉＝候補轉正／正式轉候補（跳確認提示）） -->
   <el-drawer
     v-model="enrolledDrawer"
     :title="`容量佔位名單 — ${enrolledCourse?.name ?? ''}`"
-    direction="rtl" size="420px" destroy-on-close
+    direction="rtl" size="440px" destroy-on-close
   >
-    <el-table :data="enrolledItems" v-loading="enrolledLoading" border size="small">
-      <el-table-column label="序號" prop="position" width="60" align="center" />
-      <el-table-column label="學生姓名" prop="student_name" min-width="90">
-        <template #default="{ row }">
-          <span :data-test="`occupancy-student-${row.registration_id}`">
-            {{ row.student_name }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="班級" prop="class_name" width="90" />
-      <el-table-column label="佔位狀態" width="110" align="center">
-        <template #default="{ row }">
-          <el-tag
-            :data-test="`occupancy-status-${row.registration_id}`"
-            :type="occupancyStatusTagType(row.status)"
-            size="small"
+    <div v-loading="enrolledLoading" class="roster-body">
+      <template v-if="occupyingItems.length > 0 || queueItems.length > 0">
+        <p v-if="canWrite" class="roster-hint">
+          拖拉列即可調整順序，放開後立即儲存；把候補列拖入正式區（或反向）將轉換報名身分
+        </p>
+        <div class="roster-table">
+          <div class="roster-table__head">
+            <span class="roster-col roster-col--pos">序號</span>
+            <span class="roster-col roster-col--name">學生姓名</span>
+            <span class="roster-col roster-col--class">班級</span>
+            <span class="roster-col roster-col--status">佔位狀態</span>
+          </div>
+          <div class="roster-section-label">正式（佔位）</div>
+          <draggable
+            v-model="occupyingItems"
+            item-key="course_record_id"
+            group="course-roster"
+            :disabled="!canWrite || rosterSaving"
+            :animation="150"
+            ghost-class="roster-row--ghost"
+            class="roster-list"
+            data-test="roster-occupying"
+            @end="handleRosterDragEnd"
           >
-            {{ occupancyStatusLabel(row.status) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-    </el-table>
-    <div v-if="!enrolledLoading && enrolledItems.length === 0"
-         style="text-align:center; padding: 32px; color: var(--text-tertiary);">
-      目前無容量佔位學生
+            <template #item="{ element, index }">
+              <div
+                class="roster-row"
+                :class="{ 'roster-row--draggable': canWrite && !rosterSaving }"
+                :data-test="`roster-row-${element.course_record_id}`"
+              >
+                <span class="roster-col roster-col--pos">{{ index + 1 }}</span>
+                <span class="roster-col roster-col--name">
+                  <span :data-test="`occupancy-student-${element.registration_id}`">
+                    {{ element.student_name }}
+                  </span>
+                </span>
+                <span class="roster-col roster-col--class">{{ element.class_name || '-' }}</span>
+                <span class="roster-col roster-col--status">
+                  <el-tag
+                    :data-test="`occupancy-status-${element.registration_id}`"
+                    :type="occupancyStatusTagType(element.status)"
+                    size="small"
+                  >
+                    {{ occupancyStatusLabel(element.status) }}
+                  </el-tag>
+                </span>
+              </div>
+            </template>
+          </draggable>
+          <div class="roster-section-label roster-section-label--wait">候補</div>
+          <draggable
+            v-model="queueItems"
+            item-key="course_record_id"
+            group="course-roster"
+            :disabled="!canWrite || rosterSaving"
+            :animation="150"
+            ghost-class="roster-row--ghost"
+            class="roster-list"
+            data-test="roster-queue"
+            @end="handleRosterDragEnd"
+          >
+            <template #item="{ element, index }">
+              <div
+                class="roster-row"
+                :class="{ 'roster-row--draggable': canWrite && !rosterSaving }"
+                :data-test="`roster-row-${element.course_record_id}`"
+              >
+                <span class="roster-col roster-col--pos">{{ occupyingItems.length + index + 1 }}</span>
+                <span class="roster-col roster-col--name">
+                  <span :data-test="`occupancy-student-${element.registration_id}`">
+                    {{ element.student_name }}
+                  </span>
+                </span>
+                <span class="roster-col roster-col--class">{{ element.class_name || '-' }}</span>
+                <span class="roster-col roster-col--status">
+                  <el-tag
+                    :data-test="`occupancy-status-${element.registration_id}`"
+                    :type="occupancyStatusTagType(element.status)"
+                    size="small"
+                  >
+                    {{ occupancyStatusLabel(element.status) }}
+                  </el-tag>
+                </span>
+              </div>
+            </template>
+          </draggable>
+        </div>
+      </template>
+      <div v-if="!enrolledLoading && occupyingItems.length === 0 && queueItems.length === 0"
+           style="text-align:center; padding: 32px; color: var(--text-tertiary);">
+        目前無容量佔位學生
+      </div>
     </div>
   </el-drawer>
 
@@ -316,8 +385,10 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
+import draggable from 'vuedraggable'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
-         getCourseWaitlist, getCourseEnrolled, promoteWaitlist, sweepExpiredWaitlist } from '@/api/activity'
+         getCourseWaitlist, getCourseEnrolled, reorderCourseEnrolled, promoteWaitlist,
+         sweepExpiredWaitlist } from '@/api/activity'
 import type {
   ActivityCourseOccupancyItem,
   ActivityCourseOccupancyStatus,
@@ -445,8 +516,30 @@ const promoteDialog = reactive<{
 
 const enrolledDrawer = ref(false)
 const enrolledCourse = ref<{ id: number; name: string } | null>(null)
-const enrolledItems = ref<ActivityCourseOccupancyItem[]>([])
 const enrolledLoading = ref(false)
+
+// enrollsort01：佔位名單拆「正式（佔位）／候補」兩區，各自可拖拉排序、
+// 跨區拖拉＝身分轉換。與後端 OCCUPYING_STATUSES 同口徑。
+const OCCUPYING_STATUS_SET = new Set<ActivityCourseOccupancyStatus>([
+  'enrolled', 'promoted_pending', 'pending_review',
+])
+const occupyingItems = ref<ActivityCourseOccupancyItem[]>([])
+const queueItems = ref<ActivityCourseOccupancyItem[]>([])
+const rosterSaving = ref(false)
+// 最後一次已成功儲存（或後端回傳）的快照；@end 比對避免原地放下也打 API、
+// 取消確認時用於還原
+let savedOccItems: ActivityCourseOccupancyItem[] = []
+let savedQueueItems: ActivityCourseOccupancyItem[] = []
+
+function snapshotRoster() {
+  savedOccItems = [...occupyingItems.value]
+  savedQueueItems = [...queueItems.value]
+}
+
+function restoreRoster() {
+  occupyingItems.value = [...savedOccItems]
+  queueItems.value = [...savedQueueItems]
+}
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 function occupancyStatusLabel(status: ActivityCourseOccupancyStatus): string {
@@ -470,21 +563,91 @@ function occupying(row: Course): number {
 let waitlistSeq = 0
 let enrolledSeq = 0
 
-async function openEnrolled(row: Course) {
+async function loadEnrolledRoster(courseId: number) {
   const seq = ++enrolledSeq
-  enrolledCourse.value = { id: row.id, name: row.name }
-  enrolledItems.value = [] // 切課先清空，避免新課標題下短暫顯示舊課清單
-  enrolledDrawer.value = true
   enrolledLoading.value = true
   try {
-    const res = await getCourseEnrolled(row.id)
+    const res = await getCourseEnrolled(courseId)
     if (seq !== enrolledSeq) return // 過期回應：已切到別課，丟棄不覆寫
-    enrolledItems.value = res.data.items
+    // 後端已保證佔位在前、候補在後，這裡依 status 拆兩區供分區拖拉
+    occupyingItems.value = res.data.items.filter((i) => OCCUPYING_STATUS_SET.has(i.status))
+    queueItems.value = res.data.items.filter((i) => !OCCUPYING_STATUS_SET.has(i.status))
+    snapshotRoster()
   } catch (e) {
     if (seq !== enrolledSeq) return
     ElMessage.error(friendlyError('載入報名名單失敗', e))
   } finally {
     if (seq === enrolledSeq) enrolledLoading.value = false
+  }
+}
+
+function openEnrolled(row: Course) {
+  enrolledCourse.value = { id: row.id, name: row.name }
+  // 切課先清空，避免新課標題下短暫顯示舊課清單
+  occupyingItems.value = []
+  queueItems.value = []
+  snapshotRoster()
+  enrolledDrawer.value = true
+  loadEnrolledRoster(row.id)
+}
+
+// 拖放結束：先偵測跨區身分轉換（跳確認提示），再立即儲存；任何失敗都以
+// 後端為準重載，避免畫面停留在「看似已排但未儲存」的順序
+async function handleRosterDragEnd() {
+  const course = enrolledCourse.value
+  if (!course) return
+  const occIds = occupyingItems.value.map((i) => i.course_record_id)
+  const queueIds = queueItems.value.map((i) => i.course_record_id)
+  const savedOccIds = savedOccItems.map((i) => i.course_record_id)
+  const savedQueueIds = savedQueueItems.map((i) => i.course_record_id)
+  if (occIds.join(',') === savedOccIds.join(',') && queueIds.join(',') === savedQueueIds.join(',')) {
+    return // 原地放下，不打 API
+  }
+
+  // 跨區＝身分轉換：依「目前所在區」與「原 status」的落差判定
+  const promoted = occupyingItems.value.filter((i) => !OCCUPYING_STATUS_SET.has(i.status))
+  const demoted = queueItems.value.filter((i) => OCCUPYING_STATUS_SET.has(i.status))
+  if (promoted.length > 0 || demoted.length > 0) {
+    const lines: string[] = []
+    if (promoted.length > 0) {
+      lines.push(
+        `候補轉正式：${promoted.map((i) => i.student_name).join('、')}（家長將收到通知並產生費用；待審核候補僅轉為待審核佔位）`,
+      )
+    }
+    if (demoted.length > 0) {
+      lines.push(
+        `正式轉候補：${demoted.map((i) => i.student_name).join('、')}（系統不會自動通知家長，請自行聯繫）`,
+      )
+    }
+    try {
+      await ElMessageBox.confirm(`${lines.join('；')}。確定套用？`, '確認名單身分異動', {
+        type: 'warning',
+        confirmButtonText: '確認變更',
+      })
+    } catch {
+      restoreRoster() // 取消：還原拖拉前順序
+      return
+    }
+  }
+
+  rosterSaving.value = true
+  try {
+    const res = await reorderCourseEnrolled(course.id, occIds, queueIds)
+    ElMessage.success((res.data as { message?: string })?.message || '排序已儲存')
+    if (promoted.length > 0 || demoted.length > 0) {
+      // 身分已變（status／通知／費用），以後端為準重載並刷新課程列表計數
+      await loadEnrolledRoster(course.id)
+      fetchCourses()
+    } else {
+      snapshotRoster()
+    }
+  } catch (e) {
+    ElMessage.error(
+      (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '排序儲存失敗',
+    )
+    await loadEnrolledRoster(course.id) // 409 名單過期等：重載後端最新名單
+  } finally {
+    rosterSaving.value = false
   }
 }
 
@@ -728,6 +891,63 @@ onMounted(() => {
 .toolbar__actions { display: flex; gap: 8px; align-items: center; }
 .pending-occupancy-hint { font-size: 11px; color: var(--el-color-warning); line-height: 1.2; }
 .pending-occupancy-hint--waitlist { color: var(--el-color-info); }
+
+/* 容量佔位名單 Drawer：仿 el-table 外觀的可拖拉列表（el-table 不支援列拖拉，
+   改以 vuedraggable + flex 列自繪）；正式（佔位）／候補分兩區、跨區可拖 */
+.roster-body { min-height: 120px; }
+.roster-hint { margin: 0 0 12px; font-size: 12px; color: var(--text-tertiary, #909399); }
+.roster-table {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.roster-table__head,
+.roster-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  font-size: 13px;
+}
+.roster-table__head {
+  background: var(--el-fill-color-light);
+  font-weight: 600;
+  color: var(--text-secondary, #606266);
+}
+.roster-section-label {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-color-success);
+  background: var(--el-color-success-light-9, #f0f9eb);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.roster-section-label--wait {
+  color: var(--el-color-warning);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+/* 空區維持可放置的落點高度（如把唯一佔位生拖去候補後，佔位區仍需能拖回） */
+.roster-list:empty {
+  min-height: 36px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 6px,
+      var(--el-fill-color-light) 6px,
+      var(--el-fill-color-light) 12px
+    );
+}
+.roster-row { background: var(--el-bg-color); user-select: none; }
+.roster-row:last-child { border-bottom: none; }
+.roster-row--draggable { cursor: grab; }
+.roster-row--draggable:active { cursor: grabbing; }
+.roster-row--ghost { opacity: 0.5; background: var(--el-color-primary-light-9); }
+.roster-col--pos { width: 48px; text-align: center; flex-shrink: 0; }
+.roster-col--name { flex: 1; min-width: 0; padding: 0 8px; }
+.roster-col--class { width: 90px; flex-shrink: 0; }
+.roster-col--status { width: 100px; text-align: center; flex-shrink: 0; }
 </style>
 
 <style>
