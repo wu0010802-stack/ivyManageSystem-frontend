@@ -78,7 +78,7 @@ import { apiError } from '@/utils/error'
 import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useFormDraft } from '@/composables/useFormDraft'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
-import { useClassroomStore } from '@/stores/classroom'
+import { useAllClassroomStore } from '@/stores/classroomAll'
 import { toAdYear, getCurrentAcademicTerm } from '@/utils/academic'
 import { emptyVisitForm, type VisitFormState } from '@/constants/recruitment'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
@@ -105,11 +105,13 @@ const router = useRouter()
 const convertDialogVisible = ref(false)
 const convertTargetVisit = ref<Record<string, unknown> | null>(null)
 const classroomOptions = ref<{ id: number; name: string }[]>([])
-const classroomStore = useClassroomStore()
+// 跨學期班級：招生轉入學多在暑假，新生要編進的是下個學年的班；只拿當期班級會一個都選不到。
+const classroomStore = useAllClassroomStore()
 
 async function loadClassroomsOnce() {
   try {
     await classroomStore.fetchClassrooms()
+    // 原樣傳：RecruitmentConvertDialog 自己用 school_year/semester 組「班名（114-2）」標籤
     classroomOptions.value = (classroomStore.classrooms as { id: number; name: string }[]) || []
   } catch {
     // 失敗靜默：不阻擋 dialog 開啟，使用者仍可不選班級
