@@ -55,7 +55,7 @@
         :disabled="!canConfirm"
         @click="onConfirm"
       >
-        確認推進
+        確認
       </el-button>
     </template>
   </el-dialog>
@@ -68,8 +68,8 @@ import {
   ElInput, ElButton,
 } from 'element-plus'
 import { getClassrooms } from '@/api/classrooms'
-
-type Stage = 'visited' | 'deposited' | 'enrolled' | 'active'
+import { FUNNEL_STAGES, FUNNEL_STAGE_LABELS } from '@/constants/recruitmentFunnel'
+import type { Stage } from '@/stores/recruitmentFunnel'
 
 const props = defineProps<{
   modelValue: boolean
@@ -90,36 +90,29 @@ const visible = computed({
   set: (v: boolean) => emit('update:modelValue', v),
 })
 
-const stageOrder: Stage[] = ['visited', 'deposited', 'enrolled', 'active']
-
 const mode = computed<'plain' | 'dropdown' | 'destructive'>(() => {
   if (props.fromStage === 'deposited' && props.toStage === 'enrolled') return 'dropdown'
+  if (props.toStage === 'withdrawn') return 'destructive'
   if (
-    (props.fromStage === 'enrolled' || props.fromStage === 'active') &&
-    stageOrder.indexOf(props.toStage) < stageOrder.indexOf(props.fromStage)
+    props.fromStage === 'enrolled' &&
+    FUNNEL_STAGES.indexOf(props.toStage) < FUNNEL_STAGES.indexOf(props.fromStage)
   ) return 'destructive'
   return 'plain'
 })
 
-const title = computed(() => {
-  const labels: Record<Stage, string> = {
-    visited: '已訪視',
-    deposited: '已預繳',
-    enrolled: '已註冊',
-    active: '退預繳／退註冊',
-  }
-  return `${labels[props.fromStage]} → ${labels[props.toStage]}`
-})
+const title = computed(
+  () => `${FUNNEL_STAGE_LABELS[props.fromStage]} → ${FUNNEL_STAGE_LABELS[props.toStage]}`,
+)
 
 const destructiveWarningTitle = computed(() => {
-  if (
-    props.fromStage === 'enrolled' &&
-    (props.toStage === 'deposited' || props.toStage === 'visited')
-  ) {
-    return '此操作會刪除已建立的學生資料（含監護人、異動紀錄）'
+  if (props.toStage === 'withdrawn' && props.fromStage === 'enrolled') {
+    return '將刪除學生檔案（含家長聯絡資料），招生紀錄保留'
   }
-  if (props.fromStage === 'active') {
-    return '此操作會將學生 lifecycle 從 active 退回'
+  if (props.toStage === 'withdrawn') {
+    return '將標記退預繳（取消預繳訂金）'
+  }
+  if (props.fromStage === 'enrolled') {
+    return '此操作會刪除已建立的學生資料（含監護人、異動紀錄）'
   }
   return '此為 destructive 操作'
 })

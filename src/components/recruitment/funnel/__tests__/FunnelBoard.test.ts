@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import FunnelBoard from '../FunnelBoard.vue'
 import FunnelAddVisit from '../FunnelAddVisit.vue'
+import FunnelColumn from '../FunnelColumn.vue'
 import { useRecruitmentFunnelStore } from '@/stores/recruitmentFunnel'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 
@@ -19,8 +20,8 @@ vi.mock('element-plus', async (importOriginal) => {
 
 function emptyBoard() {
   return {
-    stages: { visited: [], deposited: [], enrolled: [], active: [] },
-    summary: { visited_count: 0, deposited_count: 0, enrolled_count: 0, active_count: 0 },
+    stages: { visited: [], deposited: [], enrolled: [], withdrawn: [] },
+    summary: { visited_count: 0, deposited_count: 0, enrolled_count: 0, withdrawn_count: 0 },
   }
 }
 
@@ -53,7 +54,7 @@ describe('FunnelBoard 新增訪視串接', () => {
 
   it('子元件 created → 重載看板並 emit created', async () => {
     const store = useRecruitmentFunnelStore()
-    store.board = { stages: { visited: [{ visit_id: 99 } as never], deposited: [], enrolled: [], active: [] },
+    store.board = { stages: { visited: [{ visit_id: 99 } as never], deposited: [], enrolled: [], withdrawn: [] },
       summary: emptyBoard().summary }
     const loadSpy = vi.spyOn(store, 'loadBoard').mockResolvedValue()
     const wrapper = mountBoard()
@@ -95,5 +96,18 @@ describe('FunnelBoard 新增訪視串接', () => {
     expect(infoMock).toHaveBeenCalledTimes(1)
     expect(infoMock.mock.calls[0][0]).toContain('不在目前篩選')
     expect(wrapper.emitted('created')).toBeTruthy()
+  })
+
+  it('四欄 stage 為 visited/deposited/enrolled/withdrawn（不再有 active）', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = emptyBoard()
+    vi.spyOn(store, 'loadBoard').mockResolvedValue()
+    const wrapper = mountBoard()
+    await flushPromises()
+    const columns = wrapper.findAllComponents(FunnelColumn)
+    expect(columns.map((c) => c.props('stage'))).toEqual([
+      'visited', 'deposited', 'enrolled', 'withdrawn',
+    ])
+    expect(columns[3].props('title')).toBe('退預繳／退註冊')
   })
 })

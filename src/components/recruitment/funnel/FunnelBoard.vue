@@ -66,6 +66,7 @@ import { ElSelect, ElOption, ElButton, ElMessage, ElMessageBox } from 'element-p
 import { useRecruitmentFunnelStore, type Stage, type FunnelCardData } from '@/stores/recruitmentFunnel'
 import { hasPermission } from '@/utils/auth'
 import { currentRocYear } from '@/utils/academic'
+import { FUNNEL_STAGES, FUNNEL_STAGE_LABELS, FUNNEL_STAGE_COLORS } from '@/constants/recruitmentFunnel'
 import FunnelSummaryBar from './FunnelSummaryBar.vue'
 import FunnelColumn from './FunnelColumn.vue'
 import TransitionConfirmDialog from './TransitionConfirmDialog.vue'
@@ -94,12 +95,12 @@ async function onRefresh() {
 }
 
 // === Column 設定 ===
-const columnConfigs: Array<{ stage: Stage; title: string; color: string }> = [
-  { stage: 'visited', title: '已訪視', color: '#909399' },
-  { stage: 'deposited', title: '已預繳', color: '#e6a23c' },
-  { stage: 'enrolled', title: '已註冊', color: '#67c23a' },
-  { stage: 'active', title: '退預繳／退註冊', color: '#409eff' },
-]
+const columnConfigs: Array<{ stage: Stage; title: string; color: string }> =
+  FUNNEL_STAGES.map((stage) => ({
+    stage,
+    title: FUNNEL_STAGE_LABELS[stage],
+    color: FUNNEL_STAGE_COLORS[stage],
+  }))
 
 // === 權限控管 ===
 // 使用 hasPermission() 字串名稱 API（內部已用 BigInt 避免 32-bit overflow）
@@ -108,8 +109,11 @@ function canDragSetForStage(stage: Stage): Set<number> {
   if (stage === 'visited' || stage === 'deposited') {
     allowed =
       hasPermission('RECRUITMENT_WRITE') || hasPermission('RECRUITMENT_CONVERT')
+  } else if (stage === 'withdrawn') {
+    // 退出欄拖出＝取消退費：招生寫入權即可
+    allowed = hasPermission('RECRUITMENT_WRITE')
   } else {
-    // enrolled / active：需要 STUDENTS_WRITE 才能拖進
+    // enrolled：拖出會刪學生檔，需要 STUDENTS_WRITE
     allowed = hasPermission('STUDENTS_WRITE')
   }
   if (!allowed) return new Set<number>()
@@ -130,12 +134,11 @@ const dialogOpen = ref(false)
 function needsDialog(from: Stage, to: Stage): boolean {
   // deposited → enrolled：需選教室（dropdown mode）
   if (from === 'deposited' && to === 'enrolled') return true
-  // 自「退預繳／退註冊」或「已註冊」往前退：destructive
-  const order: Stage[] = ['visited', 'deposited', 'enrolled', 'active']
-  if (
-    (from === 'enrolled' || from === 'active') &&
-    order.indexOf(to) < order.indexOf(from)
-  ) return true
+  // 進退出欄（退預繳／退註冊）：destructive，必填原因
+  if (to === 'withdrawn') return true
+  // 自「已註冊」往前退：destructive
+  const order: readonly Stage[] = FUNNEL_STAGES
+  if (from === 'enrolled' && order.indexOf(to) < order.indexOf(from)) return true
   return false
 }
 
@@ -189,9 +192,11 @@ function handleTransitionError(err: unknown): void {
   const msg = e?.response?.data?.detail?.message
 
   if (code === 'REVERT_STUDENT_HAS_DATA') {
-    ElMessageBox.alert(msg ?? '該學生已有業務資料，無法退回', '無法退回', {
-      type: 'warning',
-    })
+    ElMessageBox.alert(
+      `${msg ?? '該學生已有業務資料，無法退回'}。請改走「學生管理 → 學生檔案 → 生命週期 → 退學」。`,
+      '無法退回',
+      { type: 'warning' },
+    )
   } else if (status === 403) {
     ElMessage.warning('無權限執行此操作')
   } else if (status === 409) {

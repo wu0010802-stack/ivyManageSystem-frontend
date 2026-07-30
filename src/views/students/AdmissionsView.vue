@@ -1,6 +1,6 @@
 <template>
   <div class="admissions-view">
-    <PageHeader title="招生入學" subtitle="參觀 → 預繳 → 註冊 → 退預繳／退註冊 · 統計分析">
+    <PageHeader title="招生入學" subtitle="參觀 → 預繳 → 註冊 ｜ 退預繳／退註冊 · 統計分析">
       <template #icon>
         <div class="page-header-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
