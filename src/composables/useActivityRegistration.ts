@@ -154,13 +154,27 @@ export function useActivityRegistration() {
     }
     savingBatch.value = true
     try {
-      const res = await batchUpdatePayment(ids, reason)
+      const res = await batchUpdatePayment(ids, reason, {
+        school_year: termStore.school_year,
+        semester: termStore.semester,
+      })
       ElMessage.success((res.data as { message: string }).message)
       if (onSuccess) onSuccess()
       await fetchList()
     } catch (e) {
-      const err = e as { response?: { data?: { detail?: string } } }
-      ElMessage.error(err?.response?.data?.detail || '批次更新失敗')
+      const err = e as { response?: { data?: { detail?: string }; status?: number } }
+      if (err?.response?.status === 409) {
+        // 資安（2026-07-30 #3）：批次名單與目前檢視學期不符（切學期載入窗口內的
+        // 殘留勾選夾帶了上一學期的報名 ID）。明確提示重新整理，並清空選取＋
+        // 重抓列表，避免使用者以同一批 ids 重試仍然失敗。
+        ElMessage.error(
+          err?.response?.data?.detail || '批次名單與目前檢視的學期不符，請重新整理後再操作'
+        )
+        if (onSuccess) onSuccess()
+        await fetchList()
+      } else {
+        ElMessage.error(err?.response?.data?.detail || '批次更新失敗')
+      }
     } finally {
       savingBatch.value = false
     }

@@ -147,6 +147,12 @@ export function usePOSCheckout() {
     if (next === prev) return
     selectedItem.value = null
     notes.value = ''
+    // 退費試算覆蓋付款金額競態修復：切模式當下使任何進行中的 applyRefundSuggestion
+    // 請求失效（stillCurrent() 靠 seq 比對擋下落地），並復位 loading 旗標，避免
+    // 「退費模式選學生 → 試算 in-flight → 切回繳費 → 重選同一筆」時，舊試算
+    // resolve 後把繳費金額覆寫成退費建議值。
+    refundSuggestionSeq++
+    refundSuggestionLoading.value = false
     // 搜尋結果也重新拉（退費模式要看已繳金額 > 0 的）
     if (searchQuery.value) runSearch()
   })
@@ -297,13 +303,17 @@ export function usePOSCheckout() {
    * fail-closed（audit F2）：載入失敗或回應缺 remaining_suggested_amount 時，不再保留
    * buildSelection 的全額 paid fallback，改歸 0 + 警告，強制人工輸入金額（amount_applied
    * <=0 時 canSubmit 為 false，送出鈕被擋）。
+   * 競態修復：stillCurrent() 額外檢查 isRefundMode，避免「試算 in-flight 時切回繳費
+   * 模式」的邊界情形——即便 seq 因某種原因未變（例如切模式與重選同一筆之間沒有其他
+   * applyRefundSuggestion 呼叫），只要目前已不在退費模式就不得套用退費建議覆寫繳費金額。
    */
   async function applyRefundSuggestion(registrationId: unknown) {
     const seq = ++refundSuggestionSeq
     refundSuggestionLoading.value = true
-    // 仍是同一筆選取、且無較新請求才套用（成功 / 失敗共用守衛）
+    // 仍是同一筆選取、仍在退費模式、且無較新請求才套用（成功 / 失敗共用守衛）
     const stillCurrent = () =>
       seq === refundSuggestionSeq &&
+      isRefundMode.value &&
       !!selectedItem.value &&
       Number(selectedItem.value.id) === Number(registrationId)
     const failClosed = () => {

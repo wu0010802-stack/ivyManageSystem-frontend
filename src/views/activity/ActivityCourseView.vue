@@ -197,14 +197,38 @@
       <el-table-column label="序號" prop="waitlist_position" width="60" align="center" />
       <el-table-column label="學生姓名" prop="student_name" min-width="90" />
       <el-table-column label="班級" prop="class_name" width="90" />
-      <el-table-column label="操作" width="90" align="center">
+      <!-- 狀態（2026-07-30 #8）：候補清單混含一般候補與「候補待審」（報名本身尚待
+           身分審核）；一眼標示子狀態，避免管理者誤以為所有候補都能立即升正式。 -->
+      <el-table-column label="狀態" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag
+            v-if="isPendingReviewWaitlist(row)"
+            type="warning" size="small" effect="plain"
+            :data-test="`waitlist-status-pending-review-${row.registration_id}`"
+          >候補待審</el-tag>
+          <el-tag v-else type="success" size="small" effect="plain" data-test="waitlist-status-normal">一般候補</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="100" align="center">
         <template #default="{ row }">
           <el-button
-            v-if="canWrite"
+            v-if="canWrite && !isPendingReviewWaitlist(row)"
             :data-test="`promote-waitlist-btn-${row.registration_id}`"
             size="small" type="success"
             @click="openPromoteDialog(row)"
           >升正式</el-button>
+          <!-- 候補待審：報名尚待身分審核（後台報名管理手動匹配／重新比對／強行收件），
+               點升正式後端必回 400——改顯示不可點的狀態標示並以 tooltip 說明原因。 -->
+          <el-tooltip
+            v-else-if="canWrite"
+            content="此候補的報名尚待身分審核，請先於「報名管理」完成審核後再回來升正式"
+            placement="top"
+          >
+            <el-tag
+              type="info" size="small"
+              :data-test="`waitlist-pending-review-tag-${row.registration_id}`"
+            >待審核</el-tag>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
@@ -226,7 +250,7 @@
       </p>
       <p v-if="promoteDialog.error" class="promote-modal__error">{{ promoteDialog.error }}</p>
       <template #footer>
-        <el-button @click="cancelPromote">取消</el-button>
+        <el-button :disabled="promoteDialog.submitting" @click="cancelPromote">取消</el-button>
         <el-button
           data-test="promote-confirm"
           type="primary"
@@ -314,7 +338,10 @@ interface Course {
   instructor_employee_id?: number | null
   enrolled?: number; promoted_pending?: number; pending_review?: number; waitlist_count?: number
 }
-interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
+// status（2026-07-30 #8）：候補清單混含一般候補（waitlist，可升正式）與「候補待審」
+// （pending_review_waitlist，報名本身尚待身分審核，點升正式後端必回 400）兩種子狀態；
+// 舊資料 / 舊測試 mock 可能缺此欄，故型別為 optional，缺值時視同一般候補處理。
+interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number; status?: 'waitlist' | 'pending_review_waitlist' }
 interface EnrolledItem { position?: number; student_name?: string; class_name?: string }
 
 interface CourseForm {
@@ -401,6 +428,12 @@ const waitlistCourse = ref<{ id: number; name: string } | null>(null)
 const waitlistItems = ref<WaitlistItem[]>([])
 const waitlistLoading = ref(false)
 
+// status（2026-07-30 #8）：缺欄位（舊測試 mock／未預期的後端回應）時視同一般候補，
+// 維持修復前「一律可升正式」的行為，只有明確標記 pending_review_waitlist 才擋。
+function isPendingReviewWaitlist(row: WaitlistItem): boolean {
+  return row.status === 'pending_review_waitlist'
+}
+
 const promoteDialog = reactive<{
   open: boolean
   registration: WaitlistItem | null
@@ -478,6 +511,10 @@ function openPromoteDialog(reg: WaitlistItem) {
 }
 
 function cancelPromote() {
+  // 送出中不可取消：避免把 promoteDialog.registration 清成 null 後，confirmPromote
+  // 仍在 await 中、resolve 後讀 registration.student_name 對 null 取值拋錯，
+  // 誤報「升位失敗」且後續刷新（getCourseWaitlist + fetchCourses）永不執行。
+  if (promoteDialog.submitting) return
   promoteDialog.open = false
   promoteDialog.registration = null
   promoteDialog.error = ''
@@ -485,19 +522,33 @@ function cancelPromote() {
 
 async function confirmPromote() {
   if (!promoteDialog.registration) return
+  // 送出前把用得到的欄位存到區域變數：避免 await 期間 promoteDialog.registration
+  // 被清掉（理論上 cancelPromote 送出中已擋，此處為雙重防線）造成事後讀取炸掉。
+  const { registration_id: registrationId, student_name: studentName } = promoteDialog.registration
+  const courseId = waitlistCourse.value!.id
   promoteDialog.submitting = true
   promoteDialog.error = ''
   try {
-    await promoteWaitlist(
-      promoteDialog.registration.registration_id,
-      waitlistCourse.value!.id,
-    )
-    ElMessage.success(`${promoteDialog.registration.student_name} 已升為正式報名`)
+    await promoteWaitlist(registrationId, courseId)
+    ElMessage.success(`${studentName} 已升為正式報名`)
     promoteDialog.open = false
     promoteDialog.registration = null
-    const res = await getCourseWaitlist(waitlistCourse.value!.id)
-    waitlistItems.value = (res.data as { items: WaitlistItem[] }).items
-    await fetchCourses()
+    // 刷新獨立 try/catch：升位本身已成功，刷新失敗不可回頭把已顯示的成功訊息
+    // 誤報為「升位失敗」（落入下方 catch 蓋掉 promoteDialog.error）。
+    try {
+      // 切課防護（與 fetchSeq/waitlistSeq 一致）：await 期間若已切到別的課程，
+      // waitlistCourse 不再等於送出當下的 courseId，套用回應前後都要重新檢查，
+      // 否則會把「舊課的升位結果」覆寫到「目前顯示的新課」候補清單上。
+      if (waitlistCourse.value?.id === courseId) {
+        const res = await getCourseWaitlist(courseId)
+        if (waitlistCourse.value?.id === courseId) {
+          waitlistItems.value = (res.data as { items: WaitlistItem[] }).items
+        }
+      }
+      await fetchCourses()
+    } catch {
+      // 非關鍵路徑：靜默失敗，不覆蓋已成功的升位結果
+    }
   } catch (e) {
     promoteDialog.error = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '升位失敗，請稍後再試'
   } finally {
