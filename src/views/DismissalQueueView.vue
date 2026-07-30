@@ -4,7 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { Search, Plus, Check, Loading, Refresh } from '@element-plus/icons-vue'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
-import { useClassroomStore } from '@/stores/classroom'
+import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
 import { closeWebSocketSafely } from '@/utils/ws'
@@ -18,6 +18,7 @@ import {
 } from '@/composables/useDismissalUrgency'
 import {
   buildRoster,
+  classroomOptionsForStudents,
   type RosterStudent,
   type ClassroomInput,
 } from '@/composables/useDismissalRoster'
@@ -48,8 +49,10 @@ interface StudentItem {
 // ─── 狀態 ───────────────────────────────────────────────
 const calls = ref<DismissalCall[]>([])
 const loading = ref(false)
-const classroomStore = useClassroomStore()
-const classrooms = computed(() => classroomStore.classrooms)
+// 班級清單刻意不走全域 classroomStore：那支 store 由 8 個頁面共用、且 _createFetchStore
+// 呼叫 apiFn() 不帶參數，只拿得到「當期學期」的班級。接送通知的名單是「今天在籍的孩子」
+// 不跟學期，暑假期間學生已編入下學年班級，用當期清單會全部對不上班級（2026-07-30 根因）。
+const classrooms = ref<ClassroomInput[]>([])
 
 // 等候時間活著跳 + 最久優先（FIFO）看板排序
 const { now } = useNowClock()
@@ -76,7 +79,7 @@ const inFlight = ref<Set<number>>(new Set())
 const roster = computed(() => {
   const groups = buildRoster(
     students.value,
-    classrooms.value as ClassroomInput[],
+    classrooms.value,
     calls.value,
     rosterQuery.value,
   )
@@ -87,13 +90,18 @@ const roster = computed(() => {
 
 const rosterFlatStudents = computed(() => roster.value.flatMap(g => g.students))
 
+// 班級篩選選項：班級清單含歷年班級，只列出實際有在籍學生的班（同名班補學期標籤）。
+const classroomOptions = computed(() =>
+  classroomOptionsForStudents(students.value, classrooms.value),
+)
+
 const filteredStudentOptions = computed(() => {
   if (!createFilterClassroomId.value) return students.value
   return students.value.filter(s => s.classroom_id === createFilterClassroomId.value)
 })
 
 const classroomNameMap = computed(() =>
-  Object.fromEntries((classrooms.value as { id: number; name: string }[]).map(c => [c.id, c.name]))
+  Object.fromEntries(classrooms.value.map(c => [c.id, c.name]))
 )
 
 const studentLabel = (s: StudentItem) => {
@@ -164,6 +172,18 @@ const loadStudents = async () => {
     students.value = ((res.data as { items?: StudentItem[] }).items || []) as StudentItem[]
   } catch (e) {
     ElMessage.error(friendlyError('載入學生清單失敗', e))
+  }
+}
+
+// ─── 班級清單載入（跨學期）───────────────────────────────
+// current_only=false 是關鍵：後端預設只回當期學期的班級，而學生名單不跟學期，
+// 兩邊錯配時學生的班級會查不到（暑假期間學生已編入下學年班級 → 整批誤標）。
+const loadClassrooms = async () => {
+  try {
+    const res = await getClassrooms({ current_only: false })
+    classrooms.value = (res.data || []) as ClassroomInput[]
+  } catch (e) {
+    ElMessage.error(friendlyError('載入班級清單失敗', e))
   }
 }
 
@@ -392,7 +412,7 @@ const formatTime = (dt: string | undefined) => formatTaipeiClock(dt) ?? '-'
 
 // ─── Lifecycle ────────────────────────────────────────────
 onMounted(async () => {
-  await Promise.all([fetchCalls(), classroomStore.fetchClassrooms(), loadStudents()])
+  await Promise.all([fetchCalls(), loadClassrooms(), loadStudents()])
   connectWs()
 })
 
@@ -471,7 +491,13 @@ onUnmounted(() => {
       </el-col>
       <el-col :xs="24" :sm="8">
         <el-select v-model="filterClassroomId" placeholder="全部班級" clearable @change="fetchCalls" style="width:100%">
-          <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+          <el-option
+            v-for="c in classroomOptions"
+            :key="c.id"
+            :label="c.label"
+            :value="c.id"
+            data-testid="dismissal-classroom-option"
+          />
         </el-select>
       </el-col>
       <el-col :xs="24" :sm="4">
@@ -530,8 +556,18 @@ onUnmounted(() => {
         <div v-if="roster.length === 0" class="roster-empty">
           {{ rosterQuery ? '找不到符合的學生' : '沒有在籍學生' }}
         </div>
-        <div v-for="group in roster" :key="group.classroomId ?? 'none'" class="roster-group">
-          <div class="roster-group__name">{{ group.classroomName }}</div>
+        <div
+          v-for="group in roster"
+          :key="group.kind === 'classroom' ? group.classroomId! : group.kind"
+          class="roster-group"
+        >
+          <div class="roster-group__head">
+            <span class="roster-group__name">{{ group.classroomName }}</span>
+            <!-- 非正常班級的兩種情形結果不同（一種點得動、一種點不動），要講明白 -->
+            <span v-if="group.kind !== 'classroom'" class="roster-group__hint">
+              {{ group.kind === 'unknown' ? '班級不在目前清單中，仍可通知' : '沒有班級，無法通知' }}
+            </span>
+          </div>
           <div class="roster-chips">
             <button
               v-for="s in group.students"
@@ -600,7 +636,7 @@ onUnmounted(() => {
             clearable
             style="width:100%"
           >
-            <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+            <el-option v-for="c in classroomOptions" :key="c.id" :label="c.label" :value="c.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="學生" required>
@@ -776,10 +812,20 @@ onUnmounted(() => {
 .roster-group {
   margin-bottom: var(--space-4);
 }
-.roster-group__name {
+.roster-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
   margin-bottom: var(--space-2);
+}
+.roster-group__name {
   font-size: var(--text-xs);
   font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+}
+.roster-group__hint {
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
 .roster-chips {

@@ -25,6 +25,17 @@ export interface RosterStudentInput {
 export interface ClassroomInput {
   id: number
   name: string
+  /** 以下三欄供跨學年同名班級加標籤區分（getClassrooms 已回傳）。 */
+  school_year?: number
+  semester?: number
+  semester_label?: string
+}
+
+/** 班級篩選下拉的一個選項；label 在同名班並存時帶學期標籤。 */
+export interface ClassroomOption {
+  id: number
+  name: string
+  label: string
 }
 
 export interface RosterStudent {
@@ -36,9 +47,19 @@ export interface RosterStudent {
   notifying: boolean
 }
 
+/**
+ * 群組類別：
+ * - classroom：對得上班級清單的正常班級。
+ * - unknown：學生有 classroom_id，但班級清單裡查不到（停用班／清單未涵蓋的學期）。
+ *   仍可發起通知，不可與 unassigned 混為一談。
+ * - unassigned：學生真的沒有 classroom_id，無法發起通知。
+ */
+export type RosterGroupKind = 'classroom' | 'unknown' | 'unassigned'
+
 export interface RosterGroup {
   classroomId: number | null
   classroomName: string
+  kind: RosterGroupKind
   students: RosterStudent[]
 }
 
@@ -46,6 +67,7 @@ export interface RosterGroup {
 const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['pending', 'acknowledged'])
 
 const UNASSIGNED_NAME = '未分班'
+const UNKNOWN_NAME = '其他班級'
 
 /** 回傳目前有進行中通知（pending/acknowledged）的 student_id 集合。 */
 export function activeCallStudentIds(calls: RosterCallInput[]): Set<number> {
@@ -73,7 +95,8 @@ const byName = (a: RosterStudent, b: RosterStudent) =>
  * - 依 classrooms 給定順序分組，班級內依姓名排序。
  * - 每位學生標記 notifying（是否已在進行中通知）。
  * - 套用 query 後略過沒有任何相符學生的班級。
- * - 無班級 / 班級不存在的學生歸入「未分班」並殿後。
+ * - 班級查不到的學生歸「其他班級」、真的沒班級的歸「未分班」，兩組依序殿後。
+ *   （2026-07-30：兩者曾被併成「未分班」，暑假期間學生編入下學年班級時全站誤標。）
  */
 export function buildRoster(
   students: RosterStudentInput[],
@@ -84,12 +107,16 @@ export function buildRoster(
   const activeIds = activeCallStudentIds(calls)
   const knownClassroom = new Set(classrooms.map(c => c.id))
 
-  // 先依班級 id 分桶（null key 代表未分班）
-  const buckets = new Map<number | null, RosterStudent[]>()
+  // 先分桶：班級 id 為已知班級，另有 'unknown'（查不到班級）/ 'unassigned'（沒有班級）
+  const buckets = new Map<number | 'unknown' | 'unassigned', RosterStudent[]>()
   for (const s of students) {
     if (!matchStudent(s.name, query)) continue
     const key =
-      s.classroom_id != null && knownClassroom.has(s.classroom_id) ? s.classroom_id : null
+      s.classroom_id == null
+        ? 'unassigned'
+        : knownClassroom.has(s.classroom_id)
+          ? s.classroom_id
+          : 'unknown'
     const entry: RosterStudent = {
       id: s.id,
       name: s.name,
@@ -109,18 +136,62 @@ export function buildRoster(
       result.push({
         classroomId: c.id,
         classroomName: c.name,
+        kind: 'classroom',
         students: list.sort(byName),
       })
     }
   }
-  // 未分班殿後
-  const unassigned = buckets.get(null)
+  // 查不到班級 → 其他班級（仍可發起通知）
+  const unknown = buckets.get('unknown')
+  if (unknown && unknown.length) {
+    result.push({
+      classroomId: null,
+      classroomName: UNKNOWN_NAME,
+      kind: 'unknown',
+      students: unknown.sort(byName),
+    })
+  }
+  // 未分班殿後（無 classroom_id，發不出通知）
+  const unassigned = buckets.get('unassigned')
   if (unassigned && unassigned.length) {
     result.push({
       classroomId: null,
       classroomName: UNASSIGNED_NAME,
+      kind: 'unassigned',
       students: unassigned.sort(byName),
     })
   }
   return result
+}
+
+/** 同名班級的區分後綴：優先用後端 semester_label，退回 `114-2` 這種組字。 */
+function termSuffix(c: ClassroomInput): string | null {
+  if (c.semester_label) return c.semester_label
+  if (c.school_year != null && c.semester != null) return `${c.school_year}-${c.semester}`
+  return null
+}
+
+/**
+ * 產生班級篩選選項：只列出「實際有在籍學生」的班級，依 classrooms 給定順序。
+ *
+ * 班級清單改抓跨學期後會含歷年班級，全部倒進下拉沒有意義；同名班（不同學年同班名）
+ * 則補學期標籤才分得出來。
+ */
+export function classroomOptionsForStudents(
+  students: RosterStudentInput[],
+  classrooms: ClassroomInput[],
+): ClassroomOption[] {
+  const used = new Set<number>()
+  for (const s of students) {
+    if (s.classroom_id != null) used.add(s.classroom_id)
+  }
+  const inUse = classrooms.filter(c => used.has(c.id))
+
+  const nameCount = new Map<string, number>()
+  for (const c of inUse) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1)
+
+  return inUse.map(c => {
+    const suffix = (nameCount.get(c.name) ?? 0) > 1 ? termSuffix(c) : null
+    return { id: c.id, name: c.name, label: suffix ? `${c.name}（${suffix}）` : c.name }
+  })
 }
