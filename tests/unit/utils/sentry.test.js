@@ -279,6 +279,36 @@ describe('scrubMapping', () => {
     expect(res.course_name).toBe('手作陶藝')
     expect(res.classroom_name).toBe('向日葵班')
   })
+
+  // #11 資安稽核（2026-07-30）：裸字 key（student=王小明）不含底線後綴，substring
+  // denylist 攔不到；與後端 _PII_KEY_EXACT 對齊補精確比對。
+  it('filters bare student/child/parent keys via exact match (#11 2026-07-30)', () => {
+    const res = scrubMapping({
+      student: '王小明',
+      child: '陳小華',
+      parent: '林小美',
+      ok: 'yes',
+    })
+    expect(res.student).toBe('[Filtered]')
+    expect(res.child).toBe('[Filtered]')
+    expect(res.parent).toBe('[Filtered]')
+    expect(res.ok).toBe('yes')
+  })
+
+  it('does not over-match extended keys like student_id / students_count via exact match (#11 2026-07-30)', () => {
+    const res = scrubMapping({
+      student_id: 42,
+      students_count: 10,
+    })
+    expect(res.student_id).toBe(42)
+    expect(res.students_count).toBe(10)
+  })
+
+  it('is case-insensitive for exact-match bare keys (#11 2026-07-30)', () => {
+    const res = scrubMapping({ Student: '王小明', CHILD: '陳小華' })
+    expect(res.Student).toBe('[Filtered]')
+    expect(res.CHILD).toBe('[Filtered]')
+  })
 })
 
 describe('scrubEvent', () => {

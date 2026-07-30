@@ -139,13 +139,51 @@ describe('useActivityRegistration', () => {
 
   it('batchMarkPaid 送出正確的 ids 與 reason（只接受 isPaid=true，批次沖帳已禁用）', async () => {
     const { batchMarkPaid } = useActivityRegistration()
+    const termStore = useAcademicTermStore()
 
     await batchMarkPaid(true, [1, 2, 3])
 
     expect(batchUpdatePayment).toHaveBeenCalledWith(
       [1, 2, 3],
-      '期末批次補齊（家長現金繳清，已對帳）'
+      '期末批次補齊（家長現金繳清，已對帳）',
+      { school_year: termStore.school_year, semester: termStore.semester }
     )
+  })
+
+  // ── 資安（#3 2026-07-30）：切換學期後批次操作誤打上一學期資料 ─────────────
+  // batchMarkPaid 需帶上呼叫端目前檢視的學期，讓後端可驗證整批 ids 同屬此學期，
+  // 不符時回 409（見 schemas/activity_admin.py BatchPaymentUpdate）。
+  it('batchMarkPaid payload 帶當前選定學期（資安 #3 2026-07-30）', async () => {
+    const { batchMarkPaid } = useActivityRegistration()
+    const termStore = useAcademicTermStore()
+    termStore.setTerm(115, 2)
+
+    await batchMarkPaid(true, [1, 2])
+
+    expect(batchUpdatePayment).toHaveBeenCalledWith(
+      [1, 2],
+      '期末批次補齊（家長現金繳清，已對帳）',
+      { school_year: 115, semester: 2 }
+    )
+  })
+
+  it('batchMarkPaid 遇後端 409（批次名單與目前學期不符）時明確提示重新整理，並清空選取、重抓列表', async () => {
+    batchUpdatePayment.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { detail: '批次名單與目前檢視的學期不符，請重新整理後再操作' },
+      },
+    })
+    const onSuccess = vi.fn()
+    const { batchMarkPaid } = useActivityRegistration()
+
+    await batchMarkPaid(true, [1, 2], onSuccess)
+
+    expect(ElMessageError).toHaveBeenCalledWith('批次名單與目前檢視的學期不符，請重新整理後再操作')
+    // 409 屬「選取殘留舊學期資料」情境：清空選取（呼叫端 view 層 clearSelection）
+    expect(onSuccess).toHaveBeenCalledOnce()
+    // 重新整理列表，避免使用者以同一批 ids 重試仍然失敗
+    expect(getRegistrations).toHaveBeenCalled()
   })
 
   it('batchMarkPaid 傳入 isPaid=false 不呼叫 API（已禁用批次沖帳）', async () => {
