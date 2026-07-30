@@ -11,8 +11,10 @@ import {
   getTimeline,
 } from '@/api/recruitmentFunnel'
 import type { Schema } from '@/api/_generated/typed'
+import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
+import { FUNNEL_STAGES, type FunnelStage } from '@/constants/recruitmentFunnel'
 
-export type Stage = 'visited' | 'deposited' | 'enrolled' | 'active'
+export type Stage = FunnelStage
 
 export type FunnelCardData = Schema<'FunnelCard'>
 export type FunnelSummaryData = Schema<'FunnelSummary'>
@@ -49,7 +51,7 @@ function emptyState(): State {
   }
 }
 
-const STAGES: Stage[] = ['visited', 'deposited', 'enrolled', 'active']
+const STAGES: Stage[] = [...FUNNEL_STAGES]
 
 export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
   state: (): State => emptyState(),
@@ -124,6 +126,20 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
         })
         this._applyServerResult(visitId, resp.data)
         this.invalidateTimeline(visitId)
+
+        const hadStudent = snapshot.card.student_id != null
+        const nowStudentId = resp.data.student_id ?? null
+        if (!hadStudent && nowStudentId != null) {
+          domainBus.emit(STUDENT_EVENTS.CREATED, {
+            id: nowStudentId,
+            classroom_id: opts.classroomId ?? null,
+          })
+        } else if (hadStudent && nowStudentId == null) {
+          domainBus.emit(STUDENT_EVENTS.DELETED, {
+            id: snapshot.card.student_id ?? undefined,
+          })
+        }
+
         return resp.data
       } catch (err: unknown) {
         this._restoreCard(snapshot)
@@ -181,7 +197,7 @@ export const useRecruitmentFunnelStore = defineStore('recruitmentFunnel', {
       for (const stage of STAGES) {
         const card = this.board.stages[stage].find(c => c.visit_id === visitId)
         if (card) {
-          if (result.student_id != null) card.student_id = result.student_id
+          card.student_id = result.student_id ?? null
           card.current_stage = result.to_stage
           break
         }

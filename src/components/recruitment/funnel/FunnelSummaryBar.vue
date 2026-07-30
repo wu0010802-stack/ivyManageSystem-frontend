@@ -14,16 +14,26 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { FUNNEL_STAGES, FUNNEL_STAGE_LABELS, FUNNEL_STAGE_COLORS } from '@/constants/recruitmentFunnel'
 import type { FunnelSummaryData } from '@/stores/recruitmentFunnel'
 
 const props = defineProps<{ summary: FunnelSummaryData }>()
 
-const items = computed(() => [
-  { stage: 'visited', label: '已訪視', count: props.summary.visited_count, color: '#909399' },
-  { stage: 'deposited', label: '已預繳', count: props.summary.deposited_count, color: '#e6a23c' },
-  { stage: 'enrolled', label: '已註冊', count: props.summary.enrolled_count, color: '#67c23a' },
-  { stage: 'active', label: '退預繳／退註冊', count: props.summary.active_count, color: '#409eff' },
-])
+const COUNT_KEYS = {
+  visited: 'visited_count',
+  deposited: 'deposited_count',
+  enrolled: 'enrolled_count',
+  withdrawn: 'withdrawn_count',
+} as const
+
+const items = computed(() =>
+  FUNNEL_STAGES.map((stage) => ({
+    stage,
+    label: FUNNEL_STAGE_LABELS[stage],
+    count: props.summary[COUNT_KEYS[stage]],
+    color: FUNNEL_STAGE_COLORS[stage],
+  })),
+)
 
 function pct(num: number, denom: number): string {
   if (denom === 0) return '0'
@@ -32,7 +42,7 @@ function pct(num: number, denom: number): string {
 
 const depositRate = computed(() => pct(props.summary.deposited_count, props.summary.visited_count))
 const enrollRate = computed(() => pct(props.summary.enrolled_count, props.summary.deposited_count))
-const activeRate = computed(() => pct(props.summary.active_count, props.summary.enrolled_count))
+const activeRate = computed(() => pct(props.summary.withdrawn_count, props.summary.enrolled_count))
 </script>
 
 <style scoped>

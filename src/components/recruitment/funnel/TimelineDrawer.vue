@@ -37,6 +37,7 @@
 import { computed, watch } from 'vue'
 import { ElDrawer, ElTag } from 'element-plus'
 import { useRecruitmentFunnelStore } from '@/stores/recruitmentFunnel'
+import { FUNNEL_EVENT_LABELS } from '@/constants/recruitmentFunnel'
 
 const props = defineProps<{
   modelValue: boolean
@@ -78,18 +79,8 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleString('zh-TW', { hour12: false })
 }
 
-const EVENT_LABELS: Record<string, string> = {
-  created: '建立訪視',
-  deposit_added: '加上預繳',
-  deposit_removed: '取消預繳',
-  converted: '註冊（轉學生）',
-  revert_converted: '取消註冊（刪學生）',
-  activated: '退預繳／退註冊',
-  revert_activated: '取消退預繳／退註冊',
-}
-
 function humanizeEventType(t: string): string {
-  return EVENT_LABELS[t] ?? t
+  return FUNNEL_EVENT_LABELS[t] ?? t
 }
 </script>
 

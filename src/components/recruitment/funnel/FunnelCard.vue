@@ -11,6 +11,7 @@
     <div class="funnel-card__header">
       <span class="funnel-card__name">{{ card.child_name }}</span>
       <span class="funnel-card__tags">
+        <el-tag v-if="withdrawnLabel" size="small" type="danger">{{ withdrawnLabel }}</el-tag>
         <el-tag v-if="card.grade" size="small" type="info">{{ card.grade }}</el-tag>
         <el-tag v-if="termLabel" size="small" type="warning" class="funnel-card__term">
           {{ termLabel }}
@@ -22,6 +23,7 @@
       <span v-if="card.district" class="funnel-card__district">{{ card.district }}</span>
       <span v-if="card.source" class="funnel-card__source">{{ card.source }}</span>
     </div>
+    <div v-if="card.withdraw_reason" class="funnel-card__reason">{{ card.withdraw_reason }}</div>
     <div v-if="card.student_id" class="student-id-badge">學號 #{{ card.student_id }}</div>
   </div>
 </template>
@@ -30,6 +32,7 @@
 import { computed } from 'vue'
 import { ElTag } from 'element-plus'
 import { formatSemesterShort } from '@/utils/classHistory'
+import { WITHDRAWN_FROM_LABELS } from '@/constants/recruitmentFunnel'
 import type { FunnelCardData } from '@/stores/recruitmentFunnel'
 
 // TODO(codegen): schema.d.ts regen 後 FunnelCardData 會自帶 target_semester，屆時此擴充成為冗餘可移除
@@ -48,6 +51,12 @@ defineEmits<{
 const termLabel = computed((): string | null =>
   props.card.target_school_year != null && props.card.target_semester != null
     ? formatSemesterShort(props.card.target_school_year, props.card.target_semester)
+    : null,
+)
+
+const withdrawnLabel = computed((): string | null =>
+  props.card.withdrawn_from
+    ? (WITHDRAWN_FROM_LABELS[props.card.withdrawn_from] ?? null)
     : null,
 )
 </script>
@@ -99,6 +108,7 @@ const termLabel = computed((): string | null =>
   font-size: 12px;
   color: var(--text-tertiary);
 }
+.funnel-card__reason { margin-top: 4px; font-size: 12px; color: #909399; }
 .student-id-badge {
   display: inline-block;
   margin-top: 6px;

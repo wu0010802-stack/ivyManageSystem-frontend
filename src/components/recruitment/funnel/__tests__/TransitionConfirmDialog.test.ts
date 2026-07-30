@@ -96,4 +96,33 @@ describe('TransitionConfirmDialog modes', () => {
     await wrapper.find('.cancel-btn').trigger('click')
     expect(wrapper.emitted('cancel')).toBeTruthy()
   })
+
+  it('enrolled→withdrawn: destructive mode with 刪除學生檔案 warning', async () => {
+    const wrapper = mount(TransitionConfirmDialog, {
+      props: {
+        modelValue: true,
+        fromStage: 'enrolled', toStage: 'withdrawn',
+        visitId: 1, childName: '王小寶',
+      },
+      attachTo: document.body,
+    })
+    await nextTick()
+    expect(wrapper.find('.destructive-warning').exists()).toBe(true)
+    expect(wrapper.text()).toContain('將刪除學生檔案（含家長聯絡資料），招生紀錄保留')
+    expect(wrapper.text()).toContain('原因')
+  })
+
+  it('deposited→withdrawn: destructive mode with 標記退預繳 warning', async () => {
+    const wrapper = mount(TransitionConfirmDialog, {
+      props: {
+        modelValue: true,
+        fromStage: 'deposited', toStage: 'withdrawn',
+        visitId: 1, childName: '王小寶',
+      },
+      attachTo: document.body,
+    })
+    await nextTick()
+    expect(wrapper.find('.destructive-warning').exists()).toBe(true)
+    expect(wrapper.text()).toContain('將標記退預繳（取消預繳訂金）')
+  })
 })

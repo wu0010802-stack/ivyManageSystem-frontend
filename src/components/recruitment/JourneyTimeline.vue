@@ -24,6 +24,7 @@
 import { ref, watch } from 'vue'
 import { ElTag } from 'element-plus'
 import { getVisitTimeline } from '@/api/recruitment'
+import { FUNNEL_EVENT_LABELS } from '@/constants/recruitmentFunnel'
 import type { Schema } from '@/api/_generated/typed'
 
 type TimelineEvent = Schema<'TimelineEvent'>
@@ -32,16 +33,7 @@ const props = defineProps<{ visitId: number | null }>()
 const events = ref<TimelineEvent[]>([])
 const loading = ref(false)
 
-const EVENT_LABELS: Record<string, string> = {
-  created: '建立訪視',
-  deposit_added: '加上預繳',
-  deposit_removed: '取消預繳',
-  converted: '註冊（轉學生）',
-  revert_converted: '取消註冊（刪學生）',
-  activated: '退預繳／退註冊',
-  revert_activated: '取消退預繳／退註冊',
-}
-const humanize = (t: string): string => EVENT_LABELS[t] ?? t
+const humanize = (t: string): string => FUNNEL_EVENT_LABELS[t] ?? t
 const formatTime = (iso: string): string =>
   new Date(iso).toLocaleString('zh-TW', { hour12: false })
 
