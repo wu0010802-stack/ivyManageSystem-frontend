@@ -194,9 +194,11 @@
 
         <!-- 待審核分類：批量審核（含批量通過的兩條路徑）+ 逐筆精靈 -->
         <template v-if="selectionCategory === 'pending'">
-          <el-button size="small" type="primary" :loading="batchProcessing" @click="onBatchRematch">批量重新比對</el-button>
-          <el-button size="small" type="danger" plain :loading="batchProcessing" @click="onBatchForceAccept">批量強行收件</el-button>
-          <el-button size="small" type="danger" :loading="batchProcessing" @click="onBatchReject">批量拒絕</el-button>
+          <!-- loading（切換學期等重新整理中）時 disable：避免用 loading 期間刷新前
+               的舊選取（切學期已清空選取，但仍防同一學期內重整列表的窗口期誤觸）。 -->
+          <el-button size="small" type="primary" :loading="batchProcessing" :disabled="loading" @click="onBatchRematch">批量重新比對</el-button>
+          <el-button size="small" type="danger" plain :loading="batchProcessing" :disabled="loading" @click="onBatchForceAccept">批量強行收件</el-button>
+          <el-button size="small" type="danger" :loading="batchProcessing" :disabled="loading" @click="onBatchReject">批量拒絕</el-button>
           <el-button size="small" type="warning" plain @click="onOpenWizard">逐筆審核</el-button>
         </template>
 
@@ -207,7 +209,7 @@
 
         <!-- 報名成功分類（系統自動 / 人工指定 / 強行收件 / 未比對）：沿用批量標記已繳費 -->
         <template v-else>
-          <el-button size="small" type="success" :loading="savingBatch" @click="handleBatchMarkPaid(true)">標記已繳費</el-button>
+          <el-button size="small" type="success" :loading="savingBatch" :disabled="loading" @click="handleBatchMarkPaid(true)">標記已繳費</el-button>
         </template>
 
         <el-button size="small" @click="clearSelection">取消</el-button>
@@ -708,6 +710,19 @@ const tableRef = ref<{
   clearSelection: () => void
   toggleRowSelection: (row: RegistrationRow, selected?: boolean) => void
 } | null>(null)
+
+// 資安（2026-07-30 #3）：切換學期後，composable 的學期 watcher 只重置 page/filter
+// 並重新載入列表，不會清空選取狀態——若使用者在切換學期前已勾選批次，切換後
+// selectedRows 仍持有「上一學期」的報名列（row 物件本身未變、id 也還在），使用者
+// 若此時點批次操作（標記已繳費／重新比對等），會誤把上一學期的資料一併處理。
+// 這裡監看學期變化並清空選取＋el-table 的勾選 UI（tableRef.clearSelection()）。
+watch(
+  () => [termStore.school_year, termStore.semester],
+  () => {
+    selectedRows.value = []
+    tableRef.value?.clearSelection()
+  }
+)
 
 // ── 繳費相關 state ──
 const loadingPayments = ref(false)

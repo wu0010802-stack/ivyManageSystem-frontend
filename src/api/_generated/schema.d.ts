@@ -17024,6 +17024,10 @@ export interface components {
              * @description 批次標記原因（≥ 15 字），會寫進每筆系統補齊紀錄的 notes
              */
             reason: string;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
         };
         /** BatchPublishPayload */
         BatchPublishPayload: {
@@ -19138,6 +19142,10 @@ export interface components {
         /**
          * CourseWaitlistItemOut
          * @description GET /courses/{course_id}/waitlist 單筆候補名單條目。
+         *
+         *     status（2026-07-30 #8）：候補清單混含一般候補與「候補待審」兩種子狀態，
+         *     原本回應無從分辨——前端對每列都顯示「升正式」，點了待審列後端必回
+         *     400（待審核報名不可走候補升等）。補上子狀態讓前端能正確分流。
          */
         CourseWaitlistItemOut: {
             /** Class Name */
@@ -19146,6 +19154,11 @@ export interface components {
             course_record_id: number;
             /** Registration Id */
             registration_id: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "waitlist" | "pending_review_waitlist";
             /** Student Name */
             student_name: string;
             /** Waitlist Position */
@@ -27480,6 +27493,11 @@ export interface components {
         RefundSuggestionResponse: {
             /** Computed At */
             computed_at: string;
+            /**
+             * Detached Refunded Amount
+             * @default 0
+             */
+            detached_refunded_amount: number;
             /** Items */
             items: components["schemas"]["RefundSuggestionItem"][];
             /**
@@ -27622,12 +27640,17 @@ export interface components {
         /**
          * RegistrationCreateResultOut
          * @description POST /registrations admin 新增報名回應（含候補資訊）。
+         *
+         *     query_token（2026-07-30 #2）：建立即發行的查詢碼明文，僅此一次回給操作的
+         *     admin 轉交家長；DB 只存 hash。
          */
         RegistrationCreateResultOut: {
             /** Id */
             id: number;
             /** Message */
             message: string;
+            /** Query Token */
+            query_token?: string | null;
             /** Waitlist Courses */
             waitlist_courses: string[];
             /** Waitlisted */

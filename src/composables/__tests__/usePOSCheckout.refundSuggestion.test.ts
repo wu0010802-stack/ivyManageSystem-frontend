@@ -152,6 +152,44 @@ describe('usePOSCheckout 退費預填建議值（P2-B / F1 / F2）', () => {
     wrapper.unmount()
   })
 
+  it('試算 pending 中切回 payment 再重選同一筆，resolve 後 amount_applied 不被覆寫', async () => {
+    // 競態修復：退費模式選學生 → 試算 in-flight → 切回繳費 → 重選同一筆 → 舊試算
+    // 回應落地不得覆寫繳費金額（watch(checkoutType) 遞增 refundSuggestionSeq +
+    // stillCurrent() 檢查 isRefundMode 兩道防線）。
+    let resolveSuggestion!: (v: unknown) => void
+    const pending = new Promise((resolve) => {
+      resolveSuggestion = resolve
+    })
+    vi.mocked(getRefundSuggestion).mockReturnValue(pending as never)
+
+    const { api, wrapper } = mountComposable()
+    api.checkoutType.value = 'refund'
+    await flushPromises()
+
+    const row = { id: 42, student_name: '王小明', total_amount: 1000, paid_amount: 900 }
+    api.selectItem(row, '王小明')
+    await flushPromises()
+    // 試算尚未 resolve，仍 in-flight
+    expect(api.refundSuggestionLoading.value).toBe(true)
+
+    // 切回繳費模式：應使 in-flight 試算失效並復位 loading
+    api.checkoutType.value = 'payment'
+    await flushPromises()
+    expect(api.refundSuggestionLoading.value).toBe(false)
+
+    // 重選同一筆（此時為繳費模式）：預填欠費 owed = 1000 - 900 = 100
+    api.selectItem(row, '王小明')
+    await flushPromises()
+    expect(api.selectedItem.value?.amount_applied).toBe(100)
+
+    // 舊試算此時才 resolve（remaining_suggested_amount = 300）：不得覆寫繳費金額
+    resolveSuggestion(suggestion(300, [COURSE_ITEM]))
+    await flushPromises()
+    expect(api.selectedItem.value?.amount_applied).toBe(100)
+
+    wrapper.unmount()
+  })
+
   it('收款模式不抓退費建議', async () => {
     const { api, wrapper } = mountComposable()
     api.checkoutType.value = 'payment'

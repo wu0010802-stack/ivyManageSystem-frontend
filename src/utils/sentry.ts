@@ -39,6 +39,17 @@ const PII_KEY_SUBSTRINGS = [
   'question', 'reply',
 ]
 
+// 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：
+// 裸字 key（如 `student=`、`child=`、`parent=`）不含底線後綴，substring denylist 命中判斷是
+// 「denylist 詞條是否為 key 的子字串」——"student_name".includes('student') 為 true，但反過來
+// PII_KEY_SUBSTRINGS.some(needle => 'student'.includes(needle)) 對裸字 'student' 為 false
+// （'student_name' 不是 'student' 的子字串），故裸字 key 完全繞過現有 substring 比對。
+// 這裡改用「整字相等」比對，避免直接把裸字加進 PII_KEY_SUBSTRINGS 誤傷 student_id /
+// students_count 等非 PII 延伸欄位（加進 substring 清單會變成 'student_id'.includes('student')
+// → true，誤遮）。新增裸字 PII key 請加進本集合，勿加進上方 substring 清單（會打破
+// tests/test_pii_denylist_parity.py 的 array parity）。
+const PII_KEY_EXACT = ['student', 'child', 'parent']
+
 const FILTERED = '[Filtered]'
 
 // Exempt：常見被誤判的 system / metric 欄位（substring 匹配；exempt 優先於 denylist）。
@@ -140,6 +151,10 @@ function keyIsPii(key: unknown) {
   const lk = key.toLowerCase()
   // Exempt 先檢查：被誤判為 PII 的系統/metric 欄位放行
   if (PII_KEY_EXEMPT_SUBSTRINGS.some((needle) => lk.includes(needle))) return false
+  // 精確比對（裸字 key，見上方 PII_KEY_EXACT 註解）：substring 清單攔不到的
+  // student= / child= / parent= 等裸字在此攔截，且不誤傷 student_id 等延伸欄位
+  // （整字相等，非子字串）。
+  if (PII_KEY_EXACT.includes(lk)) return true
   return PII_KEY_SUBSTRINGS.some((needle) => lk.includes(needle))
 }
 

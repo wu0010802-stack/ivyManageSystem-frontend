@@ -50,6 +50,7 @@ import {
   getCourseEnrolled,
   getCourses,
 } from '@/api/activity'
+import { ElMessage } from 'element-plus'
 import ActivityCourseView from '../ActivityCourseView.vue'
 
 // ── 可正確傳遞 row 資料的 table stubs ────────────────────────────────────
@@ -116,6 +117,7 @@ const GLOBAL_STUBS = {
   'el-switch': { template: '<input type="checkbox" />' },
   'el-time-picker': { template: '<input />' },
   'el-tag': { template: '<span><slot /></span>' },
+  'el-tooltip': { template: '<div><slot /></div>' },
   'el-icon': { template: '<span />' },
   'el-empty': { template: '<div />' },
   'el-divider': { template: '<hr />' },
@@ -131,6 +133,9 @@ const sampleWaitlistRow = {
   student_name: '陳小華',
   class_name: '小班',
   waitlist_position: 2,
+  // status（2026-07-30 #8）：一般候補（可升正式）；pending_review_waitlist 子狀態
+  // 另見下方「候補待審」describe block。
+  status: 'waitlist',
 }
 
 const sampleCourse = {
@@ -211,6 +216,50 @@ describe('ActivityCourseView — 候補 Drawer 手動升位', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('該家長已被前一個升位')
+  })
+
+  // 競態修復：升正式視窗送出中取消。cancelPromote 若無 submitting 守衛會把
+  // promoteDialog.registration 清成 null，confirmPromote await 成功後讀
+  // registration.student_name 對 null 取值拋錯 → 誤報「升位失敗」且後續刷新
+  // （getCourseWaitlist + fetchCourses）永不執行。
+  it('送出中點取消鈕不會關閉 dialog／不清 registration，promote resolve 後顯示成功訊息且正常刷新', async () => {
+    let resolvePromote
+    promoteWaitlist.mockImplementation(
+      () => new Promise((resolve) => { resolvePromote = resolve }),
+    )
+    getCourseWaitlist.mockResolvedValue({ data: { items: [sampleWaitlistRow] } })
+    getCourses.mockResolvedValue({ data: { courses: [sampleCourse] } })
+
+    const wrapper = await mountAndOpenWaitlistDrawer()
+    await wrapper.find('[data-test="promote-waitlist-btn-11"]').trigger('click')
+    await wrapper.find('[data-test="promote-confirm"]').trigger('click')
+    await flushPromises()
+    // 此時 confirmPromote 仍在 await promoteWaitlist（尚未 resolve），submitting=true
+
+    const ss = wrapper.vm.$.setupState
+    expect(ss.promoteDialog.submitting).toBe(true)
+
+    const cancelBtn = wrapper.findAll('button').find((b) => b.text() === '取消')
+    expect(cancelBtn).toBeTruthy()
+    await cancelBtn.trigger('click')
+    await flushPromises()
+
+    // 送出中點取消：dialog 不關閉、registration 不被清空
+    expect(ss.promoteDialog.open).toBe(true)
+    expect(ss.promoteDialog.registration).not.toBe(null)
+
+    // promoteWaitlist 此時才 resolve：應正常顯示成功訊息並完成刷新（不因剛才誤觸
+    // 取消而讀到 null registration 拋錯、誤報升位失敗）
+    resolvePromote({ data: { message: '成功升為正式報名' } })
+    await flushPromises()
+
+    expect(ElMessage.success).toHaveBeenCalledWith('陳小華 已升為正式報名')
+    expect(ss.promoteDialog.open).toBe(false)
+    expect(ss.promoteDialog.registration).toBe(null)
+    // 開啟 Drawer 時 1 次 + 升位成功後刷新 1 次
+    expect(getCourseWaitlist).toHaveBeenCalledTimes(2)
+    // mounted 時 1 次 + 升位成功後刷新 1 次
+    expect(getCourses).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -345,5 +394,58 @@ describe('ActivityCourseView — 容量佔位名單 drilldown', () => {
     expect(wrapper.get('[data-test="occupancy-status-201"]').text()).toContain('正式')
     expect(wrapper.get('[data-test="occupancy-status-202"]').text()).toContain('待家長確認')
     expect(wrapper.get('[data-test="occupancy-status-203"]').text()).toContain('待審核')
+  })
+})
+
+// status（2026-07-30 #8）：候補清單混含一般候補與「候補待審」（報名本身尚待身分審核，
+// 點升正式後端必回 400）兩種子狀態；操作欄需依 status 分流，不能一律顯示升正式鈕。
+describe('ActivityCourseView — 候補待審子狀態（#8 2026-07-30）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('一般候補（status=waitlist）仍顯示升正式鈕', async () => {
+    const wrapper = await mountAndOpenWaitlistDrawer()
+    expect(wrapper.find('[data-test="promote-waitlist-btn-11"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="waitlist-pending-review-tag-11"]').exists()).toBe(false)
+  })
+
+  it('候補待審（status=pending_review_waitlist）不顯示升正式鈕，改顯示待審核標示', async () => {
+    getCourses.mockResolvedValue({ data: { courses: [sampleCourse] } })
+    getCourseWaitlist.mockResolvedValue({
+      data: {
+        items: [{ ...sampleWaitlistRow, status: 'pending_review_waitlist' }],
+      },
+    })
+
+    const wrapper = mount(ActivityCourseView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+    const btns = wrapper.findAll('button')
+    const waitlistBtn = btns.find((b) => b.text() === '1')
+    await waitlistBtn.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="promote-waitlist-btn-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="waitlist-pending-review-tag-11"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('待審核')
+  })
+
+  it('缺 status 欄位（舊資料／舊呼叫端）預設視同一般候補，仍顯示升正式鈕', async () => {
+    getCourses.mockResolvedValue({ data: { courses: [sampleCourse] } })
+    const { status: _status, ...rowWithoutStatus } = sampleWaitlistRow
+    getCourseWaitlist.mockResolvedValue({ data: { items: [rowWithoutStatus] } })
+
+    const wrapper = mount(ActivityCourseView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+    const btns = wrapper.findAll('button')
+    const waitlistBtn = btns.find((b) => b.text() === '1')
+    await waitlistBtn.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="promote-waitlist-btn-11"]').exists()).toBe(true)
   })
 })

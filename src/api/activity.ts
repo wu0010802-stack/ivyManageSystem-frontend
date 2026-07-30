@@ -97,8 +97,22 @@ export const deleteRegistration = (id: number, { forceRefund = false, refundReas
   })
 // 批次標記「已繳費」（is_paid=true）— 後端已禁用 is_paid=false 批次沖帳以防誤操作
 // reason ≥ 5 字必填；整批 shortfall 合計 > NT$1000 需 ACTIVITY_PAYMENT_APPROVE 權限
-export const batchUpdatePayment = (ids: number[], reason: string): AxiosResp<'/activity/registrations/batch-payment', 'put'> =>
-  api.put('/activity/registrations/batch-payment', { ids, is_paid: true, reason })
+// 資安（2026-07-30 #3）：帶上呼叫端目前檢視的學期（school_year/semester）——
+// 切換學期的載入窗口內殘留勾選可能夾帶上一學期的報名 ID；後端驗證整批同屬此學期，
+// 不符即回 409（見 schemas/activity_admin.py BatchPaymentUpdate 註解）。選填以保留
+// 既有呼叫端相容。
+export const batchUpdatePayment = (
+  ids: number[],
+  reason: string,
+  term: { school_year?: number; semester?: number } = {},
+): AxiosResp<'/activity/registrations/batch-payment', 'put'> =>
+  api.put('/activity/registrations/batch-payment', {
+    ids,
+    is_paid: true,
+    reason,
+    school_year: term.school_year,
+    semester: term.semester,
+  })
 // 更新付款狀態（單筆）：
 // payload 視 is_paid 而異：
 // - is_paid=false（沖帳）：必填 confirm_refund_amount (=current_paid) + refund_reason (≥5 字)

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 
 // RegistrationTimeline 在 view 內以 defineAsyncComponent 動態 import；不 mock 掉，其
 // scoped-style CSS import 會在測試環境 teardown 後才 resolve → EnvironmentTeardownError
@@ -49,7 +49,17 @@ vi.mock('@/api/activity', () => ({
 }))
 
 // ── Pinia store mock ───────────────────────────────────────────────────────
-const mockTermStore = vi.hoisted(() => ({ school_year: 114, semester: 1 }))
+// 用 reactive()（非每次呼叫都回傳新字面值物件）：view 內對
+// termStore.school_year/semester 的 watch 需要真正的響應性才能在測試中被觸發
+// （資安 #3 2026-07-30：切換學期清空 selectedRows 的回歸測試）。
+const mockTermStore = reactive({
+  school_year: 114,
+  semester: 1,
+  setTerm(sy, sem) {
+    mockTermStore.school_year = sy
+    mockTermStore.semester = sem
+  },
+})
 vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => mockTermStore,
 }))
@@ -207,6 +217,9 @@ describe('ActivityRegistrationView', () => {
     vi.clearAllMocks()
     mockMatchStatusFilter.value = ''
     mockList.value = []
+    mockLoading.value = false
+    mockTermStore.school_year = 114
+    mockTermStore.semester = 1
     mockFetchList.mockResolvedValue(undefined)
     mockLoadOptions.mockResolvedValue(undefined)
     mockBatchMarkPaid.mockResolvedValue(undefined)
@@ -304,6 +317,57 @@ describe('ActivityRegistrationView', () => {
     createObjectURL.mockRestore()
     revokeObjectURL.mockRestore()
     click.mockRestore()
+  })
+
+  // ── 資安（#3 2026-07-30）：切換學期後批次操作誤打上一學期資料 ─────────────
+  // Bug：composable 的學期 watcher 只重置 page/filter 並重新載入列表，不碰選取
+  // 狀態；使用者若在切換學期前已勾選批次，切換後 selectedRows 仍持有上一學期的
+  // 報名列，此時點批次操作會誤把上一學期資料一併處理。
+  it('切換學期後，selectedRows 被清空', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.handleSelectionChange([
+      { id: 1, match_status: 'matched' },
+      { id: 2, match_status: 'matched' },
+    ])
+    await flushPromises()
+    expect(wrapper.vm.selectedRows).toHaveLength(2)
+
+    mockTermStore.semester = 2
+    await flushPromises()
+
+    expect(wrapper.vm.selectedRows).toHaveLength(0)
+    expect(wrapper.find('.batch-toolbar').exists()).toBe(false)
+  })
+
+  it('切換學年度（school_year）同樣會清空 selectedRows', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.handleSelectionChange([{ id: 1, match_status: 'matched' }])
+    await flushPromises()
+    expect(wrapper.vm.selectedRows).toHaveLength(1)
+
+    mockTermStore.school_year = 115
+    await flushPromises()
+
+    expect(wrapper.vm.selectedRows).toHaveLength(0)
+  })
+
+  it('loading 中時，批次工具列整個隱藏（避免用刷新前的舊選取送出批次操作）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.handleSelectionChange([
+      { id: 1, match_status: 'matched' },
+      { id: 2, match_status: 'matched' },
+    ])
+    await flushPromises()
+    expect(wrapper.find('.batch-toolbar').exists()).toBe(true)
+
+    mockLoading.value = true
+    await flushPromises()
+
+    // staging 側守衛比原分支更強：toolbar v-if 含 !loading，loading 中直接不渲染
+    expect(wrapper.find('.batch-toolbar').exists()).toBe(false)
   })
 
   // ── 批量勾選分類收斂（回歸）──────────────────────────────────────────────
