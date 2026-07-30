@@ -5,5 +5,8 @@
   line-height: 1.4;
   color: var(--el-text-color-secondary);
   margin-top: 4px;
+  /* el-form-item__content 是 flex：強制 hint 換行到控制項下方（短控制項如
+     select+radio 同列時，hint 會被擠到同一行）；block context 下無作用。 */
+  flex-basis: 100%;
 }
 .form-hint--example { color: var(--el-text-color-placeholder); }

@@ -6,85 +6,125 @@
     destroy-on-close
     @update:model-value="$emit('update:visible', $event)"
   >
-    <el-form :model="form" :rules="formRules" ref="formRef" label-position="top" size="small">
+    <el-form :model="form" :rules="formRules" ref="formRef" label-position="top">
       <p class="required-legend"><span class="req">*</span> 為必填，其餘可日後補</p>
 
-      <!-- 基本資料（核心，常駐） -->
+      <!-- 基本資料（核心，常駐）：成對短欄位雙欄，mobile 由 main.css 收回單欄 -->
       <FormSection title="基本資料" :collapsible="false">
-        <el-form-item label="參觀日期" prop="month">
-          <el-date-picker
-            v-model="form.month_raw"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="選擇參觀日期（年月日）"
-            style="width:100%"
-          />
-          <div v-if="form.visit_date" class="form-hint">
-            民國：{{ form.visit_date }}（月份：{{ form.month }}）
-          </div>
-        </el-form-item>
-        <el-form-item label="序號">
-          <el-input v-model="form.seq_no" placeholder="選填" />
-        </el-form-item>
-        <el-form-item label="幼生姓名" prop="child_name">
-          <el-input v-model="form.child_name" />
-        </el-form-item>
-        <el-form-item label="適讀班級">
-          <el-select v-model="form.grade" clearable style="width:100%">
-            <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
-          </el-select>
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="參觀日期" prop="month">
+              <el-date-picker
+                v-model="form.month_raw"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="選擇參觀日期（年月日）"
+                style="width:100%"
+              />
+              <div v-if="form.visit_date" class="form-hint">
+                民國：{{ form.visit_date }}（月份：{{ form.month }}）
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="序號">
+              <el-input v-model="form.seq_no" placeholder="選填" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="幼生姓名" prop="child_name">
+              <el-input v-model="form.child_name" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="適讀班級">
+              <el-select v-model="form.grade" clearable style="width:100%">
+                <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="入學學期" required>
           <div class="enroll-term">
-            <el-select v-model="form.target_school_year" size="small" style="width:130px">
+            <el-select v-model="form.target_school_year" style="width:130px">
               <el-option v-for="y in enrollYearOptions" :key="y" :value="y" :label="`${y} 學年`" />
             </el-select>
-            <el-radio-group v-model="form.target_semester" size="small">
+            <el-radio-group v-model="form.target_semester">
               <el-radio-button :value="1">上學期</el-radio-button>
               <el-radio-button :value="2">下學期</el-radio-button>
             </el-radio-group>
           </div>
           <div class="form-hint">小孩預計入學的學期（預設當前學期，可改）。</div>
         </el-form-item>
-        <el-form-item label="生日">
-          <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-        </el-form-item>
-        <el-form-item label="電話">
-          <el-input v-model="form.phone" />
-          <div class="form-hint form-hint--example">例：0912-345-678</div>
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="生日">
+              <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="電話">
+              <el-input v-model="form.phone" />
+              <div class="form-hint form-hint--example">例：0912-345-678</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </FormSection>
 
       <!-- 聯絡與來源 -->
       <FormSection ref="contactRef" data-test="section-contact" title="聯絡與來源" collapsible :default-open="false" :badge-count="sectionErrors.contact" badge-type="error">
-        <el-form-item label="行政區">
-          <el-autocomplete v-model="form.district" :fetch-suggestions="districtQuery" clearable style="width:100%" />
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="行政區">
+              <el-autocomplete v-model="form.district" :fetch-suggestions="districtQuery" clearable style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="地址">
           <el-input v-model="form.address" />
         </el-form-item>
-        <el-form-item label="幼生來源">
-          <el-autocomplete v-model="form.source" :fetch-suggestions="sourceQuery" clearable style="width:100%" />
-        </el-form-item>
-        <el-form-item label="介紹者">
-          <el-autocomplete v-model="form.referrer" :fetch-suggestions="referrerQuery" clearable style="width:100%" />
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="幼生來源">
+              <el-autocomplete v-model="form.source" :fetch-suggestions="sourceQuery" clearable style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="介紹者">
+              <el-autocomplete v-model="form.referrer" :fetch-suggestions="referrerQuery" clearable style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
       </FormSection>
 
       <!-- 預繳狀態 -->
       <FormSection ref="depositRef" data-test="section-deposit" title="預繳狀態" collapsible :default-open="false" :badge-count="sectionErrors.deposit" badge-type="error">
-        <el-form-item label="是否預繳">
-          <el-switch v-model="form.has_deposit" active-text="已預繳" inactive-text="未預繳" @change="onDepositChange" />
-        </el-form-item>
-        <el-form-item label="收預繳人員">
-          <el-input v-model="form.deposit_collector" :disabled="!form.has_deposit" placeholder="預繳時填寫" />
-        </el-form-item>
-        <el-form-item label="已註冊">
-          <el-switch v-model="form.enrolled" active-text="是" inactive-text="否" />
-        </el-form-item>
-        <el-form-item label="轉其他學期">
-          <el-switch v-model="form.transfer_term" active-text="是" inactive-text="否" />
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="是否預繳">
+              <el-switch v-model="form.has_deposit" active-text="已預繳" inactive-text="未預繳" @change="onDepositChange" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="收預繳人員">
+              <el-input v-model="form.deposit_collector" :disabled="!form.has_deposit" placeholder="預繳時填寫" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="已註冊">
+              <el-switch v-model="form.enrolled" active-text="是" inactive-text="否" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="轉其他學期">
+              <el-switch v-model="form.transfer_term" active-text="是" inactive-text="否" />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <template v-if="!form.has_deposit">
           <el-form-item label="未預繳原因">
             <el-select v-model="form.no_deposit_reason" clearable placeholder="請選擇原因" style="width:100%">
@@ -291,7 +331,7 @@ defineExpose({ formRef, applyValidationErrors })
 </script>
 
 <style scoped>
-.required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
+.required-legend { font-size: var(--text-xs); color: var(--el-text-color-secondary); margin: 0 0 var(--space-3); }
 .required-legend .req { color: var(--el-color-danger); }
-.enroll-term { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.enroll-term { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 </style>

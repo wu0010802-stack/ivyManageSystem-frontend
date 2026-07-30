@@ -45,6 +45,20 @@
 
 出處 spec：`docs/superpowers/specs/2026-06-17-admin-list-experience-consistency-design.md`。新列表頁**必須**套這組，不要重造搜尋列。
 
+## 元件詞彙（表單對話框標準組合）
+
+全站 `el-dialog` 桌面殼層已由 `main.css` 全域接管（2026-07-30 起）：flex column + **body 內捲**（標題與「取消／儲存」動作列常駐可見）、header/footer 全寬 hairline 分隔線、`--radius-lg` 圓角、`max-height` 自適應視窗。個別 dialog **不要**再自己寫 max-height / overflow / 分隔線。
+
+表單型 dialog 的內容規範（範例實作：`src/components/recruitment/RecruitmentRecordDialog.vue`）：
+
+- `el-form label-position="top"`，控制項用**預設尺寸**（勿 `size="small"`，表單不缺這點空間）
+- 分段用 `FormSection`（`src/components/common/FormSection.vue`）：核心欄位 `collapsible=false` 常駐，進階欄位收合 + 驗證失敗自動展開（機制見 `2026-06-02-form-ux-single-column-collapsible-design.md`）
+- 預設單欄；**語意成對且短**的欄位（日期＋序號、生日＋電話、成對 switch）用 `el-row :gutter="16"` + `el-col :span="12"` 併一列——mobile 斷點由 `main.css` 自動收回單欄，元件內不用寫 RWD
+- 欄位格式範例用 `.form-hint`／`.form-hint--example`，必填圖例 `required-legend` 置於表單頂部
+- 標題沿用 `mode === 'add' ? '新增X' : '編輯X'` 三元慣例
+
+出處 spec：`docs/superpowers/specs/2026-07-30-admin-form-dialog-shell-design.md`。
+
 ## 相關 spec 索引（改動前先查）
 
 - 表單 UX：`2026-06-02-form-ux-single-column-collapsible-design.md`

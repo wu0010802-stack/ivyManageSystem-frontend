@@ -226,6 +226,49 @@ html.ivy-admin .el-table .el-table__cell {
   padding-bottom: 6px;
 }
 
+/* Dialog - 桌面殼層（2026-07-30 表單對話框優化，spec: 2026-07-30-admin-form-dialog-shell）
+ * EP 預設 el-dialog 整個對話框跟著頁面捲動：內容一長，標題與「取消／儲存」按鈕
+ * 都會被捲出視窗（招生訪視、新增學生等 20+ 欄表單全數中招）。
+ * 改為 flex column + 只有 body 內捲：標題與動作列常駐可見。
+ * padding 從 .el-dialog 下放到 header/body/footer，分隔線才能全寬延伸。 */
+.el-dialog {
+  --el-dialog-margin-top: 7vh;
+  --el-dialog-border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin-bottom: 7vh;
+}
+.el-dialog:not(.is-fullscreen) {
+  /* top= 屬性仍生效（EP 以 inline --el-dialog-margin-top 傳入），max-height 跟著自適應 */
+  max-height: calc(100vh - var(--el-dialog-margin-top) - 7vh);
+  max-height: calc(100dvh - var(--el-dialog-margin-top) - 7vh);
+}
+.el-dialog > .el-dialog__header {
+  flex: 0 0 auto;
+  padding: var(--space-4) var(--space-6) var(--space-3);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+/* 右上角 48px 關閉鈕為 absolute，保留水平空間避免長標題壓到 */
+.el-dialog > .el-dialog__header.show-close {
+  padding-right: var(--space-12);
+}
+.el-dialog > .el-dialog__header .el-dialog__title {
+  font-weight: 600;
+}
+.el-dialog > .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5) var(--space-6);
+}
+.el-dialog > .el-dialog__footer {
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-6) var(--space-4);
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
 /* Dialog - responsive on mobile */
 @media (--to-sm) {
   /* :not(.is-fullscreen)：手機下非滿版對話框收成 95% 置中；但對 :fullscreen="isMobile"
@@ -235,6 +278,8 @@ html.ivy-admin .el-table .el-table__cell {
   .el-dialog:not(.is-fullscreen) {
     width: 95% !important;
     margin: var(--space-4) auto !important;
+    max-height: calc(100vh - var(--space-8));
+    max-height: calc(100dvh - var(--space-8));
   }
 
   .el-dialog__body {
