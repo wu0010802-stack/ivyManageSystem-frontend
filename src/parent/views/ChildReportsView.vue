@@ -13,6 +13,7 @@ interface Report {
   period_start?: string
   period_end?: string
   generated_at?: string
+  report_type?: string
 }
 
 const route = useRoute()
@@ -76,7 +77,12 @@ onMounted(load)
           <span class="material-symbols-rounded">menu_book</span>
         </div>
         <div class="report-info">
-          <h2 class="report-title">{{ r.period_label }}</h2>
+          <div class="report-title-row">
+            <h2 class="report-title">{{ r.period_label }}</h2>
+            <span class="report-type-chip" :class="{ yearbook: r.report_type === 'yearbook' }">
+              {{ r.report_type === 'yearbook' ? '年度成長冊' : '學期報告' }}
+            </span>
+          </div>
           <p class="report-period">{{ r.period_start }} ~ {{ r.period_end }}</p>
           <p v-if="r.generated_at" class="report-meta">生成於 {{ formatDate(r.generated_at) }}</p>
         </div>
@@ -123,12 +129,32 @@ onMounted(load)
   font-variation-settings: 'FILL' 1, 'wght' 500;
 }
 .report-info { flex: 1; min-width: 0; }
+.report-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
 .report-title {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
   color: var(--pt-text-strong);
   line-height: 1.3;
+}
+.report-type-chip {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pt-border-light, #ecf5f9);
+  color: var(--pt-text-muted, #5a6b6f);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.report-type-chip.yearbook {
+  background: var(--color-warning-soft, #fff3e0);
+  color: var(--pt-warning-text, #8a5d00);
 }
 .report-period {
   margin: 2px 0 0;

@@ -205,6 +205,43 @@ describe('GrowthBooksView', () => {
     expect(getGrowthBookBatchStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('status=failed 的學生列仍可點「一鍵生成」，且會被全班一鍵生成涵蓋', async () => {
+    // 審查發現：failed 狀態原本被生成/策展/批次生成三處 gate 排除，卡死無法重試。
+    getGrowthBookBatchStatus.mockImplementationOnce(() =>
+      Promise.resolve({
+        data: {
+          period_label: '114學年度成長冊',
+          items: [
+            { student_id: 1, student_name: '王小明', status: 'failed', report_id: null,
+              line_sent_at: null,
+              material_summary: { observations: 4, work_samples: 2, photos: 10 } },
+            { student_id: 2, student_name: '李小華', status: 'ready', report_id: 7,
+              line_sent_at: null,
+              material_summary: { observations: 1, work_samples: 0, photos: 3 } },
+          ],
+        },
+      }))
+    const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
+    const vm = w.vm as unknown as VM
+    vm.classroomId = 1
+    await vm.load()
+    await flushPromises()
+
+    const genBtn = w.findAll('button').find((b) => b.text().trim() === '一鍵生成')
+    expect(genBtn).toBeTruthy()
+    expect(genBtn!.attributes('disabled')).toBeUndefined()
+
+    createGrowthBook.mockClear()
+    getGrowthBookBatchStatus.mockClear()
+    const batchBtn = w.findAll('button').find((b) => b.text().includes('全班一鍵生成'))
+    expect(batchBtn).toBeTruthy()
+    await batchBtn!.trigger('click')
+    await flushPromises()
+    // failed 的王小明應被批次生成涵蓋（ready 的李小華不該被生成）
+    expect(createGrowthBook).toHaveBeenCalledTimes(1)
+    expect(createGrowthBook).toHaveBeenCalledWith(1, { academic_year: expect.any(Number) })
+  })
+
   it('點擊「策展」開啟策展抽屜並帶入該生 id／姓名', async () => {
     const w = mount(GrowthBooksView, { global: { plugins: [ElementPlus] } })
     const vm = w.vm as unknown as VM
