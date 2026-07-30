@@ -169,6 +169,7 @@ async function handleSubmit() {
             placeholder="請輸入您的姓名"
             maxlength="50"
             autocomplete="name"
+            enterkeyhint="next"
             @input="clearError('name')"
           />
           <div v-if="errors.name" id="contactName-err" class="form-error-hint" role="alert">{{ errors.name }}</div>
@@ -187,6 +188,7 @@ async function handleSubmit() {
             inputmode="tel"
             autocomplete="tel"
             maxlength="30"
+            enterkeyhint="next"
             @input="clearError('phone')"
           />
           <div v-if="errors.phone" id="contactPhone-err" class="form-error-hint" role="alert">{{ errors.phone }}</div>

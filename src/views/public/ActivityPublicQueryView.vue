@@ -74,6 +74,9 @@
                 :class="{ valid: tokenValid, invalid: tokenTouched && !tokenValid }"
                 placeholder="請貼上報名後收到的查詢碼"
                 autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="tokenTouched = true"
@@ -92,6 +95,9 @@
                 :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
                 placeholder="09xx-xxx-xxx"
                 maxlength="15"
+                inputmode="tel"
+                autocomplete="tel"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="phoneTouched = true"
@@ -112,6 +118,8 @@
                 class="input-text"
                 :class="{ valid: nameValid, invalid: nameTouched && !nameValid }"
                 placeholder="請輸入幼兒姓名"
+                autocomplete="off"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="nameTouched = true"
@@ -143,6 +151,9 @@
                 :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
                 placeholder="09xx-xxx-xxx"
                 maxlength="15"
+                inputmode="tel"
+                autocomplete="tel"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="phoneTouched = true"
@@ -447,7 +458,7 @@
         <div class="field-group">
           <label>幼兒姓名</label>
           <template v-if="identityEditable">
-            <input v-model="editForm.new_name" type="text" class="input-text" maxlength="50" />
+            <input v-model="editForm.new_name" type="text" class="input-text" maxlength="50" autocomplete="off" />
             <div class="field-hint">如有誤可直接修正；經校方審核確認後將無法再自行修改</div>
           </template>
           <template v-else>
@@ -502,6 +513,8 @@
             :class="{ invalid: newPhoneTouched && !newPhoneValid }"
             placeholder="留空表示不變更"
             maxlength="15"
+            inputmode="tel"
+            autocomplete="tel"
             @blur="newPhoneTouched = true"
           />
           <div v-if="newPhoneTouched && !newPhoneValid" class="validation-msg error" role="alert">
