@@ -8,7 +8,11 @@ vi.mock('@/api/recruitmentFunnel', () => ({
 }))
 
 import * as funnelApi from '@/api/recruitmentFunnel'
+import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 import { useRecruitmentFunnelStore } from '../recruitmentFunnel'
+import type { Stage, FunnelCardData, FunnelSummaryData } from '../recruitmentFunnel'
+
+const mockedTransitionVisit = funnelApi.transitionVisit as ReturnType<typeof vi.fn>
 
 const sampleBoard = {
   data: {
@@ -16,10 +20,48 @@ const sampleBoard = {
       visited: [{ visit_id: 1, child_name: '甲', current_stage: 'visited' }],
       deposited: [{ visit_id: 2, child_name: '乙', current_stage: 'deposited' }],
       enrolled: [],
-      active: [],
+      withdrawn: [],
     },
-    summary: { visited_count: 1, deposited_count: 1, enrolled_count: 0, active_count: 0 },
+    summary: { visited_count: 1, deposited_count: 1, enrolled_count: 0, withdrawn_count: 0 },
   },
+}
+
+/** 建一張最小合法 FunnelCard，指定欄位可覆蓋。 */
+function makeCard(overrides: Partial<FunnelCardData> & { visit_id: number }): FunnelCardData {
+  return {
+    child_name: '甲',
+    current_stage: 'visited',
+    deposited_at: null,
+    district: null,
+    grade: null,
+    phone: null,
+    source: null,
+    student_id: null,
+    ...overrides,
+  }
+}
+
+/** 回傳完整 board（四個 stage key + summary 四個 count），把卡片放進指定 stage。 */
+function boardWith(
+  overrides: Partial<FunnelCardData> & { stage: Stage; visit_id: number },
+): { stages: Record<Stage, FunnelCardData[]>; summary: FunnelSummaryData } {
+  const { stage, ...cardFields } = overrides
+  const card = makeCard({ ...cardFields, current_stage: stage })
+  const stages: Record<Stage, FunnelCardData[]> = {
+    visited: [],
+    deposited: [],
+    enrolled: [],
+    withdrawn: [],
+  }
+  stages[stage] = [card]
+  const summary: FunnelSummaryData = {
+    visited_count: 0,
+    deposited_count: 0,
+    enrolled_count: 0,
+    withdrawn_count: 0,
+  }
+  summary[`${stage}_count` as keyof FunnelSummaryData] = 1
+  return { stages, summary }
 }
 
 describe('useRecruitmentFunnelStore', () => {
@@ -123,5 +165,45 @@ describe('useRecruitmentFunnelStore', () => {
     await store.loadBoard()
     store.$reset()
     expect(store.board).toBeNull()
+  })
+})
+
+describe('transition domainBus 廣播', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('deposited→enrolled 成功（建學生）→ emit student:created', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = boardWith({ stage: 'deposited', visit_id: 21, student_id: null })
+    mockedTransitionVisit.mockResolvedValue({
+      data: { visit_id: 21, from_stage: 'deposited', to_stage: 'enrolled',
+              student_id: 55, event_log_id: 1, warnings: [] },
+    })
+    const emitSpy = vi.spyOn(domainBus, 'emit')
+    await store.transition(21, 'enrolled', { classroomId: 3 })
+    expect(emitSpy).toHaveBeenCalledWith(STUDENT_EVENTS.CREATED, { id: 55, classroom_id: 3 })
+  })
+
+  it('enrolled→withdrawn 成功（刪學生）→ emit student:deleted 帶原 student_id', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = boardWith({ stage: 'enrolled', visit_id: 22, student_id: 77 })
+    mockedTransitionVisit.mockResolvedValue({
+      data: { visit_id: 22, from_stage: 'enrolled', to_stage: 'withdrawn',
+              student_id: null, event_log_id: 2, warnings: [] },
+    })
+    const emitSpy = vi.spyOn(domainBus, 'emit')
+    await store.transition(22, 'withdrawn', { reason: '退註冊費' })
+    expect(emitSpy).toHaveBeenCalledWith(STUDENT_EVENTS.DELETED, { id: 77 })
+  })
+
+  it('transition 失敗 → 不 emit', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = boardWith({ stage: 'enrolled', visit_id: 23, student_id: 88 })
+    mockedTransitionVisit.mockRejectedValue({ response: { status: 400 } })
+    const emitSpy = vi.spyOn(domainBus, 'emit')
+    await expect(store.transition(23, 'withdrawn', { reason: 'x' })).rejects.toBeTruthy()
+    expect(emitSpy).not.toHaveBeenCalled()
   })
 })
