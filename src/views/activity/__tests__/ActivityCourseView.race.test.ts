@@ -36,6 +36,16 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+// vuedraggable stub：本測不驗拖拉，僅避免 jsdom 下掛真 Sortable
+vi.mock('vuedraggable', () => ({
+  default: {
+    name: 'draggable',
+    props: ['modelValue', 'itemKey', 'group', 'disabled', 'animation', 'ghostClass'],
+    emits: ['update:modelValue', 'end'],
+    template: `<div><template v-for="(el, i) in modelValue" :key="i"><slot name="item" :element="el" :index="i" /></template></div>`,
+  },
+}))
+
 import ActivityCourseView from '../ActivityCourseView.vue'
 
 function deferred<T>() {
@@ -88,7 +98,8 @@ interface SetupState {
   openPromoteDialog: (reg: unknown) => void
   waitlistItems: { registration_id: number }[]
   waitlistCourse: { id: number; name: string } | null
-  enrolledItems: { position?: number }[]
+  occupyingItems: { position?: number }[]
+  queueItems: { position?: number }[]
   enrolledCourse: { id: number; name: string } | null
   promoteDialog: { open: boolean; registration: unknown }
 }
@@ -157,13 +168,20 @@ describe('ActivityCourseView 候補/報名 Drawer 請求序號守衛（review P1
     ss.openEnrolled(courseA)
     ss.openEnrolled(courseB)
 
-    dB.resolve({ data: { items: [{ position: 1, student_name: 'B 生' }] } })
+    dB.resolve({ data: { items: [{ position: 1, student_name: 'B 生', status: 'enrolled' }] } })
     await flushPromises()
-    dA.resolve({ data: { items: [{ position: 1, student_name: 'A 生' }, { position: 2 }] } })
+    dA.resolve({
+      data: {
+        items: [
+          { position: 1, student_name: 'A 生', status: 'enrolled' },
+          { position: 2, status: 'enrolled' },
+        ],
+      },
+    })
     await flushPromises()
 
     expect(ss.enrolledCourse?.id).toBe(2)
-    expect(ss.enrolledItems.length).toBe(1) // B 課只有 1 筆，非 A 課的 2 筆
+    expect(ss.occupyingItems.length).toBe(1) // B 課只有 1 筆，非 A 課的 2 筆
     wrapper.unmount()
   })
 })
