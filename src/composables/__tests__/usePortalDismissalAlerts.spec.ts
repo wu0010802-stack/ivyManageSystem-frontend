@@ -179,18 +179,43 @@ describe('usePortalDismissalAlerts', () => {
     }
   })
 
-  it('close code 會分類並提供安全、可行動原因', async () => {
+  it('pre-accept 握手拒絕呈現 1006 時提供安全的備援原因', async () => {
     const m = await import('@/composables/usePortalDismissalAlerts')
     m.initPortalDismissalAlerts()
     lastWs!.onclose?.({
-      code: 4007,
+      code: 1006,
       reason: 'permission denied token=secret',
     } as CloseEvent)
 
     const { lastWsClose, connectionMessage } = m.usePortalDismissalAlerts()
-    expect(lastWsClose.value).toMatchObject({ code: 4007, kind: 'permission' })
-    expect(connectionMessage.value).toContain('權限')
+    expect(lastWsClose.value).toMatchObject({ code: 1006, kind: 'transport' })
+    expect(connectionMessage.value).toContain('備援')
     expect(JSON.stringify(lastWsClose.value)).not.toContain('secret')
+  })
+
+  it('teardown/re-init 後忽略前一個登入生命週期的晚到快照', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+
+    let resolveOld: (value: { data: Array<{ id: number; student_name: string; status: string }> }) => void
+    getCallsMock.mockImplementationOnce(
+      () => new Promise(resolve => { resolveOld = resolve }),
+    )
+    m.initPortalDismissalAlerts()
+
+    m.teardownPortalDismissalAlerts()
+    getCallsMock.mockResolvedValueOnce({
+      data: [{ id: 22, student_name: '新登入學生', status: 'pending' }],
+    })
+    m.initPortalDismissalAlerts()
+    await Promise.resolve()
+
+    resolveOld!({
+      data: [{ id: 11, student_name: '前一個登入學生', status: 'pending' }],
+    })
+    await Promise.resolve()
+    await nextTick()
+
+    expect(m.usePortalDismissalAlerts().activeCalls.value.map(call => call.id)).toEqual([22])
   })
 
   it('快速重試耗盡後保留 polling，並以低頻 recovery retry 自動建新 socket', async () => {

@@ -115,6 +115,9 @@ const WS_MAX_RETRIES = 5
 const wsConnected = ref(false)
 const wsExhausted = ref(false) // 已達重試上限，fallback 至 polling
 const lastWsClose = ref<WebSocketCloseInfo | null>(null)
+// 只允許最後發出的 HTTP 快照寫入；visibility 補抓與 WS onopen 補抓可能重疊，
+// 較舊 response 晚到時不得把較新的接送狀態覆蓋掉。
+let fetchDispatchSeq = 0
 
 // 連線體感狀態：normal / reconnecting / exhausted（對齊 PortalDismissalCallsView）
 const connectionState = computed(() => {
@@ -128,6 +131,7 @@ const connectionMessage = computed(() =>
 
 // ─── HTTP 載入 ───────────────────────────────────────────
 const fetchCalls = async () => {
+  const mySeq = ++fetchDispatchSeq
   loading.value = true
   try {
     const params: Record<string, unknown> = {}
@@ -137,11 +141,12 @@ const fetchCalls = async () => {
       params.status = filterStatus.value === 'active' ? 'pending,acknowledged' : filterStatus.value
     }
     const res = await getDismissalCalls(params)
+    if (mySeq !== fetchDispatchSeq) return
     calls.value = (res.data || []) as DismissalCall[]
   } catch (e) {
-    ElMessage.error('載入接送通知失敗')
+    if (mySeq === fetchDispatchSeq) ElMessage.error('載入接送通知失敗')
   } finally {
-    loading.value = false
+    if (mySeq === fetchDispatchSeq) loading.value = false
   }
 }
 
@@ -442,6 +447,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // 讓卸載後才完成的 HTTP request 失效，避免舊頁面狀態回填。
+  fetchDispatchSeq++
   document.removeEventListener('visibilitychange', onVisibility)
   // 先卸 handler 再 close，避免 close() 觸發 onclose → scheduleReconnect 在卸載後
   // 建殭屍重連（QA 2026-06-04 P2-5）。

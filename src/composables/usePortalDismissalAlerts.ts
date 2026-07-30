@@ -52,6 +52,9 @@ let pollingTimer: ReturnType<typeof setInterval> | null = null
 let wsLivenessTimer: ReturnType<typeof setTimeout> | null = null
 let audioCtx: AudioContext | null = null
 let initialized = false
+// teardown / re-init（例如登出後換帳號）會跨越資料生命週期。單靠 fetchDispatchSeq
+// 會因 teardown 歸零而碰撞；generation 不歸零，確保舊帳號晚到快照永遠不能回填。
+let lifecycleGeneration = 0
 let gestureHandler: (() => void) | null = null
 let visibilityHandler: (() => void) | null = null
 // fetchCalls 的發出序號（每次呼叫遞增）。用途有二：①丟棄 out-of-order 的過時快照
@@ -245,14 +248,17 @@ function mergeSnapshotWithLiveCalls(snapshot: DismissalCall[], mySeq: number): D
 
 async function fetchCalls(): Promise<void> {
   const mySeq = ++fetchDispatchSeq
+  const myGeneration = lifecycleGeneration
   loading.value = true
   try {
     const res = await getPortalDismissalCalls()
     // 已有更新的 fetch 發出 → 丟棄這個過時快照（避免 out-of-order 覆蓋新資料）
-    if (mySeq !== fetchDispatchSeq) return
+    if (myGeneration !== lifecycleGeneration || mySeq !== fetchDispatchSeq) return
     activeCalls.value = mergeSnapshotWithLiveCalls(res.data || [], mySeq)
   } catch { /* 靜默：UI 由 connectionState 呈現 */ } finally {
-    if (mySeq === fetchDispatchSeq) loading.value = false
+    if (myGeneration === lifecycleGeneration && mySeq === fetchDispatchSeq) {
+      loading.value = false
+    }
   }
 }
 
@@ -383,6 +389,7 @@ function onVisibility(): void {
 export function initPortalDismissalAlerts(): void {
   if (initialized) return
   initialized = true
+  lifecycleGeneration++
   requestNotificationPermission()
   // 首次任一手勢解鎖 AudioContext（once + capture，最早攔截）
   gestureHandler = () => { unlockAudio(); unlockSpeech() }
@@ -394,6 +401,8 @@ export function initPortalDismissalAlerts(): void {
 }
 
 export function teardownPortalDismissalAlerts(): void {
+  // 先切斷資料生命週期，讓任何仍在 flight 的舊帳號快照失效。
+  lifecycleGeneration++
   closeWebSocketSafely(ws)
   ws = null
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }

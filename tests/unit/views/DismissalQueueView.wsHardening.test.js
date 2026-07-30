@@ -151,20 +151,41 @@ describe('DismissalQueueView WS 韌性（F4）', () => {
     expect(wrapper.vm.connectionState).toBe('normal')
   })
 
-  it('保留並分類 close code，UI 顯示可行動原因而非原始敏感 reason', async () => {
+  it('pre-accept 握手拒絕在瀏覽器呈現 1006，UI 顯示備援提示且不洩漏 reason', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     mockWs.onclose?.({
-      code: 4001,
+      code: 1006,
       reason: 'token=secret phone=0912345678',
     })
     await nextTick()
 
-    expect(wrapper.vm.lastWsClose).toMatchObject({ code: 4001, kind: 'auth' })
-    expect(wrapper.get('[data-testid="dismissal-conn-banner"]').text()).toContain('重新登入')
+    expect(wrapper.vm.lastWsClose).toMatchObject({ code: 1006, kind: 'transport' })
+    expect(wrapper.get('[data-testid="dismissal-conn-banner"]').text()).toContain('備援')
     expect(wrapper.html()).not.toContain('secret')
     expect(wrapper.html()).not.toContain('0912345678')
+  })
+
+  it('較晚發出的 HTTP 快照先回時，較舊快照不得覆蓋新結果', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    let resolveOld
+    let resolveNew
+    getDismissalCalls
+      .mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveNew = resolve }))
+
+    const oldRequest = wrapper.vm.fetchCalls()
+    const newRequest = wrapper.vm.fetchCalls()
+    resolveNew({ data: [{ ...SAMPLE_CALL, id: 2, student_name: '新快照' }] })
+    await newRequest
+    resolveOld({ data: [{ ...SAMPLE_CALL, id: 1, student_name: '舊快照' }] })
+    await oldRequest
+
+    expect(wrapper.vm.calls.map(call => call.id)).toEqual([2])
+    wrapper.unmount()
   })
 
   it('快速重試耗盡後維持 polling，60 秒後仍會低頻自動恢復 WS', async () => {

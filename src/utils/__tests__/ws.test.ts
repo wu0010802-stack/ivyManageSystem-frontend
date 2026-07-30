@@ -49,6 +49,8 @@ describe('closeWebSocketSafely', () => {
 })
 
 describe('WebSocket 關閉原因與恢復時序', () => {
+  // 400x 只有在 Upgrade 完成後由 server 關閉時才會到達瀏覽器；pre-accept
+  // websocket.close 會被 Uvicorn 轉為 HTTP 403，瀏覽器端只能收到 1006。
   it.each([
     [4001, 'token missing', 'auth'],
     [4003, 'token expired', 'auth'],
@@ -57,7 +59,7 @@ describe('WebSocket 關閉原因與恢復時序', () => {
     [4029, 'handshake rate limited', 'rate-limit'],
     [1008, 'too many connections', 'rate-limit'],
     [1006, '', 'transport'],
-  ] as const)('code=%i reason=%s 分類為 %s', (code, reason, expectedKind) => {
+  ] as const)('可觀測 close code=%i reason=%s 分類為 %s', (code, reason, expectedKind) => {
     expect(classifyWebSocketClose({ code, reason })).toMatchObject({
       code,
       kind: expectedKind,
