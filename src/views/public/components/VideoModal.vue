@@ -43,7 +43,7 @@ const { onDialogKeydown } = useAccessibleDialog({
       @keydown="onDialogKeydown"
     >
       <h3 id="videoModalTitle" class="modal-title">{{ title }}</h3>
-      <button type="button" class="modal-close" aria-label="關閉影片" @click="$emit('close')">
+      <button type="button" class="modal-close tap-target" aria-label="關閉影片" @click="$emit('close')">
         <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
       </button>
       <div class="video-wrapper">

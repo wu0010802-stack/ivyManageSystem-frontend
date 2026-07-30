@@ -132,7 +132,7 @@ async function handleSubmit() {
           <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-phone" /></svg>
           聯絡主辦單位
         </h3>
-        <button type="button" class="modal-close" aria-label="關閉視窗" @click="close">
+        <button type="button" class="modal-close tap-target" aria-label="關閉視窗" @click="close">
           <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
         </button>
       </div>
@@ -169,6 +169,7 @@ async function handleSubmit() {
             placeholder="請輸入您的姓名"
             maxlength="50"
             autocomplete="name"
+            enterkeyhint="next"
             @input="clearError('name')"
           />
           <div v-if="errors.name" id="contactName-err" class="form-error-hint" role="alert">{{ errors.name }}</div>
@@ -187,6 +188,7 @@ async function handleSubmit() {
             inputmode="tel"
             autocomplete="tel"
             maxlength="30"
+            enterkeyhint="next"
             @input="clearError('phone')"
           />
           <div v-if="errors.phone" id="contactPhone-err" class="form-error-hint" role="alert">{{ errors.phone }}</div>

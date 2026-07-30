@@ -30,7 +30,7 @@
           <h1 class="page-title-main">查詢 / 修改報名資料</h1>
           <div class="page-subtitle">Query &amp; Edit Registration</div>
           <!-- 死巷修正：本頁任何狀態都要有回報名頁的顯式路徑 -->
-          <button type="button" class="page-backlink" @click="goBackToRegistration">
+          <button type="button" class="page-backlink tap-target" @click="goBackToRegistration">
             <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#q-back" /></svg>
             回才藝報名頁
           </button>
@@ -74,6 +74,9 @@
                 :class="{ valid: tokenValid, invalid: tokenTouched && !tokenValid }"
                 placeholder="請貼上報名後收到的查詢碼"
                 autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="tokenTouched = true"
@@ -92,6 +95,9 @@
                 :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
                 placeholder="09xx-xxx-xxx"
                 maxlength="15"
+                inputmode="tel"
+                autocomplete="tel"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="phoneTouched = true"
@@ -112,6 +118,8 @@
                 class="input-text"
                 :class="{ valid: nameValid, invalid: nameTouched && !nameValid }"
                 placeholder="請輸入幼兒姓名"
+                autocomplete="off"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="nameTouched = true"
@@ -143,6 +151,9 @@
                 :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
                 placeholder="09xx-xxx-xxx"
                 maxlength="15"
+                inputmode="tel"
+                autocomplete="tel"
+                enterkeyhint="search"
                 aria-required="true"
                 @keyup.enter="onQuerySubmit"
                 @blur="phoneTouched = true"
@@ -458,7 +469,7 @@
         <div class="field-group">
           <label>幼兒姓名</label>
           <template v-if="identityEditable">
-            <input v-model="editForm.new_name" type="text" class="input-text" maxlength="50" />
+            <input v-model="editForm.new_name" type="text" class="input-text" maxlength="50" autocomplete="off" />
             <div class="field-hint">如有誤可直接修正；經校方審核確認後將無法再自行修改</div>
           </template>
           <template v-else>
@@ -513,6 +524,8 @@
             :class="{ invalid: newPhoneTouched && !newPhoneValid }"
             placeholder="留空表示不變更"
             maxlength="15"
+            inputmode="tel"
+            autocomplete="tel"
             @blur="newPhoneTouched = true"
           />
           <div v-if="newPhoneTouched && !newPhoneValid" class="validation-msg error" role="alert">
@@ -1697,7 +1710,7 @@ onBeforeUnmount(() => {
   color: var(--color-text-subtle);
 }
 
-@media (max-width: 700px) {
+@media (--to-md) {
   .page-header {
     grid-template-columns: 1fr;
     gap: var(--space-5);
@@ -1710,7 +1723,7 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid var(--color-border);
   }
 }
-@media (max-width: 600px) {
+@media (--to-sm) {
   .public-query-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }

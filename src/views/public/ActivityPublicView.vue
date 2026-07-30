@@ -140,7 +140,7 @@
                 />
                 <div v-if="posterLoaded" class="poster-actions">
                   <a
-                    class="poster-action"
+                    class="poster-action tap-target"
                     :href="posterSrc"
                     :download="posterDownloadName"
                     target="_blank"
@@ -153,7 +153,7 @@
                   <button
                     v-if="canSharePoster"
                     type="button"
-                    class="poster-action"
+                    class="poster-action tap-target"
                     aria-label="分享海報給家人"
                     @click="sharePoster"
                   >
@@ -2153,7 +2153,7 @@ onUnmounted(() => {
    回滾才看到金額；mobile 維持 inline。注意不用 backdrop-filter（避免落入
    glassmorphism 預設禁令），改用純白底 + 上下兩道 shadow 區隔。 */
 .checkout-stick { margin-top: var(--space-3); }
-@media (min-width: 769px) {
+@media (--bp-sm) {
   .checkout-stick {
     position: sticky;
     bottom: var(--space-3);
@@ -2400,7 +2400,7 @@ onUnmounted(() => {
 @keyframes modalSlideIn { from { transform: translateY(24px) scale(0.96); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
 /* Responsive */
-@media (max-width: 900px) {
+@media (--to-md) {
   .grid-layout { grid-template-columns: 1fr; gap: var(--space-6); }
   .page-header {
     grid-template-columns: 1fr;
@@ -2414,7 +2414,7 @@ onUnmounted(() => {
     border-bottom: 1px solid var(--color-border);
   }
 }
-@media (max-width: 600px) {
+@media (--to-sm) {
   .public-activity-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-header { padding: var(--space-5); gap: var(--space-4); }

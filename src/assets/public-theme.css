@@ -84,4 +84,26 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 150ms; --dur-base: 220ms; --dur-slow: 320ms;
   --focus-ring: 0 0 0 3px rgba(13, 144, 83, 0.28);
+
+  --tap-target-min: 44px; /* 觸控目標下限（RWD 稽核 P3-2 / WCAG 2.5.8） */
+}
+
+/* ——— 橫切 a11y utility ———
+   章程例外：本檔原則上只放 token，唯此類「兩頁＋多個子元件共用、屬設計層
+   契約」的 utility 集中於此，避免各元件複製一份而漂移（同 token 治理理由）。
+
+   .tap-target：視覺尺寸不變，用透明 ::after 把點擊熱區撐到 ≥44×44。
+   min(0px, …) 讓本體已達標的軸不縮小熱區；top/bottom 的 100% 對應高、
+   left/right 的 100% 對應寬。var() 帶 fallback 是為未來若有元素脫離
+   .public-*-page scope（如 Teleport）仍能運作。刻意不寫 z-index：
+   已定位元素（如 modal-panel--video 的 absolute close 鈕）之既有
+   position 規則特異度較高，不會被 .tap-target 的 relative 蓋掉。 */
+.tap-target { position: relative; }
+.tap-target::after {
+  content: '';
+  position: absolute;
+  top: min(0px, calc((100% - var(--tap-target-min, 44px)) / 2));
+  bottom: min(0px, calc((100% - var(--tap-target-min, 44px)) / 2));
+  left: min(0px, calc((100% - var(--tap-target-min, 44px)) / 2));
+  right: min(0px, calc((100% - var(--tap-target-min, 44px)) / 2));
 }

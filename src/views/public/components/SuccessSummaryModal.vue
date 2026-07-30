@@ -176,7 +176,7 @@ function handleDone() {
           <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-check" /></svg>
           報名資料已送出
         </h3>
-        <button type="button" class="modal-close" aria-label="關閉視窗" @click="$emit('close')">
+        <button type="button" class="modal-close tap-target" aria-label="關閉視窗" @click="$emit('close')">
           <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
         </button>
       </div>
@@ -494,7 +494,7 @@ function handleDone() {
 .success-cta-bar .btn-block { min-height: 52px; }
 
 /* —— 手機：bottom-sheet —— */
-@media (max-width: 600px) {
+@media (--to-sm) {
   .modal-overlay.is-visible {
     align-items: flex-end;
     padding: 0;
