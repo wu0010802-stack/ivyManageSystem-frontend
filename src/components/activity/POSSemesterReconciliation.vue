@@ -1,7 +1,7 @@
 <template>
   <div class="pos-semester" v-loading="loading">
     <div class="pos-semester__head">
-      <AcademicTermSelector />
+      <AcademicTermSelector size="small" />
       <div class="pos-semester__filters">
         <el-select
           v-model="filters.classroom_name"
