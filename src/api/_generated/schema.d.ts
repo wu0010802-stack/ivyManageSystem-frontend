@@ -20379,7 +20379,7 @@ export interface components {
              * Current Stage
              * @enum {string}
              */
-            current_stage: "visited" | "deposited" | "enrolled" | "active";
+            current_stage: "visited" | "deposited" | "enrolled" | "withdrawn";
             /** Deposited At */
             deposited_at: string | null;
             /** District */
@@ -20402,17 +20402,23 @@ export interface components {
             target_semester?: number | null;
             /** Visit Id */
             visit_id: number;
+            /** Withdraw Reason */
+            withdraw_reason?: string | null;
+            /** Withdrawn At */
+            withdrawn_at?: string | null;
+            /** Withdrawn From */
+            withdrawn_from?: ("deposited" | "enrolled") | null;
         };
         /** FunnelSummary */
         FunnelSummary: {
-            /** Active Count */
-            active_count: number;
             /** Deposited Count */
             deposited_count: number;
             /** Enrolled Count */
             enrolled_count: number;
             /** Visited Count */
             visited_count: number;
+            /** Withdrawn Count */
+            withdrawn_count: number;
         };
         /** GenerateCertRequest */
         GenerateCertRequest: {
@@ -31673,7 +31679,7 @@ export interface components {
              * To Stage
              * @enum {string}
              */
-            to_stage: "visited" | "deposited" | "enrolled" | "active";
+            to_stage: "visited" | "deposited" | "enrolled" | "withdrawn";
         };
         /** TransitionOut */
         TransitionOut: {
@@ -31683,14 +31689,14 @@ export interface components {
              * From Stage
              * @enum {string}
              */
-            from_stage: "visited" | "deposited" | "enrolled" | "active";
+            from_stage: "visited" | "deposited" | "enrolled" | "withdrawn";
             /** Student Id */
             student_id: number | null;
             /**
              * To Stage
              * @enum {string}
              */
-            to_stage: "visited" | "deposited" | "enrolled" | "active";
+            to_stage: "visited" | "deposited" | "enrolled" | "withdrawn";
             /** Visit Id */
             visit_id: number;
             /** Warnings */
