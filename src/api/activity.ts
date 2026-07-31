@@ -231,6 +231,23 @@ export const uploadActivityPoster = (file: File): AxiosResp<'/activity/settings/
   })
 }
 
+// 課程 DM（介紹文宣）上傳／刪除（multipart）
+export const uploadCourseDm = (
+  courseId: number,
+  file: File,
+): AxiosResp<'/activity/courses/{course_id}/dm', 'post'> => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post(`/activity/courses/${courseId}/dm`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export const deleteCourseDm = (
+  courseId: number,
+): AxiosResp<'/activity/courses/{course_id}/dm', 'delete'> =>
+  api.delete(`/activity/courses/${courseId}/dm`)
+
 // 修改紀錄
 export const getChanges = (params?: ApiQuery<'/activity/changes', 'get'>): AxiosResp<'/activity/changes', 'get'> =>
   api.get('/activity/changes', { params })

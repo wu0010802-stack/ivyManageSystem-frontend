@@ -34,6 +34,12 @@
       @close="closeVideoModal"
     />
 
+    <!-- DM 課程簡介 Modal（Task 8 抽元件） -->
+    <DmPreviewModal
+      v-bind="dmModal"
+      @close="dmModal.visible = false"
+    />
+
     <!-- Success Modal（A1-P5 抽元件） -->
     <SuccessSummaryModal :summary="successModal" @close="closeSuccessModal" />
 
@@ -407,6 +413,7 @@
                     :is-active-step="currentStep === 2"
                     @toggle="(course) => { toggleCourse(course); clearError('courses') }"
                     @open-video="openVideoModal"
+                    @open-dm="openCourseDm"
                   />
 
                   <template v-if="supplies.length > 0">
@@ -662,6 +669,7 @@ import { buildPublicEditUrl } from '@/utils/publicLinks'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
+import DmPreviewModal from './components/DmPreviewModal.vue'
 import ContactInquiryModal from './components/ContactInquiryModal.vue'
 import ToastStack from './components/ToastStack.vue'
 import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
@@ -695,6 +703,16 @@ const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const posterBroken = ref(false)
 
+// 後端 storage.public_url 產出的相對路徑（/api/... 起頭，海報／課程 DM 皆同一機制）
+// 若前端 baseURL 指向跨 host 後端則補 host；同計算原僅 posterSrc 用，Task 8 課程 DM
+// （dm_url/dm_pages）同屬此類相對路徑，第二個消費點出現即抽成函式（CLAUDE.md 品質規範）。
+function resolveApiAssetUrl(url: string): string {
+  if (url.startsWith('/api/') && API_BASE && API_BASE !== '/api') {
+    return API_BASE.replace(/\/api\/?$/, '') + url
+  }
+  return url
+}
+
 interface TimeInfoExtended {
   open_at: string | null; close_at: string | null
   page_title?: string; term_label?: string; event_date_label?: string
@@ -717,11 +735,7 @@ const posterSrc = computed(() => {
   if (posterBroken.value) return DEFAULT_POSTER
   const url = timeInfoExt.value?.poster_url
   if (!url) return DEFAULT_POSTER
-  // 後端路徑以 /api 起頭，若前端 baseURL 指向跨 host 後端則補 host
-  if (url.startsWith('/api/') && API_BASE && API_BASE !== '/api') {
-    return API_BASE.replace(/\/api\/?$/, '') + url
-  }
-  return url
+  return resolveApiAssetUrl(url)
 })
 function onPosterError() {
   posterBroken.value = true
@@ -904,6 +918,23 @@ function closeVideoModal() {
   videoModal.visible = false
   videoModal.url = ''
   videoModal.youtubeId = null
+}
+
+// ===== 課程 DM 預覽模態（Task 8） =====
+const dmModal = ref<{ visible: boolean; title: string; pages: string[]; pdfUrl: string | null }>({
+  visible: false, title: '', pages: [], pdfUrl: null,
+})
+function openCourseDm(course: CourseOption) {
+  const rawPages = Array.isArray(course.dm_pages) ? (course.dm_pages as string[]) : []
+  const pages = rawPages.map(resolveApiAssetUrl)
+  const raw = typeof course.dm_url === 'string' ? course.dm_url : ''
+  const isPdf = raw.split('?')[0].toLowerCase().endsWith('.pdf')
+  dmModal.value = {
+    visible: true,
+    title: String(course.name ?? ''),
+    pages,
+    pdfUrl: isPdf ? resolveApiAssetUrl(raw) : null, // 原始檔非 PDF 就不顯示下載列
+  }
 }
 
 // ===== 聯絡模態 =====（A1-P3 抽至 ContactInquiryModal，本檔只保留 visible ref）
@@ -2397,6 +2428,18 @@ onUnmounted(() => {
   animation: modalSlideIn var(--dur-slow) var(--ease-out);
 }
 .modal-panel--video { max-width: 900px; padding: var(--space-5); }
+.modal-panel--dm { max-width: 720px; }
+.dm-pages { display: flex; flex-direction: column; gap: var(--space-3); }
+.dm-pages img { width: 100%; height: auto; display: block; border-radius: var(--radius-md); }
+.dm-download-row {
+  position: sticky;
+  bottom: 0;
+  padding: var(--space-3) var(--space-5);
+  text-align: center;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.dm-download-link { color: var(--color-primary-strong); font-weight: 600; }
 .modal-header {
   display: flex;
   align-items: center;
@@ -2662,6 +2705,18 @@ onUnmounted(() => {
   animation: modalSlideIn var(--dur-slow) var(--ease-out);
 }
 .public-activity-page .modal-panel--video { max-width: 900px; padding: var(--space-5); }
+.public-activity-page .modal-panel--dm { max-width: 720px; }
+.public-activity-page .dm-pages { display: flex; flex-direction: column; gap: var(--space-3); }
+.public-activity-page .dm-pages img { width: 100%; height: auto; display: block; border-radius: var(--radius-md); }
+.public-activity-page .dm-download-row {
+  position: sticky;
+  bottom: 0;
+  padding: var(--space-3) var(--space-5);
+  text-align: center;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+}
+.public-activity-page .dm-download-link { color: var(--color-primary-strong); font-weight: 600; }
 .public-activity-page .modal-panel--video .modal-close {
   position: absolute;
   top: -46px;

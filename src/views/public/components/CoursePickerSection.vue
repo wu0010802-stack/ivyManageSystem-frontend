@@ -39,6 +39,7 @@ const props = withDefaults(defineProps<{
 defineEmits<{
   (e: 'toggle', course: CourseItem): void
   (e: 'open-video', title: string, url: string): void
+  (e: 'open-dm', course: CourseItem): void
 }>()
 
 // C4：每列的 availabilityState 以 name 為鍵記憶一次，避免模板在同一 render
@@ -229,6 +230,16 @@ onUnmounted(cancelPreview)
           >
             <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
             課程介紹
+          </button>
+          <button
+            v-if="Array.isArray(course.dm_pages) && course.dm_pages.length"
+            type="button"
+            class="video-btn tap-target"
+            :aria-label="`查看 ${course.name} 課程簡介`"
+            @click="$emit('open-dm', course)"
+          >
+            <svg class="icon" aria-hidden="true"><use href="#i-form" /></svg>
+            課程簡介
           </button>
         </div>
       </div>
