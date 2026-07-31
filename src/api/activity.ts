@@ -28,8 +28,18 @@ export const listPendingRegistrations = (params?: ApiQuery<'/activity/registrati
   api.get('/activity/registrations/pending', { params })
 export const matchRegistration = (id: number, studentId: number): AxiosResp<'/activity/registrations/{registration_id}/match', 'post'> =>
   api.post(`/activity/registrations/${id}/match`, { student_id: studentId })
-export const rejectRegistration = (id: number, reason = ''): AxiosResp<'/activity/registrations/{registration_id}/reject', 'post'> =>
-  api.post(`/activity/registrations/${id}/reject`, { reason })
+// 2026-07-31 拒絕擴大涵蓋：後台唯一移除入口（「刪除」鍵已移除）。已繳費的報名
+// 後端回 409，需二次確認帶 forceRefund + refundReason（≥15 字）重送以自動沖帳。
+export const rejectRegistration = (
+  id: number,
+  reason = '',
+  opts?: { forceRefund?: boolean; refundReason?: string },
+): AxiosResp<'/activity/registrations/{registration_id}/reject', 'post'> =>
+  api.post(`/activity/registrations/${id}/reject`, {
+    reason,
+    force_refund: opts?.forceRefund ?? false,
+    refund_reason: opts?.refundReason,
+  })
 // rematch / force-accept 後端 body 為 Optional[RegistrationRematchRequest]=None
 // （optional requestBody → ApiBody 推導為 never），故直接引用具名 component schema。
 export const rematchRegistration = (id: number, data?: Schema<'RegistrationRematchRequest'>): AxiosResp<'/activity/registrations/{registration_id}/rematch', 'post'> =>
@@ -91,10 +101,9 @@ export const withdrawCourse = (
   api.delete(`/activity/registrations/${registrationId}/courses/${courseId}`, {
     params: buildForceRefundParams({ forceRefund, refundReason }),
   })
-export const deleteRegistration = (id: number, { forceRefund = false, refundReason }: { forceRefund?: boolean; refundReason?: string } = {}): AxiosResp<'/activity/registrations/{registration_id}', 'delete'> =>
-  api.delete(`/activity/registrations/${id}`, {
-    params: buildForceRefundParams({ forceRefund, refundReason }),
-  })
+// deleteRegistration 已移除（2026-07-31）：後台不再提供「刪除」操作，一律走
+// rejectRegistration（同為軟刪除、留審核軌跡、可復原）；後端 DELETE 端點保留
+// 供 API 相容，但 UI 不得再呼叫。
 // 批次標記「已繳費」（is_paid=true）— 後端已禁用 is_paid=false 批次沖帳以防誤操作
 // reason ≥ 5 字必填；整批 shortfall 合計 > NT$1000 需 ACTIVITY_PAYMENT_APPROVE 權限
 // 資安（2026-07-30 #3）：帶上呼叫端目前檢視的學期（school_year/semester）——

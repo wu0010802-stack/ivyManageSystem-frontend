@@ -119,7 +119,9 @@
       </el-table-column>
       <el-table-column label="操作" width="330" align="center" fixed="right" class-name="op-cell">
         <template #default="{ row }">
-          <!-- 第一行：詳情 / 刪除（拒絕列為復原）/ 複製查詢碼 -->
+          <!-- 第一行：詳情 / 拒絕（拒絕列為復原）/ 複製查詢碼。
+               「刪除」已移除（2026-07-31 業主指定）：後台一律走「拒絕」軟刪除
+               （強制留原因、可復原）；已繳費列拒絕時會要求退費沖帳確認。 -->
           <div class="op-row">
             <el-button size="small" @click="openDetail(row)">詳情</el-button>
             <!-- 已拒絕列：改顯示「復原」 -->
@@ -129,13 +131,14 @@
               type="success"
               @click="handleRestore(row)"
             >復原</el-button>
+            <!-- 已核可（matched/manual/forced）列：拒絕鈕在第一行；
+                 待審核／未比對列的拒絕鈕仍在第二行審核鈕群，不重複顯示 -->
             <el-button
-              v-else-if="!isRejectedRow(row) && canWrite"
+              v-else-if="!isRejectedRow(row) && canWrite && !showReviewButtons(row)"
               size="small"
               type="danger"
-              @click="handleDelete(row)"
-              :loading="deletingRegistrationId === row.id"
-            >刪除</el-button>
+              @click="handleReject(row)"
+            >拒絕</el-button>
             <!-- 查詢碼由姓名+生日+家長手機及伺服器密鑰派生，供家長遺失時由後台補發 -->
             <el-tooltip v-if="row.query_token" :content="row.query_token" placement="top">
               <el-button
@@ -151,20 +154,12 @@
           <div v-if="!isRejectedRow(row) && canWrite && showReviewButtons(row)" class="op-row op-row--audit">
             <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
             <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
-            <el-tooltip
-              :disabled="!((row.paid_amount || 0) > 0)"
-              content="已有繳費，請先於詳情處理繳費再拒絕"
-              placement="top"
-            >
-              <span class="reject-btn-wrap">
-                <el-button
-                  size="small"
-                  type="danger"
-                  :disabled="!canReject(row)"
-                  @click="handleReject(row)"
-                >拒絕</el-button>
-              </span>
-            </el-tooltip>
+            <el-button
+              size="small"
+              type="danger"
+              :disabled="!canReject(row)"
+              @click="handleReject(row)"
+            >拒絕</el-button>
           </div>
         </template>
       </el-table-column>
@@ -514,7 +509,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Edit, Link } from '@element-plus/icons-vue'
 import {
   getRegistrationDetail,
-  updateRemark, promoteWaitlist, deleteRegistration,
+  updateRemark, promoteWaitlist,
   exportRegistrations,
   getRegistrationPayments, deleteRegistrationPayment,
   withdrawCourse, getRegistrationTime,
@@ -750,7 +745,6 @@ const loadingPayments = ref(false)
 const paymentLoadFailed = ref(false)
 const paymentInfo = ref<PaymentInfo>({ total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] })
 const deletingPaymentId = ref<number | null>(null)
-const deletingRegistrationId = ref<number | null>(null)
 const paymentDialogVisible = ref(false)
 const paymentDialogType = ref<'payment' | 'refund'>('payment')
 
@@ -969,53 +963,9 @@ async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean
   }
 }
 
-async function handleDelete(row: RegistrationRow) {
-  try {
-    await ElMessageBox.confirm(`確定要刪除「${row.student_name}」的報名資料嗎？`, '確認刪除', {
-      type: 'warning',
-      confirmButtonText: '確定刪除',
-      confirmButtonClass: 'el-button--danger',
-    })
-  } catch {
-    return
-  }
-  await doDeleteRegistration(row, false)
-}
-
-async function doDeleteRegistration(row: RegistrationRow, forceRefund: boolean, refundReason?: string) {
-  deletingRegistrationId.value = row.id
-  try {
-    await deleteRegistration(row.id, { forceRefund, refundReason })
-    ElMessage.success(forceRefund ? '已刪除並自動寫退費沖帳' : '已刪除')
-    drawerVisible.value = false
-    fetchList()
-  } catch (e) {
-    // 409：報名尚有已繳金額，需二次確認以 force_refund=true 自動沖帳；
-    // 後端要求自動沖帳必填 refund_reason（≥15 字），故此處用 prompt 收原因。
-    const err = e as ApiErr
-    if (err?.response?.status === 409 && !forceRefund) {
-      const detailMsg = err?.response?.data?.detail || '報名尚有已繳金額'
-      let reasonResult: { value: string }
-      try {
-        reasonResult = (await ElMessageBox.prompt(
-          `${detailMsg}\n\n按「確認刪除並沖帳」後會自動寫退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
-            `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.refundReasonMin} 字，會寫入退費紀錄供稽核）：`,
-          '需要確認自動沖帳',
-          forceRefundReasonPromptOptions('確認刪除並沖帳')
-        )) as { value: string }
-      } catch {
-        deletingRegistrationId.value = null
-        return
-      }
-      const reason = (reasonResult.value || '').trim()
-      await doDeleteRegistration(row, true, reason)
-      return
-    }
-    ElMessage.error(err?.response?.data?.detail || '刪除失敗')
-  } finally {
-    deletingRegistrationId.value = null
-  }
-}
+// 「刪除報名」流程已整組移除（2026-07-31 業主指定）：後台唯一移除入口是
+// 「拒絕」（useActivityReview.handleReject，含已繳費 409 → force_refund 沖帳
+// 二次確認），同為軟刪除、留審核軌跡、可復原。
 
 // ── 批量勾選：限同一「審核分類」──
 // 批量動作實際只在乎三種分類：待審核 / 已拒絕 / 已完成報名（系統自動 matched、
@@ -1136,9 +1086,10 @@ function showReviewButtons(row: RegistrationRow): boolean {
 function isRejectedRow(row: RegistrationRow): boolean {
   return row.match_status === 'rejected'
 }
-// 拒絕鈕在已有繳費時 disable（對齊後端 reject 的 paid_amount 守衛，避免必然 409）
+// 2026-07-31 拒絕擴大涵蓋：已繳費不再 disable——後端 409 會引導 force_refund
+// 沖帳二次確認（與原刪除流程同一套退費簽核閘）
 function canReject(row: RegistrationRow): boolean {
-  return canWrite.value && showReviewButtons(row) && !((row.paid_amount as number) > 0)
+  return canWrite.value && showReviewButtons(row)
 }
 function onRematchAllPending() {
   handleRematchAllPending({ school_year: termStore.school_year, semester: termStore.semester })
@@ -1367,9 +1318,6 @@ onMounted(async () => {
   cursor: pointer;
 }
 .amount-hint { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
-/* 拒絕鈕以 tooltip span 包住（disabled 時仍可 hover 提示）→ 補回按鈕間距 */
-.reject-btn-wrap { display: inline-flex; margin-left: 12px; vertical-align: middle; }
-.reject-btn-wrap + .el-button { margin-left: 12px; }
 .activity-registrations { padding: 16px; }
 /* 兩列工具列（2026-07-23）：第一列搜尋/篩選、第二列動作按鈕（含重新比對），
    兩列皆靠左對齊。 */
