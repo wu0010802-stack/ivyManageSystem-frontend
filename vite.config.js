@@ -103,7 +103,15 @@ function manualChunks(id) {
         // 釘到 shared-common 切斷整條 cascade。
         id.includes('/src/constants/lifecycle.ts') ||
         id.includes('/src/utils/taipeiTime.ts') ||
-        id.includes('/src/constants/activity.ts')
+        id.includes('/src/constants/activity.ts') ||
+        // ws / html：WebSocket 重連工具與 HTML escape（皆零 import、EP-free），
+        // admin（useInboxNotifications / useBusMonitor / DismissalQueueView）與家長端
+        // （useBusTracking / ParentOfflineIndicator）共用。未 pin 時 Rollup 把兩檔併進
+        // parent-app chunk → admin index 為了頂欄通知的 ws.ts 靜態橋接 parent-app 整包
+        // （首屏 332KB 爆 310KB 預算、check-entry-chunks 紅、staging 部署連續失敗）。
+        // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第三次同型回歸。
+        id.includes('/src/utils/ws.ts') ||
+        id.includes('/src/utils/html.ts')
     ) {
         return 'shared-common'
     }
