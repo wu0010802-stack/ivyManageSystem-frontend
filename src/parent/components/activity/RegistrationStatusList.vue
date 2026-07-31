@@ -16,6 +16,7 @@
  * 根節點帶 id="act-active" 提供 hero scrollIntoView 錨點。
  */
 import { paymentBadge } from '../../utils/activityPayment'
+import { isActionablePromotion, isPromotionExpired } from '../../utils/activityPromotion'
 import { fmtDateTime } from '../../utils/datetime'
 import StatusPill from '../StatusPill.vue'
 
@@ -62,24 +63,16 @@ const emit = defineEmits<{
 }>()
 
 /**
- * 候補轉正確認期限是否已過（2026-07-31 盲區稽核 C4）。
+ * 候補轉正確認期限（2026-07-31 盲區稽核 C4）。
  *
  * 首頁待辦徽章刻意把逾期的 promoted_pending 也算進去（後端 home.py 的 docstring
  * 載明理由：讓家長點進來看得到「期限已過」，避免誤以為系統漏通知），但這裡原本
  * 只依 status 渲染一顆看起來可用的確認鈕，也不顯示期限——家長按下去只會拿到
  * 410，而且列不會消失（錯誤路徑沒有重新整理），再按一次變成 404。
  *
- * 沒有 confirm_deadline 的資料維持既有行為（顯示確認鈕），不假設後端一定有值。
+ * 判定邏輯住在 utils/activityPromotion，與才藝頁的「其他孩子待確認」統計共用。
  */
-function isPromotionExpired(rc: RegCourse): boolean {
-  if (!rc.confirm_deadline) return false
-  const t = new Date(rc.confirm_deadline).getTime()
-  return Number.isFinite(t) && t < Date.now()
-}
-
-function canConfirmPromotion(rc: RegCourse): boolean {
-  return rc.status === 'promoted_pending' && !isPromotionExpired(rc)
-}
+const canConfirmPromotion = isActionablePromotion
 
 function deadlineText(rc: RegCourse): string {
   const formatted = fmtDateTime(rc.confirm_deadline)

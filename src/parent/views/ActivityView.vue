@@ -19,6 +19,7 @@ import {
   getUpcomingSessions,
 } from '../api/activity'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { isActionablePromotion } from '../utils/activityPromotion'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
 import {
@@ -114,6 +115,33 @@ const currentTermRegs = computed(() => {
     (r) => r.school_year === c0.school_year && r.semester === c0.semester,
   )
 })
+
+// C3（2026-07-31 盲區稽核）：首頁待辦徽章對「全部子女」計數，這頁的清單卻恆以
+// selectedId 篩單一孩子（ChildContextHeader 沒有「全部」選項、useChildSelection
+// 一定會自動選第一個）。兩名子女各有一筆待確認時，徽章寫 2、清單只看得到 1，
+// 家長若信任徽章，另一名子女的邀請就在 48h 後靜默失位——這是本頁唯一帶不可逆
+// 期限的項目，故補一行提示與一鍵切換。已逾期的不提示（家長已無法處理）。
+const otherChildrenPendingRegs = computed(() => {
+  if (!selectedId.value) return []
+  return myRegs.value.filter(
+    (r) =>
+      r.student_id !== selectedId.value &&
+      (r.courses || []).some(isActionablePromotion),
+  )
+})
+
+const otherChildrenPendingCount = computed(() =>
+  otherChildrenPendingRegs.value.reduce(
+    (sum, r) => sum + (r.courses || []).filter(isActionablePromotion).length,
+    0,
+  ),
+)
+
+/** 切到第一個有待確認邀請的孩子，讓提示可直接點過去處理。 */
+function goToPendingChild() {
+  const target = otherChildrenPendingRegs.value[0]
+  if (target) selectedId.value = target.student_id
+}
 
 const COURSE_STATUS = {
   enrolled: { label: '已報名', color: { bg: 'var(--brand-primary-soft)', color: 'var(--m3-primary, var(--pt-success-text))' } },
@@ -479,6 +507,17 @@ async function pullRefresh() {
           複製連結
         </button>
       </div>
+      <!-- C3：清單只顯示當前孩子，其他孩子的待確認邀請帶不可逆的 48h 期限，
+           不提示的話家長信任首頁徽章就會讓它靜默失位。放在空狀態之前，
+           當前孩子沒有任何報名時也看得到。 -->
+      <button
+        v-if="!loadError && otherChildrenPendingCount > 0"
+        type="button"
+        class="other-child-pending"
+        @click="goToPendingChild"
+      >
+        其他孩子還有 {{ otherChildrenPendingCount }} 筆候補待確認，點此查看
+      </button>
       <MobileErrorRetry v-if="loadError" @retry="fetchBootstrap" />
       <div v-else-if="!regsLoading && filteredRegs.length === 0" class="pt-empty">
         <div class="pt-empty-title">尚無報名</div>
@@ -555,6 +594,22 @@ async function pullRefresh() {
 </template>
 
 <style scoped>
+/* C3：其他孩子的候補待確認提示。用警示色而非一般連結——它帶 48h 期限，
+   錯過不可逆。整塊可點，切到該孩子。 */
+.other-child-pending {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--color-warning, #f0b429);
+  border-radius: 8px;
+  background: var(--color-warning-soft, #fff8e1);
+  color: var(--pt-warning-text-soft, #92400e);
+  font-size: 13px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
 .activity-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
