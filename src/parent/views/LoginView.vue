@@ -7,7 +7,7 @@ import {
   initLiff,
   liff,
 } from '../services/liff'
-import { liffLogin } from '../api/auth'
+import { liffLogin, deviceSetup } from '../api/auth'
 import {
   CONSENT_SCOPE_SERVICE_ESSENTIAL,
   getCurrentPolicy,
@@ -40,6 +40,19 @@ const errorState = ref<FriendlyError | null>(null)
 
 function _setLocalError(message: string, nextStep?: string) {
   errorState.value = { message, nextStep, level: 'error' }
+}
+
+// 登入成功後的共用收尾：LIFF 登入與設定碼登入的後端回應 shape 完全一致
+// （{status:'ok', user:{user_id,name,role}}），刻意共用同一條路徑，不要
+// 分岔——否則兩條登入方式的 consent gate / 深連結行為會慢慢長歪。
+async function completeLogin(user: unknown) {
+  authStore.setUser(user)
+  const needsConsent = await checkConsentRequired()
+  if (needsConsent) {
+    status.value = 'consent'
+    return
+  }
+  redirectAfterAuth()
 }
 
 function isIdTokenExpiredError(err: unknown) {
@@ -83,14 +96,8 @@ async function startLogin({ forceFresh = false } = {}) {
     const { data } = await liffLogin(idToken)
     if (data?.status === 'ok') {
       clearLiffTokenRefreshMarker()
-      authStore.setUser(data.user)
       // P0c-3: 強制 consent 關卡 — 未對 current policy 簽 service_essential 即攔下
-      const needsConsent = await checkConsentRequired()
-      if (needsConsent) {
-        status.value = 'consent'
-        return
-      }
-      redirectAfterAuth()
+      await completeLogin(data.user)
     } else if (data?.status === 'need_binding') {
       clearLiffTokenRefreshMarker()
       // 把 redirect 一併轉給 /bind，讓「深連結 → 過期 → 登入 → 發現未綁定 →
@@ -155,6 +162,39 @@ function onConsented() {
   redirectAfterAuth()
 }
 
+// ── 設定碼登入（無 LINE / 換新裝置的家長）──────────────────────────────
+const showDeviceSetup = ref(false)
+const deviceCode = ref('')
+const deviceSetupSubmitting = ref(false)
+const deviceSetupError = ref('')
+
+async function submitDeviceSetup() {
+  const code = deviceCode.value.trim()
+  if (!code) {
+    deviceSetupError.value = '請輸入設定碼'
+    return
+  }
+  deviceSetupSubmitting.value = true
+  deviceSetupError.value = ''
+  try {
+    const { data } = await deviceSetup(code)
+    if (data?.status !== 'ok') throw new Error('伺服器回應未預期狀態')
+    await completeLogin(data.user)
+  } catch (err: unknown) {
+    const e = err as { response?: { status?: number } }
+    if (e?.response?.status === 429) {
+      deviceSetupError.value = '嘗試次數過多，請稍後再試'
+    } else {
+      // 後端對「碼不存在／已過期／已使用」一律回同一個 BusinessError code
+      // 避免碼枚舉；前端也不採用後端實際訊息字串，固定顯示這句，避免後端
+      // 訊息未來變得更具體時前端不小心變成枚舉 oracle。
+      deviceSetupError.value = '設定碼無效或已過期，請聯絡園所'
+    }
+  } finally {
+    deviceSetupSubmitting.value = false
+  }
+}
+
 onMounted(() => startLogin())
 </script>
 
@@ -208,6 +248,57 @@ onMounted(() => startLogin())
           重試登入
         </button>
       </template>
+    </div>
+
+    <!-- 次要入口：無 LINE 或換新裝置的家長，用園所簽發的設定碼直接登入。
+         跟主要 LIFF 流程共用 completeLogin（consent gate + 深連結導回），
+         見 script 內註解。 -->
+    <div v-if="status !== 'consent'" class="device-setup-block">
+      <button
+        type="button"
+        class="device-setup-toggle"
+        data-testid="device-setup-toggle"
+        @click="showDeviceSetup = !showDeviceSetup"
+      >
+        沒有 LINE？使用園所提供的設定碼登入
+      </button>
+
+      <div v-if="showDeviceSetup" class="device-setup-form">
+        <p class="device-setup-hint">
+          設定碼由園所行政人員簽發，跟「LINE 綁定碼」不同——綁定碼是給已有 LINE
+          的家長綁定小孩用的，設定碼是給沒有 LINE 或換新手機的家長直接登入用的。
+        </p>
+        <label for="device-setup-code" class="sr-only">設定碼</label>
+        <input
+          id="device-setup-code"
+          v-model="deviceCode"
+          type="text"
+          data-testid="device-setup-input"
+          :inputmode="('latin' as any)"
+          autocapitalize="characters"
+          autocomplete="one-time-code"
+          placeholder="例：ABCD1234EFGH"
+          maxlength="20"
+          @keydown.enter="submitDeviceSetup"
+        />
+        <button
+          type="button"
+          class="pt-action-btn device-setup-submit"
+          data-testid="device-setup-submit"
+          :disabled="deviceSetupSubmitting"
+          @click="submitDeviceSetup"
+        >
+          {{ deviceSetupSubmitting ? '登入中…' : '使用設定碼登入' }}
+        </button>
+        <p
+          v-if="deviceSetupError"
+          class="device-setup-error"
+          data-testid="device-setup-error"
+          role="alert"
+        >
+          {{ deviceSetupError }}
+        </p>
+      </div>
     </div>
 
     <p class="legal">本服務由常春藤幼兒園提供</p>
@@ -323,6 +414,95 @@ onMounted(() => startLogin())
   margin-top: 8px;
   width: 100%;
   min-height: 48px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.device-setup-block {
+  width: 100%;
+  max-width: 360px;
+  margin-top: 16px;
+}
+
+.device-setup-toggle {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: var(--pt-text-muted);
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.device-setup-toggle:focus-visible {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.device-setup-form {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  padding: 16px;
+  border: 1px solid rgba(13, 144, 83, 0.12);
+}
+
+.device-setup-hint {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--pt-text-muted);
+  text-align: left;
+}
+
+.device-setup-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  font-size: 18px;
+  letter-spacing: 4px;
+  text-align: center;
+  border: 2px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 12px;
+  font-family: ui-monospace, 'SF Mono', 'Menlo', monospace;
+  text-transform: uppercase;
+  background: var(--cream, #fffcf2);
+  font-weight: 700;
+  color: var(--pt-text-strong);
+  box-sizing: border-box;
+  margin-bottom: 10px;
+}
+.device-setup-form input:focus-visible {
+  outline: none;
+  border-color: var(--brand-primary, #0d9053);
+  background: var(--pt-surface-card, #fff);
+}
+
+.device-setup-submit {
+  width: 100%;
+  min-height: 44px;
+}
+
+.device-setup-error {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  background: var(--coral-100, #ffe3e0);
+  color: var(--coral-700, #b14545);
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: left;
 }
 
 .legal {
