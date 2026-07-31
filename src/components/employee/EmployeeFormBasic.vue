@@ -20,6 +20,7 @@ interface SelectOption {
 export interface EmployeeFormBasicData {
   employee_id?: string
   name?: string
+  english_name?: string
   job_title_id?: number | string | null
   title?: string
   position?: string
@@ -143,6 +144,10 @@ defineExpose({ applyValidationErrors })
   <!-- 核心資料 -->
   <el-form-item label="姓名" prop="name">
     <el-input v-model="form.name" />
+  </el-form-item>
+
+  <el-form-item label="英文名">
+    <el-input v-model="form.english_name" maxlength="100" clearable placeholder="例：Amy" />
   </el-form-item>
 
   <el-form-item label="員工編號">

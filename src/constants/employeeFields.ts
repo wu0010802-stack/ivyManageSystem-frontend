@@ -36,6 +36,7 @@ export const SELF_EDITABLE_FIELDS = Object.freeze([
 export const BASIC_TAB_FIELDS = Object.freeze([
   'employee_id',
   'name',
+  'english_name',
   'id_number',
   'employee_type',
   'job_title_id',
