@@ -7,15 +7,16 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { mockDelete, mockGet } = vi.hoisted(() => ({
+const { mockDelete, mockGet, mockPost } = vi.hoisted(() => ({
   mockDelete: vi.fn(() => Promise.resolve({ data: {} })),
   mockGet: vi.fn(() => Promise.resolve({ data: {} })),
+  mockPost: vi.fn(() => Promise.resolve({ data: {} })),
 }))
 
 vi.mock('@/api/index', () => ({
   default: {
     get: mockGet,
-    post: vi.fn(),
+    post: mockPost,
     put: vi.fn(),
     delete: mockDelete,
   },
@@ -23,7 +24,7 @@ vi.mock('@/api/index', () => ({
 
 import {
   withdrawCourse,
-  deleteRegistration,
+  rejectRegistration,
   removeRegistrationSupply,
   getActivityStats,
   getActivityStatsSummary,
@@ -33,6 +34,7 @@ import {
 describe('activity api — forceRefund / refundReason 契約', () => {
   beforeEach(() => {
     mockDelete.mockClear()
+    mockPost.mockClear()
   })
 
   it('withdrawCourse 無 options 時 params 為空物件', async () => {
@@ -67,27 +69,21 @@ describe('activity api — forceRefund / refundReason 契約', () => {
     )
   })
 
-  it('deleteRegistration 無 options 時 params 為空物件', async () => {
-    await deleteRegistration(99)
-    expect(mockDelete).toHaveBeenCalledWith(
-      '/activity/registrations/99',
-      { params: {} }
+  // deleteRegistration 已移除（2026-07-31 拒絕擴大涵蓋）：唯一移除入口改為
+  // rejectRegistration，force_refund / refund_reason 走 POST body 而非 query。
+  it('rejectRegistration 無 opts 時 body 帶 force_refund=false', async () => {
+    await rejectRegistration(99, '資料不符')
+    expect(mockPost).toHaveBeenCalledWith(
+      '/activity/registrations/99/reject',
+      { reason: '資料不符', force_refund: false, refund_reason: undefined }
     )
   })
 
-  it('deleteRegistration forceRefund=true 但無 refundReason 時只帶 force_refund=true', async () => {
-    await deleteRegistration(99, { forceRefund: true })
-    expect(mockDelete).toHaveBeenCalledWith(
-      '/activity/registrations/99',
-      { params: { force_refund: true } }
-    )
-  })
-
-  it('deleteRegistration forceRefund=true + refundReason 時兩個 query 都帶上', async () => {
-    await deleteRegistration(99, { forceRefund: true, refundReason: '報名整筆作廢沖帳' })
-    expect(mockDelete).toHaveBeenCalledWith(
-      '/activity/registrations/99',
-      { params: { force_refund: true, refund_reason: '報名整筆作廢沖帳' } }
+  it('rejectRegistration forceRefund + refundReason 時 body 兩欄都帶上', async () => {
+    await rejectRegistration(99, '資料不符', { forceRefund: true, refundReason: '報名整筆作廢沖帳' })
+    expect(mockPost).toHaveBeenCalledWith(
+      '/activity/registrations/99/reject',
+      { reason: '資料不符', force_refund: true, refund_reason: '報名整筆作廢沖帳' }
     )
   })
 
