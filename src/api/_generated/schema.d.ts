@@ -330,6 +330,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/courses/{course_id}/dm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Course Dm
+         * @description 上傳／替換課程 DM（介紹文宣）。PDF 轉頁圖、圖片視為單頁 DM（不轉檔）。
+         *
+         *     原子性順序照抄海報端點 `upload_activity_poster`（settings.py）：先存好全部
+         *     新檔 → DB commit → commit 成功後才刪舊檔。commit 失敗時舊檔完好（DB 仍指向
+         *     它），新檔變孤兒（較輕代價，可日後清理）。
+         */
+        post: operations["upload_course_dm_api_activity_courses__course_id__dm_post"];
+        /**
+         * Delete Course Dm
+         * @description 刪除課程 DM：清空 dm_url/dm_pages 並刪除 storage 檔案。
+         *
+         *     課程本來就沒有 DM 時仍回 200（冪等）。
+         */
+        delete: operations["delete_course_dm_api_activity_courses__course_id__dm_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/courses/{course_id}/enrolled": {
         parameters: {
             query?: never;
@@ -794,6 +824,34 @@ export interface paths {
          * @description 前台：取得班級選項
          */
         get: operations["get_public_classes_api_activity_public_classes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/public/course-dm/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Course Dm
+         * @description 公開端點：回傳已上傳的課程 DM（原始 PDF 或轉出的頁圖）。
+         *
+         *     防穿越：檔名須通過 DM_FILENAME_RE（`{32hex}.{ext}` 原檔／`{32hex}_p{n}.webp`
+         *     頁圖；import 自 services.activity_dm，與上傳/刪舊檔共用同一份權威 regex）——
+         *     海報端點那套純 hex 檢查會誤殺頁圖檔名裡的 `_p` 底線。
+         *     backend 為 local：直接 stream bytes；R2：controller 裁定改 302 到
+         *     `backend.signed_url()`（activity_dms 未登記 R2 公開 bucket _PUBLIC_MODULES，
+         *     刻意不加——改用短 TTL 簽名網址即可讀，免公開 bucket 設定；ttl 300s 與 local
+         *     分支的 Cache-Control max-age=300 對齊）。
+         */
+        get: operations["get_public_course_dm_api_activity_public_course_dm__filename__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15969,9 +16027,9 @@ export interface components {
          * ActivityRegistrationTimeOut
          * @description GET /settings/registration-time 回應。
          *
-         *     對應 _serialize_settings 輸出：未設定時全欄位 None；已設定時各欄位來自
-         *     ActivityRegistrationSettings ORM。open_at / close_at 在 ORM 為 String 欄位
-         *     （ISO 8601），故為 Optional[str]。is_open 開關已移除（2026-07-31）。
+         *     對應 _serialize_settings 輸出：未設定時 is_open=False，其餘欄位 None；
+         *     已設定時各欄位來自 ActivityRegistrationSettings ORM。open_at / close_at
+         *     在 ORM 為 String 欄位（ISO 8601），故為 Optional[str]。
          */
         ActivityRegistrationTimeOut: {
             /** Close At */
@@ -15980,6 +16038,8 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
+            /** Is Open */
+            is_open: boolean;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
@@ -17516,6 +17576,11 @@ export interface components {
         };
         /** Body_upload_attendance_api_attendance_upload_post */
         Body_upload_attendance_api_attendance_upload_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_course_dm_api_activity_courses__course_id__dm_post */
+        Body_upload_course_dm_api_activity_courses__course_id__dm_post: {
             /** File */
             file: string;
         };
@@ -19444,8 +19509,6 @@ export interface components {
              * @default true
              */
             allow_waitlist: boolean;
-            /** Allowed Grades */
-            allowed_grades?: string[] | null;
             /**
              * Capacity
              * @default 30
@@ -19503,15 +19566,14 @@ export interface components {
         CourseDetailOut: {
             /** Allow Waitlist */
             allow_waitlist: boolean;
-            /**
-             * Allowed Grades
-             * @default []
-             */
-            allowed_grades: string[];
             /** Capacity */
             capacity?: number | null;
             /** Description */
             description: string;
+            /** Dm Pages */
+            dm_pages?: string[] | null;
+            /** Dm Url */
+            dm_url?: string | null;
             /** Id */
             id: number;
             /** Instructor Employee Id */
@@ -19526,6 +19588,21 @@ export interface components {
             sessions?: number | null;
             /** Video Url */
             video_url: string;
+        };
+        /**
+         * CourseDmUploadResultOut
+         * @description POST /courses/{course_id}/dm 上傳／替換 200 回應。
+         *
+         *     dm_url 為 backend.public_url 產出的原始檔對外網址；dm_pages 為轉頁圖後的
+         *     URL 陣列（圖片來源時單頁＝ dm_url 本身）。不含 message——前端以
+         *     dm_url/dm_pages 是否非空判斷成功即可，與海報端點（含 message）刻意不同，
+         *     因為此回應直接餵入預覽元件而非僅顯示提示文字。
+         */
+        CourseDmUploadResultOut: {
+            /** Dm Pages */
+            dm_pages: string[];
+            /** Dm Url */
+            dm_url: string;
         };
         /**
          * CourseEnrolledItemOut
@@ -19590,15 +19667,14 @@ export interface components {
         CourseListItemOut: {
             /** Allow Waitlist */
             allow_waitlist: boolean;
-            /**
-             * Allowed Grades
-             * @default []
-             */
-            allowed_grades: string[];
             /** Capacity */
             capacity: number;
             /** Description */
             description: string;
+            /** Dm Pages */
+            dm_pages?: string[] | null;
+            /** Dm Url */
+            dm_url?: string | null;
             /** Enrolled */
             enrolled: number;
             /** Id */
@@ -19672,8 +19748,6 @@ export interface components {
         CourseUpdate: {
             /** Allow Waitlist */
             allow_waitlist?: boolean | null;
-            /** Allowed Grades */
-            allowed_grades?: string[] | null;
             /** Capacity */
             capacity?: number | null;
             /** Description */
@@ -27179,11 +27253,10 @@ export interface components {
          *     對應到 ORM 的 Time 物件，產出再序列化變 ISO）。
          */
         PublicCoursesItemOut: {
-            /**
-             * Allowed Grades
-             * @default []
-             */
-            allowed_grades: string[];
+            /** Dm Pages */
+            dm_pages?: string[] | null;
+            /** Dm Url */
+            dm_url?: string | null;
             /** Frequency */
             frequency: string;
             /** Instructor Name */
@@ -27377,9 +27450,6 @@ export interface components {
          * @description GET /public/registration-time response。
          *
          *     所有顯示欄位皆 Optional：settings 為 None 時整批回 None。
-         *
-         *     is_open 自 2026-07-31 起為衍生值（時間窗當下是否開放），無對應 DB 欄位；
-         *     僅為已部署的舊前端 bundle 相容保留，新前端依 open_at/close_at 自行計算。
          */
         PublicRegistrationTimeOut: {
             /** Close At */
@@ -28378,13 +28448,6 @@ export interface components {
             created_at?: string | null;
             /** Email */
             email?: string | null;
-            /**
-             * Grade Mismatch Courses
-             * @default []
-             */
-            grade_mismatch_courses: string[];
-            /** Grade Name */
-            grade_name?: string | null;
             /** Id */
             id: number;
             /** Internal Note */
@@ -28585,6 +28648,8 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
+            /** Is Open */
+            is_open: boolean;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
@@ -33888,6 +33953,72 @@ export interface operations {
             };
         };
     };
+    upload_course_dm_api_activity_courses__course_id__dm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_course_dm_api_activity_courses__course_id__dm_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseDmUploadResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_course_dm_api_activity_courses__course_id__dm_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                course_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_course_enrolled_api_activity_courses__course_id__enrolled_get: {
         parameters: {
             query?: never;
@@ -34640,6 +34771,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": string[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_course_dm_api_activity_public_course_dm__filename__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
