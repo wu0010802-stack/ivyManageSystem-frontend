@@ -65,4 +65,14 @@ describe('parent axios interceptor — refresh 失敗導回 /login 時保存原�
 
     expect(window.location.hash).toBe('#/login')
   })
+
+  it('currentRoute 停在根路徑 / 時不帶 redirect（純 redirect 路由，router 尚未完成初始導覽或測試未實際 push 時的預設值）', async () => {
+    currentRoute.value = { path: '/', fullPath: '/' }
+    apiMock.onGet('/parent/home/summary').reply(401)
+    globalMock.onPost(buildParentRefreshUrl()).reply(401)
+
+    await api.get('/parent/home/summary').catch(() => {})
+
+    expect(window.location.hash).toBe('#/login')
+  })
 })

@@ -328,8 +328,10 @@ api.interceptors.response.use(
 )
 
 // 已經在這幾個 public 頁時不需要（也不應該）把自己當 redirect 目標，避免
-// 登入成功後被導回登入/綁定/維護頁這種無意義的自我循環。
-const NO_REDIRECT_CAPTURE_PATHS = new Set(['/login', '/bind', '/maintenance'])
+// 登入成功後被導回登入/綁定/維護頁這種無意義的自我循環；`/` 是純 redirect
+// 到 /home 的根路由、不對應任何實際畫面，只會在 router 尚未完成初始導覽時
+// 短暫出現（或測試沒有實際 push 過路由時的預設值），同樣不值得記。
+const NO_REDIRECT_CAPTURE_PATHS = new Set(['/', '/login', '/bind', '/maintenance'])
 
 async function _redirectToLogin(): Promise<void> {
   // 深連結保存：在清 local state（含目前路由狀態可能連動的 store）之前，
