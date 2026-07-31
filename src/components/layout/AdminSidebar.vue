@@ -38,231 +38,37 @@
         background-color="#1e2a3a"
         @select="onMenuSelect"
       >
-        <!-- 1. 儀表板 -->
-        <el-menu-item v-if="canView.DASHBOARD" index="/">
-          <el-icon><DataBoard /></el-icon>
-          <template #title>儀表板</template>
-        </el-menu-item>
-
-        <!-- 2. 工作台 (合併簽核 + 高風險事件) -->
-        <el-menu-item v-if="canView.APPROVALS" index="/workbench">
-          <el-icon><Finished /></el-icon>
+        <!-- 選單樹由 src/constants/navigation manifest 衍生（SIDEBAR_TREE），
+             項目/群組/圖示/badge 全數資料驅動；新增後台頁請改 manifest，勿回頭手寫。 -->
+        <el-menu-item v-for="node in visibleTopLevel" :key="node.index" :index="node.index">
+          <el-icon><component :is="node.icon" /></el-icon>
           <template #title>
-            {{ PAGE_TERMS.workbench }}
-            <el-badge v-if="workbenchBadge > 0" :value="workbenchBadge" :max="99" class="menu-badge" />
+            {{ node.title }}
+            <el-badge
+              v-if="node.badgeKey && badgeValues[node.badgeKey] > 0"
+              :value="badgeValues[node.badgeKey]"
+              :max="99"
+              class="menu-badge"
+            />
           </template>
         </el-menu-item>
 
-        <!-- 3. 人事薪資 -->
-        <el-sub-menu v-if="hasVisibleLeaveItems" index="group-leave">
+        <el-sub-menu v-for="group in visibleGroups" :key="group.index" :index="group.index">
           <template #title>
-            <el-icon><Suitcase /></el-icon>
-            <span>人事薪資</span>
+            <el-icon><component :is="group.icon" /></el-icon>
+            <span>{{ group.title }}</span>
           </template>
-          <el-menu-item v-if="canView.EMPLOYEES_READ" index="/employees">
-            <el-icon><User /></el-icon>
-            <template #title>員工管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/salary">
-            <el-icon><Money /></el-icon>
-            <template #title>薪資管理</template>
-          </el-menu-item>
-          <el-menu-item
-            v-if="canView.SETTINGS_READ || canView.SALARY_READ || canView.YEAR_END_READ || canView.APPRAISAL_FINALIZE || canView.APPRAISAL_READ"
-            index="/appraisal-year-end"
-          >
-            <el-icon><Trophy /></el-icon>
-            <template #title>考核與年終</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
-            <el-icon><Clock /></el-icon>
-            <template #title>{{ MODULE_TERMS.attendance }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.LEAVES_READ" index="/leaves">
-            <el-icon><Document /></el-icon>
-            <template #title>請假管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.OVERTIME_READ || canView.MEETINGS" index="/overtime">
-            <el-icon><Watch /></el-icon>
-            <template #title>{{ PAGE_TERMS.overtime }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SCHEDULE" index="/schedule">
-            <el-icon><Timer /></el-icon>
-            <template #title>{{ MODULE_TERMS.schedule }}</template>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 4. 學生與班級 (不動) -->
-        <el-sub-menu v-if="hasVisibleStudentItems" index="group-students">
-          <template #title>
-            <el-icon><School /></el-icon>
-            <span>學生與班級</span>
-          </template>
-          <el-menu-item v-if="canView.CLASSROOMS_READ" index="/classrooms">
-            <el-icon><OfficeBuilding /></el-icon>
-            <template #title>{{ PAGE_TERMS.classrooms }}</template>
-          </el-menu-item>
-          <!-- 在籍記錄表（Excel 式花名冊）已折入「班級學生管理」頁的「統計表」modal；
-               統計圖表則獨立為本選單項目。 -->
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/enrollment-stats">
-            <el-icon><PieChart /></el-icon>
-            <template #title>統計圖表</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
-            <el-icon><User /></el-icon>
-            <template #title>{{ PAGE_TERMS.students }}</template>
-          </el-menu-item>
-          <!-- 成長冊工作台：權限對齊後端 GET /growth-books/batch-status 的 PORTFOLIO_READ 守衛
-               （非 STUDENTS_READ），避免無作品集權限者看得到選單卻進頁面即 403。 -->
-          <el-menu-item v-if="canView.PORTFOLIO_READ" index="/growth-books">
-            <el-icon><Collection /></el-icon>
-            <template #title>成長冊工作台</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.RECRUITMENT_READ" index="/students/admissions">
-            <el-icon><Promotion /></el-icon>
-            <template #title>招生入學</template>
-          </el-menu-item>
-          <!-- 在籍統計已折入「班級學生管理」頁的第一個分頁 -->
-          <el-menu-item v-if="canView.DISMISSAL_CALLS_READ" index="/dismissal-queue">
-            <el-icon><Van /></el-icon>
-            <template #title>{{ PAGE_TERMS.dismissalQueue }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.FEES_READ" index="/fees">
-            <el-icon><CreditCard /></el-icon>
-            <template #title>學費管理</template>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 6. 園務行政 (不動) -->
-        <el-sub-menu v-if="hasVisibleAdminItems" index="group-admin">
-          <template #title>
-            <el-icon><Files /></el-icon>
-            <span>園務行政</span>
-          </template>
-          <el-menu-item v-if="canView.ANNOUNCEMENTS_READ" index="/announcements">
-            <el-icon><Bell /></el-icon>
-            <template #title>公告管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.CALENDAR" index="/calendar">
-            <el-icon><Calendar /></el-icon>
-            <template #title>{{ PAGE_TERMS.calendar }}</template>
-          </el-menu-item>
-          <el-menu-item
-            v-if="canView.VENDOR_PAYMENT_READ || canView.MISC_RECEIPT_READ"
-            index="/finance-signoffs"
-          >
-            <el-icon><Wallet /></el-icon>
-            <template #title>收支簽收</template>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 7. 課後才藝 (含報名時間設定 + 修改紀錄) -->
-        <el-sub-menu v-if="hasVisibleActivityItems" index="group-activity">
-          <template #title>
-            <el-icon><Star /></el-icon>
-            <span>{{ MODULE_TERMS.activity }}</span>
-          </template>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/dashboard">
-            <el-icon><TrendCharts /></el-icon>
-            <template #title>{{ PAGE_TERMS.activityDashboard }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/registrations">
-            <el-icon><Tickets /></el-icon>
+          <el-menu-item v-for="item in group.items" :key="item.index" :index="item.index">
+            <el-icon><component :is="item.icon" /></el-icon>
             <template #title>
-              報名管理
-              <el-badge v-if="pendingActivityReview > 0" :value="pendingActivityReview" :max="99" class="menu-badge" />
+              {{ item.title }}
+              <el-badge
+                v-if="item.badgeKey && badgeValues[item.badgeKey] > 0"
+                :value="badgeValues[item.badgeKey]"
+                :max="99"
+                class="menu-badge"
+              />
             </template>
-          </el-menu-item>
-          <!-- 課程與用品已併入本頁前兩個 tab（2026-07-31），故條件放寬為 ACTIVITY_READ；
-               設定與信件模板 tab 由頁內 ACTIVITY_WRITE 自行擋。 -->
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/settings">
-            <el-icon><Collection /></el-icon>
-            <template #title>{{ PAGE_TERMS.activitySettings }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/pos">
-            <el-icon><Coin /></el-icon>
-            <template #title>POS 收銀</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_PAYMENT_APPROVE" index="/activity/pos/approval">
-            <el-icon><CircleCheck /></el-icon>
-            <template #title>{{ PAGE_TERMS.activityPosApproval }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/inquiries">
-            <el-icon><ChatDotRound /></el-icon>
-            <template #title>
-              家長提問
-              <el-badge v-if="pendingActivityInquiries > 0" :value="pendingActivityInquiries" :max="99" class="menu-badge" />
-            </template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/attendance">
-            <el-icon><Checked /></el-icon>
-            <template #title>點名管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
-            <el-icon><List /></el-icon>
-            <template #title>{{ PAGE_TERMS.activityChanges }}</template>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 8. 報表 (新一級，收查詢類) -->
-        <el-sub-menu v-if="hasVisibleReportsItems" index="group-reports">
-          <template #title>
-            <el-icon><DataAnalysis /></el-icon>
-            <span>報表</span>
-          </template>
-          <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
-            <el-icon><Memo /></el-icon>
-            <template #title>操作紀錄</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.DATA_QUALITY_READ" index="/data-quality">
-            <el-icon><WarningFilled /></el-icon>
-            <template #title>{{ PAGE_TERMS.dataQuality }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/monthly">
-            <el-icon><Histogram /></el-icon>
-            <template #title>{{ PAGE_TERMS.govMonthly }}</template>
-          </el-menu-item>
-          <!-- 以下三頁先前只有路由沒有選單入口，僅能靠直接輸入網址進入。
-               權限用 GOV_REPORTS_VIEW 對齊 permissions.ts 的 /admin/gov-reports prefix guard。 -->
-          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/certificates">
-            <el-icon><Document /></el-icon>
-            <template #title>{{ PAGE_TERMS.govCertificates }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/subsidies">
-            <el-icon><Document /></el-icon>
-            <template #title>{{ PAGE_TERMS.govSubsidies }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.GOV_REPORTS_VIEW" index="/admin/gov-reports/iep">
-            <el-icon><Document /></el-icon>
-            <template #title>IEP 個別化教育計畫</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.GOV_REPORTS_EXPORT" index="/gov-reports">
-            <el-icon><Files /></el-icon>
-            <template #title>{{ PAGE_TERMS.govExport }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.REPORTS" index="/reports">
-            <el-icon><PieChart /></el-icon>
-            <template #title>{{ PAGE_TERMS.reports }}</template>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 9. 系統設定（路由拆分：帳號/角色/一般 三子項各自依權限顯示） -->
-        <el-sub-menu v-if="hasVisibleSettingsItems" index="group-settings">
-          <template #title>
-            <el-icon><Setting /></el-icon>
-            <span>系統設定</span>
-          </template>
-          <el-menu-item v-if="canView.USER_MANAGEMENT_READ" index="/settings/accounts">
-            <el-icon><User /></el-icon>
-            <template #title>帳號設定</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ROLES_MANAGE" index="/settings/roles">
-            <el-icon><Key /></el-icon>
-            <template #title>角色設定</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
-            <el-icon><Tools /></el-icon>
-            <template #title>{{ PAGE_TERMS.settingsGeneral }}</template>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -284,17 +90,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import {
-  DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
-  Money, User, School, OfficeBuilding, Bell, Setting,
-  Expand, Fold, DataAnalysis, Files, Close,
-  Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Trophy, WarningFilled, Key,
-  Suitcase, Promotion, Wallet, TrendCharts, Tickets, Coin, CircleCheck,
-  Memo, Histogram, PieChart, Tools
-} from '@element-plus/icons-vue'
+// 選單項圖示改由 SIDEBAR_TREE（manifest 衍生）攜帶；此處只 import 側欄骨架自用的三顆。
+import { Expand, Fold, Close } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
-import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
+import { SIDEBAR_TREE, ACTIVE_MENU_PATHS } from '@/constants/navigation'
 
 const props = withDefaults(defineProps<{
   pendingApprovals?: number
@@ -332,54 +131,44 @@ const canView = computed(() =>
   )
 )
 
+// 側欄樹由 manifest 衍生（SIDEBAR_TREE 靜態）；項目可見性 = visibleCodes
+//（views ∪ sharedViews）任一命中，OR 語意與舊手寫 v-if 串一致。
+const visibleTopLevel = computed(() =>
+  SIDEBAR_TREE.topLevel.filter((node) => node.visibleCodes.some((code) => canView.value[code]))
+)
+
+// 群組可見性 =「子項權限濾後非空」，取代先前 6 個手寫 hasVisibleXxx OR 串。
+// 舊串的兩個殘渣（人事薪資的 SALARY_WRITE、報表的 SALARY_READ——無任何子項以其為
+// gate，卻會撐開空殼群組）就此消失，屬行為修正而非回歸。
+const visibleGroups = computed(() =>
+  SIDEBAR_TREE.groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => item.visibleCodes.some((code) => canView.value[code])),
+    }))
+    .filter((group) => group.items.length > 0)
+)
+
+// ACTIVE_MENU_PATHS（全部選單頁 routePath）最長前綴匹配：/salary/settle → /salary、
+// /appraisal-year-end/rules/* → /appraisal-year-end 自動涵蓋；/students/admissions、
+// /settings/accounts 等本身即選單頁者，比 /students、/settings 更長而勝出（精確高亮）。
 const activeMenu = computed(() => {
-  // 薪資 IA 拆 5 路由後子頁（settle/history/simulate/settings）仍高亮「薪資管理」
-  if (route.path.startsWith('/salary/')) return '/salary'
-  // 考核與年終巢狀路由（2026-07-10 改版）子頁仍高亮整合入口
-  if (route.path.startsWith('/appraisal-year-end/')) return '/appraisal-year-end'
-  return route.path
+  const currentPath = route.path
+  let best = ''
+  for (const path of ACTIVE_MENU_PATHS) {
+    if ((currentPath === path || currentPath.startsWith(`${path}/`)) && path.length > best.length) {
+      best = path
+    }
+  }
+  return best || currentPath
 })
 
-// 工作台 badge = 待簽核 + 高風險未確認
-const workbenchBadge = computed(() =>
-  (props.pendingApprovals ?? 0) + (props.pendingHighRiskAudit ?? 0)
-)
-
-// 檢查子選單是否有任何可見項目
-const hasVisibleLeaveItems = computed(() =>
-  canView.value.EMPLOYEES_READ || canView.value.SALARY_READ || canView.value.SALARY_WRITE ||
-  canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
-  canView.value.OVERTIME_READ || canView.value.MEETINGS ||
-  canView.value.SCHEDULE || canView.value.YEAR_END_READ || canView.value.APPRAISAL_FINALIZE ||
-  // 考核與年終整合入口含 SETTINGS_READ / APPRAISAL_READ，群組需據此顯示
-  canView.value.SETTINGS_READ || canView.value.APPRAISAL_READ
-)
-
-const hasVisibleStudentItems = computed(() =>
-  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ ||
-  canView.value.RECRUITMENT_READ || canView.value.PORTFOLIO_READ
-)
-
-const hasVisibleAdminItems = computed(() =>
-  canView.value.ANNOUNCEMENTS_READ || canView.value.CALENDAR ||
-  canView.value.VENDOR_PAYMENT_READ || canView.value.MISC_RECEIPT_READ
-)
-
-const hasVisibleActivityItems = computed(() =>
-  canView.value.ACTIVITY_READ || canView.value.ACTIVITY_WRITE || canView.value.ACTIVITY_PAYMENT_APPROVE
-)
-
-const hasVisibleReportsItems = computed(() =>
-  canView.value.AUDIT_LOGS ||
-  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.DATA_QUALITY_READ ||
-  canView.value.GOV_REPORTS_EXPORT ||
-  // 教育部類子頁走 GOV_REPORTS_VIEW；漏掉這條的話只有該權限的使用者會整個「報表」子選單消失
-  canView.value.GOV_REPORTS_VIEW
-)
-
-const hasVisibleSettingsItems = computed(() =>
-  canView.value.SETTINGS_READ || canView.value.USER_MANAGEMENT_READ || canView.value.ROLES_MANAGE
-)
+// badgeKey → badge 數值（工作台 = 待簽核 + 高風險未確認）
+const badgeValues = computed<Record<'workbench' | 'activityInquiries' | 'activityReview', number>>(() => ({
+  workbench: (props.pendingApprovals ?? 0) + (props.pendingHighRiskAudit ?? 0),
+  activityInquiries: props.pendingActivityInquiries ?? 0,
+  activityReview: props.pendingActivityReview ?? 0,
+}))
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value

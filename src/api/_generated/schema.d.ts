@@ -16861,6 +16861,10 @@ export interface components {
         /**
          * AuthPermissionsDefinitionOut
          * @description GET /permissions 權限定義（DB-driven，admin runtime 改動立即生效）。
+         *
+         *     ``groups`` 僅供相容保留：管理端的權限/選單樹 UI 已改由前端 navigation
+         *     manifest 驅動（2026-07 manifest 改造），不再以本欄位組樹；欄位不刪，
+         *     避免 API break 與 OpenAPI codegen 漣漪。
          */
         AuthPermissionsDefinitionOut: {
             /** Groups */
