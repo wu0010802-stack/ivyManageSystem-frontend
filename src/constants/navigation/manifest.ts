@@ -53,7 +53,9 @@ const SIDEBAR_ICONS = {
   Document: safeIcon(() => ElementPlusIcons.Document),
   Files: safeIcon(() => ElementPlusIcons.Files),
   Finished: safeIcon(() => ElementPlusIcons.Finished),
+  Guide: safeIcon(() => ElementPlusIcons.Guide),
   Histogram: safeIcon(() => ElementPlusIcons.Histogram),
+  MapLocation: safeIcon(() => ElementPlusIcons.MapLocation),
   Key: safeIcon(() => ElementPlusIcons.Key),
   List: safeIcon(() => ElementPlusIcons.List),
   Memo: safeIcon(() => ElementPlusIcons.Memo),
@@ -337,6 +339,27 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Van') },
         },
         {
+          // 娃娃車即時監看：對齊後端 api/bus/admin_routes.py 的 GET /bus/trips/today
+          // 守衛（BUS_READ）。與 /bus-routes 各自 exact、**不可** routePrefix——兩條
+          // 路徑同屬 /bus-* 但權限不同，prefix 會讓路線管理的 BUS_WRITE 外溢到監看頁。
+          key: 'busMonitor', title: '娃娃車即時監看', routePath: '/bus-monitor',
+          views: [{ code: 'BUS_READ', label: '娃娃車檢視' }],
+          menu: { icon: icon('MapLocation') },
+        },
+        {
+          // 娃娃車路線管理：頁面 gate = BUS_WRITE（後端路線管理三個寫端點的守衛），
+          // 故 BUS_WRITE 主屬於此頁 views 而非 actions——本頁「能看見/能進入」與
+          // 「能寫入」是同一個碼，沒有唯讀模式。同樣 exact，不可 routePrefix。
+          //
+          // ⚠ 授權時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：本頁進頁後
+          // 還會打 GET /bus/routes（後端 BUS_READ）與 GET /students（後端
+          // STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授 BUS_WRITE
+          // 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
+          key: 'busRoutes', title: '娃娃車路線管理', routePath: '/bus-routes',
+          views: [{ code: 'BUS_WRITE', label: '娃娃車路線管理' }],
+          menu: { icon: icon('Guide') },
+        },
+        {
           key: 'fees', title: '學費管理', routePath: '/fees',
           views: [{ code: 'FEES_READ' }],
           actions: [{ code: 'FEES_WRITE' }],
@@ -553,6 +576,10 @@ export const NAVIGATION_MANIFEST = {
     {
       code: 'BUSINESS_ANALYTICS', label: '經營分析（已停用）',
       note: '2026-06-03 業主裁定移除經營分析功能，權限碼刻意保留為孤兒（CLAUDE.md 記載），picker 仍需可編輯。',
+    },
+    {
+      code: 'BUS_TRIPS_OPERATE', label: '娃娃車隨車操作（教師端）',
+      note: '隨車老師 portal 專用（/portal/bus-trip 發車/到站/回報），管理端無對應頁面，故不主屬任何 manifest 頁。刻意**不**與 BUS_READ 綁在同一角色：隨車端只需 GET /portal/bus/routes 的 id/name 精簡清單，給 BUS_READ 等於把全園學生名冊與家庭住址座標一併開給司機。per-user 顯式授權、無 role 預設。',
     },
   ],
 } satisfies NavigationManifest

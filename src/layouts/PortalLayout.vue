@@ -8,7 +8,7 @@ import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
 import { initPortalDismissalAlerts, teardownPortalDismissalAlerts, usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getTodayHub } from '@/api/portalClassHub'
 import { changePassword, endImpersonate } from '@/api/auth'
-import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
+import { getUserInfo, clearAuth, setUserInfo, hasPortalPermission } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
 import A11yMenu from '@/components/common/A11yMenu.vue'
@@ -55,6 +55,8 @@ const passwordLoading = ref(false)
 
 // Mobile sidebar
 const { isMobile } = useIsMobile()
+// 娃娃車隨車操作為 per-user 顯式授權；沒有就不顯示入口（權限把關仍在 router guard）
+const canOperateBusTrips = computed(() => hasPortalPermission('BUS_TRIPS_OPERATE'))
 const sidebarOpen = ref(false)
 
 watch(isMobile, (m) => {
@@ -416,6 +418,11 @@ const submitPassword = async () => {
           </el-menu-item>
           <el-menu-item index="/portal/medications">
             <span>用藥執行</span>
+          </el-menu-item>
+          <!-- 娃娃車：BUS_TRIPS_OPERATE 是 per-user 顯式授權（絕大多數老師沒有），
+               不過濾的話所有人都會看到入口、點進去再被 router guard 踢回首頁。 -->
+          <el-menu-item v-if="canOperateBusTrips" index="/portal/bus-trip">
+            <span>娃娃車班次</span>
           </el-menu-item>
         </el-sub-menu>
 

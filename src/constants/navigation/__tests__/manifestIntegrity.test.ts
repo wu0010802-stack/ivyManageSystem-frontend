@@ -155,6 +155,10 @@ const LEGACY_ROUTE_PERMISSION_RULES: { path: string; permission: string; prefix?
   { path: '/settings/accounts', permission: 'USER_MANAGEMENT_READ' },
   { path: '/settings/roles', permission: 'ROLES_MANAGE' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
+  // 娃娃車追蹤（feat/bus-tracking 併入 staging）：兩條各自 exact，不可 prefix
+  //（避免 /bus-monitor 被 /bus-routes 的 BUS_WRITE 外溢）。
+  { path: '/bus-monitor', permission: 'BUS_READ' },
+  { path: '/bus-routes', permission: 'BUS_WRITE' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations/pending', permission: 'ACTIVITY_WRITE' },

@@ -47,6 +47,15 @@ const contactBookMock = vi.hoisted(() => ({
 }))
 vi.mock('@/parent/api/contactBook', () => contactBookMock)
 
+// 娃娃車入口卡：首頁 mount 時抓一次今日快照。預設回無班次（不渲染卡片），
+// 個別測試以 busTodayMock.getBusToday.mockResolvedValueOnce 覆寫。
+const busTodayMock = vi.hoisted(() => ({
+  getBusToday: vi.fn().mockResolvedValue({
+    data: { trip: null, position: null, stale: false, school: null, children: [] },
+  }),
+}))
+vi.mock('@/parent/api/bus', () => busTodayMock)
+
 import TodayView from '@/parent/views/TodayView.vue'
 
 /**
@@ -429,5 +438,102 @@ describe('TodayView Bento 儀表板 — StatTile 依 summary 條件渲染', () =
     await flushPromises()
     const signTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待簽文件')
     expect(signTile).toBeFalsy()
+  })
+})
+
+describe('TodayView 娃娃車入口卡', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    summaryRef.value = null
+    todayStatusRef.value = null
+    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
+    busTodayMock.getBusToday.mockClear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const HOME = [
+    { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
+    { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
+  ]
+
+  const inProgressBus = () => ({
+    data: {
+      trip: { id: 7, direction: 'morning', status: 'in_progress', auto_closed: false },
+      position: { lat: 22.63, lng: 120.3, at: '2026-05-14T09:29:00' },
+      stale: false,
+      school: { lat: 22.6, lng: 120.29 },
+      children: [{
+        student_id: 1, student_name: '小明', stop_status: 'pending',
+        stops_ahead: 2, stop_lat: 22.61, stop_lng: 120.28,
+      }],
+    },
+  })
+
+  it('班次進行中：顯示娃娃車 StatTile 並連到 /bus', async () => {
+    busTodayMock.getBusToday.mockResolvedValueOnce(inProgressBus())
+    const w = mountWith(...HOME)
+    await flushPromises()
+    const tile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')
+    expect(tile).toBeTruthy()
+    expect(tile.attributes('data-value')).toBe('還有 2 站')
+    expect(tile.attributes('data-to')).toBe('/bus')
+  })
+
+  it('已上車：顯示進行中而非站數', async () => {
+    const resp = inProgressBus()
+    resp.data.children[0].stop_status = 'departed'
+    resp.data.children[0].stops_ahead = 0
+    busTodayMock.getBusToday.mockResolvedValueOnce(resp)
+    const w = mountWith(...HOME)
+    await flushPromises()
+    const tile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')
+    expect(tile.attributes('data-value')).toBe('進行中')
+  })
+
+  it('班次未進行中：不渲染娃娃車卡', async () => {
+    const resp = inProgressBus()
+    resp.data.trip.status = 'completed'
+    busTodayMock.getBusToday.mockResolvedValueOnce(resp)
+    const w = mountWith(...HOME)
+    await flushPromises()
+    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
+  })
+
+  it('有待繳學費但今天沒有娃娃車班次：bento 出現但不得有空白娃娃車卡', async () => {
+    // 外層 .today-bento 的 v-if 會因為 feesInfo 有值而成立，內層 StatTile 必須自己擋住，
+    // 否則會渲染出 value 空白卻連到 /bus 的卡片。
+    busTodayMock.getBusToday.mockResolvedValueOnce({
+      data: { trip: null, position: null, stale: false, school: null, children: [] },
+    })
+    const w = mountWith(
+      {
+        me: { name: '王太太' },
+        children: [{ student_id: 1, name: '小明' }],
+        summary: { fees: { outstanding_count: 2, outstanding: 3000, overdue: 0 } },
+      },
+      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
+    )
+    await flushPromises()
+    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')).toBeTruthy()
+    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
+  })
+
+  it('娃娃車快照失敗不得擋住首頁其他區塊', async () => {
+    busTodayMock.getBusToday.mockRejectedValueOnce(new Error('boom'))
+    const w = mountWith(...HOME)
+    await flushPromises()
+    expect(w.find('.today-hero').text()).toBe('小明')
+    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
+  })
+
+  it('站點座標（家庭住址）不得進入首頁畫面', async () => {
+    busTodayMock.getBusToday.mockResolvedValueOnce(inProgressBus())
+    const w = mountWith(...HOME)
+    await flushPromises()
+    expect(w.html()).not.toContain('22.61')
+    expect(w.html()).not.toContain('120.28')
   })
 })

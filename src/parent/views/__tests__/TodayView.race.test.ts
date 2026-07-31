@@ -54,6 +54,13 @@ vi.mock('@/composables/useCachedAsync', () => ({
 }))
 
 // ── 其餘 composable / API：靜態 stub（不影響競態邏輯） ────────────────────────
+// 娃娃車入口卡在 mount 時會抓一次今日快照；本檔測聯絡簿競態，回無班次即可。
+vi.mock('@/parent/api/bus', () => ({
+  getBusToday: vi.fn().mockResolvedValue({
+    data: { trip: null, position: null, stale: false, school: null, children: [] },
+  }),
+}))
+
 vi.mock('@/parent/composables/useTodayStatusCache', () => ({
   useTodayStatusCache: () => ({ status: ref(null), refresh: vi.fn() }),
 }))
