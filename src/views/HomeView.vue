@@ -55,6 +55,7 @@ const {
   showStudents,
   stats,
   studentCount,
+  currentTermLabel,
   todayStats,
   attendanceAnomalies,
   studentAttendanceSummary,
@@ -527,7 +528,10 @@ const anomalyOverflow = computed(
               <span class="overview-row__value">{{ statDisplay(stats.teachers, criticalErrors.employees) }}</span>
             </div>
             <div class="overview-row">
-              <span class="overview-row__label">全校在籍人數</span>
+              <span class="overview-row__label">
+                全校在籍人數
+                <span class="overview-row__term">{{ currentTermLabel }}</span>
+              </span>
               <span class="overview-row__value">{{ statDisplay(studentCount, criticalErrors.students) }}</span>
             </div>
             <div v-if="hasCriticalError" class="overview-error text-secondary">部分統計載入失敗</div>
@@ -1018,6 +1022,13 @@ html.dark .todo-empty {
 .overview-row__label {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+/* 在籍人數是當期學期的數字，標出學期基準避免跨學期時被誤讀 */
+.overview-row__term {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--text-placeholder, #a8abb2);
 }
 
 .overview-row__value {

@@ -6,6 +6,7 @@ import { getToday, getTodayAnomalies } from '@/api/attendance'
 import { getUpcomingEvents, getStudentAttendanceSummary } from '@/api/home'
 import { useEmployeeStore } from '@/stores/employee'
 import { useNotificationStore } from '@/stores/notification'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 import { hasPermission, getUserInfo } from '@/utils/auth'
 
 interface UpcomingEvent {
@@ -82,21 +83,33 @@ export function useDashboardSections() {
   const showEmployees = hasPermission('EMPLOYEES_READ')
   const showStudents = hasPermission('STUDENTS_READ')
 
-  // 「含師/導」的職稱推算會把廚師、護理師等非教學職也算進教師，先以排除清單修正；
-  // 職稱分類的正解是後端給 role taxonomy，屆時此推算應整段退場。
-  const NON_TEACHING_TITLES = ['廚師', '護理師', '營養師', '藥師', '技師', '工程師', '會計師']
+  // 教師數以後端 staff_role_category（教保身分別）判定 —— 即實際帶班的教保服務人員。
+  // 園長歸 other、職員/廚工/司機各自成類，皆不計入教師數。
+  const TEACHING_ROLE_CATEGORIES = ['teacher_certified', 'educare_certified', 'assistant_educare']
+  // staff_role_category 未填（舊資料）時的退路：以官方職稱正面表列比對。
+  // 舊版用「含師/導」字串推算，會把廚師、護理師與掛「班導」職務的行政人員一起算成教師。
+  const TEACHING_TITLES = ['幼兒園教師', '教保員', '助理教保員']
   const stats = computed(() => {
-    const employees = employeeStore.employees as { title?: string; position?: string }[]
+    const all = employeeStore.employees as {
+      title?: string
+      staff_role_category?: string | null
+      is_active?: boolean
+    }[]
+    // 「教職員總數」指在職人數：/employees 不帶 is_active 時會連離職員工一起回。
+    const employees = all.filter(e => e.is_active !== false)
     const total = employees.length
     const teachers = employees.filter(e => {
-      const title = e.title || ''
-      const position = e.position || ''
-      const combined = `${title} ${position}`
-      if (NON_TEACHING_TITLES.some(t => combined.includes(t))) return false
-      return title.includes('師') || position.includes('師') ||
-        title.includes('導') || position.includes('導')
+      const category = e.staff_role_category
+      if (category) return TEACHING_ROLE_CATEGORIES.includes(category)
+      return TEACHING_TITLES.includes(e.title || '')
     }).length
     return { total, teachers, others: total - teachers }
+  })
+
+  // 在籍人數是「當期學期」的數字，卡片上要標出是哪一學期，否則跨學期時看不出基準。
+  const currentTermLabel = computed(() => {
+    const { school_year, semester } = getCurrentAcademicTerm()
+    return `${school_year}-${semester}`
   })
 
   // 假零修復：初值 null（尚未載入/失敗），成功才是數字——失敗不得渲染成 0
@@ -249,7 +262,9 @@ export function useDashboardSections() {
     await Promise.all([
       Promise.resolve(employeeStore.fetchEmployees())
         .catch(() => { criticalErrors.employees = true }),
-      getStudents({ limit: 1 })
+      // 必須明確帶學年+學期：後端 /students 只在收到學期參數時才套過濾，
+      // 漏帶會回「跨所有學年」的全表 count（含已升上下一學期班級的名冊）。
+      getStudents({ limit: 1, ...getCurrentAcademicTerm() })
         .then(r => { studentCount.value = r.data.total })
         .catch(() => { criticalErrors.students = true }),
       showAttendance
@@ -313,6 +328,7 @@ export function useDashboardSections() {
     showStudents,
     stats,
     studentCount,
+    currentTermLabel,
     todayStats,
     attendanceAnomalies,
     studentAttendanceSummary,
