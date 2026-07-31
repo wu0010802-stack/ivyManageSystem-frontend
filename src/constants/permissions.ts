@@ -140,6 +140,11 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/settings/accounts', permission: 'USER_MANAGEMENT_READ' },
   { path: '/settings/roles', permission: 'ROLES_MANAGE' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
+  // 娃娃車：權限對齊後端 api/bus/admin_routes.py 的守衛——路線管理三個寫端點掛
+  // BUS_WRITE、監看的 GET /bus/trips/today 掛 BUS_READ。**非** prefix：兩條路徑
+  // 各自 exact，避免 /bus-monitor 被 /bus-routes 的寫權限外溢。
+  { path: '/bus-routes', permission: 'BUS_WRITE' },
+  { path: '/bus-monitor', permission: 'BUS_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
   // 業主裁決（2026-06-13）：對齊後端動作端點（match/reject/force-accept 只要 ACTIVITY_WRITE），

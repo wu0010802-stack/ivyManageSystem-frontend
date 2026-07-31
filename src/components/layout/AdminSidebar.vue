@@ -127,6 +127,17 @@
             <el-icon><Van /></el-icon>
             <template #title>{{ PAGE_TERMS.dismissalQueue }}</template>
           </el-menu-item>
+          <!-- 娃娃車：權限逐項對齊 ROUTE_PERMISSION_RULES（監看 BUS_READ、路線管理
+               BUS_WRITE），漂移會讓使用者看得到卻被 guard 彈走；
+               AdminSidebar.permissionParity.test.ts 守此對應。 -->
+          <el-menu-item v-if="canView.BUS_READ" index="/bus-monitor">
+            <el-icon><Van /></el-icon>
+            <template #title>娃娃車監看</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.BUS_WRITE" index="/bus-routes">
+            <el-icon><Promotion /></el-icon>
+            <template #title>娃娃車路線</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.FEES_READ" index="/fees">
             <el-icon><CreditCard /></el-icon>
             <template #title>學費管理</template>
@@ -359,7 +370,10 @@ const hasVisibleLeaveItems = computed(() =>
 
 const hasVisibleStudentItems = computed(() =>
   canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ ||
-  canView.value.RECRUITMENT_READ || canView.value.PORTFOLIO_READ
+  canView.value.RECRUITMENT_READ || canView.value.PORTFOLIO_READ ||
+  // 娃娃車兩頁掛在本群組：只持 BUS_* 的帳號（如司機兼行政）不加這兩個判斷就會
+  // 連整個「學生與班級」群組都看不到，等於選單裡沒有娃娃車。
+  canView.value.BUS_READ || canView.value.BUS_WRITE
 )
 
 const hasVisibleAdminItems = computed(() =>

@@ -441,6 +441,23 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: PAGE_TERMS.dismissalQueue }
         },
 
+        // ============ 娃娃車 ============
+        // admin 路由的權限 gate 在 `ROUTE_PERMISSION_RULES`（canAccessRoute），
+        // **不是** meta.permission——那只對 /portal/* 生效。漏了規則會被 default-deny
+        // 鎖死（含 wildcard 管理員），加錯則是側欄看得到卻進不去。
+        {
+            path: '/bus-routes',
+            name: 'bus-routes',
+            component: () => import('../views/BusRoutesView.vue'),
+            meta: { title: '娃娃車路線' }
+        },
+        {
+            path: '/bus-monitor',
+            name: 'bus-monitor',
+            component: () => import('../views/BusMonitorView.vue'),
+            meta: { title: '娃娃車監看' }
+        },
+
         // ============ 課後才藝 ============
         {
             path: '/activity/dashboard',
