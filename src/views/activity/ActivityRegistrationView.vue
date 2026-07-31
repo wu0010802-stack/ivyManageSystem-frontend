@@ -51,9 +51,6 @@
           <el-icon><Link /></el-icon>
           複製報名連結
         </el-button>
-        <el-button type="info" plain @click="goToPublic">
-          前台報名頁
-        </el-button>
       </div>
     </div>
 
@@ -603,16 +600,12 @@ function publicRegistrationUrl() {
   return buildPublicRegistrationUrl(window.location.origin)
 }
 
-function goToPublic() {
-  window.open(publicRegistrationUrl(), '_blank', 'noopener')
-}
-
 async function copyPublicRegistrationLink() {
   try {
     await navigator.clipboard.writeText(publicRegistrationUrl())
     ElMessage.success('報名連結已複製，可直接貼到家長 LINE 群組')
   } catch {
-    ElMessage.warning('複製失敗，請改用「前台報名頁」開啟後複製網址列')
+    ElMessage.warning(`複製失敗，請手動複製報名網址：${publicRegistrationUrl()}`)
   }
 }
 
