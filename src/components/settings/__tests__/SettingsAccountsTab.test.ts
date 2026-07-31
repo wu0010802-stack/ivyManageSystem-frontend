@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// 本檔全部整棵 mount（ElementPlus + attachTo）、單機 8GB 下單測可逼近 5s 預設上限，
+// 放寬到 10s 避免慢機 false negative（非個別測試異常）
+vi.setConfig({ testTimeout: 10_000 })
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
@@ -72,11 +76,14 @@ vi.mock('vue-router', () => ({
 // hasPermission 預設回 true（既有測試多假設「管理角色」按鈕無條件顯示）；
 // 保留其餘原始匯出（isSuperAdmin / permissionsHave 等集合運算），避免其他測試間接依賴的匯出消失。
 const mockHasPermission = vi.fn().mockReturnValue(true)
+// getUserInfo 供 isSelf（自己的帳號不可停用/刪除）判斷；預設操作者不在 mock 名單內
+const mockGetUserInfo = vi.fn()
 vi.mock('@/utils/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/utils/auth')>()
   return {
     ...actual,
     hasPermission: (name: string) => mockHasPermission(name),
+    getUserInfo: () => mockGetUserInfo(),
   }
 })
 
@@ -92,6 +99,7 @@ describe('SettingsAccountsTab — role card UX', () => {
     replace.mockClear()
     push.mockClear()
     mockHasPermission.mockReturnValue(true)
+    mockGetUserInfo.mockReturnValue({ username: 'operator', role: 'admin' })
   })
 
   it('管理角色按鈕：有 ROLES_MANAGE 才顯示，點擊導向 /settings/roles', async () => {
@@ -453,6 +461,70 @@ describe('SettingsAccountsTab — role card UX', () => {
       await flushPromises()
       expect(errorSpy.mock.calls.some((c) => String(c[0]).includes('已建立'))).toBe(true)
       errorSpy.mockRestore()
+    })
+  })
+
+  describe('2026-07-31 帳號設定 UX 修正包', () => {
+    it('家長視圖不顯示「新增帳號」與「管理角色」（家長帳號由 LINE 綁定產生）', async () => {
+      mockQuery = { view: 'parent' }
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      expect(wrapper.find('.toolbar-right').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="goto-roles"]').exists()).toBe(false)
+    })
+
+    it('教職員視圖維持顯示工具列右側按鈕', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      expect(wrapper.find('.toolbar-right').exists()).toBe(true)
+    })
+
+    it('isSelf：只有目前登入者自己的列為 true；未登入資訊時 fail-safe 為 false', async () => {
+      mockGetUserInfo.mockReturnValue({ username: 'wang01' })
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { isSelf: (row: Record<string, unknown>) => boolean }
+      expect(vm.isSelf({ username: 'wang01' })).toBe(true)
+      expect(vm.isSelf({ username: 'lin02' })).toBe(false)
+      mockGetUserInfo.mockReturnValue(null)
+      expect(vm.isSelf({ username: 'wang01' })).toBe(false)
+    })
+
+    it('generatePassword 符合後端密碼政策（≥8 字元、含大寫/小寫/數字）', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { generatePassword: () => string }
+      for (let i = 0; i < 20; i++) {
+        const pw = vm.generatePassword()
+        expect(pw.length).toBeGreaterThanOrEqual(8)
+        expect(pw).toMatch(/[A-Z]/)
+        expect(pw).toMatch(/[a-z]/)
+        expect(pw).toMatch(/\d/)
+      }
+    })
+
+    it('buildLoginUrl：portal_only 角色（teacher）給 Portal 入口，管理端角色給 /#/login', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as { buildLoginUrl: (role: string) => string }
+      expect(vm.buildLoginUrl('teacher')).toBe(`${window.location.origin}/#/portal/login`)
+      expect(vm.buildLoginUrl('supervisor')).toBe(`${window.location.origin}/#/login`)
+      // 定義未含該角色時 fallback PORTAL_ONLY_ROLES 白名單
+      expect(vm.buildLoginUrl('unknown_role')).toBe(`${window.location.origin}/#/login`)
+    })
+
+    it('saveUser 成功後 createdCredentials 帶入依角色計算的登入網址', async () => {
+      const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+      await flushPromises()
+      const vm = wrapper.vm as unknown as {
+        userForm: Record<string, unknown>
+        saveUser: () => Promise<void>
+        createdCredentials: { username: string; password: string; loginUrl: string }
+      }
+      Object.assign(vm.userForm, { employee_id: 1, username: 'u1', password: 'Abc12345', role: 'teacher' })
+      await vm.saveUser()
+      await flushPromises()
+      expect(vm.createdCredentials.loginUrl).toBe(`${window.location.origin}/#/portal/login`)
     })
   })
 })

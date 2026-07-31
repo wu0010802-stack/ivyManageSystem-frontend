@@ -358,12 +358,15 @@ const termOptions = computed(() => {
   if (saved && !list.some((t) => t.school_year === saved.school_year && t.semester === saved.semester)) {
     list.unshift(saved)
   }
-  return list.map((t) => ({
-    value: `${t.school_year}-${t.semester}`,
-    label: `${t.school_year} 學年度 ${TERM_LABEL_SUFFIX[t.semester]}`,
-    school_year: t.school_year,
-    semester: t.semester,
-  }))
+  return list.map((t) => {
+    const isCurrent = t.school_year === cy && t.semester === cs
+    return {
+      value: `${t.school_year}-${t.semester}`,
+      label: `${t.school_year} 學年度 ${TERM_LABEL_SUFFIX[t.semester]}${isCurrent ? '（本學期）' : ''}`,
+      school_year: t.school_year,
+      semester: t.semester,
+    }
+  })
 })
 
 const termKey = computed<string | null>({
