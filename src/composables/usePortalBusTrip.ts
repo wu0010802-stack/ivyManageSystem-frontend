@@ -8,20 +8,24 @@
  *    每 5 秒一批，再由本檔負責送出與**重送**。
  * 3. **站點推進**：離站／跳站／撤銷，回應的 `stops` 為權威值直接覆寫。
  *
- * ── 進頁順序：先問路線，再逐條帶 route_id 查班次 ──────────────────────────
- * `GET /portal/bus/trips/active` 不帶參數是**全域查詢**（後端 docstring 明文），會挑最近
- * 一筆 in_progress 的班次，任何路線皆可能。因此進頁一律先打 `GET /portal/bus/routes`
- * （與開班同權限、只回 id/name），再逐條帶 `route_id` 查；路線清單拿不到就**不查**。
+ * ── 進頁復原：一次問「我的班次」（`mine=true`）───────────────────────────
+ * `GET /portal/bus/trips/active` 不帶任何維度是**全域查詢**（後端 docstring 明文），會挑
+ * 最近一筆 in_progress 的班次，任何路線、任何操作者皆可能。後端 `8836ecde` 補上
+ * operator 維度後，進頁復原一律帶 `mine=true`（比對 `BusTrip.operator_employee_id`
+ * 與 token 的 employee_id），**一次呼叫、不再逐路線試探**。
  *
- * ⚠ **這只是收斂，不是堵住**。`findActiveTrip` 取的是「掃全園啟用路線，第一個**有**
- * in_progress 班次的那條」，**不是「取我的班次」**——後端目前沒有 operator 維度的過濾。
- * 效果是從「不確定會拿到哪條」變成「確定拿到 id 最小的那條」：常態（同時只有一班在跑）
- * 完全正確，但 A 線與 B 線同時在跑時，B 線司機開頁仍會接手 A 線的班次與完整名冊，
- * 並把 B 車的 GPS 寫進 A 車的班次。
+ * 逐路線試探（本檔前一版）只是把「不確定拿到哪條」收斂成「確定拿到 id 最小的那條」：
+ * A 線與 B 線同時在跑時，B 線司機開頁仍會接手 A 線的班次與完整名冊（學生姓名＋家庭
+ * 座標），並把 B 車的 GPS 寫進 A 車的班次。`mine=true` 才真正堵住。
  *
- * 現階段的緩解是**讓人看得見**：班次進行中時畫面第一行就是「路線・方向」（`tripSummary`），
- * 接手到別條路線時司機自己會發現不對。待後端補上 `operator_employee_id` 維度的過濾後，
- * 改成直接查「我的班次」即可真正關閉。
+ * ⚠ 兩件不可省的事：
+ * 1. `GET /portal/bus/routes` **仍要打**——那是開班選單（沒有它司機無從選路線開班）。
+ * 2. `mine=true` 遇上未綁員工的帳號時後端回 **403**（刻意不默默退化成「回任何人的」）。
+ *    前端同樣不得吞掉：`employeeUnlinked` 旗標讓畫面明講「請先綁定員工資料」，
+ *    因為這條路徑重試不會變好，而開班（`_require_employee_id`）同樣會 403。
+ *
+ * `tripSummary`（「路線・方向」）保留：接手來的班次未必是自己選的那條，
+ * 而 `start()` 的 409 接手仍是以 route＋direction 限縮、非 operator 維度。
  *
  * ── 時間軸：一律以伺服器 `Date` header 校正 ────────────────────────────────
  * `busPingBuffer` 的時鐘暴衝防線擋得住「單顆時間戳暴衝」，擋不住「整支裝置時鐘系統性
@@ -113,6 +117,11 @@ export function usePortalBusTrip() {
   const gpsSupported = ref(true)
   /** 進頁快照失敗：**不可**當成「沒有班次」而顯示開班卡（會開出第二張班次）。 */
   const snapshotFailed = ref(false)
+  /**
+   * `mine=true` 查詢遭 403：此帳號未綁員工資料。與一般快照失敗分開呈現——
+   * 一般失敗按「重新載入」有機會好，這條不會（開班也會 403），要有人去後台綁定。
+   */
+  const employeeUnlinked = ref(false)
   /** 裝置回報的定位時間不是 epoch 基準：已改用系統時間標記，UI 要讓司機看得到。 */
   const gpsClockSuspect = ref(false)
   const pendingPingCountRef = ref(0)
@@ -304,15 +313,16 @@ export function usePortalBusTrip() {
   }
 
   /**
-   * 取進行中的班次。**帶得出 route/direction 就一定要帶**（後端不帶參數時是全域查詢，
-   * 多路線同時開班會回到別條路線的完整站點名冊＝學生姓名與家庭座標）。只有進頁復原
-   * 這一種情境沒有已知路線可帶。
+   * 取進行中的班次。**至少要帶一個維度**（後端一個都不帶時是全域查詢，多路線同時開班
+   * 會回到別條路線的完整站點名冊＝學生姓名與家庭座標）：已知路線時帶 route/direction，
+   * 進頁復原沒有已知路線，改帶 `mine=true`。
    */
   async function loadActive(
     routeId?: number | null,
     dir?: 'morning' | 'afternoon' | null,
+    mine = false,
   ): Promise<void> {
-    const res = await getActiveBusTrip(routeId ?? null, dir ?? null)
+    const res = await getActiveBusTrip(routeId ?? null, dir ?? null, mine)
     syncClock(res as ApiHeaders)
     applyActive((res as { data?: ActivePayload }).data)
   }
@@ -329,26 +339,33 @@ export function usePortalBusTrip() {
   }
 
   /**
-   * 逐條路線帶 `route_id` 查進行中的班次；找到就停。**不做**全域查詢。
-   * ⚠ 這是「第一個有班次的路線」而非「我的班次」——射程見模組開頭。
+   * 查「我的」進行中班次：**單次呼叫**，不逐路線試探（那撈的是「id 最小的那條」，
+   * 也就是別人的班次）。403 代表帳號未綁員工——標記後往上拋，由 `init` 統一呈現。
    */
   async function findActiveTrip(): Promise<void> {
-    for (const r of routes.value) {
-      await loadActive(r.id)
-      if (trip.value) return
+    try {
+      await loadActive(null, null, true)
+    } catch (e) {
+      // 只認「查我的班次」這一支的 403；路線清單的 403 是缺 BUS_TRIPS_OPERATE，
+      // 兩者的處置完全不同（找 HR 綁員工 vs 找管理員開權限），不可混為一談。
+      if (errorStatus(e) === 403) employeeUnlinked.value = true
+      throw e
     }
   }
 
   async function init(): Promise<void> {
     loading.value = true
     snapshotFailed.value = false
+    employeeUnlinked.value = false
     try {
       await loadRoutes()
       await findActiveTrip()
     } catch (e) {
       // 失敗不得謊稱「沒有班次」：那會讓司機再開一張，撞上後端 409 或開錯方向。
       snapshotFailed.value = true
-      ElMessage.error(apiError(e, '載入班次失敗，請重試'))
+      ElMessage.error(employeeUnlinked.value
+        ? apiError(e, '此帳號尚未綁定員工資料，請洽行政人員綁定後再重新載入')
+        : apiError(e, '載入班次失敗，請重試'))
     } finally {
       loading.value = false
     }
@@ -454,7 +471,8 @@ export function usePortalBusTrip() {
   return {
     trip, stops, routes, selectedRouteId, direction,
     loading, starting, completing, actingStopId,
-    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount, tripSummary,
+    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked,
+    pendingPingCount, tripSummary,
     init, start, departStop, skipStop, undoStop, complete, teardown,
   }
 }

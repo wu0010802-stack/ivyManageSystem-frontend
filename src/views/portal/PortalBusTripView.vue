@@ -4,6 +4,22 @@
       <el-skeleton :rows="3" animated />
     </div>
 
+    <!--
+      帳號未綁員工（`mine=true` 回 403）：排在快照失敗之前。這條路徑按「重新載入」
+      不會變好（開班同樣會 403），得有人去後台把帳號綁上員工資料，文案要講得出下一步。
+    -->
+    <el-card
+      v-else-if="employeeUnlinked"
+      class="bus-card"
+      data-testid="bus-employee-unlinked"
+    >
+      <h3 class="bus-title">此帳號尚未綁定員工資料</h3>
+      <p class="bus-hint">
+        無法查詢您的班次，也無法開始新班次。請洽行政人員將您的帳號綁定員工資料後，再重新載入。
+      </p>
+      <el-button size="large" data-testid="bus-retry-unlinked" @click="init">重新載入</el-button>
+    </el-card>
+
     <!-- 快照失敗：不得退化成「沒有班次」的開班畫面，否則會開出第二張班次 -->
     <el-card v-else-if="snapshotFailed" class="bus-card" data-testid="bus-snapshot-failed">
       <h3 class="bus-title">目前無法確認班次狀態</h3>
@@ -163,7 +179,8 @@ import { usePortalBusTrip } from '@/composables/usePortalBusTrip'
 const {
   trip, stops, routes, selectedRouteId, direction,
   loading, starting, completing, actingStopId,
-  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount, tripSummary,
+  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked,
+  pendingPingCount, tripSummary,
   init, start, departStop, skipStop, undoStop, complete, teardown,
 } = usePortalBusTrip()
 

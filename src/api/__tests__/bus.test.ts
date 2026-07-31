@@ -33,6 +33,15 @@ describe('娃娃車 portal API', () => {
     expect(api.get).toHaveBeenLastCalledWith('/portal/bus/trips/active', { params: {} })
   })
 
+  it('mine=true 只在明確要求時帶（預設不帶：後端預設 false，帶了才收斂成「我的班次」）', () => {
+    getActiveBusTrip(null, null, true)
+    expect(api.get).toHaveBeenCalledWith('/portal/bus/trips/active', { params: { mine: true } })
+    getActiveBusTrip(3, 'morning')
+    expect(api.get).toHaveBeenLastCalledWith('/portal/bus/trips/active', {
+      params: { route_id: 3, direction: 'morning' },
+    })
+  })
+
   it('上報座標 POST /portal/bus/trips/{id}/pings，body 為 {points}', () => {
     const points = [{ lat: 22.6, lng: 120.3, accuracy: 12, at: '2026-07-29T01:00:00.000Z' }]
     postBusPings(7, points)

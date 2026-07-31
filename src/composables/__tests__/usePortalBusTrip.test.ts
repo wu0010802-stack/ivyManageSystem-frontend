@@ -170,41 +170,85 @@ describe('usePortalBusTrip — 進頁載入', () => {
     expect(ElMessage.warning).not.toHaveBeenCalled()
   })
 
-  it('進頁一律先問路線，再逐條帶 route_id 查班次（不得做全域查詢）', async () => {
+  it('進頁只打一次「我的班次」查詢（mine=true），不逐路線試探、不做全域查詢', async () => {
+    // 逐路線試探取的是「id 最小、且有 in_progress 班次的那條」＝ **別人的班次**：
+    // B 線司機會接手 A 線的完整名冊，並把 B 車的 GPS 寫進 A 車的班次。
+    // 後端 8836ecde 補上 operator 維度後，改由 `mine=true` 一次問「我的」。
     vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
       routes: [
         { id: 3, name: 'A 線', is_active: true },
         { id: 5, name: 'C 線', is_active: true },
       ],
     }) as never)
-    // 只有 5 號路線有進行中的班次
-    vi.mocked(getActiveBusTrip).mockImplementation(((routeId: number | null) =>
-      Promise.resolve(routeId === 5 ? resp(tripPayload({ route_id: 5 })) : resp({ trip: null }))
-    ) as never)
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload({ route_id: 5 })) as never)
 
     const bus = createBus()
     await bus.init()
     await flushPromises()
 
-    expect(vi.mocked(getActiveBusTrip).mock.calls).toEqual([[3, null], [5, null]])
+    expect(vi.mocked(getActiveBusTrip).mock.calls).toEqual([[null, null, true]])
     expect(bus.trip.value?.route_id).toBe(5)
   })
 
-  it('找到班次就停止往下查（不再多撈別條路線的名冊）', async () => {
+  it('自己沒有進行中班次時停在開班畫面（不得再往下撈別人的那一班）', async () => {
     vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
       routes: [
         { id: 3, name: 'A 線', is_active: true },
         { id: 5, name: 'C 線', is_active: true },
       ],
     }) as never)
-    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload()) as never)
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null, stops: null }) as never)
 
     const bus = createBus()
     await bus.init()
     await flushPromises()
 
-    expect(vi.mocked(getActiveBusTrip).mock.calls).toEqual([[3, null]])
+    expect(vi.mocked(getActiveBusTrip).mock.calls).toEqual([[null, null, true]])
+    expect(bus.trip.value).toBeNull()
+    expect(bus.snapshotFailed.value).toBe(false)
+  })
+
+  it('mine=true 遭 403（帳號未綁員工）：明講且可行動，不得靜默也不得退化成開班畫面', async () => {
+    // 後端刻意回 403 而不是「退化成回任何人的班次」。前端同樣不能吞掉：
+    // 這條路徑重試不會變好（要有人去後台綁定員工），而開班同樣會 403。
+    vi.mocked(getActiveBusTrip).mockRejectedValue(
+      axiosError(403, '此帳號無關聯員工資料，請先綁定員工身份'),
+    )
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.employeeUnlinked.value).toBe(true)
+    expect(bus.snapshotFailed.value).toBe(true)
+    expect(bus.trip.value).toBeNull()
+    expect(bus.loading.value).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalled()
+  })
+
+  it('未綁定的旗標在下一次重新載入成功後要清掉（否則錯誤卡永遠黏著）', async () => {
+    vi.mocked(getActiveBusTrip).mockRejectedValue(axiosError(403))
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+    expect(bus.employeeUnlinked.value).toBe(true)
+
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload()) as never)
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.employeeUnlinked.value).toBe(false)
+    expect(bus.snapshotFailed.value).toBe(false)
     expect(bus.trip.value?.id).toBe(7)
+  })
+
+  it('非 403 的班次查詢失敗不得誤報成「帳號未綁員工」', async () => {
+    vi.mocked(getActiveBusTrip).mockRejectedValue(axiosError(500))
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.employeeUnlinked.value).toBe(false)
+    expect(bus.snapshotFailed.value).toBe(true)
   })
 
   it('班次查詢失敗時不得謊稱沒有班次：標記 snapshotFailed', async () => {
@@ -228,6 +272,17 @@ describe('usePortalBusTrip — 進頁載入', () => {
     expect(bus.snapshotFailed.value).toBe(true)
     expect(getActiveBusTrip).not.toHaveBeenCalled()
     expect(ElMessage.error).toHaveBeenCalled()
+  })
+
+  it('路線清單本身 403（缺 BUS_TRIPS_OPERATE）不得誤報成「帳號未綁員工」', async () => {
+    // 兩種 403 的處置完全不同：缺權限要找管理員開權限，未綁員工要找 HR 綁員工檔。
+    vi.mocked(listPortalBusRoutes).mockRejectedValue(axiosError(403))
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.employeeUnlinked.value).toBe(false)
+    expect(bus.snapshotFailed.value).toBe(true)
   })
 
   it('路線清單只保留啟用中的路線，且只留 id/name（不把學生名冊留在前端狀態）', async () => {
@@ -311,7 +366,9 @@ describe('usePortalBusTrip — 開始班次', () => {
     await bus.start()
     await flushPromises()
 
-    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, 'morning')
+    // 接手／重新同步一律 `mine=false`：後端刻意允許任一持 BUS_TRIPS_OPERATE 的帳號
+    // 接手別人開的班次（司機中途換手），帶 mine 會把換手情境擋成「查無班次」。
+    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, 'morning', false)
     expect(bus.trip.value?.id).toBe(7)
     expect(ElMessage.warning).toHaveBeenCalled()
     expect(geolocation.watchPosition).toHaveBeenCalledTimes(1)
@@ -737,7 +794,9 @@ describe('usePortalBusTrip — 站點操作', () => {
     await flushPromises()
 
     expect(ElMessage.error).toHaveBeenCalledWith('此站已處理')
-    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, 'morning')
+    // 接手／重新同步一律 `mine=false`：後端刻意允許任一持 BUS_TRIPS_OPERATE 的帳號
+    // 接手別人開的班次（司機中途換手），帶 mine 會把換手情境擋成「查無班次」。
+    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, 'morning', false)
     expect(bus.stops.value.map((s) => s.status)).toEqual(['departed'])
     // 重新同步時已在追蹤中，不得再開一組 watch／計時器（舊的會變成無人持有的孤兒）
     expect(geolocation.watchPosition).toHaveBeenCalledTimes(1)

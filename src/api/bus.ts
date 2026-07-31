@@ -32,19 +32,26 @@ export const startBusTrip = (routeId: number, direction: 'morning' | 'afternoon'
   api.post('/portal/bus/trips', { route_id: routeId, direction })
 
 /**
- * 取進行中的班次。**帶得出 route_id/direction 就一定要帶**：後端不帶參數時是全域
- * 查詢（挑最近一筆 in_progress），多路線同時開班會回到別條路線的完整站點名冊
- * ——那是含學生姓名與家庭座標的個資。只有「進頁還不知道自己開哪條路線」的復原
- * 情境才允許不帶。
+ * 取進行中的班次。三個過濾維度彼此 AND，回傳形狀一律 `{trip, stops}`。
+ *
+ * ⚠ **一個維度都不帶＝全域查詢**（後端挑最近一筆 in_progress，任何路線、任何操作者），
+ * 多路線同時開班就會回到別條路線的完整站點名冊——那是含學生姓名與家庭座標的個資。
+ * - 進頁復原用 `mine=true`（後端 `8836ecde`：比對 `BusTrip.operator_employee_id`
+ *   與 token 的 employee_id；帳號未綁員工回 **403**，刻意不默默退化成「回任何人的」）。
+ * - 已知路線／方向的重新同步（開班 409 接手、站點 409 分岔）用 `route_id`＋`direction`。
+ *
+ * `mine` 預設 false＝後端改動前的行為，向後相容。
  */
 export const getActiveBusTrip = (
   routeId?: number | null,
   direction?: 'morning' | 'afternoon' | null,
+  mine = false,
 ) =>
   api.get('/portal/bus/trips/active', {
     params: {
       ...(routeId ? { route_id: routeId } : {}),
       ...(direction ? { direction } : {}),
+      ...(mine ? { mine: true } : {}),
     },
   })
 

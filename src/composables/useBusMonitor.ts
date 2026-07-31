@@ -8,15 +8,16 @@
  *
  * ── 依 repo 實況修正 brief 之處（brief 的片段有三個會實際壞掉的地方）──────────
  *
- * 1. **admin channel 收不到 `bus_trip_started`**。`api/bus/portal_trips.py::start_trip`
- *    只對家長 channel 推 `build_trip_started_event`，`publish_admin` 一次都沒呼叫
- *    （grep `publish_admin` 只有 `_push_stop_update` / `complete_trip` /
- *    `bus_maintenance_scheduler`）。brief 監看頁把「新班次發車」寄託在
- *    `bus_trip_started` 上，那是永遠不會觸發的死分支——車已經上路，監看頁還顯示
- *    「今日尚無班次」，直到有人手動重新整理。
- *    本檔改以「收到不認識的班次事件就回頭抓一次快照」補上這個缺口：
- *    - `bus_stop_update` 帶完整 `trip`（含 `route_id`），同路線的新班次直接接手；
- *    - `bus_position` 只帶 `trip_id`，無法判斷路線，故走**節流 + 負向快取**的探測
+ * 1. **發車事件＋探測是兩層，缺一不可**。後端 `91f055f0` 之前 `start_trip` 只推家長
+ *    channel，admin 端根本收不到 `bus_trip_started`——車已上路，監看頁還顯示「今日
+ *    尚無班次」，直到有人手動重新整理。現在兩層都在：
+ *    - `bus_trip_started`（admin 版 payload 與 `bus_stop_update` 逐欄位相同，
+ *      `{trip, stops}`）與 `bus_stop_update` 都帶完整 `trip`（含 `route_id`），
+ *      同路線的新班次直接接手；
+ *    - **探測保留為 fallback，不可移除**：WS 沒有補發機制，退避重連期（上界 30 秒）
+ *      與降級輪詢期間的事件是**永久遺失**的，而 `onopen` 的 `refresh()` 只補得到
+ *      「已選路線的當下快照」，補不到「快照時無班次、之後才發車」那一段。
+ *      `bus_position` 只帶 `trip_id`、無法判斷路線，故走**節流 + 負向快取**的探測
  *      （`UNKNOWN_TRIP_PROBE_INTERVAL_MS` 內至多探一次；探完仍非本路線就記入
  *      `foreignTripIds`，之後同一班次的位置事件直接丟棄）。沒有節流的話，別條
  *      路線每 5 秒一顆的 GPS 就會變成每 5 秒一次快照請求。
@@ -296,8 +297,10 @@ export function useBusMonitor() {
   // ── WS 事件 ────────────────────────────────────────────────────────────────
 
   /**
-   * 收到不認識的班次事件時回頭抓一次快照（補 admin channel 沒有
-   * `bus_trip_started` 的缺口）。節流 + 負向快取避免別條路線的 GPS 造成快照風暴。
+   * 收到不認識的班次事件時回頭抓一次快照。**即使後端已補上 admin 端
+   * `bus_trip_started`（`91f055f0`）也不可移除**：那則事件只在「WS 當下連著」才收得到，
+   * 退避重連期與降級輪詢期間漏掉的事件沒有補發。節流 + 負向快取避免別條路線的 GPS
+   * 造成快照風暴。
    */
   async function probeUnknownTrip(tripId: number): Promise<void> {
     if (probing) return
@@ -333,7 +336,10 @@ export function useBusMonitor() {
       // 剛收到 server 推播的座標，定義上就是新鮮的；快照失敗的降級也可以解除
       nowTick.value = Date.now()
       snapshotFailed.value = false
-    } else if (type === 'bus_stop_update') {
+    } else if (type === 'bus_stop_update' || type === 'bus_trip_started') {
+      // 兩個事件的 admin payload **逐欄位相同**（`{trip, stops}`，＝開班 HTTP 201 的
+      // body），故共用同一條分支。`bus_trip_started` 是後端 `91f055f0` 補上的
+      // ——在那之前 admin channel 收不到發車事件，車已上路監看頁卻停在「今日尚無班次」。
       const nextTrip = normalizeTrip(payload.trip)
       const nextStops = normalizeStops(payload.stops)
       if (!nextTrip || !nextStops) return
@@ -347,9 +353,15 @@ export function useBusMonitor() {
       stops.value = nextStops
       foreignTripIds.delete(nextTrip.id)
       // 這裡刻意**沒有** `completedTripIds.delete(nextTrip.id)`（家長端的
-      // `bus_trip_started` 分支有）：班次狀態是終態（見 completedTripIds 的宣告），
-      // 已結束的班次不會再吐出 in_progress 的事件，那行在本檔不可達。
-      // 待後端補上 admin 端 `bus_trip_started` 推播、本分支併入該事件時，此論證不變。
+      // `bus_trip_started` 分支有）。併入 `bus_trip_started` 之後這個論證仍成立，
+      // 且兩個事件各有各的理由：
+      // - `bus_stop_update`：後端只對 in_progress 的班次推站點事件，已結束的班次
+      //   不會再吐出，集合裡的 id 不可能出現在這裡；
+      // - `bus_trip_started`：payload 是**剛 INSERT 的新 row**（新的自增 id），
+      //   而集合裡只裝「本次進站以來收過結束事件」的 id（換路線即 clear），
+      //   兩者不可能撞號——除非後端改成 reopen 舊 row 再推同一則事件。
+      // 班次狀態是終態的完整論證見 `completedTripIds` 的宣告；**若將來加了 reopen
+      // 端點，這兩條與那裡的覆寫都要一起回來改**。
       snapshotFailed.value = false
     } else if (type === 'bus_trip_completed') {
       const tripId = asNum(payload.trip_id)

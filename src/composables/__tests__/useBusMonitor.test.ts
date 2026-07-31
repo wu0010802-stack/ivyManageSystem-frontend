@@ -243,8 +243,17 @@ describe('WS 事件的班次比對（admin channel 是全園共用）', () => {
     expect(m.trip.value).toBeNull()
     expect(pending.length).toBeGreaterThan(0)
 
+    // ⚠ 呼叫次數要在事件之前先取樣：`pending` 是由 mock 自己 push 的，
+    // 事後拿 `pending.length` 當期望值會連 mutation 多打的那一次也一起算進去（恆真斷言）。
+    const callsBefore = vi.mocked(getBusTripToday).mock.calls.length
     lastSocket().emit({ type: 'bus_trip_completed', payload: { trip_id: 7 } })
     await flushPromises()
+
+    // `if (!current) return`：此時該由 in-flight 的快照收尾。
+    // 拿掉那行的話 `{ ...null }` 在 JS 是 `{}` —— trip 會變成缺 id/route_id 的殘缺物件，
+    // 摘要卡在快照回來前短暫渲染「路線 #undefined・」與「班次已結束」，還多打一次快照。
+    expect(m.trip.value).toBeNull()
+    expect(getBusTripToday).toHaveBeenCalledTimes(callsBefore)
 
     // 晚到的快照仍是 in_progress（司機在快照 in-flight 期間按了結束）
     pending.forEach((resolve) => resolve(tripPayload()))
@@ -298,7 +307,65 @@ describe('WS 事件的班次比對（admin channel 是全園共用）', () => {
   })
 })
 
-describe('不認識的班次：探測補上 admin channel 缺少的 bus_trip_started', () => {
+describe('admin channel 的 bus_trip_started（後端 91f055f0 / b2021a79 補上）', () => {
+  // payload 與 admin 的 bus_stop_update **逐欄位相同**（`{trip, stops}`，＝ HTTP 201 的 body），
+  // 因此併入同一條分支處理。探測機制仍保留為 fallback：WS 沒有補發機制，退避重連期
+  // 與降級輪詢期間的事件是永久遺失的。
+  function startedEvent(tripOverrides: Record<string, unknown> = {}, stops?: unknown[]) {
+    return {
+      type: 'bus_trip_started',
+      payload: {
+        trip: {
+          id: 30, route_id: 3, direction: 'morning', trip_date: '2026-07-29',
+          status: 'in_progress', auto_closed: false, started_at: TAIPEI_0900,
+          last_ping_at: null, last_lat: null, last_lng: null, ...tripOverrides,
+        },
+        stops: stops ?? [{
+          stop_id: 41, student_id: 101, student_name: '小明', seq: 1,
+          status: 'pending', lat: 22.61, lng: 120.31, departed_at: null,
+        }],
+      },
+    }
+  }
+
+  it('本路線發車：直接接手新班次與站點，不必再打一次快照', async () => {
+    // 進頁時今天還沒發車——這正是探測補不到的那一段（快照無班次、之後才發車）
+    vi.mocked(getBusTripToday).mockResolvedValue({ data: { trip: null, stops: [] } } as never)
+    const m = await bootMonitor()
+    expect(m.trip.value).toBeNull()
+    vi.mocked(getBusTripToday).mockClear()
+
+    lastSocket().emit(startedEvent())
+    await flushPromises()
+
+    expect(m.trip.value?.id).toBe(30)
+    expect(m.isLive.value).toBe(true)
+    expect(m.stops.value.map((s) => s.student_name)).toEqual(['小明'])
+    expect(getBusTripToday).not.toHaveBeenCalled()
+  })
+
+  it('別條路線發車：不得接手，並連帶記入負向快取（之後它的位置事件不必再探測）', async () => {
+    const m = await bootMonitor()
+    const ws = lastSocket()
+
+    ws.emit(startedEvent({ id: 31, route_id: 4 }, [
+      { stop_id: 99, student_id: 999, student_name: '別班小孩', seq: 1, status: 'pending' },
+    ]))
+    await flushPromises()
+
+    expect(m.trip.value?.id).toBe(7)
+    expect(m.stops.value.map((s) => s.student_name)).toEqual(['小明'])
+
+    // 節流窗之外仍不該探測——開班事件已經證明它不是本路線
+    vi.mocked(getBusTripToday).mockClear()
+    vi.setSystemTime(LOCAL_NOW_MS + UNKNOWN_TRIP_PROBE_INTERVAL_MS + 1000)
+    ws.emit({ type: 'bus_position', payload: { trip_id: 31, lat: 25, lng: 121, at: TAIPEI_0900 } })
+    await flushPromises()
+    expect(getBusTripToday).not.toHaveBeenCalled()
+  })
+})
+
+describe('不認識的班次：探測（WS 斷線期間漏掉的發車事件之 fallback）', () => {
   it('本路線剛發車時，位置事件會觸發一次快照並接手新班次', async () => {
     const m = await bootMonitor()
     vi.mocked(getBusTripToday).mockClear()

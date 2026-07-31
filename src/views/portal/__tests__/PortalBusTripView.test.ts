@@ -19,6 +19,7 @@ const h = vi.hoisted(() => {
       gpsSupported: r(true),
       gpsClockSuspect: r(false),
       snapshotFailed: r(false),
+      employeeUnlinked: r(false),
       pendingPingCount: r(0),
       tripSummary: r(''),
       init: vi.fn(),
@@ -52,6 +53,7 @@ function resetState() {
   s.gpsSupported.value = true
   s.gpsClockSuspect.value = false
   s.snapshotFailed.value = false
+  s.employeeUnlinked.value = false
   s.pendingPingCount.value = 0
   s.tripSummary.value = ''
 }
@@ -82,6 +84,21 @@ describe('PortalBusTripView', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="bus-snapshot-failed"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="bus-start-card"]').exists()).toBe(false)
+  })
+
+  it('帳號未綁員工時顯示專屬錯誤卡（重試不會變好，得有人去綁員工檔）', async () => {
+    s.employeeUnlinked.value = true
+    s.snapshotFailed.value = true
+    s.routes.value = [{ id: 3, name: 'A 線' }]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const card = wrapper.find('[data-testid="bus-employee-unlinked"]')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('員工')
+    // 不得同時再顯示「網路忙碌請重試」那張（訊息互斥），也不得掉進開班卡
+    expect(wrapper.find('[data-testid="bus-snapshot-failed"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="bus-start-card"]').exists()).toBe(false)
   })
 
