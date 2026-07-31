@@ -125,12 +125,13 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(items.length).toBe(0)
   })
 
-  it('「課後才藝」含報名與通知設定 /activity/settings', async () => {
+  it('「課後才藝」含才藝設定與品項 /activity/settings，且不再有獨立的課程與用品入口', async () => {
     const wrapper = await mountSidebar()
     const item = wrapper.find('[data-index="/activity/settings"]')
     expect(item.exists()).toBe(true)
-    // 原「報名時間設定」漏掉這頁實際還管的前台顯示與兩種通知信模板，2026-07-28 命名稽核改名
-    expect(item.text()).toContain('報名與通知設定')
+    // 2026-07-31 起課程與用品併入本頁前兩個 tab，名稱從「報名與通知設定」改為涵蓋品項的說法
+    expect(item.text()).toContain('才藝設定與品項')
+    expect(wrapper.find('[data-index="/activity/catalog"]').exists()).toBe(false)
   })
 
   it('「人事薪資」含「考核與年終」整合入口 /appraisal-year-end', async () => {

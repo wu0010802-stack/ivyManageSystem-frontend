@@ -3,7 +3,15 @@
     <h2>{{ PAGE_TERMS.activitySettings }}</h2>
 
     <el-tabs v-model="activeTab" class="settings-tabs" @tab-change="handleTabChange">
-      <el-tab-pane label="報名設定" name="registration">
+      <el-tab-pane label="課程管理" name="courses">
+        <ActivityCourseView v-if="activeTab === 'courses'" />
+      </el-tab-pane>
+
+      <el-tab-pane label="用品管理" name="supplies">
+        <ActivitySupplyView v-if="activeTab === 'supplies'" />
+      </el-tab-pane>
+
+      <el-tab-pane v-if="canWrite" label="報名設定" name="registration">
         <el-card style="max-width: 720px" v-loading="loading">
           <el-form :model="form" label-width="120px">
             <el-divider content-position="left">報名開關</el-divider>
@@ -155,7 +163,7 @@
         </el-card>
       </el-tab-pane>
 
-      <el-tab-pane label="候補轉正信模板" name="waitlistEmail">
+      <el-tab-pane v-if="canWrite" label="候補轉正信模板" name="waitlistEmail">
         <EmailTemplateEditor
           title="候補直升正式通知信樣板"
           hint-text="管理員從報名管理刪除正式報名後，候補依序遞補時會直接升為正式報名（略過家長 48 小時確認）並寄送這封通知信。"
@@ -176,7 +184,7 @@
         />
       </el-tab-pane>
 
-      <el-tab-pane label="報名成功模板" name="successEmail">
+      <el-tab-pane v-if="canWrite" label="報名成功模板" name="successEmail">
         <EmailTemplateEditor
           title="報名成功通知信樣板"
           hint-text="家長於前台完成報名並留下 email 時，系統會寄送這封通知信確認已收到報名資料。"
@@ -211,7 +219,7 @@
 </template>
 
 <script setup lang="ts">
-import { h, ref, computed, onMounted, watch } from 'vue'
+import { h, ref, computed, defineAsyncComponent, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -233,6 +241,11 @@ import {
   taipeiNowMinuteString,
 } from './registrationSettingsConfirm'
 import EmailTemplateEditor from './EmailTemplateEditor.vue'
+// 課程／用品兩支頁面很重（課程頁近千行），靜態 import 會把它們併進設定頁 chunk；
+// 併入前它們各自是 route-level chunk，改 async 才維持原本的分包與首屏成本。
+const ActivityCourseView = defineAsyncComponent(() => import('./ActivityCourseView.vue'))
+const ActivitySupplyView = defineAsyncComponent(() => import('./ActivitySupplyView.vue'))
+import { hasPermission } from '@/utils/auth'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 
@@ -263,15 +276,21 @@ interface EmailTemplateForm {
 const route = useRoute()
 const router = useRouter()
 
-const VALID_TABS = ['registration', 'waitlistEmail', 'successEmail']
+// 課程與用品（原 /activity/catalog）於 2026-07-31 併入本頁；日常使用的品項排前面，
+// 低頻的設定與信件模板排後面。設定三個 tab 需 ACTIVITY_WRITE，唯讀角色只看得到品項。
+const canWrite = hasPermission('ACTIVITY_WRITE')
+const DEFAULT_TAB = 'courses'
+const CATALOG_TABS = ['courses', 'supplies']
+const SETTINGS_TABS = ['registration', 'waitlistEmail', 'successEmail']
+const VALID_TABS = canWrite ? [...CATALOG_TABS, ...SETTINGS_TABS] : CATALOG_TABS
 const queryTab = route.query.tab as string | undefined
-const initialTab = queryTab && VALID_TABS.includes(queryTab) ? queryTab : 'registration'
+const initialTab = queryTab && VALID_TABS.includes(queryTab) ? queryTab : DEFAULT_TAB
 const activeTab = ref(initialTab)
 
 function handleTabChange(tab: string | number) {
   const tabStr = String(tab)
   const nextQuery = { ...route.query }
-  if (tabStr === 'registration') {
+  if (tabStr === DEFAULT_TAB) {
     delete nextQuery.tab
   } else {
     nextQuery.tab = tabStr
@@ -285,8 +304,8 @@ watch(
     const nextStr = next as string | undefined
     if (nextStr && VALID_TABS.includes(nextStr) && nextStr !== activeTab.value) {
       activeTab.value = nextStr
-    } else if (!nextStr && activeTab.value !== 'registration') {
-      activeTab.value = 'registration'
+    } else if (!nextStr && activeTab.value !== DEFAULT_TAB) {
+      activeTab.value = DEFAULT_TAB
     }
   }
 )
@@ -657,6 +676,8 @@ async function handleSuccessTestSend() {
 }
 
 onMounted(() => {
+  // 唯讀角色進來只為了看課程與用品，設定三支 API 需 ACTIVITY_WRITE，打了必 403 並跳錯誤提示。
+  if (!canWrite) return
   fetchSettings()
   fetchEmailTemplate()
   fetchSuccessEmailTemplate()

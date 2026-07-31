@@ -1,7 +1,7 @@
 <template>
   <div class="activity-supplies">
+    <!-- 標題交給外層「才藝設定與品項」頁的 h2 與 tab 標籤，此處不再重複（2026-07-31 整併） -->
     <div class="toolbar">
-      <h2>用品管理</h2>
       <div class="toolbar__actions">
         <AcademicTermSelector />
         <el-button v-if="canWrite" type="primary" @click="openCreate">新增用品</el-button>
@@ -151,7 +151,6 @@ onMounted(fetchSupplies)
 
 <style scoped>
 .activity-supplies { padding: 16px; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
-.toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.toolbar { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
 .toolbar__actions { display: flex; gap: 8px; align-items: center; }
 </style>

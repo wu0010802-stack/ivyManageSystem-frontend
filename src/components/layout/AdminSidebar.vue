@@ -173,8 +173,10 @@
               <el-badge v-if="pendingActivityReview > 0" :value="pendingActivityReview" :max="99" class="menu-badge" />
             </template>
           </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
-            <el-icon><Timer /></el-icon>
+          <!-- 課程與用品已併入本頁前兩個 tab（2026-07-31），故條件放寬為 ACTIVITY_READ；
+               設定與信件模板 tab 由頁內 ACTIVITY_WRITE 自行擋。 -->
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/settings">
+            <el-icon><Collection /></el-icon>
             <template #title>{{ PAGE_TERMS.activitySettings }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/pos">
@@ -184,10 +186,6 @@
           <el-menu-item v-if="canView.ACTIVITY_PAYMENT_APPROVE" index="/activity/pos/approval">
             <el-icon><CircleCheck /></el-icon>
             <template #title>{{ PAGE_TERMS.activityPosApproval }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/catalog">
-            <el-icon><Collection /></el-icon>
-            <template #title>{{ PAGE_TERMS.activityCatalog }}</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/inquiries">
             <el-icon><ChatDotRound /></el-icon>

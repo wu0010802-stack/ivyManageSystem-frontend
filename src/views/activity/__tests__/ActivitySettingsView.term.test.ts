@@ -26,6 +26,9 @@ vi.mock('element-plus', async () => {
   }
 })
 
+// 課程與用品併入本頁後（2026-07-31），報名設定 tab 要 ACTIVITY_WRITE 才渲染。
+vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+
 vi.mock('@/api/activity', () => ({
   getRegistrationTime: vi.fn(),
   updateRegistrationTime: vi.fn(),
@@ -56,7 +59,8 @@ const EMPTY_TEMPLATE = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockRoute.query = {}
+  // 預設 tab 已改為「課程管理」，本檔聚焦報名設定表單，一律顯式帶 tab=registration
+  mockRoute.query = { tab: 'registration' }
   vi.mocked(getWaitlistPromotedEmailTemplate).mockResolvedValue({
     data: { ...EMPTY_TEMPLATE },
   } as never)

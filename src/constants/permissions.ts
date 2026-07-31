@@ -145,7 +145,9 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/activity/courses', permission: 'ACTIVITY_READ' },
   { path: '/activity/supplies', permission: 'ACTIVITY_READ' },
   { path: '/activity/inquiries', permission: 'ACTIVITY_READ' },
-  { path: '/activity/settings', permission: 'ACTIVITY_WRITE' },
+  // 課程與用品併入本頁後（2026-07-31）不可再要求 ACTIVITY_WRITE，否則唯讀角色會連
+  // 原本看得到的課程／用品清單都進不去；設定與兩張信件模板 tab 於頁內自行擋 ACTIVITY_WRITE。
+  { path: '/activity/settings', permission: 'ACTIVITY_READ' },
   { path: '/activity/changes', permission: 'ACTIVITY_READ' },
   { path: '/activity/attendance', permission: 'ACTIVITY_READ', prefix: true },
   // POS 日結解鎖稽核軌跡：對齊後端 api/activity/pos_approval.py 的 ACTIVITY_PAYMENT_APPROVE。
