@@ -57,6 +57,8 @@ type Vm = {
   removeOverride: () => Promise<void>
   warnings: string[]
   candidateRoles: { code: string }[]
+  isChainDirty: boolean
+  switchDocType: (next: string) => Promise<void>
 }
 
 const mountEditor = async (submitterRole = 'teacher', accountCounts: Record<string, number> | null = { teacher: 5, supervisor: 2, hr: 1, admin: 1 }) => {
@@ -200,5 +202,54 @@ describe('ApprovalChainEditor', () => {
     })
     await flushPromises()
     expect(w.text()).toContain('僅超級管理員可核准')
+  })
+
+  // ── 角色設定頁稽核 2026-07-31：關卡鏈草稿的未儲存保護 ──
+
+  it('isChainDirty：草稿與已儲存的鏈一致為 false，改順序／加關卡後為 true', async () => {
+    const { vm } = await mountEditor()
+    expect(vm.isChainDirty).toBe(false)
+    // 順序有意義（逐級簽核），故重排也算變更
+    vm.chainDraft.reverse()
+    await flushPromises()
+    expect(vm.isChainDirty).toBe(true)
+  })
+
+  it('切換簽呈類型會重建草稿：dirty 時先問過，選「留在此頁」則不切', async () => {
+    const { vm } = await mountEditor()
+    vm.stageToAdd = 'admin'
+    vm.addStage()
+    await flushPromises()
+    expect(vm.isChainDirty).toBe(true)
+
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    await vm.switchDocType('leave')
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalled()
+    expect(vm.activeDocType).toBe('all') // 未切走，草稿保住
+    confirmSpy.mockRestore()
+  })
+
+  it('切換簽呈類型：選「捨棄變更」才真的切過去', async () => {
+    const { vm } = await mountEditor()
+    vm.stageToAdd = 'admin'
+    vm.addStage()
+    await flushPromises()
+
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    await vm.switchDocType('leave')
+    await flushPromises()
+    expect(vm.activeDocType).toBe('leave')
+    confirmSpy.mockRestore()
+  })
+
+  it('未變更時切換簽呈類型不彈確認', async () => {
+    const { vm } = await mountEditor()
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm')
+    await vm.switchDocType('leave')
+    await flushPromises()
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(vm.activeDocType).toBe('leave')
+    confirmSpy.mockRestore()
   })
 })

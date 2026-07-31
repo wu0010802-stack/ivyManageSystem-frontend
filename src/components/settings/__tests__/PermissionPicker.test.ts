@@ -40,10 +40,10 @@ const pageOf = (groupKey: string, pageKey: string): PickerPage => {
   return p
 }
 
-function mountPicker(modelValue: string[]) {
+function mountPicker(modelValue: string[], readonly = false) {
   return mount(PermissionPicker, {
     attachTo: document.body,
-    props: { modelValue, definition: DEFINITION },
+    props: { modelValue, definition: DEFINITION, readonly },
     global: { plugins: [ElementPlus] },
   })
 }
@@ -243,7 +243,7 @@ describe('PermissionPicker 渲染', () => {
     const tail = w.find('[data-perm-group="uncategorized"]')
     expect(tail.exists()).toBe(true)
     expect(tail.text()).toContain('孤兒碼') // 後端有、manifest 沒有 → 不得靜默消失
-    expect(tail.text()).toContain('經營分析（已停用）') // standalonePermissions（BUSINESS_ANALYTICS）
+    expect(tail.text()).toContain('經營分析（功能已移除）') // standalonePermissions（BUSINESS_ANALYTICS）
     // 未分類群組顯示各碼 label 而非「檢視」
     expect(w.find('[data-perm-view="LEGACY_ORPHAN_CODE"]').text()).toContain('孤兒碼')
   })
@@ -414,5 +414,25 @@ describe('PermissionPicker 搜尋', () => {
     await typeSearch(w, '')
     expect(w.find('[data-perm-empty]').exists()).toBe(false)
     expect(w.find('[data-perm-group="students"]').exists()).toBe(true)
+  })
+
+  // ── 角色設定頁稽核 2026-07-31 ──
+
+  it('readonly：所有 checkbox 停用、全選/清除隱藏（wildcard 與家長身份角色用）', () => {
+    const w = mountPicker(['ATTENDANCE_READ'], true)
+    expect(w.find('.picker-actions').exists()).toBe(false)
+    const boxes = document.querySelectorAll<HTMLInputElement>(
+      '.permission-picker .el-checkbox input',
+    )
+    expect(boxes.length).toBeGreaterThan(0)
+    expect([...boxes].every((b) => b.disabled)).toBe(true)
+  })
+
+  it('未分類群組不再把群組標題重複成頁標題', () => {
+    const w = mountPicker([])
+    const tail = w.find('[data-perm-group="uncategorized"]')
+    expect(tail.find('.perm-page-title').text()).toBe('')
+    // 群組標題本身仍在
+    expect(tail.text()).toContain('其他權限（未分類）')
   })
 })

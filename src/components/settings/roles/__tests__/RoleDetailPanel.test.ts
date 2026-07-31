@@ -138,13 +138,80 @@ describe('RoleDetailPanel', () => {
   })
 
   it('刪除保護：帳號數>0 disabled（系統預設與自訂角色同規則）；0 帳號可按並 emit', async () => {
-    expect((mountPanel('hr', 3).vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(true)
-    expect((mountPanel('custom_x', 2).vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(true)
-    expect((mountPanel('hr', 0).vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(false)
+    // 逐個掛載後即 unmount：本檔每次 mount 都會連帶建起 PermissionPicker 與
+    // ApprovalChainEditor 兩棵樹，四棵同時留著會讓這個純 computed 斷言的測試逼近
+    // 預設 5s timeout（2026-07-31 曾因此偶發紅）。
+    const expectDeleteDisabled = (code: string, count: number, expected: boolean) => {
+      const w = mountPanel(code, count)
+      expect((w.vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(expected)
+      w.unmount()
+    }
+    expectDeleteDisabled('hr', 3, true)
+    expectDeleteDisabled('custom_x', 2, true)
+    expectDeleteDisabled('hr', 0, false)
     const w = mountPanel('custom_x', 0)
     expect((w.vm as unknown as { deleteDisabled: boolean }).deleteDisabled).toBe(false)
     ;(w.vm as unknown as { requestDelete: () => void }).requestDelete()
     expect(w.emitted('delete-role')).toBeTruthy()
+  })
+
+  // ── 角色設定頁稽核 2026-07-31 的回歸防線 ──
+
+  it('wildcard 角色：權限樹不渲染、儲存仍送 ["*"]（不塌縮成顯式清單）', async () => {
+    const w = mountPanel('admin', 1)
+    const vm = w.vm as unknown as { isWildcardRole: boolean; form: { permissions: string[] } }
+    expect(vm.isWildcardRole).toBe(true)
+    // 未展開前不給操作權限樹，避免動一格就把 wildcard 換成當下碼的快照
+    expect(w.find('[data-testid="wildcard-notice"]').exists()).toBe(true)
+    expect(w.find('.permission-picker').exists()).toBe(false)
+
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    await (w.vm as unknown as { handleSave: () => Promise<void> }).handleSave()
+    await flushPromises()
+    const payload = vi.mocked(updateRole).mock.calls[0][1] as { permissions?: string[] }
+    expect(payload.permissions).toEqual(['*'])
+    confirmSpy.mockRestore()
+  })
+
+  it('wildcard 角色：明確按下「改為逐項設定」才展開成顯式清單', async () => {
+    const w = mountPanel('admin', 1)
+    const vm = w.vm as unknown as {
+      expandWildcard: () => Promise<void>
+      form: { permissions: string[] }
+      isWildcardRole: boolean
+    }
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    await vm.expandWildcard()
+    await flushPromises()
+    expect(vm.isWildcardRole).toBe(false)
+    expect(vm.form.permissions).toEqual(Object.keys(definition.permissions))
+    expect(w.find('.permission-picker').exists()).toBe(true)
+    confirmSpy.mockRestore()
+  })
+
+  it('家長身份角色：權限樹唯讀並顯示說明（後端不驗語意，避免誘導出無效設定）', () => {
+    const w = mountPanel('parent', 0)
+    const vm = w.vm as unknown as { isParentRole: boolean; permissionsReadonly: boolean }
+    expect(vm.isParentRole).toBe(true)
+    expect(vm.permissionsReadonly).toBe(true)
+    expect(w.find('[data-testid="parent-role-notice"]').exists()).toBe(true)
+  })
+
+  it('isDirty 併入簽呈關卡草稿：關卡改了沒存也算未儲存變更', async () => {
+    const w = mountPanel('custom_x', 0)
+    const vm = w.vm as unknown as {
+      isDirty: boolean
+      activeTab: string
+      chainRef: { chainDraft: { uid: number; role: string }[] } | null
+    }
+    expect(vm.isDirty).toBe(false)
+    // el-tab-pane 懶掛載：先切到簽呈關卡分頁，ApprovalChainEditor 才會建起來
+    vm.activeTab = 'chain'
+    await flushPromises()
+    // 直接改關卡草稿（等同使用者加了一個關卡卻沒按「儲存關卡鏈」）
+    vm.chainRef!.chainDraft.push({ uid: 999, role: 'hr' })
+    await flushPromises()
+    expect(vm.isDirty).toBe(true)
   })
 
   it('切換角色（props.code 變更）→ 表單重置為新角色資料', async () => {

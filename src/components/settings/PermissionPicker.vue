@@ -21,10 +21,16 @@ export interface PermissionPickerDefinition {
   groups: { name: string; permissions?: string[]; split_permissions?: { module: string; read: string; write: string }[] }[]
 }
 
-const props = defineProps<{
-  modelValue: string[]
-  definition: PermissionPickerDefinition
-}>()
+// readonly：整棵樹改為唯讀檢視（wildcard 角色未展開、家長身份角色）。搜尋與折疊仍可用
+// ——那是顯示層操作，不動 modelValue。
+const props = withDefaults(
+  defineProps<{
+    modelValue: string[]
+    definition: PermissionPickerDefinition
+    readonly?: boolean
+  }>(),
+  { readonly: false },
+)
 const emit = defineEmits<{ 'update:modelValue': [next: string[]] }>()
 
 const SCOPE_LABELS: Record<string, string> = { own_class: '僅自班', all: '全園' }
@@ -139,9 +145,9 @@ defineExpose({
         size="small"
         :prefix-icon="Search"
       />
-      <div class="picker-actions">
-        <el-button size="small" @click="selectAll">全選</el-button>
-        <el-button size="small" @click="clearAll">清除</el-button>
+      <div v-if="!readonly" class="picker-actions">
+        <el-button size="small" aria-label="勾選全部權限" @click="selectAll">全選</el-button>
+        <el-button size="small" aria-label="清除全部權限" @click="clearAll">清除</el-button>
       </div>
     </div>
 
@@ -174,6 +180,7 @@ defineExpose({
           class="perm-group-name"
           :model-value="groupState(group).checked"
           :indeterminate="groupState(group).indeterminate"
+          :disabled="readonly"
           @change="(v) => toggleGroup(group, !!v)"
         >
           {{ group.title }}
@@ -204,6 +211,7 @@ defineExpose({
             <template v-for="view in views" :key="view.code">
               <el-checkbox
                 :model-value="isChecked(view.code)"
+                :disabled="readonly"
                 :data-perm-view="view.code"
                 @change="(v) => togglePageView(page, view.code, !!v)"
               >
@@ -217,6 +225,7 @@ defineExpose({
                 <el-radio-group
                   :model-value="currentScope(view.code) ?? undefined"
                   size="small"
+                  :disabled="readonly"
                   @update:model-value="(v) => setScope(view.code, String(v))"
                 >
                   <el-radio v-for="opt in scopeOptionsFor(view.code)" :key="opt" :value="opt">
@@ -241,7 +250,7 @@ defineExpose({
             <template v-for="action in actions" :key="action.code">
               <el-checkbox
                 :model-value="isChecked(action.code)"
-                :disabled="actionsDisabled(page, action)"
+                :disabled="readonly || actionsDisabled(page, action)"
                 :data-perm-action="action.code"
                 @change="(v) => toggle(action.code, !!v)"
               >
@@ -255,6 +264,7 @@ defineExpose({
                 <el-radio-group
                   :model-value="currentScope(action.code) ?? undefined"
                   size="small"
+                  :disabled="readonly"
                   @update:model-value="(v) => setScope(action.code, String(v))"
                 >
                   <el-radio v-for="opt in scopeOptionsFor(action.code)" :key="opt" :value="opt">

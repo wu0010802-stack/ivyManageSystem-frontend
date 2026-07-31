@@ -19,6 +19,10 @@ const props = defineProps<{
 const activeTab = ref<'permissions' | 'basic' | 'chain'>('permissions')
 const emit = defineEmits<{ saved: []; 'delete-role': [] }>()
 
+const WILDCARD = '*'
+// 宣告在切換角色的 immediate watch 之前——watch 會重設它
+const expandedFromWildcard = ref(false)
+
 const form = reactive<{ label: string; description: string; permissions: string[]; flagSuperAdmin: boolean; flagParent: boolean }>({
   label: '', description: '', permissions: [], flagSuperAdmin: false, flagParent: false,
 })
@@ -43,13 +47,21 @@ const permsEqual = (a: string[], b: string[]): boolean => {
   return sa.every((v, i) => v === sb[i])
 }
 
+// 簽呈關卡分頁有自己的儲存按鈕與草稿狀態，不在本表單的 form/original 內；未儲存守衛
+// 只看 isDirty，故必須把它併進來，否則關卡鏈改了沒存就切角色會靜默丟失（稽核 2026-07-31）。
+//
+// el-tab-pane 懶掛載：沒點進「簽呈關卡」分頁前 chainRef 為 null，此時也不可能有草稿變更，
+// 故 ?? false 是正確預設而非漏判；分頁一旦渲染過就常駐（v-show），切走不會失去草稿狀態。
+const chainRef = ref<InstanceType<typeof ApprovalChainEditor> | null>(null)
+
 const isDirty = computed(
   () =>
     form.label !== original.label ||
     form.description !== original.description ||
     form.flagSuperAdmin !== original.flagSuperAdmin ||
     form.flagParent !== original.flagParent ||
-    !permsEqual(form.permissions, original.permissions),
+    !permsEqual(form.permissions, original.permissions) ||
+    (chainRef.value?.isChainDirty ?? false),
 )
 
 watch(
@@ -61,9 +73,45 @@ watch(
     form.permissions = [...props.role.permissions]
     form.flagSuperAdmin = flags.includes(FLAG_SUPER_ADMIN)
     form.flagParent = flags.includes(FLAG_PARENT)
+    expandedFromWildcard.value = false
     syncOriginalToForm()
   },
   { immediate: true },
+)
+
+// ── wildcard 角色（permissions === ['*']）──
+//
+// wildcard 的語意是「永遠擁有全部權限，含日後新增的碼」。原本 picker 把它渲染成一棵
+// 全勾的樹，只要在樹上動任何一格再儲存，送出的就是**當下這批碼的顯式清單**——wildcard
+// 就此消失，之後版本新增的權限碼該角色都不會自動擁有，會在新功能上吃 403。這種塌縮
+// 從畫面上完全看不出來（樹看起來一樣是全勾），故預設不讓它發生：wildcard 角色的權限
+// 分頁顯示唯讀說明，要逐項設定得先明確按下「改為逐項設定」把它展開成顯式清單。
+const isWildcardRole = computed(() => form.permissions.includes(WILDCARD))
+
+const expandWildcard = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '此角色目前擁有全部權限（含日後新增的功能）。改為逐項設定後，將固定為現有權限清單，'
+        + '日後系統新增的權限不會自動授予此角色。確定改為逐項設定？',
+      '改為逐項設定',
+      { type: 'warning', confirmButtonText: '改為逐項設定', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  form.permissions = Object.keys(props.definition.permissions)
+  expandedFromWildcard.value = true
+}
+
+// ── 家長身份角色 ──
+//
+// parent flag 的語意是「分流到家長帳號區塊，不可指派給員工」，後台權限對它沒有意義；
+// 但 picker 照樣渲染整棵員工後台權限樹外加「全選」，而後端只驗權限碼合法、不驗語意，
+// 於是可以把「薪資管理」勾給家長並成功儲存。改為唯讀＋說明，避免誘導出危險設定。
+const isParentRole = computed(() => form.flagParent)
+
+const permissionsReadonly = computed(
+  () => (isWildcardRole.value && !expandedFromWildcard.value) || isParentRole.value,
 )
 
 // ── flag checkbox disabled 規則（後端 apply_role_flags 為權威，此處只是預檢 UX）──
@@ -132,7 +180,7 @@ const deleteTooltip = computed(() => {
 })
 const requestDelete = () => emit('delete-role')
 
-defineExpose({ form, isDirty, superAdminDisabled, superAdminTooltip, parentDisabled, parentTooltip, deleteDisabled, deleteTooltip, handleSave, requestDelete, buildFlags, saving })
+defineExpose({ form, isDirty, activeTab, superAdminDisabled, superAdminTooltip, parentDisabled, parentTooltip, deleteDisabled, deleteTooltip, handleSave, requestDelete, buildFlags, saving, isWildcardRole, isParentRole, permissionsReadonly, expandWildcard, expandedFromWildcard, chainRef })
 </script>
 
 <template>
@@ -154,7 +202,34 @@ defineExpose({ form, isDirty, superAdminDisabled, superAdminTooltip, parentDisab
     <el-tabs v-model="activeTab">
       <!-- 1. 權限 -->
       <el-tab-pane label="權限" name="permissions">
-        <PermissionPicker v-model="form.permissions" :definition="definition" />
+        <el-alert
+          v-if="isParentRole"
+          type="info"
+          :closable="false"
+          class="perm-notice"
+          data-testid="parent-role-notice"
+          title="家長身份角色不使用後台權限"
+          description="此角色的帳號分流到家長端，不會進入後台，勾選後台權限不會生效。"
+        />
+        <template v-else-if="isWildcardRole && !expandedFromWildcard">
+          <el-alert
+            type="success"
+            :closable="false"
+            class="perm-notice"
+            data-testid="wildcard-notice"
+            title="此角色擁有全部權限"
+            description="包含日後系統新增的功能，無需逐項維護。改為逐項設定後就不再自動涵蓋新權限。"
+          />
+          <el-button size="small" data-testid="expand-wildcard" @click="expandWildcard">
+            改為逐項設定
+          </el-button>
+        </template>
+        <PermissionPicker
+          v-if="!isWildcardRole || expandedFromWildcard"
+          v-model="form.permissions"
+          :definition="definition"
+          :readonly="permissionsReadonly"
+        />
       </el-tab-pane>
 
       <!-- 2. 基本資料（身份 flag + 基本資料表單） -->
@@ -200,6 +275,7 @@ defineExpose({ form, isDirty, superAdminDisabled, superAdminTooltip, parentDisab
       <!-- 3. 簽呈審核關卡鏈（spec §6.1 右欄 4） -->
       <el-tab-pane label="簽呈關卡" name="chain">
         <ApprovalChainEditor
+          ref="chainRef"
           :submitter-role="code"
           :definition="definition"
           :account-counts="accountCounts"
@@ -243,5 +319,9 @@ defineExpose({ form, isDirty, superAdminDisabled, superAdminTooltip, parentDisab
 
 .flag-row {
   margin-bottom: 4px;
+}
+
+.perm-notice {
+  margin-bottom: 12px;
 }
 </style>

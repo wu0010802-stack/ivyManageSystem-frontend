@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getPermissions, getUsers } from '@/api/auth'
 import { createRole, deleteRole } from '@/api/permissions_admin'
@@ -17,13 +18,31 @@ const accountCounts = ref<Record<string, number> | null>(null)
 
 const selectedCode = ref<string>('')
 
+// 選中角色寫進 query（?role=hr）：重整不會彈回第一個角色，也能把「請看這個角色的設定」
+// 直接貼給同事。用 replace 不推歷史——切角色不是「上一頁」該回去的動作。
+// 無 router 環境（元件單元測試直接 mount）下兩者為 undefined，深連結靜默降級。
+const route = useRoute()
+const router = useRouter()
+const roleFromQuery = (): string =>
+  typeof route?.query?.role === 'string' ? route.query.role : ''
+
+watch(selectedCode, (code) => {
+  if (!router || !route) return
+  if (code && roleFromQuery() !== code) {
+    router.replace({ query: { ...route.query, role: code } })
+  }
+})
+
 const fetchDefinition = async () => {
   loadingDef.value = true
   try {
     const res = await getPermissions()
     definition.value = res.data
     if (!selectedCode.value || !definition.value.roles[selectedCode.value]) {
-      selectedCode.value = Object.keys(definition.value.roles)[0] ?? ''
+      const fromQuery = roleFromQuery()
+      selectedCode.value = definition.value.roles[fromQuery]
+        ? fromQuery
+        : (Object.keys(definition.value.roles)[0] ?? '')
     }
   } catch (e) {
     ElMessage.error(apiError(e, '載入角色定義失敗'))
@@ -81,11 +100,27 @@ const openCreateDialog = () => {
   createDialogVisible.value = true
 }
 
+// 後端 RoleIn 的 code pattern（api/permissions_admin.py）；前端同步驗證，免得填錯要等
+// 422 才知道，而 422 的訊息是給開發者看的。
+const ROLE_CODE_PATTERN = /^[a-z][a-z0-9_]*$/
+const codeError = computed(() => {
+  const code = createForm.code.trim()
+  if (!code) return ''
+  if (!ROLE_CODE_PATTERN.test(code)) return '需以小寫英文字母開頭，只能包含小寫英文、數字與底線'
+  if (code.length > 40) return 'code 長度上限 40 字元'
+  if (definition.value.roles[code]) return '此 code 已存在'
+  return ''
+})
+
 const handleCreateRole = async () => {
   const code = createForm.code.trim()
   const label = createForm.label.trim()
   if (!code || !label) {
     ElMessage.warning('請填寫 code 與名稱')
+    return
+  }
+  if (codeError.value) {
+    ElMessage.warning(codeError.value)
     return
   }
   if (creating.value) return
@@ -130,7 +165,7 @@ onMounted(() => {
   fetchAccountCounts()
 })
 
-defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, panelRef, createDialogVisible, createForm, openCreateDialog, handleCreateRole, handleDeleteRole, fetchDefinition })
+defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, panelRef, createDialogVisible, createForm, codeError, openCreateDialog, handleCreateRole, handleDeleteRole, fetchDefinition, selectRole })
 </script>
 
 <template>
@@ -147,6 +182,8 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, panelRef, cr
           class="role-item"
           :class="{ 'role-item--active': row.code === selectedCode }"
           :data-role-item="row.code"
+          :aria-current="row.code === selectedCode ? 'true' : undefined"
+          :aria-label="`${row.label}（${row.code}）${row.accountCount === null ? '' : `，帳號數 ${row.accountCount}`}`"
           @click="selectRole(row.code)"
         >
           <div class="role-item__main">
@@ -156,7 +193,14 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, panelRef, cr
           <div class="role-item__meta">
             <el-tag v-if="row.flags.includes(FLAG_SUPER_ADMIN)" size="small" type="danger">超級管理員</el-tag>
             <el-tag v-if="row.flags.includes(FLAG_PARENT)" size="small">家長</el-tag>
-            <span class="role-item__count">帳號數 {{ row.accountCount === null ? '—' : row.accountCount }}</span>
+            <el-tooltip
+              v-if="row.accountCount === null"
+              content="需要帳號管理的檢視權限才能顯示帳號數"
+              placement="top"
+            >
+              <span class="role-item__count">帳號數 —</span>
+            </el-tooltip>
+            <span v-else class="role-item__count">帳號數 {{ row.accountCount }}</span>
           </div>
         </button>
       </aside>
@@ -182,7 +226,7 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, panelRef, cr
     <!-- 新增角色 dialog -->
     <el-dialog v-model="createDialogVisible" title="新增角色" width="480px">
       <el-form :model="createForm" label-width="80px">
-        <el-form-item label="code">
+        <el-form-item label="code" :error="codeError">
           <el-input v-model="createForm.code" placeholder="例：custom_principal（建立後不可改）" />
         </el-form-item>
         <el-form-item label="名稱">
@@ -194,7 +238,7 @@ defineExpose({ roleRows, selectedCode, selectedRole, accountCounts, panelRef, cr
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="creating" @click="handleCreateRole">建立</el-button>
+        <el-button type="primary" :loading="creating" :disabled="!!codeError" @click="handleCreateRole">建立</el-button>
       </template>
     </el-dialog>
   </div>
