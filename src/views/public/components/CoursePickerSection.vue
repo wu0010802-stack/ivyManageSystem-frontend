@@ -253,12 +253,12 @@ onUnmounted(cancelPreview)
 }
 .form-section-step:first-child { padding-top: var(--space-3); }
 .form-section-step.is-active .step-num {
-  background-color: var(--color-primary);
+  background-color: var(--color-primary-strong);
   color: var(--color-primary-contrast);
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
-.form-section-step.is-active .step-title { color: var(--color-primary); }
+.form-section-step.is-active .step-title { color: var(--color-primary-strong); }
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -267,7 +267,7 @@ onUnmounted(cancelPreview)
   width: 26px;
   height: 26px;
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 700;
   font-size: var(--fs-sm);
   font-family: var(--font-display);

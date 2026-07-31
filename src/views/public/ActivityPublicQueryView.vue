@@ -1146,7 +1146,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-sm);
   font-size: var(--fs-sm);
   font-weight: 500;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease-out);
 }
@@ -1182,7 +1182,7 @@ onBeforeUnmount(() => {
   transition: background var(--dur-fast), color var(--dur-fast);
 }
 .mode-tab.active {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   background: var(--color-surface);
   border-color: var(--color-primary);
 }
@@ -1430,10 +1430,10 @@ onBeforeUnmount(() => {
 .btn-primary:disabled { background-color: var(--neutral-300); border-color: var(--neutral-300); color: var(--text-secondary); cursor: not-allowed; box-shadow: none; }
 .btn-outline {
   background: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   border-color: var(--color-primary);
 }
-.btn-outline:hover { background: var(--color-primary); color: var(--color-primary-contrast); }
+.btn-outline:hover { background: var(--color-primary-strong); color: var(--color-primary-contrast); }
 
 .action-buttons {
   display: flex;
@@ -1527,7 +1527,7 @@ onBeforeUnmount(() => {
   border-top: 1px dashed var(--color-border);
 }
 .contact-link {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 600;
   text-decoration: none;
 }
@@ -1550,7 +1550,7 @@ onBeforeUnmount(() => {
   padding: 2px 8px;
   font-size: var(--fs-xs);
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   background: var(--color-primary-soft);
   border-radius: var(--radius-full);
 }
@@ -1643,7 +1643,7 @@ onBeforeUnmount(() => {
   display: block;
   margin-top: 2px;
   font-size: var(--fs-xs);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 500;
 }
 

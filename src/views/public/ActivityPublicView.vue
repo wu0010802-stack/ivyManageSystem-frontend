@@ -1278,7 +1278,7 @@ onUnmounted(() => {
   padding: 2px 10px;
   border-radius: var(--radius-full);
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 600;
   font-size: var(--fs-xs);
   letter-spacing: 0.04em;
@@ -1530,7 +1530,7 @@ onUnmounted(() => {
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-md);
 }
-.draft-restored-notice .icon { flex-shrink: 0; width: 20px; height: 20px; color: var(--color-primary); }
+.draft-restored-notice .icon { flex-shrink: 0; width: 20px; height: 20px; color: var(--color-primary-strong); }
 .draft-restored-text {
   flex: 1;
   margin: 0;
@@ -1583,7 +1583,7 @@ onUnmounted(() => {
 }
 .registration-step-tab:disabled { cursor: not-allowed; opacity: 0.58; }
 .registration-step-tab.is-active {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   background: var(--color-surface);
   border-color: var(--color-border-strong);
   box-shadow: 0 4px 12px rgba(57, 42, 28, 0.08);
@@ -1632,7 +1632,7 @@ onUnmounted(() => {
   min-height: 44px;
   margin: -11px 0;
   padding: 4px 10px;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   background: var(--color-surface);
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-full);
@@ -1641,7 +1641,7 @@ onUnmounted(() => {
   font-weight: 700;
   cursor: pointer;
 }
-.review-edit-button:hover { color: var(--color-primary-contrast); background: var(--color-primary); }
+.review-edit-button:hover { color: var(--color-primary-contrast); background: var(--color-primary-strong); }
 .review-edit-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .review-details {
   display: grid;
@@ -1670,12 +1670,12 @@ onUnmounted(() => {
 .form-section-step:first-child { padding-top: var(--space-3); }
 /* 當前進行步驟：填色 step-num + 強調 title，給家長清楚的進度感 */
 .form-section-step.is-active .step-num {
-  background-color: var(--color-primary);
+  background-color: var(--color-primary-strong);
   color: var(--color-primary-contrast);
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
-.form-section-step.is-active .step-title { color: var(--color-primary); }
+.form-section-step.is-active .step-title { color: var(--color-primary-strong); }
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -1684,7 +1684,7 @@ onUnmounted(() => {
   width: 26px;
   height: 26px;
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 700;
   font-size: var(--fs-sm);
   font-family: var(--font-display);
@@ -2025,7 +2025,7 @@ onUnmounted(() => {
   gap: 6px;
   font-size: var(--fs-sm);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin-bottom: var(--space-3);
 }
 .fee-preview-title .icon {
@@ -2068,11 +2068,11 @@ onUnmounted(() => {
 }
 .fee-preview .fee-row-total dt {
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
 }
 .fee-preview .fee-row-total dd {
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-size: var(--fs-xl);
 }
 .fee-preview-note {
@@ -2253,10 +2253,10 @@ onUnmounted(() => {
 .btn-block { width: 100%; }
 .btn-outline {
   background-color: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   border-color: var(--color-primary);
 }
-.btn-outline:hover:not(:disabled) { background-color: var(--color-primary); color: var(--color-primary-contrast); }
+.btn-outline:hover:not(:disabled) { background-color: var(--color-primary-strong); color: var(--color-primary-contrast); }
 .btn-outline--accent { color: var(--ivy-teal); border-color: var(--ivy-teal); }
 .btn-outline--accent:hover:not(:disabled) { background-color: var(--ivy-teal); color: var(--neutral-0); border-color: var(--ivy-teal); }
 .btn-actions-row {
@@ -2366,13 +2366,13 @@ onUnmounted(() => {
 .modal-title {
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.modal-title .icon { color: var(--color-primary); }
+.modal-title .icon { color: var(--color-primary-strong); }
 .modal-close {
   flex-shrink: 0;
   width: 36px;
@@ -2422,10 +2422,10 @@ onUnmounted(() => {
   gap: var(--space-2);
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0 0 var(--space-3) 0;
 }
-.contact-school-name .icon { color: var(--color-primary); }
+.contact-school-name .icon { color: var(--color-primary-strong); }
 .contact-school-detail {
   display: flex;
   align-items: center;
@@ -2435,8 +2435,8 @@ onUnmounted(() => {
   line-height: 1.6;
   margin-top: var(--space-1);
 }
-.contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary); }
-.contact-school-detail a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
+.contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary-strong); }
+.contact-school-detail a { color: var(--color-primary-strong); font-weight: 600; text-decoration: none; }
 .contact-form-intro {
   display: flex;
   align-items: center;
@@ -2552,7 +2552,7 @@ onUnmounted(() => {
     color: var(--color-text-muted);
   }
   .submit-bar-total strong {
-    color: var(--color-primary);
+    color: var(--color-primary-strong);
     font-size: var(--fs-md);
     font-variant-numeric: tabular-nums;
   }
@@ -2641,13 +2641,13 @@ onUnmounted(() => {
 .public-activity-page .modal-title {
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.public-activity-page .modal-title .icon { color: var(--color-primary); }
+.public-activity-page .modal-title .icon { color: var(--color-primary-strong); }
 .public-activity-page .modal-close {
   flex-shrink: 0;
   width: 36px;
@@ -2687,10 +2687,10 @@ onUnmounted(() => {
   gap: var(--space-2);
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0 0 var(--space-3) 0;
 }
-.public-activity-page .contact-school-name .icon { color: var(--color-primary); }
+.public-activity-page .contact-school-name .icon { color: var(--color-primary-strong); }
 .public-activity-page .contact-school-detail {
   display: flex;
   align-items: center;
@@ -2700,8 +2700,8 @@ onUnmounted(() => {
   line-height: 1.6;
   margin-top: var(--space-1);
 }
-.public-activity-page .contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary); }
-.public-activity-page .contact-school-detail a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
+.public-activity-page .contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary-strong); }
+.public-activity-page .contact-school-detail a { color: var(--color-primary-strong); font-weight: 600; text-decoration: none; }
 .public-activity-page .contact-form-intro {
   display: flex;
   align-items: center;
@@ -2813,11 +2813,11 @@ onUnmounted(() => {
 .public-activity-page .btn-block { width: 100%; }
 .public-activity-page .btn-outline {
   background-color: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   border-color: var(--color-primary);
 }
 .public-activity-page .btn-outline:hover:not(:disabled) {
-  background-color: var(--color-primary);
+  background-color: var(--color-primary-strong);
   color: var(--color-primary-contrast);
 }
 

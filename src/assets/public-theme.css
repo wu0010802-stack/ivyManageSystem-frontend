@@ -19,13 +19,20 @@
   --color-surface-mint: #f5fbe6;  /* 嫩綠 soft tint */
   --color-surface-readonly: #f9fafb; /* 唯讀/停用欄位底 */
 
-  --color-primary: #0d9053;       /* IvyKids 深綠主色 */
+  --color-primary: #0d9053;       /* IvyKids 深綠主色；僅用於框線、圖示、底色等非文字 */
   --color-primary-hover: #0caf76; /* 亮綠 hover */
   --color-primary-soft: #d4ffe7;  /* 淺綠 tint */
   --color-primary-contrast: #ffffff;
+  /* 文字專用深綠：主色 #0d9053 當文字只有 4.09:1（白底）/ 3.75:1（淺綠底），都不過
+     WCAG AA。家長族群含長輩，且這頁多半在戶外強光下用 LINE 開啟，對比不是理論問題。
+     本色白底 5.41:1、淺綠底 4.96:1、嫩綠底 5.10:1，全部過 AA。
+     **深綠文字一律用這個 token，不要用 --color-primary。** */
+  --color-primary-strong: #0a7a46;
 
-  --color-cta: #0d9053;
-  --color-cta-hover: #0caf76;
+  --color-cta: #0a7a46;
+  /* hover 必須比底色更深。原本 #0caf76 比 CTA 底色還亮，白字只有 2.83:1，
+     是整頁對比最差的互動狀態 */
+  --color-cta-hover: #086138;
   --color-cta-contrast: #ffffff;
 
   /* 童彩 6 色（裝飾、badge、強調） */
@@ -62,6 +69,9 @@
   --color-danger-soft: #fee2e2;
   --color-warning: #d97706;
   --color-warning-soft: #fef3c7;
+  /* 警示「文字」專用：#d97706 在淺綠底只有 2.92:1，成功畫面那句「連結含個資識別碼，
+     請勿轉傳他人」等於用全頁最讀不清的對比在講資安。本色淺綠底 6.50:1、白底 7.09:1 */
+  --color-warning-strong: #92400e;
   --color-success: #0d9053;
   --color-required: #f65265;      /* 童彩粉紅紅 */
 
