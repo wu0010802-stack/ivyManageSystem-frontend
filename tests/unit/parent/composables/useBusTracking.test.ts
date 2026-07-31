@@ -7,12 +7,15 @@
  * 3. WS close code 分流：4003 走 refresh 重連（不盲目導登入）、4007 停手只提示、
  *    1008 連線數超限不快速重試
  *
- * 時區：測試以 TZ=UTC 執行，確保 stale 計算真的走 parseTaipeiDate（naive 字串錨定
- * +08:00），而不是靠「跑測試的機器剛好在台北」矇混過關。
+ * 時區：本檔以 TZ=UTC 執行，確保 stale 計算真的走 parseTaipeiDate（naive 字串錨定
+ * +08:00），而不是靠「跑測試的機器剛好在台北」矇混過關。用 `vi.stubEnv` + `unstubAllEnvs`
+ * 而非直接寫 `process.env.TZ`——`process.env` 是 process 全域，vitest 的 isolate 只重置
+ * module registry，直接改會讓同 worker 的後續測試檔全部吃到 UTC。
  */
-process.env.TZ = 'UTC'
+import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest'
 
-import { describe, it, expect, vi, afterEach } from 'vitest'
+beforeAll(() => { vi.stubEnv('TZ', 'UTC') })
+afterAll(() => { vi.unstubAllEnvs() })
 
 // 可切換的 API 實作：個別測試可換成 deferred promise 製造 in-flight 窗口
 type BusTodayResp = { data: Record<string, unknown> }
@@ -52,10 +55,15 @@ class FakeWebSocket {
     this.readyState = FakeWebSocket.CLOSED
     this.closedWith = code ?? 1000
   }
-  /** 模擬 server 端 accept：觸發 onopen */
+  /** 觸發 addEventListener 掛上的 handler（closeWebSocketSafely 卸不掉的那一種） */
+  fire(type: string): void {
+    ;(this.listeners[type] || []).forEach((h) => { h() })
+  }
+  /** 模擬 server 端 accept：on* 與 addEventListener 兩種 handler 都會收到 */
   open(): void {
     this.readyState = FakeWebSocket.OPEN
     this.onopen?.()
+    this.fire('open')
   }
   emit(obj: unknown): void {
     this.onmessage?.({ data: JSON.stringify(obj) })
@@ -63,6 +71,7 @@ class FakeWebSocket {
   serverClose(code: number, reason = ''): void {
     this.readyState = FakeWebSocket.CLOSED
     this.onclose?.({ code, reason })
+    this.fire('close')
   }
 }
 
@@ -247,6 +256,28 @@ describe('useBusTracking — 過時快照回填守衛', () => {
     expect(state.school?.lat).toBe(22.6)                   // school 為靜態設定，仍應落地
   })
 
+  it('in-flight 期間收到的 bus_position 不得被晚到快照的舊座標覆蓋', async () => {
+    let resolveFetch: (v: BusTodayResp) => void = () => {}
+    getBusTodayImpl = () => new Promise((r) => { resolveFetch = r })
+
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init } = useBusTracking()
+
+    const initPromise = init()
+    await flush()
+    FakeWebSocket.instances[0].emit({
+      type: 'bus_position',
+      payload: { lat: 22.70, lng: 120.40, at: '2026-07-29T07:40:00' },
+    })
+
+    resolveFetch(fullSnapshot()) // 舊座標 22.63（班次仍在跑，不會觸發 completed 覆寫）
+    await initPromise
+    await flush()
+
+    expect(state.position?.lat).toBe(22.70)
+    expect(state.trip?.status).toBe('in_progress')
+  })
+
   it('out-of-order：較舊 fetch 的過時快照不覆蓋較新 fetch 的結果', async () => {
     let resolveOld: (v: BusTodayResp) => void = () => {}
     getBusTodayImpl = () => new Promise((r) => { resolveOld = r })
@@ -268,6 +299,27 @@ describe('useBusTracking — 過時快照回填守衛', () => {
     await flush()
 
     expect(state.children[0].stop_status).toBe('departed')
+  })
+
+  it('首次快照 in-flight 時，別班次的結束事件不得清掉本班次位置', async () => {
+    let resolveFetch: (v: BusTodayResp) => void = () => {}
+    getBusTodayImpl = () => new Promise((r) => { resolveFetch = r })
+
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init } = useBusTracking()
+
+    const initPromise = init()
+    await flush()
+    // state.trip 還是 null（快照未回），此時手足所在的另一條路線先到站
+    FakeWebSocket.instances[0].emit({ type: 'bus_trip_completed', payload: { trip_id: 999 } })
+
+    resolveFetch(fullSnapshot()) // 本班次 trip_id=1，行駛中且有座標
+    await initPromise
+    await flush()
+
+    expect(state.trip?.id).toBe(1)
+    expect(state.trip?.status).toBe('in_progress')
+    expect(state.position?.lat).toBe(22.63)
   })
 
   it('teardown 後晚到的快照不得回填（登出換帳號）', async () => {
@@ -322,6 +374,54 @@ describe('useBusTracking — 連線恢復', () => {
     expect(state.wsConnected).toBe(true)                       // 不得被舊 socket 標成斷線
     expect(state.position).toBe(null)                          // 舊 socket 的事件不得套用
     expect(FakeWebSocket.instances.length).toBe(socketCount)   // 不得多排一次重連
+  })
+
+  it('被換掉的舊 socket 不得把全域連線狀態寫成斷線', async () => {
+    // registerWs 是用 addEventListener 掛 handler，而 closeWebSocketSafely 只卸 on* 屬性，
+    // 卸不掉 listener。沒有 identity 守衛的話，舊 socket 的 close 會在一條健康的新連線上
+    // 把 ConnectionBanner 閃成「已斷線」。
+    const { useBusTracking } = await loadFreshModule()
+    const { useConnectionStatus } = await import('@/parent/composables/useConnectionStatus')
+    const { wsConnected: globalWsConnected } = useConnectionStatus()
+    const { init, retryWs } = useBusTracking()
+    await init()
+
+    const first = FakeWebSocket.instances[0]
+    first.open()
+    await flush()
+    expect(globalWsConnected.value).toBe(true)
+
+    retryWs()
+    const second = FakeWebSocket.instances[1]
+    second.open()
+    await flush()
+    expect(globalWsConnected.value).toBe(true)
+
+    // 舊 socket 此刻才吐出 close / error（listener 仍掛著）
+    first.fire('close')
+    expect(globalWsConnected.value).toBe(true)
+    first.fire('error')
+    expect(globalWsConnected.value).toBe(true)
+  })
+
+  it('teardown 後全域連線狀態交還，舊 socket 不得再把它寫回連線中', async () => {
+    const { useBusTracking } = await loadFreshModule()
+    const { useConnectionStatus } = await import('@/parent/composables/useConnectionStatus')
+    const { wsConnected: globalWsConnected } = useConnectionStatus()
+    const { init, teardown } = useBusTracking()
+    await init()
+
+    const socket = FakeWebSocket.instances[0]
+    socket.open()
+    await flush()
+    expect(globalWsConnected.value).toBe(true)
+
+    teardown()
+    expect(globalWsConnected.value).toBe(false)
+
+    // 已無人擁有的 socket 之後吐出的事件不得再左右全域狀態
+    socket.fire('open')
+    expect(globalWsConnected.value).toBe(false)
   })
 
   it('回前景時補抓快照，連線已斷則立刻重連', async () => {
@@ -485,23 +585,42 @@ describe('useBusTracking — stale 重算', () => {
 })
 
 describe('useBusTracking — 隱私', () => {
-  it('全流程不得把站點座標寫進 console（站點座標＝家庭住址）', async () => {
+  it('全流程不得把站點座標寫進 console 或瀏覽器儲存（站點座標＝家庭住址）', async () => {
     const spies = (['log', 'info', 'warn', 'error', 'debug'] as const)
       .map((k) => vi.spyOn(console, k).mockImplementation(() => {}))
+    const localSetItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {})
+    // happy-dom 的 sessionStorage 是 Proxy，vi.spyOn 對它與 Storage.prototype 都攔不到，
+    // 只能整個換掉。不用 vi.unstubAllGlobals() 還原（會連 setup.js 的 localStorage mock
+    // 一起移除），改為把原物件 re-stub 回去。
+    const realSessionStorage = globalThis.sessionStorage
+    const sessionSetItem = vi.fn()
+    vi.stubGlobal('sessionStorage', {
+      setItem: sessionSetItem,
+      getItem: () => null,
+      removeItem: () => {},
+    })
     getBusTodayImpl = () => Promise.resolve(fullSnapshot())
 
-    const { useBusTracking } = await loadFreshModule()
-    const { init } = useBusTracking()
-    await init()
-    FakeWebSocket.instances[0].emit({
-      type: 'bus_stop_update',
-      payload: { children: [{ student_id: 3, stop_status: 'departed', stops_ahead: 0, stop_lat: 22.61, stop_lng: 120.28 }] },
-    })
-    FakeWebSocket.instances[0].serverClose(1006)
+    try {
+      const { useBusTracking } = await loadFreshModule()
+      const { init } = useBusTracking()
+      await init()
+      FakeWebSocket.instances[0].emit({
+        type: 'bus_stop_update',
+        payload: { children: [{ student_id: 3, stop_status: 'departed', stops_ahead: 0, stop_lat: 22.61, stop_lng: 120.28 }] },
+      })
+      FakeWebSocket.instances[0].serverClose(1006)
 
-    const printed = spies.flatMap((s) => s.mock.calls).map((c) => JSON.stringify(c)).join(' ')
-    expect(printed).not.toContain('22.61')
-    expect(printed).not.toContain('120.28')
-    spies.forEach((s) => { s.mockRestore() })
+      const printed = [...spies, localSetItem, sessionSetItem]
+        .flatMap((s) => s.mock.calls).map((c) => JSON.stringify(c)).join(' ')
+      expect(printed).not.toContain('22.61')
+      expect(printed).not.toContain('120.28')
+      // 座標完全不該落到任何持久化儲存，不只是「沒被寫進值裡」
+      expect(localSetItem).not.toHaveBeenCalled()
+      expect(sessionSetItem).not.toHaveBeenCalled()
+    } finally {
+      vi.stubGlobal('sessionStorage', realSessionStorage)
+      ;[...spies, localSetItem].forEach((s) => { s.mockRestore() })
+    }
   })
 })

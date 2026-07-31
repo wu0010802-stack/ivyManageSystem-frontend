@@ -180,10 +180,6 @@ function applySnapshot(raw: unknown, mySeq: number): void {
   const data = asRecord(raw)
   if (!data) return
   if (mySeq > eventSeq.trip) state.trip = normalizeTrip(data.trip)
-  // 已收過結束事件的班次一律覆寫回 completed，不論這份快照多舊
-  if (state.trip && completedTripIds.has(state.trip.id) && state.trip.status !== 'completed') {
-    state.trip = { ...state.trip, status: 'completed' }
-  }
   if (mySeq > eventSeq.position) {
     state.position = normalizePosition(data.position)
     state.stale = data.stale === true
@@ -191,6 +187,13 @@ function applySnapshot(raw: unknown, mySeq: number): void {
   if (mySeq > eventSeq.children) state.children = normalizeChildren(data.children) ?? []
   // school 是園所設定的靜態座標，沒有任何 WS 事件會改動它
   state.school = normalizeSchool(data.school)
+  // 已收過結束事件的班次一律覆寫回 completed，不論這份快照多舊。必須排在 position
+  // 之後：已回校的車不該還帶著座標在地圖上跑。
+  if (state.trip && completedTripIds.has(state.trip.id) && state.trip.status !== 'completed') {
+    state.trip = { ...state.trip, status: 'completed' }
+    state.position = null
+    state.stale = false
+  }
 }
 
 async function fetchSnapshot(): Promise<void> {
@@ -258,7 +261,11 @@ function handleEvent(event: Record<string, unknown>): void {
     const tripId = asNum(payload.trip_id)
     if (state.trip && tripId !== null && tripId !== state.trip.id) return
     if (tripId !== null) completedTripIds.add(tripId)
-    if (state.trip) state.trip = { ...state.trip, status: 'completed' }
+    // 首次快照還沒回來時 state.trip 是 null，無從判斷這是不是「自己這一班」——
+    // 若照樣清 position 並 bump 序號，別條路線（手足）先到站就會把本班次行駛中的
+    // 座標一起吃掉。此時只記下 trip id，等快照回來再由 applySnapshot 比對決定。
+    if (!state.trip) return
+    state.trip = { ...state.trip, status: 'completed' }
     state.position = null
     state.stale = false
     // 刻意不 bump eventSeq.trip：仍讓快照補齊 trip 的其他欄位，狀態由
@@ -467,6 +474,9 @@ function teardown(): void {
   initialized = false
   initPromise = null
   authRecovering = false
+  // closeWebSocketSafely 只卸 on* 屬性，卸不掉 registerWs 用 addEventListener 掛的
+  // handler；teardown 後沒有新 socket 會接管，必須顯式交還全域連線狀態的所有權。
+  useConnectionStatus().unregisterWs(ws)
   closeWebSocketSafely(ws)
   ws = null
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
