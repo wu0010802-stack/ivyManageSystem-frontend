@@ -2511,6 +2511,15 @@ onUnmounted(() => {
     border-right: none;
     border-bottom: 1px solid var(--color-border);
   }
+  /* 單欄堆疊後，品牌文字被 LOGO 往右推了約 85px，標題卻從卡片 padding 起算，
+     兩條左緣對不齊，標題看起來孤零零貼在最左。標題與招生資訊改置中收掉這條
+     參差；品牌區維持 LOGO 在旁的橫排（改成堆疊置中會讓 header 長高約 60px，
+     把 DM 海報往下推）。 */
+  .page-meta {
+    align-items: center;
+    text-align: center;
+  }
+  .page-meta-row { justify-content: center; }
 }
 @media (--to-sm) {
   .public-activity-page { padding: 0; }
