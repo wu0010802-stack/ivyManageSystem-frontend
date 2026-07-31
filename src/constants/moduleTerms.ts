@@ -65,14 +65,15 @@ export const PAGE_TERMS = {
   // 課後才藝：側欄在「課後才藝」群組內用短名，meta 靠 parentTitle 帶出模組，兩者字面一致。
   /** /activity/dashboard */
   activityDashboard: '統計儀表板',
-  /** /activity/catalog。側欄原簡稱「課程與用品」。 */
-  activityCatalog: '課程與用品',
   /** /activity/pos/approval。側欄原簡稱「收款簽核」。 */
   activityPosApproval: 'POS 收款簽核',
   /** /activity/audit/pos-unlock。原 meta「POS 日結異常稽核軌跡」vs 頁面「POS 異常稽核軌跡」。 */
   activityPosAudit: 'POS 異常稽核軌跡',
-  /** /activity/settings。原「報名時間設定」漏掉前台顯示設定與兩種通知信模板，要改 Email 模板的人找不到。 */
-  activitySettings: '報名與通知設定',
+  /**
+   * /activity/settings。2026-07-31 起把原 /activity/catalog（課程與用品）併入本頁成為前兩個
+   * tab，故名稱從「報名與通知設定」改為涵蓋品項的說法；純設定的字面會讓人找不到日常建課。
+   */
+  activitySettings: '才藝設定與品項',
   /** /activity/changes。原側欄「修改紀錄」在才藝群組下讀起來像涵蓋課程與用品，實際只有報名。 */
   activityChanges: '報名修改紀錄',
 

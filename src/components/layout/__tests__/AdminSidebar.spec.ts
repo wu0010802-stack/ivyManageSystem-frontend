@@ -100,6 +100,13 @@ describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
     expect(subs(w)).not.toContain('group-reports')
   })
 
+  it('只有 ACTIVITY_READ → 仍看得到 /activity/settings（課程與用品併入後不可再要求 WRITE）', () => {
+    const w = mountWith(['ACTIVITY_READ'])
+    expect(items(w)).toContain('/activity/settings')
+    // 舊的課程與用品獨立入口已移除
+    expect(items(w)).not.toContain('/activity/catalog')
+  })
+
   it('只有 scope-qualified STUDENTS_READ:own_class（無裸 STUDENTS_READ）→ 學生選單仍可見（對齊 hasPermission 的 scope-aware 判斷，回歸修復）', () => {
     const w = mountWith(['STUDENTS_READ:own_class'])
     expect(subs(w)).toContain('group-students')

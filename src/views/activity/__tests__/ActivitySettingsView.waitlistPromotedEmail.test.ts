@@ -10,6 +10,12 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn(), replace: routerReplace, back: vi.fn() }),
 }))
 
+// 課程與用品併入本頁後（2026-07-31），設定三個 tab 要 ACTIVITY_WRITE 才渲染。
+const hasPermissionMock = vi.fn(() => true)
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (name: string) => hasPermissionMock(name),
+}))
+
 vi.mock('@/api/activity', () => ({
   getRegistrationTime: vi.fn(),
   updateRegistrationTime: vi.fn(),
@@ -57,7 +63,9 @@ function mountView() {
 }
 
 beforeEach(() => {
-  mockRoute.query = {}
+  hasPermissionMock.mockReturnValue(true)
+  // 預設 tab 已改為「課程管理」，設定相關的案例要顯式帶 tab=registration 才看得到表單
+  mockRoute.query = { tab: 'registration' }
   vi.mocked(getRegistrationTime).mockResolvedValue({ data: { is_open: false } } as never)
   vi.mocked(getWaitlistPromotedEmailTemplate).mockResolvedValue({
     data: { ...TEMPLATE_RES },
@@ -238,11 +246,47 @@ describe('ActivitySettingsView — 報名成功通知信樣板', () => {
 })
 
 describe('ActivitySettingsView — tabs 切換與 query string 同步', () => {
-  it('預設顯示報名設定 tab，不帶 query', async () => {
+  it('不帶 query 時預設落在課程管理 tab（課程與用品併入後，日常品項優先於低頻設定）', async () => {
+    mockRoute.query = {}
+    const wrapper = mountView()
+    await flushPromises()
+
+    const activeLabel = wrapper.findAll('.el-tabs__item.is-active')[0]
+    expect(activeLabel?.text()).toBe('課程管理')
+  })
+
+  it('帶 tab=registration 時顯示報名設定表單', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.text()).toContain('報名開關')
+  })
+
+  it('無 ACTIVITY_WRITE → 只剩課程與用品 tab，設定與信件模板不渲染也不打 API', async () => {
+    hasPermissionMock.mockReturnValue(false)
+    mockRoute.query = {}
+    // 本檔 beforeEach 只重設回傳值不清呼叫紀錄，這裡要驗「沒被呼叫」故自行清空
+    vi.mocked(getRegistrationTime).mockClear()
+    vi.mocked(getWaitlistPromotedEmailTemplate).mockClear()
+    vi.mocked(getRegistrationSuccessEmailTemplate).mockClear()
+    const wrapper = mountView()
+    await flushPromises()
+
+    const labels = wrapper.findAll('.el-tabs__item').map((el) => el.text())
+    expect(labels).toEqual(['課程管理', '用品管理'])
+    expect(getRegistrationTime).not.toHaveBeenCalled()
+    expect(getWaitlistPromotedEmailTemplate).not.toHaveBeenCalled()
+    expect(getRegistrationSuccessEmailTemplate).not.toHaveBeenCalled()
+  })
+
+  it('無 ACTIVITY_WRITE 時深連結 tab=registration → 退回課程管理，不會出現空白頁', async () => {
+    hasPermissionMock.mockReturnValue(false)
+    mockRoute.query = { tab: 'registration' }
+    const wrapper = mountView()
+    await flushPromises()
+
+    const activeLabel = wrapper.findAll('.el-tabs__item.is-active')[0]
+    expect(activeLabel?.text()).toBe('課程管理')
   })
 
   it('切到候補轉正信 tab 時，query 寫入 tab=waitlistEmail', async () => {

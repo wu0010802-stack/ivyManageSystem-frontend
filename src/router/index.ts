@@ -473,20 +473,18 @@ export const routes: RouteRecordRaw[] = [
             component: () => import('../views/activity/POSAuditEventsView.vue'),
             meta: { title: PAGE_TERMS.activityPosAudit, parentTitle: MODULE_TERMS.activity }
         },
+        // 舊路徑保留相容：課程與用品已於 2026-07-31 併入 /activity/settings 的前兩個 tab
         {
             path: '/activity/catalog',
-            name: 'activity-catalog',
-            component: () => import('../views/activity/ActivityCatalogView.vue'),
-            meta: { title: PAGE_TERMS.activityCatalog, parentTitle: MODULE_TERMS.activity }
+            redirect: '/activity/settings?tab=courses'
         },
-        // 舊路徑保留相容：自動導向新整合頁
         {
             path: '/activity/courses',
-            redirect: '/activity/catalog?tab=courses'
+            redirect: '/activity/settings?tab=courses'
         },
         {
             path: '/activity/supplies',
-            redirect: '/activity/catalog?tab=supplies'
+            redirect: '/activity/settings?tab=supplies'
         },
         {
             path: '/activity/inquiries',
