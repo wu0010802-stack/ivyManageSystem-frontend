@@ -13437,6 +13437,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/student-enrollment/roster.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Enrollment Roster Xlsx
+         * @description 匯出在籍記錄 xlsx（編班表版面，A4 橫向 fit-to-page）。
+         */
+        get: operations["export_enrollment_roster_xlsx_api_student_enrollment_roster_xlsx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/student-enrollment/stats": {
         parameters: {
             query?: never;
@@ -55606,6 +55626,38 @@ export interface operations {
         };
     };
     print_enrollment_roster_pdf_api_student_enrollment_roster_pdf_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_enrollment_roster_xlsx_api_student_enrollment_roster_xlsx_get: {
         parameters: {
             query?: {
                 school_year?: number | null;
