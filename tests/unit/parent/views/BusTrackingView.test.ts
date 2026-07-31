@@ -204,6 +204,19 @@ describe('BusTrackingView — 不得把不新鮮的位置當即時', () => {
     expect(w.find('[data-testid="bus-fetch-error"]').exists()).toBe(true)
   })
 
+  it('快照失敗時不重複疊一張「訊號中斷」卡（同一件事只講一次）', async () => {
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      children: [CHILD_PENDING],
+      stale: true,
+      lastFetchFailedAt: Date.now(),
+    })
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-fetch-error"]').exists()).toBe(true)
+    expect(w.find('[data-testid="bus-stale"]').exists()).toBe(false)
+  })
+
   it('快照失敗時提供重試，按下即重抓快照並重連 WS', async () => {
     setState({ trip: IN_PROGRESS_TRIP, position: POSITION, lastFetchFailedAt: Date.now() })
     const w = await mountView()
@@ -282,11 +295,14 @@ describe('BusTrackingView — 連線狀態只有兩態', () => {
 })
 
 describe('BusTrackingView — 無障礙', () => {
-  it('地圖容器不得用 role="img"（會把 Leaflet 的縮放鈕與 OSM 授權連結一起藏起來）', async () => {
+  it('地圖容器要有可命名的 role，且不得是 img（img 會把縮放鈕與 OSM 授權連結一起藏起來）', async () => {
     setState({ trip: IN_PROGRESS_TRIP, position: POSITION })
     const w = await mountView()
     const map = w.find('[data-testid="bus-map"]')
-    expect(map.attributes('role')).toBeUndefined()
+    // ARIA 不允許為 generic role 命名 → 無 role 的 div 上的 aria-label 多數 AT 會忽略；
+    // 但 img 會讓子節點變 presentational。region / group 兩者兼得。
+    expect(map.attributes('role')).not.toBe('img')
+    expect(['region', 'group']).toContain(map.attributes('role'))
     expect(map.attributes('aria-label')).toBeTruthy()
   })
 

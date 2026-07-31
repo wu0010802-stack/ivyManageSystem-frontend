@@ -259,10 +259,21 @@ onBeforeUnmount(() => {
         </M3Card>
 
         <!--
-          不加 role="img"：那會讓容器內容變成 presentational，連 Leaflet 自動插入的縮放鈕與
-          **OpenStreetMap attribution 連結（授權要求可觸及）**一起被輔助科技隱藏。
+          role 用 region 而非 img：
+          - `img` 會讓容器內容變成 presentational，連 Leaflet 自動插入的縮放鈕與
+            **OpenStreetMap attribution 連結（授權要求可觸及）**一起被輔助科技隱藏。
+          - 但也不能沒有 role：ARIA 不允許為 generic role 命名，掛在裸 `<div>` 上的
+            `aria-label` 多數螢幕閱讀器會直接忽略，等於沒修。
+          region（landmark，可命名且不影響子節點）兩者兼得。
         -->
-        <div v-if="showMap" ref="mapEl" data-testid="bus-map" class="bus-map" aria-label="娃娃車即時位置地圖" />
+        <div
+          v-if="showMap"
+          ref="mapEl"
+          data-testid="bus-map"
+          class="bus-map"
+          role="region"
+          aria-label="娃娃車即時位置地圖"
+        />
         <p v-if="showMap && lastUpdatedText" class="bus-updated">{{ lastUpdatedText }}</p>
 
         <p v-if="showReconnecting" data-testid="bus-conn" role="status" aria-live="polite" class="bus-conn">
