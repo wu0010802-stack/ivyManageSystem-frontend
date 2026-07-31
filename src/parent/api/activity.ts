@@ -4,11 +4,6 @@ import type { ApiBody } from '../../api/_generated/typed'
 export const listCourses = (params = {}) =>
   api.get('/parent/activity/courses', { params })
 
-// ② 報名時段：沿用公開端（無需認證）設定，家長端報名前讀取以決定是否 disable 報名入口。
-// 後端 register_courses 仍以 _check_registration_open 為硬閘，此處僅為前端 UX。
-export const getRegistrationTime = () =>
-  api.get('/activity/public/registration-time')
-
 export const myRegistrations = () =>
   api.get('/parent/activity/my-registrations')
 
@@ -32,6 +27,9 @@ export const declinePromotion = (registrationId: number, courseId: number) =>
     course_id: courseId,
   })
 
+// TODO(parent-portal): 後端支援單筆報名的繳費明細，前端尚無入口串接此端點
+// （2026-07-31 家長端體檢：孤兒 API，非死碼，是功能缺口——見 activity 分頁
+// 若要補「查看此筆報名的繳費紀錄」畫面，直接接這支）。
 export const getRegistrationPayments = (registrationId: number) =>
   api.get(`/parent/activity/registrations/${registrationId}/payments`)
 
