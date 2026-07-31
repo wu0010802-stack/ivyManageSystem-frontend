@@ -21,7 +21,7 @@ import { useConsentGate } from '@/parent/composables/useConsentGate'
 // vue-router 的既有測試（同 src/api/index.ts 處理方式）。
 type ParentRouterShape = {
   replace: (to: { path: string; query?: Record<string, string | undefined> }) => unknown
-  currentRoute: { value: { path: string } }
+  currentRoute: { value: { path: string; fullPath: string } }
 }
 let _parentRouterPromise: Promise<ParentRouterShape> | null = null
 async function getParentRouter(): Promise<ParentRouterShape> {
@@ -327,7 +327,23 @@ api.interceptors.response.use(
   },
 )
 
+// 已經在這幾個 public 頁時不需要（也不應該）把自己當 redirect 目標，避免
+// 登入成功後被導回登入/綁定/維護頁這種無意義的自我循環。
+const NO_REDIRECT_CAPTURE_PATHS = new Set(['/login', '/bind', '/maintenance'])
+
 async function _redirectToLogin(): Promise<void> {
+  // 深連結保存：在清 local state（含目前路由狀態可能連動的 store）之前，
+  // 先把「使用者這次 401 當下在哪一頁」記下來，登入成功後才回得去。
+  let redirectTarget = ''
+  try {
+    const r = await getParentRouter()
+    const current = r.currentRoute.value
+    if (current?.path && !NO_REDIRECT_CAPTURE_PATHS.has(current.path)) {
+      redirectTarget = current.fullPath || current.path
+    }
+  } catch {
+    /* 拿不到目前路由就不帶 redirect，直接回登入頁 */
+  }
   try {
     // 共用「主動登出」的本地清理單一來源；用 dynamic import 避免
     // useParentLogout -> api/index 的靜態循環依賴。
@@ -336,8 +352,11 @@ async function _redirectToLogin(): Promise<void> {
   } catch {
     /* 清理的某個瀏覽器 API 不可用時仍要回登入頁 */
   } finally {
-    if (window.location.hash !== '#/login' && !window.location.hash.startsWith('#/login')) {
-      window.location.hash = '#/login'
+    const target = redirectTarget
+      ? `#/login?redirect=${encodeURIComponent(redirectTarget)}`
+      : '#/login'
+    if (window.location.hash !== target && !window.location.hash.startsWith('#/login')) {
+      window.location.hash = target
     }
   }
 }

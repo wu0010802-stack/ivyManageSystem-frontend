@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   clearLiffTokenRefreshMarker,
   forceLiffReloginOnce,
@@ -19,10 +19,19 @@ import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import BrandMark from '@/components/brand/BrandMark.vue'
 import ConsentModal from '../components/ConsentModal.vue'
+import { resolveSafeRedirect } from '../utils/safeRedirect'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useParentAuthStore()
 const { getFriendly } = useFriendlyError()
+
+// 深連結保存：guard 導來 /login 時會帶 ?redirect=<原本要去的頁>；redirect
+// 來自 URL query（使用者可控），一律經 resolveSafeRedirect 驗證只能是站內
+// 相對路徑，否則 fallback /home（防 open redirect，見 utils/safeRedirect.ts）。
+function redirectAfterAuth() {
+  router.replace(resolveSafeRedirect(route.query.redirect))
+}
 
 const status = ref<'init' | 'loading' | 'consent' | 'error'>('init')
 const pendingPolicy = ref<PolicyVersionOut | null>(null)
@@ -81,13 +90,14 @@ async function startLogin({ forceFresh = false } = {}) {
         status.value = 'consent'
         return
       }
-      router.replace('/home')
+      redirectAfterAuth()
     } else if (data?.status === 'need_binding') {
       clearLiffTokenRefreshMarker()
-      router.replace({
-        path: '/bind',
-        query: { name_hint: data.name_hint || '' },
-      })
+      // 把 redirect 一併轉給 /bind，讓「深連結 → 過期 → 登入 → 發現未綁定 →
+      // 綁定成功」這條完整鏈路最終仍能回到原本要去的頁（見 BindView.vue）。
+      const bindQuery: Record<string, string> = { name_hint: data.name_hint || '' }
+      if (typeof route.query.redirect === 'string') bindQuery.redirect = route.query.redirect
+      router.replace({ path: '/bind', query: bindQuery })
     } else {
       throw new Error('伺服器回應未預期狀態')
     }
@@ -142,7 +152,7 @@ async function checkConsentRequired(): Promise<boolean> {
 
 function onConsented() {
   status.value = 'loading'
-  router.replace('/home')
+  redirectAfterAuth()
 }
 
 onMounted(() => startLogin())
