@@ -16027,9 +16027,9 @@ export interface components {
          * ActivityRegistrationTimeOut
          * @description GET /settings/registration-time 回應。
          *
-         *     對應 _serialize_settings 輸出：未設定時 is_open=False，其餘欄位 None；
-         *     已設定時各欄位來自 ActivityRegistrationSettings ORM。open_at / close_at
-         *     在 ORM 為 String 欄位（ISO 8601），故為 Optional[str]。
+         *     對應 _serialize_settings 輸出：未設定時全欄位 None；已設定時各欄位來自
+         *     ActivityRegistrationSettings ORM。open_at / close_at 在 ORM 為 String 欄位
+         *     （ISO 8601），故為 Optional[str]。is_open 開關已移除（2026-07-31）。
          */
         ActivityRegistrationTimeOut: {
             /** Close At */
@@ -16038,8 +16038,6 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
-            /** Is Open */
-            is_open: boolean;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
@@ -19509,6 +19507,8 @@ export interface components {
              * @default true
              */
             allow_waitlist: boolean;
+            /** Allowed Grades */
+            allowed_grades?: string[] | null;
             /**
              * Capacity
              * @default 30
@@ -19566,6 +19566,11 @@ export interface components {
         CourseDetailOut: {
             /** Allow Waitlist */
             allow_waitlist: boolean;
+            /**
+             * Allowed Grades
+             * @default []
+             */
+            allowed_grades: string[];
             /** Capacity */
             capacity?: number | null;
             /** Description */
@@ -19667,6 +19672,11 @@ export interface components {
         CourseListItemOut: {
             /** Allow Waitlist */
             allow_waitlist: boolean;
+            /**
+             * Allowed Grades
+             * @default []
+             */
+            allowed_grades: string[];
             /** Capacity */
             capacity: number;
             /** Description */
@@ -19748,6 +19758,8 @@ export interface components {
         CourseUpdate: {
             /** Allow Waitlist */
             allow_waitlist?: boolean | null;
+            /** Allowed Grades */
+            allowed_grades?: string[] | null;
             /** Capacity */
             capacity?: number | null;
             /** Description */
@@ -27253,6 +27265,11 @@ export interface components {
          *     對應到 ORM 的 Time 物件，產出再序列化變 ISO）。
          */
         PublicCoursesItemOut: {
+            /**
+             * Allowed Grades
+             * @default []
+             */
+            allowed_grades: string[];
             /** Dm Pages */
             dm_pages?: string[] | null;
             /** Dm Url */
@@ -27450,6 +27467,9 @@ export interface components {
          * @description GET /public/registration-time response。
          *
          *     所有顯示欄位皆 Optional：settings 為 None 時整批回 None。
+         *
+         *     is_open 自 2026-07-31 起為衍生值（時間窗當下是否開放），無對應 DB 欄位；
+         *     僅為已部署的舊前端 bundle 相容保留，新前端依 open_at/close_at 自行計算。
          */
         PublicRegistrationTimeOut: {
             /** Close At */
@@ -28448,6 +28468,13 @@ export interface components {
             created_at?: string | null;
             /** Email */
             email?: string | null;
+            /**
+             * Grade Mismatch Courses
+             * @default []
+             */
+            grade_mismatch_courses: string[];
+            /** Grade Name */
+            grade_name?: string | null;
             /** Id */
             id: number;
             /** Internal Note */
@@ -28648,8 +28675,6 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
-            /** Is Open */
-            is_open: boolean;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
