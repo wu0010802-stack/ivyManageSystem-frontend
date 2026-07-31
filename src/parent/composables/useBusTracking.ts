@@ -88,6 +88,16 @@ const state = reactive({
   /** 權限被拒（4007）：不再重連，UI 只顯示提示 */
   wsBlocked: false,
   lastWsClose: null as WebSocketCloseInfo | null,
+  /**
+   * 最近一次快照失敗的時間戳（`Date.now()`）；成功抓到快照或收到 WS 即時座標即歸 null。
+   *
+   * 為什麼需要它：快照失敗（403 / 500）原本是完全靜默的——畫面會維持最後一筆位置、
+   * `loading=false`、沒有任何錯誤訊號，而 `stale` 只在 `status === 'in_progress'` 時
+   * 才會亮。對「車在哪」這種安全性功能，把凍結的地圖呈現成即時的並不可接受，UI 必須
+   * 據此誠實降級（明確說「無法取得最新位置」而不是靜靜顯示舊座標）。
+   * 刻意只放時間戳不放錯誤文字：後端原始訊息不進 state，文案由 UI 決定。
+   */
+  lastFetchFailedAt: null as number | null,
 })
 
 let ws: WebSocket | null = null
@@ -204,8 +214,14 @@ async function fetchSnapshot(): Promise<void> {
     // 已有更新的 fetch 發出（out-of-order）或已 teardown / 換帳號 → 丟棄這份快照
     if (myGeneration !== lifecycleGeneration || mySeq !== fetchDispatchSeq) return
     applySnapshot(res?.data, mySeq)
+    state.lastFetchFailedAt = null
   } catch {
-    /* 靜默：401 由 axios 攔截器處理（refresh / 導登入），其餘以 lastWsClose 呈現 */
+    // 不得靜默：403 / 500 之下畫面會維持最後一筆位置且毫無訊號。這裡只記時間戳，
+    // 錯誤內容一律不進 state（避免後端訊息外洩到畫面）。teardown / out-of-order 的
+    // 舊 fetch 一樣不得回填——與成功路徑同一組守衛。
+    if (myGeneration === lifecycleGeneration && mySeq === fetchDispatchSeq) {
+      state.lastFetchFailedAt = Date.now()
+    }
   } finally {
     if (myGeneration === lifecycleGeneration && mySeq === fetchDispatchSeq) state.loading = false
   }
@@ -237,6 +253,8 @@ function handleEvent(event: Record<string, unknown>): void {
     state.position = position
     // 剛收到 server 推播的即時座標，定義上就是新鮮的
     state.stale = false
+    // 拿得到即時座標就代表資料管線是通的，先前的快照失敗不該再讓畫面降級
+    state.lastFetchFailedAt = null
     eventSeq.position = fetchDispatchSeq
   } else if (type === 'bus_stop_update') {
     const children = normalizeChildren(payload.children)
@@ -504,6 +522,7 @@ function teardown(): void {
   state.wsExhausted = false
   state.wsBlocked = false
   state.lastWsClose = null
+  state.lastFetchFailedAt = null
 }
 
 export function useBusTracking() {

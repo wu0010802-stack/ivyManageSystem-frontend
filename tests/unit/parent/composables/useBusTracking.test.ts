@@ -624,3 +624,58 @@ describe('useBusTracking — 隱私', () => {
     }
   })
 })
+
+describe('useBusTracking — 快照失敗可見性（F4）', () => {
+  it('快照失敗不得靜默：記錄 lastFetchFailedAt 供 UI 誠實降級', async () => {
+    getBusTodayImpl = () => Promise.reject(new Error('boom'))
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init } = useBusTracking()
+    await init()
+
+    // 「車在哪」是安全性功能：403 / 500 之下不可讓畫面維持最後一筆位置卻毫無訊號
+    expect(typeof state.lastFetchFailedAt).toBe('number')
+    expect(state.loading).toBe(false)
+  })
+
+  it('快照重新成功後清除失敗標記（一次暫時失敗不得永久降級）', async () => {
+    let fail = true
+    getBusTodayImpl = () => (fail ? Promise.reject(new Error('boom')) : Promise.resolve(fullSnapshot()))
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init, refresh } = useBusTracking()
+    await init()
+    expect(typeof state.lastFetchFailedAt).toBe('number')
+
+    fail = false
+    await refresh()
+    expect(state.lastFetchFailedAt).toBeNull()
+  })
+
+  it('WS 推來即時座標即代表管線恢復，清除失敗標記', async () => {
+    getBusTodayImpl = () => Promise.reject(new Error('boom'))
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init } = useBusTracking()
+    await init()
+    expect(typeof state.lastFetchFailedAt).toBe('number')
+
+    FakeWebSocket.instances[0].emit({
+      type: 'bus_position',
+      payload: { lat: 22.63, lng: 120.3, at: '2026-07-29T07:31:05' },
+    })
+    expect(state.lastFetchFailedAt).toBeNull()
+  })
+
+  it('teardown 後才失敗的舊快照不得回填失敗標記（換帳號）', async () => {
+    let rejectFn: ((e: Error) => void) | null = null
+    getBusTodayImpl = () => new Promise<BusTodayResp>((_, rej) => { rejectFn = rej as (e: Error) => void })
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init, teardown } = useBusTracking()
+    const initPromise = init()
+
+    teardown()
+    rejectFn?.(new Error('boom'))
+    await initPromise
+    await flush()
+
+    expect(state.lastFetchFailedAt).toBeNull()
+  })
+})
