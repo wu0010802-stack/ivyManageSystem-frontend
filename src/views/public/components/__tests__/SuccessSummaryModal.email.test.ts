@@ -65,7 +65,7 @@ describe('SuccessSummaryModal email 提示', () => {
   })
 })
 
-// ActivityPublicView 整頁 mount 成本高（bootstrap/輪詢/draft 需大量 mock），
+// ActivityPublicView 整頁 mount 成本高（bootstrap/輪詢需大量 mock），
 // 依 repo 慣例（CLAUDE.md：元件渲染/API 整合可後補）以原始碼斷言守關鍵契約
 // （同 tests/unit/no-adhoc-breakpoints.test.ts 的檔案掃描模式）。
 describe('ActivityPublicView email 接線（原始碼斷言）', () => {
