@@ -58,6 +58,8 @@
 
     <!-- 班次進行中 -->
     <template v-else>
+      <!-- 路線與方向必須看得見：接手到別條路線時，這是司機唯一能自己察覺的訊號 -->
+      <h2 class="trip-summary" data-testid="bus-trip-summary">{{ tripSummary }}</h2>
       <el-alert
         v-if="!gpsActive"
         type="warning"
@@ -161,7 +163,7 @@ import { usePortalBusTrip } from '@/composables/usePortalBusTrip'
 const {
   trip, stops, routes, selectedRouteId, direction,
   loading, starting, completing, actingStopId,
-  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount,
+  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount, tripSummary,
   init, start, departStop, skipStop, undoStop, complete, teardown,
 } = usePortalBusTrip()
 
@@ -185,6 +187,7 @@ onBeforeUnmount(teardown)
 .bus-label { font-weight: 600; }
 .bus-select { width: 100%; max-width: 320px; }
 .bus-primary-btn { width: 100%; max-width: 320px; }
+.trip-summary { margin: 0; font-size: 18px; font-weight: 700; }
 .stop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .stop-row { display: flex; align-items: center; gap: 10px; }
 .stop-seq { font-weight: 700; min-width: 1.5em; }

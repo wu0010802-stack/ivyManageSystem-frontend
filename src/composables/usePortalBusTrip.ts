@@ -9,11 +9,19 @@
  * 3. **站點推進**：離站／跳站／撤銷，回應的 `stops` 為權威值直接覆寫。
  *
  * ── 進頁順序：先問路線，再逐條帶 route_id 查班次 ──────────────────────────
- * `GET /portal/bus/trips/active` 不帶參數是**全域查詢**（後端 docstring 明文），多路線
- * 同時開班時 A 線司機開頁會拿到 B 線的完整站點名冊（姓名＋家庭座標），而且會直接
- * 當成自己的班次開始上報——A 車的座標就寫進 B 車的班次了。因此進頁一律先打
- * `GET /portal/bus/routes`（與開班同權限、只回 id/name），再逐條帶 `route_id` 查。
- * 路線清單拿不到就**不查**，寧可讓司機重試也不做全域查詢。
+ * `GET /portal/bus/trips/active` 不帶參數是**全域查詢**（後端 docstring 明文），會挑最近
+ * 一筆 in_progress 的班次，任何路線皆可能。因此進頁一律先打 `GET /portal/bus/routes`
+ * （與開班同權限、只回 id/name），再逐條帶 `route_id` 查；路線清單拿不到就**不查**。
+ *
+ * ⚠ **這只是收斂，不是堵住**。`findActiveTrip` 取的是「掃全園啟用路線，第一個**有**
+ * in_progress 班次的那條」，**不是「取我的班次」**——後端目前沒有 operator 維度的過濾。
+ * 效果是從「不確定會拿到哪條」變成「確定拿到 id 最小的那條」：常態（同時只有一班在跑）
+ * 完全正確，但 A 線與 B 線同時在跑時，B 線司機開頁仍會接手 A 線的班次與完整名冊，
+ * 並把 B 車的 GPS 寫進 A 車的班次。
+ *
+ * 現階段的緩解是**讓人看得見**：班次進行中時畫面第一行就是「路線・方向」（`tripSummary`），
+ * 接手到別條路線時司機自己會發現不對。待後端補上 `operator_employee_id` 維度的過濾後，
+ * 改成直接查「我的班次」即可真正關閉。
  *
  * ── 時間軸：一律以伺服器 `Date` header 校正 ────────────────────────────────
  * `busPingBuffer` 的時鐘暴衝防線擋得住「單顆時間戳暴衝」，擋不住「整支裝置時鐘系統性
@@ -55,6 +63,12 @@ export const PING_FLUSH_INTERVAL_MS = 5000
  * ——那是 busPingBuffer 的 skew 防線該擋的，clamp 掉會讓整條防線失去作用。
  */
 export const SUSPECT_TIMESTAMP_STREAK = 3
+
+/** 方向的中文標籤；後端 `direction` 只有這兩個值（`TripStartIn` 的 pattern 限定）。 */
+export const DIRECTION_LABELS: Record<string, string> = {
+  morning: '早上接學生',
+  afternoon: '下午送學生',
+}
 
 /**
  * 後端 `PingIn` 對站點與班次回應的形狀（`api/bus/_schemas.py`）。
@@ -103,6 +117,18 @@ export function usePortalBusTrip() {
   const gpsClockSuspect = ref(false)
   const pendingPingCountRef = ref(0)
   const pendingPingCount = computed(() => pendingPingCountRef.value)
+  /**
+   * 「A 線・早上接學生」。班次進行中一定要顯示——後端還沒有 operator 維度的過濾，
+   * 多路線並行時有可能接手到別條路線的班次，這一行是司機唯一能自己察覺的訊號。
+   * 一律取自 `trip.route_id`（**不是** `selectedRouteId`）：接手來的班次未必是自己選的那條，
+   * 用選單值會顯示成「看起來沒問題」，正好把要暴露的問題蓋掉。
+   */
+  const tripSummary = computed(() => {
+    const t = trip.value
+    if (!t) return ''
+    const name = routes.value.find((r) => r.id === t.route_id)?.name ?? `路線 #${t.route_id}`
+    return `${name}・${DIRECTION_LABELS[t.direction] ?? t.direction}`
+  })
 
   // 本機時鐘相對伺服器的偏差；每支娃娃車 API 回應都會更新。
   let clockOffsetMs = 0
@@ -150,6 +176,10 @@ export function usePortalBusTrip() {
     suspectTimestampStreak = Math.abs(rawTs - localNow) > DEFAULT_MAX_SKEW_MS
       ? suspectTimestampStreak + 1
       : 0
+    // **刻意單向不可逆**：一旦判定「這支裝置回報的 timestamp 不可信」，就整支改用本機
+    // 時間，此後單顆暴衝也一併放行——因為「單顆暴衝」這個概念的前提（其餘 timestamp
+    // 可信）已經不成立了。不是漏掉重置：能讓它歸零的訊號並不存在（裝置不會中途換一套
+    // timestamp 基準），加一條會歸零的路徑只會讓行為在兩種模式間來回跳。
     if (suspectTimestampStreak >= SUSPECT_TIMESTAMP_STREAK) gpsClockSuspect.value = true
     const rawAt = gpsClockSuspect.value ? localNow : rawTs
     buffer.push(
@@ -298,7 +328,10 @@ export function usePortalBusTrip() {
     selectedRouteId.value = routes.value.length === 1 ? routes.value[0].id : null
   }
 
-  /** 逐條路線帶 `route_id` 查進行中的班次；找到就停。**不做**全域查詢。 */
+  /**
+   * 逐條路線帶 `route_id` 查進行中的班次；找到就停。**不做**全域查詢。
+   * ⚠ 這是「第一個有班次的路線」而非「我的班次」——射程見模組開頭。
+   */
   async function findActiveTrip(): Promise<void> {
     for (const r of routes.value) {
       await loadActive(r.id)
@@ -421,7 +454,7 @@ export function usePortalBusTrip() {
   return {
     trip, stops, routes, selectedRouteId, direction,
     loading, starting, completing, actingStopId,
-    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount,
+    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount, tripSummary,
     init, start, departStop, skipStop, undoStop, complete, teardown,
   }
 }

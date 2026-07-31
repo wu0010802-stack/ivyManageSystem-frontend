@@ -20,6 +20,7 @@ const h = vi.hoisted(() => {
       gpsClockSuspect: r(false),
       snapshotFailed: r(false),
       pendingPingCount: r(0),
+      tripSummary: r(''),
       init: vi.fn(),
       start: vi.fn(),
       departStop: vi.fn(),
@@ -52,6 +53,7 @@ function resetState() {
   s.gpsClockSuspect.value = false
   s.snapshotFailed.value = false
   s.pendingPingCount.value = 0
+  s.tripSummary.value = ''
 }
 
 function stop(overrides: Record<string, unknown> = {}) {
@@ -108,6 +110,15 @@ describe('PortalBusTripView', () => {
     expect(wrapper.find('[data-testid="bus-start-card"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="bus-stop-11"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="bus-stop-12"]').text()).toContain('已離站')
+  })
+
+  it('班次進行中顯示路線與方向（接手到別條路線時的唯一可察覺訊號）', async () => {
+    s.trip.value = { id: 7 }
+    s.tripSummary.value = 'A 線・早上接學生'
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-trip-summary"]').text()).toBe('A 線・早上接學生')
   })
 
   it('pending 站顯示離站/跳過，已處理站顯示撤銷', async () => {

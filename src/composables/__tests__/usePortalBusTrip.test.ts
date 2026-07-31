@@ -42,6 +42,11 @@ function resp(data: unknown, dateHeader: string = SERVER_DATE_HEADER) {
 /**
  * 伺服器時鐘與（假的）本機時鐘同步時的回應。**header 必須在呼叫當下才算**——
  * 用固定字串會讓時間推進後的每次回應都把偏差算成負值，靜默污染後續所有 `at`。
+ *
+ * ⚠ `toUTCString()` **只有秒級解析度**（HTTP `Date` header 本來就是），毫秒會被截掉。
+ * 因此**本檔的測試時間一律要落在整秒**，否則算出來的偏差會多出最多 999ms。
+ * 這個截斷是 fail-loud（明文 ISO 字串斷言會直接變紅），不像 `wallClock()` 那種靜默通過，
+ * 但仍由下方「helper 自檢」的毫秒級斷言明文咬住。
  */
 function respNow(data: unknown) {
   return { data, headers: { date: new Date(Date.now()).toUTCString() } }
@@ -330,6 +335,45 @@ describe('usePortalBusTrip — 開始班次', () => {
     expect(bus.starting.value).toBe(true)
     await pending
     expect(bus.starting.value).toBe(false)
+  })
+})
+
+describe('usePortalBusTrip — 班次摘要（路線與方向必須看得見）', () => {
+  it('顯示路線名稱與方向的中文標籤', async () => {
+    const bus = await bootWithActiveTrip()
+    expect(bus.tripSummary.value).toBe('A 線・早上接學生')
+  })
+
+  it('下午班次用對應標籤', async () => {
+    vi.mocked(getActiveBusTrip).mockResolvedValue(
+      resp(tripPayload({ direction: 'afternoon' })) as never,
+    )
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.tripSummary.value).toBe('A 線・下午送學生')
+  })
+
+  it('接手到不在自己選單裡的路線時，仍以 trip.route_id 呈現（不得用選單值蓋掉）', async () => {
+    // 選單只有 3 號路線，但接手到的是 9 號——正是要讓司機察覺的情境
+    vi.mocked(getActiveBusTrip).mockResolvedValue(
+      resp(tripPayload({ route_id: 9 })) as never,
+    )
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.selectedRouteId.value).toBe(3)
+    expect(bus.tripSummary.value).toBe('路線 #9・早上接學生')
+  })
+
+  it('沒有班次時為空字串', async () => {
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.tripSummary.value).toBe('')
   })
 })
 
@@ -877,6 +921,20 @@ describe('測試輔助函式自檢', () => {
     try {
       expect(a).not.toBe(b)
       expect(Date.parse(b) - Date.parse(a)).toBe(60000)
+    } finally {
+      vi.setSystemTime(LOCAL_NOW_MS)
+    }
+  })
+
+  it('respNow 的 Date header 只有秒級解析度（測試時間必須落在整秒）', () => {
+    vi.setSystemTime(LOCAL_NOW_MS + 1500)
+    try {
+      // 毫秒被截掉：1500ms 的時間點算出來的 header 只到第 1 秒
+      expect(Date.parse(respNow(null).headers.date)).toBe(LOCAL_NOW_MS + 1000)
+      vi.setSystemTime(LOCAL_NOW_MS + 1999)
+      expect(Date.parse(respNow(null).headers.date)).toBe(LOCAL_NOW_MS + 1000)
+      vi.setSystemTime(LOCAL_NOW_MS + 2000)
+      expect(Date.parse(respNow(null).headers.date)).toBe(LOCAL_NOW_MS + 2000)
     } finally {
       vi.setSystemTime(LOCAL_NOW_MS)
     }
