@@ -38,6 +38,16 @@ describe('student workbench routing', () => {
     expect(testRouter.currentRoute.value.query.tab).toBeUndefined()
   })
 
+  // 防回歸：/classrooms 不得再掛回外層 tabs 殼（ClassroomWorkbenchView）——
+  // 在籍記錄表已折入本頁「統計表」modal、統計圖表獨立為 /enrollment-stats。
+  it('/classrooms resolves to ClassroomView without a tabs shell', async () => {
+    const resolved = router.resolve('/classrooms')
+    expect(resolved.name).toBe('classrooms')
+    const loader = resolved.matched.at(-1)?.components?.default as () => Promise<unknown>
+    const mod = (await loader()) as { default: { __file?: string } }
+    expect(mod.default.__file).toMatch(/ClassroomView\.vue$/)
+  })
+
   it('/enrollment-stats resolves to EnrollmentStatsView', () => {
     const resolved = router.resolve('/enrollment-stats')
     expect(resolved.matched[0]?.components?.default).toBeDefined()
