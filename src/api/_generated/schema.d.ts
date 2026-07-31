@@ -1591,6 +1591,12 @@ export interface paths {
          *     school_year / semester、match_status / include_inactive：與列表端點使用相同
          *     篩選口徑；未提供學期時預設當前學期（resolve_academic_term_filters），
          *     避免畫面與匯出內容不一致。
+         *
+         *     內容（2026-07-31 豐富化）：
+         *     - 「報名名單」：標題/摘要列 + 完整欄位（生日/家長聯絡/用品/應繳/已繳/差額/
+         *       審核狀態/內部註記）+ 金額合計列；家長手機/Email 依 GUARDIANS_READ 遮罩
+         *       （與列表端點同口徑，否則匯出即 PII 側信道）。
+         *     - 「課程名冊」：各課程正取/候補分列；候補序位以全課程排隊計算。
          */
         get: operations["export_registrations_api_activity_registrations_export_get"];
         put?: never;
@@ -41731,6 +41737,8 @@ export interface operations {
     get_employees_api_employees_get: {
         parameters: {
             query?: {
+                /** @description 在職狀態過濾；不帶＝在職與離職都回（員工列表頁的『離職』分類靠此行為） */
+                is_active?: boolean | null;
                 limit?: number;
                 search?: string | null;
                 skip?: number;

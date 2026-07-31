@@ -206,7 +206,9 @@ describe('useDashboardSections 用詞與教師數推算', () => {
     wrapper.unmount()
   })
 
-  it('教師數推算排除非教學職稱（廚師/護理師/營養師不算教師）', async () => {
+  it('非官方職稱的自由字串不再被當成教師（舊「含師/導」推算已退場）', async () => {
+    // 教師數改以 staff_role_category 判定、退路為官方職稱正面表列，
+    // 完整規則見 useDashboardSections.schoolStats.test.ts。
     employeeStoreMock.employees = [
       { title: '老師' },
       { title: '廚師' },
@@ -216,7 +218,7 @@ describe('useDashboardSections 用詞與教師數推算', () => {
       { title: '行政' },
     ]
     const wrapper = mountHarness()
-    expect(sections.stats.value.teachers).toBe(2)
+    expect(sections.stats.value.teachers).toBe(0)
     expect(sections.stats.value.total).toBe(6)
     wrapper.unmount()
   })
