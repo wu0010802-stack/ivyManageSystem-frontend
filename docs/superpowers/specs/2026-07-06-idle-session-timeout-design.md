@@ -29,8 +29,8 @@
 
 | 項目 | 決議 |
 |---|---|
-| 閒置逾時時長 | 沿用既有 `SESSION_MAX_AGE_MS`（14 分鐘），不新增設定值 |
-| 警告 modal 時機 | 逾時前 5 分鐘（即閒置滿 9 分鐘） |
+| 閒置逾時時長 | 沿用既有 `SESSION_MAX_AGE_MS`，不新增設定值。**2026-07-31 更新：由 14 分鐘放寬為 60 分鐘**（原本 14 分是為貼齊後端 access token 15 分鐘效期，但 axios 攔截器已有 401 自動 refresh、staff refresh cookie 30 天，token 過期不會把人踢出；後台作業被頻繁打斷的成本大於效益）。本文其餘處提到的「14 分鐘」一律讀作現值 60 分鐘 |
+| 警告 modal 時機 | 逾時前 5 分鐘（原為閒置滿 9 分鐘；2026-07-31 放寬後為閒置滿 55 分鐘） |
 | 使用者活躍時是否同步延續後端 session | 是，節流呼叫既有 `POST /api/auth/refresh`；成功回呼須呼叫 `setUserInfo(res.data.user)`，同步延續 `auth.ts` 的 `auth_session_validated_at`，否則 `isLoggedIn()` 仍會在 14 分鐘後誤判為未登入（即使後端 session 已被延續）——此為實作時發現並修正的真實 bug，非文件臆測 |
 | 多分頁（multi-tab）行為 | 每個分頁獨立計時，不跨分頁同步。已知限制：`clearAuth()` 會清除跨分頁共用的 `localStorage`/httpOnly Cookie，因此分頁 A 的閒置登出仍會讓分頁 B 的後端 session 一併失效；本次不處理跨分頁通知，維持現況 |
 | 後端絕對時數上限機制 | 保留不動，作為安全網 |

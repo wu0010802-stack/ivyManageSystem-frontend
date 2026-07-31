@@ -22,7 +22,10 @@ function _isPublicRoute(path: string) {
 export const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
 // 閒置逾時（useIdleTimeout）與登入時效判定（isLoggedIn）共用同一基準，避免魔法數字重複定義。
-export const SESSION_MAX_AGE_MS = 14 * 60 * 1000
+// 2026-07-31 由 14 分鐘放寬為 60 分鐘：14 分是為了貼齊後端 access token 的 15 分鐘效期，
+// 但 axios 攔截器已有 401 自動 refresh（staff refresh cookie 30 天），token 過期不會把人踢出，
+// 沒必要讓後台作業每 14 分鐘就被倒數視窗打斷。
+export const SESSION_MAX_AGE_MS = 60 * 60 * 1000
 const LOGOUT_TIMEOUT_MS = 10_000
 let _pendingServerLogout: Promise<void> | null = null
 let _pendingClientCleanup: Promise<void> = Promise.resolve()
