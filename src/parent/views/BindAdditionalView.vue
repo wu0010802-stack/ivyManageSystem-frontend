@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import { bindAdditional } from '../api/auth'
 import { useChildrenStore } from '../stores/children'
@@ -8,7 +8,9 @@ import { toast } from '../utils/toast'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import BrandMark from '@/components/brand/BrandMark.vue'
+import { resolveSafeRedirect } from '../utils/safeRedirect'
 
+const route = useRoute()
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { getFriendly } = useFriendlyError()
@@ -41,7 +43,7 @@ async function submit() {
     toast.success('已加綁，正在重新整理子女清單')
     childrenStore.invalidate()
     await childrenStore.load(true)
-    router.replace('/home')
+    router.replace(resolveSafeRedirect(route.query.redirect))
   } catch (err: unknown) {
     const e = err as AxiosError
     const detail = e?.errorDetail as { code?: string } | null | undefined

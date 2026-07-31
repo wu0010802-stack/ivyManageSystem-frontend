@@ -117,3 +117,35 @@
   left: min(0px, calc((100% - var(--tap-target-min, 44px)) / 2));
   right: min(0px, calc((100% - var(--tap-target-min, 44px)) / 2));
 }
+
+/* ——— input[type="date"] 的 iOS 尺寸矯正 ———
+   同上章程例外：報名頁（幼兒生日）與查詢頁（生日、修改生日）共四個 date 欄位，
+   兩頁各有自己 scoped 的 .input-text，規則放這裡才不會兩邊各抄一份而漂移。
+
+   iOS Safari 不吃作者對 date 控制項設的尺寸，改用原生控制項的固有寬高：實機上
+   生日欄比同組的姓名／手機欄寬約 20px（撐出容器右緣被切掉）並高出約 5px。
+
+   高度：date 的內部原生控制項比一行文字高（實測 Blink 26.7px vs text 的 ~19px），
+   再加 .input-text 的上下 padding 共 20px 就超過 44px，min-height 便不再是實際
+   高度。padding-block:0 把上下留白交給原生控制項自己的垂直置中，量到的框高才回到
+   跟姓名／手機欄一模一樣的 44px。刻意不寫死 height:44px——那會在字級調大時裁掉
+   內容，保留 min-height 才能讓框跟著長。
+
+   寬度：appearance:none 把尺寸控制權交回 CSS，min-width:0 解除原生固有最小寬，
+   max-width:100% 兜底不讓它撐出容器。
+
+   ::-webkit-date-and-time-value 是 iOS 顯示值的內層，清掉原生外距並靠左，避免
+   值在框內偏移。（Blink 走 ::-webkit-datetime-edit，不吃這個 pseudo，無副作用。）
+
+   只設兩頁 .input-text 沒設過的屬性，特異性與載入順序都不構成競爭。 */
+.input-text[type="date"] {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  padding-block: 0;
+}
+.input-text[type="date"]::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: left;
+}

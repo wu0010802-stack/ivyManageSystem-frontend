@@ -5,7 +5,7 @@ import TodayTasksPanel from '@/components/student/workbench/TodayTasksPanel.vue'
 import StudentListPanel from '@/components/student/workbench/StudentListPanel.vue'
 
 const route = useRoute()
-// 深連結優先序：?tab= → ?action=（新增 / 轉班，落在「學生名冊」）→ 預設今日任務
+// 深連結優先序：?tab= → ?action=（新增 / 轉班，落在「學生名冊」）→ 預設學生儀表板
 const VALID_TABS = ['tasks', 'roster']
 const initialTab = () => {
   const tab = route.query.tab
@@ -18,7 +18,7 @@ const activeTab = ref(initialTab())
 <template>
   <div class="student-workbench-view">
     <el-tabs v-model="activeTab" class="workbench-tabs">
-      <el-tab-pane label="今日任務" name="tasks">
+      <el-tab-pane label="學生儀表板" name="tasks">
         <TodayTasksPanel />
       </el-tab-pane>
       <el-tab-pane label="學生名冊" name="roster">

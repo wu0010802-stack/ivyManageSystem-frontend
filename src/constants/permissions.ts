@@ -32,6 +32,12 @@ export const PERMISSION_NAMES = {
   ACTIVITY_WRITE: 'ACTIVITY_WRITE',
   DISMISSAL_CALLS_READ: 'DISMISSAL_CALLS_READ',
   DISMISSAL_CALLS_WRITE: 'DISMISSAL_CALLS_WRITE',
+  // 娃娃車追蹤（後端 utils/permissions.py Permission）：BUS_TRIPS_OPERATE 為
+  // per-user 顯式授權（無 role 預設），隨車老師 portal 頁專用；BUS_READ/BUS_WRITE
+  // 為管理端路線管理與監看。
+  BUS_READ: 'BUS_READ',
+  BUS_WRITE: 'BUS_WRITE',
+  BUS_TRIPS_OPERATE: 'BUS_TRIPS_OPERATE',
   FEES_READ: 'FEES_READ',
   FEES_WRITE: 'FEES_WRITE',
   RECRUITMENT_READ: 'RECRUITMENT_READ',
@@ -84,132 +90,6 @@ export const PERMISSION_NAMES = {
 
 export type PermissionName = typeof PERMISSION_NAMES[keyof typeof PERMISSION_NAMES]
 
-export const ROUTE_PERMISSION_RULES = [
-  { path: '/', permission: 'DASHBOARD' },
-  { path: '/approvals', permission: 'APPROVALS' },
-  // 工作台（/approvals 已 redirect 至 /workbench/approvals）：缺這幾條會讓 canAccessRoute
-  // default-deny 把所有人（含 super admin）擋在待簽核/高風險頁外。權限對齊後端守衛：
-  // approvals → APPROVALS；high-risk 走 api/audit.py 的 AUDIT_LOGS。
-  { path: '/workbench', permission: 'APPROVALS' },
-  { path: '/workbench/approvals', permission: 'APPROVALS' },
-  { path: '/workbench/high-risk', permission: 'AUDIT_LOGS' },
-  { path: '/calendar', permission: 'CALENDAR' },
-  { path: '/schedule', permission: 'SCHEDULE' },
-  { path: '/attendance', permission: 'ATTENDANCE_READ' },
-  { path: '/leaves', permission: 'LEAVES_READ' },
-  { path: '/meetings', permission: 'MEETINGS' },
-  // prefix: /employees/:id（員工詳情頁，Task 6）繼承清單頁的 EMPLOYEES_READ；
-  // 漏這條會讓 canAccessRoute default-deny 把所有人（含 super admin）擋在詳情頁外。
-  { path: '/employees', permission: 'EMPLOYEES_READ', prefix: true },
-  // 離職管理（/admin/offboarding 仍是獨立路由渲染 OffboardingView）：缺這條會讓
-  // canAccessRoute default-deny 把所有人（含 super admin）擋在離職管理頁外。
-  // 權限對齊後端 api/offboarding.py 讀取端點的 EMPLOYEES_READ 守衛。
-  { path: '/admin/offboarding', permission: 'EMPLOYEES_READ' },
-  { path: '/students', permission: 'STUDENTS_READ' },
-  { path: '/students/profile', permission: 'STUDENTS_READ', prefix: true },
-  { path: '/student-attendance', permission: 'STUDENTS_READ' },
-  { path: '/student-leaves', permission: 'STUDENTS_READ' },
-  { path: '/student-assessments', permission: 'STUDENTS_READ' },
-  { path: '/student-incidents', permission: 'STUDENTS_READ' },
-  { path: '/student-academic-affairs', permission: 'STUDENTS_READ' },
-  { path: '/classrooms', permission: 'CLASSROOMS_READ' },
-  // 成長冊工作台（班級批次）：對齊後端 GET /growth-books/batch-status 與
-  // POST /students/{id}/growth-books 的 require_permission(Permission.PORTFOLIO_READ) 守衛。
-  // 漏這條會讓 canAccessRoute default-deny 把所有人（含 super admin）擋在頁外。
-  { path: '/growth-books', permission: 'PORTFOLIO_READ' },
-  // prefix: 薪資 IA 拆分（2026-06-12）後涵蓋 /salary/settle|history|simulate|settings 全部子頁
-  { path: '/salary', permission: 'SALARY_READ', prefix: true },
-  { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
-  { path: '/reports', permission: 'REPORTS' },
-  // 對齊後端 api/gov_reports.py 四端點的 GOV_REPORTS_EXPORT 守衛
-  { path: '/gov-reports', permission: 'GOV_REPORTS_EXPORT' },
-  // /admin/gov-reports/{monthly,certificates,subsidies,iep} 對齊後端 GOV_REPORTS_VIEW 守衛
-  { path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true },
-  { path: '/audit-logs', permission: 'AUDIT_LOGS' },
-  { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
-  { path: '/settings', permission: 'SETTINGS_READ' },
-  // 系統設定路由拆分（spec §2.1）：三條 exact 獨立規則，權限對齊後端守衛——
-  // list_users → USER_MANAGEMENT_READ、permissions_admin → ROLES_MANAGE。
-  // /settings 不可改 prefix（子路由權限不同，外溢 = SETTINGS_READ 就能進帳號/角色頁）。
-  { path: '/settings/accounts', permission: 'USER_MANAGEMENT_READ' },
-  { path: '/settings/roles', permission: 'ROLES_MANAGE' },
-  { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
-  { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
-  { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
-  // 業主裁決（2026-06-13）：對齊後端動作端點（match/reject/force-accept 只要 ACTIVITY_WRITE），
-  // 入口按鈕（ActivityRegistrationView canWrite）亦同，三方一致。
-  { path: '/activity/registrations/pending', permission: 'ACTIVITY_WRITE' },
-  { path: '/activity/pos', permission: 'ACTIVITY_WRITE' },
-  { path: '/activity/pos/approval', permission: 'ACTIVITY_PAYMENT_APPROVE' },
-  { path: '/activity/catalog', permission: 'ACTIVITY_READ' },
-  { path: '/activity/courses', permission: 'ACTIVITY_READ' },
-  { path: '/activity/supplies', permission: 'ACTIVITY_READ' },
-  { path: '/activity/inquiries', permission: 'ACTIVITY_READ' },
-  // 課程與用品併入本頁後（2026-07-31）不可再要求 ACTIVITY_WRITE，否則唯讀角色會連
-  // 原本看得到的課程／用品清單都進不去；設定與兩張信件模板 tab 於頁內自行擋 ACTIVITY_WRITE。
-  { path: '/activity/settings', permission: 'ACTIVITY_READ' },
-  { path: '/activity/changes', permission: 'ACTIVITY_READ' },
-  { path: '/activity/attendance', permission: 'ACTIVITY_READ', prefix: true },
-  // POS 日結解鎖稽核軌跡：對齊後端 api/activity/pos_approval.py 的 ACTIVITY_PAYMENT_APPROVE。
-  { path: '/activity/audit/pos-unlock', permission: 'ACTIVITY_PAYMENT_APPROVE' },
-  { path: '/fees', permission: 'FEES_READ' },
-  // 在籍記錄表已折入班級學生管理頁的「統計表」modal；舊路徑一律 redirect 至 /classrooms。
-  // 此規則保留供 redirect 解析與 getAllowedRoutes 一致性，權限也對齊目標頁。
-  { path: '/student-enrollment', permission: 'CLASSROOMS_READ' },
-  // 統計圖表：獨立頁面，資料同源於在籍統計 API，權限對齊學生模組的 STUDENTS_READ。
-  { path: '/enrollment-stats', permission: 'STUDENTS_READ' },
-  // 招生入學（/recruitment 重構搬遷至學生模組）。/students 是 exact 匹配不涵蓋此路由，
-  // 缺這條會被 canAccessRoute default-deny 鎖死（含 super admin）。
-  { path: '/students/admissions', permission: 'RECRUITMENT_READ' },
-  // 新學年預編班：草稿隔離作業，對齊後端 api/classroom_year_plans.py 的 CLASSROOMS_READ 守衛
-  // （寫入動作各自細分 CLASSROOMS_WRITE，此處僅為 navigation gate）。
-  { path: '/students/year-plan', permission: 'CLASSROOMS_READ' },
-  // /recruitment 與 /recruitment-ivykids 為 redirect 至 /students/admissions（router 在 guard 前先導向），
-  // /recruitment 規則保留供 redirect 解析；ivykids 不需獨立規則。
-  { path: '/recruitment', permission: 'RECRUITMENT_READ' },
-  { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
-  // 考核：navigation gate 接受 SETTINGS_READ 或 APPRAISAL_READ（OR，canAccessRoute
-  // 對同 path 多列為 some() 語意）。後端 appraisal router 用 APPRAISAL_READ 守衛；
-  // 原本只掛 SETTINGS_READ 會把只持 APPRAISAL_READ、無 SETTINGS_READ 的考核專員被
-  // default-deny 鎖在頁外（SYNC-2）。section 層仍各自走細粒度 APPRAISAL_* 守衛。
-  { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
-  { path: '/appraisal', permission: 'APPRAISAL_READ', prefix: true },
-  // 考核管理整合頁（顯示 SETTINGS_READ 或 SALARY_READ 任一即可）
-  { path: '/appraisal-management', permission: 'SETTINGS_READ' },
-  { path: '/appraisal-management', permission: 'SALARY_READ' },
-  // 年終獎金結算：navigation gate 用 YEAR_END_READ；後端 router 用 YEAR_END_* 細粒度守衛
-  { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
-  // 考核年終 payout（路徑為 hyphen 與 /year_end 不同）：對齊後端 APPRAISAL_FINALIZE 守衛
-  { path: '/year-end/appraisal-payout', permission: 'APPRAISAL_FINALIZE' },
-  // 考核 × 年終 整合工作區（2026-07-10 巢狀路由）：頂層 prefix 承載 OR 語意（含 overview），
-  // 子區塊以「最長匹配」細分——對齊各子頁實際呼叫的後端守衛，避免看得到分頁卻 API 403。
-  { path: '/appraisal-year-end', permission: 'SETTINGS_READ', prefix: true },
-  { path: '/appraisal-year-end', permission: 'SALARY_READ', prefix: true },
-  { path: '/appraisal-year-end', permission: 'YEAR_END_READ', prefix: true },
-  { path: '/appraisal-year-end', permission: 'APPRAISAL_FINALIZE', prefix: true },
-  { path: '/appraisal-year-end', permission: 'APPRAISAL_READ', prefix: true },
-  { path: '/appraisal-year-end/appraisal', permission: 'APPRAISAL_READ', prefix: true },
-  { path: '/appraisal-year-end/year-end', permission: 'YEAR_END_READ', prefix: true },
-  { path: '/appraisal-year-end/year-end/payout', permission: 'APPRAISAL_FINALIZE' },
-  { path: '/appraisal-year-end/rules', permission: 'APPRAISAL_READ', prefix: true },
-  { path: '/appraisal-year-end/rules', permission: 'SETTINGS_READ', prefix: true },
-  // 規則設定四個子頁對齊實際呼叫的 appraisal API（APPRAISAL_READ）；年終規則另見下方 exact 規則。
-  { path: '/appraisal-year-end/rules/scoring', permission: 'APPRAISAL_READ' },
-  { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
-  { path: '/appraisal-year-end/rules/catalog', permission: 'APPRAISAL_READ' },
-  { path: '/appraisal-year-end/rules/enrollment-targets', permission: 'APPRAISAL_READ' },
-  { path: '/appraisal-year-end/rules/year-end-rules', permission: 'SETTINGS_READ' },
-  { path: '/appraisal-year-end/exceptions', permission: 'APPRAISAL_READ' },
-  { path: '/appraisal-year-end/exceptions', permission: 'YEAR_END_READ' },
-  // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
-  { path: '/overtime', permission: 'OVERTIME_READ' },
-  { path: '/overtime', permission: 'MEETINGS' },
-  // 收支簽收（園務行政）：廠商付款／雜項收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。
-  // 舊 /vendor-payments、/misc-receipts 已改 redirect，guard 收到的 to 是新路由，舊規則移除。
-  { path: '/finance-signoffs', permission: 'VENDOR_PAYMENT_READ' },
-  { path: '/finance-signoffs', permission: 'MISC_RECEIPT_READ' },
-]
-
 // 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁、已登入即可訪問的個人資料頁等）。
 // canAccessRoute 改為 default-deny，未匹配 ROUTE_PERMISSION_RULES 又不在此清單者一律拒絕，
 // 避免「忘記補規則 → 直接打 URL 進頁面」的隱性後門。
@@ -236,3 +116,12 @@ export const TEACHER_PORTAL_ROUTES = [
   '/portal/announcements',
   '/portal/profile',
 ]
+
+// ROUTE_PERMISSION_RULES 自 2026-07-31 起由 src/constants/navigation/ 的
+// NAVIGATION_MANIFEST 衍生（選單樹單一事實來源），不再手寫。新增/移除頁面或
+// 調整頁面權限請改 manifest（navigation/manifest.ts），勿在本檔手寫規則——
+// navigation/__tests__/manifestIntegrity.test.ts 以 fixture set-equality 守遷移不漂移。
+// 檔尾 re-export：auth.ts / router / 既有測試的 import 路徑全部不變。
+// （PERMISSION_NAMES 區塊必須原位原樣保留：後端 tests/test_permission_parity.py
+//   以 regex 讀本檔該區塊做 FE/BE parity。）
+export { ROUTE_PERMISSION_RULES } from './navigation'

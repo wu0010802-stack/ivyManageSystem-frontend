@@ -103,7 +103,7 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
           primary: `${c.name} 今日用藥`,
           secondary: `${c.medication.order_count} 次`,
           tone: 'violet',
-          path: '/medication',
+          path: '/medications',
         })
       }
 

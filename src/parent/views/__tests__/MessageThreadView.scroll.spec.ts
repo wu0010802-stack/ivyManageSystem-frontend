@@ -13,20 +13,42 @@ vi.mock('vue-router', async () => {
 vi.mock('../../composables/useKeyboardInset', () => ({ useKeyboardInset: () => ({ keyboardInset: ref(0) }) }))
 
 // messages store（可控 messages）
+//
+// fetchMessages / markRead 改成可從外部個別 mockResolvedValueOnce /
+// mockRejectedValueOnce 的持久 vi.fn()——原本寫死在 factory 裡的
+// `vi.fn(() => Promise.resolve())` 每次 useMessagesStore() 呼叫都是新實例，
+// 外部拿不到控制權，結構上測不到任何失敗路徑（三態測試因此完全缺角）。
 const messageItems = ref<{ id: number }[]>([])
+const mockFetchMessages = vi.fn()
+const mockMarkRead = vi.fn()
 vi.mock('../../stores/messages', () => ({
   useMessagesStore: () => ({
     get messagesByThread() { return { 1: { items: messageItems.value, hasMore: false } } },
-    fetchMessages: vi.fn(() => Promise.resolve()),
-    markRead: vi.fn(() => Promise.resolve()),
+    fetchMessages: (...args: unknown[]) => mockFetchMessages(...args),
+    markRead: (...args: unknown[]) => mockMarkRead(...args),
   }),
 }))
-vi.mock('../../api/messages', () => ({ getMessageThread: vi.fn(() => Promise.resolve({ data: { teacher_name: '王老師', student_name: '小明' } })) }))
+
+const mockGetMessageThread = vi.fn()
+vi.mock('../../api/messages', () => ({ getMessageThread: (...args: unknown[]) => mockGetMessageThread(...args) }))
+
 vi.mock('@/parent/utils/parentOfflineQueue', () => ({ enqueueParent: vi.fn(), flushParentQueue: vi.fn(() => Promise.resolve()) }))
+
+vi.mock('../../utils/toast', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}))
 
 const stubs = { MessageBubble: true, MessageComposer: true, ConfirmDialog: true }
 import MessageThreadView from '../MessageThreadView.vue'
 import router from '../../router'
+
+const SUCCESS_THREAD = { data: { teacher_name: '王老師', student_name: '小明' } }
+
+beforeEach(() => {
+  mockGetMessageThread.mockReset().mockResolvedValue(SUCCESS_THREAD)
+  mockFetchMessages.mockReset().mockResolvedValue(undefined)
+  mockMarkRead.mockReset().mockResolvedValue(undefined)
+})
 
 describe('MessageThreadView 自動捲底 + route', () => {
   beforeEach(() => { messageItems.value = [{ id: 1 }, { id: 2 }] })
@@ -60,5 +82,59 @@ describe('MessageThreadView 自動捲底 + route', () => {
     await nextTick(); await nextTick()
     // 驗證未自動捲底（scrollTop 應保持不變）
     expect(el.scrollTop).toBe(beforeScrollTop)
+  })
+})
+
+describe('MessageThreadView 三態', () => {
+  // 三態測試模擬「這串對話還沒成功載入過任何訊息」，跟自動捲底測試的
+  // 「已經有訊息、驗證捲動行為」是不同前提，這裡故意從空陣列開始。
+  beforeEach(() => { messageItems.value = [] })
+
+  it('載入中：getMessageThread 尚未 resolve 時顯示 SkeletonBlock，不顯示訊息列表', async () => {
+    mockGetMessageThread.mockReturnValue(new Promise(() => {})) // 永不 resolve，凍結在 pending
+    const wrapper = mount(MessageThreadView, { global: { stubs } })
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'SkeletonBlock' }).exists()).toBe(true)
+    expect(wrapper.find('.messages').exists()).toBe(false)
+  })
+
+  it('getMessageThread 失敗 → 顯示 MobileErrorRetry（原本只丟一個會消失的 toast，畫面留白）', async () => {
+    mockGetMessageThread.mockRejectedValueOnce({ displayMessage: '網路錯誤' })
+    const wrapper = mount(MessageThreadView, { global: { stubs } })
+    await flushPromises()
+
+    const errComp = wrapper.findComponent({ name: 'MobileErrorRetry' })
+    expect(errComp.exists()).toBe(true)
+    expect(wrapper.find('.messages').exists()).toBe(false)
+  })
+
+  it('fetchMessages 失敗（thread 資訊拿得到但訊息拿不到）→ 同樣顯示 MobileErrorRetry', async () => {
+    mockGetMessageThread.mockResolvedValueOnce(SUCCESS_THREAD)
+    mockFetchMessages.mockRejectedValueOnce({ displayMessage: '網路錯誤' })
+    const wrapper = mount(MessageThreadView, { global: { stubs } })
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(true)
+  })
+
+  it('按「重試」成功後恢復正常畫面（訊息列表出現、錯誤態消失）', async () => {
+    mockGetMessageThread
+      .mockRejectedValueOnce({ displayMessage: '網路錯誤' })
+      .mockResolvedValueOnce(SUCCESS_THREAD)
+
+    const wrapper = mount(MessageThreadView, { global: { stubs } })
+    await flushPromises()
+
+    const errComp = wrapper.findComponent({ name: 'MobileErrorRetry' })
+    expect(errComp.exists()).toBe(true)
+    expect(mockGetMessageThread).toHaveBeenCalledTimes(1)
+
+    await errComp.find('button').trigger('click')
+    await flushPromises()
+
+    expect(mockGetMessageThread).toHaveBeenCalledTimes(2)
+    expect(wrapper.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(false)
+    expect(wrapper.find('.messages').exists()).toBe(true)
   })
 })

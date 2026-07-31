@@ -157,6 +157,7 @@ declare module 'vue' {
     FunnelColumn: typeof import('./src/components/recruitment/funnel/FunnelColumn.vue')['default']
     FunnelSummaryBar: typeof import('./src/components/recruitment/funnel/FunnelSummaryBar.vue')['default']
     GlobalSearch: typeof import('./src/components/GlobalSearch.vue')['default']
+    GrowthBookCurationDrawer: typeof import('./src/components/growthBook/GrowthBookCurationDrawer.vue')['default']
     GrowthProfileTab: typeof import('./src/components/student/tabs/GrowthProfileTab.vue')['default']
     GrowthReportGenerateDialog: typeof import('./src/components/student/GrowthReportGenerateDialog.vue')['default']
     GrowthReportTab: typeof import('./src/components/student/tabs/GrowthReportTab.vue')['default']
@@ -313,6 +314,7 @@ declare module 'vue' {
     TransitionConfirmDialog: typeof import('./src/components/recruitment/funnel/TransitionConfirmDialog.vue')['default']
     TrendChart: typeof import('./src/components/portal/growth/TrendChart.vue')['default']
     UnusedLeavePayoutTooltip: typeof import('./src/components/salary/UnusedLeavePayoutTooltip.vue')['default']
+    WorkSamplesSection: typeof import('./src/components/portfolio/WorkSamplesSection.vue')['default']
     WorkspaceHeader: typeof import('./src/components/attendance/WorkspaceHeader.vue')['default']
   }
   export interface GlobalDirectives {

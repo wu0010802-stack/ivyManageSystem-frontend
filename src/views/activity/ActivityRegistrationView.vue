@@ -42,6 +42,7 @@
           @click="onRematchAllPending"
         >重新比對</el-button>
         <el-button type="success" :loading="exporting" :disabled="exporting" @click="handleExport">匯出 Excel</el-button>
+        <el-button type="success" plain :loading="exportingReport" :disabled="exportingReport" @click="handleExportPaymentReport">匯出繳費報表</el-button>
         <el-button v-if="canWrite" type="primary" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>
           新增報名
@@ -510,11 +511,12 @@ import { Plus, Edit, Link } from '@element-plus/icons-vue'
 import {
   getRegistrationDetail,
   updateRemark, promoteWaitlist,
-  exportRegistrations,
+  exportRegistrations, exportPaymentReport,
   getRegistrationPayments, deleteRegistrationPayment,
   withdrawCourse, getRegistrationTime,
   removeRegistrationSupply,
 } from '@/api/activity'
+import { saveBlobResponse } from '@/utils/download'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import {
   PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL,
@@ -719,6 +721,7 @@ const savingPromote = ref(false)
 const savingRemark = ref(false)
 const withdrawingCourseId = ref<number | null>(null)
 const exporting = ref(false)
+const exportingReport = ref(false)
 
 const tableRef = ref<{
   clearSelection: () => void
@@ -1134,17 +1137,32 @@ async function handleExport() {
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
-    const url = URL.createObjectURL(new Blob([res.data as BlobPart]))
-    const a = document.createElement('a')
-    a.href = url
-    const localDate = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-')
-    a.download = `activity_registrations_${localDate}.xlsx`
-    a.click()
-    URL.revokeObjectURL(url)
+    // 共用下載：後端 Content-Disposition 的中文檔名（才藝報名名單_學期_時間戳）優先
+    saveBlobResponse(res, '才藝報名名單.xlsx')
   } catch (e) {
     ElMessage.error(friendlyError('匯出報名資料失敗', e))
   } finally {
     exporting.value = false
+  }
+}
+
+// 繳費帳務報表（繳費總覽＋明細）；端點無 match_status 參數，僅帶列表共通篩選
+async function handleExportPaymentReport() {
+  exportingReport.value = true
+  try {
+    const res = await exportPaymentReport({
+      search: searchText.value || undefined,
+      payment_status: paymentFilter.value || undefined,
+      course_id: courseFilter.value || undefined,
+      classroom_name: classroomFilter.value || undefined,
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
+    saveBlobResponse(res, '才藝繳費報表.xlsx')
+  } catch (e) {
+    ElMessage.error(friendlyError('匯出繳費報表失敗', e))
+  } finally {
+    exportingReport.value = false
   }
 }
 

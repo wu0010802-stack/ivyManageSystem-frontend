@@ -27,6 +27,13 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '出席', tab: 'admin', showBack: true },
     },
     {
+      // 娃娃車即時位置：從首頁入口卡進來，屬 home 分頁
+      path: '/bus',
+      name: 'parent-bus',
+      component: () => import('./views/BusTrackingView.vue'),
+      meta: { title: '娃娃車', tab: 'home', showBack: true },
+    },
+    {
       path: '/announcements',
       name: 'parent-announcements',
       component: () => import('./views/AnnouncementsView.vue'),
@@ -149,7 +156,7 @@ const routes: RouteRecordRaw[] = [
       path: '/children/:studentId/measurements',
       name: 'parent-child-measurements',
       component: () => import('./views/ChildMeasurementsView.vue'),
-      meta: { title: '健康紀錄', tab: 'admin', requiresAuth: true, showBack: true },
+      meta: { title: '健康紀錄', tab: 'admin', showBack: true },
     },
     {
       path: '/calendar',

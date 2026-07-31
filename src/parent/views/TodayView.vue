@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
 import { getTodayContactBook, type ContactBookEntry } from '../api/contactBook'
+import { getBusToday } from '../api/bus'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
 import { useTodayTimeline } from '../composables/useTodayTimeline'
@@ -101,8 +102,38 @@ async function loadContactBook(force = false) {
   }
 }
 
+// 娃娃車入口卡：只在班次進行中才出現。首頁刻意**不**用 useBusTracking——那支
+// composable 會開 WebSocket，掛在首頁等於每位家長一進 App 就多一條長連線；這裡只要
+// 一次性快照即可，即時位置留給 /bus 頁。
+// 隱私：回應含 stop_lat / stop_lng（＝家庭住址），只取用得到的兩個欄位，座標不進
+// 首頁任何狀態。
+const busInfo = ref<{ stopStatus: string; stopsAhead: number } | null>(null)
+const busTileValue = computed(() => {
+  if (!busInfo.value) return ''
+  if (busInfo.value.stopStatus !== 'pending') return '進行中'
+  return `還有 ${busInfo.value.stopsAhead} 站`
+})
+
+async function loadBusToday() {
+  try {
+    const res = await getBusToday()
+    const data = res.data as {
+      trip?: { status?: string } | null
+      children?: { stop_status?: string; stops_ahead?: number }[]
+    } | null // TODO(ts-strict): 待 gen:api 產出 /parent/bus/today 型別後改用 AxiosResp
+    const child = data?.trip?.status === 'in_progress' ? data.children?.[0] : null
+    busInfo.value = child
+      ? { stopStatus: child.stop_status ?? 'pending', stopsAhead: child.stops_ahead ?? 0 }
+      : null
+  } catch {
+    // 娃娃車卡失敗不擋首頁其他區塊（真正需要誠實降級的是 /bus 頁）
+    busInfo.value = null
+  }
+}
+
 onMounted(() => {
   refreshToday()
+  loadBusToday()
   // useCachedAsync cache-hit 時 children 從一開始就有值，下方 watch（無
   // immediate）不會 fire → 聯絡簿 hero card 永遠不會顯示。mount 時直接
   // ensureSelected + loadContactBook 涵蓋此 case（P1-16）。
@@ -204,6 +235,7 @@ async function pullRefresh() {
     refreshSummary(true),
     refreshToday(),
     loadContactBook(true),
+    loadBusToday(),
   ])
 }
 
@@ -211,6 +243,7 @@ function refresh() {
   refreshSummary(true)
   refreshToday()
   loadContactBook(true)
+  loadBusToday()
 }
 
 function go(path: string) {
@@ -252,7 +285,15 @@ function go(path: string) {
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
     <!-- Bento 格：待繳學費 + 待簽文件 -->
-    <div v-if="feesInfo || pendingSignCount > 0" class="today-bento">
+    <div v-if="feesInfo || pendingSignCount > 0 || busInfo" class="today-bento">
+      <StatTile
+        v-if="busInfo"
+        label="娃娃車"
+        :value="busTileValue"
+        icon="directions_bus"
+        tone="sky"
+        to="/bus"
+      />
       <StatTile
         v-if="feesInfo"
         label="待繳學費"

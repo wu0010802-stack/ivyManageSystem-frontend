@@ -130,6 +130,15 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 
 ---
 
+### 權限／選單工作指針（2026-07-31 manifest 化）
+
+- 新增/移除後台頁面、選單項或頁面權限：先跑本 repo skill `.claude/skills/admin-page-lifecycle/SKILL.md`。
+- 新增/刪除權限碼（跨 repo 7 步含 seed migration）：先跑後端 `../ivyManageSystem-backend/.claude/skills/permission-code-lifecycle/SKILL.md`。
+- 權限模型 mental model（三層語意/scope/守衛選擇/防線地圖）：`../ivyManageSystem-backend/docs/sop/permission-model.md`——跨 repo 權限工作先讀這份。
+- 選單樹唯一事實來源 `src/constants/navigation/manifest.ts`：側邊欄、`ROUTE_PERMISSION_RULES`、權限編輯器樹皆由它衍生，勿再手寫。
+
+---
+
 ### Datetime 與 Taipei TZ
 
 後端 datetime 寫入契約由 `ivy-backend/docs/sop/datetime-contract.md` 統管；前端對應規範如下。

@@ -67,3 +67,15 @@ export const deleteGuardian = (guardianId: number) =>
 // 簽發家長 LINE LIFF 綁定碼（明碼僅回一次；後端 sha256 存 hash）
 export const createGuardianBindingCode = (guardianId: number) =>
   api.post(`/guardians/${guardianId}/binding-code`)
+
+// 簽發無 LINE / 換裝置家長的裝置設定碼（明碼僅回一次；跟綁定碼是兩支獨立
+// 端點與資料表，用途不同：綁定碼給已有 LINE 的家長綁小孩，設定碼給沒有
+// LINE 或換新手機的家長直接兌換登入 session）
+export const createGuardianDeviceSetupCode = (guardianId: number) =>
+  api.post(`/guardians/${guardianId}/device-setup-code`)
+
+// 撤銷此監護人對應家長帳號的所有裝置（含 LINE 裝置一併撤銷）；回傳
+// { revoked: <撤銷的 session 數量> }，該家長帳號沒有 user_id（從未登入過）
+// 時後端回 revoked:0，不是錯誤。
+export const revokeGuardianDevices = (guardianId: number) =>
+  api.post(`/guardians/${guardianId}/revoke-devices`)

@@ -12,6 +12,8 @@ vi.mock('@/utils/auth', () => ({
   getUserInfo: () => userInfoData,
   setUserInfo: vi.fn(),
   clearAuth: vi.fn(),
+  // 娃娃車入口以 BUS_TRIPS_OPERATE 過濾；本檔測的是其他區塊，一律回 false
+  hasPortalPermission: vi.fn(() => false),
 }))
 
 vi.mock('@/api/portal', () => ({

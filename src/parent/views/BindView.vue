@@ -7,6 +7,7 @@ import { useParentAuthStore } from '../stores/parentAuth'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import BrandMark from '@/components/brand/BrandMark.vue'
+import { resolveSafeRedirect } from '../utils/safeRedirect'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,7 +49,7 @@ async function submit() {
     const { data } = await bind(trimmedCode.value)
     if (data?.status === 'ok' && data?.user) {
       authStore.setUser(data.user)
-      router.replace('/home')
+      router.replace(resolveSafeRedirect(route.query.redirect))
     } else {
       _setLocalError('綁定失敗，請聯絡園所')
     }

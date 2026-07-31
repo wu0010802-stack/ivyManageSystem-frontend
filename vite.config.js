@@ -242,7 +242,8 @@ function manualChunks(id) {
     // Leaflet 地圖庫只在 RecruitmentAddressHeatmap.vue（招生熱力圖）動態 import 用到。
     // 不抽出時會 fall through 到 vendor catch-all → 所有入口（admin / parent / portal）
     // 都被迫載 150 KB raw / ~50 KB gz。
-    // 不放 parent-app：parent 完全不用地圖。
+    // 不放 parent-app：parent 端僅 BusTrackingView.vue（娃娃車追蹤）在 /bus 頁
+    // **動態** import leaflet 與其 CSS，仍不得靜態橋接進 parent 首屏 bundle。
     if (
         id.includes('/node_modules/leaflet/') ||
         // leaflet.markercluster（招生熱力圖附近幼兒園聚合，見 D 的改動）隨 leaflet

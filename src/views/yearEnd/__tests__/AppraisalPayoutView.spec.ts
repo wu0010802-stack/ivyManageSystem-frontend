@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick, defineComponent, h } from 'vue'
 import AppraisalPayoutView from '../AppraisalPayoutView.vue'
 
@@ -33,6 +33,7 @@ vi.mock('vue-router', () => ({
 }))
 
 import * as api from '@/api/yearEnd'
+import { ElMessage } from 'element-plus'
 
 const mockPreviewRow = (overrides: Record<string, unknown> = {}) => ({
   employee_id: 1, employee_name: '王主任', role_group: 'DIRECTOR',
@@ -294,5 +295,46 @@ describe('AppraisalPayoutView', () => {
     vm.year = 2027
     await nextTick()
     expect(replaceMock).toHaveBeenCalledWith({ query: expect.objectContaining({ year: '2027' }) })
+  })
+
+  // 2026-07-31 QA 缺陷：來源學年考核 cycle 未建立時後端回 422，detail 是給開發者看的
+  // 內部訊息（如「appraisal_cycle academic_year=113 FIRST 不存在」）。年份換算本身正確
+  // （非後端 bug），前端不該把這段原文當紅色 toast 丟給使用者，改顯示友善空狀態。
+  it('422（來源 cycle 未建立）→ 不噴 toast、改顯示友善空狀態，不含後端內部訊息', async () => {
+    const detail = 'appraisal_cycle academic_year=113 FIRST 不存在；請先在考核管理建立此 cycle'
+    vi.mocked(api.previewAppraisalPayout).mockRejectedValue({ response: { status: 422, data: { detail } } })
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { notReady: boolean; rows: unknown[] }
+
+    expect(vm.notReady).toBe(true)
+    expect(vm.rows).toEqual([])
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain(detail)
+    expect(wrapper.text()).toContain('尚無可發放的考核年終資料')
+  })
+
+  // 其他狀態碼（500 等）維持既有紅色 toast 錯誤處理，不進 notReady 空狀態。
+  it('500（非資料態問題）→ 維持既有 toast 錯誤處理，不進入友善空狀態', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockRejectedValue({ response: { status: 500 } })
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { notReady: boolean }
+
+    expect(vm.notReady).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalled()
+  })
+
+  // 422 後改切到已有資料的年份：友善空狀態要能解除，恢復顯示預覽表格。
+  it('422 後切換到有資料的年份 → notReady 解除', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockRejectedValueOnce({ response: { status: 422 } })
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { notReady: boolean; year: number }
+    expect(vm.notReady).toBe(true)
+
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [mockPreviewRow()] } as never)
+    vm.year = 2025
+    await nextTick()
+    await flushPromises()
+
+    expect(vm.notReady).toBe(false)
   })
 })

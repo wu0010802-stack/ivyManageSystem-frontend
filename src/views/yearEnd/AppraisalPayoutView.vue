@@ -59,6 +59,12 @@ const laterLabel = computed(() => `${sourceAcademicYear.value}下`)
 const anyCycleNotFinalized = computed(() =>
   rows.value.some((r) => !r.earlier_cycle_finalized || !r.later_cycle_finalized)
 )
+// 422 = 該學年來源考核 cycle 尚未建立，不是系統錯誤（發放年 N 對應前一個已完整結束
+// 的學年，年份換算是刻意設計）。前端不可把後端內部訊息（如「appraisal_cycle
+// academic_year=113 FIRST 不存在」）當紅色 toast 丟給使用者，改顯示友善空狀態
+// （提示切換年份或前往考核管理建立週期）。其他狀態碼（500 等）維持既有 toast
+// （2026-07-31 QA 缺陷）。
+const notReady = ref(false)
 // 後端 generate 契約：一律發放「全部在職員工」，只額外接受 included_inactive_employee_ids
 // 對「非在職」員工做 opt-in（後端不支援排除在職員工）。因此前端必須誠實化：
 //   payoutRows = 全部在職 + 已勾選的非在職
@@ -81,12 +87,20 @@ const includedInactiveIds = computed(() =>
 
 async function loadPreview() {
   loading.value = true
+  notReady.value = false
   try {
     const res = await previewAppraisalPayout(year.value)
     rows.value = res.data as PreviewRow[]
     selected.value = new Set(rows.value.filter((r) => !r.is_inactive).map((r) => r.employee_id))
   } catch (e) {
-    ElMessage.error(friendlyError('載入發放預覽失敗', e))
+    const status = (e as { response?: { status?: number } } | null)?.response?.status
+    if (status === 422) {
+      rows.value = []
+      selected.value = new Set()
+      notReady.value = true
+    } else {
+      ElMessage.error(friendlyError('載入發放預覽失敗', e))
+    }
   } finally {
     loading.value = false
   }
@@ -159,7 +173,7 @@ async function onVoid() {
 defineExpose({
   selected, anyCycleNotFinalized, onGenerate, onVoid, loadPreview, rows, year,
   toggleSelect, payoutRows, payoutTotal, payoutTotalDisplay,
-  tab, generatedRows, generatedLoading, loadGenerated,
+  tab, generatedRows, generatedLoading, loadGenerated, notReady,
 })
 
 onMounted(loadPreview)
@@ -194,42 +208,57 @@ watch(tab, (t) => {
 
     <el-tabs v-model="tab">
       <el-tab-pane label="預覽" name="preview">
-        <el-table v-loading="loading" :data="rows" border>
-          <el-table-column label="發放" width="80">
-            <template #default="{ row }">
-              <!-- 在職員工一律發放、不可排除（後端契約），checkbox 唯讀全勾；
-                   只有非在職員工可 opt-in 切換。bug #27：避免顯示與實際發放不一致 -->
-              <el-checkbox
-                :model-value="selected.has(row.employee_id)"
-                :disabled="!row.is_inactive"
-                :data-test="`row-checkbox-${row.employee_id}`"
-                @update:model-value="(v) => toggleSelect(row.employee_id, Boolean(v))"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column prop="employee_name" label="員工" />
-          <el-table-column prop="earlier_amount" :label="earlierLabel" />
-          <el-table-column prop="later_amount" :label="laterLabel" />
-          <el-table-column prop="total_amount" label="合計" />
-          <el-table-column label="在職?" width="100">
-            <template #default="{ row }">
-              <el-tag :type="row.is_inactive ? 'danger' : 'success'" size="small">
-                {{ row.is_inactive ? '已離職' : '在職' }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="warnings">
-            <template #default="{ row }">
-              <span v-for="w in row.warnings" :key="w" class="warning-tag">{{ w }}</span>
-            </template>
-          </el-table-column>
-        </el-table>
+        <EmptyState
+          v-if="notReady"
+          data-test="preview-not-ready"
+          title="本年度尚無可發放的考核年終資料"
+          description="來源學年的考核週期尚未建立。可切換上方年份，或前往考核管理建立該學年的考核週期後再回來發放。"
+        >
+          <template #action>
+            <router-link :to="{ path: '/appraisal-year-end/appraisal/history' }">
+              <el-button type="primary" plain>前往考核管理</el-button>
+            </router-link>
+          </template>
+        </EmptyState>
 
-        <footer class="footer">
-          <el-button type="primary" size="large" data-test="generate-button" @click="onGenerate">
-            確認生成 {{ payoutRows.length }} 筆 payout（合計 {{ payoutTotalDisplay }}）
-          </el-button>
-        </footer>
+        <template v-else>
+          <el-table v-loading="loading" :data="rows" border>
+            <el-table-column label="發放" width="80">
+              <template #default="{ row }">
+                <!-- 在職員工一律發放、不可排除（後端契約），checkbox 唯讀全勾；
+                     只有非在職員工可 opt-in 切換。bug #27：避免顯示與實際發放不一致 -->
+                <el-checkbox
+                  :model-value="selected.has(row.employee_id)"
+                  :disabled="!row.is_inactive"
+                  :data-test="`row-checkbox-${row.employee_id}`"
+                  @update:model-value="(v) => toggleSelect(row.employee_id, Boolean(v))"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column prop="employee_name" label="員工" />
+            <el-table-column prop="earlier_amount" :label="earlierLabel" />
+            <el-table-column prop="later_amount" :label="laterLabel" />
+            <el-table-column prop="total_amount" label="合計" />
+            <el-table-column label="在職?" width="100">
+              <template #default="{ row }">
+                <el-tag :type="row.is_inactive ? 'danger' : 'success'" size="small">
+                  {{ row.is_inactive ? '已離職' : '在職' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="warnings">
+              <template #default="{ row }">
+                <span v-for="w in row.warnings" :key="w" class="warning-tag">{{ w }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <footer class="footer">
+            <el-button type="primary" size="large" data-test="generate-button" @click="onGenerate">
+              確認生成 {{ payoutRows.length }} 筆 payout（合計 {{ payoutTotalDisplay }}）
+            </el-button>
+          </footer>
+        </template>
       </el-tab-pane>
 
       <el-tab-pane label="已生成" name="generated">
