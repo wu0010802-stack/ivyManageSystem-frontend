@@ -137,6 +137,16 @@
         <el-form-item label="說明">
           <el-input v-model="form.description" type="textarea" :rows="2" />
         </el-form-item>
+        <el-form-item label="課程 DM">
+          <CourseDmUploader
+            v-if="editingId"
+            :course-id="editingId"
+            :dm-url="editingDm.dm_url"
+            :dm-pages="editingDm.dm_pages"
+            @updated="onDmUpdated"
+          />
+          <span v-else class="dm-hint-create">儲存課程後即可上傳 DM</span>
+        </el-form-item>
         <el-form-item label="限定年級">
           <el-checkbox-group v-model="form.allowed_grades" data-test="allowed-grades-group">
             <el-checkbox v-for="g in GRADES_ORDER" :key="g" :value="g" :label="g">{{ g }}</el-checkbox>
@@ -449,6 +459,7 @@ import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { sanitizeHref } from '@/utils/url'
 import { GRADES_ORDER } from '@/constants/recruitment'
+import CourseDmUploader from './components/CourseDmUploader.vue'
 
 interface Course {
   id: number; name: string; price: number; sessions?: number | null; capacity: number
@@ -464,6 +475,9 @@ interface Course {
   pending_review_waitlist?: number
   promoted_pending?: number
   waitlist_count?: number
+  // 課程 DM（介紹文宣，2026-07-31）：上傳獨立於表單送出，不隨 handleSave
+  dm_url?: string | null
+  dm_pages?: string[] | null
 }
 // status（2026-07-30 #8）：候補清單混含一般候補（waitlist，可升正式）與「候補待審」
 // （pending_review_waitlist，報名本身尚待身分審核，點升正式後端必回 400）兩種子狀態；
@@ -500,6 +514,8 @@ const deletingId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const saving = ref(false)
 const editingId = ref<number | null>(null)
+// 課程 DM 現況（僅編輯模式顯示，上傳/移除獨立於表單送出，不隨 handleSave）
+const editingDm = ref<{ dm_url: string | null; dm_pages: string[] | null }>({ dm_url: null, dm_pages: null })
 const copyDialogVisible = ref(false)
 const copying = ref(false)
 const copyForm = ref<{ source_school_year: number | null; source_semester: number }>({ source_school_year: null, source_semester: 1 })
@@ -845,6 +861,7 @@ async function handleCopy() {
 function openCreate() {
   editingId.value = null
   form.value = defaultForm()
+  editingDm.value = { dm_url: null, dm_pages: null }
   dialogVisible.value = true
 }
 
@@ -865,7 +882,19 @@ function openEdit(row: Course) {
     instructor_employee_id: row.instructor_employee_id ?? null,
     allowed_grades: row.allowed_grades ? [...row.allowed_grades] : [],
   }
+  editingDm.value = { dm_url: row.dm_url ?? null, dm_pages: row.dm_pages ?? null }
   dialogVisible.value = true
+}
+
+// DM 上傳／移除獨立於 handleSave：上傳元件內已直接呼叫 API 完成，這裡只需同步
+// dialog 當前狀態與列表該 row，讓下次開 dialog／列表其他互動看到最新值。
+function onDmUpdated(payload: { dm_url: string | null; dm_pages: string[] | null }) {
+  editingDm.value = payload
+  const row = courses.value.find((c) => c.id === editingId.value)
+  if (row) {
+    row.dm_url = payload.dm_url
+    row.dm_pages = payload.dm_pages
+  }
 }
 
 async function handleSave() {
@@ -972,6 +1001,7 @@ onMounted(() => {
 .pending-occupancy-hint { font-size: 11px; color: var(--el-color-warning); line-height: 1.2; }
 .pending-occupancy-hint--waitlist { color: var(--el-color-info); }
 .grade-tag { margin: 1px 4px 1px 0; }
+.dm-hint-create { font-size: 12px; color: var(--text-tertiary); }
 
 /* 容量佔位名單 Drawer：仿 el-table 外觀的可拖拉列表（el-table 不支援列拖拉，
    改以 vuedraggable + flex 列自繪）；正式（佔位）／候補分兩區、跨區可拖 */
