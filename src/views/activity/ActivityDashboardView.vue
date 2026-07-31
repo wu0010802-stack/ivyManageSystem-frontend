@@ -2,14 +2,7 @@
   <div class="activity-dashboard">
     <PageHeader :title="PAGE_TERMS.activityDashboard">
       <template #actions>
-        <el-select v-model="selectedTermKey" style="width: 220px">
-          <el-option
-            v-for="t in semesterOptions"
-            :key="t.key"
-            :label="t.label"
-            :value="t.key"
-          />
-        </el-select>
+        <AcademicTermSelector />
       </template>
     </PageHeader>
 
@@ -140,12 +133,12 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
-import { getCurrentAcademicTerm } from '@/utils/academic'
 import { exportDashboardTable } from '@/api/activity'
 import { buildBonusLabel } from './activityDashboardTable'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 interface DashboardClassroom { courses?: Record<number, number>; [key: string]: unknown }
@@ -163,27 +156,9 @@ interface DashboardData {
 
 const activityStore = useActivityStore()
 const termStore = useAcademicTermStore()
-const currentAcademicTerm = getCurrentAcademicTerm()
 
-const semesterOptions = computed(() => {
-  const { school_year: cy, semester: cs } = currentAcademicTerm
-  const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
-  const prevTerm = cs === 1 ? { school_year: cy - 1, semester: 2 } : { school_year: cy, semester: 1 }
-  const nextTerm = cs === 1 ? { school_year: cy, semester: 2 } : { school_year: cy + 1, semester: 1 }
-  return [
-    { key: `${prevTerm.school_year}-${prevTerm.semester}`, ...prevTerm, label: `${prevTerm.school_year}學年度 ${semLabel(prevTerm.semester)}` },
-    { key: `${cy}-${cs}`, school_year: cy, semester: cs, label: `${cy}學年度 ${semLabel(cs)}（本學期）` },
-    { key: `${nextTerm.school_year}-${nextTerm.semester}`, ...nextTerm, label: `${nextTerm.school_year}學年度 ${semLabel(nextTerm.semester)}` },
-  ]
-})
-
-const selectedTermKey = computed({
-  get: () => `${termStore.school_year}-${termStore.semester}`,
-  set: (val: string) => {
-    const [y, s] = val.split('-').map(Number)
-    termStore.setTerm(y, s)
-  },
-})
+// 學期下拉統一走共用 AcademicTermSelector（直接讀寫 termStore），本頁只需監看切換
+const selectedTermKey = computed(() => `${termStore.school_year}-${termStore.semester}`)
 
 const loading = ref(false)
 const exportingTable = ref(false)
