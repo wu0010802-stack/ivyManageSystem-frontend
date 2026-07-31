@@ -1191,13 +1191,17 @@ onUnmounted(() => {
 
 .public-activity-page :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 
+/* ⚠ 這裡不可以再加 overflow: hidden。它會讓 .page-wrapper 變成 scroll container，
+   底下所有 position: sticky 從此永遠吸不住——截止倒數提示（.notice.is-sticky）與桌機
+   結帳列（.checkout-stick）都曾因此整段失效，設計意圖只留在註解裡沒實現。
+   當初加它是為了把 header 的白底裁進圓角；改由 .page-header 自己帶上方圓角處理，
+   .page-body 沒有自己的背景，下方圓角由 .page-wrapper 的底色直接呈現。 */
 .page-wrapper {
   max-width: 1400px;
   margin: 0 auto;
   background-color: var(--color-surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  overflow: hidden;
 }
 
 /* Header — 簡約版：LOGO + 校名 ｜ 活動標題 水平兩欄、純白底、無動畫 */
@@ -1210,6 +1214,8 @@ onUnmounted(() => {
   padding: var(--space-6) var(--space-8);
   background: #fff;
   border-bottom: 1px solid var(--color-border);
+  /* 取代 .page-wrapper 的 overflow: hidden（那會廢掉全頁 sticky，見上方註解） */
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 .page-brand {
   display: flex;
@@ -2505,6 +2511,7 @@ onUnmounted(() => {
 @media (--to-sm) {
   .public-activity-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
+  .page-header { border-radius: 0; }
   .page-header { padding: var(--space-5); gap: var(--space-4); }
   .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
   .page-brand-logo { width: 72px; height: 72px; }
@@ -2521,7 +2528,8 @@ onUnmounted(() => {
   .toast-container { top: auto; bottom: 96px; right: var(--space-3); left: var(--space-3); }
   .toast { min-width: 0; max-width: none; }
 
-  /* 手機版主 CTA 固定底部（page-wrapper overflow:hidden 會破壞 sticky，改用 fixed） */
+  /* 手機版主 CTA 固定在螢幕底部：手機上表單很長，sticky 只在捲到該區塊時才吸附，
+     fixed 才能讓送出鈕從落地到送出全程都在拇指範圍內。 */
   .submit-bar {
     position: fixed;
     left: 0;
