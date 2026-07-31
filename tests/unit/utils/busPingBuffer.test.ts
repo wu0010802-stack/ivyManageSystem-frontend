@@ -132,6 +132,13 @@ describe('shouldSamplePing — 時鐘暴衝（nowAt）', () => {
     }
   })
 
+  it('maxSkewMs 為 0 時只收 at 與 nowAt 完全相同的點（0 是合法門檻，不退回預設）', () => {
+    const opts = { nowAt: now, maxSkewMs: 0 }
+    expect(shouldSamplePing(null, point(0), opts)).toBe(true)
+    expect(shouldSamplePing(null, point(1), opts)).toBe(false)
+    expect(shouldSamplePing(null, point(-1), opts)).toBe(false)
+  })
+
   it('nowAt 本身不可解析時視為沒給（不因壞參數而全擋）', () => {
     expect(shouldSamplePing(null, point(0), { nowAt: '不是時間' })).toBe(true)
     expect(shouldSamplePing(null, point(3_600_001), { nowAt: '' })).toBe(true)
