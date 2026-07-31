@@ -828,12 +828,29 @@ async function runInit(): Promise<boolean> {
   }
 }
 
+// 還原草稿必須排在 runInit 之後：要拿當期課程／用品清單濾掉已下架的品項。
+// 2026-07-31 稽核：原本只在 onMounted 的首次 runInit 成功後還原，初始化失敗（後端
+// 暫時不可用）後按「重新載入」成功時不會補還原，而 startDraftAutosave 早在 onMounted
+// 就啟動了 → 家長第一次輸入就把 localStorage 裡填到一半的草稿覆蓋掉。
+let draftRestoreAttempted = false
+function restoreDraftIfNeeded() {
+  if (draftRestoreAttempted) return
+  draftRestoreAttempted = true
+  draftRestored.value = restoreDraft(
+    courses.value.map((course) => course.name),
+    supplies.value.map((supply) => supply.name),
+  )
+}
+
 async function retryInit() {
   if (retryingInit.value) return
   retryingInit.value = true
   initState.value = 'loading'
   try {
-    if (await runInit()) startPolling()
+    if (await runInit()) {
+      startPolling()
+      restoreDraftIfNeeded()
+    }
   } finally {
     retryingInit.value = false
   }
@@ -1152,11 +1169,7 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 onMounted(async () => {
   if (await runInit()) {
     startPolling()
-    // 還原草稿必須排在 runInit 之後：要拿當期課程／用品清單濾掉已下架的品項
-    draftRestored.value = restoreDraft(
-      courses.value.map((course) => course.name),
-      supplies.value.map((supply) => supply.name),
-    )
+    restoreDraftIfNeeded()
   }
   // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
   stopDraftAutosave = startDraftAutosave()

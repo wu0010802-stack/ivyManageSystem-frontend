@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
@@ -106,6 +106,18 @@ const filteredRegs = computed(() => {
   return myRegs.value.filter((r) => r.student_id === selectedId.value)
 })
 
+// 2026-07-31 稽核：hero 的「進行中」與「待繳」原本直接吃 filteredRegs（只依孩子篩），
+// 把所有歷史學期的舊報名一起算進去——家長會看到早就結束的才藝仍顯示「進行中」，
+// 待繳金額也把舊學期的欠費加總進來。以目錄課程的學期（list_courses 回的是後端開放中
+// 的學期）收斂；目錄為空時無從判定，維持原本的全部（不誤顯示為 0）。
+const currentTermRegs = computed(() => {
+  const c0 = courses.value[0]
+  if (!c0) return filteredRegs.value
+  return filteredRegs.value.filter(
+    (r) => r.school_year === c0.school_year && r.semester === c0.semester,
+  )
+})
+
 const COURSE_STATUS = {
   enrolled: { label: '已報名', color: { bg: 'var(--brand-primary-soft)', color: 'var(--m3-primary, var(--pt-success-text))' } },
   waitlist: { label: '候補中', color: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' } },
@@ -116,7 +128,7 @@ const COURSE_STATUS = {
 
 // hero stats
 const activeRegistrations = computed(() =>
-  filteredRegs.value.filter((r) =>
+  currentTermRegs.value.filter((r) =>
     (r.courses || []).some(
       (c) => OCCUPYING_STATUSES.includes(c.status),
     ),
@@ -126,7 +138,7 @@ const activeRegistrations = computed(() =>
 // ④ 待繳：以後端 outstanding_amount（= max(total-paid, 0)）為準。
 // 後端 total 只計 enrolled 課程 + 用品（候補不計），且已扣除已繳，免繳/溢繳/已繳清
 // 皆為 0。原本前端自行加總所有課程（含候補、未扣已繳、漏算用品）會高估待繳。
-const unpaidActivityFee = computed(() => sumOutstanding(filteredRegs.value))
+const unpaidActivityFee = computed(() => sumOutstanding(currentTermRegs.value))
 
 // 即將開課（7 天內）：以後端 upcoming-sessions（ActivitySession 逐場日期）為準，
 // 依所選孩子過濾。未選孩子時計全部子女。
@@ -405,9 +417,23 @@ function onScrollSection(key: string) {
   }
 }
 
+// 2026-07-31 稽核：childrenStore.load() 在「已有另一個載入在途」時會直接 return
+// （store 內的 `if (loading.value) return`），await 因此不會等它完成——此刻 items 仍是
+// 空陣列，ensureSelected([]) 會把 selectedId 清成 null，而 filteredRegs 在沒有選擇時
+// 回傳「全部孩子」的報名 → 多寶家庭的畫面混列了另一個孩子的才藝與待繳金額。
+// 改為追蹤 items，名單真的到齊時才選定；空陣列不再清掉既有選擇。
+watch(
+  () => childrenStore.items,
+  (items) => {
+    if (items && items.length > 0) {
+      ensureSelected(items as { student_id: number }[])
+    }
+  },
+  { immediate: true },
+)
+
 onMounted(async () => {
   await childrenStore.load()
-  ensureSelected(childrenStore.items as { student_id: number }[])
   fetchBootstrap()
 })
 
