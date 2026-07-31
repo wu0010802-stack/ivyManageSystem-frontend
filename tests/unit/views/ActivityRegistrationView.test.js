@@ -29,6 +29,7 @@ vi.mock('@/api/activity', () => ({
   promoteWaitlist: vi.fn(),
   deleteRegistration: vi.fn(),
   exportRegistrations: vi.fn(),
+  exportPaymentReport: vi.fn(),
   getRegistrationPayments: vi.fn(),
   addRegistrationPayment: vi.fn(),
   deleteRegistrationPayment: vi.fn(),
@@ -150,13 +151,22 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+// ── download util mock ──────────────────────────────────────────────────────
+// 匯出改走共用 saveBlobResponse（吃後端 Content-Disposition 中文檔名），
+// 測試不再 spy URL.createObjectURL / <a>.click 的手刻下載流程。
+vi.mock('@/utils/download', () => ({
+  saveBlobResponse: vi.fn(),
+}))
+
 // ── import mocked api / element-plus bindings for per-test control ──────────
 import {
+  exportPaymentReport,
   exportRegistrations,
   getRegistrationDetail,
   getRegistrationPayments,
   updateRemark,
 } from '@/api/activity'
+import { saveBlobResponse } from '@/utils/download'
 import { ElMessage } from 'element-plus'
 
 // ── import View after mocks ────────────────────────────────────────────────
@@ -298,10 +308,7 @@ describe('ActivityRegistrationView', () => {
   })
 
   it('Excel 匯出帶入畫面報名狀態與 include_inactive 口徑', async () => {
-    vi.mocked(exportRegistrations).mockResolvedValue({ data: new Blob() })
-    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test')
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    vi.mocked(exportRegistrations).mockResolvedValue({ data: new Blob(), headers: {} })
     const wrapper = mountView()
     await flushPromises()
 
@@ -314,9 +321,26 @@ describe('ActivityRegistrationView', () => {
       school_year: 114,
       semester: 1,
     }))
-    createObjectURL.mockRestore()
-    revokeObjectURL.mockRestore()
-    click.mockRestore()
+    // 下載走共用 saveBlobResponse（後端 Content-Disposition 檔名優先）
+    expect(saveBlobResponse).toHaveBeenCalled()
+  })
+
+  it('繳費報表匯出帶畫面篩選與學期（不含 match_status）', async () => {
+    vi.mocked(exportPaymentReport).mockResolvedValue({ data: new Blob(), headers: {} })
+    const wrapper = mountView()
+    await flushPromises()
+
+    mockMatchStatusFilter.value = 'rejected'
+    await wrapper.vm.handleExportPaymentReport()
+
+    expect(exportPaymentReport).toHaveBeenCalledWith(expect.objectContaining({
+      school_year: 114,
+      semester: 1,
+    }))
+    // payment-report 端點無 match_status 參數，不可誤帶
+    const args = vi.mocked(exportPaymentReport).mock.calls.at(-1)[0]
+    expect(args).not.toHaveProperty('match_status')
+    expect(saveBlobResponse).toHaveBeenCalled()
   })
 
   // ── 資安（#3 2026-07-30）：切換學期後批次操作誤打上一學期資料 ─────────────
