@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 
@@ -7,15 +7,13 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ path: '/portal/home' }),
   useRouter: () => ({ push: vi.fn() }),
 }))
-let userInfoData: Record<string, unknown> = {}
+const hasPortalPermission = vi.fn(() => false)
 vi.mock('@/utils/auth', () => ({
-  getUserInfo: () => userInfoData,
+  getUserInfo: () => ({ name: '陳老師', role: 'teacher', impersonation_mode: null }),
   setUserInfo: vi.fn(),
   clearAuth: vi.fn(),
-  // 娃娃車入口以 BUS_TRIPS_OPERATE 過濾；本檔測的是其他區塊，一律回 false
-  hasPortalPermission: vi.fn(() => false),
+  hasPortalPermission: (name: string) => hasPortalPermission(name as never),
 }))
-
 vi.mock('@/api/portal', () => ({
   getSubstitutePendingCount: vi.fn(() => Promise.resolve({ data: { pending_count: 0 } })),
   getUnreadCount: vi.fn(() => Promise.resolve({ data: { unread_count: 0 } })),
@@ -55,50 +53,40 @@ vi.mock('element-plus', async (importOriginal) => {
 const stubs = { PortalSearchPalette: true, OfflineIndicator: true, A11yMenu: true }
 import PortalLayout from '@/layouts/PortalLayout.vue'
 
-const SEL = '[data-test="portal-sidebar-toggle"]'
+async function mountLayout() {
+  const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+  await flushPromises()
+  return wrapper
+}
 
-describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
+describe('PortalLayout — 娃娃車班次入口', () => {
   beforeEach(() => {
     localStorage.setItem('portal_layout_v', '1') // 防 onboarding setTimeout 干擾
-    userInfoData = { name: '陳老師', role: 'teacher', impersonation_mode: null }
-  })
-  // RWD P0 後 PortalLayout 的 isMobile 來自 useIsMobile()（matchMedia 驅動，
-  // 非 innerWidth），測試以 mock matchMedia 控制手機/桌機判定。
-  function setMobileViewport(matches: boolean) {
-    window.matchMedia = vi.fn().mockReturnValue({
-      matches,
-      media: '(max-width: 767.98px)',
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })
-  }
-  afterEach(() => {
-    setMobileViewport(false)
+    hasPortalPermission.mockReset()
   })
 
-  it('手機寬度顯示漢堡鍵，點擊後側欄開啟', async () => {
-    setMobileViewport(true)
-    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
-    await flushPromises()
+  it('沒有 BUS_TRIPS_OPERATE 時不顯示入口（避免點進去被 guard 踢回首頁）', async () => {
+    hasPortalPermission.mockReturnValue(false)
+    const wrapper = await mountLayout()
 
-    const burger = wrapper.find(SEL)
-    expect(burger.exists()).toBe(true)
-    expect(wrapper.find('.el-aside').classes()).not.toContain('sidebar-open')
-
-    await burger.trigger('click')
-    expect(wrapper.find('.el-aside').classes()).toContain('sidebar-open')
+    expect(wrapper.text()).not.toContain('娃娃車班次')
+    expect(wrapper.find('[index="/portal/bus-trip"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
-  it('桌機寬度不顯示漢堡鍵', async () => {
-    setMobileViewport(false)
-    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
-    await flushPromises()
-    expect(wrapper.find(SEL).exists()).toBe(false)
+  it('有 BUS_TRIPS_OPERATE 時顯示入口', async () => {
+    hasPortalPermission.mockReturnValue(true)
+    const wrapper = await mountLayout()
+
+    expect(wrapper.text()).toContain('娃娃車班次')
+    wrapper.unmount()
+  })
+
+  it('查的是 BUS_TRIPS_OPERATE 這個權限碼（不是別碼順手放行）', async () => {
+    hasPortalPermission.mockReturnValue(true)
+    const wrapper = await mountLayout()
+
+    expect(hasPortalPermission).toHaveBeenCalledWith('BUS_TRIPS_OPERATE')
     wrapper.unmount()
   })
 })
