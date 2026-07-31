@@ -93,7 +93,7 @@ const displayTagCounts = computed(() => {
 })
 
 const exportXlsx = async () => {
-  await downloadFile('/student-enrollment/roster.xlsx', '在籍清單.xlsx', termParams())
+  await downloadFile('/student-enrollment/roster.xlsx', '在籍紀錄.xlsx', termParams())
 }
 
 const printRoster = async () => {
