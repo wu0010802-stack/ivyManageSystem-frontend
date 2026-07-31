@@ -274,12 +274,6 @@ export const NAVIGATION_MANIFEST = {
           ],
         },
         {
-          // 統計圖表：資料同源於在籍統計 API，權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
-          key: 'enrollmentStats', title: '統計圖表', routePath: '/enrollment-stats',
-          views: [], sharedViews: ['STUDENTS_READ'],
-          menu: { icon: icon('PieChart') },
-        },
-        {
           key: 'studentsMain', title: PAGE_TERMS.students, routePath: '/students',
           views: [{ code: 'STUDENTS_READ' }],
           actions: [
@@ -364,6 +358,13 @@ export const NAVIGATION_MANIFEST = {
           views: [{ code: 'FEES_READ' }],
           actions: [{ code: 'FEES_WRITE' }],
           menu: { icon: icon('CreditCard') },
+        },
+        {
+          // 統計圖表：資料同源於在籍統計 API，權限借道學生模組 STUDENTS_READ（owned 於 studentsMain）。
+          // 依業主指示置於本群組最下方（2026-07-31）。
+          key: 'enrollmentStats', title: '統計圖表', routePath: '/enrollment-stats',
+          views: [], sharedViews: ['STUDENTS_READ'],
+          menu: { icon: icon('PieChart') },
         },
       ],
     },
