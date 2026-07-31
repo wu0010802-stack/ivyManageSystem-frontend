@@ -5,8 +5,10 @@
  * 所有路線的事件都會進到同一條連線。少一道班次比對，畫面上 A 線的車就會被 B 線的
  * GPS 拖著跑、站點清單被別條路線的名冊整包換掉，而管理者完全看不出來。
  *
- * 另一半風險是 admin channel **沒有** `bus_trip_started`（後端 start_trip 只推家長
- * channel），所以「新班次發車」只能靠不認識的班次事件回頭探測——探測必須節流，
+ * 另一半風險在「新班次發車」怎麼被看見。後端 `91f055f0` 已補上 admin 端的
+ * `bus_trip_started`（payload 與 admin 的 `bus_stop_update` 逐欄位相同），但那則事件
+ * **只在 WS 當下連著才收得到**：退避重連期與降級輪詢期間漏掉的事件沒有補發。
+ * 因此「不認識的班次事件就回頭探測」仍是必要的 fallback——且探測必須節流，
  * 否則別條路線每 5 秒一顆的 GPS 會變成每 5 秒一次快照請求。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -200,7 +202,7 @@ describe('WS 事件的班次比對（admin channel 是全園共用）', () => {
     expect(m.trip.value?.id).toBe(7)
   })
 
-  it('同路線的 bus_stop_update 直接接手（含本路線剛發車的新班次——admin channel 沒有 bus_trip_started）', async () => {
+  it('同路線的 bus_stop_update 直接接手（含 WS 漏掉發車事件時、由站點事件補接手的新班次）', async () => {
     const m = await bootMonitor()
     lastSocket().emit({
       type: 'bus_stop_update',
@@ -415,8 +417,8 @@ describe('不認識的班次：探測（WS 斷線期間漏掉的發車事件之 
     vi.mocked(getBusTripToday).mockResolvedValue({ data: { trip: null, stops: [] } } as never)
     await m.selectRoute(4)
     await flushPromises()
-    // 4 號路線發車，第一則 admin 事件是位置（admin channel 沒有 bus_trip_started）。
-    // 負向快取沒清掉的話，這一則會被直接丟棄，監看頁永遠停在「今日尚無班次」。
+    // 4 號路線發車，但發車事件落在 WS 斷線期間（沒有補發），第一則收得到的 admin
+    // 事件是位置。負向快取沒清掉的話，這一則會被直接丟棄，監看頁永遠停在「今日尚無班次」。
     vi.mocked(getBusTripToday).mockClear()
     vi.mocked(getBusTripToday).mockResolvedValue(tripPayload({ id: 9, route_id: 4 }) as never)
     ws.emit({ type: 'bus_position', payload: { trip_id: 9, lat: 22.8, lng: 120.8, at: TAIPEI_0900 } })

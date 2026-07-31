@@ -29,7 +29,20 @@
 
     <!-- 尚未開班 -->
     <template v-else-if="!trip">
-      <el-card v-if="routes.length === 0" class="bus-card" data-testid="bus-no-routes">
+      <!--
+        路線清單載入失敗**不得**畫成「尚未設定娃娃車路線」的空狀態——那會讓司機
+        去追一個不存在的問題（與 Task 13 在 BusRoutesView 修掉的是同一個缺口）。
+        排在空狀態之前。
+      -->
+      <el-card v-if="routesFailed" class="bus-card" data-testid="bus-routes-failed">
+        <h3 class="bus-title">無法載入路線清單</h3>
+        <p class="bus-hint">目前無法開始新班次。請確認連線後重新載入；若持續失敗請洽行政人員。</p>
+        <el-button type="primary" size="large" data-testid="bus-retry-routes" @click="init">
+          重新載入
+        </el-button>
+      </el-card>
+
+      <el-card v-else-if="routes.length === 0" class="bus-card" data-testid="bus-no-routes">
         <h3 class="bus-title">尚未設定娃娃車路線</h3>
         <p class="bus-hint">請洽行政人員於後台建立路線與站點後再開始班次。</p>
       </el-card>
@@ -179,7 +192,7 @@ import { usePortalBusTrip } from '@/composables/usePortalBusTrip'
 const {
   trip, stops, routes, selectedRouteId, direction,
   loading, starting, completing, actingStopId,
-  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked,
+  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked, routesFailed,
   pendingPingCount, tripSummary,
   init, start, departStop, skipStop, undoStop, complete, teardown,
 } = usePortalBusTrip()

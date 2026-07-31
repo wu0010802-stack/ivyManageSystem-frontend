@@ -20,6 +20,7 @@ const h = vi.hoisted(() => {
       gpsClockSuspect: r(false),
       snapshotFailed: r(false),
       employeeUnlinked: r(false),
+      routesFailed: r(false),
       pendingPingCount: r(0),
       tripSummary: r(''),
       init: vi.fn(),
@@ -54,6 +55,7 @@ function resetState() {
   s.gpsClockSuspect.value = false
   s.snapshotFailed.value = false
   s.employeeUnlinked.value = false
+  s.routesFailed.value = false
   s.pendingPingCount.value = 0
   s.tripSummary.value = ''
 }
@@ -99,6 +101,18 @@ describe('PortalBusTripView', () => {
     expect(card.text()).toContain('員工')
     // 不得同時再顯示「網路忙碌請重試」那張（訊息互斥），也不得掉進開班卡
     expect(wrapper.find('[data-testid="bus-snapshot-failed"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-start-card"]').exists()).toBe(false)
+  })
+
+  it('路線清單載入失敗時不得畫成「尚未設定娃娃車路線」', async () => {
+    // 與 Task 13 在 BusRoutesView 修掉的是同一個誠實度缺口：載入失敗畫成空狀態，
+    // 會讓司機以為「行政還沒設路線」而去追一個不存在的問題。
+    s.routesFailed.value = true
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-routes-failed"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="bus-no-routes"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="bus-start-card"]').exists()).toBe(false)
   })
 

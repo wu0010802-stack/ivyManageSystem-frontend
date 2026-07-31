@@ -263,26 +263,60 @@ describe('usePortalBusTrip — 進頁載入', () => {
     expect(bus.loading.value).toBe(false)
   })
 
-  it('路線清單失敗時不做全域查詢，直接標記 snapshotFailed', async () => {
+  it('路線清單失敗不得連帶讓行駛中的班次查不到（兩支請求各自獨立）', async () => {
+    // 🔴 營運可感知的失效：司機行駛中重載頁面、`/routes` 剛好 5xx，
+    // 若兩支串行就會查不到班次 → GPS 不啟動 → 家長端完全看不到車。
+    // 路線清單只是「開班選單」，它掛掉只該擋住「開新班次」這一件事。
+    vi.mocked(listPortalBusRoutes).mockRejectedValue(axiosError(500))
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload()) as never)
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(getActiveBusTrip).toHaveBeenCalledTimes(1)
+    expect(bus.trip.value?.id).toBe(7)
+    expect(geolocation.watchPosition).toHaveBeenCalledTimes(1)
+    expect(bus.routesFailed.value).toBe(true)
+    // 班次查得到就不是「班次狀態不明」，不得亮成快照失敗
+    expect(bus.snapshotFailed.value).toBe(false)
+    expect(bus.employeeUnlinked.value).toBe(false)
+  })
+
+  it('路線清單失敗且自己沒有班次時亮 routesFailed，不得畫成「尚未設定路線」', async () => {
     vi.mocked(listPortalBusRoutes).mockRejectedValue(axiosError(500))
     const bus = createBus()
     await bus.init()
     await flushPromises()
 
-    expect(bus.snapshotFailed.value).toBe(true)
-    expect(getActiveBusTrip).not.toHaveBeenCalled()
+    expect(bus.routesFailed.value).toBe(true)
+    expect(bus.routes.value).toEqual([])
     expect(ElMessage.error).toHaveBeenCalled()
+    expect(bus.loading.value).toBe(false)
   })
 
-  it('路線清單本身 403（缺 BUS_TRIPS_OPERATE）不得誤報成「帳號未綁員工」', async () => {
-    // 兩種 403 的處置完全不同：缺權限要找管理員開權限，未綁員工要找 HR 綁員工檔。
+  it('缺 BUS_TRIPS_OPERATE：兩支都 403，不得誤報成「帳號未綁員工」', async () => {
+    // 後端兩支端點掛同一個 `_operate_dep`，缺權限時**兩支都會 403**。
+    // 判別必須看「兩支請求的結果組合」，不能只看 active 那支——也不能靠執行順序
+    // （並行化之後就沒有「routes 先炸所以沒跑到」這層意外保護了）。
     vi.mocked(listPortalBusRoutes).mockRejectedValue(axiosError(403))
+    vi.mocked(getActiveBusTrip).mockRejectedValue(axiosError(403))
     const bus = createBus()
     await bus.init()
     await flushPromises()
 
     expect(bus.employeeUnlinked.value).toBe(false)
+    expect(bus.routesFailed.value).toBe(true)
     expect(bus.snapshotFailed.value).toBe(true)
+  })
+
+  it('未綁員工：路線清單拿得到（權限沒問題）但查我的班次 403 才算', async () => {
+    vi.mocked(getActiveBusTrip).mockRejectedValue(axiosError(403))
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.employeeUnlinked.value).toBe(true)
+    expect(bus.routesFailed.value).toBe(false)
   })
 
   it('路線清單只保留啟用中的路線，且只留 id/name（不把學生名冊留在前端狀態）', async () => {

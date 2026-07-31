@@ -2,8 +2,9 @@
  * 隨車老師端娃娃車班次操作（`/portal/bus-trip` 專用，非 module singleton）。
  *
  * 三條主軸：
- * 1. **班次狀態**：進頁先問 `GET /portal/bus/trips/active`（只需 `BUS_TRIPS_OPERATE`），
- *    有進行中班次就直接接手；沒有才去載路線清單讓司機開新班次。
+ * 1. **班次狀態**：進頁**並行**打 `GET /portal/bus/trips/active?mine=true` 與
+ *    `GET /portal/bus/routes`（兩支都只需 `BUS_TRIPS_OPERATE`）——有進行中班次就直接
+ *    接手，沒有才用路線清單讓司機開新班次。兩支各自判定成敗，見下方 `init`。
  * 2. **GPS 上報**：`watchPosition` 的高頻回呼交給 `@/utils/busPingBuffer` 節流成
  *    每 5 秒一批，再由本檔負責送出與**重送**。
  * 3. **站點推進**：離站／跳站／撤銷，回應的 `stops` 為權威值直接覆寫。
@@ -26,6 +27,13 @@
  *
  * `tripSummary`（「路線・方向」）保留：接手來的班次未必是自己選的那條，
  * 而 `start()` 的 409 接手仍是以 route＋direction 限縮、非 operator 維度。
+ *
+ * ⚠ **`mine=true` 的必然代價（使用者可見）**：司機**中途換手**後，接手的老師重載頁面
+ * 會查不到那一班——`operator_employee_id` 仍是原司機，`mine=true` 依定義就不回它。
+ * 回得來，但要走「選路線 → 開始班次 → 後端 409 → 自動接手」這條路，多一次點擊。
+ * 這是刻意的取捨：拿「換手後多一次點擊」換掉「B 線司機靜默接手 A 線的完整名冊
+ * 並把 GPS 寫進別人的班次」。要同時解決需後端提供 operator 維度的**換手登記**，
+ * 非前端可補。
  *
  * ── 時間軸：一律以伺服器 `Date` header 校正 ────────────────────────────────
  * `busPingBuffer` 的時鐘暴衝防線擋得住「單顆時間戳暴衝」，擋不住「整支裝置時鐘系統性
@@ -118,17 +126,25 @@ export function usePortalBusTrip() {
   /** 進頁快照失敗：**不可**當成「沒有班次」而顯示開班卡（會開出第二張班次）。 */
   const snapshotFailed = ref(false)
   /**
-   * `mine=true` 查詢遭 403：此帳號未綁員工資料。與一般快照失敗分開呈現——
-   * 一般失敗按「重新載入」有機會好，這條不會（開班也會 403），要有人去後台綁定。
+   * 帳號未綁員工資料。與一般快照失敗分開呈現——一般失敗按「重新載入」有機會好，
+   * 這條不會（開班也會 403），要有人去後台綁定。
+   * ⚠ **判別靠兩支請求的結果組合**（見 `init`），不是單看 active 那支的狀態碼。
    */
   const employeeUnlinked = ref(false)
+  /**
+   * 開班選單（`GET /portal/bus/routes`）載入失敗。與 `snapshotFailed` **分開**：
+   * 路線清單掛掉只該擋住「開新班次」，不該連帶讓行駛中的班次查不到而停掉 GPS。
+   * 也不得退化成「尚未設定娃娃車路線」的空狀態（那會讓司機去追不存在的問題）。
+   */
+  const routesFailed = ref(false)
   /** 裝置回報的定位時間不是 epoch 基準：已改用系統時間標記，UI 要讓司機看得到。 */
   const gpsClockSuspect = ref(false)
   const pendingPingCountRef = ref(0)
   const pendingPingCount = computed(() => pendingPingCountRef.value)
   /**
-   * 「A 線・早上接學生」。班次進行中一定要顯示——後端還沒有 operator 維度的過濾，
-   * 多路線並行時有可能接手到別條路線的班次，這一行是司機唯一能自己察覺的訊號。
+   * 「A 線・早上接學生」。班次進行中一定要顯示：進頁復原雖已用 `mine=true` 收斂到
+   * 「我的班次」，但 `start()` 的 409 接手仍以 route＋direction 限縮（非 operator 維度），
+   * 且同路線兩個方向同時在跑時仍可能接到非預期方向——這一行是司機自己察覺的訊號。
    * 一律取自 `trip.route_id`（**不是** `selectedRouteId`）：接手來的班次未必是自己選的那條，
    * 用選單值會顯示成「看起來沒問題」，正好把要暴露的問題蓋掉。
    */
@@ -340,35 +356,45 @@ export function usePortalBusTrip() {
 
   /**
    * 查「我的」進行中班次：**單次呼叫**，不逐路線試探（那撈的是「id 最小的那條」，
-   * 也就是別人的班次）。403 代表帳號未綁員工——標記後往上拋，由 `init` 統一呈現。
+   * 也就是別人的班次）。錯誤一律往上拋，由 `init` 依兩支請求的組合判定。
    */
   async function findActiveTrip(): Promise<void> {
-    try {
-      await loadActive(null, null, true)
-    } catch (e) {
-      // 只認「查我的班次」這一支的 403；路線清單的 403 是缺 BUS_TRIPS_OPERATE，
-      // 兩者的處置完全不同（找 HR 綁員工 vs 找管理員開權限），不可混為一談。
-      if (errorStatus(e) === 403) employeeUnlinked.value = true
-      throw e
-    }
+    await loadActive(null, null, true)
   }
 
+  /**
+   * 進頁：**兩支請求並行、各自判定**。
+   *
+   * 為什麼不能串行（前一版是 `await loadRoutes()` 才 `await findActiveTrip()`）：
+   * 路線清單只是開班選單，它 5xx 時若連帶讓班次查不到，司機行駛中重載頁面就會
+   * 停掉 GPS 上報——家長端完全看不到車。那個串行原本的安全理由是「沒有路線清單
+   * 就只能做全域查詢」，改用 `mine=true` 之後已經消失。
+   *
+   * 兩種 403 的判別（後端兩支端點掛同一個 `_operate_dep`，缺權限時**兩支都 403**）：
+   * - 兩支都 403 → 缺 `BUS_TRIPS_OPERATE`，是權限問題；
+   * - 路線清單**拿得到**（＝權限沒問題）但查我的班次 403 → 才是未綁 employee。
+   * 刻意**不靠後端訊息字串**（文案一改就失效），也**不靠執行順序**
+   * ——串行時是「routes 先炸所以 findActiveTrip 沒跑到」這個意外才沒誤判的。
+   */
   async function init(): Promise<void> {
     loading.value = true
-    snapshotFailed.value = false
-    employeeUnlinked.value = false
-    try {
-      await loadRoutes()
-      await findActiveTrip()
-    } catch (e) {
-      // 失敗不得謊稱「沒有班次」：那會讓司機再開一張，撞上後端 409 或開錯方向。
-      snapshotFailed.value = true
+    const [routesResult, activeResult] = await Promise.allSettled([loadRoutes(), findActiveTrip()])
+    // 三個旗標一律**無條件賦值**：只設不清會讓上一輪的錯誤卡黏在成功的這一輪上。
+    routesFailed.value = routesResult.status === 'rejected'
+    // 失敗不得謊稱「沒有班次」：那會讓司機再開一張，撞上後端 409 或開錯方向。
+    snapshotFailed.value = activeResult.status === 'rejected'
+    employeeUnlinked.value = routesResult.status === 'fulfilled'
+      && activeResult.status === 'rejected'
+      && errorStatus(activeResult.reason) === 403
+    if (activeResult.status === 'rejected') {
       ElMessage.error(employeeUnlinked.value
-        ? apiError(e, '此帳號尚未綁定員工資料，請洽行政人員綁定後再重新載入')
-        : apiError(e, '載入班次失敗，請重試'))
-    } finally {
-      loading.value = false
+        ? apiError(activeResult.reason, '此帳號尚未綁定員工資料，請洽行政人員綁定後再重新載入')
+        : apiError(activeResult.reason, '載入班次失敗，請重試'))
+    } else if (routesResult.status === 'rejected') {
+      // 班次查得到就不是「什麼都不知道」，只是這一趟開不了新班次
+      ElMessage.error(apiError(routesResult.reason, '載入路線清單失敗，暫時無法開始新班次'))
     }
+    loading.value = false
   }
 
   async function start(): Promise<void> {
@@ -471,7 +497,7 @@ export function usePortalBusTrip() {
   return {
     trip, stops, routes, selectedRouteId, direction,
     loading, starting, completing, actingStopId,
-    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked,
+    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked, routesFailed,
     pendingPingCount, tripSummary,
     init, start, departStop, skipStop, undoStop, complete, teardown,
   }
