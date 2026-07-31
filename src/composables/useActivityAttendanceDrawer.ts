@@ -209,6 +209,22 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     // 另一場次，過期回應不得對它做 captureBaseline（誤標乾淨→靜默丟失輸入）/
     // success / 關閉 drawer。本場次的存檔本身已以本場 id+records 正確送出。
     const seq = loadSeq
+
+    // 2026-07-31 稽核：下方 filter 會把「未標記出席/缺席」的列整列丟掉，但流程仍會
+    // captureBaseline（畫面標為乾淨）並顯示「點名儲存成功」→ 老師在那些列打的備註
+    // 靜默消失，關掉 drawer 才發現。後端 AttendanceRecordItem.is_present 是必填
+    // bool，備註無法單獨寫入，故改為擋下並指名是誰，讓老師先標記出缺席。
+    const notesWithoutMark = drawerSession.value.students.filter(
+      s => s.is_present === null && (s.attendance_notes || '').trim() !== '',
+    )
+    if (notesWithoutMark.length > 0) {
+      const names = notesWithoutMark
+        .map(s => s.student_name || `#${s.registration_id}`)
+        .join('、')
+      ElMessage.warning(`${names} 尚未標記出席或缺席，備註無法單獨儲存`)
+      return
+    }
+
     const records = drawerSession.value.students
       // 後端 AttendanceRecordItem.is_present 為必填 bool，未點名（null）無法寫入
       .filter(s => s.is_present !== null)

@@ -190,6 +190,31 @@ describe('useActivityAttendanceDrawer — F2 點名只送異動列（防跨學�
     expect(records).toEqual([{ registration_id: 12, is_present: true, notes: '' }])
   })
 
+  it('未標記出缺席卻打了備註 → 擋下並指名，不得靜默丟棄（2026-07-31 稽核）', async () => {
+    // 後端 AttendanceRecordItem.is_present 是必填 bool，備註無法單獨寫入。原本這種列
+    // 會被 filter 直接丟掉，但流程照樣 captureBaseline（畫面標為乾淨）並顯示
+    // 「點名儲存成功」→ 老師打的備註靜默消失，關掉 drawer 才發現。
+    const seeds: StudentSeed[] = [
+      { registration_id: 31, classroom_id: 1, class_name: '蘋果班', student_name: '甲', is_present: true },
+      { registration_id: 32, classroom_id: 1, class_name: '蘋果班', student_name: '乙' },
+    ]
+    const { drawer, updateFn } = setup(seeds)
+    await drawer.openDrawer({ id: 101 })
+
+    const s31 = drawer.drawerSession.value!.students.find(s => s.registration_id === 31)!
+    s31.attendance_notes = '早退'
+    // 乙未標記出缺席，卻打了備註
+    const s32 = drawer.drawerSession.value!.students.find(s => s.registration_id === 32)!
+    s32.attendance_notes = '家長說今天請假'
+
+    await drawer.handleSave()
+
+    expect(updateFn).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith(
+      expect.stringContaining('乙'),
+    )
+  })
+
   it('改備註亦算異動（present 不變但備註變）會被送出', async () => {
     const seeds: StudentSeed[] = [
       { registration_id: 21, classroom_id: 1, class_name: '蘋果班', student_name: '甲', is_present: true, attendance_notes: '' },

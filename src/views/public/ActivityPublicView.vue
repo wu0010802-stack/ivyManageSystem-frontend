@@ -648,6 +648,7 @@ import { usePublicRegistrationDraft } from '@/composables/usePublicRegistrationD
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import ContactInquiryModal from './components/ContactInquiryModal.vue'
@@ -822,10 +823,23 @@ async function runInit(): Promise<boolean> {
     if (disposed) return false
     stopPolling()
     initState.value = 'error'
-    initErrorMessage.value =
-      (err as { response?: { data?: { detail?: string }; message?: string }; message?: string })?.response?.data?.detail || (err as Error)?.message || '頁面初始化失敗，請稍後再試。'
+    initErrorMessage.value = apiErrorMessage(err, '頁面初始化失敗，請稍後再試。')
     return false
   }
+}
+
+// 還原草稿必須排在 runInit 之後：要拿當期課程／用品清單濾掉已下架的品項。
+// 2026-07-31 稽核：原本只在 onMounted 的首次 runInit 成功後還原，初始化失敗（後端
+// 暫時不可用）後按「重新載入」成功時不會補還原，而 startDraftAutosave 早在 onMounted
+// 就啟動了 → 家長第一次輸入就把 localStorage 裡填到一半的草稿覆蓋掉。
+let draftRestoreAttempted = false
+function restoreDraftIfNeeded() {
+  if (draftRestoreAttempted) return
+  draftRestoreAttempted = true
+  draftRestored.value = restoreDraft(
+    courses.value.map((course) => course.name),
+    supplies.value.map((supply) => supply.name),
+  )
 }
 
 async function retryInit() {
@@ -833,7 +847,10 @@ async function retryInit() {
   retryingInit.value = true
   initState.value = 'loading'
   try {
-    if (await runInit()) startPolling()
+    if (await runInit()) {
+      startPolling()
+      restoreDraftIfNeeded()
+    }
   } finally {
     retryingInit.value = false
   }
@@ -1122,8 +1139,10 @@ async function handleSubmitRegistration() {
     resetFlow()
     await refreshAvailability()
   } catch (err) {
-    const detail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-    submitError.value = detail || '送出失敗，請確認網路連線後再試一次；您填寫的資料都還在。'
+    submitError.value = apiErrorMessage(
+      err,
+      '送出失敗，請確認網路連線後再試一次；您填寫的資料都還在。',
+    )
     await nextTick()
     document.querySelector('.submit-error-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   } finally {
@@ -1150,11 +1169,7 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 onMounted(async () => {
   if (await runInit()) {
     startPolling()
-    // 還原草稿必須排在 runInit 之後：要拿當期課程／用品清單濾掉已下架的品項
-    draftRestored.value = restoreDraft(
-      courses.value.map((course) => course.name),
-      supplies.value.map((supply) => supply.name),
-    )
+    restoreDraftIfNeeded()
   }
   // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
   stopDraftAutosave = startDraftAutosave()

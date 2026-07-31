@@ -690,6 +690,7 @@ import { courseBillingLabel } from '@/utils/activityDisplay'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import ToastStack from './components/ToastStack.vue'
 
 interface Toast { id: number; message: string; type: string }
@@ -887,11 +888,7 @@ watch(
     setAvailabilityTerm(term)
     if (termChangedAfterFirstResult) void refreshAvailability()
     void loadOptions(term, data).catch((err: unknown) => {
-      showToast(
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-          || '無法載入該學期課程資料',
-        'error',
-      )
+      showToast(apiErrorMessage(err, '無法載入該學期課程資料'), 'error')
     })
   },
   { flush: 'sync' },
@@ -1032,7 +1029,7 @@ onMounted(async () => {
     // （ensureAvailabilityPolling，於 hydrateResult），查詢階段不輪詢。
     await loadOptions()
   } catch (err) {
-    showToast((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '無法載入頁面資料', 'error')
+    showToast(apiErrorMessage(err, '無法載入頁面資料'), 'error')
   }
 })
 

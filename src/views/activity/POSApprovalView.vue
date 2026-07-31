@@ -520,6 +520,10 @@ async function loadPending() {
 // 現金卻把盤點金額送去簽核 B 日（送出用的是當前 selectedDate）。每次載入自增序號，
 // 回應到位時僅當序號仍為最新才套用，否則丟棄過時回應。
 let detailReqSeq = 0
+// 當日交易明細的顯示上限（後端 getPOSRecentTransactions 的 limit）。達到上限時
+// 必須提示明細不完整——主管是看著這張表決定要不要凍結日結 snapshot 的。
+const DAILY_TX_LIMIT = 100
+
 let txReqSeq = 0
 
 async function loadDetail() {
@@ -550,11 +554,19 @@ async function loadDailyTransactions() {
   try {
     const res = await getPOSRecentTransactions({
       date: selectedDate.value,
-      limit: 100,
+      limit: DAILY_TX_LIMIT,
       include_system: true,
     })
     if (seq !== txReqSeq) return
-    dailyTransactions.value = (res.data as { transactions?: Record<string, unknown>[] })?.transactions || []
+    const list = (res.data as { transactions?: Record<string, unknown>[] })?.transactions || []
+    dailyTransactions.value = list
+    // 2026-07-31 稽核：明細有硬上限而畫面無任何提示，與同頁「筆數」統計卡對不上時
+    // 主管會以為是統計錯了；更糟的是可能只看了部分流水就把日結 snapshot 凍結。
+    if (list.length >= DAILY_TX_LIMIT) {
+      ElMessage.warning(
+        `當日交易筆數已達顯示上限 ${DAILY_TX_LIMIT} 筆，以下明細可能不完整；請以上方「筆數」統計為準`,
+      )
+    }
   } catch (err) {
     if (seq !== txReqSeq) return
     dailyTransactions.value = []

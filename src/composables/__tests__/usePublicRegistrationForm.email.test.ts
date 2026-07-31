@@ -55,3 +55,36 @@ describe('公開報名表單 email 欄位', () => {
     expect(form.email).toBe('')
   })
 })
+
+// 2026-07-31 稽核：原本的 /^[^@\s]+@[^@\s]+\.[^@\s]+$/ 比後端 email-validator 寬得多，
+// 下列 typo 全數放行 → 前端不標紅、直接送出 → 後端 422 把整筆報名打回，而 Email 是
+// 「選填」欄位，家長只看到籠統的送出失敗，根本不知道是哪裡錯。
+describe('公開報名表單 email 格式收緊', () => {
+  function emailError(email: string) {
+    const { form, errors, validateForm } = setup()
+    fillValidBase(form)
+    form.email = email
+    validateForm()
+    return errors.email
+  }
+
+  it.each([
+    ['wang@gmail..com', '網域出現連續句點'],
+    ['abc@gmail.com.', '結尾多一個句點'],
+    ['.abc@gmail.com', 'local part 以句點開頭'],
+    ['abc@my_domain.com', '網域含底線'],
+    ['abc@-domain.com', '網域段以連字號開頭'],
+    ['abc@gmail', '沒有頂級網域'],
+  ])('擋下 %s（%s）', (email) => {
+    expect(emailError(email)).not.toBe('')
+  })
+
+  it.each([
+    'wang@gmail.com',
+    'wang.ming@gmail.com.tw',
+    'wang+activity@my-domain.co',
+    'a@b.co',
+  ])('放行合法的 %s', (email) => {
+    expect(emailError(email)).toBe('')
+  })
+})
