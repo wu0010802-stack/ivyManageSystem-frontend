@@ -10,7 +10,7 @@ vi.mock('@/parent/api/activity', () => ({
   registerCourses: vi.fn(),
   confirmPromotion: vi.fn(),
   declinePromotion: vi.fn(),
-  getRegistrationTime: vi.fn(() => Promise.resolve({ data: { is_open: true } })),
+  getRegistrationTime: vi.fn(() => Promise.resolve({ data: { open_at: null, close_at: '2999-01-01T00:00:00Z' } })),
 }))
 vi.mock('@/parent/utils/toast', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warn: vi.fn() },

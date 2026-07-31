@@ -15969,9 +15969,9 @@ export interface components {
          * ActivityRegistrationTimeOut
          * @description GET /settings/registration-time 回應。
          *
-         *     對應 _serialize_settings 輸出：未設定時 is_open=False，其餘欄位 None；
-         *     已設定時各欄位來自 ActivityRegistrationSettings ORM。open_at / close_at
-         *     在 ORM 為 String 欄位（ISO 8601），故為 Optional[str]。
+         *     對應 _serialize_settings 輸出：未設定時全欄位 None；已設定時各欄位來自
+         *     ActivityRegistrationSettings ORM。open_at / close_at 在 ORM 為 String 欄位
+         *     （ISO 8601），故為 Optional[str]。is_open 開關已移除（2026-07-31）。
          */
         ActivityRegistrationTimeOut: {
             /** Close At */
@@ -15980,8 +15980,6 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
-            /** Is Open */
-            is_open: boolean;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
@@ -27379,6 +27377,9 @@ export interface components {
          * @description GET /public/registration-time response。
          *
          *     所有顯示欄位皆 Optional：settings 為 None 時整批回 None。
+         *
+         *     is_open 自 2026-07-31 起為衍生值（時間窗當下是否開放），無對應 DB 欄位；
+         *     僅為已部署的舊前端 bundle 相容保留，新前端依 open_at/close_at 自行計算。
          */
         PublicRegistrationTimeOut: {
             /** Close At */
@@ -28584,8 +28585,6 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
-            /** Is Open */
-            is_open: boolean;
             /** Open At */
             open_at?: string | null;
             /** Page Title */

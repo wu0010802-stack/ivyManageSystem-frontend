@@ -88,7 +88,7 @@ describe('useRegistrationEditSave — 報名時段守衛（F5）', () => {
     'handleSaveChanges 以真實 Date.now() 二次確認並擋下送出，不呼叫更新 API', async () => {
     // isRegistrationOpen 刻意仍為 true（模擬 30s tick 還沒更新畫面），
     // 但 timeInfo.close_at 已是過去時間——handleSaveChanges 應該用 Date.now() 攔下。
-    const timeInfo = ref({ is_open: true, open_at: null, close_at: '2000-01-01T00:00:00Z' })
+    const timeInfo = ref({ open_at: null, close_at: '2000-01-01T00:00:00Z' })
     const { actions, showToast } = buildDeps({
       isRegistrationOpen: computed(() => true),
       timeInfo,
@@ -105,7 +105,7 @@ describe('useRegistrationEditSave — 報名時段守衛（F5）', () => {
   })
 
   it('timeInfo 顯示仍開放時，handleSaveChanges 正常送出（回歸）', async () => {
-    const timeInfo = ref({ is_open: true, open_at: null, close_at: '2999-01-01T00:00:00Z' })
+    const timeInfo = ref({ open_at: null, close_at: '2999-01-01T00:00:00Z' })
     publicUpdateRegistration.mockResolvedValue({
       data: {
         id: 1,

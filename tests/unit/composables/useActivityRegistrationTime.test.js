@@ -11,34 +11,56 @@ vi.mock('@/api/activityPublic', () => ({
 
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 
+// 2026-07-31 起純時間窗語意：is_open 開關已移除，registrationOpen 匯出也隨之
+// 移除；載入狀態改以 timeInfo 本身表達（null＝尚未載入＝fail-open，見
+// useRegistrationWindow 對 null 的處理）。
 describe('useActivityRegistrationTime', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getPublicRegistrationTime.mockResolvedValue({
-      data: { is_open: false, open_at: null, close_at: null },
+      data: { open_at: null, close_at: null },
     })
   })
 
-  it('registrationOpen 反映 is_open=true', async () => {
-    getPublicRegistrationTime.mockResolvedValue({
-      data: { is_open: true, open_at: '2026-04-01T09:00:00', close_at: '2026-04-30T17:00:00' },
-    })
-
-    const { registrationOpen, loadTime } = useActivityRegistrationTime()
-    await loadTime()
-
-    expect(registrationOpen.value).toBe(true)
+  it('timeInfo 初始為 null（尚未載入）', () => {
+    const { timeInfo } = useActivityRegistrationTime()
+    expect(timeInfo.value).toBeNull()
   })
 
-  it('registrationOpen 反映 is_open=false', async () => {
+  it('loadTime 成功後 timeInfo 反映後端回傳的時間窗', async () => {
     getPublicRegistrationTime.mockResolvedValue({
-      data: { is_open: false, open_at: null, close_at: null },
+      data: { open_at: '2026-04-01T09:00:00', close_at: '2026-04-30T17:00:00' },
     })
 
-    const { registrationOpen, loadTime } = useActivityRegistrationTime()
+    const { timeInfo, loadTime } = useActivityRegistrationTime()
     await loadTime()
 
-    expect(registrationOpen.value).toBe(false)
+    expect(timeInfo.value).toEqual({
+      open_at: '2026-04-01T09:00:00',
+      close_at: '2026-04-30T17:00:00',
+    })
+  })
+
+  it('loadTime 失敗時靜默吞下錯誤，timeInfo 維持 null（fail-open）', async () => {
+    getPublicRegistrationTime.mockRejectedValue(new Error('network'))
+
+    const { timeInfo, loadTime } = useActivityRegistrationTime()
+    await loadTime()
+
+    expect(timeInfo.value).toBeNull()
+  })
+
+  it('applyTime 直接餵資料（供 /public/bootstrap 的 registration_time 區塊使用）', () => {
+    const { timeInfo, applyTime } = useActivityRegistrationTime()
+    applyTime({ open_at: null, close_at: '2026-12-31T23:59:00' })
+    expect(timeInfo.value).toEqual({ open_at: null, close_at: '2026-12-31T23:59:00' })
+  })
+
+  it('applyTime 收到空值時不覆寫既有 timeInfo', () => {
+    const { timeInfo, applyTime } = useActivityRegistrationTime()
+    applyTime({ open_at: null, close_at: '2026-12-31T23:59:00' })
+    applyTime(null)
+    expect(timeInfo.value).toEqual({ open_at: null, close_at: '2026-12-31T23:59:00' })
   })
 
   it('formatDate null → "—"', () => {

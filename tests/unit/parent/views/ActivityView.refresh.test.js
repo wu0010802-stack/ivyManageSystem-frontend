@@ -11,7 +11,7 @@ vi.mock('@/parent/api/activity', () => ({
   registerCourses: vi.fn(),
   confirmPromotion: vi.fn(() => Promise.resolve({ data: { status: 'ok' } })),
   declinePromotion: vi.fn(() => Promise.resolve({ data: { status: 'declined' } })),
-  getRegistrationTime: vi.fn(() => Promise.resolve({ data: { is_open: true } })),
+  getRegistrationTime: vi.fn(() => Promise.resolve({ data: { open_at: null, close_at: '2999-01-01T00:00:00Z' } })),
   getUpcomingSessions: vi.fn(() => Promise.resolve({ data: { items: [] } })),
   getActivityBootstrap: vi.fn(() =>
     Promise.resolve({
@@ -19,7 +19,7 @@ vi.mock('@/parent/api/activity', () => ({
         registrations: { items: [] },
         courses: { items: [] },
         upcoming_sessions: { items: [] },
-        registration_time: { is_open: true },
+        registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
       },
     }),
   ),
@@ -191,7 +191,7 @@ describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
         },
         courses: { items: [] },
         upcoming_sessions: { items: [] },
-        registration_time: { is_open: true },
+        registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
       },
     })
     await flushPromises()
@@ -224,7 +224,7 @@ describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
         registrations: { items: [oldReg] },
         courses: { items: [oldCourse] },
         upcoming_sessions: { items: [] },
-        registration_time: { is_open: true },
+        registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
       },
     })
     const w = mountView()

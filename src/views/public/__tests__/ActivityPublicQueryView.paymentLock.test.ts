@@ -44,7 +44,6 @@ function mockBootstrap({
   supplies?: Array<{ name: string; price: number }>
   classes?: string[]
   registrationTime?: {
-    is_open?: boolean
     open_at?: string | null
     close_at?: string | null
   }
@@ -311,7 +310,6 @@ describe('ActivityPublicQueryView — 報名截止後唯讀', () => {
       courses: [{ name: '美術', price: 3000 }],
       supplies: [{ name: '舞鞋', price: 500 }],
       registrationTime: {
-        is_open: true,
         open_at: null,
         close_at: '2000-01-01T00:00:00Z',
       },

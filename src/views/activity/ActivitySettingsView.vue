@@ -22,15 +22,8 @@
             :closable="false"
           />
           <el-form :model="form" label-width="120px">
-            <el-divider content-position="left">報名開關與期間</el-divider>
+            <el-divider content-position="left">報名期間</el-divider>
 
-            <el-form-item label="啟用報名">
-              <el-switch v-model="form.is_open" active-text="啟用" inactive-text="停用" />
-              <div class="field-hint">
-                總開關：只決定報名功能是否啟用；實際開放時段以下方開放／截止時間為準，
-                時間到會自動開放／自動截止。
-              </div>
-            </el-form-item>
             <el-form-item label="開放學期">
               <el-select
                 v-model="termKey"
@@ -54,21 +47,30 @@
               <el-date-picker
                 v-model="form.open_at"
                 type="datetime"
-                placeholder="選擇開放時間"
+                placeholder="留空＝儲存後立即開放"
                 format="YYYY-MM-DD HH:mm"
                 value-format="YYYY-MM-DDTHH:mm"
                 style="width: 100%"
               />
             </el-form-item>
             <el-form-item label="截止時間">
-              <el-date-picker
-                v-model="form.close_at"
-                type="datetime"
-                placeholder="選擇截止時間"
-                format="YYYY-MM-DD HH:mm"
-                value-format="YYYY-MM-DDTHH:mm"
-                style="width: 100%"
-              />
+              <div class="close-at-row">
+                <el-date-picker
+                  v-model="form.close_at"
+                  type="datetime"
+                  placeholder="選擇截止時間"
+                  format="YYYY-MM-DD HH:mm"
+                  value-format="YYYY-MM-DDTHH:mm"
+                  class="close-at-picker"
+                />
+                <el-button :disabled="gateStatus.state !== 'open'" @click="handleCloseNow">
+                  立即截止
+                </el-button>
+              </div>
+              <div class="field-hint">
+                報名以此期間為唯一依據：時間到自動開放／自動截止；兩者皆留空＝不開放。
+                「立即截止」會把截止時間填為現在，仍需按下儲存才生效。
+              </div>
             </el-form-item>
 
             <el-divider content-position="left">前台顯示文字</el-divider>
@@ -263,7 +265,6 @@ import { PAGE_TERMS } from '@/constants/moduleTerms'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 
 interface SettingsForm {
-  is_open: boolean
   open_at: string | null
   close_at: string | null
   // 本次開放報名的學期：決定前台報名頁看到哪個學期的課程與用品（2026-07-31）。
@@ -348,7 +349,6 @@ onUnmounted(() => {
 })
 
 const form = ref<SettingsForm>({
-  is_open: false,
   open_at: null,
   close_at: null,
   school_year: null,
@@ -445,7 +445,6 @@ async function fetchSettings() {
     const res = await getRegistrationTime()
     const d = res.data as Partial<SettingsForm>
     form.value = {
-      is_open: d.is_open ?? false,
       open_at: d.open_at || null,
       close_at: d.close_at || null,
       school_year: d.school_year ?? null,
@@ -516,6 +515,12 @@ async function handlePosterUpload({ file }: { file: UploadRawFile }) {
   }
 }
 
+/** 緊急煞車：把截止時間填為現在（等同立刻關閉報名），仍需儲存才生效。 */
+function handleCloseNow() {
+  form.value.close_at = taipeiNowMinuteString()
+  ElMessage.info('已把截止時間設為現在，請按「儲存設定」讓它生效')
+}
+
 async function handleSave() {
   if (!settingsLoaded.value) {
     ElMessage.error('設定尚未載入完成，請先重新載入後再儲存')
@@ -530,7 +535,6 @@ async function handleSave() {
   // 導致時間窗形同永遠開放；見 registrationSettingsConfirm.ts）
   const confirmLines = buildSaveConfirmLines(
     {
-      is_open: form.value.is_open,
       open_at: form.value.open_at,
       close_at: form.value.close_at,
       school_year: form.value.school_year,
@@ -554,7 +558,6 @@ async function handleSave() {
   saving.value = true
   try {
     const payload: ActivityRegistrationSettingsPayload = {
-      is_open: form.value.is_open,
       open_at: form.value.open_at,
       close_at: form.value.close_at,
       school_year: form.value.school_year,
@@ -759,5 +762,13 @@ onMounted(() => {
 }
 .gate-status {
   margin-bottom: 16px;
+}
+.close-at-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+.close-at-picker {
+  flex: 1;
 }
 </style>

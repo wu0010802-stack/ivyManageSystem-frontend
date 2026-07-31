@@ -52,7 +52,7 @@ describe('ActivityPublicView — 初始化 loading 期間不誤閃「報名尚�
 
     // ① 不應出現報名表單欄位（幼兒姓名 input 為代表）
     expect(wrapper.find('#studentName').exists()).toBe(false)
-    // ① 不應出現「報名尚未開放」（loading 期間 timeInfo 仍是預設值 is_open:false 算出的誤導文案）
+    // ① 不應出現「報名尚未開放」（loading 期間 timeInfo 仍是預設值 null＝尚未載入，fail-open 不擋）
     expect(wrapper.text()).not.toContain('報名尚未開放')
     expect(wrapper.find('.notice').exists()).toBe(false)
     // 應顯示中性載入態
@@ -73,7 +73,7 @@ describe('ActivityPublicView — 初始化 loading 期間不誤閃「報名尚�
         supplies: [],
         classes: ['大班'],
         course_videos: {},
-        registration_time: { is_open: false, open_at: null, close_at: null },
+        registration_time: { open_at: null, close_at: null },
       },
     } as never)
     vi.mocked(getPublicCoursesAvailability).mockResolvedValue({ data: {} } as never)
@@ -85,7 +85,7 @@ describe('ActivityPublicView — 初始化 loading 期間不誤閃「報名尚�
 
     // ② ready 後表單欄位出現
     expect(wrapper.find('#studentName').exists()).toBe(true)
-    // ② ready 後真實 banner 出現（本測試 bootstrap 回傳 is_open:false → 真實狀態確實是「尚未開放」，
+    // ② ready 後真實 banner 出現（本測試 bootstrap 回傳雙空時間窗 → 真實狀態確實是「尚未開放」，
     //    此處驗證的是「resolve 後才出現」，而非「永遠不出現」）
     expect(wrapper.find('.notice').exists()).toBe(true)
     expect(wrapper.text()).toContain('報名尚未開放')

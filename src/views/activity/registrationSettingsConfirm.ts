@@ -10,7 +10,8 @@
  */
 
 export interface RegistrationWindowForm {
-  is_open: boolean
+  // is_open 開關已移除（2026-07-31 業主裁定）：純時間窗語意，
+  // open_at/close_at 雙空＝不開放，單邊空＝該側不限制。
   open_at: string | null
   close_at: string | null
   /** 本次開放報名的學期；null 代表未指定（前台改依系統日期推算當期）。 */
@@ -44,16 +45,15 @@ function fmtTerm(form: RegistrationWindowForm): string {
 }
 
 /**
- * 報名 tab 常駐狀態（2026-07-31）。
+ * 報名 tab 常駐狀態（2026-07-31；同日稍晚移除開關改純時間窗）。
  *
- * Why: 開關（is_open）與時間窗（open_at/close_at）是 AND 語意——開關只是總閘，
- * 實際開放時段由時間窗決定。過去只有存檔確認框會警告，平常看不到「前台現在
- * 到底是什麼狀態」，管理者容易把開關誤解為唯一權威。這裡把 AND 的計算結果
- * 常駐攤在表單頂部。判斷順序與 buildSaveConfirmLines 一致：
- * 停用 → 已截止（close_at <= now，等值視為已截止）→ 尚未開始 → 開放中。
+ * Why: 把時間窗的計算結果常駐攤在表單頂部，管理者隨時看得到「前台現在到底
+ * 是什麼狀態」。判斷順序與 buildSaveConfirmLines／後端
+ * registration_window_reason 一致：未設定期間（雙空＝不開放）→ 已截止
+ * （close_at <= now，等值視為已截止）→ 尚未開始 → 開放中。
  */
 export interface GateStatus {
-  state: 'switch_off' | 'closed' | 'not_started' | 'open'
+  state: 'unscheduled' | 'closed' | 'not_started' | 'open'
   /** el-alert 的 type */
   type: 'info' | 'error' | 'warning' | 'success'
   title: string
@@ -61,12 +61,12 @@ export interface GateStatus {
 }
 
 export function computeGateStatus(form: RegistrationWindowForm, nowStr: string): GateStatus {
-  if (!form.is_open) {
+  if (!form.open_at && !form.close_at) {
     return {
-      state: 'switch_off',
+      state: 'unscheduled',
       type: 'info',
-      title: '前台目前：報名尚未開放（總開關停用）',
-      description: '啟用總開關後，仍會依下方開放／截止時間決定實際開放時段。',
+      title: '前台目前：報名尚未開放（未設定期間）',
+      description: '設定下方開放／截止時間後，前台才會開放報名。',
     }
   }
   if (form.close_at && form.close_at <= nowStr) {
@@ -82,7 +82,7 @@ export function computeGateStatus(form: RegistrationWindowForm, nowStr: string):
       state: 'not_started',
       type: 'warning',
       title: '前台目前：報名尚未開始',
-      description: `總開關已啟用，前台將於 ${fmt(form.open_at)} 自動開放報名。`,
+      description: `前台將於 ${fmt(form.open_at)} 自動開放報名。`,
     }
   }
   return {
@@ -91,7 +91,7 @@ export function computeGateStatus(form: RegistrationWindowForm, nowStr: string):
     title: '前台目前：開放報名中',
     description: form.close_at
       ? `至 ${fmt(form.close_at)} 截止，屆時前台自動關閉報名。`
-      : '未設定截止時間，將持續開放，直到停用總開關或補設截止時間。',
+      : '未設定截止時間，將持續開放，直到補設截止時間或清空開放時間。',
   }
 }
 
@@ -102,21 +102,22 @@ export function computeGateStatus(form: RegistrationWindowForm, nowStr: string):
  */
 export function buildSaveConfirmLines(form: RegistrationWindowForm, nowStr: string): string[] {
   const lines = [
-    `報名總開關：${form.is_open ? '啟用' : '停用'}`,
     `開放學期：${fmtTerm(form)}`,
     `報名期間：${fmt(form.open_at)} ～ ${fmt(form.close_at)}`,
   ]
-  if (!form.is_open) {
-    lines.push('總開關停用：前台將顯示「報名尚未開放」，期間設定不生效。')
+  if (!form.open_at && !form.close_at) {
+    lines.push('未設定起訖時間：前台將顯示「報名尚未開放」，家長無法報名。')
     return lines
   }
   if (form.close_at && form.close_at <= nowStr) {
     lines.push('⚠ 截止時間已是過去時間，前台將顯示「報名已截止」，無法報名。')
   } else if (form.open_at && form.open_at > nowStr) {
     lines.push(`⚠ 開放時間尚未到，前台在 ${fmt(form.open_at)} 前將顯示「報名尚未開始」。`)
+  } else if (!form.open_at && form.close_at) {
+    lines.push(`未設定開放時間：儲存後立即開放，至 ${fmt(form.close_at)} 截止。`)
   }
-  if (!form.open_at && !form.close_at) {
-    lines.push('未設定起訖時間：前台將立即開放且無截止時間。')
+  if (form.open_at && !form.close_at) {
+    lines.push('未設定截止時間：開放後將持續開放，直到補設截止時間。')
   }
   return lines
 }

@@ -81,7 +81,7 @@ const SUCCESS_RESP = {
     courses: { items: [] },
     registrations: { items: [] },
     upcoming_sessions: { items: [] },
-    registration_time: { is_open: true, open_at: null, close_at: null },
+    registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
   },
 }
 

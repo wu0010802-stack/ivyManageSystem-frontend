@@ -66,7 +66,7 @@ beforeEach(() => {
   hasPermissionMock.mockReturnValue(true)
   // 預設 tab 已改為「課程管理」，設定相關的案例要顯式帶 tab=registration 才看得到表單
   mockRoute.query = { tab: 'registration' }
-  vi.mocked(getRegistrationTime).mockResolvedValue({ data: { is_open: false } } as never)
+  vi.mocked(getRegistrationTime).mockResolvedValue({ data: { open_at: null, close_at: null } } as never)
   vi.mocked(getWaitlistPromotedEmailTemplate).mockResolvedValue({
     data: { ...TEMPLATE_RES },
   } as never)
@@ -259,7 +259,7 @@ describe('ActivitySettingsView — tabs 切換與 query string 同步', () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('報名開關')
+    expect(wrapper.text()).toContain('報名期間')
   })
 
   it('無 ACTIVITY_WRITE → 只剩課程與用品 tab，設定與信件模板不渲染也不打 API', async () => {

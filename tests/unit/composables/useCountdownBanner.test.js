@@ -53,52 +53,70 @@ describe('countdownLabel', () => {
   })
 })
 
+// 2026-07-31 起純時間窗語意（is_open 開關已移除）：
+// 雙空物件（無 open_at/close_at）＝報名未開放，取代舊版的 banner=null。
+// timeInfoRef 本身為 null/undefined（資料尚未載入）則仍回 null，
+// 與「已載入但雙空＝未開放」區分開來，避免載入期間誤閃「未開放」訊息。
+// 順序＝null → 雙空 → 已截止 → 尚未開始 → 48h/3 天內倒數提醒 → null（開放中且無需提醒）。
 describe('useCountdownBanner', () => {
-  it('沒 open_at/close_at → banner=null', () => {
-    const { banner } = useCountdownBanner(ref({ is_open: true }))
+  it('timeInfoRef 為 null（尚未載入）→ banner=null（不誤閃未開放）', () => {
+    const { banner } = useCountdownBanner(ref(null))
     expect(banner.value).toBe(null)
+  })
+
+  it('timeInfoRef 為 undefined（尚未載入）→ banner=null', () => {
+    const { banner } = useCountdownBanner(ref(undefined))
+    expect(banner.value).toBe(null)
+  })
+
+  it('雙空（無 open_at/close_at）→ info「報名目前未開放」', () => {
+    const { banner } = useCountdownBanner(ref({}))
+    expect(banner.value.type).toBe('info')
+    expect(banner.value.msg).toContain('報名目前未開放')
   })
 
   it('close_at 已過 → info「報名已截止」', () => {
     const close = new Date(FIXED_NOW.getTime() - 60_000).toISOString()
-    const { banner } = useCountdownBanner(ref({ is_open: true, close_at: close }))
+    const { banner } = useCountdownBanner(ref({ close_at: close }))
     expect(banner.value.type).toBe('info')
     expect(banner.value.msg).toContain('報名已截止')
   })
 
   it('close_at 不到 3 天 → warning + 顯示時數分鐘', () => {
     const close = new Date(FIXED_NOW.getTime() + 2 * 24 * 3600_000 + 3 * 3600_000 + 15 * 60_000).toISOString()
-    const { banner } = useCountdownBanner(ref({ is_open: true, close_at: close }))
+    const { banner } = useCountdownBanner(ref({ close_at: close }))
     expect(banner.value.type).toBe('warning')
     expect(banner.value.msg).toContain('51 小時 15 分鐘')
   })
 
-  it('close_at 超過 3 天 + is_open=true → banner=null', () => {
+  it('close_at 超過 3 天、無 open_at 限制 → banner=null（開放中，無需提醒）', () => {
     const close = new Date(FIXED_NOW.getTime() + 10 * 24 * 3600_000).toISOString()
-    const { banner } = useCountdownBanner(ref({ is_open: true, close_at: close }))
+    const { banner } = useCountdownBanner(ref({ close_at: close }))
     expect(banner.value).toBe(null)
   })
 
-  it('close_at 超過 3 天 + is_open=false → info「報名目前未開放」', () => {
-    const close = new Date(FIXED_NOW.getTime() + 10 * 24 * 3600_000).toISOString()
-    const { banner } = useCountdownBanner(ref({ is_open: false, close_at: close }))
+  it('open_at 尚未到 → info「報名尚未開始」', () => {
+    const open = new Date(FIXED_NOW.getTime() + 24 * 3600_000).toISOString()
+    const { banner } = useCountdownBanner(ref({ open_at: open }))
     expect(banner.value.type).toBe('info')
-    expect(banner.value.msg).toContain('未開放')
+    expect(banner.value.msg).toContain('報名尚未開始')
+    expect(banner.value.msg).toContain(formatIsoMinute(open))
   })
 
-  it('只 open_at + is_open=false → info「報名目前未開放」', () => {
-    const open = new Date(FIXED_NOW.getTime() + 24 * 3600_000).toISOString()
-    const { banner } = useCountdownBanner(ref({ is_open: false, open_at: open }))
-    expect(banner.value.type).toBe('info')
+  it('只設 open_at 且已到（無 close_at）→ banner=null（立即開放，持續中）', () => {
+    const open = new Date(FIXED_NOW.getTime() - 24 * 3600_000).toISOString()
+    const { banner } = useCountdownBanner(ref({ open_at: open }))
+    expect(banner.value).toBe(null)
   })
 
   it('reactive：timeInfo 改變後 banner 重新計算', () => {
-    const info = ref({ is_open: true, close_at: null })
+    const openPast = new Date(FIXED_NOW.getTime() - 24 * 3600_000).toISOString()
+    const info = ref({ open_at: openPast, close_at: null })
     const { banner } = useCountdownBanner(info)
     expect(banner.value).toBe(null)
 
     const close = new Date(FIXED_NOW.getTime() + 60 * 60_000).toISOString()
-    info.value = { is_open: true, close_at: close }
+    info.value = { open_at: openPast, close_at: close }
     expect(banner.value.type).toBe('warning')
   })
 

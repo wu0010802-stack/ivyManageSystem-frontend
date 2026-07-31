@@ -707,9 +707,9 @@ const optionsLoading = ref(false)
 const optionsError = ref<unknown>(null)
 const loadedOptionsTermKey = ref<string | null>(null)
 
-// F5：報名時段守衛。預設 is_open=true → fail-open（比照 parent/views/ActivityView.vue
+// F5：報名時段守衛。預設 null＝尚未載入 → fail-open（比照 parent/views/ActivityView.vue
 // 既有先例）：bootstrap 資料回來前，若查到報名不該誤鎖一個實際仍開放的視窗。
-const timeInfo = ref<RegistrationTimeSettings>({ is_open: true, open_at: null, close_at: null })
+const timeInfo = ref<RegistrationTimeSettings | null>(null)
 function applyRegistrationTime(data: RegistrationTimeSettings | null | undefined) {
   if (data) timeInfo.value = data
 }
