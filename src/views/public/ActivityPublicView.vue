@@ -185,6 +185,23 @@
                   <span class="form-card-header-title">{{ displayFormCardTitle }}</span>
                 </div>
                 <div class="form-card-body">
+                  <div
+                    v-if="draftRestored"
+                    class="draft-restored-notice"
+                    role="status"
+                    data-testid="draft-restored-notice"
+                  >
+                    <svg class="icon" aria-hidden="true"><use href="#i-form" /></svg>
+                    <p class="draft-restored-text">已幫您留著上次填到一半的資料，接著填完就好。</p>
+                    <button
+                      type="button"
+                      class="draft-restored-discard"
+                      @click="discardRestoredDraft"
+                    >
+                      清除重填
+                    </button>
+                  </div>
+
                   <nav class="registration-steps" aria-label="報名進度">
                     <button
                       v-for="step in registrationSteps"
@@ -627,6 +644,7 @@ import {
   usePublicRegistrationFlow,
   type PublicRegistrationStep,
 } from '@/composables/usePublicRegistrationFlow'
+import { usePublicRegistrationDraft } from '@/composables/usePublicRegistrationDraft'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
@@ -747,6 +765,22 @@ const {
   goToErrorField,
   resetFlow,
 } = usePublicRegistrationFlow()
+
+// 草稿保存：家長在 LINE 內建瀏覽器填表、被打斷切走再回來時不必重填（見 composable 註解）
+const {
+  restoreDraft,
+  clearDraft: clearRegistrationDraft,
+  startAutosave: startDraftAutosave,
+} = usePublicRegistrationDraft({ form, currentStep, highestVisitedStep })
+let stopDraftAutosave: (() => void) | undefined
+const draftRestored = ref(false)
+
+function discardRestoredDraft() {
+  clearRegistrationDraft()
+  resetForm()
+  resetFlow()
+  draftRestored.value = false
+}
 
 const submitting = ref(false)
 // 送出失敗的持久錯誤（非 toast）：手機上家長低頭填表會錯過 4.5s toast，
@@ -1080,6 +1114,10 @@ async function handleSubmitRegistration() {
       queryToken: result.query_token,
     })
     showToast(result.message || '報名送出成功！', 'success')
+    // 先清草稿再 resetForm：autosave watcher 對空表單本來就會清掉草稿，但清除順序
+    // 顛倒會讓 debounce 期間的重新整理還原到一筆已送出的報名，家長可能重複報名
+    clearRegistrationDraft()
+    draftRestored.value = false
     resetForm()
     resetFlow()
     await refreshAvailability()
@@ -1110,13 +1148,22 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 }
 
 onMounted(async () => {
-  if (await runInit()) startPolling()
+  if (await runInit()) {
+    startPolling()
+    // 還原草稿必須排在 runInit 之後：要拿當期課程／用品清單濾掉已下架的品項
+    draftRestored.value = restoreDraft(
+      courses.value.map((course) => course.name),
+      supplies.value.map((supply) => supply.name),
+    )
+  }
   // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
+  stopDraftAutosave = startDraftAutosave()
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
 onUnmounted(() => {
   disposed = true
   stopPolling()
+  stopDraftAutosave?.()
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
@@ -1471,6 +1518,40 @@ onUnmounted(() => {
 .form-card-header .icon { color: var(--color-text-muted); flex-shrink: 0; }
 .form-card-header-title { font-weight: 700; font-size: var(--fs-md); color: var(--color-text); }
 .form-card-body { padding: var(--space-2) var(--space-5) var(--space-5); }
+
+/* 草稿還原提示：整框淡綠底 + 1px 全框線（公開頁禁用單邊色條，見 ToastStack 註解） */
+.draft-restored-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+.draft-restored-notice .icon { flex-shrink: 0; width: 20px; height: 20px; color: var(--color-primary); }
+.draft-restored-text {
+  flex: 1;
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+/* 文字用深咖啡而非深綠：深綠 #0d9053 配淺綠底僅 3.75:1，不過 WCAG AA */
+.draft-restored-discard {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.draft-restored-discard:hover { border-color: var(--color-primary); }
+.draft-restored-discard:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 .registration-steps {
   display: grid;
