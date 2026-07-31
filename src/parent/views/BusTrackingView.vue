@@ -32,9 +32,10 @@ import M3Button from '../components/m3/M3Button.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useBusTracking } from '../composables/useBusTracking'
 
-const { state, init, teardown, refresh } = useBusTracking()
+const { state, init, teardown, refresh, retryWs } = useBusTracking()
 
 const mapEl = ref<HTMLElement | null>(null)
+const retrying = ref(false)
 
 const isInProgress = computed(() => state.trip?.status === 'in_progress')
 /** 快照失敗（403 / 500）：畫面上的座標可能是好幾分鐘前的，一律當作不可信 */
@@ -43,12 +44,37 @@ const fetchFailed = computed(() => state.lastFetchFailedAt !== null)
 const showMap = computed(
   () => isInProgress.value && !!state.position && !state.stale && !fetchFailed.value,
 )
-/** 斷線重連中（實務上一律是 1006）；wsExhausted 代表已改用輪詢維生 */
-const showReconnecting = computed(() => isInProgress.value && !state.wsConnected)
+/**
+ * 斷線重連中（實務上一律是 1006）。
+ * 必須加上 `lastWsClose !== null`：`wsConnected` 初值就是 false，而 `init()` 會先 await
+ * 快照、`onopen` 更晚才到，只看 `wsConnected` 的話**每次進頁都會先閃一次「連線中斷」**
+ * （全域 ConnectionBanner 的 `wsBannerDelayMs = 3000` 正是為了迴避同一件事）。
+ * 只有真的斷過（收過 close）才提示。
+ */
+const showReconnecting = computed(
+  () => isInProgress.value && !state.wsConnected && state.lastWsClose !== null,
+)
 const lastUpdatedText = computed(() => {
   const clock = formatTaipeiClock(state.position?.at ?? null)
   return clock ? `最後回報 ${clock}` : ''
 })
+
+/**
+ * 手動重試：快照與 WS 一起救。只重抓快照的話，WS 若同時死著仍然回不到即時；
+ * `retryWs()` 會立刻換一條連線並把退避次數歸零。
+ * 連點防護只留 `:disabled="retrying"` 一道：M3Button 是原生 `<button :disabled>`，disable 期間
+ * 事件根本不會送達，再加一道 `if (retrying.value) return` 早退是永遠跑不到的死程式
+ * （mutation M47 實測：兩者互相遮蔽，拿掉任一個測試都不會紅），故不留。
+ */
+async function retryNow(): Promise<void> {
+  retrying.value = true
+  try {
+    retryWs()
+    await refresh()
+  } finally {
+    retrying.value = false
+  }
+}
 
 function progressText(child: { stop_status: string; stops_ahead: number }): string {
   if (child.stop_status === 'pending') return `前面還有 ${child.stops_ahead} 站`
@@ -177,57 +203,88 @@ onBeforeUnmount(() => {
       <SkeletonBlock variant="card" :count="2" />
     </div>
 
-    <EmptyState
-      v-else-if="!state.trip"
-      data-testid="bus-empty"
-      variant="mobile"
-      :icon="KawaiiStar"
-      title="目前沒有進行中的娃娃車班次"
-      description="發車後這裡會顯示即時位置"
-    />
-
-    <template v-else-if="isInProgress">
-      <!-- 快照失敗：明說取不到最新位置，不留舊座標假裝即時 -->
-      <M3Card v-if="fetchFailed" data-testid="bus-fetch-error" variant="outlined" class="bus-notice is-error">
+    <template v-else>
+      <!--
+        快照失敗的提示必須在三態**之外**：冷啟動就 403 / 500 時 `state.trip` 會維持 null，
+        掛在 in_progress 分支內的話畫面會走空狀態、謊稱「今天沒有班次」——那比凍結的地圖
+        更糟，家長會直接不看了。同理 `completed` 也可能只是抓不到新班次。
+      -->
+      <M3Card
+        v-if="fetchFailed"
+        data-testid="bus-fetch-error"
+        variant="outlined"
+        role="status"
+        aria-live="polite"
+        class="bus-notice is-error"
+      >
         <div class="bus-notice-title">無法取得最新位置</div>
         <div class="bus-notice-text">
-          與園所的連線出了狀況，畫面上的位置可能已經不是現在的位置，因此暫時不顯示地圖。
+          與園所的連線出了狀況，畫面上的資訊可能已經不是現在的狀況，因此暫時不顯示地圖。
         </div>
-        <M3Button data-testid="bus-retry" variant="filled" class="bus-notice-action" @click="refresh()">
-          重新載入
+        <M3Button
+          data-testid="bus-retry"
+          variant="filled"
+          class="bus-notice-action"
+          :disabled="retrying"
+          @click="retryNow"
+        >
+          {{ retrying ? '重新載入中⋯' : '重新載入' }}
         </M3Button>
       </M3Card>
 
-      <!-- server 超過 60 秒沒收到車機回報 -->
-      <M3Card v-else-if="state.stale" data-testid="bus-stale" variant="outlined" class="bus-notice">
-        <div class="bus-notice-title">位置訊號暫時中斷</div>
-        <div class="bus-notice-text">
-          車機超過一分鐘沒有回報位置，暫時不顯示地圖；以下為最近一次的接送進度。
-        </div>
-      </M3Card>
+      <!-- 快照失敗時一律不下「沒有班次」「已結束」這種負面斷言，只有進行中的進度照常顯示 -->
+      <EmptyState
+        v-if="!fetchFailed && !state.trip"
+        data-testid="bus-empty"
+        variant="mobile"
+        :icon="KawaiiStar"
+        title="目前沒有進行中的娃娃車班次"
+        description="發車後這裡會顯示即時位置"
+      />
 
-      <div v-if="showMap" ref="mapEl" data-testid="bus-map" class="bus-map" role="img" aria-label="娃娃車即時位置地圖" />
-      <p v-if="showMap && lastUpdatedText" class="bus-updated">{{ lastUpdatedText }}</p>
+      <template v-else-if="isInProgress">
+        <!-- server 超過 60 秒沒收到車機回報 -->
+        <M3Card
+          v-if="!fetchFailed && state.stale"
+          data-testid="bus-stale"
+          variant="outlined"
+          role="status"
+          aria-live="polite"
+          class="bus-notice"
+        >
+          <div class="bus-notice-title">位置訊號暫時中斷</div>
+          <div class="bus-notice-text">
+            車機超過一分鐘沒有回報位置，暫時不顯示地圖；以下為最近一次的接送進度。
+          </div>
+        </M3Card>
 
-      <p v-if="showReconnecting" data-testid="bus-conn" class="bus-conn">
-        即時連線中斷，正在重新連線⋯
-      </p>
+        <!--
+          不加 role="img"：那會讓容器內容變成 presentational，連 Leaflet 自動插入的縮放鈕與
+          **OpenStreetMap attribution 連結（授權要求可觸及）**一起被輔助科技隱藏。
+        -->
+        <div v-if="showMap" ref="mapEl" data-testid="bus-map" class="bus-map" aria-label="娃娃車即時位置地圖" />
+        <p v-if="showMap && lastUpdatedText" class="bus-updated">{{ lastUpdatedText }}</p>
 
-      <M3Card v-for="child in state.children" :key="child.student_id" class="bus-progress-card">
-        <div class="bus-progress-title">{{ child.student_name }}</div>
-        <div class="bus-progress-text">{{ progressText(child) }}</div>
-      </M3Card>
-    </template>
+        <p v-if="showReconnecting" data-testid="bus-conn" role="status" aria-live="polite" class="bus-conn">
+          即時連線中斷，正在重新連線⋯
+        </p>
 
-    <M3Card v-else data-testid="bus-done" class="bus-progress-card">
+        <M3Card v-for="child in state.children" :key="child.student_id" class="bus-progress-card">
+          <div class="bus-progress-title">{{ child.student_name }}</div>
+          <div class="bus-progress-text">{{ progressText(child) }}</div>
+        </M3Card>
+      </template>
+
+      <M3Card v-else-if="!fetchFailed && state.trip" data-testid="bus-done" class="bus-progress-card">
       <div class="bus-progress-title">班次已結束</div>
       <div class="bus-progress-text">
         {{ state.trip?.direction === 'morning' ? '孩子已抵達學校' : '接送行程已完成' }}
       </div>
-      <div v-if="state.trip?.auto_closed" class="bus-progress-note">
-        這筆班次由系統自動結束（司機未手動結束），如有疑問請聯絡園所。
-      </div>
-    </M3Card>
+        <div v-if="state.trip?.auto_closed" class="bus-progress-note">
+          這筆班次由系統自動結束（司機未手動結束），如有疑問請聯絡園所。
+        </div>
+      </M3Card>
+    </template>
   </div>
 </template>
 

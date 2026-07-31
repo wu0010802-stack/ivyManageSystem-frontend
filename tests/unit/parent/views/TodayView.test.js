@@ -502,6 +502,25 @@ describe('TodayView 娃娃車入口卡', () => {
     expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
   })
 
+  it('有待繳學費但今天沒有娃娃車班次：bento 出現但不得有空白娃娃車卡', async () => {
+    // 外層 .today-bento 的 v-if 會因為 feesInfo 有值而成立，內層 StatTile 必須自己擋住，
+    // 否則會渲染出 value 空白卻連到 /bus 的卡片。
+    busTodayMock.getBusToday.mockResolvedValueOnce({
+      data: { trip: null, position: null, stale: false, school: null, children: [] },
+    })
+    const w = mountWith(
+      {
+        me: { name: '王太太' },
+        children: [{ student_id: 1, name: '小明' }],
+        summary: { fees: { outstanding_count: 2, outstanding: 3000, overdue: 0 } },
+      },
+      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
+    )
+    await flushPromises()
+    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')).toBeTruthy()
+    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
+  })
+
   it('娃娃車快照失敗不得擋住首頁其他區塊', async () => {
     busTodayMock.getBusToday.mockRejectedValueOnce(new Error('boom'))
     const w = mountWith(...HOME)

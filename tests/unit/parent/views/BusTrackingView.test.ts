@@ -186,11 +186,50 @@ describe('BusTrackingView — 不得把不新鮮的位置當即時', () => {
     expect(w.find('[data-testid="bus-map"]').exists()).toBe(false)
   })
 
-  it('快照失敗時提供重試，按下即重抓快照', async () => {
+  it('冷啟動快照失敗時不得謊稱「今天沒有班次」', async () => {
+    // trip 還是 null 只是因為快照根本沒抓到，不代表今天沒有娃娃車。
+    // 這比凍結的地圖更糟——家長會直接不看了。
+    setState({ trip: null, lastFetchFailedAt: Date.now() })
+    const w = await mountView()
+    expect(w.text()).not.toContain('目前沒有進行中的娃娃車班次')
+    expect(w.find('[data-testid="bus-empty"]').exists()).toBe(false)
+    expect(w.find('[data-testid="bus-fetch-error"]').exists()).toBe(true)
+  })
+
+  it('快照失敗時不得宣稱「班次已結束」（可能只是抓不到新班次）', async () => {
+    setState({ trip: { ...IN_PROGRESS_TRIP, status: 'completed' }, lastFetchFailedAt: Date.now() })
+    const w = await mountView()
+    expect(w.text()).not.toContain('班次已結束')
+    expect(w.find('[data-testid="bus-done"]').exists()).toBe(false)
+    expect(w.find('[data-testid="bus-fetch-error"]').exists()).toBe(true)
+  })
+
+  it('快照失敗時提供重試，按下即重抓快照並重連 WS', async () => {
     setState({ trip: IN_PROGRESS_TRIP, position: POSITION, lastFetchFailedAt: Date.now() })
     const w = await mountView()
     await w.find('[data-testid="bus-retry"]').trigger('click')
     expect(trackingMock.refresh).toHaveBeenCalled()
+    // WS 若同時死著，只重抓快照仍然回不到即時
+    expect(trackingMock.retryWs).toHaveBeenCalled()
+  })
+
+  it('重試進行中按鈕 disable，連點不得併發多次', async () => {
+    let release: (() => void) | null = null
+    trackingMock.refresh.mockImplementationOnce(
+      () => new Promise<void>((r) => { release = r }),
+    )
+    setState({ trip: IN_PROGRESS_TRIP, position: POSITION, lastFetchFailedAt: Date.now() })
+    const w = await mountView()
+    const btn = w.find('[data-testid="bus-retry"]')
+    await btn.trigger('click')
+    await btn.trigger('click')
+    await btn.trigger('click')
+
+    expect(trackingMock.refresh).toHaveBeenCalledTimes(1)
+    expect(w.find('[data-testid="bus-retry"]').attributes('disabled')).toBeDefined()
+    release?.()
+    await flushPromises()
+    expect(w.find('[data-testid="bus-retry"]').attributes('disabled')).toBeUndefined()
   })
 
   it('資料正常時不得出現任何降級提示', async () => {
@@ -202,11 +241,24 @@ describe('BusTrackingView — 不得把不新鮮的位置當即時', () => {
 })
 
 describe('BusTrackingView — 連線狀態只有兩態', () => {
-  it('WS 斷線時提示重新連線中', async () => {
-    setState({ trip: IN_PROGRESS_TRIP, position: POSITION, wsConnected: false })
+  it('WS 真的斷過才提示重新連線中', async () => {
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      wsConnected: false,
+      lastWsClose: { code: 1006, kind: 'transient', message: '連線中斷' },
+    })
     const w = await mountView()
     expect(w.find('[data-testid="bus-conn"]').exists()).toBe(true)
     expect(w.text()).toContain('重新連線')
+  })
+
+  it('進頁瞬間（尚未握手完成、從未斷過）不得閃斷線提示', async () => {
+    // wsConnected 初值就是 false，init() 先 await 快照、onopen 更晚；
+    // 只看 wsConnected 會讓每次進頁都閃一次「連線中斷」。
+    setState({ trip: IN_PROGRESS_TRIP, position: POSITION, wsConnected: false, lastWsClose: null })
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-conn"]').exists()).toBe(false)
   })
 
   it('WS 正常時不顯示連線提示', async () => {
@@ -216,10 +268,47 @@ describe('BusTrackingView — 連線狀態只有兩態', () => {
   })
 
   it('不得為永遠不會發生的 4007 權限拒絕做 UI（死程式）', async () => {
-    setState({ trip: IN_PROGRESS_TRIP, position: POSITION, wsConnected: false, wsBlocked: true })
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      wsConnected: false,
+      wsBlocked: true,
+      lastWsClose: { code: 1006, kind: 'transient', message: '連線中斷' },
+    })
     const w = await mountView()
     expect(w.text()).not.toContain('權限')
     expect(w.text()).not.toContain('聯絡管理員')
+  })
+})
+
+describe('BusTrackingView — 無障礙', () => {
+  it('地圖容器不得用 role="img"（會把 Leaflet 的縮放鈕與 OSM 授權連結一起藏起來）', async () => {
+    setState({ trip: IN_PROGRESS_TRIP, position: POSITION })
+    const w = await mountView()
+    const map = w.find('[data-testid="bus-map"]')
+    expect(map.attributes('role')).toBeUndefined()
+    expect(map.attributes('aria-label')).toBeTruthy()
+  })
+
+  it('三種動態降級提示都要 role="status"，螢幕閱讀器才收得到', async () => {
+    setState({ trip: IN_PROGRESS_TRIP, position: POSITION, lastFetchFailedAt: Date.now() })
+    const failed = await mountView()
+    expect(failed.find('[data-testid="bus-fetch-error"]').attributes('role')).toBe('status')
+
+    Object.assign(trackingMock.state, trackingMock.reset())
+    setState({ trip: IN_PROGRESS_TRIP, position: POSITION, stale: true })
+    const stale = await mountView()
+    expect(stale.find('[data-testid="bus-stale"]').attributes('role')).toBe('status')
+
+    Object.assign(trackingMock.state, trackingMock.reset())
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      wsConnected: false,
+      lastWsClose: { code: 1006, kind: 'transient', message: '連線中斷' },
+    })
+    const conn = await mountView()
+    expect(conn.find('[data-testid="bus-conn"]').attributes('role')).toBe('status')
   })
 })
 
