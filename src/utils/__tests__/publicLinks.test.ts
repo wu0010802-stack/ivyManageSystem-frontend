@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPublicEditUrl } from '@/utils/publicLinks'
+import { buildPublicEditUrl, buildPublicRegistrationUrl } from '@/utils/publicLinks'
 
 describe('buildPublicEditUrl', () => {
   it('組出 public.html hash 路由的編修連結（token 在 hash 之內）', () => {
@@ -24,5 +24,20 @@ describe('buildPublicEditUrl', () => {
     expect(hashIdx).toBeGreaterThan(-1)
     // hash 之前的部分不得含 token（舊 bug：/public/activity/query?token= 落在 hash 前）
     expect(url.slice(0, hashIdx)).not.toContain('token')
+  })
+})
+
+describe('buildPublicRegistrationUrl', () => {
+  it('組出對外分享用的裸報名連結（不帶 token / 學期參數）', () => {
+    expect(buildPublicRegistrationUrl('https://ivy.example.com')).toBe(
+      'https://ivy.example.com/public.html#/activity',
+    )
+  })
+
+  it('走 public.html entry 而非 admin SPA fallback（後者在 LINE 預覽卡會顯示成管理系統）', () => {
+    const url = buildPublicRegistrationUrl('https://ivy.example.com')
+    expect(url).toContain('/public.html#/')
+    expect(url).not.toContain('index.html')
+    expect(url).not.toContain('#/public/activity')
   })
 })
