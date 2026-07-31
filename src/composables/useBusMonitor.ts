@@ -182,6 +182,17 @@ export function useBusMonitor() {
    * 已由 WS 告知結束的班次。`bus_trip_completed` 之後補抓的快照可能還讀到舊狀態
    * （或晚到的舊快照），沒有這道覆寫就會把已回校的車重新畫成行駛中。
    * 與家長端 `useBusTracking` 的 `completedTripIds` 同一設計。
+   *
+   * **班次狀態是終態**（`selectRoute` 的 clear 與「沒有 delete」都建立在這個前提上）：
+   * 後端 `BusTrip.status` 全 repo 只有兩處寫入，且都寫成 `"completed"`——
+   * `api/bus/portal_trips.py:407`（手動結束）與
+   * `services/bus_maintenance_scheduler.py:74`（逾時自動關閉）；
+   * `models/bus.py:46` 的 `default="in_progress"` 只在建構新 row 時生效（新 id，
+   * 不構成 reopen），DB 另有 `ck_bus_trips_status_domain` 鎖住值域。
+   * 因此集合裡的 id 永遠不可能再合法變回 `in_progress`。
+   * ⚠ **將來若後端加了 reopen 端點，這裡要一起回來改**（覆寫會把復活的班次壓回
+   * completed），連同 `selectRoute` 的 `completedTripIds.clear()`（該行目前是狀態
+   * 衛生、非行為性，mutation 實測等價，故刻意沒有對應測試——寫了會是恆真斷言）。
    */
   const completedTripIds = new Set<number>()
   let lastUnknownProbeAt = 0
@@ -335,12 +346,25 @@ export function useBusMonitor() {
       trip.value = nextTrip
       stops.value = nextStops
       foreignTripIds.delete(nextTrip.id)
+      // 這裡刻意**沒有** `completedTripIds.delete(nextTrip.id)`（家長端的
+      // `bus_trip_started` 分支有）：班次狀態是終態（見 completedTripIds 的宣告），
+      // 已結束的班次不會再吐出 in_progress 的事件，那行在本檔不可達。
+      // 待後端補上 admin 端 `bus_trip_started` 推播、本分支併入該事件時，此論證不變。
       snapshotFailed.value = false
     } else if (type === 'bus_trip_completed') {
       const tripId = asNum(payload.trip_id)
+      if (tripId === null) return
       const current = trip.value
-      if (tripId === null || !current || current.id !== tripId) return
+      // 顯示中的是別班次 → 與本頁無關（這道早退必須排在 add 之前，否則別條路線的
+      // 結束事件也會被記進覆寫集合，且會多打一次快照）
+      if (current && current.id !== tripId) return
+      // **先記錄、才早退**：首次快照還在 in-flight 時 `trip.value` 仍是 null，
+      // 此時無從標記狀態，但仍必須記下 id——否則晚到的 `in_progress` 快照會把
+      // 已回校的車復活成行駛中，而且此後不會再有該班次的事件來修正，畫面會一路
+      // 顯示「行駛中」直到 60 秒後 stale 介入，說成「位置訊號暫時中斷」（更難診斷的謊）。
+      // 與家長端 `src/parent/composables/useBusTracking.ts:276-291` 同語意。
       completedTripIds.add(tripId)
+      if (!current) return
       trip.value = { ...current, status: 'completed' }
       // payload 只有 `{trip_id}`（手動結束與 `bus_maintenance_scheduler` 的逾時自動
       // 關閉共用同一形狀），沿用舊的 `auto_closed: false` 會把「司機忘了按結束」的

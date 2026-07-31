@@ -222,6 +222,38 @@ describe('WS 事件的班次比對（admin channel 是全園共用）', () => {
     expect(m.isLive.value).toBe(true)
   })
 
+  it('首次快照還在 in-flight 時抵達的結束事件，不得被整則丟棄（晚到的快照會讓車復活）', async () => {
+    // reviewer 的探針測試（scoped 再審抓到的漏移植）：家長端 useBusTracking:276-291
+    // 是「先記錄、才早退」，本檔原本做反了 → `trip.value` 為 null 時整則丟棄。
+    // 後果不只是漏一則事件：此後不會再有該班次的事件來修正，畫面會顯示地圖與
+    // 「行駛中」直到 60 秒後 stale 介入，而 stale 的文案是「位置訊號暫時中斷」
+    // ——車已回校卻說成訊號中斷，比單純的錯更難診斷。
+    // ⚠ 收「所有」in-flight 的 resolver：`init()` 發一次快照、`onopen` 還會補發一次，
+    // 只留最後一個 resolver 的話 `await p` 會永遠等不到 → 測試逾時（掛住不是紅）。
+    const pending: Array<(v: unknown) => void> = []
+    vi.mocked(getBusTripToday).mockImplementation(
+      () => new Promise((resolve) => { pending.push(resolve) }) as never,
+    )
+    const m = createMonitor()
+    const p = m.init()
+    await flushPromises()
+    lastSocket().open()
+    await flushPromises()
+    // 前置條件：快照尚未回來，trip 仍是 null（若這條不成立，本測試就是空轉）
+    expect(m.trip.value).toBeNull()
+    expect(pending.length).toBeGreaterThan(0)
+
+    lastSocket().emit({ type: 'bus_trip_completed', payload: { trip_id: 7 } })
+    await flushPromises()
+
+    // 晚到的快照仍是 in_progress（司機在快照 in-flight 期間按了結束）
+    pending.forEach((resolve) => resolve(tripPayload()))
+    await flushPromises()
+    await p
+    expect(m.trip.value?.status).toBe('completed')
+    expect(m.showMap.value).toBe(false)
+  })
+
   it('結束事件只帶 trip_id，要補抓快照才知道是不是「逾時自動關閉」', async () => {
     // bus_maintenance_scheduler 的自動關班與司機手動結束共用同一個 {trip_id} payload。
     // 不補抓的話 auto_closed 會沿用舊值 false，「司機忘了按結束」這則營運告警就被吞掉，
