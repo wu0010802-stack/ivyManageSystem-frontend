@@ -695,7 +695,8 @@ const matchStatusFilterOptions = (Object.keys(MATCH_STATUS_LABEL_SHORT) as (keyo
 
 // ── 報名時間 banner ──
 type AlertType = 'success' | 'warning' | 'info' | 'error'
-const regTimeInfo = ref<{ is_open: boolean; open_at: string | null; close_at: string | null }>({ is_open: false, open_at: null, close_at: null })
+// null＝尚未載入（banner 不顯示）；載入後依純時間窗判定
+const regTimeInfo = ref<{ open_at: string | null; close_at: string | null } | null>(null)
 const { banner: _regTimeBanner } = useCountdownBanner(regTimeInfo)
 const regTimeBanner = computed(() => {
   if (!_regTimeBanner.value) return null
@@ -1321,7 +1322,7 @@ onMounted(async () => {
   loadOptions()
   try {
     const res = await getRegistrationTime()
-    regTimeInfo.value = res.data as { is_open: boolean; open_at: string | null; close_at: string | null }
+    regTimeInfo.value = res.data as { open_at: string | null; close_at: string | null }
   } catch {
     // 靜默失敗
   }

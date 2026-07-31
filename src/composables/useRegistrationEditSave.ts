@@ -217,9 +217,10 @@ export function useRegistrationEditSave({
     // F5：報名時段二次確認（先於既有欄位檢查）。isRegistrationOpen 依賴
     // useRegistrationWindow 的 30s reactive tick，家長開著分頁很久時可能還沒
     // 反映最新截止狀態；此處用真實 Date.now() 重新算一次 timeInfo，攔下「畫面
-    // 尚未鎖但實際已截止」的邊界情況。timeInfo 未傳（呼叫端未接線）時跳過，
-    // 完全 fail-open、不影響既有呼叫端行為。
-    if (timeInfo && computeNoticeState(timeInfo.value || {}, Date.now())?.blocking) {
+    // 尚未鎖但實際已截止」的邊界情況。timeInfo 未傳或尚未載入（null）時跳過，
+    // 完全 fail-open、不影響既有呼叫端行為（純時間窗語意下 {} 會被判為未開放，
+    // 故不可再用 `|| {}` 兜底）。
+    if (timeInfo?.value && computeNoticeState(timeInfo.value, Date.now())?.blocking) {
       showToast('報名時段已變更（可能已截止），請重新查詢以確認目前狀態。', 'warning', 6000)
       return
     }

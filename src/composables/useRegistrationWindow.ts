@@ -7,14 +7,20 @@ import {
 /**
  * 公開報名頁的「報名時段」狀態子系統（A1-P7 從 ActivityPublicView 抽出）。
  *
+ * 2026-07-31 起純時間窗語意（is_open 開關已移除，與後端
+ * registration_window_reason 對齊）：
+ * - open_at/close_at 皆空（或無法解析）＝報名尚未開放（取代舊開關 OFF）
+ * - 單邊空＝該側不限制
+ * - timeInfo 為 null＝資料尚未載入＝fail-open 不擋（後端仍為硬閘）
+ *
  * 職責：
  * - 每 30 秒 tick 一次 nowTick，讓倒數計時 reactive
- * - 依 timeInfo (is_open / open_at / close_at) 計算 noticeState
+ * - 依 timeInfo (open_at / close_at) 計算 noticeState
  *   （尚未開放 / 尚未開始 / 已截止 / 48h 內收尾提醒 / null=正常開放）
  * - 衍生 isRegistrationOpen 與 submit 按鈕語意（label / disabled）
  *
  * caller 提供：
- * - timeInfo: Ref<{ is_open, open_at, close_at }>（通常由 useActivityRegistrationTime 提供）
+ * - timeInfo: Ref<{ open_at, close_at } | null>（通常由 useActivityRegistrationTime 提供）
  * - submitting: Ref<boolean>（表單送出中旗標）
  *
  * lifecycle 由本 composable 自管（onMounted 啟 timer、onUnmounted 清掉）。
@@ -23,7 +29,6 @@ import {
  * @param {{ tickIntervalMs?: number }} [opts] 預設 30_000；測試可調短
  */
 export interface RegistrationTimeSettings {
-  is_open?: boolean
   open_at?: string | null
   close_at?: string | null
 }
@@ -59,7 +64,9 @@ export function computeNoticeState(
   const openAt = parseTaipeiDateTime(settings.open_at)
   const closeAt = parseTaipeiDateTime(settings.close_at)
 
-  if (!settings.is_open) {
+  // 未設定任何期間（含無法解析的字串）＝不開放——用解析後的值判斷，
+  // 與後端 _parse_settings_iso「解析失敗視同未設定」語意一致
+  if (!openAt && !closeAt) {
     return { variant: 'is-warning', title: '報名尚未開放', message: '目前尚未開放線上報名，請稍後再試。', blocking: true }
   }
   if (openAt && now < openAt) {
@@ -94,7 +101,10 @@ export function useRegistrationWindow({ timeInfo, submitting }: { timeInfo: Ref<
   const nowTick = ref(Date.now())
   let tickTimer: ReturnType<typeof setInterval> | null = null
 
-  const noticeState = computed(() => computeNoticeState(timeInfo.value || {}, nowTick.value))
+  // null＝資料尚未載入：不產生 notice（fail-open），後端 gating 仍為硬閘
+  const noticeState = computed(() =>
+    timeInfo.value ? computeNoticeState(timeInfo.value, nowTick.value) : null,
+  )
 
   const isRegistrationOpen = computed(() => !noticeState.value?.blocking)
 

@@ -64,13 +64,10 @@ const confirmingKey = ref<string | null>(null)
 const manageUrl = ref('')
 
 // ② 報名時段守衛（前端 UX；後端 _check_registration_open 仍為硬閘）。
-// 預設 is_open=true → fail-open：載入前 / 讀取失敗時不擋報名入口，避免誤鎖。
-// 與公開報名頁共用 useRegistrationWindow，關閉/未到/截止/即將截止語意一致。
-const regTimeInfo = ref<{ is_open?: boolean; open_at?: string | null; close_at?: string | null }>({
-  is_open: true,
-  open_at: null,
-  close_at: null,
-})
+// 預設 null＝尚未載入 → fail-open：載入前 / 讀取失敗時不擋報名入口，避免誤鎖
+// （純時間窗語意下「雙空物件」會被判為未開放，故 fail-open 改以 null 表達）。
+// 與公開報名頁共用 useRegistrationWindow，未設定/未到/截止/即將截止語意一致。
+const regTimeInfo = ref<{ open_at?: string | null; close_at?: string | null } | null>(null)
 const { isRegistrationOpen, noticeState } = useRegistrationWindow({
   timeInfo: regTimeInfo,
   submitting,

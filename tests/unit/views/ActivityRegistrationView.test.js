@@ -34,7 +34,7 @@ vi.mock('@/api/activity', () => ({
   addRegistrationPayment: vi.fn(),
   deleteRegistrationPayment: vi.fn(),
   withdrawCourse: vi.fn(),
-  getRegistrationTime: vi.fn().mockResolvedValue({ data: { is_open: false } }),
+  getRegistrationTime: vi.fn().mockResolvedValue({ data: { open_at: null, close_at: null } }),
   createRegistration: vi.fn(),
   updateRegistrationBasic: vi.fn(),
   addRegistrationCourse: vi.fn(),

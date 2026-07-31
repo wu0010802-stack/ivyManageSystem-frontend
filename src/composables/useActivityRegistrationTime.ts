@@ -1,13 +1,15 @@
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { getPublicRegistrationTime } from '@/api/activityPublic'
+import type { RegistrationTimeSettings } from '@/composables/useRegistrationWindow'
 
 export function useActivityRegistrationTime() {
-  const timeInfo = ref({ is_open: false, open_at: null, close_at: null })
-  const registrationOpen = computed(() => timeInfo.value.is_open)
+  // null＝尚未載入（useRegistrationWindow 對 null fail-open 不擋）；
+  // 載入後依純時間窗判定（is_open 開關已於 2026-07-31 移除）
+  const timeInfo = ref<RegistrationTimeSettings | null>(null)
 
   // 共用填值：個別端點（loadTime）與 /public/bootstrap 的 registration_time 區塊都用此填入。
   function applyTime(data: unknown) {
-    if (data) timeInfo.value = data as typeof timeInfo.value
+    if (data) timeInfo.value = data as RegistrationTimeSettings
   }
 
   async function loadTime() {
@@ -24,5 +26,5 @@ export function useActivityRegistrationTime() {
     return dateStr.replace('T', ' ').slice(0, 16)
   }
 
-  return { timeInfo, registrationOpen, loadTime, applyTime, formatDate }
+  return { timeInfo, loadTime, applyTime, formatDate }
 }

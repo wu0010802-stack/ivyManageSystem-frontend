@@ -14,7 +14,7 @@ vi.mock('@/parent/api/activity', () => ({
   registerCourses: vi.fn(),
   confirmPromotion: vi.fn(),
   declinePromotion: vi.fn(),
-  getRegistrationTime: vi.fn(() => Promise.resolve({ data: { is_open: true } })),
+  getRegistrationTime: vi.fn(() => Promise.resolve({ data: { open_at: null, close_at: '2999-01-01T00:00:00Z' } })),
   getUpcomingSessions: vi.fn(() => Promise.resolve({ data: { items: [] } })),
   getActivityBootstrap: vi.fn(() =>
     Promise.resolve({
@@ -55,7 +55,7 @@ vi.mock('@/parent/api/activity', () => ({
           ],
         },
         upcoming_sessions: { items: [] },
-        registration_time: { is_open: true },
+        registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
       },
     }),
   ),

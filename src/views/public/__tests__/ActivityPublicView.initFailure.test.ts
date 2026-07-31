@@ -47,7 +47,7 @@ vi.mock('@/composables/usePublicActivityOptions', async () => {
 
 vi.mock('@/composables/useActivityRegistrationTime', async () => {
   const { ref } = await import('vue')
-  const timeInfo = ref({ is_open: false, open_at: null, close_at: null })
+  const timeInfo = ref(null)
 
   return {
     useActivityRegistrationTime: () => ({
@@ -162,9 +162,8 @@ const bootstrapResponse = {
     classes: ['幼幼班'],
     course_videos: {},
     registration_time: {
-      is_open: true,
       open_at: null,
-      close_at: null,
+      close_at: '2999-01-01T00:00:00Z',
     },
   },
 }

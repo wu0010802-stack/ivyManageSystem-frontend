@@ -67,9 +67,9 @@ describe('ActivityView 報名時段守衛（②）', () => {
     getRegistrationTimeMock.mockReset()
   })
 
-  it('報名已關閉（is_open=false）時 disable「開始報名」並顯示提示', async () => {
+  it('未設定報名期間（雙空）時 disable「開始報名」並顯示「尚未開放」提示', async () => {
     getRegistrationTimeMock.mockResolvedValue({
-      data: { is_open: false, open_at: null, close_at: null },
+      data: { open_at: null, close_at: null },
     })
     const w = await buildView()
     const btn = regButton(w)
@@ -80,16 +80,16 @@ describe('ActivityView 報名時段守衛（②）', () => {
 
   it('報名截止（close_at 已過）時 disable 並顯示「報名已截止」', async () => {
     getRegistrationTimeMock.mockResolvedValue({
-      data: { is_open: true, open_at: '2020-01-01T00:00', close_at: '2020-01-02T00:00' },
+      data: { open_at: '2020-01-01T00:00', close_at: '2020-01-02T00:00' },
     })
     const w = await buildView()
     expect(regButton(w)!.attributes('disabled')).toBeDefined()
     expect(w.text()).toContain('報名已截止')
   })
 
-  it('報名開放中（is_open=true 無時間限制）時按鈕可用、無關閉提示', async () => {
+  it('只設開放時間且已到、未設截止時按鈕可用、無關閉提示（開放中且無時間上限）', async () => {
     getRegistrationTimeMock.mockResolvedValue({
-      data: { is_open: true, open_at: null, close_at: null },
+      data: { open_at: '2020-01-01T00:00', close_at: null },
     })
     const w = await buildView()
     expect(regButton(w)!.attributes('disabled')).toBeUndefined()

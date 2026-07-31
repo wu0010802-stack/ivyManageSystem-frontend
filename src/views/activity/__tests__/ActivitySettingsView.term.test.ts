@@ -93,7 +93,6 @@ async function savedPayload(wrapper: ReturnType<typeof mount>) {
 describe('ActivitySettingsView 開放學期', () => {
   it('載入既有學期後原樣送回（不會在往返中被清成 null）', async () => {
     const wrapper = await mountWithSettings({
-      is_open: true,
       school_year: 115,
       semester: 1,
     })
@@ -104,7 +103,7 @@ describe('ActivitySettingsView 開放學期', () => {
   })
 
   it('後端未設定學期時送出 null，維持依系統日期推算當期的舊行為', async () => {
-    const wrapper = await mountWithSettings({ is_open: false })
+    const wrapper = await mountWithSettings({})
 
     const payload = await savedPayload(wrapper)
     expect(payload.school_year).toBeNull()
@@ -113,7 +112,6 @@ describe('ActivitySettingsView 開放學期', () => {
 
   it('選單顯示已儲存的學期，即使它不在當期前後一期的預設選項內', async () => {
     const wrapper = await mountWithSettings({
-      is_open: true,
       school_year: 100,
       semester: 2,
     })

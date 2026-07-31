@@ -14,12 +14,12 @@ vi.mock('@/api/activityPublic', () => ({
       supplies: [],
       classes: ['大班'],
       course_videos: {},
-      registration_time: { is_open: true, open_at: null, close_at: null },
+      registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
     },
   }),
   getPublicCoursesAvailability: vi.fn().mockResolvedValue({ data: {} }),
   getPublicRegistrationTime: vi.fn().mockResolvedValue({
-    data: { is_open: true, open_at: null, close_at: null },
+    data: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
   }),
   publicRegister: vi.fn(),
 }))

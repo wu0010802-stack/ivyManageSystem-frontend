@@ -101,7 +101,7 @@
 
       <main class="page-body">
         <!-- Registration Time Notice：僅在 initState==='ready' 顯示——loading 期間 timeInfo
-             仍是預設值（is_open:false），若不擋住會先誤閃「報名尚未開放」（P2 flash 修正） -->
+             為 null（尚未載入，notice 本就為 null），此閘為雙保險避免任何誤閃（P2 flash 修正） -->
         <div
           v-if="initState === 'ready' && noticeState"
           class="notice is-visible"
@@ -714,12 +714,13 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const posterBroken = ref(false)
 
 interface TimeInfoExtended {
-  is_open: boolean; open_at: string | null; close_at: string | null
+  open_at: string | null; close_at: string | null
   page_title?: string; term_label?: string; event_date_label?: string
   target_audience?: string; form_card_title?: string; poster_url?: string
 }
-// timeInfo 基礎型別只含 is_open/open_at/close_at，後端實際回傳更多欄位
-const timeInfoExt = computed(() => timeInfo.value as TimeInfoExtended)
+// timeInfo 基礎型別只含 open_at/close_at，後端實際回傳更多欄位；
+// timeInfo 為 null（尚未載入）時各消費點皆以 ?. 取值 fallback 預設
+const timeInfoExt = computed(() => timeInfo.value as TimeInfoExtended | null)
 
 const displayTitle = computed(() => timeInfoExt.value?.page_title?.trim() || '課後才藝報名')
 const displayTermLabel = computed(() => timeInfoExt.value?.term_label?.trim() || '')

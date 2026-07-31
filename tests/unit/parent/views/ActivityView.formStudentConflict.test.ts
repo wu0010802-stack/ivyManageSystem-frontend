@@ -67,7 +67,7 @@ beforeEach(() => {
         }],
       },
       upcoming_sessions: { items: [] },
-      registration_time: { is_open: true },
+      registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
     },
   } as never)
 })

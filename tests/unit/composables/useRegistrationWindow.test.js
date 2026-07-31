@@ -5,6 +5,9 @@ import { mount } from '@vue/test-utils'
 import { useRegistrationWindow, computeNoticeState } from '@/composables/useRegistrationWindow'
 
 // A1-P7：從 ActivityPublicView 抽出的時段狀態子系統測試
+// 2026-07-31 起純時間窗語意（is_open 開關移除）：
+// - open_at/close_at 皆空（或無法解析）＝報名尚未開放（blocking）
+// - timeInfo 為 null＝資料尚未載入＝fail-open 不擋（後端仍為硬閘）
 // 包裝成 mount-able component 以觸發 onMounted / onUnmounted lifecycle，
 // 並從 mount instance 拿回 composable 出口做斷言。
 
@@ -30,8 +33,8 @@ describe('useRegistrationWindow', () => {
     vi.useRealTimers()
   })
 
-  it('is_open=false → 報名尚未開放', () => {
-    const timeInfo = ref({ is_open: false })
+  it('未設定期間（雙空）→ 報名尚未開放', () => {
+    const timeInfo = ref({ open_at: null, close_at: null })
     const submitting = ref(false)
     const { wrapper, get } = mountWithComposable({ timeInfo, submitting })
     expect(get().noticeState.value?.title).toBe('報名尚未開放')
@@ -41,9 +44,17 @@ describe('useRegistrationWindow', () => {
     wrapper.unmount()
   })
 
+  it('timeInfo=null（尚未載入）→ 不擋（fail-open，後端仍為硬閘）', () => {
+    const timeInfo = ref(null)
+    const submitting = ref(false)
+    const { wrapper, get } = mountWithComposable({ timeInfo, submitting })
+    expect(get().noticeState.value).toBeNull()
+    expect(get().isRegistrationOpen.value).toBe(true)
+    wrapper.unmount()
+  })
+
   it('開放期間 → noticeState null、可送出', () => {
     const timeInfo = ref({
-      is_open: true,
       open_at: '2026-02-01T00:00:00Z',
       close_at: '2026-04-01T23:59:59Z',
     })
@@ -59,7 +70,6 @@ describe('useRegistrationWindow', () => {
   it('截止前 48h 內 → 收尾提醒，但仍可送出（提醒非封鎖）', () => {
     // now=2026-03-01 10:00 UTC；close_at=2026-03-02 12:00 UTC（26h 後）
     const timeInfo = ref({
-      is_open: true,
       open_at: '2026-02-01T00:00:00Z',
       close_at: '2026-03-02T12:00:00Z',
     })
@@ -77,7 +87,6 @@ describe('useRegistrationWindow', () => {
   it('超過 close_at → 報名已截止，送出鎖死', () => {
     // now=2026-03-01 10:00 UTC；close_at=2026-02-28 12:00 UTC（已過）
     const timeInfo = ref({
-      is_open: true,
       open_at: '2026-02-01T00:00:00Z',
       close_at: '2026-02-28T12:00:00Z',
     })
@@ -92,7 +101,6 @@ describe('useRegistrationWindow', () => {
 
   it('submitting=true 期間 label 改「送出中…」', () => {
     const timeInfo = ref({
-      is_open: true,
       open_at: '2026-02-01T00:00:00Z',
       close_at: '2026-04-01T23:59:59Z',
     })
@@ -105,7 +113,6 @@ describe('useRegistrationWindow', () => {
 
   it('tick 後 nowTick 推進，noticeState 隨時間變化', async () => {
     const timeInfo = ref({
-      is_open: true,
       open_at: '2026-03-01T11:00:00Z', // 1 小時後開
       close_at: '2026-04-01T23:59:59Z',
     })
@@ -125,7 +132,7 @@ describe('useRegistrationWindow', () => {
   })
 
   it('unmount 清掉 interval（無記憶體洩漏）', () => {
-    const timeInfo = ref({ is_open: false })
+    const timeInfo = ref({ open_at: null, close_at: null })
     const submitting = ref(false)
     const before = vi.getTimerCount()
     const { wrapper } = mountWithComposable({ timeInfo, submitting })
@@ -140,8 +147,8 @@ describe('useRegistrationWindow', () => {
 describe('computeNoticeState（pure function）', () => {
   const NOW = new Date('2026-03-01T10:00:00Z').getTime()
 
-  it('is_open=false → 報名尚未開放（blocking）', () => {
-    const state = computeNoticeState({ is_open: false }, NOW)
+  it('雙空（未設定期間）→ 報名尚未開放（blocking）', () => {
+    const state = computeNoticeState({ open_at: null, close_at: null }, NOW)
     expect(state).toEqual({
       variant: 'is-warning',
       title: '報名尚未開放',
@@ -152,7 +159,7 @@ describe('computeNoticeState（pure function）', () => {
 
   it('open_at 尚未到 → 報名尚未開始（blocking）', () => {
     const state = computeNoticeState(
-      { is_open: true, open_at: '2026-03-02T00:00:00Z', close_at: null },
+      { open_at: '2026-03-02T00:00:00Z', close_at: null },
       NOW,
     )
     expect(state?.title).toBe('報名尚未開始')
@@ -162,7 +169,7 @@ describe('computeNoticeState（pure function）', () => {
 
   it('close_at 已過 → 報名已截止（blocking）', () => {
     const state = computeNoticeState(
-      { is_open: true, open_at: '2026-02-01T00:00:00Z', close_at: '2026-02-28T12:00:00Z' },
+      { open_at: '2026-02-01T00:00:00Z', close_at: '2026-02-28T12:00:00Z' },
       NOW,
     )
     expect(state).toEqual({
@@ -175,7 +182,7 @@ describe('computeNoticeState（pure function）', () => {
 
   it('close_at 在 48h 內但未過 → 報名即將截止（非 blocking）', () => {
     const state = computeNoticeState(
-      { is_open: true, open_at: '2026-02-01T00:00:00Z', close_at: '2026-03-02T12:00:00Z' },
+      { open_at: '2026-02-01T00:00:00Z', close_at: '2026-03-02T12:00:00Z' },
       NOW,
     )
     expect(state?.title).toBe('報名即將截止')
@@ -183,16 +190,27 @@ describe('computeNoticeState（pure function）', () => {
     expect(state?.variant).toBe('is-warning')
   })
 
+  it('只設 close_at 且未過 → 立即開放（open_at 空＝該側不限制）', () => {
+    const state = computeNoticeState({ open_at: null, close_at: '2026-04-01T23:59:59Z' }, NOW)
+    expect(state).toBeNull()
+  })
+
   it('開放中、無 48h 內截止 → null', () => {
     const state = computeNoticeState(
-      { is_open: true, open_at: '2026-02-01T00:00:00Z', close_at: '2026-04-01T23:59:59Z' },
+      { open_at: '2026-02-01T00:00:00Z', close_at: '2026-04-01T23:59:59Z' },
       NOW,
     )
     expect(state).toBeNull()
   })
 
-  it('settings 為空物件（bootstrap 尚未回來的預設值不含 is_open）→ 視為未開放', () => {
+  it('settings 為空物件 → 視為未設定期間＝未開放', () => {
     const state = computeNoticeState({}, NOW)
     expect(state?.title).toBe('報名尚未開放')
+  })
+
+  it('時間字串無法解析 → 視同未設定（與後端 _parse_settings_iso 語意對齊）', () => {
+    const state = computeNoticeState({ open_at: 'not-a-date', close_at: null }, NOW)
+    expect(state?.title).toBe('報名尚未開放')
+    expect(state?.blocking).toBe(true)
   })
 })

@@ -35,7 +35,6 @@ vi.mock('@/utils/arrayUtils', () => ({
 // 付款鎖定優先於截止鎖定的判斷順序。
 
 interface RegistrationTime {
-  is_open?: boolean
   open_at?: string | null
   close_at?: string | null
 }
@@ -108,7 +107,7 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
       supplies: [{ name: '舞鞋', price: 500 }],
-      registration_time: { is_open: true, open_at: null, close_at: '2000-01-01T00:00:00Z' },
+      registration_time: { open_at: null, close_at: '2000-01-01T00:00:00Z' },
     })
     seedRegistration()
 
@@ -129,7 +128,7 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
       supplies: [{ name: '舞鞋', price: 500 }],
-      registration_time: { is_open: true, open_at: null, close_at: '2999-01-01T00:00:00Z' },
+      registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
     })
     seedRegistration()
 
@@ -163,7 +162,7 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
       supplies: [{ name: '舞鞋', price: 500 }],
-      registration_time: { is_open: true, open_at: null, close_at: soon },
+      registration_time: { open_at: null, close_at: soon },
     })
     seedRegistration()
 
@@ -184,7 +183,7 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
       supplies: [{ name: '舞鞋', price: 500 }],
-      registration_time: { is_open: true, open_at: null, close_at: '2000-01-01T00:00:00Z' },
+      registration_time: { open_at: null, close_at: '2000-01-01T00:00:00Z' },
     })
     seedRegistration({ is_paid: true, paid_amount: 3500 })
 
@@ -198,11 +197,11 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
     expect(wrapper.text()).not.toContain('儲存修改')
   })
 
-  it('is_open=false（後台暫停報名）→ 顯示「尚未開放」而非誤標成截止', async () => {
+  it('未設定期間（雙空）→ 顯示「尚未開放」而非誤標成截止', async () => {
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
       supplies: [{ name: '舞鞋', price: 500 }],
-      registration_time: { is_open: false, open_at: null, close_at: null },
+      registration_time: { open_at: null, close_at: null },
     })
     seedRegistration()
 
@@ -221,7 +220,7 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
       supplies: [{ name: '舞鞋', price: 500 }],
-      registration_time: { is_open: true, open_at: future, close_at: null },
+      registration_time: { open_at: future, close_at: null },
     })
     seedRegistration()
 
@@ -238,7 +237,7 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
   it('候補確認/放棄按鈕在截止後仍正常顯示（回歸，不受 isEditLocked 影響）', async () => {
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
-      registration_time: { is_open: true, open_at: null, close_at: '2000-01-01T00:00:00Z' },
+      registration_time: { open_at: null, close_at: '2000-01-01T00:00:00Z' },
     })
     seedRegistration({
       courses: [

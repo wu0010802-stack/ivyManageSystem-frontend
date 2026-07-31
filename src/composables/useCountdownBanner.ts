@@ -8,8 +8,9 @@ import { computed, unref, type MaybeRef } from 'vue'
  *    "剩 N 小時" / "剩 N 分鐘" / "已逾期" / ''。
  * 2. banner — 給整體報名期間的 ElAlert banner 用，依距截止時間遠近決定顏色。
  *
- * @param {Ref<{ is_open: boolean, open_at: string|null, close_at: string|null }>} timeInfoRef
- *   響應式報名時間資訊（傳 ref 或 reactive）。
+ * @param {Ref<{ open_at: string|null, close_at: string|null }>} timeInfoRef
+ *   響應式報名時間資訊（傳 ref 或 reactive）。純時間窗語意（2026-07-31 起）：
+ *   雙空＝報名未開放。
  */
 
 const MS_PER_MINUTE = 60_000
@@ -34,27 +35,36 @@ export function countdownLabel(iso: string | null | undefined) {
   return hours >= 1 ? `剩 ${hours} 小時` : `剩 ${mins} 分鐘`
 }
 
-export function useCountdownBanner(timeInfoRef: MaybeRef<{ is_open?: boolean; open_at?: string | null; close_at?: string | null } | null | undefined>) {
+export function useCountdownBanner(timeInfoRef: MaybeRef<{ open_at?: string | null; close_at?: string | null } | null | undefined>) {
   const banner = computed(() => {
-    const info: { is_open?: boolean; open_at?: string | null; close_at?: string | null } = unref(timeInfoRef) || {}
-    if (!info.close_at && !info.open_at) return null
+    const info = unref(timeInfoRef)
+    // null/undefined＝資料尚未載入 → 不顯示 banner（避免載入期間誤閃「未開放」）
+    if (!info) return null
+    // 純時間窗語意：未設定任何期間＝不開放
+    if (!info.close_at && !info.open_at) return { type: 'info', msg: '報名目前未開放' }
 
     const now = Date.now()
     if (info.close_at) {
       const closeMs = new Date(info.close_at).getTime()
-      const diffMs = closeMs - now
-      const closeLabel = formatIsoMinute(info.close_at)
-
-      if (diffMs <= 0) {
-        return { type: 'info', msg: `報名已截止（${closeLabel}）` }
+      if (closeMs - now <= 0) {
+        return { type: 'info', msg: `報名已截止（${formatIsoMinute(info.close_at)}）` }
       }
+    }
+    if (info.open_at) {
+      const openMs = new Date(info.open_at).getTime()
+      if (!Number.isNaN(openMs) && openMs > now) {
+        return { type: 'info', msg: `報名尚未開始（${formatIsoMinute(info.open_at)} 開放）` }
+      }
+    }
+    if (info.close_at) {
+      const closeMs = new Date(info.close_at).getTime()
+      const diffMs = closeMs - now
       if (diffMs / MS_PER_DAY < NEAR_DEADLINE_DAYS) {
         const h = Math.floor(diffMs / MS_PER_HOUR)
         const m = Math.floor((diffMs % MS_PER_HOUR) / MS_PER_MINUTE)
-        return { type: 'warning', msg: `報名截止倒數：${h} 小時 ${m} 分鐘（${closeLabel}）` }
+        return { type: 'warning', msg: `報名截止倒數：${h} 小時 ${m} 分鐘（${formatIsoMinute(info.close_at)}）` }
       }
     }
-    if (!info.is_open) return { type: 'info', msg: '報名目前未開放' }
     return null
   })
 
