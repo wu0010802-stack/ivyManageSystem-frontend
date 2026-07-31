@@ -140,6 +140,9 @@ describe('GuardianManager — 撤銷此監護人的所有裝置', () => {
     const confirmMessage = mockConfirm.mock.calls[0][0] as string
     expect(confirmMessage).toContain('登出')
     expect(confirmMessage).toMatch(/重新綁定|設定碼/)
+    // 後端「全撤」含 LINE 裝置一併撤銷；行政人員若誤以為只撤設定碼登入的
+    // 裝置會誤判影響範圍，確認文案必須講清楚連 LINE 裝置也會被撤。
+    expect(confirmMessage).toContain('LINE')
   })
 
   it('使用者取消確認 → 不呼叫 API', async () => {

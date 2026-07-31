@@ -397,7 +397,7 @@ async function copyDeviceSetupCode() {
 async function handleRevokeDevices(row: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm(
-      `確定要撤銷「${row.name}」的所有裝置嗎？\n該監護人目前已登入的所有裝置都會立即登出，需要重新綁定或用新的設定碼登入。`,
+      `確定要撤銷「${row.name}」的所有裝置嗎？\n該監護人目前已登入的所有裝置（含 LINE 裝置）都會立即登出，需要重新綁定或用新的設定碼登入。`,
       '撤銷所有裝置',
       { type: 'warning', confirmButtonText: '確定撤銷' },
     )
