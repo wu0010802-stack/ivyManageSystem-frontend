@@ -10,6 +10,7 @@ import {
   searchActivityStudents,
 } from '@/api/activity'
 import type { Schema } from '@/api/_generated/typed'
+import { FIELD_RULES, forceRefundReasonPromptOptions } from '@/constants/activity'
 
 /**
  * 才藝報名「審核工作流」集中邏輯：單列動作（手動匹配 / 重新比對 / 強行收件 / 拒絕 / 復原）、
@@ -218,12 +219,40 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     } catch {
       return
     }
+    await doReject(row, reason, false)
+  }
+
+  // 拒絕送出（2026-07-31 拒絕擴大涵蓋：後台唯一移除入口）。
+  // 409 且訊息含「繳費金額」＝該報名已有已繳款，需二次確認以 force_refund 自動
+  // 沖帳（後端強制 refund_reason ≥15 字，走與原刪除流程相同的退費簽核閘）。
+  async function doReject(row: ReviewRow, reason: string, forceRefund: boolean, refundReason?: string) {
     try {
-      await rejectRegistration(row.id, reason)
-      ElMessage.success('已拒絕該筆報名（篩選「已拒絕」可見，需要時可復原）')
+      await rejectRegistration(row.id, reason, { forceRefund, refundReason })
+      ElMessage.success(
+        forceRefund
+          ? '已拒絕該筆報名並自動寫退費沖帳（篩選「已拒絕」可見，需要時可復原）'
+          : '已拒絕該筆報名（篩選「已拒絕」可見，需要時可復原）',
+      )
       opts.onChanged()
     } catch (err) {
-      ElMessage.error(errDetail(err) || '拒絕失敗')
+      const status = (err as { response?: { status?: number } })?.response?.status
+      const detailMsg = errDetail(err)
+      if (status === 409 && !forceRefund && (detailMsg || '').includes('繳費金額')) {
+        let reasonResult: { value: string }
+        try {
+          reasonResult = (await ElMessageBox.prompt(
+            `${detailMsg}\n\n按「確認拒絕並沖帳」後會自動寫退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
+              `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.refundReasonMin} 字，會寫入退費紀錄供稽核）：`,
+            '需要確認自動沖帳',
+            forceRefundReasonPromptOptions('確認拒絕並沖帳'),
+          )) as { value: string }
+        } catch {
+          return
+        }
+        await doReject(row, reason, true, (reasonResult.value || '').trim())
+        return
+      }
+      ElMessage.error(detailMsg || '拒絕失敗')
     }
   }
 
