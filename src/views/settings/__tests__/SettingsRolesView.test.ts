@@ -123,4 +123,33 @@ describe('SettingsRolesView', () => {
     expect(vi.mocked(deleteRole)).toHaveBeenCalledWith('custom_x')
     confirmSpy.mockRestore()
   })
+
+  // ── 角色設定頁稽核 2026-07-31 ──
+
+  it('新增角色 code 即時驗證：格式錯／重複時給中文說明且不送 API', async () => {
+    const w = await mountView()
+    const vm = w.vm as unknown as {
+      createForm: { code: string; label: string; description: string }
+      codeError: string
+      handleCreateRole: () => Promise<void>
+    }
+    expect(vm.codeError).toBe('') // 空值不報錯（尚未填寫）
+
+    vm.createForm.code = 'Custom-Role'
+    await flushPromises()
+    expect(vm.codeError).toContain('小寫英文字母開頭')
+
+    vm.createForm.code = 'hr' // 已存在
+    await flushPromises()
+    expect(vm.codeError).toContain('已存在')
+
+    vm.createForm.label = '測試'
+    await vm.handleCreateRole()
+    await flushPromises()
+    expect(vi.mocked(createRole)).not.toHaveBeenCalled()
+
+    vm.createForm.code = 'custom_ok'
+    await flushPromises()
+    expect(vm.codeError).toBe('')
+  })
 })

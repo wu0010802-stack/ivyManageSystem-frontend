@@ -574,7 +574,9 @@ export const NAVIGATION_MANIFEST = {
 
   standalonePermissions: [
     {
-      code: 'BUSINESS_ANALYTICS', label: '經營分析（已停用）',
+      // label 與後端 permission_definitions 對齊（migration permlbl01）——後端 label
+      // 優先，此處只是 definition 落後時的 fallback，文案不一致會讓兩邊看起來像兩個碼。
+      code: 'BUSINESS_ANALYTICS', label: '經營分析（功能已移除）',
       note: '2026-06-03 業主裁定移除經營分析功能，權限碼刻意保留為孤兒（CLAUDE.md 記載），picker 仍需可編輯。',
     },
     {

@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getApprovalPolicies, updateApprovalPolicies, type ApprovalPolicyRow } from '@/api/approvalSettings'
 import { apiError } from '@/utils/error'
 import { isSuperAdmin } from '@/utils/auth'
+import { confirmDiscardChanges } from '@/composables/useUnsavedChangesGuard'
 import { DOC_TYPES, DOC_TYPE_LABELS, FLAG_PARENT, type DocType, type RolesDefinition } from './types'
 
 const props = defineProps<{
@@ -38,6 +39,13 @@ const fetchPolicies = async () => {
 }
 
 const activeDocType = ref<DocType>('all')
+
+// 切換簽呈類型會重建草稿（syncDraft），未儲存的關卡調整會就地蒸發，故先問過再切。
+const switchDocType = async (next: DocType) => {
+  if (next === activeDocType.value) return
+  if (isChainDirty.value && !(await confirmDiscardChanges())) return
+  activeDocType.value = next
+}
 
 const findActivePolicy = (docType: string): ApprovalPolicyRow | undefined =>
   policies.value.find((p) => p.submitter_role === props.submitterRole && p.doc_type === docType && p.is_active)
@@ -110,6 +118,24 @@ const warnings = computed(() => {
 
 const chainText = (roles: string[]) => roles.map((r, i) => `${stageNo(i)}${roleLabel(r)}`).join(' → ')
 
+/**
+ * 關卡鏈草稿是否偏離已儲存狀態。
+ *
+ * 本元件有自己的「儲存關卡鏈」按鈕，與 RoleDetailPanel 右上的「儲存」是兩套獨立狀態；
+ * 未儲存守衛原本只盯 RoleDetailPanel.isDirty，於是在關卡鏈拖了順序、加了關卡卻沒存就
+ * 切換角色，變更會靜默丟失且不跳任何提示（角色設定頁稽核 2026-07-31）。此處把草稿狀態
+ * 暴露出去由 panel 併入 isDirty。
+ *
+ * 順序有意義（逐級簽核），故逐項比對而非集合比對；「按了建立專屬關卡鏈但還沒加東西」
+ * 也算 dirty——那是一個尚未落地的意圖。
+ */
+const isChainDirty = computed(() => {
+  const saved = currentPolicy.value ? parseChain(currentPolicy.value.approver_roles) : []
+  const draft = chainDraft.value.map((s) => s.role)
+  if (!currentPolicy.value && overrideEditing.value && draft.length > 0) return true
+  return draft.length !== saved.length || draft.some((r, i) => r !== saved[i])
+})
+
 const saving = ref(false)
 const saveChain = async () => {
   const roles = chainDraft.value.map((s) => s.role)
@@ -167,14 +193,18 @@ const removeOverride = async () => {
 
 onMounted(fetchPolicies)
 
-defineExpose({ policies, activeDocType, chainDraft, overrideEditing, startOverride, stageToAdd, addStage, removeStage, saveChain, removeOverride, warnings, candidateRoles, fetchPolicies })
+defineExpose({ policies, activeDocType, switchDocType, chainDraft, overrideEditing, startOverride, stageToAdd, addStage, removeStage, saveChain, removeOverride, warnings, candidateRoles, fetchPolicies, isChainDirty })
 </script>
 
 <template>
   <el-card shadow="never" class="chain-editor" :body-style="{ paddingTop: '12px' }">
     <template #header>
       <div class="chain-header">
-        <el-radio-group v-model="activeDocType" size="small">
+        <el-radio-group
+          :model-value="activeDocType"
+          size="small"
+          @update:model-value="(v) => switchDocType(v as DocType)"
+        >
           <el-radio-button v-for="dt in DOC_TYPES" :key="dt" :value="dt">{{ DOC_TYPE_LABELS[dt] }}</el-radio-button>
         </el-radio-group>
       </div>
