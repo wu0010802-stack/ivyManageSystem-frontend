@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { listAnnouncements, markRead } from '../api/announcements'
+import { computed, onMounted, ref, watch } from 'vue'
+import { getUnreadCount, listAnnouncements, markRead } from '../api/announcements'
 import { toast } from '../utils/toast'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -10,12 +10,32 @@ import AnnouncementDetailModal from '../components/announcements/AnnouncementDet
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 type AnnItem = { id: number | string; priority: string; is_read: boolean; created_at: string; title: string; content?: string }
+
+// 後端一頁的筆數；跟 useIncrementalRender 的 pageSize（本地漸進渲染批次）是
+// 兩個不同層次的分頁，刻意分開：後端一次抓 50 筆省 request 數，本地再切成
+// 20 一批漸進揭露以維持捲動流暢。
+const PAGE_LIMIT = 50
+
 const items = ref<AnnItem[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
+const total = ref(0)
+// 未讀數以後端權威值（/announcements/unread-count）為準，不是
+// items.filter(...).length——那只算「目前已載入的這一批」，筆數一多就會
+// 跟 ParentLayout 的 badge（後端全量）永遠對不上。
+const unreadCount = ref(0)
 const selected = ref<AnnItem | null>(null)
 
-const { visible: _visibleRaw, sentinelRef, hasMore } = useIncrementalRender(items as unknown as import('vue').Ref<unknown[]>, { pageSize: 20 })
+const { visible: _visibleRaw, sentinelRef, hasMore: hasMoreLocal } = useIncrementalRender(items as unknown as import('vue').Ref<unknown[]>, { pageSize: 20 })
 const visibleItems = computed(() => _visibleRaw.value as AnnItem[])
+
+// 後端是否還有本地陣列沒抓到的資料
+const hasMoreOnServer = computed(() => items.value.length < total.value)
+// 本地批次還沒揭露完，或後端還有更多可抓，都要讓 sentinel 留在畫面上
+const showSentinel = computed(() => hasMoreLocal.value || hasMoreOnServer.value)
+const noMoreLabel = computed(
+  () => items.value.length > 0 && !hasMoreLocal.value && !hasMoreOnServer.value,
+)
 
 const detailOpen = computed({
   get: () => selected.value !== null,
@@ -28,13 +48,22 @@ const PRIORITY_META: Record<string, { label: string; tone: string }> = {
   urgent:    { label: '緊急', tone: 'danger' },
 }
 
-const unreadCount = computed(() => items.value.filter((x) => !x.is_read).length)
+async function refreshUnreadCount() {
+  try {
+    const { data } = await getUnreadCount()
+    unreadCount.value = (data as Record<string, unknown>)?.unread_count as number || 0
+  } catch { /* ignore：badge 本來就是輔助資訊，抓不到就維持舊值 */ }
+}
 
 async function fetchData() {
   loading.value = true
   try {
-    const { data } = await listAnnouncements({ limit: 50 })
+    const [{ data }] = await Promise.all([
+      listAnnouncements({ limit: PAGE_LIMIT }),
+      refreshUnreadCount(),
+    ])
     items.value = (data?.items || []) as AnnItem[]
+    total.value = typeof data?.total === 'number' ? data.total : items.value.length
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
@@ -43,13 +72,38 @@ async function fetchData() {
   }
 }
 
+async function fetchMore() {
+  if (loadingMore.value || !hasMoreOnServer.value) return
+  loadingMore.value = true
+  try {
+    const { data } = await listAnnouncements({ limit: PAGE_LIMIT, skip: items.value.length })
+    const more = (data?.items || []) as AnnItem[]
+    // 用 push（原地變更）而非整批重新指派：useIncrementalRender 內部的
+    // watch(itemsRef) 只在「換了一個新陣列參考」時才 reset 漸進渲染進度，
+    // push 不會觸發，使用者已展開的捲動進度不會被打回第一批。
+    items.value.push(...more)
+    if (typeof data?.total === 'number') total.value = data.total
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入更多失敗'))
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+// 本地批次揭露完（hasMoreLocal 轉 false）且後端還有更多時，自動接著抓下一頁。
+watch(hasMoreLocal, (v) => {
+  if (!v && hasMoreOnServer.value) fetchMore()
+})
+
 async function openDetail(item: AnnItem) {
   selected.value = item
   if (!item.is_read) {
     try {
       await markRead(item.id as number)
       item.is_read = true
-      item.is_read = true
+      // 樂觀遞減：使用者當下體感立即少一則未讀；權威值下次 fetchData 時會再校正。
+      if (unreadCount.value > 0) unreadCount.value -= 1
     } catch { /* ignore */ }
   }
 }
@@ -125,7 +179,14 @@ async function pullRefresh() { await fetchData() }
       </article>
     </section>
 
-    <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
+    <div v-if="showSentinel" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
+
+    <p v-if="loadingMore" data-testid="ann-loading-more" class="pagination-status">
+      載入更多中…
+    </p>
+    <p v-else-if="noMoreLabel" data-testid="ann-no-more" class="pagination-status">
+      已顯示全部公告
+    </p>
 
     <!-- 詳情 modal（與 MessagesView 共享） -->
     <AnnouncementDetailModal v-model="detailOpen" :announcement="selected" />
@@ -148,6 +209,14 @@ async function pullRefresh() { await fetchData() }
 }
 
 .render-sentinel { height: 1px; }
+
+.pagination-status {
+  margin: 4px 0 0;
+  padding: 12px 0 20px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--pt-text-faint, #9b8d83);
+}
 
 .ann-card {
   background: var(--pt-surface-card, #fff);
