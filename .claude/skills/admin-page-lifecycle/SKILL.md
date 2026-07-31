@@ -89,6 +89,11 @@ const canWrite = computed(() => hasPermission(PERMISSION_NAMES.MY_FEATURE_WRITE)
 mutation 端點漏掛會被 `tests/test_mutation_guard_coverage.py` 抓；GET 端點
 **沒有** sweep（已知缺口），要自覺掛守衛並補 403 測試。
 
+**姊妹 sweep：`tests/test_audit_route_coverage.py`**——新 mutation 端點還必須被稽核
+覆蓋：要嘛在 `utils/audit.py` 的 `ENTITY_PATTERNS` 補一條 `(regex, entity_type)`，
+要嘛列入該測試檔的 `AUDIT_EXEMPT` 白名單**附理由**。守衛與稽核是兩條獨立防線，
+只補守衛照樣紅。
+
 ### 5. API 模組 + OpenAPI codegen
 
 `src/api/<x>.ts` 新模組（不在元件內直接 axios）。後端 schema 定案後：
@@ -99,6 +104,27 @@ cd ../ivyManageSystem-frontend && npm run gen:api   # 讀 ../ivy-backend/openapi
 ```
 
 只 commit `src/api/_generated/schema.d.ts`，不 commit openapi.json。
+
+> ⚠ **在 worktree 內工作時不能用上面這組指令**。`npm run gen:api` 寫死讀
+> `../ivy-backend/openapi.json`，而 `ivy-backend` 是指向**主 checkout**
+> `ivyManageSystem-backend` 的 symlink；`dump_openapi.py` 又固定輸出到自己所在
+> checkout 的根目錄。照抄的後果是：openapi.json 被倒進主 checkout（污染你沒在改
+> 的樹），前端則讀到主 checkout 的**舊 schema**，你這次的後端改動根本沒進 codegen。
+>
+> worktree 用法——在**你目前所在的那個 BE checkout 內**產 openapi.json，再用絕對
+> 路徑餵給 openapi-typescript（繞過 `gen:api` 的寫死路徑）：
+>
+> ```bash
+> # 1) 在你正在改的 BE checkout（worktree）內產 schema
+> cd /path/to/wt-<your-branch> && .venv/bin/python scripts/dump_openapi.py
+> # 2) 回前端，用該 checkout 的絕對路徑做 codegen
+> cd /path/to/ivyManageSystem-frontend
+> npx openapi-typescript /path/to/wt-<your-branch>/openapi.json \
+>   -o src/api/_generated/schema.d.ts --alphabetize
+> ```
+>
+> （旗標與 `gen:api` 一致，只換輸入路徑；CI 的 `openapi-drift` job 跑在主 checkout
+> 語境，分支合回後即回到 symlink 路徑，無需保留這段變通。）
 
 ### 6. 測試
 
@@ -117,10 +143,23 @@ cd ../ivyManageSystem-frontend && npm run gen:api   # 讀 ../ivy-backend/openapi
 ```bash
 # 前端（repo 根目錄）
 npm run test && npm run typecheck && npm run lint
-# 後端
-cd ../ivyManageSystem-backend && source .venv/bin/activate \
-  && pytest tests/test_mutation_guard_coverage.py -v && pytest tests/ -x -q
+# 後端：全域掃描型必跑集（這些 sweep 會因「別處漏一步」而紅）
+# ⚠ worktree 情境：`../ivyManageSystem-backend` 會解析到「主 checkout」而非你的
+#   後端 worktree——請 cd 到實際在改的後端 checkout（理由同第 5 步的 worktree
+#   註記），否則是拿沒有你改動的樹在跑 sweep，全綠也毫無意義。
+cd ../ivyManageSystem-backend && source .venv/bin/activate
+pytest tests/test_permission*.py \
+       tests/test_mutation_guard_coverage.py \
+       tests/test_audit_route_coverage.py \
+       tests/test_alembic_symmetry_lint.py \
+       tests/test_route_registration_order.py \
+       tests/test_no_bare_get_session_dep.py \
+       tests/test_reference_data_authority.py -q
 ```
+
+⚠ **後端本機不要跑 `pytest tests/ -x -q`**：全套 1.1 萬筆，且上游常有與本次改動
+無關的既有失敗，`-x` 會在那裡中斷，跑不完也拿不到有效訊號。本機跑上面那組必跑集
+即可，**全套交給 CI**。
 
 ## 移除頁面 checklist（反向）
 
@@ -130,13 +169,15 @@ cd ../ivyManageSystem-backend && source .venv/bin/activate \
    路由覆蓋測試雙向斷言會紅。
 3. **view / 元件 / 測試清理**：刪 SFC 與 per-page 測試；grep 確認無殘留 import。
 4. **後端 endpoint 是否同刪**：若刪，`test_mutation_guard_coverage.py` 的
-   `KNOWN_UNGUARDED` 白名單與該 feature 的守衛測試同步清；跑
-   `npm run gen:api` 更新 schema.d.ts。
+   `KNOWN_UNGUARDED` 白名單、`test_audit_route_coverage.py` 的 `AUDIT_EXEMPT`
+   白名單（該檔有殭屍豁免 canary `test_audit_exempt_has_no_stale_entries`，
+   留過時項會紅）與該 feature 的守衛測試同步清；跑 `npm run gen:api` 更新
+   schema.d.ts（worktree 情境見第 5 步註記）。
 5. **權限碼是否成孤兒**：該頁的 views/actions 碼若無其他頁使用——
    - 要刪碼 → 走後端 skill `permission-code-lifecycle` 的刪碼反向流程；
    - 刻意保留（業主裁定類）→ 碼移入 manifest `standalonePermissions` 豁免表
      **附 note 理由**（前例 `BUSINESS_ANALYTICS`），並在兩 repo CLAUDE.md 註記。
-6. 跑上方第 7 步全套驗證。
+6. 跑上方第 7 步的驗證指令（前端三連 + 後端必跑集；非 pytest 全套）。
 
 ## 防漏測試清單（紅了去哪修）
 
@@ -148,4 +189,5 @@ cd ../ivyManageSystem-backend && source .venv/bin/activate \
 | 既有 4 支 routePermissions | FE `src/constants/__tests__/{salary,appraisal,settings,admissions}RoutePermissions.test.ts` | 動到既有頁的碼/prefix | 檢查 manifest 對應頁，行為變更需明確裁定 |
 | typecheck 紅在 manifest | `npm run typecheck` | 權限碼打錯字（非 `PermissionName`）| 對照 `PERMISSION_NAMES` 修正 |
 | mutation guard sweep | BE `tests/test_mutation_guard_coverage.py` | 新 mutation 端點漏守衛 | 掛 `require_staff_permission`，或有意識列白名單附理由 |
+| 稽核覆蓋 sweep | BE `tests/test_audit_route_coverage.py` | 新 mutation 端點沒配稽核 | 在 `utils/audit.py` 補 `ENTITY_PATTERNS`，或列 `AUDIT_EXEMPT` 附理由 |
 | 跨 repo parity | BE `tests/test_permission_parity.py`（CI）| 兩端碼表不同步 | 走 `permission-code-lifecycle` skill 補齊 |
