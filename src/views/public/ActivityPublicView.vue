@@ -58,6 +58,16 @@
             <div class="page-brand-en">Ivy Kindergarten</div>
           </div>
         </div>
+        <div class="page-actions">
+          <button type="button" class="page-action-btn" @click="goToQuery">
+            <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-search" /></svg>
+            查詢 / 修改報名
+          </button>
+          <button type="button" class="page-action-btn" @click="openContactModal">
+            <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-message" /></svg>
+            與承辦人員聯繫
+          </button>
+        </div>
         <div class="page-meta">
           <h1 class="page-subtitle">{{ displayTitle }}</h1>
           <div class="page-meta-row">
@@ -605,17 +615,6 @@
                   </button>
                 </div>
               </div>
-
-              <div class="btn-actions-row">
-                <button type="button" class="btn btn-outline" @click="goToQuery">
-                  <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-search" /></svg>
-                  查詢 / 修改報名
-                </button>
-                <button type="button" class="btn btn-outline btn-outline--accent" @click="openContactModal">
-                  <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-message" /></svg>
-                  與承辦人員聯繫
-                </button>
-              </div>
             </div>
           </div>
         </form>
@@ -1130,7 +1129,9 @@ async function handleSubmitRegistration() {
       message: result.message || '報名資料已送出',
       queryToken: result.query_token,
     })
-    showToast(result.message || '報名送出成功！', 'success')
+    // 成功回饋只走 SuccessSummaryModal（含同一句 result.message＋查詢碼與明細）。
+    // 不再同時發 success toast：手機 toast 定位在畫面底部，會壓在成功摘要的
+    // 文字上，家長看到的是「半透明通知蓋住內容」而非第二重確認。
     // 先清草稿再 resetForm：autosave watcher 對空表單本來就會清掉草稿，但清除順序
     // 顛倒會讓 debounce 期間的重新整理還原到一筆已送出的報名，家長可能重複報名
     clearRegistrationDraft()
@@ -1219,10 +1220,10 @@ onUnmounted(() => {
   border: 1px solid var(--color-border);
 }
 
-/* Header — 簡約版：LOGO + 校名 ｜ 活動標題 水平兩欄、純白底、無動畫 */
+/* Header — 簡約版：LOGO + 校名 ｜ 活動標題 ｜ 查詢與聯繫工具列 三欄、純白底、無動畫 */
 .page-header {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-8);
   align-items: center;
   margin: 0;
@@ -1272,11 +1273,49 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 .page-meta {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
 }
+/* Header 右側工具列：查詢／聯繫是輔助動作，quiet pill 視覺壓低，
+   不與表單主 CTA 搶重量。DOM 排在標題前（工具屬 header 識別區），
+   桌機以 grid 定位到第三欄；--to-md 單欄後收成品牌區下方靠右一列。 */
+.page-actions {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+}
+.page-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.page-action-btn:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+.page-action-btn .icon { flex-shrink: 0; }
 .page-subtitle {
   margin: 0;
   font-size: clamp(20px, 3vw, 26px);
@@ -2278,41 +2317,6 @@ onUnmounted(() => {
   border-color: var(--color-primary);
 }
 .btn-outline:hover:not(:disabled) { background-color: var(--color-primary-strong); color: var(--color-primary-contrast); }
-.btn-outline--accent { color: var(--ivy-teal); border-color: var(--ivy-teal); }
-.btn-outline--accent:hover:not(:disabled) { background-color: var(--ivy-teal); color: var(--neutral-0); border-color: var(--ivy-teal); }
-.btn-actions-row {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-top: var(--space-3);
-}
-/* 副按鈕視覺壓低：text-link 風格，不跟主 submit 搶視覺重量；
-   min-height 44px 撐開觸控區（spec #2），padding 維持不變以保留壓低觀感 */
-.btn-actions-row .btn {
-  flex: 0 0 auto;
-  min-height: 44px;
-  padding: 8px 12px;
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--color-text-muted);
-  font-weight: 500;
-  font-size: var(--fs-sm);
-  box-shadow: none;
-}
-.btn-actions-row .btn:hover:not(:disabled) {
-  background: var(--color-surface-muted);
-  border-color: transparent;
-  color: var(--color-text);
-  transform: none;
-  box-shadow: none;
-}
-.btn-actions-row .btn .icon,
-.btn-actions-row .btn svg {
-  width: 14px;
-  height: 14px;
-}
-
 /* Video Button — 獨立於 label 之外，避免與 checkbox 互動衝突 */
 .video-btn {
   display: inline-flex;
@@ -2522,26 +2526,34 @@ onUnmounted(() => {
   }
   .page-brand {
     padding-right: 0;
-    padding-bottom: var(--space-5);
     border-right: none;
+  }
+  /* 單欄後查詢／聯繫工具列收到品牌區下方靠右，header 的 divider 改由它承接
+     （identity＋工具＝同一視覺群組，divider 之下才是活動標題）。
+     2026-07-31 業主改判「標題置中」突兀，標題與招生資訊恢復靠左：右上有工具列
+     平衡版面、divider 下方整塊靠左對齊後，原本「標題孤零零貼最左」的參差感
+     已由結構收掉，不再需要置中。 */
+  .page-actions {
+    grid-column: auto;
+    grid-row: auto;
+    flex-direction: row;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    padding-bottom: var(--space-5);
     border-bottom: 1px solid var(--color-border);
   }
-  /* 單欄堆疊後，品牌文字被 LOGO 往右推了約 85px，標題卻從卡片 padding 起算，
-     兩條左緣對不齊，標題看起來孤零零貼在最左。標題與招生資訊改置中收掉這條
-     參差；品牌區維持 LOGO 在旁的橫排（改成堆疊置中會讓 header 長高約 60px，
-     把 DM 海報往下推）。 */
   .page-meta {
-    align-items: center;
-    text-align: center;
+    grid-column: auto;
+    grid-row: auto;
   }
-  .page-meta-row { justify-content: center; }
 }
 @media (--to-sm) {
   .public-activity-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-header { border-radius: 0; }
   .page-header { padding: var(--space-5); gap: var(--space-4); }
-  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
+  .page-brand { gap: var(--space-4); }
+  .page-actions { padding-bottom: var(--space-4); }
   .page-brand-logo { width: 72px; height: 72px; }
   .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
   .page-subtitle { font-size: var(--fs-xl); }
@@ -2552,7 +2564,6 @@ onUnmounted(() => {
   .registration-step-tab { flex-direction: column; gap: 3px; min-height: 56px; padding: 6px 3px; font-size: 11px; }
   .registration-step-index { width: 21px; height: 21px; }
   .review-details { grid-template-columns: 1fr; }
-  .btn-actions-row { flex-direction: column; }
   .toast-container { top: auto; bottom: 96px; right: var(--space-3); left: var(--space-3); }
   .toast { min-width: 0; max-width: none; }
 

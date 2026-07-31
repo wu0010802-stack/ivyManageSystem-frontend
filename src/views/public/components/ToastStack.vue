@@ -79,16 +79,25 @@ const TOAST_ICONS: Record<string, string> = {
   box-shadow: var(--shadow-lg);
   animation: toastSlideIn var(--dur-slow) var(--ease-out);
 }
+/* type tint 用 gradient 疊在實色 surface 上：直接把半透明色寫進 background
+   會「取代」基底白底而非疊色，整張 toast 變成 94% 透明，頁面文字直接透出
+   （2026-07-31 家長回報成功通知看不清楚的根因）。 */
 .toast.success {
-  background: rgba(13, 144, 83, 0.06);
+  background:
+    linear-gradient(rgba(13, 144, 83, 0.06), rgba(13, 144, 83, 0.06)),
+    var(--color-surface);
   border-color: rgba(13, 144, 83, 0.22);
 }
 .toast.error {
-  background: rgba(220, 38, 38, 0.06);
+  background:
+    linear-gradient(rgba(220, 38, 38, 0.06), rgba(220, 38, 38, 0.06)),
+    var(--color-surface);
   border-color: rgba(220, 38, 38, 0.22);
 }
 .toast.warning {
-  background: rgba(217, 119, 6, 0.06);
+  background:
+    linear-gradient(rgba(217, 119, 6, 0.06), rgba(217, 119, 6, 0.06)),
+    var(--color-surface);
   border-color: rgba(217, 119, 6, 0.22);
 }
 .toast-icon {
