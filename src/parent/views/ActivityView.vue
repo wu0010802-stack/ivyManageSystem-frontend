@@ -353,6 +353,10 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '確認失敗'))
+    // C4（2026-07-31 盲區稽核）：失敗路徑也要刷新。逾期確認會拿到 410，而伺服器
+    // 端該列此時已被 release_expired_pending_promotion 刪除；不重抓的話那列與按鈕
+    // 仍留在畫面上，家長再按一次變成 404。刷新失敗不覆蓋原本的錯誤提示。
+    await refreshActivitySnapshot().catch(() => {})
   } finally {
     confirmingKey.value = null
   }
@@ -384,6 +388,8 @@ async function onDeclineConfirmed() {
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '放棄失敗'))
+    // C4：同 onConfirmPromotion——失敗多半代表伺服器端狀態已與畫面分叉，重抓收斂。
+    await refreshActivitySnapshot().catch(() => {})
   } finally {
     confirmingKey.value = null
   }

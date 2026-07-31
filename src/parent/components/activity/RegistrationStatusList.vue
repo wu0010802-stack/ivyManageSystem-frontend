@@ -16,6 +16,7 @@
  * 根節點帶 id="act-active" 提供 hero scrollIntoView 錨點。
  */
 import { paymentBadge } from '../../utils/activityPayment'
+import { fmtDateTime } from '../../utils/datetime'
 import StatusPill from '../StatusPill.vue'
 
 type StatusPillTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'info'
@@ -24,6 +25,8 @@ interface RegCourse {
   course_id: number
   course_name: string
   status: string
+  // 候補轉正的 48h 確認截止（後端 my-registrations 已回傳，ISO 字串）。
+  confirm_deadline?: string | null
 }
 
 interface Registration {
@@ -57,6 +60,31 @@ const emit = defineEmits<{
   'confirm-promotion': [reg: Registration, course: RegCourse]
   'decline-promotion': [reg: Registration, course: RegCourse]
 }>()
+
+/**
+ * 候補轉正確認期限是否已過（2026-07-31 盲區稽核 C4）。
+ *
+ * 首頁待辦徽章刻意把逾期的 promoted_pending 也算進去（後端 home.py 的 docstring
+ * 載明理由：讓家長點進來看得到「期限已過」，避免誤以為系統漏通知），但這裡原本
+ * 只依 status 渲染一顆看起來可用的確認鈕，也不顯示期限——家長按下去只會拿到
+ * 410，而且列不會消失（錯誤路徑沒有重新整理），再按一次變成 404。
+ *
+ * 沒有 confirm_deadline 的資料維持既有行為（顯示確認鈕），不假設後端一定有值。
+ */
+function isPromotionExpired(rc: RegCourse): boolean {
+  if (!rc.confirm_deadline) return false
+  const t = new Date(rc.confirm_deadline).getTime()
+  return Number.isFinite(t) && t < Date.now()
+}
+
+function canConfirmPromotion(rc: RegCourse): boolean {
+  return rc.status === 'promoted_pending' && !isPromotionExpired(rc)
+}
+
+function deadlineText(rc: RegCourse): string {
+  const formatted = fmtDateTime(rc.confirm_deadline)
+  return formatted ? `請於 ${formatted} 前確認` : ''
+}
 
 /**
  * 課程報名狀態 → StatusPill tone。
@@ -136,19 +164,27 @@ function courseStatusLabel(
           :data-status="rc.status"
         />
         <button
-          v-if="rc.status === 'promoted_pending'"
+          v-if="canConfirmPromotion(rc)"
           type="button"
           class="confirm-btn"
           :disabled="Boolean(confirmingKey)"
           @click="emit('confirm-promotion', reg, rc)"
         >確認轉正式</button>
         <button
-          v-if="rc.status === 'promoted_pending'"
+          v-if="canConfirmPromotion(rc)"
           type="button"
           class="decline-btn"
           :disabled="confirmingKey === `${reg.id}:${rc.course_id}`"
           @click="emit('decline-promotion', reg, rc)"
         >放棄</button>
+        <span
+          v-if="canConfirmPromotion(rc) && deadlineText(rc)"
+          class="confirm-deadline"
+        >{{ deadlineText(rc) }}</span>
+        <span
+          v-else-if="rc.status === 'promoted_pending' && isPromotionExpired(rc)"
+          class="confirm-expired"
+        >確認期限已過，名額已釋出給下一位</span>
       </div>
     </div>
   </div>
@@ -241,5 +277,21 @@ function courseStatusLabel(
 .decline-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 候補確認期限（C4）：截止時間與逾期說明各佔一行，手機上不與按鈕擠在同一列。 */
+.confirm-deadline,
+.confirm-expired {
+  flex-basis: 100%;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.confirm-deadline {
+  color: var(--m3-on-surface-variant, #49454f);
+}
+
+.confirm-expired {
+  color: var(--m3-error, #ba1a1a);
 }
 </style>
