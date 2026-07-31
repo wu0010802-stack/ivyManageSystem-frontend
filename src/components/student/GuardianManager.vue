@@ -37,11 +37,15 @@
         </template>
       </el-table-column>
       <el-table-column label="備註" prop="custody_note" min-width="140" show-overflow-tooltip />
-      <el-table-column v-if="canWrite" label="操作" width="220" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="360" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openEditDialog(row)">編輯</el-button>
-          <el-button size="small" type="primary" plain @click="handleIssueBindingCode(row)">發碼</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">刪除</el-button>
+          <div class="row-actions">
+            <el-button size="small" @click="openEditDialog(row)">編輯</el-button>
+            <el-button size="small" type="primary" plain @click="handleIssueBindingCode(row)">發碼</el-button>
+            <el-button size="small" type="primary" plain @click="handleIssueDeviceSetupCode(row)">設定碼</el-button>
+            <el-button size="small" type="warning" plain @click="handleRevokeDevices(row)">撤銷裝置</el-button>
+            <el-button size="small" type="danger" @click="handleDelete(row)">刪除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -122,6 +126,40 @@
         <el-button type="primary" @click="bindingCodeVisible = false">我已抄寫</el-button>
       </template>
     </el-dialog>
+
+    <!-- 裝置設定碼簽發結果 Dialog（明碼僅顯示一次，DB 只存 sha256）。
+         跟上面的 LINE 綁定碼是兩支獨立端點/資料表，文案刻意強調差異，
+         避免行政人員把兩種碼搞混發錯。 -->
+    <el-dialog
+      v-model="deviceSetupCodeVisible"
+      title="家長裝置設定碼"
+      width="420px"
+      :close-on-click-modal="false"
+      @closed="deviceSetupCode = ''"
+    >
+      <el-alert
+        type="warning"
+        :closable="false"
+        title="請立即抄寫並交給家長：此碼僅顯示一次，關閉後無法再查看。"
+        style="margin-bottom: 12px;"
+      />
+      <el-alert
+        type="info"
+        :closable="false"
+        title="跟 LINE 綁定碼不同：這是給沒有 LINE 或換新手機的家長，在登入頁直接輸入即可登入，不需要先加 LINE 好友。"
+        style="margin-bottom: 12px;"
+      />
+      <div class="binding-code-display">
+        <span class="binding-code-text">{{ deviceSetupCode }}</span>
+        <el-button size="small" @click="copyDeviceSetupCode">複製</el-button>
+      </div>
+      <div class="binding-code-meta">
+        過期時間：{{ deviceSetupCodeExpiresAt || '—' }}（預設 24 小時，一次性使用）
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="deviceSetupCodeVisible = false">我已抄寫</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -131,8 +169,10 @@ import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'elem
 import {
   createGuardian,
   createGuardianBindingCode,
+  createGuardianDeviceSetupCode,
   deleteGuardian,
   listGuardians,
+  revokeGuardianDevices,
   updateGuardian,
 } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
@@ -315,6 +355,64 @@ async function copyBindingCode() {
   }
 }
 
+// 裝置設定碼簽發（無 LINE / 換新手機的家長直接登入用；跟上面的 LINE 綁定碼
+// 是兩支獨立端點，文案務必區隔避免行政人員發錯碼）
+const deviceSetupCodeVisible = ref(false)
+const deviceSetupCode = ref('')
+const deviceSetupCodeExpiresAt = ref('')
+
+async function handleIssueDeviceSetupCode(row: Record<string, unknown>) {
+  try {
+    await ElMessageBox.confirm(
+      `確定要為「${row.name}」簽發裝置設定碼嗎？\n此碼可讓沒有 LINE 或換新手機的家長直接登入（跟 LINE 綁定碼不同，不需要先加 LINE 好友）。明碼僅顯示一次，請務必當下抄寫並當面交給家長。`,
+      '簽發裝置設定碼',
+      { type: 'warning', confirmButtonText: '確定簽發' },
+    )
+  } catch {
+    return
+  }
+  try {
+    const { data } = await createGuardianDeviceSetupCode(row.id as number)
+    deviceSetupCode.value = data?.code || ''
+    deviceSetupCodeExpiresAt.value = data?.expires_at
+      ? data.expires_at.replace('T', ' ').slice(0, 16)
+      : ''
+    deviceSetupCodeVisible.value = true
+  } catch (err) {
+    ElMessage.error(apiError(err, '簽發失敗'))
+  }
+}
+
+async function copyDeviceSetupCode() {
+  if (!deviceSetupCode.value) return
+  try {
+    await navigator.clipboard.writeText(deviceSetupCode.value)
+    ElMessage.success('已複製到剪貼簿')
+  } catch {
+    ElMessage.warning('瀏覽器不支援複製，請手動抄寫')
+  }
+}
+
+// 撤銷此監護人對應家長帳號的所有裝置（危險操作，二次確認）
+async function handleRevokeDevices(row: Record<string, unknown>) {
+  try {
+    await ElMessageBox.confirm(
+      `確定要撤銷「${row.name}」的所有裝置嗎？\n該監護人目前已登入的所有裝置都會立即登出，需要重新綁定或用新的設定碼登入。`,
+      '撤銷所有裝置',
+      { type: 'warning', confirmButtonText: '確定撤銷' },
+    )
+  } catch {
+    return
+  }
+  try {
+    const { data } = await revokeGuardianDevices(row.id as number)
+    const count = (data as { revoked?: number })?.revoked ?? 0
+    ElMessage.success(count > 0 ? `已撤銷 ${count} 個裝置` : '此監護人目前沒有已登入的裝置')
+  } catch (err) {
+    ElMessage.error(apiError(err, '撤銷失敗'))
+  }
+}
+
 defineExpose({ refresh: fetchGuardians })
 
 onMounted(fetchGuardians)
@@ -334,6 +432,15 @@ watch(() => props.studentId, fetchGuardians)
 .toolbar-info {
   display: flex;
   gap: 8px;
+}
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+.row-actions .el-button {
+  margin-left: 0;
 }
 .flags {
   display: flex;

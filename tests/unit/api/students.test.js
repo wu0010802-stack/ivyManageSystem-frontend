@@ -128,4 +128,14 @@ describe('students api', () => {
     await mod.createGuardianBindingCode(99)
     expect(mockPost).toHaveBeenCalledWith('/guardians/99/binding-code')
   })
+
+  it('createGuardianDeviceSetupCode POST /guardians/:guardianId/device-setup-code', async () => {
+    await mod.createGuardianDeviceSetupCode(99)
+    expect(mockPost).toHaveBeenCalledWith('/guardians/99/device-setup-code')
+  })
+
+  it('revokeGuardianDevices POST /guardians/:guardianId/revoke-devices', async () => {
+    await mod.revokeGuardianDevices(99)
+    expect(mockPost).toHaveBeenCalledWith('/guardians/99/revoke-devices')
+  })
 })
