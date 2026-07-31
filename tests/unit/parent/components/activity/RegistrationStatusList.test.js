@@ -271,3 +271,68 @@ describe('RegistrationStatusList', () => {
     expect(wrapper.find('.decline-btn').attributes('disabled')).toBeDefined()
   })
 })
+
+// ── 盲區稽核 C4（2026-07-31）：逾期候補仍渲染可按的確認鈕 ────────────────────
+// 首頁 badge 刻意把「已逾期的 promoted_pending」也算進去（home.py 的 docstring 明寫
+// ——讓家長點進來會看到「期限已過」訊息，避免以為系統漏通知），但清單只依 status
+// 渲染一顆看起來可用的按鈕，既不顯示期限也沒有逾期分支。後端其實有回
+// confirm_deadline（api/parent_portal/activity.py），前端沒用。家長按下去拿 410。
+
+const HOUR = 60 * 60 * 1000
+
+function regWithDeadline(deadlineISO) {
+  return [
+    {
+      id: 20,
+      student_id: 1,
+      student_name: '王小明',
+      school_year: 114,
+      semester: 1,
+      is_paid: false,
+      courses: [
+        {
+          course_id: 300,
+          course_name: '直排輪',
+          status: 'promoted_pending',
+          confirm_deadline: deadlineISO,
+        },
+      ],
+    },
+  ]
+}
+
+describe('RegistrationStatusList 候補確認期限', () => {
+  it('未逾期：顯示確認鈕與截止時間', () => {
+    const future = new Date(Date.now() + 12 * HOUR).toISOString()
+    const wrapper = mount(RegistrationStatusList, {
+      props: {
+        registrations: regWithDeadline(future),
+        courseStatusMap: COURSE_STATUS,
+      },
+    })
+    expect(wrapper.find('.confirm-btn').exists()).toBe(true)
+    expect(wrapper.text()).toContain('前確認')
+  })
+
+  it('已逾期：不得渲染確認鈕，改顯示「確認期限已過」', () => {
+    const past = new Date(Date.now() - 2 * HOUR).toISOString()
+    const wrapper = mount(RegistrationStatusList, {
+      props: {
+        registrations: regWithDeadline(past),
+        courseStatusMap: COURSE_STATUS,
+      },
+    })
+    expect(wrapper.find('.confirm-btn').exists()).toBe(false)
+    expect(wrapper.text()).toContain('確認期限已過')
+  })
+
+  it('沒有 confirm_deadline 時維持既有行為（顯示確認鈕）', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: {
+        registrations: regWithDeadline(null),
+        courseStatusMap: COURSE_STATUS,
+      },
+    })
+    expect(wrapper.find('.confirm-btn').exists()).toBe(true)
+  })
+})

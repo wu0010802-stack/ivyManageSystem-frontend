@@ -276,3 +276,46 @@ describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
     w.unmount()
   })
 })
+
+// ── 盲區稽核 C4（2026-07-31）：確認/放棄失敗時也必須刷新 ─────────────────────
+// 原本只有成功路徑 await refreshActivitySnapshot()，catch 只 toast。家長按下逾期的
+// 「確認轉正式」拿到 410 後，該列與按鈕仍留在畫面上（伺服器端該列已被
+// release_expired_pending_promotion 刪除），再按一次變成 404；首頁徽章又有 60s TTL
+// 快取，同時段也還在顯示。錯誤路徑重抓才能讓畫面收斂到伺服器真實狀態。
+describe('ActivityView 候補操作失敗後仍需刷新快照', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('確認轉正失敗（例如 410 已逾期）後重抓報名清單', async () => {
+    const w = mountView()
+    await flushPromises()
+    myRegistrations.mockClear()
+    getActivityBootstrap.mockClear()
+
+    confirmPromotion.mockRejectedValueOnce({ displayMessage: '確認期限已過' })
+    await w.vm.onConfirmPromotion({ id: 5, courses: [] }, { course_id: 10 })
+    await flushPromises()
+
+    expect(toast.error).toHaveBeenCalled()
+    expect(myRegistrations).toHaveBeenCalled()
+    expect(w.vm.confirmingKey).toBe(null)
+    w.unmount()
+  })
+
+  it('放棄候補失敗後重抓報名清單', async () => {
+    const w = mountView()
+    await flushPromises()
+    myRegistrations.mockClear()
+
+    declinePromotion.mockRejectedValueOnce({ displayMessage: '此課程已是正式報名' })
+    w.vm.onDeclinePromotion({ id: 5, courses: [] }, { course_id: 10 })
+    await w.vm.onDeclineConfirmed()
+    await flushPromises()
+
+    expect(toast.error).toHaveBeenCalled()
+    expect(myRegistrations).toHaveBeenCalled()
+    expect(w.vm.confirmingKey).toBe(null)
+    w.unmount()
+  })
+})
