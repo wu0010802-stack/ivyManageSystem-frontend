@@ -138,6 +138,13 @@ onUnmounted(cancelPreview)
       </span>
     </div>
     <div class="form-input-col">
+      <!-- 候補說明必須常駐在選課決策點：原本「額滿·可候補」與「已額滿」的差別只寫在
+           .course-item 的 title 屬性裡，觸控裝置永遠看不到。家長在這頁唯一真正不確定的
+           決定就是「要不要勾一門候補的課」，沒解釋的結果不是猶豫而是乾脆不勾。 -->
+      <div class="waitlist-note">
+        <p><strong>額滿·可候補</strong>的課仍可勾選：排候補<strong>不先收費</strong>，有空位時園方會主動通知您。</p>
+        <p><strong>已額滿</strong>表示連候補都已滿，本學期無法再報名。</p>
+      </div>
       <div
         id="courseListGroup"
         class="course-list-vertical"
@@ -253,12 +260,12 @@ onUnmounted(cancelPreview)
 }
 .form-section-step:first-child { padding-top: var(--space-3); }
 .form-section-step.is-active .step-num {
-  background-color: var(--color-primary);
+  background-color: var(--color-primary-strong);
   color: var(--color-primary-contrast);
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
-.form-section-step.is-active .step-title { color: var(--color-primary); }
+.form-section-step.is-active .step-title { color: var(--color-primary-strong); }
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -267,7 +274,7 @@ onUnmounted(cancelPreview)
   width: 26px;
   height: 26px;
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 700;
   font-size: var(--fs-sm);
   font-family: var(--font-display);
@@ -339,6 +346,22 @@ onUnmounted(cancelPreview)
   background-size: contain;
   background-repeat: no-repeat;
 }
+
+/* 整框暖黃底 + 1px 全框線（公開頁禁用單邊色條當強調） */
+.waitlist-note {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+.waitlist-note p {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--color-text);
+}
+.waitlist-note p + p { margin-top: 4px; }
 
 .course-list-vertical {
   display: grid;

@@ -185,6 +185,23 @@
                   <span class="form-card-header-title">{{ displayFormCardTitle }}</span>
                 </div>
                 <div class="form-card-body">
+                  <div
+                    v-if="draftRestored"
+                    class="draft-restored-notice"
+                    role="status"
+                    data-testid="draft-restored-notice"
+                  >
+                    <svg class="icon" aria-hidden="true"><use href="#i-form" /></svg>
+                    <p class="draft-restored-text">已幫您留著上次填到一半的資料，接著填完就好。</p>
+                    <button
+                      type="button"
+                      class="draft-restored-discard"
+                      @click="discardRestoredDraft"
+                    >
+                      清除重填
+                    </button>
+                  </div>
+
                   <nav class="registration-steps" aria-label="報名進度">
                     <button
                       v-for="step in registrationSteps"
@@ -627,6 +644,7 @@ import {
   usePublicRegistrationFlow,
   type PublicRegistrationStep,
 } from '@/composables/usePublicRegistrationFlow'
+import { usePublicRegistrationDraft } from '@/composables/usePublicRegistrationDraft'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
@@ -747,6 +765,22 @@ const {
   goToErrorField,
   resetFlow,
 } = usePublicRegistrationFlow()
+
+// 草稿保存：家長在 LINE 內建瀏覽器填表、被打斷切走再回來時不必重填（見 composable 註解）
+const {
+  restoreDraft,
+  clearDraft: clearRegistrationDraft,
+  startAutosave: startDraftAutosave,
+} = usePublicRegistrationDraft({ form, currentStep, highestVisitedStep })
+let stopDraftAutosave: (() => void) | undefined
+const draftRestored = ref(false)
+
+function discardRestoredDraft() {
+  clearRegistrationDraft()
+  resetForm()
+  resetFlow()
+  draftRestored.value = false
+}
 
 const submitting = ref(false)
 // 送出失敗的持久錯誤（非 toast）：手機上家長低頭填表會錯過 4.5s toast，
@@ -1080,6 +1114,10 @@ async function handleSubmitRegistration() {
       queryToken: result.query_token,
     })
     showToast(result.message || '報名送出成功！', 'success')
+    // 先清草稿再 resetForm：autosave watcher 對空表單本來就會清掉草稿，但清除順序
+    // 顛倒會讓 debounce 期間的重新整理還原到一筆已送出的報名，家長可能重複報名
+    clearRegistrationDraft()
+    draftRestored.value = false
     resetForm()
     resetFlow()
     await refreshAvailability()
@@ -1110,13 +1148,22 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 }
 
 onMounted(async () => {
-  if (await runInit()) startPolling()
+  if (await runInit()) {
+    startPolling()
+    // 還原草稿必須排在 runInit 之後：要拿當期課程／用品清單濾掉已下架的品項
+    draftRestored.value = restoreDraft(
+      courses.value.map((course) => course.name),
+      supplies.value.map((supply) => supply.name),
+    )
+  }
   // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
+  stopDraftAutosave = startDraftAutosave()
   window.addEventListener('beforeunload', handleBeforeUnload)
 })
 onUnmounted(() => {
   disposed = true
   stopPolling()
+  stopDraftAutosave?.()
   window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
@@ -1144,13 +1191,17 @@ onUnmounted(() => {
 
 .public-activity-page :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 
+/* ⚠ 這裡不可以再加 overflow: hidden。它會讓 .page-wrapper 變成 scroll container，
+   底下所有 position: sticky 從此永遠吸不住——截止倒數提示（.notice.is-sticky）與桌機
+   結帳列（.checkout-stick）都曾因此整段失效，設計意圖只留在註解裡沒實現。
+   當初加它是為了把 header 的白底裁進圓角；改由 .page-header 自己帶上方圓角處理，
+   .page-body 沒有自己的背景，下方圓角由 .page-wrapper 的底色直接呈現。 */
 .page-wrapper {
   max-width: 1400px;
   margin: 0 auto;
   background-color: var(--color-surface);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
-  overflow: hidden;
 }
 
 /* Header — 簡約版：LOGO + 校名 ｜ 活動標題 水平兩欄、純白底、無動畫 */
@@ -1163,6 +1214,8 @@ onUnmounted(() => {
   padding: var(--space-6) var(--space-8);
   background: #fff;
   border-bottom: 1px solid var(--color-border);
+  /* 取代 .page-wrapper 的 overflow: hidden（那會廢掉全頁 sticky，見上方註解） */
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 .page-brand {
   display: flex;
@@ -1231,7 +1284,7 @@ onUnmounted(() => {
   padding: 2px 10px;
   border-radius: var(--radius-full);
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 600;
   font-size: var(--fs-xs);
   letter-spacing: 0.04em;
@@ -1472,6 +1525,40 @@ onUnmounted(() => {
 .form-card-header-title { font-weight: 700; font-size: var(--fs-md); color: var(--color-text); }
 .form-card-body { padding: var(--space-2) var(--space-5) var(--space-5); }
 
+/* 草稿還原提示：整框淡綠底 + 1px 全框線（公開頁禁用單邊色條，見 ToastStack 註解） */
+.draft-restored-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+.draft-restored-notice .icon { flex-shrink: 0; width: 20px; height: 20px; color: var(--color-primary-strong); }
+.draft-restored-text {
+  flex: 1;
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+/* 文字用深咖啡而非深綠：深綠 #0d9053 配淺綠底僅 3.75:1，不過 WCAG AA */
+.draft-restored-discard {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.draft-restored-discard:hover { border-color: var(--color-primary); }
+.draft-restored-discard:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
 .registration-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1502,7 +1589,7 @@ onUnmounted(() => {
 }
 .registration-step-tab:disabled { cursor: not-allowed; opacity: 0.58; }
 .registration-step-tab.is-active {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   background: var(--color-surface);
   border-color: var(--color-border-strong);
   box-shadow: 0 4px 12px rgba(57, 42, 28, 0.08);
@@ -1551,7 +1638,7 @@ onUnmounted(() => {
   min-height: 44px;
   margin: -11px 0;
   padding: 4px 10px;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   background: var(--color-surface);
   border: 1px solid var(--color-primary);
   border-radius: var(--radius-full);
@@ -1560,7 +1647,7 @@ onUnmounted(() => {
   font-weight: 700;
   cursor: pointer;
 }
-.review-edit-button:hover { color: var(--color-primary-contrast); background: var(--color-primary); }
+.review-edit-button:hover { color: var(--color-primary-contrast); background: var(--color-primary-strong); }
 .review-edit-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .review-details {
   display: grid;
@@ -1589,12 +1676,12 @@ onUnmounted(() => {
 .form-section-step:first-child { padding-top: var(--space-3); }
 /* 當前進行步驟：填色 step-num + 強調 title，給家長清楚的進度感 */
 .form-section-step.is-active .step-num {
-  background-color: var(--color-primary);
+  background-color: var(--color-primary-strong);
   color: var(--color-primary-contrast);
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-soft);
 }
-.form-section-step.is-active .step-title { color: var(--color-primary); }
+.form-section-step.is-active .step-title { color: var(--color-primary-strong); }
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -1603,7 +1690,7 @@ onUnmounted(() => {
   width: 26px;
   height: 26px;
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-weight: 700;
   font-size: var(--fs-sm);
   font-family: var(--font-display);
@@ -1944,7 +2031,7 @@ onUnmounted(() => {
   gap: 6px;
   font-size: var(--fs-sm);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin-bottom: var(--space-3);
 }
 .fee-preview-title .icon {
@@ -1987,11 +2074,11 @@ onUnmounted(() => {
 }
 .fee-preview .fee-row-total dt {
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
 }
 .fee-preview .fee-row-total dd {
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-size: var(--fs-xl);
 }
 .fee-preview-note {
@@ -2172,10 +2259,10 @@ onUnmounted(() => {
 .btn-block { width: 100%; }
 .btn-outline {
   background-color: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   border-color: var(--color-primary);
 }
-.btn-outline:hover:not(:disabled) { background-color: var(--color-primary); color: var(--color-primary-contrast); }
+.btn-outline:hover:not(:disabled) { background-color: var(--color-primary-strong); color: var(--color-primary-contrast); }
 .btn-outline--accent { color: var(--ivy-teal); border-color: var(--ivy-teal); }
 .btn-outline--accent:hover:not(:disabled) { background-color: var(--ivy-teal); color: var(--neutral-0); border-color: var(--ivy-teal); }
 .btn-actions-row {
@@ -2285,13 +2372,13 @@ onUnmounted(() => {
 .modal-title {
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.modal-title .icon { color: var(--color-primary); }
+.modal-title .icon { color: var(--color-primary-strong); }
 .modal-close {
   flex-shrink: 0;
   width: 36px;
@@ -2341,10 +2428,10 @@ onUnmounted(() => {
   gap: var(--space-2);
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0 0 var(--space-3) 0;
 }
-.contact-school-name .icon { color: var(--color-primary); }
+.contact-school-name .icon { color: var(--color-primary-strong); }
 .contact-school-detail {
   display: flex;
   align-items: center;
@@ -2354,8 +2441,8 @@ onUnmounted(() => {
   line-height: 1.6;
   margin-top: var(--space-1);
 }
-.contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary); }
-.contact-school-detail a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
+.contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary-strong); }
+.contact-school-detail a { color: var(--color-primary-strong); font-weight: 600; text-decoration: none; }
 .contact-form-intro {
   display: flex;
   align-items: center;
@@ -2402,6 +2489,13 @@ onUnmounted(() => {
 /* Responsive */
 @media (--to-md) {
   .grid-layout { grid-template-columns: 1fr; gap: var(--space-6); }
+  /* 單欄堆疊時把報名表提到海報與注意事項之前。
+     手機是這頁唯一的真實情境（家長從 LINE@ 連結點進來），而底部固定 CTA 從首次繪製
+     就在畫面上：若第一屏只有 3:4 海報 + 四條注意事項（第一個輸入框在約 900px 之下），
+     家長最先能點的東西就是那顆「下一步」，點下去只會得到紅字驗證錯誤——與這個服務的
+     第一次互動變成被責備。表單先行後，CTA 才有對應的填寫脈絡。 */
+  .col-right { order: 1; }
+  .col-left { order: 2; }
   .page-header {
     grid-template-columns: 1fr;
     gap: var(--space-5);
@@ -2417,6 +2511,7 @@ onUnmounted(() => {
 @media (--to-sm) {
   .public-activity-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
+  .page-header { border-radius: 0; }
   .page-header { padding: var(--space-5); gap: var(--space-4); }
   .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
   .page-brand-logo { width: 72px; height: 72px; }
@@ -2433,7 +2528,8 @@ onUnmounted(() => {
   .toast-container { top: auto; bottom: 96px; right: var(--space-3); left: var(--space-3); }
   .toast { min-width: 0; max-width: none; }
 
-  /* 手機版主 CTA 固定底部（page-wrapper overflow:hidden 會破壞 sticky，改用 fixed） */
+  /* 手機版主 CTA 固定在螢幕底部：手機上表單很長，sticky 只在捲到該區塊時才吸附，
+     fixed 才能讓送出鈕從落地到送出全程都在拇指範圍內。 */
   .submit-bar {
     position: fixed;
     left: 0;
@@ -2464,7 +2560,7 @@ onUnmounted(() => {
     color: var(--color-text-muted);
   }
   .submit-bar-total strong {
-    color: var(--color-primary);
+    color: var(--color-primary-strong);
     font-size: var(--fs-md);
     font-variant-numeric: tabular-nums;
   }
@@ -2553,13 +2649,13 @@ onUnmounted(() => {
 .public-activity-page .modal-title {
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.public-activity-page .modal-title .icon { color: var(--color-primary); }
+.public-activity-page .modal-title .icon { color: var(--color-primary-strong); }
 .public-activity-page .modal-close {
   flex-shrink: 0;
   width: 36px;
@@ -2599,10 +2695,10 @@ onUnmounted(() => {
   gap: var(--space-2);
   font-size: var(--fs-lg);
   font-weight: 700;
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   margin: 0 0 var(--space-3) 0;
 }
-.public-activity-page .contact-school-name .icon { color: var(--color-primary); }
+.public-activity-page .contact-school-name .icon { color: var(--color-primary-strong); }
 .public-activity-page .contact-school-detail {
   display: flex;
   align-items: center;
@@ -2612,8 +2708,8 @@ onUnmounted(() => {
   line-height: 1.6;
   margin-top: var(--space-1);
 }
-.public-activity-page .contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary); }
-.public-activity-page .contact-school-detail a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
+.public-activity-page .contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary-strong); }
+.public-activity-page .contact-school-detail a { color: var(--color-primary-strong); font-weight: 600; text-decoration: none; }
 .public-activity-page .contact-form-intro {
   display: flex;
   align-items: center;
@@ -2725,11 +2821,11 @@ onUnmounted(() => {
 .public-activity-page .btn-block { width: 100%; }
 .public-activity-page .btn-outline {
   background-color: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   border-color: var(--color-primary);
 }
 .public-activity-page .btn-outline:hover:not(:disabled) {
-  background-color: var(--color-primary);
+  background-color: var(--color-primary-strong);
   color: var(--color-primary-contrast);
 }
 

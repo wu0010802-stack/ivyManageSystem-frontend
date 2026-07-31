@@ -318,7 +318,8 @@ function handleDone() {
   margin: 0 0 var(--space-1);
   font-size: var(--fs-md);
   font-weight: 700;
-  color: var(--color-primary);
+  /* 16px/700 不到 WCAG「大型文字」門檻（需 18.66px 粗體），要吃 4.5:1 全標準 */
+  color: var(--color-primary-strong);
 }
 .token-hint {
   margin: 0 0 var(--space-3);
@@ -385,7 +386,7 @@ function handleDone() {
   gap: 4px;
   margin: var(--space-2) 0 0;
   font-size: var(--fs-xs);
-  color: var(--color-warning);
+  color: var(--color-warning-strong);
   font-weight: 600;
 }
 .token-warn svg { flex-shrink: 0; }
@@ -442,7 +443,7 @@ function handleDone() {
   color: var(--color-text);
 }
 .receipt-total strong {
-  color: var(--color-primary);
+  color: var(--color-primary-strong);
   font-size: var(--fs-xl);
   font-variant-numeric: tabular-nums;
 }

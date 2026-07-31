@@ -46,8 +46,11 @@
           <el-icon><Plus /></el-icon>
           新增報名
         </el-button>
-        <el-button type="info" plain @click="goToPublic">
+        <el-button type="primary" plain @click="copyPublicRegistrationLink">
           <el-icon><Link /></el-icon>
+          複製報名連結
+        </el-button>
+        <el-button type="info" plain @click="goToPublic">
           前台報名頁
         </el-button>
       </div>
@@ -505,7 +508,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, watch, defineAsyncComponent } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { Plus, Edit, Link } from '@element-plus/icons-vue'
@@ -530,6 +533,7 @@ import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBa
 import { formatActivityDate } from '@/utils/format'
 import { courseBillingLabel as formatCourseBillingLabel } from '@/utils/activityDisplay'
 import { hasPermission } from '@/utils/auth'
+import { buildPublicRegistrationUrl } from '@/utils/publicLinks'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 // 6 個彈窗/時間軸都綁在 v-model/drawer 後，互動才顯示 → 改 async 拆出主 chunk，加速首載。
@@ -587,12 +591,27 @@ function courseStatusLabel(status: string) {
   return (COURSE_STATUS_LABEL as Record<string, string>)[status] || status
 }
 const termStore = useAcademicTermStore()
-const router = useRouter()
 const route = useRoute()
 
+// 老師實際的分享動作是「複製連結貼到家長 LINE@」，所以這裡給的必須是對外的
+// public.html 網址，而不是 router.resolve('public-activity') 解出的 admin SPA
+// fallback（index.html#/public/activity）——那個網址貼進 LINE 的預覽卡標題會是
+// 「常春藤管理系統」，而且會讓家長載入整包 admin bundle。
+function publicRegistrationUrl() {
+  return buildPublicRegistrationUrl(window.location.origin)
+}
+
 function goToPublic() {
-  const url = router.resolve({ name: 'public-activity' }).href
-  window.open(url, '_blank', 'noopener')
+  window.open(publicRegistrationUrl(), '_blank', 'noopener')
+}
+
+async function copyPublicRegistrationLink() {
+  try {
+    await navigator.clipboard.writeText(publicRegistrationUrl())
+    ElMessage.success('報名連結已複製，可直接貼到家長 LINE 群組')
+  } catch {
+    ElMessage.warning('複製失敗，請改用「前台報名頁」開啟後複製網址列')
+  }
 }
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
