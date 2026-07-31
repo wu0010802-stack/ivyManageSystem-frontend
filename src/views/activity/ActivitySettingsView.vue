@@ -13,11 +13,23 @@
 
       <el-tab-pane v-if="canWrite" label="報名設定" name="registration">
         <el-card style="max-width: 720px" v-loading="loading">
+          <el-alert
+            class="gate-status"
+            :type="gateStatus.type"
+            :title="gateStatus.title"
+            :description="gateStatus.description"
+            show-icon
+            :closable="false"
+          />
           <el-form :model="form" label-width="120px">
-            <el-divider content-position="left">報名開關</el-divider>
+            <el-divider content-position="left">報名開關與期間</el-divider>
 
-            <el-form-item label="開放報名">
-              <el-switch v-model="form.is_open" active-text="開放" inactive-text="關閉" />
+            <el-form-item label="啟用報名">
+              <el-switch v-model="form.is_open" active-text="啟用" inactive-text="停用" />
+              <div class="field-hint">
+                總開關：只決定報名功能是否啟用；實際開放時段以下方開放／截止時間為準，
+                時間到會自動開放／自動截止。
+              </div>
             </el-form-item>
             <el-form-item label="開放學期">
               <el-select
@@ -219,7 +231,7 @@
 </template>
 
 <script setup lang="ts">
-import { h, ref, computed, defineAsyncComponent, onMounted, watch } from 'vue'
+import { h, ref, computed, defineAsyncComponent, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -238,6 +250,7 @@ import {
 import type { ActivityRegistrationSettingsPayload } from '@/api/activity'
 import {
   buildSaveConfirmLines,
+  computeGateStatus,
   taipeiNowMinuteString,
 } from './registrationSettingsConfirm'
 import EmailTemplateEditor from './EmailTemplateEditor.vue'
@@ -321,6 +334,19 @@ const savedAt = ref('')
 const settingsLoaded = ref(false)
 const settingsLoadFailed = ref(false)
 
+// 常駐狀態列的「現在」：30 秒 tick 一次，長開頁面時「自動開放／截止」的狀態才會跟上
+const GATE_NOW_TICK_MS = 30_000
+const gateNowStr = ref(taipeiNowMinuteString())
+let gateNowTimer: ReturnType<typeof setInterval> | null = null
+onMounted(() => {
+  gateNowTimer = setInterval(() => {
+    gateNowStr.value = taipeiNowMinuteString()
+  }, GATE_NOW_TICK_MS)
+})
+onUnmounted(() => {
+  if (gateNowTimer) clearInterval(gateNowTimer)
+})
+
 const form = ref<SettingsForm>({
   is_open: false,
   open_at: null,
@@ -334,6 +360,8 @@ const form = ref<SettingsForm>({
   form_card_title: '',
   poster_url: '',
 })
+
+const gateStatus = computed(() => computeGateStatus(form.value, gateNowStr.value))
 
 // ── 開放學期 ────────────────────────────────────────────────────────
 // 這裡刻意不用全域 AcademicTermSelector：那顆綁 useAcademicTermStore，動它會連帶
@@ -728,5 +756,8 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+.gate-status {
+  margin-bottom: 16px;
 }
 </style>
