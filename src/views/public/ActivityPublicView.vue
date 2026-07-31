@@ -2489,13 +2489,17 @@ onUnmounted(() => {
 /* Responsive */
 @media (--to-md) {
   .grid-layout { grid-template-columns: 1fr; gap: var(--space-6); }
-  /* 單欄堆疊時把報名表提到海報與注意事項之前。
-     手機是這頁唯一的真實情境（家長從 LINE@ 連結點進來），而底部固定 CTA 從首次繪製
-     就在畫面上：若第一屏只有 3:4 海報 + 四條注意事項（第一個輸入框在約 900px 之下），
-     家長最先能點的東西就是那顆「下一步」，點下去只會得到紅字驗證錯誤——與這個服務的
-     第一次互動變成被責備。表單先行後，CTA 才有對應的填寫脈絡。 */
-  .col-right { order: 1; }
-  .col-left { order: 2; }
+  /* 單欄堆疊順序：海報 → 報名表 → 說明與注意事項。
+     海報是這頁的 DM 本體（家長從 LINE@ 連結點進來，第一眼要先知道在報什麼），
+     所以放最前面；但「爸比媽咪…」介紹文與四條注意事項留在表單之後，否則第一個
+     輸入框會被推到約 900px 之下——底部固定 CTA 從首次繪製就在畫面上，家長最先能
+     點的東西就變成那顆「下一步」。（真按下去 focusFirstError() 會捲到出錯欄位，
+     不會卡死，但仍以少滑一段為佳。）
+     col-left 改 display:contents 把海報與說明攤平成 grid item，才能各自排序。 */
+  .col-left { display: contents; }
+  .poster-wrapper { order: 1; }
+  .col-right { order: 2; }
+  .info-box { order: 3; }
   .page-header {
     grid-template-columns: 1fr;
     gap: var(--space-5);
