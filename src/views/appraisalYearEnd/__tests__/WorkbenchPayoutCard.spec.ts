@@ -31,14 +31,17 @@ describe('WorkbenchPayoutCard', () => {
     expect(w.emitted('stats')?.[0]).toEqual([2])
   })
 
-  it('422（來源 cycle 未建立）→ 顯示後端 detail 的空狀態、不觸發 stats-error、回報 stats 0', async () => {
+  it('422（來源 cycle 未建立）→ 顯示友善空狀態（非後端內部 detail 原文）、不觸發 stats-error、回報 stats 0', async () => {
+    // 2026-07-31 QA 缺陷修正：後端 detail 是給開發者看的內部訊息（含 cycle 代號如
+    // 「appraisal_cycle academic_year=113 FIRST 不存在」），不應直接丟給使用者；
+    // 卡片改顯示固定的友善空狀態文案。
     const detail = 'appraisal_cycle academic_year=113 FIRST 不存在；請先在考核管理建立此 cycle'
     vi.mocked(previewAppraisalPayout).mockRejectedValue(axiosErr(422, detail))
     const w = mountCard()
     await flushPromises()
-    // 語義化空狀態：顯示後端訊息而非籠統「載入失敗」
-    expect(w.text()).toContain(detail)
+    expect(w.text()).not.toContain(detail)
     expect(w.text()).not.toContain('載入失敗')
+    expect(w.text()).toContain('尚無可發放的考核年終資料')
     // 不該點亮父層「部分卡片載入失敗」橫幅
     expect(w.emitted('stats-error')).toBeUndefined()
     expect(w.emitted('stats')?.[0]).toEqual([0])
