@@ -19856,6 +19856,8 @@ export interface components {
              * @default regular
              */
             employee_type: string;
+            /** English Name */
+            english_name?: string | null;
             /** Gender */
             gender?: string | null;
             /**
@@ -20113,6 +20115,8 @@ export interface components {
             emergency_contact_phone?: string | null;
             /** Employee Type */
             employee_type?: string | null;
+            /** English Name */
+            english_name?: string | null;
             /** Gender */
             gender?: string | null;
             /** Health Exempt */

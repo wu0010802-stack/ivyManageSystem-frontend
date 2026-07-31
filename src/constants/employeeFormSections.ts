@@ -6,6 +6,7 @@ export type EmployeeFormSection =
 export const EMPLOYEE_FIELD_SECTION: Record<string, EmployeeFormSection> = {
   // 核心（永遠顯示）
   name: 'core',
+  english_name: 'core',
   employee_id: 'core',
   job_title_id: 'core',
   employee_type: 'core',

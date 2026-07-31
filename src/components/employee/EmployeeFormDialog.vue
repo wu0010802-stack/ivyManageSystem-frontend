@@ -68,6 +68,7 @@ interface EmployeeForm {
   id: number | null
   employee_id: string
   name: string
+  english_name: string
   id_number: string
   employee_type: string
   job_title_id: number | null
@@ -115,6 +116,7 @@ const form = reactive<EmployeeForm>({
   id: null,
   employee_id: '',
   name: '',
+  english_name: '',
   id_number: '',
   employee_type: 'regular',
   job_title_id: null,
@@ -191,7 +193,7 @@ const salarySubmitError = computed(() =>
 
 // ── 欄位標籤（預覽對話框用）──────────────────────────
 const FIELD_LABELS = {
-  name: '姓名', gender: '性別', email: 'Email', phone: '電話', address: '地址',
+  name: '姓名', english_name: '英文名', gender: '性別', email: 'Email', phone: '電話', address: '地址',
   insurance_effective_date: '加保生效日',
   base_salary: '底薪', hourly_rate: '時薪',
   insurance_salary_level: '投保級距', pension_self_rate: '勞退自提',
