@@ -143,6 +143,32 @@ describe('AdminSidebar activeMenu 薪資子頁高亮', () => {
     const w = mountWith(['*'])
     expect(w.find('nav').attributes('data-active')).toBe('/appraisal-year-end')
   })
+
+  // manifest 化後 activeMenu 改為 ACTIVE_MENU_PATHS 最長前綴匹配；
+  // 釘住「本身即選單頁的深路徑」不可被較短前綴（/students、/settings）搶走高亮。
+  it('/students/admissions 高亮自身（最長前綴勝過 /students）', () => {
+    routeState.path = '/students/admissions'
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/students/admissions')
+  })
+
+  it('/students/profile/123 非選單頁子路徑 → 高亮 /students', () => {
+    routeState.path = '/students/profile/123'
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/students')
+  })
+
+  it('/settings/accounts 高亮自身（最長前綴勝過 /settings）', () => {
+    routeState.path = '/settings/accounts'
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/settings/accounts')
+  })
+
+  it('/settings 精確高亮一般設定，不受 /settings/accounts 影響', () => {
+    routeState.path = '/settings'
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/settings')
+  })
 })
 
 describe('AdminSidebar 行動版無障礙互動', () => {

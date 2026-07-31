@@ -1,33 +1,31 @@
 /**
  * 守衛：側欄選單的權限 gate 必須與 route guard 的規則一致。
  *
- * 側欄用 `v-if="canView.X"` 決定顯不顯示，route guard 用
- * `ROUTE_PERMISSION_RULES` 決定進不進得去，兩份表各自手工維護。漂移的後果不是
- * 越權（guard 是 default-deny，仍會擋下），而是**使用者看得到卻進不去**：點下去
- * 被彈到「第一個有權限的路由」，畫面隨機跳頁，沒有任何「無權限」提示，使用者
- * 無從自我診斷。反方向（側欄比 guard 嚴）則會讓以側欄為準的權限稽核得出錯誤結論。
+ * 2026-07-31 manifest 化改造後的資料層版本：側欄不再手寫 v-if="canView.X"，而是由
+ * NAVIGATION_MANIFEST 衍生（SIDEBAR_TREE 的 visibleCodes = views ∪ sharedViews），
+ * route guard 的 ROUTE_PERMISSION_RULES 也由同一 manifest 衍生。本測試因此不再
+ * regex 讀 AdminSidebar.vue SFC，改直接對資料層斷言：每個 manifest 選單頁的
+ * (views ∪ sharedViews) 必須 ⊆ 該 routePath 的路由規則接受集合。
  *
- * 2026-07-27 建立本測試時實際抓到 3 條漂移（SA-005 A3）：
+ * 為什麼還需要這支測試（衍生同源後看似恆真）：兩份衍生物共用 manifest，但衍生
+ * 邏輯各自獨立（deriveSidebarTree vs deriveRoutePermissionRules 的攤平＋冗餘消除
+ * ＋最長匹配）。derive.ts 的任何改動（例如冗餘消除規則放寬、prefix 語意變動）若讓
+ * 「側欄可見但 guard 拒絕」重新出現，本測試就紅。漂移的後果不是越權（guard 是
+ * default-deny，仍會擋下），而是**使用者看得到卻進不去**：點下去被彈到「第一個有
+ * 權限的路由」，畫面隨機跳頁，沒有任何「無權限」提示，使用者無從自我診斷。
+ *
+ * 歷史脈絡：2026-07-27 建立本測試（SFC regex 版）時實際抓到 3 條漂移（SA-005 A3）：
  *   - /dismissal-queue        側欄 STUDENTS_READ → 規則要 DISMISSAL_CALLS_READ
  *   - /admin/gov-reports/...  側欄 SALARY_READ   → 規則要 GOV_REPORTS_VIEW
  *   - /gov-reports            側欄 SALARY_READ   → 規則要 REPORTS
- *
- * `src/constants/permissions.ts` 的行內註解自述同型回歸已發生過數次，靠人記得
- * 顯然不夠。
- *
- * 讀 SFC 原始碼而非 mount 元件：這裡要驗的是「兩份表的對應關係」這個靜態事實，
- * 掛起整個 Element Plus 選單只會引入不相干的失敗來源。
+ * 這三個路徑續留為防假綠釘子。
  */
-
-import { existsSync, readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
 import { ROUTE_PERMISSION_RULES } from '@/constants/permissions'
-
-// happy-dom 環境下 import.meta.url 不是 file: scheme，只能從 cwd 解析。
-const SIDEBAR = resolve(process.cwd(), 'src/components/layout/AdminSidebar.vue')
+import { NAVIGATION_MANIFEST } from '@/constants/navigation'
+import type { ManifestPage } from '@/constants/navigation'
 
 /**
  * 與 `src/utils/auth.ts` 的 `getRoutePermissions` 同邏輯：取所有匹配規則中
@@ -50,29 +48,22 @@ interface MenuGate {
   permissions: string[]
 }
 
-/** 抽出所有 `<el-menu-item v-if="...canView.X..." index="/path">` 的 (path, [X]) 對。 */
+/** manifest 中所有會出現在側欄的頁（有 menu 且有 routePath），取其可見性碼集合。 */
 function sidebarGates(): MenuGate[] {
-  if (!existsSync(SIDEBAR)) {
-    throw new Error(`找不到 AdminSidebar.vue（解析為 ${SIDEBAR}）——路徑失效會讓本測試假綠`)
-  }
-  const source = readFileSync(SIDEBAR, 'utf-8')
-  const gates: MenuGate[] = []
-  const itemRe = /<el-menu-item\s+([^>]*?)index="([^"]+)"/g
-
-  for (const match of source.matchAll(itemRe)) {
-    const [, attrs, path] = match
-    if (!path.startsWith('/')) continue
-    const vIf = /v-if="([^"]*)"/.exec(attrs)
-    if (!vIf) continue
-    const permissions = [...vIf[1].matchAll(/canView\.([A-Z_]+)/g)].map((m) => m[1])
-    if (permissions.length === 0) continue // 非權限條件（如 isMobile）不在本測試範圍
-    gates.push({ path, permissions })
-  }
-  return gates
+  const allPages: ManifestPage[] = [
+    ...NAVIGATION_MANIFEST.topLevel,
+    ...NAVIGATION_MANIFEST.groups.filter((g) => !g.pickerOnly).flatMap((g) => [...g.pages]),
+  ]
+  return allPages
+    .filter((p) => p.menu !== undefined && p.routePath !== null)
+    .map((p) => ({
+      path: p.routePath as string,
+      permissions: [...p.views.map((v) => v.code), ...(p.sharedViews ?? [])],
+    }))
 }
 
-describe('AdminSidebar 權限 gate 與 route guard 規則一致性', () => {
-  it('抽得到足夠的選單項（避免 regex 失效造成假綠）', () => {
+describe('AdminSidebar（manifest 選單頁）權限 gate 與 route guard 規則一致性', () => {
+  it('抽得到足夠的選單頁（避免 manifest 結構改動造成假綠）', () => {
     const gates = sidebarGates()
     expect(gates.length).toBeGreaterThan(20)
     // 釘住三個曾漂移的路徑，重構改名時直接紅而非靜默略過
@@ -82,18 +73,22 @@ describe('AdminSidebar 權限 gate 與 route guard 規則一致性', () => {
     expect(paths).toContain('/admin/gov-reports/monthly')
   })
 
-  it('每個選單項的 canView 權限都必須是該路由規則接受的權限', () => {
+  it('每個選單頁的 (views ∪ sharedViews) 都必須被該路由規則接受', () => {
     const offenders: string[] = []
 
     for (const { path, permissions } of sidebarGates()) {
       const allowed = routePermissions(path)
-      if (allowed.length === 0) continue // 該路徑無 guard 規則，不在本測試範圍
+      if (allowed.length === 0) {
+        // 選單頁完全沒有 guard 規則 = 全員 default-deny 卻顯示選單，必為漂移
+        offenders.push(`  ${path}\n      無任何路由規則（default-deny 會擋下所有人）`)
+        continue
+      }
 
       const mismatched = permissions.filter((p) => !allowed.includes(p))
       if (mismatched.length > 0) {
         offenders.push(
           `  ${path}\n` +
-            `      側欄 gate: ${permissions.join(' | ')}\n` +
+            `      側欄可見碼: ${permissions.join(' | ')}\n` +
             `      規則接受: ${allowed.join(' | ')}\n` +
             `      不被接受: ${mismatched.join(', ')}`
         )
@@ -102,10 +97,10 @@ describe('AdminSidebar 權限 gate 與 route guard 規則一致性', () => {
 
     expect(
       offenders,
-      '側欄權限與 route guard 規則漂移。持有側欄權限但不在規則內的使用者，' +
+      '側欄可見性與 route guard 規則漂移。持有側欄可見碼但不在規則內的使用者，' +
         '會看到選單卻在點擊後被彈走（無錯誤提示，無法自我診斷）。\n' +
-        '修法：改 AdminSidebar.vue 的 canView.X 對齊 ROUTE_PERMISSION_RULES，' +
-        '或補規則。\n' +
+        '修法：調整 navigation/manifest.ts 的 views/sharedViews/extraRoutes，' +
+        '或檢查 derive.ts 的衍生邏輯（冗餘消除／最長匹配）是否被改壞。\n' +
         offenders.join('\n')
     ).toEqual([])
   })
