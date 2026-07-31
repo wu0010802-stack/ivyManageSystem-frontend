@@ -119,7 +119,12 @@ export function usePromotionActions({
   }
 
   async function handleDeclinePromotion(item: CourseEntry) {
-    if (promotionSubmitting.value !== null) return
+    // 2026-07-31 稽核：原本直接 return，家長在另一門候補處理中時按「放棄」完全沒反應
+    // （連確認框都不會出現），無從判斷名額到底釋出了沒。
+    if (promotionSubmitting.value !== null) {
+      showToast('另一筆候補正在處理中，請稍候再試', 'warning')
+      return
+    }
     if (item.course_id == null) {
       showToast('課程資料不完整，請重新查詢', 'error')
       return
