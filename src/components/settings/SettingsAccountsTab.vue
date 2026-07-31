@@ -6,7 +6,7 @@ import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPass
 import { createRole } from '@/api/permissions_admin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { ArrowDown, QuestionFilled } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 import { formatDateTimeTW } from '@/utils/format'
@@ -15,7 +15,8 @@ import type { RolesDefinition } from './roles/types'
 import ParentAccountsList from './ParentAccountsList.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, getUserInfo } from '@/utils/auth'
+import { PORTAL_ONLY_ROLES } from '@/constants/permissions'
 
 interface EmployeeItem { id: number; name: string; employee_id: string }
 
@@ -63,7 +64,7 @@ const editUserForm = reactive<{ id: number | null; username: string; role: strin
 // 開 dialog 當下的角色快照：saveEditUser 判斷角色是否真的變更，避免 no-op 儲存把偏離權限靜默重置為角色預設
 const editUserOriginalRole = ref<string>('')
 const credentialDialogVisible = ref<boolean>(false)
-const createdCredentials = ref<{ username: string; password: string }>({ username: '', password: '' })
+const createdCredentials = ref<{ username: string; password: string; loginUrl: string }>({ username: '', password: '', loginUrl: '' })
 const permissionDefinition = ref<RolesDefinition>({ permissions: {}, groups: [], roles: {} })
 
 // 搜尋 / 角色篩選
@@ -149,6 +150,37 @@ const fetchPermissionDefinition = async () => {
   }
 }
 
+// 自己的帳號不可停用/刪除（後端 400 防護已存在；前端先擋，避免走完 confirm 才失敗）
+const isSelf = (row: Record<string, unknown>): boolean => {
+  const me = getUserInfo()
+  return !!me && !!row.username && row.username === me.username
+}
+
+// 與後端 utils/auth.validate_password_strength 對齊的政策提示
+const PASSWORD_HINT = '至少 8 字元，需包含大寫、小寫英文字母與數字'
+// 排除易混淆字元（I/l/O/0/1）；固定前三碼各落一類，保證通過後端強度檢查
+const _PW_UPPER = 'ABCDEFGHJKMNPQRSTUVWXYZ'
+const _PW_LOWER = 'abcdefghjkmnpqrstuvwxyz'
+const _PW_DIGIT = '23456789'
+const generatePassword = (length = 12): string => {
+  const all = _PW_UPPER + _PW_LOWER + _PW_DIGIT
+  const buf = new Uint32Array(length)
+  crypto.getRandomValues(buf)
+  const chars = Array.from(buf, (n) => all[n % all.length])
+  chars[0] = _PW_UPPER[buf[0] % _PW_UPPER.length]
+  chars[1] = _PW_LOWER[buf[1] % _PW_LOWER.length]
+  chars[2] = _PW_DIGIT[buf[2] % _PW_DIGIT.length]
+  return chars.join('')
+}
+
+// 依角色決定登入入口：portal_only 角色（教師）走 Portal，其餘走管理端。
+// 優先用 /auth/permissions 的 flags；定義未載入時 fallback 常數白名單。
+const buildLoginUrl = (role: string): string => {
+  const flags = permissionDefinition.value.roles[role]?.flags
+  const portalOnly = flags ? flags.includes('portal_only') : PORTAL_ONLY_ROLES.includes(role)
+  return `${window.location.origin}/#${portalOnly ? '/portal/login' : '/login'}`
+}
+
 const availableEmployees = () => {
   const empList = employees.value
   const existingIds = new Set(users.value.map(u => u.employee_id))
@@ -181,7 +213,7 @@ const saveUser = async () => {
     }
     await createUser(payload)
     userDialogVisible.value = false
-    createdCredentials.value = { username: userForm.username, password: userForm.password }
+    createdCredentials.value = { username: userForm.username, password: userForm.password, loginUrl: buildLoginUrl(userForm.role) }
     credentialDialogVisible.value = true
     fetchUsers()
   } catch (error) {
@@ -292,7 +324,9 @@ const saveEditUser = async () => {
 const getRoleTagType = (role: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined => {
   const types: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
     admin: 'danger',
+    principal: 'primary',
     hr: 'warning',
+    accountant: 'warning',
     supervisor: 'success',
     teacher: 'info',
   }
@@ -418,6 +452,7 @@ defineExpose({
   keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser, handleToggleActive,
   audience, staffUsers, parentUsers, filteredParentUsers, onAudienceChange, roleFilterOptions, parentEmptyText,
   staffStats, parentStats, loadError,
+  isSelf, generatePassword, buildLoginUrl, createdCredentials,
 })
 </script>
 
@@ -442,7 +477,8 @@ defineExpose({
           <el-option v-for="r in roleFilterOptions" :key="r.code" :label="r.label" :value="r.code" />
         </el-select>
       </div>
-      <div class="toolbar-right">
+      <!-- 家長帳號由 LINE 綁定自動產生：新增/角色管理僅屬教職員視圖，避免與空狀態文案矛盾 -->
+      <div v-if="audience === 'staff'" class="toolbar-right">
         <el-button v-if="hasPermission('ROLES_MANAGE')" data-testid="goto-roles" @click="router.push('/settings/roles')">⚙ 管理角色</el-button>
         <el-button type="primary" @click="handleAddUser">新增帳號</el-button>
       </div>
@@ -457,6 +493,13 @@ defineExpose({
         </template>
       </el-table-column>
       <el-table-column label="權限" width="120">
+        <template #header>
+          <span class="perm-header">權限
+            <el-tooltip placement="top" content="全部＝不受限制；預設＝依角色預設權限；自訂＝已個別調整；教師固定用角色權限，顯示「-」">
+              <el-icon class="perm-help"><question-filled /></el-icon>
+            </el-tooltip>
+          </span>
+        </template>
         <template #default="{ row } = {}">
           <template v-if="row?.role !== 'teacher'">
             <el-tag v-if="Array.isArray(row?.permission_names) && row?.permission_names.includes('*')" type="success" size="small">全部</el-tag>
@@ -485,8 +528,8 @@ defineExpose({
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
-                <el-dropdown-item command="toggle-active">{{ row?.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
-                <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+                <el-dropdown-item command="toggle-active" :disabled="isSelf(row)">{{ isSelf(row) ? '停用帳號（不可停用自己）' : row?.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
+                <el-dropdown-item command="delete" :disabled="isSelf(row)" divided>{{ isSelf(row) ? '刪除（不可刪除自己）' : '刪除' }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -537,8 +580,8 @@ defineExpose({
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
-              <el-dropdown-item command="toggle-active">{{ item.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
-              <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+              <el-dropdown-item command="toggle-active" :disabled="isSelf(item)">{{ isSelf(item) ? '停用帳號（不可停用自己）' : item.is_active ? '停用帳號' : '啟用帳號' }}</el-dropdown-item>
+              <el-dropdown-item command="delete" :disabled="isSelf(item)" divided>{{ isSelf(item) ? '刪除（不可刪除自己）' : '刪除' }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -556,7 +599,7 @@ defineExpose({
 
     <!-- Create User Dialog -->
     <el-dialog v-model="userDialogVisible" title="新增帳號" width="600px">
-      <el-form :model="userForm" label-width="80px">
+      <el-form :model="userForm" label-position="top">
         <el-form-item label="員工">
           <el-select v-model="userForm.employee_id" placeholder="選擇員工" filterable style="width: 100%;" @change="autoFillUsername">
             <el-option v-for="emp in availableEmployees()" :key="emp.id" :label="`${emp.name} (${emp.employee_id})`" :value="emp.id" />
@@ -565,8 +608,12 @@ defineExpose({
         <el-form-item label="帳號">
           <el-input v-model="userForm.username" placeholder="登入帳號" />
         </el-form-item>
-        <el-form-item label="密碼">
-          <el-input v-model="userForm.password" type="password" placeholder="初始密碼" show-password />
+        <el-form-item label="初始密碼">
+          <div class="password-row">
+            <el-input v-model="userForm.password" type="password" placeholder="初始密碼" show-password />
+            <el-button data-testid="gen-password" @click="userForm.password = generatePassword()">產生亂數密碼</el-button>
+          </div>
+          <div class="form-hint">{{ PASSWORD_HINT }}；員工首次登入後將被要求重新設定。</div>
         </el-form-item>
         <el-form-item label="角色">
           <RoleCardsGrid v-model="userForm.role" :definition="permissionDefinition" />
@@ -579,13 +626,18 @@ defineExpose({
     </el-dialog>
 
     <!-- Reset Password Dialog -->
-    <el-dialog v-model="resetDialogVisible" title="重設密碼" width="400px">
+    <el-dialog v-model="resetDialogVisible" title="重設密碼" width="440px">
       <p>帳號: <strong>{{ resetPasswordForm.username }}</strong></p>
-      <el-form label-width="80px">
+      <el-form label-position="top">
         <el-form-item label="新密碼">
-          <el-input v-model="resetPasswordForm.new_password" type="password" placeholder="請輸入新密碼" show-password />
+          <div class="password-row">
+            <el-input v-model="resetPasswordForm.new_password" type="password" placeholder="請輸入新密碼" show-password />
+            <el-button data-testid="gen-reset-password" @click="resetPasswordForm.new_password = generatePassword()">產生亂數密碼</el-button>
+          </div>
+          <div class="form-hint">{{ PASSWORD_HINT }}</div>
         </el-form-item>
       </el-form>
+      <p class="reset-note">重設後，該帳號下次登入時將被要求重新設定密碼。</p>
       <template #footer>
         <el-button @click="resetDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="submitResetPassword">確認重設</el-button>
@@ -594,7 +646,7 @@ defineExpose({
 
     <!-- Edit User Dialog -->
     <el-dialog v-model="editUserDialogVisible" title="編輯使用者" width="600px">
-      <el-form :model="editUserForm" label-width="80px">
+      <el-form :model="editUserForm" label-position="top">
         <el-form-item label="帳號">
           <el-input :model-value="editUserForm.username" disabled />
         </el-form-item>
@@ -619,7 +671,7 @@ defineExpose({
     </el-dialog>
 
     <!-- Credential Dialog -->
-    <el-dialog v-model="credentialDialogVisible" title="帳號已建立" width="480px" @closed="createdCredentials = { username: '', password: '' }">
+    <el-dialog v-model="credentialDialogVisible" title="帳號已建立" width="480px" @closed="createdCredentials = { username: '', password: '', loginUrl: '' }">
       <div style="margin-bottom: 16px; color: #67c23a; font-weight: 500;">帳號建立成功，請將以下資訊提供給員工：</div>
       <el-descriptions :column="1" border>
         <el-descriptions-item label="帳號">
@@ -635,7 +687,10 @@ defineExpose({
           </div>
         </el-descriptions-item>
         <el-descriptions-item label="登入網址">
-          <span>#/portal/login</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="login-url" data-testid="login-url">{{ createdCredentials.loginUrl }}</span>
+            <el-button size="small" @click="copyText(createdCredentials.loginUrl)">複製</el-button>
+          </div>
         </el-descriptions-item>
       </el-descriptions>
       <div style="margin-top: 16px; color: var(--text-tertiary); font-size: 13px;">員工首次登入後將被要求修改密碼。</div>
@@ -649,7 +704,7 @@ defineExpose({
       <p style="margin: 0 0 12px; color: var(--text-tertiary); font-size: 13px;">
         以此帳號目前的權限集合建立新角色，並指派給此帳號。
       </p>
-      <el-form :model="saveAsRoleForm" label-width="60px">
+      <el-form :model="saveAsRoleForm" label-position="top">
         <el-form-item label="code">
           <el-input v-model="saveAsRoleForm.code" placeholder="例：custom_hr_plus" />
         </el-form-item>
@@ -715,5 +770,32 @@ defineExpose({
 .accounts-stats b {
   color: var(--text-primary);
   font-weight: 600;
+}
+
+.password-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.password-row .el-input {
+  flex: 1;
+}
+
+.login-url {
+  word-break: break-all;
+}
+
+.reset-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.perm-help {
+  vertical-align: -2px;
+  margin-left: 2px;
+  color: var(--text-tertiary);
+  cursor: help;
 }
 </style>
