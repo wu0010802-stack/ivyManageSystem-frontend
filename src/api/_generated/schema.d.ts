@@ -1399,9 +1399,13 @@ export interface paths {
         put?: never;
         /**
          * Reject Registration
-         * @description 後台將待審核 registration 視為校外生/資料不符拒絕。
+         * @description 後台拒絕 registration（軟刪除 + match_status='rejected'）。
          *
-         *     軟刪除（is_active=False）+ match_status='rejected' + remark 加註原因。
+         *     2026-07-31 拒絕擴大涵蓋：後台唯一的移除入口（「刪除」鍵已自 UI 移除）。
+         *     待審核／未比對之外，已確認（matched/manual/forced）的報名也可由此拒絕；
+         *     已繳費者須顯式帶 force_refund + refund_reason，走與 delete_registration
+         *     同一套退費簽核三閘（reason / cumulative / diff）後自動沖帳——不可繞過
+         *     （2026-06-24 review #1 的守衛精神不變，只是閘門搬進本端點）。
          */
         post: operations["reject_registration_api_activity_registrations__registration_id__reject_post"];
         delete?: never;
@@ -4023,6 +4027,92 @@ export interface paths {
          *     金額（保留 employee_id / name / role / enrollment 等運維所需欄位）。
          */
         post: operations["preview_bonus_impact_api_bonus_impact_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bus/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Routes */
+        get: operations["list_routes_api_bus_routes_get"];
+        put?: never;
+        /** Create Route */
+        post: operations["create_route_api_bus_routes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bus/routes/{route_id}/stops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace Stops
+         * @description 該路線該方向的站點 replace-all（另一個方向不受影響）。
+         */
+        put: operations["replace_stops_api_bus_routes__route_id__stops_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bus/routes/geocode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Geocode Student
+         * @description 依學生住址查座標（**不落庫**，管理端在地圖微調後隨 PUT stops 存）。
+         */
+        post: operations["geocode_student_api_bus_routes_geocode_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bus/trips/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trips Today
+         * @description 今日班次監看 snapshot（單筆班次 + 全車站點）。
+         *
+         *     多路線同時發車時，不帶參數只會回其中一筆——監看頁應帶 `route_id`
+         *     （必要時再帶 `direction`）限縮到指定路線，語意與
+         *     `GET /api/portal/bus/trips/active` 的同名參數一致。
+         *
+         *     排序刻意是「進行中優先、再比開跑時間」而非純 `started_at desc`：上午班
+         *     已結束、下午班尚未發車時，純時間排序會回到已結束的那筆，監看頁就看不到
+         *     正在路上的車。
+         */
+        get: operations["trips_today_api_bus_trips_today_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8257,6 +8347,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/bus/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Bus Today
+         * @description 今日班次：家長只看得到自己小孩所在的那筆 trip。
+         *
+         *     合約限制（M4）：手足若分屬同日不同路線（例如老大老二不同路線車），本端點
+         *     只回傳「找到自己小孩的第一筆」trip（見下方排序規則），不會把手足跨路線的
+         *     多筆班次合併回傳。目前系統一個學生只會出現在單一路線的站點名冊，這在絕大
+         *     多數案例下等同「回傳自己小孩唯一所在的那筆」；若未來允許手足選讀不同路線
+         *     且同日都發車，前端需知道本端點不是「聯集所有手足班次」的形狀。
+         */
+        get: operations["get_bus_today_api_parent_bus_today_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/calendar/month": {
         parameters: {
             query?: never;
@@ -9613,6 +9729,171 @@ export interface paths {
          * @description 個人月考勤表 PDF（A4 橫向）。
          */
         get: operations["print_attendance_sheet_pdf_api_portal_attendance_sheet_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Routes For Operator
+         * @description 隨車老師開班前的路線選單（只回啟用中的路線，只帶 id/name/is_active）。
+         *
+         *     存在理由：唯一的路線清單端點 `GET /api/bus/routes` 掛 BUS_READ 且回傳全車
+         *     站點名冊；為了讓隨車老師能自行開班而補授 BUS_READ，等於把全園學生姓名與
+         *     家庭住址座標一併給出去（過度授權）。此端點與 POST /trips 同權限
+         *     （BUS_TRIPS_OPERATE），揭露面收斂到「選單需要的最小欄位」。
+         *
+         *     只回 `is_active=True`：停用路線本來就不該被開班（POST /trips 也只接受
+         *     啟用中的路線，回 404），列在選單裡只會製造死巷。
+         */
+        get: operations["list_routes_for_operator_api_portal_bus_routes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Trip */
+        post: operations["start_trip_api_portal_bus_trips_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/trips/{trip_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Trip */
+        post: operations["complete_trip_api_portal_bus_trips__trip_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/trips/{trip_id}/pings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Pings */
+        post: operations["post_pings_api_portal_bus_trips__trip_id__pings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/trips/{trip_id}/stops/{stop_id}/depart": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Depart Stop */
+        post: operations["depart_stop_api_portal_bus_trips__trip_id__stops__stop_id__depart_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/trips/{trip_id}/stops/{stop_id}/skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Skip Stop */
+        post: operations["skip_stop_api_portal_bus_trips__trip_id__stops__stop_id__skip_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/trips/{trip_id}/stops/{stop_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo Stop */
+        post: operations["undo_stop_api_portal_bus_trips__trip_id__stops__stop_id__undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/bus/trips/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Active
+         * @description 回目前 in_progress 的班次。
+         *
+         *     三個過濾條件皆為選填、彼此 AND：
+         *
+         *     - `route_id`/`direction`：限縮到某條路線的某個方向。
+         *     - `mine=true`：限縮到「呼叫者本人開的班次」（比對
+         *       `BusTrip.operator_employee_id` 與 token 的 employee_id）。隨車老師頁
+         *       「進頁復原」應帶此參數——否則多路線同時開跑時，B 線司機會拿到 A 線的
+         *       班次連同完整站點名冊（學生姓名＋家庭住址座標＝家長 PII），並把 B 車的
+         *       GPS 寫進 A 車的班次。
+         *
+         *     預設（不帶任何參數）維持原行為：挑最近一筆 in_progress 的班次，任何路線、
+         *     任何操作者皆可能回傳——刻意不改，前端尚未接上新參數。
+         *
+         *     ⚠️ `mine` **只影響查詢**，不改變任何操作授權：任一持 BUS_TRIPS_OPERATE 的
+         *     帳號仍可操作任一班次（輪班交接所需），見 `_active_trip_or_404`。
+         */
+        get: operations["get_active_api_portal_bus_trips_active_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15638,6 +15919,10 @@ export interface components {
          *
          *     student_name 為快照欄位（報名當下 snapshot），ACTIVITY_READ 後台顯示。
          *     changed_by 為操作者 username 或系統字串，非家長/學生 PII。
+         *
+         *     registration_id 必為 Optional：model 端是 nullable + ondelete="SET NULL"，
+         *     來源報名被刪除後該欄位轉 NULL 而紀錄本身刻意保留（student_name 為此冗餘存放）。
+         *     宣告成必填 int 會讓當頁只要混到一筆無主紀錄就整頁 500（2026-07-31 QA 探測）。
          */
         ActivityRegistrationChangeItemOut: {
             /** Change Type */
@@ -15651,7 +15936,7 @@ export interface components {
             /** Id */
             id: number;
             /** Registration Id */
-            registration_id: number;
+            registration_id?: number | null;
             /** Student Name */
             student_name: string;
         };
@@ -17540,6 +17825,224 @@ export interface components {
             moved_count: number;
             /** Target Classroom Id */
             target_classroom_id: number;
+        };
+        /**
+         * BusActiveTripOut
+         * @description GET /trips/active：無進行中班次時只回 `{"trip": None}`（`stops` 缺席）；
+         *     `Optional[...] = None` 讓兩種既有形狀都能通過 response_model 驗證。
+         */
+        BusActiveTripOut: {
+            /** Stops */
+            stops?: components["schemas"]["BusStopAdminOut"][] | null;
+            trip?: components["schemas"]["BusTripAdminOut"] | null;
+        };
+        /** BusChildOut */
+        BusChildOut: {
+            /** Stop Lat */
+            stop_lat?: number | null;
+            /** Stop Lng */
+            stop_lng?: number | null;
+            /** Stop Status */
+            stop_status: string;
+            /** Stops Ahead */
+            stops_ahead: number;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /**
+         * BusGeocodeOut
+         * @description 座標為 provider 依**巷弄層級去識別化**地址所回，非精確門牌；
+         *     `address` 是學生主檔原文，供管理端在地圖上手動微調到正確門口。
+         */
+        BusGeocodeOut: {
+            /** Address */
+            address: string;
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+        };
+        /** BusPositionOut */
+        BusPositionOut: {
+            /** At */
+            at?: string | null;
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+        };
+        /** BusRouteBriefListOut */
+        BusRouteBriefListOut: {
+            /** Routes */
+            routes: components["schemas"]["BusRouteBriefOut"][];
+        };
+        /**
+         * BusRouteBriefOut
+         * @description 開班選單用的路線最小揭露形狀。
+         *
+         *     刻意**不**含 `stops`：管理端 `GET /api/bus/routes` 的 BusRouteOut 帶全車
+         *     站點（學生姓名 + 家庭住址座標），隨車老師開班只需要知道路線叫什麼名字。
+         *     要新增欄位前先問「司機開班真的需要嗎」——這支端點的授權面是
+         *     BUS_TRIPS_OPERATE，比 BUS_READ 寬。
+         */
+        BusRouteBriefOut: {
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+        };
+        /** BusRouteCreatedOut */
+        BusRouteCreatedOut: {
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+        };
+        /** BusRouteListOut */
+        BusRouteListOut: {
+            /** Routes */
+            routes: components["schemas"]["BusRouteOut"][];
+        };
+        /** BusRouteOut */
+        BusRouteOut: {
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            stops: components["schemas"]["BusRouteStopsByDirectionOut"];
+        };
+        /** BusRouteStopOut */
+        BusRouteStopOut: {
+            /** Address Snapshot */
+            address_snapshot?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lng */
+            lng?: number | null;
+            /** Seq */
+            seq: number;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /** BusRouteStopsByDirectionOut */
+        BusRouteStopsByDirectionOut: {
+            /** Afternoon */
+            afternoon: components["schemas"]["BusRouteStopOut"][];
+            /** Morning */
+            morning: components["schemas"]["BusRouteStopOut"][];
+        };
+        /** BusRouteStopsOut */
+        BusRouteStopsOut: {
+            stops: components["schemas"]["BusRouteStopsByDirectionOut"];
+        };
+        /** BusSchoolCoordsOut */
+        BusSchoolCoordsOut: {
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+        };
+        /**
+         * BusStopAdminOut
+         * @description 全車站點（含學生姓名與家庭座標）——僅下發給 BUS_READ 以上的員工端。
+         */
+        BusStopAdminOut: {
+            /** Departed At */
+            departed_at?: string | null;
+            /** Lat */
+            lat?: number | null;
+            /** Lng */
+            lng?: number | null;
+            /** Seq */
+            seq: number;
+            /** Status */
+            status: string;
+            /** Stop Id */
+            stop_id: number;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /** BusStopsOut */
+        BusStopsOut: {
+            /** Stops */
+            stops: components["schemas"]["BusStopAdminOut"][];
+        };
+        /** BusTodayOut */
+        BusTodayOut: {
+            /** Children */
+            children: components["schemas"]["BusChildOut"][];
+            position?: components["schemas"]["BusPositionOut"] | null;
+            school?: components["schemas"]["BusSchoolCoordsOut"] | null;
+            /** Stale */
+            stale: boolean;
+            trip?: components["schemas"]["BusTripBriefOut"] | null;
+        };
+        /**
+         * BusTripAdminOut
+         * @description 班次本體（管理／隨車端；家長端另有去識別化的 BusTripBriefOut）。
+         */
+        BusTripAdminOut: {
+            /** Auto Closed */
+            auto_closed: boolean;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Last Lat */
+            last_lat?: number | null;
+            /** Last Lng */
+            last_lng?: number | null;
+            /** Last Ping At */
+            last_ping_at?: string | null;
+            /** Route Id */
+            route_id: number;
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Trip Date */
+            trip_date: string;
+        };
+        /** BusTripBriefOut */
+        BusTripBriefOut: {
+            /** Auto Closed */
+            auto_closed: boolean;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+        };
+        /** BusTripOut */
+        BusTripOut: {
+            trip: components["schemas"]["BusTripAdminOut"];
+        };
+        /** BusTripsTodayOut */
+        BusTripsTodayOut: {
+            /** Stops */
+            stops: components["schemas"]["BusStopAdminOut"][];
+            trip?: components["schemas"]["BusTripAdminOut"] | null;
+        };
+        /** BusTripWithStopsOut */
+        BusTripWithStopsOut: {
+            /** Stops */
+            stops: components["schemas"]["BusStopAdminOut"][];
+            trip: components["schemas"]["BusTripAdminOut"];
         };
         /**
          * CalendarFeedItem
@@ -19856,6 +20359,8 @@ export interface components {
              * @default regular
              */
             employee_type: string;
+            /** English Name */
+            english_name?: string | null;
             /** Gender */
             gender?: string | null;
             /**
@@ -20113,6 +20618,8 @@ export interface components {
             emergency_contact_phone?: string | null;
             /** Employee Type */
             employee_type?: string | null;
+            /** English Name */
+            english_name?: string | null;
             /** Gender */
             gender?: string | null;
             /** Health Exempt */
@@ -20900,6 +21407,11 @@ export interface components {
             plan_id: number;
             /** Version */
             version: number;
+        };
+        /** GeocodeIn */
+        GeocodeIn: {
+            /** Student Id */
+            student_id: number;
         };
         /** GlobalSearchResult */
         GlobalSearchResult: {
@@ -25014,6 +25526,25 @@ export interface components {
             /** Items */
             items: components["schemas"]["PhotoTagsItem"][];
         };
+        /** PingBatchIn */
+        PingBatchIn: {
+            /** Points */
+            points: components["schemas"]["PingIn"][];
+        };
+        /** PingIn */
+        PingIn: {
+            /** Accuracy */
+            accuracy?: number | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Lat */
+            lat: number;
+            /** Lng */
+            lng: number;
+        };
         /** PlanActionRequest */
         PlanActionRequest: {
             /** Base Version */
@@ -27878,8 +28409,15 @@ export interface components {
         };
         /** RegistrationRejectRequest */
         RegistrationRejectRequest: {
+            /**
+             * Force Refund
+             * @default false
+             */
+            force_refund: boolean;
             /** Reason */
             reason: string;
+            /** Refund Reason */
+            refund_reason?: string | null;
         };
         /**
          * RegistrationRematchBatchFailureItemOut
@@ -28767,6 +29305,11 @@ export interface components {
             seq: number;
             /** Status Tag */
             status_tag: string | null;
+        };
+        /** RouteCreateIn */
+        RouteCreateIn: {
+            /** Name */
+            name: string;
         };
         /** RunNowOut */
         RunNowOut: {
@@ -30652,6 +31195,24 @@ export interface components {
             /** Step */
             step: string;
         };
+        /** StopIn */
+        StopIn: {
+            /** Lat */
+            lat?: number | null;
+            /** Lng */
+            lng?: number | null;
+            /** Seq */
+            seq: number;
+            /** Student Id */
+            student_id: number;
+        };
+        /** StopsReplaceIn */
+        StopsReplaceIn: {
+            /** Direction */
+            direction: string;
+            /** Stops */
+            stops: components["schemas"]["StopIn"][];
+        };
         /** StorageHealth */
         StorageHealth: {
             /** Breaker */
@@ -32203,6 +32764,13 @@ export interface components {
             visit_id: number;
             /** Warnings */
             warnings?: string[];
+        };
+        /** TripStartIn */
+        TripStartIn: {
+            /** Direction */
+            direction: string;
+            /** Route Id */
+            route_id: number;
         };
         /**
          * UnfinalizeSalaryRequest
@@ -39214,6 +39782,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BonusImpactResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_routes_api_bus_routes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusRouteListOut"];
+                };
+            };
+        };
+    };
+    create_route_api_bus_routes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusRouteCreatedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_stops_api_bus_routes__route_id__stops_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StopsReplaceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusRouteStopsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    geocode_student_api_bus_routes_geocode_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeocodeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusGeocodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trips_today_api_bus_trips_today_get: {
+        parameters: {
+            query?: {
+                direction?: string | null;
+                route_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTripsTodayOut"];
                 };
             };
             /** @description Validation Error */
@@ -47094,6 +47815,26 @@ export interface operations {
             };
         };
     };
+    get_bus_today_api_parent_bus_today_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTodayOut"];
+                };
+            };
+        };
+    };
     get_month_agenda_api_parent_calendar_month_get: {
         parameters: {
             query: {
@@ -49217,6 +49958,252 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_routes_for_operator_api_portal_bus_routes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusRouteBriefListOut"];
+                };
+            };
+        };
+    };
+    start_trip_api_portal_bus_trips_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TripStartIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTripWithStopsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_trip_api_portal_bus_trips__trip_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTripOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_pings_api_portal_bus_trips__trip_id__pings_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PingBatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    depart_stop_api_portal_bus_trips__trip_id__stops__stop_id__depart_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stop_id: number;
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusStopsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    skip_stop_api_portal_bus_trips__trip_id__stops__stop_id__skip_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stop_id: number;
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusStopsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_stop_api_portal_bus_trips__trip_id__stops__stop_id__undo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                stop_id: number;
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusStopsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_active_api_portal_bus_trips_active_get: {
+        parameters: {
+            query?: {
+                direction?: string | null;
+                mine?: boolean;
+                route_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusActiveTripOut"];
                 };
             };
             /** @description Validation Error */
