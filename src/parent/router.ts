@@ -149,7 +149,7 @@ const routes: RouteRecordRaw[] = [
       path: '/children/:studentId/measurements',
       name: 'parent-child-measurements',
       component: () => import('./views/ChildMeasurementsView.vue'),
-      meta: { title: '健康紀錄', tab: 'admin', requiresAuth: true, showBack: true },
+      meta: { title: '健康紀錄', tab: 'admin', showBack: true },
     },
     {
       path: '/calendar',
