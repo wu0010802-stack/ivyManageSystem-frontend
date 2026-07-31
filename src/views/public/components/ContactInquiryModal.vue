@@ -11,6 +11,7 @@
 import { nextTick, ref, reactive, watch } from 'vue'
 import { publicCreateInquiry } from '@/api/activityPublic'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 
 const props = withDefaults(defineProps<{
   visible?: boolean
@@ -104,7 +105,7 @@ async function handleSubmit() {
     emit('toast', res?.data?.message || '感謝您的提問，我們會儘快回覆您！', 'success')
     emit('update:visible', false)
   } catch (err) {
-    emit('toast', (err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '送出失敗', 'error')
+    emit('toast', apiErrorMessage(err, '送出失敗'), 'error')
   } finally {
     submitting.value = false
   }

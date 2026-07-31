@@ -648,6 +648,7 @@ import { usePublicRegistrationDraft } from '@/composables/usePublicRegistrationD
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
+import { apiErrorMessage } from '@/utils/apiErrorMessage'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import ContactInquiryModal from './components/ContactInquiryModal.vue'
@@ -822,8 +823,7 @@ async function runInit(): Promise<boolean> {
     if (disposed) return false
     stopPolling()
     initState.value = 'error'
-    initErrorMessage.value =
-      (err as { response?: { data?: { detail?: string }; message?: string }; message?: string })?.response?.data?.detail || (err as Error)?.message || '頁面初始化失敗，請稍後再試。'
+    initErrorMessage.value = apiErrorMessage(err, '頁面初始化失敗，請稍後再試。')
     return false
   }
 }
@@ -1122,8 +1122,10 @@ async function handleSubmitRegistration() {
     resetFlow()
     await refreshAvailability()
   } catch (err) {
-    const detail = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-    submitError.value = detail || '送出失敗，請確認網路連線後再試一次；您填寫的資料都還在。'
+    submitError.value = apiErrorMessage(
+      err,
+      '送出失敗，請確認網路連線後再試一次；您填寫的資料都還在。',
+    )
     await nextTick()
     document.querySelector('.submit-error-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   } finally {

@@ -17,8 +17,13 @@ import { toggleArrayItem } from '@/utils/arrayUtils'
 import { parseLocalISODate, todayTaipeiISO } from '@/utils/format'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
-// 保守 email 格式（與後端 EmailStr 寬嚴不必一致：打錯只是收不到信，無安全後果）
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+// Email 格式。2026-07-31 稽核：原本的 /^[^@\s]+@[^@\s]+\.[^@\s]+$/ 比後端的
+// email-validator 寬得多，`wang@gmail..com`、`abc@gmail.com.`、`.abc@gmail.com`、
+// `abc@my_domain.com` 都會放行 → 前端不標紅、直接送出，後端 422 打回來，家長只看到
+// 一句籠統的送出失敗，完全不知道是那個「選填」的 Email 欄位害的（整筆報名被退）。
+// 收緊到：local part 不以句點開頭、domain 各段須以英數起訖、不得有連續句點或結尾句點。
+const EMAIL_RE =
+  /^[^\s@.][^\s@]*@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/
 // 對齊後端 DB String(200)
 const EMAIL_MAX_LEN = 200
 
