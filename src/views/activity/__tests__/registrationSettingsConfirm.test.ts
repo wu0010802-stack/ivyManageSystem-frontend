@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildSaveConfirmLines, taipeiNowMinuteString } from '../registrationSettingsConfirm'
+import {
+  buildSaveConfirmLines,
+  computeGateStatus,
+  taipeiNowMinuteString,
+} from '../registrationSettingsConfirm'
 
 const NOW = '2026-07-08T10:00'
 
@@ -10,7 +14,7 @@ describe('buildSaveConfirmLines', () => {
       { is_open: true, open_at: '2021-01-05T00:00', close_at: '2029-12-01T21:54' },
       NOW,
     )
-    expect(lines).toContain('報名開關：開放報名')
+    expect(lines).toContain('報名總開關：啟用')
     expect(lines).toContain('報名期間：2021-01-05 00:00 ～ 2029-12-01 21:54')
   })
 
@@ -38,11 +42,12 @@ describe('buildSaveConfirmLines', () => {
     expect(lines.some((l) => l.includes('⚠'))).toBe(false)
   })
 
-  it('開關關閉 → 提示期間設定不生效', () => {
+  it('總開關停用 → 提示期間設定不生效', () => {
     const lines = buildSaveConfirmLines(
       { is_open: false, open_at: '2026-07-01T00:00', close_at: '2026-07-20T18:00' },
       NOW,
     )
+    expect(lines).toContain('報名總開關：停用')
     expect(lines.some((l) => l.includes('期間設定不生效'))).toBe(true)
   })
 
@@ -58,6 +63,66 @@ describe('buildSaveConfirmLines', () => {
       NOW,
     )
     expect(lines.some((l) => l.includes('報名已截止'))).toBe(true)
+  })
+})
+
+describe('computeGateStatus — 報名 tab 常駐狀態（2026-07-31）', () => {
+  it('總開關停用 → switch_off，且不管時間窗（期間內也顯示未開放）', () => {
+    const s = computeGateStatus(
+      { is_open: false, open_at: '2026-07-01T00:00', close_at: '2026-07-20T18:00' },
+      NOW,
+    )
+    expect(s.state).toBe('switch_off')
+    expect(s.type).toBe('info')
+    expect(s.title).toContain('報名尚未開放')
+    expect(s.description).toContain('總開關')
+  })
+
+  it('啟用＋期間內 → open，描述含截止時間與自動截止', () => {
+    const s = computeGateStatus(
+      { is_open: true, open_at: '2026-07-01T00:00', close_at: '2026-07-20T18:00' },
+      NOW,
+    )
+    expect(s.state).toBe('open')
+    expect(s.type).toBe('success')
+    expect(s.title).toContain('開放報名中')
+    expect(s.description).toContain('2026-07-20 18:00')
+    expect(s.description).toContain('自動')
+  })
+
+  it('啟用＋開放時間未到 → not_started，描述含開放時間與自動開放', () => {
+    const s = computeGateStatus(
+      { is_open: true, open_at: '2026-07-10T09:00', close_at: '2026-07-20T18:00' },
+      NOW,
+    )
+    expect(s.state).toBe('not_started')
+    expect(s.type).toBe('warning')
+    expect(s.title).toContain('尚未開始')
+    expect(s.description).toContain('2026-07-10 09:00')
+    expect(s.description).toContain('自動')
+  })
+
+  it('啟用＋截止已過 → closed，描述導向「調整截止時間」而非切開關', () => {
+    const s = computeGateStatus(
+      { is_open: true, open_at: '2026-07-01T00:00', close_at: '2026-07-07T23:59' },
+      NOW,
+    )
+    expect(s.state).toBe('closed')
+    expect(s.type).toBe('error')
+    expect(s.title).toContain('已截止')
+    expect(s.description).toContain('截止時間')
+  })
+
+  it('截止=當下（邊界）視為已截止，與 buildSaveConfirmLines 同語意', () => {
+    const s = computeGateStatus({ is_open: true, open_at: null, close_at: NOW }, NOW)
+    expect(s.state).toBe('closed')
+  })
+
+  it('啟用＋起訖皆空 → open，描述明講無截止、持續開放', () => {
+    const s = computeGateStatus({ is_open: true, open_at: null, close_at: null }, NOW)
+    expect(s.state).toBe('open')
+    expect(s.type).toBe('success')
+    expect(s.description).toContain('未設定截止時間')
   })
 })
 

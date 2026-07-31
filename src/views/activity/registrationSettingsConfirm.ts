@@ -44,18 +44,70 @@ function fmtTerm(form: RegistrationWindowForm): string {
 }
 
 /**
+ * 報名 tab 常駐狀態（2026-07-31）。
+ *
+ * Why: 開關（is_open）與時間窗（open_at/close_at）是 AND 語意——開關只是總閘，
+ * 實際開放時段由時間窗決定。過去只有存檔確認框會警告，平常看不到「前台現在
+ * 到底是什麼狀態」，管理者容易把開關誤解為唯一權威。這裡把 AND 的計算結果
+ * 常駐攤在表單頂部。判斷順序與 buildSaveConfirmLines 一致：
+ * 停用 → 已截止（close_at <= now，等值視為已截止）→ 尚未開始 → 開放中。
+ */
+export interface GateStatus {
+  state: 'switch_off' | 'closed' | 'not_started' | 'open'
+  /** el-alert 的 type */
+  type: 'info' | 'error' | 'warning' | 'success'
+  title: string
+  description: string
+}
+
+export function computeGateStatus(form: RegistrationWindowForm, nowStr: string): GateStatus {
+  if (!form.is_open) {
+    return {
+      state: 'switch_off',
+      type: 'info',
+      title: '前台目前：報名尚未開放（總開關停用）',
+      description: '啟用總開關後，仍會依下方開放／截止時間決定實際開放時段。',
+    }
+  }
+  if (form.close_at && form.close_at <= nowStr) {
+    return {
+      state: 'closed',
+      type: 'error',
+      title: '前台目前：報名已截止',
+      description: `已於 ${fmt(form.close_at)} 截止。要延長報名，請往後調整截止時間。`,
+    }
+  }
+  if (form.open_at && form.open_at > nowStr) {
+    return {
+      state: 'not_started',
+      type: 'warning',
+      title: '前台目前：報名尚未開始',
+      description: `總開關已啟用，前台將於 ${fmt(form.open_at)} 自動開放報名。`,
+    }
+  }
+  return {
+    state: 'open',
+    type: 'success',
+    title: '前台目前：開放報名中',
+    description: form.close_at
+      ? `至 ${fmt(form.close_at)} 截止，屆時前台自動關閉報名。`
+      : '未設定截止時間，將持續開放，直到停用總開關或補設截止時間。',
+  }
+}
+
+/**
  * 產生儲存確認框逐行文案。
  * @param form 目前表單的開關與起訖時間
  * @param nowStr 台北當下時間（`YYYY-MM-DDTHH:mm`），由 taipeiNowMinuteString() 提供
  */
 export function buildSaveConfirmLines(form: RegistrationWindowForm, nowStr: string): string[] {
   const lines = [
-    `報名開關：${form.is_open ? '開放報名' : '關閉報名'}`,
+    `報名總開關：${form.is_open ? '啟用' : '停用'}`,
     `開放學期：${fmtTerm(form)}`,
     `報名期間：${fmt(form.open_at)} ～ ${fmt(form.close_at)}`,
   ]
   if (!form.is_open) {
-    lines.push('開關為關閉：前台將顯示「報名尚未開放」，期間設定不生效。')
+    lines.push('總開關停用：前台將顯示「報名尚未開放」，期間設定不生效。')
     return lines
   }
   if (form.close_at && form.close_at <= nowStr) {
