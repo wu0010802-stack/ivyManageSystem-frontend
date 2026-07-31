@@ -123,24 +123,6 @@ function genIdempotencyKey() {
   return `REG-${Date.now()}-${rand}`
 }
 
-watch(
-  () => props.modelValue,
-  (open) => {
-    if (!open) return
-    // 退費先放全額已繳作 fallback，再以後端建議值（按出席比例）覆寫，避免超退（P2-B）
-    form.amount = props.type === 'payment'
-      ? computeOwed(props.totalAmount, props.paidAmount)
-      : props.paidAmount
-    form.payment_date = todayISO()
-    form.payment_method = (PAYMENT_METHODS as string[])[0]
-    form.notes = ''
-    form.idempotency_key = genIdempotencyKey()
-    if (props.type === 'refund' && props.registrationId != null) {
-      loadRefundSuggestion(props.registrationId)
-    }
-  }
-)
-
 // 抓後端退費建議（按出席堂數三段比例），以 remaining_suggested_amount（剩餘建議額＝
 // 建議總額扣已退、夾 0）覆寫全額預填；多次退費不重複預填累積建議總額（audit F1）。
 // 仍開著同一筆才套用。
@@ -178,6 +160,31 @@ async function loadRefundSuggestion(registrationId: string | number) {
     if (seq === refundSuggestionSeq) refundSuggestionLoading.value = false
   }
 }
+
+// 開窗初始化。必須帶 immediate：父層 ActivityRegistrationView 以
+// `v-if="paymentDialogVisible"` 懶掛載，元件建立時 modelValue 已經是 true，之後不再有
+// false→true 變化；沒有 immediate 這段永不執行，金額停在 0、日期停在空字串，送出鈕的
+// `:disabled="!form.amount || !form.payment_date"` 恆為 true，繳費與退費都送不出去。
+// 位置必須排在 loadRefundSuggestion 之後——immediate 會在 setup 期間同步執行 callback，
+// 放在前面會踩到 `let refundSuggestionSeq` 的 TDZ。
+watch(
+  () => props.modelValue,
+  (open) => {
+    if (!open) return
+    // 退費先放全額已繳作 fallback，再以後端建議值（按出席比例）覆寫，避免超退（P2-B）
+    form.amount = props.type === 'payment'
+      ? computeOwed(props.totalAmount, props.paidAmount)
+      : props.paidAmount
+    form.payment_date = todayISO()
+    form.payment_method = (PAYMENT_METHODS as string[])[0]
+    form.notes = ''
+    form.idempotency_key = genIdempotencyKey()
+    if (props.type === 'refund' && props.registrationId != null) {
+      loadRefundSuggestion(props.registrationId)
+    }
+  },
+  { immediate: true }
+)
 
 const overpayment = computed(() => {
   if (props.type !== 'payment') return 0

@@ -86,7 +86,9 @@ watch(
   () => props.modelValue,
   (open) => {
     if (open) addCourseId.value = null
-  }
+  },
+  // 父層以 `v-if` 懶掛載：新掛載時 addCourseId 本就是 null，此處與其餘四支對話框保持一致寫法。
+  { immediate: true }
 )
 
 const availableCourses = computed(() => {

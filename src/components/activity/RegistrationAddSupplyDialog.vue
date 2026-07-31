@@ -102,7 +102,9 @@ watch(
     if (!open) return
     supplyId.value = null
     loadSupplies()
-  }
+  },
+  // 父層以 `v-if` 懶掛載，元件建立時 modelValue 已是 true；不帶 immediate 則用品下拉恆為空。
+  { immediate: true }
 )
 
 watch(

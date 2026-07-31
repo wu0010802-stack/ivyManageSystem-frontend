@@ -93,7 +93,10 @@ watch(
     form.birthday = props.initial.birthday || ''
     form.class_ = props.initial.class_name || ''
     form.email = props.initial.email || ''
-  }
+  },
+  // 父層以 `v-if` 懶掛載，元件建立時 modelValue 已是 true；不帶 immediate 則四欄不預填，
+  // 送出時會把既有 email 一併清成 null。
+  { immediate: true }
 )
 
 const isValid = computed(() => !!form.name && !!form.birthday && !!form.class_)
