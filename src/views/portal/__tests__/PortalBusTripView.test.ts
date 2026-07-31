@@ -17,8 +17,8 @@ const h = vi.hoisted(() => {
       actingStopId: r<number | null>(null),
       gpsActive: r(false),
       gpsSupported: r(true),
+      gpsClockSuspect: r(false),
       snapshotFailed: r(false),
-      routesBlocked: r(false),
       pendingPingCount: r(0),
       init: vi.fn(),
       start: vi.fn(),
@@ -49,8 +49,8 @@ function resetState() {
   s.actingStopId.value = null
   s.gpsActive.value = false
   s.gpsSupported.value = true
+  s.gpsClockSuspect.value = false
   s.snapshotFailed.value = false
-  s.routesBlocked.value = false
   s.pendingPingCount.value = 0
 }
 
@@ -81,16 +81,6 @@ describe('PortalBusTripView', () => {
 
     expect(wrapper.find('[data-testid="bus-snapshot-failed"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="bus-start-card"]').exists()).toBe(false)
-  })
-
-  it('缺 BUS_READ 時顯示可行動的提示，而不是空白開班卡', async () => {
-    s.routesBlocked.value = true
-    const wrapper = mount(PortalBusTripView)
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="bus-routes-blocked"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="bus-start-card"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('娃娃車檢視')
   })
 
   it('沒有任何啟用路線時提示洽行政', async () => {
@@ -171,6 +161,17 @@ describe('PortalBusTripView', () => {
     expect(wrapper.find('[data-testid="bus-gps-warning"]').attributes('title')).toContain('不支援定位')
   })
 
+  it('裝置定位時間異常時顯示訊號（否則是完全無回饋的失敗模式）', async () => {
+    s.trip.value = { id: 7 }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-clock-suspect"]').exists()).toBe(false)
+
+    s.gpsClockSuspect.value = true
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-clock-suspect"]').attributes('title')).toContain('定位時間異常')
+  })
+
   it('有待重送的點時提示筆數', async () => {
     s.trip.value = { id: 7 }
     s.pendingPingCount.value = 3
@@ -203,11 +204,11 @@ describe('PortalBusTripView', () => {
 describe('PortalBusTripView — helper 自檢', () => {
   it('resetState 真的把狀態清乾淨（否則跨測試互相污染，斷言形同虛設）', () => {
     s.trip.value = { id: 99 }
-    s.routesBlocked.value = true
+    s.gpsClockSuspect.value = true
     s.pendingPingCount.value = 5
     resetState()
     expect(s.trip.value).toBeNull()
-    expect(s.routesBlocked.value).toBe(false)
+    expect(s.gpsClockSuspect.value).toBe(false)
     expect(s.pendingPingCount.value).toBe(0)
   })
 

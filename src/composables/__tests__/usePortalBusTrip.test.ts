@@ -9,7 +9,7 @@ vi.mock('@/api/bus', () => ({
   skipBusStop: vi.fn(),
   undoBusStop: vi.fn(),
   completeBusTrip: vi.fn(),
-  listBusRoutes: vi.fn(),
+  listPortalBusRoutes: vi.fn(),
 }))
 
 vi.mock('element-plus', () => ({
@@ -20,9 +20,11 @@ vi.mock('element-plus', () => ({
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   startBusTrip, getActiveBusTrip, postBusPings, departBusStop, skipBusStop,
-  undoBusStop, completeBusTrip, listBusRoutes,
+  undoBusStop, completeBusTrip, listPortalBusRoutes,
 } from '@/api/bus'
-import { usePortalBusTrip, PING_FLUSH_INTERVAL_MS } from '@/composables/usePortalBusTrip'
+import {
+  usePortalBusTrip, PING_FLUSH_INTERVAL_MS, SUSPECT_TIMESTAMP_STREAK,
+} from '@/composables/usePortalBusTrip'
 
 // ---------------------------------------------------------------------------
 // 測試時間軸：本機時鐘固定在 2026-07-29 09:00:00 UTC；伺服器 Date header 預設同步。
@@ -35,6 +37,14 @@ const ONE_HOUR_MS = 60 * 60 * 1000
 
 function resp(data: unknown, dateHeader: string = SERVER_DATE_HEADER) {
   return { data, headers: { date: dateHeader } }
+}
+
+/**
+ * 伺服器時鐘與（假的）本機時鐘同步時的回應。**header 必須在呼叫當下才算**——
+ * 用固定字串會讓時間推進後的每次回應都把偏差算成負值，靜默污染後續所有 `at`。
+ */
+function respNow(data: unknown) {
+  return { data, headers: { date: new Date(Date.now()).toUTCString() } }
 }
 
 function tripPayload(overrides: Record<string, unknown> = {}) {
@@ -50,11 +60,9 @@ function tripPayload(overrides: Record<string, unknown> = {}) {
 function routesPayload() {
   return {
     routes: [
-      {
-        id: 3, name: 'A 線', is_active: true,
-        stops: { morning: [{ student_id: 101, student_name: '小明', seq: 1, lat: 22.6, lng: 120.3 }], afternoon: [] },
-      },
-      { id: 4, name: 'B 線（停用）', is_active: false, stops: { morning: [], afternoon: [] } },
+      { id: 3, name: 'A 線', is_active: true },
+      // 端點理應只回啟用中的路線；保留一筆停用的用來咬住前端那道防禦性過濾
+      { id: 4, name: 'B 線（停用）', is_active: false },
     ],
   }
 }
@@ -114,8 +122,8 @@ beforeEach(() => {
   vi.setSystemTime(LOCAL_NOW_MS)
   Object.defineProperty(globalThis.navigator, 'geolocation', { value: geolocation, configurable: true })
   Object.defineProperty(globalThis.navigator, 'wakeLock', { value: wakeLock, configurable: true })
-  vi.mocked(postBusPings).mockResolvedValue(resp(null) as never)
-  vi.mocked(listBusRoutes).mockResolvedValue(resp(routesPayload()) as never)
+  vi.mocked(postBusPings).mockImplementation((() => Promise.resolve(respNow(null))) as never)
+  vi.mocked(listPortalBusRoutes).mockResolvedValue(resp(routesPayload()) as never)
   vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null }) as never)
   vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
 })
@@ -145,19 +153,56 @@ describe('usePortalBusTrip — 進頁載入', () => {
     expect(bus.snapshotFailed.value).toBe(false)
   })
 
-  it('沒有進行中班次時才去載路線清單', async () => {
+  it('沒有進行中班次時停在開班畫面', async () => {
     const bus = createBus()
     await bus.init()
     await flushPromises()
 
     expect(bus.trip.value).toBeNull()
-    expect(listBusRoutes).toHaveBeenCalledTimes(1)
+    expect(listPortalBusRoutes).toHaveBeenCalledTimes(1)
     expect(geolocation.watchPosition).not.toHaveBeenCalled()
     // 本來就沒有班次 ≠ 班次剛結束，不得跳出「班次已結束」的警告
     expect(ElMessage.warning).not.toHaveBeenCalled()
   })
 
-  it('快照失敗時不得謊稱沒有班次：標記 snapshotFailed 且不去載路線', async () => {
+  it('進頁一律先問路線，再逐條帶 route_id 查班次（不得做全域查詢）', async () => {
+    vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
+      routes: [
+        { id: 3, name: 'A 線', is_active: true },
+        { id: 5, name: 'C 線', is_active: true },
+      ],
+    }) as never)
+    // 只有 5 號路線有進行中的班次
+    vi.mocked(getActiveBusTrip).mockImplementation(((routeId: number | null) =>
+      Promise.resolve(routeId === 5 ? resp(tripPayload({ route_id: 5 })) : resp({ trip: null }))
+    ) as never)
+
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(vi.mocked(getActiveBusTrip).mock.calls).toEqual([[3, null], [5, null]])
+    expect(bus.trip.value?.route_id).toBe(5)
+  })
+
+  it('找到班次就停止往下查（不再多撈別條路線的名冊）', async () => {
+    vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
+      routes: [
+        { id: 3, name: 'A 線', is_active: true },
+        { id: 5, name: 'C 線', is_active: true },
+      ],
+    }) as never)
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload()) as never)
+
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(vi.mocked(getActiveBusTrip).mock.calls).toEqual([[3, null]])
+    expect(bus.trip.value?.id).toBe(7)
+  })
+
+  it('班次查詢失敗時不得謊稱沒有班次：標記 snapshotFailed', async () => {
     vi.mocked(getActiveBusTrip).mockRejectedValue(axiosError(500))
     const bus = createBus()
     await bus.init()
@@ -165,7 +210,18 @@ describe('usePortalBusTrip — 進頁載入', () => {
 
     expect(bus.snapshotFailed.value).toBe(true)
     expect(bus.trip.value).toBeNull()
-    expect(listBusRoutes).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(bus.loading.value).toBe(false)
+  })
+
+  it('路線清單失敗時不做全域查詢，直接標記 snapshotFailed', async () => {
+    vi.mocked(listPortalBusRoutes).mockRejectedValue(axiosError(500))
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.snapshotFailed.value).toBe(true)
+    expect(getActiveBusTrip).not.toHaveBeenCalled()
     expect(ElMessage.error).toHaveBeenCalled()
   })
 
@@ -175,7 +231,7 @@ describe('usePortalBusTrip — 進頁載入', () => {
     await flushPromises()
 
     expect(bus.routes.value).toEqual([{ id: 3, name: 'A 線' }])
-    expect(JSON.stringify(bus.routes.value)).not.toContain('小明')
+    expect(JSON.stringify(bus.routes.value)).not.toContain('is_active')
   })
 
   it('只有一條啟用路線時自動選取', async () => {
@@ -187,10 +243,10 @@ describe('usePortalBusTrip — 進頁載入', () => {
   })
 
   it('多條啟用路線時不自動選取（避免開錯路線）', async () => {
-    vi.mocked(listBusRoutes).mockResolvedValue(resp({
+    vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
       routes: [
-        { id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } },
-        { id: 5, name: 'C 線', is_active: true, stops: { morning: [], afternoon: [] } },
+        { id: 3, name: 'A 線', is_active: true },
+        { id: 5, name: 'C 線', is_active: true },
       ],
     }) as never)
     const bus = createBus()
@@ -201,24 +257,13 @@ describe('usePortalBusTrip — 進頁載入', () => {
     expect(bus.routes.value).toHaveLength(2)
   })
 
-  it('缺 BUS_READ（403）時標記 routesBlocked，不當成一般錯誤', async () => {
-    vi.mocked(listBusRoutes).mockRejectedValue(axiosError(403))
+  it('用的是 portal 路線端點（不是回全車名冊的 admin 端點）', async () => {
     const bus = createBus()
     await bus.init()
     await flushPromises()
 
-    expect(bus.routesBlocked.value).toBe(true)
-    expect(ElMessage.error).not.toHaveBeenCalled()
-  })
-
-  it('路線清單其他錯誤仍顯示錯誤訊息且不標 routesBlocked', async () => {
-    vi.mocked(listBusRoutes).mockRejectedValue(axiosError(500))
-    const bus = createBus()
-    await bus.init()
-    await flushPromises()
-
-    expect(bus.routesBlocked.value).toBe(false)
-    expect(ElMessage.error).toHaveBeenCalled()
+    expect(listPortalBusRoutes).toHaveBeenCalledTimes(1)
+    expect(bus.routes.value).toEqual([{ id: 3, name: 'A 線' }])
   })
 })
 
@@ -243,7 +288,7 @@ describe('usePortalBusTrip — 開始班次', () => {
   })
 
   it('未選路線時不打 API', async () => {
-    vi.mocked(listBusRoutes).mockResolvedValue(resp({ routes: [] }) as never)
+    vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({ routes: [] }) as never)
     const bus = await bootForStart()
     await bus.start()
 
@@ -360,6 +405,72 @@ describe('usePortalBusTrip — GPS 上報', () => {
     expect(wakeLock.request).toHaveBeenCalledTimes(2)
   })
 
+  it('分頁轉為隱藏時把已收集的點送出（關分頁／被系統回收不會觸發 unmount）', async () => {
+    await bootWithActiveTrip()
+    emitPosition(LOCAL_NOW_MS)
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    try {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flushPromises()
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    }
+
+    expect(sentPoints().map((p) => p.at)).toEqual(['2026-07-29T09:00:00.000Z'])
+  })
+
+  it('停止追蹤後轉為隱藏不再送出（監聽器已移除）', async () => {
+    const bus = await bootWithActiveTrip()
+    bus.teardown()
+    await flushPromises()
+    const before = vi.mocked(postBusPings).mock.calls.length
+
+    emitPosition(LOCAL_NOW_MS)
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    try {
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flushPromises()
+    } finally {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+    }
+
+    expect(postBusPings).toHaveBeenCalledTimes(before)
+  })
+
+  it('連續多顆 timestamp 都不是 epoch 基準時改用本機時間並亮出訊號', async () => {
+    const bus = await bootWithActiveTrip()
+    // 相對時間基準（開機以來的毫秒數）：每顆都偏離「現在」超過一小時
+    for (let i = 0; i < SUSPECT_TIMESTAMP_STREAK; i += 1) {
+      emitPosition(12345 + i * 1000)
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    await advanceToFlush()
+
+    expect(bus.gpsClockSuspect.value).toBe(true)
+    // 前兩顆仍照 buffer 的 skew 防線被拒，第三顆起改用本機時間送出
+    expect(sentPoints().map((p) => p.at)).toEqual(['2026-07-29T09:00:02.000Z'])
+  })
+
+  it('偶發單顆暴衝不觸發改用本機時間（仍由 skew 防線拒收）', async () => {
+    const bus = await bootWithActiveTrip()
+    // 三顆暴衝但互不相鄰：連段每次都被正常點打斷，不得累積成「系統性」
+    for (const offsetMs of [0, 1000, 2000, 3000, 4000, 5000]) {
+      const spike = offsetMs % 2000 === 0
+      emitPosition(spike ? Date.UTC(3000, 0, 1) : LOCAL_NOW_MS + offsetMs)
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    await advanceToFlush()
+
+    expect(bus.gpsClockSuspect.value).toBe(false)
+    // 只有三顆正常點被收下，三顆暴衝仍由 skew 防線拒收
+    expect(sentPoints().map((p) => p.at)).toEqual([
+      '2026-07-29T09:00:01.000Z',
+      '2026-07-29T09:00:03.000Z',
+      '2026-07-29T09:00:05.000Z',
+    ])
+  })
+
   it('分頁被隱藏時不去搶 Wake Lock（瀏覽器會直接拒絕）', async () => {
     await bootWithActiveTrip()
     Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
@@ -473,7 +584,7 @@ describe('usePortalBusTrip — 上報失敗與重送', () => {
     await advanceToFlush()
     expect(postBusPings).toHaveBeenCalledTimes(1)
 
-    resolveFirst(resp(null))
+    resolveFirst(respNow(null))
     await flushPromises()
     await advanceToFlush()
     expect(postBusPings).toHaveBeenCalledTimes(2)
@@ -757,6 +868,18 @@ describe('測試輔助函式自檢', () => {
     const ats = sentPoints().map((p) => p.at)
     expect(ats).toEqual(['2026-07-29T09:00:00.000Z', '2026-07-29T09:00:01.001Z'])
     expect(new Set(ats).size).toBe(ats.length)
+  })
+
+  it('respNow 的 Date header 跟著假時鐘走（固定字串會把偏差靜默算成負值）', () => {
+    const a = respNow(null).headers.date
+    vi.setSystemTime(LOCAL_NOW_MS + 60000)
+    const b = respNow(null).headers.date
+    try {
+      expect(a).not.toBe(b)
+      expect(Date.parse(b) - Date.parse(a)).toBe(60000)
+    } finally {
+      vi.setSystemTime(LOCAL_NOW_MS)
+    }
   })
 
   it('axiosError 造出的物件確實帶得出 status 與 detail', () => {

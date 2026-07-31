@@ -7,7 +7,7 @@ vi.mock('@/api/index', () => ({
 import api from '@/api/index'
 import {
   startBusTrip, getActiveBusTrip, postBusPings, departBusStop, skipBusStop,
-  undoBusStop, completeBusTrip, listBusRoutes, createBusRoute,
+  undoBusStop, completeBusTrip, listPortalBusRoutes, listBusRoutes, createBusRoute,
   replaceBusRouteStops, geocodeBusStudent, getBusTripToday,
 } from '../bus'
 
@@ -46,6 +46,11 @@ describe('娃娃車 portal API', () => {
     expect(api.post).toHaveBeenLastCalledWith('/portal/bus/trips/7/stops/11/skip')
     undoBusStop(7, 11)
     expect(api.post).toHaveBeenLastCalledWith('/portal/bus/trips/7/stops/11/undo')
+  })
+
+  it('開班選單走 portal 端點（BUS_TRIPS_OPERATE，不含站點名冊）', () => {
+    listPortalBusRoutes()
+    expect(api.get).toHaveBeenCalledWith('/portal/bus/routes')
   })
 
   it('結束班次 POST /portal/bus/trips/{id}/complete', () => {

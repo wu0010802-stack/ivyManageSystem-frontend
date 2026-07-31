@@ -8,12 +8,12 @@
  *    每 5 秒一批，再由本檔負責送出與**重送**。
  * 3. **站點推進**：離站／跳站／撤銷，回應的 `stops` 為權威值直接覆寫。
  *
- * ── 權限分界（後端 `api/bus/`）──────────────────────────────────────────────
- * `listBusRoutes` 屬管理端（`BUS_READ`），**不是** `BUS_TRIPS_OPERATE` 的範圍。只被
- * 授予隨車權限的老師呼叫它會 403。因此「接手既有班次」與「挑路線開新班次」是兩條
- * 獨立路徑：前者永遠可用，後者 403 時以 `routesBlocked` 降級成一句可行動的提示，
- * 而不是讓整頁看起來壞掉。⚠ 這是跨端缺口（見 task-12 報告 follow-up），後端補上
- * portal 版路線清單端點後可移除此降級。
+ * ── 進頁順序：先問路線，再逐條帶 route_id 查班次 ──────────────────────────
+ * `GET /portal/bus/trips/active` 不帶參數是**全域查詢**（後端 docstring 明文），多路線
+ * 同時開班時 A 線司機開頁會拿到 B 線的完整站點名冊（姓名＋家庭座標），而且會直接
+ * 當成自己的班次開始上報——A 車的座標就寫進 B 車的班次了。因此進頁一律先打
+ * `GET /portal/bus/routes`（與開班同權限、只回 id/name），再逐條帶 `route_id` 查。
+ * 路線清單拿不到就**不查**，寧可讓司機重試也不做全域查詢。
  *
  * ── 時間軸：一律以伺服器 `Date` header 校正 ────────────────────────────────
  * `busPingBuffer` 的時鐘暴衝防線擋得住「單顆時間戳暴衝」，擋不住「整支裝置時鐘系統性
@@ -37,15 +37,24 @@
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  completeBusTrip, departBusStop, getActiveBusTrip, listBusRoutes,
+  completeBusTrip, departBusStop, getActiveBusTrip, listPortalBusRoutes,
   postBusPings, skipBusStop, startBusTrip, undoBusStop,
 } from '@/api/bus'
-import { createPingBuffer, MAX_BATCH_POINTS, type PingPoint } from '@/utils/busPingBuffer'
+import {
+  createPingBuffer, DEFAULT_MAX_SKEW_MS, MAX_BATCH_POINTS, type PingPoint,
+} from '@/utils/busPingBuffer'
 import { serverClockOffsetMs, serverNowIso } from '@/utils/serverClock'
 import { apiError } from '@/utils/error'
 
 /** 批次送出間隔（毫秒）；buffer 的節流週期與 outbox 的送出週期共用同一值。 */
 export const PING_FLUSH_INTERVAL_MS = 5000
+
+/**
+ * 連續幾顆 `pos.timestamp` 都偏離本機「現在」超過 skew 門檻，就判定為「這支瀏覽器的
+ * timestamp 不是 Unix epoch 基準」（系統性），改用本機時間標記。**偶發單顆暴衝不算**
+ * ——那是 busPingBuffer 的 skew 防線該擋的，clamp 掉會讓整條防線失去作用。
+ */
+export const SUSPECT_TIMESTAMP_STREAK = 3
 
 /**
  * 後端 `PingIn` 對站點與班次回應的形狀（`api/bus/_schemas.py`）。
@@ -90,8 +99,8 @@ export function usePortalBusTrip() {
   const gpsSupported = ref(true)
   /** 進頁快照失敗：**不可**當成「沒有班次」而顯示開班卡（會開出第二張班次）。 */
   const snapshotFailed = ref(false)
-  /** 缺 `BUS_READ` 而拿不到路線清單（403）；與一般錯誤分開，文案要可行動。 */
-  const routesBlocked = ref(false)
+  /** 裝置回報的定位時間不是 epoch 基準：已改用系統時間標記，UI 要讓司機看得到。 */
+  const gpsClockSuspect = ref(false)
   const pendingPingCountRef = ref(0)
   const pendingPingCount = computed(() => pendingPingCountRef.value)
 
@@ -100,6 +109,7 @@ export function usePortalBusTrip() {
   let watchId: number | null = null
   let wakeLockSentinel: { release?: () => Promise<void> } | null = null
   let shipTimer: ReturnType<typeof setInterval> | null = null
+  let suspectTimestampStreak = 0
   let shipping = false
   /**
    * 待送出的點。**刻意不是 reactive**：座標不必進 Vue 響應式系統（devtools 可見），
@@ -132,7 +142,16 @@ export function usePortalBusTrip() {
     gpsActive.value = true
     const localNow = Date.now()
     // 裝置偶爾會吐出壞掉的 timestamp；退回「校正後的現在」而不是讓這個點被丟掉。
-    const rawAt = Number.isFinite(pos.timestamp) ? pos.timestamp : localNow
+    const rawTs = Number.isFinite(pos.timestamp) ? pos.timestamp : localNow
+    // 極少數瀏覽器的 GeolocationPosition.timestamp 是相對時間基準而非 Unix epoch。
+    // 那會讓**每一個**點都偏離 nowAt 超過門檻而被 buffer 拒收，且 gpsActive 仍是 true、
+    // 待送筆數恆為 0——司機與家長端都看不到任何異常訊號。連續多顆都偏離才判定為系統性
+    // 並改用本機時間（同時亮出 UI 訊號）；單顆暴衝仍原樣送進 buffer 由 skew 防線拒收。
+    suspectTimestampStreak = Math.abs(rawTs - localNow) > DEFAULT_MAX_SKEW_MS
+      ? suspectTimestampStreak + 1
+      : 0
+    if (suspectTimestampStreak >= SUSPECT_TIMESTAMP_STREAK) gpsClockSuspect.value = true
+    const rawAt = gpsClockSuspect.value ? localNow : rawTs
     buffer.push(
       {
         lat: pos.coords.latitude,
@@ -187,9 +206,18 @@ export function usePortalBusTrip() {
    * 分頁回前景時 Wake Lock 已被瀏覽器釋放，必須重新取得，否則螢幕會在路上熄掉。
    * 「是否還在追蹤」單純由監聽器的註冊／移除決定（`beginTracking`/`stopTracking`
    * 成對），這裡不再重複判一次 `watchId`——兩道等價守衛只會讓其中一道永遠測不到。
+   *
+   * 轉 hidden 時把已收集的點推出去：`onBeforeUnmount` 在「關分頁／App 被系統回收」
+   * 這兩種情境都不會觸發，而 `visibilitychange` 是行動瀏覽器唯一可靠的「即將離開」
+   * 訊號——隨車老師的手機正是最常被系統回收的那一類。
    */
   function onVisibilityChange(): void {
-    if (document.visibilityState === 'visible') void acquireWakeLock()
+    if (document.visibilityState === 'visible') {
+      void acquireWakeLock()
+      return
+    }
+    buffer.flushNow()
+    void shipOutbox()
   }
 
   function beginTracking(): void {
@@ -259,21 +287,22 @@ export function usePortalBusTrip() {
     applyActive((res as { data?: ActivePayload }).data)
   }
 
+  /** 開班選單（`GET /portal/bus/routes`，與開班同權限、不含站點名冊）。失敗往上拋。 */
   async function loadRoutes(): Promise<void> {
-    try {
-      const res = await listBusRoutes()
-      syncClock(res as ApiHeaders)
-      const raw = (res as { data?: { routes?: Array<{ id: number; name: string; is_active: boolean }> } })
-        .data?.routes ?? []
-      // 只留 id/name：回應裡的 stops 含學生姓名與家庭座標，隨車頁不需要，不進狀態。
-      routes.value = raw.filter((r) => r.is_active).map((r) => ({ id: r.id, name: r.name }))
-      selectedRouteId.value = routes.value.length === 1 ? routes.value[0].id : null
-    } catch (e) {
-      if (errorStatus(e) === 403) {
-        routesBlocked.value = true
-        return
-      }
-      ElMessage.error(apiError(e, '載入路線失敗'))
+    const res = await listPortalBusRoutes()
+    syncClock(res as ApiHeaders)
+    const raw = (res as { data?: { routes?: Array<{ id: number; name: string; is_active: boolean }> } })
+      .data?.routes ?? []
+    // 只留 id/name；`is_active` 過濾是防禦（端點已只回啟用中，欄位仍在 schema 裡）。
+    routes.value = raw.filter((r) => r.is_active).map((r) => ({ id: r.id, name: r.name }))
+    selectedRouteId.value = routes.value.length === 1 ? routes.value[0].id : null
+  }
+
+  /** 逐條路線帶 `route_id` 查進行中的班次；找到就停。**不做**全域查詢。 */
+  async function findActiveTrip(): Promise<void> {
+    for (const r of routes.value) {
+      await loadActive(r.id)
+      if (trip.value) return
     }
   }
 
@@ -281,16 +310,15 @@ export function usePortalBusTrip() {
     loading.value = true
     snapshotFailed.value = false
     try {
-      await loadActive()
+      await loadRoutes()
+      await findActiveTrip()
     } catch (e) {
-      // 快照失敗不得謊稱「沒有班次」：那會讓司機再開一張，撞上後端 409 或開錯方向。
+      // 失敗不得謊稱「沒有班次」：那會讓司機再開一張，撞上後端 409 或開錯方向。
       snapshotFailed.value = true
       ElMessage.error(apiError(e, '載入班次失敗，請重試'))
-      return
     } finally {
       loading.value = false
     }
-    if (!trip.value) await loadRoutes()
   }
 
   async function start(): Promise<void> {
@@ -393,7 +421,7 @@ export function usePortalBusTrip() {
   return {
     trip, stops, routes, selectedRouteId, direction,
     loading, starting, completing, actingStopId,
-    gpsActive, gpsSupported, snapshotFailed, routesBlocked, pendingPingCount,
+    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount,
     init, start, departStop, skipStop, undoStop, complete, teardown,
   }
 }

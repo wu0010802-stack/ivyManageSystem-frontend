@@ -5,10 +5,12 @@
  * - portal 區塊：`BUS_TRIPS_OPERATE`（per-user 顯式授權，無 role 預設）
  * - admin 區塊：讀 `BUS_READ`、寫 `BUS_WRITE`
  *
- * ⚠ `listBusRoutes` 屬 **admin 區塊**（`BUS_READ`），只持有 `BUS_TRIPS_OPERATE` 的
- * 隨車老師呼叫它會拿到 403。隨車頁因此把「接手既有班次」（只需 `BUS_TRIPS_OPERATE`）
- * 與「挑路線開新班次」（另需 `BUS_READ`）拆成兩條路徑，見
- * `src/composables/usePortalBusTrip.ts`。
+ * ⚠ **路線清單有兩支，不可混用**：
+ * - `listPortalBusRoutes`（`GET /portal/bus/routes`，`BUS_TRIPS_OPERATE`）只回
+ *   `id`/`name`/`is_active`，是**隨車頁唯一該用的那支**。
+ * - `listBusRoutes`（`GET /bus/routes`，`BUS_READ`）回全車站點名冊（學生姓名與家庭
+ *   座標），僅供管理端。為了讓隨車老師能開班而補授 `BUS_READ` 等於把全園學生住址
+ *   一併給出去。
  *
  * 型別：`src/api/_generated/schema.d.ts` 目前尚未涵蓋 `/bus` 與 `/portal/bus` 路徑
  * （codegen 需要後端先 dump openapi.json），故此處不標 `AxiosResp<...>`；呼叫端
@@ -18,6 +20,12 @@
 import api from './index'
 
 // --- Portal（隨車老師，Permission.BUS_TRIPS_OPERATE） ---
+
+/**
+ * 開班前的路線選單：只回啟用中的路線與 `id`/`name`/`is_active`，**不含站點名冊**。
+ * 與 `POST /portal/bus/trips` 同權限，隨車老師不需要 `BUS_READ` 就能自行開班。
+ */
+export const listPortalBusRoutes = () => api.get('/portal/bus/routes')
 
 /** 開始班次；成功 201 回 `{trip, stops}`，已有進行中班次時 409 `{message, trip_id}`。 */
 export const startBusTrip = (routeId: number, direction: 'morning' | 'afternoon') =>

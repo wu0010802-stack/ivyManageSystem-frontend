@@ -13,15 +13,7 @@
 
     <!-- 尚未開班 -->
     <template v-else-if="!trip">
-      <el-card v-if="routesBlocked" class="bus-card" data-testid="bus-routes-blocked">
-        <h3 class="bus-title">無法載入路線清單</h3>
-        <p class="bus-hint">
-          您的帳號有「隨車操作」權限，但沒有「娃娃車檢視」權限，因此無法挑選路線開新班次。
-          請洽行政人員開通，或改由已開班的同事把班次交接給您（已開始的班次本頁會自動接手）。
-        </p>
-      </el-card>
-
-      <el-card v-else-if="routes.length === 0" class="bus-card" data-testid="bus-no-routes">
+      <el-card v-if="routes.length === 0" class="bus-card" data-testid="bus-no-routes">
         <h3 class="bus-title">尚未設定娃娃車路線</h3>
         <p class="bus-hint">請洽行政人員於後台建立路線與站點後再開始班次。</p>
       </el-card>
@@ -73,6 +65,14 @@
         show-icon
         data-testid="bus-gps-warning"
         :title="gpsSupported ? 'GPS 尚未取得位置，家長端只會看到站點進度' : '此裝置不支援定位，家長端只會看到站點進度'"
+      />
+      <el-alert
+        v-if="gpsClockSuspect"
+        type="warning"
+        :closable="false"
+        show-icon
+        data-testid="bus-clock-suspect"
+        title="此裝置回報的定位時間異常，已改用系統時間標記位置"
       />
       <el-alert
         v-if="pendingPingCount > 0"
@@ -161,7 +161,7 @@ import { usePortalBusTrip } from '@/composables/usePortalBusTrip'
 const {
   trip, stops, routes, selectedRouteId, direction,
   loading, starting, completing, actingStopId,
-  gpsActive, gpsSupported, snapshotFailed, routesBlocked, pendingPingCount,
+  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, pendingPingCount,
   init, start, departStop, skipStop, undoStop, complete, teardown,
 } = usePortalBusTrip()
 
