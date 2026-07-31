@@ -8,6 +8,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  DEFAULT_FLUSH_INTERVAL_MS,
+  DEFAULT_MAX_SKEW_MS,
   MAX_BATCH_POINTS,
   createPingBuffer,
   pushPing,
@@ -18,10 +20,14 @@ import {
 // 2026-07-30 07:30:00 台北 = 2026-07-29 23:30:00 UTC
 const BASE_UTC_MS = Date.UTC(2026, 6, 29, 23, 30, 0)
 
-/** 產生台北牆鐘 naive 字串（後端 `PingIn.at` 契約），偏移量以毫秒計。 */
+/**
+ * 產生台北牆鐘 naive 字串（後端 `PingIn.at` 契約），偏移量以毫秒計。
+ * **毫秒必須保留**（只有剛好整秒才省略），否則 `point(999)` 會塌成 `point(0)`，
+ * 「差 1 毫秒」的邊界測試就變成在測「差 0 毫秒」，off-by-one 變異抓不到。
+ */
 function wallClock(offsetMs: number): string {
   const d = new Date(BASE_UTC_MS + offsetMs + 8 * 60 * 60 * 1000)
-  return d.toISOString().replace(/\.\d{3}Z$/, '')
+  return d.toISOString().replace(/\.000Z$/, '').replace(/Z$/, '')
 }
 
 /** 產生同一時刻的 aware（帶 Z）字串，用來驗證兩種格式落在同一時間軸。 */
@@ -79,6 +85,79 @@ describe('shouldSamplePing — 座標／精度守衛', () => {
     expect(shouldSamplePing(null, { lat: 22.6, lng: 120.3, at: '' })).toBe(false)
     expect(shouldSamplePing(null, { lat: 22.6, lng: 120.3, at: '不是時間' })).toBe(false)
   })
+
+  it('點本身為 null／undefined 時拒（未走型別的 JS 呼叫端）', () => {
+    expect(shouldSamplePing(null, null as unknown as PingPoint)).toBe(false)
+    expect(shouldSamplePing(null, undefined as unknown as PingPoint)).toBe(false)
+  })
+
+  it('accuracy 為 null 視同未提供（部分瀏覽器的 GeolocationCoordinates 給 null）', () => {
+    const p = { lat: 22.6, lng: 120.3, at: wallClock(0), accuracy: null as unknown as number }
+    expect(shouldSamplePing(null, p)).toBe(true)
+  })
+})
+
+describe('shouldSamplePing — 時鐘暴衝（nowAt）', () => {
+  const now = wallClock(0)
+
+  it('未傳 nowAt 時完全不檢查（與加此參數前相容）', () => {
+    expect(shouldSamplePing(null, point(1000 * 60 * 60 * 24 * 365))).toBe(true)
+    expect(shouldSamplePing(null, { lat: 22.6, lng: 120.3, at: '3000-01-01T00:00:00' })).toBe(true)
+  })
+
+  it('傳了 nowAt 就擋掉暴衝到未來的時間戳', () => {
+    expect(
+      shouldSamplePing(null, { lat: 22.6, lng: 120.3, at: '3000-01-01T00:00:00' }, { nowAt: now }),
+    ).toBe(false)
+  })
+
+  it('偏差邊界：剛好等於 maxSkewMs 收下，多 1 毫秒即拒（未來與過去對稱）', () => {
+    const opts = { nowAt: now, maxSkewMs: 60_000 }
+    expect(shouldSamplePing(null, point(60_000), opts)).toBe(true)
+    expect(shouldSamplePing(null, point(60_001), opts)).toBe(false)
+    expect(shouldSamplePing(null, point(-60_000), opts)).toBe(true)
+    expect(shouldSamplePing(null, point(-60_001), opts)).toBe(false)
+  })
+
+  it('maxSkewMs 預設 1 小時', () => {
+    expect(DEFAULT_MAX_SKEW_MS).toBe(3_600_000)
+    expect(shouldSamplePing(null, point(3_600_000), { nowAt: now })).toBe(true)
+    expect(shouldSamplePing(null, point(3_600_001), { nowAt: now })).toBe(false)
+  })
+
+  it('maxSkewMs 為 NaN／負數／Infinity 時退回預設 1 小時', () => {
+    for (const maxSkewMs of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+      expect(shouldSamplePing(null, point(3_600_000), { nowAt: now, maxSkewMs })).toBe(true)
+      expect(shouldSamplePing(null, point(3_600_001), { nowAt: now, maxSkewMs })).toBe(false)
+    }
+  })
+
+  it('nowAt 本身不可解析時視為沒給（不因壞參數而全擋）', () => {
+    expect(shouldSamplePing(null, point(0), { nowAt: '不是時間' })).toBe(true)
+    expect(shouldSamplePing(null, point(3_600_001), { nowAt: '' })).toBe(true)
+  })
+
+  it('nowAt 也吃 aware 字串（與 at 同一時間軸）', () => {
+    expect(shouldSamplePing(null, point(3_600_001), { nowAt: awareUtc(0) })).toBe(false)
+    expect(shouldSamplePing(null, point(3_600_000), { nowAt: awareUtc(0) })).toBe(true)
+  })
+
+  it('暴衝的未來點無法再把節流基準推走（reviewer 的繞過情境）', () => {
+    // 先塞一個 3000 年的點，其後 50 個間隔 <100ms 的真實點原本會全數被當「時鐘回捲」收下
+    let pts: PingPoint[] = []
+    pts = pushPing(pts, { lat: 22.6, lng: 120.3, at: '3000-01-01T00:00:00' }, { nowAt: wallClock(0) })
+    expect(pts).toHaveLength(0)
+    for (let i = 0; i < 50; i += 1) {
+      pts = pushPing(pts, point(i * 80), { nowAt: wallClock(i * 80) })
+    }
+    // 節流正常運作：4 秒的高頻點只留下每秒一個
+    expect(pts.map((p) => p.at)).toEqual([
+      wallClock(0),
+      wallClock(1040),
+      wallClock(2080),
+      wallClock(3120),
+    ])
+  })
 })
 
 describe('shouldSamplePing — 時間節流邊界', () => {
@@ -107,6 +186,15 @@ describe('shouldSamplePing — 時間節流邊界', () => {
     expect(shouldSamplePing(null, point(0, { accuracy: 500 }), { maxAccuracyM: Number.NaN })).toBe(true)
     expect(shouldSamplePing(null, point(0, { accuracy: 500 }), { maxAccuracyM: -1 })).toBe(true)
     expect(shouldSamplePing(null, point(0, { accuracy: 1500 }), { maxAccuracyM: Number.NaN })).toBe(false)
+  })
+
+  it('選項為 Infinity 時退回預設（Infinity 門檻會讓節流永久拒收所有點）', () => {
+    const inf = Number.POSITIVE_INFINITY
+    expect(shouldSamplePing(point(0), point(1000), { minIntervalMs: inf })).toBe(true)
+    expect(shouldSamplePing(point(0), point(999), { minIntervalMs: inf })).toBe(false)
+    // maxAccuracyM: Infinity 若被採用會讓精度門檻完全失效
+    expect(shouldSamplePing(null, point(0, { accuracy: 1500 }), { maxAccuracyM: inf })).toBe(false)
+    expect(shouldSamplePing(null, point(0, { accuracy: 900 }), { maxAccuracyM: inf })).toBe(true)
   })
 
   it('裝置時鐘回捲（間隔為負）要收下並重新錨定，不可永久卡死', () => {
@@ -169,11 +257,28 @@ describe('pushPing — 容量、順序與基準點', () => {
     }
   })
 
-  it('被拒的點不改動原陣列（純函式不得就地變更）', () => {
+  it('被拒的點不改動原陣列，且回傳「同一個」陣列（Task 12 靠此判定被拒）', () => {
     const pts = [point(0)]
     const next = pushPing(pts, point(500))
     expect(pts.map((p) => p.at)).toEqual([wallClock(0)])
     expect(next.map((p) => p.at)).toEqual([wallClock(0)])
+    expect(next).toBe(pts)
+  })
+
+  it('收下時回傳「新」陣列且原陣列不被就地變更', () => {
+    const pts = [point(0)]
+    const next = pushPing(pts, point(1000))
+    expect(next).not.toBe(pts)
+    expect(pts.map((p) => p.at)).toEqual([wallClock(0)])
+    expect(next.map((p) => p.at)).toEqual([wallClock(0), wallClock(1000)])
+  })
+
+  it('超過容量而裁切時同樣不就地變更原陣列', () => {
+    const pts = [point(0), point(1000)]
+    const next = pushPing(pts, point(2000), { maxPoints: 2 })
+    expect(next).not.toBe(pts)
+    expect(pts.map((p) => p.at)).toEqual([wallClock(0), wallClock(1000)])
+    expect(next.map((p) => p.at)).toEqual([wallClock(1000), wallClock(2000)])
   })
 
   it('節流基準是「最後被收下的點」而非「最後被 push 的點」', () => {
@@ -235,6 +340,44 @@ describe('createPingBuffer', () => {
       wallClock(1000),
       wallClock(2000),
     ])
+  })
+
+  it('flushIntervalMs 為 0／負數／NaN 時退回 5 秒（否則變成 setInterval(fn, 0) 的 flush 風暴）', () => {
+    // 直接斷言交給 setInterval 的延遲值：若改成 advanceTimersByTime 觀測，
+    // 「延遲被算成 0」的變異體會讓假計時器原地空轉，測試不是紅而是掛住。
+    const spy = vi.spyOn(globalThis, 'setInterval')
+    try {
+      for (const flushIntervalMs of [0, -1, Number.NaN]) {
+        spy.mockClear()
+        const buf = createPingBuffer({ flushIntervalMs, onFlush: vi.fn() })
+        buf.start()
+        expect(spy).toHaveBeenCalledWith(expect.any(Function), DEFAULT_FLUSH_INTERVAL_MS)
+        buf.stop()
+      }
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('預設 flushIntervalMs 為 5 秒（4999 毫秒還不送）', () => {
+    const onFlush = vi.fn()
+    const buf = createPingBuffer({ onFlush })
+    buf.start()
+    buf.push(point(0))
+    vi.advanceTimersByTime(4999)
+    expect(onFlush).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(onFlush).toHaveBeenCalledOnce()
+  })
+
+  it('push 的 nowAt 會被帶進取樣守衛（時鐘暴衝的點不進 buffer）', () => {
+    const onFlush = vi.fn()
+    const buf = createPingBuffer({ flushIntervalMs: 5000, onFlush })
+    buf.start()
+    buf.push({ lat: 22.6, lng: 120.3, at: '3000-01-01T00:00:00' }, wallClock(0))
+    buf.push(point(0), wallClock(0))
+    vi.advanceTimersByTime(5000)
+    expect(onFlush.mock.calls[0][0].map((p: PingPoint) => p.at)).toEqual([wallClock(0)])
   })
 
   it('空 buffer 不觸發 flush', () => {
