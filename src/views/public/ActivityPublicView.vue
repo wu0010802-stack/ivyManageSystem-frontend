@@ -61,15 +61,17 @@
           <!-- 手機版服務選單：查詢／聯繫收進選單免佔版面（業主嫌 pill 列太滿）；
                桌機隱藏，桌機維持表單底部的按鈕列 -->
           <div class="page-menu" @keydown.escape="pageMenuOpen = false">
+            <!-- icon-only 漢堡對非重度使用者可發現性差（NNGroup），帶「選單」
+                 文字標籤；可見文字即無障礙名稱，不另設 aria-label -->
             <button
               type="button"
               class="page-menu-btn"
-              aria-label="開啟服務選單"
               :aria-expanded="pageMenuOpen"
               aria-controls="page-menu-pop"
               @click="pageMenuOpen = !pageMenuOpen"
             >
-              <svg class="icon" width="20" height="20" aria-hidden="true"><use href="#i-menu" /></svg>
+              <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-menu" /></svg>
+              選單
             </button>
             <div v-if="pageMenuOpen" class="page-menu-backdrop" @click="pageMenuOpen = false"></div>
             <div v-if="pageMenuOpen" id="page-menu-pop" class="page-menu-pop">
@@ -1327,13 +1329,16 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
+  gap: 6px;
   height: 44px;
-  padding: 0;
+  padding: 0 14px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease-out),
@@ -2647,7 +2652,9 @@ onUnmounted(() => {
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-header { border-radius: 0; }
   .page-header { padding: var(--space-5); gap: var(--space-4); }
-  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
+  /* flex-wrap 是 ≤330px 極窄機的防線：帶「選單」標籤的按鈕擠不下時
+     整顆換行到品牌區第二列靠右，不裁切校名 */
+  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); flex-wrap: wrap; }
   .page-brand-logo { width: 72px; height: 72px; }
   .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
   .page-subtitle { font-size: var(--fs-xl); }
