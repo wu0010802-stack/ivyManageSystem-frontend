@@ -69,6 +69,7 @@
       :data="list"
       v-loading="loading"
       border
+      :row-class-name="tableRowClassName"
       @selection-change="handleSelectionChange"
     >
       <el-table-column type="selection" width="45" :selectable="isRowSelectable" />
@@ -1098,6 +1099,11 @@ function showReviewButtons(row: RegistrationRow): boolean {
 function isRejectedRow(row: RegistrationRow): boolean {
   return row.match_status === 'rejected'
 }
+// 已拒絕列整列灰階（.row-rejected）：預設清單保留已拒絕（可復原、可稽核），
+// 但視覺退到背景，避免與待處理資料混雜；要完全隱藏可用「報名狀態」篩選。
+function tableRowClassName({ row }: { row: RegistrationRow }): string {
+  return isRejectedRow(row) ? 'row-rejected' : ''
+}
 // 2026-07-31 拒絕擴大涵蓋：已繳費不再 disable——後端 409 會引導 force_refund
 // 沖帳二次確認（與原刪除流程同一套退費簽核閘）
 function canReject(row: RegistrationRow): boolean {
@@ -1498,4 +1504,19 @@ onMounted(async () => {
 .op-row .el-button + .el-button { margin-left: 0; }
 /* 操作欄儲存格 padding 加大，兩行按鈕不顯擁擠 */
 :deep(td.op-cell .cell) { padding: 14px 12px; }
+
+/* ── 已拒絕列灰階 ──
+   資料欄整格去彩度＋淡化，讓已拒絕記錄退到背景；操作欄（op-cell）刻意不淡化，
+   「復原」「詳情」入口維持原色可辨。背景用 --bg-color 與正常白底列區隔。 */
+.activity-registrations :deep(.el-table__row.row-rejected > td) {
+  background: var(--bg-color);
+}
+.activity-registrations :deep(.el-table__row.row-rejected > td .cell) {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.activity-registrations :deep(.el-table__row.row-rejected > td.op-cell .cell) {
+  filter: none;
+  opacity: 1;
+}
 </style>
