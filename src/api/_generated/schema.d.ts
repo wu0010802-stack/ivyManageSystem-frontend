@@ -3847,6 +3847,15 @@ export interface paths {
          *
          *     R6-1：須登入才可讀（原本無任何 Depends → 匿名訪客可拉整份 RBAC 模型，含
          *     自訂角色 code/label/權限陣列）。要求 get_current_user 即封閉匿名洩漏。
+         *
+         *     角色設定稽核 2026-07-31 P1：R6-1 只擋了匿名，**任何已登入角色（含 teacher、
+         *     parent）**仍可拉走完整 RBAC 模型——每個角色的權限矩陣、flags、label。對想找最弱
+         *     權限帳號下手的人這是一張現成地圖。回傳內容本身無法逐欄分級（角色權限陣列正是
+         *     敏感的那部分），故整支收斂為管理職能專屬。
+         *
+         *     用 any-of 而非單一權限：這份 payload 有兩個正當消費者——角色設定頁
+         *     （`ROLES_MANAGE`）與帳號設定頁的角色選擇器（`USER_MANAGEMENT_READ`）；兩者持有的
+         *     權限不同，用單一 `require_permission` 會擋掉其中一方。
          */
         get: operations["get_permissions_api_auth_permissions_get"];
         put?: never;
@@ -19437,6 +19446,8 @@ export interface components {
              * @default true
              */
             allow_waitlist: boolean;
+            /** Allowed Grades */
+            allowed_grades?: string[] | null;
             /**
              * Capacity
              * @default 30
@@ -19494,6 +19505,11 @@ export interface components {
         CourseDetailOut: {
             /** Allow Waitlist */
             allow_waitlist: boolean;
+            /**
+             * Allowed Grades
+             * @default []
+             */
+            allowed_grades: string[];
             /** Capacity */
             capacity?: number | null;
             /** Description */
@@ -19576,6 +19592,11 @@ export interface components {
         CourseListItemOut: {
             /** Allow Waitlist */
             allow_waitlist: boolean;
+            /**
+             * Allowed Grades
+             * @default []
+             */
+            allowed_grades: string[];
             /** Capacity */
             capacity: number;
             /** Description */
@@ -19653,6 +19674,8 @@ export interface components {
         CourseUpdate: {
             /** Allow Waitlist */
             allow_waitlist?: boolean | null;
+            /** Allowed Grades */
+            allowed_grades?: string[] | null;
             /** Capacity */
             capacity?: number | null;
             /** Description */
@@ -27158,6 +27181,11 @@ export interface components {
          *     對應到 ORM 的 Time 物件，產出再序列化變 ISO）。
          */
         PublicCoursesItemOut: {
+            /**
+             * Allowed Grades
+             * @default []
+             */
+            allowed_grades: string[];
             /** Frequency */
             frequency: string;
             /** Instructor Name */
@@ -28349,6 +28377,13 @@ export interface components {
             created_at?: string | null;
             /** Email */
             email?: string | null;
+            /**
+             * Grade Mismatch Courses
+             * @default []
+             */
+            grade_mismatch_courses: string[];
+            /** Grade Name */
+            grade_name?: string | null;
             /** Id */
             id: number;
             /** Internal Note */

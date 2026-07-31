@@ -34,6 +34,20 @@
           <span v-else style="color: var(--text-tertiary);">-</span>
         </template>
       </el-table-column>
+      <el-table-column label="限定年級" min-width="110">
+        <template #default="{ row }">
+          <template v-if="row.allowed_grades?.length">
+            <el-tag
+              v-for="g in row.allowed_grades"
+              :key="g"
+              size="small"
+              effect="plain"
+              class="grade-tag"
+            >{{ g }}</el-tag>
+          </template>
+          <span v-else style="color: var(--text-tertiary);">不限</span>
+        </template>
+      </el-table-column>
       <!-- G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算 -->
       <el-table-column label="負責老師" width="100" align="center">
         <template #default="{ row }">
@@ -122,6 +136,14 @@
         </el-form-item>
         <el-form-item label="說明">
           <el-input v-model="form.description" type="textarea" :rows="2" />
+        </el-form-item>
+        <el-form-item label="限定年級">
+          <el-checkbox-group v-model="form.allowed_grades" data-test="allowed-grades-group">
+            <el-checkbox v-for="g in GRADES_ORDER" :key="g" :value="g" :label="g">{{ g }}</el-checkbox>
+          </el-checkbox-group>
+          <div style="font-size: 12px; color: var(--text-tertiary); width: 100%;">
+            不勾＝不限年級。僅供前台顯示與報名管理標示，不會擋報名
+          </div>
         </el-form-item>
         <el-form-item label="講師">
           <el-input v-model="form.instructor_name" maxlength="50" placeholder="講師姓名（選填，前台課程卡顯示）" />
@@ -426,6 +448,7 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { sanitizeHref } from '@/utils/url'
+import { GRADES_ORDER } from '@/constants/recruitment'
 
 interface Course {
   id: number; name: string; price: number; sessions?: number | null; capacity: number
@@ -434,6 +457,8 @@ interface Course {
   instructor_name?: string | null
   // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
   instructor_employee_id?: number | null
+  // 可報名年級（空=不限；僅顯示 advisory，不擋報名）
+  allowed_grades?: string[]
   enrolled?: number
   pending_review?: number
   pending_review_waitlist?: number
@@ -451,6 +476,7 @@ interface CourseForm {
   meeting_weekday: number | null; meeting_start_time: string; meeting_end_time: string
   instructor_name: string
   instructor_employee_id: number | null
+  allowed_grades: string[]
 }
 
 type EmployeeOption = { id: number; name: unknown }
@@ -492,6 +518,7 @@ const defaultForm = (): CourseForm => ({
   meeting_end_time: '',
   instructor_name: '',
   instructor_employee_id: null,
+  allowed_grades: [],
 })
 const form = ref<CourseForm>(defaultForm())
 
@@ -836,6 +863,7 @@ function openEdit(row: Course) {
     meeting_end_time: row.meeting_end_time || '',
     instructor_name: row.instructor_name || '',
     instructor_employee_id: row.instructor_employee_id ?? null,
+    allowed_grades: row.allowed_grades ? [...row.allowed_grades] : [],
   }
   dialogVisible.value = true
 }
@@ -855,6 +883,8 @@ async function handleSave() {
     meeting_start_time: f.meeting_start_time || null,
     meeting_end_time: f.meeting_end_time || null,
     instructor_name: f.instructor_name || null,
+    // 空陣列送 null（後端 [] 與 null 皆正規化為 NULL=不限，取語意明確者）
+    allowed_grades: f.allowed_grades.length ? f.allowed_grades : null,
   }
   saving.value = true
   try {
@@ -941,6 +971,7 @@ onMounted(() => {
 .toolbar__actions { display: flex; gap: 8px; align-items: center; }
 .pending-occupancy-hint { font-size: 11px; color: var(--el-color-warning); line-height: 1.2; }
 .pending-occupancy-hint--waitlist { color: var(--el-color-info); }
+.grade-tag { margin: 1px 4px 1px 0; }
 
 /* 容量佔位名單 Drawer：仿 el-table 外觀的可拖拉列表（el-table 不支援列拖拉，
    改以 vuedraggable + flex 列自繪）；正式（佔位）／候補分兩區、跨區可拖 */

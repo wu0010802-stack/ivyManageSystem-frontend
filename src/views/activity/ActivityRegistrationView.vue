@@ -83,6 +83,22 @@
           <span>{{ row.class_name || '—' }}</span>
         </template>
       </el-table-column>
+      <!-- 年級（後端推導）＋不符標示：課程有限定年級而學生年級不在名單時提示承辦。
+           僅 advisory——報名不做資格擋件（2026-07-31 業主規格） -->
+      <el-table-column label="年級" width="90" align="center">
+        <template #default="{ row }">
+          <div>{{ row.grade_name || '—' }}</div>
+          <el-tooltip
+            v-if="row.grade_mismatch_courses?.length"
+            :content="`年級不符課程：${row.grade_mismatch_courses.join('、')}`"
+            placement="top"
+          >
+            <el-tag type="danger" size="small" effect="plain" data-test="grade-mismatch-tag">
+              年級不符
+            </el-tag>
+          </el-tooltip>
+        </template>
+      </el-table-column>
       <el-table-column label="審核狀態" width="100" align="center">
         <template #default="{ row }">
           <el-tag

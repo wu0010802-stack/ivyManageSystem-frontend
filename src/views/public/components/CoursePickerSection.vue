@@ -13,6 +13,9 @@ interface CourseItem {
   name: string
   price?: string | number
   sessions?: number | string
+  // 可報名年級（後端 allowed_grades；空/缺=不限）。僅顯示 advisory，
+  // 不做勾選擋件——業主規格：不在報名時比對學童資格
+  allowed_grades?: string[]
   [key: string]: unknown
 }
 interface AvailabilityResult { text: string; cssClass: string; full: boolean }
@@ -56,6 +59,11 @@ const courseStates = computed(() => {
 // usePublicRegistrationForm.toggleCourse 守衛及查詢頁 courseLocked 對齊）
 function courseLocked(course: CourseItem): boolean {
   return !!courseStates.value.get(course.name)?.full && !props.selectedCourses.includes(course.name)
+}
+
+function allowedGradesLabel(course: CourseItem): string {
+  const grades = course.allowed_grades
+  return Array.isArray(grades) && grades.length ? `限 ${grades.join('、')}` : ''
 }
 
 const PREVIEW_W = 320
@@ -191,6 +199,9 @@ onUnmounted(cancelPreview)
                 <span v-if="formatSchedule(course)" class="meta-chip meta-chip--schedule">
                   <svg class="icon" width="12" height="12" aria-hidden="true"><use href="#i-calendar" /></svg>
                   {{ formatSchedule(course) }}
+                </span>
+                <span v-if="allowedGradesLabel(course)" class="meta-chip meta-chip--grades">
+                  {{ allowedGradesLabel(course) }}
                 </span>
                 <span
                   v-for="(w, i) in courseAdvisory(course)"
@@ -512,6 +523,11 @@ onUnmounted(cancelPreview)
   border-color: var(--color-border);
 }
 .meta-chip--schedule .icon { color: var(--ivy-teal); flex-shrink: 0; }
+.meta-chip--grades {
+  color: var(--color-primary-strong);
+  background-color: var(--color-primary-soft);
+  border-color: rgba(10, 122, 70, 0.3);
+}
 .meta-chip--advisory .icon { flex-shrink: 0; }
 .meta-chip--danger {
   color: var(--color-danger-darker);
