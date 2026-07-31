@@ -4,12 +4,19 @@ import { previewAppraisalPayout } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 import { formatCurrency } from '@/utils/currency'
 
+// 422 = 「該學年尚無可發放的來源考核資料」的引導空狀態文案。不可直接顯示後端
+// detail（如「appraisal_cycle academic_year=113 FIRST 不存在；請先在考核管理建立此
+// cycle」）——那是給開發者看的內部訊息，年份換算（發放年 N 對應前一個已完整結束的
+// 學年）本身是正確的刻意設計，不是後端 bug，使用者不需要知道 cycle 內部代號
+// （2026-07-31 QA 缺陷）。
+const NOT_READY_MESSAGE = '本年度尚無可發放的考核年終資料，可切換年份，或前往考核管理建立來源學年的考核週期'
+
 const props = defineProps<{ year: number }>()
 const emit = defineEmits<{ stats: [n: number]; 'stats-error': [] }>()
 const loading = ref(false)
 const error = ref('')
-// 422 = 資料態尚未就緒（來源學年 cycle 未建立），非載入失敗：顯示後端 detail
-// 的引導空狀態，且不 emit stats-error（避免點亮父層「部分卡片載入失敗」橫幅）
+// 422 = 資料態尚未就緒（來源學年 cycle 未建立），非載入失敗：顯示友善空狀態，
+// 且不 emit stats-error（避免點亮父層「部分卡片載入失敗」橫幅）
 const notReady = ref(false)
 const count = ref(0)
 const totalAmount = ref(0)
@@ -29,7 +36,7 @@ async function load() {
     const status = (e as { response?: { status?: number } } | null)?.response?.status
     if (status === 422) {
       notReady.value = true
-      error.value = apiError(e, '尚未建立來源考核週期')
+      error.value = NOT_READY_MESSAGE
       emit('stats', 0)
     } else {
       error.value = apiError(e, '載入失敗')
