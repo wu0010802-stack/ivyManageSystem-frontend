@@ -10,6 +10,7 @@
       <symbol id="i-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></symbol>
       <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></symbol>
       <symbol id="i-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></symbol>
+      <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="17" x2="20" y2="17" /></symbol>
       <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" /><path d="M12 9v4" /><path d="M12 17h.01" /></symbol>
       <symbol id="i-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /><path d="m6 6 12 12" /></symbol>
       <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3" /></symbol>
@@ -57,16 +58,31 @@
             <div class="page-brand-zh">常春藤幼兒園</div>
             <div class="page-brand-en">Ivy Kindergarten</div>
           </div>
-        </div>
-        <div class="page-actions">
-          <button type="button" class="page-action-btn" @click="goToQuery">
-            <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-search" /></svg>
-            查詢 / 修改報名
-          </button>
-          <button type="button" class="page-action-btn" @click="openContactModal">
-            <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-message" /></svg>
-            與承辦人員聯繫
-          </button>
+          <!-- 手機版服務選單：查詢／聯繫收進選單免佔版面（業主嫌 pill 列太滿）；
+               桌機隱藏，桌機維持表單底部的按鈕列 -->
+          <div class="page-menu" @keydown.escape="pageMenuOpen = false">
+            <button
+              type="button"
+              class="page-menu-btn"
+              aria-label="開啟服務選單"
+              :aria-expanded="pageMenuOpen"
+              aria-controls="page-menu-pop"
+              @click="pageMenuOpen = !pageMenuOpen"
+            >
+              <svg class="icon" width="20" height="20" aria-hidden="true"><use href="#i-menu" /></svg>
+            </button>
+            <div v-if="pageMenuOpen" class="page-menu-backdrop" @click="pageMenuOpen = false"></div>
+            <div v-if="pageMenuOpen" id="page-menu-pop" class="page-menu-pop">
+              <button type="button" class="page-menu-item" @click="menuGoToQuery">
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-search" /></svg>
+                查詢 / 修改報名
+              </button>
+              <button type="button" class="page-menu-item" @click="menuOpenContact">
+                <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-message" /></svg>
+                與承辦人員聯繫
+              </button>
+            </div>
+          </div>
         </div>
         <div class="page-meta">
           <h1 class="page-subtitle">{{ displayTitle }}</h1>
@@ -615,6 +631,18 @@
                   </button>
                 </div>
               </div>
+
+              <!-- 桌機版：查詢／聯繫維持表單底部文字連結列；手機版收進 header 選單（--to-md 隱藏） -->
+              <div class="btn-actions-row">
+                <button type="button" class="btn btn-outline" @click="goToQuery">
+                  <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-search" /></svg>
+                  查詢 / 修改報名
+                </button>
+                <button type="button" class="btn btn-outline btn-outline--accent" @click="openContactModal">
+                  <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-message" /></svg>
+                  與承辦人員聯繫
+                </button>
+              </div>
             </div>
           </div>
         </form>
@@ -935,6 +963,19 @@ function goToQuery() {
   router.push({ name: 'public-activity-query' })
 }
 
+// ===== 手機版 header 服務選單 =====
+// 點外面關閉走透明 backdrop（免掛 document listener）、Escape 由 .page-menu 的
+// keydown 處理；選單動作先收合再執行，避免路由離開後選單殘留 open 狀態。
+const pageMenuOpen = ref(false)
+function menuGoToQuery() {
+  pageMenuOpen.value = false
+  goToQuery()
+}
+function menuOpenContact() {
+  pageMenuOpen.value = false
+  openContactModal()
+}
+
 // ===== 送出成功 modal =====
 interface CourseItem { name: string; price: number; waitlisted?: boolean }
 const successModal = reactive<{
@@ -1220,10 +1261,10 @@ onUnmounted(() => {
   border: 1px solid var(--color-border);
 }
 
-/* Header — 簡約版：LOGO + 校名 ｜ 活動標題 ｜ 查詢與聯繫工具列 三欄、純白底、無動畫 */
+/* Header — 簡約版：LOGO + 校名 ｜ 活動標題 水平兩欄、純白底、無動畫（手機另有服務選單） */
 .page-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto 1fr;
   gap: var(--space-8);
   align-items: center;
   margin: 0;
@@ -1273,49 +1314,73 @@ onUnmounted(() => {
   margin-top: 4px;
 }
 .page-meta {
-  grid-column: 2;
-  grid-row: 1;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   min-width: 0;
 }
-/* Header 右側工具列：查詢／聯繫是輔助動作，quiet pill 視覺壓低，
-   不與表單主 CTA 搶重量。DOM 排在標題前（工具屬 header 識別區），
-   桌機以 grid 定位到第三欄；--to-md 單欄後收成品牌區下方靠右一列。 */
-.page-actions {
-  grid-column: 3;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-2);
-}
-.page-action-btn {
+/* 手機版 header 服務選單：桌機隱藏（查詢／聯繫走表單底部按鈕列），
+   --to-md 以下顯示於品牌列右端。pop／backdrop 只在開啟時渲染，
+   樣式放頂層不影響桌機。z-index 高於 sticky 截止提示（50）。 */
+.page-menu { display: none; }
+.page-menu-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 8px 16px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   color: var(--color-text-muted);
-  font: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 500;
-  line-height: 1.2;
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out);
 }
-.page-action-btn:hover {
+.page-menu-btn:hover,
+.page-menu-btn[aria-expanded='true'] {
   background: var(--color-surface-muted);
   color: var(--color-text);
 }
-.page-action-btn .icon { flex-shrink: 0; }
+.page-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: transparent;
+}
+.page-menu-pop {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  padding: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+.page-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.page-menu-item:hover { background: var(--color-surface-muted); }
+.page-menu-item .icon { flex-shrink: 0; color: var(--color-text-muted); }
 .page-subtitle {
   margin: 0;
   font-size: clamp(20px, 3vw, 26px);
@@ -2317,6 +2382,42 @@ onUnmounted(() => {
   border-color: var(--color-primary);
 }
 .btn-outline:hover:not(:disabled) { background-color: var(--color-primary-strong); color: var(--color-primary-contrast); }
+.btn-outline--accent { color: var(--ivy-teal); border-color: var(--ivy-teal); }
+.btn-outline--accent:hover:not(:disabled) { background-color: var(--ivy-teal); color: var(--neutral-0); border-color: var(--ivy-teal); }
+/* 桌機版查詢／聯繫按鈕列（--to-md 隱藏，手機走 header 服務選單） */
+.btn-actions-row {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+/* 副按鈕視覺壓低：text-link 風格，不跟主 submit 搶視覺重量；
+   min-height 44px 撐開觸控區（spec #2），padding 維持不變以保留壓低觀感 */
+.btn-actions-row .btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: var(--fs-sm);
+  box-shadow: none;
+}
+.btn-actions-row .btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  border-color: transparent;
+  color: var(--color-text);
+  transform: none;
+  box-shadow: none;
+}
+.btn-actions-row .btn .icon,
+.btn-actions-row .btn svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Video Button — 獨立於 label 之外，避免與 checkbox 互動衝突 */
 .video-btn {
   display: inline-flex;
@@ -2526,34 +2627,27 @@ onUnmounted(() => {
   }
   .page-brand {
     padding-right: 0;
-    border-right: none;
-  }
-  /* 單欄後查詢／聯繫工具列收到品牌區下方靠右，header 的 divider 改由它承接
-     （identity＋工具＝同一視覺群組，divider 之下才是活動標題）。
-     2026-07-31 業主改判「標題置中」突兀，標題與招生資訊恢復靠左：右上有工具列
-     平衡版面、divider 下方整塊靠左對齊後，原本「標題孤零零貼最左」的參差感
-     已由結構收掉，不再需要置中。 */
-  .page-actions {
-    grid-column: auto;
-    grid-row: auto;
-    flex-direction: row;
-    justify-content: flex-end;
-    flex-wrap: wrap;
     padding-bottom: var(--space-5);
+    border-right: none;
     border-bottom: 1px solid var(--color-border);
   }
-  .page-meta {
-    grid-column: auto;
-    grid-row: auto;
+  /* 2026-07-31 業主兩度裁定：標題「置中」突兀改靠左；查詢／聯繫 pill 列又嫌
+     太滿，收進品牌列右端的服務選單（.page-menu）。品牌列右端有選單鈕平衡
+     版面、divider 下方整塊靠左對齊後，原本「標題孤零零貼最左」的參差感已由
+     結構收掉，不再需要置中。桌機的表單底部按鈕列在此隱藏。 */
+  .page-menu {
+    display: block;
+    position: relative;
+    margin-left: auto;
   }
+  .btn-actions-row { display: none; }
 }
 @media (--to-sm) {
   .public-activity-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-header { border-radius: 0; }
   .page-header { padding: var(--space-5); gap: var(--space-4); }
-  .page-brand { gap: var(--space-4); }
-  .page-actions { padding-bottom: var(--space-4); }
+  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
   .page-brand-logo { width: 72px; height: 72px; }
   .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
   .page-subtitle { font-size: var(--fs-xl); }
