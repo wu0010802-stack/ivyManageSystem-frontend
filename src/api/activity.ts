@@ -139,6 +139,9 @@ export const deleteRegistrationPayment = (registrationId: number, paymentId: num
 
 export const exportRegistrations = (params?: ApiQuery<'/activity/registrations/export', 'get'>): Promise<AxiosResponse<Blob>> =>
   api.get('/activity/registrations/export', { params, responseType: 'blob' })
+// 繳費帳務報表（繳費總覽＋繳費明細兩工作表）；端點無 match_status 參數
+export const exportPaymentReport = (params?: ApiQuery<'/activity/registrations/payment-report', 'get'>): Promise<AxiosResponse<Blob>> =>
+  api.get('/activity/registrations/payment-report', { params, responseType: 'blob' })
 
 // 課程
 export const getCourses = (params?: ApiQuery<'/activity/courses', 'get'>): AxiosResp<'/activity/courses', 'get'> =>
