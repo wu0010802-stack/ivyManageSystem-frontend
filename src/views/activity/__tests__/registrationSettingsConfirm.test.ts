@@ -66,3 +66,38 @@ describe('taipeiNowMinuteString', () => {
     expect(taipeiNowMinuteString()).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
   })
 })
+
+describe('buildSaveConfirmLines — 開放學期（2026-07-31）', () => {
+  it('指定學期 → 攤開學年度與上/下學期', () => {
+    const lines = buildSaveConfirmLines(
+      {
+        is_open: true,
+        open_at: '2026-07-01T00:00',
+        close_at: '2026-07-20T18:00',
+        school_year: 115,
+        semester: 1,
+      },
+      NOW,
+    )
+    expect(lines).toContain('開放學期：115 學年度 上學期')
+  })
+
+  it('semester=2 → 下學期', () => {
+    const lines = buildSaveConfirmLines(
+      { is_open: true, open_at: null, close_at: null, school_year: 114, semester: 2 },
+      NOW,
+    )
+    expect(lines).toContain('開放學期：114 學年度 下學期')
+  })
+
+  it('未指定學期 → 明講會依系統日期判斷，可能顯示到另一學期的課程／用品', () => {
+    const lines = buildSaveConfirmLines(
+      { is_open: true, open_at: null, close_at: null },
+      NOW,
+    )
+    const termLine = lines.find((l) => l.startsWith('開放學期：'))
+    expect(termLine).toBeDefined()
+    expect(termLine).toContain('未指定')
+    expect(termLine).toContain('系統日期')
+  })
+})

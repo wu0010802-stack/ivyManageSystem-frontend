@@ -15668,6 +15668,10 @@ export interface components {
             page_title?: string | null;
             /** Poster Url */
             poster_url?: string | null;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
             /** Target Audience */
             target_audience?: string | null;
             /** Term Label */
@@ -26802,6 +26806,10 @@ export interface components {
             page_title?: string | null;
             /** Poster Url */
             poster_url?: string | null;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
             /** Target Audience */
             target_audience?: string | null;
             /** Term Label */
@@ -27981,6 +27989,10 @@ export interface components {
             page_title?: string | null;
             /** Poster Url */
             poster_url?: string | null;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
             /** Target Audience */
             target_audience?: string | null;
             /** Term Label */

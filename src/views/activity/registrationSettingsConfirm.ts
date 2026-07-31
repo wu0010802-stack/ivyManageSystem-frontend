@@ -13,6 +13,9 @@ export interface RegistrationWindowForm {
   is_open: boolean
   open_at: string | null
   close_at: string | null
+  /** 本次開放報名的學期；null 代表未指定（前台改依系統日期推算當期）。 */
+  school_year?: number | null
+  semester?: number | null
 }
 
 /** 取台北時區當下時間的 `YYYY-MM-DDTHH:mm` 字串（與 value-format 同構）。 */
@@ -29,6 +32,18 @@ function fmt(v: string | null): string {
 }
 
 /**
+ * 學期文案。未指定學期是最容易出事的設定：前台會改用系統日期推算當期，
+ * 在學期交界（例如 7 月底已建好下學期課程）時就會顯示另一個學期的課程與用品，
+ * 所以這裡明講後果而不只是寫「未指定」。
+ */
+function fmtTerm(form: RegistrationWindowForm): string {
+  if (form.school_year == null || form.semester == null) {
+    return '未指定（前台依系統日期判斷當期，學期交界時可能顯示到另一學期的課程／用品）'
+  }
+  return `${form.school_year} 學年度 ${form.semester === 1 ? '上' : '下'}學期`
+}
+
+/**
  * 產生儲存確認框逐行文案。
  * @param form 目前表單的開關與起訖時間
  * @param nowStr 台北當下時間（`YYYY-MM-DDTHH:mm`），由 taipeiNowMinuteString() 提供
@@ -36,6 +51,7 @@ function fmt(v: string | null): string {
 export function buildSaveConfirmLines(form: RegistrationWindowForm, nowStr: string): string[] {
   const lines = [
     `報名開關：${form.is_open ? '開放報名' : '關閉報名'}`,
+    `開放學期：${fmtTerm(form)}`,
     `報名期間：${fmt(form.open_at)} ～ ${fmt(form.close_at)}`,
   ]
   if (!form.is_open) {

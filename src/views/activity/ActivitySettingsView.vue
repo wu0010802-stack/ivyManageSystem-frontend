@@ -11,6 +11,25 @@
             <el-form-item label="開放報名">
               <el-switch v-model="form.is_open" active-text="開放" inactive-text="關閉" />
             </el-form-item>
+            <el-form-item label="開放學期">
+              <el-select
+                v-model="termKey"
+                placeholder="依系統日期自動判斷"
+                clearable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="opt in termOptions"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+              <div class="field-hint">
+                前台報名頁會顯示「這個學期」的課程與用品。留空則依系統日期自動判斷當期，
+                在學期交界時容易與實際開放的學期對不上，建議明確指定。
+              </div>
+            </el-form-item>
             <el-form-item label="開放時間">
               <el-date-picker
                 v-model="form.open_at"
@@ -47,8 +66,11 @@
                 v-model="form.term_label"
                 maxlength="50"
                 show-word-limit
-                placeholder="例：114 下學期"
+                :placeholder="autoTermLabel || '例：114 下學期'"
               />
+              <div v-if="!form.term_label && autoTermLabel" class="field-hint">
+                留空時前台自動顯示「{{ autoTermLabel }}」，與上方開放學期一致。
+              </div>
             </el-form-item>
             <el-form-item label="活動日期">
               <el-input
@@ -212,11 +234,16 @@ import {
 } from './registrationSettingsConfirm'
 import EmailTemplateEditor from './EmailTemplateEditor.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 
 interface SettingsForm {
   is_open: boolean
   open_at: string | null
   close_at: string | null
+  // 本次開放報名的學期：決定前台報名頁看到哪個學期的課程與用品（2026-07-31）。
+  // null 代表未指定，前台沿用系統日期推算當期（舊行為）。
+  school_year: number | null
+  semester: number | null
   page_title: string
   term_label: string
   event_date_label: string
@@ -279,6 +306,8 @@ const form = ref<SettingsForm>({
   is_open: false,
   open_at: null,
   close_at: null,
+  school_year: null,
+  semester: null,
   page_title: '',
   term_label: '',
   event_date_label: '',
@@ -286,6 +315,60 @@ const form = ref<SettingsForm>({
   form_card_title: '',
   poster_url: '',
 })
+
+// ── 開放學期 ────────────────────────────────────────────────────────
+// 這裡刻意不用全域 AcademicTermSelector：那顆綁 useAcademicTermStore，動它會連帶
+// 切掉整個後台正在檢視的學期。此處只是表單上的一個欄位，狀態必須留在 form 內。
+const TERM_LABEL_SUFFIX: Record<number, string> = { 1: '上學期', 2: '下學期' }
+
+function formatTermLabel(schoolYear: number | null, semester: number | null): string {
+  if (schoolYear === null || semester === null) return ''
+  return `${schoolYear} ${TERM_LABEL_SUFFIX[semester] ?? ''}`
+}
+
+/** 當期前後各一學期，涵蓋「提前開放下學期報名」與「補設定上學期」兩種實務情境。 */
+const termOptions = computed(() => {
+  const { school_year: cy, semester: cs } = getCurrentAcademicTerm()
+  const prev = cs === 1 ? { school_year: cy - 1, semester: 2 } : { school_year: cy, semester: 1 }
+  const next = cs === 1 ? { school_year: cy, semester: 2 } : { school_year: cy + 1, semester: 1 }
+  const list = [prev, { school_year: cy, semester: cs }, next]
+  // 已存的學期若落在這三期之外（例如很久以前設定的），仍要能顯示出來而非變空白
+  const saved = form.value.school_year !== null && form.value.semester !== null
+    ? { school_year: form.value.school_year, semester: form.value.semester }
+    : null
+  if (saved && !list.some((t) => t.school_year === saved.school_year && t.semester === saved.semester)) {
+    list.unshift(saved)
+  }
+  return list.map((t) => ({
+    value: `${t.school_year}-${t.semester}`,
+    label: `${t.school_year} 學年度 ${TERM_LABEL_SUFFIX[t.semester]}`,
+    school_year: t.school_year,
+    semester: t.semester,
+  }))
+})
+
+const termKey = computed<string | null>({
+  get: () =>
+    form.value.school_year !== null && form.value.semester !== null
+      ? `${form.value.school_year}-${form.value.semester}`
+      : null,
+  set: (val) => {
+    // 兩欄同進同退：後端 schema 也擋半套學期（只填一半會靜默退回日期推算當期）
+    if (!val) {
+      form.value.school_year = null
+      form.value.semester = null
+      return
+    }
+    const [sy, sem] = val.split('-').map(Number)
+    form.value.school_year = sy
+    form.value.semester = sem
+  },
+})
+
+/** 學期徽章留空時前台會自動顯示的文字，讓管理員先看到再決定要不要自訂。 */
+const autoTermLabel = computed(() =>
+  formatTermLabel(form.value.school_year, form.value.semester)
+)
 
 const posterBroken = ref(false)
 
@@ -315,6 +398,8 @@ async function fetchSettings() {
       is_open: d.is_open ?? false,
       open_at: d.open_at || null,
       close_at: d.close_at || null,
+      school_year: d.school_year ?? null,
+      semester: d.semester ?? null,
       page_title: d.page_title || '',
       term_label: d.term_label || '',
       event_date_label: d.event_date_label || '',
@@ -398,6 +483,8 @@ async function handleSave() {
       is_open: form.value.is_open,
       open_at: form.value.open_at,
       close_at: form.value.close_at,
+      school_year: form.value.school_year,
+      semester: form.value.semester,
     },
     taipeiNowMinuteString()
   )
@@ -420,6 +507,8 @@ async function handleSave() {
       is_open: form.value.is_open,
       open_at: form.value.open_at,
       close_at: form.value.close_at,
+      school_year: form.value.school_year,
+      semester: form.value.semester,
       page_title: form.value.page_title.trim() || null,
       term_label: form.value.term_label.trim() || null,
       event_date_label: form.value.event_date_label.trim() || null,
@@ -605,6 +694,13 @@ onMounted(() => {
   gap: 8px;
 }
 .poster-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.field-hint {
+  width: 100%;
+  margin-top: 4px;
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.5;
