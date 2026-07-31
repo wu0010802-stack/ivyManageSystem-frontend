@@ -168,7 +168,8 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/classrooms',
             name: 'classrooms',
-            component: () => import('../views/ClassroomWorkbenchView.vue'),
+            // 外層 tabs 殼已移除：在籍記錄表折入本頁「統計表」modal、統計圖表獨立為 /enrollment-stats。
+            component: () => import('../views/ClassroomView.vue'),
             meta: { title: PAGE_TERMS.classrooms }
         },
         {

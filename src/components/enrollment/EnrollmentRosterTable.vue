@@ -292,7 +292,7 @@ function onClick(student: RosterStudent | undefined) {
 </script>
 
 <style>
-/* 在籍狀態標籤色：EnrollmentPanel 工具列 chips 共用，白底對比皆 ≥ 4.5:1（AA） */
+/* 在籍狀態標籤色：EnrollmentRosterDialog 工具列 chips 共用，白底對比皆 ≥ 4.5:1（AA） */
 :root {
   --roster-tag-new: var(--color-success-darker);
   --roster-tag-underage: var(--color-warning-darker);
