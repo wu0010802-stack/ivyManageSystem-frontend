@@ -143,6 +143,14 @@ export const ROUTE_PERMISSION_RULES = [
   // 娃娃車：權限對齊後端 api/bus/admin_routes.py 的守衛——路線管理三個寫端點掛
   // BUS_WRITE、監看的 GET /bus/trips/today 掛 BUS_READ。**非** prefix：兩條路徑
   // 各自 exact，避免 /bus-monitor 被 /bus-routes 的寫權限外溢。
+  //
+  // ⚠ **授權時三碼要一起給**：`/bus-routes` 這一頁除了三個寫端點，進頁還會打
+  // `GET /bus/routes`（後端 BUS_READ）與 `GET /students`（後端 STUDENTS_READ）。
+  // 這裡的 gate 是 OR 語意（`canAccessRoute` 對同 path 多列取 some()），寫不出
+  // AND，所以**只授 BUS_WRITE 的角色進得了頁，但兩支載入全 403**，畫面會退化成
+  // 「無法載入娃娃車路線」的錯誤卡。角色設定時 BUS_WRITE 必須與 BUS_READ、
+  // STUDENTS_READ 同時授予（部署 checklist 已載明）。放寬 gate 不構成提權——
+  // 後端各自 enforce。
   { path: '/bus-routes', permission: 'BUS_WRITE' },
   { path: '/bus-monitor', permission: 'BUS_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },

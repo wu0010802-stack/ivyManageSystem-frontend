@@ -112,6 +112,10 @@ export function useBusRouteEditor() {
   const saving = ref(false)
   const creating = ref(false)
   const geocodingStudentId = ref<number | null>(null)
+  /** 路線清單載入失敗：`routes` 是空的，但**不是**「園裡沒有路線」。 */
+  const loadFailed = ref(false)
+  /** 學生清單載入失敗：候選名單是空的，但**不是**「沒有學生可以加」。 */
+  const studentsFailed = ref(false)
   /** 編輯緩衝與伺服器名冊已分岔；切換路線／方向與離開頁面前要提醒。 */
   const dirty = ref(false)
 
@@ -192,15 +196,33 @@ export function useBusRouteEditor() {
     students.value = collected
   }
 
+  /**
+   * 進頁載入。**路線與學生分開判定成敗**：
+   *
+   * 1. 路線載入失敗時 `routes` 會停在初始 `[]`，畫面若照樣渲染「尚未建立任何路線 +
+   *    建立第一條路線」，一次 403／500／斷網就會誘導管理者建出一條**後端沒有端點可以
+   *    刪除**的重複路線。因此獨立一個 `loadFailed`，由 view 以錯誤卡取代空狀態並停用
+   *    建立按鈕（與監看頁 `snapshotFailed` 同一條原則：畫面不得把「連不上」講成「沒有」）。
+   * 2. 學生清單失敗只讓候選名單變空，用「載入娃娃車路線失敗」的訊息指錯對象；
+   *    空的候選選單看起來也像「沒有學生可以加」，故另立 `studentsFailed` 讓 UI 明說。
+   *
+   * 用 `allSettled` 而非 `Promise.all`：後者一邊失敗就不知道另一邊的結果，兩個旗標
+   * 沒辦法各自判定。
+   */
   async function init(): Promise<void> {
     loading.value = true
-    try {
-      await Promise.all([loadRoutes(), loadStudents()])
-    } catch (e) {
-      ElMessage.error(apiError(e, '載入娃娃車路線失敗，請重新整理'))
-    } finally {
-      loading.value = false
+    loadFailed.value = false
+    studentsFailed.value = false
+    const [routesResult, studentsResult] = await Promise.allSettled([loadRoutes(), loadStudents()])
+    if (routesResult.status === 'rejected') {
+      loadFailed.value = true
+      ElMessage.error(apiError(routesResult.reason, '載入娃娃車路線失敗，請重新整理'))
     }
+    if (studentsResult.status === 'rejected') {
+      studentsFailed.value = true
+      ElMessage.error(apiError(studentsResult.reason, '載入學生名單失敗，暫時無法加入新站點'))
+    }
+    loading.value = false
   }
 
   // ── 切換（未儲存的編輯要先確認）─────────────────────────────────────────────
@@ -368,16 +390,24 @@ export function useBusRouteEditor() {
         direction.value,
         stops.value.map((s, i) => ({ student_id: s.student_id, seq: i + 1, lat: s.lat, lng: s.lng })),
       )
-      ElMessage.success('已儲存')
-      // 以伺服器回傳為權威重讀（含 address_snapshot 等後端補的欄位）
+    } catch (e) {
+      // 失敗時**保留**編輯緩衝：整批 422（重複指派／已離校學生／超過 60 站）時
+      // 重讀會把使用者剛排好的順序整個丟掉。
+      ElMessage.error(apiError(e, '儲存失敗，請確認名單後再試'))
+      saving.value = false
+      return
+    }
+    ElMessage.success('已儲存')
+    try {
+      // 以伺服器回傳為權威重讀（含 address_snapshot 等後端補的欄位）。
+      // **獨立 try**：PUT 已經 commit 了，重讀失敗不可以再喊一次「儲存失敗」——
+      // 使用者會照著提示重送，等於對同一個方向再跑一次 replace-all。
       await loadRoutes()
       if (missingCoordinateCount.value > 0) {
         ElMessage.warning(`仍有 ${missingCoordinateCount.value} 站沒有座標，家長端不會看到該站位置`)
       }
     } catch (e) {
-      // 失敗時**保留**編輯緩衝：整批 422（重複指派／已離校學生／超過 60 站）時
-      // 重讀會把使用者剛排好的順序整個丟掉。
-      ElMessage.error(apiError(e, '儲存失敗，請確認名單後再試'))
+      ElMessage.warning(apiError(e, '已儲存，但重新載入名冊失敗，畫面可能不是最新狀態'))
     } finally {
       saving.value = false
     }
@@ -386,6 +416,7 @@ export function useBusRouteEditor() {
   return {
     routes, activeRoute, activeRouteId, direction, stops, students, candidates,
     savedStops, missingCoordinateCount, loading, saving, creating, geocodingStudentId, dirty,
+    loadFailed, studentsFailed,
     init, loadRoutes, createRoute, selectRoute, setDirection,
     addStop, removeStop, move, setCoordinates, geocodeStop, mirrorFromMorning, save,
   }

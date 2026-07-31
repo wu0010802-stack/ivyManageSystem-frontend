@@ -96,6 +96,37 @@ describe('載入', () => {
     expect(editor.stops.value).toEqual([])
   })
 
+  it('路線載入失敗要亮 loadFailed（空的 routes **不是**「園裡沒有路線」）', async () => {
+    vi.mocked(listBusRoutes).mockRejectedValue(
+      Object.assign(new Error('403'), { response: { status: 403, data: { detail: '權限不足' } } }),
+    )
+    const editor = useBusRouteEditor()
+    await editor.init()
+    expect(editor.loadFailed.value).toBe(true)
+    expect(editor.routes.value).toEqual([])
+    expect(editor.loading.value).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalledWith('權限不足')
+  })
+
+  it('路線載入失敗不影響學生清單的判定（反之亦然），訊息各自指向正確對象', async () => {
+    vi.mocked(getStudents).mockRejectedValue(new Error('boom'))
+    const editor = await boot()
+    expect(editor.loadFailed.value).toBe(false)
+    expect(editor.studentsFailed.value).toBe(true)
+    expect(editor.routes.value).toHaveLength(1)
+    expect(ElMessage.error).toHaveBeenCalledWith('載入學生名單失敗，暫時無法加入新站點')
+  })
+
+  it('重新 init 會清掉上一輪的失敗旗標', async () => {
+    vi.mocked(listBusRoutes).mockRejectedValueOnce(new Error('boom'))
+    const editor = useBusRouteEditor()
+    await editor.init()
+    expect(editor.loadFailed.value).toBe(true)
+    vi.mocked(listBusRoutes).mockResolvedValue(routesPayload([routeA()]) as never)
+    await editor.init()
+    expect(editor.loadFailed.value).toBe(false)
+  })
+
   it('載入既有路線並把當前方向的名冊複製進編輯緩衝', async () => {
     const editor = await boot()
     expect(editor.activeRouteId.value).toBe(3)
@@ -380,6 +411,19 @@ describe('儲存（整方向 replace-all）', () => {
     expect(ElMessage.error).toHaveBeenCalledWith(
       '下列學生已排入其他路線的同方向名冊：學生 103（B 線）',
     )
+  })
+
+  it('PUT 成功但重讀失敗時**不得**謊報「儲存失敗」（使用者會重送＝再跑一次 replace-all）', async () => {
+    vi.mocked(replaceBusRouteStops).mockResolvedValue({ data: { stops: {} } } as never)
+    const editor = await boot()
+    vi.mocked(listBusRoutes).mockRejectedValue(new Error('boom'))
+    await editor.save()
+    expect(ElMessage.success).toHaveBeenCalledWith('已儲存')
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith(
+      '已儲存，但重新載入名冊失敗，畫面可能不是最新狀態',
+    )
+    expect(editor.saving.value).toBe(false)
   })
 
   it('存檔後仍有站點缺座標時要提示（家長端看不到該站位置）', async () => {

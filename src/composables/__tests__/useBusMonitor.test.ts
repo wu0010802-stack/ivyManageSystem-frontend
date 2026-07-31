@@ -222,6 +222,41 @@ describe('WS 事件的班次比對（admin channel 是全園共用）', () => {
     expect(m.isLive.value).toBe(true)
   })
 
+  it('結束事件只帶 trip_id，要補抓快照才知道是不是「逾時自動關閉」', async () => {
+    // bus_maintenance_scheduler 的自動關班與司機手動結束共用同一個 {trip_id} payload。
+    // 不補抓的話 auto_closed 會沿用舊值 false，「司機忘了按結束」這則營運告警就被吞掉，
+    // 而 WS 正常時沒有其他路徑會修正它（不重連就不 refresh、不降級就不輪詢）。
+    const m = await bootMonitor()
+    vi.mocked(getBusTripToday).mockClear()
+    vi.mocked(getBusTripToday).mockResolvedValue(
+      tripPayload({ status: 'completed', auto_closed: true }) as never,
+    )
+    lastSocket().emit({ type: 'bus_trip_completed', payload: { trip_id: 7 } })
+    await flushPromises()
+    expect(getBusTripToday).toHaveBeenCalledTimes(1)
+    expect(m.trip.value?.auto_closed).toBe(true)
+  })
+
+  it('別班次的結束事件不得觸發快照（那是別條路線的事）', async () => {
+    await bootMonitor()
+    vi.mocked(getBusTripToday).mockClear()
+    lastSocket().emit({ type: 'bus_trip_completed', payload: { trip_id: 8 } })
+    await flushPromises()
+    expect(getBusTripToday).not.toHaveBeenCalled()
+  })
+
+  it('結束後補抓的快照若仍讀到 in_progress，不得把已回校的車復活成行駛中', async () => {
+    const m = await bootMonitor()
+    // 補抓的快照還是舊狀態（DB 讀到結束前的資料 / 晚到的舊快照）
+    lastSocket().emit({ type: 'bus_trip_completed', payload: { trip_id: 7 } })
+    await flushPromises()
+    expect(m.trip.value?.status).toBe('completed')
+    expect(m.showMap.value).toBe(false)
+    // 之後的輪詢／重連再抓一次也一樣不得復活
+    await m.refresh()
+    expect(m.trip.value?.status).toBe('completed')
+  })
+
   it('本班次結束後不再把最後座標當即時位置呈現', async () => {
     const m = await bootMonitor()
     lastSocket().emit({ type: 'bus_trip_completed', payload: { trip_id: 7 } })

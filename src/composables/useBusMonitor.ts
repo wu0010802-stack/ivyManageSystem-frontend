@@ -178,6 +178,12 @@ export function useBusMonitor() {
 
   /** 已確認「不是目前這條路線」的班次；之後它的位置事件一律丟棄，不再探測。 */
   const foreignTripIds = new Set<number>()
+  /**
+   * 已由 WS 告知結束的班次。`bus_trip_completed` 之後補抓的快照可能還讀到舊狀態
+   * （或晚到的舊快照），沒有這道覆寫就會把已回校的車重新畫成行駛中。
+   * 與家長端 `useBusTracking` 的 `completedTripIds` 同一設計。
+   */
+  const completedTripIds = new Set<number>()
   let lastUnknownProbeAt = 0
   let probing = false
   /** 快照發出序號：換路線／晚到的回應不得回填到新選擇上。 */
@@ -227,7 +233,12 @@ export function useBusMonitor() {
       // 換路線或有更新的 fetch 已發出 → 丟棄這份快照
       if (disposed || mySeq !== fetchSeq) return false
       const data = asRecord((res as { data?: unknown }).data) ?? {}
-      trip.value = normalizeTrip(data.trip)
+      const nextTrip = normalizeTrip(data.trip)
+      // 已收過結束事件的班次一律覆寫回 completed，不論這份快照多舊——已回校的車
+      // 不該在畫面上復活成行駛中（`auto_closed` 等其他欄位仍以快照為準）。
+      trip.value = nextTrip && completedTripIds.has(nextTrip.id)
+        ? { ...nextTrip, status: 'completed' }
+        : nextTrip
       stops.value = normalizeStops(data.stops) ?? []
       snapshotFailed.value = false
       return true
@@ -263,6 +274,7 @@ export function useBusMonitor() {
     selectedRouteId.value = routeId
     // 換路線＝換一整份資料，舊路線的判定結果全部作廢
     foreignTripIds.clear()
+    completedTripIds.clear()
     lastUnknownProbeAt = 0
     trip.value = null
     stops.value = []
@@ -328,7 +340,13 @@ export function useBusMonitor() {
       const tripId = asNum(payload.trip_id)
       const current = trip.value
       if (tripId === null || !current || current.id !== tripId) return
+      completedTripIds.add(tripId)
       trip.value = { ...current, status: 'completed' }
+      // payload 只有 `{trip_id}`（手動結束與 `bus_maintenance_scheduler` 的逾時自動
+      // 關閉共用同一形狀），沿用舊的 `auto_closed: false` 會把「司機忘了按結束」的
+      // 營運告警顯示成一般結束。WS 正常時沒有任何其他路徑會修正它（不重連就不
+      // refresh、不降級就不輪詢），所以在這裡補抓一次快照取回 `auto_closed`。
+      void refresh()
     }
   }
 

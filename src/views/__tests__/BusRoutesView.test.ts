@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => {
       creating: r(false),
       geocodingStudentId: r<number | null>(null),
       dirty: r(false),
+      loadFailed: r(false),
+      studentsFailed: r(false),
       init: vi.fn(),
       loadRoutes: vi.fn(),
       createRoute: vi.fn(),
@@ -128,6 +130,8 @@ beforeEach(() => {
   s.direction.value = 'morning'
   s.loading.value = false
   s.dirty.value = false
+  s.loadFailed.value = false
+  s.studentsFailed.value = false
 })
 
 describe('BusRoutesView', () => {
@@ -142,6 +146,38 @@ describe('BusRoutesView', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="bus-routes-empty"]').exists()).toBe(true)
     expect(s.createRoute).not.toHaveBeenCalled()
+  })
+
+  it('載入失敗時顯示錯誤卡，**不得**顯示「尚未建立任何路線」的空狀態', async () => {
+    // 空的 routes 被畫成「園裡沒有路線」＋一顆建立按鈕，一次 403 就會誘導管理者
+    // 建出一條後端沒有端點可以刪除的重複路線。
+    s.loadFailed.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-routes-load-error"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="bus-routes-empty"]').exists()).toBe(false)
+  })
+
+  it('載入失敗時「新增路線」按鈕停用', async () => {
+    s.loadFailed.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-routes-create"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('載入正常時「新增路線」按鈕可用', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-routes-create"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('學生名單載入失敗時明說（空選單不是「沒有學生可以加」）', async () => {
+    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
+    s.activeRouteId.value = 3
+    s.studentsFailed.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-students-error"]').exists()).toBe(true)
   })
 
   it('建立路線一律先跳確認（建錯了後端沒有刪除端點）', async () => {

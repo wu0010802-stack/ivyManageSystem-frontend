@@ -29,6 +29,7 @@ const editor = useBusRouteEditor()
 const {
   routes, activeRoute, activeRouteId, direction, stops, candidates,
   loading, saving, creating, geocodingStudentId, dirty, missingCoordinateCount,
+  loadFailed, studentsFailed,
 } = editor
 
 const pickStudentId = ref<number | null>(null)
@@ -172,11 +173,34 @@ onBeforeUnmount(destroyMap)
   <div class="bus-routes">
     <PageHeader title="娃娃車路線" subtitle="設定各路線早上接、下午送的停靠順序與座標">
       <template #actions>
-        <el-button type="primary" :loading="creating" @click="onCreateRoute">新增路線</el-button>
+        <el-button
+          type="primary"
+          data-testid="bus-routes-create"
+          :loading="creating"
+          :disabled="loadFailed"
+          @click="onCreateRoute"
+        >
+          新增路線
+        </el-button>
       </template>
     </PageHeader>
 
     <el-skeleton v-if="loading" :rows="6" animated />
+
+    <!--
+      載入失敗必須**優先於**空狀態：`routes` 停在初始 [] 時渲染「尚未建立任何路線 +
+      建立第一條路線」，等於把一次 403／500／斷網講成「園裡沒有路線」，而管理者按下去
+      就會建出一條後端沒有端點可以刪掉的重複路線。
+    -->
+    <el-alert
+      v-else-if="loadFailed"
+      data-testid="bus-routes-load-error"
+      type="error"
+      show-icon
+      :closable="false"
+      title="無法載入娃娃車路線"
+      description="與伺服器的連線出了狀況，目前無法確認園內既有的路線；請重新整理後再操作，先不要新增路線以免建出重複的路線。"
+    />
 
     <el-empty
       v-else-if="!routes.length"
@@ -236,6 +260,16 @@ onBeforeUnmount(destroyMap)
           {{ stops.length }} / {{ MAX_STOPS_PER_DIRECTION }} 站
         </span>
       </div>
+
+      <el-alert
+        v-if="studentsFailed"
+        data-testid="bus-students-error"
+        type="warning"
+        show-icon
+        :closable="false"
+        title="學生名單載入失敗"
+        description="「加入搭車學生」的選單目前是空的——這不代表沒有學生可以加，請重新整理。"
+      />
 
       <el-alert
         v-if="missingCoordinateCount > 0"
