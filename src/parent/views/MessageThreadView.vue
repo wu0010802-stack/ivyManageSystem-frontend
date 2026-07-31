@@ -6,6 +6,8 @@ import { getMessageThread } from '../api/messages'
 import MessageBubble from '../components/MessageBubble.vue'
 import MessageComposer from '../components/MessageComposer.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import { toast } from '../utils/toast'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
@@ -28,6 +30,8 @@ const messagesStore = useMessagesStore()
 
 const threadId = computed(() => Number(route.params.threadId))
 const thread = ref<ThreadInfo | null>(null)
+const loading = ref(false)
+const loadError = ref(false)
 const loadingMore = ref(false)
 const recallTarget = ref<number | string | null>(null) // 待撤回的 messageId 或 null
 
@@ -42,6 +46,8 @@ const hasMore = computed(() => {
 })
 
 async function init() {
+  loading.value = true
+  loadError.value = false
   try {
     const { data } = await getMessageThread(threadId.value)
     thread.value = data as ThreadInfo
@@ -51,7 +57,17 @@ async function init() {
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
+    // 三態：原本只丟一個會自動消失的 toast，畫面留白，使用者分不清「這串
+    // 本來就沒訊息」還是「載入失敗」；改顯示可重試的錯誤態。
+    loadError.value = true
+  } finally {
+    loading.value = false
   }
+}
+
+async function retryInit() {
+  await init()
+  scrollToBottom()
 }
 
 async function loadMore() {
@@ -156,26 +172,37 @@ onMounted(async () => {
       <span class="sub">{{ thread.student_name }}</span>
     </div>
 
-    <div class="messages" ref="messagesEl">
-      <button
-        v-if="hasMore"
-        type="button"
-        class="pt-ghost-btn load-more"
-        :disabled="loadingMore"
-        @click="loadMore"
-      >
-        {{ loadingMore ? '載入中…' : '載入更早訊息' }}
-      </button>
-      <MessageBubble
-        v-for="m in messages"
-        :key="m.id"
-        :message="m"
-        :can-recall="true"
-        @recall="askRecall"
-      />
+    <div v-if="loading && messages.length === 0" class="skeleton-wrap">
+      <SkeletonBlock variant="card" :count="3" />
     </div>
 
-    <MessageComposer @send="onSend" />
+    <MobileErrorRetry
+      v-else-if="loadError && messages.length === 0"
+      @retry="retryInit"
+    />
+
+    <template v-else>
+      <div class="messages" ref="messagesEl">
+        <button
+          v-if="hasMore"
+          type="button"
+          class="pt-ghost-btn load-more"
+          :disabled="loadingMore"
+          @click="loadMore"
+        >
+          {{ loadingMore ? '載入中…' : '載入更早訊息' }}
+        </button>
+        <MessageBubble
+          v-for="m in messages"
+          :key="m.id"
+          :message="m"
+          :can-recall="true"
+          @recall="askRecall"
+        />
+      </div>
+
+      <MessageComposer @send="onSend" />
+    </template>
 
     <ConfirmDialog
       v-model:open="recallOpen"
@@ -220,6 +247,14 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   padding: var(--space-3, 12px);
+}
+
+.skeleton-wrap {
+  flex: 1;
+  padding: var(--space-3, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
 }
 
 .load-more {

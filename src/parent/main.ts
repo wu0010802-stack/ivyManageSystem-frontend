@@ -77,7 +77,10 @@ router.beforeEach(async (to) => {
   if (!isPublic) {
     await ensureSessionProbed(authStore)
     if (!authStore.isAuthed()) {
-      return { path: '/login', replace: true }
+      // 深連結保存：帶上原始目的地，讓 LoginView 登入成功後能導回這裡
+      // （見 utils/safeRedirect.ts —— 消費端一律驗證過才使用，這裡存的是
+      // router 自己解析出的 fullPath，非使用者可竄改的原始輸入）。
+      return { path: '/login', replace: true, query: { redirect: to.fullPath } }
     }
   }
   return true
