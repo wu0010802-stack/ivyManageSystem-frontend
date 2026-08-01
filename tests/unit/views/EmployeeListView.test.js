@@ -229,7 +229,13 @@ describe('EmployeeListView', () => {
     // rosterStats 永遠以整份名冊計數，不受狀態篩選影響
     expect(wrapper.vm.rosterStats).toMatchObject({ total: 3, active: 1, pending: 1, resigned: 1 })
 
-    // 預設「全部」→ 顯示全部
+    // 預設「現職」→ 在職＋待離職顯示、已離職不出現（業主 2026-08-01）
+    expect(wrapper.vm.statusFilter).toBe('employed')
+    expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1, 2])
+
+    // 切「全部狀態」→ 含已離職全部顯示
+    wrapper.vm.statusFilter = 'all'
+    await nextTick()
     expect(wrapper.vm.displayedEmployees).toHaveLength(3)
 
     // 切「在職」→ 只剩 active
@@ -243,12 +249,92 @@ describe('EmployeeListView', () => {
     expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([3])
     expect(wrapper.vm.rosterStats.total).toBe(3)
 
-    // clearFilters 回復預設（含 titleFilter）
+    // clearFilters 回復預設「現職」（含 titleFilter）
     wrapper.vm.clearFilters()
     await nextTick()
-    expect(wrapper.vm.statusFilter).toBe('all')
+    expect(wrapper.vm.statusFilter).toBe('employed')
     expect(wrapper.vm.titleFilter).toBe('all')
-    expect(wrapper.vm.displayedEmployees).toHaveLength(3)
+    expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1, 2])
+  })
+
+  it('統計數字兼狀態切換鈕：點「已離職 N」切到離職名單、再點回復現職、aria-pressed 跟著切', async () => {
+    employeeStore.employees = [
+      { id: 1, name: 'A', is_active: true, resign_date: null },
+      { id: 3, name: 'C', is_active: false, resign_date: '2020-01-01' },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+
+    const resignedToggle = wrapper
+      .findAll('.stat-toggle')
+      .find((b) => b.text().includes('已離職'))
+    expect(resignedToggle).toBeTruthy()
+    expect(resignedToggle.attributes('aria-pressed')).toBe('false')
+
+    await resignedToggle.trigger('click')
+    await nextTick()
+    expect(wrapper.vm.statusFilter).toBe('resigned')
+    expect(resignedToggle.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([3])
+
+    // 再點同一顆 → 回到預設現職
+    await resignedToggle.trigger('click')
+    await nextTick()
+    expect(wrapper.vm.statusFilter).toBe('employed')
+    expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1])
+  })
+
+  it('搜尋結果全被狀態篩選擋下時，hiddenByStatusCount 提供「顯示全部狀態」出口', async () => {
+    employeeStore.employees = [
+      { id: 3, name: '已離職者', is_active: false, resign_date: '2020-01-01' },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+
+    // 預設現職 → 名冊只有離職者時清單空，但 hiddenByStatusCount 指出仍有 1 筆在篩選之外
+    expect(wrapper.vm.displayedEmployees).toHaveLength(0)
+    expect(wrapper.vm.hiddenByStatusCount).toBe(1)
+
+    // 切全部狀態 → 出現且 hidden 歸零
+    wrapper.vm.statusFilter = 'all'
+    await nextTick()
+    expect(wrapper.vm.displayedEmployees).toHaveLength(1)
+    expect(wrapper.vm.hiddenByStatusCount).toBe(0)
+  })
+
+  it('URL 同步以「現職」為預設：預設不寫 status、切 all/employed 還原正確', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    routerMocks.replace.mockClear()
+
+    // 預設 employed → 不留 status 參數
+    wrapper.vm.titleFilter = '教師'
+    await nextTick()
+    let lastQuery = routerMocks.replace.mock.calls.at(-1)[0].query
+    expect(lastQuery).toEqual({ title: '教師' })
+
+    // 非預設的「全部狀態」要寫回 URL（可分享）
+    wrapper.vm.statusFilter = 'all'
+    await nextTick()
+    lastQuery = routerMocks.replace.mock.calls.at(-1)[0].query
+    expect(lastQuery).toMatchObject({ status: 'all' })
+  })
+
+  it('onMounted 從 URL 還原 status=all / status=employed', async () => {
+    routerMocks.routeQuery.value = { status: 'all' }
+    let wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.vm.statusFilter).toBe('all')
+
+    routerMocks.routeQuery.value = { status: 'employed' }
+    wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.vm.statusFilter).toBe('employed')
   })
 
   it('職稱篩選與狀態篩選可疊加（title chain 在 status 之後）', async () => {
@@ -264,8 +350,13 @@ describe('EmployeeListView', () => {
     // titleOptions 去重（兩筆「教師」只出現一次）
     expect(wrapper.vm.titleOptions).toEqual(['教師', '助理'])
 
-    // 只過職稱：教師 → id 1、3
+    // 只過職稱：教師 → 預設現職下已離職的 id 3 仍被擋，只剩 id 1
     wrapper.vm.titleFilter = '教師'
+    await nextTick()
+    expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1])
+
+    // 切全部狀態 → 教師含已離職 id 1、3
+    wrapper.vm.statusFilter = 'all'
     await nextTick()
     expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1, 3])
 
@@ -522,18 +613,30 @@ describe('EmployeeListView', () => {
 
   // ── Task 8：匯出帶篩選（finding #2 前端半）───────────────────────
   describe('匯出帶篩選', () => {
-    it('無篩選：downloadFile 不帶 params；tooltip 顯示「匯出全部名冊」', async () => {
+    it('預設（現職）：params 帶 status=employed，匯出與畫面一致；tooltip 說明現職範圍', async () => {
       const wrapper = mountView()
       await flushPromises()
       await nextTick()
 
-      expect(wrapper.vm.exportTooltip).toBe('匯出全部名冊')
+      expect(wrapper.vm.exportTooltip).toBe('匯出現職名冊（切「全部狀態」可含已離職）')
+
+      wrapper.vm.exportEmployees()
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { status: 'employed' })
+    })
+
+    it('切「全部狀態」→ params 不帶 status（真正匯出全部）', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await nextTick()
+
+      wrapper.vm.statusFilter = 'all'
+      await nextTick()
 
       wrapper.vm.exportEmployees()
       expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', undefined)
     })
 
-    it('只有搜尋字串 → params 只帶 search；tooltip 顯示「匯出符合目前搜尋與篩選的名冊」', async () => {
+    it('只有搜尋字串 → params 帶 search 與預設 status；tooltip 顯示「匯出符合目前搜尋與篩選的名冊」', async () => {
       const wrapper = mountView()
       await flushPromises()
       await nextTick()
@@ -543,7 +646,7 @@ describe('EmployeeListView', () => {
       expect(wrapper.vm.exportTooltip).toBe('匯出符合目前搜尋與篩選的名冊')
 
       wrapper.vm.exportEmployees()
-      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { search: '王小明' })
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { search: '王小明', status: 'employed' })
     })
 
     it('statusFilter ≠ all → params 帶 status', async () => {
@@ -558,7 +661,7 @@ describe('EmployeeListView', () => {
       expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { status: 'active' })
     })
 
-    it('titleFilter ≠ all → params 帶 title', async () => {
+    it('titleFilter ≠ all → params 帶 title（連同預設 status）', async () => {
       const wrapper = mountView()
       await flushPromises()
       await nextTick()
@@ -567,7 +670,7 @@ describe('EmployeeListView', () => {
       await nextTick()
 
       wrapper.vm.exportEmployees()
-      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { title: '教師' })
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { status: 'employed', title: '教師' })
     })
 
     it('search + status + title 同時疊加 → params 三者皆帶', async () => {
@@ -602,8 +705,8 @@ describe('EmployeeListView', () => {
       expect(wrapper.vm.exportTooltip).toContain('HR 待辦篩選不影響匯出')
 
       wrapper.vm.exportEmployees()
-      // todoFilter 非後端支援的 query 參數；無其他篩選時 params 仍應是 undefined
-      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', undefined)
+      // todoFilter 非後端支援的 query 參數；params 只剩預設 status，不含 todo
+      expect(downloadFile).toHaveBeenCalledWith('/exports/employees', '員工名冊.xlsx', { status: 'employed' })
     })
   })
 })
