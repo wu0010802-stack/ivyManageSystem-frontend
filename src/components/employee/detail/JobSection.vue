@@ -10,7 +10,7 @@ const employeeTypeLabel = computed(() => {
 })
 const STAFF_ROLE_LABELS: Record<string, string> = {
   teacher_certified: '幼教師（持幼教師證）', educare_certified: '教保員（持教保員證）',
-  assistant_educare: '助理教保員', office: '行政人員', kitchen: '廚工', driver: '司機', other: '其他',
+  assistant_educare: '助理教保員', office: '職員', kitchen: '廚工', driver: '司機', other: '其他',
 }
 const staffRoleLabel = computed(() => {
   const v = props.employee.staff_role_category as string

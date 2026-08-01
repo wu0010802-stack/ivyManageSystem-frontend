@@ -279,7 +279,7 @@ defineExpose({ applyValidationErrors })
         <el-option label="幼教師（持幼教師證）" value="teacher_certified" />
         <el-option label="教保員（持教保員證）" value="educare_certified" />
         <el-option label="助理教保員" value="assistant_educare" />
-        <el-option label="行政人員" value="office" />
+        <el-option label="職員" value="office" />
         <el-option label="廚工" value="kitchen" />
         <el-option label="司機" value="driver" />
         <el-option label="其他" value="other" />
