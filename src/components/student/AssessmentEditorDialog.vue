@@ -184,7 +184,7 @@ const loadStudents = async (classroomId: number | null) => {
   studentsLoading.value = true
   try {
      
-    const res = await getStudents({ classroom_id: classroomId, is_active: true })
+    const res = await getStudents({ classroom_id: classroomId, is_active: true, limit: 500 })
     studentOptions.value = res.data.items || []
   } catch (e) {
     ElMessage.error(friendlyError('載入學生資料失敗', e))

@@ -180,10 +180,23 @@ const handleCancel = async (call: DismissalCall) => {
 }
 
 // ─── 學生清單載入（點名單 + Dialog 共用）────────────────
+// 翻頁到底（仿 useBusRouteEditor.loadStudents）：單發 limit:500 在學生數
+// 超過上限時會靜默截斷，漏掉的學生無法發接送通知。
+const STUDENT_PAGE_SIZE = 500
+const MAX_STUDENT_PAGES = 10
 const loadStudents = async () => {
   try {
-    const res = await getStudents({ is_active: true, limit: 500 })
-    students.value = ((res.data as { items?: StudentItem[] }).items || []) as StudentItem[]
+    const collected: StudentItem[] = []
+    let skip = 0
+    for (let page = 0; page < MAX_STUDENT_PAGES; page += 1) {
+      const res = await getStudents({ is_active: true, limit: STUDENT_PAGE_SIZE, skip })
+      const data = res.data as { items?: StudentItem[]; total?: number }
+      const items = data.items || []
+      collected.push(...items)
+      skip += items.length
+      if (items.length === 0 || collected.length >= (data.total ?? collected.length)) break
+    }
+    students.value = collected
   } catch (e) {
     ElMessage.error(friendlyError('載入學生清單失敗', e))
   }

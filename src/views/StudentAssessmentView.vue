@@ -106,7 +106,7 @@ const onDialogClassroomChange = async (cid: number | null) => {
   if (!cid) return
   dialogStudentsLoading.value = true
   try {
-    const res = await getStudents({ classroom_id: cid, is_active: true })
+    const res = await getStudents({ classroom_id: cid, is_active: true, limit: 500 })
     dialogStudents.value = res.data.items || []
   } catch (e) {
     ElMessage.error(friendlyError('載入學生資料失敗', e))
