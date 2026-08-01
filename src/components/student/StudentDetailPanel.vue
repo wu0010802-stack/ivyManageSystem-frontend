@@ -120,6 +120,12 @@ const TAB_DEFS = computed(() => [
 
 const visibleTabs = computed(() => TAB_DEFS.value.filter((t) => t.show))
 
+// 深連結 ?tab= 指向被權限過濾掉的 tab（如無 FEES_READ 連到 fees）時，
+// activeTab 會指向不存在的 pane 而整個內容區空白——退回總覽
+if (!visibleTabs.value.some((t) => t.name === activeTab.value)) {
+  activeTab.value = 'overview'
+}
+
 // 快速切換學生時，較舊學生的慢回應不得覆寫新學生的 profile（標頭/PII 競態）。
 let profileSeq = 0
 // 編輯資料是另一條獨立請求；同樣要在切換學生時失效，避免在 B 畫面開啟 A 的表單。
