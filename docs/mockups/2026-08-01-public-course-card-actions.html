@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>設計稿：公開報名頁 — 課程卡片動作列</title>
+<style>
+/* ============================================================
+   Design tokens — 值複製自 src/assets/public-theme.css（2026-08-01 快照，
+   origin/staging）。設計稿為獨立 HTML，允許落地 hex；實作時一律 var(--…)。
+   ============================================================ */
+:root {
+  --color-bg: #fffce8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #fff8e1;
+  --color-primary: #0d9053;
+  --color-primary-hover: #0caf76;
+  --color-primary-soft: #d4ffe7;
+  --color-primary-contrast: #ffffff;
+  --color-primary-strong: #0a7a46;
+  --color-cta: #0a7a46;
+  --color-cta-hover: #086138;
+  --ivy-teal: #33aaaa;
+  --color-accent: #1e3a8a;
+  --color-accent-soft: #e0e7ff;
+  --color-text: #392a1c;
+  --color-text-muted: #5b5b5b;
+  --color-text-subtle: #7a6e5e;
+  --color-border: #f2e6c9;
+  --color-border-strong: #e8d9a8;
+  --color-border-muted: #e5e7eb;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-danger-darker: #b91c1c;
+  --color-warning-soft: #fef3c7;
+  --color-warning-darker: #b45309;
+  --color-required: #f65265;
+  --neutral-0: #ffffff;
+  --neutral-300: #cbd5e1;
+  --text-secondary: #5b5b5b;
+  --text-tertiary: #7a6e5e;
+  --font-sans: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 15px; --fs-md: 16px; --fs-lg: 18px; --fs-xl: 22px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-full: 999px;
+  --shadow-md: 0 4px 12px rgba(17, 24, 39, 0.08);
+  --shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.10);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 150ms;
+  --focus-ring: 0 0 0 3px rgba(13, 144, 83, 0.28);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base); line-height: 1.5; color: var(--color-text);
+  background: #efece0; /* 設計稿外框底，區隔手機模擬框 */
+  padding-bottom: 80px;
+}
+
+/* ============================================================
+   視寬模擬：桌機（原尺寸）↔ 手機 390px
+   ============================================================ */
+#viewport {
+  background: var(--color-bg);
+  min-height: 100vh;
+  transition: max-width .25s var(--ease-out);
+}
+body.mock-phone #viewport {
+  max-width: 390px;
+  margin: 16px auto 0;
+  border: 10px solid #1f2937;
+  border-radius: 36px;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  min-height: 760px;
+}
+
+/* ============================================================
+   公開頁 shell（照 ActivityPublicView.vue 現況簡化重現）
+   ============================================================ */
+.page-wrapper { max-width: 920px; margin: 0 auto; padding: var(--space-5) var(--space-4) var(--space-8); }
+.page-header { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-4); padding: var(--space-4) 0 var(--space-5); }
+.page-brand { display: flex; align-items: center; gap: var(--space-3); }
+.page-brand-logo {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #0caf76, #0a7a46);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 700; flex-shrink: 0;
+}
+.page-brand-prefix { font-size: var(--fs-xs); color: var(--color-text-subtle); }
+.page-brand-zh { font-size: var(--fs-lg); font-weight: 800; color: var(--color-primary-strong); letter-spacing: .04em; }
+.page-brand-en { font-size: var(--fs-xs); color: var(--color-text-subtle); letter-spacing: .08em; }
+.page-meta { flex: 1; min-width: 240px; }
+.page-subtitle { font-size: var(--fs-xl); font-weight: 800; color: var(--color-text); }
+.page-meta-row { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: 6px; font-size: var(--fs-sm); color: var(--color-text-muted); }
+.page-meta-term {
+  padding: 2px 10px; border-radius: var(--radius-full);
+  background: var(--color-primary-soft); color: var(--color-primary-strong); font-weight: 700;
+}
+.form-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-2) var(--space-5) var(--space-5);
+}
+
+/* ---- Step 標頭（照 CoursePickerSection 現況） ---- */
+.form-section-step {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-4) 0 var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 26px; height: 26px;
+  background: var(--color-primary-strong); color: #fff;
+  font-weight: 700; font-size: var(--fs-sm);
+  border: 1.5px solid var(--color-primary); border-radius: var(--radius-full);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.step-title-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.step-title { font-size: var(--fs-md); font-weight: 700; color: var(--color-primary-strong); }
+.step-desc { font-size: var(--fs-xs); color: var(--color-text-subtle); line-height: 1.4; }
+
+.form-row { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4) 0; }
+.form-label { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--fs-sm); font-weight: 700; }
+.form-label .en { font-size: var(--fs-xs); font-weight: 400; color: var(--color-text-subtle); }
+.required-mark { color: var(--color-required); font-weight: 700; }
+
+.waitlist-note {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+.waitlist-note p { font-size: var(--fs-sm); line-height: 1.6; }
+.waitlist-note p + p { margin-top: 4px; }
+
+/* ============================================================
+   課程卡片格線：改前 minmax(260px,1fr) ↔ 改後 minmax(320px,1fr)
+   ============================================================ */
+.course-list-vertical { display: grid; gap: var(--space-2); }
+.grid-before { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.grid-after  { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+body.mock-phone .course-list-vertical { grid-template-columns: 1fr; }
+
+/* ---- 卡片共通（兩版共用的視覺） ---- */
+.course-item {
+  display: flex; align-items: stretch; gap: var(--space-2);
+  background-color: var(--color-surface);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  line-height: 1.5; overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.course-item:hover:not(.course-item-disabled) { border-color: var(--color-primary); background-color: var(--color-primary-soft); }
+.course-item:has(input:checked) {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+.course-label {
+  flex: 1; display: flex; align-items: flex-start; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer; min-width: 0;
+}
+.course-item input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none; flex-shrink: 0;
+  display: grid; place-content: center; margin: 3px 0 0;
+  width: 18px; height: 18px;
+  border: 2px solid var(--color-text-subtle); border-radius: 5px;
+  background: var(--color-surface) center / 12px 12px no-repeat;
+  cursor: pointer;
+}
+.course-item input[type="checkbox"]:checked {
+  border-color: var(--color-primary); background-color: var(--color-primary);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'><path d='M2.5 6.2 5 8.7 9.5 3.3' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+.course-text--stacked { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; }
+.course-row-main { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); width: 100%; }
+.course-row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.course-name { font-weight: 600; font-size: var(--fs-base); line-height: 1.4; }
+.meta-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 10px; font-size: var(--fs-xs); font-weight: 600;
+  border-radius: var(--radius-full); border: 1px solid transparent;
+  color: var(--color-text-muted); background: var(--color-surface-muted); border-color: var(--color-border);
+  font-variant-numeric: tabular-nums;
+}
+.meta-chip--grades { color: var(--color-primary-strong); background: var(--color-primary-soft); border-color: rgba(10,122,70,.3); }
+.meta-chip .icon { width: 12px; height: 12px; flex-shrink: 0; }
+.meta-chip--schedule .icon { color: var(--ivy-teal); }
+.qty-display {
+  font-weight: 600; font-size: var(--fs-xs);
+  padding: 2px 10px; border-radius: var(--radius-full);
+  background: var(--color-surface-muted); color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+.qty-display.is-low { background: var(--color-danger-soft); color: var(--color-danger-darker); }
+.qty-display.is-waiting { background: var(--color-warning-soft); color: var(--color-warning-darker); }
+.video-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 12px; min-height: 32px;
+  background: var(--color-accent-soft); color: var(--color-accent);
+  border: 1px solid transparent; border-radius: var(--radius-full);
+  font-size: var(--fs-xs); font-weight: 600; font-family: inherit;
+  cursor: pointer; white-space: nowrap;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.video-btn:hover { background: var(--color-accent); color: #fff; }
+.video-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* ---- 已額滿卡片 ---- */
+.course-item-disabled { background: #f5f6f8; border-style: dashed; border-color: var(--neutral-300); position: relative; }
+.course-item-disabled::after {
+  content: "已額滿"; position: absolute; top: 8px; right: 8px;
+  padding: 2px 8px; background: var(--text-secondary); color: #fff;
+  font-size: 10px; font-weight: 700; border-radius: var(--radius-full); letter-spacing: .05em;
+}
+.course-item-disabled .course-name { color: var(--text-tertiary); text-decoration: line-through; }
+.course-item-disabled .meta-chip { color: #b0b7bf; background: transparent; border-color: #e5e7eb; }
+.course-item-disabled .qty-display { display: none; }
+.course-item-disabled .course-label { cursor: not-allowed; }
+.course-item-disabled input { cursor: not-allowed; border-color: var(--neutral-300); background: #f3f4f6; }
+
+/* ============================================================
+   【改前現況】按鈕與 label 同一條水平 flex：
+   .course-label{flex:1} = flex-basis:0 → 手機的 flex-wrap 永不觸發，
+   課名被壓成直排（忠實重現 bug，看倌可切「改前現況」體會）
+   ============================================================ */
+.layout-before .course-actions-inline { display: contents; }
+.layout-before .video-btn { align-self: center; margin-right: var(--space-3); }
+
+/* ============================================================
+   【改後】按鈕改為卡片內容第三列（動作列）：
+   課名永遠有整行寬度；0/1/2 顆按鈕都穩定；手機桌機同一套版型
+   ============================================================ */
+.layout-after .course-row-actions {
+  display: flex; flex-wrap: wrap; gap: var(--space-2);
+  margin-top: 2px; padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
+}
+
+/* ---- 底部 CTA（現況重現，非本次變更） ---- */
+.bottom-cta {
+  margin-top: var(--space-5);
+  display: flex; justify-content: center;
+}
+.bottom-cta button {
+  width: 100%; max-width: 560px; padding: 14px 24px;
+  background: var(--color-cta); color: #fff;
+  border: none; border-radius: var(--radius-lg);
+  font-size: var(--fs-md); font-weight: 700; font-family: inherit; cursor: pointer;
+}
+.bottom-cta button:hover { background: var(--color-cta-hover); }
+
+/* ============================================================
+   設計稿專用：前後版本切換＋變更標註（實作時不存在）
+   ============================================================ */
+body:not(.mock-view-before) .mock-before { display: none !important; }
+body.mock-view-before .mock-after { display: none !important; }
+body.mock-view-before .mock-badge { display: none !important; }
+body.mock-view-before .mock-changed { outline: none; }
+.mock-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  padding: 3px 7px; border-radius: var(--radius-full);
+  background: #fdf4ff; color: #a21caf; border: 1px dashed #d946ef;
+  vertical-align: middle; margin-left: 6px;
+}
+.mock-changed { outline: 2px dashed #d946ef; outline-offset: 3px; border-radius: var(--radius-md); }
+body.hide-annotations .mock-badge, body.hide-annotations .mock-changed { outline: none; }
+body.hide-annotations .mock-badge { display: none; }
+.mock-toolbar {
+  position: fixed; bottom: 16px; right: 16px; z-index: 2000;
+  display: flex; gap: 8px; align-items: center;
+  background: #0f172a; color: #fff; font-size: 12px;
+  padding: 8px 12px; border-radius: var(--radius-full);
+  box-shadow: var(--shadow-lg); opacity: .94;
+}
+.mock-toolbar button { border: none; background: #334155; color: #fff; border-radius: var(--radius-full); padding: 4px 10px; font-size: 12px; cursor: pointer; font-family: inherit; }
+.mock-toolbar button:hover { background: #475569; }
+.mock-seg { display: flex; background: #334155; border-radius: var(--radius-full); padding: 2px; }
+.mock-seg button { background: none; padding: 3px 10px; }
+.mock-seg button.is-active { background: #7dd3fc; color: #0f172a; font-weight: 600; }
+.mock-seg button.is-active:hover { background: #7dd3fc; }
+</style>
+</head>
+<body>
+<div id="viewport">
+  <div class="page-wrapper">
+
+    <header class="page-header">
+      <div class="page-brand">
+        <div class="page-brand-logo">藤</div>
+        <div class="page-brand-text">
+          <div class="page-brand-prefix">高雄市私立</div>
+          <div class="page-brand-zh">常春藤幼兒園</div>
+          <div class="page-brand-en">Ivy Kindergarten</div>
+        </div>
+      </div>
+      <div class="page-meta">
+        <h1 class="page-subtitle">課後才藝課程報名</h1>
+        <div class="page-meta-row">
+          <span class="page-meta-term">115 學年度上學期</span>
+          <span>招生對象：全園幼生</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="form-card">
+      <div class="form-section-step">
+        <span class="step-num">2</span>
+        <div class="step-title-col">
+          <span class="step-title">選擇才藝課程
+            <span class="mock-badge">✦ 變更：課程卡片版面</span>
+          </span>
+          <span class="step-desc">至少一門課程；可複選、用品選填、剩餘名額即時顯示</span>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <span class="form-label"><span class="required-mark">*</span> 才藝課班別 <span class="en">Courses</span></span>
+
+        <div class="waitlist-note">
+          <p><strong>額滿·可候補</strong>的課仍可勾選：排候補<strong>不先收費</strong>，有空位時園方會主動通知您。</p>
+          <p><strong>已額滿</strong>表示連候補都已滿，本學期無法再報名。</p>
+        </div>
+
+        <!-- ══════════ 改後：按鈕改為卡片第三列動作列 ══════════ -->
+        <div class="course-list-vertical grid-after layout-after mock-after mock-changed">
+
+          <!-- 影片＋DM 都有（原本最擠的情境） -->
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox" checked>
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">直排輪基礎班</span>
+                  <span class="qty-display">剩 29 位</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">11 堂 · NT$ 3,300</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週二 16:00–17:00</span>
+                </span>
+                <span class="course-row-actions">
+                  <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>課程介紹</button>
+                  <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>課程簡介</button>
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <!-- 只有影片 -->
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox">
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">街舞 MV 班</span>
+                  <span class="qty-display">剩 30 位</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">9 堂 · NT$ 2,700</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週三 16:00–17:00</span>
+                </span>
+                <span class="course-row-actions">
+                  <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>課程介紹</button>
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <!-- 只有 DM＋低名額＋年級限制 -->
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox">
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">圍棋啟蒙班</span>
+                  <span class="qty-display is-low">剩 3 位</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">10 堂 · NT$ 3,000</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週四 16:00–17:00</span>
+                  <span class="meta-chip meta-chip--grades">限 中班、大班</span>
+                </span>
+                <span class="course-row-actions">
+                  <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>課程簡介</button>
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <!-- 沒有影片也沒有 DM（動作列整列不渲染） -->
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox">
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">美術創作班</span>
+                  <span class="qty-display is-waiting">額滿·可候補</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">12 堂 · NT$ 3,600</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週五 16:00–17:00</span>
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <!-- 已額滿 -->
+          <div class="course-item course-item-disabled">
+            <label class="course-label">
+              <input type="checkbox" disabled>
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">足球幼幼班</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">10 堂 · NT$ 3,200</span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- ══════════ 改前現況：按鈕與課名同一條水平 flex（擠壓 bug 忠實重現） ══════════ -->
+        <div class="course-list-vertical grid-before layout-before mock-before">
+
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox" checked>
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">直排輪基礎班</span>
+                  <span class="qty-display">剩 29 位</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">11 堂 · NT$ 3,300</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週二 16:00–17:00</span>
+                </span>
+              </span>
+            </label>
+            <span class="course-actions-inline">
+              <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>課程介紹</button>
+              <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>課程簡介</button>
+            </span>
+          </div>
+
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox">
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">街舞 MV 班</span>
+                  <span class="qty-display">剩 30 位</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">9 堂 · NT$ 2,700</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週三 16:00–17:00</span>
+                </span>
+              </span>
+            </label>
+            <span class="course-actions-inline">
+              <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>課程介紹</button>
+            </span>
+          </div>
+
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox">
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">圍棋啟蒙班</span>
+                  <span class="qty-display is-low">剩 3 位</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">10 堂 · NT$ 3,000</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週四 16:00–17:00</span>
+                  <span class="meta-chip meta-chip--grades">限 中班、大班</span>
+                </span>
+              </span>
+            </label>
+            <span class="course-actions-inline">
+              <button type="button" class="video-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg>課程簡介</button>
+            </span>
+          </div>
+
+          <div class="course-item">
+            <label class="course-label">
+              <input type="checkbox">
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">美術創作班</span>
+                  <span class="qty-display is-waiting">額滿·可候補</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">12 堂 · NT$ 3,600</span>
+                  <span class="meta-chip meta-chip--schedule"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#33aaaa" stroke-width="2"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>週五 16:00–17:00</span>
+                </span>
+              </span>
+            </label>
+          </div>
+
+          <div class="course-item course-item-disabled">
+            <label class="course-label">
+              <input type="checkbox" disabled>
+              <span class="course-text--stacked">
+                <span class="course-row-main">
+                  <span class="course-name">足球幼幼班</span>
+                </span>
+                <span class="course-row-meta">
+                  <span class="meta-chip">10 堂 · NT$ 3,200</span>
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-cta">
+        <button type="button">下一步：填寫寶貝資料</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 設計稿控制列（右下角，非實際 UI 的一部分） -->
+<div class="mock-toolbar">
+  <span>📐 設計稿</span>
+  <div class="mock-seg" id="mock-viewport-seg">
+    <button class="is-active" data-vp="desktop" onclick="setViewport('desktop')">桌機</button>
+    <button data-vp="phone" onclick="setViewport('phone')">手機 390px</button>
+  </div>
+  <div class="mock-seg" id="mock-version-seg">
+    <button class="is-active" data-view="after" onclick="setMockView('after')">改後</button>
+    <button data-view="before" onclick="setMockView('before')">改前現況</button>
+  </div>
+  <button onclick="document.body.classList.toggle('hide-annotations')">切換變更標註</button>
+</div>
+
+<script>
+function setMockView(view) {
+  document.body.classList.toggle('mock-view-before', view === 'before');
+  document.querySelectorAll('#mock-version-seg button').forEach(function (b) {
+    b.classList.toggle('is-active', b.dataset.view === view);
+  });
+}
+function setViewport(vp) {
+  document.body.classList.toggle('mock-phone', vp === 'phone');
+  document.querySelectorAll('#mock-viewport-seg button').forEach(function (b) {
+    b.classList.toggle('is-active', b.dataset.vp === vp);
+  });
+}
+</script>
+</body>
+</html>
