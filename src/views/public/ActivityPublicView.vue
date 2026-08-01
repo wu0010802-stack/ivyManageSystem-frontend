@@ -240,17 +240,78 @@
                     </button>
                   </nav>
 
+                  <!-- 課程優先流程（2026-08-01）：家長從 LINE@／海報進來的第一個問題是
+                       「有什麼課、還有沒有名額」，先給課程清單再要個資，公開頁流失較低；
+                       課程資料本來就在 bootstrap 一次載回，不依賴任何寶貝資料 -->
                   <section
                     v-show="currentStep === 1"
                     class="registration-step-panel"
                     data-registration-step="1"
-                    aria-labelledby="registrationStep1Title"
+                    aria-label="選擇課程與用品"
+                    tabindex="-1"
+                  >
+                  <!-- A1-P7：課程選擇區塊抽 CoursePickerSection 元件 -->
+                  <CoursePickerSection
+                    :courses="courses"
+                    :selected-courses="form.selectedCourses"
+                    :videos="videos"
+                    :error-message="errors.courses"
+                    :availability-state="availabilityState"
+                    :format-schedule="formatSchedule"
+                    :course-advisory="courseAdvisory"
+                    :is-active-step="currentStep === 1"
+                    @toggle="(course) => { toggleCourse(course); clearError('courses') }"
+                    @open-video="openVideoModal"
+                    @open-dm="openCourseDm"
+                  />
+
+                  <template v-if="supplies.length > 0">
+                    <div class="form-section-step form-subsection-heading">
+                      <span class="step-num" aria-hidden="true">＋</span>
+                      <div class="step-title-col">
+                        <span class="step-title">加購用品</span>
+                        <span class="step-desc">選填；需先選至少一門課程，用品可不加購</span>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div v-if="supplies.length > 0" class="form-row">
+                    <div class="form-label-col">
+                      <span class="form-label">
+                        課程加購項目 <span class="en">Supplies</span>
+                      </span>
+                    </div>
+                    <div class="form-input-col">
+                      <div class="dance-grid" role="group" aria-label="加購項目">
+                        <label v-for="supply in supplies" :key="supply.name" class="course-item supply-item">
+                          <input
+                            type="checkbox"
+                            name="supply"
+                            :value="supply.name"
+                            :checked="selectedSupplies.includes(supply.name)"
+                            @change="toggleSupply(supply)"
+                          />
+                          <span class="course-text">
+                            <span class="course-name">{{ supply.name }}</span>
+                            <span class="price-tag">${{ supply.price }}</span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  </section>
+
+                  <section
+                    v-show="currentStep === 2"
+                    class="registration-step-panel"
+                    data-registration-step="2"
+                    aria-labelledby="registrationStep2Title"
                     tabindex="-1"
                   >
                   <div class="form-section-step is-active">
-                    <span class="step-num">1</span>
+                    <span class="step-num">2</span>
                     <div class="step-title-col">
-                      <span id="registrationStep1Title" class="step-title">寶貝資料</span>
+                      <span id="registrationStep2Title" class="step-title">寶貝資料</span>
                       <span class="step-desc">填寫幼兒基本資訊與聯絡方式</span>
                     </div>
                   </div>
@@ -395,64 +456,6 @@
                   </section>
 
                   <section
-                    v-show="currentStep === 2"
-                    class="registration-step-panel"
-                    data-registration-step="2"
-                    aria-label="選擇課程與用品"
-                    tabindex="-1"
-                  >
-                  <!-- A1-P7：Step 2 抽 CoursePickerSection 元件 -->
-                  <CoursePickerSection
-                    :courses="courses"
-                    :selected-courses="form.selectedCourses"
-                    :videos="videos"
-                    :error-message="errors.courses"
-                    :availability-state="availabilityState"
-                    :format-schedule="formatSchedule"
-                    :course-advisory="courseAdvisory"
-                    :is-active-step="currentStep === 2"
-                    @toggle="(course) => { toggleCourse(course); clearError('courses') }"
-                    @open-video="openVideoModal"
-                    @open-dm="openCourseDm"
-                  />
-
-                  <template v-if="supplies.length > 0">
-                    <div class="form-section-step form-subsection-heading">
-                      <span class="step-num" aria-hidden="true">＋</span>
-                      <div class="step-title-col">
-                        <span class="step-title">加購用品</span>
-                        <span class="step-desc">選填；需先選至少一門課程，用品可不加購</span>
-                      </div>
-                    </div>
-                  </template>
-
-                  <div v-if="supplies.length > 0" class="form-row">
-                    <div class="form-label-col">
-                      <span class="form-label">
-                        課程加購項目 <span class="en">Supplies</span>
-                      </span>
-                    </div>
-                    <div class="form-input-col">
-                      <div class="dance-grid" role="group" aria-label="加購項目">
-                        <label v-for="supply in supplies" :key="supply.name" class="course-item supply-item">
-                          <input
-                            type="checkbox"
-                            name="supply"
-                            :value="supply.name"
-                            :checked="selectedSupplies.includes(supply.name)"
-                            @change="toggleSupply(supply)"
-                          />
-                          <span class="course-text">
-                            <span class="course-name">{{ supply.name }}</span>
-                            <span class="price-tag">${{ supply.price }}</span>
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                  </section>
-
-                  <section
                     v-show="currentStep === 3"
                     class="registration-step-panel"
                     data-registration-step="3"
@@ -468,10 +471,28 @@
                     </div>
 
                     <div class="registration-review">
+                      <section class="review-section" aria-labelledby="reviewSelectionTitle">
+                        <div class="review-section-heading">
+                          <h4 id="reviewSelectionTitle">課程與用品</h4>
+                          <button type="button" class="review-edit-button" @click="navigateToVisitedStep(1)">修改</button>
+                        </div>
+                        <ul v-if="selectedCourseReview.length > 0" class="review-selection-list">
+                          <li v-for="item in selectedCourseReview" :key="`review-course-${item.name}`">
+                            <span>{{ item.name }}</span><strong>NT$ {{ item.price.toLocaleString() }}</strong>
+                          </li>
+                        </ul>
+                        <p v-else class="review-empty">尚未選擇課程，請返回第一步完成選課。</p>
+                        <ul v-if="selectedSupplyReview.length > 0" class="review-selection-list review-selection-list--supplies">
+                          <li v-for="item in selectedSupplyReview" :key="`review-supply-${item.name}`">
+                            <span>{{ item.name }} <small>用品</small></span><strong>NT$ {{ item.price.toLocaleString() }}</strong>
+                          </li>
+                        </ul>
+                      </section>
+
                       <section class="review-section" aria-labelledby="reviewStudentTitle">
                         <div class="review-section-heading">
                           <h4 id="reviewStudentTitle">寶貝與聯絡資料</h4>
-                          <button type="button" class="review-edit-button" @click="navigateToVisitedStep(1)">修改</button>
+                          <button type="button" class="review-edit-button" @click="navigateToVisitedStep(2)">修改</button>
                         </div>
                         <dl class="review-details">
                           <div><dt>幼兒姓名</dt><dd>{{ form.name }}</dd></div>
@@ -481,24 +502,6 @@
                           <div v-if="form.email"><dt>通知 Email</dt><dd>{{ form.email }}</dd></div>
                         </dl>
                       </section>
-
-                      <section class="review-section" aria-labelledby="reviewSelectionTitle">
-                        <div class="review-section-heading">
-                          <h4 id="reviewSelectionTitle">課程與用品</h4>
-                          <button type="button" class="review-edit-button" @click="navigateToVisitedStep(2)">修改</button>
-                        </div>
-                        <ul v-if="selectedCourseReview.length > 0" class="review-selection-list">
-                          <li v-for="item in selectedCourseReview" :key="`review-course-${item.name}`">
-                            <span>{{ item.name }}</span><strong>NT$ {{ item.price.toLocaleString() }}</strong>
-                          </li>
-                        </ul>
-                        <p v-else class="review-empty">尚未選擇課程，請返回上一步完成選課。</p>
-                        <ul v-if="selectedSupplyReview.length > 0" class="review-selection-list review-selection-list--supplies">
-                          <li v-for="item in selectedSupplyReview" :key="`review-supply-${item.name}`">
-                            <span>{{ item.name }} <small>用品</small></span><strong>NT$ {{ item.price.toLocaleString() }}</strong>
-                          </li>
-                        </ul>
-                      </section>
                     </div>
                   </section>
                 </div>
@@ -506,7 +509,7 @@
 
               <transition name="fee-fade">
                 <aside
-                  v-if="currentStep === 2 && selectedAdvisories.length > 0"
+                  v-if="currentStep === 1 && selectedAdvisories.length > 0"
                   class="advisory-panel"
                   role="status"
                   aria-live="polite"
@@ -537,7 +540,8 @@
                    底部，家長勾課程時不用回滾才看到金額 / 送出 -->
               <div class="checkout-stick">
                 <transition name="fee-fade">
-                  <aside v-if="currentStep > 1 && feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
+                  <!-- 課程優先流程：第 1 步就在選課，費用預估自首次勾選起常駐 -->
+                  <aside v-if="feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
                     <div class="fee-preview-title">
                       <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-check" /></svg>
                       費用預估
@@ -590,7 +594,7 @@
                        預估留在內文流裡，勾完課要回滾才看得到金額，這裡補一行。
                        金額變動已由 fee-preview 的 aria-live 播報，此處 aria-hidden 防雙報 -->
                   <div
-                    v-if="currentStep > 1 && feePreview"
+                    v-if="feePreview"
                     class="submit-bar-total"
                     aria-hidden="true"
                   >
@@ -611,7 +615,7 @@
                     :disabled="submitButtonDisabled"
                     @click="continueRegistration"
                   >
-                    {{ currentStep === 1 ? '下一步：選擇課程與用品' : '下一步：確認資料' }}
+                    {{ currentStep === 1 ? '下一步：填寫寶貝資料' : '下一步：確認資料' }}
                   </button>
                   <button
                     v-else
@@ -676,9 +680,10 @@ import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
 import CoursePickerSection from './components/CoursePickerSection.vue'
 
 const router = useRouter()
+// 課程優先流程（2026-08-01）：先選課再填個資，降低公開頁流失
 const registrationSteps: ReadonlyArray<{ number: PublicRegistrationStep; label: string }> = [
-  { number: 1, label: '寶貝資料' },
-  { number: 2, label: '課程用品' },
+  { number: 1, label: '選擇課程' },
+  { number: 2, label: '寶貝資料' },
   { number: 3, label: '確認送出' },
 ]
 
@@ -1083,11 +1088,11 @@ async function continueRegistration() {
   }
 
   const valid = currentStep.value === 1
-    ? validatePersonalDetails()
-    : validateSelections()
+    ? validateSelections()
+    : validatePersonalDetails()
   if (!valid) {
     showToast(
-      currentStep.value === 1 ? '請先完成紅字標示的寶貝資料。' : '請至少選一門課程後再繼續。',
+      currentStep.value === 1 ? '請至少選一門課程後再繼續。' : '請先完成紅字標示的寶貝資料。',
       'error',
     )
     await focusFirstError()
@@ -1176,12 +1181,16 @@ async function handleSubmitRegistration() {
 // resetForm 已抽至 usePublicRegistrationForm（A1-P1）
 
 // ===== 離開防護（spec #6）=====
-// dirty 判定：任一必填欄位（姓名/生日/家長手機/班級）已有值。
+// dirty 判定：已勾選任何課程，或任一必填欄位（姓名/生日/家長手機/班級）已有值。
+// 課程優先流程下第 1 步的進度就是選課，只看個資欄位會漏攔。
 // 送出成功後 handleSubmitRegistration 會呼叫 resetForm() 清空這些欄位，
 // isFormDirty 隨之回 false，beforeunload 自然不再攔截，不需額外的
 // 「已送出」旗標。
 function isFormDirty(): boolean {
-  return Boolean(form.name || form.birthday || form.parent_phone || form.class_name)
+  return Boolean(
+    form.selectedCourses.length > 0 ||
+      form.name || form.birthday || form.parent_phone || form.class_name,
+  )
 }
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (!isFormDirty()) return
@@ -2570,9 +2579,9 @@ onUnmounted(() => {
   .grid-layout { grid-template-columns: 1fr; gap: var(--space-6); }
   /* 單欄堆疊順序：海報 → 報名表 → 說明與注意事項。
      海報是這頁的 DM 本體（家長從 LINE@ 連結點進來，第一眼要先知道在報什麼），
-     所以放最前面；但「爸比媽咪…」介紹文與四條注意事項留在表單之後，否則第一個
-     輸入框會被推到約 900px 之下——底部固定 CTA 從首次繪製就在畫面上，家長最先能
-     點的東西就變成那顆「下一步」。（真按下去 focusFirstError() 會捲到出錯欄位，
+     所以放最前面；但「爸比媽咪…」介紹文與四條注意事項留在表單之後，否則第一步
+     的課程清單會被推到約 900px 之下——底部固定 CTA 從首次繪製就在畫面上，家長最先
+     能點的東西就變成那顆「下一步」。（真按下去 focusFirstError() 會捲到出錯欄位，
      不會卡死，但仍以少滑一段為佳。）
      col-left 改 display:contents 把海報與說明攤平成 grid item，才能各自排序。 */
   .col-left { display: contents; }

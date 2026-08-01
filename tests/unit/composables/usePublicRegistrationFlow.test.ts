@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { usePublicRegistrationFlow } from '@/composables/usePublicRegistrationFlow'
 
 describe('usePublicRegistrationFlow', () => {
-  it('從寶貝資料依序進到選課與確認，不能跳過未完成步驟', () => {
+  it('從選課依序進到寶貝資料與確認，不能跳過未完成步驟', () => {
     const flow = usePublicRegistrationFlow()
 
     expect(flow.currentStep.value).toBe(1)
@@ -28,15 +28,15 @@ describe('usePublicRegistrationFlow', () => {
     expect(flow.highestVisitedStep.value).toBe(1)
   })
 
-  it('確認頁驗證失敗時會依錯誤欄位返回可見步驟', () => {
+  it('確認頁驗證失敗時會依錯誤欄位返回可見步驟（課程在第 1 步、寶貝資料在第 2 步）', () => {
     const flow = usePublicRegistrationFlow()
     flow.completeStep(1)
     flow.completeStep(2)
 
-    expect(flow.goToErrorField('name')).toBe(1)
+    expect(flow.goToErrorField('courses')).toBe(1)
     expect(flow.currentStep.value).toBe(1)
 
-    expect(flow.goToErrorField('courses')).toBe(2)
+    expect(flow.goToErrorField('name')).toBe(2)
     expect(flow.currentStep.value).toBe(2)
   })
 })

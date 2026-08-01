@@ -24,7 +24,8 @@ export function usePublicRegistrationFlow() {
   }
 
   function goToErrorField(field: string): PublicRegistrationStep {
-    const step: PublicRegistrationStep = field === 'courses' ? 2 : 1
+    // 課程優先流程：選課在第 1 步，寶貝資料欄位在第 2 步
+    const step: PublicRegistrationStep = field === 'courses' ? 1 : 2
     currentStep.value = step
     return step
   }

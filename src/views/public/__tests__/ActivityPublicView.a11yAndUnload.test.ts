@@ -107,4 +107,20 @@ describe('ActivityPublicView — beforeunload 離開防護（spec #6）', () => 
     expect(event.preventDefault).toHaveBeenCalled()
     addSpy.mockRestore()
   })
+
+  it('已勾選課程（第 1 步即有進度）時 beforeunload 攔截', async () => {
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const wrapper = await mountView()
+
+    await wrapper.find('#courseListGroup input[type="checkbox"]').setValue(true)
+
+    const handler = addSpy.mock.calls.find((c) => c[0] === 'beforeunload')?.[1] as (
+      e: Partial<BeforeUnloadEvent>,
+    ) => void
+    const event = { preventDefault: vi.fn(), returnValue: '' }
+    handler(event)
+
+    expect(event.preventDefault).toHaveBeenCalled()
+    addSpy.mockRestore()
+  })
 })

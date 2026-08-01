@@ -11,8 +11,9 @@ const baseProps = {
 }
 
 describe('CoursePickerSection', () => {
-  it('Step 2 說明文與後端規則一致，課程必選且用品選填', () => {
+  it('Step 1 說明文與後端規則一致，課程必選且用品選填', () => {
     const wrapper = mount(CoursePickerSection, { props: baseProps })
+    expect(wrapper.find('.step-num').text()).toBe('1')
     expect(wrapper.find('.step-desc').text()).toContain('至少一門')
     expect(wrapper.find('.step-desc').text()).toContain('用品選填')
   })

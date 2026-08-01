@@ -63,14 +63,14 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       expect(f.phoneTouched.value).toBe(false)
     })
 
-    it('FIELD_FOCUS_ORDER 包含 6 欄', () => {
+    it('FIELD_FOCUS_ORDER 包含 6 欄（課程優先流程：courses 排最前）', () => {
       expect(f.FIELD_FOCUS_ORDER).toEqual([
+        'courses',
         'name',
         'birthday',
         'parent_phone',
         'class_name',
         'email',
-        'courses',
       ])
     })
   })
