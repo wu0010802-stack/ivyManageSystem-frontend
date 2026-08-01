@@ -67,6 +67,10 @@ function allowedGradesLabel(course: CourseItem): string {
   return Array.isArray(grades) && grades.length ? `限 ${grades.join('、')}` : ''
 }
 
+function courseHasDm(course: CourseItem): boolean {
+  return Array.isArray(course.dm_pages) && course.dm_pages.length > 0
+}
+
 const PREVIEW_W = 320
 const PREVIEW_H = 180
 const HOVER_DELAY_MS = 600
@@ -217,30 +221,36 @@ onUnmounted(cancelPreview)
               </span>
             </span>
           </label>
-          <button
-            v-if="videos[course.name]"
-            type="button"
-            class="video-btn tap-target"
-            :aria-label="`觀看 ${course.name} 介紹影片`"
-            @click="$emit('open-video', course.name, videos[course.name])"
-            @mouseenter="schedulePreview(course.name, videos[course.name], $event)"
-            @mouseleave="cancelPreview"
-            @focus="schedulePreview(course.name, videos[course.name], $event)"
-            @blur="cancelPreview"
-          >
-            <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
-            課程介紹
-          </button>
-          <button
-            v-if="Array.isArray(course.dm_pages) && course.dm_pages.length"
-            type="button"
-            class="video-btn tap-target"
-            :aria-label="`查看 ${course.name} 課程簡介`"
-            @click="$emit('open-dm', course)"
-          >
-            <svg class="icon" aria-hidden="true"><use href="#i-form" /></svg>
-            課程簡介
-          </button>
+          <!-- 動作列獨立於 label 之外成卡片第三列：按鈕若巢在 label 內，點擊會
+               連動勾選 checkbox；且原本與 label 同一條水平 flex 的排法，會因
+               .course-label{flex:1}（flex-basis:0）讓手機版 flex-wrap 永不觸發，
+               課名被兩顆按鈕壓成一字一行直排（2026-08-01 業主回報） -->
+          <div v-if="videos[course.name] || courseHasDm(course)" class="course-row-actions">
+            <button
+              v-if="videos[course.name]"
+              type="button"
+              class="video-btn tap-target"
+              :aria-label="`觀看 ${course.name} 介紹影片`"
+              @click="$emit('open-video', course.name, videos[course.name])"
+              @mouseenter="schedulePreview(course.name, videos[course.name], $event)"
+              @mouseleave="cancelPreview"
+              @focus="schedulePreview(course.name, videos[course.name], $event)"
+              @blur="cancelPreview"
+            >
+              <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
+              課程介紹
+            </button>
+            <button
+              v-if="courseHasDm(course)"
+              type="button"
+              class="video-btn tap-target"
+              :aria-label="`查看 ${course.name} 課程簡介`"
+              @click="$emit('open-dm', course)"
+            >
+              <svg class="icon" aria-hidden="true"><use href="#i-form" /></svg>
+              課程簡介
+            </button>
+          </div>
         </div>
       </div>
       <div v-if="errorMessage" class="form-error-hint" role="alert">{{ errorMessage }}</div>
@@ -387,15 +397,18 @@ onUnmounted(cancelPreview)
 
 .course-list-vertical {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  /* 320px：課名列＋chips＋動作列的舒適下限；260px 時代按鈕與課名同列，
+     卡片一窄就互擠（2026-08-01 版面改動連袂加寬） */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--space-2);
 }
 .course-list-vertical:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-md); }
 
 .course-item {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: var(--space-2);
+  gap: 0;
   padding: 0;
   background-color: var(--color-surface);
   border: 1.5px solid var(--color-border-muted);
@@ -414,13 +427,23 @@ onUnmounted(cancelPreview)
   box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 .course-label {
-  flex: 1;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   cursor: pointer;
   min-width: 0;
+}
+/* 動作列（卡片第三列）：縮排對齊 checkbox 右側的文字欄
+   （label 左 padding 16px + checkbox 18px + gap 12px） */
+.course-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: calc(-1 * var(--space-1)) var(--space-4) var(--space-3)
+    calc(var(--space-4) + 18px + var(--space-3));
+  padding-top: var(--space-2);
+  border-top: 1px dashed var(--color-border);
 }
 .course-item input[type="checkbox"] {
   appearance: none;
@@ -576,8 +599,6 @@ onUnmounted(cancelPreview)
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  align-self: center;
-  margin-right: var(--space-3);
   padding: 6px 12px;
   background-color: var(--color-accent-soft);
   color: var(--color-accent);
@@ -638,10 +659,8 @@ onUnmounted(cancelPreview)
   .video-hover-preview { display: none; }
 }
 
-/* 行動裝置：course-item 內換行讓 video-btn 落到下一列 */
+/* 行動裝置：動作列已是獨立第三列，只剩額滿 badge 縮小 */
 @media (--to-sm) {
-  .course-item { flex-wrap: wrap; }
   .course-item-disabled::after { top: 6px; right: 6px; padding: 1px 6px; font-size: 9px; }
-  .video-btn { margin: 0 var(--space-4) var(--space-3); }
 }
 </style>
