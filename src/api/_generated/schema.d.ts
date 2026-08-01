@@ -42849,8 +42849,8 @@ export interface operations {
         parameters: {
             query?: {
                 search?: string | null;
-                /** @description 在職狀態篩選：active=在職／pending=待離職／resigned=已離職 */
-                status?: ("active" | "pending" | "resigned") | null;
+                /** @description 在職狀態篩選：employed=現職（在職＋待離職）／active=在職／pending=待離職／resigned=已離職 */
+                status?: ("employed" | "active" | "pending" | "resigned") | null;
                 /** @description 職稱篩選（精確比對） */
                 title?: string | null;
             };

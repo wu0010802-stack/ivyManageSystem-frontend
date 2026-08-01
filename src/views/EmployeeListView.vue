@@ -98,10 +98,20 @@ const filteredEmployees = computed(() =>
 )
 
 // ── 狀態篩選（純前端，疊在 filteredEmployees 之上；搜尋中也同時生效）──
-type StatusFilter = 'all' | EmployeeStatusKey
-const statusFilter = ref<StatusFilter>('all')
-const matchesStatus = (emp: Record<string, unknown>) =>
-  statusFilter.value === 'all' || statusKeyOf(emp) === statusFilter.value
+// 預設「現職」＝在職＋待離職（業主 2026-08-01：離職名單不要預設出現在名冊上）。
+// 取「非已離職」而非單一 active：待離職者仍在園內，辦理離職當下人就從清單消失會造成困惑。
+type StatusFilter = 'all' | 'employed' | EmployeeStatusKey
+const DEFAULT_STATUS_FILTER: StatusFilter = 'employed'
+const statusFilter = ref<StatusFilter>(DEFAULT_STATUS_FILTER)
+const matchesStatus = (emp: Record<string, unknown>) => {
+  if (statusFilter.value === 'all') return true
+  if (statusFilter.value === 'employed') return statusKeyOf(emp) !== 'resigned'
+  return statusKeyOf(emp) === statusFilter.value
+}
+// 頂列統計數字兼作狀態切換鈕（「已離職 N」點一下即切到離職名單）；再點同一顆回到預設現職
+const toggleStatusFilter = (key: EmployeeStatusKey) => {
+  statusFilter.value = statusFilter.value === key ? DEFAULT_STATUS_FILTER : key
+}
 
 // ── 職稱篩選（清單 title 欄位的去重值，純前端 chain 在狀態篩選之後）──
 const titleFilter = ref<string>('all')
@@ -155,12 +165,21 @@ const rosterStats = computed(() => {
 
 // 任一篩選生效（含 todoFilter，因其影響 displayedEmployees）→ 顯示「顯示 N 筆」對比全園總數，讓範圍更清楚
 const hasActiveFilters = computed(() =>
-  !!searchQuery.value.trim() || statusFilter.value !== 'all' || titleFilter.value !== 'all' || todoFilter.value !== 'none'
+  !!searchQuery.value.trim() || statusFilter.value !== DEFAULT_STATUS_FILTER || titleFilter.value !== 'all' || todoFilter.value !== 'none'
 )
+
+// 被狀態篩選擋下、但符合其餘條件（搜尋/職稱/待辦）的筆數：
+// 搜尋離職員工時給「顯示全部狀態」出口，避免「名冊裡明明有這個人卻查無結果」
+const hiddenByStatusCount = computed(() => {
+  if (statusFilter.value === 'all') return 0
+  return (filteredEmployees.value as Record<string, unknown>[]).filter(
+    (e) => !matchesStatus(e) && matchesTitle(e) && matchesTodo(e),
+  ).length
+})
 
 const clearFilters = () => {
   searchQuery.value = ''
-  statusFilter.value = 'all'
+  statusFilter.value = DEFAULT_STATUS_FILTER
   titleFilter.value = 'all'
   todoFilter.value = 'none'
 }
@@ -171,7 +190,7 @@ function restoreFiltersFromQuery() {
   const q = route.query
   const search = typeof q.search === 'string' ? q.search : ''
   if (search) { searchQuery.value = search; debouncedSearch.value = search }
-  if (typeof q.status === 'string' && ['all', 'active', 'pending', 'resigned'].includes(q.status)) {
+  if (typeof q.status === 'string' && ['all', 'employed', 'active', 'pending', 'resigned'].includes(q.status)) {
     statusFilter.value = q.status as StatusFilter
   }
   if (typeof q.title === 'string' && q.title) titleFilter.value = q.title
@@ -184,7 +203,7 @@ function syncFiltersToQuery() {
   const query: Record<string, string> = {}
   const search = searchQuery.value.trim()
   if (search) query.search = search
-  if (statusFilter.value !== 'all') query.status = statusFilter.value
+  if (statusFilter.value !== DEFAULT_STATUS_FILTER) query.status = statusFilter.value
   if (titleFilter.value !== 'all') query.title = titleFilter.value
   if (todoFilter.value !== 'none') query.todo = todoFilter.value
   // replace 於測試 mock 可能回傳 undefined、實務上重複導航會 reject，統一吞掉避免 unhandled rejection
@@ -204,11 +223,11 @@ watch(debouncedSearch, async (val) => {
   }
 })
 
-// ── 匯出 Excel：帶入目前搜尋與 status/title 篩選（後端 Task 2 已支援）；
+// ── 匯出 Excel：帶入目前搜尋與 status/title 篩選（後端 Task 2 已支援；employed 值於 2026-08-01 補上）；
 // todoFilter（HR 待辦篩選）為純前端衍生資料，後端匯出端點不支援，不放進 params ──
 const exportTooltip = computed(() => {
-  const hasFilters = !!searchQuery.value.trim() || statusFilter.value !== 'all' || titleFilter.value !== 'all'
-  const base = hasFilters ? '匯出符合目前搜尋與篩選的名冊' : '匯出全部名冊'
+  const hasFilters = !!searchQuery.value.trim() || statusFilter.value !== DEFAULT_STATUS_FILTER || titleFilter.value !== 'all'
+  const base = hasFilters ? '匯出符合目前搜尋與篩選的名冊' : '匯出現職名冊（切「全部狀態」可含已離職）'
   return todoFilter.value !== 'none' ? `${base}（HR 待辦篩選不影響匯出）` : base
 })
 
@@ -302,12 +321,30 @@ onMounted(async () => {
         <p v-if="!loading" class="roster-stats">
           <template v-if="hasActiveFilters">顯示 <b>{{ displayedEmployees.length }}</b> 筆 <span class="stat-sep">·</span> </template>
           共 <b>{{ rosterStats.total }}</b> 人
-          <span class="stat-sep">·</span> 在職 <b>{{ rosterStats.active }}</b>
+          <span class="stat-sep">·</span>
+          <button
+            type="button"
+            class="stat-toggle"
+            :aria-pressed="statusFilter === 'active' ? 'true' : 'false'"
+            @click="toggleStatusFilter('active')"
+          >在職 <b>{{ rosterStats.active }}</b></button>
           <template v-if="rosterStats.pending">
-            <span class="stat-sep">·</span> 待離職 <b>{{ rosterStats.pending }}</b>
+            <span class="stat-sep">·</span>
+            <button
+              type="button"
+              class="stat-toggle"
+              :aria-pressed="statusFilter === 'pending' ? 'true' : 'false'"
+              @click="toggleStatusFilter('pending')"
+            >待離職 <b>{{ rosterStats.pending }}</b></button>
           </template>
           <template v-if="rosterStats.resigned">
-            <span class="stat-sep">·</span> 已離職 <b>{{ rosterStats.resigned }}</b>
+            <span class="stat-sep">·</span>
+            <button
+              type="button"
+              class="stat-toggle"
+              :aria-pressed="statusFilter === 'resigned' ? 'true' : 'false'"
+              @click="toggleStatusFilter('resigned')"
+            >已離職 <b>{{ rosterStats.resigned }}</b></button>
           </template>
         </p>
         <!-- chips 為可 toggle 的篩選鈕：role="button" + tabindex 讓鍵盤可聚焦，
@@ -349,10 +386,11 @@ onMounted(async () => {
           clearable
         />
         <el-select v-model="statusFilter" class="status-filter" aria-label="狀態篩選">
-          <el-option label="全部狀態" value="all" />
+          <el-option label="現職" value="employed" />
           <el-option label="在職" value="active" />
           <el-option label="待離職" value="pending" />
           <el-option label="已離職" value="resigned" />
+          <el-option label="全部狀態" value="all" />
         </el-select>
         <el-select v-model="titleFilter" class="title-filter" aria-label="職稱篩選">
           <el-option label="全部職稱" value="all" />
@@ -438,11 +476,12 @@ onMounted(async () => {
         </el-table-column>
         <template #empty>
           <EmptyState
-            v-if="searchQuery || statusFilter !== 'all' || titleFilter !== 'all' || todoFilter !== 'none'"
+            v-if="searchQuery || statusFilter !== DEFAULT_STATUS_FILTER || titleFilter !== 'all' || todoFilter !== 'none' || hiddenByStatusCount > 0"
             title="查無符合條件的員工"
-            description="試著調整搜尋關鍵字或篩選條件"
+            :description="hiddenByStatusCount > 0 ? `另有 ${hiddenByStatusCount} 筆在目前狀態篩選之外` : '試著調整搜尋關鍵字或篩選條件'"
           >
             <template #action>
+              <el-button v-if="hiddenByStatusCount > 0" size="small" type="primary" @click="statusFilter = 'all'">顯示全部狀態</el-button>
               <el-button size="small" @click="clearFilters">清除條件</el-button>
             </template>
           </EmptyState>
@@ -509,6 +548,21 @@ onMounted(async () => {
 .roster-stats .stat-sep {
   margin: 0 var(--space-1);
   color: var(--neutral-300);
+}
+/* 統計數字兼狀態切換鈕：外觀維持統計文字，hover / 選中以主色與底線提示可互動 */
+.stat-toggle {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.stat-toggle:hover { color: var(--el-color-primary); }
+.stat-toggle[aria-pressed='true'] {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 /* HR 待辦 chips：可點擊，選中時 el-tag effect 切 dark 呈現選中態 */
 .todo-chips {
