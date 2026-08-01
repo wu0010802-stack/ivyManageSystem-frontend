@@ -39,15 +39,15 @@ function makeRow(overrides: Partial<GridRow> = {}): GridRow {
   return {
     settlement_id: 1,
     employee_id: 10,
-    employee_name: '蔡宜倩',
-    payable_amount: '29044.71',
+    employee_name: '王年終',
+    payable_amount: '12345.67',
     deduction_disciplinary: '-500',
     hire_months: '12',
     special_bonuses: {
       APPRAISAL_HALF_BONUS_FIRST: '3312',
       EXCESS_ENROLLMENT: '2000',
     },
-    total_amount: '34856.71',
+    total_amount: '23456.78',
     status: 'DRAFT',
     remark: null,
     ...overrides,
@@ -681,11 +681,11 @@ describe('GridRowDetailDrawer（DOM 渲染：breakdown 文字＋非 DRAFT 隱藏
 
     const section = wrapper.find('[data-test="breakdown-section"]')
     expect(section.exists()).toBe(true)
-    expect(wrapper.find('[data-test="breakdown-payable"]').text()).toContain('NT$29,045')
+    expect(wrapper.find('[data-test="breakdown-payable"]').text()).toContain('NT$12,346')
     expect(wrapper.find('[data-test="breakdown-bonus-APPRAISAL_HALF_BONUS_FIRST"]').text()).toContain('考核上')
     expect(wrapper.find('[data-test="breakdown-bonus-APPRAISAL_HALF_BONUS_FIRST"]').text()).toContain('NT$3,312')
     expect(wrapper.find('[data-test="breakdown-bonus-total"]').text()).toContain('NT$5,312')
-    expect(wrapper.find('[data-test="breakdown-total"]').text()).toContain('NT$34,857')
+    expect(wrapper.find('[data-test="breakdown-total"]').text()).toContain('NT$23,457')
     expect(wrapper.find('[data-test="breakdown-status"]').text()).toContain('草稿')
     expect(wrapper.find('[data-test="breakdown-remark"]').text()).toContain('114.08 到職')
   })

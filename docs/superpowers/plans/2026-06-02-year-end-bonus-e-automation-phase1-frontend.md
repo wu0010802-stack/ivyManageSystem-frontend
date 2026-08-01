@@ -189,13 +189,13 @@ import { mount } from '@vue/test-utils'
 import { vi } from 'vitest'
 vi.mock('@/api/yearEnd', () => ({
   getYearEndGrid: vi.fn().mockResolvedValue({ data: [
-    { employee_id: 1, employee_name: '蔡宜倩', payable_amount: 29044.71,
+    { employee_id: 1, employee_name: '王年終', payable_amount: 12345.67,
       special_bonuses: { APPRAISAL_HALF_BONUS_FIRST: 3312, EXCESS_ENROLLMENT: 2000 },
-      total_amount: 40106.71, status: 'DRAFT' },
+      total_amount: 54321.00, status: 'DRAFT' },
   ]}),
   buildSettlements: vi.fn().mockResolvedValue({ data: { built: 1, skipped_finalized: 0 }}),
 }))
-// 斷言：render 後表格出現「蔡宜倩」「40,106」；special bonus 欄正確對應
+// 斷言：render 後表格出現「王年終」「54,321」；special bonus 欄正確對應
 test('renders grid rows with totals', async () => { /* ... */ })
 ```
 

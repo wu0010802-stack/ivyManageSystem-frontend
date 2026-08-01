@@ -63,13 +63,13 @@ function makeRow(overrides: Partial<GridRow> = {}): GridRow {
   return {
     settlement_id: 1,
     employee_id: 10,
-    employee_name: '蔡宜倩',
-    payable_amount: '29044.71',
+    employee_name: '王年終',
+    payable_amount: '12345.67',
     special_bonuses: {
       APPRAISAL_HALF_BONUS_FIRST: '3312',
       EXCESS_ENROLLMENT: '2000',
     },
-    total_amount: '40106.71',
+    total_amount: '54321.00',
     status: 'DRAFT',
     ...overrides,
   }
@@ -141,10 +141,10 @@ describe('YearEndGridView', () => {
 
     // employee name is present in rows
     expect(vm.rows).toHaveLength(1)
-    expect(vm.rows[0].employee_name).toBe('蔡宜倩')
+    expect(vm.rows[0].employee_name).toBe('王年終')
 
     // total amount is the raw string from the server
-    expect(vm.rows[0].total_amount).toBe('40106.71')
+    expect(vm.rows[0].total_amount).toBe('54321.00')
 
     // bonus columns include 考核上 (APPRAISAL_HALF_BONUS_FIRST)
     const labels = vm.bonusColumns.map((c) => c.label)
