@@ -395,6 +395,36 @@ export const NAVIGATION_MANIFEST = {
           ],
           menu: { icon: icon('Wallet') },
         },
+        // 政府報表五頁自「報表」群組移入本群組（業主指示，2026-08-01）；
+        // 權限碼主屬與路由不動，僅選單歸屬變更。
+        {
+          key: 'govMonthly', title: PAGE_TERMS.govMonthly, routePath: '/admin/gov-reports/monthly',
+          views: [{ code: 'GOV_REPORTS_VIEW' }],
+          menu: { icon: icon('Histogram') },
+          // /admin/gov-reports/{monthly,certificates,subsidies,iep} 由此 prefix 規則涵蓋。
+          extraRoutes: [{ path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true }],
+        },
+        {
+          key: 'govCertificates', title: PAGE_TERMS.govCertificates, routePath: '/admin/gov-reports/certificates',
+          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
+          menu: { icon: icon('Document') },
+        },
+        {
+          key: 'govSubsidies', title: PAGE_TERMS.govSubsidies, routePath: '/admin/gov-reports/subsidies',
+          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
+          menu: { icon: icon('Document') },
+        },
+        {
+          key: 'govIep', title: 'IEP 個別化教育計畫', routePath: '/admin/gov-reports/iep',
+          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
+          menu: { icon: icon('Document') },
+        },
+        {
+          // 勞健保與稅務申報：對齊後端 api/gov_reports.py 的 GOV_REPORTS_EXPORT 守衛。
+          key: 'govExport', title: PAGE_TERMS.govExport, routePath: '/gov-reports',
+          views: [{ code: 'GOV_REPORTS_EXPORT' }],
+          menu: { icon: icon('Files') },
+        },
       ],
     },
 
@@ -479,34 +509,6 @@ export const NAVIGATION_MANIFEST = {
           views: [{ code: 'DATA_QUALITY_READ' }],
           actions: [{ code: 'DATA_QUALITY_WRITE' }],
           menu: { icon: icon('WarningFilled') },
-        },
-        {
-          key: 'govMonthly', title: PAGE_TERMS.govMonthly, routePath: '/admin/gov-reports/monthly',
-          views: [{ code: 'GOV_REPORTS_VIEW' }],
-          menu: { icon: icon('Histogram') },
-          // /admin/gov-reports/{monthly,certificates,subsidies,iep} 由此 prefix 規則涵蓋。
-          extraRoutes: [{ path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true }],
-        },
-        {
-          key: 'govCertificates', title: PAGE_TERMS.govCertificates, routePath: '/admin/gov-reports/certificates',
-          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-          menu: { icon: icon('Document') },
-        },
-        {
-          key: 'govSubsidies', title: PAGE_TERMS.govSubsidies, routePath: '/admin/gov-reports/subsidies',
-          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-          menu: { icon: icon('Document') },
-        },
-        {
-          key: 'govIep', title: 'IEP 個別化教育計畫', routePath: '/admin/gov-reports/iep',
-          views: [], sharedViews: ['GOV_REPORTS_VIEW'],
-          menu: { icon: icon('Document') },
-        },
-        {
-          // 勞健保與稅務申報：對齊後端 api/gov_reports.py 的 GOV_REPORTS_EXPORT 守衛。
-          key: 'govExport', title: PAGE_TERMS.govExport, routePath: '/gov-reports',
-          views: [{ code: 'GOV_REPORTS_EXPORT' }],
-          menu: { icon: icon('Files') },
         },
         {
           key: 'reportsMain', title: PAGE_TERMS.reports, routePath: '/reports',
