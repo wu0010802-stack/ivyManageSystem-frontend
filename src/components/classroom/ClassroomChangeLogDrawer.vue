@@ -58,7 +58,14 @@ const emit = defineEmits<{
 const updateVisible = (v: boolean) => emit('update:visible', v)
 
 // ── 學期 ───────────────────────────────────────
+// 抽屜是「單一班級的歷史瀏覽器」，學期選擇只影響抽屜內查詢——初始值取全域
+// 學期上下文，但不回寫 store：直接寫 store 會連動底下主列表換學期並重抓
+// （2026-08-01 稽核修正）。
 const termStore = useAcademicTermStore()
+const drawerTerm = ref({
+  school_year: termStore.school_year,
+  semester: termStore.semester,
+})
 const currentTerm = getCurrentAcademicTerm()
 const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
 const makeTerm = (sy: number, sem: number) => ({
@@ -80,10 +87,10 @@ const termOptions = computed(() => {
 })
 
 const selectedTermKey = computed({
-  get: () => `${termStore.school_year}-${termStore.semester}`,
+  get: () => `${drawerTerm.value.school_year}-${drawerTerm.value.semester}`,
   set: (val) => {
     const [y, s] = val.split('-').map(Number)
-    termStore.setTerm(y, s)
+    drawerTerm.value = { school_year: y, semester: s }
   },
 })
 
@@ -109,8 +116,8 @@ const eventTagType = (type: string | undefined): ChangeLogTagType | undefined =>
 }
 
 const termParams = () => ({
-  school_year: termStore.school_year,
-  semester: termStore.semester,
+  school_year: drawerTerm.value.school_year,
+  semester: drawerTerm.value.semester,
   classroom_id: props.classroom?.id,
 })
 
@@ -284,7 +291,16 @@ const reloadAll = () => {
 watch(
   () => [props.visible, props.classroom?.id],
   ([vis, id]) => {
-    if (vis && id) reloadAll()
+    if (vis && id) {
+      // 每次開啟都從全域學期上下文重新取初始值（僅讀不寫）；若學期因此變動，
+      // selectedTermKey watcher 會自行 reloadAll，避免雙重載入
+      const prevKey = selectedTermKey.value
+      drawerTerm.value = {
+        school_year: termStore.school_year,
+        semester: termStore.semester,
+      }
+      if (selectedTermKey.value === prevKey) reloadAll()
+    }
   },
 )
 watch(selectedTermKey, () => {

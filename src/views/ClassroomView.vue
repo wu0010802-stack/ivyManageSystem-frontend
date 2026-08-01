@@ -47,6 +47,11 @@ const formRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>
 const isEdit = ref(false)
 const showInactive = ref(false)
 const currentClassroom = ref<ClassroomRow | null>(null)
+// 編輯 dialog 的學生名單母集合：在讀生（is_active !== false），對齊後端
+// current_count 口徑；混列已離園/已刪除學生會與人數對不上（2026-08-01 稽核）
+const activeDialogStudents = computed(() => (
+  (currentClassroom.value?.students ?? []).filter((s) => s.is_active !== false)
+))
 const classroomDrawerVisible = ref(false)
 const classroomDrawerLoading = ref(false)
 const drawerClassroom = ref<ClassroomRow | null>(null)
@@ -666,17 +671,19 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           </el-descriptions>
 
           <h4 style="margin-top: 20px;">學生名單</h4>
+          <!-- 只列在讀生（is_active !== false，NULL 視為在讀對齊後端口徑），
+               與上方「學生人數」同一母集合；已離園/已刪除學生看 ClassroomStudentDrawer -->
           <div class="student-list">
             <el-tag
-              v-for="student in currentClassroom.students"
+              v-for="student in activeDialogStudents"
               :key="student.id as string | number"
               class="student-tag"
-              :type="student.gender === 'male' ? 'primary' : 'danger'"
+              :type="student.gender === '男' ? 'primary' : 'danger'"
               effect="plain"
             >
               {{ student.name }}
             </el-tag>
-            <p v-if="!currentClassroom.students || currentClassroom.students.length === 0" class="text-muted">
+            <p v-if="activeDialogStudents.length === 0" class="text-muted">
               尚無學生
             </p>
           </div>
