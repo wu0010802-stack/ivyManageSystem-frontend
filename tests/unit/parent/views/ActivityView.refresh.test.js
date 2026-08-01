@@ -319,3 +319,100 @@ describe('ActivityView 候補操作失敗後仍需刷新快照', () => {
     w.unmount()
   })
 })
+
+// ── 盲區稽核 C3（2026-07-31）：待辦徽章跨子女、清單只顯示單一子女 ────────────
+// 首頁徽章對家長「全部子女」計數（home.py 的 _count_pending_activity_promotions
+// 不分子女），但才藝頁清單恆以 selectedId 篩單一孩子，且 ChildContextHeader 沒有
+// 「全部」選項、useChildSelection 一定會自動選第一個。兩名子女各有一筆待確認 →
+// 徽章寫 2、清單只看得到 1；家長若信任徽章，另一名子女的邀請就在 48h 後靜默失位。
+// 這是家長端的系統性樣式（待繳費也一樣），但只有候補轉正帶不可逆的期限。
+describe('ActivityView 其他子女的候補待確認提示', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const FUTURE = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString()
+
+  function bootstrapWithTwoChildren() {
+    getActivityBootstrap.mockResolvedValue({
+      data: {
+        registrations: {
+          items: [
+            {
+              id: 1,
+              student_id: 1,
+              school_year: 114,
+              semester: 1,
+              is_paid: false,
+              courses: [
+                { course_id: 10, course_name: '足球', status: 'enrolled' },
+              ],
+            },
+            {
+              id: 2,
+              student_id: 2,
+              school_year: 114,
+              semester: 1,
+              is_paid: false,
+              courses: [
+                {
+                  course_id: 11,
+                  course_name: '直排輪',
+                  status: 'promoted_pending',
+                  confirm_deadline: FUTURE,
+                },
+              ],
+            },
+          ],
+        },
+        courses: { items: [] },
+        upcoming_sessions: { items: [] },
+        registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
+      },
+    })
+  }
+
+  it('其他孩子有未逾期的待確認時，回報數量供畫面提示', async () => {
+    bootstrapWithTwoChildren()
+    const w = mountView() // useChildSelection mock 固定選中 student_id=1
+    await flushPromises()
+
+    expect(w.vm.otherChildrenPendingCount).toBe(1)
+    w.unmount()
+  })
+
+  it('其他孩子的待確認已逾期則不提示（家長已無法處理）', async () => {
+    const past = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    getActivityBootstrap.mockResolvedValue({
+      data: {
+        registrations: {
+          items: [
+            {
+              id: 2,
+              student_id: 2,
+              school_year: 114,
+              semester: 1,
+              is_paid: false,
+              courses: [
+                {
+                  course_id: 11,
+                  course_name: '直排輪',
+                  status: 'promoted_pending',
+                  confirm_deadline: past,
+                },
+              ],
+            },
+          ],
+        },
+        courses: { items: [] },
+        upcoming_sessions: { items: [] },
+        registration_time: { open_at: null, close_at: '2999-01-01T00:00:00Z' },
+      },
+    })
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.vm.otherChildrenPendingCount).toBe(0)
+    w.unmount()
+  })
+})
