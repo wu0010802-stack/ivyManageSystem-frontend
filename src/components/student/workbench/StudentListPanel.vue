@@ -103,8 +103,18 @@ const filteredClassroomOptions = computed(() => {
   ))
 })
 
+// 指派用選項（編輯/轉班目標）：排除歷史學期班級，對齊後端
+// _assert_classroom_not_past_term 守衛——把在讀生掛進舊班會讓學生從當期
+// 名單與在籍統計消失；未來學期保留（暑假預先編班合法）。
+const assignableClassroomOptions = computed(() => (
+  filteredClassroomOptions.value.filter((item) => (
+    Number(item.school_year) * 10 + Number(item.semester)
+      >= currentAcademicTerm.school_year * 10 + currentAcademicTerm.semester
+  ))
+))
+
 const dialogClassroomOptions = computed(() => {
-  const options = [...filteredClassroomOptions.value]
+  const options = [...assignableClassroomOptions.value]
   const cid = editInitial.value?.classroom_id || pendingClassroomId.value
   if (cid && !options.some((item) => item.id === cid)) {
     const selected = classrooms.value.find((item) => item.id === cid)
@@ -410,8 +420,20 @@ const loadClassrooms = async () => {
 
 let _applyingRoute = false
 
-watch([filterSchoolYear, filterSemester, filterClassroomId], () => {
+watch([filterSchoolYear, filterSemester, filterClassroomId], ([, , cid], [prevYear, prevSem]) => {
   if (_applyingRoute) return
+  // 切換學年/學期時清掉不屬於新學期的班級篩選：殘留舊學期班級 id 會讓
+  // 列表靜默變 0 筆（後端以班級學期 join 過濾）。清空會再觸發本 watch，
+  // 由那一輪執行 fetch，避免重複請求。
+  const termChanged = filterSchoolYear.value !== prevYear || filterSemester.value !== prevSem
+  if (
+    termChanged
+    && cid != null
+    && !filteredClassroomOptions.value.some((item) => item.id === cid)
+  ) {
+    filterClassroomId.value = null
+    return
+  }
   currentPage.value = 1
   fetchStudents()
 })
@@ -686,7 +708,7 @@ onMounted(async () => {
         <el-form-item label="目標班級">
           <el-select v-model="transferTargetClassroomId" placeholder="選擇班級" style="width: 100%">
             <el-option
-              v-for="c in filteredClassroomOptions"
+              v-for="c in assignableClassroomOptions"
               :key="c.id"
               :label="classroomLabel(c)"
               :value="c.id"

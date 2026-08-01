@@ -68,4 +68,14 @@ describe('QuickStudentDialog', () => {
     await flushPromises()
     expect(caught).toEqual([])
   })
+
+  it('性別選項使用中文「男」「女」值、學號欄位已移除（2026-08-01 稽核：M/F 會靜默入庫且學號由後端配發）', async () => {
+    const wrapper = mountComp(true)
+    await flushPromises()
+    const html = wrapper.html()
+    expect(html).toContain('value="男"')
+    expect(html).toContain('value="女"')
+    expect(html).not.toContain('value="M"')
+    expect(html).not.toContain('學號')
+  })
 })

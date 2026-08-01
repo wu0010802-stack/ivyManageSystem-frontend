@@ -15,15 +15,14 @@ const emit = defineEmits<{
 
 const formRef = ref<FormInstance>()
 const form = reactive({
-  student_id: '',
   name: '',
-  gender: '' as '' | 'M' | 'F',
+  // 全站性別口徑一律中文「男」「女」（DB、名冊、班級抽屜統計、頭像配色皆以中文比對）
+  gender: '' as '' | '男' | '女',
   birthday: '' as string,
   classroom_id: null as number | null,
 })
 
 const rules: FormRules = {
-  student_id: [{ required: true, message: '請輸入學號', trigger: 'blur' }],
   name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }],
 }
 
@@ -50,7 +49,6 @@ const loadClassrooms = async () => {
 const { submitting, run } = useQuickAddSubmit()
 
 const resetForm = () => {
-  form.student_id = ''
   form.name = ''
   form.gender = ''
   form.birthday = ''
@@ -72,7 +70,6 @@ const handleSubmit = async () => {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   const payload: Record<string, unknown> = {
-    student_id: form.student_id.trim(),
     name: form.name.trim(),
   }
   if (form.gender) payload.gender = form.gender
@@ -101,16 +98,13 @@ const handleSubmit = async () => {
     @update:model-value="emit('update:visible', $event)"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
-      <el-form-item label="學號" prop="student_id">
-        <el-input v-model="form.student_id" maxlength="20" placeholder="例：S2026001" />
-      </el-form-item>
       <el-form-item label="姓名" prop="name">
         <el-input v-model="form.name" maxlength="50" placeholder="學生姓名" />
       </el-form-item>
       <el-form-item label="性別">
         <el-radio-group v-model="form.gender">
-          <el-radio value="M">男</el-radio>
-          <el-radio value="F">女</el-radio>
+          <el-radio value="男">男</el-radio>
+          <el-radio value="女">女</el-radio>
         </el-radio-group>
       </el-form-item>
       <el-form-item label="生日">
