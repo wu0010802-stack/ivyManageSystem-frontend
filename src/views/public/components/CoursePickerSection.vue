@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * A1-P7：從 ActivityPublicView 抽出的 Step 2 課程選擇區塊。
+ * A1-P7：從 ActivityPublicView 抽出的課程選擇區塊（課程優先流程下為 Step 1）。
  *
  * 包含:
- *  - 「Step 2 選擇才藝課程」標題
+ *  - 「Step 1 選擇才藝課程」標題
  *  - 課程清單 v-for(含名額狀態、衝堂 advisory chip、影片預覽 btn)
  *  - 影片 chip hover 600ms 後浮現 muted autoplay preview (YouTube-style)
  */
@@ -132,7 +132,7 @@ onUnmounted(cancelPreview)
 
 <template>
   <div class="form-section-step" :class="{ 'is-active': isActiveStep }">
-      <span class="step-num">2</span>
+      <span class="step-num">1</span>
       <div class="step-title-col">
         <span class="step-title">選擇才藝課程</span>
         <span class="step-desc">至少一門課程；可複選、用品選填、剩餘名額即時顯示</span>

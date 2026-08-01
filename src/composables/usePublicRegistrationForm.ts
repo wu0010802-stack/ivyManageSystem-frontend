@@ -44,7 +44,8 @@ function priceOf(name: string, source: { name: string; price?: number | string }
   return Number(item?.price) || 0
 }
 
-const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'email', 'courses']
+// 課程優先流程：選課在第 1 步，錯誤聚焦先跳課程再跳寶貝資料欄位
+const FIELD_FOCUS_ORDER = ['courses', 'name', 'birthday', 'parent_phone', 'class_name', 'email']
 
 export function usePublicRegistrationForm({ courses, supplies, availability }: { courses: { value: { name: string; price?: number | string }[] }; supplies: { value: { name: string; price?: number | string }[] }; availability: { value: Record<string, number> } }) {
   const form = reactive({
