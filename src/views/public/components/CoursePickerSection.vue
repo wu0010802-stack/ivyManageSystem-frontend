@@ -156,7 +156,6 @@ onUnmounted(cancelPreview)
            決定就是「要不要勾一門候補的課」，沒解釋的結果不是猶豫而是乾脆不勾。 -->
       <div class="waitlist-note">
         <p><strong>額滿·可候補</strong>的課仍可勾選：排候補<strong>不先收費</strong>，有空位時園方會主動通知您。</p>
-        <p><strong>已額滿</strong>表示連候補都已滿，本學期無法再報名。</p>
       </div>
       <div
         id="courseListGroup"
@@ -393,7 +392,6 @@ onUnmounted(cancelPreview)
   line-height: 1.6;
   color: var(--color-text);
 }
-.waitlist-note p + p { margin-top: 4px; }
 
 .course-list-vertical {
   display: grid;

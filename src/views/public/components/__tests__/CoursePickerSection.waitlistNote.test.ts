@@ -30,9 +30,6 @@ describe('CoursePickerSection — 候補說明常駐於選課決策點', () => {
     expect(text).toContain('通知')
   })
 
-  it('說明「已額滿」與「額滿·可候補」的差別（兩者的可勾選狀態不同）', () => {
-    const text = mount(CoursePickerSection, { props: baseProps }).find('.waitlist-note').text()
-    expect(text).toContain('額滿·可候補')
-    expect(text).toContain('已額滿')
-  })
+  // 「已額滿表示連候補都已滿」的補充句已依業主指示移除（2026-08-01），
+  // 說明只保留「額滿·可候補」這一行。
 })
