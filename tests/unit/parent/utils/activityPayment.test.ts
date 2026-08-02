@@ -67,3 +67,52 @@ describe('paymentBadge', () => {
     expect(paymentBadge({ is_paid: false }).label).toBe('未繳費')
   })
 })
+
+describe('paymentBadge — 待審核報名（比對不符）', () => {
+  // 後端口徑：pending_review 課程不計入 total_amount（_build_public_query_payload），
+  // 純待審核報名 payment_status 會落成 no_fee；直接渲染「免繳」會誤導家長以為不用錢。
+  it('no_fee ＋ 全課程待審核 → 費用待審核（info），不顯示免繳', () => {
+    const badge = paymentBadge({
+      payment_status: 'no_fee',
+      is_paid: false,
+      courses: [{ status: 'pending_review' }],
+    })
+    expect(badge).toEqual({ label: '費用待審核', tone: 'info' })
+  })
+
+  it('pending_review_waitlist 同樣視為費用待審核', () => {
+    const badge = paymentBadge({
+      payment_status: 'no_fee',
+      courses: [{ status: 'pending_review_waitlist' }],
+    })
+    expect(badge.label).toBe('費用待審核')
+  })
+
+  it('no_fee 但已有 enrolled 課（0 元課）→ 維持免繳', () => {
+    const badge = paymentBadge({
+      payment_status: 'no_fee',
+      courses: [{ status: 'enrolled' }, { status: 'pending_review' }],
+    })
+    expect(badge.label).toBe('免繳')
+  })
+
+  it('有應繳（如用品費 unpaid）時不覆蓋 → 仍顯示未繳費', () => {
+    const badge = paymentBadge({
+      payment_status: 'unpaid',
+      courses: [{ status: 'pending_review' }],
+    })
+    expect(badge.label).toBe('未繳費')
+  })
+
+  it('純候補（waitlist）不受影響 → 免繳', () => {
+    const badge = paymentBadge({
+      payment_status: 'no_fee',
+      courses: [{ status: 'waitlist' }],
+    })
+    expect(badge.label).toBe('免繳')
+  })
+
+  it('courses 缺失（舊 response）→ 不覆蓋，維持原 badge', () => {
+    expect(paymentBadge({ payment_status: 'no_fee' }).label).toBe('免繳')
+  })
+})
