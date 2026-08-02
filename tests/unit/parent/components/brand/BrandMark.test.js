@@ -27,9 +27,9 @@ describe('BrandMark', () => {
     expect(w.findComponent({ name: 'CrownIcon' }).exists()).toBe(true)
   })
 
-  it('aria-label=常春藤幼兒園', () => {
+  it('aria-label=常春藤教育機構', () => {
     const w = mount(BrandMark)
-    expect(w.find('[data-test="brand-mark"]').attributes('aria-label')).toBe('常春藤幼兒園')
+    expect(w.find('[data-test="brand-mark"]').attributes('aria-label')).toBe('常春藤教育機構')
   })
 
   it('size prop 透過 --mark-size CSS var 傳給內層 ribbon font-size', () => {

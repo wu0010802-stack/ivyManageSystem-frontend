@@ -39,7 +39,7 @@ const crownSize = computed(() => Math.round(props.size * 0.4))
   <span
     data-test="brand-mark"
     role="img"
-    aria-label="常春藤幼兒園"
+    aria-label="常春藤教育機構"
     :style="containerStyle"
     class="brand-mark"
   >

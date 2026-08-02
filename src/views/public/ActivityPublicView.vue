@@ -54,14 +54,14 @@
         <div class="page-brand">
           <img
             src="/LOGO.png"
-            alt="常春藤幼兒園"
+            alt="常春藤教育機構"
             class="page-brand-logo"
             width="96"
             height="96"
           />
           <div class="page-brand-text">
             <div class="page-brand-prefix">高雄市私立</div>
-            <div class="page-brand-zh">常春藤幼兒園</div>
+            <div class="page-brand-zh">常春藤教育機構</div>
             <div class="page-brand-en">Ivy Kindergarten</div>
           </div>
           <!-- 手機版服務選單：查詢／聯繫收進選單免佔版面（業主嫌 pill 列太滿）；
@@ -759,7 +759,7 @@ async function sharePoster() {
   try {
     await navigator.share({
       title: displayTitle.value,
-      text: '常春藤幼兒園才藝報名海報',
+      text: '常春藤教育機構才藝報名海報',
       url: window.location.href,
     })
   } catch (err) {

@@ -4,7 +4,7 @@
 import { formatCurrency } from '@/utils/currency'
 
 export const POS_ORG_INFO = {
-  name: '常春藤幼兒園',
+  name: '常春藤教育機構',
   subtitle: '課後才藝繳費收據',
 }
 

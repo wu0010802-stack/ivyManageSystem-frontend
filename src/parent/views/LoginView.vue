@@ -301,7 +301,7 @@ onMounted(() => startLogin())
       </div>
     </div>
 
-    <p class="legal">本服務由常春藤幼兒園提供</p>
+    <p class="legal">本服務由常春藤教育機構提供</p>
 
     <ConsentModal
       v-if="status === 'consent' && pendingPolicy"
