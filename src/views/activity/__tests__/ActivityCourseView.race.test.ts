@@ -87,7 +87,7 @@ const STUBS = {
 const baseCourse = {
   price: 3000, sessions: 10, capacity: 20, enrolled: 5, promoted_pending: 0,
   allow_waitlist: true, video_url: '', description: '',
-  meeting_weekday: null, meeting_start_time: '', meeting_end_time: '',
+  meeting_weekdays: null, meeting_start_time: '', meeting_end_time: '',
 }
 const courseA = { ...baseCourse, id: 1, name: 'A 課', waitlist_count: 1 }
 const courseB = { ...baseCourse, id: 2, name: 'B 課', waitlist_count: 1 }

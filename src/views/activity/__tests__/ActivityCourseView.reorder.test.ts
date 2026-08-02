@@ -133,7 +133,7 @@ const sampleCourse = {
   allow_waitlist: true,
   video_url: '',
   description: '',
-  meeting_weekday: null,
+  meeting_weekdays: null,
   meeting_start_time: '',
   meeting_end_time: '',
 }

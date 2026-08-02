@@ -93,7 +93,7 @@ describe('ActivityCardList', () => {
           {
             ...courses[0],
             id: 7,
-            meeting_weekday: 2,
+            meeting_weekdays: [2],
             meeting_start_time: '15:30',
             meeting_end_time: '16:30',
           },

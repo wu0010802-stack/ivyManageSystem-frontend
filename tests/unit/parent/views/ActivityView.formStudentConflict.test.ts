@@ -39,7 +39,7 @@ const candidate = {
   enrolled_count: 0,
   is_full: false,
   allow_waitlist: true,
-  meeting_weekday: 1,
+  meeting_weekdays: [1],
   meeting_start_time: '09:00',
   meeting_end_time: '10:00',
 }
@@ -60,7 +60,7 @@ beforeEach(() => {
             course_id: 99,
             course_name: '鋼琴',
             status: 'enrolled',
-            meeting_weekday: 1,
+            meeting_weekdays: [1],
             meeting_start_time: '09:30',
             meeting_end_time: '10:30',
           }],

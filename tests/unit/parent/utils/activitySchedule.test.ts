@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  formatWeekday,
+  formatWeekdays,
   formatTimeRange,
   hasScheduleConflict,
   collectBusySlots,
@@ -9,16 +9,21 @@ import {
   buildFormConflictCourseIds,
 } from '@/parent/utils/activitySchedule'
 
-describe('formatWeekday', () => {
-  it('0=週一 .. 6=週日（後端 meeting_weekday 慣例）', () => {
-    expect(formatWeekday(0)).toBe('週一')
-    expect(formatWeekday(2)).toBe('週三')
-    expect(formatWeekday(6)).toBe('週日')
+describe('formatWeekdays', () => {
+  it('單一星期：0=週一 .. 6=週日（後端 meeting_weekdays 慣例）', () => {
+    expect(formatWeekdays([0])).toBe('週一')
+    expect(formatWeekdays([2])).toBe('週三')
+    expect(formatWeekdays([6])).toBe('週日')
   })
-  it('null/undefined/超範圍 → 空字串（不顯示）', () => {
-    expect(formatWeekday(null)).toBe('')
-    expect(formatWeekday(undefined)).toBe('')
-    expect(formatWeekday(7)).toBe('')
+  it('多星期 → 「週一、三」複合標籤', () => {
+    expect(formatWeekdays([0, 2])).toBe('週一、三')
+    expect(formatWeekdays([0, 4, 6])).toBe('週一、五、日')
+  })
+  it('null/undefined/空陣列/超範圍 → 空字串（不顯示）', () => {
+    expect(formatWeekdays(null)).toBe('')
+    expect(formatWeekdays(undefined)).toBe('')
+    expect(formatWeekdays([])).toBe('')
+    expect(formatWeekdays([7])).toBe('')
   })
 })
 
@@ -34,11 +39,11 @@ describe('formatTimeRange', () => {
 })
 
 describe('hasScheduleConflict', () => {
-  const base = { meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' }
+  const base = { meeting_weekdays: [2], meeting_start_time: '15:00', meeting_end_time: '16:00' }
   it('同星期且時間重疊 → 衝突', () => {
     expect(
       hasScheduleConflict(base, {
-        meeting_weekday: 2,
+        meeting_weekdays: [2],
         meeting_start_time: '15:30',
         meeting_end_time: '16:30',
       }),
@@ -47,26 +52,34 @@ describe('hasScheduleConflict', () => {
   it('同星期但時間相接（邊界不算重疊） → 不衝突', () => {
     expect(
       hasScheduleConflict(base, {
-        meeting_weekday: 2,
+        meeting_weekdays: [2],
         meeting_start_time: '16:00',
         meeting_end_time: '17:00',
       }),
     ).toBe(false)
   })
+  it('多星期交集（[1,2] vs [2,4]）且時間重疊 → 衝突', () => {
+    expect(
+      hasScheduleConflict(
+        { meeting_weekdays: [1, 2], meeting_start_time: '15:00', meeting_end_time: '16:00' },
+        { meeting_weekdays: [2, 4], meeting_start_time: '15:30', meeting_end_time: '16:30' },
+      ),
+    ).toBe(true)
+  })
   it('不同星期 → 不衝突', () => {
     expect(
       hasScheduleConflict(base, {
-        meeting_weekday: 3,
+        meeting_weekdays: [3],
         meeting_start_time: '15:00',
         meeting_end_time: '16:00',
       }),
     ).toBe(false)
   })
   it('任一缺 weekday 或時間 → 無法判定，不衝突', () => {
-    expect(hasScheduleConflict(base, { meeting_weekday: null })).toBe(false)
+    expect(hasScheduleConflict(base, { meeting_weekdays: null })).toBe(false)
     expect(
       hasScheduleConflict(base, {
-        meeting_weekday: 2,
+        meeting_weekdays: [2],
         meeting_start_time: '15:30',
         meeting_end_time: null,
       }),
@@ -79,24 +92,24 @@ describe('collectBusySlots', () => {
     const regs = [
       {
         courses: [
-          { status: 'enrolled', meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' },
-          { status: 'waitlist', meeting_weekday: 3, meeting_start_time: '15:00', meeting_end_time: '16:00' },
-          { status: 'promoted_pending', meeting_weekday: 4, meeting_start_time: '15:00', meeting_end_time: '16:00' },
+          { status: 'enrolled', meeting_weekdays: [2], meeting_start_time: '15:00', meeting_end_time: '16:00' },
+          { status: 'waitlist', meeting_weekdays: [3], meeting_start_time: '15:00', meeting_end_time: '16:00' },
+          { status: 'promoted_pending', meeting_weekdays: [4], meeting_start_time: '15:00', meeting_end_time: '16:00' },
         ],
       },
     ]
     const slots = collectBusySlots(regs)
-    expect(slots.map((s) => s.meeting_weekday)).toEqual([2, 4]) // waitlist 不算
+    expect(slots.map((s) => s.meeting_weekdays)).toEqual([[2], [4]]) // waitlist 不算
   })
 })
 
 describe('buildConflictCourseIds', () => {
   it('回傳與已佔位時段衝突的目錄課程 id 集合', () => {
     const catalog = [
-      { id: 1, meeting_weekday: 2, meeting_start_time: '15:30', meeting_end_time: '16:30' }, // 衝
-      { id: 2, meeting_weekday: 5, meeting_start_time: '15:30', meeting_end_time: '16:30' }, // 不衝
+      { id: 1, meeting_weekdays: [2], meeting_start_time: '15:30', meeting_end_time: '16:30' }, // 衝
+      { id: 2, meeting_weekdays: [5], meeting_start_time: '15:30', meeting_end_time: '16:30' }, // 不衝
     ]
-    const busy = [{ meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' }]
+    const busy = [{ meeting_weekdays: [2], meeting_start_time: '15:00', meeting_end_time: '16:00' }]
     const ids = buildConflictCourseIds(catalog, busy)
     expect(ids.has(1)).toBe(true)
     expect(ids.has(2)).toBe(false)
@@ -133,14 +146,14 @@ describe('collectBusySlots（學期過濾，code review #6）', () => {
       school_year: 113,
       semester: 2,
       courses: [
-        { status: 'enrolled', meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' },
+        { status: 'enrolled', meeting_weekdays: [2], meeting_start_time: '15:00', meeting_end_time: '16:00' },
       ],
     },
     {
       school_year: 114,
       semester: 1,
       courses: [
-        { status: 'enrolled', meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' },
+        { status: 'enrolled', meeting_weekdays: [2], meeting_start_time: '15:00', meeting_end_time: '16:00' },
       ],
     },
   ]
@@ -155,9 +168,9 @@ describe('collectBusySlots（學期過濾，code review #6）', () => {
 
 describe('buildFormConflictCourseIds（表單複選互比，code review #6）', () => {
   const catalog = [
-    { id: 1, meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' },
-    { id: 2, meeting_weekday: 2, meeting_start_time: '15:30', meeting_end_time: '16:30' }, // 與 1 衝
-    { id: 3, meeting_weekday: 5, meeting_start_time: '15:00', meeting_end_time: '16:00' }, // 不衝
+    { id: 1, meeting_weekdays: [2], meeting_start_time: '15:00', meeting_end_time: '16:00' },
+    { id: 2, meeting_weekdays: [2], meeting_start_time: '15:30', meeting_end_time: '16:30' }, // 與 1 衝
+    { id: 3, meeting_weekdays: [5], meeting_start_time: '15:00', meeting_end_time: '16:00' }, // 不衝
   ]
   it('同時勾選兩門互衝課程 → 兩者都標記', () => {
     const ids = buildFormConflictCourseIds(catalog, [1, 2], [])
@@ -170,7 +183,7 @@ describe('buildFormConflictCourseIds（表單複選互比，code review #6）', 
     expect(ids.has(1)).toBe(false)
   })
   it('與既有 busy 時段衝突的目錄課程也標記（不限已勾選）', () => {
-    const busy = [{ meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' }]
+    const busy = [{ meeting_weekdays: [2], meeting_start_time: '15:00', meeting_end_time: '16:00' }]
     const ids = buildFormConflictCourseIds(catalog, [], busy)
     expect(ids.has(1)).toBe(true)
     expect(ids.has(2)).toBe(true)
