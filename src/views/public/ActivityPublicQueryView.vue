@@ -50,7 +50,10 @@
               :tabindex="queryMode === 'token' ? 0 : -1"
               :class="['mode-tab', { active: queryMode === 'token' }]"
               @click="switchQueryMode('token')"
-            >查詢碼 + 手機</button>
+            >
+              <span class="mode-tab-label">查詢碼 + 手機</span>
+              <span class="mode-tab-sub">可查詢・可修改</span>
+            </button>
             <button
               ref="fieldsTabRef"
               type="button"
@@ -60,7 +63,10 @@
               :tabindex="queryMode === 'fields' ? 0 : -1"
               :class="['mode-tab', { active: queryMode === 'fields' }]"
               @click="switchQueryMode('fields')"
-            >姓名 + 生日 + 手機</button>
+            >
+              <span class="mode-tab-label">姓名 + 生日 + 手機</span>
+              <span class="mode-tab-sub">僅供查詢</span>
+            </button>
           </div>
 
           <div v-if="queryMode === 'token'" id="queryPanelToken" role="tabpanel">
@@ -109,6 +115,16 @@
           </div>
 
           <div v-else id="queryPanelFields" role="tabpanel">
+            <!-- 資安 #5 配套：三欄查詢在「查詢前」就先告知僅供檢視，避免家長查完才發現不能改 -->
+            <div class="info-hint mutation-locked-hint mode-readonly-hint" data-test="fields-mode-readonly-hint">
+              <svg class="icon icon-lock" width="13" height="13" aria-hidden="true"><use href="#q-lock" /></svg>
+              <span>
+                此方式僅能<strong>查看</strong>報名資料，無法修改。
+                如需修改，請改用
+                <button type="button" class="hint-switch-link" @click="switchQueryMode('token')">查詢碼 + 手機</button>
+                查詢（查詢碼於完成報名時提供）。
+              </span>
+            </div>
             <div class="field-group">
               <label for="searchName">幼兒姓名 <span class="required-mark">*</span></label>
               <input
@@ -1167,7 +1183,12 @@ onBeforeUnmount(() => {
 .mode-tab {
   flex: 1;
   min-height: 44px;
-  padding: 8px 12px;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   font-family: inherit;
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -1184,6 +1205,13 @@ onBeforeUnmount(() => {
   border-color: var(--color-primary);
 }
 .mode-tab:not(.active):hover { background: var(--color-surface); }
+/* 權限副標：讓家長在選擇查詢方式前就知道該方式能不能修改 */
+.mode-tab-sub {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+.mode-tab.active .mode-tab-sub { color: var(--color-primary-strong); }
 
 .credential-recovery {
   display: flex;
@@ -1230,6 +1258,19 @@ onBeforeUnmount(() => {
   font-size: var(--fs-sm);
   color: var(--color-text-muted);
   margin-bottom: var(--space-4);
+}
+/* 三欄查詢面板頂端的唯讀預告：沿用 info-hint 視覺，僅調整與表單的間距 */
+.mode-readonly-hint { margin-bottom: var(--space-5); }
+.hint-switch-link {
+  padding: 0;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--color-primary-strong);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
 }
 /* sprite icon 對齊行內文字（取代 emoji 後的基線調整） */
 .info-hint .icon-lock,
