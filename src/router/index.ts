@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLocationNormalized, type RouteLocation, type RouteLocationRaw } from 'vue-router'
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
-import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth, hasPortalPermission, hasPermission } from '@/utils/auth'
+import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission } from '@/utils/auth'
 import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
@@ -779,7 +779,9 @@ const router = createRouter({
 async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
     const needsProtectedSession = Boolean(to.meta.requiresAuth) || (!to.meta.noAuth && !to.meta.portal)
 
-    if (!needsProtectedSession || isLoggedIn() || !hasStoredUserInfo()) {
+    // userInfo 已改 per-tab sessionStorage：全新分頁即使共用 HttpOnly cookie 也不會有
+    // 本地 userInfo，因此不能再以「沒存 userInfo＝未登入」短路，必須先 refresh 還原。
+    if (!needsProtectedSession || isLoggedIn()) {
         return {
             loggedIn: isLoggedIn(),
             userInfo: getUserInfo(),
