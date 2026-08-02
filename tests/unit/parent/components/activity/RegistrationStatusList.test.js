@@ -336,3 +336,57 @@ describe('RegistrationStatusList 候補確認期限', () => {
     expect(wrapper.find('.confirm-btn').exists()).toBe(true)
   })
 })
+
+describe('RegistrationStatusList 待審核報名（比對不符）', () => {
+  const pendingReg = {
+    id: 30,
+    student_id: 9,
+    student_name: '林小安',
+    school_year: 115,
+    semester: 1,
+    is_paid: false,
+    payment_status: 'no_fee',
+    outstanding_amount: 0,
+    courses: [
+      { course_id: 400, course_name: '圍棋', status: 'pending_review' },
+    ],
+  }
+
+  it('付款 badge 顯示「費用待審核」（tone-info），不顯示免繳', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: [pendingReg], courseStatusMap: COURSE_STATUS },
+    })
+    const pill = wrapper.find('.payment-pill')
+    expect(pill.text()).toContain('費用待審核')
+    expect(pill.classes()).toContain('tone-info')
+    expect(wrapper.text()).not.toContain('免繳')
+  })
+
+  it('卡片顯示審核中說明（data-test=review-pending-hint）', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: [pendingReg], courseStatusMap: COURSE_STATUS },
+    })
+    const hint = wrapper.find('[data-test="review-pending-hint"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('審核')
+  })
+
+  it('pending_review_waitlist 同樣顯示說明', () => {
+    const reg = {
+      ...pendingReg,
+      courses: [{ course_id: 401, course_name: '桌球', status: 'pending_review_waitlist' }],
+    }
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: [reg], courseStatusMap: COURSE_STATUS },
+    })
+    expect(wrapper.find('[data-test="review-pending-hint"]').exists()).toBe(true)
+  })
+
+  it('非待審核報名不顯示說明，badge 維持原樣', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations, courseStatusMap: COURSE_STATUS },
+    })
+    expect(wrapper.find('[data-test="review-pending-hint"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('費用待審核')
+  })
+})

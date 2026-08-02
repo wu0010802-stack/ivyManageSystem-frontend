@@ -123,6 +123,15 @@ function courseStatusLabel(
 ): string {
   return map[status]?.label ?? STATUS_LABEL_FALLBACK[status] ?? status
 }
+
+/**
+ * 報名是否仍在校方核對就讀資料（比對不符）。
+ * 與公開查詢頁 review-pending-hint 同口徑：此時課程不計價、費用以審核結果為準，
+ * 需在卡片上說明，避免家長把「費用待審核」badge 或 0 元誤讀成免費。
+ */
+function isPendingReview(reg: Registration): boolean {
+  return (reg.courses || []).some((rc) => (rc.status || '').startsWith('pending_review'))
+}
 </script>
 
 <template>
@@ -145,6 +154,13 @@ function courseStatusLabel(
           已退費 ${{ (reg.refunded_amount ?? 0).toLocaleString() }}
         </span>
       </div>
+      <p
+        v-if="isPendingReview(reg)"
+        class="review-pending-hint"
+        data-test="review-pending-hint"
+      >
+        此報名尚待校方核對就讀資料，課程與實際應繳金額以審核結果為準。
+      </p>
       <div
         v-for="rc in reg.courses"
         :key="rc.course_id"
@@ -216,6 +232,16 @@ function courseStatusLabel(
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;
+}
+
+.review-pending-hint {
+  margin: 0 0 var(--space-2, 8px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--color-info-soft, #e0f2fe);
+  color: var(--pt-info-text, #2d6f8e);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .payment-pill {
