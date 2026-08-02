@@ -48,6 +48,7 @@ const ENTRIES = [
       /^qrcode-/,
     ],
     reason: '管理端 index 不得靜態可達家長 App / LIFF 或 lazy feature chunk',
+    routeEntryForbidden: [/^parent-app-/, /^public-app-/],
     manifestHref: '/manifest.webmanifest',
     manifestName: '常春藤管理系統',
     manifestStartUrl: './',
@@ -58,6 +59,7 @@ const ENTRIES = [
     html: join(DIST, 'public.html'),
     forbidden: [/^parent-app-/, /^liff-/],
     reason: '公開報名 public 不得靜態可達家長 App / LIFF chunk',
+    routeEntryForbidden: [/^parent-app-/, /^liff-/],
     manifestHref: '/public.webmanifest',
     manifestName: '常春藤公開報名',
     manifestStartUrl: '/public.html',
@@ -68,6 +70,7 @@ const ENTRIES = [
     html: join(DIST, 'parent.html'),
     forbidden: [/^admin-core-/],
     reason: '家長端 parent 不得靜態可達 admin-core chunk',
+    routeEntryForbidden: [/^public-app-/],
     manifestHref: '/parent.webmanifest',
     manifestName: '常春藤家長 App',
     manifestStartUrl: '/parent.html',
@@ -147,6 +150,29 @@ function staticImportsOf(assetFile) {
   }
   // import ... from"./x.js" / export ... from"./x.js"（動態 import() 無 from）
   for (const m of code.matchAll(/\bfrom\s*["']([^"']+)["']/g)) {
+    const a = resolveAsset(m[1])
+    if (a) deps.add(a)
+  }
+  return deps
+}
+
+/**
+ * 解析單一 chunk 的「動態」import 目標：import("./x.js") 與 Vite 的 __vite__mapDeps
+ * 依賴表（lazy route 的 preload 清單）。
+ *
+ * 只看靜態邊會漏掉真正的危害路徑：lazy route chunk 本身雖是動態載入，但它一旦被載入，
+ * 它的靜態 import 就會同步執行。公開頁 `/` redirect 到 `/activity`，該 route chunk
+ * 等同首屏——它靜態 import parent-app 就會執行家長端 main.ts 並 mount 搶佔畫面。
+ */
+function dynamicImportsOf(assetFile) {
+  const code = readFileSync(join(ASSETS, assetFile), 'utf8')
+  const deps = new Set()
+  for (const m of code.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g)) {
+    const a = resolveAsset(m[1])
+    if (a) deps.add(a)
+  }
+  // __vite__mapDeps 依賴表：["assets/x.js","assets/y.css",…]
+  for (const m of code.matchAll(/["']((?:\.\/|\/)?assets\/[^"']+\.js)["']/g)) {
     const a = resolveAsset(m[1])
     if (a) deps.add(a)
   }
@@ -267,14 +293,49 @@ for (const entry of ENTRIES) {
   }
 
   const violations = [...visited].filter((f) => entry.forbidden.some((re) => re.test(f)))
-  if (violations.length === 0) {
-    continue
+  if (violations.length > 0) {
+    failed = true
+    console.error(`\n[check-entry-chunks] ✗ ${entry.name}：${entry.reason}`)
+    for (const v of violations) {
+      console.error(`  違規 chunk：${v}`)
+      console.error(`    靜態可達路徑：\n      ${tracePath(entry.name, v, edgeFrom)}`)
+    }
   }
-  failed = true
-  console.error(`\n[check-entry-chunks] ✗ ${entry.name}：${entry.reason}`)
-  for (const v of violations) {
-    console.error(`  違規 chunk：${v}`)
-    console.error(`    靜態可達路徑：\n      ${tracePath(entry.name, v, edgeFrom)}`)
+
+  // 路由層：entry 的 router 直接 dynamic import 的 route chunk，一旦該路由被開啟就會
+  // 同步執行它的靜態 import——若那指向 forbidden chunk，等於在本 entry 執行對方 entry
+  // 的 main.ts 副作用。2026-08-03 prod 事故：weekdaySchedule.ts 漏 pin 落入 parent-app，
+  // 公開頁 ActivityPublicView 靜態 import 之 → 家長 App mount('#app') 搶佔公開報名頁並
+  // 導向 LIFF 登入。上面那層只從 entry HTML 種子追靜態邊，看不到這條路徑。
+  //
+  // 刻意只展開「一跳」dynamic：再往下遞迴會沿著 chunk 間的 lazy 邊走遍全圖
+  // （admin 對話框 → admin-core 之類與本 entry 無關的邊），全是雜訊。
+  const routeChunks = new Set()
+  for (const chunk of visited) {
+    for (const dep of dynamicImportsOf(chunk)) {
+      if (!visited.has(dep)) routeChunks.add(dep)
+    }
+  }
+  // 只擋「對方 entry chunk」（含該端 main.ts 的 mount 副作用），不擋 admin-core 這類
+  // 純 utilities——後者橋接只是體積問題，由上面的靜態層與 gz 預算把關。
+  const routeForbidden = entry.routeEntryForbidden || []
+  const routeViolations = []
+  for (const chunk of routeChunks) {
+    if (routeForbidden.some((re) => re.test(chunk))) continue // 自身即禁區，由靜態層回報
+    for (const dep of staticImportsOf(chunk)) {
+      if (routeForbidden.some((re) => re.test(dep))) routeViolations.push([chunk, dep])
+    }
+  }
+  if (routeViolations.length > 0) {
+    failed = true
+    console.error(`\n[check-entry-chunks] ✗ ${entry.name}（路由可達）：${entry.reason}`)
+    for (const [importer, dep] of routeViolations) {
+      console.error(`  違規靜態邊：${importer}\n      → ${dep}`)
+    }
+    console.error(
+      '  修法：把該邊上的跨端共用檔 pin 進 shared-common（vite.config.js manualChunks），' +
+        '切斷 route chunk 對他端 entry chunk 的靜態依賴。'
+    )
   }
 }
 
