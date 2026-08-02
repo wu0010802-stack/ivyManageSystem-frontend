@@ -186,8 +186,9 @@
         </el-divider>
         <el-form-item label="上課星期">
           <el-select
-            v-model="form.meeting_weekday"
-            placeholder="選擇上課星期"
+            v-model="form.meeting_weekdays"
+            placeholder="選擇上課星期（可複選）"
+            multiple
             clearable
             style="width: 100%;"
           >
@@ -458,13 +459,14 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { sanitizeHref } from '@/utils/url'
+import { formatWeekdaySchedule } from '@/utils/weekdaySchedule'
 import { GRADES_ORDER } from '@/constants/recruitment'
 import CourseDmUploader from './components/CourseDmUploader.vue'
 
 interface Course {
   id: number; name: string; price: number; sessions?: number | null; capacity: number
   allow_waitlist: boolean; video_url?: string; description?: string
-  meeting_weekday?: number | null; meeting_start_time?: string; meeting_end_time?: string
+  meeting_weekdays?: number[] | null; meeting_start_time?: string; meeting_end_time?: string
   instructor_name?: string | null
   // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
   instructor_employee_id?: number | null
@@ -487,7 +489,7 @@ interface WaitlistItem { registration_id: number; student_name?: string; class_n
 interface CourseForm {
   name: string; price: number; sessions: number | null; capacity: number; allow_waitlist: boolean
   video_url: string; description: string
-  meeting_weekday: number | null; meeting_start_time: string; meeting_end_time: string
+  meeting_weekdays: number[]; meeting_start_time: string; meeting_end_time: string
   instructor_name: string
   instructor_employee_id: number | null
   allowed_grades: string[]
@@ -500,12 +502,8 @@ const termStore = useAcademicTermStore()
 // 對齊 ActivityRegistrationView 慣例：READ-only 使用者隱藏 mutation 入口（後端守衛 ACTIVITY_WRITE）
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
-const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 function formatSchedule(row: Course) {
-  if (row.meeting_weekday == null || !row.meeting_start_time || !row.meeting_end_time) {
-    return ''
-  }
-  return `週${WEEKDAY_LABELS[row.meeting_weekday]} ${row.meeting_start_time}–${row.meeting_end_time}`
+  return formatWeekdaySchedule(row)
 }
 
 const courses = ref<Course[]>([])
@@ -528,8 +526,8 @@ const defaultForm = (): CourseForm => ({
   allow_waitlist: true,
   video_url: '',
   description: '',
-  // Phase 3：結構化時段（給家長公開頁前台 advisory 用；nullable 表示不限）
-  meeting_weekday: null,
+  // Phase 3：結構化時段（給家長公開頁前台 advisory 用；空陣列表示不限）
+  meeting_weekdays: [],
   meeting_start_time: '',
   meeting_end_time: '',
   instructor_name: '',
@@ -875,7 +873,7 @@ function openEdit(row: Course) {
     allow_waitlist: row.allow_waitlist,
     video_url: row.video_url || '',
     description: row.description || '',
-    meeting_weekday: row.meeting_weekday ?? null,
+    meeting_weekdays: row.meeting_weekdays ? [...row.meeting_weekdays] : [],
     meeting_start_time: row.meeting_start_time || '',
     meeting_end_time: row.meeting_end_time || '',
     instructor_name: row.instructor_name || '',
@@ -909,6 +907,10 @@ async function handleSave() {
   // 後端期望 time field 為 "HH:MM" 字串或 null
   const payload = {
     ...f,
+    // 排序去重後送出；空陣列送 null（後端 [] 與 null 皆收斂為 NULL=未定）
+    meeting_weekdays: f.meeting_weekdays.length
+      ? [...new Set(f.meeting_weekdays)].sort((a, b) => a - b)
+      : null,
     meeting_start_time: f.meeting_start_time || null,
     meeting_end_time: f.meeting_end_time || null,
     instructor_name: f.instructor_name || null,

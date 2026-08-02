@@ -10,7 +10,7 @@
  *
  * 注：目前後端 course response 無 poster/image 欄位，故未使用 LazyImage。
  */
-import { formatWeekday, formatTimeRange } from '../../utils/activitySchedule'
+import { formatWeekdays, formatTimeRange } from '../../utils/activitySchedule'
 import M3Card from '../m3/M3Card.vue'
 import M3Icon from '../m3/M3Icon.vue'
 import StatusPill from '../StatusPill.vue'
@@ -27,7 +27,7 @@ interface Course {
   is_full: boolean
   allow_waitlist: boolean
   description?: string
-  meeting_weekday?: number | null
+  meeting_weekdays?: number[] | null
   meeting_start_time?: string | null
   meeting_end_time?: string | null
   instructor_name?: string | null
@@ -44,7 +44,7 @@ const props = withDefaults(defineProps<{
 
 // 課程時段摘要：'週三 15:30–16:30'（缺 weekday 或時間則只顯示有的部分）。
 function scheduleText(c: Course): string {
-  return [formatWeekday(c.meeting_weekday), formatTimeRange(c.meeting_start_time, c.meeting_end_time)]
+  return [formatWeekdays(c.meeting_weekdays), formatTimeRange(c.meeting_start_time, c.meeting_end_time)]
     .filter(Boolean)
     .join(' ')
 }

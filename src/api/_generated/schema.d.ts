@@ -152,8 +152,9 @@ export interface paths {
          * Create Sessions Batch
          * @description 依「每週上課星期」在日期範圍內批次建立場次（取代逐堂手動新增十幾二十次）。
          *
-         *     weekday 省略時取課程 meeting_weekday；同課同日已存在（uq_activity_session_course_date）
-         *     者跳過並計入 skipped_existing（冪等 → 可重複按 / 微調範圍重跑不報錯）。
+         *     weekday 省略時取課程 meeting_weekdays 的全部星期（複選，actwkdays01）；
+         *     同課同日已存在（uq_activity_session_course_date）者跳過並計入
+         *     skipped_existing（冪等 → 可重複按 / 微調範圍重跑不報錯）。
          */
         post: operations["create_sessions_batch_api_activity_attendance_sessions_batch_post"];
         delete?: never;
@@ -1647,8 +1648,8 @@ export interface paths {
          *     避免重複打 Excel 生成造成資源壓力）
          *
          *     school_year / semester、match_status / include_inactive：與列表端點使用相同
-         *     篩選口徑；未提供學期時預設當前學期（resolve_academic_term_filters），
-         *     避免畫面與匯出內容不一致。
+         *     篩選口徑；未提供學期時預設「報名設定列開放的學期」（2026-07-31 盲區稽核 B4），
+         *     與家長送出報名時的寫入學期同源，避免畫面與匯出內容不一致。
          *
          *     內容（2026-07-31 豐富化）：
          *     - 「報名名單」：標題/摘要列 + 完整欄位（生日/家長聯絡/用品/應繳/已繳/差額/
@@ -1679,8 +1680,9 @@ export interface paths {
          *     include_inactive：預設 False（維持只含 active 的現狀）；財務需查核刪除並退款後的
          *     歷史帳務時可帶 true 納入軟刪報名（#5）。
          *
-         *     school_year / semester：與列表端點一致，未提供時預設當前學期
-         *     （resolve_academic_term_filters），避免匯出傾印所有 active 學期。
+         *     school_year / semester：與列表端點一致，未提供時預設「報名設定列開放的學期」
+         *     （2026-07-31 盲區稽核 B4），避免匯出傾印所有 active 學期、也避免與家長報名的
+         *     寫入學期分叉。
          */
         get: operations["export_payment_report_api_activity_registrations_payment_report_get"];
         put?: never;
@@ -19524,8 +19526,8 @@ export interface components {
             meeting_end_time?: string | null;
             /** Meeting Start Time */
             meeting_start_time?: string | null;
-            /** Meeting Weekday */
-            meeting_weekday?: number | null;
+            /** Meeting Weekdays */
+            meeting_weekdays?: number[] | null;
             /** Name */
             name: string;
             /** Price */
@@ -19699,6 +19701,8 @@ export interface components {
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
+            /** Meeting Weekdays */
+            meeting_weekdays?: number[] | null;
             /** Name */
             name: string;
             /** Pending Review */
@@ -19772,8 +19776,8 @@ export interface components {
             meeting_end_time?: string | null;
             /** Meeting Start Time */
             meeting_start_time?: string | null;
-            /** Meeting Weekday */
-            meeting_weekday?: number | null;
+            /** Meeting Weekdays */
+            meeting_weekdays?: number[] | null;
             /** Name */
             name?: string | null;
             /** Price */
@@ -24732,6 +24736,8 @@ export interface components {
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
+            /** Meeting Weekdays */
+            meeting_weekdays?: number[] | null;
             /** Name */
             name: string;
             /** Next Session Date */
@@ -25064,6 +25070,8 @@ export interface components {
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
+            /** Meeting Weekdays */
+            meeting_weekdays?: number[] | null;
             /** Session Date */
             session_date: string;
             /** Student Id */
@@ -27284,6 +27292,8 @@ export interface components {
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
+            /** Meeting Weekdays */
+            meeting_weekdays?: number[] | null;
             /** Name */
             name: string;
             /** Next Session Date */
@@ -28316,6 +28326,8 @@ export interface components {
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
+            /** Meeting Weekdays */
+            meeting_weekdays?: number[] | null;
             /** Price Snapshot */
             price_snapshot?: number | null;
             /** Promoted At */

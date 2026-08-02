@@ -309,7 +309,7 @@ export const getAttendanceSessions = (params?: ApiQuery<'/activity/attendance/se
   api.get('/activity/attendance/sessions', { params })
 export const createAttendanceSession = (data: ApiBody<'/activity/attendance/sessions', 'post'>): AxiosResp<'/activity/attendance/sessions', 'post'> =>
   api.post('/activity/attendance/sessions', data)
-// 依上課星期在日期範圍批次建場次（取代逐堂手動新增）；weekday 省略則用課程 meeting_weekday
+// 依上課星期在日期範圍批次建場次（取代逐堂手動新增）；weekday 省略則用課程 meeting_weekdays 全部星期
 export const createAttendanceSessionsBatch = (data: ApiBody<'/activity/attendance/sessions/batch', 'post'>): AxiosResp<'/activity/attendance/sessions/batch', 'post'> =>
   api.post('/activity/attendance/sessions/batch', data)
 export const deleteAttendanceSession = (id: number): AxiosResp<'/activity/attendance/sessions/{session_id}', 'delete'> =>

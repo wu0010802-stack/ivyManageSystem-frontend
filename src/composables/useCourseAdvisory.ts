@@ -3,50 +3,42 @@
  *
  * 集中:
  *  - availabilityState(course)        — 名額顏色語意（剩餘 / 候補 / 額滿）
- *  - formatSchedule(course)            — 「週X 09:30–10:30」字串
+ *  - formatSchedule(course)            — 「週一、三 09:30–10:30」字串
  *  - courseAdvisory(course)            — 衝堂 warning 列表
  *  - selectedAdvisories                — 已勾選課程的 advisory 匯總(供 advisory-panel)
  *
  * Input: { courses, availability, form } reactive refs
+ * 時段判定/格式化委派 @/utils/weekdaySchedule（上課星期複選版，actwkdays01）。
  */
 
 import { computed, type Ref } from 'vue'
-
-const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
+import {
+  formatWeekdaySchedule,
+  hasWeekdaySchedule,
+  weekdaySchedulesOverlap,
+} from '@/utils/weekdaySchedule'
 
 type CourseItem = {
   name: string
-  meeting_weekday?: number | null
+  meeting_weekdays?: number[] | null
   meeting_start_time?: string | null
   meeting_end_time?: string | null
   [key: string]: unknown
 }
 
-function hasSchedule(c: CourseItem) {
-  return c && c.meeting_weekday != null && !!c.meeting_start_time && !!c.meeting_end_time
-}
-
-function schedulesOverlap(a: CourseItem, b: CourseItem) {
-  if (!hasSchedule(a) || !hasSchedule(b)) return false
-  if (a.meeting_weekday !== b.meeting_weekday) return false
-  // "HH:MM" 字串字典序與時間序一致;半開區間判定重疊
-  return (a.meeting_start_time ?? '') < (b.meeting_end_time ?? '') && (b.meeting_start_time ?? '') < (a.meeting_end_time ?? '')
-}
-
 export function useCourseAdvisory({ courses, availability, form }: { courses: Ref<CourseItem[]>; availability: Ref<Record<string, number>>; form: { selectedCourses: string[] } }) {
   function formatSchedule(course: CourseItem) {
-    if (!hasSchedule(course)) return ''
-    return `週${WEEKDAY_LABELS[course.meeting_weekday!]} ${course.meeting_start_time}–${course.meeting_end_time}`
+    return formatWeekdaySchedule(course)
   }
 
   // 對單一課程算 advisory(衝堂);僅在課程被勾選時計算
   function courseAdvisory(course: CourseItem) {
     const warnings = []
-    if (form.selectedCourses.includes(course.name) && hasSchedule(course)) {
+    if (form.selectedCourses.includes(course.name) && hasWeekdaySchedule(course)) {
       for (const otherName of form.selectedCourses) {
         if (otherName === course.name) continue
         const other = courses.value.find((c: CourseItem) => c.name === otherName)
-        if (other && schedulesOverlap(course, other)) {
+        if (other && weekdaySchedulesOverlap(course, other)) {
           warnings.push({
             kind: 'conflict',
             severity: 'danger',

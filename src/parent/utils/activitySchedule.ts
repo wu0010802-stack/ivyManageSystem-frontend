@@ -1,28 +1,25 @@
 /**
  * 家長端才藝課「上課時段 / 衝堂偵測」純函式。
  *
- * 資料來源：後端 list_courses / my-registrations 已曝露 meeting_weekday(0=Mon..6=Sun)、
- * meeting_start_time / meeting_end_time（"HH:MM"）。
- * 衝堂為前台 advisory（model 設計：警告不擋報名），故全部判定在前端純函式完成。
+ * 資料來源：後端 list_courses / my-registrations 已曝露 meeting_weekdays
+ * （複選陣列，0=Mon..6=Sun；actwkdays01）、meeting_start_time /
+ * meeting_end_time（"HH:MM"）。衝堂為前台 advisory（model 設計：警告不擋報名），
+ * 故全部判定在前端純函式完成；星期標籤/交集判定委派 @/utils/weekdaySchedule。
  */
 
-export interface CourseSlot {
-  meeting_weekday?: number | null
-  meeting_start_time?: string | null
-  meeting_end_time?: string | null
-}
+import {
+  formatWeekdays,
+  weekdaySchedulesOverlap,
+  type WeekdaySlot,
+} from '../../utils/weekdaySchedule'
+
+export type CourseSlot = WeekdaySlot
 
 export interface CatalogCourseSlot extends CourseSlot {
   id: number
 }
 
-const WEEKDAY_LABELS = ['週一', '週二', '週三', '週四', '週五', '週六', '週日']
-
-/** meeting_weekday(0=Mon..6=Sun) → '週一'..'週日'；非法/缺值 → ''。 */
-export function formatWeekday(weekday?: number | null): string {
-  if (weekday == null || weekday < 0 || weekday > 6) return ''
-  return WEEKDAY_LABELS[weekday]
-}
+export { formatWeekdays }
 
 /** ('15:30','16:30') → '15:30–16:30'；缺任一端 → ''（時段不完整不顯示）。 */
 export function formatTimeRange(start?: string | null, end?: string | null): string {
@@ -31,16 +28,11 @@ export function formatTimeRange(start?: string | null, end?: string | null): str
 }
 
 /**
- * 兩課程時段是否衝突：同星期 + 時間區間重疊（相接邊界不算重疊）。
- * 任一缺 weekday 或起訖時間 → 無法判定，回 false（不誤報）。
- * "HH:MM" 為零補位字串，字典序即時間序，可直接比較。
+ * 兩課程時段是否衝突：星期集合有交集 + 時間區間重疊（相接邊界不算重疊）。
+ * 任一缺星期或起訖時間 → 無法判定，回 false（不誤報）。
  */
 export function hasScheduleConflict(a: CourseSlot, b: CourseSlot): boolean {
-  if (a.meeting_weekday == null || b.meeting_weekday == null) return false
-  if (a.meeting_weekday !== b.meeting_weekday) return false
-  if (!a.meeting_start_time || !a.meeting_end_time) return false
-  if (!b.meeting_start_time || !b.meeting_end_time) return false
-  return a.meeting_start_time < b.meeting_end_time && b.meeting_start_time < a.meeting_end_time
+  return weekdaySchedulesOverlap(a, b)
 }
 
 /** 已佔位狀態（與後端 OCCUPYING_STATUSES 對齊）：候補不算佔時段。 */
@@ -78,7 +70,7 @@ export function collectBusySlots(
     for (const c of reg?.courses || []) {
       if (c.status && statuses.includes(c.status)) {
         slots.push({
-          meeting_weekday: c.meeting_weekday,
+          meeting_weekdays: c.meeting_weekdays,
           meeting_start_time: c.meeting_start_time,
           meeting_end_time: c.meeting_end_time,
         })
