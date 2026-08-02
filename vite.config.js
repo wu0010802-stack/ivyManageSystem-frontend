@@ -111,7 +111,15 @@ function manualChunks(id) {
         // （首屏 332KB 爆 310KB 預算、check-entry-chunks 紅、staging 部署連續失敗）。
         // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第三次同型回歸。
         id.includes('/src/utils/ws.ts') ||
-        id.includes('/src/utils/html.ts')
+        id.includes('/src/utils/html.ts') ||
+        // weekdaySchedule：上課星期複選的判定/格式化/衝堂純函式（零 import、EP-free），
+        // 公開報名頁 useCourseAdvisory 與家長端 parent/utils/activitySchedule 皆用。
+        // 未 pin 時被吸進 parent-app chunk → 公開頁的 ActivityPublicView（lazy route，
+        // 但 / redirect 到 /activity 故等同首屏）靜態 import parent-app 整包 →
+        // src/parent/main.ts 的 top-level 副作用執行：家長 App 也 mount('#app') 搶佔
+        // 畫面、guard 判未登入導向 /login → 公開報名網址開出家長端登入（LIFF）。
+        // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第四次同型回歸。
+        id.includes('/src/utils/weekdaySchedule.ts')
     ) {
         return 'shared-common'
     }
