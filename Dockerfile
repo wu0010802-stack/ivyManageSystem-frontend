@@ -13,7 +13,11 @@ COPY . .
 # VITE_* 變數會被烤進 bundle，必須在 build 階段提供
 ARG VITE_API_BASE_URL=/api
 ARG VITE_GOOGLE_MAPS_API_KEY=
-ARG VITE_LIFF_ID=2009899896-2qCpwrdC
+# 不給預設值：LIFF ID 綁定 LINE console 的 endpoint 網域，各環境必須在
+# 儀表板顯式設定；硬編 prod ID 曾讓沒設變數的 staging 默默把 LIFF 流程
+# 轉去 prod endpoint（環境互串）。缺值時家長端 LINE 登入會明確報
+# 「VITE_LIFF_ID 未設定」（src/parent/services/liff.ts），fail-fast 優於誤連。
+ARG VITE_LIFF_ID=
 ARG VITE_LINE_BOT_FRIEND_URL=https://line.me/R/ti/p/@116fakhu
 # Sentry 錯誤監控：DSN 為唯一啟用開關（空值 → utils/sentry.ts no-op，SDK 不下載）。
 # 必須宣告為 build ARG，否則 Zeabur 儀表板即使設了 VITE_SENTRY_DSN 也無法穿透
