@@ -31,6 +31,33 @@ describe('C-race: /auth/refresh 409（併發 rotation）不應把仍有效的 se
     await router.push('/login')
   })
 
+  it('全新分頁沒有 per-tab userInfo 時，改用 HttpOnly Cookie 還原 session', async () => {
+    // userInfo 已改 per-tab sessionStorage，開新分頁一定是空的；此時不可直接
+    // 判定未登入，必須讓共享的 HttpOnly refresh cookie 有機會還原身分。
+    refreshSessionMock.mockImplementationOnce(async () => ({
+      data: { user: { id: 'new-tab-admin', role: 'admin', permission_names: ['EMPLOYEES_READ'] } },
+    }))
+
+    const landed = await navigate('/employees')
+
+    expect(refreshSessionMock).toHaveBeenCalledTimes(1)
+    expect(landed).toBe('/employees')
+    expect(isLoggedIn()).toBe(true)
+  })
+
+  it('全新分頁遇 409 時不得把未知身分當成已登入', async () => {
+    const conflict = new Error('rotation in progress, please retry') as Error & {
+      response?: { status: number }
+    }
+    conflict.response = { status: 409 }
+    refreshSessionMock.mockRejectedValueOnce(conflict)
+
+    const landed = await navigate('/employees')
+
+    expect(landed).toBe('/login')
+    expect(isLoggedIn()).toBe(false)
+  })
+
   it('session 驗證視窗過期但收到 409 時，沿用既有 userInfo 並放行導航（不彈回 /login）', async () => {
     setUserInfo({
       role: 'admin',
