@@ -3,6 +3,7 @@
 import { shallowRef } from 'vue'
 import { getActivePinia } from 'pinia'
 import { advanceAdminSession, onAdminSessionReset } from '@/utils/adminSession'
+import type { AdminSessionResetContext } from '@/utils/adminSession'
 import {
   PERMISSION_NAMES,
   ROUTE_PERMISSION_RULES,
@@ -33,27 +34,40 @@ let _pendingClientCleanup: Promise<void> = Promise.resolve()
 // 響應式 user info 來源：refresh / setUserInfo 後，任何 computed(() => hasPermission(...))
 // 或 computed(() => getUserInfo()) 會自動重算，不需要 F5。
 // 用 shallowRef：只有整個物件被替換時才觸發，比 ref 省 deep-reactive 開銷。
+// userInfo 一律存 sessionStorage（per-tab）：localStorage 是同源共用的，
+// 兩個分頁登入不同帳號時會互相覆寫，舊分頁還會繼續拿新帳號的共享 Cookie 打 API。
 function _readFromStorage(): Record<string, unknown> | null {
-  const str = localStorage.getItem(USER_INFO_KEY)
+  const str = sessionStorage.getItem(USER_INFO_KEY)
   if (!str) return null
   try {
-    return JSON.parse(str) as Record<string, unknown>
+    const parsed = JSON.parse(str) as unknown
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    return parsed as Record<string, unknown>
   } catch {
     return null
   }
 }
 
-// 跨版本 localStorage 嗅探：若 userInfo 仍是舊 bigint mask schema
-// （含 `permissions` 但無 `permission_names`），清掉以免下游 hasPermission 拿到錯誤型別。
-// 部署後第一次開瀏覽器會強制 redirect 到登入頁。
+// 跨版本嗅探：
+// 1. 舊版把 userInfo 放共用 localStorage——升級後一律丟棄（無法證明與目前 Cookie
+//    同一身分，且是跨分頁 PII 外洩來源），交由 route guard 用 Cookie 重新驗證。
+// 2. 更舊的 bigint mask schema（含 `permissions` 但無 `permission_names`）同樣清掉，
+//    以免下游 hasPermission 拿到錯誤型別。
 function _purgeStaleUserInfo() {
+  try {
+    if (localStorage.getItem(USER_INFO_KEY) !== null) {
+      localStorage.removeItem(USER_INFO_KEY)
+      sessionStorage.removeItem(SESSION_VALIDATED_AT_KEY)
+    }
+  } catch { /* storage 被停用時只靠 in-memory state */ }
+
   const stored = _readFromStorage()
   if (
     stored &&
     'permissions' in stored &&
     !('permission_names' in stored)
   ) {
-    localStorage.removeItem(USER_INFO_KEY)
+    sessionStorage.removeItem(USER_INFO_KEY)
   }
 }
 _purgeStaleUserInfo()
@@ -94,12 +108,8 @@ export function getUserInfo() {
 
 export function setUserInfo(info: unknown) {
   _userInfoRef.value = info as Record<string, unknown>
-  localStorage.setItem(USER_INFO_KEY, JSON.stringify(info))
+  sessionStorage.setItem(USER_INFO_KEY, JSON.stringify(info))
   _setSessionValidatedAt()
-}
-
-export function hasStoredUserInfo() {
-  return _userInfoRef.value !== null
 }
 
 /** 新登入必須先等這個 barrier，避免舊 logout 的 Set-Cookie 晚到清掉新 cookie。 */
@@ -116,20 +126,23 @@ export function waitForAdminSessionCleanup(): Promise<void> {
  * 純本地的身分切換 cleanup。不清 userInfo、不送 logout，因此可安全用於
  * login / impersonate / end-impersonate 發出前，也不會在新身分回應後反向清狀態。
  */
-function _resetAdminSessionRuntimeState(): void {
+function _resetAdminSessionRuntimeState(context: AdminSessionResetContext): void {
   // Pinia 是同步 in-memory state，先立即清掉，不留一個 render tick 的 PII。
   _resetStores()
 
-  // CacheStorage / IndexedDB 是 async；世代間串行，且新身分請求會 await
-  // 這個 barrier，避免舊 cleanup 晚到刪掉新身分剛寫入的 cache / queue。
+  // 另一分頁換了身分：本分頁的 userInfo 已經不對應目前的共享 Cookie，
+  // 必須立刻失效並退出受保護畫面，否則會用新帳號的 Cookie 續打舊帳號的 API。
+  if (context.source === 'remote') _clearLocalIdentity({ redirect: true })
+
+  // CacheStorage 是 async；世代間串行，且新身分請求會 await 這個 barrier，
+  // 避免舊 cleanup 晚到刪掉新身分剛寫入的個人化 cache。
+  //
+  // ⚠ 這裡刻意**不清離線佇列**：IndexedDB 佇列每筆都帶 user_id、listOps 缺
+  // userId 時 fail-closed，本來就不會跨使用者送出。身分切換時 clearAll() 等於
+  // 把其他老師（或本人下次登入）尚未同步的離線點名一起刪掉。
   _pendingClientCleanup = _pendingClientCleanup
     .catch(() => undefined)
-    .then(async () => {
-      await Promise.all([
-        _purgeOfflineQueue(),
-        _purgePortalCaches(),
-      ])
-    })
+    .then(() => _purgePortalCaches())
 }
 
 onAdminSessionReset(_resetAdminSessionRuntimeState)
@@ -165,9 +178,7 @@ export function clearAuth(options: { notifyServer?: boolean } = {}): Promise<voi
   const { notifyServer = true } = options
   advanceAdminSession()
   const clientCleanup = waitForAdminSessionCleanup()
-  _userInfoRef.value = null
-  localStorage.removeItem(USER_INFO_KEY)
-  _clearSessionValidatedAt()
+  _clearLocalIdentity({ redirect: false })
   // 公開報名草稿含 PII（姓名/生日/手機），登出時一併清除
   try {
     sessionStorage.removeItem('activity_draft')
@@ -234,14 +245,36 @@ async function _purgePortalCaches(): Promise<void> {
   }
 }
 
-async function _purgeOfflineQueue(): Promise<void> {
-  // 動態 import 避免冷啟動就載入 idb 函式庫
+/**
+ * 清掉本分頁的身分狀態。`redirect` 供遠端（另一分頁換身分）情境使用：
+ * 舊畫面已渲染的學生／薪資資料不能留在螢幕上等使用者自己發現。
+ */
+function _clearLocalIdentity({ redirect }: { redirect: boolean }): void {
+  // 沒有身分的分頁（登入頁、尚未還原的新分頁）沒有東西要保護，
+  // 不該因為別的分頁換帳號就被硬拉走。
+  const shouldRedirect = redirect && _userInfoRef.value !== null
+  const wasPortal = shouldRedirect && _isPortalContext()
+  _userInfoRef.value = null
   try {
-    const mod = await import('@/utils/offlineQueue')
-    await mod.clearAll?.()
+    sessionStorage.removeItem(USER_INFO_KEY)
+    localStorage.removeItem(USER_INFO_KEY)  // 清舊版共用殘留
+  } catch { /* storage 被停用時只清 in-memory state */ }
+  _clearSessionValidatedAt()
+
+  if (!shouldRedirect || typeof window === 'undefined') return
+  try {
+    const target = wasPortal ? '#/portal/login' : '#/login'
+    if (window.location.hash !== target) window.location.hash = target
   } catch {
-    /* IndexedDB 不可用時仍解開 session barrier */
+    /* 無 location API 的測試/SSR 環境不阻斷其餘 session 隔離 */
   }
+}
+
+function _isPortalContext(): boolean {
+  try {
+    if (window.location.hash.includes('/portal')) return true
+  } catch { /* 無 location API */ }
+  return isPortalOnlyUser(_userInfoRef.value)
 }
 
 export function clearMustChangePassword() {

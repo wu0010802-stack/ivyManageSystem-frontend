@@ -228,28 +228,43 @@ describe('權限邏輯（text[] 版本）', () => {
     })
   })
 
-  describe('localStorage 跨版本 schema 嗅探', () => {
+  describe('跨版本 userInfo 嗅探', () => {
     it("舊版 schema（含 'permissions' 且無 'permission_names'）會在模組載入時被清除", async () => {
       // 模擬部署前的舊 userInfo
-      localStorage.setItem(
+      sessionStorage.setItem(
         'userInfo',
         JSON.stringify({ id: 'A001', role: 'admin', permissions: -1 })
       )
       vi.resetModules()
       const fresh = await import('@/utils/auth')
       expect(fresh.getUserInfo()).toBeNull()
-      expect(localStorage.getItem('userInfo')).toBeNull()
+      expect(sessionStorage.getItem('userInfo')).toBeNull()
     })
 
-    it("新版 schema（含 'permission_names'）保留", async () => {
+    it('留在共用 localStorage 的 userInfo 一律丟棄（即使 schema 是新版）', async () => {
+      // userInfo 改 per-tab 後，localStorage 的殘留無法證明與本分頁目前的共享
+      // Cookie 是同一身分，且會把 PII 洩漏給其他分頁——一律清掉，改由受保護
+      // route 用 Cookie refresh 重新驗證。
       localStorage.setItem(
         'userInfo',
         JSON.stringify({ id: 'A002', role: 'admin', permission_names: ['*'] })
       )
       vi.resetModules()
       const fresh = await import('@/utils/auth')
+      expect(fresh.getUserInfo()).toBeNull()
+      expect(localStorage.getItem('userInfo')).toBeNull()
+      expect(sessionStorage.getItem('auth_session_validated_at')).toBeNull()
+    })
+
+    it('本分頁 sessionStorage 的新版 userInfo 保留', async () => {
+      sessionStorage.setItem(
+        'userInfo',
+        JSON.stringify({ id: 'A003', role: 'admin', permission_names: ['*'] })
+      )
+      vi.resetModules()
+      const fresh = await import('@/utils/auth')
       expect(fresh.getUserInfo()).toMatchObject({
-        id: 'A002',
+        id: 'A003',
         role: 'admin',
         permission_names: ['*'],
       })
