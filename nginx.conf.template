@@ -57,6 +57,10 @@ server {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
     }
+    location = /public.html {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+    }
     location = /sw.js {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
