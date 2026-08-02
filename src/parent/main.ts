@@ -32,6 +32,13 @@ import { initA11y } from './composables/useA11y'
 import { initSentry } from '@/utils/sentry'
 // 離線寫入佇列：boot / online / visibilitychange flush triggers（spec §6.3.2）
 import { flushAllParent } from '@/parent/utils/parentOfflineQueue'
+import { resolvePublicLiffStateTarget } from '@/parent/utils/liffStateRedirect'
+
+// 誤包 LIFF 的公開頁連結：liff.state 指向 /public.html 時整頁跳轉過去，
+// 不讓家長端登入頁攔胡（機制說明見 liffStateRedirect.ts）。跳轉後頁面即將
+// 卸載，後續 boot 流程照跑無害。
+const publicLiffTarget = resolvePublicLiffStateTarget(window.location.search)
+if (publicLiffTarget) window.location.replace(publicLiffTarget)
 
 // PWA 升級自救（chunk hash 失效時清 SW+caches reload，避免白屏）
 installChunkSelfHeal()
