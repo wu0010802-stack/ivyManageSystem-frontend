@@ -40,6 +40,17 @@
       @close="dmModal.visible = false"
     />
 
+    <!-- 海報放大檢視：左欄 ~526px 顯示不出原圖 2500px 級的細節 -->
+    <PosterLightbox
+      :visible="posterLightboxVisible"
+      :title="displayTitle"
+      :src="posterSrc"
+      :download-name="posterDownloadName"
+      :can-share="canSharePoster"
+      @close="posterLightboxVisible = false"
+      @share="sharePoster"
+    />
+
     <!-- Success Modal（A1-P5 抽元件） -->
     <SuccessSummaryModal :summary="successModal" @close="closeSuccessModal" />
 
@@ -162,7 +173,16 @@
         >
           <div class="grid-layout">
             <div class="col-left">
-              <div class="poster-wrapper" :class="{ 'is-loading': !posterLoaded }">
+              <div
+                class="poster-wrapper"
+                :class="{ 'is-loading': !posterLoaded, 'poster-wrapper--zoomable': posterZoomable }"
+                :role="posterZoomable ? 'button' : undefined"
+                :tabindex="posterZoomable ? 0 : undefined"
+                :aria-label="posterZoomable ? '放大檢視活動海報' : undefined"
+                @click="openPosterLightbox"
+                @keydown.enter.prevent="openPosterLightbox"
+                @keydown.space.prevent="openPosterLightbox"
+              >
                 <img
                   :src="posterSrc"
                   :alt="`${displayTitle} 活動海報`"
@@ -172,7 +192,12 @@
                   @load="onPosterLoad"
                   @error="onPosterError"
                 />
-                <div v-if="posterLoaded" class="poster-actions">
+                <span v-if="posterZoomable" class="poster-zoom-hint" aria-hidden="true">
+                  <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
+                  點擊放大
+                </span>
+                <!-- 下載／分享是獨立動作，點它們不該連帶開燈箱 -->
+                <div v-if="posterLoaded" class="poster-actions" @click.stop>
                   <a
                     class="poster-action tap-target"
                     :href="posterSrc"
@@ -674,6 +699,7 @@ import { apiErrorMessage } from '@/utils/apiErrorMessage'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import DmPreviewModal from './components/DmPreviewModal.vue'
+import PosterLightbox from './components/PosterLightbox.vue'
 import ContactInquiryModal from './components/ContactInquiryModal.vue'
 import ToastStack from './components/ToastStack.vue'
 import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
@@ -804,6 +830,17 @@ const submitting = ref(false)
 const submitError = ref('')
 const posterLoaded = ref(false)
 function onPosterLoad() { posterLoaded.value = true }
+
+// 海報放大檢視：原圖是 2500px 級印刷稿，左欄只有 ~526px 顯示不出細節。
+// 閘門要同時排除 posterBroken——載入失敗會 fallback 到 DEFAULT_POSTER（打包進站的
+// 小圖），那張同樣會觸發 @load 把 posterLoaded 設 true，只看 posterLoaded 會讓
+// 家長點開一張放大也沒有細節的預設圖。
+const posterZoomable = computed(() => posterLoaded.value && !posterBroken.value)
+const posterLightboxVisible = ref(false)
+function openPosterLightbox() {
+  if (!posterZoomable.value) return
+  posterLightboxVisible.value = true
+}
 
 // 初始化狀態：'loading' | 'ready' | 'error'
 // loading 期間隱藏報名表，error 顯示頁內錯誤狀態 + 重試按鈕，避免「toast 一閃但頁面空殼」
@@ -1549,9 +1586,44 @@ onUnmounted(() => {
 }
 .poster-action:hover { background: #fff; transform: translateY(-1px); }
 .poster-action .icon, .poster-action svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* 海報左下角「點擊放大」提示，與右下角 .poster-actions 同一套 chip 外觀與浮現時機 */
+.poster-wrapper--zoomable { cursor: zoom-in; }
+.poster-zoom-hint {
+  position: absolute;
+  left: var(--space-3);
+  bottom: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  pointer-events: none;
+}
+.poster-zoom-hint .icon, .poster-zoom-hint svg { width: 14px; height: 14px; flex-shrink: 0; }
+.poster-wrapper--zoomable:hover .poster-zoom-hint,
+.poster-wrapper--zoomable:focus-within .poster-zoom-hint {
+  opacity: 1;
+  transform: translateY(0);
+}
+.poster-wrapper--zoomable:focus-visible {
+  outline: 2px solid var(--color-primary-strong);
+  outline-offset: 2px;
+}
 @media (hover: none) {
   .poster-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
   .poster-action { padding: 4px 10px; font-size: 11px; }
+  /* 觸控裝置沒有 hover，提示常駐才看得到 */
+  .poster-zoom-hint { opacity: 1; transform: translateY(0); padding: 4px 10px; font-size: 11px; }
 }
 .poster-wrapper.is-loading img { opacity: 0; }
 .poster-wrapper.is-loading::after {
@@ -2750,6 +2822,124 @@ onUnmounted(() => {
   left: 0;
   color: var(--neutral-0);
   font-size: var(--fs-md);
+}
+/* 海報放大檢視（PosterLightbox）：沉浸式殼，面板不畫底色與陰影，空間全留給海報。
+   overlay 加深到 .9 是因為海報四周是奶油黃亮底，.55 的遮罩壓不住背景、圖浮不出來。
+
+   ⚠ 關鍵取捨：海報是 A4 直式（比例約 1:1.41），若讓整張 fit 進視窗（max-height:
+   NNvh），桌機視窗高才 800 出頭，扣掉標題與動作列後圖只剩 ~460px 寬——比頁面上
+   原本的 526px 還小，等於白做。所以這裡走「寬度優先 + 垂直捲動」：圖以最大 900px
+   寬渲染（頁面內的 1.7 倍），看不完的往下捲。 */
+.public-activity-page .modal-overlay--poster {
+  background: rgba(15, 23, 42, 0.9);
+  display: none;
+  align-items: flex-start;
+  padding: 0;
+  /* 放大後要能雙向捲動；overscroll-behavior 防止捲到底把底下的報名頁一起帶動 */
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.public-activity-page .modal-overlay--poster.is-visible { display: block; }
+.public-activity-page .modal-panel--poster {
+  /* 放大後圖會比視窗寬，此時 panel 要跟著撐開才捲得到右半邊；
+     置中一律靠 margin auto，不用 flex align-items:center——後者在子元素
+     比容器寬時會把左半截切掉且捲不回去 */
+  width: fit-content;
+  min-width: 100%;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  display: block;
+  /* 上方留白讓開圖片時不被固定在角落的標題／關閉鈕壓到 */
+  padding: 60px var(--space-5) var(--space-8);
+}
+/* 標題與關閉鈕固定在視窗角落，捲動時不跟著跑掉 */
+.public-activity-page .modal-panel--poster .modal-title {
+  position: fixed;
+  top: 18px;
+  left: var(--space-5);
+  /* 反白字浮在深色遮罩上；--video 變體用的 --neutral-0 已被 stylelint 標 deprecated */
+  color: var(--color-primary-contrast);
+  font-size: var(--fs-md);
+  text-shadow: 0 1px 4px rgba(15, 23, 42, 0.6);
+}
+.public-activity-page .modal-panel--poster .modal-close {
+  position: fixed;
+  top: 14px;
+  right: var(--space-5);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-md);
+  z-index: 1;
+}
+.public-activity-page .poster-full {
+  display: block;
+  width: min(100%, 900px);
+  height: auto;
+  margin: 0 auto;
+  /* 頁面上的海報是 aspect-ratio 3/4 + cover（上下被裁掉一截），
+     這裡不設 aspect-ratio 讓原圖以真實比例完整呈現 */
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-xl);
+  cursor: zoom-in;
+}
+/* 第二段：放大到兩倍寬再自由捲動。上限 1800px 是因為原圖寬 2505，
+   超過就只是把像素放大、看不到更多細節。 */
+.public-activity-page .poster-full.is-zoomed {
+  width: min(200%, 1800px);
+  max-width: none;
+  cursor: zoom-out;
+}
+.public-activity-page .poster-full:focus-visible {
+  outline: 2px solid var(--color-primary-contrast);
+  outline-offset: 3px;
+}
+/* 動作列黏在視窗底部，捲到哪都按得到。海報比視窗高時它會疊在圖上，
+   所以收進一個深色 pill 裡，讓它讀起來是浮動工具列而不是壓在海報上的雜訊。 */
+.public-activity-page .poster-full-actions {
+  position: sticky;
+  bottom: var(--space-4);
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  width: fit-content;
+  margin: var(--space-4) auto 0;
+  padding: var(--space-2);
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: var(--radius-full);
+}
+/* 燈箱在子元件內，拿不到 <style scoped> 的 .poster-action；此處重新 export 一份
+   （與 scoped 版同一套 chip 外觀，改動時兩邊要一起改） */
+.public-activity-page .poster-full-actions .poster-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.public-activity-page .poster-full-actions .poster-action:hover {
+  background: var(--color-surface);
+  transform: translateY(-1px);
+}
+.public-activity-page .poster-full-actions .poster-action .icon,
+.public-activity-page .poster-full-actions .poster-action svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 .public-activity-page .video-wrapper {
   width: 100%;
