@@ -490,10 +490,6 @@
           </template>
           <template v-else>
             <input :value="editForm.new_name" type="text" class="input-text" readonly />
-            <div class="field-hint field-hint-locked">
-              <span class="field-tag">已完成審核</span>
-              如姓名有誤，請聯繫校方協助更正
-            </div>
           </template>
         </div>
 
@@ -505,10 +501,6 @@
           </template>
           <template v-else>
             <input :value="editForm.new_birthday" type="date" class="input-text" readonly />
-            <div class="field-hint field-hint-locked">
-              <span class="field-tag">已完成審核</span>
-              如生日有誤，請聯繫校方協助更正
-            </div>
           </template>
         </div>
 
@@ -523,10 +515,6 @@
           </template>
           <template v-else>
             <input :value="editForm.class_name" type="text" class="input-text" readonly />
-            <div class="field-hint field-hint-locked">
-              <span class="field-tag">依園所系統資料</span>
-              如班級有誤，請聯繫校方協助調整
-            </div>
           </template>
         </div>
 
@@ -1576,21 +1564,6 @@ onBeforeUnmount(() => {
   margin-top: var(--space-1);
   font-size: var(--fs-xs);
   color: var(--color-text-subtle);
-}
-.field-hint-locked {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-}
-.field-tag {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  color: var(--color-primary-strong);
-  background: var(--color-primary-soft);
-  border-radius: var(--radius-full);
 }
 
 /* 已付款鎖定：純文字唯讀摘要 */
