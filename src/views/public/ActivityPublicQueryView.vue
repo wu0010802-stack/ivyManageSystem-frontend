@@ -1737,9 +1737,12 @@ onBeforeUnmount(() => {
 @media (--to-sm) {
   .public-query-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
-  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
-  .page-brand-logo { width: 72px; height: 72px; }
+  /* 品牌列尺寸跟著報名頁走（那邊為了讓「選單」鈕不掉行縮了 logo 與校名字距）；
+     兩頁互跳時 header 不該有大小跳動，即使查詢頁本身沒有選單鈕 */
+  .page-brand { gap: var(--space-3); padding-bottom: var(--space-4); }
+  .page-brand-logo { width: 64px; height: 64px; }
   .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
+  .page-brand-zh { font-size: clamp(19px, 5.4vw, 22px); letter-spacing: 0.06em; }
   .action-buttons { flex-direction: column; }
   .action-buttons .btn { max-width: none; }
 }

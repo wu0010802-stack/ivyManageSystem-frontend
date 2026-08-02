@@ -2615,11 +2615,22 @@ onUnmounted(() => {
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-header { border-radius: 0; }
   .page-header { padding: var(--space-5); gap: var(--space-4); }
-  /* flex-wrap 是 ≤330px 極窄機的防線：帶「選單」標籤的按鈕擠不下時
-     整顆換行到品牌區第二列靠右，不裁切校名 */
-  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); flex-wrap: wrap; }
-  .page-brand-logo { width: 72px; height: 72px; }
+  /* 2026-08-03：舊註解說 flex-wrap 只是「≤330px 極窄機的防線」，實測低估了 70px——
+     原尺寸下品牌列需要 logo 72 + gap 16×2 + 校名 172(22px×7字×1.12 字距) + 選單鈕 84
+     = 356px，加 .page-header 左右 padding 40px 後門檻落在 viewport 400px：375／390／
+     393 三種主流 iPhone 全部溢出，選單鈕整顆掉到第二列（家長從 LINE 進來看到的高低差）。
+     DevTools 常態視窗寬 600–760px 雖同在 --to-sm 內卻遠寬於 400px，永遠重現不出來。
+     以下把需求壓到 ~305px（375 寬仍餘 22px 吸收字型度量差），wrap 退回真正的極窄機防線。 */
+  .page-brand { gap: var(--space-3); padding-bottom: var(--space-4); flex-wrap: wrap; }
+  .page-brand-logo { width: 64px; height: 64px; }
   .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
+  /* 校名改跟著 vw 縮（桌機那條 clamp 的 3vw 在手機恆低於下限，等於鎖死 22px）；
+     414px 以上機型維持原本的 22px，只有窄機才降到 19–21px */
+  .page-brand-zh { font-size: clamp(19px, 5.4vw, 22px); letter-spacing: 0.06em; }
+  /* 選單鈕是品牌列的第二大戶（原 84px）：收窄 padding 與圖示省下 16px，
+     高度維持 44px 不動觸控目標。省這 16px 才夠 360dp Android 一行放下 */
+  .page-menu-btn { gap: 4px; padding: 0 10px; }
+  .page-menu-btn .icon { width: 16px; height: 16px; }
   .page-subtitle { font-size: var(--fs-xl); }
   /* 為 sticky CTA 預留空間，避免遮擋頁尾文字 */
   .page-body { padding: var(--space-5); padding-bottom: 96px; }
