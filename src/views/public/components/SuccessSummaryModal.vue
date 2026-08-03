@@ -185,7 +185,7 @@ function handleDone() {
 
         <section v-if="summary.queryToken" class="success-token-box" aria-labelledby="successTokenTitle">
           <h4 id="successTokenTitle" class="token-title">查詢 / 編修專用連結</h4>
-          <p class="token-hint">請保存查詢碼：之後查詢或修改報名時，僅需查詢碼＋家長手機，免填姓名與生日。</p>
+          <p class="token-hint">請保存查詢碼：之後查詢或修改報名皆需以查詢碼＋家長手機進行。</p>
           <div class="token-field">
             <label class="token-label" for="successQueryToken">查詢碼</label>
             <div class="token-control">

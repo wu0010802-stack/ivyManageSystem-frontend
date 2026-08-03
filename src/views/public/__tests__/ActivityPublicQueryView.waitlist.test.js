@@ -11,7 +11,6 @@ vi.mock('vue-router', () => ({
 // ── 模擬 API ──────────────────────────────────────────────────────────────
 vi.mock('@/api/activityPublic', () => ({
   publicQueryByToken: vi.fn(),
-  publicQueryRegistration: vi.fn(),
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
@@ -24,7 +23,6 @@ vi.mock('@/api/activityPublic', () => ({
 
 import {
   publicQueryByToken,
-  publicQueryRegistration,
   publicConfirmPromotion,
   publicDeclinePromotion,
   getPublicBootstrap,
@@ -59,16 +57,11 @@ const mountView = async () => {
 }
 
 /**
- * 切換到 token 模式、填入查詢碼與手機，然後點擊查詢按鈕。
+ * 填入查詢碼與手機，然後點擊查詢按鈕。
  * handleQuery 在 tokenValid / phoneValid 不滿足時會 early-return，
  * 所以必須先寫入合法值再觸發。
  */
 async function triggerTokenQuery(wrapper) {
-  // 切到 token 模式（點 tab）
-  const tabs = wrapper.findAll('.mode-tab')
-  // 第 0 個是「查詢碼 + 手機」
-  await tabs[0].trigger('click')
-
   // 填 queryForm（直接設 vm 的 reactive 物件最可靠）
   wrapper.vm.queryForm.token = 'TESTTOKEN123'
   wrapper.vm.queryForm.parent_phone = '0912345678'
@@ -237,7 +230,6 @@ describe('ActivityPublicQueryView — 候補轉正後刷新沿用查詢模式（
 
     // 清掉查詢階段的呼叫，只觀察「轉正後刷新」用哪個 API
     publicQueryByToken.mockClear()
-    publicQueryRegistration.mockClear()
 
     await wrapper.vm.handleConfirmPromotion({
       course_id: 7,
@@ -247,10 +239,9 @@ describe('ActivityPublicQueryView — 候補轉正後刷新沿用查詢模式（
     await new Promise((r) => setTimeout(r, 0))
 
     expect(publicConfirmPromotion).toHaveBeenCalledTimes(1)
-    // 刷新必須沿用 token 模式（token 查詢鎖定同一張報名 / 學期），
-    // 不可硬用三欄查詢（多筆跨學期時會任意跳到別的學期報名）
+    // 刷新必須用 token 查詢鎖定同一張報名 / 學期（查詢碼是公開端唯一查詢方式，
+    // 2026-08-03 起三欄查詢已整組移除，不再有「跳到別的學期報名」的替代路徑）
     expect(publicQueryByToken).toHaveBeenCalledTimes(1)
-    expect(publicQueryRegistration).not.toHaveBeenCalled()
   })
 })
 

@@ -10,7 +10,6 @@ vi.mock('vue-router', () => ({
 // ── 模擬 API ──────────────────────────────────────────────────────────────
 vi.mock('@/api/activityPublic', () => ({
   publicQueryByToken: vi.fn(),
-  publicQueryRegistration: vi.fn(),
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
@@ -65,9 +64,6 @@ const mountView = async (): Promise<VueWrapper> => {
 }
 
 async function triggerTokenQuery(wrapper: VueWrapper) {
-  const tabs = wrapper.findAll('.mode-tab')
-  await tabs[0].trigger('click')
-
   const vm = wrapper.vm as unknown as {
     queryForm: { token: string; parent_phone: string }
     $nextTick: () => Promise<void>

@@ -36,13 +36,8 @@ export const publicCreateInquiry = (
   data: ApiBody<'/activity/public/inquiries', 'post'>,
 ): AxiosResp<'/activity/public/inquiries', 'post'> =>
   api.post('/activity/public/inquiries', data)
-export const publicQueryRegistration = (
-  name: string,
-  birthday: string,
-  parent_phone: string,
-): AxiosResp<'/activity/public/query', 'post'> =>
-  api.post('/activity/public/query', { name, birthday, parent_phone })
-// Phase 3：以查詢碼 + 家長手機查詢（POST 而非 GET，避免 token 進 access log / 瀏覽器歷史）
+// 以查詢碼 + 家長手機查詢（POST 而非 GET，避免 token 進 access log / 瀏覽器歷史）。
+// 2026-08-03：三欄（姓名+生日+手機）查詢已移除，查詢碼是公開端唯一查詢方式。
 export const publicQueryByToken = (
   token: string,
   parent_phone: string,
