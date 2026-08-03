@@ -123,6 +123,7 @@
                 如需修改，請改用
                 <button type="button" class="hint-switch-link" @click="switchQueryMode('token')">查詢碼 + 手機</button>
                 查詢（查詢碼於完成報名時提供）。
+                另外，2026 年 8 月起的新報名未填生日，僅能以查詢碼查詢。
               </span>
             </div>
             <div class="field-group">
@@ -490,17 +491,6 @@
           </template>
           <template v-else>
             <input :value="editForm.new_name" type="text" class="input-text" readonly />
-          </template>
-        </div>
-
-        <div class="field-group">
-          <label>幼兒生日</label>
-          <template v-if="identityEditable">
-            <input v-model="editForm.new_birthday" type="date" class="input-text" />
-            <div class="field-hint">如有誤可直接修正；經校方審核確認後將無法再自行修改</div>
-          </template>
-          <template v-else>
-            <input :value="editForm.new_birthday" type="date" class="input-text" readonly />
           </template>
         </div>
 
