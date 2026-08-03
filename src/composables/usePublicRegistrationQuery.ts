@@ -142,7 +142,6 @@ export function usePublicRegistrationQuery({
     selectedSupplies: [] as string[],
     new_parent_phone: '',
     new_name: '',
-    new_birthday: '',
   })
 
   const nameValid = computed(() => queryForm.name.trim().length > 0)
@@ -349,10 +348,10 @@ export function usePublicRegistrationQuery({
       : []
     editForm.new_parent_phone = ''
     // 比照 class_name：欄位與顯示合併，一律預填目前值（不可編輯時單純唯讀顯示
-    // 這個值；可編輯時直接在原地修改，是否送出 new_name/new_birthday 由送出時
-    // 與 queryResult 原值比對決定，不是「留空=不變更」的獨立欄位）。
+    // 這個值；可編輯時直接在原地修改，是否送出 new_name 由送出時與 queryResult
+    // 原值比對決定，不是「留空=不變更」的獨立欄位）。
+    // 2026-08-03：new_birthday 已自公開端移除（生日更正回歸後台審核處理）。
     editForm.new_name = data.name || ''
-    editForm.new_birthday = data.birthday || ''
     // availability 只有「編輯課程」介面才用；查詢階段不輪詢。查詢命中→進入編輯介面時
     // 才首次抓 availability 並起 30s 輪詢（avoid 查詢頁背景空轉）。
     ensureAvailabilityPolling()

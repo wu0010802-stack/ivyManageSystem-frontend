@@ -26,7 +26,6 @@ interface EditForm {
   selectedSupplies: string[]
   new_parent_phone: string
   new_name: string
-  new_birthday: string
 }
 
 export interface RotatedCredentialRecovery {
@@ -235,10 +234,6 @@ export function useRegistrationEditSave({
       showToast('請填寫學生姓名', 'error')
       return
     }
-    if (!editForm.new_birthday) {
-      showToast('請選擇學生生日', 'error')
-      return
-    }
     if (!editorReady.value) {
       showToast('課程與名額資料尚未就緒，請稍後再試', 'warning', 6000)
       return
@@ -272,10 +267,7 @@ export function useRegistrationEditSave({
     // 不同」的判斷，不重複做審核狀態檢查）。
     const newNameRaw = editForm.new_name.trim()
     const nameWillChange = Boolean(newNameRaw && newNameRaw !== queryResult.value!.name)
-    const newBirthdayRaw = editForm.new_birthday
-    const birthdayWillChange = Boolean(
-      newBirthdayRaw && newBirthdayRaw !== queryResult.value!.birthday,
-    )
+    // 2026-08-03：生日更正欄位自公開端移除（生日更正回歸後台審核處理）。
 
     editSubmitting.value = true
     try {
@@ -298,9 +290,6 @@ export function useRegistrationEditSave({
       }
       if (nameWillChange) {
         payload.new_name = newNameRaw
-      }
-      if (birthdayWillChange) {
-        payload.new_birthday = newBirthdayRaw
       }
       // 樂觀鎖：把當前查詢回來的 updated_at 帶回去，後端比對不符即拒（409）
       if (queryResult.value!.updated_at) {
@@ -330,10 +319,9 @@ export function useRegistrationEditSave({
       if (hydrated) {
         if (phoneWillChange) queryForm.parent_phone = newPhoneRaw
         if (nameWillChange) queryForm.name = newNameRaw
-        if (birthdayWillChange) queryForm.birthday = newBirthdayRaw
         if (rotatedToken) queryForm.token = rotatedToken
         rotatedCredentialRecovery.value = null
-      } else if (rotatedToken && (phoneWillChange || nameWillChange || birthdayWillChange)) {
+      } else if (rotatedToken && (phoneWillChange || nameWillChange)) {
         // mutation 已成功但使用者已切到另一筆查詢：不能覆蓋新畫面，亦不能丟掉
         // 僅回傳一次的新 token。獨立保存並由 view 顯示，讓家長可複製後再關閉。
         // parentPhone 沿用實際生效的手機（電話沒變時仍是 oldPhone，token 是因姓名/

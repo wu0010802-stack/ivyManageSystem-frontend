@@ -8,13 +8,12 @@
  * 使用：
  *   const { form, errors, parentPhoneError, feePreview, validateForm,
  *           clearError, toggleCourse, toggleSupply, resetForm,
- *           normalizeMobile, maxBirthdayISO, minBirthdayISO }
+ *           normalizeMobile }
  *     = usePublicRegistrationForm({ courses, supplies, availability })
  */
 
 import { reactive, ref, computed } from 'vue'
 import { toggleArrayItem } from '@/utils/arrayUtils'
-import { parseLocalISODate, todayTaipeiISO } from '@/utils/format'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 // Email 格式。2026-07-31 稽核：原本的 /^[^@\s]+@[^@\s]+\.[^@\s]+$/ 比後端的
@@ -32,25 +31,18 @@ const EMAIL_MAX_LEN = 200
 // （import { normalizeMobile } from '@/composables/usePublicRegistrationForm'）相容。
 export { normalizeMobile }
 
-function toISODate(d: Date) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
 function priceOf(name: string, source: { name: string; price?: number | string }[]) {
   const item = source.find((it) => it.name === name)
   return Number(item?.price) || 0
 }
 
 // 課程優先流程：選課在第 1 步，錯誤聚焦先跳課程再跳寶貝資料欄位
-const FIELD_FOCUS_ORDER = ['courses', 'name', 'birthday', 'parent_phone', 'class_name', 'email']
+// 2026-08-03 業主決策：公開表單移除幼兒生日欄位（比對走姓名＋班級）
+const FIELD_FOCUS_ORDER = ['courses', 'name', 'parent_phone', 'class_name', 'email']
 
 export function usePublicRegistrationForm({ courses, supplies, availability }: { courses: { value: { name: string; price?: number | string }[] }; supplies: { value: { name: string; price?: number | string }[] }; availability: { value: Record<string, number> } }) {
   const form = reactive({
     name: '',
-    birthday: '',
     parent_phone: '',
     class_name: '',
     email: '',
@@ -61,7 +53,6 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
   // 各欄位錯誤訊息（送出後填入；使用者開始修改時清除對應欄位）
   const errors = reactive({
     name: '',
-    birthday: '',
     parent_phone: '',
     class_name: '',
     email: '',
@@ -77,15 +68,6 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     return TW_MOBILE_RE.test(normalizeMobile(form.parent_phone))
       ? ''
       : '請輸入 09 開頭的 10 碼手機號碼'
-  })
-
-  // 生日輸入上下限（與後端 _validate_birthday_str 同步：20 年內、不可未來）
-  const maxBirthdayISO = computed(() => todayTaipeiISO())
-  const minBirthdayISO = computed(() => {
-    const d = parseLocalISODate(todayTaipeiISO())
-    if (!d) return ''
-    d.setFullYear(d.getFullYear() - 20)
-    return toISODate(d)
   })
 
   // 即時費用預覽（學費 + 用品分項合計）
@@ -122,7 +104,6 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
 
   function clearPersonalDetailErrors() {
     errors.name = ''
-    errors.birthday = ''
     errors.parent_phone = ''
     errors.class_name = ''
     errors.email = ''
@@ -132,30 +113,10 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     clearPersonalDetailErrors()
 
     const name = form.name.trim()
-    const birthday = form.birthday
     const className = form.class_name
     const parentPhone = normalizeMobile(form.parent_phone)
 
     if (!name) errors.name = '請輸入幼兒姓名'
-
-    if (!birthday) {
-      errors.birthday = '請選擇幼兒生日'
-    } else {
-      const inputDate = parseLocalISODate(birthday)
-      const today = parseLocalISODate(todayTaipeiISO())
-      if (!inputDate) {
-        errors.birthday = '生日格式不正確'
-      } else if (!today) {
-        errors.birthday = '無法判定今日日期，請稍後再試'
-      } else if (inputDate > today) {
-        errors.birthday = '生日不可選擇未來日期'
-      } else {
-        const earliest = new Date(today)
-        earliest.setFullYear(earliest.getFullYear() - 20)
-        if (inputDate < earliest)
-          errors.birthday = '生日超出合理範圍，請再次確認'
-      }
-    }
 
     if (!parentPhone) {
       errors.parent_phone = '請輸入家長手機號碼'
@@ -170,7 +131,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
       errors.email = '請輸入有效的 Email，或留空不填'
     }
 
-    return ['name', 'birthday', 'parent_phone', 'class_name', 'email'].every(
+    return ['name', 'parent_phone', 'class_name', 'email'].every(
       (field) => !errors[field as keyof typeof errors],
     )
   }
@@ -212,7 +173,6 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
 
   function resetForm() {
     form.name = ''
-    form.birthday = ''
     form.parent_phone = ''
     form.class_name = ''
     form.email = ''
@@ -225,8 +185,6 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     errors,
     phoneTouched,
     parentPhoneError,
-    maxBirthdayISO,
-    minBirthdayISO,
     feePreview,
     validatePersonalDetails,
     validateSelections,

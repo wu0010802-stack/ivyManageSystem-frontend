@@ -11,7 +11,6 @@ function setup() {
 
 function fillValidBase(form: ReturnType<typeof setup>['form']) {
   form.name = '王小明'
-  form.birthday = '2020-05-10'
   form.parent_phone = '0912345678'
   form.class_name = '海豚班'
   form.selectedCourses = ['圍棋']

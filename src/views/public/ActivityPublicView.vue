@@ -371,32 +371,6 @@
                     </div>
                   </div>
 
-                  <div class="form-row" :class="{ 'has-error': !!errors.birthday }">
-                    <div class="form-label-col">
-                      <label class="form-label" for="studentBirthday">
-                        <span class="required-mark">*</span>
-                        幼兒生日 <span class="en">Birthday</span>
-                      </label>
-                    </div>
-                    <div class="form-input-col">
-                      <input
-                        id="studentBirthday"
-                        v-model="form.birthday"
-                        type="date"
-                        class="input-text"
-                        :class="{ 'is-invalid': !!errors.birthday }"
-                        :min="minBirthdayISO"
-                        :max="maxBirthdayISO"
-                        aria-required="true"
-                        :aria-invalid="!!errors.birthday"
-                        :aria-describedby="errors.birthday ? 'studentBirthday-err' : undefined"
-                        enterkeyhint="next"
-                        @input="clearError('birthday')"
-                      />
-                      <div v-if="errors.birthday" id="studentBirthday-err" class="form-error-hint" role="alert">{{ errors.birthday }}</div>
-                    </div>
-                  </div>
-
                   <div class="form-row" :class="{ 'has-error': !!parentPhoneError }">
                     <div class="form-label-col">
                       <label class="form-label" for="parentPhone">
@@ -523,7 +497,6 @@
                         </div>
                         <dl class="review-details">
                           <div><dt>幼兒姓名</dt><dd>{{ form.name }}</dd></div>
-                          <div><dt>幼兒生日</dt><dd>{{ form.birthday }}</dd></div>
                           <div><dt>寶貝班級</dt><dd>{{ form.class_name }}</dd></div>
                           <div><dt>家長手機</dt><dd>{{ form.parent_phone }}</dd></div>
                           <div v-if="form.email"><dt>通知 Email</dt><dd>{{ form.email }}</dd></div>
@@ -775,14 +748,12 @@ async function sharePoster() {
   }
 }
 
-// A1-P1：表單狀態 / 驗證 / 即時費用預覽 / 生日範圍 抽到 usePublicRegistrationForm
+// A1-P1：表單狀態 / 驗證 / 即時費用預覽 抽到 usePublicRegistrationForm
 const {
   form,
   errors,
   phoneTouched,
   parentPhoneError,
-  maxBirthdayISO,
-  minBirthdayISO,
   validatePersonalDetails,
   validateSelections,
   validateForm,
@@ -1064,7 +1035,6 @@ function closeSuccessModal() {
 // FIELD_ELEMENT_ID 因 DOM 操作仰賴 view 的元件 id。
 const FIELD_ELEMENT_ID: Record<string, string> = {
   name: 'studentName',
-  birthday: 'studentBirthday',
   parent_phone: 'parentPhone',
   class_name: 'studentClass',
   email: 'contactEmail',
@@ -1146,7 +1116,6 @@ async function handleSubmitRegistration() {
   }
 
   const name = form.name.trim()
-  const birthday = form.birthday
   const className = form.class_name
   const parentPhone = normalizeMobile(form.parent_phone)
   const email = form.email.trim()
@@ -1156,7 +1125,7 @@ async function handleSubmitRegistration() {
   try {
     const res = await publicRegister({
       name,
-      birthday,
+      // 2026-08-03 業主決策：公開表單移除生日欄位，payload 不再帶 birthday
       parent_phone: parentPhone,
       class: className,
       // 契約 PublicCourseItem/PublicSupplyItem 只收 name（價格後端以 DB 為準）
@@ -1205,7 +1174,7 @@ async function handleSubmitRegistration() {
 function isFormDirty(): boolean {
   return Boolean(
     form.selectedCourses.length > 0 ||
-      form.name || form.birthday || form.parent_phone || form.class_name,
+      form.name || form.parent_phone || form.class_name,
   )
 }
 function handleBeforeUnload(event: BeforeUnloadEvent) {

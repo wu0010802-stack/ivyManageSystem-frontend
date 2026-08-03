@@ -40,11 +40,10 @@ describe('ActivityPublicView — 必填欄位 aria-required（spec #4）', () =>
     vi.clearAllMocks()
   })
 
-  it('姓名／生日／家長手機／班級四個必填欄位皆有 aria-required="true"', async () => {
+  it('姓名／家長手機／班級三個必填欄位皆有 aria-required="true"（2026-08-03 生日欄已移除）', async () => {
     const wrapper = await mountView()
 
     expect(wrapper.find('#studentName').attributes('aria-required')).toBe('true')
-    expect(wrapper.find('#studentBirthday').attributes('aria-required')).toBe('true')
     expect(wrapper.find('#parentPhone').attributes('aria-required')).toBe('true')
     expect(wrapper.find('#studentClass').attributes('aria-required')).toBe('true')
   })
