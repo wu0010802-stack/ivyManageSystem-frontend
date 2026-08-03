@@ -15688,7 +15688,7 @@ export interface components {
         /** _PromotionActionPayload */
         _PromotionActionPayload: {
             /** Birthday */
-            birthday: string;
+            birthday?: string | null;
             /** Name */
             name: string;
             /** Parent Phone */
@@ -16416,7 +16416,7 @@ export interface components {
          */
         AdminRegistrationBasicUpdate: {
             /** Birthday */
-            birthday: string;
+            birthday?: string | null;
             /** Class */
             class: string;
             /** Email */
@@ -16434,7 +16434,7 @@ export interface components {
          */
         AdminRegistrationPayload: {
             /** Birthday */
-            birthday: string;
+            birthday?: string | null;
             /** Class */
             class: string;
             /**
@@ -27436,7 +27436,7 @@ export interface components {
             /** Ts */
             _ts?: number | null;
             /** Birthday */
-            birthday: string;
+            birthday?: string | null;
             /** Class */
             class: string;
             /** Courses */
@@ -27536,7 +27536,7 @@ export interface components {
         /** PublicUpdatePayload */
         PublicUpdatePayload: {
             /** Birthday */
-            birthday: string;
+            birthday?: string | null;
             /** Class */
             class: string;
             /** Courses */
