@@ -536,38 +536,9 @@
                 </aside>
               </transition>
 
-              <!-- checkout-stick: 桌機把費用預覽 + 主送出鈕 sticky 在 viewport
-                   底部，家長勾課程時不用回滾才看到金額 / 送出 -->
+              <!-- checkout-stick: 桌機把主送出鈕 sticky 在 viewport 底部
+                   （2026-08-03 業主要求費用預估卡整卡移除，金額不再顯示） -->
               <div class="checkout-stick">
-                <transition name="fee-fade">
-                  <!-- 課程優先流程：第 1 步就在選課，費用預估自首次勾選起常駐 -->
-                  <aside v-if="feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
-                    <div class="fee-preview-title">
-                      <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-check" /></svg>
-                      費用預估
-                      <span class="fee-preview-count">
-                        <template v-if="feePreview.courseCount > 0">{{ feePreview.courseCount }} 堂課</template>
-                        <template v-if="feePreview.courseCount > 0 && feePreview.supplyCount > 0">．</template>
-                        <template v-if="feePreview.supplyCount > 0">{{ feePreview.supplyCount }} 項加購</template>
-                      </span>
-                    </div>
-                    <dl class="fee-preview-list">
-                      <div class="fee-row fee-row-total">
-                        <dt>預估應繳合計</dt>
-                        <dd>NT$ {{ feePreview.total.toLocaleString() }}</dd>
-                      </div>
-                    </dl>
-                    <div class="fee-preview-note">
-                      <template v-if="feePreview.waitlistCount > 0">
-                        含 {{ feePreview.waitlistCount }} 堂候補課程；候補課程實際不收費，校方確認後另行通知。
-                      </template>
-                      <template v-else>
-                        * 此為估算金額，實際應繳以校方確認後通知為準。
-                      </template>
-                    </div>
-                  </aside>
-                </transition>
-
                 <div
                   v-if="submitError"
                   class="submit-error-panel"
@@ -582,16 +553,6 @@
                 </div>
 
                 <div class="submit-bar registration-nav-actions">
-                  <!-- 手機版吸底 CTA 帶合計：桌機有 sticky fee-preview，手機的費用
-                       預估留在內文流裡，勾完課要回滾才看得到金額，這裡補一行。
-                       金額變動已由 fee-preview 的 aria-live 播報，此處 aria-hidden 防雙報 -->
-                  <div
-                    v-if="feePreview"
-                    class="submit-bar-total"
-                    aria-hidden="true"
-                  >
-                    預估合計 <strong>NT$ {{ feePreview.total.toLocaleString() }}</strong>
-                  </div>
                   <button
                     v-if="currentStep > 1"
                     type="button"
@@ -793,7 +754,6 @@ const {
   errors,
   phoneTouched,
   parentPhoneError,
-  feePreview,
   validatePersonalDetails,
   validateSelections,
   validateForm,
@@ -2151,75 +2111,6 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
 }
 
-/* 費用預估卡 */
-.fee-preview {
-  margin-top: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-surface-mint) 100%);
-  border: 1px solid rgba(13, 144, 83, 0.30);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 4px 12px rgba(13, 144, 83, 0.08);
-}
-.fee-preview-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  font-weight: 700;
-  color: var(--color-primary-strong);
-  margin-bottom: var(--space-3);
-}
-.fee-preview-title .icon {
-  background-color: var(--color-primary);
-  color: var(--neutral-0);
-  border-radius: var(--radius-full);
-  padding: 3px;
-  width: 20px;
-  height: 20px;
-}
-.fee-preview-count {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-  font-weight: 500;
-  color: var(--color-text-muted);
-  background: rgba(255, 255, 255, 0.6);
-  padding: 2px 10px;
-  border-radius: var(--radius-full);
-}
-.fee-preview-list {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.fee-preview .fee-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--fs-sm);
-  color: var(--color-text-muted);
-}
-.fee-preview .fee-row dt { margin: 0; font-weight: 500; }
-.fee-preview .fee-row dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--color-text); }
-.fee-preview .fee-row-total {
-  font-size: var(--fs-md);
-}
-.fee-preview .fee-row-total dt {
-  font-weight: 700;
-  color: var(--color-primary-strong);
-}
-.fee-preview .fee-row-total dd {
-  font-weight: 700;
-  color: var(--color-primary-strong);
-  font-size: var(--fs-xl);
-}
-.fee-preview-note {
-  margin-top: var(--space-2);
-  font-size: var(--fs-xs);
-  color: var(--color-text-subtle);
-  line-height: 1.5;
-}
-
 .fee-fade-enter-active, .fee-fade-leave-active {
   transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
 }
@@ -2363,14 +2254,12 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
-/* 手機吸底 CTA 的合計列：桌機由 sticky fee-preview 呈現，預設隱藏 */
-.submit-bar-total { display: none; }
 .registration-nav-actions .btn-submit { flex: 1 1 auto; width: auto; }
 .registration-back-button { flex: 0 0 auto; min-width: 112px; }
 
-/* 桌機：fee-preview + submit-bar 一起 sticky 在 viewport 底，家長勾課程時不用
-   回滾才看到金額；mobile 維持 inline。注意不用 backdrop-filter（避免落入
-   glassmorphism 預設禁令），改用純白底 + 上下兩道 shadow 區隔。 */
+/* 桌機：submit-bar sticky 在 viewport 底；mobile 維持 inline。注意不用
+   backdrop-filter（避免落入 glassmorphism 預設禁令），改用純白底 +
+   上下兩道 shadow 區隔。 */
 .checkout-stick { margin-top: var(--space-3); }
 @media (--bp-sm) {
   .checkout-stick {
@@ -2385,8 +2274,8 @@ onUnmounted(() => {
       0 -2px 6px rgba(15, 23, 42, 0.04),
       0 12px 28px rgba(15, 23, 42, 0.12);
   }
-  .checkout-stick .fee-preview { margin-top: 0; }
-  .checkout-stick .submit-bar { margin-top: var(--space-3); }
+  .checkout-stick .submit-bar { margin-top: 0; }
+  .checkout-stick .submit-error-panel + .submit-bar { margin-top: var(--space-3); }
 }
 .btn-block { width: 100%; }
 .btn-outline {
@@ -2718,26 +2607,7 @@ onUnmounted(() => {
   .btn-submit { min-height: 52px; font-size: var(--fs-md); }
   .registration-back-button { min-width: 84px; padding-inline: var(--space-3); }
 
-  /* 手機吸底 CTA 帶合計：fee-preview 在內文流會被滾出視野，家長勾完課
-     不用回滾就能看到金額（桌機由 sticky fee-preview 負責，此列僅手機顯示） */
   .registration-nav-actions { flex-wrap: wrap; }
-  .submit-bar-total {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    flex: 1 0 100%;
-    margin-bottom: var(--space-2);
-    font-size: var(--fs-sm);
-    color: var(--color-text-muted);
-  }
-  .submit-bar-total strong {
-    color: var(--color-primary-strong);
-    font-size: var(--fs-md);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* 行動裝置 fee-preview 預留底部空間，避免被吸底 CTA 遮 */
-  .fee-preview { margin-bottom: 0; }
 
   /* 課程列：影片按鈕在小螢幕往下換行更舒服 */
   .course-item { flex-wrap: wrap; }
