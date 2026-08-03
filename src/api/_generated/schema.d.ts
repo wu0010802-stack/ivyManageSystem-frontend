@@ -32591,6 +32591,8 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /** Ordered Count */
+            ordered_count: number;
             /** Price */
             price: number;
             /** School Year */

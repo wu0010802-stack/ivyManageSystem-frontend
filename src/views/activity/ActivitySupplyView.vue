@@ -13,6 +13,9 @@
       <el-table-column label="價格（元）" prop="price" width="110" align="right">
         <template #default="{ row }">${{ row.price?.toLocaleString() }}</template>
       </el-table-column>
+      <el-table-column label="已訂套數" prop="ordered_count" width="100" align="right">
+        <template #default="{ row }">{{ row.ordered_count ?? 0 }}</template>
+      </el-table-column>
       <el-table-column v-if="canWrite" label="操作" width="130" align="center" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openEdit(row)">編輯</el-button>
@@ -47,7 +50,8 @@ import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
 
-interface Supply { id: number; name: string; price: number }
+// ordered_count＝被有效報名選用的筆數（後端與停用 guard 同口徑，rejected 不計）
+interface Supply { id: number; name: string; price: number; ordered_count: number }
 
 const termStore = useAcademicTermStore()
 
