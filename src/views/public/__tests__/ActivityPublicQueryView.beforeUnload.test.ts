@@ -10,7 +10,6 @@ vi.mock('vue-router', () => ({
 // ── 模擬 API ──────────────────────────────────────────────────────────────
 vi.mock('@/api/activityPublic', () => ({
   publicQueryByToken: vi.fn(),
-  publicQueryRegistration: vi.fn(),
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
@@ -74,11 +73,9 @@ describe('ActivityPublicQueryView — beforeunload 離開防護（#6）', () => 
     await flushPromises()
 
     const vm = wrapper.vm as unknown as {
-      queryMode: 'fields' | 'token'
       queryForm: { token: string; parent_phone: string }
       handleQuery: () => Promise<void>
     }
-    vm.queryMode = 'token'
     vm.queryForm.token = 'TESTTOKEN123'
     vm.queryForm.parent_phone = '0912345678'
     await vm.handleQuery()
@@ -94,12 +91,10 @@ describe('ActivityPublicQueryView — beforeunload 離開防護（#6）', () => 
     await flushPromises()
 
     const vm = wrapper.vm as unknown as {
-      queryMode: 'fields' | 'token'
       queryForm: { token: string; parent_phone: string }
       handleQuery: () => Promise<void>
       editForm: { class_name: string }
     }
-    vm.queryMode = 'token'
     vm.queryForm.token = 'TESTTOKEN123'
     vm.queryForm.parent_phone = '0912345678'
     await vm.handleQuery()
@@ -118,12 +113,10 @@ describe('ActivityPublicQueryView — beforeunload 離開防護（#6）', () => 
     await flushPromises()
 
     const vm = wrapper.vm as unknown as {
-      queryMode: 'fields' | 'token'
       queryForm: { token: string; parent_phone: string }
       handleQuery: () => Promise<void>
       editForm: { class_name: string }
     }
-    vm.queryMode = 'token'
     vm.queryForm.token = 'TESTTOKEN123'
     vm.queryForm.parent_phone = '0912345678'
     await vm.handleQuery()

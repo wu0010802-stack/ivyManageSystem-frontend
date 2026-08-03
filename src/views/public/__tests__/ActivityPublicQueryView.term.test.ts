@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn() }) }))
 vi.mock('@/api/activityPublic', () => ({
   publicQueryByToken: vi.fn(),
-  publicQueryRegistration: vi.fn(),
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
@@ -78,14 +77,12 @@ describe('ActivityPublicQueryView 跨學期編修', () => {
     const wrapper = mount(ActivityPublicQueryView)
     await flushPromises()
     const vm = wrapper.vm as unknown as {
-      queryMode: 'fields' | 'token'
       queryForm: { token: string; parent_phone: string }
       handleQuery: () => Promise<void>
       editForm: { selectedCourses: string[]; selectedSupplies: string[] }
       onToggleCourseOption: (course: { name: string; existing_only?: boolean }) => void
       onToggleSupplyOption: (supply: { name: string; existing_only?: boolean }) => void
     }
-    vm.queryMode = 'token'
     vm.queryForm.token = 'HISTORICAL-TOKEN'
     vm.queryForm.parent_phone = '0912345678'
     await vm.handleQuery()
@@ -129,14 +126,12 @@ describe('ActivityPublicQueryView 跨學期編修', () => {
     }>()
     vi.mocked(getPublicBootstrap).mockReturnValueOnce(historical.promise as never)
     const vm = wrapper.vm as unknown as {
-      queryMode: 'fields' | 'token'
       queryForm: { token: string; parent_phone: string }
       handleQuery: () => Promise<void>
       editForm: { selectedCourses: string[] }
       onToggleCourseOption: (course: { name: string }) => void
       saveBlocked: boolean
     }
-    vm.queryMode = 'token'
     vm.queryForm.token = 'HISTORICAL-TOKEN'
     vm.queryForm.parent_phone = '0912345678'
     await vm.handleQuery()
@@ -170,12 +165,10 @@ describe('ActivityPublicQueryView 跨學期編修', () => {
     const failed = deferred<never>()
     vi.mocked(getPublicBootstrap).mockReturnValueOnce(failed.promise as never)
     const vm = wrapper.vm as unknown as {
-      queryMode: 'fields' | 'token'
       queryForm: { token: string; parent_phone: string }
       handleQuery: () => Promise<void>
       saveBlocked: boolean
     }
-    vm.queryMode = 'token'
     vm.queryForm.token = 'HISTORICAL-TOKEN'
     vm.queryForm.parent_phone = '0912345678'
     await vm.handleQuery()
@@ -195,13 +188,11 @@ describe('ActivityPublicQueryView 跨學期編修', () => {
     const wrapper = mount(ActivityPublicQueryView)
     await flushPromises()
     const vm = wrapper.vm as unknown as {
-      queryMode: 'fields' | 'token'
       queryForm: { token: string; parent_phone: string }
       handleQuery: () => Promise<void>
       courseLocked: (name: string) => boolean
       saveBlocked: boolean
     }
-    vm.queryMode = 'token'
     vm.queryForm.token = 'HISTORICAL-TOKEN'
     vm.queryForm.parent_phone = '0912345678'
     await vm.handleQuery()

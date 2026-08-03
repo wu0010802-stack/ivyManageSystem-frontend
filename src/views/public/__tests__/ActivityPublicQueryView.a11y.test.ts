@@ -11,7 +11,6 @@ vi.mock('vue-router', () => ({
 // ── 模擬 API ──────────────────────────────────────────────────────────────
 vi.mock('@/api/activityPublic', () => ({
   publicQueryByToken: vi.fn(),
-  publicQueryRegistration: vi.fn(),
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
@@ -34,10 +33,12 @@ const mountView = async (): Promise<VueWrapper> => {
 
 /**
  * #3/#4 a11y 補齊（spec 2026-07-27-public-registration-ux-batch5-design）：
- * - role="tablist"/"tab" 補 aria-controls 指向面板 id、面板補 role="tabpanel" + id
  * - 必填欄位補 aria-required="true"
  * - validation 訊息補 role="alert"
  * - 查詢結果/錯誤區塊共用 aria-live="polite" wrapper，查詢完成後 focus 移入
+ *
+ * 2026-08-03：兩種查詢模式（tabs：查詢碼+手機 / 姓名+生日+手機）已整組移除，
+ * 只剩查詢碼+手機單一模式；原 role="tablist"/"tab" 與 roving tabindex 測試已刪除。
  */
 describe('ActivityPublicQueryView — a11y（#3/#4）', () => {
   beforeEach(() => {
@@ -47,39 +48,13 @@ describe('ActivityPublicQueryView — a11y（#3/#4）', () => {
     vi.restoreAllMocks()
   })
 
-  it('mode tab 具備 role/aria-controls，對應面板具備 role=tabpanel + id', async () => {
+  // 2026-08-03：兩種查詢模式（tabs）已整組移除，查詢碼+手機為唯一模式，
+  // 不再需要 tablist/tabpanel/roving tabindex 的鍵盤語意；相關測試已刪除。
+
+  it('必填欄位（查詢碼/手機）皆有 aria-required=true', async () => {
     const wrapper = await mountView()
     await flushPromises()
 
-    const tablist = wrapper.find('[role="tablist"]')
-    expect(tablist.exists()).toBe(true)
-
-    const tabs = wrapper.findAll('[role="tab"]')
-    expect(tabs).toHaveLength(2)
-    expect(tabs[0].attributes('aria-controls')).toBe('queryPanelToken')
-    expect(tabs[1].attributes('aria-controls')).toBe('queryPanelFields')
-
-    // 預設 queryMode='fields'，面板應渲染 fields 版本
-    const fieldsPanel = wrapper.find('#queryPanelFields')
-    expect(fieldsPanel.exists()).toBe(true)
-    expect(fieldsPanel.attributes('role')).toBe('tabpanel')
-
-    await tabs[0].trigger('click')
-    const tokenPanel = wrapper.find('#queryPanelToken')
-    expect(tokenPanel.exists()).toBe(true)
-    expect(tokenPanel.attributes('role')).toBe('tabpanel')
-  })
-
-  it('必填欄位（查詢碼/姓名/生日/手機）皆有 aria-required=true', async () => {
-    const wrapper = await mountView()
-    await flushPromises()
-
-    // 預設 fields 模式：姓名/生日/手機
-    expect(wrapper.find('#searchName').attributes('aria-required')).toBe('true')
-    expect(wrapper.find('#searchBirthday').attributes('aria-required')).toBe('true')
-    expect(wrapper.find('#searchPhoneFields').attributes('aria-required')).toBe('true')
-
-    await wrapper.findAll('.mode-tab')[0].trigger('click')
     expect(wrapper.find('#searchToken').attributes('aria-required')).toBe('true')
     expect(wrapper.find('#searchPhone').attributes('aria-required')).toBe('true')
   })
@@ -88,7 +63,7 @@ describe('ActivityPublicQueryView — a11y（#3/#4）', () => {
     const wrapper = await mountView()
     await flushPromises()
 
-    await wrapper.find('#searchName').trigger('blur')
+    await wrapper.find('#searchToken').trigger('blur')
     await flushPromises()
     const msg = wrapper.find('.validation-msg.error')
     expect(msg.exists()).toBe(true)
@@ -104,7 +79,6 @@ describe('ActivityPublicQueryView — a11y（#3/#4）', () => {
     const wrapper = await mountView()
     await flushPromises()
 
-    await wrapper.findAll('.mode-tab')[0].trigger('click')
     const vm = wrapper.vm as unknown as {
       queryForm: { token: string; parent_phone: string }
       $nextTick: () => Promise<void>
@@ -145,7 +119,6 @@ describe('ActivityPublicQueryView — a11y（#3/#4）', () => {
     const wrapper = await mountView()
     await flushPromises()
 
-    await wrapper.findAll('.mode-tab')[0].trigger('click')
     const vm = wrapper.vm as unknown as {
       queryForm: { token: string; parent_phone: string }
       $nextTick: () => Promise<void>
@@ -180,21 +153,5 @@ describe('ActivityPublicQueryView — 回報名頁導航', () => {
     expect(backlink.exists()).toBe(true)
     await backlink.trigger('click')
     expect(routerPushMock).toHaveBeenCalledWith({ name: 'public-activity' })
-  })
-
-  it('mode tab 支援左右方向鍵切換（roving tabindex）', async () => {
-    const wrapper = await mountView()
-    await flushPromises()
-
-    // 預設 queryMode='fields'：右側 tab 為 active（tabindex=0）
-    const tabs = wrapper.findAll('[role="tab"]')
-    expect(tabs[0].attributes('tabindex')).toBe('-1')
-    expect(tabs[1].attributes('tabindex')).toBe('0')
-
-    await wrapper.find('[role="tablist"]').trigger('keydown', { key: 'ArrowLeft' })
-    await flushPromises()
-    expect(tabs[0].attributes('aria-selected')).toBe('true')
-    expect(tabs[0].attributes('tabindex')).toBe('0')
-    expect(tabs[1].attributes('aria-selected')).toBe('false')
   })
 })

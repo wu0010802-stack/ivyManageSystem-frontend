@@ -40,36 +40,7 @@
       <!-- 搜尋區 -->
       <section class="search-section">
         <div class="search-box">
-          <div class="mode-tabs" role="tablist" @keydown="onTablistKeydown">
-            <button
-              ref="tokenTabRef"
-              type="button"
-              role="tab"
-              :aria-selected="queryMode === 'token'"
-              aria-controls="queryPanelToken"
-              :tabindex="queryMode === 'token' ? 0 : -1"
-              :class="['mode-tab', { active: queryMode === 'token' }]"
-              @click="switchQueryMode('token')"
-            >
-              <span class="mode-tab-label">查詢碼 + 手機</span>
-              <span class="mode-tab-sub">可查詢・可修改</span>
-            </button>
-            <button
-              ref="fieldsTabRef"
-              type="button"
-              role="tab"
-              :aria-selected="queryMode === 'fields'"
-              aria-controls="queryPanelFields"
-              :tabindex="queryMode === 'fields' ? 0 : -1"
-              :class="['mode-tab', { active: queryMode === 'fields' }]"
-              @click="switchQueryMode('fields')"
-            >
-              <span class="mode-tab-label">姓名 + 生日 + 手機</span>
-              <span class="mode-tab-sub">僅供查詢</span>
-            </button>
-          </div>
-
-          <div v-if="queryMode === 'token'" id="queryPanelToken" role="tabpanel">
+          <div id="queryPanelToken">
             <div class="field-group">
               <label for="searchToken">查詢碼 <span class="required-mark">*</span></label>
               <input
@@ -95,73 +66,6 @@
               <label for="searchPhone">家長手機 <span class="required-mark">*</span></label>
               <input
                 id="searchPhone"
-                v-model="queryForm.parent_phone"
-                type="tel"
-                class="input-text"
-                :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
-                placeholder="09xx-xxx-xxx"
-                maxlength="15"
-                inputmode="tel"
-                autocomplete="tel"
-                enterkeyhint="search"
-                aria-required="true"
-                @keyup.enter="onQuerySubmit"
-                @blur="phoneTouched = true"
-              />
-              <div v-if="phoneTouched && !phoneValid" class="validation-msg error" role="alert">
-                請輸入 09 開頭的 10 碼手機號碼
-              </div>
-            </div>
-          </div>
-
-          <div v-else id="queryPanelFields" role="tabpanel">
-            <!-- 資安 #5 配套：三欄查詢在「查詢前」就先告知僅供檢視，避免家長查完才發現不能改 -->
-            <div class="info-hint mutation-locked-hint mode-readonly-hint" data-test="fields-mode-readonly-hint">
-              <svg class="icon icon-lock" width="13" height="13" aria-hidden="true"><use href="#q-lock" /></svg>
-              <span>
-                此方式僅能<strong>查看</strong>報名資料，無法修改。
-                如需修改，請改用
-                <button type="button" class="hint-switch-link" @click="switchQueryMode('token')">查詢碼 + 手機</button>
-                查詢（查詢碼於完成報名時提供）。
-                另外，2026 年 8 月起的新報名未填生日，僅能以查詢碼查詢。
-              </span>
-            </div>
-            <div class="field-group">
-              <label for="searchName">幼兒姓名 <span class="required-mark">*</span></label>
-              <input
-                id="searchName"
-                v-model="queryForm.name"
-                type="text"
-                class="input-text"
-                :class="{ valid: nameValid, invalid: nameTouched && !nameValid }"
-                placeholder="請輸入幼兒姓名"
-                autocomplete="off"
-                enterkeyhint="search"
-                aria-required="true"
-                @keyup.enter="onQuerySubmit"
-                @blur="nameTouched = true"
-              />
-              <div v-if="nameTouched && !nameValid" class="validation-msg error" role="alert">請輸入幼兒姓名</div>
-            </div>
-            <div class="field-group">
-              <label for="searchBirthday">幼兒生日 <span class="required-mark">*</span></label>
-              <input
-                id="searchBirthday"
-                v-model="queryForm.birthday"
-                type="date"
-                class="input-text"
-                :class="{ valid: birthdayValid, invalid: birthdayTouched && !birthdayValid }"
-                aria-required="true"
-                @blur="birthdayTouched = true"
-              />
-              <div v-if="birthdayTouched && !birthdayValid" class="validation-msg error" role="alert">
-                {{ birthdayErrorMsg }}
-              </div>
-            </div>
-            <div class="field-group">
-              <label for="searchPhoneFields">家長手機 <span class="required-mark">*</span></label>
-              <input
-                id="searchPhoneFields"
                 v-model="queryForm.parent_phone"
                 type="tel"
                 class="input-text"
@@ -226,13 +130,13 @@
         <div class="not-found-help">
           <div class="not-found-title">常見原因</div>
           <ul class="not-found-list">
-            <li>姓名包含全形/半形空格或別字（請與報名表填寫完全一致）</li>
-            <li>幼兒生日西元年月日格式錯誤</li>
+            <li>查詢碼未完整貼上（前後多了空白或漏了字元）</li>
+            <li>查詢碼已逾有效期限</li>
             <li>家長手機與報名時填寫的不同（如已換號請使用舊號查詢）</li>
             <li>本學期尚未報名，或已由校方取消報名</li>
           </ul>
           <div class="not-found-cta">
-            如三項資料皆確認無誤，請於上班時間來電聯繫校方協助查詢。
+            如兩項資料皆確認無誤，請於上班時間來電聯繫校方協助查詢。
           </div>
         </div>
       </section>
@@ -821,9 +725,9 @@ function dismissToast(id: number) {
 // usePromotionActions.ts），詳細職責見各檔頂部說明。此檔只保留 options 載入、
 // toast、生命週期，其餘綁定名稱與拆分前完全相同，template 不需改動。
 const {
-  queryMode, queryForm, queryLoading, queryResult, searchError,
-  nameTouched, birthdayTouched, phoneTouched, tokenTouched,
-  tokenValid, phoneValid, nameValid, birthdayErrorMsg, birthdayValid,
+  queryForm, queryLoading, queryResult, searchError,
+  phoneTouched, tokenTouched,
+  tokenValid, phoneValid,
   activeQueryCredentials, activeQueryToken, canMutate, isPaymentLocked, lockedSummarySupplies,
   editForm, statusBadgeFor, waitlistCourses, fieldState, classEditable, identityEditable,
   handleQuery, createHydrationGuard, hydrateResult, refetchCurrent, initFromRoute,
@@ -998,21 +902,6 @@ async function confirmDeclinePromotion(item: Parameters<typeof handleDeclineProm
   await handleDeclinePromotion(item)
 }
 
-// mode-tabs 完整 ARIA tabs 鍵盤語意：roving tabindex + 左右鍵切換
-const tokenTabRef = ref<HTMLButtonElement | null>(null)
-const fieldsTabRef = ref<HTMLButtonElement | null>(null)
-function switchQueryMode(mode: 'token' | 'fields') {
-  queryMode.value = mode
-  void nextTick(() => {
-    ;(mode === 'token' ? tokenTabRef : fieldsTabRef).value?.focus()
-  })
-}
-function onTablistKeydown(event: KeyboardEvent) {
-  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-  event.preventDefault()
-  switchQueryMode(queryMode.value === 'token' ? 'fields' : 'token')
-}
-
 onMounted(async () => {
   initFromRoute()
   // #6：離開防護；handleBeforeUnload 內部依 isEditFormDirty 判斷，非編輯中或
@@ -1150,47 +1039,6 @@ onBeforeUnmount(() => {
 }
 .search-box { max-width: 520px; margin: 0 auto; }
 
-.mode-tabs {
-  display: flex;
-  gap: var(--space-2);
-  margin-bottom: var(--space-5);
-  padding: 4px;
-  background: var(--color-surface-muted);
-  border-radius: var(--radius-md);
-}
-.mode-tab {
-  flex: 1;
-  min-height: 44px;
-  padding: 6px 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  color: var(--color-text-muted);
-  background: transparent;
-  border: 1.5px solid transparent;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--dur-fast), color var(--dur-fast);
-}
-.mode-tab.active {
-  color: var(--color-primary-strong);
-  background: var(--color-surface);
-  border-color: var(--color-primary);
-}
-.mode-tab:not(.active):hover { background: var(--color-surface); }
-/* 權限副標：讓家長在選擇查詢方式前就知道該方式能不能修改 */
-.mode-tab-sub {
-  font-size: var(--fs-xs);
-  font-weight: 400;
-  color: var(--color-text-muted);
-}
-.mode-tab.active .mode-tab-sub { color: var(--color-primary-strong); }
-
 .credential-recovery {
   display: flex;
   align-items: center;
@@ -1236,19 +1084,6 @@ onBeforeUnmount(() => {
   font-size: var(--fs-sm);
   color: var(--color-text-muted);
   margin-bottom: var(--space-4);
-}
-/* 三欄查詢面板頂端的唯讀預告：沿用 info-hint 視覺，僅調整與表單的間距 */
-.mode-readonly-hint { margin-bottom: var(--space-5); }
-.hint-switch-link {
-  padding: 0;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: 600;
-  color: var(--color-primary-strong);
-  background: none;
-  border: none;
-  text-decoration: underline;
-  cursor: pointer;
 }
 /* sprite icon 對齊行內文字（取代 emoji 後的基線調整） */
 .info-hint .icon-lock,

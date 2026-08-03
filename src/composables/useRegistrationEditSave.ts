@@ -65,7 +65,7 @@ export function useRegistrationEditSave({
 }: {
   editForm: EditForm
   queryResult: Ref<QueryResult | null>
-  queryForm: { token: string; name: string; birthday: string; parent_phone: string }
+  queryForm: { token: string; parent_phone: string }
   activeQueryCredentials: Ref<QueryCredentials | null>
   activeQueryToken: ComputedRef<string | null>
   courses: Ref<CourseOption[]>
@@ -307,7 +307,7 @@ export function useRegistrationEditSave({
       // 後續 mutation 全 404。（無 token 的舊報名不重派生，見後端 helper docstring）
       const rotatedToken = (res as { data?: { rotated_query_token?: string | null } })?.data?.rotated_query_token
       // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
-      // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。hydrateResult 內部
+      // 直接 hydrate 即可，不需再查詢一次。hydrateResult 內部
       // 已用 response 的 name/birthday 覆寫 credentials，姓名/生日異動不需要在這裡
       // 額外處理；只有 parent_phone 需要在此手動接手（hydrateResult 不會從 data
       // 覆寫 phone，沿用呼叫端傳入值）。
@@ -318,7 +318,6 @@ export function useRegistrationEditSave({
       }, guard)
       if (hydrated) {
         if (phoneWillChange) queryForm.parent_phone = newPhoneRaw
-        if (nameWillChange) queryForm.name = newNameRaw
         if (rotatedToken) queryForm.token = rotatedToken
         rotatedCredentialRecovery.value = null
       } else if (rotatedToken && (phoneWillChange || nameWillChange)) {

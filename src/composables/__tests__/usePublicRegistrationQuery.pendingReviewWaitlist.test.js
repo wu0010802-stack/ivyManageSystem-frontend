@@ -5,7 +5,6 @@ vi.mock('vue-router', () => ({
 }))
 
 vi.mock('@/api/activityPublic', () => ({
-  publicQueryRegistration: vi.fn(),
   publicQueryByToken: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
