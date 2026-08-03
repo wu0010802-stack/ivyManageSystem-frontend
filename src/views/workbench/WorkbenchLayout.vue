@@ -11,7 +11,10 @@ const router = useRouter()
 
 const { unackCount } = useHighRiskAuditCount()
 
-const canSeeHighRisk = computed(() => hasPermission('AUDIT_LOGS'))
+// 兩分頁各自一碼（2026-08-03 細分）：高風險事件原本共用 AUDIT_LOGS，等於要連
+// 「報表 › 操作紀錄」一起授出去才看得到。
+const canSeeApprovals = computed(() => hasPermission('APPROVALS'))
+const canSeeHighRisk = computed(() => hasPermission('HIGH_RISK_READ'))
 
 const activeTab = ref(route.path.endsWith('/high-risk') ? 'high-risk' : 'approvals')
 
@@ -27,7 +30,7 @@ watch(() => route.path, (p) => {
 <template>
   <div class="workbench-layout">
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
-      <el-tab-pane label="待簽核" name="approvals" />
+      <el-tab-pane v-if="canSeeApprovals" label="待簽核" name="approvals" />
       <el-tab-pane v-if="canSeeHighRisk" name="high-risk">
         <template #label>
           <span>高風險事件</span>

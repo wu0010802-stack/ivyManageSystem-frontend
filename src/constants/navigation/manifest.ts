@@ -155,14 +155,20 @@ export const NAVIGATION_MANIFEST = {
     },
     {
       key: 'workbench', title: PAGE_TERMS.workbench, routePath: '/workbench',
-      views: [{ code: 'APPROVALS' }],
+      // 兩個分頁各自一碼（2026-08-03 細分）：高風險事件原本共用 AUDIT_LOGS，
+      // 想授出它就得連「報表 › 操作紀錄」一起給。頁面 views 為 OR，只持其中
+      // 一碼者仍能進 /workbench，由 WorkbenchLayout 決定看得到哪個分頁。
+      views: [
+        { code: 'APPROVALS', label: '待簽核' },
+        { code: 'HIGH_RISK_READ', label: '高風險事件' },
+      ],
       menu: { icon: icon('Finished'), badgeKey: 'workbench' },
       extraRoutes: [
         // /approvals 已 redirect 至 /workbench/approvals；規則保留供 redirect 解析。
         { path: '/approvals', permission: 'APPROVALS' },
         { path: '/workbench/approvals', permission: 'APPROVALS' },
-        // 高風險事件頁走 api/audit.py 的 AUDIT_LOGS 守衛。
-        { path: '/workbench/high-risk', permission: 'AUDIT_LOGS' },
+        // 高風險事件頁走 api/audit.py 的 HIGH_RISK_READ 守衛。
+        { path: '/workbench/high-risk', permission: 'HIGH_RISK_READ' },
       ],
     },
   ],

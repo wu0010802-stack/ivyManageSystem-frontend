@@ -158,11 +158,21 @@ describe('權限邏輯（text[] 版本）', () => {
       expect(canAccessRoute('/workbench/high-risk')).toBe(false)
     })
 
-    it('工作台高風險頁 /workbench/high-risk 需要 AUDIT_LOGS', () => {
-      setUserInfo({ role: 'admin', permission_names: ['AUDIT_LOGS'] })
+    it('工作台高風險頁 /workbench/high-risk 需要 HIGH_RISK_READ', () => {
+      setUserInfo({ role: 'admin', permission_names: ['HIGH_RISK_READ'] })
       expect(canAccessRoute('/workbench/high-risk')).toBe(true)
-      // 僅有 AUDIT_LOGS 不得進待簽核頁
+      // 只被授予高風險事件者仍可進工作台外層（落點由 router redirect 導到 high-risk）
+      expect(canAccessRoute('/workbench')).toBe(true)
+      // 僅有 HIGH_RISK_READ 不得進待簽核頁
       expect(canAccessRoute('/workbench/approvals')).toBe(false)
+    })
+
+    it('AUDIT_LOGS（操作紀錄）不再能進高風險事件頁', () => {
+      // 2026-08-03 細分：高風險事件改吃 HIGH_RISK_READ，授「報表 › 操作紀錄」
+      // 不等於授「審核工作台 › 高風險事件」。
+      setUserInfo({ role: 'admin', permission_names: ['AUDIT_LOGS'] })
+      expect(canAccessRoute('/audit-logs')).toBe(true)
+      expect(canAccessRoute('/workbench/high-risk')).toBe(false)
     })
 
     // 業主裁決（2026-06-13）：待審核佇列 route gate 對齊後端動作端點（只要 ACTIVITY_WRITE）。

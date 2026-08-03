@@ -212,6 +212,19 @@ const LEGACY_ROUTE_PERMISSION_RULES: { path: string; permission: string; prefix?
 const tripleKey = (r: { path: string; permission: string; prefix?: boolean }) =>
   `${r.path} × ${r.permission}${r.prefix === true ? ' × prefix' : ''}`
 
+// 遷移「之後」刻意改動的規則——fixture 維持 2026-07-31 凍結原樣，差異登記於此附理由。
+// 沒有這張表就只能改寫 fixture，那會讓它失去「凍結基準」的意義。
+const INTENTIONAL_DIVERGENCE = {
+  // 2026-08-03 審核工作台權限細分：高風險事件分頁自 AUDIT_LOGS 拆出 HIGH_RISK_READ，
+  // 否則「授高風險事件」等於連「報表 › 操作紀錄」一起授出去。
+  removedFromLegacy: ['/workbench/high-risk × AUDIT_LOGS'],
+  addedByManifest: [
+    '/workbench/high-risk × HIGH_RISK_READ',
+    // 頁面 views 為 OR：只持高風險碼者也該能進 /workbench（落點由 router redirect 決定）
+    '/workbench × HIGH_RISK_READ',
+  ],
+}
+
 describe('衍生規則 vs 遷移前手寫陣列（fixture set-equality）', () => {
   it('fixture 本身無重複三元組（抄錄防呆）', () => {
     const keys = LEGACY_ROUTE_PERMISSION_RULES.map(tripleKey)
@@ -227,11 +240,29 @@ describe('衍生規則 vs 遷移前手寫陣列（fixture set-equality）', () =
     const derived = new Set(ROUTE_PERMISSION_RULES.map(tripleKey))
     const legacy = new Set(LEGACY_ROUTE_PERMISSION_RULES.map(tripleKey))
 
-    const missing = [...legacy].filter((k) => !derived.has(k))
-    const extra = [...derived].filter((k) => !legacy.has(k))
+    const missing = [...legacy]
+      .filter((k) => !derived.has(k))
+      .filter((k) => !INTENTIONAL_DIVERGENCE.removedFromLegacy.includes(k))
+    const extra = [...derived]
+      .filter((k) => !legacy.has(k))
+      .filter((k) => !INTENTIONAL_DIVERGENCE.addedByManifest.includes(k))
 
     expect(missing, '手寫規則在衍生輸出中消失（manifest 漏抄或衍生邏輯錯）').toEqual([])
     expect(extra, '衍生輸出多出手寫規則沒有的規則（manifest 多抄或冗餘消除失效）').toEqual([])
+  })
+
+  it('刻意差異表無殭屍條目（差異消失後必須把它從表中移除）', () => {
+    const derived = new Set(ROUTE_PERMISSION_RULES.map(tripleKey))
+    const legacy = new Set(LEGACY_ROUTE_PERMISSION_RULES.map(tripleKey))
+
+    for (const k of INTENTIONAL_DIVERGENCE.removedFromLegacy) {
+      expect(legacy.has(k), `${k} 不在 fixture 中，不需登記為「已移除」`).toBe(true)
+      expect(derived.has(k), `${k} 仍在衍生輸出中，登記為「已移除」是錯的`).toBe(false)
+    }
+    for (const k of INTENTIONAL_DIVERGENCE.addedByManifest) {
+      expect(derived.has(k), `${k} 不在衍生輸出中，不需登記為「新增」`).toBe(true)
+      expect(legacy.has(k), `${k} 本來就在 fixture 中，登記為「新增」是錯的`).toBe(false)
+    }
   })
 
   it('prefix 旗標形狀與既有消費端相容（true 才出現，其餘不帶 prefix key）', () => {

@@ -44,7 +44,9 @@ export const routes: RouteRecordRaw[] = [
         {
             path: '/workbench',
             component: () => import('../views/workbench/WorkbenchLayout.vue'),
-            redirect: '/workbench/approvals',
+            // 兩分頁各自一碼（APPROVALS / HIGH_RISK_READ，2026-08-03 細分）；只被授予
+            // 高風險事件者若硬導 approvals 會撞路由守衛，故落點依權限決定。
+            redirect: () => hasPermission('APPROVALS') ? '/workbench/approvals' : '/workbench/high-risk',
             meta: { title: PAGE_TERMS.workbench },
             children: [
                 {

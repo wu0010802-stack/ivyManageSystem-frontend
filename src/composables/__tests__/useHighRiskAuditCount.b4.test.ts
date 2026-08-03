@@ -5,6 +5,11 @@ vi.mock("@/api/audit", () => ({
   getHighRiskAudits: vi.fn(),
 }));
 
+// 2026-08-03 權限細分：composable 先驗 HIGH_RISK_READ 才發請求
+vi.mock("@/utils/auth", () => ({
+  hasPermission: vi.fn(() => true),
+}));
+
 import { getHighRiskAudits } from "@/api/audit";
 import { useHighRiskAuditCount } from "@/composables/useHighRiskAuditCount";
 

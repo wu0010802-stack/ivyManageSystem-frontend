@@ -5,7 +5,13 @@ vi.mock("@/api/audit", () => ({
   getHighRiskAudits: vi.fn(),
 }));
 
+// 2026-08-03 權限細分：composable 先驗 HIGH_RISK_READ 才發請求
+vi.mock("@/utils/auth", () => ({
+  hasPermission: vi.fn(() => true),
+}));
+
 import { getHighRiskAudits } from "@/api/audit";
+import { hasPermission } from "@/utils/auth";
 import { useHighRiskAuditCount } from "@/composables/useHighRiskAuditCount";
 
 describe("useHighRiskAuditCount", () => {
@@ -80,5 +86,25 @@ describe("useHighRiskAuditCount", () => {
     await refresh();
     expect(getHighRiskAudits).toHaveBeenCalledTimes(2);
     wrapper.unmount();
+  });
+
+  it("無 HIGH_RISK_READ 權限時完全不發請求（2026-08-03 權限細分）", async () => {
+    // 細分前 badge 對無權者每 60 秒打一次 403；細分後改為根本不發。
+    vi.mocked(hasPermission).mockReturnValue(false);
+    const TestComp = {
+      setup() {
+        return useHighRiskAuditCount();
+      },
+      template: "<div>{{ unackCount }}</div>",
+    };
+    const wrapper = mount(TestComp);
+    await flushPromises();
+    vi.advanceTimersByTime(120_000);
+    await flushPromises();
+
+    expect(getHighRiskAudits).not.toHaveBeenCalled();
+    expect(wrapper.text()).toBe("0");
+    wrapper.unmount();
+    vi.mocked(hasPermission).mockReturnValue(true);
   });
 });

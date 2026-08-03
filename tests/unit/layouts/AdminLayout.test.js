@@ -13,6 +13,8 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/utils/auth', () => ({
   isLoggedIn: vi.fn(() => true),
+  // useHighRiskAuditCount 會先驗 HIGH_RISK_READ 才發請求（2026-08-03 權限細分）
+  hasPermission: vi.fn(() => true),
 }))
 
 vi.mock('@/stores/notification', () => ({
