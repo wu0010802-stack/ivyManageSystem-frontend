@@ -17,13 +17,15 @@
          預覽卡看得到的每一個字都必須是這份靜態 HTML 裡的字面值。
          og:image 需絕對網址；網域刻意硬編而非用 build 變數：.env 系列全被 gitignore，
          變數缺值時 Vite 的 HTML 佔位不會被替換，會原樣輸出成壞掉的圖片網址。
-         換正式網域或改版海報時，這三行要一起更新。 -->
+         換正式網域或改版海報時，這三行要一起更新。
+         og:image 的 ?v= 是給 LINE 圖片 CDN 的 cache-bust：LINE 按整串網址快取圖，
+         換海報但網址不變會一直吃舊圖且無官方清快取工具——改版海報時把 v 改成當天日期。 -->
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="常春藤教育機構">
     <meta property="og:url" content="https://ivypreschool.tw/public.html#/activity">
     <meta property="og:title" content="常春藤教育機構｜課後才藝線上報名">
     <meta property="og:description" content="2～5 歲課後才藝課線上報名，額滿為止。手機點開就能填，幾分鐘完成。">
-    <meta property="og:image" content="https://ivypreschool.tw/images/activity-poster.jpg">
+    <meta property="og:image" content="https://ivypreschool.tw/images/activity-poster.jpg?v=20260803">
     <meta property="og:image:alt" content="常春藤教育機構課後才藝課程海報">
     <meta name="twitter:card" content="summary_large_image">
 
