@@ -579,14 +579,6 @@
                       </span>
                     </div>
                     <dl class="fee-preview-list">
-                      <div v-if="feePreview.courseCount > 0" class="fee-row">
-                        <dt>才藝課程小計</dt>
-                        <dd>NT$ {{ feePreview.coursesTotal.toLocaleString() }}</dd>
-                      </div>
-                      <div v-if="feePreview.supplyCount > 0" class="fee-row">
-                        <dt>用品加購小計</dt>
-                        <dd>NT$ {{ feePreview.suppliesTotal.toLocaleString() }}</dd>
-                      </div>
                       <div class="fee-row fee-row-total">
                         <dt>預估應繳合計</dt>
                         <dd>NT$ {{ feePreview.total.toLocaleString() }}</dd>
@@ -2241,9 +2233,6 @@ onUnmounted(() => {
 .fee-preview .fee-row dt { margin: 0; font-weight: 500; }
 .fee-preview .fee-row dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--color-text); }
 .fee-preview .fee-row-total {
-  padding-top: var(--space-3);
-  margin-top: var(--space-1);
-  border-top: 1px dashed rgba(13, 144, 83, 0.4);
   font-size: var(--fs-md);
 }
 .fee-preview .fee-row-total dt {
