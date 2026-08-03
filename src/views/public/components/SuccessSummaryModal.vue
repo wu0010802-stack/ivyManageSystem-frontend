@@ -261,12 +261,8 @@ function handleDone() {
             </div>
           </div>
 
-          <div class="receipt-total">
-            <span>預估應繳金額</span>
-            <strong>{{ fmtAmount(summary.totalAmount) }}</strong>
-          </div>
           <p v-if="hasWaitlistedCourse" class="receipt-waitlist-note">
-            標示「依序候補」的課程（依送出當下名額估計）暫不計入合計；
+            標示「依序候補」的課程（依送出當下名額估計）暫不收費；
             升為正式後校方會另行通知繳費。
           </p>
         </section>
@@ -429,23 +425,6 @@ function handleDone() {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--color-text-subtle);
-}
-.receipt-total {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--color-border);
-  font-size: var(--fs-md);
-  font-weight: 600;
-  color: var(--color-text);
-}
-.receipt-total strong {
-  color: var(--color-primary-strong);
-  font-size: var(--fs-xl);
-  font-variant-numeric: tabular-nums;
 }
 .receipt-waitlist-badge {
   display: inline-flex;

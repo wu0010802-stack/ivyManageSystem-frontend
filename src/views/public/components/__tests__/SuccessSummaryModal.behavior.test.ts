@@ -32,12 +32,14 @@ beforeEach(() => {
 })
 
 describe('金額格式', () => {
-  it('課程價、加購價與總額都以千分位顯示', () => {
+  it('課程價與加購價以千分位顯示；合計不顯示（2026-08-03 業主要求）', () => {
     const wrapper = mountModal()
     expect(wrapper.text()).toContain('$2,600')
-    expect(wrapper.text()).toContain('$3,550')
+    expect(wrapper.text()).toContain('$950')
     expect(wrapper.text()).not.toContain('$2600')
-    expect(wrapper.text()).not.toContain('$3550')
+    // 合計（2,600 + 950 = 3,550）不得再出現於摘要視窗
+    expect(wrapper.text()).not.toContain('$3,550')
+    expect(wrapper.text()).not.toContain('預估應繳金額')
   })
 })
 
