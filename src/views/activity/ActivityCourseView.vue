@@ -220,6 +220,13 @@
             />
           </div>
         </el-form-item>
+        <el-alert
+          v-if="isWeekdayScheduleIncomplete(form)"
+          title="已選上課星期但未填完整起訖時間：報名頁只會顯示星期，且不參與衝堂提醒。"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -459,7 +466,7 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
 import { sanitizeHref } from '@/utils/url'
-import { formatWeekdaySchedule } from '@/utils/weekdaySchedule'
+import { formatWeekdaySchedule, isWeekdayScheduleIncomplete } from '@/utils/weekdaySchedule'
 import { GRADES_ORDER } from '@/constants/recruitment'
 import CourseDmUploader from './components/CourseDmUploader.vue'
 

@@ -38,10 +38,25 @@ export function hasWeekdaySchedule(slot?: WeekdaySlot | null): boolean {
   )
 }
 
-/** '週一、三 16:00–17:00'；時段不完整 → ''。 */
+/**
+ * '週一、三 16:00–17:00'；只有星期沒有（完整）起訖時間 → 退階顯示 '週一、三'；
+ * 連星期都沒有 → ''。退階只影響顯示，衝堂判定仍走 hasWeekdaySchedule 三欄齊備語意。
+ */
 export function formatWeekdaySchedule(slot?: WeekdaySlot | null): string {
-  if (!slot || !hasWeekdaySchedule(slot)) return ''
-  return `${formatWeekdays(slot.meeting_weekdays)} ${slot.meeting_start_time}–${slot.meeting_end_time}`
+  if (!slot) return ''
+  if (hasWeekdaySchedule(slot)) {
+    return `${formatWeekdays(slot.meeting_weekdays)} ${slot.meeting_start_time}–${slot.meeting_end_time}`
+  }
+  return formatWeekdays(slot.meeting_weekdays)
+}
+
+/** 後台表單提醒用：勾了星期但起訖時間缺任一 → true（此時前台只會退階顯示星期）。 */
+export function isWeekdayScheduleIncomplete(slot?: WeekdaySlot | null): boolean {
+  return (
+    !!slot &&
+    validWeekdays(slot.meeting_weekdays).length > 0 &&
+    (!slot.meeting_start_time || !slot.meeting_end_time)
+  )
 }
 
 /**
