@@ -119,7 +119,12 @@ function manualChunks(id) {
         // src/parent/main.ts 的 top-level 副作用執行：家長 App 也 mount('#app') 搶佔
         // 畫面、guard 判未登入導向 /login → 公開報名網址開出家長端登入（LIFF）。
         // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第四次同型回歸。
-        id.includes('/src/utils/weekdaySchedule.ts')
+        id.includes('/src/utils/weekdaySchedule.ts') ||
+        // publicCopy：公開頁行銷文案的粗體解析/一行一條轉換純函式（零 import、
+        // EP-free），公開頁 ActivityPublicView 與 admin ActivitySettingsView 共用。
+        // 與 weekdaySchedule 同型：跨端共用純函式檔必 pin，防被併進單端 chunk
+        // 造成另一端靜態橋接整包（2026-08-03 公開頁接管事故的教訓）。
+        id.includes('/src/utils/publicCopy.ts')
     ) {
         return 'shared-common'
     }

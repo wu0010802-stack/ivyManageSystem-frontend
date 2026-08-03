@@ -118,6 +118,31 @@
                 placeholder="例：114 下藝童趣 · 2026-02-23"
               />
             </el-form-item>
+            <el-form-item label="行銷說明">
+              <el-input
+                v-model="form.intro_text"
+                type="textarea"
+                :autosize="{ minRows: 4, maxRows: 10 }"
+                maxlength="2000"
+                show-word-limit
+                placeholder="例：爸比媽咪：&#10;2 ~ 5 歲的孩子對於自我探索的心很強烈……"
+              />
+              <div class="field-hint">
+                前台海報下方的說明段落，換行照顯示；留空時顯示系統預設文案。
+              </div>
+            </el-form-item>
+            <el-form-item label="報名須知">
+              <el-input
+                v-model="form.notice_items_text"
+                type="textarea"
+                :autosize="{ minRows: 4, maxRows: 12 }"
+                placeholder="一行一條，例：&#10;本學期才藝課線上報名，**額滿為止**。&#10;人數未達最低標準時，這門課會取消開課。"
+              />
+              <div class="field-hint">
+                一行一條、每條最多 200 字；文字用 **兩個星號** 包起來會顯示為粗體。
+                留空時顯示系統預設四條須知。
+              </div>
+            </el-form-item>
 
             <el-divider content-position="left">活動海報</el-divider>
 
@@ -263,6 +288,7 @@ const ActivitySupplyView = defineAsyncComponent(() => import('./ActivitySupplyVi
 import { hasPermission } from '@/utils/auth'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import { getCurrentAcademicTerm } from '@/utils/academic'
+import { noticeItemsToLines, noticeLinesToItems } from '@/utils/publicCopy'
 
 interface SettingsForm {
   open_at: string | null
@@ -277,6 +303,10 @@ interface SettingsForm {
   target_audience: string
   form_card_title: string
   poster_url: string
+  intro_text: string
+  // 報名須知在 API 為字串陣列；表單以「一行一條」textarea 編輯，存取時經
+  // noticeLinesToItems / noticeItemsToLines 轉換
+  notice_items_text: string
 }
 
 interface EmailTemplateForm {
@@ -359,6 +389,8 @@ const form = ref<SettingsForm>({
   target_audience: '',
   form_card_title: '',
   poster_url: '',
+  intro_text: '',
+  notice_items_text: '',
 })
 
 const gateStatus = computed(() => computeGateStatus(form.value, gateNowStr.value))
@@ -443,7 +475,7 @@ async function fetchSettings() {
   settingsLoadFailed.value = false
   try {
     const res = await getRegistrationTime()
-    const d = res.data as Partial<SettingsForm>
+    const d = res.data as Partial<SettingsForm> & { notice_items?: string[] | null }
     form.value = {
       open_at: d.open_at || null,
       close_at: d.close_at || null,
@@ -455,6 +487,8 @@ async function fetchSettings() {
       target_audience: d.target_audience || '',
       form_card_title: d.form_card_title || '',
       poster_url: d.poster_url || '',
+      intro_text: d.intro_text || '',
+      notice_items_text: noticeItemsToLines(d.notice_items),
     }
     posterBroken.value = false
     settingsLoaded.value = true
@@ -568,6 +602,8 @@ async function handleSave() {
       target_audience: form.value.target_audience.trim() || null,
       form_card_title: form.value.form_card_title.trim() || null,
       poster_url: form.value.poster_url || null,
+      intro_text: form.value.intro_text.trim() || null,
+      notice_items: noticeLinesToItems(form.value.notice_items_text),
     }
     await updateRegistrationTime(payload)
     ElMessage.success('設定已儲存')

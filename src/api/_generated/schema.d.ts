@@ -7730,7 +7730,7 @@ export interface paths {
         put?: never;
         /**
          * Post Magic Link
-         * @description admin 產 magic-link token（30 天 / 3 次上限）。覆寫舊 hash（重發即作廢前一個）。
+         * @description 產 magic-link token；須同時具員工編輯與薪資讀取權限。
          */
         post: operations["post_magic_link_api_offboarding__employee_id__magic_link_post"];
         /**
@@ -16040,6 +16040,10 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
+            /** Intro Text */
+            intro_text?: string | null;
+            /** Notice Items */
+            notice_items?: string[] | null;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
@@ -27488,8 +27492,12 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
+            /** Intro Text */
+            intro_text?: string | null;
             /** Is Open */
             is_open: boolean;
+            /** Notice Items */
+            notice_items?: string[] | null;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
@@ -28687,6 +28695,10 @@ export interface components {
             event_date_label?: string | null;
             /** Form Card Title */
             form_card_title?: string | null;
+            /** Intro Text */
+            intro_text?: string | null;
+            /** Notice Items */
+            notice_items?: string[] | null;
             /** Open At */
             open_at?: string | null;
             /** Page Title */
