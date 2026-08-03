@@ -223,16 +223,18 @@
               </div>
               <div class="info-box">
                 <p class="info-intro">
-                  爸比媽咪：<br />
-                  2 ~ 5 歲的孩子對於自我探索的心很強烈，也是孩子成長的重要因素之一，課後才藝就是一個很好的機會哦！<br />
-                  孩子和同儕一起互動學習是最開心的時刻，樂在其中的學習也能玩出潛能！讓我們一起發掘孩子的能力吧！
+                  <template v-for="(line, i) in displayIntroLines" :key="i">
+                    <br v-if="i > 0" />{{ line }}
+                  </template>
                 </p>
                 <hr class="info-divider" />
                 <ul class="notice-list">
-                  <li>本學期才藝課線上報名，<strong>額滿為止</strong>。</li>
-                  <li>上才藝課當天，<strong>坐娃娃車的寶貝請爸媽自己來接喔</strong>。</li>
-                  <li>人數未達最低標準時，這門課會取消開課。</li>
-                  <li>遇到臨時停課（例如颱風天）時，會依比例退費給您。</li>
+                  <li v-for="(segments, i) in displayNoticeItems" :key="i">
+                    <template v-for="(seg, j) in segments" :key="j">
+                      <strong v-if="seg.bold">{{ seg.text }}</strong>
+                      <template v-else>{{ seg.text }}</template>
+                    </template>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -694,6 +696,7 @@ import {
 } from '@/composables/usePublicRegistrationFlow'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
+import { parseBoldSegments } from '@/utils/publicCopy'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
@@ -748,6 +751,7 @@ interface TimeInfoExtended {
   open_at: string | null; close_at: string | null
   page_title?: string; term_label?: string; event_date_label?: string
   target_audience?: string; form_card_title?: string; poster_url?: string
+  intro_text?: string | null; notice_items?: string[] | null
 }
 // timeInfo 基礎型別只含 open_at/close_at，後端實際回傳更多欄位；
 // timeInfo 為 null（尚未載入）時各消費點皆以 ?. 取值 fallback 預設
@@ -761,6 +765,29 @@ const displayFormCardTitle = computed(() => {
   const custom = timeInfoExt.value?.form_card_title?.trim()
   if (custom) return custom
   return buildFormCardTitle(displayTitle.value, displayEventDate.value)
+})
+
+// 行銷說明與報名須知（2026-08-03 文案後台化）：後台未設定（null/空）時
+// fallback 到原本寫死的預設文案，行為與 displayTitle 等欄位一致
+const DEFAULT_INTRO_LINES = [
+  '爸比媽咪：',
+  '2 ~ 5 歲的孩子對於自我探索的心很強烈，也是孩子成長的重要因素之一，課後才藝就是一個很好的機會哦！',
+  '孩子和同儕一起互動學習是最開心的時刻，樂在其中的學習也能玩出潛能！讓我們一起發掘孩子的能力吧！',
+]
+const DEFAULT_NOTICE_ITEMS = [
+  '本學期才藝課線上報名，**額滿為止**。',
+  '上才藝課當天，**坐娃娃車的寶貝請爸媽自己來接喔**。',
+  '人數未達最低標準時，這門課會取消開課。',
+  '遇到臨時停課（例如颱風天）時，會依比例退費給您。',
+]
+const displayIntroLines = computed(() => {
+  const custom = timeInfoExt.value?.intro_text?.trim()
+  if (!custom) return DEFAULT_INTRO_LINES
+  return custom.split('\n').map((line) => line.trim()).filter(Boolean)
+})
+const displayNoticeItems = computed(() => {
+  const items = timeInfoExt.value?.notice_items
+  return (items && items.length ? items : DEFAULT_NOTICE_ITEMS).map(parseBoldSegments)
 })
 const posterSrc = computed(() => {
   if (posterBroken.value) return DEFAULT_POSTER
