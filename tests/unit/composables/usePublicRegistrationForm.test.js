@@ -15,7 +15,6 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ref } from 'vue'
-import { dateToLocalISO } from '@/utils/format'
 import {
   usePublicRegistrationForm,
   normalizeMobile,
@@ -47,7 +46,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
   describe('初始狀態', () => {
     it('form 初始全空、selectedCourses/selectedSupplies 為空陣列', () => {
       expect(f.form.name).toBe('')
-      expect(f.form.birthday).toBe('')
       expect(f.form.parent_phone).toBe('')
       expect(f.form.class_name).toBe('')
       expect(f.form.email).toBe('')
@@ -57,17 +55,15 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
 
     it('errors 全空字串、phoneTouched=false', () => {
       expect(f.errors.name).toBe('')
-      expect(f.errors.birthday).toBe('')
       expect(f.errors.email).toBe('')
       expect(f.errors.courses).toBe('')
       expect(f.phoneTouched.value).toBe(false)
     })
 
-    it('FIELD_FOCUS_ORDER 包含 6 欄（課程優先流程：courses 排最前）', () => {
+    it('FIELD_FOCUS_ORDER 包含 5 欄（課程優先流程：courses 排最前；2026-08-03 生日欄已移除）', () => {
       expect(f.FIELD_FOCUS_ORDER).toEqual([
         'courses',
         'name',
-        'birthday',
         'parent_phone',
         'class_name',
         'email',
@@ -91,7 +87,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
   describe('validateForm', () => {
     it('完整正確資料 → true,errors 全空', () => {
       f.form.name = '小明'
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       f.form.selectedCourses = ['美術']
@@ -101,7 +96,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
     })
 
     it('缺姓名 → false,errors.name 填入', () => {
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       f.form.selectedCourses = ['美術']
@@ -109,61 +103,8 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       expect(f.errors.name).toBe('請輸入幼兒姓名')
     })
 
-    it('生日為未來日期 → errors.birthday 標記', () => {
-      const future = new Date()
-      future.setFullYear(future.getFullYear() + 1)
-      f.form.name = '小明'
-      f.form.birthday = dateToLocalISO(future)
-      f.form.parent_phone = '0912345678'
-      f.form.class_name = '大班'
-      f.form.selectedCourses = ['美術']
-      expect(f.validateForm()).toBe(false)
-      expect(f.errors.birthday).toContain('未來')
-    })
-
-    it('台北凌晨時，生日等於今天不會因 UTC 解析被判成未來', () => {
-      const originalTZ = process.env.TZ
-      process.env.TZ = 'Asia/Taipei'
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date(2026, 6, 13, 0, 30))
-      try {
-        f.form.name = '小明'
-        f.form.birthday = '2026-07-13'
-        f.form.parent_phone = '0912345678'
-        f.form.class_name = '大班'
-        f.form.selectedCourses = ['美術']
-
-        expect(f.validateForm()).toBe(true)
-        expect(f.errors.birthday).toBe('')
-      } finally {
-        vi.useRealTimers()
-        process.env.TZ = originalTZ
-      }
-    })
-
-    it('瀏覽器時區落後台北時，台北今天仍可送出報名', () => {
-      const originalTZ = process.env.TZ
-      process.env.TZ = 'UTC'
-      vi.useFakeTimers()
-      vi.setSystemTime(new Date('2026-07-12T16:30:00Z'))
-      try {
-        f.form.name = '小明'
-        f.form.birthday = '2026-07-13'
-        f.form.parent_phone = '0912345678'
-        f.form.class_name = '大班'
-        f.form.selectedCourses = ['美術']
-
-        expect(f.validateForm()).toBe(true)
-        expect(f.errors.birthday).toBe('')
-      } finally {
-        vi.useRealTimers()
-        process.env.TZ = originalTZ
-      }
-    })
-
     it('手機格式錯誤 → errors.parent_phone', () => {
       f.form.name = '小明'
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '12345'
       f.form.class_name = '大班'
       f.form.selectedCourses = ['美術']
@@ -173,7 +114,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
 
     it('未選課程且未選用品 → false,errors.courses', () => {
       f.form.name = '小明'
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       expect(f.validateForm()).toBe(false)
@@ -182,7 +122,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
 
     it('只選用品、無課程 → false（用品只能加購）', () => {
       f.form.name = '小明'
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       f.form.selectedSupplies = ['畫具組']
@@ -192,7 +131,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
 
     it('課程與用品皆空 → false,errors.courses 標記', () => {
       f.form.name = '小明'
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       f.form.selectedCourses = []
@@ -205,7 +143,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
   describe('step validation', () => {
     it('寶貝資料完整時可先進入選課，不要求先選課程', () => {
       f.form.name = '小明'
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
 
@@ -235,9 +172,9 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
 
     it('不影響其他欄位', () => {
       f.errors.name = '請輸入姓名'
-      f.errors.birthday = '請選擇生日'
+      f.errors.class_name = '請選擇寶貝班級'
       f.clearError('name')
-      expect(f.errors.birthday).toBe('請選擇生日')
+      expect(f.errors.class_name).toBe('請選擇寶貝班級')
     })
   })
 
@@ -276,7 +213,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
   describe('resetForm', () => {
     it('全欄位重置為空', () => {
       f.form.name = '小明'
-      f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       f.form.email = 'test@example.com'
@@ -286,7 +222,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       f.resetForm()
 
       expect(f.form.name).toBe('')
-      expect(f.form.birthday).toBe('')
       expect(f.form.parent_phone).toBe('')
       expect(f.form.class_name).toBe('')
       expect(f.form.email).toBe('')
@@ -353,22 +288,6 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
     it('errors.parent_phone 直接設置時優先顯示', () => {
       f.errors.parent_phone = 'server 錯誤訊息'
       expect(f.parentPhoneError.value).toBe('server 錯誤訊息')
-    })
-  })
-
-  describe('生日上下限', () => {
-    it('maxBirthdayISO 為今日', () => {
-      const today = new Date()
-      const expected = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-      expect(f.maxBirthdayISO.value).toBe(expected)
-    })
-
-    it('minBirthdayISO 為 20 年前同日', () => {
-      const today = new Date()
-      const min = new Date(today)
-      min.setFullYear(min.getFullYear() - 20)
-      const expected = `${min.getFullYear()}-${String(min.getMonth() + 1).padStart(2, '0')}-${String(min.getDate()).padStart(2, '0')}`
-      expect(f.minBirthdayISO.value).toBe(expected)
     })
   })
 })
