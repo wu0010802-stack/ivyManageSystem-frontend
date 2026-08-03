@@ -1198,6 +1198,9 @@ export interface paths {
          *       標記，混進「全部」會讓使用者誤以為是有效報名。
          *     student_id：查詢單一學生的歷史報名紀錄（跨學期）；提供時通常搭配
          *       school_year=None、semester=None 才能看全部學期。
+         *     supply_id：列出訂購該用品的報名（用品管理「已訂套數」訂購名單）。搭配
+         *       預設 include_inactive=False 時口徑與 GET /supplies 的 ordered_count
+         *       一致（is_active=True 才計入）。
          */
         get: operations["get_registrations_api_activity_registrations_get"];
         put?: never;
@@ -35301,6 +35304,8 @@ export interface operations {
                 skip?: number;
                 /** @description 指定在校學生 ID，查詢其歷史報名紀錄 */
                 student_id?: number | null;
+                /** @description 指定用品 ID，列出訂購該用品的報名（訂購名單） */
+                supply_id?: number | null;
             };
             header?: never;
             path?: never;
