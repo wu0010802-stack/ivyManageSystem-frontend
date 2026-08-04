@@ -180,6 +180,25 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     form.selectedSupplies = []
   }
 
+  /**
+   * 「幫另一位寶貝報名」：兩胎家庭是幼兒園常態，家長手機與通知信箱兩筆報名
+   * 必然相同，重打一次純屬白費力氣。孩子資料（姓名／班級）與選課一律清空，
+   * 避免家長沿用上一位的課程而不自覺。
+   *
+   * errors 一併清乾淨：上一輪送出留下的紅字若殘留，第二位寶貝一進第 1 步就
+   * 看到滿版錯誤，會被誤讀成「系統出問題」。
+   */
+  function resetForNextApplicant(
+    contact: { parentPhone?: string; email?: string } = {},
+  ) {
+    resetForm()
+    clearPersonalDetailErrors()
+    errors.courses = ''
+    phoneTouched.value = false
+    form.parent_phone = contact.parentPhone || ''
+    form.email = contact.email || ''
+  }
+
   return {
     form,
     errors,
@@ -193,6 +212,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     toggleCourse,
     toggleSupply,
     resetForm,
+    resetForNextApplicant,
     normalizeMobile,
     FIELD_FOCUS_ORDER,
   }

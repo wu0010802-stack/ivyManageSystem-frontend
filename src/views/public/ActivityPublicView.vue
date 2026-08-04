@@ -52,7 +52,11 @@
     />
 
     <!-- Success Modal（A1-P5 抽元件） -->
-    <SuccessSummaryModal :summary="successModal" @close="closeSuccessModal" />
+    <SuccessSummaryModal
+      :summary="successModal"
+      @close="closeSuccessModal"
+      @reapply="handleReapply"
+    />
 
     <!-- Contact Modal（A1-P3 抽元件） -->
     <ContactInquiryModal
@@ -325,6 +329,34 @@
                         </label>
                       </div>
                     </div>
+                  </div>
+
+                  <!-- 選課摘要：課程清單一長，家長滑到底要按「下一步」時已經看不到
+                       自己勾了什麼，得往回捲一遍核對。這裡只呈現品項與數量，
+                       不含任何加總金額（2026-08-03 業主裁定移除合計）。 -->
+                  <div
+                    class="selection-summary"
+                    role="status"
+                    aria-live="polite"
+                    data-test="selection-summary"
+                  >
+                    <template v-if="form.selectedCourses.length > 0 || selectedSupplies.length > 0">
+                      <div v-if="form.selectedCourses.length > 0" class="selection-summary-row">
+                        <span class="selection-summary-label">
+                          已選課程（{{ form.selectedCourses.length }}）
+                        </span>
+                        <span class="selection-summary-items">{{ form.selectedCourses.join('、') }}</span>
+                      </div>
+                      <div v-if="selectedSupplies.length > 0" class="selection-summary-row">
+                        <span class="selection-summary-label">
+                          加購用品（{{ selectedSupplies.length }}）
+                        </span>
+                        <span class="selection-summary-items">{{ selectedSupplies.join('、') }}</span>
+                      </div>
+                    </template>
+                    <p v-else class="selection-summary-empty">
+                      尚未選擇課程，請於上方至少勾選一門後再繼續。
+                    </p>
                   </div>
                   </section>
 
@@ -761,9 +793,15 @@ const {
   toggleCourse,
   toggleSupply,
   resetForm,
+  resetForNextApplicant,
   normalizeMobile,
   FIELD_FOCUS_ORDER,
 } = usePublicRegistrationForm({ courses, supplies, availability })
+
+// 「幫另一位寶貝報名」回填的聯絡資料快照。beforeunload 用它區分「家長自己填的
+// 進度」與「系統代填的手機／信箱」——後者被攔下來問「確定離開嗎」是純噪音，
+// 家長此刻其實沒有任何東西可失去。
+const prefilledContact = ref<{ phone: string; email: string } | null>(null)
 
 const {
   currentStep,
@@ -1029,6 +1067,23 @@ function closeSuccessModal() {
   successModal.visible = false
 }
 
+/**
+ * 幫另一位寶貝報名：保留家長手機與通知信箱（同一家庭兩筆報名必然相同），
+ * 清掉孩子資料與選課後回到第 1 步。查詢碼守門在 SuccessSummaryModal 內，
+ * 走到這裡代表家長已複製或已確認過。
+ */
+async function handleReapply() {
+  const phone = successModal.parentPhone
+  const email = successModal.email
+  successModal.visible = false
+  resetForNextApplicant({ parentPhone: phone, email })
+  prefilledContact.value = { phone, email }
+  resetFlow()
+  submitError.value = ''
+  await focusStepPanel(1)
+  showToast('已保留您的手機與 Email，請為下一位寶貝選擇課程。', 'success')
+}
+
 // ===== 表單驗證 =====
 // validateForm / clearError / errors / FIELD_FOCUS_ORDER 已抽至
 // usePublicRegistrationForm（A1-P1）。view 保留 focusFirstError 與
@@ -1150,6 +1205,8 @@ async function handleSubmitRegistration() {
     // 文字上，家長看到的是「半透明通知蓋住內容」而非第二重確認。
     resetForm()
     resetFlow()
+    // 新一輪送出完成，上一次接續報名的回填快照失效
+    prefilledContact.value = null
     await refreshAvailability()
   } catch (err) {
     submitError.value = apiErrorMessage(
@@ -1172,10 +1229,13 @@ async function handleSubmitRegistration() {
 // isFormDirty 隨之回 false，beforeunload 自然不再攔截，不需額外的
 // 「已送出」旗標。
 function isFormDirty(): boolean {
-  return Boolean(
-    form.selectedCourses.length > 0 ||
-      form.name || form.parent_phone || form.class_name,
-  )
+  if (form.selectedCourses.length > 0 || form.name || form.class_name) return true
+  // 接續報名剛回填、家長還沒動任何欄位：沒有進度可失去，不攔。
+  const prefilled = prefilledContact.value
+  if (prefilled && form.parent_phone === prefilled.phone && form.email === prefilled.email) {
+    return false
+  }
+  return Boolean(form.parent_phone)
 }
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (!isFormDirty()) return
@@ -2120,6 +2180,39 @@ onUnmounted(() => {
 }
 
 /* Phase 3 課程提醒匯總卡 */
+/* 選課摘要：第 1 步結尾的核對行。刻意不做成卡片（表單內已有 form-card 一層），
+   只用上緣分隔線 + 淡底把它從課程清單裡分出來。 */
+.selection-summary {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-muted);
+  border-top: 1px solid var(--color-border);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+.selection-summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--space-2);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+.selection-summary-row + .selection-summary-row { margin-top: var(--space-2); }
+.selection-summary-label {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--color-primary-strong);
+}
+.selection-summary-items {
+  min-width: 0;
+  color: var(--color-text);
+  word-break: break-word;
+}
+.selection-summary-empty {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
 .advisory-panel {
   margin-top: var(--space-3);
   padding: var(--space-3) var(--space-4);

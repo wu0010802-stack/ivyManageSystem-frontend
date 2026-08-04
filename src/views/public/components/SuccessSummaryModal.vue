@@ -46,6 +46,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   (e: 'close'): void
+  (e: 'reapply'): void
 }>()
 const dialogRef = ref<HTMLElement | null>(null)
 
@@ -121,13 +122,25 @@ async function copyToClipboard(text: string, label: string, key: 'token' | 'link
 
 onUnmounted(clearCopyTimers)
 
-function handleDone() {
-  // 有查詢碼卻沒複製過：第一次點擊只提醒，第二次（或複製後）才關閉
+/**
+ * 離開本畫面的共同守門：有查詢碼卻沒複製過時，第一次點擊只提醒，第二次
+ * （或複製後）才放行。「幫另一位寶貝報名」同樣是離開路徑——它一走，這組
+ * 查詢碼就再也回不來（三欄查詢只能檢視），故與「完成」吃同一道閘。
+ */
+function requestExit(proceed: () => void) {
   if (props.summary.queryToken && !hasCopiedAny.value && !nudgeVisible.value) {
     nudgeVisible.value = true
     return
   }
-  emit('close')
+  proceed()
+}
+
+function handleDone() {
+  requestExit(() => emit('close'))
+}
+
+function handleReapply() {
+  requestExit(() => emit('reapply'))
 }
 
 // 2026-07-08 業主指示：暫時停用「分享給家人」按鈕（Web Share API）。
@@ -272,7 +285,7 @@ function handleDone() {
         </p>
 
         <div class="success-cta-bar">
-          <p v-if="nudgeVisible" class="close-nudge" role="status">還沒複製查詢碼，建議先複製保存；再點一次即可完成。</p>
+          <p v-if="nudgeVisible" class="close-nudge" role="status">還沒複製查詢碼，建議先複製保存；再點一次即可繼續。</p>
           <button
             type="button"
             class="btn btn-block"
@@ -280,6 +293,16 @@ function handleDone() {
             @click="handleDone"
           >
             {{ summary.queryToken ? '我已保存查詢碼，完成' : '完成' }}
+          </button>
+          <!-- 兩胎家庭常態：不給接續入口，家長得把同一支手機與信箱重打一遍，
+               還要重走三個步驟。手機與 Email 由母頁保留，孩子資料一律重填。 -->
+          <button
+            type="button"
+            class="success-reapply-link tap-target"
+            data-test="reapply-button"
+            @click="handleReapply"
+          >
+            幫另一位寶貝報名
           </button>
         </div>
       </div>
@@ -472,6 +495,28 @@ function handleDone() {
   text-align: center;
 }
 .success-cta-bar .btn-block { min-height: 52px; }
+/* 接續報名是次要路徑：視覺壓到 text-link，不與主 CTA 搶重量，
+   但 44px 高度與整列寬度維持完整觸控目標（手機吸底列內同樣適用）。 */
+.success-reapply-link {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: var(--space-1);
+  padding: 8px 12px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+}
+.success-reapply-link:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
 
 /* —— 手機：bottom-sheet —— */
 @media (--to-sm) {
