@@ -248,9 +248,32 @@ export interface paths {
         };
         /**
          * Get Changes
-         * @description 取得修改紀錄列表
+         * @description 取得修改紀錄列表（2026-08-04 加篩選：原本只有分頁，查一筆退課要一頁頁翻）
          */
         get: operations["get_changes_api_activity_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/changes/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Changes Meta
+         * @description 異動紀錄的可篩選類型清單（給前端下拉）。
+         *
+         *     change_type 是各寫入點自由給的中文字串，沒有 enum 可列舉；改由 DB distinct
+         *     取得，避免前端硬編一份清單後隨新寫入點漂移。
+         */
+        get: operations["get_changes_meta_api_activity_changes_meta_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16020,13 +16043,21 @@ export interface components {
         };
         /**
          * ActivityRegistrationChangeListOut
-         * @description GET /changes 列表 + 總筆數。
+         * @description GET /changes 列表 + 總筆數（total 為套用篩選後的筆數，非全表）。
          */
         ActivityRegistrationChangeListOut: {
             /** Items */
             items: components["schemas"]["ActivityRegistrationChangeItemOut"][];
             /** Total */
             total: number;
+        };
+        /**
+         * ActivityRegistrationChangeMetaOut
+         * @description GET /changes/meta：異動類型下拉選項（DB distinct，非前端硬編）。
+         */
+        ActivityRegistrationChangeMetaOut: {
+            /** Change Types */
+            change_types: string[];
         };
         /**
          * ActivityRegistrationTimeOut
@@ -33782,8 +33813,19 @@ export interface operations {
     get_changes_api_activity_changes_get: {
         parameters: {
             query?: {
+                /** @description 異動類型（精確） */
+                change_type?: string | null;
+                /** @description 操作者關鍵字 */
+                changed_by?: string | null;
+                /** @description 起始日（含當日） */
+                date_from?: string | null;
+                /** @description 結束日（含當日） */
+                date_to?: string | null;
                 limit?: number;
+                registration_id?: number | null;
                 skip?: number;
+                /** @description 學生姓名關鍵字 */
+                student_name?: string | null;
             };
             header?: never;
             path?: never;
@@ -33807,6 +33849,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_changes_meta_api_activity_changes_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityRegistrationChangeMetaOut"];
                 };
             };
         };
@@ -39408,6 +39470,8 @@ export interface operations {
                 end_at?: string | null;
                 entity_id?: string | null;
                 entity_type?: string | null;
+                /** @description 是否含登入活動（token 刷新等）。列表頁預設 false 以免洗版；紀錄照常寫入 */
+                include_auth?: boolean;
                 ip_address?: string | null;
                 page?: number;
                 page_size?: number;
@@ -39511,6 +39575,8 @@ export interface operations {
                 end_at?: string | null;
                 entity_id?: string | null;
                 entity_type?: string | null;
+                /** @description 是否含登入活動（token 刷新等）。列表頁預設 false 以免洗版；紀錄照常寫入 */
+                include_auth?: boolean;
                 ip_address?: string | null;
                 risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
                 search?: string | null;

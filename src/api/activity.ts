@@ -252,6 +252,10 @@ export const deleteCourseDm = (
 export const getChanges = (params?: ApiQuery<'/activity/changes', 'get'>): AxiosResp<'/activity/changes', 'get'> =>
   api.get('/activity/changes', { params })
 
+// 修改紀錄的異動類型下拉選項（DB distinct，不在前端硬編以免與後端寫入點漂移）
+export const getChangesMeta = (): AxiosResp<'/activity/changes/meta', 'get'> =>
+  api.get('/activity/changes/meta')
+
 // 班級選項
 export const getClassOptions = (params?: ApiQuery<'/activity/class-options', 'get'>): AxiosResp<'/activity/class-options', 'get'> =>
   api.get('/activity/class-options', { params })
