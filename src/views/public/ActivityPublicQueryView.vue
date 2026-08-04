@@ -366,7 +366,9 @@
           </div>
         </template>
 
-        <!-- 候補位次摘要：依 queryResult.courses 渲染，不依賴 options 列表 -->
+        <!-- 候補狀態摘要：依 queryResult.courses 渲染，不依賴 options 列表。
+             2026-08-04 業主決策：只顯示「是否在候補中」，不揭露候補順位（見
+             usePublicRegistrationQuery.statusBadgeFor 的 why）。 -->
         <div
           v-if="waitlistCourses.length > 0"
           class="waitlist-summary"
@@ -387,23 +389,9 @@
               class="badge badge-waitlist"
             >候補資格待校方審核</span>
             <span v-else class="badge badge-waitlist">候補中</span>
-            <template
-              v-if="
-                wc.status === 'waitlist'
-                  && wc.waitlist_position != null
-              "
-            >
-              <span v-if="wc.waitlist_total === 1" class="waitlist-position waitlist-position--solo">
-                您是目前唯一候補者
-              </span>
-              <span v-else class="waitlist-position">
-                目前第 <strong>{{ wc.waitlist_position }}</strong> 位
-                <span class="waitlist-total">／共 {{ wc.waitlist_total }} 位</span>
-                <small v-if="wc.waitlist_position === 1" class="waitlist-hint">
-                  您是下一位候補；如有空位將自動通知
-                </small>
-              </span>
-            </template>
+          </div>
+          <div class="waitlist-note">
+            名額釋出時，校方會依候補順序主動與您聯繫，無需重複報名。
           </div>
         </div>
 
@@ -1562,7 +1550,7 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
-/* 候補位次摘要 */
+/* 候補狀態摘要（不含順位） */
 .waitlist-summary {
   margin-bottom: var(--space-4);
   padding: var(--space-3) var(--space-4);
@@ -1600,28 +1588,13 @@ onBeforeUnmount(() => {
   font-weight: 600;
   white-space: nowrap;
 }
-.waitlist-position {
-  font-size: var(--fs-sm);
-  color: var(--color-text);
-}
-.waitlist-position strong {
-  font-weight: 700;
-  color: var(--color-warning);
-}
-.waitlist-position--solo {
-  font-weight: 600;
+.waitlist-note {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed #f59e0b;
+  font-size: var(--fs-xs);
   color: #92400e;
-}
-.waitlist-total {
-  color: var(--color-text-muted);
-  font-size: var(--fs-xs);
-}
-.waitlist-hint {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--fs-xs);
-  color: var(--color-primary-strong);
-  font-weight: 500;
+  line-height: 1.6;
 }
 
 /* 費用預覽 */
