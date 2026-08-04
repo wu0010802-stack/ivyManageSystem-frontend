@@ -9,7 +9,7 @@
       type="warning"
       :closable="false"
       show-icon
-      title="此操作會跳過三欄比對，直接將這筆報名插入正式報名管理，並以「強行收件」標記。常用於校外生或資料永遠無法比對的情境。"
+      title="此操作會跳過比對，直接將這筆報名插入正式報名管理，並以「強行收件」標記。常用於校外生或資料永遠無法比對的情境。"
       class="dialog-alert"
     />
     <el-alert
@@ -17,12 +17,23 @@
       type="info"
       :closable="false"
       show-icon
-      title="三欄比對以 姓名 + 生日 + 家長手機 為準。若家長打錯字，校方可直接修正後再比對。"
+      title="比對以 姓名 + 班級 為準（家長手機不參與比對）。家長打錯字或選錯班級時，校方在此修正後再比對即可。"
       class="dialog-alert"
     />
     <el-form label-width="90px" label-position="right">
       <el-form-item label="幼兒姓名">
         <el-input v-model="state.form.name" maxlength="50" />
+      </el-form-item>
+      <el-form-item label="班級">
+        <el-select
+          v-model="state.form.class_name"
+          placeholder="選擇班級"
+          filterable
+          clearable
+          style="width: 100%"
+        >
+          <el-option v-for="n in classroomOptions" :key="n" :label="n" :value="n" />
+        </el-select>
       </el-form-item>
       <el-form-item label="生日">
         <el-date-picker
@@ -59,10 +70,13 @@ interface EditDialogState {
   action: 'rematch' | 'force'
   row: ReviewRow | null
   submitting: boolean
-  form: { name: string; birthday: string; parent_phone: string }
+  form: { name: string; birthday: string; parent_phone: string; class_name: string }
 }
 
-defineProps<{ state: EditDialogState; onConfirm: () => void }>()
+withDefaults(
+  defineProps<{ state: EditDialogState; onConfirm: () => void; classroomOptions?: string[] }>(),
+  { classroomOptions: () => [] },
+)
 </script>
 
 <style scoped>

@@ -499,6 +499,7 @@
       v-if="editDialog.visible"
       :state="editDialog"
       :on-confirm="confirmEdit"
+      :classroom-options="classroomOptions"
     />
     <RegistrationReviewWizard
       v-if="wizardEverOpened"

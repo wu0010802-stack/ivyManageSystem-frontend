@@ -1400,6 +1400,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/registrations/{registration_id}/match-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest Students For Registration
+         * @description 待審核報名的「可能是這位學生」候選（2026-08-04）。
+         *
+         *     為什麼需要：自動比對只認正規化後**完全相等**的姓名，因為誤綁會把 A 小孩的
+         *     報名掛到 B 小孩身上。但 prod 2026-08-03 的 7 筆未配對中有 5 筆是名冊拆字、
+         *     異體字、漏複姓（「范廖翊程」vs「廖翊程」、「薛斾青」vs「薛旆青」）——這些
+         *     永遠不該自動綁，卻讓承辦得自己在名冊裡大海撈針。本端點把「像但不完全一樣」
+         *     的候選撈出來排序，判斷仍由人做，接著走既有的 POST /registrations/{id}/match。
+         *
+         *     候選池＝該報名學期的在籍學生（同班優先，但**不限同班**——家長選錯班正是
+         *     未配對的另一個主因）。已有本學期有效報名的學生會被排除。
+         *
+         *     權限：對齊 GET /students/search——ACTIVITY_WRITE + STUDENTS_READ，缺後者 403
+         *     （否則等於開一條「有 ACTIVITY_WRITE 就能拉全校學生名冊」的側信道）；
+         *     STUDENTS_READ:own_class 者只會拿到管轄班級的候選。
+         */
+        get: operations["suggest_students_for_registration_api_activity_registrations__registration_id__match_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/registrations/{registration_id}/payment": {
         parameters: {
             query?: never;
@@ -27491,6 +27524,10 @@ export interface components {
         /**
          * PublicRegistrationCourseOut
          * @description /public/query 與 /public/update 的 courses[] 單筆。
+         *
+         *     2026-08-04 業主決策：公開端不揭露候補順位，`waitlist_position` /
+         *     `waitlist_total` 兩欄已移除（家長只看得到 status 是否為候補）。**勿因
+         *     「後台明明算得出順位」而加回**——理由見 `_build_public_query_payload`。
          */
         PublicRegistrationCourseOut: {
             /** Confirm Deadline */
@@ -27503,10 +27540,6 @@ export interface components {
             price: number;
             /** Status */
             status: string;
-            /** Waitlist Position */
-            waitlist_position?: number | null;
-            /** Waitlist Total */
-            waitlist_total?: number | null;
         };
         /**
          * PublicRegistrationDetailOut
@@ -28689,6 +28722,47 @@ export interface components {
         RegistrationMatchRequest: {
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * RegistrationMatchSuggestionItemOut
+         * @description GET /registrations/{id}/match-suggestions items[] 單筆候選在籍學生。
+         *
+         *     `similarity` 是**姓名字元相似度**（0~1），僅供排序與人工判斷，**不是**系統的
+         *     比對結論——自動綁定一律只認 utils/name_match.normalize_person_name 收斂後完全
+         *     相等（見 services/activity_student_sync._match_student_with_class）。相似度高
+         *     的兩個姓名可能是兩個不同的孩子（「王小明」vs「王小名」），必須由校方確認。
+         *
+         *     權限與 /students/search 同口徑：caller 必有 STUDENTS_READ（否則 403），
+         *     STUDENTS_READ:own_class 者只會拿到管轄班級的候選。
+         */
+        RegistrationMatchSuggestionItemOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Same Class */
+            same_class: boolean;
+            /** Similarity */
+            similarity: number;
+            /** Student Id */
+            student_id?: string | null;
+        };
+        /**
+         * RegistrationMatchSuggestionsOut
+         * @description GET /registrations/{id}/match-suggestions 完整回應。
+         *
+         *     `items` 已依「同班優先 → 相似度降冪」排序，且排除本學期已有有效報名的學生
+         *     （那些按下去會被同學生同學期唯一性守衛擋掉，列出來只是白給承辦點）。
+         */
+        RegistrationMatchSuggestionsOut: {
+            /** Items */
+            items: components["schemas"]["RegistrationMatchSuggestionItemOut"][];
+            /** Registration Id */
+            registration_id: number;
         };
         /** RegistrationRejectRequest */
         RegistrationRejectRequest: {
@@ -35789,6 +35863,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PendingRegistrationActionResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_students_for_registration_api_activity_registrations__registration_id__match_suggestions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                registration_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationMatchSuggestionsOut"];
                 };
             };
             /** @description Validation Error */
