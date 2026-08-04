@@ -318,9 +318,13 @@ export const getAttendanceSessions = (params?: ApiQuery<'/activity/attendance/se
   api.get('/activity/attendance/sessions', { params })
 export const createAttendanceSession = (data: ApiBody<'/activity/attendance/sessions', 'post'>): AxiosResp<'/activity/attendance/sessions', 'post'> =>
   api.post('/activity/attendance/sessions', data)
-// 依上課星期在日期範圍批次建場次（取代逐堂手動新增）；weekday 省略則用課程 meeting_weekdays 全部星期
+// 依上課星期在日期範圍批次建場次（取代逐堂手動新增）；weekday 省略則用課程 meeting_weekdays 全部星期。
+// 亦支援 items 明確日期模式（多課程一次建立），由 previewAttendanceSessionsBatch 算好日期後送回。
 export const createAttendanceSessionsBatch = (data: ApiBody<'/activity/attendance/sessions/batch', 'post'>): AxiosResp<'/activity/attendance/sessions/batch', 'post'> =>
   api.post('/activity/attendance/sessions/batch', data)
+// 批次產生前的唯讀預覽：起訖日省略時後端自動取學期範圍，逐日回 new/exists/holiday
+export const previewAttendanceSessionsBatch = (data: ApiBody<'/activity/attendance/sessions/batch/preview', 'post'>): AxiosResp<'/activity/attendance/sessions/batch/preview', 'post'> =>
+  api.post('/activity/attendance/sessions/batch/preview', data)
 export const deleteAttendanceSession = (id: number): AxiosResp<'/activity/attendance/sessions/{session_id}', 'delete'> =>
   api.delete(`/activity/attendance/sessions/${id}`)
 export const getAttendanceSession = (id: number, params?: ApiQuery<'/activity/attendance/sessions/{session_id}', 'get'>): AxiosResp<'/activity/attendance/sessions/{session_id}', 'get'> =>

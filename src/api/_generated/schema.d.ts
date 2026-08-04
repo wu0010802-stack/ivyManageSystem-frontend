@@ -150,13 +150,43 @@ export interface paths {
         put?: never;
         /**
          * Create Sessions Batch
-         * @description 依「每週上課星期」在日期範圍內批次建立場次（取代逐堂手動新增十幾二十次）。
+         * @description 批次建立場次，兩種模式共用同一段寫入邏輯。
          *
-         *     weekday 省略時取課程 meeting_weekdays 的全部星期（複選，actwkdays01）；
-         *     同課同日已存在（uq_activity_session_course_date）者跳過並計入
-         *     skipped_existing（冪等 → 可重複按 / 微調範圍重跑不報錯）。
+         *     模式 A（範圍）：依「每週上課星期」在日期範圍內展開（取代逐堂手動新增十幾二十次）。
+         *     weekday 省略時取課程 meeting_weekdays 的全部星期（複選，actwkdays01）。
+         *     模式 B（items）：前端在 preview 勾選後送回明確日期，可一次跨多門課程。
+         *
+         *     同課同日已存在（uq_activity_session_course_date）者跳過並計入 skipped_existing
+         *     （冪等 → 可重複按 / 微調範圍重跑不報錯）。
          */
         post: operations["create_sessions_batch_api_activity_attendance_sessions_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/attendance/sessions/batch/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Sessions Batch
+         * @description 批次產生場次的唯讀預覽（不寫入任何資料）。
+         *
+         *     把三件原本要人工做的事收進一次呼叫：日期範圍自動取學期起訖、逐日標記已建立
+         *     過的場次、逐日標記國定假日。前端據此顯示可勾選的日期清單，確認後才送
+         *     POST /sessions/batch 的 items 模式。
+         *
+         *     權限用 ACTIVITY_WRITE（與實際建立同級）：本端點會揭露課程排課與既有場次，
+         *     不開放唯讀角色探測。
+         */
+        post: operations["preview_sessions_batch_api_activity_attendance_sessions_batch_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16205,13 +16235,10 @@ export interface components {
             term_label?: string | null;
         };
         /**
-         * ActivitySessionBatchCreateResultOut
-         * @description POST /attendance/sessions/batch 回應：依上課星期展開日期範圍批次建立場次。
-         *
-         *     created_dates 為實際新建的日期（ISO 升冪）；已存在（uq course+date）者計入
-         *     skipped_existing 而不報錯，讓重複按或微調範圍重跑為冪等。
+         * ActivitySessionBatchCourseResultOut
+         * @description 多課程批次的逐課明細。
          */
-        ActivitySessionBatchCreateResultOut: {
+        ActivitySessionBatchCourseResultOut: {
             /** Course Id */
             course_id: number;
             /** Course Name */
@@ -16220,14 +16247,66 @@ export interface components {
             created_count: number;
             /** Created Dates */
             created_dates: string[];
+            /** Skipped Existing */
+            skipped_existing: number;
+        };
+        /**
+         * ActivitySessionBatchCreateResultOut
+         * @description POST /attendance/sessions/batch 回應（範圍模式與 items 模式共用）。
+         *
+         *     created_dates 為實際新建的日期（ISO 升冪）；已存在（uq course+date）者計入
+         *     skipped_existing 而不報錯，讓重複按或微調範圍重跑為冪等。
+         *
+         *     course_id / course_name / weekday / start_date / end_date 為**範圍模式**的回應欄位；
+         *     items 模式沒有單一課程與單一範圍，這些欄位回 None，改讀 results 逐課明細。
+         *     created_count / skipped_existing 在兩種模式都是**總和**（舊前端與既有測試依賴）。
+         */
+        ActivitySessionBatchCreateResultOut: {
+            /** Course Id */
+            course_id?: number | null;
+            /** Course Name */
+            course_name?: string | null;
+            /** Created Count */
+            created_count: number;
+            /** Created Dates */
+            created_dates: string[];
             /** End Date */
-            end_date: string;
+            end_date?: string | null;
+            /**
+             * Results
+             * @default []
+             */
+            results: components["schemas"]["ActivitySessionBatchCourseResultOut"][];
             /** Skipped Existing */
             skipped_existing: number;
             /** Start Date */
-            start_date: string;
+            start_date?: string | null;
             /** Weekday */
-            weekday: number;
+            weekday?: number | null;
+        };
+        /**
+         * ActivitySessionBatchPreviewOut
+         * @description POST /attendance/sessions/batch/preview 回應（唯讀，不寫入任何資料）。
+         *
+         *     calendar_synced=False 表示涵蓋年度的行政院行事曆尚未同步 → 假日清單為空，
+         *     前端必須明講「未排除國定假日」，否則使用者會誤以為已濾過。
+         */
+        ActivitySessionBatchPreviewOut: {
+            /** Calendar Synced */
+            calendar_synced: boolean;
+            /** Courses */
+            courses: components["schemas"]["ActivitySessionPreviewCourseOut"][];
+            /**
+             * Range Source
+             * @enum {string}
+             */
+            range_source: "term" | "manual";
+            /** Resolved End Date */
+            resolved_end_date: string;
+            /** Resolved Start Date */
+            resolved_start_date: string;
+            /** Total New */
+            total_new: number;
         };
         /**
          * ActivitySessionCreateResultOut
@@ -16349,6 +16428,50 @@ export interface components {
             skip: number;
             /** Total */
             total: number;
+        };
+        /**
+         * ActivitySessionPreviewCourseOut
+         * @description 預覽中的單門課程。
+         *
+         *     warning 非 None 時 dates 為空——單門課的問題（未設上課星期、範圍內無命中、
+         *     超過單課上限）不該讓整批 400，否則多課程時一門課有問題就全部產不出來。
+         */
+        ActivitySessionPreviewCourseOut: {
+            /** Course Id */
+            course_id: number;
+            /** Course Name */
+            course_name: string;
+            /** Dates */
+            dates: components["schemas"]["ActivitySessionPreviewDateOut"][];
+            /** Exists Count */
+            exists_count: number;
+            /** Expected Sessions */
+            expected_sessions?: number | null;
+            /** Holiday Count */
+            holiday_count: number;
+            /** New Count */
+            new_count: number;
+            /** Warning */
+            warning?: string | null;
+            /** Weekdays */
+            weekdays: number[];
+        };
+        /**
+         * ActivitySessionPreviewDateOut
+         * @description 預覽中的單一日期。
+         *
+         *     status：new=將建立、exists=該課該日已有場次、holiday=國定假日（skip_holidays 時排除）。
+         */
+        ActivitySessionPreviewDateOut: {
+            /** Date */
+            date: string;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "new" | "exists" | "holiday";
         };
         /**
          * ActivitySessionStudentItemOut
@@ -31058,22 +31181,57 @@ export interface components {
             /** Message */
             message?: string | null;
         };
-        /** SessionBatchCreate */
+        /**
+         * SessionBatchCreate
+         * @description 批次建立場次，兩種模式二選一。
+         *
+         *     模式 A（範圍）：course_id + start_date + end_date [+ weekday]，後端依上課星期展開。
+         *     模式 B（明確日期）：items，由 preview 端點算好、使用者勾選後送回；多課程一次建立。
+         *     兩者互斥——同時給會讓「以哪個為準」變成隱含約定，直接 422 擋掉。
+         */
         SessionBatchCreate: {
             /** Course Id */
-            course_id: number;
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
+            course_id?: number | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Items */
+            items?: components["schemas"]["SessionBatchItem"][] | null;
             /** Notes */
             notes?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Weekday */
+            weekday?: number | null;
+        };
+        /**
+         * SessionBatchItem
+         * @description 明確日期模式的單門課項目（preview 勾選結果的送出格式）。
+         */
+        SessionBatchItem: {
+            /** Course Id */
+            course_id: number;
+            /** Dates */
+            dates: string[];
+        };
+        /**
+         * SessionBatchPreviewRequest
+         * @description 批次產生場次的唯讀預覽輸入。
+         *
+         *     start_date/end_date 省略時由後端取課程所屬學期的 academic_terms 範圍
+         *     （前端無學期起訖日來源——後端未開 academic_terms 端點）。
+         */
+        SessionBatchPreviewRequest: {
+            /** Course Ids */
+            course_ids: number[];
+            /** End Date */
+            end_date?: string | null;
             /**
-             * Start Date
-             * Format: date
+             * Skip Holidays
+             * @default true
              */
-            start_date: string;
+            skip_holidays: boolean;
+            /** Start Date */
+            start_date?: string | null;
             /** Weekday */
             weekday?: number | null;
         };
@@ -33872,6 +34030,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivitySessionBatchCreateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_sessions_batch_api_activity_attendance_sessions_batch_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionBatchPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySessionBatchPreviewOut"];
                 };
             };
             /** @description Validation Error */
