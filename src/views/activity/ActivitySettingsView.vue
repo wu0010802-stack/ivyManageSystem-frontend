@@ -205,7 +205,7 @@
       <el-tab-pane v-if="canWrite" label="候補轉正信模板" name="waitlistEmail">
         <EmailTemplateEditor
           title="候補直升正式通知信樣板"
-          hint-text="管理員從報名管理刪除正式報名後，候補依序遞補時會直接升為正式報名（略過家長 48 小時確認）並寄送這封通知信。"
+          hint-text="名額釋出時（取消報名、刪除課程、後台拒絕、管理員手動升位等），候補依序直接升為正式報名，並寄送這封通知信給報名時留下的信箱。"
           :placeholders="['student_name', 'course_name', 'query_token', 'edit_url']"
           :loading="emailTemplateLoading"
           v-model:subject="emailTemplate.subject"
