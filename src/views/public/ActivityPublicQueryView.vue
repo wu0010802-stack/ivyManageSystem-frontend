@@ -95,8 +95,9 @@
             {{ queryLoading ? '查詢中…' : '查詢 Search' }}
           </button>
 
-          <!-- 忘記查詢碼：以姓名＋班級＋家長手機找回（2026-08-04）。email 是選填
-               欄位，沒填／填錯的家長收不到報名成功信，這是他們唯一的自助路徑。 -->
+          <!-- 忘記查詢碼：以姓名＋班級＋家長手機做唯讀查詢（2026-08-04）。email
+               是選填欄位，沒填／填錯的家長收不到報名成功信，這是他們唯一的自助
+               路徑。業主裁定：三欄僅供檢視，查詢碼（＝編修權限）只走 email。 -->
           <button
             type="button"
             class="recovery-toggle tap-target"
@@ -105,12 +106,13 @@
             aria-controls="recoveryPanel"
             @click="onRecoveryToggle"
           >
-            忘記查詢碼？用姓名＋班級＋手機找回
+            忘記查詢碼？用姓名＋班級＋手機查詢
           </button>
 
           <div v-if="recoveryOpen" id="recoveryPanel" class="recovery-panel">
             <p class="recovery-hint">
-              請填寫報名時的資料，我們會把查詢碼給您。
+              請填寫報名時的資料。此查詢僅供檢視報名狀態；
+              需修改時請使用查詢碼（報名有填信箱者，系統會將查詢碼寄到該信箱）。
             </p>
             <div class="field-group">
               <label for="recoveryName">學生姓名 <span class="required-mark">*</span></label>
@@ -164,19 +166,28 @@
               data-test="recovery-submit"
               @click="onRecoverySubmit"
             >
-              {{ recoveryLoading ? '查詢中…' : '找回查詢碼' }}
+              {{ recoveryLoading ? '查詢中…' : '查詢報名' }}
             </button>
             <div aria-live="polite">
               <div v-if="recoveryError" class="validation-msg error" role="alert">
                 {{ recoveryError }}
               </div>
-              <div v-else-if="recoverySentTo" class="recovery-sent" data-test="recovery-sent">
-                查詢碼已寄到報名時填寫的信箱 <strong>{{ recoverySentTo }}</strong>，
-                請至信箱收信後回到本頁輸入查詢碼。
-              </div>
             </div>
           </div>
         </div>
+      </section>
+
+      <!-- 三欄唯讀查詢的持久提示：toast 會消失，「查詢碼寄到哪」「僅供檢視」
+           這兩件事家長需要留在畫面上 -->
+      <section
+        v-if="identityQueryNotice"
+        class="identity-query-notice"
+        data-test="identity-query-notice"
+        role="status"
+        aria-live="polite"
+      >
+        <svg class="icon icon-lock" width="14" height="14" aria-hidden="true"><use href="#q-lock" /></svg>
+        {{ identityQueryNotice }}
       </section>
 
       <section
@@ -218,7 +229,7 @@
             <li>本學期尚未報名，或已由校方取消報名</li>
           </ul>
           <div class="not-found-cta">
-            忘記或沒收到查詢碼，可用上方「忘記查詢碼？」以姓名＋班級＋手機找回；
+            忘記或沒收到查詢碼，可用上方「忘記查詢碼？」以姓名＋班級＋手機查詢報名狀態；
             如資料皆確認無誤仍查不到，請於上班時間來電聯繫校方協助查詢。
           </div>
         </div>
@@ -824,6 +835,7 @@ const searchErrorRef = ref<HTMLElement | null>(null)
 const queryResultRef = ref<HTMLElement | null>(null)
 
 async function onQuerySubmit() {
+  identityQueryNotice.value = ''
   await handleQuery()
   await nextTick()
   if (searchError.value) {
@@ -834,25 +846,39 @@ async function onQuerySubmit() {
 }
 
 const {
-  recoveryOpen, recoveryForm, recoveryLoading, recoveryError, recoverySentTo,
+  recoveryOpen, recoveryForm, recoveryLoading, recoveryError,
   recoveryTouched, recoveryNameValid, recoveryClassValid, recoveryPhoneValid,
-  recoveryFormValid, toggleRecovery, submitRecovery,
+  recoveryFormValid, toggleRecovery, submitIdentityQuery,
 } = useQueryTokenRecovery()
 
 function onRecoveryToggle() {
   toggleRecovery(queryForm.parent_phone)
 }
 
-// 畫面直給查詢碼時（報名當初沒留 email）直接接上正式查詢流程：填入查詢欄 →
-// 自動查一次。查詢碼留在輸入框裡供家長複製保存，toast 再提醒一次。
+// 三欄查詢成功後顯示的持久提示（toast 會消失，家長需要留著「查詢碼已寄到哪」
+// 或「僅供檢視」的資訊）；改用查詢碼重新查詢時清掉，避免掛在新結果上。
+const identityQueryNotice = ref('')
+
+// 三欄唯讀查詢（業主裁定：僅供檢視，畫面永不顯示查詢碼）。後端已強制
+// query_token_required=true，這裡以無 token 的 credentials hydrate，讓既有的
+// canMutate=false 僅供檢視 UI（鎖定提示、隱藏候補確認/放棄、儲存鍵 disabled）
+// 整套自動生效。
 async function onRecoverySubmit() {
-  const outcome = await submitRecovery()
-  if (!outcome || outcome.delivery !== 'shown') return
-  queryForm.token = outcome.token
-  queryForm.parent_phone = recoveryForm.parent_phone
+  const outcome = await submitIdentityQuery()
+  if (!outcome) return
   recoveryOpen.value = false
-  showToast('已找回查詢碼，請複製保存以便下次查詢')
-  await onQuerySubmit()
+  searchError.value = ''
+  hydrateResult(outcome.registration, {
+    token: '',
+    name: '',
+    birthday: '',
+    parent_phone: recoveryForm.parent_phone,
+  })
+  identityQueryNotice.value = outcome.tokenEmailSent
+    ? `此查詢僅供檢視。需修改時請使用查詢碼：已寄到報名時填寫的信箱 ${outcome.maskedEmail}，請收信後改用查詢碼查詢。`
+    : '此查詢僅供檢視。如需修改報名內容，請於上班時間聯繫校方協助。'
+  await nextTick()
+  queryResultRef.value?.focus()
 }
 
 const queryTermKey = computed(() => {
@@ -1170,15 +1196,20 @@ onBeforeUnmount(() => {
   font-size: var(--fs-sm);
   color: var(--color-text-muted);
 }
-.recovery-sent {
-  margin-top: var(--space-3);
-  padding: var(--space-3);
+.identity-query-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: 520px;
+  margin: var(--space-4) auto 0;
+  padding: var(--space-3) var(--space-4);
   font-size: var(--fs-sm);
   color: #14532d;
   background: #f0fdf4;
   border: 1px solid var(--color-primary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
 }
+.identity-query-notice .icon { flex-shrink: 0; margin-top: 2px; }
 
 .credential-recovery {
   display: flex;

@@ -1,8 +1,9 @@
 /**
- * 「忘記查詢碼」找回流程（2026-08-04）。
+ * 「忘記查詢碼」三欄唯讀查詢流程（2026-08-04）。
  *
- * 生日欄移除後查詢碼是唯一自助途徑，而 email 為選填 → 沒填的家長忘記查詢碼即
- * 完全查不到。本檔守住兩條投遞路徑的 UI 分流與「不得把查詢碼顯示在寄信路徑」。
+ * 業主裁定：姓名＋班級＋手機是熟人圈容易取得的資訊，三欄比對成功**只能檢視**，
+ * 畫面永遠不顯示查詢碼；查詢碼（＝完整編修權限）只在報名有留 email 時寄到該
+ * 信箱。本檔守住唯讀 hydrate（canMutate=false 整套鎖定 UI 生效）與提示分流。
  */
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,7 +14,7 @@ vi.mock('vue-router', () => ({
 }))
 vi.mock('@/api/activityPublic', () => ({
   publicQueryByToken: vi.fn(),
-  publicRecoverQueryToken: vi.fn(),
+  publicQueryByIdentity: vi.fn(),
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
@@ -24,10 +25,35 @@ vi.mock('@/api/activityPublic', () => ({
 import {
   getPublicBootstrap,
   getPublicCoursesAvailability,
+  publicQueryByIdentity,
   publicQueryByToken,
-  publicRecoverQueryToken,
 } from '@/api/activityPublic'
 import ActivityPublicQueryView from '../ActivityPublicQueryView.vue'
+
+// 後端三欄端點出口一律強制 query_token_required=true（唯讀鎖第 1 層）
+const REGISTRATION_DETAIL = {
+  id: 7,
+  name: '王小明',
+  birthday: '',
+  class_name: '大象班',
+  school_year: 115,
+  semester: 1,
+  parent_phone: '0912345678',
+  courses: [{ name: '圍棋', course_id: 1, price: 3000, status: 'enrolled' }],
+  supplies: [],
+  total_amount: 3000,
+  paid_amount: 0,
+  payment_status: 'unpaid',
+  remark: '',
+  query_token_required: true,
+  is_paid: false,
+  field_state: {
+    class_source: 'student_record',
+    class_editable: false,
+    review_state: 'confirmed',
+    identity_editable: false,
+  },
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -40,20 +66,6 @@ beforeEach(() => {
     },
   } as never)
   vi.mocked(getPublicCoursesAvailability).mockResolvedValue({ data: {} } as never)
-  vi.mocked(publicQueryByToken).mockResolvedValue({
-    data: {
-      id: 7,
-      name: '王小明',
-      birthday: '',
-      class_name: '大象班',
-      school_year: 115,
-      semester: 1,
-      courses: [],
-      supplies: [],
-      total_amount: 0,
-      paid_amount: 0,
-    },
-  } as never)
 })
 
 async function mountAndOpenRecovery() {
@@ -106,15 +118,19 @@ describe('忘記查詢碼入口', () => {
     await wrapper.find('[data-test="recovery-submit"]').trigger('click')
     await flushPromises()
 
-    expect(publicRecoverQueryToken).not.toHaveBeenCalled()
+    expect(publicQueryByIdentity).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('請完整填寫三項資料')
   })
 })
 
-describe('投遞路徑分流', () => {
-  it('沒留 email：查詢碼填回查詢欄並自動查詢', async () => {
-    vi.mocked(publicRecoverQueryToken).mockResolvedValue({
-      data: { delivery: 'shown', query_token: 'recovered-token-123', masked_email: null },
+describe('唯讀查詢結果', () => {
+  it('比對成功載入唯讀明細：不呼叫查詢碼端點、查詢欄不被填入任何 token', async () => {
+    vi.mocked(publicQueryByIdentity).mockResolvedValue({
+      data: {
+        registration: REGISTRATION_DETAIL,
+        token_email_sent: false,
+        masked_email: null,
+      },
     } as never)
     const wrapper = await mountAndOpenRecovery()
     await fillRecoveryForm(wrapper)
@@ -122,23 +138,38 @@ describe('投遞路徑分流', () => {
     await wrapper.find('[data-test="recovery-submit"]').trigger('click')
     await flushPromises()
 
-    expect(publicRecoverQueryToken).toHaveBeenCalledWith({
+    expect(publicQueryByIdentity).toHaveBeenCalledWith({
       name: '王小明',
       class: '大象班',
       parent_phone: '0912345678',
       _hp: '',
     })
-    expect((wrapper.find('#searchToken').element as HTMLInputElement).value).toBe(
-      'recovered-token-123',
-    )
-    expect(publicQueryByToken).toHaveBeenCalledWith('recovered-token-123', '0912345678')
-    // 找回後面板收合，避免家長以為還要再送一次
+    // 唯讀契約：不接查詢碼流程、查詢欄保持空白（畫面上沒有任何 token 可抄）
+    expect(publicQueryByToken).not.toHaveBeenCalled()
+    expect((wrapper.find('#searchToken').element as HTMLInputElement).value).toBe('')
+    // 結果已載入且鎖成僅供檢視（鎖定提示＋儲存鍵 disabled＝canMutate=false 生效）
+    expect(wrapper.text()).toContain('圍棋')
+    expect(wrapper.text()).toContain('此報名需使用「報名時取得的查詢連結」才能修改')
+    const saveBtn = wrapper
+      .findAll('button')
+      .find((b) => b.text().includes('儲存修改'))
+    expect(saveBtn).toBeTruthy()
+    expect(saveBtn!.attributes('disabled')).toBeDefined()
+    // 面板收合，持久提示顯示「僅供檢視」
     expect(wrapper.find('#recoveryPanel').exists()).toBe(false)
+    const notice = wrapper.find('[data-test="identity-query-notice"]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toContain('僅供檢視')
+    expect(notice.text()).toContain('聯繫校方')
   })
 
-  it('有留 email：只顯示遮罩信箱，畫面不得出現查詢碼、不自動查詢', async () => {
-    vi.mocked(publicRecoverQueryToken).mockResolvedValue({
-      data: { delivery: 'email', query_token: null, masked_email: 'p***@example.com' },
+  it('有留 email：提示查詢碼已寄到遮罩信箱', async () => {
+    vi.mocked(publicQueryByIdentity).mockResolvedValue({
+      data: {
+        registration: REGISTRATION_DETAIL,
+        token_email_sent: true,
+        masked_email: 'p***@example.com',
+      },
     } as never)
     const wrapper = await mountAndOpenRecovery()
     await fillRecoveryForm(wrapper)
@@ -146,15 +177,39 @@ describe('投遞路徑分流', () => {
     await wrapper.find('[data-test="recovery-submit"]').trigger('click')
     await flushPromises()
 
-    const sent = wrapper.find('[data-test="recovery-sent"]')
-    expect(sent.exists()).toBe(true)
-    expect(sent.text()).toContain('p***@example.com')
+    const notice = wrapper.find('[data-test="identity-query-notice"]')
+    expect(notice.text()).toContain('p***@example.com')
+    expect(notice.text()).toContain('僅供檢視')
     expect((wrapper.find('#searchToken').element as HTMLInputElement).value).toBe('')
-    expect(publicQueryByToken).not.toHaveBeenCalled()
+  })
+
+  it('改用查詢碼重新查詢時清掉三欄提示', async () => {
+    vi.mocked(publicQueryByIdentity).mockResolvedValue({
+      data: {
+        registration: REGISTRATION_DETAIL,
+        token_email_sent: false,
+        masked_email: null,
+      },
+    } as never)
+    vi.mocked(publicQueryByToken).mockResolvedValue({
+      data: { ...REGISTRATION_DETAIL, query_token_required: true },
+    } as never)
+    const wrapper = await mountAndOpenRecovery()
+    await fillRecoveryForm(wrapper)
+    await wrapper.find('[data-test="recovery-submit"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-test="identity-query-notice"]').exists()).toBe(true)
+
+    await wrapper.find('#searchToken').setValue('a-valid-token-from-email')
+    await wrapper.find('#searchPhone').setValue('0912345678')
+    await wrapper.find('[data-test="query-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="identity-query-notice"]').exists()).toBe(false)
   })
 
   it('比對失敗顯示通用訊息，不透露是哪一欄不符', async () => {
-    vi.mocked(publicRecoverQueryToken).mockRejectedValue({
+    vi.mocked(publicQueryByIdentity).mockRejectedValue({
       response: { data: { detail: '查無對應報名，請確認三項資料是否與報名時一致' } },
     })
     const wrapper = await mountAndOpenRecovery()
@@ -164,7 +219,7 @@ describe('投遞路徑分流', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('查無對應報名，請確認三項資料是否與報名時一致')
-    expect(wrapper.find('[data-test="recovery-sent"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="identity-query-notice"]').exists()).toBe(false)
     expect(publicQueryByToken).not.toHaveBeenCalled()
   })
 })

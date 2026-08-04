@@ -1022,6 +1022,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/public/query-by-identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Query By Identity
+         * @description 前台：忘記查詢碼時，以學生姓名+班級+家長手機做**唯讀**查詢。
+         *
+         *     業主裁定（2026-08-04 二次決策）：這三欄是熟人圈容易取得的資訊，比對成功
+         *     **只能檢視**，畫面永遠不顯示查詢碼——完整編修權限維持查詢碼單一途徑：
+         *     - 報名當初留了 email → 順便把查詢碼寄到該信箱（節流保護），response 帶
+         *       token_email_sent + 遮罩信箱。「能收到該信箱」才是取得編修權限的關卡。
+         *     - 沒留 email → 只回唯讀明細；需修改時聯繫園方（園方核對身分後於後台處理）。
+         *
+         *     唯讀由兩層鎖死：
+         *     1. 本端點出口強制 query_token_required=True——即使該報名沒有 token hash，
+         *        三欄途徑載入的結果在前端一律鎖成僅供檢視。
+         *     2. 破壞性 mutation 端點本就走 _parent_mutation_identity_ok：token-bearing
+         *        報名強制帶 token，本 response 不含 token，繞過前端也改不了。
+         *
+         *     寄信路徑的查詢碼在有效期內原碼回傳（recover_query_token），**不輪替**——
+         *     家長可能只是漏看信，貿然輪替會作廢仍在流通的舊碼與編修連結；僅在無碼／
+         *     已過期時才發新碼並重設 TTL。無 email 路徑為純讀，不發碼、不寫 DB。
+         *
+         *     失敗一律回相同 404（不洩漏是哪一欄不符），並比照其他公開查詢端點加
+         *     200~500ms 隨機延遲壓低枚舉的時序 oracle。
+         */
+        post: operations["public_query_by_identity_api_activity_public_query_by_identity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/public/query-by-token": {
         parameters: {
             query?: never;
@@ -1045,39 +1084,6 @@ export interface paths {
          *     LOW-3 一致性：成功與失敗 path 都加入隨機延遲，壓低時序差。
          */
         post: operations["public_query_by_token_api_activity_public_query_by_token_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/activity/public/recover-query-token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Public Recover Query Token
-         * @description 前台：忘記查詢碼時，以學生姓名+班級+家長手機找回查詢碼。
-         *
-         *     投遞方式二選一（見 PublicRecoverTokenOut）：
-         *     - 報名當初留了 email → 只寄到該信箱，畫面僅回遮罩信箱。「能收到該信箱」是
-         *       第二道關卡，避免僅憑三欄 PII 就在畫面上取得等同完整權限的查詢碼。
-         *     - 沒留 email → 畫面直接顯示查詢碼。這批家長沒有其他管道，若也不顯示等於
-         *       本功能對他們無效；其身分驗證強度與 2026-08-03 前的三欄查詢同級。
-         *
-         *     既有查詢碼仍在有效期內時原碼回傳（recover_query_token），**不輪替**——家長
-         *     可能只是漏看信，貿然輪替會作廢仍在流通的舊碼與編修連結。僅在無碼／已過期
-         *     時才發新碼並重設 TTL。
-         *
-         *     失敗一律回相同 404（不洩漏是哪一欄不符），並比照其他公開查詢端點加
-         *     200~500ms 隨機延遲壓低枚舉的時序 oracle。
-         */
-        post: operations["public_recover_query_token_api_activity_public_recover_query_token_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15755,6 +15761,34 @@ export interface components {
             query_token?: string | null;
         };
         /**
+         * _PublicIdentityQueryPayload
+         * @description 以姓名 + 班級 + 家長手機查詢報名（唯讀，2026-08-04）。
+         *
+         *     Why: 查詢碼是唯一的自助查詢途徑，但家長會忘記查詢碼，而 email 是選填欄位
+         *     ——沒填 / 填錯的家長收不到報名成功信，等於永久失去自助查詢能力。生日欄已於
+         *     2026-08-03 依業主決策全面移除，不得作為替代因子，故改用報名表上僅存的三個
+         *     身分欄位（學生姓名、班級、家長手機）。
+         *
+         *     schema 故意不設嚴格格式驗證（如手機 09 開頭）——422 與 404 的 status code
+         *     差異會洩漏「哪一欄格式不合」的 oracle；一律讓比對失敗回統一 404。
+         *     max_length 保留是為防 DoS 級超長 payload。
+         */
+        _PublicIdentityQueryPayload: {
+            /**
+             * Hp
+             * @default
+             */
+            _hp: string;
+            /** Ts */
+            _ts?: number | null;
+            /** Class */
+            class: string;
+            /** Name */
+            name: string;
+            /** Parent Phone */
+            parent_phone: string;
+        };
+        /**
          * _PublicQueryByTokenPayload
          * @description 以查詢碼 + 家長手機查詢報名（Phase 3）。
          *
@@ -15785,34 +15819,6 @@ export interface components {
         _PublicQueryPayload: {
             /** Birthday */
             birthday: string;
-            /** Name */
-            name: string;
-            /** Parent Phone */
-            parent_phone: string;
-        };
-        /**
-         * _PublicRecoverTokenPayload
-         * @description 以姓名 + 班級 + 家長手機找回查詢碼（2026-08-04）。
-         *
-         *     Why: 查詢碼是唯一的自助查詢途徑，但家長會忘記查詢碼，而 email 是選填欄位
-         *     ——沒填 / 填錯的家長收不到報名成功信，等於永久失去自助查詢能力。生日欄已於
-         *     2026-08-03 依業主決策全面移除，不得作為替代因子，故改用報名表上僅存的三個
-         *     身分欄位（學生姓名、班級、家長手機）。
-         *
-         *     schema 故意不設嚴格格式驗證（如手機 09 開頭）——422 與 404 的 status code
-         *     差異會洩漏「哪一欄格式不合」的 oracle；一律讓比對失敗回統一 404。
-         *     max_length 保留是為防 DoS 級超長 payload。
-         */
-        _PublicRecoverTokenPayload: {
-            /**
-             * Hp
-             * @default
-             */
-            _hp: string;
-            /** Ts */
-            _ts?: number | null;
-            /** Class */
-            class: string;
             /** Name */
             name: string;
             /** Parent Phone */
@@ -27428,6 +27434,25 @@ export interface components {
             review_state: string;
         };
         /**
+         * PublicIdentityQueryOut
+         * @description POST /public/query-by-identity response（三欄唯讀查詢，2026-08-04）。
+         *
+         *     業主裁定（同日二次決策）：姓名＋班級＋手機是熟人圈容易取得的資訊，三欄比對
+         *     成功**只能唯讀檢視**，畫面永遠不顯示查詢碼——查詢碼（＝完整編修權限）只在
+         *     報名當初有留 email 時寄到該信箱（``token_email_sent`` + ``masked_email``）。
+         *
+         *     ``registration`` 為與查詢碼查詢相同 shape 的報名明細，但本端點出口一律強制
+         *     ``query_token_required=True``：無論該報名有無 token hash，三欄途徑載入的結果
+         *     在前端一律鎖成僅供檢視，破壞性操作必須改走查詢碼。
+         */
+        PublicIdentityQueryOut: {
+            /** Masked Email */
+            masked_email?: string | null;
+            registration: components["schemas"]["PublicRegistrationDetailOut"];
+            /** Token Email Sent */
+            token_email_sent: boolean;
+        };
+        /**
          * PublicInquiryPayload
          * @description LOW-4：附 honeypot（hp）+ 時間戳（ts）兩個 alias 欄位。
          */
@@ -27445,30 +27470,6 @@ export interface components {
             phone: string;
             /** Question */
             question: string;
-        };
-        /**
-         * PublicRecoverTokenOut
-         * @description POST /public/recover-query-token response（找回查詢碼）。
-         *
-         *     家長忘記查詢碼、又沒收到／沒填 email 時的第二條自助途徑（2026-08-04 業主需求：
-         *     生日欄已移除，不得再要求家長填生日）。
-         *
-         *     兩種投遞方式共用同一 shape，前端依 ``delivery`` 分支：
-         *     - ``"email"``：報名當初有填 email → 查詢碼只寄到該信箱，畫面僅顯示遮罩後的
-         *       信箱（``masked_email``），``query_token`` 為 None。多一道「須能收到該信箱」
-         *       的關卡，避免只憑姓名+班級+手機就在畫面上拿到等同完整權限的查詢碼。
-         *     - ``"shown"``：報名當初沒填 email → 查詢碼直接顯示在 ``query_token``，
-         *       否則這批家長完全無路可走（他們正是本需求要救的人）。
-         *
-         *     honeypot 命中的 bot 走 ``"shown"`` + 假碼，維持 shape 一致不洩漏偵測。
-         */
-        PublicRecoverTokenOut: {
-            /** Delivery */
-            delivery: string;
-            /** Masked Email */
-            masked_email?: string | null;
-            /** Query Token */
-            query_token?: string | null;
         };
         /**
          * PublicRegisterResultOut
@@ -35224,6 +35225,39 @@ export interface operations {
             };
         };
     };
+    public_query_by_identity_api_activity_public_query_by_identity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_PublicIdentityQueryPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicIdentityQueryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     public_query_by_token_api_activity_public_query_by_token_post: {
         parameters: {
             query?: never;
@@ -35244,39 +35278,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicRegistrationDetailOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    public_recover_query_token_api_activity_public_recover_query_token_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["_PublicRecoverTokenPayload"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicRecoverTokenOut"];
                 };
             };
             /** @description Validation Error */

@@ -1,21 +1,23 @@
 import { computed, reactive, ref } from 'vue'
-import { publicRecoverQueryToken } from '@/api/activityPublic'
+import { publicQueryByIdentity } from '@/api/activityPublic'
+import type { QueryResult } from '@/composables/usePublicRegistrationQuery'
 import { TW_MOBILE_RE, normalizeMobile } from '@/utils/phone'
 
 /**
- * 「忘記查詢碼」找回流程（2026-08-04）。
+ * 「忘記查詢碼」三欄唯讀查詢流程（2026-08-04）。
  *
  * Why: 生日欄移除後，查詢碼＋手機是唯一自助查詢途徑，而 email 為選填——沒填／
- * 填錯的家長忘記查詢碼即完全查不到，只能打電話請園方代查。本流程以報名表僅存
- * 的三個身分欄位（學生姓名＋班級＋家長手機）向後端換回查詢碼。
+ * 填錯的家長忘記查詢碼即完全查不到。本流程以報名表僅存的三個身分欄位（學生
+ * 姓名＋班級＋家長手機）做唯讀查詢。
  *
- * 後端依報名當初有無留 email 決定投遞方式（見 PublicRecoverTokenOut）：
- * - delivery='shown'：畫面直接拿到查詢碼，呼叫端負責填入查詢欄並自動查詢
- * - delivery='email'：只寄到該信箱，畫面僅得遮罩後的信箱字串
+ * 業主裁定（同日二次決策）：三欄是熟人圈容易取得的資訊，比對成功**只能檢視**，
+ * 畫面永遠不顯示查詢碼；報名當初有留 email 時後端順便把查詢碼（＝完整編修權限）
+ * 寄到該信箱。後端已在出口強制 query_token_required=true，呼叫端以無 token 的
+ * credentials hydrate 即得既有的僅供檢視 UI（canMutate=false）。
  */
-export interface RecoveryOutcome {
-  delivery: 'shown' | 'email'
-  token: string
+export interface IdentityQueryOutcome {
+  registration: QueryResult
+  tokenEmailSent: boolean
   maskedEmail: string
 }
 
@@ -24,8 +26,6 @@ export function useQueryTokenRecovery() {
   const recoveryForm = reactive({ name: '', class_name: '', parent_phone: '' })
   const recoveryLoading = ref(false)
   const recoveryError = ref('')
-  // 寄信路徑的成功提示（畫面路徑不留提示，token 直接進查詢欄並自動查詢）。
-  const recoverySentTo = ref('')
   const recoveryTouched = ref(false)
 
   const recoveryNameValid = computed(() => recoveryForm.name.trim().length > 0)
@@ -43,42 +43,43 @@ export function useQueryTokenRecovery() {
       // 家長多半已在上方填過手機，重打一次是白費力氣。
       recoveryForm.parent_phone = prefillPhone
     }
-    if (!recoveryOpen.value) resetRecoveryFeedback()
-  }
-
-  function resetRecoveryFeedback() {
-    recoveryError.value = ''
-    recoverySentTo.value = ''
+    if (!recoveryOpen.value) recoveryError.value = ''
   }
 
   /**
-   * 送出找回請求。成功回 RecoveryOutcome，失敗回 null（錯誤訊息寫入 recoveryError）。
-   * 呼叫端依 delivery 決定後續（填入查詢欄 / 顯示寄信提示）。
+   * 送出三欄查詢。成功回 IdentityQueryOutcome（registration 供呼叫端以唯讀
+   * 姿態 hydrate），失敗回 null（錯誤訊息寫入 recoveryError）。
    */
-  async function submitRecovery(): Promise<RecoveryOutcome | null> {
+  async function submitIdentityQuery(): Promise<IdentityQueryOutcome | null> {
     recoveryTouched.value = true
     if (!recoveryFormValid.value) return null
     recoveryLoading.value = true
-    resetRecoveryFeedback()
+    recoveryError.value = ''
     try {
-      const res = await publicRecoverQueryToken({
+      const res = await publicQueryByIdentity({
         name: recoveryForm.name.trim(),
         class: recoveryForm.class_name.trim(),
         parent_phone: normalizeMobile(recoveryForm.parent_phone),
-        // _hp honeypot：正常使用者空字串（填值=機器人→後端回假碼、不動 DB）。
+        // _hp honeypot：正常使用者空字串（填值=機器人→後端回統一 404、不動 DB）。
         // 與報名頁 ActivityPublicView 同慣例，不另設隱形實體欄位。
         _hp: '',
       })
-      const data = (res as { data?: { delivery?: string; query_token?: string | null; masked_email?: string | null } }).data
-      const outcome: RecoveryOutcome = {
-        delivery: data?.delivery === 'email' ? 'email' : 'shown',
-        token: data?.query_token || '',
-        maskedEmail: data?.masked_email || '',
+      const data = (res as {
+        data?: {
+          registration?: unknown
+          token_email_sent?: boolean
+          masked_email?: string | null
+        }
+      }).data
+      if (!data?.registration) {
+        recoveryError.value = '查詢失敗，請稍後再試。'
+        return null
       }
-      if (outcome.delivery === 'email') {
-        recoverySentTo.value = outcome.maskedEmail
+      return {
+        registration: data.registration as QueryResult,
+        tokenEmailSent: Boolean(data.token_email_sent),
+        maskedEmail: data.masked_email || '',
       }
-      return outcome
     } catch (err) {
       // 與查詢端一致的隱私口徑：不透露是哪一欄不符。
       recoveryError.value =
@@ -95,14 +96,12 @@ export function useQueryTokenRecovery() {
     recoveryForm,
     recoveryLoading,
     recoveryError,
-    recoverySentTo,
     recoveryTouched,
     recoveryNameValid,
     recoveryClassValid,
     recoveryPhoneValid,
     recoveryFormValid,
     toggleRecovery,
-    resetRecoveryFeedback,
-    submitRecovery,
+    submitIdentityQuery,
   }
 }
