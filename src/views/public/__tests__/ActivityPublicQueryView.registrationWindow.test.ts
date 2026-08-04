@@ -30,7 +30,7 @@ vi.mock('@/utils/arrayUtils', () => ({
 }))
 
 // F5：報名時段守衛（前台「修改報名」頁）。截止後家長不應能再修改已送出的
-// 報名資料——本檔驗證 close_at 過去/未來/48h 內三種情境的渲染分支，以及
+// 報名資料——本檔驗證 close_at 過去/未來/24h 內三種情境的渲染分支，以及
 // 付款鎖定優先於截止鎖定的判斷順序。
 
 interface RegistrationTime {
@@ -153,7 +153,7 @@ describe('ActivityPublicQueryView — 報名時段截止鎖定（F5）', () => {
     expect(wrapper.text()).toContain('儲存修改')
   })
 
-  it('close_at 在 48 小時內但未過期 → 顯示非阻斷提醒但仍可編輯', async () => {
+  it('close_at 在 24 小時內但未過期 → 顯示非阻斷提醒但仍可編輯', async () => {
     const soon = new Date(Date.now() + 6 * 3_600_000).toISOString()
     mockBootstrap({
       courses: [{ name: '美術', price: 3000 }],
