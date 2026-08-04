@@ -43,6 +43,13 @@ export const publicQueryByToken = (
   parent_phone: string,
 ): AxiosResp<'/activity/public/query-by-token', 'post'> =>
   api.post('/activity/public/query-by-token', { token, parent_phone })
+// 忘記查詢碼時，以學生姓名＋班級＋家長手機找回（2026-08-04）。生日欄已移除，
+// 這三欄是報名表上僅存的身分欄位。回應依報名當初有無留 email 分兩種投遞方式：
+// 有 email → 只寄信（delivery='email'）；沒有 → 畫面直接給碼（delivery='shown'）。
+export const publicRecoverQueryToken = (
+  data: ApiBody<'/activity/public/recover-query-token', 'post'>,
+): AxiosResp<'/activity/public/recover-query-token', 'post'> =>
+  api.post('/activity/public/recover-query-token', data)
 export const publicUpdateRegistration = (
   data: ApiBody<'/activity/public/update', 'post'>,
 ): AxiosResp<'/activity/public/update', 'post'> =>
