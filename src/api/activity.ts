@@ -55,6 +55,11 @@ export const restoreRegistration = (id: number): AxiosResp<'/activity/registrati
   api.post(`/activity/registrations/${id}/restore`)
 export const searchActivityStudents = (q: string, limit = 20): AxiosResp<'/activity/students/search', 'get'> =>
   api.get('/activity/students/search', { params: { q, limit } })
+// 待審核報名的「可能是這位學生」候選（2026-08-04）。自動比對只認正規化後完全相等的
+// 姓名，名冊拆字／異體字／漏複姓永遠不會自動配上；本端點以相似度撈出候選供人工判斷，
+// 選定後仍走 matchRegistration。
+export const fetchMatchSuggestions = (id: number, limit = 5): AxiosResp<'/activity/registrations/{registration_id}/match-suggestions', 'get'> =>
+  api.get(`/activity/registrations/${id}/match-suggestions`, { params: { limit } })
 export const createRegistration = (data: ApiBody<'/activity/registrations', 'post'>): AxiosResp<'/activity/registrations', 'post'> =>
   api.post('/activity/registrations', data)
 export const updateRegistrationBasic = (id: number, data: ApiBody<'/activity/registrations/{registration_id}', 'put'>): AxiosResp<'/activity/registrations/{registration_id}', 'put'> =>
