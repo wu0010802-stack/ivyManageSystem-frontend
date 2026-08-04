@@ -894,7 +894,7 @@ const selectedSupplyReview = computed(() => form.selectedSupplies.map((name) => 
   price: priceFromList(name, supplies.value),
 })))
 
-// 報名截止 48h 內彈出的 noticeState 改 sticky，家長滑到底勾課程時仍可見倒數
+// 報名截止 24h 內彈出的 noticeState 改 sticky，家長滑到底勾課程時仍可見倒數
 const noticeIsUrgent = computed(() => noticeState.value?.title === '報名即將截止')
 
 // ===== 影片模態 =====
