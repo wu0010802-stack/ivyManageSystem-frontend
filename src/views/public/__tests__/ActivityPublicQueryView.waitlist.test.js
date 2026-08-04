@@ -73,98 +73,73 @@ async function triggerTokenQuery(wrapper) {
   await new Promise((r) => setTimeout(r, 0))
 }
 
-describe('ActivityPublicQueryView — 候補位次顯示', () => {
+// 2026-08-04 業主決策：公開端一律不揭露候補順位。本 describe 原名「候補位次
+// 顯示」、斷言「目前第 N 位／共 M 位」「下一位」「唯一候補者」三種順位文案，
+// 反轉為「候補區塊只講狀態、不得出現任何順位資訊」的守衛。
+// Why: 家長看到自己排在後段會直接放棄；且後台可手動調整候補順序（sort_order
+// 優先於報名先後），露出順位會引來「我比較早報名為什麼排後面」的爭議。
+describe('ActivityPublicQueryView — 候補狀態顯示（不含順位）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('候補課程顯示「目前第 N 位 / 共 M 位」', async () => {
-    publicQueryByToken.mockResolvedValue({
-      data: {
-        id: 1,
-        name: '王小明',
-        birthday: '2020-01-01',
-        class_name: '大班',
-        courses: [
-          {
-            course_id: 1,
-            name: '美術',
-            status: 'waitlist',
-            waitlist_position: 3,
-            waitlist_total: 8,
-          },
-        ],
-        supplies: [],
-        total_amount: 0,
-        paid_amount: 0,
+  // 測資刻意仍帶 waitlist_position / waitlist_total（模擬舊版後端或殘留資料），
+  // 確保前端就算收到也絕不渲染。
+  const WAITLIST_PAYLOAD = {
+    id: 1,
+    name: '王小明',
+    birthday: '2020-01-01',
+    class_name: '大班',
+    courses: [
+      {
+        course_id: 1,
+        name: '美術',
+        status: 'waitlist',
+        waitlist_position: 3,
+        waitlist_total: 8,
       },
-    })
+    ],
+    supplies: [],
+    total_amount: 0,
+    paid_amount: 0,
+  }
+
+  it('候補課程只顯示「候補中」，候補區塊不含任何順位數字', async () => {
+    publicQueryByToken.mockResolvedValue({ data: WAITLIST_PAYLOAD })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    const summary = wrapper.find('[data-test="waitlist-summary"]')
+    expect(summary.exists()).toBe(true)
+    const txt = summary.text()
+    expect(txt).toContain('候補中')
+    // 區塊內不得出現任何數字——涵蓋 position / total 兩者的所有渲染形式
+    expect(txt).not.toMatch(/\d/)
+  })
+
+  it('候補區塊不出現順位相關文案（第 N 位／共 M 位／下一位／唯一候補者）', async () => {
+    publicQueryByToken.mockResolvedValue({ data: WAITLIST_PAYLOAD })
 
     const wrapper = await mountView()
     await triggerTokenQuery(wrapper)
 
     const txt = wrapper.text()
-    expect(txt).toContain('候補')
-    expect(txt).toMatch(/第\s*3\s*位/)
-    expect(txt).toMatch(/共\s*8\s*位/)
+    expect(txt).not.toContain('目前第')
+    expect(txt).not.toContain('下一位')
+    expect(txt).not.toContain('唯一候補者')
+    expect(txt).not.toMatch(/共\s*\d+\s*位/)
   })
 
-  it('waitlist_position == 1 時顯示「下一位」提示', async () => {
-    publicQueryByToken.mockResolvedValue({
-      data: {
-        id: 1,
-        name: '王小明',
-        birthday: '2020-01-01',
-        class_name: '大班',
-        courses: [
-          {
-            course_id: 1,
-            name: '美術',
-            status: 'waitlist',
-            waitlist_position: 1,
-            waitlist_total: 5,
-          },
-        ],
-        supplies: [],
-        total_amount: 0,
-        paid_amount: 0,
-      },
-    })
+  it('候補區塊改以「校方會依序聯繫」取代順位，讓家長知道不必重複報名', async () => {
+    publicQueryByToken.mockResolvedValue({ data: WAITLIST_PAYLOAD })
 
     const wrapper = await mountView()
     await triggerTokenQuery(wrapper)
 
-    expect(wrapper.text()).toContain('下一位')
-  })
-
-  it('waitlist_total == 1 顯示「唯一候補者」', async () => {
-    publicQueryByToken.mockResolvedValue({
-      data: {
-        id: 1,
-        name: '王小明',
-        birthday: '2020-01-01',
-        class_name: '大班',
-        courses: [
-          {
-            course_id: 1,
-            name: '美術',
-            status: 'waitlist',
-            waitlist_position: 1,
-            waitlist_total: 1,
-          },
-        ],
-        supplies: [],
-        total_amount: 0,
-        paid_amount: 0,
-      },
-    })
-
-    const wrapper = await mountView()
-    await triggerTokenQuery(wrapper)
-
-    expect(wrapper.text()).toContain('唯一候補者')
-    // 唯一候補時不應同時顯示「下一位」（互斥）
-    expect(wrapper.text()).not.toContain('下一位')
+    expect(wrapper.find('[data-test="waitlist-summary"]').text()).toContain(
+      '無需重複報名',
+    )
   })
 
   it('enrolled 課程不顯示候補資訊區塊', async () => {

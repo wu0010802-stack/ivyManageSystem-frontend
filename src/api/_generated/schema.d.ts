@@ -27490,6 +27490,10 @@ export interface components {
         /**
          * PublicRegistrationCourseOut
          * @description /public/query 與 /public/update 的 courses[] 單筆。
+         *
+         *     2026-08-04 業主決策：公開端不揭露候補順位，`waitlist_position` /
+         *     `waitlist_total` 兩欄已移除（家長只看得到 status 是否為候補）。**勿因
+         *     「後台明明算得出順位」而加回**——理由見 `_build_public_query_payload`。
          */
         PublicRegistrationCourseOut: {
             /** Confirm Deadline */
@@ -27502,10 +27506,6 @@ export interface components {
             price: number;
             /** Status */
             status: string;
-            /** Waitlist Position */
-            waitlist_position?: number | null;
-            /** Waitlist Total */
-            waitlist_total?: number | null;
         };
         /**
          * PublicRegistrationDetailOut

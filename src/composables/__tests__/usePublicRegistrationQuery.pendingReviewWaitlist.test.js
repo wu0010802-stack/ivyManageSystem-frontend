@@ -12,9 +12,10 @@ vi.mock('@/api/activityPublic', () => ({
 
 import { usePublicRegistrationQuery } from '@/composables/usePublicRegistrationQuery'
 
-// 後端 _build_public_query_payload 對 QUEUE_STATUSES（waitlist +
-// pending_review_waitlist）都會回 waitlist_position / waitlist_total；
-// 家長端顯示不得因識別狀態不同而丟掉順位資訊（2026-07-27 回歸）。
+// 2026-08-04 業主決策：公開端一律不揭露候補順位（後端 payload 已移除
+// waitlist_position / waitlist_total）。本檔原為「待審核候補仍要顯示順位」的
+// 回歸測試，反轉為「任何候補狀態都不得顯示順位」的守衛。
+// 測資刻意保留兩個順位欄位（模擬舊版後端或殘留資料），確保前端就算收到也不顯示。
 function setupWithCourses(courses) {
   const query = usePublicRegistrationQuery({
     refreshAvailability: vi.fn(),
@@ -30,10 +31,9 @@ function setupWithCourses(courses) {
   return query
 }
 
-describe('usePublicRegistrationQuery 待審核候補順位顯示', () => {
-  it('pending_review_waitlist 顯示審核中文案，不把殘留 waitlist_position 冒充候補順位', () => {
-    // 2026-07-28 收尾包口徑：pending_review_waitlist 尚未進入正式候補佇列，
-    // 後端不保證順位；舊資料殘留 waitlist_position 也不可顯示成一般候補名次。
+describe('usePublicRegistrationQuery 候補顯示不含順位', () => {
+  it('pending_review_waitlist 顯示審核中文案', () => {
+    // 此狀態尚未進入正式候補佇列，連候補資格都未定，文案與一般候補分流。
     const query = setupWithCourses([
       {
         name: '圍棋',
@@ -61,11 +61,13 @@ describe('usePublicRegistrationQuery 待審核候補順位顯示', () => {
     expect(query.waitlistCourses.value.map((c) => c.name)).toEqual(['圍棋', '美術'])
   })
 
-  it('一般 waitlist 徽章行為不變', () => {
+  it('一般 waitlist 只顯示「候補中」，即使 payload 仍帶順位也不得顯示', () => {
     const query = setupWithCourses([
       { name: '圍棋', status: 'waitlist', waitlist_position: 3, waitlist_total: 5 },
     ])
 
-    expect(query.statusBadgeFor('圍棋')).toBe('候補第 3 位')
+    const badge = query.statusBadgeFor('圍棋')
+    expect(badge).toBe('候補中')
+    expect(badge).not.toMatch(/\d/)
   })
 })
