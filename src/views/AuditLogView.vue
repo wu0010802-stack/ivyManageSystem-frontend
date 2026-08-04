@@ -54,6 +54,10 @@ const filters = reactive({
   page_size: 50,
 })
 
+// 登入活動（token 刷新）量大，預設隱藏免得業務操作被洗出畫面外；紀錄照常寫入，
+// 要看時勾起來即可。顯式選了資源類型時後端不套此排除（「登入失敗」快篩才不會壞）。
+const includeAuth = ref(false)
+
 // entity_type → 前端路由生成函式。只對「有 id 專屬詳情頁」的資源建連結，
 // 避免點「#5」卻跳去列表頁這種假導航（其他 entity 只有列表頁）。
 const ENTITY_ROUTES: Record<string, (id: number | string | null | undefined) => { path: string; query?: Record<string, string | number> } | null> = {
@@ -149,6 +153,8 @@ const buildFilterParams = () => {
   if (filters.risk_tag) params.risk_tag = filters.risk_tag
   if (filters.start_at) params.start_at = filters.start_at
   if (filters.end_at) params.end_at = filters.end_at
+  // 列表與 CSV 匯出共用本函式，兩者口徑一致（畫面看到什麼就匯出什麼）
+  if (!includeAuth.value) params.include_auth = false
   return params
 }
 
@@ -209,6 +215,7 @@ const handleReset = () => {
   filters.end_at = ''
   filters.page = 1
   activeRiskFilter.value = ''
+  includeAuth.value = false
   fetchLogs()
 }
 
@@ -495,6 +502,9 @@ defineExpose({ formatOperator })
           value-format="YYYY-MM-DDTHH:mm:ss"
           style="width: 180px;"
         />
+        <el-checkbox v-model="includeAuth" @change="handleSearch">
+          含登入活動
+        </el-checkbox>
         <el-button type="primary" @click="handleSearch">查詢</el-button>
         <el-button @click="handleReset">重置</el-button>
         <el-button :loading="exporting" @click="handleExport">匯出 CSV</el-button>
