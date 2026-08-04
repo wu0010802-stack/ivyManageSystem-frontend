@@ -67,11 +67,11 @@ describe('useRegistrationWindow', () => {
     wrapper.unmount()
   })
 
-  it('截止前 48h 內 → 收尾提醒，但仍可送出（提醒非封鎖）', () => {
-    // now=2026-03-01 10:00 UTC；close_at=2026-03-02 12:00 UTC（26h 後）
+  it('截止前 24h 內 → 收尾提醒，但仍可送出（提醒非封鎖）', () => {
+    // now=2026-03-01 10:00 UTC；close_at=2026-03-02 06:00 UTC（20h 後）
     const timeInfo = ref({
       open_at: '2026-02-01T00:00:00Z',
-      close_at: '2026-03-02T12:00:00Z',
+      close_at: '2026-03-02T06:00:00Z',
     })
     const submitting = ref(false)
     const { wrapper, get } = mountWithComposable({ timeInfo, submitting })
@@ -180,9 +180,9 @@ describe('computeNoticeState（pure function）', () => {
     })
   })
 
-  it('close_at 在 48h 內但未過 → 報名即將截止（非 blocking）', () => {
+  it('close_at 在 24h 內但未過 → 報名即將截止（非 blocking）', () => {
     const state = computeNoticeState(
-      { open_at: '2026-02-01T00:00:00Z', close_at: '2026-03-02T12:00:00Z' },
+      { open_at: '2026-02-01T00:00:00Z', close_at: '2026-03-02T06:00:00Z' },
       NOW,
     )
     expect(state?.title).toBe('報名即將截止')
@@ -190,12 +190,31 @@ describe('computeNoticeState（pure function）', () => {
     expect(state?.variant).toBe('is-warning')
   })
 
+  // 回歸：門檻 2026-08-04 由 48h 收斂為 24h——業主反映公開報名頁提早兩天就
+  // 掛「報名即將截止」sticky 橫幅，太早開始催。26h/47h 這種舊門檻涵蓋、
+  // 新門檻不涵蓋的區間必須維持 null。
+  it('close_at 還有 26h（>24h）→ 不提醒（舊 48h 門檻的回歸防線）', () => {
+    const state = computeNoticeState(
+      { open_at: '2026-02-01T00:00:00Z', close_at: '2026-03-02T12:00:00Z' },
+      NOW,
+    )
+    expect(state).toBeNull()
+  })
+
+  it('close_at 剛好 24h 後（邊界含）→ 提醒', () => {
+    const state = computeNoticeState(
+      { open_at: '2026-02-01T00:00:00Z', close_at: '2026-03-02T10:00:00Z' },
+      NOW,
+    )
+    expect(state?.title).toBe('報名即將截止')
+  })
+
   it('只設 close_at 且未過 → 立即開放（open_at 空＝該側不限制）', () => {
     const state = computeNoticeState({ open_at: null, close_at: '2026-04-01T23:59:59Z' }, NOW)
     expect(state).toBeNull()
   })
 
-  it('開放中、無 48h 內截止 → null', () => {
+  it('開放中、無 24h 內截止 → null', () => {
     const state = computeNoticeState(
       { open_at: '2026-02-01T00:00:00Z', close_at: '2026-04-01T23:59:59Z' },
       NOW,

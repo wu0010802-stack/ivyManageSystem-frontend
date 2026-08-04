@@ -48,12 +48,35 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="total_enrollments" label="班級人數" width="90" align="center" />
+        <!-- 人次：同一學生報兩門算 2，故欄名為「人次」而非「人數」（2026-08-04 正名） -->
+        <el-table-column prop="total_enrollments" label="班級人次" width="90" align="center">
+          <template #header>
+            <el-tooltip content="各課程報名數加總；同一學生報多門重複計算" placement="top">
+              <span>班級人次</span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
         <el-table-column prop="ratio" label="比率" width="80" align="center">
+            <template #header>
+              <el-tooltip content="參與率＝有參加才藝的學生數 ÷ 在籍人數；同一學生報多門只計一次，故不超過 100%" placement="top">
+                <span>比率</span>
+              </el-tooltip>
+            </template>
             <template #default="scope">
                 <span v-if="scope.row.ratio !== undefined" :class="{'text-danger': scope.row.rowType !== 'grand_total' && scope.row.targetPercent > 0 && scope.row.ratio < scope.row.targetPercent, 'text-success': scope.row.rowType !== 'grand_total' && scope.row.targetPercent > 0 && scope.row.ratio >= scope.row.targetPercent}">
                     {{ scope.row.ratio }}%
                 </span>
+            </template>
+        </el-table-column>
+        <!-- 人次比率：分子為可重複的人次，刻意允許 >100%，不參與達標判定（無紅綠著色） -->
+        <el-table-column prop="enrollment_ratio" label="人次比率" width="90" align="center">
+            <template #header>
+              <el-tooltip content="人次比率＝報名人次 ÷ 在籍人數；每人平均報越多門越高，可超過 100%" placement="top">
+                <span>人次比率</span>
+              </el-tooltip>
+            </template>
+            <template #default="scope">
+                <span v-if="scope.row.enrollment_ratio !== undefined">{{ scope.row.enrollment_ratio }}%</span>
             </template>
         </el-table-column>
         <el-table-column prop="bonus" label="達成獎金 +1000" width="140" align="center" />

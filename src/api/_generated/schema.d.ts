@@ -15886,6 +15886,9 @@ export interface components {
         /**
          * ActivityDashboardClassroomRowOut
          * @description dashboard-table 班級列。courses 為 {course_id(str): 報名數}。
+         *
+         *     ratio 是**參與率**（不重複參與學生 ÷ 在籍數，≤100%）；enrollment_ratio 是
+         *     **人次比率**（報名人次 ÷ 在籍數，可 >100%）。兩者分子不同，勿互相取代。
          */
         ActivityDashboardClassroomRowOut: {
             /** Classroom Id */
@@ -15896,6 +15899,8 @@ export interface components {
             courses: {
                 [key: string]: number;
             };
+            /** Enrollment Ratio */
+            enrollment_ratio: number;
             /** Ratio */
             ratio: number;
             /** Student Count */
@@ -15941,6 +15946,8 @@ export interface components {
             courses: {
                 [key: string]: number;
             };
+            /** Enrollment Ratio */
+            enrollment_ratio: number;
             /** Points */
             points: number;
             /** Ratio */
@@ -15959,6 +15966,8 @@ export interface components {
             courses: {
                 [key: string]: number;
             };
+            /** Enrollment Ratio */
+            enrollment_ratio: number;
             /** Ratio */
             ratio: number;
             /** Student Count */

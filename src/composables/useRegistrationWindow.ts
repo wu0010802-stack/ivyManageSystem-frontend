@@ -16,7 +16,7 @@ import {
  * 職責：
  * - 每 30 秒 tick 一次 nowTick，讓倒數計時 reactive
  * - 依 timeInfo (open_at / close_at) 計算 noticeState
- *   （尚未開放 / 尚未開始 / 已截止 / 48h 內收尾提醒 / null=正常開放）
+ *   （尚未開放 / 尚未開始 / 已截止 / 24h 內收尾提醒 / null=正常開放）
  * - 衍生 isRegistrationOpen 與 submit 按鈕語意（label / disabled）
  *
  * caller 提供：
@@ -39,6 +39,11 @@ export interface RegistrationNoticeState {
   message: string
   blocking: boolean
 }
+
+// 「報名即將截止」收尾提醒的提前量。2026-08-04 由 48h 收斂為 24h：48h＝整整兩天，
+// 公開報名頁的這條橫幅又是 sticky（ActivityPublicView 的 noticeIsUrgent），家長在
+// 還有兩天時就被一路黏著催，反而稀釋了真正最後一天的急迫感。
+const URGENT_CLOSE_HOURS = 24
 
 export function formatCountdown(targetMs: number, nowMs: number) {
   const diff = targetMs - nowMs
@@ -80,11 +85,11 @@ export function computeNoticeState(
   if (closeAt && now > closeAt) {
     return { variant: 'is-danger', title: '報名已截止', message: '感謝您的關注，本期報名已結束。', blocking: true }
   }
-  // 截止前 48 小時內：彈出收尾提醒（urgent close countdown）。
+  // 截止前 URGENT_CLOSE_HOURS 小時內：彈出收尾提醒（urgent close countdown）。
   // blocking:false —— 純提示，報名視窗仍開放，不得鎖住送出按鈕。
   if (closeAt) {
     const diffHours = (closeAt.getTime() - now.getTime()) / 3_600_000
-    if (diffHours <= 48 && diffHours > 0) {
+    if (diffHours <= URGENT_CLOSE_HOURS && diffHours > 0) {
       return {
         variant: 'is-warning',
         title: '報名即將截止',
