@@ -5,6 +5,7 @@ import { useShiftStore } from '@/stores/shift'
 import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
 import SettingsObservabilityTab from '@/components/settings/SettingsObservabilityTab.vue'
+import SettingsTenantConfigTab from '@/components/settings/SettingsTenantConfigTab.vue'
 import DsrRequestsView from '@/views/DsrRequestsView.vue'
 import PolicyVersionsView from '@/views/PolicyVersionsView.vue'
 import { hasPermission } from '@/utils/auth'
@@ -14,7 +15,7 @@ import { PAGE_TERMS } from '@/constants/moduleTerms'
 const route = useRoute()
 const router = useRouter()
 
-const BASE_TABS = ['shifts', 'line', 'observability']
+const BASE_TABS = ['shifts', 'line', 'observability', 'tenant-config']
 
 const availableTabs = (): string[] =>
   hasPermission('DSR_MANAGE') ? [...BASE_TABS, 'dsr-requests', 'policy-versions'] : [...BASE_TABS]
@@ -58,7 +59,7 @@ onMounted(() => {
 
 <template>
   <div class="settings-page">
-    <PageHeader :title="PAGE_TERMS.settingsGeneral" subtitle="輪班別、通知、排程觀測與個資治理設定" />
+    <PageHeader :title="PAGE_TERMS.settingsGeneral" subtitle="輪班別、通知、排程觀測、分校設定與個資治理設定" />
     <el-tabs v-model="activeTab" type="card" @tab-change="onTabChange">
       <el-tab-pane label="輪班別管理" name="shifts">
         <SettingsShiftTab v-if="activeTab === 'shifts'" />
@@ -69,6 +70,9 @@ onMounted(() => {
       </el-tab-pane>
       <el-tab-pane label="排程狀態" name="observability" lazy>
         <SettingsObservabilityTab v-if="activeTab === 'observability'" />
+      </el-tab-pane>
+      <el-tab-pane label="分校設定" name="tenant-config" lazy>
+        <SettingsTenantConfigTab v-if="activeTab === 'tenant-config'" />
       </el-tab-pane>
       <el-tab-pane
         v-if="hasPermission('DSR_MANAGE')"
