@@ -12,6 +12,12 @@ export const OFFICIAL_JOB_TITLE_NAMES = [
 
 // 職等（與後端 services/salary/config_defaults.POSITION_GRADE_MAP 同一套）：
 // A=有教師證、B=教保員（含助理教保員）、C=非教保員。業主職等薪資表 2026-07-29。
+//
+// @deprecated 多租戶（CT-FIX-09）：權威來源已改為 `GET /api/config/position-mapping`
+// （per-tenant，依該租戶的 job_titles.bonus_grade 推導）。本常數**只保留為 API 尚未
+// 載入完成 / 失敗時的 fallback**，請改用 `@/composables/useTenantDictionaries` 的
+// `getTitleToGrade()`（同步）或 `useTenantDictionaries().titleToGrade`（響應式）。
+// 直接 import 本常數會在 B 校查無鍵而讓職等空白。
 export const TITLE_TO_GRADE = {
   '幼兒園教師': 'A',
   '教保員': 'B',
@@ -20,6 +26,9 @@ export const TITLE_TO_GRADE = {
 }
 
 // 其他職位 → position_salary 設定欄位 key
+//
+// @deprecated 同 TITLE_TO_GRADE：改用 `getPositionSalaryKey()` /
+// `useTenantDictionaries().positionSalaryKey`。查無鍵會讓「建議薪資」算成空。
 export const POSITION_SALARY_KEY = {
   '行政': 'admin_staff',
   '美語教師': 'english_teacher',

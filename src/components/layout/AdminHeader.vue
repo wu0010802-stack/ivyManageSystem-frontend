@@ -69,7 +69,11 @@
             <el-avatar :size="36" class="user-avatar" icon="UserFilled" />
             <div class="user-info">
               <span class="user-name">{{ displayName }}</span>
-              <span class="user-role">{{ displayRole }}</span>
+              <span class="user-role">
+                <!-- 多租戶：園所名稱只在後端有下發 tenant_name 時才顯示（單租戶部署
+                     不會下發，畫面與改造前逐字相同）。切換分校下拉屬 Phase 2（CT-A-08）。 -->
+                <template v-if="tenantLabel">{{ tenantLabel }}・</template>{{ displayRole }}
+              </span>
             </div>
             <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </button>
@@ -180,6 +184,13 @@ const displayName = computed(() => (userInfo.value.name as string | undefined) |
 const displayRole = computed(() =>
   roleDisplayLabel(userInfo.value as { role_label?: string; role?: string })
 )
+
+// 目前所屬園所名稱（多租戶）。沿用同一個 userInfo computed，登入/refresh/代操作
+// 回填後自動重算。後端未下發（單租戶部署）→ 空字串 → 模板整段不渲染。
+const tenantLabel = computed(() => {
+  const name = userInfo.value.tenant_name
+  return typeof name === 'string' ? name : ''
+})
 
 // 是否有員工記錄（行政/園長/主任）
 const hasEmployee = computed(() => userInfo.value.employee_id != null)

@@ -13,17 +13,20 @@
     <div class="page-wrapper">
       <header class="page-header">
         <div class="page-brand">
+          <!-- /LOGO.png 的 URL 刻意不變（L3）：per-tenant 換圖由 nginx 從
+               /brand/<slug>/LOGO.png overlay，前端引用點零改動。 -->
           <img
             src="/LOGO.png"
-            alt="常春藤教育機構"
+            :alt="branding.org_name"
             class="page-brand-logo"
             width="96"
             height="96"
           />
           <div class="page-brand-text">
-            <div class="page-brand-prefix">高雄市私立</div>
-            <div class="page-brand-zh">常春藤教育機構</div>
-            <div class="page-brand-en">Ivy Kindergarten</div>
+            <!-- 缺值即隱藏該行（org_prefix / school_name_en 為 onboarding 選填） -->
+            <div v-if="branding.org_prefix" class="page-brand-prefix">{{ branding.org_prefix }}</div>
+            <div class="page-brand-zh">{{ branding.org_name }}</div>
+            <div v-if="branding.school_name_en" class="page-brand-en">{{ branding.school_name_en }}</div>
           </div>
         </div>
         <div class="page-meta">
@@ -672,6 +675,7 @@ import { courseBillingLabel } from '@/utils/activityDisplay'
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 import ToastStack from './components/ToastStack.vue'
 
 interface Toast { id: number; message: string; type: string }
@@ -1002,6 +1006,7 @@ const {
 // 死巷修正（critique 2026-07-28）：本頁由報名頁 router.push 同窗導入或 LINE
 // 直開，皆非 script 開窗——舊 window.close() 會靜默失敗，按鈕形同虛設。
 // 改為顯式導回報名頁；編輯中有未存異動時沿用 beforeunload 同語意先確認。
+const { branding } = useTenantBranding()
 const router = useRouter()
 function goBackToRegistration() {
   if (isEditFormDirty.value && !window.confirm('尚有未儲存的修改，確定要離開嗎？')) return

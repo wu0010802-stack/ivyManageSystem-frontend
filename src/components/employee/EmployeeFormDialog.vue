@@ -14,11 +14,11 @@ import { useFormDraft } from '@/composables/useFormDraft'
 // 無關 composable，其間接依賴 @/stores/employee（getEmployees）在測試 mock 下會炸開。
 import { useCrudDialog } from '@/composables/useCrudDialog'
 import { BASIC_TAB_FIELDS, SALARY_TAB_FIELDS } from '@/constants/employeeFields'
-import {
-  OFFICIAL_JOB_TITLE_NAMES,
-  TITLE_TO_GRADE,
-  POSITION_SALARY_KEY,
-} from '@/constants/employee'
+import { OFFICIAL_JOB_TITLE_NAMES } from '@/constants/employee'
+// 職稱→職等 / 職稱→薪資 key 改讀 per-tenant 端點（CT-FIX-09）。composable 在
+// setup 期觸發載入；兩支 getter 在載入完成前/失敗時退回 constants/employee.ts 的
+// 常數，因此下方的同步邏輯與改造前逐字相同（單租戶下兩者等價）。
+import { useTenantDictionaries } from '@/composables/useTenantDictionaries'
 import { detectRole } from '@/utils/employeeDisplay'
 import { validateInsuranceVsBase, validateBaseSalary, validateHourlyRate } from '@/validators/employeeForm'
 import { mapEmployeeError } from '@/utils/error'
@@ -57,11 +57,16 @@ const rules: FormRules = {
 const positionSalaryConfig = ref<Record<string, number> | null>(null)
 const suggestedSalary = ref<number | null>(null)
 
+// per-tenant 職稱對照：mount 時觸發載入，載入前/失敗時 getter 自動退 fallback 常數。
+const tenantDicts = useTenantDictionaries()
+
 const titleToGrade = (jobTitleId: number | null | undefined) => {
   if (!jobTitleId || !configStore.jobTitles) return null
   const jt = (configStore.jobTitles as { id: number; name: string }[]).find(t => t.id === jobTitleId)
   if (!jt) return null
-  return (TITLE_TO_GRADE as Record<string, string>)[jt.name] || null
+  // 讀 tenantDicts.titleToGrade（響應式）而非同步 getter：API 回來後 watch 才會重算，
+  // 否則使用者要重開 dialog 才看得到正確職等。
+  return tenantDicts.titleToGrade.value[jt.name] || null
 }
 
 interface EmployeeForm {
@@ -246,7 +251,7 @@ watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], ()
     const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
     salary = positionSalaryConfig.value[key] ?? null
   } else {
-    const key = (POSITION_SALARY_KEY as Record<string, string>)[form.position]
+    const key = tenantDicts.positionSalaryKey.value[form.position]
     salary = key ? (positionSalaryConfig.value[key] ?? null) : null
   }
   suggestedSalary.value = salary

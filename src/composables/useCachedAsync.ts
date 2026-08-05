@@ -34,6 +34,21 @@ interface ActiveCacheConsumer {
   clear: () => void
 }
 
+/**
+ * ⚠ 多租戶守則（frontend-core §2.8，**不要幫它自動加租戶前綴**）
+ *
+ * `_cache` 是 module-level in-memory Map，生命週期 = 單一分頁。正式環境每個租戶是
+ * 獨立 origin（獨立 JS context），跨租戶污染的唯一路徑是「同一分頁內切換 acting
+ * tenant」——而該切換依 CT-A-06 必走 `advanceAdminSession()`，它會呼叫
+ * `invalidateCachedAsync()` 全清（見 `src/utils/adminSession.ts`）。
+ *
+ * 因此：
+ *  - **既有 call site 的 key 一律不改**（零收益 churn，且會打破 `invalidate(prefix)` 語意）；
+ *  - **總部（hq）頁面的 key 必須自己含 acting tenant**，例如
+ *    `hq:${actingTenantId}:reports:finance:${period}`，或用
+ *    `@/utils/tenantStorage` 的 `tenantCacheKey(base)`。這樣即使切換時有 race，
+ *    也不會讀到他租戶的條目，且 `invalidateCachedAsync('hq:')` 仍可做細粒度失效。
+ */
 const _cache = new Map<string, CacheEntry<unknown>>()
 const _activeControllers = new Map<string, Set<AbortController>>()
 const _activeConsumers = new Map<string, Set<ActiveCacheConsumer>>()

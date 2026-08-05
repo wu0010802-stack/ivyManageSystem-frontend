@@ -1,4 +1,7 @@
 /** 年終 grid 獎金欄開關（單一來源，元件與測試共用）。 */
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
+
 export const BONUS_COL_KEYS = [
   'APPRAISAL_HALF_BONUS_FIRST', 'APPRAISAL_HALF_BONUS_SECOND',
   'SEMESTER_DIVIDEND_FIRST', 'SEMESTER_DIVIDEND_SECOND',
@@ -36,7 +39,7 @@ const LS_KEY = 'ye-grid-visible-bonus-cols'
 /** 讀取使用者勾選要顯示的獎金欄（預設全不顯示——摘要表零橫捲）。 */
 export function loadVisibleBonusCols(): Set<string> {
   try {
-    const raw = localStorage.getItem(LS_KEY)
+    const raw = tenantGetItem(LS_KEY)
     if (!raw) return new Set()
     const arr = JSON.parse(raw)
     return new Set(Array.isArray(arr) ? arr.filter((k) => (BONUS_COL_KEYS as readonly string[]).includes(k)) : [])
@@ -46,5 +49,5 @@ export function loadVisibleBonusCols(): Set<string> {
 }
 
 export function saveVisibleBonusCols(cols: Set<string>): void {
-  localStorage.setItem(LS_KEY, JSON.stringify([...cols]))
+  tenantSetItem(LS_KEY, JSON.stringify([...cols]))
 }

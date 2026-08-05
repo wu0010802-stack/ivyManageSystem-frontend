@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLocationNormalized, type RouteLocation, type RouteLocationRaw } from 'vue-router'
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
-import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission } from '@/utils/auth'
+import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission, isPlatformAdmin } from '@/utils/auth'
 import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
@@ -282,6 +282,46 @@ export const routes: RouteRecordRaw[] = [
             name: 'data-quality',
             component: () => import('../views/DataQualityView.vue'),
             meta: { title: PAGE_TERMS.dataQuality }
+        },
+        // ── 總部（platform / hq）console ──
+        // 權限由 manifest 衍生的 ROUTE_PERMISSION_RULES 把關（canAccessRoute default-deny），
+        // 三個 PLATFORM_* 碼只會出現在 kind='platform' 租戶的角色上。後端未開
+        // PLATFORM_ENABLED 時端點一律 404，頁面會顯示載入失敗而非白畫面。
+        {
+            path: '/platform/overview',
+            name: 'platform-overview',
+            component: () => import('../views/platform/PlatformOverviewView.vue'),
+            meta: { title: '總部總覽' }
+        },
+        {
+            path: '/platform/tenants',
+            name: 'platform-tenants',
+            component: () => import('../views/platform/PlatformTenantsView.vue'),
+            meta: { title: '分校管理' }
+        },
+        {
+            path: '/platform/tenants/:id(\\d+)',
+            name: 'platform-tenant-detail',
+            component: () => import('../views/platform/PlatformTenantDetailView.vue'),
+            meta: { title: '分校詳情' }
+        },
+        {
+            path: '/platform/reports',
+            name: 'platform-reports',
+            component: () => import('../views/platform/PlatformReportsView.vue'),
+            meta: { title: '跨分校報表' }
+        },
+        {
+            path: '/platform/roles-sync',
+            name: 'platform-roles-sync',
+            component: () => import('../views/platform/PlatformRoleSyncView.vue'),
+            meta: { title: '角色同步' }
+        },
+        {
+            path: '/platform/audit',
+            name: 'platform-audit',
+            component: () => import('../views/platform/PlatformAuditView.vue'),
+            meta: { title: '跨分校稽核' }
         },
         {
             path: '/settings',
@@ -853,7 +893,10 @@ router.beforeEach(async (to) => {
 
     if (to.path === '/login' && loggedIn) {
         // 已登入時根據角色導向
-        return userInfo?.role === 'teacher' ? '/portal/home' : '/'
+        if (userInfo?.role === 'teacher') return '/portal/home'
+        // 總部（platform admin）的角色只含 PLATFORM_*，導 '/' 會被 canAccessRoute 擋下
+        // 再彈一次；直接落在總部首頁（hq-reporting §2.5「登入後導向」）。
+        return isPlatformAdmin() ? '/platform/overview' : '/'
     }
 
     // teacher 不可存取管理後台路由，強制導回 portal

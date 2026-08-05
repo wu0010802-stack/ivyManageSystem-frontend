@@ -1,5 +1,7 @@
 import { todayISO } from '@/utils/format'
-import { TITLE_TO_GRADE, POSITION_SALARY_KEY } from '@/constants/employee'
+// per-tenant 對照（CT-FIX-09）：兩支 getter 在 API 尚未載入 / 失敗時自動退回
+// src/constants/employee.ts 的常數，因此本檔維持同步、行為與改造前相同。
+import { getPositionSalaryKey, getTitleToGrade } from '@/composables/useTenantDictionaries'
 
 export type EmployeeStatusKey = 'active' | 'pending' | 'resigned'
 export type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
@@ -95,13 +97,13 @@ export const standardSalaryFor = (
   const role = detectRole(pos)
   if (role) {
     const titleName = (emp.job_title_name as string) || (emp.title as string) || ''
-    const grade = ((emp.bonus_grade as string) || (TITLE_TO_GRADE as Record<string, string>)[titleName] || '').toLowerCase()
+    const grade = ((emp.bonus_grade as string) || getTitleToGrade()[titleName] || '').toLowerCase()
     if (grade) {
       const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
       return cfg[key] ?? null
     }
     return null
   }
-  const key = (POSITION_SALARY_KEY as Record<string, string>)[pos]
+  const key = getPositionSalaryKey()[pos]
   return key ? (cfg[key] ?? null) : null
 }

@@ -31,6 +31,9 @@ import {
   Bell,
   Clock,
 } from '@element-plus/icons-vue'
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 
 interface UserInfo {
   name?: string
@@ -38,6 +41,8 @@ interface UserInfo {
   impersonation_mode?: 'readonly' | 'write' | null
   [key: string]: unknown
 }
+
+const { branding } = useTenantBranding()
 
 const { openPalette } = usePortalSearch()
 installPortalSearchKeyboard()
@@ -199,7 +204,7 @@ onMounted(() => {
 
   // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
   const PORTAL_LAYOUT_VERSION = '1'
-  const stored = localStorage.getItem('portal_layout_v')
+  const stored = tenantGetItem('portal_layout_v')
   if (stored !== PORTAL_LAYOUT_VERSION) {
     setTimeout(() => {
       ElMessageBox({
@@ -216,7 +221,7 @@ onMounted(() => {
       })
         .catch(() => {})
         .finally(() => {
-          localStorage.setItem('portal_layout_v', PORTAL_LAYOUT_VERSION)
+          tenantSetItem('portal_layout_v', PORTAL_LAYOUT_VERSION)
         })
     }, 500)
   }
@@ -510,7 +515,7 @@ const submitPassword = async () => {
             >
               <el-icon><Fold /></el-icon>
             </button>
-            <h3>常春藤教育機構 - 教職員考勤系統</h3>
+            <h3>{{ branding.org_name }} - 教職員考勤系統</h3>
           </div>
           <button class="psp-trigger-portal" @click="openPalette" title="搜尋 (Cmd+K)">
             <el-icon><Search /></el-icon>

@@ -8,6 +8,9 @@ import { login } from '@/api/auth'
 import { setUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { IDLE_LOGOUT_FLAG_KEY } from '@/composables/useIdleTimeout'
+import { useTenantBranding } from '@/composables/useTenantBranding'
+
+const { branding } = useTenantBranding()
 
 const router = useRouter()
 const loading = ref(false)
@@ -67,7 +70,7 @@ const handleLogin = async () => {
 
 <template>
   <div class="login-page">
-    <main class="login-shell" aria-label="常春藤教育機構教職員登入">
+    <main class="login-shell" :aria-label="`${branding.org_name}教職員登入`">
       <section class="login-brand">
         <div class="brand-mark" aria-hidden="true"></div>
       </section>
@@ -130,8 +133,8 @@ const handleLogin = async () => {
     </main>
 
     <footer class="login-footer">
-      <p class="footer-tagline">常春藤教育機構 ・ 教職員入口</p>
-      <p class="footer-copy">© {{ new Date().getFullYear() }} 常春藤教育機構 版權所有</p>
+      <p class="footer-tagline">{{ branding.org_name }} ・ 教職員入口</p>
+      <p class="footer-copy">© {{ new Date().getFullYear() }} {{ branding.org_name }} 版權所有</p>
     </footer>
   </div>
 </template>

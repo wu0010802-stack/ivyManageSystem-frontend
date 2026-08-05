@@ -12,6 +12,7 @@ import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 import MeDrawer from '../components/layout/MeDrawer.vue'
 import ParentOfflineIndicator from '../components/ParentOfflineIndicator.vue'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 
 interface TabItem {
   key: string
@@ -101,7 +102,8 @@ async function refreshUnread(force = false) {
 onMounted(() => refreshUnread())
 watch(() => route.fullPath, () => refreshUnread())
 
-const headerTitle = computed(() => route.meta?.title as string || '常春藤家長')
+const { branding } = useTenantBranding()
+const headerTitle = computed(() => (route.meta?.title as string) || branding.value.titles.parent_short)
 const headerShowBack = computed(() => route.meta?.showBack === true)
 
 function onBack() {

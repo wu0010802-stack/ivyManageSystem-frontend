@@ -4,13 +4,16 @@
  * 工作台（SalaryHubView）與月結嚮導（SalarySettleView 各步驟）共用：
  * - 月狀態推導（deriveStatus）：純函式，從 records 推導，不需後端新欄位
  * - 異常偵測（detectAnomalies）：與上月差異 ≥ pct 或 ≥ abs、手動調整過、本月新進
- * - 門檻 per 裝置存 localStorage（業主未要求全園共用，維持後端零修改）
+ * - 門檻 per 裝置存 localStorage（業主未要求全園共用，維持後端零修改）；
+ *   各園薪資規模不同，門檻本就該 per-tenant，故走 tenantStorage（CT-F-07，
+ *   單租戶模式 key 與改造前逐字相同）
  *
  * 注意：records API 的 needs_recalc 以 `breakdown_stale` 欄位外露。
  */
 import { ref, computed, watch, type Ref } from 'vue'
 import { getRecords } from '@/api/salary'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 export type SettlementStatus = 'not_calculated' | 'needs_recalc' | 'reviewing' | 'finalized'
 
@@ -42,7 +45,7 @@ const MONITORED_FIELDS = ['net_salary', 'gross_salary'] as const
 
 export function getThresholds(): Thresholds {
     try {
-        const raw = localStorage.getItem(THRESHOLDS_KEY)
+        const raw = tenantGetItem(THRESHOLDS_KEY)
         if (raw) {
             const parsed: unknown = JSON.parse(raw)
             if (
@@ -60,7 +63,7 @@ export function getThresholds(): Thresholds {
 }
 
 export function setThresholds(t: Thresholds): void {
-    localStorage.setItem(THRESHOLDS_KEY, JSON.stringify(t))
+    tenantSetItem(THRESHOLDS_KEY, JSON.stringify(t))
 }
 
 export function deriveStatus(records: SettlementRecord[]): SettlementStatus {

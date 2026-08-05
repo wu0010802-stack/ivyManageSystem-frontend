@@ -3,7 +3,7 @@
     <!-- ── Section 1：同步控制列 ── -->
     <div class="ivk-sync-bar" v-loading="loadingStatus">
       <div class="ivk-sync-info">
-        <span class="ivk-sync-label">{{ syncStatus?.provider_label ?? '義華校官網' }}</span>
+        <span class="ivk-sync-label">{{ providerLabel }}</span>
         <span class="ivk-sync-meta">
           <template v-if="syncStatus?.last_synced_at">
             上次同步：{{ lastSyncedDisplay }}
@@ -295,6 +295,14 @@ const depositRate = computed(() => {
 })
 
 // ── 同步狀態顯示 ──
+/**
+ * 官網後台 provider 的顯示名。權威值來自後端 `GET /recruitment/ivykids/status`
+ * 的 `provider_label`（`services/recruitment_ivykids_sync.IVYKIDS_PROVIDER_LABEL`）。
+ * fallback 必須**校名中性**（多租戶 4e / contracts §16 DEV-15）——舊字面「義華校官網」
+ * 會讓 B 校在 status 載入前或 API 失敗時看到 A 校校名。所有需要提及 provider 的
+ * 文案（含 confirm 對話框）一律引用這支，不要再內嵌字面。
+ */
+const providerLabel = computed(() => syncStatus.value?.provider_label ?? '官網後台')
 const syncStatusTagType = computed(() => {
   if (!syncStatus.value) return 'info'
   if (syncStatus.value.sync_in_progress)                return 'warning'
@@ -468,7 +476,7 @@ const handleSync = async () => {
 const handleDeleteAll = async () => {
   try {
     await ElMessageBox.confirm(
-      '確定要刪除所有義華官網同步的報名記錄並重置同步狀態嗎？此操作無法復原。',
+      `確定要刪除所有${providerLabel.value}同步的報名記錄並重置同步狀態嗎？此操作無法復原。`,
       '警告',
       { type: 'warning', confirmButtonText: '確定刪除', cancelButtonText: '取消' },
     )

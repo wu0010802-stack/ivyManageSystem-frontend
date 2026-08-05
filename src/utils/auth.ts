@@ -12,6 +12,9 @@ import {
   PUBLIC_ROUTE_PREFIXES,
   PORTAL_ONLY_ROLES,
 } from '@/constants/permissions'
+import { tenantHeaders, tenantSlug } from '@/utils/tenant'
+import { tenantRemoveItem } from '@/utils/tenantStorage'
+import { captureException } from '@/utils/sentry'
 
 export { PERMISSION_NAMES, ROUTE_PERMISSION_RULES }
 
@@ -107,9 +110,30 @@ export function getUserInfo() {
 }
 
 export function setUserInfo(info: unknown) {
+  // 多租戶交叉驗證（frontend-core §2.3 第 1 層）：後端回的 tenant_slug 與前端由
+  // hostname 解出的 slug 不符 → 只可能是 cookie 被設成 Domain=.ivy.tw（跨 subdomain
+  // 汙染）或 DNS/反代設錯。這種狀態下繼續操作等於「以 A 校身分改 B 校資料」，
+  // 一律 fail-closed 清掉身分。單租戶模式（tenantSlug() 為 null）不比對（DEV-12）。
+  if (_rejectCrossTenantUser(info)) return
+
   _userInfoRef.value = info as Record<string, unknown>
   sessionStorage.setItem(USER_INFO_KEY, JSON.stringify(info))
   _setSessionValidatedAt()
+}
+
+/** 回 true 表示這份 userInfo 屬於別的租戶、已被拒絕並清空登入狀態。 */
+function _rejectCrossTenantUser(info: unknown): boolean {
+  const current = tenantSlug()
+  if (!current || !info || typeof info !== 'object') return false
+  const incoming = (info as Record<string, unknown>)['tenant_slug']
+  // 後端尚未下發 tenant_slug（灰度期舊版本）→ 不判定，避免把正常登入擋掉。
+  if (typeof incoming !== 'string' || incoming === '' || incoming === current) return false
+  captureException(new Error('TENANT_USER_MISMATCH: 登入回應的園所與網址不符'), {
+    expected: current,
+    received: incoming,
+  }).catch(() => {})
+  clearAuth({ notifyServer: false }).catch(() => {})
+  return true
 }
 
 /** 新登入必須先等這個 barrier，避免舊 logout 的 Set-Cookie 晚到清掉新 cookie。 */
@@ -158,6 +182,9 @@ function _notifyServerLogout(): Promise<void> {
       method: 'POST',
       credentials: 'include',
       signal: controller.signal,
+      // 裸 fetch（不經 axios interceptor），tenant 一致性 header 自己帶（CT-A-05）。
+      // 單租戶模式回 {}，等同不加 header。
+      headers: tenantHeaders(),
     })
       .then(() => undefined)
       .catch(() => undefined)
@@ -182,7 +209,8 @@ export function clearAuth(options: { notifyServer?: boolean } = {}): Promise<voi
   // 公開報名草稿含 PII（姓名/生日/手機），登出時一併清除
   try {
     sessionStorage.removeItem('activity_draft')
-    localStorage.removeItem('activity_draft')  // 清舊版殘留
+    // localStorage 走 wrapper：一次清掉租戶化 key 與舊版 legacy 殘留兩者。
+    tenantRemoveItem('activity_draft')
   } catch { /* silent */ }
   // 立即清本地狀態，但保留一個可 await 的 server logout barrier。
   // login / impersonation 會等它完成，避免舊 logout 回應晚到覆蓋新 cookie。
@@ -227,6 +255,16 @@ function _resetStores() {
   })
 }
 
+/**
+ * 登出時要清掉的 CacheStorage 名稱（含個人化 Portal 回應）。
+ *
+ * 多租戶（frontend-core §2.7）：**這裡維持原名、不加租戶後綴**。理由：這是一份
+ * 「刪除清單」，多刪一個不存在的名字無害，而少刪一個就是 PII 殘留。workbox build
+ * 期的快取名同樣不改——CacheStorage 是 per-origin 的，正式環境天然隔離。
+ *
+ * 守則：任何**新的** `caches.open(...)` 一律經 `tenantCacheName(base)`
+ * （`@/utils/tenantStorage`），並把該 base 名加進本清單。
+ */
 const _PORTAL_USER_CACHES = [
   'portal-class-attendance',
   'portal-my-students',
@@ -324,6 +362,15 @@ const _SCOPE_BREADTH: Record<string, number> = { own_class: 0, all: 1 }
  * 對應 DB permission_definitions.scope_options 非空的 code（permscope01-04 seed）。
  * scope-aware-parity.test.ts 以 hardcoded 期望集合守同步，防前後端反向漂移
  * （RA-HIGH-1c：前端誤判「有權」→ 後端 403）。
+ *
+ * ⚠ **多租戶下這個集合維持全域常數，禁止 per-tenant 化**（CT-F-08、decisions #5）。
+ * 理由（最容易被日後「順手改」的地方，所以寫在這裡）：
+ *   1. `permission_definitions` 本身是**全域**表——roles / role_flags 才 per-tenant。
+ *      per-tenant 化只改變「誰持有哪些碼」，不改變「哪些碼吃 `:scope` 後綴」。
+ *   2. scope 語意（`own_class` / `all`）是**租戶內**的 row-level 範圍，與租戶維度正交。
+ *      「跨租戶」由 `platform_admin` flag + `/api/platform/*` 的 `tenant_id` 參數表達，
+ *      **不得**新增 `:tenant` 這種 scope 後綴（會與後端 `resolve_grant` 的 fail-closed
+ *      邏輯衝突，且 parity 測試的 regex 也讀不出來）。
  */
 export const SCOPE_AWARE_CODES: ReadonlySet<string> = new Set([
   'STUDENTS_READ', 'STUDENTS_WRITE', 'STUDENTS_HEALTH_READ', 'STUDENTS_HEALTH_WRITE',
@@ -468,6 +515,36 @@ export function isSuperAdmin(): boolean {
   const flags = userInfo['flags']
   if (Array.isArray(flags) && (flags as unknown[]).includes('super_admin')) return true
   return userInfo['role'] === 'admin'
+}
+
+/**
+ * 目前登入者所屬的園所（租戶）。後端在 login / refresh / impersonate /
+ * end-impersonate / get_me 五處共用的 `_user_response_payload` 下發，
+ * `schemas/auth.py::AuthUserOut` 已同批加這三欄（否則 response_model 會過濾掉）。
+ *
+ * 回 `null` 的情況：未登入、或後端尚未下發（灰度期舊版本）。呼叫端一律要能接受 null。
+ */
+export function getTenantInfo(): { id: number | null; slug: string; name: string } | null {
+  const u = getUserInfo()
+  if (!u || typeof u['tenant_slug'] !== 'string' || u['tenant_slug'] === '') return null
+  return {
+    id: typeof u['tenant_id'] === 'number' ? u['tenant_id'] : null,
+    slug: u['tenant_slug'],
+    name: typeof u['tenant_name'] === 'string' ? u['tenant_name'] : '',
+  }
+}
+
+/**
+ * 跨租戶總部（platform）視角。僅供 UI 顯示/分流，授權一律由後端即時查 role_flags。
+ *
+ * **刻意無 `role === 'admin'` 字面 fallback**（與 `isSuperAdmin()` 不同）：
+ * `platform_admin` 是全新 flag、沒有舊資料相容需求，缺 flag 一律 false（fail-closed）。
+ * 加了 fallback 等於「每一位分校 admin 都變成總部」——那是本次改造最嚴重的提權面。
+ * owner = fc（CT-F-08）；hq 只消費，不得再宣告一份。
+ */
+export function isPlatformAdmin(): boolean {
+  const flags = getUserInfo()?.['flags']
+  return Array.isArray(flags) && (flags as unknown[]).includes('platform_admin')
 }
 
 // ── 權限名稱集合運算（取代舊 BigInt mask 版本） ──

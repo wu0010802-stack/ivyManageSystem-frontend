@@ -7,6 +7,8 @@
  * 矩陣預設全展開造成橫向捲動。員工欄與合計欄不受此開關控制，恆顯示。
  */
 import { ITEM_CODE_LABELS } from './scoreItemLabels'
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 export const SCORE_COL_LS_KEY = 'aye-score-preview-visible-cols'
 
@@ -26,7 +28,7 @@ export interface ScorePreviewParticipant {
 /** 讀取使用者的欄位可見覆寫；未曾覆寫過（或資料毀損）回 `null`，由呼叫端落回預設。 */
 export function loadVisibleScoreColOverride(): Set<string> | null {
   try {
-    const raw = localStorage.getItem(SCORE_COL_LS_KEY)
+    const raw = tenantGetItem(SCORE_COL_LS_KEY)
     if (raw == null) return null
     const arr = JSON.parse(raw)
     if (!Array.isArray(arr)) return null
@@ -37,7 +39,7 @@ export function loadVisibleScoreColOverride(): Set<string> | null {
 }
 
 export function saveVisibleScoreColOverride(cols: Set<string>): void {
-  localStorage.setItem(SCORE_COL_LS_KEY, JSON.stringify([...cols]))
+  tenantSetItem(SCORE_COL_LS_KEY, JSON.stringify([...cols]))
 }
 
 /** 回傳所有參與者中，任一列有異動（delta 與目前系統值不同、或非零）的 item_code 集合。 */

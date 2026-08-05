@@ -161,16 +161,19 @@ import { getLaborInsurance, getHealthInsurance, getWithholding, getPension } fro
 import { FirstAidKit } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 type ReportType = 'labor' | 'health' | 'withholding' | 'pension'
 
-// 雇主基本資料屬「填一次、長期不變」的設定，記在 localStorage 免每次進頁重填
+// 雇主基本資料屬「填一次、長期不變」的設定，記在 localStorage 免每次進頁重填。
+// ⚠ 機構名 + 統一編號會直接進勞健保申報參數，跨園所污染等同申報到錯的雇主，
+//    因此走 tenantStorage 做 per-tenant 隔離（CT-F-07；單租戶模式 key 不變）。
 const EMPLOYER_STORAGE_KEY = 'gov-reports.employer'
 const TAX_ID_RE = /^\d{8}$/
 
 function _loadEmployer(): { name: string; code: string } {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(EMPLOYER_STORAGE_KEY) ?? '{}')
+    const parsed: unknown = JSON.parse(tenantGetItem(EMPLOYER_STORAGE_KEY) ?? '{}')
     if (parsed && typeof parsed === 'object') {
       const p = parsed as Record<string, unknown>
       return {
@@ -187,7 +190,7 @@ function _loadEmployer(): { name: string; code: string } {
 const employer = reactive(_loadEmployer())
 
 watch(employer, () => {
-  localStorage.setItem(EMPLOYER_STORAGE_KEY, JSON.stringify({ name: employer.name, code: employer.code }))
+  tenantSetItem(EMPLOYER_STORAGE_KEY, JSON.stringify({ name: employer.name, code: employer.code }))
 })
 
 // 目前作用中的申報項目（取代原 4 張並排 card 的 identical-grid 視覺）

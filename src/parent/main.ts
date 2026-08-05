@@ -30,6 +30,8 @@ import { getMe } from './api/profile'
 import { initTheme } from './composables/useTheme'
 import { initA11y } from './composables/useA11y'
 import { initSentry } from '@/utils/sentry'
+import { initTenantBoot } from '@/utils/tenantBoot'
+import { getBranding, onBrandingLoaded, useTenantBranding } from '@/composables/useTenantBranding'
 // 離線寫入佇列：boot / online / visibilitychange flush triggers（spec §6.3.2）
 import { flushAllParent } from '@/parent/utils/parentOfflineQueue'
 import { resolvePublicLiffStateTarget } from '@/parent/utils/liffStateRedirect'
@@ -49,11 +51,28 @@ initA11y()
 
 const app: VueApp = createApp(App)
 
-// Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking
-initSentry(app, { entry: 'parent' })
+// 多租戶 boot 檢查（frontend-core §2.1）。單租戶模式下完全不介入（DEV-12）。
+const tenantBoot = initTenantBoot()
 
-app.use(createPinia())
-app.use(router)
+// Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking
+initSentry(app, {
+  entry: 'parent',
+  tags: tenantBoot.slug ? { tenant: tenantBoot.slug } : undefined,
+}).finally(() => tenantBoot.report())
+
+// 認不出園所時不掛 router：vue-router 在 app.use() 當下就會開始首次導覽，
+// 而 guard 會 probe /parent/me——那正是「不打 API」要擋掉的東西。
+if (tenantBoot.proceed) {
+  // 品牌 / tenant-meta 預熱（fb §4.5）：與 router 首導航的 /parent/me probe 並行。
+  // initLiff() 也消費同一條 in-flight promise，boot 期間 tenant-meta 只會打一次。
+  useTenantBranding()
+  onBrandingLoaded(() => {
+    const title = router.currentRoute.value.meta?.title
+    if (title) document.title = `${title} - ${getBranding().titles.parent_short}`
+  })
+  app.use(createPinia())
+  app.use(router)
+}
 
 // 全域 navigation guard：未登入使用者只能進公開頁（login / bind）
 //
@@ -111,6 +130,7 @@ function setupOfflineFlushTriggers() {
     }
   })
 }
-setupOfflineFlushTriggers()
-
-app.mount('#app')
+if (tenantBoot.proceed) {
+  setupOfflineFlushTriggers()
+  app.mount('#app')
+}

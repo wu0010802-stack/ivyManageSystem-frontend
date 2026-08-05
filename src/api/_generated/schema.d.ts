@@ -897,7 +897,8 @@ export interface paths {
          * Get Public Course Dm
          * @description 公開端點：回傳已上傳的課程 DM（原始 PDF 或轉出的頁圖）。
          *
-         *     防穿越：檔名須通過 DM_FILENAME_RE（`{32hex}.{ext}` 原檔／`{32hex}_p{n}.webp`
+         *     防穿越：**先去掉 `t<tid>/` 前綴並驗租戶**（`_assert_public_key_tenant`），
+         *     再對去前綴後的檔名跑 DM_FILENAME_RE（`{32hex}.{ext}` 原檔／`{32hex}_p{n}.webp`
          *     頁圖；import 自 services.activity_dm，與上傳/刪舊檔共用同一份權威 regex）——
          *     海報端點那套純 hex 檢查會誤殺頁圖檔名裡的 `_p` 底線。
          *     backend 為 local：直接 stream bytes；R2：controller 裁定改 302 到
@@ -1013,7 +1014,8 @@ export interface paths {
          * Get Public Poster
          * @description 公開端點：回傳已上傳的活動海報圖。
          *
-         *     防穿越：檔名只允許純 hex + 白名單副檔名。
+         *     防穿越：**先去掉 `t<tid>/` 前綴並驗租戶**（`_assert_public_key_tenant`），
+         *     再對去前綴後的檔名做原本的「純 hex + 白名單副檔名」檢查。
          *     backend 為 local：直接 stream bytes；R2：302 redirect 到 CDN URL。
          */
         get: operations["get_public_poster_api_activity_public_poster__filename__get"];
@@ -2250,7 +2252,10 @@ export interface paths {
         };
         /**
          * List Policy Versions
-         * @description 列出所有 PolicyVersion，effective_at desc（最新生效版排前）。
+         * @description 列出**本租戶**的 PolicyVersion，effective_at desc（最新生效版排前）。
+         *
+         *     多租戶（CT-FIX-01 / pp §2.7）：`policy_versions` 由 GLOBAL 改 DIRECT——每間
+         *     幼兒園在個資法上是各自獨立的蒐集/處理機關，政策版本目錄必須各自維護。
          */
         get: operations["list_policy_versions_api_admin_policies_get"];
         put?: never;
@@ -2258,10 +2263,14 @@ export interface paths {
          * Create Policy Version
          * @description 建立新 PolicyVersion。
          *
-         *     - version 唯一，重複 version → 409。
+         *     - version **租戶內**唯一（`uq_policy_versions_tenant_version`），重複 → 409。
+         *       A 校用過的版本字串，B 校仍可使用。
          *     - effective_at 解析為 naive datetime（isoformat 輸入）。
          *     - 建立 effective_at <= now 的新版即觸發既有家長下次
          *       has_signed_current_policy 失效 → 重簽（純資料驅動，此端點不額外處理）。
+         *
+         *     多租戶（CT-FIX-01）：唯一性檢查與寫入都限定本租戶——沒有這道 filter，A 校
+         *     admin 發新版會把**全平台所有分校**的家長強制重簽 A 校的隱私權政策。
          */
         post: operations["create_policy_version_api_admin_policies_post"];
         delete?: never;
@@ -3804,6 +3813,9 @@ export interface paths {
         /**
          * 標記單筆 audit 為已 ack
          * @description 將單筆高風險事件標為已讀（idempotent：重複呼叫不覆寫首次 timestamp）。
+         *
+         *     多租戶（CT-X-05）：他租戶的 audit_id 一律回 **404 而非 403**——403 會變成
+         *     「這個 id 存在」的 oracle，讓 A 校 admin 用遞增 id 探測 B 校的稽核量。
          */
         post: operations["ack_audit_api_audit_logs__audit_id__ack_post"];
         delete?: never;
@@ -3824,6 +3836,10 @@ export interface paths {
         /**
          * 標記所有高風險未 ack 為已 ack
          * @description 批次將時間窗內所有未 ack 高風險事件標為已讀。
+         *
+         *     多租戶（CT-X-05）：**只 ack 本租戶**。不加過濾時 A 校 admin 按一次「全部已讀」
+         *     會把 B 校的未讀高風險紅點全部清掉——B 校再也看不到那批事件的未讀狀態。
+         *     ack-all 刻意**不**開放 platform 跨租戶模式：批次寫入的破壞面遠大於檢視。
          */
         post: operations["ack_all_audits_api_audit_logs_ack_all_post"];
         delete?: never;
@@ -3862,6 +3878,9 @@ export interface paths {
         /**
          * 高風險 audit 事件列表（紅點用）
          * @description 列出時間窗內高風險 audit 事件，含 unack_count 供前端紅點顯示。
+         *
+         *     多租戶（CT-X-05）：rows 與**兩處 count** 都必須帶 tenant——只過濾 rows 而
+         *     漏了 count，紅點數字仍會把他校事件算進去（數量本身即是側通道）。
          */
         get: operations["get_high_risk_audits_api_audit_logs_high_risk_get"];
         put?: never;
@@ -4904,6 +4923,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/config/position-mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Position Mapping
+         * @description 回該租戶的「職稱→職等」與「職稱→薪資設定 key」兩組字典。
+         */
+        get: operations["get_position_mapping_api_config_position_mapping_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/config/position-salary": {
         parameters: {
             query?: never;
@@ -5243,6 +5282,10 @@ export interface paths {
         /**
          * Create Employee
          * @description 新增員工
+         *
+         *     `request` 參數（2026-08 多租戶 rp §2.10）：身分證字號撞號若來自**他租戶**
+         *     的那一列，必須寫 `CROSS_TENANT_UNIQUE_CONFLICT` 稽核事件；
+         *     `write_explicit_audit` 需要 Request 才能取操作者/IP/session。
          */
         post: operations["create_employee_api_employees_post"];
         delete?: never;
@@ -6919,7 +6962,17 @@ export interface paths {
         };
         /**
          * Get Integrations Health
-         * @description 回傳外部整合系統的即時健康狀態。
+         * @description 回傳外部整合系統的即時健康狀態（**per-tenant 視角**）。
+         *
+         *     多租戶（sch §3-3 / scan-cross-repo GAP-07）：`LineTokenHealth` 由 id=1
+         *     singleton 改為每租戶一列，本端點是它的第三個讀取點（另兩個在
+         *     `services/line_token_health_scheduler.py`）。硬編 `id == 1` 會讓第二個以後的
+         *     租戶永遠讀到 default tenant 的列（或在 RLS 下讀到 0 列而誤報 unknown）。
+         *     `PendingUpload` 計數因該表改判 DIRECT，在 tenant session 下自動縮域
+         *     （原「全平台加總洩漏」問題連帶消失）。
+         *
+         *     粒度分工：per-tenant LINE 健康看本端點（`/api/internal/integrations/health`），
+         *     平台級單列檢查看 `/health`（`api/health.py`，維持平台級不動）。
          */
         get: operations["get_integrations_health_api_internal_integrations_health_get"];
         put?: never;
@@ -7031,6 +7084,11 @@ export interface paths {
          *
          *     與 asyncio scheduler 呼叫相同的 service 函式，savepoint 隔離單員工失敗。
          *     加 try_scheduler_lock 防並發 double-pay：同日多 worker POST 只有一個會成功。
+         *
+         *     多租戶（sch §2.6 / S-5）：本端點**自開 session**（非沿用 request session），
+         *     在 engine `begin` event 下仍會正確注入 GUC（contextvar 來自 middleware）；
+         *     唯 advisory lock 必須補 `tenant_id=require_tenant_id()`，否則 A 校手動觸發
+         *     會擋住 B 校的排程器 tick（兩者共用同一個 `(leave_quota_expiry, 今日)` 鎖）。
          */
         post: operations["run_scheduler_now_api_leave_quota_expiry_run_now_post"];
         delete?: never;
@@ -9707,6 +9765,352 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 跨租戶稽核查詢（tenant_id=all 會產生高風險告警）
+         * @description 查詢稽核紀錄。`tenant_id` 為**必填**——沒有「不小心查到全平台」這回事。
+         */
+        get: operations["query_platform_audit_api_platform_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/attendance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 出勤對比
+         * @description 各分校年度出勤。全平台出勤率為**加權**（先加總分子分母再相除）。
+         */
+        get: operations["platform_attendance_api_platform_reports_attendance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/finance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 財務彙總
+         * @description 各分校收支彙總。合計只做「標準度量」（金額合計），分類細項不跨校對齊。
+         */
+        get: operations["platform_finance_api_platform_reports_finance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 總覽卡片
+         * @description 各分校的在籍學生 / 在職員工 / 當期現金流，加跨校合計。
+         */
+        get: operations["platform_overview_api_platform_reports_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/recruitment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 招生漏斗
+         * @description 各分校招生漏斗（參觀→預繳→註冊）。轉換率一律重算，不平均各校的比率。
+         */
+        get: operations["platform_recruitment_api_platform_reports_recruitment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/salary-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 薪資成本
+         * @description 各分校年度薪資成本（只計已封存且非 stale 的薪資，與分校端同口徑）。
+         */
+        get: operations["platform_salary_cost_api_platform_reports_salary_cost_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/roles/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 跨租戶角色同步（dry_run 預設 True）
+         * @description 把 source 租戶的角色權限設定同步到各 target 租戶。
+         *
+         *     **`dry_run` 預設 True**（CT-P-05）：先看 diff 報告，確認後再送
+         *     `dry_run=false`。`mode` 預設 `merge`（只補 target 缺的 code）；`overwrite`
+         *     會覆蓋 label / description / permissions，前端需二次確認字串（風險 #15）。
+         *
+         *     回應為 **單一聚合物件** `RoleSyncReport`（CT-FIX-07），per-target 結果在
+         *     `results`。**HTTP 狀態碼一律 200**，除非**全部** target 都因 advisory lock
+         *     衝突而未執行（此時 409）——per-target 的失敗語意由 `results[].errors` 承載，
+         *     否則「3 個 target 有 1 個 409」在 HTTP 層無從表達。
+         */
+        post: operations["sync_roles_endpoint_api_platform_roles_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 租戶清單
+         * @description 全平台租戶清單（含 hq 自己；報表才排除 platform）。
+         */
+        get: operations["list_tenants_api_platform_tenants_get"];
+        put?: never;
+        /**
+         * 建立租戶（支援 dry-run）
+         * @description 建立分校並跑完整 provisioning。
+         *
+         *     **hq 不自行 INSERT `tenants` 列、不自開寫入 bypass**（CT-S-06）：一律呼叫
+         *     dms 的 `create_tenant()`，它內部自開 `maintenance_session()`、全流程單一交易、
+         *     任何一步失敗即整批回滾（不留半殘租戶）。
+         *
+         *     `dry_run=True` 只驗證 CT-X-12 的三條件閘門與 slug 規則，**不寫任何一列**。
+         *     前端建立 dialog 的「檢查」按鈕用它，避免使用者在填完整張表後才發現
+         *     `MULTI_TENANT_PROVISIONING_ENABLED` 沒開。
+         */
+        post: operations["create_tenant_endpoint_api_platform_tenants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/tenants/{tenant_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 租戶詳情（含 onboarding 完成度）
+         * @description 單一租戶詳情。
+         *
+         *     `missing_config_keys` / `missing_brand_keys` 是總部 onboarding 頁的待辦清單
+         *     ——scan-cross-repo GAP-06 那半（`gov.*` 四組申報碼）也在
+         *     `ONBOARDING_REQUIRED_CONFIG_KEYS` 裡，未填時前端標紅。
+         */
+        get: operations["get_tenant_api_platform_tenants__tenant_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 更新租戶粗粒度品牌欄
+         * @description 改 `tenants` 上的欄位。細粒度 `brand.*` 走 `PUT /tenants/{id}/brand`。
+         */
+        patch: operations["update_tenant_api_platform_tenants__tenant_id__patch"];
+        trace?: never;
+    };
+    "/platform/tenants/{tenant_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 封存租戶
+         * @description `status='archived'`：終態，資料保留但不再服務。硬刪除與資料匯出為 P2。
+         */
+        post: operations["archive_tenant_api_platform_tenants__tenant_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/tenants/{tenant_id}/brand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 租戶細粒度品牌設定
+         * @description `brand.*` 全目錄 + 目前值 + 未填清單（onboarding 頁的資料源）。
+         */
+        get: operations["get_tenant_brand_api_platform_tenants__tenant_id__brand_get"];
+        /**
+         * 更新租戶細粒度品牌設定
+         * @description 部分更新。值為 None ⇒ 刪除該 key（回到「未設定」，前端退回預設值）。
+         *
+         *     ⚠ 只接受 `BRAND_CONFIG_KEYS` 內的 key：本端點是 platform 通道，若放任寫入
+         *     任意 `config_key`，總部就能改分校的**任何**系統設定而不留該功能的稽核語意。
+         */
+        put: operations["update_tenant_brand_api_platform_tenants__tenant_id__brand_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/tenants/{tenant_id}/line-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 租戶 LINE 憑證（遮罩）
+         * @description **一律遮罩**：憑證欄只回尾 4 碼，永遠不回明文（風險 #11）。
+         */
+        get: operations["get_tenant_line_config_api_platform_tenants__tenant_id__line_config_get"];
+        /**
+         * 更新租戶 LINE 憑證（只寫不回讀）
+         * @description 未提供（None）的欄位保持原值；要清空請顯式送 `""`。
+         *
+         *     audit 的 `changes` 對加密欄一律寫 `"***"`（CT-P-08 風險 #11）——把憑證明文
+         *     寫進 `audit_logs` 等於用另一張表把剛加密的東西存成明文。
+         */
+        put: operations["update_tenant_line_config_api_platform_tenants__tenant_id__line_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/tenants/{tenant_id}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 上傳租戶 logo
+         * @description 寫入 `tenants.logo_key`，讓 `GET /api/public/tenant-logo` 有東西可回。
+         *
+         *     key 一律 `t<tid>/<內容 sha256 前 32 碼>.<ext>`：內容定址讓「換 logo 一定換
+         *     key」，前端的 `?v=` cache-buster 才有意義；同一張圖重傳不會產生孤兒檔。
+         */
+        post: operations["upload_tenant_logo_api_platform_tenants__tenant_id__logo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/tenants/{tenant_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 恢復租戶 */
+        post: operations["resume_tenant_api_platform_tenants__tenant_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/tenants/{tenant_id}/suspend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 停用租戶
+         * @description `status='suspended'`：middleware 依 CT-A-03 回 403 `TENANT_SUSPENDED`。
+         *
+         *     MVP 語意（風險 #7）：擋互動式登入 + 公開報名 + 家長端登入；
+         *     **排程與資料保留照跑**（薪資 / 法定申報不能中斷）。
+         */
+        post: operations["suspend_tenant_api_platform_tenants__tenant_id__suspend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/activity/attendance/sessions": {
         parameters: {
             query?: never;
@@ -11841,6 +12245,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/tenant-logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 公開 logo（匿名，依 Host 解析租戶）
+         * @description 回傳該租戶的 logo；未上傳一律 404（前端據此退回 `brand.logo_url`）。
+         */
+        get: operations["get_tenant_logo_api_public_tenant_logo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/tenant-meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 公開品牌 / 設定（匿名，依 Host 解析租戶）
+         * @description 回傳該租戶的公開品牌資訊（園名、logo、主色、聯絡資訊、標題與分享文案）。
+         *
+         *     **不含統編**（`tax_id`）與任何憑證欄——見 `schemas/tenant_meta.py` 檔頭。
+         */
+        get: operations["get_tenant_meta_api_public_tenant_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/punch-corrections": {
         parameters: {
             query?: never;
@@ -11958,7 +12404,10 @@ export interface paths {
         };
         /**
          * Get Campus Competition
-         * @description 各常春藤校區的周遭競爭分析（3km / 6km）。
+         * @description 本園各校區的周遭競爭分析（3km / 6km）。
+         *
+         *     「哪些是自家校區」改由 per-tenant `brand.school_keywords` / `brand.school_aliases`
+         *     決定（`utils/tenant_branding.get_school_keywords`），不再寫死 `%常春藤%`。
          */
         get: operations["get_campus_competition_api_recruitment_campus_competition_get"];
         put?: never;
@@ -14050,6 +14499,10 @@ export interface paths {
         /**
          * Create Student
          * @description 新增學生
+         *
+         *     `request` 參數（2026-08 多租戶 rp §2.10）：身分證字號撞號若來自**他租戶**
+         *     的那一列，必須寫 `CROSS_TENANT_UNIQUE_CONFLICT` 稽核事件；
+         *     `write_explicit_audit` 需要 Request 才能取操作者/IP/session。
          *
          *     重複建檔查重（架構評估 D4，2026-07-11）：建立前以 (name, birthday) 精確比對
          *     既有學生（strip 後完全比對，無模糊比對）。命中「非終態」（prospect/enrolled/
@@ -17534,6 +17987,12 @@ export interface components {
             role: string;
             /** Role Label */
             role_label: string;
+            /** Tenant Id */
+            tenant_id?: number | null;
+            /** Tenant Name */
+            tenant_name?: string | null;
+            /** Tenant Slug */
+            tenant_slug?: string | null;
             /** Title */
             title?: string | null;
             /** Username */
@@ -17880,6 +18339,11 @@ export interface components {
         Body_upload_photos_api_portal_class_albums__album_id__photos_post: {
             /** Files */
             files: string[];
+        };
+        /** Body_upload_tenant_logo_api_platform_tenants__tenant_id__logo_post */
+        Body_upload_tenant_logo_api_platform_tenants__tenant_id__logo_post: {
+            /** File */
+            file: string;
         };
         /**
          * BonusConfigUpdate
@@ -23260,12 +23724,21 @@ export interface components {
         };
         /** LineConfigRead */
         LineConfigRead: {
+            /**
+             * Has Login Secret
+             * @default false
+             */
+            has_login_secret: boolean;
             /** Has Secret */
             has_secret: boolean;
             /** Has Token */
             has_token: boolean;
             /** Is Enabled */
             is_enabled: boolean;
+            /** Liff Id */
+            liff_id?: string | null;
+            /** Line Login Channel Id */
+            line_login_channel_id?: string | null;
             /** Target Id */
             target_id: string | null;
         };
@@ -23277,6 +23750,12 @@ export interface components {
             channel_secret?: string | null;
             /** Is Enabled */
             is_enabled?: boolean | null;
+            /** Liff Id */
+            liff_id?: string | null;
+            /** Line Login Channel Id */
+            line_login_channel_id?: string | null;
+            /** Line Login Channel Secret */
+            line_login_channel_secret?: string | null;
             /** Target Id */
             target_id?: string | null;
         };
@@ -26060,6 +26539,386 @@ export interface components {
             source_classroom_name?: string | null;
             /** Student Id */
             student_id?: string | null;
+        };
+        /** PlatformAuditOut */
+        PlatformAuditOut: {
+            /**
+             * Cross Tenant
+             * @default false
+             */
+            cross_tenant: boolean;
+            /** Items */
+            items: components["schemas"]["PlatformAuditRow"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** PlatformAuditRow */
+        PlatformAuditRow: {
+            /** Action */
+            action?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Entity Type */
+            entity_type?: string | null;
+            /** Id */
+            id: number;
+            /** Ip Address */
+            ip_address?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Tenant Id */
+            tenant_id?: number | null;
+            /** Tenant Slug */
+            tenant_slug?: string | null;
+            /** User Id */
+            user_id?: number | null;
+            /** Username */
+            username?: string | null;
+        };
+        /** PlatformBrandOut */
+        PlatformBrandOut: {
+            /** Known Keys */
+            known_keys: string[];
+            /** Missing Keys */
+            missing_keys: string[];
+            /** Tenant Id */
+            tenant_id: number;
+            /** Values */
+            values: {
+                [key: string]: string | null;
+            };
+        };
+        /**
+         * PlatformBrandUpdateIn
+         * @description 部分更新：只送要改的 key。值為 None ⇒ 刪除該 key（回到未設定）。
+         */
+        PlatformBrandUpdateIn: {
+            /** Values */
+            values: {
+                [key: string]: string | null;
+            };
+        };
+        /**
+         * PlatformLineConfigOut
+         * @description 讀取一律遮罩：憑證欄只回尾 4 碼（風險 #11）。
+         */
+        PlatformLineConfigOut: {
+            /** Channel Access Token Masked */
+            channel_access_token_masked?: string | null;
+            /** Channel Secret Masked */
+            channel_secret_masked?: string | null;
+            /**
+             * Is Enabled
+             * @default false
+             */
+            is_enabled: boolean;
+            /** Liff Id */
+            liff_id?: string | null;
+            /** Line Login Channel Id */
+            line_login_channel_id?: string | null;
+            /** Line Login Channel Secret Masked */
+            line_login_channel_secret_masked?: string | null;
+            /** Target Id */
+            target_id?: string | null;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * PlatformLineConfigUpdateIn
+         * @description **只寫不回讀**：未提供（None）的欄位保持原值，不會被清空。
+         *
+         *     要清空某欄請顯式送空字串 `""`。
+         */
+        PlatformLineConfigUpdateIn: {
+            /** Channel Access Token */
+            channel_access_token?: string | null;
+            /** Channel Secret */
+            channel_secret?: string | null;
+            /** Is Enabled */
+            is_enabled?: boolean | null;
+            /** Liff Id */
+            liff_id?: string | null;
+            /** Line Login Channel Id */
+            line_login_channel_id?: string | null;
+            /** Line Login Channel Secret */
+            line_login_channel_secret?: string | null;
+            /** Target Id */
+            target_id?: string | null;
+        };
+        /** PlatformReportOut */
+        PlatformReportOut: {
+            /**
+             * Cached
+             * @default false
+             */
+            cached: boolean;
+            /** Category */
+            category: string;
+            /** Generated At */
+            generated_at?: string | null;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
+            /** Tenants */
+            tenants?: components["schemas"]["PlatformReportTenantRow"][];
+            /** Totals */
+            totals?: {
+                [key: string]: unknown;
+            };
+        };
+        /** PlatformReportTenantRow */
+        PlatformReportTenantRow: {
+            /** Data */
+            data?: {
+                [key: string]: unknown;
+            };
+            /** Error */
+            error?: string | null;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Tenant Id */
+            tenant_id: number;
+        };
+        /** PlatformRoleSyncIn */
+        PlatformRoleSyncIn: {
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+            /**
+             * Mode
+             * @default merge
+             * @enum {string}
+             */
+            mode: "merge" | "overwrite";
+            /** Source Tenant Id */
+            source_tenant_id: number;
+            /** Target Tenant Ids */
+            target_tenant_ids: number[];
+        };
+        /**
+         * PlatformRoleSyncOut
+         * @description CT-FIX-07 的單一聚合物件，per-target 語意在 `results`。
+         */
+        PlatformRoleSyncOut: {
+            /** Dry Run */
+            dry_run: boolean;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "merge" | "overwrite";
+            /** Results */
+            results?: components["schemas"]["PlatformRoleSyncTargetOut"][];
+            /** Source Tenant Id */
+            source_tenant_id: number;
+        };
+        /** PlatformRoleSyncTargetOut */
+        PlatformRoleSyncTargetOut: {
+            /**
+             * Committed
+             * @default false
+             */
+            committed: boolean;
+            /** Created */
+            created?: string[];
+            /** Errors */
+            errors?: string[];
+            /**
+             * Legacy Snapshots Migrated
+             * @default 0
+             */
+            legacy_snapshots_migrated: number;
+            /** Skipped */
+            skipped?: string[];
+            /** Tenant Id */
+            tenant_id: number;
+            /** Tenant Slug */
+            tenant_slug: string;
+            /** Updated */
+            updated?: string[];
+            /**
+             * Users Token Bumped
+             * @default 0
+             */
+            users_token_bumped: number;
+        };
+        /** PlatformTenantCreateIn */
+        PlatformTenantCreateIn: {
+            /** Admin Password */
+            admin_password?: string | null;
+            /**
+             * Admin Username
+             * @default admin
+             */
+            admin_username: string;
+            /** Copy Roles From Tenant Id */
+            copy_roles_from_tenant_id?: number | null;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+        };
+        /** PlatformTenantCreateOut */
+        PlatformTenantCreateOut: {
+            /** Admin One Time Password */
+            admin_one_time_password?: string | null;
+            /** Admin Username */
+            admin_username?: string | null;
+            /** Blockers */
+            blockers?: string[];
+            /** Dry Run */
+            dry_run: boolean;
+            /** Slug */
+            slug: string;
+            /** Tenant Id */
+            tenant_id?: number | null;
+        };
+        /** PlatformTenantDetailOut */
+        PlatformTenantDetailOut: {
+            /** Contact Json */
+            contact_json?: {
+                [key: string]: unknown;
+            } | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Custom Domain */
+            custom_domain?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Employee Count */
+            employee_count?: number | null;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Logo Key */
+            logo_key?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /** Missing Brand Keys */
+            missing_brand_keys?: string[];
+            /** Missing Config Keys */
+            missing_config_keys?: string[];
+            /** Name */
+            name: string;
+            /** Public Origin */
+            public_origin?: string | null;
+            /** Short Name */
+            short_name?: string | null;
+            /** Slug */
+            slug: string;
+            /** Status */
+            status: string;
+            /** Student Count */
+            student_count?: number | null;
+            /**
+             * System Roles Ok
+             * @default true
+             */
+            system_roles_ok: boolean;
+            /** Theme Color */
+            theme_color?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** PlatformTenantListOut */
+        PlatformTenantListOut: {
+            /**
+             * Counts Available
+             * @default true
+             */
+            counts_available: boolean;
+            /** Items */
+            items: components["schemas"]["PlatformTenantSummary"][];
+            /** Total */
+            total: number;
+        };
+        /** PlatformTenantStatusOut */
+        PlatformTenantStatusOut: {
+            /**
+             * Cache Invalidated
+             * @default true
+             */
+            cache_invalidated: boolean;
+            /** Id */
+            id: number;
+            /** Slug */
+            slug: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * PlatformTenantSummary
+         * @description 清單列。`student_count` / `employee_count` 為唯讀 bypass 取得的摘要。
+         */
+        PlatformTenantSummary: {
+            /** Created At */
+            created_at?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Employee Count */
+            employee_count?: number | null;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Public Origin */
+            public_origin?: string | null;
+            /** Short Name */
+            short_name?: string | null;
+            /** Slug */
+            slug: string;
+            /** Status */
+            status: string;
+            /** Student Count */
+            student_count?: number | null;
+            /** Theme Color */
+            theme_color?: string | null;
+        };
+        /**
+         * PlatformTenantUpdateIn
+         * @description 粗粒度品牌欄（`tenants` 自己的欄位，CT-D-01/CT-D-02）。
+         *
+         *     **`slug` 不可改**（公開連結 / og / LINE 綁定都掛在 subdomain 上，風險 #9），
+         *     本 model 刻意不含該欄；細粒度品牌值走 `PUT /tenants/{id}/brand`。
+         */
+        PlatformTenantUpdateIn: {
+            /** Contact Json */
+            contact_json?: {
+                [key: string]: unknown;
+            } | null;
+            /** Custom Domain */
+            custom_domain?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Public Origin */
+            public_origin?: string | null;
+            /** Short Name */
+            short_name?: string | null;
+            /** Theme Color */
+            theme_color?: string | null;
         };
         /** PolicyItem */
         PolicyItem: {
@@ -33139,6 +33998,163 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /**
+         * TenantMetaContactOut
+         * @description 聯絡資訊。來源為 `tenants.contact_json`（單一來源，CT-D-02）＋ `brand.campus_label`。
+         *
+         *     ⚠ `contact_json` 內的 `tax_id` **刻意不轉出**（見模組 docstring）。
+         */
+        TenantMetaContactOut: {
+            /** Address */
+            address?: string | null;
+            /** Campus Label */
+            campus_label?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Phone Display */
+            phone_display?: string | null;
+        };
+        /**
+         * TenantMetaManifestEntryOut
+         * @description 單一 PWA manifest 的三個字串（**與 `titles.*` 不同組**，CT-F-02）。
+         */
+        TenantMetaManifestEntryOut: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Short Name */
+            short_name?: string | null;
+        };
+        /**
+         * TenantMetaManifestOut
+         * @description 三份 webmanifest（admin / parent / public）各一組 name/short_name/description。
+         */
+        TenantMetaManifestOut: {
+            /** @default {} */
+            admin: components["schemas"]["TenantMetaManifestEntryOut"];
+            /** @default {} */
+            parent: components["schemas"]["TenantMetaManifestEntryOut"];
+            /** @default {} */
+            public: components["schemas"]["TenantMetaManifestEntryOut"];
+        };
+        /**
+         * TenantMetaMapOut
+         * @description 園所座標，取代前端硬編的高雄座標（scan-frontend GAP-08）。
+         */
+        TenantMetaMapOut: {
+            /** Lat */
+            lat?: number | null;
+            /** Lng */
+            lng?: number | null;
+        };
+        /**
+         * TenantMetaOut
+         * @description `GET /api/public/tenant-meta` 回應。
+         */
+        TenantMetaOut: {
+            /** @default {} */
+            contact: components["schemas"]["TenantMetaContactOut"];
+            /** Liff Id */
+            liff_id?: string | null;
+            /** Line Bot Friend Url */
+            line_bot_friend_url?: string | null;
+            /** Logo Url */
+            logo_url?: string | null;
+            /**
+             * @default {
+             *       "admin": {},
+             *       "parent": {},
+             *       "public": {}
+             *     }
+             */
+            manifest: components["schemas"]["TenantMetaManifestOut"];
+            /** @default {} */
+            map: components["schemas"]["TenantMetaMapOut"];
+            /** Org Name */
+            org_name?: string | null;
+            /** Org Name En */
+            org_name_en?: string | null;
+            /** Org Prefix */
+            org_prefix?: string | null;
+            /** Public Site Origin */
+            public_site_origin?: string | null;
+            /**
+             * School Aliases
+             * @default []
+             */
+            school_aliases: string[];
+            /**
+             * School Keywords
+             * @default []
+             */
+            school_keywords: string[];
+            /** School Name */
+            school_name?: string | null;
+            /** School Name En */
+            school_name_en?: string | null;
+            /** @default {} */
+            share: components["schemas"]["TenantMetaShareOut"];
+            /** Short Name */
+            short_name?: string | null;
+            tenant: components["schemas"]["TenantMetaTenantOut"];
+            /** @default {} */
+            theme: components["schemas"]["TenantMetaThemeOut"];
+            /** @default {} */
+            titles: components["schemas"]["TenantMetaTitlesOut"];
+        };
+        /**
+         * TenantMetaShareOut
+         * @description 分享 / og:tags 文案。
+         */
+        TenantMetaShareOut: {
+            /** Og Description */
+            og_description?: string | null;
+            /** Og Title */
+            og_title?: string | null;
+            /** Poster Alt */
+            poster_alt?: string | null;
+            /** Share Text */
+            share_text?: string | null;
+            /** Site Name */
+            site_name?: string | null;
+        };
+        /**
+         * TenantMetaTenantOut
+         * @description 租戶身分（前端用來確認「我進對學校了」）。
+         */
+        TenantMetaTenantOut: {
+            /** Kind */
+            kind: string;
+            /** Slug */
+            slug: string;
+        };
+        /**
+         * TenantMetaThemeOut
+         * @description 主色（管理端 / 家長端各一）。
+         */
+        TenantMetaThemeOut: {
+            /** Admin Primary */
+            admin_primary?: string | null;
+            /** Parent Primary */
+            parent_primary?: string | null;
+        };
+        /**
+         * TenantMetaTitlesOut
+         * @description L2 runtime 標題（`pageTitle.ts` 的四個 entry + 家長端短標）。
+         */
+        TenantMetaTitlesOut: {
+            /** Admin */
+            admin?: string | null;
+            /** Parent */
+            parent?: string | null;
+            /** Parent Short */
+            parent_short?: string | null;
+            /** Portal */
+            portal?: string | null;
+            /** Public */
+            public?: string | null;
+        };
         /** TerminalOut */
         TerminalOut: {
             /** Actual Date */
@@ -39900,12 +40916,16 @@ export interface operations {
                 entity_type?: string | null;
                 /** @description 是否含登入活動（token 刷新等）。列表頁預設 false 以免洗版；紀錄照常寫入 */
                 include_auth?: boolean;
+                /** @description 平台管理員專用：一併顯示 tenant 為 NULL 的系統事件 */
+                include_system?: boolean;
                 ip_address?: string | null;
                 page?: number;
                 page_size?: number;
                 risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
                 search?: string | null;
                 start_at?: string | null;
+                /** @description 平台管理員專用：租戶 id 或 'all'（跨分校檢視） */
+                tenant?: string | null;
                 username?: string | null;
             };
             header?: never;
@@ -40005,10 +41025,14 @@ export interface operations {
                 entity_type?: string | null;
                 /** @description 是否含登入活動（token 刷新等）。列表頁預設 false 以免洗版；紀錄照常寫入 */
                 include_auth?: boolean;
+                /** @description 平台管理員專用：一併匯出 tenant 為 NULL 的系統事件 */
+                include_system?: boolean;
                 ip_address?: string | null;
                 risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
                 search?: string | null;
                 start_at?: string | null;
+                /** @description 平台管理員專用：租戶 id 或 'all'（跨分校匯出） */
+                tenant?: string | null;
                 username?: string | null;
             };
             header?: never;
@@ -40041,7 +41065,11 @@ export interface operations {
         parameters: {
             query?: {
                 days?: number;
+                /** @description 平台管理員專用：一併顯示 tenant 為 NULL 的系統事件 */
+                include_system?: boolean;
                 limit?: number;
+                /** @description 平台管理員專用：租戶 id 或 'all'（跨分校紅點） */
+                tenant?: string | null;
                 unack_only?: boolean;
             };
             header?: never;
@@ -41797,6 +42825,26 @@ export interface operations {
         };
     };
     test_line_notify_api_config_line_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_position_mapping_api_config_position_mapping_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -50377,6 +51425,648 @@ export interface operations {
             };
         };
     };
+    query_platform_audit_api_platform_audit_get: {
+        parameters: {
+            query: {
+                action?: string | null;
+                /** @description ISO 8601 結束時間（含） */
+                end?: string | null;
+                /** @description 如 cross_tenant_unique_conflict（DEV-02：該類事件不是用 action 篩） */
+                entity_type?: string | null;
+                page?: number;
+                page_size?: number;
+                /** @description ISO 8601 起始時間（含） */
+                start?: string | null;
+                /** @description 租戶 id，或 'all' 進入跨租戶模式（**會產生一則高風險稽核告警**） */
+                tenant_id: string;
+                user_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformAuditOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_attendance_api_platform_reports_attendance_get: {
+        parameters: {
+            query: {
+                force_refresh?: boolean;
+                tenant_ids?: number[] | null;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_finance_api_platform_reports_finance_get: {
+        parameters: {
+            query: {
+                force_refresh?: boolean;
+                month?: number | null;
+                tenant_ids?: number[] | null;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_overview_api_platform_reports_overview_get: {
+        parameters: {
+            query: {
+                force_refresh?: boolean;
+                month?: number | null;
+                tenant_ids?: number[] | null;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_recruitment_api_platform_reports_recruitment_get: {
+        parameters: {
+            query?: {
+                force_refresh?: boolean;
+                school_year?: number | null;
+                tenant_ids?: number[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_salary_cost_api_platform_reports_salary_cost_get: {
+        parameters: {
+            query: {
+                force_refresh?: boolean;
+                tenant_ids?: number[] | null;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_roles_endpoint_api_platform_roles_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformRoleSyncIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformRoleSyncOut"];
+                };
+            };
+            /** @description 全部 target 都被其他同步佔用（advisory lock） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tenants_api_platform_tenants_get: {
+        parameters: {
+            query?: {
+                /** @description 是否附學生/員工數摘要 */
+                include_counts?: boolean;
+                kind?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_tenant_endpoint_api_platform_tenants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformTenantCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantCreateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_api_platform_tenants__tenant_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_tenant_api_platform_tenants__tenant_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformTenantUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_tenant_api_platform_tenants__tenant_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_brand_api_platform_tenants__tenant_id__brand_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformBrandOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_tenant_brand_api_platform_tenants__tenant_id__brand_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformBrandUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformBrandOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_line_config_api_platform_tenants__tenant_id__line_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformLineConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_tenant_line_config_api_platform_tenants__tenant_id__line_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformLineConfigUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformLineConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_tenant_logo_api_platform_tenants__tenant_id__logo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_tenant_logo_api_platform_tenants__tenant_id__logo_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_tenant_api_platform_tenants__tenant_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suspend_tenant_api_platform_tenants__tenant_id__suspend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     portal_list_sessions_api_portal_activity_attendance_sessions_get: {
         parameters: {
             query?: {
@@ -53769,6 +55459,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_logo_api_public_tenant_logo_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description logo 圖檔 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "image/png": unknown;
+                };
+            };
+            /** @description 雲端 backend：redirect 到 CDN */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 該租戶未上傳 logo */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_tenant_meta_api_public_tenant_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenantMetaOut"];
                 };
             };
         };

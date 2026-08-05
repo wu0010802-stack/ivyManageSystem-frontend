@@ -87,9 +87,24 @@ export const PERMISSION_NAMES = {
   // 班級相簿（教師端，Task 9）：對齊後端 utils/permissions.py 新增的兩碼。
   CLASS_ALBUMS_READ: 'CLASS_ALBUMS_READ',
   CLASS_ALBUMS_WRITE: 'CLASS_ALBUMS_WRITE',
+  // 總部（platform）專用碼（2026-08 多租戶）：只會出現在 kind='platform' 租戶的
+  // 角色上，一般分校（kind='school'）角色不得授予——分校角色持有即為設定錯誤。
+  PLATFORM_TENANTS_MANAGE: 'PLATFORM_TENANTS_MANAGE',
+  PLATFORM_REPORTS_VIEW: 'PLATFORM_REPORTS_VIEW',
+  PLATFORM_AUDIT_VIEW: 'PLATFORM_AUDIT_VIEW',
 } as const
 
 export type PermissionName = typeof PERMISSION_NAMES[keyof typeof PERMISSION_NAMES]
+
+// 對應後端 utils/permissions.py::PLATFORM_ONLY_PERMISSION_CODES。
+// 語意：這些碼只能授予 platform 租戶的角色；分校角色持有即為設定錯誤。
+// 由後端 tests/test_platform_admin_flag.py::TestFrontendParity 以 regex 讀本宣告做
+// parity 守護，故格式（單行 new Set([...]) 內只放字面字串）勿隨意改寫。
+export const PLATFORM_ONLY_CODES: ReadonlySet<string> = new Set([
+  'PLATFORM_TENANTS_MANAGE',
+  'PLATFORM_REPORTS_VIEW',
+  'PLATFORM_AUDIT_VIEW',
+])
 
 // 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁、已登入即可訪問的個人資料頁等）。
 // canAccessRoute 改為 default-deny，未匹配 ROUTE_PERMISSION_RULES 又不在此清單者一律拒絕，

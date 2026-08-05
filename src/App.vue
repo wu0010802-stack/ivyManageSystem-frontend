@@ -9,6 +9,7 @@ import SessionIdleModal from './components/common/SessionIdleModal.vue'
 import { useRouteLoading } from './composables/useRouteLoading'
 import { useIdleTimeout } from './composables/useIdleTimeout'
 import { applyPageTitle } from './utils/pageTitle'
+import { onBrandingLoaded, useTenantBranding } from './composables/useTenantBranding'
 
 const route = useRoute()
 const { routeLoading, routeProgress } = useRouteLoading()
@@ -26,6 +27,12 @@ watch(
   () => applyPageTitle(route),
   { immediate: true }
 )
+
+// 多租戶（4d/fb）：品牌 API 是非同步的，首屏那次 applyPageTitle 讀到的是
+// BRANDING_DEFAULTS。載入完成後補套一次，否則第二間園所的分頁標題會停在預設值
+// 直到下一次換頁。單租戶模式下 onBrandingLoaded 永不觸發（不打 API），行為不變。
+useTenantBranding()
+onBrandingLoaded(() => applyPageTitle(route))
 </script>
 
 <template>

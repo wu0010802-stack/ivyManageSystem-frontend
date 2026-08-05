@@ -16,6 +16,8 @@ import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
 import { toast } from '@/parent/utils/toast'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
+import { tenantErrorCodeOf, tenantHeaders } from '@/utils/tenant'
+import { showTenantBlocked } from '@/utils/tenantBlocked'
 
 // Lazy router import：避免將 createRouter side effect 灌進所有 partial-mock
 // vue-router 的既有測試（同 src/api/index.ts 處理方式）。
@@ -90,6 +92,9 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     sessionGeneration: _apiSessionGeneration,
   }
   config.signal = combineAbortSignals(config.signal, _apiSessionController.signal)
+  // 多租戶一致性 header（CT-A-05）：Host 才是後端唯一權威，這只是斷言通道。
+  // 單租戶模式回 {}，一個 header 都不加（DEV-12 灰度不變式）。
+  for (const [name, value] of Object.entries(tenantHeaders())) config.headers.set(name, value)
   return config
 })
 
@@ -124,10 +129,12 @@ function _doRefresh(): Promise<boolean> {
   const generation = _apiSessionGeneration
   _refreshController = controller
   return axios
+    // 裸 axios（不經上面的 request interceptor），tenant header 必須自己帶。
     .post(buildParentRefreshUrl(), null, {
       withCredentials: true,
       timeout: 30000,
       signal: combineAbortSignals(controller.signal, _apiSessionController.signal),
+      headers: tenantHeaders(),
     })
     .then(() => {
       if (generation !== _apiSessionGeneration) {
@@ -192,6 +199,17 @@ api.interceptors.response.use(
       // 前一位使用者的舊請求不可在登出後啟動 refresh 或其他全域 side effect。
       return Promise.reject(error)
     }
+
+    // 租戶三態（CT-A-03 + CT-F-01）**必須排在 401 refresh 之前**：園所不存在／已停用／
+    // 開通中，重試與 refresh 都無意義。家長端尤其不能靜默 fallback 到 default 品牌
+    // ——家長會以為自己在看小孩那間園所的資料。
+    const tenantErrorCode = tenantErrorCodeOf(error.response?.status, error.response?.data)
+    if (tenantErrorCode) {
+      showTenantBlocked(tenantErrorCode)
+      error.errorDetail = error.response?.data
+      return Promise.reject(error)
+    }
+
     const url = originalRequest?.url || ''
     const isAuthEndpoint =
       url.includes('/parent/auth/liff-login') ||

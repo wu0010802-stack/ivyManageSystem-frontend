@@ -2,7 +2,11 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 
 export const GRADES_ORDER = ['幼幼班', '小班', '中班', '大班']
 
-// 本園座標備援值（當後端尚未設定 campus_lat/lng 時使用，同時是地圖初始中心點）
+// 本園座標的**最終**備援值（scan-frontend GAP-08）。
+// 優先序：後端 campus 設定 > 品牌 API 的 `branding.map.{lat,lng}`（per-tenant）> 這兩個常數。
+// 多租戶下硬編高雄座標對第二間園所是錯的，故一般不應走到這裡；保留是為了
+// 「品牌 API 也掛掉」時地圖仍有一個可拖曳的起點，而不是 NaN。
+// 消費點請改用 `getBranding().map`，見 RecruitmentStatsPanel.vue。
 export const FALLBACK_SCHOOL_LAT = 22.6420
 export const FALLBACK_SCHOOL_LNG = 120.3243
 

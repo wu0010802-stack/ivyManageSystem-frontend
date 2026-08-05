@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import { getBranding } from '@/composables/useTenantBranding'
 
 const routes: RouteRecordRaw[] = [
     { path: '/', redirect: '/home' },
@@ -203,7 +204,8 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta.title) {
-    document.title = `${to.meta.title} - 常春藤家長`
+    // 多租戶（4d/fb）：尾綴改讀 titles.parent_short（預設 '常春藤家長'）。
+    document.title = `${to.meta.title} - ${getBranding().titles.parent_short}`
   }
 })
 

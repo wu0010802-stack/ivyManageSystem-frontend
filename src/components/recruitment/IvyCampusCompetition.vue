@@ -1,7 +1,7 @@
 <template>
   <div class="ivy-competition">
     <div v-if="loading" class="ivy-loading">載入競爭分析中…</div>
-    <div v-else-if="!campuses.length" class="ivy-loading">尚無常春藤校區資料</div>
+    <div v-else-if="!campuses.length" class="ivy-loading">尚無{{ branding.short_name }}校區資料</div>
     <template v-else>
       <div
         v-for="campus in campuses"
@@ -56,6 +56,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getCampusCompetition } from '@/api/recruitment'
+import { OWN_BRAND_FILL } from '@/utils/recruitmentSchoolType'
+import { useTenantBranding } from '@/composables/useTenantBranding'
+
+const { branding } = useTenantBranding()
 
 interface SchoolType { type?: string; count?: number; avg_fee?: number | null; penalty_count?: number }
 interface Ring { total?: number; total_capacity?: number; types?: SchoolType[] }
@@ -70,18 +74,32 @@ interface Campus {
 const loading = ref<boolean>(true)
 const campuses = ref<Campus[]>([])
 
-const TYPE_COLORS: Record<string, string> = {
-  '常春藤': '#0f7b52',
+// ⚠ 這裡的 key 來源與 recruitmentSchoolType.ts 不同：`t.type` 是**後端**回傳的
+// 分類字面（api/recruitment 的競爭分析），不是前端 getSchoolType() 的內部 key。
+// 因此自家品牌那格改用 per-tenant 的短名當 key（預設 '常春藤'，單租戶行為不變），
+// 其餘四類是政府登錄的固定字面，不 per-tenant。
+// TODO(4d/be)：後端「招生 '%常春藤%' 查詢改機制」落地後，這裡應改吃後端回的穩定 key。
+const STATIC_TYPE_COLORS: Record<string, string> = {
   '公立': '#eab308',
   '非營利': '#7c3aed',
   '準公共': '#d97706',
   '私立': '#2563eb',
 }
 
-const typeColor = (type: unknown) => TYPE_COLORS[String(type)] || '#64748b'
+const typeColor = (type: unknown) => {
+  const key = String(type)
+  if (key && key === branding.value.short_name) return OWN_BRAND_FILL
+  return STATIC_TYPE_COLORS[key] || '#64748b'
+}
 
-const shortName = (name: unknown) =>
-  String(name || '').replace('高雄市私立', '').replace('幼兒園', '')
+// 校名裁字：拿掉縣市前綴與「幼兒園」尾綴，只留可辨識的校區名。
+// 前綴改讀 per-tenant 的 org_prefix（原硬編 '高雄市私立'，scan-frontend GAP-12）；
+// 缺值時不裁（寧可名字長一點，也不要裁錯別間園所的字）。
+const shortName = (name: unknown) => {
+  const raw = String(name || '')
+  const prefix = branding.value.org_prefix
+  return (prefix ? raw.replace(prefix, '') : raw).replace('幼兒園', '')
+}
 
 onMounted(async () => {
   try {

@@ -2,12 +2,14 @@ import { ref, computed, watch, type Ref, type ComputedRef } from 'vue'
 import type { EventInput } from '@fullcalendar/core'
 import { CALENDAR_LAYERS } from '@/constants/calendarLayers'
 import type { CalendarLayer, CalendarFeedItem } from '@/api/calendar'
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 const STORAGE_KEY = 'calendar.enabledLayers'
 
 function loadEnabled(): Set<CalendarLayer> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = tenantGetItem(STORAGE_KEY)
     if (!raw) return new Set(CALENDAR_LAYERS)
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return new Set(CALENDAR_LAYERS)
@@ -99,7 +101,7 @@ export function useCalendarLayers(): UseCalendarLayersReturn {
     enabledLayers,
     (s) => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...s]))
+        tenantSetItem(STORAGE_KEY, JSON.stringify([...s]))
       } catch {
         /* localStorage 滿了不影響邏輯 */
       }

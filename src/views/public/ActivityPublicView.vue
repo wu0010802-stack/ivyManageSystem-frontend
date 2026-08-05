@@ -67,17 +67,20 @@
     <div class="page-wrapper">
       <header class="page-header">
         <div class="page-brand">
+          <!-- /LOGO.png 的 URL 刻意不變（L3）：per-tenant 換圖由 nginx 從
+               /brand/<slug>/LOGO.png overlay，前端引用點零改動。 -->
           <img
             src="/LOGO.png"
-            alt="常春藤教育機構"
+            :alt="branding.org_name"
             class="page-brand-logo"
             width="96"
             height="96"
           />
           <div class="page-brand-text">
-            <div class="page-brand-prefix">高雄市私立</div>
-            <div class="page-brand-zh">常春藤教育機構</div>
-            <div class="page-brand-en">Ivy Kindergarten</div>
+            <!-- 缺值即隱藏該行（org_prefix / school_name_en 為 onboarding 選填） -->
+            <div v-if="branding.org_prefix" class="page-brand-prefix">{{ branding.org_prefix }}</div>
+            <div class="page-brand-zh">{{ branding.org_name }}</div>
+            <div v-if="branding.school_name_en" class="page-brand-en">{{ branding.school_name_en }}</div>
           </div>
           <!-- 手機版服務選單：查詢／聯繫收進選單免佔版面（業主嫌 pill 列太滿）；
                桌機隱藏，桌機維持表單底部的按鈕列 -->
@@ -629,7 +632,7 @@
         </form>
 
         <footer class="footer-note">
-          <p>常春藤教育機構 Ivy Educational Institution © 2026</p>
+          <p>{{ branding.org_name }} {{ branding.org_name_en }} © {{ new Date().getFullYear() }}</p>
         </footer>
       </main>
     </div>
@@ -657,6 +660,7 @@ import { buildFormCardTitle } from '@/utils/activityDisplay'
 import { parseBoldSegments } from '@/utils/publicCopy'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import DmPreviewModal from './components/DmPreviewModal.vue'
@@ -666,6 +670,7 @@ import ToastStack from './components/ToastStack.vue'
 import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
 import CoursePickerSection from './components/CoursePickerSection.vue'
 
+const { branding } = useTenantBranding()
 const router = useRouter()
 // 課程優先流程（2026-08-01）：先選課再填個資，降低公開頁流失
 const registrationSteps: ReadonlyArray<{ number: PublicRegistrationStep; label: string }> = [
@@ -691,6 +696,9 @@ const courses = computed(() => _courses.value as unknown as CourseOption[])
 const supplies = computed(() => _supplies.value as unknown as SupplyOption[])
 
 // ===== 前台客製化顯示 =====
+// L3 品牌資產：URL 刻意不變，per-tenant 海報由 nginx 從 /brand/<slug>/images/
+// activity-poster.jpg overlay。後端 poster_url 優先的既有邏輯不動（那是「這一檔活動」
+// 的海報，這裡是「這間園所」的預設海報，兩層不同）。
 const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const posterBroken = ref(false)
@@ -762,7 +770,7 @@ const canSharePoster = computed(
   () => typeof navigator !== 'undefined' && typeof navigator.share === 'function',
 )
 const posterDownloadName = computed(() => {
-  const base = (displayTitle.value || '常春藤才藝報名海報').replace(/[\\/:*?"<>|]/g, '_')
+  const base = (displayTitle.value || `${branding.value.short_name}才藝報名海報`).replace(/[\\/:*?"<>|]/g, '_')
   return `${base}.jpg`
 })
 async function sharePoster() {
@@ -770,7 +778,7 @@ async function sharePoster() {
   try {
     await navigator.share({
       title: displayTitle.value,
-      text: '常春藤教育機構才藝報名海報',
+      text: branding.value.share.share_text,
       url: window.location.href,
     })
   } catch (err) {
