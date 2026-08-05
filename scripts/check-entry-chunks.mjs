@@ -50,7 +50,7 @@ const ENTRIES = [
     reason: '管理端 index 不得靜態可達家長 App / LIFF 或 lazy feature chunk',
     routeEntryForbidden: [/^parent-app-/, /^public-app-/],
     manifestHref: '/manifest.webmanifest',
-    manifestName: '常春藤管理系統',
+    manifestName: '{{TB_MANIFEST_ADMIN_NAME}}',
     manifestStartUrl: './',
     manifestScope: './',
   },
@@ -61,7 +61,7 @@ const ENTRIES = [
     reason: '公開報名 public 不得靜態可達家長 App / LIFF chunk',
     routeEntryForbidden: [/^parent-app-/, /^liff-/],
     manifestHref: '/public.webmanifest',
-    manifestName: '常春藤公開報名',
+    manifestName: '{{TB_MANIFEST_PUBLIC_NAME}}',
     manifestStartUrl: '/public.html',
     manifestScope: '/public.html',
   },
@@ -72,7 +72,7 @@ const ENTRIES = [
     reason: '家長端 parent 不得靜態可達 admin-core chunk',
     routeEntryForbidden: [/^public-app-/],
     manifestHref: '/parent.webmanifest',
-    manifestName: '常春藤家長 App',
+    manifestName: '{{TB_MANIFEST_PARENT_NAME}}',
     manifestStartUrl: '/parent.html',
     manifestScope: '/parent.html',
   },
@@ -85,6 +85,13 @@ const ENTRIES = [
 // 校準基準（真實 build 首屏 gz）：index 276.2（2026-07-20，Element Plus 改依
 // import graph 自然分塊，不再把 lazy route 元件全塞入首屏）；public 175.5；
 // parent 219.0。下方為約 12% headroom；刻意成長時對照 build 印出值上調。
+// 多租戶（4d/fb，scan-frontend GAP-02）：`manifestName` 期望值改為 **token 字面**。
+// dist 的 *.webmanifest 現在存的是 `{{TB_MANIFEST_*_NAME}}`，真正的品牌值由 nginx
+// `sub_filter` 依 $host 逐請求注入。這條斷言因此反向鎖住「不得退回硬編品牌字面」：
+// 有人把中文名寫回 manifest 就會在這裡 exit 1。
+// `manifestStartUrl` / `manifestScope` 的斷言**保留原樣**——那是 entry 邊界契約
+// （哪個 HTML 對應哪個 PWA scope），與品牌無關，不得一起 token 化。
+
 const ENTRY_BUDGETS_KB = {
   index: 310,
   public: 200,

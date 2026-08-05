@@ -1,8 +1,8 @@
 {
-  "name": "常春藤管理系統",
-  "short_name": "常春藤管理",
-  "description": "常春藤教育機構管理與教師入口系統",
-  "theme_color": "#4f46e5",
+  "name": "{{TB_MANIFEST_ADMIN_NAME}}",
+  "short_name": "{{TB_MANIFEST_ADMIN_SHORT}}",
+  "description": "{{TB_MANIFEST_ADMIN_DESC}}",
+  "theme_color": "{{TB_THEME_ADMIN}}",
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
