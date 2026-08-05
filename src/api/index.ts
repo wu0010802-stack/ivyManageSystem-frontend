@@ -10,6 +10,8 @@ import {
     isAdminSessionCurrent,
     onAdminSessionReset,
 } from '@/utils/adminSession'
+import { tenantErrorCodeOf, tenantHeaders } from '@/utils/tenant'
+import { showTenantBlocked } from '@/utils/tenantBlocked'
 
 // Lazy router import：直接 top-level import 會把 createRouter side effect 拉進
 // 所有 import @/api 的測試（不少測試只 partial-mock vue-router 而沒 export
@@ -78,6 +80,10 @@ function combineAbortSignals(existing: GenericAbortSignal | undefined, session: 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     config._adminSessionGeneration = getAdminSessionGeneration()
     config.signal = combineAbortSignals(config.signal, getAdminSessionSignal())
+    // 多租戶一致性 header（CT-A-05）：**Host 才是後端唯一的租戶來源**，這個 header
+    // 只是斷言通道，供 middleware 比對「前端以為自己在哪一校」。單租戶模式回 {} →
+    // 一個 header 都不加，行為與改造前逐字相同（DEV-12）。
+    for (const [name, value] of Object.entries(tenantHeaders())) config.headers.set(name, value)
     return config
 })
 
@@ -92,10 +98,12 @@ onAdminSessionReset(() => {
 function _doRefresh(): Promise<boolean> {
     const generation = getAdminSessionGeneration()
     // Cookie 會自動帶出，不需手動設定 header
+    // 裸 axios（不經上面的 request interceptor），tenant header 必須自己帶。
     return axios.post(buildRefreshUrl(), null, {
         withCredentials: true,
         timeout: 30000,
         signal: getAdminSessionSignal(),
+        headers: tenantHeaders(),
     }).then(res => {
         if (!isAdminSessionCurrent(generation)) {
             throw new axios.CanceledError('Admin session changed during refresh')
@@ -134,6 +142,18 @@ api.interceptors.response.use(
             originalRequest?._adminSessionGeneration !== undefined
             && !isAdminSessionCurrent(originalRequest._adminSessionGeneration)
         ) {
+            return Promise.reject(error)
+        }
+
+        // 租戶三態（CT-A-03 + CT-F-01）**必須排在 401 refresh 之前**：
+        // 404 TENANT_NOT_FOUND / 403 TENANT_SUSPENDED / 503 TENANT_PROVISIONING。
+        // 這三種狀態下重試與 refresh 都無意義（不是身分問題是園所問題），而靜默
+        // 顯示 default 品牌繼續跑是最危險的錯誤。直接掛全屏遮罩並 reject。
+        const tenantErrorCode = tenantErrorCodeOf(error.response?.status, error.response?.data)
+        if (tenantErrorCode) {
+            showTenantBlocked(tenantErrorCode)
+            error.errorDetail = error.response?.data
+            error.errorType = classifyError(error)
             return Promise.reject(error)
         }
 
