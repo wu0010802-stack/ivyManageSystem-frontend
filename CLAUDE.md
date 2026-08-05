@@ -39,7 +39,11 @@ npm run test:coverage  # 含覆蓋率報告
 |------|------|
 | `VITE_API_BASE_URL` | 後端 API 基底路徑，未設時預設 `/api` |
 | `VITE_GOOGLE_MAPS_API_KEY` | 設定後招生熱點圖改走 Google Maps；未設定維持 Leaflet + OpenStreetMap fallback。前端 key 應於 Google Console 設定 HTTP referrer 限制與只開 `Maps JavaScript API` |
-| `VITE_LIFF_ID` | LINE LIFF App ID，家長入口（parent portal）需要；未設定家長端 LINE 綁定/登入流程會失效 |
+| `VITE_LIFF_ID` | LINE LIFF App ID。**多租戶後降為過渡 fallback**：改由 `GET /api/public/tenant-meta` 依 Host 回傳（`line_configs.liff_id`），`src/parent/services/liff.ts` 只在品牌 API 取不到時才讀這個變數。階段 3 刪除 |
+| `VITE_LINE_BOT_FRIEND_URL` | 教師端 LINE Bot 加好友連結。**已改由後台「LINE 設定」提供**，此變數僅過渡期 fallback（Dockerfile 的預設值是 default tenant 的 OA，多租戶下必錯） |
+| `VITE_TENANT_BASE_DOMAIN` | 多租戶 subdomain 樣板的 base domain（例 `ivy.tw` → `yihua.ivy.tw` 解出 slug）。**未設 = 單租戶模式**，全前端行為與改造前逐字相同 |
+| `VITE_TENANT_DOMAIN_MAP` | 既有正式網域 → slug 的 JSON 對照（自訂網域租戶）。壞 JSON 視同未設定 |
+| `VITE_TENANT_META_ENABLED` | 品牌 API 灰度開關。留空 = 跟隨上面兩者；`1` 強制開；`0` kill switch。⚠ 後端 tenant-meta 上線並通過煙霧測試後**應整個刪除**（見 `src/api/tenantMeta.ts` 的落日條件） |
 | `VITE_SENTRY_DSN` | Sentry browser SDK DSN；缺值時 `src/utils/sentry.ts` 完全 no-op |
 | `VITE_SENTRY_ENVIRONMENT` | Sentry environment tag，預設 fallback 到 `import.meta.env.MODE` |
 | `VITE_SENTRY_TRACES_SAMPLE_RATE` | trace 抽樣率（0~1，預設 0.1） |
@@ -136,6 +140,27 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 - 新增/刪除權限碼（跨 repo 7 步含 seed migration）：先跑後端 `../ivyManageSystem-backend/.claude/skills/permission-code-lifecycle/SKILL.md`。
 - 權限模型 mental model（三層語意/scope/守衛選擇/防線地圖）：`../ivyManageSystem-backend/docs/sop/permission-model.md`——跨 repo 權限工作先讀這份。
 - 選單樹唯一事實來源 `src/constants/navigation/manifest.ts`：側邊欄、`ROUTE_PERMISSION_RULES`、權限編輯器樹皆由它衍生，勿再手寫。
+- **`PLATFORM_*` 三碼（`PLATFORM_TENANTS_MANAGE` / `PLATFORM_REPORTS_VIEW` / `PLATFORM_AUDIT_VIEW`）已於 2026-08-04（4e）主屬 manifest 的「總部管理」群組**（分校管理／跨分校報表／跨分校稽核三頁；總覽與角色同步以 `sharedViews` 借道）——**不再是 `standalonePermissions` 孤兒，不要加回豁免表**。`src/constants/permissions.ts` 的 `PLATFORM_ONLY_CODES` 由後端 `tests/test_platform_admin_flag.py::TestFrontendParity` 以 regex 讀取比對，**改寫該宣告的格式（`new Set([...])` 內只放字面字串）會讓 parity 守衛靜默 skip**。
+- **總部（platform）console**：頁面在 `src/views/platform/`，client 在 `src/api/platform.ts`，acting tenant 在 `src/composables/useActingTenant.ts`。三條守則：(1) acting tenant 只走 `tenant_id` 參數，**不得**新增任何 acting header（CT-A-06）；(2) 切換 acting tenant 必經 `setActingTenant()`（內含 `advanceAdminSession()`）；(3) 總部頁的 `useCachedAsync` key 一律用 `platformCacheKey()`（Host 租戶 + acting tenant 兩層），既有分校頁 call site 不動。選單可見性由 `AdminSidebar` 的雙向過濾把關（見 contracts §16 **DEV-20**）。
+
+---
+
+### 多租戶（2026-08 起）
+
+設計文件：`../multitenant-plan/03-final/frontend-core.md`；契約與偏離記錄：同目錄 `contracts.md`（§16 **DEV-12** 是前端灰度不變式那條，改動前必讀）。
+
+**灰度不變式（鐵則）**：未設 `VITE_TENANT_BASE_DOMAIN` / `VITE_TENANT_DOMAIN_MAP` 時 = **單租戶模式**，全前端行為必須與改造前逐字相同——storage key 不加前綴、API 不送 `X-Tenant-Slug`、boot 不掛遮罩。任何新程式碼都不得破壞這條。守衛：`src/utils/__tests__/tenant.spec.ts` / `tenantStorage.spec.ts` / `tenantBoot.spec.ts` 的「灰度不變式」describe 區塊。
+
+| 要做的事 | 用什麼 |
+|---|---|
+| 取當前租戶 slug | `@/utils/tenant` 的 `tenantSlug()`（回 `string \| null`）。**module top-level 禁用 `requireTenantSlug()`**（會 throw，繞過 boot 遮罩變白畫面） |
+| 新的 localStorage 讀寫 | `@/utils/tenantStorage` 的 `tenantGetItem` / `tenantSetItem` / `tenantRemoveItem`，**禁止裸 `localStorage`**（`src/utils/__tests__/tenantStorageGuard.spec.ts` 會擋；`src/parent/**` 依 CT-F-07(4) 豁免） |
+| 新的 HTTP 注入點 | `@/utils/tenant` 的 `tenantHeaders()` 展開進 headers。**WebSocket 顯式豁免**（瀏覽器 API 無法設 header，靠 Host + JWT claim 兩通道） |
+| 新的 `caches.open()` | `tenantCacheName(base)`，並把 base 名加進 `src/utils/auth.ts::_PORTAL_USER_CACHES` |
+| 總部（hq）頁的 `useCachedAsync` key | 必含 acting tenant（或走 `tenantCacheKey()`）；既有 call site 一律不改 |
+| 年級/職稱/職等/薪資 key 字典 | 走 `@/composables/useTenantDictionaries`，**不要直接 import `src/constants/employee.ts` 的 `TITLE_TO_GRADE` / `POSITION_SALARY_KEY`**（已標 `@deprecated`，只是 API 失敗時的 fallback） |
+
+**dev 模擬多租戶**：`?tenant=<slug>`（僅 DEV 生效，寫進 sessionStorage 沿用）或 `VITE_DEV_TENANT_SLUG`。⚠ 家長端 localStorage 豁免 wrapper，dev 切租戶前請手動清 `parent_*` key。
 
 ---
 

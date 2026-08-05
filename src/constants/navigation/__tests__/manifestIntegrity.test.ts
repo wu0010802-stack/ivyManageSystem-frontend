@@ -222,6 +222,14 @@ const INTENTIONAL_DIVERGENCE = {
     '/workbench/high-risk × HIGH_RISK_READ',
     // 頁面 views 為 OR：只持高風險碼者也該能進 /workbench（落點由 router redirect 決定）
     '/workbench × HIGH_RISK_READ',
+    // 2026-08-04 4e：總部 console 五頁上線，三個 PLATFORM_* 碼從 standalonePermissions
+    // 豁免表移出、改主屬本群組。fixture 凍結於 2026-07-31，故整組列為「新增」。
+    '/platform/overview × PLATFORM_REPORTS_VIEW',
+    '/platform/overview × PLATFORM_TENANTS_MANAGE',
+    '/platform/tenants × PLATFORM_TENANTS_MANAGE × prefix',
+    '/platform/reports × PLATFORM_REPORTS_VIEW',
+    '/platform/roles-sync × PLATFORM_TENANTS_MANAGE',
+    '/platform/audit × PLATFORM_AUDIT_VIEW',
   ],
 }
 

@@ -16,6 +16,9 @@ vi.mock('@/api/employees', () => ({
 }))
 vi.mock('@/api/config', () => ({
   getPositionSalary: vi.fn().mockResolvedValue({ data: {} }),
+  // 多租戶 CT-FIX-09：EmployeeFormDialog 經 useTenantDictionaries 讀 per-tenant
+  // 職稱對照；回空物件即等同「退 constants/employee.ts 的 fallback」。
+  getPositionMapping: vi.fn().mockResolvedValue({ data: { title_to_grade: {}, position_salary_key: {} } }),
 }))
 vi.mock('@/stores/config', () => ({
   useConfigStore: () => ({ jobTitles: [], fetchJobTitles: vi.fn() }),

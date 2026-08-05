@@ -8,7 +8,7 @@
  *    登出改登 B 之後，舊分頁仍顯示 A 的畫面並拿 B 的共享 Cookie continue 打 API。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ADMIN_SESSION_REVISION_KEY, getAdminSessionGeneration, getAdminSessionSignal } from '@/utils/adminSession'
+import { adminSessionRevisionKey, getAdminSessionGeneration, getAdminSessionSignal } from '@/utils/adminSession'
 import { clearAuth, getUserInfo, setUserInfo, USER_INFO_KEY, waitForAdminSessionCleanup } from '@/utils/auth'
 
 const clearAllSpy = vi.fn(() => Promise.resolve())
@@ -18,9 +18,9 @@ vi.mock('@/utils/offlineQueue', () => ({
 }))
 
 function dispatchRemoteRevision(revision: string): void {
-  localStorage.setItem(ADMIN_SESSION_REVISION_KEY, revision)
+  localStorage.setItem(adminSessionRevisionKey(), revision)
   window.dispatchEvent(new StorageEvent('storage', {
-    key: ADMIN_SESSION_REVISION_KEY,
+    key: adminSessionRevisionKey(),
     newValue: revision,
   }))
 }
@@ -126,12 +126,12 @@ describe('管理端跨分頁 session 隔離', () => {
 
     it('自己送出的 revision 不會反彈成 remote reset（避免分頁間迴圈）', async () => {
       setUserInfo({ id: 'admin-A', role: 'admin' })
-      const ownRevision = localStorage.getItem(ADMIN_SESSION_REVISION_KEY)
+      const ownRevision = localStorage.getItem(adminSessionRevisionKey())
       expect(ownRevision).toBeTruthy()
       window.location.hash = '#/employees'
 
       window.dispatchEvent(new StorageEvent('storage', {
-        key: ADMIN_SESSION_REVISION_KEY,
+        key: adminSessionRevisionKey(),
         newValue: ownRevision,
       }))
 

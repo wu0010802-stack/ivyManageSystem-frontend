@@ -17,6 +17,10 @@ vi.mock('@/utils/auth', async () => {
     // AdminSidebar 的 canView 直接委派 hasPermission（見 src/utils/auth.ts）；
     // 固定回 true，本檔專注驗 IA 結構而非權限判定。
     hasPermission: () => true,
+    // 2026-08-04 4e：側欄新增總部（platform）雙向過濾。本檔驗的是**分校** IA，
+    // 故固定回 false（＝分校視角：總部群組隱藏、業務群組照常）。總部視角的斷言在
+    // src/components/layout/__tests__/AdminSidebar.platform.spec.ts。
+    isPlatformAdmin: () => false,
   }
 })
 

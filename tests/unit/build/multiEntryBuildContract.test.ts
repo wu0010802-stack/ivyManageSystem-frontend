@@ -78,10 +78,14 @@ describe('multi-entry build contract', () => {
     expect(config.slice(elementPlusRule, vueRule)).not.toContain("return 'element-plus'")
   })
 
+  // 多租戶（4d/fb，CT-F-02）：`name` 改斷言 **token**（真正的值由 nginx sub_filter
+  // 依 $host 注入），反向鎖住「不得退回硬編品牌字面」。
+  // `start_url` / `scope` 的斷言**保留原樣**——那是 entry 邊界契約（哪個 HTML 對應
+  // 哪個 PWA scope），與品牌無關，不得一起 token 化。
   it.each([
-    ['public/manifest.webmanifest', '常春藤管理系統', './', './'],
-    ['public/parent.webmanifest', '常春藤家長 App', '/parent.html', '/parent.html'],
-    ['public/public.webmanifest', '常春藤公開報名', '/public.html', '/public.html'],
+    ['public/manifest.webmanifest', '{{TB_MANIFEST_ADMIN_NAME}}', './', './'],
+    ['public/parent.webmanifest', '{{TB_MANIFEST_PARENT_NAME}}', '/parent.html', '/parent.html'],
+    ['public/public.webmanifest', '{{TB_MANIFEST_PUBLIC_NAME}}', '/public.html', '/public.html'],
   ])('%s has entry-scoped install identity', (path, name, startUrl, scope) => {
     const manifest = JSON.parse(readProjectFile(path))
     expect(manifest).toMatchObject({ name, start_url: startUrl, scope })
