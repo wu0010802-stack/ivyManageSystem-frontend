@@ -508,6 +508,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/courses/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder Courses
+         * @description 儲存課程管理的拖拉排序，決定前台（公開報名頁／家長端）顯示順序。
+         *
+         *     course_ids 須為該學期所有啟用課程的完整排列；集合不符回 409 要求前端重載
+         *     （並發新增／刪除課程時前端名單已過期）。部分套用會讓未列出的課程被推到
+         *     NULL 尾端，等於在使用者無感知下改動前台順序，故不接受。
+         */
+        put: operations["reorder_courses_api_activity_courses_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/dashboard-table": {
         parameters: {
             query?: never;
@@ -20013,6 +20037,8 @@ export interface components {
             semester: number;
             /** Sessions */
             sessions?: number | null;
+            /** Sort Order */
+            sort_order?: number | null;
             /** Video Url */
             video_url: string;
             /** Waitlist Count */
@@ -20035,6 +20061,37 @@ export interface components {
             skip: number;
             /** Total */
             total: number;
+        };
+        /**
+         * CourseReorderRequest
+         * @description PUT /courses/order：以拖拉後的完整 id 序列覆寫該學期顯示順序。
+         *
+         *     course_ids 必須是「該學期所有啟用課程」的完整排列（不可多、不可少、
+         *     不可重複）——半套列表會讓未列出的課程沉到 NULL 尾端，前台順序在使用者
+         *     毫無感知的情況下被改動，故一律 400 拒絕而非部分套用。
+         *     上限與 GET /courses 的 limit 上限（500）對齊。
+         */
+        CourseReorderRequest: {
+            /** Course Ids */
+            course_ids: number[];
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+        };
+        /**
+         * CourseReorderResultOut
+         * @description PUT /courses/order 200 回應（回 echo 學期與實際寫入筆數）。
+         */
+        CourseReorderResultOut: {
+            /** Message */
+            message: string;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Updated */
+            updated: number;
         };
         /**
          * CoursesCopyResultOut
@@ -34636,6 +34693,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CoursesCopyResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_courses_api_activity_courses_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CourseReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CourseReorderResultOut"];
                 };
             };
             /** @description Validation Error */

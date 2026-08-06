@@ -175,6 +175,11 @@ export const getCourseEnrolled = (courseId: number): AxiosResp<'/activity/course
 // 套用狀態轉移與通知）。名單過期（並發報名/退課/審核）回 409，前端應重載後再排
 export const reorderCourseEnrolled = (courseId: number, occupyingIds: number[], waitlistIds: number[]): AxiosResp<'/activity/courses/{course_id}/enrolled/order', 'put'> =>
   api.put(`/activity/courses/${courseId}/enrolled/order`, { occupying_ids: occupyingIds, waitlist_ids: waitlistIds })
+// 課程顯示排序（actcsort01）：course_ids 需為該學期所有啟用課程的完整排列，
+// 決定後台列表與前台（公開報名頁／家長端）的顯示順序。清單過期（並發新增／
+// 停用課程）回 409，前端應重載後再排。
+export const reorderCourses = (payload: ApiBody<'/activity/courses/order', 'put'>): AxiosResp<'/activity/courses/order', 'put'> =>
+  api.put('/activity/courses/order', payload)
 export const createCourse = (data: ApiBody<'/activity/courses', 'post'>): AxiosResp<'/activity/courses', 'post'> =>
   api.post('/activity/courses', data)
 export const updateCourse = (id: number, data: ApiBody<'/activity/courses/{course_id}', 'put'>): AxiosResp<'/activity/courses/{course_id}', 'put'> =>
