@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   updateTenantBrand: vi.fn(),
   getTenantLineConfig: vi.fn(),
   updateTenantLineConfig: vi.fn(),
+  getTenantEmailConfig: vi.fn(),
+  updateTenantEmailConfig: vi.fn(),
 }))
 
 vi.mock('@/api/platform', () => ({
@@ -20,6 +22,8 @@ vi.mock('@/api/platform', () => ({
   updateTenantBrand: h.updateTenantBrand,
   getTenantLineConfig: h.getTenantLineConfig,
   updateTenantLineConfig: h.updateTenantLineConfig,
+  getTenantEmailConfig: h.getTenantEmailConfig,
+  updateTenantEmailConfig: h.updateTenantEmailConfig,
 }))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -28,6 +32,7 @@ vi.mock('element-plus', () => ({
 vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
 
 import TenantBrandTab from '../TenantBrandTab.vue'
+import TenantEmailTab from '../TenantEmailTab.vue'
 import TenantLineTab from '../TenantLineTab.vue'
 
 const stubs = {
@@ -136,5 +141,53 @@ describe('TenantLineTab', () => {
     const payload = h.updateTenantLineConfig.mock.calls[0][1] as Record<string, unknown>
     expect(payload).not.toHaveProperty('channel_access_token')
     expect(payload).not.toHaveProperty('channel_secret')
+  })
+})
+
+describe('TenantEmailTab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    h.getTenantEmailConfig.mockResolvedValue({
+      data: {
+        tenant_id: 2,
+        is_enabled: true,
+        from_name: '仁武幼兒園',
+        from_address: 'noreply@example.tw',
+        resend_api_key_masked: '••••1234',
+        updated_at: '2026-08-07',
+      },
+    })
+    h.updateTenantEmailConfig.mockResolvedValue({ data: { tenant_id: 2, is_enabled: true } })
+  })
+
+  const mountTab = () => mount(TenantEmailTab, { props: { tenantId: 2 }, global: { stubs } })
+
+  it('憑證只顯示遮罩值，不會有明文出現在畫面上', async () => {
+    const w = mountTab()
+    await flushPromises()
+    expect(w.find('[data-testid="email-key-masked"]').text()).toBe('••••1234')
+    expect(w.find('[data-testid="email-from-name"]').text()).toBe('仁武幼兒園')
+    // 表單的憑證欄一律留空（沒有明文可回填）
+    expect((w.find('[data-testid="email-form-key"]').element as HTMLInputElement).value).toBe('')
+  })
+
+  it('留空的憑證欄不進 payload（按儲存不會把既有 API Key 洗成空值）', async () => {
+    const w = mountTab()
+    await flushPromises()
+
+    await w.find('[data-testid="email-form-from-name"]').setValue('仁武幼兒園（更新）')
+    await w.find('[data-testid="email-save"]').trigger('click')
+    await flushPromises()
+
+    expect(h.updateTenantEmailConfig).toHaveBeenCalledWith(2, {
+      is_enabled: true,
+      from_name: '仁武幼兒園（更新）',
+      // 非憑證欄位（from_address）本來就有值，儲存時照既有值一併送出——
+      // 跟 TenantLineTab 的 line_login_channel_id/liff_id 同一套語意，
+      // 「留空 = 不變更」只保護憑證欄（resend_api_key）。
+      from_address: 'noreply@example.tw',
+    })
+    const payload = h.updateTenantEmailConfig.mock.calls[0][1] as Record<string, unknown>
+    expect(payload).not.toHaveProperty('resend_api_key')
   })
 })

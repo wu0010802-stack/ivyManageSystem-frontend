@@ -123,11 +123,20 @@ export const BRANDING_DEFAULTS: TenantBranding = Object.freeze({
   }),
   logo_url: '/LOGO.png',
   theme: Object.freeze({ admin_primary: '#4f46e5', parent_primary: '#0d9053' }),
+  // ⚠ 2026-08 事故修復：這裡**刻意不放**義華的真實地址/電話。
+  // `contact.*` 是 `normalizeBranding()` 逐欄 fallback 的對象（見下方），若這裡放
+  // 另一間真實園所的真實聯絡資訊，任何新租戶只要忘記在總部「基本資料」/「品牌設定」
+  // 頁填地址電話，公開頁的「聯絡主辦單位」就會**借用義華的真實 PII**（renwu 分校
+  // 曾實際發生：訪客看到的校名/地址/電話全是義華的）——`ContactInquiryModal.vue`
+  // 原本設計是「缺值就隱藏該列」（`v-if="branding.contact.campus_label"`），但因為
+  // fallback 永遠給非空字面值，這個 `v-if` 事實上從未真正隱藏過任何一列。
+  // 留空字串才能讓 `v-if` 依原設計生效；單租戶灰度模式（未打 tenant-meta API）下
+  // 因此會直接隱藏這幾列，而不是顯示假資料——這比借用別間學校的身分安全得多。
   contact: Object.freeze({
-    campus_label: '常春藤義華校',
-    address: '高雄市三民區義華路 68 號',
-    phone: '+88673928366',
-    phone_display: '(07) 392-8366',
+    campus_label: '',
+    address: '',
+    phone: '',
+    phone_display: '',
   }),
   // 招生地圖預設中心；原 src/constants/recruitment.ts 的 FALLBACK_SCHOOL_LAT/LNG
   map: Object.freeze({ lat: 22.642, lng: 120.3243 }),

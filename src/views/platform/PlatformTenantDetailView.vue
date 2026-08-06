@@ -35,6 +35,9 @@
       <el-tab-pane label="LINE 憑證" name="line">
         <TenantLineTab v-if="activeTab === 'line'" :tenant-id="tenant.id" />
       </el-tab-pane>
+      <el-tab-pane label="Email 設定" name="email">
+        <TenantEmailTab v-if="activeTab === 'email'" :tenant-id="tenant.id" />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -50,6 +53,7 @@ import { setActingTenant } from '@/composables/useActingTenant'
 import { getTenant, resumeTenant, suspendTenant, type TenantDetail } from '@/api/platform'
 import TenantBasicTab from './TenantBasicTab.vue'
 import TenantBrandTab from './TenantBrandTab.vue'
+import TenantEmailTab from './TenantEmailTab.vue'
 import TenantLineTab from './TenantLineTab.vue'
 import { tenantStatusLabel, tenantStatusTagType } from './tenantDisplay'
 
@@ -57,7 +61,7 @@ const route = useRoute()
 const router = useRouter()
 
 const canManage = computed(() => hasPermission('PLATFORM_TENANTS_MANAGE'))
-const activeTab = ref<'basic' | 'brand' | 'line'>('basic')
+const activeTab = ref<'basic' | 'brand' | 'line' | 'email'>('basic')
 const tenant = ref<TenantDetail | null>(null)
 const loading = ref(false)
 const loadError = ref<string | null>(null)

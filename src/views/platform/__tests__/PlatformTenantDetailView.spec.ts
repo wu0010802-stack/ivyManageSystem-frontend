@@ -56,6 +56,7 @@ const stubs = {
   TenantBasicTab: { template: '<div class="basic-tab" />' },
   TenantBrandTab: { template: '<div class="brand-tab" />' },
   TenantLineTab: { template: '<div class="line-tab" />' },
+  TenantEmailTab: { template: '<div class="email-tab" />' },
   'el-alert': { props: ['title'], template: '<div class="el-alert">{{ title }}</div>' },
   'el-button': { props: ['loading', 'type'], template: '<button><slot /></button>' },
   'el-tabs': { props: ['modelValue'], template: '<div><slot /></div>' },

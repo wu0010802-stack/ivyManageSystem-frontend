@@ -62,8 +62,18 @@ describe('灰度不變式', () => {
     expect(BRANDING_DEFAULTS.titles.admin).toBe('常春藤管理系統')
     expect(BRANDING_DEFAULTS.titles.public).toBe('常春藤才藝報名')
     expect(BRANDING_DEFAULTS.manifest.public.name).toBe('常春藤公開報名')
-    expect(BRANDING_DEFAULTS.contact.phone_display).toBe('(07) 392-8366')
     expect(BRANDING_DEFAULTS.school_keywords).toEqual(['常春藤'])
+  })
+
+  it('BRANDING_DEFAULTS.contact 刻意留空字串，不是義華的真實地址/電話（2026-08 事故回歸測試）', () => {
+    // 這組值同時是 normalizeBranding() 的逐欄 fallback：若放另一間真實園所的
+    // 真實聯絡資訊，任何忘記在總部填聯絡資訊的新租戶都會借用它的身分。
+    expect(BRANDING_DEFAULTS.contact).toEqual({
+      campus_label: '',
+      address: '',
+      phone: '',
+      phone_display: '',
+    })
   })
 })
 
@@ -79,6 +89,13 @@ describe('逐欄 fallback（normalizeBranding）', () => {
     expect(out.titles.admin).toBe('陽光管理系統')
     expect(out.titles.portal).toBe(BRANDING_DEFAULTS.titles.portal)
     expect(out.manifest.public.name).toBe(BRANDING_DEFAULTS.manifest.public.name)
+  })
+
+  it('新租戶未填聯絡資訊時 contact.* 退回空字串，不會借用義華的地址/電話（2026-08 事故回歸測試）', () => {
+    // 模擬 renwu 這種「tenant-meta 有回應，但 contact 整組缺欄」的真實情境
+    // （後端 response_model_exclude_none=True，未填欄位不會出現在 payload 裡）。
+    const out = normalizeBranding({ tenant: { slug: 'renwu' }, school_name: '仁武幼兒園' })
+    expect(out.contact).toEqual({ campus_label: '', address: '', phone: '', phone_display: '' })
   })
 
   it('map 的 0 座標視為有效值（|| 會把 0 當缺值，故用 typeof 判斷）', () => {

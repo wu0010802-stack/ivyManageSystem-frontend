@@ -10045,6 +10045,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/tenants/{tenant_id}/email-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 租戶 Email 寄件設定（遮罩）
+         * @description **一律遮罩**：`resend_api_key` 只回尾 4 碼，永遠不回明文（比照 LINE 憑證風險 #11）。
+         *
+         *     沒有列（`email_configs` 尚未建列）時回全空值，前端據此顯示「未設定」，
+         *     語意與 `services/registration_email.py::_resolve_email_settings()` 的
+         *     「DB 缺列 → 退回平台共用 env 設定」一致：這支端點只反映**該租戶自己**的
+         *     覆寫值，不吐平台共用的預設值（避免總部誤以為某租戶已個別設定）。
+         */
+        get: operations["get_tenant_email_config_api_platform_tenants__tenant_id__email_config_get"];
+        /**
+         * 更新租戶 Email 寄件設定（只寫不回讀）
+         * @description 未提供（None）的欄位保持原值；要清空請顯式送 `""`。
+         *
+         *     audit 的 `changes` 對加密欄一律寫 `"***"`（比照 LINE 憑證，CT-P-08 風險 #11）。
+         */
+        put: operations["update_tenant_email_config_api_platform_tenants__tenant_id__email_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/tenants/{tenant_id}/line-config": {
         parameters: {
             query?: never;
@@ -26682,6 +26713,44 @@ export interface components {
             values: {
                 [key: string]: string | null;
             };
+        };
+        /**
+         * PlatformEmailConfigOut
+         * @description 讀取一律遮罩：`resend_api_key` 只回尾 4 碼（比照 `PlatformLineConfigOut` 風險 #11）。
+         */
+        PlatformEmailConfigOut: {
+            /** From Address */
+            from_address?: string | null;
+            /** From Name */
+            from_name?: string | null;
+            /**
+             * Is Enabled
+             * @default false
+             */
+            is_enabled: boolean;
+            /** Resend Api Key Masked */
+            resend_api_key_masked?: string | null;
+            /** Tenant Id */
+            tenant_id: number;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * PlatformEmailConfigUpdateIn
+         * @description **只寫不回讀**：未提供（None）的欄位保持原值，不會被清空。
+         *
+         *     要清空某欄請顯式送空字串 `""`。留空 `resend_api_key` 時沿用平台共用金鑰
+         *     （`_resolve_email_settings()` 的逐欄 fallback，`services/registration_email.py`）。
+         */
+        PlatformEmailConfigUpdateIn: {
+            /** From Address */
+            from_address?: string | null;
+            /** From Name */
+            from_name?: string | null;
+            /** Is Enabled */
+            is_enabled?: boolean | null;
+            /** Resend Api Key */
+            resend_api_key?: string | null;
         };
         /**
          * PlatformLineConfigOut
@@ -52003,6 +52072,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformBrandOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tenant_email_config_api_platform_tenants__tenant_id__email_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformEmailConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_tenant_email_config_api_platform_tenants__tenant_id__email_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tenant_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformEmailConfigUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformEmailConfigOut"];
                 };
             };
             /** @description Validation Error */

@@ -23,6 +23,7 @@ export type TenantStatusResult = Schema<'PlatformTenantStatusOut'>
 export type TenantCreateResult = Schema<'PlatformTenantCreateOut'>
 export type BrandConfig = Schema<'PlatformBrandOut'>
 export type PlatformLineConfig = Schema<'PlatformLineConfigOut'>
+export type PlatformEmailConfig = Schema<'PlatformEmailConfigOut'>
 export type PlatformReport = Schema<'PlatformReportOut'>
 export type PlatformReportTenantRow = Schema<'PlatformReportTenantRow'>
 export type RoleSyncReport = Schema<'PlatformRoleSyncOut'>
@@ -109,6 +110,21 @@ export function updateTenantLineConfig(
   body: ApiBody<'/platform/tenants/{tenant_id}/line-config', 'put'>,
 ): AxiosResp<'/platform/tenants/{tenant_id}/line-config', 'put'> {
   return api.put(`/platform/tenants/${tenantId}/line-config`, body)
+}
+
+// ── Email 寄件設定（讀一律遮罩、寫只寫不回讀）──
+
+export function getTenantEmailConfig(
+  tenantId: number,
+): AxiosResp<'/platform/tenants/{tenant_id}/email-config', 'get'> {
+  return api.get(`/platform/tenants/${tenantId}/email-config`)
+}
+
+export function updateTenantEmailConfig(
+  tenantId: number,
+  body: ApiBody<'/platform/tenants/{tenant_id}/email-config', 'put'>,
+): AxiosResp<'/platform/tenants/{tenant_id}/email-config', 'put'> {
+  return api.put(`/platform/tenants/${tenantId}/email-config`, body)
 }
 
 /** logo 上傳（multipart，欄位名 `file`）。SVG 後端不放行（DEV-17 安全決定 2）。 */
