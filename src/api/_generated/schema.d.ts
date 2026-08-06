@@ -16021,6 +16021,10 @@ export interface components {
          *
          *     ratio 是**參與率**（不重複參與學生 ÷ 在籍數，≤100%）；enrollment_ratio 是
          *     **人次比率**（報名人次 ÷ 在籍數，可 >100%）。兩者分子不同，勿互相取代。
+         *
+         *     pending_review_courses / total_pending_review 是**顯示專用**的待審核人次
+         *     （只計 pending_review，不含 pending_review_waitlist），刻意不進 courses /
+         *     total_enrollments / 兩個比率——身分未審核前計入會讓參與率虛高並誤發紅利。
          */
         ActivityDashboardClassroomRowOut: {
             /** Classroom Id */
@@ -16033,6 +16037,10 @@ export interface components {
             };
             /** Enrollment Ratio */
             enrollment_ratio: number;
+            /** Pending Review Courses */
+            pending_review_courses: {
+                [key: string]: number;
+            };
             /** Ratio */
             ratio: number;
             /** Student Count */
@@ -16041,6 +16049,8 @@ export interface components {
             teacher_name: string;
             /** Total Enrollments */
             total_enrollments: number;
+            /** Total Pending Review */
+            total_pending_review: number;
         };
         /**
          * ActivityDashboardCourseOut
@@ -16080,6 +16090,10 @@ export interface components {
             };
             /** Enrollment Ratio */
             enrollment_ratio: number;
+            /** Pending Review Courses */
+            pending_review_courses: {
+                [key: string]: number;
+            };
             /** Points */
             points: number;
             /** Ratio */
@@ -16088,6 +16102,8 @@ export interface components {
             student_count: number;
             /** Total Enrollments */
             total_enrollments: number;
+            /** Total Pending Review */
+            total_pending_review: number;
         };
         /**
          * ActivityDashboardGrandTotalOut
@@ -16100,12 +16116,18 @@ export interface components {
             };
             /** Enrollment Ratio */
             enrollment_ratio: number;
+            /** Pending Review Courses */
+            pending_review_courses: {
+                [key: string]: number;
+            };
             /** Ratio */
             ratio: number;
             /** Student Count */
             student_count: number;
             /** Total Enrollments */
             total_enrollments: number;
+            /** Total Pending Review */
+            total_pending_review: number;
         };
         /**
          * ActivityDashboardTableOut

@@ -20,3 +20,29 @@ export function buildBonusLabel(bonus: number | undefined | null): string {
   // FE-3 canonical 金額格式化：千分位，避免大額紅利可讀性差
   return `+${bonus.toLocaleString('en-US')}`
 }
+
+/**
+ * 課程格子的顯示值：正式報名數 + 待審核標記（2026-08-06）。
+ *
+ * 回傳兩段而非單一字串，讓 template 能把待審核渲染成另一種顏色——「12 (+3)」
+ * 全黑會被誤讀成一個數字。
+ *
+ * 口徑：`count` 為 enrolled + promoted_pending（後端 courses），`pending` 為
+ * pending_review（後端 pending_review_courses）。兩者刻意分離，**待審核不進
+ * 任何比率**（身分未審核前計入會讓參與率虛高並誤發學期紅利）。
+ *
+ * 待審核 > 0 時即使報名數為 0 也印出 "0"：只留一個孤零零的「+3」，讀者無從
+ * 判斷基數是 0 還是沒資料。
+ */
+export function buildCourseCell(
+  count: number | undefined | null,
+  pending: number | undefined | null,
+): { count: string; pending: string } {
+  const enrolled = count || 0
+  const pendingCount = pending || 0
+  if (enrolled <= 0 && pendingCount <= 0) return { count: '', pending: '' }
+  return {
+    count: String(enrolled),
+    pending: pendingCount > 0 ? `+${pendingCount}` : '',
+  }
+}

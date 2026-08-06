@@ -35,16 +35,24 @@
         <el-table-column prop="teacher_name" label="班級老師" width="100" align="center" fixed="left" />
         <el-table-column prop="student_count" label="在籍人數" width="90" align="center" />
         
-        <!-- 動態課程欄位 -->
+        <!-- 動態課程欄位：報名數 +（待審核）。待審核不進任何比率，僅此處與待審核人次欄呈現 -->
         <el-table-column
           v-for="course in dashboardData.courses"
           :key="course.id"
           :label="course.name"
           align="center"
-          width="80"
+          width="95"
         >
+          <template #header>
+            <el-tooltip :content="`${course.name}：括號內為尚未通過身分審核的報名，未計入比率`" placement="top">
+              <span>{{ course.name }}</span>
+            </el-tooltip>
+          </template>
           <template #default="scope">
-            {{ getCourseCount(scope.row, course.id) }}
+            <span>{{ getCourseCell(scope.row, course.id).count }}</span>
+            <span v-if="getCourseCell(scope.row, course.id).pending" class="pending-mark">
+              ({{ getCourseCell(scope.row, course.id).pending }})
+            </span>
           </template>
         </el-table-column>
 
@@ -54,6 +62,20 @@
             <el-tooltip content="各課程報名數加總；同一學生報多門重複計算" placement="top">
               <span>班級人次</span>
             </el-tooltip>
+          </template>
+        </el-table-column>
+        <!-- 待審核人次：pending_review 合計。刻意不進比率與達標判定（身分未確認） -->
+        <el-table-column prop="total_pending_review" label="待審核人次" width="105" align="center">
+          <template #header>
+            <el-tooltip content="尚未通過身分審核的報名人次；已佔用名額，審核通過後才計入報名人次與比率" placement="top">
+              <span>待審核人次</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope">
+            <span v-if="scope.row.total_pending_review" class="pending-mark">
+              {{ scope.row.total_pending_review }}
+            </span>
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column prop="ratio" label="比率" width="80" align="center">
@@ -157,7 +179,7 @@ import { storeToRefs } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { exportDashboardTable } from '@/api/activity'
-import { buildBonusLabel } from './activityDashboardTable'
+import { buildBonusLabel, buildCourseCell } from './activityDashboardTable'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -303,10 +325,10 @@ const flattenedTableData = computed(() => {
     return data
 })
 
-const getCourseCount = (row: Record<string, unknown>, courseId: number): number | string => {
+const getCourseCell = (row: Record<string, unknown>, courseId: number): { count: string; pending: string } => {
     const courses = row.courses as Record<number, number> | undefined || {}
-    const count = courses[courseId]
-    return count > 0 ? count : ''
+    const pendingCourses = row.pending_review_courses as Record<number, number> | undefined || {}
+    return buildCourseCell(courses[courseId], pendingCourses[courseId])
 }
 
 const objectSpanMethod = ({ row, column }: { row: Record<string, unknown>; column: { property?: string }; rowIndex: number; columnIndex: number }) => {
@@ -408,6 +430,10 @@ async function handleExportTable() {
 
 .text-danger { color: #e11d48; font-weight: bold; }
 .text-success { color: var(--color-success-hover); font-weight: bold; }
+
+/* 待審核：用品牌橙與正式報名的黑字區隔，避免「12 (+3)」被讀成單一數字。
+   刻意不用紅色——待審核是待辦不是錯誤。 */
+.pending-mark { color: var(--color-warning, #ff8c42); font-weight: 600; margin-left: 2px; }
 
 /* Let Element Plus handle the default table styles instead of custom backgrounds */
 </style>
