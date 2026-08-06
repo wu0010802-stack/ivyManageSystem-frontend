@@ -43,6 +43,14 @@ export const publicQueryByToken = (
   parent_phone: string,
 ): AxiosResp<'/activity/public/query-by-token', 'post'> =>
   api.post('/activity/public/query-by-token', { token, parent_phone })
+// 忘記查詢碼時，以學生姓名＋班級＋家長手機做唯讀查詢（2026-08-04）。生日欄已
+// 移除，這三欄是報名表上僅存的身分欄位。業主裁定：三欄比對成功只能檢視，畫面
+// 永遠不顯示查詢碼；報名當初有留 email 時後端順便把查詢碼寄到該信箱
+// （token_email_sent + masked_email）。
+export const publicQueryByIdentity = (
+  data: ApiBody<'/activity/public/query-by-identity', 'post'>,
+): AxiosResp<'/activity/public/query-by-identity', 'post'> =>
+  api.post('/activity/public/query-by-identity', data)
 export const publicUpdateRegistration = (
   data: ApiBody<'/activity/public/update', 'post'>,
 ): AxiosResp<'/activity/public/update', 'post'> =>

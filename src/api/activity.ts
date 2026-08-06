@@ -55,6 +55,11 @@ export const restoreRegistration = (id: number): AxiosResp<'/activity/registrati
   api.post(`/activity/registrations/${id}/restore`)
 export const searchActivityStudents = (q: string, limit = 20): AxiosResp<'/activity/students/search', 'get'> =>
   api.get('/activity/students/search', { params: { q, limit } })
+// 待審核報名的「可能是這位學生」候選（2026-08-04）。自動比對只認正規化後完全相等的
+// 姓名，名冊拆字／異體字／漏複姓永遠不會自動配上；本端點以相似度撈出候選供人工判斷，
+// 選定後仍走 matchRegistration。
+export const fetchMatchSuggestions = (id: number, limit = 5): AxiosResp<'/activity/registrations/{registration_id}/match-suggestions', 'get'> =>
+  api.get(`/activity/registrations/${id}/match-suggestions`, { params: { limit } })
 export const createRegistration = (data: ApiBody<'/activity/registrations', 'post'>): AxiosResp<'/activity/registrations', 'post'> =>
   api.post('/activity/registrations', data)
 export const updateRegistrationBasic = (id: number, data: ApiBody<'/activity/registrations/{registration_id}', 'put'>): AxiosResp<'/activity/registrations/{registration_id}', 'put'> =>
@@ -257,6 +262,10 @@ export const deleteCourseDm = (
 export const getChanges = (params?: ApiQuery<'/activity/changes', 'get'>): AxiosResp<'/activity/changes', 'get'> =>
   api.get('/activity/changes', { params })
 
+// 修改紀錄的異動類型下拉選項（DB distinct，不在前端硬編以免與後端寫入點漂移）
+export const getChangesMeta = (): AxiosResp<'/activity/changes/meta', 'get'> =>
+  api.get('/activity/changes/meta')
+
 // 班級選項
 export const getClassOptions = (params?: ApiQuery<'/activity/class-options', 'get'>): AxiosResp<'/activity/class-options', 'get'> =>
   api.get('/activity/class-options', { params })
@@ -314,9 +323,13 @@ export const getAttendanceSessions = (params?: ApiQuery<'/activity/attendance/se
   api.get('/activity/attendance/sessions', { params })
 export const createAttendanceSession = (data: ApiBody<'/activity/attendance/sessions', 'post'>): AxiosResp<'/activity/attendance/sessions', 'post'> =>
   api.post('/activity/attendance/sessions', data)
-// 依上課星期在日期範圍批次建場次（取代逐堂手動新增）；weekday 省略則用課程 meeting_weekdays 全部星期
+// 依上課星期在日期範圍批次建場次（取代逐堂手動新增）；weekday 省略則用課程 meeting_weekdays 全部星期。
+// 亦支援 items 明確日期模式（多課程一次建立），由 previewAttendanceSessionsBatch 算好日期後送回。
 export const createAttendanceSessionsBatch = (data: ApiBody<'/activity/attendance/sessions/batch', 'post'>): AxiosResp<'/activity/attendance/sessions/batch', 'post'> =>
   api.post('/activity/attendance/sessions/batch', data)
+// 批次產生前的唯讀預覽：起訖日省略時後端自動取學期範圍，逐日回 new/exists/holiday
+export const previewAttendanceSessionsBatch = (data: ApiBody<'/activity/attendance/sessions/batch/preview', 'post'>): AxiosResp<'/activity/attendance/sessions/batch/preview', 'post'> =>
+  api.post('/activity/attendance/sessions/batch/preview', data)
 export const deleteAttendanceSession = (id: number): AxiosResp<'/activity/attendance/sessions/{session_id}', 'delete'> =>
   api.delete(`/activity/attendance/sessions/${id}`)
 export const getAttendanceSession = (id: number, params?: ApiQuery<'/activity/attendance/sessions/{session_id}', 'get'>): AxiosResp<'/activity/attendance/sessions/{session_id}', 'get'> =>

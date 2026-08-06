@@ -138,21 +138,22 @@ export function usePublicRegistrationQuery({
     new_name: '',
   })
 
-  // 候補家族：一般候補 + 待審核候補。後端對兩者都回 waitlist_position（
-  // QUEUE_STATUSES 全域排序），家長端順位顯示同格式、不透露審核狀態差異
-  // （公開端隱私口徑：不洩漏比對細節）。
+  // 候補家族：一般候補 + 待審核候補。2026-08-04 業主決策：**公開端一律不顯示
+  // 候補順位**，後端 /public/query 已不再回 waitlist_position / waitlist_total。
+  // Why: 家長看到自己排在後段會直接放棄；且後台可手動調整候補順序
+  // （sort_order 優先於報名先後），露出順位會引來「我比較早報名為什麼排後面」
+  // 的爭議。家長端只需知道「是否在候補中」。
+  // 待審核候補仍分流文案（此狀態連候補資格都未定），與順位無關。
 
   function statusBadgeFor(name: string): string {
     if (!queryResult.value) return ''
     const entry = (queryResult.value.courses || []).find((c) => c.name === name)
     if (!entry) return ''
-    // pending_review_waitlist 尚未進入正式候補佇列，後端也不保證有順位；
-    // 即使舊資料殘留 waitlist_position，也不可把它冒充一般候補名次。
     if (entry.status === 'pending_review_waitlist') {
       return '候補資格待校方審核'
     }
     if (entry.status === 'waitlist') {
-      return `候補第 ${entry.waitlist_position ?? '?'} 位`
+      return '候補中'
     }
     if (entry.status === 'promoted_pending') {
       return '已升正式（待確認）'

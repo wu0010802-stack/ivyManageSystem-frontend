@@ -8,6 +8,7 @@ import {
   forceAcceptRegistration,
   restoreRegistration,
   searchActivityStudents,
+  fetchMatchSuggestions,
 } from '@/api/activity'
 import type { Schema } from '@/api/_generated/typed'
 import { FIELD_RULES, forceRefundReasonPromptOptions } from '@/constants/activity'
@@ -36,11 +37,20 @@ export interface StudentCandidate {
   birthday?: string
   classroom_name?: string
   parent_phone?: string
+  /** 僅系統建議候選帶：姓名字元相似度（0~1），供人工判斷，不是比對結論 */
+  similarity?: number
+  /** 僅系統建議候選帶：是否與家長填寫的班級相同 */
+  same_class?: boolean
 }
 
 interface SearchTarget {
   candidates: StudentCandidate[]
   loading: boolean
+}
+
+interface SuggestionTarget {
+  suggestions: StudentCandidate[]
+  suggestionsLoading: boolean
 }
 
 function errDetail(err: unknown): string | undefined {
@@ -59,7 +69,12 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     candidates: StudentCandidate[]
     selected: StudentCandidate | null
     loading: boolean
-  }>({ visible: false, row: null, searchQuery: '', candidates: [], selected: null, loading: false })
+    suggestions: StudentCandidate[]
+    suggestionsLoading: boolean
+  }>({
+    visible: false, row: null, searchQuery: '', candidates: [], selected: null, loading: false,
+    suggestions: [], suggestionsLoading: false,
+  })
 
   // ── 重新比對 / 強行收件 共用 dialog ────────────────────────────
   const editDialog = reactive<{
@@ -67,8 +82,11 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     action: 'rematch' | 'force'
     row: ReviewRow | null
     submitting: boolean
-    form: { name: string; birthday: string; parent_phone: string }
-  }>({ visible: false, action: 'rematch', row: null, submitting: false, form: { name: '', birthday: '', parent_phone: '' } })
+    form: { name: string; birthday: string; parent_phone: string; class_name: string }
+  }>({
+    visible: false, action: 'rematch', row: null, submitting: false,
+    form: { name: '', birthday: '', parent_phone: '', class_name: '' },
+  })
 
   // ── 逐筆審核精靈 ────────────────────────────────────────────────
   const wizard = reactive<{
@@ -80,10 +98,13 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     selected: StudentCandidate | null
     loading: boolean
     submitting: boolean
+    suggestions: StudentCandidate[]
+    suggestionsLoading: boolean
     done: { matched: number; forced: number; rejected: number; skipped: number }
   }>({
     visible: false, queue: [], index: 0, searchQuery: '', candidates: [], selected: null,
-    loading: false, submitting: false, done: { matched: 0, forced: 0, rejected: 0, skipped: 0 },
+    loading: false, submitting: false, suggestions: [], suggestionsLoading: false,
+    done: { matched: 0, forced: 0, rejected: 0, skipped: 0 },
   })
   const wizardCurrent = computed<ReviewRow | null>(() => wizard.queue[wizard.index] ?? null)
 
@@ -120,6 +141,26 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     wizardTimer = setTimeout(runWizardSearch, 250)
   }
 
+  // ── 系統建議候選（相似姓名）──────────────────────────────────
+  // 搜尋框走 ilike 子字串比對，找不到「薛旆青 vs 薛斾青」這種字元差異——那正是
+  // 配不上的主因。建議清單改以姓名相似度撈候選，讓承辦不必在名冊裡大海撈針。
+  let suggestSeq = 0
+  async function loadSuggestions(row: ReviewRow, target: SuggestionTarget) {
+    const seq = ++suggestSeq
+    target.suggestions = []
+    target.suggestionsLoading = true
+    try {
+      const res = await fetchMatchSuggestions(row.id)
+      if (seq !== suggestSeq) return
+      target.suggestions = (res.data as { items?: StudentCandidate[] })?.items || []
+    } catch {
+      // 建議只是輔助，失敗不打斷手動匹配流程（承辦仍可用搜尋框）。
+      if (seq === suggestSeq) target.suggestions = []
+    } finally {
+      if (seq === suggestSeq) target.suggestionsLoading = false
+    }
+  }
+
   // ── 單列：手動匹配 ─────────────────────────────────────────────
   function openMatchDialog(row: ReviewRow) {
     matchDialog.row = row
@@ -130,6 +171,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     matchDialog.visible = true
     searchSeq++ // 使前一次在途搜尋失效，避免污染本次候選
     if (matchDialog.searchQuery) runMatchSearch()
+    loadSuggestions(row, matchDialog)
   }
   async function confirmMatch() {
     if (!matchDialog.row || !matchDialog.selected) return
@@ -150,6 +192,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     editDialog.form.name = row.student_name || ''
     editDialog.form.birthday = row.birthday || ''
     editDialog.form.parent_phone = row.parent_phone || ''
+    editDialog.form.class_name = row.class_name || ''
     editDialog.visible = true
   }
   const openRematchDialog = (row: ReviewRow) => openEditDialog(row, 'rematch')
@@ -160,9 +203,13 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     const name = editDialog.form.name?.trim()
     const birthday = editDialog.form.birthday || ''
     const phone = editDialog.form.parent_phone?.trim()
+    const className = editDialog.form.class_name?.trim()
     if (name && name !== row.student_name) payload.name = name
     if (birthday && birthday !== row.birthday) payload.birthday = birthday
     if (phone && phone !== row.parent_phone) payload.parent_phone = phone
+    // 班級是比對鍵的另一半（2026-08-03 生日退出後更是佔一半權重），家長選錯班是
+    // 未配對的主因之一。後端 rematch 一直支援改班級，只是這裡以前沒給欄位。
+    if (className && className !== row.class_name) payload.class = className
     return payload
   }
 
@@ -438,9 +485,11 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     const row = wizardCurrent.value
     wizard.selected = null
     wizard.candidates = []
+    wizard.suggestions = []
     wizard.searchQuery = row?.student_name || ''
     searchSeq++ // 失效前一筆在途搜尋
     if (wizard.searchQuery) runWizardSearch()
+    if (row) loadSuggestions(row, wizard)
   }
   function advanceWizard() {
     if (wizard.index < wizard.queue.length - 1) {

@@ -5,7 +5,7 @@
         <el-button
           v-if="canWrite"
           :icon="Calendar"
-          @click="openBatchDialog"
+          @click="batchDialogVisible = true"
         >批次產生場次</el-button>
         <el-button
           v-if="canWrite"
@@ -175,40 +175,13 @@
       </template>
     </el-dialog>
 
-    <!-- 批次產生場次 Dialog：依上課星期在日期範圍展開整段場次 -->
-    <el-dialog
+    <!-- 批次產生場次：預覽（自動帶學期起訖、排除國定假日、標記已存在）後一次建立多門課程 -->
+    <SessionBatchDialog
       v-model="batchDialogVisible"
-      title="批次產生場次"
-      width="440px"
-      :close-on-click-modal="false"
-    >
-      <el-form :model="batchForm" label-width="90px">
-        <el-form-item label="課程" required>
-          <el-select v-model="batchForm.course_id" placeholder="選擇課程" style="width: 100%">
-            <el-option v-for="c in courses" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="上課星期">
-          <el-select v-model="batchForm.weekday" placeholder="用課程預設上課星期" clearable style="width: 100%">
-            <el-option v-for="w in weekdayOptions" :key="w.value" :label="w.label" :value="w.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="起始日期" required>
-          <el-date-picker v-model="batchForm.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="結束日期" required>
-          <el-date-picker v-model="batchForm.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="備註">
-          <el-input v-model="batchForm.notes" type="textarea" :rows="2" />
-        </el-form-item>
-        <p class="batch-hint">將依上課星期在範圍內建立每週一場；已存在的日期會自動略過。</p>
-      </el-form>
-      <template #footer>
-        <el-button @click="batchDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="batchLoading" @click="handleBatchCreate">產生場次</el-button>
-      </template>
-    </el-dialog>
+      :courses="courses"
+      :default-course-id="filterCourseId"
+      @created="loadSessions"
+    />
 
     <!-- 點名 Drawer -->
     <el-drawer
@@ -370,7 +343,7 @@ import { Plus, Check, Delete, Printer, Calendar } from '@element-plus/icons-vue'
 import {
   getAttendanceSessions,
   createAttendanceSession,
-  createAttendanceSessionsBatch,
+
   deleteAttendanceSession,
   getAttendanceSession,
   batchUpdateAttendance,
@@ -380,6 +353,7 @@ import {
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import SessionBatchDialog from './components/SessionBatchDialog.vue'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
@@ -434,19 +408,8 @@ const createDialogVisible = ref(false)
 const createLoading = ref(false)
 const createForm = ref<{ course_id: number | null; session_date: string | null; notes: string }>({ course_id: null, session_date: null, notes: '' })
 
-// 批次產生場次
+// 批次產生場次（表單狀態與預覽邏輯都在 SessionBatchDialog 內）
 const batchDialogVisible = ref(false)
-const batchLoading = ref(false)
-const batchForm = ref<{ course_id: number | null; weekday: number | null; start_date: string | null; end_date: string | null; notes: string }>({ course_id: null, weekday: null, start_date: null, end_date: null, notes: '' })
-const weekdayOptions = [
-  { value: 0, label: '每週一' },
-  { value: 1, label: '每週二' },
-  { value: 2, label: '每週三' },
-  { value: 3, label: '每週四' },
-  { value: 4, label: '每週五' },
-  { value: 5, label: '每週六' },
-  { value: 6, label: '每週日' },
-]
 
 // 分頁（後端預設 limit=100，逾百場次需分頁才不會靜默消失）
 const page = ref(1)
@@ -671,45 +634,6 @@ async function handleCreate() {
   }
 }
 
-function openBatchDialog() {
-  batchForm.value = { course_id: filterCourseId.value, weekday: null, start_date: todayISO(), end_date: null, notes: '' }
-  batchDialogVisible.value = true
-}
-
-async function handleBatchCreate() {
-  if (!batchForm.value.course_id) {
-    ElMessage.warning('請選擇課程')
-    return
-  }
-  if (!batchForm.value.start_date || !batchForm.value.end_date) {
-    ElMessage.warning('請選擇起始與結束日期')
-    return
-  }
-  batchLoading.value = true
-  try {
-    // 上方守衛已確保 course_id / start_date / end_date 非空，對齊 codegen body 型別。
-    const payload: ApiBody<'/activity/attendance/sessions/batch', 'post'> = {
-      course_id: batchForm.value.course_id as number,
-      start_date: batchForm.value.start_date as string,
-      end_date: batchForm.value.end_date as string,
-      notes: batchForm.value.notes,
-    }
-    if (batchForm.value.weekday != null) payload.weekday = batchForm.value.weekday
-    const res = await createAttendanceSessionsBatch(payload)
-    const data = res.data as { created_count?: number; skipped_existing?: number }
-    const created = data?.created_count ?? 0
-    const skipped = data?.skipped_existing ?? 0
-    ElMessage.success(`已建立 ${created} 場${skipped ? `，略過 ${skipped} 場（已存在）` : ''}`)
-    batchDialogVisible.value = false
-    loadSessions()
-  } catch (e) {
-    const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '批次產生失敗'
-    ElMessage.error(msg)
-  } finally {
-    batchLoading.value = false
-  }
-}
-
 async function handleDelete(row: SessionRow) {
   try {
     await ElMessageBox.confirm(
@@ -757,7 +681,6 @@ onMounted(() => {
 <style scoped>
 .attendance-view { padding: 0; }
 .filter-card { margin-bottom: 0; }
-.batch-hint { margin: 4px 0 0; color: var(--text-tertiary); font-size: 12px; }
 .no-record { color: var(--text-tertiary); font-size: 13px; }
 .present-count { color: var(--color-success); font-weight: 600; }
 .count-sep { color: var(--text-tertiary); }

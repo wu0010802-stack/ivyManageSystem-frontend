@@ -329,7 +329,7 @@ describe('ActivityPublicQueryView — is_paid=true 時候補相關區塊不受�
     mockBootstrap({ courses: [{ name: '美術', price: 3000 }] })
   })
 
-  it('候補中課程的位次摘要照常顯示', async () => {
+  it('候補狀態摘要照常顯示', async () => {
     seedPaidRegistration({
       courses: [
         { course_id: 1, name: '美術', status: 'enrolled', price: 3000 },
@@ -349,12 +349,13 @@ describe('ActivityPublicQueryView — is_paid=true 時候補相關區塊不受�
     // 鎖定生效
     expect(wrapper.find('[data-test="payment-locked-hint"]').exists()).toBe(true)
 
-    // 候補位次摘要獨立於鎖定判斷之外，照常渲染
+    // 候補狀態摘要獨立於鎖定判斷之外，照常渲染
+    // （2026-08-04 起只顯示狀態不顯示順位，見 ActivityPublicQueryView.waitlist.test.js）
     const summary = wrapper.find('[data-test="waitlist-summary"]')
     expect(summary.exists()).toBe(true)
     expect(summary.text()).toContain('陶藝')
-    expect(summary.text()).toMatch(/第\s*2\s*位/)
-    expect(summary.text()).toMatch(/共\s*6\s*位/)
+    expect(summary.text()).toContain('候補中')
+    expect(summary.text()).not.toMatch(/\d/)
   })
 
   it('待審核候補在唯讀摘要顯示審核語意，不冒用正式候補順位', async () => {

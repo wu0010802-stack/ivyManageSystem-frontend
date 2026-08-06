@@ -94,7 +94,100 @@
           >
             {{ queryLoading ? '查詢中…' : '查詢 Search' }}
           </button>
+
+          <!-- 忘記查詢碼：以姓名＋班級＋家長手機做唯讀查詢（2026-08-04）。email
+               是選填欄位，沒填／填錯的家長收不到報名成功信，這是他們唯一的自助
+               路徑。業主裁定：三欄僅供檢視，查詢碼（＝編修權限）只走 email。 -->
+          <button
+            type="button"
+            class="recovery-toggle tap-target"
+            data-test="recovery-toggle"
+            :aria-expanded="recoveryOpen"
+            aria-controls="recoveryPanel"
+            @click="onRecoveryToggle"
+          >
+            忘記查詢碼？用姓名＋班級＋手機查詢
+          </button>
+
+          <div v-if="recoveryOpen" id="recoveryPanel" class="recovery-panel">
+            <p class="recovery-hint">
+              請填寫報名時的資料。此查詢僅供檢視報名狀態；
+              需修改時請使用查詢碼（報名有填信箱者，系統會將查詢碼寄到該信箱）。
+            </p>
+            <div class="field-group">
+              <label for="recoveryName">學生姓名 <span class="required-mark">*</span></label>
+              <input
+                id="recoveryName"
+                v-model="recoveryForm.name"
+                type="text"
+                class="input-text"
+                :class="{ invalid: recoveryTouched && !recoveryNameValid }"
+                placeholder="請輸入學生姓名"
+                autocomplete="off"
+                aria-required="true"
+              />
+            </div>
+            <div class="field-group">
+              <label for="recoveryClass">班級 <span class="required-mark">*</span></label>
+              <select
+                id="recoveryClass"
+                v-model="recoveryForm.class_name"
+                class="input-text"
+                :class="{ invalid: recoveryTouched && !recoveryClassValid }"
+                aria-required="true"
+              >
+                <option value="">請選擇報名時填的班級</option>
+                <option v-for="c in classes" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="recoveryPhone">家長手機 <span class="required-mark">*</span></label>
+              <input
+                id="recoveryPhone"
+                v-model="recoveryForm.parent_phone"
+                type="tel"
+                class="input-text"
+                :class="{ invalid: recoveryTouched && !recoveryPhoneValid }"
+                placeholder="09xx-xxx-xxx"
+                maxlength="15"
+                inputmode="tel"
+                autocomplete="tel"
+                aria-required="true"
+                @keyup.enter="onRecoverySubmit"
+              />
+            </div>
+            <div v-if="recoveryTouched && !recoveryFormValid" class="validation-msg error" role="alert">
+              請完整填寫三項資料（手機為 09 開頭 10 碼）
+            </div>
+            <button
+              type="button"
+              class="btn btn-secondary btn-block"
+              :disabled="recoveryLoading"
+              data-test="recovery-submit"
+              @click="onRecoverySubmit"
+            >
+              {{ recoveryLoading ? '查詢中…' : '查詢報名' }}
+            </button>
+            <div aria-live="polite">
+              <div v-if="recoveryError" class="validation-msg error" role="alert">
+                {{ recoveryError }}
+              </div>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <!-- 三欄唯讀查詢的持久提示：toast 會消失，「查詢碼寄到哪」「僅供檢視」
+           這兩件事家長需要留在畫面上 -->
+      <section
+        v-if="identityQueryNotice"
+        class="identity-query-notice"
+        data-test="identity-query-notice"
+        role="status"
+        aria-live="polite"
+      >
+        <svg class="icon icon-lock" width="14" height="14" aria-hidden="true"><use href="#q-lock" /></svg>
+        {{ identityQueryNotice }}
       </section>
 
       <section
@@ -136,7 +229,8 @@
             <li>本學期尚未報名，或已由校方取消報名</li>
           </ul>
           <div class="not-found-cta">
-            如兩項資料皆確認無誤，請於上班時間來電聯繫校方協助查詢。
+            忘記或沒收到查詢碼，可用上方「忘記查詢碼？」以姓名＋班級＋手機查詢報名狀態；
+            如資料皆確認無誤仍查不到，請於上班時間來電聯繫校方協助查詢。
           </div>
         </div>
       </section>
@@ -283,7 +377,9 @@
           </div>
         </template>
 
-        <!-- 候補位次摘要：依 queryResult.courses 渲染，不依賴 options 列表 -->
+        <!-- 候補狀態摘要：依 queryResult.courses 渲染，不依賴 options 列表。
+             2026-08-04 業主決策：只顯示「是否在候補中」，不揭露候補順位（見
+             usePublicRegistrationQuery.statusBadgeFor 的 why）。 -->
         <div
           v-if="waitlistCourses.length > 0"
           class="waitlist-summary"
@@ -304,23 +400,9 @@
               class="badge badge-waitlist"
             >候補資格待校方審核</span>
             <span v-else class="badge badge-waitlist">候補中</span>
-            <template
-              v-if="
-                wc.status === 'waitlist'
-                  && wc.waitlist_position != null
-              "
-            >
-              <span v-if="wc.waitlist_total === 1" class="waitlist-position waitlist-position--solo">
-                您是目前唯一候補者
-              </span>
-              <span v-else class="waitlist-position">
-                目前第 <strong>{{ wc.waitlist_position }}</strong> 位
-                <span class="waitlist-total">／共 {{ wc.waitlist_total }} 位</span>
-                <small v-if="wc.waitlist_position === 1" class="waitlist-hint">
-                  您是下一位候補；如有空位將自動通知
-                </small>
-              </span>
-            </template>
+          </div>
+          <div class="waitlist-note">
+            名額釋出時，校方會依候補順序主動與您聯繫，無需重複報名。
           </div>
         </div>
 
@@ -582,6 +664,7 @@ import type { QueryResult } from '@/composables/usePublicRegistrationQuery'
 import { useRegistrationEditSave } from '@/composables/useRegistrationEditSave'
 import { useRegistrationWindow, type RegistrationTimeSettings } from '@/composables/useRegistrationWindow'
 import { usePromotionActions } from '@/composables/usePromotionActions'
+import { useQueryTokenRecovery } from '@/composables/useQueryTokenRecovery'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 import { COURSE_STATUS_LABEL } from '@/constants/activity'
 import { courseBillingLabel } from '@/utils/activityDisplay'
@@ -740,6 +823,7 @@ const searchErrorRef = ref<HTMLElement | null>(null)
 const queryResultRef = ref<HTMLElement | null>(null)
 
 async function onQuerySubmit() {
+  identityQueryNotice.value = ''
   await handleQuery()
   await nextTick()
   if (searchError.value) {
@@ -747,6 +831,42 @@ async function onQuerySubmit() {
   } else if (queryResult.value) {
     queryResultRef.value?.focus()
   }
+}
+
+const {
+  recoveryOpen, recoveryForm, recoveryLoading, recoveryError,
+  recoveryTouched, recoveryNameValid, recoveryClassValid, recoveryPhoneValid,
+  recoveryFormValid, toggleRecovery, submitIdentityQuery,
+} = useQueryTokenRecovery()
+
+function onRecoveryToggle() {
+  toggleRecovery(queryForm.parent_phone)
+}
+
+// 三欄查詢成功後顯示的持久提示（toast 會消失，家長需要留著「查詢碼已寄到哪」
+// 或「僅供檢視」的資訊）；改用查詢碼重新查詢時清掉，避免掛在新結果上。
+const identityQueryNotice = ref('')
+
+// 三欄唯讀查詢（業主裁定：僅供檢視，畫面永不顯示查詢碼）。後端已強制
+// query_token_required=true，這裡以無 token 的 credentials hydrate，讓既有的
+// canMutate=false 僅供檢視 UI（鎖定提示、隱藏候補確認/放棄、儲存鍵 disabled）
+// 整套自動生效。
+async function onRecoverySubmit() {
+  const outcome = await submitIdentityQuery()
+  if (!outcome) return
+  recoveryOpen.value = false
+  searchError.value = ''
+  hydrateResult(outcome.registration, {
+    token: '',
+    name: '',
+    birthday: '',
+    parent_phone: recoveryForm.parent_phone,
+  })
+  identityQueryNotice.value = outcome.tokenEmailSent
+    ? `此查詢僅供檢視。需修改時請使用查詢碼：已寄到報名時填寫的信箱 ${outcome.maskedEmail}，請收信後改用查詢碼查詢。`
+    : '此查詢僅供檢視。如需修改報名內容，請於上班時間聯繫校方協助。'
+  await nextTick()
+  queryResultRef.value?.focus()
 }
 
 const queryTermKey = computed(() => {
@@ -1038,6 +1158,46 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--color-border);
 }
 .search-box { max-width: 520px; margin: 0 auto; }
+
+/* 忘記查詢碼：次要入口，視覺上刻意弱於主查詢按鈕，但仍是可點的完整 tap target */
+.recovery-toggle {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-3);
+  padding: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--color-primary-strong);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.recovery-panel {
+  margin-top: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface-mint);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.recovery-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+.identity-query-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  max-width: 520px;
+  margin: var(--space-4) auto 0;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-sm);
+  color: #14532d;
+  background: #f0fdf4;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+.identity-query-notice .icon { flex-shrink: 0; margin-top: 2px; }
 
 .credential-recovery {
   display: flex;
@@ -1421,7 +1581,7 @@ onBeforeUnmount(() => {
   color: var(--color-text-muted);
 }
 
-/* 候補位次摘要 */
+/* 候補狀態摘要（不含順位） */
 .waitlist-summary {
   margin-bottom: var(--space-4);
   padding: var(--space-3) var(--space-4);
@@ -1459,28 +1619,13 @@ onBeforeUnmount(() => {
   font-weight: 600;
   white-space: nowrap;
 }
-.waitlist-position {
-  font-size: var(--fs-sm);
-  color: var(--color-text);
-}
-.waitlist-position strong {
-  font-weight: 700;
-  color: var(--color-warning);
-}
-.waitlist-position--solo {
-  font-weight: 600;
+.waitlist-note {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px dashed #f59e0b;
+  font-size: var(--fs-xs);
   color: #92400e;
-}
-.waitlist-total {
-  color: var(--color-text-muted);
-  font-size: var(--fs-xs);
-}
-.waitlist-hint {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--fs-xs);
-  color: var(--color-primary-strong);
-  font-weight: 500;
+  line-height: 1.6;
 }
 
 /* 費用預覽 */

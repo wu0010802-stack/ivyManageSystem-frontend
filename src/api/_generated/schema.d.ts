@@ -150,13 +150,43 @@ export interface paths {
         put?: never;
         /**
          * Create Sessions Batch
-         * @description 依「每週上課星期」在日期範圍內批次建立場次（取代逐堂手動新增十幾二十次）。
+         * @description 批次建立場次，兩種模式共用同一段寫入邏輯。
          *
-         *     weekday 省略時取課程 meeting_weekdays 的全部星期（複選，actwkdays01）；
-         *     同課同日已存在（uq_activity_session_course_date）者跳過並計入
-         *     skipped_existing（冪等 → 可重複按 / 微調範圍重跑不報錯）。
+         *     模式 A（範圍）：依「每週上課星期」在日期範圍內展開（取代逐堂手動新增十幾二十次）。
+         *     weekday 省略時取課程 meeting_weekdays 的全部星期（複選，actwkdays01）。
+         *     模式 B（items）：前端在 preview 勾選後送回明確日期，可一次跨多門課程。
+         *
+         *     同課同日已存在（uq_activity_session_course_date）者跳過並計入 skipped_existing
+         *     （冪等 → 可重複按 / 微調範圍重跑不報錯）。
          */
         post: operations["create_sessions_batch_api_activity_attendance_sessions_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/attendance/sessions/batch/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Sessions Batch
+         * @description 批次產生場次的唯讀預覽（不寫入任何資料）。
+         *
+         *     把三件原本要人工做的事收進一次呼叫：日期範圍自動取學期起訖、逐日標記已建立
+         *     過的場次、逐日標記國定假日。前端據此顯示可勾選的日期清單，確認後才送
+         *     POST /sessions/batch 的 items 模式。
+         *
+         *     權限用 ACTIVITY_WRITE（與實際建立同級）：本端點會揭露課程排課與既有場次，
+         *     不開放唯讀角色探測。
+         */
+        post: operations["preview_sessions_batch_api_activity_attendance_sessions_batch_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -248,9 +278,32 @@ export interface paths {
         };
         /**
          * Get Changes
-         * @description 取得修改紀錄列表
+         * @description 取得修改紀錄列表（2026-08-04 加篩選：原本只有分頁，查一筆退課要一頁頁翻）
          */
         get: operations["get_changes_api_activity_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/changes/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Changes Meta
+         * @description 異動紀錄的可篩選類型清單（給前端下拉）。
+         *
+         *     change_type 是各寫入點自由給的中文字串，沒有 enum 可列舉；改由 DB distinct
+         *     取得，避免前端硬編一份清單後隨新寫入點漂移。
+         */
+        get: operations["get_changes_meta_api_activity_changes_meta_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1023,6 +1076,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/public/query-by-identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Public Query By Identity
+         * @description 前台：忘記查詢碼時，以學生姓名+班級+家長手機做**唯讀**查詢。
+         *
+         *     業主裁定（2026-08-04 二次決策）：這三欄是熟人圈容易取得的資訊，比對成功
+         *     **只能檢視**，畫面永遠不顯示查詢碼——完整編修權限維持查詢碼單一途徑：
+         *     - 報名當初留了 email → 順便把查詢碼寄到該信箱（節流保護），response 帶
+         *       token_email_sent + 遮罩信箱。「能收到該信箱」才是取得編修權限的關卡。
+         *     - 沒留 email → 只回唯讀明細；需修改時聯繫園方（園方核對身分後於後台處理）。
+         *
+         *     唯讀由兩層鎖死：
+         *     1. 本端點出口強制 query_token_required=True——即使該報名沒有 token hash，
+         *        三欄途徑載入的結果在前端一律鎖成僅供檢視。
+         *     2. 破壞性 mutation 端點本就走 _parent_mutation_identity_ok：token-bearing
+         *        報名強制帶 token，本 response 不含 token，繞過前端也改不了。
+         *
+         *     寄信路徑的查詢碼在有效期內原碼回傳（recover_query_token），**不輪替**——
+         *     家長可能只是漏看信，貿然輪替會作廢仍在流通的舊碼與編修連結；僅在無碼／
+         *     已過期時才發新碼並重設 TTL。無 email 路徑為純讀，不發碼、不寫 DB。
+         *
+         *     失敗一律回相同 404（不洩漏是哪一欄不符），並比照其他公開查詢端點加
+         *     200~500ms 隨機延遲壓低枚舉的時序 oracle。
+         */
+        post: operations["public_query_by_identity_api_activity_public_query_by_identity_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/public/query-by-token": {
         parameters: {
             query?: never;
@@ -1362,6 +1454,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/registrations/{registration_id}/match-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Suggest Students For Registration
+         * @description 待審核報名的「可能是這位學生」候選（2026-08-04）。
+         *
+         *     為什麼需要：自動比對只認正規化後**完全相等**的姓名，因為誤綁會把 A 小孩的
+         *     報名掛到 B 小孩身上。但 prod 2026-08-03 的 7 筆未配對中有 5 筆是名冊拆字、
+         *     異體字、漏複姓（「范廖翊程」vs「廖翊程」、「薛斾青」vs「薛旆青」）——這些
+         *     永遠不該自動綁，卻讓承辦得自己在名冊裡大海撈針。本端點把「像但不完全一樣」
+         *     的候選撈出來排序，判斷仍由人做，接著走既有的 POST /registrations/{id}/match。
+         *
+         *     候選池＝該報名學期的在籍學生（同班優先，但**不限同班**——家長選錯班正是
+         *     未配對的另一個主因）。已有本學期有效報名的學生會被排除。
+         *
+         *     權限：對齊 GET /students/search——ACTIVITY_WRITE + STUDENTS_READ，缺後者 403
+         *     （否則等於開一條「有 ACTIVITY_WRITE 就能拉全校學生名冊」的側信道）；
+         *     STUDENTS_READ:own_class 者只會拿到管轄班級的候選。
+         */
+        get: operations["suggest_students_for_registration_api_activity_registrations__registration_id__match_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/registrations/{registration_id}/payment": {
         parameters: {
             query?: never;
@@ -1624,7 +1749,9 @@ export interface paths {
         get?: never;
         /**
          * Promote Waitlist
-         * @description 管理員手動將候補或 promoted_pending 直接升為正式報名（跳過 24h 確認窗）。
+         * @description 管理員手動將候補或既有 promoted_pending 直接升為正式報名。
+         *
+         *     2026-08-04 起自動遞補也一律直升，兩條路徑同口徑（皆無確認窗、皆寄通知信）。
          */
         put: operations["promote_waitlist_api_activity_registrations__registration_id__waitlist_put"];
         post?: never;
@@ -15721,6 +15848,34 @@ export interface components {
             query_token?: string | null;
         };
         /**
+         * _PublicIdentityQueryPayload
+         * @description 以姓名 + 班級 + 家長手機查詢報名（唯讀，2026-08-04）。
+         *
+         *     Why: 查詢碼是唯一的自助查詢途徑，但家長會忘記查詢碼，而 email 是選填欄位
+         *     ——沒填 / 填錯的家長收不到報名成功信，等於永久失去自助查詢能力。生日欄已於
+         *     2026-08-03 依業主決策全面移除，不得作為替代因子，故改用報名表上僅存的三個
+         *     身分欄位（學生姓名、班級、家長手機）。
+         *
+         *     schema 故意不設嚴格格式驗證（如手機 09 開頭）——422 與 404 的 status code
+         *     差異會洩漏「哪一欄格式不合」的 oracle；一律讓比對失敗回統一 404。
+         *     max_length 保留是為防 DoS 級超長 payload。
+         */
+        _PublicIdentityQueryPayload: {
+            /**
+             * Hp
+             * @default
+             */
+            _hp: string;
+            /** Ts */
+            _ts?: number | null;
+            /** Class */
+            class: string;
+            /** Name */
+            name: string;
+            /** Parent Phone */
+            parent_phone: string;
+        };
+        /**
          * _PublicQueryByTokenPayload
          * @description 以查詢碼 + 家長手機查詢報名（Phase 3）。
          *
@@ -15887,6 +16042,9 @@ export interface components {
         /**
          * ActivityDashboardClassroomRowOut
          * @description dashboard-table 班級列。courses 為 {course_id(str): 報名數}。
+         *
+         *     ratio 是**參與率**（不重複參與學生 ÷ 在籍數，≤100%）；enrollment_ratio 是
+         *     **人次比率**（報名人次 ÷ 在籍數，可 >100%）。兩者分子不同，勿互相取代。
          */
         ActivityDashboardClassroomRowOut: {
             /** Classroom Id */
@@ -15897,6 +16055,8 @@ export interface components {
             courses: {
                 [key: string]: number;
             };
+            /** Enrollment Ratio */
+            enrollment_ratio: number;
             /** Ratio */
             ratio: number;
             /** Student Count */
@@ -15942,6 +16102,8 @@ export interface components {
             courses: {
                 [key: string]: number;
             };
+            /** Enrollment Ratio */
+            enrollment_ratio: number;
             /** Points */
             points: number;
             /** Ratio */
@@ -15960,6 +16122,8 @@ export interface components {
             courses: {
                 [key: string]: number;
             };
+            /** Enrollment Ratio */
+            enrollment_ratio: number;
             /** Ratio */
             ratio: number;
             /** Student Count */
@@ -16044,13 +16208,21 @@ export interface components {
         };
         /**
          * ActivityRegistrationChangeListOut
-         * @description GET /changes 列表 + 總筆數。
+         * @description GET /changes 列表 + 總筆數（total 為套用篩選後的筆數，非全表）。
          */
         ActivityRegistrationChangeListOut: {
             /** Items */
             items: components["schemas"]["ActivityRegistrationChangeItemOut"][];
             /** Total */
             total: number;
+        };
+        /**
+         * ActivityRegistrationChangeMetaOut
+         * @description GET /changes/meta：異動類型下拉選項（DB distinct，非前端硬編）。
+         */
+        ActivityRegistrationChangeMetaOut: {
+            /** Change Types */
+            change_types: string[];
         };
         /**
          * ActivityRegistrationTimeOut
@@ -16087,13 +16259,10 @@ export interface components {
             term_label?: string | null;
         };
         /**
-         * ActivitySessionBatchCreateResultOut
-         * @description POST /attendance/sessions/batch 回應：依上課星期展開日期範圍批次建立場次。
-         *
-         *     created_dates 為實際新建的日期（ISO 升冪）；已存在（uq course+date）者計入
-         *     skipped_existing 而不報錯，讓重複按或微調範圍重跑為冪等。
+         * ActivitySessionBatchCourseResultOut
+         * @description 多課程批次的逐課明細。
          */
-        ActivitySessionBatchCreateResultOut: {
+        ActivitySessionBatchCourseResultOut: {
             /** Course Id */
             course_id: number;
             /** Course Name */
@@ -16102,14 +16271,66 @@ export interface components {
             created_count: number;
             /** Created Dates */
             created_dates: string[];
+            /** Skipped Existing */
+            skipped_existing: number;
+        };
+        /**
+         * ActivitySessionBatchCreateResultOut
+         * @description POST /attendance/sessions/batch 回應（範圍模式與 items 模式共用）。
+         *
+         *     created_dates 為實際新建的日期（ISO 升冪）；已存在（uq course+date）者計入
+         *     skipped_existing 而不報錯，讓重複按或微調範圍重跑為冪等。
+         *
+         *     course_id / course_name / weekday / start_date / end_date 為**範圍模式**的回應欄位；
+         *     items 模式沒有單一課程與單一範圍，這些欄位回 None，改讀 results 逐課明細。
+         *     created_count / skipped_existing 在兩種模式都是**總和**（舊前端與既有測試依賴）。
+         */
+        ActivitySessionBatchCreateResultOut: {
+            /** Course Id */
+            course_id?: number | null;
+            /** Course Name */
+            course_name?: string | null;
+            /** Created Count */
+            created_count: number;
+            /** Created Dates */
+            created_dates: string[];
             /** End Date */
-            end_date: string;
+            end_date?: string | null;
+            /**
+             * Results
+             * @default []
+             */
+            results: components["schemas"]["ActivitySessionBatchCourseResultOut"][];
             /** Skipped Existing */
             skipped_existing: number;
             /** Start Date */
-            start_date: string;
+            start_date?: string | null;
             /** Weekday */
-            weekday: number;
+            weekday?: number | null;
+        };
+        /**
+         * ActivitySessionBatchPreviewOut
+         * @description POST /attendance/sessions/batch/preview 回應（唯讀，不寫入任何資料）。
+         *
+         *     calendar_synced=False 表示涵蓋年度的行政院行事曆尚未同步 → 假日清單為空，
+         *     前端必須明講「未排除國定假日」，否則使用者會誤以為已濾過。
+         */
+        ActivitySessionBatchPreviewOut: {
+            /** Calendar Synced */
+            calendar_synced: boolean;
+            /** Courses */
+            courses: components["schemas"]["ActivitySessionPreviewCourseOut"][];
+            /**
+             * Range Source
+             * @enum {string}
+             */
+            range_source: "term" | "manual";
+            /** Resolved End Date */
+            resolved_end_date: string;
+            /** Resolved Start Date */
+            resolved_start_date: string;
+            /** Total New */
+            total_new: number;
         };
         /**
          * ActivitySessionCreateResultOut
@@ -16231,6 +16452,50 @@ export interface components {
             skip: number;
             /** Total */
             total: number;
+        };
+        /**
+         * ActivitySessionPreviewCourseOut
+         * @description 預覽中的單門課程。
+         *
+         *     warning 非 None 時 dates 為空——單門課的問題（未設上課星期、範圍內無命中、
+         *     超過單課上限）不該讓整批 400，否則多課程時一門課有問題就全部產不出來。
+         */
+        ActivitySessionPreviewCourseOut: {
+            /** Course Id */
+            course_id: number;
+            /** Course Name */
+            course_name: string;
+            /** Dates */
+            dates: components["schemas"]["ActivitySessionPreviewDateOut"][];
+            /** Exists Count */
+            exists_count: number;
+            /** Expected Sessions */
+            expected_sessions?: number | null;
+            /** Holiday Count */
+            holiday_count: number;
+            /** New Count */
+            new_count: number;
+            /** Warning */
+            warning?: string | null;
+            /** Weekdays */
+            weekdays: number[];
+        };
+        /**
+         * ActivitySessionPreviewDateOut
+         * @description 預覽中的單一日期。
+         *
+         *     status：new=將建立、exists=該課該日已有場次、holiday=國定假日（skip_holidays 時排除）。
+         */
+        ActivitySessionPreviewDateOut: {
+            /** Date */
+            date: string;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "new" | "exists" | "holiday";
         };
         /**
          * ActivitySessionStudentItemOut
@@ -27382,6 +27647,25 @@ export interface components {
             review_state: string;
         };
         /**
+         * PublicIdentityQueryOut
+         * @description POST /public/query-by-identity response（三欄唯讀查詢，2026-08-04）。
+         *
+         *     業主裁定（同日二次決策）：姓名＋班級＋手機是熟人圈容易取得的資訊，三欄比對
+         *     成功**只能唯讀檢視**，畫面永遠不顯示查詢碼——查詢碼（＝完整編修權限）只在
+         *     報名當初有留 email 時寄到該信箱（``token_email_sent`` + ``masked_email``）。
+         *
+         *     ``registration`` 為與查詢碼查詢相同 shape 的報名明細，但本端點出口一律強制
+         *     ``query_token_required=True``：無論該報名有無 token hash，三欄途徑載入的結果
+         *     在前端一律鎖成僅供檢視，破壞性操作必須改走查詢碼。
+         */
+        PublicIdentityQueryOut: {
+            /** Masked Email */
+            masked_email?: string | null;
+            registration: components["schemas"]["PublicRegistrationDetailOut"];
+            /** Token Email Sent */
+            token_email_sent: boolean;
+        };
+        /**
          * PublicInquiryPayload
          * @description LOW-4：附 honeypot（hp）+ 時間戳（ts）兩個 alias 欄位。
          */
@@ -27420,6 +27704,10 @@ export interface components {
         /**
          * PublicRegistrationCourseOut
          * @description /public/query 與 /public/update 的 courses[] 單筆。
+         *
+         *     2026-08-04 業主決策：公開端不揭露候補順位，`waitlist_position` /
+         *     `waitlist_total` 兩欄已移除（家長只看得到 status 是否為候補）。**勿因
+         *     「後台明明算得出順位」而加回**——理由見 `_build_public_query_payload`。
          */
         PublicRegistrationCourseOut: {
             /** Confirm Deadline */
@@ -27432,10 +27720,6 @@ export interface components {
             price: number;
             /** Status */
             status: string;
-            /** Waitlist Position */
-            waitlist_position?: number | null;
-            /** Waitlist Total */
-            waitlist_total?: number | null;
         };
         /**
          * PublicRegistrationDetailOut
@@ -28618,6 +28902,47 @@ export interface components {
         RegistrationMatchRequest: {
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * RegistrationMatchSuggestionItemOut
+         * @description GET /registrations/{id}/match-suggestions items[] 單筆候選在籍學生。
+         *
+         *     `similarity` 是**姓名字元相似度**（0~1），僅供排序與人工判斷，**不是**系統的
+         *     比對結論——自動綁定一律只認 utils/name_match.normalize_person_name 收斂後完全
+         *     相等（見 services/activity_student_sync._match_student_with_class）。相似度高
+         *     的兩個姓名可能是兩個不同的孩子（「王小明」vs「王小名」），必須由校方確認。
+         *
+         *     權限與 /students/search 同口徑：caller 必有 STUDENTS_READ（否則 403），
+         *     STUDENTS_READ:own_class 者只會拿到管轄班級的候選。
+         */
+        RegistrationMatchSuggestionItemOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Same Class */
+            same_class: boolean;
+            /** Similarity */
+            similarity: number;
+            /** Student Id */
+            student_id?: string | null;
+        };
+        /**
+         * RegistrationMatchSuggestionsOut
+         * @description GET /registrations/{id}/match-suggestions 完整回應。
+         *
+         *     `items` 已依「同班優先 → 相似度降冪」排序，且排除本學期已有有效報名的學生
+         *     （那些按下去會被同學生同學期唯一性守衛擋掉，列出來只是白給承辦點）。
+         */
+        RegistrationMatchSuggestionsOut: {
+            /** Items */
+            items: components["schemas"]["RegistrationMatchSuggestionItemOut"][];
+            /** Registration Id */
+            registration_id: number;
         };
         /** RegistrationRejectRequest */
         RegistrationRejectRequest: {
@@ -30913,22 +31238,57 @@ export interface components {
             /** Message */
             message?: string | null;
         };
-        /** SessionBatchCreate */
+        /**
+         * SessionBatchCreate
+         * @description 批次建立場次，兩種模式二選一。
+         *
+         *     模式 A（範圍）：course_id + start_date + end_date [+ weekday]，後端依上課星期展開。
+         *     模式 B（明確日期）：items，由 preview 端點算好、使用者勾選後送回；多課程一次建立。
+         *     兩者互斥——同時給會讓「以哪個為準」變成隱含約定，直接 422 擋掉。
+         */
         SessionBatchCreate: {
             /** Course Id */
-            course_id: number;
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
+            course_id?: number | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Items */
+            items?: components["schemas"]["SessionBatchItem"][] | null;
             /** Notes */
             notes?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Weekday */
+            weekday?: number | null;
+        };
+        /**
+         * SessionBatchItem
+         * @description 明確日期模式的單門課項目（preview 勾選結果的送出格式）。
+         */
+        SessionBatchItem: {
+            /** Course Id */
+            course_id: number;
+            /** Dates */
+            dates: string[];
+        };
+        /**
+         * SessionBatchPreviewRequest
+         * @description 批次產生場次的唯讀預覽輸入。
+         *
+         *     start_date/end_date 省略時由後端取課程所屬學期的 academic_terms 範圍
+         *     （前端無學期起訖日來源——後端未開 academic_terms 端點）。
+         */
+        SessionBatchPreviewRequest: {
+            /** Course Ids */
+            course_ids: number[];
+            /** End Date */
+            end_date?: string | null;
             /**
-             * Start Date
-             * Format: date
+             * Skip Holidays
+             * @default true
              */
-            start_date: string;
+            skip_holidays: boolean;
+            /** Start Date */
+            start_date?: string | null;
             /** Weekday */
             weekday?: number | null;
         };
@@ -33740,6 +34100,39 @@ export interface operations {
             };
         };
     };
+    preview_sessions_batch_api_activity_attendance_sessions_batch_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionBatchPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySessionBatchPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_operator_activity_api_activity_audit_operator_activity_get: {
         parameters: {
             query?: {
@@ -33839,8 +34232,19 @@ export interface operations {
     get_changes_api_activity_changes_get: {
         parameters: {
             query?: {
+                /** @description 異動類型（精確） */
+                change_type?: string | null;
+                /** @description 操作者關鍵字 */
+                changed_by?: string | null;
+                /** @description 起始日（含當日） */
+                date_from?: string | null;
+                /** @description 結束日（含當日） */
+                date_to?: string | null;
                 limit?: number;
+                registration_id?: number | null;
                 skip?: number;
+                /** @description 學生姓名關鍵字 */
+                student_name?: string | null;
             };
             header?: never;
             path?: never;
@@ -33864,6 +34268,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_changes_meta_api_activity_changes_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityRegistrationChangeMetaOut"];
                 };
             };
         };
@@ -35156,6 +35580,39 @@ export interface operations {
             };
         };
     };
+    public_query_by_identity_api_activity_public_query_by_identity_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_PublicIdentityQueryPayload"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicIdentityQueryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     public_query_by_token_api_activity_public_query_by_token_post: {
         parameters: {
             query?: never;
@@ -35687,6 +36144,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PendingRegistrationActionResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_students_for_registration_api_activity_registrations__registration_id__match_suggestions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                registration_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationMatchSuggestionsOut"];
                 };
             };
             /** @description Validation Error */
@@ -39498,6 +39988,8 @@ export interface operations {
                 end_at?: string | null;
                 entity_id?: string | null;
                 entity_type?: string | null;
+                /** @description 是否含登入活動（token 刷新等）。列表頁預設 false 以免洗版；紀錄照常寫入 */
+                include_auth?: boolean;
                 ip_address?: string | null;
                 page?: number;
                 page_size?: number;
@@ -39601,6 +40093,8 @@ export interface operations {
                 end_at?: string | null;
                 entity_id?: string | null;
                 entity_type?: string | null;
+                /** @description 是否含登入活動（token 刷新等）。列表頁預設 false 以免洗版；紀錄照常寫入 */
+                include_auth?: boolean;
                 ip_address?: string | null;
                 risk_tag?: ("refund" | "large_amount" | "force_overlay" | "reject_approved" | "login_blocked") | null;
                 search?: string | null;

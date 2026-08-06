@@ -2,9 +2,13 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const getChangesMock = vi.hoisted(() => vi.fn())
+const getChangesMetaMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ data: { change_types: [] } }),
+)
 
 vi.mock('@/api/activity', () => ({
   getChanges: getChangesMock,
+  getChangesMeta: getChangesMetaMock,
 }))
 
 vi.mock('element-plus', () => ({
