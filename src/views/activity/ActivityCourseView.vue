@@ -6,6 +6,13 @@
         <AcademicTermSelector />
         <el-button v-if="canWrite" data-test="sweep-expired-btn" :loading="sweeping" @click="handleSweepExpired">掃描過期候補</el-button>
         <el-button v-if="canWrite" @click="openCopyDialog" :icon="CopyDocument">複製上學期</el-button>
+        <el-button
+          v-if="canWrite"
+          data-test="open-sort-btn"
+          :icon="Sort"
+          :disabled="courses.length < 2"
+          @click="openSortDialog"
+        >調整順序</el-button>
         <el-button v-if="canWrite" type="primary" @click="openCreate">新增課程</el-button>
       </div>
     </div>
@@ -441,6 +448,48 @@
       <el-button type="primary" :loading="copying" @click="handleCopy">確認複製</el-button>
     </template>
   </el-dialog>
+
+  <!-- 課程顯示順序（actcsort01）：el-table 不支援列拖拉，故沿用容量佔位名單那套
+       vuedraggable + flex 自繪列。清單刻意只放辨識用的欄位，避免與課程表格重複 -->
+  <el-dialog v-model="sortDialogVisible" title="調整課程顯示順序" width="460px" destroy-on-close>
+    <el-alert
+      title="此順序同時決定公開報名頁與家長端的課程排列。"
+      type="info"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    />
+    <draggable
+      v-model="sortItems"
+      item-key="id"
+      :animation="150"
+      :disabled="sortSaving"
+      ghost-class="sort-row--ghost"
+      handle=".sort-row__handle"
+      class="sort-list"
+      data-test="course-sort-list"
+    >
+      <template #item="{ element, index }">
+        <div class="sort-row" :data-test="`course-sort-row-${element.id}`">
+          <span class="sort-row__handle" :class="{ 'sort-row__handle--off': sortSaving }">
+            <el-icon><Rank /></el-icon>
+          </span>
+          <span class="sort-row__pos">{{ index + 1 }}</span>
+          <span class="sort-row__name">{{ element.name }}</span>
+          <span class="sort-row__price">${{ element.price?.toLocaleString() }}</span>
+        </div>
+      </template>
+    </draggable>
+    <template #footer>
+      <el-button :disabled="sortSaving" @click="sortDialogVisible = false">取消</el-button>
+      <el-button
+        type="primary"
+        data-test="save-sort-btn"
+        :loading="sortSaving"
+        @click="handleSaveSort"
+      >儲存順序</el-button>
+    </template>
+  </el-dialog>
   </div>
 </template>
 
@@ -448,11 +497,11 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
+import { CopyDocument, Rank, Sort, VideoPlay } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
          getCourseWaitlist, getCourseEnrolled, reorderCourseEnrolled, promoteWaitlist,
-         sweepExpiredWaitlist } from '@/api/activity'
+         reorderCourses, sweepExpiredWaitlist } from '@/api/activity'
 import type {
   ActivityCourseOccupancyItem,
   ActivityCourseOccupancyStatus,
@@ -863,6 +912,38 @@ async function handleCopy() {
   }
 }
 
+// 課程顯示順序（actcsort01）
+const sortDialogVisible = ref(false)
+const sortSaving = ref(false)
+const sortItems = ref<Course[]>([])
+
+function openSortDialog() {
+  // 一律以完整清單為底，不吃 filteredCourses：後端要求送出該學期完整排列，
+  // 搜尋結果只是子集，送出去會被判定清單不符而 409。
+  sortItems.value = [...courses.value]
+  sortDialogVisible.value = true
+}
+
+async function handleSaveSort() {
+  sortSaving.value = true
+  try {
+    await reorderCourses({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+      course_ids: sortItems.value.map((c) => c.id),
+    })
+    ElMessage.success('課程順序已儲存')
+    sortDialogVisible.value = false
+    fetchCourses()
+  } catch (e) {
+    ElMessage.error(friendlyError('順序儲存失敗', e))
+    // 409＝清單已變動（並發新增／停用課程）；重載讓使用者在最新清單上重排
+    fetchCourses()
+  } finally {
+    sortSaving.value = false
+  }
+}
+
 function openCreate() {
   editingId.value = null
   form.value = defaultForm()
@@ -1084,4 +1165,37 @@ onMounted(() => {
   font-size: 13px;
   color: var(--el-color-danger, #f56c6c);
 }
+
+/* 課程顯示順序對話框：同樣是 el-table 無法列拖拉，沿用 vuedraggable + flex 列 */
+.sort-list {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  overflow: hidden;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+.sort-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+  font-size: 13px;
+  user-select: none;
+}
+.sort-row:last-child { border-bottom: none; }
+.sort-row--ghost { opacity: 0.5; background: var(--el-color-primary-light-9); }
+/* 只有握把可拖：整列可拖時使用者容易誤觸而不自覺改動前台順序 */
+.sort-row__handle { color: var(--text-tertiary, #909399); cursor: grab; display: flex; }
+.sort-row__handle:active { cursor: grabbing; }
+.sort-row__handle--off { cursor: not-allowed; opacity: 0.5; }
+.sort-row__pos {
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--text-tertiary, #909399);
+}
+.sort-row__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sort-row__price { flex-shrink: 0; color: var(--text-regular, #606266); }
 </style>
