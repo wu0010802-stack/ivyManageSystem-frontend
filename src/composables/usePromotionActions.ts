@@ -129,9 +129,11 @@ export function usePromotionActions({
       showToast('課程資料不完整，請重新查詢', 'error')
       return
     }
-    if (!window.confirm(`確定要放棄「${item.name}」的正式名額？\n放棄後將遞補給下一位候補，無法復原。`)) {
-      return
-    }
+    // 2026-08-06 稽核：此處原本再跳一次原生 window.confirm，形成「頁內二段確認 →
+    // 原生對話框」連跳兩次；且原生對話框按取消時頁內確認區已被收掉（呼叫端
+    // confirmDeclinePromotion 會先清 pendingDeclineFor），使用者完全沒有回饋，
+    // 會誤以為系統當掉。原生 confirm 的警語（遞補給下一位候補、無法復原）與頁內
+    // 確認文案內容等價，無資訊遺失，故整段移除，只保留頁內二段確認。
     const credentials = activeQueryCredentials.value
     if (!credentials) {
       showToast('查詢憑證已失效，請重新查詢', 'error')

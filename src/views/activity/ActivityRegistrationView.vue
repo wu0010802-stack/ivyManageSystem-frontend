@@ -243,7 +243,11 @@
           :closable="false"
           show-icon
           style="margin-bottom: 12px"
-        />
+        >
+          <div v-if="rejectionReason" data-test="rejection-reason" class="rejection-reason">
+            {{ rejectionReason }}
+          </div>
+        </el-alert>
         <div class="section-header">
           <span class="section-header-title">基本資料</span>
           <el-button v-if="canMutateDetail" size="small" type="primary" link @click="openEditBasicDialog">
@@ -717,6 +721,16 @@ const inactiveDetailMessage = computed(() =>
     ? '此報名已拒絕，以下為唯讀歷史詳情；如需恢復請使用列表的「復原」動作'
     : '此報名已撤銷，以下為唯讀歷史詳情',
 )
+// 拒絕原因：後端 reject 端點會寫一筆 change（change_type='拒絕報名'、
+// description='拒絕原因：…'），changes 由後端以時間新到舊排序，取第一筆即為本次
+// 拒絕的原因。完整審核軌跡另見下方「內部審核註記」區塊。
+const REJECT_CHANGE_TYPE = '拒絕報名'
+const rejectionReason = computed<string>(() => {
+  if (detail.value?.match_status !== 'rejected') return ''
+  const hit = (detail.value.changes || []).find((c) => c.change_type === REJECT_CHANGE_TYPE)
+  const description = hit?.description
+  return typeof description === 'string' ? description : ''
+})
 
 function ensureMutableDetail(): boolean {
   if (canMutateDetail.value) return true
@@ -1205,8 +1219,15 @@ function openEditBasicDialog() {
 
 async function onEditBasicSaved() {
   if (!detail.value) return
-  const res = await getRegistrationDetail(detail.value.id)
-  detail.value = res.data as RegistrationDetail
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
+  const res = await getRegistrationDetail(targetId)
+  // Why: await 期間承辦可能已關閉抽屜或改開另一位學生，慢回應的舊詳情不可覆蓋
+  //（同 handlePromote / onCourseAdded 的 drawerSeq 守衛）；列表本身仍要刷新，
+  // 因為儲存確實已發生。
+  if (seq === drawerSeq.value) {
+    detail.value = res.data as RegistrationDetail
+  }
   fetchList()
 }
 
@@ -1390,6 +1411,12 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 1.6;
   color: var(--neutral-700);
+}
+/* 唯讀提示條內的拒絕原因（承辦最常要看的一行，貼在狀態標示下方） */
+.rejection-reason {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.6;
 }
 .internal-note-inline {
   font-size: 12px;

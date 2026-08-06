@@ -35,8 +35,20 @@ export function hasScheduleConflict(a: CourseSlot, b: CourseSlot): boolean {
   return weekdaySchedulesOverlap(a, b)
 }
 
-/** 已佔位狀態（與後端 OCCUPYING_STATUSES 對齊）：候補不算佔時段。 */
-export const OCCUPYING_STATUSES = ['enrolled', 'promoted_pending']
+/**
+ * 已佔位狀態，與後端 `utils/activity_constants.py` 的 `OCCUPYING_STATUSES` 逐字對齊。
+ *
+ * 三態＝enrolled / promoted_pending / pending_review。pending_review（公開報名尚未
+ * 完成身分審核）自 2026-07-19 業主決策起視同佔用正式名額，後端 upcoming-sessions
+ * 也是用這個集合撈場次；前端漏掉它，hero 會出現「進行中 0、即將開課 3」的自相矛盾。
+ *
+ * 候補（waitlist / pending_review_waitlist）**不算**佔時段：尚未取得名額，
+ * 不應據以判定衝堂或計入「進行中」。
+ *
+ * ⚠ 這是跨 repo 常數複本，改動須同步後端；契約測試見
+ * `src/parent/utils/__tests__/activitySchedule.occupying.test.ts`。
+ */
+export const OCCUPYING_STATUSES = ['enrolled', 'promoted_pending', 'pending_review']
 
 interface RegistrationLike {
   school_year?: number | null
