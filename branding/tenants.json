@@ -74,6 +74,36 @@
         "TB_MANIFEST_PUBLIC_DESC": "常春藤教育機構公開活動報名",
         "TB_SLUG": "yihua"
       }
+    },
+    {
+      "slug": "renwu",
+      "hosts": [
+        "renwu.ivypreschool.tw"
+      ],
+      "origin": "https://renwu.ivypreschool.tw",
+      "tokens": {
+        "TB_ADMIN_TITLE": "仁武幼兒園管理系統",
+        "TB_PORTAL_TITLE": "仁武幼兒園教師入口",
+        "TB_PARENT_TITLE": "仁武幼兒園家長 App",
+        "TB_PUBLIC_TITLE": "仁武幼兒園｜課後才藝線上報名",
+        "TB_ORG_NAME": "仁武幼兒園",
+        "TB_META_DESC": "仁武幼兒園課後才藝課線上報名，2～5 歲適齡課程，額滿為止。手機點開就能填，報名後可隨時查詢或修改。",
+        "TB_OG_DESC": "2～5 歲課後才藝課線上報名，額滿為止。手機點開就能填，幾分鐘完成。",
+        "TB_POSTER_ALT": "仁武幼兒園課後才藝課程海報",
+        "TB_OG_POSTER_V": "20260807",
+        "TB_THEME_ADMIN": "#4f46e5",
+        "TB_THEME_PARENT": "#0d9053",
+        "TB_MANIFEST_ADMIN_NAME": "仁武幼兒園管理系統",
+        "TB_MANIFEST_ADMIN_SHORT": "仁武管理",
+        "TB_MANIFEST_ADMIN_DESC": "仁武幼兒園管理與教師入口系統",
+        "TB_MANIFEST_PARENT_NAME": "仁武幼兒園家長 App",
+        "TB_MANIFEST_PARENT_SHORT": "家長 App",
+        "TB_MANIFEST_PARENT_DESC": "仁武幼兒園家長端",
+        "TB_MANIFEST_PUBLIC_NAME": "仁武幼兒園公開報名",
+        "TB_MANIFEST_PUBLIC_SHORT": "公開報名",
+        "TB_MANIFEST_PUBLIC_DESC": "仁武幼兒園公開活動報名",
+        "TB_SLUG": "renwu"
+      }
     }
   ]
 }
