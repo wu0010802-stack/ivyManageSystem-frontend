@@ -986,11 +986,19 @@ function openCourseDm(course: CourseOption) {
 }
 
 // ===== 聯絡模態 =====（A1-P3 抽至 ContactInquiryModal，本檔只保留 visible ref）
-// 仁武暫不開放「與承辦人員聯繫」（2026-08-07 業主指示，開通後移除）。判斷用
-// Host 同步解析的 tenantSlug()，不用 branding.slug——後者在 tenant-meta 回來前
-// fallback 到 yihua，按鈕會先閃現再消失。
+// 仁武暫不開放「與承辦人員聯繫」（2026-08-07 業主指示，開通後移除整段）。
+//
+// ⚠ 為什麼要 hostname 兜底：prod 前端 build 目前是**單租戶模式**
+// （`VITE_TENANT_BASE_DOMAIN` / `VITE_TENANT_DOMAIN_MAP` 皆為空），`tenantSlug()`
+// 一律回 null，`branding.slug` 也 fallback 到 yihua——兩者在 prod 都認不出仁武
+// （2026-08-07 實測：只靠 slug 的版本上 prod 後按鈕依然顯示）。hostname 是這個
+// 部署形態下唯一可靠的租戶訊號。日後租戶 env 補齊，slug 分支會自動接手。
 const CONTACT_HIDDEN_SLUGS = new Set(['renwu'])
-const contactEnabled = !CONTACT_HIDDEN_SLUGS.has(tenantSlug() ?? '')
+const CONTACT_HIDDEN_HOSTS = new Set(['renwu.ivypreschool.tw'])
+const _tenantSlug = tenantSlug()
+const contactEnabled = _tenantSlug
+  ? !CONTACT_HIDDEN_SLUGS.has(_tenantSlug)
+  : !CONTACT_HIDDEN_HOSTS.has(window.location.hostname.toLowerCase())
 const contactModalVisible = ref(false)
 function openContactModal() {
   contactModalVisible.value = true
