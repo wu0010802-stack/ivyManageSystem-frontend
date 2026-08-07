@@ -47,6 +47,8 @@
       "hosts": [
         "ivypreschool.tw",
         "www.ivypreschool.tw",
+        "yihua.staging.ivypreschool.tw",
+        "ivy-staging.zeabur.app",
         "localhost",
         "127.0.0.1"
       ],
@@ -78,7 +80,8 @@
     {
       "slug": "renwu",
       "hosts": [
-        "renwu.ivypreschool.tw"
+        "renwu.ivypreschool.tw",
+        "renwu.staging.ivypreschool.tw"
       ],
       "origin": "https://renwu.ivypreschool.tw",
       "tokens": {
