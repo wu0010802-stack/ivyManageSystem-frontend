@@ -152,12 +152,17 @@ const COURSE_STATUS = {
 }
 
 // hero stats
+// 2026-08-06 稽核：原本 filter(...).length 算的是「報名筆數」，但一個孩子一學期
+// 只會有一筆 is_active 報名（後端 register 的同學期去重閘），所以單一孩子恆為 0 或 1，
+// 報三門課也只顯示 1。「進行中」語意上是課程數，改以 RegistrationCourse 逐列計數。
+// 佔位狀態集合沿用 activitySchedule 的 OCCUPYING_STATUSES（與後端同名常數對齊）。
 const activeRegistrations = computed(() =>
-  currentTermRegs.value.filter((r) =>
-    (r.courses || []).some(
-      (c) => OCCUPYING_STATUSES.includes(c.status),
-    ),
-  ).length,
+  currentTermRegs.value.reduce(
+    (sum, r) =>
+      sum +
+      (r.courses || []).filter((c) => OCCUPYING_STATUSES.includes(c.status)).length,
+    0,
+  ),
 )
 
 // ④ 待繳：以後端 outstanding_amount（= max(total-paid, 0)）為準。
@@ -285,6 +290,28 @@ async function fetchBootstrap() {
   }
 }
 
+// 項目 1（2026-08-06 稽核）：後端 register 對「同 student_id + 同學期已有 is_active
+// 報名」硬性 400（api/parent_portal/activity.py 的 existing 檢查），原文是
+// 「該學期已有活的報名，請先取消既有報名再重新提交」——但家長端**沒有**取消／改課
+// 入口，照抄那句等於要家長做一件他做不到的事，開了表單也必定送不出去。
+// 兩層處理：① 開表單前先擋（下方 findCurrentTermRegOf）② 競態仍撞到 400 時，把訊息
+// 改寫成家長真的可執行的指示（submitRegister catch）。
+const DUP_TERM_REG_DETAIL_MARK = '已有活的報名'
+const DUP_TERM_REG_HINT = '本學期已有報名，無法重複報名；如需加課或異動課程請洽校方。'
+
+/** 該童在「目錄學期」是否已有有效報名。my-registrations 只回 is_active 的列，
+ *  故命中即代表後端去重閘會擋。目錄為空（無從判定學期）時不擋。 */
+function findCurrentTermRegOf(studentId: number | null | undefined) {
+  const c0 = courses.value[0]
+  if (studentId == null || !c0) return undefined
+  return myRegs.value.find(
+    (r) =>
+      r.student_id === studentId &&
+      r.school_year === c0.school_year &&
+      r.semester === c0.semester,
+  )
+}
+
 function openRegister() {
   if (!isRegistrationOpen.value) {
     toast.warn(noticeState.value?.message || '目前未開放報名')
@@ -300,8 +327,17 @@ function openRegister() {
   }
   // 預設帶入第一門課的學期
   const c0 = courses.value[0]
+  const targetStudentId =
+    selectedId.value ?? (childrenStore.items[0] as { student_id: number }).student_id
+  // 項目 1：已有本學期報名 → 不開 sheet，改導向「我的報名」讓家長看到既有那筆。
+  if (findCurrentTermRegOf(targetStudentId)) {
+    selectedId.value = targetStudentId
+    tab.value = 'my'
+    toast.warn(DUP_TERM_REG_HINT)
+    return
+  }
   form.value = {
-    student_id: selectedId.value ?? (childrenStore.items[0] as { student_id: number }).student_id,
+    student_id: targetStudentId,
     school_year: c0.school_year,
     semester: String(c0.semester),
     course_ids: [],
@@ -347,7 +383,19 @@ async function submitRegister() {
     await refreshActivitySnapshot()
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '報名失敗'))
+    const raw = String(e?.displayMessage || '')
+    // 項目 1 第二層：守衛之後才被建立的報名（另一位家長同時送出、或本機快照過舊）
+    // 仍會撞到後端 400。後端原文要家長「先取消既有報名」，但家長端沒有取消入口，
+    // 直接轉述會把家長推進死路 → 改寫成可執行的指示，並收掉表單、回「我的報名」
+    // 並重抓快照，讓畫面與伺服器狀態收斂（家長看得到那筆既有報名）。
+    if (raw.includes(DUP_TERM_REG_DETAIL_MARK)) {
+      toast.warn(DUP_TERM_REG_HINT)
+      showRegister.value = false
+      tab.value = 'my'
+      await refreshActivitySnapshot().catch(() => {})
+    } else {
+      toast.error(raw || '報名失敗')
+    }
   } finally {
     submitting.value = false
   }
@@ -519,8 +567,18 @@ async function pullRefresh() {
         其他孩子還有 {{ otherChildrenPendingCount }} 筆候補待確認，點此查看
       </button>
       <MobileErrorRetry v-if="loadError" @retry="fetchBootstrap" />
-      <div v-else-if="!regsLoading && filteredRegs.length === 0" class="pt-empty">
+      <!-- 項目 3（2026-08-06 稽核）：載入中原本既無骨架也無空狀態（只落到下方
+           RegistrationStatusList 渲染空陣列）→ 首屏一片空白，家長會以為沒報名。
+           比照「可報名課程」分頁補 SkeletonBlock。 -->
+      <SkeletonBlock
+        v-else-if="regsLoading && filteredRegs.length === 0"
+        variant="card"
+        :count="2"
+        aria-label="報名載入中"
+      />
+      <div v-else-if="filteredRegs.length === 0" class="pt-empty">
         <div class="pt-empty-title">尚無報名</div>
+        <p class="pt-empty-note">切換到「可報名課程」即可為孩子報名才藝課</p>
       </div>
       <RegistrationStatusList
         v-else

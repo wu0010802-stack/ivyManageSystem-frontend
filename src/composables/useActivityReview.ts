@@ -20,6 +20,17 @@ import { FIELD_RULES, forceRefundReasonPromptOptions } from '@/constants/activit
  * 後端無批量端點 → 批量以 Promise.allSettled 逐筆並發彙總（沿用待審核頁範式）。
  */
 
+/**
+ * 自動比對鍵的對外說明文字（唯一出處，兩處確認框共用）。
+ *
+ * 後端事實（services/activity_student_sync.py `_match_student_with_class`）：
+ * - 2026-07-19 家長電話已完全退出比對，改「姓名 + 生日 + 班級」；
+ * - 2026-08-02 名冊生日為 NULL 時退階為「姓名 + 班級」；
+ * - 2026-08-03 公開報名表移除生日欄，新報名一律無生日 → 實際只剩「姓名 + 班級」。
+ * 文案沿用 RegistrationRematchForceDialog.vue 既有措辭，避免同一頁兩種說法。
+ */
+const MATCH_KEY_DESC = '姓名 + 班級'
+
 export interface ReviewRow {
   id: number
   student_name?: string
@@ -326,7 +337,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
   async function handleRematchAllPending(params?: { school_year?: number; semester?: number }) {
     try {
       await ElMessageBox.confirm(
-        '將對目前學期所有「待審核」報名重新執行自動比對（姓名 + 生日 + 班級）。比對成功者自動綁定在校生，其餘維持待審核。',
+        `將對目前學期所有「待審核」報名重新執行自動比對（比對鍵：${MATCH_KEY_DESC}）。比對成功者自動綁定在校生，其餘維持待審核。`,
         '重新比對',
         { confirmButtonText: '確定重新比對', cancelButtonText: '取消', type: 'info' },
       )
@@ -360,7 +371,7 @@ export function useActivityReview(opts: { onChanged: () => void | Promise<void>;
     if (rows.length === 0) return
     try {
       await ElMessageBox.confirm(
-        `將對已選 ${rows.length} 筆待審核報名重新執行自動比對（姓名 + 生日 + 家長手機）。比對成功者自動綁定在校生，其餘維持待審核。`,
+        `將對已選 ${rows.length} 筆待審核報名重新執行自動比對（比對鍵：${MATCH_KEY_DESC}）。比對成功者自動綁定在校生，其餘維持待審核。`,
         '批量重新比對',
         { confirmButtonText: '確定重新比對', cancelButtonText: '取消', type: 'info' },
       )

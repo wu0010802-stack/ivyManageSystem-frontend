@@ -6,6 +6,31 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import { sentryVitePlugin } from '@sentry/vite-plugin'
+import { loadBranding, replaceTokens, tokenMapFor } from './scripts/brand-tokens-lib.mjs'
+
+/**
+ * dev server 專用：把三個 HTML 的 `{{TB_*}}` 換成 default tenant 的值。
+ *
+ * 正式環境由 nginx `sub_filter` 依 $host 注入（fb §3.3）；**build 產物刻意保留 token**。
+ * `transformIndexHtml` 只在 dev server 生效（CT-F-03：初稿宣稱它也涵蓋 `vite preview`
+ * 已撤回）——跑 dist 但沒有 nginx 的環境請先跑 `node scripts/apply-brand-tokens.mjs`。
+ *
+ * dev 下 public/*.webmanifest 是靜態檔、不經 vite transform，瀏覽器會抓到含 token 的
+ * manifest；只影響 dev 安裝 PWA 的顯示名，可接受。
+ * dev 模擬他租戶品牌：`?tenant=` 只影響 L2/API，L1 一律 default；L1 驗收走部署環境。
+ */
+function brandTokensDevPlugin() {
+    return {
+        name: 'ivy-brand-tokens-dev',
+        apply: 'serve',
+        transformIndexHtml: {
+            order: 'pre',
+            handler(html) {
+                return replaceTokens(html, tokenMapFor(loadBranding().defaultTenant))
+            },
+        },
+    }
+}
 
 // Sentry source map 上傳採雙重 gate：CI 明確標記 trusted main/release，且三個 secret
 // 全部存在才啟用。PR 即使是同 repo 分支也不應取得可外傳 source map 的 auth token。
@@ -124,7 +149,23 @@ function manualChunks(id) {
         // EP-free），公開頁 ActivityPublicView 與 admin ActivitySettingsView 共用。
         // 與 weekdaySchedule 同型：跨端共用純函式檔必 pin，防被併進單端 chunk
         // 造成另一端靜態橋接整包（2026-08-03 公開頁接管事故的教訓）。
-        id.includes('/src/utils/publicCopy.ts')
+        id.includes('/src/utils/publicCopy.ts') ||
+        // 多租戶品牌（4d/fb）：tenantMeta.ts 是裸 fetch、零 axios 依賴，
+        // useTenantBranding.ts 只依賴 vue + tenantMeta。三個 entry 都要讀品牌字串，
+        // 家長端的 liff.ts 也 import tenantMeta 取 liff_id。
+        // ⛔ **不得改回 admin-core**：admin-core 被 check-entry-chunks.mjs 對 parent
+        //    entry 設為 forbidden（家長端不得靜態可達 admin-core），改回去會直接讓
+        //    `npm run build` exit 1、CI Build check 紅、出不了 image（CT-F-05 / GAP-01）。
+        id.includes('/src/api/tenantMeta.ts') ||
+        id.includes('/src/composables/useTenantBranding.ts') ||
+        // fc 的租戶解析／儲存隔離／boot 檢查／三態遮罩入口：同樣三端共用且 EP-free。
+        // ⚠ tenantBlocked.ts 漏 pin 曾讓 index.html 直接靜態可達 parent-app
+        //（「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」的第五次同型回歸），
+        // admin 首屏 gz 從 276KB 漂到 337KB 並觸發 check-entry-chunks 的 forbidden 邊。
+        id.includes('/src/utils/tenant.ts') ||
+        id.includes('/src/utils/tenantStorage.ts') ||
+        id.includes('/src/utils/tenantBlocked.ts') ||
+        id.includes('/src/utils/tenantBoot.ts')
     ) {
         return 'shared-common'
     }
@@ -310,6 +351,7 @@ function manualChunks(id) {
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
+        brandTokensDevPlugin(),
         vue(),
         AutoImport({
             resolvers: [ElementPlusResolver()],
@@ -327,7 +369,14 @@ export default defineConfig({
             // 不放 images/ivy-kids-loading.png（324 KB）：放進 includeAssets 會被 SW
             // 在 install 階段搶下載，與首屏 API 競爭頻寬；改 runtime 才載入。
             // 圖檔仍由 vite 自動複製 public/ 下到 dist，App.vue 用到時即可取得。
-            includeAssets: ['favicon.ico', 'LOGO.png', 'apple-touch-icon-180x180.png', 'logo.svg'],
+            //
+            // 多租戶（4d/fb，CT-F-04）：**品牌資產全部退出 precache**（原為
+            // favicon.ico / LOGO.png / apple-touch-icon-180x180.png / logo.svg）。
+            // 理由：precache 的 revision 來自 build 時「預設檔」的內容 hash，而
+            // per-tenant 的圖是 nginx 依 $host 從 /brand/<slug>/ overlay 換掉的
+            // （dist 內容不變）⇒ revision 永遠不變 ⇒ SW 永遠不重抓，B 校會一直看到
+            // A 校的 logo。改走下方 runtimeCaching 的 `brand-assets` SWR 規則。
+            includeAssets: [],
 
             // VitePWA 的 manifest 注入會套用到每個 HTML entry，無法區分
             // admin / parent / public。三個 entry 改由各自 HTML 明確連結 public/
@@ -341,21 +390,28 @@ export default defineConfig({
                 clientsClaim: true,
                 // 只預快取 app shell 與核心 vendor；大型 route chunk 與圖片改由 runtime cache 接手
                 // multi-page 後管理端 entry 是 main-*.js，家長 App 是 parent-app-*.js（走 runtime cache）
+                //
+                // 多租戶（CT-F-04）兩處調整：
+                //   - **移除三份 *.webmanifest**：它們現在帶 {{TB_*}} token、本就 no-cache，
+                //     由 nginx 逐請求注入；留在 precache 只會讓已安裝 PWA 卡住舊品牌。
+                //   - **移除 '*.{ico,svg}'**：favicon.ico / logo.svg 是 per-tenant overlay
+                //     的品牌資產（理由同 includeAssets），改走 brand-assets SWR。
+                //   - **新增 brand-version.json**：內容 = branding/tenants.json 的 hash。
+                //     token 化後 dist 對所有租戶內容相同，改品牌只改 nginx map ⇒ 若沒有
+                //     這個檔，workbox revision 不變、已安裝 PWA 的三個 HTML 永不重抓。
+                //     這是「L1 品牌改動能傳到已安裝 PWA」的唯一機制，勿刪。
                 globPatterns: [
                     'index.html',
                     'parent.html',
                     'public.html',
                     'registerSW.js',
-                    'manifest.webmanifest',
-                    'parent.webmanifest',
-                    'public.webmanifest',
+                    'brand-version.json',
                     'assets/main-*.css',
                     'assets/main-*.js',
                     'assets/vue-core-*.js',
                     'assets/vendor-*.js',
                     'assets/shared-common-*.js',
                     'assets/shared-common-*.css',
-                    '*.{ico,svg}',
                 ],
                 // 排除大型 PWA 圖示（由 manifest 按需載入）與 chart-vendor
                 globIgnores: [
@@ -372,6 +428,30 @@ export default defineConfig({
                 ],
 
                 runtimeCaching: [
+                    // ─── 品牌資產（L3，per-tenant overlay）───────────────────
+                    // 必須排在 app-images 之前：workbox 先匹配先贏，
+                    // /images/activity-poster.jpg 同時符合這條與 app-images 的
+                    // CacheFirst，順序反了海報就換不掉。
+                    //
+                    // 用 SWR 而非 CacheFirst：這些 URL 的**內容**會因租戶 overlay 或
+                    // 換 logo 而改變，但 URL 永遠不變（被 HTML/template/manifest 四處引用，
+                    // 刻意不加 hash）。SWR 讓使用者這次先看到快取、背景更新，下一次導航即新圖。
+                    // cache 名不需 tenant 後綴：CacheStorage 本就 per-origin，租戶各自 origin。
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.origin === self.location.origin &&
+                            /^\/(LOGO\.png|logo\.svg|favicon\.ico|apple-touch-icon-180x180\.png|pwa-|maskable-icon-|parent-(pwa-|maskable-)|images\/(activity-poster\.jpg|login-logo\.png|ivy-kids-loading\.png))/.test(url.pathname) &&
+                            ['image', ''].includes(request.destination),
+                        handler: 'StaleWhileRevalidate',
+                        options: {
+                            cacheName: 'brand-assets',
+                            expiration: {
+                                maxEntries: 30,
+                                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 天
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
                     {
                         // Google Fonts（跨 origin）：CacheFirst，opaque 回應允許快取
                         urlPattern: ({ url }) =>
@@ -489,7 +569,11 @@ export default defineConfig({
         proxy: {
             '/api': {
                 target: 'http://127.0.0.1:8088',
-                changeOrigin: true,
+                // 多租戶（2026-08）：必須保留原始 Host（如 yihua.localhost:5173）讓後端
+                // TenantContextMiddleware 解析 subdomain；後端會自行剝除 port。
+                // 單租戶模式後端不讀 Host，false 無副作用。勿改回 true——
+                // changeOrigin 會把 Host 改寫成 127.0.0.1:8088，租戶解析必失敗。
+                changeOrigin: false,
                 ws: true,   // 讓 /api/ws/* WebSocket 也通過 proxy
             }
         }

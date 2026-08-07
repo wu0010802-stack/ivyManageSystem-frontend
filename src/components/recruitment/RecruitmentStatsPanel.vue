@@ -213,6 +213,14 @@ import {
   FALLBACK_SCHOOL_LNG,
   TRAVEL_BANDS,
 } from '@/constants/recruitment'
+import { useTenantBranding } from '@/composables/useTenantBranding'
+
+// 園所座標的三層優先序（scan-frontend GAP-08）：
+//   後端 campus 設定 > 品牌 API 的 per-tenant 座標 > constants 的最終硬編 fallback。
+// 中間這層是多租戶新增的：沒有它，第二間園所在還沒設 campus_lat/lng 前地圖會落在高雄。
+const { branding } = useTenantBranding()
+const brandingCampusLat = computed(() => branding.value.map.lat ?? FALLBACK_SCHOOL_LAT)
+const brandingCampusLng = computed(() => branding.value.map.lng ?? FALLBACK_SCHOOL_LNG)
 
 // -------- props / emits --------
 const props = defineProps<{ dashboard: ReturnType<typeof useRecruitmentDashboard> }>()
@@ -309,8 +317,8 @@ const {
   displayLimit: AREA_HOTSPOT_DISPLAY_LIMIT,
   syncBatchSize: AREA_HOTSPOT_SYNC_BATCH_SIZE,
   maxSyncRounds: AREA_HOTSPOT_MAX_SYNC_ROUNDS,
-  fallbackCampusLat: FALLBACK_SCHOOL_LAT,
-  fallbackCampusLng: FALLBACK_SCHOOL_LNG,
+  fallbackCampusLat: brandingCampusLat.value,
+  fallbackCampusLng: brandingCampusLng.value,
 })
 
 const invalidateLazyTabs = () => {
@@ -488,11 +496,11 @@ const {
 
 // -------- 區域分析：本園座標合併（含市場情報回傳覆蓋）--------
 const currentCampus = computed(() => ({
-  ...createEmptyCampus(FALLBACK_SCHOOL_LAT, FALLBACK_SCHOOL_LNG),
+  ...createEmptyCampus(brandingCampusLat.value, brandingCampusLng.value),
   ...campusSetting.value,
   ...(marketSnapshot.value.campus || {}),
-  campus_lat: marketSnapshot.value.campus?.campus_lat ?? campusSetting.value.campus_lat ?? FALLBACK_SCHOOL_LAT,
-  campus_lng: marketSnapshot.value.campus?.campus_lng ?? campusSetting.value.campus_lng ?? FALLBACK_SCHOOL_LNG,
+  campus_lat: marketSnapshot.value.campus?.campus_lat ?? campusSetting.value.campus_lat ?? brandingCampusLat.value,
+  campus_lng: marketSnapshot.value.campus?.campus_lng ?? campusSetting.value.campus_lng ?? brandingCampusLng.value,
 }))
 
 // -------- 接待分析：交叉分析 computed helper（解決 stats.referrer_source_cross 為 unknown 的 template 型別問題）--------

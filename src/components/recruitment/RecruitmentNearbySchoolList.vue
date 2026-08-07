@@ -29,7 +29,7 @@
     <!-- 類型圖例 -->
     <div class="school-type-legend">
       <span
-        v-for="(style, type) in SCHOOL_TYPE_STYLES"
+        v-for="(style, type) in schoolTypeStyles"
         :key="type"
         class="legend-item"
       >
@@ -141,10 +141,13 @@
 //   讓地圖引擎（仍留在主元件）決定如何 pan/highlight，維持地圖狀態不跨元件邊界搬移。
 import { computed, ref, watch } from 'vue'
 import type { GovData, NearbySchool } from '@/types/recruitmentHeatmap'
-import { DEFAULT_SCHOOL_STYLE, SCHOOL_TYPE_STYLES, getSchoolType, getSchoolTypeStyle } from '@/utils/recruitmentSchoolType'
+import { DEFAULT_SCHOOL_STYLE, getSchoolType, getSchoolTypeStyle, getSchoolTypeStyles } from '@/utils/recruitmentSchoolType'
 // 顯式 import：新元件尚未跑過一次 vite dev/build，unplugin-vue-components 的
 // components.d.ts 全域自動註冊還沒收錄它，顯式 import 才能讓 vue-tsc 正確解析型別。
 import RecruitmentSchoolGovDetail from './RecruitmentSchoolGovDetail.vue'
+
+// 圖例：自家品牌那項的 label 是 per-tenant 的（品牌短名），故包 computed 保持響應。
+const schoolTypeStyles = computed(() => getSchoolTypeStyles())
 
 const props = withDefaults(defineProps<{
   schools: NearbySchool[]

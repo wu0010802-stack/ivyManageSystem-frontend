@@ -1,8 +1,8 @@
 {
-  "name": "常春藤家長 App",
-  "short_name": "家長 App",
-  "description": "常春藤教育機構家長端",
-  "theme_color": "#0d9053",
+  "name": "{{TB_MANIFEST_PARENT_NAME}}",
+  "short_name": "{{TB_MANIFEST_PARENT_SHORT}}",
+  "description": "{{TB_MANIFEST_PARENT_DESC}}",
+  "theme_color": "{{TB_THEME_PARENT}}",
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",

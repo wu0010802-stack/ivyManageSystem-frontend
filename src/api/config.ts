@@ -53,5 +53,12 @@ export const updatePositionSalary = (
 // compare 後端尚未補 response_model（回傳形狀未入契約），維持 untyped 待後端補後再 type。
 export const comparePositionSalary = () => api.get('/config/position-salary/compare')
 
+// ----- 職稱對照（多租戶 CT-FIX-09 / P32b）-----
+// 回 { title_to_grade, position_salary_key } 兩組 per-tenant 對照，取代前端
+// src/constants/employee.ts 的兩組硬編字典（那兩組現已降級為 API 失敗時的 fallback）。
+// 後端尚未標 response_model → 回 unknown，由 useTenantDictionaries 收斂型別。
+export const getPositionMapping = (): AxiosResp<'/config/position-mapping', 'get'> =>
+  api.get('/config/position-mapping')
+
 export const syncPositionSalary = (employeeIds: number[] = []) =>
   api.post('/config/position-salary/sync', { employee_ids: employeeIds })

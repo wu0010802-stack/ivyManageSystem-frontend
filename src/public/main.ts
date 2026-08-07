@@ -15,6 +15,8 @@ import { installChunkSelfHeal } from '@/utils/chunkSelfHeal'
 import App from './App.vue'
 import router from './router'
 import { initSentry } from '@/utils/sentry'
+import { initTenantBoot } from '@/utils/tenantBoot'
+import { getBranding, onBrandingLoaded, useTenantBranding } from '@/composables/useTenantBranding'
 
 // 設計 tokens（字級 / 間距 / 圓角 / 顏色）與 admin / parent 共用同一份基礎尺度
 import '@/assets/design-tokens.css'
@@ -24,8 +26,25 @@ installChunkSelfHeal()
 
 const app: VueApp = createApp(App)
 
-// Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking
-initSentry(app, { entry: 'public' })
+// 多租戶 boot 檢查（frontend-core §2.1）。公開報名頁是**最需要**擋的一支：
+// 認不出園所卻照樣渲染，家長會對著別校的報名表單填自己小孩的個資。
+const tenantBoot = initTenantBoot()
 
-app.use(router)
-app.mount('#app')
+// Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking
+initSentry(app, {
+  entry: 'public',
+  tags: tenantBoot.slug ? { tenant: tenantBoot.slug } : undefined,
+}).finally(() => tenantBoot.report())
+
+if (tenantBoot.proceed) {
+  // 品牌預熱：與首次導航並行，避免 header 的校名／英文名先閃 default 再跳。
+  // 單租戶模式下 useTenantBranding() 不會發任何請求（灰度不變式）。
+  useTenantBranding()
+  // router.beforeEach 設的 document.title 尾綴用 short_name，品牌回來後補套一次。
+  onBrandingLoaded(() => {
+    const title = router.currentRoute.value.meta?.title
+    if (title) document.title = `${title}｜${getBranding().short_name}`
+  })
+  app.use(router)
+  app.mount('#app')
+}

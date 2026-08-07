@@ -10,6 +10,7 @@
  * 不破壞既有部署）。
  */
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import { getBranding } from '@/composables/useTenantBranding'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -37,7 +38,8 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta?.title) {
-    document.title = `${to.meta.title}｜常春藤`
+    // 多租戶（4d/fb）：尾綴改讀品牌短名（預設 '常春藤'，單租戶輸出不變）。
+    document.title = `${to.meta.title}｜${getBranding().short_name}`
   }
 })
 

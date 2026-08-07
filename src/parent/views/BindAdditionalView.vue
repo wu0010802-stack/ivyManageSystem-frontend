@@ -7,6 +7,7 @@ import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 import BrandMark from '@/components/brand/BrandMark.vue'
 import { resolveSafeRedirect } from '../utils/safeRedirect'
 
@@ -28,7 +29,15 @@ const needsNewCode = computed(
     errorCode.value === 'BIND_CODE_USED' ||
     errorCode.value === 'BIND_CODE_ALREADY_USED',
 )
-const schoolPhone = (import.meta.env.VITE_SCHOOL_PHONE as string | undefined) || ''
+// 多租戶（4d/fb）：園所電話改由品牌 API 提供（tenants.contact_json）。
+// `VITE_SCHOOL_PHONE` 降為過渡 fallback——它連 Dockerfile ARG 都沒宣告，
+// 正式 image 內恆為空字串，實務上等於已由品牌值接手。階段 3 連同這行一起刪。
+// 顯示用 phone_display（人眼格式），撥號用 phone（E.164）。
+const { branding } = useTenantBranding()
+const schoolPhone = computed(
+  () => branding.value.contact.phone_display || (import.meta.env.VITE_SCHOOL_PHONE as string | undefined) || '',
+)
+const schoolPhoneTel = computed(() => branding.value.contact.phone || schoolPhone.value)
 
 async function submit() {
   errorState.value = null
@@ -105,7 +114,7 @@ function resetForRetry() {
       <div v-if="needsNewCode" class="recovery-actions">
         <a
           v-if="schoolPhone"
-          :href="`tel:${schoolPhone}`"
+          :href="`tel:${schoolPhoneTel}`"
           class="pt-action-btn recovery-call"
         >
           聯絡園所 {{ schoolPhone }}

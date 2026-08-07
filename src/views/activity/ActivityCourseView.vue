@@ -78,11 +78,15 @@
           <div v-if="(row.pending_review || 0) > 0" class="pending-occupancy-hint">
             含 {{ row.pending_review }} 待審核
           </div>
+          <!-- 待審候補（pending_review_waitlist）：不佔容量，且點「升正式」後端必回 400，
+               須先於「報名管理」完成身分審核——理由與候補 Drawer 的 tooltip 同一套說法。 -->
           <div
-            v-if="(row.pending_review_waitlist || 0) > 0"
+            v-if="pendingReviewWaitlist(row) > 0"
             class="pending-occupancy-hint pending-occupancy-hint--waitlist"
+            data-test="pending-review-waitlist-hint"
           >
-            {{ row.pending_review_waitlist }} 待審候補（不佔位）
+            {{ pendingReviewWaitlist(row) }} 待審候補（不佔位）
+            <span class="pending-occupancy-hint__note">須先完成審核才能升正式</span>
           </div>
         </template>
       </el-table-column>
@@ -686,6 +690,14 @@ function occupying(row: Course): number {
   return (row.enrolled || 0) + (row.promoted_pending || 0) + (row.pending_review || 0)
 }
 
+// 待審候補人數：後端 CourseListItemOut 的 pending_review_waitlist（不佔位，另計於
+// waitlist_count 之內）。舊版後端未回此欄位（或回非數值）時一律當 0，讓前後端
+// 部署順序不必嚴格對齊，也避免欄位缺失時顯示 NaN 而整列壞掉。
+function pendingReviewWaitlist(row: Course): number {
+  const n = Number(row.pending_review_waitlist ?? 0)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 // review P1（2026-07-12）：候補/報名 Drawer 的載入需與 fetchCourses 同樣的請求序號守衛，
 // 否則快速切換不同課程時較慢的舊課回應會最後覆寫較新課程的清單 → Drawer 標題顯示新課、
 // 列卻屬舊課；此時 confirmPromote 以最新 waitlistCourse.id + 舊課列的 registration_id
@@ -1090,6 +1102,8 @@ onMounted(() => {
 .toolbar__actions { display: flex; gap: 8px; align-items: center; }
 .pending-occupancy-hint { font-size: 11px; color: var(--el-color-warning); line-height: 1.2; }
 .pending-occupancy-hint--waitlist { color: var(--el-color-info); }
+/* 待審候補的補充說明另起一行：欄寬僅 140px，與人數擠同一行會斷得難讀 */
+.pending-occupancy-hint__note { display: block; font-size: 10px; }
 .grade-tag { margin: 1px 4px 1px 0; }
 .dm-hint-create { font-size: 12px; color: var(--text-tertiary); }
 

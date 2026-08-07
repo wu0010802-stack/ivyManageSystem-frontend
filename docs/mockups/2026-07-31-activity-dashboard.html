@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>設計稿：統計儀表板（課後才藝）</title>
+<style>
+/* ============================================================
+   Design tokens — 值複製自 src/assets/design-tokens.css（html.ivy-admin scope）
+   產稿前請對照原檔確認未漂移；設計稿為獨立 HTML，允許落地 hex。
+   ============================================================ */
+:root {
+  /* Admin accent（sky，非 :root default 的 indigo！） */
+  --brand-primary: #0284c7;
+  --brand-primary-hover: #0369a1;
+  --brand-primary-soft: #e0f2fe;
+  /* Neutral（= Tailwind slate） */
+  --neutral-0: #ffffff; --neutral-50: #f8fafc; --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0; --neutral-300: #cbd5e1; --neutral-400: #94a3b8;
+  --neutral-500: #64748b; --neutral-600: #475569; --neutral-700: #334155;
+  --neutral-800: #1e293b; --neutral-900: #0f172a;
+  /* Semantic */
+  --success: #10b981; --success-soft: #dcfce7; --success-darker: #15803d;
+  --warning: #f59e0b; --warning-soft: #fef3c7; --warning-darker: #b45309;
+  --danger: #ef4444;  --danger-soft: #fee2e2;  --danger-darker: #b91c1c;
+  --info: #3b82f6;    --info-soft: #dbeafe;    --info-darker: #1d4ed8;
+  /* Sidebar */
+  --sidebar-bg: #1e2a3a; --sidebar-bg-active: #314257;
+  --sidebar-text: #94a3b8; --sidebar-text-hover: #e2e8f0; --sidebar-text-active: #7dd3fc;
+  /* 語意 alias（= src/assets/main.css） */
+  --bg-color: var(--neutral-50); --bg-color-soft: var(--neutral-100);
+  --surface-color: var(--neutral-0);
+  --text-primary: var(--neutral-800); --text-secondary: var(--neutral-500); --text-tertiary: var(--neutral-400);
+  --border-color: var(--neutral-200); --border-color-light: var(--neutral-100);
+  /* Spacing / radius / shadow / motion */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px;
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --transition-fast: .15s ease; --transition-base: .2s ease;
+  --transition-slow: .3s cubic-bezier(.4,0,.2,1);
+  --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-lg: 16px;
+  --text-xl: 18px; --text-2xl: 20px; --text-3xl: 24px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--text-base); line-height: 1.5; color: var(--text-primary);
+  background: var(--bg-color); overflow: hidden;
+}
+
+/* ============================================================
+   App shell（骨架照抄 AdminLayout.vue / AdminSidebar.vue / AdminHeader.vue）
+   ============================================================ */
+.admin-layout { display: flex; height: 100vh; }
+
+/* ---- Sidebar：260px、收合 64px ---- */
+.admin-sidebar {
+  width: 260px; flex-shrink: 0; height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--sidebar-bg); color: #fff;
+  border-right: 1px solid var(--neutral-700);
+  box-shadow: 4px 0 24px rgba(0,0,0,.1);
+  transition: width var(--transition-slow); z-index: 20;
+}
+.logo-container {
+  height: 64px; flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 var(--space-5); background: var(--neutral-900);
+  border-bottom: 1px solid var(--neutral-700);
+}
+.logo-icon {
+  width: 36px; height: 36px; border-radius: var(--radius-md); flex-shrink: 0;
+  background: linear-gradient(135deg, #4EB87A, #2D8F5A);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 15px;
+}
+.logo-text { margin-left: var(--space-3); font-size: var(--text-xl); font-weight: 700; color: #fff; letter-spacing: .5px; white-space: nowrap; }
+.sidebar-menu { flex: 1; overflow-y: auto; padding: var(--space-2) 0; }
+.sidebar-menu::-webkit-scrollbar { width: 6px; }
+.sidebar-menu::-webkit-scrollbar-thumb { background: var(--neutral-700); border-radius: 3px; }
+.menu-item, .submenu-title {
+  display: flex; align-items: center; gap: 10px;
+  height: 50px; line-height: 50px; margin: var(--space-1) var(--space-3);
+  padding: 0 var(--space-4); border-radius: var(--radius-md);
+  color: var(--sidebar-text); font-size: var(--text-base);
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  text-decoration: none;
+}
+.menu-item:hover, .submenu-title:hover { color: var(--sidebar-text-hover); background: rgba(255,255,255,.05); }
+.menu-item.is-active { background: var(--sidebar-bg-active); color: var(--sidebar-text-active); font-weight: 500; }
+.menu-icon { width: 18px; height: 18px; flex-shrink: 0; display: inline-flex; }
+.menu-icon svg { width: 100%; height: 100%; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.submenu-arrow { margin-left: auto; transition: transform var(--transition-base); font-size: 12px; }
+.submenu.is-open .submenu-arrow { transform: rotate(180deg); }
+.submenu-items { display: none; }
+.submenu.is-open .submenu-items { display: block; }
+.submenu-items .menu-item { height: 44px; line-height: 44px; padding-left: 36px; font-size: var(--text-sm); }
+.menu-badge {
+  margin-left: auto; background: var(--danger); color: #fff;
+  font-size: 11px; line-height: 1; padding: 3px 6px; border-radius: var(--radius-full);
+  font-weight: 600;
+}
+.collapse-toggle {
+  height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  border-top: 1px solid var(--neutral-700); color: var(--sidebar-text); cursor: pointer;
+}
+.collapse-toggle:hover { color: var(--sidebar-text-hover); }
+
+/* ---- Main ---- */
+.main-content-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.admin-header {
+  height: 64px; flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 var(--space-6); gap: var(--space-3);
+  background: var(--surface-color); border-bottom: 1px solid var(--border-color-light);
+}
+.page-title { font-size: var(--text-2xl); font-weight: 600; color: var(--text-primary); }
+.page-title .parent-title { color: var(--text-tertiary); font-weight: 400; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-3); }
+.global-search {
+  display: flex; align-items: center; gap: var(--space-2);
+  height: 36px; padding: 0 var(--space-3); min-width: 180px;
+  background: var(--bg-color-soft); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); color: var(--text-tertiary); font-size: var(--text-sm); cursor: pointer;
+}
+.global-search kbd {
+  margin-left: auto; font-family: inherit; font-size: 11px; color: var(--text-secondary);
+  background: var(--surface-color); border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); padding: 1px 5px;
+}
+.header-icon-btn {
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  border: none; background: none; border-radius: var(--radius-md);
+  color: var(--text-secondary); cursor: pointer; position: relative; font-size: 18px;
+}
+.header-icon-btn:hover { background: var(--bg-color-soft); }
+.header-icon-btn .dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.user-menu { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; padding: var(--space-1) var(--space-2); border-radius: var(--radius-md); }
+.user-menu:hover { background: var(--bg-color-soft); }
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--brand-primary-soft);
+  color: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-weight: 600;
+}
+.user-name { font-size: var(--text-sm); }
+.user-role { font-size: var(--text-xs); color: var(--text-tertiary); }
+#admin-main { flex: 1; overflow-y: auto; }
+.content-container { padding: var(--space-8); max-width: 1600px; margin: 0 auto; }
+
+/* ============================================================
+   Element Plus 近似樣式（ep- 前綴；只求視覺相同，非真元件）
+   ============================================================ */
+.ep-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 15px; font-size: var(--text-base); font-family: inherit;
+  border-radius: var(--radius-sm); border: 1px solid var(--border-color-mid, #dcdfe6);
+  background: var(--surface-color); color: var(--text-primary); cursor: pointer;
+  transition: all var(--transition-fast); white-space: nowrap;
+}
+.ep-button:hover { color: var(--brand-primary); border-color: var(--brand-primary-soft); background: var(--brand-primary-soft); }
+.ep-button--primary { background: var(--brand-primary); border-color: var(--brand-primary); color: #fff; }
+.ep-button--primary:hover { background: var(--brand-primary-hover); border-color: var(--brand-primary-hover); color: #fff; }
+.ep-button--primary.is-plain { background: var(--brand-primary-soft); border-color: #7dd3fc; color: var(--brand-primary); }
+.ep-button--success.is-plain { background: var(--success-soft); border-color: #86efac; color: var(--success-darker); }
+.ep-button--warning.is-plain { background: var(--warning-soft); border-color: #fcd34d; color: var(--warning-darker); }
+.ep-button--danger.is-plain { background: var(--danger-soft); border-color: #fca5a5; color: var(--danger-darker); }
+.ep-button--small { height: 28px; padding: 0 11px; font-size: var(--text-xs); }
+.ep-button--text { border: none; background: none; color: var(--brand-primary); padding: 0 6px; }
+.ep-input {
+  height: 36px; padding: 0 11px; font-size: var(--text-base); font-family: inherit;
+  border: 1px solid #dcdfe6; border-radius: var(--radius-sm); color: var(--text-primary);
+  background: var(--surface-color); outline: none; transition: border-color var(--transition-fast);
+}
+.ep-input:focus { border-color: var(--brand-primary); }
+.ep-input::placeholder { color: var(--text-tertiary); }
+.ep-select { position: relative; }
+.ep-select::after { content: "▾"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
+.ep-card {
+  background: var(--surface-color); border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm);
+}
+.ep-tag {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 9px;
+  font-size: var(--text-xs); border-radius: var(--radius-sm); border: 1px solid transparent;
+}
+.ep-tag--success { background: var(--success-soft); color: var(--success-darker); border-color: #bbf7d0; }
+.ep-tag--warning { background: var(--warning-soft); color: var(--warning-darker); border-color: #fde68a; }
+.ep-tag--danger  { background: var(--danger-soft); color: var(--danger-darker); border-color: #fecaca; }
+.ep-tag--info    { background: var(--neutral-100); color: var(--neutral-600); border-color: var(--neutral-200); }
+.ep-table { width: 100%; border-collapse: collapse; background: var(--surface-color); font-size: var(--text-base); }
+.ep-table th {
+  text-align: left; font-weight: 600; color: var(--text-secondary); font-size: var(--text-sm);
+  padding: 12px 16px; background: var(--neutral-50); border-bottom: 1px solid var(--border-color);
+}
+.ep-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color-light); }
+.ep-table tbody tr:hover { background: var(--neutral-50); }
+.ep-pagination { display: flex; align-items: center; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-secondary); }
+.ep-pagination .page-btn {
+  min-width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); cursor: pointer; background: var(--bg-color-soft);
+}
+.ep-pagination .page-btn.is-active { background: var(--brand-primary); color: #fff; }
+.ep-dialog-overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 100;
+  display: none; align-items: flex-start; justify-content: center; padding-top: 10vh;
+}
+.ep-dialog-overlay.is-open { display: flex; }
+.ep-dialog {
+  background: var(--surface-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  width: 560px; max-width: calc(100vw - 32px); max-height: 80vh; overflow-y: auto;
+}
+.ep-dialog__header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-5) var(--space-6) var(--space-3); }
+.ep-dialog__title { font-size: var(--text-lg); font-weight: 600; }
+.ep-dialog__close { border: none; background: none; font-size: 18px; color: var(--text-tertiary); cursor: pointer; }
+.ep-dialog__body { padding: var(--space-3) var(--space-6); }
+.ep-dialog__footer { padding: var(--space-4) var(--space-6) var(--space-5); display: flex; justify-content: flex-end; gap: var(--space-2); }
+.ep-form-item { margin-bottom: var(--space-4); }
+.ep-form-item label { display: block; font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: 6px; }
+.ep-form-item .ep-input, .ep-form-item select.ep-input { width: 100%; }
+
+/* PageHeader + Toolbar（列表頁標準組合，見 DESIGN.md） */
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-5); }
+.page-header h2 { font-size: var(--text-2xl); font-weight: 600; }
+.page-header .subtitle { font-size: var(--text-sm); color: var(--text-secondary); margin-top: 2px; }
+.list-toolbar { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); flex-wrap: wrap; }
+.list-toolbar .spacer { flex: 1; }
+
+/* ============================================================
+   設計稿專用：變更標註（實作時不存在，純供 review）
+   ============================================================ */
+.mock-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  padding: 3px 7px; border-radius: var(--radius-full);
+  background: #fdf4ff; color: #a21caf; border: 1px dashed #d946ef;
+  vertical-align: middle; margin-left: 6px;
+}
+.mock-changed { outline: 2px dashed #d946ef; outline-offset: 3px; border-radius: var(--radius-md); }
+body.hide-annotations .mock-badge, body.hide-annotations .mock-changed { outline: none; }
+body.hide-annotations .mock-badge { display: none; }
+.mock-toolbar {
+  position: fixed; bottom: 16px; right: 16px; z-index: 2000;
+  display: flex; gap: 8px; align-items: center;
+  background: var(--neutral-900); color: #fff; font-size: 12px;
+  padding: 8px 12px; border-radius: var(--radius-full); box-shadow: var(--shadow-lg); opacity: .92;
+}
+.mock-toolbar button { border: none; background: var(--neutral-700); color: #fff; border-radius: var(--radius-full); padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.mock-toolbar button:hover { background: var(--neutral-600); }
+
+/* ============================================================
+   活動儀表板頁面專用樣式
+   ============================================================ */
+.section-eyebrow {
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-tertiary); margin: var(--space-6) 0 var(--space-3);
+}
+.section-eyebrow:first-child { margin-top: 0; }
+
+/* ---- KPI hero row ---- */
+.kpi-hero-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
+.kpi-hero-card {
+  background: var(--surface-color); border: 1px solid var(--neutral-200); border-radius: var(--radius-lg);
+  padding: 18px 20px; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 10px;
+}
+.kpi-hero-top { display: flex; align-items: center; justify-content: space-between; }
+.kpi-hero-icon {
+  width: 40px; height: 40px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+  font-size: 19px; flex-shrink: 0;
+}
+.kpi-hero-icon.blue   { background: var(--info-soft);    color: var(--info-darker); }
+.kpi-hero-icon.green  { background: var(--success-soft); color: var(--success-darker); }
+.kpi-hero-icon.amber  { background: var(--warning-soft); color: var(--warning-darker); }
+.kpi-hero-icon.sky    { background: var(--brand-primary-soft); color: var(--brand-primary); }
+.kpi-hero-value { font-size: 30px; font-weight: 700; color: var(--text-primary); line-height: 1.1; }
+.kpi-hero-label { font-size: var(--text-sm); color: var(--text-secondary); }
+.kpi-hero-sub { font-size: 12px; color: var(--text-tertiary); }
+
+/* ---- KPI secondary row ---- */
+.kpi-secondary-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: var(--space-3); margin-top: var(--space-3); }
+.kpi-chip {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface-color); border: 1px solid var(--border-color-light); border-radius: var(--radius-md);
+  padding: 10px 14px;
+}
+.kpi-chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.kpi-chip-value { font-size: var(--text-lg); font-weight: 700; color: var(--text-primary); }
+.kpi-chip-label { font-size: 11px; color: var(--text-tertiary); }
+
+/* ---- Charts row ---- */
+.charts-grid { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-4); align-items: stretch; }
+.chart-card {
+  background: var(--surface-color); border: 1px solid var(--neutral-200); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm); display: flex; flex-direction: column;
+}
+.chart-card-header { padding: 16px 20px 0; display: flex; align-items: baseline; justify-content: space-between; }
+.chart-card-title { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.chart-card-meta { font-size: 12px; color: var(--text-tertiary); }
+.chart-card-body { padding: 8px 20px 20px; flex: 1; }
+.chart-side-stack { display: flex; flex-direction: column; gap: var(--space-4); }
+
+/* Line chart */
+.line-chart-svg { width: 100%; height: auto; overflow: visible; }
+.line-chart-area { fill: url(#trendGradient); }
+.line-chart-line { fill: none; stroke: var(--brand-primary); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.line-chart-dot { fill: var(--surface-color); stroke: var(--brand-primary); stroke-width: 2; }
+.line-chart-dot.is-today { fill: var(--brand-primary); stroke: #fff; stroke-width: 2; }
+.line-chart-grid { stroke: var(--border-color-light); stroke-width: 1; }
+.line-chart-axis-label { font-size: 10px; fill: var(--text-tertiary); font-family: inherit; }
+.line-chart-callout {
+  font-size: 11px; fill: var(--brand-primary-hover); font-weight: 700; font-family: inherit;
+}
+
+/* Horizontal bar chart */
+.hbar-list { display: flex; flex-direction: column; gap: 12px; }
+.hbar-row { display: grid; grid-template-columns: 78px 1fr 34px; align-items: center; gap: 10px; }
+.hbar-name { font-size: var(--text-sm); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hbar-track { height: 12px; background: var(--neutral-100); border-radius: var(--radius-full); overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: var(--radius-full); background: linear-gradient(90deg, var(--brand-primary), #38bdf8); }
+.hbar-value { font-size: 12px; font-weight: 700; color: var(--text-secondary); text-align: right; }
+
+/* Donut chart */
+.donut-wrap { display: flex; align-items: center; gap: var(--space-4); }
+.donut-ring {
+  width: 88px; height: 88px; border-radius: 50%; flex-shrink: 0;
+  background: conic-gradient(var(--success) 0% 66.7%, var(--warning) 66.7% 83.3%, var(--danger) 83.3% 100%);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+}
+.donut-ring::after {
+  content: ""; position: absolute; inset: 12px; border-radius: 50%; background: var(--surface-color);
+}
+.donut-ring-center { position: relative; z-index: 1; text-align: center; }
+.donut-ring-center .num { font-size: 18px; font-weight: 700; color: var(--text-primary); }
+.donut-ring-center .unit { font-size: 10px; color: var(--text-tertiary); }
+.donut-legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.donut-legend-item { display: flex; align-items: center; gap: 6px; }
+.donut-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* ---- Tables ---- */
+.detail-card { background: var(--surface-color); border: 1px solid var(--neutral-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin-bottom: var(--space-4); }
+.detail-card-header { padding: 18px 20px 14px; display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid var(--border-color-light); }
+.detail-card-title { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.detail-card-desc { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.detail-card-meta { font-size: 12px; color: var(--text-secondary); }
+.table-scroll { overflow-x: auto; }
+
+.dashboard-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); min-width: 920px; }
+.dashboard-table th, .dashboard-table td { border: 1px solid var(--border-color); padding: 9px 10px; text-align: center; white-space: nowrap; }
+.dashboard-table th { background: var(--neutral-50); color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+.dashboard-table td.col-name { text-align: left; font-weight: 500; }
+.dashboard-table tr.row-subtotal td { background: var(--bg-color-soft); font-weight: 600; }
+.dashboard-table tr.row-grand-total td { background: var(--neutral-100); font-weight: 700; }
+.dashboard-table .text-danger { color: var(--danger); font-weight: 700; }
+.dashboard-table .text-success { color: var(--success-darker); font-weight: 700; }
+.dashboard-table .cell-empty { color: var(--text-tertiary); }
+.dashboard-table td.col-bonus { color: var(--success-darker); font-weight: 700; }
+
+.attendance-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.attendance-table th, .attendance-table td { border-bottom: 1px solid var(--border-color-light); padding: 10px 16px; }
+.attendance-table th { background: var(--neutral-50); text-align: left; color: var(--text-secondary); font-weight: 600; font-size: 12px; }
+.attendance-table td.col-name { text-align: left; }
+.attendance-table td.col-num { text-align: center; width: 110px; }
+.attendance-progress { display: flex; align-items: center; gap: 10px; width: 220px; }
+.attendance-progress .track { flex: 1; height: 10px; background: var(--neutral-100); border-radius: var(--radius-full); overflow: hidden; }
+.attendance-progress .fill { height: 100%; border-radius: var(--radius-full); }
+.attendance-progress .fill.success { background: var(--success); }
+.attendance-progress .fill.default { background: var(--brand-primary); }
+.attendance-progress .fill.exception { background: var(--danger); }
+.attendance-progress .pct { font-size: 12px; font-weight: 700; width: 34px; text-align: right; }
+
+@media (max-width: 1280px) {
+  .kpi-hero-row { grid-template-columns: repeat(2, 1fr); }
+  .kpi-secondary-row { grid-template-columns: repeat(3, 1fr); }
+  .charts-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="admin-layout">
+
+  <!-- ==================== Sidebar ==================== -->
+  <aside class="admin-sidebar">
+    <div class="logo-container">
+      <div class="logo-icon">常</div>
+      <span class="logo-text">常春藤管理系統</span>
+    </div>
+    <nav class="sidebar-menu">
+      <a class="menu-item" href="#/"><span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>儀表板</a>
+      <a class="menu-item" href="#/workbench"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M21 12v6a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2h11"/></svg></span>審核工作台<span class="menu-badge">6</span></a>
+
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg></span>人事薪資<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/employees">員工管理</a>
+          <a class="menu-item" href="#/salary">薪資管理</a>
+          <a class="menu-item" href="#/appraisal-year-end">考核與年終</a>
+          <a class="menu-item" href="#/attendance">出勤管理</a>
+          <a class="menu-item" href="#/leaves">請假管理</a>
+          <a class="menu-item" href="#/overtime">加班與園務會議</a>
+          <a class="menu-item" href="#/schedule">排班管理</a>
+        </div>
+      </div>
+
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span>學生與班級<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/classrooms">班級管理</a>
+          <a class="menu-item" href="#/enrollment-stats">統計圖表</a>
+          <a class="menu-item" href="#/students">學生</a>
+          <a class="menu-item" href="#/portfolio/medication-today">健康與給藥</a>
+          <a class="menu-item" href="#/growth-books">成長冊工作台</a>
+          <a class="menu-item" href="#/students/admissions">招生入學</a>
+          <a class="menu-item" href="#/dismissal-queue">接送管理</a>
+          <a class="menu-item" href="#/fees">學費管理</a>
+        </div>
+      </div>
+
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9l-7-7z"/><path d="M13 2v7h7"/></svg></span>園務行政<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/announcements">公告管理</a>
+          <a class="menu-item" href="#/calendar">學校行事曆</a>
+          <a class="menu-item" href="#/finance-signoffs">收支簽收</a>
+        </div>
+      </div>
+
+      <div class="submenu is-open">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1L12 2z"/></svg></span>課後才藝<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item is-active" href="#/activity/dashboard">統計儀表板</a>
+          <a class="menu-item" href="#/activity/registrations">報名管理</a>
+          <a class="menu-item" href="#/activity/settings">才藝設定與品項</a>
+          <a class="menu-item" href="#/activity/pos">POS 收銀</a>
+          <a class="menu-item" href="#/activity/pos/approval">POS 收款簽核</a>
+          <a class="menu-item" href="#/activity/inquiries">家長提問</a>
+          <a class="menu-item" href="#/activity/attendance">點名管理</a>
+          <a class="menu-item" href="#/activity/changes">報名修改紀錄</a>
+        </div>
+      </div>
+
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>報表<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/audit-logs">操作紀錄</a>
+          <a class="menu-item" href="#/data-quality">資料異常待辦</a>
+          <a class="menu-item" href="#/admin/gov-reports/monthly">月度幼生在園統計</a>
+          <a class="menu-item" href="#/admin/gov-reports/certificates">在學證明開立紀錄</a>
+          <a class="menu-item" href="#/admin/gov-reports/subsidies">特教加給與鐘點費</a>
+          <a class="menu-item" href="#/admin/gov-reports/iep">IEP 個別化教育計畫</a>
+          <a class="menu-item" href="#/gov-reports">勞健保與稅務申報</a>
+          <a class="menu-item" href="#/reports">經營報表</a>
+        </div>
+      </div>
+
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5h0a1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg></span>系統設定<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/settings/accounts">帳號設定</a>
+          <a class="menu-item" href="#/settings/roles">角色設定</a>
+          <a class="menu-item" href="#/settings">進階設定</a>
+        </div>
+      </div>
+    </nav>
+    <div class="collapse-toggle" title="收合側邊欄">⟨</div>
+  </aside>
+
+  <!-- ==================== Main ==================== -->
+  <div class="main-content-wrapper">
+    <header class="admin-header">
+      <h1 class="page-title"><span class="parent-title">課後才藝 / </span>統計儀表板</h1>
+      <div class="header-right">
+        <div class="global-search">🔍 搜尋…<kbd>Ctrl K</kbd></div>
+        <button class="header-icon-btn" title="通知">🔔<span class="dot"></span></button>
+        <button class="ep-button ep-button--warning is-plain ep-button--small">檢視老師教師端</button>
+        <button class="ep-button ep-button--primary is-plain ep-button--small">進入前台</button>
+        <div class="user-menu">
+          <div class="avatar">管</div>
+          <div><div class="user-name">園長</div><div class="user-role">系統管理員</div></div>
+        </div>
+      </div>
+    </header>
+
+    <main id="admin-main">
+      <div class="content-container">
+
+        <!-- Page header -->
+        <div class="page-header">
+          <div>
+            <h2>統計儀表板<span class="mock-badge">✦ 整頁重構</span></h2>
+            <div class="subtitle">課後才藝報名、收入與出席總覽</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="ep-select">
+              <select class="ep-input" style="width:220px; appearance:none; padding-right:28px;">
+                <option>114學年度 上學期</option>
+                <option selected>114學年度 下學期（本學期）</option>
+                <option>115學年度 上學期</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════════════ KPI 總覽 ════════════════ -->
+        <div class="section-eyebrow">KPI 總覽</div>
+        <div class="mock-changed" style="padding:16px; position:relative;">
+          <span class="mock-badge" style="position:absolute; top:-12px; left:12px;">✦ 變更 · 分層 KPI</span>
+
+          <div class="kpi-hero-row">
+            <div class="kpi-hero-card">
+              <div class="kpi-hero-top">
+                <div class="kpi-hero-icon blue">👥</div>
+              </div>
+              <div class="kpi-hero-value">142</div>
+              <div class="kpi-hero-label">總報名數</div>
+              <div class="kpi-hero-sub">含候補 17 人</div>
+            </div>
+            <div class="kpi-hero-card">
+              <div class="kpi-hero-top">
+                <div class="kpi-hero-icon green">✅</div>
+              </div>
+              <div class="kpi-hero-value">125</div>
+              <div class="kpi-hero-label">正式報名</div>
+              <div class="kpi-hero-sub">占總報名 88%</div>
+            </div>
+            <div class="kpi-hero-card">
+              <div class="kpi-hero-top">
+                <div class="kpi-hero-icon amber">💰</div>
+              </div>
+              <div class="kpi-hero-value">$1,082,000</div>
+              <div class="kpi-hero-label">總收入（已繳）</div>
+              <div class="kpi-hero-sub">待收 $96,400</div>
+            </div>
+            <div class="kpi-hero-card">
+              <div class="kpi-hero-top">
+                <div class="kpi-hero-icon sky">📋</div>
+              </div>
+              <div class="kpi-hero-value">87%</div>
+              <div class="kpi-hero-label">平均出席率</div>
+              <div class="kpi-hero-sub">共點名 198 場次</div>
+            </div>
+          </div>
+
+          <div class="kpi-secondary-row">
+            <div class="kpi-chip">
+              <span class="kpi-chip-dot" style="background:var(--info);"></span>
+              <div><div class="kpi-chip-value">17</div><div class="kpi-chip-label">候補人數</div></div>
+            </div>
+            <div class="kpi-chip">
+              <span class="kpi-chip-dot" style="background:var(--success);"></span>
+              <div><div class="kpi-chip-value">5</div><div class="kpi-chip-label">今日新增</div></div>
+            </div>
+            <div class="kpi-chip">
+              <span class="kpi-chip-dot" style="background:var(--warning);"></span>
+              <div><div class="kpi-chip-value">$96,400</div><div class="kpi-chip-label">待繳金額</div></div>
+            </div>
+            <div class="kpi-chip">
+              <span class="kpi-chip-dot" style="background:var(--brand-primary);"></span>
+              <div><div class="kpi-chip-value">77%</div><div class="kpi-chip-label">報名率</div></div>
+            </div>
+            <div class="kpi-chip">
+              <span class="kpi-chip-dot" style="background:var(--danger);"></span>
+              <div><div class="kpi-chip-value">4</div><div class="kpi-chip-label">未讀提問</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════════════ 趨勢與分析 ════════════════ -->
+        <div class="section-eyebrow">趨勢與分析</div>
+        <div class="mock-changed" style="padding:16px; position:relative;">
+          <span class="mock-badge" style="position:absolute; top:-12px; left:12px;">✦ 新增 · 導入真圖表（chart.js）</span>
+
+          <div class="charts-grid">
+            <!-- 每日報名趨勢：折線 + 區域圖 -->
+            <div class="chart-card">
+              <div class="chart-card-header">
+                <span class="chart-card-title">每日報名趨勢</span>
+                <span class="chart-card-meta">07/18 – 07/31</span>
+              </div>
+              <div class="chart-card-body">
+                <svg class="line-chart-svg" viewBox="-10 0 630 190" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#0284c7" stop-opacity="0.22"/>
+                      <stop offset="100%" stop-color="#0284c7" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <!-- gridlines -->
+                  <line class="line-chart-grid" x1="0" y1="20" x2="600" y2="20"/>
+                  <line class="line-chart-grid" x1="0" y1="65" x2="600" y2="65"/>
+                  <line class="line-chart-grid" x1="0" y1="110" x2="600" y2="110"/>
+                  <line class="line-chart-grid" x1="0" y1="160" x2="600" y2="160"/>
+
+                  <path class="line-chart-area" d="M0,125 L46,108 L92,119 L138,96 L185,78 L231,102 L277,67 L323,84 L369,49 L415,73 L462,38 L508,55 L554,20 L600,131 L600,160 L0,160 Z"/>
+                  <path class="line-chart-line" d="M0,125 L46,108 L92,119 L138,96 L185,78 L231,102 L277,67 L323,84 L369,49 L415,73 L462,38 L508,55 L554,20 L600,131"/>
+
+                  <circle class="line-chart-dot" cx="0" cy="125" r="3"/>
+                  <circle class="line-chart-dot" cx="46" cy="108" r="3"/>
+                  <circle class="line-chart-dot" cx="92" cy="119" r="3"/>
+                  <circle class="line-chart-dot" cx="138" cy="96" r="3"/>
+                  <circle class="line-chart-dot" cx="185" cy="78" r="3"/>
+                  <circle class="line-chart-dot" cx="231" cy="102" r="3"/>
+                  <circle class="line-chart-dot" cx="277" cy="67" r="3"/>
+                  <circle class="line-chart-dot" cx="323" cy="84" r="3"/>
+                  <circle class="line-chart-dot" cx="369" cy="49" r="3"/>
+                  <circle class="line-chart-dot" cx="415" cy="73" r="3"/>
+                  <circle class="line-chart-dot" cx="462" cy="38" r="3"/>
+                  <circle class="line-chart-dot" cx="508" cy="55" r="3"/>
+                  <circle class="line-chart-dot" cx="554" cy="20" r="3.5"/>
+                  <circle class="line-chart-dot is-today" cx="600" cy="131" r="4.5"/>
+
+                  <!-- 高峰標註 -->
+                  <text class="line-chart-callout" x="524" y="12" text-anchor="middle">07/30 · 24 人</text>
+                  <!-- 今日標註 -->
+                  <text class="line-chart-callout" x="565" y="145" text-anchor="start">07/31（今日）· 5 人</text>
+
+                  <text class="line-chart-axis-label" x="0" y="178">07/18</text>
+                  <text class="line-chart-axis-label" x="92" y="178" text-anchor="middle">07/20</text>
+                  <text class="line-chart-axis-label" x="185" y="178" text-anchor="middle">07/22</text>
+                  <text class="line-chart-axis-label" x="277" y="178" text-anchor="middle">07/24</text>
+                  <text class="line-chart-axis-label" x="369" y="178" text-anchor="middle">07/26</text>
+                  <text class="line-chart-axis-label" x="462" y="178" text-anchor="middle">07/28</text>
+                  <text class="line-chart-axis-label" x="554" y="178" text-anchor="middle">07/30</text>
+                </svg>
+              </div>
+            </div>
+
+            <!-- 右側：熱門課程 + 出席率分布 -->
+            <div class="chart-side-stack">
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <span class="chart-card-title">熱門課程 Top 5</span>
+                </div>
+                <div class="chart-card-body">
+                  <div class="hbar-list">
+                    <div class="hbar-row">
+                      <span class="hbar-name">跆拳道</span>
+                      <div class="hbar-track"><div class="hbar-fill" style="width:100%;"></div></div>
+                      <span class="hbar-value">36</span>
+                    </div>
+                    <div class="hbar-row">
+                      <span class="hbar-name">直笛</span>
+                      <div class="hbar-track"><div class="hbar-fill" style="width:100%;"></div></div>
+                      <span class="hbar-value">36</span>
+                    </div>
+                    <div class="hbar-row">
+                      <span class="hbar-name">美術創作</span>
+                      <div class="hbar-track"><div class="hbar-fill" style="width:75%;"></div></div>
+                      <span class="hbar-value">27</span>
+                    </div>
+                    <div class="hbar-row">
+                      <span class="hbar-name">圍棋</span>
+                      <div class="hbar-track"><div class="hbar-fill" style="width:42%;"></div></div>
+                      <span class="hbar-value">15</span>
+                    </div>
+                    <div class="hbar-row">
+                      <span class="hbar-name">芭蕾舞</span>
+                      <div class="hbar-track"><div class="hbar-fill" style="width:17%;"></div></div>
+                      <span class="hbar-value">6</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="chart-card">
+                <div class="chart-card-header">
+                  <span class="chart-card-title">課程出席率分布</span>
+                </div>
+                <div class="chart-card-body">
+                  <div class="donut-wrap">
+                    <div class="donut-ring">
+                      <div class="donut-ring-center"><div class="num">6</div><div class="unit">堂課</div></div>
+                    </div>
+                    <div class="donut-legend">
+                      <div class="donut-legend-item"><span class="donut-legend-dot" style="background:var(--success);"></span>達標（≥80%）· 4 堂</div>
+                      <div class="donut-legend-item"><span class="donut-legend-dot" style="background:var(--warning);"></span>普通（60–79%）· 1 堂</div>
+                      <div class="donut-legend-item"><span class="donut-legend-dot" style="background:var(--danger);"></span>待加強（&lt;60%）· 1 堂</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ════════════════ 明細資料 ════════════════ -->
+        <div class="section-eyebrow">明細資料</div>
+
+        <div class="detail-card mock-changed" style="position:relative;">
+          <span class="mock-badge" style="position:absolute; top:-12px; left:12px;">✦ 變更 · 版面調整（功能不變）</span>
+          <div class="detail-card-header">
+            <div>
+              <div class="detail-card-title">課後才藝統計表</div>
+              <div class="detail-card-desc">依年級 → 班級呈現本學期各課程報名分布</div>
+            </div>
+            <button class="ep-button ep-button--success is-plain ep-button--small">匯出 Excel</button>
+          </div>
+          <div style="padding: 16px 20px;">
+            <div class="table-scroll">
+              <table class="dashboard-table">
+                <thead>
+                  <tr>
+                    <th rowspan="2">班級</th>
+                    <th rowspan="2">班級老師</th>
+                    <th rowspan="2">在籍人數</th>
+                    <th colspan="6">課程報名人數</th>
+                    <th rowspan="2">班級人數</th>
+                    <th rowspan="2">比率</th>
+                    <th rowspan="2">達成獎金 +1000</th>
+                    <th rowspan="2">達成積分</th>
+                  </tr>
+                  <tr>
+                    <th>跆拳道</th><th>直笛</th><th>美術創作</th><th>圍棋</th><th>芭蕾舞</th><th>桌球</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- 大班 -->
+                  <tr>
+                    <td class="col-name">大仁班</td><td>陳雅婷</td><td>32</td>
+                    <td>10</td><td>8</td><td>6</td><td>4</td><td class="cell-empty">–</td><td>2</td>
+                    <td>30</td><td><span class="text-success">94%</span></td>
+                    <td rowspan="3" class="col-bonus">+1,000</td>
+                    <td rowspan="3">100%</td>
+                  </tr>
+                  <tr>
+                    <td class="col-name">大勇班</td><td>林建宏</td><td>30</td>
+                    <td>8</td><td>6</td><td>5</td><td>3</td><td>2</td><td>1</td>
+                    <td>25</td><td><span class="text-danger">83%</span></td>
+                  </tr>
+                  <tr class="row-subtotal">
+                    <td class="col-name">小計</td><td></td><td>62</td>
+                    <td>18</td><td>14</td><td>11</td><td>7</td><td>2</td><td>3</td>
+                    <td>55</td><td><span class="text-success">89%</span></td>
+                  </tr>
+                  <!-- 中班 -->
+                  <tr>
+                    <td class="col-name">中仁班</td><td>王淑芬</td><td>28</td>
+                    <td>6</td><td>7</td><td>4</td><td>3</td><td>1</td><td class="cell-empty">–</td>
+                    <td>21</td><td><span class="text-danger">75%</span></td>
+                    <td rowspan="3" class="cell-empty">–</td>
+                    <td rowspan="3" class="cell-empty">–</td>
+                  </tr>
+                  <tr>
+                    <td class="col-name">中勇班</td><td>張家豪</td><td>26</td>
+                    <td>5</td><td>6</td><td>5</td><td>2</td><td>2</td><td>1</td>
+                    <td>21</td><td><span class="text-success">81%</span></td>
+                  </tr>
+                  <tr class="row-subtotal">
+                    <td class="col-name">小計</td><td></td><td>54</td>
+                    <td>11</td><td>13</td><td>9</td><td>5</td><td>3</td><td>1</td>
+                    <td>42</td><td><span class="text-danger">78%</span></td>
+                  </tr>
+                  <!-- 小班 -->
+                  <tr>
+                    <td class="col-name">小仁班</td><td>李思穎</td><td>24</td>
+                    <td>4</td><td>5</td><td>3</td><td>2</td><td>1</td><td>1</td>
+                    <td>16</td><td><span class="text-danger">67%</span></td>
+                    <td rowspan="3" class="cell-empty">–</td>
+                    <td rowspan="3" class="cell-empty">–</td>
+                  </tr>
+                  <tr>
+                    <td class="col-name">小勇班</td><td>黃冠霖</td><td>22</td>
+                    <td>3</td><td>4</td><td>4</td><td>1</td><td class="cell-empty">–</td><td class="cell-empty">–</td>
+                    <td>12</td><td><span class="text-danger">55%</span></td>
+                  </tr>
+                  <tr class="row-subtotal">
+                    <td class="col-name">小計</td><td></td><td>46</td>
+                    <td>7</td><td>9</td><td>7</td><td>3</td><td>1</td><td>1</td>
+                    <td>28</td><td><span class="text-danger">61%</span></td>
+                  </tr>
+                  <tr class="row-grand-total">
+                    <td class="col-name">總計</td><td></td><td>162</td>
+                    <td>36</td><td>36</td><td>27</td><td>15</td><td>6</td><td>5</td>
+                    <td>125</td><td>77%</td>
+                    <td></td><td></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-card mock-changed" style="position:relative;">
+          <span class="mock-badge" style="position:absolute; top:-12px; left:12px;">✦ 變更 · 視覺加強</span>
+          <div class="detail-card-header">
+            <div class="detail-card-title">課程出席率統計</div>
+            <div class="detail-card-meta">已點名 198 場次．平均出席率 87%</div>
+          </div>
+          <table class="attendance-table">
+            <thead>
+              <tr><th>課程名稱</th><th style="text-align:center;">已點名場次</th><th>平均出席率</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="col-name">跆拳道</td><td class="col-num">42</td>
+                <td><div class="attendance-progress"><div class="track"><div class="fill success" style="width:96%;"></div></div><span class="pct">96%</span></div></td>
+              </tr>
+              <tr>
+                <td class="col-name">直笛</td><td class="col-num">38</td>
+                <td><div class="attendance-progress"><div class="track"><div class="fill success" style="width:94%;"></div></div><span class="pct">94%</span></div></td>
+              </tr>
+              <tr>
+                <td class="col-name">美術創作</td><td class="col-num">35</td>
+                <td><div class="attendance-progress"><div class="track"><div class="fill success" style="width:95%;"></div></div><span class="pct">95%</span></div></td>
+              </tr>
+              <tr>
+                <td class="col-name">圍棋</td><td class="col-num">30</td>
+                <td><div class="attendance-progress"><div class="track"><div class="fill success" style="width:90%;"></div></div><span class="pct">90%</span></div></td>
+              </tr>
+              <tr>
+                <td class="col-name">芭蕾舞</td><td class="col-num">28</td>
+                <td><div class="attendance-progress"><div class="track"><div class="fill default" style="width:78%;"></div></div><span class="pct">78%</span></div></td>
+              </tr>
+              <tr>
+                <td class="col-name">桌球</td><td class="col-num">25</td>
+                <td><div class="attendance-progress"><div class="track"><div class="fill exception" style="width:55%;"></div></div><span class="pct">55%</span></div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- 設計稿控制列（右下角，非實際 UI 的一部分） -->
+<div class="mock-toolbar">
+  <span>📐 設計稿</span>
+  <button onclick="document.body.classList.toggle('hide-annotations')">切換變更標註</button>
+</div>
+
+<script>
+function toggleSubmenu(el) { el.parentElement.classList.toggle('is-open'); }
+function openDialog(id) { document.getElementById(id).classList.add('is-open'); }
+function closeDialog(id) { document.getElementById(id).classList.remove('is-open'); }
+document.addEventListener('click', function (e) {
+  if (e.target.classList.contains('ep-dialog-overlay')) e.target.classList.remove('is-open');
+});
+</script>
+</body>
+</html>

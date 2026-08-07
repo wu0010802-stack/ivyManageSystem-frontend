@@ -1,0 +1,109 @@
+{
+  "_readme": [
+    "L1 品牌值（HTML head / og:tags / PWA manifest）的單一事實來源。",
+    "讀者：scripts/gen-tenant-brand-conf.mjs（產 nginx map + brand-version.json）、",
+    "scripts/apply-brand-tokens.mjs（dist 就地替換，供 vite preview / E2E / 無 nginx 環境）、",
+    "vite.config.js 的 dev plugin（transformIndexHtml），以及",
+    "tests/unit/branding/brandingParity.spec.ts（與 BRANDING_DEFAULTS 逐欄 parity）。",
+    "",
+    "⛔ 規則：",
+    "1. default: true 的條目必須恰好一個，其 tokens 必須等於改造前 HTML/manifest 的現行字面",
+    "   （灰度不變式：單租戶輸出 byte-level 不變）。",
+    "2. 每個租戶的 tokens 必須覆蓋全部 token key（gen 腳本缺欄即 fail build），",
+    "   避免漏配置時 nginx map 落到 default 分支而吐出別間園所的品牌。",
+    "3. hosts 同時是 $tb_known_host 白名單來源（未知 host 守衛，TENANT_HOST_GUARD=on 時回 404）。",
+    "   ⚠ 平台健康檢查 / 內網探測用的 host 必須列進來，否則部署會被自己擋掉。",
+    "4. og:image 換圖時 bump 該租戶的 TB_OG_POSTER_V（LINE 圖片 CDN 按整串網址快取，無清快取工具）。",
+    "5. TB_ORIGIN 在 nginx 由 $scheme://$host 展開（CT-F-09），tenants.json 的 origin 欄只給",
+    "   dev plugin / apply-brand-tokens.mjs 使用。"
+  ],
+  "tokenKeys": [
+    "TB_ADMIN_TITLE",
+    "TB_PORTAL_TITLE",
+    "TB_PARENT_TITLE",
+    "TB_PUBLIC_TITLE",
+    "TB_ORG_NAME",
+    "TB_META_DESC",
+    "TB_OG_DESC",
+    "TB_POSTER_ALT",
+    "TB_OG_POSTER_V",
+    "TB_THEME_ADMIN",
+    "TB_THEME_PARENT",
+    "TB_MANIFEST_ADMIN_NAME",
+    "TB_MANIFEST_ADMIN_SHORT",
+    "TB_MANIFEST_ADMIN_DESC",
+    "TB_MANIFEST_PARENT_NAME",
+    "TB_MANIFEST_PARENT_SHORT",
+    "TB_MANIFEST_PARENT_DESC",
+    "TB_MANIFEST_PUBLIC_NAME",
+    "TB_MANIFEST_PUBLIC_SHORT",
+    "TB_MANIFEST_PUBLIC_DESC",
+    "TB_SLUG"
+  ],
+  "tenants": [
+    {
+      "slug": "yihua",
+      "default": true,
+      "hosts": [
+        "ivypreschool.tw",
+        "www.ivypreschool.tw",
+        "localhost",
+        "127.0.0.1"
+      ],
+      "origin": "https://ivypreschool.tw",
+      "tokens": {
+        "TB_ADMIN_TITLE": "常春藤管理系統",
+        "TB_PORTAL_TITLE": "常春藤教師入口",
+        "TB_PARENT_TITLE": "常春藤家長 App",
+        "TB_PUBLIC_TITLE": "常春藤教育機構｜課後才藝線上報名",
+        "TB_ORG_NAME": "常春藤教育機構",
+        "TB_META_DESC": "常春藤教育機構課後才藝課線上報名，2～5 歲適齡課程，額滿為止。手機點開就能填，報名後可隨時查詢或修改。",
+        "TB_OG_DESC": "2～5 歲課後才藝課線上報名，額滿為止。手機點開就能填，幾分鐘完成。",
+        "TB_POSTER_ALT": "常春藤教育機構課後才藝課程海報",
+        "TB_OG_POSTER_V": "20260803",
+        "TB_THEME_ADMIN": "#4f46e5",
+        "TB_THEME_PARENT": "#0d9053",
+        "TB_MANIFEST_ADMIN_NAME": "常春藤管理系統",
+        "TB_MANIFEST_ADMIN_SHORT": "常春藤管理",
+        "TB_MANIFEST_ADMIN_DESC": "常春藤教育機構管理與教師入口系統",
+        "TB_MANIFEST_PARENT_NAME": "常春藤家長 App",
+        "TB_MANIFEST_PARENT_SHORT": "家長 App",
+        "TB_MANIFEST_PARENT_DESC": "常春藤教育機構家長端",
+        "TB_MANIFEST_PUBLIC_NAME": "常春藤公開報名",
+        "TB_MANIFEST_PUBLIC_SHORT": "公開報名",
+        "TB_MANIFEST_PUBLIC_DESC": "常春藤教育機構公開活動報名",
+        "TB_SLUG": "yihua"
+      }
+    },
+    {
+      "slug": "renwu",
+      "hosts": [
+        "renwu.ivypreschool.tw"
+      ],
+      "origin": "https://renwu.ivypreschool.tw",
+      "tokens": {
+        "TB_ADMIN_TITLE": "仁武幼兒園管理系統",
+        "TB_PORTAL_TITLE": "仁武幼兒園教師入口",
+        "TB_PARENT_TITLE": "仁武幼兒園家長 App",
+        "TB_PUBLIC_TITLE": "仁武幼兒園｜課後才藝線上報名",
+        "TB_ORG_NAME": "仁武幼兒園",
+        "TB_META_DESC": "仁武幼兒園課後才藝課線上報名，2～5 歲適齡課程，額滿為止。手機點開就能填，報名後可隨時查詢或修改。",
+        "TB_OG_DESC": "2～5 歲課後才藝課線上報名，額滿為止。手機點開就能填，幾分鐘完成。",
+        "TB_POSTER_ALT": "仁武幼兒園課後才藝課程海報",
+        "TB_OG_POSTER_V": "20260807",
+        "TB_THEME_ADMIN": "#4f46e5",
+        "TB_THEME_PARENT": "#0d9053",
+        "TB_MANIFEST_ADMIN_NAME": "仁武幼兒園管理系統",
+        "TB_MANIFEST_ADMIN_SHORT": "仁武管理",
+        "TB_MANIFEST_ADMIN_DESC": "仁武幼兒園管理與教師入口系統",
+        "TB_MANIFEST_PARENT_NAME": "仁武幼兒園家長 App",
+        "TB_MANIFEST_PARENT_SHORT": "家長 App",
+        "TB_MANIFEST_PARENT_DESC": "仁武幼兒園家長端",
+        "TB_MANIFEST_PUBLIC_NAME": "仁武幼兒園公開報名",
+        "TB_MANIFEST_PUBLIC_SHORT": "公開報名",
+        "TB_MANIFEST_PUBLIC_DESC": "仁武幼兒園公開活動報名",
+        "TB_SLUG": "renwu"
+      }
+    }
+  ]
+}

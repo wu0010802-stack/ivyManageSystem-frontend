@@ -1,4 +1,5 @@
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
+import { tenantKey } from '@/utils/tenantStorage'
 
 /**
  * `local` = 本分頁自己發動的身分切換（login / logout / impersonate）；
@@ -14,7 +15,20 @@ type SessionResetListener = (context: AdminSessionResetContext) => void
  * 跨分頁身分變更廣播頻道。刻意只放 opaque revision（不含 user / PII）：
  * localStorage 是同源共用的，任何寫進去的東西其他分頁都讀得到。
  */
-export const ADMIN_SESSION_REVISION_KEY = 'ivy.admin.session.revision.v1'
+const ADMIN_SESSION_REVISION_BASE_KEY = 'ivy.admin.session.revision.v1'
+
+/**
+ * 廣播 key 的**惰性** getter（不是常數）。
+ *
+ * Why lazy：本模組在 `main.ts` → `api/index.ts` → 這裡的 module 求值鏈上，早於 entry
+ * body。若寫成 module top-level 的 `tenantKey(...)` 常數，多租戶解析失敗時會在 module
+ * 求值期就取到錯的值（甚至 throw），繞過 `main.ts` 的 boot 遮罩變成白畫面（GAP-07）。
+ *
+ * 單租戶模式下 `tenantKey()` 回原字串，key 與改造前完全相同（DEV-12）。
+ */
+export function adminSessionRevisionKey(): string {
+  return tenantKey(ADMIN_SESSION_REVISION_BASE_KEY)
+}
 
 let generation = 0
 let sessionController = new AbortController()
@@ -63,7 +77,7 @@ export function advanceAdminSession(): number {
   const nextGeneration = applyAdminSessionReset({ source: 'local' })
   knownRevision = `${Date.now()}-${Math.random().toString(36).slice(2)}`
   try {
-    localStorage.setItem(ADMIN_SESSION_REVISION_KEY, knownRevision)
+    localStorage.setItem(adminSessionRevisionKey(), knownRevision)
   } catch {
     /* storage 被停用時退回單分頁 generation 隔離 */
   }
@@ -71,7 +85,7 @@ export function advanceAdminSession(): number {
 }
 
 function handleRemoteSessionRevision(event: StorageEvent): void {
-  if (event.key !== ADMIN_SESSION_REVISION_KEY || !event.newValue) return
+  if (event.key !== adminSessionRevisionKey() || !event.newValue) return
   // storage event 不會送回發動的分頁，但 revision 可能與本分頁剛寫入的值相同
   // （例如同值重寫）；比對後略過自己的回音，避免分頁間互相 reset 成迴圈。
   if (event.newValue === knownRevision) return
@@ -82,7 +96,7 @@ function handleRemoteSessionRevision(event: StorageEvent): void {
 
 function initAdminSessionIsolation(): void {
   try {
-    knownRevision = localStorage.getItem(ADMIN_SESSION_REVISION_KEY)
+    knownRevision = localStorage.getItem(adminSessionRevisionKey())
   } catch {
     knownRevision = null
   }

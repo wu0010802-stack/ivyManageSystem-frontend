@@ -27,7 +27,8 @@ export function buildPublicEditUrl(origin: string, queryToken?: string): string 
  *
  * 必須用 public.html entry 而非 admin SPA 的 `index.html#/public/activity`。後者只是
  * 相容舊連結的 fallback，會讓家長載入整包 admin bundle，且 LINE 聊天室抓到的預覽卡
- * 標題會是 index.html 的「常春藤管理系統」——家長看到的是一張管理系統的卡片。
+ * 標題會是 index.html 的管理端標題（{{TB_ADMIN_TITLE}}，由 nginx 依 $host 注入）
+ * ——家長看到的是一張管理系統的卡片。
  * 學期不必帶參數：公開端點的開放學期以後台「才藝設定與品項」的設定列為權威。
  */
 export function buildPublicRegistrationUrl(origin: string): string {

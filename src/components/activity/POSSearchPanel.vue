@@ -89,8 +89,8 @@
                 <span v-if="g.birthday">· 生日 {{ g.birthday }}</span>
               </div>
             </div>
-            <div class="pos-group__owed">
-              欠 {{ formatTWD(g.group_owed_total) }}
+            <div class="pos-group__owed" :class="{ 'pos-group__owed--refund': isRefundMode }">
+              {{ groupTotalLabel }} {{ formatTWD(g.group_owed_total) }}
             </div>
           </div>
           <div
@@ -313,6 +313,11 @@ const truncationText = computed(() => {
   }
   return `部分交易未載入（${totalHint}每狀態上限 200 筆），日曆與金額可能少算，請用班級或關鍵字縮小範圍後再核對。`
 })
+
+// 分組表頭金額標籤：退費模式下後端（filter=refundable）回的 group_owed_total 語意是
+// 「已繳／可退金額」而非欠款，沿用「欠」會讓櫃台把已繳清的學生誤判成欠費。標籤與配色
+// 都對齊上方「待退／待收合計」。語意正規化理應在父層 composable 做，此處先於元件內收斂。
+const groupTotalLabel = computed(() => (props.isRefundMode ? '可退' : '欠'))
 
 const emit = defineEmits<{
   'update:mode': [value: string | number | boolean]
@@ -596,6 +601,11 @@ function handleSingleToggle(row: RegistrationEntry) {
   font-weight: 700;
   color: var(--color-danger-hover);
   font-size: 15px;
+}
+
+/* 退費模式不是欠款警示，配色與單列可退金額（.pos-reg__owed--refund）一致 */
+.pos-group__owed--refund {
+  color: #0284c7;
 }
 
 .pos-reg {

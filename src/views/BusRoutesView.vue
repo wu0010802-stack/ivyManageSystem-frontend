@@ -21,6 +21,7 @@ import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { getBranding } from '@/composables/useTenantBranding'
 import {
   useBusRouteEditor, DIRECTION_LABELS, MAX_STOPS_PER_DIRECTION, type BusDirection,
 } from '@/composables/useBusRouteEditor'
@@ -93,8 +94,15 @@ let map: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let marker: any = null
 
-/** 沒有座標時的起始視野：高雄市中心（園所所在地），只作為拖曳起點。 */
-const FALLBACK_CENTER: [number, number] = [22.6273, 120.3014]
+/**
+ * 沒有座標時的起始視野，只作為拖曳起點。
+ * 多租戶（4d/fb，GAP-08）：改讀該租戶的 `branding.map`（預設仍為原高雄座標），
+ * 否則第二間園所每次新增站點都要從高雄拖過去。
+ */
+const fallbackCenter = computed<[number, number]>(() => {
+  const { lat, lng } = getBranding().map
+  return [lat, lng]
+})
 const MAP_ZOOM = 16
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -126,7 +134,7 @@ async function renderTuneMap(): Promise<void> {
   if (!tuneMapEl.value || !tuneStop.value) return
   const center: [number, number] = stop.lat != null && stop.lng != null
     ? [stop.lat, stop.lng]
-    : FALLBACK_CENTER
+    : fallbackCenter.value
   destroyMap()
   map = L.map(tuneMapEl.value).setView(center, MAP_ZOOM)
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

@@ -10,13 +10,13 @@
       <el-form-item label="學生姓名" required>
         <el-input v-model="form.name" :maxlength="FIELD_RULES.studentNameMax" placeholder="請輸入學生姓名" />
       </el-form-item>
-      <el-form-item label="生日" required>
+      <el-form-item label="生日">
         <el-date-picker
           v-model="form.birthday"
           type="date"
           format="YYYY-MM-DD"
           value-format="YYYY-MM-DD"
-          placeholder="YYYY-MM-DD"
+          placeholder="YYYY-MM-DD（選填）"
           style="width: 100%"
         />
       </el-form-item>
@@ -212,10 +212,11 @@ watch(
 
 // 至少一門課程或一項用品（對齊後端 invariant：公開/家長/後台一致），
 // 否則送出會被後端 400 退回。
+// 生日為選填（對齊 2026-08-03 起公開報名不再收生日、後端 AdminRegistrationPayload.birthday 為 Optional，
+// 比對已可用姓名＋班級退階）。
 const isValid = computed(
   () =>
     !!form.name &&
-    !!form.birthday &&
     !!form.class_ &&
     (form.courseNames.length > 0 || form.supplyNames.length > 0),
 )
@@ -260,7 +261,8 @@ async function handleCreate() {
   try {
     const payload = {
       name: form.name.trim(),
-      birthday: form.birthday,
+      // 未填時送 null（空字串會被後端當成非法日期格式 422）
+      birthday: form.birthday || null,
       class: form.class_,
       parent_phone: form.parentPhone?.trim() || null,
       email: form.email?.trim() || null,

@@ -48,7 +48,8 @@ describe('RecruitmentIvykidsTab', () => {
     vi.clearAllMocks()
     getRecruitmentIvykidsBackendStatus.mockResolvedValue({
       data: {
-        provider_label: '義華校官網',
+        // 4e：後端 IVYKIDS_PROVIDER_LABEL 已中性化（contracts §16 DEV-15）
+        provider_label: '官網後台',
         sync_in_progress: false,
         last_sync_status: 'success',
         last_synced_at: '2026-04-13T08:00:00',
@@ -117,6 +118,47 @@ describe('RecruitmentIvykidsTab', () => {
     expect(getRecruitmentIvykidsStats).toHaveBeenCalledTimes(1)
     expect(getRecruitmentIvykidsRecords).toHaveBeenCalledWith({ page: 1, page_size: 50 })
     expect(wrapper.text()).toContain('共 1 筆')
+  })
+
+  it('provider 文案無校名硬編：狀態未載入時 fallback 為中性字面（4e / DEV-15）', async () => {
+    // 後端 IVYKIDS_PROVIDER_LABEL 已中性化為「官網後台」。前端 fallback 若留舊字面
+    // 「義華校官網」，B 校在 status 載入前（或 API 失敗）會看到 A 校校名。
+    getRecruitmentIvykidsBackendStatus.mockRejectedValueOnce(new Error('boom'))
+
+    const wrapper = shallowMount(RecruitmentIvykidsTab, {
+      props: {
+        barComponent: { name: 'BarStub', template: '<div />' },
+        showCharts: false,
+        canWrite: true,
+      },
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          'el-card': { template: '<div><slot name="header" /><slot /></div>' },
+          'el-table': { template: '<div><slot /></div>' },
+          'el-table-column': { template: '<div><slot :row="{}" /></div>' },
+          'el-tag': { template: '<span><slot /></span>' },
+          'el-button': { template: '<button><slot /></button>' },
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-empty': true,
+          'el-pagination': true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('官網後台')
+    expect(wrapper.text()).not.toContain('義華')
+
+    // 整支元件（含 confirm 對話框文案）都不得再內嵌校名字面
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/recruitment/RecruitmentIvykidsTab.vue'),
+      'utf8',
+    )
+    const code = source.replace(/<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')
+    expect(code).not.toContain('義華')
   })
 
   it('官網報名併入招生入學（無獨立側邊欄/路由改 redirect 至 /students/admissions）', () => {

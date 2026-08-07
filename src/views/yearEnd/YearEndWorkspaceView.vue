@@ -7,6 +7,8 @@ import { listYearEndCycles, updateCycleStatus, getCycleProgress } from '@/api/ye
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { CYCLE_STATUS_TAG, cycleStatusLabel } from '@/constants/appraisalYearEnd'
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 const YearEndConfigView = defineAsyncComponent(() => import('./YearEndConfigView.vue'))
 const YearEndGridView = defineAsyncComponent(() => import('./YearEndGridView.vue'))
@@ -23,10 +25,10 @@ function goStep(key: WorkspaceStepKey) {
 }
 
 const RAIL_COLLAPSE_KEY = 'ye-workspace-rail-collapsed'
-const collapsed = ref(localStorage.getItem(RAIL_COLLAPSE_KEY) === '1')
+const collapsed = ref(tenantGetItem(RAIL_COLLAPSE_KEY) === '1')
 function toggleCollapse() {
   collapsed.value = !collapsed.value
-  localStorage.setItem(RAIL_COLLAPSE_KEY, collapsed.value ? '1' : '0')
+  tenantSetItem(RAIL_COLLAPSE_KEY, collapsed.value ? '1' : '0')
 }
 
 // ── 週期頭 + 狀態機（Task 7：自 YearEndDetailView 上移）──────────────────────

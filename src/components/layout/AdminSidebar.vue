@@ -20,9 +20,11 @@
       <el-icon><Close /></el-icon>
     </button>
     <div class="logo-container">
-      <img src="/LOGO.png" class="logo-icon-img" alt="IVY" />
+      <!-- /LOGO.png 的 URL 刻意不變（L3）：nginx 依 $host 從 /brand/<slug>/ overlay
+           換檔案內容，HTML/template/manifest/SW 四處引用點零改動。 -->
+      <img src="/LOGO.png" class="logo-icon-img" :alt="branding.short_name" />
       <transition name="fade">
-        <span v-if="!isCollapse" class="logo-text">常春藤管理系統</span>
+        <span v-if="!isCollapse" class="logo-text">{{ branding.titles.admin }}</span>
       </transition>
     </div>
 
@@ -92,8 +94,12 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 // 選單項圖示改由 SIDEBAR_TREE（manifest 衍生）攜帶；此處只 import 側欄骨架自用的三顆。
 import { Expand, Fold, Close } from '@element-plus/icons-vue'
-import { PERMISSION_NAMES, hasPermission } from '@/utils/auth'
+import { PERMISSION_NAMES, hasPermission, isPlatformAdmin } from '@/utils/auth'
+import { PLATFORM_ONLY_CODES } from '@/constants/permissions'
 import { SIDEBAR_TREE, ACTIVE_MENU_PATHS } from '@/constants/navigation'
+import { useTenantBranding } from '@/composables/useTenantBranding'
+
+const { branding } = useTenantBranding()
 
 const props = withDefaults(defineProps<{
   pendingApprovals?: number
@@ -131,11 +137,33 @@ const canView = computed(() =>
   )
 )
 
+/**
+ * 總部（platform）與分校（school）選單的雙向過濾（CT-P-04(3)）。
+ *
+ * 權限碼本身已經擋住九成：`PLATFORM_*` 只授予 kind='platform' 租戶的角色，分校 admin
+ * 的 `canView` 對它們恆 false。這裡再加一道以 **`platform_admin` flag** 為準的顯式過濾，
+ * 理由是「設定錯誤（有人把 PLATFORM_* 勾給分校角色）不該直接變成 UI 可達」——後端仍會
+ * 403/404，但選單先擋住比較不會有人去點。
+ *
+ * ⚠ 判準用 `isPlatformAdmin()`（flag）而非契約字面的 `tenant.kind`：登入 payload
+ * （`AuthUserOut`）目前只有 `tenant_slug` / `tenant_name`，**沒有 `kind`**。flag 與
+ * kind 在 CT-P-01 下是綁定的（platform_admin 只存在於 hq 租戶），且 flag 缺失時
+ * `isPlatformAdmin()` 回 false ⇒ 總部選單隱藏，方向是 fail-closed。
+ */
+const platformView = computed(() => isPlatformAdmin())
+const isPlatformItem = (visibleCodes: readonly string[]): boolean =>
+  visibleCodes.length > 0 && visibleCodes.every((code) => PLATFORM_ONLY_CODES.has(code))
+
+const itemAllowed = (item: { visibleCodes: readonly string[] }): boolean => {
+  const platformItem = isPlatformItem(item.visibleCodes)
+  // platform 頁：非總部身分一律不顯示；總部身分：只顯示 platform 頁（分校業務頁隱藏）。
+  if (platformItem !== platformView.value) return false
+  return item.visibleCodes.some((code) => canView.value[code])
+}
+
 // 側欄樹由 manifest 衍生（SIDEBAR_TREE 靜態）；項目可見性 = visibleCodes
 //（views ∪ sharedViews）任一命中，OR 語意與舊手寫 v-if 串一致。
-const visibleTopLevel = computed(() =>
-  SIDEBAR_TREE.topLevel.filter((node) => node.visibleCodes.some((code) => canView.value[code]))
-)
+const visibleTopLevel = computed(() => SIDEBAR_TREE.topLevel.filter(itemAllowed))
 
 // 群組可見性 =「子項權限濾後非空」，取代先前 6 個手寫 hasVisibleXxx OR 串。
 // 舊串的兩個殘渣（人事薪資的 SALARY_WRITE、報表的 SALARY_READ——無任何子項以其為
@@ -144,7 +172,7 @@ const visibleGroups = computed(() =>
   SIDEBAR_TREE.groups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => item.visibleCodes.some((code) => canView.value[code])),
+      items: group.items.filter(itemAllowed),
     }))
     .filter((group) => group.items.length > 0)
 )

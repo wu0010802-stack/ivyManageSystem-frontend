@@ -19,6 +19,8 @@ import {
   type WebSocketCloseInfo,
 } from '@/utils/ws'
 import { sortByOldestFirst, type DismissalCallView } from '@/composables/useDismissalUrgency'
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 type DismissalCall = DismissalCallView
 
@@ -32,7 +34,7 @@ const wsExhausted = ref(false)
 const lastWsClose = ref<WebSocketCloseInfo | null>(null)
 const audioUnlocked = ref(false)
 const SOUND_PREF_KEY = 'portal_dismissal_sound_muted'
-const muted = ref(localStorage.getItem(SOUND_PREF_KEY) === '1')
+const muted = ref(tenantGetItem(SOUND_PREF_KEY) === '1')
 const notificationSupported = ref(typeof window !== 'undefined' && 'Notification' in window)
 
 const sortedCalls = computed(() => sortByOldestFirst(activeCalls.value))
@@ -200,7 +202,7 @@ function triggerHaptic(): void {
 
 function toggleMute(): void {
   muted.value = !muted.value
-  localStorage.setItem(SOUND_PREF_KEY, muted.value ? '1' : '')
+  tenantSetItem(SOUND_PREF_KEY, muted.value ? '1' : '')
 }
 
 // ── 瀏覽器推播（誠實降級：iOS Safari/LINE WebView 多半不送達，包 try/catch）──
@@ -422,7 +424,7 @@ export function teardownPortalDismissalAlerts(): void {
   wsRecentlyCreated.clear()
   fetchDispatchSeq = 0
   // muted 偏好持久化於 localStorage；重讀當前值（與 toggleMute 寫入保持同步，正常情況為 no-op）
-  muted.value = localStorage.getItem(SOUND_PREF_KEY) === '1'
+  muted.value = tenantGetItem(SOUND_PREF_KEY) === '1'
   liveAnnounce.value = ''
   loading.value = false
   initialized = false

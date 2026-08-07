@@ -1,6 +1,8 @@
 import { watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useA11yPreferenceStore } from '@/stores/a11yPreference'
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 const STORAGE_KEY = 'ivy.a11y'
 const SIZE_CLASSES = ['ivy-size-sm', 'ivy-size-md', 'ivy-size-lg', 'ivy-size-xl', 'ivy-size-2xl']
@@ -44,7 +46,7 @@ export function useA11yPreference() {
 
   function persist() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(store.$state))
+      tenantSetItem(STORAGE_KEY, JSON.stringify(store.$state))
     } catch {
       // 無痕模式 / quota 滿 — 不影響主流程
     }
@@ -54,7 +56,7 @@ export function useA11yPreference() {
     if (initialized) return
     initialized = true
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      const raw = tenantGetItem(STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
         if (parsed && typeof parsed === 'object') {

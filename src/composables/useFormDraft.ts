@@ -1,4 +1,5 @@
 import { watch, ref, toValue, onScopeDispose, type Ref, type MaybeRefOrGetter } from 'vue'
+import { tenantKey, tenantGetItem, tenantSetItem, tenantRemoveItem } from '@/utils/tenantStorage'
 
 const PREFIX = 'ivy.draft.'
 const VERSION = 1
@@ -59,7 +60,9 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
   // Resolve the current form object via toValue (supports reactive object, ref, or getter)
   const cur = (): Record<string, unknown> => toValue(opts.state) as Record<string, unknown>
 
-  const buildKey = (): string => {
+  // 未加租戶前綴的原始 key（= 改造前的形狀，也是 legacy fallback 要讀的 key）。
+  // tenantStorage 的 helper 都吃這個 base，由它們自己算 `t/<slug>/…`。
+  const buildBaseKey = (): string => {
     const rid = toValue(opts.recordId)
     const scope = toValue(opts.userScope)
     let k = `${PREFIX}v${VERSION}.${formId}`
@@ -67,6 +70,10 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     if (scope != null && scope !== '') k += `.${scope}`
     return k
   }
+
+  // 註：不另留 `buildKey()`。單一草稿的讀/寫/刪三處都吃 base key 走 tenantStorage
+  // wrapper（由它自己算 `t/<slug>/…`）；只有 gcExpired() 需要「完整 key 前綴」，
+  // 它在下方自行以 tenantKey(PREFIX) 取得。
 
   const pick = (obj: Record<string, unknown> | null | undefined): Record<string, unknown> => {
     const out: Record<string, unknown> = {}
@@ -89,7 +96,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
         savedAt: new Date().toISOString(),
         data: pick(cur()),
       }
-      localStorage.setItem(buildKey(), JSON.stringify(env))
+      tenantSetItem(buildBaseKey(), JSON.stringify(env))
     } catch {
       // 無痕模式 / quota 滿 — 不影響主流程
     }
@@ -114,7 +121,9 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
 
   const clear = (): void => {
     if (timer) { clearTimeout(timer); timer = null }
-    try { localStorage.removeItem(buildKey()) } catch { /* */ }
+    // 連 legacy key 一併刪：否則使用者「捨棄草稿」後，read() 的 legacy fallback
+    // 會把同一份草稿再撈回來復活。
+    tenantRemoveItem(buildBaseKey())
     hasDraft.value = false
     draftSavedAt.value = null
     snapshot = JSON.stringify(pick(cur())) // 重拍快照：clear 後不再 dirty，避免關閉時 flush 復活草稿
@@ -122,7 +131,10 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
 
   const read = (): DraftEnvelope | null => {
     try {
-      const raw = localStorage.getItem(buildKey())
+      // tenantGetItem：新 key miss 時讀一次 legacy key（改造前形狀），命中則搬移到新 key
+      // 並刪 legacy（一次性遷移；DEV `?tenant=` override 下只讀不搬，CT-F-07(2)）。
+      // 草稿 TTL 7 天，legacy 殘留會自然收斂。單租戶模式下兩者同 key，等同原本的 getItem。
+      const raw = tenantGetItem(buildBaseKey())
       if (!raw) return null
       const parsed = JSON.parse(raw)
       if (!parsed || typeof parsed !== 'object') return null
@@ -145,10 +157,14 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
   const gcExpired = (): void => {
     try {
       const cutoff = ttlDays * 86400_000
+      // 掃新舊兩組前綴：PREFIX 是改造前的裸 key（legacy 殘留），tenantKey(PREFIX) 是本租戶
+      // 的新前綴。單租戶模式下兩者相同，去重避免同一 key 判斷兩次。其他租戶的
+      // `t/<other>/ivy.draft.…` 不以任一前綴開頭，不會被本租戶誤刪。
+      const prefixes = Array.from(new Set([PREFIX, tenantKey(PREFIX)]))
       const toRemove: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)
-        if (!k || !k.startsWith(PREFIX)) continue
+        if (!k || !prefixes.some((p) => k.startsWith(p))) continue
         try {
           const parsed = JSON.parse(localStorage.getItem(k) || '')
           const ageMs = Date.now() - new Date(parsed?.savedAt).getTime()

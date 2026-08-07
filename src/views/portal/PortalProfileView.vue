@@ -1,14 +1,21 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import { getProfile, updateProfile, setPunchPin } from '@/api/portal'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 
 const { notify } = useErrorNotify()
-const lineBotFriendUrl = import.meta.env.VITE_LINE_BOT_FRIEND_URL || ''
+// 多租戶（4d/fb）：加好友連結改由品牌 API 提供（system_configs `brand.line_bot_friend_url`）。
+// `VITE_LINE_BOT_FRIEND_URL` 的 Dockerfile 預設值是 **default tenant 的 OA**，多租戶下
+// 烤進 bundle 必錯（B 校老師加到 A 校的 OA），故品牌值優先、env 只作過渡 fallback。
+const { branding } = useTenantBranding()
+const lineBotFriendUrl = computed(
+  () => branding.value.line_bot_friend_url || import.meta.env.VITE_LINE_BOT_FRIEND_URL || '',
+)
 
 const loading = ref(false)
 const saving = ref(false)
@@ -112,9 +119,9 @@ const lineBotQrDataUrl = ref('')
 const LINE_ID_RE = /^U[0-9a-f]{32}$/
 
 const generateLineBotQr = async () => {
-  if (!lineBotFriendUrl) return
+  if (!lineBotFriendUrl.value) return
   try {
-    lineBotQrDataUrl.value = await QRCode.toDataURL(lineBotFriendUrl, {
+    lineBotQrDataUrl.value = await QRCode.toDataURL(lineBotFriendUrl.value, {
       width: 220,
       margin: 1,
       errorCorrectionLevel: 'M',
@@ -126,9 +133,9 @@ const generateLineBotQr = async () => {
 }
 
 const copyLineBotUrl = async () => {
-  if (!lineBotFriendUrl) return
+  if (!lineBotFriendUrl.value) return
   try {
-    await navigator.clipboard.writeText(lineBotFriendUrl)
+    await navigator.clipboard.writeText(lineBotFriendUrl.value)
     ElMessage.success('連結已複製')
   } catch {
     ElMessage.error('複製失敗，請手動長按連結')
@@ -348,7 +355,7 @@ onMounted(() => {
               <el-button @click="copyLineBotUrl">複製連結</el-button>
             </div>
             <p v-else class="line-bot-url-missing">
-              ⚠ 尚未設定 Bot 加好友連結，請聯絡系統管理員於前端 <code>.env</code> 設定 <code>VITE_LINE_BOT_FRIEND_URL</code>
+              ⚠ 尚未設定 Bot 加好友連結，請於後台「LINE 設定」填寫加好友連結
             </p>
           </div>
 

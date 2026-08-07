@@ -12,6 +12,9 @@ import { nextTick, ref, reactive, watch } from 'vue'
 import { publicCreateInquiry } from '@/api/activityPublic'
 import { useAccessibleDialog } from '@/composables/useAccessibleDialog'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
+import { useTenantBranding } from '@/composables/useTenantBranding'
+
+const { branding } = useTenantBranding()
 
 const props = withDefaults(defineProps<{
   visible?: boolean
@@ -138,18 +141,21 @@ async function handleSubmit() {
         </button>
       </div>
       <div class="modal-body">
+        <!-- 多租戶（4d/fb）：校名／地址／電話改資料驅動。任一欄缺值即隱藏該列，
+             避免新租戶還沒填聯絡資訊時畫面出現「電話：」這種半截標籤。 -->
         <div class="contact-school-card">
-          <h4 class="contact-school-name">
+          <h4 v-if="branding.contact.campus_label" class="contact-school-name">
             <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-school" /></svg>
-            常春藤義華校
+            {{ branding.contact.campus_label }}
           </h4>
-          <div class="contact-school-detail">
+          <div v-if="branding.contact.address" class="contact-school-detail">
             <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-pin" /></svg>
-            高雄市三民區義華路 68 號
+            {{ branding.contact.address }}
           </div>
-          <div class="contact-school-detail">
+          <div v-if="branding.contact.phone_display" class="contact-school-detail">
             <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-phone" /></svg>
-            電話：<a href="tel:+88673928366">(07) 392-8366</a>
+            <!-- 撥號用 E.164（contact.phone），顯示用人眼格式（contact.phone_display） -->
+            電話：<a :href="`tel:${branding.contact.phone || branding.contact.phone_display}`">{{ branding.contact.phone_display }}</a>
           </div>
         </div>
         <div class="contact-form-intro">

@@ -20,3 +20,7 @@ frontend.log
 vite.config.js.timestamp-*
 CLAUDE.md.before-*
 .playwright-cli/
+
+# 由 scripts/gen-tenant-brand-conf.mjs 於 prebuild 產生（不進版控）
+nginx-tenant-brand.conf
+public/brand-version.json

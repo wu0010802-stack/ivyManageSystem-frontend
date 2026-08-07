@@ -11,16 +11,25 @@ import { computed, type CSSProperties } from 'vue'
 import LaurelWreath from './LaurelWreath.vue'
 import CrownIcon from './CrownIcon.vue'
 import IvyRibbon from './IvyRibbon.vue'
+import { useTenantBranding } from '@/composables/useTenantBranding'
 
 defineOptions({ name: 'BrandMark' })
 
 const props = withDefaults(defineProps<{
   variant?: 'mini' | 'full' | 'mark-only'
   size?: number
+  /**
+   * 無障礙名稱。預設用該租戶的機構名（多租戶 4d/fb；原為硬編「常春藤教育機構」）。
+   * 其餘 4 個純裝飾 SVG（LaurelWreath / CrownIcon / IvyRibbon）維持 aria-hidden，不 prop 化。
+   */
+  label?: string
 }>(), {
   variant: 'mini',
   size: 32,
+  label: '',
 })
+
+const { branding } = useTenantBranding()
 
 const containerStyle = computed((): CSSProperties => ({
   width: `${props.size}px`,
@@ -39,7 +48,7 @@ const crownSize = computed(() => Math.round(props.size * 0.4))
   <span
     data-test="brand-mark"
     role="img"
-    aria-label="常春藤教育機構"
+    :aria-label="props.label || branding.org_name"
     :style="containerStyle"
     class="brand-mark"
   >

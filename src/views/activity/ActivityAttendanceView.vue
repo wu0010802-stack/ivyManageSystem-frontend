@@ -362,6 +362,8 @@ import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 
 import type { AttendanceStudent, AttendanceStudentGroup } from '@/composables/useActivityAttendanceDrawer'
 import type { ApiBody } from '@/api/_generated/typed'
+// 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 interface CourseOption { id: number; name: string }
 interface SessionRow { id: number; course_name?: string; session_date?: string; recorded_count?: number; present_count?: number; notes?: string; created_by?: string }
@@ -420,7 +422,7 @@ const total = ref(0)
 const GROUP_PREF_KEY = 'activity_attendance_group_by_classroom'
 const groupByClassroom = ref(
   typeof localStorage !== 'undefined'
-    ? localStorage.getItem(GROUP_PREF_KEY) !== '0'
+    ? tenantGetItem(GROUP_PREF_KEY) !== '0'
     : true
 )
 const activeGroups = ref<string[]>([])
@@ -481,7 +483,7 @@ function syncActiveGroups() {
 
 function onGroupToggle(val: string | number | boolean) {
   if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(GROUP_PREF_KEY, val ? '1' : '0')
+    tenantSetItem(GROUP_PREF_KEY, val ? '1' : '0')
   }
   // 分組為純前端 computed 視圖，切換不需重打 API
   syncActiveGroups()

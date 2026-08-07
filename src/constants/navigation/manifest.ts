@@ -562,6 +562,48 @@ export const NAVIGATION_MANIFEST = {
     },
 
     {
+      // 總部（platform / hq）console。**只有 kind='platform' 租戶的角色會持有 PLATFORM_* 碼**
+      //（後端 tests/test_platform_admin_flag.py 的 PLATFORM_ONLY_CODES parity 測試守著——
+      //  它直接讀本 repo 的 src/constants/permissions.ts 比對兩份清單），
+      // 因此分校 admin 的 canView 對這三碼恆為 false、整個群組自然不出現。AdminSidebar 另有
+      // 一道以 isPlatformAdmin() 為準的顯式過濾（CT-P-04(3) 雙向），兩道是刻意的縱深。
+      //
+      // ⚠ 這三碼 2026-08-04 之前掛在 standalonePermissions 豁免表（4e 交付前無對應頁面），
+      // 本批已改為主屬本群組各頁——不要再往豁免表加回去。
+      key: 'platform', title: '總部管理', icon: icon('OfficeBuilding'), pages: [
+        {
+          key: 'platformOverview', title: '總部總覽', routePath: '/platform/overview',
+          // 總覽同時吃分校清單與跨校報表，兩碼皆非 owned 於此（借道，OR 語意）。
+          views: [],
+          sharedViews: ['PLATFORM_REPORTS_VIEW', 'PLATFORM_TENANTS_MANAGE'],
+          menu: { icon: icon('DataBoard') },
+        },
+        {
+          // prefix：/platform/tenants/:id 詳情頁與清單同權限（都是 PLATFORM_TENANTS_MANAGE）。
+          key: 'platformTenants', title: '分校管理', routePath: '/platform/tenants', routePrefix: true,
+          views: [{ code: 'PLATFORM_TENANTS_MANAGE' }],
+          menu: { icon: icon('School') },
+        },
+        {
+          key: 'platformReports', title: '跨分校報表', routePath: '/platform/reports',
+          views: [{ code: 'PLATFORM_REPORTS_VIEW' }],
+          menu: { icon: icon('TrendCharts') },
+        },
+        {
+          key: 'platformRoleSync', title: '角色同步', routePath: '/platform/roles-sync',
+          views: [],
+          sharedViews: ['PLATFORM_TENANTS_MANAGE'],
+          menu: { icon: icon('Key') },
+        },
+        {
+          key: 'platformAudit', title: '跨分校稽核', routePath: '/platform/audit',
+          views: [{ code: 'PLATFORM_AUDIT_VIEW' }],
+          menu: { icon: icon('List') },
+        },
+      ],
+    },
+
+    {
       // 純 picker 群組：教師 Portal 端能力（管理端無頁面，但角色授權需要編輯）。
       // portal 專用碼不進 standalonePermissions 豁免表：它們必須可在 picker 授權
       //（教師角色要勾），所以在 manifest 內有 owned 位置。
@@ -592,5 +634,7 @@ export const NAVIGATION_MANIFEST = {
       code: 'BUS_TRIPS_OPERATE', label: '娃娃車隨車操作（教師端）',
       note: '隨車老師 portal 專用（/portal/bus-trip 發車/到站/回報），管理端無對應頁面，故不主屬任何 manifest 頁。刻意**不**與 BUS_READ 綁在同一角色：隨車端只需 GET /portal/bus/routes 的 id/name 精簡清單，給 BUS_READ 等於把全園學生名冊與家庭住址座標一併開給司機。per-user 顯式授權、無 role 預設。',
     },
+    // PLATFORM_TENANTS_MANAGE / PLATFORM_REPORTS_VIEW / PLATFORM_AUDIT_VIEW 已於 2026-08-04
+    // （4e hq 前端）改主屬「總部管理」群組各頁，不再是 standalone 孤兒。
   ],
 } satisfies NavigationManifest

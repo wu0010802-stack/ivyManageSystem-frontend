@@ -1,3 +1,21 @@
+# ─── 多租戶品牌注入（fb §3.3）───────────────────────────────────────────────
+# `$tb_*` 變數與 `$tb_known_host` 由 /etc/nginx/conf.d/00-tenant-brand.conf 定義
+# （scripts/gen-tenant-brand-conf.mjs 從 branding/tenants.json 產生，`00-` 前綴保證
+# 先於本檔載入）。本檔只負責「怎麼用」，不含任何品牌字面值。
+#
+# ⚠ envsubst 注意：nginx 官方 entrypoint 只替換「實際存在於環境變數」的名稱，
+# 因此 $host / $uri / $scheme / $tb_* 都會原樣保留；${BACKEND_URL} 與
+# ${TENANT_HOST_GUARD} 則必須在 Dockerfile 以 ENV 給預設值，否則不會被替換。
+#
+# 未知 host 守衛（scan-frontend GAP-13）：TENANT_HOST_GUARD=on 且 host 不在
+# tenants.json 內時整站回 404。目的是讓任何指到本 IP 的 host（攻擊者自建 DNS、
+# CDN 誤配、直連 IP）拿不到某一間真實園所的 og:site_name / 校名 / 海報。
+# ⚠ 平台健康檢查用的 host 必須先列進 branding/tenants.json，否則部署會被自己擋掉。
+map "${TENANT_HOST_GUARD}:$tb_known_host" $tb_reject_host {
+    default 0;
+    "on:0"  1;
+}
+
 server {
     listen 8080;
     server_name _;
@@ -5,7 +23,39 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # gzip 靜態資源
+    if ($tb_reject_host) { return 404; }
+
+    # ── 品牌注入：server 層宣告一次，所有 location 繼承 ──
+    # HTML 檔 <5KB 且本就 no-cache，逐請求替換成本可忽略；/assets/ 的 js/css 因
+    # type 不在 sub_filter_types 而完全不受影響。
+    # ⛔ 不得改用 gzip_static 預壓縮 .gz：sub_filter 無法處理已壓縮的 body，token 會
+    #    原樣外洩到使用者畫面（scripts/check-brand-tokens.mjs 有 gzip 斷言把關）。
+    sub_filter_once off;
+    sub_filter_types application/manifest+json;   # text/html 為隱含預設
+    sub_filter '{{TB_ADMIN_TITLE}}'           $tb_admin_title;
+    sub_filter '{{TB_PORTAL_TITLE}}'          $tb_portal_title;
+    sub_filter '{{TB_PARENT_TITLE}}'          $tb_parent_title;
+    sub_filter '{{TB_PUBLIC_TITLE}}'          $tb_public_title;
+    sub_filter '{{TB_ORG_NAME}}'              $tb_org_name;
+    sub_filter '{{TB_META_DESC}}'             $tb_meta_desc;
+    sub_filter '{{TB_OG_DESC}}'               $tb_og_desc;
+    sub_filter '{{TB_POSTER_ALT}}'            $tb_poster_alt;
+    sub_filter '{{TB_OG_POSTER_V}}'           $tb_og_poster_v;
+    sub_filter '{{TB_THEME_ADMIN}}'           $tb_theme_admin;
+    sub_filter '{{TB_THEME_PARENT}}'          $tb_theme_parent;
+    sub_filter '{{TB_MANIFEST_ADMIN_NAME}}'   $tb_manifest_admin_name;
+    sub_filter '{{TB_MANIFEST_ADMIN_SHORT}}'  $tb_manifest_admin_short;
+    sub_filter '{{TB_MANIFEST_ADMIN_DESC}}'   $tb_manifest_admin_desc;
+    sub_filter '{{TB_MANIFEST_PARENT_NAME}}'  $tb_manifest_parent_name;
+    sub_filter '{{TB_MANIFEST_PARENT_SHORT}}' $tb_manifest_parent_short;
+    sub_filter '{{TB_MANIFEST_PARENT_DESC}}'  $tb_manifest_parent_desc;
+    sub_filter '{{TB_MANIFEST_PUBLIC_NAME}}'  $tb_manifest_public_name;
+    sub_filter '{{TB_MANIFEST_PUBLIC_SHORT}}' $tb_manifest_public_short;
+    sub_filter '{{TB_MANIFEST_PUBLIC_DESC}}'  $tb_manifest_public_desc;
+    # CT-F-09：不寫死 https，dev/staging 走 http 也要正確
+    sub_filter '{{TB_ORIGIN}}'                '$scheme://$host';
+
+    # gzip 靜態資源（sub_filter 在 gzip 壓縮之前執行，兩者相容）
     gzip on;
     gzip_vary on;
     gzip_min_length 1024;
@@ -69,10 +119,40 @@ server {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
     }
+    # 三份 manifest 全部顯式列出（改造前只有 /manifest.webmanifest 有）：
+    # 它們現在帶 {{TB_*}} token，必須 no-cache 才能讓改品牌後的注入結果傳得出去。
     location = /manifest.webmanifest {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
         types { } default_type application/manifest+json;
+    }
+    location = /parent.webmanifest {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        types { } default_type application/manifest+json;
+    }
+    location = /public.webmanifest {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+        types { } default_type application/manifest+json;
+    }
+    # brand-version.json：內容 = branding/tenants.json 的 hash，被 SW precache
+    # （CT-F-04）。改品牌值 → hash 變 → precache revision 變 → 已安裝 PWA 重抓
+    # 三個 HTML。必須 no-cache，否則瀏覽器快取會讓這條機制延遲生效。
+    location = /brand-version.json {
+        include /etc/nginx/security-headers.conf;
+        add_header Cache-Control "no-cache" always;
+    }
+
+    # ── L3 品牌資產 overlay：URL 不變，per-tenant 檔案優先、缺檔 fallback 預設檔 ──
+    # /LOGO.png 等被 HTML、Vue template、SW precache、manifest 四處引用；讓 nginx 依
+    # $host 換檔案內容，所有引用點零改動。租戶可以只覆蓋 logo，其餘自動吃預設檔。
+    location ~ ^/(LOGO\.png|logo\.svg|favicon\.ico|apple-touch-icon-180x180\.png|pwa-(64x64|192x192|512x512)\.png|maskable-icon-512x512\.png|parent-(pwa-(192x192|512x512)|maskable-512x512)\.png|images/(activity-poster\.jpg|login-logo\.png|ivy-kids-loading\.png))$ {
+        include /etc/nginx/security-headers.conf;
+        # CT-F-09：短快取而非 no-cache——SW 的 StaleWhileRevalidate 仍能拿到更新，
+        # 而首訪公開報名頁的訪客不必為每張圖多一次 revalidate。
+        add_header Cache-Control "max-age=300" always;
+        try_files /brand/$tb_slug$uri $uri =404;
     }
 
     # ── 帶 hash 的靜態資源：永久 cache ──

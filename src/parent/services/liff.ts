@@ -1,9 +1,23 @@
 /**
- * LIFF SDK 初始化（家長 App）
+ * LIFF SDK 初始化（家長 App）。owner = fb（CT-X-06 / CT-F-08，原屬 pp）。
  *
- * VITE_LIFF_ID 必須在 .env.local 設定（與後端 LINE_LOGIN_CHANNEL_ID 對應的
- * LIFF App ID）。LIFF App 必須綁定到與 Messaging Bot 同一個 LINE Provider
- * 下的 Login Channel，否則 id_token.sub 與 webhook source.userId 對不上。
+ * ## LIFF ID 改 runtime 取得（多租戶 4d/fb）
+ *
+ * LIFF App 綁定的是「某一個 LINE Login Channel」，而每間園所有自己的 LINE 官方帳號
+ * ⇒ LIFF ID 必然 per-tenant，**不能**是 build-time 的 `VITE_LIFF_ID`（一個 image
+ * 服務多租戶時，烤進 bundle 的 ID 會把 B 校家長送去 A 校的 LINE Login）。
+ * 改為 init 前 `await fetchTenantMeta()` 取 `liff_id`（來源 `line_configs.liff_id`）。
+ *
+ * `VITE_LIFF_ID` 降為**過渡 fallback**：品牌 API 尚未上線 / 單租戶模式時仍可運作。
+ * 階段 3（Sentry 觀察 fallback 命中為零一個 release 後）刪除該分支與 Dockerfile ARG。
+ *
+ * 時序（已核實呼叫鏈）：`src/parent/main.ts` 在 boot 就 `void fetchTenantMeta()` 預熱，
+ * 與 router 首導航的 `/parent/me` probe 並行；`LoginView.startLogin()` 的流程不變；
+ * LIFF OAuth redirect 回來後重新 `await initLiff()` 的成本可忽略（同 origin GET +
+ * 後端 60s 服務層快取 + 瀏覽器 max-age=300）。
+ *
+ * LIFF App 必須綁定到與 Messaging Bot 同一個 LINE Provider 下的 Login Channel，
+ * 否則 id_token.sub 與 webhook source.userId 對不上。
  *
  * id_token refresh 行為：LIFF SDK 不主動 refresh id_token；access_token 預設
  * 30 天但 id_token 1 小時。第二次以後 liff.getIDToken() 可能回過期 token，
@@ -13,27 +27,56 @@
 
 import liff from '@line/liff'
 
-const LIFF_ID = import.meta.env.VITE_LIFF_ID || ''
+import { fetchTenantMeta } from '@/api/tenantMeta'
+
 const LIFF_REFRESH_MARKER = 'parent_liff_token_refresh_marker'
 // id_token exp buffer：剩餘 < 60 秒視為需 refresh，避免送出途中過期
 const ID_TOKEN_REFRESH_BUFFER_SECONDS = 60
 
 let _initPromise: Promise<void> | null = null
 
+/** 過渡 fallback：品牌 API 未上線 / 單租戶模式時沿用 build 變數。階段 3 刪除。 */
+function envLiffId(): string {
+  return (import.meta.env.VITE_LIFF_ID as string | undefined) || ''
+}
+
+async function resolveLiffId(): Promise<string> {
+  try {
+    const id = (await fetchTenantMeta()).liff_id
+    if (id) return id
+  } catch {
+    // tenant-meta 不可用（灰度未開 / 網路錯誤）→ 走過渡 fallback。
+    // 404/403/503 這三種「這個網域不是有效園所」的情況已由 useTenantBranding 的
+    // 三態遮罩接管（CT-F-01），不需要在這裡重複判斷。
+  }
+  return envLiffId()
+}
+
 export function initLiff(): Promise<void> {
   if (_initPromise) return _initPromise
-  if (!LIFF_ID) {
-    _initPromise = Promise.reject(
-      new Error('VITE_LIFF_ID 未設定，無法初始化 LIFF'),
-    )
-    return _initPromise
-  }
-  _initPromise = liff.init({
-    liffId: LIFF_ID,
-    // 允許在外部瀏覽器（非 LINE 內）也走 OAuth 流程，方便桌面測試
-    withLoginOnExternalBrowser: true,
+  _initPromise = (async () => {
+    const liffId = await resolveLiffId()
+    if (!liffId) {
+      // 訊息刻意指向「園所設定」而非工程 env：看到這行的是家長，不是工程師。
+      throw new Error('此園所尚未設定 LIFF ID，請聯絡園所確認 LINE 設定')
+    }
+    await liff.init({
+      liffId,
+      // 允許在外部瀏覽器（非 LINE 內）也走 OAuth 流程，方便桌面測試
+      withLoginOnExternalBrowser: true,
+    })
+  })()
+  // 失敗即清空，讓 LoginView 的 manualRetry 能真的重試（原本 reject 會被永久快取）。
+  _initPromise = _initPromise.catch((e: unknown) => {
+    _initPromise = null
+    throw e
   })
   return _initPromise
+}
+
+/** 測試專用：重置 init promise。 */
+export function _resetLiffInitForTests(): void {
+  _initPromise = null
 }
 
 export function idTokenNeedsRefresh(payload: { exp?: number } | null | undefined, nowSec: number): boolean {

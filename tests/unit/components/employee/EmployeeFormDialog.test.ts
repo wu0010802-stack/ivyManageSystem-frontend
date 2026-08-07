@@ -20,6 +20,8 @@ vi.mock('@/api/employees', () => ({
 const mockGetPositionSalary = vi.fn(() => Promise.resolve({ data: {} }))
 vi.mock('@/api/config', () => ({
   getPositionSalary: (...a: unknown[]) => mockGetPositionSalary(...a),
+  // 多租戶 CT-FIX-09：per-tenant 職稱對照；空物件 = 退 constants/employee.ts fallback。
+  getPositionMapping: () => Promise.resolve({ data: { title_to_grade: {}, position_salary_key: {} } }),
 }))
 
 // ── stores（照抄 EmployeeListView.test.js 開頭的 mock 寫法：整包替換成可控 plain object）──

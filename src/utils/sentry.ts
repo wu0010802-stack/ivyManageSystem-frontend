@@ -302,7 +302,12 @@ let _SentryRef: unknown = null
  * @param {import('vue-router').Router} [opts.router] — 可選，會自動加 routing instrumentation
  * @returns {Promise<boolean>} — true 表示已 init；false 表示 DSN 缺或載入失敗
  */
-export async function initSentry(app: App, opts: { entry?: string; router?: unknown } = {}) {
+export async function initSentry(
+  app: App,
+  // `tags`：boot 期就已知的靜態 tag（目前只有多租戶的 `tenant`）。刻意收在 init
+  // 參數裡而不另開 setTag()——initSentry 是 async，外部太早呼叫 setTag 會 no-op。
+  opts: { entry?: string; router?: unknown; tags?: Record<string, string> } = {},
+) {
   const dsn = (import.meta.env.VITE_SENTRY_DSN || '').trim()
   if (!dsn) return false
 
@@ -359,6 +364,9 @@ export async function initSentry(app: App, opts: { entry?: string; router?: unkn
 
   if (opts.entry) {
     Sentry.setTag('entry', opts.entry)
+  }
+  for (const [key, value] of Object.entries(opts.tags ?? {})) {
+    Sentry.setTag(key, value)
   }
   _SentryRef = Sentry
   return true

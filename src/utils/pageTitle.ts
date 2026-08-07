@@ -1,19 +1,23 @@
-const ADMIN_APP_TITLE = '常春藤管理系統'
-const PORTAL_APP_TITLE = '常春藤教師入口'
-const PUBLIC_APP_TITLE = '常春藤才藝報名'
+// 多租戶（4d/fb）：三個 app title 由常數改成從 `getBranding().titles` 取。
+// `getBranding()` 是同步的（module-level shallowRef），在品牌 API 回來之前回
+// BRANDING_DEFAULTS = 改造前的三個字面 ⇒ 單租戶輸出不變。
+// 品牌載入完成後由 `App.vue` 的 `onBrandingLoaded` 重新套一次標題。
+// ⚠ `applyPageTitle` / `buildDocumentTitle` 的簽名刻意不變，呼叫端零改動。
+import { getBranding } from '@/composables/useTenantBranding'
 
 function getAppTitle(route: { path?: string; meta?: Record<string, unknown> } | null | undefined) {
   const path = route?.path || ''
+  const titles = getBranding().titles
 
   if (route?.meta?.portal || path.startsWith('/portal')) {
-    return PORTAL_APP_TITLE
+    return titles.portal
   }
 
   if (path.startsWith('/public')) {
-    return PUBLIC_APP_TITLE
+    return titles.public
   }
 
-  return ADMIN_APP_TITLE
+  return titles.admin
 }
 
 function getPageTitle(route: { path?: string; meta?: Record<string, unknown> } | null | undefined) {

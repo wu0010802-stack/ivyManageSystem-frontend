@@ -20,6 +20,9 @@ import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import BrandMark from '@/components/brand/BrandMark.vue'
 import ConsentModal from '../components/ConsentModal.vue'
 import { resolveSafeRedirect } from '../utils/safeRedirect'
+import { useTenantBranding } from '@/composables/useTenantBranding'
+
+const { branding } = useTenantBranding()
 
 const route = useRoute()
 const router = useRouter()
@@ -70,7 +73,8 @@ async function startLogin({ forceFresh = false } = {}) {
   } catch (err: unknown) {
     status.value = 'error'
     _setLocalError(
-      (err instanceof Error ? err.message : String(err)) || 'LIFF 初始化失敗，請確認 VITE_LIFF_ID 設定',
+      // 文案不再指向工程 env：LIFF ID 已改由園所的 LINE 設定提供（多租戶 4d/fb）。
+      (err instanceof Error ? err.message : String(err)) || 'LINE 登入初始化失敗，請聯絡園所確認 LINE 設定',
       '請重新開啟 LIFF 頁面；持續發生請聯絡園所',
     )
     return
@@ -203,7 +207,7 @@ onMounted(() => startLogin())
     <BrandMark variant="full" :size="120" class="welcome-mark" />
     <div class="login-card">
       <p class="welcome-eyebrow">歡迎回到</p>
-      <h1 class="title">常春藤家長</h1>
+      <h1 class="title">{{ branding.titles.parent_short }}</h1>
 
       <div v-if="status === 'init' || status === 'loading'" class="loader">
         <span class="loader-dot" />
@@ -301,7 +305,7 @@ onMounted(() => startLogin())
       </div>
     </div>
 
-    <p class="legal">本服務由常春藤教育機構提供</p>
+    <p class="legal">本服務由{{ branding.org_name }}提供</p>
 
     <ConsentModal
       v-if="status === 'consent' && pendingPolicy"

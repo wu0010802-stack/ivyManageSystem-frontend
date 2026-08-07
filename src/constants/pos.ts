@@ -1,12 +1,12 @@
 // POS 收銀常數
-// 園所資訊變動頻率極低，直接定義於此；日後要動態化再搬至 SystemConfig API
+//
+// ⛔ 舊的 `POS_ORG_INFO`（機構名 + 收據抬頭）已於多租戶改造（4d/fb，CT-F-09）刪除：
+// `src/` 內零消費點，收據抬頭實際由後端 `services/activity_pos_receipt_pdf.py` 產生，
+// 而後端那半邊已改讀 per-tenant 的 `utils/tenant_branding.get_branding()`。
+// 前端不要再建一份 `getPosOrgInfo()`——那會是無人消費的第二份事實來源。
+// 需要顯示機構名請用 `@/composables/useTenantBranding` 的 `branding.org_name`。
 
 import { formatCurrency } from '@/utils/currency'
-
-export const POS_ORG_INFO = {
-  name: '常春藤教育機構',
-  subtitle: '課後才藝繳費收據',
-}
 
 export const POS_MODES = [
   { value: 'by-student', label: '依學生' },
@@ -111,6 +111,10 @@ export function toChineseAmount(n: unknown): string {
   const totalGroups = groups.length
   groups.forEach((group, gi) => {
     const groupDigits = group.split('').map(Number)
+    // 跨分組補零：高位已有輸出（parts 非空）而本組又以 0 開頭時，
+    // 組內的 zeroPending 因 segment 尚空而吞掉「零」，
+    // 需在此補回，否則 10005 會印成「壹萬伍元整」（被讀成 15000）。
+    const needZero = parts.length > 0 && groupDigits[0] === 0
     let segment = ''
     let zeroPending = false
     const len = groupDigits.length
@@ -125,7 +129,7 @@ export function toChineseAmount(n: unknown): string {
       }
     })
     if (segment) {
-      parts.push(segment + _CN_BIG_UNITS[totalGroups - 1 - gi])
+      parts.push((needZero ? '零' : '') + segment + _CN_BIG_UNITS[totalGroups - 1 - gi])
     } else if (parts.length && totalGroups - 1 - gi === 0) {
       // 全零段（通常不會進來，但保險）
     }
