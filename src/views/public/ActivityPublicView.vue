@@ -60,6 +60,7 @@
 
     <!-- Contact Modal（A1-P3 抽元件） -->
     <ContactInquiryModal
+      v-if="contactEnabled"
       v-model:visible="contactModalVisible"
       @toast="(msg, type) => showToast(msg, type)"
     />
@@ -103,7 +104,7 @@
                 <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-search" /></svg>
                 查詢 / 修改報名
               </button>
-              <button type="button" class="page-menu-item" @click="menuOpenContact">
+              <button v-if="contactEnabled" type="button" class="page-menu-item" @click="menuOpenContact">
                 <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-message" /></svg>
                 與承辦人員聯繫
               </button>
@@ -625,7 +626,12 @@
                   <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-search" /></svg>
                   查詢 / 修改報名
                 </button>
-                <button type="button" class="btn btn-outline btn-outline--accent" @click="openContactModal">
+                <button
+                  v-if="contactEnabled"
+                  type="button"
+                  class="btn btn-outline btn-outline--accent"
+                  @click="openContactModal"
+                >
                   <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-message" /></svg>
                   與承辦人員聯繫
                 </button>
@@ -664,6 +670,7 @@ import { parseBoldSegments } from '@/utils/publicCopy'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import { apiErrorMessage } from '@/utils/apiErrorMessage'
 import { useTenantBranding } from '@/composables/useTenantBranding'
+import { tenantSlug } from '@/utils/tenant'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import DmPreviewModal from './components/DmPreviewModal.vue'
@@ -979,6 +986,11 @@ function openCourseDm(course: CourseOption) {
 }
 
 // ===== 聯絡模態 =====（A1-P3 抽至 ContactInquiryModal，本檔只保留 visible ref）
+// 仁武暫不開放「與承辦人員聯繫」（2026-08-07 業主指示，開通後移除）。判斷用
+// Host 同步解析的 tenantSlug()，不用 branding.slug——後者在 tenant-meta 回來前
+// fallback 到 yihua，按鈕會先閃現再消失。
+const CONTACT_HIDDEN_SLUGS = new Set(['renwu'])
+const contactEnabled = !CONTACT_HIDDEN_SLUGS.has(tenantSlug() ?? '')
 const contactModalVisible = ref(false)
 function openContactModal() {
   contactModalVisible.value = true
