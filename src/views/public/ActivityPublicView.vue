@@ -203,8 +203,11 @@
                   <svg class="icon" aria-hidden="true"><use href="#i-search" /></svg>
                   點擊放大
                 </span>
-                <!-- 下載／分享是獨立動作，點它們不該連帶開燈箱 -->
-                <div v-if="posterLoaded" class="poster-actions" @click.stop>
+                <!-- 下載／分享是獨立動作，滑鼠點、鍵盤按都不該連帶開燈箱。
+                     keydown 也要擋冒泡：外層的 @keydown.enter/space.prevent 會取消
+                     連結／按鈕的原生啟動行為，鍵盤使用者按「下載」「分享」會變成
+                     只彈出燈箱、動作沒執行。 -->
+                <div v-if="posterLoaded" class="poster-actions" @click.stop @keydown.stop>
                   <a
                     class="poster-action tap-target"
                     :href="posterSrc"

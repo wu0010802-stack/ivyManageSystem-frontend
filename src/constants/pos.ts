@@ -111,6 +111,10 @@ export function toChineseAmount(n: unknown): string {
   const totalGroups = groups.length
   groups.forEach((group, gi) => {
     const groupDigits = group.split('').map(Number)
+    // 跨分組補零：高位已有輸出（parts 非空）而本組又以 0 開頭時，
+    // 組內的 zeroPending 因 segment 尚空而吞掉「零」，
+    // 需在此補回，否則 10005 會印成「壹萬伍元整」（被讀成 15000）。
+    const needZero = parts.length > 0 && groupDigits[0] === 0
     let segment = ''
     let zeroPending = false
     const len = groupDigits.length
@@ -125,7 +129,7 @@ export function toChineseAmount(n: unknown): string {
       }
     })
     if (segment) {
-      parts.push(segment + _CN_BIG_UNITS[totalGroups - 1 - gi])
+      parts.push((needZero ? '零' : '') + segment + _CN_BIG_UNITS[totalGroups - 1 - gi])
     } else if (parts.length && totalGroups - 1 - gi === 0) {
       // 全零段（通常不會進來，但保險）
     }
