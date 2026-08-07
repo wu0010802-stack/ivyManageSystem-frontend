@@ -45,26 +45,44 @@ const mountView = async (): Promise<VueWrapper> => {
 const contactButtons = (wrapper: VueWrapper) =>
   wrapper.findAll('button').filter((b) => b.text().includes('與承辦人員聯繫'))
 
+const setHost = (hostname: string) => {
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, hostname },
+  })
+}
+
 // 仁武暫不開放線上留言（2026-08-07 業主指示）：桌機按鈕列與手機選單的
-// 「與承辦人員聯繫」入口都要隱藏；其他租戶（含單租戶模式 slug=null）不受影響
+// 「與承辦人員聯繫」入口都要隱藏；其他租戶不受影響。
+//
+// prod 是單租戶 build（tenantSlug() 回 null），故 hostname 分支才是實際生效的
+// 那條——2026-08-07 只靠 slug 的版本上 prod 後按鈕依然顯示，這組測試守住回歸。
 describe('ActivityPublicView — 與承辦人員聯繫的租戶閘', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    setHost('activity.example.com')
   })
 
-  it('renwu 隱藏所有聯繫入口', async () => {
+  it('slug=renwu 隱藏所有聯繫入口', async () => {
     mockSlug = 'renwu'
     const wrapper = await mountView()
     expect(contactButtons(wrapper)).toHaveLength(0)
   })
 
-  it('yihua 保留聯繫入口（桌機按鈕列）', async () => {
+  it('單租戶 build（slug=null）下，仁武網域仍隱藏聯繫入口', async () => {
+    mockSlug = null
+    setHost('renwu.ivypreschool.tw')
+    const wrapper = await mountView()
+    expect(contactButtons(wrapper)).toHaveLength(0)
+  })
+
+  it('slug=yihua 保留聯繫入口（桌機按鈕列）', async () => {
     mockSlug = 'yihua'
     const wrapper = await mountView()
     expect(contactButtons(wrapper).length).toBeGreaterThan(0)
   })
 
-  it('單租戶模式（slug=null）保留聯繫入口', async () => {
+  it('單租戶模式的其他網域保留聯繫入口', async () => {
     mockSlug = null
     const wrapper = await mountView()
     expect(contactButtons(wrapper).length).toBeGreaterThan(0)
