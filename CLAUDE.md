@@ -147,18 +147,20 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 
 ### 多租戶（2026-08 起）
 
-設計文件：`../multitenant-plan/03-final/frontend-core.md`；契約與偏離記錄：同目錄 `contracts.md`（§16 **DEV-12** 是前端灰度不變式那條，改動前必讀）。
+設計文件原在 `../multitenant-plan/`（`03-final/frontend-core.md`＋契約 `contracts.md`）——**該目錄已不在本機（2026-08-07 盤點確認）**。本檔沿用其契約代號（DEV-12／DEV-20／CT-A-06／CT-F-07 等）作為條文編號，關鍵不變式已內化為下方條文與測試守衛：**以本檔＋測試為準**，不要再花時間找原設計文件。
 
 **灰度不變式（鐵則）**：未設 `VITE_TENANT_BASE_DOMAIN` / `VITE_TENANT_DOMAIN_MAP` 時 = **單租戶模式**，全前端行為必須與改造前逐字相同——storage key 不加前綴、API 不送 `X-Tenant-Slug`、boot 不掛遮罩。任何新程式碼都不得破壞這條。守衛：`src/utils/__tests__/tenant.spec.ts` / `tenantStorage.spec.ts` / `tenantBoot.spec.ts` 的「灰度不變式」describe 區塊。
 
 | 要做的事 | 用什麼 |
 |---|---|
-| 取當前租戶 slug | `@/utils/tenant` 的 `tenantSlug()`（回 `string \| null`）。**module top-level 禁用 `requireTenantSlug()`**（會 throw，繞過 boot 遮罩變白畫面） |
+| 取當前租戶 slug | `@/utils/tenant` 的 `tenantSlug()`（回 `string \| null`）。**module top-level 禁用 `requireTenantSlug()`**（會 throw，繞過 boot 遮罩變白畫面）。Host→slug 解析唯一實作＝`src/utils/tenant.ts`（`src/utils/resolveTenant.ts` 是純 re-export 相容別名，**勿在該檔加邏輯**） |
 | 新的 localStorage 讀寫 | `@/utils/tenantStorage` 的 `tenantGetItem` / `tenantSetItem` / `tenantRemoveItem`，**禁止裸 `localStorage`**（`src/utils/__tests__/tenantStorageGuard.spec.ts` 會擋；`src/parent/**` 依 CT-F-07(4) 豁免） |
 | 新的 HTTP 注入點 | `@/utils/tenant` 的 `tenantHeaders()` 展開進 headers。**WebSocket 顯式豁免**（瀏覽器 API 無法設 header，靠 Host + JWT claim 兩通道） |
 | 新的 `caches.open()` | `tenantCacheName(base)`，並把 base 名加進 `src/utils/auth.ts::_PORTAL_USER_CACHES` |
 | 總部（hq）頁的 `useCachedAsync` key | 必含 acting tenant（或走 `tenantCacheKey()`）；既有 call site 一律不改 |
 | 年級/職稱/職等/薪資 key 字典 | 走 `@/composables/useTenantDictionaries`，**不要直接 import `src/constants/employee.ts` 的 `TITLE_TO_GRADE` / `POSITION_SALARY_KEY`**（已標 `@deprecated`，只是 API 失敗時的 fallback） |
+| 租戶品牌／主題／文案 | 三層注入：L1＝`branding/tenants.json`（HTML head／PWA manifest 靜態 token，nginx `sub_filter`，map 由 `scripts/gen-tenant-brand-conf.mjs` 產生）；L2＝`useTenantBranding()`（`src/composables/useTenantBranding.ts`，runtime `GET /api/public/tenant-meta` 逐欄 fallback `BRANDING_DEFAULTS`）；L3＝per-tenant 靜態圖檔 `public/brand/<slug>/…`（nginx overlay，og 海報換檔要 bump 版號）。**勿新增寫死義華的品牌常數** |
+| LIFF ID／LINE OA 連結 | `src/parent/services/liff.ts::resolveLiffId()`：tenant-meta 的 `liff_id`（後端來源 DB `line_configs`）優先，`VITE_LIFF_ID` 僅過渡 fallback（階段 3 刪除） |
 
 **dev 模擬多租戶**：`?tenant=<slug>`（僅 DEV 生效，寫進 sessionStorage 沿用）或 `VITE_DEV_TENANT_SLUG`。⚠ 家長端 localStorage 豁免 wrapper，dev 切租戶前請手動清 `parent_*` key。
 
