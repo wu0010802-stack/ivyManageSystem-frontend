@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { computed, defineComponent } from 'vue'
 
 const h = vi.hoisted(() => ({
   listTenants: vi.fn(),
@@ -32,6 +33,22 @@ const stubs = {
   'el-tag': { template: '<span><slot /></span>' },
   'router-link': { props: ['to'], template: '<a><slot /></a>' },
   'el-card': { template: '<div><slot name="header" /><slot /></div>' },
+  // el-table/el-table-column：比照 PlatformReportsView.spec.ts 的 el-table 資料驅動寫法，
+  // 但額外用 provide/inject 承接每個 el-table-column 的 scoped default slot（`{ row }`），
+  // 讓警示標色斷言能命中真實 cell 內容，而不是退回原生 <table> 規避這個問題。
+  'el-table': defineComponent({
+    props: ['data'],
+    provide() {
+      return { healthTableRows: computed(() => this.data ?? []) }
+    },
+    template: '<div class="el-table-stub"><slot /></div>',
+  }),
+  'el-table-column': defineComponent({
+    props: ['label'],
+    inject: ['healthTableRows'],
+    template:
+      '<div class="el-table-column-stub"><div v-for="(row, i) in healthTableRows" :key="i" class="cell"><slot :row="row" /></div></div>',
+  }),
 }
 
 const OVERVIEW_FIXTURE = {
@@ -159,5 +176,19 @@ describe('PlatformOverviewView', () => {
     await w.find('[data-testid="health-refresh"]').trigger('click')
     await flushPromises()
     expect(h.getPlatformReport.mock.calls.length).toBeGreaterThan(calls)
+  })
+
+  it('健康面板取數失敗要顯示錯誤，不能偽裝成「尚無資料」', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      category === 'health'
+        ? Promise.reject(new Error('取數失敗'))
+        : Promise.resolve(OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+
+    const health = w.find('[data-testid="health-panel"]')
+    expect(w.find('[data-testid="health-error"]').exists()).toBe(true)
+    expect(health.text()).not.toContain('尚無資料')
   })
 })

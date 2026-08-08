@@ -84,34 +84,49 @@
           >刷新</el-button>
         </div>
       </template>
-      <table v-if="healthRows.length" class="health-table">
-        <thead>
-          <tr>
-            <th>分校</th>
-            <th>今日出勤</th>
-            <th>待簽核</th>
-            <th>逾期繳費</th>
-            <th>近 30 天參觀</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in healthRows" :key="row.tenant_id" :data-testid="`health-row-${row.tenant_id}`">
-            <td>{{ row.name }}</td>
-            <td class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'staff_missing') }">
+      <el-alert
+        v-if="healthErrorText"
+        type="error"
+        :closable="false"
+        data-testid="health-error"
+        :title="healthErrorText"
+        class="health-panel__alert"
+      />
+      <el-table v-else v-loading="healthLoading" :data="healthRows" size="small" data-testid="health-table">
+        <el-table-column label="分校" min-width="120">
+          <template #default="{ row }">{{ row.name }}</template>
+        </el-table-column>
+        <el-table-column label="今日出勤" min-width="110">
+          <template #default="{ row }">
+            <span class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'staff_missing') }">
               {{ healthNum(row, 'staff_checked_in') ?? '—' }}/{{ healthNum(row, 'staff_expected') ?? '—' }}
               <template v-if="(healthNum(row, 'staff_missing') ?? 0) > 0">（缺 {{ healthNum(row, 'staff_missing') }}）</template>
-            </td>
-            <td class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'pending_total') }">
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="待簽核" min-width="90">
+          <template #default="{ row }">
+            <span class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'pending_total') }">
               {{ healthNum(row, 'pending_total') ?? '—' }}
-            </td>
-            <td class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'overdue_fee_students') }">
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="逾期繳費" min-width="130">
+          <template #default="{ row }">
+            <span class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'overdue_fee_students') }">
               {{ healthNum(row, 'overdue_fee_students') ?? 0 }} 位／{{ formatMetric('overdue_fee_amount', healthNum(row, 'overdue_fee_amount') ?? 0) }}
-            </td>
-            <td class="health-cell">{{ healthNum(row, 'recent_visits_30d') ?? '—' }}</td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else class="health-table__empty">{{ healthLoading ? '載入中…' : '尚無資料' }}</p>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="近 30 天參觀" min-width="100">
+          <template #default="{ row }">
+            <span class="health-cell">{{ healthNum(row, 'recent_visits_30d') ?? '—' }}</span>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <span class="health-table__empty">{{ healthLoading ? '載入中…' : '尚無資料' }}</span>
+        </template>
+      </el-table>
     </el-card>
   </div>
 </template>
@@ -206,6 +221,7 @@ function refreshAll(): void {
 // 不做輪詢——進頁自動載一次＋手動刷新按鈕。
 const {
   data: healthData,
+  error: healthErrorRaw,
   pending: healthLoading,
   refresh: refreshHealth,
 } = useCachedAsync<PlatformReport | null>(
@@ -218,6 +234,12 @@ const {
 )
 
 const healthRows = computed<PlatformReportTenantRow[]>(() => healthData.value?.tenants ?? [])
+
+// 取數失敗要跟「查無資料」明顯區分——偽裝成「一切正常」是監控面板最糟的失敗模式，
+// 因此獨立於主頁面的 `errorText`，不拖垮整頁其他區塊。
+const healthErrorText = computed(() =>
+  healthErrorRaw.value ? getErrorMessage(healthErrorRaw.value, '營運健康資料載入失敗') : null,
+)
 
 const healthDate = computed(() => {
   const params = healthData.value?.params
@@ -365,22 +387,8 @@ function healthWarn(row: PlatformReportTenantRow, key: string): boolean {
   align-items: center;
 }
 
-.health-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.health-table th,
-.health-table td {
-  padding: var(--space-2) var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.health-table th {
-  color: var(--text-tertiary);
-  font-weight: 600;
+.health-panel__alert {
+  margin: 0;
 }
 
 .health-cell--warn {
