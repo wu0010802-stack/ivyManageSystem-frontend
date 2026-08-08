@@ -151,11 +151,16 @@ export type PlatformReportCategory =
   | 'attendance'
   | 'salary-cost'
   | 'recruitment'
+  | 'students'
+  | 'hr'
+  | 'activities'
+  | 'health'
 
 export interface PlatformReportQuery {
   year?: number
   month?: number | null
   school_year?: number | null
+  semester?: number
   tenant_ids?: number[] | null
   force_refresh?: boolean
 }
