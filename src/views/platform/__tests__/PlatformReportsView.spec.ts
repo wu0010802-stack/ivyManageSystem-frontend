@@ -117,4 +117,65 @@ describe('PlatformReportsView', () => {
 
     expect(h.getPlatformReport).toHaveBeenCalledWith('recruitment', expect.not.objectContaining({ year: expect.anything() }))
   })
+
+  it('學生班級 tab 用 school_year 查 students 報表', async () => {
+    h.getPlatformReport.mockResolvedValue({
+      data: {
+        category: 'students',
+        params: {},
+        tenants: [
+          {
+            tenant_id: 1,
+            slug: 'yihua',
+            name: 'A 校',
+            data: { enrolled_count: 95, total_capacity: 100 },
+            error: null,
+          },
+        ],
+        totals: { enrolled_count: 95, total_capacity: 100, occupancy_rate: 0.95 },
+        generated_at: null,
+        cached: false,
+      },
+    })
+    const w = mount(PlatformReportsView, { global: { stubs } })
+    await flushPromises()
+
+    const vm = w.vm as unknown as Vm
+    vm.category = 'students'
+    await flushPromises()
+
+    expect(h.getPlatformReport).toHaveBeenLastCalledWith(
+      'students',
+      expect.objectContaining({ school_year: expect.any(Number) }),
+    )
+    // el-table-column 在測試 stub 下只渲染 label、不渲染 cell（見檔內既有測試慣例），
+    // 分校列的實際數值改從彙總卡片（report-totals）驗證有渲染出來。
+    expect(w.find('[data-testid="report-totals"]').text()).toContain('95')
+    expect(w.find('[data-testid="report-table"]').text()).toContain('A 校')
+  })
+
+  it('活動 tab 帶 school_year+semester；人事 tab 帶 year', async () => {
+    const w = mount(PlatformReportsView, { global: { stubs } })
+    await flushPromises()
+
+    const vm = w.vm as unknown as Vm
+    vm.category = 'activities'
+    await flushPromises()
+
+    expect(h.getPlatformReport).toHaveBeenLastCalledWith(
+      'activities',
+      expect.objectContaining({
+        school_year: expect.any(Number),
+        semester: expect.any(Number),
+      }),
+    )
+
+    vm.category = 'hr'
+    await flushPromises()
+
+    expect(h.getPlatformReport).toHaveBeenLastCalledWith(
+      'hr',
+      expect.objectContaining({ year: expect.any(Number) }),
+    )
+  })
 })

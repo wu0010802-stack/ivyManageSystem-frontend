@@ -173,7 +173,7 @@ export const METRIC_LABELS: Record<string, string> = {
   pending_total: '待簽核合計',
   overdue_fee_students: '逾期繳費學生',
   overdue_fee_amount: '逾期金額',
-  recent_visits_30d: '近30天參觀',
+  recent_visits_30d: '近 30 天參觀',
 }
 
 /** `total_income` → `total income`；沒有更好的來源時比原始 snake_case 好讀。 */
