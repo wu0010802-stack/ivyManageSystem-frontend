@@ -28,6 +28,11 @@ import { apiError } from '@/utils/error'
 import { useTableFilters } from '@/composables/useTableFilters'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -436,6 +441,18 @@ const formatDate = (isoStr: string | null | undefined) => {
 
 const getReadPreview = (row: AnnouncementItem) => row.read_preview || []
 
+// 手機卡片欄位（__ 前綴為 slot-only 欄）。內容在卡片改為全文（block），
+// 表格版的 60 字截斷是為了塞進窄欄，卡片沒有這個限制
+const announcementCardColumns = [
+  { label: '狀態', prop: '__status' },
+  { label: '優先級', prop: '__priority' },
+  { label: '對象', prop: '__audience' },
+  { label: '發佈者', prop: 'created_by_name' },
+  { label: '發佈時間', prop: '__created', formatter: (r: Record<string, unknown>) => formatDate(r.created_at as string) },
+  { label: '已讀', prop: '__read' },
+  { label: '內容', prop: 'content', block: true },
+]
+
 onMounted(() => {
   fetchAnnouncements()
   employeeStore.fetchEmployees()
@@ -460,7 +477,7 @@ onMounted(() => {
       @update:filter-values="onAnnFilterChange"
     />
 
-    <el-table :data="announcements" v-loading="loading" stripe border style="width: 100%" max-height="600">
+    <el-table v-if="!isMobile" :data="announcements" v-loading="loading" stripe border style="width: 100%" max-height="600">
       <el-table-column label="置頂" width="70" align="center">
         <template #default="{ row }">
           <el-button
@@ -572,6 +589,67 @@ onMounted(() => {
         </template>
       </el-table-column>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="(announcements as unknown as Record<string, unknown>[])"
+      :columns="announcementCardColumns"
+      row-key="id"
+      :loading="loading"
+      empty-text="尚無公告"
+    >
+      <template #title="{ item }">
+        <el-icon v-if="item.is_pinned" class="card-pin-icon"><Top /></el-icon>{{ item.title }}
+      </template>
+      <template #cell-__status="{ item }">
+        <el-tag v-if="item.status === 'scheduled'" type="info" size="small">預定</el-tag>
+        <el-tag v-else-if="item.status === 'expired'" size="small">已過期</el-tag>
+        <el-tag v-else type="success" size="small">進行中</el-tag>
+      </template>
+      <template #cell-__priority="{ item }">
+        <el-tag :type="priorityMap[item.priority as string]?.type || 'info'" size="small">
+          {{ priorityMap[item.priority as string]?.label || item.priority }}
+        </el-tag>
+      </template>
+      <template #cell-__audience="{ item }">
+        <el-tag v-if="!item.recipient_count" type="primary" size="small">全員</el-tag>
+        <el-tag v-else type="warning" size="small">{{ item.recipient_count }} 位員工</el-tag>
+      </template>
+      <template #cell-__read="{ item }">
+        <el-popover
+          v-if="(item.read_count as number) > 0"
+          placement="top-end"
+          trigger="click"
+          width="260"
+          @show="ensureReadersLoaded(item.id as number)"
+        >
+          <template #reference>
+            <el-button link type="success">已讀 {{ item.read_count }} 人</el-button>
+          </template>
+          <div v-loading="readersLoading[item.id as number]" class="reader-popover">
+            <div class="reader-popover-title">已讀名單</div>
+            <div
+              v-for="reader in readersCache[item.id as number]?.items || []"
+              :key="`${item.id}-${reader.employee_id}`"
+              class="reader-row"
+            >
+              <span>{{ reader.name }}</span>
+              <span class="reader-read-at">{{ formatDate(reader.read_at) }}</span>
+            </div>
+            <div v-if="!readersLoading[item.id as number] && (readersCache[item.id as number]?.items || []).length === 0" class="text-muted">
+              尚未有人已讀
+            </div>
+          </div>
+        </el-popover>
+        <span v-else class="text-muted">尚未有人已讀</span>
+      </template>
+      <template #actions="{ item }">
+        <el-button size="small" :type="item.is_pinned ? 'warning' : 'default'" @click="togglePin(item as unknown as AnnouncementItem)">
+          {{ item.is_pinned ? '取消置頂' : '置頂' }}
+        </el-button>
+        <el-button type="primary" size="small" @click="openEdit(item as unknown as AnnouncementItem)">編輯</el-button>
+        <el-button type="danger" size="small" @click="handleDelete(item as unknown as AnnouncementItem)">刪除</el-button>
+      </template>
+    </AdminListCards>
 
     <el-pagination
       v-if="annTotal > annPageSize"
@@ -835,5 +913,12 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 手機卡片標題的置頂圖示：與標題文字同列對齊 */
+.card-pin-icon {
+  color: var(--el-color-warning);
+  margin-right: var(--space-1);
+  vertical-align: -2px;
 }
 </style>
