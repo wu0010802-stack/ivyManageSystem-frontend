@@ -54,6 +54,7 @@ interface Vm {
   category: string
   selectedTenantIds: number[]
   metricKeys: string[]
+  schoolYear: number | null
 }
 
 describe('PlatformReportsView', () => {
@@ -118,7 +119,7 @@ describe('PlatformReportsView', () => {
     expect(h.getPlatformReport).toHaveBeenCalledWith('recruitment', expect.not.objectContaining({ year: expect.anything() }))
   })
 
-  it('學生班級 tab 用 school_year 查 students 報表', async () => {
+  it('學生班級 tab 未選學年時不送 school_year；選了學年後會送', async () => {
     h.getPlatformReport.mockResolvedValue({
       data: {
         category: 'students',
@@ -144,17 +145,29 @@ describe('PlatformReportsView', () => {
     vm.category = 'students'
     await flushPromises()
 
+    // 未選學年：school_year 不送，落到後端「未帶＝當前學期」fallback。
     expect(h.getPlatformReport).toHaveBeenLastCalledWith(
       'students',
-      expect.objectContaining({ school_year: expect.any(Number) }),
+      expect.not.objectContaining({ school_year: expect.anything() }),
     )
+    // 資料真的有流進 rows（不是只有 totals 那條路徑，見 Important B）。
+    expect(vm.metricKeys).toEqual(['enrolled_count', 'total_capacity'])
     // el-table-column 在測試 stub 下只渲染 label、不渲染 cell（見檔內既有測試慣例），
     // 分校列的實際數值改從彙總卡片（report-totals）驗證有渲染出來。
     expect(w.find('[data-testid="report-totals"]').text()).toContain('95')
     expect(w.find('[data-testid="report-table"]').text()).toContain('A 校')
+
+    h.getPlatformReport.mockClear()
+    vm.schoolYear = 114
+    await flushPromises()
+
+    expect(h.getPlatformReport).toHaveBeenLastCalledWith(
+      'students',
+      expect.objectContaining({ school_year: 114 }),
+    )
   })
 
-  it('活動 tab 帶 school_year+semester；人事 tab 帶 year', async () => {
+  it('活動 tab：未選學年時 school_year/semester 皆不送；選了學年後兩者同送；人事 tab 帶 year', async () => {
     const w = mount(PlatformReportsView, { global: { stubs } })
     await flushPromises()
 
@@ -162,10 +175,25 @@ describe('PlatformReportsView', () => {
     vm.category = 'activities'
     await flushPromises()
 
+    // 未選學年：school_year 與 semester 都不送——不能只送 semester，
+    // 否則撞後端「同時給或同時不給」約束（400）。
+    expect(h.getPlatformReport).toHaveBeenLastCalledWith(
+      'activities',
+      expect.not.objectContaining({ school_year: expect.anything() }),
+    )
+    expect(h.getPlatformReport).toHaveBeenLastCalledWith(
+      'activities',
+      expect.not.objectContaining({ semester: expect.anything() }),
+    )
+
+    h.getPlatformReport.mockClear()
+    vm.schoolYear = 114
+    await flushPromises()
+
     expect(h.getPlatformReport).toHaveBeenLastCalledWith(
       'activities',
       expect.objectContaining({
-        school_year: expect.any(Number),
+        school_year: 114,
         semester: expect.any(Number),
       }),
     )

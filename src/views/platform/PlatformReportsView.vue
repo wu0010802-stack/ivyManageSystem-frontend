@@ -141,19 +141,18 @@ function categoryLabel(rawCategory: string | null | undefined): string {
 }
 
 const now = new Date()
-// 民國學年（後端 school_year 為 100~200 的整數）
-const currentSchoolYear = now.getFullYear() - 1911
 // 8 月–1 月為上學期（第 1 學期），2 月–7 月為下學期（第 2 學期）
 const currentSemester = now.getMonth() + 1 >= 8 || now.getMonth() + 1 <= 1 ? 1 : 2
 
 const category = ref<PlatformReportCategory>('overview')
 const year = ref(now.getFullYear())
 const month = ref<number | null>(null)
-// 非空預設值：students/activities 皆屬「選填、未帶＝當前學年」的後端契約，
-// 但 activities 的 school_year 與 semester 必須同時給或同時不給——若讓 schoolYear
-// 預設為空、只有 semester 有值，切到活動報表會漏送 school_year 而 400。
-// 給實際的當前學年當預設，確保兩者永遠同進退。
-const schoolYear = ref<number | null>(currentSchoolYear)
+// 維持 null 預設（選填、未指定）：
+// - recruitment 的 school_year=None 在後端語意是「不篩學年、回傳全部歷史」，
+//   不是「當前學年」的同義詞，給非空預設會把資料範圍縮小成回歸（Important A）。
+// - students/activities 的 school_year 未帶時後端 fallback 到當前學期，
+//   null 預設同樣是正確、零猜測的選項。
+const schoolYear = ref<number | null>(null)
 const semester = ref<number>(currentSemester)
 const selectedTenantIds = ref<number[]>([])
 
@@ -161,8 +160,9 @@ const yearOptions = computed(() => {
   const base = now.getFullYear()
   return [base + 1, base, base - 1, base - 2, base - 3]
 })
+// 民國學年（後端 school_year 為 100~200 的整數）
 const schoolYearOptions = computed(() => {
-  const base = currentSchoolYear
+  const base = now.getFullYear() - 1911
   return [base + 1, base, base - 1, base - 2]
 })
 
@@ -180,10 +180,17 @@ const { selectableSchools } = usePlatformTenants({ schoolsOnly: true })
 const queryParams = computed(() => ({
   ...(needsYear.value ? { year: year.value } : {}),
   ...(needsMonth.value && month.value ? { month: month.value } : {}),
-  ...(needsSchoolYear.value && schoolYear.value ? { school_year: schoolYear.value } : {}),
-  // 只在 school_year 有值時才送 semester：後端「同時給或同時不給」的約束，
-  // 避免使用者清空學年選擇後只剩 semester 單獨送出觸發 400。
-  ...(needsSemester.value && schoolYear.value ? { semester: semester.value } : {}),
+  // school_year 與 semester 綁在同一個 spread 裡：只有 school_year 真的有值
+  // 才會一起送 semester，避免「只送 semester、不送 school_year」撞後端
+  // resolve_academic_term_filters 的「同時給或同時不給」約束（400）。
+  // school_year 未選（null）時兩者皆不送——對 recruitment 等價於既有的
+  // 「不篩學年」行為，對 students/activities 等價於後端 fallback 到當前學期。
+  ...(needsSchoolYear.value && schoolYear.value
+    ? {
+        school_year: schoolYear.value,
+        ...(needsSemester.value ? { semester: semester.value } : {}),
+      }
+    : {}),
   ...(selectedTenantIds.value.length ? { tenant_ids: [...selectedTenantIds.value].sort((a, b) => a - b) } : {}),
 }))
 
