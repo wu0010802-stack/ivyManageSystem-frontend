@@ -71,6 +71,48 @@
       title="沒有分校"
       description="尚未建立任何分校，或後端總部功能未開通（PLATFORM_ENABLED）。"
     />
+
+    <el-card data-testid="health-panel" class="health-panel">
+      <template #header>
+        <div class="health-panel__header">
+          <span>營運健康（{{ healthDate }}）</span>
+          <el-button
+            data-testid="health-refresh"
+            size="small"
+            :loading="healthLoading"
+            @click="refreshHealth(true)"
+          >刷新</el-button>
+        </div>
+      </template>
+      <table v-if="healthRows.length" class="health-table">
+        <thead>
+          <tr>
+            <th>分校</th>
+            <th>今日出勤</th>
+            <th>待簽核</th>
+            <th>逾期繳費</th>
+            <th>近 30 天參觀</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in healthRows" :key="row.tenant_id" :data-testid="`health-row-${row.tenant_id}`">
+            <td>{{ row.name }}</td>
+            <td class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'staff_missing') }">
+              {{ healthNum(row, 'staff_checked_in') ?? '—' }}/{{ healthNum(row, 'staff_expected') ?? '—' }}
+              <template v-if="(healthNum(row, 'staff_missing') ?? 0) > 0">（缺 {{ healthNum(row, 'staff_missing') }}）</template>
+            </td>
+            <td class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'pending_total') }">
+              {{ healthNum(row, 'pending_total') ?? '—' }}
+            </td>
+            <td class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'overdue_fee_students') }">
+              {{ healthNum(row, 'overdue_fee_students') ?? 0 }} 位／{{ formatMetric('overdue_fee_amount', healthNum(row, 'overdue_fee_amount') ?? 0) }}
+            </td>
+            <td class="health-cell">{{ healthNum(row, 'recent_visits_30d') ?? '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="health-table__empty">{{ healthLoading ? '載入中…' : '尚無資料' }}</p>
+    </el-card>
   </div>
 </template>
 
@@ -81,11 +123,14 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { platformCacheKey } from '@/composables/useActingTenant'
 import { getErrorMessage } from '@/utils/errorHandler'
-import { getPlatformReport, type PlatformReport } from '@/api/platform'
+import { getPlatformReport, type PlatformReport, type PlatformReportTenantRow } from '@/api/platform'
 import { usePlatformTenants } from './usePlatformTenants'
 import { tenantStatusLabel, tenantStatusTagType } from './tenantDisplay'
-import { metricLabel } from './reportFormat'
+import { metricLabel, formatMetric } from './reportFormat'
 import MetricValue from './MetricValue.vue'
+
+/** 待簽核合計超過此值才標警示（缺打卡 / 逾期繳費人數只要 > 0 就標，見 healthWarn）。 */
+const HEALTH_WARN_PENDING_THRESHOLD = 10
 
 const now = new Date()
 const year = now.getFullYear()
@@ -155,6 +200,43 @@ function errorOf(tenantId: number): string | null {
 function refreshAll(): void {
   refreshList(true).catch(() => {})
   refreshReport(true).catch(() => {})
+}
+
+// 營運健康：沒有期間參數（後端只收 tenant_ids/force_refresh），TTL 對齊後端快取 60 秒。
+// 不做輪詢——進頁自動載一次＋手動刷新按鈕。
+const {
+  data: healthData,
+  pending: healthLoading,
+  refresh: refreshHealth,
+} = useCachedAsync<PlatformReport | null>(
+  platformCacheKey('reports:health'),
+  async () => {
+    const res = await getPlatformReport('health', {})
+    return res.data ?? null
+  },
+  { ttl: 60_000 },
+)
+
+const healthRows = computed<PlatformReportTenantRow[]>(() => healthData.value?.tenants ?? [])
+
+const healthDate = computed(() => {
+  const params = healthData.value?.params
+  const date = params && typeof params === 'object' ? params['date'] : undefined
+  return typeof date === 'string' ? date : '—'
+})
+
+/** `row.data` 型別是 `Record<string, unknown>`——取數值一律經此 narrow，禁 `as any`。 */
+function healthNum(row: PlatformReportTenantRow, key: string): number | null {
+  const value = row.data?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function healthWarn(row: PlatformReportTenantRow, key: string): boolean {
+  const n = healthNum(row, key) ?? 0
+  if (key === 'staff_missing') return n > 0
+  if (key === 'pending_total') return n > HEALTH_WARN_PENDING_THRESHOLD
+  if (key === 'overdue_fee_students') return n > 0
+  return false
 }
 </script>
 
@@ -271,5 +353,43 @@ function refreshAll(): void {
   margin: 0;
   font-size: var(--text-xs);
   color: var(--el-color-danger);
+}
+
+.health-panel {
+  margin-top: var(--space-5);
+}
+
+.health-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.health-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.health-table th,
+.health-table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.health-table th {
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.health-cell--warn {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+
+.health-table__empty {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 </style>

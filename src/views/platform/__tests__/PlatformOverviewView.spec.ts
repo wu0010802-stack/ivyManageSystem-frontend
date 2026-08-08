@@ -31,6 +31,71 @@ const stubs = {
   'el-button': { props: ['loading'], template: '<button><slot /></button>' },
   'el-tag': { template: '<span><slot /></span>' },
   'router-link': { props: ['to'], template: '<a><slot /></a>' },
+  'el-card': { template: '<div><slot name="header" /><slot /></div>' },
+}
+
+const OVERVIEW_FIXTURE = {
+  data: {
+    category: 'platform_overview',
+    params: {},
+    totals: {},
+    tenants: [
+      { tenant_id: 2, slug: 'branch-a', name: 'A 校', data: { student_count: 100 }, error: null },
+      { tenant_id: 3, slug: 'branch-b', name: 'B 校', data: {}, error: '取數失敗' },
+    ],
+  },
+}
+
+const HEALTH_FIXTURE = {
+  data: {
+    category: 'health',
+    params: { date: '2026-08-08' },
+    tenants: [
+      {
+        tenant_id: 1,
+        slug: 'yihua',
+        name: 'A 校',
+        error: null,
+        data: {
+          staff_expected: 20,
+          staff_checked_in: 18,
+          staff_missing: 2,
+          pending_leaves: 8,
+          pending_overtimes: 4,
+          pending_total: 12,
+          overdue_fee_students: 1,
+          overdue_fee_amount: 5000,
+          recent_visits_30d: 6,
+        },
+      },
+      {
+        tenant_id: 3,
+        slug: 'renwu',
+        name: 'B 校',
+        error: null,
+        data: {
+          staff_expected: 5,
+          staff_checked_in: 5,
+          staff_missing: 0,
+          pending_leaves: 0,
+          pending_overtimes: 0,
+          pending_total: 0,
+          overdue_fee_students: 0,
+          overdue_fee_amount: 0,
+          recent_visits_30d: 1,
+        },
+      },
+    ],
+    totals: {
+      staff_missing: 2,
+      pending_total: 12,
+      overdue_fee_students: 1,
+      overdue_fee_amount: 5000,
+      recent_visits_30d: 7,
+    },
+    generated_at: '2026-08-08T09:00:00',
+    cached: false,
+  },
 }
 
 describe('PlatformOverviewView', () => {
@@ -38,17 +103,7 @@ describe('PlatformOverviewView', () => {
     vi.clearAllMocks()
     _resetCacheForTesting()
     h.listTenants.mockResolvedValue({ data: { items: TENANTS, total: TENANTS.length } })
-    h.getPlatformReport.mockResolvedValue({
-      data: {
-        category: 'platform_overview',
-        params: {},
-        totals: {},
-        tenants: [
-          { tenant_id: 2, slug: 'branch-a', name: 'A 校', data: { student_count: 100 }, error: null },
-          { tenant_id: 3, slug: 'branch-b', name: 'B 校', data: {}, error: '取數失敗' },
-        ],
-      },
-    })
+    h.getPlatformReport.mockResolvedValue(OVERVIEW_FIXTURE)
   })
 
   it('卡片牆只放分校，總部（hq）自己不列為一間分校', async () => {
@@ -78,5 +133,31 @@ describe('PlatformOverviewView', () => {
     expect(w.find('[data-testid="tenant-card-error-3"]').text()).toContain('取數失敗')
     expect(w.find('[data-testid="tenant-card-error-2"]').exists()).toBe(false)
     expect(w.find('[data-testid="overview-error"]').exists()).toBe(false)
+  })
+
+  it('渲染營運健康區塊並依閾值標警示', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+    const health = w.find('[data-testid="health-panel"]')
+    expect(health.exists()).toBe(true)
+    expect(health.text()).toContain('A 校')
+    const warnCells = health.findAll('.health-cell--warn')
+    // A 校：缺打卡 2 > 0、待簽 12 > 10、逾期 1 > 0 → 3 格警示；B 校 0 格
+    expect(warnCells.length).toBe(3)
+  })
+
+  it('健康面板手動刷新會 force refresh', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+    const calls = h.getPlatformReport.mock.calls.length
+    await w.find('[data-testid="health-refresh"]').trigger('click')
+    await flushPromises()
+    expect(h.getPlatformReport.mock.calls.length).toBeGreaterThan(calls)
   })
 })
