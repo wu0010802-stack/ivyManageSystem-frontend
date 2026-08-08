@@ -32,7 +32,7 @@ import { join } from 'node:path'
  * 這一步是刻意的：把成果鎖進版控，等同 eslint 的
  * `reportUnusedDisableDirectives: 'error'`。
  */
-const BASELINE = 115
+const BASELINE = 114
 
 /** 這些檔案本來就該讀 raw detail——interceptor 與錯誤訊息 helper 自己。 */
 const EXEMPT = new Set([
