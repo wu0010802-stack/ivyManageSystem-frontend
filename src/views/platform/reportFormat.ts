@@ -136,6 +136,51 @@ export const METRIC_LABELS: Record<string, string> = {
   month_over_month: '月增減比較',
   alerts: '警示',
   top_action_queue: '待辦建議',
+
+  // students（跨分校學生班級營運）
+  school_year: '學年',
+  enrolled_count: '在籍學生',
+  on_leave_count: '休學',
+  classroom_count: '班級數',
+  total_capacity: '總容量',
+  vacancy: '缺額',
+  occupancy_rate: '容量使用率',
+  new_enrollments: '本學年新生',
+  departures: '本學年離園',
+  age_distribution: '學齡分布',
+  // age_distribution 的 bucket key（見 _age_bucket）：'<2' / '>=6' 讀起來尚可
+  // 不特別翻譯，'unknown'（生日未填）需要，否則 MetricValue 遞迴渲染會原樣
+  // 顯示英文（見 finding S2）。
+  unknown: '生日未填',
+
+  // hr（跨分校人事教職員）
+  active_employee_count: '在職員工',
+  approved_leave_hours: '請假時數（核准）',
+  approved_overtime_hours: '加班時數（核准）',
+  onboard_count: '入職人數',
+  offboard_count: '離職人數',
+  turnover_rate: '流動率',
+
+  // activities（跨分校活動才藝課）
+  activity_count: '開課數',
+  registration_count: '報名筆數',
+  // 注意：不可與 students 分組的 enrolled_count（在籍學生）共用同一個中文標籤
+  // ——後端已改用獨立鍵名 activity_enrolled_count 避免撞名（見 finding I1）。
+  activity_enrolled_count: '報名成功人次',
+  semester: '學期',
+  // revenue 已於 finance 分組定義（'收入'），此處沿用不重複宣告
+  unpaid: '未收金額',
+
+  // health（跨分校營運健康）
+  staff_expected: '應到教職員',
+  staff_checked_in: '已打卡',
+  staff_missing: '缺打卡',
+  pending_leaves: '待審請假',
+  pending_overtimes: '待審加班',
+  pending_total: '待簽核合計',
+  overdue_fee_students: '逾期繳費學生',
+  overdue_fee_amount: '逾期金額',
+  recent_visits_30d: '近 30 天參觀',
 }
 
 /** `total_income` → `total income`；沒有更好的來源時比原始 snake_case 好讀。 */

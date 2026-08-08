@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { computed, defineComponent } from 'vue'
 
 const h = vi.hoisted(() => ({
   listTenants: vi.fn(),
@@ -31,6 +32,87 @@ const stubs = {
   'el-button': { props: ['loading'], template: '<button><slot /></button>' },
   'el-tag': { template: '<span><slot /></span>' },
   'router-link': { props: ['to'], template: '<a><slot /></a>' },
+  'el-card': { template: '<div><slot name="header" /><slot /></div>' },
+  // el-table/el-table-column：比照 PlatformReportsView.spec.ts 的 el-table 資料驅動寫法，
+  // 但額外用 provide/inject 承接每個 el-table-column 的 scoped default slot（`{ row }`），
+  // 讓警示標色斷言能命中真實 cell 內容，而不是退回原生 <table> 規避這個問題。
+  'el-table': defineComponent({
+    props: ['data'],
+    provide() {
+      return { healthTableRows: computed(() => this.data ?? []) }
+    },
+    template: '<div class="el-table-stub"><slot /></div>',
+  }),
+  'el-table-column': defineComponent({
+    props: ['label'],
+    inject: ['healthTableRows'],
+    template:
+      '<div class="el-table-column-stub"><div v-for="(row, i) in healthTableRows" :key="i" class="cell"><slot :row="row" /></div></div>',
+  }),
+}
+
+const OVERVIEW_FIXTURE = {
+  data: {
+    category: 'platform_overview',
+    params: {},
+    totals: {},
+    tenants: [
+      { tenant_id: 2, slug: 'branch-a', name: 'A 校', data: { student_count: 100 }, error: null },
+      { tenant_id: 3, slug: 'branch-b', name: 'B 校', data: {}, error: '取數失敗' },
+    ],
+  },
+}
+
+const HEALTH_FIXTURE = {
+  data: {
+    category: 'health',
+    params: { date: '2026-08-08' },
+    tenants: [
+      {
+        tenant_id: 1,
+        slug: 'yihua',
+        name: 'A 校',
+        error: null,
+        data: {
+          staff_expected: 20,
+          staff_checked_in: 18,
+          staff_missing: 2,
+          pending_leaves: 8,
+          pending_overtimes: 4,
+          pending_total: 12,
+          overdue_fee_students: 1,
+          overdue_fee_amount: 5000,
+          recent_visits_30d: 6,
+        },
+      },
+      {
+        tenant_id: 3,
+        slug: 'renwu',
+        name: 'B 校',
+        error: null,
+        data: {
+          staff_expected: 5,
+          staff_checked_in: 5,
+          staff_missing: 0,
+          pending_leaves: 0,
+          pending_overtimes: 0,
+          pending_total: 0,
+          overdue_fee_students: 0,
+          overdue_fee_amount: 0,
+          recent_visits_30d: 1,
+        },
+      },
+    ],
+    totals: {
+      staff_missing: 2,
+      pending_total: 12,
+      overdue_fee_students: 1,
+      overdue_fee_amount: 5000,
+      recent_visits_30d: 7,
+    },
+    generated_at: '2026-08-08T09:00:00',
+    cached: false,
+  },
 }
 
 describe('PlatformOverviewView', () => {
@@ -38,17 +120,7 @@ describe('PlatformOverviewView', () => {
     vi.clearAllMocks()
     _resetCacheForTesting()
     h.listTenants.mockResolvedValue({ data: { items: TENANTS, total: TENANTS.length } })
-    h.getPlatformReport.mockResolvedValue({
-      data: {
-        category: 'platform_overview',
-        params: {},
-        totals: {},
-        tenants: [
-          { tenant_id: 2, slug: 'branch-a', name: 'A 校', data: { student_count: 100 }, error: null },
-          { tenant_id: 3, slug: 'branch-b', name: 'B 校', data: {}, error: '取數失敗' },
-        ],
-      },
-    })
+    h.getPlatformReport.mockResolvedValue(OVERVIEW_FIXTURE)
   })
 
   it('卡片牆只放分校，總部（hq）自己不列為一間分校', async () => {
@@ -78,5 +150,78 @@ describe('PlatformOverviewView', () => {
     expect(w.find('[data-testid="tenant-card-error-3"]').text()).toContain('取數失敗')
     expect(w.find('[data-testid="tenant-card-error-2"]').exists()).toBe(false)
     expect(w.find('[data-testid="overview-error"]').exists()).toBe(false)
+  })
+
+  it('渲染營運健康區塊並依閾值標警示（逐格核對，不只比對總數）', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+    const health = w.find('[data-testid="health-panel"]')
+    expect(health.exists()).toBe(true)
+    expect(health.text()).toContain('A 校')
+
+    // 只比對總數（3 格警示）在三個 healthWarn 分支互相寫錯 key 時仍可能是 3，
+    // 因此逐格核對「是哪三格」（見 finding S5）：A 校缺打卡/待簽/逾期三格皆警示、
+    // B 校（全數為 0）不該有任何一格警示。
+    const cells = health.findAll('.health-cell')
+    // A 校在每欄 cells 陣列中固定排第一列（HEALTH_FIXTURE 順序）。
+    const aStaffCell = cells.find((c) => c.text().includes('18/20'))
+    const aPendingCell = cells.find((c) => c.text() === '12')
+    const aOverdueCell = cells.find((c) => c.text().includes('1 位'))
+    const bStaffCell = cells.find((c) => c.text().includes('5/5'))
+    const bPendingCell = cells.find((c) => c.text() === '0')
+    const bOverdueCell = cells.find((c) => c.text().includes('0 位'))
+
+    expect(aStaffCell?.classes()).toContain('health-cell--warn')
+    expect(aPendingCell?.classes()).toContain('health-cell--warn')
+    expect(aOverdueCell?.classes()).toContain('health-cell--warn')
+    expect(bStaffCell?.classes()).not.toContain('health-cell--warn')
+    expect(bPendingCell?.classes()).not.toContain('health-cell--warn')
+    expect(bOverdueCell?.classes()).not.toContain('health-cell--warn')
+
+    const warnCells = health.findAll('.health-cell--warn')
+    expect(warnCells.length).toBe(3)
+  })
+
+  it('健康面板標題顯示資料 generated_at，不是請求參數 params.date', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+    const header = w.find('[data-testid="health-panel"]')
+    expect(header.text()).toContain(HEALTH_FIXTURE.data.generated_at)
+  })
+
+  it('健康面板手動刷新會帶 force_refresh 給後端（不只是繞過前端快取）', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+    const calls = h.getPlatformReport.mock.calls.length
+    await w.find('[data-testid="health-refresh"]').trigger('click')
+    await flushPromises()
+    expect(h.getPlatformReport.mock.calls.length).toBeGreaterThan(calls)
+    const lastHealthCall = h.getPlatformReport.mock.calls
+      .filter((c: unknown[]) => c[0] === 'health')
+      .at(-1)
+    expect(lastHealthCall?.[1]).toEqual({ force_refresh: true })
+  })
+
+  it('健康面板取數失敗要顯示錯誤，不能偽裝成「尚無資料」', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      category === 'health'
+        ? Promise.reject(new Error('取數失敗'))
+        : Promise.resolve(OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+
+    const health = w.find('[data-testid="health-panel"]')
+    expect(w.find('[data-testid="health-error"]').exists()).toBe(true)
+    expect(health.text()).not.toContain('尚無資料')
   })
 })

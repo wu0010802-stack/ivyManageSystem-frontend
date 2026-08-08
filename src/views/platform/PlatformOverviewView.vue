@@ -71,21 +71,82 @@
       title="沒有分校"
       description="尚未建立任何分校，或後端總部功能未開通（PLATFORM_ENABLED）。"
     />
+
+    <el-card data-testid="health-panel" class="health-panel">
+      <template #header>
+        <div class="health-panel__header">
+          <span>營運健康（{{ healthDate }}）</span>
+          <el-tag v-if="healthData?.cached" size="small" type="info" data-testid="health-cached">快取結果</el-tag>
+          <el-button
+            data-testid="health-refresh"
+            size="small"
+            :loading="healthLoading"
+            @click="refreshHealthForced"
+          >刷新</el-button>
+        </div>
+      </template>
+      <el-alert
+        v-if="healthErrorText"
+        type="error"
+        :closable="false"
+        data-testid="health-error"
+        :title="healthErrorText"
+        class="health-panel__alert"
+      />
+      <el-table v-else v-loading="healthLoading" :data="healthRows" size="small" data-testid="health-table">
+        <el-table-column label="分校" min-width="120">
+          <template #default="{ row }">{{ row.name }}</template>
+        </el-table-column>
+        <el-table-column label="今日出勤" min-width="110">
+          <template #default="{ row }">
+            <span class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'staff_missing') }">
+              {{ healthNum(row, 'staff_checked_in') ?? '—' }}/{{ healthNum(row, 'staff_expected') ?? '—' }}
+              <template v-if="(healthNum(row, 'staff_missing') ?? 0) > 0">（缺 {{ healthNum(row, 'staff_missing') }}）</template>
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="待簽核" min-width="90">
+          <template #default="{ row }">
+            <span class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'pending_total') }">
+              {{ healthNum(row, 'pending_total') ?? '—' }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="逾期繳費" min-width="130">
+          <template #default="{ row }">
+            <span class="health-cell" :class="{ 'health-cell--warn': healthWarn(row, 'overdue_fee_students') }">
+              {{ healthNum(row, 'overdue_fee_students') ?? 0 }} 位／{{ formatMetric('overdue_fee_amount', healthNum(row, 'overdue_fee_amount') ?? 0) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="近 30 天參觀" min-width="100">
+          <template #default="{ row }">
+            <span class="health-cell">{{ healthNum(row, 'recent_visits_30d') ?? '—' }}</span>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <span class="health-table__empty">{{ healthLoading ? '載入中…' : '尚無資料' }}</span>
+        </template>
+      </el-table>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { platformCacheKey } from '@/composables/useActingTenant'
 import { getErrorMessage } from '@/utils/errorHandler'
-import { getPlatformReport, type PlatformReport } from '@/api/platform'
+import { getPlatformReport, type PlatformReport, type PlatformReportTenantRow } from '@/api/platform'
 import { usePlatformTenants } from './usePlatformTenants'
 import { tenantStatusLabel, tenantStatusTagType } from './tenantDisplay'
-import { metricLabel } from './reportFormat'
+import { metricLabel, formatMetric } from './reportFormat'
 import MetricValue from './MetricValue.vue'
+
+/** 待簽核合計超過此值才標警示（缺打卡 / 逾期繳費人數只要 > 0 就標，見 healthWarn）。 */
+const HEALTH_WARN_PENDING_THRESHOLD = 10
 
 const now = new Date()
 const year = now.getFullYear()
@@ -155,6 +216,68 @@ function errorOf(tenantId: number): string | null {
 function refreshAll(): void {
   refreshList(true).catch(() => {})
   refreshReport(true).catch(() => {})
+}
+
+// 營運健康：沒有期間參數（後端只收 tenant_ids/force_refresh），TTL 對齊後端快取 60 秒。
+// 不做輪詢——進頁自動載一次＋手動刷新按鈕。
+//
+// `useCachedAsync` 的 `refresh(force)` 只繞過「前端」cache TTL，fetcher 本身拿不到
+// force 旗標——若不帶 force_refresh 給後端，後端 60 秒 snapshot 仍可能回舊值
+// （前後端 TTL 疊加，使用者按「刷新」最壞仍看到近 2 分鐘前的數字，見 finding S1）。
+// 用這個 ref 在按下刷新前先記下旗標，fetcher 讀完立即歸零，避免污染下一次背景刷新。
+const forceHealthRefresh = ref(false)
+const {
+  data: healthData,
+  error: healthErrorRaw,
+  pending: healthLoading,
+  refresh: refreshHealth,
+} = useCachedAsync<PlatformReport | null>(
+  platformCacheKey('reports:health'),
+  async () => {
+    const force = forceHealthRefresh.value
+    forceHealthRefresh.value = false
+    const res = await getPlatformReport('health', force ? { force_refresh: true } : {})
+    return res.data ?? null
+  },
+  { ttl: 60_000 },
+)
+
+function refreshHealthForced(): void {
+  forceHealthRefresh.value = true
+  refreshHealth(true).catch(() => {})
+}
+
+const healthRows = computed<PlatformReportTenantRow[]>(() => healthData.value?.tenants ?? [])
+
+// 取數失敗要跟「查無資料」明顯區分——偽裝成「一切正常」是監控面板最糟的失敗模式，
+// 因此獨立於主頁面的 `errorText`，不拖垮整頁其他區塊。
+const healthErrorText = computed(() =>
+  healthErrorRaw.value ? getErrorMessage(healthErrorRaw.value, '營運健康資料載入失敗') : null,
+)
+
+// 顯示「資料時間戳」而非請求參數：後端 TTL 60s + 前端 ttl 60s 疊加，畫面若標成
+// 「今天」使用者會誤以為是即時值，實際最壞可能是近 2 分鐘前的快取（見 finding I2）。
+// `generated_at` 才是資料真正產生的時間；`params.date`（永遠是今天）只作 fallback。
+const healthDate = computed(() => {
+  const generatedAt = healthData.value?.generated_at
+  if (typeof generatedAt === 'string' && generatedAt) return generatedAt
+  const params = healthData.value?.params
+  const date = params && typeof params === 'object' ? params['date'] : undefined
+  return typeof date === 'string' ? date : '—'
+})
+
+/** `row.data` 型別是 `Record<string, unknown>`——取數值一律經此 narrow，禁 `as any`。 */
+function healthNum(row: PlatformReportTenantRow, key: string): number | null {
+  const value = row.data?.[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+function healthWarn(row: PlatformReportTenantRow, key: string): boolean {
+  const n = healthNum(row, key) ?? 0
+  if (key === 'staff_missing') return n > 0
+  if (key === 'pending_total') return n > HEALTH_WARN_PENDING_THRESHOLD
+  if (key === 'overdue_fee_students') return n > 0
+  return false
 }
 </script>
 
@@ -271,5 +394,29 @@ function refreshAll(): void {
   margin: 0;
   font-size: var(--text-xs);
   color: var(--el-color-danger);
+}
+
+.health-panel {
+  margin-top: var(--space-5);
+}
+
+.health-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.health-panel__alert {
+  margin: 0;
+}
+
+.health-cell--warn {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+
+.health-table__empty {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
 }
 </style>

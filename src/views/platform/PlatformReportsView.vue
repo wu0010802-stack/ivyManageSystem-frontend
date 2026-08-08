@@ -14,6 +14,10 @@
         <el-select v-if="needsSchoolYear" v-model="schoolYear" clearable placeholder="本學年" data-testid="report-school-year" class="filter-item">
           <el-option v-for="y in schoolYearOptions" :key="y" :label="`${y} 學年`" :value="y" />
         </el-select>
+        <el-select v-if="needsSemester" v-model="semester" data-testid="report-semester" class="filter-item">
+          <el-option :label="'第 1 學期'" :value="1" />
+          <el-option :label="'第 2 學期'" :value="2" />
+        </el-select>
         <el-select
           v-model="selectedTenantIds"
           multiple
@@ -119,6 +123,9 @@ const CATEGORIES: { value: PlatformReportCategory; label: string }[] = [
   { value: 'attendance', label: '出勤對比' },
   { value: 'salary-cost', label: '薪資成本' },
   { value: 'recruitment', label: '招生漏斗' },
+  { value: 'students', label: '學生班級' },
+  { value: 'hr', label: '人事' },
+  { value: 'activities', label: '活動' },
 ]
 
 /**
@@ -134,10 +141,19 @@ function categoryLabel(rawCategory: string | null | undefined): string {
 }
 
 const now = new Date()
+// 8 月–1 月為上學期（第 1 學期），2 月–7 月為下學期（第 2 學期）
+const currentSemester = now.getMonth() + 1 >= 8 || now.getMonth() + 1 <= 1 ? 1 : 2
+
 const category = ref<PlatformReportCategory>('overview')
 const year = ref(now.getFullYear())
 const month = ref<number | null>(null)
+// 維持 null 預設（選填、未指定）：
+// - recruitment 的 school_year=None 在後端語意是「不篩學年、回傳全部歷史」，
+//   不是「當前學年」的同義詞，給非空預設會把資料範圍縮小成回歸（Important A）。
+// - students/activities 的 school_year 未帶時後端 fallback 到當前學期，
+//   null 預設同樣是正確、零猜測的選項。
 const schoolYear = ref<number | null>(null)
+const semester = ref<number>(currentSemester)
 const selectedTenantIds = ref<number[]>([])
 
 const yearOptions = computed(() => {
@@ -150,16 +166,31 @@ const schoolYearOptions = computed(() => {
   return [base + 1, base, base - 1, base - 2]
 })
 
-const needsYear = computed(() => category.value !== 'recruitment')
+const needsYear = computed(() =>
+  ['overview', 'finance', 'attendance', 'salary-cost', 'hr'].includes(category.value),
+)
 const needsMonth = computed(() => category.value === 'overview' || category.value === 'finance')
-const needsSchoolYear = computed(() => category.value === 'recruitment')
+const needsSchoolYear = computed(() =>
+  ['recruitment', 'students', 'activities'].includes(category.value),
+)
+const needsSemester = computed(() => category.value === 'activities')
 
 const { selectableSchools } = usePlatformTenants({ schoolsOnly: true })
 
 const queryParams = computed(() => ({
   ...(needsYear.value ? { year: year.value } : {}),
   ...(needsMonth.value && month.value ? { month: month.value } : {}),
-  ...(needsSchoolYear.value && schoolYear.value ? { school_year: schoolYear.value } : {}),
+  // school_year 與 semester 綁在同一個 spread 裡：只有 school_year 真的有值
+  // 才會一起送 semester，避免「只送 semester、不送 school_year」撞後端
+  // resolve_academic_term_filters 的「同時給或同時不給」約束（400）。
+  // school_year 未選（null）時兩者皆不送——對 recruitment 等價於既有的
+  // 「不篩學年」行為，對 students/activities 等價於後端 fallback 到當前學期。
+  ...(needsSchoolYear.value && schoolYear.value
+    ? {
+        school_year: schoolYear.value,
+        ...(needsSemester.value ? { semester: semester.value } : {}),
+      }
+    : {}),
   ...(selectedTenantIds.value.length ? { tenant_ids: [...selectedTenantIds.value].sort((a, b) => a - b) } : {}),
 }))
 
