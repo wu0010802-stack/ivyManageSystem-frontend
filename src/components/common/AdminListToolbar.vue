@@ -153,4 +153,37 @@ const countText = computed(() => {
   font-size: 13px;
   color: var(--el-text-color-secondary);
 }
+
+/* 手機（≤767.98px）：搜尋框撐滿、篩選段落鈕改橫向捲動、
+   筆數與動作鈕收同一列，觸控目標對齊 44px。共用元件一次改，11 個列表頁同時受益 */
+@media (--to-sm) {
+  .admin-list-toolbar__search {
+    width: 100%;
+  }
+  .admin-list-toolbar__filter {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .admin-list-toolbar__filter-label {
+    white-space: nowrap;
+  }
+  /* 段落鈕不換行改捲動：radio-button 換行會斷開首尾圓角的膠囊外觀 */
+  .admin-list-toolbar__filter :deep(.el-radio-group) {
+    flex-wrap: nowrap;
+  }
+  .admin-list-toolbar__filter :deep(.el-radio-button__inner) {
+    min-height: var(--touch-target-min);
+    display: inline-flex;
+    align-items: center;
+  }
+  .admin-list-toolbar__spacer {
+    display: none;
+  }
+  .admin-list-toolbar__count {
+    flex: 1 1 auto;
+  }
+  .admin-list-toolbar :deep(.el-button) {
+    min-height: var(--touch-target-min);
+  }
+}
 </style>

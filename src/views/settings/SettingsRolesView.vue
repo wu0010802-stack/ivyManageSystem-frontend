@@ -331,8 +331,9 @@ html.dark .role-item--active {
   min-width: 0;
 }
 
-/* 手機：上下堆疊 */
-@media (max-width: 768px) {
+/* 手機：上下堆疊（--to-sm = 767.98px，對齊 canonical MOBILE_MAX_PX，
+   原寫死 768px 與斷點基建 off-by-one） */
+@media (--to-sm) {
   .roles-layout {
     flex-direction: column;
   }

@@ -320,6 +320,14 @@ html.ivy-admin .el-table .el-table__cell {
   .el-table {
     overflow-x: auto;
   }
+
+  /* 分頁器窄幅換行置中（公告/稽核/活動等頁）：EP 預設單列 flex 會把
+     sizes/jumper 擠出視窗；換行保留全部功能、不隱藏 */
+  .el-pagination {
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+    justify-content: center;
+  }
 }
 
 /* ========== PWA Safe Area ========== */
