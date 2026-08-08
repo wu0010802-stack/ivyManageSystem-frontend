@@ -20,11 +20,38 @@ import BatchOvertimeDialog from '@/components/overtime/BatchOvertimeDialog.vue'
 import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
 const route = useRoute()
 const router = useRouter()
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）；
+// 批次勾選為桌機工作流，手機以單筆核准/駁回為主
+const { isMobile } = useIsMobile()
+
+// 手機卡片視圖欄位（__ 前綴為 slot-only 欄，值由對應 #cell- slot 渲染）
+const overtimeCardColumns = [
+  { label: '日期', prop: 'overtime_date' },
+  { label: '類型', prop: '__type' },
+  { label: '時間', prop: '__time', formatter: (r: Record<string, unknown>) => `${r.start_time || '-'} ~ ${r.end_time || '-'}` },
+  { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.hours}h` },
+  { label: '方式', prop: '__method' },
+  { label: '加班費', prop: '__pay' },
+  { label: '原因', prop: 'reason', formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+  { label: '審核', prop: '__status' },
+]
+
+// 待審核項目卡片欄位（手機），與待審表格同欄
+const pendingCardColumns = [
+  { label: '日期', prop: 'overtime_date' },
+  { label: '類型', prop: 'overtime_type_label' },
+  { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.hours}h` },
+  { label: '方式', prop: '__method' },
+  { label: '原因', prop: 'reason', formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+]
 
 const canViewOvertime = computed(() => hasPermission('OVERTIME_READ'))
 const canViewMeetings = computed(() => hasPermission('MEETINGS'))
@@ -363,13 +390,13 @@ watch(activeSection, async (value) => {
       <el-tab-pane v-if="canViewOvertime" label="一般加班" name="overtime">
         <el-card class="control-panel">
           <div class="controls">
-            <el-select v-model="query.employee_id" placeholder="全部員工" clearable filterable style="width: 180px;">
+            <el-select v-model="query.employee_id" placeholder="全部員工" clearable filterable class="ctl-emp">
               <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
             </el-select>
-            <el-select v-model="query.year" style="width: 110px;">
+            <el-select v-model="query.year" class="ctl-year">
               <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
             </el-select>
-            <el-select v-model="query.month" style="width: 90px;">
+            <el-select v-model="query.month" class="ctl-month">
               <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
             </el-select>
             <el-button type="primary" @click="fetchOvertimes" :loading="loading">查詢</el-button>
@@ -404,7 +431,7 @@ watch(activeSection, async (value) => {
               <el-tag type="warning" effect="dark" size="small">需處理</el-tag>
             </div>
           </template>
-          <el-table :data="pendingRecords" style="width: 100%" size="small">
+          <el-table v-if="!isMobile" :data="pendingRecords" style="width: 100%" size="small">
             <el-table-column prop="employee_name" label="員工" width="100" />
             <el-table-column prop="overtime_date" label="日期" width="110" />
             <el-table-column label="類型" width="90">
@@ -431,6 +458,21 @@ watch(activeSection, async (value) => {
               </template>
             </el-table-column>
           </el-table>
+          <AdminListCards v-else :items="(pendingRecords as Record<string, unknown>[])" :columns="pendingCardColumns" row-key="id">
+            <template #title="{ item }">{{ item.employee_name }}</template>
+            <template #cell-__method="{ item }">
+              <el-tag v-if="item.use_comp_leave" type="success" size="small">補休</el-tag>
+              <el-tag v-else size="small">加班費</el-tag>
+            </template>
+            <template #actions="{ item }">
+              <el-button type="success" size="small" @click="approveOvertime(item, true)">
+                <el-icon><Check /></el-icon> 核准
+              </el-button>
+              <el-button type="danger" size="small" @click="approveOvertime(item, false)">
+                <el-icon><Close /></el-icon> 駁回
+              </el-button>
+            </template>
+          </AdminListCards>
         </el-card>
 
         <AdminListToolbar
@@ -448,7 +490,7 @@ watch(activeSection, async (value) => {
         >
           <template #skeleton><TableSkeleton :columns="8" /></template>
           <template #empty><el-empty description="尚無加班紀錄" /></template>
-          <el-table :data="filteredOvertimes" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+          <el-table v-if="!isMobile" :data="filteredOvertimes" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
           <template #empty>
             <el-empty :description="overtimeSearch ? '沒有符合搜尋條件的加班紀錄' : '尚無加班紀錄'" />
           </template>
@@ -500,6 +542,41 @@ watch(activeSection, async (value) => {
             </template>
           </el-table-column>
         </el-table>
+        <AdminListCards
+          v-else
+          :items="filteredOvertimes"
+          :columns="overtimeCardColumns"
+          row-key="id"
+          :loading="loading"
+          :empty-text="overtimeSearch ? '沒有符合搜尋條件的加班紀錄' : '尚無加班紀錄'"
+        >
+          <template #title="{ item }">{{ item.employee_name }}</template>
+          <template #cell-__type="{ item }">
+            <el-tag :type="item.overtime_type === 'weekday' ? 'info' : 'warning'" size="small">
+              {{ item.overtime_type_label }}
+            </el-tag>
+          </template>
+          <template #cell-__method="{ item }">
+            <el-tag v-if="item.use_comp_leave" type="success" size="small">補休 {{ item.hours }}h</el-tag>
+            <el-tag v-else size="small">加班費</el-tag>
+          </template>
+          <template #cell-__pay="{ item }">
+            <span v-if="item.use_comp_leave" style="color: var(--el-text-color-secondary);">--</span>
+            <strong v-else>{{ money(item.overtime_pay as number) }}</strong>
+          </template>
+          <template #cell-__status="{ item }">
+            <el-tag v-if="item.status === 'approved'" type="success" size="small">已核准</el-tag>
+            <el-tag v-else-if="item.status === 'rejected'" type="danger" size="small">已駁回</el-tag>
+            <el-tag v-else type="warning" size="small">待審核</el-tag>
+          </template>
+          <template #actions="{ item }">
+            <el-button v-if="item.status !== 'approved' && canApprove(item)" type="success" size="small" link @click="approveOvertime(item, true)">核准</el-button>
+            <el-button v-if="item.status !== 'rejected' && canApprove(item)" type="warning" size="small" link @click="approveOvertime(item, false)">駁回</el-button>
+            <el-button type="primary" size="small" link @click="openEdit(item)">編輯</el-button>
+            <el-button type="danger" size="small" link @click="deleteOvertime(item)" :loading="deleteOvertimeLoading">刪除</el-button>
+            <el-button type="info" size="small" link @click="openApprovalLogs({ id: item.id })">記錄</el-button>
+          </template>
+        </AdminListCards>
         </LoadingPanel>
 
         <el-card v-if="overtimeRecords.length > 0" class="summary-card">
@@ -641,6 +718,23 @@ watch(activeSection, async (value) => {
   gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
+}
+.ctl-emp { width: 180px; }
+.ctl-year { width: 110px; }
+.ctl-month { width: 90px; }
+
+/* 手機：查詢列控制項改流式填滿、按鈕觸控目標對齊 44px */
+@media (--to-sm) {
+  .ctl-emp { width: auto; flex: 1 1 100%; }
+  .ctl-year { width: auto; flex: 1 1 40%; }
+  .ctl-month { width: auto; flex: 1 1 28%; }
+  .controls .el-button {
+    min-height: var(--touch-target-min);
+  }
+  .summary {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
 }
 .summary-card {
   margin-top: var(--space-4);
