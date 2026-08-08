@@ -57,4 +57,23 @@ describe('AdminListCards', () => {
     const w = mount(AdminListCards, { props: { items: [], columns, rowKey: 'id', emptyText: '尚無資料' } })
     expect(w.find('.alc-empty').text()).toContain('尚無資料')
   })
+
+  it('block 欄改為整寬呈現（長文字用：標籤在上、內容左對齊不擠壓）', () => {
+    const longText = '午休時與同學因為玩具發生爭執，老師已在現場協助雙方溝通並完成安撫。'
+    const w = mount(AdminListCards, {
+      props: {
+        items: [{ id: 'A1', note: longText }],
+        columns: [{ label: '事件描述', prop: 'note', block: true }],
+        rowKey: 'id',
+      },
+    })
+    const field = w.find('.alc-field')
+    expect(field.classes()).toContain('alc-field--block')
+    expect(field.text()).toContain(longText)
+  })
+
+  it('未指定 block 的欄維持原本左右對照排版', () => {
+    const w = mount(AdminListCards, { props: { items, columns, rowKey: 'id' } })
+    expect(w.find('.alc-field').classes()).not.toContain('alc-field--block')
+  })
 })

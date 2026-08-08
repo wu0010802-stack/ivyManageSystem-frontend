@@ -41,7 +41,7 @@ const leaveCardColumns = [
   { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.leave_hours}h` },
   { label: '審核', prop: '__status' },
   { label: '代理人', prop: '__substitute' },
-  { label: '原因', prop: 'reason', formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+  { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
   { label: '附件', prop: '__attach' },
 ]
 

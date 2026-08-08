@@ -5,6 +5,9 @@ interface AdminListColumn {
   label: string
   prop: string
   formatter?: (item: Record<string, unknown>) => unknown
+  /** 長文字欄（描述、原因、摘要）：標籤在上、內容整寬左對齊，
+   *  避免右對齊窄欄把整段文字擠成鋸齒狀 */
+  block?: boolean
 }
 
 const props = defineProps<{
@@ -46,7 +49,12 @@ function titleFallback(item: Record<string, unknown>): unknown {
           <slot name="title" :item="item">{{ titleFallback(item) }}</slot>
         </header>
         <dl class="alc-card__fields">
-          <div v-for="col in columns" :key="col.prop" class="alc-field">
+          <div
+            v-for="col in columns"
+            :key="col.prop"
+            class="alc-field"
+            :class="{ 'alc-field--block': col.block }"
+          >
             <dt class="alc-field__label">{{ col.label }}</dt>
             <dd class="alc-field__value">
               <slot :name="`cell-${col.prop}`" :item="item">{{ cellValue(col, item) }}</slot>
@@ -95,6 +103,19 @@ function titleFallback(item: Record<string, unknown>): unknown {
   text-align: right;
   color: var(--text-primary);
   margin: 0;
+}
+/* 長文字欄：改直向堆疊、整寬左對齊，與前一欄留間距 */
+.alc-field--block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  margin-top: var(--space-1);
+}
+.alc-field--block .alc-field__value {
+  text-align: left;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .alc-card__actions {
   display: flex;

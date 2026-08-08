@@ -40,7 +40,7 @@ const overtimeCardColumns = [
   { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.hours}h` },
   { label: '方式', prop: '__method' },
   { label: '加班費', prop: '__pay' },
-  { label: '原因', prop: 'reason', formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+  { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
   { label: '審核', prop: '__status' },
 ]
 
@@ -50,7 +50,7 @@ const pendingCardColumns = [
   { label: '類型', prop: 'overtime_type_label' },
   { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.hours}h` },
   { label: '方式', prop: '__method' },
-  { label: '原因', prop: 'reason', formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+  { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
 ]
 
 const canViewOvertime = computed(() => hasPermission('OVERTIME_READ'))
