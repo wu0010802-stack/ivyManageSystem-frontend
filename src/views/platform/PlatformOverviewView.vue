@@ -76,11 +76,12 @@
       <template #header>
         <div class="health-panel__header">
           <span>營運健康（{{ healthDate }}）</span>
+          <el-tag v-if="healthData?.cached" size="small" type="info" data-testid="health-cached">快取結果</el-tag>
           <el-button
             data-testid="health-refresh"
             size="small"
             :loading="healthLoading"
-            @click="refreshHealth(true)"
+            @click="refreshHealthForced"
           >刷新</el-button>
         </div>
       </template>
@@ -132,7 +133,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
@@ -219,6 +220,12 @@ function refreshAll(): void {
 
 // 營運健康：沒有期間參數（後端只收 tenant_ids/force_refresh），TTL 對齊後端快取 60 秒。
 // 不做輪詢——進頁自動載一次＋手動刷新按鈕。
+//
+// `useCachedAsync` 的 `refresh(force)` 只繞過「前端」cache TTL，fetcher 本身拿不到
+// force 旗標——若不帶 force_refresh 給後端，後端 60 秒 snapshot 仍可能回舊值
+// （前後端 TTL 疊加，使用者按「刷新」最壞仍看到近 2 分鐘前的數字，見 finding S1）。
+// 用這個 ref 在按下刷新前先記下旗標，fetcher 讀完立即歸零，避免污染下一次背景刷新。
+const forceHealthRefresh = ref(false)
 const {
   data: healthData,
   error: healthErrorRaw,
@@ -227,11 +234,18 @@ const {
 } = useCachedAsync<PlatformReport | null>(
   platformCacheKey('reports:health'),
   async () => {
-    const res = await getPlatformReport('health', {})
+    const force = forceHealthRefresh.value
+    forceHealthRefresh.value = false
+    const res = await getPlatformReport('health', force ? { force_refresh: true } : {})
     return res.data ?? null
   },
   { ttl: 60_000 },
 )
+
+function refreshHealthForced(): void {
+  forceHealthRefresh.value = true
+  refreshHealth(true).catch(() => {})
+}
 
 const healthRows = computed<PlatformReportTenantRow[]>(() => healthData.value?.tenants ?? [])
 
@@ -241,7 +255,12 @@ const healthErrorText = computed(() =>
   healthErrorRaw.value ? getErrorMessage(healthErrorRaw.value, '營運健康資料載入失敗') : null,
 )
 
+// 顯示「資料時間戳」而非請求參數：後端 TTL 60s + 前端 ttl 60s 疊加，畫面若標成
+// 「今天」使用者會誤以為是即時值，實際最壞可能是近 2 分鐘前的快取（見 finding I2）。
+// `generated_at` 才是資料真正產生的時間；`params.date`（永遠是今天）只作 fallback。
 const healthDate = computed(() => {
+  const generatedAt = healthData.value?.generated_at
+  if (typeof generatedAt === 'string' && generatedAt) return generatedAt
   const params = healthData.value?.params
   const date = params && typeof params === 'object' ? params['date'] : undefined
   return typeof date === 'string' ? date : '—'

@@ -148,6 +148,10 @@ export const METRIC_LABELS: Record<string, string> = {
   new_enrollments: '本學年新生',
   departures: '本學年離園',
   age_distribution: '學齡分布',
+  // age_distribution 的 bucket key（見 _age_bucket）：'<2' / '>=6' 讀起來尚可
+  // 不特別翻譯，'unknown'（生日未填）需要，否則 MetricValue 遞迴渲染會原樣
+  // 顯示英文（見 finding S2）。
+  unknown: '生日未填',
 
   // hr（跨分校人事教職員）
   active_employee_count: '在職員工',
@@ -160,6 +164,9 @@ export const METRIC_LABELS: Record<string, string> = {
   // activities（跨分校活動才藝課）
   activity_count: '開課數',
   registration_count: '報名筆數',
+  // 注意：不可與 students 分組的 enrolled_count（在籍學生）共用同一個中文標籤
+  // ——後端已改用獨立鍵名 activity_enrolled_count 避免撞名（見 finding I1）。
+  activity_enrolled_count: '報名成功人次',
   semester: '學期',
   // revenue 已於 finance 分組定義（'收入'），此處沿用不重複宣告
   unpaid: '未收金額',

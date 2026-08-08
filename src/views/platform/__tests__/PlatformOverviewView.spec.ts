@@ -152,7 +152,7 @@ describe('PlatformOverviewView', () => {
     expect(w.find('[data-testid="overview-error"]').exists()).toBe(false)
   })
 
-  it('渲染營運健康區塊並依閾值標警示', async () => {
+  it('渲染營運健康區塊並依閾值標警示（逐格核對，不只比對總數）', async () => {
     h.getPlatformReport.mockImplementation((category: string) =>
       Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
     )
@@ -161,12 +161,41 @@ describe('PlatformOverviewView', () => {
     const health = w.find('[data-testid="health-panel"]')
     expect(health.exists()).toBe(true)
     expect(health.text()).toContain('A 校')
+
+    // 只比對總數（3 格警示）在三個 healthWarn 分支互相寫錯 key 時仍可能是 3，
+    // 因此逐格核對「是哪三格」（見 finding S5）：A 校缺打卡/待簽/逾期三格皆警示、
+    // B 校（全數為 0）不該有任何一格警示。
+    const cells = health.findAll('.health-cell')
+    // A 校在每欄 cells 陣列中固定排第一列（HEALTH_FIXTURE 順序）。
+    const aStaffCell = cells.find((c) => c.text().includes('18/20'))
+    const aPendingCell = cells.find((c) => c.text() === '12')
+    const aOverdueCell = cells.find((c) => c.text().includes('1 位'))
+    const bStaffCell = cells.find((c) => c.text().includes('5/5'))
+    const bPendingCell = cells.find((c) => c.text() === '0')
+    const bOverdueCell = cells.find((c) => c.text().includes('0 位'))
+
+    expect(aStaffCell?.classes()).toContain('health-cell--warn')
+    expect(aPendingCell?.classes()).toContain('health-cell--warn')
+    expect(aOverdueCell?.classes()).toContain('health-cell--warn')
+    expect(bStaffCell?.classes()).not.toContain('health-cell--warn')
+    expect(bPendingCell?.classes()).not.toContain('health-cell--warn')
+    expect(bOverdueCell?.classes()).not.toContain('health-cell--warn')
+
     const warnCells = health.findAll('.health-cell--warn')
-    // A 校：缺打卡 2 > 0、待簽 12 > 10、逾期 1 > 0 → 3 格警示；B 校 0 格
     expect(warnCells.length).toBe(3)
   })
 
-  it('健康面板手動刷新會 force refresh', async () => {
+  it('健康面板標題顯示資料 generated_at，不是請求參數 params.date', async () => {
+    h.getPlatformReport.mockImplementation((category: string) =>
+      Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
+    )
+    const w = mount(PlatformOverviewView, { global: { stubs } })
+    await flushPromises()
+    const header = w.find('[data-testid="health-panel"]')
+    expect(header.text()).toContain(HEALTH_FIXTURE.data.generated_at)
+  })
+
+  it('健康面板手動刷新會帶 force_refresh 給後端（不只是繞過前端快取）', async () => {
     h.getPlatformReport.mockImplementation((category: string) =>
       Promise.resolve(category === 'health' ? HEALTH_FIXTURE : OVERVIEW_FIXTURE),
     )
@@ -176,6 +205,10 @@ describe('PlatformOverviewView', () => {
     await w.find('[data-testid="health-refresh"]').trigger('click')
     await flushPromises()
     expect(h.getPlatformReport.mock.calls.length).toBeGreaterThan(calls)
+    const lastHealthCall = h.getPlatformReport.mock.calls
+      .filter((c: unknown[]) => c[0] === 'health')
+      .at(-1)
+    expect(lastHealthCall?.[1]).toEqual({ force_refresh: true })
   })
 
   it('健康面板取數失敗要顯示錯誤，不能偽裝成「尚無資料」', async () => {

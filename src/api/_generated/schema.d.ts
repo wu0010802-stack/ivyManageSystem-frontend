@@ -9842,6 +9842,8 @@ export interface paths {
          * @description 各分校才藝課彙總：開課數/報名/實收營收（active reg paid_amount 加總）/未收。
          *
          *     期間單位＝民國學年＋學期，未帶時落到當前學期（與分校端活動儀表板同口徑）。
+         *     只帶 `school_year` 不帶 `semester`（或反之）會回 400——兩者需同時提供或
+         *     同時省略。
          */
         get: operations["platform_activities_api_platform_reports_activities_get"];
         put?: never;
@@ -10012,6 +10014,9 @@ export interface paths {
          *     在籍（enrolled_count）＝ lifecycle enrolled＋active 的**現點快照**，不受
          *     school_year 影響；new_enrollments / departures / 學齡基準日（9/1 足歲）依所選
          *     學年（民國，未帶＝當前學年）。on_leave（休學）獨立列出，不計入在籍與缺額。
+         *     班級數（classroom_count）／容量（total_capacity）同樣是**當期 active 班級**
+         *     的現點快照，不隨 school_year 參數變動（Classroom 每學期一列，此處固定取
+         *     resolve_current_academic_term() 當期）。
          */
         get: operations["platform_students_api_platform_reports_students_get"];
         put?: never;
