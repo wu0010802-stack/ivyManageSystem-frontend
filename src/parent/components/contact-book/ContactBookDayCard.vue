@@ -2,6 +2,8 @@
 import { computed } from 'vue'
 import MoodBadge from './MoodBadge.vue'
 import ParentIcon from '../ParentIcon.vue'
+import StatusPill from '../StatusPill.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import type { ContactBookEntry } from '../../api/contactBook'
 
 interface EntryPhoto {
@@ -10,25 +12,58 @@ interface EntryPhoto {
   display_url: string
 }
 
+/**
+ * 今日卡三態（首頁 hero + 聯絡簿列表頂部共用）：
+ *  - full     老師已填今日聯絡簿 → 心情徽章 + 量化 chip + 留言 + 照片
+ *  - awaiting 上學日但老師還沒填 → 同骨架，改放 motif 與「記錄中」提示
+ *  - offday   假日／請假／尚未到校 → 同骨架，改放休息文案
+ *
+ * 三態刻意共用同一張卡而不是「有 entry 才顯示、沒有就換別的 hero」：
+ * 首頁 hero 每天都在同一個位置、同一個形狀，家長不必重新找。
+ */
 const props = withDefaults(defineProps<{
-  entry: ContactBookEntry
+  entry?: ContactBookEntry | null
   studentName?: string
   classroomName?: string
+  variant?: 'full' | 'awaiting' | 'offday'
+  /** 出席狀態（在園中／已離園／請假／今天放假…），由父層依 today-status 決定 */
+  statusLabel?: string
+  statusTone?: 'ok' | 'warn' | 'danger' | 'neutral' | 'info'
+  /** 非 full 態沒有 entry.log_date 可用，日期由父層傳入 */
+  dateLine?: string
+  /** 覆寫非 full 態的預設提示文案 */
+  hint?: string
 }>(), {
+  entry: null,
   studentName: '',
   classroomName: '',
+  variant: 'full',
+  statusLabel: '',
+  statusTone: 'neutral',
+  dateLine: '',
+  hint: '',
 })
+
+const isFull = computed<boolean>(() => props.variant === 'full' && !!props.entry)
 
 const dateFormatted = computed<string>(() => {
   const raw = props.entry?.log_date
-  if (!raw) return ''
+  if (!raw) return props.dateLine
   const [y, m, d] = raw.split('-')
   const date = new Date(Number(y), Number(m) - 1, Number(d))
   const wd = ['日', '一', '二', '三', '四', '五', '六'][date.getDay()]
   return `${Number(m)} 月 ${Number(d)} 日　星期${wd}`
 })
 
-const isUnread = computed<boolean>(() => !props.entry?.isRead)
+const hintText = computed<string>(() => {
+  if (isFull.value) return ''
+  if (props.hint) return props.hint
+  return props.variant === 'offday'
+    ? '今天放假，好好休息'
+    : '老師正在記錄今天的點滴'
+})
+
+const isUnread = computed<boolean>(() => isFull.value && !props.entry?.isRead)
 const photoCount = computed<number>(() => (props.entry?.photos || []).length)
 // Facade's `photos` is `unknown[]` for forward-compat; narrow here at the access boundary.
 const previewPhotos = computed<EntryPhoto[]>(() => ((props.entry?.photos ?? []) as EntryPhoto[]).slice(0, 3))
@@ -40,8 +75,9 @@ const teacherNoteShort = computed<string | null>(() => {
 })
 
 const stats = computed(() => {
-  const e = props.entry || {}
+  const e = props.entry
   const out: { key: string; label: string; value: string | number; icon: string }[] = []
+  if (!e) return out
   if (e.meal_lunch != null) out.push({ key: 'lunch', label: '午餐', value: `${e.meal_lunch}/3`, icon: 'restaurant' })
   if (e.nap_minutes != null) out.push({ key: 'nap', label: '午睡', value: `${e.nap_minutes} 分`, icon: 'bedtime' })
   if (e.temperature_c != null) out.push({ key: 'temp', label: '體溫', value: `${e.temperature_c}°`, icon: 'thermostat' })
@@ -51,26 +87,39 @@ const stats = computed(() => {
 </script>
 
 <template>
-  <article class="day-card">
+  <article class="day-card" :class="`day-card-${variant}`">
     <div class="hero">
-      <MoodBadge :mood="entry.mood" size="lg" />
+      <MoodBadge v-if="isFull && entry" :mood="entry.mood" size="lg" />
+      <span v-else class="hero-motif" aria-hidden="true">
+        <KawaiiStar :size="44" />
+      </span>
       <div class="hero-head">
         <h2 class="name">
           <span class="name-text">{{ studentName }}</span>
-          <span v-if="isUnread" class="unread-dot" aria-label="尚未閱讀" />
-          <span v-else class="read-check" aria-label="已讀">
-            <ParentIcon name="check" size="xs" :decorative="false" />
-          </span>
+          <template v-if="isFull">
+            <span v-if="isUnread" class="unread-dot" aria-label="尚未閱讀" />
+            <span v-else class="read-check" aria-label="已讀">
+              <ParentIcon name="check" size="xs" :decorative="false" />
+            </span>
+          </template>
         </h2>
-        <p class="meta">
-          <span>{{ dateFormatted }}</span>
-          <span v-if="classroomName" class="meta-sep" aria-hidden="true">·</span>
+        <p v-if="dateFormatted || classroomName" class="meta">
+          <span v-if="dateFormatted">{{ dateFormatted }}</span>
+          <span v-if="dateFormatted && classroomName" class="meta-sep" aria-hidden="true">·</span>
           <span v-if="classroomName">{{ classroomName }}</span>
         </p>
+        <StatusPill
+          v-if="statusLabel"
+          class="hero-status"
+          :tone="statusTone"
+          :label="statusLabel"
+        />
       </div>
     </div>
 
-    <div v-if="stats.length" class="stats">
+    <p v-if="hintText" class="hint">{{ hintText }}</p>
+
+    <div v-if="isFull && stats.length" class="stats">
       <div v-for="s in stats" :key="s.key" class="stat" :class="`stat-${s.key}`">
         <span class="stat-icon" aria-hidden="true">
           <span class="material-symbols-rounded">{{ s.icon }}</span>
@@ -80,11 +129,11 @@ const stats = computed(() => {
       </div>
     </div>
 
-    <p v-if="teacherNoteShort" class="note">
+    <p v-if="isFull && teacherNoteShort" class="note">
       <span class="note-quote" aria-hidden="true">「</span>{{ teacherNoteShort }}<span class="note-quote" aria-hidden="true">」</span>
     </p>
 
-    <div v-if="previewPhotos.length" class="photos">
+    <div v-if="isFull && previewPhotos.length" class="photos">
       <div class="photos-row">
         <img
           v-for="p in previewPhotos"
@@ -114,14 +163,42 @@ const stats = computed(() => {
   isolation: isolate;
 }
 
+/* awaiting / offday：今天還沒有故事可講，漸層收斂成近乎純 cream，
+   讓「有聯絡簿的日子」在視覺上明顯更飽滿。 */
+.day-card-awaiting,
+.day-card-offday {
+  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, rgba(220, 244, 230, 0.45) 100%);
+}
+
 .hero {
   display: flex;
   align-items: center;
   gap: 14px;
 }
+/* 佔位對齊 MoodBadge lg 的 64×64，避免三態之間 hero 高度跳動 */
+.hero-motif {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+  color: var(--brand-accent, #ffde51);
+  opacity: 0.85;
+}
 .hero-head {
   flex: 1;
   min-width: 0;
+}
+.hero-status {
+  margin-top: 8px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--pt-text-muted);
 }
 .name {
   display: flex;
