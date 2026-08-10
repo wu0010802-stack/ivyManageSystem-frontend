@@ -138,12 +138,22 @@
 
       <ul class="stop-list" aria-label="站點清單">
         <li v-for="stop in stops" :key="stop.stop_id" class="stop-item">
-          <el-card :class="['stop-card', `stop-${stop.status}`]" :data-testid="`bus-stop-${stop.stop_id}`">
+          <el-card
+            :class="['stop-card', `stop-${stop.status}`, { 'stop-on-leave': stop.on_leave }]"
+            :data-testid="`bus-stop-${stop.stop_id}`"
+          >
             <div class="stop-row">
               <span class="stop-seq">{{ stop.seq }}</span>
               <span class="stop-name">{{ stop.student_name }}</span>
               <el-tag v-if="stop.status === 'departed'" type="success">已離站</el-tag>
               <el-tag v-else-if="stop.status === 'skipped'" type="info">已跳過</el-tag>
+              <!--
+                請假是「明顯標示 + 讓司機自己決定」，不是自動跳站（後端刻意不動這站，
+                怕請假資料有誤會漏接）。標示排在既有狀態 tag 之外，任何 status 下都要看得到。
+              -->
+              <el-tag v-if="stop.on_leave" type="warning" :data-testid="`bus-stop-onleave-${stop.stop_id}`">
+                今日已請假
+              </el-tag>
             </div>
             <div class="stop-actions">
               <template v-if="stop.status === 'pending'">
@@ -159,6 +169,7 @@
                 </el-button>
                 <el-button
                   size="large"
+                  :type="stop.on_leave ? 'warning' : undefined"
                   :disabled="actingStopId !== null"
                   :aria-label="`跳過 ${stop.student_name}`"
                   @click="skipStop(stop)"
@@ -247,6 +258,8 @@ onBeforeUnmount(teardown)
 .stop-name { font-size: 16px; }
 .stop-departed { opacity: 0.6; }
 .stop-skipped { opacity: 0.5; }
+/* 請假站視覺弱化：司機一瞄就知道這站不用等人，但仍保留操作（不隱藏、不 disable）。 */
+.stop-on-leave { opacity: 0.7; border-style: dashed; }
 .stop-actions { margin-top: 8px; display: flex; gap: 8px; }
 .complete-btn { margin-top: 16px; }
 </style>

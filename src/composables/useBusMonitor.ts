@@ -95,6 +95,12 @@ export interface BusMonitorStop {
   lat: number | null
   lng: number | null
   departed_at: string | null
+  /**
+   * 該生今日已核准請假（後端即時計算，非落庫）。站仍是 pending、後端不會自動跳站
+   * ——UI 只是讓行政知道「這站沒接是預期的」，不改變任何流程判斷。
+   * 選填：舊回應或此欄位缺席時視同 false。
+   */
+  on_leave?: boolean
 }
 export interface BusMonitorRoute {
   id: number
@@ -145,6 +151,7 @@ function normalizeStops(raw: unknown): BusMonitorStop[] | null {
       lat: asNum(r.lat),
       lng: asNum(r.lng),
       departed_at: asStr(r.departed_at),
+      on_leave: r.on_leave === true,
     }
   })
 }

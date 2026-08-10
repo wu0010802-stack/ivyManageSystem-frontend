@@ -276,6 +276,42 @@ describe('PortalBusTripView', () => {
     expect(wrapper.html()).not.toContain('22.6083')
     expect(wrapper.html()).not.toContain('120.3014')
   })
+
+  it('on_leave=true 的站顯示請假標示，且該站卡片視覺弱化，跳過/離站操作仍在', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({ on_leave: true })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const card = wrapper.find('[data-testid="bus-stop-11"]')
+    expect(card.find('[data-testid="bus-stop-onleave-11"]').exists()).toBe(true)
+    expect(card.classes()).toContain('stop-on-leave')
+    // 請假不可讓司機少了操作選項：仍要看得到離站與跳過
+    const btns = card.findAll('el-button')
+    expect(btns.map((b) => b.text())).toEqual(['離站', '跳過'])
+  })
+
+  it('on_leave=false 或欄位不存在時不顯示請假標示', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({ on_leave: false }), stop({ stop_id: 12, seq: 2 })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-onleave-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-stop-onleave-12"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-stop-11"]').classes()).not.toContain('stop-on-leave')
+  })
+
+  it('請假站的跳過按鈕更容易被看見（type=warning 突顯）', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({ on_leave: true })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const card = wrapper.find('[data-testid="bus-stop-11"]')
+    const skipBtn = card.findAll('el-button').find((b) => b.text() === '跳過')
+    expect(skipBtn?.attributes('type')).toBe('warning')
+  })
 })
 
 describe('PortalBusTripView — helper 自檢', () => {

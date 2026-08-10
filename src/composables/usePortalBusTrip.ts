@@ -107,6 +107,12 @@ export interface BusTripStop {
   seq: number
   status: string
   departed_at?: string | null
+  /**
+   * 該生今日已核准請假（後端即時計算，非落庫）。**只是標示，不改變流程**：
+   * 站仍是 pending、司機仍要自己按跳過——請假資料若有誤，自動跳站會漏接。
+   * 選填：舊回應或此欄位缺席時視同 false。
+   */
+  on_leave?: boolean
 }
 export interface BusTripBrief {
   id: number

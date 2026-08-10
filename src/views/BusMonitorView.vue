@@ -251,6 +251,21 @@ onBeforeUnmount(() => {
               <el-tag :type="stopTagType(row.status)">{{ stopLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
+          <!--
+            這站仍是 pending（後端刻意不自動跳站，怕請假資料有誤漏接）——沒有這欄，
+            行政只會看到「這站沒接」而誤判成漏接，得靠這個標示明講「預期如此」。
+          -->
+          <el-table-column label="請假" width="90">
+            <template #default="{ row }">
+              <el-tag
+                v-if="row.on_leave"
+                type="warning"
+                :data-testid="`bus-monitor-onleave-${row.stop_id}`"
+              >
+                已請假
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="離站時間" width="140">
             <template #default="{ row }">
               {{ formatTaipeiClock(row.departed_at) ?? '—' }}

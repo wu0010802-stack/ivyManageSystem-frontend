@@ -169,4 +169,37 @@ describe('BusMonitorView', () => {
     expect(map.attributes('role')).toBe('region')
     expect(map.attributes('aria-label')).toBe('娃娃車即時位置地圖')
   })
+
+  it('on_leave=true 的站在站點表格顯示請假標示，讓行政知道這站沒接是預期的', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'pending', lat: 22.61, lng: 120.31, departed_at: null, on_leave: true,
+      },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-monitor-onleave-11"]').exists()).toBe(true)
+  })
+
+  it('on_leave=false 或欄位不存在時不顯示請假標示', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'pending', lat: 22.61, lng: 120.31, departed_at: null, on_leave: false,
+      },
+      {
+        stop_id: 12, student_id: 102, student_name: '小華', seq: 2,
+        status: 'pending', lat: 22.62, lng: 120.32, departed_at: null,
+      },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-monitor-onleave-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-monitor-onleave-12"]').exists()).toBe(false)
+  })
 })
