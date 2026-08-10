@@ -60,6 +60,12 @@ export interface BusStopDraft {
   seq: number
   lat: number | null
   lng: number | null
+  /**
+   * 存檔時的地址快照與學生現在的地址不一致（學生搬家過，站點座標可能還指向舊址）。
+   * 後端 `GET /api/bus/routes` 較新才回這個欄位；舊回應缺欄位/快照為 NULL 一律當
+   * false，不誤報成「已過期」（見 `normalizeStops`）。
+   */
+  address_stale: boolean
 }
 export interface BusRouteRow {
   id: number
@@ -77,6 +83,9 @@ function asNum(v: unknown): number | null {
 }
 function asStr(v: unknown): string | null {
   return typeof v === 'string' ? v : null
+}
+function asBool(v: unknown): boolean {
+  return v === true
 }
 /** HTTP status，用來在 apiError 的通用 fallback 之外對 409 給更明確的訊息。 */
 function errorStatus(e: unknown): number | null {
@@ -96,6 +105,7 @@ function normalizeStops(raw: unknown): BusStopDraft[] {
       seq: asNum(r.seq) ?? 0,
       lat: asNum(r.lat),
       lng: asNum(r.lng),
+      address_stale: asBool(r.address_stale),
     }]
   })
 }
@@ -144,6 +154,10 @@ export function useBusRouteEditor() {
   })
   const missingCoordinateCount = computed(
     () => stops.value.filter((s) => s.lat == null || s.lng == null).length,
+  )
+  /** 目前這條路線這個方向的編輯緩衝中，地址快照已與學生現況不一致的站數。 */
+  const staleAddressCount = computed(
+    () => stops.value.filter((s) => s.address_stale).length,
   )
 
   function resetEditing(): void {
@@ -332,7 +346,9 @@ export function useBusRouteEditor() {
     }
     stops.value = renumber([
       ...stops.value,
-      { student_id: student.id, student_name: student.name, seq: 0, lat: null, lng: null },
+      {
+        student_id: student.id, student_name: student.name, seq: 0, lat: null, lng: null, address_stale: false,
+      },
     ])
     dirty.value = true
   }
@@ -455,7 +471,7 @@ export function useBusRouteEditor() {
 
   return {
     routes, activeRoute, activeRouteId, direction, stops, students, candidates,
-    savedStops, missingCoordinateCount, loading, saving, creating, updatingRoute,
+    savedStops, missingCoordinateCount, staleAddressCount, loading, saving, creating, updatingRoute,
     geocodingStudentId, dirty,
     loadFailed, studentsFailed,
     init, loadRoutes, createRoute, selectRoute, setDirection, updateRoute,

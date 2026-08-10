@@ -167,6 +167,51 @@ describe('載入', () => {
   })
 })
 
+describe('地址過期偵測（address_stale）', () => {
+  it('後端回 address_stale:true 時站點要帶進編輯緩衝（學生搬家後座標可能過期）', async () => {
+    const editor = await boot([routeA({
+      stops: {
+        morning: [
+          { student_id: 101, student_name: '小明', seq: 1, lat: 22.61, lng: 120.31, address_stale: true },
+          { student_id: 102, student_name: '小華', seq: 2, lat: null, lng: null, address_stale: false },
+        ],
+        afternoon: [],
+      },
+    })])
+    expect(editor.stops.value.find((s) => s.student_id === 101)?.address_stale).toBe(true)
+    expect(editor.stops.value.find((s) => s.student_id === 102)?.address_stale).toBe(false)
+  })
+
+  it('舊回應沒有 address_stale 欄位時預設 false（不可誤報成已過期）', async () => {
+    const editor = await boot([routeA({
+      stops: {
+        morning: [{ student_id: 101, student_name: '小明', seq: 1, lat: 22.61, lng: 120.31 }],
+        afternoon: [],
+      },
+    })])
+    expect(editor.stops.value[0].address_stale).toBe(false)
+  })
+
+  it('staleAddressCount 統計目前方向編輯緩衝中 address_stale 的站數', async () => {
+    const editor = await boot([routeA({
+      stops: {
+        morning: [
+          { student_id: 101, student_name: '小明', seq: 1, lat: 22.61, lng: 120.31, address_stale: true },
+          { student_id: 102, student_name: '小華', seq: 2, lat: null, lng: null, address_stale: true },
+          { student_id: 103, student_name: '小美', seq: 3, lat: 22.6, lng: 120.3, address_stale: false },
+        ],
+        afternoon: [],
+      },
+    })])
+    expect(editor.staleAddressCount.value).toBe(2)
+  })
+
+  it('沒有任何過期站時 staleAddressCount 為 0', async () => {
+    const editor = await boot()
+    expect(editor.staleAddressCount.value).toBe(0)
+  })
+})
+
 describe('候選名單', () => {
   it('排除已在本方向清單中的學生', async () => {
     const editor = await boot()

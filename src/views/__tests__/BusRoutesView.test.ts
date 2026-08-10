@@ -26,6 +26,9 @@ const mocks = vi.hoisted(() => {
       missingCoordinateCount: c(
         () => stops.value.filter((s) => s.lat == null || s.lng == null).length,
       ),
+      staleAddressCount: c(
+        () => stops.value.filter((s) => s.address_stale === true).length,
+      ),
       loading: r(false),
       saving: r(false),
       creating: r(false),
@@ -251,6 +254,48 @@ describe('BusRoutesView', () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.find('[data-testid="bus-missing-coords"]').exists()).toBe(false)
+  })
+
+  it('站點 address_stale 時該列顯示過期警示（學生搬家後座標可能還指向舊址）', async () => {
+    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
+    s.activeRouteId.value = 3
+    s.stops.value = [stop({ address_stale: true })]
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-stop-address-stale"]').exists()).toBe(true)
+  })
+
+  it('站點 address_stale:false 或未帶欄位時不顯示過期警示', async () => {
+    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
+    s.activeRouteId.value = 3
+    s.stops.value = [stop({ address_stale: false }), stop({ student_id: 102, student_name: '小華' })]
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-stop-address-stale"]').exists()).toBe(false)
+  })
+
+  it('多站地址過期時頁面彙總提示顯示正確站數', async () => {
+    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
+    s.activeRouteId.value = 3
+    s.stops.value = [
+      stop({ address_stale: true }),
+      stop({ student_id: 102, student_name: '小華', address_stale: true }),
+      stop({ student_id: 103, student_name: '小美', address_stale: false }),
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+    const alert = wrapper.find('[data-testid="bus-stale-addresses"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.attributes('title')).toContain('2')
+  })
+
+  it('沒有過期站時不顯示彙總提示', async () => {
+    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
+    s.activeRouteId.value = 3
+    s.stops.value = [stop({ address_stale: false })]
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-stale-addresses"]').exists()).toBe(false)
   })
 
   it('未儲存時亮出提示（整方向 replace-all，離開就沒了）', async () => {

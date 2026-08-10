@@ -34,7 +34,7 @@ const editor = useBusRouteEditor()
 const {
   routes, activeRoute, activeRouteId, direction, stops, candidates,
   loading, saving, creating, updatingRoute, geocodingStudentId, dirty, missingCoordinateCount,
-  loadFailed, studentsFailed,
+  staleAddressCount, loadFailed, studentsFailed,
 } = editor
 
 const pickStudentId = ref<number | null>(null)
@@ -354,6 +354,21 @@ onBeforeUnmount(() => {
         :title="`有 ${missingCoordinateCount} 站尚未定位，家長端不會看到該站位置`"
       />
 
+      <!--
+        地址過期＝存檔時的地址快照與學生現在的地址不一致，代表學生搬過家、站點座標
+        可能還指向舊址；後端刻意對「快照為 NULL 的舊資料」回 false 不誤報，見
+        useBusRouteEditor 的 address_stale 說明。彙總提示放在逐列標示之前，站數多時
+        不必逐列找。
+      -->
+      <el-alert
+        v-if="staleAddressCount > 0"
+        data-testid="bus-stale-addresses"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="`有 ${staleAddressCount} 站的學生地址已變更，站點座標可能已過期，請重新定位`"
+      />
+
       <el-table :data="stops" size="small" row-key="student_id" empty-text="此方向尚未排入任何學生">
         <el-table-column label="順序" width="130">
           <template #default="{ $index }">
@@ -369,12 +384,21 @@ onBeforeUnmount(() => {
               {{ row.lat.toFixed(5) }}, {{ row.lng.toFixed(5) }}
             </span>
             <el-tag v-else type="warning">未定位</el-tag>
+            <el-tag
+              v-if="row.address_stale"
+              type="danger"
+              data-testid="bus-stop-address-stale"
+              class="bus-routes__stale-tag"
+            >
+              地址已變更，請重新定位
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="240">
           <template #default="{ row, $index }">
             <el-button
               size="small"
+              :type="row.address_stale ? 'warning' : undefined"
               :loading="geocodingStudentId === row.student_id"
               @click="editor.geocodeStop(row.student_id)"
             >
@@ -454,6 +478,9 @@ onBeforeUnmount(() => {
 .bus-routes__seq {
   display: inline-block;
   min-width: 1.5em;
+}
+.bus-routes__stale-tag {
+  margin-left: var(--space-1, 4px);
 }
 .bus-routes__map {
   height: 50vh;
