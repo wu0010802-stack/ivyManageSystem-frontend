@@ -13,6 +13,13 @@ const emit = defineEmits<{
 
 const REACTION_EMOJI_MAP = REACTION_EMOJI as Record<string, string>
 const reactions: string[] = ['like', 'love', 'celebrate']
+
+// emoji 按鈕對螢幕閱讀器不會念出有意義的內容，必須補中文標籤。
+const REACTION_LABEL: Record<string, string> = {
+  like: '按讚',
+  love: '好喜歡',
+  celebrate: '恭喜',
+}
 </script>
 
 <template>
@@ -20,11 +27,14 @@ const reactions: string[] = ['like', 'love', 'celebrate']
     <button
       v-for="r in reactions"
       :key="r"
+      type="button"
       class="reaction"
       :class="{ active: current === r }"
+      :aria-label="REACTION_LABEL[r]"
+      :aria-pressed="current === r"
       @click="emit('select', r)"
     >
-      {{ REACTION_EMOJI_MAP[r] }}
+      <span aria-hidden="true">{{ REACTION_EMOJI_MAP[r] }}</span>
     </button>
   </div>
 </template>

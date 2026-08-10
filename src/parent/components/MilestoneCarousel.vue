@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { fetchChildMilestones, reactToMilestone } from '../api/childMilestones'
+import {
+  acknowledgeMilestone,
+  fetchChildMilestones,
+  reactToMilestone,
+} from '../api/childMilestones'
 import { toast } from '../utils/toast'
 import MilestoneCard from './MilestoneCard.vue'
+import SkeletonBlock from './SkeletonBlock.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 interface MilestoneItem {
   id: number
@@ -47,19 +54,40 @@ async function onReact(milestone: MilestoneItem, reaction: string): Promise<void
   }
 }
 
+/**
+ * 「我看到了」。後端是 first-ack-wins（同學生兩位家長並發也只寫一次），
+ * 回傳最新的 milestone，直接以回傳值取代本地那筆即可。
+ */
+async function onAcknowledge(milestone: MilestoneItem): Promise<void> {
+  try {
+    const r = await acknowledgeMilestone(props.studentId, milestone.id)
+    const idx = milestones.value.findIndex((m) => m.id === milestone.id)
+    if (idx >= 0) milestones.value[idx] = r.data as MilestoneItem
+  } catch (e: unknown) {
+    toast.error((e as { displayMessage?: string })?.displayMessage || '確認失敗，請重試')
+  }
+}
+
 onMounted(load)
 watch(() => props.studentId, load)
 </script>
 
 <template>
-  <div v-if="loading" class="loading">載入中…</div>
-  <div v-else-if="milestones.length === 0" class="empty">尚無里程碑</div>
+  <SkeletonBlock v-if="loading" variant="row" :count="1" />
+  <EmptyState
+    v-else-if="milestones.length === 0"
+    variant="inline"
+    :icon="KawaiiStar"
+    title="還沒有里程碑"
+    description="老師記錄下孩子的成長時刻後會出現在這裡"
+  />
   <div v-else class="carousel">
     <MilestoneCard
       v-for="m in milestones"
       :key="m.id"
       :milestone="m"
       @react="(reaction) => onReact(m, reaction)"
+      @acknowledge="onAcknowledge(m)"
     />
   </div>
 </template>
