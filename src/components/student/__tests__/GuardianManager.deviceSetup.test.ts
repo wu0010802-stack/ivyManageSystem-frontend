@@ -112,6 +112,68 @@ describe('GuardianManager — 產生裝置設定碼', () => {
   })
 })
 
+describe('GuardianManager — 設定碼彌窗附家長端網址', () => {
+  it('網址以目前後台網域推導（多租戶下自動對應該分校）', async () => {
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as { parentAppUrl: string }
+
+    expect(vm.parentAppUrl).toBe(`${window.location.origin}/parent.html`)
+    // 不得寫死任何品牌網址，否則 B 校職員會把 A 校網址發給家長
+    expect(vm.parentAppUrl).not.toContain('ivypreschool.tw')
+    expect(vm.parentAppUrl).not.toContain('zeabur')
+  })
+
+  it('複製網址：寫進剪貼簿並提示成功', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as { copyParentAppUrl: () => Promise<void> }
+    await vm.copyParentAppUrl()
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/parent.html`)
+    expect(mockMessageSuccess).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('複製網址與設定碼：一次備好可直接貼給家長的訊息（含網址、碼、期限）', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    mockConfirm.mockResolvedValueOnce(undefined)
+    mockCreateGuardianDeviceSetupCode.mockResolvedValueOnce({
+      data: { code: 'ABCD1234EFGH', expires_at: '2026-08-11T10:00:00' },
+    })
+
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as {
+      handleIssueDeviceSetupCode: (row: typeof GUARDIAN_ROW) => Promise<void>
+      copyDeviceSetupMessage: () => Promise<void>
+    }
+    await vm.handleIssueDeviceSetupCode(GUARDIAN_ROW)
+    await vm.copyDeviceSetupMessage()
+
+    const text = writeText.mock.calls.at(-1)?.[0] as string
+    expect(text).toContain(`${window.location.origin}/parent.html`)
+    expect(text).toContain('ABCD1234EFGH')
+    // 期限沿用彌窗既有的格式化結果，這裡只確認有帶到、不固化格式
+    expect(text).toContain('有效期限')
+    expect(text).toContain('2026-08-11')
+    vi.unstubAllGlobals()
+  })
+
+  it('沒有設定碼時不複製訊息（避免貼出只有網址的半套內容）', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+
+    const wrapper = await mountManager()
+    const vm = wrapper.vm as unknown as { copyDeviceSetupMessage: () => Promise<void> }
+    await vm.copyDeviceSetupMessage()
+
+    expect(writeText).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+})
+
 describe('GuardianManager — 撤銷此監護人的所有裝置', () => {
   it('確認後成功撤銷：呼叫 revokeGuardianDevices 並用回傳數量顯示成功訊息', async () => {
     mockConfirm.mockResolvedValueOnce(undefined)

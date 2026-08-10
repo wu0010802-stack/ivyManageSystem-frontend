@@ -156,7 +156,20 @@
       <div class="binding-code-meta">
         過期時間：{{ deviceSetupCodeExpiresAt || '—' }}（預設 24 小時，一次性使用）
       </div>
+
+      <!--
+        家長端網址。設定碼是「在登入頁輸入」才有用的東西，但這個彌窗原本只給碼，
+        職員還得另外口頭告訴家長要去哪裡輸入。網址以目前後台的網域推導
+        （window.location.origin），多租戶下自動對應正確的分校網域。
+      -->
+      <div class="parent-url-label">家長要開啟的網址</div>
+      <div class="binding-code-display parent-url-display">
+        <span class="parent-url-text">{{ parentAppUrl }}</span>
+        <el-button size="small" @click="copyParentAppUrl">複製</el-button>
+      </div>
+
       <template #footer>
+        <el-button @click="copyDeviceSetupMessage">複製網址與設定碼</el-button>
         <el-button type="primary" @click="deviceSetupCodeVisible = false">我已抄寫</el-button>
       </template>
     </el-dialog>
@@ -393,6 +406,44 @@ async function copyDeviceSetupCode() {
   }
 }
 
+/**
+ * 家長端網址。
+ *
+ * 以目前後台的網域推導，多租戶下自動對應正確的分校（義華 / 仁武各自的
+ * 子網域），不寫死任何品牌網址。家長端是獨立 entry（parent.html）+ hash router。
+ */
+const parentAppUrl = computed<string>(() => {
+  if (typeof window === 'undefined') return '/parent.html'
+  return `${window.location.origin}/parent.html`
+})
+
+async function copyParentAppUrl() {
+  try {
+    await navigator.clipboard.writeText(parentAppUrl.value)
+    ElMessage.success('已複製家長端網址')
+  } catch {
+    ElMessage.warning('瀏覽器不支援複製，請手動抄寫')
+  }
+}
+
+/** 職員實際要做的事就是把網址與碼一起傳給家長，這裡一次備好可直接貼上的訊息。 */
+async function copyDeviceSetupMessage() {
+  if (!deviceSetupCode.value) return
+  const lines = [
+    `請開啟：${parentAppUrl.value}`,
+    `設定碼：${deviceSetupCode.value}`,
+  ]
+  if (deviceSetupCodeExpiresAt.value) {
+    lines.push(`有效期限：${deviceSetupCodeExpiresAt.value}（一次性使用）`)
+  }
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'))
+    ElMessage.success('已複製網址與設定碼')
+  } catch {
+    ElMessage.warning('瀏覽器不支援複製，請手動抄寫')
+  }
+}
+
 // 撤銷此監護人對應家長帳號的所有裝置（危險操作，二次確認）
 async function handleRevokeDevices(row: Record<string, unknown>) {
   try {
@@ -472,5 +523,26 @@ watch(() => props.studentId, fetchGuardians)
 .binding-code-meta {
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.parent-url-label {
+  margin-top: 14px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+/* 網址不是要人唸出來的字串，字級與字距都收斂，別跟設定碼搶視覺重量 */
+.parent-url-display {
+  margin-bottom: 0;
+}
+.parent-url-text {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, "Menlo", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+  user-select: all;
 }
 </style>
