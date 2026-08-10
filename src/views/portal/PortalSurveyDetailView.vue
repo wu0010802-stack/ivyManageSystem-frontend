@@ -77,21 +77,21 @@
         <template v-if="fillForm.attending">
           <el-form-item v-for="q in classStatus?.questions ?? []" :key="q.id" :label="q.question_text">
             <el-radio-group
-              v-if="q.question_type === 'single_choice'"
+              v-if="q.question_type === SURVEY_QUESTION_TYPES.SINGLE_CHOICE"
               :model-value="answerAsString(q.id)"
               @update:model-value="v => setAnswer(q.id, v)"
             >
               <el-radio v-for="opt in q.options ?? []" :key="opt" :label="opt">{{ opt }}</el-radio>
             </el-radio-group>
             <el-checkbox-group
-              v-else-if="q.question_type === 'multi_choice'"
+              v-else-if="q.question_type === SURVEY_QUESTION_TYPES.MULTI_CHOICE"
               :model-value="answerAsArray(q.id)"
               @update:model-value="v => setAnswer(q.id, v)"
             >
               <el-checkbox v-for="opt in q.options ?? []" :key="opt" :label="opt">{{ opt }}</el-checkbox>
             </el-checkbox-group>
             <el-input-number
-              v-else-if="q.question_type === 'number'"
+              v-else-if="q.question_type === SURVEY_QUESTION_TYPES.NUMBER"
               :model-value="answerAsNumber(q.id)"
               :min="0"
               @update:model-value="v => setAnswer(q.id, v)"
@@ -122,11 +122,13 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getPortalSurveyClassStatus, portalFillResponse, portalRemindSurvey } from '@/api/surveys'
+import { friendlyError } from '@/utils/errorMessages'
+import { SURVEY_QUESTION_TYPES, firstUnansweredRequiredQuestion, type SurveyQuestionType } from '@/constants/surveyQuestionTypes'
 
 interface QuestionOut {
   id: number
   question_text: string
-  question_type: 'single_choice' | 'multi_choice' | 'number' | 'text'
+  question_type: SurveyQuestionType
   options: string[] | null
   is_required: boolean
   sort_order: number
@@ -177,6 +179,8 @@ async function fetchAll() {
   try {
     const res = await getPortalSurveyClassStatus(surveyId)
     classStatus.value = res.data as unknown as ClassStatus
+  } catch (e) {
+    ElMessage.error(friendlyError('載入調查狀態失敗', e))
   } finally {
     loading.value = false
   }
@@ -190,10 +194,18 @@ function formatAnswer(q: QuestionOut, answers: Record<string, unknown>): string 
 }
 
 async function onRemind() {
-  await ElMessageBox.confirm('對尚未回覆的家長推播提醒？', '一鍵提醒')
-  const res = await portalRemindSurvey(surveyId)
-  const data = res.data as unknown as { sent: number }
-  ElMessage.success(`已推播 ${data.sent} 位家長`)
+  try {
+    await ElMessageBox.confirm('對尚未回覆的家長推播提醒？', '一鍵提醒')
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    const res = await portalRemindSurvey(surveyId)
+    const data = res.data as unknown as { sent: number }
+    ElMessage.success(`已推播 ${data.sent} 位家長`)
+  } catch (e) {
+    ElMessage.error(friendlyError('催覆失敗', e))
+  }
 }
 
 const fillDialogVisible = ref(false)
@@ -231,6 +243,13 @@ function openFillDialog(studentId: number, name: string, existing?: ResponseRow)
 
 async function onFillSubmit() {
   if (!fillTarget.value) return
+  if (fillForm.attending) {
+    const missing = firstUnansweredRequiredQuestion(classStatus.value?.questions ?? [], fillForm.answers)
+    if (missing) {
+      ElMessage.warning(`「${missing}」為必填`)
+      return
+    }
+  }
   fillSubmitting.value = true
   try {
     const answers = fillForm.attending ? fillForm.answers : {}
@@ -242,6 +261,8 @@ async function onFillSubmit() {
     ElMessage.success('已送出')
     fillDialogVisible.value = false
     await fetchAll()
+  } catch (e) {
+    ElMessage.error(friendlyError('代填送出失敗', e))
   } finally {
     fillSubmitting.value = false
   }

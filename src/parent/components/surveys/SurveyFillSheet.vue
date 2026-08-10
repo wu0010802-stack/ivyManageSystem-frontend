@@ -9,6 +9,7 @@
  */
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 import { toast } from '@/parent/utils/toast'
+import { SURVEY_QUESTION_TYPES, firstUnansweredRequiredQuestion } from '@/constants/surveyQuestionTypes'
 
 interface Question {
   id: number
@@ -71,12 +72,10 @@ function onSubmit(): void {
     return
   }
   if (props.formData.attending) {
-    for (const q of props.survey?.questions ?? []) {
-      const v = props.formData.answers[String(q.id)]
-      if (q.is_required && (v === undefined || v === '' || (Array.isArray(v) && !v.length))) {
-        toast.warn(`「${q.question_text}」為必填`)
-        return
-      }
+    const missing = firstUnansweredRequiredQuestion(props.survey?.questions ?? [], props.formData.answers)
+    if (missing) {
+      toast.warn(`「${missing}」為必填`)
+      return
     }
   } else if (Object.keys(props.formData.answers).length) {
     emit('update:form-data', { ...props.formData, answers: {} })
@@ -125,7 +124,7 @@ function onSubmit(): void {
         <fieldset v-for="q in survey?.questions ?? []" :key="q.id" class="field">
           <legend>{{ q.question_text }}<span v-if="q.is_required" class="required-mark">＊</span></legend>
 
-          <div v-if="q.question_type === 'single'" class="option-list">
+          <div v-if="q.question_type === SURVEY_QUESTION_TYPES.SINGLE_CHOICE" class="option-list">
             <label v-for="opt in q.options ?? []" :key="opt" class="option-item">
               <input
                 type="radio"
@@ -138,7 +137,7 @@ function onSubmit(): void {
             </label>
           </div>
 
-          <div v-else-if="q.question_type === 'multi'" class="option-list">
+          <div v-else-if="q.question_type === SURVEY_QUESTION_TYPES.MULTI_CHOICE" class="option-list">
             <label v-for="opt in q.options ?? []" :key="opt" class="option-item">
               <input
                 type="checkbox"
@@ -150,7 +149,7 @@ function onSubmit(): void {
           </div>
 
           <input
-            v-else-if="q.question_type === 'number'"
+            v-else-if="q.question_type === SURVEY_QUESTION_TYPES.NUMBER"
             type="number"
             min="0"
             class="text-input"

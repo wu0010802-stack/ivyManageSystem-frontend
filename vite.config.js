@@ -165,7 +165,14 @@ function manualChunks(id) {
         id.includes('/src/utils/tenant.ts') ||
         id.includes('/src/utils/tenantStorage.ts') ||
         id.includes('/src/utils/tenantBlocked.ts') ||
-        id.includes('/src/utils/tenantBoot.ts')
+        id.includes('/src/utils/tenantBoot.ts') ||
+        // surveyQuestionTypes：活動參加調查題型列舉/共用驗證純函式（零 import、
+        // EP-free），管理端 surveyFormModel/SurveyDetailView、教師端
+        // PortalSurveyDetailView、家長端 SurveyFillSheet 三端皆 import 同一份
+        // （2026-08-10 whole-branch review Critical 修復：三端原本各自手抄字面值，
+        // 家長端曾誤植不存在的 'single'/'multi'）。與 weekdaySchedule/publicCopy
+        // 同型：跨端共用純函式檔未 pin 時會被吸進單端 chunk，讓另一端靜態橋接整包。
+        id.includes('/src/constants/surveyQuestionTypes.ts')
     ) {
         return 'shared-common'
     }

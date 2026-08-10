@@ -1,8 +1,9 @@
 // 活動調查表單純函式模型（可測，不依賴 Vue）
+import { isSurveyChoiceType, type SurveyQuestionType } from '@/constants/surveyQuestionTypes'
 
 export interface QuestionDraft {
   question_text: string
-  question_type: 'single_choice' | 'multi_choice' | 'number' | 'text'
+  question_type: SurveyQuestionType
   options: string[] | null
   is_required: boolean
   sort_order: number
@@ -35,7 +36,7 @@ export function emptyDraft(): SurveyDraft {
 }
 
 function isChoiceType(type: QuestionDraft['question_type']): boolean {
-  return type === 'single_choice' || type === 'multi_choice'
+  return isSurveyChoiceType(type)
 }
 
 export function addQuestion(d: SurveyDraft, type: QuestionDraft['question_type']): void {

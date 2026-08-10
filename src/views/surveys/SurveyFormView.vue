@@ -37,10 +37,10 @@
           <el-card v-for="(q, i) in draft.questions" :key="i" class="question-card" shadow="never">
             <div class="question-row">
               <el-select v-model="q.question_type" placeholder="題型" style="width: 140px" :disabled="lockStructure" @change="onTypeChange(i)">
-                <el-option label="單選" value="single_choice" />
-                <el-option label="多選" value="multi_choice" />
-                <el-option label="數字" value="number" />
-                <el-option label="文字" value="text" />
+                <el-option label="單選" :value="SURVEY_QUESTION_TYPES.SINGLE_CHOICE" />
+                <el-option label="多選" :value="SURVEY_QUESTION_TYPES.MULTI_CHOICE" />
+                <el-option label="數字" :value="SURVEY_QUESTION_TYPES.NUMBER" />
+                <el-option label="文字" :value="SURVEY_QUESTION_TYPES.TEXT" />
               </el-select>
               <el-input v-model="q.question_text" placeholder="題目文字" maxlength="200" :disabled="lockStructure" />
               <el-switch v-model="q.is_required" active-text="必填" :disabled="lockStructure" />
@@ -59,10 +59,10 @@
             </div>
           </el-card>
           <div class="add-question-bar" v-if="!lockStructure">
-            <el-button @click="addQuestion(draft, 'single_choice')">+ 單選題</el-button>
-            <el-button @click="addQuestion(draft, 'multi_choice')">+ 多選題</el-button>
-            <el-button @click="addQuestion(draft, 'number')">+ 數字題</el-button>
-            <el-button @click="addQuestion(draft, 'text')">+ 文字題</el-button>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.SINGLE_CHOICE)">+ 單選題</el-button>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.MULTI_CHOICE)">+ 多選題</el-button>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.NUMBER)">+ 數字題</el-button>
+            <el-button @click="addQuestion(draft, SURVEY_QUESTION_TYPES.TEXT)">+ 文字題</el-button>
           </div>
         </div>
       </el-form-item>
@@ -83,6 +83,8 @@ import { ArrowDown, ArrowUp, Close, Delete } from '@element-plus/icons-vue'
 import { createSurvey, getSurvey, updateSurvey } from '@/api/surveys'
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
+import { friendlyError } from '@/utils/errorMessages'
+import { SURVEY_QUESTION_TYPES, isSurveyChoiceType } from '@/constants/surveyQuestionTypes'
 import {
   addQuestion,
   emptyDraft,
@@ -125,38 +127,47 @@ interface ClassroomOption { id: number; name: string }
 const classroomOptions = ref<ClassroomOption[]>([])
 
 async function loadClassrooms() {
-  const res = await getClassrooms({ current_only: true })
-  const list = (res.data ?? []) as ClassroomOption[]
-  classroomOptions.value = list.map(c => ({ id: c.id, name: c.name }))
+  try {
+    const res = await getClassrooms({ current_only: true })
+    const list = (res.data ?? []) as ClassroomOption[]
+    classroomOptions.value = list.map(c => ({ id: c.id, name: c.name }))
+  } catch (e) {
+    ElMessage.error(friendlyError('載入班級清單失敗', e))
+  }
 }
 
 async function loadSurvey() {
   if (!surveyId.value) return
-  const res = await getSurvey(surveyId.value)
-  const data = res.data as unknown as SurveyDraft & { status: string }
-  status.value = data.status
-  draft.value = {
-    title: data.title,
-    description: data.description ?? '',
-    event_date: data.event_date ?? null,
-    location: data.location ?? '',
-    fee_note: data.fee_note ?? '',
-    audience_type: data.audience_type,
-    classroom_ids: data.classroom_ids ?? [],
-    reply_deadline: data.reply_deadline,
-    questions: (data.questions ?? []).map(q => ({
-      question_text: q.question_text,
-      question_type: q.question_type,
-      options: q.options ?? null,
-      is_required: q.is_required,
-      sort_order: q.sort_order,
-    })),
+  try {
+    const res = await getSurvey(surveyId.value)
+    const data = res.data as unknown as SurveyDraft & { status: string }
+    status.value = data.status
+    draft.value = {
+      title: data.title,
+      description: data.description ?? '',
+      event_date: data.event_date ?? null,
+      location: data.location ?? '',
+      fee_note: data.fee_note ?? '',
+      audience_type: data.audience_type,
+      classroom_ids: data.classroom_ids ?? [],
+      reply_deadline: data.reply_deadline,
+      questions: (data.questions ?? []).map(q => ({
+        question_text: q.question_text,
+        question_type: q.question_type,
+        options: q.options ?? null,
+        is_required: q.is_required,
+        sort_order: q.sort_order,
+      })),
+    }
+  } catch (e) {
+    ElMessage.error(friendlyError('載入調查資料失敗', e))
+    router.replace({ name: 'surveys' })
   }
 }
 
 function onTypeChange(i: number) {
   const q = draft.value.questions[i]
-  const isChoice = q.question_type === 'single_choice' || q.question_type === 'multi_choice'
+  const isChoice = isSurveyChoiceType(q.question_type)
   q.options = isChoice ? (q.options && q.options.length >= 2 ? q.options : ['', '']) : null
 }
 
@@ -190,6 +201,8 @@ async function onSubmit() {
       ElMessage.success('已建立')
       router.push({ name: 'survey-detail', params: { id: data.id } })
     }
+  } catch (e) {
+    ElMessage.error(friendlyError(isEdit.value ? '儲存調查失敗' : '建立調查失敗', e))
   } finally {
     submitting.value = false
   }

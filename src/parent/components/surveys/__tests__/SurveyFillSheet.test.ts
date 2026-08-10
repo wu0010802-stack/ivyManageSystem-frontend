@@ -22,7 +22,7 @@ const SURVEY = {
   location: '動物園',
   reply_deadline: '2026-08-20',
   questions: [
-    { id: 1, question_text: '選擇車次', question_type: 'single', options: ['早班', '晚班'], is_required: true },
+    { id: 1, question_text: '選擇車次', question_type: 'single_choice', options: ['早班', '晚班'], is_required: true },
     { id: 2, question_text: '過敏原', question_type: 'text', options: null, is_required: false },
   ],
 }
@@ -83,6 +83,18 @@ describe('SurveyFillSheet（Task 17）', () => {
 
     expect(warnMock).not.toHaveBeenCalled()
     expect(w.emitted('submit')).toBeTruthy()
+    w.unmount()
+  })
+
+  it('single_choice/multi_choice 題型渲染成 radio/checkbox，而非落入 textarea（回歸：曾用不存在的 single/multi 字面值）', async () => {
+    const w = await mountSheet({ attending: true, answers: {}, note: '' })
+
+    const singleChoiceField = w.findAll('fieldset').find((f) => f.text().includes('選擇車次'))!
+    expect(singleChoiceField.find('input[type="radio"]').exists()).toBe(true)
+    expect(singleChoiceField.find('textarea').exists()).toBe(false)
+
+    const textField = w.findAll('fieldset').find((f) => f.text().includes('過敏原'))!
+    expect(textField.find('textarea').exists()).toBe(true)
     w.unmount()
   })
 })

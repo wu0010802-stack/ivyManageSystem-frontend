@@ -36,9 +36,9 @@
             <ul v-if="q.option_counts">
               <li v-for="(count, opt) in q.option_counts" :key="opt">{{ opt }}：{{ count }}</li>
             </ul>
-            <div v-else-if="q.question_type === 'number'">總和 {{ q.sum ?? 0 }}／平均 {{ (q.avg ?? 0).toFixed(1) }}</div>
+            <div v-else-if="q.question_type === SURVEY_QUESTION_TYPES.NUMBER">總和 {{ q.sum ?? 0 }}／平均 {{ (q.avg ?? 0).toFixed(1) }}</div>
             <ul v-else-if="q.texts">
-              <li v-for="(t, i) in q.texts" :key="i">{{ t }}</li>
+              <li v-for="(t, i) in q.texts" :key="i">{{ t.student_name }}：{{ t.value }}</li>
             </ul>
           </el-card>
         </div>
@@ -103,21 +103,21 @@
         <template v-if="fillForm.attending">
           <el-form-item v-for="q in survey?.questions ?? []" :key="q.id" :label="q.question_text">
             <el-radio-group
-              v-if="q.question_type === 'single_choice'"
+              v-if="q.question_type === SURVEY_QUESTION_TYPES.SINGLE_CHOICE"
               :model-value="answerAsString(q.id)"
               @update:model-value="v => setAnswer(q.id, v)"
             >
               <el-radio v-for="opt in q.options ?? []" :key="opt" :label="opt">{{ opt }}</el-radio>
             </el-radio-group>
             <el-checkbox-group
-              v-else-if="q.question_type === 'multi_choice'"
+              v-else-if="q.question_type === SURVEY_QUESTION_TYPES.MULTI_CHOICE"
               :model-value="answerAsArray(q.id)"
               @update:model-value="v => setAnswer(q.id, v)"
             >
               <el-checkbox v-for="opt in q.options ?? []" :key="opt" :label="opt">{{ opt }}</el-checkbox>
             </el-checkbox-group>
             <el-input-number
-              v-else-if="q.question_type === 'number'"
+              v-else-if="q.question_type === SURVEY_QUESTION_TYPES.NUMBER"
               :model-value="answerAsNumber(q.id)"
               :min="0"
               @update:model-value="v => setAnswer(q.id, v)"
@@ -150,11 +150,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { adminFillResponse, exportSurvey, getSurvey, getSurveyResponses, getSurveyStats, remindSurvey } from '@/api/surveys'
 import { hasPermission } from '@/utils/auth'
+import { friendlyError } from '@/utils/errorMessages'
+import { SURVEY_QUESTION_TYPES, firstUnansweredRequiredQuestion, type SurveyQuestionType } from '@/constants/surveyQuestionTypes'
 
 interface QuestionOut {
   id: number
   question_text: string
-  question_type: 'single_choice' | 'multi_choice' | 'number' | 'text'
+  question_type: SurveyQuestionType
   options: string[] | null
   is_required: boolean
   sort_order: number
@@ -175,7 +177,7 @@ interface StatsQuestion {
   option_counts?: Record<string, number> | null
   sum?: number | null
   avg?: number | null
-  texts?: string[] | null
+  texts?: { student_name: string; value: string }[] | null
 }
 interface Stats {
   denominator: number
@@ -227,6 +229,8 @@ async function fetchAll() {
     survey.value = surveyRes.data as unknown as SurveyDetail
     stats.value = statsRes.data as unknown as Stats
     responses.value = ((responsesRes.data as unknown as { items?: ResponseRow[] })?.items) ?? []
+  } catch (e) {
+    ElMessage.error(friendlyError('載入調查詳情失敗', e))
   } finally {
     loading.value = false
   }
@@ -240,24 +244,36 @@ function formatAnswer(q: QuestionOut, answers: Record<string, unknown>): string 
 }
 
 async function onRemind() {
-  await ElMessageBox.confirm('對尚未回覆的家長推播提醒？', '一鍵催覆')
-  const res = await remindSurvey(surveyId)
-  const data = res.data as unknown as { sent: number }
-  ElMessage.success(`已推播 ${data.sent} 位家長`)
+  try {
+    await ElMessageBox.confirm('對尚未回覆的家長推播提醒？', '一鍵催覆')
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    const res = await remindSurvey(surveyId)
+    const data = res.data as unknown as { sent: number }
+    ElMessage.success(`已推播 ${data.sent} 位家長`)
+  } catch (e) {
+    ElMessage.error(friendlyError('催覆失敗', e))
+  }
 }
 
 async function onExport() {
-  const res = await exportSurvey(surveyId)
-  const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `survey_${surveyId}.xlsx`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
-  ElMessage.success('匯出成功')
+  try {
+    const res = await exportSurvey(surveyId)
+    const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `survey_${surveyId}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+    ElMessage.success('匯出成功')
+  } catch (e) {
+    ElMessage.error(friendlyError('匯出 Excel 失敗', e))
+  }
 }
 
 const fillDialogVisible = ref(false)
@@ -295,6 +311,13 @@ function openFillDialog(row: ResponseRow) {
 
 async function onFillSubmit() {
   if (!fillTarget.value) return
+  if (fillForm.attending) {
+    const missing = firstUnansweredRequiredQuestion(survey.value?.questions ?? [], fillForm.answers)
+    if (missing) {
+      ElMessage.warning(`「${missing}」為必填`)
+      return
+    }
+  }
   fillSubmitting.value = true
   try {
     const answers = fillForm.attending ? fillForm.answers : {}
@@ -306,6 +329,8 @@ async function onFillSubmit() {
     ElMessage.success('已送出')
     fillDialogVisible.value = false
     await fetchAll()
+  } catch (e) {
+    ElMessage.error(friendlyError('代填送出失敗', e))
   } finally {
     fillSubmitting.value = false
   }
