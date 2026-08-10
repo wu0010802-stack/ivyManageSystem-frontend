@@ -1,21 +1,20 @@
 <template>
-  <div class="portal-survey-list" v-loading="loading">
-    <el-empty v-if="!loading && rows.length === 0" description="尚無調查資料" />
-
-    <div
-      v-for="row in rows"
-      :key="row.id"
-      class="survey-card"
-      data-test="survey-card"
-      @click="goDetail(row.id)"
-    >
-      <div class="survey-card__title">{{ row.title }}</div>
-      <div class="survey-card__meta">
-        <span>活動日：{{ row.event_date ?? '-' }}</span>
-        <span>回覆截止：{{ row.reply_deadline }}</span>
-        <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
-      </div>
-    </div>
+  <div class="portal-survey-list">
+    <el-table :data="rows" v-loading="loading" border @row-click="onRowClick">
+      <template #empty>
+        <el-empty description="尚無調查資料" />
+      </template>
+      <el-table-column label="標題" prop="title" min-width="160" />
+      <el-table-column label="活動日" width="110">
+        <template #default="{ row }">{{ row.event_date ?? '-' }}</template>
+      </el-table-column>
+      <el-table-column label="回覆截止" prop="reply_deadline" width="110" />
+      <el-table-column label="狀態" width="90">
+        <template #default="{ row }">
+          <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
+        </template>
+      </el-table-column>
+    </el-table>
   </div>
 </template>
 
@@ -60,30 +59,15 @@ async function fetchData() {
   }
 }
 
-function goDetail(id: number) {
-  router.push({ name: 'portal-survey-detail', params: { id } })
+function onRowClick(row: Row) {
+  router.push({ name: 'portal-survey-detail', params: { id: row.id } })
 }
 
 onMounted(fetchData)
 </script>
 
 <style scoped>
-.survey-card {
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  padding: 12px 16px;
-  margin-bottom: 10px;
+.portal-survey-list :deep(.el-table__row) {
   cursor: pointer;
-}
-.survey-card__title {
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-.survey-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
 }
 </style>
