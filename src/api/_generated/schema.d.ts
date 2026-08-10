@@ -4390,6 +4390,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bus/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trips
+         * @description 乘車歷史分頁查詢（任務一）：家長申訴「昨天接晚了」時查歷史班次用。
+         *
+         *     刻意不回座標——列表不需要，家庭住址 PII 能少下發就少下發；要看逐站座標走
+         *     `GET /trips/{trip_id}` 詳情。
+         *
+         *     站點統計（`stop_stats`）以單次 GROUP BY 聚合查詢算完，不逐 trip 查
+         *     （`_stop_stats_by_trip`），查詢數不隨頁內 trip 筆數線性成長。
+         */
+        get: operations["list_trips_api_bus_trips_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bus/trips/{trip_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Trip Detail
+         * @description 單筆班次詳情，含逐站明細（任務一）。查無回 404（訊息不帶座標／地址）。
+         */
+        get: operations["get_trip_detail_api_bus_trips__trip_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/bus/trips/today": {
         parameters: {
             query?: never;
@@ -10571,6 +10617,10 @@ export interface paths {
          *
          *     只回 `is_active=True`：停用路線本來就不該被開班（POST /trips 也只接受
          *     啟用中的路線，回 404），列在選單裡只會製造死巷。
+         *
+         *     租戶隔離（2026-08-10）：`BusRoute` 為 DIRECT（自帶 tenant_id），依當前
+         *     租戶過濾——沒有這層過濾，開班選單會把他校路線名稱一併列出，且提供
+         *     可枚舉的 route_id（見 `start_trip` 的租戶檢查）。
          */
         get: operations["list_routes_for_operator_api_portal_bus_routes_get"];
         put?: never;
@@ -18971,6 +19021,11 @@ export interface components {
         BusRouteStopOut: {
             /** Address Snapshot */
             address_snapshot?: string | null;
+            /**
+             * Address Stale
+             * @default false
+             */
+            address_stale: boolean;
             /** Lat */
             lat?: number | null;
             /** Lng */
@@ -19011,6 +19066,11 @@ export interface components {
             lat?: number | null;
             /** Lng */
             lng?: number | null;
+            /**
+             * On Leave
+             * @default false
+             */
+            on_leave: boolean;
             /** Seq */
             seq: number;
             /** Status */
@@ -19081,6 +19141,77 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * BusTripDetailOut
+         * @description 單筆班次詳情，含逐站明細（沿用 build_admin_stops_payload 的既有形狀，
+         *     已是管理端授權可見的內容，含座標）。
+         */
+        BusTripDetailOut: {
+            /** Auto Closed */
+            auto_closed: boolean;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Operator Employee Id */
+            operator_employee_id: number;
+            /** Operator Employee Name */
+            operator_employee_name?: string | null;
+            /** Route Id */
+            route_id: number;
+            /** Route Name */
+            route_name: string;
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Stops */
+            stops: components["schemas"]["BusStopAdminOut"][];
+            /** Trip Date */
+            trip_date: string;
+        };
+        /**
+         * BusTripListItemOut
+         * @description 乘車歷史列表單筆——刻意不含座標（列表不需要，家庭住址 PII 能少帶就少帶）。
+         */
+        BusTripListItemOut: {
+            /** Auto Closed */
+            auto_closed: boolean;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Operator Employee Id */
+            operator_employee_id: number;
+            /** Operator Employee Name */
+            operator_employee_name?: string | null;
+            /** Route Id */
+            route_id: number;
+            /** Route Name */
+            route_name: string;
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+            stop_stats: components["schemas"]["BusTripStopStatsOut"];
+            /** Trip Date */
+            trip_date: string;
+        };
+        /** BusTripListOut */
+        BusTripListOut: {
+            /** Items */
+            items: components["schemas"]["BusTripListItemOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
         /** BusTripOut */
         BusTripOut: {
             trip: components["schemas"]["BusTripAdminOut"];
@@ -19090,6 +19221,20 @@ export interface components {
             /** Stops */
             stops: components["schemas"]["BusStopAdminOut"][];
             trip?: components["schemas"]["BusTripAdminOut"] | null;
+        };
+        /**
+         * BusTripStopStatsOut
+         * @description 一次聚合查詢算完的站點統計（免逐 trip N+1）。
+         */
+        BusTripStopStatsOut: {
+            /** Departed */
+            departed: number;
+            /** Pending */
+            pending: number;
+            /** Skipped */
+            skipped: number;
+            /** Total */
+            total: number;
         };
         /** BusTripWithStopsOut */
         BusTripWithStopsOut: {
@@ -42077,6 +42222,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BusGeocodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trips_api_bus_trips_get: {
+        parameters: {
+            query?: {
+                /** @description trip_date 起（含） */
+                date_from?: string | null;
+                /** @description trip_date 迄（含） */
+                date_to?: string | null;
+                direction?: string | null;
+                /** @description 第幾頁（從 1 開始） */
+                page?: number;
+                /** @description 每頁筆數 */
+                page_size?: number;
+                route_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTripListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trip_detail_api_bus_trips__trip_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTripDetailOut"];
                 };
             };
             /** @description Validation Error */
