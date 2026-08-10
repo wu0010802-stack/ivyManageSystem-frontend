@@ -53,6 +53,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { closeSurvey, deleteSurvey, listSurveys, publishSurvey } from '@/api/surveys'
 import { hasPermission } from '@/utils/auth'
+import { friendlyError } from '@/utils/errorMessages'
 
 interface Row {
   id: number
@@ -90,30 +91,56 @@ async function fetchData() {
     const res = await listSurveys(statusTab.value === 'all' ? undefined : { status: statusTab.value })
     const data = res.data as unknown as { items?: Row[] }
     rows.value = data?.items ?? []
+  } catch (e) {
+    ElMessage.error(friendlyError('載入調查列表失敗', e))
   } finally {
     loading.value = false
   }
 }
 
 async function onPublish(row: Row) {
-  await ElMessageBox.confirm(`發布「${row.title}」並推播給對象家長？`, '發布調查')
-  await publishSurvey(row.id)
-  ElMessage.success('已發布並推播')
-  fetchData()
+  try {
+    await ElMessageBox.confirm(`發布「${row.title}」並推播給對象家長？`, '發布調查')
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    await publishSurvey(row.id)
+    ElMessage.success('已發布並推播')
+    fetchData()
+  } catch (e) {
+    ElMessage.error(friendlyError('發布調查失敗', e))
+  }
 }
 
 async function onClose(row: Row) {
-  await ElMessageBox.confirm(`結束「${row.title}」調查？結束後將無法再收取回覆。`, '結束調查')
-  await closeSurvey(row.id)
-  ElMessage.success('調查已結束')
-  fetchData()
+  try {
+    await ElMessageBox.confirm(`結束「${row.title}」調查？結束後將無法再收取回覆。`, '結束調查')
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    await closeSurvey(row.id)
+    ElMessage.success('調查已結束')
+    fetchData()
+  } catch (e) {
+    ElMessage.error(friendlyError('結束調查失敗', e))
+  }
 }
 
 async function onDelete(row: Row) {
-  await ElMessageBox.confirm(`刪除「${row.title}」草稿？此動作無法復原。`, '刪除調查', { type: 'warning' })
-  await deleteSurvey(row.id)
-  ElMessage.success('已刪除')
-  fetchData()
+  try {
+    await ElMessageBox.confirm(`刪除「${row.title}」草稿？此動作無法復原。`, '刪除調查', { type: 'warning' })
+  } catch {
+    return // 使用者取消
+  }
+  try {
+    await deleteSurvey(row.id)
+    ElMessage.success('已刪除')
+    fetchData()
+  } catch (e) {
+    ElMessage.error(friendlyError('刪除調查失敗', e))
+  }
 }
 
 onMounted(fetchData)

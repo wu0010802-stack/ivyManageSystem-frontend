@@ -21,7 +21,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { listPortalSurveys } from '@/api/surveys'
+import { friendlyError } from '@/utils/errorMessages'
 
 interface Row {
   id: number
@@ -54,6 +56,8 @@ async function fetchData() {
     const res = await listPortalSurveys()
     const data = res.data as unknown as { items?: Row[] }
     rows.value = data?.items ?? []
+  } catch (e) {
+    ElMessage.error(friendlyError('載入調查列表失敗', e))
   } finally {
     loading.value = false
   }
