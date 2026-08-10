@@ -163,7 +163,7 @@ const routes: RouteRecordRaw[] = [
       path: '/calendar',
       name: 'parent-calendar',
       component: () => import('./views/CalendarView.vue'),
-      meta: { title: '本週行程', tab: 'home', showBack: true },
+      meta: { title: '行事曆', tab: 'home', showBack: true },
     },
     {
       path: '/contact-book',
