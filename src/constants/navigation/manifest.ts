@@ -517,7 +517,8 @@ export const NAVIGATION_MANIFEST = {
       // ⚠ 與 brief 草稿的差異（已跑 manifestRouteParity 驗證修正）：/surveys/:id/edit
       // 是動態路由，實際導覽路徑帶真實數字 id（如 /surveys/123/edit），extraRoutes
       // 的 permission rule 只做字面比對——寫 literal ':id' 字串永遠比對不到真實路徑，
-      // 等同該頁在路由層完全不設防。改採 /employees 既有慣例：/surveys 掛
+      // 規則命中不到即回空集合，manifest 權限判定 default-deny，等同把有權限的人
+      // 一起擋下（並非「完全不設防」）。改採 /employees 既有慣例：/surveys 掛
       // routePrefix: true + SURVEYS_READ 涵蓋 list/detail/edit 全部子路由，WRITE 純作
       // actions 級的按鈕/表單顯示控制（實際寫入仍由後端 SURVEYS_WRITE 守衛擋）；
       // 唯一例外是 /surveys/new——純靜態路徑（無參數段），可用 exact extraRoute
