@@ -1,5 +1,5 @@
 <template>
-  <div class="survey-form">
+  <div v-if="authorized" class="survey-form">
     <el-form label-width="100px" :disabled="locked">
       <el-form-item label="標題" required>
         <el-input v-model="draft.title" maxlength="100" show-word-limit />
@@ -95,10 +95,13 @@ import {
 const route = useRoute()
 const router = useRouter()
 
-// 驗收條件（2026-08-10 controller 追加，Task 13 審查裁定）：
+// 驗收條件（2026-08-10 controller 追加，Task 13 審查裁定；2026-08-10 審查修正②：
+// 光是導頁不夠，導頁完成前 template 會以完全可編輯狀態渲染、onMounted 仍會照發請求，
+// 必須用 authorized 旗標同時擋渲染與資料載入）：
 // 動態路由 /surveys/:id/edit 在路由層無法表達 SURVEYS_WRITE 門檻（僅 SURVEYS_READ prefix 涵蓋），
-// 本頁必須自行檢查權限，無權者導回列表。
-if (!hasPermission('SURVEYS_WRITE')) {
+// 本頁必須自行檢查權限，無權者導回列表、不渲染表單、不發任何請求。
+const authorized = hasPermission('SURVEYS_WRITE')
+if (!authorized) {
   ElMessage.warning('您沒有管理調查的權限')
   router.replace({ name: 'surveys' })
 }
@@ -193,6 +196,7 @@ async function onSubmit() {
 }
 
 onMounted(async () => {
+  if (!authorized) return
   await loadClassrooms()
   if (isEdit.value) await loadSurvey()
 })

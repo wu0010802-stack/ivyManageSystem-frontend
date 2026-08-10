@@ -34,7 +34,7 @@
         <template #default="{ row }">
           <el-button size="small" @click="router.push({ name: 'survey-detail', params: { id: row.id } })">詳情</el-button>
           <el-button
-            v-if="canWrite && row.status === 'draft'"
+            v-if="canWrite && row.status !== 'closed'"
             size="small"
             @click="router.push({ name: 'survey-edit', params: { id: row.id } })"
           >編輯</el-button>

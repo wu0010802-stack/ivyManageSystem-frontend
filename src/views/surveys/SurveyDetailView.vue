@@ -2,7 +2,13 @@
   <div class="survey-detail" v-loading="loading">
     <div class="header">
       <h2>{{ survey?.title }}</h2>
-      <el-button :icon="Download" @click="onExport">匯出 Excel</el-button>
+      <div class="header__actions">
+        <el-button
+          v-if="canWrite && survey?.status === 'published'"
+          @click="router.push({ name: 'survey-edit', params: { id: surveyId } })"
+        >編輯</el-button>
+        <el-button :icon="Download" @click="onExport">匯出 Excel</el-button>
+      </div>
     </div>
 
     <el-tabs v-model="activeTab">
@@ -139,7 +145,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { adminFillResponse, exportSurvey, getSurvey, getSurveyResponses, getSurveyStats, remindSurvey } from '@/api/surveys'
@@ -194,6 +200,7 @@ interface ResponseRow {
 }
 
 const route = useRoute()
+const router = useRouter()
 const canWrite = hasPermission('SURVEYS_WRITE')
 const surveyId = Number(route.params.id)
 
@@ -312,6 +319,10 @@ onMounted(fetchAll)
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.header__actions {
+  display: flex;
+  gap: 8px;
 }
 .stat-cards {
   display: flex;
