@@ -271,8 +271,14 @@ const avgAttendanceRate = computed(() => {
   return rate != null ? `${Math.round(rate * 100)}%` : '-'
 })
 
+// 全園參與率／待審核人次取自統計表的總計列（分子是不重複學生數，摘要端點沒有），
+// 這樣卡片與表格底下的總計必定同值，不會出現兩個打架的參與率。
 const statCards = computed(() =>
-  buildStatCards(statistics.value as Record<string, number | null | undefined>, avgAttendanceRate.value),
+  buildStatCards(
+    statistics.value as Record<string, number | null | undefined>,
+    avgAttendanceRate.value,
+    dashboardData.value?.grand_total ?? null,
+  ),
 )
 
 // Why: 後端回傳 grades > classrooms 的樹狀結構，但 el-table 只接受平面陣列。
