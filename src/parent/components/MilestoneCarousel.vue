@@ -8,7 +8,6 @@ import {
 import { toast } from '../utils/toast'
 import MilestoneCard from './MilestoneCard.vue'
 import SkeletonBlock from './SkeletonBlock.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 interface MilestoneItem {
@@ -74,13 +73,18 @@ watch(() => props.studentId, load)
 
 <template>
   <SkeletonBlock v-if="loading" variant="row" :count="1" />
-  <EmptyState
-    v-else-if="milestones.length === 0"
-    variant="inline"
-    :icon="KawaiiStar"
-    title="還沒有里程碑"
-    description="老師記錄下孩子的成長時刻後會出現在這裡"
-  />
+  <!--
+    刻意不用共用的 @/components/common/EmptyState：它 import
+    @element-plus/icons-vue，而本元件被 rollup 打包進 parent-app chunk，
+    等於讓家長端 entry 靜態橋接 admin-core（實測 parent 首屏 gz
+    227.9KB → 492.0KB，check-entry-chunks gate 直接擋下 build）。
+    lazy route（如 ContactBookView）有自己的 chunk 所以用它沒問題。
+  -->
+  <div v-else-if="milestones.length === 0" class="empty">
+    <KawaiiStar :size="32" decorative />
+    <p class="empty-title">還沒有里程碑</p>
+    <p class="empty-desc">老師記錄下孩子的成長時刻後會出現在這裡</p>
+  </div>
   <div v-else class="carousel">
     <MilestoneCard
       v-for="m in milestones"
@@ -102,5 +106,25 @@ watch(() => props.studentId, load)
   -webkit-overflow-scrolling: touch;
 }
 .carousel > * { scroll-snap-align: start; }
-.loading, .empty { padding: 24px; color: var(--text-tertiary); text-align: center; font-size: 14px; }
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--pt-text-muted, #6b5e54);
+}
+.empty-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pt-text-strong, #392a1c);
+}
+.empty-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
 </style>

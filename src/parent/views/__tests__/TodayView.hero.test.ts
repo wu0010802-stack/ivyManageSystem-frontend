@@ -196,7 +196,10 @@ describe('TodayView — 尚未綁定子女', () => {
     const wrapper = await mountToday()
 
     expect(wrapper.findComponent(ContactBookDayCard).exists()).toBe(false)
-    expect(wrapper.html()).toContain('empty-state-stub')
+    // 首屏不引入共用 EmptyState（會把 admin-core chunk 拖進家長端首屏），
+    // 改用本地 markup，斷言落在文案與 class 上。
+    expect(wrapper.find('.unbound').exists()).toBe(true)
+    expect(wrapper.text()).toContain('尚未綁定子女')
 
     wrapper.unmount()
   })

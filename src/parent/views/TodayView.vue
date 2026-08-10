@@ -17,8 +17,6 @@ import ChildrenStrip from '../components/home/ChildrenStrip.vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import PendingSignBanner from '../components/home/PendingSignBanner.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
-import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 
@@ -255,13 +253,18 @@ function go(path: string) {
       今日卡 = 首頁 hero。PRODUCT.md 的成功定義是「3 秒內看到孩子當日狀態」，
       所以這張卡排在所有行政事項（待繳/待簽/娃娃車）之前，且三態都佔同一個位置。
     -->
+    <!--
+      刻意不用共用的 @/components/common/EmptyState：那支沒被 pin 進 vite.config
+      的 shared-common，落在 admin-core chunk。首頁是家長端 entry 的首屏，靜態
+      import 它會把整包 admin-core 拖進首屏（實測 gz 227.9KB → 492.0KB，
+      check-entry-chunks gate 直接擋下 build）。lazy route（如 ContactBookView）
+      用它沒問題，首屏元件不行。
+    -->
     <section v-if="isUnbound" class="cb-hero">
-      <EmptyState
-        variant="mobile"
-        :icon="KawaiiStar"
-        title="尚未綁定子女"
-        description="可從右上角個人選單加綁，或請園所協助。"
-      />
+      <div class="unbound">
+        <p class="unbound-title">尚未綁定子女</p>
+        <p class="unbound-desc">可從右上角個人選單加綁，或請園所協助。</p>
+      </div>
     </section>
 
     <section v-else-if="selectedChild" class="cb-hero">
@@ -422,6 +425,30 @@ function go(path: string) {
 
 /* 今日聯絡簿 hero 區 */
 .cb-hero { padding: 0 var(--space-4, 16px); }
+
+/* 尚未綁定子女（首屏不引入共用 EmptyState，見 template 註解） */
+.unbound {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-8, 32px) var(--space-5, 20px);
+  text-align: center;
+  background: var(--cream, #fffcf2);
+  border: 1px solid rgba(13, 144, 83, 0.12);
+  border-radius: 20px;
+}
+.unbound-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+}
+.unbound-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--pt-text-muted);
+}
 
 .cb-open {
   display: inline-flex;
