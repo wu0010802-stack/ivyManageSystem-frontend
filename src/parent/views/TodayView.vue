@@ -114,9 +114,17 @@ const busTileValue = computed(() => {
   return `還有 ${busInfo.value.stopsAhead} 站`
 })
 
+// request-sequence guard：下拉刷新與重試可能重疊觸發 loadBusToday（見
+// onMounted / pullRefresh / refresh 三個呼叫點），較舊的回應可能晚到覆蓋較新
+// 的回應，讓「還有 N 站」小卡短暫顯示過期資訊。做法與上方 loadContactBook 的
+// seq guard 相同：只套用最新一次呼叫的結果，較舊的回應（含錯誤）一律丟棄。
+let busSeq = 0
+
 async function loadBusToday() {
+  const mySeq = ++busSeq
   try {
     const res = await getBusToday()
+    if (mySeq !== busSeq) return // 已有更新請求，丟棄此舊回應
     const data = res.data as {
       trip?: { status?: string } | null
       children?: { stop_status?: string; stops_ahead?: number }[]
@@ -126,6 +134,7 @@ async function loadBusToday() {
       ? { stopStatus: child.stop_status ?? 'pending', stopsAhead: child.stops_ahead ?? 0 }
       : null
   } catch {
+    if (mySeq !== busSeq) return // 較舊請求的錯誤靜默忽略
     // 娃娃車卡失敗不擋首頁其他區塊（真正需要誠實降級的是 /bus 頁）
     busInfo.value = null
   }
