@@ -575,6 +575,31 @@ export const routes: RouteRecordRaw[] = [
             component: () => import('../views/activity/ActivityAttendanceView.vue'),
             meta: { title: '點名管理', parentTitle: MODULE_TERMS.activity }
         },
+        // ============ 活動調查（Task 13） ============
+        {
+            path: '/surveys',
+            name: 'surveys',
+            component: () => import('../views/surveys/SurveyListView.vue'),
+            meta: { title: '活動調查' }
+        },
+        {
+            path: '/surveys/new',
+            name: 'survey-new',
+            component: () => import('../views/surveys/SurveyFormView.vue'),
+            meta: { title: '建立調查', parentTitle: '活動調查' }
+        },
+        {
+            path: '/surveys/:id/edit',
+            name: 'survey-edit',
+            component: () => import('../views/surveys/SurveyFormView.vue'),
+            meta: { title: '編輯調查', parentTitle: '活動調查' }
+        },
+        {
+            path: '/surveys/:id',
+            name: 'survey-detail',
+            component: () => import('../views/surveys/SurveyDetailView.vue'),
+            meta: { title: '調查詳情', parentTitle: '活動調查' }
+        },
         // ============ 公開前台 ============
         {
             path: '/public/activity',
@@ -814,6 +839,18 @@ export const routes: RouteRecordRaw[] = [
                     name: 'portal-leave-history',
                     component: () => import('../views/portal/PortalLeaveHistoryView.vue'),
                     meta: { portal: true, title: '補休歷史' },
+                },
+                {
+                    path: 'surveys',
+                    name: 'portal-surveys',
+                    component: () => import('../views/portal/PortalSurveysView.vue'),
+                    meta: { title: '活動調查' },
+                },
+                {
+                    path: 'surveys/:id',
+                    name: 'portal-survey-detail',
+                    component: () => import('../views/portal/PortalSurveyDetailView.vue'),
+                    meta: { title: '班級回覆狀況' },
                 },
             ],
         },

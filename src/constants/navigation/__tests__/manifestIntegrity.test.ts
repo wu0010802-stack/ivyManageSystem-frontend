@@ -232,6 +232,9 @@ const INTENTIONAL_DIVERGENCE = {
     '/platform/audit × PLATFORM_AUDIT_VIEW',
     // 2026-08-10 娃娃車乘車歷史頁新增（fixture 凍結於 2026-07-31，此路由更晚才有）。
     '/bus-history × BUS_READ',
+    // 2026-08-10 活動參加調查表（Task 13）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
+    '/surveys × SURVEYS_READ × prefix',
+    '/surveys/new × SURVEYS_WRITE',
   ],
 }
 
