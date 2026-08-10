@@ -1,10 +1,8 @@
 // src/parent/api/childMeasurements.ts
 import api from './index'
 
-// TODO(parent-portal): 後端支援逐筆量測記錄，前端「健康紀錄」頁
-// （ChildMeasurementsView.vue）目前只用 fetchChildMeasurementChart 畫成長曲線，
-// 缺一個「查看歷次量測明細」的清單畫面（2026-07-31 家長端體檢：孤兒 API，
-// 非死碼，是功能缺口）。
+// 逐筆量測明細（含成長曲線畫不出來的頭圍與視力）。
+// UI 在 ChildMeasurementsView 的「歷次紀錄」區塊（2026-08-10 補；此前是孤兒 API）。
 export const fetchChildMeasurements = (studentId: number, params: unknown = {}) =>
   api.get('/parent/measurements', { params: { student_id: studentId, ...(params as object) } })
 
