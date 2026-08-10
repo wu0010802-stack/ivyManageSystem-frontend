@@ -16,7 +16,6 @@ import StatusPill from '../components/StatusPill.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
 import SurveyFillSheet from '../components/surveys/SurveyFillSheet.vue'
 
 interface Question {
@@ -79,6 +78,13 @@ function pillFor(card: Card): { label: string; tone: 'ok' | 'warn' | 'danger' | 
   return { label: '已截止未回覆', tone: 'danger' }
 }
 
+// 已截止（!is_open）一律不可再填寫/修改——後端對截止/closed 一律 400。
+// 未附加唯讀檢視模式（brief 未要求，YAGNI）：截止後的卡片直接不可點，避免死路型 UX
+// （填完送出才吃 400）。
+function canFill(card: Card): boolean {
+  return card.is_open
+}
+
 const showSheet = ref(false)
 const submitting = ref(false)
 const activeCard = ref<Card | null>(null)
@@ -131,7 +137,6 @@ async function fetchData() {
   try {
     const { data } = await listParentSurveys()
     cards.value = (data as { items?: Card[] })?.items || []
-    await maybeOpenDeepLink()
   } catch (err) {
     loadError.value = true
     _toastFriendly(err, '載入失敗')
@@ -140,7 +145,14 @@ async function fetchData() {
   }
 }
 
+// 深連結只在「首次掛載後的首次成功載入」處理一次：
+// fetchData 之後還會被送出成功／下拉刷新重呼叫，若深連結邏輯留在 fetchData 內，
+// 會導致送出後 sheet 立刻被重新彈開（deep-link 重放）。用 deepLinkHandled 一次性 guard。
+const deepLinkHandled = ref(false)
+
 async function maybeOpenDeepLink() {
+  if (deepLinkHandled.value) return
+  deepLinkHandled.value = true
   const surveyId = route.params.surveyId
   if (!surveyId) return
   const id = Number(surveyId)
@@ -152,7 +164,10 @@ async function maybeOpenDeepLink() {
   await openFill(card)
 }
 
-onMounted(fetchData)
+onMounted(async () => {
+  await fetchData()
+  await maybeOpenDeepLink()
+})
 
 async function pullRefresh() {
   await fetchData()
@@ -179,18 +194,16 @@ defineExpose({ pullRefresh })
     <MobileErrorRetry v-else-if="loadError && cards.length === 0" @retry="fetchData" />
 
     <template v-else>
-      <EmptyState
-        v-if="visibleCards.length === 0"
-        variant="mobile"
-        title="目前沒有調查"
-      />
+      <p v-if="visibleCards.length === 0" class="surveys-empty">目前沒有調查</p>
 
       <button
         v-for="card in visibleCards"
         :key="`${card.survey_id}-${card.student_id}`"
         type="button"
         class="survey-card"
-        @click="openFill(card)"
+        :class="{ 'survey-card--readonly': !canFill(card) }"
+        :disabled="!canFill(card)"
+        @click="canFill(card) && openFill(card)"
       >
         <div class="survey-card-head">
           <span class="survey-card-title">{{ card.title }}</span>
@@ -231,6 +244,14 @@ defineExpose({ pullRefresh })
   margin: 0;
 }
 
+.surveys-empty {
+  color: var(--pt-text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 24px 12px;
+  margin: 0;
+}
+
 .survey-card {
   display: flex;
   flex-direction: column;
@@ -242,6 +263,11 @@ defineExpose({ pullRefresh })
   background: var(--pt-surface-card, var(--neutral-0));
   cursor: pointer;
   font-family: inherit;
+}
+
+.survey-card--readonly {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .survey-card-head {
