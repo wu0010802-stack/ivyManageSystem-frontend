@@ -88,5 +88,14 @@ export const replaceBusRouteStops = (
 export const geocodeBusStudent = (studentId: number) =>
   api.post('/bus/routes/geocode', { student_id: studentId })
 
+/**
+ * 改名／啟用停用（`PATCH /bus/routes/{id}`，`BUS_WRITE`）。兩欄皆選填但至少要帶一項；
+ * `is_active: false` 若該路線目前有進行中班次會 409。
+ */
+export const updateBusRoute = (
+  routeId: number,
+  payload: { name?: string; is_active?: boolean },
+) => api.patch(`/bus/routes/${routeId}`, payload)
+
 export const getBusTripToday = (routeId?: number | null) =>
   api.get('/bus/trips/today', { params: routeId ? { route_id: routeId } : {} })

@@ -5,10 +5,12 @@
  * 業務邏輯全在 `@/composables/useBusRouteEditor`（含 replace-all 語意、未儲存保護、
  * 站數上限、候選名單過濾）；本檔只負責呈現與地圖微調。
  *
- * ⚠ 後端目前**沒有**路線改名／停用／刪除端點（`api/bus/admin_routes.py` 只有
- * GET routes / POST routes / PUT stops / POST geocode）。因此本頁：
- * - 建立路線一律先確認（建錯了刪不掉）
- * - 只顯示 `is_active`，不提供停用開關（做了也沒有端點可打）
+ * ⚠ 後端**沒有**路線刪除端點（`api/bus/admin_routes.py` 只有 GET routes /
+ * POST routes / PATCH routes/{id} / PUT stops / POST geocode）。因此本頁：
+ * - 建立路線一律先確認（建錯了刪不掉，只能事後改名或停用）
+ * - 改名／停用走 `PATCH /bus/routes/{id}`（`editor.updateRoute`）：停用需二次確認
+ *   （司機開班選單會看不到這條路線），已停用路線仍留在下拉選單並標示，否則停用後
+ *   就再也改不回來
  *
  * 隱私：站點座標＝家庭住址。座標只交給 Leaflet 畫點與表格顯示（管理端有
  * `BUS_WRITE`，看得到是合理的），但不得進 console / Sentry / URL query /
@@ -17,9 +19,11 @@
  * Leaflet 一律**動態** import（含 CSS），比照 `RecruitmentAddressHeatmap.vue` 與
  * 家長端 `BusTrackingView.vue`：靜態 import 會把 ~150KB 的地圖庫橋接進首屏 bundle。
  */
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import {
+  computed, nextTick, onBeforeUnmount, onMounted, ref,
+} from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getBranding } from '@/composables/useTenantBranding'
 import {
@@ -29,7 +33,7 @@ import {
 const editor = useBusRouteEditor()
 const {
   routes, activeRoute, activeRouteId, direction, stops, candidates,
-  loading, saving, creating, geocodingStudentId, dirty, missingCoordinateCount,
+  loading, saving, creating, updatingRoute, geocodingStudentId, dirty, missingCoordinateCount,
   loadFailed, studentsFailed,
 } = editor
 
@@ -37,6 +41,49 @@ const pickStudentId = ref<number | null>(null)
 const mapDialogVisible = ref(false)
 const tuneStudentId = ref<number | null>(null)
 const tuneMapEl = ref<HTMLElement | null>(null)
+
+// ── 改名／啟用停用（PATCH /bus/routes/{id}）─────────────────────────────────
+const editDialogVisible = ref(false)
+const editName = ref('')
+const editActive = ref(true)
+
+function openEditDialog(): void {
+  const route = activeRoute.value
+  if (!route) return
+  editName.value = route.name
+  editActive.value = route.is_active
+  editDialogVisible.value = true
+}
+
+async function onSubmitEdit(): Promise<void> {
+  const route = activeRoute.value
+  if (!route) return
+  const trimmedName = editName.value.trim()
+  if (!trimmedName) {
+    ElMessage.error('請輸入路線名稱')
+    return
+  }
+  const payload: { name?: string; is_active?: boolean } = {}
+  if (trimmedName !== route.name) payload.name = trimmedName
+  if (editActive.value !== route.is_active) payload.is_active = editActive.value
+  if (Object.keys(payload).length === 0) {
+    editDialogVisible.value = false
+    return
+  }
+  if (payload.is_active === false) {
+    try {
+      await ElMessageBox.confirm(
+        `停用「${route.name}」後，司機在開班選單將看不到這條路線，確定要停用嗎？`,
+        '停用路線',
+        { type: 'warning', confirmButtonText: '停用', cancelButtonText: '取消' },
+      )
+    } catch {
+      return
+    }
+  }
+  const ok = await editor.updateRoute(route.id, payload)
+  if (ok) editDialogVisible.value = false
+}
 
 const tuneStop = computed(
   () => stops.value.find((s) => s.student_id === tuneStudentId.value) ?? null,
@@ -174,7 +221,18 @@ onBeforeRouteLeave(async () => {
   }
 })
 
-onBeforeUnmount(destroyMap)
+// 關分頁／重新整理的未儲存保護；SPA 內部導航已由上面的 onBeforeRouteLeave 涵蓋，
+// 這兩者互不重疊（同慣例見 ActivityPublicView.vue／ActivityPublicQueryView.vue）。
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!dirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+onMounted(() => window.addEventListener('beforeunload', handleBeforeUnload))
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  destroyMap()
+})
 </script>
 
 <template>
@@ -234,6 +292,14 @@ onBeforeUnmount(destroyMap)
             :value="r.id"
           />
         </el-select>
+        <el-button
+          v-if="activeRoute"
+          size="small"
+          data-testid="bus-route-edit"
+          @click="openEditDialog"
+        >
+          編輯路線
+        </el-button>
         <el-tag v-if="activeRoute && !activeRoute.is_active" type="info">此路線已停用，不會出現在開班選單</el-tag>
       </div>
 
@@ -337,6 +403,33 @@ onBeforeUnmount(destroyMap)
         aria-label 又會被多數螢幕閱讀器忽略。region 兩者兼得。
       -->
       <div ref="tuneMapEl" class="bus-routes__map" role="region" aria-label="停靠點位置微調地圖" />
+    </el-dialog>
+
+    <el-dialog v-model="editDialogVisible" title="編輯路線">
+      <el-form label-width="80px">
+        <el-form-item label="路線名稱">
+          <el-input v-model="editName" data-testid="bus-route-edit-name" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="啟用狀態">
+          <el-switch
+            v-model="editActive"
+            data-testid="bus-route-edit-active"
+            active-text="啟用中"
+            inactive-text="已停用（司機開班選單看不到）"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button data-testid="bus-route-edit-cancel" @click="editDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="updatingRoute"
+          data-testid="bus-route-edit-save"
+          @click="onSubmitEdit"
+        >
+          儲存
+        </el-button>
+      </template>
     </el-dialog>
   </div>
 </template>

@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/api/index', () => ({
-  default: { defaults: { baseURL: '/api' }, get: vi.fn(), post: vi.fn(), put: vi.fn() },
+  default: {
+    defaults: { baseURL: '/api' }, get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(),
+  },
 }))
 
 import api from '@/api/index'
 import {
   startBusTrip, getActiveBusTrip, postBusPings, departBusStop, skipBusStop,
   undoBusStop, completeBusTrip, listPortalBusRoutes, listBusRoutes, createBusRoute,
-  replaceBusRouteStops, geocodeBusStudent, getBusTripToday,
+  replaceBusRouteStops, geocodeBusStudent, getBusTripToday, updateBusRoute,
 } from '../bus'
 
 beforeEach(() => { vi.clearAllMocks() })
@@ -89,5 +91,12 @@ describe('娃娃車 admin API', () => {
     expect(api.get).toHaveBeenLastCalledWith('/bus/trips/today', { params: { route_id: 3 } })
     getBusTripToday()
     expect(api.get).toHaveBeenLastCalledWith('/bus/trips/today', { params: {} })
+  })
+
+  it('改名／啟用停用 PATCH /bus/routes/{id}，只帶有變動的欄位', () => {
+    updateBusRoute(3, { name: 'A 線新名' })
+    expect(api.patch).toHaveBeenLastCalledWith('/bus/routes/3', { name: 'A 線新名' })
+    updateBusRoute(3, { is_active: false })
+    expect(api.patch).toHaveBeenLastCalledWith('/bus/routes/3', { is_active: false })
   })
 })

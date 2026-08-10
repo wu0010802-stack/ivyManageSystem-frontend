@@ -35,7 +35,7 @@
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  createBusRoute, geocodeBusStudent, listBusRoutes, replaceBusRouteStops,
+  createBusRoute, geocodeBusStudent, listBusRoutes, replaceBusRouteStops, updateBusRoute,
 } from '@/api/bus'
 import { getStudents } from '@/api/students'
 import { apiError } from '@/utils/error'
@@ -78,6 +78,11 @@ function asNum(v: unknown): number | null {
 function asStr(v: unknown): string | null {
   return typeof v === 'string' ? v : null
 }
+/** HTTP status，用來在 apiError 的通用 fallback 之外對 409 給更明確的訊息。 */
+function errorStatus(e: unknown): number | null {
+  const r = asRecord((e as { response?: unknown } | null)?.response)
+  return r ? asNum(r.status) : null
+}
 
 function normalizeStops(raw: unknown): BusStopDraft[] {
   if (!Array.isArray(raw)) return []
@@ -111,6 +116,8 @@ export function useBusRouteEditor() {
   const loading = ref(true)
   const saving = ref(false)
   const creating = ref(false)
+  /** 改名／啟用停用（PATCH）的 in-flight 旗標，與 saving/creating 同層級。 */
+  const updatingRoute = ref(false)
   const geocodingStudentId = ref<number | null>(null)
   /** 路線清單載入失敗：`routes` 是空的，但**不是**「園裡沒有路線」。 */
   const loadFailed = ref(false)
@@ -280,6 +287,39 @@ export function useBusRouteEditor() {
     }
   }
 
+  /**
+   * 改名／啟用停用（`PATCH /bus/routes/{id}`）。與 `selectRoute`/`setDirection`
+   * 同一條「未儲存編輯先確認」防線：更新成功後一律 `loadRoutes()` 重讀清單，而
+   * `loadRoutes` 內部的 `resetEditing()` 會把編輯緩衝蓋回伺服器名冊——若當前方向
+   * 有未儲存的站點編輯，不先確認就直接改名／停用，等於用一個和「切換路線」
+   * 語意上毫不相關的動作，靜默丟棄使用者剛排好的順序。
+   */
+  async function updateRoute(
+    routeId: number,
+    payload: { name?: string; is_active?: boolean },
+  ): Promise<boolean> {
+    if (!await confirmDiscard()) return false
+    updatingRoute.value = true
+    try {
+      await updateBusRoute(routeId, payload)
+    } catch (e) {
+      const fallback = errorStatus(e) === 409
+        ? '此路線目前有進行中的班次，需完成或取消班次後才能停用'
+        : (payload.is_active === false ? '停用失敗，請稍後再試' : '更新路線失敗，請稍後再試')
+      ElMessage.error(apiError(e, fallback))
+      updatingRoute.value = false
+      return false
+    }
+    try {
+      await loadRoutes()
+    } catch (e) {
+      ElMessage.warning(apiError(e, '已更新，但重新載入路線清單失敗，畫面可能不是最新狀態'))
+    }
+    ElMessage.success('已更新路線')
+    updatingRoute.value = false
+    return true
+  }
+
   // ── 編輯 ──────────────────────────────────────────────────────────────────
 
   function addStop(studentId: number | null): void {
@@ -415,9 +455,10 @@ export function useBusRouteEditor() {
 
   return {
     routes, activeRoute, activeRouteId, direction, stops, students, candidates,
-    savedStops, missingCoordinateCount, loading, saving, creating, geocodingStudentId, dirty,
+    savedStops, missingCoordinateCount, loading, saving, creating, updatingRoute,
+    geocodingStudentId, dirty,
     loadFailed, studentsFailed,
-    init, loadRoutes, createRoute, selectRoute, setDirection,
+    init, loadRoutes, createRoute, selectRoute, setDirection, updateRoute,
     addStop, removeStop, move, setCoordinates, geocodeStop, mirrorFromMorning, save,
   }
 }

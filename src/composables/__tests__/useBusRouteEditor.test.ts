@@ -13,6 +13,7 @@ vi.mock('@/api/bus', () => ({
   createBusRoute: vi.fn(),
   replaceBusRouteStops: vi.fn(),
   geocodeBusStudent: vi.fn(),
+  updateBusRoute: vi.fn(),
 }))
 vi.mock('@/api/students', () => ({ getStudents: vi.fn() }))
 vi.mock('element-plus', () => ({
@@ -22,7 +23,7 @@ vi.mock('element-plus', () => ({
 
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  listBusRoutes, createBusRoute, replaceBusRouteStops, geocodeBusStudent,
+  listBusRoutes, createBusRoute, replaceBusRouteStops, geocodeBusStudent, updateBusRoute,
 } from '@/api/bus'
 import { getStudents } from '@/api/students'
 import { useBusRouteEditor, MAX_STOPS_PER_DIRECTION } from '@/composables/useBusRouteEditor'
@@ -453,6 +454,89 @@ describe('建立路線', () => {
     await editor.createRoute('   ')
     expect(createBusRoute).not.toHaveBeenCalled()
     expect(ElMessage.error).toHaveBeenCalled()
+  })
+})
+
+describe('改名／啟用停用（PATCH /bus/routes/{id}）', () => {
+  it('改名成功後重讀路線清單並回 true', async () => {
+    vi.mocked(updateBusRoute).mockResolvedValue({ data: { id: 3, name: 'A 線改名', is_active: true } } as never)
+    const editor = await boot()
+    vi.mocked(listBusRoutes).mockResolvedValue(
+      routesPayload([routeA({ name: 'A 線改名' })]) as never,
+    )
+    const ok = await editor.updateRoute(3, { name: 'A 線改名' })
+    expect(ok).toBe(true)
+    expect(updateBusRoute).toHaveBeenCalledWith(3, { name: 'A 線改名' })
+    expect(editor.routes.value[0].name).toBe('A 線改名')
+    expect(editor.updatingRoute.value).toBe(false)
+    expect(ElMessage.success).toHaveBeenCalled()
+  })
+
+  it('停用成功後路線清單反映 is_active=false', async () => {
+    vi.mocked(updateBusRoute).mockResolvedValue({ data: { id: 3, name: 'A 線', is_active: false } } as never)
+    const editor = await boot()
+    vi.mocked(listBusRoutes).mockResolvedValue(
+      routesPayload([routeA({ is_active: false })]) as never,
+    )
+    const ok = await editor.updateRoute(3, { is_active: false })
+    expect(ok).toBe(true)
+    expect(editor.routes.value[0].is_active).toBe(false)
+  })
+
+  it('有未儲存的站點編輯時要先確認才能改名／停用（reload 會靜默丟棄編輯緩衝）', async () => {
+    const editor = await boot()
+    editor.move(1, -1) // 製造 dirty
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+    const ok = await editor.updateRoute(3, { name: '改壞了' })
+    expect(ok).toBe(false)
+    expect(updateBusRoute).not.toHaveBeenCalled()
+    expect(editor.stops.value.map((s) => s.student_id)).toEqual([102, 101]) // 編輯緩衝保留
+  })
+
+  it('確認捨棄未儲存編輯後可繼續改名／停用', async () => {
+    vi.mocked(updateBusRoute).mockResolvedValue({ data: { id: 3, name: 'A 線', is_active: true } } as never)
+    const editor = await boot()
+    editor.move(1, -1)
+    const ok = await editor.updateRoute(3, { name: 'A 線' })
+    expect(ok).toBe(true)
+    expect(updateBusRoute).toHaveBeenCalled()
+  })
+
+  it('409（有進行中班次）要給明確可理解的訊息，不可只丟通用連線錯誤', async () => {
+    vi.mocked(updateBusRoute).mockRejectedValue(
+      Object.assign(new Error('409'), { response: { status: 409, data: {} } }),
+    )
+    const editor = await boot()
+    const ok = await editor.updateRoute(3, { is_active: false })
+    expect(ok).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalledWith(
+      expect.stringContaining('進行中'),
+    )
+    expect(ElMessage.error).not.toHaveBeenCalledWith(
+      expect.stringContaining('連線'),
+    )
+    expect(editor.updatingRoute.value).toBe(false)
+  })
+
+  it('409 但後端有帶明確 detail 訊息時，優先顯示後端訊息', async () => {
+    vi.mocked(updateBusRoute).mockRejectedValue(
+      Object.assign(new Error('409'), {
+        response: { status: 409, data: { detail: '此路線目前有進行中班次，無法停用' } },
+      }),
+    )
+    const editor = await boot()
+    const ok = await editor.updateRoute(3, { is_active: false })
+    expect(ok).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalledWith('此路線目前有進行中班次，無法停用')
+  })
+
+  it('其他失敗（非 409）也回 false 並提示，不動編輯緩衝', async () => {
+    vi.mocked(updateBusRoute).mockRejectedValue(new Error('boom'))
+    const editor = await boot()
+    const ok = await editor.updateRoute(3, { name: 'x' })
+    expect(ok).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(editor.updatingRoute.value).toBe(false)
   })
 })
 
