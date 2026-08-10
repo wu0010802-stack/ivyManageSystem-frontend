@@ -1,0 +1,101 @@
+// src/parent/composables/useHomeSummary.ts
+/**
+ * 家長端 `GET /parent/home/summary` 的共用讀取層。
+ *
+ * summary 一支就帶齊 7 個計數（未讀公告 / 未讀訊息 / 待繳 / 待簽 /
+ * 才藝候補待確認 / 假單審核結果 / 今日用藥單），所以事務頁列徽章、
+ * 底部 tab 徽章都從這裡拿，不再各自打 API。
+ *
+ * 快取鍵刻意與 TodayView 相同：useCachedAsync 對同 key 共用 cache 條目
+ * 並 dedupe in-flight 請求，因此首頁與事務頁同時掛載也只會有一次網路請求。
+ */
+import { computed } from 'vue'
+import { useCachedAsync } from '@/composables/useCachedAsync'
+import { getHomeSummary } from '../api/profile'
+
+export const HOME_SUMMARY_CACHE_KEY = 'parent/today/summary'
+
+export interface HomeBadges {
+  unreadAnnouncements: number
+  unreadMessages: number
+  /** 未繳費用「筆數」（非金額） */
+  outstandingFees: number
+  overdueFees: number
+  pendingEventAcks: number
+  pendingActivityPromotions: number
+  recentLeaveReviews: number
+  /** 今日生效的委託用藥單張數；資訊性，不計入 tab 徽章 */
+  activeMedicationOrders: number
+}
+
+function num(v: unknown): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0
+}
+
+/**
+ * @param options.immediate mount 時是否自動抓。ParentLayout 會在登入頁也掛載，
+ *   那裡必須傳 false，否則未登入就打 /parent/home/summary 會拿到 401。
+ */
+export function useHomeSummary(options: { immediate?: boolean } = {}) {
+  const { immediate = true } = options
+  const { data, error, pending, refresh } = useCachedAsync(
+    HOME_SUMMARY_CACHE_KEY,
+    async () => {
+      const res = await getHomeSummary()
+      return res.data
+    },
+    { ttl: 60_000, immediate },
+  )
+
+  const summary = computed<Record<string, unknown> | null>(() => {
+    const d = data.value as { summary?: Record<string, unknown> } | null
+    return d?.summary ?? null
+  })
+
+  const badges = computed<HomeBadges>(() => {
+    const s = summary.value ?? {}
+    const fees = (s.fees ?? {}) as Record<string, unknown>
+    return {
+      unreadAnnouncements: num(s.unread_announcements),
+      unreadMessages: num(s.unread_messages),
+      outstandingFees: num(fees.outstanding_count),
+      overdueFees: num(fees.overdue),
+      pendingEventAcks: num(s.pending_event_acks),
+      pendingActivityPromotions: num(s.pending_activity_promotions),
+      recentLeaveReviews: num(s.recent_leave_reviews),
+      activeMedicationOrders: num(s.active_medication_orders),
+    }
+  })
+
+  /**
+   * 底部「事務」tab 的總數徽章。
+   *
+   * 只加「需要家長動作或該知道結果」的四項。今日用藥單是資訊性的
+   * （家長已經送出、老師照表執行），計進去只會讓紅點天天亮著而失去意義。
+   */
+  const adminTabBadge = computed<number>(() => {
+    const b = badges.value
+    return (
+      b.outstandingFees +
+      b.pendingEventAcks +
+      b.pendingActivityPromotions +
+      b.recentLeaveReviews
+    )
+  })
+
+  /** 底部「訊息」tab 徽章＝未讀公告 + 未讀訊息。 */
+  const messagesTabBadge = computed<number>(
+    () => badges.value.unreadAnnouncements + badges.value.unreadMessages,
+  )
+
+  return {
+    data,
+    error,
+    pending,
+    refresh,
+    summary,
+    badges,
+    adminTabBadge,
+    messagesTabBadge,
+  }
+}

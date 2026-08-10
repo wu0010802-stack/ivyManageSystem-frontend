@@ -4,6 +4,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 vi.mock('@/parent/api/childMilestones', () => ({
   fetchChildMilestones: vi.fn(),
   reactToMilestone: vi.fn(),
+  acknowledgeMilestone: vi.fn(),
   REACTION_EMOJI: { like: '👍', love: '🥰', celebrate: '🎉' },
 }))
 
@@ -48,7 +49,9 @@ describe('MilestoneCarousel', () => {
     fetchChildMilestones.mockResolvedValueOnce({ data: { items: [] } })
     const w = mount(MilestoneCarousel, { props: { studentId: 2 } })
     await flushPromises()
-    expect(w.text()).toContain('尚無')
+    // 2026-08-10：空狀態從裸文字「尚無里程碑」改用共用 EmptyState 元件
+    expect(w.text()).toContain('還沒有里程碑')
+    expect(w.find('.carousel').exists()).toBe(false)
   })
 
   it('refetches when studentId changes', async () => {

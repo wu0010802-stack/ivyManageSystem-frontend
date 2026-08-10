@@ -17,7 +17,6 @@ import ChildrenStrip from '../components/home/ChildrenStrip.vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import PendingSignBanner from '../components/home/PendingSignBanner.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
-import DashboardHero from '../components/DashboardHero.vue'
 import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 
@@ -194,50 +193,39 @@ const selectedTodayChild = computed(() => {
   return tc.find((c) => (c as { student_id?: number }).student_id === selectedStudentId.value) || null
 })
 
-const hero = computed(() => {
+/**
+ * 「尚未綁定子女」須依 home-summary 的權威子女清單判定，而非 today-status：
+ * today-status 可能因放假或尚未載入而為空，若據此判空，有綁定子女的家長會
+ * 被誤顯示「尚未綁定子女」。
+ */
+const isUnbound = computed<boolean>(
+  () => !!summaryData.value && (children.value || []).length === 0,
+)
+
+/** 今日卡要顯示的出席狀態（單孩取唯一那位，多寶取選中那位）。 */
+const heroStatus = computed<{ label: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' | 'info' }>(() => {
   const tc = todayChildren.value || []
-  if (tc.length === 0) {
-    if (!summaryData.value) return null
-    // 「尚未綁定子女」須依 home-summary 的權威子女清單判定，而非 today-status：
-    // today-status 可能因放假或尚未載入而為空，若據此判空，有綁定子女的家長會
-    // 被誤顯示「尚未綁定子女」。有子女但今日無狀態時隱藏 hero（其餘區塊照常渲染）。
-    if (children.value.length > 0) return null
-    return {
-      kind: 'empty',
-      title: '尚未綁定子女',
-      sub: '可從「我的」分頁加綁，或請園所協助。',
-      statusLabel: null as string | null,
-      statusTone: 'neutral' as const,
-    }
-  }
-  if (tc.length === 1) {
-    const c = tc[0]
-    // title = 孩子姓名（來自 home-summary selectedChild），sub = 班級，statusLabel = 出席狀態
-    const name = (selectedChild.value?.name ?? (c as { name?: string }).name) || '孩子'
-    const classroom = (selectedChild.value?.classroom_name ?? (c as { classroom_name?: string }).classroom_name) || null
-    const statusLabel = childStatusLabel(c)
-    return {
-      kind: 'single',
-      title: name,
-      sub: classroom,
-      statusLabel,
-      statusTone: childStatusTone(statusLabel),
-    }
-  }
-  // 多寶家庭：title = selected 孩子姓名，sub = 班級，statusLabel = 該孩出席狀態
-  // ChildContextHeader 已改為多孩才顯示，不在此重複孩子名
-  const sc = selectedChild.value
-  const name = sc?.name || '孩子'
-  const classroom = sc?.classroom_name || null
-  const statusLabel = childStatusLabel(selectedTodayChild.value)
-  return {
-    kind: 'multi',
-    title: name,
-    sub: classroom,
-    statusLabel,
-    statusTone: childStatusTone(statusLabel),
-  }
+  const target = tc.length === 1 ? tc[0] : selectedTodayChild.value
+  const label = childStatusLabel(target)
+  return { label, tone: childStatusTone(label) }
 })
+
+/**
+ * 今日卡三態。聯絡簿不是每天都有（假日、請假、老師還沒填），
+ * 但 hero 每天都要在同一個位置維持同一個形狀，所以改由 variant 驅動，
+ * 不再「有 entry 才顯示卡、沒有就換一個 DashboardHero」。
+ */
+const todayVariant = computed<'full' | 'awaiting' | 'offday'>(() => {
+  if (contactBookEntry.value) return 'full'
+  const label = heroStatus.value.label
+  if (label === '今天放假' || label === '請假') return 'offday'
+  return 'awaiting'
+})
+
+/** 請假與放假都是 offday，但文案要分開講。 */
+const todayHint = computed<string>(() =>
+  heroStatus.value.label === '請假' ? '今天請假，好好休息' : '',
+)
 
 async function pullRefresh() {
   await Promise.all([
@@ -264,36 +252,71 @@ function go(path: string) {
   <PullToRefresh :on-refresh="pullRefresh" class="today-view">
     <PendingSignBanner :count="pendingSignCount" />
 
-    <!-- 頂部 Bento Hero：孩子姓名/班級 + 今日出席狀態 -->
+    <!-- 頂部：日期 + 多寶切換（單孩姓名由今日卡呈現，不重複） -->
     <div class="today-head">
       <p class="today-date">{{ todayDateLine }}</p>
-      <!-- 多孩才顯示 ChildContextHeader；單孩姓名已由 DashboardHero title 呈現 -->
       <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
-
-      <!-- empty 態：尚未綁定子女 -->
-      <template v-if="hero?.kind === 'empty'">
-        <DashboardHero
-          :title="hero.title"
-          :sub="hero.sub ?? undefined"
-          class="today-hero-card"
-        />
-      </template>
-
-      <!-- single / multi 態：title = 孩子姓名，sub = 班級，status-label = 出席狀態 -->
-      <template v-else-if="hero">
-        <DashboardHero
-          :title="hero.title"
-          :sub="hero.sub ?? undefined"
-          :status-label="hero.statusLabel ?? undefined"
-          :status-tone="hero.statusTone"
-          class="today-hero-card"
-        />
-      </template>
     </div>
+
+    <!--
+      今日卡 = 首頁 hero。PRODUCT.md 的成功定義是「3 秒內看到孩子當日狀態」，
+      所以這張卡排在所有行政事項（待繳/待簽/娃娃車）之前，且三態都佔同一個位置。
+    -->
+    <!--
+      刻意不用共用的 @/components/common/EmptyState：那支沒被 pin 進 vite.config
+      的 shared-common，落在 admin-core chunk。首頁是家長端 entry 的首屏，靜態
+      import 它會把整包 admin-core 拖進首屏（實測 gz 227.9KB → 492.0KB，
+      check-entry-chunks gate 直接擋下 build）。lazy route（如 ContactBookView）
+      用它沒問題，首屏元件不行。
+    -->
+    <section v-if="isUnbound" class="cb-hero">
+      <div class="unbound">
+        <p class="unbound-title">尚未綁定子女</p>
+        <p class="unbound-desc">可從右上角個人選單加綁，或請園所協助。</p>
+      </div>
+    </section>
+
+    <section v-else-if="selectedChild" class="cb-hero">
+      <SectionHeader title="今日聯絡簿">
+        <template v-if="contactBookEntry" #action>
+          <router-link :to="`/contact-book/${contactBookEntry.id}`" class="cb-open">
+            查看完整
+            <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+          </router-link>
+        </template>
+      </SectionHeader>
+
+      <router-link
+        v-if="contactBookEntry"
+        :to="`/contact-book/${contactBookEntry.id}`"
+        class="cb-card-link"
+      >
+        <ContactBookDayCard
+          :entry="contactBookEntry"
+          :student-name="selectedChild.name"
+          :classroom-name="selectedChild.classroom_name"
+          variant="full"
+          :status-label="heroStatus.label"
+          :status-tone="heroStatus.tone"
+        />
+      </router-link>
+
+      <!-- 還沒有聯絡簿的日子：同一張卡的 awaiting / offday 態，不可點擊 -->
+      <ContactBookDayCard
+        v-else
+        :student-name="selectedChild.name"
+        :classroom-name="selectedChild.classroom_name"
+        :variant="todayVariant"
+        :date-line="todayDateLine"
+        :status-label="heroStatus.label"
+        :status-tone="heroStatus.tone"
+        :hint="todayHint"
+      />
+    </section>
 
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
-    <!-- Bento 格：待繳學費 + 待簽文件 -->
+    <!-- Bento 格：行政事項，位階刻意在今日卡之下 -->
     <div v-if="feesInfo || pendingSignCount > 0 || busInfo" class="today-bento">
       <StatTile
         v-if="busInfo"
@@ -322,36 +345,6 @@ function go(path: string) {
       />
     </div>
 
-    <!-- 今日聯絡簿 hero card：家長最關心的「孩子今天過得好嗎」 -->
-    <section v-if="contactBookEntry && selectedChild" class="cb-hero">
-      <SectionHeader title="今日聯絡簿">
-        <template #action>
-          <router-link :to="`/contact-book/${contactBookEntry.id}`" class="cb-open">
-            查看完整
-            <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
-          </router-link>
-        </template>
-      </SectionHeader>
-      <router-link
-        :to="`/contact-book/${contactBookEntry.id}`"
-        class="cb-card-link"
-      >
-        <ContactBookDayCard
-          :entry="contactBookEntry"
-          :student-name="selectedChild.name"
-          :classroom-name="selectedChild.classroom_name"
-        />
-      </router-link>
-    </section>
-
-    <ChildrenStrip
-      v-if="children.length > 1"
-      :children="children"
-      :selected-id="selectedStudentId"
-      @select="setSelected"
-      @navigate="go"
-    />
-
     <template v-if="summaryPending && !summaryData">
       <div class="skeleton-wrap">
         <SkeletonBlock variant="card" />
@@ -367,9 +360,33 @@ function go(path: string) {
     />
 
     <section v-else class="today-stream">
-      <SectionHeader title="今日動態" />
+      <SectionHeader title="今日動態">
+        <!--
+          今日動態只講「今天」。更長的歷史（跨 9 種來源的成長時間軸）在孩子檔案頁，
+          原本要從「事務 → 孩子檔案 → 往下滑」三層才找得到，這裡補一個直達出口。
+        -->
+        <template v-if="selectedChild" #action>
+          <router-link :to="`/children/${selectedChild.student_id}`" class="cb-open">
+            更多動態
+            <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+          </router-link>
+        </template>
+      </SectionHeader>
       <TodayTimeline :buckets="buckets" @navigate="go" />
     </section>
+
+    <!--
+      多寶家庭的孩子總覽。切換子女的主要入口是上方 ChildContextHeader，
+      這條保留是因為它另外承載生日提示、在籍狀態與「進孩子檔案」入口，
+      移掉會少功能；但位置下移，不與 hero 搶同一個視覺區。
+    -->
+    <ChildrenStrip
+      v-if="children.length > 1"
+      :children="children"
+      :selected-id="selectedStudentId"
+      @select="setSelected"
+      @navigate="go"
+    />
 
     <footer class="today-footer">
       <router-link to="/calendar" class="today-footer-link">
@@ -407,10 +424,6 @@ function go(path: string) {
   margin-top: var(--space-1, 4px);
 }
 
-.today-hero-card {
-  margin-top: var(--space-2, 8px);
-}
-
 /* Bento 格：2 欄 StatTile */
 .today-bento {
   display: grid;
@@ -421,6 +434,30 @@ function go(path: string) {
 
 /* 今日聯絡簿 hero 區 */
 .cb-hero { padding: 0 var(--space-4, 16px); }
+
+/* 尚未綁定子女（首屏不引入共用 EmptyState，見 template 註解） */
+.unbound {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-8, 32px) var(--space-5, 20px);
+  text-align: center;
+  background: var(--cream, #fffcf2);
+  border: 1px solid rgba(13, 144, 83, 0.12);
+  border-radius: 20px;
+}
+.unbound-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+}
+.unbound-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--pt-text-muted);
+}
 
 .cb-open {
   display: inline-flex;

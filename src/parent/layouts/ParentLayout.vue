@@ -2,9 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useParentAuthStore } from '../stores/parentAuth'
-import { getUnreadCount } from '../api/announcements'
-import { getMessageUnreadCount } from '../api/messages'
-import { shouldRefreshUnread } from '../utils/unreadThrottle'
+import { useHomeSummary } from '../composables/useHomeSummary'
 import M3TopAppBar from '../components/m3/M3TopAppBar.vue'
 import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
 import M3IconButton from '../components/m3/M3IconButton.vue'
@@ -49,8 +47,21 @@ function onTabSelect(_key: string, item: { key: string; icon: string; label: str
   if (item.path) router.push(item.path)
 }
 
-const unread = ref(0)
-const unreadMessages = ref(0)
+/**
+ * tab 徽章全部取自 home/summary 這一支。
+ *
+ * 這裡原本另外打 announcements/unread-count 與 messages/unread-count 兩支，
+ * 但 summary 早就同時回傳 unread_announcements 與 unread_messages，等於每次
+ * 換頁都多送兩個請求拿已經有的數字。改走共用 composable 後，同 key 的
+ * useCachedAsync 會與首頁 / 事務頁共用 cache 並 dedupe in-flight 請求，
+ * 節流也由它的 60s TTL 負責（原本的 unreadThrottle 因此退場）。
+ *
+ * immediate: false —— 這個 layout 在 /login、/bind 等公開頁也會掛載，
+ * 未登入就打 summary 會拿到 401。
+ */
+const { refresh: refreshSummary, messagesTabBadge, adminTabBadge } = useHomeSummary({
+  immediate: false,
+})
 
 const TABS = computed<TabItem[]>(() => [
   {
@@ -66,7 +77,7 @@ const TABS = computed<TabItem[]>(() => [
     icon: 'chat_bubble',
     activeIcon: 'chat_bubble',
     path: '/messages',
-    badge: unreadMessages.value + unread.value,
+    badge: messagesTabBadge.value,
   },
   {
     key: 'admin',
@@ -74,33 +85,19 @@ const TABS = computed<TabItem[]>(() => [
     icon: 'assignment',
     activeIcon: 'assignment',
     path: '/admin',
+    badge: adminTabBadge.value,
   },
 ])
 
 const drawerOpen = ref(false)
 
-const UNREAD_TTL_MS = 45_000
-let lastUnreadAt = 0
-
-async function refreshUnread(force = false) {
+function refreshBadges() {
   if (!authStore.isAuthed()) return
-  const now = Date.now()
-  if (!force && !shouldRefreshUnread(lastUnreadAt, now, UNREAD_TTL_MS)) return
-  try {
-    const [{ data: a }, { data: m }] = await Promise.all([
-      getUnreadCount(),
-      getMessageUnreadCount(),
-    ])
-    unread.value = (a as Record<string, unknown>)?.unread_count as number || 0
-    unreadMessages.value = (m as Record<string, unknown>)?.unread_count as number || 0
-    lastUnreadAt = now
-  } catch {
-    /* ignore */
-  }
+  refreshSummary()
 }
 
-onMounted(() => refreshUnread())
-watch(() => route.fullPath, () => refreshUnread())
+onMounted(() => refreshBadges())
+watch(() => route.fullPath, () => refreshBadges())
 
 const { branding } = useTenantBranding()
 const headerTitle = computed(() => (route.meta?.title as string) || branding.value.titles.parent_short)

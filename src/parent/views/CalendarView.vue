@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getWeekAgenda } from '../api/calendar'
+import { getMonthAgenda, getWeekAgenda } from '../api/calendar'
 import { localDateISO } from '../utils/date'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -24,6 +24,21 @@ const router = useRouter()
 const data = ref<{ items?: AgendaItem[] } | null>(null)
 const loading = ref(false)
 const days = ref(7)
+
+/**
+ * 'days' = 未來 N 天（原有行為）；'month' = 整個當月。
+ *
+ * 後端 /calendar/month 一直都在，前端只接了 week，家長因此看不到
+ * 「這個月還有什麼活動」。兩者共用同一份 items 形狀，只差查詢區間。
+ */
+const mode = ref<'days' | 'month'>('days')
+const now = new Date()
+const monthYear = now.getFullYear()
+const monthNo = now.getMonth() + 1
+
+const rangeLabel = computed(() =>
+  mode.value === 'month' ? `${monthNo} 月` : `未來 ${days.value} 天`,
+)
 
 const CATEGORY_META: Record<string, { icon: string; tone: string; label: string }> = {
   event:         { icon: 'event',          tone: 'grape', label: '活動' },
@@ -51,7 +66,10 @@ const groupedByDate = computed(() => {
 async function fetchData() {
   loading.value = true
   try {
-    const { data: d } = await getWeekAgenda(days.value)
+    const { data: d } =
+      mode.value === 'month'
+        ? await getMonthAgenda(monthYear, monthNo)
+        : await getWeekAgenda(days.value)
     data.value = d
   } catch (err) {
     const e = err as Record<string, unknown>
@@ -59,6 +77,18 @@ async function fetchData() {
   } finally {
     loading.value = false
   }
+}
+
+function selectDays(d: number) {
+  mode.value = 'days'
+  days.value = d
+  fetchData()
+}
+
+function selectMonth() {
+  if (mode.value === 'month') return
+  mode.value = 'month'
+  fetchData()
 }
 
 function gotoItem(it: AgendaItem) {
@@ -108,16 +138,25 @@ function dayLabel(iso: string) {
   <div class="cal-view">
     <header class="pt-page-hero">
       <p class="pt-page-hero-eyebrow">行事曆</p>
-      <h1 class="pt-page-hero-title">未來幾天</h1>
-      <div class="day-filter">
+      <h1 class="pt-page-hero-title">{{ rangeLabel }}</h1>
+      <div class="day-filter" role="group" aria-label="行事曆範圍">
         <button
           v-for="d in [3, 7, 14]"
           :key="d"
           type="button"
-          :class="{ active: days === d }"
-          @click="days = d; fetchData()"
+          :class="{ active: mode === 'days' && days === d }"
+          :aria-pressed="mode === 'days' && days === d"
+          @click="selectDays(d)"
         >
           {{ d }} 天
+        </button>
+        <button
+          type="button"
+          :class="{ active: mode === 'month' }"
+          :aria-pressed="mode === 'month'"
+          @click="selectMonth"
+        >
+          整月
         </button>
       </div>
     </header>
@@ -132,7 +171,7 @@ function dayLabel(iso: string) {
       v-else-if="data && groupedByDate.length === 0"
       variant="mobile"
       :icon="KawaiiStar"
-      :title="`未來 ${days} 天沒有特別行程`"
+      :title="mode === 'month' ? `${monthNo} 月沒有特別行程` : `未來 ${days} 天沒有特別行程`"
       description="園所行程更新後會出現在這裡"
     />
 

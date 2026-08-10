@@ -9,9 +9,8 @@ export const reactToMilestone = (studentId: number, milestoneId: number, reactio
     { reaction },
     { params: { student_id: studentId } })
 
-// TODO(parent-portal): 後端支援里程碑家長「確認」流程，前端目前只做了
-// reactToMilestone（按讚/愛心/慶祝），確認（acknowledge）流程沒有 UI 入口
-// （2026-07-31 家長端體檢：孤兒 API，非死碼，是功能缺口）。
+// 家長「我看到了」：純標記已看過（不動 reaction），後端 first-ack-wins。
+// UI 入口在 MilestoneCard（2026-08-10 補；此前是有 wrapper 沒畫面的孤兒 API）。
 export const acknowledgeMilestone = (studentId: number, milestoneId: number) =>
   api.post(`/parent/milestones/${milestoneId}/acknowledge`, null,
     { params: { student_id: studentId } })
