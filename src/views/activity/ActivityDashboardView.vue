@@ -10,7 +10,19 @@
       <el-col :xs="12" :sm="8" :lg="4" v-for="card in statCards" :key="card.label">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-value">{{ card.value }}</div>
-          <div class="stat-label">{{ card.label }}</div>
+          <div class="stat-label">
+            <span>{{ card.label }}</span>
+            <!-- trigger 同時給 hover 與 click：桌機滑過即看，觸控裝置點一下也能開 -->
+            <el-tooltip
+              :content="card.hint"
+              placement="top"
+              :trigger="['hover', 'click']"
+              :show-after="120"
+              popper-class="stat-hint-popper"
+            >
+              <el-icon class="stat-hint-icon" tabindex="0" :aria-label="`${card.label}說明`"><InfoFilled /></el-icon>
+            </el-tooltip>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -180,7 +192,9 @@ import { useActivityStore } from '@/stores/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { exportDashboardTable } from '@/api/activity'
 import { buildBonusLabel, buildCourseCell } from './activityDashboardTable'
+import { buildStatCards } from './activityDashboardStatCards'
 import { ElMessage } from 'element-plus'
+import { InfoFilled } from '@element-plus/icons-vue'
 import { friendlyError } from '@/utils/errorMessages'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
@@ -257,20 +271,9 @@ const avgAttendanceRate = computed(() => {
   return rate != null ? `${Math.round(rate * 100)}%` : '-'
 })
 
-const statCards = computed(() => {
-  const st = statistics.value as Record<string, number | null | undefined>
-  return [
-    { label: '總報名數', value: st.totalRegistrations ?? '-' },
-    { label: '正式報名', value: st.totalEnrollments ?? '-' },
-    { label: '候補人數', value: st.totalWaitlist ?? '-' },
-    { label: '今日新增', value: st.todayNewRegistrations ?? '-' },
-    { label: '總收入（已繳）', value: st.totalRevenue != null ? `$${st.totalRevenue.toLocaleString()}` : '-' },
-    { label: '待繳金額', value: st.totalUnpaid != null ? `$${st.totalUnpaid.toLocaleString()}` : '-' },
-    { label: '報名率', value: st.enrollmentRate != null ? `${st.enrollmentRate}%` : '-' },
-    { label: '平均出席率', value: avgAttendanceRate.value },
-    { label: '未讀提問', value: st.unreadInquiries ?? '-' },
-  ]
-})
+const statCards = computed(() =>
+  buildStatCards(statistics.value as Record<string, number | null | undefined>, avgAttendanceRate.value),
+)
 
 // Why: 後端回傳 grades > classrooms 的樹狀結構，但 el-table 只接受平面陣列。
 // 透過此 computed 將每個年級的「各班列 + 小計列」展開，並標記 rowSpan / isFirstOfGrade
@@ -416,12 +419,35 @@ async function handleExportTable() {
 }
 </script>
 
+<!-- tooltip 內容被 teleport 到 body，scoped 選不到，故另開非 scoped 區塊限制寬度 -->
+<style>
+.stat-hint-popper { max-width: 280px; line-height: 1.6; }
+</style>
+
 <style scoped>
 .activity-dashboard { padding: 16px; }
 .stat-cards { margin-bottom: 16px; }
 .stat-card { text-align: center; padding: 8px 0; }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--color-primary, #4f46e5); }
-.stat-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.stat-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+/* 觸控裝置上要點得到，所以給 icon 比字級更大的可點區域 */
+.stat-hint-icon {
+  cursor: help;
+  color: var(--el-color-info);
+  font-size: 14px;
+  flex-shrink: 0;
+  padding: 2px;
+  outline: none;
+}
+.stat-hint-icon:focus-visible { outline: 2px solid var(--el-color-primary); border-radius: 50%; }
 .charts-row { margin-top: 8px; }
 .chart-container { max-height: 320px; overflow-y: auto; }
 .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
