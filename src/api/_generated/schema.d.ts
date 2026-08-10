@@ -63285,7 +63285,7 @@ export interface operations {
     list_surveys_api_surveys_get: {
         parameters: {
             query?: {
-                status?: string | null;
+                status?: ("draft" | "published" | "closed") | null;
             };
             header?: never;
             path?: never;
