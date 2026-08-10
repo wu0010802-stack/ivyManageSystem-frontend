@@ -9072,6 +9072,10 @@ export interface paths {
          *     - unread_announcements: int
          *     - fees: { outstanding, overdue, due_soon, outstanding_count, ... }
          *     - pending_event_acks: int
+         *     - unread_messages: int
+         *     - pending_activity_promotions: int
+         *     - recent_leave_reviews: int
+         *     - active_medication_orders: int
          */
         get: operations["home_summary_api_parent_home_summary_get"];
         put?: never;
