@@ -156,12 +156,19 @@ async function maybeOpenDeepLink() {
   const surveyId = route.params.surveyId
   if (!surveyId) return
   const id = Number(surveyId)
-  const card = cards.value.find((c) => c.survey_id === id)
-  if (!card) {
+  const matches = cards.value.filter((c) => c.survey_id === id)
+  if (matches.length === 0) {
     toast.info('找不到這份調查，可能不屬於您的孩子')
     return
   }
-  await openFill(card)
+  if (matches.length > 1) {
+    // 多寶家庭：同一份調查對應多個孩子的卡片，自動開第一張會讓家長替錯孩子送出，
+    // 改為只切換分頁，讓家長自行點選要填的孩子。
+    tab.value = matches[0].is_open && !matches[0].my_response ? 'pending' : 'done'
+    toast.info('這份調查對應多位孩子，請選擇要填寫的孩子')
+    return
+  }
+  await openFill(matches[0])
 }
 
 onMounted(async () => {
