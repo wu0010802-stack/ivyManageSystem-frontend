@@ -238,6 +238,51 @@ describe('scrubMapping', () => {
     }
   })
 
+  // 資安稽核（2026-08-10）：三組漏網欄位補齊；與 BE
+  // tests/test_sentry_pii_security_audit_2026_08_10.py 對應（陷阱 #8 要求兩端各自補測試）。
+  it('filters labor insurance / student sensitive category / medical DEK keys', () => {
+    const res = scrubMapping({
+      labor_insurance_employee: 1234,
+      labor_insurance_employer: 5678,
+      health_insurance_employee: 900, // 既有行為，不得回歸
+      nationality: '越南',
+      is_disadvantaged: true,
+      low_income_status: 'low',
+      indigenous_status: '阿美族',
+      medical_dek_wrapped: 'base64blob',
+      medical_dek_lookup: 'hash',
+      classroom_id: 3, // 非 PII 保留
+    })
+    expect(res.labor_insurance_employee).toBe('[Filtered]')
+    expect(res.labor_insurance_employer).toBe('[Filtered]')
+    expect(res.health_insurance_employee).toBe('[Filtered]')
+    expect(res.nationality).toBe('[Filtered]')
+    expect(res.is_disadvantaged).toBe('[Filtered]')
+    expect(res.low_income_status).toBe('[Filtered]')
+    expect(res.indigenous_status).toBe('[Filtered]')
+    expect(res.medical_dek_wrapped).toBe('[Filtered]')
+    expect(res.medical_dek_lookup).toBe('[Filtered]')
+    expect(res.classroom_id).toBe(3)
+  })
+
+  it('does not overmatch insurance settings or gov-MoE aggregate stats', () => {
+    // insurance_brackets / insurance_rates 是制度設定（非 PII）——若有人把詞條
+    // 從 labor_insurance 放寬成 insurance，這裡會紅。
+    // *_count / *_pct 是報教育部的班級人數統計，非個人身分屬性。
+    const res = scrubMapping({
+      insurance_brackets: [1, 2, 3],
+      insurance_rates: { labor: 0.11 },
+      disadvantaged_count: 2,
+      disadvantaged_pct: 8,
+      indigenous_count: 1,
+      indigenous_pct: 4,
+      disability_count: 1,
+    })
+    for (const [k, v] of Object.entries(res)) {
+      expect(v, `${k} was wrongly filtered`).not.toBe('[Filtered]')
+    }
+  })
+
   it('still filters personal growth / measurement despite exempt', () => {
     const res = scrubMapping({
       growth_record: { data: '...' },
