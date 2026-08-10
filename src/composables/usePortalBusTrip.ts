@@ -76,6 +76,19 @@ export const PING_FLUSH_INTERVAL_MS = 5000
  */
 export const SUSPECT_TIMESTAMP_STREAK = 3
 
+/**
+ * 週期性核對「班次是否仍存在」的間隔（毫秒）。**不能靠 shipOutbox 的 409/404**（唯一既有
+ * 偵測路徑）——GPS 因權限被拒或裝置不支援而完全沒有點時，outbox 永遠是空的，那條路徑
+ * 形同失效，班次被 `bus_maintenance_scheduler` 逾時關閉或被另一台裝置結束時，司機畫面
+ * 會永遠停在「進行中」。
+ *
+ * 訂 60 秒：這支查詢（`GET /portal/bus/trips/active`）比 GPS ping 重（要撈站點清單），
+ * 拉太密只是浪費行動網路流量換不到多少即時性——「班次已消失」不是那種需要秒級反應的
+ * 狀態，晚一分鐘讓司機看到已經足夠好；分頁回前景時另外核對一次補上「剛好卡在週期中間」
+ * 的空窗，兩者合起來已經足夠及時。
+ */
+export const ACTIVE_TRIP_RESYNC_INTERVAL_MS = 60_000
+
 /** 方向的中文標籤；後端 `direction` 只有這兩個值（`TripStartIn` 的 pattern 限定）。 */
 export const DIRECTION_LABELS: Record<string, string> = {
   morning: '早上接學生',
@@ -123,6 +136,13 @@ export function usePortalBusTrip() {
   /** 定位權限被拒／取不到位置：家長端只看得到站點進度，UI 要明講。 */
   const gpsActive = ref(false)
   const gpsSupported = ref(true)
+  /**
+   * `PositionError.code === 1`（PERMISSION_DENIED）——與其他定位失敗（POSITION_UNAVAILABLE
+   * / TIMEOUT）分開呈現：`watchPosition` 一旦被拒，之後不會再自動跳權限提示，司機唯一的
+   * 出路是自己去瀏覽器或系統設定開權限，「重新整理」對這條路徑沒有用。拿到一次真實位置
+   * 就解除（代表權限後來被開了）。
+   */
+  const gpsPermissionDenied = ref(false)
   /** 進頁快照失敗：**不可**當成「沒有班次」而顯示開班卡（會開出第二張班次）。 */
   const snapshotFailed = ref(false)
   /**
@@ -142,6 +162,18 @@ export function usePortalBusTrip() {
   const pendingPingCountRef = ref(0)
   const pendingPingCount = computed(() => pendingPingCountRef.value)
   /**
+   * 待重送的站點動作（離站/跳過/撤銷）。**刻意不是「一個 boolean」**——多個站的動作可能
+   * 各自因短暫斷訊而排隊，司機要看得到「還有幾個」，而且是持續存在的狀態（不是會自動
+   * 消失的 toast）：行駛中訊號短暫中斷時司機不會盯著螢幕看，toast 消失後就再也看不到。
+   */
+  const stopRetryQueue = ref<Array<{
+    kind: 'depart' | 'skip' | 'undo'
+    tripId: number
+    stopId: number
+    fallbackMessage: string
+  }>>([])
+  const pendingStopActionCount = computed(() => stopRetryQueue.value.length)
+  /**
    * 「A 線・早上接學生」。班次進行中一定要顯示：進頁復原雖已用 `mine=true` 收斂到
    * 「我的班次」，但 `start()` 的 409 接手仍以 route＋direction 限縮（非 operator 維度），
    * 且同路線兩個方向同時在跑時仍可能接到非預期方向——這一行是司機自己察覺的訊號。
@@ -160,6 +192,7 @@ export function usePortalBusTrip() {
   let watchId: number | null = null
   let wakeLockSentinel: { release?: () => Promise<void> } | null = null
   let shipTimer: ReturnType<typeof setInterval> | null = null
+  let resyncTimer: ReturnType<typeof setInterval> | null = null
   let suspectTimestampStreak = 0
   let shipping = false
   /**
@@ -191,6 +224,9 @@ export function usePortalBusTrip() {
 
   function reportPosition(pos: GeolocationPosition): void {
     gpsActive.value = true
+    // 拿到真實位置就代表權限沒問題（可能是司機事後去設定開了權限）：解除舊旗標，
+    // 否則畫面會在權限其實已經恢復後繼續顯示過時的「請去開權限」提示。
+    gpsPermissionDenied.value = false
     const localNow = Date.now()
     // 裝置偶爾會吐出壞掉的 timestamp；退回「校正後的現在」而不是讓這個點被丟掉。
     const rawTs = Number.isFinite(pos.timestamp) ? pos.timestamp : localNow
@@ -269,26 +305,59 @@ export function usePortalBusTrip() {
   function onVisibilityChange(): void {
     if (document.visibilityState === 'visible') {
       void acquireWakeLock()
+      // 分頁在背景的這段時間班次可能已被結束，不必等到下一個 60 秒週期——這是
+      // 「司機把手機切回這頁」的當下，正是最該立刻告訴他真相的時機。
+      void resyncActiveTrip()
       return
     }
     buffer.flushNow()
     void shipOutbox()
   }
 
+  /** 背景計時器與 visibilitychange 是否已註冊；獨立於 `watchId`，因為不支援定位的
+   * 裝置永遠不會有 `watchId`，但仍要跑站點重試佇列與週期性核對（見下方 Task 2 註解）。
+   */
+  let trackingActive = false
+
   function beginTracking(): void {
-    if (watchId !== null) return
-    if (!('geolocation' in navigator)) { gpsSupported.value = false; return }
-    // 契約②：push() 只在 start()~stop() 之間有效 —— 先 start 再掛回呼，避免第一個
-    // 回呼落在啟動前而被靜默丟掉。
-    buffer.start()
-    watchId = navigator.geolocation.watchPosition(
-      reportPosition,
-      () => { gpsActive.value = false },
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 },
-    )
+    if ('geolocation' in navigator) {
+      if (watchId === null) {
+        // 契約②：push() 只在 start()~stop() 之間有效 —— 先 start 再掛回呼，避免第一個
+        // 回呼落在啟動前而被靜默丟掉。
+        buffer.start()
+        watchId = navigator.geolocation.watchPosition(
+          reportPosition,
+          (err) => {
+            gpsActive.value = false
+            // code 1 = PERMISSION_DENIED（W3C Geolocation spec）；2 = POSITION_UNAVAILABLE、
+            // 3 = TIMEOUT 都是「暫時取不到位置」，重試／等待有機會自己好，與權限被拒是
+            // 完全不同的可行動指引，不得混為一談。
+            const code = (err as GeolocationPositionError | null | undefined)?.code
+            gpsPermissionDenied.value = code === 1
+          },
+          { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 },
+        )
+      }
+    } else {
+      // Task 2：裝置不支援定位——沒有 watchId、沒有 GPS 點，但站點重試佇列（純靠
+      // 網路）與週期性核對（`resyncActiveTrip` 的存在理由正是涵蓋「完全沒有 GPS
+      // 點」的情境，見其註解）不該因此被連帶卡死，故不 return，繼續往下註冊計時器。
+      gpsSupported.value = false
+    }
+    if (trackingActive) return
+    trackingActive = true
     // 送出計時器**在 buffer.start() 之後**註冊：同週期的兩個計時器依註冊順序觸發，
     // 於是每一輪都是「buffer 先把批次搬進 outbox，再由這裡送出」，不會延後一輪。
-    shipTimer = setInterval(() => { void shipOutbox() }, PING_FLUSH_INTERVAL_MS)
+    // 同一顆計時器也順帶處理站點動作的重送佇列：兩者都是「網路恢復後自動補送」，
+    // 不必為此另開一顆計時器。GPS 不支援時 shipOutbox 內部本來就會因 outbox 恆空
+    // 而是 no-op，retryStopActions 不受影響。
+    shipTimer = setInterval(() => {
+      void shipOutbox()
+      void retryStopActions()
+    }, PING_FLUSH_INTERVAL_MS)
+    // 週期性核對班次是否仍存在（見 `resyncActiveTrip` 註解）：獨立於 ping 管線，
+    // 只要還在追蹤中就跑，與 GPS 是否真的有點無關。
+    resyncTimer = setInterval(() => { void resyncActiveTrip() }, ACTIVE_TRIP_RESYNC_INTERVAL_MS)
     document.addEventListener('visibilitychange', onVisibilityChange)
     void acquireWakeLock()
   }
@@ -302,7 +371,9 @@ export function usePortalBusTrip() {
     buffer.flushNow()
     buffer.stop()
     if (shipTimer !== null) { clearInterval(shipTimer); shipTimer = null }
+    if (resyncTimer !== null) { clearInterval(resyncTimer); resyncTimer = null }
     document.removeEventListener('visibilitychange', onVisibilityChange)
+    trackingActive = false
     void wakeLockSentinel?.release?.()
     wakeLockSentinel = null
     gpsActive.value = false
@@ -311,6 +382,8 @@ export function usePortalBusTrip() {
   function handleTripGone(): void {
     stopTracking()
     setOutbox([])
+    // 班次已消失，佇列裡待重送的站點動作已無意義（該班次的端點只會回 404/409）。
+    stopRetryQueue.value = []
     trip.value = null
     stops.value = []
     ElMessage.warning('班次已結束，已停止位置上報')
@@ -325,6 +398,39 @@ export function usePortalBusTrip() {
       beginTracking()
     } else if (trip.value) {
       handleTripGone()
+    }
+  }
+
+  /**
+   * 不依賴 ping 管線的週期性核對：GPS 完全沒有點（權限被拒／不支援定位）時
+   * `shipOutbox` 的 409/404 偵測路徑恆不觸發，班次被排程器逾時關閉或被另一台裝置
+   * 結束時司機畫面會永遠停在「進行中」。用既有路線＋方向重查一次（**非** `mine=true`
+   * ——理由與 `start()` 的 409 接手一致：司機中途換手後仍要能核到「班次還在」）。
+   *
+   * 失敗（網路／5xx）刻意靜默：這是背景核對不是使用者觸發的動作，用會打斷司機的
+   * toast 呈現「查核暫時失敗」沒有意義——真正的「班次消失了」會在下一輪核對到，
+   * 或被 `shipOutbox`／站點操作的 409/404 分支先一步抓到。
+   */
+  async function resyncActiveTrip(): Promise<void> {
+    const current = trip.value
+    if (!current) return
+    try {
+      const res = await getActiveBusTrip(current.route_id, current.direction)
+      syncClock(res as ApiHeaders)
+      const data = (res as { data?: ActivePayload }).data
+      // 這支查詢**不帶** `mine=true`（理由見上方註解：司機中途換手後仍要能核到
+      // 「班次還在」），代價是同 route+direction 若已被另一位司機開了新班次，
+      // 回傳的會是「別人的班次」——不同 `trip.id`。這裡只用來核對「我手上這張
+      // 是否還在」，絕不可拿別人的 trip.id 覆寫過來：那會讓這支裝置的畫面載入
+      // 別人班次的學生姓名與家庭座標（PII），並把自己的 GPS 灌進別人的班次。
+      // trip.id 不同（含 null）一律視為「我的班次已消失」。
+      if (data?.trip && data.trip.id !== current.id) {
+        handleTripGone()
+        return
+      }
+      applyActive(data)
+    } catch {
+      // 靜默忽略，見上方註解。
     }
   }
 
@@ -424,8 +530,115 @@ export function usePortalBusTrip() {
 
   // ── 站點推進 ──────────────────────────────────────────────────────────────
 
+  type StopActionKind = 'depart' | 'skip' | 'undo'
+
+  const STOP_ACTION_CALLS: Record<StopActionKind, (tripId: number, stopId: number) => Promise<unknown>> = {
+    depart: departBusStop,
+    skip: skipBusStop,
+    undo: undoBusStop,
+  }
+
+  /** 套用站點動作回應的權威 `stops`，並呈現後端新增的 `notification_warning`。 */
+  function applyStopResponse(res: unknown): void {
+    const data = (res as { data?: { stops?: BusTripStop[]; notification_warning?: boolean } }).data
+    stops.value = data?.stops ?? []
+    if (data?.notification_warning) {
+      // 落庫已成功，只是發家長通知失敗：不是錯誤，是輕量提示，不得用 ElMessage.error
+      // （那會讓司機以為操作失敗而重按，反而製造真正的重複操作）。
+      ElMessage.warning('操作已成功，家長通知可能延遲')
+    }
+  }
+
+  function enqueueStopRetry(item: {
+    kind: StopActionKind; tripId: number; stopId: number; fallbackMessage: string
+  }): void {
+    // 同一站已在佇列裡就不重複加：`runStopAction` 本身用 `actingStopId` 擋掉同站的
+    // 第二次手動操作，這裡是防禦（例如未來呼叫路徑變多時）。
+    if (stopRetryQueue.value.some((q) => q.stopId === item.stopId && q.kind === item.kind)) return
+    stopRetryQueue.value = [...stopRetryQueue.value, item]
+  }
+
+  /**
+   * 只清掉「同站＋同 kind」的那一筆。**不可只比 stopId**：enqueue 以 `stopId+kind`
+   * 去重，代表同一站可能同時排著 depart 與 skip（例如司機離站後又立刻按撤銷／跳過，
+   * 中途都因斷訊各自進了佇列）——只比 stopId 會讓其中一筆成功時把另一筆也靜默清掉，
+   * 該動作永遠送不出去也不會有任何提示。這裡選擇「各 kind 獨立追蹤」而非「同站新動作
+   * 覆寫舊動作」：後者需要在 enqueue 時主動剔除同站其他 kind，會把「跳過」誤判成
+   * 「取代離站」，但兩者是使用者兩個不同的意圖，不該由前端替司機決定何者作廢。
+   */
+  function dequeueStopRetry(stopId: number, kind: StopActionKind): void {
+    stopRetryQueue.value = stopRetryQueue.value.filter(
+      (q) => !(q.stopId === stopId && q.kind === kind),
+    )
+  }
+
+  /**
+   * 站點動作的實際執行＋錯誤分流，供「使用者手動觸發」與「背景自動重送」共用。
+   * `isRetry` 只影響要不要再彈一次 toast：手動觸發第一次失敗要立刻讓司機知道，
+   * 背景重送每 5 秒失敗一次若也彈 toast 會變成灌爆畫面的噪音。
+   */
+  async function performStopAction(
+    kind: StopActionKind,
+    tripId: number,
+    stopId: number,
+    fallbackMessage: string,
+    isRetry = false,
+  ): Promise<void> {
+    try {
+      const res = await STOP_ACTION_CALLS[kind](tripId, stopId)
+      syncClock(res as ApiHeaders)
+      applyStopResponse(res)
+      dequeueStopRetry(stopId, kind)
+    } catch (e) {
+      const status = errorStatus(e)
+      if (status === 409) {
+        dequeueStopRetry(stopId, kind)
+        // 重送觸發的 409 代表**已經成功**（自己或別人先前的嘗試已落庫），是冪等意義上
+        // 的完成，不是新錯誤——只有手動觸發的第一次才彈錯誤（此站與畫面已分岔要讓司機
+        // 知道）。背景重送不是新錯誤，但也不能完全靜默：那會讓司機以為自己剛才排隊的
+        // 那次操作成功了，其實是被別的裝置先一步改了狀態——用 info（非 error，避免
+        // 誘發司機重按）明講一次。
+        if (!isRetry) {
+          ElMessage.error(apiError(e, fallbackMessage))
+        } else {
+          ElMessage.info('此站狀態已由其他裝置更新')
+        }
+        const current = trip.value
+        if (current) await loadActive(current.route_id, current.direction).catch(() => {})
+        return
+      }
+      if (status !== undefined && status < 500) {
+        // 4xx 非 409（403 權限、404 站點不存在等）：重試不會變好，直接呈現，不進佇列。
+        dequeueStopRetry(stopId, kind)
+        ElMessage.error(apiError(e, fallbackMessage))
+        return
+      }
+      // 網路（無 response）或 5xx：進重試佇列，靠持續存在的 UI 狀態（而非會消失的
+      // toast）讓司機知道還有動作沒送出去；手動觸發的第一次仍彈一次即時提示。
+      if (!isRetry) ElMessage.error(apiError(e, fallbackMessage))
+      enqueueStopRetry({ kind, tripId, stopId, fallbackMessage })
+    }
+  }
+
+  let retryingStopActions = false
+  /** 由 `shipTimer` 每輪順帶呼叫；重送順序依佇列先進先出，逐筆 await 避免打亂 stops 覆寫順序。 */
+  async function retryStopActions(): Promise<void> {
+    if (retryingStopActions || stopRetryQueue.value.length === 0) return
+    retryingStopActions = true
+    try {
+      const items = [...stopRetryQueue.value]
+      for (const item of items) {
+        // 刻意序列化（不用 Promise.all）：逐筆 await 才能維持 stops 覆寫的時序，
+        // 且與 shipOutbox 的併發守衛精神一致。
+        await performStopAction(item.kind, item.tripId, item.stopId, item.fallbackMessage, true)
+      }
+    } finally {
+      retryingStopActions = false
+    }
+  }
+
   async function runStopAction(
-    call: (tripId: number, stopId: number) => Promise<unknown>,
+    kind: StopActionKind,
     stop: { stop_id: number },
     fallbackMessage: string,
   ): Promise<void> {
@@ -433,23 +646,15 @@ export function usePortalBusTrip() {
     if (!current || actingStopId.value !== null) return
     actingStopId.value = stop.stop_id
     try {
-      const res = await call(current.id, stop.stop_id)
-      syncClock(res as ApiHeaders)
-      stops.value = (res as { data?: { stops?: BusTripStop[] } }).data?.stops ?? []
-    } catch (e) {
-      ElMessage.error(apiError(e, fallbackMessage))
-      if (errorStatus(e) === 409) {
-        // 此站已被別人處理／班次已結束：畫面與後端已分岔，重抓權威狀態。
-        await loadActive(current.route_id, current.direction).catch(() => {})
-      }
+      await performStopAction(kind, current.id, stop.stop_id, fallbackMessage)
     } finally {
       actingStopId.value = null
     }
   }
 
-  const departStop = (stop: { stop_id: number }) => runStopAction(departBusStop, stop, '離站失敗')
-  const skipStop = (stop: { stop_id: number }) => runStopAction(skipBusStop, stop, '跳過失敗')
-  const undoStop = (stop: { stop_id: number }) => runStopAction(undoBusStop, stop, '撤銷失敗')
+  const departStop = (stop: { stop_id: number }) => runStopAction('depart', stop, '離站失敗')
+  const skipStop = (stop: { stop_id: number }) => runStopAction('skip', stop, '跳過失敗')
+  const undoStop = (stop: { stop_id: number }) => runStopAction('undo', stop, '撤銷失敗')
 
   // ── 結束班次 ──────────────────────────────────────────────────────────────
 
@@ -482,6 +687,8 @@ export function usePortalBusTrip() {
       return
     }
     setOutbox([])
+    // 班次已正式結束，佇列裡待重送的站點動作已無意義（同 handleTripGone 的理由）。
+    stopRetryQueue.value = []
     trip.value = null
     stops.value = []
     completing.value = false
@@ -497,8 +704,9 @@ export function usePortalBusTrip() {
   return {
     trip, stops, routes, selectedRouteId, direction,
     loading, starting, completing, actingStopId,
-    gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked, routesFailed,
-    pendingPingCount, tripSummary,
+    gpsActive, gpsSupported, gpsClockSuspect, gpsPermissionDenied,
+    snapshotFailed, employeeUnlinked, routesFailed,
+    pendingPingCount, pendingStopActionCount, tripSummary,
     init, start, departStop, skipStop, undoStop, complete, teardown,
   }
 }

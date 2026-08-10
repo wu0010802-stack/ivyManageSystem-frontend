@@ -18,10 +18,12 @@ const h = vi.hoisted(() => {
       gpsActive: r(false),
       gpsSupported: r(true),
       gpsClockSuspect: r(false),
+      gpsPermissionDenied: r(false),
       snapshotFailed: r(false),
       employeeUnlinked: r(false),
       routesFailed: r(false),
       pendingPingCount: r(0),
+      pendingStopActionCount: r(0),
       tripSummary: r(''),
       init: vi.fn(),
       start: vi.fn(),
@@ -53,10 +55,12 @@ function resetState() {
   s.gpsActive.value = false
   s.gpsSupported.value = true
   s.gpsClockSuspect.value = false
+  s.gpsPermissionDenied.value = false
   s.snapshotFailed.value = false
   s.employeeUnlinked.value = false
   s.routesFailed.value = false
   s.pendingPingCount.value = 0
+  s.pendingStopActionCount.value = 0
   s.tripSummary.value = ''
 }
 
@@ -221,6 +225,37 @@ describe('PortalBusTripView', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="bus-pending-pings"]').attributes('title')).toContain('3 筆')
+  })
+
+  it('定位權限被拒時顯示可行動的提示，且蓋過通用 GPS 警示（不得兩張都顯示）', async () => {
+    s.trip.value = { id: 7 }
+    s.gpsPermissionDenied.value = true
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const card = wrapper.find('[data-testid="bus-gps-permission-denied"]')
+    expect(card.exists()).toBe(true)
+    expect(card.attributes('description')).toContain('設定')
+    expect(wrapper.find('[data-testid="bus-gps-warning"]').exists()).toBe(false)
+  })
+
+  it('取得位置後（gpsActive=true）即使 gpsPermissionDenied 舊值未清也不顯示權限提示', async () => {
+    s.trip.value = { id: 7 }
+    s.gpsPermissionDenied.value = true
+    s.gpsActive.value = true
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-gps-permission-denied"]').exists()).toBe(false)
+  })
+
+  it('有待重送的站點操作時提示筆數（持續存在的狀態，不是會消失的 toast）', async () => {
+    s.trip.value = { id: 7 }
+    s.pendingStopActionCount.value = 2
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-pending-stop-actions"]').attributes('title')).toContain('2 個')
   })
 
   it('結束班次按鈕呼叫 complete', async () => {

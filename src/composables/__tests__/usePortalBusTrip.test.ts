@@ -24,6 +24,7 @@ import {
 } from '@/api/bus'
 import {
   usePortalBusTrip, PING_FLUSH_INTERVAL_MS, SUSPECT_TIMESTAMP_STREAK,
+  ACTIVE_TRIP_RESYNC_INTERVAL_MS,
 } from '@/composables/usePortalBusTrip'
 
 // ---------------------------------------------------------------------------
@@ -99,6 +100,27 @@ const geolocation = {
 }
 const wakeLockSentinel = { release: vi.fn().mockResolvedValue(undefined) }
 const wakeLock = { request: vi.fn().mockResolvedValue(wakeLockSentinel) }
+
+/**
+ * 模擬「裝置完全不支援定位」（`!('geolocation' in navigator)`）。**不能用
+ * `Object.defineProperty(navigator, 'geolocation', { value: undefined })` 再 `delete`**
+ * ——測試環境的 `Navigator.prototype` 本身就有 `geolocation`（未實作但存在），刪掉
+ * own property 後 `in` 操作仍會沿原型鏈找到它、恆為 `true`。改用 Proxy 攔截 `has`。
+ */
+let originalNavigator: Navigator
+function stubNoGeolocation(): void {
+  originalNavigator = globalThis.navigator
+  const proxy = new Proxy(originalNavigator, {
+    has: (target, prop) => (prop === 'geolocation' ? false : prop in target),
+    get: (target, prop, receiver) => (
+      prop === 'geolocation' ? undefined : Reflect.get(target, prop, receiver)
+    ),
+  })
+  Object.defineProperty(globalThis, 'navigator', { value: proxy, configurable: true })
+}
+function restoreGeolocation(): void {
+  Object.defineProperty(globalThis, 'navigator', { value: originalNavigator, configurable: true })
+}
 
 function emitPosition(atMs: number, coords: Record<string, number> = {}) {
   watchCb?.({ timestamp: atMs, coords: { latitude: 22.61, longitude: 120.31, accuracy: 12, ...coords } })
@@ -637,6 +659,107 @@ describe('usePortalBusTrip — GPS 上報', () => {
     watchErrCb?.({ code: 1, message: 'denied' })
     expect(bus.gpsActive.value).toBe(false)
   })
+
+  // Task 1: GPS 權限被拒與其他定位失敗（POSITION_UNAVAILABLE / TIMEOUT）必須分開呈現，
+  // 因為「重試」對權限被拒完全沒用——司機得去瀏覽器/系統設定開權限。
+  it('PositionError.code === 1（PERMISSION_DENIED）時亮出可行動的權限提示', async () => {
+    const bus = await bootWithActiveTrip()
+
+    watchErrCb?.({ code: 1, message: 'User denied Geolocation' })
+
+    expect(bus.gpsPermissionDenied.value).toBe(true)
+    expect(bus.gpsActive.value).toBe(false)
+  })
+
+  it('code === 2（POSITION_UNAVAILABLE）不得誤判為權限被拒', async () => {
+    const bus = await bootWithActiveTrip()
+
+    watchErrCb?.({ code: 2, message: 'Position unavailable' })
+
+    expect(bus.gpsPermissionDenied.value).toBe(false)
+    expect(bus.gpsActive.value).toBe(false)
+  })
+
+  it('code === 3（TIMEOUT）不得誤判為權限被拒', async () => {
+    const bus = await bootWithActiveTrip()
+
+    watchErrCb?.({ code: 3, message: 'Timeout' })
+
+    expect(bus.gpsPermissionDenied.value).toBe(false)
+    expect(bus.gpsActive.value).toBe(false)
+  })
+
+  it('拿到真正的位置後解除權限被拒旗標（例如司機事後去設定開了權限）', async () => {
+    const bus = await bootWithActiveTrip()
+    watchErrCb?.({ code: 1, message: 'denied' })
+    expect(bus.gpsPermissionDenied.value).toBe(true)
+
+    emitPosition(LOCAL_NOW_MS)
+
+    expect(bus.gpsPermissionDenied.value).toBe(false)
+    expect(bus.gpsActive.value).toBe(true)
+  })
+})
+
+// Task 2: 裝置不支援定位（`!('geolocation' in navigator)`）時，站點動作重試佇列與
+// 週期性核對（resyncActiveTrip）不該因此永遠不啟動——兩者都與 GPS 是否有點無關，
+// 前者只依賴網路，後者的存在理由正是「涵蓋沒有 GPS 點」的情境。
+describe('usePortalBusTrip — 裝置不支援定位時的背景計時器', () => {
+  it('不支援定位仍要啟動站點重試佇列送出計時器（stopRetryQueue 不得永遠卡住）', async () => {
+    stubNoGeolocation()
+    try {
+      const bus = await bootWithActiveTrip()
+      expect(bus.gpsSupported.value).toBe(false)
+
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+      expect(bus.pendingStopActionCount.value).toBe(1)
+
+      vi.mocked(departBusStop).mockResolvedValueOnce(resp({
+        stops: [{ stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' }],
+      }) as never)
+      await vi.advanceTimersByTimeAsync(PING_FLUSH_INTERVAL_MS)
+      await flushPromises()
+
+      expect(bus.pendingStopActionCount.value).toBe(0)
+    } finally {
+      restoreGeolocation()
+    }
+  })
+
+  it('不支援定位仍要啟動週期性核對（班次消失仍要被發現）', async () => {
+    stubNoGeolocation()
+    try {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null }) as never)
+
+      await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS)
+      await flushPromises()
+
+      expect(bus.trip.value).toBeNull()
+      expect(ElMessage.warning).toHaveBeenCalled()
+    } finally {
+      restoreGeolocation()
+    }
+  })
+
+  it('teardown 時仍要對稱清理計時器（不支援定位路徑也不得留下孤兒 interval）', async () => {
+    stubNoGeolocation()
+    try {
+      const bus = await bootWithActiveTrip()
+      bus.teardown()
+      await flushPromises()
+      const callsBefore = vi.mocked(getActiveBusTrip).mock.calls.length
+
+      await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS * 2)
+      await flushPromises()
+
+      expect(vi.mocked(getActiveBusTrip).mock.calls.length).toBe(callsBefore)
+    } finally {
+      restoreGeolocation()
+    }
+  })
 })
 
 describe('usePortalBusTrip — 上報失敗與重送', () => {
@@ -791,6 +914,100 @@ describe('usePortalBusTrip — 上報失敗與重送', () => {
   })
 })
 
+describe('usePortalBusTrip — 週期性核對班次是否仍存在', () => {
+  // Task 2: 唯一能發現「班次已不存在」的既有路徑是 shipOutbox 送 ping 時收到 409/404。
+  // 當 GPS 完全沒有點（權限被拒／不支援）時 outbox 永遠是空的，這條路徑等於失效——
+  // 班次被排程器逾時關閉或被另一台裝置結束時，司機畫面會永遠停在「進行中」。
+  // 這裡驗證一條不依賴 ping 管線的週期性核對。
+
+  it('GPS 完全沒有點時（outbox 恆為空），週期性核對仍能發現班次已消失', async () => {
+    const bus = await bootWithActiveTrip()
+    // 完全不 emitPosition：outbox 永遠是空的，shipOutbox 那條偵測路徑必然失效。
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null }) as never)
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS)
+    await flushPromises()
+
+    expect(bus.trip.value).toBeNull()
+    expect(geolocation.clearWatch).toHaveBeenCalledWith(42)
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('未到週期性核對的時間點不觸發（避免過度頻繁打行動網路）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null }) as never)
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS - 1)
+    await flushPromises()
+
+    expect(bus.trip.value).not.toBeNull()
+  })
+
+  it('班次仍存在時週期性核對不動任何狀態（只是核對，非重載）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload()) as never)
+    const watchCallsBefore = geolocation.watchPosition.mock.calls.length
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS)
+    await flushPromises()
+
+    expect(bus.trip.value?.id).toBe(7)
+    // beginTracking 在核對成功時仍會被呼叫，但已在追蹤中應是 no-op，不得重開一組 watch
+    expect(geolocation.watchPosition.mock.calls.length).toBe(watchCallsBefore)
+  })
+
+  it('週期性核對遇到網路暫時失敗時靜默忽略，不打斷司機（下一輪再試）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(getActiveBusTrip).mockRejectedValueOnce(axiosError(undefined))
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS)
+    await flushPromises()
+
+    expect(bus.trip.value?.id).toBe(7) // 沒被誤判成消失
+  })
+
+  // Major（PII 洩漏）：resyncActiveTrip 沒帶 mine=true，若同 route+direction 已被
+  // 另一位司機（B）開了新班次，A 的週期核對會把 B 的班次（含學生姓名與家庭座標）
+  // 直接接手覆寫進 A 的畫面，且 A 的 GPS 會灌進 B 的班次。resyncActiveTrip 只該用來
+  // 確認「我手上這張是否還在」，trip.id 不同就該視為「我的班次已消失」。
+  it('週期性核對回傳的是別的班次（trip.id 不同）時視為原班次已消失，不得接手新班次', async () => {
+    const bus = await bootWithActiveTrip() // trip.id === 7
+    // B 司機在同一 route+direction 開了新班次（id=99），含 B 班次的學生名冊
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload({ id: 99 })) as never)
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS)
+    await flushPromises()
+
+    // 不得接手 B 的班次
+    expect(bus.trip.value).toBeNull()
+    expect(geolocation.clearWatch).toHaveBeenCalledWith(42)
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('分頁回前景時也核對一次（不必等到下一個週期）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null }) as never)
+
+    document.dispatchEvent(new Event('visibilitychange')) // 預設 visibilityState 已是 'visible'
+    await flushPromises()
+
+    expect(bus.trip.value).toBeNull()
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('teardown 之後週期性核對停擺', async () => {
+    const bus = await bootWithActiveTrip()
+    bus.teardown()
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null }) as never)
+    const callsBefore = vi.mocked(getActiveBusTrip).mock.calls.length
+
+    await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS * 2)
+    await flushPromises()
+
+    expect(vi.mocked(getActiveBusTrip).mock.calls.length).toBe(callsBefore)
+  })
+})
+
 describe('usePortalBusTrip — 站點操作', () => {
   it('離站成功後以回應的 stops 覆寫', async () => {
     const bus = await bootWithActiveTrip()
@@ -861,6 +1078,165 @@ describe('usePortalBusTrip — 站點操作', () => {
     resolveDepart(resp({ stops: [] }))
     await pending
     expect(bus.actingStopId.value).toBeNull()
+  })
+
+  // Task 3：站點動作失敗只跳一個會消失的 toast，行駛中訊號短暫中斷時司機不會盯著螢幕看，
+  // 該站就停在 pending、家長端進度顯示錯誤。網路類失敗（無 response / 5xx）要能自動重試，
+  // 並用「持續存在的 UI 狀態」（不是會消失的 toast）讓司機看得到還有幾個動作待重送。
+  describe('失敗重送（強健性比照 GPS ping 的 outbox）', () => {
+    it('網路錯誤（無 response）進重試佇列，且待重送筆數對外可見', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
+
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+
+      expect(bus.pendingStopActionCount.value).toBe(1)
+    })
+
+    it('5xx 進重試佇列', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(503))
+
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+
+      expect(bus.pendingStopActionCount.value).toBe(1)
+    })
+
+    it('下一輪自動重送成功後從佇列移除並套用最新 stops', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+      expect(bus.pendingStopActionCount.value).toBe(1)
+
+      vi.mocked(departBusStop).mockResolvedValueOnce(resp({
+        stops: [{ stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' }],
+      }) as never)
+      await vi.advanceTimersByTimeAsync(PING_FLUSH_INTERVAL_MS)
+      await flushPromises()
+
+      expect(bus.pendingStopActionCount.value).toBe(0)
+      expect(bus.stops.value.find((s) => s.stop_id === 11)?.status).toBe('departed')
+      expect(departBusStop).toHaveBeenCalledTimes(2)
+    })
+
+    it('重送遇到 409（此站已處理）視為已完成：從佇列移除、重抓權威狀態，不算錯誤', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+      expect(bus.pendingStopActionCount.value).toBe(1)
+
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(409, '此站已處理'))
+      vi.mocked(getActiveBusTrip).mockResolvedValue(resp({
+        trip: { id: 7, route_id: 3, direction: 'morning', status: 'in_progress' },
+        stops: [{ stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' }],
+      }) as never)
+      const errorCallsBefore = vi.mocked(ElMessage.error).mock.calls.length
+
+      await vi.advanceTimersByTimeAsync(PING_FLUSH_INTERVAL_MS)
+      await flushPromises()
+
+      expect(bus.pendingStopActionCount.value).toBe(0)
+      expect(bus.stops.value.find((s) => s.stop_id === 11)?.status).toBe('departed')
+      // 重送觸發的 409 不是新錯誤（已由第一次失敗提示過），不得再彈一次
+      expect(vi.mocked(ElMessage.error).mock.calls.length).toBe(errorCallsBefore)
+    })
+
+    // Task 4: 重送遇 409 代表這站已被別的裝置改了狀態，畫面雖然正確但司機以為自己
+    // 剛才的操作成功了。要用 info（非 error，避免誘發司機重按）明講一次。
+    it('重送遇 409 時給一則 info 提示，告知站點已由其他裝置更新', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(409, '此站已處理'))
+      vi.mocked(getActiveBusTrip).mockResolvedValue(resp({
+        trip: { id: 7, route_id: 3, direction: 'morning', status: 'in_progress' },
+        stops: [{ stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'skipped' }],
+      }) as never)
+
+      await vi.advanceTimersByTimeAsync(PING_FLUSH_INTERVAL_MS)
+      await flushPromises()
+
+      expect(ElMessage.info).toHaveBeenCalled()
+      expect(ElMessage.error).not.toHaveBeenCalledWith(expect.stringContaining('此站已處理'))
+    })
+
+    it('4xx（非 409，例如 403）不重試：不進佇列，直接呈現錯誤', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(403, '無權限操作此站'))
+
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+
+      expect(bus.pendingStopActionCount.value).toBe(0)
+      expect(ElMessage.error).toHaveBeenCalledWith('無權限操作此站')
+
+      await vi.advanceTimersByTimeAsync(PING_FLUSH_INTERVAL_MS * 3)
+      await flushPromises()
+      expect(departBusStop).toHaveBeenCalledTimes(1) // 沒有被重送
+    })
+
+    it('404（站點不存在）不重試：不進佇列', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(skipBusStop).mockRejectedValueOnce(axiosError(404))
+
+      await bus.skipStop({ stop_id: 11 } as never)
+      await flushPromises()
+
+      expect(bus.pendingStopActionCount.value).toBe(0)
+    })
+
+    it('佇列裡排著別站別 kind 的動作時，某動作成功不得連帶丟掉同站不同 kind 的待重送', async () => {
+      const bus = await bootWithActiveTrip()
+      // 同一站先前的 skip 因網路錯誤進了佇列，仍待重送
+      vi.mocked(skipBusStop).mockRejectedValueOnce(axiosError(undefined))
+      await bus.skipStop({ stop_id: 11 } as never)
+      await flushPromises()
+      expect(bus.pendingStopActionCount.value).toBe(1)
+
+      // 司機接著對同一站發起一次全新的 depart 動作（非重送、非同一筆），且這次成功
+      vi.mocked(departBusStop).mockResolvedValueOnce(resp({ stops: [] }) as never)
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+
+      // depart 成功只該清掉 depart 自己（佇列裡根本沒有它），佇列裡待重送的 skip
+      // 不得被 dequeue 誤刪——if it only compares stopId 這裡會被清成 0，是 bug。
+      expect(bus.pendingStopActionCount.value).toBe(1)
+    })
+
+    it('班次已消失時清空重試佇列（動作已無意義，不留孤兒重試）', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
+      await bus.departStop({ stop_id: 11 } as never)
+      await flushPromises()
+      expect(bus.pendingStopActionCount.value).toBe(1)
+
+      vi.mocked(postBusPings).mockRejectedValueOnce(axiosError(409, '班次已結束'))
+      emitPosition(LOCAL_NOW_MS)
+      await advanceToFlush()
+
+      expect(bus.trip.value).toBeNull()
+      expect(bus.pendingStopActionCount.value).toBe(0)
+    })
+
+    it('離站成功時若後端回 notification_warning：輕量提示家長通知可能延遲，不當成錯誤', async () => {
+      const bus = await bootWithActiveTrip()
+      vi.mocked(departBusStop).mockResolvedValue(resp({
+        stops: [{ stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' }],
+        notification_warning: true,
+      }) as never)
+
+      await bus.departStop(bus.stops.value[0])
+      await flushPromises()
+
+      expect(ElMessage.error).not.toHaveBeenCalled()
+      expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('家長通知'))
+    })
   })
 })
 

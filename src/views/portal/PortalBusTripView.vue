@@ -89,8 +89,22 @@
     <template v-else>
       <!-- 路線與方向必須看得見：接手到別條路線時，這是司機唯一能自己察覺的訊號 -->
       <h2 class="trip-summary" data-testid="bus-trip-summary">{{ tripSummary }}</h2>
+      <!--
+        定位權限被拒與其他定位失敗（POSITION_UNAVAILABLE / TIMEOUT）分開呈現：
+        `watchPosition` 一旦被拒不會再自動跳權限提示，「重新整理」對這條路徑沒用，
+        要給司機一個可行動的下一步（去瀏覽器/系統設定開權限）。排在通用 GPS 警示之前。
+      -->
       <el-alert
-        v-if="!gpsActive"
+        v-if="!gpsActive && gpsPermissionDenied"
+        type="error"
+        :closable="false"
+        show-icon
+        data-testid="bus-gps-permission-denied"
+        title="定位權限已被拒絕，家長端看不到車輛位置"
+        description="請至瀏覽器或手機系統設定開啟此頁面的定位權限，開啟後重新整理頁面"
+      />
+      <el-alert
+        v-else-if="!gpsActive"
         type="warning"
         :closable="false"
         show-icon
@@ -112,6 +126,14 @@
         show-icon
         data-testid="bus-pending-pings"
         :title="`有 ${pendingPingCount} 筆位置待重送（網路恢復後會自動補上）`"
+      />
+      <el-alert
+        v-if="pendingStopActionCount > 0"
+        type="info"
+        :closable="false"
+        show-icon
+        data-testid="bus-pending-stop-actions"
+        :title="`有 ${pendingStopActionCount} 個站點操作待重送（網路恢復後會自動補上）`"
       />
 
       <ul class="stop-list" aria-label="站點清單">
@@ -192,8 +214,9 @@ import { usePortalBusTrip } from '@/composables/usePortalBusTrip'
 const {
   trip, stops, routes, selectedRouteId, direction,
   loading, starting, completing, actingStopId,
-  gpsActive, gpsSupported, gpsClockSuspect, snapshotFailed, employeeUnlinked, routesFailed,
-  pendingPingCount, tripSummary,
+  gpsActive, gpsSupported, gpsClockSuspect, gpsPermissionDenied,
+  snapshotFailed, employeeUnlinked, routesFailed,
+  pendingPingCount, pendingStopActionCount, tripSummary,
   init, start, departStop, skipStop, undoStop, complete, teardown,
 } = usePortalBusTrip()
 
