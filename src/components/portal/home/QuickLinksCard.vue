@@ -13,6 +13,7 @@ const links = [
   { label: '學期評量', to: '/portal/assessments', tint: 'contact' },
   { label: '成長軌跡', to: '/portal/growth', tint: 'event' },
   { label: '才藝點名', to: { path: '/portal/activity', query: { tab: 'attendance' } }, tint: 'activity' },
+  { label: '活動調查', to: '/portal/surveys', tint: 'event' },
 ]
 
 function go(to: RouteLocationRaw) {
