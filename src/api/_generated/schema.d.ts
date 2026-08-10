@@ -4320,6 +4320,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bus/routes/{route_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Route
+         * @description 改路線名稱／啟用狀態（部分更新，兩欄皆選填但至少一項）。
+         *
+         *     停用（`is_active=False`）時若該路線有 in_progress 班次一律擋 409：司機／
+         *     家長端正在依賴這班車的路線狀態，中途把路線關掉等同把正在路上的班次攔腰
+         *     切斷；停用語意應是「下一趟不再開」，`list_portal_routes` 已用
+         *     `is_active.is_(True)` 濾掉停用路線的司機選單、`start_trip` 也只接受
+         *     is_active 路線開新班，兩者都只影響「未開始」的班次，與此處對齊。改名不
+         *     受此限制（純文字異動不牽涉開班語意）。
+         *
+         *     管理端 `GET /routes` 刻意繼續列出已停用路線（`is_active` 已在既有
+         *     response 帶出）：停用後若管理端看不到，就永遠改不回來。
+         */
+        patch: operations["update_route_api_bus_routes__route_id__patch"];
+        trace?: never;
+    };
     "/bus/routes/{route_id}/stops": {
         parameters: {
             query?: never;
@@ -18990,6 +19020,11 @@ export interface components {
         };
         /** BusStopsOut */
         BusStopsOut: {
+            /**
+             * Notification Warning
+             * @default false
+             */
+            notification_warning: boolean;
             /** Stops */
             stops: components["schemas"]["BusStopAdminOut"][];
         };
@@ -30928,6 +30963,17 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * RouteUpdateIn
+         * @description 兩欄皆選填，但至少須帶一個——空 body 判定為 422（未表達任何變更意圖，
+         *     與 pydantic 既有欄位驗證錯誤同一種回應形狀，前端不必分辨兩種 422）。
+         */
+        RouteUpdateIn: {
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Name */
+            name?: string | null;
+        };
         /** RunNowOut */
         RunNowOut: {
             /** Detected */
@@ -41919,6 +41965,41 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusRouteCreatedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_route_api_bus_routes__route_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
