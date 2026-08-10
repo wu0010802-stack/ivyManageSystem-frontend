@@ -9122,6 +9122,7 @@ export interface paths {
          *     - pending_activity_promotions: int
          *     - recent_leave_reviews: int
          *     - active_medication_orders: int
+         *     - pending_survey_count: int
          */
         get: operations["home_summary_api_parent_home_summary_get"];
         put?: never;
@@ -9841,6 +9842,57 @@ export interface paths {
         get: operations["get_child_profile_api_parent_students__student_id__profile_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/surveys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Parent Surveys */
+        get: operations["list_parent_surveys_api_parent_surveys_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/surveys/{survey_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Parent Survey */
+        get: operations["get_parent_survey_api_parent_surveys__survey_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/surveys/{survey_id}/responses/{student_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Parent Response */
+        post: operations["submit_parent_response_api_parent_surveys__survey_id__responses__student_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12332,6 +12384,81 @@ export interface paths {
         get: operations["get_substitute_pending_count_api_portal_substitute_pending_count_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/surveys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Portal Surveys */
+        get: operations["list_portal_surveys_api_portal_surveys_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/surveys/{survey_id}/class-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Portal Class Status */
+        get: operations["portal_class_status_api_portal_surveys__survey_id__class_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/surveys/{survey_id}/remind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Portal Remind
+         * @description 僅 published 且未過截止可催（與管理端一致）；只推自己班未回覆者。
+         */
+        post: operations["portal_remind_api_portal_surveys__survey_id__remind_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/surveys/{survey_id}/responses/{student_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Portal Fill Response
+         * @description 教師代填（spec D7）：不受截止日/closed 限制，但 draft 不可代填；
+         *     學生須在教師管轄班級 ∩ 本調查 audience 內（_my_audience_students 四條件）。
+         */
+        post: operations["portal_fill_response_api_portal_surveys__survey_id__responses__student_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15682,6 +15809,166 @@ export interface paths {
          * @description 跨三模型的學生紀錄時間軸（事件 / 評量 / 異動）。
          */
         get: operations["get_student_records_timeline_api_students_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Surveys */
+        get: operations["list_surveys_api_surveys_get"];
+        put?: never;
+        /** Create Survey */
+        post: operations["create_survey_api_surveys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Survey */
+        get: operations["get_survey_api_surveys__survey_id__get"];
+        /** Update Survey */
+        put: operations["update_survey_api_surveys__survey_id__put"];
+        post?: never;
+        /** Delete Survey */
+        delete: operations["delete_survey_api_surveys__survey_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Survey */
+        post: operations["close_survey_api_surveys__survey_id__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Survey */
+        get: operations["export_survey_api_surveys__survey_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish Survey */
+        post: operations["publish_survey_api_surveys__survey_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}/remind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remind Survey */
+        post: operations["remind_survey_api_surveys__survey_id__remind_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Survey Responses */
+        get: operations["list_survey_responses_api_surveys__survey_id__responses_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}/responses/{student_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Fill Response
+         * @description 行政代填（spec D7）：不受截止日/closed 狀態限制（口頭告知後補登），
+         *     但 draft 尚未發布不可代填；學生須在本調查 audience 內且屬本租戶。
+         */
+        post: operations["admin_fill_response_api_surveys__survey_id__responses__student_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/surveys/{survey_id}/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Survey Stats */
+        get: operations["get_survey_stats_api_surveys__survey_id__stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -25726,6 +26013,14 @@ export interface components {
             registrations: components["schemas"]["MyRegistrationsOut"];
             upcoming_sessions: components["schemas"]["ParentUpcomingSessionsOut"];
         };
+        /** ParentChildResponseOut */
+        ParentChildResponseOut: {
+            my_response?: components["schemas"]["ParentResponseOut"] | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
         /**
          * ParentContactBookAckOut
          * @description POST /parent/contact-book/{id}/ack — 已讀回傳（idempotent）。
@@ -26230,6 +26525,77 @@ export interface components {
              */
             status: "ok";
             user: components["schemas"]["ParentUserInfo"];
+        };
+        /** ParentResponseOut */
+        ParentResponseOut: {
+            /** Answers */
+            answers: {
+                [key: string]: unknown;
+            };
+            /** Attending */
+            attending: boolean;
+            /** Note */
+            note?: string | null;
+        };
+        /** ParentSurveyCardOut */
+        ParentSurveyCardOut: {
+            /** Event Date */
+            event_date?: string | null;
+            /** Fee Note */
+            fee_note?: string | null;
+            /** Is Open */
+            is_open: boolean;
+            /** Location */
+            location?: string | null;
+            my_response?: components["schemas"]["ParentResponseOut"] | null;
+            /**
+             * Reply Deadline
+             * Format: date
+             */
+            reply_deadline: string;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+            /** Survey Id */
+            survey_id: number;
+            /** Title */
+            title: string;
+        };
+        /** ParentSurveyDetailOut */
+        ParentSurveyDetailOut: {
+            /** Children */
+            children: components["schemas"]["ParentChildResponseOut"][];
+            /** Description */
+            description?: string | null;
+            /** Event Date */
+            event_date?: string | null;
+            /** Fee Note */
+            fee_note?: string | null;
+            /** Is Open */
+            is_open: boolean;
+            /** Location */
+            location?: string | null;
+            /** Questions */
+            questions: components["schemas"]["QuestionOut"][];
+            /**
+             * Reply Deadline
+             * Format: date
+             */
+            reply_deadline: string;
+            /** Status */
+            status: string;
+            /** Survey Id */
+            survey_id: number;
+            /** Title */
+            title: string;
+        };
+        /** ParentSurveyListOut */
+        ParentSurveyListOut: {
+            /** Items */
+            items: components["schemas"]["ParentSurveyCardOut"][];
         };
         /** ParentUpcomingSessionOut */
         ParentUpcomingSessionOut: {
@@ -27475,6 +27841,16 @@ export interface components {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
         };
+        /** PortalClassStatusOut */
+        PortalClassStatusOut: {
+            /** Not Replied */
+            not_replied: components["schemas"]["PortalNotRepliedOut"][];
+            /** Questions */
+            questions: components["schemas"]["QuestionOut"][];
+            /** Replied */
+            replied: components["schemas"]["ResponseItemOut"][];
+            survey: components["schemas"]["PortalSurveyItemOut"];
+        };
         /**
          * PortalColleagueOut
          * @description GET /portal/colleagues 單筆同事（僅供代理人下拉）。
@@ -27529,6 +27905,15 @@ export interface components {
             }[];
             /** Schema Version */
             schema_version: number;
+        };
+        /** PortalNotRepliedOut */
+        PortalNotRepliedOut: {
+            /** Classroom Name */
+            classroom_name: string;
+            /** Name */
+            name: string;
+            /** Student Id */
+            student_id: number;
         };
         /**
          * PortalParentMessageAttachmentOut
@@ -27780,6 +28165,29 @@ export interface components {
             total_registrations: number;
             /** Total Waitlist */
             total_waitlist: number;
+        };
+        /** PortalSurveyItemOut */
+        PortalSurveyItemOut: {
+            /** Event Date */
+            event_date?: string | null;
+            /** Fee Note */
+            fee_note?: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Reply Deadline
+             * Format: date
+             */
+            reply_deadline: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+        };
+        /** PortalSurveyListOut */
+        PortalSurveyListOut: {
+            /** Items */
+            items: components["schemas"]["PortalSurveyItemOut"][];
         };
         /** POSCheckoutItem */
         POSCheckoutItem: {
@@ -29223,6 +29631,43 @@ export interface components {
             /** Pin */
             pin: string;
         };
+        /** QuestionIn */
+        QuestionIn: {
+            /**
+             * Is Required
+             * @default true
+             */
+            is_required: boolean;
+            /** Options */
+            options?: string[] | null;
+            /** Question Text */
+            question_text: string;
+            /**
+             * Question Type
+             * @enum {string}
+             */
+            question_type: "single_choice" | "multi_choice" | "number" | "text";
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+        };
+        /** QuestionOut */
+        QuestionOut: {
+            /** Id */
+            id: number;
+            /** Is Required */
+            is_required: boolean;
+            /** Options */
+            options?: string[] | null;
+            /** Question Text */
+            question_text: string;
+            /** Question Type */
+            question_type: string;
+            /** Sort Order */
+            sort_order: number;
+        };
         /** QuotaUpdate */
         QuotaUpdate: {
             /** Note */
@@ -30373,6 +30818,11 @@ export interface components {
             /** Remark */
             remark: string;
         };
+        /** RemindOut */
+        RemindOut: {
+            /** Sent */
+            sent: number;
+        };
         /**
          * RemoveItemResultOut
          * @description 退課 / 退用品共用：含退費金額（force_refund 時 > 0，否則 0）。
@@ -30997,6 +31447,48 @@ export interface components {
         ResolveBody: {
             /** Note */
             note: string;
+        };
+        /**
+         * ResponseIn
+         * @description 代填（Task 8）/家長作答（Task 10）共用的答題輸入。本檔（Task 7）不掛任何端點使用它，
+         *     只是它與 `_upsert_response` 定義在此供後續任務 import（controller 明確裁定，見
+         *     task-7 brief 疑義 3），非 YAGNI 違規。
+         */
+        ResponseIn: {
+            /**
+             * Answers
+             * @default {}
+             */
+            answers: {
+                [key: string]: unknown;
+            };
+            /** Attending */
+            attending: boolean;
+            /** Note */
+            note?: string | null;
+        };
+        /** ResponseItemOut */
+        ResponseItemOut: {
+            /** Answers */
+            answers: {
+                [key: string]: unknown;
+            };
+            /** Attending */
+            attending: boolean;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Is Proxy */
+            is_proxy: boolean;
+            /** Note */
+            note?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+            /** Submitted By User Id */
+            submitted_by_user_id?: number | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /**
          * RevealPhoneOut
@@ -32969,6 +33461,51 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** StatsClassroomOut */
+        StatsClassroomOut: {
+            /** Attending */
+            attending: number;
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Replied */
+            replied: number;
+            /** Total */
+            total: number;
+        };
+        /** StatsNotRepliedOut */
+        StatsNotRepliedOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Name */
+            name: string;
+            /** Student Id */
+            student_id: number;
+        };
+        /** StatsQuestionOut */
+        StatsQuestionOut: {
+            /** Avg */
+            avg?: number | null;
+            /** Option Counts */
+            option_counts?: {
+                [key: string]: unknown;
+            } | null;
+            /** Question Id */
+            question_id: number;
+            /** Question Text */
+            question_text: string;
+            /** Question Type */
+            question_type: string;
+            /** Sum */
+            sum?: number | null;
+            /** Texts */
+            texts?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
         /**
          * StatusOut
          * @description GET /status — 無 plan 也要能答（state="none"）。
@@ -34317,6 +34854,121 @@ export interface components {
             name?: string | null;
             /** Price */
             price?: number | null;
+        };
+        /** SurveyDetailOut */
+        SurveyDetailOut: {
+            /** Audience Type */
+            audience_type: string;
+            /** Classroom Ids */
+            classroom_ids: number[];
+            /** Description */
+            description?: string | null;
+            /** Event Date */
+            event_date?: string | null;
+            /** Fee Note */
+            fee_note?: string | null;
+            /** Id */
+            id: number;
+            /** Location */
+            location?: string | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Questions */
+            questions: components["schemas"]["QuestionOut"][];
+            /**
+             * Reply Deadline
+             * Format: date
+             */
+            reply_deadline: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+        };
+        /** SurveyIn */
+        SurveyIn: {
+            /**
+             * Audience Type
+             * @default all
+             * @enum {string}
+             */
+            audience_type: "all" | "classrooms";
+            /**
+             * Classroom Ids
+             * @default []
+             */
+            classroom_ids: number[];
+            /** Description */
+            description?: string | null;
+            /** Event Date */
+            event_date?: string | null;
+            /** Fee Note */
+            fee_note?: string | null;
+            /** Location */
+            location?: string | null;
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["QuestionIn"][];
+            /**
+             * Reply Deadline
+             * Format: date
+             */
+            reply_deadline: string;
+            /** Title */
+            title: string;
+        };
+        /** SurveyListItemOut */
+        SurveyListItemOut: {
+            /** Audience Type */
+            audience_type: string;
+            /** Denominator */
+            denominator: number;
+            /** Event Date */
+            event_date?: string | null;
+            /** Id */
+            id: number;
+            /** Replied Count */
+            replied_count: number;
+            /**
+             * Reply Deadline
+             * Format: date
+             */
+            reply_deadline: string;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+        };
+        /** SurveyListOut */
+        SurveyListOut: {
+            /** Items */
+            items: components["schemas"]["SurveyListItemOut"][];
+        };
+        /** SurveyResponsesOut */
+        SurveyResponsesOut: {
+            /** Items */
+            items: components["schemas"]["ResponseItemOut"][];
+        };
+        /** SurveyStatsOut */
+        SurveyStatsOut: {
+            /** Attend Rate */
+            attend_rate: number;
+            /** Attending Count */
+            attending_count: number;
+            /** By Classroom */
+            by_classroom: components["schemas"]["StatsClassroomOut"][];
+            /** Denominator */
+            denominator: number;
+            /** Not Replied */
+            not_replied: components["schemas"]["StatsNotRepliedOut"][];
+            /** Questions */
+            questions: components["schemas"]["StatsQuestionOut"][];
+            /** Replied Count */
+            replied_count: number;
+            /** Reply Rate */
+            reply_rate: number;
         };
         /** SwapRequestCreate */
         SwapRequestCreate: {
@@ -51965,6 +52617,93 @@ export interface operations {
             };
         };
     };
+    list_parent_surveys_api_parent_surveys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentSurveyListOut"];
+                };
+            };
+        };
+    };
+    get_parent_survey_api_parent_surveys__survey_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentSurveyDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_parent_response_api_parent_surveys__survey_id__responses__student_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: number;
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResponseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentResponseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     parent_get_timeline_api_parent_timeline_get: {
         parameters: {
             query: {
@@ -56023,6 +56762,124 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubstitutePendingCountOut"];
+                };
+            };
+        };
+    };
+    list_portal_surveys_api_portal_surveys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalSurveyListOut"];
+                };
+            };
+        };
+    };
+    portal_class_status_api_portal_surveys__survey_id__class_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalClassStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portal_remind_api_portal_surveys__survey_id__remind_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemindOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portal_fill_response_api_portal_surveys__survey_id__responses__student_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: number;
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResponseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -62412,6 +63269,387 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StudentRecordsTimelineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_surveys_api_surveys_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_survey_api_surveys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_survey_api_surveys__survey_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_survey_api_surveys__survey_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurveyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_survey_api_surveys__survey_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_survey_api_surveys__survey_id__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_survey_api_surveys__survey_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_survey_api_surveys__survey_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remind_survey_api_surveys__survey_id__remind_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemindOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_survey_responses_api_surveys__survey_id__responses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyResponsesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_fill_response_api_surveys__survey_id__responses__student_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: number;
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResponseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_survey_stats_api_surveys__survey_id__stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                survey_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurveyStatsOut"];
                 };
             };
             /** @description Validation Error */
