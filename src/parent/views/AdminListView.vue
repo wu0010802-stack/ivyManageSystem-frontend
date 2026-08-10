@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
+import { useHomeSummary } from '../composables/useHomeSummary'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
 import M3Divider from '../components/m3/M3Divider.vue'
@@ -10,14 +11,77 @@ import M3Divider from '../components/m3/M3Divider.vue'
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
+const { badges } = useHomeSummary()
 
-const ITEMS = [
-  { headline: '請假', supportingText: '送出請假申請、查詢假單狀態', leadingIcon: 'event_busy', path: '/leaves' },
-  { headline: '繳費', supportingText: '查詢應繳/已繳費用', leadingIcon: 'payments', path: '/fees' },
-  { headline: '用藥委託', supportingText: '新增/查詢委託用藥單', leadingIcon: 'medication', path: '/medications' },
-  { headline: '課後才藝', supportingText: '才藝課程報名與紀錄', leadingIcon: 'palette', path: '/activity' },
-  { headline: '待簽紀錄', supportingText: '需家長簽收的通知事項', leadingIcon: 'mark_email_read', path: '/events' },
-] as const
+/**
+ * 徽章語意分兩種，色調要分開，否則「今天有藥要吃」會被讀成「有事沒處理」：
+ *  - action：需要家長處理或該知道結果 → 品牌綠（逾期款項轉 coral）
+ *  - info：純資訊 → 中性藍
+ * 數字為 0 時不顯示徽章（不要出現「0 筆」）。
+ */
+interface AdminItem {
+  headline: string
+  supportingText: string
+  leadingIcon: string
+  path: string
+  badge: number
+  badgeTone: 'action' | 'info' | 'alert'
+  badgeLabel: string
+}
+
+const items = computed<AdminItem[]>(() => {
+  const b = badges.value
+  return [
+    {
+      headline: '請假',
+      supportingText: '送出請假申請、查詢假單狀態',
+      leadingIcon: 'event_busy',
+      path: '/leaves',
+      badge: b.recentLeaveReviews,
+      badgeTone: 'action',
+      badgeLabel: `${b.recentLeaveReviews} 筆假單有審核結果`,
+    },
+    {
+      headline: '繳費',
+      supportingText: '查詢應繳/已繳費用',
+      leadingIcon: 'payments',
+      path: '/fees',
+      badge: b.outstandingFees,
+      badgeTone: b.overdueFees > 0 ? 'alert' : 'action',
+      badgeLabel:
+        b.overdueFees > 0
+          ? `${b.outstandingFees} 筆待繳，含逾期款項`
+          : `${b.outstandingFees} 筆待繳`,
+    },
+    {
+      headline: '用藥委託',
+      supportingText: '新增/查詢委託用藥單',
+      leadingIcon: 'medication',
+      path: '/medications',
+      badge: b.activeMedicationOrders,
+      badgeTone: 'info',
+      badgeLabel: `今日 ${b.activeMedicationOrders} 張用藥單`,
+    },
+    {
+      headline: '課後才藝',
+      supportingText: '才藝課程報名與紀錄',
+      leadingIcon: 'palette',
+      path: '/activity',
+      badge: b.pendingActivityPromotions,
+      badgeTone: 'action',
+      badgeLabel: `${b.pendingActivityPromotions} 筆候補待確認`,
+    },
+    {
+      headline: '待簽紀錄',
+      supportingText: '需家長簽收的通知事項',
+      leadingIcon: 'mark_email_read',
+      path: '/events',
+      badge: b.pendingEventAcks,
+      badgeTone: 'action',
+      badgeLabel: `${b.pendingEventAcks} 份待簽`,
+    },
+  ]
+})
 
 const children = computed(() =>
   (childrenStore.items || []) as { student_id: number; name?: string }[],
@@ -53,15 +117,27 @@ onMounted(async () => {
   <div class="admin-list-view">
     <M3List>
       <M3ListItem
-        v-for="item in ITEMS"
+        v-for="item in items"
         :key="item.path"
         :headline="item.headline"
         :supporting-text="item.supportingText"
         :leading-icon="item.leadingIcon"
-        trailing-icon="chevron_right"
         clickable
         @click="go(item.path)"
-      />
+      >
+        <template #trailing>
+          <span class="admin-trailing">
+            <span
+              v-if="item.badge > 0"
+              class="admin-badge"
+              :class="`admin-badge-${item.badgeTone}`"
+              role="status"
+              :aria-label="item.badgeLabel"
+            >{{ item.badge }}</span>
+            <span class="material-symbols-rounded admin-chevron" aria-hidden="true">chevron_right</span>
+          </span>
+        </template>
+      </M3ListItem>
 
       <M3Divider class="admin-divider" />
 
@@ -86,5 +162,40 @@ onMounted(async () => {
 }
 .admin-divider {
   margin: 8px 0;
+}
+
+.admin-trailing {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, #006d3d);
+}
+/* 逾期款項：唯一該讓家長心跳快一下的情況 */
+.admin-badge-alert {
+  background: var(--coral-700, #b14545);
+}
+/* 資訊性（今日用藥單）：中性藍，避免被讀成待辦 */
+.admin-badge-info {
+  background: var(--sky-700, #2d6f8e);
+}
+
+.admin-chevron {
+  font-size: 20px;
+  color: var(--pt-text-muted, #6b5e54);
+  font-variation-settings: 'wght' 400;
 }
 </style>
