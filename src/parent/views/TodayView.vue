@@ -16,6 +16,7 @@ import PushCta from '../components/home/PushCta.vue'
 import ChildrenStrip from '../components/home/ChildrenStrip.vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import PendingSignBanner from '../components/home/PendingSignBanner.vue'
+import PendingSurveyBanner from '../components/home/PendingSurveyBanner.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
@@ -47,6 +48,10 @@ const summary = computed(() => summaryData.value?.summary || null)
 const showPushCta = computed(() => me.value && !me.value.can_push)
 const pendingSignCount = computed(() => {
   const v = (summary.value as { pending_event_acks?: unknown } | null)?.pending_event_acks
+  return typeof v === 'number' ? v : 0
+})
+const pendingSurveyCount = computed(() => {
+  const v = (summary.value as { pending_survey_count?: unknown } | null)?.pending_survey_count
   return typeof v === 'number' ? v : 0
 })
 
@@ -251,6 +256,7 @@ function go(path: string) {
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="today-view">
     <PendingSignBanner :count="pendingSignCount" />
+    <PendingSurveyBanner :count="pendingSurveyCount" />
 
     <!-- 頂部：日期 + 多寶切換（單孩姓名由今日卡呈現，不重複） -->
     <div class="today-head">

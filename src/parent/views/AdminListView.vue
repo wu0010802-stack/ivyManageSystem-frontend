@@ -11,7 +11,14 @@ import M3Divider from '../components/m3/M3Divider.vue'
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
-const { badges } = useHomeSummary()
+const { badges, summary } = useHomeSummary()
+
+// pending_survey_count 尚未併入 HomeBadges（該 interface 之後才擴充），
+// 直接讀 summary 原始欄位，做法比照 TodayView 的 pendingSurveyCount。
+const pendingSurveyCount = computed(() => {
+  const v = (summary.value as { pending_survey_count?: unknown } | null)?.pending_survey_count
+  return typeof v === 'number' ? v : 0
+})
 
 /**
  * 徽章語意分兩種，色調要分開，否則「今天有藥要吃」會被讀成「有事沒處理」：
@@ -79,6 +86,15 @@ const items = computed<AdminItem[]>(() => {
       badge: b.pendingEventAcks,
       badgeTone: 'action',
       badgeLabel: `${b.pendingEventAcks} 份待簽`,
+    },
+    {
+      headline: '活動調查',
+      supportingText: '戶外教學/親子活動參加意願回覆',
+      leadingIcon: 'fact_check',
+      path: '/surveys',
+      badge: pendingSurveyCount.value,
+      badgeTone: 'action',
+      badgeLabel: `${pendingSurveyCount.value} 份待回覆`,
     },
   ]
 })

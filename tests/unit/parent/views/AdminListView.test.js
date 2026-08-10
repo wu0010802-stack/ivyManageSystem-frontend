@@ -37,16 +37,17 @@ beforeEach(() => {
 })
 
 describe('AdminListView', () => {
-  it('渲染 5 個主行政 item + 孩子檔案二級入口', () => {
+  it('渲染 6 個主行政 item + 孩子檔案二級入口', () => {
     setupStores()
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
-    expect(items).toHaveLength(6)
+    expect(items).toHaveLength(7)
     expect(w.text()).toContain('請假')
     expect(w.text()).toContain('繳費')
     expect(w.text()).toContain('用藥委託')
     expect(w.text()).toContain('課後才藝')
     expect(w.text()).toContain('待簽紀錄')
+    expect(w.text()).toContain('活動調查')
     expect(w.text()).toContain('孩子檔案')
   })
 
@@ -57,12 +58,12 @@ describe('AdminListView', () => {
     expect(pushMock).toHaveBeenCalledWith('/leaves')
   })
 
-  it('5 行政 item 路徑對齊', async () => {
+  it('6 行政 item 路徑對齊', async () => {
     setupStores()
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
-    const paths = ['/leaves', '/fees', '/medications', '/activity', '/events']
-    for (let i = 0; i < 5; i++) {
+    const paths = ['/leaves', '/fees', '/medications', '/activity', '/events', '/surveys']
+    for (let i = 0; i < 6; i++) {
       pushMock.mockClear()
       await items[i].trigger('click')
       expect(pushMock).toHaveBeenCalledWith(paths[i])

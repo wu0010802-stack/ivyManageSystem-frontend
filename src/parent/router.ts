@@ -178,6 +178,19 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '聯絡簿詳情', tab: 'home', showBack: true },
     },
     {
+      path: '/surveys',
+      name: 'parent-surveys',
+      component: () => import('./views/SurveysView.vue'),
+      meta: { title: '活動調查', tab: 'admin', showBack: true },
+    },
+    {
+      // 推播深連結落點：detail 由填寫 sheet 於同頁打開（實作見 Task 17）
+      path: '/surveys/:surveyId',
+      name: 'parent-survey-detail',
+      component: () => import('./views/SurveysView.vue'),
+      meta: { title: '活動調查', tab: 'admin', showBack: true },
+    },
+    {
       path: '/admin',
       name: 'parent-admin',
       component: () => import('./views/AdminListView.vue'),

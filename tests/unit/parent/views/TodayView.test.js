@@ -120,6 +120,7 @@ function mountWith(summary, today) {
           template: '<div class="section-header-stub" :data-title="title"><slot name="action" /></div>',
         },
         PendingSignBanner: { props: ['count'], template: '<div class="pending-sign-stub" :data-count="count"></div>' },
+        PendingSurveyBanner: true,
         M3Card: { template: '<div class="m3-card-stub"><slot /></div>' },
       },
     },
