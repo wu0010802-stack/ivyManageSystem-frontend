@@ -230,6 +230,8 @@ const INTENTIONAL_DIVERGENCE = {
     '/platform/reports × PLATFORM_REPORTS_VIEW',
     '/platform/roles-sync × PLATFORM_TENANTS_MANAGE',
     '/platform/audit × PLATFORM_AUDIT_VIEW',
+    // 2026-08-10 娃娃車乘車歷史頁新增（fixture 凍結於 2026-07-31，此路由更晚才有）。
+    '/bus-history × BUS_READ',
   ],
 }
 

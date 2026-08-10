@@ -347,6 +347,14 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('MapLocation') },
         },
         {
+          // 娃娃車乘車歷史：GET /bus/trips(/{id}) 兩支皆 BUS_READ，與監看頁同權限碼。
+          // BUS_READ 已由 busMonitor 主屬（views），本頁改用 sharedViews 借道
+          // （M3：同一碼只能一處 owned），各自 exact（同屬 /bus-* 但頁面獨立，不可 routePrefix）。
+          key: 'busHistory', title: '娃娃車乘車歷史', routePath: '/bus-history',
+          views: [], sharedViews: ['BUS_READ'],
+          menu: { icon: icon('Clock') },
+        },
+        {
           // 娃娃車路線管理：頁面 gate = BUS_WRITE（後端路線管理三個寫端點的守衛），
           // 故 BUS_WRITE 主屬於此頁 views 而非 actions——本頁「能看見/能進入」與
           // 「能寫入」是同一個碼，沒有唯讀模式。同樣 exact，不可 routePrefix。

@@ -28,18 +28,26 @@ describe('娃娃車路由權限規則', () => {
     expect(rules.some((r) => 'prefix' in r && r.prefix)).toBe(false)
   })
 
-  it('兩條路由都註冊在 router 上且有標題', () => {
+  it('/bus-history 掛 BUS_READ（單條、非 prefix）', () => {
+    const rules = rulesFor('/bus-history')
+    expect(rules.map((r) => r.permission)).toEqual([PERMISSION_NAMES.BUS_READ])
+    expect(rules.some((r) => 'prefix' in r && r.prefix)).toBe(false)
+  })
+
+  it('三條路由都註冊在 router 上且有標題', () => {
     expect(router.resolve('/bus-routes').matched.at(-1)?.meta.title).toBe('娃娃車路線')
     expect(router.resolve('/bus-monitor').matched.at(-1)?.meta.title).toBe('娃娃車監看')
+    expect(router.resolve('/bus-history').matched.at(-1)?.meta.title).toBe('娃娃車乘車歷史')
   })
 })
 
 describe('canAccessRoute', () => {
   beforeEach(() => setUserInfo(null))
 
-  it('只有 BUS_READ：可進監看頁，不可進路線管理頁', () => {
+  it('只有 BUS_READ：可進監看頁與乘車歷史頁，不可進路線管理頁', () => {
     setUserInfo({ role: 'admin', permission_names: ['BUS_READ'] })
     expect(canAccessRoute('/bus-monitor')).toBe(true)
+    expect(canAccessRoute('/bus-history')).toBe(true)
     expect(canAccessRoute('/bus-routes')).toBe(false)
   })
 
@@ -52,17 +60,20 @@ describe('canAccessRoute', () => {
     setUserInfo({ role: 'admin', permission_names: ['BUS_TRIPS_OPERATE'] })
     expect(canAccessRoute('/bus-routes')).toBe(false)
     expect(canAccessRoute('/bus-monitor')).toBe(false)
+    expect(canAccessRoute('/bus-history')).toBe(false)
   })
 
-  it('teacher 角色一律走 portal，兩頁皆不可達（即使被灌 wildcard）', () => {
+  it('teacher 角色一律走 portal，三頁皆不可達（即使被灌 wildcard）', () => {
     setUserInfo({ role: 'teacher', permission_names: ['*'] })
     expect(canAccessRoute('/bus-routes')).toBe(false)
     expect(canAccessRoute('/bus-monitor')).toBe(false)
+    expect(canAccessRoute('/bus-history')).toBe(false)
   })
 
-  it('wildcard 管理員兩頁皆可進（規則漏掉的話這裡會紅）', () => {
+  it('wildcard 管理員三頁皆可進（規則漏掉的話這裡會紅）', () => {
     setUserInfo({ role: 'admin', permission_names: ['*'] })
     expect(canAccessRoute('/bus-routes')).toBe(true)
     expect(canAccessRoute('/bus-monitor')).toBe(true)
+    expect(canAccessRoute('/bus-history')).toBe(true)
   })
 })

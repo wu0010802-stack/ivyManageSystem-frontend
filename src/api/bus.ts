@@ -12,12 +12,14 @@
  *   座標），僅供管理端。為了讓隨車老師能開班而補授 `BUS_READ` 等於把全園學生住址
  *   一併給出去。
  *
- * 型別：`src/api/_generated/schema.d.ts` 目前尚未涵蓋 `/bus` 與 `/portal/bus` 路徑
- * （codegen 需要後端先 dump openapi.json），故此處不標 `AxiosResp<...>`；呼叫端
- * （usePortalBusTrip）以本地 interface narrow，待 `npm run gen:api` 涵蓋後改為
- * 產生型別。**不得**把後端 schema 手抄成共用型別檔（CLAUDE.md：禁止手寫對應型別）。
+ * 型別：`/bus`（管理端）路徑已進 `src/api/_generated/schema.d.ts`；`/bus/trips`
+ * 與 `/bus/trips/{trip_id}` 兩支改用 `ApiQuery`/`AxiosResp` 對齊 codegen 型別。
+ * `/portal/bus` 路徑仍未涵蓋，該區塊維持原樣（呼叫端 usePortalBusTrip 以本地
+ * interface narrow），待 `npm run gen:api` 補上後再比照改。**不得**把後端 schema
+ * 手抄成共用型別檔（CLAUDE.md：禁止手寫對應型別）。
  */
 import api from './index'
+import type { ApiQuery, AxiosResp } from './_generated/typed'
 
 // --- Portal（隨車老師，Permission.BUS_TRIPS_OPERATE） ---
 
@@ -99,3 +101,20 @@ export const updateBusRoute = (
 
 export const getBusTripToday = (routeId?: number | null) =>
   api.get('/bus/trips/today', { params: routeId ? { route_id: routeId } : {} })
+
+/**
+ * 乘車歷史清單（`GET /bus/trips`，`BUS_READ`）。列表**不含座標**，排序固定
+ * `trip_date desc, started_at desc, id desc`（後端決定，前端不重排）。
+ * `page`/`page_size` 皆選填，交給後端預設（1 / 20）；其餘過濾維度未帶時省略
+ * 該 query key，交由 axios 預設序列化行為丟棄 undefined。
+ */
+export const listBusTrips = (
+  params: ApiQuery<'/bus/trips', 'get'>,
+): AxiosResp<'/bus/trips', 'get'> => api.get('/bus/trips', { params })
+
+/**
+ * 單筆班次詳情（`GET /bus/trips/{id}`，`BUS_READ`），含 `stops`（逐站 lat/lng）。
+ * ⚠ 隱私：`stops[].lat/lng` 是家庭座標，呼叫端不得印出數字、寫進 console／URL query。
+ */
+export const getBusTrip = (tripId: number): AxiosResp<'/bus/trips/{trip_id}', 'get'> =>
+  api.get(`/bus/trips/${tripId}`)

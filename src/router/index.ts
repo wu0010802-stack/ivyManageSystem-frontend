@@ -500,6 +500,12 @@ export const routes: RouteRecordRaw[] = [
             component: () => import('../views/BusMonitorView.vue'),
             meta: { title: '娃娃車監看' }
         },
+        {
+            path: '/bus-history',
+            name: 'bus-history',
+            component: () => import('../views/BusHistoryView.vue'),
+            meta: { title: '娃娃車乘車歷史' }
+        },
 
         // ============ 課後才藝 ============
         {
