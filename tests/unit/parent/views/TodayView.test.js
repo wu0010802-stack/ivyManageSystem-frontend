@@ -59,16 +59,37 @@ vi.mock('@/parent/api/bus', () => busTodayMock)
 import TodayView from '@/parent/views/TodayView.vue'
 
 /**
- * DashboardHero stub：以 .today-hero（title）與 .today-note（sub）渲染，
- * 保留舊測試斷言目標；同時暴露 data-status-label / data-status-tone 供新斷言。
+ * 今日卡 stub。
+ *
+ * 2026-08-10 首頁重整後 hero 改由 ContactBookDayCard 三態承載
+ * （DashboardHero 已從首頁退場），孩子姓名 / 班級 / 出席狀態都是它的 prop。
+ * 舊測試斷言的 .today-hero / .today-note / .status-pill-stub 語意在此對應到
+ * data-student-name / data-classroom / data-status-label。
  */
-const DashboardHeroStub = {
-  props: ['eyebrow', 'title', 'value', 'sub', 'statusLabel', 'statusTone'],
-  template: `<div class="dash-hero-stub">
-    <h2 class="today-hero">{{ title }}</h2>
-    <p v-if="sub" class="today-note">{{ sub }}</p>
-    <span v-if="statusLabel" class="status-pill-stub" :data-tone="statusTone">{{ statusLabel }}</span>
-  </div>`,
+const ContactBookDayCardStub = {
+  props: [
+    'entry', 'studentName', 'classroomName',
+    'variant', 'statusLabel', 'statusTone', 'dateLine', 'hint',
+  ],
+  template: `<div
+    class="cb-card-stub"
+    :data-entry-id="entry?.id"
+    :data-student-name="studentName"
+    :data-classroom="classroomName"
+    :data-variant="variant"
+    :data-status-label="statusLabel"
+    :data-status-tone="statusTone"
+    :data-hint="hint"
+  ></div>`,
+}
+
+/** 讀今日卡上的出席狀態（等同舊 .status-pill-stub 的文字） */
+function statusOf(w) {
+  return w.find('.cb-card-stub').attributes('data-status-label')
+}
+/** 讀今日卡上的孩子姓名（等同舊 .today-hero 的文字） */
+function heroNameOf(w) {
+  return w.find('.cb-card-stub').attributes('data-student-name')
 }
 
 function mountWith(summary, today) {
@@ -88,9 +109,8 @@ function mountWith(summary, today) {
           template: '<div class="children-strip-stub" :data-count="children.length" :data-selected="selectedId"></div>',
         },
         ChildContextHeader: { props: ['variant'], template: '<div class="cch-stub" :data-variant="variant"></div>' },
-        ContactBookDayCard: { props: ['entry', 'studentName', 'classroomName'], template: '<div class="cb-card-stub" :data-entry-id="entry?.id"></div>' },
+        ContactBookDayCard: ContactBookDayCardStub,
         RouterLink: { template: '<a><slot /></a>', props: ['to'] },
-        DashboardHero: DashboardHeroStub,
         StatTile: {
           props: ['label', 'value', 'sub', 'icon', 'tone', 'to'],
           template: '<div class="stat-tile-stub" :data-label="label" :data-value="value" :data-tone="tone" :data-to="to"></div>',
@@ -119,72 +139,73 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     vi.useRealTimers()
   })
 
-  it('單一孩子在園：DashboardHero title 為孩子姓名、sub 為班級、StatusPill 顯示出席狀態', async () => {
+  it('單一孩子在園：今日卡帶孩子姓名、班級與出席狀態', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班', attendance: { status: '已入園' } }] },
     )
     await flushPromises()
 
-    // title = 孩子姓名
-    expect(w.find('.today-hero').text()).toBe('小明')
-    // sub = 班級
-    expect(w.find('.today-note').text()).toContain('太陽班')
-    // statusLabel = 出席狀態（delivered via StatusPill）
-    expect(w.find('.status-pill-stub').text()).toBe('已入園')
-    expect(w.find('.status-pill-stub').attributes('data-tone')).toBe('ok')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(w.find('.cb-card-stub').attributes('data-classroom')).toBe('太陽班')
+    expect(statusOf(w)).toBe('已入園')
+    expect(w.find('.cb-card-stub').attributes('data-status-tone')).toBe('ok')
   })
 
-  it('單一孩子在園但 status 為「遲到」：StatusPill 顯示「遲到」（保留 backend 細節）', async () => {
+  it('單一孩子在園但 status 為「遲到」：今日卡顯示「遲到」（保留 backend 細節）', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班', attendance: { status: '遲到' } }] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
-    expect(w.find('.status-pill-stub').text()).toBe('遲到')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(statusOf(w)).toBe('遲到')
   })
 
-  it('單一孩子在園但 attendance 無 status 欄位：StatusPill fallback 為「在園中」', async () => {
+  it('單一孩子在園但 attendance 無 status 欄位：fallback 為「在園中」', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', attendance: {} }] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
-    expect(w.find('.status-pill-stub').text()).toBe('在園中')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(statusOf(w)).toBe('在園中')
   })
 
-  it('單一孩子請假：title 為孩子姓名、StatusPill 顯示「請假」', async () => {
+  it('單一孩子請假：今日卡顯示「請假」且走 offday 態', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班', leave: { type: '事假' } }] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
-    expect(w.find('.status-pill-stub').text()).toBe('請假')
-    expect(w.find('.status-pill-stub').attributes('data-tone')).toBe('info')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(statusOf(w)).toBe('請假')
+    expect(w.find('.cb-card-stub').attributes('data-status-tone')).toBe('info')
+    // 請假有專屬文案，不套用「今天放假，好好休息」
+    expect(w.find('.cb-card-stub').attributes('data-variant')).toBe('offday')
+    expect(w.find('.cb-card-stub').attributes('data-hint')).toBe('今天請假，好好休息')
   })
 
-  it('單一孩子尚未到校：title 為孩子姓名、StatusPill 顯示「尚未到校」', async () => {
+  it('單一孩子尚未到校：今日卡顯示「尚未到校」且走 awaiting 態', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
-    expect(w.find('.status-pill-stub').text()).toBe('尚未到校')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(statusOf(w)).toBe('尚未到校')
+    expect(w.find('.cb-card-stub').attributes('data-variant')).toBe('awaiting')
   })
 
-  it('單一孩子已離園：title 為孩子姓名、StatusPill 顯示「已離園」', async () => {
+  it('單一孩子已離園：今日卡顯示「已離園」', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' }, dismissal: { status: 'completed' } }] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
-    expect(w.find('.status-pill-stub').text()).toBe('已離園')
-    expect(w.find('.status-pill-stub').attributes('data-tone')).toBe('ok')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(statusOf(w)).toBe('已離園')
+    expect(w.find('.cb-card-stub').attributes('data-status-tone')).toBe('ok')
   })
 
   it('多孩子：hero 渲染 ChildContextHeader（hero variant）+ ChildrenStrip 接力，不再顯示「今天 N 位」聚合文案', async () => {
@@ -205,14 +226,15 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     expect(w.find('.children-strip-stub').attributes('data-count')).toBe('2')
   })
 
-  it('尚未綁定子女：DashboardHero 顯示空狀態文案', async () => {
+  it('尚未綁定子女：走 EmptyState 空狀態，不渲染今日卡', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [], summary: {} },
       { children: [] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('尚未綁定子女')
-    expect(w.find('.today-note').text()).toContain('加綁')
+    expect(w.text()).toContain('尚未綁定子女')
+    expect(w.text()).toContain('加綁')
+    expect(w.find('.cb-card-stub').exists()).toBe(false)
   })
 
   it('有綁定子女但今日狀態尚未就緒：不誤顯示「尚未綁定子女」（QA P2-15）', async () => {
@@ -222,9 +244,11 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
       { children: [] },
     )
     await flushPromises()
-    // hero 應為 null（隱藏），絕不可據 today-status 空而誤報「尚未綁定子女」
-    expect(w.find('.today-hero').exists()).toBe(false)
+    // 絕不可據 today-status 空而誤報「尚未綁定子女」。
+    // 重整後這種情況仍渲染今日卡（awaiting/offday 態），而不是隱藏 hero。
     expect(w.text()).not.toContain('尚未綁定子女')
+    expect(w.find('.cb-card-stub').exists()).toBe(true)
+    expect(heroNameOf(w)).toBe('小明')
   })
 
   it('不再顯示樣板問候語（晚安/早安/午安/下午好）', async () => {
@@ -248,26 +272,29 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     expect(w.text()).not.toContain('公告')
   })
 
-  it('週末單一孩子無 attendance：StatusPill 顯示「今天放假」而非「尚未到校」', async () => {
+  it('週末單一孩子無 attendance：顯示「今天放假」而非「尚未到校」', async () => {
     vi.setSystemTime(new Date('2026-05-16T10:00:00+08:00')) // 星期六
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
-    expect(w.find('.status-pill-stub').text()).toBe('今天放假')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(statusOf(w)).toBe('今天放假')
+    expect(w.find('.cb-card-stub').attributes('data-variant')).toBe('offday')
   })
 
-  it('週日單一孩子無 attendance：StatusPill 顯示「今天放假」', async () => {
+  it('週日單一孩子無 attendance：顯示「今天放假」，用預設休息文案', async () => {
     vi.setSystemTime(new Date('2026-05-17T10:00:00+08:00')) // 星期日
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明' }] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
-    expect(w.find('.status-pill-stub').text()).toBe('今天放假')
+    expect(heroNameOf(w)).toBe('小明')
+    expect(statusOf(w)).toBe('今天放假')
+    // 放假不覆寫 hint，由卡片自己套「今天放假，好好休息」
+    expect(w.find('.cb-card-stub').attributes('data-hint')).toBe('')
   })
 
   it('日期行顯示「N 月 N 日　星期X」格式（非 weekday-uppercase 樣板）', async () => {
@@ -355,13 +382,13 @@ describe('TodayView Bento 儀表板 — StatTile 依 summary 條件渲染', () =
     vi.useRealTimers()
   })
 
-  it('mount 後不拋例外、DashboardHero stub 存在（render smoke）', async () => {
+  it('mount 後不拋例外、今日卡存在（render smoke）', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
     )
     await flushPromises()
-    expect(w.find('.dash-hero-stub').exists()).toBe(true)
+    expect(w.find('.cb-card-stub').exists()).toBe(true)
   })
 
   it('summary.fees.outstanding_count > 0：渲染待繳學費 StatTile（tone=amber, to=/fees）', async () => {
@@ -525,7 +552,7 @@ describe('TodayView 娃娃車入口卡', () => {
     busTodayMock.getBusToday.mockRejectedValueOnce(new Error('boom'))
     const w = mountWith(...HOME)
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('小明')
+    expect(heroNameOf(w)).toBe('小明')
     expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
   })
 
