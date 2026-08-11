@@ -7,10 +7,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import PickupCreateView from '../PickupCreateView.vue'
 
-const { mockCreate, mockListPersons, mockGetMyChildren } = vi.hoisted(() => ({
+const { mockCreate, mockListPersons, mockGetMyChildren, mockToastError } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
   mockListPersons: vi.fn(),
   mockGetMyChildren: vi.fn(),
+  mockToastError: vi.fn(),
 }))
 
 vi.mock('../../api/pickup', () => ({
@@ -20,6 +21,10 @@ vi.mock('../../api/pickup', () => ({
 
 vi.mock('../../api/profile', () => ({
   getMyChildren: mockGetMyChildren,
+}))
+
+vi.mock('../../utils/toast', () => ({
+  toast: { error: mockToastError, success: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }))
 
 async function mountView() {
@@ -108,6 +113,34 @@ describe('PickupCreateView', () => {
     // 不可被舊回應蓋回小明的清單
     expect(wrapper.text()).toContain('陳阿姨')
     expect(wrapper.text()).not.toContain('王阿嬤')
+  })
+
+  it('P1-1 — 切換孩子後新孩子的常用接送人請求真的失敗時，清單清空且彈出錯誤提示（不可沿用上一個孩子的清單）', async () => {
+    mockToastError.mockReset()
+    mockListPersons.mockImplementation((sid: number) => {
+      if (sid === 1) {
+        return Promise.resolve({
+          data: { items: [{ id: 10, person_name: '王阿嬤', person_relation: '祖母', person_phone: '0912' }] },
+        })
+      }
+      return Promise.reject({ displayMessage: '網路錯誤' })
+    })
+    const wrapper = await mountView()
+    const rows = wrapper.findAll('.child-row')
+
+    await rows[0].trigger('click') // 選小明(1)：成功，顯示王阿嬤
+    await flushPromises()
+    expect(wrapper.text()).toContain('王阿嬤')
+
+    await rows[1].trigger('click') // 再選小美(2)：first 仍是 1，不觸發新 load
+    await rows[0].trigger('click') // 取消小明：first 變成 2 → 觸發 load(2)，真的失敗（非 abort）
+    await flushPromises()
+
+    // 不可靜默沿用小明（1）的常用接送人清單
+    expect(wrapper.text()).not.toContain('王阿嬤')
+    expect(wrapper.text()).toContain('尚無常用接送人')
+    // 有錯誤提示，不是靜默失敗
+    expect(mockToastError).toHaveBeenCalledTimes(1)
   })
 
   it('switching to manual mode shows the inline form without its own footer buttons', async () => {

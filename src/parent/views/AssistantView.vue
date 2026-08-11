@@ -8,12 +8,15 @@ import CategoryChip from '@/parent/components/assistant/CategoryChip.vue'
 import FaqAnswer from '@/parent/components/assistant/FaqAnswer.vue'
 import SkeletonBlock from '@/parent/components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 type FaqItem = { id?: unknown; question?: string; answer?: string; keywords?: string[]; category?: unknown; [key: string]: unknown }
 type FaqCategory = { id: number | string; label: string; icon: string; color: string }
 
 const router = useRouter()
-const { faq, loading, load } = useFaq()
+// P1-2：原本只解構 faq/loading/load，丟掉 error——真實載入失敗時會誤顯示
+// 「尚無常見問題」且無重試。比照 AdminListView pattern 補 error 分支。
+const { faq, loading, error, load } = useFaq()
 const query = ref('')
 const selectedCategoryId = ref<number | string | null>(null)
 const expandedKey = ref<string | null>(null)
@@ -77,9 +80,14 @@ onMounted(load)
     </div>
 
     <div class="faq-list">
-      <div v-if="loading && filteredItems.length === 0" class="skeleton-wrap">
+      <div v-if="loading && !faq" class="skeleton-wrap">
         <SkeletonBlock variant="row" :count="4" />
       </div>
+      <MobileErrorRetry
+        v-else-if="error && !faq"
+        :error="error"
+        @retry="load"
+      />
       <EmptyState
         v-else-if="!loading && filteredItems.length === 0"
         variant="inline"

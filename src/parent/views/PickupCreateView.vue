@@ -60,7 +60,7 @@ function toggleStudent(id: number) {
 // F1：改走 useAbortableFetch——快速切換勾選孩子時，較舊孩子的回應若晚於
 // 新孩子的回應抵達，refresh() 會用 AbortController 判斷該次已過期而不覆寫，
 // 避免「常用接送人」清單掛在錯的孩子底下。
-const { data: personsResp, refresh: refreshPersons } = useAbortableFetch((config) =>
+const { data: personsResp, error: personsError, refresh: refreshPersons } = useAbortableFetch((config) =>
   listPickupPersons(selectedStudentIds.value[0], config),
 )
 const persons = computed(
@@ -75,11 +75,22 @@ async function loadPersonsForFirstSelected() {
   try {
     await refreshPersons()
   } catch {
-    // 錯誤已由 useAbortableFetch 的 error ref 記錄；本頁沿用舊行為靜默失敗
-    // （常用接送人清單留空，家長仍可切換到「臨時填寫」）。
+    // P1-1：refresh() 對「真的失敗」（非 abort）才會 throw；useAbortableFetch
+    // 不會自動清空 data，若不在這裡清空，畫面會靜默沿用上一個孩子的常用接送
+    // 人清單，在「接送授權對到誰」的領域是資料混淆風險。清空回安全預設，
+    // watch(personsError) 統一彈 toast 告知使用者。
+    personsResp.value = null
   }
 }
 watch(() => selectedStudentIds.value[0], loadPersonsForFirstSelected)
+
+// 比照 MedicationListView/ContactBookView/AttendanceView/TodayView 同款
+// useAbortableFetch 用例：watch error 統一彈 toast（abort 不會進到這裡，
+// 因為 refresh() 對 abort 不會設定 error）。
+watch(personsError, (err) => {
+  const e = err as Record<string, unknown> | null
+  if (e) toast.error(String(e?.displayMessage || '載入常用接送人失敗'))
+})
 
 type PersonMode = 'saved' | 'manual'
 const personMode = ref<PersonMode>('saved')
