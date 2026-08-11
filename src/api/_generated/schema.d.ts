@@ -12578,6 +12578,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/student-leaves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Class Student Leaves
+         * @description 教師查自班學生請假；預設過去 7 天～未來 14 天。
+         */
+        get: operations["list_my_class_student_leaves_api_portal_student_leaves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/students/{student_id}/detail": {
         parameters: {
             query?: never;
@@ -28877,6 +28897,36 @@ export interface components {
             total_registrations: number;
             /** Total Waitlist */
             total_waitlist: number;
+        };
+        /** PortalStudentLeaveListOut */
+        PortalStudentLeaveListOut: {
+            /** Items */
+            items: components["schemas"]["PortalStudentLeaveOut"][];
+            /** Total */
+            total: number;
+        };
+        /** PortalStudentLeaveOut */
+        PortalStudentLeaveOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /** End Date */
+            end_date: string;
+            /** Id */
+            id: number;
+            /** Leave Type */
+            leave_type: string;
+            /** Reason */
+            reason?: string | null;
+            /** Start Date */
+            start_date: string;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
         };
         /** PortalSurveyItemOut */
         PortalSurveyItemOut: {
@@ -58036,6 +58086,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_class_student_leaves_api_portal_student_leaves_get: {
+        parameters: {
+            query?: {
+                classroom_id?: number | null;
+                end_date?: string | null;
+                start_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalStudentLeaveListOut"];
                 };
             };
             /** @description Validation Error */

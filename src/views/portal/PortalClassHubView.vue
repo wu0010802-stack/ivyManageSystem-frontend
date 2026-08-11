@@ -12,6 +12,8 @@
       @open="openBatchSheet"
     />
 
+    <ClassHubLeaveCard />
+
     <div class="class-hub__header">
       <h2 class="class-hub__title">
         {{ data?.classroom_name || '今日工作台' }}
@@ -95,6 +97,7 @@ import ClassHubIncidentQuickSheet from '@/components/portal/class-hub/ClassHubIn
 import ClassHubCommBar from '@/components/portal/class-hub/ClassHubCommBar.vue'
 import ClassHubMessagesDrawer from '@/components/portal/class-hub/ClassHubMessagesDrawer.vue'
 import ClassHubBatchMeasurementCard from '@/components/portal/class-hub/ClassHubBatchMeasurementCard.vue'
+import ClassHubLeaveCard from '@/components/portal/class-hub/ClassHubLeaveCard.vue'
 import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
 import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 import { getMeasurementsLatest } from '@/api/portalMeasurements'
