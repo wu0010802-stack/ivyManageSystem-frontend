@@ -269,6 +269,22 @@ describe('scrubMapping', () => {
     expect(res.is_read).toBe(false)
   })
 
+  // 臨時接送授權（2026-08-11）：接送人姓名快照/名單欄位 person_name 新增
+  // substring；person_phone 已被既有 phone substring 命中，無需重複新增。
+  it('filters pickup person_name / person_phone (2026-08-11)', () => {
+    const res = scrubMapping({
+      person_name: '王阿嬤',
+      person_phone: '0912345678',
+      person_relation: '祖母',
+      status: 'active',
+    })
+    expect(res.person_name).toBe('[Filtered]')
+    expect(res.person_phone).toBe('[Filtered]')
+    // relation/status 非強識別欄位，不在 denylist，維持原值
+    expect(res.person_relation).toBe('祖母')
+    expect(res.status).toBe('active')
+  })
+
   it('does not over-match bare name fields like course_name (D2 2026-07-22)', () => {
     const res = scrubMapping({
       name: 'Alice',
