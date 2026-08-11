@@ -28484,6 +28484,88 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * PortalAnnouncementItemOut
+         * @description 教師端公告單筆。
+         *
+         *     ⚠ created_at 在 router 內已 `.isoformat()`，故宣告 str 而非 datetime
+         *     （宣告成 datetime 會讓 Pydantic 重新 parse + 依 IvyBaseModel 的 json_encoders
+         *     重新序列化，輸出格式與現行不同）。
+         */
+        PortalAnnouncementItemOut: {
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["AnnouncementAttachmentOut"][];
+            /** Content */
+            content: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By Name */
+            created_by_name: string;
+            /** Id */
+            id: number;
+            /** Is Pinned */
+            is_pinned: boolean;
+            /** Is Read */
+            is_read: boolean;
+            /** Priority */
+            priority: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * PortalAnnouncementListOut
+         * @description GET /portal/announcements 回傳。
+         *
+         *     ⚠ 分頁欄位是 `skip`/`limit` 而非 `page`/`page_size`：本端點沿用較舊的
+         *     skip/limit 慣例（見 utils/pagination.py 的說明，codebase 內兩種並存）。
+         *     此處如實描述現況，不在補型別的 PR 裡順手改契約。
+         */
+        PortalAnnouncementListOut: {
+            /** Items */
+            items: components["schemas"]["PortalAnnouncementItemOut"][];
+            /** Limit */
+            limit: number;
+            /** Skip */
+            skip: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * PortalAnomalyItemOut
+         * @description 單筆出勤異常。
+         *
+         *     ⚠ 一個 attendance 列可能展開成多筆異常（遲到 / 早退 / 缺上班卡 / 缺下班卡），
+         *     因此 `id`（= Attendance.id）在回傳陣列中**不唯一**；前端做 row-key 必須用
+         *     `id + type` 組合。這是 router 內 `{**item}` 展開的既有行為，非本次改動。
+         *
+         *     confirmed 狀態為**逐項**判定（同日只確認「遲到」時，缺卡項不會被一起標成
+         *     已處理）；管理員的整天處置（admin_accept / admin_waive）則對當天每一項成立。
+         */
+        PortalAnomalyItemOut: {
+            /** Confirmed */
+            confirmed: boolean;
+            /** Confirmed Action */
+            confirmed_action?: string | null;
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Date */
+            date: string;
+            /** Detail */
+            detail: string;
+            /** Estimated Deduction */
+            estimated_deduction: number;
+            /** Id */
+            id: number;
+            /** Type */
+            type: string;
+            /** Type Label */
+            type_label: string;
+            /** Weekday */
+            weekday: string;
+        };
         /** PortalAttendanceRecordItem */
         PortalAttendanceRecordItem: {
             /** Is Present */
@@ -28536,6 +28618,38 @@ export interface components {
             name: string;
         };
         /**
+         * PortalCompLeaveGrantItemOut
+         * @description 單筆補休配額（granted_at DESC）。
+         *
+         *     remaining_hours 由 router 以 granted - consumed 計算後回傳（非 DB 欄位）。
+         */
+        PortalCompLeaveGrantItemOut: {
+            /** Consumed Hours */
+            consumed_hours: number;
+            /** Expired At */
+            expired_at?: string | null;
+            /** Expires At */
+            expires_at: string;
+            /** Grant Id */
+            grant_id: number;
+            /** Granted At */
+            granted_at: string;
+            /** Granted Hours */
+            granted_hours: number;
+            /** Remaining Hours */
+            remaining_hours: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * PortalCompLeaveGrantsOut
+         * @description GET /portal/me/comp-leave-grants 回傳。
+         */
+        PortalCompLeaveGrantsOut: {
+            /** Grants */
+            grants: components["schemas"]["PortalCompLeaveGrantItemOut"][];
+        };
+        /**
          * PortalMyDataExportOut
          * @description GET /portal/my-data-export 員工自身完整資料 JSON download.
          *
@@ -28575,6 +28689,76 @@ export interface components {
             /** Schema Version */
             schema_version: number;
         };
+        /**
+         * PortalMyOvertimeItemOut
+         * @description 教師端個人加班單筆。
+         *
+         *     ⚠ 日期／時間欄位在 router 內已格式化成字串（overtime_date 走 isoformat、
+         *     start_time/end_time 走 "%H:%M"），故一律宣告 str。
+         */
+        PortalMyOvertimeItemOut: {
+            /** Approved By */
+            approved_by?: string | null;
+            /** Comp Leave Granted */
+            comp_leave_granted?: boolean | null;
+            /** Created At */
+            created_at?: string | null;
+            /** End Time */
+            end_time?: string | null;
+            /** Hours */
+            hours?: number | null;
+            /** Id */
+            id: number;
+            /** Overtime Date */
+            overtime_date: string;
+            /** Overtime Pay */
+            overtime_pay?: number | null;
+            /** Overtime Type */
+            overtime_type: string;
+            /** Overtime Type Label */
+            overtime_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** Status */
+            status: string;
+            /** Use Comp Leave */
+            use_comp_leave?: boolean | null;
+        };
+        /**
+         * PortalMyPunchCorrectionItemOut
+         * @description 教師端個人補打卡申請單筆。
+         *
+         *     ⚠ `approval_status` 是 model 上 `status` 欄位的 property 別名
+         *     （models/overtime.py::PunchCorrectionRequest.approval_status），非獨立欄位；
+         *     沿用既有 key 名不改，避免破壞前端。
+         *     ⚠ 日期／時間欄位在 _format_correction 內已 `.isoformat()`，故宣告 str。
+         */
+        PortalMyPunchCorrectionItemOut: {
+            /** Approval Status */
+            approval_status: string;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Attendance Date */
+            attendance_date: string;
+            /** Correction Type */
+            correction_type: string;
+            /** Correction Type Label */
+            correction_type_label: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Id */
+            id: number;
+            /** Reason */
+            reason?: string | null;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Requested Punch In */
+            requested_punch_in?: string | null;
+            /** Requested Punch Out */
+            requested_punch_out?: string | null;
+        };
         /** PortalNotRepliedOut */
         PortalNotRepliedOut: {
             /** Classroom Name */
@@ -28583,6 +28767,23 @@ export interface components {
             name: string;
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * PortalOvertimeCreateResultOut
+         * @description POST /portal/my-overtimes 回傳（201）。
+         *
+         *     use_comp_leave 回傳的是**送出的申請值**（data.use_comp_leave），不是
+         *     「補休是否已發放」——配額要等核准才發（見 comp_leave_granted）。
+         */
+        PortalOvertimeCreateResultOut: {
+            /** Id */
+            id: number;
+            /** Message */
+            message: string;
+            /** Overtime Pay */
+            overtime_pay?: number | null;
+            /** Use Comp Leave */
+            use_comp_leave?: boolean | null;
         };
         /**
          * PortalParentMessageAttachmentOut
@@ -28735,6 +28936,44 @@ export interface components {
             student_name?: string | null;
             /** Unread Count */
             unread_count: number;
+        };
+        /**
+         * PortalPayoutHistoryOut
+         * @description GET /portal/me/payout-history 回傳。
+         */
+        PortalPayoutHistoryOut: {
+            /** Logs */
+            logs: components["schemas"]["PortalPayoutLogItemOut"][];
+        };
+        /**
+         * PortalPayoutLogItemOut
+         * @description 單筆未休假折算工資兌現紀錄（created_at DESC）。
+         *
+         *     金額欄位（hourly_wage / amount）在 router 內已 `float()` 轉出（DB 為 Money
+         *     TypeDecorator），故宣告 float。
+         */
+        PortalPayoutLogItemOut: {
+            /** Amount */
+            amount: number;
+            /** Hourly Wage */
+            hourly_wage: number;
+            /** Hours */
+            hours: number;
+            /** Log Id */
+            log_id: number;
+            /**
+             * Meta
+             * @default {}
+             */
+            meta: {
+                [key: string]: unknown;
+            };
+            /** Salary Period */
+            salary_period: string;
+            /** Source Type */
+            source_type: string;
+            /** Wage Basis Date */
+            wage_basis_date: string;
         };
         /**
          * PortalPickupAuthListOut
@@ -55082,7 +55321,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalAnnouncementListOut"];
                 };
             };
             /** @description Validation Error */
@@ -55113,7 +55352,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -55145,7 +55384,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalAnomalyItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -55180,7 +55419,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -56603,7 +56842,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalCompLeaveGrantsOut"];
                 };
             };
         };
@@ -56643,7 +56882,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalPayoutHistoryOut"];
                 };
             };
         };
@@ -57216,7 +57455,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalMyOvertimeItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -57249,7 +57488,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalOvertimeCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -57280,7 +57519,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -57312,7 +57551,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalMyPunchCorrectionItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -57345,7 +57584,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -58541,7 +58780,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UnreadCountOut"];
                 };
             };
         };
