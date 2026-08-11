@@ -484,6 +484,14 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: PAGE_TERMS.dismissalQueue }
         },
 
+        // ============ 臨時接送授權 ============
+        {
+            path: '/pickup-authorizations',
+            name: 'pickup-authorizations',
+            component: () => import('../views/PickupAuthorizationsView.vue'),
+            meta: { title: PAGE_TERMS.pickupAuthorizations }
+        },
+
         // ============ 娃娃車 ============
         // admin 路由的權限 gate 在 `ROUTE_PERMISSION_RULES`（canAccessRoute），
         // **不是** meta.permission——那只對 /portal/* 生效。漏了規則會被 default-deny

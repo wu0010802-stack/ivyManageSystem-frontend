@@ -339,6 +339,16 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Van') },
         },
         {
+          // 未新增 Permission enum 值，沿用既有 GUARDIANS_READ/WRITE（照預編班先例）。
+          // 兩碼已由 studentsMain 主屬（M3：每碼恰一處 owned），本頁走 sharedViews
+          // 借道可見；實際寫入授權仍由後端 require_staff_permission 強制，元件內
+          // hasPermission('GUARDIANS_WRITE') 只控制核銷按鈕顯示。
+          key: 'pickupAuthorizations', title: PAGE_TERMS.pickupAuthorizations,
+          routePath: '/pickup-authorizations',
+          views: [], sharedViews: ['GUARDIANS_READ', 'GUARDIANS_WRITE'],
+          menu: { icon: icon('User') },
+        },
+        {
           // 娃娃車即時監看：對齊後端 api/bus/admin_routes.py 的 GET /bus/trips/today
           // 守衛（BUS_READ）。與 /bus-routes 各自 exact、**不可** routePrefix——兩條
           // 路徑同屬 /bus-* 但權限不同，prefix 會讓路線管理的 BUS_WRITE 外溢到監看頁。
