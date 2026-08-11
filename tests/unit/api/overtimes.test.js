@@ -35,9 +35,14 @@ describe('overtimes api', () => {
     mockDelete.mockResolvedValue({ data: {} })
   })
 
-  it('getOvertimes GET /overtimes with params', async () => {
-    await mod.getOvertimes({ status: 'pending' })
-    expect(mockGet).toHaveBeenCalledWith('/overtimes', { params: { status: 'pending' } })
+  it('getOvertimes 一律帶 page/page_size 並回正規化的 PagedResult', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ id: 1 }], total: 1, page: 1, page_size: 5000 } })
+    const res = await mod.getOvertimes({ status: 'pending' })
+    expect(mockGet).toHaveBeenCalledWith('/overtimes', {
+      params: { status: 'pending', page: 1, page_size: 5000 },
+    })
+    expect(res.items).toEqual([{ id: 1 }])
+    expect(res.total).toBe(1)
   })
 
   it('createOvertime POST /overtimes', async () => {

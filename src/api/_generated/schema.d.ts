@@ -7255,7 +7255,13 @@ export interface paths {
         };
         /**
          * Get Leaves
-         * @description 查詢請假記錄
+         * @description 查詢請假記錄。
+         *
+         *     分頁（2026-08-11）：
+         *     - **帶 `page`** → 回 `{items, total, page, page_size}`（正式分頁）。
+         *     - **不帶 `page`** → 維持既有裸陣列行為（最多 5000 筆）；觸頂時掛
+         *       `X-Result-Truncated: true` header，不再靜默截斷。此路徑為過渡相容用，
+         *       呼叫端應改帶 page。
          */
         get: operations["get_leaves_api_leaves_get"];
         put?: never;
@@ -8170,7 +8176,12 @@ export interface paths {
         };
         /**
          * Get Overtimes
-         * @description 查詢加班記錄
+         * @description 查詢加班記錄。
+         *
+         *     分頁（2026-08-11）：
+         *     - **帶 `page`** → 回 `{items, total, page, page_size}`（正式分頁）。
+         *     - **不帶 `page`** → 維持既有裸陣列行為（最多 5000 筆）；觸頂時掛
+         *       `X-Result-Truncated: true` header，不再靜默截斷。
          */
         get: operations["get_overtimes_api_overtimes_get"];
         put?: never;
@@ -12983,7 +12994,12 @@ export interface paths {
         };
         /**
          * List Punch Corrections
-         * @description 查詢補打卡申請（管理員用）
+         * @description 查詢補打卡申請（管理員用）。
+         *
+         *     分頁（2026-08-11）：
+         *     - **帶 `page`** → 回 `{items, total, page, page_size}`（正式分頁）。
+         *     - **不帶 `page`** → 維持既有裸陣列行為（最多 5000 筆）；觸頂時掛
+         *       `X-Result-Truncated: true` header，不再靜默截斷。
          */
         get: operations["list_punch_corrections_api_punch_corrections_get"];
         put?: never;
@@ -24853,6 +24869,93 @@ export interface components {
             /** Total */
             total: number;
         };
+        /**
+         * LeaveListItemOut
+         * @description GET /leaves 單筆。
+         *
+         *     ⚠ 所有日期／時間欄位在 router 內已 `.isoformat()` 成字串後才組 dict，
+         *     故此處宣告為 `str` 而非 date/datetime——若改宣告成 date，Pydantic 會把字串
+         *     再 parse 一次並依 IvyBaseModel 的 json_encoders 重新序列化，時區處理路徑
+         *     與現行輸出不同，屬行為變更。維持 str 才是「逐字不變」。
+         */
+        LeaveListItemOut: {
+            /** Approved By */
+            approved_by?: string | null;
+            /**
+             * Attachment Paths
+             * @default []
+             */
+            attachment_paths: string[];
+            /** Created At */
+            created_at?: string | null;
+            /** Deduction Ratio */
+            deduction_ratio?: number | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** End Date */
+            end_date: string;
+            /** End Time */
+            end_time?: string | null;
+            /** Id */
+            id: number;
+            /** Leave Hours */
+            leave_hours?: number | null;
+            /** Leave Type */
+            leave_type: string;
+            /** Leave Type Label */
+            leave_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            related_swap?: components["schemas"]["LeaveRelatedSwapOut"] | null;
+            /** Start Date */
+            start_date: string;
+            /** Start Time */
+            start_time?: string | null;
+            /** Status */
+            status: string;
+            /** Submitter Role */
+            submitter_role: string;
+            /** Substitute Employee Id */
+            substitute_employee_id?: number | null;
+            /** Substitute Employee Name */
+            substitute_employee_name?: string | null;
+            /** Substitute Responded At */
+            substitute_responded_at?: string | null;
+            /** Substitute Status */
+            substitute_status: string;
+        };
+        /**
+         * LeavePageOut
+         * @description GET /leaves 帶 page 參數時的分頁回傳（{items, total, page, page_size}）。
+         */
+        LeavePageOut: {
+            /** Items */
+            items: components["schemas"]["LeaveListItemOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * LeaveRelatedSwapOut
+         * @description 假單期間內同員工的換班申請摘要（related_swap 欄位）。
+         */
+        LeaveRelatedSwapOut: {
+            /** Id */
+            id: number;
+            /** Status */
+            status: string;
+            /** Swap Date */
+            swap_date: string;
+            /** Target Id */
+            target_id?: number | null;
+        };
         /** LeaveSnapshotPreview */
         LeaveSnapshotPreview: {
             /** Daily Wage */
@@ -26500,6 +26603,64 @@ export interface components {
             errors: string[];
             /** Failed */
             failed: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * OvertimeListItemOut
+         * @description GET /overtimes 單筆。
+         *
+         *     ⚠ 日期／時間欄位在 router 內已格式化成字串（overtime_date 走 isoformat、
+         *     start_time/end_time 走 "%H:%M"）後才組 dict，故此處一律宣告 `str`——
+         *     改宣告 date/time 會讓 Pydantic 重新 parse + 重新序列化，輸出格式會變。
+         */
+        OvertimeListItemOut: {
+            /** Approved By */
+            approved_by?: string | null;
+            /** Comp Leave Granted */
+            comp_leave_granted?: boolean | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** End Time */
+            end_time?: string | null;
+            /** Hours */
+            hours?: number | null;
+            /** Id */
+            id: number;
+            /** Overtime Date */
+            overtime_date: string;
+            /** Overtime Pay */
+            overtime_pay?: number | null;
+            /** Overtime Type */
+            overtime_type: string;
+            /** Overtime Type Label */
+            overtime_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** Status */
+            status: string;
+            /** Submitter Role */
+            submitter_role: string;
+            /** Use Comp Leave */
+            use_comp_leave?: boolean | null;
+        };
+        /**
+         * OvertimePageOut
+         * @description GET /overtimes 帶 page 參數時的分頁回傳（{items, total, page, page_size}）。
+         */
+        OvertimePageOut: {
+            /** Items */
+            items: components["schemas"]["OvertimeListItemOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
             /** Total */
             total: number;
         };
@@ -30387,6 +30548,56 @@ export interface components {
             requested_punch_in?: string | null;
             /** Requested Punch Out */
             requested_punch_out?: string | null;
+        };
+        /**
+         * PunchCorrectionListItemOut
+         * @description GET /punch-corrections 單筆（由 api/punch_corrections._format_correction 組出）。
+         *
+         *     ⚠ `approval_status` 是 model 上 `status` 欄位的 property 別名（models/overtime.py），
+         *     非獨立欄位；沿用既有 key 名不改，避免破壞前端。
+         *     ⚠ 日期／時間欄位在 _format_correction 內已 `.isoformat()` 成字串，故宣告 `str`。
+         */
+        PunchCorrectionListItemOut: {
+            /** Approval Status */
+            approval_status: string;
+            /** Approved By */
+            approved_by?: string | null;
+            /** Attendance Date */
+            attendance_date: string;
+            /** Correction Type */
+            correction_type: string;
+            /** Correction Type Label */
+            correction_type_label: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Id */
+            id: number;
+            /** Reason */
+            reason?: string | null;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Requested Punch In */
+            requested_punch_in?: string | null;
+            /** Requested Punch Out */
+            requested_punch_out?: string | null;
+        };
+        /**
+         * PunchCorrectionPageOut
+         * @description GET /punch-corrections 帶 page 參數時的分頁回傳。
+         */
+        PunchCorrectionPageOut: {
+            /** Items */
+            items: components["schemas"]["PunchCorrectionListItemOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
         };
         /** PunchPinSetRequest */
         PunchPinSetRequest: {
@@ -49246,6 +49457,10 @@ export interface operations {
             query?: {
                 employee_id?: number | null;
                 month?: number | null;
+                /** @description 第幾頁（從 1 開始）。不帶＝legacy 全量模式（最多 5000 筆、回裸陣列、無 total） */
+                page?: number | null;
+                /** @description 每頁筆數（僅在有帶 page 時生效） */
+                page_size?: number;
                 status?: string | null;
                 year?: number | null;
             };
@@ -49261,7 +49476,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LeavePageOut"] | components["schemas"]["LeaveListItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -50858,6 +51073,10 @@ export interface operations {
             query?: {
                 employee_id?: number | null;
                 month?: number | null;
+                /** @description 第幾頁（從 1 開始）。不帶＝legacy 全量模式（最多 5000 筆、回裸陣列、無 total） */
+                page?: number | null;
+                /** @description 每頁筆數（僅在有帶 page 時生效） */
+                page_size?: number;
                 status?: string | null;
                 year?: number | null;
             };
@@ -50873,7 +51092,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OvertimePageOut"] | components["schemas"]["OvertimeListItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -58660,6 +58879,10 @@ export interface operations {
             query?: {
                 employee_id?: number | null;
                 month?: number | null;
+                /** @description 第幾頁（從 1 開始）。不帶＝legacy 全量模式（最多 5000 筆、回裸陣列、無 total） */
+                page?: number | null;
+                /** @description 每頁筆數（僅在有帶 page 時生效） */
+                page_size?: number;
                 /** @description pending / approved / rejected */
                 status?: string | null;
                 year?: number | null;
@@ -58676,7 +58899,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PunchCorrectionPageOut"] | components["schemas"]["PunchCorrectionListItemOut"][];
                 };
             };
             /** @description Validation Error */

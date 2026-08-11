@@ -5,6 +5,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import OvertimeView from '@/views/OvertimeView.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+// 分頁契約 mock helper：抄 src/api/_pagination.ts 的 PagedResult 形狀。
+// 三支列表 api 自 2026-08-11 起回 PagedResult 而非 AxiosResponse，mock 若還用
+// { data } 會靜默給出空清單（假綠），故一律經此 helper 建構。
+const paged = (items) => ({
+  items,
+  total: Array.isArray(items) ? items.length : 0,
+  page: 1,
+  pageSize: 5000,
+  hasMore: false,
+})
+
+
 // ── API mocks ──────────────────────────────────────────────────────────────
 const getOvertimes = vi.fn()
 const createOvertime = vi.fn()
@@ -174,7 +186,7 @@ describe('OvertimeView', () => {
     vi.clearAllMocks()
     mockHasPermission = vi.fn(() => true)
     mockUserInfo = { role: 'admin', permissions: -1 }
-    getOvertimes.mockResolvedValue({ data: [] })
+    getOvertimes.mockResolvedValue(paged([]))
     getApprovalPolicies.mockResolvedValue({ data: [] })
     ElMessageBox.confirm.mockResolvedValue('confirm')
   })
@@ -193,7 +205,7 @@ describe('OvertimeView', () => {
 
     it('成功後更新 overtimeRecords', async () => {
       const records = [{ id: 1, employee_name: '王小明', hours: 3, overtime_pay: 600 }]
-      getOvertimes.mockResolvedValue({ data: records })
+      getOvertimes.mockResolvedValue(paged(records))
 
       const wrapper = mountOvertimeView()
       await flushPromises()
@@ -231,7 +243,7 @@ describe('OvertimeView', () => {
     ]
 
     it('依員工姓名收斂 filteredOvertimes', async () => {
-      getOvertimes.mockResolvedValue({ data: records })
+      getOvertimes.mockResolvedValue(paged(records))
       const wrapper = mountOvertimeView()
       await flushPromises()
 
@@ -242,7 +254,7 @@ describe('OvertimeView', () => {
     })
 
     it('依事由也可命中', async () => {
-      getOvertimes.mockResolvedValue({ data: records })
+      getOvertimes.mockResolvedValue(paged(records))
       const wrapper = mountOvertimeView()
       await flushPromises()
 
@@ -251,7 +263,7 @@ describe('OvertimeView', () => {
     })
 
     it('清空搜尋字串時還原全部資料', async () => {
-      getOvertimes.mockResolvedValue({ data: records })
+      getOvertimes.mockResolvedValue(paged(records))
       const wrapper = mountOvertimeView()
       await flushPromises()
 
@@ -265,12 +277,10 @@ describe('OvertimeView', () => {
 
   describe('totalHours & totalPay', () => {
     it('正確加總所有加班時數', async () => {
-      getOvertimes.mockResolvedValue({
-        data: [
+      getOvertimes.mockResolvedValue(paged([
           { id: 1, hours: 2, overtime_pay: 400 },
           { id: 2, hours: 3, overtime_pay: 600 },
-        ],
-      })
+        ]))
       const wrapper = mountOvertimeView()
       await flushPromises()
 
@@ -278,12 +288,10 @@ describe('OvertimeView', () => {
     })
 
     it('正確加總所有加班費', async () => {
-      getOvertimes.mockResolvedValue({
-        data: [
+      getOvertimes.mockResolvedValue(paged([
           { id: 1, hours: 2, overtime_pay: 400 },
           { id: 2, hours: 3, overtime_pay: 600 },
-        ],
-      })
+        ]))
       const wrapper = mountOvertimeView()
       await flushPromises()
 
@@ -291,12 +299,10 @@ describe('OvertimeView', () => {
     })
 
     it('overtime_pay 為 null/undefined 時不影響計算', async () => {
-      getOvertimes.mockResolvedValue({
-        data: [
+      getOvertimes.mockResolvedValue(paged([
           { id: 1, hours: 2, overtime_pay: null },
           { id: 2, hours: 1, overtime_pay: undefined },
-        ],
-      })
+        ]))
       const wrapper = mountOvertimeView()
       await flushPromises()
 
@@ -367,7 +373,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       await wrapper.vm.$.setupState.approveOvertime({ id: 10 }, true)
       await flushPromises()
@@ -383,7 +389,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
       ElMessageBox.prompt.mockResolvedValue({ value: '事由不充分' })
 
       await wrapper.vm.$.setupState.approveOvertime({ id: 11 }, false)
@@ -418,7 +424,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       Object.assign(wrapper.vm.$.setupState.form, {
         id: null,
@@ -447,7 +453,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       Object.assign(wrapper.vm.$.setupState.form, {
         id: 5,
@@ -492,7 +498,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       wrapper.vm.$.setupState.selectedOvertimes = [{ id: 1 }, { id: 2 }]
       await wrapper.vm.$.setupState.showBatchApproveConfirm()
@@ -534,7 +540,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       wrapper.vm.$.setupState.selectedOvertimes = [{ id: 3 }]
       wrapper.vm.$.setupState.batchRejectReason = '理由不充分'
@@ -555,7 +561,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       await wrapper.vm.$.setupState.handleImportFile({ raw: new File([], 'test.xlsx') })
       await flushPromises()
@@ -571,7 +577,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       await wrapper.vm.$.setupState.handleImportFile({ raw: new File([], 'test.xlsx') })
       await flushPromises()
@@ -590,7 +596,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       await wrapper.vm.$.setupState.handleImportFile({ raw: new File([], 'test.xlsx') })
       await flushPromises()
@@ -626,7 +632,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
-      getOvertimes.mockResolvedValue({ data: [] })
+      getOvertimes.mockResolvedValue(paged([]))
 
       wrapper.vm.$.setupState.onDeleteSuccess()
       await flushPromises()

@@ -1,6 +1,19 @@
 import api from './index'
+import type { Schema } from './_generated/typed'
+import { fetchPagedList, type PagedResult } from './_pagination'
 
-export const getLeaves = (params: unknown) => api.get('/leaves', { params })
+export type LeaveListItem = Schema<'LeaveListItemOut'>
+
+/**
+ * 查詢請假記錄（伺服器分頁）。
+ *
+ * ⚠ 回傳的是正規化後的 PagedResult，**不是** AxiosResponse——呼叫端取 `.items`
+ * 而非 `.data`。2026-08-11 改版：後端原本回裸陣列且超過 5000 筆會靜默截斷，
+ * 現改帶 page 取得 total；`hasMore` 為 true 時 UI 需提示縮小查詢範圍。
+ */
+export const getLeaves = (
+  params: Record<string, unknown> = {},
+): Promise<PagedResult<LeaveListItem>> => fetchPagedList<LeaveListItem>('/leaves', params)
 
 export const createLeave = (data: unknown) => api.post('/leaves', data)
 

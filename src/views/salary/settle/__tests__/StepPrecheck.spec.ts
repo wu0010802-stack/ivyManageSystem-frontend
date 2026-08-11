@@ -2,6 +2,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import StepPrecheck from '../StepPrecheck.vue'
 
+// 分頁契約 mock helper：抄 src/api/_pagination.ts 的 PagedResult 形狀。
+const paged = <T,>(items: T[]) => ({
+  items,
+  total: items.length,
+  page: 1,
+  pageSize: 5000,
+  hasMore: false,
+})
+
+
 const getLeavesMock = vi.fn()
 const getOvertimesMock = vi.fn()
 const getCorrectionsMock = vi.fn()
@@ -39,9 +49,9 @@ describe('StepPrecheck', () => {
     })
 
     it('有 pending 項目：顯示計數與「前往簽核」連結、警告但不擋下一步', async () => {
-        getLeavesMock.mockResolvedValue({ data: [{}, {}] })
-        getOvertimesMock.mockResolvedValue({ data: [{}] })
-        getCorrectionsMock.mockResolvedValue({ data: [] })
+        getLeavesMock.mockResolvedValue(paged([{}, {}]))
+        getOvertimesMock.mockResolvedValue(paged([{}]))
+        getCorrectionsMock.mockResolvedValue(paged([]))
         const wrapper = mountStep()
         await flushPromises()
 
@@ -58,18 +68,18 @@ describe('StepPrecheck', () => {
     })
 
     it('全部簽核完畢：顯示就緒', async () => {
-        getLeavesMock.mockResolvedValue({ data: [] })
-        getOvertimesMock.mockResolvedValue({ data: [] })
-        getCorrectionsMock.mockResolvedValue({ data: [] })
+        getLeavesMock.mockResolvedValue(paged([]))
+        getOvertimesMock.mockResolvedValue(paged([]))
+        getCorrectionsMock.mockResolvedValue(paged([]))
         const wrapper = mountStep()
         await flushPromises()
         expect(wrapper.text()).toContain('無未簽核項目')
     })
 
     it('節慶發放月（6 月）顯示提示、非發放月（5 月）不顯示', async () => {
-        getLeavesMock.mockResolvedValue({ data: [] })
-        getOvertimesMock.mockResolvedValue({ data: [] })
-        getCorrectionsMock.mockResolvedValue({ data: [] })
+        getLeavesMock.mockResolvedValue(paged([]))
+        getOvertimesMock.mockResolvedValue(paged([]))
+        getCorrectionsMock.mockResolvedValue(paged([]))
 
         const w6 = mountStep({ year: 2026, month: 6 })
         await flushPromises()

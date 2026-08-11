@@ -35,9 +35,22 @@ describe('leaves api', () => {
     mockDelete.mockResolvedValue({ data: {} })
   })
 
-  it('getLeaves GET /leaves with params', async () => {
-    await mod.getLeaves({ status: 'pending' })
-    expect(mockGet).toHaveBeenCalledWith('/leaves', { params: { status: 'pending' } })
+  it('getLeaves 一律帶 page/page_size 並回正規化的 PagedResult', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ id: 1 }], total: 7, page: 1, page_size: 5000 } })
+    const res = await mod.getLeaves({ status: 'pending' })
+    // 前端一律 opt-in 分頁：不帶 page 後端會回裸陣列（legacy 路徑）
+    expect(mockGet).toHaveBeenCalledWith('/leaves', {
+      params: { status: 'pending', page: 1, page_size: 5000 },
+    })
+    expect(res).toEqual({ items: [{ id: 1 }], total: 7, page: 1, pageSize: 5000, hasMore: false })
+  })
+
+  it('getLeaves 對裸陣列回應降級為單頁 PagedResult（舊版後端容錯）', async () => {
+    mockGet.mockResolvedValue({ data: [{ id: 1 }, { id: 2 }] })
+    const res = await mod.getLeaves({})
+    expect(res.items).toHaveLength(2)
+    expect(res.total).toBe(2)
+    expect(res.hasMore).toBe(false)
   })
 
   it('createLeave POST /leaves', async () => {

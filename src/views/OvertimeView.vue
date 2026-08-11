@@ -59,6 +59,8 @@ const activeSection = ref('overtime')
 
 const loading = ref(false)
 const overtimeRecords = ref<Record<string, unknown>[]>([])
+// >0 表示後端還有未載入的資料（伺服器單次上限），值為過濾條件下的全量筆數
+const truncatedTotal = ref(0)
 const { items: pendingRecords, fetch: silentFetchPending } = useFetchPending(getOvertimes)
 
 // 客端關鍵字過濾：單月資料已全載，姓名/事由即打即濾，與上方年月/員工下拉（伺服器端）交集
@@ -155,8 +157,10 @@ const fetchOvertimes = async () => {
   try {
     const params: Record<string, unknown> = { year: query.year, month: query.month }
     if (query.employee_id) params.employee_id = query.employee_id
-    const response = await getOvertimes(params)
-    overtimeRecords.value = Array.isArray(response.data) ? response.data : []
+    const page = await getOvertimes(params)
+    overtimeRecords.value = page.items
+    // 後端單次最多回 5000 筆；超量時明講，不讓使用者以為看到了全部
+    truncatedTotal.value = page.hasMore ? page.total : 0
   } catch (error) {
     ElMessage.error(friendlyError('載入加班記錄失敗', error))
   } finally {
@@ -474,6 +478,16 @@ watch(activeSection, async (value) => {
             </template>
           </AdminListCards>
         </el-card>
+
+        <el-alert
+          v-if="truncatedTotal"
+          type="warning"
+          show-icon
+          :closable="false"
+          class="overtime-truncated-alert"
+          :title="`查詢結果共 ${truncatedTotal} 筆，目前僅載入前 ${overtimeRecords.length} 筆`"
+          description="請縮小查詢範圍（例如指定員工或改查單一月份）以取得完整資料。"
+        />
 
         <AdminListToolbar
           v-model:search="overtimeSearch"

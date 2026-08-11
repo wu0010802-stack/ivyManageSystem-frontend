@@ -1,22 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// 分頁契約 mock helper：抄 src/api/_pagination.ts 的 PagedResult 形狀。
+// 必須用 vi.hoisted：vi.mock factory 會被提升到檔頭，直接寫 const 會在
+// factory 執行時撞 "Cannot access 'paged' before initialization"。
+const paged = vi.hoisted(
+  () =>
+    <T,>(items: T[]) => ({
+      items,
+      total: items.length,
+      page: 1,
+      pageSize: 5000,
+      hasMore: false,
+    }),
+)
+
 import { shallowMount, flushPromises } from '@vue/test-utils'
 import { ElMessageBox } from 'element-plus'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 vi.mock('@/api/leaves', () => ({
-  getLeaves: vi.fn().mockResolvedValue({ data: [] }),
+  getLeaves: vi.fn().mockResolvedValue(paged([])),
   approveLeave: vi.fn().mockResolvedValue({ data: {} }),
   getLeaveAttachment: vi.fn(),
   batchApproveLeaves: vi.fn(),
 }))
 vi.mock('@/api/overtimes', () => ({
-  getOvertimes: vi.fn().mockResolvedValue({ data: [] }),
+  getOvertimes: vi.fn().mockResolvedValue(paged([])),
   approveOvertime: vi.fn().mockResolvedValue({ data: {} }),
   batchApproveOvertimes: vi.fn(),
 }))
 vi.mock('@/api/punchCorrections', () => ({
-  getCorrections: vi.fn().mockResolvedValue({ data: [] }),
+  getCorrections: vi.fn().mockResolvedValue(paged([])),
   approveCorrection: vi.fn().mockResolvedValue({ data: {} }),
   batchApproveCorrections: vi.fn(),
 }))
@@ -41,6 +56,7 @@ vi.mock('@/stores/notification', () => ({ useNotificationStore: () => ({ addNoti
 
 import { approveLeave } from '@/api/leaves'
 import WorkbenchApprovalsView from '../WorkbenchApprovalsView.vue'
+
 
 type Vm = {
   showFinalize: boolean

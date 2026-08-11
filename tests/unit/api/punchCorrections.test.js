@@ -27,11 +27,14 @@ describe('punchCorrections api', () => {
     mockPut.mockResolvedValue({ data: {} })
   })
 
-  it('getCorrections GET /punch-corrections with params', async () => {
-    await mod.getCorrections({ status: 'pending' })
+  it('getCorrections 一律帶 page/page_size 並回正規化的 PagedResult', async () => {
+    mockGet.mockResolvedValue({ data: { items: [{ id: 1 }], total: 1, page: 1, page_size: 5000 } })
+    const res = await mod.getCorrections({ status: 'pending' })
     expect(mockGet).toHaveBeenCalledWith('/punch-corrections', {
-      params: { status: 'pending' },
+      params: { status: 'pending', page: 1, page_size: 5000 },
     })
+    expect(res.items).toEqual([{ id: 1 }])
+    expect(res.total).toBe(1)
   })
 
   it('approveCorrection PUT /punch-corrections/:id/approve with approved=true', async () => {

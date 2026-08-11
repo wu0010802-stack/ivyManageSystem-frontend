@@ -47,6 +47,8 @@ const leaveCardColumns = [
 
 const loading = ref(false)
 const leaveRecords = ref<Record<string, unknown>[]>([])
+// >0 表示後端還有未載入的資料（伺服器單次上限），值為過濾條件下的全量筆數
+const truncatedTotal = ref(0)
 const formRef = ref<{ validate: () => Promise<boolean>; clearValidate?: () => void } | null>(null)
 
 // 子元件 ref
@@ -257,8 +259,10 @@ const fetchLeaves = async () => {
     const params: Record<string, unknown> = { year: query.year, month: query.month }
     if (query.employee_id) params.employee_id = query.employee_id
     if (statusFilter.value) params.status = statusFilter.value
-    const response = await getLeaves(params)
-    leaveRecords.value = response.data
+    const page = await getLeaves(params)
+    leaveRecords.value = page.items
+    // 後端單次最多回 5000 筆；超量時明講，不讓使用者以為看到了全部
+    truncatedTotal.value = page.hasMore ? page.total : 0
   } catch (error) {
     ElMessage.error(friendlyError('載入請假記錄失敗', error))
   } finally {
@@ -495,6 +499,16 @@ onMounted(() => {
         </el-button>
       </div>
     </el-card>
+
+    <el-alert
+      v-if="truncatedTotal"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="leave-truncated-alert"
+      :title="`查詢結果共 ${truncatedTotal} 筆，目前僅載入前 ${leaveRecords.length} 筆`"
+      description="請縮小查詢範圍（例如指定員工或改查單一月份）以取得完整資料。"
+    />
 
     <AdminListToolbar
       v-model:search="leaveSearch"
