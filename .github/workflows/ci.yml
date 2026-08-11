@@ -87,6 +87,11 @@ jobs:
       - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
         run: npm run check:error-detail
 
+      # 可點擊但 Tab 不到的元素（div/li @click 沒補 role/tabindex/keydown）。
+      # 存量分三類、修法各不同，見腳本頂部註解。
+      - name: a11y 棘輪（可點擊元素必須鍵盤可及）
+        run: npm run check:a11y
+
       # 家長端視覺一致性防回歸：綠 fallback 殘骸、主按鈕誤用 --pt-info-link、
       # background/color 直寫 hex。腳本已存在且是綠的，只是從沒進 CI。
       - name: 家長端視覺一致性稽核

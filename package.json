@@ -28,7 +28,8 @@
         "lint": "eslint .",
         "lint:css": "stylelint 'src/**/*.{css,vue}'",
         "lint:tokens": "node scripts/lint-tokens.mjs",
-        "check:error-detail": "node scripts/check-error-detail-ratchet.mjs"
+        "check:error-detail": "node scripts/check-error-detail-ratchet.mjs",
+        "check:a11y": "node scripts/check-a11y-clickable.mjs"
     },
     "dependencies": {
         "@element-plus/icons-vue": "^2.3.2",

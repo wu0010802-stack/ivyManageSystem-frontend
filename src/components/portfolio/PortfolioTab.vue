@@ -55,7 +55,10 @@
             v-for="att in obs.attachments"
             :key="att.id"
             class="attachment-thumb"
+            role="button"
+            tabindex="0"
             @click="openLightbox(att)"
+            @keydown.enter.space.prevent="openLightbox(att)"
           >
             <img :src="att.thumb_url || att.url" :alt="att.original_filename" />
           </div>
@@ -459,6 +462,11 @@ onMounted(reload)
   border-radius: 6px;
   cursor: pointer;
   background: #f5f7fa;
+}
+
+.attachment-thumb:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 .attachment-thumb img {
   width: 100%;

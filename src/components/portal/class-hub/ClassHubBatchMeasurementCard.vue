@@ -8,7 +8,14 @@ const props = withDefaults(defineProps<{
 </script>
 
 <template>
-  <div class="batch-card pt-card-elevated" @click="$emit('open')">
+  <!--
+    整張卡片本身就是按鈕：原本外層 div @click 內再包一個 <button>，滑鼠可用但
+    (a) 鍵盤 Tab 到的是內層 button，按下去卻是靠冒泡到外層才生效，
+    (b) 螢幕閱讀器讀到一個沒有名稱的「開始」按鈕、外層文字則完全不是互動元素。
+    改成單一 <button> 後，鍵盤/AT/滑鼠走同一條路徑，也不需要 role/tabindex/keydown。
+    右側「開始」退回 <span>，純視覺 affordance（巢狀 button 是無效 HTML）。
+  -->
+  <button type="button" class="batch-card pt-card-elevated" @click="$emit('open')">
     <div class="left">
       <span class="emoji">📏</span>
       <div class="text">
@@ -22,8 +29,8 @@ const props = withDefaults(defineProps<{
         </div>
       </div>
     </div>
-    <button class="btn">開始</button>
-  </div>
+    <span class="btn">開始</span>
+  </button>
 </template>
 
 <style scoped>
@@ -34,6 +41,19 @@ const props = withDefaults(defineProps<{
   padding: 12px 16px;
   margin: 12px 0;
   cursor: pointer;
+  /* <button> reset：外觀維持原本的卡片，只是語意換成按鈕 */
+  width: 100%;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+/* 現在真的能被 Tab 到了，焦點必須看得見 */
+.batch-card:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 .left {
   display: flex;
@@ -52,6 +72,9 @@ const props = withDefaults(defineProps<{
   color: var(--el-text-color-secondary);
 }
 .btn {
+  /* 從 <button> 換成 <span> 後要自己補：inline 元素吃不到垂直 padding */
+  display: inline-block;
+  flex-shrink: 0;
   padding: 6px 14px;
   border: 1px solid var(--el-color-primary);
   background: var(--el-fill-color-blank);

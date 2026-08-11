@@ -13,7 +13,10 @@
         :key="album.id"
         class="album-card"
         data-test="album-card"
+        role="button"
+        tabindex="0"
         @click="goDetail(album.id)"
+        @keydown.enter.space.prevent="goDetail(album.id)"
       >
         <div class="album-cover">
           <img v-if="album.cover_thumb_url" :src="album.cover_thumb_url" :alt="album.title" />
@@ -125,6 +128,7 @@ defineExpose({ createForm, submitCreate })
 /* 版面比照其他 Portal*View 的卡片樣式；grid 2-4 欄 responsive，封面 4:3 object-fit: cover */
 .album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
 .album-card { cursor: pointer; border: 1px solid var(--el-border-color); border-radius: 8px; overflow: hidden; }
+.album-card:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .album-cover { aspect-ratio: 4 / 3; background: var(--el-fill-color-light); }
 .album-cover img { width: 100%; height: 100%; object-fit: cover; }
 .album-info { padding: 10px 12px; }

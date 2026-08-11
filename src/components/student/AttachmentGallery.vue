@@ -25,7 +25,10 @@ defineExpose({ previewVisible, openPreview })
       v-for="(item, idx) in items"
       :key="item.id as PropertyKey"
       class="thumb"
+      role="button"
+      tabindex="0"
       @click="openPreview(idx)"
+      @keydown.enter.space.prevent="openPreview(idx)"
     >
       <el-image
         :src="(item.thumb_url || item.display_url || item.url) as string | undefined"
@@ -59,6 +62,10 @@ defineExpose({ previewVisible, openPreview })
   overflow: hidden;
   cursor: pointer;
   background: var(--el-fill-color-light);
+}
+.thumb:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 .thumb :deep(.el-image) { width: 100%; height: 100%; }
 .thumb .meta {
