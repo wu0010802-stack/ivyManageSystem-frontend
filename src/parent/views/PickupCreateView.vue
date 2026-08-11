@@ -12,6 +12,8 @@ import {
 } from '../api/pickup'
 import { toast } from '../utils/toast'
 import { useFriendlyError } from '@/composables/useFriendlyError'
+import { useAbortableFetch } from '../composables/useAbortableFetch'
+import { localDateISO } from '../utils/date'
 import PickupPersonForm from '../components/pickup/PickupPersonForm.vue'
 import PickupCodeCard from '../components/pickup/PickupCodeCard.vue'
 import M3Card from '../components/m3/M3Card.vue'
@@ -55,18 +57,26 @@ function toggleStudent(id: number) {
 
 // 常用接送人：僅載入第一位選中孩子的名單（多孩批次常見情境是同一位親友，
 // 若名單因孩子而異，家長仍可切換到「臨時填寫」）。
-const persons = ref<PickupPerson[]>([])
+// F1：改走 useAbortableFetch——快速切換勾選孩子時，較舊孩子的回應若晚於
+// 新孩子的回應抵達，refresh() 會用 AbortController 判斷該次已過期而不覆寫，
+// 避免「常用接送人」清單掛在錯的孩子底下。
+const { data: personsResp, refresh: refreshPersons } = useAbortableFetch((config) =>
+  listPickupPersons(selectedStudentIds.value[0], config),
+)
+const persons = computed(
+  () => ((personsResp.value as { data?: { items?: PickupPerson[] } })?.data?.items) || [],
+)
 async function loadPersonsForFirstSelected() {
   const sid = selectedStudentIds.value[0]
   if (!sid) {
-    persons.value = []
+    personsResp.value = null
     return
   }
   try {
-    const { data } = await listPickupPersons(sid)
-    persons.value = (data as { items?: PickupPerson[] })?.items || []
+    await refreshPersons()
   } catch {
-    persons.value = []
+    // 錯誤已由 useAbortableFetch 的 error ref 記錄；本頁沿用舊行為靜默失敗
+    // （常用接送人清單留空，家長仍可切換到「臨時填寫」）。
   }
 }
 watch(() => selectedStudentIds.value[0], loadPersonsForFirstSelected)
@@ -80,14 +90,14 @@ const manualForm = ref({
 })
 const saveToList = ref(false)
 
-const todayStr = (() => {
-  const d = new Date()
-  return d.toISOString().slice(0, 10)
-})()
+// F4：不可用 toISOString().slice(0,10)——UTC 輸出在台灣 00:00–08:00 會偏成
+// 昨天，早上急需臨時接送時日期欄位預設不是「今天」。改用 localDateISO 取裝置
+// 本地日期（家長手機時區即台灣時區）。
+const todayStr = localDateISO(new Date())
 const maxDateStr = (() => {
   const d = new Date()
   d.setDate(d.getDate() + 14)
-  return d.toISOString().slice(0, 10)
+  return localDateISO(d)
 })()
 const pickupDate = ref(todayStr)
 

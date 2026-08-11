@@ -2,7 +2,7 @@
  * 建立臨時接送授權精靈：多孩選擇、常用/臨時分支、日期驗證、送出後顯示取件碼。
  */
 import { mount, flushPromises } from '@vue/test-utils'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import PickupCreateView from '../PickupCreateView.vue'
@@ -74,8 +74,40 @@ describe('PickupCreateView', () => {
     await childRows[0].trigger('click')
     await flushPromises()
 
-    expect(mockListPersons).toHaveBeenCalledWith(1)
+    // F1：改走 useAbortableFetch，呼叫會多帶 AbortSignal config
+    expect(mockListPersons).toHaveBeenCalledWith(1, expect.objectContaining({ signal: expect.anything() }))
     expect(wrapper.text()).toContain('王阿嬤')
+  })
+
+  it('F1 — 快速切換孩子（1 選中又取消，改選 2）時，舊孩子姍姍來遲的回應不可覆寫新孩子的常用接送人清單', async () => {
+    let resolveFirst!: (v: unknown) => void
+    const pendingFirst = new Promise((resolve) => { resolveFirst = resolve })
+    mockListPersons.mockImplementation((sid: number) => {
+      if (sid === 1) return pendingFirst
+      return Promise.resolve({
+        data: { items: [{ id: 20, person_name: '陳阿姨', person_relation: '阿姨', person_phone: '0922' }] },
+      })
+    })
+    const wrapper = await mountView()
+    const rows = wrapper.findAll('.child-row')
+
+    await rows[0].trigger('click') // 選小明(1)：觸發 load(1)，回應尚未到
+    await rows[1].trigger('click') // 再選小美(2)：selectedStudentIds=[1,2]，first 仍是 1，不觸發新 load
+    await rows[0].trigger('click') // 取消小明：selectedStudentIds=[2]，first 變成 2 → 觸發 load(2)
+    await flushPromises()
+
+    // 2 的回應已完成，應顯示 2 的常用接送人
+    expect(wrapper.text()).toContain('陳阿姨')
+
+    // 1 的舊回應這時才姍姍來遲
+    resolveFirst({
+      data: { items: [{ id: 10, person_name: '王阿嬤', person_relation: '祖母', person_phone: '0912' }] },
+    })
+    await flushPromises()
+
+    // 不可被舊回應蓋回小明的清單
+    expect(wrapper.text()).toContain('陳阿姨')
+    expect(wrapper.text()).not.toContain('王阿嬤')
   })
 
   it('switching to manual mode shows the inline form without its own footer buttons', async () => {
@@ -115,5 +147,28 @@ describe('PickupCreateView', () => {
     expect(fd.get('person_name')).toBe('李叔叔')
 
     expect(wrapper.text()).toContain('123456')
+  })
+
+  describe('F4 — 接送日期預設值不可用 toISOString() 換算 UTC（台灣凌晨會回退一天）', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+      vi.unstubAllEnvs()
+    })
+
+    it('台灣凌晨 2 點（UTC 前一天 18:00）時，日期預設值與可選下限仍是裝置本地的「今天」', async () => {
+      vi.useFakeTimers()
+      vi.stubEnv('TZ', 'Asia/Taipei')
+      // 2026-08-11T18:00:00Z = 台灣時間 2026-08-12 02:00
+      vi.setSystemTime(new Date('2026-08-11T18:00:00Z'))
+
+      const wrapper = await mountView()
+      const dateInput = wrapper.find('.date-input').element as HTMLInputElement
+
+      // 用 toISOString().slice(0,10) 算會誤回 '2026-08-11'（UTC 當下日期，昨天）
+      expect(dateInput.min).toBe('2026-08-12')
+      expect(dateInput.value).toBe('2026-08-12')
+      // max 為 +14 天，同樣要以本地日期為基準
+      expect(dateInput.max).toBe('2026-08-26')
+    })
   })
 })

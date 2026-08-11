@@ -4,10 +4,11 @@
  * 對應後端 api/parent_portal/pickup.py。常用接送人 CRUD 與授權建立/取消/重發碼
  * 皆為 multipart（可選上傳照片），故用 FormData，不走 JSON body。
  */
+import type { AxiosRequestConfig } from 'axios'
 import api from './index'
 
-export function listPickupPersons(studentId: number) {
-  return api.get('/parent/pickup-persons', { params: { student_id: studentId } })
+export function listPickupPersons(studentId: number, config: AxiosRequestConfig = {}) {
+  return api.get('/parent/pickup-persons', { params: { student_id: studentId }, ...config })
 }
 
 /**
