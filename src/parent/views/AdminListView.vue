@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import { useHomeSummary } from '../composables/useHomeSummary'
+import { listPickupAuthorizations } from '../api/pickup'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
 import M3Divider from '../components/m3/M3Divider.vue'
@@ -18,6 +19,18 @@ const { badges, summary } = useHomeSummary()
 const pendingSurveyCount = computed(() => {
   const v = (summary.value as { pending_survey_count?: unknown } | null)?.pending_survey_count
   return typeof v === 'number' ? v : 0
+})
+
+// 臨時接送授權同樣尚未併入 HomeBadges（後端 home/summary 未加此欄位）；
+// 比照 TodayView 的 pickupActiveCount，走獨立輕量 fetch，失敗降為 0。
+const pendingPickupCount = ref(0)
+onMounted(async () => {
+  try {
+    const { data } = await listPickupAuthorizations({ status: 'active' })
+    pendingPickupCount.value = ((data as { items?: unknown[] })?.items || []).length
+  } catch {
+    pendingPickupCount.value = 0
+  }
 })
 
 /**
@@ -95,6 +108,15 @@ const items = computed<AdminItem[]>(() => {
       badge: pendingSurveyCount.value,
       badgeTone: 'action',
       badgeLabel: `${pendingSurveyCount.value} 份待回覆`,
+    },
+    {
+      headline: '臨時接送',
+      supportingText: '授權親友代為到園接送',
+      leadingIcon: 'hail',
+      path: '/pickup',
+      badge: pendingPickupCount.value,
+      badgeTone: 'info',
+      badgeLabel: `${pendingPickupCount.value} 筆進行中授權`,
     },
   ]
 })

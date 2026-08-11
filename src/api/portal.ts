@@ -238,3 +238,24 @@ export const setPunchPin = (
  *  代理人下拉因此永遠空白。 */
 export const getMyColleagues = (): AxiosResp<'/portal/colleagues', 'get'> =>
   api.get('/portal/colleagues')
+
+// ----- 臨時接送授權 -----
+export const getPortalPickupAuthorizations = (): AxiosResp<
+  '/portal/pickup-authorizations', 'get'
+> => api.get('/portal/pickup-authorizations')
+
+export const getPortalPickupPendingCount = (): AxiosResp<
+  '/portal/pickup-authorizations/pending-count', 'get'
+> => api.get('/portal/pickup-authorizations/pending-count')
+
+export const verifyPickupAuthorization = (
+  authId: number,
+  data: ApiBody<'/portal/pickup-authorizations/{auth_id}/verify', 'post'>,
+): AxiosResp<'/portal/pickup-authorizations/{auth_id}/verify', 'post'> =>
+  api.post(`/portal/pickup-authorizations/${authId}/verify`, data)
+
+export const overridePickupAuthorization = (
+  authId: number,
+  data: ApiBody<'/portal/pickup-authorizations/{auth_id}/override-complete', 'post'>,
+): AxiosResp<'/portal/pickup-authorizations/{auth_id}/override-complete', 'post'> =>
+  api.post(`/portal/pickup-authorizations/${authId}/override-complete`, data)

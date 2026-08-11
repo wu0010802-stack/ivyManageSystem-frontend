@@ -9707,6 +9707,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/pickup-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Authorizations */
+        get: operations["list_authorizations_api_parent_pickup_authorizations_get"];
+        put?: never;
+        /** Create Authorizations */
+        post: operations["create_authorizations_api_parent_pickup_authorizations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-authorizations/{auth_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Authorization */
+        post: operations["cancel_authorization_api_parent_pickup_authorizations__auth_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-authorizations/{auth_id}/regenerate-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Code */
+        post: operations["regenerate_code_api_parent_pickup_authorizations__auth_id__regenerate_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-persons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Pickup Persons */
+        get: operations["list_pickup_persons_api_parent_pickup_persons_get"];
+        put?: never;
+        /** Create Pickup Person */
+        post: operations["create_pickup_person_api_parent_pickup_persons_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-persons/{person_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Pickup Person */
+        delete: operations["delete_pickup_person_api_parent_pickup_persons__person_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Pickup Person */
+        patch: operations["update_pickup_person_api_parent_pickup_persons__person_id__patch"];
+        trace?: never;
+    };
     "/parent/policies/current": {
         parameters: {
             query?: never;
@@ -9936,6 +10024,57 @@ export interface paths {
         get: operations["download_parent_portfolio_api_parent_uploads_portfolio__key__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pickup-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Authorizations */
+        get: operations["list_authorizations_api_pickup_authorizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pickup-authorizations/{auth_id}/override-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admin Override */
+        post: operations["admin_override_api_pickup_authorizations__auth_id__override_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pickup-authorizations/{auth_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admin Verify */
+        post: operations["admin_verify_api_pickup_authorizations__auth_id__verify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12185,6 +12324,74 @@ export interface paths {
          * @description 教師端家長訊息未讀總數（跨所有 thread）。
          */
         get: operations["get_teacher_unread_count_api_portal_parent_messages_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Today Authorizations */
+        get: operations["list_today_authorizations_api_portal_pickup_authorizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations/{auth_id}/override-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Override */
+        post: operations["override_api_portal_pickup_authorizations__auth_id__override_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations/{auth_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify */
+        post: operations["verify_api_portal_pickup_authorizations__auth_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations/pending-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending Count */
+        get: operations["pending_count_api_portal_pickup_authorizations_pending_count_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -16061,6 +16268,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/pickup-photos/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Pickup Photo */
+        get: operations["download_pickup_photo_api_uploads_pickup_photos__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/uploads/portfolio/{key}": {
         parameters: {
             query?: never;
@@ -18809,6 +19033,45 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_create_authorizations_api_parent_pickup_authorizations_post */
+        Body_create_authorizations_api_parent_pickup_authorizations_post: {
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Person Phone */
+            person_phone?: string | null;
+            /** Person Relation */
+            person_relation?: string | null;
+            /** Photo */
+            photo?: string | null;
+            /** Pickup Date */
+            pickup_date: string;
+            /** Pickup Person Id */
+            pickup_person_id?: number | null;
+            /**
+             * Save To List
+             * @default false
+             */
+            save_to_list: boolean;
+            /** Student Ids */
+            student_ids: string;
+        };
+        /** Body_create_pickup_person_api_parent_pickup_persons_post */
+        Body_create_pickup_person_api_parent_pickup_persons_post: {
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo */
+            photo?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
         /** Body_import_excel_api_appraisal_cycles_import_excel_post */
         Body_import_excel_api_appraisal_cycles_import_excel_post: {
             /** File */
@@ -18838,6 +19101,21 @@ export interface components {
         Body_import_shifts_api_shifts_import_post: {
             /** File */
             file: string;
+        };
+        /** Body_update_pickup_person_api_parent_pickup_persons__person_id__patch */
+        Body_update_pickup_person_api_parent_pickup_persons__person_id__patch: {
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Person Phone */
+            person_phone?: string | null;
+            /** Person Relation */
+            person_relation?: string | null;
+            /** Photo */
+            photo?: string | null;
         };
         /** Body_upload_ack_signature_api_parent_events__event_id__ack_signature_post */
         Body_upload_ack_signature_api_parent_events__event_id__ack_signature_post: {
@@ -27186,6 +27464,137 @@ export interface components {
             /** Items */
             items: components["schemas"]["PhotoTagsItem"][];
         };
+        /**
+         * PickupAuthorizationCreatedOut
+         * @description POST /pickup-authorizations 回傳 — 明碼取件碼僅此一次。
+         */
+        PickupAuthorizationCreatedOut: {
+            /** Code */
+            code: string;
+            /** Items */
+            items: components["schemas"]["PickupAuthorizationOut"][];
+        };
+        /**
+         * PickupAuthorizationListOut
+         * @description GET /pickup-authorizations 回傳 — {items}。
+         */
+        PickupAuthorizationListOut: {
+            /** Items */
+            items: components["schemas"]["PickupAuthorizationOut"][];
+        };
+        /**
+         * PickupAuthorizationOut
+         * @description 單筆接送授權（家長端視角）。
+         */
+        PickupAuthorizationOut: {
+            /** Batch Key */
+            batch_key?: string | null;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Completed Via */
+            completed_via?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Effective Status */
+            effective_status: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo Url */
+            photo_url?: string | null;
+            /**
+             * Pickup Date
+             * Format: date
+             */
+            pickup_date: string;
+            /** Pickup Person Id */
+            pickup_person_id?: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /**
+         * PickupCodeOut
+         * @description POST /pickup-authorizations/{id}/regenerate-code 回傳。
+         */
+        PickupCodeOut: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * PickupOverrideIn
+         * @description POST .../override-complete 輸入。
+         */
+        PickupOverrideIn: {
+            /** Note */
+            note: string;
+        };
+        /**
+         * PickupPendingCountOut
+         * @description GET /portal/pickup-authorizations/pending-count 回傳。
+         */
+        PickupPendingCountOut: {
+            /** Count */
+            count: number;
+        };
+        /**
+         * PickupPersonListOut
+         * @description GET /pickup-persons 回傳 — {items}。
+         */
+        PickupPersonListOut: {
+            /** Items */
+            items: components["schemas"]["PickupPersonOut"][];
+        };
+        /**
+         * PickupPersonOut
+         * @description 單筆常用接送人資料。
+         */
+        PickupPersonOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo Url */
+            photo_url?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /**
+         * PickupVerifyIn
+         * @description POST .../verify 輸入。
+         */
+        PickupVerifyIn: {
+            /** Code */
+            code: string;
+        };
         /** PingBatchIn */
         PingBatchIn: {
             /** Points */
@@ -28066,6 +28475,69 @@ export interface components {
             student_name?: string | null;
             /** Unread Count */
             unread_count: number;
+        };
+        /**
+         * PortalPickupAuthListOut
+         * @description GET /portal/pickup-authorizations 回傳 — {items}。
+         */
+        PortalPickupAuthListOut: {
+            /** Items */
+            items: components["schemas"]["PortalPickupAuthOut"][];
+        };
+        /**
+         * PortalPickupAuthOut
+         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊，永不含取件碼。
+         */
+        PortalPickupAuthOut: {
+            /** Batch Key */
+            batch_key?: string | null;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+            /** Classroom Name */
+            classroom_name: string;
+            /**
+             * Code Locked
+             * @default false
+             */
+            code_locked: boolean;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Completed Via */
+            completed_via?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Effective Status */
+            effective_status: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Parent Name */
+            parent_name?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo Url */
+            photo_url?: string | null;
+            /**
+             * Pickup Date
+             * Format: date
+             */
+            pickup_date: string;
+            /** Pickup Person Id */
+            pickup_person_id?: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /**
          * PortalProfileLineBindingOut
@@ -52384,6 +52856,262 @@ export interface operations {
             };
         };
     };
+    list_authorizations_api_parent_pickup_authorizations_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAuthorizationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_authorizations_api_parent_pickup_authorizations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_authorizations_api_parent_pickup_authorizations_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAuthorizationCreatedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_authorization_api_parent_pickup_authorizations__auth_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAuthorizationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_code_api_parent_pickup_authorizations__auth_id__regenerate_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupCodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pickup_persons_api_parent_pickup_persons_get: {
+        parameters: {
+            query: {
+                student_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPersonListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pickup_person_api_parent_pickup_persons_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_pickup_person_api_parent_pickup_persons_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPersonOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_pickup_person_api_parent_pickup_persons__person_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pickup_person_api_parent_pickup_persons__person_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_update_pickup_person_api_parent_pickup_persons__person_id__patch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPersonOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_current_policy_api_parent_policies_current_get: {
         parameters: {
             query?: never;
@@ -52761,6 +53489,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_authorizations_api_pickup_authorizations_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                status?: string | null;
+                student_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_override_api_pickup_authorizations__auth_id__override_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupOverrideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_verify_api_pickup_authorizations__auth_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupVerifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
                 };
             };
             /** @description Validation Error */
@@ -56467,6 +57299,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnreadCountOut"];
+                };
+            };
+        };
+    };
+    list_today_authorizations_api_portal_pickup_authorizations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthListOut"];
+                };
+            };
+        };
+    };
+    override_api_portal_pickup_authorizations__auth_id__override_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupOverrideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_api_portal_pickup_authorizations__auth_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupVerifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pending_count_api_portal_pickup_authorizations_pending_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPendingCountOut"];
                 };
             };
         };
@@ -63788,6 +64730,37 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_pickup_photo_api_uploads_pickup_photos__key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;

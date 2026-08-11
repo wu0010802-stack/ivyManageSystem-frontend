@@ -37,6 +37,9 @@ export const PAGE_TERMS = {
   students: '學生',
   /** /dismissal-queue。原「接送通知」與 Portal /portal/dismissal-calls 完全同名；admin 側管的是佇列。 */
   dismissalQueue: '接送管理',
+  /** /pickup-authorizations。與 dismissalQueue（櫃台放學呼叫）不同語意——本頁管的是
+   * 家長事前授權的臨時接送人核銷紀錄。 */
+  pickupAuthorizations: '接送授權',
   /** /overtime。原 meta「加班管理」漏掉會議，頁面實際涵蓋園務會議。 */
   overtime: '加班與園務會議',
   /** /calendar。側欄原簡稱「行事曆」。 */

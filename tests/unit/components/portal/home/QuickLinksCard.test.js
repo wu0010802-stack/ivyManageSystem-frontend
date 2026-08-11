@@ -1,6 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createWebHistory } from 'vue-router'
+
+const { mockPendingCount } = vi.hoisted(() => ({ mockPendingCount: vi.fn() }))
+vi.mock('@/api/portal', () => ({ getPortalPickupPendingCount: mockPendingCount }))
+
 import QuickLinksCard from '@/components/portal/home/QuickLinksCard.vue'
 
 const router = createRouter({
@@ -8,14 +12,20 @@ const router = createRouter({
   routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
 })
 
-// QuickLinksCard 是 hardcoded 8 個連結，使用 .link-tile class 的 button
-const EXPECTED_LABELS = ['班級學生', '課堂觀察', '作品上傳', '用藥執行', '事件紀錄', '學期評量', '成長軌跡', '才藝點名']
+// QuickLinksCard 是 hardcoded 10 個連結（staging 併入時新增「活動調查」，
+// 2026-08-11 新增「接送授權」），使用 .link-tile class 的 button
+const EXPECTED_LABELS = ['班級學生', '課堂觀察', '作品上傳', '用藥執行', '事件紀錄', '學期評量', '成長軌跡', '才藝點名', '活動調查', '接送授權']
 
 describe('QuickLinksCard', () => {
-  it('renders 8 link tiles', () => {
+  beforeEach(() => {
+    mockPendingCount.mockReset()
+    mockPendingCount.mockResolvedValue({ data: { count: 0 } })
+  })
+
+  it('renders 10 link tiles', () => {
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const tiles = w.findAll('.link-tile')
-    expect(tiles.length).toBe(8)
+    expect(tiles.length).toBe(10)
   })
 
   it('renders all expected link labels', () => {
@@ -55,6 +65,28 @@ describe('QuickLinksCard', () => {
   it('each tile has a tint dot element', () => {
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const dots = w.findAll('.tile-dot')
-    expect(dots.length).toBe(8)
+    expect(dots.length).toBe(10)
+  })
+
+  it('shows pending count badge on 接送授權 tile when count > 0', async () => {
+    mockPendingCount.mockResolvedValue({ data: { count: 3 } })
+    const w = mount(QuickLinksCard, { global: { plugins: [router] } })
+    await flushPromises()
+    const badge = w.find('.tile-badge')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('3')
+  })
+
+  it('hides badge when pending count is 0', async () => {
+    const w = mount(QuickLinksCard, { global: { plugins: [router] } })
+    await flushPromises()
+    expect(w.find('.tile-badge').exists()).toBe(false)
+  })
+
+  it('hides badge (does not throw) when the count fetch fails', async () => {
+    mockPendingCount.mockRejectedValue(new Error('network error'))
+    const w = mount(QuickLinksCard, { global: { plugins: [router] } })
+    await flushPromises()
+    expect(w.find('.tile-badge').exists()).toBe(false)
   })
 })

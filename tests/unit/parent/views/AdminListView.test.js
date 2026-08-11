@@ -17,6 +17,31 @@ vi.mock('@/parent/composables/useChildSelection', () => ({
   useChildSelection: vi.fn(),
 }))
 
+// AdminListView 改走動態徽章後多了兩個資料依賴：useHomeSummary（badges 皆為 0，
+// 測試不驗徽章數字本身）與 listPickupAuthorizations（今日接送授權筆數）。
+vi.mock('@/parent/composables/useHomeSummary', () => ({
+  useHomeSummary: vi.fn(() => ({
+    badges: {
+      value: {
+        unreadAnnouncements: 0,
+        unreadMessages: 0,
+        outstandingFees: 0,
+        overdueFees: 0,
+        pendingEventAcks: 0,
+        pendingActivityPromotions: 0,
+        recentLeaveReviews: 0,
+        activeMedicationOrders: 0,
+      },
+    },
+    summary: { value: {} },
+  })),
+}))
+
+const mockListPickupAuthorizations = vi.fn().mockResolvedValue({ data: { items: [] } })
+vi.mock('@/parent/api/pickup', () => ({
+  listPickupAuthorizations: (...args) => mockListPickupAuthorizations(...args),
+}))
+
 import { useChildrenStore } from '@/parent/stores/children'
 import { useChildSelection } from '@/parent/composables/useChildSelection'
 
@@ -34,20 +59,23 @@ function setupStores({ children = [], selectedId = null } = {}) {
 beforeEach(() => {
   setActivePinia(createPinia())
   pushMock.mockClear()
+  mockListPickupAuthorizations.mockClear()
+  mockListPickupAuthorizations.mockResolvedValue({ data: { items: [] } })
 })
 
 describe('AdminListView', () => {
-  it('渲染 6 個主行政 item + 孩子檔案二級入口', () => {
+  it('渲染 7 個主行政 item + 孩子檔案二級入口', () => {
     setupStores()
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
-    expect(items).toHaveLength(7)
+    expect(items).toHaveLength(8)
     expect(w.text()).toContain('請假')
     expect(w.text()).toContain('繳費')
     expect(w.text()).toContain('用藥委託')
     expect(w.text()).toContain('課後才藝')
     expect(w.text()).toContain('待簽紀錄')
     expect(w.text()).toContain('活動調查')
+    expect(w.text()).toContain('臨時接送')
     expect(w.text()).toContain('孩子檔案')
   })
 
@@ -62,8 +90,8 @@ describe('AdminListView', () => {
     setupStores()
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
-    const paths = ['/leaves', '/fees', '/medications', '/activity', '/events', '/surveys']
-    for (let i = 0; i < 6; i++) {
+    const paths = ['/leaves', '/fees', '/medications', '/activity', '/events', '/surveys', '/pickup']
+    for (let i = 0; i < 7; i++) {
       pushMock.mockClear()
       await items[i].trigger('click')
       expect(pushMock).toHaveBeenCalledWith(paths[i])
