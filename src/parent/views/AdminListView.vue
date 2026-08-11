@@ -8,11 +8,24 @@ import { listPickupAuthorizations } from '../api/pickup'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
 import M3Divider from '../components/m3/M3Divider.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
-const { badges, summary } = useHomeSummary()
+// F5：原本只解構 badges/summary，丟掉 error/pending——API 失敗時 num() 把
+// 每個徽章 fallback 成 0，會被誤讀成「一切都處理完了」（含逾期款項這種需要
+// 提醒的項目）。比照 TodayView：pending 時顯示骨架、error 時顯示可重試的
+// 錯誤態，只有兩者皆無資料（首次載入）時才擋住清單，避免誤導性的 0。
+const {
+  badges,
+  summary,
+  data: summaryData,
+  error: summaryError,
+  pending: summaryPending,
+  refresh: refreshSummary,
+} = useHomeSummary()
 
 // pending_survey_count 尚未併入 HomeBadges（該 interface 之後才擴充），
 // 直接讀 summary 原始欄位，做法比照 TodayView 的 pendingSurveyCount。
@@ -153,7 +166,19 @@ onMounted(async () => {
 
 <template>
   <div class="admin-list-view">
-    <M3List>
+    <template v-if="summaryPending && !summaryData">
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="row" :count="6" />
+      </div>
+    </template>
+
+    <MobileErrorRetry
+      v-else-if="summaryError && !summaryData"
+      :error="summaryError"
+      @retry="refreshSummary"
+    />
+
+    <M3List v-else>
       <M3ListItem
         v-for="item in items"
         :key="item.path"
@@ -200,6 +225,12 @@ onMounted(async () => {
 }
 .admin-divider {
   margin: 8px 0;
+}
+.skeleton-wrap {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .admin-trailing {
