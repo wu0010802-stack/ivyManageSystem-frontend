@@ -283,6 +283,11 @@
 
   /* 白字：品牌綠/語意色/深色覆蓋等「有色背景」上的文字，light/dark 皆白（勿用 --m3-on-primary，dark 會變深綠） */
   --pt-on-accent: #ffffff;
+
+  /* canonical 對應（docs/TOKENS.md）：--pt-* 屬 deprecated prefix，新樣式一律用這個。
+     原本只定義在 assets/public-theme.css，家長端不 import 該檔，所以在此補上同值定義。
+     存量的 --pt-on-accent 待 token 遷移批次一併收斂。 */
+  --color-primary-contrast: #ffffff;
 }
 
 /* ============================================================

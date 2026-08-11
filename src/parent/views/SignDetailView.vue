@@ -197,7 +197,7 @@ onMounted(load)
   border-radius: 8px;
   border: none;
   background: var(--pt-primary, #4eb87a);
-  color: #fff;
+  color: var(--color-primary-contrast, #fff);
   font-weight: 600;
   font-size: 15px;
 }
