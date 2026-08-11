@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
+import { getPortalPickupPendingCount } from '@/api/portal'
 
 const router = useRouter()
 
@@ -13,7 +15,21 @@ const links = [
   { label: '學期評量', to: '/portal/assessments', tint: 'contact' },
   { label: '成長軌跡', to: '/portal/growth', tint: 'event' },
   { label: '才藝點名', to: { path: '/portal/activity', query: { tab: 'attendance' } }, tint: 'activity' },
+  { label: '接送授權', to: '/portal/pickup-authorizations', tint: 'message' },
 ]
+
+// 今日接送授權待處理數（跨教師所有班級彙總，非單一 ClassroomOpsCard 可分組——
+// 該卡的 KPI 皆來自 home summary 後端聚合，接送本次未加後端欄位，故獨立輕量
+// fetch，比照 QuickLinksCard 本身不依賴 usePortalDashboard 的既有模式）。
+const pickupPendingCount = ref(0)
+onMounted(async () => {
+  try {
+    const { data } = await getPortalPickupPendingCount()
+    pickupPendingCount.value = (data as { count?: number })?.count || 0
+  } catch {
+    pickupPendingCount.value = 0
+  }
+})
 
 function go(to: RouteLocationRaw) {
   router.push(to)
@@ -32,6 +48,10 @@ function go(to: RouteLocationRaw) {
       >
         <span class="tile-dot" :class="`tint-${l.tint}`"></span>
         <span class="tile-label">{{ l.label }}</span>
+        <span
+          v-if="l.label === '接送授權' && pickupPendingCount > 0"
+          class="tile-badge"
+        >{{ pickupPendingCount }}</span>
       </button>
     </div>
   </div>
@@ -67,6 +87,20 @@ function go(to: RouteLocationRaw) {
 
 .tile-dot {
   width: 10px; height: 10px; border-radius: 50%;
+}
+.tile-badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-danger, #e0645a);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .tint-message { background: var(--pt-tint-message-fg); }
 .tint-event { background: var(--pt-tint-event-fg); }

@@ -750,6 +750,12 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '接送通知', permission: 'DISMISSAL_CALLS_READ' },
                 },
                 {
+                    path: 'pickup-authorizations',
+                    name: 'portal-pickup-authorizations',
+                    component: () => import('../views/portal/PortalPickupAuthorizationsView.vue'),
+                    meta: { title: '接送授權', permission: 'STUDENTS_READ' },
+                },
+                {
                     path: 'bus-trip',
                     name: 'portal-bus-trip',
                     component: () => import('../views/portal/PortalBusTripView.vue'),
