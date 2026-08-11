@@ -130,6 +130,18 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '才藝課', tab: 'admin', showBack: true },
     },
     {
+      path: '/pickup',
+      name: 'parent-pickup',
+      component: () => import('./views/PickupView.vue'),
+      meta: { title: '臨時接送', tab: 'admin', showBack: true },
+    },
+    {
+      path: '/pickup/new',
+      name: 'parent-pickup-new',
+      component: () => import('./views/PickupCreateView.vue'),
+      meta: { title: '建立臨時接送授權', tab: 'admin', showBack: true },
+    },
+    {
       path: '/bind-additional',
       name: 'parent-bind-additional',
       component: () => import('./views/BindAdditionalView.vue'),

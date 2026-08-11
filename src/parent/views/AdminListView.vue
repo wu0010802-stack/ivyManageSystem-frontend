@@ -17,6 +17,7 @@ const ITEMS = [
   { headline: '用藥委託', supportingText: '新增/查詢委託用藥單', leadingIcon: 'medication', path: '/medications' },
   { headline: '課後才藝', supportingText: '才藝課程報名與紀錄', leadingIcon: 'palette', path: '/activity' },
   { headline: '待簽紀錄', supportingText: '需家長簽收的通知事項', leadingIcon: 'mark_email_read', path: '/events' },
+  { headline: '臨時接送', supportingText: '授權親友代為到園接送', leadingIcon: 'hail', path: '/pickup' },
 ] as const
 
 const children = computed(() =>
