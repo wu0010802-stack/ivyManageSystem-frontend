@@ -2311,8 +2311,16 @@ export interface paths {
          *     - version **租戶內**唯一（`uq_policy_versions_tenant_version`），重複 → 409。
          *       A 校用過的版本字串，B 校仍可使用。
          *     - effective_at 解析為 naive datetime（isoformat 輸入）。
-         *     - 建立 effective_at <= now 的新版即觸發既有家長下次
-         *       has_signed_current_policy 失效 → 重簽（純資料驅動，此端點不額外處理）。
+         *     - 建立 `effective_at <= now`（即時發布）的新版，即觸發既有家長下次
+         *       has_signed_current_policy 失效 → 重簽（純資料驅動）；commit 成功後
+         *       額外呼叫 invalidate_current_policy_cache_for_tenant() 清空本租戶 gate
+         *       快取，讓「即時發布」對已快取 True 的家長立刻生效，不必等 60s TTL
+         *       （2026-08-11 P2-2）。
+         *       **排程型（`effective_at` 在未來）政策例外**：建立當下清快取沒有意義
+         *       （該版本此刻還不是「當期」），`effective_at` 真正到達的那一刻也沒有
+         *       任何觸發器會再清一次快取——這類政策生效後，家長端仍可能有最多 60s
+         *       的視窗被舊快取放行。這是刻意接受的取捨（機制成本 vs. 排程發布本就
+         *       不要求秒級精確），不是遺漏，也不打算另建排程清快取機制。
          *
          *     多租戶（CT-FIX-01）：唯一性檢查與寫入都限定本租戶——沒有這道 filter，A 校
          *     admin 發新版會把**全平台所有分校**的家長強制重簽 A 校的隱私權政策。
