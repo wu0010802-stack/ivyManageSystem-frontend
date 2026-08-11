@@ -6,6 +6,8 @@ import { searchFaq } from '@/parent/composables/useFaqSearch'
 import AssistantSearch from '@/parent/components/assistant/AssistantSearch.vue'
 import CategoryChip from '@/parent/components/assistant/CategoryChip.vue'
 import FaqAnswer from '@/parent/components/assistant/FaqAnswer.vue'
+import SkeletonBlock from '@/parent/components/SkeletonBlock.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 type FaqItem = { id?: unknown; question?: string; answer?: string; keywords?: string[]; category?: unknown; [key: string]: unknown }
 type FaqCategory = { id: number | string; label: string; icon: string; color: string }
@@ -75,10 +77,14 @@ onMounted(load)
     </div>
 
     <div class="faq-list">
-      <div v-if="loading && filteredItems.length === 0" class="hint">載入中…</div>
-      <div v-else-if="!loading && filteredItems.length === 0" class="hint">
-        {{ query.trim() ? '沒有找到相關問題' : '尚無常見問題' }}
+      <div v-if="loading && filteredItems.length === 0" class="skeleton-wrap">
+        <SkeletonBlock variant="row" :count="4" />
       </div>
+      <EmptyState
+        v-else-if="!loading && filteredItems.length === 0"
+        variant="inline"
+        :title="query.trim() ? '沒有找到相關問題' : '尚無常見問題'"
+      />
       <div
         v-for="item in filteredItems"
         :key="itemKey(item)"
@@ -144,11 +150,11 @@ onMounted(load)
   flex-direction: column;
   gap: 8px;
 }
-.hint {
-  color: var(--pt-text-faint, #6b7280);
-  font-size: 14px;
-  padding: 24px 4px;
-  text-align: center;
+.skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
 }
 .faq-item {
   background: var(--pt-surface-card, #fff);
