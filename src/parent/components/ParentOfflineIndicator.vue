@@ -94,8 +94,16 @@ const POLL_IDLE_MS = 30000
 
 let timer: ReturnType<typeof setTimeout> | null = null
 let unsubscribeEnqueued: (() => void) | null = null
+// P2：unmount 若撞上 tick()/onOpsEnqueued 回呼中 `await refresh()` 進行中的
+// 窗口，onUnmounted 當下能清的只有「已經觸發、value 已消耗」的舊 timer id；
+// refresh() 事後才 resolve 時，若沒有這個旗標，程式仍會照常呼叫
+// scheduleNext() 建立一個新 timer——這個新 timer 沒有人會再清（onUnmounted
+// 已經跑過一次），形成殭屍輪詢。disposed 讓這些「事後才繼續執行」的路徑
+// 全部提前短路。
+let disposed = false
 
 function scheduleNext(delay: number) {
+  if (disposed) return
   if (timer) clearTimeout(timer)
   timer = setTimeout(tick, delay)
 }
@@ -103,22 +111,29 @@ function scheduleNext(delay: number) {
 // 輪詢 tick：背景分頁（document.hidden）時跳過 refresh（省 IO），但仍以 active
 // 間隔重排，確保回到前景時能在原本的時間內恢復輪詢。
 async function tick() {
+  if (disposed) return
   if (typeof document !== 'undefined' && document.hidden) {
     scheduleNext(POLL_ACTIVE_MS)
     return
   }
   await refresh()
+  if (disposed) return
   scheduleNext(show.value ? POLL_ACTIVE_MS : POLL_IDLE_MS)
 }
 
 onMounted(async () => {
   await refresh()
+  if (disposed) return
   scheduleNext(show.value ? POLL_ACTIVE_MS : POLL_IDLE_MS)
   unsubscribeEnqueued = onOpsEnqueued(() => {
-    refresh().then(() => scheduleNext(POLL_ACTIVE_MS))
+    refresh().then(() => {
+      if (disposed) return
+      scheduleNext(POLL_ACTIVE_MS)
+    })
   })
 })
 onUnmounted(() => {
+  disposed = true
   if (timer) clearTimeout(timer)
   unsubscribeEnqueued?.()
 })
