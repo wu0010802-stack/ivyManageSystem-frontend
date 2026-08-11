@@ -237,6 +237,8 @@ const INTENTIONAL_DIVERGENCE = {
     // 2026-08-10 活動參加調查表（Task 13）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
     '/surveys × SURVEYS_READ × prefix',
     '/surveys/new × SURVEYS_WRITE',
+    // 2026-08-11 入學文件電子簽署（esign01）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
+    '/students/sign-documents × STUDENTS_READ',
   ],
 }
 
