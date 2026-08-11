@@ -88,7 +88,7 @@ function formatSize(bytes: number) {
           :tabindex="0"
           @keydown.enter="openAttachment(att)"
         >
-          <img v-if="att.thumb_url" :src="att.thumb_url" :alt="att.filename" class="parent-att-thumb" />
+          <img v-if="att.thumb_url" :src="att.thumb_url" :alt="att.filename" class="parent-att-thumb" loading="lazy" decoding="async" />
           <div v-else class="parent-att-pdf-icon">PDF</div>
           <div class="parent-att-meta">
             <span class="parent-att-name">{{ att.filename }}</span>
