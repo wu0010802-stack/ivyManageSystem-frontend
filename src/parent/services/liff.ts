@@ -27,7 +27,7 @@
 
 import liff from '@line/liff'
 
-import { fetchTenantMeta } from '@/api/tenantMeta'
+import { fetchTenantMetaForLiff } from '@/api/tenantMeta'
 
 const LIFF_REFRESH_MARKER = 'parent_liff_token_refresh_marker'
 // id_token exp buffer：剩餘 < 60 秒視為需 refresh，避免送出途中過期
@@ -42,10 +42,14 @@ function envLiffId(): string {
 
 async function resolveLiffId(): Promise<string> {
   try {
-    const id = (await fetchTenantMeta()).liff_id
+    // ⚠ 用 `fetchTenantMetaForLiff()` 而**非** `fetchTenantMeta()`：後者被品牌灰度
+    // 閘門擋住時會直接 reject、連請求都不發，而該閘門讀的是 build-time 旗標——
+    // Zeabur 實測不會把 service variables 傳成 build-arg，旗標在正式環境恆為空
+    // ⇒ 家長端會連 LIFF ID 都拿不到而完全無法登入（2026-08-11 prod 事故）。
+    const id = (await fetchTenantMetaForLiff()).liff_id
     if (id) return id
   } catch {
-    // tenant-meta 不可用（灰度未開 / 網路錯誤）→ 走過渡 fallback。
+    // tenant-meta 不可用（網路錯誤 / 端點未上線）→ 走過渡 fallback。
     // 404/403/503 這三種「這個網域不是有效園所」的情況已由 useTenantBranding 的
     // 三態遮罩接管（CT-F-01），不需要在這裡重複判斷。
   }

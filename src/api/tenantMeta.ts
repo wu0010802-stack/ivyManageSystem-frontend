@@ -140,6 +140,29 @@ export function fetchTenantMeta(): Promise<TenantMeta> {
   if (!isTenantMetaEnabled()) {
     return Promise.reject(new TenantMetaError(0, TENANT_META_DISABLED))
   }
+  return _shared()
+}
+
+/**
+ * 家長端 LIFF 專用：**刻意不經灰度閘門**的同一支請求（與 `fetchTenantMeta()`
+ * 共用 in-flight promise，boot 仍只打一次）。
+ *
+ * 為什麼要有這個例外（2026-08-11 prod 事故）：`isTenantMetaEnabled()` 讀的是
+ * build-time 的 `import.meta.env`，而 Zeabur **不會**把 service variables 傳成
+ * Docker build-arg（實測：面板上 `VITE_LIFF_ID` len=19，產出的 bundle 內卻是
+ * `VITE_TENANT_BASE_DOMAIN:""`；同一次 build 連 `VITE_SENTRY_DSN` 也沒進去）。
+ * 於是所有 `VITE_*` 一律 baked 成空字串 ⇒ 灰度恆為關、`VITE_LIFF_ID` fallback
+ * 也恆為空，家長端**兩條路同時斷**，登入頁卡在「此園所尚未設定 LIFF ID」。
+ *
+ * LIFF ID 是**登入前置**，不該被「品牌 API 灰度」這個無關旗標決定生死；品牌／
+ * CT-F-01 遮罩行為仍走 `fetchTenantMeta()`，灰度不變式（DEV-12）不受影響。
+ */
+export function fetchTenantMetaForLiff(): Promise<TenantMeta> {
+  return _shared()
+}
+
+/** 單一 in-flight promise；**rejection 不快取**，讓重試能真的重打。 */
+function _shared(): Promise<TenantMeta> {
   if (!_p) {
     _p = _doFetch().catch((e: unknown) => {
       _p = null

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   fetchTenantMeta,
+  fetchTenantMetaForLiff,
   isTenantMetaEnabled,
   TENANT_META_DISABLED,
   TenantMetaError,
@@ -66,6 +67,23 @@ describe('灰度閘門 isTenantMetaEnabled()', () => {
   it('VITE_TENANT_META_ENABLED=0 是 kill switch，多租戶模式下也關閉', () => {
     setEnv({ VITE_TENANT_META_ENABLED: '0', VITE_TENANT_BASE_DOMAIN: 'ivy.tw' })
     expect(isTenantMetaEnabled()).toBe(false)
+  })
+
+  /**
+   * 迴歸（2026-08-11 prod 事故）：build-time 旗標在 Zeabur 上一律 baked 成空字串
+   * （service variables 實測不會傳成 Docker build-arg），灰度因此恆為關 ⇒ 家長端
+   * 拿不到 LIFF ID 而完全無法登入。LIFF ID 是登入前置，必須有一條不受此閘門
+   * 限制的管道；品牌／遮罩行為仍走 `fetchTenantMeta()`，灰度不變式不受影響。
+   */
+  it('fetchTenantMetaForLiff 不受閘門限制：灰度全關仍會發請求', async () => {
+    setEnv({ VITE_TENANT_META_ENABLED: '', VITE_TENANT_BASE_DOMAIN: '', VITE_TENANT_DOMAIN_MAP: '' })
+    const spy = stubFetch(() => jsonResponse({ liff_id: 'tenant-liff-9' }))
+    expect(isTenantMetaEnabled()).toBe(false)
+
+    await expect(fetchTenantMetaForLiff()).resolves.toMatchObject({ liff_id: 'tenant-liff-9' })
+    expect(spy).toHaveBeenCalledTimes(1)
+    // 同一時間 branding 那條仍必須被閘門擋住（灰度不變式沒有被順手放寬）
+    await expect(fetchTenantMeta()).rejects.toMatchObject({ code: TENANT_META_DISABLED })
   })
 })
 
