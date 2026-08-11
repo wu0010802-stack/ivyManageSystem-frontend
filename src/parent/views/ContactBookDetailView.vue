@@ -134,16 +134,24 @@ const timelineItems = computed(() => {
 })
 
 async function fetchData() {
+  // F6：reqId guard——目前 App.vue 的 `:key="route.fullPath"` 會讓 entryId
+  // 改變時整棵元件樹強制 destroy+recreate，理論上 entryId 不會在同一元件實例
+  // 內變兩次；但下方 watch(entryId) 仍在，補這個 guard 讓「若日後那道 app 級
+  // 防線被移除」不會變成活的 race（較舊 entry 的慢回應蓋掉新 entry 畫面），
+  // 樣板同 FeesView.vue 的 reqId pattern。
+  const reqId = entryId.value
   loading.value = true
   try {
-    const { data } = await getContactBookDetail(entryId.value)
+    const { data } = await getContactBookDetail(reqId)
+    if (entryId.value !== reqId) return
     entry.value = data as CbEntry
     replies.value = ((data as CbEntry)?.replies as Reply[] | undefined) || []
   } catch (err) {
+    if (entryId.value !== reqId) return
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
-    loading.value = false
+    if (entryId.value === reqId) loading.value = false
   }
 }
 
