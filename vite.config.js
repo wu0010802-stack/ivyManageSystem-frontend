@@ -251,10 +251,22 @@ function manualChunks(id) {
           && !id.includes('/src/parent/views/')
           // assistant/ 元件只被 lazy AssistantView 用，排除讓 marked/dompurify
           // （FaqAnswer 靜態 import）隨 AssistantView 一起 lazy，不進 parent 首屏。
-          && !id.includes('/src/parent/components/assistant/'))
+          && !id.includes('/src/parent/components/assistant/')
+          // mdRender.ts（esign01，2026-08-11）：同樣靜態 import marked/dompurify，
+          // 僅被 lazy route SignDetailView.vue 用到。與 assistant/ 同理排除，否則
+          // 這支 utils 檔會被本規則收進 eager parent-app，順帶把 markdown chunk
+          // 也拖進首屏（實測 253.4KB 超預算 245KB；排除後回落 230KB）。
+          && !id.includes('/src/parent/utils/mdRender.ts'))
         // @line/liff / @liff/* / services/liff.ts 已由上方 liff chunk 規則攔截
     ) {
         return 'parent-app'
+    }
+
+    // mdRender.ts 落 markdown chunk 家族：與其唯一依賴 marked/dompurify 同進退，
+    // 讓 rollup 把它跟下方「marked + dompurify」規則歸的 'markdown' chunk 合併，
+    // 維持 lazy（隨 SignDetailView.vue 動態載入）。
+    if (id.includes('/src/parent/utils/mdRender.ts')) {
+        return 'markdown'
     }
 
     // A2: 公開報名頁（public.html entry）shell + router + design-tokens.
