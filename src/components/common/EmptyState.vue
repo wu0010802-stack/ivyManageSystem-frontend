@@ -5,9 +5,13 @@
     role="status"
     aria-live="polite"
   >
-    <el-icon v-if="iconType === 'el'" class="empty-state__icon" :size="iconSize">
-      <component :is="resolvedIcon" />
-    </el-icon>
+    <component
+      v-if="iconType === 'el'"
+      :is="resolvedIcon"
+      class="empty-state__icon"
+      :style="{ width: `${iconSize}px`, height: `${iconSize}px` }"
+      aria-hidden="true"
+    />
     <component
       v-else-if="iconType === 'component'"
       :is="resolvedIcon"
@@ -38,12 +42,35 @@
  *  - inline：列表內無資料（無 padding 撐高，icon 32）
  *
  * Icon：
- *  - 預設用 Element Plus 的 FolderOpened
- *  - 傳 ElIcon 物件（如 import { Warning } from '@element-plus/icons-vue'）→ 自動偵測
- *  - 傳 Vue component（如 ParentIcon、KawaiiStar）→ 也支援
+ *  - 預設用內建的 folder-opened / warning 線稿（inline SVG，見下方 FolderOpenedIcon/
+ *    WarningFilledIcon，圖形取自 Element Plus 的 FolderOpened/WarningFilled 原始
+ *    path data，視覺等價）——此元件被 14 個 parent lazy route 引入，靜態 import
+ *    `@element-plus/icons-vue` + `<el-icon>` 會讓這些 route chunk 額外橋接到
+ *    `admin-core` chunk（實測 gzip ~28KB，parent 端從未真正用到 admin-core 其他內容），
+ *    改 inline SVG 後徹底斷開這條依賴
+ *  - 傳 Vue component（如 ParentIcon、KawaiiStar）→ 支援，直接渲染
  */
-import { computed } from 'vue'
-import { FolderOpened, WarningFilled } from '@element-plus/icons-vue'
+import { computed, h, type FunctionalComponent } from 'vue'
+
+/** 對應 Element Plus FolderOpened 的 path data（viewBox 0 0 1024 1024）。 */
+const FolderOpenedIcon: FunctionalComponent = () => h(
+  'svg',
+  { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 1024 1024' },
+  [h('path', {
+    fill: 'currentColor',
+    d: 'M878.08 448H241.92l-96 384h636.16zM832 384v-64H485.76L357.504 192H128v448l57.92-231.744A32 32 0 0 1 216.96 384zm-24.96 512H96a32 32 0 0 1-32-32V160a32 32 0 0 1 32-32h287.872l128.384 128H864a32 32 0 0 1 32 32v96h23.04a32 32 0 0 1 31.04 39.744l-112 448A32 32 0 0 1 807.04 896',
+  })],
+)
+
+/** 對應 Element Plus WarningFilled 的 path data（viewBox 0 0 1024 1024）。 */
+const WarningFilledIcon: FunctionalComponent = () => h(
+  'svg',
+  { xmlns: 'http://www.w3.org/2000/svg', viewBox: '0 0 1024 1024' },
+  [h('path', {
+    fill: 'currentColor',
+    d: 'M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896m0 192a58.43 58.43 0 0 0-58.24 63.744l23.36 256.384a35.072 35.072 0 0 0 69.76 0l23.296-256.384A58.43 58.43 0 0 0 512 256m0 512a51.2 51.2 0 1 0 0-102.4 51.2 51.2 0 0 0 0 102.4',
+  })],
+)
 
 const props = withDefaults(defineProps<{
   icon?: string | object | ((...args: unknown[]) => unknown) | null
@@ -77,7 +104,7 @@ const iconType = computed(() => {
 
 const resolvedIcon = computed(() => {
   if (props.icon) return props.icon
-  return props.variant === 'error' ? WarningFilled : FolderOpened
+  return props.variant === 'error' ? WarningFilledIcon : FolderOpenedIcon
 })
 </script>
 
