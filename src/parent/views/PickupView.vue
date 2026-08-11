@@ -26,6 +26,9 @@ import PickupCodeCard from '../components/pickup/PickupCodeCard.vue'
 import M3Card from '../components/m3/M3Card.vue'
 import M3Button from '../components/m3/M3Button.vue'
 import M3Chip from '../components/m3/M3Chip.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface PickupAuth {
   id: number
@@ -68,6 +71,9 @@ function _toastFriendly(err: unknown, fallback: string) {
 const authorizations = ref<PickupAuth[]>([])
 const persons = ref<PickupPerson[]>([])
 const loading = ref(false)
+// F2：原本失敗只靠 transient toast，畫面留白與「沒有資料」無法區分；
+// 補一個持久錯誤旗標讓「進行中授權」與「常用接送人」兩區塊改顯示可重試的錯誤態。
+const loadError = ref(false)
 
 const activeAuths = computed(() =>
   authorizations.value.filter((a) => a.effective_status === 'active'),
@@ -86,6 +92,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 async function fetchData() {
   loading.value = true
+  loadError.value = false
   try {
     const [authRes, personRes] = await Promise.all([
       listPickupAuthorizations(),
@@ -96,6 +103,7 @@ async function fetchData() {
     authorizations.value = (authRes.data as { items?: PickupAuth[] })?.items || []
     persons.value = (personRes.data as { items?: PickupPerson[] })?.items || []
   } catch (err) {
+    loadError.value = true
     _toastFriendly(err, '載入失敗')
   } finally {
     loading.value = false
@@ -249,57 +257,22 @@ onMounted(async () => {
       </M3Button>
     </M3Card>
 
-    <section class="pickup-section">
-      <h2 class="section-title">進行中授權</h2>
-      <p v-if="!loading && activeAuths.length === 0" class="empty-hint">目前沒有進行中的授權</p>
-      <M3Card v-for="a in activeAuths" :key="a.id" class="auth-card">
-        <div class="auth-row">
-          <div class="auth-info">
-            <strong>{{ a.student_name }}</strong>
-            <span class="auth-meta">{{ a.person_name }}（{{ a.person_relation }}）· {{ a.pickup_date }}</span>
-          </div>
-          <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
-        </div>
-        <div class="auth-actions">
-          <button type="button" class="link-btn" @click="askRegenerate(a)">重發取件碼</button>
-          <button type="button" class="link-btn danger" @click="askCancel(a)">取消授權</button>
-        </div>
-      </M3Card>
-    </section>
+    <!-- F2：載入中骨架（僅初次載入、兩區塊皆空時）-->
+    <div v-if="loading && authorizations.length === 0 && persons.length === 0" class="skeleton-wrap">
+      <SkeletonBlock variant="card" :count="3" />
+    </div>
 
-    <section class="pickup-section">
-      <div class="section-header">
-        <h2 class="section-title">常用接送人</h2>
-        <button type="button" class="link-btn" @click="openAddPerson">+ 新增</button>
-      </div>
-      <p v-if="!loading && persons.length === 0" class="empty-hint">尚未建立常用接送人</p>
-      <M3Card
-        v-for="p in persons"
-        :key="p.id"
-        class="person-card"
-        clickable
-        @click="openEditPerson(p)"
-      >
-        <div class="auth-row">
-          <div class="auth-info">
-            <strong>{{ p.person_name }}</strong>
-            <span class="auth-meta">{{ p.person_relation }} · {{ p.person_phone }}</span>
-          </div>
-          <button
-            type="button"
-            class="link-btn danger"
-            @click.stop="askDeletePerson(p)"
-          >移除</button>
-        </div>
-      </M3Card>
-    </section>
+    <!-- F2：失敗持久錯誤態＋重試（僅兩區塊皆空時，避免蓋掉已成功載入的舊資料） -->
+    <MobileErrorRetry
+      v-else-if="loadError && authorizations.length === 0 && persons.length === 0"
+      @retry="fetchData"
+    />
 
-    <section class="pickup-section">
-      <button type="button" class="section-toggle" @click="showHistory = !showHistory">
-        歷史授權（{{ historyAuths.length }}）{{ showHistory ? '收起' : '展開' }}
-      </button>
-      <template v-if="showHistory">
-        <M3Card v-for="a in historyAuths" :key="a.id" class="auth-card history">
+    <template v-else>
+      <section class="pickup-section">
+        <h2 class="section-title">進行中授權</h2>
+        <EmptyState v-if="activeAuths.length === 0" variant="inline" title="目前沒有進行中的授權" />
+        <M3Card v-for="a in activeAuths" :key="a.id" class="auth-card">
           <div class="auth-row">
             <div class="auth-info">
               <strong>{{ a.student_name }}</strong>
@@ -307,9 +280,57 @@ onMounted(async () => {
             </div>
             <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
           </div>
+          <div class="auth-actions">
+            <button type="button" class="link-btn" @click="askRegenerate(a)">重發取件碼</button>
+            <button type="button" class="link-btn danger" @click="askCancel(a)">取消授權</button>
+          </div>
         </M3Card>
-      </template>
-    </section>
+      </section>
+
+      <section class="pickup-section">
+        <div class="section-header">
+          <h2 class="section-title">常用接送人</h2>
+          <button type="button" class="link-btn" @click="openAddPerson">+ 新增</button>
+        </div>
+        <EmptyState v-if="persons.length === 0" variant="inline" title="尚未建立常用接送人" />
+        <M3Card
+          v-for="p in persons"
+          :key="p.id"
+          class="person-card"
+          clickable
+          @click="openEditPerson(p)"
+        >
+          <div class="auth-row">
+            <div class="auth-info">
+              <strong>{{ p.person_name }}</strong>
+              <span class="auth-meta">{{ p.person_relation }} · {{ p.person_phone }}</span>
+            </div>
+            <button
+              type="button"
+              class="link-btn danger"
+              @click.stop="askDeletePerson(p)"
+            >移除</button>
+          </div>
+        </M3Card>
+      </section>
+
+      <section class="pickup-section">
+        <button type="button" class="section-toggle" @click="showHistory = !showHistory">
+          歷史授權（{{ historyAuths.length }}）{{ showHistory ? '收起' : '展開' }}
+        </button>
+        <template v-if="showHistory">
+          <M3Card v-for="a in historyAuths" :key="a.id" class="auth-card history">
+            <div class="auth-row">
+              <div class="auth-info">
+                <strong>{{ a.student_name }}</strong>
+                <span class="auth-meta">{{ a.person_name }}（{{ a.person_relation }}）· {{ a.pickup_date }}</span>
+              </div>
+              <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
+            </div>
+          </M3Card>
+        </template>
+      </section>
+    </template>
 
     <!-- 常用接送人新增/編輯 -->
     <ParentBottomSheet
@@ -381,6 +402,13 @@ onMounted(async () => {
   margin: 0;
   font-size: 14px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
+}
+
+.skeleton-wrap {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .pickup-section {

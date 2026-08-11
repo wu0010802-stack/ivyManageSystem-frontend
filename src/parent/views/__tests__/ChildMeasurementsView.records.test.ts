@@ -125,4 +125,67 @@ describe('ChildMeasurementsView 歷次紀錄', () => {
     expect(toastError).not.toHaveBeenCalled()
     w.unmount()
   })
+
+  // F3：載入中骨架 / 失敗持久錯誤態＋重試 / 空資料提示 三態
+  describe('F3 — 載入中骨架 / 失敗錯誤態＋重試 / 空資料 三態', () => {
+    it('資料抵達前顯示骨架，不與「尚無紀錄」文案同時出現', async () => {
+      let resolveChart!: (v: unknown) => void
+      let resolveList!: (v: unknown) => void
+      chartMock.mockReturnValue(new Promise((r) => { resolveChart = r }))
+      listMock.mockReturnValue(new Promise((r) => { resolveList = r }))
+
+      const w = mount(ChildMeasurementsView)
+      await flushPromises()
+
+      expect(w.find('.sk-card').exists()).toBe(true)
+      expect(w.find('.sk-row').exists()).toBe(true)
+      expect(w.text()).not.toContain('尚無')
+      expect(w.text()).not.toContain('園所完成量測後會出現在這裡')
+
+      resolveChart(chartPayload)
+      resolveList({ data: { items: [] } })
+      await flushPromises()
+      w.unmount()
+    })
+
+    it('曲線載入失敗時顯示可重試的錯誤態（而非與「尚無紀錄」同一句文案），按重試會重新呼叫 API', async () => {
+      chartMock.mockRejectedValueOnce({ displayMessage: '曲線壞掉了' })
+
+      const w = await mountView()
+
+      expect(toastError).toHaveBeenCalledWith('曲線壞掉了')
+      expect(w.find('.mobile-error-retry').exists()).toBe(true)
+      expect(w.text()).not.toContain('尚無')
+
+      chartMock.mockResolvedValueOnce(chartPayload)
+      await w.find('.mobile-error-retry__btn').trigger('click')
+      await flushPromises()
+
+      expect(chartMock).toHaveBeenCalledTimes(2)
+      expect(w.find('.mobile-error-retry').exists()).toBe(false)
+      expect(w.find('.line-chart-stub').exists()).toBe(true)
+      w.unmount()
+    })
+
+    it('歷次紀錄清單失敗時顯示可重試的錯誤態（不再與「尚無紀錄」同一句文案，也不彈 toast），按重試會重新呼叫 API', async () => {
+      listMock.mockRejectedValueOnce({ displayMessage: '清單壞掉了' })
+
+      const w = await mountView()
+
+      expect(toastError).not.toHaveBeenCalled()
+      expect(w.find('.mobile-error-retry').exists()).toBe(true)
+      expect(w.text()).not.toContain('園所完成量測後會出現在這裡')
+
+      listMock.mockResolvedValueOnce({
+        data: { items: [{ id: 9, measured_on: '2026-08-01', height_cm: '100', weight_kg: null, head_circumference_cm: null, vision_left: null, vision_right: null, note: null }] },
+      })
+      await w.find('.mobile-error-retry__btn').trigger('click')
+      await flushPromises()
+
+      expect(listMock).toHaveBeenCalledTimes(2)
+      expect(w.find('.mobile-error-retry').exists()).toBe(false)
+      expect(w.find('.record').exists()).toBe(true)
+      w.unmount()
+    })
+  })
 })

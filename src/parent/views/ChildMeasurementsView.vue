@@ -5,6 +5,8 @@ import type { ChartData, ChartOptions } from 'chart.js'
 import { LineChart } from '@/composables/useChartJs'
 import { fetchChildMeasurements, fetchChildMeasurementChart } from '../api/childMeasurements'
 import { toast } from '../utils/toast'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 const route = useRoute()
 const studentId = computed(() => Number(route.params.studentId))
@@ -132,6 +134,12 @@ interface MeasurementRecord {
 
 const records = ref<MeasurementRecord[]>([])
 
+// F3：曲線與清單各自 Promise.allSettled、各自容錯（清單失敗刻意不彈 toast，
+// 見 load() 內註解），因此也各自記一個錯誤旗標，讓「載入失敗」與「本來就沒
+// 資料」在畫面上可被區分，並提供重試按鈕。
+const chartError = ref(false)
+const listError = ref(false)
+
 /** 一筆量測的可顯示欄位（後端未填的一律不佔位） */
 function recordChips(r: MeasurementRecord): { key: string; label: string; value: string }[] {
   const out: { key: string; label: string; value: string }[] = []
@@ -160,6 +168,8 @@ function recordDateLabel(iso: string | null): string {
 async function load() {
   if (!studentId.value) return
   loading.value = true
+  chartError.value = false
+  listError.value = false
   try {
     // 曲線與清單同時抓；清單失敗不該讓曲線一起消失，故各自容錯。
     const [chartRes, listRes] = await Promise.allSettled([
@@ -169,12 +179,18 @@ async function load() {
     if (chartRes.status === 'fulfilled') {
       chartData.value = chartRes.value.data
     } else {
+      chartError.value = true
       const err = chartRes.reason as Record<string, unknown>
       toast.error(String(err?.displayMessage || '載入失敗'))
     }
     if (listRes.status === 'fulfilled') {
       const d = listRes.value.data as { items?: MeasurementRecord[] } | null
       records.value = d?.items || []
+    } else {
+      // 清單失敗刻意不彈 toast（曲線才是這頁主體），但仍記錯誤旗標讓
+      // 「歷次紀錄」區塊改顯示可重試的錯誤態，而非跟「本來就沒紀錄」
+      // 同一句文案。
+      listError.value = true
     }
   } finally {
     loading.value = false
@@ -212,19 +228,37 @@ onMounted(load)
     </div>
 
     <div class="pt-card chart-card">
-      <div class="chart">
-        <LineChart v-if="!isEmpty" :data="lineData" :options="lineOptions" />
+      <div v-if="loading && isEmpty" class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="1" />
       </div>
-      <p v-if="!loading && isEmpty" class="empty-msg">
-        尚無 {{ currentMetric?.label }} 紀錄
-      </p>
+      <MobileErrorRetry
+        v-else-if="chartError && isEmpty"
+        @retry="load"
+      />
+      <template v-else>
+        <div class="chart">
+          <LineChart v-if="!isEmpty" :data="lineData" :options="lineOptions" />
+        </div>
+        <p v-if="isEmpty" class="empty-msg">
+          尚無 {{ currentMetric?.label }} 紀錄
+        </p>
+      </template>
     </div>
 
     <!-- 歷次紀錄：曲線看趨勢，這裡看每一次的實際數字（含曲線畫不出的頭圍與視力） -->
     <section class="pt-card records-card" aria-labelledby="records-title">
       <h2 id="records-title" class="records-title">歷次紀錄</h2>
 
-      <p v-if="!loading && records.length === 0" class="empty-msg">
+      <div v-if="loading && records.length === 0" class="skeleton-wrap">
+        <SkeletonBlock variant="row" :count="2" />
+      </div>
+
+      <MobileErrorRetry
+        v-else-if="listError && records.length === 0"
+        @retry="load"
+      />
+
+      <p v-else-if="records.length === 0" class="empty-msg">
         園所完成量測後會出現在這裡
       </p>
 
@@ -299,6 +333,11 @@ onMounted(load)
 .chart {
   width: 100%;
   height: 260px;
+}
+.skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .empty-msg {
   margin: 0;
