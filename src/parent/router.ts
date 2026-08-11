@@ -94,6 +94,18 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '事件簽閱', tab: 'admin', showBack: true },
     },
     {
+      path: '/sign',
+      name: 'parent-sign-list',
+      component: () => import('./views/SignListView.vue'),
+      meta: { title: '文件簽署', tab: 'admin', showBack: true },
+    },
+    {
+      path: '/sign/:id',
+      name: 'parent-sign-detail',
+      component: () => import('./views/SignDetailView.vue'),
+      meta: { title: '文件簽署', tab: 'admin', showBack: true },
+    },
+    {
       path: '/events/:eventId/ack',
       name: 'parent-event-ack',
       component: () => import('./views/EventAckView.vue'),
