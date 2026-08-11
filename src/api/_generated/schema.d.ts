@@ -1342,13 +1342,34 @@ export interface paths {
         };
         /**
          * Get Registration Detail
-         * @description 取得報名詳情（含課程/用品/修改紀錄）
+         * @description 取得報名詳情（含課程/用品/修改紀錄）。
+         *
+         *     2026-08-06：唯讀詳情放行 `match_status='rejected'` 的軟刪列。被拒報名自
+         *     2026-07-31「只留拒絕（軟刪）」改版後刻意保留在列表中供稽核與復原（見
+         *     GET /registrations 的 include_inactive 說明，前端預設就帶
+         *     include_inactive=true 且詳情鈕無 v-if），原本寫死 is_active=True 讓這些列
+         *     點「詳情」必定 404 —— 連帶把繳費/退費明細也擋死：前端 openDetail 先 await
+         *     詳情、拋錯就進 catch，`loadPayments` 永遠不會被呼叫，而
+         *     registrations_payments.get_registration_payments 刻意不要求 is_active
+         *     （軟刪報名的沖帳歷史仍需供財務查核）等於白放寬。已繳費後被拒（force_refund
+         *     沖帳）的報名，後台唯一的退費明細入口就是這裡。
+         *     一般刪除／學生離園自動軟刪的列仍維持 404（那些列 match_status 保留刪除前
+         *     原值、無任何「已刪除」標記，同 list 端點的收斂口徑）。**只放寬本唯讀端點**，
+         *     下方所有寫入型端點維持 is_active=True。
          */
         get: operations["get_registration_detail_api_activity_registrations__registration_id__get"];
         /**
          * Update Registration Basic
          * @description 後台編輯報名基本欄位（姓名、生日、班級、Email）。
          *     學期不可變更，若需更改請重新建立報名。
+         *
+         *     2026-08-06 起 `birthday` 為 **partial-update** 語意（與前端議定的契約）：
+         *     request body **未帶** birthday key ＝ 不變更該欄位；帶了 key 但值為
+         *     null/空字串 ＝ 明確清空為 None。Why：缺 STUDENTS_READ 的員工在詳情看到的
+         *     生日空白是**遮罩**（`reg.birthday if can_see_student else None`），不是真的
+         *     沒資料；原本無條件 `reg.birthday = new_bday` 會讓這種員工一按儲存就把真實
+         *     生日靜默清成 NULL（2026-08-03 生日退出公開表單、前端解除必填後必然發生）。
+         *     前端對應行為：生日欄未載入到值時 payload 不帶 birthday key。
          */
         put: operations["update_registration_basic_api_activity_registrations__registration_id__put"];
         post?: never;
@@ -4299,6 +4320,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/bus/routes/{route_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Route
+         * @description 改路線名稱／啟用狀態（部分更新，兩欄皆選填但至少一項）。
+         *
+         *     停用（`is_active=False`）時若該路線有 in_progress 班次一律擋 409：司機／
+         *     家長端正在依賴這班車的路線狀態，中途把路線關掉等同把正在路上的班次攔腰
+         *     切斷；停用語意應是「下一趟不再開」，`list_portal_routes` 已用
+         *     `is_active.is_(True)` 濾掉停用路線的司機選單、`start_trip` 也只接受
+         *     is_active 路線開新班，兩者都只影響「未開始」的班次，與此處對齊。改名不
+         *     受此限制（純文字異動不牽涉開班語意）。
+         *
+         *     管理端 `GET /routes` 刻意繼續列出已停用路線（`is_active` 已在既有
+         *     response 帶出）：停用後若管理端看不到，就永遠改不回來。
+         */
+        patch: operations["update_route_api_bus_routes__route_id__patch"];
+        trace?: never;
+    };
     "/bus/routes/{route_id}/stops": {
         parameters: {
             query?: never;
@@ -4333,6 +4384,52 @@ export interface paths {
          * @description 依學生住址查座標（**不落庫**，管理端在地圖微調後隨 PUT stops 存）。
          */
         post: operations["geocode_student_api_bus_routes_geocode_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bus/trips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trips
+         * @description 乘車歷史分頁查詢（任務一）：家長申訴「昨天接晚了」時查歷史班次用。
+         *
+         *     刻意不回座標——列表不需要，家庭住址 PII 能少下發就少下發；要看逐站座標走
+         *     `GET /trips/{trip_id}` 詳情。
+         *
+         *     站點統計（`stop_stats`）以單次 GROUP BY 聚合查詢算完，不逐 trip 查
+         *     （`_stop_stats_by_trip`），查詢數不隨頁內 trip 筆數線性成長。
+         */
+        get: operations["list_trips_api_bus_trips_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bus/trips/{trip_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Trip Detail
+         * @description 單筆班次詳情，含逐站明細（任務一）。查無回 404（訊息不帶座標／地址）。
+         */
+        get: operations["get_trip_detail_api_bus_trips__trip_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9021,6 +9118,10 @@ export interface paths {
          *     - unread_announcements: int
          *     - fees: { outstanding, overdue, due_soon, outstanding_count, ... }
          *     - pending_event_acks: int
+         *     - unread_messages: int
+         *     - pending_activity_promotions: int
+         *     - recent_leave_reviews: int
+         *     - active_medication_orders: int
          */
         get: operations["home_summary_api_parent_home_summary_get"];
         put?: never;
@@ -9605,6 +9706,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/pickup-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Authorizations */
+        get: operations["list_authorizations_api_parent_pickup_authorizations_get"];
+        put?: never;
+        /** Create Authorizations */
+        post: operations["create_authorizations_api_parent_pickup_authorizations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-authorizations/{auth_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Authorization */
+        post: operations["cancel_authorization_api_parent_pickup_authorizations__auth_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-authorizations/{auth_id}/regenerate-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Regenerate Code */
+        post: operations["regenerate_code_api_parent_pickup_authorizations__auth_id__regenerate_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-persons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Pickup Persons */
+        get: operations["list_pickup_persons_api_parent_pickup_persons_get"];
+        put?: never;
+        /** Create Pickup Person */
+        post: operations["create_pickup_person_api_parent_pickup_persons_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/pickup-persons/{person_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Pickup Person */
+        delete: operations["delete_pickup_person_api_parent_pickup_persons__person_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Pickup Person */
+        patch: operations["update_pickup_person_api_parent_pickup_persons__person_id__patch"];
+        trace?: never;
+    };
     "/parent/policies/current": {
         parameters: {
             query?: never;
@@ -9789,6 +9978,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pickup-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Authorizations */
+        get: operations["list_authorizations_api_pickup_authorizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pickup-authorizations/{auth_id}/override-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admin Override */
+        post: operations["admin_override_api_pickup_authorizations__auth_id__override_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pickup-authorizations/{auth_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Admin Verify */
+        post: operations["admin_verify_api_pickup_authorizations__auth_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/audit": {
         parameters: {
             query?: never;
@@ -9801,6 +10041,30 @@ export interface paths {
          * @description 查詢稽核紀錄。`tenant_id` 為**必填**——沒有「不小心查到全平台」這回事。
          */
         get: operations["query_platform_audit_api_platform_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/activities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 活動才藝課
+         * @description 各分校才藝課彙總：開課數/報名/實收營收（active reg paid_amount 加總）/未收。
+         *
+         *     期間單位＝民國學年＋學期，未帶時落到當前學期（與分校端活動儀表板同口徑）。
+         *     只帶 `school_year` 不帶 `semester`（或反之）會回 400——兩者需同時提供或
+         *     同時省略。
+         */
+        get: operations["platform_activities_api_platform_reports_activities_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9841,6 +10105,52 @@ export interface paths {
          * @description 各分校收支彙總。合計只做「標準度量」（金額合計），分類細項不跨校對齊。
          */
         get: operations["platform_finance_api_platform_reports_finance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 營運健康即時面板
+         * @description 各分校「今日/當下」健康訊號：今日教職員出勤、待簽核積壓（請假＋加班
+         *     pending）、逾期繳費（折抵後淨額，逾期學生數＋金額）、近 30 天新參觀預約。
+         *
+         *     短 TTL（60 秒）；「今日」以台北時間為準。假日全員未打卡屬預期，警示判定
+         *     交前端。
+         */
+        get: operations["platform_health_api_platform_reports_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/reports/hr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 人事教職員
+         * @description 各分校人事彙總：在職編制（現點）、該年核准請假/加班時數、入離職與流動率。
+         *
+         *     請假以 start_date 落點年度計；流動率＝該年離職數／現點在職數（合計重算）。
+         */
+        get: operations["platform_hr_api_platform_reports_hr_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9909,6 +10219,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/reports/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 學生班級營運
+         * @description 各分校在籍/容量/缺額/新生離園/學齡分布。
+         *
+         *     在籍（enrolled_count）＝ lifecycle enrolled＋active 的**現點快照**，不受
+         *     school_year 影響；new_enrollments / departures / 學齡基準日（9/1 足歲）依所選
+         *     學年（民國，未帶＝當前學年）。on_leave（休學）獨立列出，不計入在籍與缺額。
+         *     班級數（classroom_count）／容量（total_capacity）同樣是**當期 active 班級**
+         *     的現點快照，不隨 school_year 參數變動（Classroom 每學期一列，此處固定取
+         *     resolve_current_academic_term() 當期）。
+         */
+        get: operations["platform_students_api_platform_reports_students_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/roles/sync": {
         parameters: {
             query?: never;
@@ -9959,7 +10296,7 @@ export interface paths {
          *     dms 的 `create_tenant()`，它內部自開 `maintenance_session()`、全流程單一交易、
          *     任何一步失敗即整批回滾（不留半殘租戶）。
          *
-         *     `dry_run=True` 只驗證 CT-X-12 的三條件閘門與 slug 規則，**不寫任何一列**。
+         *     `dry_run=True` 只驗證 CT-X-12 的四條件閘門與 slug 規則，**不寫任何一列**。
          *     前端建立 dialog 的「檢查」按鈕用它，避免使用者在填完整張表後才發現
          *     `MULTI_TENANT_PROVISIONING_ENABLED` 沒開。
          */
@@ -10419,6 +10756,10 @@ export interface paths {
          *
          *     只回 `is_active=True`：停用路線本來就不該被開班（POST /trips 也只接受
          *     啟用中的路線，回 404），列在選單裡只會製造死巷。
+         *
+         *     租戶隔離（2026-08-10）：`BusRoute` 為 DIRECT（自帶 tenant_id），依當前
+         *     租戶過濾——沒有這層過濾，開班選單會把他校路線名稱一併列出，且提供
+         *     可枚舉的 route_id（見 `start_trip` 的租戶檢查）。
          */
         get: operations["list_routes_for_operator_api_portal_bus_routes_get"];
         put?: never;
@@ -11931,6 +12272,74 @@ export interface paths {
          * @description 教師端家長訊息未讀總數（跨所有 thread）。
          */
         get: operations["get_teacher_unread_count_api_portal_parent_messages_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Today Authorizations */
+        get: operations["list_today_authorizations_api_portal_pickup_authorizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations/{auth_id}/override-complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Override */
+        post: operations["override_api_portal_pickup_authorizations__auth_id__override_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations/{auth_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify */
+        post: operations["verify_api_portal_pickup_authorizations__auth_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/pickup-authorizations/pending-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pending Count */
+        get: operations["pending_count_api_portal_pickup_authorizations_pending_count_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15572,6 +15981,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/uploads/pickup-photos/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Pickup Photo */
+        get: operations["download_pickup_photo_api_uploads_pickup_photos__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/uploads/portfolio/{key}": {
         parameters: {
             query?: never;
@@ -17208,6 +17634,11 @@ export interface components {
         /**
          * AdminRegistrationBasicUpdate
          * @description 後台編輯報名基本欄位（不含課程/用品/備註）。
+         *
+         *     `birthday` 為 partial-update 語意（2026-08-06 與前端議定的契約）：
+         *     payload **未帶** birthday key ＝ 不變更該欄位（後端以 `model_fields_set`
+         *     判斷）；帶 key 但值為 null/空字串 ＝ 明確清空。缺 STUDENTS_READ 的員工讀到
+         *     的生日是遮罩後的 None，不帶 key 才不會把真實生日靜默清空。
          */
         AdminRegistrationBasicUpdate: {
             /** Birthday */
@@ -18315,6 +18746,45 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_create_authorizations_api_parent_pickup_authorizations_post */
+        Body_create_authorizations_api_parent_pickup_authorizations_post: {
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Person Phone */
+            person_phone?: string | null;
+            /** Person Relation */
+            person_relation?: string | null;
+            /** Photo */
+            photo?: string | null;
+            /** Pickup Date */
+            pickup_date: string;
+            /** Pickup Person Id */
+            pickup_person_id?: number | null;
+            /**
+             * Save To List
+             * @default false
+             */
+            save_to_list: boolean;
+            /** Student Ids */
+            student_ids: string;
+        };
+        /** Body_create_pickup_person_api_parent_pickup_persons_post */
+        Body_create_pickup_person_api_parent_pickup_persons_post: {
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo */
+            photo?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
         /** Body_import_excel_api_appraisal_cycles_import_excel_post */
         Body_import_excel_api_appraisal_cycles_import_excel_post: {
             /** File */
@@ -18344,6 +18814,21 @@ export interface components {
         Body_import_shifts_api_shifts_import_post: {
             /** File */
             file: string;
+        };
+        /** Body_update_pickup_person_api_parent_pickup_persons__person_id__patch */
+        Body_update_pickup_person_api_parent_pickup_persons__person_id__patch: {
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Person Phone */
+            person_phone?: string | null;
+            /** Person Relation */
+            person_relation?: string | null;
+            /** Photo */
+            photo?: string | null;
         };
         /** Body_upload_ack_signature_api_parent_events__event_id__ack_signature_post */
         Body_upload_ack_signature_api_parent_events__event_id__ack_signature_post: {
@@ -18814,6 +19299,11 @@ export interface components {
         BusRouteStopOut: {
             /** Address Snapshot */
             address_snapshot?: string | null;
+            /**
+             * Address Stale
+             * @default false
+             */
+            address_stale: boolean;
             /** Lat */
             lat?: number | null;
             /** Lng */
@@ -18854,6 +19344,11 @@ export interface components {
             lat?: number | null;
             /** Lng */
             lng?: number | null;
+            /**
+             * On Leave
+             * @default false
+             */
+            on_leave: boolean;
             /** Seq */
             seq: number;
             /** Status */
@@ -18867,6 +19362,11 @@ export interface components {
         };
         /** BusStopsOut */
         BusStopsOut: {
+            /**
+             * Notification Warning
+             * @default false
+             */
+            notification_warning: boolean;
             /** Stops */
             stops: components["schemas"]["BusStopAdminOut"][];
         };
@@ -18919,6 +19419,77 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * BusTripDetailOut
+         * @description 單筆班次詳情，含逐站明細（沿用 build_admin_stops_payload 的既有形狀，
+         *     已是管理端授權可見的內容，含座標）。
+         */
+        BusTripDetailOut: {
+            /** Auto Closed */
+            auto_closed: boolean;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Operator Employee Id */
+            operator_employee_id: number;
+            /** Operator Employee Name */
+            operator_employee_name?: string | null;
+            /** Route Id */
+            route_id: number;
+            /** Route Name */
+            route_name: string;
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Stops */
+            stops: components["schemas"]["BusStopAdminOut"][];
+            /** Trip Date */
+            trip_date: string;
+        };
+        /**
+         * BusTripListItemOut
+         * @description 乘車歷史列表單筆——刻意不含座標（列表不需要，家庭住址 PII 能少帶就少帶）。
+         */
+        BusTripListItemOut: {
+            /** Auto Closed */
+            auto_closed: boolean;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Operator Employee Id */
+            operator_employee_id: number;
+            /** Operator Employee Name */
+            operator_employee_name?: string | null;
+            /** Route Id */
+            route_id: number;
+            /** Route Name */
+            route_name: string;
+            /** Started At */
+            started_at: string;
+            /** Status */
+            status: string;
+            stop_stats: components["schemas"]["BusTripStopStatsOut"];
+            /** Trip Date */
+            trip_date: string;
+        };
+        /** BusTripListOut */
+        BusTripListOut: {
+            /** Items */
+            items: components["schemas"]["BusTripListItemOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
         /** BusTripOut */
         BusTripOut: {
             trip: components["schemas"]["BusTripAdminOut"];
@@ -18928,6 +19499,20 @@ export interface components {
             /** Stops */
             stops: components["schemas"]["BusStopAdminOut"][];
             trip?: components["schemas"]["BusTripAdminOut"] | null;
+        };
+        /**
+         * BusTripStopStatsOut
+         * @description 一次聚合查詢算完的站點統計（免逐 trip N+1）。
+         */
+        BusTripStopStatsOut: {
+            /** Departed */
+            departed: number;
+            /** Pending */
+            pending: number;
+            /** Skipped */
+            skipped: number;
+            /** Total */
+            total: number;
         };
         /** BusTripWithStopsOut */
         BusTripWithStopsOut: {
@@ -20520,6 +21105,11 @@ export interface components {
             name: string;
             /** Pending Review */
             pending_review: number;
+            /**
+             * Pending Review Waitlist
+             * @default 0
+             */
+            pending_review_waitlist: number;
             /** Price */
             price: number;
             /** Promoted Pending */
@@ -26508,6 +27098,137 @@ export interface components {
             /** Items */
             items: components["schemas"]["PhotoTagsItem"][];
         };
+        /**
+         * PickupAuthorizationCreatedOut
+         * @description POST /pickup-authorizations 回傳 — 明碼取件碼僅此一次。
+         */
+        PickupAuthorizationCreatedOut: {
+            /** Code */
+            code: string;
+            /** Items */
+            items: components["schemas"]["PickupAuthorizationOut"][];
+        };
+        /**
+         * PickupAuthorizationListOut
+         * @description GET /pickup-authorizations 回傳 — {items}。
+         */
+        PickupAuthorizationListOut: {
+            /** Items */
+            items: components["schemas"]["PickupAuthorizationOut"][];
+        };
+        /**
+         * PickupAuthorizationOut
+         * @description 單筆接送授權（家長端視角）。
+         */
+        PickupAuthorizationOut: {
+            /** Batch Key */
+            batch_key?: string | null;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Completed Via */
+            completed_via?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Effective Status */
+            effective_status: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo Url */
+            photo_url?: string | null;
+            /**
+             * Pickup Date
+             * Format: date
+             */
+            pickup_date: string;
+            /** Pickup Person Id */
+            pickup_person_id?: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /**
+         * PickupCodeOut
+         * @description POST /pickup-authorizations/{id}/regenerate-code 回傳。
+         */
+        PickupCodeOut: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * PickupOverrideIn
+         * @description POST .../override-complete 輸入。
+         */
+        PickupOverrideIn: {
+            /** Note */
+            note: string;
+        };
+        /**
+         * PickupPendingCountOut
+         * @description GET /portal/pickup-authorizations/pending-count 回傳。
+         */
+        PickupPendingCountOut: {
+            /** Count */
+            count: number;
+        };
+        /**
+         * PickupPersonListOut
+         * @description GET /pickup-persons 回傳 — {items}。
+         */
+        PickupPersonListOut: {
+            /** Items */
+            items: components["schemas"]["PickupPersonOut"][];
+        };
+        /**
+         * PickupPersonOut
+         * @description 單筆常用接送人資料。
+         */
+        PickupPersonOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Note */
+            note?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo Url */
+            photo_url?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /**
+         * PickupVerifyIn
+         * @description POST .../verify 輸入。
+         */
+        PickupVerifyIn: {
+            /** Code */
+            code: string;
+        };
         /** PingBatchIn */
         PingBatchIn: {
             /** Points */
@@ -27369,6 +28090,69 @@ export interface components {
             student_name?: string | null;
             /** Unread Count */
             unread_count: number;
+        };
+        /**
+         * PortalPickupAuthListOut
+         * @description GET /portal/pickup-authorizations 回傳 — {items}。
+         */
+        PortalPickupAuthListOut: {
+            /** Items */
+            items: components["schemas"]["PortalPickupAuthOut"][];
+        };
+        /**
+         * PortalPickupAuthOut
+         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊，永不含取件碼。
+         */
+        PortalPickupAuthOut: {
+            /** Batch Key */
+            batch_key?: string | null;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+            /** Classroom Name */
+            classroom_name: string;
+            /**
+             * Code Locked
+             * @default false
+             */
+            code_locked: boolean;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Completed Via */
+            completed_via?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Effective Status */
+            effective_status: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Parent Name */
+            parent_name?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Person Phone */
+            person_phone: string;
+            /** Person Relation */
+            person_relation: string;
+            /** Photo Url */
+            photo_url?: string | null;
+            /**
+             * Pickup Date
+             * Format: date
+             */
+            pickup_date: string;
+            /** Pickup Person Id */
+            pickup_person_id?: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /**
          * PortalProfileLineBindingOut
@@ -30799,6 +31583,17 @@ export interface components {
         RouteCreateIn: {
             /** Name */
             name: string;
+        };
+        /**
+         * RouteUpdateIn
+         * @description 兩欄皆選填，但至少須帶一個——空 body 判定為 422（未表達任何變更意圖，
+         *     與 pydantic 既有欄位驗證錯誤同一種回應形狀，前端不必分辨兩種 422）。
+         */
+        RouteUpdateIn: {
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Name */
+            name?: string | null;
         };
         /** RunNowOut */
         RunNowOut: {
@@ -41809,6 +42604,41 @@ export interface operations {
             };
         };
     };
+    update_route_api_bus_routes__route_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RouteUpdateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusRouteCreatedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     replace_stops_api_bus_routes__route_id__stops_put: {
         parameters: {
             query?: never;
@@ -41864,6 +42694,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BusGeocodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trips_api_bus_trips_get: {
+        parameters: {
+            query?: {
+                /** @description trip_date 起（含） */
+                date_from?: string | null;
+                /** @description trip_date 迄（含） */
+                date_to?: string | null;
+                direction?: string | null;
+                /** @description 第幾頁（從 1 開始） */
+                page?: number;
+                /** @description 每頁筆數 */
+                page_size?: number;
+                route_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTripListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trip_detail_api_bus_trips__trip_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trip_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusTripDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -51303,6 +52204,262 @@ export interface operations {
             };
         };
     };
+    list_authorizations_api_parent_pickup_authorizations_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAuthorizationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_authorizations_api_parent_pickup_authorizations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_authorizations_api_parent_pickup_authorizations_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAuthorizationCreatedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_authorization_api_parent_pickup_authorizations__auth_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAuthorizationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    regenerate_code_api_parent_pickup_authorizations__auth_id__regenerate_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupCodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pickup_persons_api_parent_pickup_persons_get: {
+        parameters: {
+            query: {
+                student_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPersonListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pickup_person_api_parent_pickup_persons_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_pickup_person_api_parent_pickup_persons_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPersonOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_pickup_person_api_parent_pickup_persons__person_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_pickup_person_api_parent_pickup_persons__person_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                person_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_update_pickup_person_api_parent_pickup_persons__person_id__patch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPersonOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_current_policy_api_parent_policies_current_get: {
         parameters: {
             query?: never;
@@ -51606,6 +52763,110 @@ export interface operations {
             };
         };
     };
+    list_authorizations_api_pickup_authorizations_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                status?: string | null;
+                student_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_override_api_pickup_authorizations__auth_id__override_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupOverrideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_verify_api_pickup_authorizations__auth_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupVerifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     query_platform_audit_api_platform_audit_get: {
         parameters: {
             query: {
@@ -51635,6 +52896,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformAuditOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_activities_api_platform_reports_activities_get: {
+        parameters: {
+            query?: {
+                force_refresh?: boolean;
+                school_year?: number | null;
+                semester?: number | null;
+                tenant_ids?: number[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
                 };
             };
             /** @description Validation Error */
@@ -51686,6 +52981,71 @@ export interface operations {
             query: {
                 force_refresh?: boolean;
                 month?: number | null;
+                tenant_ids?: number[] | null;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_health_api_platform_reports_health_get: {
+        parameters: {
+            query?: {
+                force_refresh?: boolean;
+                tenant_ids?: number[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_hr_api_platform_reports_hr_get: {
+        parameters: {
+            query: {
+                force_refresh?: boolean;
                 tenant_ids?: number[] | null;
                 year: number;
             };
@@ -51788,6 +53148,39 @@ export interface operations {
                 force_refresh?: boolean;
                 tenant_ids?: number[] | null;
                 year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    platform_students_api_platform_reports_students_get: {
+        parameters: {
+            query?: {
+                force_refresh?: boolean;
+                school_year?: number | null;
+                tenant_ids?: number[] | null;
             };
             header?: never;
             path?: never;
@@ -55167,6 +56560,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnreadCountOut"];
+                };
+            };
+        };
+    };
+    list_today_authorizations_api_portal_pickup_authorizations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthListOut"];
+                };
+            };
+        };
+    };
+    override_api_portal_pickup_authorizations__auth_id__override_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupOverrideIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_api_portal_pickup_authorizations__auth_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupVerifyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pending_count_api_portal_pickup_authorizations_pending_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupPendingCountOut"];
                 };
             };
         };
@@ -61989,6 +63492,37 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_pickup_photo_api_uploads_pickup_photos__key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
