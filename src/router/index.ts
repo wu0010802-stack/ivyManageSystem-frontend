@@ -158,6 +158,13 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '新學年預編班' }
         },
         {
+            // 入學文件電子簽署（esign01，2026-08-11）：範本管理 + 發送追蹤兩個 tab。
+            path: '/students/sign-documents',
+            name: 'signDocuments',
+            component: () => import('../views/students/SignDocumentsView.vue'),
+            meta: { title: '入學文件簽署' }
+        },
+        {
             // 招生統計已重構為學生模組下的「招生入學」；舊連結 redirect 並保留 query
             path: '/recruitment',
             redirect: (to) => ({ path: '/students/admissions', query: to.query })
