@@ -303,9 +303,13 @@ export const NAVIGATION_MANIFEST = {
         {
           // 入學文件電子簽署（esign01，2026-08-11）：範本管理 + 發送追蹤，
           // 沿用既有 STUDENTS_READ/WRITE，不新增 Permission（spec D9）。
+          // STUDENTS_READ 已由 studentsMain 主屬（views），本頁改用 sharedViews 借道
+          // （M3：同一碼只能一處 owned，同 enrollmentStats 模式）。STUDENTS_WRITE 同理
+          // 已由 studentsMain 主屬（actions）且無 sharedActions 機制，寫入門檻改在頁面
+          // 元件內以 hasPermission('STUDENTS_WRITE') 判斷（見 SignDocumentsView.vue
+          // 的 canWrite，控制發送/新增範本等按鈕顯示）。
           key: 'signDocuments', title: '入學文件簽署', routePath: '/students/sign-documents',
-          views: [{ code: 'STUDENTS_READ' }],
-          actions: [{ code: 'STUDENTS_WRITE' }],
+          views: [], sharedViews: ['STUDENTS_READ'],
           menu: { icon: icon('EditPen') },
         },
         {
