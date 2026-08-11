@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
 import { getTodayContactBook, type ContactBookEntry } from '../api/contactBook'
 import { getBusToday } from '../api/bus'
+import { listPickupAuthorizations } from '../api/pickup'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
 import { useTodayTimeline } from '../composables/useTodayTimeline'
@@ -131,9 +132,22 @@ async function loadBusToday() {
   }
 }
 
+// 臨時接送快捷卡：今日進行中授權筆數（跨全部小孩）。失敗不擋首頁其他區塊。
+const pickupActiveCount = ref(0)
+async function loadPickupToday() {
+  try {
+    const res = await listPickupAuthorizations({ status: 'active' })
+    const items = (res.data as { items?: unknown[] })?.items || []
+    pickupActiveCount.value = items.length
+  } catch {
+    pickupActiveCount.value = 0
+  }
+}
+
 onMounted(() => {
   refreshToday()
   loadBusToday()
+  loadPickupToday()
   // useCachedAsync cache-hit 時 children 從一開始就有值，下方 watch（無
   // immediate）不會 fire → 聯絡簿 hero card 永遠不會顯示。mount 時直接
   // ensureSelected + loadContactBook 涵蓋此 case（P1-16）。
@@ -285,7 +299,7 @@ function go(path: string) {
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
     <!-- Bento 格：待繳學費 + 待簽文件 -->
-    <div v-if="feesInfo || pendingSignCount > 0 || busInfo" class="today-bento">
+    <div v-if="feesInfo || pendingSignCount > 0 || busInfo || pickupActiveCount > 0" class="today-bento">
       <StatTile
         v-if="busInfo"
         label="娃娃車"
@@ -293,6 +307,14 @@ function go(path: string) {
         icon="directions_bus"
         tone="sky"
         to="/bus"
+      />
+      <StatTile
+        v-if="pickupActiveCount > 0"
+        label="臨時接送"
+        :value="`${pickupActiveCount} 筆進行中`"
+        icon="hail"
+        tone="coral"
+        to="/pickup"
       />
       <StatTile
         v-if="feesInfo"
