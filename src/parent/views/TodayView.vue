@@ -21,6 +21,7 @@ import PendingSurveyBanner from '../components/home/PendingSurveyBanner.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
+import { listMySignRequests } from '../api/signDocuments'
 
 const router = useRouter()
 const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
@@ -55,6 +56,20 @@ const pendingSurveyCount = computed(() => {
   const v = (summary.value as { pending_survey_count?: unknown } | null)?.pending_survey_count
   return typeof v === 'number' ? v : 0
 })
+
+// 入學文件電子簽署（esign01）：與既有 pendingSignCount（事件簽閱，導向
+// /events）為不同功能，刻意用不同變數名與標籤避免首頁出現兩個「待簽文件」
+// tile 導向不同頁面的混淆。home summary 尚未聚合此欄位（不動既有共用
+// endpoint），改用獨立輕量請求。
+const pendingSignDocCount = ref(0)
+async function loadPendingSignDocCount() {
+  try {
+    const { data } = await listMySignRequests()
+    pendingSignDocCount.value = data.pending.length
+  } catch {
+    pendingSignDocCount.value = 0
+  }
+}
 
 // 學費：summary.fees.outstanding_count（筆數）+ outstanding（金額）
 const feesInfo = computed(() => {
@@ -166,6 +181,7 @@ onMounted(() => {
   // ensureSelected + loadContactBook 涵蓋此 case（P1-16）。
   ensureSelected(children.value || [])
   loadContactBook()
+  loadPendingSignDocCount()
 })
 
 watch(
@@ -337,7 +353,10 @@ function go(path: string) {
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
     <!-- Bento 格：行政事項，位階刻意在今日卡之下 -->
-    <div v-if="feesInfo || pendingSignCount > 0 || busInfo || pickupActiveCount > 0" class="today-bento">
+    <div
+      v-if="feesInfo || pendingSignCount > 0 || pendingSignDocCount > 0 || busInfo || pickupActiveCount > 0"
+      class="today-bento"
+    >
       <StatTile
         v-if="busInfo"
         label="娃娃車"
@@ -370,6 +389,14 @@ function go(path: string) {
         icon="edit_document"
         tone="coral"
         to="/events"
+      />
+      <StatTile
+        v-if="pendingSignDocCount > 0"
+        label="入學文件簽署"
+        :value="`${pendingSignDocCount} 份`"
+        icon="history_edu"
+        tone="brand"
+        to="/sign"
       />
     </div>
 

@@ -9345,6 +9345,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/me/sign-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List My Sign Requests */
+        get: operations["list_my_sign_requests_api_parent_me_sign_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/sign-requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Sign Request */
+        get: operations["get_my_sign_request_api_parent_me_sign_requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/sign-requests/{request_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get My Sign Request Pdf */
+        get: operations["get_my_sign_request_pdf_api_parent_me_sign_requests__request_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/sign-requests/{request_id}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign My Request */
+        post: operations["sign_my_request_api_parent_me_sign_requests__request_id__sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/measurements": {
         parameters: {
             query?: never;
@@ -14711,6 +14779,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/sign-documents/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Requests */
+        get: operations["list_requests_api_sign_documents_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-documents/requests/{request_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Request */
+        get: operations["get_request_api_sign_documents_requests__request_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-documents/requests/{request_id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Request Pdf */
+        get: operations["get_request_pdf_api_sign_documents_requests__request_id__pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-documents/requests/{request_id}/resend-notification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend Notification */
+        post: operations["resend_notification_api_sign_documents_requests__request_id__resend_notification_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-documents/requests/{request_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void Request */
+        post: operations["void_request_api_sign_documents_requests__request_id__void_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-documents/requests/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Batch */
+        post: operations["create_batch_api_sign_documents_requests_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-documents/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Templates */
+        get: operations["list_templates_api_sign_documents_templates_get"];
+        put?: never;
+        /** Create Template */
+        post: operations["create_template_api_sign_documents_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sign-documents/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Template */
+        put: operations["update_template_api_sign_documents_templates__template_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/student-assessments": {
         parameters: {
             query?: never;
@@ -18872,6 +19077,13 @@ export interface components {
             /** Remark */
             remark?: string | null;
         };
+        /** BatchIn */
+        BatchIn: {
+            /** Student Ids */
+            student_ids: number[];
+            /** Template Ids */
+            template_ids: number[];
+        };
         /** BatchOvertimeCreate */
         BatchOvertimeCreate: {
             /** Employees */
@@ -18946,6 +19158,17 @@ export interface components {
             /** Entry Ids */
             entry_ids: number[];
         };
+        /** BatchResultOut */
+        BatchResultOut: {
+            /** Batch Id */
+            batch_id: string;
+            /** Created */
+            created: number;
+            /** Skipped */
+            skipped: components["schemas"]["BatchSkippedOut"][];
+            /** Unnotifiable Student Ids */
+            unnotifiable_student_ids: number[];
+        };
         /** BatchSaveRequest */
         BatchSaveRequest: {
             /** Date */
@@ -18985,6 +19208,15 @@ export interface components {
             failed: components["schemas"]["BatchSignErrorItem"][];
             /** Succeeded */
             succeeded: number[];
+        };
+        /** BatchSkippedOut */
+        BatchSkippedOut: {
+            /** Reason */
+            reason: string;
+            /** Student Id */
+            student_id: number;
+            /** Template Id */
+            template_id: number;
         };
         /**
          * BindAdditionalChildOut
@@ -33762,6 +33994,52 @@ export interface components {
             /** Work Start */
             work_start?: string | null;
         };
+        /** SignBodyIn */
+        SignBodyIn: {
+            /** Confirmed Read */
+            confirmed_read: boolean;
+            /** Signature Data */
+            signature_data: string;
+        };
+        /** SignRequestOut */
+        SignRequestOut: {
+            /** Batch Id */
+            batch_id: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Content Md */
+            content_md: string;
+            /** Doc Type */
+            doc_type: string;
+            /**
+             * Has Pdf
+             * @default false
+             */
+            has_pdf: boolean;
+            /** Id */
+            id: number;
+            /** Sent At */
+            sent_at: string;
+            /** Signed At */
+            signed_at?: string | null;
+            /** Signed Guardian Id */
+            signed_guardian_id?: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /**
+             * Student Name
+             * @default
+             */
+            student_name: string;
+            /** Template Id */
+            template_id: number;
+            /** Title */
+            title: string;
+            /** Void Reason */
+            void_reason?: string | null;
+        };
         /** SignStatusBucket */
         SignStatusBucket: {
             /** Count */
@@ -35585,6 +35863,45 @@ export interface components {
             /** Temperature C */
             temperature_c?: number | null;
         };
+        /** TemplateIn */
+        TemplateIn: {
+            /** Body Md */
+            body_md: string;
+            /** Doc Type */
+            doc_type: string;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
+            /** Title */
+            title: string;
+        };
+        /** TemplateOut */
+        TemplateOut: {
+            /** Body Md */
+            body_md: string;
+            /** Doc Type */
+            doc_type: string;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Pending Count
+             * @default 0
+             */
+            pending_count: number;
+            /**
+             * Signed Count
+             * @default 0
+             */
+            signed_count: number;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+        };
         /** TemplateUpdate */
         TemplateUpdate: {
             /** Classroom Id */
@@ -36113,6 +36430,11 @@ export interface components {
             payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
             /** Vendor Name */
             vendor_name?: string | null;
+        };
+        /** VoidIn */
+        VoidIn: {
+            /** Reason */
+            reason: string;
         };
         /**
          * VoidPaymentRequest
@@ -52156,6 +52478,123 @@ export interface operations {
             };
         };
     };
+    list_my_sign_requests_api_parent_me_sign_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_my_sign_request_api_parent_me_sign_requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_sign_request_pdf_api_parent_me_sign_requests__request_id__pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_my_request_api_parent_me_sign_requests__request_id__sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignBodyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     parent_list_measurements_api_parent_measurements_get: {
         parameters: {
             query: {
@@ -61298,6 +61737,300 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_requests_api_sign_documents_requests_get: {
+        parameters: {
+            query?: {
+                batch_id?: string | null;
+                classroom_id?: number | null;
+                status?: string | null;
+                template_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignRequestOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_request_api_sign_documents_requests__request_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_request_pdf_api_sign_documents_requests__request_id__pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resend_notification_api_sign_documents_requests__request_id__resend_notification_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_request_api_sign_documents_requests__request_id__void_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                request_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_batch_api_sign_documents_requests_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_templates_api_sign_documents_templates_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_template_api_sign_documents_templates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_api_sign_documents_templates__template_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TemplateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateOut"];
                 };
             };
             /** @description Validation Error */

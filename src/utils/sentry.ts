@@ -40,6 +40,9 @@ const PII_KEY_SUBSTRINGS = [
   // 臨時接送授權（2026-08-11）：接送人姓名快照/名單欄位（與 BE 同步；
   // person_phone 已被上方 phone substring 命中）
   'person_name',
+  // 入學文件電子簽署（esign01，2026-08-11）：signature_data/signature_key 為簽名圖
+  // base64/storage key，content_md 為快照含學生/家長姓名的自由文字（與 BE 同步）
+  'signature_data', 'signature_key', 'content_md',
 ]
 
 // 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：

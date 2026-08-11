@@ -301,6 +301,14 @@ export const NAVIGATION_MANIFEST = {
           ],
         },
         {
+          // 入學文件電子簽署（esign01，2026-08-11）：範本管理 + 發送追蹤，
+          // 沿用既有 STUDENTS_READ/WRITE，不新增 Permission（spec D9）。
+          key: 'signDocuments', title: '入學文件簽署', routePath: '/students/sign-documents',
+          views: [{ code: 'STUDENTS_READ' }],
+          actions: [{ code: 'STUDENTS_WRITE' }],
+          menu: { icon: icon('EditPen') },
+        },
+        {
           // 隱藏頁：健康與給藥（路由存在但無選單入口）。
           key: 'studentsHealth', title: '健康與給藥', routePath: '/portfolio/medication-today',
           views: [{ code: 'STUDENTS_HEALTH_READ' }],
