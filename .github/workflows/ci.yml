@@ -78,12 +78,19 @@ jobs:
       - name: ESLint（no-explicit-any — blocking；新 any 一律擋，遺留以 inline disable 棘輪 grandfather）
         run: npm run lint
 
-      - name: Lint tokens (baseline, warn only)
+      # 原本是 continue-on-error 的 warn-only，等於沒有防線：token 存量從 main 的
+      # 1678 一路漲到 staging 的 1795。改 blocking 棘輪（逐 prefix 只准降不准升），
+      # 同時涵蓋 stylelint 的 error severity 規則 —— 所以不需要另外跑 lint:css。
+      - name: Design token 棘輪 + stylelint（逐 prefix 只准降不准升）
         run: npm run lint:tokens
-        continue-on-error: true
 
       - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
         run: npm run check:error-detail
+
+      # 家長端視覺一致性防回歸：綠 fallback 殘骸、主按鈕誤用 --pt-info-link、
+      # background/color 直寫 hex。腳本已存在且是綠的，只是從沒進 CI。
+      - name: 家長端視覺一致性稽核
+        run: npm run parent:audit
 
       - name: Build check (PR, no Sentry secrets)
         if: github.event_name == 'pull_request'
