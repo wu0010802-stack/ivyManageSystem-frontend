@@ -67,6 +67,28 @@ function genId() {
     return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+type EnqueueListener = () => void
+const _enqueueListeners = new Set<EnqueueListener>()
+
+/**
+ * 訂閱「有新 op 入列」事件。用於輪詢 UI 在降頻閒置期間仍能立即反應新入列的操作，
+ * 而不必等到下一次（拉長後的）輪詢 tick 才發現。回傳取消訂閱函式。
+ */
+export function onOpsEnqueued(listener: EnqueueListener): () => void {
+    _enqueueListeners.add(listener)
+    return () => { _enqueueListeners.delete(listener) }
+}
+
+function notifyOpsEnqueued(): void {
+    for (const listener of _enqueueListeners) {
+        try {
+            listener()
+        } catch {
+            // 監聽者例外不可傳染回佇列寫入路徑
+        }
+    }
+}
+
 /**
  * 加入一筆待送出的離線操作。
  * @param {Object} op
@@ -95,6 +117,7 @@ export async function enqueueOp({ kind, payload, userId, meta = {} }: { kind: st
         last_error: null,
     }
     await db.put(STORE, record)
+    notifyOpsEnqueued()
     return record
 }
 
@@ -132,6 +155,54 @@ export async function listOps({ kind, status = 'pending', userId }: { kind?: str
     })
     if (legacyHits > 0 && current !== null) reportMissingTenantSlug(current, legacyHits)
     return matched.sort((a: Record<string, unknown>, b: Record<string, unknown>) => (a['created_at'] as string).localeCompare(b['created_at'] as string))
+}
+
+/**
+ * 批次讀取多個 kind 的 pending / needs_review 記錄，底層只對 IndexedDB 做**一次**
+ * `getAll()`，取代呼叫方對每個 kind×status 各自呼叫 `listOps()`（N 次全表掃描）。
+ *
+ * 過濾規則（userId 必填、租戶 fail-open、依 created_at 排序）與 `listOps` 完全一致，
+ * 唯一差異是一次回傳多個 kind 分組好的結果，且固定只看 pending/needs_review 兩種狀態
+ * （其餘狀態如 failed_permanent 不在輪詢 UI 的關心範圍內）。
+ */
+export async function listOpsForKinds({
+    kinds,
+    userId,
+}: {
+    kinds: readonly string[]
+    userId?: number | string | null
+}): Promise<Record<string, { pending: Record<string, unknown>[]; needs_review: Record<string, unknown>[] }>> {
+    const empty = (): Record<string, { pending: Record<string, unknown>[]; needs_review: Record<string, unknown>[] }> =>
+        Object.fromEntries(kinds.map((k) => [k, { pending: [], needs_review: [] }]))
+    if (!isValidUserId(userId)) return empty()
+    const db = await getDB()
+    const all = await db.getAll(STORE)
+    const current = tenantSlug()
+    let legacyHits = 0
+    const kindSet = new Set(kinds)
+    const result = empty()
+    for (const op of all as Record<string, unknown>[]) {
+        if (op['user_id'] !== userId) continue
+        const kind = op['kind'] as string
+        if (!kindSet.has(kind)) continue
+        const status = op['status'] as string
+        if (status !== OP_STATUS.PENDING && status !== OP_STATUS.NEEDS_REVIEW) continue
+        if (current !== null) {
+            const slug = op['tenant_slug']
+            // 舊記錄（改造前入列）沒有這個欄位 → 放行，但記一筆供觀測
+            if (slug == null) legacyHits++
+            else if (slug !== current) continue
+        }
+        result[kind][status === OP_STATUS.PENDING ? 'pending' : 'needs_review'].push(op)
+    }
+    if (legacyHits > 0 && current !== null) reportMissingTenantSlug(current, legacyHits)
+    for (const kind of kinds) {
+        const cmp = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+            (a['created_at'] as string).localeCompare(b['created_at'] as string)
+        result[kind].pending.sort(cmp)
+        result[kind].needs_review.sort(cmp)
+    }
+    return result
 }
 
 /** 每 session 一次的觀測回報；上報失敗絕不能傳染回離線佇列的讀取路徑。 */

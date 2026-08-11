@@ -8,7 +8,7 @@
  * - K needs_review → 顯示「K 筆無法同步」+ 點開 ElMessageBox 列詳情
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { listOps, OP_STATUS, updateOp } from '@/utils/offlineQueue'
+import { listOpsForKinds, onOpsEnqueued, OP_STATUS, updateOp } from '@/utils/offlineQueue'
 import { flushAllParent, PARENT_KINDS } from '@/parent/utils/parentOfflineQueue'
 import { useParentAuthStore } from '@/parent/stores/parentAuth'
 import { escapeHtml } from '@/utils/html'
@@ -27,15 +27,17 @@ async function refresh() {
     reviewCount.value = 0
     return
   }
+  // 5 kind 一次 getAll()（listOpsForKinds），取代逐 kind×status 呼叫 listOps 的
+  // 10 次全表掃描。
+  const grouped = await listOpsForKinds({ kinds: PARENT_KINDS, userId: uid })
   let pending = 0
   let needs = 0
   const reviewList: Record<string, unknown>[] = []
   for (const kind of PARENT_KINDS) {
-    const p = await listOps({ kind, status: OP_STATUS.PENDING, userId: uid })
-    const r = await listOps({ kind, status: OP_STATUS.NEEDS_REVIEW, userId: uid })
-    pending += p.length
-    needs += r.length
-    reviewList.push(...(r as Record<string, unknown>[]))
+    const g = grouped[kind]
+    pending += g.pending.length
+    needs += g.needs_review.length
+    reviewList.push(...g.needs_review)
   }
   pendingCount.value = pending
   reviewCount.value = needs
@@ -84,18 +86,41 @@ async function openReviewDialog() {
 
 const show = computed(() => pendingCount.value > 0 || reviewCount.value > 0)
 
-let timer: ReturnType<typeof setInterval> | null = null
-// 輪詢 callback：背景分頁（document.hidden）時跳過，省 IO；前景再恢復。
-function pollRefresh() {
-  if (typeof document !== 'undefined' && document.hidden) return
-  refresh()
+// 佇列非空（有 pending/needs_review）時維持原本 5s 輪詢；佇列全空時降頻到 30s，
+// 省下多數 session 全程 pendingCount===0 卻仍常駐掃描的成本。降頻期間若有新 op
+// 入列，靠 onOpsEnqueued 事件立即補一次 refresh + 恢復 5s 節奏，延遲不會變差。
+const POLL_ACTIVE_MS = 5000
+const POLL_IDLE_MS = 30000
+
+let timer: ReturnType<typeof setTimeout> | null = null
+let unsubscribeEnqueued: (() => void) | null = null
+
+function scheduleNext(delay: number) {
+  if (timer) clearTimeout(timer)
+  timer = setTimeout(tick, delay)
 }
-onMounted(() => {
-  refresh()
-  timer = setInterval(pollRefresh, 5000)
+
+// 輪詢 tick：背景分頁（document.hidden）時跳過 refresh（省 IO），但仍以 active
+// 間隔重排，確保回到前景時能在原本的時間內恢復輪詢。
+async function tick() {
+  if (typeof document !== 'undefined' && document.hidden) {
+    scheduleNext(POLL_ACTIVE_MS)
+    return
+  }
+  await refresh()
+  scheduleNext(show.value ? POLL_ACTIVE_MS : POLL_IDLE_MS)
+}
+
+onMounted(async () => {
+  await refresh()
+  scheduleNext(show.value ? POLL_ACTIVE_MS : POLL_IDLE_MS)
+  unsubscribeEnqueued = onOpsEnqueued(() => {
+    refresh().then(() => scheduleNext(POLL_ACTIVE_MS))
+  })
 })
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  if (timer) clearTimeout(timer)
+  unsubscribeEnqueued?.()
 })
 </script>
 
