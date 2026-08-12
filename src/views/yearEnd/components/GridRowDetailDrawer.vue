@@ -96,7 +96,62 @@ const editForm = reactive({
   excess_amount: null as number | null,
   hire_months_override: null as number | null,
   remark: null as string | null,
+  // 批次 C：調整原因——動金額欄（設定或還原）時必填，落後端 settlement_log.reason
+  reason: '',
 })
+
+// ── 批次 C：override 對比與「還原為自動計算」──────────────────────────────
+// BE 契約（GridRowOut）：*_auto = build 迴圈 persist 的自動候選值（legacy 結算在
+// 下次 rebuild 前可能為 null）；*_override = 人工覆寫現值（null=未覆寫）。excess
+// 的 auto 是覆寫當下凍結的前值。還原採 pending 標記：點「還原」只標記，送出時
+// 該欄帶 null（後端清 override 並以自動值 rebuild）。
+type OverrideKey = 'deduction_disciplinary' | 'excess_amount' | 'hire_months_override'
+
+const revertFields = reactive<Record<OverrideKey, boolean>>({
+  deduction_disciplinary: false,
+  excess_amount: false,
+  hire_months_override: false,
+})
+
+function toggleRevert(key: OverrideKey) {
+  revertFields[key] = !revertFields[key]
+}
+
+interface OverridePair {
+  auto: string | null
+  override: string | null
+}
+
+const overridePairs = computed<Record<OverrideKey, OverridePair>>(() => {
+  const row = props.row
+  return {
+    deduction_disciplinary: {
+      auto: row?.deduction_disciplinary_auto ?? null,
+      override: row?.deduction_disciplinary_override ?? null,
+    },
+    excess_amount: {
+      auto: row?.excess_amount_auto ?? null,
+      override: row?.excess_amount_override ?? null,
+    },
+    hire_months_override: {
+      auto: row?.hire_months_auto ?? null,
+      override: row?.hire_months_override ?? null,
+    },
+  }
+})
+
+function overrideDiff(key: OverrideKey): number | null {
+  const pair = overridePairs.value[key]
+  if (pair.auto == null || pair.override == null) return null
+  const diff = Number(pair.override) - Number(pair.auto)
+  return Number.isFinite(diff) ? diff : null
+}
+
+// 差額顯示帶正負號（+2,500 / -500）；月數不走 moneyInt（非金額）。
+function signed(n: number, money: boolean): string {
+  const text = money ? moneyInt(Math.abs(n)) : String(Math.abs(n))
+  return `${n >= 0 ? '+' : '-'}${text}`
+}
 
 // 開抽屜當下的基準值（金額欄已轉 number，remark 對應 row.remark），用來判斷
 // 「使用者是否實際改動」。GridRowOut 的 deduction_disciplinary/hire_months 是
@@ -132,11 +187,16 @@ function resetEditForm(row: GridRow | null) {
   editForm.excess_amount = excess
   editForm.hire_months_override = hire
   editForm.remark = remark
+  editForm.reason = ''
 
   original.deduction_disciplinary = deduction
   original.excess_amount = excess
   original.hire_months_override = hire
   original.remark = remark
+
+  revertFields.deduction_disciplinary = false
+  revertFields.excess_amount = false
+  revertFields.hire_months_override = false
 }
 
 // ─────────────────────────────────────────
@@ -243,27 +303,34 @@ async function submit() {
   if (!row) return
 
   // 只把「與預填原值不同」的欄放進 payload——沒改的欄不送，後端維持既有值。
-  // null（未改動或已清空）一律跳過，不送出 null 覆寫（現行 manual API 也不支援
-  // 用 null 清除既有 override，見 task-4-brief.md「語意調和」段，本抽屜不承諾此行為）。
+  // 批次 C 清除語意：標記「還原為自動」的欄位顯式送 null（後端移除 override 並以
+  // 自動值 rebuild）；輸入框清空（值為 null 但未標記還原）仍視為未改動跳過。
   const payload: {
-    deduction_disciplinary?: number
-    excess_amount?: number
-    hire_months_override?: number
+    deduction_disciplinary?: number | null
+    excess_amount?: number | null
+    hire_months_override?: number | null
     remark?: string
+    reason?: string
   } = {}
-  if (
+  if (revertFields.deduction_disciplinary) {
+    payload.deduction_disciplinary = null
+  } else if (
     editForm.deduction_disciplinary !== null
     && editForm.deduction_disciplinary !== original.deduction_disciplinary
   ) {
     payload.deduction_disciplinary = editForm.deduction_disciplinary
   }
-  if (
+  if (revertFields.excess_amount) {
+    payload.excess_amount = null
+  } else if (
     editForm.excess_amount !== null
     && editForm.excess_amount !== original.excess_amount
   ) {
     payload.excess_amount = editForm.excess_amount
   }
-  if (
+  if (revertFields.hire_months_override) {
+    payload.hire_months_override = null
+  } else if (
     editForm.hire_months_override !== null
     && editForm.hire_months_override !== original.hire_months_override
   ) {
@@ -276,6 +343,21 @@ async function submit() {
   if (Object.keys(payload).length === 0) {
     ElMessage.warning('尚未變更任何欄位')
     return
+  }
+
+  // 批次 C：動金額欄（設定或還原）時原因必填（BE 亦強制 422；這裡先擋提升 UX）
+  const touchesAmount = (
+    'deduction_disciplinary' in payload
+    || 'excess_amount' in payload
+    || 'hire_months_override' in payload
+  )
+  if (touchesAmount) {
+    const reason = editForm.reason.trim()
+    if (!reason) {
+      ElMessage.warning('調整或還原金額欄位時必須填寫原因')
+      return
+    }
+    payload.reason = reason
   }
 
   saving.value = true
@@ -297,6 +379,8 @@ defineExpose({
   visible, canEdit, specialBonusItems, specialBonusTotal, statusLabel, statusTagType,
   editForm, original, submit, saving,
   provenanceState, isProvenanceKey, toggleProvenance, goDeepLink,
+  // 批次 C：override 對比與還原
+  revertFields, toggleRevert, overridePairs, overrideDiff,
 })
 </script>
 
@@ -418,38 +502,98 @@ defineExpose({
         <h4 class="section-title">手動調整（已預填目前值，僅送出您變更的欄位）</h4>
         <el-form label-width="130px" label-position="right">
           <el-form-item label="獎懲扣項（≤0）">
-            <el-input-number
-              v-model="editForm.deduction_disciplinary"
-              :max="0"
-              :step="100"
-              controls-position="right"
-              style="width: 200px"
-              :value-on-clear="null"
-              data-test="input-deduction"
-            />
+            <div class="override-field">
+              <el-input-number
+                v-model="editForm.deduction_disciplinary"
+                :max="0"
+                :step="100"
+                controls-position="right"
+                style="width: 200px"
+                :value-on-clear="null"
+                :disabled="revertFields.deduction_disciplinary"
+                data-test="input-deduction"
+              />
+              <div class="override-line" data-test="override-line-deduction_disciplinary">
+                <template v-if="overridePairs.deduction_disciplinary.override != null">
+                  <span>自動 {{ overridePairs.deduction_disciplinary.auto != null ? moneyInt(overridePairs.deduction_disciplinary.auto) : '—' }}</span>
+                  <span>人工 {{ moneyInt(overridePairs.deduction_disciplinary.override) }}</span>
+                  <span v-if="overrideDiff('deduction_disciplinary') != null">差額 {{ signed(overrideDiff('deduction_disciplinary')!, true) }}</span>
+                  <el-button
+                    type="primary" link size="small"
+                    data-test="revert-deduction_disciplinary"
+                    @click="toggleRevert('deduction_disciplinary')"
+                  >{{ revertFields.deduction_disciplinary ? '取消還原' : '還原為自動計算' }}</el-button>
+                  <span v-if="revertFields.deduction_disciplinary" class="override-pending">送出後將還原為自動值</span>
+                </template>
+                <template v-else>目前為自動計算{{ overridePairs.deduction_disciplinary.auto != null ? `（${moneyInt(overridePairs.deduction_disciplinary.auto)}）` : '' }}</template>
+              </div>
+            </div>
           </el-form-item>
           <el-form-item label="超額獎金（≥0）">
-            <el-input-number
-              v-model="editForm.excess_amount"
-              :min="0"
-              :step="100"
-              controls-position="right"
-              style="width: 200px"
-              :value-on-clear="null"
-              data-test="input-excess"
-            />
+            <div class="override-field">
+              <el-input-number
+                v-model="editForm.excess_amount"
+                :min="0"
+                :step="100"
+                controls-position="right"
+                style="width: 200px"
+                :value-on-clear="null"
+                :disabled="revertFields.excess_amount"
+                data-test="input-excess"
+              />
+              <div class="override-line" data-test="override-line-excess_amount">
+                <template v-if="overridePairs.excess_amount.override != null">
+                  <span>覆寫前 {{ overridePairs.excess_amount.auto != null ? moneyInt(overridePairs.excess_amount.auto) : '—（手動新增）' }}</span>
+                  <span>人工 {{ moneyInt(overridePairs.excess_amount.override) }}</span>
+                  <span v-if="overrideDiff('excess_amount') != null">差額 {{ signed(overrideDiff('excess_amount')!, true) }}</span>
+                  <el-button
+                    type="primary" link size="small"
+                    data-test="revert-excess_amount"
+                    @click="toggleRevert('excess_amount')"
+                  >{{ revertFields.excess_amount ? '取消還原' : '還原為自動計算' }}</el-button>
+                  <span v-if="revertFields.excess_amount" class="override-pending">送出後將還原（無前值則移除該筆）</span>
+                </template>
+                <template v-else>目前為自動計算</template>
+              </div>
+            </div>
           </el-form-item>
           <el-form-item label="到職月數覆寫">
-            <el-input-number
-              v-model="editForm.hire_months_override"
-              :min="0"
-              :max="12"
-              :step="0.5"
-              :precision="1"
-              controls-position="right"
-              style="width: 200px"
-              :value-on-clear="null"
-              data-test="input-hire-months"
+            <div class="override-field">
+              <el-input-number
+                v-model="editForm.hire_months_override"
+                :min="0"
+                :max="12"
+                :step="0.5"
+                :precision="1"
+                controls-position="right"
+                style="width: 200px"
+                :value-on-clear="null"
+                :disabled="revertFields.hire_months_override"
+                data-test="input-hire-months"
+              />
+              <div class="override-line" data-test="override-line-hire_months_override">
+                <template v-if="overridePairs.hire_months_override.override != null">
+                  <span>自動 {{ overridePairs.hire_months_override.auto ?? '—' }} 月</span>
+                  <span>人工 {{ overridePairs.hire_months_override.override }} 月</span>
+                  <span v-if="overrideDiff('hire_months_override') != null">差額 {{ signed(overrideDiff('hire_months_override')!, false) }} 月</span>
+                  <el-button
+                    type="primary" link size="small"
+                    data-test="revert-hire_months_override"
+                    @click="toggleRevert('hire_months_override')"
+                  >{{ revertFields.hire_months_override ? '取消還原' : '還原為自動計算' }}</el-button>
+                  <span v-if="revertFields.hire_months_override" class="override-pending">送出後將還原為自動值</span>
+                </template>
+                <template v-else>目前為自動計算{{ overridePairs.hire_months_override.auto != null ? `（${overridePairs.hire_months_override.auto} 月）` : '' }}</template>
+              </div>
+            </div>
+          </el-form-item>
+          <el-form-item label="調整原因">
+            <el-input
+              v-model="editForm.reason"
+              maxlength="200"
+              show-word-limit
+              placeholder="調整或還原金額欄位時必填，將寫入簽核軌跡"
+              data-test="input-reason"
             />
           </el-form-item>
           <el-form-item label="備註">
@@ -577,6 +721,23 @@ defineExpose({
 .edit-actions {
   display: flex;
   justify-content: flex-end;
+}
+.override-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.override-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.override-pending {
+  color: var(--el-color-warning);
+  font-weight: 600;
 }
 .readonly-hint {
   margin-top: var(--space-4);

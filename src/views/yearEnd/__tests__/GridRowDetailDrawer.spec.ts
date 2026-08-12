@@ -82,8 +82,10 @@ function mountVm(props: { modelValue: boolean; row: GridRow | null; canWrite: bo
       stubs: {
         'el-drawer': true,
         'el-tag': true,
-        'el-form': true,
-        'el-form-item': true,
+        // 批次 C：override-line 在 el-form/el-form-item slot 內，布林 stub 會吞 slot
+        // （既有教訓：stubs 反吞 slot），改用會渲染 default slot 的輕量 stub。
+        'el-form': { template: '<form><slot /></form>' },
+        'el-form-item': { template: '<div><slot /></div>' },
         'el-input-number': true,
         'el-input': true,
         'el-button': true,
@@ -105,6 +107,7 @@ interface DrawerVm {
     excess_amount: number | null
     hire_months_override: number | null
     remark: string | null
+    reason: string
   }
   original: {
     deduction_disciplinary: number
@@ -215,10 +218,11 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     const vm = wrapper.vm as unknown as DrawerVm
 
     vm.editForm.deduction_disciplinary = -6000
+    vm.editForm.reason = '測試調整'
     await vm.submit()
     await nextTick()
 
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { deduction_disciplinary: -6000 })
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { deduction_disciplinary: -6000, reason: '測試調整' })
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已更新')
   })
 
@@ -233,10 +237,11 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
 
     // 預填值是 2000（來自 row.special_bonuses.EXCESS_ENROLLMENT），改成 3500
     vm.editForm.excess_amount = 3500
+    vm.editForm.reason = '測試調整'
     await vm.submit()
     await nextTick()
 
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { excess_amount: 3500 })
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { excess_amount: 3500, reason: '測試調整' })
   })
 
   // 邊界：excess 現值為 0（special_bonuses 無 EXCESS_ENROLLMENT key）時，
@@ -253,10 +258,11 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     const vmA = wrapperA.vm as unknown as DrawerVm
     expect(vmA.editForm.excess_amount).toBe(0)
     vmA.editForm.hire_months_override = 6
+    vmA.editForm.reason = '測試調整'
     await vmA.submit()
     await nextTick()
     const [, payloadA] = vi.mocked(api.manualPatchSettlement).mock.calls[0]!
-    expect(payloadA).toEqual({ hire_months_override: 6 })
+    expect(payloadA).toEqual({ hire_months_override: 6, reason: '測試調整' })
     expect('excess_amount' in payloadA).toBe(false)
 
     vi.mocked(api.manualPatchSettlement).mockClear()
@@ -266,9 +272,10 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     await nextTick()
     const vmB = wrapperB.vm as unknown as DrawerVm
     vmB.editForm.excess_amount = 500
+    vmB.editForm.reason = '測試調整'
     await vmB.submit()
     await nextTick()
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { excess_amount: 500 })
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { excess_amount: 500, reason: '測試調整' })
   })
 
   it('改多欄：submit 只送有改動的欄位集合', async () => {
@@ -280,11 +287,12 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
 
     vm.editForm.hire_months_override = 8
     vm.editForm.remark = '新備註'
+    vm.editForm.reason = '測試調整'
     await vm.submit()
     await nextTick()
 
     const [, payload] = vi.mocked(api.manualPatchSettlement).mock.calls[0]!
-    expect(payload).toEqual({ hire_months_override: 8, remark: '新備註' })
+    expect(payload).toEqual({ hire_months_override: 8, remark: '新備註', reason: '測試調整' })
     // excess/deduction 未改動，完全不該出現在 payload
     expect('deduction_disciplinary' in payload).toBe(false)
     expect('excess_amount' in payload).toBe(false)
@@ -342,12 +350,13 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     vm.editForm.deduction_disciplinary = -700
     vm.editForm.deduction_disciplinary = -500 // 改回跟預填一樣
     vm.editForm.hire_months_override = 6 // 這欄真的改了
+    vm.editForm.reason = '測試調整'
 
     await vm.submit()
     await nextTick()
 
     const [, payload] = vi.mocked(api.manualPatchSettlement).mock.calls[0]!
-    expect(payload).toEqual({ hire_months_override: 6 })
+    expect(payload).toEqual({ hire_months_override: 6, reason: '測試調整' })
   })
 
   it('清空欄位（editForm 變 null）：視為未改動，不送該欄（不承諾清除既有 override）', async () => {
@@ -359,12 +368,13 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
 
     vm.editForm.deduction_disciplinary = null // 使用者清空輸入框
     vm.editForm.hire_months_override = 3 // 另一欄真的改了
+    vm.editForm.reason = '測試調整'
 
     await vm.submit()
     await nextTick()
 
     const [, payload] = vi.mocked(api.manualPatchSettlement).mock.calls[0]!
-    expect(payload).toEqual({ hire_months_override: 3 })
+    expect(payload).toEqual({ hire_months_override: 3, reason: '測試調整' })
     expect('deduction_disciplinary' in payload).toBe(false)
   })
 
@@ -376,6 +386,7 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     const vm = wrapper.vm as unknown as DrawerVm
 
     vm.editForm.deduction_disciplinary = -1000
+    vm.editForm.reason = '測試調整'
     await vm.submit()
     await nextTick()
 
@@ -393,6 +404,7 @@ describe('GridRowDetailDrawer（vm-layer：breakdown / 預填 / diff-only 送出
     const vm = wrapper.vm as unknown as DrawerVm
 
     vm.editForm.deduction_disciplinary = -1000
+    vm.editForm.reason = '測試調整'
     await vm.submit()
     await nextTick()
 
@@ -746,12 +758,13 @@ describe('GridRowDetailDrawer（DOM 渲染：breakdown 文字＋非 DRAFT 隱藏
     await nextTick()
     const vm = wrapper.vm as unknown as DrawerVm
     vm.editForm.deduction_disciplinary = -8000
+    vm.editForm.reason = '測試調整'
 
     await wrapper.find('[data-test="save-button"]').trigger('click')
     await nextTick()
     await nextTick()
 
-    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { deduction_disciplinary: -8000 })
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { deduction_disciplinary: -8000, reason: '測試調整' })
   })
 })
 
@@ -827,5 +840,135 @@ describe('GridRowDetailDrawer（DOM 渲染：怎麼算的 provenance 下鑽）',
 
     const panel = wrapper.find('[data-test="provenance-panel-APPRAISAL_HALF_BONUS_FIRST"]')
     expect(panel.find('.el-empty-stub').text()).toContain('無紀錄')
+  })
+})
+
+// ── 批次 C（2026-08-12）：override 對比與還原、調整原因必填 ─────────────────
+// BE 契約：GridRowOut 曝露 auto/override 對比欄；manual patch 三金額欄顯式帶
+// null＝還原自動；動金額欄（設定或清除）reason 必填。
+interface DrawerVmC {
+  editForm: {
+    deduction_disciplinary: number | null
+    excess_amount: number | null
+    hire_months_override: number | null
+    remark: string | null
+    reason: string
+  }
+  revertFields: Record<'deduction_disciplinary' | 'excess_amount' | 'hire_months_override', boolean>
+  toggleRevert: (k: 'deduction_disciplinary' | 'excess_amount' | 'hire_months_override') => void
+  submit: () => Promise<void>
+}
+
+describe('GridRowDetailDrawer override 全鏈（批次 C）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('有 override 的欄位顯示自動/人工對比與還原鈕；無 override 欄位顯示自動狀態、無還原鈕', async () => {
+    // 顯示類斷言用 mountDom（mountVm 的 el-drawer 布林 stub 會吞整個 body slot）
+    const wrapper = mountDom({
+      modelValue: true,
+      canWrite: true,
+      row: makeRow({
+        hire_months: '6',
+        hire_months_auto: '12',
+        hire_months_override: '6',
+        deduction_disciplinary_auto: '0',
+        deduction_disciplinary_override: null,
+      }),
+    })
+    await nextTick()
+
+    const line = wrapper.find('[data-test="override-line-hire_months_override"]')
+    expect(line.exists()).toBe(true)
+    expect(line.text()).toContain('12')
+    expect(line.text()).toContain('6')
+    expect(wrapper.find('[data-test="revert-hire_months_override"]').exists()).toBe(true)
+
+    const dLine = wrapper.find('[data-test="override-line-deduction_disciplinary"]')
+    expect(dLine.exists()).toBe(true)
+    expect(dLine.text()).toContain('自動計算')
+    expect(wrapper.find('[data-test="revert-deduction_disciplinary"]').exists()).toBe(false)
+  })
+
+  it('點還原 → 送出 payload 該欄為 null 並帶 reason', async () => {
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({ data: {} } as never)
+    const wrapper = mountVm({
+      modelValue: true,
+      canWrite: true,
+      row: makeRow({ hire_months_auto: '12', hire_months_override: '6', hire_months: '6' }),
+    })
+    await nextTick()
+    const vm = wrapper.vm as unknown as DrawerVmC
+
+    vm.toggleRevert('hire_months_override')
+    vm.editForm.reason = '還原自動'
+    await vm.submit()
+
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, {
+      hire_months_override: null,
+      reason: '還原自動',
+    })
+  })
+
+  it('動金額欄未填原因 → 警示且不打 API', async () => {
+    const wrapper = mountVm({ modelValue: true, canWrite: true, row: makeRow() })
+    await nextTick()
+    const vm = wrapper.vm as unknown as DrawerVmC
+
+    vm.editForm.deduction_disciplinary = -800
+    await vm.submit()
+
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('原因'))
+    expect(api.manualPatchSettlement).not.toHaveBeenCalled()
+  })
+
+  it('動金額欄＋原因 → payload 帶 reason', async () => {
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({ data: {} } as never)
+    const wrapper = mountVm({ modelValue: true, canWrite: true, row: makeRow() })
+    await nextTick()
+    const vm = wrapper.vm as unknown as DrawerVmC
+
+    vm.editForm.deduction_disciplinary = -800
+    vm.editForm.reason = '懲處補登'
+    await vm.submit()
+
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, {
+      deduction_disciplinary: -800,
+      reason: '懲處補登',
+    })
+  })
+
+  it('remark-only 不需原因、payload 不帶 reason', async () => {
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({ data: {} } as never)
+    const wrapper = mountVm({ modelValue: true, canWrite: true, row: makeRow() })
+    await nextTick()
+    const vm = wrapper.vm as unknown as DrawerVmC
+
+    vm.editForm.remark = '只改備註'
+    await vm.submit()
+
+    expect(ElMessage.warning).not.toHaveBeenCalled()
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { remark: '只改備註' })
+  })
+
+  it('取消還原（再點一次）→ 恢復 diff 語意，不送 null', async () => {
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({ data: {} } as never)
+    const wrapper = mountVm({
+      modelValue: true,
+      canWrite: true,
+      row: makeRow({ hire_months_auto: '12', hire_months_override: '6', hire_months: '6' }),
+    })
+    await nextTick()
+    const vm = wrapper.vm as unknown as DrawerVmC
+
+    vm.toggleRevert('hire_months_override')
+    vm.toggleRevert('hire_months_override')
+    vm.editForm.remark = '取消還原後只剩備註變更'
+    await vm.submit()
+
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, {
+      remark: '取消還原後只剩備註變更',
+    })
   })
 })
