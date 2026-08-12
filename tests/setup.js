@@ -43,7 +43,12 @@ installHarnessGlobals()
 
 // A few interaction tests call vi.unstubAllGlobals(). Reinstall the harness boundary
 // before every following test so file scheduling cannot leak real network/storage state.
+// 同時清空 localStorage mock 的 backing store：`store` 是模組層單例，
+// installHarnessGlobals() 只重掛同一參照——不清空的話同檔內前一個 it() 寫入的
+// key 會洩漏到下一個 it()（2026-08-11 測試架構稽核；已確認無測試在 beforeAll
+// seed localStorage，安全）。
 beforeEach(() => {
+    Object.keys(store).forEach(k => delete store[k])
     installHarnessGlobals()
 })
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus from 'element-plus'
@@ -38,6 +38,13 @@ function deferred<T>() {
   const promise = new Promise<T>((r) => { resolve = r })
   return { promise, resolve }
 }
+
+// fake timers 用畢還原：無 afterEach 還原時，本檔收尾（auto-unmount、後續 hook）
+// 仍在假時鐘下執行，EP 元件的 debounce/transition timer 掛著不走，是並行
+// timeout flaky 的已知放大器（2026-08-11 測試架構稽核；比照 MonthlyFixedCostPanel）
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 beforeEach(() => {
   invalidateCachedAsync('reports/')

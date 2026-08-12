@@ -8,6 +8,13 @@ export default defineConfig({
         environment: 'happy-dom',
         globals: true,
         setupFiles: ['./tests/setup.js'],
+        // Why: 每個 test 前自動 mockClear() 所有 mock——只清 call history/results，
+        // **不動** mockResolvedValue 等 implementation（那是 mockReset/restoreMocks
+        // 才會做的事，會炸掉 module 層設定的 vi.mock factory）。沒有這行時，
+        // 同檔內 toHaveBeenCalledTimes / 最後一次呼叫參數的斷言依賴前面 it() 的
+        // 呼叫殘留，285 個檔各自手動 clearAllMocks、其餘裸奔（2026-08-11 測試
+        // 架構稽核）。手動 clearAllMocks 與本設定重複無害。
+        clearMocks: true,
         // Large local/hosted runners otherwise spawn one worker per CPU. This suite has
         // several mount-heavy files and best-effort API cleanup; excessive workers cause
         // memory/network contention and turn unrelated 5s assertions into false timeouts.

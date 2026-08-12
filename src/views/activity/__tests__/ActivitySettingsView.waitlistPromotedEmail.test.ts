@@ -3,6 +3,10 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { reactive } from 'vue'
 import ElementPlus, { ElMessage } from 'element-plus'
 
+// 真 EP 全量 mount 在並行滿載（尤其 coverage 插樁）時偶發超過預設 5s（單獨跑綠），
+// 比照既有慣例放寬本檔 timeout（2026-08-11 baseline coverage run 實測命中）
+vi.setConfig({ testTimeout: 15000 })
+
 const mockRoute = reactive<{ query: Record<string, unknown> }>({ query: {} })
 const routerReplace = vi.fn()
 vi.mock('vue-router', () => ({
