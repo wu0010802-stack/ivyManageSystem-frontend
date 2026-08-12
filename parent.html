@@ -20,14 +20,14 @@
     <!-- 中文字型：Noto Sans TC（IvyKids 品牌字）。font-display: swap 避免 FOIT。 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- 字型非阻塞載入：media=print 不阻塞首屏渲染，onload 後切回 all 套用 -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" media="print" onload="this.media='all'">
+    <!-- ⚠ 不得用 media="print" onload="this.media='all'" 的非阻塞手法：
+         nginx CSP 的 script-src 無 unsafe-inline，inline onload 會被擋下，
+         stylesheet 永遠停在 media=print → Material Symbols 永不套用，
+         全 app 圖示 render 成 ligature 原文（2026-08-12 prod 實測事故）。
+         display=swap 已避免 FOIT，直接同步載入即可。 -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
     <!-- Material Symbols Rounded：display=swap 避免弱網下 icon 隱形（FOIT），改顯示 fallback -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" media="print" onload="this.media='all'">
-    <noscript>
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
-    </noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
 </head>
 
 <body>
