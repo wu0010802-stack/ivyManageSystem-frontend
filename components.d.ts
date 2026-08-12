@@ -45,6 +45,7 @@ declare module 'vue' {
     ClassHubBatchMeasurementCard: typeof import('./src/components/portal/class-hub/ClassHubBatchMeasurementCard.vue')['default']
     ClassHubCommBar: typeof import('./src/components/portal/class-hub/ClassHubCommBar.vue')['default']
     ClassHubIncidentQuickSheet: typeof import('./src/components/portal/class-hub/ClassHubIncidentQuickSheet.vue')['default']
+    ClassHubLeaveCard: typeof import('./src/components/portal/class-hub/ClassHubLeaveCard.vue')['default']
     ClassHubMedicationSheet: typeof import('./src/components/portal/class-hub/ClassHubMedicationSheet.vue')['default']
     ClassHubMessagesDrawer: typeof import('./src/components/portal/class-hub/ClassHubMessagesDrawer.vue')['default']
     ClassHubStickyNext: typeof import('./src/components/portal/class-hub/ClassHubStickyNext.vue')['default']

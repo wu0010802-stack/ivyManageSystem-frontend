@@ -2,7 +2,6 @@ import api from './index'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // ----- 通知 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getUnreadCount = (): AxiosResp<'/portal/unread-count', 'get'> =>
   api.get('/portal/unread-count')
 
@@ -76,12 +75,10 @@ export const exportMyClassAttendance = (
 ) => api.get('/portal/my-class-attendance/export', { params, responseType: 'blob' })
 
 // ----- 異常 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getAnomalies = (
   params: ApiQuery<'/portal/anomalies', 'get'>,
 ): AxiosResp<'/portal/anomalies', 'get'> => api.get('/portal/anomalies', { params })
 
-// TODO(ts-strict): 後端缺 response_model
 // remark：申訴理由。後端 AnomalyConfirm 早就收這個欄位（寫成「 [申訴: {remark}]」），
 // 只在有值時放進 body，避免對既有的 accept / use_pto 呼叫端造成 payload 變化。
 export const confirmAnomaly = (
@@ -105,13 +102,11 @@ export const getSalaryPreview = (
   api.get('/portal/salary-preview', { params })
 
 // ----- 公告 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getPortalAnnouncements = (
   params?: ApiQuery<'/portal/announcements', 'get'>,
 ): AxiosResp<'/portal/announcements', 'get'> =>
   api.get('/portal/announcements', { params })
 
-// TODO(ts-strict): 後端缺 response_model
 export const markAnnouncementRead = (
   id: number,
 ): AxiosResp<'/portal/announcements/{announcement_id}/read', 'post'> =>
@@ -155,31 +150,26 @@ export const getMyWorkdayHours = (
   api.get('/portal/my-workday-hours', { params })
 
 // ----- 加班 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getMyOvertimes = (
   params: ApiQuery<'/portal/my-overtimes', 'get'>,
 ): AxiosResp<'/portal/my-overtimes', 'get'> =>
   api.get('/portal/my-overtimes', { params })
 
-// TODO(ts-strict): 後端缺 response_model
 export const createMyOvertime = (
   data: ApiBody<'/portal/my-overtimes', 'post'>,
 ): AxiosResp<'/portal/my-overtimes', 'post'> => api.post('/portal/my-overtimes', data)
 
-// TODO(ts-strict): 後端缺 response_model
 export const deleteMyOvertime = (
   id: number,
 ): AxiosResp<'/portal/my-overtimes/{overtime_id}', 'delete'> =>
   api.delete(`/portal/my-overtimes/${id}`)
 
 // ----- 補打卡 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getMyPunchCorrections = (
   params?: ApiQuery<'/portal/my-punch-corrections', 'get'>,
 ): AxiosResp<'/portal/my-punch-corrections', 'get'> =>
   api.get('/portal/my-punch-corrections', { params })
 
-// TODO(ts-strict): 後端缺 response_model
 export const createMyPunchCorrection = (
   data: ApiBody<'/portal/my-punch-corrections', 'post'>,
 ): AxiosResp<'/portal/my-punch-corrections', 'post'> =>

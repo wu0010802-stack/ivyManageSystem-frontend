@@ -57,10 +57,10 @@ const { notify } = useErrorNotify()
 const loading = ref(false)
 const counts = ref({ leaves: 0, overtimes: 0, corrections: 0 })
 
-const len = (resp: unknown): number => {
-    const data = (resp as { data?: unknown })?.data
-    return Array.isArray(data) ? data.length : 0
-}
+// 待簽核筆數改讀分頁契約的 total：原本數的是回傳陣列長度，超過後端單次上限
+// （5000）時會少報，結算前置檢查因此可能漏掉待簽核項目。total 是過濾後全量。
+const len = (resp: { total?: number; items?: unknown[] }): number =>
+    Number(resp?.total ?? resp?.items?.length ?? 0)
 
 onMounted(async () => {
     loading.value = true

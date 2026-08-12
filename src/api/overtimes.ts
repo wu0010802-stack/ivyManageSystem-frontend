@@ -1,7 +1,17 @@
 import api from './index'
-import type { ApiBody } from './_generated/typed'
+import type { ApiBody, Schema } from './_generated/typed'
+import { fetchPagedList, type PagedResult } from './_pagination'
 
-export const getOvertimes = (params: unknown) => api.get('/overtimes', { params })
+export type OvertimeListItem = Schema<'OvertimeListItemOut'>
+
+/**
+ * 查詢加班記錄（伺服器分頁）。回傳 PagedResult，取 `.items` 而非 `.data`。
+ * 見 `src/api/_pagination.ts` 的契約說明。
+ */
+export const getOvertimes = (
+  params: Record<string, unknown> = {},
+): Promise<PagedResult<OvertimeListItem>> =>
+  fetchPagedList<OvertimeListItem>('/overtimes', params)
 
 export const createOvertime = (data: unknown) => api.post('/overtimes', data)
 

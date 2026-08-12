@@ -1,4 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
+
+// 分頁契約 mock helper（vi.hoisted：vi.mock factory 會被提升到檔頭）。
+// 抄 src/api/_pagination.ts 的 PagedResult 形狀——三支列表 api 回的是它，
+// 不是 AxiosResponse；mock 若還用 { data } 會靜默給出空清單（假綠）。
+const paged = vi.hoisted(
+  () =>
+    <T,>(items: T[]) => ({
+      items,
+      total: items.length,
+      page: 1,
+      pageSize: 5000,
+      hasMore: false,
+    }),
+)
+
 import { ref, nextTick } from 'vue'
 import { shallowMount } from '@vue/test-utils'
 
@@ -20,7 +35,7 @@ const fakeLeave = {
   substitute_status: 'not_required',
 }
 vi.mock('@/api/leaves', () => ({
-  getLeaves: vi.fn(() => Promise.resolve({ data: [fakeLeave] })),
+  getLeaves: vi.fn(() => Promise.resolve(paged([fakeLeave]))),
   createLeave: vi.fn(),
   updateLeave: vi.fn(),
   approveLeave: vi.fn(),

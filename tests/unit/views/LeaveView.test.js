@@ -5,6 +5,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import LeaveView from '@/views/LeaveView.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+// 分頁契約 mock helper：抄 src/api/_pagination.ts 的 PagedResult 形狀。
+// 三支列表 api 自 2026-08-11 起回 PagedResult 而非 AxiosResponse，mock 若還用
+// { data } 會靜默給出空清單（假綠），故一律經此 helper 建構。
+const paged = (items) => ({
+  items,
+  total: Array.isArray(items) ? items.length : 0,
+  page: 1,
+  pageSize: 5000,
+  hasMore: false,
+})
+
+
 // ── API mocks ──────────────────────────────────────────────────────────────
 const getLeaves = vi.fn()
 const createLeave = vi.fn()
@@ -186,7 +198,7 @@ describe('LeaveView', () => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     mockUserInfo = { role: 'admin', permissions: -1 }
-    getLeaves.mockResolvedValue({ data: [] })
+    getLeaves.mockResolvedValue(paged([]))
     getApprovalPolicies.mockResolvedValue({ data: [] })
     ElMessageBox.confirm.mockResolvedValue('confirm')
   })
@@ -207,7 +219,7 @@ describe('LeaveView', () => {
       const records = [
         { id: 1, employee_name: '王小明', leave_type: 'personal', leave_hours: 8 },
       ]
-      getLeaves.mockResolvedValue({ data: records })
+      getLeaves.mockResolvedValue(paged(records))
 
       const wrapper = mountLeaveView()
       await flushPromises()
@@ -242,7 +254,7 @@ describe('LeaveView', () => {
     ]
 
     it('依員工姓名收斂 filteredLeaves', async () => {
-      getLeaves.mockResolvedValue({ data: records })
+      getLeaves.mockResolvedValue(paged(records))
       const wrapper = mountLeaveView()
       await flushPromises()
 
@@ -253,7 +265,7 @@ describe('LeaveView', () => {
     })
 
     it('依請假原因也可命中', async () => {
-      getLeaves.mockResolvedValue({ data: records })
+      getLeaves.mockResolvedValue(paged(records))
       const wrapper = mountLeaveView()
       await flushPromises()
 
@@ -262,7 +274,7 @@ describe('LeaveView', () => {
     })
 
     it('清空搜尋字串時還原全部資料', async () => {
-      getLeaves.mockResolvedValue({ data: records })
+      getLeaves.mockResolvedValue(paged(records))
       const wrapper = mountLeaveView()
       await flushPromises()
 
@@ -356,7 +368,7 @@ describe('LeaveView', () => {
       const wrapper = mountLeaveView()
       await flushPromises()
       vi.clearAllMocks()
-      getLeaves.mockResolvedValue({ data: [] })
+      getLeaves.mockResolvedValue(paged([]))
 
       await wrapper.vm.$.setupState.approveLeave({ id: 5, substitute_status: null })
       await flushPromises()
@@ -400,7 +412,7 @@ describe('LeaveView', () => {
       const wrapper = mountLeaveView()
       await flushPromises()
       vi.clearAllMocks()
-      getLeaves.mockResolvedValue({ data: [] })
+      getLeaves.mockResolvedValue(paged([]))
 
       await wrapper.vm.$.setupState.cancelApprove({ id: 7 })
       await flushPromises()
@@ -524,7 +536,7 @@ describe('LeaveView', () => {
       batchApproveLeaves.mockResolvedValue({ data: { succeeded: [{ id: 1 }, { id: 2 }], failed: [] } })
       const wrapper = mountLeaveView()
       await flushPromises()
-      getLeaves.mockResolvedValue({ data: [] })
+      getLeaves.mockResolvedValue(paged([]))
 
       wrapper.vm.$.setupState.selectedLeaves = [{ id: 1 }, { id: 2 }]
       await wrapper.vm.$.setupState.showBatchApproveConfirm()
@@ -563,7 +575,7 @@ describe('LeaveView', () => {
       batchApproveLeaves.mockResolvedValue({ data: { succeeded: [{ id: 3 }], failed: [] } })
       const wrapper = mountLeaveView()
       await flushPromises()
-      getLeaves.mockResolvedValue({ data: [] })
+      getLeaves.mockResolvedValue(paged([]))
 
       wrapper.vm.$.setupState.selectedLeaves = [{ id: 3 }]
       wrapper.vm.$.setupState.batchRejectReason = '事由不足'

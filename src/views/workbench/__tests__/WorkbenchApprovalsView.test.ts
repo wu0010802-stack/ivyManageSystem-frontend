@@ -1,4 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// 分頁契約 mock helper：抄 src/api/_pagination.ts 的 PagedResult 形狀。
+// 必須用 vi.hoisted：vi.mock factory 會被提升到檔頭，直接寫 const 會在
+// factory 執行時撞 "Cannot access 'paged' before initialization"。
+const paged = vi.hoisted(
+  () =>
+    <T,>(items: T[]) => ({
+      items,
+      total: items.length,
+      page: 1,
+      pageSize: 5000,
+      hasMore: false,
+    }),
+)
+
 import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
@@ -6,18 +21,18 @@ const mockIsMobile = ref(false)
 vi.mock('@/composables/useIsMobile', () => ({ useIsMobile: () => ({ isMobile: mockIsMobile, cleanup: () => {} }) }))
 
 vi.mock('@/api/leaves', () => ({
-  getLeaves: vi.fn().mockResolvedValue({ data: [] }),
+  getLeaves: vi.fn().mockResolvedValue(paged([])),
   approveLeave: vi.fn(),
   getLeaveAttachment: vi.fn(),
   batchApproveLeaves: vi.fn().mockResolvedValue({ data: { succeeded: [1], failed: [] } }),
 }))
 vi.mock('@/api/overtimes', () => ({
-  getOvertimes: vi.fn().mockResolvedValue({ data: [] }),
+  getOvertimes: vi.fn().mockResolvedValue(paged([])),
   approveOvertime: vi.fn(),
   batchApproveOvertimes: vi.fn().mockResolvedValue({ data: { succeeded: [], failed: [] } }),
 }))
 vi.mock('@/api/punchCorrections', () => ({
-  getCorrections: vi.fn().mockResolvedValue({ data: [] }),
+  getCorrections: vi.fn().mockResolvedValue(paged([])),
   approveCorrection: vi.fn(),
   batchApproveCorrections: vi.fn().mockResolvedValue({ data: { succeeded: [9], failed: [] } }),
 }))
@@ -33,6 +48,7 @@ import WorkbenchApprovalsView from '@/views/workbench/WorkbenchApprovalsView.vue
 import * as punchCorrectionsApi from '@/api/punchCorrections'
 import * as leavesApi from '@/api/leaves'
 import * as overtimesApi from '@/api/overtimes'
+
 
 const stubs = {
   teleport: true,
@@ -99,9 +115,9 @@ describe('WorkbenchApprovalsView 跨佇列搜尋', () => {
   ]
 
   const mountWithData = async () => {
-    vi.mocked(leavesApi.getLeaves).mockResolvedValueOnce({ data: leaves })
-    vi.mocked(overtimesApi.getOvertimes).mockResolvedValueOnce({ data: overtimes })
-    vi.mocked(punchCorrectionsApi.getCorrections).mockResolvedValueOnce({ data: corrections })
+    vi.mocked(leavesApi.getLeaves).mockResolvedValueOnce(paged(leaves))
+    vi.mocked(overtimesApi.getOvertimes).mockResolvedValueOnce(paged(overtimes))
+    vi.mocked(punchCorrectionsApi.getCorrections).mockResolvedValueOnce(paged(corrections))
     const wrapper = mountView()
     await flushPromises()
     return wrapper
@@ -149,9 +165,9 @@ describe('WorkbenchApprovalsView 手機卡片視圖', () => {
   ]
 
   const mountWithData = async () => {
-    vi.mocked(leavesApi.getLeaves).mockResolvedValueOnce({ data: leaves })
-    vi.mocked(overtimesApi.getOvertimes).mockResolvedValueOnce({ data: overtimes })
-    vi.mocked(punchCorrectionsApi.getCorrections).mockResolvedValueOnce({ data: corrections })
+    vi.mocked(leavesApi.getLeaves).mockResolvedValueOnce(paged(leaves))
+    vi.mocked(overtimesApi.getOvertimes).mockResolvedValueOnce(paged(overtimes))
+    vi.mocked(punchCorrectionsApi.getCorrections).mockResolvedValueOnce(paged(corrections))
     const wrapper = mountView()
     await flushPromises()
     return wrapper

@@ -6,21 +6,30 @@ import { friendlyError } from '@/utils/errorMessages'
 import { ArrowLeft, ArrowRight, Loading } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
-import type { ApprovalStatus } from '@/constants/approvalStatus'
+import type { LeaveListItem } from '@/api/leaves'
 
-interface LeaveRecord {
-  id: number
-  status: ApprovalStatus
-  start_date: string
-  end_date: string
-  leave_type: string
-  leave_type_label: string
-  employee_name: string
-  start_time?: string
-  end_time?: string
-  leave_hours: number
-  reason?: string
-}
+/**
+ * 行事曆用到的假單欄位（GET /leaves 契約的子集，型別自 OpenAPI codegen 推導，
+ * 不再手寫維護一份會與後端漂移的複本）。
+ *
+ * `status` 沿用契約的 `string` 而非窄化成 ApprovalStatus union：
+ * leave_records.status 在 DB 層沒有列舉約束，窄化會是型別謊言。本檔對 status
+ * 的用法全是字面值比較（=== 'rejected' / 'pending' / 'approved'），string 即足夠。
+ */
+type LeaveRecord = Pick<
+  LeaveListItem,
+  | 'id'
+  | 'status'
+  | 'start_date'
+  | 'end_date'
+  | 'leave_type'
+  | 'leave_type_label'
+  | 'employee_name'
+  | 'start_time'
+  | 'end_time'
+  | 'leave_hours'
+  | 'reason'
+>
 
 interface CalCell {
   day: number | null
@@ -77,8 +86,8 @@ const fetchCalendar = async () => {
   try {
     const params: Record<string, unknown> = { year: calYear.value, month: calMonth.value }
     if (calFilterEmp.value) params.employee_id = calFilterEmp.value
-    const res = await getLeaves(params)
-    calendarLeaves.value = res.data
+    const page = await getLeaves(params)
+    calendarLeaves.value = page.items
   } catch (e) {
     ElMessage.error(friendlyError('載入行事曆失敗', e))
   } finally {
