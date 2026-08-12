@@ -6,6 +6,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import {
   previewAppraisalPayout, generateAppraisalPayout,
   listAppraisalPayouts, voidAppraisalPayouts,
+  exportYearEndTransferRosterXlsxUrl,
 } from '@/api/yearEnd'
 import { formatCurrency } from '@/utils/currency'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -37,6 +38,35 @@ interface PayoutItem {
   calc_meta: Record<string, unknown>
 }
 
+// 批次 A②：generate 成功後的「收據」——後端 PayoutGenerateResult 本就回傳人數/筆數/
+// 總額/略過數，原本全被丟掉只彈一個 toast。收據卡常駐「已生成」分頁頂部，並附
+// 轉帳名冊下載連結（cycle_id 來自 generate response）。included_inactive_count 是
+// 送出當下的前端狀態（後端 response 無此欄），與 skipped_inactive_count 互補。
+interface GenerateReceipt {
+  cycle_id: number
+  generated_count: number
+  affected_employee_count: number
+  total_amount: string
+  skipped_inactive_count: number
+  warnings: string[]
+  included_inactive_count: number
+  created_at: Date
+}
+
+// 預覽列 warnings 是後端英文代碼（SPEC-006 §4.5），UI 一律轉中文；未知代碼原樣顯示。
+// 「上/下學期」對齊本頁 earlierLabel/laterLabel 的語意（earlier=上學期）。
+const WARNING_LABELS: Record<string, string> = {
+  inactive_employee: '已離職',
+  not_participated_in_earlier: '未參與上學期考核',
+  not_participated_in_later: '未參與下學期考核',
+  earlier_summary_not_finalized: '上學期考核未核定',
+  later_summary_not_finalized: '下學期考核未核定',
+  cycle_not_finalized: '考核週期未核定',
+}
+function warningLabel(code: string): string {
+  return WARNING_LABELS[code] ?? code
+}
+
 const route = useRoute()
 const router = useRouter()
 // year 持久化進 URL query，F5 / 分享連結可保留篩選狀態（比照 CycleListView 慣例）。
@@ -47,6 +77,7 @@ const selected = ref<Set<number>>(new Set())
 const tab = ref<'preview' | 'generated'>('preview')
 const generatedRows = ref<PayoutItem[]>([])
 const generatedLoading = ref(false)
+const receipt = ref<GenerateReceipt | null>(null)
 
 // 考核年終 payout 兩分量 = 前一學年的上/下學期。後端 resolve_target_cycles：
 // source_academic_year = civil_year_to_target_academic_year(year) - 1 = year - 1913
@@ -134,51 +165,70 @@ async function onGenerate() {
   }
   try {
     await ElMessageBox.confirm(
-      `將為 ${payoutRows.value.length} 名員工生成 payout（全部在職 + 已勾選非在職，合計 ${payoutTotalDisplay.value}）`,
-      '確認生成',
-      { confirmButtonText: '確認', cancelButtonText: '取消' }
+      `將為 ${payoutRows.value.length} 名員工建立考核年終發放資料（全部在職員工＋已勾選的離職員工），合計 ${payoutTotalDisplay.value}。此動作只會在系統內建立發放資料，不會執行匯款。`,
+      '確認建立發放資料',
+      { confirmButtonText: '確認建立', cancelButtonText: '取消' }
     )
   } catch {
     return
   }
   try {
-    await generateAppraisalPayout({
+    const res = await generateAppraisalPayout({
       year: year.value,
       included_inactive_employee_ids: includedInactiveIds.value,
     })
-    ElMessage.success('已生成')
+    const data = res.data
+    receipt.value = {
+      cycle_id: data.cycle_id,
+      generated_count: data.generated_count,
+      affected_employee_count: data.affected_employee_count,
+      total_amount: data.total_amount,
+      skipped_inactive_count: data.skipped_inactive_count,
+      warnings: data.warnings ?? [],
+      included_inactive_count: includedInactiveIds.value.length,
+      created_at: new Date(),
+    }
+    ElMessage.success('發放資料已建立')
     tab.value = 'generated'
   } catch (e) {
-    ElMessage.error(friendlyError('生成發放名單失敗', e))
+    ElMessage.error(friendlyError('建立發放資料失敗', e))
   }
 }
 
 async function onVoid() {
   try {
-    await ElMessageBox.confirm('將清空本年所有考核年終 payout（不可復原）', '確認清空', { type: 'warning' })
-    await ElMessageBox.confirm('再次確認：清空後須重新生成', '最終確認', { type: 'warning' })
+    await ElMessageBox.confirm('將清空本年所有考核年終發放資料（不可復原）', '確認清空', { type: 'warning' })
+    await ElMessageBox.confirm('再次確認：清空後須重新建立發放資料', '最終確認', { type: 'warning' })
   } catch {
     return
   }
   try {
     const res = await voidAppraisalPayouts(year.value)
     const data = res.data as { deleted_count: number }
-    ElMessage.success(`已刪除 ${data.deleted_count} 筆`)
+    ElMessage.success(`已刪除 ${data.deleted_count} 筆發放資料`)
+    receipt.value = null
     await loadGenerated()
   } catch (e) {
-    ElMessage.error(friendlyError('清空發放名單失敗', e))
+    ElMessage.error(friendlyError('清空發放資料失敗', e))
   }
+}
+
+// 收據時間戳（本地時間，僅供畫面回顧；權威軌跡在後端 audit log）
+function formatReceiptTime(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 defineExpose({
   selected, anyCycleNotFinalized, onGenerate, onVoid, loadPreview, rows, year,
   toggleSelect, payoutRows, payoutTotal, payoutTotalDisplay,
-  tab, generatedRows, generatedLoading, loadGenerated, notReady,
+  tab, generatedRows, generatedLoading, loadGenerated, notReady, receipt,
 })
 
 onMounted(loadPreview)
 watch(year, (v) => {
   loadPreview()
+  receipt.value = null // 收據屬於送出當下的年份，切年後顯示會誤導
   if (tab.value === 'generated') loadGenerated()
   // year 同步進 URL query（F5 / 分享連結可保留），保留其餘既有 query 欄位。
   router.replace({ query: { ...route.query, year: String(v) } })
@@ -201,7 +251,7 @@ watch(tab, (t) => {
       v-if="anyCycleNotFinalized"
       type="warning"
       :closable="false"
-      title="⚠️ 有未 finalized 的 cycle，建議先完成簽核再生成"
+      title="來源考核週期尚未全數核定，可能無法建立發放資料；請先完成考核簽核。"
       data-test="not-finalized-warning"
       style="margin: var(--space-3) 0;"
     />
@@ -246,24 +296,46 @@ watch(tab, (t) => {
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="warnings">
+            <el-table-column label="警告">
               <template #default="{ row }">
-                <span v-for="w in row.warnings" :key="w" class="warning-tag">{{ w }}</span>
+                <span v-for="w in row.warnings" :key="w" class="warning-tag">{{ warningLabel(w) }}</span>
               </template>
             </el-table-column>
           </el-table>
 
           <footer class="footer">
             <el-button type="primary" size="large" data-test="generate-button" @click="onGenerate">
-              確認生成 {{ payoutRows.length }} 筆 payout（合計 {{ payoutTotalDisplay }}）
+              建立發放資料（{{ payoutRows.length }} 人，合計 {{ payoutTotalDisplay }}）
             </el-button>
           </footer>
         </template>
       </el-tab-pane>
 
       <el-tab-pane label="已生成" name="generated">
+        <!-- 批次 A②：收據卡——建立成功後常駐回顧（原本只彈一次 toast，看過就沒了） -->
+        <div v-if="receipt" class="receipt-card" data-test="generate-receipt">
+          <div class="receipt-card__title">✅ 發放資料已建立（{{ formatReceiptTime(receipt.created_at) }}）</div>
+          <ul class="receipt-card__list">
+            <li>員工 {{ receipt.affected_employee_count }} 人，共 {{ receipt.generated_count }} 筆發放資料（每人上、下學期各一筆）</li>
+            <li>合計 {{ formatCurrency(receipt.total_amount) }}</li>
+            <li>納入離職員工 {{ receipt.included_inactive_count }} 位；未納入 {{ receipt.skipped_inactive_count }} 位</li>
+            <li v-for="w in receipt.warnings" :key="w" class="receipt-card__warning">{{ warningLabel(w) }}</li>
+          </ul>
+          <div class="receipt-card__note">
+            此動作僅在系統內建立發放資料，不會執行匯款。下一步：下載轉帳名冊交付銀行作業
+            （名冊涵蓋整個年終週期，含本次考核獎金與其他年終項目）。
+          </div>
+          <a
+            :href="exportYearEndTransferRosterXlsxUrl(receipt.cycle_id)"
+            target="_blank"
+            class="receipt-card__link"
+            data-test="receipt-roster-link"
+          >
+            <el-button type="primary" plain>下載轉帳名冊 Excel</el-button>
+          </a>
+        </div>
         <div class="generated-toolbar">
-          <el-button type="danger" plain data-test="void-button" @click="onVoid">清空本年 payout</el-button>
+          <el-button type="danger" plain data-test="void-button" @click="onVoid">清空本年發放資料</el-button>
         </div>
         <el-table v-loading="generatedLoading" :data="generatedRows" border>
           <template #empty>
@@ -296,4 +368,15 @@ watch(tab, (t) => {
   background: var(--color-warning-soft); color: var(--color-warning-darker);
   border-radius: 4px; font-size: 12px;
 }
+.receipt-card {
+  margin-bottom: var(--space-3); padding: var(--space-3);
+  border: 1px solid var(--el-color-success-light-5, #b3e19d);
+  background: var(--el-color-success-light-9, #f0f9eb);
+  border-radius: var(--radius-md, 6px);
+}
+.receipt-card__title { font-weight: 600; margin-bottom: var(--space-2); }
+.receipt-card__list { margin: 0 0 var(--space-2); padding-left: 1.4em; }
+.receipt-card__warning { color: var(--color-warning-darker); }
+.receipt-card__note { font-size: 13px; color: var(--text-secondary); margin-bottom: var(--space-2); }
+.receipt-card__link { text-decoration: none; display: inline-block; }
 </style>

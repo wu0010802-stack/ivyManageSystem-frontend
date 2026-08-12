@@ -33,7 +33,7 @@ vi.mock('vue-router', () => ({
 }))
 
 import * as api from '@/api/yearEnd'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const mockPreviewRow = (overrides: Record<string, unknown> = {}) => ({
   employee_id: 1, employee_name: '王主任', role_group: 'DIRECTOR',
@@ -295,6 +295,80 @@ describe('AppraisalPayoutView', () => {
     vm.year = 2027
     await nextTick()
     expect(replaceMock).toHaveBeenCalledWith({ query: expect.objectContaining({ year: '2027' }) })
+  })
+
+  // ── 批次 A②（2026-08-12）：發放頁收據式改版 ─────────────────────────────
+  // 「生成」原本成功只彈一個 toast，使用者不知道建立了什麼、下一步去哪。改為：
+  // ① confirm 文案明示「只建立發放資料，不會執行匯款」② 成功後顯示收據卡
+  //（人數/筆數/總額/離職納入與略過數/轉帳名冊下載連結）③ 英文技術詞中文化。
+
+  it('confirm 文案明示不會執行匯款', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [mockPreviewRow()],
+    } as never)
+    vi.mocked(api.generateAppraisalPayout).mockResolvedValue({
+      data: { cycle_id: 1, generated_count: 2, affected_employee_count: 1, total_amount: '13600', skipped_inactive_count: 0, warnings: [] },
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onGenerate: () => Promise<void> }
+    await vm.onGenerate()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('不會執行匯款'),
+      expect.any(String),
+      expect.anything(),
+    )
+  })
+
+  it('generate 成功 → 顯示收據卡（人數/總額/離職納入與略過數）與轉帳名冊連結（href 含 cycle_id）', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [
+        mockPreviewRow({ employee_id: 1 }),
+        mockPreviewRow({ employee_id: 3, is_inactive: true }),
+      ],
+    } as never)
+    vi.mocked(api.generateAppraisalPayout).mockResolvedValue({
+      data: { cycle_id: 77, generated_count: 4, affected_employee_count: 2, total_amount: '27200', skipped_inactive_count: 1, warnings: [] },
+    } as never)
+    vi.mocked(api.listAppraisalPayouts).mockResolvedValue({ data: [] } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      toggleSelect: (id: number, checked: boolean) => void
+      onGenerate: () => Promise<void>
+      tab: string
+    }
+    vm.toggleSelect(3, true)
+    await vm.onGenerate()
+    await nextTick()
+    await nextTick()
+
+    // 成功訊息不再是含糊的「已生成」
+    expect(ElMessage.success).toHaveBeenCalledWith('發放資料已建立')
+    expect(vm.tab).toBe('generated')
+
+    const receipt = wrapper.find('[data-test="generate-receipt"]')
+    expect(receipt.exists()).toBe(true)
+    expect(receipt.text()).toContain('2 人')
+    expect(receipt.text()).toContain('NT$27,200')
+    expect(receipt.text()).toContain('納入離職員工 1 位')
+    expect(receipt.text()).toContain('未納入 1 位')
+
+    const rosterLink = wrapper.find('[data-test="receipt-roster-link"]')
+    expect(rosterLink.exists()).toBe(true)
+    expect(rosterLink.attributes('href')).toContain('/year_end/cycles/77/transfer_roster.xlsx')
+  })
+
+  it('預覽列 warnings 英文代碼中文化（不得出現原始代碼）', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({
+      data: [mockPreviewRow({ warnings: ['inactive_employee', 'earlier_summary_not_finalized'] })],
+    } as never)
+    const wrapper = await mountView()
+
+    const text = wrapper.text()
+    expect(text).toContain('已離職')
+    expect(text).toContain('上學期考核未核定')
+    expect(text).not.toContain('inactive_employee')
+    expect(text).not.toContain('earlier_summary_not_finalized')
   })
 
   // 2026-07-31 QA 缺陷：來源學年考核 cycle 未建立時後端回 422，detail 是給開發者看的
