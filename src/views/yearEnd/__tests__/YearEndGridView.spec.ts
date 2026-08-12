@@ -57,6 +57,9 @@ type GridRow = {
   total_amount: string
   status: string
   remark?: string | null
+  // 批次 A③：需注意列過濾會讀這兩欄（GridRowOut 契約本就有，補進測試型別）
+  hire_months: string
+  deduction_disciplinary: string
 }
 
 function makeRow(overrides: Partial<GridRow> = {}): GridRow {
@@ -71,6 +74,8 @@ function makeRow(overrides: Partial<GridRow> = {}): GridRow {
     },
     total_amount: '54321.00',
     status: 'DRAFT',
+    hire_months: '12',
+    deduction_disciplinary: '0',
     ...overrides,
   }
 }
@@ -883,5 +888,74 @@ describe('YearEndGridView（Task 3：grid 6 欄摘要表＋獎金欄位開關 ch
     const vm = wrapper.vm as unknown as { visibleBonusColumns: { key: string; label: string }[] }
 
     expect(vm.visibleBonusColumns).toEqual([])
+  })
+})
+
+// ── 批次 A③（2026-08-12）：需注意列過濾 ─────────────────────────────────────
+// 30 人規模的總表逐列掃視仍吃力，行政人員實際要看的是「哪些列需要人工確認」：
+// 合計非正數、有人工備註、獎懲扣款非 0、未滿整年折算。提供一鍵過濾（預設關閉，
+// 不改變既有預設視圖）。
+describe('YearEndGridView 需注意列過濾', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'OPEN' }],
+    } as never)
+  })
+
+  it('isAttentionRow：合計≤0／有備註／獎懲扣款≠0／未滿整年 → true；正常列 → false', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { isAttentionRow: (row: GridRow) => boolean }
+
+    expect(vm.isAttentionRow(makeRow())).toBe(false)
+    expect(vm.isAttentionRow(makeRow({ total_amount: '0' }))).toBe(true)
+    expect(vm.isAttentionRow(makeRow({ total_amount: '-500' }))).toBe(true)
+    expect(vm.isAttentionRow(makeRow({ remark: '代理教保組長，人工調整' }))).toBe(true)
+    expect(vm.isAttentionRow(makeRow({ deduction_disciplinary: '-1000' }))).toBe(true)
+    expect(vm.isAttentionRow(makeRow({ hire_months: '6' }))).toBe(true)
+    // 空字串備註不算有備註
+    expect(vm.isAttentionRow(makeRow({ remark: '' }))).toBe(false)
+  })
+
+  it('attentionOnly 開啟 → displayedRows 只剩需注意列；關閉 → 全部列；count 正確', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [
+        makeRow({ settlement_id: 1, employee_id: 10 }),
+        makeRow({ settlement_id: 2, employee_id: 11, total_amount: '0' }),
+        makeRow({ settlement_id: 3, employee_id: 12, remark: '手動調整' }),
+      ],
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      attentionOnly: boolean
+      attentionCount: number
+      displayedRows: GridRow[]
+    }
+
+    expect(vm.attentionCount).toBe(2)
+    expect(vm.displayedRows).toHaveLength(3)
+
+    vm.attentionOnly = true
+    await nextTick()
+    expect(vm.displayedRows).toHaveLength(2)
+    expect(vm.displayedRows.map((r) => r.settlement_id).sort()).toEqual([2, 3])
+
+    vm.attentionOnly = false
+    await nextTick()
+    expect(vm.displayedRows).toHaveLength(3)
+  })
+
+  it('過濾開關有 data-test 錨點且顯示需注意筆數', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow(), makeRow({ settlement_id: 2, total_amount: '0' })],
+    } as never)
+    const wrapper = await mountView()
+
+    const filter = wrapper.find('[data-test="attention-filter"]')
+    expect(filter.exists()).toBe(true)
+    expect(filter.text()).toContain('1')
   })
 })

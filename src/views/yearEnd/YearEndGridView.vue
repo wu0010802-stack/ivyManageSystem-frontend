@@ -110,6 +110,24 @@ const visibleBonusColumns = computed(() =>
   bonusColumns.value.filter((col) => visibleBonusCols.value.has(col.key))
 )
 
+// ── 批次 A③：需注意列過濾 ────────────────────────────────────────────────
+// 行政人員實際掃視的是「哪些列需要人工確認」：合計非正數（0 元或負值多半是資料
+// 缺漏/扣款吃光）、有人工備註（代表有 override）、獎懲扣款非 0（手動或懲處 deriver
+// 自動產生）、未滿整年（到職月折算 <12/12，年中到離職都在這裡）。預設關閉，不改變
+// 既有預設視圖；金額欄為後端 Decimal 序列化字串，缺欄防禦性視為無異常訊號。
+function isAttentionRow(row: GridRow): boolean {
+  const total = Number(row.total_amount)
+  const disciplinary = Number(row.deduction_disciplinary ?? 0)
+  const hireMonths = Number(row.hire_months ?? 12)
+  return !(total > 0) || Boolean(row.remark) || disciplinary !== 0 || hireMonths < 12
+}
+
+const attentionOnly = ref(false)
+const attentionCount = computed(() => rows.value.filter(isAttentionRow).length)
+const displayedRows = computed(() =>
+  attentionOnly.value ? rows.value.filter(isAttentionRow) : rows.value
+)
+
 // 特別獎金合計：9 個常駐獎金欄摘要成單一欄，是摘要表零橫捲的關鍵——使用者要看
 // 細項才勾 chip 插回單欄，預設只看合計。金額為後端 Decimal 序列化字串，逐一
 // Number() 加總；row.special_bonuses 只含實際發放的 key，未發放的欄位不存在，
@@ -239,6 +257,8 @@ defineExpose({
   buildResult, buildSummaryText,
   // Task 3（批次2b-1）：獎金欄開關 chips 供測試直接驅動（避免透過 stub 層模擬點擊的脆弱性）。
   visibleBonusCols, toggleBonusCol, visibleBonusColumns, specialBonusTotal,
+  // 批次 A③：需注意列過濾
+  attentionOnly, attentionCount, displayedRows, isAttentionRow,
   // Task 4（批次2b-1）：舊手改 dialog（editVisible/editForm/editingRow/openEdit/submitEdit）
   // 已移除，改由 GridRowDetailDrawer 承接（含就地編輯）；grid 這層只保留開關抽屜狀態。
   drawerVisible, drawerRow, openDrawer,
@@ -338,6 +358,13 @@ onMounted(initGrid)
         style="cursor: pointer"
         @click="toggleBonusCol(key)"
       >{{ SPECIAL_BONUS_LABELS[key] ?? key }}</el-tag>
+
+      <!-- 批次 A③：需注意列過濾（合計≤0／有備註／獎懲扣款≠0／未滿整年） -->
+      <el-checkbox
+        v-model="attentionOnly"
+        class="attention-filter"
+        data-test="attention-filter"
+      >只顯示需注意（{{ attentionCount }}）</el-checkbox>
     </div>
 
     <!-- Grid table：6 欄摘要（姓名/主結算/特別獎金合計/合計/狀態/操作），零橫捲。
@@ -345,7 +372,7 @@ onMounted(initGrid)
          抽屜承接（抽屜自建 specialBonusItems，未沿用本檔案任何舊 expand 邏輯）。 -->
     <el-table
       v-loading="loading"
-      :data="rows"
+      :data="displayedRows"
       border
       stripe
       max-height="640"
@@ -517,6 +544,9 @@ onMounted(initGrid)
 }
 .bonus-col-chip {
   user-select: none;
+}
+.attention-filter {
+  margin-left: var(--space-3);
 }
 /* F-2：金額 cell 禁止在小數點/千分位逗號附近換行成兩行（稽核核對風險）；
    欄寬不足時交給 el-table 內建橫向捲動，不擠壓內容。 */
