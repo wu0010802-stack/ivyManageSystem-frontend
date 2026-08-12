@@ -23850,12 +23850,24 @@ export interface components {
         GridRowOut: {
             /** Deduction Disciplinary */
             deduction_disciplinary: string;
+            /** Deduction Disciplinary Auto */
+            deduction_disciplinary_auto?: string | null;
+            /** Deduction Disciplinary Override */
+            deduction_disciplinary_override?: string | null;
             /** Employee Id */
             employee_id: number;
             /** Employee Name */
             employee_name: string;
+            /** Excess Amount Auto */
+            excess_amount_auto?: string | null;
+            /** Excess Amount Override */
+            excess_amount_override?: string | null;
             /** Hire Months */
             hire_months: string;
+            /** Hire Months Auto */
+            hire_months_auto?: string | null;
+            /** Hire Months Override */
+            hire_months_override?: string | null;
             /** Payable Amount */
             payable_amount: string;
             /** Remark */
@@ -25370,6 +25382,8 @@ export interface components {
             excess_amount?: number | string | null;
             /** Hire Months Override */
             hire_months_override?: number | string | null;
+            /** Reason */
+            reason?: string | null;
             /** Remark */
             remark?: string | null;
         };
