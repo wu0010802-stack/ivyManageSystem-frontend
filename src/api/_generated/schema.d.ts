@@ -5965,6 +5965,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/extra-bonuses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Extra Bonuses
+         * @description 查詢表外獎金發放紀錄（依歸屬年月）。
+         */
+        get: operations["list_extra_bonuses_api_extra_bonuses_get"];
+        put?: never;
+        /**
+         * Create Extra Bonus
+         * @description 新增一筆表外獎金發放紀錄。
+         */
+        post: operations["create_extra_bonus_api_extra_bonuses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extra-bonuses/{bonus_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Extra Bonus
+         * @description 更新表外獎金紀錄（歸屬月異動時新舊月份範圍都標 stale）。
+         */
+        put: operations["update_extra_bonus_api_extra_bonuses__bonus_id__put"];
+        post?: never;
+        /**
+         * Delete Extra Bonus
+         * @description 刪除表外獎金紀錄。
+         */
+        delete: operations["delete_extra_bonus_api_extra_bonuses__bonus_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/extra-bonuses/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Categories
+         * @description 表外獎金類別清單（前端下拉選項）。
+         */
+        get: operations["list_categories_api_extra_bonuses_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/adjustments": {
         parameters: {
             query?: never;
@@ -23147,6 +23215,86 @@ export interface components {
         ExternalHttpHealth: {
             /** Breaker */
             breaker: string;
+        };
+        /** ExtraBonusCategoryOut */
+        ExtraBonusCategoryOut: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+        };
+        /** ExtraBonusCreate */
+        ExtraBonusCreate: {
+            /** Amount */
+            amount: number;
+            /** Category */
+            category: string;
+            /**
+             * Counts For Supplementary
+             * @default true
+             */
+            counts_for_supplementary: boolean;
+            /** Employee Id */
+            employee_id: number;
+            /** Paid Date */
+            paid_date?: string | null;
+            /** Period Month */
+            period_month: number;
+            /** Period Year */
+            period_year: number;
+            /** Remark */
+            remark?: string | null;
+        };
+        /** ExtraBonusListOut */
+        ExtraBonusListOut: {
+            /** Items */
+            items: components["schemas"]["ExtraBonusOut"][];
+            /** Total Amount */
+            total_amount: number;
+        };
+        /** ExtraBonusOut */
+        ExtraBonusOut: {
+            /** Amount */
+            amount: number;
+            /** Category */
+            category: string;
+            /** Category Label */
+            category_label: string;
+            /** Counts For Supplementary */
+            counts_for_supplementary: boolean;
+            /** Created At */
+            created_at?: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Id */
+            id: number;
+            /** Paid Date */
+            paid_date?: string | null;
+            /** Period Month */
+            period_month: number;
+            /** Period Year */
+            period_year: number;
+            /** Remark */
+            remark?: string | null;
+        };
+        /** ExtraBonusUpdate */
+        ExtraBonusUpdate: {
+            /** Amount */
+            amount?: number | null;
+            /** Category */
+            category?: string | null;
+            /** Counts For Supplementary */
+            counts_for_supplementary?: boolean | null;
+            /** Paid Date */
+            paid_date?: string | null;
+            /** Period Month */
+            period_month?: number | null;
+            /** Period Year */
+            period_year?: number | null;
+            /** Remark */
+            remark?: string | null;
         };
         /**
          * FaqAction
@@ -47348,6 +47496,159 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_extra_bonuses_api_extra_bonuses_get: {
+        parameters: {
+            query: {
+                category?: string | null;
+                employee_id?: number | null;
+                month?: number | null;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtraBonusListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_extra_bonus_api_extra_bonuses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtraBonusCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtraBonusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_extra_bonus_api_extra_bonuses__bonus_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bonus_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExtraBonusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtraBonusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_extra_bonus_api_extra_bonuses__bonus_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                bonus_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_categories_api_extra_bonuses_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExtraBonusCategoryOut"][];
                 };
             };
         };
