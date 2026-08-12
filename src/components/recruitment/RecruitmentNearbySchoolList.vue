@@ -79,7 +79,10 @@
         v-for="school in topSchools"
         :key="school.place_id || `${school.name}-${school.lat}-${school.lng}`"
         class="nearby-school-item nearby-school-item--clickable"
+        role="button"
+        tabindex="0"
         @click="emit('select-school', school)"
+        @keydown.enter.space.prevent="emit('select-school', school)"
       >
         <div class="nearby-school-header">
           <div class="nearby-school-name">{{ school.name || '未命名幼兒園' }}</div>

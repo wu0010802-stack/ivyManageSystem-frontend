@@ -463,11 +463,6 @@ onMounted(reload)
   cursor: pointer;
   background: #f5f7fa;
 }
-
-.attachment-thumb:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
-}
 .attachment-thumb img {
   width: 100%;
   height: 100%;

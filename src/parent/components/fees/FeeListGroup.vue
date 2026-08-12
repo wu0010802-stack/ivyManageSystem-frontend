@@ -53,7 +53,10 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
     :key="r.id"
     class="record-card"
     :data-unpaid-anchor="isUnpaidAnchor(r, idx) ? '' : null"
+    role="button"
+    tabindex="0"
     @click="emit('record-click', r)"
+    @keydown.enter.space.prevent="emit('record-click', r)"
   >
     <div class="record-row1">
       <span class="record-name">{{ r.fee_item_name }}</span>

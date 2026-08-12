@@ -37,25 +37,30 @@ const SELF_PATH = 'scripts/check-a11y-clickable.mjs';
 /**
  * 修掉幾處之後**必須**同步調降這個數字（`--update` 會幫你改），否則棘輪會鬆掉。
  *
- * 存量 14 處**不是同一種修法**，別無腦套三件套 —— 分三類，各有正解：
+ * A 類（單純卡片／列表項）與 B 類（listbox）已於 2026-08-12 收斂完畢：
+ *   A → 補 role="button" + tabindex="0" + @keydown.enter.space.prevent 三件套，
+ *       有選取狀態的另加 aria-pressed；ClassHubBatchMeasurementCard 因為原本
+ *       巢狀了一個 <button>，直接整張改成單一 <button>。
+ *   B → GlobalSearch 改成正規 combobox：input 掛 role="combobox" +
+ *       aria-activedescendant，.gs-results 掛 role="listbox"，.gs-item 掛
+ *       role="option" + aria-selected。**刻意不加 tabindex** —— 該元件已有
+ *       ArrowDown/Enter 導航，加了會讓 Tab 逐筆走過結果、破壞既有操作。
  *
- *   A. 單純卡片／列表項（RecruitmentAreaTab、RecruitmentNearbySchoolList、
- *      PlanIssuesSummary、IepView、FeeListGroup、KioskPunchView、PortalAlbums…）
- *      → 三件套或直接換 <button>。低風險，可逐一收。
+ * 剩下 5 處分兩類，都**不該**套三件套：
  *
- *   B. listbox / combobox（GlobalSearch 的 .gs-item ×2）
- *      → **不要**加 tabindex。父層 .gs-modal 已經接管 ArrowDown/Enter，
- *        正解是父 role="listbox" + 項目 role="option" + aria-selected +
- *        aria-activedescendant。加 tabindex 會破壞既有的方向鍵導航。
+ *   C. grid（LeaveCalendar 的 .cal-cell、POSSearchPanel 的 .pos-cal__cell）
+ *      → 正解是 roving tabindex：整個 grid 只有一格 tabindex="0"，方向鍵搬移
+ *        焦點。每格都給 tabindex="0" 的話，一個月要按 30 次 Tab 才走得完。
+ *        這需要一個焦點狀態機而不只是加屬性，兩個元件應共用一支
+ *        useRovingGrid composable —— 屬獨立重構，尚未做。
  *
- *   C. grid（LeaveCalendar 的日曆格、POSSearchPanel 的 .pos-cal__cell）
- *      → roving tabindex（整個 grid 只有一個 tabindex="0"，方向鍵移動焦點），
- *        不是每一格都 tabindex="0" —— 否則一個月要按 30 次 Tab 才能走完。
- *
- *   另有一處刻意保留：PortalAlbumDetailView 的 <img @click> 只是滑鼠捷徑，
- *   旁邊的 el-checkbox 已提供等價的鍵盤路徑，加 tabindex 只會製造重複停點。
+ *   D. 已有等價鍵盤路徑的滑鼠捷徑（POSSearchPanel 的 .pos-reg ×2、
+ *      PortalAlbumDetailView 的 <img>）
+ *      → 這些元素內部／旁邊已經有 el-checkbox，本身就能 Tab + Space。
+ *        外層 @click 只是「點整列也能選」的便利。補 tabindex 會讓同一個功能
+ *        出現兩個 Tab 停點，反而更糟。這類**不必**再收斂。
  */
-const BASELINE = 14;
+const BASELINE = 5;
 
 /** 非語意元素：本身不帶互動語意，掛 @click 就需要自己補鍵盤可及性。 */
 const NON_SEMANTIC = new Set([

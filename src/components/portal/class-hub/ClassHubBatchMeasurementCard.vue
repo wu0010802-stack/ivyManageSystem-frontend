@@ -49,12 +49,6 @@ const props = withDefaults(defineProps<{
   color: inherit;
   text-align: left;
 }
-
-/* 現在真的能被 Tab 到了，焦點必須看得見 */
-.batch-card:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
-}
 .left {
   display: flex;
   align-items: center;

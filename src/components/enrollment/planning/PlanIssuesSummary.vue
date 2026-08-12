@@ -28,7 +28,10 @@
             v-for="(issue, idx) in group.items"
             :key="idx"
             class="issue-item"
+            role="button"
+            tabindex="0"
             @click="emit('locate-issue', issue)"
+            @keydown.enter.space.prevent="emit('locate-issue', issue)"
           >{{ issue.message }}</li>
         </ul>
       </div>

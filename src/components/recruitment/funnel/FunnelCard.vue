@@ -6,7 +6,10 @@
       'funnel-card--disabled': !canDrag,
     }"
     :data-visit-id="card.visit_id"
+    role="button"
+    tabindex="0"
     @click="$emit('click')"
+    @keydown.enter.space.prevent="$emit('click')"
   >
     <div class="funnel-card__header">
       <span class="funnel-card__name">{{ card.child_name }}</span>

@@ -113,7 +113,10 @@ function reset() {
         :key="e.employee_id"
         class="roster-item"
         :class="{ 'no-pin': !e.has_pin }"
+        role="button"
+        tabindex="0"
         @click="pickEmployee(e)"
+        @keydown.enter.space.prevent="pickEmployee(e)"
       >
         <span class="roster-name">{{ e.name }}</span>
         <span v-if="e.today_state === 'in_only'" class="roster-tag">已上班</span>

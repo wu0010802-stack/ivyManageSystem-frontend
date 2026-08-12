@@ -64,4 +64,82 @@ describe('GlobalSearch', () => {
     expect(push).toHaveBeenCalledWith('/students/profile/7')
     wrapper.unmount()
   })
+
+  describe('combobox ARIA 契約', () => {
+    /**
+     * 為什麼要測：這個元件是「焦點留在 input、方向鍵移動 highlight」的 combobox，
+     * 選項本身沒有 tabindex（加了會讓 Tab 逐筆走過結果、破壞方向鍵導航）。
+     * 螢幕閱讀器唯一能知道「現在停在哪一筆」的途徑就是 aria-activedescendant
+     * 指到正確的 option id —— 這個對應一旦錯位，視覺上完全看不出來。
+     *
+     * 刻意跨兩個區塊各放資料：flatIndex 是**全域連續**編號，若哪天改成每個
+     * 區塊各自從 0 編，單一區塊的測試會照樣綠，但 id 會在第二個區塊開始撞號。
+     */
+    const twoSectionData = {
+      ...emptyData,
+      q: '王',
+      students: [
+        { id: 7, name: '王小明', student_id: 'S1', classroom_name: 'A班' },
+        { id: 8, name: '王小華', student_id: 'S2', classroom_name: 'B班' },
+      ],
+      employees: [{ id: 3, name: '王老師', employee_id: 'E1', title: '導師' }],
+    }
+
+    const openWithResults = async () => {
+      vi.mocked(searchApi.globalSearch).mockResolvedValue({ data: twoSectionData } as never)
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('王小')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      return wrapper
+    }
+
+    it('結果容器是 listbox，每筆是 option，id 跨區塊連續不撞號', async () => {
+      const wrapper = await openWithResults()
+
+      expect(wrapper.find('[role="listbox"]').exists()).toBe(true)
+      const options = wrapper.findAll('[role="option"]')
+      expect(options).toHaveLength(3)
+
+      // 2 個學生 + 1 個員工 → id 必須是 0,1,2 而不是 0,1,0
+      expect(options.map(o => o.attributes('id'))).toEqual([
+        'gs-opt-0', 'gs-opt-1', 'gs-opt-2',
+      ])
+      // input 必須宣告自己控制這個 listbox
+      expect(wrapper.find('input').attributes('role')).toBe('combobox')
+      expect(wrapper.find('input').attributes('aria-controls')).toBe('gs-listbox')
+      expect(wrapper.find('[role="listbox"]').attributes('id')).toBe('gs-listbox')
+
+      wrapper.unmount()
+    })
+
+    it('尚未選取時不宣告 activedescendant，方向鍵後指向對應的 option', async () => {
+      const wrapper = await openWithResults()
+      const input = wrapper.find('input')
+      const modal = wrapper.find('.gs-modal')
+
+      // activeIndex = -1：不能指向任何 option，否則 AT 會唸出一個沒 highlight 的項目
+      expect(input.attributes('aria-activedescendant')).toBeUndefined()
+      expect(wrapper.findAll('[aria-selected="true"]')).toHaveLength(0)
+
+      await modal.trigger('keydown', { key: 'ArrowDown' })
+      await nextTick()
+      expect(input.attributes('aria-activedescendant')).toBe('gs-opt-0')
+
+      // 走到第三筆（跨到員工區塊）——aria-selected 必須跟著移動且只有一個
+      await modal.trigger('keydown', { key: 'ArrowDown' })
+      await modal.trigger('keydown', { key: 'ArrowDown' })
+      await nextTick()
+      expect(input.attributes('aria-activedescendant')).toBe('gs-opt-2')
+
+      const selected = wrapper.findAll('[aria-selected="true"]')
+      expect(selected).toHaveLength(1)
+      expect(selected[0].attributes('id')).toBe('gs-opt-2')
+
+      wrapper.unmount()
+    })
+  })
 })

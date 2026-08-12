@@ -52,7 +52,11 @@
             :key="row.district"
             class="district-card"
             :class="{ 'district-card--active': row.district === selectedDistrict }"
-            @click="emit('update:selectedDistrict', row.district === selectedDistrict ? '' : (row.district || ''))"
+            role="button"
+            tabindex="0"
+            :aria-pressed="row.district === selectedDistrict"
+            @click="toggleDistrict(row)"
+            @keydown.enter.space.prevent="toggleDistrict(row)"
           >
             <!-- 行 1：區名 + 來源量 -->
             <div class="dc-row-top">
@@ -251,6 +255,11 @@ const emit = defineEmits<{
 }>()
 
 const districts = computed((): DistrictRow[] => (props.marketSnapshot.districts as DistrictRow[]) || [])
+
+/** 點同一區＝取消選取。抽成 function 是因為 click 與 keydown 兩處都要用。 */
+const toggleDistrict = (row: DistrictRow) => {
+  emit('update:selectedDistrict', row.district === props.selectedDistrict ? '' : (row.district || ''))
+}
 
 /** 有任何來源／競爭／人口資料才值得展開成完整卡片，否則收進精簡 chip 區 */
 const hasDistrictData = (r: DistrictRow) =>

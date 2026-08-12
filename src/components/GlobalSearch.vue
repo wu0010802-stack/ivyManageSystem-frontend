@@ -5,25 +5,39 @@
         <div ref="modalRef" class="gs-modal" role="dialog" aria-modal="true" aria-label="全局搜尋" @keydown="onKeydown">
           <div class="gs-input-wrap">
             <el-icon class="gs-input-icon"><Search /></el-icon>
+            <!--
+              combobox 模式：焦點永遠留在 input，用 aria-activedescendant 指出目前
+              highlight 的選項。**刻意不給 .gs-item 加 tabindex** —— 這裡已經有
+              ArrowDown/Enter 導航（onKeydown），加 tabindex 會讓 Tab 逐一走過每一
+              筆結果，反而破壞既有的方向鍵操作。
+            -->
             <input
               ref="inputRef"
               v-model="query"
               class="gs-input"
               placeholder="搜尋學生、員工、家長、班級、學費、才藝、招生、公告、頁面…"
               autocomplete="off"
+              role="combobox"
+              aria-controls="gs-listbox"
+              aria-autocomplete="list"
+              :aria-expanded="query.trim().length >= 2"
+              :aria-activedescendant="activeIndex >= 0 ? `gs-opt-${activeIndex}` : undefined"
             />
             <span v-if="isLoading" class="gs-spinner"></span>
             <kbd class="gs-esc-hint" @click="close">esc</kbd>
           </div>
 
-          <div class="gs-results" ref="resultsRef">
+          <div class="gs-results" ref="resultsRef" id="gs-listbox" role="listbox" aria-label="搜尋結果">
             <template v-if="query.trim().length >= 2">
               <template v-for="group in groups" :key="group.key">
-                <div class="gs-section-title">{{ group.title }}</div>
+                <div class="gs-section-title" role="presentation">{{ group.title }}</div>
                 <div
                   v-for="entry in group.items"
                   :key="group.key + '-' + entry.flatIndex"
+                  :id="`gs-opt-${entry.flatIndex}`"
                   class="gs-item"
+                  role="option"
+                  :aria-selected="activeIndex === entry.flatIndex"
                   :class="{ 'gs-item--active': activeIndex === entry.flatIndex }"
                   @mouseenter="activeIndex = entry.flatIndex"
                   @click="selectByFlat(entry.flatIndex)"
@@ -35,11 +49,14 @@
               </template>
 
               <template v-if="pageEntries.length">
-                <div class="gs-section-title">頁面</div>
+                <div class="gs-section-title" role="presentation">頁面</div>
                 <div
                   v-for="entry in pageEntries"
                   :key="'page-' + entry.flatIndex"
+                  :id="`gs-opt-${entry.flatIndex}`"
                   class="gs-item"
+                  role="option"
+                  :aria-selected="activeIndex === entry.flatIndex"
                   :class="{ 'gs-item--active': activeIndex === entry.flatIndex }"
                   @mouseenter="activeIndex = entry.flatIndex"
                   @click="selectByFlat(entry.flatIndex)"

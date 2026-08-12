@@ -14,7 +14,11 @@
         <ul class="student-list">
           <li v-for="s in filteredStudents" :key="s.id"
               :class="{ active: selectedStudent?.id === s.id }"
-              @click="selectStudent(s)">
+              role="button"
+              tabindex="0"
+              :aria-pressed="selectedStudent?.id === s.id"
+              @click="selectStudent(s)"
+              @keydown.enter.space.prevent="selectStudent(s)">
             <div class="name">{{ s.name }}</div>
             <el-tag size="small" :type="statusTagType(iepStatusByStudent[s.id])">
               {{ iepStatusLabel(iepStatusByStudent[s.id]) }}

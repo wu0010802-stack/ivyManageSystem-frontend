@@ -63,10 +63,6 @@ defineExpose({ previewVisible, openPreview })
   cursor: pointer;
   background: var(--el-fill-color-light);
 }
-.thumb:focus-visible {
-  outline: 2px solid var(--el-color-primary);
-  outline-offset: 2px;
-}
 .thumb :deep(.el-image) { width: 100%; height: 100%; }
 .thumb .meta {
   position: absolute;
