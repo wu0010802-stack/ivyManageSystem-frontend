@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getYearEndGrid, buildSettlements, listYearEndCycles } from '@/api/yearEnd'
+import { getYearEndGrid, buildSettlements, listYearEndCycles, getYearEndCycleExceptions } from '@/api/yearEnd'
 import { moneyInt } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
-import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER } from '@/constants/appraisalYearEnd'
+import { SIGN_STATUS_LABEL, SIGN_STATUS_TAG, SIGN_STATUS_ORDER, exceptionTypeLabel } from '@/constants/appraisalYearEnd'
 import api from '@/api/index'
 import { BONUS_COL_KEYS, SPECIAL_BONUS_LABELS, loadVisibleBonusCols, saveVisibleBonusCols } from './gridColumns'
 import GridRowDetailDrawer from './components/GridRowDetailDrawer.vue'
@@ -141,6 +141,51 @@ function sortBySpecialBonusTotal(a: GridRow, b: GridRow) {
 
 const baseUrl = computed(() => api.defaults.baseURL || '/api')
 
+// ── 批次 B：試算就緒檢查前移 ──────────────────────────────────────────────
+// 例外中心（GET /cycles/{id}/exceptions，唯讀衍生）的 blocking 訊號原本藏在另一頁，
+// 行政人員按「開始試算」前看不到。就緒卡把它拉到 CTA 前，並依「是否直接讓試算
+// 結果錯」分兩級：
+// - gate 試算：missing_class_target／missing_head_teacher——學期紅利與超額計算
+//   依賴班級目標與班導，缺列會靜默算錯（少發），未排除前 disable 試算鈕。
+// - 不 gate：prereq_not_finalized 擋的是下游「考核年終發放」（generate 會被後端
+//   拒絕），與本頁試算無關；qualification/unassigned_course/unmatched_registrations
+//   （warning）與 performance_anomaly（info）亦僅提示。
+// 載入失敗 fail-open（維持批次 B 前可試算的行為）＋可見警示與重試，比照批次 A①
+// 的「降級必須可見」原則。
+type ExceptionItem = Awaited<ReturnType<typeof getYearEndCycleExceptions>>['data']['items'][number]
+
+const BUILD_GATING_TYPES = new Set(['missing_class_target', 'missing_head_teacher'])
+
+const exceptions = ref<ExceptionItem[]>([])
+const exceptionsLoadFailed = ref(false)
+
+const blockingItems = computed(() => exceptions.value.filter((e) => e.severity === 'blocking'))
+const gatingItems = computed(() => blockingItems.value.filter((e) => BUILD_GATING_TYPES.has(e.type)))
+const nonGatingBlockingItems = computed(() => blockingItems.value.filter((e) => !BUILD_GATING_TYPES.has(e.type)))
+const warningCount = computed(() => exceptions.value.filter((e) => e.severity === 'warning').length)
+const infoCount = computed(() => exceptions.value.filter((e) => e.severity === 'info').length)
+const buildGated = computed(() => gatingItems.value.length > 0)
+
+// 就緒卡以「型別 × 筆數」摘要（逐筆明細留給例外中心），型別中文標籤走單一來源
+// exceptionTypeLabel（constants/appraisalYearEnd.ts）。
+function countByType(items: ExceptionItem[]): { type: string; label: string; count: number }[] {
+  const counts = new Map<string, number>()
+  for (const item of items) counts.set(item.type, (counts.get(item.type) ?? 0) + 1)
+  return [...counts.entries()].map(([type, count]) => ({ type, label: exceptionTypeLabel(type), count }))
+}
+const gatingSummary = computed(() => countByType(gatingItems.value))
+const nonGatingBlockingSummary = computed(() => countByType(nonGatingBlockingItems.value))
+
+async function loadExceptions() {
+  try {
+    const res = await getYearEndCycleExceptions(cycleId)
+    exceptions.value = res.data.items
+    exceptionsLoadFailed.value = false
+  } catch {
+    exceptionsLoadFailed.value = true
+  }
+}
+
 // 排序：金額欄是後端 Decimal 序列化字串，plain sortable 會做字典序比較
 // （"10000" 排到 "9000" 前），一律走 sort-method 轉數字比較。
 function sortByPayable(a: GridRow, b: GridRow) {
@@ -215,7 +260,8 @@ async function initGrid() {
     .catch(() => [] as YearEndCycleLite[])
   const cycle = cycles.find((c) => c.id === cycleId)
   cycleStatus.value = cycle?.status ?? null
-  await loadGrid()
+  // 批次 B：就緒檢查與 grid 資料無依賴，並行載入
+  await Promise.all([loadGrid(), loadExceptions()])
 }
 
 async function onBuild() {
@@ -255,6 +301,9 @@ defineExpose({
   buildDialogVisible,
   cycleStatus, lastBuiltAt, initGrid,
   buildResult, buildSummaryText,
+  // 批次 B：試算就緒檢查
+  exceptions, exceptionsLoadFailed, loadExceptions, buildGated,
+  gatingItems, gatingSummary, nonGatingBlockingSummary, warningCount, infoCount,
   // Task 3（批次2b-1）：獎金欄開關 chips 供測試直接驅動（避免透過 stub 層模擬點擊的脆弱性）。
   visibleBonusCols, toggleBonusCol, visibleBonusColumns, specialBonusTotal,
   // 批次 A③：需注意列過濾
@@ -279,6 +328,7 @@ onMounted(initGrid)
         <el-button
           v-if="canWrite && cycleStatus === 'OPEN'"
           type="primary"
+          :disabled="buildGated"
           data-test="build-button"
           @click="buildDialogVisible = true"
         >
@@ -319,6 +369,43 @@ onMounted(initGrid)
       class="grid-alert"
       data-test="non-open-banner"
     />
+
+    <!-- 批次 B：試算就緒卡——只在 OPEN 週期顯示（LOCKED/CLOSED 連試算 CTA 都沒有）。
+         gate 型 blocking 未清時試算鈕 disabled，卡片說明原因並導去例外中心；
+         載入失敗 fail-open＋可見警示與重試（比照批次 A① 降級必須可見）。 -->
+    <div
+      v-if="cycleStatus === 'OPEN'"
+      class="readiness-card"
+      :class="{ 'readiness-card--gated': buildGated, 'readiness-card--failed': exceptionsLoadFailed }"
+      data-test="readiness-card"
+    >
+      <template v-if="exceptionsLoadFailed">
+        <span class="readiness-card__title">⚠️ 試算就緒檢查載入失敗</span>
+        <span class="readiness-card__text">無法確認是否有阻斷項；仍可試算，但結果可能包含缺漏。</span>
+        <el-button size="small" data-test="readiness-retry" @click="loadExceptions">重試</el-button>
+      </template>
+      <template v-else-if="buildGated">
+        <span class="readiness-card__title">⛔ 尚有 {{ gatingItems.length }} 項阻斷，暫無法試算</span>
+        <span v-for="g in gatingSummary" :key="g.type" class="readiness-card__item">
+          {{ g.label }} {{ g.count }} 筆
+        </span>
+        <span class="readiness-card__text">班級目標與班導缺漏會讓紅利／超額計算靜默算錯，請先排除。</span>
+      </template>
+      <template v-else>
+        <span class="readiness-card__title" data-test="readiness-ok">✅ 無阻斷項，可開始試算</span>
+        <span v-for="g in nonGatingBlockingSummary" :key="g.type" class="readiness-card__item">
+          {{ g.label }} {{ g.count }} 筆（不影響試算，會擋後續發放）
+        </span>
+        <span v-if="warningCount > 0 || infoCount > 0" class="readiness-card__text">
+          另有提醒 {{ warningCount }} 筆、資訊 {{ infoCount }} 筆。
+        </span>
+      </template>
+      <router-link
+        v-if="!exceptionsLoadFailed && exceptions.length > 0"
+        to="/appraisal-year-end/exceptions"
+        class="readiness-card__link"
+      >前往例外中心</router-link>
+    </div>
 
     <!-- Task 12②：build 成功摘要列（取代原本「只彈一次」的 ElMessage，常駐可回顧） -->
     <el-alert
@@ -548,6 +635,25 @@ onMounted(initGrid)
 .attention-filter {
   margin-left: var(--space-3);
 }
+.readiness-card {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  margin-bottom: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--el-color-success-light-5, #b3e19d);
+  background: var(--el-color-success-light-9, #f0f9eb);
+  border-radius: var(--radius-md, 6px); font-size: 13px;
+}
+.readiness-card--gated {
+  border-color: var(--el-color-danger-light-5, #fab6b6);
+  background: var(--el-color-danger-light-9, #fef0f0);
+}
+.readiness-card--failed {
+  border-color: var(--el-color-warning-light-5, #f3d19e);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+}
+.readiness-card__title { font-weight: 600; }
+.readiness-card__item { font-weight: 600; }
+.readiness-card__text { color: var(--text-secondary); }
+.readiness-card__link { margin-left: auto; white-space: nowrap; }
 /* F-2：金額 cell 禁止在小數點/千分位逗號附近換行成兩行（稽核核對風險）；
    欄寬不足時交給 el-table 內建橫向捲動，不擠壓內容。 */
 :deep(.money-cell .cell) {

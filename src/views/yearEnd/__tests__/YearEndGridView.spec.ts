@@ -12,6 +12,7 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     getYearEndGrid: vi.fn(),
     buildSettlements: vi.fn(),
     manualPatchSettlement: vi.fn(),
+    getYearEndCycleExceptions: vi.fn(),
   }
 })
 
@@ -80,6 +81,45 @@ function makeRow(overrides: Partial<GridRow> = {}): GridRow {
   }
 }
 
+// 批次 B：試算就緒檢查用的例外項工廠（欄位對齊 ExceptionItemOut）。
+type ExceptionItem = {
+  type: string
+  severity: 'blocking' | 'warning' | 'info'
+  entity_type: string
+  entity_id: string
+  target_name: string
+  reason: string
+  impact: string
+  suggested_action: string
+  deep_link: string
+}
+
+function makeException(overrides: Partial<ExceptionItem> = {}): ExceptionItem {
+  return {
+    type: 'missing_class_target',
+    severity: 'blocking',
+    entity_type: 'classroom',
+    entity_id: '3',
+    target_name: '大班A',
+    reason: '班級招生目標缺列',
+    impact: '該班班導的學期紅利無法計算',
+    suggested_action: '至本期設定補齊班級編制',
+    deep_link: '/appraisal-year-end/year-end/cycles/7?step=config',
+    ...overrides,
+  }
+}
+
+function mockExceptions(items: ExceptionItem[]) {
+  vi.mocked(api.getYearEndCycleExceptions).mockResolvedValue({
+    data: {
+      cycle_id: 7,
+      generated_at: '2026-08-12T12:00:00Z',
+      counts_by_type: {},
+      items,
+    },
+  } as never)
+}
+
 async function mountView() {
   const wrapper = mount(YearEndGridView, {
     props: { cycleId: 7 },
@@ -130,6 +170,8 @@ describe('YearEndGridView', () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'OPEN' }],
     } as never)
+    // 批次 B：initGrid 會載入試算就緒檢查，預設無例外項
+    mockExceptions([])
   })
 
   // Case 1: renders rows with employee name + total + bonus columns (vm-layer)
@@ -392,6 +434,8 @@ describe('YearEndGridView 進頁不自動試算，改顯式「開始試算」CTA
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'OPEN' }],
     } as never)
+    // 批次 B：initGrid 會載入試算就緒檢查，預設無例外項
+    mockExceptions([])
   })
 
   it('OPEN + canWrite：mount 時不自動呼叫 buildSettlements，只 loadGrid（避免非預期 DB 寫入）', async () => {
@@ -668,6 +712,8 @@ describe('YearEndGridView（Task 12：展開列修 404／build 摘要列；Task 
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'OPEN' }],
     } as never)
+    // 批次 B：initGrid 會載入試算就緒檢查，預設無例外項
+    mockExceptions([])
   })
 
   // 案①：原「展開」按鈕 push 到不存在的 /year_end/cycles/:id/settlements/:id
@@ -795,6 +841,8 @@ describe('YearEndGridView（Task 3：grid 6 欄摘要表＋獎金欄位開關 ch
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'OPEN' }],
     } as never)
+    // 批次 B：initGrid 會載入試算就緒檢查，預設無例外項
+    mockExceptions([])
   })
 
   it('預設 visibleBonusCols 為空集合，主表只渲染 6 欄（零橫捲）', async () => {
@@ -903,6 +951,8 @@ describe('YearEndGridView 需注意列過濾', () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'OPEN' }],
     } as never)
+    // 批次 B：initGrid 會載入試算就緒檢查，預設無例外項
+    mockExceptions([])
   })
 
   it('isAttentionRow：合計≤0／有備註／獎懲扣款≠0／未滿整年 → true；正常列 → false', async () => {
@@ -957,5 +1007,102 @@ describe('YearEndGridView 需注意列過濾', () => {
     const filter = wrapper.find('[data-test="attention-filter"]')
     expect(filter.exists()).toBe(true)
     expect(filter.text()).toContain('1')
+  })
+})
+
+// ── 批次 B（2026-08-12）：試算就緒檢查前移 ──────────────────────────────────
+// 例外中心的 blocking 訊號原本藏在另一頁，行政人員按「開始試算」前不會看到；
+// 把就緒狀態拉到試算按鈕前：會直接讓試算結果錯的 blocking 型別
+// （missing_class_target/missing_head_teacher）未清時 gate 試算按鈕；
+// prereq_not_finalized 擋的是下游「考核年終發放」，列出但不 gate 試算。
+describe('YearEndGridView 試算就緒檢查', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'OPEN' }],
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+  })
+
+  it('gating blocking（缺班級目標/缺班導）→ buildGated=true、試算鈕 disabled、卡片列型別與筆數', async () => {
+    mockExceptions([
+      makeException({ entity_id: '3', target_name: '大班A' }),
+      makeException({ entity_id: '4', target_name: '中班B' }),
+      makeException({ type: 'missing_head_teacher', entity_id: '5', target_name: '小班C' }),
+    ])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { buildGated: boolean }
+
+    expect(vm.buildGated).toBe(true)
+    // el-button 在測試中是 unknown element，:disabled 以字面字串渲染
+    expect(wrapper.find('[data-test="build-button"]').attributes('disabled')).toBe('true')
+
+    const card = wrapper.find('[data-test="readiness-card"]')
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain('班級編制缺漏')
+    expect(card.text()).toContain('2')
+    expect(card.text()).toContain('班導未指定')
+    expect(card.text()).toContain('前往例外中心')
+  })
+
+  it('只有 prereq_not_finalized blocking → 不 gate 試算（列出但註明不擋試算）', async () => {
+    mockExceptions([
+      makeException({
+        type: 'prereq_not_finalized', entity_type: 'employee', entity_id: '9',
+        target_name: '王主任', reason: '來源考核未核定',
+        impact: '考核年終發放會被拒絕', suggested_action: '完成考核簽核',
+      }),
+    ])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { buildGated: boolean }
+
+    expect(vm.buildGated).toBe(false)
+    expect(wrapper.find('[data-test="build-button"]').attributes('disabled')).not.toBe('true')
+
+    const card = wrapper.find('[data-test="readiness-card"]')
+    expect(card.text()).toContain('前置未核定')
+    expect(card.text()).toContain('不影響試算')
+  })
+
+  it('無任何例外 → 卡片顯示可試算、不 gate', async () => {
+    mockExceptions([])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { buildGated: boolean }
+
+    expect(vm.buildGated).toBe(false)
+    expect(wrapper.find('[data-test="readiness-ok"]').exists()).toBe(true)
+  })
+
+  it('就緒檢查載入失敗 → fail-open 不 gate、顯示可重試的警示；重試成功後恢復', async () => {
+    vi.mocked(api.getYearEndCycleExceptions).mockRejectedValueOnce(new Error('network'))
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { buildGated: boolean; exceptionsLoadFailed: boolean }
+
+    expect(vm.exceptionsLoadFailed).toBe(true)
+    expect(vm.buildGated).toBe(false)
+    expect(wrapper.find('[data-test="build-button"]').attributes('disabled')).not.toBe('true')
+    const retry = wrapper.find('[data-test="readiness-retry"]')
+    expect(retry.exists()).toBe(true)
+
+    // rejectedValueOnce 只發作一次；重試改吃 beforeEach 之後設定的成功 mock
+    mockExceptions([])
+    await retry.trigger('click')
+    await flushPromises()
+    await nextTick()
+
+    expect(vm.exceptionsLoadFailed).toBe(false)
+    expect(wrapper.find('[data-test="readiness-ok"]').exists()).toBe(true)
+  })
+
+  it('LOCKED 週期不顯示就緒卡（試算 CTA 本就不出現）', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'LOCKED' }],
+    } as never)
+    mockExceptions([makeException()])
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="readiness-card"]').exists()).toBe(false)
   })
 })
