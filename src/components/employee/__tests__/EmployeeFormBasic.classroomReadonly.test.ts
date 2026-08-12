@@ -3,11 +3,15 @@
 // classroom_teacher_sync（班級頁指派老師時反算），員工表單手動選班級不會建立
 // 真正的師生關聯、且會被下次班級異動無聲覆寫（staging 向日葵幼幼班回報）。
 // 收斂後員工表單一律唯讀顯示，指派入口只留班級管理頁；PUT diff 不再送 classroom_id。
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import EmployeeFormBasic from '../EmployeeFormBasic.vue'
 import { BASIC_TAB_FIELDS } from '@/constants/employeeFields'
+
+// 真 EP 全量 mount 在並行滿載時偶發超過預設 5s（單獨跑綠），比照既有慣例放寬
+// 本檔 timeout（HomeView.state.spec.ts 同式；2026-08-11 baseline 兩度實測命中）
+vi.setConfig({ testTimeout: 15000 })
 
 const OPTIONS = [{ id: 5, name: '向日葵', grade_name: '幼幼班' }]
 
