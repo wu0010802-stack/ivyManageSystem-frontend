@@ -53,13 +53,20 @@ const progress = ref<CycleProgress | null>(null)
 const canFinalize = computed(() => hasPermission('YEAR_END_FINALIZE'))
 const statusBusy = ref(false)
 
+// 批次 A①：載入失敗不再靜默（原空 catch 讓表頭/導軌數字無聲消失，使用者會誤信
+// 「進度為空＝沒有待辦」）。維持降級語意（不擋既有操作），但失敗必須可見且可重試。
+const cycleLoadFailed = ref(false)
+const progressLoadFailed = ref(false)
+const headerLoadFailed = computed(() => cycleLoadFailed.value || progressLoadFailed.value)
+
 async function loadCycle() {
   try {
     const res = await listYearEndCycles()
     const cycles = res.data as YearEndCycle[]
     cycle.value = cycles.find((c) => c.id === cycleId) ?? null
+    cycleLoadFailed.value = false
   } catch {
-    // 靜默降級：表頭學年/狀態/基準日不顯示，不擋操作
+    cycleLoadFailed.value = true
   }
 }
 
@@ -67,9 +74,15 @@ async function loadProgress() {
   try {
     const res = await getCycleProgress(cycleId)
     progress.value = res.data as CycleProgress
+    progressLoadFailed.value = false
   } catch {
-    // 靜默降級：導軌數字不顯示，不擋操作
+    progressLoadFailed.value = true
   }
+}
+
+function retryHeaderLoad() {
+  loadCycle()
+  loadProgress()
 }
 
 onMounted(() => {
@@ -175,6 +188,16 @@ function reopenToOpen() {
     <section class="ye-workspace__body">
       <!-- Task 7：週期頭（學年/基準日/狀態）+ 狀態機 toolbar，自 YearEndDetailView 上移常駐 -->
       <div class="ye-header">
+        <!-- 批次 A①：載入失敗可見化＋重試（原空 catch 靜默降級） -->
+        <el-alert
+          v-if="headerLoadFailed"
+          type="error" :closable="false" show-icon
+          title="週期資訊載入失敗，學年、狀態與流程進度可能未顯示。"
+          data-test="header-load-error"
+          style="margin-bottom: 12px"
+        >
+          <el-button size="small" data-test="header-retry-button" @click="retryHeaderLoad">重試</el-button>
+        </el-alert>
         <div v-if="cycle" class="ye-header__meta">
           <strong>{{ cycle.academic_year }} 學年度</strong> ｜
           基準日 {{ cycle.bonus_calc_date }} ｜

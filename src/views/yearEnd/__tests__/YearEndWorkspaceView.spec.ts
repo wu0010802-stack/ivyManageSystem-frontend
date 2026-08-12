@@ -191,6 +191,41 @@ describe('YearEndWorkspaceView', () => {
     expect(api.updateCycleStatus).not.toHaveBeenCalled()
   })
 
+  // 批次 A①（2026-08-12）：loadCycle/loadProgress 原為空 catch 靜默降級——表頭與導軌
+  // 數字消失但使用者毫無感知，會誤信「進度為空＝沒有待辦」。改為顯示可重試的錯誤提示
+  //（維持不擋操作的降級語意，但失敗必須可見）。
+  it('cycle 載入失敗 → 顯示錯誤提示與重試鈕；重試成功後提示消失、表頭恢復', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    vi.mocked(api.listYearEndCycles).mockRejectedValueOnce(new Error('network error'))
+
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="header-load-error"]').exists()).toBe(true)
+
+    // beforeEach 預設 mock 已恢復成功（rejectedValueOnce 只發作一次）→ 點重試應復原
+    await wrapper.find('[data-test="header-retry-button"]').trigger('click')
+    await new Promise((r) => setTimeout(r))
+
+    expect(wrapper.find('[data-test="header-load-error"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('114 學年度')
+  })
+
+  it('progress 載入失敗（cycle 正常）→ 仍顯示錯誤提示', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    vi.mocked(api.getCycleProgress).mockRejectedValueOnce(new Error('network error'))
+
+    const wrapper = await mountShell()
+
+    expect(wrapper.find('[data-test="header-load-error"]').exists()).toBe(true)
+    // cycle 本身載入成功，表頭照常顯示（部分降級，不整塊消失）
+    expect(wrapper.text()).toContain('114 學年度')
+  })
+
+  it('cycle 與 progress 皆載入成功 → 不顯示載入錯誤提示', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="header-load-error"]').exists()).toBe(false)
+  })
+
   it('封存前置檢核通過（pending_sign_count=0）：confirm + updateCycleStatus(CLOSED) 後重載 cycle/progress', async () => {
     routeRef.value = { params: { id: '9' }, query: {} }
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
