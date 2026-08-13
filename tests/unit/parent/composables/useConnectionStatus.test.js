@@ -44,3 +44,42 @@ describe('useConnectionStatus', () => {
     expect(wsConnected.value).toBe(false)
   })
 })
+
+describe('useConnectionStatus — wsExpected（2026-08-13 全站常駐 banner 修正）', () => {
+  beforeEach(() => {
+    _resetConnectionStatusForTest()
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true })
+  })
+
+  function makeFakeWs() {
+    return {
+      _handlers: {},
+      addEventListener(evt, h) { this._handlers[evt] = h },
+      fire(evt) { this._handlers[evt]?.() },
+    }
+  }
+
+  it('初始 wsExpected=false（沒有頁面需要 WS）', () => {
+    const { wsExpected } = useConnectionStatus()
+    expect(wsExpected.value).toBe(false)
+  })
+
+  it('registerWs → wsExpected=true；unregisterWs → false', () => {
+    const { wsExpected, registerWs, unregisterWs } = useConnectionStatus()
+    const ws = makeFakeWs()
+    registerWs(ws)
+    expect(wsExpected.value).toBe(true)
+    unregisterWs(ws)
+    expect(wsExpected.value).toBe(false)
+  })
+
+  it('unregister 非當前 socket 為 no-op，不清 wsExpected', () => {
+    const { wsExpected, registerWs, unregisterWs } = useConnectionStatus()
+    const oldWs = makeFakeWs()
+    const newWs = makeFakeWs()
+    registerWs(oldWs)
+    registerWs(newWs) // 接管
+    unregisterWs(oldWs) // 舊持有者晚到的 teardown
+    expect(wsExpected.value).toBe(true)
+  })
+})

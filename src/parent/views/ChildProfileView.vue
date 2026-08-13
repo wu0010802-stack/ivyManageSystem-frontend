@@ -8,7 +8,6 @@ import ParentIcon from '../components/ParentIcon.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import CrownIcon from '@/components/brand/CrownIcon.vue'
 import MilestoneCarousel from '../components/MilestoneCarousel.vue'
@@ -173,7 +172,15 @@ onMounted(() => {
 
     <template v-else-if="data">
       <section class="child-hero">
-        <LaurelWreath side="full" :opacity="0.15" :size="120" class="child-hero-laurel" />
+        <!-- 品牌徽章水印（2026-08-13：SVG 桂冠 W 形觀感不佳，改正式徽章圖；
+             badge 批次掃 components 時漏了本 view，本次補齊） -->
+        <img
+          src="/LOGO.png"
+          alt=""
+          aria-hidden="true"
+          class="child-hero-laurel"
+          style="width: 120px; height: 120px; opacity: 0.12"
+        >
         <KawaiiStar :size="32" decorative class="child-hero-star" />
         <div class="child-hero-inner">
           <div class="child-avatar-wrap">

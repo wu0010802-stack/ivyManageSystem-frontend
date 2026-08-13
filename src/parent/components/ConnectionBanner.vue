@@ -2,7 +2,10 @@
 /**
  * 家長端連線狀態 banner。
  * - 離線：暖黃 money tint（--pt-tint-money）「目前離線，部分功能受限」
- * - WS 斷線（online 但 wsConnected=false 超過 delay）：藍綠 message tint（--pt-tint-message）「即時通知暫停，正在重連...」
+ * - WS 斷線（online 且 **wsExpected**——確實有頁面需要 WS——但 wsConnected=false
+ *   超過 delay）：藍綠 message tint（--pt-tint-message）「即時通知暫停，正在重連...」
+ *   ⚠ 沒有任何頁面持有 WS（wsExpected=false）時**不顯示**——「沒在用」≠「斷線」
+ *   （2026-08-13 前曾因此全站常駐重連 banner）。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useConnectionStatus } from '@/parent/composables/useConnectionStatus'
@@ -13,14 +16,16 @@ const props = withDefaults(defineProps<{
   wsBannerDelayMs: 3000,
 })
 
-const { online, wsConnected } = useConnectionStatus()
+const { online, wsConnected, wsExpected } = useConnectionStatus()
 const wsBannerVisible = ref<boolean>(false)
 let wsTimer: ReturnType<typeof setTimeout> | null = null
 
 function scheduleWsBanner(): void {
   if (wsTimer !== null) clearTimeout(wsTimer)
-  if (online.value && !wsConnected.value) {
-    wsTimer = setTimeout(() => { wsBannerVisible.value = !wsConnected.value }, props.wsBannerDelayMs)
+  if (online.value && wsExpected.value && !wsConnected.value) {
+    wsTimer = setTimeout(() => {
+      wsBannerVisible.value = wsExpected.value && !wsConnected.value
+    }, props.wsBannerDelayMs)
   } else {
     wsBannerVisible.value = false
   }
@@ -29,7 +34,7 @@ function scheduleWsBanner(): void {
 // 初始
 scheduleWsBanner()
 // watch 變化
-watch([online, wsConnected], scheduleWsBanner)
+watch([online, wsConnected, wsExpected], scheduleWsBanner)
 
 onBeforeUnmount(() => { if (wsTimer !== null) clearTimeout(wsTimer) })
 
