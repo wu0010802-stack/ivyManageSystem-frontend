@@ -10,6 +10,15 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '登入', public: true, hideTabBar: true },
     },
     {
+      // D 案（2026-08-13）：園所設定碼單/QR 的印刷入口——同一個 LoginView，
+      // deviceOnly 模式完全不觸發 LIFF、設定碼表單直接展開（無 LINE 家長
+      // 不會被自動跳轉 LINE OAuth 蓋掉入口）。
+      path: '/device-login',
+      name: 'parent-device-login',
+      component: () => import('./views/LoginView.vue'),
+      meta: { title: '設定碼登入', public: true, hideTabBar: true, deviceOnly: true },
+    },
+    {
       path: '/bind',
       name: 'parent-bind',
       component: () => import('./views/BindView.vue'),

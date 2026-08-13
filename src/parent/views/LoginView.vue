@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   clearLiffTokenRefreshMarker,
@@ -36,10 +36,16 @@ function redirectAfterAuth() {
   router.replace(resolveSafeRedirect(route.query.redirect))
 }
 
-const status = ref<'init' | 'loading' | 'consent' | 'error'>('init')
+// choice：外部瀏覽器（或 /device-login 入口）不自動跳轉，讓家長自選登入方式
+// （2026-08-13 A+D 裁定：修「設定碼入口被 LIFF 自動跳轉蓋掉、實際不可達」）。
+const status = ref<'init' | 'loading' | 'consent' | 'error' | 'choice'>('init')
 const pendingPolicy = ref<PolicyVersionOut | null>(null)
 // friendly error 狀態：含 message + nextStep（命中 LINE_BINDING_* / LINE_PROFILE_FETCH_FAILED）
 const errorState = ref<FriendlyError | null>(null)
+
+// D 案：/device-login（meta.deviceOnly）＝園所設定碼單/QR 的印刷入口，
+// 完全不觸發 LIFF；設定碼表單直接展開，附「改用 LINE 登入」連結。
+const isDeviceOnly = computed(() => route.meta.deviceOnly === true)
 
 function _setLocalError(message: string, nextStep?: string) {
   errorState.value = { message, nextStep, level: 'error' }
@@ -87,8 +93,15 @@ async function startLogin({ forceFresh = false } = {}) {
   }
 
   if (!liff.isLoggedIn()) {
-    // 觸發 LINE OAuth；登入完成後 LIFF 會帶回此頁，重新進入此函式
-    liff.login({ redirectUri: window.location.href })
+    // A 案分流：只有在 LINE App 內（LIFF in-client）才自動觸發 OAuth——
+    // 外部瀏覽器整頁跳轉會把「使用設定碼登入」入口蓋掉，無 LINE 家長
+    // 永遠到不了設定碼表單。外部瀏覽器改停在 choice 讓家長自選。
+    if (liff.isInClient()) {
+      // 觸發 LINE OAuth；登入完成後 LIFF 會帶回此頁，重新進入此函式
+      liff.login({ redirectUri: window.location.href })
+    } else {
+      status.value = 'choice'
+    }
     return
   }
 
@@ -133,6 +146,17 @@ function manualRetry() {
   startLogin({ forceFresh: true })
 }
 
+// choice 狀態下使用者主動選 LINE 登入（外部瀏覽器；此時 initLiff 必已成功）
+function startLineLogin() {
+  liff.login({ redirectUri: window.location.href })
+}
+
+// /device-login 的「改用 LINE 登入」：導回 /login 並保留 redirect 等 query
+// （/device-login 不 init LIFF，不能直接 liff.login）。
+function goLineLoginEntry() {
+  router.replace({ path: '/login', query: route.query })
+}
+
 async function checkConsentRequired(): Promise<boolean> {
   /**
    * 判斷是否需顯示 consent modal。
@@ -167,7 +191,8 @@ function onConsented() {
 }
 
 // ── 設定碼登入（無 LINE / 換新裝置的家長）──────────────────────────────
-const showDeviceSetup = ref(false)
+// /device-login 入口直接展開表單（該頁的主要用途就是設定碼）。
+const showDeviceSetup = ref(isDeviceOnly.value)
 const deviceCode = ref('')
 const deviceSetupSubmitting = ref(false)
 const deviceSetupError = ref('')
@@ -199,7 +224,14 @@ async function submitDeviceSetup() {
   }
 }
 
-onMounted(() => startLogin())
+onMounted(() => {
+  if (isDeviceOnly.value) {
+    // D 案：印刷入口完全不觸發 LIFF（無自動跳轉、無 LIFF 錯誤干擾）。
+    status.value = 'choice'
+    return
+  }
+  startLogin()
+})
 </script>
 
 <template>
@@ -231,6 +263,22 @@ onMounted(() => startLogin())
       >
         驗證您的身分…
       </p>
+      <!-- A 案：外部瀏覽器不自動跳轉，家長自選登入方式（/device-login 只顯示
+           設定碼區塊，LINE 入口在下方連結）。 -->
+      <template v-else-if="status === 'choice'">
+        <p class="hint" role="status" aria-live="polite">
+          {{ isDeviceOnly ? '請輸入園所提供的設定碼' : '請選擇登入方式' }}
+        </p>
+        <button
+          v-if="!isDeviceOnly"
+          type="button"
+          class="pt-action-btn line-login"
+          data-testid="line-login-btn"
+          @click="startLineLogin"
+        >
+          使用 LINE 登入
+        </button>
+      </template>
       <template v-else-if="status === 'error' && errorState">
         <div
           class="error"
@@ -259,6 +307,7 @@ onMounted(() => startLogin())
          見 script 內註解。 -->
     <div v-if="status !== 'consent'" class="device-setup-block">
       <button
+        v-if="!isDeviceOnly"
         type="button"
         class="device-setup-toggle"
         data-testid="device-setup-toggle"
@@ -304,6 +353,17 @@ onMounted(() => startLogin())
           {{ deviceSetupError }}
         </p>
       </div>
+
+      <!-- D 案印刷入口的返程：導回 /login（保留 redirect query）再走 LIFF -->
+      <button
+        v-if="isDeviceOnly"
+        type="button"
+        class="device-setup-toggle"
+        data-testid="device-login-to-line"
+        @click="goLineLoginEntry"
+      >
+        有 LINE？改用 LINE 登入
+      </button>
     </div>
 
     <p class="legal">本服務由{{ branding.org_name }}提供</p>
@@ -416,6 +476,12 @@ onMounted(() => startLogin())
 }
 
 .retry {
+  margin-top: 8px;
+  width: 100%;
+  min-height: 48px;
+}
+
+.line-login {
   margin-top: 8px;
   width: 100%;
   min-height: 48px;
