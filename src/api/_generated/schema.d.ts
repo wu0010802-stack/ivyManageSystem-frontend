@@ -14044,6 +14044,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/monthly-pnl/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Monthly Pnl
+         * @description 匯出月度現金收支表為 Excel（單一工作表，項目 × 12 月 × 合計）。
+         *
+         *     表格結構對齊園方慣用的年度收支表：section 標題列 + 明細列 +
+         *     小計/合計列 + 底部口徑註記（含 pending_items，明示尚未整合項目，
+         *     避免拿去對帳時把「未整合」誤讀為 0）。
+         *
+         *     金額皆為聚合值（無逐員明細），持 REPORTS 即可匯出，無需 F-031 遮罩。
+         */
+        get: operations["export_monthly_pnl_api_reports_monthly_pnl_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reports/salary/contributors": {
         parameters: {
             query?: never;
@@ -32759,9 +32785,13 @@ export interface components {
         };
         /**
          * ReportsPnlTotalsOut
-         * @description `totals` 區塊——四個彙總指標。
+         * @description `totals` 區塊——五個彙總指標。
+         *
+         *     cumulative_net＝net_cashflow 的逐月累計（對齊園方 Excel「累計損益」列），
+         *     total 為年末累計值（≡ net_cashflow.total）。
          */
         ReportsPnlTotalsOut: {
+            cumulative_net: components["schemas"]["ReportsPnlTotalItemOut"];
             expense_total: components["schemas"]["ReportsPnlTotalItemOut"];
             income_total: components["schemas"]["ReportsPnlTotalItemOut"];
             net_cashflow: components["schemas"]["ReportsPnlTotalItemOut"];
@@ -61184,6 +61214,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportsMonthlyPnlOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_monthly_pnl_api_reports_monthly_pnl_export_get: {
+        parameters: {
+            query: {
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

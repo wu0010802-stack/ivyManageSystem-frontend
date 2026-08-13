@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getMonthlyPnL } from '@/api/reports'
+import { Download } from '@element-plus/icons-vue'
+import { getMonthlyPnL, monthlyPnlExportUrl } from '@/api/reports'
 import { apiError } from '@/utils/error'
+import { downloadFile } from '@/utils/download'
 import { computeReportPeriod } from './useReportPeriod'
 
 const props = defineProps<{
@@ -18,6 +20,7 @@ const data = ref<{
     refund_total?: { monthly: (number | null)[]; total: number | null }
     expense_total?: { monthly: (number | null)[]; total: number | null }
     net_cashflow?: { monthly: (number | null)[]; total: number | null }
+    cumulative_net?: { monthly: (number | null)[]; total: number | null }
   }
   pending_items?: string[]
 } | null>(null)
@@ -69,7 +72,7 @@ const isEmpty = computed(() => {
   return s.every(sec => !sec.rows || sec.rows.length === 0)
 })
 
-// 把 totals 物件展平成 4 條尾列，方便 template loop
+// 把 totals 物件展平成 5 條尾列，方便 template loop
 // 注意：使用 amount 單位（千分位、0→—）
 const totalRows = computed(() => {
   if (!totals.value) return []
@@ -86,8 +89,24 @@ const totalRows = computed(() => {
   if (totals.value.net_cashflow) {
     rows.push({ key: 'net_cashflow', label: '結餘（淨現金流）', kind: 'net', monthly: totals.value.net_cashflow.monthly, total: totals.value.net_cashflow.total })
   }
+  if (totals.value.cumulative_net) {
+    // 累計淨現金＝結餘逐月累計（對齊園方 Excel「累計損益」列）；合計欄=年末累計值
+    rows.push({ key: 'cumulative_net', label: '累計淨現金', kind: 'net', monthly: totals.value.cumulative_net.monthly, total: totals.value.cumulative_net.total })
+  }
   return rows
 })
+
+const exporting = ref(false)
+const exportXlsx = async () => {
+  exporting.value = true
+  try {
+    await downloadFile(monthlyPnlExportUrl(props.year), `現金收支表_${props.year}.xlsx`)
+  } catch (e) {
+    ElMessage.error(apiError(e, '匯出失敗'))
+  } finally {
+    exporting.value = false
+  }
+}
 
 function netCellClass(v: number | null | undefined) {
   if (v == null) return ''
@@ -138,6 +157,9 @@ function scrollToCurrentMonth() {
       <el-tag type="info" effect="plain" size="small" data-test="pnl-cashbasis-badge">現金收付實現制</el-tag>
       <el-button v-if="period.isCurrentYear" size="small" data-test="jump-to-current" @click="scrollToCurrentMonth">
         跳到本月
+      </el-button>
+      <el-button :icon="Download" :loading="exporting" size="small" data-test="pnl-export" @click="exportXlsx">
+        匯出 Excel
       </el-button>
     </div>
     <div class="pnl-scroll" ref="pnlScrollRef">
