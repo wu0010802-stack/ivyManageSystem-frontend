@@ -50,14 +50,10 @@ const iconStyle = computed<Record<string, string | number>>(() => {
 </template>
 
 <style scoped>
+/* 盒模型/防跑版夾盒由全域 .material-symbols-rounded 提供（styles/icons.css），
+   這裡只留元件層行為。舊 font-display: block 已移除——該屬性只在 @font-face
+   內有效，寫在 class 上是 no-op（真正的 block 行為在 icons.css @font-face）。 */
 .m3-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   user-select: none;
-  font-style: normal;
-  /* 確保 font 還沒載入時不會出現 raw ligature 字串太久 */
-  font-display: block;
-  vertical-align: middle;
 }
 </style>

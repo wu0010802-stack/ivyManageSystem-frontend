@@ -22,6 +22,7 @@
         "typecheck:watch": "vue-tsc --noEmit --watch",
         "parent:audit": "bash scripts/parent-audit-grep.sh",
         "gen:m3-tokens": "node scripts/gen-m3-tokens.mjs > src/parent/styles/m3-tokens.css",
+        "gen:parent-icons": "node scripts/gen-parent-icon-font.mjs",
         "gen:api": "openapi-typescript ../ivy-backend/openapi.json -o src/api/_generated/schema.d.ts --alphabetize",
         "gen:api:check": "npm run gen:api && node scripts/check-api-drift.mjs",
         "check:shared-constants": "node scripts/check-shared-constants.mjs",

@@ -1,0 +1,45 @@
+/**
+ * Material Symbols Rounded — 自架子集字型（LIFF 跑版根治，2026-08-13）。
+ *
+ * 家長端跑在 LINE 內嵌 WebView，Google Fonts CDN 慢或不可達時，
+ * display=swap 會讓所有圖示 render 成 ligature 原文（check_circle 等英文字串）
+ * 撐爆列版面。改為：
+ *  1. 同源自架子集 woff2（~15 KB，Vite fingerprint），不依賴第三方 CDN
+ *  2. font-display: block——載入期間文字隱形而非顯示原文
+ *  3. .material-symbols-rounded 夾在 1em 盒內（glyph 本來就是 1em 見方）——
+ *     即使字型最終載不進來（極端離線），也只是 1em 空盒，版面永不被原文撐爆
+ *
+ * 新增 icon 後執行 npm run gen:parent-icons 重產字型與 manifest，
+ * 守衛測試 src/parent/__tests__/iconFontSubset.spec.ts 會擋住忘記重產的情況。
+ */
+
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('../assets/fonts/material-symbols-rounded-subset.woff2') format('woff2');
+}
+
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  /* 防跑版夾盒：字型未就緒時 ligature 原文被裁切在 1em 內，佔位與最終 glyph 完全相同 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 1em;
+  overflow: hidden;
+  flex-shrink: 0;
+  vertical-align: middle;
+}

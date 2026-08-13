@@ -14,6 +14,8 @@ import '@/assets/design-tokens.css'
 // Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §3
 import './styles/m3-tokens.css'
 import './styles/typography.css'
+// 自架 Material Symbols 子集字型 + 1em 夾盒守衛（LIFF 冷啟不再露 ligature 原文跑版）
+import './styles/icons.css'
 import './styles/motion.css'
 // 家長 App 全域樣式：focus / reduced-motion / tap-highlight / utility class
 // + 既有 IvyKids tokens（與 M3 共存，P4 view 改完後 P5 統一清理）。

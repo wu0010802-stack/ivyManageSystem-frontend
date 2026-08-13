@@ -26,8 +26,10 @@
          全 app 圖示 render 成 ligature 原文（2026-08-12 prod 實測事故）。
          display=swap 已避免 FOIT，直接同步載入即可。 -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
-    <!-- Material Symbols Rounded：display=swap 避免弱網下 icon 隱形（FOIT），改顯示 fallback -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap">
+    <!-- Material Symbols Rounded 已改自架子集字型（src/parent/styles/icons.css，2026-08-13）：
+         LIFF WebView 對 Google CDN 慢/不可達時 display=swap 會讓全 app 圖示
+         render 成 ligature 原文（check_circle 等英文字串）撐爆版面。
+         同源 woff2 + font-display: block 根治；重產：npm run gen:parent-icons -->
 </head>
 
 <body>
