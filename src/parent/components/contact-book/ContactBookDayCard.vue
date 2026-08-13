@@ -167,7 +167,7 @@ const stats = computed(() => {
    讓「有聯絡簿的日子」在視覺上明顯更飽滿。 */
 .day-card-awaiting,
 .day-card-offday {
-  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, rgba(220, 244, 230, 0.45) 100%);
+  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, color-mix(in srgb, var(--leaf-100, #dcf4e6) 45%, transparent) 100%);
 }
 
 .hero {
@@ -230,8 +230,8 @@ const stats = computed(() => {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   flex-shrink: 0;
 }
 .meta {
@@ -254,7 +254,7 @@ const stats = computed(() => {
   justify-content: center;
   gap: 2px;
   padding: 10px 6px 8px;
-  background: rgba(255, 255, 255, 0.7);
+  background: color-mix(in srgb, var(--pt-surface-card, #fff) 70%, transparent);
   border: 1px solid rgba(13, 144, 83, 0.08);
   border-radius: 14px;
   text-align: center;
@@ -321,8 +321,8 @@ const stats = computed(() => {
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  background: rgba(13, 144, 83, 0.85);
-  color: var(--pt-on-accent, #fff);
+  background: color-mix(in srgb, var(--m3-primary, #006d3d) 88%, transparent);
+  color: var(--m3-on-primary, #fff);
   font-weight: 700;
   font-size: 17px;
   border-radius: 12px;

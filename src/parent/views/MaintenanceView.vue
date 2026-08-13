@@ -76,10 +76,12 @@ async function tryRefresh() {
 .parent-maintenance {
   --mv-gradient-start: var(--m3-surface-container-low, #f4f7fa);
   --mv-gradient-end:   var(--m3-surface-container-lowest, #ffffff);
-  --mv-heading-color:  var(--brand-secondary, #33aaaa);
+  /* teal 對比修正：#33aaaa 配白字僅 2.8:1（dark 翻 #4dc4c4 更差）；
+     heading 用 tile-teal-fg（light 深 teal / dark 淺 teal）、按鈕走 m3-tertiary 配對 */
+  --mv-heading-color:  var(--ivy-tile-teal-fg, var(--brand-secondary, #33aaaa));
   --mv-body-color:     var(--pt-text-muted, #64748b);
-  --mv-btn-bg:         var(--brand-secondary, #33aaaa);
-  --mv-btn-hover-bg:   var(--ivy-teal-primary, #33aaaa);
+  --mv-btn-bg:         var(--m3-tertiary, #3a646f);
+  --mv-btn-hover-bg:   color-mix(in srgb, var(--m3-tertiary, #3a646f) 85%, #000);
 
   min-height: 100dvh;
   display: flex;
@@ -117,7 +119,7 @@ p {
 }
 button {
   background: var(--mv-btn-bg);
-  color: var(--pt-on-accent, #fff);
+  color: var(--m3-on-tertiary, #fff);
   border: none;
   padding: 12px 32px;
   border-radius: 24px;

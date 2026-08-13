@@ -194,8 +194,8 @@ watch(open, (v) => {
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -31,8 +31,10 @@ defineProps<{
   overflow: hidden;
   border-radius: 22px;
   padding: 16px 18px;
-  color: var(--pt-on-accent, #fff);
-  background: linear-gradient(135deg, var(--brand-primary, #0d9053), var(--brand-primary-hover, #12b06a));
+  /* m3 配對：brand-primary 漸層配白字在亮端只剩 2.8:1（dark 更差）；
+     文字集中左上深端，右下亮端僅放大字/裝飾 */
+  color: var(--m3-on-primary, #fff);
+  background: linear-gradient(135deg, var(--m3-primary, #006d3d), var(--ivy-green-mid, #41a074));
   box-shadow: 0 10px 22px rgba(13, 144, 83, 0.30);
 }
 .dash-hero-laurel { position: absolute; right: -16px; top: -12px; pointer-events: none; }
@@ -41,5 +43,5 @@ defineProps<{
 .dash-hero-title { margin: 2px 0 0; font-size: 17px; font-weight: 800; }
 .dash-hero-value { margin: 8px 0 0; font-size: 28px; font-weight: 900; letter-spacing: 0.5px; }
 .dash-hero-sub { margin: 3px 0 0; font-size: var(--text-xs, 11px); opacity: 0.95; }
-.dash-hero-pill { margin-top: 10px; background: rgba(255, 255, 255, 0.22) !important; color: var(--pt-on-accent, #fff) !important; }
+.dash-hero-pill { margin-top: 10px; background: color-mix(in srgb, var(--m3-on-primary, #fff) 22%, transparent) !important; color: var(--m3-on-primary, #fff) !important; }
 </style>

@@ -546,7 +546,7 @@ function formatReplyTime(iso: string) {
 /* 老師留言 */
 .note-card {
   background:
-    linear-gradient(180deg, var(--cream, #fffcf2) 0%, #ffffff 100%);
+    linear-gradient(180deg, var(--cream, #fffcf2) 0%, var(--pt-surface-card, #ffffff) 100%);
   border-color: var(--sun-300, #ffe285);
 }
 .note-card .card-title .material-symbols-rounded { color: var(--sun-700, #c99500); }
@@ -589,8 +589,8 @@ function formatReplyTime(iso: string) {
   color: var(--coral-700, #b14545);
 }
 .read-btn {
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 8px 16px;
   border-radius: 999px;
@@ -688,8 +688,8 @@ function formatReplyTime(iso: string) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 8px 16px;
   border-radius: 999px;

@@ -148,6 +148,6 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 }
 
 .fee-hero-cta:hover {
-  background: rgba(255, 255, 255, 1);
+  background: var(--pt-surface-card, #fff); /* 寫死白底 dark 會配出黃字白底 */
 }
 </style>

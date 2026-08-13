@@ -46,7 +46,8 @@
   --sun-100:   #fff4c9;
   --sun-300:   #ffe285;
   --sun-500:   #ffd93d;
-  --sun-700:   #c99500;
+  --sun-700:   #8a5d00;  /* 2026-08-13 由 #c99500 調深：舊值對 sun-100 僅 2.45:1、對白底 2.9:1，
+                            當文字/圖示色全數未過 AA；對齊 --pt-warning-text */
   --sun-900:   #4a3700;
 
   /* ---- Coral 階（CTA / 主行動 / 緊急） ---- */
@@ -116,6 +117,13 @@
   --pt-info-text:         #2d6f8e;       /* info chip */
   --pt-info-link:         #5ba8cc;       /* link 色 */
   --pt-violet-text:       #6e3f94;       /* medication chip text */
+
+  /* 首頁待辦橫幅琥珀色（PendingSignBanner / PendingSurveyBanner）。
+     2026-08-13 前為未定義變數、永遠吃元件 fallback → dark 無法翻色，
+     近白 --pt-text-strong 配淺琥珀底看不到字。icon-bg 為飽和裝飾色，
+     兩主題共用不覆寫。 */
+  --pt-amber-bg: #fff4dc;
+  --pt-amber-icon-bg: #f5b637;
 
   color-scheme: light;
 
@@ -429,6 +437,26 @@
   --pt-page-border: rgba(255, 255, 255, 0.08);
   --pt-hairline: 1px solid #2a333f;
   --pt-shadow-card: 0 6px 20px rgba(0, 0, 0, 0.32);
+
+  /* Legacy 色階 dark 對應（2026-08-13 文字/背景對比修正）：
+     light 慣用「pastel 100 背景＋深色 700 文字」（pt-pill-* / pt-page-hero /
+     tone-* dot / desc-card 等），這批 token 先前 dark 無覆寫 → 背景維持淺色、
+     而 --pt-text-* 已翻近白，疊出「白字配淺底」看不到字。
+     100 階改低 alpha tint（疊在深色卡上）、700 階提亮為 pastel 文字
+     （對齊上方 --pt-warning-text / --pt-info-text 等 dark 值）；
+     300/500/600 為飽和裝飾色（dot / badge / 虛線框），深底上仍清楚，維持 light 值。 */
+  --cream: #1f2731;                       /* 對齊 --pt-surface-mute dark（icon-btn / hero 起點 / list-row:active） */
+  --sky-100: rgba(91, 168, 204, 0.20);
+  --sky-700: #92c8e0;
+  --sun-100: rgba(255, 217, 61, 0.18);
+  --sun-700: #ffe285;
+  --coral-100: rgba(255, 139, 139, 0.20);
+  --coral-700: #ffb5ad;
+  --leaf-100: rgba(95, 199, 154, 0.18);
+  --leaf-700: #a8e6cf;
+  --grape-100: rgba(181, 140, 217, 0.20);
+  --grape-700: #d4bce6;
+  --pt-amber-bg: rgba(255, 222, 81, 0.14);
 }
 
 /* ========== Focus Visible ==========

@@ -336,8 +336,8 @@ const PREFS = [
   padding: 10px 18px;
   border-radius: 10px;
   border: none;
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;

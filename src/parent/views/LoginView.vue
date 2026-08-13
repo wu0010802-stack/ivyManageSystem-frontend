@@ -405,7 +405,7 @@ onMounted(() => {
 }
 
 .login-card {
-  background: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--pt-surface-card, #fff) 85%, transparent);
   border-radius: 24px;
   padding: 32px 28px;
   width: 100%;
@@ -534,7 +534,7 @@ onMounted(() => {
 }
 
 .device-setup-form {
-  background: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--pt-surface-card, #fff) 85%, transparent);
   border-radius: 18px;
   padding: 16px;
   border: 1px solid rgba(13, 144, 83, 0.12);

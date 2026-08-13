@@ -324,9 +324,9 @@ onMounted(load)
   font-variation-settings: 'wght' 500;
 }
 .metric-tabs > button.active {
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
-  border-color: var(--brand-primary, #0d9053);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
+  border-color: var(--m3-primary, var(--brand-primary, #0d9053));
 }
 
 .chart-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; }

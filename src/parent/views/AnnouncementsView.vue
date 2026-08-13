@@ -234,7 +234,7 @@ async function pullRefresh() { await fetchData() }
 .ann-card:active { transform: scale(0.995); background: var(--pt-surface-mute-soft, #fefcf3); }
 
 .ann-card.unread {
-  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, #ffffff 80%);
+  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, var(--pt-surface-card, #ffffff) 80%);
   border-color: rgba(13, 144, 83, 0.16);
 }
 

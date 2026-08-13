@@ -475,7 +475,7 @@ async function pullRefresh() {
 .render-sentinel { height: 1px; }
 
 .hero-cta {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--pt-surface-card, rgba(255, 255, 255, 0.95));
   color: var(--brand-primary, #0d9053);
   border: 1px solid rgba(13, 144, 83, 0.18);
 }

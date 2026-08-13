@@ -191,7 +191,8 @@ function resetForRetry() {
 }
 
 .bind-card {
-  background: rgba(255, 255, 255, 0.92);
+  /* 用 token 保留半透明玻璃感：寫死白底在 dark 會變「近白 token 文字配白卡」 */
+  background: color-mix(in srgb, var(--pt-surface-card, #fff) 92%, transparent);
   border-radius: 24px;
   padding: 28px 24px;
   width: 100%;

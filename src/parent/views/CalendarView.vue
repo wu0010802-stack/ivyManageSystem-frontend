@@ -226,7 +226,7 @@ function dayLabel(iso: string) {
 }
 .day-filter > button {
   padding: 6px 14px;
-  background: rgba(255, 255, 255, 0.7);
+  background: color-mix(in srgb, var(--pt-surface-card, #fff) 70%, transparent);
   border: 1px solid rgba(13, 144, 83, 0.12);
   border-radius: 999px;
   font-size: 13px;
@@ -237,9 +237,10 @@ function dayLabel(iso: string) {
   transition: background 160ms ease;
 }
 .day-filter > button.active {
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
-  border-color: var(--brand-primary, #0d9053);
+  /* 小字綠底一律 m3 配對（brand-primary 白字 light 4.1:1 / dark 3:1 不過 AA） */
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
+  border-color: var(--m3-primary, var(--brand-primary, #0d9053));
 }
 
 .day-card {

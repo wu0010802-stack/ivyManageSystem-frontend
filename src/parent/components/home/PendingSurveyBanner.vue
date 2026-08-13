@@ -72,7 +72,7 @@ function go() {
   height: 32px;
   border-radius: 9999px;
   background: var(--pt-amber-icon-bg, #f5b637);
-  color: var(--pt-on-accent, #fff);
+  color: var(--sun-900, #4a3700); /* 白 icon 對琥珀底僅 1.8:1 */
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -135,7 +135,7 @@
   background: var(--pt-surface-mute, #f5fbe6);
   color: var(--pt-text-strong);
 }
-.pt-pill-success { background: var(--leaf-100, #dcf4e6); color: var(--brand-primary, #0d9053); }
+.pt-pill-success { background: var(--leaf-100, #dcf4e6); color: var(--ivy-tile-green-fg, #1b5e20); } /* brand-primary 對 leaf-100 僅 3.5:1 */
 .pt-pill-warn    { background: var(--sun-100, #fff4c9); color: var(--sun-700, #c99500); }
 .pt-pill-danger  { background: var(--coral-100, #ffe3e0); color: var(--coral-700, #b14545); }
 .pt-pill-info    { background: var(--sky-100, #dceef5); color: var(--sky-700, #2d6f8e); }
@@ -148,7 +148,7 @@
   justify-content: center;
   gap: 6px;
   background: var(--m3-primary, #006d3d);
-  color: #fff;
+  color: var(--m3-on-primary, #fff); /* 寫死 #fff 在 dark 的 mint 底上隱形 */
   border: none;
   padding: 10px 18px;
   border-radius: 999px;

@@ -346,8 +346,8 @@ onMounted(init)
   min-width: 22px;
   height: 22px;
   padding: 0 7px;
-  background: var(--coral-500, #ff8b8b);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-error, #ba1a1a); /* coral-500 配白字僅 2.25:1 */
+  color: var(--m3-on-error, #fff);
   font-size: 11px;
   font-weight: 700;
   border-radius: 11px;
