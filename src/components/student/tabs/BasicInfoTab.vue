@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { View } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import GuardianManager from '@/components/student/GuardianManager.vue'
 import MedicalReasonDialog from '@/components/MedicalReasonDialog.vue'
@@ -49,7 +50,9 @@ const studentName = computed(() => (basic.value?.name as string) || '')
         size="small"
         @click="showMedicalDialog = true"
       >
-        <el-icon><span class="material-symbols-rounded" aria-hidden="true">verified_user</span></el-icon>
+        <!-- admin 入口不載 Material Symbols 字型（僅家長端載），這裡必須用 EP 圖示，
+             否則 render 成 verified_user 原文 -->
+        <el-icon><View /></el-icon>
         以稽核紀錄查看詳情
       </el-button>
     </div>

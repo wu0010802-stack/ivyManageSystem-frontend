@@ -1,4 +1,9 @@
 <script setup lang="ts">
+/**
+ * ⚠ 本元件用 Material Symbols ligature 字型渲染圖示，該字型只有家長端載入
+ * （src/parent/styles/icons.css，自架子集）。admin / public 入口未載字型，
+ * 在那邊使用會 render 成 "error" 原文——要用請改 EP 圖示或先載字型。
+ */
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{
