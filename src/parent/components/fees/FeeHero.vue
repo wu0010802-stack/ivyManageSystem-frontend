@@ -86,6 +86,8 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 .fee-hero-content {
   position: relative;
   z-index: 1;
+  /* flex 子項預設 min-width:auto 不可縮，大金額 + 窄機時整列會被撐出畫面 */
+  min-width: 0;
 }
 
 .fee-hero-label {
@@ -114,6 +116,8 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
   font-size: 32px;
   font-weight: 900;
   color: var(--m3-on-surface, var(--pt-text-strong));
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .fee-hero-overdue {
@@ -141,6 +145,7 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .fee-hero-cta:hover {

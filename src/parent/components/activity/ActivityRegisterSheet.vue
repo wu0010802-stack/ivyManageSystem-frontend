@@ -192,6 +192,8 @@ function toggleCourse(id: number): void {
 .pick-name {
   flex: 1;
   font-weight: 500;
+  /* 課名長 + 「已額滿」meta 同列時允許收縮換行，不撐爆窄機 */
+  min-width: 0;
 }
 
 .pick-conflict {

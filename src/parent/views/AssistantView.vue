@@ -130,7 +130,7 @@ onMounted(load)
 
 <style scoped>
 .assistant-view {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--pt-surface-mute-soft, #fefcf3);
   padding-bottom: 80px;
   display: flex;

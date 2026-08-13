@@ -81,7 +81,7 @@ async function tryRefresh() {
   --mv-btn-bg:         var(--brand-secondary, #33aaaa);
   --mv-btn-hover-bg:   var(--ivy-teal-primary, #33aaaa);
 
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;

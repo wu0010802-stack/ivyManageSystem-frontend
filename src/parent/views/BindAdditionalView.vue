@@ -143,7 +143,7 @@ function resetForRetry() {
 
 <style scoped>
 .bind-add-view {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;

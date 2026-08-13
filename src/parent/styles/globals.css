@@ -476,6 +476,12 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+body {
+  /* 溢出兜底（可繼承）：中文自然斷行不受影響，但長英文字串／email／流水號
+     混入姓名、標題等欄位時在盒內折行，而不是撐爆窄機版面。 */
+  overflow-wrap: break-word;
+}
+
 button {
   /* 預設 button 字級 / 字型繼承父層，避免 webview 用系統字型 */
   font-family: inherit;
