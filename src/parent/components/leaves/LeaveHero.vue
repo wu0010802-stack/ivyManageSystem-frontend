@@ -7,7 +7,6 @@
  *  - summary: Object（必填）
  *    { total_used: number, by_type: { sick, personal, ... }, semester_label: string }
  */
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 interface LeaveSummary {
@@ -33,7 +32,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 <template>
   <section class="leave-hero" aria-label="請假概況">
-    <LaurelWreath side="left" :opacity="0.18" :size="80" class="hero-laurel" />
+    <img src="/LOGO.png" alt="" aria-hidden="true" class="hero-laurel" style="width: 80px; height: 80px; opacity: 0.15">
     <KawaiiStar :size="32" decorative class="hero-star" />
     <div class="leave-hero-content">
       <div class="leave-hero-main">

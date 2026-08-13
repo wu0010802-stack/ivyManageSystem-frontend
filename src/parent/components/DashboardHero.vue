@@ -1,6 +1,5 @@
 <!-- src/parent/components/DashboardHero.vue -->
 <script setup lang="ts">
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import StatusPill from './StatusPill.vue'
 
 defineProps<{
@@ -15,7 +14,7 @@ defineProps<{
 
 <template>
   <section class="dash-hero">
-    <LaurelWreath class="dash-hero-laurel" side="right" :opacity="0.16" :size="120" aria-hidden="true" />
+    <img src="/LOGO.png" alt="" aria-hidden="true" class="dash-hero-laurel" style="width: 120px; height: 120px; opacity: 0.14">
     <div class="dash-hero-body">
       <p v-if="eyebrow" class="dash-hero-eyebrow">{{ eyebrow }}</p>
       <h2 class="dash-hero-title">{{ title }}</h2>

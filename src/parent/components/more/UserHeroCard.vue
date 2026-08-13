@@ -15,7 +15,6 @@
  *  - pushStatusKnown: me 是否已載入（false 時 hide push badge 區）
  */
 import ParentIcon from '../ParentIcon.vue'
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 withDefaults(defineProps<{
@@ -35,8 +34,15 @@ withDefaults(defineProps<{
 
 <template>
   <section class="user-card" aria-label="家長身份">
-    <!-- 月桂葉水印 -->
-    <LaurelWreath side="full" :opacity="0.15" :size="120" class="user-card-laurel" />
+    <!-- 品牌徽章水印（2026-08-13：SVG 桂冠 W 形觀感不佳，改正式徽章圖） -->
+    <img
+      src="/LOGO.png"
+      alt=""
+      aria-hidden="true"
+      class="user-card-laurel"
+      style="width: 120px; height: 120px; opacity: 0.12"
+    >
+
     <!-- KawaiiStar 右上裝飾 -->
     <KawaiiStar :size="32" decorative class="user-card-star" />
 

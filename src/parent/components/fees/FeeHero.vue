@@ -12,7 +12,6 @@
  * Emits:
  *  - jump-unpaid: CTA 點擊；父層負責 scrollIntoView 到 [data-unpaid-anchor]
  */
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
 withDefaults(defineProps<{
   unpaidTotal?: number
@@ -34,7 +33,7 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 
 <template>
   <section class="fee-hero">
-    <LaurelWreath side="right" :opacity="0.18" :size="80" class="hero-laurel" />
+    <img src="/LOGO.png" alt="" aria-hidden="true" class="hero-laurel" style="width: 80px; height: 80px; opacity: 0.15">
     <div class="fee-hero-content">
       <span class="fee-hero-label">未繳合計</span>
       <div class="fee-hero-amount">

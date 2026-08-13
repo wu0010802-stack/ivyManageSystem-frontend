@@ -12,7 +12,6 @@
  * Emits:
  *  - scroll-section(key): 'active' | 'unpaid' | 'upcoming'
  */
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
 withDefaults(defineProps<{
   activeRegistrations?: number
@@ -32,7 +31,7 @@ function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 
 <template>
   <section class="act-hero" aria-label="才藝報名概況">
-    <LaurelWreath side="left" :opacity="0.15" :size="80" class="hero-laurel" />
+    <img src="/LOGO.png" alt="" aria-hidden="true" class="hero-laurel" style="width: 80px; height: 80px; opacity: 0.15">
     <div class="act-hero-content">
       <div class="act-hero-label">才藝報名概況</div>
       <div class="act-hero-stats">
