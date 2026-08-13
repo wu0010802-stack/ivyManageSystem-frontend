@@ -8,7 +8,6 @@ import { toast } from '../utils/toast'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import { useTenantBranding } from '@/composables/useTenantBranding'
-import BrandMark from '@/components/brand/BrandMark.vue'
 import { resolveSafeRedirect } from '../utils/safeRedirect'
 
 const route = useRoute()
@@ -74,7 +73,14 @@ function resetForRetry() {
 
 <template>
   <div class="bind-add-view">
-    <BrandMark variant="full" :size="100" class="welcome-mark" />
+    <!-- 與後台/教師端登入頁同款 logo（512px 量化版，同 LoginView）。 -->
+    <img
+      class="welcome-mark"
+      src="/images/login-logo-512.png"
+      :alt="branding.org_name"
+      width="512"
+      height="512"
+    >
     <div class="card pt-card">
       <h2 class="title">加綁第二個小孩</h2>
       <p class="desc">
@@ -153,8 +159,11 @@ function resetForRetry() {
 }
 
 .welcome-mark {
+  width: min(150px, 42vw);
+  height: auto;
   margin: var(--space-6, 32px) auto var(--space-5, 24px);
   display: block;
+  filter: drop-shadow(0 8px 20px rgba(13, 144, 83, 0.18));
 }
 
 .card {

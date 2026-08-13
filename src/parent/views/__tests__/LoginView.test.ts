@@ -29,10 +29,6 @@ vi.mock('@/parent/api/auth', () => ({
   liffLogin: mockLiffLogin,
 }))
 
-vi.mock('@/components/brand/BrandMark.vue', () => ({
-  default: { template: '<div data-testid="brand-mark" />' },
-}))
-
 function createTestRouter() {
   return createRouter({
     history: createWebHistory(),
@@ -54,6 +50,17 @@ beforeEach(() => {
   mockLiffLogin.mockReset()
   mockLiff.isLoggedIn.mockReset().mockReturnValue(true)
   mockLiff.getIDToken.mockReset().mockReturnValue('fake-id-token')
+})
+
+describe('LoginView — 品牌 logo', () => {
+  it('渲染與後台登入頁同款 logo 圖檔（行動端縮圖版），alt 用租戶機構名', async () => {
+    const w = mountLoginView()
+    await flushPromises()
+    const logo = w.find('img.welcome-mark')
+    expect(logo.exists()).toBe(true)
+    expect(logo.attributes('src')).toBe('/images/login-logo-512.png')
+    expect(logo.attributes('alt')).toBe('常春藤教育機構')
+  })
 })
 
 describe('LoginView — friendly error', () => {

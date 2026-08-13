@@ -6,7 +6,6 @@ import { bind } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
-import BrandMark from '@/components/brand/BrandMark.vue'
 import { resolveSafeRedirect } from '../utils/safeRedirect'
 import { useTenantBranding } from '@/composables/useTenantBranding'
 
@@ -81,7 +80,14 @@ function resetForRetry() {
 
 <template>
   <div class="bind-view">
-    <BrandMark variant="full" :size="100" class="welcome-mark" />
+    <!-- 與後台/教師端登入頁同款 logo（512px 量化版，同 LoginView）。 -->
+    <img
+      class="welcome-mark"
+      src="/images/login-logo-512.png"
+      :alt="branding.org_name"
+      width="512"
+      height="512"
+    >
     <div class="bind-card">
       <p class="welcome-eyebrow">第一次使用</p>
       <h1 class="title">完成家長帳號綁定</h1>
@@ -177,8 +183,11 @@ function resetForRetry() {
 }
 
 .welcome-mark {
-  margin: 24px auto 16px;
+  width: min(150px, 42vw);
+  height: auto;
+  margin: 20px auto 16px;
   display: block;
+  filter: drop-shadow(0 8px 20px rgba(13, 144, 83, 0.18));
 }
 
 .bind-card {

@@ -16,10 +16,6 @@ vi.mock('@/parent/api/auth', () => ({
   bind: mockBind,
 }))
 
-vi.mock('@/components/brand/BrandMark.vue', () => ({
-  default: { template: '<div data-testid="brand-mark" />' },
-}))
-
 // ===== Helpers =====
 function createTestRouter() {
   return createRouter({

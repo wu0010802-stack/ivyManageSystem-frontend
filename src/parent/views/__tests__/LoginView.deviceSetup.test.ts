@@ -49,10 +49,6 @@ vi.mock('@/parent/api/consent', () => ({
   getMyConsents: mockGetMyConsents,
 }))
 
-vi.mock('@/components/brand/BrandMark.vue', () => ({
-  default: { template: '<div data-testid="brand-mark" />' },
-}))
-
 vi.mock('../../components/ConsentModal.vue', () => ({
   default: {
     props: ['policy'],

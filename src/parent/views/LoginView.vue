@@ -17,7 +17,6 @@ import {
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
-import BrandMark from '@/components/brand/BrandMark.vue'
 import ConsentModal from '../components/ConsentModal.vue'
 import { resolveSafeRedirect } from '../utils/safeRedirect'
 import { useTenantBranding } from '@/composables/useTenantBranding'
@@ -236,7 +235,15 @@ onMounted(() => {
 
 <template>
   <div class="login-view">
-    <BrandMark variant="full" :size="120" class="welcome-mark" />
+    <!-- 與後台/教師端登入頁同款 logo（/images/login-logo.png 的 512px 量化版，
+         行動端省流量；換 logo 時兩份檔案要一起換）。 -->
+    <img
+      class="welcome-mark"
+      src="/images/login-logo-512.png"
+      :alt="branding.org_name"
+      width="512"
+      height="512"
+    >
     <div class="login-card">
       <p class="welcome-eyebrow">歡迎回到</p>
       <h1 class="title">{{ branding.titles.parent_short }}</h1>
@@ -390,8 +397,11 @@ onMounted(() => {
 }
 
 .welcome-mark {
-  margin: 24px auto 24px;
+  width: min(190px, 52vw);
+  height: auto;
+  margin: 12px auto 20px;
   display: block;
+  filter: drop-shadow(0 8px 20px rgba(13, 144, 83, 0.18));
 }
 
 .login-card {

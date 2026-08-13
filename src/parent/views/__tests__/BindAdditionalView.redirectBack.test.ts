@@ -20,10 +20,6 @@ vi.mock('@/parent/api/profile', () => ({
   getMyChildren: vi.fn().mockResolvedValue({ data: { items: [] } }),
 }))
 
-vi.mock('@/components/brand/BrandMark.vue', () => ({
-  default: { template: '<div data-testid="brand-mark" />' },
-}))
-
 function createTestRouter() {
   return createRouter({
     history: createWebHistory(),
