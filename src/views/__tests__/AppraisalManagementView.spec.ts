@@ -90,6 +90,6 @@ describe('AppraisalManagementView tabs（路由驅動，不再自管 query）', 
     const { w } = await mountAt('/appraisal-year-end/appraisal/current')
     const panes = w.findAllComponents({ name: 'ElTabPane' })
     const labels = panes.map((p) => p.props('label'))
-    expect(labels).toEqual(['當期總覽', '歷史週期與簽核', '活動出席', '懲處記錄'])
+    expect(labels).toEqual(['當期總覽', '歷史週期與簽核', '活動出席', '懲處記錄', '等第校準'])
   })
 })

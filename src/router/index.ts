@@ -402,6 +402,7 @@ export const routes: RouteRecordRaw[] = [
                         { path: 'history', name: 'aye-appraisal-history', component: () => import('../views/appraisal/CycleListView.vue'), meta: { title: '歷史週期與簽核' } },
                         { path: 'institution-events', name: 'aye-appraisal-events', component: () => import('../views/appraisal/components/InstitutionEventPanel.vue'), meta: { title: '活動出席' } },
                         { path: 'disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處紀錄' } },
+                        { path: 'calibration', name: 'aye-appraisal-calibration', component: () => import('../views/appraisal/CalibrationView.vue'), meta: { title: '等第校準' } },
                     ],
                 },
                 { path: 'year-end', name: 'aye-year-end', component: () => import('../views/yearEnd/YearEndListView.vue'), meta: { title: '年終' } },

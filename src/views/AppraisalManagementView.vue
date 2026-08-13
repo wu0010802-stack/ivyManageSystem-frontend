@@ -7,6 +7,7 @@ const TABS = [
   { name: 'history', label: '歷史週期與簽核' },
   { name: 'institution-events', label: '活動出席' },
   { name: 'disciplinary', label: '懲處記錄' },
+  { name: 'calibration', label: '等第校準' },
 ]
 
 const route = useRoute()

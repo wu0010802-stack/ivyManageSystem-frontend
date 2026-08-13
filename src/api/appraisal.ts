@@ -88,6 +88,12 @@ export const getAppraisalCurrentCycle = (params: Record<string, unknown> = {}): 
 export const getAppraisalCyclesByYear = (academicYear: number) =>
     api.get(`/appraisal/by_year/${academicYear}`)
 
+/** UX 批次 D：等第分布校準（本期/上期分布＋逐員工上期對齊，唯讀彙總）。 */
+export const getGradeDistribution = (
+  cycleId: number,
+): AxiosResp<'/appraisal/cycles/{cycle_id}/grade_distribution', 'get'> =>
+  api.get(`/appraisal/cycles/${cycleId}/grade_distribution`)
+
 export const syncAppraisalScoreItems = (cycleId: number, { dryRun = false } = {}) =>
     api.post(`/appraisal/cycles/${cycleId}/sync_score_items`, null, {
         params: { dry_run: dryRun },
