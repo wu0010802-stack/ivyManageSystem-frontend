@@ -362,33 +362,35 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('User') },
         },
         {
-          // 娃娃車即時監看：對齊後端 api/bus/admin_routes.py 的 GET /bus/trips/today
-          // 守衛（BUS_READ）。與 /bus-routes 各自 exact、**不可** routePrefix——兩條
-          // 路徑同屬 /bus-* 但權限不同，prefix 會讓路線管理的 BUS_WRITE 外溢到監看頁。
-          key: 'busMonitor', title: '娃娃車即時監看', routePath: '/bus-monitor',
-          views: [{ code: 'BUS_READ', label: '娃娃車檢視' }],
-          menu: { icon: icon('MapLocation') },
-        },
-        {
-          // 娃娃車乘車歷史：GET /bus/trips(/{id}) 兩支皆 BUS_READ，與監看頁同權限碼。
-          // BUS_READ 已由 busMonitor 主屬（views），本頁改用 sharedViews 借道
-          // （M3：同一碼只能一處 owned），各自 exact（同屬 /bus-* 但頁面獨立，不可 routePrefix）。
-          key: 'busHistory', title: '娃娃車乘車歷史', routePath: '/bus-history',
-          views: [], sharedViews: ['BUS_READ'],
-          menu: { icon: icon('Clock') },
-        },
-        {
-          // 娃娃車路線管理：頁面 gate = BUS_WRITE（後端路線管理三個寫端點的守衛），
-          // 故 BUS_WRITE 主屬於此頁 views 而非 actions——本頁「能看見/能進入」與
-          // 「能寫入」是同一個碼，沒有唯讀模式。同樣 exact，不可 routePrefix。
+          // 娃娃車管理（2026-08-13 三頁整合單一入口＋頁內分頁，比照 workbench）：
+          // 即時監看／乘車歷史＝BUS_READ（後端 GET /bus/trips/today 與 /bus/trips(/{id})
+          // 守衛）、路線管理＝BUS_WRITE（三個寫端點守衛；該分頁「能進入」與「能寫入」
+          // 同一碼，沒有唯讀模式）。主路由 /bus 承載兩碼 OR（只持其中一碼也進得來，
+          // 落點由 router redirect 依權限決定、分頁可見性由 BusLayout 各自判斷）。
           //
-          // ⚠ 授權時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：本頁進頁後
-          // 還會打 GET /bus/routes（後端 BUS_READ）與 GET /students（後端
-          // STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授 BUS_WRITE
-          // 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
-          key: 'busRoutes', title: '娃娃車路線管理', routePath: '/bus-routes',
-          views: [{ code: 'BUS_WRITE', label: '娃娃車路線管理' }],
-          menu: { icon: icon('Guide') },
+          // **不可 routePrefix**：三個分頁子路由權限不同，prefix 會讓 /bus 的
+          // BUS_WRITE 外溢到監看／歷史（或 BUS_READ 外溢到路線管理），故子路由
+          // 一律走 extraRoutes 各自 exact。
+          //
+          // ⚠ 授權路線管理時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：
+          // 該分頁進頁後還會打 GET /bus/routes（後端 BUS_READ）與 GET /students
+          // （後端 STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授
+          // BUS_WRITE 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
+          key: 'bus', title: '娃娃車管理', routePath: '/bus',
+          views: [
+            { code: 'BUS_READ', label: '娃娃車檢視' },
+            { code: 'BUS_WRITE', label: '娃娃車路線管理' },
+          ],
+          menu: { icon: icon('MapLocation') },
+          extraRoutes: [
+            { path: '/bus/monitor', permission: 'BUS_READ' },
+            { path: '/bus/history', permission: 'BUS_READ' },
+            { path: '/bus/routes', permission: 'BUS_WRITE' },
+            // 舊路徑 redirect 保留規則（比照 /approvals → /workbench/approvals）。
+            { path: '/bus-monitor', permission: 'BUS_READ' },
+            { path: '/bus-history', permission: 'BUS_READ' },
+            { path: '/bus-routes', permission: 'BUS_WRITE' },
+          ],
         },
         {
           key: 'fees', title: '學費管理', routePath: '/fees',

@@ -239,6 +239,15 @@ const INTENTIONAL_DIVERGENCE = {
     '/surveys/new × SURVEYS_WRITE',
     // 2026-08-11 入學文件電子簽署（esign01）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
     '/students/sign-documents × STUDENTS_READ',
+    // 2026-08-13 娃娃車三頁整合單一入口 /bus（頁內分頁）：主路由承載兩碼 OR、
+    // 分頁子路由各自 exact；舊 /bus-monitor|/bus-history|/bus-routes 規則保留供
+    // redirect 解析（fixture 的兩條舊規則因此不列 removedFromLegacy，
+    // '/bus-history × BUS_READ' 也續留本表）。
+    '/bus × BUS_READ',
+    '/bus × BUS_WRITE',
+    '/bus/monitor × BUS_READ',
+    '/bus/history × BUS_READ',
+    '/bus/routes × BUS_WRITE',
   ],
 }
 

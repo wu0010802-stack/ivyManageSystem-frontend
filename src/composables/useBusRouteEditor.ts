@@ -1,5 +1,5 @@
 /**
- * 管理端娃娃車路線編輯（`/bus-routes` 專用，非 module singleton）。
+ * 管理端娃娃車路線編輯（`/bus/routes` 專用，非 module singleton）。
  *
  * 後端 `PUT /api/bus/routes/{id}/stops` 是**整方向 replace-all**：送出的清單就是該
  * 路線該方向的全部站點，沒送的一律刪除。本檔因此持有一份「編輯緩衝」（`stops`），

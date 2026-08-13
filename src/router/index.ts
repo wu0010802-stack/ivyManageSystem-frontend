@@ -504,24 +504,39 @@ export const routes: RouteRecordRaw[] = [
         // admin 路由的權限 gate 在 `ROUTE_PERMISSION_RULES`（canAccessRoute），
         // **不是** meta.permission——那只對 /portal/* 生效。漏了規則會被 default-deny
         // 鎖死（含 wildcard 管理員），加錯則是側欄看得到卻進不去。
+        // 2026-08-13 三頁整合單一入口＋頁內分頁（比照 /workbench）：分頁權限不同
+        //（monitor/history=BUS_READ、routes=BUS_WRITE），只持其中一碼者硬導對面
+        // 分頁會撞路由守衛，故落點依權限決定。
         {
-            path: '/bus-routes',
-            name: 'bus-routes',
-            component: () => import('../views/BusRoutesView.vue'),
-            meta: { title: '娃娃車路線' }
+            path: '/bus',
+            component: () => import('../views/bus/BusLayout.vue'),
+            redirect: () => hasPermission('BUS_READ') ? '/bus/monitor' : '/bus/routes',
+            meta: { title: '娃娃車管理' },
+            children: [
+                {
+                    path: 'monitor',
+                    name: 'bus-monitor',
+                    component: () => import('../views/BusMonitorView.vue'),
+                    meta: { title: '娃娃車即時監看' },
+                },
+                {
+                    path: 'history',
+                    name: 'bus-history',
+                    component: () => import('../views/BusHistoryView.vue'),
+                    meta: { title: '娃娃車乘車歷史' },
+                },
+                {
+                    path: 'routes',
+                    name: 'bus-routes',
+                    component: () => import('../views/BusRoutesView.vue'),
+                    meta: { title: '娃娃車路線管理' },
+                },
+            ],
         },
-        {
-            path: '/bus-monitor',
-            name: 'bus-monitor',
-            component: () => import('../views/BusMonitorView.vue'),
-            meta: { title: '娃娃車監看' }
-        },
-        {
-            path: '/bus-history',
-            name: 'bus-history',
-            component: () => import('../views/BusHistoryView.vue'),
-            meta: { title: '娃娃車乘車歷史' }
-        },
+        // 舊路徑 redirect（書籤／外部連結相容）。
+        { path: '/bus-monitor', redirect: '/bus/monitor' },
+        { path: '/bus-history', redirect: '/bus/history' },
+        { path: '/bus-routes', redirect: '/bus/routes' },
 
         // ============ 課後才藝 ============
         {

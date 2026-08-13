@@ -1,5 +1,5 @@
 /**
- * 管理端娃娃車即時監看（`/bus-monitor` 專用，非 module singleton）。
+ * 管理端娃娃車即時監看（`/bus/monitor` 專用，非 module singleton）。
  *
  * 資料來源兩條，兩條都必須存在：
  * - HTTP 快照 `GET /api/bus/trips/today?route_id=`：進頁、換路線、重連、輪詢降級時的權威基準
