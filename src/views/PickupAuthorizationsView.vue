@@ -6,6 +6,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
+import { extractErrorCode, extractErrorDetail } from '@/utils/error'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import {
@@ -91,17 +92,6 @@ function openVerify(item: PickupAuth) {
 function closeVerify() {
   verifyDialogOpen.value = false
   verifyTarget.value = null
-}
-
-function extractErrorCode(e: unknown): string | undefined {
-  const err = e as { response?: { data?: { detail?: { error_code?: string } } } }
-  return err.response?.data?.detail?.error_code
-}
-function extractErrorDetail(e: unknown): string {
-  const err = e as { response?: { data?: { detail?: { detail?: string } | string } } }
-  const d = err.response?.data?.detail
-  if (typeof d === 'string') return d
-  return d?.detail || '操作失敗'
 }
 
 async function submitVerify() {

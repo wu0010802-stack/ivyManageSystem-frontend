@@ -8,6 +8,7 @@
  */
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { extractErrorCode, extractErrorDetail } from '@/utils/error'
 import {
   getPortalPickupAuthorizations,
   getPortalPickupPendingCount,
@@ -38,17 +39,6 @@ const pendingCount = ref(0)
 
 const STATUS_LABEL: Record<string, string> = {
   active: '進行中', completed: '已完成', cancelled: '已取消', expired: '已過期',
-}
-
-function extractErrorCode(e: unknown): string | undefined {
-  const err = e as { response?: { data?: { detail?: { error_code?: string } } } }
-  return err.response?.data?.detail?.error_code
-}
-function extractErrorDetail(e: unknown): string {
-  const err = e as { response?: { data?: { detail?: { detail?: string } | string } } }
-  const d = err.response?.data?.detail
-  if (typeof d === 'string') return d
-  return d?.detail || '操作失敗'
 }
 
 async function fetchData() {
