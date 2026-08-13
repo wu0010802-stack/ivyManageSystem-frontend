@@ -4,20 +4,35 @@ import { resolve } from 'node:path'
 const read = (f: string) => readFileSync(resolve(process.cwd(), f), 'utf-8')
 
 describe('家長端字型首屏效能', () => {
-  it('parent.html Material Symbols 用 display=swap（非 block，消除 FOIT）', () => {
+  // 2026-08-13 政策反轉：Material Symbols 是 ligature 圖示字型，display=swap
+  // 會在字型未就緒時把圖示 render 成 check_circle 等英文原文撐爆版面
+  // （LIFF「很多文字跑版」事故根因）。已改同源自架子集字型
+  // （src/parent/styles/icons.css），舊「CDN + swap 消除 FOIT」斷言退場——
+  // swap 只適用於文字字型（Noto），圖示字型必須 block + 夾盒。
+  it('parent.html 不再引用 Material Symbols CDN（已自架子集字型）', () => {
     const html = read('parent.html')
-    expect(html).toContain('Material+Symbols+Rounded')
-    expect(html).not.toMatch(/Material\+Symbols\+Rounded[^"]*display=block/)
-    expect(html).toMatch(/Material\+Symbols\+Rounded[^"]*display=swap/)
+    expect(html).not.toContain('fonts.googleapis.com/css2?family=Material+Symbols')
+  })
+  it('自架 icon 字型：@font-face font-display: block + 1em 夾盒守衛，禁 swap 回流', () => {
+    const css = read('src/parent/styles/icons.css')
+    expect(css).toMatch(/font-display:\s*block/)
+    expect(css).not.toMatch(/font-display:\s*swap/)
+    // 夾盒守衛：字型載入前/失敗時 ligature 原文被裁在 1em 內，版面不可能被撐爆
+    expect(css).toMatch(/\.material-symbols-rounded\s*\{[^}]*width:\s*1em/s)
+    expect(css).toMatch(/\.material-symbols-rounded\s*\{[^}]*overflow:\s*hidden/s)
+  })
+  it('Noto Sans TC 文字字型維持 display=swap（文字用 swap 正確，避免 FOIT）', () => {
+    const html = read('parent.html')
+    expect(html).toMatch(/Noto\+Sans\+TC[^"]*display=swap/)
   })
   it('parent.html 字型 link 同步載入（禁 media=print onload 非阻塞手法）', () => {
     // 2026-08-12 prod 事故：nginx CSP script-src 無 unsafe-inline，
     // media="print" onload="this.media='all'" 的 inline handler 被 CSP 擋下，
     // stylesheet 永遠停在 media=print → 圖示全 render 成 ligature 原文。
-    // 字型 link 必須同步（無 media=print、無 onload）；FOIT 由 display=swap 處理。
+    // 字型 link 必須同步（無 media=print、無 onload）。
     const html = read('parent.html')
     const fontLinks = html.match(/<link[^>]*rel="stylesheet"[^>]*fonts\.googleapis\.com[^>]*>/g) || []
-    expect(fontLinks.length).toBeGreaterThanOrEqual(2)
+    expect(fontLinks.length).toBeGreaterThanOrEqual(1)
     fontLinks.forEach((l) => {
       expect(l).not.toContain('media="print"')
       expect(l).not.toContain('onload=')
