@@ -5,6 +5,7 @@ import { fetchChildPhotos } from '../api/childPhotos'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
@@ -31,6 +32,8 @@ const category = ref('all')
 const items = ref<PhotoItem[]>([])
 const total = ref(0)
 const loading = ref(false)
+// 載入失敗必須進持久錯誤態，不得與「尚無照片」空狀態同形（500 ≠ 沒資料）。
+const loadError = ref(false)
 
 // 漸進渲染：每頁 30 張，避免一次 render 200 縮圖拖慢首屏
 const { visible: visibleRaw, hasMore, sentinelRef } = useIncrementalRender(
@@ -47,6 +50,7 @@ let previousActiveElement: Element | null = null
 async function load() {
   if (!studentId.value) return
   loading.value = true
+  loadError.value = false
   try {
     const r = await fetchChildPhotos(studentId.value, {
       limit: 200,
@@ -55,6 +59,7 @@ async function load() {
     items.value = r.data.items || []
     total.value = r.data.total || 0
   } catch (e) {
+    loadError.value = true
     const err = e as Record<string, unknown>
     toast.error(String(err?.displayMessage || '載入失敗'))
   } finally {
@@ -128,6 +133,9 @@ onMounted(load)
         <SkeletonBlock variant="card" />
       </div>
     </template>
+
+    <!-- 失敗持久錯誤態＋重試（比照 PickupView）；不得落到下面的空狀態分支 -->
+    <MobileErrorRetry v-else-if="loadError" @retry="load" />
 
     <EmptyState
       v-else-if="items.length === 0"

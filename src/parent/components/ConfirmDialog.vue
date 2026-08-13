@@ -41,14 +41,20 @@ const messageId = computed<string>(
   () => `confirm-msg-${Math.random().toString(36).slice(2, 8)}`,
 )
 
+// ⚠ 事件順序是行為契約（2026-08-13 QA 巡檢）：必須**先 emit confirm/cancel、
+// 再 emit update:open**。呼叫端慣用 pattern 是 `const xOpen = computed({
+// set:(v)=>{ if(!v) target=null } })` ＋ handler 讀 target——若 update:open
+// 先到，target 已被清空，handler 拿到 null 直接早退，確認流程靜默 no-op
+// （曾同時廢掉撤回訊息/取消接送授權/刪除用藥單等七條流程）。
+// 回歸測試：__tests__/ConfirmDialog.emitOrder.spec.ts。
 function onCancel(): void {
-  emit('update:open', false)
   emit('cancel')
+  emit('update:open', false)
 }
 
 function onConfirm(): void {
-  emit('update:open', false)
   emit('confirm')
+  emit('update:open', false)
 }
 </script>
 

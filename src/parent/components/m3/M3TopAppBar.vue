@@ -67,6 +67,11 @@ function onBackClick(): void {
   z-index: var(--z-sticky, 10);
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr) auto;
+  /* 子元素以具名 grid-area（leading/title/actions）定位——基底必須宣告
+   * 對應的 template areas，否則具名區域不存在、三個子元素全部掉進隱式
+   * 軌道疊在右上角（2026-08-13 QA：全頁 header 跑版）。large 變體另以
+   * 兩列 areas 覆寫。守衛：m3/__tests__/M3TopAppBar.layout.spec.ts */
+  grid-template-areas: "leading title actions";
   align-items: center;
   gap: 4px;
   padding: 0 4px;
