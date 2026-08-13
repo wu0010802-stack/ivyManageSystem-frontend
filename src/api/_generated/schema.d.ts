@@ -2727,6 +2727,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/appraisal/cycles/{cycle_id}/grade_distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Grade Distribution
+         * @description 本期/上期等第分布與逐員工上期對齊列（唯讀彙總，校準頁專用）。
+         */
+        get: operations["grade_distribution_api_appraisal_cycles__cycle_id__grade_distribution_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/appraisal/cycles/{cycle_id}/manual_event_counts": {
         parameters: {
             query?: never;
@@ -20201,6 +20221,27 @@ export interface components {
              */
             to: string;
         };
+        /** CalibrationRowOut */
+        CalibrationRowOut: {
+            /** Bonus Amount */
+            bonus_amount: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            grade: components["schemas"]["Grade"];
+            /** Participant Id */
+            participant_id: number;
+            prev_grade?: components["schemas"]["Grade"] | null;
+            /** Prev Total Score */
+            prev_total_score?: string | null;
+            role_group: components["schemas"]["RoleGroup"];
+            /** Score Delta */
+            score_delta?: string | null;
+            status: components["schemas"]["SummaryStatus"];
+            /** Total Score */
+            total_score: string;
+        };
         /** CampusSettingPayload */
         CampusSettingPayload: {
             /**
@@ -21951,6 +21992,18 @@ export interface components {
             /** Enrollment Target */
             enrollment_target?: number | null;
             semester: components["schemas"]["Semester"];
+        };
+        /** CycleDistributionOut */
+        CycleDistributionOut: {
+            /** Academic Year */
+            academic_year: number;
+            /** Buckets */
+            buckets: components["schemas"]["GradeBucketOut"][];
+            /** Cycle Id */
+            cycle_id: number;
+            semester: components["schemas"]["Semester"];
+            /** Total Count */
+            total_count: number;
         };
         /** CycleOut */
         CycleOut: {
@@ -23734,6 +23787,21 @@ export interface components {
          * @enum {string}
          */
         Grade: "OUTSTANDING" | "GOOD" | "PASS" | "WARN" | "FAIL";
+        /** GradeBucketOut */
+        GradeBucketOut: {
+            /** Count */
+            count: number;
+            grade: components["schemas"]["Grade"];
+            /** Ratio */
+            ratio: string;
+        };
+        /** GradeDistributionOut */
+        GradeDistributionOut: {
+            current: components["schemas"]["CycleDistributionOut"];
+            previous?: components["schemas"]["CycleDistributionOut"] | null;
+            /** Rows */
+            rows: components["schemas"]["CalibrationRowOut"][];
+        };
         /**
          * GradeOut
          * @description 年級 (GET /grades list 單筆 / PATCH /grades/{id} 回傳)。
@@ -41718,6 +41786,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grade_distribution_api_appraisal_cycles__cycle_id__grade_distribution_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeDistributionOut"];
                 };
             };
             /** @description Validation Error */
