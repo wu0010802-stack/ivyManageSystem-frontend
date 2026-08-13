@@ -51,9 +51,12 @@ export async function flushClassAttendanceQueue(saveFn: (payload: unknown) => Pr
             if (status === 401) {
                 // Session 過期：保留整個佇列，停止後續重送避免連續 401
                 result.auth_failed = true
-                result.kept += 1
-                // 剩下的也當保留
-                result.kept += ops.length - result.succeeded - result.needs_review - 1
+                // 已處理筆數必須含先前累計的 kept（網路失敗保留的那幾筆），否則剩餘數
+                // 會把它們再算一次 → kept 大於佇列總長度。
+                // 家長端 flushParentQueue 用的是同一個公式，兩邊不得再分歧。
+                const processed = result.succeeded + result.needs_review + result.kept
+                const remaining = ops.length - processed - 1
+                result.kept += 1 + Math.max(0, remaining)
                 break
             }
             if (status === 403) {

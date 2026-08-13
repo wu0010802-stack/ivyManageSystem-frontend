@@ -65,6 +65,26 @@ describe('flushClassAttendanceQueue', () => {
         expect(remain).toHaveLength(3)
     })
 
+    it('先網路失敗、後遇 401：kept 不得超過佇列總數', async () => {
+        await makeOp({ classroom_name: 'A' })
+        await makeOp({ classroom_name: 'B' })
+        await makeOp({ classroom_name: 'C' })
+        const saveFn = vi
+            .fn()
+            .mockRejectedValueOnce(networkError())                 // 第 1 筆：保留重試
+            .mockRejectedValueOnce(httpError(401, 'Unauthorized')) // 第 2 筆：停止後續
+
+        const result = await flushClassAttendanceQueue(saveFn, { userId: 1 })
+
+        expect(saveFn).toHaveBeenCalledTimes(2)
+        expect(result.auth_failed).toBe(true)
+        // 三筆全數保留：1（網路失敗）+ 1（401 當下這筆）+ 1（未處理）
+        // 舊實作的 remaining 公式沒扣掉先前已計入的 kept → 會多算成 4
+        expect(result.kept).toBe(3)
+        const remain = await listOps({ kind: OP_KINDS.CLASS_ATTENDANCE, userId: 1 })
+        expect(remain).toHaveLength(3)
+    })
+
     it('遇到 403 標為 needs_review 不重試', async () => {
         await makeOp({ classroom_name: 'A' })
         await makeOp({ classroom_name: 'B' })
