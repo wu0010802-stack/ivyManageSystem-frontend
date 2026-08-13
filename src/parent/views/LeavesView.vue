@@ -14,6 +14,7 @@ import {
 import { toast } from '../utils/toast'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
+import { isNetworkError } from '@/composables/useOnlineStatus'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { toRocYear } from '@/utils/academic'
@@ -298,6 +299,30 @@ function openForm() {
   showForm.value = true
 }
 
+/**
+ * 把請假寫進離線佇列（含成功提示、關閉表單）。入列失敗會往外拋，由 caller 決定錯誤文案。
+ * 離線分流與「假線上」網路失敗 fallback 共用這一條。
+ */
+async function queueLeave(leavePayload: {
+  student_id: number
+  leave_type: string
+  start_date: string
+  end_date: string
+  reason: string | null
+}) {
+  await enqueueParent({
+    kind: OP_KINDS.PARENT_LEAVE_REQUEST,
+    payload: leavePayload,
+    meta: {
+      student_id: leavePayload.student_id,
+      leave_type: leavePayload.leave_type,
+    },
+  })
+  toast.success('請假已暫存，連線後自動送出')
+  showForm.value = false
+  flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
+}
+
 async function submit() {
   if (!form.value.student_id) {
     toast.warn('請選擇學生')
@@ -319,17 +344,7 @@ async function submit() {
 
   if (!navigator.onLine) {
     try {
-      await enqueueParent({
-        kind: OP_KINDS.PARENT_LEAVE_REQUEST,
-        payload: leavePayload,
-        meta: {
-          student_id: leavePayload.student_id,
-          leave_type: leavePayload.leave_type,
-        },
-      })
-      toast.success('請假已暫存，連線後自動送出')
-      showForm.value = false
-      flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
+      await queueLeave(leavePayload)
     } catch (err) {
       const e = err as Record<string, unknown>
       toast.error(String(e?.displayMessage || '暫存失敗'))
@@ -345,6 +360,14 @@ async function submit() {
     showForm.value = false
     fetchData()
   } catch (err) {
+    // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
+    // 一律 fallback 進佇列，否則家長填好的請假直接遺失。
+    if (isNetworkError(err)) {
+      try {
+        await queueLeave(leavePayload)
+        return
+      } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
+    }
     _toastFriendly(err, '送出失敗')
   } finally {
     submitting.value = false

@@ -9,6 +9,7 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
+import { isNetworkError } from '@/composables/useOnlineStatus'
 
 interface EventItem {
   id: number
@@ -63,6 +64,25 @@ async function init() {
   }
 }
 
+/**
+ * 把簽收寫進離線佇列（含成功提示）。入列失敗會往外拋，由 caller 決定錯誤文案。
+ * 離線分流與「假線上」網路失敗 fallback 共用這一條。
+ * 呼叫前 submit() 已確保 event / studentId 皆有值。
+ */
+async function queueAck() {
+  await enqueueParent({
+    kind: OP_KINDS.EVENT_ACK,
+    payload: {
+      event_id: event.value!.id,
+      student_id: studentId.value,
+      signature_name: signatureName.value || null,
+    },
+    meta: { event_id: event.value!.id },
+  })
+  toast.success('已暫存，連線後自動送出')
+  flushParentQueue(OP_KINDS.EVENT_ACK).catch(() => {})
+}
+
 async function submit() {
   if (!studentId.value) {
     toast.warn('請選擇子女')
@@ -80,17 +100,7 @@ async function submit() {
       return
     }
     try {
-      await enqueueParent({
-        kind: OP_KINDS.EVENT_ACK,
-        payload: {
-          event_id: event.value.id,
-          student_id: studentId.value,
-          signature_name: signatureName.value || null,
-        },
-        meta: { event_id: event.value.id },
-      })
-      toast.success('已暫存，連線後自動送出')
-      flushParentQueue(OP_KINDS.EVENT_ACK).catch(() => {})
+      await queueAck()
       router.replace({ path: '/events' })
     } catch (err) {
       const e = err as Record<string, unknown>
@@ -101,7 +111,7 @@ async function submit() {
     return
   }
 
-  // 線上路徑（原有邏輯不動）
+  // 線上路徑
   let ackOk = false
   try {
     await acknowledgeEvent(event.value.id, {
@@ -110,6 +120,17 @@ async function submit() {
     })
     ackOk = true
   } catch (err) {
+    // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
+    // 一律 fallback 進佇列。手寫簽名無法入列（同離線分流的限制），維持原錯誤提示。
+    const hasSignature = !!(padRef.value && !padRef.value.isEmpty())
+    if (isNetworkError(err) && !hasSignature) {
+      try {
+        await queueAck()
+        submitting.value = false
+        router.replace({ path: '/events' })
+        return
+      } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
+    }
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '簽收失敗'))
     submitting.value = false

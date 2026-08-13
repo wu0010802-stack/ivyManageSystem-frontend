@@ -11,6 +11,7 @@ import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import { toast } from '../utils/toast'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
+import { isNetworkError } from '@/composables/useOnlineStatus'
 import { useKeyboardInset } from '../composables/useKeyboardInset'
 
 interface ThreadInfo {
@@ -80,6 +81,20 @@ async function loadMore() {
   }
 }
 
+/**
+ * 把訊息寫進離線佇列（含成功提示）。入列失敗會往外拋，由 caller 決定錯誤文案。
+ * 離線分流與「假線上」網路失敗 fallback 共用這一條。
+ */
+async function queueMessage(body: string) {
+  await enqueueParent({
+    kind: OP_KINDS.PARENT_MESSAGE,
+    payload: { thread_id: threadId.value, body },
+    meta: { thread_id: threadId.value, content_preview: body.slice(0, 20) },
+  })
+  toast.success('已暫存，連線後自動送出')
+  flushParentQueue(OP_KINDS.PARENT_MESSAGE).catch(() => {})
+}
+
 async function onSend({ body, attachments, done }: { body: string; attachments?: File[]; done: (ok: boolean) => void }) {
   const hasAttachment = (attachments?.length ?? 0) > 0
 
@@ -88,6 +103,16 @@ async function onSend({ body, attachments, done }: { body: string; attachments?:
       await messagesStore.send(threadId.value, body, attachments)
       done(true)
     } catch (err) {
+      // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
+      // 一律 fallback 進佇列，否則家長打好的訊息直接遺失。
+      // 附件無法入列（同離線分流的限制），維持原錯誤提示讓家長連線後重送。
+      if (isNetworkError(err) && !hasAttachment) {
+        try {
+          await queueMessage(body)
+          done(true)
+          return
+        } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
+      }
       const e = err as Record<string, unknown>
       toast.error(String(e?.displayMessage || '送出失敗'))
       done(false)
@@ -103,14 +128,8 @@ async function onSend({ body, attachments, done }: { body: string; attachments?:
   }
 
   try {
-    await enqueueParent({
-      kind: OP_KINDS.PARENT_MESSAGE,
-      payload: { thread_id: threadId.value, body },
-      meta: { thread_id: threadId.value, content_preview: body.slice(0, 20) },
-    })
-    toast.success('已暫存，連線後自動送出')
+    await queueMessage(body)
     done(true)
-    flushParentQueue(OP_KINDS.PARENT_MESSAGE).catch(() => {})
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '暫存失敗'))

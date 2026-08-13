@@ -17,6 +17,7 @@ import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
+import { isNetworkError } from '@/composables/useOnlineStatus'
 
 interface Reply {
   id: number | string
@@ -155,24 +156,33 @@ async function fetchData() {
   }
 }
 
+/**
+ * 把「標記已讀」寫進離線佇列（含樂觀 UI）。
+ * `!navigator.onLine` 的離線分流與「假線上」網路失敗的 fallback 共用這一條，
+ * 兩條路徑的行為不得再分歧。
+ */
+async function queueAck() {
+  await enqueueParent({
+    kind: OP_KINDS.CONTACT_BOOK_ACK,
+    payload: { entry_id: entryId.value },
+    meta: { entry_id: entryId.value },
+  })
+  // 樂觀 UI
+  if (entry.value) {
+    entry.value.isRead = true
+    entry.value.readAt = new Date().toISOString()
+  }
+  toast.success('已暫存，連線後自動送出')
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
+}
+
 async function markAsRead() {
   if (acking.value) return
   acking.value = true
 
   if (!navigator.onLine) {
     try {
-      await enqueueParent({
-        kind: OP_KINDS.CONTACT_BOOK_ACK,
-        payload: { entry_id: entryId.value },
-        meta: { entry_id: entryId.value },
-      })
-      // 樂觀 UI
-      if (entry.value) {
-        entry.value.isRead = true
-        entry.value.readAt = new Date().toISOString()
-      }
-      toast.success('已暫存，連線後自動送出')
-      flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
+      await queueAck()
     } catch (err) {
       const e = err as Record<string, unknown>
       toast.error(String(e?.displayMessage || '暫存失敗，請稍後再試'))
@@ -190,11 +200,35 @@ async function markAsRead() {
     }
     // 已讀軌：成功不跳 toast（被動行為，與「已讀」語意一致）
   } catch (err) {
+    // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
+    // 一律 fallback 進佇列，否則家長的操作直接遺失。非網路錯誤（4xx/5xx）維持原提示。
+    if (isNetworkError(err)) {
+      try {
+        await queueAck()
+        return
+      } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
+    }
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '標記失敗，請重試'))
   } finally {
     acking.value = false
   }
+}
+
+/**
+ * 把回覆寫進離線佇列（含樂觀 UI）。離線分流與假線上 fallback 共用。
+ */
+async function queueReply(body: string) {
+  await enqueueParent({
+    kind: OP_KINDS.CONTACT_BOOK_REPLY,
+    payload: { entry_id: entryId.value, body },
+    meta: { entry_id: entryId.value, content_preview: body.slice(0, 20) },
+  })
+  // 樂觀 UI
+  replies.value.push({ id: `pending-${Date.now()}`, body, created_at: new Date().toISOString() })
+  newReply.value = ''
+  toast.success('已暫存，連線後自動送出')
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
 }
 
 async function submitReply() {
@@ -208,16 +242,7 @@ async function submitReply() {
 
   if (!navigator.onLine) {
     try {
-      await enqueueParent({
-        kind: OP_KINDS.CONTACT_BOOK_REPLY,
-        payload: { entry_id: entryId.value, body },
-        meta: { entry_id: entryId.value, content_preview: body.slice(0, 20) },
-      })
-      // 樂觀 UI
-      replies.value.push({ id: `pending-${Date.now()}`, body, created_at: new Date().toISOString() })
-      newReply.value = ''
-      toast.success('已暫存，連線後自動送出')
-      flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
+      await queueReply(body)
     } catch (err) {
       const e = err as Record<string, unknown>
       toast.error(String(e?.displayMessage || '暫存失敗'))
@@ -232,6 +257,13 @@ async function submitReply() {
     replies.value.push(data as Reply)
     newReply.value = ''
   } catch (err) {
+    // 假線上：網路層失敗一律進佇列，家長打好的回覆不可因弱訊號蒸發。
+    if (isNetworkError(err)) {
+      try {
+        await queueReply(body)
+        return
+      } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
+    }
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '送出失敗'))
   } finally {
