@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useHomeSummary } from '../composables/useHomeSummary'
@@ -8,7 +8,6 @@ import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
 import M3IconButton from '../components/m3/M3IconButton.vue'
 import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
-import MeDrawer from '../components/layout/MeDrawer.vue'
 import ParentOfflineIndicator from '../components/ParentOfflineIndicator.vue'
 import { useTenantBranding } from '@/composables/useTenantBranding'
 
@@ -72,6 +71,13 @@ const TABS = computed<TabItem[]>(() => [
     path: '/home',
   },
   {
+    key: 'child',
+    label: '孩子',
+    icon: 'child_care',
+    activeIcon: 'child_care',
+    path: '/child',
+  },
+  {
     key: 'messages',
     label: '訊息',
     icon: 'chat_bubble',
@@ -87,9 +93,14 @@ const TABS = computed<TabItem[]>(() => [
     path: '/admin',
     badge: adminTabBadge.value,
   },
+  {
+    key: 'me',
+    label: '我的',
+    icon: 'account_circle',
+    activeIcon: 'account_circle',
+    path: '/me',
+  },
 ])
-
-const drawerOpen = ref(false)
 
 function refreshBadges() {
   if (!authStore.isAuthed()) return
@@ -121,22 +132,23 @@ function onBack() {
       :on-back="onBack"
       variant="small"
     >
-      <!-- 主分頁（home/messages/admin）無 showBack，需要 BrandMark 補位；
+      <!-- 主分頁（home/child/messages/admin/me）無 showBack，需要 BrandMark 補位；
            深層頁有 back button 不用蓋。CLAUDE.md 列為 polish 階段 acceptance：
            保留 LaurelWreath/CrownIcon brand。bug sweep round 4 (2026-05-14) F-FE-3。 -->
       <template v-if="!headerShowBack" #leading>
         <BrandMark variant="mini" :size="28" />
       </template>
       <template #actions>
+        <!-- P2 IA 重整（2026-08-14）：頭像不再開抽屜，直接導向常駐「我的」tab。
+             MeDrawer 的全部功能（個人資料/通知偏好/加綁子女/登出）已存在於 /me 頁，
+             元件檔案保留一個 release 週期再清除，見 spec §7。 -->
         <M3IconButton
           icon="account_circle"
-          aria-label="開啟個人選單"
-          @click="drawerOpen = true"
+          aria-label="我的"
+          @click="router.push('/me')"
         />
       </template>
     </M3TopAppBar>
-
-    <MeDrawer v-if="!isPublic" v-model="drawerOpen" />
 
     <div v-if="!isPublic" class="parent-conn-slot">
       <ConnectionBanner />
