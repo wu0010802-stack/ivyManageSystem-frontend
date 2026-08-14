@@ -53,6 +53,32 @@ describe('ContactBookDayCard', () => {
       })
       expect(w.find('.status-pill').exists()).toBe(false)
     })
+
+    it('心情有值時 stats 新增心情格，順序為午餐/午睡/心情', () => {
+      const w = mount(ContactBookDayCard, {
+        props: { entry: fullEntry, studentName: '小明', classroomName: '中班' },
+      })
+      const labels = w.findAll('.stat-label').map((n) => n.text())
+      expect(labels.slice(0, 3)).toEqual(['午餐', '午睡', '心情'])
+      expect(w.text()).toContain('開心')
+    })
+
+    it('心情格底色走童彩 leaf tonal', () => {
+      const w = mount(ContactBookDayCard, {
+        props: { entry: fullEntry, studentName: '小明' },
+      })
+      const moodStat = w.findAll('.stat').find((s) => s.classes().includes('stat-leaf'))
+      expect(moodStat).toBeTruthy()
+    })
+
+    it('無心情值時不渲染心情格', () => {
+      const noMood = { ...fullEntry, mood: undefined }
+      const w = mount(ContactBookDayCard, {
+        props: { entry: noMood, studentName: '小明' },
+      })
+      const labels = w.findAll('.stat-label').map((n) => n.text())
+      expect(labels).not.toContain('心情')
+    })
   })
 
   describe('awaiting 態（上學日、老師尚未填寫）', () => {

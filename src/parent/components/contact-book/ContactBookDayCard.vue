@@ -74,14 +74,28 @@ const teacherNoteShort = computed<string | null>(() => {
   return note.length > 80 ? note.slice(0, 80) + '…' : note
 })
 
+const MOOD_STAT_ICON: Record<string, string> = {
+  happy: 'sentiment_very_satisfied',
+  normal: 'sentiment_neutral',
+  tired: 'bedtime',
+  sad: 'sentiment_dissatisfied',
+  sick: 'sick',
+}
+const MOOD_STAT_TEXT: Record<string, string> = {
+  happy: '開心', normal: '普通', tired: '想睡', sad: '難過', sick: '不舒服',
+}
+
 const stats = computed(() => {
   const e = props.entry
-  const out: { key: string; label: string; value: string | number; icon: string }[] = []
+  const out: { key: string; label: string; value: string | number; icon: string; tone: string }[] = []
   if (!e) return out
-  if (e.meal_lunch != null) out.push({ key: 'lunch', label: '午餐', value: `${e.meal_lunch}/3`, icon: 'restaurant' })
-  if (e.nap_minutes != null) out.push({ key: 'nap', label: '午睡', value: `${e.nap_minutes} 分`, icon: 'bedtime' })
-  if (e.temperature_c != null) out.push({ key: 'temp', label: '體溫', value: `${e.temperature_c}°`, icon: 'thermostat' })
-  if (photoCount.value > 0) out.push({ key: 'photo', label: '照片', value: photoCount.value, icon: 'photo_camera' })
+  if (e.meal_lunch != null) out.push({ key: 'lunch', label: '午餐', value: `${e.meal_lunch}/3`, icon: 'restaurant', tone: 'sun' })
+  if (e.nap_minutes != null) out.push({ key: 'nap', label: '午睡', value: `${e.nap_minutes} 分`, icon: 'bedtime', tone: 'grape' })
+  if (e.mood && MOOD_STAT_TEXT[e.mood]) {
+    out.push({ key: 'mood', label: '心情', value: MOOD_STAT_TEXT[e.mood], icon: MOOD_STAT_ICON[e.mood], tone: 'leaf' })
+  }
+  if (e.temperature_c != null) out.push({ key: 'temp', label: '體溫', value: `${e.temperature_c}°`, icon: 'thermostat', tone: 'sky' })
+  if (photoCount.value > 0) out.push({ key: 'photo', label: '照片', value: photoCount.value, icon: 'photo_camera', tone: 'coral' })
   return out
 })
 </script>
@@ -120,7 +134,7 @@ const stats = computed(() => {
     <p v-if="hintText" class="hint">{{ hintText }}</p>
 
     <div v-if="isFull && stats.length" class="stats">
-      <div v-for="s in stats" :key="s.key" class="stat" :class="`stat-${s.key}`">
+      <div v-for="s in stats" :key="s.key" class="stat" :class="`stat-${s.tone}`">
         <span class="stat-icon" aria-hidden="true">
           <span class="material-symbols-rounded">{{ s.icon }}</span>
         </span>
@@ -261,8 +275,6 @@ const stats = computed(() => {
   justify-content: center;
   gap: 2px;
   padding: 10px 6px 8px;
-  background: color-mix(in srgb, var(--pt-surface-card, #fff) 70%, transparent);
-  border: 1px solid rgba(13, 144, 83, 0.08);
   border-radius: 14px;
   text-align: center;
 }
@@ -273,16 +285,22 @@ const stats = computed(() => {
   width: 26px;
   height: 26px;
   margin-bottom: 2px;
-  color: var(--brand-primary, #0d9053);
 }
 .stat-icon .material-symbols-rounded {
   font-size: 22px;
   font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
 }
-.stat-lunch .stat-icon { color: var(--coral-600, #e96b6b); }
-.stat-nap   .stat-icon { color: var(--grape-700, #6e3f94); }
-.stat-temp  .stat-icon { color: var(--sun-700, #c99500); }
-.stat-photo .stat-icon { color: var(--sky-700, #2d6f8e); }
+
+.stat-sun   { background: var(--pt-accent-sun-container); }
+.stat-sun .stat-icon, .stat-sun .stat-value { color: var(--pt-accent-sun-on); }
+.stat-grape { background: var(--pt-accent-grape-container); }
+.stat-grape .stat-icon, .stat-grape .stat-value { color: var(--pt-accent-grape-on); }
+.stat-leaf  { background: var(--pt-accent-leaf-container); }
+.stat-leaf .stat-icon, .stat-leaf .stat-value { color: var(--pt-accent-leaf-on); }
+.stat-sky   { background: var(--pt-accent-sky-container); }
+.stat-sky .stat-icon, .stat-sky .stat-value { color: var(--pt-accent-sky-on); }
+.stat-coral { background: var(--pt-accent-coral-container); }
+.stat-coral .stat-icon, .stat-coral .stat-value { color: var(--pt-accent-coral-on); }
 
 .stat-value {
   font-size: 15px;
