@@ -172,25 +172,25 @@ const routes: RouteRecordRaw[] = [
       path: '/children/:studentId',
       name: 'parent-child-profile',
       component: () => import('./views/ChildProfileView.vue'),
-      meta: { title: '孩子檔案', tab: 'admin', showBack: true },
+      meta: { title: '孩子檔案', tab: 'child', showBack: true },
     },
     {
       path: '/children/:studentId/reports',
       name: 'parent-child-reports',
       component: () => import('./views/ChildReportsView.vue'),
-      meta: { title: '歷次成長報告', tab: 'admin', showBack: true },
+      meta: { title: '歷次成長報告', tab: 'child', showBack: true },
     },
     {
       path: '/children/:studentId/photos',
       name: 'parent-child-photos',
       component: () => import('./views/ChildPhotosView.vue'),
-      meta: { title: '照片牆', tab: 'admin', showBack: true },
+      meta: { title: '照片牆', tab: 'child', showBack: true },
     },
     {
       path: '/children/:studentId/measurements',
       name: 'parent-child-measurements',
       component: () => import('./views/ChildMeasurementsView.vue'),
-      meta: { title: '健康紀錄', tab: 'admin', showBack: true },
+      meta: { title: '健康紀錄', tab: 'child', showBack: true },
     },
     {
       path: '/calendar',
@@ -202,13 +202,13 @@ const routes: RouteRecordRaw[] = [
       path: '/contact-book',
       name: 'parent-contact-book',
       component: () => import('./views/ContactBookView.vue'),
-      meta: { title: '聯絡簿', tab: 'home', showBack: true },
+      meta: { title: '聯絡簿', tab: 'child', showBack: true },
     },
     {
       path: '/contact-book/:entryId',
       name: 'parent-contact-book-detail',
       component: () => import('./views/ContactBookDetailView.vue'),
-      meta: { title: '聯絡簿詳情', tab: 'home', showBack: true },
+      meta: { title: '聯絡簿詳情', tab: 'child', showBack: true },
     },
     {
       path: '/surveys',
@@ -222,6 +222,12 @@ const routes: RouteRecordRaw[] = [
       name: 'parent-survey-detail',
       component: () => import('./views/SurveysView.vue'),
       meta: { title: '活動調查', tab: 'admin', showBack: true },
+    },
+    {
+      path: '/child',
+      name: 'parent-child-hub',
+      component: () => import('./views/ChildHubView.vue'),
+      meta: { title: '孩子', tab: 'child' },
     },
     {
       path: '/admin',

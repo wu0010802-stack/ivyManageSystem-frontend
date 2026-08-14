@@ -781,7 +781,13 @@ export interface paths {
         };
         /**
          * Print Pos Receipt Pdf
-         * @description 重印 POS 收據 PDF（80mm 寬窄條）。
+         * @description 列印 / 補印 POS 收據 PDF（80mm 寬窄條）。
+         *
+         *     `reprint`（2026-08-14 bug hunt）：本端點是前端**唯一**的列印路徑——結帳成功後的
+         *     首印與交易列表的補印都打這支。舊版無條件標 `is_reprint=True`，家長拿到的正本
+         *     收據抬頭因而印著「（補印）」。預設仍為 True 是刻意保守：漏傳時寧可把正本多標
+         *     一次補印，也不能讓真正的補印看起來像正本（後者會讓同一筆款項的兩張紙看起來
+         *     都是正本，對帳時無從分辨）。
          */
         get: operations["print_pos_receipt_pdf_api_activity_pos_receipts__receipt_no__print_pdf_get"];
         put?: never;
@@ -38798,7 +38804,10 @@ export interface operations {
     };
     print_pos_receipt_pdf_api_activity_pos_receipts__receipt_no__print_pdf_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 是否標記為補印。結帳後的第一次列印請傳 false；從交易列表補印請傳 true（預設） */
+                reprint?: boolean;
+            };
             header?: never;
             path: {
                 receipt_no: string;

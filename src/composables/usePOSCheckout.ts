@@ -97,7 +97,16 @@ export function usePOSCheckout() {
   const submitting = ref(false)
 
   // ── 冪等 key（送出當下產生，成功後清除） ────────────────────────
+  // payment_date 與 key 同生命週期：後端的冪等內容簽章含 payment_date，重試若
+  // 重算「今天」，跨午夜時簽章就不符 → 409 → 下方 4xx 分支釋放 key → 再送等於
+  // 新 key + 新日期 = 重複入帳。兩者必須一起凍結、一起釋放（2026-08-14 bug hunt）。
   let pendingIdempotencyKey: string | null = null
+  let pendingPaymentDate: string | null = null
+
+  function releasePendingTransaction() {
+    pendingIdempotencyKey = null
+    pendingPaymentDate = null
+  }
 
   // ── 最後收據與日結 ─────────────────────────────────────────────
   const lastReceipt = ref<Record<string, unknown> | null>(null)
@@ -423,6 +432,11 @@ export function usePOSCheckout() {
       return
     }
 
+    // submitting 必須在大額二次確認**之前**就鎖上（2026-08-14 bug hunt）：confirm
+    // 是 await 的，期間若 submitting 仍為 false，canSubmit 為 true、送出鈕未 disable，
+    // 可再開一次結帳流程（modal 遮罩只是視覺防線，鍵盤/程式路徑仍可觸發）。
+    submitting.value = true
+
     // 大額交易（>= LARGE_AMOUNT_THRESHOLD）二次確認
     if (itemTotal.value >= LARGE_AMOUNT_THRESHOLD) {
       const typeLabel = isRefundMode.value ? '退費' : '收款'
@@ -438,15 +452,16 @@ export function usePOSCheckout() {
           }
         )
       } catch {
+        submitting.value = false
         return // 使用者取消
       }
     }
 
-    submitting.value = true
-
-    // 若重試時 pendingIdempotencyKey 仍存在，代表上次 submit 還沒成功結束，重用同 key
+    // 若重試時 pendingIdempotencyKey 仍存在，代表上次 submit 還沒成功結束，
+    // 重用同 key **與同 payment_date**（理由見上方宣告處註解）
     if (!pendingIdempotencyKey) {
       pendingIdempotencyKey = makeIdempotencyKey()
+      pendingPaymentDate = taipeiTodayISO()
     }
 
     try {
@@ -458,7 +473,7 @@ export function usePOSCheckout() {
           },
         ],
         payment_method: paymentMethod.value as CheckoutBody['payment_method'],
-        payment_date: taipeiTodayISO(),
+        payment_date: pendingPaymentDate as string,
         tendered: null,
         notes: (notes.value || '').trim(),
         type: checkoutType.value as CheckoutBody['type'],
@@ -478,13 +493,14 @@ export function usePOSCheckout() {
         ElMessage.success(`${doneLabel}：${receipt.receipt_no}`)
       }
 
-      // 送出成功後才釋放 key，重試時會復用
-      pendingIdempotencyKey = null
+      // 送出成功後才釋放 key + payment_date，重試時會復用
+      releasePendingTransaction()
 
       if (shouldPrint) {
         receiptDialogVisible.value = true
         await nextTick()
-        printReceipt()
+        // 結帳當下的第一次列印＝正本，不可標補印（2026-08-14 bug hunt）
+        printReceipt({ reprint: false })
       }
       resetTransactionInputs()
       // 刷新：日結、最近交易、搜尋結果（讓剛收款的學生立即從欠費列表消失）
@@ -516,7 +532,13 @@ export function usePOSCheckout() {
     }
   }
 
-  async function printReceipt() {
+  /**
+   * 列印收據 PDF。
+   * @param options.reprint 是否標記為補印。結帳當下的首印傳 false（正本）；
+   *   從交易列表或收據 dialog 再印一次維持預設 true（2026-08-14 bug hunt）。
+   */
+  async function printReceipt(options: { reprint?: boolean } = {}) {
+    const { reprint = true } = options
     const receiptNo = lastReceipt.value?.receipt_no
     if (!receiptNo) {
       ElMessage.warning('找不到收據編號，無法列印')
@@ -524,7 +546,7 @@ export function usePOSCheckout() {
     }
     await openPdfInNewTab({
       fetchBlob: async () => {
-        const res = await getPOSReceiptPdf(receiptNo as string)
+        const res = await getPOSReceiptPdf(receiptNo as string, { reprint })
         return res.data
       },
       loadingText: '收據載入中…',
@@ -559,7 +581,7 @@ export function usePOSCheckout() {
     receiptDialogVisible.value = true
     await nextTick()
     try {
-      printReceipt()
+      printReceipt({ reprint: true })
     } finally {
       // 略等一小段時間再解鎖，避免印表機尚未結束就被觸發第二次
       setTimeout(() => {

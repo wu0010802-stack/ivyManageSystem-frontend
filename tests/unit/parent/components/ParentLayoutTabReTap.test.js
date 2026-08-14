@@ -5,7 +5,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import ParentLayout from '@/parent/layouts/ParentLayout.vue'
 
 /**
- * 測試 tab re-tap 行為（IA v2 Phase 3：4-tab 結構 home/messages/family/me）：
+ * 測試 tab re-tap 行為（P2 5-tab 結構 home/child/messages/admin/me，2026-08-14）：
  *  - 在 /home，點 home tab → window.scrollTo({top:0,...}) 被呼叫
  *  - 在 /home，點 messages tab → 不 scrollTo
  *  - 在 /messages/123（深層），點 messages tab → 不 scrollTo（讓 router-link 正常導回 /messages 列表）
@@ -82,8 +82,8 @@ describe('ParentLayout tab re-tap', () => {
   it('在 /home，點 messages tab → 不觸發 scrollTo（讓 router 正常導航）', async () => {
     const { wrapper } = await mountLayout('/home')
     const tabs = wrapper.findAll('.m3-nav-tab')
-    // messages 是第二個 tab（IA v2 Phase 3 4-tab）
-    await tabs[1].trigger('click')
+    // messages 是第三個 tab（P2 5-tab：home/child/messages/admin/me）
+    await tabs[2].trigger('click')
     expect(scrollToSpy).not.toHaveBeenCalled()
     wrapper.unmount()
   })
@@ -91,8 +91,8 @@ describe('ParentLayout tab re-tap', () => {
   it('在 /messages/123 深層，點 messages tab → 不觸發 scrollTo（仍應導航回 /messages）', async () => {
     const { wrapper } = await mountLayout('/messages/123')
     const tabs = wrapper.findAll('.m3-nav-tab')
-    // messages 是第二個 tab（IA v2 Phase 3 4-tab）
-    await tabs[1].trigger('click')
+    // messages 是第三個 tab（P2 5-tab：home/child/messages/admin/me）
+    await tabs[2].trigger('click')
     expect(scrollToSpy).not.toHaveBeenCalled()
     wrapper.unmount()
   })
