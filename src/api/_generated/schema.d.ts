@@ -6844,6 +6844,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/growth-contract/employees/{employee_id}/signed-on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Signed On
+         * @description 設定或清空自主成長契約簽約日。
+         *
+         *     用 `model_fields_set` 區分「body 完全省略 signed_on」（不異動）與
+         *     「顯式傳 `{"signed_on": null}`」（清空為未簽約，HR 誤設可撤銷）——
+         *     見本檔頂部 docstring 與計畫 Task 7 回報 (d)。
+         */
+        patch: operations["update_signed_on_api_growth_contract_employees__employee_id__signed_on_patch"];
+        trace?: never;
+    };
+    "/growth-contract/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Growth Hours
+         * @description 列出某學年的時數登記；`employee_id` 可選——省略時回全園該學年所有列
+         *     （(a) 見計畫 Task 7 回報：以 `school_year` 天然分區，單學年全園筆數量級小，
+         *     暫不需分頁，理由詳回報）。
+         */
+        get: operations["list_growth_hours_api_growth_contract_hours_get"];
+        put?: never;
+        /**
+         * Create Growth Hour
+         * @description 新增一筆時數登記。`hours<=0`／`semester` 非 1/2 由 Pydantic Field 擋
+         *     422；員工不存在 → 404。
+         */
+        post: operations["create_growth_hour_api_growth_contract_hours_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/growth-contract/hours/{hour_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Growth Hour
+         * @description 刪除一筆時數登記；紀錄不存在 → 404。
+         */
+        delete: operations["delete_growth_hour_api_growth_contract_hours__hour_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Growth Hour
+         * @description 改一筆時數登記；紀錄不存在 → 404。
+         */
+        patch: operations["update_growth_hour_api_growth_contract_hours__hour_id__patch"];
+        trace?: never;
+    };
+    "/growth-contract/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Growth Contract Preview
+         * @description 學年結算預覽（唯讀，不落表、不寫錢）；直接 passthrough
+         *     `build_growth_contract_preview`，含 `pending_rule` 標記與逐員工 gate
+         *     明細。該學年查無在職／該學年內離職的員工 → 200 + `rows: []`（非錯誤，
+         *     見計畫 Task 7 回報 (b)）。
+         */
+        get: operations["get_growth_contract_preview_api_growth_contract_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/guardians/{guardian_id}/binding-code": {
         parameters: {
             query?: never;
@@ -13146,6 +13244,152 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recruitment-bonus/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Campaigns
+         * @description 列出所有招生獎金期（含每期 pending/confirmed 列數，供列表頁快速判斷狀態）。
+         */
+        get: operations["list_campaigns_api_recruitment_bonus_campaigns_get"];
+        put?: never;
+        /**
+         * Create Campaign
+         * @description 建立招生獎金期；未給的參數帶入辦法預設值（守衛 1）。
+         */
+        post: operations["create_campaign_api_recruitment_bonus_campaigns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Campaign Detail
+         * @description 招生獎金期明細：逐列歸屬 ＋ 每師彙總（確認人數／級距單價／金額，守衛 2）。
+         */
+        get: operations["get_campaign_detail_api_recruitment_bonus_campaigns__campaign_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Campaign
+         * @description 改招生獎金期參數；已結算的期一律 409（守衛 6）。
+         */
+        patch: operations["update_campaign_api_recruitment_bonus_campaigns__campaign_id__patch"];
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/attributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Attribution
+         * @description 手動加一筆歸屬列（Excel 外補件、邀約拆分第二列）。
+         */
+        post: operations["create_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/attributions/{attribution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Attribution
+         * @description 改一筆歸屬列：point_code／points／grade_multiplier／employee_id／
+         *     collector／status／notes（守衛 3）。point_code 不在目錄 → 422（守衛 4）；
+         *     confirmed 但 employee_id 空 → 422（守衛 5）；已結算的期 → 409（守衛 6）。
+         */
+        patch: operations["update_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions__attribution_id__patch"];
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Campaign
+         * @description 結算：把已確認歸屬換算成錢，寫入表外獎金通道（`ExtraBonusPayment`）。
+         *
+         *     防呆順序（缺一不可，見 spec §3.4／§6 P5）：
+         *     1. campaign 必須存在且 `open`（已 `settled` → 409，冪等——重複呼叫不
+         *        重複發錢，守衛 6 沿用 `_assert_campaign_open`）。
+         *     2. 不得有 `pending` 列（否則 409，回應列出未處理的歸屬列 id，供 HR
+         *        前往歸屬列表處理——`excluded`／`deferred` 不算未處理，不擋）。
+         *     3. 用 Task 2 引擎（透過 `_compute_employee_summary` 重用，不重複彙總
+         *        邏輯）算出每師合計；任一員工 `total_amount < 0`（讓出的代收分潤
+         *        超過自己的招生金額，非邊際級距下理論可能發生）→ 整批 409 帶明細，
+         *        不寫任何一筆錢，要求人工處理。
+         *     4. 對 `total_amount > 0` 者逐筆寫 `ExtraBonusPayment`；`== 0` 者不寫列
+         *        （DB CHECK `ck_extra_bonus_amount_positive` 要求 amount > 0）。
+         *     5. 全部寫完、campaign 轉 `settled` 後才一次 `session.commit()`——單一
+         *        DB transaction，任何一步失敗（含寫入途中的例外）整批回滾，不會
+         *        留下「部分員工已入帳但 campaign 仍是 open」的孤兒狀態（見計畫
+         *        Task 5 回報 (a)）。
+         */
+        post: operations["settle_campaign_api_recruitment_bonus_campaigns__campaign_id__settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/sync-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Campaign Candidates
+         * @description 候選同步（冪等）；已結算的期一律 409（守衛 6），回傳四個計數（守衛 7）。
+         */
+        post: operations["sync_campaign_candidates_api_recruitment_bonus_campaigns__campaign_id__sync_candidates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recruitment/address-hotspots": {
         parameters: {
             query?: never;
@@ -19003,6 +19247,76 @@ export interface components {
             /** Year */
             year: number;
         };
+        /** AttributionCreate */
+        AttributionCreate: {
+            /** Collector Employee Id */
+            collector_employee_id?: number | null;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Grade Multiplier */
+            grade_multiplier: number;
+            /** Notes */
+            notes?: string | null;
+            /** Point Code */
+            point_code: string;
+            /** Points */
+            points: number;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+        };
+        /** AttributionOut */
+        AttributionOut: {
+            /** Campaign Id */
+            campaign_id: number;
+            /** Collector Employee Id */
+            collector_employee_id?: number | null;
+            /** Collector Name */
+            collector_name?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Grade Multiplier */
+            grade_multiplier: number;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Point Code */
+            point_code: string;
+            /** Points */
+            points: number;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Status */
+            status: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** AttributionUpdate */
+        AttributionUpdate: {
+            /** Collector Employee Id */
+            collector_employee_id?: number | null;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Grade Multiplier */
+            grade_multiplier?: number | null;
+            /** Notes */
+            notes?: string | null;
+            /** Point Code */
+            point_code?: string | null;
+            /** Points */
+            points?: number | null;
+            /** Status */
+            status?: string | null;
+        };
         /** AuditLogHighRiskItem */
         AuditLogHighRiskItem: {
             /** Acknowledged At */
@@ -20241,6 +20555,139 @@ export interface components {
             status: components["schemas"]["SummaryStatus"];
             /** Total Score */
             total_score: string;
+        };
+        /** CampaignCreate */
+        CampaignCreate: {
+            /** Collector Share */
+            collector_share?: number | null;
+            /** End Date */
+            end_date: string;
+            /** Grade Multipliers */
+            grade_multipliers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Name */
+            name: string;
+            /** Point Catalog */
+            point_catalog?: {
+                [key: string]: unknown;
+            } | null;
+            /** Start Date */
+            start_date: string;
+            /** Tier Config */
+            tier_config?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
+        /** CampaignDetailOut */
+        CampaignDetailOut: {
+            /** Attributions */
+            attributions: components["schemas"]["AttributionOut"][];
+            /** Collector Share */
+            collector_share: number;
+            /** Confirmed Count */
+            confirmed_count: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Employee Summary */
+            employee_summary: components["schemas"]["EmployeeSummaryOut"][];
+            /** End Date */
+            end_date: string;
+            /** Grade Multipliers */
+            grade_multipliers: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Pending Count */
+            pending_count: number;
+            /** Point Catalog */
+            point_catalog: {
+                [key: string]: unknown;
+            };
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By */
+            settled_by?: number | null;
+            /** Start Date */
+            start_date: string;
+            /** Status */
+            status: string;
+            /** Tier Config */
+            tier_config: {
+                [key: string]: unknown;
+            }[];
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** CampaignListOut */
+        CampaignListOut: {
+            /** Items */
+            items: components["schemas"]["CampaignOut"][];
+        };
+        /** CampaignOut */
+        CampaignOut: {
+            /** Collector Share */
+            collector_share: number;
+            /** Confirmed Count */
+            confirmed_count: number;
+            /** Created At */
+            created_at?: string | null;
+            /** End Date */
+            end_date: string;
+            /** Grade Multipliers */
+            grade_multipliers: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Pending Count */
+            pending_count: number;
+            /** Point Catalog */
+            point_catalog: {
+                [key: string]: unknown;
+            };
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By */
+            settled_by?: number | null;
+            /** Start Date */
+            start_date: string;
+            /** Status */
+            status: string;
+            /** Tier Config */
+            tier_config: {
+                [key: string]: unknown;
+            }[];
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** CampaignUpdate */
+        CampaignUpdate: {
+            /** Collector Share */
+            collector_share?: number | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Grade Multipliers */
+            grade_multipliers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Name */
+            name?: string | null;
+            /** Point Catalog */
+            point_catalog?: {
+                [key: string]: unknown;
+            } | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Tier Config */
+            tier_config?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /** CampusSettingPayload */
         CampusSettingPayload: {
@@ -22825,6 +23272,30 @@ export interface components {
             /** Work Start Time */
             work_start_time?: string | null;
         };
+        /**
+         * EmployeeSummaryOut
+         * @description 每師彙總：前端 grid「確認人數／級距單價／金額」的資料來源。
+         */
+        EmployeeSummaryOut: {
+            /** Counted Persons */
+            counted_persons: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Gross Amount */
+            gross_amount: number;
+            /** Resigned */
+            resigned: boolean;
+            /** Share In */
+            share_in: number;
+            /** Share Out */
+            share_out: number;
+            /** Total Amount */
+            total_amount: number;
+            /** Unit Price */
+            unit_price: number;
+        };
         /** EmployeeUpdate */
         EmployeeUpdate: {
             /** Address */
@@ -23989,6 +24460,127 @@ export interface components {
             version: number;
             /** Work Sample Ids */
             work_sample_ids?: number[];
+        };
+        /** GrowthHourCreate */
+        GrowthHourCreate: {
+            /** Activity Date */
+            activity_date: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Hours */
+            hours: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Title */
+            title: string;
+        };
+        /** GrowthHourListOut */
+        GrowthHourListOut: {
+            /** Items */
+            items: components["schemas"]["GrowthHourOut"][];
+        };
+        /** GrowthHourOut */
+        GrowthHourOut: {
+            /** Activity Date */
+            activity_date: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By */
+            created_by?: number | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Hours */
+            hours: number;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** GrowthHourUpdate */
+        GrowthHourUpdate: {
+            /** Activity Date */
+            activity_date?: string | null;
+            /** Hours */
+            hours?: number | null;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * GrowthPreviewGateOut
+         * @description 單一資格條件：`status` 為前端渲染三態（✓pass／✗fail／⚠no_data）的依據，
+         *     `detail` 為對應中文說明文字，前端可直接顯示不需自行組字串。
+         */
+        GrowthPreviewGateOut: {
+            /** Code */
+            code: string;
+            /** Detail */
+            detail: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * GrowthPreviewOut
+         * @description 學年結算預覽（`services.growth_contract.preview.build_growth_contract_preview`
+         *     的 passthrough）。`pending_rule` 放最外層——整份預覽只有一份標記，不逐列
+         *     重複；`rows` 為空陣列代表「該學年查無在職／該學年內離職的員工」，非錯誤
+         *     （見計畫 Task 7 回報 (b)：錯誤情境走 422/500，不會回這個 200 形狀）。
+         */
+        GrowthPreviewOut: {
+            /** Pending Rule */
+            pending_rule: string;
+            /** Rows */
+            rows: components["schemas"]["GrowthPreviewRowOut"][];
+            /** School Year */
+            school_year: number;
+        };
+        /** GrowthPreviewRowOut */
+        GrowthPreviewRowOut: {
+            /** Actual Hours */
+            actual_hours: number;
+            /** Amount */
+            amount: number;
+            /** Amount If Eligible */
+            amount_if_eligible: number;
+            /** Eligible */
+            eligible: boolean;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Gates */
+            gates: components["schemas"]["GrowthPreviewGateOut"][];
+            /** Hours Ratio */
+            hours_ratio: number;
+            /** Monthly Rate */
+            monthly_rate: number;
+            /** Position Key */
+            position_key: string;
+            /** Position Unknown */
+            position_unknown: boolean;
+            /** Required Hours */
+            required_hours: number;
+            /** Tenure Months */
+            tenure_months: number;
         };
         /**
          * GrowthReportListOut
@@ -31138,6 +31730,27 @@ export interface components {
             read_at?: string | null;
         };
         /**
+         * RecruitmentBonusSyncResultOut
+         * @description 招生候選同步結果。
+         *
+         *     ⚠ 類別名稱必須帶模組前綴：FastAPI 以 Pydantic 類別名當 OpenAPI schema key，
+         *     與 `schemas/appraisal.py` 既有的 `SyncResultOut`（考核評分項同步）同名會
+         *     **互相覆蓋**，讓 `/appraisal/cycles/{id}/sync_score_items` 的前端型別靜默
+         *     變成招生獎金的欄位。命名對齊既有的 `RecruitmentMarketSyncResultOut`。
+         */
+        RecruitmentBonusSyncResultOut: {
+            /** Carried Over */
+            carried_over: number;
+            /** Created */
+            created: number;
+            /** Excluded */
+            excluded: number;
+            /** Note */
+            note: string;
+            /** Skipped Other Campaign */
+            skipped_other_campaign: number;
+        };
+        /**
          * RecruitmentCampusSettingOut
          * @description 本園基本設定（地址 / 座標 / 通勤模式）。
          */
@@ -34605,6 +35218,32 @@ export interface components {
             reason: string;
         };
         /**
+         * SettlePaymentOut
+         * @description 結算回應中單一員工的發放明細（前端結算結果彈窗顯示用）。
+         */
+        SettlePaymentOut: {
+            /** Amount */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Resigned */
+            resigned: boolean;
+        };
+        /**
+         * SettleResultOut
+         * @description 結算結果：campaign 轉 settled 後，每位員工實際入帳的金額清單。
+         */
+        SettleResultOut: {
+            /** Campaign Id */
+            campaign_id: number;
+            /** Payments */
+            payments: components["schemas"]["SettlePaymentOut"][];
+            /** Settled At */
+            settled_at: string;
+        };
+        /**
          * ShiftAssignmentOut
          * @description 每週排班單筆 (GET /assignments)。
          */
@@ -34738,6 +35377,21 @@ export interface components {
             confirmed_read: boolean;
             /** Signature Data */
             signature_data: string;
+        };
+        /**
+         * SignedOnOut
+         * @description 簽約日維護回應：`growth_contract_signed_on` 為 None 代表未簽約／已清空。
+         */
+        SignedOnOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Growth Contract Signed On */
+            growth_contract_signed_on?: string | null;
+        };
+        /** SignedOnUpdate */
+        SignedOnUpdate: {
+            /** Signed On */
+            signed_on?: string | null;
         };
         /** SignRequestOut */
         SignRequestOut: {
@@ -49389,6 +50043,203 @@ export interface operations {
             };
         };
     };
+    update_signed_on_api_growth_contract_employees__employee_id__signed_on_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignedOnUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedOnOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_growth_hours_api_growth_contract_hours_get: {
+        parameters: {
+            query: {
+                employee_id?: number | null;
+                school_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthHourListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_growth_hour_api_growth_contract_hours_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthHourCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthHourOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_growth_hour_api_growth_contract_hours__hour_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hour_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_growth_hour_api_growth_contract_hours__hour_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hour_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthHourUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthHourOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_growth_contract_preview_api_growth_contract_preview_get: {
+        parameters: {
+            query: {
+                school_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_binding_code_api_guardians__guardian_id__binding_code_post: {
         parameters: {
             query?: never;
@@ -59621,6 +60472,258 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchApproveResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_campaigns_api_recruitment_bonus_campaigns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignListOut"];
+                };
+            };
+        };
+    };
+    create_campaign_api_recruitment_bonus_campaigns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_campaign_detail_api_recruitment_bonus_campaigns__campaign_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_campaign_api_recruitment_bonus_campaigns__campaign_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions__attribution_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attribution_id: number;
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_campaign_api_recruitment_bonus_campaigns__campaign_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettleResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_campaign_candidates_api_recruitment_bonus_campaigns__campaign_id__sync_candidates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentBonusSyncResultOut"];
                 };
             };
             /** @description Validation Error */
