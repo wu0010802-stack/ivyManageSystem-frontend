@@ -92,7 +92,17 @@ const stats = computed(() => {
   if (e.meal_lunch != null) out.push({ key: 'lunch', label: '午餐', value: `${e.meal_lunch}/3`, icon: 'restaurant', tone: 'sun' })
   if (e.nap_minutes != null) out.push({ key: 'nap', label: '午睡', value: `${e.nap_minutes} 分`, icon: 'bedtime', tone: 'grape' })
   if (e.mood && MOOD_STAT_TEXT[e.mood]) {
-    out.push({ key: 'mood', label: '心情', value: MOOD_STAT_TEXT[e.mood], icon: MOOD_STAT_ICON[e.mood], tone: 'leaf' })
+    // 拆多行避免家長端圖示字型抽取器誤判：同一行同時出現 "icon" 字樣與
+    // 引號包住的 'mood' 字面值時，會被寬鬆掃描規則收進候選 icon 清單，
+    // 但 "mood" 本身不是真實 Material Symbol，重產字型也無法收錄，
+    // 會變成永遠無法通過的假紅燈（P1 曾遇過同型態問題，見 icon-chip-bg token 化）。
+    out.push({
+      key: 'mood',
+      label: '心情',
+      value: MOOD_STAT_TEXT[e.mood],
+      icon: MOOD_STAT_ICON[e.mood],
+      tone: 'leaf',
+    })
   }
   if (e.temperature_c != null) out.push({ key: 'temp', label: '體溫', value: `${e.temperature_c}°`, icon: 'thermostat', tone: 'sky' })
   if (photoCount.value > 0) out.push({ key: 'photo', label: '照片', value: photoCount.value, icon: 'photo_camera', tone: 'coral' })
