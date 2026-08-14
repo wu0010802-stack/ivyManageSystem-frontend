@@ -155,19 +155,24 @@ const stats = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background:
-    linear-gradient(135deg, var(--cream, #fffcf2) 0%, var(--leaf-100, #dcf4e6) 100%);
+  background: var(--pt-gradient-hero);
   border: 1px solid rgba(13, 144, 83, 0.12);
-  border-radius: 20px;
+  border-radius: var(--pt-hero-radius, 30px);
   padding: 18px 16px 16px;
   isolation: isolate;
 }
 
-/* awaiting / offday：今天還沒有故事可講，漸層收斂成近乎純 cream，
-   讓「有聯絡簿的日子」在視覺上明顯更飽滿。 */
+/* awaiting / offday：今天還沒有故事可講，漸層收斂較淡，
+   讓「有聯絡簿的日子」在視覺上明顯更飽滿。三色同源、只降飽和度，
+   不能對 --pt-gradient-hero（gradient 值）直接 color-mix，故獨立複寫三色。 */
 .day-card-awaiting,
 .day-card-offday {
-  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, color-mix(in srgb, var(--leaf-100, #dcf4e6) 45%, transparent) 100%);
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, #fff7dd 55%, var(--pt-surface-card)) 0%,
+    color-mix(in srgb, #d9f4e2 55%, var(--pt-surface-card)) 78%,
+    color-mix(in srgb, #cdeef9 55%, var(--pt-surface-card)) 130%
+  );
 }
 
 .hero {
@@ -183,6 +188,8 @@ const stats = computed(() => {
   width: 64px;
   height: 64px;
   flex-shrink: 0;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--pt-surface-card) 55%, transparent);
   color: var(--brand-accent, #ffde51);
   opacity: 0.85;
 }

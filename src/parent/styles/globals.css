@@ -248,6 +248,7 @@
   --pt-shadow-press: var(--pt-shadow-card);
   --pt-tint-brand: rgba(13, 144, 83, 0.10);
   --pt-tint-sun: rgba(255, 222, 81, 0.28);
+  --pt-icon-chip-bg: rgba(255, 255, 255, 0.55);
 
   /* 白字：品牌綠/語意色/深色覆蓋等「有色背景」上的文字，light/dark 皆白（勿用 --m3-on-primary，dark 會變深綠） */
   --pt-on-accent: #ffffff;
@@ -380,6 +381,7 @@
   --pt-shadow-press: var(--pt-shadow-card);
   --pt-tint-brand: rgba(90, 168, 66, 0.16);
   --pt-tint-sun: rgba(255, 230, 109, 0.16);
+  --pt-icon-chip-bg: rgba(255, 255, 255, 0.1);
 
   /* Legacy 色階 dark 對應（2026-08-13 文字/背景對比修正）：
      light 慣用「pastel 100 背景＋深色 700 文字」（pt-pill-* / pt-page-hero /
@@ -528,14 +530,13 @@ select {
   border: var(--pt-hairline);
 }
 
-/* ========== Section title（首頁/More 統一）========== */
+/* ========== Section title（首頁/More 統一，M3 Expressive 大字階）========== */
 .pt-section-title {
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--pt-text-soft);
+  font-size: 16px;
+  font-weight: 900;
+  color: var(--pt-text-strong);
   margin: 0 0 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 .pt-page-stack {
