@@ -111,6 +111,8 @@ const links = [
     { path: '/salary/history', title: '薪資歷史', desc: '歷月紀錄、快照與明細回看' },
     { path: '/salary/simulate', title: '薪資試算', desc: '人事談薪情境試算（不寫入）' },
     { path: '/salary/settings', title: '薪資設定', desc: '獎金規則、才藝老師、系統參數' },
+    { path: '/salary/recruitment-bonus', title: '招生獎金', desc: '個人招生獎勵核算與結算轉帳' },
+    { path: '/salary/growth-contract', title: '自主成長獎勵金', desc: '研習時數登記、學年結算與每年 8 月發放' },
 ]
 </script>
 
