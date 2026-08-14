@@ -224,6 +224,12 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '活動調查', tab: 'admin', showBack: true },
     },
     {
+      path: '/child',
+      name: 'parent-child-hub',
+      component: () => import('./views/ChildHubView.vue'),
+      meta: { title: '孩子', tab: 'child' },
+    },
+    {
       path: '/admin',
       name: 'parent-admin',
       component: () => import('./views/AdminListView.vue'),
