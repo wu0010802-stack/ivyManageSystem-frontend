@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { Search, Plus, Check, Loading, Refresh } from '@element-plus/icons-vue'
-import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
+import { getDismissalCalls, cancelDismissalCall, createDismissalCall, arriveDismissalCall } from '@/api/dismissalCalls'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
@@ -19,7 +19,8 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import {
   useNowClock,
-  sortByOldestFirst,
+  sortActiveQueue,
+  isPreArrivalNotice,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 import {
@@ -60,10 +61,12 @@ const loading = ref(false)
 // 不跟學期，暑假期間學生已編入下學年班級，用當期清單會全部對不上班級（2026-07-30 根因）。
 const classrooms = ref<ClassroomInput[]>([])
 
-// 等候時間活著跳 + 最久優先（FIFO）看板排序
+// 等候時間活著跳＋看板排序（與教師端共用 sortActiveQueue：已抵達優先依
+// arrived_at 舊→新，未抵達的預告依 expected_arrival_at 近→遠；staff 舊資料
+// arrived_at=requested_at → 等價原 FIFO）
 const { now } = useNowClock()
 const isActiveView = computed(() => filterStatus.value === 'active')
-const sortedCalls = computed(() => sortByOldestFirst(calls.value as DismissalCallView[]))
+const sortedCalls = computed(() => sortActiveQueue(calls.value as DismissalCallView[]))
 
 // 篩選
 const filterStatus = ref('active') // active=pending+acknowledged | completed | cancelled | all
@@ -176,6 +179,23 @@ const handleCancel = async (call: DismissalCall) => {
   } catch (e) {
     if (e === 'cancel') return
     ElMessage.error((e as { response?: { data?: { detail?: string } } }).response?.data?.detail || '取消失敗')
+  }
+}
+
+// ─── 標記已到門口（pnotice01：辦公室代替忘記按抵達的家長）─────────────
+const handleArrive = async (call: DismissalCall) => {
+  try {
+    await arriveDismissalCall(call.id)
+    ElMessage.success(`已標記到門口：${call.student_name}`)
+    fetchCalls()
+  } catch (e) {
+    const err = e as { response?: { status?: number } }
+    if (err.response?.status === 409) {
+      await fetchCalls() // 多半家長剛自己按了，補抓現況
+      ElMessage.info(friendlyError('此通知狀態已變更', e))
+    } else {
+      ElMessage.error(friendlyError('標記失敗', e))
+    }
   }
 }
 
@@ -434,7 +454,9 @@ const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
         calls.value.unshift(payload)
       }
     }
-  } else if (type === 'dismissal_call_updated') {
+  } else if (type === 'dismissal_call_updated' || type === 'dismissal_call_arrived') {
+    // arrived（pnotice01 家長/辦公室標記已到門口）與 updated 同為 upsert 語意；
+    // 重複事件以 id 定位 splice 替換，天然 idempotent 不重複插卡。
     const idx = calls.value.findIndex(c => c.id === payload.id)
     if (idx !== -1) {
       if (filterStatus.value === 'active' && payload.status === 'completed') {
@@ -442,6 +464,12 @@ const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
       } else {
         calls.value.splice(idx, 1, payload)
       }
+    } else if (
+      type === 'dismissal_call_arrived' &&
+      (filterStatus.value === 'active' || filterStatus.value === 'all')
+    ) {
+      // 斷線期間錯過 created、先收到 arrived：補插卡避免佇列缺漏
+      calls.value.unshift(payload)
     }
   } else if (type === 'dismissal_call_cancelled') {
     if (filterStatus.value === 'active') {
@@ -609,6 +637,14 @@ onUnmounted(() => {
               </template>
               <template #action>
                 <el-button
+                  v-if="isPreArrivalNotice(call) && (call.status === 'pending' || call.status === 'acknowledged')"
+                  type="primary"
+                  plain
+                  size="small"
+                  data-testid="dismissal-arrive-btn"
+                  @click="handleArrive(call as DismissalCall)"
+                >標記已到門口</el-button>
+                <el-button
                   v-if="call.status === 'pending' || call.status === 'acknowledged'"
                   type="danger"
                   plain
@@ -674,6 +710,9 @@ onUnmounted(() => {
         <template #default="{ row }">{{ formatTime(row.requested_at) }}</template>
       </el-table-column>
       <el-table-column label="通知人" prop="requested_by_name" width="100" />
+      <el-table-column label="抵達時間" width="100">
+        <template #default="{ row }">{{ formatTime(row.arrived_at) }}</template>
+      </el-table-column>
       <el-table-column label="確認時間" width="100">
         <template #default="{ row }">{{ formatTime(row.acknowledged_at) }}</template>
       </el-table-column>

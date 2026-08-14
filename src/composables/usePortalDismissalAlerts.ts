@@ -18,7 +18,12 @@ import {
   WS_RECOVERY_RETRY_MS,
   type WebSocketCloseInfo,
 } from '@/utils/ws'
-import { sortByOldestFirst, type DismissalCallView } from '@/composables/useDismissalUrgency'
+import {
+  sortActiveQueue,
+  isPreArrivalNotice,
+  etaDeltaMinutes,
+  type DismissalCallView,
+} from '@/composables/useDismissalUrgency'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
@@ -37,7 +42,8 @@ const SOUND_PREF_KEY = 'portal_dismissal_sound_muted'
 const muted = ref(tenantGetItem(SOUND_PREF_KEY) === '1')
 const notificationSupported = ref(typeof window !== 'undefined' && 'Notification' in window)
 
-const sortedCalls = computed(() => sortByOldestFirst(activeCalls.value))
+// 與管理端 DismissalQueueView 共用 sortActiveQueue（已抵達優先 → 預告依 ETA）
+const sortedCalls = computed(() => sortActiveQueue(activeCalls.value))
 const pendingCount = computed(() => activeCalls.value.length)
 const connectionState = computed<'normal' | 'reconnecting' | 'exhausted'>(() =>
   wsConnected.value ? 'normal' : wsExhausted.value ? 'exhausted' : 'reconnecting',
@@ -101,6 +107,33 @@ const DISMISSAL_CHIME_TONES = [
   { freq: 783.99, at: 0.32, dur: 0.38 }, // G5
 ]
 const CHIME_PEAK_GAIN = 0.12
+
+// 家長預告（尚未抵達）的柔和提示：單音、低音量、無震動無語音。
+// 強提醒（三音+震動+語音）保留給「已到門口」與 staff 即時通知。
+const SOFT_CHIME_GAIN = 0.06
+function playSoftChime(): void {
+  if (muted.value) return
+  try {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!Ctx) return
+      audioCtx = new Ctx()
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {})
+    const t0 = audioCtx.currentTime
+    const osc = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.value = 523.25 // C5 單音
+    gain.gain.setValueAtTime(0, t0)
+    gain.gain.linearRampToValueAtTime(SOFT_CHIME_GAIN, t0 + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3)
+    osc.connect(gain).connect(audioCtx.destination)
+    osc.start(t0)
+    osc.stop(t0 + 0.32)
+  } catch { /* ignore */ }
+}
+
 function playBeep(): void {
   if (muted.value) return
   try {
@@ -160,14 +193,17 @@ function pickVoice(exact: string, prefix: string): { hasVoices: boolean; voice: 
 // 全中文播報，避免裝置的英文 voice 把學生姓名唸得不自然。
 // 班級／名字皆缺時退化為「學生」，與 liveAnnounce fallback 一致；若 voice 清單已載入但
 // 沒有中文 voice，寧可只保留提示音，不使用錯語系 voice。清單尚未載入時仍帶 lang 退化播報。
-function speakAnnouncement(call: { student_name?: string; classroom_name?: string }): void {
+function speakAnnouncement(
+  call: { student_name?: string; classroom_name?: string },
+  phrase = '，請準備回家囉',
+): void {
   if (muted.value) return
   if (!speechSupported()) return
   try {
     const studentLabel = [call.classroom_name, call.student_name].filter(Boolean).join(' ') || '學生'
     const zhPick = pickVoice('zh-TW', 'zh')
     if (!zhPick.hasVoices || zhPick.voice) {
-      const zh = new window.SpeechSynthesisUtterance(`${studentLabel}，請準備回家囉`)
+      const zh = new window.SpeechSynthesisUtterance(`${studentLabel}${phrase}`)
       zh.lang = 'zh-TW'
       zh.rate = SPEECH_RATE
       zh.pitch = SPEECH_PITCH
@@ -179,10 +215,14 @@ function speakAnnouncement(call: { student_name?: string; classroom_name?: strin
 
 // 統一的「提示音 + 播報」序列：提示音同步先響，SPEECH_LEAD_MS 後才唸（不重疊）。
 // 真實通知（handleWsEvent）與測試按鈕（PortalDismissalCallsView.testSound）共用，時序一致。
-function playAlert(call: { student_name?: string; classroom_name?: string }): void {
+// phrase：staff/舊流程預設「請準備回家囉」；家長已到門口用「家長已到門口，請準備放學」。
+function playAlert(
+  call: { student_name?: string; classroom_name?: string },
+  phrase?: string,
+): void {
   playBeep()
   triggerHaptic()
-  const timer = setTimeout(() => { speechTimers.delete(timer); speakAnnouncement(call) }, SPEECH_LEAD_MS)
+  const timer = setTimeout(() => { speechTimers.delete(timer); speakAnnouncement(call, phrase) }, SPEECH_LEAD_MS)
   speechTimers.add(timer)
 }
 
@@ -206,12 +246,12 @@ function toggleMute(): void {
 }
 
 // ── 瀏覽器推播（誠實降級：iOS Safari/LINE WebView 多半不送達，包 try/catch）──
-function notifyBrowser(call: DismissalCall): void {
+function notifyBrowser(call: DismissalCall, body?: string): void {
   if (!notificationSupported.value) return
   try {
     if (Notification.permission === 'granted') {
       new Notification('接送通知', {
-        body: `${call.student_name}（${call.classroom_name}）等待接送`,
+        body: body || `${call.student_name}（${call.classroom_name}）等待接送`,
         icon: '/favicon.ico',
       })
     }
@@ -353,12 +393,41 @@ function connectWs(): void {
 function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
   const { type, payload } = event
   if (type === 'dismissal_call_created') {
+    // idempotent：重複 created（重連補送 / echo）以 id 去重，只更新內容、不重播提醒
+    const dupIdx = activeCalls.value.findIndex((c) => c.id === payload.id)
+    if (dupIdx !== -1) {
+      activeCalls.value.splice(dupIdx, 1, payload)
+      return
+    }
     activeCalls.value.unshift(payload)
     // 記錄「加入當下的 fetch 序號」，讓 in-flight fetch 的晚到快照不會把這張新卡抹除。
     wsRecentlyCreated.set(payload.id, fetchDispatchSeq)
-    notifyBrowser(payload)
-    playAlert(payload)
-    liveAnnounce.value = `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`
+    if (isPreArrivalNotice(payload)) {
+      // 家長預告（尚未抵達）：柔和提示——單音 + 視覺插卡 + 報讀，
+      // 不震動、不語音；強提醒保留給 dismissal_call_arrived。
+      playSoftChime()
+      const eta = etaDeltaMinutes(payload.expected_arrival_at, Date.now())
+      const etaText = eta != null && eta > 0 ? `預計 ${eta} 分鐘後抵達` : '即將抵達'
+      const line = `${payload.student_name || '學生'}家長${etaText}`
+      notifyBrowser(payload, `${line}（${payload.classroom_name || ''}）`)
+      liveAnnounce.value = `預告接送：${line}`
+    } else {
+      notifyBrowser(payload)
+      playAlert(payload)
+      liveAnnounce.value = `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`
+    }
+  } else if (type === 'dismissal_call_arrived') {
+    // 家長/辦公室標記「已到門口」：此刻才觸發較強的音效、震動與語音。
+    const idx = activeCalls.value.findIndex((c) => c.id === payload.id)
+    const wasArrived = idx !== -1 && !!activeCalls.value[idx].arrived_at
+    if (idx !== -1) activeCalls.value.splice(idx, 1, payload)
+    else { activeCalls.value.unshift(payload); wsRecentlyCreated.set(payload.id, fetchDispatchSeq) }
+    if (!wasArrived) {
+      // 重複 arrived 事件不重播（idempotent）
+      notifyBrowser(payload, `${payload.student_name || '學生'}家長已到門口，請準備放學`)
+      playAlert(payload, '家長已到門口，請準備放學')
+      liveAnnounce.value = `${payload.student_name || '學生'}家長已到門口，請準備放學`
+    }
   } else if (type === 'dismissal_call_updated') {
     const idx = activeCalls.value.findIndex((c) => c.id === payload.id)
     if (payload.status === 'completed' || payload.status === 'cancelled') {

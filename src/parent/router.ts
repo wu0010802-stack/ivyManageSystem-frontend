@@ -157,6 +157,14 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '臨時接送', tab: 'admin', showBack: true },
     },
     {
+      // 預告接送（pnotice01）：家長本人提前通知抵達時間。
+      // ⚠ 與 /pickup（臨時接送授權，親友代接）是兩個功能，不可合併或改名。
+      path: '/pickup-notice',
+      name: 'parent-pickup-notice',
+      component: () => import('./views/PickupNoticeView.vue'),
+      meta: { title: '預告接送', tab: 'admin', showBack: true },
+    },
+    {
       path: '/pickup/new',
       name: 'parent-pickup-new',
       component: () => import('./views/PickupCreateView.vue'),

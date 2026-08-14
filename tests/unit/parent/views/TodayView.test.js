@@ -565,3 +565,59 @@ describe('TodayView 娃娃車入口卡', () => {
     expect(w.html()).not.toContain('120.28')
   })
 })
+
+describe('TodayView 預告接送 CTA（pnotice01）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    summaryRef.value = null
+    todayStatusRef.value = null
+    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const SUMMARY = {
+    me: { name: '王太太' },
+    children: [{ student_id: 1, name: '小明', classroom_name: '太陽班' }],
+    summary: {},
+  }
+
+  it('選中孩子無進行中預告：顯示「我要接小孩」導向 /pickup-notice', async () => {
+    const w = mountWith(SUMMARY, {
+      children: [{ student_id: 1, name: '小明', classroom_name: '太陽班', attendance: { status: '已入園' } }],
+    })
+    await flushPromises()
+    const cta = w.find('[data-testid="today-pickup-notice-cta"]')
+    expect(cta.exists()).toBe(true)
+    expect(cta.text()).toContain('我要接小孩')
+  })
+
+  it('家長預告進行中：CTA 改為查看文案（同一資料源，不出現矛盾卡）', async () => {
+    const w = mountWith(SUMMARY, {
+      children: [{
+        student_id: 1, name: '小明', classroom_name: '太陽班',
+        attendance: { status: '已入園' },
+        dismissal: { id: 9, status: 'pending', request_source: 'parent', requested_at: '2026-05-14T09:00:00', expected_arrival_at: '2026-05-14T09:20:00', arrived_at: null },
+      }],
+    })
+    await flushPromises()
+    const cta = w.find('[data-testid="today-pickup-notice-cta"]')
+    expect(cta.exists()).toBe(true)
+    expect(cta.text()).toContain('預告接送進行中')
+    expect(cta.text()).not.toContain('我要接小孩')
+  })
+
+  it('已離園（dismissal completed）：CTA 隱藏', async () => {
+    const w = mountWith(SUMMARY, {
+      children: [{
+        student_id: 1, name: '小明', classroom_name: '太陽班',
+        attendance: { status: '已入園' },
+        dismissal: { id: 9, status: 'completed', request_source: 'parent', requested_at: '2026-05-14T09:00:00' },
+      }],
+    })
+    await flushPromises()
+    expect(w.find('[data-testid="today-pickup-notice-cta"]').exists()).toBe(false)
+  })
+})
