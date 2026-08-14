@@ -61,11 +61,11 @@ const info = computed(() => (props.mood ? MOOD_MAP[props.mood] : null) || FALLBA
 .is-lg .mood-emoji { width: 64px; height: 64px; font-size: 36px; }
 .is-lg .mood-label { font-size: 15px; }
 
-.tone-sun    .mood-emoji { background: var(--sun-100, #fff4c9); }
+.tone-sun    .mood-emoji { background: var(--pt-accent-sun-container); }
 .tone-cream  .mood-emoji { background: var(--cream, #fffcf2); border: 1px solid var(--pt-border-light); }
-.tone-grape  .mood-emoji { background: var(--grape-100, #ebe0f5); }
-.tone-sky    .mood-emoji { background: var(--sky-100, #dceef5); }
-.tone-coral  .mood-emoji { background: var(--coral-100, #ffe3e0); }
+.tone-grape  .mood-emoji { background: var(--pt-accent-grape-container); }
+.tone-sky    .mood-emoji { background: var(--pt-accent-sky-container); }
+.tone-coral  .mood-emoji { background: var(--pt-accent-coral-container); }
 .tone-muted  .mood-emoji {
   background: var(--pt-surface-mute-soft, #f5f5f5);
   color: var(--pt-text-faint, #9a9a9a);
