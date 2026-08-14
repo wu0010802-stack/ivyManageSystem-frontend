@@ -51,11 +51,14 @@
           重新整理
         </el-button>
       </div>
-      <el-empty
+      <!-- 空狀態壓成一行：el-empty 的插圖與留白在收銀頁佔掉三百多 px，而開店到
+           第一筆入帳之間這塊一直是空的，等於把收款區推出畫面。 -->
+      <p
         v-if="!recentTransactions.loading && recentTransactions.items.length === 0"
-        description="今日尚無交易"
-        :image-size="60"
-      />
+        class="pos-panel-wrap__recent-empty"
+      >
+        今日尚無交易，完成第一筆收款後會列在這裡。
+      </p>
       <el-table
         v-else
         :data="recentTransactions.items"
@@ -343,6 +346,13 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
 .pos-panel-wrap__recent-title {
   font-size: 15px;
   font-weight: 600;
+}
+
+.pos-panel-wrap__recent-empty {
+  margin: 0;
+  padding: 4px 0 8px;
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 
 .pos-panel-wrap__receipt {

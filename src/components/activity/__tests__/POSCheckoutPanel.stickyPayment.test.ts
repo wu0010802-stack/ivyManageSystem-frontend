@@ -79,3 +79,19 @@ describe('POS 付款面板 sticky（長清單時仍看得到結帳按鈕）', ()
     expect(paymentTag![0]).toMatch(/pos-panel-wrap__col--pay/)
   })
 })
+
+describe('今日交易空狀態不佔版面', () => {
+  it('空清單用一行文字，不是 el-empty 的插圖加大留白', () => {
+    // el-empty 在收銀頁佔掉三百多 px，而開店到第一筆入帳之間這塊一直是空的
+    expect(panelSource).not.toMatch(/<el-empty/)
+    expect(panelSource).toMatch(/pos-panel-wrap__recent-empty/)
+  })
+
+  it('空狀態文案指出東西何時會出現，不是只說「沒有資料」', () => {
+    const text = panelSource.match(
+      /class="pos-panel-wrap__recent-empty"[^>]*>\s*([^<]+)/
+    )
+    expect(text, '找不到空狀態文案').toBeTruthy()
+    expect(text![1]).toMatch(/收款/)
+  })
+})
