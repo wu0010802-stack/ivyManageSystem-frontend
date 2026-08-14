@@ -1,19 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useChildrenStore } from '../stores/children'
-import { useChildSelection } from '../composables/useChildSelection'
 import { useHomeSummary } from '../composables/useHomeSummary'
 import { listPickupAuthorizations } from '../api/pickup'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
-import M3Divider from '../components/m3/M3Divider.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 const router = useRouter()
-const childrenStore = useChildrenStore()
-const { selectedId, ensureSelected } = useChildSelection()
 // F5：原本只解構 badges/summary，丟掉 error/pending——API 失敗時 num() 把
 // 每個徽章 fallback 成 0，會被誤讀成「一切都處理完了」（含逾期款項這種需要
 // 提醒的項目）。比照 TodayView：pending 時顯示骨架、error 時顯示可重試的
@@ -134,34 +129,9 @@ const items = computed<AdminItem[]>(() => {
   ]
 })
 
-const children = computed(() =>
-  (childrenStore.items || []) as { student_id: number; name?: string }[],
-)
-
-const childProfileTarget = computed(() => {
-  const sid = selectedId.value || children.value[0]?.student_id || null
-  return sid ? `/children/${sid}` : null
-})
-
-const childProfileSupporting = computed(() => {
-  const list = children.value
-  if (list.length === 0) return '尚未綁定子女'
-  if (list.length === 1) return `${list[0].name || ''} · 基本資料 / 健康 / 照片 / 報告 / 出勤`
-  return `${list.length} 位 · 基本資料 / 健康 / 照片 / 報告 / 出勤`
-})
-
 function go(path: string) {
   router.push(path)
 }
-
-function goChildProfile() {
-  if (childProfileTarget.value) router.push(childProfileTarget.value)
-}
-
-onMounted(async () => {
-  await childrenStore.load()
-  ensureSelected(children.value)
-})
 </script>
 
 <template>
@@ -201,18 +171,6 @@ onMounted(async () => {
           </span>
         </template>
       </M3ListItem>
-
-      <M3Divider class="admin-divider" />
-
-      <M3ListItem
-        headline="孩子檔案"
-        :supporting-text="childProfileSupporting"
-        leading-icon="folder_shared"
-        trailing-icon="chevron_right"
-        :clickable="!!childProfileTarget"
-        :disabled="!childProfileTarget"
-        @click="goChildProfile"
-      />
     </M3List>
   </div>
 </template>
@@ -222,9 +180,6 @@ onMounted(async () => {
   padding: 8px 0 16px;
   background: var(--m3-surface, #f7fbf3);
   min-height: 100%;
-}
-.admin-divider {
-  margin: 8px 0;
 }
 .skeleton-wrap {
   padding: 8px 16px;
