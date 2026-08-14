@@ -1,6 +1,6 @@
 <template>
   <div>
-    <PageHeader title="自主成長獎勵金" subtitle="研習時數登記與學年結算預覽（不發放）">
+    <PageHeader title="自主成長獎勵金" subtitle="研習時數登記、學年結算預覽與每年 8 月發放">
       <template #actions>
         <el-select v-model="schoolYear" style="width: 120px" aria-label="學年">
           <el-option v-for="y in schoolYearOptions" :key="y" :value="y" :label="`${y} 學年`" />

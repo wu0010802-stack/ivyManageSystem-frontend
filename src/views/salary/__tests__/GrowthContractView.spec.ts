@@ -704,3 +704,16 @@ describe('GrowthContractView 簽約日帶出來源', () => {
         expect(vm.signedOnDate).toBeNull()
     })
 })
+
+describe('GrowthContractView 頁面文案與現況一致', () => {
+    it('標題副標不得再宣稱「不發放」（2026-08-14 起可發放）', async () => {
+        // 業主裁定後本頁已能實際發錢；副標若仍寫「不發放」，HR 會以為按了結算
+        // 也不會出帳，是直接誤導。
+        listGrowthHoursMock.mockResolvedValue({ data: { items: [] } })
+        getGrowthPreviewMock.mockResolvedValue({ data: previewFixture({ rows: [] }) })
+        const wrapper = mountView()
+        await flushPromises()
+
+        expect(wrapper.text()).not.toContain('不發放')
+    })
+})
