@@ -73,11 +73,17 @@ function onClick(e: MouseEvent): void {
   gap: 12px;
   border: none;
   cursor: pointer;
-  box-shadow: var(--m3-elev-3, 0 4px 8px rgba(0, 0, 0, 0.2));
+  box-shadow: var(--pt-shadow-float, var(--m3-elev-3, 0 4px 8px rgba(0, 0, 0, 0.2)));
   transition:
     background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
-    box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+    box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
+    transform var(--motion-base, 260ms) var(--motion-spring, ease);
   font-family: var(--m3-font-body, 'Roboto', sans-serif);
+}
+.m3-fab:active:not(.is-disabled) { transform: scale(0.96); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-fab { transition: none; }
+  .m3-fab:active:not(.is-disabled) { transform: none; }
 }
 .m3-fab::before {
   content: '';

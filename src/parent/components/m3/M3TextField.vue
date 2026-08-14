@@ -131,7 +131,7 @@ function onInput(e: Event): void {
 
 .m3-text-field-filled .m3-text-field-control {
   background: var(--m3-surface-container-highest, #e0e4dc);
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--pt-control-radius, 14px) var(--pt-control-radius, 14px) 0 0;
   border-bottom: 1px solid var(--m3-on-surface-variant, #424941);
 }
 .m3-text-field-filled.is-focused .m3-text-field-control {
@@ -140,7 +140,7 @@ function onInput(e: Event): void {
 
 .m3-text-field-outlined .m3-text-field-control {
   border: 1px solid var(--m3-outline, #727970);
-  border-radius: 4px;
+  border-radius: var(--pt-control-radius, 14px);
 }
 .m3-text-field-outlined.is-focused .m3-text-field-control {
   border: 2px solid var(--m3-primary, #006d3d);
