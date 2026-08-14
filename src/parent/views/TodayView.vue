@@ -22,6 +22,8 @@ import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vu
 import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 import { listMySignRequests } from '../api/signDocuments'
+import GreetingSunIllustration from '../components/illustrations/GreetingSunIllustration.vue'
+import GreetingMoonIllustration from '../components/illustrations/GreetingMoonIllustration.vue'
 
 const router = useRouter()
 const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
@@ -201,6 +203,24 @@ const todayDateLine = computed(() => {
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日　星期${wd}`
 })
 
+type GreetingPeriod = 'morning' | 'noon' | 'evening'
+
+const GREETING_TEXT: Record<GreetingPeriod, string> = {
+  morning: '早安！',
+  noon: '午安！',
+  evening: '晚安！',
+}
+
+function greetingPeriod(): GreetingPeriod {
+  const h = new Date().getHours()
+  if (h >= 5 && h < 12) return 'morning'
+  if (h >= 12 && h < 18) return 'noon'
+  return 'evening'
+}
+
+const greetingText = computed(() => GREETING_TEXT[greetingPeriod()])
+const isEveningGreeting = computed(() => greetingPeriod() === 'evening')
+
 function isOffDay() {
   const d = new Date().getDay()
   return d === 0 || d === 6
@@ -288,9 +308,16 @@ function go(path: string) {
     <PendingSignBanner :count="pendingSignCount" />
     <PendingSurveyBanner :count="pendingSurveyCount" />
 
-    <!-- 頂部：日期 + 多寶切換（單孩姓名由今日卡呈現，不重複） -->
+    <!-- 頂部：問候語 + 日期 + 多寶切換（單孩姓名由今日卡呈現，不重複） -->
     <div class="today-head">
-      <p class="today-date">{{ todayDateLine }}</p>
+      <div class="today-greet-row">
+        <div>
+          <h1 class="today-greet">{{ greetingText }}</h1>
+          <p class="today-date">{{ todayDateLine }}</p>
+        </div>
+        <GreetingMoonIllustration v-if="isEveningGreeting" class="today-greet-art" />
+        <GreetingSunIllustration v-else class="today-greet-art" />
+      </div>
       <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
     </div>
 
@@ -465,6 +492,25 @@ function go(path: string) {
   flex-direction: column;
   gap: var(--space-2, 8px);
   padding: var(--space-6, 24px) var(--space-4, 16px) 0;
+}
+
+.today-greet-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.today-greet {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  color: var(--pt-text-strong);
+}
+.today-greet-art {
+  flex-shrink: 0;
+  margin-bottom: -2px;
 }
 
 .today-date {

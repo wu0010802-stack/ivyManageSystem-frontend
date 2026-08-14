@@ -252,14 +252,18 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     expect(heroNameOf(w)).toBe('小明')
   })
 
-  it('不再顯示樣板問候語（晚安/早安/午安/下午好）', async () => {
+  // 2026-05-16（66093e97）拿掉的是「晚安, 王太太」樣板 hero——問候語當時是首頁
+  // 主視覺、搶走孩子狀態的主角地位。2026-08-14 P3（M3 Expressive 改版 spec §6/§9）
+  // 依 mockup 加回問候語，但份量降到最低：頂端一小行文字+插畫、不含家長稱謂，
+  // 今日聯絡簿 hero 卡仍緊接在後、仍是最大最先的視覺主角，未違反原決策精神
+  // （2026-08-14 使用者已就此衝突明確裁定：加回但份量最低）。
+  it('問候語不含家長稱謂（P3 起有「早安/午安/晚安」，但不再有「, 王太太」樣板）', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
     )
     await flushPromises()
     const head = w.find('.today-head').text()
-    expect(head).not.toMatch(/晚安|早安|午安|下午好|夜深了/)
     expect(head).not.toContain('王太太')
   })
 
