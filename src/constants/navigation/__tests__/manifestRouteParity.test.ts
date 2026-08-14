@@ -33,7 +33,14 @@ import type { ManifestPage } from '@/constants/navigation'
 // 所有實頁（含巢狀 children 與參數路由代樣本值後）皆被衍生規則的 exact/prefix
 // 涵蓋。新增豁免前先確認該頁真的不該有權限規則（幾乎不存在這種頁——已登入即可
 // 訪問的頁應收進 PUBLIC_ROUTES，如 /profile）。
-const ROUTE_COVERAGE_EXEMPT: readonly { path: string; reason: string }[] = []
+const ROUTE_COVERAGE_EXEMPT: readonly { path: string; reason: string }[] = [
+  {
+    path: '/error',
+    reason:
+      '403 錯誤頁：權限守衛的重導落點，guard 以 meta.errorPage 豁免 canAccessRoute；' +
+      '掛權限規則反而讓被擋下的人連錯誤頁都進不去（重導迴圈）。',
+  },
+]
 
 /**
  * 與 `src/utils/auth.ts` 的 `getRoutePermissions` 同邏輯（最長匹配那組的

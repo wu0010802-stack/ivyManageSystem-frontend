@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLoca
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission, isPlatformAdmin } from '@/utils/auth'
+import { captureException } from '@/utils/sentry'
 import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
@@ -646,6 +647,14 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '系統維護中', noAuth: true, public: true, bare: true, hideNav: true }
         },
 
+        // ============ Admin 403 錯誤頁（權限守衛落點；errorPage 讓守衛跳過 default-deny 的 canAccessRoute） ============
+        {
+            path: '/error',
+            name: 'admin-error',
+            component: () => import('../views/ErrorStateView.vue'),
+            meta: { title: '無法存取', errorPage: true, errorType: 'forbidden' }
+        },
+
         // ============ Admin Login / Change Password ============
         {
             path: '/login',
@@ -874,7 +883,23 @@ export const routes: RouteRecordRaw[] = [
                     component: () => import('../views/portal/PortalSurveyDetailView.vue'),
                     meta: { title: '班級回覆狀況' },
                 },
+                {
+                    // portal 403 錯誤頁：權限守衛落點。不得掛 meta.permission，
+                    // 否則權限不足者連錯誤頁都進不去（重導迴圈）。
+                    path: 'error',
+                    name: 'portal-error',
+                    component: () => import('../views/ErrorStateView.vue'),
+                    meta: { title: '無法存取', errorPage: true, errorType: 'forbidden' },
+                },
             ],
+        },
+
+        // ============ 404 catch-all（必須殿後；此前未知路徑會被守衛靜默導回首頁） ============
+        {
+            path: '/:pathMatch(.*)*',
+            name: 'not-found',
+            component: () => import('../views/ErrorStateView.vue'),
+            meta: { title: '找不到頁面', noAuth: true, bare: true, errorPage: true, errorType: 'not-found' },
         },
 ]
 
@@ -929,9 +954,9 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
 // Auth guard
 // return-style（Vue Router 4）：回傳路由目標＝redirect、回傳 true＝放行；
 // 不再用已 deprecated 的 next() callback（每次導航會噴 deprecation warning）。
-router.beforeEach(async (to) => {
-    startRouteLoading()
-
+// 抽成具名匯出供單元測試（src/router/__tests__/authGuardErrorRedirects.spec.ts）；
+// startRouteLoading 留在 beforeEach wrapper，authGuard 本身不碰載入狀態。
+export async function authGuard(to: RouteLocationNormalized) {
     const { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁
@@ -969,12 +994,31 @@ router.beforeEach(async (to) => {
         return '/portal/home'
     }
 
-    // 權限檢查：admin 路由且已登入（非 teacher）
+    // 權限檢查：admin 路由且已登入（非 teacher）。
+    // meta.errorPage 路由（/error、404）跳過檢查：canAccessRoute 是 default-deny、
+    // 錯誤頁不在 ROUTE_PERMISSION_RULES 內，不跳過會把錯誤頁再重導成迴圈。
     if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role !== 'teacher') {
-        if (!canAccessRoute(to.path)) {
-            // 無權限，導向第一個有權限的路由；完全沒有權限時導向登入頁
-            const allowedRoutes = getAllowedRoutes()
-            return allowedRoutes.length > 0 ? allowedRoutes[0] : '/login'
+        if (!to.meta.errorPage && !canAccessRoute(to.path)) {
+            // '/' 是登入後的預設落點：導向第一個有權限的路由屬自動落地、不是錯誤；
+            // 完全沒有權限時導向登入頁（維持既有行為）。
+            if (to.path === '/') {
+                const allowedRoutes = getAllowedRoutes()
+                return allowedRoutes.length > 0 ? allowedRoutes[0] : '/login'
+            }
+            // 指名頁面無權限：導 403 錯誤頁並上報 Sentry。先前是靜默導去第一個
+            // 允許路由，使用者觀感是「功能壞掉被丟到別頁」且維運端毫無紀錄。
+            void captureException(new Error('admin route access denied'), {
+                path: to.fullPath,
+                routeTitle: to.meta.title ?? null,
+            })
+            return {
+                path: '/error',
+                query: {
+                    type: 'forbidden',
+                    feature: typeof to.meta.title === 'string' ? to.meta.title : '',
+                    from: to.fullPath,
+                },
+            }
         }
     }
 
@@ -983,16 +1027,34 @@ router.beforeEach(async (to) => {
     // 導致任何登入的 portal 使用者（含缺對應權限的教師）可直接打 URL 進敏感子頁
     //（用藥/接送/學生個案等含學生 PII/健康資料）。在此對掛了 meta.permission 的 portal 子路由
     // 以 hasPortalPermission 判定（teacher 不短路，沿用其既有 scope-aware 語意，
-    // 與後端 require_permission 對齊），缺權限導回 /portal/home。
+    // 與後端 require_permission 對齊）。缺權限導 /portal/error 403 錯誤頁並上報
+    // Sentry——先前靜默導回 /portal/home，使用者觀感是「功能壞掉被丟回首頁」
+    // 且毫無紀錄（2026-08-14 班級相簿實例）。/portal/error 本身不掛 meta.permission，
+    // 不會回到這個分支。
     if (loggedIn && to.meta.portal && to.meta.permission) {
         if (!hasPortalPermission(to.meta.permission as string)) {
-            if (to.path !== '/portal/home') {
-                return '/portal/home'
+            void captureException(new Error('portal route permission denied'), {
+                permission: to.meta.permission,
+                path: to.fullPath,
+            })
+            return {
+                path: '/portal/error',
+                query: {
+                    type: 'forbidden',
+                    feature: typeof to.meta.title === 'string' ? to.meta.title : '',
+                    permission: to.meta.permission as string,
+                    from: to.fullPath,
+                },
             }
         }
     }
 
     return true
+}
+
+router.beforeEach(async (to) => {
+    startRouteLoading()
+    return authGuard(to)
 })
 
 router.afterEach(() => {
