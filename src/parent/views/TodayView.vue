@@ -397,7 +397,7 @@ function go(path: string) {
         label="臨時接送"
         :value="`${pickupActiveCount} 筆進行中`"
         icon="hail"
-        tone="coral"
+        tone="leaf"
         to="/pickup"
       />
       <StatTile

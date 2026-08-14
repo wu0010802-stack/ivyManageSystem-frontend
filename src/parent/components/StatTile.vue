@@ -7,7 +7,7 @@ const props = withDefaults(defineProps<{
   value: string | number
   sub?: string
   icon?: string
-  tone?: 'brand' | 'amber' | 'coral' | 'sky' | 'neutral'
+  tone?: 'brand' | 'amber' | 'coral' | 'sky' | 'leaf' | 'neutral'
   to?: string
 }>(), {
   tone: 'neutral',
@@ -58,10 +58,12 @@ const ariaLabel = computed(() => `${props.label} ${props.value}`)
 .tone-amber { --m3-surface-container-low: var(--pt-accent-sun-container); }
 .tone-coral { --m3-surface-container-low: var(--pt-accent-coral-container); }
 .tone-sky   { --m3-surface-container-low: var(--pt-accent-sky-container); }
+.tone-leaf  { --m3-surface-container-low: var(--pt-accent-leaf-container); }
 .tone-brand { --m3-surface-container-low: var(--m3-primary-container); }
 
 .tone-amber .stat-tile-value, .tone-amber .stat-tile-icon { color: var(--pt-accent-sun-on); }
 .tone-coral .stat-tile-value, .tone-coral .stat-tile-icon { color: var(--pt-accent-coral-on); }
 .tone-sky .stat-tile-value, .tone-sky .stat-tile-icon { color: var(--pt-accent-sky-on); }
+.tone-leaf .stat-tile-value, .tone-leaf .stat-tile-icon { color: var(--pt-accent-leaf-on); }
 .tone-brand .stat-tile-value, .tone-brand .stat-tile-icon { color: var(--m3-on-primary-container); }
 </style>
