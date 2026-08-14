@@ -30,7 +30,7 @@
         :can-submit="canSubmit"
         :refund-approval-blocked="refundApprovalBlocked"
         :submitting="submitting"
-        class="pos-panel-wrap__col"
+        class="pos-panel-wrap__col pos-panel-wrap__col--pay"
         @update:applied-amount="(v) => updateSelectedAmount(v ?? 0)"
         @clear-selection="clearSelection"
         @clear="resetTransactionInputs"
@@ -51,11 +51,14 @@
           重新整理
         </el-button>
       </div>
-      <el-empty
+      <!-- 空狀態壓成一行：el-empty 的插圖與留白在收銀頁佔掉三百多 px，而開店到
+           第一筆入帳之間這塊一直是空的，等於把收款區推出畫面。 -->
+      <p
         v-if="!recentTransactions.loading && recentTransactions.items.length === 0"
-        description="今日尚無交易"
-        :image-size="60"
-      />
+        class="pos-panel-wrap__recent-empty"
+      >
+        今日尚無交易，完成第一筆收款後會列在這裡。
+      </p>
       <el-table
         v-else
         :data="recentTransactions.items"
@@ -138,7 +141,10 @@
       </div>
       <template #footer>
         <el-button @click="receiptDialogVisible = false">關閉</el-button>
-        <el-button type="primary" @click="printReceipt">重印收據</el-button>
+        <!-- 明確傳 reprint：dialog 內再按一次即為補印（首印由 submit() 自帶
+             reprint:false）。不可寫成 @click="printReceipt"——那會把 MouseEvent
+             當 options 傳進去，只是靠「event.reprint 為 undefined」巧合退回預設。 -->
+        <el-button type="primary" @click="printReceipt({ reprint: true })">重印收據</el-button>
       </template>
     </el-dialog>
   </div>
@@ -296,13 +302,29 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   grid-template-columns: 1.3fr 1fr;
   gap: 12px;
   min-height: 0;
-  align-items: stretch;
+  /* start 而非 stretch：依學生收款時左欄清單可長達數十筆，stretch 會把付款欄
+     一起拉到同高，加上付款卡按鈕組的 margin-top:auto，結帳鈕會被推到整份清單
+     的最底下。改 start 後付款欄縮回內容高度，才有空間讓下面的 sticky 生效。 */
+  align-items: start;
 }
 
 .pos-panel-wrap__col {
   min-height: 560px;
   overflow: hidden;
   display: flex;
+}
+
+/* 付款欄吸附：收銀員捲動長清單挑學生時，金額與結帳鈕一直留在視線內。
+   吸附座標系是 AdminLayout 那個 overflow-y:auto 的主內容區，與
+   YearPlanWorkspaceView `.side-panel` 同一套慣例。 */
+.pos-panel-wrap__col--pay {
+  position: sticky;
+  top: var(--space-3);
+  /* 覆蓋通用欄位的 560px：空狀態就該是一張矮卡，不是一大片白 */
+  min-height: 0;
+  /* 選了含多門課程的報名時面板可能比視窗高，讓它自己捲，別把按鈕頂出畫面 */
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
 }
 
 .pos-panel-wrap__col > :deep(.pos-panel),
@@ -324,6 +346,13 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
 .pos-panel-wrap__recent-title {
   font-size: 15px;
   font-weight: 600;
+}
+
+.pos-panel-wrap__recent-empty {
+  margin: 0;
+  padding: 4px 0 8px;
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 
 .pos-panel-wrap__receipt {
@@ -384,6 +413,12 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   }
   .pos-panel-wrap__col {
     min-height: 420px;
+  }
+  /* 單欄堆疊時付款卡排在清單「上方」，繼續吸附會蓋住正要挑選的清單 */
+  .pos-panel-wrap__col--pay {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 }
 </style>

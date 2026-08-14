@@ -283,8 +283,16 @@ export const getPOSOutstandingByStudent = (q: string, limit = 100, opts: Record<
 }
 export const posCheckout = (payload: ApiBody<'/activity/pos/checkout', 'post'>): AxiosResp<'/activity/pos/checkout', 'post'> =>
   api.post('/activity/pos/checkout', payload)
-export const getPOSReceiptPdf = (receiptNo: string): Promise<AxiosResponse<Blob>> =>
+// reprint（2026-08-14 bug hunt）：本端點是唯一列印路徑，結帳後首印與交易列表補印
+// 都打這支。後端據此決定收據抬頭是否加「（補印）」；**首印務必傳 false**，否則家長
+// 拿到的正本會印著補印章。預設 true 與後端一致（保守：寧可多標一次補印，也不能讓
+// 補印看起來像正本）。
+export const getPOSReceiptPdf = (
+  receiptNo: string,
+  opts: { reprint?: boolean } = {}
+): Promise<AxiosResponse<Blob>> =>
   api.get(`/activity/pos/receipts/${encodeURIComponent(receiptNo)}/print.pdf`, {
+    params: { reprint: opts.reprint ?? true },
     responseType: 'blob',
   })
 export const getPOSDailySummary = (date?: string): AxiosResp<'/activity/pos/daily-summary', 'get'> =>
