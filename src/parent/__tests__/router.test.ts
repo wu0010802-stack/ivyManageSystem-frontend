@@ -43,10 +43,6 @@ describe('parent router IA (2026-05-22 restructure)', () => {
       '/events',
       '/events/:eventId/ack',
       '/attendance',
-      '/children/:studentId',
-      '/children/:studentId/reports',
-      '/children/:studentId/photos',
-      '/children/:studentId/measurements',
     ])('%s 應有 tab=admin', (path) => {
       expect(tabOf(path)).toBe('admin')
     })
@@ -55,11 +51,28 @@ describe('parent router IA (2026-05-22 restructure)', () => {
   describe('Home tab 子頁（spec §5.1）', () => {
     it.each([
       '/home',
-      '/contact-book',
-      '/contact-book/:entryId',
       '/calendar',
     ])('%s 應有 tab=home', (path) => {
       expect(tabOf(path)).toBe('home')
+    })
+  })
+
+  describe('Child tab（P2 IA 重整，2026-08-14：5-tab 導航新增「孩子」hub）', () => {
+    it('/child hub 存在且 tab=child', () => {
+      const r = findRoute('/child')
+      expect(r).toBeDefined()
+      expect(r?.name).toBe('parent-child-hub')
+      expect(r?.meta?.tab).toBe('child')
+    })
+    it.each([
+      '/contact-book',
+      '/contact-book/:entryId',
+      '/children/:studentId',
+      '/children/:studentId/reports',
+      '/children/:studentId/photos',
+      '/children/:studentId/measurements',
+    ])('%s 應有 tab=child（P2 起自 admin/home 改歸屬，避免與孩子 hub 雙入口）', (path) => {
+      expect(tabOf(path)).toBe('child')
     })
   })
 
