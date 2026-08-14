@@ -16,6 +16,7 @@ import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Clock, Delete, Edit, Grid, Plus, RefreshRight, User, Reading, MoreFilled } from '@element-plus/icons-vue'
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
+import { formatTeacherOptionLabel } from '@/utils/teacherOption'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
@@ -31,7 +32,7 @@ import EnrollmentRosterDialog from '@/components/enrollment/EnrollmentRosterDial
 
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
-interface TeacherOption { id: number; name: string; [key: string]: unknown }
+interface TeacherOption { id: number; name: string; employee_id?: string | null; position?: string | null; [key: string]: unknown }
 
 const classroomStore = useClassroomStore()
 const termStore = useAcademicTermStore()
@@ -641,21 +642,21 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
             <el-col :span="8">
               <el-form-item label="班導師" label-width="90px">
                 <el-select v-model="form.head_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
+                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8">
               <el-form-item label="副班導" label-width="90px">
                 <el-select v-model="form.assistant_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
+                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8">
               <el-form-item label="美語老師" label-width="90px">
                 <el-select v-model="form.english_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
+                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
                 </el-select>
               </el-form-item>
             </el-col>

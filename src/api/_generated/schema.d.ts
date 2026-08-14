@@ -4797,6 +4797,8 @@ export interface paths {
         /**
          * Get Teacher Options
          * @description 取得可指派教師清單。
+         *
+         *     帶工號與職稱：同名教師只看姓名無法辨識（見 TeacherOptionOut docstring）。
          */
         get: operations["get_teacher_options_api_classrooms_teacher_options_get"];
         put?: never;
@@ -36574,12 +36576,20 @@ export interface components {
         /**
          * TeacherOptionOut
          * @description GET /classrooms/teacher-options 單筆。
+         *
+         *     employee_id（工號）與 position（職稱）供前端區分同名教師：只給姓名時操作者
+         *     無從判斷選中的是哪一位（2026-08-14 staging：同名兩筆使班導師指派到與登入帳號
+         *     綁定不同的員工，教師 Portal 因此看不到班級）。
          */
         TeacherOptionOut: {
+            /** Employee Id */
+            employee_id?: string | null;
             /** Id */
             id: number;
             /** Name */
             name: string;
+            /** Position */
+            position?: string | null;
         };
         /**
          * TeacherOut
