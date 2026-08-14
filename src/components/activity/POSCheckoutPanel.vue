@@ -138,7 +138,10 @@
       </div>
       <template #footer>
         <el-button @click="receiptDialogVisible = false">關閉</el-button>
-        <el-button type="primary" @click="printReceipt">重印收據</el-button>
+        <!-- 明確傳 reprint：dialog 內再按一次即為補印（首印由 submit() 自帶
+             reprint:false）。不可寫成 @click="printReceipt"——那會把 MouseEvent
+             當 options 傳進去，只是靠「event.reprint 為 undefined」巧合退回預設。 -->
+        <el-button type="primary" @click="printReceipt({ reprint: true })">重印收據</el-button>
       </template>
     </el-dialog>
   </div>
