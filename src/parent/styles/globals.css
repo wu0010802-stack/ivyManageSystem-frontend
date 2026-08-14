@@ -168,6 +168,17 @@
   --pt-gradient-hero:       linear-gradient(150deg, #fff7dd 0%, #d9f4e2 78%, #cdeef9 130%);
 
   /* ============================================================
+   * 童彩 tonal 配對（M3 Expressive，spec §3）
+   * 每色 container + on-container 成對，用於 tile / timeline dot / chip。
+   * 不得單獨取 container 自訂文字色。
+   * ============================================================ */
+  --pt-accent-sun-container: #ffedb8;   --pt-accent-sun-on: #5c4300;
+  --pt-accent-coral-container: #ffddd1; --pt-accent-coral-on: #7a2e18;
+  --pt-accent-sky-container: #cfecf7;   --pt-accent-sky-on: #0b4a5c;
+  --pt-accent-leaf-container: #d8f1de;  --pt-accent-leaf-on: #1c5232;
+  --pt-accent-grape-container: #eadfff; --pt-accent-grape-on: #4a3277;
+
+  /* ============================================================
    * Icon tint（quick action / todo 背景）— v2.1 配色
    * 每類功能對應一組淡色背景 + 同色系 fg
    * ============================================================ */
@@ -319,6 +330,13 @@
   --pt-gradient-warm:       linear-gradient(135deg, var(--ivy-tile-yellow-bg) 0%, rgba(255, 222, 81, 0.14) 100%);
   /* Hero 漸層：暖黃 → 嫩綠 → 天藍的深色版（對齊 light 段 §3） */
   --pt-gradient-hero:       linear-gradient(150deg, #2c2a1c 0%, #1c332a 78%, #14313c 130%);
+
+  /* 童彩 tonal 配對 dark（對齊 light 段 §3） */
+  --pt-accent-sun-container: #4a3a10;   --pt-accent-sun-on: #ffe08c;
+  --pt-accent-coral-container: #54291c; --pt-accent-coral-on: #ffbfa8;
+  --pt-accent-sky-container: #123c4a;   --pt-accent-sky-on: #a5dff2;
+  --pt-accent-leaf-container: #1d3f2a;  --pt-accent-leaf-on: #b5e8c4;
+  --pt-accent-grape-container: #38295c; --pt-accent-grape-on: #d8c5ff;
 
   /* dark tint：對應 ivy-tile-* 配色（rgba 0.18 已在 ivy-tile-* 自帶 alpha） */
   --pt-tint-money:        var(--ivy-tile-yellow-bg);  --pt-tint-money-fg:        var(--ivy-tile-yellow-fg);
