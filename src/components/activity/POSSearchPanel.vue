@@ -81,7 +81,9 @@
           :key="g.student_key"
           class="pos-group"
         >
-          <div class="pos-group__head">
+          <!-- 只有一筆報名時整組攤平成單列：群組表頭在那種情況下只是把姓名與同一個
+               金額再印一次（多數學生只報一門課）。多筆才需要表頭承載合計。 -->
+          <div v-if="!isFlatGroup(g)" class="pos-group__head">
             <div>
               <div class="pos-group__name">{{ g.student_name }}</div>
               <div class="pos-group__sub">
@@ -97,7 +99,10 @@
             v-for="reg in g.registrations"
             :key="reg.id"
             class="pos-reg"
-            :class="{ 'pos-reg--selected': isSelected(reg.id) }"
+            :class="{
+              'pos-reg--selected': isSelected(reg.id),
+              'pos-reg--flat': isFlatGroup(g),
+            }"
             @click="emit('toggle', reg, g.student_name || '')"
           >
             <el-checkbox
@@ -106,6 +111,13 @@
               @change="emit('toggle', reg, g.student_name || '')"
             />
             <div class="pos-reg__info">
+              <div v-if="isFlatGroup(g)" class="pos-reg__student">
+                <span class="pos-reg__student-name">{{ g.student_name }}</span>
+                <span class="pos-reg__student-class">
+                  {{ g.class_name || '—' }}
+                  <template v-if="g.birthday">· 生日 {{ g.birthday }}</template>
+                </span>
+              </div>
               <div class="pos-reg__lines">
                 <span
                   v-for="(c, i) in reg.courses"
@@ -122,11 +134,14 @@
                   {{ s.name }}
                 </span>
               </div>
-              <div class="pos-reg__meta">
+              <!-- 已繳 0 時這行只是把欠款金額換句話再說一次；部分繳費才有資訊量，
+                   順帶讓這種人在滿是「未繳」的清單裡自然凸顯。 -->
+              <div v-if="hasPartialPayment(reg)" class="pos-reg__meta">
                 應繳 {{ formatTWD(reg.total_amount) }} · 已繳 {{ formatTWD(reg.paid_amount) }}
               </div>
             </div>
             <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
+              <span v-if="isFlatGroup(g)" class="pos-reg__owed-label">{{ groupTotalLabel }}</span>
               {{ formatTWD(isRefundMode ? reg.paid_amount : reg.owed) }}
             </div>
           </div>
@@ -318,6 +333,25 @@ const truncationText = computed(() => {
 // 「已繳／可退金額」而非欠款，沿用「欠」會讓櫃台把已繳清的學生誤判成欠費。標籤與配色
 // 都對齊上方「待退／待收合計」。語意正規化理應在父層 composable 做，此處先於元件內收斂。
 const groupTotalLabel = computed(() => (props.isRefundMode ? '可退' : '欠'))
+
+/**
+ * 只有一筆報名 → 攤平成單列（姓名與金額同行、品項在下），不再包群組表頭。
+ * 表頭在這種情況下只是把姓名與同一個金額再印一次，而多數學生只報一門課。
+ * 多筆時表頭仍要留著承載合計，各列才不必逐列重複姓名。
+ */
+function isFlatGroup(g: GroupEntry): boolean {
+  return (g.registrations?.length ?? 0) === 1
+}
+
+/**
+ * 是否為部分繳費（已繳 > 0 但尚未結清）。
+ * 只有這種列才印「應繳 X · 已繳 Y」——已繳 0 時那行等於把欠款金額換句話再說一次。
+ */
+function hasPartialPayment(r: RegistrationEntry): boolean {
+  const paid = Number(r.paid_amount || 0)
+  const total = Number(r.total_amount || 0)
+  return paid > 0 && paid < total
+}
 
 const emit = defineEmits<{
   'update:mode': [value: string | number | boolean]
@@ -616,6 +650,36 @@ function handleSingleToggle(row: RegistrationEntry) {
   border-top: 1px solid var(--border-color);
   cursor: pointer;
   transition: background 0.15s;
+}
+
+/* 攤平列：姓名與金額必須落在同一行，所以改頂端對齊——置中會讓金額浮在
+   姓名與品項之間，掃描「誰欠多少」時對不上。 */
+.pos-reg--flat {
+  align-items: flex-start;
+}
+
+.pos-reg__student {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-bottom: 4px;
+}
+
+.pos-reg__student-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.pos-reg__student-class {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pos-reg__owed-label {
+  font-weight: 500;
+  font-size: 13px;
 }
 
 .pos-reg:first-child {
