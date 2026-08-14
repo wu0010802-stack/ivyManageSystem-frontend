@@ -12,8 +12,9 @@ import { clearSnackbarQueue } from './useSnackbar'
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
 import { resetParentOfflineQueueRuntime } from '@/parent/utils/parentOfflineQueue'
 // 注意：liff（@line/liff SDK ~30KB gz）改為登出時才 dynamic import。此 composable
-// 經 MeDrawer → ParentLayout → App.vue 靜態鏈落在家長首屏；若靜態 import liff 會把整包
-// SDK 拖進首屏。登出是使用者動作，容忍一次動態載入（登入過的使用者該 chunk 已在快取）。
+// 經 MeView（/me route lazy component）引入；P2 起 MeDrawer 已移除掛載，本檔不再
+// 落在首屏靜態鏈上，但維持動態 import liff 的既有決策不變（無急迫理由改回靜態，
+// 且改動屬效能優化範疇，超出 P4 掃尾範圍）。
 
 /**
  * 家長端統一登出清理。抽成單一來源，避免 MeView / MeDrawer 兩條 doLogout 漂移
