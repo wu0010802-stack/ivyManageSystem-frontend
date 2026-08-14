@@ -15,6 +15,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import MoodBadge from '../components/contact-book/MoodBadge.vue'
 import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
+import ContactBookHeroSparkle from '../components/illustrations/ContactBookHeroSparkle.vue'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
@@ -356,12 +357,19 @@ function formatReplyTime(iso: string) {
     <template v-else-if="entry">
       <!-- Hero：日期 + 名字 + 大心情徽章 -->
       <header class="hero">
+        <ContactBookHeroSparkle class="hero-art" />
         <p class="hero-date">{{ dateLine }}</p>
         <div class="hero-row">
-          <MoodBadge :mood="entry.mood" size="lg" show-label />
+          <div class="mood-lg">
+            <MoodBadge :mood="entry.mood" size="lg" />
+          </div>
           <div class="hero-meta">
             <h1 class="hero-name">{{ studentInfo?.name || '聯絡簿' }}</h1>
             <p v-if="studentInfo?.classroom_name" class="hero-class">{{ studentInfo.classroom_name }}</p>
+            <span v-if="entry.mood && MOOD_LABEL[entry.mood]" class="mood-tag">
+              <span class="material-symbols-rounded" aria-hidden="true">sunny</span>
+              今天心情：{{ MOOD_LABEL[entry.mood] }}
+            </span>
           </div>
         </div>
       </header>
@@ -499,9 +507,17 @@ function formatReplyTime(iso: string) {
 
 /* Hero */
 .hero {
+  position: relative;
   padding: 16px 20px 18px;
-  background:
-    linear-gradient(135deg, var(--cream, #fffcf2) 0%, var(--leaf-100, #dcf4e6) 100%);
+  background: var(--pt-gradient-hero);
+  border-radius: var(--pt-hero-radius, 30px);
+  overflow: hidden;
+}
+.hero-art {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  opacity: 0.95;
 }
 .hero-date {
   margin: 0;
@@ -517,6 +533,32 @@ function formatReplyTime(iso: string) {
   gap: 16px;
 }
 .hero-meta { flex: 1; min-width: 0; }
+.mood-lg {
+  width: 76px;
+  height: 76px;
+  border-radius: 28px;
+  flex-shrink: 0;
+  background: var(--pt-surface-card, #fff);
+  box-shadow: var(--pt-shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mood-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  background: var(--pt-accent-sun-container);
+  color: var(--pt-accent-sun-on);
+  border-radius: 999px;
+  padding: 4px 12px 4px 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.mood-tag .material-symbols-rounded {
+  font-size: 15px;
+}
 .hero-name {
   margin: 0;
   font-size: 26px;
