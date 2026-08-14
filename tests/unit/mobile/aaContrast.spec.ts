@@ -67,9 +67,9 @@ describe('家長端 dark mode legacy 色階覆寫（2026-08-13 文字/背景對�
     expect(globals()).not.toMatch(/--sun-700:\s*#c99500/)
   })
 
-  it('.pt-pill-success 文字不用 --brand-primary（#0d9053 對 leaf-100 僅 3.5:1）', () => {
+  it('.pt-pill-success 文字不用 --brand-primary（#0d9053 對 leaf-100 僅 3.5:1）——P1 起改走童彩 leaf tonal 配對', () => {
     const css = read('src/parent/styles/patterns.css').replace(/\s+/g, ' ')
-    expect(css).toMatch(/\.pt-pill-success \{[^}]*color: var\(--ivy-tile-green-fg/)
+    expect(css).toMatch(/\.pt-pill-success \{[^}]*color: var\(--pt-accent-leaf-on/)
   })
 
   it('TimelineItem 不用 dark 不翻色的 --neutral-600 / 未定義的 --text-tertiary', () => {
