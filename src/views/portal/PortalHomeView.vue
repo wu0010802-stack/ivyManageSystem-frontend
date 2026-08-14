@@ -43,12 +43,24 @@ const greeting = computed(() => {
   return '晚安'
 })
 
-interface DashboardSummary { me?: Record<string, unknown>; today?: Record<string, unknown>; classrooms?: Record<string, unknown>[]; actions?: Record<string, unknown>; message?: string }
+interface DashboardSummary { me?: Record<string, unknown>; today?: Record<string, unknown>; classrooms?: Record<string, unknown>[]; classrooms_hint?: string | null; actions?: Record<string, unknown>; message?: string }
 const summaryData = summary as import('vue').Ref<DashboardSummary | null>
 const me = computed(() => summaryData.value?.me || {})
 const today = computed(() => summaryData.value?.today || {})
 const classrooms = computed(() => summaryData.value?.classrooms || [])
 const actions = computed(() => summaryData.value?.actions || {})
+const classroomsHint = computed(() => summaryData.value?.classrooms_hint || '')
+
+// 「姓名（工號·職稱）」——與管理端教師下拉同一組辨識欄位，老師才能逐字核對
+// 人事指派到的是不是自己這一筆。
+const myIdentity = computed(() => {
+  const name = (me.value.name as string) || ''
+  if (!name) return ''
+  const extras = [me.value.employee_no, me.value.position]
+    .map((value) => String(value ?? '').trim())
+    .filter((value) => value.length > 0)
+  return extras.length > 0 ? `${name}（${extras.join('·')}）` : name
+})
 </script>
 
 <template>
@@ -104,7 +116,13 @@ const actions = computed(() => summaryData.value?.actions || {})
 
       <div class="classroom-section pt-stagger">
         <h3 class="pt-section-title">我的班級</h3>
-        <p v-if="!classrooms.length" class="empty">您目前未綁定任何班級</p>
+        <div v-if="!classrooms.length" class="empty">
+          <p>您目前未綁定任何班級</p>
+          <!-- 空班級時附上身分與後端診斷提示：同名員工在系統裡是兩筆不同資料，
+               老師看得到自己的工號才有辦法跟人事核對指派對象（2026-08-14 實例）。 -->
+          <p v-if="myIdentity" class="empty-identity">目前身分：{{ myIdentity }}</p>
+          <p v-if="classroomsHint" class="empty-hint">{{ classroomsHint }}</p>
+        </div>
         <ClassroomOpsCard
           v-for="c in classrooms"
           :key="(c.classroom_id as PropertyKey)"
@@ -166,6 +184,20 @@ const actions = computed(() => summaryData.value?.actions || {})
   color: var(--pt-text-muted);
   text-align: center;
   padding: var(--space-6);
+}
+
+.empty-identity {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+.empty-hint {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  text-align: left;
+  max-width: 34rem;
+  margin-inline: auto;
 }
 
 /* 補休結餘 widget */
