@@ -248,6 +248,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '招生獎金', parentTitle: '薪資管理' }
         },
         {
+            path: '/salary/growth-contract',
+            name: 'salary-growth-contract',
+            component: () => import('../views/salary/GrowthContractView.vue'),
+            meta: { title: '自主成長獎勵金', parentTitle: '薪資管理' }
+        },
+        {
             path: '/calendar',
             name: 'calendar',
             component: () => import('../views/CalendarView.vue'),
