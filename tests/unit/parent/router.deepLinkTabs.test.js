@@ -8,11 +8,12 @@ async function buildRouter() {
 }
 
 // IA v3（2026-05-22）：4 tab = home / messages / admin / me（family 砍掉）
-// 對映規則見 docs/superpowers/specs/2026-05-22-parent-ia-restructure-design.md §5.1
-describe('parent router IA v3 — deep-link tab association', () => {
+// P2（2026-08-14）：擴充為 5 tab，新增 child——聯絡簿改歸屬孩子 hub。
+// 對映規則見 docs/superpowers/specs/2026-08-14-parent-liff-m3-expressive-redesign-design.md §7
+describe('parent router IA v3+P2 — deep-link tab association', () => {
   it.each([
     ['/home', 'home'],
-    ['/contact-book', 'home'],
+    ['/contact-book', 'child'],
     ['/calendar', 'home'],
     ['/messages', 'messages'],
     ['/announcements', 'messages'],
@@ -26,6 +27,7 @@ describe('parent router IA v3 — deep-link tab association', () => {
     ['/me', 'me'],
     ['/notifications/preferences', 'me'],
     ['/bind-additional', 'me'],
+    ['/children/1', 'child'],
   ])('深層頁 %s 對應 tab %s', async (path, expectedTab) => {
     const router = await buildRouter()
     await router.push(path)
