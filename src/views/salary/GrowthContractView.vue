@@ -13,9 +13,10 @@
       type="warning"
       show-icon
       :closable="false"
-      title="本頁金額僅供試算，尚未發放"
+      title="金額試算規則"
       :description="pendingRule || DEFAULT_PENDING_RULE"
     />
+    <p v-if="paidPeriod" class="paid-period-hint">將於 {{ paidPeriod }} 發放</p>
 
     <section class="hours-section">
       <div class="section-header">
@@ -60,8 +61,26 @@
     <section class="preview-section">
       <div class="section-header">
         <h3>學年結算預覽</h3>
-        <el-checkbox v-model="onlyEligiblePayable">只顯示符合資格且金額 &gt; 0</el-checkbox>
+        <div class="section-actions">
+          <el-checkbox v-model="onlyEligiblePayable">只顯示符合資格且金額 &gt; 0</el-checkbox>
+          <el-button
+            v-if="canWrite"
+            type="danger"
+            :loading="settling"
+            :disabled="settleDisabled"
+            @click="doSettle"
+          >結算</el-button>
+        </div>
       </div>
+
+      <el-alert
+        v-if="settleResult"
+        class="settle-result-alert"
+        type="success"
+        show-icon
+        :closable="false"
+        :title="settleResultLabel"
+      />
 
       <EmptyState
         v-if="!previewLoading && previewTableData.length === 0"
@@ -96,7 +115,7 @@
             >{{ g.symbol }} {{ g.label }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="金額（試算，未發放）" width="180">
+        <el-table-column label="金額（試算）" width="180">
           <template #default="{ row }">
             <div class="amount-cell">
               <strong>{{ row.amountLabel }}</strong>
@@ -115,6 +134,26 @@
             <el-button link size="small" @click="openSignedOnDialog(row)">設定</el-button>
           </template>
         </el-table-column>
+      </el-table>
+    </section>
+
+    <section class="paid-section">
+      <h3>已發放明細（表外獎金－自主成長獎勵金）</h3>
+      <EmptyState
+        v-if="!extraBonusLoading && extraBonusItems.length === 0"
+        variant="inline"
+        title="查無已發放明細"
+        description="尚未結算過，或該學年對應的發放年月查無紀錄"
+      />
+      <el-table v-else v-loading="extraBonusLoading" :data="extraBonusTableData" stripe style="width: 100%">
+        <el-table-column prop="employee_name" label="員工" min-width="120" />
+        <el-table-column label="金額" width="120">
+          <template #default="{ row }">{{ row.amountLabel }}</template>
+        </el-table-column>
+        <el-table-column label="歸屬年月" width="120">
+          <template #default="{ row }">{{ row.period_year }} / {{ row.period_month }}</template>
+        </el-table-column>
+        <el-table-column prop="remark" label="備註" min-width="200" />
       </el-table>
     </section>
 
@@ -191,19 +230,27 @@ import {
     deleteGrowthHour,
     patchSignedOn,
     getGrowthPreview,
+    settleGrowthContract,
 } from '@/api/growthContract'
+import { listExtraBonuses } from '@/api/extraBonuses'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 
-// 自主成長獎勵金頁（計畫 Task 11）：學年選擇 → 時數登記（dialog CRUD）與簽約日維護
-// （可設可清空）→ 學年結算預覽（唯讀試算，不發放）。`pending_rule` 警示條是刻意的
-// 制度標記——金額語意待業主確認（spec §6 P2），任何情況都不可省略或弱化。
+// 自主成長獎勵金頁（計畫 Task 11 + 業主 2026-08-14 裁定發放）：學年選擇 → 時數登記
+// （dialog CRUD）與簽約日維護（可設可清空）→ 學年結算預覽（動態試算）→ 結算
+// （POST /growth-contract/settle，per-employee 冪等，寫入表外獎金獨立轉帳）→
+// 已發放明細（GET /extra-bonuses?category=growth_contract）。`pending_rule` 警示條
+// 仍是刻意的制度標記，但金額語意已由業主確認、不再是「待確認、不可發放」，內容一律
+// 以後端回傳原文為準，前端不可再寫死「未發放」這類與「已可結算」矛盾的固定文案。
 
 type GrowthHour = Schema<'GrowthHourOut'>
 type GrowthPreviewRow = Schema<'GrowthPreviewRowOut'>
 type GrowthPreviewGate = Schema<'GrowthPreviewGateOut'>
+type GrowthSettleResult = Schema<'GrowthSettleResultOut'>
+type ExtraBonusRow = Schema<'ExtraBonusOut'>
 type HourCreateBody = ApiBody<'/growth-contract/hours', 'post'>
 type HourUpdateBody = ApiBody<'/growth-contract/hours/{hour_id}', 'patch'>
 type SignedOnBody = ApiBody<'/growth-contract/employees/{employee_id}/signed-on', 'patch'>
+type SettleBody = ApiBody<'/growth-contract/settle', 'post'>
 
 interface EmployeeOption {
     id: number
@@ -211,7 +258,7 @@ interface EmployeeOption {
 }
 
 const DEFAULT_PENDING_RULE =
-    '金額語意暫依「每月提撥×在職月數」假設建模，待業主確認；舊生註冊率無資料時僅警示不擋。'
+    '金額依「每月提撥×在職月數」與各項資格條件計算；結算後將寫入表外獎金獨立轉帳，實際入帳金額以結算結果為準。'
 
 const SEMESTER_LABELS: Record<number, string> = { 1: '上學期', 2: '下學期' }
 // 資格條件 code → 短標籤（用於資格條件欄的 tag 文字）。
@@ -282,6 +329,7 @@ const fetchHours = async () => {
 const previewRows = ref<GrowthPreviewRow[]>([])
 const previewLoading = ref(false)
 const pendingRule = ref('')
+const paidPeriod = ref('')
 const onlyEligiblePayable = ref(false)
 
 let previewSeq = 0
@@ -293,6 +341,9 @@ const fetchPreview = async () => {
         if (seq !== previewSeq) return
         previewRows.value = res.data.rows
         pendingRule.value = res.data.pending_rule
+        paidPeriod.value = res.data.paid_period
+        // 不 await：已發放明細是輔助資訊，不必阻塞預覽本身的 loading 狀態。
+        fetchSettledPayments()
     } catch (e) {
         if (seq !== previewSeq) return
         ElMessage.error(friendlyError('載入結算預覽失敗', e))
@@ -347,6 +398,81 @@ const previewTableData = computed<PreviewDisplayRow[]>(() => {
         return b.amount - a.amount
     })
 })
+
+// ---- 結算（per-employee 冪等，寫入表外獎金獨立轉帳；已發過的員工回應會落在
+// skipped_already_paid，不重複發，因此結算不是不可逆的整批鎖定——時數後補齊的員工
+// 可以再按一次結算補發） ----
+const settling = ref(false)
+const settleResult = ref<GrowthSettleResult | null>(null)
+// 只把「符合資格且金額 > 0」的列算進即將結算的人數／金額，不符合資格或金額為 0
+// 的列本來就不會被後端寫入，計入確認文案裡只會誤導 HR。
+const settleTargets = computed(() => previewRows.value.filter((r) => r.eligible && r.amount > 0))
+const settleTotalAmount = computed(() => settleTargets.value.reduce((sum, r) => sum + r.amount, 0))
+const settleDisabled = computed(() => settleTargets.value.length === 0)
+const settleResultLabel = computed(() => {
+    if (!settleResult.value) return ''
+    return `本次結算：發放 ${settleResult.value.created.length} 位、跳過（已發過）${settleResult.value.skipped_already_paid.length} 位，共 ${formatCurrency(settleResult.value.total_amount)}`
+})
+
+const doSettle = async () => {
+    if (settleTargets.value.length === 0) {
+        ElMessage.warning('目前查無符合資格且金額大於 0 的員工，無需結算')
+        return
+    }
+    try {
+        await ElMessageBox.confirm(
+            `即將結算 ${schoolYear.value} 學年自主成長獎勵金：將發給 ${settleTargets.value.length} 位員工共 ${formatCurrency(settleTotalAmount.value)}。已發放過的員工本次會自動跳過、不重複發放；發放後仍可再次結算以補發後續才符合資格的員工。確定結算？`,
+            '確認結算',
+            { confirmButtonText: '確定結算', cancelButtonText: '取消', type: 'warning' },
+        )
+    } catch {
+        return
+    }
+    settling.value = true
+    try {
+        const body: SettleBody = { school_year: schoolYear.value }
+        const res = await settleGrowthContract(body)
+        settleResult.value = res.data
+        ElMessage.success(
+            `結算完成：發放 ${res.data.created.length} 位、跳過（已發過）${res.data.skipped_already_paid.length} 位，共 ${formatCurrency(res.data.total_amount)}`,
+        )
+        // fetchPreview 內會一併重抓已發放明細（paid_period 由此帶出）。
+        await fetchPreview()
+    } catch (e) {
+        ElMessage.error(friendlyError('結算失敗', e))
+    } finally {
+        settling.value = false
+    }
+}
+
+// ---- 已發放明細（表外獎金，category=growth_contract） ----
+const extraBonusItems = ref<ExtraBonusRow[]>([])
+const extraBonusLoading = ref(false)
+const extraBonusTableData = computed(() =>
+    extraBonusItems.value.map((row) => ({ ...row, amountLabel: formatCurrency(row.amount) })),
+)
+
+let extraBonusSeq = 0
+const fetchSettledPayments = async () => {
+    const period = paidPeriod.value
+    if (!period) return
+    const [yearStr, monthStr] = period.split('-')
+    const year = Number(yearStr)
+    const month = Number(monthStr)
+    if (!year || !month) return
+    const seq = ++extraBonusSeq
+    extraBonusLoading.value = true
+    try {
+        const res = await listExtraBonuses({ year, month, category: 'growth_contract' })
+        if (seq !== extraBonusSeq) return
+        extraBonusItems.value = res.data.items
+    } catch (e) {
+        if (seq !== extraBonusSeq) return
+        ElMessage.error(friendlyError('載入已發放明細失敗', e))
+    } finally {
+        if (seq === extraBonusSeq) extraBonusLoading.value = false
+    }
+}
 
 watch(schoolYear, () => {
     fetchHours()
@@ -537,6 +663,17 @@ onMounted(() => {
 }
 .pending-rule-alert {
   margin-bottom: var(--space-4);
+}
+.paid-period-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  margin: 0 0 var(--space-4);
+}
+.settle-result-alert {
+  margin-bottom: var(--space-3);
+}
+.paid-section {
+  margin-top: var(--space-5);
 }
 .hint {
   color: var(--el-text-color-secondary);

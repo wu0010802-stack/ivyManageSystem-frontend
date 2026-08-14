@@ -6942,6 +6942,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/growth-contract/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Growth Contract
+         * @description 學年結算：把 preview 中 `eligible` 且 `amount > 0` 的員工寫入表外獎金
+         *     通道（`ExtraBonusPayment`，`category="growth_contract"`）。
+         *
+         *     防呆順序（缺一不可，比照 `api/recruitment_bonus.py` 的 `settle_campaign`）：
+         *     1. 取鎖（`acquire_growth_contract_settle_lock`）**必須在讀 preview 資料
+         *        之前**——本結算無 campaign 狀態機可擋重複呼叫，冪等性完全依賴下面第 3
+         *        步的查詢，取鎖太晚會讓兩個並發 request 都通過冪等檢查（見 HR
+         *        double-click race，詳 advisory_lock 該函式 docstring）。
+         *     2. 用 `build_growth_contract_preview` 算出該學年所有列，只挑
+         *        `eligible is True` 且 `amount > 0` 者為候選（不符資格／金額為 0 者
+         *        不寫列，也不算跳過——它們從未進過候選名單）。
+         *     3. per-employee 冪等：該員工該學年（＝該發放年月）已有
+         *        `category="growth_contract"` 的 `ExtraBonusPayment` → 跳過，列入
+         *        `skipped_already_paid`（支援「時數後來補齊才符合資格」的補發場景，
+         *        不是整批鎖死）。
+         *     4. 對剩餘候選逐筆寫 `ExtraBonusPayment`：`period_year/period_month` 為
+         *        該學年「期滿次月」（民國 school_year 學年 → 西元 school_year+1912
+         *        年 8 月，見 `paid_period_for_school_year`）；`counts_for_supplementary
+         *        =False`（業主 2026-08-14 裁定，與同日招生獎金裁定同口徑）。連帶
+         *        **不做** stale 傳播——該機制存在的理由是補充保費 ytd 基數會變，
+         *        `counts_for_supplementary=False` 下基數不變，沒有重算需求。
+         *     5. 全部寫完才一次 `session.commit()`——單一 DB transaction，任何一步
+         *        失敗（含寫入途中的例外）整批回滾，不留孤兒紀錄。
+         */
+        post: operations["settle_growth_contract_api_growth_contract_settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/guardians/{guardian_id}/binding-code": {
         parameters: {
             query?: never;
@@ -24552,6 +24594,8 @@ export interface components {
          *     （見計畫 Task 7 回報 (b)：錯誤情境走 422/500，不會回這個 200 形狀）。
          */
         GrowthPreviewOut: {
+            /** Paid Period */
+            paid_period: string;
             /** Pending Rule */
             pending_rule: string;
             /** Rows */
@@ -24645,6 +24689,49 @@ export interface components {
             line_sent_at?: string | null;
             /** Sent Count */
             sent_count: number;
+        };
+        /**
+         * GrowthSettleCreatedOut
+         * @description 結算回應中單一員工的實發明細。
+         */
+        GrowthSettleCreatedOut: {
+            /** Amount */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+        };
+        /** GrowthSettleRequest */
+        GrowthSettleRequest: {
+            /** School Year */
+            school_year: number;
+        };
+        /**
+         * GrowthSettleResultOut
+         * @description 自主成長契約獎勵金學年結算結果。
+         */
+        GrowthSettleResultOut: {
+            /** Created */
+            created: components["schemas"]["GrowthSettleCreatedOut"][];
+            /** Paid Period */
+            paid_period: string;
+            /** School Year */
+            school_year: number;
+            /** Skipped Already Paid */
+            skipped_already_paid: components["schemas"]["GrowthSettleSkippedOut"][];
+            /** Total Amount */
+            total_amount: number;
+        };
+        /**
+         * GrowthSettleSkippedOut
+         * @description 該學年已入帳、本次結算跳過的員工（per-employee 冪等）。
+         */
+        GrowthSettleSkippedOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
         };
         /** GuardianCreate */
         GuardianCreate: {
@@ -50235,6 +50322,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GrowthPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_growth_contract_api_growth_contract_settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthSettleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthSettleResultOut"];
                 };
             };
             /** @description Validation Error */

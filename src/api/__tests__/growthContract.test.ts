@@ -17,6 +17,7 @@ import {
   deleteGrowthHour,
   patchSignedOn,
   getGrowthPreview,
+  settleGrowthContract,
 } from '../growthContract'
 
 const asMock = (fn: unknown) => fn as ReturnType<typeof vi.fn>
@@ -184,6 +185,25 @@ describe('growthContract API wrapper', () => {
     const res = await getGrowthPreview(115)
 
     expect(api.get).toHaveBeenCalledWith('/growth-contract/preview', { params: { school_year: 115 } })
+    expect(res).toBe(mockResp)
+  })
+
+  it('settleGrowthContract → POST /growth-contract/settle 帶 body', async () => {
+    // 真實契約 GrowthSettleResultOut：per-employee 冪等，已發過的員工落在 skipped_already_paid
+    const mockResp = {
+      data: {
+        school_year: 115,
+        paid_period: '115-08',
+        created: [{ employee_id: 5, employee_name: '林慧慈', amount: 7440 }],
+        skipped_already_paid: [{ employee_id: 6, employee_name: '王雅玲' }],
+        total_amount: 7440,
+      },
+    }
+    asMock(api.post).mockResolvedValue(mockResp)
+
+    const res = await settleGrowthContract({ school_year: 115 })
+
+    expect(api.post).toHaveBeenCalledWith('/growth-contract/settle', { school_year: 115 })
     expect(res).toBe(mockResp)
   })
 })

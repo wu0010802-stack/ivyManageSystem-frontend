@@ -9,6 +9,8 @@ type GrowthHour = Schema<'GrowthHourOut'>
 type GrowthPreviewGate = Schema<'GrowthPreviewGateOut'>
 type GrowthPreviewRow = Schema<'GrowthPreviewRowOut'>
 type GrowthPreviewOut = Schema<'GrowthPreviewOut'>
+type GrowthSettleResultOut = Schema<'GrowthSettleResultOut'>
+type ExtraBonusRow = Schema<'ExtraBonusOut'>
 
 // ---- api/growthContract mocks ----
 const listGrowthHoursMock = vi.fn()
@@ -17,6 +19,7 @@ const patchGrowthHourMock = vi.fn()
 const deleteGrowthHourMock = vi.fn()
 const patchSignedOnMock = vi.fn()
 const getGrowthPreviewMock = vi.fn()
+const settleGrowthContractMock = vi.fn()
 vi.mock('@/api/growthContract', () => ({
     listGrowthHours: (...a: unknown[]) => listGrowthHoursMock(...a),
     createGrowthHour: (...a: unknown[]) => createGrowthHourMock(...a),
@@ -24,6 +27,13 @@ vi.mock('@/api/growthContract', () => ({
     deleteGrowthHour: (...a: unknown[]) => deleteGrowthHourMock(...a),
     patchSignedOn: (...a: unknown[]) => patchSignedOnMock(...a),
     getGrowthPreview: (...a: unknown[]) => getGrowthPreviewMock(...a),
+    settleGrowthContract: (...a: unknown[]) => settleGrowthContractMock(...a),
+}))
+
+// ---- api/extraBonuses mock（已發放明細區塊：GET /extra-bonuses?category=growth_contract）----
+const listExtraBonusesMock = vi.fn()
+vi.mock('@/api/extraBonuses', () => ({
+    listExtraBonuses: (...a: unknown[]) => listExtraBonusesMock(...a),
 }))
 
 // ---- auth mock ----
@@ -117,8 +127,25 @@ const previewRow = (over: Partial<GrowthPreviewRow> = {}): GrowthPreviewRow => (
 
 const previewFixture = (over: Partial<GrowthPreviewOut> = {}): GrowthPreviewOut => ({
     school_year: 115,
+    paid_period: '115-08',
     pending_rule: '金額語意暫依「每月提撥×在職月數」假設建模，待業主確認（spec §6 P2）',
     rows: [previewRow()],
+    ...over,
+})
+
+const extraBonusRow = (over: Partial<ExtraBonusRow> = {}): ExtraBonusRow => ({
+    id: 1,
+    employee_id: 2,
+    employee_name: '林慧慈',
+    category: 'growth_contract',
+    category_label: '自主成長獎勵金',
+    amount: 7440,
+    counts_for_supplementary: true,
+    created_at: null,
+    paid_date: null,
+    period_month: 8,
+    period_year: 115,
+    remark: '115 學年自主成長獎勵金結算',
     ...over,
 })
 
@@ -163,6 +190,7 @@ interface PreviewDisplayRow extends GrowthPreviewRow {
 interface ViewVm {
     schoolYear: number
     pendingRule: string
+    paidPeriod: string
     hourRows: GrowthHour[]
     previewRows: GrowthPreviewRow[]
     previewTableData: PreviewDisplayRow[]
@@ -178,6 +206,10 @@ interface ViewVm {
     openSignedOnDialog: (row: GrowthPreviewRow) => void
     saveSignedOn: () => Promise<void>
     clearSignedOn: () => Promise<void>
+    settling: boolean
+    settleResult: GrowthSettleResultOut | null
+    doSettle: () => Promise<void>
+    extraBonusItems: ExtraBonusRow[]
 }
 
 describe('GrowthContractView', () => {
@@ -190,6 +222,8 @@ describe('GrowthContractView', () => {
         deleteGrowthHourMock.mockReset()
         patchSignedOnMock.mockReset()
         getGrowthPreviewMock.mockReset().mockResolvedValue({ data: previewFixture() })
+        settleGrowthContractMock.mockReset()
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [], total_amount: 0 } })
         vi.mocked(ElMessage.success).mockReset()
         vi.mocked(ElMessage.error).mockReset()
         vi.mocked(ElMessage.warning).mockReset()
@@ -354,6 +388,9 @@ describe('GrowthContractView', () => {
         expect(wrapper.find('.pending-rule-alert').exists()).toBe(true)
         expect(wrapper.text()).toContain('金額語意待業主確認的特殊標記文字P2')
         expect(wrapper.text()).toMatch(/試算|未發放/)
+        // 業主 2026-08-14 裁定金額語意已確認、可實際發放——不可再寫死「尚未發放」這種
+        // 與「已可結算」矛盾的固定文案；警示條的內容一律以後端 pending_rule 為準。
+        expect(wrapper.text()).not.toContain('尚未發放')
     })
 
     it('(b) 金額欄額外標示「試算」，不符合資格時顯示假設金額提示', async () => {
@@ -497,6 +534,123 @@ describe('GrowthContractView', () => {
         const buttonTexts = wrapper.findAll('button').map((b) => b.text())
         expect(buttonTexts.some((t) => t.includes('新增時數'))).toBe(false)
     })
+
+    // ---- 結算（業主 2026-08-14 裁定：可實際發放，走 POST /growth-contract/settle） ----
+
+    it('⑤ 顯示「將於 {paid_period} 發放」（來自 preview 的 paid_period）', async () => {
+        getGrowthPreviewMock.mockResolvedValue({ data: previewFixture({ paid_period: '115-08' }) })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        expect(vm.paidPeriod).toBe('115-08')
+        expect(wrapper.text()).toContain('115-08')
+        expect(wrapper.text()).toMatch(/發放/)
+    })
+
+    it('⑥ 無 SALARY_WRITE 權限時看不到「結算」按鈕', async () => {
+        hasPermissionMock.mockReturnValue(false)
+        const wrapper = mountView()
+        await flushPromises()
+
+        const buttonTexts = wrapper.findAll('button').map((b) => b.text())
+        expect(buttonTexts.some((t) => t.includes('結算'))).toBe(false)
+    })
+
+    it('⑦ 結算二次確認文案含正確人數與總額（只算 eligible 且 amount > 0 者）', async () => {
+        getGrowthPreviewMock.mockResolvedValue({
+            data: previewFixture({
+                rows: [
+                    previewRow({ employee_id: 2, employee_name: 'A符合', eligible: true, amount: 7440 }),
+                    previewRow({ employee_id: 3, employee_name: 'B符合', eligible: true, amount: 3000 }),
+                    previewRow({ employee_id: 4, employee_name: 'C不符合', eligible: false, amount: 0 }),
+                ],
+            }),
+        })
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        settleGrowthContractMock.mockResolvedValue({
+            data: { school_year: 115, paid_period: '115-08', created: [], skipped_already_paid: [], total_amount: 0 },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        await vm.doSettle()
+        await flushPromises()
+
+        expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+        const [message] = vi.mocked(ElMessageBox.confirm).mock.calls[0]
+        expect(String(message)).toContain('2')
+        expect(String(message)).toContain(formatCurrency(10440))
+        expect(settleGrowthContractMock).toHaveBeenCalledWith({ school_year: 115 })
+    })
+
+    it('⑧ 取消結算確認 → 不呼叫 settleGrowthContract', async () => {
+        vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        await vm.doSettle()
+        await flushPromises()
+
+        expect(settleGrowthContractMock).not.toHaveBeenCalled()
+    })
+
+    it('⑨ 結算成功後顯示 created／skipped 統計與總額', async () => {
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        settleGrowthContractMock.mockResolvedValue({
+            data: {
+                school_year: 115,
+                paid_period: '115-08',
+                created: [{ employee_id: 2, employee_name: '林慧慈', amount: 7440 }],
+                skipped_already_paid: [{ employee_id: 3, employee_name: '王雅玲' }],
+                total_amount: 7440,
+            },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        await vm.doSettle()
+        await flushPromises()
+
+        expect(ElMessage.success).toHaveBeenCalled()
+        expect(vm.settleResult?.created.length).toBe(1)
+        expect(vm.settleResult?.skipped_already_paid.length).toBe(1)
+        expect(wrapper.text()).toContain(formatCurrency(7440))
+    })
+
+    it('⑩ 結算確認文案不得出現「不可撤銷」（per-employee 冪等，可再結算補發，不是招生獎金那種整批不可逆鎖定）', async () => {
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        settleGrowthContractMock.mockResolvedValue({
+            data: { school_year: 115, paid_period: '115-08', created: [], skipped_already_paid: [], total_amount: 0 },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+
+        await vm.doSettle()
+        await flushPromises()
+
+        const [message] = vi.mocked(ElMessageBox.confirm).mock.calls[0]
+        expect(String(message)).not.toContain('不可撤銷')
+        expect(wrapper.text()).not.toContain('不可撤銷')
+    })
+
+    it('已發放明細：結算後查詢 GET /extra-bonuses?category=growth_contract 並渲染', async () => {
+        listExtraBonusesMock.mockResolvedValue({
+            data: { items: [extraBonusRow()], total_amount: 7440 },
+        })
+        const wrapper = mountView()
+        await flushPromises()
+
+        expect(listExtraBonusesMock).toHaveBeenCalledWith(
+            expect.objectContaining({ category: 'growth_contract', year: 115, month: 8 }),
+        )
+        expect(wrapper.text()).toContain('林慧慈')
+        expect(wrapper.text()).toContain(formatCurrency(7440))
+    })
 })
 
 describe('GrowthContractView 簽約日帶出來源', () => {
@@ -504,6 +658,8 @@ describe('GrowthContractView 簽約日帶出來源', () => {
         getGrowthPreviewMock.mockReset()
         listGrowthHoursMock.mockReset()
         patchSignedOnMock.mockReset()
+        settleGrowthContractMock.mockReset()
+        listExtraBonusesMock.mockReset().mockResolvedValue({ data: { items: [], total_amount: 0 } })
     })
 
     it('用 preview row 的結構化 signed_on 欄位帶出目前值，不解析 gate 文案', async () => {
@@ -527,7 +683,7 @@ describe('GrowthContractView 簽約日帶出來源', () => {
         })
         const wrapper = mountView()
         await flushPromises()
-        const vm = wrapper.vm as unknown as GrowthVm
+        const vm = wrapper.vm as unknown as ViewVm
         vm.openSignedOnDialog(vm.previewTableData[0])
         await flushPromises()
 
@@ -541,7 +697,7 @@ describe('GrowthContractView 簽約日帶出來源', () => {
         })
         const wrapper = mountView()
         await flushPromises()
-        const vm = wrapper.vm as unknown as GrowthVm
+        const vm = wrapper.vm as unknown as ViewVm
         vm.openSignedOnDialog(vm.previewTableData[0])
         await flushPromises()
 

@@ -41,3 +41,11 @@ export const getGrowthPreview = (
     schoolYear: number,
 ): AxiosResp<'/growth-contract/preview', 'get'> =>
     api.get('/growth-contract/preview', { params: { school_year: schoolYear } })
+
+// 業主 2026-08-14 裁定：金額語意已確認，可實際發放（每年 8 月，走表外獎金獨立轉帳）。
+// 結算為 per-employee 冪等——已發過的員工這次會落在 skipped_already_paid，不重複發；
+// 時數後補齊的員工可再結算一次補發，不是不可逆的整批鎖定。
+export const settleGrowthContract = (
+    body: ApiBody<'/growth-contract/settle', 'post'>,
+): AxiosResp<'/growth-contract/settle', 'post'> =>
+    api.post('/growth-contract/settle', body)
