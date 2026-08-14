@@ -468,20 +468,9 @@ const signedOnDialogVisible = ref(false)
 const signedOnTarget = ref<{ employee_id: number; employee_name: string } | null>(null)
 const signedOnDate = ref<string | null>(null)
 
-// preview row 沒有獨立的 signed_on 欄位（後端只回 gate detail 文字），簽約日 gate
-// 通過時 detail 固定格式「簽約日 YYYY-MM-DD」（見 services/growth_contract/preview.py
-// `_gate_signed`），從這裡帶出目前值供編輯 dialog 預填；未簽約或格式不符一律留空，
-// 不強行猜測日期。
-function extractSignedOnDate(row: GrowthPreviewRow): string | null {
-    const gate = row.gates.find((g) => g.code === 'signed')
-    if (!gate || gate.status !== 'pass') return null
-    const match = /簽約日\s+(\d{4}-\d{2}-\d{2})/.exec(gate.detail)
-    return match ? match[1] : null
-}
-
 const openSignedOnDialog = (row: GrowthPreviewRow) => {
     signedOnTarget.value = { employee_id: row.employee_id, employee_name: row.employee_name }
-    signedOnDate.value = extractSignedOnDate(row)
+    signedOnDate.value = row.signed_on ?? null
     signedOnDialogVisible.value = true
 }
 

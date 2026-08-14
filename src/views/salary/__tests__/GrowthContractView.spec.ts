@@ -95,6 +95,7 @@ const gate = (over: Partial<GrowthPreviewGate> = {}): GrowthPreviewGate => ({
 const previewRow = (over: Partial<GrowthPreviewRow> = {}): GrowthPreviewRow => ({
     employee_id: 2,
     employee_name: '林慧慈',
+    signed_on: '2026-09-01',
     position_key: 'head_teacher_a',
     position_unknown: false,
     monthly_rate: 620,
@@ -450,13 +451,14 @@ describe('GrowthContractView', () => {
         expect(vm.signedOnDialogVisible).toBe(false)
     })
 
-    it('簽約日維護：從既有 gate 明細帶出目前簽約日', async () => {
+    it('簽約日維護：從 preview row 的 signed_on 欄位帶出目前值', async () => {
+        // 2026-08-14 起改讀結構化欄位（原為正則反解 gate 中文 detail）。
         const wrapper = mountView()
         await flushPromises()
         const vm = wrapper.vm as unknown as ViewVm
 
         vm.openSignedOnDialog(vm.previewRows[0])
-        expect(vm.signedOnDate).toBe('2025-09-01')
+        expect(vm.signedOnDate).toBe('2026-09-01')
     })
 
     it('簽約日維護：清空送出 { signed_on: null }，需二次確認', async () => {
@@ -494,5 +496,55 @@ describe('GrowthContractView', () => {
 
         const buttonTexts = wrapper.findAll('button').map((b) => b.text())
         expect(buttonTexts.some((t) => t.includes('新增時數'))).toBe(false)
+    })
+})
+
+describe('GrowthContractView 簽約日帶出來源', () => {
+    beforeEach(() => {
+        getGrowthPreviewMock.mockReset()
+        listGrowthHoursMock.mockReset()
+        patchSignedOnMock.mockReset()
+    })
+
+    it('用 preview row 的結構化 signed_on 欄位帶出目前值，不解析 gate 文案', async () => {
+        // 曾經是從 signed gate 的中文 detail 正則反解，後端改文案就靜默壞掉。
+        // 這裡刻意把 gate detail 改成不含日期的文字，仍必須正確帶出簽約日。
+        listGrowthHoursMock.mockResolvedValue({ data: { items: [] } })
+        getGrowthPreviewMock.mockResolvedValue({
+            data: previewFixture({
+                rows: [
+                    previewRow({
+                        signed_on: '2026-10-15',
+                        gates: [
+                            { code: 'signed', status: 'pass', detail: '已簽約' },
+                            { code: 'returning_rate', status: 'pass', detail: '班級舊生註冊率 90.0%' },
+                            { code: 'late_early', status: 'pass', detail: '遲到早退累計 0 分鐘' },
+                            { code: 'leave_days', status: 'pass', detail: '事假 0 天／病假 0 天' },
+                        ],
+                    }),
+                ],
+            }),
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as GrowthVm
+        vm.openSignedOnDialog(vm.previewTableData[0])
+        await flushPromises()
+
+        expect(vm.signedOnDate).toBe('2026-10-15')
+    })
+
+    it('未簽約（signed_on 為 null）時 dialog 帶空值', async () => {
+        listGrowthHoursMock.mockResolvedValue({ data: { items: [] } })
+        getGrowthPreviewMock.mockResolvedValue({
+            data: previewFixture({ rows: [previewRow({ signed_on: null })] }),
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as GrowthVm
+        vm.openSignedOnDialog(vm.previewTableData[0])
+        await flushPromises()
+
+        expect(vm.signedOnDate).toBeNull()
     })
 })

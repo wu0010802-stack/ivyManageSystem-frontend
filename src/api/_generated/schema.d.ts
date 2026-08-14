@@ -24585,6 +24585,8 @@ export interface components {
             position_unknown: boolean;
             /** Required Hours */
             required_hours: number;
+            /** Signed On */
+            signed_on?: string | null;
             /** Tenure Months */
             tenure_months: number;
         };
