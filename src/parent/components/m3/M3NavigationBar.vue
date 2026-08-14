@@ -114,13 +114,21 @@ function onTabClick(item: NavItem): void {
   border-radius: 9999px;
   background: var(--m3-secondary-container, #d3e8d3);
   opacity: 0;
-  transition: opacity var(--m3-dur-short-3, 150ms) var(--m3-easing-emphasized-decel, ease);
+  transform: scale(0.85);
+  transition: opacity var(--motion-quick, 150ms) ease,
+    transform var(--motion-base, 260ms) var(--motion-spring, ease);
 }
-.m3-nav-tab.is-active .m3-nav-tab-indicator { opacity: 1; }
+.m3-nav-tab.is-active .m3-nav-tab-indicator { opacity: 1; transform: scale(1); }
 
 .m3-nav-tab-icon {
   position: relative;
   z-index: 1;
+  transition: transform var(--motion-base, 260ms) var(--motion-spring, ease);
+}
+.m3-nav-tab.is-active .m3-nav-tab-icon { transform: scale(1.06); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-nav-tab-indicator,
+  .m3-nav-tab-icon { transition: none; }
 }
 .m3-nav-tab.is-active .m3-nav-tab-icon {
   color: var(--m3-on-secondary-container, #0e1f12);

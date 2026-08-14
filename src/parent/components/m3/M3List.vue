@@ -17,5 +17,7 @@
   margin: 0;
   padding: 0;
   background: var(--m3-surface, #f7fbf3);
+  border-radius: var(--pt-card-radius, 26px);
+  overflow: hidden;
 }
 </style>

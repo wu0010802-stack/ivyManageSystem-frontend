@@ -92,10 +92,10 @@ onBeforeUnmount(clearTimer)
   min-height: 48px;
   max-width: min(560px, calc(100vw - 32px));
   padding: 14px 16px;
-  border-radius: 4px;
+  border-radius: var(--pt-control-radius, 14px);
   background: var(--m3-inverse-surface, #2d3230);
   color: var(--m3-inverse-on-surface, #eef2eb);
-  box-shadow: var(--m3-elev-3, 0 4px 8px rgba(0, 0, 0, 0.3));
+  box-shadow: var(--pt-shadow-float, var(--m3-elev-3, 0 4px 8px rgba(0, 0, 0, 0.3)));
   font-family: var(--m3-font-body, 'Roboto', sans-serif);
 }
 
@@ -119,8 +119,8 @@ onBeforeUnmount(clearTimer)
 
 .m3-snackbar-enter-active,
 .m3-snackbar-leave-active {
-  transition: transform var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, ease),
-    opacity var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, ease);
+  transition: transform var(--motion-base, 260ms) var(--motion-emphasized, ease),
+    opacity var(--motion-base, 260ms) var(--motion-emphasized, ease);
 }
 .m3-snackbar-enter-from,
 .m3-snackbar-leave-to {

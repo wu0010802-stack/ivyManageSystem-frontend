@@ -30,3 +30,27 @@ describe('m3 元件 Expressive 化（P1 批次一）', () => {
     expect(read('M3FAB')).toMatch(/\.m3-fab\s*\{[^}]*var\(--pt-shadow-float/s)
   })
 })
+
+describe('m3 元件 Expressive 化（P1 批次二）', () => {
+  it('M3NavigationBar indicator 用 spring 曲線', () => {
+    expect(read('M3NavigationBar')).toMatch(/var\(--motion-spring/)
+  })
+  it('M3TopAppBar 標題字重 900', () => {
+    expect(read('M3TopAppBar')).toMatch(/\.m3-top-app-bar-title\s*\{[^}]*font-weight:\s*900/s)
+  })
+  it('M3Snackbar 圓角走 control token', () => {
+    expect(read('M3Snackbar')).toMatch(/\.m3-snackbar\s*\{[^}]*var\(--pt-control-radius/s)
+  })
+  it('M3List 圓角走 card token（無外層容器包裝，需自帶卡片感）', () => {
+    expect(read('M3List')).toMatch(/\.m3-list\s*\{[^}]*var\(--pt-card-radius/s)
+  })
+  it('M3ListItem 有按壓 state layer transition 時長 token', () => {
+    expect(read('M3ListItem')).toMatch(/var\(--motion-quick/)
+  })
+  it('M3SegmentedButton 過渡時長改語意 token', () => {
+    expect(read('M3SegmentedButton')).toMatch(/var\(--motion-quick/)
+  })
+  it.each(['M3Switch', 'M3Checkbox', 'M3Radio'])('%s transition 時長字面值改語意 token', (name) => {
+    expect(read(name)).toMatch(/var\(--motion-quick/)
+  })
+})

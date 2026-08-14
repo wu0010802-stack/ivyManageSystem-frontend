@@ -112,6 +112,7 @@ function onBackClick(): void {
   text-overflow: ellipsis;
   white-space: nowrap;
   grid-area: title;
+  font-weight: 900;
 }
 .m3-top-app-bar-small .m3-top-app-bar-title { text-align: left; }
 .m3-top-app-bar-center-aligned .m3-top-app-bar-title { text-align: center; }
