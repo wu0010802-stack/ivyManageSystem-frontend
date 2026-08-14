@@ -19273,6 +19273,8 @@ export interface components {
         AttributionOut: {
             /** Campaign Id */
             campaign_id: number;
+            /** Child Name */
+            child_name?: string | null;
             /** Collector Employee Id */
             collector_employee_id?: number | null;
             /** Collector Name */
@@ -19299,6 +19301,10 @@ export interface components {
             status: string;
             /** Updated At */
             updated_at?: string | null;
+            /** Visit Grade */
+            visit_grade?: string | null;
+            /** Visit Month */
+            visit_month?: string | null;
         };
         /** AttributionUpdate */
         AttributionUpdate: {

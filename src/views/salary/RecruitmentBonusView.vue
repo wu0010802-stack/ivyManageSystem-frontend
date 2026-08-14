@@ -67,7 +67,10 @@
 
       <el-table :data="pagedAttributionRows" stripe style="width: 100%" :row-class-name="attributionRowClass">
         <el-table-column label="幼生" min-width="120">
-          <template #default="{ row }">{{ row.visitLabel }}</template>
+          <template #default="{ row }">
+            <div>{{ row.visitLabel }}</div>
+            <div v-if="row.visitSubLabel" class="visit-sub">{{ row.visitSubLabel }}</div>
+          </template>
         </el-table-column>
         <el-table-column label="來源點數類型" min-width="160">
           <template #default="{ row }">
@@ -421,6 +424,7 @@ interface AttributionDisplayRow extends AttributionRow {
     statusLabel: string
     pointLabel: string
     visitLabel: string
+    visitSubLabel: string
     unassigned: boolean
 }
 const pagedAttributionRows = computed<AttributionDisplayRow[]>(() =>
@@ -428,9 +432,12 @@ const pagedAttributionRows = computed<AttributionDisplayRow[]>(() =>
         ...row,
         statusLabel: ATTR_STATUS_LABELS[row.status] || row.status,
         pointLabel: pointCatalog.value[row.point_code]?.label || row.point_code,
-        // ⚠ AttributionOut 沒有幼生姓名欄位（後端未 join RecruitmentVisit），只能顯示
-        // visit id 供 HR 對照招生名冊；已知缺口，見報告 (c)。
-        visitLabel: row.recruitment_visit_id != null ? `訪視 #${row.recruitment_visit_id}` : '（手動加列）',
+        visitLabel: row.child_name
+            ? `${row.child_name}${row.visit_grade ? `（${row.visit_grade}）` : ''}`
+            : row.recruitment_visit_id != null
+              ? `訪視 #${row.recruitment_visit_id}`
+              : '（手動加列）',
+        visitSubLabel: row.visit_month ?? '',
         unassigned: row.employee_id == null,
     })),
 )
@@ -614,6 +621,11 @@ onMounted(() => {
 .settle-reason {
   color: var(--el-color-warning);
 }
+.visit-sub {
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+}
+
 .unassigned-banner {
   color: var(--el-color-warning);
   background: var(--el-color-warning-light-9);

@@ -110,6 +110,9 @@ const attributionRow = (over: Partial<AttributionRow> = {}): AttributionRow => (
     id: 1,
     campaign_id: 1,
     recruitment_visit_id: 10,
+    child_name: '黃翊睿',
+    visit_month: '115.04',
+    visit_grade: '幼幼班',
     employee_id: 2,
     employee_name: '林慧慈',
     point_code: 'self_report',
@@ -526,5 +529,55 @@ describe('RecruitmentBonusView', () => {
             end_date: '2027-03-15',
         })
         expect(vm.createDialogVisible).toBe(false)
+    })
+})
+
+describe('RecruitmentBonusView 幼生欄顯示', () => {
+    beforeEach(() => {
+        listCampaignsMock.mockReset()
+        getCampaignMock.mockReset()
+        listExtraBonusesMock.mockReset()
+    })
+
+    it('有幼生資料時顯示姓名與年級月份，不是訪視編號', async () => {
+        // HR 靠這欄判斷「這個孩子是誰招來的」；退回顯示 #id 等同頁面不可用。
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockResolvedValue({
+            data: detailFixture({ attributions: [attributionRow()] }),
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        await vm.openDetail(campaignRow())
+        await flushPromises()
+
+        const text = wrapper.text()
+        expect(text).toContain('黃翊睿')
+        expect(text).toContain('幼幼班')
+        expect(text).toContain('115.04')
+        expect(text).not.toContain('訪視 #10')
+    })
+
+    it('手動加列（無 visit）顯示「（手動加列）」', async () => {
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockResolvedValue({
+            data: detailFixture({
+                attributions: [
+                    attributionRow({
+                        recruitment_visit_id: null,
+                        child_name: null,
+                        visit_month: null,
+                        visit_grade: null,
+                    }),
+                ],
+            }),
+        })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm
+        await vm.openDetail(campaignRow())
+        await flushPromises()
+
+        expect(wrapper.text()).toContain('（手動加列）')
     })
 })
