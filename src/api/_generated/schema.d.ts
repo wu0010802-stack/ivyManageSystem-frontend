@@ -259,6 +259,13 @@ export interface paths {
          *
          *     時間倒序，限 200 筆；ApprovalLog 為 source of truth。
          *     供老闆/簽核者隨時查看異常解鎖記錄，補強稽核獨立性。
+         *
+         *     ⚠ 顯式租戶縮域（P1-01）：`approval_logs` 沒有 `tenant_id` 欄，RLS policy 靠
+         *     `approver_id → users.tenant_id` 推導，且 `models/tenant_rls_ddl._NULLABLE_PATH_TABLES`
+         *     對 `approver_id IS NULL` 的列**明文 fail-open**。本端點回傳的 comment 含金額、
+         *     原簽核人與解鎖原因全文，不能只靠 RLS，故在應用層再縮一次域（縱深防禦，
+         *     對齊 workspace CLAUDE.md「應用層顯式 tenant filter 仍為必要」）。
+         *     approver_id 為 NULL 的歷史列一律不回（fail-closed）——那批列無法歸屬租戶。
          */
         get: operations["list_pos_unlock_events_api_activity_audit_pos_unlock_events_get"];
         put?: never;
@@ -685,12 +692,19 @@ export interface paths {
         /**
          * Get Daily Close
          * @description 查某日日結簽核狀態。未簽核時 is_approved=False 並附即時 preview。
+         *
+         *     approver_username 對無 ACTIVITY_PAYMENT_APPROVE 者遮罩（P3-12）。
          */
         get: operations["get_daily_close_api_activity_pos_daily_close__date_str__get"];
         put?: never;
         /**
          * Approve Daily Close
          * @description 老闆簽核某日 POS 流水：凍結 snapshot，同時寫 ApprovalLog。
+         *
+         *     兩道與前端協同的守衛：
+         *     - `confirm_close_today`（P2-05）：簽核今日需明示確認。
+         *     - `expected_net_total` / `expected_transaction_count`（P2-01）：樂觀鎖，
+         *       與後端重算不符即 409。
          */
         post: operations["approve_daily_close_api_activity_pos_daily_close__date_str__post"];
         /**
@@ -22612,13 +22626,40 @@ export interface components {
             enrollment_target?: number | null;
             status?: components["schemas"]["CycleStatus"] | null;
         };
-        /** DailyCloseCreate */
+        /**
+         * DailyCloseCreate
+         * @description POST /pos/daily-close/{date} 請求。
+         *
+         *     `expected_*` 為樂觀鎖（P2-01）：前端送出時帶「畫面上正在看的」淨額與筆數，
+         *     後端重算 snapshot 後不符即 409。Why: 老闆核對到按下簽核之間若有人補登或作廢
+         *     交易，原本會靜默把另一組數字凍結，事後對帳才發現。未帶（舊前端）維持原行為。
+         *
+         *     `confirm_close_today` 為當日簽核的 opt-in（P2-05）：簽核今日會立刻擋住當天
+         *     後續所有 POS 收款與自動沖帳，且簽核人本人受 4-eye 守衛無法自行解鎖，
+         *     故必須明示確認。
+         */
         DailyCloseCreate: {
             /**
              * Actual Cash Count
              * @description 實際現金盤點金額（可選）
              */
             actual_cash_count?: number | null;
+            /**
+             * Confirm Close Today
+             * @description 簽核當日（台北時區今日）必須明示確認，否則 400
+             * @default false
+             */
+            confirm_close_today: boolean;
+            /**
+             * Expected Net Total
+             * @description 樂觀鎖：前端送出時畫面顯示的淨額；與後端重算不符即 409
+             */
+            expected_net_total?: number | null;
+            /**
+             * Expected Transaction Count
+             * @description 樂觀鎖：前端送出時畫面顯示的交易筆數；與後端重算不符即 409
+             */
+            expected_transaction_count?: number | null;
             /** Note */
             note?: string | null;
         };
@@ -30392,9 +30433,9 @@ export interface components {
             notes: string;
             /**
              * Payment Date
-             * Format: date
+             * @description 帳務日（YYYY-MM-DD）。**省略時由後端以台北時區當日決定**——櫃台機器的時鐘／時區偏差會把款項記到錯誤帳務日，該日一旦日結簽核就再也修不回來，故前端不再送此欄。有傳時仍走 validate_payment_date 驗證（補登路徑）。
              */
-            payment_date: string;
+            payment_date?: string | null;
             /**
              * Payment Method
              * @description 目前 POS 僅支援現金；payment_method 欄位保留供未來擴充
@@ -30923,10 +30964,22 @@ export interface components {
         /**
          * PosPendingDailyClosesOut
          * @description GET /pos/daily-close/pending 完整回應。
+         *
+         *     `older_pending_count` / `oldest_pending_date` 為區間**起點之前**的未簽核積壓
+         *     （P2-02）：pending 查詢受 92 天上限，若老闆停簽超過該區間，更早的積壓日在
+         *     UI 上完全隱形。此兩欄為獨立 aggregate，不受上限影響，讓前端能提示
+         *     「另有 N 天更早的未簽核日」。無積壓時為 0 / None。
          */
         PosPendingDailyClosesOut: {
             /** End Date */
             end_date: string;
+            /**
+             * Older Pending Count
+             * @default 0
+             */
+            older_pending_count: number;
+            /** Oldest Pending Date */
+            oldest_pending_date?: string | null;
             /** Pending */
             pending: components["schemas"]["PosPendingDailyCloseItemOut"][];
             /** Start Date */
@@ -30995,12 +31048,26 @@ export interface components {
         /**
          * PosRecentTransactionsOut
          * @description GET /pos/recent-transactions 完整回應。
+         *
+         *     total/truncated（P2-07）：`total` 為**截斷前**當日收據總張數、`truncated` 表示
+         *     清單被 `limit` 截掉。舊版無聲截斷，櫃台會把畫面上的張數當成當日全部而對帳漏張；
+         *     前端據此顯示「今日交易（顯示 N／共 M 張）」。
          */
         PosRecentTransactionsOut: {
             /** Date */
             date: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
             /** Transactions */
             transactions: components["schemas"]["PosRecentTransactionOut"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * PosReconciliationItemOut

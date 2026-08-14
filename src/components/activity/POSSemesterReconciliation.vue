@@ -416,11 +416,13 @@ onMounted(() => {
   gap: 10px;
 }
 
+/* 原本寫死淺色 hex，深色模式下是淺底＋翻轉後的近白字＝看不見。
+   改走已為 dark 翻好的 alias（light 值與原 hex 幾乎相同，亮模式外觀不變）。 */
 .pos-semester__hint {
   font-size: 12px;
-  color: #64748b;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  color: var(--text-secondary);
+  background: var(--bg-color-soft);
+  border: 1px solid var(--border-color);
   padding: 8px 12px;
   border-radius: 4px;
 }
@@ -428,7 +430,10 @@ onMounted(() => {
 .pos-semester__trunc-warn {
   font-size: 13px;
   line-height: 1.6;
-  color: var(--color-danger-hover, #b42318);
+  /* 這是「資料截斷可能漏算」的警告，深色下最不能失效：*-hover 是互動態 token，
+     a11y.css 的 html.dark 刻意沒翻（多處拿它當背景／邊框），疊深底僅 2.5–3.6:1。
+     *-darker 才是 dark 已翻成亮階的高對比文字色。 */
+  color: var(--color-danger-darker, #b42318);
   background: var(--color-danger-soft, #fef3f2);
   border: 1px solid var(--color-danger-soft, #fee4e2);
   padding: 10px 14px;
@@ -438,12 +443,12 @@ onMounted(() => {
 .pos-semester__stats-caption {
   font-size: 12px;
   font-weight: 600;
-  color: var(--color-warning-hover, #b54708);
+  color: var(--color-warning-darker, #b54708);
   margin-bottom: -4px;
 }
 
 .pos-semester__hint code {
-  background: #e2e8f0;
+  background: var(--neutral-200);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 11px;
@@ -465,15 +470,15 @@ onMounted(() => {
 }
 
 .pos-semester__text--success {
-  color: var(--color-success-hover);
+  color: var(--color-success-darker);
 }
 
 .pos-semester__text--warning {
-  color: var(--color-warning-hover);
+  color: var(--color-warning-darker);
 }
 
 .pos-semester__text--danger {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
   font-weight: 600;
 }
 

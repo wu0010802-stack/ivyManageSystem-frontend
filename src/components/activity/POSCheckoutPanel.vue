@@ -1,6 +1,10 @@
 <template>
   <div class="pos-panel-wrap">
-    <POSDailySummaryBar :data="dailySummary.data" />
+    <POSDailySummaryBar
+      :data="dailySummary.data"
+      :error="dailySummary.error"
+      @retry="refreshDailySummary"
+    />
 
     <div class="pos-panel-wrap__body">
       <POSSearchPanel
@@ -9,6 +13,7 @@
         v-model:classroom-filter="classroomFilter"
         v-model:overdue-only="overdueOnly"
         :searching="searching"
+        :load-error="searchError"
         :groups="searchGroups"
         :registrations="searchRegistrations"
         :selected-ids="selectedIds"
@@ -29,6 +34,7 @@
         :selected-item="selectedItem"
         :can-submit="canSubmit"
         :refund-approval-blocked="refundApprovalBlocked"
+        :refund-suggestion-loading="refundSuggestionLoading"
         :submitting="submitting"
         class="pos-panel-wrap__col pos-panel-wrap__col--pay"
         @update:applied-amount="(v) => updateSelectedAmount(v ?? 0)"
@@ -41,7 +47,21 @@
     <!-- 今日交易明細（可展開，可重印） -->
     <el-card class="pos-panel-wrap__recent" shadow="never">
       <div class="pos-panel-wrap__recent-head">
-        <span class="pos-panel-wrap__recent-title">今日交易 ({{ recentTransactions.items.length }})</span>
+        <div class="pos-panel-wrap__recent-head-main">
+          <!-- 「顯示 N／共 M 張」：列表有取回上限，旺季一天上百張時，只寫顯示筆數會被
+               當成當日總張數拿去對帳（P2-07）。 -->
+          <span class="pos-panel-wrap__recent-title">
+            今日交易（顯示 {{ recentTransactions.items.length }}／共 {{ recentTotal }} 張）
+          </span>
+          <el-tag
+            v-if="recentTransactions.truncated"
+            type="warning"
+            size="small"
+            class="pos-panel-wrap__recent-truncated"
+          >
+            僅顯示最新 {{ recentTransactions.items.length }} 筆，完整清單請至「POS 日結簽核」查看
+          </el-tag>
+        </div>
         <el-button
           size="small"
           :icon="RefreshRight"
@@ -51,6 +71,19 @@
           重新整理
         </el-button>
       </div>
+      <!-- 刷新失敗必須看得見（P3-05）：櫃台可能剛結完帳、正要在這裡確認那筆收據，
+           清單靜默維持舊內容會被誤讀成「這筆沒收到」。 -->
+      <el-alert
+        v-if="recentTransactions.error"
+        type="error"
+        :closable="false"
+        show-icon
+        class="pos-panel-wrap__recent-error"
+      >
+        <template #title>
+          今日交易清單載入失敗，以下內容可能不是最新，請按「重新整理」再試。
+        </template>
+      </el-alert>
       <!-- 空狀態壓成一行：el-empty 的插圖與留白在收銀頁佔掉三百多 px，而開店到
            第一筆入帳之間這塊一直是空的，等於把收款區推出畫面。 -->
       <p
@@ -176,11 +209,13 @@ const {
   searching,
   searchGroups,
   searchRegistrations,
+  searchError,
   searchTruncation,
   triggerSearch,
   runSearch,
   checkoutType,
   isRefundMode,
+  refundSuggestionLoading,
   selectedItem,
   itemTotal,
   selectItem,
@@ -201,6 +236,11 @@ const {
   recentTransactions,
   refreshRecentTransactions,
 } = usePOSCheckout()
+
+// 當日收據總張數（截斷前）。後端未回 total 時退回顯示筆數，避免標題寫「共 0 張」。
+const recentTotal = computed((): number =>
+  recentTransactions.total || recentTransactions.items.length
+)
 
 // 搜尋面板的 selected-ids 仍以陣列接口呈現，單筆模式下至多一個元素
 const selectedIds = computed((): (number | string)[] => (selectedItem.value ? [selectedItem.value.id as number | string] : []))
@@ -271,7 +311,11 @@ watch(
     clearSelection()
     classroomFilter.value = ''
     dailySummary.data = null
+    dailySummary.error = false
     recentTransactions.items = []
+    recentTransactions.total = 0
+    recentTransactions.truncated = false
+    recentTransactions.error = false
     loadClassroomOptions()
     runSearch()
     refreshDailySummary()
@@ -343,9 +387,21 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   margin-bottom: 12px;
 }
 
+.pos-panel-wrap__recent-head-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .pos-panel-wrap__recent-title {
   font-size: 15px;
   font-weight: 600;
+}
+
+.pos-panel-wrap__recent-error {
+  margin-bottom: 10px;
 }
 
 .pos-panel-wrap__recent-empty {
@@ -391,8 +447,11 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   font-size: 16px;
 }
 
+/* 找零金額：文字色走 *-darker（a11y.css 的 html.dark 已翻成亮階）。*-hover 是互動態
+   token、dark 刻意未覆寫，深色底下讀不到找零＝當場找錯錢（P3-10）。守衛見
+   __tests__/POSDarkContrast.test.ts。 */
 .pos-panel-wrap__change {
-  color: var(--color-success-hover) !important;
+  color: var(--color-success-darker) !important;
   font-size: 18px !important;
 }
 
