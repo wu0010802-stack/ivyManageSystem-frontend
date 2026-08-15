@@ -118,6 +118,16 @@ const items = computed<AdminItem[]>(() => {
       badgeLabel: `${pendingSurveyCount.value} 份待回覆`,
     },
     {
+      // 預告接送與臨時接送是兩個功能：前者=本人預告抵達時間，後者=授權親友代接。
+      headline: '預告接送',
+      supportingText: '通知園所我多久後抵達',
+      leadingIcon: 'directions_walk',
+      path: '/pickup-notice',
+      badge: 0,
+      badgeTone: 'info',
+      badgeLabel: '',
+    },
+    {
       headline: '臨時接送',
       supportingText: '授權親友代為到園接送',
       leadingIcon: 'hail',

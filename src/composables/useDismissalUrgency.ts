@@ -28,7 +28,90 @@ export interface DismissalCallView {
   requested_at?: string
   requested_by_name?: string
   note?: string
+  /** pnotice01 家長預告接送：staff（舊流程，視同已在門口）/ parent（預告） */
+  request_source?: string | null
+  expected_arrival_at?: string | null
+  arrived_at?: string | null
+  cancelled_at?: string | null
   [key: string]: unknown
+}
+
+/** 家長預告且尚未抵達——顯示 ETA、不套 3/8 分鐘等候警示。 */
+export function isPreArrivalNotice(call: {
+  request_source?: string | null
+  arrived_at?: string | null
+}): boolean {
+  return call.request_source === 'parent' && !call.arrived_at
+}
+
+/**
+ * 等候時間起算點：實際到門口（arrived_at）優先；staff 舊流程 arrived_at＝
+ * requested_at（migration 已回填），無 arrived_at 時防禦性 fallback requested_at
+ * ——確保等候語意永遠是「家長在門口等多久」，不是「按下通知多久」。
+ */
+export function waitAnchorIso(call: {
+  requested_at?: string | null
+  arrived_at?: string | null
+}): string | null | undefined {
+  return call.arrived_at || call.requested_at
+}
+
+/** 「預計 HH:MM」（台北時間）。無法解析回空字串。 */
+export function formatExpectedArrival(iso: string | null | undefined): string {
+  const d = parseTaipeiDate(iso)
+  if (!d) return ''
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `預計 ${hh}:${mm}`
+}
+
+/** ETA 差（分鐘，向零取整）：未到為正、已過為負。無法解析回 null。 */
+export function etaDeltaMinutes(
+  iso: string | null | undefined,
+  nowMs: number,
+): number | null {
+  const d = parseTaipeiDate(iso)
+  if (!d) return null
+  return Math.trunc((d.getTime() - nowMs) / 60000)
+}
+
+/** ETA 相對文案：「還有 N 分」／「即將抵達」（±1 分內）／「預計時間已過 N 分」。 */
+export function etaRelativeText(
+  iso: string | null | undefined,
+  nowMs: number,
+): string {
+  const delta = etaDeltaMinutes(iso, nowMs)
+  if (delta == null) return ''
+  if (delta > 0) return `還有 ${delta} 分`
+  if (delta === 0) return '即將抵達'
+  return `預計時間已過 ${-delta} 分`
+}
+
+/**
+ * active queue 排序（管理端與教師端共用，語意單一來源）：
+ * 1. 已抵達者優先，依 arrived_at 最舊到最新（等最久的孩子最前）
+ * 2. 尚未抵達者依 expected_arrival_at 由近到遠（已超過 ETA 自然排最前）
+ * staff 舊資料 arrived_at=requested_at → 全體落在第 1 組，等價原 FIFO。
+ */
+export function sortActiveQueue<
+  T extends {
+    requested_at?: string | null
+    expected_arrival_at?: string | null
+    arrived_at?: string | null
+  },
+>(calls: T[]): T[] {
+  const ts = (iso: string | null | undefined) =>
+    parseTaipeiDate(iso)?.getTime() ?? Number.MAX_SAFE_INTEGER
+  return [...calls].sort((a, b) => {
+    const aArrived = !!a.arrived_at
+    const bArrived = !!b.arrived_at
+    if (aArrived !== bArrived) return aArrived ? -1 : 1
+    if (aArrived) return ts(a.arrived_at) - ts(b.arrived_at)
+    return (
+      ts(a.expected_arrival_at ?? a.requested_at) -
+      ts(b.expected_arrival_at ?? b.requested_at)
+    )
+  })
 }
 
 /** 已等候分鐘數（向下取整，下限 0）。無法解析回 null。 */

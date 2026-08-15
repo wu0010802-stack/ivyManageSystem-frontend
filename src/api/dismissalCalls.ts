@@ -4,6 +4,8 @@ import api from './index'
 export const createDismissalCall = (data: unknown) => api.post('/dismissal-calls', data)
 export const getDismissalCalls = (params: unknown) => api.get('/dismissal-calls', { params })
 export const cancelDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/cancel`)
+// 標記已到門口（pnotice01 家長預告接送：辦公室代替忘記按抵達的家長操作）
+export const arriveDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/arrive`)
 
 // 教師 portal
 export const getPortalDismissalCalls = () => api.get('/portal/dismissal-calls')

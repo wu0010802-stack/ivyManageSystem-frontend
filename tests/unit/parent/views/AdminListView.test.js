@@ -41,19 +41,20 @@ beforeEach(() => {
 })
 
 // 「孩子檔案」二級入口 P2 起已移至孩子 hub（ChildHubView，見
-// tests/unit/parent/views/ChildHubView.test.js），本檔只驗 7 個一般行政項目，
+// tests/unit/parent/views/ChildHubView.test.js），本檔只驗 8 個一般行政項目，
 // 不再依賴 useChildrenStore／useChildSelection。
 describe('AdminListView', () => {
-  it('渲染 7 個主行政 item', () => {
+  it('渲染 8 個主行政 item', () => {
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
-    expect(items).toHaveLength(7)
+    expect(items).toHaveLength(8)
     expect(w.text()).toContain('請假')
     expect(w.text()).toContain('繳費')
     expect(w.text()).toContain('用藥委託')
     expect(w.text()).toContain('課後才藝')
     expect(w.text()).toContain('待簽紀錄')
     expect(w.text()).toContain('活動調查')
+    expect(w.text()).toContain('預告接送')
     expect(w.text()).toContain('臨時接送')
     expect(w.text()).not.toContain('孩子檔案')
   })
@@ -64,14 +65,24 @@ describe('AdminListView', () => {
     expect(pushMock).toHaveBeenCalledWith('/leaves')
   })
 
-  it('6 行政 item 路徑對齊', async () => {
+  it('8 行政 item 路徑對齊', async () => {
     const w = mount(AdminListView)
     const items = w.findAll('.m3-list-item')
-    const paths = ['/leaves', '/fees', '/medications', '/activity', '/events', '/surveys', '/pickup']
-    for (let i = 0; i < 7; i++) {
+    const paths = ['/leaves', '/fees', '/medications', '/activity', '/events', '/surveys', '/pickup-notice', '/pickup']
+    for (let i = 0; i < 8; i++) {
       pushMock.mockClear()
       await items[i].trigger('click')
       expect(pushMock).toHaveBeenCalledWith(paths[i])
     }
+  })
+})
+
+describe('AdminListView 預告接送（pnotice01）', () => {
+  it('預告接送與臨時接送並存且文案可辨，不互相取代', () => {
+    const w = mount(AdminListView)
+    expect(w.text()).toContain('預告接送')
+    expect(w.text()).toContain('通知園所我多久後抵達')
+    expect(w.text()).toContain('臨時接送')
+    expect(w.text()).toContain('授權親友代為到園接送')
   })
 })

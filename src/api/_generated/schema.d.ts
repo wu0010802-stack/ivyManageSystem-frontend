@@ -5404,6 +5404,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dismissal-calls/{call_id}/arrive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arrive Dismissal Call
+         * @description 辦公室代替忘記按抵達的家長標記「已到門口」（家長預告接送 fallback）。
+         *
+         *     沿用既有 staff dismissal 邊界（STUDENTS_WRITE + :all，見 create/cancel 註解，
+         *     勿正名 DISMISSAL_CALLS_*）。staff 舊流程建立時 arrived_at 已寫入 → 409。
+         */
+        post: operations["arrive_dismissal_call_api_dismissal_calls__call_id__arrive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dismissal-calls/{call_id}/cancel": {
         parameters: {
             query?: never;
@@ -9166,6 +9189,70 @@ export interface paths {
         get: operations["get_today_api_parent_contact_book_today_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/dismissal-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dismissal Notices
+         * @description 列出自家子女指定日期（預設今天）的接送通知（含 staff 建立與各狀態）。
+         */
+        get: operations["list_dismissal_notices_api_parent_dismissal_calls_get"];
+        put?: never;
+        /**
+         * Create Dismissal Notice
+         * @description 建立預告接送：同一學生同一天只能有一筆進行中通知。
+         */
+        post: operations["create_dismissal_notice_api_parent_dismissal_calls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/dismissal-calls/{call_id}/arrive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arrive Dismissal Notice
+         * @description 家長標記「我已到門口」——教師端此時才觸發強提醒。
+         */
+        post: operations["arrive_dismissal_notice_api_parent_dismissal_calls__call_id__arrive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/dismissal-calls/{call_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Dismissal Notice
+         * @description 家長取消自己建立的進行中預告。
+         */
+        post: operations["cancel_dismissal_notice_api_parent_dismissal_calls__call_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -22461,6 +22548,26 @@ export interface components {
             /** Items */
             items: components["schemas"]["CourseWaitlistItemOut"][];
         };
+        /** CreateDismissalNoticeRequest */
+        CreateDismissalNoticeRequest: {
+            /**
+             * Client Request Id
+             * @description 前端產生的 UUID，partial UNIQUE 提供冪等性
+             */
+            client_request_id?: string | null;
+            /**
+             * Eta Minutes
+             * @description 預計幾分鐘後抵達（1~60）
+             */
+            eta_minutes: number;
+            /**
+             * Note
+             * @description 備註，trim 後最多 200 字
+             */
+            note?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
         /** CreateLeaveRequest */
         CreateLeaveRequest: {
             /**
@@ -22958,6 +23065,45 @@ export interface components {
             note?: string | null;
             /** Student Id */
             student_id: number;
+        };
+        /** DismissalCallOut */
+        DismissalCallOut: {
+            /** Acknowledged At */
+            acknowledged_at: string | null;
+            /** Arrived At */
+            arrived_at: string | null;
+            /** Cancelled At */
+            cancelled_at: string | null;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Expected Arrival At
+             * Format: date-time
+             */
+            expected_arrival_at: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /** Request Source */
+            request_source: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested By Name */
+            requested_by_name: string;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /**
          * DsrDecisionIn
@@ -27877,6 +28023,52 @@ export interface components {
             items: components["schemas"]["ParentCourseItemOut"][];
             /** Total */
             total: number;
+        };
+        /** ParentDismissalCallListOut */
+        ParentDismissalCallListOut: {
+            /** Items */
+            items: components["schemas"]["ParentDismissalCallOut"][];
+            /** Total */
+            total: number;
+        };
+        /** ParentDismissalCallOut */
+        ParentDismissalCallOut: {
+            /** Acknowledged At */
+            acknowledged_at?: string | null;
+            /** Arrived At */
+            arrived_at?: string | null;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Expected Arrival At
+             * Format: date-time
+             */
+            expected_arrival_at: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Request Source */
+            request_source: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested By Name */
+            requested_by_name: string;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /**
          * ParentMedicationLogOut
@@ -47120,6 +47312,37 @@ export interface operations {
             };
         };
     };
+    arrive_dismissal_call_api_dismissal_calls__call_id__arrive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     cancel_dismissal_call_api_dismissal_calls__call_id__cancel_post: {
         parameters: {
             query?: never;
@@ -53898,6 +54121,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParentContactBookTodayOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dismissal_notices_api_parent_dismissal_calls_get: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD，預設今日 */
+                target_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dismissal_notice_api_parent_dismissal_calls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDismissalNoticeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    arrive_dismissal_notice_api_parent_dismissal_calls__call_id__arrive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_dismissal_notice_api_parent_dismissal_calls__call_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallOut"];
                 };
             };
             /** @description Validation Error */

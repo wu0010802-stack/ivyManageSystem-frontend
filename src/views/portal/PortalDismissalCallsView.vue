@@ -9,6 +9,7 @@ import {
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
 import {
   useNowClock,
+  isPreArrivalNotice,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
@@ -199,6 +200,15 @@ onMounted(() => {
               class="act-btn"
               @click="handleAcknowledge(call)"
             >我收到了</el-button>
+            <!-- 家長預告尚未抵達：不可帶出去放學（後端 409 為最終防線）；
+                 dismissal_call_arrived 事件到達後按鈕自動解鎖 -->
+            <el-button
+              v-else-if="call.status === 'acknowledged' && isPreArrivalNotice(call)"
+              type="success"
+              class="act-btn"
+              disabled
+              data-testid="portal-complete-locked"
+            >家長尚未抵達</el-button>
             <el-button
               v-else-if="call.status === 'acknowledged'"
               type="success"

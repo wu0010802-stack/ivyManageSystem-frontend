@@ -282,6 +282,26 @@ const todayHint = computed<string>(() =>
   heroStatus.value.label === '請假' ? '今天請假，好好休息' : '',
 )
 
+/**
+ * 「我要接小孩」CTA（pnotice01 預告接送）：貼在選中子女資訊（今日卡）下方，
+ * 明顯但不干擾。已離園隱藏；已有家長預告進行中改為查看文案（避免與追蹤卡
+ * 資訊矛盾——資料同源 today-status.dismissal）。
+ */
+const pickupNoticeCta = computed<string | null>(() => {
+  if (!selectedChild.value) return null
+  const d = (selectedTodayChild.value as {
+    dismissal?: { status?: string; request_source?: string } | null
+  } | null)?.dismissal
+  if (d?.status === 'completed') return null
+  if (
+    d?.request_source === 'parent' &&
+    (d.status === 'pending' || d.status === 'acknowledged')
+  ) {
+    return '預告接送進行中 · 查看'
+  }
+  return '我要接小孩'
+})
+
 async function pullRefresh() {
   await Promise.all([
     refreshSummary(true),
@@ -376,6 +396,18 @@ function go(path: string) {
         :hint="todayHint"
       />
     </section>
+
+    <!-- 預告接送 CTA：選中子女資訊附近、明顯但不干擾（pnotice01） -->
+    <router-link
+      v-if="pickupNoticeCta"
+      to="/pickup-notice"
+      class="pn-cta"
+      data-testid="today-pickup-notice-cta"
+    >
+      <span class="material-symbols-rounded" aria-hidden="true">directions_walk</span>
+      <span>{{ pickupNoticeCta }}</span>
+      <span class="material-symbols-rounded pn-cta__arrow" aria-hidden="true">chevron_right</span>
+    </router-link>
 
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
@@ -637,5 +669,35 @@ function go(path: string) {
 
 @media (prefers-reduced-motion: reduce) {
   .cb-card-link { transition: none; }
+}
+
+/* ─── 預告接送 CTA（pnotice01）：今日卡下方的輕量入口 ───
+   token：lint:tokens 棘輪禁新增 --m3- 引用（TOKENS.md 階段 2 前），以元件級
+   --pn-cta-* 鏡射 m3 primary-container 的明/暗值（同 PickupNoticeView 說明）。 */
+.pn-cta {
+  --pn-cta-bg: #cdeeda;
+  --pn-cta-fg: #00210f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--pn-cta-bg);
+  color: var(--pn-cta-fg);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+[data-theme='dark'] .pn-cta {
+  --pn-cta-bg: #00522c;
+  --pn-cta-fg: #89f9b1;
+}
+.pn-cta .material-symbols-rounded {
+  font-size: 20px;
+}
+.pn-cta__arrow {
+  margin-left: auto;
+  color: var(--pn-cta-fg);
 }
 </style>
