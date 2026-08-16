@@ -29,13 +29,13 @@ withDefaults(defineProps<{
 })
 
 const router = useRouter()
-const { slots, availableModules, swap, resetToDefault, load } = useQuickActionSlots()
+const { slots, isDefault, persisting, availableModules, swap, resetToDefault, load } =
+  useQuickActionSlots()
 onMounted(load)
 
 const editing = ref(false)
 const sheetOpen = ref(false)
 const activeSlotIndex = ref<number | null>(null)
-const swapping = ref(false)
 
 function toggleEditing(): void {
   editing.value = !editing.value
@@ -50,27 +50,32 @@ function onModuleClick(idx: number): void {
   router.push(QUICK_ACTION_CATALOG[slots.value[idx]].route)
 }
 
+/** 家長端慣例：axios 攔截器 normalize 出 displayMessage，優先顯示後端實際原因
+ * （例：模組目錄 FE/BE drift 時的 422），沒有才退回通用文案（比照 NotificationPrefsView.vue）。*/
+function errorMessage(err: unknown, fallback: string): string {
+  const e = err as Record<string, unknown>
+  return String(e?.displayMessage || fallback)
+}
+
 async function pickModule(key: string): Promise<void> {
-  if (activeSlotIndex.value === null || swapping.value) return
+  if (activeSlotIndex.value === null || persisting.value) return
   const idx = activeSlotIndex.value
-  swapping.value = true
   try {
     await swap(idx, key)
     sheetOpen.value = false
     activeSlotIndex.value = null
-  } catch {
-    toast.error('替換失敗，請稍後再試')
-  } finally {
-    swapping.value = false
+  } catch (err) {
+    toast.error(errorMessage(err, '替換失敗，請稍後再試'))
   }
 }
 
 async function onReset(): Promise<void> {
+  if (persisting.value) return
   try {
     await resetToDefault()
     toast.success('已恢復預設')
-  } catch {
-    toast.error('恢復預設失敗，請稍後再試')
+  } catch (err) {
+    toast.error(errorMessage(err, '恢復預設失敗，請稍後再試'))
   }
 }
 
@@ -127,7 +132,13 @@ const sheetCandidates = computed(() => availableModules())
 
     <p v-if="editing" class="qa-edit-hint">
       點任一按鈕即可替換成其他功能
-      <button type="button" class="qa-reset" @click="onReset">
+      <button
+        v-if="!isDefault"
+        type="button"
+        class="qa-reset"
+        :disabled="persisting"
+        @click="onReset"
+      >
         <span class="material-symbols-rounded" aria-hidden="true">restart_alt</span>
         恢復預設
       </button>
@@ -142,7 +153,7 @@ const sheetCandidates = computed(() => availableModules())
       <p class="qa-sheet-sub">選一個功能模組放到這一格</p>
       <ul class="qa-sheet-list">
         <li v-for="m in sheetCandidates" :key="m.key">
-          <button type="button" class="qa-sheet-item" :disabled="swapping" @click="pickModule(m.key)">
+          <button type="button" class="qa-sheet-item" :disabled="persisting" @click="pickModule(m.key)">
             <span class="qa-sheet-icon" :class="`tone-${m.tone}`">
               <span class="material-symbols-rounded" aria-hidden="true">{{ m.icon }}</span>
             </span>
@@ -153,7 +164,6 @@ const sheetCandidates = computed(() => availableModules())
           </button>
         </li>
       </ul>
-      <p v-if="sheetCandidates.length === 0" class="qa-sheet-empty">目前三格都已放滿，沒有其他候選模組</p>
     </ParentBottomSheet>
   </section>
 </template>
@@ -272,7 +282,6 @@ const sheetCandidates = computed(() => availableModules())
 .qa-sheet-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .qa-sheet-label { font-size: 14px; font-weight: 700; color: var(--pt-text-strong); }
 .qa-sheet-desc { font-size: 11px; font-weight: 600; color: var(--pt-text-faint); }
-.qa-sheet-empty { padding: 12px 4px; text-align: center; font-size: 13px; color: var(--pt-text-faint); font-weight: 600; }
 
 /* 出席狀態 pill 色調對齊既有 status tone vocabulary（見 ContactBookDayCard 用法） */
 .qa-cb-pill.tone-ok { background: rgba(255, 255, 255, 0.28); }

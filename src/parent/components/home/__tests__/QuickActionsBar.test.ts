@@ -158,4 +158,45 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     expect(w.findAll('.qa-mod-label').map((n) => n.text())).toEqual(['接送', '代理接送', '公告'])
     expect(toastSuccess).toHaveBeenCalled()
   })
+
+  it('已經是預設值時：不顯示「恢復預設」按鈕（避免打一發無意義 PUT）', async () => {
+    // beforeEach 預設 mock 就是 is_default: true
+    const w = mountBar()
+    await flushPromises()
+    await w.find('.qa-edit').trigger('click')
+    expect(w.find('.qa-reset').exists()).toBe(false)
+  })
+
+  it('恢復預設失敗：跳錯誤 toast，畫面回滾成原本的模組', async () => {
+    getQuickActions.mockResolvedValue({ data: { slots: ['bus', 'fees', 'calendar'], is_default: false } })
+    updateQuickActions.mockRejectedValue(new Error('boom'))
+    const w = mountBar()
+    await flushPromises()
+    await w.find('.qa-edit').trigger('click')
+
+    await w.find('.qa-reset').trigger('click')
+    await flushPromises()
+
+    expect(toastError).toHaveBeenCalled()
+    expect(w.findAll('.qa-mod-label').map((n) => n.text())).toEqual(['娃娃車', '學費', '行事曆'])
+  })
+
+  it('替換 PUT 還在飛時連點兩個候選模組：只發一次 PUT（persisting 鎖）', async () => {
+    let resolvePut!: (v: unknown) => void
+    updateQuickActions.mockImplementation(
+      () => new Promise((resolve) => { resolvePut = resolve }),
+    )
+    const w = mountBar()
+    await flushPromises()
+    await w.find('.qa-edit').trigger('click')
+    await w.findAll('.qa-mod')[0].trigger('click')
+
+    const items = w.findAll('.qa-sheet-item')
+    await items[0].trigger('click') // 選「娃娃車」，PUT 掛著
+    await items[1].trigger('click') // 立刻再點「學費」，應被忽略
+
+    expect(updateQuickActions).toHaveBeenCalledTimes(1)
+    resolvePut({ data: {} })
+    await flushPromises()
+  })
 })
