@@ -28,23 +28,28 @@
       @keyup.enter="$emit('search')"
     />
 
-    <div class="pos-panel__filters">
-      <el-select
-        :model-value="classroomFilter"
-        placeholder="全部班級"
-        clearable
-        size="small"
-        class="pos-panel__classroom"
-        @update:model-value="$emit('update:classroomFilter', $event ?? '')"
+    <!-- 班級快選（①快速找到繳費的學生，2026-08-16）：現場收費時家長多半自報班級，
+         點一下即列出全班，比打字搜尋更快命中；改自原本的下拉選單。 -->
+    <div class="pos-search__class-chips" role="group" aria-label="班級快選">
+      <el-check-tag
+        class="pos-search__class-chip"
+        :checked="!classroomFilter"
+        @change="$emit('update:classroomFilter', '')"
       >
-        <el-option label="全部班級" value="" />
-        <el-option
-          v-for="c in classroomOptions"
-          :key="c"
-          :label="c"
-          :value="c"
-        />
-      </el-select>
+        全部
+      </el-check-tag>
+      <el-check-tag
+        v-for="c in classroomOptions"
+        :key="c"
+        class="pos-search__class-chip"
+        :checked="classroomFilter === c"
+        @change="$emit('update:classroomFilter', classroomFilter === c ? '' : c)"
+      >
+        {{ c }}
+      </el-check-tag>
+    </div>
+
+    <div class="pos-panel__filters">
       <el-switch
         v-if="!isRefundMode"
         :model-value="overdueOnly"
@@ -139,6 +144,18 @@
               <div v-if="hasPartialPayment(reg)" class="pos-reg__meta">
                 應繳 {{ formatTWD(reg.total_amount) }} · 已繳 {{ formatTWD(reg.paid_amount) }}
               </div>
+              <!-- 待審核防漏（③學期對帳追加，2026-08-16）：課程 pending_review 的
+                   報名 total_amount 算不到，過去 owed=0 會在收款清單隱形；現場
+                   收銀員仍要看得到人與待確認金額，提醒需先完成審核才能正式收款。 -->
+              <el-tag
+                v-if="reg.pending_review"
+                type="danger"
+                size="small"
+                effect="dark"
+                class="pos-reg__pending-tag"
+              >
+                待審核 · 待確認 {{ formatTWD(reg.pending_amount || 0) }}
+              </el-tag>
             </div>
             <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
               <span v-if="isFlatGroup(g)" class="pos-reg__owed-label">{{ groupTotalLabel }}</span>
@@ -277,6 +294,8 @@ interface RegistrationEntry {
   supplies?: { name: string }[]
   course_names?: string
   created_at?: string
+  pending_review?: boolean
+  pending_amount?: number
   [key: string]: unknown
 }
 
@@ -563,15 +582,16 @@ function handleSingleToggle(row: RegistrationEntry) {
   justify-content: center;
 }
 
+.pos-search__class-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .pos-panel__filters {
   display: flex;
   gap: 10px;
   align-items: center;
-}
-
-.pos-panel__classroom {
-  flex: 1;
-  min-width: 0;
 }
 
 .pos-panel__summary {
@@ -737,6 +757,10 @@ function handleSingleToggle(row: RegistrationEntry) {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 2px;
+}
+
+.pos-reg__pending-tag {
+  margin-top: 4px;
 }
 
 .pos-reg__owed {
