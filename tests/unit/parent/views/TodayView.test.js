@@ -254,27 +254,32 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
 
   // 2026-05-16（66093e97）拿掉的是「晚安, 王太太」樣板 hero——問候語當時是首頁
   // 主視覺、搶走孩子狀態的主角地位。2026-08-14 P3（M3 Expressive 改版 spec §6/§9）
-  // 依 mockup 加回問候語，但份量降到最低：頂端一小行文字+插畫、不含家長稱謂，
-  // 今日聯絡簿 hero 卡仍緊接在後、仍是最大最先的視覺主角，未違反原決策精神
-  // （2026-08-14 使用者已就此衝突明確裁定：加回但份量最低）。
-  it('問候語不含家長稱謂（P3 起有「早安/午安/晚安」，但不再有「, 王太太」樣板）', async () => {
+  // 依 mockup 加回問候語，但份量降到最低：頂端一小行文字+插畫、不含家長稱謂。
+  // 2026-08-16 首頁改版（quickact01）把問候語＋孩子照片／姓名合併成
+  // HomeHeroHeader hero，份量比 P3 更重——這是使用者這次明確要的新方向，
+  // 取代 2026-08-14 那次「份量降到最低」的裁定；家長稱謂本身仍不出現，是唯一
+  // 延續的部分。問候語/日期細節斷言已搬到 HomeHeroHeader 自己的測試
+  // （src/parent/components/home/__tests__/HomeHeroHeader.test.ts），
+  // 這裡只留「不含家長稱謂」這條全頁級守則。
+  it('頁面不含家長稱謂（王太太不應出現在首頁任何角落）', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
     )
     await flushPromises()
-    const head = w.find('.today-head').text()
-    expect(head).not.toContain('王太太')
+    expect(w.text()).not.toContain('王太太')
   })
 
-  it('不再顯示 IA migration banner（公告／出席已移至底部）', async () => {
+  it('不再顯示 IA migration banner（舊版 class 不應出現）', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
     )
     await flushPromises()
+    // 舊斷言曾含 `w.text()).not.toContain('公告')`：2026-08-16 常用功能列
+    // （quickact01）讓「公告」成為合法的模組按鈕標籤，此頁本來就該顯示這兩個
+    // 字，不再是回歸信號；改回單純守 IA migration banner 本身的 class。
     expect(w.html()).not.toContain('ia-banner')
-    expect(w.text()).not.toContain('公告')
   })
 
   it('週末單一孩子無 attendance：顯示「今天放假」而非「尚未到校」', async () => {
@@ -302,14 +307,17 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     expect(w.find('.cb-card-stub').attributes('data-hint')).toBe('')
   })
 
-  it('日期行顯示「N 月 N 日　星期X」格式（非 weekday-uppercase 樣板）', async () => {
+  // 2026-08-16 首頁改版（quickact01）：日期行搬進 HomeHeroHeader 的 .hh-meta，
+  // 格式也從「N 月 N 日　星期X」改成「M/D · 星期X」（見該元件註解），
+  // 但「星期」用中文全形字、不用英文縮寫的精神不變，這條斷言照舊保留。
+  it('HomeHeroHeader 日期行顯示「M/D · 星期X」格式（非 weekday-uppercase 樣板）', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
       { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
     )
     await flushPromises()
-    const dateText = w.find('.today-date').text()
-    expect(dateText).toMatch(/\d+ 月 \d+ 日.*星期[日一二三四五六]/)
+    const dateText = w.find('.hh-meta').text()
+    expect(dateText).toMatch(/\d+\/\d+ · 星期[日一二三四五六]/)
     // 不再是 letterspace uppercase eyebrow
     expect(dateText).not.toMatch(/SUNDAY|MONDAY|MON|TUE|WED|星期\s*[A-Z]/)
   })

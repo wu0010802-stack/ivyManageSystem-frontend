@@ -22,8 +22,9 @@ import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vu
 import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 import { listMySignRequests } from '../api/signDocuments'
-import GreetingSunIllustration from '../components/illustrations/GreetingSunIllustration.vue'
-import GreetingMoonIllustration from '../components/illustrations/GreetingMoonIllustration.vue'
+import HomeHeroHeader from '../components/home/HomeHeroHeader.vue'
+import QuickActionsBar from '../components/home/QuickActionsBar.vue'
+import { resolveQuickActionSlots } from '../utils/quickActionModules'
 
 const router = useRouter()
 const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
@@ -49,6 +50,9 @@ const {
 const me = computed(() => summaryData.value?.me || null)
 const children = computed(() => summaryData.value?.children || [])
 const summary = computed(() => summaryData.value?.summary || null)
+// quickact01：園所後台統一配置的常用功能三格，resolveQuickActionSlots 負責
+// 驗證＋壞值/未設定退回預設，見 utils/quickActionModules.ts。
+const quickActionSlots = computed(() => resolveQuickActionSlots(summaryData.value?.quick_action_slots))
 const showPushCta = computed(() => me.value && !me.value.can_push)
 const pendingSignCount = computed(() => {
   const v = (summary.value as { pending_event_acks?: unknown } | null)?.pending_event_acks
@@ -203,24 +207,6 @@ const todayDateLine = computed(() => {
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日　星期${wd}`
 })
 
-type GreetingPeriod = 'morning' | 'noon' | 'evening'
-
-const GREETING_TEXT: Record<GreetingPeriod, string> = {
-  morning: '早安！',
-  noon: '午安！',
-  evening: '晚安！',
-}
-
-function greetingPeriod(): GreetingPeriod {
-  const h = new Date().getHours()
-  if (h >= 5 && h < 12) return 'morning'
-  if (h >= 12 && h < 18) return 'noon'
-  return 'evening'
-}
-
-const greetingText = computed(() => GREETING_TEXT[greetingPeriod()])
-const isEveningGreeting = computed(() => greetingPeriod() === 'evening')
-
 function isOffDay() {
   const d = new Date().getDay()
   return d === 0 || d === 6
@@ -283,6 +269,22 @@ const todayHint = computed<string>(() =>
 )
 
 /**
+ * 常用功能列（quickact01，2026-08-16 改版）的聯絡簿大按鈕連結／副標。
+ * 有今天的紀錄就直連該筆；沒有的話連去列表，副標依三態給對應文案，
+ * 呼應 ContactBookDayCard 原本的 awaiting/offday 語意，不重造一套判斷。
+ */
+const contactBookHref = computed<string>(() =>
+  contactBookEntry.value ? `/contact-book/${contactBookEntry.value.id}` : '/contact-book',
+)
+const contactBookSub = computed<string>(() => {
+  if (contactBookEntry.value) return '查看今天的完整紀錄'
+  if (todayVariant.value === 'offday') {
+    return heroStatus.value.label === '請假' ? '今天請假，暫無紀錄' : '今天放假，暫無紀錄'
+  }
+  return '老師還沒有寫今天的紀錄'
+})
+
+/**
  * 「我要接小孩」CTA（pnotice01 預告接送）：貼在選中子女資訊（今日卡）下方，
  * 明顯但不干擾。已離園隱藏；已有家長預告進行中改為查看文案（避免與追蹤卡
  * 資訊矛盾——資料同源 today-status.dismissal）。
@@ -328,18 +330,33 @@ function go(path: string) {
     <PendingSignBanner :count="pendingSignCount" />
     <PendingSurveyBanner :count="pendingSurveyCount" />
 
-    <!-- 頂部：問候語 + 日期 + 多寶切換（單孩姓名由今日卡呈現，不重複） -->
-    <div class="today-head">
-      <div class="today-greet-row">
-        <div>
-          <h1 class="today-greet">{{ greetingText }}</h1>
-          <p class="today-date">{{ todayDateLine }}</p>
-        </div>
-        <GreetingMoonIllustration v-if="isEveningGreeting" class="today-greet-art" />
-        <GreetingSunIllustration v-else class="today-greet-art" />
-      </div>
-      <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
-    </div>
+    <!--
+      首頁頂部 hero（2026-08-16 改版）：問候語 chip（早中晚＋插畫）+ 孩子近期
+      照片輪播 + 姓名 + 日期/班級，取代原本的純問候語列。多寶切換沿用既有
+      ChildContextHeader，接在後面。
+    -->
+    <HomeHeroHeader
+      v-if="selectedChild"
+      :student-id="selectedChild.student_id"
+      :name="selectedChild.name || ''"
+      :classroom-name="selectedChild.classroom_name"
+    />
+    <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
+
+    <!--
+      常用功能列（quickact01，2026-08-16 改版）：聯絡簿大按鈕 + 三個模組
+      按鈕，內容由園所後台統一配置（quickActionSlots，未設定過時退回預設
+      接送／代理接送／公告）。位在今日卡之上，但聯絡簿大按鈕本身帶出席狀態
+      pill，「3 秒內看到孩子當日狀態」的既有承諾不受影響。
+    -->
+    <QuickActionsBar
+      v-if="selectedChild"
+      :contact-book-href="contactBookHref"
+      :contact-book-sub="contactBookSub"
+      :status-label="heroStatus.label"
+      :status-tone="heroStatus.tone"
+      :slots="quickActionSlots"
+    />
 
     <!--
       今日卡 = 首頁 hero。PRODUCT.md 的成功定義是「3 秒內看到孩子當日狀態」，
@@ -519,42 +536,9 @@ function go(path: string) {
   gap: var(--space-4, 16px);
 }
 
-.today-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2, 8px);
-  padding: var(--space-6, 24px) var(--space-4, 16px) 0;
-}
-
-.today-greet-row {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-.today-greet {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 900;
-  letter-spacing: 0.01em;
-  line-height: 1.15;
-  color: var(--pt-text-strong);
-}
-.today-greet-art {
-  flex-shrink: 0;
-  margin-bottom: -2px;
-}
-
-.today-date {
-  margin: 0;
-  font-size: var(--text-sm, 13px);
-  font-weight: 600;
-  color: var(--pt-text-muted);
-  letter-spacing: 0.02em;
-}
-
 .today-cch {
   margin-top: var(--space-1, 4px);
+  padding: 0 var(--space-4, 16px);
 }
 
 /* Bento 格：2 欄 StatTile */
