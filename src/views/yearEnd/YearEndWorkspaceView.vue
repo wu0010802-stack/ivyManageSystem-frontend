@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { WORKSPACE_STEPS, normalizeStep, type WorkspaceStepKey } from './workspaceSteps'
 import { listYearEndCycles, updateCycleStatus, getCycleProgress } from '@/api/yearEnd'
@@ -13,6 +13,7 @@ import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 const YearEndConfigView = defineAsyncComponent(() => import('./YearEndConfigView.vue'))
 const YearEndGridView = defineAsyncComponent(() => import('./YearEndGridView.vue'))
 const YearEndDetailView = defineAsyncComponent(() => import('./YearEndDetailView.vue'))
+const AppraisalPayoutView = defineAsyncComponent(() => import('./AppraisalPayoutView.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -21,7 +22,11 @@ const cycleId = Number(route.params.id)
 const step = computed<WorkspaceStepKey>(() => normalizeStep(route.query.step))
 function goStep(key: WorkspaceStepKey) {
   if (key === step.value) return
-  router.replace({ query: { ...route.query, step: key } })
+  const q: LocationQueryRaw = { ...route.query, step: key }
+  if (key === 'payout' && !q.year && cycle.value) {
+    q.year = String(cycle.value.academic_year + 1913)
+  }
+  router.replace({ query: q })
 }
 
 const RAIL_COLLAPSE_KEY = 'ye-workspace-rail-collapsed'
@@ -249,6 +254,7 @@ function reopenToOpen() {
 
       <YearEndConfigView v-if="step === 'config'" :cycle-id="cycleId" />
       <YearEndGridView v-else-if="step === 'grid'" :cycle-id="cycleId" />
+      <AppraisalPayoutView v-else-if="step === 'payout'" />
       <YearEndDetailView v-else :cycle-id="cycleId" />
     </section>
   </div>

@@ -54,6 +54,7 @@ const STUBS = {
   YearEndConfigView: { template: '<div data-test="stub-config" />' },
   YearEndGridView: { template: '<div data-test="stub-grid" />' },
   YearEndDetailView: { template: '<div data-test="stub-detail" />' },
+  AppraisalPayoutView: { template: '<div data-test="stub-payout" />' },
 }
 
 async function mountShell() {
@@ -249,5 +250,32 @@ describe('YearEndWorkspaceView', () => {
     // 成功後重載 cycle + progress（表頭狀態 tag 與導軌數字一併更新）
     expect(api.listYearEndCycles).toHaveBeenCalledTimes(2)
     expect(api.getCycleProgress).toHaveBeenCalledTimes(2)
+  })
+
+  it('step=payout 時掛載發放內容', async () => {
+    routeRef.value = { params: { id: '9' }, query: { step: 'payout', year: '2027' } }
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="stub-payout"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="stub-detail"]').exists()).toBe(false)
+  })
+
+  it('點 rail-step-payout 且 URL 尚無 year → goStep 補上以週期學年換算的 year（academic_year+1913）', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    const wrapper = await mountShell()
+    replaceMock.mockClear()
+
+    await wrapper.find('[data-test="rail-step-payout"]').trigger('click')
+
+    expect(replaceMock).toHaveBeenCalledWith({ query: { step: 'payout', year: '2027' } })
+  })
+
+  it('點 rail-step-payout 且 URL 已有 year → goStep 保留原 year 不覆寫', async () => {
+    routeRef.value = { params: { id: '9' }, query: { year: '2026' } }
+    const wrapper = await mountShell()
+    replaceMock.mockClear()
+
+    await wrapper.find('[data-test="rail-step-payout"]').trigger('click')
+
+    expect(replaceMock).toHaveBeenCalledWith({ query: { year: '2026', step: 'payout' } })
   })
 })
