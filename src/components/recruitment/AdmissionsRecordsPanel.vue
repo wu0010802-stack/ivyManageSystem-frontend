@@ -42,6 +42,8 @@
       :source-suggestions="((options.sources as string[] | undefined) || [])"
       :referrer-suggestions="((options.referrers as string[] | undefined) || [])"
       :no-deposit-reasons="((options.no_deposit_reasons as string[] | undefined) || [])"
+      :source-categories="sourceCategories"
+      :teacher-options="teacherOptions"
       @save="handleSave"
     />
 
@@ -79,6 +81,7 @@ import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useFormDraft } from '@/composables/useFormDraft'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useAllClassroomStore } from '@/stores/classroomAll'
+import { getTeacherOptions } from '@/api/classrooms'
 import { toAdYear, getCurrentAcademicTerm } from '@/utils/academic'
 import { emptyVisitForm, type VisitFormState } from '@/constants/recruitment'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
@@ -95,6 +98,25 @@ const props = defineProps<{
 const emit = defineEmits<{ changed: [] }>()
 
 const { options, stats, invalidateOptions, fetchOptions } = props.dashboard
+
+// -------- 來源分類（獎金點數）與帶參觀老師選項 --------
+type SourceCategoryOption = { code: string; label: string; points: number }
+type TeacherOption = { id: number; name: string; employee_id?: string | null; position?: string | null }
+const sourceCategories = computed(
+  (): SourceCategoryOption[] =>
+    ((options.value.source_categories as SourceCategoryOption[] | undefined) || []),
+)
+const teacherOptions = ref<TeacherOption[]>([])
+async function loadTeacherOptionsOnce() {
+  if (teacherOptions.value.length) return
+  try {
+    const res = await getTeacherOptions()
+    teacherOptions.value = (res.data as TeacherOption[]) || []
+  } catch {
+    // 失敗靜默：不阻擋 dialog 開啟，仍可手填其他欄位
+    teacherOptions.value = []
+  }
+}
 
 // -------- 權限 --------
 const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
@@ -306,7 +328,7 @@ const onPageChange = (page: number) => {
 
 // -------- 訪視記錄 CRUD --------
 const openAddDialog = async () => {
-  await fetchOptions()
+  await Promise.all([fetchOptions(), loadTeacherOptionsOnce()])
   form.value = emptyVisitForm()
   dialogMode.value = 'add'
   editingId.value = null
@@ -316,7 +338,7 @@ const openAddDialog = async () => {
 }
 
 const openEditDialog = async (row: Record<string, unknown>) => {
-  await fetchOptions()
+  await Promise.all([fetchOptions(), loadTeacherOptionsOnce()])
   form.value = {
     month: String(row.month ?? ''),
     month_raw: rocDateToISO(String(row.visit_date ?? '')) ?? rocMonthToISO(String(row.month ?? '')),
@@ -329,8 +351,10 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     address: String(row.address ?? ''),
     district: String(row.district ?? ''),
     source: String(row.source ?? ''),
+    source_category: (row.source_category ?? null) as string | null,
     referrer: String(row.referrer ?? ''),
     deposit_collector: String(row.deposit_collector ?? ''),
+    tour_guide_employee_id: (row.tour_guide_employee_id ?? null) as number | null,
     has_deposit: Boolean(row.has_deposit),
     enrolled: Boolean(row.enrolled ?? false),
     transfer_term: Boolean(row.transfer_term ?? false),

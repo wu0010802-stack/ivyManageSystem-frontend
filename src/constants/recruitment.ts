@@ -30,8 +30,10 @@ export interface VisitFormState {
   address: string
   district: string
   source: string
+  source_category: string | null
   referrer: string
   deposit_collector: string
+  tour_guide_employee_id: number | null
   has_deposit: boolean
   enrolled: boolean
   transfer_term: boolean
@@ -49,7 +51,8 @@ export function emptyVisitForm(): VisitFormState {
   return {
     month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
     birthday: null, grade: null, phone: '', address: '',
-    district: '', source: '', referrer: '', deposit_collector: '',
+    district: '', source: '', source_category: null, referrer: '',
+    deposit_collector: '', tour_guide_employee_id: null,
     has_deposit: false, enrolled: false, transfer_term: false,
     target_school_year: term.school_year,
     target_semester: term.semester as 1 | 2,

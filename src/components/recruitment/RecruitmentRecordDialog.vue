@@ -87,8 +87,37 @@
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="幼生來源">
+            <el-form-item label="來源分類">
+              <el-select v-model="form.source_category" clearable placeholder="選擇來源（決定獎金點數）" style="width:100%">
+                <el-option
+                  v-for="c in sourceCategories"
+                  :key="c.code"
+                  :value="c.code"
+                  :label="`${c.label}（${c.points}）`"
+                />
+              </el-select>
+              <div class="form-hint">對應招生獎勵辦法點數表；舊資料未歸類時獎金頁會提示補填。</div>
+              <div v-if="splitHint" class="form-hint form-hint--warning">{{ splitHint }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="帶參觀老師">
+              <el-select v-model="form.tour_guide_employee_id" filterable clearable placeholder="自報生／邀約類獎金歸此人" style="width:100%">
+                <el-option
+                  v-for="t in teacherOptions"
+                  :key="t.id"
+                  :value="t.id"
+                  :label="t.employee_id ? `${t.name}（${t.employee_id}）` : t.name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="來源備註">
               <el-autocomplete v-model="form.source" :fetch-suggestions="sourceQuery" clearable style="width:100%" />
+              <div class="form-hint">原自由文字來源欄，保留舊資料原文。</div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -201,6 +230,8 @@ interface VisitForm {
   geocoding_consent?: boolean
   target_school_year?: number
   target_semester?: number
+  source_category?: string | null
+  tour_guide_employee_id?: number | null
   [key: string]: unknown
 }
 
@@ -213,6 +244,8 @@ const props = withDefaults(defineProps<{
   sourceSuggestions?: string[]
   referrerSuggestions?: string[]
   noDepositReasons?: string[]
+  sourceCategories?: { code: string; label: string; points: number }[]
+  teacherOptions?: { id: number; name: string; employee_id?: string | null; position?: string | null }[]
 }>(), {
   mode: 'add',
   saving: false,
@@ -220,6 +253,16 @@ const props = withDefaults(defineProps<{
   sourceSuggestions: () => [],
   referrerSuggestions: () => [],
   noDepositReasons: () => [],
+  sourceCategories: () => [],
+  teacherOptions: () => [],
+})
+
+// 拆分提示（spec §6）：兄姊均分／邀約拆分是一生兩師，第二列要在獎金頁手動加
+const splitHint = computed(() => {
+  const code = props.form.source_category
+  if (code === 'sibling_split') return '兄姊二人均分：另一位老師的 0.5 點列，請於招生獎金頁「新增歸屬列」補建。'
+  if (code === 'invite_success' || code === 'invite_origin') return '邀約拆分（0.6／0.4）：另一位老師的列請於招生獎金頁「新增歸屬列」補建。'
+  return ''
 })
 
 const emit = defineEmits<{
@@ -332,6 +375,7 @@ defineExpose({ formRef, applyValidationErrors })
 
 <style scoped>
 .required-legend { font-size: var(--text-xs); color: var(--el-text-color-secondary); margin: 0 0 var(--space-3); }
+.form-hint--warning { color: var(--el-color-warning); }
 .required-legend .req { color: var(--el-color-danger); }
 .enroll-term { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 </style>
