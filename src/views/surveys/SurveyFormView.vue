@@ -69,7 +69,7 @@
 
       <el-form-item v-if="!locked">
         <el-button type="primary" :loading="submitting" @click="onSubmit">{{ isEdit ? '儲存' : '建立' }}</el-button>
-        <el-button @click="router.back()">取消</el-button>
+        <el-button @click="onCancel">取消</el-button>
       </el-form-item>
     </el-form>
   </div>
@@ -78,7 +78,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, ArrowUp, Close, Delete } from '@element-plus/icons-vue'
 import { createSurvey, getSurvey, updateSurvey } from '@/api/surveys'
 import { getClassrooms } from '@/api/classrooms'
@@ -88,6 +88,7 @@ import { SURVEY_QUESTION_TYPES, isSurveyChoiceType } from '@/constants/surveyQue
 import {
   addQuestion,
   emptyDraft,
+  isDraftDirty,
   moveQuestion,
   removeQuestion,
   validateDraft,
@@ -116,6 +117,8 @@ const surveyId = computed(() => {
 const isEdit = computed(() => surveyId.value !== null)
 
 const draft = ref<SurveyDraft>(emptyDraft())
+// 取消時比對用的基準快照：新建模式即空草稿，編輯模式於 loadSurvey() 載入後覆寫。
+const baseline = ref<SurveyDraft>(emptyDraft())
 const status = ref('draft')
 const submitting = ref(false)
 
@@ -159,6 +162,7 @@ async function loadSurvey() {
         sort_order: q.sort_order,
       })),
     }
+    baseline.value = JSON.parse(JSON.stringify(draft.value)) as SurveyDraft
   } catch (e) {
     ElMessage.error(friendlyError('載入調查資料失敗', e))
     router.replace({ name: 'surveys' })
@@ -206,6 +210,22 @@ async function onSubmit() {
   } finally {
     submitting.value = false
   }
+}
+
+const onCancel = async () => {
+  if (isDraftDirty(baseline.value, draft.value)) {
+    try {
+      await ElMessageBox.confirm('尚未儲存的變更將會遺失，確定離開？', '放棄編輯', {
+        confirmButtonText: '放棄變更',
+        cancelButtonText: '繼續編輯',
+        type: 'warning',
+      })
+    } catch {
+      return // 使用者選擇繼續編輯
+    }
+  }
+  // 固定回調查列表：router.back() 在直接開連結進來時無處可回。
+  router.push({ name: 'surveys' })
 }
 
 onMounted(async () => {

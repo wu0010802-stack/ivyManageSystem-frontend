@@ -35,6 +35,14 @@ export function emptyDraft(): SurveyDraft {
   }
 }
 
+/**
+ * 草稿是否有未儲存變更。題目為巢狀結構，用序列化整體比對而非淺比較——
+ * 淺比較會漏掉「只改了某題標題」這種最常見的編輯。
+ */
+export function isDraftDirty(baseline: SurveyDraft, current: SurveyDraft): boolean {
+  return JSON.stringify(baseline) !== JSON.stringify(current)
+}
+
 function isChoiceType(type: QuestionDraft['question_type']): boolean {
   return isSurveyChoiceType(type)
 }
