@@ -70,6 +70,18 @@ describe('AppraisalWorkspaceView', () => {
     expect(w.findComponent({ name: 'AppraisalCycleExceptionsSummary' }).exists()).toBe(true)
   })
 
+  it('審查例外階段切換週期會用新 cycleId 重新呼叫例外 API（:key 強制重掛，非沿用舊資料）', async () => {
+    const { w } = await mountShell('?stage=exceptions')
+    expect(mockedExceptions).toHaveBeenCalledWith(2)
+    mockedExceptions.mockClear()
+
+    await (w.vm as any).selectCycle(1)
+    await flushPromises()
+
+    expect(mockedExceptions).toHaveBeenCalledWith(1)
+    expect(mockedExceptions).not.toHaveBeenCalledWith(2)
+  })
+
   it('URL 帶 cycle 參數時選中該歷史週期，非目前 OPEN 週期時「準備資料」顯示說明空狀態而非 CurrentSemesterOverview', async () => {
     const { w } = await mountShell('?cycle=1&stage=prepare')
     expect((w.vm as any).selectedCycleId).toBe(1)

@@ -97,7 +97,7 @@ defineExpose({ selectedCycleId, stage, cycles, currentCycleId, selectCycle, sele
           <CurrentSemesterOverview v-if="isLiveCurrentCycle" />
           <EmptyState v-else title="此週期無需準備資料" description="準備資料僅適用於目前進行中的學期；歷史週期請直接查看簽核完成頁。" />
         </template>
-        <AppraisalCycleExceptionsSummary v-else-if="stage === 'exceptions'" :cycle-id="selectedCycleId" />
+        <AppraisalCycleExceptionsSummary v-else-if="stage === 'exceptions'" :key="selectedCycleId" :cycle-id="selectedCycleId" />
         <CycleDetailPanel v-else :key="selectedCycleId" :cycle-id="selectedCycleId" />
       </div>
     </template>
