@@ -53,4 +53,12 @@ describe('SalarySettleView 嚮導外殼', () => {
             expect.objectContaining({ query: expect.objectContaining({ step: 'finalize' }) }),
         )
     })
+
+    it('返回入口已上移至頂列麵包屑，頁內不再重複放返回鍵', async () => {
+        // 全站唯一的「回上一層」機制是 AdminHeader 的麵包屑父層。
+        // 頁內再放一顆等於同一動作兩個入口、位置還各不相同（本次收斂的原因）。
+        const wrapper = mount(SalarySettleView, { global: { stubs: STUBS } })
+        await flushPromises()
+        expect(wrapper.text()).not.toContain('回工作台')
+    })
 })

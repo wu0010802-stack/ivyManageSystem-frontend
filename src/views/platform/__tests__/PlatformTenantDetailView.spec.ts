@@ -115,4 +115,13 @@ describe('PlatformTenantDetailView', () => {
     expect(h.getTenant).toHaveBeenCalledTimes(2)
     expect(w.find('[data-testid="detail-status"]').text()).toBe('已停用')
   })
+
+  it('返回入口已上移至頂列麵包屑，頁內不再重複放返回鍵', async () => {
+    // 全站唯一的「回上一層」機制是 AdminHeader 的麵包屑父層。
+    // 頁內再放一顆等於同一動作兩個入口、位置還各不相同（本次收斂的原因）。
+    const w = mount(PlatformTenantDetailView, { global: { stubs } })
+    await flushPromises()
+    expect(w.find('[data-testid="back-to-list"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('回清單')
+  })
 })

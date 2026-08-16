@@ -5,7 +5,7 @@ import ElementPlus from 'element-plus'
 
 // ── Mocks（比照 EmployeeHubView.spec.ts / EmployeeListView.cardview.spec.ts 既有慣例）──
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn() }),
 }))
 vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
 vi.mock('@/stores/employee', () => ({ useEmployeeStore: () => ({ fetchEmployees: vi.fn() }) }))
@@ -325,5 +325,16 @@ describe('EmployeeDetailView 英文名顯示', () => {
       employee: { id: 1, name: '王小明', english_name: null, is_active: true, employee_type: 'regular', base_salary: 30000 },
     })
     expect(w.find('.emp-english-name').exists()).toBe(false)
+  })
+})
+
+describe('EmployeeDetailView 返回入口收斂', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('返回入口已上移至頂列麵包屑，頁內不再重複放返回鍵', () => {
+    // 全站唯一的「回上一層」機制是 AdminHeader 的麵包屑父層。
+    // 頁內再放一顆等於同一動作兩個入口、位置還各不相同（本次收斂的原因）。
+    const w = mountDetail()
+    expect(w.text()).not.toContain('返回員工列表')
   })
 })
