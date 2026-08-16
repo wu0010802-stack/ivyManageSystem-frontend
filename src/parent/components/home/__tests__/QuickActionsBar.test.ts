@@ -80,6 +80,41 @@ describe('QuickActionsBar — 掛載時載入設定', () => {
   })
 })
 
+describe('QuickActionsBar — 三格模組載入態（2026-08-16 使用者實測回報的 UX 問題）', () => {
+  it('GET 還沒回來時：顯示骨架佔位，不先閃預設三格', async () => {
+    let resolveGet!: (v: unknown) => void
+    getQuickActions.mockReturnValue(new Promise((resolve) => { resolveGet = resolve }))
+
+    const w = mountBar()
+    await flushPromises() // 讓 onMounted(load) 的同步部分（loading=true）跑完
+
+    // 還沒 resolve：看得到骨架，看不到任何模組按鈕（含預設三格）
+    expect(w.findAll('.sk-line').length).toBe(3)
+    expect(w.findAll('.qa-mod-label').length).toBe(0)
+    expect(w.find('.qa-edit').attributes('disabled')).toBeDefined()
+
+    // GET 回來，且家長存的不是預設值
+    resolveGet({ data: { slots: ['bus', 'fees', 'calendar'], is_default: false } })
+    await flushPromises()
+
+    // 直接顯示家長存的設定，中間沒有出現過「接送・代理接送・公告」
+    expect(w.findAll('.sk-line').length).toBe(0)
+    const labels = w.findAll('.qa-mod-label').map((n) => n.text())
+    expect(labels).toEqual(['娃娃車', '學費', '行事曆'])
+    expect(w.find('.qa-edit').attributes('disabled')).toBeUndefined()
+  })
+
+  it('GET 失敗：骨架消失、降級成預設三格（不是卡在骨架不動）', async () => {
+    getQuickActions.mockRejectedValue(new Error('boom'))
+    const w = mountBar()
+    await flushPromises()
+
+    expect(w.findAll('.sk-line').length).toBe(0)
+    const labels = w.findAll('.qa-mod-label').map((n) => n.text())
+    expect(labels).toEqual(['接送', '代理接送', '公告'])
+  })
+})
+
 describe('QuickActionsBar — 非編輯態：點模組即導覽', () => {
   it('點「接送」導向 /pickup-notice', async () => {
     const w = mountBar()

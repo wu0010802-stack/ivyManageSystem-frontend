@@ -9,10 +9,18 @@
  *
  * 聯絡簿大按鈕上疊一顆出席狀態小 pill（statusLabel/statusTone），延續
  * 「3 秒內看到孩子當日狀態」的既有產品決策。
+ *
+ * 三格模組按鈕的載入態（2026-08-16 使用者實測回報）：composable 的 slots
+ * 初值是 DEFAULT_SLOTS，掛載後才 fetch 家長實際存的設定，中間這段空窗如果
+ * 直接渲染按鈕，家長重新整理後會先閃一次預設三格、API 回來才跳成自己存的
+ * 設定，像是編輯沒生效。改在 loading 期間用共用 SkeletonBlock 佔位（比照
+ * TodayView / NotificationPrefsView 既有 loading 慣例），不提前渲染任何
+ * 一組模組內容。
  */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ParentBottomSheet from '../ParentBottomSheet.vue'
+import SkeletonBlock from '../SkeletonBlock.vue'
 import { toast } from '../../utils/toast'
 import { QUICK_ACTION_CATALOG, useQuickActionSlots } from '../../composables/useQuickActionSlots'
 
@@ -29,7 +37,7 @@ withDefaults(defineProps<{
 })
 
 const router = useRouter()
-const { slots, isDefault, persisting, availableModules, swap, resetToDefault, load } =
+const { slots, loading, isDefault, persisting, availableModules, swap, resetToDefault, load } =
   useQuickActionSlots()
 onMounted(load)
 
@@ -89,7 +97,13 @@ const sheetCandidates = computed(() => availableModules())
   <section class="qa">
     <div class="qa-head">
       <h3 class="qa-title">常用功能</h3>
-      <button type="button" class="qa-edit" :class="{ 'is-active': editing }" @click="toggleEditing">
+      <button
+        type="button"
+        class="qa-edit"
+        :class="{ 'is-active': editing }"
+        :disabled="loading"
+        @click="toggleEditing"
+      >
         <span class="material-symbols-rounded" aria-hidden="true">{{ editing ? 'check' : 'edit_note' }}</span>
         {{ editing ? '完成' : '編輯' }}
       </button>
@@ -110,24 +124,27 @@ const sheetCandidates = computed(() => availableModules())
     </router-link>
 
     <div class="qa-row" :class="{ 'is-editing': editing }" role="group" aria-label="常用功能模組（可替換）">
-      <button
-        v-for="(key, idx) in slots"
-        :key="key"
-        type="button"
-        class="qa-mod"
-        :class="`tone-${QUICK_ACTION_CATALOG[key].tone}`"
-        :aria-label="`${QUICK_ACTION_CATALOG[key].label}${editing ? '，點擊可替換' : ''}`"
-        @click="onModuleClick(idx)"
-      >
-        <span v-if="editing" class="qa-mod-badge" aria-hidden="true">
-          <span class="material-symbols-rounded">edit_note</span>
-        </span>
-        <span class="qa-mod-icon">
-          <span class="material-symbols-rounded" aria-hidden="true">{{ QUICK_ACTION_CATALOG[key].icon }}</span>
-        </span>
-        <span class="qa-mod-label">{{ QUICK_ACTION_CATALOG[key].label }}</span>
-        <span class="qa-mod-sub">{{ QUICK_ACTION_CATALOG[key].sub }}</span>
-      </button>
+      <SkeletonBlock v-if="loading" variant="line" :count="3" height="88px" />
+      <template v-else>
+        <button
+          v-for="(key, idx) in slots"
+          :key="key"
+          type="button"
+          class="qa-mod"
+          :class="`tone-${QUICK_ACTION_CATALOG[key].tone}`"
+          :aria-label="`${QUICK_ACTION_CATALOG[key].label}${editing ? '，點擊可替換' : ''}`"
+          @click="onModuleClick(idx)"
+        >
+          <span v-if="editing" class="qa-mod-badge" aria-hidden="true">
+            <span class="material-symbols-rounded">edit_note</span>
+          </span>
+          <span class="qa-mod-icon">
+            <span class="material-symbols-rounded" aria-hidden="true">{{ QUICK_ACTION_CATALOG[key].icon }}</span>
+          </span>
+          <span class="qa-mod-label">{{ QUICK_ACTION_CATALOG[key].label }}</span>
+          <span class="qa-mod-sub">{{ QUICK_ACTION_CATALOG[key].sub }}</span>
+        </button>
+      </template>
     </div>
 
     <p v-if="editing" class="qa-edit-hint">
@@ -216,6 +233,17 @@ const sheetCandidates = computed(() => availableModules())
 .qa-cb-chev { font-size: 20px !important; opacity: 0.85; flex-shrink: 0; }
 
 .qa-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+/* 三格模組載入態：SkeletonBlock 是多 root node 元件（line 變體的 N 個
+   .sk-line + 一個 sr-only 狀態文字），class/attrs 不會 fallthrough 到任何
+   單一子節點，所以直接選 .qa-row 底下的 .sk-line（它們就是 .qa-row 的直接
+   子節點）。蓋掉預設的直排 margin-top 與方形圓角，改成跟 .qa-mod 一致的
+   圓角，避免載入態跟真實內容的視覺形狀不一致；sr-only 狀態文字是
+   position:absolute，不吃 grid 版位，不用另外處理。 */
+.qa-row :deep(.sk-line) {
+  margin-top: 0 !important;
+  border-radius: var(--pt-card-radius, 26px) !important;
+}
 .qa-mod {
   position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
