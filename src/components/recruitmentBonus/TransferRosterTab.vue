@@ -4,19 +4,20 @@
       帳號已遮罩（僅顯示尾四碼）：完整帳號需要完整薪資檢視權限。
     </p>
     <el-table :data="roster?.rows || []" stripe style="width: 100%">
+      <!-- slot 用 scope 防衛式取值：EP 表格在部分渲染路徑會以 undefined 呼叫 default slot -->
       <el-table-column label="帳號" min-width="200">
-        <template #default="{ row }">
-          <template v-if="row.missing_account">
+        <template #default="scope">
+          <template v-if="scope?.row?.missing_account">
             <el-tag type="warning" size="small">未填帳號</el-tag>
           </template>
-          <template v-else>{{ row.bank_code ? `${row.bank_code}-` : '' }}{{ row.bank_account }}</template>
+          <template v-else-if="scope?.row">{{ scope.row.bank_code ? `${scope.row.bank_code}-` : '' }}{{ scope.row.bank_account }}</template>
         </template>
       </el-table-column>
       <el-table-column label="戶名" min-width="120">
-        <template #default="{ row }">{{ row.bank_account_name || row.employee_name }}</template>
+        <template #default="scope">{{ scope?.row ? (scope.row.bank_account_name || scope.row.employee_name) : '' }}</template>
       </el-table-column>
       <el-table-column label="金額" width="140" align="right">
-        <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
+        <template #default="scope">{{ scope?.row ? formatCurrency(scope.row.amount) : '' }}</template>
       </el-table-column>
     </el-table>
     <div class="roster-total">合計 <strong>{{ formatCurrency(roster?.total_amount || 0) }}</strong></div>
