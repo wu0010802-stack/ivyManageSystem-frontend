@@ -117,7 +117,7 @@ describe('GuardianManager — 設定碼彌窗附家長端網址', () => {
     const wrapper = await mountManager()
     const vm = wrapper.vm as unknown as { parentAppUrl: string }
 
-    expect(vm.parentAppUrl).toBe(`${window.location.origin}/parent.html`)
+    expect(vm.parentAppUrl).toBe(`${window.location.origin}/parent/`)
     // 不得寫死任何品牌網址，否則 B 校職員會把 A 校網址發給家長
     expect(vm.parentAppUrl).not.toContain('ivypreschool.tw')
     expect(vm.parentAppUrl).not.toContain('zeabur')
@@ -131,7 +131,7 @@ describe('GuardianManager — 設定碼彌窗附家長端網址', () => {
     const vm = wrapper.vm as unknown as { copyParentAppUrl: () => Promise<void> }
     await vm.copyParentAppUrl()
 
-    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/parent.html`)
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/parent/`)
     expect(mockMessageSuccess).toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
@@ -153,7 +153,7 @@ describe('GuardianManager — 設定碼彌窗附家長端網址', () => {
     await vm.copyDeviceSetupMessage()
 
     const text = writeText.mock.calls.at(-1)?.[0] as string
-    expect(text).toContain(`${window.location.origin}/parent.html`)
+    expect(text).toContain(`${window.location.origin}/parent/`)
     expect(text).toContain('ABCD1234EFGH')
     // 期限沿用彌窗既有的格式化結果，這裡只確認有帶到、不固化格式
     expect(text).toContain('有效期限')

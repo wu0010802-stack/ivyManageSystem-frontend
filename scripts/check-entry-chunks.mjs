@@ -67,14 +67,14 @@ const ENTRIES = [
   },
   {
     name: 'parent',
-    html: join(DIST, 'parent.html'),
+    html: join(DIST, 'parent', 'index.html'),
     forbidden: [/^admin-core-/],
     reason: '家長端 parent 不得靜態可達 admin-core chunk',
     routeEntryForbidden: [/^public-app-/],
     manifestHref: '/parent.webmanifest',
     manifestName: '{{TB_MANIFEST_PARENT_NAME}}',
-    manifestStartUrl: '/parent.html',
-    manifestScope: '/parent.html',
+    manifestStartUrl: '/parent/',
+    manifestScope: '/parent/',
   },
 ]
 

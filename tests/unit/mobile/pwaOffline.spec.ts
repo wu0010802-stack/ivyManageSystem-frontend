@@ -12,9 +12,9 @@ describe('PWA 離線收斂', () => {
     expect(c).toContain('/^\\/public\\//')
   })
 
-  it('globPatterns 精快取 parent.html 與 public.html', () => {
+  it('globPatterns 精快取 parent/index.html 與 public.html', () => {
     const c = cfg()
-    expect(c).toContain("'parent.html'")
+    expect(c).toContain("'parent/index.html'")
     expect(c).toContain("'public.html'")
   })
 

@@ -103,9 +103,19 @@ server {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
     }
-    location = /parent.html {
+    location = /parent/ {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
+        try_files /parent/index.html =404;
+    }
+    # 乾淨網址（2026-08-16 由 /parent.html 改名）：裸路徑與舊網址皆 301 到正式的
+    # /parent/。舊網址保留轉址而非直接刪除，避免已在 LINE Developers console
+    # 設定過 endpoint URL＝/parent.html 的既有租戶登入流程中斷。
+    location = /parent {
+        return 301 /parent/;
+    }
+    location = /parent.html {
+        return 301 /parent/;
     }
     location = /public.html {
         include /etc/nginx/security-headers.conf;

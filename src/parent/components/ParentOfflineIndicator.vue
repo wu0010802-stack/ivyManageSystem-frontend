@@ -80,7 +80,7 @@ async function openReviewDialog() {
     await manualFlush()
   } catch {
     // 取消 = 聯絡管理員：v1 簡單導向 messages
-    window.location.href = '/parent.html#/messages'
+    window.location.href = '/parent/#/messages'
   }
 }
 

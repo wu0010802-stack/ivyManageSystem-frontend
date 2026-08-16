@@ -11,7 +11,7 @@ const defaultTokens = (): Record<string, string> =>
   ).tokens
 
 describe('viewport meta — 三 entry 對齊（safe-area 生效前提）', () => {
-  it.each(['index.html', 'parent.html', 'public.html'])(
+  it.each(['index.html', 'parent/index.html', 'public.html'])(
     '%s 的 viewport 含 viewport-fit=cover',
     (file) => {
       const html = read(file)
