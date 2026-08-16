@@ -50,3 +50,19 @@ export const settleCampaign = (
     campaignId: number,
 ): AxiosResp<'/recruitment-bonus/campaigns/{campaign_id}/settle', 'post'> =>
     api.post(`/recruitment-bonus/campaigns/${campaignId}/settle`)
+
+/** 統計表（園方 Excel 格式）：每師區塊＋計算式＋下次核算名單。 */
+export const getCampaignReport = (
+    campaignId: number,
+): AxiosResp<'/recruitment-bonus/campaigns/{campaign_id}/report', 'get'> =>
+    api.get(`/recruitment-bonus/campaigns/${campaignId}/report`)
+
+/** 轉帳名冊；無完整薪資檢視權限時後端回遮罩帳號（account_masked=true）。 */
+export const getTransferRoster = (
+    campaignId: number,
+): AxiosResp<'/recruitment-bonus/campaigns/{campaign_id}/transfer-roster', 'get'> =>
+    api.get(`/recruitment-bonus/campaigns/${campaignId}/transfer-roster`)
+
+/** 匯出 Excel（三 sheet）；需完整薪資檢視權限（無權限後端回 403）。 */
+export const exportCampaignXlsx = (campaignId: number) =>
+    api.get(`/recruitment-bonus/campaigns/${campaignId}/export`, { responseType: 'blob' })

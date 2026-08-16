@@ -13497,6 +13497,49 @@ export interface paths {
         patch: operations["update_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions__attribution_id__patch"];
         trace?: never;
     };
+    "/recruitment-bonus/campaigns/{campaign_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Campaign Xlsx
+         * @description 匯出招生獎金 Excel（統計表／獎金條／轉帳名冊三 sheet，仿園方 1150317）。
+         *
+         *     含完整銀行帳號 → 需 has_full_salary_view，否則 403；並寫顯式匯出稽核
+         *     （GET 不經 AuditMiddleware，比照 api/art_teacher_payroll.py）。
+         */
+        get: operations["export_campaign_xlsx_api_recruitment_bonus_campaigns__campaign_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Campaign Report
+         * @description 統計表（園方 Excel 格式）：每師區塊＋逐生明細＋計算式＋下次核算名單。
+         */
+        get: operations["get_campaign_report_api_recruitment_bonus_campaigns__campaign_id__report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recruitment-bonus/campaigns/{campaign_id}/settle": {
         parameters: {
             query?: never;
@@ -13547,6 +13590,26 @@ export interface paths {
          * @description 候選同步（冪等）；已結算的期一律 409（守衛 6），回傳四個計數（守衛 7）。
          */
         post: operations["sync_campaign_candidates_api_recruitment_bonus_campaigns__campaign_id__sync_candidates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/transfer-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Transfer Roster
+         * @description 轉帳名冊：戶名／帳號／金額／合計；無完整薪資檢視權限時帳號遮罩尾四碼。
+         */
+        get: operations["get_transfer_roster_api_recruitment_bonus_campaigns__campaign_id__transfer_roster_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -32092,6 +32155,126 @@ export interface components {
             read_at?: string | null;
         };
         /**
+         * RecruitmentBonusReportBlockOut
+         * @description 統計表每師一區塊（含計算式字串與下次核算名單）。
+         */
+        RecruitmentBonusReportBlockOut: {
+            /** Counted Persons */
+            counted_persons: number;
+            /** Deferred Rows */
+            deferred_rows: components["schemas"]["RecruitmentBonusReportRowOut"][];
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Employee Name */
+            employee_name: string;
+            /** Formula Text */
+            formula_text: string;
+            /** Gross Amount */
+            gross_amount: number;
+            /** Resigned */
+            resigned: boolean;
+            /** Rows */
+            rows: components["schemas"]["RecruitmentBonusReportRowOut"][];
+            /** Share In */
+            share_in: number;
+            /** Share Out */
+            share_out: number;
+            /** Total Amount */
+            total_amount: number;
+            /** Unit Price */
+            unit_price: number;
+        };
+        /** RecruitmentBonusReportOut */
+        RecruitmentBonusReportOut: {
+            /** Blocks */
+            blocks: components["schemas"]["RecruitmentBonusReportBlockOut"][];
+            /** Campaign Id */
+            campaign_id: number;
+            /** Campaign Name */
+            campaign_name: string;
+            /** Settled Mismatches */
+            settled_mismatches: components["schemas"]["RecruitmentBonusSettledMismatchOut"][];
+            /** Status */
+            status: string;
+            /** Total Amount */
+            total_amount: number;
+            /** Unassigned Rows */
+            unassigned_rows: components["schemas"]["RecruitmentBonusReportRowOut"][];
+        };
+        /**
+         * RecruitmentBonusReportRowOut
+         * @description 統計表單一幼生列（Excel 逐生欄）。
+         */
+        RecruitmentBonusReportRowOut: {
+            /** Attribution Id */
+            attribution_id: number;
+            /** Child Name */
+            child_name?: string | null;
+            /** Employee Assigned */
+            employee_assigned: boolean;
+            /** Grade Multiplier */
+            grade_multiplier: number;
+            /** Point Code */
+            point_code: string;
+            /** Point Label */
+            point_label: string;
+            /** Points */
+            points: number;
+            /** Status */
+            status: string;
+            /** Uncategorized */
+            uncategorized: boolean;
+            /** Visit Grade */
+            visit_grade?: string | null;
+        };
+        /** RecruitmentBonusRosterOut */
+        RecruitmentBonusRosterOut: {
+            /** Account Masked */
+            account_masked: boolean;
+            /** Campaign Id */
+            campaign_id: number;
+            /** Campaign Name */
+            campaign_name: string;
+            /** Rows */
+            rows: components["schemas"]["RecruitmentBonusRosterRowOut"][];
+            /** Total Amount */
+            total_amount: number;
+        };
+        /**
+         * RecruitmentBonusRosterRowOut
+         * @description 轉帳名冊單列；無完整薪資檢視權限時 bank_account 只回尾四碼遮罩。
+         */
+        RecruitmentBonusRosterRowOut: {
+            /** Amount */
+            amount: number;
+            /** Bank Account */
+            bank_account?: string | null;
+            /** Bank Account Name */
+            bank_account_name?: string | null;
+            /** Bank Code */
+            bank_code?: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Missing Account */
+            missing_account: boolean;
+        };
+        /**
+         * RecruitmentBonusSettledMismatchOut
+         * @description 結算後引擎重算值與實際入帳不一致的警示列（正常應為空）。
+         */
+        RecruitmentBonusSettledMismatchOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Engine Amount */
+            engine_amount: number;
+            /** Paid Amount */
+            paid_amount: number;
+        };
+        /**
          * RecruitmentBonusSyncResultOut
          * @description 招生候選同步結果。
          *
@@ -32334,6 +32517,8 @@ export interface components {
             no_deposit_reasons: string[];
             /** Referrers */
             referrers: string[];
+            /** Source Categories */
+            source_categories: components["schemas"]["RecruitmentSourceCategoryOut"][];
             /** Sources */
             sources: string[];
         };
@@ -32428,16 +32613,32 @@ export interface components {
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Source Category */
+            source_category?: string | null;
             /** Target School Year */
             target_school_year?: number | null;
             /** Target Semester */
             target_semester?: number | null;
+            /** Tour Guide Employee Id */
+            tour_guide_employee_id?: number | null;
             /** Transfer Term */
             transfer_term?: boolean | null;
             /** Updated At */
             updated_at?: string | null;
             /** Visit Date */
             visit_date?: string | null;
+        };
+        /**
+         * RecruitmentSourceCategoryOut
+         * @description 來源固定分類（對應招生獎金 point_catalog；招生頁下拉顯示「label（points）」）。
+         */
+        RecruitmentSourceCategoryOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Points */
+            points: number;
         };
         /** RecruitmentVisitCreate */
         RecruitmentVisitCreate: {
@@ -32487,10 +32688,14 @@ export interface components {
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Source Category */
+            source_category?: string | null;
             /** Target School Year */
             target_school_year?: number | null;
             /** Target Semester */
             target_semester?: number | null;
+            /** Tour Guide Employee Id */
+            tour_guide_employee_id?: number | null;
             /**
              * Transfer Term
              * @default false
@@ -32540,10 +32745,14 @@ export interface components {
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Source Category */
+            source_category?: string | null;
             /** Target School Year */
             target_school_year?: number | null;
             /** Target Semester */
             target_semester?: number | null;
+            /** Tour Guide Employee Id */
+            tour_guide_employee_id?: number | null;
             /** Transfer Term */
             transfer_term?: boolean | null;
             /** Visit Date */
@@ -61296,6 +61505,68 @@ export interface operations {
             };
         };
     };
+    export_campaign_xlsx_api_recruitment_bonus_campaigns__campaign_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_campaign_report_api_recruitment_bonus_campaigns__campaign_id__report_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentBonusReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     settle_campaign_api_recruitment_bonus_campaigns__campaign_id__settle_post: {
         parameters: {
             query?: never;
@@ -61345,6 +61616,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecruitmentBonusSyncResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transfer_roster_api_recruitment_bonus_campaigns__campaign_id__transfer_roster_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentBonusRosterOut"];
                 };
             };
             /** @description Validation Error */

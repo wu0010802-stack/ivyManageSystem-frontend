@@ -18,6 +18,9 @@ import {
   createAttribution,
   patchAttribution,
   settleCampaign,
+  getCampaignReport,
+  getTransferRoster,
+  exportCampaignXlsx,
 } from '../recruitmentBonus'
 
 const asMock = (fn: unknown) => fn as ReturnType<typeof vi.fn>
@@ -206,5 +209,66 @@ describe('recruitmentBonus API wrapper', () => {
 
     expect(api.post).toHaveBeenCalledWith('/recruitment-bonus/campaigns/1/settle')
     expect(res).toBe(mockResp)
+  })
+
+  it('getCampaignReport → GET .../report', async () => {
+    // 真實契約 RecruitmentBonusReportOut
+    const mockResp = {
+      data: {
+        campaign_id: 1,
+        campaign_name: '115.03',
+        status: 'open',
+        blocks: [],
+        unassigned_rows: [],
+        total_amount: 0,
+        settled_mismatches: [],
+      },
+    }
+    asMock(api.get).mockResolvedValue(mockResp)
+
+    const res = await getCampaignReport(1)
+
+    expect(api.get).toHaveBeenCalledWith('/recruitment-bonus/campaigns/1/report')
+    expect(res).toBe(mockResp)
+  })
+
+  it('getTransferRoster → GET .../transfer-roster', async () => {
+    // 真實契約 RecruitmentBonusRosterOut
+    const mockResp = {
+      data: {
+        campaign_id: 1,
+        campaign_name: '115.03',
+        account_masked: true,
+        rows: [
+          {
+            employee_id: 5,
+            employee_name: '林慧慈',
+            bank_code: '013',
+            bank_account: '＊＊＊＊6436',
+            bank_account_name: '林慧慈',
+            amount: 960,
+            missing_account: false,
+          },
+        ],
+        total_amount: 960,
+      },
+    }
+    asMock(api.get).mockResolvedValue(mockResp)
+
+    const res = await getTransferRoster(1)
+
+    expect(api.get).toHaveBeenCalledWith('/recruitment-bonus/campaigns/1/transfer-roster')
+    expect(res).toBe(mockResp)
+  })
+
+  it('exportCampaignXlsx → GET .../export 帶 blob responseType', async () => {
+    const mockResp = { data: new Blob() }
+    asMock(api.get).mockResolvedValue(mockResp)
+
+    await exportCampaignXlsx(2)
+
+    expect(api.get).toHaveBeenCalledWith('/recruitment-bonus/campaigns/2/export', {
+      responseType: 'blob',
+    })
   })
 })
