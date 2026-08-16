@@ -23,6 +23,17 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # 本檔在 Zeabur 上是「container 內部埠 8080」被外層反代終止 TLS 後轉發進來，
+    # 對外實際埠是 443（或根本不露埠）。nginx 對「本地 URI」的 redirect（如下方
+    # /parent、/parent.html 的 return 301）預設會把自己的 listen port 塞進
+    # Location header（port_in_redirect 預設 on）——2026-08-16 加入這兩條 301 才
+    # 首次觸發，此前全站零 server 端產生的 redirect，故先前未暴露。
+    # 症狀：對外網址開出 Location: https://host:8080/parent/，8080 對外根本打不通。
+    # 關掉 absolute_redirect 讓 nginx 吐相對路徑（Location: /parent/），交給瀏覽器
+    # 用「使用者實際連線的 scheme/host/port」去解析，同時繞開 port 與 scheme 兩種
+    # 反代不透光的情境，比只關 port_in_redirect 更保守。
+    absolute_redirect off;
+
     if ($tb_reject_host) { return 404; }
 
     # ── 品牌注入：server 層宣告一次，所有 location 繼承 ──
