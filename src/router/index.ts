@@ -409,7 +409,7 @@ export const routes: RouteRecordRaw[] = [
                 { path: 'year-end/cycles/:id', name: 'year-end-cycle-workspace', component: () => import('../views/yearEnd/YearEndWorkspaceView.vue'), meta: { title: '年終 › 結算工作區' } },
                 { path: 'year-end/cycles/:id/grid', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'grid' } }) },
                 { path: 'year-end/cycles/:id/config', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'config' } }) },
-                { path: 'year-end/payout', name: 'aye-payout', component: () => import('../views/yearEnd/AppraisalPayoutView.vue'), meta: { title: '考核年終發放' } },
+                { path: 'year-end/payout', name: 'aye-payout', component: () => import('../views/yearEnd/YearEndPayoutEntry.vue'), meta: { title: '考核年終發放' } },
                 {
                     path: 'rules',
                     component: () => import('../views/appraisalYearEnd/RulesSettingsLayout.vue'),
