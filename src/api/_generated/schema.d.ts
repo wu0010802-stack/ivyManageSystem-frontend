@@ -5168,30 +5168,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/config/quick-actions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Quick Actions Config
-         * @description 取得首頁常用功能三格設定；尚未設定過時回預設值 + is_default=True。
-         */
-        get: operations["get_quick_actions_config_api_config_quick_actions_get"];
-        /**
-         * Update Quick Actions Config
-         * @description 更新首頁常用功能三格設定（全體家長立即看到同一組）。
-         */
-        put: operations["update_quick_actions_config_api_config_quick_actions_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/config/reload": {
         parameters: {
             query?: never;
@@ -9489,8 +9465,6 @@ export interface paths {
          *     - recent_leave_reviews: int
          *     - active_medication_orders: int
          *     - pending_survey_count: int
-         *     - quick_action_slots: list[str]（quickact01，首頁常用功能三格，園所後台
-         *       統一配置，見 api/config/quick_actions.py；未設定過時回預設三格）
          */
         get: operations["home_summary_api_parent_home_summary_get"];
         put?: never;
@@ -10244,6 +10218,30 @@ export interface paths {
          */
         get: operations["get_current_policy_api_parent_policies_current_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/quick-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Quick Actions
+         * @description 取得家長自己目前的常用功能三格；沒設定過回預設值（is_default=True）。
+         */
+        get: operations["get_quick_actions_api_parent_quick_actions_get"];
+        /**
+         * Update Quick Actions
+         * @description 整組覆寫家長自己的常用功能三格（upsert）。
+         */
+        put: operations["update_quick_actions_api_parent_quick_actions_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -32049,16 +32047,6 @@ export interface components {
             /** Sort Order */
             sort_order: number;
         };
-        /** QuickActionSlotsRead */
-        QuickActionSlotsRead: {
-            /**
-             * Is Default
-             * @default false
-             */
-            is_default: boolean;
-            /** Slots */
-            slots: string[];
-        };
         /** QuickActionSlotsUpdate */
         QuickActionSlotsUpdate: {
             /** Slots */
@@ -46826,59 +46814,6 @@ export interface operations {
             };
         };
     };
-    get_quick_actions_config_api_config_quick_actions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["QuickActionSlotsRead"];
-                };
-            };
-        };
-    };
-    update_quick_actions_config_api_config_quick_actions_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuickActionSlotsUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     reload_config_api_config_reload_post: {
         parameters: {
             query?: never;
@@ -55969,6 +55904,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyVersionOut"];
+                };
+            };
+        };
+    };
+    get_quick_actions_api_parent_quick_actions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    update_quick_actions_api_parent_quick_actions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickActionSlotsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
