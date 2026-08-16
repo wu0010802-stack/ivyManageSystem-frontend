@@ -4,6 +4,7 @@ import { NAVIGATION_MANIFEST } from './manifest'
 import {
   collectOwnedCodes,
   deriveActiveMenuPaths,
+  deriveBreadcrumbParents,
   derivePickerTree,
   deriveRoutePermissionRules,
   deriveSidebarTree,
@@ -18,6 +19,9 @@ export const SIDEBAR_TREE = deriveSidebarTree(NAVIGATION_MANIFEST)
 /** activeMenu 最長前綴匹配用的 menu 頁 routePath 全集。 */
 export const ACTIVE_MENU_PATHS = deriveActiveMenuPaths(NAVIGATION_MANIFEST)
 
+/** 麵包屑父層候選（已依 path 長度降冪，供最長前綴匹配）。 */
+export const BREADCRUMB_PARENTS = deriveBreadcrumbParents(NAVIGATION_MANIFEST)
+
 export { derivePickerTree, collectOwnedCodes, NAVIGATION_MANIFEST }
 
 export type {
@@ -29,6 +33,7 @@ export type {
   NavigationManifest,
 } from './manifest'
 export type {
+  BreadcrumbParent,
   PickerDefinitionLike,
   PickerGroup,
   PickerNode,
