@@ -190,9 +190,7 @@ const router = useRouter()
 const pageTitle = computed(() => route.meta?.title || '')
 
 const parentLink = computed(() =>
-  // 既有 AdminHeader.spec.ts 對 vue-router 整包 mock，useRoute() 只回傳
-  // { meta: { title } }（無 path）；防禦性 fallback 避免該檔測試炸掉。
-  resolveBreadcrumbParent(route.path ?? '', {
+  resolveBreadcrumbParent(route.path, {
     parents: BREADCRUMB_PARENTS,
     // 純 redirect 容器（/workbench、/bus、/appraisal-year-end）點下去會被守衛
     // 轉走，常落回原頁 → 視為不可用父層。

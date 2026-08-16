@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
+// path 與 resolve 是 RouteLocationNormalized / Router 的必備成員，mock 必須提供：
+// 缺 path 會讓消費端拿到 undefined，與生產行為不符（頂列麵包屑解析吃 route.path）。
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ meta: { title: '儀表板' } }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRoute: () => ({ path: '/', meta: { title: '儀表板' } }),
+  useRouter: () => ({ push: vi.fn(), resolve: () => ({ matched: [], meta: {} }) }),
 }))
 vi.mock('@/stores/employee', () => ({
   useEmployeeStore: () => ({ fetchEmployees: vi.fn(), employees: [] }),
