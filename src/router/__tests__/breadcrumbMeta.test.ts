@@ -30,4 +30,26 @@ describe('router 麵包屑 meta', () => {
   it('年終結算工作區不再用手工「›」拼假麵包屑（層級改由 meta.parent 表達）', () => {
     expect(ROUTER_SRC).not.toContain('年終 › 結算工作區')
   })
+
+  it('學生相關孤兒頁以 meta.parent 指回學生列表', () => {
+    const offenders: string[] = []
+    for (const path of [
+      '/student-attendance',
+      '/student-leaves',
+      '/student-assessments',
+      '/student-incidents',
+      '/portfolio/medication-today',
+    ]) {
+      const start = ROUTER_SRC.indexOf(`path: '${path}'`)
+      if (start < 0) {
+        offenders.push(`${path} 不存在於 router`)
+        continue
+      }
+      const metaStart = ROUTER_SRC.indexOf('meta:', start)
+      const metaEnd = ROUTER_SRC.indexOf('}', metaStart)
+      const metaBlock = ROUTER_SRC.slice(metaStart, metaEnd)
+      if (!metaBlock.includes("parent: '/students'")) offenders.push(`${path} 缺 meta.parent`)
+    }
+    expect(offenders, '孤兒頁沒有回頭路；補 meta.parent').toEqual([])
+  })
 })

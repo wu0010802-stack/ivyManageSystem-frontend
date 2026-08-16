@@ -103,25 +103,25 @@ export const routes: RouteRecordRaw[] = [
             path: '/student-attendance',
             name: 'student-attendance',
             component: () => import('../views/StudentAttendanceView.vue'),
-            meta: { title: '學生出席紀錄' }
+            meta: { title: '學生出席紀錄', parent: '/students' }
         },
         {
             path: '/student-leaves',
             name: 'student-leaves',
             component: () => import('../views/StudentLeavesListView.vue'),
-            meta: { title: '學生請假紀錄' }
+            meta: { title: '學生請假紀錄', parent: '/students' }
         },
         {
             path: '/student-assessments',
             name: 'student-assessments',
             component: () => import('../views/StudentAssessmentView.vue'),
-            meta: { title: PAGE_TERMS.studentAssessments }
+            meta: { title: PAGE_TERMS.studentAssessments, parent: '/students' }
         },
         {
             path: '/student-incidents',
             name: 'student-incidents',
             component: () => import('../views/StudentIncidentView.vue'),
-            meta: { title: '學生事件紀錄' }
+            meta: { title: '學生事件紀錄', parent: '/students' }
         },
         {
             path: '/student-academic-affairs',
@@ -131,7 +131,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/portfolio/medication-today',
             name: 'medication-today',
             component: () => import('../views/MedicationTodayView.vue'),
-            meta: { title: '今日用藥' }
+            meta: { title: '今日用藥', parent: '/students' }
         },
         {
             // 在籍記錄表已折入班級學生管理頁的「統計表」modal；統計圖表獨立為 /enrollment-stats。
