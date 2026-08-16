@@ -389,9 +389,10 @@ export const routes: RouteRecordRaw[] = [
             path: '/appraisal-year-end',
             component: () => import('../views/appraisalYearEnd/AppraisalYearEndLayout.vue'),
             // 舊 query 導覽（?section=&tab=&cycle=&view=）與例外中心 deep_link 相容層
-            redirect: (to) => resolveLegacySectionQuery(to) ?? '/appraisal-year-end/overview',
+            redirect: (to) => resolveLegacySectionQuery(to) ?? '/appraisal-year-end/todo',
             children: [
-                { path: 'overview', name: 'aye-overview', component: () => import('../views/appraisalYearEnd/OverviewWorkbenchView.vue'), meta: { title: '總覽' } },
+                { path: 'todo', name: 'aye-todo', component: () => import('../views/appraisalYearEnd/OverviewWorkbenchView.vue'), meta: { title: '待辦' } },
+                { path: 'overview', redirect: '/appraisal-year-end/todo' },
                 {
                     path: 'appraisal',
                     component: () => import('../views/AppraisalManagementView.vue'),

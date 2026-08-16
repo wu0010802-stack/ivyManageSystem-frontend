@@ -15,7 +15,8 @@ const mkRouter = () => createRouter({ history: createMemoryHistory(), routes })
 
 // [舊 URL, 期望落地 path, 期望 query 子集]
 const CASES: Array<[string, string, Record<string, string>?]> = [
-  ['/appraisal-year-end', '/appraisal-year-end/overview'],
+  ['/appraisal-year-end', '/appraisal-year-end/todo'],
+  ['/appraisal-year-end/overview', '/appraisal-year-end/todo'],
   ['/appraisal-year-end?section=appraisal', '/appraisal-year-end/appraisal/current'],
   ['/appraisal-year-end?section=appraisal&tab=history&cycle=7&view=kanban', '/appraisal-year-end/appraisal/history', { cycle: '7', view: 'kanban' }],
   ['/appraisal-year-end?section=appraisal&tab=cycles', '/appraisal-year-end/appraisal/history'],
