@@ -24,7 +24,6 @@ import SectionHeader from '../components/SectionHeader.vue'
 import { listMySignRequests } from '../api/signDocuments'
 import HomeHeroHeader from '../components/home/HomeHeroHeader.vue'
 import QuickActionsBar from '../components/home/QuickActionsBar.vue'
-import { resolveQuickActionSlots } from '../utils/quickActionModules'
 
 const router = useRouter()
 const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
@@ -50,9 +49,6 @@ const {
 const me = computed(() => summaryData.value?.me || null)
 const children = computed(() => summaryData.value?.children || [])
 const summary = computed(() => summaryData.value?.summary || null)
-// quickact01：園所後台統一配置的常用功能三格，resolveQuickActionSlots 負責
-// 驗證＋壞值/未設定退回預設，見 utils/quickActionModules.ts。
-const quickActionSlots = computed(() => resolveQuickActionSlots(summaryData.value?.quick_action_slots))
 const showPushCta = computed(() => me.value && !me.value.can_push)
 const pendingSignCount = computed(() => {
   const v = (summary.value as { pending_event_acks?: unknown } | null)?.pending_event_acks
@@ -345,9 +341,10 @@ function go(path: string) {
 
     <!--
       常用功能列（quickact01，2026-08-16 改版）：聯絡簿大按鈕 + 三個模組
-      按鈕，內容由園所後台統一配置（quickActionSlots，未設定過時退回預設
-      接送／代理接送／公告）。位在今日卡之上，但聯絡簿大按鈕本身帶出席狀態
-      pill，「3 秒內看到孩子當日狀態」的既有承諾不受影響。
+      按鈕，家長各自在自己手機上編輯、存 DB（QuickActionsBar 內部自己
+      fetch /parent/quick-actions，不經 home-summary）。位在今日卡之上，
+      但聯絡簿大按鈕本身帶出席狀態 pill，「3 秒內看到孩子當日狀態」的
+      既有承諾不受影響。
     -->
     <QuickActionsBar
       v-if="selectedChild"
@@ -355,7 +352,6 @@ function go(path: string) {
       :contact-book-sub="contactBookSub"
       :status-label="heroStatus.label"
       :status-tone="heroStatus.tone"
-      :slots="quickActionSlots"
     />
 
     <!--

@@ -1,46 +1,94 @@
 <script setup lang="ts">
 /**
- * 首頁「常用功能」：聯絡簿滿版大按鈕 ＋ 三個模組按鈕。
+ * 首頁「常用功能」：聯絡簿滿版大按鈕 ＋ 三個可替換模組按鈕。
  *
- * 2026-08-16 首頁改版，見該次對話 Artifact 預覽稿。三格內容原規劃家長可各自
- * 替換（存裝置本機），業主當次對話後段改裁定為「統一配置」：由園所後台設定
- * 全體家長看到同一組，不是家長自行編輯——因此本元件**沒有編輯態**，`slots`
- * 完全由外部（TodayView，最終資料源是 home-summary 的後台設定值）決定，
- * 元件本身只負責渲染與導覽。驗證／預設回退邏輯在 utils/quickActionModules。
+ * 2026-08-16 首頁改版（quickact01），見該次對話 Artifact 預覽稿。三格內容
+ * 家長各自在自己手機上編輯、存 DB（不是 localStorage，也不是租戶層級統一
+ * 配置——設計討論中間繞了一圈，見 useQuickActionSlots.ts 檔頭）。點右上角
+ * 「編輯」進入編輯態後，點任一格開底部選單換成其他模組。
  *
  * 聯絡簿大按鈕上疊一顆出席狀態小 pill（statusLabel/statusTone），延續
- * 「3 秒內看到孩子當日狀態」的既有產品決策——聯絡簿卡本身雖然被往下推到
- * 這個區塊之後，但狀態不必等捲到那張卡才看得到。
+ * 「3 秒內看到孩子當日狀態」的既有產品決策。
  */
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { DEFAULT_SLOTS, QUICK_ACTION_CATALOG } from '../../utils/quickActionModules'
+import ParentBottomSheet from '../ParentBottomSheet.vue'
+import { toast } from '../../utils/toast'
+import { QUICK_ACTION_CATALOG, useQuickActionSlots } from '../../composables/useQuickActionSlots'
 
 type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'info'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   contactBookHref: string
   contactBookSub: string
   statusLabel?: string
   statusTone?: StatusTone
-  /** 園所後台設定的三格；未帶入或驗證失敗時已由呼叫端 resolveQuickActionSlots() 處理成預設值。 */
-  slots?: string[]
 }>(), {
   statusLabel: '',
   statusTone: 'neutral',
-  slots: () => DEFAULT_SLOTS.slice(),
 })
 
 const router = useRouter()
+const { slots, availableModules, swap, resetToDefault, load } = useQuickActionSlots()
+onMounted(load)
 
-function onModuleClick(key: string): void {
-  const mod = QUICK_ACTION_CATALOG[key]
-  if (mod) router.push(mod.route)
+const editing = ref(false)
+const sheetOpen = ref(false)
+const activeSlotIndex = ref<number | null>(null)
+const swapping = ref(false)
+
+function toggleEditing(): void {
+  editing.value = !editing.value
 }
+
+function onModuleClick(idx: number): void {
+  if (editing.value) {
+    activeSlotIndex.value = idx
+    sheetOpen.value = true
+    return
+  }
+  router.push(QUICK_ACTION_CATALOG[slots.value[idx]].route)
+}
+
+async function pickModule(key: string): Promise<void> {
+  if (activeSlotIndex.value === null || swapping.value) return
+  const idx = activeSlotIndex.value
+  swapping.value = true
+  try {
+    await swap(idx, key)
+    sheetOpen.value = false
+    activeSlotIndex.value = null
+  } catch {
+    toast.error('替換失敗，請稍後再試')
+  } finally {
+    swapping.value = false
+  }
+}
+
+async function onReset(): Promise<void> {
+  try {
+    await resetToDefault()
+    toast.success('已恢復預設')
+  } catch {
+    toast.error('恢復預設失敗，請稍後再試')
+  }
+}
+
+const activeSlotLabel = computed(() =>
+  activeSlotIndex.value === null ? '' : QUICK_ACTION_CATALOG[slots.value[activeSlotIndex.value]].label,
+)
+const sheetCandidates = computed(() => availableModules())
 </script>
 
 <template>
   <section class="qa">
-    <h3 class="qa-title">常用功能</h3>
+    <div class="qa-head">
+      <h3 class="qa-title">常用功能</h3>
+      <button type="button" class="qa-edit" :class="{ 'is-active': editing }" @click="toggleEditing">
+        <span class="material-symbols-rounded" aria-hidden="true">{{ editing ? 'check' : 'edit_note' }}</span>
+        {{ editing ? '完成' : '編輯' }}
+      </button>
+    </div>
 
     <router-link :to="contactBookHref" class="qa-cb-bar">
       <span class="qa-cb-icon">
@@ -56,16 +104,19 @@ function onModuleClick(key: string): void {
       <span class="material-symbols-rounded qa-cb-chev" aria-hidden="true">chevron_right</span>
     </router-link>
 
-    <div class="qa-row" role="group" aria-label="常用功能">
+    <div class="qa-row" :class="{ 'is-editing': editing }" role="group" aria-label="常用功能模組（可替換）">
       <button
-        v-for="key in props.slots"
+        v-for="(key, idx) in slots"
         :key="key"
         type="button"
         class="qa-mod"
         :class="`tone-${QUICK_ACTION_CATALOG[key].tone}`"
-        :aria-label="QUICK_ACTION_CATALOG[key].label"
-        @click="onModuleClick(key)"
+        :aria-label="`${QUICK_ACTION_CATALOG[key].label}${editing ? '，點擊可替換' : ''}`"
+        @click="onModuleClick(idx)"
       >
+        <span v-if="editing" class="qa-mod-badge" aria-hidden="true">
+          <span class="material-symbols-rounded">edit_note</span>
+        </span>
         <span class="qa-mod-icon">
           <span class="material-symbols-rounded" aria-hidden="true">{{ QUICK_ACTION_CATALOG[key].icon }}</span>
         </span>
@@ -73,12 +124,56 @@ function onModuleClick(key: string): void {
         <span class="qa-mod-sub">{{ QUICK_ACTION_CATALOG[key].sub }}</span>
       </button>
     </div>
+
+    <p v-if="editing" class="qa-edit-hint">
+      點任一按鈕即可替換成其他功能
+      <button type="button" class="qa-reset" @click="onReset">
+        <span class="material-symbols-rounded" aria-hidden="true">restart_alt</span>
+        恢復預設
+      </button>
+    </p>
+
+    <ParentBottomSheet
+      v-model="sheetOpen"
+      :title="`替換「${activeSlotLabel}」`"
+      :snap-points="['mid']"
+      default-snap="mid"
+    >
+      <p class="qa-sheet-sub">選一個功能模組放到這一格</p>
+      <ul class="qa-sheet-list">
+        <li v-for="m in sheetCandidates" :key="m.key">
+          <button type="button" class="qa-sheet-item" :disabled="swapping" @click="pickModule(m.key)">
+            <span class="qa-sheet-icon" :class="`tone-${m.tone}`">
+              <span class="material-symbols-rounded" aria-hidden="true">{{ m.icon }}</span>
+            </span>
+            <span class="qa-sheet-text">
+              <span class="qa-sheet-label">{{ m.label }}</span>
+              <span class="qa-sheet-desc">{{ m.sub }}</span>
+            </span>
+          </button>
+        </li>
+      </ul>
+      <p v-if="sheetCandidates.length === 0" class="qa-sheet-empty">目前三格都已放滿，沒有其他候選模組</p>
+    </ParentBottomSheet>
   </section>
 </template>
 
 <style scoped>
 .qa { padding: 4px var(--space-4, 16px) 0; display: flex; flex-direction: column; gap: 10px; }
+.qa-head { display: flex; align-items: center; justify-content: space-between; }
 .qa-title { margin: 0; font-size: 13.5px; font-weight: 800; color: var(--pt-text-muted); letter-spacing: 0.01em; }
+
+.qa-edit {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: none; background: transparent;
+  color: var(--m3-primary, #006d3d);
+  font-size: 12.5px; font-weight: 700;
+  padding: 5px 8px; margin: -5px -8px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.qa-edit .material-symbols-rounded { font-size: 16px; }
+.qa-edit.is-active { background: var(--brand-primary, #0d9053); color: var(--pt-on-accent, #fff); }
 
 .qa-cb-bar {
   display: flex; align-items: center; gap: 12px;
@@ -112,14 +207,15 @@ function onModuleClick(key: string): void {
 
 .qa-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .qa-mod {
+  position: relative;
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   padding: 13px 4px 11px;
   border-radius: var(--pt-card-radius, 26px);
-  border: none;
+  border: 1px solid transparent;
   background: var(--m3-surface-container-low, #f3f4ef);
   box-shadow: var(--pt-shadow-card);
   cursor: pointer;
-  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 150ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 140ms ease;
 }
 .qa-mod:active { transform: scale(0.96); }
 .qa-mod-icon {
@@ -130,21 +226,59 @@ function onModuleClick(key: string): void {
 .qa-mod-label { font-size: 12.5px; font-weight: 700; color: var(--pt-text-strong); }
 .qa-mod-sub { font-size: 10px; font-weight: 600; color: var(--pt-text-faint); }
 
+.qa-row.is-editing .qa-mod { border-color: color-mix(in srgb, var(--brand-primary, #0d9053) 45%, transparent); border-style: dashed; }
+.qa-mod-badge {
+  position: absolute; top: -6px; right: -6px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--brand-primary, #0d9053); color: var(--pt-on-accent, #fff);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.qa-mod-badge .material-symbols-rounded { font-size: 11px; }
+
+.qa-edit-hint {
+  margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 11.5px; font-weight: 600; color: var(--pt-text-faint);
+}
+.qa-reset {
+  display: inline-flex; align-items: center; gap: 3px;
+  border: none; background: transparent; color: var(--m3-primary, #006d3d);
+  font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 2px;
+}
+.qa-reset .material-symbols-rounded { font-size: 14px; }
+
 /* 色調沿用既有 StatTile 的 tonal 語意（tone-amber/coral/sky/leaf/brand 完全同義），
    teal/grape 是本次新增（分別對齊既有 --pt-tint-pickup 與 --pt-accent-grape-*）。 */
-.tone-amber .qa-mod-icon { background: var(--pt-accent-sun-container); color: var(--pt-accent-sun-on); }
-.tone-coral .qa-mod-icon { background: var(--pt-accent-coral-container); color: var(--pt-accent-coral-on); }
-.tone-sky .qa-mod-icon { background: var(--pt-accent-sky-container); color: var(--pt-accent-sky-on); }
-.tone-leaf .qa-mod-icon { background: var(--pt-accent-leaf-container); color: var(--pt-accent-leaf-on); }
-.tone-grape .qa-mod-icon { background: var(--pt-accent-grape-container); color: var(--pt-accent-grape-on); }
-.tone-brand .qa-mod-icon { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
-.tone-teal .qa-mod-icon { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
+.tone-amber .qa-mod-icon, .tone-amber .qa-sheet-icon { background: var(--pt-accent-sun-container); color: var(--pt-accent-sun-on); }
+.tone-coral .qa-mod-icon, .tone-coral .qa-sheet-icon { background: var(--pt-accent-coral-container); color: var(--pt-accent-coral-on); }
+.tone-sky .qa-mod-icon, .tone-sky .qa-sheet-icon { background: var(--pt-accent-sky-container); color: var(--pt-accent-sky-on); }
+.tone-leaf .qa-mod-icon, .tone-leaf .qa-sheet-icon { background: var(--pt-accent-leaf-container); color: var(--pt-accent-leaf-on); }
+.tone-grape .qa-mod-icon, .tone-grape .qa-sheet-icon { background: var(--pt-accent-grape-container); color: var(--pt-accent-grape-on); }
+.tone-brand .qa-mod-icon, .tone-brand .qa-sheet-icon { background: var(--m3-primary-container); color: var(--m3-on-primary-container); }
+.tone-teal .qa-mod-icon, .tone-teal .qa-sheet-icon { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
+
+.qa-sheet-sub { margin: 0 0 12px; font-size: 12.5px; color: var(--pt-text-faint); font-weight: 600; }
+.qa-sheet-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.qa-sheet-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 10px 12px; border: none; border-radius: 16px;
+  background: var(--m3-surface-container, #edeee9);
+  cursor: pointer; text-align: left;
+}
+.qa-sheet-item:active { transform: scale(0.98); }
+.qa-sheet-item:disabled { opacity: 0.6; cursor: default; }
+.qa-sheet-icon { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.qa-sheet-icon .material-symbols-rounded { font-size: 19px; }
+.qa-sheet-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.qa-sheet-label { font-size: 14px; font-weight: 700; color: var(--pt-text-strong); }
+.qa-sheet-desc { font-size: 11px; font-weight: 600; color: var(--pt-text-faint); }
+.qa-sheet-empty { padding: 12px 4px; text-align: center; font-size: 13px; color: var(--pt-text-faint); font-weight: 600; }
 
 /* 出席狀態 pill 色調對齊既有 status tone vocabulary（見 ContactBookDayCard 用法） */
 .qa-cb-pill.tone-ok { background: rgba(255, 255, 255, 0.28); }
 .qa-cb-pill.tone-warn, .qa-cb-pill.tone-danger { background: rgba(255, 235, 205, 0.35); }
 
 @media (prefers-reduced-motion: reduce) {
-  .qa-cb-bar, .qa-mod { transition: none; }
+  .qa-cb-bar, .qa-mod, .qa-sheet-item { transition: none; }
 }
 </style>

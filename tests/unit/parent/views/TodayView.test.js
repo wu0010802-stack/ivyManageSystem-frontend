@@ -56,6 +56,20 @@ const busTodayMock = vi.hoisted(() => ({
 }))
 vi.mock('@/parent/api/bus', () => busTodayMock)
 
+// 常用功能列（quickact01）：QuickActionsBar 掛載時自己打 /parent/quick-actions，
+// 這裡不是測試重點，mock 回預設三格避免真的打網路。
+vi.mock('@/parent/api/quickActions', () => ({
+  getQuickActions: vi.fn().mockResolvedValue({
+    data: { slots: ['pickup', 'proxy', 'announce'], is_default: true },
+  }),
+  updateQuickActions: vi.fn().mockResolvedValue({ data: {} }),
+}))
+
+// HomeHeroHeader：一樣掛載時自己打 /parent/photos，非本檔測試重點。
+vi.mock('@/parent/api/childPhotos', () => ({
+  fetchChildPhotos: vi.fn().mockResolvedValue({ data: { items: [] } }),
+}))
+
 import TodayView from '@/parent/views/TodayView.vue'
 
 /**
