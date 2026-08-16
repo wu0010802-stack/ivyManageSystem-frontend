@@ -2,17 +2,15 @@
  * 首頁「常用功能」三格模組目錄與驗證。
  *
  * 背景：2026-08-16 首頁改版——聯絡簿獨立成滿版大按鈕，下方三格預設「接送・
- * 代理接送・公告」。原本規劃家長可各自替換（存裝置本機），業主 2026-08-16
- * 當次對話改裁定為「統一配置」：由園所後台設定、全體家長看到同一組，
- * 不是家長各自在手機上編輯。因此本檔**不再持有狀態／不寫 localStorage**，
- * 只留：
- *  - QUICK_ACTION_CATALOG：模組目錄（哪些 key 對應什麼路由/圖示/色調）
- *  - resolveQuickActionSlots()：把後端回傳的設定值（可能缺、可能壞）驗證、
- *    驗證失敗一律退回預設三格
+ * 代理接送・公告」，家長各自在自己手機上編輯、存 DB（`/parent/quick-actions`
+ * GET/PUT，見 composables/useQuickActionSlots.ts；不是租戶層級統一配置，
+ * 也不是 localStorage）。
  *
- * 後台設定介面與 API 尚未串接前，resolveQuickActionSlots(undefined) 就是
- * 目前的行為——傳 undefined 得到預設三格，UI 先能動；後端欄位補上後只要
- * 呼叫端把真正的值傳進來即可，本檔不用再改。
+ * 本檔只放純資料/驗證，不持有狀態：
+ *  - QUICK_ACTION_CATALOG：模組目錄（哪些 key 對應什麼路由/圖示/色調）
+ *  - resolveQuickActionSlots()：把後端回傳的設定值（可能缺、可能壞）驗證，
+ *    驗證失敗一律退回預設三格——防禦性複查，後端 api/parent_portal/
+ *    quick_actions.py 已做過一次同樣驗證，這裡是第二層。
  *
  * icon 一律用既有 manifest 已收錄的名稱（見 src/parent/assets/fonts/
  * material-symbols-manifest.json），避免另外跑 gen:parent-icons。

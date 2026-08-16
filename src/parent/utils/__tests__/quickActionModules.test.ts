@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { DEFAULT_SLOTS, QUICK_ACTION_CATALOG, resolveQuickActionSlots } from '../quickActionModules'
 
-describe('resolveQuickActionSlots — 統一配置值驗證（2026-08-16 改版）', () => {
-  it('undefined／null：退回預設三格（後端欄位尚未串接時的行為）', () => {
+describe('resolveQuickActionSlots — 常用功能三格值驗證（2026-08-16 改版）', () => {
+  it('undefined／null：退回預設三格', () => {
     expect(resolveQuickActionSlots(undefined)).toEqual(DEFAULT_SLOTS)
     expect(resolveQuickActionSlots(null)).toEqual(DEFAULT_SLOTS)
   })
