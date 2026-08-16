@@ -19,6 +19,9 @@ const syncCandidatesMock = vi.fn()
 const createAttributionMock = vi.fn()
 const patchAttributionMock = vi.fn()
 const settleCampaignMock = vi.fn()
+const getCampaignReportMock = vi.fn()
+const getTransferRosterMock = vi.fn()
+const exportCampaignXlsxMock = vi.fn()
 vi.mock('@/api/recruitmentBonus', () => ({
     listCampaigns: (...a: unknown[]) => listCampaignsMock(...a),
     createCampaign: (...a: unknown[]) => createCampaignMock(...a),
@@ -27,6 +30,9 @@ vi.mock('@/api/recruitmentBonus', () => ({
     createAttribution: (...a: unknown[]) => createAttributionMock(...a),
     patchAttribution: (...a: unknown[]) => patchAttributionMock(...a),
     settleCampaign: (...a: unknown[]) => settleCampaignMock(...a),
+    getCampaignReport: (...a: unknown[]) => getCampaignReportMock(...a),
+    getTransferRoster: (...a: unknown[]) => getTransferRosterMock(...a),
+    exportCampaignXlsx: (...a: unknown[]) => exportCampaignXlsxMock(...a),
 }))
 
 // ---- api/extraBonuses mock ----
@@ -61,6 +67,15 @@ vi.mock('element-plus', async (importOriginal) => {
 })
 
 const STUBS = {
+    // 三個 tab 元件行為由各自 spec 覆蓋（Task 9/10），這裡 stub 掉避免真 mount 打 API
+    ReportStatementTab: true,
+    BonusSlipsTab: true,
+    TransferRosterTab: true,
+    'el-tabs': { template: '<div class="tabs-stub"><slot /></div>' },
+    'el-tab-pane': {
+        props: ['label'],
+        template: '<div class="tab-pane-stub" :data-label="label"><slot /></div>',
+    },
     'el-select': true,
     'el-option': true,
     'el-input': true,
@@ -215,6 +230,22 @@ describe('RecruitmentBonusView', () => {
         expect(text).toContain('進行中')
         expect(text).toContain('3')
         expect(text).toContain('5')
+    })
+
+    it('明細頁有四個 tab（統計表/歸屬核對/獎金條/轉帳名冊），預設統計表', async () => {
+        listCampaignsMock.mockResolvedValue({ data: { items: [campaignRow()] } })
+        getCampaignMock.mockResolvedValue({ data: detailFixture() })
+        const wrapper = mountView()
+        await flushPromises()
+        const vm = wrapper.vm as unknown as ViewVm & { activeTab: string }
+        await vm.openDetail(campaignRow())
+        await flushPromises()
+
+        const labels = wrapper
+            .findAll('.tab-pane-stub')
+            .map((p) => p.attributes('data-label'))
+        expect(labels).toEqual(['統計表', '歸屬核對', '獎金條', '轉帳名冊'])
+        expect(vm.activeTab).toBe('statement')
     })
 
     it('② 有 pending 列時結算鈕 disabled 並顯示原因', async () => {

@@ -5,6 +5,7 @@
         <el-button v-if="!selectedCampaignId && canWrite" type="primary" :icon="Plus" @click="openCreateDialog">
           新增期間
         </el-button>
+        <el-button v-if="selectedCampaignId && canWrite" :loading="exporting" @click="doExport">匯出 Excel</el-button>
         <el-button v-if="selectedCampaignId" @click="backToList">返回列表</el-button>
       </template>
     </PageHeader>
@@ -51,6 +52,16 @@
           本期已結算（唯讀），已寫入表外獎金（招生獎金）。歸屬列與參數不可再修改。
         </p>
       </div>
+
+      <el-tabs v-model="activeTab">
+        <el-tab-pane label="統計表" name="statement">
+          <ReportStatementTab
+            v-if="selectedCampaignId"
+            ref="statementRef"
+            :campaign-id="selectedCampaignId"
+          />
+        </el-tab-pane>
+        <el-tab-pane label="歸屬核對" name="grid">
 
       <div class="action-bar">
         <el-button v-if="canWrite && !isSettled" :loading="syncing" @click="doSync">同步候選</el-button>
@@ -204,6 +215,15 @@
           description="可能尚未寫入或查詢年月不符，請確認結算月份"
         />
       </template>
+
+        </el-tab-pane>
+        <el-tab-pane label="獎金條" name="slips" lazy>
+          <BonusSlipsTab v-if="selectedCampaignId" :campaign-id="selectedCampaignId" />
+        </el-tab-pane>
+        <el-tab-pane label="轉帳名冊" name="roster" lazy>
+          <TransferRosterTab v-if="selectedCampaignId" :campaign-id="selectedCampaignId" />
+        </el-tab-pane>
+      </el-tabs>
     </template>
 
     <!-- ============ 新增期間 dialog ============ -->
@@ -283,7 +303,11 @@ import {
     createAttribution,
     patchAttribution,
     settleCampaign,
+    exportCampaignXlsx,
 } from '@/api/recruitmentBonus'
+import ReportStatementTab from '@/components/recruitmentBonus/ReportStatementTab.vue'
+import BonusSlipsTab from '@/components/recruitmentBonus/BonusSlipsTab.vue'
+import TransferRosterTab from '@/components/recruitmentBonus/TransferRosterTab.vue'
 import { listExtraBonuses } from '@/api/extraBonuses'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 
@@ -376,6 +400,30 @@ const selectedCampaignId = ref<number | null>(null)
 const detail = ref<CampaignDetail | null>(null)
 const detailLoading = ref(false)
 
+// 四 tab：統計表（預設，仿園方 Excel）／歸屬核對（既有編輯表格）／獎金條／轉帳名冊
+const activeTab = ref<'statement' | 'grid' | 'slips' | 'roster'>('statement')
+const statementRef = ref<{ reload: () => Promise<void> } | null>(null)
+
+// ---- 匯出 Excel（需完整薪資檢視權限，403 時 toast 說明）----
+const exporting = ref(false)
+const doExport = async () => {
+    if (!selectedCampaignId.value) return
+    exporting.value = true
+    try {
+        const res = await exportCampaignXlsx(selectedCampaignId.value)
+        const url = URL.createObjectURL(res.data as Blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `招生獎金_${detail.value?.name || selectedCampaignId.value}.xlsx`
+        a.click()
+        URL.revokeObjectURL(url)
+    } catch (e) {
+        ElMessage.error(friendlyError('匯出失敗（需完整薪資檢視權限）', e))
+    } finally {
+        exporting.value = false
+    }
+}
+
 const isSettled = computed(() => detail.value?.status === 'settled')
 const readOnly = computed(() => isSettled.value || !canWrite.value)
 
@@ -393,6 +441,7 @@ const fetchDetail = async (id: number) => {
 
 const openDetail = async (row: CampaignRow) => {
     selectedCampaignId.value = row.id
+    activeTab.value = 'statement'
     extraBonusItems.value = []
     await fetchDetail(row.id)
     if (detail.value?.status === 'settled') {
@@ -456,6 +505,7 @@ const doSync = async () => {
             `同步完成：新增 ${r.created}／排除 ${r.excluded}／跳過（他期已歸屬）${r.skipped_other_campaign}／遞延承接 ${r.carried_over}`,
         )
         await fetchDetail(selectedCampaignId.value)
+        void statementRef.value?.reload()
     } catch (e) {
         ElMessage.error(friendlyError('同步候選失敗', e))
     } finally {
@@ -469,6 +519,7 @@ const patchRow = async (row: AttributionRow, patch: AttributionUpdateBody) => {
     try {
         await patchAttribution(selectedCampaignId.value, row.id, patch)
         await fetchDetail(selectedCampaignId.value)
+        void statementRef.value?.reload()
     } catch (e) {
         ElMessage.error(friendlyError('更新歸屬列失敗', e))
         await fetchDetail(selectedCampaignId.value) // 失敗時重抓，還原成伺服器端真實值
@@ -526,6 +577,7 @@ const submitAdd = async () => {
         ElMessage.success('新增成功')
         addDialogVisible.value = false
         await fetchDetail(selectedCampaignId.value)
+        void statementRef.value?.reload()
     } catch (e) {
         ElMessage.error(friendlyError('新增歸屬列失敗', e))
     }
@@ -560,6 +612,7 @@ const doSettle = async () => {
         ElMessage.success('結算完成，已寫入表外獎金通道')
         await fetchDetail(selectedCampaignId.value)
         await fetchSettledPayments()
+        void statementRef.value?.reload()
     } catch (e) {
         ElMessage.error(friendlyError('結算失敗', e))
     } finally {
