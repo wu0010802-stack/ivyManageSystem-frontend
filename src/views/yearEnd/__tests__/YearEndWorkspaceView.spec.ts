@@ -3,8 +3,8 @@ import { mount } from '@vue/test-utils'
 import { normalizeStep, WORKSPACE_STEPS } from '../workspaceSteps'
 
 describe('workspaceSteps', () => {
-  it('三步定義齊全且順序為 config→grid→detail', () => {
-    expect(WORKSPACE_STEPS.map((s) => s.key)).toEqual(['config', 'grid', 'detail'])
+  it('四步定義齊全且順序為 config→grid→detail→payout', () => {
+    expect(WORKSPACE_STEPS.map((s) => s.key)).toEqual(['config', 'grid', 'detail', 'payout'])
   })
   it('normalizeStep 對非法值回退 detail', () => {
     expect(normalizeStep('grid')).toBe('grid')
@@ -85,7 +85,7 @@ describe('YearEndWorkspaceView', () => {
     const wrapper = await mountShell()
     expect(wrapper.find('[data-test="stub-detail"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="stub-grid"]').exists()).toBe(false)
-    expect(wrapper.findAll('[data-test^="rail-step-"]').length).toBe(3)
+    expect(wrapper.findAll('[data-test^="rail-step-"]').length).toBe(4)
   })
 
   it('點 rail-step-grid → goStep 呼叫 router.replace 帶 step:grid', async () => {
