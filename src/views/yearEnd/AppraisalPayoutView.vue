@@ -265,7 +265,7 @@ watch(tab, (t) => {
           description="來源學年的考核週期尚未建立。可切換上方年份，或前往考核管理建立該學年的考核週期後再回來發放。"
         >
           <template #action>
-            <router-link :to="{ path: '/appraisal-year-end/appraisal/history' }">
+            <router-link :to="{ path: '/appraisal-year-end/appraisal', query: { stage: 'sign' } }">
               <el-button type="primary" plain>前往考核管理</el-button>
             </router-link>
           </template>

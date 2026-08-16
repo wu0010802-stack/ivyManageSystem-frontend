@@ -518,7 +518,7 @@ function onGuideNavigate(key: AppraisalStepKey) {
       reloadAll()
       break
     case 'sign':
-      router.push('/appraisal-year-end/appraisal/history')
+      router.push('/appraisal-year-end/appraisal?stage=sign')
       break
   }
 }

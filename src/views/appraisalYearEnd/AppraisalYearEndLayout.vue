@@ -14,7 +14,7 @@ interface SectionDef { key: string; label: string; to: string; can: () => boolea
 const SECTIONS: SectionDef[] = [
   { key: 'todo', label: '待辦', to: '/appraisal-year-end/todo',
     can: () => ['APPRAISAL_READ', 'YEAR_END_READ', 'SETTINGS_READ', 'SALARY_READ', 'APPRAISAL_FINALIZE'].some((p) => hasPermission(p)) },
-  { key: 'appraisal', label: '考核', to: '/appraisal-year-end/appraisal/current', can: () => hasPermission('APPRAISAL_READ') },
+  { key: 'appraisal', label: '考核', to: '/appraisal-year-end/appraisal', can: () => hasPermission('APPRAISAL_READ') },
   { key: 'year-end', label: '年終', to: '/appraisal-year-end/year-end',
     can: () => hasPermission('YEAR_END_READ') || hasPermission('APPRAISAL_FINALIZE') },
 ]

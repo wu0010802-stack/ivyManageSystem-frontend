@@ -1073,7 +1073,7 @@ describe('CurrentSemesterOverview 引導條（Task A3）', () => {
     expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(2)
   })
 
-  it('已同步時點 sign 引導步驟，導向 /appraisal-year-end/appraisal/history', async () => {
+  it('已同步時點 sign 引導步驟，導向 /appraisal-year-end/appraisal?stage=sign', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
     getSignStatusSummary.mockResolvedValue({
@@ -1086,6 +1086,6 @@ describe('CurrentSemesterOverview 引導條（Task A3）', () => {
     await wrapper.find('[data-test="guide-step-sign"]').trigger('click')
     await flushPromises()
 
-    expect(guidePushMock).toHaveBeenCalledWith('/appraisal-year-end/appraisal/history')
+    expect(guidePushMock).toHaveBeenCalledWith('/appraisal-year-end/appraisal?stage=sign')
   })
 })
