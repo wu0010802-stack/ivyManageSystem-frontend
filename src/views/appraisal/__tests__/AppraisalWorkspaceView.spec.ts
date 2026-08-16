@@ -27,10 +27,18 @@ const CYCLES = [
   { id: 2, academic_year: 115, semester: 'FIRST', status: 'OPEN' },
 ]
 
+const Stub = { template: '<div />' }
+
 function router(initialQuery = '') {
   return createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/w', component: AppraisalWorkspaceView }, { path: '/', component: { template: '<div/>' } }],
+    routes: [
+      { path: '/w', component: AppraisalWorkspaceView },
+      { path: '/', component: { template: '<div/>' } },
+      { path: '/appraisal-year-end/appraisal/institution-events', component: Stub },
+      { path: '/appraisal-year-end/appraisal/disciplinary', component: Stub },
+      { path: '/appraisal-year-end/appraisal/calibration', component: Stub },
+    ],
   })
 }
 
@@ -114,5 +122,29 @@ describe('AppraisalWorkspaceView', () => {
     const { w } = await mountShell()
     expect((w.vm as any).selectedCycleId).toBe(null)
     expect(w.findComponent({ name: 'EmptyState' }).exists()).toBe(true)
+  })
+
+  it('load() 失敗時顯示重試按鈕，重試成功後恢復正常渲染（非永遠 loading 的空白頁）', async () => {
+    mockedList.mockRejectedValueOnce(new Error('network error'))
+    const { w } = await mountShell()
+
+    expect((w.vm as any).loadError).toBe(true)
+    expect(w.find('[data-test="workspace-retry"]').exists()).toBe(true)
+
+    mockedList.mockResolvedValue({ data: CYCLES })
+    await w.find('[data-test="workspace-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-test="workspace-retry"]').exists()).toBe(false)
+    expect((w.vm as any).selectedCycleId).toBe(2)
+  })
+
+  it('顯示活動出席／懲處紀錄／等第校準三個過渡連結（AppraisalManagementView 退場後唯一入口）', async () => {
+    const { w } = await mountShell()
+    const links = w.findAll('.ap-workspace__source-links a')
+    expect(links).toHaveLength(3)
+    expect(links[0].attributes('href')).toBe('/appraisal-year-end/appraisal/institution-events')
+    expect(links[1].attributes('href')).toBe('/appraisal-year-end/appraisal/disciplinary')
+    expect(links[2].attributes('href')).toBe('/appraisal-year-end/appraisal/calibration')
   })
 })

@@ -18,6 +18,7 @@ const cycles = ref<CycleOption[]>([])
 const currentCycleId = ref<number | null>(null)
 const selectedCycleId = ref<number | null>(null)
 const loading = ref(true)
+const loadError = ref(false)
 
 const stage = computed<AppraisalStepKey>(() => normalizeAppraisalStep(route.query.stage))
 
@@ -40,30 +41,45 @@ function selectStage(key: AppraisalStepKey) {
 
 async function load() {
   loading.value = true
-  const [listRes, currentRes] = await Promise.all([listAppraisalCycles(), getAppraisalCurrentCycle()])
-  cycles.value = (listRes.data as CycleOption[]) ?? []
-  currentCycleId.value = (currentRes.data as CycleOption | null)?.id ?? null
+  loadError.value = false
+  try {
+    const [listRes, currentRes] = await Promise.all([listAppraisalCycles(), getAppraisalCurrentCycle()])
+    cycles.value = (listRes.data as CycleOption[]) ?? []
+    currentCycleId.value = (currentRes.data as CycleOption | null)?.id ?? null
 
-  const queryCycle = Number(route.query.cycle)
-  if (!Number.isNaN(queryCycle) && cycles.value.some((c) => c.id === queryCycle)) {
-    selectedCycleId.value = queryCycle
-  } else if (currentCycleId.value != null) {
-    selectedCycleId.value = currentCycleId.value
-  } else if (cycles.value.length > 0) {
-    selectedCycleId.value = cycles.value.reduce((a, b) => (b.academic_year > a.academic_year ? b : a)).id
-  } else {
-    selectedCycleId.value = null
+    const queryCycle = Number(route.query.cycle)
+    if (!Number.isNaN(queryCycle) && cycles.value.some((c) => c.id === queryCycle)) {
+      selectedCycleId.value = queryCycle
+    } else if (currentCycleId.value != null) {
+      selectedCycleId.value = currentCycleId.value
+    } else if (cycles.value.length > 0) {
+      selectedCycleId.value = cycles.value.reduce((a, b) => (b.academic_year > a.academic_year ? b : a)).id
+    } else {
+      selectedCycleId.value = null
+    }
+  } catch {
+    loadError.value = true
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 onMounted(load)
 
-defineExpose({ selectedCycleId, stage, cycles, currentCycleId, selectCycle, selectStage })
+defineExpose({ selectedCycleId, stage, cycles, currentCycleId, loadError, selectCycle, selectStage, load })
 </script>
 
 <template>
   <div class="ap-workspace">
-    <EmptyState v-if="!loading && cycles.length === 0" title="尚無考核週期" description="請先建立本學期考核週期。" />
+    <div class="ap-workspace__source-links">
+      <router-link to="/appraisal-year-end/appraisal/institution-events">活動出席</router-link>
+      <router-link to="/appraisal-year-end/appraisal/disciplinary">懲處紀錄</router-link>
+      <router-link to="/appraisal-year-end/appraisal/calibration">等第校準</router-link>
+    </div>
+    <div v-if="loadError" class="ap-workspace__error">
+      載入失敗
+      <el-button data-test="workspace-retry" size="small" text type="primary" @click="load">重試</el-button>
+    </div>
+    <EmptyState v-else-if="!loading && cycles.length === 0" title="尚無考核週期" description="請先建立本學期考核週期。" />
     <template v-else>
       <div class="ap-workspace__head">
         <el-select
@@ -105,6 +121,15 @@ defineExpose({ selectedCycleId, stage, cycles, currentCycleId, selectCycle, sele
 </template>
 
 <style scoped>
+.ap-workspace__source-links { display: flex; gap: var(--space-3); margin-bottom: var(--space-3); font-size: var(--text-sm); }
+.ap-workspace__error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
 .ap-workspace__head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
 .ap-workspace__cycle-select { width: 220px; }
 .ap-workspace__readonly {
