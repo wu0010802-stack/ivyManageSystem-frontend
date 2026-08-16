@@ -322,6 +322,16 @@ export const getPOSReconciliation = (startDate: string, endDate: string): AxiosR
 export const getPOSSemesterReconciliation = (params?: ApiQuery<'/activity/pos/semester-reconciliation', 'get'>): AxiosResp<'/activity/pos/semester-reconciliation', 'get'> =>
   api.get('/activity/pos/semester-reconciliation', { params })
 
+// POS 學期簽收帳本（老闆整筆簽收）
+export const getPOSSemesterSignoffs = (params?: ApiQuery<'/activity/pos/semester-signoffs', 'get'>): AxiosResp<'/activity/pos/semester-signoffs', 'get'> =>
+  api.get('/activity/pos/semester-signoffs', { params })
+export const createPOSSemesterSignoff = (payload: ApiBody<'/activity/pos/semester-signoffs', 'post'>): AxiosResp<'/activity/pos/semester-signoffs', 'post'> =>
+  api.post('/activity/pos/semester-signoffs', payload)
+export const voidPOSSemesterSignoff = (id: number, payload: ApiBody<'/activity/pos/semester-signoffs/{signoff_id}', 'delete'>): AxiosResp<'/activity/pos/semester-signoffs/{signoff_id}', 'delete'> =>
+  api.delete(`/activity/pos/semester-signoffs/${id}`, { data: payload })
+export const getPOSSemesterRegistrationChanges = (params?: ApiQuery<'/activity/pos/semester-registration-changes', 'get'>): AxiosResp<'/activity/pos/semester-registration-changes', 'get'> =>
+  api.get('/activity/pos/semester-registration-changes', { params })
+
 // Portal - 才藝查詢
 export const getPortalActivityRegistrations = (): AxiosResp<'/portal/activity/registrations', 'get'> =>
   api.get('/portal/activity/registrations')

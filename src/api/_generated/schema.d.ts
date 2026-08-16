@@ -861,11 +861,81 @@ export interface paths {
          *     - partially_approved: 部分繳費記錄落在已簽核日
          *     - pending_approval: 有繳費但都在未簽核日
          *     - no_payment: 完全尚未繳費（paid_amount == 0）
+         *
+         *     待審核防漏（2026-08-16）：課程 status='pending_review' 的報名不計入
+         *     total_amount（既有 enrolled-only 應繳口徑，不動），故待審核報名在對帳頁
+         *     過去顯示「應繳 $0」，審核拖延即形成少收缺口。totals.pending_review_amount
+         *     獨立呈現此待確認金額（不含 waitlist/pending_review_waitlist 兩態，候補
+         *     即使過審也不產生應收）。
          */
         get: operations["pos_semester_reconciliation_api_activity_pos_semester_reconciliation_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/semester-registration-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Semester Registration Changes
+         * @description 按學期彙整退課/加報異動，供老闆對帳審視。
+         */
+        get: operations["list_semester_registration_changes_api_activity_pos_semester_registration_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/semester-signoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Semester Signoffs
+         * @description 列出當期簽收流水（含作廢列）＋未作廢累計。
+         */
+        get: operations["list_semester_signoffs_api_activity_pos_semester_signoffs_get"];
+        put?: never;
+        /**
+         * Create Semester Signoff
+         * @description 登記一筆整筆簽收。signed_by 取當前登入者，不信任前端。
+         */
+        post: operations["create_semester_signoff_api_activity_pos_semester_signoffs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/semester-signoffs/{signoff_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Void Semester Signoff
+         * @description 作廢一筆簽收（軟刪，必填原因）。已作廢再作廢回 409。
+         */
+        delete: operations["void_semester_signoff_api_activity_pos_semester_signoffs__signoff_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -31169,6 +31239,11 @@ export interface components {
         /**
          * PosOutstandingRegistrationItemOut
          * @description GET /pos/outstanding-by-student groups[].registrations[] 單筆。
+         *
+         *     pending_review/pending_amount（2026-08-16）：課程 status='pending_review'
+         *     的報名 total_amount 算不到待審課程金額，過去在 outstanding 模式下 total=0
+         *     會直接從搜尋結果隱形，造成現場收費防漏破口。此欄位讓收銀員仍看得到人與
+         *     待確認金額（提示需先完成審核才能正式收款）。
          */
         PosOutstandingRegistrationItemOut: {
             /** Class Name */
@@ -31183,6 +31258,16 @@ export interface components {
             owed: number;
             /** Paid Amount */
             paid_amount: number;
+            /**
+             * Pending Amount
+             * @default 0
+             */
+            pending_amount: number;
+            /**
+             * Pending Review
+             * @default false
+             */
+            pending_review: boolean;
             /** Supplies */
             supplies: components["schemas"]["PosSupplyDetailItemOut"][];
             /** Total Amount */
@@ -31369,6 +31454,11 @@ export interface components {
             is_active: boolean;
             /** Latest Payment Date */
             latest_payment_date?: string | null;
+            /**
+             * Match Status
+             * @default unmatched
+             */
+            match_status: string;
             /** Offline Paid Amount */
             offline_paid_amount: number;
             /** Owed */
@@ -31377,8 +31467,18 @@ export interface components {
             paid_amount: number;
             /** Payment Status */
             payment_status: string;
+            /**
+             * Pending Amount
+             * @default 0
+             */
+            pending_amount: number;
             /** Pending Paid Amount */
             pending_paid_amount: number;
+            /**
+             * Pending Review
+             * @default false
+             */
+            pending_review: boolean;
             /** Student Name */
             student_name: string;
             /** Total Amount */
@@ -31415,6 +31515,11 @@ export interface components {
         /**
          * PosSemesterReconciliationTotalsOut
          * @description GET /pos/semester-reconciliation totals 區段。
+         *
+         *     signoff_total/unsigned_gap（2026-08-16 新增）：老闆學期簽收帳本累計，與
+         *     POS 淨實收（approved_paid_amount + pending_paid_amount）的差額。
+         *     pending_review_count/pending_review_amount：待審核報名（系統比對非自動成功）
+         *     的待確認應收，**不併入** total_amount，避免審核拖延造成少收。
          */
         PosSemesterReconciliationTotalsOut: {
             /** Approved Paid Amount */
@@ -31435,10 +31540,126 @@ export interface components {
             paid_amount: number;
             /** Pending Paid Amount */
             pending_paid_amount: number;
+            /**
+             * Pending Review Amount
+             * @default 0
+             */
+            pending_review_amount: number;
+            /**
+             * Pending Review Count
+             * @default 0
+             */
+            pending_review_count: number;
             /** Registration Count */
             registration_count: number;
+            /**
+             * Signoff Total
+             * @default 0
+             */
+            signoff_total: number;
             /** Total Amount */
             total_amount: number;
+            /**
+             * Unsigned Gap
+             * @default 0
+             */
+            unsigned_gap: number;
+        };
+        /** PosSemesterRegChangeItemOut */
+        PosSemesterRegChangeItemOut: {
+            /** Change Type */
+            change_type: string;
+            /** Changed By */
+            changed_by?: string | null;
+            /** Class Name */
+            class_name: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Description */
+            description: string;
+            /** Student Name */
+            student_name: string;
+        };
+        /**
+         * PosSemesterRegChangesOut
+         * @description GET /pos/semester-registration-changes 回應。
+         *
+         *     已知限制：registration_id 為 NULL 的異動列（報名硬刪除後 SET NULL）無法
+         *     歸屬學期不會出現；現行報名為軟刪不硬刪，實務上不發生。
+         */
+        PosSemesterRegChangesOut: {
+            /** Items */
+            items: components["schemas"]["PosSemesterRegChangeItemOut"][];
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Total */
+            total: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** PosSemesterSignoffCreate */
+        PosSemesterSignoffCreate: {
+            /**
+             * Amount
+             * @description 簽收金額（元）
+             */
+            amount: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
+        /**
+         * PosSemesterSignoffItemOut
+         * @description 學期簽收帳本單列。作廢列保留輸出（voided_at 非 NULL），前端刪除線呈現。
+         */
+        PosSemesterSignoffItemOut: {
+            /** Amount */
+            amount: number;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Signed At */
+            signed_at?: string | null;
+            /** Signed By */
+            signed_by: string;
+            /** Void Reason */
+            void_reason?: string | null;
+            /** Voided At */
+            voided_at?: string | null;
+            /** Voided By */
+            voided_by?: string | null;
+        };
+        /**
+         * PosSemesterSignoffListOut
+         * @description GET /pos/semester-signoffs 回應。signoff_total 只計未作廢列。
+         */
+        PosSemesterSignoffListOut: {
+            /** Items */
+            items: components["schemas"]["PosSemesterSignoffItemOut"][];
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Signoff Total */
+            signoff_total: number;
+        };
+        /** PosSemesterSignoffVoid */
+        PosSemesterSignoffVoid: {
+            /** Reason */
+            reason: string;
         };
         /**
          * PosSupplyDetailItemOut
@@ -40106,6 +40327,8 @@ export interface operations {
                 approval_status?: string | null;
                 classroom_name?: string | null;
                 payment_status?: ("paid" | "partial" | "unpaid" | "overpaid" | "no_fee") | null;
+                /** @description 待審核防漏篩選：pending=待審核（pending_review 或 match_status='pending'，**不含** 'unmatched' 舊資料）；non_auto=非系統自動比對（match_status != 'matched'，含 unmatched/pending/manual/forced） */
+                review_status?: ("all" | "pending" | "non_auto") | null;
                 school_year?: number | null;
                 semester?: number | null;
             };
@@ -40122,6 +40345,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PosSemesterReconciliationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_semester_registration_changes_api_activity_pos_semester_registration_changes_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+                /** @description CSV 過濾異動類型；預設＝退課/加報四類；白名單外回 400 */
+                types?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterRegChangesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_semester_signoffs_api_activity_pos_semester_signoffs_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterSignoffListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_semester_signoff_api_activity_pos_semester_signoffs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosSemesterSignoffCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterSignoffItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_semester_signoff_api_activity_pos_semester_signoffs__signoff_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                signoff_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosSemesterSignoffVoid"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterSignoffItemOut"];
                 };
             };
             /** @description Validation Error */
