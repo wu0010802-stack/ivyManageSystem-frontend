@@ -29,6 +29,8 @@ function goStep(key: WorkspaceStepKey) {
   router.replace({ query: q })
 }
 
+const visibleSteps = computed(() => WORKSPACE_STEPS.filter((s) => s.key !== 'payout' || canPayout.value))
+
 const RAIL_COLLAPSE_KEY = 'ye-workspace-rail-collapsed'
 const collapsed = ref(tenantGetItem(RAIL_COLLAPSE_KEY) === '1')
 function toggleCollapse() {
@@ -56,6 +58,7 @@ interface CycleProgress {
 const cycle = ref<YearEndCycle | null>(null)
 const progress = ref<CycleProgress | null>(null)
 const canFinalize = computed(() => hasPermission('YEAR_END_FINALIZE'))
+const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 const statusBusy = ref(false)
 
 // 批次 A①：載入失敗不再靜默（原空 catch 讓表頭/導軌數字無聲消失，使用者會誤信
@@ -157,7 +160,7 @@ function reopenToOpen() {
       <button class="ye-rail__toggle" type="button" @click="toggleCollapse"
         :aria-label="collapsed ? '展開導軌' : '收合導軌'">{{ collapsed ? '»' : '«' }}</button>
       <ul class="ye-rail__steps">
-        <li v-for="s in WORKSPACE_STEPS" :key="s.key">
+        <li v-for="s in visibleSteps" :key="s.key">
           <button
             type="button"
             class="ye-rail__step"
@@ -254,7 +257,7 @@ function reopenToOpen() {
 
       <YearEndConfigView v-if="step === 'config'" :cycle-id="cycleId" />
       <YearEndGridView v-else-if="step === 'grid'" :cycle-id="cycleId" />
-      <AppraisalPayoutView v-else-if="step === 'payout'" />
+      <AppraisalPayoutView v-else-if="step === 'payout' && canPayout" />
       <YearEndDetailView v-else :cycle-id="cycleId" />
     </section>
   </div>

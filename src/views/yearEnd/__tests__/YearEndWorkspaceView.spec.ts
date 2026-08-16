@@ -278,4 +278,26 @@ describe('YearEndWorkspaceView', () => {
 
     expect(replaceMock).toHaveBeenCalledWith({ query: { year: '2026', step: 'payout' } })
   })
+
+  it('無 APPRAISAL_FINALIZE 權限時，導軌不顯示發放按鈕', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    mockHasPermission.mockImplementation((p: string) => p === 'YEAR_END_FINALIZE')
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="rail-step-payout"]').exists()).toBe(false)
+  })
+
+  it('有 APPRAISAL_FINALIZE 權限時，導軌顯示發放按鈕', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    mockHasPermission.mockImplementation((p: string) => p === 'APPRAISAL_FINALIZE')
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="rail-step-payout"]').exists()).toBe(true)
+  })
+
+  it('無 APPRAISAL_FINALIZE 權限但直接以 step=payout 網址進入時，退回顯示簽核內容而非發放內容（雙重防線）', async () => {
+    routeRef.value = { params: { id: '9' }, query: { step: 'payout' } }
+    mockHasPermission.mockImplementation((p: string) => p === 'YEAR_END_FINALIZE')
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="stub-payout"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="stub-detail"]').exists()).toBe(true)
+  })
 })
