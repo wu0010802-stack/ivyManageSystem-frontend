@@ -1190,15 +1190,29 @@ grep -n "ArrowLeft\|router\." src/views/EmployeeDetailView.vue
 
 （本檔模板用的是 `$router`，script 內的 `router`（`:53`）另有用途，**不要動 script**。）
 
-- [ ] **Step 5: 更新受影響的測試**
+- [ ] **Step 5: 補防復活斷言**
 
-把 Step 1 找到的、斷言 `back-to-list` 存在的 case 改為斷言**不存在**，並在該處加註解說明返回已上移至頂列麵包屑。例如：
+**已實測（2026-08-16）**：`data-testid="back-to-list"` 只存在於元件本身、**無任何測試引用**；三支目標檔的既有測試也**都沒有斷言返回鈕**：
+
+| 測試檔 | 返回相關內容 |
+|---|---|
+| `src/views/__tests__/EmployeeDetailView.test.ts` | 僅 router mock 提供 `back: vi.fn()`（因元件目前呼叫 `router.back()`） |
+| `src/views/platform/__tests__/PlatformTenantDetailView.spec.ts` | 無 |
+| `src/views/salary/__tests__/SalarySettleView.spec.ts` | 無 |
+
+所以移除返回鈕**不會弄紅任何既有測試**——但也代表沒有任何東西防止它們被加回來。在三支既有測試各補一個斷言，把本次設計決策釘住（mount 方式沿用各檔既有 case，不要自創）：
 
 ```ts
   it('返回入口已上移至頂列麵包屑，頁內不再重複放返回鍵', () => {
-    expect(wrapper.find('[data-testid="back-to-list"]').exists()).toBe(false)
+    // 全站唯一的「回上一層」機制是 AdminHeader 的麵包屑父層。
+    // 頁內再放一顆等於同一動作兩個入口、位置還各不相同（本次收斂的原因）。
+    expect(wrapper.text()).not.toContain('返回員工列表')
   })
 ```
+
+三支各自要斷言的字串：`EmployeeDetailView` → `'返回員工列表'`；`PlatformTenantDetailView` → `'回清單'`（也可續用 `[data-testid="back-to-list"]` 選擇器斷言不存在）；`SalarySettleView` → `'回工作台'`。
+
+**注意 `SalarySettleView` 的斷言字串**：同頁的 `StepExport` 在 Task 10 會把文案改成「回薪資管理」，所以這裡斷言 `'回工作台'` 不存在是安全的；但若你在 Task 10 之前跑，`StepExport` 可能因條件未滿足而根本未渲染——若斷言意外失敗，先確認是不是撈到 `StepExport` 的按鈕，是的話改用更精確的選擇器。
 
 - [ ] **Step 6: 跑相關測試**
 
