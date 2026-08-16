@@ -96,6 +96,19 @@
           @update:model-value="(v) => $emit('update:appliedAmount', v ?? null)"
         />
       </div>
+
+      <!-- 應收差額提示（繳費模式）：分期收款是合法情境，不阻擋送出，僅提醒收銀員
+           口頭與家長確認金額（②收款改造，2026-08-16） -->
+      <el-alert
+        v-if="!isRefundMode && amountDiff !== 0"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="pos-payment__diff-hint"
+      >
+        與應收差 {{ formatTWD(Math.abs(amountDiff)) }}（應收 {{ formatTWD(owedAmount) }}）——
+        分期收款屬正常情況，請口頭與家長確認
+      </el-alert>
     </div>
 
     <div class="pos-payment__summary">
@@ -138,23 +151,14 @@
         清空
       </el-button>
       <el-button
-        size="large"
-        :loading="submitting"
-        :disabled="!canSubmit"
-        class="pos-payment__submit pos-payment__submit--plain"
-        @click="$emit('submit', { print: false })"
-      >
-        {{ isRefundMode ? '只確認退費' : '只確認收款' }}
-      </el-button>
-      <el-button
         :type="isRefundMode ? 'danger' : 'primary'"
         size="large"
         :loading="submitting"
         :disabled="!canSubmit"
         class="pos-payment__submit"
-        @click="$emit('submit', { print: true })"
+        @click="$emit('submit')"
       >
-        {{ isRefundMode ? '確認退費並列印' : '確認收款並列印' }}
+        {{ isRefundMode ? '確認退費' : '確認收款' }}
       </el-button>
     </div>
   </el-card>
@@ -219,12 +223,25 @@ const emit = defineEmits<{
   'update:appliedAmount': [value: number | null]
   'clear-selection': []
   'clear': []
-  'submit': [payload?: { print?: boolean }]
+  'submit': []
 }>()
 
 function onCheckoutTypeChange(v: string | number | boolean | undefined) {
   if (v !== undefined) emit('update:checkoutType', v)
 }
+
+// 應收差額提示（②收款改造，2026-08-16）：金額輸入預設已由父層預填欠款
+// （既有 buildSelection 邏輯不動），此處只在使用者手動改動、與應收不一致時提示。
+const owedAmount = computed(() => {
+  const it = selectedItemTyped.value
+  if (!it) return 0
+  return Math.max(0, (it.total_amount || 0) - (it.paid_amount || 0))
+})
+const amountDiff = computed(() => {
+  const it = selectedItemTyped.value
+  if (!it) return 0
+  return (Number(it.amount_applied) || 0) - owedAmount.value
+})
 </script>
 
 <style scoped>
@@ -418,7 +435,7 @@ function onCheckoutTypeChange(v: string | number | boolean | undefined) {
   min-width: 140px;
 }
 
-.pos-payment__submit--plain {
-  flex: 0.8;
+.pos-payment__diff-hint {
+  margin-top: -4px;
 }
 </style>
