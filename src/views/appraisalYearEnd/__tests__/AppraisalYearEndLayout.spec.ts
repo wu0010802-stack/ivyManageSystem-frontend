@@ -43,21 +43,10 @@ describe('AppraisalYearEndLayout', () => {
     expect(text).not.toContain('年終獎金率') // 規則設定內頁不出現在頂層
     expect(w.findAll('.aye-nav [role="radio"], .aye-nav .el-segmented__item').length).toBeGreaterThan(0)
   })
-  it('麵包屑顯示 目前 section 路徑', async () => {
+  it('頁內不再渲染麵包屑（層級由頂列麵包屑與 segmented 表達）', async () => {
     const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
     await flushPromises()
-    expect(w.find('.aye-breadcrumb').text()).toContain('當期總覽')
-  })
-  it('麵包屑 fallback：路由只有 meta.title（無 meta.breadcrumb）時顯示該 title', async () => {
-    await router.push('/appraisal-year-end/year-end')
-    await router.isReady()
-    const w = mount(AppraisalYearEndLayout, { global: { plugins: [ElementPlus, router] } })
-    await flushPromises()
-    // 用 .el-breadcrumb__inner 逐段比對，避免「考核與年終」子字串巧合覆蓋掉 fallback 判斷。
-    // 只在第一個 .aye-breadcrumb 內找（直接 mount 時內部 <router-view> 因缺少 depth
-    // context 會把自己重新渲染一次，與 AppraisalManagementView.spec.ts 的既知現象相同）。
-    const segments = w.find('.aye-breadcrumb').findAll('.el-breadcrumb__inner').map((n) => n.text())
-    expect(segments).toEqual(['考核與年終', '年終'])
+    expect(w.find('.aye-breadcrumb').exists()).toBe(false)
   })
 })
 
