@@ -103,25 +103,25 @@ export const routes: RouteRecordRaw[] = [
             path: '/student-attendance',
             name: 'student-attendance',
             component: () => import('../views/StudentAttendanceView.vue'),
-            meta: { title: '學生出席紀錄' }
+            meta: { title: '學生出席紀錄', parent: '/students' }
         },
         {
             path: '/student-leaves',
             name: 'student-leaves',
             component: () => import('../views/StudentLeavesListView.vue'),
-            meta: { title: '學生請假紀錄' }
+            meta: { title: '學生請假紀錄', parent: '/students' }
         },
         {
             path: '/student-assessments',
             name: 'student-assessments',
             component: () => import('../views/StudentAssessmentView.vue'),
-            meta: { title: PAGE_TERMS.studentAssessments }
+            meta: { title: PAGE_TERMS.studentAssessments, parent: '/students' }
         },
         {
             path: '/student-incidents',
             name: 'student-incidents',
             component: () => import('../views/StudentIncidentView.vue'),
-            meta: { title: '學生事件紀錄' }
+            meta: { title: '學生事件紀錄', parent: '/students' }
         },
         {
             path: '/student-academic-affairs',
@@ -131,7 +131,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/portfolio/medication-today',
             name: 'medication-today',
             component: () => import('../views/MedicationTodayView.vue'),
-            meta: { title: '今日用藥' }
+            meta: { title: '今日用藥', parent: '/students' }
         },
         {
             // 在籍記錄表已折入班級學生管理頁的「統計表」modal；統計圖表獨立為 /enrollment-stats。
@@ -222,37 +222,37 @@ export const routes: RouteRecordRaw[] = [
             path: '/salary/settle',
             name: 'salary-settle',
             component: () => import('../views/salary/SalarySettleView.vue'),
-            meta: { title: PAGE_TERMS.salarySettle, parentTitle: '薪資管理' }
+            meta: { title: PAGE_TERMS.salarySettle }
         },
         {
             path: '/salary/history',
             name: 'salary-history',
             component: () => import('../views/salary/SalaryHistoryView.vue'),
-            meta: { title: '薪資歷史', parentTitle: '薪資管理' }
+            meta: { title: '薪資歷史' }
         },
         {
             path: '/salary/simulate',
             name: 'salary-simulate',
             component: () => import('../views/salary/SalarySimulateView.vue'),
-            meta: { title: '薪資試算', parentTitle: '薪資管理' }
+            meta: { title: '薪資試算' }
         },
         {
             path: '/salary/settings',
             name: 'salary-settings',
             component: () => import('../views/salary/SalarySettingsView.vue'),
-            meta: { title: '薪資設定', parentTitle: '薪資管理' }
+            meta: { title: '薪資設定' }
         },
         {
             path: '/salary/recruitment-bonus',
             name: 'salary-recruitment-bonus',
             component: () => import('../views/salary/RecruitmentBonusView.vue'),
-            meta: { title: '招生獎金', parentTitle: '薪資管理' }
+            meta: { title: '招生獎金' }
         },
         {
             path: '/salary/growth-contract',
             name: 'salary-growth-contract',
             component: () => import('../views/salary/GrowthContractView.vue'),
-            meta: { title: '自主成長獎勵金', parentTitle: '薪資管理' }
+            meta: { title: '自主成長獎勵金' }
         },
         {
             path: '/calendar',
@@ -419,7 +419,7 @@ export const routes: RouteRecordRaw[] = [
                     ],
                 },
                 { path: 'year-end', name: 'aye-year-end', component: () => import('../views/yearEnd/YearEndListView.vue'), meta: { title: '年終' } },
-                { path: 'year-end/cycles/:id', name: 'year-end-cycle-workspace', component: () => import('../views/yearEnd/YearEndWorkspaceView.vue'), meta: { title: '年終 › 結算工作區' } },
+                { path: 'year-end/cycles/:id', name: 'year-end-cycle-workspace', component: () => import('../views/yearEnd/YearEndWorkspaceView.vue'), meta: { title: '結算工作區', parent: '/appraisal-year-end/year-end' } },
                 { path: 'year-end/cycles/:id/grid', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'grid' } }) },
                 { path: 'year-end/cycles/:id/config', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'config' } }) },
                 { path: 'year-end/payout', name: 'aye-payout', component: () => import('../views/yearEnd/AppraisalPayoutView.vue'), meta: { title: '考核年終發放' } },
@@ -556,31 +556,31 @@ export const routes: RouteRecordRaw[] = [
             path: '/activity/dashboard',
             name: 'activity-dashboard',
             component: () => import('../views/activity/ActivityDashboardView.vue'),
-            meta: { title: PAGE_TERMS.activityDashboard, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityDashboard }
         },
         {
             path: '/activity/registrations',
             name: 'activity-registrations',
             component: () => import('../views/activity/ActivityRegistrationView.vue'),
-            meta: { title: '報名管理', parentTitle: MODULE_TERMS.activity }
+            meta: { title: '報名管理' }
         },
         {
             path: '/activity/pos',
             name: 'activity-pos',
             component: () => import('../views/activity/POSView.vue'),
-            meta: { title: 'POS 收銀', parentTitle: MODULE_TERMS.activity }
+            meta: { title: 'POS 收銀' }
         },
         {
             path: '/activity/pos/approval',
             name: 'activity-pos-approval',
             component: () => import('../views/activity/POSApprovalView.vue'),
-            meta: { title: PAGE_TERMS.activityPosApproval, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityPosApproval }
         },
         {
             path: '/activity/audit/pos-unlock',
             name: 'POSAuditEvents',
             component: () => import('../views/activity/POSAuditEventsView.vue'),
-            meta: { title: PAGE_TERMS.activityPosAudit, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityPosAudit, parent: '/activity/pos' }
         },
         // 舊路徑保留相容：課程與用品已於 2026-07-31 併入 /activity/settings 的前兩個 tab
         {
@@ -599,25 +599,25 @@ export const routes: RouteRecordRaw[] = [
             path: '/activity/inquiries',
             name: 'activity-inquiries',
             component: () => import('../views/activity/ActivityInquiryView.vue'),
-            meta: { title: '家長提問', parentTitle: MODULE_TERMS.activity }
+            meta: { title: '家長提問' }
         },
         {
             path: '/activity/settings',
             name: 'activity-settings',
             component: () => import('../views/activity/ActivitySettingsView.vue'),
-            meta: { title: PAGE_TERMS.activitySettings, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activitySettings }
         },
         {
             path: '/activity/changes',
             name: 'activity-changes',
             component: () => import('../views/activity/ActivityChangesView.vue'),
-            meta: { title: PAGE_TERMS.activityChanges, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityChanges }
         },
         {
             path: '/activity/attendance',
             name: 'activity-attendance',
             component: () => import('../views/activity/ActivityAttendanceView.vue'),
-            meta: { title: '點名管理', parentTitle: MODULE_TERMS.activity }
+            meta: { title: '點名管理' }
         },
         // ============ 活動調查（Task 13） ============
         {
@@ -630,19 +630,19 @@ export const routes: RouteRecordRaw[] = [
             path: '/surveys/new',
             name: 'survey-new',
             component: () => import('../views/surveys/SurveyFormView.vue'),
-            meta: { title: '建立調查', parentTitle: '活動調查' }
+            meta: { title: '建立調查' }
         },
         {
             path: '/surveys/:id/edit',
             name: 'survey-edit',
             component: () => import('../views/surveys/SurveyFormView.vue'),
-            meta: { title: '編輯調查', parentTitle: '活動調查' }
+            meta: { title: '編輯調查' }
         },
         {
             path: '/surveys/:id',
             name: 'survey-detail',
             component: () => import('../views/surveys/SurveyDetailView.vue'),
-            meta: { title: '調查詳情', parentTitle: '活動調查' }
+            meta: { title: '調查詳情' }
         },
         // ============ 公開前台 ============
         {

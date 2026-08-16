@@ -18,8 +18,18 @@
           <span class="hamburger-line"></span>
         </button>
         <h1 v-if="pageTitle" class="page-title">
-          <span v-if="parentTitle" class="page-title__parent">{{ parentTitle }} / </span>
-          <span>{{ pageTitle }}</span>
+          <template v-if="parentLink">
+            <router-link
+              :to="parentLink.path"
+              class="page-title__parent"
+              :aria-label="`返回${parentLink.title}`"
+            >
+              <el-icon class="page-title__back"><ArrowLeft /></el-icon>
+              <span class="page-title__parent-text">{{ parentLink.title }}</span>
+            </router-link>
+            <span class="page-title__sep" aria-hidden="true">/</span>
+          </template>
+          <span class="page-title__current">{{ pageTitle }}</span>
         </h1>
       </div>
 
@@ -133,7 +143,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Search, Setting, SwitchButton, User, ArrowDown } from '@element-plus/icons-vue'
+import { Monitor, Search, Setting, SwitchButton, User, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo, hasPermission } from '@/utils/auth'
@@ -143,6 +153,8 @@ import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import { roleDisplayLabel } from '@/constants/roleDisplay'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import { BREADCRUMB_PARENTS } from '@/constants/navigation'
+import { resolveBreadcrumbParent } from '@/utils/breadcrumb'
 
 withDefaults(defineProps<{
   isMobile?: boolean
@@ -176,7 +188,23 @@ const route = useRoute()
 const router = useRouter()
 
 const pageTitle = computed(() => route.meta?.title || '')
-const parentTitle = computed(() => (route.meta?.parentTitle as string) || '')
+
+const parentLink = computed(() =>
+  resolveBreadcrumbParent(route.path, {
+    parents: BREADCRUMB_PARENTS,
+    // 純 redirect 容器（/workbench、/bus、/appraisal-year-end）點下去會被守衛
+    // 轉走，常落回原頁 → 視為不可用父層。
+    isContainer: (p) => {
+      const matched = router.resolve(p).matched
+      return Boolean(matched[matched.length - 1]?.redirect)
+    },
+    titleOf: (p) => {
+      const title = router.resolve(p).meta?.title
+      return typeof title === 'string' ? title : ''
+    },
+    metaParent: typeof route.meta?.parent === 'string' ? route.meta.parent : undefined,
+  }),
+)
 
 const userInfo = computed(() => (getUserInfo() || {}) as Record<string, unknown>)
 const displayName = computed(() => (userInfo.value.name as string | undefined) || '管理員')
@@ -316,13 +344,35 @@ const handleCommand = (command: string) => {
 }
 
 .page-title__parent {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   color: var(--text-tertiary);
   font-weight: 400;
-  margin-right: 4px;
   white-space: nowrap;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease;
 }
 
-.page-title > span {
+.page-title__parent:hover,
+.page-title__parent:focus-visible {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+}
+
+.page-title__back {
+  font-size: 0.9em;
+}
+
+.page-title__sep {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  margin: 0 4px;
+  flex: 0 0 auto;
+}
+
+.page-title__current {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -477,6 +527,15 @@ const handleCommand = (command: string) => {
   .page-title {
     font-size: var(--text-lg);
     padding: 2px 4px;
+  }
+
+  .page-title__parent-text {
+    display: inline-block;
+    max-width: 6em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
   }
 
   .user-info {

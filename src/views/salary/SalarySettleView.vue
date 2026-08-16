@@ -8,7 +8,6 @@
         <el-select v-model="query.month" style="width: 90px" aria-label="月份" :disabled="calculating">
           <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
         </el-select>
-        <el-button @click="$router.push('/salary')">← 回工作台</el-button>
       </template>
     </PageHeader>
 

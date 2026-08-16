@@ -13,6 +13,8 @@
 declare module 'vue-router' {
   interface RouteMeta {
     title?: string
+    /** Admin: 麵包屑父層路徑（manifest 反查涵蓋不到時明示；spec §3.1 規則 2） */
+    parent?: string
     /** Admin: route requires no authentication */
     noAuth?: boolean
     /** Admin: route belongs to portal section */

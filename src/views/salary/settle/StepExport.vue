@@ -41,7 +41,7 @@
       :sub-title="`${q.year} 年 ${q.month} 月已全數封存並匯出轉帳名冊`"
     >
       <template #extra>
-        <el-button type="primary" @click="$router.push('/salary')">回工作台</el-button>
+        <el-button type="primary" @click="$router.push('/salary')">回薪資管理</el-button>
       </template>
     </el-result>
 

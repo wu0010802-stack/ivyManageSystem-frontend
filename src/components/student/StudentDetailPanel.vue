@@ -7,7 +7,6 @@ import { getStudent, getStudentProfile } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
 import { domainBus, STUDENT_EVENTS, RECORD_EVENTS } from '@/utils/domainBus'
 import { apiError } from '@/utils/error'
-import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 import StudentSummaryHeader from './StudentSummaryHeader.vue'
 import StudentEditDialog from './StudentEditDialog.vue'
@@ -264,8 +263,6 @@ const handleGotoLink = (cmd: string) => {
     router.push('/fees')
   } else if (cmd === 'classrooms') {
     router.push('/classrooms')
-  } else if (cmd === 'students') {
-    router.push('/students')
   }
 }
 
@@ -294,47 +291,23 @@ const handleLifecycleTransitioned = () => {
 
 const handleGuardiansChanged = () => fetchProfile()
 
-// 返回（page mode）
-const handleBack = () => {
-  if (props.fromContext === 'classroom' && props.fromClassroomId) {
-    router.replace({ path: '/classrooms', query: { selected: props.fromClassroomId } })
-  } else {
-    router.back()
-  }
+// 回到來源班級（帶回選取狀態）。一般返回走頂列麵包屑「‹ 學生」，
+// 只有從班級名冊點進來時才需要這條帶狀態的路徑。
+const showBackToClassroom = computed(
+  () => props.mode === 'page' && props.fromContext === 'classroom' && Boolean(props.fromClassroomId),
+)
+const handleBackToClassroom = () => {
+  router.replace({ path: '/classrooms', query: { selected: props.fromClassroomId } })
 }
-
-const breadcrumbItems = computed(() => {
-  if (props.mode !== 'page') return []
-  const name = (profile.value?.basic as Record<string, unknown> | undefined)?.name as
-    | string
-    | undefined
-  if (props.fromContext === 'classroom') {
-    return [
-      { label: PAGE_TERMS.classrooms, path: '/classrooms' },
-      { label: name || '學生檔案' },
-    ]
-  }
-  return [
-    { label: '學生管理', path: '/students' },
-    { label: name || '學生檔案' },
-  ]
-})
 </script>
 
 <template>
   <div class="student-detail-panel" :class="`mode-${mode}`" v-loading="loading && !profile">
-    <!-- Page mode：頁首 breadcrumb -->
-    <div v-if="mode === 'page'" class="page-header">
-      <div class="breadcrumb">
-        <el-button text :icon="ArrowLeft" @click="handleBack" class="back-btn">返回</el-button>
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item
-            v-for="(c, idx) in breadcrumbItems"
-            :key="idx"
-            :to="c.path ? { path: c.path } : undefined"
-          >{{ c.label }}</el-breadcrumb-item>
-        </el-breadcrumb>
-      </div>
+    <!-- 從班級名冊進來時，提供帶回選取狀態的返回；一般返回走頂列麵包屑 -->
+    <div v-if="showBackToClassroom" class="page-header">
+      <el-button text :icon="ArrowLeft" class="back-btn" @click="handleBackToClassroom">
+        回班級名冊
+      </el-button>
     </div>
 
     <!-- 摘要列：固定頂部 -->
@@ -462,11 +435,6 @@ const breadcrumbItems = computed(() => {
   margin-bottom: 12px;
 }
 
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .back-btn {
   margin-right: 4px;
 }

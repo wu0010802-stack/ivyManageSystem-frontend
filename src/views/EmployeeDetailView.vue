@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, toRef, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { ArrowLeft, User } from '@element-plus/icons-vue'
+import { User } from '@element-plus/icons-vue'
 import { useEmployeeDetail } from '@/composables/useEmployeeDetail'
 import { getEmployeeStatus, standardSalaryFor, isMissingSalary } from '@/utils/employeeDisplay'
 import { expiryStatus } from '@/utils/expiry'
@@ -22,7 +21,6 @@ import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import EmployeeFormDialog from '@/components/employee/EmployeeFormDialog.vue'
 
 const props = defineProps<{ id: number }>()
-const router = useRouter()
 const { isMobile } = useIsMobile()
 const employeeStore = useEmployeeStore()
 
@@ -130,11 +128,6 @@ watch(employee, async (val) => {
 }, { immediate: true })
 onUnmounted(() => sectionObserver?.disconnect())
 
-const goBack = () => {
-  if (window.history.length > 1) router.back()
-  else router.push('/employees')
-}
-
 // 辦理離職
 const offboardVisible = ref(false)
 const onOffboarded = async () => {
@@ -160,10 +153,6 @@ const onSaved = async () => {
 
 <template>
   <div class="employee-detail-page crisp-surface">
-    <el-button link class="back-btn" @click="goBack">
-      <el-icon><ArrowLeft /></el-icon> 返回員工列表
-    </el-button>
-
     <el-alert v-if="error" :title="error" type="error" show-icon :closable="false">
       <el-button size="small" style="margin-top:8px" @click="detail.load()">重試</el-button>
     </el-alert>
@@ -268,7 +257,6 @@ const onSaved = async () => {
 </template>
 
 <style scoped>
-.back-btn { margin-bottom: 12px; }
 .detail-layout { display: flex; gap: 20px; align-items: flex-start; }
 .detail-aside {
   flex: 0 0 240px; position: sticky; top: 16px;

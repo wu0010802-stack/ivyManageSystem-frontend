@@ -132,7 +132,6 @@ const avatarColor = computed(() => {
               <el-dropdown-item divided command="attendance">學生出席紀錄頁</el-dropdown-item>
               <el-dropdown-item command="fees">學費管理頁</el-dropdown-item>
               <el-dropdown-item v-if="context === 'students'" command="classrooms">{{ PAGE_TERMS.classrooms }}</el-dropdown-item>
-              <el-dropdown-item v-else command="students">回到學生列表</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
