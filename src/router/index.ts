@@ -15,12 +15,18 @@ function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
     if (section === 'appraisal') {
         const tab = tabRaw === 'cycles' ? 'history' : tabRaw === 'institution_events' ? 'institution-events' : tabRaw
         if (tab === 'settings') return { path: '/appraisal-year-end/rules/scoring' }
-        if (tab && ['current', 'history', 'institution-events', 'disciplinary'].includes(tab)) {
-            // cycle/view 只對 history 有意義，其餘子頁清掉避免殘留
-            if (tab !== 'history') { delete q.cycle; delete q.view }
+        if (tab === 'history') {
+            const hq: Record<string, string> = {}
+            if (typeof q.cycle === 'string') hq.cycle = q.cycle
+            if (typeof q.view === 'string') hq.view = q.view
+            return { path: '/appraisal-year-end/appraisal', query: { ...hq, stage: 'sign' } }
+        }
+        if (tab === 'current') return { path: '/appraisal-year-end/appraisal' }
+        if (tab && ['institution-events', 'disciplinary', 'calibration'].includes(tab)) {
+            delete q.cycle; delete q.view
             return { path: `/appraisal-year-end/appraisal/${tab}`, query: q }
         }
-        return { path: '/appraisal-year-end/appraisal/current' }
+        return { path: '/appraisal-year-end/appraisal' }
     }
     if (section === 'year-end') return { path: '/appraisal-year-end/year-end', query: q }
     if (section === 'payout') return { path: '/appraisal-year-end/year-end/payout', query: q }
@@ -393,19 +399,12 @@ export const routes: RouteRecordRaw[] = [
             children: [
                 { path: 'todo', name: 'aye-todo', component: () => import('../views/appraisalYearEnd/OverviewWorkbenchView.vue'), meta: { title: '待辦' } },
                 { path: 'overview', redirect: '/appraisal-year-end/todo' },
-                {
-                    path: 'appraisal',
-                    component: () => import('../views/AppraisalManagementView.vue'),
-                    redirect: '/appraisal-year-end/appraisal/current',
-                    meta: { title: '考核' },
-                    children: [
-                        { path: 'current', name: 'aye-appraisal-current', component: () => import('../views/appraisal/CurrentSemesterOverview.vue'), meta: { title: '當期總覽' } },
-                        { path: 'history', name: 'aye-appraisal-history', component: () => import('../views/appraisal/CycleListView.vue'), meta: { title: '歷史週期與簽核' } },
-                        { path: 'institution-events', name: 'aye-appraisal-events', component: () => import('../views/appraisal/components/InstitutionEventPanel.vue'), meta: { title: '活動出席' } },
-                        { path: 'disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處紀錄' } },
-                        { path: 'calibration', name: 'aye-appraisal-calibration', component: () => import('../views/appraisal/CalibrationView.vue'), meta: { title: '等第校準' } },
-                    ],
-                },
+                { path: 'appraisal', name: 'aye-appraisal', component: () => import('../views/appraisal/AppraisalWorkspaceView.vue'), meta: { title: '考核' } },
+                { path: 'appraisal/institution-events', name: 'aye-appraisal-events', component: () => import('../views/appraisal/components/InstitutionEventPanel.vue'), meta: { title: '活動出席' } },
+                { path: 'appraisal/disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處紀錄' } },
+                { path: 'appraisal/calibration', name: 'aye-appraisal-calibration', component: () => import('../views/appraisal/CalibrationView.vue'), meta: { title: '等第校準' } },
+                { path: 'appraisal/current', redirect: '/appraisal-year-end/appraisal' },
+                { path: 'appraisal/history', redirect: (to) => ({ path: '/appraisal-year-end/appraisal', query: { ...to.query, stage: 'sign' } }) },
                 { path: 'year-end', name: 'aye-year-end', component: () => import('../views/yearEnd/YearEndListView.vue'), meta: { title: '年終' } },
                 { path: 'year-end/cycles/:id', name: 'year-end-cycle-workspace', component: () => import('../views/yearEnd/YearEndWorkspaceView.vue'), meta: { title: '年終 › 結算工作區' } },
                 { path: 'year-end/cycles/:id/grid', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'grid' } }) },
