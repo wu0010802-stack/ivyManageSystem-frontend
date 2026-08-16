@@ -77,6 +77,9 @@ FROM nginx:alpine AS runtime
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 # 安全標頭 snippet（非 template，不經 envsubst）；由各 location include 載入
 COPY nginx-security-headers.conf /etc/nginx/security-headers.conf
+# 開機從 /etc/resolv.conf 產生 resolver 設定（變數 proxy_pass 的 DNS 重解析
+# 依賴它；2026-08-16 staging /api timeout 事故防復發，詳見 script 檔頭）
+COPY --chmod=755 nginx-resolver-entrypoint.sh /docker-entrypoint.d/15-resolver.sh
 # 多租戶品牌 map（$tb_* / $tb_known_host / $tb_slug）。`00-` 前綴保證先於
 # default.conf 載入——map 必須在 http context 且早於使用它的 server block。
 # 不經 templates/ 目錄故不走 envsubst，裡面的中文品牌字面不會被動到。

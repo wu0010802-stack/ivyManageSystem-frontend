@@ -78,10 +78,20 @@ server {
     # /api/* 反代到後端（內部網路）— 讓 cookie 變 first-party，
     # 解 LIFF in-app webview 第三方 cookie 被 ITP 擋的問題。
     # BACKEND_URL 由 Zeabur frontend service 注入：
-    #   http://ivymanagesystem-backend-rulla.zeabur.internal:8080
+    #   http://backend.zeabur.internal:8080
     # WS 走 upgrade，HTTP 走標準反代
+    #
+    # ⚠ proxy_pass 必須走「變數」形式（2026-08-16 staging 全站 /api timeout 事故）：
+    # 字面 hostname 只在 nginx 啟動時解析一次並永久快取，後端 redeploy 換 IP 後
+    # 前端就一直反代到死 IP，直到前端自己重啟。改用 set 變數 + resolver
+    # （/docker-entrypoint.d/15-resolver.sh 開機從 /etc/resolv.conf 產生，valid=30s）
+    # 讓 nginx 逐請求依 TTL 重新解析。兩個 location 的上游路徑前綴與本地相同
+    # （/api/ → /api/），變數形式不帶 URI 部分時 nginx 原樣轉發原始請求 URI，
+    # 語意與原本的 `proxy_pass ${BACKEND_URL}/api/;` 逐字等價。
+    set $backend_upstream ${BACKEND_URL};
+
     location /api/ws/ {
-        proxy_pass ${BACKEND_URL}/api/ws/;
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -94,7 +104,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass ${BACKEND_URL}/api/;
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
