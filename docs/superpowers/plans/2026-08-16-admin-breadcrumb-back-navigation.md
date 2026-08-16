@@ -1016,15 +1016,19 @@ git commit -m "test(nav): 麵包屑父層全路由完整性守衛"
 
 ### Task 6: 孤兒頁父層
 
-階段一已自動解除 `/salary/history`、`/salary/simulate`、`/salary/settings`、`/surveys/:id` 四條死巷（各自反查到父層）。本 task 處理 manifest 反查涵蓋不到的 4 條——它們的 path 用連字號（`/student-attendance`）而非 `/students/…`，前綴反查照設計不會命中。
+階段一已自動解除 `/salary/history`、`/salary/simulate`、`/salary/settings`、`/surveys/:id` 四條死巷（各自反查到父層）。本 task 處理 manifest 反查涵蓋不到的 **5 條**——前 4 條的 path 用連字號（`/student-attendance`）而非 `/students/…`，前綴反查照設計不會命中。
+
+**第 5 條由 Task 5 的完整性守衛額外揪出**：`/portfolio/medication-today`（健康與給藥）在 manifest 有 `routePath` 但**沒有 `menu` 欄位**，所以既不會被規則 1 接住（不在候選表內）、也沒有 `/portfolio` 選單項可供規則 3 命中。它與前 4 條同型（無 in-app 入口、側邊欄不高亮），一併補上。
+
+**不處理** `/profile`：計畫 §5 已裁定——header 下拉本身就是明確入口，且沒有語意上合適的父層。
 
 **Files:**
-- Modify: `src/router/index.ts`（`/student-attendance`、`/student-leaves`、`/student-assessments`、`/student-incidents` 四條路由的 meta）
+- Modify: `src/router/index.ts`（`/student-attendance`、`/student-leaves`、`/student-assessments`、`/student-incidents`、`/portfolio/medication-today` 五條路由的 meta）
 - Test: `src/router/__tests__/breadcrumbMeta.test.ts`（Task 4 建立，追加 case）
 
 **Interfaces:**
 - Consumes: Task 2 的規則 2（`meta.parent`）、Task 4 的 `RouteMeta.parent` 型別
-- Produces: 四條學生相關孤兒路由取得父層 `/students`
+- Produces: 五條孤兒路由取得父層 `/students`
 
 - [ ] **Step 1: 追加失敗測試**
 
@@ -1038,6 +1042,7 @@ git commit -m "test(nav): 麵包屑父層全路由完整性守衛"
       '/student-leaves',
       '/student-assessments',
       '/student-incidents',
+      '/portfolio/medication-today',
     ]) {
       const start = ROUTER_SRC.indexOf(`path: '${path}'`)
       if (start < 0) {
