@@ -124,5 +124,15 @@ describe('surveyFormModel', () => {
       addQuestion(draft, 'single_choice')
       expect(isDraftDirty(base, draft)).toBe(true)
     })
+
+    it('只改某題文字也偵測得到——isDraftDirty 註解宣稱的正是這個情境', () => {
+      const draft = emptyDraft()
+      addQuestion(draft, 'number')
+      // 比照 SurveyFormView.loadSurvey() 的真實流程：baseline 是深拷貝快照，
+      // 之後使用者只動巢狀欄位（題目文字），top-level 欄位數量與型別都沒變。
+      const base = JSON.parse(JSON.stringify(draft)) as SurveyDraft
+      draft.questions[0].question_text = '交通方式'
+      expect(isDraftDirty(base, draft)).toBe(true)
+    })
   })
 })
