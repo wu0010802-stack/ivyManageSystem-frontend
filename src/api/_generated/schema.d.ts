@@ -10240,6 +10240,11 @@ export interface paths {
         /**
          * Update Quick Actions
          * @description 整組覆寫家長自己的常用功能三格（upsert）。
+         *
+         *     row 帶 `(tenant_id, user_id)` 複合 unique key（見 model 檔頭說明），
+         *     這裡用「先 UPDATE 既有列，沒有才 INSERT」+ `IntegrityError` 收斂並發
+         *     首次寫入的 race（同一家長兩台裝置同時第一次存，兩邊都讀到 None）：
+         *     第二個 INSERT 撞 unique key 時視為「已被另一個請求建立」，改走 UPDATE。
          */
         put: operations["update_quick_actions_api_parent_quick_actions_put"];
         post?: never;
