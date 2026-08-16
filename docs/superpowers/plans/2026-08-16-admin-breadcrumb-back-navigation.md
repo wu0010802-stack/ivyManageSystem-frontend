@@ -440,7 +440,7 @@ export function resolveBreadcrumbParent(
 npm test -- src/utils/__tests__/breadcrumb.test.ts
 ```
 
-Expected: PASS（16 個 case）
+Expected: PASS（15 個 case：規則 3 六個、規則 1 三個、規則 2 四個、規則 4 兩個）
 
 - [ ] **Step 5: Commit**
 
@@ -621,7 +621,12 @@ const parentLink = computed(() =>
     parents: BREADCRUMB_PARENTS,
     // 純 redirect 容器（/workbench、/bus、/appraisal-year-end）點下去會被守衛
     // 轉走，常落回原頁 → 視為不可用父層。
-    isContainer: (p) => Boolean(router.resolve(p).matched.at(-1)?.redirect),
+    // ⚠ 不要用 matched.at(-1)：tsconfig 繼承 @vue/tsconfig/tsconfig.dom.json，
+    // lib 鎖在 ES2020（刻意與 Vite build target 對齊），Array.at 是 ES2022。
+    isContainer: (p) => {
+      const matched = router.resolve(p).matched
+      return Boolean(matched[matched.length - 1]?.redirect)
+    },
     titleOf: (p) => {
       const title = router.resolve(p).meta?.title
       return typeof title === 'string' ? title : ''
