@@ -122,11 +122,19 @@ server {
     # 乾淨網址（2026-08-16 由 /parent.html 改名）：裸路徑與舊網址皆 301 到正式的
     # /parent/。舊網址保留轉址而非直接刪除，避免已在 LINE Developers console
     # 設定過 endpoint URL＝/parent.html 的既有租戶登入流程中斷。
+    #
+    # ⚠ 必須帶 $is_args$args：LINE 開 LIFF 深連結時會在 endpoint URL 後面帶
+    # ?liff.state=... 這種 query string（src/parent/main.ts 的
+    # resolvePublicLiffStateTarget 就是在讀這個參數）。`return 301 URI;`
+    # 預設**不會**自動保留原始 query string，若後台 LIFF app 的 Endpoint URL
+    # 設定成不帶尾斜線的 /parent（而非 /parent/），每次 LIFF 深連結冷啟動都會
+    # 經過這條轉址，沒有 $is_args$args 會把 liff.state 整個吃掉、深連結靜默失效
+    # （不會報錯，只是打開後永遠是首頁）。
     location = /parent {
-        return 301 /parent/;
+        return 301 /parent/$is_args$args;
     }
     location = /parent.html {
-        return 301 /parent/;
+        return 301 /parent/$is_args$args;
     }
     location = /public.html {
         include /etc/nginx/security-headers.conf;
