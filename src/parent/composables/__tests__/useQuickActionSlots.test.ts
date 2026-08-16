@@ -109,3 +109,45 @@ describe('useQuickActionSlots — availableModules()', () => {
     expect(keys).not.toEqual(expect.arrayContaining(['pickup', 'proxy', 'announce']))
   })
 })
+
+describe('useQuickActionSlots — 併發保護（2026-08-16 review 修復）', () => {
+  it('慢的 load() 若在 swap() 存檔之後才回來，不應蓋掉家長剛存好的編輯（F1）', async () => {
+    // 模擬弱網：GET 掛載時發出但先不 resolve
+    let resolveGet!: (v: unknown) => void
+    getQuickActions.mockReturnValue(new Promise((resolve) => { resolveGet = resolve }))
+    updateQuickActions.mockResolvedValue({ data: {} })
+
+    const { slots, load, swap } = useQuickActionSlots()
+    const loadPromise = load() // 掛著，還沒回來
+
+    // 這段期間家長已經完成一次編輯並存檔成功
+    await swap(0, 'bus')
+    expect(slots.value).toEqual(['bus', 'proxy', 'announce'])
+
+    // 慢的 GET 這時才回來，帶的是「編輯前」的舊資料
+    resolveGet({ data: { slots: ['pickup', 'proxy', 'announce'], is_default: true } })
+    await loadPromise
+
+    // 家長剛存好的編輯不應被蓋掉
+    expect(slots.value).toEqual(['bus', 'proxy', 'announce'])
+  })
+
+  it('persist 期間再次呼叫 swap／resetToDefault 會被忽略，不會用到過期的回滾快照（F2）', async () => {
+    let resolvePut!: (v: unknown) => void
+    updateQuickActions.mockImplementation(
+      () => new Promise((resolve) => { resolvePut = resolve }),
+    )
+
+    const { slots, swap, resetToDefault } = useQuickActionSlots()
+    const swapPromise = swap(0, 'bus') // 第一筆 PUT 還在飛
+    expect(slots.value).toEqual(['bus', 'proxy', 'announce'])
+
+    await resetToDefault() // 應被忽略（persisting lock），不應再發一次 PUT
+    expect(updateQuickActions).toHaveBeenCalledTimes(1)
+    expect(slots.value).toEqual(['bus', 'proxy', 'announce'])
+
+    resolvePut({ data: {} })
+    await swapPromise
+    expect(slots.value).toEqual(['bus', 'proxy', 'announce'])
+  })
+})
