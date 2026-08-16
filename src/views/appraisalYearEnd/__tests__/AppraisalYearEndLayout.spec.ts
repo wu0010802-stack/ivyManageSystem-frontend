@@ -20,10 +20,9 @@ const router = createRouter({
     path: '/appraisal-year-end', component: AppraisalYearEndLayout, redirect: '/appraisal-year-end/overview',
     children: [
       { path: 'overview', component: Stub, meta: { title: '總覽' } },
-      { path: 'appraisal/current', component: Stub, meta: { title: '考核', breadcrumb: ['考核', '當期總覽'] } },
-      // 無 meta.breadcrumb、只有 meta.title 的路由（fallback 分支）
+      { path: 'appraisal/current', component: Stub, meta: { title: '考核' } },
       { path: 'year-end', component: Stub, meta: { title: '年終' } },
-      { path: 'year-end/cycles/:id', component: Stub, meta: { title: '年終 › 結算工作區' } },
+      { path: 'year-end/cycles/:id', component: Stub, meta: { title: '結算工作區' } },
       { path: 'year-end/payout', component: Stub, meta: { title: '考核年終發放' } },
     ],
   }],
