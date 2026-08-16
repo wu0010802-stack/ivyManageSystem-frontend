@@ -77,9 +77,6 @@ FROM nginx:alpine AS runtime
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 # 安全標頭 snippet（非 template，不經 envsubst）；由各 location include 載入
 COPY nginx-security-headers.conf /etc/nginx/security-headers.conf
-# 開機從 /etc/resolv.conf 產生 resolver 設定（變數 proxy_pass 的 DNS 重解析
-# 依賴它；2026-08-16 staging /api timeout 事故防復發，詳見 script 檔頭）
-COPY --chmod=755 nginx-resolver-entrypoint.sh /docker-entrypoint.d/15-resolver.sh
 # 多租戶品牌 map（$tb_* / $tb_known_host / $tb_slug）。`00-` 前綴保證先於
 # default.conf 載入——map 必須在 http context 且早於使用它的 server block。
 # 不經 templates/ 目錄故不走 envsubst，裡面的中文品牌字面不會被動到。
@@ -89,5 +86,12 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # 不會替換 ${TENANT_HOST_GUARD}，map 會拿到字面 "${TENANT_HOST_GUARD}:0" 而恆不命中。
 # 階段 2（多租戶開通、平台健康檢查 host 已列進 branding/tenants.json）後改 on。
 ENV TENANT_HOST_GUARD=off
+# 啟用官方 image 的 15-local-resolvers.envsh：開機從 /etc/resolv.conf 算出
+# ${NGINX_LOCAL_RESOLVERS} 供 template 的 `resolver` 指令使用（變數 proxy_pass
+# 的 DNS 重解析依賴它；2026-08-16 staging /api timeout 事故防復發）。
+# ⚠ Zeabur 的 frontend service 另設有同名 service variable 兜底——若部署平台
+# 用的 Dockerfile 副本沒跟上本行，envsh 沒被啟用會讓 envsubst 把
+# ${NGINX_LOCAL_RESOLVERS} 換成空字串，nginx 直接 config error 起不來。
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=true
 
 EXPOSE 8080
