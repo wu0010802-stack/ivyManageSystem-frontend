@@ -116,9 +116,12 @@ const includedInactiveIds = computed(() =>
   selectedInactiveRows.value.map((r) => r.employee_id)
 )
 
+const previewLoadError = ref(false)
+
 async function loadPreview() {
   loading.value = true
   notReady.value = false
+  previewLoadError.value = false
   try {
     const res = await previewAppraisalPayout(year.value)
     rows.value = res.data as PreviewRow[]
@@ -131,19 +134,24 @@ async function loadPreview() {
       notReady.value = true
     } else {
       ElMessage.error(friendlyError('載入發放預覽失敗', e))
+      previewLoadError.value = true
     }
   } finally {
     loading.value = false
   }
 }
 
+const generatedLoadError = ref(false)
+
 async function loadGenerated() {
   generatedLoading.value = true
+  generatedLoadError.value = false
   try {
     const res = await listAppraisalPayouts(year.value)
     generatedRows.value = res.data as PayoutItem[]
   } catch (e) {
     ElMessage.error(friendlyError('載入已生成列表失敗', e))
+    generatedLoadError.value = true
   } finally {
     generatedLoading.value = false
   }
@@ -223,6 +231,7 @@ defineExpose({
   selected, anyCycleNotFinalized, onGenerate, onVoid, loadPreview, rows, year,
   toggleSelect, payoutRows, payoutTotal, payoutTotalDisplay,
   tab, generatedRows, generatedLoading, loadGenerated, notReady, receipt,
+  previewLoadError, generatedLoadError,
 })
 
 onMounted(loadPreview)
@@ -258,8 +267,13 @@ watch(tab, (t) => {
 
     <el-tabs v-model="tab">
       <el-tab-pane label="預覽" name="preview">
+        <div v-if="previewLoadError" class="apv-error">
+          載入失敗
+          <el-button data-test="preview-load-retry" size="small" text type="primary" @click="loadPreview">重試</el-button>
+        </div>
+
         <EmptyState
-          v-if="notReady"
+          v-else-if="notReady"
           data-test="preview-not-ready"
           title="本年度尚無可發放的考核年終資料"
           description="來源學年的考核週期尚未建立。可切換上方年份，或前往考核管理建立該學年的考核週期後再回來發放。"
@@ -337,6 +351,10 @@ watch(tab, (t) => {
         <div class="generated-toolbar">
           <el-button type="danger" plain data-test="void-button" @click="onVoid">清空本年發放資料</el-button>
         </div>
+        <div v-if="generatedLoadError" class="apv-error">
+          載入失敗
+          <el-button data-test="generated-load-retry" size="small" text type="primary" @click="loadGenerated">重試</el-button>
+        </div>
         <el-table v-loading="generatedLoading" :data="generatedRows" border>
           <template #empty>
             <EmptyState title="本年尚未生成" />
@@ -360,6 +378,14 @@ watch(tab, (t) => {
 </template>
 
 <style scoped>
+.apv-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
 .appraisal-payout-view { padding: var(--space-4); }
 .footer { margin-top: var(--space-4); text-align: right; }
 .generated-toolbar { margin-bottom: var(--space-3); text-align: right; }
