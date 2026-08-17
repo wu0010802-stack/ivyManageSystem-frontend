@@ -18,6 +18,7 @@ import type { ApiResponse } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
 import { summarizeCsvImportResult } from '@/utils/attendanceImport'
+import { csvRow } from '@/utils/csv'
 
 // ── Props / Emits ──────────────────────────────────────────────────────────────
 const props = defineProps<{
@@ -185,11 +186,20 @@ function handleDownloadProblems() {
   const problemRows = previewResult.value.rows.filter(
     (r) => r.check !== 'importable' && r.check !== 'overwrite',
   )
+  // 欄位值（姓名、員工編號）來自使用者上傳的 Excel，可含逗號或 `=` 開頭的
+  // 公式字串 → 一律經 csvRow 做欄位跳脫 + 公式中和（見 utils/csv.ts）。
   const header = '列號,員工編號,姓名,日期,上班,下班,問題類型\n'
   const body = problemRows
-    .map(
-      (r) =>
-        `${r.row_num},${r.employee_number},${r.employee_name},${r.date},${r.punch_in ?? ''},${r.punch_out ?? ''},${r.check}`,
+    .map((r) =>
+      csvRow([
+        r.row_num,
+        r.employee_number,
+        r.employee_name,
+        r.date,
+        r.punch_in ?? '',
+        r.punch_out ?? '',
+        r.check,
+      ]),
     )
     .join('\n')
   const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8;' })
