@@ -27,7 +27,7 @@ vi.mock('@/api/appraisal', () => ({
   }),
   listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
 }))
-import { listAppraisalParticipants } from '@/api/appraisal'
+import { listAppraisalParticipants, listAppraisalCycles } from '@/api/appraisal'
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }))
@@ -306,5 +306,20 @@ describe('CycleDetailPanel', () => {
 
     expect(wrapper.find('[data-test="cdp-retry"]').exists()).toBe(false)
     expect(listAppraisalParticipants).toHaveBeenCalledTimes(2)
+  })
+
+  it('cycle 非 OPEN 時隱藏重算按鈕（List 檢視）', async () => {
+    listAppraisalCycles.mockResolvedValueOnce({
+      data: [{ id: 5, academic_year: 114, semester: 'FIRST', base_score_calc_date: '2025-09-15', base_score: 75.6, status: 'LOCKED' }],
+    })
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="recompute-btn"]').exists()).toBe(false)
+  })
+
+  it('cycle 為 OPEN 時仍依權限顯示重算按鈕（不受本次改動影響的既有行為）', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="recompute-btn"]').exists()).toBe(true)
   })
 })

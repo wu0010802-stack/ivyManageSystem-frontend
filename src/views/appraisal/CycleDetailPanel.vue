@@ -121,10 +121,16 @@ const summariesById = computed(() => {
 
 // P0-A：依後端 APPRAISAL_* 細粒度 permission bit 守衛 UI 動作。
 // `canBatchSign` 任一階段簽核權限即可顯示批次區（個別按鈕再各自守衛）。
-const canRecompute = computed(() => hasPermission('APPRAISAL_EVENT_WRITE'))
-const canSignSupervisor = computed(() => hasPermission('APPRAISAL_REVIEW'))
-const canSignAccounting = computed(() => hasPermission('APPRAISAL_ACCOUNTING'))
-const canFinalize = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+// Batch 12：後端 recompute/sign_supervisor/sign_accounting/finalize/reject 五個
+// 端點皆守 cycle.status != OPEN 一律 400（reject 於 2026-08-17 補齊，
+// ivy-backend fix/appraisal-reject-comment-cycle-guard 分支 commit 56115514）
+// ——前端補齊同款判斷，避免顯示點了必失敗的按鈕；父層 AppraisalWorkspaceView.vue
+// 的唯讀文案已說明「內容為唯讀」，此處純粹讓寫入 CTA 隨之隱藏。
+const canWriteCycle = computed(() => cycle.value?.status === 'OPEN')
+const canRecompute = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_EVENT_WRITE'))
+const canSignSupervisor = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_REVIEW'))
+const canSignAccounting = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_ACCOUNTING'))
+const canFinalize = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_FINALIZE'))
 const canBatchSign = computed(
   () => canSignSupervisor.value || canSignAccounting.value || canFinalize.value,
 )
