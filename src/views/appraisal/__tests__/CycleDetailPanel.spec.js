@@ -22,6 +22,10 @@ vi.mock('@/api/appraisal', () => ({
   getSignStatusSummary: vi.fn().mockResolvedValue({
     data: { cycle_id: 5, counts: { DRAFT: 2, SUPERVISOR_SIGNED: 1, ACCOUNTING_SIGNED: 0, FINALIZED: 3 }, buckets: [] },
   }),
+  getAppraisalAllEmployeesStatus: vi.fn().mockResolvedValue({
+    data: { participants: [{ employee_id: 42, employee_name: '林靜宜', role_group: 'HOMEROOM', attendance: {}, retention: null, activity: null, disciplinary: {} }] },
+  }),
+  listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
 }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
@@ -50,7 +54,7 @@ const stubs = {
   ListView: defineComponent({
     name: 'ListView',
     props: ['cycleId', 'participants', 'summaryByParticipant', 'catalog', 'selectedIds', 'busy'],
-    emits: ['sign', 'reject', 'comment', 'open-log', 'update:selected-ids'],
+    emits: ['sign', 'reject', 'comment', 'open-log', 'open-detail', 'update:selected-ids'],
     setup() {
       return () => h('div', { 'data-test': 'list-view-stub' }, 'list')
     },
@@ -97,6 +101,16 @@ const stubs = {
     setup(props) {
       return () => (props.visible
         ? h('div', { 'data-test': 'log-drawer-stub' }, 'log')
+        : null)
+    },
+  }),
+  AggregatedStatusDetailDialog: defineComponent({
+    name: 'AggregatedStatusDetailDialog',
+    props: ['visible', 'participant', 'cycle', 'rules'],
+    emits: ['update:visible'],
+    setup(props) {
+      return () => (props.visible
+        ? h('div', { 'data-test': 'detail-dialog-stub' }, props.participant?.employee_name ?? '')
         : null)
     },
   }),
@@ -196,5 +210,34 @@ describe('CycleDetailPanel', () => {
     wrapper.vm.openReject({ id: 7, status: 'SUPERVISOR_SIGNED' })
     await nextTick()
     expect(wrapper.find('[data-test="reject-dialog-stub"]').exists()).toBe(true)
+  })
+
+  it('openDetail(employeeId) 找到對應明細時開啟詳情 dialog', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
+    wrapper.vm.openDetail(42)
+    await nextTick()
+    const dialog = wrapper.find('[data-test="detail-dialog-stub"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.text()).toContain('林靜宜')
+  })
+
+  it('openDetail(employeeId) 找不到對應明細時顯示警告、不開啟 dialog', async () => {
+    const { ElMessage } = await import('element-plus')
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openDetail(9999)
+    await nextTick()
+    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('openDetail(undefined) 為 no-op', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openDetail(undefined)
+    await nextTick()
+    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
   })
 })

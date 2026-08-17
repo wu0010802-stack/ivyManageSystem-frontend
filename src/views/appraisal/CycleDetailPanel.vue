@@ -23,6 +23,8 @@ import {
   exportAppraisalCycleXlsxUrl,
   exportAppraisalTransferRosterXlsxUrl,
   getSignStatusSummary,
+  getAppraisalAllEmployeesStatus,
+  listScoringRules,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
@@ -35,10 +37,22 @@ import CommentDialog from './components/CommentDialog.vue'
 import BatchSignButton from './components/BatchSignButton.vue'
 import SummaryLogDrawer from './components/SummaryLogDrawer.vue'
 import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
+import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
 
 interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; status?: string; [key: string]: unknown }
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
 interface Summary { id: number; participant_id?: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
+interface AggregatedParticipant {
+  employee_id?: number
+  employee_name?: string
+  role_group?: string
+  reinstate_count?: number
+  attendance?: Record<string, unknown>
+  retention?: Record<string, unknown> | null
+  activity?: Record<string, unknown> | null
+  disciplinary?: Record<string, unknown>
+  [key: string]: unknown
+}
 
 const props = defineProps<{ cycleId: number }>()
 
@@ -52,6 +66,10 @@ const summaries = ref<Summary[]>([])
 const catalog = ref<unknown[]>([])
 const loading = ref(false)
 const busy = ref(false)
+const aggregatedParticipants = ref<AggregatedParticipant[]>([])
+const rulesByCode = ref<Record<string, unknown>>({})
+const detailDialogVisible = ref(false)
+const detailTarget = ref<AggregatedParticipant | null>(null)
 
 // Task 8：頂部簽核進度列 counts（getSignStatusSummary 獨立於 kanban 自己的
 // data，list view 沒有 kanban 可看，故獨立載入才能兩種 view 都顯示進度）。
@@ -119,24 +137,51 @@ const canReject = computed(() => canBatchSign.value)
 async function load() {
   loading.value = true
   try {
-    // 四支彼此無資料依賴（皆只吃 cycleId 或無參）→ 併發載入，首載等待取最慢者
-    // 而非四次 round-trip 相加（比照 yearEnd/YearEndDetailView.vue load()）。
-    const [cyclesRes, participantsRes, summariesRes, catalogRes] = await Promise.all([
+    // 五支彼此無資料依賴（皆只吃 cycleId 或無參）→ 併發載入，首載等待取最慢者
+    // 而非五次 round-trip 相加（比照 yearEnd/YearEndDetailView.vue load()）。
+    const [cyclesRes, participantsRes, summariesRes, catalogRes, statusRes] = await Promise.all([
       listAppraisalCycles(),
       listAppraisalParticipants(cycleId.value),
       listAppraisalSummaries(cycleId.value),
       listAppraisalCatalog(),
+      getAppraisalAllEmployeesStatus(cycleId.value),
     ])
     const cycles = cyclesRes.data as unknown as Cycle[]
     cycle.value = cycles.find((c) => c.id === cycleId.value) || null
     participants.value = participantsRes.data as Participant[]
     summaries.value = summariesRes.data as Summary[]
     catalog.value = catalogRes.data as unknown[]
+    aggregatedParticipants.value = (statusRes.data as { participants?: AggregatedParticipant[] })?.participants ?? []
+    loadRules()
   } catch (e) {
     ElMessage.error(apiError(e, MSG.load_failed))
   } finally {
     loading.value = false
   }
+}
+
+// 詳情 dialog 的規則 tooltip 用資料，比照 CurrentSemesterOverview.vue 既有作法：
+// 失敗不影響主流程，rulesByCode 留空 dict、dialog 內 tooltip 自動隱藏。
+async function loadRules() {
+  if (!cycle.value?.base_score_calc_date) { rulesByCode.value = {}; return }
+  try {
+    const { data } = await listScoringRules(cycle.value.base_score_calc_date)
+    const list: { item_code?: string; [key: string]: unknown }[] = Array.isArray(data) ? data : ((data as { rules?: unknown[] })?.rules || [])
+    rulesByCode.value = Object.fromEntries(list.map((r) => [r.item_code, r]))
+  } catch {
+    rulesByCode.value = {}
+  }
+}
+
+function openDetail(employeeId?: number) {
+  if (employeeId == null) return
+  const row = aggregatedParticipants.value.find((p) => p.employee_id === employeeId)
+  if (!row) {
+    ElMessage.warning('找不到明細資料，請重新整理後再試')
+    return
+  }
+  detailTarget.value = row
+  detailDialogVisible.value = true
 }
 
 const kanbanRef = ref<{ reload?: () => void } | null>(null)
@@ -256,6 +301,7 @@ defineExpose({
   openReject,
   openComment,
   openLog,
+  openDetail,
   sign,
   signingIds,
   isSigning,
@@ -354,6 +400,7 @@ onMounted(() => {
       @reject="openReject"
       @comment="openComment"
       @open-log="openLog"
+      @open-detail="(p) => openDetail(p.employee_id)"
     />
 
     <RejectDialog
@@ -369,6 +416,12 @@ onMounted(() => {
     <SummaryLogDrawer
       v-model:visible="logDrawerVisible"
       :summary-id="logTargetId"
+    />
+    <AggregatedStatusDetailDialog
+      v-model:visible="detailDialogVisible"
+      :participant="detailTarget"
+      :cycle="cycle"
+      :rules="rulesByCode"
     />
   </div>
 </template>
