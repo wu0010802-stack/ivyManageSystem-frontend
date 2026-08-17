@@ -11,6 +11,7 @@
           :index="anomalyIndex"
           :total="anomalyTotal"
           :context="context"
+          :busy="resolving"
           @resolve="onResolve"
           @navigate="(d: number) => emit('navigate', d)"
         />
@@ -36,17 +37,18 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import ResolveCard from './ResolveCard.vue'
 import EmployeeMonthPanel from './EmployeeMonthPanel.vue'
 import { upsertRecord, batchConfirmAnomalies } from '@/api/attendance'
 import { useErrorNotify } from '@/composables/useErrorNotify'
-import type { AnomalyItem } from '@/composables/useAttendanceWorkspace'
+import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── props & emits ──────────────────────────────────────────────────────────────
 const props = defineProps<{
   mode: 'resolve' | 'month'
-  anomaly: AnomalyItem | null
+  anomaly: AnomalyDayCard | null
   anomalyIndex: number
   anomalyTotal: number
   context: {
@@ -69,12 +71,17 @@ const emit = defineEmits<{
 // ── error notify ───────────────────────────────────────────────────────────────
 const { notify } = useErrorNotify()
 
+// ── mutation in-flight（P1-4：防重複送出）───────────────────────────────────────
+const resolving = ref(false)
+
 // ── action handler ─────────────────────────────────────────────────────────────
 async function onResolve(payload: {
   action: 'punch' | 'admin_accept' | 'admin_waive'
   punch_in?: string
   punch_out?: string
 }): Promise<void> {
+  if (resolving.value) return
+  resolving.value = true
   try {
     if (payload.action === 'punch') {
       if (props.employeeId == null) {
@@ -99,6 +106,8 @@ async function onResolve(payload: {
     // navigate 只保留給 ResolveCard 的 ◀▶ 手動瀏覽
   } catch (err) {
     notify(err, 'DetailColumn.resolve', null, { prefix: '處理失敗' })
+  } finally {
+    resolving.value = false
   }
 }
 </script>

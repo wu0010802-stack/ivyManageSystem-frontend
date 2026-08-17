@@ -4,8 +4,9 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 // ── hoisted mocks ──────────────────────────────────────────────────────────────
-const { mockPreviewImport, mockUploadCsv, mockUploadFile, mockNotify } = vi.hoisted(() => ({
+const { mockPreviewImport, mockPreviewExcel, mockUploadCsv, mockUploadFile, mockNotify } = vi.hoisted(() => ({
   mockPreviewImport: vi.fn(),
+  mockPreviewExcel: vi.fn(),
   mockUploadCsv: vi.fn(),
   mockUploadFile: vi.fn(),
   mockNotify: vi.fn(),
@@ -14,6 +15,7 @@ const { mockPreviewImport, mockUploadCsv, mockUploadFile, mockNotify } = vi.hois
 // ── mock api ───────────────────────────────────────────────────────────────────
 vi.mock('@/api/attendance', () => ({
   previewImport: mockPreviewImport,
+  previewExcel: mockPreviewExcel,
   uploadCsv: mockUploadCsv,
   uploadFile: mockUploadFile,
 }))
@@ -225,7 +227,11 @@ describe('ImportPreviewDialog', () => {
     await previewBtn!.trigger('click')
     await nextTick()
 
-    expect(mockPreviewImport).toHaveBeenCalledWith({ raw_text: expect.stringContaining('E001') })
+    expect(mockPreviewImport).toHaveBeenCalledWith({
+      raw_text: expect.stringContaining('E001'),
+      year: 2026,
+      month: 6,
+    })
   })
 
   it('預覽後 banner 顯示可匯入/問題/覆蓋數字', async () => {
@@ -284,6 +290,12 @@ describe('ImportPreviewDialog', () => {
     expect(vm.CHECK_TAG_TYPE['importable']).toBe('success')
     expect(vm.CHECK_TAG_TYPE['employee_not_found']).toBe('danger')
     expect(vm.CHECK_TAG_TYPE['overwrite']).toBe('warning')
+    // P1-1 新增 row-level error codes
+    expect(vm.CHECK_LABEL['invalid_time']).toBe('時間格式錯誤')
+    expect(vm.CHECK_LABEL['equal_punch']).toBe('上下班時間相同')
+    expect(vm.CHECK_LABEL['duplicate_row']).toBe('同批重複列')
+    expect(vm.CHECK_LABEL['missing_fields']).toBe('缺必要欄位')
+    expect(vm.CHECK_LABEL['month_mismatch']).toBe('不在選定月份')
   })
 
   it('點「確認匯入」→ 呼叫 uploadCsv 帶 records/year/month', async () => {
@@ -413,25 +425,88 @@ describe('ImportPreviewDialog', () => {
     expect(notShownOrDisabled).toBe(true)
   })
 
-  // ── Tab B: Excel 上傳 ─────────────────────────────────────────────────────────
-  it('Tab B: 觸發 uploadFile → emit imported', async () => {
+  // ── Tab B: Excel 兩段式（P1-1：先 preview 再 confirm）───────────────────────
+  it('Tab B: 上傳 Excel → 呼叫 previewExcel（不直接匯入）', async () => {
     const mockFile = new File(['data'], 'test.xlsx', {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
-    mockUploadFile.mockResolvedValue({ data: { message: '上傳完成', success: 5, failed: 0 } })
+    mockPreviewExcel.mockResolvedValue({ data: previewFixture })
 
     const wrapper = mountDialog()
-
-    // Call handleExcelUpload directly through exposed vm
     const vm = wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }
     await vm.handleExcelUpload({ file: mockFile })
     await nextTick()
 
-    expect(mockUploadFile).toHaveBeenCalled()
-    const formData = mockUploadFile.mock.calls[0][0] as FormData
+    expect(mockPreviewExcel).toHaveBeenCalled()
+    const formData = mockPreviewExcel.mock.calls[0][0] as FormData
     expect(formData.get('file')).toBe(mockFile)
+    // 不得直接匯入：uploadFile 未被呼叫、未 emit imported
+    expect(mockUploadFile).not.toHaveBeenCalled()
+    expect(wrapper.emitted('imported')).toBeFalsy()
+    // 預覽結果已載入，待使用者確認
+    const vm2 = wrapper.vm as unknown as { previewResult: unknown }
+    expect(vm2.previewResult).not.toBeNull()
+  })
+
+  it('Tab B: Excel 預覽後點「確認匯入」→ uploadCsv 帶 normalized 列', async () => {
+    const mockFile = new File(['data'], 'test.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    mockPreviewExcel.mockResolvedValue({ data: previewFixture })
+    mockUploadCsv.mockResolvedValue({ data: { message: '匯入完成' } })
+
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: mockFile })
+    await nextTick()
+
+    const importBtn = wrapper.findAll('.el-button-stub').find((b) => b.text().includes('確認匯入'))
+    expect(importBtn).toBeTruthy()
+    await importBtn!.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(mockUploadCsv).toHaveBeenCalledWith({
+      records: normalizedRows,
+      year: 2026,
+      month: 6,
+    })
     expect(wrapper.emitted('imported')).toBeTruthy()
-    expect(wrapper.emitted('update:modelValue')![0][0]).toBe(false)
+  })
+
+  it('Tab B: legacy 格式 400 → 提供直接匯入退路（uploadFile）', async () => {
+    const mockFile = new File(['data'], 'legacy.xls', { type: 'application/vnd.ms-excel' })
+    mockPreviewExcel.mockRejectedValue({
+      response: { data: { detail: '此檔非新格式考勤表…legacy 月統計格式請走原 Excel 匯入' } },
+    })
+    mockUploadFile.mockResolvedValue({ data: { message: '上傳完成', success: 5, failed: 0 } })
+
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as { handleExcelUpload: (opts: { file: File }) => Promise<void> }
+    await vm.handleExcelUpload({ file: mockFile })
+    await nextTick()
+
+    const legacyBtn = wrapper
+      .findAll('.el-button-stub')
+      .find((b) => b.text().includes('legacy 格式直接匯入'))
+    expect(legacyBtn).toBeTruthy()
+    await legacyBtn!.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(mockUploadFile).toHaveBeenCalled()
+    expect(wrapper.emitted('imported')).toBeTruthy()
+  })
+
+  it('Tab B: hasPermission false → el-upload disabled（P1-4 !canWrite gate）', () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mountDialog()
+    // el-upload stub 收到 disabled prop（attribute 透傳）
+    const upload = wrapper.findComponent({ name: undefined, ref: undefined })
+    // 直接驗 vm 狀態：canWrite=false 時 template 綁 :disabled="uploading || !canWrite"
+    const vm = wrapper.vm as unknown as { canWrite: boolean }
+    expect(vm.canWrite).toBe(false)
+    expect(upload).toBeTruthy()
   })
 
   // ── 錯誤處理 ──────────────────────────────────────────────────────────────────

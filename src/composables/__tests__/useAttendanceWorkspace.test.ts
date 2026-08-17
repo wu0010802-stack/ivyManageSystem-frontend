@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ref } from 'vue'
-import { dedupeAnomalyIds, buildKpis, useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
+import {
+  dedupeAnomalyIds,
+  buildKpis,
+  groupAnomalies,
+  useAttendanceWorkspace,
+} from '@/composables/useAttendanceWorkspace'
 
 vi.mock('@/api/attendance', () => ({
   getSummary: vi.fn(), getAnomalyList: vi.fn(), getRecords: vi.fn(),
@@ -29,6 +34,51 @@ describe('buildKpis', () => {
   })
 })
 
+describe('groupAnomalies（P1-4 一天一張卡）', () => {
+  const row = (over: Record<string, unknown>) => ({
+    id: 1,
+    employee_name: '王小明',
+    employee_number: 'E001',
+    date: '2026-07-01',
+    weekday: '三',
+    type: 'late',
+    type_label: '遲到',
+    detail: '遲到 10 分鐘',
+    estimated_deduction: 60,
+    confirmed_action: null,
+    confirmed_by: null,
+    confirmed_at: null,
+    ...over,
+  })
+
+  it('同 attendance id 的多筆異常收成一張日卡，卡內列出所有異常', () => {
+    const cards = groupAnomalies([
+      row({ type: 'late', type_label: '遲到' }),
+      row({ type: 'missing_punch', type_label: '未打卡(下班)', estimated_deduction: 0 }),
+      row({ id: 2, date: '2026-07-02', type: 'early_leave', type_label: '早退' }),
+    ])
+    expect(cards.length).toBe(2)
+    expect(cards[0].id).toBe(1)
+    expect(cards[0].items.length).toBe(2)
+    expect(cards[0].items.map((i) => i.type)).toEqual(['late', 'missing_punch'])
+    expect(cards[1].id).toBe(2)
+  })
+
+  it('已處理卡保留（狀態篩選由列表端做，不在分組層丟棄）', () => {
+    const cards = groupAnomalies([
+      row({ id: 1, confirmed_action: 'admin_waive' }),
+      row({ id: 2 }),
+    ])
+    expect(cards.length).toBe(2)
+    expect(cards[0].confirmed_action).toBe('admin_waive')
+  })
+
+  it('estimated_deduction 遮罩（null）保留為 null，不得變 0', () => {
+    const cards = groupAnomalies([row({ estimated_deduction: null })])
+    expect(cards[0].items[0].estimated_deduction).toBeNull()
+  })
+})
+
 describe('useAttendanceWorkspace load', () => {
   beforeEach(() => vi.clearAllMocks())
   it('並行載入 summary + anomalies 並組 KPI', async () => {
@@ -39,6 +89,22 @@ describe('useAttendanceWorkspace load', () => {
     expect(ws.roster.value.length).toBe(1)
     expect(ws.anomalyQueue.value.length).toBe(1)
     expect(ws.kpis.value.pendingAnomalies).toBe(1)
+  })
+  it('queue 含已處理日卡（狀態篩選在列表端生效，不在資料層截斷）', async () => {
+    ;(getSummary as ReturnType<typeof vi.fn>).mockResolvedValue({ data: [] })
+    ;(getAnomalyList as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        total: 2, pending: 1, confirmed: 1,
+        items: [
+          { id: 1, type: 'late', confirmed_action: null },
+          { id: 2, type: 'late', confirmed_action: 'admin_accept' },
+        ],
+      },
+    })
+    const ws = useAttendanceWorkspace(ref(2026), ref(2))
+    await ws.refresh()
+    expect(ws.anomalyQueue.value.length).toBe(2)
+    expect(ws.anomalyQueue.value[1].confirmed_action).toBe('admin_accept')
   })
   it('切月 race：晚到舊請求不蓋新月', async () => {
     let resolveOld: (v: unknown) => void = () => {}

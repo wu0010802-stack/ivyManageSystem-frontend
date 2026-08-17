@@ -36,7 +36,7 @@
       />
     </div>
 
-    <!-- 列表 -->
+    <!-- 列表：一天一張卡（同 attendance id 的異常收在同卡） -->
     <ul v-else class="anomaly-queue-column__list" role="listbox" aria-label="異常佇列">
       <li
         v-for="{ item, origIndex } in filteredWithIndex"
@@ -57,17 +57,17 @@
         <div class="anomaly-item__main">
           <div class="anomaly-item__header">
             <span class="anomaly-item__name">{{ item.employee_name }}</span>
-            <span class="anomaly-item__type-label">{{ item.type_label }}</span>
+            <span class="anomaly-item__type-label">{{ typeLabels(item) }}</span>
           </div>
           <div class="anomaly-item__sub">
             <span class="anomaly-item__date">
               {{ item.date }}（{{ item.weekday }}）
             </span>
             <span
-              v-if="item.estimated_deduction > 0"
+              v-if="deductionOf(item) > 0"
               class="anomaly-item__deduction"
             >
-              -NT${{ item.estimated_deduction.toLocaleString() }}
+              -NT${{ deductionOf(item).toLocaleString() }}
             </span>
           </div>
         </div>
@@ -79,10 +79,10 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import type { AnomalyItem } from '@/composables/useAttendanceWorkspace'
+import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 const props = defineProps<{
-  items: AnomalyItem[]
+  items: AnomalyDayCard[]
   selectedIndex: number
   loading: boolean
 }>()
@@ -93,17 +93,36 @@ const emit = defineEmits<{
 }>()
 
 const typeFilter = ref<string>('all')
-const statusFilter = ref<string>('all')
+// 預設只看未處理（沿用舊佇列語意）；已處理／全部由使用者切換
+const statusFilter = ref<string>('pending')
 
 function onFilterChange(): void {
   emit('filterChange', { type: typeFilter.value, status: statusFilter.value })
 }
 
-// 保留原始 index，本地只依 type 篩選；狀態只 emit 不做本地過濾
-const filteredWithIndex = computed<{ item: AnomalyItem; origIndex: number }[]>(() => {
+function typeLabels(card: AnomalyDayCard): string {
+  return card.items.map((i) => i.type_label).join('・')
+}
+
+/** 卡片預估扣款合計（遮罩 null 視為未知不列入） */
+function deductionOf(card: AnomalyDayCard): number {
+  return card.items.reduce((sum, i) => sum + (i.estimated_deduction ?? 0), 0)
+}
+
+// 保留原始 index（供父層以 anomalyQueue 全量索引選取）；
+// type：卡內任一異常符合即顯示；status：pending=未處理、confirmed=已處理（真的生效）
+const filteredWithIndex = computed<{ item: AnomalyDayCard; origIndex: number }[]>(() => {
   return props.items
     .map((it, i) => ({ item: it, origIndex: i }))
-    .filter(({ item }) => typeFilter.value === 'all' || item.type === typeFilter.value)
+    .filter(
+      ({ item }) =>
+        typeFilter.value === 'all' || item.items.some((x) => x.type === typeFilter.value),
+    )
+    .filter(({ item }) => {
+      if (statusFilter.value === 'pending') return item.confirmed_action === null
+      if (statusFilter.value === 'confirmed') return item.confirmed_action !== null
+      return true
+    })
 })
 </script>
 

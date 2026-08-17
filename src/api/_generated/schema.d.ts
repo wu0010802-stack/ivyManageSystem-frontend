@@ -3750,7 +3750,12 @@ export interface paths {
         post?: never;
         /**
          * Delete Single Attendance Record
-         * @description 刪除單筆考勤記錄
+         * @deprecated
+         * @description 刪除單筆考勤記錄。
+         *
+         *     Deprecated（2026-08-17）：與 DELETE /records/{employee_id}/{date_str} 重複；
+         *     前端只用後者。本端點保留相容不移除，新程式請改用 /records/ 版本；
+         *     確認無外部呼叫端後可於下一版移除。
          */
         delete: operations["delete_single_attendance_record_api_attendance_record__employee_id___date__delete"];
         options?: never;
@@ -3850,7 +3855,13 @@ export interface paths {
         };
         /**
          * Get Today Attendance Summary
-         * @description 取得今日出勤即時狀態
+         * @description 取得今日出勤即時狀態。
+         *
+         *     P1-3（2026-08-17）absent 語意修正——不再用「active employees − present」粗算：
+         *     - **到離職有效期**：hire_date > 今天（未到職）或 resign_date < 今天（已離職、
+         *       is_active 可能尚未更新）者不列入今日母體
+         *     - **核准請假**涵蓋今天者不算 absent（另回傳 on_leave_count）
+         *     - **週末/假日（非補班日）**：僅「當日有 DailyShift 排班」者期望出勤
          */
         get: operations["get_today_attendance_summary_api_attendance_today_get"];
         put?: never;
@@ -3938,6 +3949,29 @@ export interface paths {
          *     逐列分類並回傳 check 結果，不寫入任何考勤記錄。
          */
         post: operations["preview_attendance_upload_api_attendance_upload_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/upload/preview-excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Attendance Excel
+         * @description 新格式 Excel 匯入預覽（唯讀）。
+         *
+         *     P1-1：Excel 匯入改「先 preview 再 confirm」兩段式——本端點解析並逐列
+         *     分類，confirm 由前端把 normalized 列送 POST /attendance/upload-csv。
+         */
+        post: operations["preview_attendance_excel_api_attendance_upload_preview_excel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19206,6 +19240,44 @@ export interface components {
             /** Remark */
             remark?: string | null;
         };
+        /** AnomalyItemOut */
+        AnomalyItemOut: {
+            /** Confirmed Action */
+            confirmed_action?: string | null;
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Confirmed By */
+            confirmed_by?: string | null;
+            /** Date */
+            date: string;
+            /** Detail */
+            detail: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Number */
+            employee_number: string;
+            /** Estimated Deduction */
+            estimated_deduction?: number | null;
+            /** Id */
+            id: number;
+            /** Type */
+            type: string;
+            /** Type Label */
+            type_label: string;
+            /** Weekday */
+            weekday: string;
+        };
+        /** AnomalyListOut */
+        AnomalyListOut: {
+            /** Confirmed */
+            confirmed: number;
+            /** Items */
+            items: components["schemas"]["AnomalyItemOut"][];
+            /** Pending */
+            pending: number;
+            /** Total */
+            total: number;
+        };
         /** CertificateOut */
         api__gov_moe__certificates__CertificateOut: {
             /** Copies */
@@ -19405,6 +19477,20 @@ export interface components {
             /** Suggested Score Delta */
             suggested_score_delta: string;
         };
+        /** AttendanceCalendarOut */
+        AttendanceCalendarOut: {
+            /** Days */
+            days: components["schemas"]["CalendarDayOut"][];
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Employee Name */
+            employee_name: string;
+            /** Month */
+            month: number;
+            summary: components["schemas"]["CalendarSummaryOut"];
+            /** Year */
+            year: number;
+        };
         /**
          * AttendanceCSVRow
          * @description CSV 考勤記錄格式
@@ -19474,10 +19560,14 @@ export interface components {
         };
         /** AttendancePreviewRequest */
         AttendancePreviewRequest: {
+            /** Month */
+            month?: number | null;
             /** Raw Text */
             raw_text?: string | null;
             /** Records */
             records?: components["schemas"]["AttendanceCSVRow"][] | null;
+            /** Year */
+            year?: number | null;
         };
         /** AttendancePreviewResult */
         AttendancePreviewResult: {
@@ -19574,9 +19664,38 @@ export interface components {
             /** Status */
             status?: string | null;
         };
+        /** AttendanceSummaryRowOut */
+        AttendanceSummaryRowOut: {
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Number */
+            employee_number?: string | null;
+            /** Late Count */
+            late_count: number;
+            /** Missing Punch In */
+            missing_punch_in: number;
+            /** Missing Punch Out */
+            missing_punch_out: number;
+            /** Normal Days */
+            normal_days: number;
+            /** Total Days */
+            total_days: number;
+            /** Total Early Minutes */
+            total_early_minutes: number;
+            /** Total Late Minutes */
+            total_late_minutes: number;
+        };
         /**
          * AttendanceUploadRequest
-         * @description CSV 考勤上傳請求
+         * @description CSV 考勤上傳請求。
+         *
+         *     year/month＝目標匯入月份（P1-1 起為**真契約**）：所有 records 的日期必須
+         *     落在該月份，否則該列以 row-level error 拒絕（見 upload_attendance_csv），
+         *     不再靜默寫進別的月份。
          */
         AttendanceUploadRequest: {
             /** Month */
@@ -19859,7 +19978,14 @@ export interface components {
             /** Records */
             records: components["schemas"]["AttendanceRecordItem"][];
         };
-        /** BatchConfirmRequest */
+        /**
+         * BatchConfirmRequest
+         * @description 批次確認請求。
+         *
+         *     attendance_ids 契約（2026-08-17）：空集合 422（無意義請求）、上限 500
+         *     （防超大批次撐爆單一 transaction）；**不存在／跨租戶的 id 靜默跳過**，
+         *     僅計入實際處理的 processed。
+         */
         BatchConfirmRequest: {
             /** Action */
             action: string;
@@ -19867,6 +19993,11 @@ export interface components {
             attendance_ids: number[];
             /** Remark */
             remark?: string | null;
+        };
+        /** BatchConfirmResultOut */
+        BatchConfirmResultOut: {
+            /** Processed */
+            processed: number;
         };
         /** BatchIn */
         BatchIn: {
@@ -20122,6 +20253,11 @@ export interface components {
         };
         /** Body_import_shifts_api_shifts_import_post */
         Body_import_shifts_api_shifts_import_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_attendance_excel_api_attendance_upload_preview_excel_post */
+        Body_preview_attendance_excel_api_attendance_upload_preview_excel_post: {
             /** File */
             file: string;
         };
@@ -20830,6 +20966,37 @@ export interface components {
             stops: components["schemas"]["BusStopAdminOut"][];
             trip: components["schemas"]["BusTripAdminOut"];
         };
+        /** CalendarDayOut */
+        CalendarDayOut: {
+            /** Date */
+            date: string;
+            /** Is Early Leave */
+            is_early_leave?: boolean | null;
+            /** Is Late */
+            is_late?: boolean | null;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /** Leave Hours */
+            leave_hours?: number | null;
+            /** Leave Type */
+            leave_type?: string | null;
+            /** Leave Type Label */
+            leave_type_label?: string | null;
+            /** Overtime Hours */
+            overtime_hours?: number | null;
+            /** Overtime Type */
+            overtime_type?: string | null;
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Weekday */
+            weekday: number;
+        };
         /**
          * CalendarFeedItem
          * @description 單筆行事曆事件，統一 envelope。
@@ -20879,6 +21046,17 @@ export interface components {
              * Format: date
              */
             to: string;
+        };
+        /** CalendarSummaryOut */
+        CalendarSummaryOut: {
+            /** Late Count */
+            late_count: number;
+            /** Leave Days */
+            leave_days: number;
+            /** Overtime Hours */
+            overtime_hours: number;
+            /** Work Days */
+            work_days: number;
         };
         /** CalibrationRowOut */
         CalibrationRowOut: {
@@ -22795,6 +22973,27 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** CsvUploadResultOut */
+        CsvUploadResultOut: {
+            /** Message */
+            message: string;
+            results: components["schemas"]["CsvUploadResults"];
+        };
+        /** CsvUploadResults */
+        CsvUploadResults: {
+            /** Errors */
+            errors: string[];
+            /** Failed */
+            failed: number;
+            /** Success */
+            success: number;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            }[];
+            /** Total */
+            total: number;
+        };
         /** CycleCreate */
         CycleCreate: {
             /** Academic Year */
@@ -24105,6 +24304,23 @@ export interface components {
             start_time?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * ExcelUploadResultOut
+         * @description Excel 匯入結果。summary 列在新格式（員工統計，中文鍵）與 legacy
+         *     （parser DataFrame records）形狀不同，維持鬆散 dict。
+         */
+        ExcelUploadResultOut: {
+            /** Anomalies */
+            anomalies: unknown[];
+            /** Anomaly Count */
+            anomaly_count: number;
+            /** Message */
+            message: string;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            }[];
         };
         /** ExceptionItemOut */
         ExceptionItemOut: {
@@ -30073,6 +30289,59 @@ export interface components {
             /** Weekday */
             weekday: string;
         };
+        /** PortalAttendanceDayOut */
+        PortalAttendanceDayOut: {
+            /** Date */
+            date: string;
+            /** Day */
+            day: number;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Is Early Leave */
+            is_early_leave: boolean;
+            /** Is Holiday */
+            is_holiday: boolean;
+            /** Is Late */
+            is_late: boolean;
+            /** Is Makeup Workday */
+            is_makeup_workday: boolean;
+            /** Is Missing Punch In */
+            is_missing_punch_in: boolean;
+            /** Is Missing Punch Out */
+            is_missing_punch_out: boolean;
+            /** Is Weekend */
+            is_weekend: boolean;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Leave Requests */
+            leave_requests: components["schemas"]["PortalLeaveRequestOut"][];
+            /** Leave Type */
+            leave_type?: string | null;
+            /** Leave Type Label */
+            leave_type_label?: string | null;
+            /** Overtime Requests */
+            overtime_requests: components["schemas"]["PortalOvertimeRequestOut"][];
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Scheduled End */
+            scheduled_end?: string | null;
+            /** Scheduled Start */
+            scheduled_start?: string | null;
+            /** Shift Name */
+            shift_name?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Weekday */
+            weekday: string;
+            /** Work Hours */
+            work_hours?: number | null;
+            /** Workday Override Name */
+            workday_override_name?: string | null;
+        };
         /** PortalAttendanceRecordItem */
         PortalAttendanceRecordItem: {
             /** Is Present */
@@ -30084,6 +30353,35 @@ export interface components {
             notes: string | null;
             /** Registration Id */
             registration_id: number;
+        };
+        /** PortalAttendanceSheetOut */
+        PortalAttendanceSheetOut: {
+            /** Days */
+            days: components["schemas"]["PortalAttendanceDayOut"][];
+            /** Employee Name */
+            employee_name: string;
+            /** Month */
+            month: number;
+            summary: components["schemas"]["PortalAttendanceSummaryOut"];
+            /** Uses Shift */
+            uses_shift: boolean;
+            /** Year */
+            year: number;
+        };
+        /** PortalAttendanceSummaryOut */
+        PortalAttendanceSummaryOut: {
+            /** Avg Work Hours */
+            avg_work_hours: number;
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Late Count */
+            late_count: number;
+            /** Leave Count */
+            leave_count: number;
+            /** Missing Punch Count */
+            missing_punch_count: number;
+            /** Total Work Days */
+            total_work_days: number;
         };
         /** PortalBatchAttendanceResultOut */
         PortalBatchAttendanceResultOut: {
@@ -30155,6 +30453,19 @@ export interface components {
         PortalCompLeaveGrantsOut: {
             /** Grants */
             grants: components["schemas"]["PortalCompLeaveGrantItemOut"][];
+        };
+        /** PortalLeaveRequestOut */
+        PortalLeaveRequestOut: {
+            /** Leave Hours */
+            leave_hours?: number | null;
+            /** Leave Type */
+            leave_type: string;
+            /** Leave Type Label */
+            leave_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
         };
         /**
          * PortalMyDataExportOut
@@ -30291,6 +30602,19 @@ export interface components {
             overtime_pay?: number | null;
             /** Use Comp Leave */
             use_comp_leave?: boolean | null;
+        };
+        /** PortalOvertimeRequestOut */
+        PortalOvertimeRequestOut: {
+            /** Hours */
+            hours?: number | null;
+            /** Overtime Type */
+            overtime_type: string;
+            /** Overtime Type Label */
+            overtime_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
         };
         /**
          * PortalParentMessageAttachmentOut
@@ -31825,7 +32149,7 @@ export interface components {
              * Check
              * @enum {string}
              */
-            check: "importable" | "employee_not_found" | "invalid_date" | "month_finalized" | "overwrite";
+            check: "importable" | "employee_not_found" | "invalid_date" | "month_finalized" | "overwrite" | "missing_fields" | "invalid_time" | "equal_punch" | "duplicate_row" | "month_mismatch";
             /** Date */
             date?: string | null;
             /** Employee Name */
@@ -38419,6 +38743,41 @@ export interface components {
             /** Total Items */
             total_items: number;
         };
+        /** TodayAnomaliesOut */
+        TodayAnomaliesOut: {
+            /** Anomalies */
+            anomalies: components["schemas"]["TodayAnomalyItemOut"][];
+            /** Date */
+            date: string;
+        };
+        /** TodayAnomalyItemOut */
+        TodayAnomalyItemOut: {
+            /** Anomaly Type */
+            anomaly_type: string;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Employee Name */
+            employee_name: string;
+            /** Late Minutes */
+            late_minutes?: number | null;
+        };
+        /** TodayAttendanceOut */
+        TodayAttendanceOut: {
+            /** Absent Count */
+            absent_count: number;
+            /** Date */
+            date: string;
+            /** Late Count */
+            late_count: number;
+            /** Missing Count */
+            missing_count: number;
+            /** On Leave Count */
+            on_leave_count: number;
+            /** Present Count */
+            present_count: number;
+            /** Total Employees */
+            total_employees: number;
+        };
         /**
          * TodayMedicationSummaryOut
          * @description GET /portfolio/today-medication 回傳。
@@ -44719,7 +45078,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnomalyListOut"];
                 };
             };
             /** @description Validation Error */
@@ -44752,7 +45111,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BatchConfirmResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -44850,7 +45209,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AttendanceCalendarOut"];
                 };
             };
             /** @description Validation Error */
@@ -45130,7 +45489,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AttendanceSummaryRowOut"][];
                 };
             };
             /** @description Validation Error */
@@ -45159,7 +45518,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TodayAttendanceOut"];
                 };
             };
         };
@@ -45179,7 +45538,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TodayAnomaliesOut"];
                 };
             };
         };
@@ -45203,7 +45562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ExcelUploadResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -45236,7 +45595,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CsvUploadResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -45260,6 +45619,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AttendancePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendancePreviewResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_attendance_excel_api_attendance_upload_preview_excel_post: {
+        parameters: {
+            query?: {
+                month?: number | null;
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_attendance_excel_api_attendance_upload_preview_excel_post"];
             };
         };
         responses: {
@@ -58215,7 +58610,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalAttendanceSheetOut"];
                 };
             };
             /** @description Validation Error */

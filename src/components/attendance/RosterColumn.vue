@@ -34,7 +34,8 @@
         </div>
         <div class="roster-item__badges">
           <template v-if="anomalyCount(row) === 0">
-            <el-tag type="success" size="small">全勤</el-tag>
+            <!-- P1-3：expected workdays 未定義前不宣稱「全勤」（待業主裁定） -->
+            <el-tag type="success" size="small">紀錄無異常</el-tag>
           </template>
           <template v-else>
             <el-tag

@@ -102,24 +102,20 @@
 import { reactive, toRef, onMounted, provide, computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
-import type { AnomalyItem } from '@/composables/useAttendanceWorkspace'
+import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
 import { getRecords } from '@/api/attendance'
+import type { ApiResponse } from '@/api/_generated/typed'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
 import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
 
-// ── 最小 interface for getRecords 回傳列 ──────────────────────────────────────
-interface RecordRow {
-  date: string
-  punch_in: string | null
-  punch_out: string | null
-  status: string | null
-}
+// ── getRecords 回傳列（OpenAPI 契約型別）────────────────────────────────────
+type RecordRow = ApiResponse<'/attendance/records', 'get'>[number]
 
 // ── 查詢狀態 ────────────────────────────────────────────────────────────────
 const now = new Date()
@@ -146,8 +142,8 @@ const importOpen = ref(false)
 // key = employee_id，val = 該員工在當月的記錄陣列
 const recordsCache = ref<Map<number, RecordRow[]>>(new Map())
 
-// ── derived: 當前異常筆 ────────────────────────────────────────────────────
-const currentAnomaly = computed<AnomalyItem | null>(
+// ── derived: 當前異常日卡 ──────────────────────────────────────────────────
+const currentAnomaly = computed<AnomalyDayCard | null>(
   () => ws.anomalyQueue.value[selectedAnomalyIndex.value] ?? null,
 )
 
@@ -182,8 +178,7 @@ watch(
       const res = await getRecords({ year: y, month: m, employee_id: empId })
       // 較新一次 watch 觸發已使本次回應過期 → 丟棄，避免舊月 in-flight 回填快取
       if (seq !== recSeq) return
-      const rows = (res.data ?? []) as RecordRow[]
-      recordsCache.value = new Map(recordsCache.value).set(empId, rows)
+      recordsCache.value = new Map(recordsCache.value).set(empId, res.data ?? [])
     } catch (err) {
       notify(err, 'AttendanceWorkspaceView.loadRecords', null, { prefix: '載入打卡記錄失敗' })
     }
@@ -203,7 +198,9 @@ const context = computed(() => {
     punch_in: rec?.punch_in ?? null,
     punch_out: rec?.punch_out ?? null,
     has_leave: typeof rec?.status === 'string' && rec.status.includes('leave'),
-    estimated_deduction: a?.estimated_deduction ?? 0,
+    // 日卡合計（遮罩 null 不列入）；處理動作套用整天，扣款也以整天合計呈現
+    estimated_deduction:
+      a?.items.reduce((sum, i) => sum + (i.estimated_deduction ?? 0), 0) ?? 0,
   }
 })
 
@@ -220,18 +217,39 @@ function onAnomalySelect(idx: number): void {
   detailMode.value = 'resolve'
 }
 
-function onFilterChange(): void {
-  // status 篩選完整支援列為 follow-up（目前 AnomalyQueueColumn 本地只篩 type）；
-  // 此處觸發 refresh 讓佇列重新拉取最新資料
-  ws.refresh()
-}
-
-async function onResolved(): Promise<void> {
-  await ws.refresh()
-  // clamp：解決最後一筆後 index 不超界
+function clampSelectedIndex(): void {
   if (selectedAnomalyIndex.value >= ws.anomalyQueue.value.length) {
     selectedAnomalyIndex.value = Math.max(0, ws.anomalyQueue.value.length - 1)
   }
+}
+
+// 明細快取失效（P1-4）：resolve/import/upsert/delete 後打卡事實已變，
+// 不失效會讓 ResolveCard/EmployeeMonthPanel 讀到舊資料。清空後立即補抓
+// 當前員工，其餘員工待選取時 cache-miss 重載。
+async function invalidateRecordsCache(): Promise<void> {
+  recordsCache.value = new Map()
+  const empId = currentEmployeeId.value
+  if (empId == null) return
+  const seq = ++recSeq
+  try {
+    const res = await getRecords({ year: query.year, month: query.month, employee_id: empId })
+    if (seq !== recSeq) return
+    recordsCache.value = new Map(recordsCache.value).set(empId, res.data ?? [])
+  } catch (err) {
+    notify(err, 'AttendanceWorkspaceView.reloadRecords', null, { prefix: '載入打卡記錄失敗' })
+  }
+}
+
+function onFilterChange(): void {
+  // 狀態/類型篩選由 AnomalyQueueColumn 本地過濾（真的生效）；此處 refresh
+  // 拉最新資料，並 clamp index 防列表縮短後選取超界
+  void ws.refresh().then(clampSelectedIndex)
+}
+
+async function onResolved(): Promise<void> {
+  await Promise.all([ws.refresh(), invalidateRecordsCache()])
+  // clamp：解決最後一筆後 index 不超界
+  clampSelectedIndex()
 }
 
 function onNavigate(delta: number): void {
@@ -240,7 +258,8 @@ function onNavigate(delta: number): void {
 }
 
 async function onImported(): Promise<void> {
-  await ws.refresh()
+  await Promise.all([ws.refresh(), invalidateRecordsCache()])
+  clampSelectedIndex()
   ElMessage.success('匯入完成')
 }
 
