@@ -65,6 +65,7 @@
     />
 
     <el-table
+      v-if="!isMobile"
       ref="tableRef"
       :data="list"
       v-loading="loading"
@@ -179,6 +180,78 @@
         </template>
       </el-table-column>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="(list as unknown as Record<string, unknown>[])"
+      :columns="registrationCardColumns"
+      row-key="id"
+      :loading="loading"
+      :empty-text="hasActiveFilters ? '未找到符合篩選條件的資料' : '尚無報名記錄'"
+    >
+      <template #title="{ item }">{{ item.student_name }}</template>
+      <template #cell-__grade="{ item }">
+        {{ item.grade_name || '—' }}
+        <!-- 年級不符：桌機是 hover tooltip，觸控裝置改直接列出不符課程 -->
+        <div v-if="(item.grade_mismatch_courses as string[])?.length" class="card-grade-mismatch">
+          <el-tag type="danger" size="small" effect="plain">年級不符</el-tag>
+          <span class="card-grade-mismatch__courses">{{ (item.grade_mismatch_courses as string[]).join('、') }}</span>
+        </div>
+      </template>
+      <template #cell-__match="{ item }">
+        <el-tag
+          v-if="item.match_status"
+          size="small"
+          :type="matchStatusTag(item.match_status as string).type"
+          effect="plain"
+        >{{ matchStatusTag(item.match_status as string).label }}</el-tag>
+        <span v-else>—</span>
+      </template>
+      <template #cell-__payment="{ item }">
+        <el-tag :type="paymentTagType(cardRow(item))" size="small">
+          {{ paymentTagLabel(cardRow(item)) }}
+        </el-tag>
+        <div v-if="(item.total_amount as number) > 0" class="amount-hint">
+          {{ ((item.paid_amount as number) || 0).toLocaleString() }} / {{ (item.total_amount as number).toLocaleString() }}
+        </div>
+      </template>
+      <template #cell-__remark="{ item }">
+        <div v-if="item.remark">{{ item.remark }}</div>
+        <div v-if="item.internal_note" class="internal-note-inline">{{ item.internal_note }}</div>
+        <span v-if="!item.remark && !item.internal_note">—</span>
+      </template>
+      <template #actions="{ item }">
+        <el-button size="small" @click="openDetail(cardRow(item))">詳情</el-button>
+        <el-button
+          v-if="isRejectedRow(cardRow(item)) && canWrite"
+          size="small"
+          type="success"
+          @click="handleRestore(cardRow(item))"
+        >復原</el-button>
+        <el-button
+          v-else-if="!isRejectedRow(cardRow(item)) && canWrite && !showReviewButtons(cardRow(item))"
+          size="small"
+          type="danger"
+          @click="handleReject(cardRow(item))"
+        >拒絕</el-button>
+        <el-button
+          v-if="item.query_token"
+          size="small"
+          type="primary"
+          plain
+          @click="copyQueryToken(item.query_token as string)"
+        >複製查詢碼</el-button>
+        <template v-if="!isRejectedRow(cardRow(item)) && canWrite && showReviewButtons(cardRow(item))">
+          <el-button size="small" type="primary" @click="openMatchDialog(cardReviewRow(item))">手動匹配</el-button>
+          <el-button size="small" type="danger" plain @click="openForceDialog(cardReviewRow(item))">強行收件</el-button>
+          <el-button
+            size="small"
+            type="danger"
+            :disabled="!canReject(cardRow(item))"
+            @click="handleReject(cardRow(item))"
+          >拒絕</el-button>
+        </template>
+      </template>
+    </AdminListCards>
 
     <el-empty
       v-if="!loading && list.length === 0"
@@ -552,6 +625,8 @@ import { hasPermission } from '@/utils/auth'
 import { buildPublicRegistrationUrl } from '@/utils/publicLinks'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 // 6 個彈窗/時間軸都綁在 v-model/drawer 後，互動才顯示 → 改 async 拆出主 chunk，加速首載。
 const RegistrationPaymentDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationPaymentDialog.vue'))
 const RegistrationTimeline = defineAsyncComponent(() => import('@/components/activity/RegistrationTimeline.vue'))
@@ -584,6 +659,22 @@ function courseBillingLabel(course: RegistrationCourse): string {
 }
 
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）。
+// 批次勾選為桌機工作流（手機沒有選取欄），手機以單筆審核為主
+const { isMobile } = useIsMobile()
+
+// 手機卡片欄位（__ 前綴為 slot-only 欄）
+const registrationCardColumns = [
+  { label: '班級', prop: '__class', formatter: (r: Record<string, unknown>) => (r.class_name as string) || '—' },
+  { label: '年級', prop: '__grade' },
+  { label: '家長手機', prop: '__phone', formatter: (r: Record<string, unknown>) => (r.parent_phone as string) || '—' },
+  { label: '審核狀態', prop: '__match' },
+  { label: '繳費', prop: '__payment' },
+  { label: '報名時間', prop: '__created', formatter: (r: Record<string, unknown>) => formatActivityDate(r.created_at as string) },
+  { label: '課程', prop: 'course_names', block: true },
+  { label: '備註', prop: '__remark', block: true },
+]
 // 軟刪繳費走後端 DELETE /registrations/{id}/payments/{pid}，守衛是
 // ACTIVITY_PAYMENT_APPROVE（非 WRITE）——「有 WRITE 無簽核權」的櫃台配置
 // 舊版會看到可點按鈕、填完原因才吃 403（audit C-4，2026-07-02；對齊
@@ -1125,6 +1216,12 @@ function tableRowClassName({ row }: { row: RegistrationRow }): string {
 function canReject(row: RegistrationRow): boolean {
   return canWrite.value && showReviewButtons(row)
 }
+
+// 手機卡片的列動作薄包裝：AdminListCards 的 item 型別是 Record<string, unknown>，
+// 這裡集中做一次轉換，避免在模板散佈 as-cast（模板內的物件型別 cast 也會炸
+// template compiler）。行為與桌機表格完全共用同一組 handler。
+const cardRow = (item: Record<string, unknown>) => item as unknown as RegistrationRow
+const cardReviewRow = (item: Record<string, unknown>) => item as unknown as ReviewRow
 function onRematchAllPending() {
   handleRematchAllPending({ school_year: termStore.school_year, semester: termStore.semester })
 }
@@ -1547,5 +1644,14 @@ onMounted(async () => {
 .activity-registrations :deep(.el-table__row.row-rejected > td.op-cell .cell) {
   filter: none;
   opacity: 1;
+}
+/* 手機卡片：年級不符改直接列出不符課程（觸控裝置沒有 hover tooltip） */
+.card-grade-mismatch {
+  margin-top: var(--space-1);
+}
+.card-grade-mismatch__courses {
+  margin-left: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--el-color-danger);
 }
 </style>

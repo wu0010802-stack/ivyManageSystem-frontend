@@ -12,8 +12,23 @@ import { buildStudentProfileLink } from '@/utils/studentLinks'
 import { hasPermission } from '@/utils/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
+
+// 手機卡片欄位（__ 前綴為 slot-only 欄）。事件描述在卡片改為全文顯示——
+// 表格版靠 hover tooltip 看全文，觸控裝置無 hover
+const incidentCardColumns = [
+  { label: '發生時間', prop: '__occurred', formatter: (r: Record<string, unknown>) => (r.occurred_at ? String(r.occurred_at).slice(0, 16).replace('T', ' ') : '-') },
+  { label: '事件類型', prop: '__type' },
+  { label: '嚴重程度', prop: '__severity' },
+  { label: '事件描述', prop: 'description', block: true },
+  { label: '通知家長', prop: '__notified' },
+]
 
 // 寫入控制守衛（防禦縱深；班級越權由後端 assert_student_access 把關）
 const canWrite = computed(() => hasPermission('STUDENTS_WRITE'))
@@ -269,7 +284,7 @@ onMounted(() => {
 
     <!-- 表格 -->
     <el-card shadow="never" style="margin-top: 16px">
-      <el-table :data="incidents" v-loading="loading" stripe>
+      <el-table v-if="!isMobile" :data="incidents" v-loading="loading" stripe>
         <template #empty>
           <EmptyState
             :title="hasActiveFilter ? '目前篩選條件下沒有紀錄' : '尚無事件紀錄'"
@@ -326,6 +341,37 @@ onMounted(() => {
           </template>
         </el-table-column>
       </el-table>
+      <AdminListCards
+        v-else
+        :items="incidents"
+        :columns="incidentCardColumns"
+        row-key="id"
+        :loading="loading"
+        :empty-text="hasActiveFilter ? '目前篩選條件下沒有紀錄' : '尚無事件紀錄'"
+      >
+        <template #title="{ item }">
+          <router-link
+            v-if="buildStudentProfileLink(item.student_id as number, 'records')"
+            :to="buildStudentProfileLink(item.student_id as number, 'records')!"
+            class="student-link"
+          >{{ item.student_name }}</router-link>
+          <span v-else>{{ item.student_name }}</span>
+        </template>
+        <template #cell-__type="{ item }">
+          <el-tag :type="incidentTypeTagType(item.incident_type)" size="small">{{ item.incident_type }}</el-tag>
+        </template>
+        <template #cell-__severity="{ item }">
+          <el-tag v-if="item.severity" :type="severityTagType(item.severity)" size="small">{{ item.severity }}</el-tag>
+          <span v-else>-</span>
+        </template>
+        <template #cell-__notified="{ item }">
+          <el-switch :model-value="Boolean(item.parent_notified)" size="small" @change="toggleParentNotified(item)" />
+        </template>
+        <template #actions="{ item }">
+          <el-button v-if="canWrite" size="small" text @click="openEdit(item)">編輯</el-button>
+          <el-button v-if="canWrite" size="small" text type="danger" @click="handleDelete(item)">刪除</el-button>
+        </template>
+      </AdminListCards>
 
       <div style="display: flex; justify-content: flex-end; margin-top: 16px">
         <el-pagination

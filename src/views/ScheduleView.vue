@@ -10,7 +10,31 @@ import { useShiftStore } from '@/stores/shift'
 import { storeToRefs } from 'pinia'
 import { apiError } from '@/utils/error'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useClientTableFilter } from '@/composables'
+
+// 手機版（≤767.98px）：兩個清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
+
+// 班別指派卡片欄位：班別下拉與起訖時間為 slot（沿用表格內同一套 getter）
+const assignmentCardColumns = [
+  { label: '班級', prop: '__classroom', formatter: (r: Record<string, unknown>) => (r.classroom_name as string) || '-' },
+  { label: '班別', prop: '__shift' },
+  { label: '上班時間', prop: '__start' },
+  { label: '下班時間', prop: '__end' },
+]
+
+// 換班紀錄卡片欄位
+const swapCardColumns = [
+  { label: '換班日期', prop: 'swap_date' },
+  { label: '發起人', prop: '__requester' },
+  { label: '對象', prop: '__target' },
+  { label: '狀態', prop: '__status' },
+  { label: '申請時間', prop: 'created_at' },
+  { label: '回覆時間', prop: '__responded', formatter: (r: Record<string, unknown>) => (r.target_responded_at as string) || '—' },
+  { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+]
 
 // --- State ---
 interface AssignmentEntry { shift_type_id: number | null; notes: string | null }
@@ -476,7 +500,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
         </el-card>
 
         <!-- Assignment Table -->
-        <el-table :data="teacherEmployees" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
+        <el-table v-if="!isMobile" :data="teacherEmployees" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
           <el-table-column prop="name" label="姓名" width="100" fixed />
           <el-table-column label="班級" width="120">
             <template #default="{ row }">
@@ -523,6 +547,47 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
             </template>
           </el-table-column>
         </el-table>
+        <AdminListCards
+          v-else
+          :items="(teacherEmployees as unknown as Record<string, unknown>[])"
+          :columns="assignmentCardColumns"
+          row-key="id"
+          :loading="loading"
+          empty-text="尚無班導老師資料（需有班級指派的員工）"
+        >
+          <template #title="{ item }">{{ item.name }}</template>
+          <template #cell-__shift="{ item }">
+            <el-select
+              :model-value="getAssignment(item.id as number)"
+              placeholder="選擇班別"
+              clearable
+              class="card-shift-select"
+              @update:model-value="(val) => setAssignment(item.id as number, val)"
+            >
+              <el-option
+                v-for="st in shiftTypes"
+                :key="st.id"
+                :label="`${st.name} (${st.work_start}~${st.work_end})`"
+                :value="st.id"
+              />
+            </el-select>
+          </template>
+          <template #cell-__start="{ item }">
+            <template v-if="getAssignment(item.id as number)">
+              {{ getShiftInfo(getAssignment(item.id as number))?.work_start || '' }}
+            </template>
+            <span v-else class="text-muted">-</span>
+          </template>
+          <template #cell-__end="{ item }">
+            <template v-if="getAssignment(item.id as number)">
+              {{ getShiftInfo(getAssignment(item.id as number))?.work_end || '' }}
+            </template>
+            <span v-else class="text-muted">-</span>
+          </template>
+          <template #actions="{ item }">
+            <el-button size="small" @click="openDailyDialog(item as unknown as EmployeeRow)">每日調整</el-button>
+          </template>
+        </AdminListCards>
 
         <el-empty v-if="teacherEmployees.length === 0 && !loading" description="尚無班導老師資料（需有班級指派的員工）" />
       </el-tab-pane>
@@ -561,7 +626,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
           :shown="swapShown"
         />
 
-        <el-table :data="filteredSwapHistory" v-loading="swapLoading" style="width: 100%; margin-top: 16px;" stripe>
+        <el-table v-if="!isMobile" :data="filteredSwapHistory" v-loading="swapLoading" style="width: 100%; margin-top: 16px;" stripe>
           <template #empty>
             <el-empty :description="swapSearch ? '沒有符合搜尋條件的換班紀錄' : '尚無換班紀錄'" />
           </template>
@@ -579,6 +644,28 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
           <el-table-column prop="target_responded_at" label="回覆時間" width="160" />
           <el-table-column prop="created_at" label="申請時間" width="160" />
         </el-table>
+        <AdminListCards
+          v-else
+          :items="filteredSwapHistory"
+          :columns="swapCardColumns"
+          row-key="id"
+          :loading="swapLoading"
+          :empty-text="swapSearch ? '沒有符合搜尋條件的換班紀錄' : '尚無換班紀錄'"
+        >
+          <!-- 卡片標題用「發起人 → 對象」把換班雙方一眼帶出 -->
+          <template #title="{ item }">
+            {{ item.requester_name }} <el-icon><ArrowRight /></el-icon> {{ item.target_name }}
+          </template>
+          <template #cell-__requester="{ item }">
+            {{ item.requester_name }}<span v-if="item.requester_shift">（{{ item.requester_shift }}）</span>
+          </template>
+          <template #cell-__target="{ item }">
+            {{ item.target_name }}<span v-if="item.target_shift">（{{ item.target_shift }}）</span>
+          </template>
+          <template #cell-__status="{ item }">
+            <el-tag :type="swapStatusType(item.status as string)" size="small">{{ swapStatusLabel(item.status as string) }}</el-tag>
+          </template>
+        </AdminListCards>
       </el-tab-pane>
     </el-tabs>
 
@@ -713,5 +800,10 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
 }
 .text-sm {
   font-size: var(--text-base);
+}
+/* 手機卡片內的班別下拉：撐滿可用寬度，避免在窄卡片被壓成細長條 */
+.card-shift-select {
+  width: 100%;
+  min-width: 160px;
 }
 </style>

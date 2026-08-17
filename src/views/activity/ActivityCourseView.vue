@@ -24,7 +24,7 @@
       :shown="courseShown"
     />
 
-    <el-table :data="filteredCourses" v-loading="loading" border>
+    <el-table v-if="!isMobile" :data="filteredCourses" v-loading="loading" border>
       <template #empty>
         <el-empty :description="courseSearch ? '沒有符合搜尋條件的課程' : '尚無課程資料'" />
       </template>
@@ -123,6 +123,67 @@
         </template>
       </el-table-column>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="filteredCourses"
+      :columns="courseCardColumns"
+      row-key="id"
+      :loading="loading"
+      :empty-text="courseSearch ? '沒有符合搜尋條件的課程' : '尚無課程資料'"
+    >
+      <template #title="{ item }">{{ item.name }}</template>
+      <template #cell-__grades="{ item }">
+        <template v-if="(item.allowed_grades as string[])?.length">
+          <el-tag
+            v-for="g in (item.allowed_grades as string[])"
+            :key="g"
+            size="small"
+            effect="plain"
+            class="grade-tag"
+          >{{ g }}</el-tag>
+        </template>
+        <span v-else>不限</span>
+      </template>
+      <template #cell-__capacity="{ item }">
+        <el-button
+          v-if="occupying(item as unknown as Course) > 0"
+          link type="primary" size="small"
+          @click="openEnrolled(item as unknown as Course)"
+        >{{ occupying(item as unknown as Course) }}/{{ item.capacity }}</el-button>
+        <span v-else>0/{{ item.capacity }}</span>
+        <div v-if="((item.promoted_pending as number) || 0) > 0" class="pending-occupancy-hint">
+          含 {{ item.promoted_pending }} 待確認
+        </div>
+        <div v-if="((item.pending_review as number) || 0) > 0" class="pending-occupancy-hint">
+          含 {{ item.pending_review }} 待審核
+        </div>
+        <div
+          v-if="pendingReviewWaitlist(item as unknown as Course) > 0"
+          class="pending-occupancy-hint pending-occupancy-hint--waitlist"
+        >
+          {{ pendingReviewWaitlist(item as unknown as Course) }} 待審候補（不佔位）
+          <span class="pending-occupancy-hint__note">須先完成審核才能升正式</span>
+        </div>
+      </template>
+      <template #cell-__waitlist="{ item }">
+        <el-button
+          v-if="(item.waitlist_count as number) > 0"
+          link type="warning" size="small"
+          @click="openWaitlist(item as unknown as Course)"
+        >{{ item.waitlist_count }}</el-button>
+        <span v-else>0</span>
+      </template>
+      <template #cell-__allowWaitlist="{ item }">
+        <el-tag :type="item.allow_waitlist ? 'success' : 'info'" size="small">
+          {{ item.allow_waitlist ? '是' : '否' }}
+        </el-tag>
+      </template>
+      <template v-if="canWrite" #actions="{ item }">
+        <el-button size="small" @click="openEnrolled(item as unknown as Course)">報名排序</el-button>
+        <el-button size="small" @click="openEdit(item as unknown as Course)">編輯</el-button>
+        <el-button size="small" type="danger" :loading="deletingId === item.id" @click="handleDelete(item as unknown as Course)">停用</el-button>
+      </template>
+    </AdminListCards>
 
     <!-- 新增/編輯對話框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '編輯課程' : '新增課程'" width="480px" destroy-on-close>
@@ -515,6 +576,8 @@ import type { ApiBody } from '@/api/_generated/typed'
 import { COURSE_STATUS_LABEL, COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
@@ -567,6 +630,9 @@ function formatSchedule(row: Course) {
 }
 
 const courses = ref<Course[]>([])
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
 const loading = ref(false)
 const deletingId = ref<number | null>(null)
 const dialogVisible = ref(false)
@@ -624,6 +690,18 @@ const {
   source: () => courses.value as unknown as Record<string, unknown>[],
   searchFields: (r) => [r.name as string | undefined, instructorName(r as unknown as Course)],
 })
+
+// 手機卡片欄位（__ 前綴為 slot-only 欄）。容量／候補的多行提示改由 slot 沿用原邏輯
+const courseCardColumns = [
+  { label: '價格', prop: '__price', formatter: (r: Record<string, unknown>) => `$${(r.price as number)?.toLocaleString() ?? '-'}` },
+  { label: '堂數', prop: '__sessions', formatter: (r: Record<string, unknown>) => (r.sessions ?? '-') },
+  { label: '上課時段', prop: '__schedule', formatter: (r: Record<string, unknown>) => formatSchedule(r as unknown as Course) || '-' },
+  { label: '限定年級', prop: '__grades' },
+  { label: '負責老師', prop: '__instructor', formatter: (r: Record<string, unknown>) => instructorName(r as unknown as Course) || '未設定' },
+  { label: '容量', prop: '__capacity' },
+  { label: '候補', prop: '__waitlist' },
+  { label: '允許候補', prop: '__allowWaitlist' },
+]
 
 const waitlistDrawer = ref(false)
 const waitlistCourse = ref<{ id: number; name: string } | null>(null)

@@ -328,6 +328,15 @@ html.ivy-admin .el-table .el-table__cell {
     row-gap: var(--space-2);
     justify-content: center;
   }
+
+  /* 側向抽屜手機一律滿版：15+ 個 admin drawer 寫死 px 寬（420–1100px），
+     在 390px 手機會橫向溢出。EP 以 inline style 設寬，故需 !important
+     覆蓋（同 .el-dialog 手機規則手法）。只收側向（rtl/ltr）——ttb/btt
+     的 size 是高度，不可套。個別 drawer 因此不必再自寫 isMobile 分岔。 */
+  .el-drawer.rtl,
+  .el-drawer.ltr {
+    width: 100% !important;
+  }
 }
 
 /* ========== PWA Safe Area ========== */

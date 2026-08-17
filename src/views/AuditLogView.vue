@@ -6,6 +6,11 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import AuditChangesDetail from '@/components/AuditChangesDetail.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -232,6 +237,18 @@ const hasActiveFilter = computed(() =>
   Boolean(filters.end_at) ||
   Boolean(activeRiskFilter.value)
 )
+
+// 手機卡片欄位（__ 前綴為 slot-only 欄）。桌機的 type="expand" 展開列在卡片
+// 改用 el-collapse（見 #cell-__changes），維持「預設收合、需要才展開」的行為
+const auditCardColumns = [
+  { label: '時間', prop: '__time' },
+  { label: '使用者', prop: '__operator' },
+  { label: '操作', prop: '__action' },
+  { label: '資源', prop: '__entity' },
+  { label: 'IP', prop: '__ip', formatter: (r: Record<string, unknown>) => (r.ip_address as string) || '—' },
+  { label: '摘要', prop: '__summary', block: true },
+  { label: '變更明細', prop: '__changes', block: true },
+]
 
 // 高風險旗標：用於行內顯示警示徽章
 const getRiskBadges = (row: AuditLog) => {
@@ -536,6 +553,7 @@ defineExpose({ formatOperator })
     </el-card>
 
     <el-table
+      v-if="!isMobile"
       :data="logs"
       border
       stripe
@@ -616,6 +634,64 @@ defineExpose({ formatOperator })
         </template>
       </el-table-column>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="(logs as unknown as Record<string, unknown>[])"
+      :columns="auditCardColumns"
+      row-key="id"
+      :loading="loading"
+      :empty-text="hasActiveFilter ? '目前篩選條件下沒有紀錄' : '尚無操作紀錄'"
+    >
+      <template #title="{ item }">
+        {{ getEntityLabel(item.entity_type as string) }}
+        <span v-if="item.entity_id" class="card-entity-id">#{{ item.entity_id }}</span>
+      </template>
+      <template #cell-__time="{ item }">
+        <span class="time-text">{{ formatTime(item.created_at as string) }}</span>
+      </template>
+      <template #cell-__operator="{ item }">{{ formatOperator(item as unknown as AuditLog) }}</template>
+      <template #cell-__action="{ item }">
+        <el-tag :type="getActionTag(item.action as string).type" size="small">
+          {{ getActionTag(item.action as string).label }}
+        </el-tag>
+      </template>
+      <template #cell-__entity="{ item }">
+        <el-button
+          v-if="item.entity_id && canNavigate(item as unknown as AuditLog)"
+          link
+          type="primary"
+          size="small"
+          @click="goToEntity(item as unknown as AuditLog)"
+        >前往 #{{ item.entity_id }}</el-button>
+        <span v-else>{{ item.entity_id || '—' }}</span>
+      </template>
+      <template #cell-__summary="{ item }">
+        <div class="summary-cell">
+          <span class="summary-text">{{ item.summary }}</span>
+          <div v-if="getRiskBadges(item as unknown as AuditLog).length > 0" class="risk-badges">
+            <el-tag
+              v-for="b in getRiskBadges(item as unknown as AuditLog)"
+              :key="b.label"
+              :type="b.type"
+              size="small"
+              effect="dark"
+            >{{ b.label }}</el-tag>
+          </div>
+        </div>
+      </template>
+      <template #cell-__changes="{ item }">
+        <el-collapse class="card-changes-collapse">
+          <el-collapse-item title="展開變更明細" :name="`changes-${item.id}`">
+            <AuditChangesDetail :changes="item.changes as Record<string, unknown>" :field-labels="fieldLabels" />
+          </el-collapse-item>
+        </el-collapse>
+      </template>
+      <template #actions="{ item }">
+        <el-button v-if="item.entity_id" link type="primary" size="small" @click="openHistory(item as unknown as AuditLog)">
+          歷史軌跡
+        </el-button>
+      </template>
+    </AdminListCards>
 
     <div class="pagination-wrapper">
       <el-pagination
@@ -717,6 +793,30 @@ defineExpose({ formatOperator })
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+}
+/* 手機卡片：摘要恢復全文換行（表格版的 nowrap+ellipsis 是為了塞進固定欄寬，
+   卡片沒有這個限制，且觸控裝置沒有 hover title 可看全文） */
+.admin-list-cards .summary-text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.card-entity-id {
+  color: var(--text-tertiary);
+  font-weight: normal;
+}
+/* 變更明細 collapse 併入卡片：去掉 EP 預設外框與左右內距，貼齊卡片欄位 */
+.card-changes-collapse {
+  border-top: none;
+  border-bottom: none;
+}
+.card-changes-collapse :deep(.el-collapse-item__header),
+.card-changes-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: none;
+}
+.card-changes-collapse :deep(.el-collapse-item__content) {
+  padding-bottom: var(--space-2);
 }
 .history-node {
   display: flex;
