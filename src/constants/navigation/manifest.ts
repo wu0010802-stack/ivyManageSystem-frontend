@@ -422,6 +422,26 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Calendar') },
         },
         {
+          // 活動參加調查表（Task 13，2026-08-10）：SURVEYS_* 兩碼，單頁模組。
+          // 2026-08-17 業主指示：自獨立的「活動調查」群組移入本群組（原群組僅此一頁，
+          // 隨之移除）；權限碼主屬、路由規則與頁面 title 全不動，僅選單歸屬變更
+          // （title 亦為麵包屑來源，見 deriveBreadcrumbParents）。
+          // ⚠ 與 brief 草稿的差異（已跑 manifestRouteParity 驗證修正）：/surveys/:id/edit
+          // 是動態路由，實際導覽路徑帶真實數字 id（如 /surveys/123/edit），extraRoutes
+          // 的 permission rule 只做字面比對——寫 literal ':id' 字串永遠比對不到真實路徑，
+          // 規則命中不到即回空集合，manifest 權限判定 default-deny，等同把有權限的人
+          // 一起擋下（並非「完全不設防」）。改採 /employees 既有慣例：/surveys 掛
+          // routePrefix: true + SURVEYS_READ 涵蓋 list/detail/edit 全部子路由，WRITE 純作
+          // actions 級的按鈕/表單顯示控制（實際寫入仍由後端 SURVEYS_WRITE 守衛擋）；
+          // 唯一例外是 /surveys/new——純靜態路徑（無參數段），可用 exact extraRoute
+          // 精確要求 SURVEYS_WRITE（longest-match 優先於 /surveys prefix 的 READ）。
+          key: 'surveyList', title: '調查管理', routePath: '/surveys', routePrefix: true,
+          views: [{ code: 'SURVEYS_READ', label: '檢視' }],
+          actions: [{ code: 'SURVEYS_WRITE', label: '建立與管理' }],
+          menu: { icon: icon('EditPen') },
+          extraRoutes: [{ path: '/surveys/new', permission: 'SURVEYS_WRITE' }],
+        },
+        {
           // 收支簽收：廠商付款／雜項收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。
           key: 'financeSignoffs', title: '收支簽收', routePath: '/finance-signoffs',
           views: [
@@ -532,28 +552,6 @@ export const NAVIGATION_MANIFEST = {
           key: 'activityChanges', title: PAGE_TERMS.activityChanges, routePath: '/activity/changes',
           views: [], sharedViews: ['ACTIVITY_READ'],
           menu: { icon: icon('List') },
-        },
-      ],
-    },
-
-    {
-      // 活動參加調查表（Task 13，2026-08-10）：SURVEYS_* 兩碼，單頁模組。
-      // ⚠ 與 brief 草稿的差異（已跑 manifestRouteParity 驗證修正）：/surveys/:id/edit
-      // 是動態路由，實際導覽路徑帶真實數字 id（如 /surveys/123/edit），extraRoutes
-      // 的 permission rule 只做字面比對——寫 literal ':id' 字串永遠比對不到真實路徑，
-      // 規則命中不到即回空集合，manifest 權限判定 default-deny，等同把有權限的人
-      // 一起擋下（並非「完全不設防」）。改採 /employees 既有慣例：/surveys 掛
-      // routePrefix: true + SURVEYS_READ 涵蓋 list/detail/edit 全部子路由，WRITE 純作
-      // actions 級的按鈕/表單顯示控制（實際寫入仍由後端 SURVEYS_WRITE 守衛擋）；
-      // 唯一例外是 /surveys/new——純靜態路徑（無參數段），可用 exact extraRoute
-      // 精確要求 SURVEYS_WRITE（longest-match 優先於 /surveys prefix 的 READ）。
-      key: 'surveys', title: '活動調查', icon: icon('EditPen'), pages: [
-        {
-          key: 'surveyList', title: '調查管理', routePath: '/surveys', routePrefix: true,
-          views: [{ code: 'SURVEYS_READ', label: '檢視' }],
-          actions: [{ code: 'SURVEYS_WRITE', label: '建立與管理' }],
-          menu: { icon: icon('EditPen') },
-          extraRoutes: [{ path: '/surveys/new', permission: 'SURVEYS_WRITE' }],
         },
       ],
     },
