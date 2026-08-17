@@ -95,6 +95,10 @@ const router = useRouter()
 // ── 取得 current cycle（依 termStore 切換）────────────────
 const currentCycle = ref<CurrentCycle | null>(null)
 const cycleLoading = ref(false)
+// Batch 9：API 失敗與「該學期真的還沒建立週期」是兩件事，畫面不能顯示同一個
+// 「尚未建立週期」banner——否則使用者會誤判系統真的沒有週期而重複建立
+// （比照 OverviewWorkbenchView.vue 的 appraisalRootError 既有作法）。
+const cycleFetchFailed = ref(false)
 
 // 回傳當次載入的 cycle（不直接寫 currentCycle.value）——由 reloadAll 在 epoch
 // 守衛通過後才提交，避免晚到的舊學期請求覆寫新學期。
@@ -105,9 +109,11 @@ async function fetchCurrentCycle(): Promise<CurrentCycle | null> {
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
+    cycleFetchFailed.value = false
     return data as CurrentCycle
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:fetchCycle', '載入當期週期失敗')
+    cycleFetchFailed.value = true
     return null
   } finally {
     cycleLoading.value = false
@@ -571,9 +577,32 @@ function onGuideNavigate(key: AppraisalStepKey) {
 
     <AppraisalProcessGuide :statuses="stepStatuses" @navigate="onGuideNavigate" />
 
+    <!-- API 失敗 → 顯式錯誤卡＋重試，不得落入下方「尚未建立」空狀態
+         （比照 OverviewWorkbenchView.vue 的 appraisalRootError 既有作法） -->
+    <el-alert
+      v-if="!cycleLoading && cycleFetchFailed"
+      type="error"
+      :closable="false"
+      data-test="cycle-fetch-error-banner"
+      class="banner"
+    >
+      <template #title>載入本學期考核週期失敗</template>
+      <template #default>
+        <div class="banner__body">
+          <span>請檢查網路連線後重試，不代表本學期尚未建立週期。</span>
+          <el-button
+            size="small"
+            type="primary"
+            data-test="cycle-fetch-retry-btn"
+            @click="reloadAll"
+          >重試</el-button>
+        </div>
+      </template>
+    </el-alert>
+
     <!-- cycle 不存在 banner -->
     <el-alert
-      v-if="!cycleLoading && !currentCycle"
+      v-if="!cycleLoading && !cycleFetchFailed && !currentCycle"
       type="warning"
       :closable="false"
       data-test="no-cycle-banner"
