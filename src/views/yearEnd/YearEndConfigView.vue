@@ -36,7 +36,17 @@ const props = defineProps<{ cycleId: number }>()
 const router = useRouter()
 const cycleId = props.cycleId
 
-const canWrite = computed(() => hasPermission('YEAR_END_WRITE'))
+// Batch 12：後端 org_settings/class_targets 三個端點皆守 cycle.status != OPEN
+// 一律 400（services/year_end/cycle_guard.py::assert_cycle_writable）。cycleStatus
+// 借用 loadCycleTargets() 既有的 listYearEndCycles() 呼叫取得（不新增網路請求，
+// 見下方 loadCycleTargets 改動）。fail-open：查無/失敗時 cycleStatus 維持 null，
+// canWrite 視為「未知，不新增限制」——這裡純粹是 UX 提示，真正的寫入守衛在後端，
+// 寧可少擋一次非必要按鈕也不要多擋一次原本允許的操作（比照既有測試多數不 mock
+// listYearEndCycles 的現況，fail-open 才能保持這些既有測試不受影響）。
+const cycleStatus = ref<string | null>(null)
+const canWrite = computed(
+  () => hasPermission('YEAR_END_WRITE') && (cycleStatus.value === null || cycleStatus.value === 'OPEN'),
+)
 
 // ---- Org Settings state (two semesters) ----
 const orgSettings = ref<OrgSettingsRow[]>([])
@@ -169,6 +179,7 @@ async function loadCycleTargets() {
   try {
     const { data: yearEndCycles } = await listYearEndCycles()
     const yearEndCycle = yearEndCycles.find((c) => c.id === cycleId)
+    cycleStatus.value = yearEndCycle?.status ?? null
     if (!yearEndCycle) {
       cycleTargets.value = {}
       return

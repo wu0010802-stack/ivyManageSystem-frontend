@@ -683,4 +683,33 @@ describe('YearEndConfigView', () => {
       expect(crossRef.props('cycleTarget')).toBeNull()
     })
   })
+
+  // Batch 12：canWrite 疊加週期狀態守衛，對齊後端 assert_cycle_writable
+  describe('週期狀態守衛（Batch 12）', () => {
+    it('週期非 OPEN 時 canWrite 為 false（依 listYearEndCycles 帶回的 status）', async () => {
+      stubSupportApis()
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({
+        data: [makeYearEndCycle({ id: 5, status: 'LOCKED' })],
+      } as never)
+
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as { canWrite: boolean }
+      expect(vm.canWrite).toBe(false)
+    })
+
+    it('週期為 OPEN 時 canWrite 依權限判斷（不受本次改動影響的既有行為）', async () => {
+      stubSupportApis()
+      vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+      vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({
+        data: [makeYearEndCycle({ id: 5, status: 'OPEN' })],
+      } as never)
+
+      const wrapper = await mountView()
+      const vm = wrapper.vm as unknown as { canWrite: boolean }
+      expect(vm.canWrite).toBe(true)
+    })
+  })
 })
