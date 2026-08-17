@@ -49,6 +49,9 @@ const {
     finalizeAppraisalSummary: vi.fn(() => Promise.resolve({ data: {} })),
     exportAppraisalCycleXlsxUrl: () => '#',
     exportAppraisalTransferRosterXlsxUrl: () => '#',
+    getAppraisalAllEmployeesStatus: vi.fn(() => Promise.resolve({ data: { participants: [] } })),
+    getSignStatusSummary: vi.fn(() => Promise.resolve({ data: { counts: {} } })),
+    listScoringRules: vi.fn(() => Promise.resolve({ data: [] })),
   }
   return {
     apiMocks,

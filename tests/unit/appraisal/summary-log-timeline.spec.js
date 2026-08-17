@@ -1,5 +1,7 @@
 /**
- * P1-11：SummaryLogDrawer 台北時區 + action 色區分。
+ * P1-11：SummaryLogTimeline 台北時區 + action 色區分。
+ * （原 summary-log-drawer.spec.js；SummaryLogDrawer 已於 Phase 1 Batch 13
+ *  抽成統一員工抽屜的一部分，內容元件改為 SummaryLogTimeline，測試同步遷移。）
  *
  *   1. timestamp 不含 'T'（已透過 formatDateTimeTW 格式化為台北時區）
  *   2. 三個簽核 stage (主管 / 會計 / 核定) 的 el-tag type 不同
@@ -19,14 +21,13 @@ vi.mock('@/api/appraisal', () => ({
 }))
 vi.mock('@/utils/error', () => ({ apiError: (e, f) => f || 'err' }))
 
-import SummaryLogDrawer from '@/views/appraisal/components/SummaryLogDrawer.vue'
+import SummaryLogTimeline from '@/views/appraisal/components/SummaryLogTimeline.vue'
 
 const transparentStub = (slotsToRender = ['default']) => ({
   template: `<div>${slotsToRender.map((s) => `<slot name="${s}" />`).join('')}</div>`,
 })
 
 const stubs = {
-  'el-drawer': transparentStub(),
   'el-timeline': transparentStub(),
   'el-timeline-item': {
     props: ['timestamp', 'type'],
@@ -86,10 +87,10 @@ const sampleLogs = [
   },
 ]
 
-async function mountDrawer() {
+async function mountTimeline() {
   getSummaryLogsMock.mockResolvedValue({ data: sampleLogs })
-  const w = mount(SummaryLogDrawer, {
-    props: { visible: true, summaryId: 99 },
+  const w = mount(SummaryLogTimeline, {
+    props: { summaryId: 99 },
     global: { stubs },
   })
   // wait for async load
@@ -98,13 +99,13 @@ async function mountDrawer() {
   return w
 }
 
-describe('P1-11 SummaryLogDrawer 台北時區 + action 色區分', () => {
+describe('P1-11 SummaryLogTimeline 台北時區 + action 色區分', () => {
   beforeEach(() => {
     getSummaryLogsMock.mockReset()
   })
 
   it('timestamp 經 formatDateTimeTW 格式化，不含原始 ISO 的 T', async () => {
-    const w = await mountDrawer()
+    const w = await mountTimeline()
     const items = w.findAll('[data-test^="log-item-"]')
     expect(items.length).toBe(5)
     items.forEach((it) => {
@@ -116,7 +117,7 @@ describe('P1-11 SummaryLogDrawer 台北時區 + action 色區分', () => {
   })
 
   it('三個簽核 stage 與其他 action 的 el-tag type 區分明確', async () => {
-    const w = await mountDrawer()
+    const w = await mountTimeline()
     const tagType = (id) =>
       w.find(`[data-test="log-action-tag-${id}"]`).attributes('data-tag-type')
 

@@ -129,6 +129,17 @@ describe('YearEndWorkspaceView', () => {
     expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(false)
   })
 
+  it('CLOSED 週期 → 頭部顯示已封存唯讀提示', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 9, academic_year: 114, status: 'CLOSED', bonus_calc_date: '2026-01-15' }],
+    } as never)
+
+    const wrapper = await mountShell()
+
+    expect(wrapper.find('[data-test="closed-readonly-hint"]').exists()).toBe(true)
+  })
+
   it('無 YEAR_END_FINALIZE 權限 → 不顯示任何狀態機按鈕', async () => {
     routeRef.value = { params: { id: '9' }, query: {} }
     mockHasPermission.mockReturnValue(false)

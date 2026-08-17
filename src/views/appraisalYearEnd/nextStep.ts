@@ -41,7 +41,28 @@ export interface NextStep {
   to: string
 }
 
-export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
+const DONE_STEP: NextStep = {
+  key: 'done',
+  title: '目前沒有待辦',
+  reason: '簽核、例外與發放皆已處理完畢。',
+  ctaLabel: '',
+  to: '',
+}
+
+function isLoading(stats: WorkbenchStats): boolean {
+  return (
+    stats.blockingExceptions === undefined ||
+    stats.yearEndPendingSign === undefined ||
+    stats.appraisalPendingSign === undefined ||
+    stats.payoutReadyCount === undefined
+  )
+}
+
+/** 回傳全部待處理項目（依既有優先序排列），供待辦頁統一清單渲染。
+ *  isLoading 時回空陣列——呼叫端（統一清單）應另外依 isLoading 決定是否顯示
+ *  skeleton，不要把空陣列誤讀成「全部完成」。 */
+export function deriveTodoList(stats: WorkbenchStats): NextStep[] {
+  if (isLoading(stats)) return []
   const {
     appraisalCycle,
     yearEndCycle,
@@ -53,73 +74,66 @@ export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
     canYearEnd,
     payoutYear,
   } = stats
-  if (
-    blockingExceptions === undefined ||
-    yearEndPendingSign === undefined ||
-    appraisalPendingSign === undefined ||
-    payoutReadyCount === undefined
-  ) {
-    return null
-  }
-  if (blockingExceptions > 0) {
-    return {
+  const items: NextStep[] = []
+
+  if (blockingExceptions !== undefined && blockingExceptions > 0) {
+    items.push({
       key: 'exceptions',
       title: `處理 ${blockingExceptions} 筆阻斷級例外`,
       reason: '阻斷級例外會讓試算與簽核出錯，建議最先處理。',
       ctaLabel: `前往${PAGE_TERMS.yearEndExceptions}`,
       to: '/appraisal-year-end/exceptions',
-    }
+    })
   }
-  if (yearEndCycle?.status === 'OPEN' && yearEndPendingSign > 0) {
-    return {
+  if (yearEndCycle?.status === 'OPEN' && yearEndPendingSign !== undefined && yearEndPendingSign > 0) {
+    items.push({
       key: 'year-end-sign',
       title: `年終結算還有 ${yearEndPendingSign} 筆未核定`,
       reason: `${yearEndCycle.label}結算進行中，完成兩關簽核後才能鎖定發放。`,
       ctaLabel: '前往結算明細',
       to: `/appraisal-year-end/year-end/cycles/${yearEndCycle.id}`,
-    }
+    })
   }
-  if (appraisalCycle && appraisalPendingSign > 0) {
-    return {
+  if (appraisalCycle && appraisalPendingSign !== undefined && appraisalPendingSign > 0) {
+    items.push({
       key: 'appraisal-sign',
       title: `考核還有 ${appraisalPendingSign} 筆未核定`,
       reason: `${appraisalCycle.label}簽核進行中。`,
       ctaLabel: '前往簽核',
       to: `/appraisal-year-end/appraisal?cycle=${appraisalCycle.id}&stage=sign&view=kanban`,
-    }
+    })
   }
-  if (payoutReadyCount > 0) {
-    return {
+  if (payoutReadyCount !== undefined && payoutReadyCount > 0) {
+    items.push({
       key: 'payout',
       title: `${payoutReadyCount} 筆考核年終可發放`,
       reason: '簽核已完成，可產生轉帳資料。',
       ctaLabel: '前往發放',
       to: `/appraisal-year-end/year-end/payout?year=${payoutYear}`,
-    }
+    })
   }
   if (!appraisalCycle && canAppraisal) {
-    return {
+    items.push({
       key: 'create-appraisal',
       title: '建立本學期考核週期',
       reason: '本學期尚未建立考核週期，建立後才能開始評分與簽核。',
       ctaLabel: '前往建立',
       to: '/appraisal-year-end/appraisal',
-    }
+    })
   }
   if (!yearEndCycle && canYearEnd) {
-    return {
+    items.push({
       key: 'create-year-end',
       title: '建立年終結算週期',
       reason: '尚未建立年終週期；年底結算前建立即可。',
       ctaLabel: '前往建立',
       to: '/appraisal-year-end/year-end',
-    }
+    })
   }
-  return {
-    key: 'done',
-    title: '目前沒有待辦',
-    reason: '簽核、例外與發放皆已處理完畢。',
-    ctaLabel: '',
-    to: '',
-  }
+  return items
+}
+
+export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
+  if (isLoading(stats)) return null
+  return deriveTodoList(stats)[0] ?? DONE_STEP
 }

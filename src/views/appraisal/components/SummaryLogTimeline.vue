@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { getSummaryLogs } from '@/api/appraisal'
@@ -10,15 +10,8 @@ import { ACTION_LABEL } from '@/constants/appraisalYearEnd'
 interface SummaryLog { id: number; action?: string; created_at?: string; actor_name?: string; actor_id?: number; from_status?: string; to_status?: string; reason?: string; comment?: string }
 
 const props = defineProps<{
-  visible?: boolean
   summaryId?: number | null
 }>()
-const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
-
-const drawerVisible = computed({
-  get: () => props.visible ?? false,
-  set: (v: boolean) => emit('update:visible', v),
-})
 
 const logs = ref<SummaryLog[]>([])
 const loading = ref(false)
@@ -36,7 +29,7 @@ async function load() {
   }
 }
 
-watch(() => [props.visible, props.summaryId], ([v]) => { if (v) load() }, { immediate: true })
+watch(() => props.summaryId, (id) => { if (id) load() }, { immediate: true })
 
 // ACTION_LABEL 從 ../labels 集中載入（P2 i18n 過渡）
 
@@ -54,31 +47,28 @@ const ACTION_COLOR: Record<string, TagType> = {
 </script>
 
 <template>
-  <el-drawer v-model="drawerVisible" title="簽核軌跡" size="40%"
-             data-test="summary-log-drawer">
-    <el-timeline v-loading="loading">
-      <el-timeline-item v-for="log in logs" :key="log.id"
-                        :timestamp="formatDateTimeTW(log.created_at)" placement="top"
-                        :type="ACTION_COLOR[log.action ?? ''] || 'primary'"
-                        :data-test="`log-item-${log.id}`">
-        <div class="log-entry">
-          <div>
-            <el-tag :type="ACTION_COLOR[log.action ?? '']" size="small"
-                    :data-test="`log-action-tag-${log.id}`">
-              {{ (ACTION_LABEL as Record<string, string>)[log.action ?? ''] || log.action }}
-            </el-tag>
-            <span class="actor">{{ log.actor_name || `user#${log.actor_id}` }}</span>
-          </div>
-          <div v-if="log.from_status || log.to_status" class="transition">
-            {{ log.from_status || '—' }} → {{ log.to_status || '—' }}
-          </div>
-          <div v-if="log.reason" class="reason">退簽原因：{{ log.reason }}</div>
-          <div v-if="log.comment" class="comment">留言：{{ log.comment }}</div>
+  <el-timeline v-loading="loading" data-test="summary-log-timeline">
+    <el-timeline-item v-for="log in logs" :key="log.id"
+                      :timestamp="formatDateTimeTW(log.created_at)" placement="top"
+                      :type="ACTION_COLOR[log.action ?? ''] || 'primary'"
+                      :data-test="`log-item-${log.id}`">
+      <div class="log-entry">
+        <div>
+          <el-tag :type="ACTION_COLOR[log.action ?? '']" size="small"
+                  :data-test="`log-action-tag-${log.id}`">
+            {{ (ACTION_LABEL as Record<string, string>)[log.action ?? ''] || log.action }}
+          </el-tag>
+          <span class="actor">{{ log.actor_name || `user#${log.actor_id}` }}</span>
         </div>
-      </el-timeline-item>
-      <el-empty v-if="!loading && logs.length === 0" description="尚無簽核軌跡" />
-    </el-timeline>
-  </el-drawer>
+        <div v-if="log.from_status || log.to_status" class="transition">
+          {{ log.from_status || '—' }} → {{ log.to_status || '—' }}
+        </div>
+        <div v-if="log.reason" class="reason">退簽原因：{{ log.reason }}</div>
+        <div v-if="log.comment" class="comment">留言：{{ log.comment }}</div>
+      </div>
+    </el-timeline-item>
+    <el-empty v-if="!loading && logs.length === 0" description="尚無簽核軌跡" />
+  </el-timeline>
 </template>
 
 <style scoped>
