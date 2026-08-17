@@ -6,8 +6,14 @@
  * ../../api/quickActions，讓 useQuickActionSlots composable 走真邏輯。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ref } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 import QuickActionsBar from '../QuickActionsBar.vue'
+
+const mockSelectedId = ref<number | null>(42)
+vi.mock('../../../composables/useChildSelection', () => ({
+  useChildSelection: () => ({ selectedId: mockSelectedId }),
+}))
 
 const pushMock = vi.fn()
 vi.mock('vue-router', () => ({
@@ -52,6 +58,7 @@ function mountBar(props: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockSelectedId.value = 42
   getQuickActions.mockResolvedValue({ data: { slots: ['pickup', 'proxy', 'announce'], is_default: true } })
   updateQuickActions.mockResolvedValue({ data: {} })
 })
@@ -129,6 +136,27 @@ describe('QuickActionsBar — 非編輯態：點模組即導覽', () => {
     await w.findAll('.qa-mod')[1].trigger('click')
     expect(pushMock).toHaveBeenCalledWith('/pickup')
   })
+
+  it('孩子相關模組（route 帶 :studentId 佔位符）：導向時代入目前選定孩子的 id', async () => {
+    getQuickActions.mockResolvedValue({
+      data: { slots: ['childPhotos', 'proxy', 'announce'], is_default: false },
+    })
+    const w = mountBar()
+    await flushPromises()
+    await w.findAll('.qa-mod')[0].trigger('click')
+    expect(pushMock).toHaveBeenCalledWith('/children/42/photos')
+  })
+
+  it('孩子相關模組但沒有選定孩子：退回孩子 hub /child，不 push 出 /children/null', async () => {
+    mockSelectedId.value = null
+    getQuickActions.mockResolvedValue({
+      data: { slots: ['childPhotos', 'proxy', 'announce'], is_default: false },
+    })
+    const w = mountBar()
+    await flushPromises()
+    await w.findAll('.qa-mod')[0].trigger('click')
+    expect(pushMock).toHaveBeenCalledWith('/child')
+  })
 })
 
 describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
@@ -149,7 +177,11 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     expect(w.find('.sheet-stub').exists()).toBe(true)
     expect(w.find('.sheet-stub-title').text()).toContain('接送')
     const candidateLabels = w.findAll('.qa-sheet-label').map((n) => n.text())
-    expect(candidateLabels).toEqual(['娃娃車', '學費', '待簽文件', '行事曆'])
+    expect(candidateLabels).toEqual([
+      '娃娃車', '學費', '待簽文件', '行事曆',
+      '請假', '用藥委託', '課後才藝', '活動調查',
+      '孩子檔案', '成長報告', '照片牆', '健康紀錄',
+    ])
   })
 
   it('選一個候選模組：呼叫 PUT，該格換成新模組，底部選單關閉', async () => {

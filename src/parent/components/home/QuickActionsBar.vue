@@ -23,6 +23,7 @@ import ParentBottomSheet from '../ParentBottomSheet.vue'
 import SkeletonBlock from '../SkeletonBlock.vue'
 import { toast } from '../../utils/toast'
 import { QUICK_ACTION_CATALOG, useQuickActionSlots } from '../../composables/useQuickActionSlots'
+import { useChildSelection } from '../../composables/useChildSelection'
 
 type StatusTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'info'
 
@@ -41,6 +42,18 @@ const { slots, loading, isDefault, persisting, availableModules, swap, resetToDe
   useQuickActionSlots()
 onMounted(load)
 
+// 孩子相關四個模組（child*）的 route 帶 `:studentId` 佔位符（見
+// quickActionModules.ts 檔頭註解）；useChildSelection() 是模組層級單例
+// ref，跟 TodayView 讀的是同一份「目前選定孩子」，不用另外傳 prop。
+const { selectedId } = useChildSelection()
+
+function resolveRoute(route: string): string {
+  if (!route.includes(':studentId')) return route
+  // 理論上 QuickActionsBar 只在 TodayView 已解出 selectedChild 後才會渲染，
+  // 這裡仍防禦性 fallback 到孩子 hub，避免任何邊界情況下 push 出 `/children/null`。
+  return selectedId.value ? route.replace(':studentId', String(selectedId.value)) : '/child'
+}
+
 const editing = ref(false)
 const sheetOpen = ref(false)
 const activeSlotIndex = ref<number | null>(null)
@@ -55,7 +68,7 @@ function onModuleClick(idx: number): void {
     sheetOpen.value = true
     return
   }
-  router.push(QUICK_ACTION_CATALOG[slots.value[idx]].route)
+  router.push(resolveRoute(QUICK_ACTION_CATALOG[slots.value[idx]].route))
 }
 
 /** 家長端慣例：axios 攔截器 normalize 出 displayMessage，優先顯示後端實際原因

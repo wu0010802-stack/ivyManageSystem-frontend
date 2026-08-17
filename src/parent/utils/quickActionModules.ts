@@ -34,6 +34,18 @@ export interface QuickActionModule {
  * parent-icon-names.mjs 規則 5）是「同一行只要出現 icon 字樣，該行所有引號
  * 字串都當候選名」的寬鬆規則，寫成單行會把其他欄位（如 key／tone 的字面值）
  * 誤判成缺字型的 icon 名。拆行後 icon 那行只留 icon 字串。
+ *
+ * 2026-08-17 補齊「事務」hub（AdminListView）與「孩子」hub（ChildHubView）既有
+ * 但先前漏收錄的模組（leaves/medications/activity/surveys/child*）——原目錄只
+ * 涵蓋首頁 bento 既有路由，未隨功能成長同步擴充，家長端點編輯永遠只看得到
+ * 寥寥幾個候選。**不收錄聯絡簿**：聯絡簿已是 QuickActionsBar.vue 的滿版大按鈕
+ * （固定顯示，不經三格 slots 機制），收進 catalog 會造成重複入口。
+ *
+ * ⚠ route 含 `:studentId` 佔位符的模組（child* 四項）代表該路由需要「目前選定
+ * 孩子」才能導覽——catalog 本身是純資料，不持有 selectedId 狀態，實際替換成
+ * 真實 studentId 的邏輯在 QuickActionsBar.vue 的 resolveRoute()（讀
+ * useChildSelection() 的單例 selectedId；缺選定孩子時退回 `/child` 孩子 hub
+ * 讓家長自己選）。
  */
 export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = {
   pickup: {
@@ -91,6 +103,70 @@ export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = {
     tone: 'leaf',
     route: '/calendar',
     icon: 'calendar_month',
+  },
+  leaves: {
+    key: 'leaves',
+    label: '請假',
+    sub: '申請與查詢',
+    tone: 'coral',
+    route: '/leaves',
+    icon: 'event_busy',
+  },
+  medications: {
+    key: 'medications',
+    label: '用藥委託',
+    sub: '委託用藥單',
+    tone: 'grape',
+    route: '/medications',
+    icon: 'medication',
+  },
+  activity: {
+    key: 'activity',
+    label: '課後才藝',
+    sub: '報名與紀錄',
+    tone: 'sky',
+    route: '/activity',
+    icon: 'palette',
+  },
+  surveys: {
+    key: 'surveys',
+    label: '活動調查',
+    sub: '參加意願回覆',
+    tone: 'amber',
+    route: '/surveys',
+    icon: 'fact_check',
+  },
+  childProfile: {
+    key: 'childProfile',
+    label: '孩子檔案',
+    sub: '基本資料',
+    tone: 'teal',
+    route: '/children/:studentId',
+    icon: 'person',
+  },
+  childReports: {
+    key: 'childReports',
+    label: '成長報告',
+    sub: '歷次報告',
+    tone: 'brand',
+    route: '/children/:studentId/reports',
+    icon: 'insights',
+  },
+  childPhotos: {
+    key: 'childPhotos',
+    label: '照片牆',
+    sub: '孩子的照片',
+    tone: 'grape',
+    route: '/children/:studentId/photos',
+    icon: 'photo_library',
+  },
+  childMeasurements: {
+    key: 'childMeasurements',
+    label: '健康紀錄',
+    sub: '生長曲線',
+    tone: 'sky',
+    route: '/children/:studentId/measurements',
+    icon: 'monitor_weight',
   },
 }
 
