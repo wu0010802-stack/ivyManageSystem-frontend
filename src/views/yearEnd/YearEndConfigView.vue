@@ -109,8 +109,11 @@ function classroomName(id: number): string {
 }
 
 // ---- Load ----
+const orgLoadError = ref(false)
+
 async function loadOrgSettings() {
   orgLoading.value = true
+  orgLoadError.value = false
   try {
     const res = await getOrgSettings(cycleId)
     orgSettings.value = res.data
@@ -129,13 +132,17 @@ async function loadOrgSettings() {
     }
   } catch {
     ElMessage.error('全校設定載入失敗')
+    orgLoadError.value = true
   } finally {
     orgLoading.value = false
   }
 }
 
+const classLoadError = ref(false)
+
 async function loadClassTargets() {
   classLoading.value = true
+  classLoadError.value = false
   try {
     const res = await getClassTargets(cycleId)
     classTargets.value = res.data
@@ -149,6 +156,7 @@ async function loadClassTargets() {
     }
   } catch {
     ElMessage.error('班級設定載入失敗')
+    classLoadError.value = true
   } finally {
     classLoading.value = false
   }
@@ -314,6 +322,8 @@ defineExpose({
   saveAllClassTargets,
   goToYearEndRules,
   cycleId,
+  orgLoadError,
+  classLoadError,
 })
 
 onMounted(async () => {
@@ -335,6 +345,10 @@ onMounted(async () => {
 
       <!-- 全校目標 (org_settings) -->
       <h3 class="sub-title">全校目標</h3>
+      <div v-if="orgLoadError" class="yec-error">
+        載入失敗
+        <el-button data-test="org-load-retry" size="small" text type="primary" @click="loadOrgSettings">重試</el-button>
+      </div>
       <div
         v-loading="orgLoading"
         class="org-settings-grid"
@@ -439,6 +453,10 @@ onMounted(async () => {
         >
           全部儲存
         </el-button>
+      </div>
+      <div v-if="classLoadError" class="yec-error">
+        載入失敗
+        <el-button data-test="class-load-retry" size="small" text type="primary" @click="loadClassTargets">重試</el-button>
       </div>
       <el-table
         v-loading="classLoading"
@@ -558,6 +576,14 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.yec-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
 .year-end-config-view {
   padding: var(--space-4);
 }

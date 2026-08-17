@@ -223,6 +223,16 @@ function reopenToOpen() {
           style="margin-bottom: 12px"
         />
 
+        <!-- CLOSED 週期語意明示——已封存，僅能操作退回鎖定（批次 A①／Batch 10 補齊，
+             原本只有 LOCKED 有對應提示，CLOSED 只能從按鈕組合變化間接推敲狀態） -->
+        <el-alert
+          v-if="cycle?.status === 'CLOSED'"
+          type="info" :closable="false" show-icon
+          title="週期已封存：僅可檢視與匯出；如需異動請先退回鎖定狀態。"
+          data-test="closed-readonly-hint"
+          style="margin-bottom: 12px"
+        />
+
         <div class="ye-toolbar">
           <template v-if="canFinalize && cycle">
             <el-button

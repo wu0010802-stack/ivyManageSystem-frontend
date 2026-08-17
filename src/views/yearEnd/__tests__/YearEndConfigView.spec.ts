@@ -530,6 +530,40 @@ describe('YearEndConfigView', () => {
     expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('儲存失敗')
   })
 
+  it('全校設定載入失敗時標記 orgLoadError，重試成功後清除', async () => {
+    stubSupportApis()
+    vi.mocked(yearEndApi.getOrgSettings).mockRejectedValueOnce(new Error('network'))
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { orgLoadError: boolean; loadOrgSettings: () => Promise<void> }
+    expect(vm.orgLoadError).toBe(true)
+
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValueOnce({ data: [] } as never)
+    await vm.loadOrgSettings()
+    await nextTick()
+
+    expect(vm.orgLoadError).toBe(false)
+    expect(yearEndApi.getOrgSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('班級設定載入失敗時標記 classLoadError，重試成功後清除', async () => {
+    stubSupportApis()
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockRejectedValueOnce(new Error('network'))
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { classLoadError: boolean; loadClassTargets: () => Promise<void> }
+    expect(vm.classLoadError).toBe(true)
+
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValueOnce({ data: [] } as never)
+    await vm.loadClassTargets()
+    await nextTick()
+
+    expect(vm.classLoadError).toBe(false)
+    expect(yearEndApi.getClassTargets).toHaveBeenCalledTimes(2)
+  })
+
   // Task 15：「前往年終規則設定」改直達巢狀路由（非舊 query 相容層）；
   // 「← 返回」按鈕移除（shell 麵包屑已提供導航）。
   describe('跳轉路徑更新（Task 15）', () => {
