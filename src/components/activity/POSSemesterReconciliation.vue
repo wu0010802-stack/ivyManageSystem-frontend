@@ -137,57 +137,7 @@
         <div v-if="truncated" class="pos-semester__stats-caption">
           以下為部分合計（已載入 {{ items.length }} / {{ totalActive }} 筆）
         </div>
-        <div class="pos-semester__stats">
-          <StatCard
-            label="報名筆數"
-            :value="String(totals.registration_count || 0)"
-            :icon="Tickets"
-            color="info"
-            variant="filled"
-          />
-          <StatCard
-            label="應繳"
-            :value="formatTWD(totals.total_amount || 0)"
-            :icon="Wallet"
-            color="primary"
-            variant="filled"
-          />
-          <StatCard
-            label="已繳"
-            :value="formatTWD(totals.paid_amount || 0)"
-            :icon="Money"
-            color="success"
-            variant="filled"
-          />
-          <StatCard
-            label="欠款"
-            :value="formatTWD(totals.outstanding_amount || 0)"
-            :icon="Warning"
-            color="danger"
-            variant="filled"
-          />
-          <StatCard
-            label="已簽核金額"
-            :value="formatTWD(totals.approved_paid_amount || 0)"
-            :icon="CircleCheck"
-            color="success"
-            variant="filled"
-          />
-          <StatCard
-            label="待簽核金額"
-            :value="formatTWD(totals.pending_paid_amount || 0)"
-            :icon="Clock"
-            color="warning"
-            variant="filled"
-          />
-          <StatCard
-            label="非 POS 已繳"
-            :value="formatTWD(totals.offline_paid_amount || 0)"
-            :icon="Finished"
-            color="info"
-            variant="filled"
-          />
-        </div>
+        <StatStrip :items="semesterStripItems" />
         <div v-if="(totals.offline_paid_amount || 0) > 0" class="pos-semester__hint">
           「非 POS 已繳」：直接寫入 paid_amount 但無對應收款紀錄的金額（多為歷史匯入），
           無法判斷簽核狀態。可執行 <code>scripts/backfill_import_payments.py</code> 補齊後即可納入簽核流程。
@@ -356,19 +306,10 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import {
-  CircleCheck,
-  Clock,
-  Finished,
-  Money,
-  RefreshRight,
-  Tickets,
-  Wallet,
-  Warning,
-} from '@element-plus/icons-vue'
+import { RefreshRight } from '@element-plus/icons-vue'
 
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
-import StatCard from '@/components/common/StatCard.vue'
+import StatStrip, { type StatStripItem } from '@/components/common/StatStrip.vue'
 import POSSignoffLedger from '@/components/activity/POSSignoffLedger.vue'
 import POSRegChangesTimeline from '@/components/activity/POSRegChangesTimeline.vue'
 import { getClassrooms } from '@/api/classrooms'
@@ -414,6 +355,29 @@ const totals = ref<{
   [key: string]: unknown
 }>({})
 const classroomOptions = ref<string[]>([])
+
+// 詳細數字統計列：常態安靜，只有例外數字上色（欠款、尚待簽核）
+const semesterStripItems = computed((): StatStripItem[] => {
+  const t = totals.value
+  return [
+    { label: '報名筆數', value: String(t.registration_count || 0) },
+    { label: '應繳', value: formatTWD(t.total_amount || 0) },
+    { label: '已繳', value: formatTWD(t.paid_amount || 0) },
+    {
+      label: '欠款',
+      value: formatTWD(t.outstanding_amount || 0),
+      tone: (t.outstanding_amount || 0) > 0 ? 'danger' : undefined,
+    },
+    { label: '已簽核金額', value: formatTWD(t.approved_paid_amount || 0) },
+    {
+      label: '待簽核金額',
+      value: formatTWD(t.pending_paid_amount || 0),
+      tone: (t.pending_paid_amount || 0) > 0 ? 'warning' : undefined,
+    },
+    { label: '非 POS 已繳', value: formatTWD(t.offline_paid_amount || 0) },
+  ]
+})
+
 // High（2026-06-24 code review）：後端在報名數超過單次查詢上限時回 truncated=true
 // + total_active（母體總數），此時 items / totals 只是「已載入筆數的部分合計」。
 // 必須保存並顯示，否則對帳者會把部分合計誤當全學期總計而靜默少算。
@@ -629,12 +593,6 @@ onMounted(() => {
 
 .pos-semester__detail-collapse {
   border: none;
-}
-
-.pos-semester__stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
 }
 
 /* 原本寫死淺色 hex，深色模式下是淺底＋翻轉後的近白字＝看不見。

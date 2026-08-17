@@ -5,7 +5,6 @@
         <el-button
           v-if="canApprove"
           size="small"
-          :icon="Warning"
           @click="$router.push('/activity/audit/pos-unlock')"
         >
           異常稽核軌跡
@@ -115,36 +114,7 @@
         </template>
 
         <div v-if="detail" class="pos-approval__detail">
-          <div class="pos-approval__stat-grid">
-            <StatCard
-              label="收款"
-              :value="formatTWD(detail.payment_total)"
-              :icon="Money"
-              color="success"
-              variant="filled"
-            />
-            <StatCard
-              label="退款"
-              :value="formatTWD(detail.refund_total)"
-              :icon="RefreshLeft"
-              color="warning"
-              variant="filled"
-            />
-            <StatCard
-              label="淨額"
-              :value="formatTWD(detail.net_total)"
-              :icon="Wallet"
-              color="primary"
-              variant="filled"
-            />
-            <StatCard
-              label="筆數"
-              :value="String(detail.transaction_count)"
-              :icon="Tickets"
-              color="info"
-              variant="filled"
-            />
-          </div>
+          <StatStrip :items="detailStripItems" />
 
           <div v-if="methodEntries.length" class="pos-approval__methods">
             <span
@@ -435,20 +405,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Money,
-  RefreshLeft,
-  RefreshRight,
-  Tickets,
-  Wallet,
-  Warning,
-} from '@element-plus/icons-vue'
+import { RefreshRight } from '@element-plus/icons-vue'
 
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import POSCloseHistoryPanel from '@/components/activity/POSCloseHistoryPanel.vue'
 import POSSemesterReconciliation from '@/components/activity/POSSemesterReconciliation.vue'
-import StatCard from '@/components/common/StatCard.vue'
+import StatStrip, { type StatStripItem } from '@/components/common/StatStrip.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useClientTableFilter } from '@/composables'
 import { CASH_METHOD, formatTWD } from '@/constants/pos'
@@ -567,6 +530,22 @@ const approveDisabled = computed(
 const isFormDirty = computed(
   () => form.actualCashCount != null || (form.note || '').trim() !== '',
 )
+
+// 與 POS 收銀頁的日結列同一套呈現：退款只在發生時上色，淨額是簽核人核對的錨點
+const detailStripItems = computed((): StatStripItem[] => {
+  const d = detail.value
+  if (!d) return []
+  return [
+    { label: '收款', value: formatTWD(d.payment_total ?? 0) },
+    {
+      label: '退款',
+      value: formatTWD(d.refund_total ?? 0),
+      tone: (d.refund_total ?? 0) > 0 ? 'warning' : undefined,
+    },
+    { label: '淨額', value: formatTWD(d.net_total ?? 0), emphasis: true },
+    { label: '筆數', value: String(d.transaction_count ?? 0) },
+  ]
+})
 
 const methodEntries = computed((): [string, number][] => {
   if (!detail.value || !detail.value.by_method) return []
@@ -1031,12 +1010,6 @@ onMounted(refreshAll)
   gap: 16px;
 }
 
-.pos-approval__stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-}
-
 .pos-approval__methods {
   display: flex;
   gap: 8px;
@@ -1168,9 +1141,6 @@ onMounted(refreshAll)
 @media (max-width: 1000px) {
   .pos-approval__body {
     grid-template-columns: 1fr;
-  }
-  .pos-approval__stat-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

@@ -10,7 +10,7 @@
       class="pos-daily-bar__approved-alert"
     >
       <template #title>
-        🔒 本日已日結簽核，無法再收款或退款。若需補登交易，請先於「POS 日結簽核」解鎖該日。
+        本日已日結簽核，無法再收款或退款。若需補登交易，請先於「POS 日結簽核」解鎖該日。
       </template>
     </el-alert>
 
@@ -45,49 +45,19 @@
       class="pos-daily-bar__cash-alert"
     >
       <template #title>
-        💰 抽屜現金已累積 {{ formatTWD(data.cash_in_drawer) }}
+        抽屜現金已累積 {{ formatTWD(data.cash_in_drawer) }}
         （≥ 警報門檻 {{ formatTWD(data.cash_warning_threshold) }}）；建議盡早將現金存入銀行避免遺失風險
       </template>
     </el-alert>
 
-    <div class="pos-daily-bar">
-      <StatCard
-        label="今日收款"
-        :value="amountText(data?.payment_total)"
-        :icon="Money"
-        color="success"
-        variant="filled"
-      />
-      <StatCard
-        label="今日退款"
-        :value="amountText(data?.refund_total)"
-        :icon="RefreshLeft"
-        color="warning"
-        variant="filled"
-      />
-      <StatCard
-        label="淨額"
-        :value="amountText(data?.net)"
-        :icon="Wallet"
-        color="primary"
-        variant="filled"
-      />
-      <StatCard
-        label="筆數（收/退）"
-        :value="countText"
-        :icon="Tickets"
-        color="info"
-        variant="filled"
-      />
-    </div>
+    <StatStrip :items="stripItems" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Money, RefreshLeft, Tickets, Wallet } from '@element-plus/icons-vue'
 
-import StatCard from '@/components/common/StatCard.vue'
+import StatStrip, { type StatStripItem } from '@/components/common/StatStrip.vue'
 import { formatTWD } from '@/constants/pos'
 import type { ApiResponse } from '@/api/_generated/typed'
 
@@ -116,6 +86,19 @@ const countText = computed((): string => {
   if (!props.data) return '—'
   return `${props.data.payment_count ?? 0} / ${props.data.refund_count ?? 0}`
 })
+
+// 退款只在真的發生時上警示色；淨額是收銀員一眼要看的錨點。
+// 無資料（「—」）時一律不上色，避免把缺值染成有語意的狀態。
+const stripItems = computed((): StatStripItem[] => [
+  { label: '今日收款', value: amountText(props.data?.payment_total) },
+  {
+    label: '今日退款',
+    value: amountText(props.data?.refund_total),
+    tone: props.data && (props.data.refund_total ?? 0) > 0 ? 'warning' : undefined,
+  },
+  { label: '淨額', value: amountText(props.data?.net), emphasis: true },
+  { label: '筆數（收/退）', value: countText.value },
+])
 </script>
 
 <style scoped>
@@ -134,18 +117,5 @@ const countText = computed((): string => {
 
 .pos-daily-bar__retry {
   margin-left: 8px;
-}
-
-.pos-daily-bar {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
-  gap: 12px;
-  align-items: stretch;
-}
-
-@media (max-width: 900px) {
-  .pos-daily-bar {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 </style>
