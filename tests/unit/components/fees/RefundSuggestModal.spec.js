@@ -87,10 +87,17 @@ describe('RefundSuggestModal', () => {
       suggested_amount: 12667,
     }
     wrapper.vm.form.amount = 12667
-    wrapper.vm.form.reason = '中途離園'
+    // reason 需 ≥5 字（canSubmit 門檻；舊測試靠 stub 不接 disabled 繞過，新 onFooterConfirm 有明確防呆）
+    wrapper.vm.form.reason = '中途離園退費'
     await nextTick()
-    const buttons = wrapper.findAll('button')
-    // 最後一個 button 是 footer 確認退費
+    // 2026-08-17 review state：第一按進 review（尚不送出）
+    let buttons = wrapper.findAll('button')
+    await buttons[buttons.length - 1].trigger('click')
+    await nextTick()
+    expect(refundFeeRecord).not.toHaveBeenCalled()
+
+    // 第二按（footer 最後一顆「確認退費 NT$X」）才真正送出
+    buttons = wrapper.findAll('button')
     await buttons[buttons.length - 1].trigger('click')
     await nextTick()
     await nextTick()

@@ -4,12 +4,12 @@ import { nextTick } from 'vue'
 
 // ── API mocks ──────────────────────────────────────────────────────────────
 const getFeeRecords = vi.fn()
-const getFeeRefunds = vi.fn()
+const getRefundedFeeRecords = vi.fn()
 const getFeePeriods = vi.fn()
 
 vi.mock('@/api/fees', () => ({
   getFeeRecords: (...a) => getFeeRecords(...a),
-  getFeeRefunds: (...a) => getFeeRefunds(...a),
+  getRefundedFeeRecords: (...a) => getRefundedFeeRecords(...a),
   getFeePeriods: (...a) => getFeePeriods(...a),
 }))
 
@@ -67,62 +67,51 @@ describe('FeeRefundsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getFeeRecords.mockResolvedValue({ items: [], total: 0 })
-    getFeeRefunds.mockResolvedValue({
-      record_id: 0,
-      student_name: '',
-      total_refunded: 0,
-      refunds: [],
-    })
+    getRefundedFeeRecords.mockResolvedValue({ total: 0, page: 1, page_size: 20, items: [] })
     getFeePeriods.mockResolvedValue(['2025-1'])
   })
 
-  it('mount 後呼叫 getFeeRecords + getFeeRefunds 並只保留有退費的 record', async () => {
-    getFeeRecords.mockResolvedValue({
+  it('mount 後呼叫 GET /fees/refunds（伺服器分頁）並映射彙總列（Phase 2，2026-08-17）', async () => {
+    getRefundedFeeRecords.mockResolvedValue({
+      total: 1,
+      page: 1,
+      page_size: 20,
       items: [
-        { id: 1, student_name: '小明', classroom_name: '小班', period: '2025-1',
-          fee_item_name: '學費', amount_paid: 5000 },
-        { id: 2, student_name: '小華', classroom_name: '中班', period: '2025-1',
-          fee_item_name: '材料費', amount_paid: 1000 },
-        { id: 3, student_name: '未繳', classroom_name: '大班', period: '2025-1',
-          fee_item_name: '學費', amount_paid: 0 }, // 未繳：不會跑 refunds
-      ],
-      total: 3,
-    })
-    getFeeRefunds.mockImplementation((id) => {
-      if (id === 1) {
-        return Promise.resolve({
+        {
           record_id: 1,
+          student_id: 10,
           student_name: '小明',
+          classroom_name: '小班',
+          period: '2025-1',
+          fee_item_name: '學費',
+          fee_type: 'monthly',
+          amount_due: 5000,
+          amount_paid: 5000,
           total_refunded: 1200,
+          refund_count: 1,
+          latest_refund_at: '2026-05-10T10:00:00',
           refunds: [
             { id: 11, amount: 1200, reason: '中途離園', notes: '', refunded_by: 'admin',
               refunded_at: '2026-05-10T10:00:00' },
           ],
-        })
-      }
-      // record 2 沒退費紀錄
-      return Promise.resolve({ record_id: id, student_name: '', total_refunded: 0, refunds: [] })
+        },
+      ],
     })
 
     const wrapper = mountTab()
     await flushPromises()
-    // onMounted 內 fetch 可能尚未跑完，明確再觸發一次以等待 settle
-    await wrapper.vm.$.setupState.loadRefundedRecords()
-    await flushPromises()
 
-    // 只對有繳費的兩筆呼叫 getFeeRefunds（id=3 amount_paid=0 略過）
-    expect(getFeeRecords).toHaveBeenCalled()
-    expect(getFeeRefunds).toHaveBeenCalledWith(1)
-    expect(getFeeRefunds).toHaveBeenCalledWith(2)
-    expect(getFeeRefunds).not.toHaveBeenCalledWith(3)
+    expect(getRefundedFeeRecords).toHaveBeenCalled()
+    const params = getRefundedFeeRecords.mock.calls[0][0]
+    expect(params.page).toBe(1)
 
-    // 結果只剩 record 1（有 refund）
     const rows = wrapper.vm.$.setupState.refundedRows
     expect(rows.length).toBe(1)
-    expect(rows[0].id).toBe(1)
+    expect(rows[0].id).toBe(1) // record_id 映射為 id（row-key 與再次退費沿用）
     expect(rows[0]._refunds.length).toBe(1)
     expect(rows[0]._total_refunded).toBe(1200)
     expect(rows[0]._latest_refund_at).toBe('2026-05-10T10:00:00')
+    expect(wrapper.vm.$.setupState.total).toBe(1)
   })
 
   it('「+ 新增退費」按鈕打開 picker dialog', async () => {
@@ -164,34 +153,16 @@ describe('FeeRefundsTab', () => {
     expect(wrapper.vm.$.setupState.refundTarget).toEqual(row)
   })
 
-  it('getFeeRefunds 失敗時不阻斷其他 record 顯示', async () => {
-    getFeeRecords.mockResolvedValue({
-      items: [
-        { id: 1, student_name: '小明', amount_paid: 5000, period: '2025-1', fee_item_name: '學費' },
-        { id: 2, student_name: '小華', amount_paid: 5000, period: '2025-1', fee_item_name: '學費' },
-      ],
-      total: 2,
-    })
-    getFeeRefunds.mockImplementation((id) => {
-      if (id === 1) return Promise.reject(new Error('500'))
-      return Promise.resolve({
-        record_id: 2,
-        total_refunded: 500,
-        refunds: [
-          { id: 21, amount: 500, reason: '行政錯誤', refunded_by: 'admin',
-            refunded_at: '2026-05-12T12:00:00' },
-        ],
-      })
-    })
-
+  it('載入失敗 → loadError 持久呈現，重試成功後恢復（伺服器分頁單一請求語意）', async () => {
+    getRefundedFeeRecords.mockRejectedValueOnce(new Error('500'))
     const wrapper = mountTab()
     await flushPromises()
+
+    expect(wrapper.vm.$.setupState.loadError).toBe(true)
+
+    getRefundedFeeRecords.mockResolvedValue({ total: 0, page: 1, page_size: 20, items: [] })
     await wrapper.vm.$.setupState.loadRefundedRecords()
     await flushPromises()
-
-    const rows = wrapper.vm.$.setupState.refundedRows
-    // record 1 失敗 → 不會出現；record 2 成功 → 出現
-    expect(rows.length).toBe(1)
-    expect(rows[0].id).toBe(2)
+    expect(wrapper.vm.$.setupState.loadError).toBe(false)
   })
 })

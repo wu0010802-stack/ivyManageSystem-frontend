@@ -7,6 +7,7 @@ import { nextTick } from 'vue'
 // 無 router 注入時 mount 即炸，mock 之
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {} }),
+  useRouter: () => ({ replace: vi.fn() }),
 }))
 
 // ── API mocks ──────────────────────────────────────────────────────────────
@@ -102,24 +103,29 @@ describe('StudentFeeView', () => {
     expect(FeeRecordsTabModule.__fetchRecords).toHaveBeenCalled()
   })
 
-  it('渲染三個 tab 子元件：費用範本 / 繳費記錄 / 退費管理', async () => {
+  it('lazy mount：初始只渲染 records，其他 tab 造訪後才 mount（2026-08-17 UI/UX 重構）', async () => {
     const wrapper = mountFeeView()
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="fee-template-tab"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="fee-records-tab"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="fee-refunds-tab"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="fee-template-tab"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="fee-refunds-tab"]').exists()).toBe(false)
+
+    // 造訪後 mount（走真實切換路徑 onTabChange，同步 visitedTabs）
+    wrapper.vm.$.setupState.onTabChange('templates')
+    await nextTick()
+    expect(wrapper.find('[data-testid="fee-template-tab"]').exists()).toBe(true)
   })
 
   it('切換至「繳費記錄」Tab 時呼叫子元件 fetchRecords', async () => {
     const wrapper = mountFeeView()
     await flushPromises()
-    // 預設已在 records；先切走再切回，驗證 watch(activeTab)
-    wrapper.vm.$.setupState.activeTab = 'templates'
+    // 預設已在 records；先切走再切回，驗證 watch(activeTab)（走真實 onTabChange 路徑）
+    wrapper.vm.$.setupState.onTabChange('templates')
     await nextTick()
     FeeRecordsTabModule.__fetchRecords.mockClear()
 
-    wrapper.vm.$.setupState.activeTab = 'records'
+    wrapper.vm.$.setupState.onTabChange('records')
     await nextTick()
     await flushPromises()
 
@@ -131,7 +137,7 @@ describe('StudentFeeView', () => {
     await flushPromises()
     FeeRecordsTabModule.__fetchRecords.mockClear()
 
-    wrapper.vm.$.setupState.activeTab = 'refunds'
+    wrapper.vm.$.setupState.onTabChange('refunds')
     await nextTick()
     await flushPromises()
 
