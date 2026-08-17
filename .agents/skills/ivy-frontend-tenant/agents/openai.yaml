@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ivy 前端租戶安全"
+  short_description: "保護租戶 storage、header、cache、品牌與灰度行為"
+  default_prompt: "Use $ivy-frontend-tenant to implement this tenant-aware frontend change."

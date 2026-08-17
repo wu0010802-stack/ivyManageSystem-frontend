@@ -1,0 +1,31 @@
+{
+  "description": "Ivy frontend 的破壞性操作守衛與敏感變更提醒。",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/Users/yilunwu/Desktop/ivyManageSystem/.codex/hooks/ivy_guard.py\" pre",
+            "timeout": 5,
+            "statusMessage": "檢查 Ivy frontend 操作安全"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/Users/yilunwu/Desktop/ivyManageSystem/.codex/hooks/ivy_guard.py\" post",
+            "timeout": 5,
+            "statusMessage": "檢查 Ivy frontend 敏感變更驗證需求"
+          }
+        ]
+      }
+    ]
+  }
+}
