@@ -436,11 +436,13 @@ export function usePOSCheckout() {
   // ── 送出 ──────────────────────────────────────────────────────
   /**
    * @param {Object} [options]
-   * @param {boolean} [options.print=true] 是否在成功後觸發列印
+   * @param {boolean} [options.print] 已棄用（②收款改造，2026-08-16 起收款不再自動
+   *   列印；PDF 列印一律改由收據 dialog 內手動點擊觸發）。型別保留僅為既有呼叫端
+   *   相容，本函式不再讀取此欄位。
    * @param {Function} [options.onSubmitted] 成功後的回調
    */
   async function submit(options: { print?: boolean; onSubmitted?: () => unknown } = {}) {
-    const { print: shouldPrint = true, onSubmitted } = options
+    const { onSubmitted } = options
     if (!canSubmit.value) return
     const item = selectedItem.value
     if (!item) return
@@ -514,12 +516,11 @@ export function usePOSCheckout() {
       // 送出成功後才釋放 key + payment_date，重試時會復用
       releasePendingTransaction()
 
-      if (shouldPrint) {
-        receiptDialogVisible.value = true
-        await nextTick()
-        // 結帳當下的第一次列印＝正本，不可標補印（2026-08-14 bug hunt）
-        printReceipt({ reprint: false })
-      }
+      // 結帳成功一律顯示核對用收據 dialog；不再自動觸發 PDF 列印（②收款改造，
+      // 2026-08-16）——列印改為使用者於 dialog 內按「列印收據」手動觸發
+      // （POSCheckoutPanel.vue，該按鈕沿用 lastReceipt.is_reprint 判斷首印/補印）。
+      receiptDialogVisible.value = true
+      await nextTick()
       resetTransactionInputs()
       // 刷新：日結、最近交易、搜尋結果（讓剛收款的學生立即從欠費列表消失）
       await Promise.allSettled([

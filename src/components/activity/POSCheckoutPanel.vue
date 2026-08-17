@@ -138,18 +138,39 @@
       align-center
     >
       <div v-if="lastReceipt" class="pos-panel-wrap__receipt">
-        <div class="pos-panel-wrap__receipt-row pos-panel-wrap__receipt-row--lg">
-          <span>收據編號</span>
-          <strong>{{ lastReceipt.receipt_no }}</strong>
+        <!-- 核對區（②收款改造，2026-08-16）：主角改成「這筆錢有沒有收對」，
+             收據編號／國字大寫降級為次要資訊移到下方。 -->
+        <div class="pos-panel-wrap__verify">
+          <div class="pos-panel-wrap__verify-row pos-panel-wrap__verify-row--main">
+            <span>{{ lastReceipt.type === 'refund' ? '本次退費' : '本次收取' }}</span>
+            <strong>{{ formatTWD(lastReceipt.total) }}</strong>
+          </div>
+          <div v-if="primaryReceiptItem" class="pos-panel-wrap__verify-row">
+            <span>該生累計已繳</span>
+            <span>{{ formatTWD(receiptPaidAfter) }}</span>
+          </div>
+          <div v-if="primaryReceiptItem" class="pos-panel-wrap__verify-row">
+            <span>應繳合計</span>
+            <span>{{ formatTWD(receiptTotalAmount) }}</span>
+          </div>
+          <div
+            v-if="primaryReceiptItem"
+            class="pos-panel-wrap__verify-row pos-panel-wrap__verify-row--remaining"
+            :class="receiptRemaining > 0 ? 'is-danger' : 'is-success'"
+          >
+            <span>剩餘欠款</span>
+            <strong>{{ formatTWD(receiptRemaining) }}</strong>
+          </div>
+          <el-alert
+            v-if="lastReceipt.type !== 'refund' && primaryReceiptItem && receiptRemaining === 0"
+            type="success"
+            :closable="false"
+            show-icon
+            title="✓ 已繳清——實收與報名應繳相符"
+            class="pos-panel-wrap__verify-alert"
+          />
         </div>
-        <div class="pos-panel-wrap__receipt-row">
-          <span>{{ lastReceipt.type === 'refund' ? '退款合計' : '應收' }}</span>
-          <strong>{{ formatTWD(lastReceipt.total) }}</strong>
-        </div>
-        <div class="pos-panel-wrap__receipt-row pos-panel-wrap__receipt-row--small">
-          <span></span>
-          <em>{{ toChineseAmount(lastReceipt.total) }}</em>
-        </div>
+
         <div v-if="lastReceipt.tendered != null" class="pos-panel-wrap__receipt-row">
           <span>實收</span>
           <strong>{{ formatTWD(lastReceipt.tendered) }}</strong>
@@ -157,10 +178,6 @@
         <div v-if="lastReceipt.change != null" class="pos-panel-wrap__receipt-row">
           <span>找零</span>
           <strong class="pos-panel-wrap__change">{{ formatTWD(lastReceipt.change) }}</strong>
-        </div>
-        <div class="pos-panel-wrap__receipt-row">
-          <span>方式</span>
-          <strong>{{ lastReceipt.payment_method }}</strong>
         </div>
         <div class="pos-panel-wrap__receipt-items">
           <div
@@ -171,13 +188,24 @@
             {{ formatTWD(item.amount_applied) }}
           </div>
         </div>
+
+        <div class="pos-panel-wrap__receipt-meta">
+          <span>{{ lastReceipt.payment_method }} · 收據編號 {{ lastReceipt.receipt_no }}</span>
+          <em>{{ toChineseAmount(lastReceipt.total) }}</em>
+        </div>
       </div>
       <template #footer>
         <el-button @click="receiptDialogVisible = false">關閉</el-button>
-        <!-- 明確傳 reprint：dialog 內再按一次即為補印（首印由 submit() 自帶
-             reprint:false）。不可寫成 @click="printReceipt"——那會把 MouseEvent
-             當 options 傳進去，只是靠「event.reprint 為 undefined」巧合退回預設。 -->
-        <el-button type="primary" @click="printReceipt({ reprint: true })">重印收據</el-button>
+        <!-- 明確傳 reprint：is_reprint 為真（來自 reprintTransaction）代表這顆按鈕
+             是再印一次、標補印；一般結帳成功後首次點擊視為本收據的正本列印
+             （②收款改造起不再自動列印，改由此按鈕手動觸發）。不可寫成
+             @click="printReceipt"——那會把 MouseEvent 當 options 傳進去。 -->
+        <el-button
+          type="primary"
+          @click="printReceipt({ reprint: !!lastReceipt?.is_reprint })"
+        >
+          {{ lastReceipt?.is_reprint ? '重印收據' : '列印收據' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -250,20 +278,30 @@ interface ReceiptItem {
   student_name?: string
   class_name?: string
   amount_applied?: number
+  new_paid_amount?: number
+  total_amount?: number
 }
 // 收據明細：將 lastReceipt.items (unknown) cast 為具名型別，供模板安全存取
 const receiptItems = computed((): ReceiptItem[] =>
   ((lastReceipt.value?.items as ReceiptItem[]) ?? [])
 )
 
+// 核對區（②收款改造，2026-08-16）：POS 目前每筆交易恆為單一報名，取第一筆即可。
+// new_paid_amount/total_amount 兩欄後端 checkout 與 recent-transactions 回應皆帶，
+// 重印歷史交易（reprintTransaction）走同一 lastReceipt.items 形狀，邏輯共用不需分支。
+const primaryReceiptItem = computed((): ReceiptItem | null => receiptItems.value[0] ?? null)
+const receiptPaidAfter = computed(() => primaryReceiptItem.value?.new_paid_amount ?? 0)
+const receiptTotalAmount = computed(() => primaryReceiptItem.value?.total_amount ?? 0)
+const receiptRemaining = computed(() =>
+  Math.max(0, receiptTotalAmount.value - receiptPaidAfter.value)
+)
+
 function handleToggle(row: Record<string, unknown>, studentName: string) {
   selectItem(row, studentName)
 }
 
-async function handleSubmit(payload: { print?: boolean } = {}) {
-  const { print = true } = payload
+async function handleSubmit() {
   await doSubmit({
-    print,
     onSubmitted: () => props.onAfterCheckout?.(),
   })
 }
@@ -424,24 +462,6 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   color: var(--neutral-600);
 }
 
-.pos-panel-wrap__receipt-row--lg {
-  font-size: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 4px;
-}
-
-.pos-panel-wrap__receipt-row--small {
-  font-size: 12px;
-  font-style: italic;
-  color: var(--text-tertiary);
-  margin-top: -6px;
-}
-
-.pos-panel-wrap__receipt-row--small em {
-  font-style: normal;
-}
-
 .pos-panel-wrap__receipt-row strong {
   color: var(--text-primary);
   font-size: 16px;
@@ -464,6 +484,62 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* 核對區（②收款改造，2026-08-16）：對帳導向的主要視覺焦點 */
+.pos-panel-wrap__verify {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--bg-color);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.pos-panel-wrap__verify-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 14px;
+  color: var(--neutral-600);
+}
+
+.pos-panel-wrap__verify-row--main {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.pos-panel-wrap__verify-row--remaining {
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-color);
+  font-size: 16px;
+}
+
+.pos-panel-wrap__verify-row--remaining.is-danger strong {
+  color: var(--color-danger-hover);
+}
+
+.pos-panel-wrap__verify-row--remaining.is-success strong {
+  color: var(--color-success-hover);
+}
+
+.pos-panel-wrap__verify-alert {
+  margin-top: 4px;
+}
+
+.pos-panel-wrap__receipt-meta {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.pos-panel-wrap__receipt-meta em {
+  font-style: italic;
 }
 
 @media (max-width: 1000px) {

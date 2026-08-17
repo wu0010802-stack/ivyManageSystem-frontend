@@ -99,18 +99,16 @@ describe('usePOSCheckout：首印/補印標記與冪等凍結（2026-08-14）', 
   })
   afterEach(() => vi.clearAllMocks())
 
-  it('結帳後首印：帶 reprint=false，不得標補印', async () => {
+  it('結帳成功：顯示收據 dialog 但不自動觸發列印（②收款改造，2026-08-16）', async () => {
     const { api } = mountComposable()
     vi.mocked(posCheckout).mockResolvedValue(checkoutOk())
 
     api.selectItem(ROW, '王小明')
-    await api.submit({ print: true })
+    await api.submit()
     await flushPromises()
 
-    expect(getPOSReceiptPdf).toHaveBeenCalledWith(
-      'POS-20260814-ABCDEF123456',
-      expect.objectContaining({ reprint: false })
-    )
+    expect(api.receiptDialogVisible.value).toBe(true)
+    expect(getPOSReceiptPdf).not.toHaveBeenCalled()
   })
 
   it('從交易列表補印：帶 reprint=true', async () => {
