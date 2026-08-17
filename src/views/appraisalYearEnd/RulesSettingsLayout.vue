@@ -79,7 +79,7 @@ onMounted(refresh)
   >
     <template #title>
       目前有進行中考核週期（ID {{ openCycle.id }}），規則變更於下次試算/重算生效。
-      <router-link to="/appraisal-year-end/appraisal/current" class="rules-open-cycle-alert__link">
+      <router-link to="/appraisal-year-end/appraisal" class="rules-open-cycle-alert__link">
         前往重算
       </router-link>
     </template>

@@ -32,6 +32,7 @@ const emit = defineEmits<{
   'reject': [summary: Summary]
   'comment': [summary: Summary]
   'open-log': [summary: Summary]
+  'open-detail': [participant: Participant]
   'update:selected-ids': [ids: number[]]
 }>()
 
@@ -72,6 +73,7 @@ function sign(summary: Summary, stage: string) { emit('sign', { summary, stage }
 function reject(summary: Summary) { emit('reject', summary) }
 function comment(summary: Summary) { emit('comment', summary) }
 function openLog(summary: Summary) { emit('open-log', summary) }
+function openDetail(row: Participant) { emit('open-detail', row) }
 </script>
 
 <template>
@@ -87,7 +89,14 @@ function openLog(summary: Summary) { emit('open-log', summary) }
       </template>
     </el-table-column>
     <el-table-column label="員工" width="120">
-      <template #default="{ row }">{{ row.employee_name ?? `員工 ${row.employee_id}` }}</template>
+      <template #default="{ row }">
+        <el-button
+          link
+          type="primary"
+          :data-test="`detail-btn-${row.id}`"
+          @click="openDetail(row)"
+        >{{ row.employee_name ?? `員工 ${row.employee_id}` }}</el-button>
+      </template>
     </el-table-column>
     <el-table-column label="角色群" width="140">
       <template #default="{ row }">{{ ROLE_GROUP_LABEL[row.role_group ?? ''] || row.role_group }}</template>

@@ -85,7 +85,7 @@ export function deriveNextStep(stats: WorkbenchStats): NextStep | null {
       title: `考核還有 ${appraisalPendingSign} 筆未核定`,
       reason: `${appraisalCycle.label}簽核進行中。`,
       ctaLabel: '前往簽核',
-      to: `/appraisal-year-end/appraisal/history?cycle=${appraisalCycle.id}&view=kanban`,
+      to: `/appraisal-year-end/appraisal?cycle=${appraisalCycle.id}&stage=sign&view=kanban`,
     }
   }
   if (payoutReadyCount > 0) {

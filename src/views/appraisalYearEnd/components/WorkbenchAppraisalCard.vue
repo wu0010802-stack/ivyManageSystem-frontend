@@ -56,7 +56,7 @@ watch(() => props.cycle?.id, load, { immediate: true })
     </el-empty>
     <template v-else>
       <SignProgressBar :counts="counts" />
-      <router-link class="wb-card__cta" :to="`/appraisal-year-end/appraisal/history?cycle=${cycle.id}&view=kanban`">前往簽核 →</router-link>
+      <router-link class="wb-card__cta" :to="`/appraisal-year-end/appraisal?cycle=${cycle.id}&stage=sign&view=kanban`">前往簽核 →</router-link>
     </template>
   </el-card>
 </template>

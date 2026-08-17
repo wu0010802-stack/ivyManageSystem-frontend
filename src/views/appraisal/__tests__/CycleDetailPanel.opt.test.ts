@@ -21,6 +21,8 @@ vi.mock('@/api/appraisal', () => ({
   exportAppraisalCycleXlsxUrl: vi.fn().mockReturnValue('/x'),
   exportAppraisalTransferRosterXlsxUrl: vi.fn().mockReturnValue('/y'),
   getSignStatusSummary: vi.fn().mockResolvedValue({ data: { counts: {} } }),
+  getAppraisalAllEmployeesStatus: vi.fn().mockResolvedValue({ data: { participants: [] } }),
+  listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
 }))
 
 vi.mock('element-plus', () => ({
@@ -50,6 +52,7 @@ const stubs = {
   BatchSignButton: stub('BatchSignButton'),
   SummaryLogDrawer: stub('SummaryLogDrawer'),
   SignProgressBar: stub('SignProgressBar'),
+  AggregatedStatusDetailDialog: stub('AggregatedStatusDetailDialog'),
   ElButton: { template: '<button><slot /></button>' },
   ElRadioGroup: { template: '<div><slot /></div>' },
   ElRadioButton: { template: '<button><slot /></button>' },
