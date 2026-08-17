@@ -1,8 +1,9 @@
 <template>
+  <!-- size 用 CSS min()：桌面 720px、窄幅隨 viewport 不截斷 -->
   <el-drawer
     :model-value="modelValue"
     title="費用範本管理"
-    size="720px"
+    size="min(720px, 100vw)"
     @update:model-value="emit('update:modelValue', $event)"
     @open="loadTemplates"
   >
@@ -43,6 +44,8 @@
       v-model="dialogVisible"
       :template="editing"
       :grades="grades"
+      :default-school-year="schoolYear"
+      :default-semester="semester"
       @saved="onSaved"
     />
   </el-drawer>
@@ -143,12 +146,14 @@ if (props.modelValue) void loadTemplates()
 </script>
 
 <style scoped>
-.mb-12 { margin-bottom: 12px; }
+.mb-12 { margin-bottom: var(--space-3); }
 .drawer-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3);
 }
 .term-label { color: var(--el-text-color-secondary); }
 </style>

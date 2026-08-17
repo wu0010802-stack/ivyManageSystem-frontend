@@ -51,34 +51,69 @@ describe('FeeGenerateModal', () => {
     expect(wrapper.emitted('generated')).toBeTruthy()
   })
 
-  it('未預覽前確認鈕 disabled', () => {
+  it('兩階段 footer：未預覽時只有「預覽產單」，無確認鈕', () => {
     const wrapper = mount(FeeGenerateModal, {
       props: { modelValue: true },
       global: { stubs: { 'el-dialog': ElDialogStub } },
     })
-    const confirmBtn = wrapper.findAll('el-button').find((b) => b.text().includes('確認產生'))!
-    // 陷阱：未註冊 Element Plus 時 el-button 是未解析元素，:disabled 綁定的布林值
-    // 一律會被渲染成字串屬性（"true"/"false"），attributes('disabled') 恆為已定義字串，
-    // toBeDefined() 對 enabled 狀態也會恆真；必須用 toBe('true') 精準比對值本身。
-    expect(confirmBtn.attributes('disabled')).toBe('true')
+    const buttons = wrapper.findAll('el-button')
+    expect(buttons.find((b) => b.text().includes('預覽產單'))).toBeTruthy()
+    expect(buttons.find((b) => b.text().includes('確認產生'))).toBeUndefined()
   })
 
-  it('F-1: 預覽後改動表單（學年）→ 舊預覽失效，確認鈕回到 disabled', async () => {
+  it('已預覽 → footer primary 為「確認產生 N 筆」，並顯示學年/學期/類型/跳過摘要', async () => {
+    const wrapper = mount(FeeGenerateModal, {
+      props: { modelValue: true },
+      global: { stubs: { 'el-dialog': ElDialogStub } },
+    })
+    await wrapper.findAll('el-button').find((b) => b.text().includes('預覽產單'))!.trigger('click')
+    await flushPromises(); await nextTick()
+
+    const confirmBtn = wrapper.findAll('el-button').find((b) => b.text().includes('確認產生'))
+    expect(confirmBtn).toBeTruthy()
+    expect(confirmBtn!.text()).toContain('確認產生 12 筆')
+
+    const summary = wrapper.find('[data-test="generate-preview-summary"]')
+    expect(summary.exists()).toBe(true)
+    const text = summary.text()
+    expect(text).toContain('學年度')
+    expect(text).toContain('學期')
+    expect(text).toContain('12')
+    expect(text).toContain('3') // skipped
+  })
+
+  it('F-1: 預覽後改動表單（學年）→ 舊預覽失效，footer 回到「預覽產單」', async () => {
     const wrapper = mount(FeeGenerateModal, {
       props: { modelValue: true },
       global: { stubs: { 'el-dialog': ElDialogStub, 'el-input-number': ElInputNumberStub } },
     })
-    const confirmBtn = () => wrapper.findAll('el-button').find((b) => b.text().includes('確認產生'))!
+    const confirmBtn = () => wrapper.findAll('el-button').find((b) => b.text().includes('確認產生'))
 
-    await wrapper.findAll('el-button').find((b) => b.text().includes('預覽'))!.trigger('click')
+    await wrapper.findAll('el-button').find((b) => b.text().includes('預覽產單'))!.trigger('click')
     await flushPromises(); await nextTick()
-    // 預覽成功後（created: 12）確認鈕應可按
-    expect(confirmBtn().attributes('disabled')).toBe('false')
+    // 預覽成功後（created: 12）確認鈕出現
+    expect(confirmBtn()).toBeTruthy()
 
     await wrapper.find('[data-test="school-year-input"]').setValue(116)
     await nextTick()
 
-    // 表單改動後，舊 preview 是用過期參數換來的，確認鈕必須回到 disabled
-    expect(confirmBtn().attributes('disabled')).toBe('true')
+    // 表單改動後，舊 preview 是用過期參數換來的 → 確認鈕消失、回到預覽階段
+    expect(confirmBtn()).toBeUndefined()
+    expect(wrapper.findAll('el-button').find((b) => b.text().includes('預覽產單'))).toBeTruthy()
+  })
+
+  it('開啟時繼承 schoolYear/semester props 並清除舊 preview', async () => {
+    const wrapper = mount(FeeGenerateModal, {
+      props: { modelValue: false, schoolYear: 116, semester: 2 },
+      global: { stubs: { 'el-dialog': ElDialogStub } },
+    })
+    await wrapper.setProps({ modelValue: true })
+    await nextTick()
+
+    await wrapper.findAll('el-button').find((b) => b.text().includes('預覽產單'))!.trigger('click')
+    await flushPromises()
+    const payload = generateFeeRecords.mock.calls[0][0] as { school_year: number; semester: number }
+    expect(payload.school_year).toBe(116)
+    expect(payload.semester).toBe(2)
   })
 })

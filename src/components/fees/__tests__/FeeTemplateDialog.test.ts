@@ -116,4 +116,40 @@ describe('FeeTemplateDialog', () => {
     expect(payload.amount).toBe(0)
     expect(payload.grade_id).toBe(null)
   })
+
+  it('新增模式繼承 Drawer 的期別（defaultSchoolYear/defaultSemester），不固定回 114-1', async () => {
+    const wrapper = mount(FeeTemplateDialog, {
+      props: {
+        modelValue: true,
+        template: null,
+        grades: [{ id: 2, name: '中班' }],
+        defaultSchoolYear: 115,
+        defaultSemester: 2,
+      },
+      global: { stubs: { 'el-dialog': ElDialogStub, 'el-form': ElFormStub } },
+    })
+    await nextTick()
+    await wrapper.findAll('el-button').find((b) => b.text().includes('儲存'))!.trigger('click')
+    await nextTick(); await Promise.resolve()
+    const payload = createFeeTemplate.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.school_year).toBe(115)
+    expect(payload.semester).toBe(2)
+  })
+
+  it('編輯模式仍以既有 template 期別為準，不被 default 期別覆蓋', async () => {
+    const wrapper = mount(FeeTemplateDialog, {
+      props: {
+        modelValue: true,
+        template: { ...baseTemplate, school_year: 114, semester: 1 },
+        grades: [{ id: 2, name: '中班' }],
+        defaultSchoolYear: 115,
+        defaultSemester: 2,
+      },
+      global: { stubs: { 'el-dialog': ElDialogStub, 'el-form': ElFormStub } },
+    })
+    await nextTick()
+    const vm = wrapper.vm as unknown as { form: { school_year: number; semester: number } }
+    expect(vm.form.school_year).toBe(114)
+    expect(vm.form.semester).toBe(1)
+  })
 })

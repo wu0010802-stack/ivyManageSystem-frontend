@@ -6463,6 +6463,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Refunded Records
+         * @description 退費列表（伺服器分頁）：只列「有退費紀錄」的費用記錄，一 record 一列。
+         *
+         *     取代前端掃描前 100 筆 records 再逐筆查 refunds 的 N+1 fan-out；
+         *     彙總（總額/筆數/最近退費時間）以 aggregate subquery 計算，
+         *     當頁 records 的退費明細再以單一 IN 查詢帶出。排序＝最近退費新→舊。
+         */
+        get: operations["list_refunded_records_api_fees_refunds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/summary": {
         parameters: {
             query?: never;
@@ -24645,6 +24669,70 @@ export interface components {
             student_id: number;
             /** Student Name */
             student_name?: string | null;
+        };
+        /**
+         * FeeRefundEntryOut
+         * @description 單筆退費明細（對應 StudentFeeRefund）。
+         */
+        FeeRefundEntryOut: {
+            /** Amount */
+            amount: number;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Reason */
+            reason: string;
+            /** Refunded At */
+            refunded_at?: string | null;
+            /** Refunded By */
+            refunded_by?: string | null;
+        };
+        /**
+         * FeeRefundListOut
+         * @description GET /fees/refunds 回傳（分頁）。
+         */
+        FeeRefundListOut: {
+            /** Items */
+            items: components["schemas"]["FeeRefundRecordOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * FeeRefundRecordOut
+         * @description 一筆「有退費」的學費紀錄列（record 彙總 + 明細）。
+         */
+        FeeRefundRecordOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Fee Type */
+            fee_type?: string | null;
+            /** Latest Refund At */
+            latest_refund_at?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Record Id */
+            record_id: number;
+            /** Refund Count */
+            refund_count: number;
+            /** Refunds */
+            refunds: components["schemas"]["FeeRefundEntryOut"][];
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+            /** Total Refunded */
+            total_refunded: number;
         };
         /** FeeTemplateCreate */
         FeeTemplateCreate: {
@@ -50317,6 +50405,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_refunded_records_api_fees_refunds_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                period?: string | null;
+                student_id?: number | null;
+                student_name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRefundListOut"];
                 };
             };
             /** @description Validation Error */

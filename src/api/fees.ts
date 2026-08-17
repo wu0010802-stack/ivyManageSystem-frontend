@@ -13,6 +13,12 @@ export const refundFeeRecord = (id: number, data: unknown) => api.post(`/fees/re
 export const suggestRefund = (recordId: number, payload: unknown) =>
   api.post(`/fees/records/${recordId}/refund-suggest`, payload).then((res) => res.data)
 export const getFeeRefunds = (id: number) => api.get(`/fees/records/${id}/refunds`).then((res) => res.data)
+// 退費列表（伺服器分頁；Phase 2 取代前端掃 100 筆逐筆查 refunds 的 fan-out）
+// params 維持 unknown：FeeRefundsTab 以 Record<string, unknown> 建構（含條件式賦值），對齊本檔慣例。
+export const getRefundedFeeRecords = (
+  params: unknown,
+): Promise<ApiResponse<'/fees/refunds', 'get'>> =>
+  api.get('/fees/refunds', { params }).then((res) => res.data)
 export const getFeeSummary = (params: unknown) => api.get('/fees/summary', { params }).then((res) => res.data)
 
 // ===== 費用範本 =====

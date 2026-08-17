@@ -89,6 +89,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { createFeeTemplate, updateFeeTemplate } from '@/api/fees'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 import FormSection from '@/components/common/FormSection.vue'
 import { formatCurrency } from '@/utils/currency'
 import { FEE_TYPES } from '@/components/fees/feeTypes'
@@ -121,9 +122,23 @@ const props = withDefaults(defineProps<{
   modelValue: boolean
   template?: FeeTemplateRow | null
   grades?: Grade[]
+  /** 新增模式的預設學年（由 Drawer 傳入目前選定期別）；編輯模式以 template 為準 */
+  defaultSchoolYear?: number
+  /** 新增模式的預設學期；編輯模式以 template 為準 */
+  defaultSemester?: number
 }>(), {
   template: null,
   grades: () => [],
+  defaultSchoolYear: undefined,
+  defaultSemester: undefined,
+})
+
+// 新增模式預設期別：Drawer 傳入的目前選定期別優先；未傳時退回當前學年期
+// （修正舊行為：無論現在是哪個學期，新增一律固定回 114-1）
+const _fallbackTerm = getCurrentAcademicTerm()
+const defaultTerm = () => ({
+  school_year: props.defaultSchoolYear ?? _fallbackTerm.school_year,
+  semester: props.defaultSemester ?? _fallbackTerm.semester,
 })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -146,8 +161,7 @@ interface FormState {
 
 const form = reactive<FormState>({
   grade_id: null,
-  school_year: 114,
-  semester: 1,
+  ...defaultTerm(),
   fee_type: 'registration',
   name: '',
   amount: 0,
@@ -215,8 +229,7 @@ watch(
     } else if (visible) {
       Object.assign(form, {
         grade_id: null,
-        school_year: 114,
-        semester: 1,
+        ...defaultTerm(),
         fee_type: 'registration',
         name: '',
         amount: 0,
@@ -258,20 +271,25 @@ async function onSave() {
     saving.value = false
   }
 }
+
+// 供測試檢視內部狀態（比照 RefundSuggestModal 慣例）
+defineExpose({ form })
 </script>
 
 <style scoped>
+/* 必要資訊用 --text-secondary（tertiary 對小字對比不足）；--danger/--bg-subtle 不存在，
+   有效 token 見 DESIGN.md（--color-danger 系列） */
 .hint {
-  color: var(--text-tertiary, #888);
-  margin-left: 8px;
-  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
 }
 .error-hint {
-  color: var(--danger, #d33);
-  margin-left: 12px;
-  font-size: 12px;
+  color: var(--color-danger-darker);
+  margin-left: var(--space-3);
+  font-size: var(--text-xs);
 }
-.required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
+.required-legend { font-size: var(--text-xs); color: var(--el-text-color-secondary); margin: 0 0 var(--space-4); }
 .required-legend .req { color: var(--el-color-danger); }
-.mb-12 { margin-bottom: 12px; }
+.mb-12 { margin-bottom: var(--space-3); }
 </style>

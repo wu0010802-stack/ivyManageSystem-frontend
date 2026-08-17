@@ -1,10 +1,13 @@
 <template>
   <div class="admin-list-toolbar">
     <div v-if="searchable" class="admin-list-toolbar__search" data-test="toolbar-search">
+      <!-- aria-label 落在內層 input（el-input 透傳 attrs）；placeholder 不是 label，
+           螢幕閱讀器需要明確名稱 -->
       <el-input
         :model-value="search"
         :placeholder="searchPlaceholder"
         :prefix-icon="Search"
+        :aria-label="searchPlaceholder"
         clearable
         @update:model-value="(v) => emit('update:search', String(v ?? ''))"
       />
