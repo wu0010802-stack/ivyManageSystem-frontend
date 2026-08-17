@@ -474,6 +474,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/courses/{course_id}/payment-slips.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Print Course Payment Slips
+         * @description 批次列印課程繳費單（A4 一頁 8 格，未結清學生一人一格）。
+         */
+        get: operations["print_course_payment_slips_api_activity_courses__course_id__payment_slips_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/courses/{course_id}/waitlist": {
         parameters: {
             query?: never;
@@ -780,6 +800,28 @@ export interface paths {
          *     never_filters_the_list。
          */
         get: operations["outstanding_by_student_api_activity_pos_outstanding_by_student_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/payment-slips/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve Payment Slip Token
+         * @description 驗證繳費單 QR token，回報名群組定位資訊。
+         *
+         *     無效/竄改/跨租戶/已刪報名一律 404「無效的繳費單條碼」，不洩漏內部判定。
+         */
+        get: operations["resolve_payment_slip_token_api_activity_pos_payment_slips_resolve_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -36656,6 +36698,22 @@ export interface components {
             /** Skipped Reason */
             skipped_reason: string;
         };
+        /**
+         * SlipResolveOut
+         * @description 繳費單 QR 掃碼解析結果（供 POS 以既有 outstanding-by-student 反查群組）。
+         */
+        SlipResolveOut: {
+            /** Class Name */
+            class_name: string;
+            /** Registration Id */
+            registration_id: number;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+            /** Student Name */
+            student_name: string;
+        };
         /** SnapshotConfirmRequest */
         SnapshotConfirmRequest: {
             /** Month */
@@ -40113,6 +40171,40 @@ export interface operations {
             };
         };
     };
+    print_course_payment_slips_api_activity_courses__course_id__payment_slips_pdf_get: {
+        parameters: {
+            query?: {
+                /** @description 繳費期限（印在單上；留空不印期限行） */
+                due_date?: string | null;
+            };
+            header?: never;
+            path: {
+                course_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_course_waitlist_api_activity_courses__course_id__waitlist_get: {
         parameters: {
             query?: never;
@@ -40630,6 +40722,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PosOutstandingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_payment_slip_token_api_activity_pos_payment_slips_resolve_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlipResolveOut"];
                 };
             };
             /** @description Validation Error */
