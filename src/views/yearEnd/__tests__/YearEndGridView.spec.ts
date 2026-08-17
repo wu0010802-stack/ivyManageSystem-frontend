@@ -425,6 +425,22 @@ describe('YearEndGridView', () => {
     expect(vm.drawerVisible).toBe(true)
     expect(vm.drawerRow?.status).toBe('FINALIZED')
   })
+
+  it('loadGrid() 失敗時標記 gridLoadError，不顯示「尚未試算」提示；重試成功後恢復', async () => {
+    vi.mocked(api.getYearEndGrid).mockRejectedValueOnce(new Error('network error'))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="grid-load-error"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="empty-grid-hint"]').exists()).toBe(false)
+
+    vi.mocked(api.getYearEndGrid).mockResolvedValueOnce({ data: [makeRow()] } as never)
+    const vm = wrapper.vm as unknown as { loadGrid: () => Promise<void> }
+    await vm.loadGrid()
+    await nextTick()
+
+    expect(wrapper.find('[data-test="grid-load-error"]').exists()).toBe(false)
+    expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
+  })
 })
 
 // ── Task 5（批次2b-1）：移除進頁 auto-build，改顯式「開始試算」CTA ──────────

@@ -249,13 +249,17 @@ function applyBuildSuccess(data: BuildSummary) {
   lastBuiltAt.value = new Date()
 }
 
+const gridLoadError = ref(false)
+
 async function loadGrid() {
   loading.value = true
   try {
     const res = await getYearEndGrid(cycleId)
     rows.value = res.data
+    gridLoadError.value = false
   } catch {
     ElMessage.error('總表載入失敗')
+    gridLoadError.value = true
   } finally {
     loading.value = false
   }
@@ -324,6 +328,7 @@ defineExpose({
   // Task 4（批次2b-1）：舊手改 dialog（editVisible/editForm/editingRow/openEdit/submitEdit）
   // 已移除，改由 GridRowDetailDrawer 承接（含就地編輯）；grid 這層只保留開關抽屜狀態。
   drawerVisible, drawerRow, openDrawer,
+  gridLoadError,
 })
 
 onMounted(initGrid)
@@ -431,10 +436,25 @@ onMounted(initGrid)
       @close="buildResult = null"
     />
 
+    <!-- 載入失敗 → 顯式錯誤卡＋重試，不得落入下方「尚未試算」提示（比照 Batch 9
+         CurrentSemesterOverview.vue 的 cycleFetchFailed 既有作法：API 失敗與
+         「真的沒資料」是兩件事，不能共用同一個空狀態判斷） -->
+    <el-alert
+      v-if="gridLoadError"
+      type="error"
+      :closable="false"
+      show-icon
+      title="總表載入失敗"
+      data-test="grid-load-error"
+      class="grid-alert"
+    >
+      <el-button size="small" data-test="grid-load-retry" @click="loadGrid">重試</el-button>
+    </el-alert>
+
     <!-- Task 5（批次2b-1）：進頁不再自動試算，尚未試算過（rows 為空）時明確引導使用者
          點「開始試算」，避免誤以為系統忘記載入資料。 -->
     <el-alert
-      v-if="!rows.length && canWrite && cycleStatus === 'OPEN'"
+      v-if="!rows.length && !gridLoadError && canWrite && cycleStatus === 'OPEN'"
       type="info"
       :closable="false"
       show-icon
