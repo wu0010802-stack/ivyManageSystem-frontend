@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveNextStep, type WorkbenchStats } from '../nextStep'
+import { deriveNextStep, deriveTodoList, type WorkbenchStats } from '../nextStep'
 
 const base: WorkbenchStats = {
   appraisalCycle: { id: 1, label: '115 學年上學期', status: 'OPEN' },
@@ -61,5 +61,41 @@ describe('deriveNextStep 優先序', () => {
     const s = deriveNextStep({ ...base, yearEndCycle: null, canYearEnd: false })
     expect(s?.key).not.toBe('create-year-end')
     expect(s?.key).toBe('done')
+  })
+})
+
+describe('deriveTodoList', () => {
+  it('isLoading 時回空陣列', () => {
+    expect(deriveTodoList({ ...base, blockingExceptions: undefined })).toEqual([])
+  })
+  it('全部完成時回空陣列（非含 done 項目的陣列）', () => {
+    expect(deriveTodoList(base)).toEqual([])
+  })
+  it('多項待處理時依優先序全部列出（阻斷例外/年終待簽/考核待簽/可發放同時存在）', () => {
+    const items = deriveTodoList({
+      ...base,
+      blockingExceptions: 2,
+      yearEndPendingSign: 5,
+      appraisalPendingSign: 3,
+      payoutReadyCount: 4,
+    })
+    expect(items.map((i) => i.key)).toEqual(['exceptions', 'year-end-sign', 'appraisal-sign', 'payout'])
+  })
+  it('年終週期非 OPEN 時年終待簽項目不出現，但考核待簽項目仍出現', () => {
+    const items = deriveTodoList({
+      ...base,
+      yearEndCycle: { id: 9, label: '114 學年度', status: 'LOCKED' },
+      yearEndPendingSign: 5,
+      appraisalPendingSign: 3,
+    })
+    expect(items.map((i) => i.key)).toEqual(['appraisal-sign'])
+  })
+  it('deriveNextStep 回傳值等於 deriveTodoList 第一項（優先序一致性）', () => {
+    const stats = { ...base, blockingExceptions: 2, yearEndPendingSign: 5 }
+    expect(deriveNextStep(stats)).toEqual(deriveTodoList(stats)[0])
+  })
+  it('deriveNextStep 全部完成時回 done，deriveTodoList 回空陣列（兩者語意不同但一致）', () => {
+    expect(deriveNextStep(base)?.key).toBe('done')
+    expect(deriveTodoList(base)).toEqual([])
   })
 })
