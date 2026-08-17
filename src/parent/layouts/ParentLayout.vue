@@ -27,6 +27,13 @@ const authStore = useParentAuthStore()
 const isPublic = computed(() => route.meta?.public === true)
 const hideTabBar = computed(() => route.meta?.hideTabBar === true)
 const currentTab = computed(() => (route.meta?.tab as string) || '')
+/**
+ * 首頁改版（2026-08-17）：只有 /home 本身拿掉頂部 sticky bar，logo 併入
+ * HomeHeroHeader 的問候語 chip。同分頁（tab: 'home'）底下的次頁面
+ * （/bus、/calendar，皆 showBack: true）仍需要返回鍵與標題，不受影響——
+ * 故用 route.name 精準比對，不能只看 currentTab === 'home'。
+ */
+const isHomeRoute = computed(() => route.name === 'parent-home')
 
 /**
  * 點再次點 active tab → scroll-to-top。
@@ -126,7 +133,7 @@ function onBack() {
 <template>
   <div class="parent-layout">
     <M3TopAppBar
-      v-if="!isPublic"
+      v-if="!isPublic && !isHomeRoute"
       :title="headerTitle"
       :show-back="headerShowBack"
       :on-back="onBack"
@@ -150,13 +157,21 @@ function onBack() {
       </template>
     </M3TopAppBar>
 
-    <div v-if="!isPublic" class="parent-conn-slot">
+    <div
+      v-if="!isPublic"
+      class="parent-conn-slot"
+      :class="{ 'no-topbar': isHomeRoute }"
+    >
       <ConnectionBanner />
     </div>
 
     <main
       class="parent-main"
-      :class="{ 'is-public': isPublic, 'with-tabbar': !hideTabBar && !isPublic }"
+      :class="{
+        'is-public': isPublic,
+        'with-tabbar': !hideTabBar && !isPublic,
+        'no-topbar': isHomeRoute && !isPublic,
+      }"
     >
       <slot />
     </main>
@@ -190,6 +205,10 @@ function onBack() {
   top: 64px;
   z-index: 9;
 }
+/* 首頁沒有頂部 sticky bar（64px），banner 直接貼齊頂端 */
+.parent-conn-slot.no-topbar {
+  top: 0;
+}
 
 .parent-main {
   flex: 1;
@@ -198,6 +217,11 @@ function onBack() {
 }
 .parent-main.with-tabbar {
   padding-bottom: 80px;
+}
+/* 首頁沒有頂部 sticky bar 吸收瀏海／狀態列安全區，補回這段 padding，
+   避免 HomeHeroHeader 內容被裝置瀏海遮住 */
+.parent-main.no-topbar {
+  padding-top: env(safe-area-inset-top, 0);
 }
 
 .parent-navbar {

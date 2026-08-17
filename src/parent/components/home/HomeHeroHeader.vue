@@ -20,6 +20,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { fetchChildPhotos } from '../../api/childPhotos'
 import GreetingSunIllustration from '../illustrations/GreetingSunIllustration.vue'
 import GreetingMoonIllustration from '../illustrations/GreetingMoonIllustration.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const props = defineProps<{
   studentId: number | null
@@ -123,6 +124,10 @@ const currentPhotoUrl = computed(() => {
   <section class="hh-head">
     <div class="hh-top">
       <div class="hh-greet-chip">
+        <!-- 2026-08-17 首頁改版：頂部 sticky bar 移除後，logo 併入這裡，
+             與早／午／晚安插畫左右並排（logo 在左）。見 ParentLayout.vue
+             isHomeRoute 分支。 -->
+        <BrandMark variant="mini" :size="26" class="hh-greet-logo" />
         <GreetingMoonIllustration v-if="isEvening" class="hh-greet-art" />
         <GreetingSunIllustration v-else class="hh-greet-art" />
         <span class="hh-greet-text">{{ greetingText }}</span>
@@ -160,12 +165,13 @@ const currentPhotoUrl = computed(() => {
 .hh-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 .hh-greet-chip {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 14px 6px 6px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px 6px 4px;
   border-radius: 999px;
   background: var(--m3-surface-container-low, #f3f4ef);
   box-shadow: var(--pt-shadow-card);
 }
+.hh-greet-logo { flex-shrink: 0; }
 .hh-greet-art { width: 34px; height: auto; flex-shrink: 0; }
 .hh-greet-text { font-size: var(--text-sm, 13px); font-weight: 700; color: var(--pt-text-strong); }
 
