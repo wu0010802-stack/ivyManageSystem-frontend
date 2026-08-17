@@ -33,9 +33,12 @@ vi.mock('element-plus', () => ({
 
 // 內嵌元件仍讀 route.query.view 覆寫預設 view；query 可由測試逐案調整
 const routeQuery = { value: {} }
+// module-scope 共用物件，讓測試可以斷言 router.replace 被呼叫的參數
+// （query 同步邏輯若不驗證呼叫內容，等於只測到「沒噴錯」，測不出寫錯 key）。
+const mockRouter = { back: vi.fn(), replace: vi.fn() }
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: routeQuery.value }),
-  useRouter: () => ({ back: vi.fn(), replace: vi.fn() }),
+  useRouter: () => mockRouter,
 }))
 
 vi.mock('@/utils/auth', () => ({
@@ -250,6 +253,42 @@ describe('CycleDetailPanel', () => {
     await flush()
     wrapper.vm.openDetail(undefined)
     await nextTick()
+    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
+  })
+
+  it('openDetail 成功開啟時同步 employee query', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openDetail(42)
+    await nextTick()
+    const lastCall = mockRouter.replace.mock.calls.at(-1)
+    expect(lastCall[0].query.employee).toBe('42')
+  })
+
+  it('關閉詳情 dialog 時清除 employee query', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openDetail(42)
+    await nextTick()
+    await wrapper.findComponent({ name: 'AggregatedStatusDetailDialog' }).vm.$emit('update:visible', false)
+    await nextTick()
+    const lastCall = mockRouter.replace.mock.calls.at(-1)
+    expect(lastCall[0].query.employee).toBeUndefined()
+  })
+
+  it('URL 帶 employee query 時，載入完成後自動開啟該員工詳情', async () => {
+    routeQuery.value = { employee: '42' }
+    const wrapper = mountPanel()
+    await flush()
+    const dialog = wrapper.find('[data-test="detail-dialog-stub"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.text()).toContain('林靜宜')
+  })
+
+  it('URL 帶不存在的 employee query 時，不噴錯、不開啟 dialog', async () => {
+    routeQuery.value = { employee: '9999' }
+    const wrapper = mountPanel()
+    await flush()
     expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
   })
 })

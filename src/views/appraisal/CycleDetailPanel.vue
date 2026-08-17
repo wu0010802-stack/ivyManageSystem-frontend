@@ -182,7 +182,22 @@ function openDetail(employeeId?: number) {
   }
   detailTarget.value = row
   detailDialogVisible.value = true
+  if (router?.replace) {
+    router.replace({ query: { ...(route?.query || {}), employee: String(employeeId) } })
+  }
 }
+
+// 詳情 dialog 關閉時清掉 URL 上的 employee query，避免重整後又自動彈回同一個
+// 員工（closeable dialog 的關閉是「使用者主動退出」語意，query 應跟著清空）。
+// 比照上方 view watch（96-101 行）：不額外判斷 query 是否已含 employee 才清，
+// 一律無條件 replace——避免依賴 route.query 在 router.replace 後同步更新的
+// 即時反應性（真實 vue-router 有、單元測試的簡化 mock 沒有）。
+watch(detailDialogVisible, (visible) => {
+  if (visible) return
+  const q = { ...(route?.query || {}) }
+  delete q.employee
+  router?.replace?.({ query: q })
+})
 
 const kanbanRef = ref<{ reload?: () => void } | null>(null)
 async function reload() {
@@ -310,7 +325,12 @@ defineExpose({
 })
 
 onMounted(() => {
-  load()
+  load().then(() => {
+    const initialEmployee = Number(route?.query?.employee)
+    if (!Number.isNaN(initialEmployee) && initialEmployee > 0) {
+      openDetail(initialEmployee)
+    }
+  })
   loadSignCounts()
 })
 </script>
