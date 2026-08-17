@@ -95,6 +95,13 @@ describe('useExceptionsWorkbenchStats', () => {
 describe('usePayoutWorkbenchStats', () => {
   beforeEach(() => vi.clearAllMocks())
 
+  it('year() 回傳 null 時 stat 設為 0，不呼叫 API', async () => {
+    const { stat, load } = runInScope(() => usePayoutWorkbenchStats(() => null))
+    await load()
+    expect(stat.value).toBe(0)
+    expect(previewAppraisalPayout).not.toHaveBeenCalled()
+  })
+
   it('422 時 notReady=true，不視為 error', async () => {
     vi.mocked(previewAppraisalPayout).mockRejectedValue({ response: { status: 422 } })
     const { notReady, stat, load } = runInScope(() => usePayoutWorkbenchStats(() => 2026))

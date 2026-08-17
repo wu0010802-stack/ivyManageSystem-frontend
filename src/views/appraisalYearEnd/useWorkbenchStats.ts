@@ -120,7 +120,7 @@ export function useExceptionsWorkbenchStats(
 //    就緒，非載入失敗，不視為 error）────────────────────────────────────
 const NOT_READY_MESSAGE = '本年度尚無可發放的考核年終資料，可切換年份，或前往考核管理建立來源學年的考核週期'
 
-export function usePayoutWorkbenchStats(year: () => number) {
+export function usePayoutWorkbenchStats(year: () => number | null) {
   const loading = ref(false)
   const errorMsg = ref('')
   const notReady = ref(false)
@@ -128,11 +128,16 @@ export function usePayoutWorkbenchStats(year: () => number) {
   const totalAmount = ref(0)
 
   async function load() {
+    const y = year()
+    if (y == null) {
+      stat.value = 0
+      return
+    }
     loading.value = true
     errorMsg.value = ''
     notReady.value = false
     try {
-      const rows = (await previewAppraisalPayout(year())).data
+      const rows = (await previewAppraisalPayout(y)).data
       stat.value = rows.length
       totalAmount.value = rows.reduce((sum, r) => sum + Number(r.total_amount), 0)
     } catch (e) {
