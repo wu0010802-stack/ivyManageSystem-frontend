@@ -114,7 +114,7 @@ export function useDashboardSections() {
 
   // 假零修復：初值 null（尚未載入/失敗），成功才是數字——失敗不得渲染成 0
   const studentCount = ref<number | null>(null)
-  const todayStats = ref(null)
+  const todayStats = ref<import('@/api/_generated/typed').ApiResponse<'/attendance/today', 'get'> | null>(null)
   // per-source 失敗旗標：讓模板能把「載入失敗」與「真實為零」區分開
   const criticalErrors = reactive({
     employees: false,
@@ -182,7 +182,7 @@ export function useDashboardSections() {
   const deferredLoaders: Record<string, () => Promise<void>> = {
     studentAttendance: () => getStudentAttendanceSummary()
       .then(r => { studentAttendanceSummary.value = r.data }),
-    anomalies: () => getTodayAnomalies({})
+    anomalies: () => getTodayAnomalies()
       .then(r => { attendanceAnomalies.value = r.data }),
     calendar: () => getUpcomingEvents()
       .then(r => { upcomingEvents.value = (r.data as typeof upcomingEvents.value) }),

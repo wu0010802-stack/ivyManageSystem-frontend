@@ -76,8 +76,8 @@ const editAttendance = (row: Record<string, unknown>) => {
         month: parseInt(attendanceMonth.value.split('-')[1]),
         records: [{
            department: "Manual",
-           employee_number: props.employee.employee_id,
-           name: props.employee.name,
+           employee_number: String(props.employee.employee_id ?? ''),
+           name: String(props.employee.name ?? ''),
            date: (row.date as string).replace(/-/g, '/'),
            weekday: "",
            punch_in: inTime,

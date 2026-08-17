@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import type { AnomalyItem } from '@/composables/useAttendanceWorkspace'
+import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── hoisted mocks ─────────────────────────────────────────────────────────────
 const { mockUpsertRecord, mockBatchConfirm, mockGetRecords, mockNotify } = vi.hoisted(() => ({
@@ -36,17 +36,16 @@ const mockElMessageSuccess = ElMessage.success as ReturnType<typeof vi.fn>
 const mockElMessageWarning = ElMessage.warning as ReturnType<typeof vi.fn>
 
 // ── fixture data ───────────────────────────────────────────────────────────────
-const anomalyItem: AnomalyItem = {
+const anomalyItem: AnomalyDayCard = {
   id: 42,
   employee_name: '陳測試',
   employee_number: 'E007',
   date: '2026-06-10',
   weekday: '三',
-  type: 'late',
-  type_label: '遲到',
-  detail: '遲到 10 分',
-  estimated_deduction: 200,
   confirmed_action: null,
+  items: [
+    { type: 'late', type_label: '遲到', detail: '遲到 10 分', estimated_deduction: 200 },
+  ],
 }
 
 const defaultContext = {
@@ -101,7 +100,7 @@ const stubs = {
 // ── mount helper ───────────────────────────────────────────────────────────────
 function mountDetail(overrides: {
   mode?: 'resolve' | 'month'
-  anomaly?: AnomalyItem | null
+  anomaly?: AnomalyDayCard | null
   anomalyIndex?: number
   anomalyTotal?: number
   context?: typeof defaultContext | typeof missingContext
@@ -320,5 +319,55 @@ describe('DetailColumn', () => {
     await nextTick()
     expect(wrapper.emitted('navigate')).toBeTruthy()
     expect(wrapper.emitted('navigate')![0][0]).toBe(1)
+  })
+})
+
+describe('DetailColumn — mutation in-flight（P1-4）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('resolve 進行中 ResolveCard 收到 busy=true，完成後恢復 false', async () => {
+    let release: (v: unknown) => void = () => {}
+    mockBatchConfirm.mockReturnValue(new Promise((r) => { release = r }))
+
+    const ResolveCardProbe = {
+      name: 'ResolveCard',
+      props: ['item', 'index', 'total', 'context', 'busy'],
+      emits: ['resolve', 'navigate'],
+      template: `<div class="resolve-card-probe" :data-busy="String(!!busy)" />`,
+    }
+    const wrapper = mount(DetailColumn, {
+      props: {
+        mode: 'resolve',
+        anomaly: anomalyItem,
+        anomalyIndex: 0,
+        anomalyTotal: 1,
+        context: { punch_in: '08:10', punch_out: '17:00', has_leave: false, estimated_deduction: 200 },
+        employeeId: 7,
+        year: 2026,
+        month: 6,
+      },
+      global: {
+        stubs: {
+          ResolveCard: ResolveCardProbe,
+          EmployeeMonthPanel: true,
+          'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+        },
+      },
+    })
+
+    const probe = wrapper.find('.resolve-card-probe')
+    expect(probe.attributes('data-busy')).toBe('false')
+
+    const card = wrapper.findComponent(ResolveCardProbe)
+    await card.vm.$emit('resolve', { action: 'admin_accept' })
+    await nextTick()
+    expect(probe.attributes('data-busy')).toBe('true')
+
+    release({ data: {} })
+    await nextTick()
+    await nextTick()
+    expect(probe.attributes('data-busy')).toBe('false')
   })
 })

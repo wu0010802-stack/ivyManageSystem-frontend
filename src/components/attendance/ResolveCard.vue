@@ -6,8 +6,14 @@
         <span class="resolve-card__name">{{ item.employee_name }}</span>
         <span class="resolve-card__separator">·</span>
         <span class="resolve-card__date">{{ item.date }}（{{ item.weekday }}）</span>
-        <el-tag :type="tagType" size="small" class="resolve-card__type-tag">
-          {{ item.type_label }}
+        <el-tag
+          v-for="(entry, i) in item.items"
+          :key="`${item.id}-${entry.type}-${i}`"
+          :type="tagTypeOf(entry)"
+          size="small"
+          class="resolve-card__type-tag"
+        >
+          {{ entry.type_label }}
         </el-tag>
       </div>
       <div class="resolve-card__nav">
@@ -24,6 +30,19 @@
         >▶</el-button>
       </div>
     </div>
+
+    <!-- 當日異常明細（一天一張卡：列出全部異常） -->
+    <ul class="resolve-card__entries">
+      <li v-for="(entry, i) in item.items" :key="`d-${item.id}-${i}`" class="resolve-card__entry">
+        <span class="resolve-card__entry-detail">{{ entry.detail }}</span>
+        <span
+          v-if="entry.estimated_deduction != null && entry.estimated_deduction > 0"
+          class="resolve-card__deduction--negative"
+        >
+          -NT${{ entry.estimated_deduction.toLocaleString() }}
+        </span>
+      </li>
+    </ul>
 
     <!-- 脈絡卡 -->
     <div class="resolve-card__context">
@@ -63,14 +82,28 @@
     </div>
 
     <!-- 動作列 -->
-    <div v-if="canWrite" class="resolve-card__actions">
-      <el-button
-        type="primary"
-        :disabled="!canPunch"
-        @click="handlePunch"
-      >補打卡並重算</el-button>
-      <el-button @click="emit('resolve', { action: 'admin_accept' })">接受扣款</el-button>
-      <el-button @click="emit('resolve', { action: 'admin_waive' })">豁免</el-button>
+    <div v-if="canWrite" class="resolve-card__actions-block">
+      <p class="resolve-card__whole-day-hint">
+        接受扣款／豁免會套用到<strong>整天</strong>的所有異常項目
+      </p>
+      <div class="resolve-card__actions">
+        <el-button
+          type="primary"
+          :loading="busy"
+          :disabled="busy || !canPunch"
+          @click="handlePunch"
+        >補打卡並重算</el-button>
+        <el-button
+          :loading="busy"
+          :disabled="busy"
+          @click="emit('resolve', { action: 'admin_accept' })"
+        >接受扣款</el-button>
+        <el-button
+          :loading="busy"
+          :disabled="busy"
+          @click="emit('resolve', { action: 'admin_waive' })"
+        >豁免</el-button>
+      </div>
     </div>
     <div v-else class="resolve-card__readonly-hint">
       您無權限執行操作
@@ -81,11 +114,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { hasPermission } from '@/utils/auth'
-import type { AnomalyItem } from '@/composables/useAttendanceWorkspace'
+import type { AnomalyDayCard, AnomalyEntry } from '@/composables/useAttendanceWorkspace'
 
 // ── props & emits ──────────────────────────────────────────────────────────────
 const props = defineProps<{
-  item: AnomalyItem
+  item: AnomalyDayCard
   index: number
   total: number
   context: {
@@ -94,6 +127,8 @@ const props = defineProps<{
     has_leave: boolean
     estimated_deduction: number
   }
+  /** mutation in-flight：防重複送出 */
+  busy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -119,9 +154,9 @@ watch(
 )
 
 // ── tag 顏色 ───────────────────────────────────────────────────────────────────
-const tagType = computed<'warning' | 'danger'>(() => {
-  return props.item.type === 'missing_punch' ? 'danger' : 'warning'
-})
+function tagTypeOf(entry: AnomalyEntry): 'warning' | 'danger' {
+  return entry.type === 'missing_punch' ? 'danger' : 'warning'
+}
 
 // ── 補打卡邏輯 ────────────────────────────────────────────────────────────────
 // 最終上/下班時間：優先用使用者填的 local，否則用原 context 值
@@ -206,6 +241,24 @@ function handlePunch(): void {
   white-space: nowrap;
 }
 
+.resolve-card__entries {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1, 4px);
+}
+
+.resolve-card__entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-secondary, #475569);
+}
+
 .resolve-card__context {
   background: var(--fill-color-light, #f9fafb);
   border: 1px solid var(--border-color-light, #f1f5f9);
@@ -253,6 +306,18 @@ function handlePunch(): void {
   color: var(--danger, #ef4444);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.resolve-card__actions-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.resolve-card__whole-day-hint {
+  margin: 0;
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-tertiary, #94a3b8);
 }
 
 .resolve-card__actions {
