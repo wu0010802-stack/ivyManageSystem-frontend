@@ -19,6 +19,11 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     finalizeBatch: vi.fn(),
     exportYearEndSummaryXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/summary.xlsx'),
     exportYearEndTransferRosterXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/roster.xlsx'),
+    // Task 2：openProvenanceDrawer 觸發真的 ProvenanceDrawer.vue（本檔未 stub），
+    // 其 fetchAll 會呼叫 getProvenance；不 mock 會打到 importOriginal 的真實實作，
+    // 沒回應可 resolve → Promise.allSettled 對非 thenable 值視為已 fulfilled，
+    // 後續 result.value.data 對 undefined 取值噴 unhandled rejection。
+    getProvenance: vi.fn().mockResolvedValue({ data: null }),
   }
 })
 
@@ -38,6 +43,15 @@ vi.mock('@/utils/auth', () => ({
 
 vi.mock('@/api/index', () => ({
   default: { defaults: { baseURL: '/api' }, get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+}))
+
+// tab／employee query 同步（Task 2）：module-scope 共用物件，讓測試可調整初始
+// route.query 並斷言 router.replace 被呼叫的參數（比照 CycleDetailPanel.spec.js）。
+const routeQuery = { value: {} as Record<string, string> }
+const mockYearEndRouter = { replace: vi.fn() }
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery.value }),
+  useRouter: () => mockYearEndRouter,
 }))
 
 import * as api from '@/api/yearEnd'
@@ -177,6 +191,8 @@ describe('YearEndDetailView — 兩關簽核流程', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
+    mockYearEndRouter.replace.mockClear()
   })
 
   // Case 1: DRAFT → 顯示「會計簽核」不顯示「主管簽」
@@ -339,6 +355,8 @@ describe('YearEndDetailView — 行級會計簽核顯示條件（canAccountingSi
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
+    mockYearEndRouter.replace.mockClear()
   })
 
   it('SUPERVISOR_SIGNED 仍可行級會計簽核（對齊 BE 狀態機）', async () => {
@@ -370,6 +388,8 @@ describe('YearEndDetailView.load — 併發載入（Promise.all）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
+    mockYearEndRouter.replace.mockClear()
   })
 
   it('load 併發呼叫四支彼此無依賴的 API（非序列 await）', async () => {
@@ -414,6 +434,8 @@ describe('YearEndDetailView — Task 11 明細頁重整', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
+    mockYearEndRouter.replace.mockClear()
   })
 
   it('① 結算單顯示員工姓名而非裸 ID，金額欄用 formatCurrency，簽核 tag 依 SIGN_STATUS_TAG 上色', async () => {
@@ -535,6 +557,8 @@ describe('YearEndDetailView — 退回按鈕 canReject 閘門', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
+    mockYearEndRouter.replace.mockClear()
   })
 
   function findRejectButtons(wrapper: Awaited<ReturnType<typeof mountView>>) {
@@ -566,5 +590,70 @@ describe('YearEndDetailView — 退回按鈕 canReject 閘門', () => {
     const wrapper = await mountView()
 
     expect(findRejectButtons(wrapper)).toHaveLength(0)
+  })
+})
+
+/**
+ * Task 2（V2 IA 簡化 Phase 1 Batch 7）：分頁（tab）與計算軌跡 drawer 開哪個員工
+ * 上 URL query，分享連結或重整不再回到預設分頁、白忙一次找員工（考核側同語意見
+ * CycleDetailPanel.spec.js 的 openDetail query 同步測試）。
+ */
+describe('YearEndDetailView — tab／employee query 同步', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+    routeQuery.value = {}
+    mockYearEndRouter.replace.mockClear()
+  })
+
+  // router.replace 的呼叫參數型別於 mock 上是 unknown，取最後一次呼叫的 query 供斷言。
+  function lastReplaceQuery(): Record<string, string | undefined> {
+    const lastCall = mockYearEndRouter.replace.mock.calls.at(-1) as
+      | [{ query: Record<string, string | undefined> }]
+      | undefined
+    return lastCall![0].query
+  }
+
+  it('切換 tab 時同步 query', async () => {
+    setupApiMocks([makeSettlement()])
+    const wrapper = await mountView()
+    ;(wrapper.vm as unknown as { tab: string }).tab = 'bonuses'
+    await nextTick()
+    expect(lastReplaceQuery().tab).toBe('bonuses')
+  })
+
+  it('URL 帶 tab query 時初始分頁採用該值', async () => {
+    routeQuery.value = { tab: 'classes' }
+    setupApiMocks([makeSettlement()])
+    const wrapper = await mountView()
+    expect((wrapper.vm as unknown as { tab: string }).tab).toBe('classes')
+  })
+
+  it('openProvenanceDrawer 開啟時同步 employee query，關閉時清除', async () => {
+    setupApiMocks([makeSettlement()])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      openProvenanceDrawer: (employeeId: number) => void
+      provenanceDrawerVisible: boolean
+    }
+    vm.openProvenanceDrawer(10)
+    await nextTick()
+    expect(lastReplaceQuery().employee).toBe('10')
+
+    vm.provenanceDrawerVisible = false
+    await nextTick()
+    expect(lastReplaceQuery().employee).toBeUndefined()
+  })
+
+  it('URL 帶 employee query 時，進頁自動開啟計算軌跡 drawer', async () => {
+    routeQuery.value = { employee: '10' }
+    setupApiMocks([makeSettlement()])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      provenanceDrawerVisible: boolean
+      provenanceEmployeeId: number
+    }
+    expect(vm.provenanceDrawerVisible).toBe(true)
+    expect(vm.provenanceEmployeeId).toBe(10)
   })
 })
