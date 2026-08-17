@@ -74,13 +74,18 @@ function useExceptionGroup(
   fetchExceptions: ExceptionsFetcher,
   queryKey: 'acycle' | 'ycycle',
 ) {
+  const typeQueryKey = queryKey === 'acycle' ? 'atype' : 'ytype'
   const cycles = ref<CycleOption[]>([])
   const cyclesLoading = ref(false)
   const selectedCycleId = ref<number | null>(null)
   const data = ref<ExceptionsData | null>(null)
   const loading = ref(false)
   const errorMsg = ref('')
-  const typeFilter = ref<string>('all')
+  // Batch 8：分類篩選上 URL query（考核 atype／年終 ytype），F5／分享連結保留篩選。
+  // 未知 type 值只會讓 filteredItems 過濾出空清單（優雅降級，不需要像週期 id 那樣
+  // 驗證存在性後 fallback）。
+  const initialTypeRaw = route.query[typeQueryKey]
+  const typeFilter = ref<string>(typeof initialTypeRaw === 'string' ? initialTypeRaw : 'all')
 
   const totalCount = computed(() => data.value?.items.length ?? 0)
   const typeCounts = computed(() => data.value?.counts_by_type ?? {})
@@ -135,17 +140,31 @@ function useExceptionGroup(
     }
   }
 
+  // 型別篩選變更 → 單獨寫回自己的 query key，與週期 query 共存（不同使用者操作
+  // 各自觸發各自的 replace，彼此不會同時發生，不受檔案開頭「合併成單次 replace」
+  // 鐵律限制——那條鐵律管的是「同一個操作內」多個 key 同時變更的情境，見下方
+  // onCycleChange 的處理）。
+  function setTypeFilter(type: string) {
+    typeFilter.value = type
+    router.replace({ query: { ...route.query, [typeQueryKey]: type } })
+  }
+
   function onCycleChange() {
     typeFilter.value = 'all'
     loadExceptions()
     // 週期選擇變更 → 寫回 URL query，只動自己的 key、與其他 query 共存。
-    router.replace({ query: { ...route.query, [queryKey]: String(selectedCycleId.value) } })
+    // typeFilter 同時重置為 all，兩個 key 的變更合併進同一次 replace——不可分開
+    // 各自呼叫（vue-router pendingLocation 會讓後發起的取消先發起的，見檔案開頭
+    // 「合併成單次 replace」註解，這裡是同一顆坑的第二個現場）。
+    router.replace({
+      query: { ...route.query, [queryKey]: String(selectedCycleId.value), [typeQueryKey]: 'all' },
+    })
   }
 
   return reactive({
     cycles, cyclesLoading, selectedCycleId, data, loading, errorMsg, typeFilter,
     totalCount, typeCounts, filteredItems,
-    loadCycles, loadExceptions, onCycleChange,
+    loadCycles, loadExceptions, onCycleChange, setTypeFilter,
   })
 }
 
@@ -254,7 +273,7 @@ onMounted(async () => {
             class="type-chip"
             :class="{ 'type-chip--active': group.g.typeFilter === 'all' }"
             :data-test="`${group.key}-type-chip-all`"
-            @click="group.g.typeFilter = 'all'"
+            @click="group.g.setTypeFilter('all')"
           >
             全部
             <span class="type-chip__count">{{ group.g.totalCount }}</span>
@@ -266,7 +285,7 @@ onMounted(async () => {
             class="type-chip"
             :class="{ 'type-chip--active': group.g.typeFilter === type }"
             :data-test="`${group.key}-type-chip-${type}`"
-            @click="group.g.typeFilter = type"
+            @click="group.g.setTypeFilter(type)"
           >
             {{ exceptionTypeLabel(type) }}
             <span class="type-chip__count">{{ count }}</span>
