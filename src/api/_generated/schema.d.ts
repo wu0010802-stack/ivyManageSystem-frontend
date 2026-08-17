@@ -3714,6 +3714,9 @@ export interface paths {
         /**
          * Kiosk Preview
          * @description 打卡預判（確認用，不寫入）：驗 PIN 後回傳即將記為上班/下班。
+         *
+         *     與 `/kiosk/punch` 共用同一組失敗桶：preview 一樣會回「PIN 對不對」，
+         *     是等價的 oracle，限流若只掛 punch 端，攻擊者改打 preview 即可繞過。
          */
         post: operations["kiosk_preview_api_attendance_kiosk_preview_post"];
         delete?: never;
@@ -3752,6 +3755,13 @@ export interface paths {
         /**
          * Kiosk Roster
          * @description 打卡名單：在職員工 + 是否已設 PIN + 今日打卡狀態。最小揭露，無 PII。
+         *
+         *     SEC-16 取捨（2026-08-17）：本端點無 JWT、無權限守衛，回傳內容等於一份可
+         *     直接拿來噴灑的名冊，因此加掛 per-IP 刮取限流（`_roster_limiter`）。
+         *     `has_pin` 則**保留**——前端 `KioskPunchView.vue` 靠它擋掉未設 PIN 的員工並
+         *     引導去教師入口設定（`pickEmployee()`），拿掉會讓使用者按下去才吃 400、
+         *     且屬跨 repo 契約異動。此欄的洩漏面是「哪些員工還沒設 PIN」，而未設 PIN 的
+         *     帳號本來就打不了卡（400），對攻擊者的剪枝價值遠低於它的 UX 價值。
          */
         get: operations["kiosk_roster_api_attendance_kiosk_roster_get"];
         put?: never;
@@ -5158,17 +5168,31 @@ export interface paths {
         get: operations["get_insurance_rates_api_config_insurance_rates_get"];
         /**
          * Update Insurance Rates
-         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）。
+         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）。**總部限定**。
          *
-         *     金流硬化（資安 R-13 mitigation (a) InsuranceRate 分支，2026-07-21）：
-         *     - 只有 SETTINGS_WRITE 不夠（HR 行政都有）→ 額外要求 has_finance_approve
-         *       （ACTIVITY_PAYMENT_APPROVE）。否則持 SETTINGS_WRITE 的 admin 可建立惡意金額
-         *       的費率版本（甚至 is_active=False 的歷史 rate_year），被 `_select_active_at` /
-         *       歷史補算以 id desc 撿到且無稽核軌跡（見 SPEC-002 R-13 / SPEC-001 §18）。
-         *       與 PUT /bonus（api/config/bonus.py）、PUT/DELETE /insurance/brackets
-         *       （api/insurance.py）三處守衛對齊。
-         *     - reason 必填，會與 changed_fields 一併寫入 audit_logs.changes。
+         *     授權（SEC-02，資安稽核 2026-08-17，業主裁定）：本端點改掛
+         *     `require_platform_admin`。理由——`insurance_rates` 是 GLOBAL 表，一改對
+         *     **全平台所有租戶**生效，而勞健保費率是全國統一的法定值，本來就該由總部
+         *     維護；掛租戶內權限等於讓任一園所的行政人員改動其他園所全體員工的保費
+         *     扣繳。改動後須從總部網域（`kind='platform'` 租戶的 Host）以平台管理員
+         *     身分操作。
+         *
+         *     ⚠ 連帶移除原本的 `has_finance_approve` 二簽（2026-07-21 資安 R-13
+         *     mitigation (a)）。不是放寬，而是它與新守衛**互斥**：`platform_admin` 角色
+         *     只持 `PLATFORM_*` 三個平台治理權限，本來就不會有園所端的
+         *     `ACTIVITY_PAYMENT_APPROVE` → 兩者並存會讓端點對所有人 403。R-13 當時要防
+         *     的是「HR 行政都有 SETTINGS_WRITE，門檻太低」，而 `require_platform_admin`
+         *     的雙條件（platform_admin role flag ＋ 請求來自總部網域）遠嚴於當初的
+         *     SETTINGS_WRITE + 金流簽核組合。
+         *     - reason 仍必填，會與 changed_fields 一併寫入 audit_logs.changes。
          *     - 守衛置於 try 之外：try 內 except 會經 raise_safe_500 把 403 洗成 500。
+         *
+         *     多租戶（SEC-02，資安稽核 2026-08-17）：`insurance_rates` 列在
+         *     `models/tenant_registry.py::GLOBAL_TABLES`（無 `tenant_id`、無 policy），
+         *     一改對**全平台**生效；但 `salary_records` 是 VIA `employees.tenant_id` 的表，
+         *     請求 session 被 RLS 縮在操作者當前租戶 → 原本的 stale 標記只涵蓋自己園所，
+         *     其他園所會拿著新費率把舊金額靜默封存。改為逐 active 租戶標記，見
+         *     `_mark_all_unfinalized_salary_stale_across_tenants()`。
          */
         put: operations["update_insurance_rates_api_config_insurance_rates_put"];
         post?: never;
@@ -5960,12 +5984,24 @@ export interface paths {
         put?: never;
         /**
          * Import Holidays
-         * @description 批次匯入國定假日（UPSERT by date，同日期若已存在則更新）。
+         * @description 批次匯入國定假日（UPSERT by date，同日期若已存在則更新）。**總部限定**。
+         *
+         *     授權（SEC-02，資安稽核 2026-08-17，業主裁定）：改掛
+         *     `require_platform_admin`。`holidays` 是 GLOBAL 表（無 tenant_id、無 policy，
+         *     且 `date` 有 unique 約束＝本來就不支援各校自訂行事曆），資料來源是人事行政
+         *     總處公告，一改對**全平台**生效並連動出勤異常判定、假日加班費與薪資基礎。
+         *     原本掛的 `CALENDAR` 是門檻最低的租戶內權限（行政助理級即可，且沒有金流
+         *     二簽），等於讓任一園所的助理改掉其他園所的工作日曆。須從總部網域以平台
+         *     管理員身分操作。
          *
          *     封存月禁改:任一涉及月份有薪資 is_finalized=True 即整批 409;
          *     force=true 配合 force_reason(≥ 10 字)可繞過,留稽核日誌。
          *     匯入成功後,該月份所有未封存的 SalaryRecord 將被標 needs_recalc=True,
          *     避免後續 finalize 把舊曠職/加班判定的薪資誤封存。
+         *
+         *     ⚠ 多租戶(SEC-02):`holidays` 是全域表,一改對全平台生效——封存月掃描與
+         *     stale 標記**都涵蓋全部 active 租戶**,因此 409 訊息可能列出其他園所的
+         *     封存月,這是預期行為。
          */
         post: operations["import_holidays_api_events_holidays_import_post"];
         delete?: never;
@@ -7457,20 +7493,29 @@ export interface paths {
         get: operations["list_brackets_api_insurance_brackets_get"];
         /**
          * Upsert Brackets
-         * @description 新增/更新指定年度的整張級距表。
+         * @description 新增/更新指定年度的整張級距表。**總部限定**。
          *
-         *     用法（每年公告新分級表）：行政上傳 effective_year=新年度 + 全部級距列；
+         *     用法（每年公告新分級表）：總部上傳 effective_year=新年度 + 全部級距列；
          *     `replace_existing=True` 適合「整張表重整」，否則以 (year, amount) UPSERT。
          *
          *     寫入後立即呼叫 service.load_brackets_from_db() 讓計算端立刻反映新資料，
          *     避免要重啟 server 才生效（與 BonusConfig PATCH 流程一致）。
          *
-         *     守衛（audit 2026-05-07 P0 #9）：
-         *     - 雖只需 SALARY_WRITE 即可呼叫（級距表為政府公告，常規業務動作），但
-         *       變更會影響全員保費；額外要求 has_finance_approve（即 ACTIVITY_PAYMENT_APPROVE）
-         *       或符合「正規行政上傳」流程；reason 必填 ≥10 字落 audit。
+         *     授權（SEC-02，資安稽核 2026-08-17，業主裁定）：改掛
+         *     `require_platform_admin`。`insurance_brackets` 是 GLOBAL 表（無 tenant_id、
+         *     無 policy），一改對**全平台**生效，而級距表是政府公告的全國統一值——
+         *     掛租戶內 `SALARY_WRITE` 等於讓任一園所的會計清空或竄改所有園所的投保
+         *     級距。須從總部網域以平台管理員身分操作。
+         *
+         *     ⚠ 連帶移除 `has_finance_approve` 二簽（audit 2026-05-07 P0 #9）：它與新
+         *     守衛**互斥**（`platform_admin` 只持 `PLATFORM_*` 權限，不會有園所端的
+         *     `ACTIVITY_PAYMENT_APPROVE`），並存會讓端點對所有人 403。新守衛的雙條件
+         *     （role flag ＋ 請求來自總部網域）門檻遠高於原本的 SALARY_WRITE + 金流簽核。
+         *     - reason 仍必填 ≥10 字落 audit。
          *     - 寫入成功後對該 effective_year 所有未封存 SalaryRecord 標 needs_recalc=True，
          *       避免「stale 未標 → finalize 用新（可能被改低）級距值落帳」的攻擊。
+         *       ⚠ 級距表是 GLOBAL 表，stale 標記與封存月掃描一律**跨全部 active 租戶**
+         *       （SEC-02，見 `_bulk_mark_salary_stale_for_year_all_tenants`）。
          */
         put: operations["upsert_brackets_api_insurance_brackets_put"];
         post?: never;
@@ -7492,14 +7537,16 @@ export interface paths {
         post?: never;
         /**
          * Delete Bracket
-         * @description 刪除單一級距列（行政誤新增時的修正用）。
+         * @description 刪除單一級距列（誤新增時的修正用）。**總部限定**。
          *
          *     刪除後立即同步 service 的 in-memory 級距表（與 PUT /brackets 行為一致），
          *     避免要重啟 server 才生效。
          *
-         *     守衛（audit 2026-05-07 P0 #9）：與 PUT 對齊，刪一筆級距會讓該級距金額落入
-         *     fallback 邏輯，足以低估保費，故同樣要求 finance_approve + reason ≥10 字 +
-         *     bulk mark stale。
+         *     授權（SEC-02，資安稽核 2026-08-17）：與 PUT /brackets 同一裁定，改掛
+         *     `require_platform_admin`——刪一筆級距會讓該級距金額落入 fallback 邏輯、
+         *     足以低估**全平台**保費。連帶移除與新守衛互斥的 `has_finance_approve`
+         *     二簽（理由見 PUT /brackets 的 docstring）。reason ≥10 字與 bulk mark
+         *     stale 維持不變（SEC-02 起 stale 與封存月掃描皆跨全部 active 租戶）。
          */
         delete: operations["delete_bracket_api_insurance_brackets__bracket_id__delete"];
         options?: never;
@@ -10034,6 +10081,8 @@ export interface paths {
         /**
          * Upload Medication Photo
          * @description 為已建立的用藥單上傳藥袋/處方照（一次一張）。
+         *
+         *     限流：每位家長每 10 分鐘 30 次（見 `_upload_limits.py`）。
          */
         post: operations["upload_medication_photo_api_parent_medication_orders__order_id__photos_post"];
         delete?: never;
@@ -10149,6 +10198,8 @@ export interface paths {
         /**
          * Attach To Message
          * @description 為自己剛送出的訊息上傳一個附件（一次一檔）。
+         *
+         *     限流：每位家長每 10 分鐘 30 次（見 `_upload_limits.py`）。
          */
         post: operations["attach_to_message_api_parent_messages_threads__thread_id__messages__message_id__attach_post"];
         delete?: never;
@@ -10490,6 +10541,8 @@ export interface paths {
          *
          *     僅在 status='approved' 且 start_date > 今天時允許上傳；請假已開始或已取消後
          *     不再受理變更。若需補件，請聯絡老師。
+         *
+         *     限流：每位家長每 10 分鐘 30 次（見 `_upload_limits.py`）。
          */
         post: operations["upload_leave_attachment_api_parent_student_leaves__leave_id__attachments_post"];
         delete?: never;
