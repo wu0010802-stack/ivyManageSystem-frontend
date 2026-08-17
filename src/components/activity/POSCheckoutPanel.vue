@@ -518,11 +518,11 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
 }
 
 .pos-panel-wrap__verify-row--remaining.is-danger strong {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
 }
 
 .pos-panel-wrap__verify-row--remaining.is-success strong {
-  color: var(--color-success-hover);
+  color: var(--color-success-darker);
 }
 
 .pos-panel-wrap__verify-alert {
