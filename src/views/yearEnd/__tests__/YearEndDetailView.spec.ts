@@ -344,6 +344,21 @@ describe('YearEndDetailView — 兩關簽核流程', () => {
     expect(vi.mocked(ElMessage.warning)).toHaveBeenCalled()
     expect(vi.mocked(ElMessage.success)).not.toHaveBeenCalled()
   })
+
+  it('load() 失敗時顯示錯誤區塊，點重試成功後消失', async () => {
+    setupApiMocks([makeSettlement()])
+    vi.mocked(api.listYearEndSettlements).mockRejectedValueOnce(new Error('network error'))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="detail-load-retry"]').exists()).toBe(true)
+
+    vi.mocked(api.listYearEndSettlements).mockResolvedValueOnce({ data: [makeSettlement()] } as never)
+    await wrapper.find('[data-test="detail-load-retry"]').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('[data-test="detail-load-retry"]').exists()).toBe(false)
+    expect(api.listYearEndSettlements).toHaveBeenCalledTimes(2)
+  })
 })
 
 /**
