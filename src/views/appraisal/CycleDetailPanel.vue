@@ -134,8 +134,11 @@ const canReject = computed(() => canBatchSign.value)
 
 // statusLabel 從 ./labels 集中載入（P2 i18n 過渡）
 
+const loadError = ref(false)
+
 async function load() {
   loading.value = true
+  loadError.value = false
   try {
     // 五支彼此無資料依賴（皆只吃 cycleId 或無參）→ 併發載入，首載等待取最慢者
     // 而非五次 round-trip 相加（比照 yearEnd/YearEndDetailView.vue load()）。
@@ -155,6 +158,7 @@ async function load() {
     loadRules()
   } catch (e) {
     ElMessage.error(apiError(e, MSG.load_failed))
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -322,6 +326,7 @@ defineExpose({
   signingIds,
   isSigning,
   summaries,
+  loadError,
 })
 
 onMounted(() => {
@@ -336,7 +341,12 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="cycle-detail">
+  <div v-loading="loading" class="cycle-detail">
+    <div v-if="loadError" class="cdp-error">
+      載入失敗
+      <el-button data-test="cdp-retry" size="small" text type="primary" @click="load">重試</el-button>
+    </div>
+
     <div v-if="cycle" class="meta">
       <strong>{{ cycle.academic_year }} 學年</strong>
       {{ cycle.semester === 'FIRST' ? '上學期' : '下學期' }} ｜
@@ -448,6 +458,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.cdp-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
 .cycle-detail { padding: 0; }
 .meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
 .sign-progress-wrap { margin: 0 0 var(--space-3); }

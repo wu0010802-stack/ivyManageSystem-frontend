@@ -27,6 +27,7 @@ vi.mock('@/api/appraisal', () => ({
   }),
   listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
 }))
+import { listAppraisalParticipants } from '@/api/appraisal'
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }))
@@ -290,5 +291,20 @@ describe('CycleDetailPanel', () => {
     const wrapper = mountPanel()
     await flush()
     expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
+  })
+
+  it('load() 失敗時顯示錯誤區塊，點重試成功後消失', async () => {
+    listAppraisalParticipants.mockRejectedValueOnce(new Error('network error'))
+    const wrapper = mountPanel()
+    await flush()
+
+    expect(wrapper.find('[data-test="cdp-retry"]').exists()).toBe(true)
+
+    listAppraisalParticipants.mockResolvedValueOnce({ data: [] })
+    await wrapper.find('[data-test="cdp-retry"]').trigger('click')
+    await flush()
+
+    expect(wrapper.find('[data-test="cdp-retry"]').exists()).toBe(false)
+    expect(listAppraisalParticipants).toHaveBeenCalledTimes(2)
   })
 })
