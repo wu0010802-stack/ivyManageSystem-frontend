@@ -11,6 +11,7 @@ import {
   posCheckout,
 } from '@/api/activity'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
+import { readBlobErrorDetail } from '@/utils/blobErrorDetail'
 import {
   CASH_METHOD,
   LARGE_AMOUNT_THRESHOLD,
@@ -35,15 +36,17 @@ type CheckoutBody = ApiBody<'/activity/pos/checkout', 'post'>
  *   避免重複結帳；成功或 4xx（含後端內容守衛回 409）後才釋放，下次送出換新 key。
  *   後端 /pos/checkout 對同 key 不同內容（金額/項目/類型/日期）回 409，杜絕改了
  *   金額卻收到舊收據的錯帳。
- * - payment_date 使用台北時區本地日期字串，避免跨日 UTC 誤差
+ * - payment_date 不再由前端決定（2026-08-15 code review P2-06）：收銀電腦的時區／
+ *   時鐘偏差會寫出錯誤日期的收據，而日期是日結簽核與現金對帳的分界。改為省略欄位，
+ *   由後端以台北時區當日填入（單一權威來源）。
  * - scope dispose 時清除 searchTimer
  */
 
-/** 取得台北時區當日 ISO 日期字串（避免 new Date().toISOString() 跨日誤差） */
-function taipeiTodayISO() {
-  // sv-SE locale 輸出 YYYY-MM-DD，與 ISO 一致
-  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Taipei' })
-}
+/**
+ * 今日交易列表取回上限。與「POS 日結簽核」頁一致，避免同一天的張數在兩頁對不起來。
+ * 後端另回 total / truncated，UI 據此顯示「顯示 N／共 M 張」。
+ */
+const RECENT_TRANSACTIONS_LIMIT = 100
 
 /** 產生冪等 key（優先 crypto.randomUUID，否則 fallback） */
 function makeIdempotencyKey() {
@@ -65,6 +68,11 @@ export function usePOSCheckout() {
   const searching = ref(false)
   const searchGroups = ref<Record<string, unknown>[]>([])
   const searchRegistrations = ref<Record<string, unknown>[]>([])
+  // searchError：搜尋失敗旗標（P3-06）。runSearch 失敗時 fail-closed 清空清單，但空
+  // 清單同時也是「本來就沒有未結清報名」的正常結果——兩者長得一模一樣。少了這個旗標，
+  // 空狀態只能寫「目前沒有未結清的報名」，櫃台會把載入失敗讀成「全部繳清」而漏收款。
+  // 命名比照 dailySummary.error / recentTransactions.error 的 fail-visible 慣例。
+  const searchError = ref(false)
   // 截斷狀態：後端 outstanding-by-student 有 2000 筆防爆上限、依日期模式每狀態
   // /registrations 上限 200。超限時清單/日曆/金額會不完整，必須讓 UI 提示櫃台縮小
   // 搜尋範圍，否則靜默漏掉待收/待退款（code review P1/P2）。
@@ -97,30 +105,36 @@ export function usePOSCheckout() {
   const submitting = ref(false)
 
   // ── 冪等 key（送出當下產生，成功後清除） ────────────────────────
-  // payment_date 與 key 同生命週期：後端的冪等內容簽章含 payment_date，重試若
-  // 重算「今天」，跨午夜時簽章就不符 → 409 → 下方 4xx 分支釋放 key → 再送等於
-  // 新 key + 新日期 = 重複入帳。兩者必須一起凍結、一起釋放（2026-08-14 bug hunt）。
+  // payment_date 已改由後端決定（P2-06），前端不再凍結日期；跨午夜重試時後端
+  // 冪等內容簽章仍可能不符而回 409，該情形由下方 409 分支的阻斷式提示接手處理
+  // （刷新交易列表 → 讓已入帳的那筆現形 → 由櫃台決定是否重收）。
   let pendingIdempotencyKey: string | null = null
-  let pendingPaymentDate: string | null = null
 
   function releasePendingTransaction() {
     pendingIdempotencyKey = null
-    pendingPaymentDate = null
   }
 
   // ── 最後收據與日結 ─────────────────────────────────────────────
   const lastReceipt = ref<Record<string, unknown> | null>(null)
   const receiptDialogVisible = ref(false)
 
+  // error：刷新失敗旗標（P3-05）。失敗時不可續留舊值——結帳成功後刷新失敗的話，
+  // 彙總條會顯示**不含本筆**的舊金額，櫃台據此點鈔會少算。
   const dailySummary = reactive({
     data: null as ApiResponse<'/activity/pos/daily-summary', 'get'> | null,
     loading: false,
+    error: false,
   })
 
   // ── 今日交易明細（可重印） ─────────────────────────────────────
+  // total / truncated：後端回的「當日收據總張數（截斷前）」與是否被上限截斷，
+  // 供 UI 顯示「顯示 N／共 M 張」，避免櫃台把顯示筆數當成當日總張數對帳。
   const recentTransactions = reactive({
     items: [] as NonNullable<ApiResponse<'/activity/pos/recent-transactions', 'get'>['transactions']>,
     loading: false,
+    total: 0,
+    truncated: false,
+    error: false,
   })
 
   // ── 計算屬性 ──────────────────────────────────────────────────
@@ -268,10 +282,16 @@ export function usePOSCheckout() {
         merged.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
         searchRegistrations.value = merged
       }
+      // 走到這裡代表本次是最新一輪且已成功寫入結果（兩個分支都在 seq 不符時提早
+      // return），可以把失敗旗標放掉。
+      searchError.value = false
     } catch (e) {
       if (seq === searchSeq) {
         const err = e as { response?: { data?: { detail?: string } } }
         ElMessage.error(err?.response?.data?.detail || '搜尋失敗')
+        // fail-visible：toast 幾秒就消失，清單卻會一直空著。留下旗標讓空狀態
+        // 能講「讀取失敗」而不是「目前沒有未結清的報名」（P3-06）。
+        searchError.value = true
       }
     } finally {
       if (seq === searchSeq) searching.value = false
@@ -457,11 +477,9 @@ export function usePOSCheckout() {
       }
     }
 
-    // 若重試時 pendingIdempotencyKey 仍存在，代表上次 submit 還沒成功結束，
-    // 重用同 key **與同 payment_date**（理由見上方宣告處註解）
+    // 若重試時 pendingIdempotencyKey 仍存在，代表上次 submit 還沒成功結束，重用同 key
     if (!pendingIdempotencyKey) {
       pendingIdempotencyKey = makeIdempotencyKey()
-      pendingPaymentDate = taipeiTodayISO()
     }
 
     try {
@@ -473,7 +491,7 @@ export function usePOSCheckout() {
           },
         ],
         payment_method: paymentMethod.value as CheckoutBody['payment_method'],
-        payment_date: pendingPaymentDate as string,
+        // 不傳 payment_date：由後端以台北時區當日決定（P2-06）
         tendered: null,
         notes: (notes.value || '').trim(),
         type: checkoutType.value as CheckoutBody['type'],
@@ -517,8 +535,20 @@ export function usePOSCheckout() {
         pendingIdempotencyKey = null
       }
       const detailMsg = err?.response?.data?.detail || '結帳失敗'
-      // 400 且 detail 包含「日結」→ 用 alert 對話框顯示更清楚的指引
-      if (status === 400 && /日結簽核/.test(detailMsg)) {
+      // 409 = 這把 idempotency_key 已經成立過一筆**未作廢的有效收據**（後端只在命中
+      // 有效收據時才拋），也就是前一筆已經入帳。若比照其他 4xx 只彈幾秒即消的 toast、
+      // 又不刷新任何清單，櫃台看不到那筆收據就會再按一次——新 key 產生第二筆＝重複收款
+      // （2026-08-15 code review P2-04）。先刷新今日交易與搜尋讓那筆現形，再用阻斷式
+      // 對話框說明，把「是否重收」的決定交回櫃台。
+      if (status === 409) {
+        await Promise.allSettled([refreshRecentTransactions(), runSearch()])
+        ElMessageBox.alert(
+          `${detailMsg}\n\n前一筆交易已成功入帳，本次未再產生新收據。請先在下方「今日交易」列表確認該筆收據後，再決定是否需要重收。`,
+          '前一筆已入帳，請勿重複收款',
+          { type: 'warning', confirmButtonText: '我知道了，先去確認交易列表' }
+        ).catch(() => {})
+      } else if (status === 400 && /日結簽核/.test(detailMsg)) {
+        // 400 且 detail 包含「日結」→ 用 alert 對話框顯示更清楚的指引
         ElMessageBox.alert(
           `${detailMsg}\n\n若確認要補這筆交易，請到「POS 日結簽核」解鎖該日，再重新結帳。`,
           '該日已日結，無法新增交易',
@@ -550,8 +580,11 @@ export function usePOSCheckout() {
         return res.data
       },
       loadingText: '收據載入中…',
-      onError: (err: unknown) => {
-        ElMessage.error((err as { message?: string })?.message || '收據 PDF 載入失敗')
+      // 該端點是 responseType:'blob'，錯誤時 response.data 是 Blob，直接讀 err.message
+      // 只會拿到「Request failed with status code 400」；真正的原因（例如「該收據已作廢」）
+      // 要先把 Blob 讀成 JSON 才拿得到（2026-08-15 code review P3-15）。
+      onError: async (err: unknown) => {
+        ElMessage.error(await readBlobErrorDetail(err, '收據 PDF 載入失敗'))
       },
     })
   }
@@ -596,8 +629,13 @@ export function usePOSCheckout() {
     try {
       const res = await getPOSDailySummary()
       dailySummary.data = res.data
+      dailySummary.error = false
     } catch {
-      // 日結非關鍵路徑，失敗靜默
+      // fail-visible（P3-05）：不可靜默。留著上一次的數字＝顯示「不含剛收那筆」的
+      // 舊金額，櫃台照著點鈔會少算；顯示 NT$0 又分不清「沒資料」與「今天真的是零」。
+      // 清值 + 立旗標，由 POSDailySummaryBar 顯示「—」與重試。
+      dailySummary.data = null
+      dailySummary.error = true
     } finally {
       dailySummary.loading = false
     }
@@ -607,10 +645,17 @@ export function usePOSCheckout() {
   async function refreshRecentTransactions() {
     recentTransactions.loading = true
     try {
-      const res = await getPOSRecentTransactions({ limit: 20 })
-      recentTransactions.items = res.data?.transactions || []
+      const res = await getPOSRecentTransactions({ limit: RECENT_TRANSACTIONS_LIMIT })
+      const items = res.data?.transactions || []
+      recentTransactions.items = items
+      // total 缺漏（舊版後端）時退回顯示筆數，至少不會顯示成 0 張
+      recentTransactions.total = res.data?.total ?? items.length
+      recentTransactions.truncated = res.data?.truncated ?? false
+      recentTransactions.error = false
     } catch {
-      // 失敗靜默
+      // fail-visible（P3-05）：清單保留（既有收據仍需可重印），但立錯誤旗標讓 UI
+      // 明講「這份清單可能不是最新」，避免櫃台在 409 提示後看不到新交易卻以為沒收到。
+      recentTransactions.error = true
     } finally {
       recentTransactions.loading = false
     }
@@ -636,6 +681,7 @@ export function usePOSCheckout() {
     searching,
     searchGroups,
     searchRegistrations,
+    searchError,
     searchTruncation,
     triggerSearch,
     runSearch,

@@ -311,6 +311,10 @@ export const approvePOSDailyClose = (dateStr: string, payload?: ApiBody<'/activi
 // 後端 response: 200 + { close_date, unlocked_at, is_admin_override, notification_delivered }
 export const unlockPOSDailyClose = (date: string, payload: ApiBody<'/activity/pos/daily-close/{date_str}', 'delete'>): AxiosResp<'/activity/pos/daily-close/{date_str}', 'delete'> =>
   api.delete(`/activity/pos/daily-close/${date}`, { data: payload })
+// 單一日期的日結歷史快照（每次 unlock 前的完整帳面 + 解鎖原因）。
+// 權限與日結簽核同一顆 ACTIVITY_PAYMENT_APPROVE；後端依 unlocked_at 倒序、上限 50 筆。
+export const getPOSCloseHistory = (closeDate: string): AxiosResp<'/activity/audit/pos-close-history', 'get'> =>
+  api.get('/activity/audit/pos-close-history', { params: { close_date: closeDate } })
 export const getPOSUnlockEvents = (days = 30): AxiosResp<'/activity/audit/pos-unlock-events', 'get'> =>
   api.get('/activity/audit/pos-unlock-events', { params: { days } })
 export const getPOSOperatorActivity = (days = 30): AxiosResp<'/activity/audit/operator-activity', 'get'> =>

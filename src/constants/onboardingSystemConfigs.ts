@@ -10,6 +10,12 @@
  * 邏輯，不吃本檔定義）；本檔僅收錄其餘 10 項機構層級設定，供
  * `src/components/settings/SettingsTenantConfigTab.vue`（系統設定頁「租戶基本
  * 設定」tab）使用。
+ *
+ * ⚠ 本表 ≠ onboarding 必填清單：除上述 10 項外，另收錄「POS 現金門檻」兩個
+ * **選填** key（`pos.cash_count_required_threshold` /
+ * `pos.cash_deposit_warning_threshold`），只是借用同一個 tab 讓人維護。新增
+ * 選填 key 時**不可**同步加進後端 `ONBOARDING_REQUIRED_CONFIG_KEYS`，否則每個
+ * 新租戶的 onboarding 進度都永遠不會齊。
  */
 
 export type SystemConfigFieldType = 'text' | 'switch'
@@ -90,6 +96,26 @@ export const SYSTEM_CONFIG_SECTIONS: SystemConfigSectionDef[] = [
       { key: 'gov.labor_insurance_unit_code', label: '勞保投保單位編號', type: 'text' },
       { key: 'gov.health_insurance_unit_code', label: '健保投保單位編號', type: 'text' },
       { key: 'gov.pension_employer_code', label: '勞退提繳單位編號', type: 'text' },
+    ],
+  },
+  {
+    title: 'POS 現金門檻',
+    hint:
+      '才藝 POS 收銀與日結簽核的兩個現金門檻。兩者皆為選填，留空即沿用系統預設值，'
+      + '不屬於新租戶 onboarding 必填項。',
+    fields: [
+      {
+        key: 'pos.cash_count_required_threshold',
+        label: '日結強制盤點門檻',
+        hint: '當日現金毛流量達此金額時，日結簽核必須填寫實際盤點金額。留空＝使用系統預設 3000',
+        type: 'text',
+      },
+      {
+        key: 'pos.cash_deposit_warning_threshold',
+        label: '抽屜現金存銀行提醒門檻',
+        hint: '抽屜現金累積達此金額時於收銀頁提示存入銀行。留空＝使用系統預設 30000',
+        type: 'text',
+      },
     ],
   },
   {

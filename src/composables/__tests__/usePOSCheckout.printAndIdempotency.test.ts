@@ -6,9 +6,10 @@ import { createPinia, setActivePinia } from 'pinia'
 // 1. 結帳後的第一次列印不得標「補印」——後端 print.pdf 端點是前端唯一列印路徑，
 //    舊版無條件 is_reprint=True，家長拿到的正本印著「（補印）」。首印須傳
 //    reprint=false，交易列表補印才傳 true。
-// 2. payment_date 必須與 idempotency_key 一起在首次送出時凍結。舊版每次重試都
-//    重算 taipeiTodayISO()，跨午夜重試時後端內容簽章（含 payment_date）不符 →
-//    409 → 前端因 4xx 釋放 key → 再送＝新 key + 新日期＝重複入帳。
+// 2. idempotency_key 在首次送出時凍結、成功或 4xx 後才釋放。
+//    ⚠ 2026-08-15 code review P2-06 起，payment_date 已改由**後端**以台北時區決定、
+//    前端不再送該欄位（原本前端凍結 payment_date 的兩條斷言隨之調整為「不送日期」
+//    ＋「key 凍結／釋放」；日期相關斷言見 usePOSCheckout.conflictAndRefresh.test.ts）。
 // 3. 大額二次確認期間 submitting 必須already為 true，否則 confirm 對話框開著時
 //    canSubmit 仍為 true、送出鈕未 disable。
 
@@ -129,14 +130,8 @@ describe('usePOSCheckout：首印/補印標記與冪等凍結（2026-08-14）', 
     )
   })
 
-  it('重試沿用首次凍結的 payment_date 與 idempotency_key（跨午夜不得改日期）', async () => {
+  it('網路中斷後重試：沿用同一把 idempotency_key，且始終不送 payment_date', async () => {
     const { api } = mountComposable()
-
-    // 台北當日以外部變數驅動：兩次送出「之間」跨過午夜
-    let today = '2026-08-14'
-    const dateSpy = vi
-      .spyOn(Date.prototype, 'toLocaleDateString')
-      .mockImplementation(() => today)
 
     // 首次：網路中斷（無 response → 不可釋放 key）
     vi.mocked(posCheckout).mockRejectedValueOnce(new Error('Network Error'))
@@ -144,25 +139,20 @@ describe('usePOSCheckout：首印/補印標記與冪等凍結（2026-08-14）', 
     await api.submit({ print: false })
     await flushPromises()
 
-    today = '2026-08-15' // ← 收銀員重試前已跨日
     vi.mocked(posCheckout).mockResolvedValue(checkoutOk())
     await api.submit({ print: false })
     await flushPromises()
 
-    const first = vi.mocked(posCheckout).mock.calls[0][0]
-    const second = vi.mocked(posCheckout).mock.calls[1][0]
-    expect(first.payment_date).toBe('2026-08-14')
-    expect(second.payment_date).toBe(first.payment_date)
+    const first = vi.mocked(posCheckout).mock.calls[0][0] as Record<string, unknown>
+    const second = vi.mocked(posCheckout).mock.calls[1][0] as Record<string, unknown>
     expect(second.idempotency_key).toBe(first.idempotency_key)
-    dateSpy.mockRestore()
+    // 日期權威在後端（P2-06）：跨午夜重試不會因前端重算日期而讓內容簽章對不上
+    expect('payment_date' in first).toBe(false)
+    expect('payment_date' in second).toBe(false)
   })
 
-  it('4xx 後重新送出：換新 key 且重新取當日日期', async () => {
+  it('4xx 後重新送出：換新 key（視為全新交易）', async () => {
     const { api } = mountComposable()
-    let today = '2026-08-14'
-    const dateSpy = vi
-      .spyOn(Date.prototype, 'toLocaleDateString')
-      .mockImplementation(() => today)
 
     vi.mocked(posCheckout).mockRejectedValueOnce({
       response: { status: 400, data: { detail: '報名 42 無應繳金額，無法收款' } },
@@ -171,19 +161,15 @@ describe('usePOSCheckout：首印/補印標記與冪等凍結（2026-08-14）', 
     await api.submit({ print: false })
     await flushPromises()
 
-    // 4xx 已釋放 key，重送視為全新交易、取當下日期。
+    // 4xx 已釋放 key，重送視為全新交易。
     // 不重新 selectItem——同 id 再點是「取消選取」語意，選取在 4xx 後本就保留。
-    today = '2026-08-15'
     vi.mocked(posCheckout).mockResolvedValue(checkoutOk())
     await api.submit({ print: false })
     await flushPromises()
 
     const first = vi.mocked(posCheckout).mock.calls[0][0]
     const second = vi.mocked(posCheckout).mock.calls[1][0]
-    expect(first.payment_date).toBe('2026-08-14')
     expect(second.idempotency_key).not.toBe(first.idempotency_key)
-    expect(second.payment_date).toBe('2026-08-15')
-    dateSpy.mockRestore()
   })
 
   it('大額二次確認期間：submitting 為 true、canSubmit 為 false', async () => {
