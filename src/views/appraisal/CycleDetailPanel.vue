@@ -416,6 +416,7 @@ onMounted(() => {
       v-if="view === 'kanban'"
       ref="kanbanRef"
       :cycle-id="cycleId"
+      :can-write-cycle="canWriteCycle"
       @action="onKanbanActionPayload"
       @selected-changed="(ids) => (selectedIds = ids)"
     />

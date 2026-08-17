@@ -17,7 +17,16 @@ type BucketOut = SignStatusData['buckets'][number]
 type Summary = BucketOut['summaries'][number] & { status: string }
 interface Bucket { status: string; summaries: Summary[] }
 
-const props = defineProps<{ cycleId: number }>()
+// ⚠ canWriteCycle 需 withDefaults 給 true：Vue 對未傳的 boolean-only prop 會轉型
+// 成顯式 false（而非 undefined），若不在這裡明訂 default，這個顯式 false 會沿著
+// 下方 :can-write-cycle="canWriteCycle" 綁定傳給 KanbanColumn，蓋掉 SummaryCard
+// 那層 withDefaults(true) 的 fallback（因為子層收到的是「明確 false」而非「未
+// 傳」）。整條鏈都要一致預設 true，「未傳＝不受限」的相容承諾才成立（見
+// SummaryCard.vue 同款註解）。
+const props = withDefaults(
+  defineProps<{ cycleId: number; canWriteCycle?: boolean }>(),
+  { canWriteCycle: true },
+)
 const emit = defineEmits<{
   'action': [payload: unknown]
   'selected-changed': [ids: number[]]
@@ -91,6 +100,7 @@ function selectAll({ status, selected }: { status: string; selected: boolean }) 
       :summaries="summariesByStatus(col.status)"
       :selected-ids="selectedIds"
       :collapsed-by-default="col.collapse"
+      :can-write-cycle="canWriteCycle"
       @toggle-select="toggleSelect"
       @select-all="selectAll"
       @action="(payload) => emit('action', payload)"

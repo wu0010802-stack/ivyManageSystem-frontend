@@ -98,4 +98,16 @@ describe('SummaryCard', () => {
     await wrapper.find('[data-test="detail-btn-3"]').trigger('click')
     expect(wrapper.emitted('action')?.[0]).toEqual([{ action: 'detail', summary }])
   })
+
+  it('canWriteCycle=false 時即使有權限也不顯示主按鈕', () => {
+    permState.granted.add('APPRAISAL_REVIEW')
+    const wrapper = mountCard({ ...baseSummary, status: 'DRAFT' }, { canWriteCycle: false })
+    expect(wrapper.find('[data-test="summary-primary-action"]').exists()).toBe(false)
+  })
+
+  it('canWriteCycle 未傳時預設不受限（沿用既有純權限行為）', () => {
+    permState.granted.add('APPRAISAL_REVIEW')
+    const wrapper = mountCard({ ...baseSummary, status: 'DRAFT' })
+    expect(wrapper.find('[data-test="summary-primary-action"]').exists()).toBe(true)
+  })
 })
