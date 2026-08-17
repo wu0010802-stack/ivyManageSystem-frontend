@@ -98,23 +98,13 @@ const stubs = {
       return () => h('div', { 'data-test': 'sign-progress-bar-stub' }, JSON.stringify(props.counts))
     },
   }),
-  SummaryLogDrawer: defineComponent({
-    name: 'SummaryLogDrawer',
-    props: ['visible', 'summaryId'],
+  EmployeeSummaryDrawer: defineComponent({
+    name: 'EmployeeSummaryDrawer',
+    props: ['visible', 'participant', 'summary', 'rules', 'cycleId'],
     emits: ['update:visible'],
     setup(props) {
       return () => (props.visible
-        ? h('div', { 'data-test': 'log-drawer-stub' }, 'log')
-        : null)
-    },
-  }),
-  AggregatedStatusDetailDialog: defineComponent({
-    name: 'AggregatedStatusDetailDialog',
-    props: ['visible', 'participant', 'cycle', 'rules'],
-    emits: ['update:visible'],
-    setup(props) {
-      return () => (props.visible
-        ? h('div', { 'data-test': 'detail-dialog-stub' }, props.participant?.employee_name ?? '')
+        ? h('div', { 'data-test': 'employee-summary-drawer-stub' }, props.participant?.employee_name ?? '')
         : null)
     },
   }),
@@ -216,81 +206,93 @@ describe('CycleDetailPanel', () => {
     expect(wrapper.find('[data-test="reject-dialog-stub"]').exists()).toBe(true)
   })
 
-  it('openDetail(employeeId) 找到對應明細時開啟詳情 dialog', async () => {
+  it('openEmployeeDrawer(employeeId) 找到對應明細時開啟員工明細抽屜', async () => {
     const wrapper = mountPanel()
     await flush()
-    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
-    wrapper.vm.openDetail(42)
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
+    wrapper.vm.openEmployeeDrawer(42)
     await nextTick()
-    const dialog = wrapper.find('[data-test="detail-dialog-stub"]')
-    expect(dialog.exists()).toBe(true)
-    expect(dialog.text()).toContain('林靜宜')
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
   })
 
-  it('openDetail(employeeId) 找不到對應明細時顯示警告、不開啟 dialog', async () => {
+  it('openEmployeeDrawer(employeeId) 找不到對應明細時顯示警告、不開啟抽屜', async () => {
     const { ElMessage } = await import('element-plus')
     const wrapper = mountPanel()
     await flush()
-    wrapper.vm.openDetail(9999)
+    wrapper.vm.openEmployeeDrawer(9999)
     await nextTick()
-    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
     expect(ElMessage.warning).toHaveBeenCalled()
   })
 
-  it('kanban 觸發 action=detail 時開啟對應員工的詳情 dialog', async () => {
+  it('kanban 觸發 action=detail 時開啟對應員工的明細抽屜', async () => {
     const wrapper = mountPanel()
     await flush()
     wrapper.vm.view = 'kanban'
     await nextTick()
     await wrapper.findComponent({ name: 'KanbanView' }).vm.$emit('action', { action: 'detail', summary: { id: 1, employee_id: 42, employee_name: '林靜宜' } })
     await nextTick()
-    const dialog = wrapper.find('[data-test="detail-dialog-stub"]')
-    expect(dialog.exists()).toBe(true)
-    expect(dialog.text()).toContain('林靜宜')
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
   })
 
-  it('openDetail(undefined) 為 no-op', async () => {
+  it('kanban 觸發 action=log 時開啟對應員工的明細抽屜', async () => {
     const wrapper = mountPanel()
     await flush()
-    wrapper.vm.openDetail(undefined)
+    wrapper.vm.view = 'kanban'
     await nextTick()
-    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
+    await wrapper.findComponent({ name: 'KanbanView' }).vm.$emit('action', { action: 'log', summary: { id: 1, employee_id: 42, employee_name: '林靜宜' } })
+    await nextTick()
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
   })
 
-  it('openDetail 成功開啟時同步 employee query', async () => {
+  it('openEmployeeDrawer(undefined) 為 no-op', async () => {
     const wrapper = mountPanel()
     await flush()
-    wrapper.vm.openDetail(42)
+    wrapper.vm.openEmployeeDrawer(undefined)
+    await nextTick()
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
+  })
+
+  it('openEmployeeDrawer 成功開啟時同步 employee query', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openEmployeeDrawer(42)
     await nextTick()
     const lastCall = mockRouter.replace.mock.calls.at(-1)
     expect(lastCall[0].query.employee).toBe('42')
   })
 
-  it('關閉詳情 dialog 時清除 employee query', async () => {
+  it('關閉員工明細抽屜時清除 employee query', async () => {
     const wrapper = mountPanel()
     await flush()
-    wrapper.vm.openDetail(42)
+    wrapper.vm.openEmployeeDrawer(42)
     await nextTick()
-    await wrapper.findComponent({ name: 'AggregatedStatusDetailDialog' }).vm.$emit('update:visible', false)
+    await wrapper.findComponent({ name: 'EmployeeSummaryDrawer' }).vm.$emit('update:visible', false)
     await nextTick()
     const lastCall = mockRouter.replace.mock.calls.at(-1)
     expect(lastCall[0].query.employee).toBeUndefined()
   })
 
-  it('URL 帶 employee query 時，載入完成後自動開啟該員工詳情', async () => {
+  it('URL 帶 employee query 時，載入完成後自動開啟該員工明細抽屜', async () => {
     routeQuery.value = { employee: '42' }
     const wrapper = mountPanel()
     await flush()
-    const dialog = wrapper.find('[data-test="detail-dialog-stub"]')
-    expect(dialog.exists()).toBe(true)
-    expect(dialog.text()).toContain('林靜宜')
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
   })
 
-  it('URL 帶不存在的 employee query 時，不噴錯、不開啟 dialog', async () => {
+  it('URL 帶不存在的 employee query 時，不噴錯、不開啟抽屜', async () => {
     routeQuery.value = { employee: '9999' }
     const wrapper = mountPanel()
     await flush()
-    expect(wrapper.find('[data-test="detail-dialog-stub"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
   })
 
   it('load() 失敗時顯示錯誤區塊，點重試成功後消失', async () => {

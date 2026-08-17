@@ -35,9 +35,8 @@ import ListView from './components/ListView.vue'
 import RejectDialog from './components/RejectDialog.vue'
 import CommentDialog from './components/CommentDialog.vue'
 import BatchSignButton from './components/BatchSignButton.vue'
-import SummaryLogDrawer from './components/SummaryLogDrawer.vue'
 import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
-import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
+import EmployeeSummaryDrawer from './components/EmployeeSummaryDrawer.vue'
 
 interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; status?: string; [key: string]: unknown }
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
@@ -68,8 +67,6 @@ const loading = ref(false)
 const busy = ref(false)
 const aggregatedParticipants = ref<AggregatedParticipant[]>([])
 const rulesByCode = ref<Record<string, unknown>>({})
-const detailDialogVisible = ref(false)
-const detailTarget = ref<AggregatedParticipant | null>(null)
 
 // Task 8：頂部簽核進度列 counts（getSignStatusSummary 獨立於 kanban 自己的
 // data，list view 沒有 kanban 可看，故獨立載入才能兩種 view 都顯示進度）。
@@ -183,26 +180,39 @@ async function loadRules() {
   }
 }
 
-function openDetail(employeeId?: number) {
+const employeeDrawerVisible = ref(false)
+const employeeDrawerParticipant = ref<AggregatedParticipant | null>(null)
+const employeeDrawerSummary = ref<Summary | null>(null)
+
+function employeeIdForSummary(summary: Summary): number | undefined {
+  return participants.value.find((p) => p.id === summary.participant_id)?.employee_id
+}
+
+function openEmployeeDrawer(employeeId?: number) {
   if (employeeId == null) return
-  const row = aggregatedParticipants.value.find((p) => p.employee_id === employeeId)
-  if (!row) {
+  const participant = aggregatedParticipants.value.find((p) => p.employee_id === employeeId) ?? null
+  if (!participant) {
     ElMessage.warning('找不到明細資料，請重新整理後再試')
     return
   }
-  detailTarget.value = row
-  detailDialogVisible.value = true
+  const targetParticipant = participants.value.find((p) => p.employee_id === employeeId)
+  const summary = targetParticipant
+    ? summaries.value.find((s) => s.participant_id === targetParticipant.id) ?? null
+    : null
+  employeeDrawerParticipant.value = participant
+  employeeDrawerSummary.value = summary
+  employeeDrawerVisible.value = true
   if (router?.replace) {
     router.replace({ query: { ...(route?.query || {}), employee: String(employeeId) } })
   }
 }
 
-// 詳情 dialog 關閉時清掉 URL 上的 employee query，避免重整後又自動彈回同一個
-// 員工（closeable dialog 的關閉是「使用者主動退出」語意，query 應跟著清空）。
+// 抽屜關閉時清掉 URL 上的 employee query，避免重整後又自動彈回同一個員工
+// （closeable drawer 的關閉是「使用者主動退出」語意，query 應跟著清空）。
 // 比照上方 view watch（96-101 行）：不額外判斷 query 是否已含 employee 才清，
 // 一律無條件 replace——避免依賴 route.query 在 router.replace 後同步更新的
 // 即時反應性（真實 vue-router 有、單元測試的簡化 mock 沒有）。
-watch(detailDialogVisible, (visible) => {
+watch(employeeDrawerVisible, (visible) => {
   if (visible) return
   const q = { ...(route?.query || {}) }
   delete q.employee
@@ -299,10 +309,6 @@ const commentDialogVisible = ref(false)
 const commentTarget = ref<Summary | null>(null)
 function openComment(summary: Summary) { commentTarget.value = summary; commentDialogVisible.value = true }
 
-const logDrawerVisible = ref(false)
-const logTargetId = ref<number | null>(null)
-function openLog(summary: Summary) { logTargetId.value = summary.id; logDrawerVisible.value = true }
-
 function onKanbanAction({ action, summary }: { action: string; summary: Summary }) {
   if (action === 'sign') {
     const stage = ({
@@ -313,8 +319,8 @@ function onKanbanAction({ action, summary }: { action: string; summary: Summary 
     if (stage) sign({ summary: { id: summary.id }, stage })
   } else if (action === 'reject') openReject(summary)
   else if (action === 'comment') openComment(summary)
-  else if (action === 'log') openLog(summary)
-  else if (action === 'detail') openDetail(summary.employee_id as number | undefined)
+  else if (action === 'log') openEmployeeDrawer(summary.employee_id as number | undefined)
+  else if (action === 'detail') openEmployeeDrawer(summary.employee_id as number | undefined)
 }
 
 function onKanbanActionPayload(payload: unknown) {
@@ -326,8 +332,7 @@ defineExpose({
   selectedIds,
   openReject,
   openComment,
-  openLog,
-  openDetail,
+  openEmployeeDrawer,
   sign,
   signingIds,
   isSigning,
@@ -339,7 +344,7 @@ onMounted(() => {
   load().then(() => {
     const initialEmployee = Number(route?.query?.employee)
     if (!Number.isNaN(initialEmployee) && initialEmployee > 0) {
-      openDetail(initialEmployee)
+      openEmployeeDrawer(initialEmployee)
     }
   })
   loadSignCounts()
@@ -437,8 +442,8 @@ onMounted(() => {
       @sign="sign"
       @reject="openReject"
       @comment="openComment"
-      @open-log="openLog"
-      @open-detail="(p) => openDetail(p.employee_id)"
+      @open-log="(s) => openEmployeeDrawer(employeeIdForSummary(s))"
+      @open-detail="(p) => openEmployeeDrawer(p.employee_id)"
     />
 
     <RejectDialog
@@ -451,15 +456,12 @@ onMounted(() => {
       :summary="commentTarget"
       @commented="onCommented"
     />
-    <SummaryLogDrawer
-      v-model:visible="logDrawerVisible"
-      :summary-id="logTargetId"
-    />
-    <AggregatedStatusDetailDialog
-      v-model:visible="detailDialogVisible"
-      :participant="detailTarget"
-      :cycle="cycle"
+    <EmployeeSummaryDrawer
+      v-model:visible="employeeDrawerVisible"
+      :participant="employeeDrawerParticipant"
+      :summary="employeeDrawerSummary"
       :rules="rulesByCode"
+      :cycle-id="cycleId"
     />
   </div>
 </template>
