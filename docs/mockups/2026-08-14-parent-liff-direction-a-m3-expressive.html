@@ -1,0 +1,774 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>方向 A：M3 Expressive・童趣深化 — 家長端 LIFF 改版 mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   設計稿註記：本檔為自足 mockup，所有 hex 為快照值，
+   不可直接複製進 src/（實作時一律走 token）。
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; }
+body {
+  font-family: 'Noto Sans TC', 'PingFang TC', sans-serif;
+  background: #eceae4;
+  color: #2a2d2a;
+  padding: 40px 24px 80px;
+}
+.spec-head { max-width: 1720px; margin: 0 auto 36px; }
+.spec-head h1 { font-size: 28px; font-weight: 900; letter-spacing: 0.01em; }
+.spec-head .tagline { margin-top: 6px; font-size: 15px; color: #5c655e; }
+.spec-cols { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
+.spec-card {
+  flex: 1 1 320px; background: #fff; border-radius: 18px; padding: 18px 20px;
+  font-size: 14px; line-height: 1.8; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.spec-card h2 { font-size: 14px; font-weight: 700; color: #0d9053; margin-bottom: 8px; letter-spacing: 0.04em; }
+.spec-card ul { padding-left: 18px; }
+.spec-card li + li { margin-top: 4px; }
+.frames { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; max-width: 1760px; margin: 0 auto; }
+.frame-slot { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.frame-label { font-size: 13px; font-weight: 700; color: #6b716c; letter-spacing: 0.06em; }
+
+/* ---------- 手機框 ---------- */
+.phone {
+  width: 393px; border-radius: 46px; overflow: hidden;
+  border: 10px solid #1a1c1a;
+  box-shadow: 0 24px 60px rgba(20,40,28,0.28);
+  background: var(--bg);
+}
+.screen { display: flex; flex-direction: column; min-height: 820px; background: var(--bg); color: var(--text); }
+
+/* ---------- 方向 A tokens（light 快照） ---------- */
+.phone {
+  --bg: #f7f6ef;                 /* 較現行 #fbfdf8 更暖，米白基底 */
+  --surface: #ffffff;
+  --surface-dim: #efeee6;
+  --text: #1c211d;
+  --text-muted: #5c655e;
+  --text-faint: #8b938c;
+  --primary: #0d9053;
+  --primary-deep: #006d3d;
+  --on-primary: #ffffff;
+  --primary-container: #c9f2d6;
+  --on-primary-container: #072e18;
+  --sun-container: #ffedb8;  --on-sun: #5c4300;
+  --coral-container: #ffddd1; --on-coral: #7a2e18;
+  --sky-container: #cfecf7;  --on-sky: #0b4a5c;
+  --leaf-container: #d8f1de; --on-leaf: #1c5232;
+  --grape-container: #eadfff; --on-grape: #4a3277;
+  --outline: #dfe2da;
+  --hero-grad: linear-gradient(150deg, #fff7dd 0%, #d9f4e2 78%, #cdeef9 130%);
+  --shadow-card: 0 1px 2px rgba(27,60,38,0.05), 0 6px 20px -8px rgba(27,60,38,0.14);
+  --shadow-float: 0 8px 28px -6px rgba(27,60,38,0.25);
+  --navbar-bg: rgba(255,255,255,0.92);
+}
+.phone.dark {
+  --bg: #141614;
+  --surface: #1e211e;
+  --surface-dim: #191c19;
+  --text: #e4e7e2;
+  --text-muted: #a9b1a9;
+  --text-faint: #7d857d;
+  --primary: #6ddc97;
+  --primary-deep: #6ddc97;
+  --on-primary: #00391d;
+  --primary-container: #14532f;
+  --on-primary-container: #a9f4c4;
+  --sun-container: #4a3a10;  --on-sun: #ffe08c;
+  --coral-container: #54291c; --on-coral: #ffbfa8;
+  --sky-container: #123c4a;  --on-sky: #a5dff2;
+  --leaf-container: #1d3f2a; --on-leaf: #b5e8c4;
+  --grape-container: #38295c; --on-grape: #d8c5ff;
+  --outline: #333833;
+  --hero-grad: linear-gradient(150deg, #2c2a1c 0%, #1c332a 78%, #14313c 130%);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.4), 0 6px 20px -8px rgba(0,0,0,0.5);
+  --shadow-float: 0 8px 28px -6px rgba(0,0,0,0.6);
+  --navbar-bg: rgba(24,27,24,0.94);
+}
+
+.msr {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal; font-style: normal; line-height: 1;
+  letter-spacing: normal; text-transform: none; display: inline-block;
+  white-space: nowrap; word-wrap: normal; direction: ltr;
+  font-variation-settings: 'wght' 500;
+  -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga';
+}
+.msr.fill { font-variation-settings: 'FILL' 1, 'wght' 500; }
+
+/* ---------- 狀態列 ---------- */
+.statusbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 26px 6px; font-size: 14px; font-weight: 700; color: var(--text);
+}
+.statusbar .right { display: flex; gap: 5px; align-items: center; }
+.statusbar .msr { font-size: 16px; }
+
+/* ---------- Top app bar ---------- */
+.appbar {
+  display: flex; align-items: center; gap: 12px; padding: 10px 16px 6px;
+}
+.brandmark {
+  width: 34px; height: 34px; border-radius: 12px;
+  background: var(--primary); color: var(--on-primary);
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.brandmark .msr { font-size: 20px; }
+.appbar-title { font-size: 17px; font-weight: 900; letter-spacing: 0.01em; flex: 1; }
+.appbar-back { width: 40px; height: 40px; display: grid; place-items: center; color: var(--text); }
+.appbar-back .msr { font-size: 24px; }
+.avatar-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--sun-container); color: var(--on-sun);
+  display: grid; place-items: center; font-size: 15px; font-weight: 900;
+  border: 2px solid var(--surface); box-shadow: var(--shadow-card);
+}
+
+/* ---------- 內容捲動區 ---------- */
+.content { flex: 1; display: flex; flex-direction: column; gap: 18px; padding: 8px 16px 108px; }
+
+/* ---------- 問候區（expressive 大字階） ---------- */
+.greet { padding: 6px 4px 0; display: flex; align-items: flex-end; justify-content: space-between; }
+.greet h1 { font-size: 30px; font-weight: 900; letter-spacing: 0.01em; line-height: 1.15; }
+.greet .date { margin-top: 4px; font-size: 13.5px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.03em; }
+.greet-art { flex-shrink: 0; margin-bottom: -2px; }
+
+/* ---------- 今日聯絡簿 hero 卡 ---------- */
+.hero-card {
+  position: relative; overflow: hidden;
+  background: var(--hero-grad);
+  border-radius: 30px; padding: 20px 18px 18px;
+  box-shadow: var(--shadow-card);
+}
+.hero-card .blob {
+  position: absolute; right: -34px; top: -38px; width: 150px; height: 150px;
+  border-radius: 46% 54% 58% 42% / 48% 42% 58% 52%;
+  background: rgba(255,255,255,0.34); pointer-events: none;
+}
+.phone.dark .hero-card .blob { background: rgba(255,255,255,0.05); }
+.hero-top { position: relative; display: flex; align-items: center; gap: 14px; }
+.mood {
+  width: 64px; height: 64px; border-radius: 24px; flex-shrink: 0;
+  background: var(--surface); box-shadow: var(--shadow-card);
+  display: grid; place-items: center;
+}
+.hero-name { font-size: 21px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+.hero-meta { margin-top: 3px; font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 8px; padding: 4px 12px 4px 8px; border-radius: 999px;
+  background: var(--primary); color: var(--on-primary);
+  font-size: 12.5px; font-weight: 700;
+}
+.pill .msr { font-size: 15px; }
+.hero-stats { position: relative; display: flex; gap: 8px; margin-top: 16px; }
+.hstat {
+  flex: 1; background: color-mix(in srgb, var(--surface) 72%, transparent);
+  border-radius: 18px; padding: 10px 6px 9px; text-align: center;
+}
+.hstat .msr { font-size: 20px; }
+.hstat-value { display: block; margin-top: 3px; font-size: 14px; font-weight: 900; }
+.hstat-label { display: block; margin-top: 1px; font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.hstat.t-sun .msr { color: var(--on-sun); }
+.hstat.t-leaf .msr { color: var(--primary-deep); }
+.hstat.t-grape .msr { color: var(--on-grape); }
+.hero-note {
+  position: relative; margin-top: 14px; font-size: 14px; line-height: 1.7; font-weight: 500;
+  color: var(--text);
+}
+.hero-note b { color: var(--primary-deep); font-weight: 900; }
+.hero-photos { position: relative; display: flex; gap: 8px; margin-top: 14px; }
+.ph {
+  width: 74px; height: 74px; border-radius: 18px; flex-shrink: 0;
+  display: grid; place-items: center; color: rgba(255,255,255,0.85);
+  box-shadow: var(--shadow-card);
+}
+.ph .msr { font-size: 26px; }
+.ph.p1 { background: linear-gradient(145deg,#8fd6a9,#4faf7c); }
+.ph.p2 { background: linear-gradient(145deg,#ffd98e,#f5a34c); }
+.ph.p3 { background: linear-gradient(145deg,#9bd3ec,#5d9fc9); }
+.ph.more {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--text-muted); font-size: 14px; font-weight: 900; box-shadow: none;
+  border: 1.5px dashed var(--outline);
+}
+.hero-open {
+  position: absolute; right: 14px; top: 16px;
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: 12.5px; font-weight: 700; color: var(--primary-deep);
+}
+.hero-open .msr { font-size: 16px; }
+
+/* ---------- Bento tiles（expressive tonal 容器） ---------- */
+.section-h {
+  display: flex; align-items: baseline; justify-content: space-between; padding: 2px 6px 0;
+}
+.section-h h2 { font-size: 16.5px; font-weight: 900; letter-spacing: 0.01em; }
+.section-h a { font-size: 12.5px; font-weight: 700; color: var(--primary-deep); text-decoration: none; display: inline-flex; align-items: center; }
+.section-h a .msr { font-size: 15px; }
+.bento { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tile {
+  border-radius: 26px; padding: 14px 14px 13px; display: flex; flex-direction: column; gap: 10px;
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.tile:active { transform: scale(0.96); }
+.tile-icon {
+  width: 42px; height: 42px; border-radius: 16px;
+  background: color-mix(in srgb, #ffffff 55%, transparent);
+  display: grid; place-items: center;
+}
+.phone.dark .tile-icon { background: rgba(255,255,255,0.1); }
+.tile-icon .msr { font-size: 23px; }
+.tile-value { font-size: 16.5px; font-weight: 900; line-height: 1.2; }
+.tile-label { font-size: 12px; font-weight: 700; opacity: 0.75; margin-top: -7px; }
+.tile.t-sky   { background: var(--sky-container);   color: var(--on-sky); }
+.tile.t-sun   { background: var(--sun-container);   color: var(--on-sun); }
+.tile.t-coral { background: var(--coral-container); color: var(--on-coral); }
+.tile.t-leaf  { background: var(--leaf-container);  color: var(--on-leaf); }
+.tile-sub { font-size: 11.5px; font-weight: 700; margin-top: -6px; display: inline-flex; align-items: center; gap: 3px; }
+.tile-sub .msr { font-size: 13px; }
+
+/* ---------- 今日動態 timeline ---------- */
+.stream { background: var(--surface); border-radius: 26px; padding: 6px 16px; box-shadow: var(--shadow-card); }
+.trow { display: flex; gap: 14px; padding: 13px 0; position: relative; }
+.trow + .trow { border-top: 1px solid color-mix(in srgb, var(--outline) 55%, transparent); }
+.tdot {
+  width: 40px; height: 40px; border-radius: 15px; flex-shrink: 0;
+  display: grid; place-items: center;
+}
+.tdot .msr { font-size: 21px; }
+.tdot.leaf  { background: var(--leaf-container);  color: var(--primary-deep); }
+.tdot.sun   { background: var(--sun-container);   color: var(--on-sun); }
+.tdot.sky   { background: var(--sky-container);   color: var(--on-sky); }
+.tdot.grape { background: var(--grape-container); color: var(--on-grape); }
+.tbody { flex: 1; min-width: 0; padding-top: 1px; }
+.tt { font-size: 14.5px; font-weight: 700; }
+.td { margin-top: 2px; font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+.ttime { font-size: 12px; font-weight: 700; color: var(--text-faint); padding-top: 3px; font-variant-numeric: tabular-nums; }
+
+/* ---------- 行事曆入口 ---------- */
+.rowlink {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border-radius: 22px; padding: 15px 18px;
+  box-shadow: var(--shadow-card); font-size: 15px; font-weight: 700;
+}
+.rowlink .lead { color: var(--primary-deep); font-size: 22px; }
+.rowlink .chev { margin-left: auto; color: var(--text-faint); font-size: 20px; }
+
+/* ---------- 底部導航（5 destinations + active pill） ---------- */
+.navbar {
+  position: sticky; bottom: 0; margin-top: auto;
+  display: flex; padding: 10px 6px calc(10px + 14px);
+  background: var(--navbar-bg);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid color-mix(in srgb, var(--outline) 60%, transparent);
+}
+.nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
+.nav-pill {
+  width: 56px; height: 32px; border-radius: 999px;
+  display: grid; place-items: center; color: var(--text-muted);
+  transition: all 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nav-item.active .nav-pill { background: var(--primary); color: var(--on-primary); }
+.nav-pill .msr { font-size: 22px; }
+.nav-label { font-size: 11px; font-weight: 700; color: var(--text-muted); }
+.nav-item.active .nav-label { color: var(--primary-deep); font-weight: 900; }
+.nav-badge {
+  position: absolute; top: -3px; right: 50%; margin-right: -26px;
+  min-width: 17px; height: 17px; border-radius: 999px; padding: 0 4px;
+  background: #e5484d; color: #fff; font-size: 10.5px; font-weight: 800;
+  display: grid; place-items: center; border: 2px solid var(--bg);
+}
+
+/* ---------- 聯絡簿詳情頁 ---------- */
+.detail-hero {
+  position: relative; overflow: hidden; border-radius: 30px;
+  background: var(--hero-grad); padding: 22px 20px 20px;
+  box-shadow: var(--shadow-card);
+}
+.detail-hero .art { position: absolute; right: 8px; top: 10px; opacity: 0.95; }
+.dh-date { font-size: 13px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.04em; position: relative; }
+.dh-row { position: relative; display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.mood-lg {
+  width: 76px; height: 76px; border-radius: 28px; flex-shrink: 0;
+  background: var(--surface); box-shadow: var(--shadow-card);
+  display: grid; place-items: center;
+}
+.dh-name { font-size: 26px; font-weight: 900; letter-spacing: -0.01em; }
+.dh-class { margin-top: 3px; font-size: 14px; font-weight: 500; color: var(--text-muted); }
+.mood-tag {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 8px;
+  background: var(--sun-container); color: var(--on-sun);
+  border-radius: 999px; padding: 4px 12px; font-size: 12.5px; font-weight: 800;
+}
+
+.card { background: var(--surface); border-radius: 26px; padding: 18px; box-shadow: var(--shadow-card); }
+.card-title { display: flex; align-items: center; gap: 8px; font-size: 15.5px; font-weight: 900; margin-bottom: 14px; }
+.card-title .msr { font-size: 20px; color: var(--primary-deep); }
+.card-title .count { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--text-faint); }
+
+.story { display: flex; flex-direction: column; }
+.srow { display: flex; gap: 14px; position: relative; padding-bottom: 18px; }
+.srow:last-child { padding-bottom: 2px; }
+.srow::before {
+  content: ''; position: absolute; left: 19px; top: 42px; bottom: 0;
+  width: 2.5px; border-radius: 2px;
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.srow:last-child::before { display: none; }
+
+.note-card { background: var(--sun-container); box-shadow: var(--shadow-card); }
+.note-card .card-title { color: var(--on-sun); margin-bottom: 8px; }
+.note-card .card-title .msr { color: var(--on-sun); }
+.note-body { font-size: 14.5px; line-height: 1.85; font-weight: 500; color: var(--on-sun); }
+
+.photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.photo-grid .ph { width: 100%; height: 128px; border-radius: 20px; }
+.ph.p4 { background: linear-gradient(145deg,#d3a7f0,#9a6fd0); }
+
+.ack { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.ack-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--leaf-container); color: var(--primary-deep);
+  border-radius: 999px; padding: 5px 12px; font-size: 12.5px; font-weight: 800;
+}
+.ack-badge .msr { font-size: 15px; }
+.reply-bubble {
+  background: var(--surface-dim); border-radius: 18px 18px 18px 6px;
+  padding: 12px 14px; font-size: 14px; line-height: 1.7;
+}
+.reply-meta { margin-top: 6px; font-size: 11.5px; color: var(--text-faint); padding-left: 4px; }
+.composer {
+  margin-top: 14px; display: flex; align-items: center; gap: 10px;
+  background: var(--surface-dim); border-radius: 999px; padding: 6px 6px 6px 18px;
+}
+.composer .hinttext { flex: 1; font-size: 13.5px; color: var(--text-faint); }
+.send-btn {
+  width: 44px; height: 44px; border-radius: 999px; border: none;
+  background: var(--primary); color: var(--on-primary);
+  display: grid; place-items: center; box-shadow: var(--shadow-float);
+}
+.send-btn .msr { font-size: 20px; }
+
+/* ---------- 插畫（inline SVG 共用樣式） ---------- */
+.illu { display: block; }
+
+.footnote { max-width: 1720px; margin: 40px auto 0; font-size: 13px; color: #6b716c; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<header class="spec-head">
+  <h1>方向 A：M3 Expressive・童趣深化</h1>
+  <p class="tagline">把既有 Material 3 底子升級到 Expressive 語彙——大圓角、tonal 色彩容器、彈性動效、加粗字階——並收斂三代疊層為單一 token 真源，插畫落在 hero 與空狀態。</p>
+  <div class="spec-cols">
+    <div class="spec-card">
+      <h2>設計要點</h2>
+      <ul>
+        <li><b>色彩</b>：基底轉暖（米白 #f7f6ef），品牌綠為錨，童彩六色映射為 M3 tonal container（sun／coral／sky／leaf／grape），每個容器都有配對前景色，light／dark 成對定義。</li>
+        <li><b>形狀</b>：卡 26–30px、tile 26px、hero 30px 大圓角；hero 卡加有機 blob 裝飾。</li>
+        <li><b>字階</b>：問候語 30px／900 大字階（Expressive 特徵），內文維持 14–15px。</li>
+        <li><b>插畫</b>：太陽、雲朵、星星的圓潤 spot 插畫，只出現在 hero／空狀態，不干擾資訊區。</li>
+      </ul>
+    </div>
+    <div class="spec-card">
+      <h2>導航提案（IA 改動）</h2>
+      <ul>
+        <li>3 tab＋抽屜 → <b>5 destinations</b>：首頁／孩子／訊息／事務／我的。</li>
+        <li>「孩子」把聯絡簿、照片、成長紀錄、健康量測從「事務 → 孩子檔案」三層深處拉到第一層。</li>
+        <li>「我的」離開抽屜成為常駐 tab，費用摘要、通知設定、外觀設定不再隱藏。</li>
+        <li>Active tab 用品牌綠膠囊（保留現有 AA 對比修正），切換帶 spring 動效。</li>
+      </ul>
+    </div>
+    <div class="spec-card">
+      <h2>動效系統（靜態稿以文字說明）</h2>
+      <ul>
+        <li>頁面轉場：進場 fade + 24px 上移，emphasized-decelerate 350ms。</li>
+        <li>點擊回饋：卡片 scale 0.96 spring 回彈（本稿 tile 按下可預覽）。</li>
+        <li>Tab 切換：active pill 以 spring 曲線滑移。</li>
+        <li>骨架載入：shimmer 流光取代現行純灰塊；reduced-motion 全部降階。</li>
+      </ul>
+    </div>
+    <div class="spec-card">
+      <h2>取捨</h2>
+      <ul>
+        <li>✅ 15 個 M3 元件、token 產線、自架圖示直接沿用，工程量三個方向中最小。</li>
+        <li>✅ per-tenant 主題＝擴充 gen-m3-tokens 產線（換 source color 重跑）。</li>
+        <li>⚠ 整體是「Google 味」；若要 iPhone 原生質感，此方向給不了。</li>
+      </ul>
+    </div>
+  </div>
+</header>
+
+<div class="frames">
+
+  <!-- ============ 首頁 · Light ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">首頁 · Light</span>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="right"><span class="msr">signal_cellular_alt</span><span class="msr">wifi</span><span class="msr">battery_full</span></span></div>
+        <div class="appbar">
+          <div class="brandmark"><span class="msr fill">psychiatry</span></div>
+          <span class="appbar-title">常春藤親子</span>
+          <div class="avatar-btn">林</div>
+        </div>
+        <div class="content">
+          <div class="greet">
+            <div>
+              <h1>早安！</h1>
+              <p class="date">8 月 14 日 星期五</p>
+            </div>
+            <svg class="greet-art illu" width="92" height="66" viewBox="0 0 92 66" fill="none" aria-hidden="true">
+              <circle cx="60" cy="28" r="17" fill="#FFD75E"/>
+              <g stroke="#FFC93C" stroke-width="3.4" stroke-linecap="round">
+                <line x1="60" y1="4" x2="60" y2="0.5"/><line x1="77" y1="11" x2="80" y2="8"/>
+                <line x1="84" y1="28" x2="88" y2="28"/><line x1="77" y1="45" x2="80" y2="48"/>
+              </g>
+              <circle cx="54.5" cy="26" r="1.9" fill="#8a6d1d"/><circle cx="65.5" cy="26" r="1.9" fill="#8a6d1d"/>
+              <path d="M55 32 Q60 36.5 65 32" stroke="#8a6d1d" stroke-width="2" stroke-linecap="round" fill="none"/>
+              <path d="M4 52 a10 10 0 0 1 10-9 a12 12 0 0 1 23-3 a9 9 0 0 1 9 12 z" fill="#fff" stroke="#cfe8f4" stroke-width="2.5"/>
+            </svg>
+          </div>
+
+          <section>
+            <div class="hero-card">
+              <div class="blob"></div>
+              <span class="hero-open">查看完整<span class="msr">arrow_forward</span></span>
+              <div class="hero-top">
+                <div class="mood">
+                  <svg class="illu" width="42" height="42" viewBox="0 0 42 42" aria-label="心情：開心">
+                    <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                    <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                    <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                    <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="hero-name">林小恩</h2>
+                  <p class="hero-meta">今日聯絡簿 · 小熊班</p>
+                  <span class="pill"><span class="msr fill">check_circle</span>在園中</span>
+                </div>
+              </div>
+              <div class="hero-stats">
+                <div class="hstat t-sun"><span class="msr fill">restaurant</span><span class="hstat-value">全吃光</span><span class="hstat-label">午餐</span></div>
+                <div class="hstat t-grape"><span class="msr fill">bedtime</span><span class="hstat-value">1.8 小時</span><span class="hstat-label">午睡</span></div>
+                <div class="hstat t-leaf"><span class="msr fill">sentiment_very_satisfied</span><span class="hstat-value">開心</span><span class="hstat-label">心情</span></div>
+              </div>
+              <p class="hero-note">「今天小恩在積木角當小老師，教同學蓋出好高的城堡，<b>超有成就感</b>！」</p>
+              <div class="hero-photos">
+                <div class="ph p1"><span class="msr fill">image</span></div>
+                <div class="ph p2"><span class="msr fill">image</span></div>
+                <div class="ph p3"><span class="msr fill">image</span></div>
+                <div class="ph more">+2</div>
+              </div>
+            </div>
+          </section>
+
+          <div class="bento">
+            <div class="tile t-sky">
+              <div class="tile-icon"><span class="msr fill">directions_bus</span></div>
+              <span class="tile-value">還有 3 站</span><span class="tile-label">娃娃車</span>
+            </div>
+            <div class="tile t-sun">
+              <div class="tile-icon"><span class="msr fill">payments</span></div>
+              <span class="tile-value">2 筆</span><span class="tile-label">待繳學費</span>
+              <span class="tile-sub"><span class="msr">error</span>有逾期款項</span>
+            </div>
+            <div class="tile t-coral">
+              <div class="tile-icon"><span class="msr fill">edit_document</span></div>
+              <span class="tile-value">1 份</span><span class="tile-label">待簽文件</span>
+            </div>
+            <div class="tile t-leaf">
+              <div class="tile-icon"><span class="msr fill">hail</span></div>
+              <span class="tile-value">1 筆進行中</span><span class="tile-label">臨時接送</span>
+            </div>
+          </div>
+
+          <section>
+            <div class="section-h"><h2>今日動態</h2><a href="#">更多動態<span class="msr">arrow_forward</span></a></div>
+            <div class="stream" style="margin-top:10px;">
+              <div class="trow"><div class="tdot grape"><span class="msr fill">auto_stories</span></div><div class="tbody"><p class="tt">聯絡簿發布了</p><p class="td">王老師寫下了今天的故事</p></div><span class="ttime">15:40</span></div>
+              <div class="trow"><div class="tdot sky"><span class="msr fill">bedtime</span></div><div class="tbody"><p class="tt">午睡</p><p class="td">12:30 – 14:20，睡得香甜</p></div><span class="ttime">14:20</span></div>
+              <div class="trow"><div class="tdot sun"><span class="msr fill">restaurant</span></div><div class="tbody"><p class="tt">上午點心</p><p class="td">香蕉牛奶，全部吃完</p></div><span class="ttime">10:15</span></div>
+              <div class="trow"><div class="tdot leaf"><span class="msr fill">check_circle</span></div><div class="tbody"><p class="tt">已入園</p><p class="td">刷卡入園，由媽媽接送</p></div><span class="ttime">08:12</span></div>
+            </div>
+          </section>
+
+          <div class="rowlink"><span class="msr fill lead">calendar_month</span>行事曆<span class="msr chev">chevron_right</span></div>
+        </div>
+
+        <nav class="navbar">
+          <div class="nav-item active"><div class="nav-pill"><span class="msr fill">home</span></div><span class="nav-label">首頁</span></div>
+          <div class="nav-item"><div class="nav-pill"><span class="msr">child_care</span></div><span class="nav-label">孩子</span></div>
+          <div class="nav-item"><span class="nav-badge">3</span><div class="nav-pill"><span class="msr">chat_bubble</span></div><span class="nav-label">訊息</span></div>
+          <div class="nav-item"><span class="nav-badge">2</span><div class="nav-pill"><span class="msr">assignment</span></div><span class="nav-label">事務</span></div>
+          <div class="nav-item"><div class="nav-pill"><span class="msr">account_circle</span></div><span class="nav-label">我的</span></div>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 聯絡簿詳情 · Light ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">聯絡簿詳情 · Light</span>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="right"><span class="msr">signal_cellular_alt</span><span class="msr">wifi</span><span class="msr">battery_full</span></span></div>
+        <div class="appbar">
+          <div class="appbar-back"><span class="msr">arrow_back</span></div>
+          <span class="appbar-title">聯絡簿</span>
+        </div>
+        <div class="content">
+          <div class="detail-hero">
+            <svg class="art illu" width="72" height="58" viewBox="0 0 72 58" fill="none" aria-hidden="true">
+              <path d="M8 40 a9 9 0 0 1 9-8 a11 11 0 0 1 21-3 a8 8 0 0 1 8 11 z" fill="#fff" opacity="0.9"/>
+              <g fill="#FFD75E"><path d="M58 10 l2.2 5 5 2.2 -5 2.2 -2.2 5 -2.2 -5 -5 -2.2 5 -2.2 z"/></g>
+              <g fill="#FF8C42" opacity="0.8"><path d="M46 34 l1.5 3.4 3.4 1.5 -3.4 1.5 -1.5 3.4 -1.5 -3.4 -3.4 -1.5 3.4 -1.5 z"/></g>
+            </svg>
+            <p class="dh-date">8 月 14 日 星期五</p>
+            <div class="dh-row">
+              <div class="mood-lg">
+                <svg class="illu" width="52" height="52" viewBox="0 0 42 42" aria-label="心情：開心">
+                  <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                  <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                  <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                  <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                </svg>
+              </div>
+              <div>
+                <h1 class="dh-name">林小恩</h1>
+                <p class="dh-class">小熊班</p>
+                <span class="mood-tag"><span class="msr fill" style="font-size:15px;">sunny</span>今天心情：開心</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="msr fill">timeline</span>今天的故事</div>
+            <div class="story">
+              <div class="srow"><div class="tdot leaf"><span class="msr fill">check_circle</span></div><div class="tbody"><p class="tt">已入園 <span style="color:var(--text-faint);font-weight:700;font-size:12px;">08:12</span></p><p class="td">刷卡入園，精神很好</p></div></div>
+              <div class="srow"><div class="tdot sun"><span class="msr fill">restaurant</span></div><div class="tbody"><p class="tt">午餐</p><p class="td">咖哩飯＋玉米濃湯，全部吃光</p></div></div>
+              <div class="srow"><div class="tdot sky"><span class="msr fill">bedtime</span></div><div class="tbody"><p class="tt">午睡</p><p class="td">12:30 – 14:20（1 小時 50 分）</p></div></div>
+              <div class="srow"><div class="tdot grape"><span class="msr fill">favorite</span></div><div class="tbody"><p class="tt">心情</p><p class="td">開心一整天，和同學玩得很好</p></div></div>
+            </div>
+          </div>
+
+          <div class="card note-card">
+            <div class="card-title"><span class="msr fill">format_quote</span>老師留言</div>
+            <p class="note-body">今天小恩在積木角當小老師，教同學蓋出好高的城堡，超有成就感！下午唱遊課也很投入，回家可以請小恩表演新學的〈小星星〉手勢舞喔。</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="msr fill">photo_library</span>今天的照片<span class="count">4 張</span></div>
+            <div class="photo-grid">
+              <div class="ph p1"><span class="msr fill">image</span></div>
+              <div class="ph p2"><span class="msr fill">image</span></div>
+              <div class="ph p3"><span class="msr fill">image</span></div>
+              <div class="ph p4"><span class="msr fill">image</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="ack"><span class="ack-badge"><span class="msr fill">check_circle</span>已讀 · 16:02</span></div>
+            <div class="card-title"><span class="msr fill">forum</span>家長留言<span class="count">1 則</span></div>
+            <div class="reply-bubble">謝謝老師！回家路上一直哼小星星，會請他表演的 😊</div>
+            <p class="reply-meta">今天 16:05</p>
+            <div class="composer">
+              <span class="hinttext">想跟老師說的話…</span>
+              <button class="send-btn"><span class="msr fill">send</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 首頁 · Dark ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">首頁 · Dark</span>
+    <div class="phone dark">
+      <div class="screen">
+        <div class="statusbar"><span>21:41</span><span class="right"><span class="msr">signal_cellular_alt</span><span class="msr">wifi</span><span class="msr">battery_full</span></span></div>
+        <div class="appbar">
+          <div class="brandmark"><span class="msr fill">psychiatry</span></div>
+          <span class="appbar-title">常春藤親子</span>
+          <div class="avatar-btn">林</div>
+        </div>
+        <div class="content">
+          <div class="greet">
+            <div>
+              <h1>晚安！</h1>
+              <p class="date">8 月 14 日 星期五</p>
+            </div>
+            <svg class="greet-art illu" width="86" height="62" viewBox="0 0 86 62" fill="none" aria-hidden="true">
+              <path d="M66 12 a17 17 0 1 0 8 30 a17 17 0 0 1 -8 -30 z" fill="#FFD75E"/>
+              <g fill="#a5dff2"><path d="M28 8 l1.8 4 4 1.8 -4 1.8 -1.8 4 -1.8 -4 -4 -1.8 4 -1.8 z"/><path d="M42 34 l1.3 2.8 2.8 1.3 -2.8 1.3 -1.3 2.8 -1.3 -2.8 -2.8 -1.3 2.8 -1.3 z" opacity="0.7"/></g>
+            </svg>
+          </div>
+
+          <section>
+            <div class="hero-card">
+              <div class="blob"></div>
+              <span class="hero-open" style="color:var(--primary);">查看完整<span class="msr">arrow_forward</span></span>
+              <div class="hero-top">
+                <div class="mood">
+                  <svg class="illu" width="42" height="42" viewBox="0 0 42 42" aria-label="心情：開心">
+                    <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                    <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                    <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                    <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="hero-name">林小恩</h2>
+                  <p class="hero-meta">今日聯絡簿 · 小熊班</p>
+                  <span class="pill"><span class="msr fill">check_circle</span>已離園</span>
+                </div>
+              </div>
+              <div class="hero-stats">
+                <div class="hstat t-sun"><span class="msr fill">restaurant</span><span class="hstat-value">全吃光</span><span class="hstat-label">午餐</span></div>
+                <div class="hstat t-grape"><span class="msr fill">bedtime</span><span class="hstat-value">1.8 小時</span><span class="hstat-label">午睡</span></div>
+                <div class="hstat t-leaf"><span class="msr fill">sentiment_very_satisfied</span><span class="hstat-value">開心</span><span class="hstat-label">心情</span></div>
+              </div>
+              <p class="hero-note">「今天小恩在積木角當小老師，教同學蓋出好高的城堡，<b style="color:var(--primary);">超有成就感</b>！」</p>
+              <div class="hero-photos">
+                <div class="ph p1"><span class="msr fill">image</span></div>
+                <div class="ph p2"><span class="msr fill">image</span></div>
+                <div class="ph p3"><span class="msr fill">image</span></div>
+                <div class="ph more">+2</div>
+              </div>
+            </div>
+          </section>
+
+          <div class="bento">
+            <div class="tile t-sky">
+              <div class="tile-icon"><span class="msr fill">directions_bus</span></div>
+              <span class="tile-value">已到站</span><span class="tile-label">娃娃車</span>
+            </div>
+            <div class="tile t-sun">
+              <div class="tile-icon"><span class="msr fill">payments</span></div>
+              <span class="tile-value">2 筆</span><span class="tile-label">待繳學費</span>
+              <span class="tile-sub"><span class="msr">error</span>有逾期款項</span>
+            </div>
+            <div class="tile t-coral">
+              <div class="tile-icon"><span class="msr fill">edit_document</span></div>
+              <span class="tile-value">1 份</span><span class="tile-label">待簽文件</span>
+            </div>
+            <div class="tile t-leaf">
+              <div class="tile-icon"><span class="msr fill">hail</span></div>
+              <span class="tile-value">1 筆進行中</span><span class="tile-label">臨時接送</span>
+            </div>
+          </div>
+
+          <section>
+            <div class="section-h"><h2>今日動態</h2><a href="#" style="color:var(--primary);">更多動態<span class="msr">arrow_forward</span></a></div>
+            <div class="stream" style="margin-top:10px;">
+              <div class="trow"><div class="tdot grape"><span class="msr fill">auto_stories</span></div><div class="tbody"><p class="tt">聯絡簿發布了</p><p class="td">王老師寫下了今天的故事</p></div><span class="ttime">15:40</span></div>
+              <div class="trow"><div class="tdot leaf"><span class="msr fill">logout</span></div><div class="tbody"><p class="tt">已離園</p><p class="td">由爸爸接回</p></div><span class="ttime">16:45</span></div>
+              <div class="trow"><div class="tdot sun"><span class="msr fill">restaurant</span></div><div class="tbody"><p class="tt">上午點心</p><p class="td">香蕉牛奶，全部吃完</p></div><span class="ttime">10:15</span></div>
+            </div>
+          </section>
+
+          <div class="rowlink"><span class="msr fill lead" style="color:var(--primary);">calendar_month</span>行事曆<span class="msr chev">chevron_right</span></div>
+        </div>
+
+        <nav class="navbar">
+          <div class="nav-item active"><div class="nav-pill"><span class="msr fill">home</span></div><span class="nav-label" style="color:var(--primary);">首頁</span></div>
+          <div class="nav-item"><div class="nav-pill"><span class="msr">child_care</span></div><span class="nav-label">孩子</span></div>
+          <div class="nav-item"><span class="nav-badge">3</span><div class="nav-pill"><span class="msr">chat_bubble</span></div><span class="nav-label">訊息</span></div>
+          <div class="nav-item"><span class="nav-badge">2</span><div class="nav-pill"><span class="msr">assignment</span></div><span class="nav-label">事務</span></div>
+          <div class="nav-item"><div class="nav-pill"><span class="msr">account_circle</span></div><span class="nav-label">我的</span></div>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 聯絡簿詳情 · Dark ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">聯絡簿詳情 · Dark</span>
+    <div class="phone dark">
+      <div class="screen">
+        <div class="statusbar"><span>21:41</span><span class="right"><span class="msr">signal_cellular_alt</span><span class="msr">wifi</span><span class="msr">battery_full</span></span></div>
+        <div class="appbar">
+          <div class="appbar-back"><span class="msr">arrow_back</span></div>
+          <span class="appbar-title">聯絡簿</span>
+        </div>
+        <div class="content">
+          <div class="detail-hero">
+            <svg class="art illu" width="72" height="58" viewBox="0 0 72 58" fill="none" aria-hidden="true">
+              <g fill="#FFD75E"><path d="M58 10 l2.2 5 5 2.2 -5 2.2 -2.2 5 -2.2 -5 -5 -2.2 5 -2.2 z"/></g>
+              <g fill="#a5dff2" opacity="0.8"><path d="M42 34 l1.5 3.4 3.4 1.5 -3.4 1.5 -1.5 3.4 -1.5 -3.4 -3.4 -1.5 3.4 -1.5 z"/></g>
+            </svg>
+            <p class="dh-date">8 月 14 日 星期五</p>
+            <div class="dh-row">
+              <div class="mood-lg">
+                <svg class="illu" width="52" height="52" viewBox="0 0 42 42" aria-label="心情：開心">
+                  <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                  <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                  <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                  <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                </svg>
+              </div>
+              <div>
+                <h1 class="dh-name">林小恩</h1>
+                <p class="dh-class">小熊班</p>
+                <span class="mood-tag"><span class="msr fill" style="font-size:15px;">sunny</span>今天心情：開心</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="msr fill" style="color:var(--primary);">timeline</span>今天的故事</div>
+            <div class="story">
+              <div class="srow"><div class="tdot leaf"><span class="msr fill">check_circle</span></div><div class="tbody"><p class="tt">已入園 <span style="color:var(--text-faint);font-weight:700;font-size:12px;">08:12</span></p><p class="td">刷卡入園，精神很好</p></div></div>
+              <div class="srow"><div class="tdot sun"><span class="msr fill">restaurant</span></div><div class="tbody"><p class="tt">午餐</p><p class="td">咖哩飯＋玉米濃湯，全部吃光</p></div></div>
+              <div class="srow"><div class="tdot sky"><span class="msr fill">bedtime</span></div><div class="tbody"><p class="tt">午睡</p><p class="td">12:30 – 14:20（1 小時 50 分）</p></div></div>
+              <div class="srow"><div class="tdot grape"><span class="msr fill">favorite</span></div><div class="tbody"><p class="tt">心情</p><p class="td">開心一整天，和同學玩得很好</p></div></div>
+            </div>
+          </div>
+
+          <div class="card note-card">
+            <div class="card-title"><span class="msr fill">format_quote</span>老師留言</div>
+            <p class="note-body">今天小恩在積木角當小老師，教同學蓋出好高的城堡，超有成就感！下午唱遊課也很投入，回家可以請小恩表演新學的〈小星星〉手勢舞喔。</p>
+          </div>
+
+          <div class="card">
+            <div class="card-title"><span class="msr fill" style="color:var(--primary);">photo_library</span>今天的照片<span class="count">4 張</span></div>
+            <div class="photo-grid">
+              <div class="ph p1"><span class="msr fill">image</span></div>
+              <div class="ph p2"><span class="msr fill">image</span></div>
+              <div class="ph p3"><span class="msr fill">image</span></div>
+              <div class="ph p4"><span class="msr fill">image</span></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="ack"><span class="ack-badge"><span class="msr fill">check_circle</span>已讀 · 16:02</span></div>
+            <div class="card-title"><span class="msr fill" style="color:var(--primary);">forum</span>家長留言<span class="count">1 則</span></div>
+            <div class="reply-bubble">謝謝老師！回家路上一直哼小星星，會請他表演的 😊</div>
+            <p class="reply-meta">今天 16:05</p>
+            <div class="composer">
+              <span class="hinttext">想跟老師說的話…</span>
+              <button class="send-btn"><span class="msr fill">send</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="footnote">
+  ※ 資料皆為擬真示意（林小恩／小熊班為虛構）。本稿 hex 為快照值，實作時一律經 token（m3-tokens 產線＋童彩 container 擴充），並收斂 legacy 疊層。
+  插畫為 inline SVG spot 風格示意，正式插畫可再委製或以同風格 SVG 系統化。Icon 走既有自架 Material Symbols Rounded 子集。
+</p>
+</body>
+</html>

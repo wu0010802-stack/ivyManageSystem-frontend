@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>方向 B：iOS 風格・溫潤卡片 — 家長端 LIFF 改版 mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,200..500,0..1,0&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   設計稿註記：本檔為自足 mockup，所有 hex 為快照值，
+   不可直接複製進 src/（實作時一律走 token）。
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-font-smoothing: antialiased; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro TC', 'PingFang TC', 'Helvetica Neue', sans-serif;
+  background: #e8e8ed;
+  color: #1c1c1e;
+  padding: 40px 24px 80px;
+}
+.spec-head { max-width: 1720px; margin: 0 auto 36px; }
+.spec-head h1 { font-size: 28px; font-weight: 800; letter-spacing: 0.01em; }
+.spec-head .tagline { margin-top: 6px; font-size: 15px; color: #6e6e73; }
+.spec-cols { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
+.spec-card {
+  flex: 1 1 320px; background: #fff; border-radius: 18px; padding: 18px 20px;
+  font-size: 14px; line-height: 1.8; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+.spec-card h2 { font-size: 14px; font-weight: 700; color: #0d9053; margin-bottom: 8px; letter-spacing: 0.04em; }
+.spec-card ul { padding-left: 18px; }
+.spec-card li + li { margin-top: 4px; }
+.frames { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; max-width: 1760px; margin: 0 auto; }
+.frame-slot { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.frame-label { font-size: 13px; font-weight: 700; color: #6e6e73; letter-spacing: 0.06em; }
+
+/* ---------- 手機框 ---------- */
+.phone {
+  width: 393px; border-radius: 46px; overflow: hidden;
+  border: 10px solid #101012;
+  box-shadow: 0 24px 60px rgba(10,10,20,0.3);
+  background: var(--bg);
+}
+.screen { display: flex; flex-direction: column; min-height: 820px; background: var(--bg); color: var(--text); }
+
+/* ---------- 方向 B tokens（light 快照） ---------- */
+.phone {
+  --bg: #f2f2f7;
+  --card: #ffffff;
+  --fill-2: #f2f2f7;               /* card 內次級填色 */
+  --text: #000000;
+  --text-2: rgba(60,60,67,0.6);
+  --text-3: rgba(60,60,67,0.35);
+  --sep: rgba(60,60,67,0.16);
+  --tint: #0d9053;                  /* 品牌綠作 iOS tint */
+  --tint-soft: #e0f2e7;
+  --on-tint: #ffffff;
+  --cream: #fff8e9;                 /* hero 暖底 */
+  --cream-edge: #f4e5c4;
+  --sun: #f5b800;   --sun-bg: #fff3d1;
+  --coral: #e8563f; --coral-bg: #ffe6df;
+  --sky: #2a92c8;   --sky-bg: #ddf1fb;
+  --grape: #8a5cd6; --grape-bg: #efe6ff;
+  --bar-bg: rgba(249,249,249,0.88);
+  --shadow-card: 0 0 0 0.5px rgba(0,0,0,0.04), 0 2px 10px rgba(0,0,0,0.04);
+}
+.phone.dark {
+  --bg: #000000;
+  --card: #1c1c1e;
+  --fill-2: #2c2c2e;
+  --text: #ffffff;
+  --text-2: rgba(235,235,245,0.6);
+  --text-3: rgba(235,235,245,0.35);
+  --sep: rgba(84,84,88,0.5);
+  --tint: #3fd68c;
+  --tint-soft: #123526;
+  --on-tint: #003920;
+  --cream: #2a2416;
+  --cream-edge: #3d3420;
+  --sun: #ffd60a;   --sun-bg: #3a3212;
+  --coral: #ff7a5c; --coral-bg: #401f16;
+  --sky: #64c7f0;   --sky-bg: #10303f;
+  --grape: #bf9df5; --grape-bg: #2c2044;
+  --bar-bg: rgba(22,22,24,0.9);
+  --shadow-card: 0 0 0 0.5px rgba(255,255,255,0.06);
+}
+
+/* SF Symbols 以 Material Symbols Outlined 細字重近似 */
+.sf {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal; font-style: normal; line-height: 1;
+  display: inline-block; white-space: nowrap; direction: ltr;
+  font-variation-settings: 'wght' 300;
+  -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga';
+}
+.sf.fill { font-variation-settings: 'FILL' 1, 'wght' 300; }
+
+/* ---------- 狀態列 ---------- */
+.statusbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 26px 6px; font-size: 15px; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.statusbar .right { display: flex; gap: 5px; align-items: center; }
+.statusbar .sf { font-size: 16px; font-variation-settings: 'FILL' 1, 'wght' 400; }
+
+/* ---------- Large title 頁首 ---------- */
+.lt-head { padding: 8px 20px 4px; display: flex; align-items: flex-end; justify-content: space-between; }
+.lt-eyebrow { font-size: 13px; font-weight: 600; color: var(--text-2); letter-spacing: 0.02em; text-transform: none; }
+.lt-title { font-size: 34px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.15; margin-top: 2px; }
+.avatar {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: linear-gradient(145deg, #ffd75e, #ff9f4c);
+  color: #6b4a00; font-size: 16px; font-weight: 800;
+  display: grid; place-items: center; margin-bottom: 4px;
+  box-shadow: var(--shadow-card);
+}
+
+/* ---------- 導覽列（詳情頁） ---------- */
+.navbar-top {
+  display: flex; align-items: center; padding: 8px 8px 8px 4px; position: relative;
+}
+.nb-back { display: inline-flex; align-items: center; color: var(--tint); font-size: 17px; font-weight: 500; }
+.nb-back .sf { font-size: 26px; font-variation-settings: 'wght' 500; }
+.nb-title {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font-size: 17px; font-weight: 700;
+}
+
+/* ---------- 內容 ---------- */
+.content { flex: 1; display: flex; flex-direction: column; padding: 6px 16px 108px; }
+
+/* iOS 分節標頭（inset grouped 樣式） */
+.gsection { margin-top: 22px; }
+.gsection:first-child { margin-top: 10px; }
+.ghead {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0 16px 7px;
+}
+.ghead h2 { font-size: 13px; font-weight: 600; color: var(--text-2); letter-spacing: 0.03em; }
+.ghead a { font-size: 13px; font-weight: 500; color: var(--tint); text-decoration: none; }
+
+/* ---------- Hero 卡（cream 暖底 · continuous corner） ---------- */
+.hero-card {
+  position: relative; overflow: hidden;
+  background: var(--cream);
+  border: 0.5px solid var(--cream-edge);
+  border-radius: 22px; padding: 18px 18px 16px;
+  box-shadow: var(--shadow-card);
+}
+.hero-art { position: absolute; right: 12px; top: 12px; }
+.hero-top { display: flex; align-items: center; gap: 14px; position: relative; }
+.mood {
+  width: 60px; height: 60px; border-radius: 50%; flex-shrink: 0;
+  background: var(--card); box-shadow: var(--shadow-card);
+  display: grid; place-items: center;
+}
+.hero-name { font-size: 20px; font-weight: 800; letter-spacing: 0.01em; }
+.hero-meta { margin-top: 2px; font-size: 13px; color: var(--text-2); }
+.status-chip {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 7px;
+  background: var(--tint-soft); color: var(--tint);
+  border-radius: 999px; padding: 3.5px 10px; font-size: 12.5px; font-weight: 700;
+}
+.status-chip .sf { font-size: 14px; }
+.hero-facts {
+  display: flex; margin-top: 14px; background: color-mix(in srgb, var(--card) 62%, transparent);
+  border-radius: 14px; padding: 10px 0;
+}
+.fact { flex: 1; text-align: center; position: relative; }
+.fact + .fact::before {
+  content: ''; position: absolute; left: 0; top: 15%; bottom: 15%;
+  width: 0.5px; background: var(--sep);
+}
+.fact-value { font-size: 15px; font-weight: 800; }
+.fact-label { margin-top: 1px; font-size: 11px; font-weight: 500; color: var(--text-2); }
+.hero-note { margin-top: 13px; font-size: 14px; line-height: 1.65; color: var(--text); position: relative; }
+.hero-note::before { content: '「'; color: var(--sun); font-weight: 800; }
+.hero-note::after { content: '」'; color: var(--sun); font-weight: 800; }
+.hero-photos { display: flex; gap: 8px; margin-top: 13px; }
+.ph {
+  width: 72px; height: 72px; border-radius: 14px; flex-shrink: 0;
+  display: grid; place-items: center; color: rgba(255,255,255,0.9);
+}
+.ph .sf { font-size: 24px; }
+.ph.p1 { background: linear-gradient(145deg,#8fd6a9,#4faf7c); }
+.ph.p2 { background: linear-gradient(145deg,#ffd98e,#f5a34c); }
+.ph.p3 { background: linear-gradient(145deg,#9bd3ec,#5d9fc9); }
+.ph.p4 { background: linear-gradient(145deg,#d3a7f0,#9a6fd0); }
+.ph.more {
+  background: transparent; border: 1.5px dashed var(--sep);
+  color: var(--text-2); font-size: 14px; font-weight: 700;
+}
+.hero-cta {
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  margin-top: 14px; padding: 11px; border-radius: 13px;
+  background: var(--tint); color: var(--on-tint);
+  font-size: 15px; font-weight: 700;
+}
+.hero-cta .sf { font-size: 18px; font-variation-settings: 'wght' 500; }
+
+/* ---------- 行政事項（2 欄小卡） ---------- */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mini {
+  background: var(--card); border-radius: 18px; padding: 13px 14px;
+  box-shadow: var(--shadow-card);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mini-top { display: flex; align-items: center; justify-content: space-between; }
+.mini-icon {
+  width: 32px; height: 32px; border-radius: 9px;
+  display: grid; place-items: center;
+}
+.mini-icon .sf { font-size: 19px; font-variation-settings: 'FILL' 1, 'wght' 400; }
+.mini-icon.sky   { background: var(--sky-bg);   color: var(--sky); }
+.mini-icon.sun   { background: var(--sun-bg);   color: var(--sun); }
+.mini-icon.coral { background: var(--coral-bg); color: var(--coral); }
+.mini-icon.grape { background: var(--grape-bg); color: var(--grape); }
+.mini-chev { color: var(--text-3); font-size: 17px; }
+.mini-value { font-size: 16px; font-weight: 800; letter-spacing: 0.01em; }
+.mini-label { font-size: 12px; font-weight: 500; color: var(--text-2); margin-top: -6px; }
+.mini-alert { font-size: 11.5px; font-weight: 600; color: var(--coral); margin-top: -4px; }
+
+/* ---------- Inset grouped list（今日動態 / 更多） ---------- */
+.glist {
+  background: var(--card); border-radius: 16px; overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.grow { display: flex; align-items: center; gap: 12px; padding: 11px 14px; position: relative; }
+.grow + .grow::before {
+  content: ''; position: absolute; top: 0; left: 58px; right: 0; height: 0.5px; background: var(--sep);
+}
+.gicon {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center; color: #fff;
+}
+.gicon .sf { font-size: 19px; font-variation-settings: 'FILL' 1, 'wght' 400; }
+.gicon.green  { background: #34a765; }
+.gicon.orange { background: #f0a23c; }
+.gicon.blue   { background: #4aa8dc; }
+.gicon.purple { background: #9d76e0; }
+.gicon.teal   { background: #45b8ad; }
+.gbody { flex: 1; min-width: 0; }
+.gt { font-size: 15px; font-weight: 600; letter-spacing: 0.01em; }
+.gd { margin-top: 1px; font-size: 12.5px; color: var(--text-2); }
+.gtime { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.gchev { color: var(--text-3); font-size: 17px; }
+
+/* ---------- Tab bar ---------- */
+.tabbar {
+  position: sticky; bottom: 0; margin-top: auto;
+  display: flex; padding: 8px 4px calc(8px + 14px);
+  background: var(--bar-bg);
+  backdrop-filter: blur(22px) saturate(1.6);
+  border-top: 0.5px solid var(--sep);
+}
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--text-3); position: relative; }
+.tab .sf { font-size: 26px; }
+.tab-label { font-size: 10px; font-weight: 500; letter-spacing: 0.01em; }
+.tab.active { color: var(--tint); }
+.tab.active .sf { font-variation-settings: 'FILL' 1, 'wght' 300; }
+.tab-badge {
+  position: absolute; top: -2px; right: 50%; margin-right: -22px;
+  min-width: 16px; height: 16px; border-radius: 999px; padding: 0 4px;
+  background: #ff3b30; color: #fff; font-size: 10px; font-weight: 700;
+  display: grid; place-items: center;
+}
+
+/* ---------- 聯絡簿詳情 ---------- */
+.dhero {
+  background: var(--cream); border: 0.5px solid var(--cream-edge);
+  border-radius: 22px; padding: 20px 18px; position: relative; overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.dhero .hero-art { top: 14px; }
+.dh-date { font-size: 13px; font-weight: 600; color: var(--text-2); }
+.dh-row { display: flex; align-items: center; gap: 15px; margin-top: 12px; }
+.mood-lg {
+  width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0;
+  background: var(--card); box-shadow: var(--shadow-card);
+  display: grid; place-items: center;
+}
+.dh-name { font-size: 25px; font-weight: 800; }
+.dh-class { margin-top: 2px; font-size: 14px; color: var(--text-2); }
+.mood-chip {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 7px;
+  background: var(--sun-bg); color: color-mix(in srgb, var(--sun) 60%, var(--text));
+  border-radius: 999px; padding: 3.5px 10px; font-size: 12.5px; font-weight: 700;
+}
+
+.gcard { background: var(--card); border-radius: 16px; padding: 4px 0; box-shadow: var(--shadow-card); }
+.gcard.pad { padding: 15px 16px; }
+
+.note-quote { font-size: 14.5px; line-height: 1.8; }
+.note-sign { margin-top: 8px; font-size: 12.5px; color: var(--text-2); }
+
+.pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pgrid .ph { width: 100%; height: 124px; border-radius: 12px; }
+
+.ackrow { display: flex; align-items: center; gap: 6px; }
+.ackrow .sf { color: var(--tint); font-size: 18px; }
+.ack-text { font-size: 13.5px; font-weight: 600; color: var(--tint); }
+
+.bubble {
+  background: var(--fill-2); border-radius: 16px 16px 16px 5px;
+  padding: 11px 13px; font-size: 14px; line-height: 1.65;
+}
+.bubble-meta { margin-top: 5px; font-size: 11.5px; color: var(--text-3); padding-left: 3px; }
+.composer {
+  margin-top: 13px; display: flex; align-items: center; gap: 8px;
+  background: var(--fill-2); border-radius: 999px; padding: 5px 5px 5px 16px;
+}
+.composer .hinttext { flex: 1; font-size: 13.5px; color: var(--text-3); }
+.send {
+  width: 34px; height: 34px; border-radius: 999px; border: none;
+  background: var(--tint); color: var(--on-tint); display: grid; place-items: center;
+}
+.send .sf { font-size: 17px; font-variation-settings: 'FILL' 1, 'wght' 400; }
+
+.illu { display: block; }
+.footnote { max-width: 1720px; margin: 40px auto 0; font-size: 13px; color: #6e6e73; line-height: 1.8; }
+</style>
+</head>
+<body>
+
+<header class="spec-head">
+  <h1>方向 B：iOS 風格・溫潤卡片</h1>
+  <p class="tagline">Apple HIG 語彙——大標題頁首、inset grouped 卡片列表、hairline 分隔線、毛玻璃 bar、細線圖示——品牌綠作為 tint，童趣以 cream 暖底 hero 與 spot 插畫點綴，像 Apple「手記」app 的溫度。</p>
+  <div class="spec-cols">
+    <div class="spec-card">
+      <h2>設計要點</h2>
+      <ul>
+        <li><b>排版</b>：34px 大標題＋日期 eyebrow；分節用 iOS 13px 灰標頭，內容收進 inset grouped 白卡。</li>
+        <li><b>色彩</b>：背景 systemGray6（#f2f2f7）、卡片純白；品牌綠 #0d9053 只作 tint（連結、CTA、active tab）；hero 用 cream 暖底承載童趣。</li>
+        <li><b>元件</b>：list row＋左 icon 方塊（iOS 設定樣式）＋hairline＋chevron；狀態用 tint 淡底 chip。</li>
+        <li><b>字體</b>：系統字（PingFang TC／SF Pro），數字 tabular。圖示走細線（wght 300）近似 SF Symbols。</li>
+      </ul>
+    </div>
+    <div class="spec-card">
+      <h2>導航提案（IA 改動，與方向 A 相同）</h2>
+      <ul>
+        <li>3 tab＋抽屜 → <b>5 tabs</b>：首頁／孩子／訊息／事務／我的。</li>
+        <li>iOS tab bar：毛玻璃、細線圖示、active 填色＋tint；深層頁走導覽列返回 chevron。</li>
+        <li>「孩子」聚合聯絡簿／照片／成長／健康；「我的」自抽屜移出。</li>
+      </ul>
+    </div>
+    <div class="spec-card">
+      <h2>動效系統（靜態稿以文字說明）</h2>
+      <ul>
+        <li>頁面轉場：iOS push（右滑入＋前頁視差左移）；modal 用 sheet 上滑＋背景縮退。</li>
+        <li>點擊回饋：row highlight（灰底閃現）；卡片 spring scale 0.97。</li>
+        <li>下拉更新：iOS 橡皮筋＋spinner。</li>
+        <li>reduced-motion：全部退為 crossfade。</li>
+      </ul>
+    </div>
+    <div class="spec-card">
+      <h2>取捨</h2>
+      <ul>
+        <li>✅ 「iPhone 感」＝台灣家長直覺的高級感，區隔度最高。</li>
+        <li>⚠ 15 個 M3 元件需全部重塑（圓角、字重、圖示語言、list 結構），工程量約方向 A 的 1.5–2 倍。</li>
+        <li>⚠ 毛玻璃 backdrop-filter 在 LINE Android WebView 有效能風險，需降級方案（實色 bar）。</li>
+        <li>⚠ Android 使用者看到純 iOS 語彙可能略有異物感。</li>
+      </ul>
+    </div>
+  </div>
+</header>
+
+<div class="frames">
+
+  <!-- ============ 首頁 · Light ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">首頁 · Light</span>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="right"><span class="sf">signal_cellular_alt</span><span class="sf">wifi</span><span class="sf">battery_full</span></span></div>
+
+        <div class="lt-head">
+          <div>
+            <p class="lt-eyebrow">8 月 14 日 星期五</p>
+            <h1 class="lt-title">今天</h1>
+          </div>
+          <div class="avatar">林</div>
+        </div>
+
+        <div class="content">
+          <div class="gsection">
+            <div class="ghead"><h2>今日聯絡簿</h2></div>
+            <div class="hero-card">
+              <svg class="hero-art illu" width="64" height="46" viewBox="0 0 64 46" fill="none" aria-hidden="true">
+                <circle cx="44" cy="18" r="12" fill="#FFD75E"/>
+                <g stroke="#FFC93C" stroke-width="2.6" stroke-linecap="round">
+                  <line x1="44" y1="1.5" x2="44" y2="4"/><line x1="58" y1="8" x2="56" y2="10"/><line x1="60.5" y1="18" x2="58" y2="18"/>
+                </g>
+                <path d="M2 38 a7.5 7.5 0 0 1 7.5-7 a9 9 0 0 1 17.5-2 a7 7 0 0 1 7 9 z" fill="#fff" stroke="#eadfc2" stroke-width="1.5"/>
+              </svg>
+              <div class="hero-top">
+                <div class="mood">
+                  <svg class="illu" width="40" height="40" viewBox="0 0 42 42" aria-label="心情：開心">
+                    <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                    <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                    <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                    <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="hero-name">林小恩</h2>
+                  <p class="hero-meta">小熊班</p>
+                  <span class="status-chip"><span class="sf fill">check_circle</span>在園中</span>
+                </div>
+              </div>
+              <div class="hero-facts">
+                <div class="fact"><p class="fact-value">全吃光</p><p class="fact-label">午餐</p></div>
+                <div class="fact"><p class="fact-value">1.8 小時</p><p class="fact-label">午睡</p></div>
+                <div class="fact"><p class="fact-value">開心</p><p class="fact-label">心情</p></div>
+              </div>
+              <p class="hero-note">今天小恩在積木角當小老師，教同學蓋出好高的城堡，超有成就感！</p>
+              <div class="hero-photos">
+                <div class="ph p1"><span class="sf fill">photo</span></div>
+                <div class="ph p2"><span class="sf fill">photo</span></div>
+                <div class="ph p3"><span class="sf fill">photo</span></div>
+                <div class="ph more">+2</div>
+              </div>
+              <div class="hero-cta">查看完整聯絡簿<span class="sf">chevron_right</span></div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>待辦與提醒</h2></div>
+            <div class="duo">
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon sky"><span class="sf">directions_bus</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">還有 3 站</span><span class="mini-label">娃娃車</span>
+              </div>
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon sun"><span class="sf">credit_card</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">2 筆</span><span class="mini-label">待繳學費</span>
+                <span class="mini-alert">有逾期款項</span>
+              </div>
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon coral"><span class="sf">signature</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">1 份</span><span class="mini-label">待簽文件</span>
+              </div>
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon grape"><span class="sf">hail</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">1 筆進行中</span><span class="mini-label">臨時接送</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>今日動態</h2><a href="#">更多動態</a></div>
+            <div class="glist">
+              <div class="grow"><div class="gicon purple"><span class="sf">book</span></div><div class="gbody"><p class="gt">聯絡簿發布了</p><p class="gd">王老師寫下了今天的故事</p></div><span class="gtime">15:40</span></div>
+              <div class="grow"><div class="gicon blue"><span class="sf">bedtime</span></div><div class="gbody"><p class="gt">午睡</p><p class="gd">12:30 – 14:20，睡得香甜</p></div><span class="gtime">14:20</span></div>
+              <div class="grow"><div class="gicon orange"><span class="sf">restaurant</span></div><div class="gbody"><p class="gt">上午點心</p><p class="gd">香蕉牛奶，全部吃完</p></div><span class="gtime">10:15</span></div>
+              <div class="grow"><div class="gicon green"><span class="sf">check_circle</span></div><div class="gbody"><p class="gt">已入園</p><p class="gd">刷卡入園，由媽媽接送</p></div><span class="gtime">08:12</span></div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="glist">
+              <div class="grow"><div class="gicon teal"><span class="sf">calendar_month</span></div><div class="gbody"><p class="gt">行事曆</p></div><span class="sf gchev">chevron_right</span></div>
+              <div class="grow"><div class="gicon green"><span class="sf">palette</span></div><div class="gbody"><p class="gt">才藝課報名</p></div><span class="sf gchev">chevron_right</span></div>
+            </div>
+          </div>
+        </div>
+
+        <nav class="tabbar">
+          <div class="tab active"><span class="sf">house</span><span class="tab-label">首頁</span></div>
+          <div class="tab"><span class="sf">child_care</span><span class="tab-label">孩子</span></div>
+          <div class="tab"><span class="tab-badge">3</span><span class="sf">chat_bubble</span><span class="tab-label">訊息</span></div>
+          <div class="tab"><span class="tab-badge">2</span><span class="sf">checklist</span><span class="tab-label">事務</span></div>
+          <div class="tab"><span class="sf">person</span><span class="tab-label">我的</span></div>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 聯絡簿詳情 · Light ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">聯絡簿詳情 · Light</span>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>9:41</span><span class="right"><span class="sf">signal_cellular_alt</span><span class="sf">wifi</span><span class="sf">battery_full</span></span></div>
+
+        <div class="navbar-top">
+          <span class="nb-back"><span class="sf">chevron_left</span>今天</span>
+          <span class="nb-title">聯絡簿</span>
+        </div>
+
+        <div class="content">
+          <div class="gsection">
+            <div class="dhero">
+              <svg class="hero-art illu" width="58" height="46" viewBox="0 0 58 46" fill="none" aria-hidden="true">
+                <g fill="#FFD75E"><path d="M44 6 l2 4.6 4.6 2 -4.6 2 -2 4.6 -2 -4.6 -4.6 -2 4.6 -2 z"/></g>
+                <g fill="#FF8C42" opacity="0.75"><path d="M30 28 l1.4 3.2 3.2 1.4 -3.2 1.4 -1.4 3.2 -1.4 -3.2 -3.2 -1.4 3.2 -1.4 z"/></g>
+              </svg>
+              <p class="dh-date">8 月 14 日 星期五</p>
+              <div class="dh-row">
+                <div class="mood-lg">
+                  <svg class="illu" width="48" height="48" viewBox="0 0 42 42" aria-label="心情：開心">
+                    <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                    <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                    <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                    <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                  </svg>
+                </div>
+                <div>
+                  <h1 class="dh-name">林小恩</h1>
+                  <p class="dh-class">小熊班</p>
+                  <span class="mood-chip">☀️ 今天心情：開心</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>今天的故事</h2></div>
+            <div class="glist">
+              <div class="grow"><div class="gicon green"><span class="sf">check_circle</span></div><div class="gbody"><p class="gt">已入園</p><p class="gd">刷卡入園，精神很好</p></div><span class="gtime">08:12</span></div>
+              <div class="grow"><div class="gicon orange"><span class="sf">restaurant</span></div><div class="gbody"><p class="gt">午餐</p><p class="gd">咖哩飯＋玉米濃湯，全部吃光</p></div></div>
+              <div class="grow"><div class="gicon blue"><span class="sf">bedtime</span></div><div class="gbody"><p class="gt">午睡</p><p class="gd">12:30 – 14:20（1 小時 50 分）</p></div></div>
+              <div class="grow"><div class="gicon purple"><span class="sf">favorite</span></div><div class="gbody"><p class="gt">心情</p><p class="gd">開心一整天，和同學玩得很好</p></div></div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>老師留言</h2></div>
+            <div class="gcard pad" style="background: var(--cream); border: 0.5px solid var(--cream-edge);">
+              <p class="note-quote">今天小恩在積木角當小老師，教同學蓋出好高的城堡，超有成就感！下午唱遊課也很投入，回家可以請小恩表演新學的〈小星星〉手勢舞喔。</p>
+              <p class="note-sign">— 王老師 · 15:40</p>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>今天的照片</h2><a href="#">4 張</a></div>
+            <div class="gcard pad">
+              <div class="pgrid">
+                <div class="ph p1"><span class="sf fill">photo</span></div>
+                <div class="ph p2"><span class="sf fill">photo</span></div>
+                <div class="ph p3"><span class="sf fill">photo</span></div>
+                <div class="ph p4"><span class="sf fill">photo</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>家長留言</h2></div>
+            <div class="gcard pad">
+              <div class="ackrow"><span class="sf fill">check_circle</span><span class="ack-text">已讀 · 16:02</span></div>
+              <div class="bubble" style="margin-top:12px;">謝謝老師！回家路上一直哼小星星，會請他表演的 😊</div>
+              <p class="bubble-meta">今天 16:05</p>
+              <div class="composer">
+                <span class="hinttext">想跟老師說的話…</span>
+                <button class="send"><span class="sf">arrow_upward</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 首頁 · Dark ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">首頁 · Dark</span>
+    <div class="phone dark">
+      <div class="screen">
+        <div class="statusbar"><span>21:41</span><span class="right"><span class="sf">signal_cellular_alt</span><span class="sf">wifi</span><span class="sf">battery_full</span></span></div>
+
+        <div class="lt-head">
+          <div>
+            <p class="lt-eyebrow">8 月 14 日 星期五</p>
+            <h1 class="lt-title">今天</h1>
+          </div>
+          <div class="avatar">林</div>
+        </div>
+
+        <div class="content">
+          <div class="gsection">
+            <div class="ghead"><h2>今日聯絡簿</h2></div>
+            <div class="hero-card">
+              <svg class="hero-art illu" width="64" height="46" viewBox="0 0 64 46" fill="none" aria-hidden="true">
+                <path d="M46 8 a11 11 0 1 0 6 19 a11 11 0 0 1 -6 -19 z" fill="#FFD75E"/>
+                <g fill="#64c7f0"><path d="M20 8 l1.5 3.4 3.4 1.5 -3.4 1.5 -1.5 3.4 -1.5 -3.4 -3.4 -1.5 3.4 -1.5 z"/></g>
+              </svg>
+              <div class="hero-top">
+                <div class="mood">
+                  <svg class="illu" width="40" height="40" viewBox="0 0 42 42" aria-label="心情：開心">
+                    <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                    <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                    <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                    <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                  </svg>
+                </div>
+                <div>
+                  <h2 class="hero-name">林小恩</h2>
+                  <p class="hero-meta">小熊班</p>
+                  <span class="status-chip"><span class="sf fill">check_circle</span>已離園</span>
+                </div>
+              </div>
+              <div class="hero-facts">
+                <div class="fact"><p class="fact-value">全吃光</p><p class="fact-label">午餐</p></div>
+                <div class="fact"><p class="fact-value">1.8 小時</p><p class="fact-label">午睡</p></div>
+                <div class="fact"><p class="fact-value">開心</p><p class="fact-label">心情</p></div>
+              </div>
+              <p class="hero-note">今天小恩在積木角當小老師，教同學蓋出好高的城堡，超有成就感！</p>
+              <div class="hero-photos">
+                <div class="ph p1"><span class="sf fill">photo</span></div>
+                <div class="ph p2"><span class="sf fill">photo</span></div>
+                <div class="ph p3"><span class="sf fill">photo</span></div>
+                <div class="ph more">+2</div>
+              </div>
+              <div class="hero-cta">查看完整聯絡簿<span class="sf">chevron_right</span></div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>待辦與提醒</h2></div>
+            <div class="duo">
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon sky"><span class="sf">directions_bus</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">已收班</span><span class="mini-label">娃娃車</span>
+              </div>
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon sun"><span class="sf">credit_card</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">2 筆</span><span class="mini-label">待繳學費</span>
+                <span class="mini-alert">有逾期款項</span>
+              </div>
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon coral"><span class="sf">signature</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">1 份</span><span class="mini-label">待簽文件</span>
+              </div>
+              <div class="mini">
+                <div class="mini-top"><div class="mini-icon grape"><span class="sf">hail</span></div><span class="sf mini-chev">chevron_right</span></div>
+                <span class="mini-value">1 筆進行中</span><span class="mini-label">臨時接送</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>今日動態</h2><a href="#">更多動態</a></div>
+            <div class="glist">
+              <div class="grow"><div class="gicon purple"><span class="sf">book</span></div><div class="gbody"><p class="gt">聯絡簿發布了</p><p class="gd">王老師寫下了今天的故事</p></div><span class="gtime">15:40</span></div>
+              <div class="grow"><div class="gicon green"><span class="sf">logout</span></div><div class="gbody"><p class="gt">已離園</p><p class="gd">由爸爸接回</p></div><span class="gtime">16:45</span></div>
+              <div class="grow"><div class="gicon orange"><span class="sf">restaurant</span></div><div class="gbody"><p class="gt">上午點心</p><p class="gd">香蕉牛奶，全部吃完</p></div><span class="gtime">10:15</span></div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="glist">
+              <div class="grow"><div class="gicon teal"><span class="sf">calendar_month</span></div><div class="gbody"><p class="gt">行事曆</p></div><span class="sf gchev">chevron_right</span></div>
+              <div class="grow"><div class="gicon green"><span class="sf">palette</span></div><div class="gbody"><p class="gt">才藝課報名</p></div><span class="sf gchev">chevron_right</span></div>
+            </div>
+          </div>
+        </div>
+
+        <nav class="tabbar">
+          <div class="tab active"><span class="sf">house</span><span class="tab-label">首頁</span></div>
+          <div class="tab"><span class="sf">child_care</span><span class="tab-label">孩子</span></div>
+          <div class="tab"><span class="tab-badge">3</span><span class="sf">chat_bubble</span><span class="tab-label">訊息</span></div>
+          <div class="tab"><span class="tab-badge">2</span><span class="sf">checklist</span><span class="tab-label">事務</span></div>
+          <div class="tab"><span class="sf">person</span><span class="tab-label">我的</span></div>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 聯絡簿詳情 · Dark ============ -->
+  <div class="frame-slot">
+    <span class="frame-label">聯絡簿詳情 · Dark</span>
+    <div class="phone dark">
+      <div class="screen">
+        <div class="statusbar"><span>21:41</span><span class="right"><span class="sf">signal_cellular_alt</span><span class="sf">wifi</span><span class="sf">battery_full</span></span></div>
+
+        <div class="navbar-top">
+          <span class="nb-back"><span class="sf">chevron_left</span>今天</span>
+          <span class="nb-title">聯絡簿</span>
+        </div>
+
+        <div class="content">
+          <div class="gsection">
+            <div class="dhero">
+              <svg class="hero-art illu" width="58" height="46" viewBox="0 0 58 46" fill="none" aria-hidden="true">
+                <g fill="#FFD75E"><path d="M44 6 l2 4.6 4.6 2 -4.6 2 -2 4.6 -2 -4.6 -4.6 -2 4.6 -2 z"/></g>
+                <g fill="#64c7f0" opacity="0.85"><path d="M30 28 l1.4 3.2 3.2 1.4 -3.2 1.4 -1.4 3.2 -1.4 -3.2 -3.2 -1.4 3.2 -1.4 z"/></g>
+              </svg>
+              <p class="dh-date">8 月 14 日 星期五</p>
+              <div class="dh-row">
+                <div class="mood-lg">
+                  <svg class="illu" width="48" height="48" viewBox="0 0 42 42" aria-label="心情：開心">
+                    <circle cx="21" cy="21" r="19" fill="#FFD75E"/>
+                    <circle cx="14.5" cy="18" r="2.6" fill="#6d5215"/><circle cx="27.5" cy="18" r="2.6" fill="#6d5215"/>
+                    <path d="M13 25 Q21 32 29 25" stroke="#6d5215" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+                    <circle cx="10.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/><circle cx="31.5" cy="23.5" r="2.8" fill="#ffb0a0" opacity="0.75"/>
+                  </svg>
+                </div>
+                <div>
+                  <h1 class="dh-name">林小恩</h1>
+                  <p class="dh-class">小熊班</p>
+                  <span class="mood-chip">☀️ 今天心情：開心</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>今天的故事</h2></div>
+            <div class="glist">
+              <div class="grow"><div class="gicon green"><span class="sf">check_circle</span></div><div class="gbody"><p class="gt">已入園</p><p class="gd">刷卡入園，精神很好</p></div><span class="gtime">08:12</span></div>
+              <div class="grow"><div class="gicon orange"><span class="sf">restaurant</span></div><div class="gbody"><p class="gt">午餐</p><p class="gd">咖哩飯＋玉米濃湯，全部吃光</p></div></div>
+              <div class="grow"><div class="gicon blue"><span class="sf">bedtime</span></div><div class="gbody"><p class="gt">午睡</p><p class="gd">12:30 – 14:20（1 小時 50 分）</p></div></div>
+              <div class="grow"><div class="gicon purple"><span class="sf">favorite</span></div><div class="gbody"><p class="gt">心情</p><p class="gd">開心一整天，和同學玩得很好</p></div></div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>老師留言</h2></div>
+            <div class="gcard pad" style="background: var(--cream); border: 0.5px solid var(--cream-edge);">
+              <p class="note-quote">今天小恩在積木角當小老師，教同學蓋出好高的城堡，超有成就感！下午唱遊課也很投入，回家可以請小恩表演新學的〈小星星〉手勢舞喔。</p>
+              <p class="note-sign">— 王老師 · 15:40</p>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>今天的照片</h2><a href="#">4 張</a></div>
+            <div class="gcard pad">
+              <div class="pgrid">
+                <div class="ph p1"><span class="sf fill">photo</span></div>
+                <div class="ph p2"><span class="sf fill">photo</span></div>
+                <div class="ph p3"><span class="sf fill">photo</span></div>
+                <div class="ph p4"><span class="sf fill">photo</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gsection">
+            <div class="ghead"><h2>家長留言</h2></div>
+            <div class="gcard pad">
+              <div class="ackrow"><span class="sf fill">check_circle</span><span class="ack-text">已讀 · 16:02</span></div>
+              <div class="bubble" style="margin-top:12px;">謝謝老師！回家路上一直哼小星星，會請他表演的 😊</div>
+              <p class="bubble-meta">今天 16:05</p>
+              <div class="composer">
+                <span class="hinttext">想跟老師說的話…</span>
+                <button class="send"><span class="sf">arrow_upward</span></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="footnote">
+  ※ 資料皆為擬真示意（林小恩／小熊班為虛構）。本稿 hex 為快照值，實作時一律經 token。
+  本稿以 Material Symbols Outlined 細字重（wght 300）近似 SF Symbols 視覺；正式實作沿用自架圖示子集並調字重軸，不引入 Apple 字型／圖示資產（授權限制）。
+  毛玻璃 bar 於 LINE Android WebView 需準備實色降級。
+</p>
+</body>
+</html>
