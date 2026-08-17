@@ -115,8 +115,9 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="canWrite" label="操作" width="240" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="310" align="center" fixed="right">
         <template #default="{ row }">
+          <el-button size="small" :data-test="`payment-slips-btn-${row.id}`" @click="openSlipDialog(row)">繳費單</el-button>
           <el-button size="small" :data-test="`reorder-enrolled-btn-${row.id}`" @click="openEnrolled(row)">報名排序</el-button>
           <el-button size="small" @click="openEdit(row)">編輯</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">停用</el-button>
@@ -242,6 +243,29 @@
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSave" :loading="saving" :disabled="saving">儲存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 繳費單批次列印：A4 一頁 8 格（含 QR），裁切後貼信封袋發給家長 -->
+    <el-dialog v-model="slipDialogVisible" :title="`列印繳費單 — ${slipCourse?.name ?? ''}`" width="380px" destroy-on-close>
+      <el-form label-width="90px" size="default" @submit.prevent>
+        <el-form-item label="繳費期限">
+          <el-date-picker
+            v-model="slipDueDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="留空則單上不印期限"
+            style="width: 100%"
+            data-test="slip-due-date"
+          />
+        </el-form-item>
+      </el-form>
+      <div style="font-size: 12px; color: var(--text-tertiary);">
+        產出該課程所有未結清學生的繳費單（同學生同學期多課程合併一張；已繳清與純候補不出單）。
+      </div>
+      <template #footer>
+        <el-button @click="slipDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="slipPrinting" data-test="slip-print-confirm" @click="handlePrintSlips">列印</el-button>
       </template>
     </el-dialog>
   <!-- 候補名單 Drawer -->
@@ -503,7 +527,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { CopyDocument, Rank, Sort, VideoPlay } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
-import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
+import { openPdfInNewTab } from '@/utils/printPdfWindow'
+import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse, getCoursePaymentSlipsPdf,
          getCourseWaitlist, getCourseEnrolled, reorderCourseEnrolled, promoteWaitlist,
          reorderCourses, sweepExpiredWaitlist } from '@/api/activity'
 import type {
@@ -564,6 +589,63 @@ const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
 function formatSchedule(row: Course) {
   return formatWeekdaySchedule(row)
+}
+
+// ── 繳費單批次列印 ──────────────────────────────────────────────
+const slipDialogVisible = ref(false)
+const slipCourse = ref<{ id: number; name: string } | null>(null)
+const slipDueDate = ref<string>('')
+const slipPrinting = ref(false)
+
+function defaultSlipDueDate(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 14)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function openSlipDialog(row: Course) {
+  slipCourse.value = { id: row.id, name: row.name }
+  slipDueDate.value = defaultSlipDueDate()
+  slipDialogVisible.value = true
+}
+
+// blob 回應的錯誤 body 也是 Blob，得先讀文字才能取出後端 detail（例如「無未結清報名」）
+async function slipErrorDetail(err: unknown): Promise<string | null> {
+  const data = (err as { response?: { data?: unknown } })?.response?.data
+  if (data instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await data.text()) as { detail?: string }
+      return parsed.detail ?? null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+async function handlePrintSlips() {
+  const course = slipCourse.value
+  if (!course) return
+  slipPrinting.value = true
+  try {
+    // openPdfInNewTab 內部吞錯走 onError，成功回 win、失敗回 null——失敗時保留 dialog 供重試
+    const win = await openPdfInNewTab({
+      fetchBlob: async () => {
+        const res = await getCoursePaymentSlipsPdf(course.id, slipDueDate.value || undefined)
+        return res.data
+      },
+      loadingText: '繳費單產生中…',
+      onError: (err: unknown) => {
+        void slipErrorDetail(err).then((detail) => {
+          ElMessage.error(detail || friendlyError('繳費單 PDF 載入失敗', err))
+        })
+      },
+    })
+    if (win) slipDialogVisible.value = false
+  } finally {
+    slipPrinting.value = false
+  }
 }
 
 const courses = ref<Course[]>([])

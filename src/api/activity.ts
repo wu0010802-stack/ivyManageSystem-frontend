@@ -287,6 +287,12 @@ export const getPOSReceiptPdf = (receiptNo: string): Promise<AxiosResponse<Blob>
   api.get(`/activity/pos/receipts/${encodeURIComponent(receiptNo)}/print.pdf`, {
     responseType: 'blob',
   })
+// 課程繳費單批次列印（A4 八格 + QR，裁切貼信封袋）
+export const getCoursePaymentSlipsPdf = (courseId: number, dueDate?: string): Promise<AxiosResponse<Blob>> =>
+  api.get(`/activity/courses/${courseId}/payment-slips.pdf`, {
+    params: dueDate ? { due_date: dueDate } : {},
+    responseType: 'blob',
+  })
 export const getPOSDailySummary = (date?: string): AxiosResp<'/activity/pos/daily-summary', 'get'> =>
   api.get('/activity/pos/daily-summary', { params: date ? { date } : {} })
 export const getPOSRecentTransactions = (params?: ApiQuery<'/activity/pos/recent-transactions', 'get'>): AxiosResp<'/activity/pos/recent-transactions', 'get'> =>
