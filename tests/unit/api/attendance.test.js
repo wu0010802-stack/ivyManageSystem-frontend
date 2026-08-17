@@ -80,11 +80,11 @@ describe('attendance api', () => {
     expect(mockGet).toHaveBeenCalledWith('/attendance/today')
   })
 
-  it('getTodayAnomalies GET /attendance/today-anomalies with params', async () => {
-    await mod.getTodayAnomalies({ classroom_id: 1 })
-    expect(mockGet).toHaveBeenCalledWith('/attendance/today-anomalies', {
-      params: { classroom_id: 1 },
-    })
+  it('getTodayAnomalies GET /attendance/today-anomalies（端點無查詢參數）', async () => {
+    // P1-5 typed 化：後端 /attendance/today-anomalies 不吃任何 query 參數，
+    // wrapper 簽名改為零參數（舊版把 params 原樣透傳屬假契約）。
+    await mod.getTodayAnomalies()
+    expect(mockGet).toHaveBeenCalledWith('/attendance/today-anomalies')
   })
 
   it('getAnomalyList GET /attendance/anomalies with params', async () => {
