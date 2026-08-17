@@ -233,6 +233,18 @@ describe('CycleDetailPanel', () => {
     expect(ElMessage.warning).toHaveBeenCalled()
   })
 
+  it('kanban 觸發 action=detail 時開啟對應員工的詳情 dialog', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.view = 'kanban'
+    await nextTick()
+    await wrapper.findComponent({ name: 'KanbanView' }).vm.$emit('action', { action: 'detail', summary: { id: 1, employee_id: 42, employee_name: '林靜宜' } })
+    await nextTick()
+    const dialog = wrapper.find('[data-test="detail-dialog-stub"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.text()).toContain('林靜宜')
+  })
+
   it('openDetail(undefined) 為 no-op', async () => {
     const wrapper = mountPanel()
     await flush()

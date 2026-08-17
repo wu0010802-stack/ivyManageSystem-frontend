@@ -18,6 +18,7 @@ const emit = defineEmits<{
 
 function onCheckboxChange(v: string | number | boolean) { emit('update:selected', Boolean(v)) }
 function onMenuClick(action: string) { emit('action', { action, summary: props.summary }) }
+function onDetailClick() { emit('action', { action: 'detail', summary: props.summary }) }
 
 // P0-A：依 APPRAISAL_* permission bit 個別守衛 dropdown 動作。
 // 簽核 / 退簽：任一 sign 權限即顯示（後端會依當前 stage 二次驗）。
@@ -57,7 +58,13 @@ function onPrimaryAction() {
     <div class="card-header">
       <el-checkbox :model-value="selected" @update:model-value="onCheckboxChange"
                    :data-test="`card-checkbox-${summary.id}`" />
-      <span class="employee-name">{{ summary.employee_name }}</span>
+      <el-button
+        link
+        type="primary"
+        class="employee-name"
+        :data-test="`detail-btn-${summary.id}`"
+        @click.stop="onDetailClick"
+      >{{ summary.employee_name }}</el-button>
       <el-dropdown v-if="showMenu" trigger="click" @command="onMenuClick">
         <el-icon class="menu-icon"><MoreFilled /></el-icon>
         <template #dropdown>

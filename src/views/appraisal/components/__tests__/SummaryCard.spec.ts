@@ -91,4 +91,11 @@ describe('SummaryCard', () => {
     const tag = wrapper.find('[data-test="grade-tag"]')
     expect(tag.attributes('data-type')).toBe('success')
   })
+
+  it('點擊員工姓名 emit action:detail', async () => {
+    const summary = { id: 3, employee_name: '林靜宜', status: 'DRAFT', total_score: 90, grade: 'A', bonus_amount: 3000 }
+    const wrapper = mountCard(summary)
+    await wrapper.find('[data-test="detail-btn-3"]').trigger('click')
+    expect(wrapper.emitted('action')?.[0]).toEqual([{ action: 'detail', summary }])
+  })
 })

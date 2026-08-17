@@ -289,6 +289,7 @@ function onKanbanAction({ action, summary }: { action: string; summary: Summary 
   } else if (action === 'reject') openReject(summary)
   else if (action === 'comment') openComment(summary)
   else if (action === 'log') openLog(summary)
+  else if (action === 'detail') openDetail(summary.employee_id as number | undefined)
 }
 
 function onKanbanActionPayload(payload: unknown) {
