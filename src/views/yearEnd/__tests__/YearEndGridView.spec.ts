@@ -27,11 +27,17 @@ vi.mock('element-plus', async (importOriginal) => {
 
 // Task 12：router.push 改成共用 hoisted mock，讓「展開不再 push 到 404 路由」這件事
 // 可被斷言（openDetail 已整支刪除，理論上不會再有任何呼叫）。
-const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }))
+// Batch 8：新增 replaceMock／routeQuery，供 attentionOnly 的 query 同步測試斷言
+// （比照 ExceptionCenterView.spec.ts 已驗證可行的殼）。
+const { pushMock, replaceMock, routeQuery } = vi.hoisted(() => ({
+  pushMock: vi.fn(),
+  replaceMock: vi.fn(),
+  routeQuery: { value: {} as Record<string, unknown> },
+}))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '7' }, query: {} }),
-  useRouter: () => ({ push: pushMock, back: vi.fn() }),
+  useRoute: () => ({ params: { id: '7' }, query: routeQuery.value }),
+  useRouter: () => ({ push: pushMock, back: vi.fn(), replace: replaceMock }),
 }))
 
 vi.mock('@/utils/auth', () => ({
@@ -947,6 +953,7 @@ describe('YearEndGridView 需注意列過濾', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    routeQuery.value = {}
     vi.mocked(hasPermission).mockReturnValue(true)
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'OPEN' }],
@@ -1007,6 +1014,36 @@ describe('YearEndGridView 需注意列過濾', () => {
     const filter = wrapper.find('[data-test="attention-filter"]')
     expect(filter.exists()).toBe(true)
     expect(filter.text()).toContain('1')
+  })
+
+  it('attentionOnly 開啟時同步 attention=1 query，關閉時清除', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { attentionOnly: boolean }
+
+    vm.attentionOnly = true
+    await nextTick()
+    let lastCall = replaceMock.mock.calls.at(-1)
+    expect(lastCall[0].query.attention).toBe('1')
+
+    vm.attentionOnly = false
+    await nextTick()
+    lastCall = replaceMock.mock.calls.at(-1)
+    expect(lastCall[0].query.attention).toBeUndefined()
+  })
+
+  it('URL 帶 attention=1 query 時，初始 attentionOnly 為開啟', async () => {
+    routeQuery.value = { attention: '1' }
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [
+        makeRow({ settlement_id: 1, employee_id: 10 }),
+        makeRow({ settlement_id: 2, employee_id: 11, total_amount: '0' }),
+      ],
+    } as never)
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { attentionOnly: boolean; displayedRows: GridRow[] }
+    expect(vm.attentionOnly).toBe(true)
+    expect(vm.displayedRows).toHaveLength(1)
   })
 })
 

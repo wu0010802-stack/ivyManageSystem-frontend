@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getYearEndGrid, buildSettlements, listYearEndCycles, getYearEndCycleExceptions } from '@/api/yearEnd'
 import { moneyInt } from '@/utils/currency'
@@ -33,6 +34,9 @@ interface YearEndCycleLite {
 
 const props = defineProps<{ cycleId: number }>()
 const cycleId = props.cycleId
+
+const route = useRoute()
+const router = useRouter()
 
 const rows = ref<GridRow[]>([])
 const loading = ref(false)
@@ -122,7 +126,16 @@ function isAttentionRow(row: GridRow): boolean {
   return !(total > 0) || Boolean(row.remark) || disciplinary !== 0 || hireMonths < 12
 }
 
-const attentionOnly = ref(false)
+// 批次 A③ + Batch 8：過濾開關上 URL query（attention=1／不存在＝關），分享連結
+// 或重整不遺失篩選狀態。單一布林開關、無其他 query 變更在同一操作內競爭，直接
+// watch 同步即可（不像 ExceptionCenterView.vue 的 typeFilter 需要跟週期切換合併
+// 成單次 replace）。
+const attentionOnly = ref(String(route?.query?.attention ?? '') === '1')
+watch(attentionOnly, (next) => {
+  if (router?.replace) {
+    router.replace({ query: { ...(route?.query || {}), attention: next ? '1' : undefined } })
+  }
+})
 const attentionCount = computed(() => rows.value.filter(isAttentionRow).length)
 const displayedRows = computed(() =>
   attentionOnly.value ? rows.value.filter(isAttentionRow) : rows.value
