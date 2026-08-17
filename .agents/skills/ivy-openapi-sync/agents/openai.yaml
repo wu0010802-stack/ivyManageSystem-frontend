@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ivy OpenAPI 同步"
+  short_description: "安全重產並審查 FastAPI 到 TypeScript 的契約型別"
+  default_prompt: "Use $ivy-openapi-sync to regenerate and review the frontend API types."

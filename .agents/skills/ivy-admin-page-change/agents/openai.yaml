@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ivy 後台頁面異動"
+  short_description: "同步 Vue 頁面、路由、選單、權限與測試的生命週期"
+  default_prompt: "Use $ivy-admin-page-change to add or remove this admin page safely."

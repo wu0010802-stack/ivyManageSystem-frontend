@@ -21,6 +21,10 @@ vite.config.js.timestamp-*
 CLAUDE.md.before-*
 .playwright-cli/
 
+# Claude Code 本機狀態（skills/settings 是否版控另行決定，session/worktree 不入版控）
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+
 # 由 scripts/gen-tenant-brand-conf.mjs 於 prebuild 產生（不進版控）
 nginx-tenant-brand.conf
 public/brand-version.json

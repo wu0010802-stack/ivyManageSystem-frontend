@@ -46,12 +46,12 @@ npm run test:coverage  # 含覆蓋率報告
 | `VITE_GOOGLE_MAPS_API_KEY` | 若設定，招生熱點圖改走 Google Maps；未設則維持 Leaflet + OpenStreetMap fallback。前端 key 應在 Google Console 設定 HTTP referrer 限制與只開 `Maps JavaScript API` |
 
 ### 部署
-直接 `git push origin main`，由 GitHub Actions 跑 CI（`.github/workflows/ci.yml`）。
+使用 feature branch 開發，依 workspace `../ivyManageSystem/AGENTS.md` 的 staging promotion 流程驗證後再升版；不要由工作中的 agent 直接推送 `main`。GitHub Actions 定義於 `.github/workflows/ci.yml`。
 
 ## 📁 目錄結構
 
 ```
-frontend-vue/
+ivy-frontend/
 ├── src/
 │   ├── api/            # Axios 網路請求封裝
 │   ├── components/     # 共用 UI 元件

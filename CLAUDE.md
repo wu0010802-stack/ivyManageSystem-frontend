@@ -29,7 +29,7 @@ npm run test:coverage  # 含覆蓋率報告
 ```
 
 ### CI/CD
-`.github/workflows/ci.yml`：push/PR 到 main 時跑 `audit`（`npm audit`）/ `test`（含 coverage / typecheck / eslint / build）/ `openapi-drift` 三個 job，細節見下方對應章節。
+`.github/workflows/ci.yml`：push/PR 到 `main`、`staging`，以及 `release` 分支的相應事件時執行 audit、test、build 與 OpenAPI drift 等 gate；精確觸發條件與命令以 workflow 為準。
 
 ---
 
@@ -122,7 +122,7 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 **新增 Permission 的跨端 SOP**：
 1. 後端 `utils/permissions.Permission` 加 enum 值（如 `Permission.NEW_FEATURE_READ = "NEW_FEATURE_READ"`）+ `PERMISSION_LABELS` 中文（僅供 alembic seed）
 2. 前端 `src/constants/permissions.ts` 同步加常數（與後端 enum 名稱字面一致，CI 漂移將造成所有檢查 fail-safe 不通過）
-3. 角色→權限映射以 **DB `roles` 表為單一來源**（`rolesdb01` 起，`GET /auth/permissions` 回傳、前端純渲染）；in-code `ROLE_TEMPLATES` 僅為無 session / DB 未 seed 時的 fallback，新權限的角色授予要落在 DB seed
+3. 角色→權限映射以 **DB `roles` 表為單一來源**（`rolesdb01` 起，`GET /auth/permissions` 回傳、前端純渲染）；runtime 不得退回 in-code `ROLE_TEMPLATES`。session 或 DB seed 缺失時必須 fail-closed 並回報錯誤，新權限的角色授予要落在 DB seed
 4. 兩端各自補測試
 
 **禁止**：
@@ -136,9 +136,9 @@ const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
 
 ### 權限／選單工作指針（2026-07-31 manifest 化）
 
-- 新增/移除後台頁面、選單項或頁面權限：先跑本 repo skill `.claude/skills/admin-page-lifecycle/SKILL.md`。
-- 新增/刪除權限碼（跨 repo 7 步含 seed migration）：先跑後端 `../ivyManageSystem-backend/.claude/skills/permission-code-lifecycle/SKILL.md`。
-- 權限模型 mental model（三層語意/scope/守衛選擇/防線地圖）：`../ivyManageSystem-backend/docs/sop/permission-model.md`——跨 repo 權限工作先讀這份。
+- 新增/移除後台頁面、選單項或頁面權限：Codex 先讀本 repo skill `.agents/skills/ivy-admin-page-change/SKILL.md`。
+- 新增/刪除權限碼（跨 repo 含 seed migration）：Codex 先讀後端 `../ivy-backend/.agents/skills/ivy-permission-change/SKILL.md`。
+- 權限模型 mental model（三層語意/scope/守衛選擇/防線地圖）：`../ivy-backend/docs/sop/permission-model.md`——跨 repo 權限工作先讀這份。
 - 選單樹唯一事實來源 `src/constants/navigation/manifest.ts`：側邊欄、`ROUTE_PERMISSION_RULES`、權限編輯器樹皆由它衍生，勿再手寫。
 - **`PLATFORM_*` 三碼（`PLATFORM_TENANTS_MANAGE` / `PLATFORM_REPORTS_VIEW` / `PLATFORM_AUDIT_VIEW`）已於 2026-08-04（4e）主屬 manifest 的「總部管理」群組**（分校管理／跨分校報表／跨分校稽核三頁；總覽與角色同步以 `sharedViews` 借道）——**不再是 `standalonePermissions` 孤兒，不要加回豁免表**。`src/constants/permissions.ts` 的 `PLATFORM_ONLY_CODES` 由後端 `tests/test_platform_admin_flag.py::TestFrontendParity` 以 regex 讀取比對，**改寫該宣告的格式（`new Set([...])` 內只放字面字串）會讓 parity 守衛靜默 skip**。
 - **總部（platform）console**：頁面在 `src/views/platform/`，client 在 `src/api/platform.ts`，acting tenant 在 `src/composables/useActingTenant.ts`。三條守則：(1) acting tenant 只走 `tenant_id` 參數，**不得**新增任何 acting header（CT-A-06）；(2) 切換 acting tenant 必經 `setActingTenant()`（內含 `advanceAdminSession()`）；(3) 總部頁的 `useCachedAsync` key 一律用 `platformCacheKey()`（Host 租戶 + acting tenant 兩層），既有分校頁 call site 不動。選單可見性由 `AdminSidebar` 的雙向過濾把關（見 contracts §16 **DEV-20**）。
@@ -308,7 +308,7 @@ npm run test -- --run src/parent tests/unit/parent tests/parent
 ## 開發注意事項
 - 回應語言：一律使用**繁體中文**
 - 權限檢查：一律走 `@/utils/auth` 的 `hasPermission(name: string)`（**非純 `includes`**：teacher 短路 → wildcard `*` → bare includes → scope-qualified 前綴，詳見上方「跨端權限與認證」段）；**禁止**任何 `BigInt` / `mask & PERMISSION_VALUES.X` 寫法（2026-05-21 起 Permission 已改 str enum，舊 BigInt helper 已移除）。決策見 `../ivyManageSystem/docs/adr/ADR-002_permission-intflag-to-str-enum.md`。
-- 升級依賴後必須跑 `npm audit --omit=dev --audit-level=moderate`（與 CI 一致）；CI 會 enforce。dev-only 套件的 transitive CVE（如 `vite-plugin-pwa`）需評估是否要 force 升級。
+- 升級依賴後必須跑 `node scripts/check-audit-allowlist.mjs`；這會依 CI 的同一套 allowlist 檢查完整 dependency tree（含 dev dependency）。不要另抄一份 audit 排除規則。
 - **依賴版本釘選（升大版前先讀）**：`vite` 停在 7.x——vite 8 = Rolldown，不支援 `manualChunks`，升級需重寫成 `advancedChunks` 並對 baseline build 比對 chunk 產物；`vue-tsc` 停在 2.2.12——v3 對 composable + template ref 有 `noUnusedLocals` 誤報（上游 issue #1168）。
 
 ---

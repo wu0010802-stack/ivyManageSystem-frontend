@@ -1,0 +1,26 @@
+# Ivy frontend 的 Codex project 設定。只在受信任專案載入。
+
+[features]
+hooks = true
+
+[agents]
+max_concurrent_threads_per_session = 3
+interrupt_message = true
+
+[sandbox_workspace_write]
+writable_roots = [
+  "/Users/yilunwu/Desktop/ivyManageSystem",
+  "/Users/yilunwu/Desktop/ivy-backend",
+]
+network_access = false
+
+[mcp_servers.playwright]
+# 覆蓋使用者層的浮動版本，統一走 workspace 內已釘版 wrapper。
+command = "bash"
+args = ["-lc", "./scripts/mcp/run-playwright.sh"]
+cwd = "/Users/yilunwu/Desktop/ivyManageSystem"
+enabled = true
+required = false
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+default_tools_approval_mode = "prompt"
