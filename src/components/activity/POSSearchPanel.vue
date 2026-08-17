@@ -49,17 +49,6 @@
       </el-check-tag>
     </div>
 
-    <div class="pos-panel__filters">
-      <el-switch
-        v-if="!isRefundMode"
-        :model-value="overdueOnly"
-        size="small"
-        active-text="只看逾期"
-        inline-prompt
-        @update:model-value="$emit('update:overdueOnly', $event)"
-      />
-    </div>
-
     <el-alert
       v-if="!searching && truncated"
       class="pos-panel__truncated"
@@ -146,6 +135,10 @@
                    順帶讓這種人在滿是「未繳」的清單裡自然凸顯。 -->
               <div v-if="hasPartialPayment(reg)" class="pos-reg__meta">
                 應繳 {{ formatTWD(reg.total_amount) }} · 已繳 {{ formatTWD(reg.paid_amount) }}
+              </div>
+              <!-- 報名日期（2026-08-17）：中性事實，語意見 registeredOnLabel -->
+              <div v-if="registeredOnLabel(reg)" class="pos-reg__date">
+                {{ registeredOnLabel(reg) }}
               </div>
               <!-- 待審核防漏（③學期對帳追加，2026-08-16）：課程 pending_review 的
                    報名 total_amount 算不到，過去 owed=0 會在收款清單隱形；現場
@@ -343,7 +336,6 @@ const props = withDefaults(defineProps<{
   mode: string
   searchQuery: string
   classroomFilter?: string
-  overdueOnly?: boolean
   searching?: boolean
   /** 父層 runSearch 失敗（P3-06）：空清單要說「讀取失敗」而非「目前沒有未結清」 */
   loadError?: boolean
@@ -357,7 +349,6 @@ const props = withDefaults(defineProps<{
   truncatedTotal?: number
 }>(), {
   classroomFilter: '',
-  overdueOnly: false,
   searching: false,
   loadError: false,
   groups: () => [],
@@ -415,11 +406,23 @@ function hasPartialPayment(r: RegistrationEntry): boolean {
   return paid > 0 && paid < total
 }
 
+/**
+ * 報名日期標籤（台北時區，例：`8/01 報名`）。
+ * 刻意只給日期、不算「報名幾天」也不判逾期——園方收費期晚於報名日，系統無從
+ * 認定哪筆該催繳（2026-08-17 業主確認，舊 overdue_only 過濾即因此整條移除）。
+ * created_at 缺值或不可解析時回空字串，由 v-if 收掉整行（不得印 Invalid Date）。
+ */
+function registeredOnLabel(r: RegistrationEntry): string {
+  const key = extractDateKey(r.created_at)
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(key)
+  if (!m) return ''
+  return `${Number(m[1])}/${m[2]} 報名`
+}
+
 const emit = defineEmits<{
   'update:mode': [value: string | number | boolean]
   'update:searchQuery': [value: string | number | boolean]
   'update:classroomFilter': [value: string | number | boolean | null | undefined]
-  'update:overdueOnly': [value: boolean | string | number]
   'search': []
   'toggle': [row: Record<string, unknown>, studentName: string]
 }>()
@@ -684,12 +687,6 @@ function handleSingleToggle(row: RegistrationEntry) {
   gap: 6px;
 }
 
-.pos-panel__filters {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
 .pos-panel__summary {
   display: flex;
   justify-content: space-between;
@@ -856,6 +853,13 @@ function handleSingleToggle(row: RegistrationEntry) {
 .pos-reg__meta {
   font-size: 12px;
   color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* 報名日期：純參考資訊，比 meta 再弱一階，不與欠款金額搶視線 */
+.pos-reg__date {
+  font-size: 11px;
+  color: var(--text-placeholder, var(--text-secondary));
   margin-top: 2px;
 }
 

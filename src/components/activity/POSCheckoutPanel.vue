@@ -11,7 +11,6 @@
         v-model:mode="mode"
         v-model:search-query="searchQuery"
         v-model:classroom-filter="classroomFilter"
-        v-model:overdue-only="overdueOnly"
         :searching="searching"
         :load-error="searchError"
         :groups="searchGroups"
@@ -233,7 +232,6 @@ const {
   mode,
   searchQuery,
   classroomFilter,
-  overdueOnly,
   searching,
   searchGroups,
   searchRegistrations,

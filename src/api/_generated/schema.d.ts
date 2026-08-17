@@ -775,7 +775,9 @@ export interface paths {
          *     filter=outstanding：未結清（繳費模式）
          *     filter=refundable ：已繳 > 0（退費模式）
          *     搜尋 q 為空時回傳該學期全部符合其他條件的項目（預設瀏覽清單）。
-         *     overdue_only=True 僅在 outstanding 模式下生效。
+         *     刻意不提供任何以報名時間為準的過濾：園方收費期晚於報名日（報名後隔一段時間
+         *     才開始收費），「報名滿 N 天未結清＝逾期」不成立，見 test_registration_age_
+         *     never_filters_the_list。
          */
         get: operations["outstanding_by_student_api_activity_pos_outstanding_by_student_get"];
         put?: never;
@@ -40610,8 +40612,6 @@ export interface operations {
                 /** @description outstanding=未結清(paid<total)，refundable=已繳>0(供退費使用) */
                 filter?: "outstanding" | "refundable";
                 limit?: number;
-                /** @description 只列報名超過 14 天仍未結清的『逾期』項目 */
-                overdue_only?: boolean;
                 /** @description 關鍵字模糊搜尋（姓名 / 班級 / 家長手機）；留空則列出全部 */
                 q?: string | null;
                 school_year?: number | null;

@@ -64,7 +64,6 @@ export function usePOSCheckout() {
   const mode = ref('by-student') // 'by-student' | 'by-registration'
   const searchQuery = ref('')
   const classroomFilter = ref('') // 班級下拉選單：'' = 全部
-  const overdueOnly = ref(false) // 逾期過濾（僅繳費模式有意義）
   const searching = ref(false)
   const searchGroups = ref<Record<string, unknown>[]>([])
   const searchRegistrations = ref<Record<string, unknown>[]>([])
@@ -220,7 +219,6 @@ export function usePOSCheckout() {
           semester: termStore.semester,
         }
         if (classroom) opts.classroom = classroom
-        if (overdueOnly.value && !isRefundMode.value) opts.overdue_only = true
         const res = await getPOSOutstandingByStudent(q, 100, opts)
         if (seq !== searchSeq) return
         searchGroups.value = res.data?.groups || []
@@ -306,8 +304,8 @@ export function usePOSCheckout() {
     runSearch()
   }
 
-  // 班級 / 逾期 filter 變動時立即重搜
-  watch([classroomFilter, overdueOnly], () => {
+  // 班級 filter 變動時立即重搜
+  watch(classroomFilter, () => {
     runSearch()
   })
 
@@ -678,7 +676,6 @@ export function usePOSCheckout() {
     mode,
     searchQuery,
     classroomFilter,
-    overdueOnly,
     searching,
     searchGroups,
     searchRegistrations,
