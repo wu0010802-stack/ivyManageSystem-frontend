@@ -105,6 +105,81 @@ describe('GlobalSearch', () => {
     wrapper.unmount()
   })
 
+  describe('UX：最近搜尋 / 常用頁面 / skeleton', () => {
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('空 query 顯示常用頁面快捷（權限內），點擊導航並關閉', async () => {
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      expect(wrapper.text()).toContain('常用頁面')
+      const opts = wrapper.findAll('[role="option"]')
+      expect(opts.length).toBeGreaterThan(0)
+      await opts[0].trigger('click')
+      expect(push).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('選擇結果後記錄最近搜尋；重開顯示且點擊回填 query 重新搜尋', async () => {
+      vi.mocked(searchApi.globalSearch).mockResolvedValue({
+        data: {
+          ...emptyData,
+          q: '王小',
+          students: [{ id: 7, name: '王小明', student_id: 'S1', classroom_name: 'A班' }],
+        },
+      } as never)
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('王小')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      await wrapper.find('.gs-item').trigger('click')
+
+      // 重開：最近搜尋出現在空 query 狀態
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      expect(wrapper.text()).toContain('最近搜尋')
+      expect(wrapper.text()).toContain('王小')
+
+      // 點最近搜尋 → 回填 query → debounce 後重打 API
+      vi.mocked(searchApi.globalSearch).mockClear()
+      await wrapper.find('.gs-item').trigger('click')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      expect(searchApi.globalSearch).toHaveBeenCalledWith('王小')
+      wrapper.unmount()
+    })
+
+    it('清除最近搜尋後空狀態不再顯示', async () => {
+      localStorage.setItem('gs_recent_searches_v1', JSON.stringify(['王小明']))
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      expect(wrapper.text()).toContain('最近搜尋')
+      await wrapper.find('.gs-clear-btn').trigger('click')
+      await nextTick()
+      expect(wrapper.text()).not.toContain('最近搜尋')
+      expect(localStorage.getItem('gs_recent_searches_v1')).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('API 載入中顯示 skeleton', async () => {
+      vi.mocked(searchApi.globalSearch).mockReturnValue(new Promise(() => {}) as never)
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('王小')
+      await new Promise(r => setTimeout(r, 350))
+      await nextTick()
+      expect(wrapper.find('.gs-skel-row').exists()).toBe(true)
+      wrapper.unmount()
+    })
+  })
+
   describe('combobox ARIA 契約', () => {
     /**
      * 為什麼要測：這個元件是「焦點留在 input、方向鍵移動 highlight」的 combobox，
