@@ -15473,7 +15473,7 @@ export interface paths {
          * @description 後台全域搜尋。
          *
          *     Returns:
-         *         GlobalSearchResult 含 8 類 entity，各類 ≤ 8 筆。
+         *         GlobalSearchResult 含 12 類 entity，各類 ≤ 8 筆。
          *         無對應 READ 權限的類別回空陣列。
          */
         get: operations["global_search_api_search_get"];
@@ -25036,6 +25036,11 @@ export interface components {
         /** GlobalSearchResult */
         GlobalSearchResult: {
             /**
+             * Activity Catalog
+             * @default []
+             */
+            activity_catalog: components["schemas"]["SearchActivityCatalogItem"][];
+            /**
              * Activity Registrations
              * @default []
              */
@@ -25065,6 +25070,16 @@ export interface components {
              * @default []
              */
             guardians: components["schemas"]["SearchGuardianItem"][];
+            /**
+             * Leaves
+             * @default []
+             */
+            leaves: components["schemas"]["SearchLeaveItem"][];
+            /**
+             * Overtimes
+             * @default []
+             */
+            overtimes: components["schemas"]["SearchOvertimeItem"][];
             /** Q */
             q: string;
             /**
@@ -25077,6 +25092,11 @@ export interface components {
              * @default []
              */
             students: components["schemas"]["SearchStudentItem"][];
+            /**
+             * Surveys
+             * @default []
+             */
+            surveys: components["schemas"]["SearchSurveyItem"][];
         };
         /**
          * Grade
@@ -36293,6 +36313,19 @@ export interface components {
              */
             rule_type: "PER_UNIT" | "TIER" | "FLAT_THRESHOLD" | "DISCIPLINARY_TIERED" | "MANUAL_DELTA";
         };
+        /** SearchActivityCatalogItem */
+        SearchActivityCatalogItem: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+        };
         /** SearchActivityItem */
         SearchActivityItem: {
             /**
@@ -36385,6 +36418,44 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /** SearchLeaveItem */
+        SearchLeaveItem: {
+            /** Employee Name */
+            employee_name: string;
+            /** Id */
+            id: number;
+            /**
+             * Leave Type
+             * @default
+             */
+            leave_type: string;
+            /** Start Date */
+            start_date?: string | null;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+        };
+        /** SearchOvertimeItem */
+        SearchOvertimeItem: {
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Hours
+             * @default 0
+             */
+            hours: number;
+            /** Id */
+            id: number;
+            /** Overtime Date */
+            overtime_date?: string | null;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+        };
         /** SearchRecruitmentItem */
         SearchRecruitmentItem: {
             /** Child Name */
@@ -36412,6 +36483,20 @@ export interface components {
             name: string;
             /** Student Id */
             student_id?: string | null;
+        };
+        /** SearchSurveyItem */
+        SearchSurveyItem: {
+            /** Event Date */
+            event_date?: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /** Title */
+            title: string;
         };
         /**
          * Semester

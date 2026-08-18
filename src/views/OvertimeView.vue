@@ -74,6 +74,13 @@ const {
   searchFields: (r) => [r.employee_name as string | undefined, r.reason as string | undefined],
 })
 
+// 全域搜尋（Ctrl+K）深連結：?search=<員工姓名> 預填客端關鍵字過濾
+// （route 在無 router 的測試掛載下為 undefined，防禦式取值）
+{
+  const s = route?.query?.search
+  if (typeof s === 'string' && s) overtimeSearch.value = s
+}
+
 
 const form = reactive<{
   id: number | null

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -183,6 +184,13 @@ const {
   source: () => leaveRecords.value,
   searchFields: (r) => [r.employee_name as string | undefined, r.reason as string | undefined],
 })
+
+// 全域搜尋（Ctrl+K）深連結：?search=<員工姓名> 預填客端關鍵字過濾
+// （useRoute 在無 router 的測試掛載下回 undefined，防禦式取值）
+{
+  const s = useRoute()?.query?.search
+  if (typeof s === 'string' && s) leaveSearch.value = s
+}
 
 const saveLoading = ref(false)
 
