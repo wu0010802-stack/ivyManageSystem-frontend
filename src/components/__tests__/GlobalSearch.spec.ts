@@ -6,8 +6,9 @@ import GlobalSearch from '../GlobalSearch.vue'
 import * as searchApi from '@/api/search'
 
 const push = vi.fn()
+const mockRoutes: Array<{ path: string; meta?: { title?: string } }> = []
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, getRoutes: () => [] }),
+  useRouter: () => ({ push, getRoutes: () => mockRoutes }),
 }))
 vi.mock('@/utils/auth', () => ({ canAccessRoute: () => true }))
 vi.mock('@/utils/highlight', () => ({ highlight: (s: string) => s }))
@@ -26,6 +27,7 @@ const emptyData = {
 describe('GlobalSearch', () => {
   beforeEach(() => {
     push.mockClear()
+    mockRoutes.length = 0
     // NOTE: do NOT call mockReset here - it breaks the component's live binding
     // in subsequent tests. Instead set implementation fresh per test.
     vi.mocked(searchApi.globalSearch).mockResolvedValue({ data: emptyData } as never)
@@ -103,6 +105,34 @@ describe('GlobalSearch', () => {
     await wrapper.find('.gs-item').trigger('click')
     expect(push).toHaveBeenCalledWith({ path: '/classrooms', query: { selected: '5' } })
     wrapper.unmount()
+  })
+
+  describe('頁面標題同義詞', () => {
+    it('查「薪水」可命中標題含「薪資」的頁面', async () => {
+      mockRoutes.push({ path: '/salary', meta: { title: '薪資管理' } })
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('薪水')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      expect(wrapper.text()).toContain('薪資管理')
+      wrapper.unmount()
+    })
+
+    it('無同義詞時仍走原本標題包含比對', async () => {
+      mockRoutes.push({ path: '/salary', meta: { title: '薪資管理' } })
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('不存在詞')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      expect(wrapper.text()).not.toContain('薪資管理')
+      wrapper.unmount()
+    })
   })
 
   describe('UX：最近搜尋 / 常用頁面 / skeleton', () => {

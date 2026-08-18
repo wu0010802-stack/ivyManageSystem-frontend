@@ -259,17 +259,40 @@ const groups = computed<RenderedGroup[]>(() => {
   return out
 })
 
+// 口語同義詞 → 頁面標題關鍵字：query 與左側詞互含時，額外用右側詞比對標題
+const PAGE_TITLE_ALIASES: Record<string, string[]> = {
+  薪水: ['薪資'],
+  打卡: ['考勤', '出勤'],
+  出勤: ['考勤'],
+  小孩: ['學生'],
+  幼生: ['學生'],
+  小朋友: ['學生'],
+  休假: ['請假'],
+  放假: ['請假', '行事曆'],
+  繳費: ['學費', '收費'],
+  收費: ['學費'],
+}
+
+function pageMatchTerms(q: string): string[] {
+  const terms = [q]
+  for (const [alias, targets] of Object.entries(PAGE_TITLE_ALIASES)) {
+    if (q.includes(alias) || alias.includes(q)) terms.push(...targets)
+  }
+  return terms
+}
+
 interface PageRow { title: string; path: string }
 const pages = computed<PageRow[]>(() => {
   const q = query.value.trim()
   if (q.length < 2) return []
+  const terms = pageMatchTerms(q)
   const seen = new Set<string>()
   const out: PageRow[] = []
   for (const r of router.getRoutes()) {
     const title = r.meta?.title
     if (!title || r.path.includes(':') || seen.has(r.path)) continue
     if (!canAccessRoute(r.path)) continue
-    if (!String(title).includes(q)) continue
+    if (!terms.some(t => String(title).includes(t))) continue
     seen.add(r.path)
     out.push({ title: String(title), path: r.path })
   }
