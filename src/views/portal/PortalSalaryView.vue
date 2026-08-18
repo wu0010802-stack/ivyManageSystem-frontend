@@ -123,7 +123,7 @@ onMounted(fetchSalary)
           <el-descriptions-item label="加班費">
             NT$ {{ salary?.overtime_pay?.toLocaleString() || 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="園務會議加班">
+          <el-descriptions-item label="園務會議加班費">
             NT$ {{ salary?.meeting_overtime_pay?.toLocaleString() || 0 }}
           </el-descriptions-item>
         </el-descriptions>

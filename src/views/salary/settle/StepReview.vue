@@ -134,7 +134,7 @@
           <ManualOverrideIcon :row="scope.row" field="supervisor_dividend" />
         </template>
       </el-table-column>
-      <el-table-column label="會議加班" width="100" align="right" class-name="num-cell">
+      <el-table-column label="園務會議" width="100" align="right" class-name="num-cell">
         <template #default="scope">
           <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'meeting_overtime_pay')">
             {{ money(scope.row.meeting_overtime_pay) }}

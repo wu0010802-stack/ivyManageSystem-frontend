@@ -252,7 +252,7 @@ onMounted(() => {
                   <span class="date-label">{{ group.date }}</span>
                   <el-tag type="success" size="small">出席 {{ group.attended }}</el-tag>
                   <el-tag v-if="group.absent > 0" type="danger" size="small">缺席 {{ group.absent }}</el-tag>
-                  <el-tag type="info" size="small">加班費合計 {{ money(group.total_pay) }}</el-tag>
+                  <el-tag type="info" size="small">園務會議費合計 {{ money(group.total_pay) }}</el-tag>
                 </div>
                 <el-button type="danger" size="small" link @click="handleDeleteDate(group.date)">刪除整天</el-button>
               </div>
@@ -266,7 +266,7 @@ onMounted(() => {
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="加班費" width="100">
+              <el-table-column label="園務會議加班費" width="130">
                 <template #default="scope">
                   {{ money(scope.row.overtime_pay) }}
                 </template>
@@ -299,7 +299,7 @@ onMounted(() => {
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="加班費合計" width="120">
+          <el-table-column label="園務會議加班費合計" width="150">
             <template #default="scope">
               {{ money(scope.row.total_pay) }}
             </template>
