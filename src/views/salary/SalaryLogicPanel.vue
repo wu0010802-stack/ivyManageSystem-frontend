@@ -21,6 +21,19 @@ const officialSources = computed(() => (formulaVerification.value?.official_sour
 const attendancePolicyDb = computed(() => (logicData.value?.attendance_policy_db as { default_work_start?: unknown; default_work_end?: unknown; festival_bonus_months?: unknown }) || null)
 const leaveDeductionRules = computed(() => logicData.value?.leave_deduction_rules as Record<string, { label?: string; ratio?: unknown; note?: string }> || {})
 const gradeTargetsDb = computed(() => (logicData.value?.grade_targets_db as Record<string, unknown>[]) || [])
+
+// 勞健保級距表版本：與結算頁勞保／健保細項備註標的是同一份權威，也是總部
+// 「政府資料同步」頁維護的對象。來源為 builtin 代表 DB 整表無級距（fresh /
+// DR 部署漏 seed），保費會靜默走程式內建舊年度表 —— 必須顯眼告警。
+const bracketVersion = computed(() => {
+  const cfg = logicData.value?.insurance_runtime_config as Record<string, unknown> | undefined
+  if (!cfg || cfg.brackets_year === undefined) return null
+  return {
+    year: cfg.brackets_year as number,
+    count: (cfg.bracket_count as number) ?? 0,
+    fromDb: cfg.brackets_source === 'db',
+  }
+})
 const shiftTypes = computed(() => (logicData.value?.shift_types as Record<string, unknown>[]) || [])
 
 const fetchLogic = async () => {
@@ -55,6 +68,32 @@ onMounted(() => {
           後台設定頁不再提供這兩項人工調整；此頁面顯示實際薪資邏輯、runtime 常數與 2026 官方資料比對結果。
         </template>
       </el-alert>
+
+      <!-- 勞健保級距表版本：結算頁勞保／健保細項備註標的版本，於此查核 -->
+      <el-card class="section-card" v-if="bracketVersion">
+        <template #header><strong>勞健保級距表版本</strong></template>
+        <el-descriptions :column="3" border size="small">
+          <el-descriptions-item label="生效年度">{{ bracketVersion.year }} 年</el-descriptions-item>
+          <el-descriptions-item label="級距列數">{{ bracketVersion.count }} 列</el-descriptions-item>
+          <el-descriptions-item label="資料來源">
+            <el-tag :type="bracketVersion.fromDb ? 'success' : 'danger'" size="small">
+              {{ bracketVersion.fromDb ? 'DB（insurance_brackets）' : '程式內建 fallback' }}
+            </el-tag>
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-alert
+          v-if="!bracketVersion.fromDb"
+          type="error"
+          :closable="false"
+          class="section-card"
+          title="資料庫無級距資料，保費正以程式內建表計算"
+        >
+          <template #default>
+            級距表未寫入資料庫（fresh 部署或災難復原可能漏 seed），系統暫以程式內建的
+            {{ bracketVersion.year }} 年度表計算保費。若政府已公告新年度級距，請由總部匯入後再行結算。
+          </template>
+        </el-alert>
+      </el-card>
 
       <!-- 薪資公式 -->
       <el-card class="section-card">
