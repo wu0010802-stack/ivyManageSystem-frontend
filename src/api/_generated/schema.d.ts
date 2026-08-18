@@ -10779,6 +10779,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/platform/gov-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gov Data
+         * @description 總部政府資料總覽：生效版本 ＋ 級距表 ＋ 費率 ＋ 與內建表的差異。
+         *
+         *     `builtin_consistency` 是 DB 級距與程式內建 `INSURANCE_TABLE_2026` 的逐列
+         *     比對，用途是「DB 被改壞時看得出來」，**不是**要求兩者永遠相同——新年度
+         *     公告後本來就會整張表不同，故只回差異、不判對錯。
+         */
+        get: operations["get_gov_data_api_platform_gov_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/gov-data/brackets/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Brackets
+         * @description 解析貼上的級距表並與現行年度逐列比對。**不寫入任何資料。**
+         *
+         *     解析規則與寫入端共用 `services/finance/insurance_bracket_import`——這張表
+         *     錯一列就是全平台每位員工每月扣繳金額錯誤，驗證規則不能有第二份。
+         *
+         *     確認 diff 後由前端改呼叫既有的 `PUT /api/insurance/brackets`（同樣是
+         *     platform-only，且會要求 reason、二次確認封存月、標記跨租戶需重算）。
+         */
+        post: operations["preview_brackets_api_platform_gov_data_brackets_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/platform/reports/activities": {
         parameters: {
             query?: never;
@@ -20654,6 +20704,79 @@ export interface components {
              */
             sort_order: number;
         };
+        /** BracketDiffOut */
+        BracketDiffOut: {
+            /** Rows */
+            rows?: components["schemas"]["BracketDiffRowOut"][];
+            summary: components["schemas"]["BracketDiffSummaryOut"];
+        };
+        /** BracketDiffRowOut */
+        BracketDiffRowOut: {
+            /** Amount */
+            amount: number;
+            /** Changed Fields */
+            changed_fields?: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            current?: components["schemas"]["BracketRowOut"] | null;
+            incoming?: components["schemas"]["BracketRowOut"] | null;
+            /** Status */
+            status: string;
+        };
+        /** BracketDiffSummaryOut */
+        BracketDiffSummaryOut: {
+            /** Added */
+            added: number;
+            /** Changed */
+            changed: number;
+            /** Removed */
+            removed: number;
+            /** Unchanged */
+            unchanged: number;
+        };
+        /** BracketPreviewIn */
+        BracketPreviewIn: {
+            /** Content */
+            content: string;
+            /** Effective Year */
+            effective_year: number;
+        };
+        /** BracketPreviewOut */
+        BracketPreviewOut: {
+            /** Compared Year */
+            compared_year?: number | null;
+            diff: components["schemas"]["BracketDiffOut"];
+            /** Effective Year */
+            effective_year: number;
+            /** Parsed Count */
+            parsed_count: number;
+        };
+        /** BracketRowOut */
+        BracketRowOut: {
+            /** Amount */
+            amount: number;
+            /** Health Employee */
+            health_employee: number;
+            /** Health Employer */
+            health_employer: number;
+            /** Labor Employee */
+            labor_employee: number;
+            /** Labor Employer */
+            labor_employer: number;
+            /** Pension */
+            pension: number;
+        };
+        /** BracketsOut */
+        BracketsOut: {
+            /** Effective Year */
+            effective_year?: number | null;
+            /** Requested Year */
+            requested_year: number;
+            /** Rows */
+            rows?: components["schemas"]["BracketRowOut"][];
+        };
         /** BuildResultOut */
         BuildResultOut: {
             /** Built */
@@ -25097,6 +25220,13 @@ export interface components {
              * @default []
              */
             surveys: components["schemas"]["SearchSurveyItem"][];
+        };
+        /** GovDataOut */
+        GovDataOut: {
+            brackets: components["schemas"]["BracketsOut"];
+            builtin_consistency: components["schemas"]["BracketDiffOut"];
+            rates?: components["schemas"]["RateOut"] | null;
+            runtime: components["schemas"]["RuntimeOut"];
         };
         /**
          * Grade
@@ -32944,6 +33074,50 @@ export interface components {
             /** Total Hours */
             total_hours: number;
         };
+        /**
+         * RateOut
+         * @description 生效中的勞健保費率版本（`insurance_rates` 至多一筆 is_active）。
+         */
+        RateOut: {
+            /** Average Dependents */
+            average_dependents?: number | null;
+            /** Changed By */
+            changed_by?: string | null;
+            /** Health Employee Ratio */
+            health_employee_ratio?: number | null;
+            /** Health Employer Ratio */
+            health_employer_ratio?: number | null;
+            /** Health Max Insured */
+            health_max_insured?: number | null;
+            /** Health Rate */
+            health_rate?: number | null;
+            /** Id */
+            id: number;
+            /** Labor Employee Ratio */
+            labor_employee_ratio?: number | null;
+            /** Labor Employer Ratio */
+            labor_employer_ratio?: number | null;
+            /** Labor Government Ratio */
+            labor_government_ratio?: number | null;
+            /** Labor Max Insured */
+            labor_max_insured?: number | null;
+            /** Labor Rate */
+            labor_rate?: number | null;
+            /** Pension Employer Rate */
+            pension_employer_rate?: number | null;
+            /** Pension Max Insured */
+            pension_max_insured?: number | null;
+            /** Rate Year */
+            rate_year: number;
+            /** Supplementary Health Rate */
+            supplementary_health_rate?: number | null;
+            /** Supplementary Health Threshold */
+            supplementary_health_threshold?: number | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Version */
+            version?: number | null;
+        };
         /** ReactPayload */
         ReactPayload: {
             /**
@@ -35063,6 +35237,21 @@ export interface components {
             new_open: number;
             /** Ran At */
             ran_at: string;
+        };
+        /**
+         * RuntimeOut
+         * @description 薪資實算此刻真正使用的級距版本。
+         *
+         *     `brackets_source == "builtin"` 代表 DB 整表無級距、正走 `INSURANCE_TABLE_2026`
+         *     fallback——fresh／DR 部署漏 seed 的故障指紋，前端須紅字告警。
+         */
+        RuntimeOut: {
+            /** Bracket Count */
+            bracket_count: number;
+            /** Brackets Source */
+            brackets_source: string;
+            /** Brackets Year */
+            brackets_year: number;
         };
         /**
          * SalaryDetailAuditLogItemOut
@@ -57881,6 +58070,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformAuditOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gov_data_api_platform_gov_data_get: {
+        parameters: {
+            query?: {
+                /** @description 預設取當年 */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovDataOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_brackets_api_platform_gov_data_brackets_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BracketPreviewOut"];
                 };
             };
             /** @description Validation Error */

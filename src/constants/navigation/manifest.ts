@@ -653,6 +653,16 @@ export const NAVIGATION_MANIFEST = {
           views: [{ code: 'PLATFORM_AUDIT_VIEW' }],
           menu: { icon: icon('List') },
         },
+        {
+          // 勞健保級距／費率是 GLOBAL 表（無 tenant_id），一改對全平台生效，
+          // 後端寫入端已於 SEC-02 降為 require_platform_admin。此處借道
+          // PLATFORM_TENANTS_MANAGE（比照角色同步頁），**不新增第四個
+          // PLATFORM_* 碼**——會牽動後端 PLATFORM_ONLY_CODES parity 與角色 seed。
+          key: 'platformGovData', title: '政府資料同步', routePath: '/platform/gov-data',
+          views: [],
+          sharedViews: ['PLATFORM_TENANTS_MANAGE'],
+          menu: { icon: icon('Coin') },
+        },
       ],
     },
 

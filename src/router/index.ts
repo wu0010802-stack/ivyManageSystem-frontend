@@ -350,6 +350,12 @@ export const routes: RouteRecordRaw[] = [
             meta: { title: '跨分校稽核' }
         },
         {
+            path: '/platform/gov-data',
+            name: 'platform-gov-data',
+            component: () => import('../views/platform/PlatformGovDataView.vue'),
+            meta: { title: '政府資料同步' }
+        },
+        {
             path: '/settings',
             name: 'settings',
             component: () => import('../views/SettingsView.vue'),

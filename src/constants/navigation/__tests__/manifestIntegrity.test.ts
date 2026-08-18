@@ -248,6 +248,10 @@ const INTENTIONAL_DIVERGENCE = {
     '/bus/monitor × BUS_READ',
     '/bus/history × BUS_READ',
     '/bus/routes × BUS_WRITE',
+    // 2026-08-18 總部「政府資料同步」頁新增（fixture 凍結於 2026-07-31）。
+    // 借道 PLATFORM_TENANTS_MANAGE 而非新增第四個 PLATFORM_* 碼——後端
+    // PLATFORM_ONLY_CODES parity 與角色 seed 都吃那三碼。
+    '/platform/gov-data × PLATFORM_TENANTS_MANAGE',
   ],
 }
 
