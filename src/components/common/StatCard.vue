@@ -1,11 +1,14 @@
 <template>
-  <div class="stat-card" :class="[`stat-card--${variant}`, `stat-card--${color}`]">
+  <div
+    class="stat-card"
+    :class="[`stat-card--${variant}`, `stat-card--${color}`, { 'stat-card--iconless': !icon }]"
+  >
     <div class="stat-card__body">
       <div class="stat-card__content">
         <span class="stat-card__label">{{ label }}</span>
         <div class="stat-card__value">{{ value }}</div>
       </div>
-      <div class="stat-card__icon-wrap">
+      <div v-if="icon" class="stat-card__icon-wrap">
         <el-icon :size="20"><component :is="icon" /></el-icon>
       </div>
     </div>
@@ -15,12 +18,13 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 
-// icon 只收元件物件：字串名走 <component :is> 需全域註冊，局部 import 的
-// EP icon 傳字串會靜默渲染成空色塊
+// icon 為選填：純裝飾（只是複述 label 文字）的場合直接不傳，卡片會收成
+// 「標籤＋數值」的純資料塊。傳時只收元件物件——字串名走 <component :is> 需
+// 全域註冊，局部 import 的 EP icon 傳字串會靜默渲染成空色塊。
 withDefaults(defineProps<{
   label: string
   value: string | number
-  icon: Component
+  icon?: Component
   color?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   variant?: 'default' | 'filled'
 }>(), {
@@ -84,6 +88,17 @@ withDefaults(defineProps<{
 .stat-card--default.stat-card--warning .stat-card__icon-wrap { background: var(--color-warning-soft); color: var(--color-warning); }
 .stat-card--default.stat-card--danger  .stat-card__icon-wrap { background: var(--color-danger-soft); color: var(--color-danger); }
 .stat-card--default.stat-card--info    .stat-card__icon-wrap { background: var(--color-info-soft); color: var(--color-info); }
+
+/* ── iconless（未傳 icon）──
+ * color prop 原本只作用在 icon 底色；拿掉裝飾 icon 後改由數值承載語意色，
+ * 讓顏色說明狀態而非裝飾。文字內容本身已完整敘述狀態（「需重算」「10 筆」），
+ * 色彩非唯一指示，符合 PRODUCT.md 的 a11y 要求。
+ * -darker 階是「文字用」色（light 深、dark 亮，a11y.css 已翻色），對比達 AA。
+ * info 刻意不著色——info 語意是「無特殊狀態」，上色反而變雜訊。 */
+.stat-card--default.stat-card--iconless.stat-card--primary .stat-card__value { color: var(--brand-primary-hover); }
+.stat-card--default.stat-card--iconless.stat-card--success .stat-card__value { color: var(--color-success-darker); }
+.stat-card--default.stat-card--iconless.stat-card--warning .stat-card__value { color: var(--color-warning-darker); }
+.stat-card--default.stat-card--iconless.stat-card--danger  .stat-card__value { color: var(--color-danger-darker); }
 
 /* ── filled variant (Material 3 tonal) ──
  * 一律走 token：primary 硬編 indigo 會與 admin 青藍 brand 脫鉤（html.ivy-admin 覆寫）。

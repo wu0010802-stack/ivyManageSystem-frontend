@@ -14,12 +14,11 @@
     <LoadingPanel v-if="loading" />
     <template v-else>
       <div class="hub-stats">
-        <StatCard label="本月狀態" :value="statusMeta.label" :icon="Money" :color="statusMeta.color" />
-        <StatCard label="封存進度" :value="`${finalizedCount} / ${records.length} 人`" :icon="Finished" color="info" />
+        <StatCard label="本月狀態" :value="statusMeta.label" :color="statusMeta.color" />
+        <StatCard label="封存進度" :value="`${finalizedCount} / ${records.length} 人`" color="info" />
         <StatCard
           label="需注意"
           :value="`${anomalies.size} 筆`"
-          :icon="WarningFilled"
           :color="anomalies.size > 0 ? 'warning' : 'success'"
         />
       </div>
@@ -51,7 +50,6 @@
 <script setup lang="ts">
 import { reactive, computed, toRef, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Money, Finished, WarningFilled } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
@@ -139,9 +137,11 @@ const links = [
   color: var(--text-secondary);
 }
 
+/* 入口卡數量會隨功能增減（目前 5 張）。固定 3 欄會排成 3+2 留下半列空洞，
+   改自適應：卡片維持可讀最小寬，剩餘空間平均分配，任意張數都填滿列。 */
 .hub-links {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: var(--space-4);
 }
 

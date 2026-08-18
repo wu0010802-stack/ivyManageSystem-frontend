@@ -71,6 +71,18 @@ describe('SalaryHubView', () => {
         )
     })
 
+    it('概況卡不渲染裝飾 icon，狀態語意色掛在數值上', async () => {
+        getRecordsMock.mockResolvedValue({ data: [rec({ breakdown_stale: true })] })
+        const wrapper = mountHub()
+        await flushPromises()
+        expect(wrapper.findAll('.stat-card')).toHaveLength(3)
+        expect(wrapper.find('.stat-card__icon-wrap').exists()).toBe(false)
+        expect(wrapper.findAll('.stat-card--iconless')).toHaveLength(3)
+        // needs_recalc → warning：色彩掛在卡片上，文字本身仍寫明狀態
+        expect(wrapper.find('.stat-card--warning').exists()).toBe(true)
+        expect(wrapper.text()).toContain('需重算')
+    })
+
     it('無紀錄：未計算狀態，深連結到 precheck', async () => {
         getRecordsMock.mockResolvedValue({ data: [] })
         const wrapper = mountHub()

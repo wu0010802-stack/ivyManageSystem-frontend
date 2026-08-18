@@ -61,6 +61,25 @@ describe('StatCard.vue', () => {
         expect(wrapper.find('.stat-card__icon-wrap').exists()).toBe(true)
     })
 
+    it('未傳 icon 時不渲染 icon 區域，並掛上 iconless 修飾詞', () => {
+        const wrapper = mount(StatCard, {
+            props: { label: '本月狀態', value: '需重算', color: 'warning' },
+            global: globalConfig
+        })
+        expect(wrapper.find('.stat-card__icon-wrap').exists()).toBe(false)
+        expect(wrapper.classes()).toContain('stat-card--iconless')
+        // 語意色改由數值承載；文字本身仍完整敘述狀態，色彩非唯一指示
+        expect(wrapper.text()).toContain('需重算')
+    })
+
+    it('有傳 icon 時不掛 iconless 修飾詞', () => {
+        const wrapper = mount(StatCard, {
+            props: { label: '測試', value: 1, icon: MockIcon, color: 'primary' },
+            global: globalConfig
+        })
+        expect(wrapper.classes()).not.toContain('stat-card--iconless')
+    })
+
     it('不同 color 產生不同顏色 class', () => {
         const wrapper1 = mount(StatCard, {
             props: { label: 'A', value: 1, icon: MockIcon, color: 'primary' },
