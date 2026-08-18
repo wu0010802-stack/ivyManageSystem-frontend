@@ -22,6 +22,7 @@ const mountOpts = () => ({
 const emptyData = {
   q: '', students: [], employees: [], guardians: [], classrooms: [],
   fees: [], activity_registrations: [], recruitment: [], announcements: [],
+  leaves: [], overtimes: [], surveys: [], activity_catalog: [],
 }
 
 describe('GlobalSearch', () => {
@@ -105,6 +106,65 @@ describe('GlobalSearch', () => {
     await wrapper.find('.gs-item').trigger('click')
     expect(push).toHaveBeenCalledWith({ path: '/classrooms', query: { selected: '5' } })
     wrapper.unmount()
+  })
+
+  describe('新增類別導航（請假/加班/問卷/才藝課程用品）', () => {
+    const openWith = async (data: Record<string, unknown>, q: string) => {
+      vi.mocked(searchApi.globalSearch).mockResolvedValue({
+        data: { ...emptyData, q, ...data },
+      } as never)
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue(q)
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      return wrapper
+    }
+
+    it('請假結果點擊導清單頁帶 search 預填', async () => {
+      const wrapper = await openWith({
+        leaves: [{ id: 1, employee_name: '林美麗', leave_type: 'sick', start_date: '2026-08-03', status: 'approved' }],
+      }, '林美麗')
+      expect(wrapper.text()).toContain('病假')
+      await wrapper.find('.gs-item').trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/leaves', query: { search: '林美麗' } })
+      wrapper.unmount()
+    })
+
+    it('加班結果點擊導清單頁帶 search 預填', async () => {
+      const wrapper = await openWith({
+        overtimes: [{ id: 2, employee_name: '林美麗', overtime_date: '2026-08-05', hours: 2, status: 'pending' }],
+      }, '林美麗')
+      await wrapper.find('.gs-item').trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/overtime', query: { search: '林美麗' } })
+      wrapper.unmount()
+    })
+
+    it('問卷結果點擊直達問卷詳情頁', async () => {
+      const wrapper = await openWith({
+        surveys: [{ id: 9, title: '運動會參加調查', status: 'published', event_date: null }],
+      }, '運動會')
+      await wrapper.find('.gs-item').trigger('click')
+      expect(push).toHaveBeenCalledWith('/surveys/9')
+      wrapper.unmount()
+    })
+
+    it('才藝課程/用品依 kind 導到對應設定 tab', async () => {
+      const wrapper = await openWith({
+        activity_catalog: [
+          { id: 4, name: '直排輪課程', kind: 'course', school_year: 115, semester: 1 },
+          { id: 5, name: '直排輪護具組', kind: 'supply', school_year: 115, semester: 1 },
+        ],
+      }, '直排輪')
+      const items = wrapper.findAll('.gs-item')
+      await items[0].trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/activity/settings', query: { tab: 'courses' } })
+      await items[1].trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/activity/settings', query: { tab: 'supplies' } })
+      wrapper.unmount()
+    })
   })
 
   describe('頁面標題同義詞', () => {

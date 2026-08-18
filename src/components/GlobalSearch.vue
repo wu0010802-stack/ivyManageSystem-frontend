@@ -15,7 +15,7 @@
               ref="inputRef"
               v-model="query"
               class="gs-input"
-              placeholder="搜尋學生、員工、家長、班級、學費、才藝、招生、公告、頁面…"
+              placeholder="搜尋學生、員工、家長、班級、學費、才藝、招生、公告、請假、加班、問卷、頁面…"
               autocomplete="off"
               role="combobox"
               aria-controls="gs-listbox"
@@ -138,11 +138,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, User, Avatar, Bell, Grid, Clock } from '@element-plus/icons-vue'
+import { Search, User, Avatar, Bell, Grid, Clock, Calendar, AlarmClock, Document, ShoppingBag } from '@element-plus/icons-vue'
 import { globalSearch } from '@/api/search'
 import { canAccessRoute } from '@/utils/auth'
 import { highlight } from '@/utils/highlight'
 import { tenantGetItem, tenantSetItem, tenantRemoveItem } from '@/utils/tenantStorage'
+import { LEAVE_TYPE_MAP } from '@/utils/leaves'
 
 const router = useRouter()
 
@@ -243,6 +244,22 @@ const SECTIONS: SectionDef[] = [
     label: i => String(i.title ?? ''),
     sub: () => '',
     navigate: () => router.push('/announcements') },
+  { key: 'leaves', title: '請假', icon: markRaw(Calendar),
+    label: i => String(i.employee_name ?? ''),
+    sub: i => [LEAVE_TYPE_MAP[String(i.leave_type)]?.label ?? i.leave_type, i.start_date].filter(Boolean).join('．'),
+    navigate: i => router.push({ path: '/leaves', query: { search: String(i.employee_name ?? '') } }) },
+  { key: 'overtimes', title: '加班', icon: markRaw(AlarmClock),
+    label: i => String(i.employee_name ?? ''),
+    sub: i => String(i.overtime_date ?? ''),
+    navigate: i => router.push({ path: '/overtime', query: { search: String(i.employee_name ?? '') } }) },
+  { key: 'surveys', title: '問卷', icon: markRaw(Document),
+    label: i => String(i.title ?? ''),
+    sub: i => String(i.event_date ?? ''),
+    navigate: i => router.push(`/surveys/${i.id}`) },
+  { key: 'activity_catalog', title: '才藝課程/用品', icon: markRaw(ShoppingBag),
+    label: i => String(i.name ?? ''),
+    sub: i => [i.kind === 'supply' ? '用品' : '課程', i.school_year ? `${i.school_year}-${i.semester ?? ''}` : ''].filter(Boolean).join('．'),
+    navigate: i => router.push({ path: '/activity/settings', query: { tab: i.kind === 'supply' ? 'supplies' : 'courses' } }) },
 ]
 
 interface RenderedEntry { item: Item; flatIndex: number; label: string; sub: string }
