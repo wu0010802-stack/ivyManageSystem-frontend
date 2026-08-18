@@ -146,13 +146,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* 動態視窗高度：iOS Safari / Android Chrome 的網址列會收合，100vh 是「網址列展開時」
+   的高度且不隨捲動更新，會讓底部內容被瀏覽器 UI 裁掉。100dvh 隨可視區即時變動。
+   先寫 100vh 給不支援 dvh 的舊瀏覽器當 fallback（同 main.css dialog 手法）。 */
 .admin-layout {
   height: 100vh;
+  height: 100dvh;
   background-color: var(--bg-color);
 }
 
 .main-content-wrapper {
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -194,7 +199,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(15, 23, 42, 0.5);
+  background-color: var(--overlay-medium);
   backdrop-filter: blur(2px);
   border: 0;
   padding: 0;
@@ -205,6 +210,21 @@ onUnmounted(() => {
 @media (--to-sm) {
   .content-container {
     padding: var(--space-4);
+  }
+}
+
+/* 底部安全區：手機橫桿（home indicator）／Android 手勢列會蓋住捲動區最後一段內容，
+   讓頁尾的分頁器、儲存鈕點不到。main.css 的 @supports 段只處理 .el-header 頂部與
+   .bottom-nav，admin 的捲動內容區沒有涵蓋到，這裡補上。 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .content-container {
+    padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
+  }
+
+  @media (--to-sm) {
+    .content-container {
+      padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+    }
   }
 }
 </style>

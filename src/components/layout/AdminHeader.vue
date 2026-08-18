@@ -46,9 +46,11 @@
 
         <A11yMenu />
 
-        <!-- 檢視老師教師端按鈕（園長/admin 持有 PORTAL_PREVIEW 可達） -->
+        <!-- 檢視老師教師端按鈕（園長/admin 持有 PORTAL_PREVIEW 可達）。
+             手機收進帳號選單（見下方 dropdown），常駐列只留搜尋／通知／無障礙／帳號。 -->
         <el-button
-          v-if="canPreviewPortal"
+          v-if="!isMobile && canPreviewPortal"
+          data-test="header-preview-portal"
           type="warning"
           size="small"
           plain
@@ -62,7 +64,8 @@
 
         <!-- 進入前台按鈕 -->
         <el-button
-          v-if="canEnterPortal"
+          v-if="!isMobile && canEnterPortal"
+          data-test="header-enter-portal"
           type="primary"
           size="small"
           plain
@@ -89,7 +92,29 @@
           </button>
           <template #dropdown>
             <el-dropdown-menu class="user-dropdown">
-              <el-dropdown-item command="profile">
+              <!-- 手機 overflow：兩個前台入口在窄螢幕不佔常駐位，改成選單項。
+                   顯示條件與桌機按鈕逐字相同（canPreviewPortal / canEnterPortal），
+                   實際授權仍由後端把關——這裡只是版面優先級，不是權限。 -->
+              <el-dropdown-item
+                v-if="isMobile && canPreviewPortal"
+                data-test="menu-preview-portal"
+                command="preview-portal"
+              >
+                <el-icon><Monitor /></el-icon>檢視老師教師端
+              </el-dropdown-item>
+              <el-dropdown-item
+                v-if="isMobile && canEnterPortal"
+                data-test="menu-enter-portal"
+                command="enter-portal"
+                :divided="!canPreviewPortal ? false : undefined"
+              >
+                <el-icon><Monitor /></el-icon>進入前台
+              </el-dropdown-item>
+
+              <el-dropdown-item
+                :divided="isMobile && (canPreviewPortal || canEnterPortal)"
+                command="profile"
+              >
                 <el-icon><User /></el-icon>個人資料
               </el-dropdown-item>
               <el-dropdown-item command="settings">
@@ -290,7 +315,12 @@ const doImpersonate = async (employeeId: number) => {
 }
 
 const handleCommand = (command: string) => {
-  if (command === 'logout') {
+  if (command === 'preview-portal') {
+    // 與桌機按鈕同一支 handler，行為零分岔
+    openTeacherPicker()
+  } else if (command === 'enter-portal') {
+    goToPortal()
+  } else if (command === 'logout') {
     clearAuth()
     router.push('/login')
     ElMessage.success('已登出')
