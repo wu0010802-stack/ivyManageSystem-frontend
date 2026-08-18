@@ -90,6 +90,23 @@ describe('AdminListToolbar 手機篩選 sheet', () => {
     expect(emitted![emitted!.length - 1][0]).toEqual({ status: 'pending' })
   })
 
+  it('手機：整顆 chip 都是移除目標（EP 關閉圖示僅 20px，不足 44px 觸控下限）', async () => {
+    mockIsMobile.value = true
+    const wrapper = mountToolbar({
+      filters: FILTERS,
+      filterValues: { priority: 'important', status: 'pending' },
+    })
+    await nextTick()
+
+    const chip = wrapper.get('[data-test="toolbar-chip-status"]')
+    expect(chip.attributes('role')).toBe('button')
+    expect(chip.attributes('aria-label')).toContain('移除篩選條件')
+
+    await chip.trigger('click')
+    const emitted = wrapper.emitted('update:filter-values')
+    expect(emitted![emitted!.length - 1][0]).toEqual({ priority: 'important' })
+  })
+
   it('手機：清除全部會 emit 空的 filterValues', async () => {
     mockIsMobile.value = true
     const wrapper = mountToolbar({

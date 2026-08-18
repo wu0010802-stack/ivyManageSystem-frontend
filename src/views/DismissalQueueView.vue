@@ -911,6 +911,11 @@ onUnmounted(() => {
     gap: var(--space-2);
     flex-wrap: wrap;
   }
+  /* 篩選列的「重新整理」是預設尺寸 el-button（32px），手機補足觸控下限 */
+  .filter-bar :deep(.el-button) {
+    min-height: var(--touch-target-min);
+    width: 100%;
+  }
 }
 
 .req-by {

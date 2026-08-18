@@ -57,6 +57,8 @@
       class="admin-list-toolbar__chips"
       data-test="toolbar-chips"
     >
+      <!-- 整顆 chip 都是移除目標：EP 的關閉圖示只有 20px，達不到 44px 觸控下限。
+           X 保留作為「可移除」的視覺提示。 -->
       <el-tag
         v-for="chip in activeFilters"
         :key="chip.key"
@@ -64,7 +66,13 @@
         type="info"
         closable
         disable-transitions
+        role="button"
+        tabindex="0"
+        :aria-label="`移除篩選條件 ${chip.label}：${chip.valueLabel}`"
         @close="onFilterChange(chip.key, ALL_VALUE)"
+        @click="onFilterChange(chip.key, ALL_VALUE)"
+        @keydown.enter.prevent="onFilterChange(chip.key, ALL_VALUE)"
+        @keydown.space.prevent="onFilterChange(chip.key, ALL_VALUE)"
       >
         {{ chip.label }}：{{ chip.valueLabel }}
       </el-tag>
@@ -279,11 +287,12 @@ const countText = computed(() => {
     gap: var(--space-2);
     width: 100%;
   }
-  /* chip 的關閉鈕是主要觸控目標，撐開到易點的尺寸 */
+  /* 整顆 chip 是觸控目標，對齊 44px 下限（EP 的 .el-tag__close 只有 20px） */
   .admin-list-toolbar__chips :deep(.el-tag) {
-    min-height: var(--space-8);
+    min-height: var(--touch-target-min);
     display: inline-flex;
     align-items: center;
+    cursor: pointer;
   }
   .admin-list-toolbar__chips :deep(.el-tag__close) {
     width: var(--space-5);

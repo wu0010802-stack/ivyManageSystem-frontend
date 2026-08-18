@@ -598,6 +598,24 @@ const handleCommand = (command: string) => {
     min-width: 44px;
     min-height: 44px;
   }
+  /* A11yMenu 的觸發鈕是裸 <button>（非 .el-button），上一條選不到，實測只有 36px。
+     在此就地補足；:deep 限定在 AdminHeader 內，教師 Portal 的同元件不受影響。 */
+  .header-right :deep(.a11y-trigger) {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+  }
+
+  /* 把寬度還給標題：320px 下右側四個動作＋帳號鈕佔 240px，頁名只剩 12px（一個
+     被切掉的字）。頭像旁的展開箭頭純裝飾（整顆帳號鈕本來就可點），手機收掉；
+     帳號鈕左右內距也收窄。實測 320px 下頁名可用寬度從 12px 增至 46px（約 3 字＋刪節號）。 */
+  .user-profile :deep(.el-icon--right) {
+    display: none;
+  }
+  .user-profile {
+    padding-left: var(--space-1);
+    padding-right: var(--space-1);
+    gap: 0;
+  }
   .search-trigger {
     min-width: 44px;
     min-height: 44px;
