@@ -263,7 +263,7 @@ const COMPARE_FIELDS = [
   { key: 'overtime_bonus', label: '超額獎金' },
   { key: 'overtime_pay', label: '加班津貼' },
   { key: 'supervisor_dividend', label: '主管紅利' },
-  { key: 'meeting_overtime_pay', label: '會議加班' },
+  { key: 'meeting_overtime_pay', label: '園務會議' },
   { key: 'birthday_bonus', label: '生日禮金' },
   { key: 'labor_insurance', label: '勞保（扣）' },
   { key: 'health_insurance', label: '健保（扣）' },
