@@ -65,6 +65,46 @@ describe('GlobalSearch', () => {
     wrapper.unmount()
   })
 
+  it('員工結果點擊直達員工詳情頁（非清單頁帶 search）', async () => {
+    vi.mocked(searchApi.globalSearch).mockResolvedValue({
+      data: {
+        ...emptyData,
+        q: '王老',
+        employees: [{ id: 3, name: '王老師', employee_id: 'E1', title: '導師' }],
+      },
+    } as never)
+    const wrapper = mount(GlobalSearch, mountOpts())
+    ;(wrapper.vm as any).open()
+    await nextTick()
+    await wrapper.find('input').setValue('王老')
+    await new Promise(r => setTimeout(r, 350))
+    await flushPromises()
+    await nextTick()
+    await wrapper.find('.gs-item').trigger('click')
+    expect(push).toHaveBeenCalledWith('/employees/3')
+    wrapper.unmount()
+  })
+
+  it('班級結果點擊帶 selected 深連結開啟該班抽屜', async () => {
+    vi.mocked(searchApi.globalSearch).mockResolvedValue({
+      data: {
+        ...emptyData,
+        q: '蘋果',
+        classrooms: [{ id: 5, name: '蘋果班', school_year: 114, semester: 1 }],
+      },
+    } as never)
+    const wrapper = mount(GlobalSearch, mountOpts())
+    ;(wrapper.vm as any).open()
+    await nextTick()
+    await wrapper.find('input').setValue('蘋果')
+    await new Promise(r => setTimeout(r, 350))
+    await flushPromises()
+    await nextTick()
+    await wrapper.find('.gs-item').trigger('click')
+    expect(push).toHaveBeenCalledWith({ path: '/classrooms', query: { selected: '5' } })
+    wrapper.unmount()
+  })
+
   describe('combobox ARIA 契約', () => {
     /**
      * 為什麼要測：這個元件是「焦點留在 input、方向鍵移動 highlight」的 combobox，
