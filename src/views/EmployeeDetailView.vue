@@ -16,6 +16,7 @@ import JobSection from '@/components/employee/detail/JobSection.vue'
 import SalarySection from '@/components/employee/detail/SalarySection.vue'
 import CredentialsSection from '@/components/employee/detail/CredentialsSection.vue'
 import AttendanceSection from '@/components/employee/detail/AttendanceSection.vue'
+import OvertimeSection from '@/components/employee/detail/OvertimeSection.vue'
 import ClassHistorySection from '@/components/employee/detail/ClassHistorySection.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import EmployeeFormDialog from '@/components/employee/EmployeeFormDialog.vue'
@@ -99,6 +100,7 @@ const SECTIONS = [
   { key: 'salary', label: '薪資・投保' },
   { key: 'credentials', label: '學歷・證照・合約' },
   { key: 'attendance', label: '出勤紀錄' },
+  { key: 'overtime', label: '加班紀錄' },
 ] as const
 const scrollToSection = (key: string) => {
   activeSectionKey.value = key
@@ -239,6 +241,10 @@ const onSaved = async () => {
         <section :id="`emp-sec-attendance`" class="detail-section">
           <h3 class="section-title">出勤紀錄</h3>
           <AttendanceSection :employee="employee" />
+        </section>
+        <section :id="`emp-sec-overtime`" class="detail-section">
+          <h3 class="section-title">加班紀錄</h3>
+          <OvertimeSection :employee="employee" />
         </section>
       </main>
     </div>
