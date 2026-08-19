@@ -37,7 +37,32 @@ describe('shifts api', () => {
 
   it('getShiftTypes GET /shifts/types', async () => {
     await mod.getShiftTypes()
-    expect(mockGet).toHaveBeenCalledWith('/shifts/types')
+    expect(mockGet).toHaveBeenCalledWith('/shifts/types', { params: undefined })
+  })
+
+  it('getShiftTypes 可帶 include_usage（設定頁使用數）', async () => {
+    await mod.getShiftTypes({ include_usage: true })
+    expect(mockGet).toHaveBeenCalledWith('/shifts/types', {
+      params: { include_usage: true },
+    })
+  })
+
+  it('getScheduleRoster GET /shifts/roster（排班最小名冊，非 /employees）', async () => {
+    await mod.getScheduleRoster()
+    expect(mockGet).toHaveBeenCalledWith('/shifts/roster', { params: undefined })
+  })
+
+  it('copyMonthAssignments POST /shifts/copy-month（整月複製走後端單一 transaction）', async () => {
+    const payload = {
+      source_year: 2026,
+      source_month: 9,
+      target_year: 2026,
+      target_month: 10,
+      mode: 'overwrite',
+      dry_run: true,
+    }
+    await mod.copyMonthAssignments(payload)
+    expect(mockPost).toHaveBeenCalledWith('/shifts/copy-month', payload)
   })
 
   it('createShiftType POST /shifts/types', async () => {
@@ -75,8 +100,14 @@ describe('shifts api', () => {
     expect(mockGet).toHaveBeenCalledWith('/shifts/daily', { params: { date: '2026-05-17' } })
   })
 
-  it('saveDaily POST /shifts/daily', async () => {
-    const payload = { date: '2026-05-17', items: [] }
+  it('saveDaily POST /shifts/daily（指定班別）', async () => {
+    const payload = { employee_id: 7, shift_type_id: 3, date: '2026-05-17' }
+    await mod.saveDaily(payload)
+    expect(mockPost).toHaveBeenCalledWith('/shifts/daily', payload)
+  })
+
+  it('saveDaily POST /shifts/daily（day_off 明確排休三態）', async () => {
+    const payload = { employee_id: 7, day_off: true, date: '2026-05-17' }
     await mod.saveDaily(payload)
     expect(mockPost).toHaveBeenCalledWith('/shifts/daily', payload)
   })
@@ -87,8 +118,8 @@ describe('shifts api', () => {
   })
 
   it('getSwapHistory GET /shifts/swap-history with params', async () => {
-    await mod.getSwapHistory({ employee_id: 42 })
-    expect(mockGet).toHaveBeenCalledWith('/shifts/swap-history', { params: { employee_id: 42 } })
+    await mod.getSwapHistory({ status: 'pending' })
+    expect(mockGet).toHaveBeenCalledWith('/shifts/swap-history', { params: { status: 'pending' } })
   })
 
   it('getShiftImportTemplate GET /shifts/import-template with blob', async () => {
