@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
+import { getAssignments, saveAssignments, copyMonthAssignments, getDaily, saveDaily, deleteDaily, getScheduleRoster, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
+import type { ApiResponse } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
-import { getMonthWeeks } from '@/utils/scheduleUtils'
-import { useEmployeeStore } from '@/stores/employee'
 import { useShiftStore } from '@/stores/shift'
 import { storeToRefs } from 'pinia'
 import { apiError } from '@/utils/error'
@@ -38,16 +37,26 @@ const swapCardColumns = [
 
 // --- State ---
 interface AssignmentEntry { shift_type_id: number | null; notes: string | null }
-interface EmployeeRow { id: number; name: string; is_active?: boolean; classroom_id?: number | null; [key: string]: unknown }
-interface ShiftImportResult { failed: number; total: number; upserted: number; errors?: string[] }
+// 排班名冊列（GET /shifts/roster 最小欄位；勿改回全量 EmployeeOut）
+type EmployeeRow = ApiResponse<'/shifts/roster', 'get'>[number]
+type ShiftImportResult = ApiResponse<'/shifts/import', 'post'>
+type WeeklyWarning = NonNullable<ApiResponse<'/shifts/assignments', 'post'>['warnings']>[number]
 
 const loading = ref(false)
 const saving = ref(false)
-const employeeStore = useEmployeeStore()
 const shiftStore = useShiftStore()
-const { employees } = storeToRefs(employeeStore)
 const { activeShiftTypes: shiftTypes } = storeToRefs(shiftStore)
+const roster = ref<EmployeeRow[]>([])
 const assignments = ref<Record<string | number, AssignmentEntry>>({}) // { employee_id: { shift_type_id, notes } }
+
+const fetchRoster = async () => {
+  try {
+    const res = await getScheduleRoster()
+    roster.value = res.data
+  } catch (e) {
+    ElMessage.error(friendlyError('載入排班名冊失敗', e))
+  }
+}
 
 // Week selector - default to current week's Monday
 const getMonday = (d: Date) => {
@@ -76,8 +85,9 @@ const weekLabel = computed(() => {
 })
 
 // Filter: only show active employees with classroom assignment (teachers)
+// roster 預設只回在職者；沿用「有班級指派」的既有篩選語意
 const teacherEmployees = computed(() => {
-  return (employees.value as EmployeeRow[]).filter((e) => e.is_active && e.classroom_id)
+  return roster.value.filter((e) => e.classroom_id)
 })
 
 const fetchAssignments = async () => {
@@ -133,6 +143,9 @@ const shiftTypeMap = computed(() => {
 const getShiftInfo = (shiftTypeId: number | null) => shiftTypeId != null ? shiftTypeMap.value.get(shiftTypeId) : undefined
 
 // --- Save ---
+// 後端超時預警（>40h/週）——過去整包被丟棄，現以常駐 alert 呈現到下次儲存
+const saveWarnings = ref<WeeklyWarning[]>([])
+
 const saveAll = async () => {
   saving.value = true
   try {
@@ -145,11 +158,16 @@ const saveAll = async () => {
         notes: a?.notes || null,
       })
     }
-    await saveAssignments({
+    const res = await saveAssignments({
       week_start_date: weekStart.value,
       assignments: items,
     })
-    ElMessage.success('排班已儲存')
+    saveWarnings.value = res.data.warnings ?? []
+    if (saveWarnings.value.length) {
+      ElMessage.warning(`排班已儲存，但有 ${saveWarnings.value.length} 位員工週工時超過上限，詳見下方警告`)
+    } else {
+      ElMessage.success('排班已儲存')
+    }
   } catch (error) {
     ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
@@ -196,7 +214,8 @@ const onCopyWeekConfirm = () => {
   copyWeekPickerVisible.value = false
 }
 
-// 複製上月整月（直接寫入後端各目標週）
+// 複製上月整月：改走後端單一 transaction 端點（preview → 確認 → 套用）。
+// 舊版前端逐週 await 迴圈是部分成功黑洞：中途失敗不回滾也不告知已寫入週數。
 const monthCopyLoading = ref(false)
 
 const copyPrevMonth = async () => {
@@ -208,40 +227,38 @@ const copyPrevMonth = async () => {
   let sy = ty, sm = tm - 1
   if (sm === 0) { sy -= 1; sm = 12 }
 
-  const sourceWeeks = getMonthWeeks(sy, sm)
-  const targetWeeks = getMonthWeeks(ty, tm)
-  const copyCount = Math.min(sourceWeeks.length, targetWeeks.length)
-
-  const sourceLabel = `${sy}年${sm}月`
-  const targetLabel = `${ty}年${tm}月`
-
-  try {
-    await ElMessageBox.confirm(
-      `確定將 ${sourceLabel} 排班複製到 ${targetLabel}？\n這將覆蓋目標月現有週排班（每日調班不受影響）。`,
-      '複製上月整月',
-      { confirmButtonText: '確認複製', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch {
-    return // 使用者取消
+  const payload = {
+    source_year: sy,
+    source_month: sm,
+    target_year: ty,
+    target_month: tm,
+    mode: 'overwrite' as const,
   }
 
   monthCopyLoading.value = true
-  let copied = 0
   try {
-    for (let i = 0; i < copyCount; i++) {
-      const res = await getAssignments({ week_start: sourceWeeks[i] })
-      if (res.data.length === 0) continue // 來源週無資料，跳過不清空目標
-      await saveAssignments({
-        week_start_date: targetWeeks[i],
-        assignments: (res.data as { employee_id: number; shift_type_id: number | null; notes: string | null }[]).map((a) => ({
-          employee_id: a.employee_id,
-          shift_type_id: a.shift_type_id,
-          notes: a.notes,
-        })),
-      })
-      copied++
+    // 先 dry_run 取預覽：封存阻擋與筆數先攤在確認框，不做半套
+    const preview = await copyMonthAssignments({ ...payload, dry_run: true })
+    const p = preview.data
+    if (p.blocked.length) {
+      ElMessage.error(`無法複製，以下月份薪資已封存：${p.blocked.join('、')}`)
+      return
     }
-    ElMessage.success(`已複製 ${copied} 週排班`)
+    if (p.created + p.updated === 0) {
+      ElMessage.warning('來源月無可複製的週排班')
+      return
+    }
+    try {
+      await ElMessageBox.confirm(
+        `將 ${sy}年${sm}月 排班複製到 ${ty}年${tm}月（配對 ${p.weeks_paired} 週）：新增 ${p.created} 筆、覆蓋 ${p.updated} 筆。每日調班不受影響。`,
+        '複製上月整月',
+        { confirmButtonText: '確認複製', cancelButtonText: '取消', type: 'warning' }
+      )
+    } catch {
+      return // 使用者取消
+    }
+    const res = await copyMonthAssignments({ ...payload, dry_run: false })
+    ElMessage.success(`已複製：新增 ${res.data.created} 筆、覆蓋 ${res.data.updated} 筆`)
     fetchAssignments() // 重新載入當前週
   } catch (e) {
     ElMessage.error(friendlyError('整月複製排班失敗', e))
@@ -251,7 +268,7 @@ const copyPrevMonth = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([employeeStore.fetchEmployees(), shiftStore.fetchShiftTypes()])
+  await Promise.all([fetchRoster(), shiftStore.fetchShiftTypes()])
   fetchAssignments()
 })
 
@@ -261,12 +278,13 @@ const currentEmployee = ref<EmployeeRow | null>(null)
 const dailyShifts = ref<Record<string, unknown>[]>([]) // list of daily shifts from API
 const dailyShiftMap = ref<Record<string, Record<string, unknown>>>({}) // date -> shift record
 
-// Generate dates for current week (Mon-Fri)
+// Generate dates for current week（週一～週日整週 7 天——週末也可指定日班/排休，
+// 舊版寫死 5 天讓假日班與週末排休完全沒有入口）
 const currentWeekDates = computed(() => {
   if (!weekStart.value) return []
   const start = new Date(weekStart.value)
   const dates = []
-  for (let i = 0; i < 5; i++) { // Mon-Fri
+  for (let i = 0; i < 7; i++) {
     const d = new Date(start)
     d.setDate(d.getDate() + i)
     dates.push(formatDate(d))
@@ -289,12 +307,12 @@ const openDailyDialog = async (emp: EmployeeRow) => {
 
 const fetchDailyShiftsForDialog = async () => {
   if (!currentEmployee.value) return
-  
-  // Calculate end date (Friday)
+
+  // Calculate end date（週日；整週 7 天）
   const start = new Date(weekStart.value)
   const end = new Date(start)
-  end.setDate(end.getDate() + 4)
-  
+  end.setDate(end.getDate() + 6)
+
   try {
     const res = await getDaily({
       start_date: weekStart.value,
@@ -314,9 +332,14 @@ const fetchDailyShiftsForDialog = async () => {
   }
 }
 
-const getDailyShiftId = (dateStr: string): number | null => {
+// 三態 select 的哨兵值：明確排休（後端 day_off=true → DailyShift.shift_type_id=NULL）
+const DAY_OFF_VALUE = -1
+
+/** 三態顯示值：無列=null（繼承）；列的 shift_type_id=null → 排休哨兵；否則班別 id */
+const getDailySelectValue = (dateStr: string): number | null => {
   const ds = dailyShiftMap.value[dateStr]
-  return ds ? (ds.shift_type_id as number | null) : null
+  if (!ds) return null
+  return (ds.shift_type_id as number | null) ?? DAY_OFF_VALUE
 }
 
 const getDailyShiftRecordId = (dateStr: string): number | null => {
@@ -419,10 +442,11 @@ const handleShiftImportFile = async (file: { raw?: File }) => {
   try {
     const res = await importShifts(formData, weekStart.value)
     shiftImportResult.value = res.data
+    // 後端欄位名是 saved（typed wrapper 上線前曾誤讀 upserted → UI 顯示 undefined）
     if (res.data.failed === 0) {
-      ElMessage.success(`匯入完成，共 ${res.data.upserted} 筆排班`)
+      ElMessage.success(`匯入完成，共 ${res.data.saved} 筆排班`)
     } else {
-      ElMessage.warning(`匯入完成，成功 ${res.data.upserted} 筆，失敗 ${res.data.failed} 筆`)
+      ElMessage.warning(`匯入完成，成功 ${res.data.saved} 筆，失敗 ${res.data.failed} 筆`)
     }
     fetchAssignments()
   } catch (error) {
@@ -432,24 +456,33 @@ const handleShiftImportFile = async (file: { raw?: File }) => {
   }
 }
 
-const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | null) => {
+const handleDailyShiftChange = async (dateStr: string, value: number | null) => {
   if (!currentEmployee.value) return
-  
+
   try {
-    if (shiftTypeId) {
-      // Upsert
+    if (value === DAY_OFF_VALUE) {
+      // 明確排休：留一筆 shift_type_id=NULL 的列（與「清除＝恢復繼承」是不同語意）
       await saveDaily({
         employee_id: currentEmployee.value.id,
-        shift_type_id: shiftTypeId,
-        date: dateStr
+        day_off: true,
+        date: dateStr,
+      })
+      ElMessage.success('已標記休假（該日不上班）')
+    } else if (value) {
+      // Upsert 指定日班
+      await saveDaily({
+        employee_id: currentEmployee.value.id,
+        shift_type_id: value,
+        day_off: false,
+        date: dateStr,
       })
       ElMessage.success('已更新每日排班')
     } else {
-      // Delete if exists
+      // 清除＝刪列＝恢復繼承週排班
       const recordId = getDailyShiftRecordId(dateStr)
       if (recordId != null) {
         await deleteDaily(recordId)
-        ElMessage.success('已清除每日排班 (恢復預設)')
+        ElMessage.success('已清除（恢復繼承週排班）')
       }
     }
     // Refresh
@@ -498,6 +531,19 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
             <el-button type="primary" @click="saveAll" :loading="saving">儲存排班</el-button>
           </div>
         </el-card>
+
+        <!-- 週工時超時預警（後端 warnings；常駐到下次儲存或手動關閉） -->
+        <el-alert
+          v-if="saveWarnings.length"
+          type="warning"
+          title="週工時超上限預警"
+          :closable="true"
+          data-test="weekly-warnings"
+          style="margin-top: 12px;"
+          @close="saveWarnings = []"
+        >
+          <div v-for="w in saveWarnings" :key="w.employee_id">{{ w.message }}</div>
+        </el-alert>
 
         <!-- Assignment Table -->
         <el-table v-if="!isMobile" :data="teacherEmployees" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
@@ -710,7 +756,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
       <div v-if="shiftImportResult" style="margin-top: 16px;">
         <el-alert
           :type="shiftImportResult.failed === 0 ? 'success' : 'warning'"
-          :title="`共 ${shiftImportResult.total} 筆，成功 ${shiftImportResult.upserted} 筆，失敗 ${shiftImportResult.failed} 筆`"
+          :title="`共 ${shiftImportResult.total} 筆，成功 ${shiftImportResult.saved} 筆，失敗 ${shiftImportResult.failed} 筆`"
           :closable="false"
         />
         <div v-if="shiftImportResult.errors?.length" style="margin-top: 8px; max-height: 150px; overflow-y: auto;">
@@ -740,12 +786,12 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
               {{ row.date }} ({{ getDayName(row.date) }})
             </template>
           </el-table-column>
-          <el-table-column label="當日班別">
+          <el-table-column label="當日安排">
             <template #default="{ row }">
               <el-select
-                :model-value="getDailyShiftId(row.date)"
+                :model-value="getDailySelectValue(row.date)"
                 @update:model-value="(val) => handleDailyShiftChange(row.date, val)"
-                placeholder="預設 (同週排班)"
+                placeholder="繼承週排班"
                 clearable
                 style="width: 100%"
               >
@@ -755,12 +801,17 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
                   :label="st.name"
                   :value="st.id"
                 />
+                <el-option
+                  :value="DAY_OFF_VALUE"
+                  label="休假（明確不上班）"
+                  class="day-off-option"
+                />
               </el-select>
             </template>
           </el-table-column>
         </el-table>
         <div class="mt-4 text-gray-500 text-sm">
-          * 清除選擇即恢復為「週排班」設定
+          * 三種狀態：留空＝繼承「週排班」；選班別＝該日指定班；「休假」＝該日明確不上班（不再回落週排班）。清除選擇即恢復繼承。
         </div>
       </div>
     </el-dialog>
