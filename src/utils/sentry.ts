@@ -48,14 +48,14 @@ const PII_KEY_SUBSTRINGS = [
   // 資安稽核（2026-08-10，與 BE _PII_KEY_SUBSTRINGS 同步）：
   // 勞保費欄位（SalaryRecord.labor_insurance_employee / _employer）。同構的
   // health_insurance_* 因含 'health' 已被遮，勞保側漏網。
-  // ⚠ 刻意用 'labor_insurance' 而非 'insurance'：後者會誤傷 insurance_brackets /
+  // ⚠ 刻意用 labor_insurance 而非裸字 insurance：後者會誤傷 insurance_brackets /
   // insurance_rates / insurance_salary_level 等純制度設定欄位（非 PII，prod debug 需要）。
   'labor_insurance',
   // 學生政府申報敏感類別個資（Student.nationality / is_disadvantaged /
   // low_income_status / indigenous_status）；對應班級統計聚合欄位走 exempt，見下方。
   'nationality', 'indigenous', 'disadvantaged', 'low_income',
   // per-tenant 醫療欄位加密金鑰材料（Tenant.medical_dek_wrapped / medical_dek_lookup）。
-  // 用 'medical_dek' 而非過短的 'dek'，避免誤傷無關欄位。
+  // 用 medical_dek 而非過短的 dek，避免誤傷無關欄位。
   'medical_dek',
 ]
 
@@ -88,7 +88,7 @@ const PII_KEY_EXEMPT_SUBSTRINGS = [
   // 個人身分屬性走 is_disadvantaged / indigenous_status（不含 _count/_pct 後綴，仍被遮）。
   'disadvantaged_count', 'disadvantaged_pct',
   'indigenous_count', 'indigenous_pct',
-  // 同表 disability_count：既有 'disability' denylist 的同構誤遮（本次順帶修正）。
+  // 同表 disability_count：既有 disability denylist 的同構誤遮（本次順帶修正）。
   'disability_count',
 ]
 
