@@ -1,5 +1,5 @@
 import api from './index'
-import type { ApiBody, AxiosResp } from './_generated/typed'
+import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 export const calculate = (year: number, month: number): AxiosResp<'/salaries/calculate', 'post'> =>
     api.post(`/salaries/calculate?year=${year}&month=${month}`)
@@ -64,7 +64,17 @@ export const manualAdjustSalary = (recordId: number, payload: ApiBody<'/salaries
     return api.put(`/salaries/${recordId}/manual-adjust`, payload, config)
 }
 
-export const getHistory = (params: unknown) => api.get('/salaries/history', { params })
+export const getHistory = (
+    params: ApiQuery<'/salaries/history', 'get'>,
+): AxiosResp<'/salaries/history', 'get'> => api.get('/salaries/history', { params })
+
+// 全員月總覽（persisted 純彙總；summary 由後端對帳，前端不得重加總）。
+// signal 供年月快速切換時 abort 舊請求（配合呼叫端 epoch race guard）。
+export const getSalaryMonthlyOverview = (
+    params: ApiQuery<'/salaries/monthly-overview', 'get'>,
+    signal?: AbortSignal,
+): AxiosResp<'/salaries/monthly-overview', 'get'> =>
+    api.get('/salaries/monthly-overview', { params, signal })
 
 // 銀行轉帳名冊匯出（xlsx）
 // type: 'base' | 'festival' | 'surplus' | 'art_teacher'

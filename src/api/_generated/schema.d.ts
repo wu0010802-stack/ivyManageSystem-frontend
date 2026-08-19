@@ -15407,6 +15407,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/salaries/monthly-overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Monthly Overview
+         * @description 全員月薪資總覽（persisted SalaryRecord + ExtraBonusPayment 純彙總）。
+         *
+         *     - admin/hr：全員（scope=all）；其他 SALARY_READ 角色：僅本人（scope=self）。
+         *     - 所有金額口徑走 services/salary/amounts.py 共用 helper，不重跑 SalaryEngine。
+         *     - 常數查詢數：薪資列 1 查、表外獎金聚合 1 查、僅領獎金員工補查 1 查。
+         */
+        get: operations["get_salary_monthly_overview_api_salaries_monthly_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/salaries/records": {
         parameters: {
             query?: never;
@@ -35659,6 +35683,163 @@ export interface components {
             special_bonus?: number | null;
             /** Supervisor Dividend */
             supervisor_dividend?: number | null;
+        };
+        /**
+         * SalaryMonthlyCategoryOut
+         * @description 轉帳構成單一分類（各分類合計 == summary.total_salary_cash_payout）。
+         */
+        SalaryMonthlyCategoryOut: {
+            /** Amount */
+            amount: number;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * SalaryMonthlyCheckOut
+         * @description reconciliation 檢查單項；delta 非 0 時 ok=False，UI 必須警示。
+         */
+        SalaryMonthlyCheckOut: {
+            /** Actual */
+            actual: number;
+            /** Delta */
+            delta: number;
+            /** Expected */
+            expected: number;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Ok */
+            ok: boolean;
+        };
+        /**
+         * SalaryMonthlyEmployeeOut
+         * @description 全員月總覽單列（admin/hr 全員；其他 SALARY_READ 角色僅本人）。
+         */
+        SalaryMonthlyEmployeeOut: {
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
+            /** Employee Code */
+            employee_code: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Type */
+            employee_type: string;
+            /** Employer Burden */
+            employer_burden: number;
+            /** Employer Cost */
+            employer_cost: number;
+            /** Extra Bonus Amount */
+            extra_bonus_amount: number;
+            /**
+             * Extra Bonus Items
+             * @default []
+             */
+            extra_bonus_items: components["schemas"]["SalaryHistoryLineOut"][];
+            /** Gross Salary */
+            gross_salary: number;
+            /** Has Manual Adjust */
+            has_manual_adjust: boolean;
+            /** Has Salary Record */
+            has_salary_record: boolean;
+            /** Health Insurance Employer */
+            health_insurance_employer: number;
+            /** Is Finalized */
+            is_finalized: boolean;
+            /** Job Title */
+            job_title: string;
+            /** Labor Insurance Employer */
+            labor_insurance_employer: number;
+            /** Needs Recalc */
+            needs_recalc: boolean;
+            /** Net Salary */
+            net_salary: number;
+            payslip_detail?: components["schemas"]["SalaryHistoryBreakdownOut"] | null;
+            /** Pension Employer */
+            pension_employer: number;
+            /** Salary Cash Payout */
+            salary_cash_payout: number;
+            /** Salary Record Id */
+            salary_record_id?: number | null;
+            /** Salary Separate Transfer */
+            salary_separate_transfer: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
+        };
+        /**
+         * SalaryMonthlyOverviewOut
+         * @description GET /salaries/monthly-overview 回傳 wrapper。
+         */
+        SalaryMonthlyOverviewOut: {
+            /** Checks */
+            checks: components["schemas"]["SalaryMonthlyCheckOut"][];
+            /** Checks Status */
+            checks_status: string;
+            /** Employees */
+            employees: components["schemas"]["SalaryMonthlyEmployeeOut"][];
+            /** Month */
+            month: number;
+            /** Scope */
+            scope: string;
+            summary: components["schemas"]["SalaryMonthlySummaryOut"];
+            /** Total */
+            total: number;
+            /** Transfer Categories */
+            transfer_categories: components["schemas"]["SalaryMonthlyCategoryOut"][];
+            /** Year */
+            year: number;
+        };
+        /**
+         * SalaryMonthlySummaryOut
+         * @description 全園（或 scope=self 時本人）月度彙總；口徑見 services/salary/amounts.py。
+         */
+        SalaryMonthlySummaryOut: {
+            /** Employee Count */
+            employee_count: number;
+            /** Finalized Count */
+            finalized_count: number;
+            /** Hourly Count */
+            hourly_count: number;
+            /** Manual Adjust Count */
+            manual_adjust_count: number;
+            /** Needs Recalc Count */
+            needs_recalc_count: number;
+            /** Regular Count */
+            regular_count: number;
+            /** Total Base Transfer Amount */
+            total_base_transfer_amount: number;
+            /** Total Employer Burden */
+            total_employer_burden: number;
+            /** Total Employer Cost */
+            total_employer_cost: number;
+            /** Total Extra Bonus Amount */
+            total_extra_bonus_amount: number;
+            /** Total Gross Salary */
+            total_gross_salary: number;
+            /** Total Health Insurance Employer */
+            total_health_insurance_employer: number;
+            /** Total Labor Insurance Employer */
+            total_labor_insurance_employer: number;
+            /** Total Net Salary */
+            total_net_salary: number;
+            /** Total Pension Employer */
+            total_pension_employer: number;
+            /** Total Salary Cash Payout */
+            total_salary_cash_payout: number;
+            /** Total Salary Deduction */
+            total_salary_deduction: number;
+            /** Total Salary Separate Transfer */
+            total_salary_separate_transfer: number;
+            /** Total Unused Leave Payout */
+            total_unused_leave_payout: number;
+            /** Unfinalized Count */
+            unfinalized_count: number;
         };
         /**
          * SalaryRecordItemOut
@@ -65622,6 +65803,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_salary_monthly_overview_api_salaries_monthly_overview_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryMonthlyOverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

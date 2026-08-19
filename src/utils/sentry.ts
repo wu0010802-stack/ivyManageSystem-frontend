@@ -21,6 +21,8 @@ import type { ErrorEvent as SentryErrorEvent, Breadcrumb } from '@sentry/vue'
 // PII 欄位 denylist（與後端 utils/sentry_init.py 保持一致）
 const PII_KEY_SUBSTRINGS = [
   'salary', 'insured', 'dependent', 'bonus_amount', 'unused_leave_payout', 'base_transfer_amount',
+  // 月總覽（2026-08-18）：雇主負擔／完整人事成本為薪資衍生 PII（與後端同步）
+  'employer_burden', 'employer_cost',
   'bank_account', 'bank_code', 'card_no', 'credit_card',
   'id_number', 'passport', 'phone', 'mobile', 'email',
   'line_user_id', 'liff', 'address',

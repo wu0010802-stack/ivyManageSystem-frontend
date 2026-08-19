@@ -106,7 +106,7 @@ const goSettle = () =>
     })
 
 const links = [
-    { path: '/salary/history', title: '薪資歷史', desc: '歷月紀錄、快照與明細回看' },
+    { path: '/salary/history', title: '薪資總覽與歷史', desc: '全員月度對帳、個人歷史與快照' },
     { path: '/salary/simulate', title: '薪資試算', desc: '人事談薪情境試算（不寫入）' },
     { path: '/salary/settings', title: '薪資設定', desc: '獎金規則、才藝老師、系統參數' },
     { path: '/salary/recruitment-bonus', title: '招生獎金', desc: '個人招生獎勵核算與結算轉帳' },
