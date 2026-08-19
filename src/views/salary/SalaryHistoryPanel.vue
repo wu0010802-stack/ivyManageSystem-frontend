@@ -8,25 +8,10 @@ import { money } from '@/utils/format'
 import { LineChart } from '@/composables/useChartJs'
 import type { ChartOptions } from 'chart.js'
 import SalaryHistoryDetail from './SalaryHistoryDetail.vue'
-import type { PayslipDetail } from './salaryHistoryDetail'
+import type { Schema } from '@/api/_generated/typed'
 
-interface HistoryRow {
-  year: number
-  month: number
-  net_salary: number
-  unused_leave_payout: number
-  base_transfer_amount: number
-  gross_salary: number
-  base_salary: number
-  total_bonus: number
-  in_gross_bonus: number
-  payslip_detail: PayslipDetail
-  labor_insurance: number
-  health_insurance: number
-  attendance_deduction: number
-  leave_deduction: number
-  total_deduction: number
-}
+// 型別取自 OpenAPI generated schema（原手寫 HistoryRow interface 已移除）
+type HistoryRow = Schema<'SalaryHistoryItemOut'>
 
 const employeeStore = useEmployeeStore()
 const historyLoading = ref(false)
@@ -45,7 +30,7 @@ const fetchHistory = async () => {
   try {
     const response = await getHistory({ employee_id: selectedEmployeeId.value, months: historyMonths.value })
     if (epoch !== fetchEpoch) return // 已被更新的請求取代，捨棄結果
-    historyData.value = (response.data as HistoryRow[]).reverse()
+    historyData.value = response.data.slice().reverse()
   } catch (e) {
     if (epoch !== fetchEpoch) return
     ElMessage.error(friendlyError('載入薪資歷史失敗', e))

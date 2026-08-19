@@ -227,7 +227,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/salary/history',
             name: 'salary-history',
             component: () => import('../views/salary/SalaryHistoryView.vue'),
-            meta: { title: '薪資歷史', parentTitle: '薪資管理' }
+            meta: { title: '薪資總覽與歷史', parentTitle: '薪資管理' }
         },
         {
             path: '/salary/simulate',
