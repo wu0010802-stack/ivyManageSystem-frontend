@@ -100,6 +100,8 @@ describe('scrubMapping', () => {
       bonus_amount: 1000,
       unused_leave_payout: 5000,
       base_transfer_amount: 35000,
+      employer_burden: 6500,
+      total_employer_cost: 73000,
       id_number: 'A123456789',
       phone: '0912345678',
       child_name: '小明',
@@ -122,6 +124,8 @@ describe('scrubMapping', () => {
     expect(res.diagnosis).toBe('[Filtered]')
     expect(res.growth_record).toBe('[Filtered]')
     expect(res.weight_kg).toBe('[Filtered]')
+    expect(res.employer_burden).toBe('[Filtered]')
+    expect(res.total_employer_cost).toBe('[Filtered]')
     expect(res.name).toBe('Alice')
     expect(res.ok).toBe('yes')
   })
