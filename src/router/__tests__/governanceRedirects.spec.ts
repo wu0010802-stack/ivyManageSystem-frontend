@@ -58,6 +58,23 @@ describe('/governance 落點依權限決定（子分頁互不外溢）', () => {
   })
 })
 
+describe('全域搜尋的頁面清單不出現同名重複項', () => {
+  // GlobalSearch 的「頁面」區塊掃 router.getRoutes() × meta.title × canAccessRoute。
+  // 舊路徑若沿用同一個標題，搜「操作紀錄」會列出 /audit-logs 與 /governance/audit-logs
+  // 兩筆同名結果；頁名由新分頁承擔，舊路徑只負責把人送過去。
+  it('舊路徑 redirect 不帶 meta.title', () => {
+    for (const p of ['/audit-logs', '/data-quality', '/workbench/high-risk', '/workbench/approvals']) {
+      expect(router.resolve(p).meta.title, p).toBeUndefined()
+    }
+  })
+
+  it('新分頁各自帶得到頁名', () => {
+    expect(router.resolve('/governance/audit-logs').meta.title).toBe('操作紀錄')
+    expect(router.resolve('/governance/high-risk').meta.title).toBe('高風險事件')
+    expect(router.resolve('/governance/data-quality').meta.title).toBe('資料異常待辦')
+  })
+})
+
 describe('審核工作台簡化為單頁待簽核', () => {
   it('/workbench 本身即待簽核實頁（不再是分頁殼、不再依權限分岔落點）', () => {
     const res = router.resolve('/workbench')

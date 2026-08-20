@@ -26,7 +26,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
 
-import AuditLogView from '@/views/AuditLogView.vue'
+import AuditLogView from '@/views/governance/AuditLogView.vue'
 
 const globalStubs = {
   stubs: {

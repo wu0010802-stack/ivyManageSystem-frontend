@@ -324,17 +324,17 @@ export const routes: RouteRecordRaw[] = [
         },
         // 2026-08-20 整併至 /governance；兩條舊路徑（書籤／全域搜尋／稽核信件連結）
         // 保留 redirect，操作紀錄的篩選 query 原樣帶過去（URL 深連結）。
+        // ⚠ 不掛 meta.title：全域搜尋的「頁面」區塊掃 router.getRoutes() × meta.title，
+        // 舊路徑沿用同名標題會讓搜尋結果出現兩筆同名項（頁名由新分頁承擔）。
         {
             path: '/audit-logs',
             name: 'audit-logs',
             redirect: (to) => ({ path: '/governance/audit-logs', query: { ...to.query } }),
-            meta: { title: '操作紀錄' }
         },
         {
             path: '/data-quality',
             name: 'data-quality',
             redirect: (to) => ({ path: '/governance/data-quality', query: { ...to.query } }),
-            meta: { title: PAGE_TERMS.dataQuality }
         },
         // ── 總部（platform / hq）console ──
         // 權限由 manifest 衍生的 ROUTE_PERMISSION_RULES 把關（canAccessRoute default-deny），
