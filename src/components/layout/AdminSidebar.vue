@@ -73,6 +73,20 @@
             </template>
           </el-menu-item>
         </el-sub-menu>
+
+        <!-- placement: 'bottom'（稽核與資料品質）：日常不進但需常駐入口，壓在最底。 -->
+        <el-menu-item v-for="node in visibleBottomLevel" :key="node.index" :index="node.index">
+          <el-icon><component :is="node.icon" /></el-icon>
+          <template #title>
+            {{ node.title }}
+            <el-badge
+              v-if="node.badgeKey && badgeValues[node.badgeKey] > 0"
+              :value="badgeValues[node.badgeKey]"
+              :max="99"
+              class="menu-badge"
+            />
+          </template>
+        </el-menu-item>
       </el-menu>
     </el-scrollbar>
 
@@ -165,6 +179,9 @@ const itemAllowed = (item: { visibleCodes: readonly string[] }): boolean => {
 //（views ∪ sharedViews）任一命中，OR 語意與舊手寫 v-if 串一致。
 const visibleTopLevel = computed(() => SIDEBAR_TREE.topLevel.filter(itemAllowed))
 
+// placement: 'bottom' 的項目（稽核與資料品質）：渲染在所有群組之後。
+const visibleBottomLevel = computed(() => SIDEBAR_TREE.bottomLevel.filter(itemAllowed))
+
 // 群組可見性 =「子項權限濾後非空」，取代先前 6 個手寫 hasVisibleXxx OR 串。
 // 舊串的兩個殘渣（人事薪資的 SALARY_WRITE、報表的 SALARY_READ——無任何子項以其為
 // gate，卻會撐開空殼群組）就此消失，屬行為修正而非回歸。
@@ -191,9 +208,13 @@ const activeMenu = computed(() => {
   return best || currentPath
 })
 
-// badgeKey → badge 數值（工作台 = 待簽核 + 高風險未確認）
-const badgeValues = computed<Record<'workbench' | 'activityInquiries' | 'activityReview', number>>(() => ({
-  workbench: (props.pendingApprovals ?? 0) + (props.pendingHighRiskAudit ?? 0),
+// badgeKey → badge 數值。2026-08-20 高風險事件移出工作台後兩者分開計：相加會讓
+// 工作台的 badge 指向一個它已經沒有的分頁。
+const badgeValues = computed<
+  Record<'workbench' | 'governance' | 'activityInquiries' | 'activityReview', number>
+>(() => ({
+  workbench: props.pendingApprovals ?? 0,
+  governance: props.pendingHighRiskAudit ?? 0,
   activityInquiries: props.pendingActivityInquiries ?? 0,
   activityReview: props.pendingActivityReview ?? 0,
 }))

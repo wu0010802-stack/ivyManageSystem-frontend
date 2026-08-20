@@ -39,27 +39,52 @@ export const routes: RouteRecordRaw[] = [
         },
         {
             path: '/approvals',
-            redirect: '/workbench/approvals',
+            redirect: '/workbench',
         },
         {
+            // 2026-08-20：高風險事件分頁移至 /governance，工作台收斂成單頁待簽核。
             path: '/workbench',
-            component: () => import('../views/workbench/WorkbenchLayout.vue'),
-            // 兩分頁各自一碼（APPROVALS / HIGH_RISK_READ，2026-08-03 細分）；只被授予
-            // 高風險事件者若硬導 approvals 會撞路由守衛，故落點依權限決定。
-            redirect: () => hasPermission('APPROVALS') ? '/workbench/approvals' : '/workbench/high-risk',
+            name: 'WorkbenchApprovals',
+            component: () => import('../views/workbench/WorkbenchApprovalsView.vue'),
             meta: { title: PAGE_TERMS.workbench },
+        },
+        {
+            path: '/workbench/approvals',
+            redirect: '/workbench',
+        },
+        {
+            path: '/workbench/high-risk',
+            redirect: '/governance/high-risk',
+        },
+        {
+            // 稽核與資料品質整合頁：高風險事件 / 操作紀錄 / 資料異常待辦三分頁。
+            // 三碼各自獨立，落點取使用者實際持有的第一個分頁，避免硬導撞路由守衛。
+            path: '/governance',
+            component: () => import('../views/governance/GovernanceLayout.vue'),
+            redirect: () => {
+                if (hasPermission('HIGH_RISK_READ')) return '/governance/high-risk'
+                if (hasPermission('AUDIT_LOGS')) return '/governance/audit-logs'
+                return '/governance/data-quality'
+            },
+            meta: { title: PAGE_TERMS.governance },
             children: [
                 {
-                    path: 'approvals',
-                    name: 'WorkbenchApprovals',
-                    component: () => import('../views/workbench/WorkbenchApprovalsView.vue'),
-                    meta: { title: '待簽核' },
+                    path: 'high-risk',
+                    name: 'GovernanceHighRisk',
+                    component: () => import('../views/governance/GovernanceHighRiskView.vue'),
+                    meta: { title: '高風險事件' },
                 },
                 {
-                    path: 'high-risk',
-                    name: 'WorkbenchHighRisk',
-                    component: () => import('../views/workbench/WorkbenchHighRiskView.vue'),
-                    meta: { title: '高風險事件' },
+                    path: 'audit-logs',
+                    name: 'GovernanceAuditLogs',
+                    component: () => import('../views/governance/AuditLogView.vue'),
+                    meta: { title: '操作紀錄' },
+                },
+                {
+                    path: 'data-quality',
+                    name: 'GovernanceDataQuality',
+                    component: () => import('../views/governance/DataQualityView.vue'),
+                    meta: { title: PAGE_TERMS.dataQuality },
                 },
             ],
         },
@@ -278,16 +303,18 @@ export const routes: RouteRecordRaw[] = [
             redirect: (to) => ({ path: '/finance-signoffs', query: { ...to.query, tab: 'misc' } }),
             meta: { title: '雜項收款簽收' }
         },
+        // 2026-08-20 整併至 /governance；兩條舊路徑（書籤／全域搜尋／稽核信件連結）
+        // 保留 redirect，操作紀錄的篩選 query 原樣帶過去（URL 深連結）。
         {
             path: '/audit-logs',
             name: 'audit-logs',
-            component: () => import('../views/AuditLogView.vue'),
+            redirect: (to) => ({ path: '/governance/audit-logs', query: { ...to.query } }),
             meta: { title: '操作紀錄' }
         },
         {
             path: '/data-quality',
             name: 'data-quality',
-            component: () => import('../views/DataQualityView.vue'),
+            redirect: (to) => ({ path: '/governance/data-quality', query: { ...to.query } }),
             meta: { title: PAGE_TERMS.dataQuality }
         },
         // ── 總部（platform / hq）console ──

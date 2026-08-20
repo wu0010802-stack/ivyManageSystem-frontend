@@ -63,7 +63,7 @@ onMounted(load);
 <template>
   <div class="high-risk-view">
     <div class="header">
-      <h2>高風險事件（近 7 天）</h2>
+      <p class="hint">近 7 天內的真刪、被擋與權限變更事件</p>
       <div class="actions">
         <el-checkbox v-model="unackOnly" @change="load">只看未讀</el-checkbox>
         <el-button type="primary" data-test="ack-all-btn" @click="onAckAll">全部標已讀</el-button>
@@ -103,6 +103,11 @@ onMounted(load);
 <style scoped>
 .high-risk-view {
   padding: 16px;
+}
+.hint {
+  margin: 0;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
 }
 .header {
   display: flex;

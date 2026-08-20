@@ -461,8 +461,6 @@ defineExpose({ formatOperator })
 
 <template>
   <div class="audit-page">
-    <h2>操作紀錄</h2>
-
     <el-card class="filter-card">
       <div class="filters">
         <el-input

@@ -335,8 +335,6 @@ body.hide-annotations .mock-badge { display: none; }
       <div class="submenu">
         <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>報表<span class="submenu-arrow">▾</span></div>
         <div class="submenu-items">
-          <a class="menu-item" href="#/audit-logs">操作紀錄</a>
-          <a class="menu-item" href="#/data-quality">資料異常待辦</a>
           <a class="menu-item" href="#/admin/gov-reports/monthly">月度幼生在園統計</a>
           <a class="menu-item" href="#/admin/gov-reports/certificates">在學證明開立紀錄</a>
           <a class="menu-item" href="#/admin/gov-reports/subsidies">特教加給與鐘點費</a>
@@ -354,6 +352,10 @@ body.hide-annotations .mock-badge { display: none; }
           <a class="menu-item" href="#/settings">進階設定</a>
         </div>
       </div>
+
+      <!-- placement: 'bottom'（2026-08-20 整併）：高風險事件 / 操作紀錄 / 資料異常待辦
+           三頁合為一個入口，壓在所有群組之後。 -->
+      <a class="menu-item" href="#/governance"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M4 4h12l4 4v12a1 1 0 01-1 1H4a1 1 0 01-1-1V5a1 1 0 011-1z"/><path d="M8 10h8"/><path d="M8 14h8"/></svg></span>稽核與資料品質<span class="menu-badge">3</span></a>
     </nav>
     <div class="collapse-toggle" title="收合側邊欄">⟨</div>
   </aside>
