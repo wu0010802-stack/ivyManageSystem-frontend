@@ -81,11 +81,10 @@ describe('DataQualityView', () => {
     })
   })
 
-  it('renders title and severity counters', async () => {
+  it('renders severity counters', async () => {
     const wrapper = mountView()
     await flushPromises()
-    // 原「資料品質報告」讀起來像報表，實際是可確認／標記已修正／忽略的待辦佇列
-    expect(wrapper.text()).toContain('資料異常待辦')
+    // 2026-08-20 整併後頁名由分頁列承擔（見 GovernanceLayout.tabs.test.ts），本頁不再自帶標題
     expect(wrapper.text()).toContain('P0')
     expect(wrapper.text()).toContain('P1')
     expect(wrapper.text()).toContain('P2')

@@ -11,39 +11,43 @@ const router = useRouter()
 
 const { unackCount } = useHighRiskAuditCount()
 
-// 兩分頁各自一碼（2026-08-03 細分）：高風險事件原本共用 AUDIT_LOGS，等於要連
-// 「報表 › 操作紀錄」一起授出去才看得到。
-const canSeeApprovals = computed(() => hasPermission('APPROVALS'))
+// 三個分頁各自一碼，彼此不互相授權（看得到操作紀錄 ≠ 看得到高風險事件）。
+// 路由守衛那一半在 navigation/manifest.ts 的 governance extraRoutes。
 const canSeeHighRisk = computed(() => hasPermission('HIGH_RISK_READ'))
+const canSeeAuditLogs = computed(() => hasPermission('AUDIT_LOGS'))
+const canSeeDataQuality = computed(() => hasPermission('DATA_QUALITY_READ'))
 
-const activeTab = ref(route.path.endsWith('/high-risk') ? 'high-risk' : 'approvals')
+const tabFromPath = (path: string): string => path.split('/')[2] ?? ''
+
+const activeTab = ref(tabFromPath(route.path))
 
 const onTabChange = (name: TabPaneName) => {
-  router.push(`/workbench/${name}`)
+  router.push(`/governance/${name}`)
 }
 
 watch(() => route.path, (p) => {
-  activeTab.value = p.endsWith('/high-risk') ? 'high-risk' : 'approvals'
+  activeTab.value = tabFromPath(p)
 })
 </script>
 
 <template>
-  <div class="workbench-layout">
+  <div class="governance-layout">
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
-      <el-tab-pane v-if="canSeeApprovals" label="待簽核" name="approvals" />
       <el-tab-pane v-if="canSeeHighRisk" name="high-risk">
         <template #label>
           <span>高風險事件</span>
           <el-badge v-if="unackCount > 0" :value="unackCount" class="ml-1" />
         </template>
       </el-tab-pane>
+      <el-tab-pane v-if="canSeeAuditLogs" label="操作紀錄" name="audit-logs" />
+      <el-tab-pane v-if="canSeeDataQuality" label="資料異常待辦" name="data-quality" />
     </el-tabs>
     <RouterView />
   </div>
 </template>
 
 <style scoped>
-.workbench-layout {
+.governance-layout {
   padding: 12px 0;
 }
 </style>

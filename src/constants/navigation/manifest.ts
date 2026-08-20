@@ -76,7 +76,6 @@ const SIDEBAR_ICONS = {
   User: safeIcon(() => ElementPlusIcons.User),
   Van: safeIcon(() => ElementPlusIcons.Van),
   Wallet: safeIcon(() => ElementPlusIcons.Wallet),
-  WarningFilled: safeIcon(() => ElementPlusIcons.WarningFilled),
   Watch: safeIcon(() => ElementPlusIcons.Watch),
 } satisfies Record<string, Component>
 
@@ -126,7 +125,12 @@ export interface ManifestPage {
   /** 側欄設定；undefined = 不出現在側欄（隱藏頁 / picker-only 節點）。 */
   menu?: {
     icon: Component
-    badgeKey?: 'workbench' | 'activityInquiries' | 'activityReview'
+    badgeKey?: 'workbench' | 'governance' | 'activityInquiries' | 'activityReview'
+    /**
+     * 'bottom' = 渲染在所有群組之後（側欄最底），給「日常不進、但需要常駐入口」的
+     * 稽核類頁面；省略 = 照既有行為渲染在群組之前。
+     */
+    placement?: 'bottom'
   }
 }
 
@@ -155,21 +159,40 @@ export const NAVIGATION_MANIFEST = {
       menu: { icon: icon('DataBoard') },
     },
     {
+      // 2026-08-20 整併：高風險事件分頁移至 /governance，工作台收斂成單頁待簽核
+      //（分頁殼 WorkbenchLayout 一併移除）。/workbench 本身即實頁。
       key: 'workbench', title: PAGE_TERMS.workbench, routePath: '/workbench',
-      // 兩個分頁各自一碼（2026-08-03 細分）：高風險事件原本共用 AUDIT_LOGS，
-      // 想授出它就得連「報表 › 操作紀錄」一起給。頁面 views 為 OR，只持其中
-      // 一碼者仍能進 /workbench，由 WorkbenchLayout 決定看得到哪個分頁。
-      views: [
-        { code: 'APPROVALS', label: '待簽核' },
-        { code: 'HIGH_RISK_READ', label: '高風險事件' },
-      ],
+      views: [{ code: 'APPROVALS', label: '待簽核' }],
       menu: { icon: icon('Finished'), badgeKey: 'workbench' },
       extraRoutes: [
-        // /approvals 已 redirect 至 /workbench/approvals；規則保留供 redirect 解析。
+        // 兩條舊路徑已 redirect 至 /workbench；規則保留供 redirect 解析。
         { path: '/approvals', permission: 'APPROVALS' },
         { path: '/workbench/approvals', permission: 'APPROVALS' },
-        // 高風險事件頁走 api/audit.py 的 HIGH_RISK_READ 守衛。
+      ],
+    },
+    {
+      // 稽核與資料品質（2026-08-20 整併）：高風險事件（原審核工作台分頁）、操作紀錄、
+      // 資料異常待辦（原報表群組兩頁）合為一頁三分頁。
+      //
+      // 頁面 views 為 OR：只持其中一碼者仍能進 /governance，落點由 router redirect
+      // 依權限決定。⚠ 三個子路徑一律 exact 掛各自的碼、**禁用 routePrefix**——
+      // prefix 會讓三碼互相外溢（只持 DATA_QUALITY_READ 者深連結進操作紀錄）。
+      key: 'governance', title: PAGE_TERMS.governance, routePath: '/governance',
+      views: [
+        { code: 'HIGH_RISK_READ', label: '高風險事件' },
+        { code: 'AUDIT_LOGS', label: '操作紀錄' },
+        { code: 'DATA_QUALITY_READ', label: '資料異常待辦' },
+      ],
+      actions: [{ code: 'DATA_QUALITY_WRITE', label: '資料異常處理' }],
+      menu: { icon: icon('Memo'), badgeKey: 'governance', placement: 'bottom' },
+      extraRoutes: [
+        { path: '/governance/high-risk', permission: 'HIGH_RISK_READ' },
+        { path: '/governance/audit-logs', permission: 'AUDIT_LOGS' },
+        { path: '/governance/data-quality', permission: 'DATA_QUALITY_READ' },
+        // 三條舊路徑已 redirect 至上面三個分頁；規則保留供 redirect 解析。
         { path: '/workbench/high-risk', permission: 'HIGH_RISK_READ' },
+        { path: '/audit-logs', permission: 'AUDIT_LOGS' },
+        { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
       ],
     },
   ],
@@ -557,18 +580,8 @@ export const NAVIGATION_MANIFEST = {
     },
 
     {
+      // 2026-08-20：操作紀錄與資料異常待辦移至 topLevel 的 governance 節點（整合頁）。
       key: 'reports', title: '報表', icon: icon('DataAnalysis'), pages: [
-        {
-          key: 'auditLogs', title: '操作紀錄', routePath: '/audit-logs',
-          views: [{ code: 'AUDIT_LOGS' }],
-          menu: { icon: icon('Memo') },
-        },
-        {
-          key: 'dataQuality', title: PAGE_TERMS.dataQuality, routePath: '/data-quality',
-          views: [{ code: 'DATA_QUALITY_READ' }],
-          actions: [{ code: 'DATA_QUALITY_WRITE' }],
-          menu: { icon: icon('WarningFilled') },
-        },
         {
           key: 'reportsMain', title: PAGE_TERMS.reports, routePath: '/reports',
           views: [{ code: 'REPORTS' }],
