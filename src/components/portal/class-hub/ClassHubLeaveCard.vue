@@ -46,6 +46,7 @@ onMounted(load)
     <header class="leave-card__head">
       <span class="emoji" role="img" aria-label="請假">🏠</span>
       <h3>近期請假</h3>
+      <RouterLink class="leave-card__all" to="/portal/student-leaves">查看全部 →</RouterLink>
     </header>
 
     <p v-if="errorMessage" class="leave-card__error">
@@ -79,6 +80,13 @@ onMounted(load)
 .leave-card__head h3 {
   margin: 0;
   font-size: 16px;
+}
+
+.leave-card__all {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--el-color-primary);
+  text-decoration: none;
 }
 
 .leave-card__list {
