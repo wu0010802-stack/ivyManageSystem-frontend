@@ -13,11 +13,20 @@
  * 傳入的 activeCalls 不保證只含 pending/acknowledged（呼叫端可能為了 D5 的
  * guardian_picked 徽章連 completed 記錄都一起傳進來），本檔一律依
  * useDismissalRoster.ACTIVE_STATUSES 過濾後才轉成右欄佇列項目。
+ *
+ * 送出後的持續顯示：submit() 成功後不能只等呼叫端的 activeCalls（WS 廣播／
+ * fallback 輪詢）補上這筆——WS 延遲或斷線期間會讓卡片在 staging 移除後短暫
+ * （最長到下次輪詢）從右欄整個消失，使用者會誤以為通知遺失。改用既有
+ * createDismissalCall 的 response（後端已回傳建立好的紀錄，見
+ * api/dismissal_calls.py::create_dismissal_call）直接建立一筆本地 active
+ * 項目、立即持續顯示；一旦 activeCalls 真的追上（該 id 出現，不論任何狀態）
+ * 就視為外部單一事實來源已接手，移除本地暫存版本，避免兩邊資料漂移。
  */
 
-import { reactive, computed, onScopeDispose, type Ref } from 'vue'
+import { reactive, computed, watch, onScopeDispose, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createDismissalCall, cancelDismissalCall } from '@/api/dismissalCalls'
+import type { Schema } from '@/api/_generated/typed'
 import { sortActiveQueue, type DismissalCallView } from '@/composables/useDismissalUrgency'
 import { activeCallStudentIds, ACTIVE_STATUSES } from '@/composables/useDismissalRoster'
 import type { PosQueueItem, PosQueueSource } from '@/types/dismissalPos'
@@ -81,6 +90,23 @@ function toStagingItem(studentId: number, entry: StagingEntry): PosQueueItem {
  */
 export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
   const staging = reactive(new Map<number, StagingEntry>())
+  // submit() 成功後的本地樂觀 active 項目（key＝call id），在呼叫端的 activeCalls
+  // 真正追上（該 id 出現，不論任何狀態）前頂替它持續顯示於右欄，見檔頭註解。
+  const localActiveCalls = reactive(new Map<number, DismissalCallView>())
+
+  // 外部 activeCalls 一旦包含某個 id（不論狀態），代表 WS/輪詢已經追上該筆紀錄的
+  // 最新狀態，本地樂觀版本已無存在必要（不清掉的話兩邊資料會漂移，例如後續
+  // acknowledged/completed 都不會反映到這裡）。
+  watch(
+    activeCalls,
+    (calls) => {
+      if (localActiveCalls.size === 0) return
+      for (const call of calls) {
+        if (localActiveCalls.has(call.id)) localActiveCalls.delete(call.id)
+      }
+    },
+    { deep: true },
+  )
 
   const queue = computed<PosQueueItem[]>(() => {
     // 呼叫端傳入的 activeCalls 不保證只含 pending/acknowledged——D5 要求中欄
@@ -88,8 +114,10 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     // 今日 calls（含 completed/cancelled）一起傳進來。這裡用全 repo 單一事實
     // 來源 ACTIVE_STATUSES 過濾，只有還在流程中的通知才會出現在右欄佇列，
     // 不然 completed/cancelled 的舊紀錄會被誤畫成「已通知教師端，等待確認」。
+    const knownIds = new Set(activeCalls.value.map(c => c.id))
+    const localOnly = Array.from(localActiveCalls.values()).filter(c => !knownIds.has(c.id))
     const activeItems = sortActiveQueue(
-      activeCalls.value.filter(c => ACTIVE_STATUSES.has(c.status ?? '')),
+      [...activeCalls.value, ...localOnly].filter(c => ACTIVE_STATUSES.has(c.status ?? '')),
     ).map(toActiveItem)
     // WS 推播與本地 createDismissalCall 的 HTTP response 是不同通道，前者偶爾會
     // 更早抵達：這個瞬間 activeCalls 已經有這個學生、但 submit() 的 finally 還沒
@@ -116,14 +144,34 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
    * 「別次」倒數，此次呼叫不該把它一併刪掉，否則新倒數會無預警消失、且它自己
    * 的 timer 到期時 staging.get 已 undefined 而靜默 return，使用者對第二次點擊
    * 完全沒有任何回饋。
+   *
+   * 成功時直接用 response 建一筆本地 active 項目（見檔頭註解），讓卡片從
+   * staging 移除的瞬間立刻以持續存在的 active 卡呈現，不必等 WS/輪詢。
    */
   async function submit(studentId: number) {
     const entry = staging.get(studentId)
     if (!entry) return
     try {
-      await createDismissalCall({
+      const res = await createDismissalCall({
         student_id: studentId,
         classroom_id: entry.student.classroomId,
+      })
+      // TODO(ts-strict): waiting on backend response_model for POST /dismissal-calls（現為 unknown，
+      // 這個 cast 完全不受型別系統保護——OpenAPI schema 對這個 response 給的就是 unknown，下面的
+      // id 存在性檢查是唯一的執行期防線，未來後端回應形狀跑掉時 fail-safe 為「不做本地樂觀顯示、
+      // 靜默交回 WS/輪詢」，不會把畸形資料塞進佇列或用 NaN 呼叫後續的 cancel）。
+      const created = res.data as Schema<'DismissalCallOut'>
+      if (typeof created?.id !== 'number') return
+      localActiveCalls.set(created.id, {
+        id: created.id,
+        student_id: created.student_id,
+        student_name: created.student_name,
+        classroom_name: created.classroom_name,
+        status: created.status,
+        requested_at: created.requested_at,
+        request_source: created.request_source,
+        expected_arrival_at: created.expected_arrival_at,
+        arrived_at: created.arrived_at,
       })
     } catch (e) {
       const err = e as { response?: { status?: number; data?: { detail?: string } } }
@@ -172,6 +220,10 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     }
     try {
       await cancelDismissalCall(Number(item.id))
+      // 取消成功即移除本地樂觀版本：POS active 檢視下 WS/輪詢對「已取消」是直接
+      // 從 calls.value 濾除、不是 upsert（見 DismissalQueueView.vue handleWsEvent），
+      // 該 id 可能永遠不會再出現在 activeCalls，若不主動清會讓這張卡卡死在右欄。
+      localActiveCalls.delete(Number(item.id))
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } }
       ElMessage.error(err.response?.data?.detail || `取消失敗：${item.studentName}`)
@@ -184,6 +236,7 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
       clearTimeout(entry.timer)
     }
     staging.clear()
+    localActiveCalls.clear()
   })
 
   return { queue, addToQueue, cancel }

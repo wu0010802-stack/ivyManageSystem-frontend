@@ -1,7 +1,10 @@
 import api from './index'
+import type { ApiBody, AxiosResp } from './_generated/typed'
 
 // 管理端
-export const createDismissalCall = (data: unknown) => api.post('/dismissal-calls', data)
+export const createDismissalCall = (
+  data: ApiBody<'/dismissal-calls', 'post'>,
+): AxiosResp<'/dismissal-calls', 'post'> => api.post('/dismissal-calls', data)
 export const getDismissalCalls = (params: unknown) => api.get('/dismissal-calls', { params })
 export const cancelDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/cancel`)
 // 標記已到門口（pnotice01 家長預告接送：辦公室代替忘記按抵達的家長操作）

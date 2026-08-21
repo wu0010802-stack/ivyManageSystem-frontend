@@ -637,6 +637,25 @@ onUnmounted(() => {
 <style scoped>
 .dismissal-queue-view {
   padding: var(--space-5);
+  /* 接上 AdminLayout.vue .content-container 的 height:100% 鏈，讓下方三欄 POS
+     佈局（.pos-board）的 flex:1; min-height:0 真的有邊界高度可用，三欄才能各自
+     overflow-y:auto 獨立捲動，而不是整個 .dismissal-queue-view 撐高、改由外層
+     .el-main 產生單一整頁捲動。PageHeader／連線 banner／篩選列皆維持預設
+     flex-shrink，內容多高就多高，只有最下面那個 flex 項目（POS 版或歷史表格）
+     會吃掉剩餘空間；歷史表格分支未設 min-height:0，維持既有『內容撐高、
+     el-main 捲動』行為不變（D7）。
+
+     repo 內另一個「固定高度＋內部捲動」的既有案例是
+     src/components/activity/POSCheckoutPanel.vue 的 .pos-panel-wrap__col--pay
+     （max-height: calc(100vh - 140px) + sticky），靠魔術數字貼齊已知的 header
+     高度。這裡改走 height:100% 這條鏈是刻意選的不同解法——POS 佈局的
+     PageHeader／連線 banner／篩選列高度會隨篩選狀態、連線是否異常而變動，
+     魔術數字算不準；height:100% 鏈不受這些高度變化影響，但需要 AdminLayout.vue
+     多一行 height:100%（見該檔 .content-container 的註解）。 */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* 待接送即時計數：與教師端 portal 一致，一眼掌握還有幾位待處理
