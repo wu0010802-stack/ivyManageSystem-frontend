@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import { parseTaipeiDate } from '@/utils/taipeiTime'
+import { parseTaipeiDate, formatTaipeiClock } from '@/utils/taipeiTime'
 
 /**
  * 接送通知「等候時間 / 緊急度」共用邏輯。
@@ -57,13 +57,14 @@ export function waitAnchorIso(call: {
   return call.arrived_at || call.requested_at
 }
 
-/** 「預計 HH:MM」（台北時間）。無法解析回空字串。 */
+/**
+ * 「預計 HH:MM」（台北時間）。無法解析回空字串。
+ * 走 formatTaipeiClock 顯式以 Asia/Taipei 格式化——原本的 getHours()/getMinutes()
+ * 吃裝置本地時區，非台灣裝置（與 UTC 的 CI runner）會差 8 小時。
+ */
 export function formatExpectedArrival(iso: string | null | undefined): string {
-  const d = parseTaipeiDate(iso)
-  if (!d) return ''
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `預計 ${hh}:${mm}`
+  const clock = formatTaipeiClock(iso)
+  return clock ? `預計 ${clock}` : ''
 }
 
 /** ETA 差（分鐘，向零取整）：未到為正、已過為負。無法解析回 null。 */
