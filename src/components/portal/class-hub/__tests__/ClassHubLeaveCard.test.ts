@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, RouterLinkStub } from '@vue/test-utils'
 
 import ClassHubLeaveCard from '../ClassHubLeaveCard.vue'
 
@@ -12,7 +12,10 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 // v-loading 是 Element Plus 的指令，元件測試不掛整包 EP，給個 no-op stub
 const mountCard = () =>
   mount(ClassHubLeaveCard, {
-    global: { directives: { loading: {} } },
+    global: {
+      directives: { loading: {} },
+      stubs: { RouterLink: RouterLinkStub },
+    },
   })
 
 const leaveItem = {
@@ -70,6 +73,21 @@ describe('ClassHubLeaveCard', () => {
 
     expect(wrapper.text()).toContain('載入失敗')
     expect(wrapper.text()).not.toContain('近期沒有請假')
+  })
+
+  it('提供「查看全部」連結導向學生請假頁', async () => {
+    const { listPortalStudentLeaves } = await import('@/api/portalStudentLeaves')
+    vi.mocked(listPortalStudentLeaves).mockResolvedValue({
+      data: { items: [leaveItem], total: 1 },
+    } as never)
+
+    const wrapper = mountCard()
+    await flush()
+
+    const link = wrapper.findComponent(RouterLinkStub)
+    expect(link.exists()).toBe(true)
+    expect(link.props('to')).toBe('/portal/student-leaves')
+    expect(link.text()).toContain('查看全部')
   })
 
   it('單日請假只顯示一個日期', async () => {
