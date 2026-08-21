@@ -55,8 +55,15 @@ const etaText = computed(() => {
   return [expected, rel].filter(Boolean).join(' · ')
 })
 
-/** 已送出（active）且非預約未抵達：顯示「已通知教師端，等待確認」等候標記。 */
+/** 已送出（active）且非預約未抵達：顯示等候標記，文案依老師是否已確認分兩階段。 */
 const showWaitingFlag = computed(() => props.item.phase === 'active' && !preArrival.value)
+
+/** 老師已按下確認（acknowledged）：等候標記進入第二階段，讓櫃台知道教師端已接手。 */
+const isAcknowledged = computed(() => props.item.call?.status === 'acknowledged')
+
+const waitingText = computed(() =>
+  isAcknowledged.value ? '老師已收到，準備放學' : '已通知教師端，等待確認',
+)
 
 /** 已放學（done）：保留在佇列尾端供回顧，顯示放學時間、整卡降階、不可滑動取消。 */
 const isDone = computed(() => props.item.phase === 'done')
@@ -116,8 +123,12 @@ const bodyStyle = computed(() => ({
       />
       <div v-else-if="isDone" class="pos-queue-card__done-flag">✅ {{ doneText }}</div>
       <div v-else-if="etaText" class="pos-queue-card__eta-flag">{{ etaText }}</div>
-      <div v-else-if="showWaitingFlag" class="pos-queue-card__waiting-flag">
-        <span class="pos-queue-card__waiting-dot" aria-hidden="true" />已通知教師端，等待確認
+      <div
+        v-else-if="showWaitingFlag"
+        class="pos-queue-card__waiting-flag"
+        :class="{ 'pos-queue-card__waiting-flag--ack': isAcknowledged }"
+      >
+        <span class="pos-queue-card__waiting-dot" aria-hidden="true" />{{ waitingText }}
       </div>
     </div>
   </div>
@@ -248,6 +259,16 @@ const bodyStyle = computed(() => ({
   border-radius: 50%;
   background: var(--color-success);
   animation: pos-queue-card-pulse 1.6s ease-in-out infinite;
+}
+
+/* 老師已確認（acknowledged）：等候標記轉藍，與 pending 的綠色第一階段做出區隔
+   （對齊 view STATUS_TYPE_MAP：acknowledged=primary 系）。 */
+.pos-queue-card__waiting-flag--ack {
+  color: var(--color-info-darker);
+}
+
+.pos-queue-card__waiting-flag--ack .pos-queue-card__waiting-dot {
+  background: var(--color-info);
 }
 
 @media (prefers-reduced-motion: reduce) {

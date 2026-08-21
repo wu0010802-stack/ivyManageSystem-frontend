@@ -140,8 +140,20 @@ describe('DismissalPosQueueCard', () => {
 
     it('active 且現場/已抵達：顯示「已通知教師端，等待確認」', () => {
       const w = mount(DismissalPosQueueCard, { props: { item: activeItem() } })
-      expect(w.find('.pos-queue-card__waiting-flag').text()).toContain('已通知教師端')
+      const flag = w.find('.pos-queue-card__waiting-flag')
+      expect(flag.text()).toContain('已通知教師端')
+      expect(flag.classes()).not.toContain('pos-queue-card__waiting-flag--ack')
       expect(w.find('.pos-queue-card__eta-flag').exists()).toBe(false)
+    })
+
+    it('active 且老師已確認（acknowledged）：等候標記進入第二階段「老師已收到」', () => {
+      const base = activeItem()
+      const w = mount(DismissalPosQueueCard, {
+        props: { item: { ...base, call: { ...base.call!, status: 'acknowledged' } } },
+      })
+      const flag = w.find('.pos-queue-card__waiting-flag')
+      expect(flag.text()).toContain('老師已收到')
+      expect(flag.classes()).toContain('pos-queue-card__waiting-flag--ack')
     })
   })
 
