@@ -167,7 +167,7 @@ describe('DismissalQueueView POS 整合測試', () => {
     expect(createDismissalCall).not.toHaveBeenCalled()
   })
 
-  it('D5：待處理檢視下 completed 記錄會驅動中欄「家長已接送」徽章，但不計入待接送計數／不出現在右欄佇列', async () => {
+  it('D5：待處理檢視下 completed 記錄驅動中欄「家長已接送」徽章、右欄保留 done 卡，但不計入待接送計數', async () => {
     vi.mocked(getDismissalCalls).mockResolvedValueOnce({
       data: [
         {
@@ -185,14 +185,17 @@ describe('DismissalQueueView POS 整合測試', () => {
     // active 檢視不帶 status 篩選（拿到今日全狀態，含 completed）
     expect(getDismissalCalls).toHaveBeenCalledWith({})
 
-    // 中欄：王小明的卡片顯示「家長已接送」徽章，且視覺降階（不可再點擊發起）
+    // 中欄：王小明的卡片顯示「家長已接送」徽章、視覺降階（淡灰），但仍可再次點擊通知
     const card = wrapper.find('.pos-student-card')
     expect(card.text()).toContain('家長已接送')
     expect(card.classes()).toContain('is-resolved')
+    expect(card.classes()).toContain('is-redispatchable')
 
-    // 頁首「待接送」計數與右欄佇列都不應把這筆 completed 記錄算進去
+    // 頁首「待接送」計數不把 completed 算進去；右欄保留這筆為 done（已放學）卡
     expect(wrapper.find('.page-header__count').exists()).toBe(false)
-    expect(wrapper.findAll('.pos-queue-card')).toHaveLength(0)
+    const queueCards = wrapper.findAll('.pos-queue-card')
+    expect(queueCards).toHaveLength(1)
+    expect(queueCards[0].classes()).toContain('pos-queue-card--done')
   })
 
   it('篩選狀態切到非「待處理」時，歷史表格分支不受影響（POS 佈局消失、表格出現）', async () => {

@@ -18,6 +18,7 @@ import {
   isPreArrivalNotice,
 } from '@/composables/useDismissalUrgency'
 import { useSwipeToCancel } from '@/composables/useSwipeToCancel'
+import { formatTaipeiClock } from '@/utils/taipeiTime'
 import type { PosQueueItem, PosQueueSource } from '@/types/dismissalPos'
 import DismissalPosCountdownBar from './DismissalPosCountdownBar.vue'
 
@@ -57,10 +58,25 @@ const etaText = computed(() => {
 /** 已送出（active）且非預約未抵達：顯示「已通知教師端，等待確認」等候標記。 */
 const showWaitingFlag = computed(() => props.item.phase === 'active' && !preArrival.value)
 
+/** 已放學（done）：保留在佇列尾端供回顧，顯示放學時間、整卡降階、不可滑動取消。 */
+const isDone = computed(() => props.item.phase === 'done')
+
+const doneText = computed(() => {
+  if (!isDone.value) return ''
+  const time = formatTaipeiClock(props.item.call?.completed_at as string | undefined)
+  return time ? `已放學 ${time}` : '已放學'
+})
+
 const { dragX, reboundInstant, onPointerDown, onPointerMove, onPointerUp, onPointerCancel } =
   useSwipeToCancel({
     onCommit: () => emit('cancel', props.item),
   })
+
+/** done 卡沒有取消語意：不進入 swipe 手勢，卡片維持靜止。 */
+function handlePointerDown(e: PointerEvent) {
+  if (isDone.value) return
+  onPointerDown(e)
+}
 
 const bodyStyle = computed(() => ({
   transform: `translateX(${dragX.value}px)`,
@@ -68,14 +84,17 @@ const bodyStyle = computed(() => ({
 </script>
 
 <template>
-  <div class="pos-queue-card" :class="`pos-queue-card--${item.source}`">
-    <div class="pos-queue-card__swipe-bg" aria-hidden="true">滑動取消</div>
+  <div
+    class="pos-queue-card"
+    :class="[`pos-queue-card--${item.source}`, { 'pos-queue-card--done': isDone }]"
+  >
+    <div v-if="!isDone" class="pos-queue-card__swipe-bg" aria-hidden="true">滑動取消</div>
     <div
       class="pos-queue-card__body"
       :class="{ 'pos-queue-card__body--rebound-instant': reboundInstant }"
       :style="bodyStyle"
       data-testid="pos-queue-card-body"
-      @pointerdown="onPointerDown"
+      @pointerdown="handlePointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
@@ -95,6 +114,7 @@ const bodyStyle = computed(() => ({
         :started-at="item.countdown.startedAt"
         :duration-ms="item.countdown.durationMs"
       />
+      <div v-else-if="isDone" class="pos-queue-card__done-flag">✅ {{ doneText }}</div>
       <div v-else-if="etaText" class="pos-queue-card__eta-flag">{{ etaText }}</div>
       <div v-else-if="showWaitingFlag" class="pos-queue-card__waiting-flag">
         <span class="pos-queue-card__waiting-dot" aria-hidden="true" />已通知教師端，等待確認
@@ -185,6 +205,31 @@ const bodyStyle = computed(() => ({
   font-size: var(--text-xs, 12px);
   color: var(--color-info-darker);
   font-weight: 600;
+}
+
+/* 已放學（done）：整卡淡灰降階，touch-action 還原（沒有 swipe 手勢） */
+.pos-queue-card--done {
+  box-shadow: none;
+}
+
+.pos-queue-card--done .pos-queue-card__body {
+  background: var(--bg-color-soft);
+  touch-action: auto;
+}
+
+.pos-queue-card--done .pos-queue-card__name {
+  color: var(--text-secondary);
+}
+
+.pos-queue-card--done .pos-queue-card__source-tag {
+  opacity: 0.65;
+}
+
+.pos-queue-card__done-flag {
+  margin-top: var(--space-3, 12px);
+  font-size: var(--text-xs, 12px);
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .pos-queue-card__waiting-flag {

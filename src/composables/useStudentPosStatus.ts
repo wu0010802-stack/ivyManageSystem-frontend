@@ -9,6 +9,7 @@
  */
 
 import type { PosStudentStatus } from '@/types/dismissalPos'
+import { ACTIVE_STATUSES } from '@/composables/useDismissalRoster'
 
 /** 今日 dismissal call 的最小輸入形狀（比照 useDismissalRoster.ts 的 RosterCallInput 慣例）。 */
 export interface PosStudentCallInput {
@@ -39,14 +40,24 @@ function hasCompletedCall(studentId: number, calls: PosStudentCallInput[]): bool
   return calls.some(c => c.student_id === studentId && c.status === 'completed')
 }
 
+/** 該生是否有進行中（pending/acknowledged）通知——再次通知時它比舊的 completed 更能代表現況。 */
+function hasActiveCall(studentId: number, calls: PosStudentCallInput[]): boolean {
+  return calls.some(c => c.student_id === studentId && ACTIVE_STATUSES.has(c.status ?? ''))
+}
+
 /**
  * 輸入單一學生 + 今日 dismissal calls[]，輸出 { status, sortWeight }。
  * pending/acknowledged/cancelled 等非 completed 狀態一律仍算 unpicked（尚未真正完成接送）。
+ * 已放學（completed）後可再次通知：同時存在 completed ＋ 進行中通知時，以進行中
+ * 為準判 unpicked（卡片回到待接送外觀），不讓舊的 completed 記錄把新通知蓋掉。
  */
 export function useStudentPosStatus(
   student: PosStudentInput,
   calls: PosStudentCallInput[],
 ): PosStudentStatusResult {
-  const status: PosStudentStatus = hasCompletedCall(student.id, calls) ? 'guardian_picked' : 'unpicked'
+  const status: PosStudentStatus =
+    hasCompletedCall(student.id, calls) && !hasActiveCall(student.id, calls)
+      ? 'guardian_picked'
+      : 'unpicked'
   return { status, sortWeight: SORT_WEIGHT[status] }
 }

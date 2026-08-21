@@ -70,9 +70,10 @@ const sortedCalls = computed(() =>
   ),
 )
 // 供 T-011 DismissalPosBoard 使用（中欄 roster 分組 + 右欄 active 佇列共用同一份，不重複打 API）。
-// D5：中欄「家長已接送」徽章需要今日 completed 記錄，所以 active 檢視下 calls.value
-// 本身就不再過濾狀態（見 fetchCalls）；右欄佇列的 pending/acknowledged 過濾交給
-// useDismissalPosQueue.ts 自己做（同一份 ACTIVE_STATUSES 單一事實來源）。
+// D5：中欄「家長已接送」徽章與右欄的 done（已放學）卡都需要今日 completed 記錄，
+// 所以 active 檢視下 calls.value 本身就不再過濾狀態（見 fetchCalls）；右欄的
+// active／done 分流交給 useDismissalPosQueue.ts 自己做（同一份 ACTIVE_STATUSES
+// 單一事實來源）。
 const posBoardCalls = computed(() => calls.value as DismissalCallView[])
 
 // 篩選
@@ -399,7 +400,7 @@ const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
     // 重複事件以 id 定位 splice 替換，天然 idempotent 不重複插卡。轉為 completed
     // 時不再從 calls.value 移除（D5：中欄「家長已接送」徽章要吃得到這筆），單純
     // upsert 成最新狀態即可——它會自然從 sortedCalls／右欄佇列的 active 過濾中
-    // 消失，只留在中欄的徽章判斷（useStudentPosStatus）裡。
+    // 消失，改以右欄尾端的 done（已放學）卡與中欄徽章（useStudentPosStatus）呈現。
     const idx = calls.value.findIndex(c => c.id === payload.id)
     if (idx !== -1) {
       calls.value.splice(idx, 1, payload)

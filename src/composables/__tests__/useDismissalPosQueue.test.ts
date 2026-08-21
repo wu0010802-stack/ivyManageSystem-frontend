@@ -240,17 +240,106 @@ describe('useDismissalPosQueue', () => {
     stop()
   })
 
-  it('activeCalls 混入 completed/cancelled 記錄時（D5：呼叫端可能為了徽章一起傳入），右欄佇列只顯示 pending/acknowledged，不會誤畫成「等待確認」', () => {
+  it('activeCalls 混入 completed/cancelled 記錄時：pending/acknowledged 顯示為 active、completed 保留為 done 排在尾端、cancelled 不顯示', () => {
     const activeCalls = ref<DismissalCallView[]>([
-      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed' },
+      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed', completed_at: '2026-08-21T16:10:00' },
       { id: 2, student_id: 2, student_name: '李小美', classroom_name: '向日葵', status: 'cancelled' },
       { id: 3, student_id: 3, student_name: '陳大文', classroom_name: '星星班', status: 'pending' },
     ])
     const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
 
-    expect(api.queue.value).toHaveLength(1)
+    expect(api.queue.value).toHaveLength(2)
     expect(api.queue.value[0].studentId).toBe(3)
     expect(api.queue.value[0].phase).toBe('active')
+    expect(api.queue.value[1].studentId).toBe(1)
+    expect(api.queue.value[1].phase).toBe('done')
+    stop()
+  })
+
+  it('家長預約（request_source=parent）的通知會進入右欄佇列，且進行中項目依接送時間先後合併排序（已抵達比 arrived_at、預約未抵達比 expected_arrival_at）', () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      // 16:05 才到門口的現場家長
+      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'pending', request_source: 'staff', requested_at: '2026-08-21T16:05:00', arrived_at: '2026-08-21T16:05:00' },
+      // 預約 16:00、尚未抵達的家長預約 → 應排在 16:05 已抵達者前面
+      { id: 2, student_id: 2, student_name: '李小美', classroom_name: '向日葵', status: 'pending', request_source: 'parent', requested_at: '2026-08-21T15:30:00', expected_arrival_at: '2026-08-21T16:00:00', arrived_at: null },
+      // 15:50 已抵達 → 最前
+      { id: 3, student_id: 3, student_name: '陳大文', classroom_name: '星星班', status: 'acknowledged', request_source: 'staff', requested_at: '2026-08-21T15:50:00', arrived_at: '2026-08-21T15:50:00' },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    expect(api.queue.value.map(i => i.id)).toEqual([3, 2, 1])
+    expect(api.queue.value.every(i => i.phase === 'active')).toBe(true)
+    // 家長預約項目帶 reservation 來源標籤（供右欄卡片顯示「預約」）
+    expect(api.queue.value[1].source).toBe('reservation')
+    stop()
+  })
+
+  it('家長預約與 completed 並存時：預約排進行中區、被接送過的排最後面', () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed', completed_at: '2026-08-21T15:40:00', arrived_at: '2026-08-21T15:35:00' },
+      { id: 2, student_id: 2, student_name: '李小美', classroom_name: '向日葵', status: 'pending', request_source: 'parent', expected_arrival_at: '2026-08-21T16:00:00', arrived_at: null },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    expect(api.queue.value.map(i => [i.id, i.phase])).toEqual([
+      [2, 'active'],
+      [1, 'done'],
+    ])
+    stop()
+  })
+
+  it('done 項目依 completed_at 新→舊排序，且同一學生多筆 completed 只留最新一筆', () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed', completed_at: '2026-08-21T15:00:00' },
+      { id: 2, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed', completed_at: '2026-08-21T16:30:00' },
+      { id: 3, student_id: 2, student_name: '李小美', classroom_name: '向日葵', status: 'completed', completed_at: '2026-08-21T16:00:00' },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    expect(api.queue.value.map(i => i.id)).toEqual([2, 3])
+    expect(api.queue.value.every(i => i.phase === 'done')).toBe(true)
+    stop()
+  })
+
+  it('已放學的學生被再次通知（同時有 completed ＋ pending）時，只顯示進行中的 active 卡，不重複出現舊的 done 卡', () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed', completed_at: '2026-08-21T15:00:00' },
+      { id: 2, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'pending' },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    const matches = api.queue.value.filter(i => i.studentId === 1)
+    expect(matches).toHaveLength(1)
+    expect(matches[0].phase).toBe('active')
+    expect(matches[0].id).toBe(2)
+    stop()
+  })
+
+  it('已放學的學生再次 addToQueue 開始倒數時，staging 卡取代舊的 done 卡（同一學生只顯示一張）', () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed', completed_at: '2026-08-21T15:00:00' },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+    expect(api.queue.value[0].phase).toBe('done')
+
+    api.addToQueue(student) // student.id === 1，completed 不在 ACTIVE_STATUSES，不會被防呆擋下
+
+    const matches = api.queue.value.filter(i => i.studentId === 1)
+    expect(matches).toHaveLength(1)
+    expect(matches[0].phase).toBe('staging')
+    stop()
+  })
+
+  it('done 項目呼叫 cancel(item) 不打任何後端 API（completed 沒有取消語意）', async () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      { id: 1, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'completed', completed_at: '2026-08-21T15:00:00' },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    await api.cancel(api.queue.value[0])
+
+    expect(cancelDismissalCall).not.toHaveBeenCalled()
+    expect(api.queue.value).toHaveLength(1)
     stop()
   })
 

@@ -45,15 +45,24 @@ const statusMeta = computed<StatusMeta | null>(() =>
   isUnpicked.value ? null : STATUS_META[props.status as Exclude<PosStudentStatus, 'unpicked'>],
 )
 
+/**
+ * 家長已接送後仍可再次點擊發起（家長折返／誤標完成等情境）；重複發起防線在
+ * useDismissalPosQueue.addToQueue（staging 倒數中或已有 active 通知會被忽略）。
+ * on_leave / bus_picked 維持不可點（本輪無資料來源，純視覺 placeholder）。
+ */
+const canDispatch = computed(
+  () => props.status === 'unpicked' || props.status === 'guardian_picked',
+)
+
 /** 姓名 + 狀態，讓報讀器一次唸完整句（比照 DismissalCallCard 既有 aria-label 慣例）。 */
 const ariaLabel = computed(() => {
   const statusText = statusMeta.value ? statusMeta.value.label : '待接送'
-  return `${props.student.name}，${statusText}`
+  const redispatchHint = props.status === 'guardian_picked' ? '，點擊可再次通知' : ''
+  return `${props.student.name}，${statusText}${redispatchHint}`
 })
 
-/** 已完成狀態不可再次點擊發起，防重複發起（比照現有 chip.is-notifying 慣例）。 */
 function handleDispatch() {
-  if (!isUnpicked.value) return
+  if (!canDispatch.value) return
   emit('quick-dispatch', props.student)
 }
 </script>
@@ -61,7 +70,7 @@ function handleDispatch() {
 <template>
   <div
     class="pos-student-card"
-    :class="{ 'is-resolved': !isUnpicked }"
+    :class="{ 'is-resolved': !isUnpicked, 'is-redispatchable': canDispatch && !isUnpicked }"
     role="button"
     tabindex="0"
     :aria-label="ariaLabel"
@@ -96,11 +105,16 @@ function handleDispatch() {
 
     <div class="pos-student-card__name">{{ student.name }}</div>
 
-    <span
-      v-if="statusMeta"
-      class="pos-student-card__status"
-      :class="`pos-student-card__status--${statusMeta.tone}`"
-    >{{ statusMeta.icon }} {{ statusMeta.label }}</span>
+    <div v-if="statusMeta" class="pos-student-card__resolved-info">
+      <span
+        class="pos-student-card__status"
+        :class="`pos-student-card__status--${statusMeta.tone}`"
+      >{{ statusMeta.icon }} {{ statusMeta.label }}</span>
+      <span
+        v-if="canDispatch"
+        class="pos-student-card__redispatch-hint"
+      >👆 點卡片可再次通知</span>
+    </div>
     <span v-else class="pos-student-card__tap-hint">👆 點卡片＝現場接送</span>
   </div>
 </template>
@@ -215,7 +229,7 @@ function handleDispatch() {
   color: var(--color-success-darker);
 }
 
-/* 已處理（請假／娃娃車已接送／家長已接送）卡片：降低視覺優先度、不可再點 */
+/* 已處理（請假／娃娃車已接送／家長已接送）卡片：降低視覺優先度（淡灰） */
 .pos-student-card.is-resolved {
   cursor: default;
   background: var(--bg-color-soft);
@@ -228,5 +242,28 @@ function handleDispatch() {
 
 .pos-student-card.is-resolved .pos-student-card__name {
   color: var(--text-secondary);
+}
+
+/* 家長已接送：維持淡灰降階，但仍可再次點擊發起通知（恢復可點視覺回饋） */
+.pos-student-card.is-redispatchable {
+  cursor: pointer;
+}
+
+.pos-student-card.is-redispatchable:hover {
+  border-color: var(--brand-primary, var(--color-primary));
+  box-shadow: var(--shadow-md);
+}
+
+.pos-student-card__resolved-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1, 4px);
+}
+
+.pos-student-card__redispatch-hint {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary);
+  font-weight: 600;
 }
 </style>

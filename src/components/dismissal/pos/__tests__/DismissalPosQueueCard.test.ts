@@ -40,6 +40,30 @@ function activeItem(overrides: Partial<PosQueueItem> = {}): PosQueueItem {
   }
 }
 
+function doneItem(overrides: Partial<PosQueueItem> = {}): PosQueueItem {
+  return {
+    id: 43,
+    phase: 'done',
+    studentId: 1,
+    studentName: '王小明',
+    classroomName: '陽光班',
+    source: 'onsite',
+    countdown: null,
+    call: {
+      id: 43,
+      student_name: '王小明',
+      classroom_name: '陽光班',
+      status: 'completed',
+      request_source: 'staff',
+      requested_at: '2026-08-21T07:00:00',
+      arrived_at: '2026-08-21T07:00:00',
+      expected_arrival_at: null,
+      completed_at: '2026-08-21T07:12:00',
+    },
+    ...overrides,
+  }
+}
+
 /** 讓 body 元素有非零寬度，模擬真實 layout，讓 useSwipeToCancel 的閾值計算生效。 */
 function withMeasuredWidth(wrapper: ReturnType<typeof mount>, width = 200) {
   const body = wrapper.find('[data-testid="pos-queue-card-body"]').element as HTMLElement
@@ -143,6 +167,36 @@ describe('DismissalPosQueueCard', () => {
       await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
       await body.dispatchEvent(new PointerEvent('pointermove', { clientX: 20, pointerId: 1 })) // 20/200=10%<40%
       await body.dispatchEvent(new PointerEvent('pointerup', { clientX: 20, pointerId: 1 }))
+
+      expect(w.emitted('cancel')).toBeUndefined()
+    })
+  })
+
+  describe('done（已放學）卡', () => {
+    it('顯示「已放學 HH:MM」標記與降階 class，不顯示等候標記／ETA／倒數條', () => {
+      const w = mount(DismissalPosQueueCard, { props: { item: doneItem() } })
+      expect(w.find('.pos-queue-card').classes()).toContain('pos-queue-card--done')
+      expect(w.find('.pos-queue-card__done-flag').text()).toContain('已放學 07:12')
+      expect(w.find('.pos-queue-card__waiting-flag').exists()).toBe(false)
+      expect(w.find('.pos-queue-card__eta-flag').exists()).toBe(false)
+      expect(w.find('.pos-countdown-bar__track').exists()).toBe(false)
+    })
+
+    it('completed_at 缺值時仍顯示「已放學」，不顯示時間', () => {
+      const item = doneItem()
+      item.call = { ...item.call!, completed_at: undefined }
+      const w = mount(DismissalPosQueueCard, { props: { item } })
+      expect(w.find('.pos-queue-card__done-flag').text().trim()).toBe('✅ 已放學')
+    })
+
+    it('swipe 手勢不會 emit cancel（completed 沒有取消語意），swipe 背景也不渲染', async () => {
+      const w = mount(DismissalPosQueueCard, { props: { item: doneItem() } })
+      expect(w.find('.pos-queue-card__swipe-bg').exists()).toBe(false)
+      const body = withMeasuredWidth(w)
+
+      await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
+      await body.dispatchEvent(new PointerEvent('pointermove', { clientX: 100, pointerId: 1 }))
+      await body.dispatchEvent(new PointerEvent('pointerup', { clientX: 100, pointerId: 1 }))
 
       expect(w.emitted('cancel')).toBeUndefined()
     })

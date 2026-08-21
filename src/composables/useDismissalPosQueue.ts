@@ -9,10 +9,13 @@
  * 學生卡片回到可再次點擊發起的狀態，不會靜默消失卻沒真的建立通知。
  * addToQueue 同時防呆：該生已在 staging 倒數中，或已有後端 active（pending/
  * acknowledged）通知（重用 useDismissalRoster.ts 的 activeCallStudentIds）皆會
- * 被忽略，避免重複發起。active 清單排序沿用既有 useDismissalUrgency.sortActiveQueue，不重造。
+ * 被忽略，避免重複發起。active 清單排序為 POS 專屬的「接送時間先後」單一排序
+ * （見 pickupTimeMs）——已抵達與家長預約未抵達合併比時間，刻意不同於教師端
+ * sortActiveQueue 的「已抵達一律優先」兩段式語意，該共用函式維持原樣不動。
  * 傳入的 activeCalls 不保證只含 pending/acknowledged（呼叫端可能為了 D5 的
- * guardian_picked 徽章連 completed 記錄都一起傳進來），本檔一律依
- * useDismissalRoster.ACTIVE_STATUSES 過濾後才轉成右欄佇列項目。
+ * guardian_picked 徽章連 completed 記錄都一起傳進來），本檔依
+ * useDismissalRoster.ACTIVE_STATUSES 過濾出進行中項目；今日 completed 記錄
+ * 不丟棄，改以 phase='done' 保留在佇列尾端供回顧（cancelled 仍然不顯示）。
  *
  * 送出後的持續顯示：submit() 成功後不能只等呼叫端的 activeCalls（WS 廣播／
  * fallback 輪詢）補上這筆——WS 延遲或斷線期間會讓卡片在 staging 移除後短暫
@@ -27,7 +30,7 @@ import { reactive, computed, watch, onScopeDispose, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createDismissalCall, cancelDismissalCall } from '@/api/dismissalCalls'
 import type { Schema } from '@/api/_generated/typed'
-import { sortActiveQueue, type DismissalCallView } from '@/composables/useDismissalUrgency'
+import { parseTaipeiDate, type DismissalCallView } from '@/composables/useDismissalUrgency'
 import { activeCallStudentIds, ACTIVE_STATUSES } from '@/composables/useDismissalRoster'
 import type { PosQueueItem, PosQueueSource } from '@/types/dismissalPos'
 
@@ -71,6 +74,21 @@ function toActiveItem(call: DismissalCallView): PosQueueItem {
   }
 }
 
+/**
+ * 接送時間排序鍵（毫秒）：已抵達（含 staff 現場，migration 已回填 arrived_at=
+ * requested_at）用實際到門口時間 arrived_at；家長預約未抵達用預計抵達時間
+ * expected_arrival_at；都缺時 fallback requested_at。無法解析排最後。
+ */
+function pickupTimeMs(call: DismissalCallView): number {
+  const iso = call.arrived_at || call.expected_arrival_at || call.requested_at
+  return parseTaipeiDate(iso)?.getTime() ?? Number.MAX_SAFE_INTEGER
+}
+
+/** 今日 completed call → PosQueueItem（phase='done'）：保留在佇列尾端供回顧，不可取消。 */
+function toDoneItem(call: DismissalCallView): PosQueueItem {
+  return { ...toActiveItem(call), phase: 'done' }
+}
+
 /** staging entry → PosQueueItem（phase='staging'）。 */
 function toStagingItem(studentId: number, entry: StagingEntry): PosQueueItem {
   return {
@@ -112,13 +130,18 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     // 呼叫端傳入的 activeCalls 不保證只含 pending/acknowledged——D5 要求中欄
     // 「家長已接送」徽章要吃得到今日 completed 記錄，呼叫端因此可能把完整的
     // 今日 calls（含 completed/cancelled）一起傳進來。這裡用全 repo 單一事實
-    // 來源 ACTIVE_STATUSES 過濾，只有還在流程中的通知才會出現在右欄佇列，
-    // 不然 completed/cancelled 的舊紀錄會被誤畫成「已通知教師端，等待確認」。
+    // 來源 ACTIVE_STATUSES 過濾出「還在流程中」的通知（completed 另走下方
+    // done 分支保留顯示、cancelled 不顯示），不然 completed/cancelled 的舊紀錄
+    // 會被誤畫成「已通知教師端，等待確認」。
     const knownIds = new Set(activeCalls.value.map(c => c.id))
     const localOnly = Array.from(localActiveCalls.values()).filter(c => !knownIds.has(c.id))
-    const activeItems = sortActiveQueue(
-      [...activeCalls.value, ...localOnly].filter(c => ACTIVE_STATUSES.has(c.status ?? '')),
-    ).map(toActiveItem)
+    // 進行中項目（含家長預約）依「接送時間先後」單一排序：已抵達比 arrived_at、
+    // 預約未抵達比 expected_arrival_at，時間早的在前——預約 16:00 的孩子會排在
+    // 16:05 才到門口的家長前面，讓老師照時間順序備妥孩子。
+    const activeItems = [...activeCalls.value, ...localOnly]
+      .filter(c => ACTIVE_STATUSES.has(c.status ?? ''))
+      .sort((a, b) => pickupTimeMs(a) - pickupTimeMs(b))
+      .map(toActiveItem)
     // WS 推播與本地 createDismissalCall 的 HTTP response 是不同通道，前者偶爾會
     // 更早抵達：這個瞬間 activeCalls 已經有這個學生、但 submit() 的 finally 還沒
     // 跑完把 staging 清掉，此處按 studentId 排除，避免同一學生短暫同時出現
@@ -127,8 +150,27 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     const stagingItems = Array.from(staging.entries())
       .filter(([studentId]) => !activeStudentIds.has(studentId))
       .map(([studentId, entry]) => toStagingItem(studentId, entry))
-    // staging（倒數中尚未送出）排最前面，符合『加入後立即出現在合併清單中』。
-    return [...stagingItems, ...activeItems]
+    // 今日 completed 記錄保留在佇列尾端（phase='done'）供回顧，不再從右欄消失。
+    // 同一學生若正被再次通知（staging 倒數中或已有 active call），舊的 completed
+    // 卡先讓位給進行中的那張，避免同一學生同時出現兩張卡；同一學生多筆
+    // completed 只留 completed_at 最新的一筆，依 completed_at 新→舊排序。
+    const stagingStudentIds = new Set(stagingItems.map(i => i.studentId))
+    const latestDoneByStudent = new Map<number, DismissalCallView>()
+    for (const call of activeCalls.value) {
+      if (call.status !== 'completed') continue
+      const sid = Number(call.student_id ?? 0)
+      if (activeStudentIds.has(sid) || stagingStudentIds.has(sid)) continue
+      const prev = latestDoneByStudent.get(sid)
+      if (!prev || String(call.completed_at ?? '') > String(prev.completed_at ?? '')) {
+        latestDoneByStudent.set(sid, call)
+      }
+    }
+    const doneItems = Array.from(latestDoneByStudent.values())
+      .sort((a, b) => String(b.completed_at ?? '').localeCompare(String(a.completed_at ?? '')))
+      .map(toDoneItem)
+    // staging（倒數中尚未送出）排最前面，符合『加入後立即出現在合併清單中』；
+    // done（已放學）殿後。
+    return [...stagingItems, ...activeItems, ...doneItems]
   })
 
   /**
@@ -210,6 +252,9 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
    * 後端沒動，靜默留下錯誤認知。
    */
   async function cancel(item: PosQueueItem) {
+    // done（已放學）純回顧顯示，後端 completed 狀態沒有取消語意；卡片本身已
+    // 停用 swipe（見 DismissalPosQueueCard），這裡再防呆一層避免誤打 API 收 409。
+    if (item.phase === 'done') return
     if (item.phase === 'staging') {
       const entry = staging.get(item.studentId)
       if (entry) {

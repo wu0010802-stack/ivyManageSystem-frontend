@@ -30,17 +30,20 @@ export interface PosQueueCountdown {
 }
 
 /**
- * 右側佇列的單一項目——staging（倒數中尚未送出）與 active（後端已存在的
- * dismissal call）兩種狀態的統一形狀，由 phase 判別：
+ * 右側佇列的單一項目——staging（倒數中尚未送出）／active（後端進行中的
+ * dismissal call）／done（今日已放學完成，保留在佇列尾端供回顧）三種狀態的
+ * 統一形狀，由 phase 判別：
  * - phase='staging'：countdown 必有值、call 為 null；id 是本地暫用識別碼
  *   （非後端 call id，格式見 useDismissalPosQueue.ts，例如 `staging:<studentId>`）
  * - phase='active'：call 必有值（既有 DismissalCallView，含 status/expected_arrival_at
  *   /arrived_at 等，供 T-009 重用 useDismissalUrgency 的 ETA/等候時間邏輯）、countdown 為 null；
  *   id 是後端 dismissal call 的數字 id
+ * - phase='done'：status=completed 的 call，欄位形狀同 active；不可滑動取消
+ *   （後端已完成的通知沒有取消語意），排在所有 staging/active 之後
  */
 export interface PosQueueItem {
   id: string | number
-  phase: 'staging' | 'active'
+  phase: 'staging' | 'active' | 'done'
   studentId: number
   studentName: string
   classroomName: string
