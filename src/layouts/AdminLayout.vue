@@ -185,6 +185,11 @@ onUnmounted(() => {
   padding: var(--space-8);
   max-width: 1600px;
   margin: 0 auto;
+  /* 讓子頁面（如接送管理 POS 佈局）可用 height:100% 接上這條「已知邊界」的鏈，
+     自行改造成固定高度＋內部各自捲動；一般頁面內容仍照舊自然撐高、由
+     .el-main 的 overflow-y:auto 捲動（overflow 預設 visible，未主動要求捲動的
+     頁面完全不受影響）。 */
+  height: 100%;
 }
 
 /* Mobile overlay */

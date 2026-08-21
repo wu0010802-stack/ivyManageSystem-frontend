@@ -63,7 +63,19 @@ describe('useDismissalPosQueue', () => {
     stop()
   })
 
-  it('5000ms 後 staging 項目消失，createDismissalCall 恰被呼叫一次且參數正確', async () => {
+  it('5000ms 後 staging 項目轉為 active 且持續顯示（不等 activeCalls／WS 更新），createDismissalCall 恰被呼叫一次且參數正確', async () => {
+    vi.mocked(createDismissalCall).mockResolvedValueOnce({
+      data: {
+        id: 200,
+        student_id: 1,
+        student_name: '王小明',
+        classroom_id: 13,
+        classroom_name: '天堂鳥',
+        status: 'pending',
+        requested_at: '2026-08-21T08:00:00+08:00',
+        request_source: 'staff',
+      },
+    })
     const activeCalls = ref<DismissalCallView[]>([])
     const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
 
@@ -74,7 +86,68 @@ describe('useDismissalPosQueue', () => {
 
     expect(createDismissalCall).toHaveBeenCalledTimes(1)
     expect(createDismissalCall).toHaveBeenCalledWith({ student_id: 1, classroom_id: 13 })
+    // 送出成功後不能整個消失：activeCalls 模擬 WS 尚未追上（仍是空陣列），
+    // 但這筆通知要用 createDismissalCall 的 response 直接持續顯示在右欄，
+    // 不能只靠外部 activeCalls／WS 才補回來。
+    expect(api.queue.value).toHaveLength(1)
+    expect(api.queue.value[0].phase).toBe('active')
+    expect(api.queue.value[0].id).toBe(200)
+    stop()
+  })
+
+  it('createDismissalCall 成功但 response 缺 id（後端回應形狀跑掉，型別上是 unknown）時不建立本地樂觀項目、不噴錯', async () => {
+    vi.mocked(createDismissalCall).mockResolvedValueOnce({ data: { message: 'ok' } })
+    const activeCalls = ref<DismissalCallView[]>([])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    api.addToQueue(student)
+    await vi.advanceTimersByTimeAsync(5000)
+
+    // fail-safe：不塞畸形資料進佇列，靜默交回 WS/輪詢（原本 D2/D5 依賴的路徑）。
     expect(api.queue.value).toHaveLength(0)
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    stop()
+  })
+
+  it('本地樂觀 active 項目在 activeCalls 追上（該 id 出現，不論狀態）後改用外部版本，不重複渲染也不資料漂移', async () => {
+    vi.mocked(createDismissalCall).mockResolvedValueOnce({
+      data: { id: 200, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'pending' },
+    })
+    const activeCalls = ref<DismissalCallView[]>([])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    api.addToQueue(student)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.queue.value).toHaveLength(1)
+
+    // WS/輪詢追上：同一 id 狀態已變 acknowledged（老師已確認）
+    activeCalls.value = [
+      { id: 200, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'acknowledged' },
+    ]
+
+    expect(api.queue.value.filter(i => i.id === 200)).toHaveLength(1)
+    stop()
+  })
+
+  it('cancel 本地樂觀 active 項目（activeCalls 尚未追上）會呼叫 cancelDismissalCall 並讓卡片消失，不會卡死在右欄', async () => {
+    vi.mocked(createDismissalCall).mockResolvedValueOnce({
+      data: { id: 201, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'pending' },
+    })
+    const activeCalls = ref<DismissalCallView[]>([])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    api.addToQueue(student)
+    await vi.advanceTimersByTimeAsync(5000)
+    const item = api.queue.value.find(i => i.id === 201)
+    expect(item).toBeTruthy()
+
+    await api.cancel(item!)
+
+    expect(cancelDismissalCall).toHaveBeenCalledWith(201)
+    // POS active 檢視下「已取消」是直接從 calls.value 濾除、不是 upsert（見
+    // DismissalQueueView.vue handleWsEvent），activeCalls 可能永遠不會再出現
+    // 這個 id——若沒主動清 localActiveCalls，卡片會卡死在右欄。
+    expect(api.queue.value.filter(i => i.id === 201)).toHaveLength(0)
     stop()
   })
 
@@ -256,7 +329,11 @@ describe('useDismissalPosQueue', () => {
     // 手動控制 createDismissalCall 的 resolve 時機，模擬「API 呼叫進行中」的窗口。
     let resolveCreate!: () => void
     vi.mocked(createDismissalCall).mockImplementationOnce(
-      () => new Promise((resolve) => { resolveCreate = () => resolve({ data: {} }) }),
+      () => new Promise((resolve) => {
+        resolveCreate = () => resolve({
+          data: { id: 300, student_id: 1, student_name: '王小明', classroom_name: '天堂鳥', status: 'pending' },
+        })
+      }),
     )
     const activeCalls = ref<DismissalCallView[]>([])
     const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
@@ -273,13 +350,20 @@ describe('useDismissalPosQueue', () => {
     api.addToQueue(student)
     expect(api.queue.value.filter(i => i.phase === 'staging')).toHaveLength(1)
 
-    // 現在才讓 E1 的 createDismissalCall 完成
+    // 現在才讓 E1 的 createDismissalCall 完成——E1 實際上已在後端建立成功，
+    // 本地樂觀 active 項目（id 300）會出現；E2 與它是同一學生，此刻在合併
+    // 清單中被暫時併入 E1 的 active 顯示（避免同一學生同時出現 staging + active
+    // 兩張卡，見 queue computed 的 activeStudentIds dedup），但這只影響「畫面
+    // 上顯示哪一張卡」，E2 底層的 staging entry 沒有被誤刪。
     resolveCreate()
     await Promise.resolve()
     await Promise.resolve()
+    expect(createDismissalCall).toHaveBeenCalledTimes(1)
 
-    // E2 不應被誤刪：卡片仍在合併清單中
-    expect(api.queue.value.filter(i => i.phase === 'staging')).toHaveLength(1)
+    // 驗證 E2 沒有被誤刪的關鍵證據：等它自己的 5000ms 到，仍會照常呼叫
+    // createDismissalCall 第二次（若被誤刪，timer 早已被 clearTimeout，不會再呼叫）。
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(createDismissalCall).toHaveBeenCalledTimes(2)
     stop()
   })
 })
