@@ -22,6 +22,7 @@ export type UrgencyLevel = 'normal' | 'warning' | 'critical'
 /** 接送通知 payload 的最小形狀（管理端 / portal 共用欄位，見後端 _call_base_dict）。 */
 export interface DismissalCallView {
   id: number
+  student_id?: number
   student_name?: string
   classroom_name?: string
   status?: string

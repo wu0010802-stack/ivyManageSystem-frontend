@@ -7,6 +7,18 @@
  *
  * 這裡的 getClassrooms 假件刻意複製後端語義：不帶 current_only=false 就只回當期班級，
  * 所以「畫面顯示正確班名」這件事只有在前端真的把參數帶對時才會綠。
+ *
+ * 【T-012 改版】isActiveView 原本的「搜尋框＋待接送看板＋點名單」三段已換成
+ * DismissalPosBoard（三欄 POS 佈局，D7）。原本用 `.roster-group__name` 直接
+ * 在本檔 DOM 斷言的寫法不再適用——shallowMount 下 DismissalPosBoard 本身也是
+ * stub，實際分班/去重（buildRoster）邏輯現在活在 DismissalPosStudentGrid.vue
+ * 內（另有自己的 __tests__ 覆蓋）。這裡改成斷言 loadClassrooms/loadStudents
+ * 撈回來的資料有沒有「正確、完整」地當作 props 傳給 DismissalPosBoard——這正是
+ * 本檔原本要保護的迴歸點（current_only 參數有沒有帶對），只是斷言的觀察點從
+ * 「畫面上看到的班名」往前移到「餵給 POS 元件的 props」。「其他班級」/「未分班」
+ * 這兩種非正常班級分組的提示文字，POS 版重新設計後沒有對應的 UI（左欄班級列表
+ * 只列出 props.classrooms 裡的真實班級，沒有「其他班級」/「未分班」這種合成分組
+ * 可以選），屬於已知、記錄在 T-012 notes 的能力落差，這裡不再測試該情境。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount, flushPromises } from '@vue/test-utils'
@@ -84,7 +96,7 @@ class FakeWebSocket {
 vi.stubGlobal('WebSocket', FakeWebSocket)
 
 import DismissalQueueView from '@/views/DismissalQueueView.vue'
-import { getStudents } from '@/api/students'
+import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
 
 const globalConfig = {
   stubs: { teleport: true, 'el-table-column': { template: '<span />' } },
@@ -96,41 +108,27 @@ const mountView = async () => {
   return wrapper
 }
 
-const groupNames = (wrapper: ReturnType<typeof shallowMount>) =>
-  wrapper.findAll('.roster-group__name').map(n => n.text())
+/** DismissalPosBoard 收到的 classrooms/students props（shallowMount 下它本身是 stub，不深入渲染）。 */
+const posBoardProps = (wrapper: ReturnType<typeof shallowMount>) =>
+  wrapper.findComponent(DismissalPosBoard).props()
 
 describe('DismissalQueueView 點名單班級歸屬', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('學生編在非當期學年的班級時，仍顯示實際班名而非「未分班」', async () => {
+  it('學生編在非當期學年的班級時，DismissalPosBoard 仍收到該班的正確班級資料（不受 current_only 影響）', async () => {
     const wrapper = await mountView()
-    const names = groupNames(wrapper)
-    expect(names).toContain('天堂鳥')
-    expect(names).not.toContain('未分班')
+    const { classrooms } = posBoardProps(wrapper)
+    // 115-1 天堂鳥（id 13）屬於非當期學年，只有 current_only=false 撈回全部班級時才拿得到。
+    expect(classrooms.map((c: { id: number }) => c.id)).toContain(13)
   })
 
-  it('三位學生分屬三個班級，不會被擠進同一組', async () => {
+  it('三位分屬三個班級的學生都完整傳給 DismissalPosBoard，沒有任何學生被漏掉', async () => {
     const wrapper = await mountView()
-    expect(groupNames(wrapper)).toHaveLength(3)
-  })
-
-  // 班級被停用（getClassrooms 預設不回 inactive）時學生仍會落在「其他班級」，
-  // 只給組名的話老師無從判斷這排 chip 是不是壞的、能不能點。
-  it('「其他班級」註明仍可通知，「未分班」註明無法通知', async () => {
-    vi.mocked(getStudents).mockResolvedValueOnce({
-      data: {
-        items: [
-          { id: 9, name: '林小安', classroom_id: 777 }, // 已停用／查不到的班
-          { id: 8, name: '黃小百', classroom_id: null }, // 真的沒有班級
-        ],
-      },
-    } as never)
-    const wrapper = await mountView()
-    expect(groupNames(wrapper)).toEqual(['其他班級', '未分班'])
-    expect(wrapper.findAll('.roster-group__hint').map(n => n.text())).toEqual([
-      '班級不在目前清單中，仍可通知',
-      '沒有班級，無法通知',
-    ])
+    const { students } = posBoardProps(wrapper)
+    expect(students).toHaveLength(3)
+    expect(new Set(students.map((s: { classroom_id: number }) => s.classroom_id))).toEqual(
+      new Set([13, 22, 24]),
+    )
   })
 
   it('班級篩選只列出有在籍學生的班級，跨學年同名班帶學期標籤', async () => {
