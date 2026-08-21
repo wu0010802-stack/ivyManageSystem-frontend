@@ -53,10 +53,18 @@ vi.mock('@/composables/usePortalDismissalAlerts', () => ({
 }))
 
 // ─── Mock useDismissalUrgency（useNowClock 供計時）────────
-vi.mock('@/composables/useDismissalUrgency', () => ({
-  useNowClock: () => ({ now: ref(new Date()) }),
-  sortByOldestFirst: (calls) => [...calls],
-}))
+// partial mock（importOriginal）：只覆寫需要決定性的 useNowClock 與排序，
+// 其餘 export（isPreArrivalNotice / formatExpectedArrival / etaRelativeText…）
+// 用真實實作——view 新增使用任何 export 都不會再因 mock 缺項而掛載炸掉
+// （2026-08-21 CI 紅根因：pnotice01 後 view 用了 isPreArrivalNotice，這裡沒補）。
+vi.mock('@/composables/useDismissalUrgency', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useNowClock: () => ({ now: ref(new Date()) }),
+    sortByOldestFirst: (calls) => [...calls],
+  }
+})
 
 // ─── Mock element-plus（ElMessageBox.confirm 給 handleComplete）
 vi.mock('element-plus', async (importOriginal) => {
