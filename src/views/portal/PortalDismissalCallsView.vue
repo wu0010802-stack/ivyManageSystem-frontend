@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Bell, CircleCheck, Mute, Refresh } from '@element-plus/icons-vue'
 import {
   acknowledgeDismissalCall,
@@ -56,38 +56,20 @@ const testSound = () => {
 }
 
 // ─── 確認已收到 ──────────────────────────────────────────
+// 教師端不再有獨立「帶出去放學」步驟：按下「我收到了」即視為完成。
+// 家長已在門口（或 staff 舊流程建立，arrived_at 已寫入）→ 確認已收到後立即帶出放學。
+// 家長預告尚未抵達 → 先標記已收到；待 usePortalDismissalAlerts 收到
+// dismissal_call_arrived 事件（家長抵達門口）時自動完成放學，教師不需再操作第二次。
 const handleAcknowledge = async (call: DismissalCall) => {
   try {
     await acknowledgeDismissalCall(call.id)
-    const idx = activeCalls.value.findIndex(c => c.id === call.id)
-    if (idx !== -1) activeCalls.value[idx].status = 'acknowledged'
-  } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '操作失敗')
-  }
-}
-
-// ─── 確認已放學 ──────────────────────────────────────────
-// 此操作無法撤銷（後端無 reverse-complete 端點，且家長端會收到放學通知），
-// 因此先二次確認再送出。
-const handleComplete = async (call: DismissalCall) => {
-  try {
-    await ElMessageBox.confirm(
-      `確定 ${call.student_name}（${call.classroom_name}）已交給家長放學？\n此操作無法撤銷，家長端將收到放學通知。`,
-      '確認放學',
-      {
-        confirmButtonText: '確定放學',
-        cancelButtonText: '返回',
-        type: 'warning',
-      },
-    )
-  } catch {
-    return // 使用者取消
-  }
-  try {
+    if (isPreArrivalNotice(call)) {
+      const idx = activeCalls.value.findIndex(c => c.id === call.id)
+      if (idx !== -1) activeCalls.value[idx].status = 'acknowledged'
+      return
+    }
     await completeDismissalCall(call.id)
     activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
-    ElMessage.success('已標記為放學')
   } catch (e) {
     const err = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(err.response?.data?.detail || '操作失敗')
@@ -200,21 +182,8 @@ onMounted(() => {
               class="act-btn"
               @click="handleAcknowledge(call)"
             >我收到了</el-button>
-            <!-- 家長預告尚未抵達：不可帶出去放學（後端 409 為最終防線）；
-                 dismissal_call_arrived 事件到達後按鈕自動解鎖 -->
-            <el-button
-              v-else-if="call.status === 'acknowledged' && isPreArrivalNotice(call)"
-              type="success"
-              class="act-btn"
-              disabled
-              data-testid="portal-complete-locked"
-            >家長尚未抵達</el-button>
-            <el-button
-              v-else-if="call.status === 'acknowledged'"
-              type="success"
-              class="act-btn"
-              @click="handleComplete(call)"
-            >帶出去放學</el-button>
+            <!-- acknowledged：教師端已完成操作。家長尚未抵達時等待
+                 dismissal_call_arrived 事件自動完成放學，不需教師再次操作。 -->
           </template>
         </DismissalCallCard>
       </TransitionGroup>

@@ -10,7 +10,7 @@
  * 純前端：不依賴後端推播。由 PortalLayout 呼叫 initPortalDismissalAlerts() 一次。
  */
 import { ref, computed } from 'vue'
-import { getPortalDismissalCalls } from '@/api/dismissalCalls'
+import { getPortalDismissalCalls, completeDismissalCall } from '@/api/dismissalCalls'
 import {
   classifyWebSocketClose,
   closeWebSocketSafely,
@@ -269,6 +269,19 @@ function isActiveStatus(status?: string): boolean {
   return status !== 'completed' && status !== 'cancelled'
 }
 
+// 教師端不再有「帶出去放學」按鈕：老師按「我收到了」時若家長預告尚未抵達，
+// 通知先停在 acknowledged；家長此刻抵達門口（dismissal_call_arrived）才補一刀
+// 自動完成放學，教師不需再操作第二次。422/網路錯誤靜默吞掉——多半是已被
+// 其他路徑完成，稍後 dismissal_call_updated 廣播到達時狀態仍會正確收斂。
+async function autoCompleteOnArrival(callId: number): Promise<void> {
+  try {
+    await completeDismissalCall(callId)
+    const idx = activeCalls.value.findIndex((c) => c.id === callId)
+    if (idx !== -1) activeCalls.value.splice(idx, 1)
+    wsRecentlyCreated.delete(callId)
+  } catch { /* ignore：見上方註解 */ }
+}
+
 // server 快照為權威基準，但【保留】在此 fetch 發出之後才由 WS 加入、快照尚未涵蓋、且仍在
 // 進行中的接送卡——否則晚到的 HTTP 快照會抹除剛由 WS 新增/播報過的卡（純 fetch-vs-fetch
 // seq guard 不足，因 WS created 事件不會 bump fetch seq）。反之，快照缺席但於 fetch 發出
@@ -427,6 +440,10 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
       notifyBrowser(payload, `${payload.student_name || '學生'}家長已到門口，請準備放學`)
       playAlert(payload, '家長已到門口，請準備放學')
       liveAnnounce.value = `${payload.student_name || '學生'}家長已到門口，請準備放學`
+    }
+    // 教師已按過「我收到了」（acknowledged）且家長此刻才抵達：自動完成放學。
+    if (payload.status === 'acknowledged') {
+      autoCompleteOnArrival(payload.id)
     }
   } else if (type === 'dismissal_call_updated') {
     const idx = activeCalls.value.findIndex((c) => c.id === payload.id)
