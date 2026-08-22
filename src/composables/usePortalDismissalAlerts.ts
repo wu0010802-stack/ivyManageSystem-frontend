@@ -11,6 +11,7 @@
  */
 import { ref, computed } from 'vue'
 import { getPortalDismissalCalls, completeDismissalCall } from '@/api/dismissalCalls'
+import { drawSoftChime } from '@/composables/useDismissalChime'
 import {
   classifyWebSocketClose,
   closeWebSocketSafely,
@@ -110,7 +111,7 @@ const CHIME_PEAK_GAIN = 0.12
 
 // 家長預告（尚未抵達）的柔和提示：單音、低音量、無震動無語音。
 // 強提醒（三音+震動+語音）保留給「已到門口」與 staff 即時通知。
-const SOFT_CHIME_GAIN = 0.06
+// 音色描繪與後台接送佇列的 useDismissalReservationChime 共用，見 useDismissalChime.ts。
 function playSoftChime(): void {
   if (muted.value) return
   try {
@@ -120,17 +121,7 @@ function playSoftChime(): void {
       audioCtx = new Ctx()
     }
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {})
-    const t0 = audioCtx.currentTime
-    const osc = audioCtx.createOscillator()
-    const gain = audioCtx.createGain()
-    osc.type = 'triangle'
-    osc.frequency.value = 523.25 // C5 單音
-    gain.gain.setValueAtTime(0, t0)
-    gain.gain.linearRampToValueAtTime(SOFT_CHIME_GAIN, t0 + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3)
-    osc.connect(gain).connect(audioCtx.destination)
-    osc.start(t0)
-    osc.stop(t0 + 0.32)
+    drawSoftChime(audioCtx)
   } catch { /* ignore */ }
 }
 

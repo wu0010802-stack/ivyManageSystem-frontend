@@ -23,6 +23,7 @@ import type { DismissalPosStudentCardStudent } from './DismissalPosStudentCard.v
 import type { RosterStudentInput, ClassroomInput } from '@/composables/useDismissalRoster'
 import type { DismissalCallView } from '@/composables/useDismissalUrgency'
 import { useDismissalPosQueue } from '@/composables/useDismissalPosQueue'
+import { useDismissalReservationChime } from '@/composables/useDismissalReservationChime'
 
 const props = defineProps<{
   classrooms: ClassroomInput[]
@@ -53,6 +54,8 @@ const classroomRailItems = computed(() =>
 
 const activeCalls = computed(() => props.calls)
 const { queue, addToQueue, cancel } = useDismissalPosQueue(activeCalls)
+// 右欄家長預約倒數 10 / 5 分鐘柔和提示（見 useDismissalReservationChime.ts）。
+useDismissalReservationChime(activeCalls)
 
 function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
   if (selectedClassroomId.value == null) return
