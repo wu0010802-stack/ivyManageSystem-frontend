@@ -64,10 +64,9 @@ function doneItem(overrides: Partial<PosQueueItem> = {}): PosQueueItem {
   }
 }
 
-/** 讓 body 元素有非零寬度，模擬真實 layout，讓 useSwipeToCancel 的閾值計算生效。 */
-function withMeasuredWidth(wrapper: ReturnType<typeof mount>, width = 200) {
+/** 補上 pointer capture no-op stub（happy-dom 未必實作），供 useSwipeReveal 呼叫。 */
+function withPointerCaptureStub(wrapper: ReturnType<typeof mount>) {
   const body = wrapper.find('[data-testid="pos-queue-card-body"]').element as HTMLElement
-  Object.defineProperty(body, 'offsetWidth', { value: width, configurable: true })
   body.setPointerCapture = vi.fn()
   body.releasePointerCapture = vi.fn()
   return body
@@ -157,29 +156,47 @@ describe('DismissalPosQueueCard', () => {
     })
   })
 
-  describe('swipe 取消', () => {
-    it('swipe 手勢完成後 emit cancel(item) 恰一次', async () => {
-      const item = activeItem()
-      const w = mount(DismissalPosQueueCard, { props: { item } })
-      const body = withMeasuredWidth(w)
+  describe('swipe 取消（滑開才出現取消鈕，需再點按鈕才真正取消）', () => {
+    it('向左滑動超過開啟閾值鬆手：卡片彈開露出取消鈕，但不會立即 emit cancel', async () => {
+      const w = mount(DismissalPosQueueCard, { props: { item: activeItem() } })
+      const body = withPointerCaptureStub(w)
 
       await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
-      await body.dispatchEvent(new PointerEvent('pointermove', { clientX: 100, pointerId: 1 })) // 100/200=50%>40%
-      await body.dispatchEvent(new PointerEvent('pointerup', { clientX: 100, pointerId: 1 }))
+      await body.dispatchEvent(new PointerEvent('pointermove', { clientX: -60, pointerId: 1 })) // 60/84≈71%>45%
+      await body.dispatchEvent(new PointerEvent('pointerup', { clientX: -60, pointerId: 1 }))
+
+      expect(w.emitted('cancel')).toBeUndefined()
+      expect(w.find('.pos-queue-card__cancel-btn').attributes('disabled')).toBeUndefined()
+    })
+
+    it('彈開後點擊取消鈕才 emit cancel(item) 恰一次，並收合回關閉狀態', async () => {
+      const item = activeItem()
+      const w = mount(DismissalPosQueueCard, { props: { item } })
+      const body = withPointerCaptureStub(w)
+
+      await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
+      await body.dispatchEvent(new PointerEvent('pointermove', { clientX: -60, pointerId: 1 }))
+      await body.dispatchEvent(new PointerEvent('pointerup', { clientX: -60, pointerId: 1 }))
+
+      await w.find('.pos-queue-card__cancel-btn').trigger('click')
 
       const emitted = w.emitted('cancel')
       expect(emitted).toHaveLength(1)
       expect(emitted?.[0]).toEqual([item])
+      expect(w.find('.pos-queue-card__cancel-btn').attributes('disabled')).toBeDefined()
     })
 
-    it('未達閾值的 swipe 不會 emit cancel', async () => {
+    it('未達開啟閾值的 swipe 會回彈，取消鈕維持 disabled，點擊也不會 emit cancel', async () => {
       const w = mount(DismissalPosQueueCard, { props: { item: activeItem() } })
-      const body = withMeasuredWidth(w)
+      const body = withPointerCaptureStub(w)
 
       await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
-      await body.dispatchEvent(new PointerEvent('pointermove', { clientX: 20, pointerId: 1 })) // 20/200=10%<40%
-      await body.dispatchEvent(new PointerEvent('pointerup', { clientX: 20, pointerId: 1 }))
+      await body.dispatchEvent(new PointerEvent('pointermove', { clientX: -10, pointerId: 1 })) // 10/84≈12%<45%
+      await body.dispatchEvent(new PointerEvent('pointerup', { clientX: -10, pointerId: 1 }))
 
+      const btn = w.find('.pos-queue-card__cancel-btn')
+      expect(btn.attributes('disabled')).toBeDefined()
+      await btn.trigger('click')
       expect(w.emitted('cancel')).toBeUndefined()
     })
   })
@@ -201,10 +218,10 @@ describe('DismissalPosQueueCard', () => {
       expect(w.find('.pos-queue-card__done-flag').text().trim()).toBe('✅ 已放學')
     })
 
-    it('swipe 手勢不會 emit cancel（completed 沒有取消語意），swipe 背景也不渲染', async () => {
+    it('swipe 手勢不會 emit cancel（completed 沒有取消語意），取消鈕也不渲染', async () => {
       const w = mount(DismissalPosQueueCard, { props: { item: doneItem() } })
-      expect(w.find('.pos-queue-card__swipe-bg').exists()).toBe(false)
-      const body = withMeasuredWidth(w)
+      expect(w.find('.pos-queue-card__reveal').exists()).toBe(false)
+      const body = withPointerCaptureStub(w)
 
       await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
       await body.dispatchEvent(new PointerEvent('pointermove', { clientX: 100, pointerId: 1 }))

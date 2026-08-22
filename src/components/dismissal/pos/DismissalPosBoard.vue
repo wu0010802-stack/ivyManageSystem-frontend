@@ -91,7 +91,7 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 200px 1fr 360px;
+  grid-template-columns: 200px 1fr 280px;
 }
 
 .pos-board__rail {
@@ -116,7 +116,7 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
 
 @media (max-width: 1023.98px) {
   .pos-board {
-    grid-template-columns: 160px 1fr 300px;
+    grid-template-columns: 160px 1fr 240px;
   }
 }
 </style>

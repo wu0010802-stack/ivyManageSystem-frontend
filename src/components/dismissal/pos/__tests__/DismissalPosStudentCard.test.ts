@@ -14,7 +14,7 @@ describe('DismissalPosStudentCard', () => {
     expect(w.find('.pos-student-card').classes()).not.toContain('is-resolved')
   })
 
-  it('status=guardian_picked 時卡片視覺降階（淡灰）但仍可點擊再次通知，並顯示再次通知提示', async () => {
+  it('status=guardian_picked 時卡片視覺降階（淡灰）但仍可點擊再次通知', async () => {
     const w = mount(DismissalPosStudentCard, {
       props: { student: STUDENT, status: 'guardian_picked' },
     })
@@ -22,7 +22,6 @@ describe('DismissalPosStudentCard', () => {
     expect(w.find('.pos-student-card').classes()).toContain('is-redispatchable')
     expect(w.find('.pos-student-card__status--picked').exists()).toBe(true)
     expect(w.text()).toContain('家長已接送')
-    expect(w.text()).toContain('點卡片可再次通知')
 
     await w.find('.pos-student-card').trigger('click')
     expect(w.emitted('quick-dispatch')).toEqual([[STUDENT]])

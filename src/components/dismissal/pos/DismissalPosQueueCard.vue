@@ -1,15 +1,16 @@
 <script setup lang="ts">
 /**
- * 右欄單張佇列卡片（T-009）：呈現一個 PosQueueItem（staging 倒數中／後端
- * active call），套用 T-004 useSwipeToCancel 做左右滑動取消。
+ * 右欄單張佇列卡片（T-009，2026-08-22 互動調整）：呈現一個 PosQueueItem（staging
+ * 倒數中／後端 active call），套用 useSwipeReveal 做向左滑動露出取消按鈕——鬆手
+ * 只會彈開／回彈，需再點一次露出的取消按鈕才會 emit cancel(item)（不是滑動放開
+ * 就直接觸發，取代舊版 useSwipeToCancel 的一步式手勢）。
  *
  * 家長預約且未抵達的 ETA 顯示重用 useDismissalUrgency.ts 既有的
  * formatExpectedArrival / etaRelativeText（不重造等候/ETA 文案邏輯）。
  *
- * 範圍說明：mockup（docs/mockups/2026-08-20-dismissal-pos-queue.html）對「已送出
- * 通知」的 active call 多做了一層 swipe 後二次確認 strip（避免手滑誤取消已通知
- * 教師端的項目）；T-009 acceptance_criteria 只要求「swipe 完成後 emit cancel(item)
- * 恰一次」，未要求二次確認，本輪不加這層，避免超出 task 範圍——如需要可另拆 task。
+ * 對照 docs/mockups/2026-08-22-dismissal-pos-card-density.html：不分 staging／
+ * active，統一用同一顆滑開才出現的取消按鈕，未額外做「已送出通知」的二次確認 strip
+ * （彈開＋需再點按鈕本身已是一次確認，如需要更強的二次確認可另拆 task）。
  */
 import { computed } from 'vue'
 import {
@@ -17,7 +18,7 @@ import {
   etaRelativeText,
   isPreArrivalNotice,
 } from '@/composables/useDismissalUrgency'
-import { useSwipeToCancel } from '@/composables/useSwipeToCancel'
+import { useSwipeReveal } from '@/composables/useSwipeReveal'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import type { PosQueueItem, PosQueueSource } from '@/types/dismissalPos'
 import DismissalPosCountdownBar from './DismissalPosCountdownBar.vue'
@@ -74,15 +75,27 @@ const doneText = computed(() => {
   return time ? `已放學 ${time}` : '已放學'
 })
 
-const { dragX, reboundInstant, onPointerDown, onPointerMove, onPointerUp, onPointerCancel } =
-  useSwipeToCancel({
-    onCommit: () => emit('cancel', props.item),
-  })
+const {
+  dragX,
+  isOpen,
+  reboundInstant,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  close,
+} = useSwipeReveal()
 
 /** done 卡沒有取消語意：不進入 swipe 手勢，卡片維持靜止。 */
 function handlePointerDown(e: PointerEvent) {
   if (isDone.value) return
   onPointerDown(e)
+}
+
+/** 取消按鈕點擊才是真正觸發業務動作的地方；成功後主動收合，避免卡片移除前殘留彈開狀態。 */
+function handleCancelClick() {
+  emit('cancel', props.item)
+  close()
 }
 
 const bodyStyle = computed(() => ({
@@ -95,7 +108,17 @@ const bodyStyle = computed(() => ({
     class="pos-queue-card"
     :class="[`pos-queue-card--${item.source}`, { 'pos-queue-card--done': isDone }]"
   >
-    <div v-if="!isDone" class="pos-queue-card__swipe-bg" aria-hidden="true">滑動取消</div>
+    <div v-if="!isDone" class="pos-queue-card__reveal">
+      <button
+        type="button"
+        class="pos-queue-card__cancel-btn"
+        :disabled="!isOpen"
+        :tabindex="isOpen ? 0 : -1"
+        @click="handleCancelClick"
+      >
+        取消
+      </button>
+    </div>
     <div
       class="pos-queue-card__body"
       :class="{ 'pos-queue-card__body--rebound-instant': reboundInstant }"
@@ -144,16 +167,30 @@ const bodyStyle = computed(() => ({
   box-shadow: var(--shadow-sm);
 }
 
-.pos-queue-card__swipe-bg {
+.pos-queue-card__reveal {
   position: absolute;
   inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+.pos-queue-card__cancel-btn {
+  width: 84px;
+  border: none;
   background: var(--color-danger);
   color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   font-size: var(--text-sm, 13px);
   font-weight: 700;
+  cursor: pointer;
+}
+
+.pos-queue-card__cancel-btn:disabled {
+  cursor: default;
+}
+
+.pos-queue-card__cancel-btn:not(:disabled):hover {
+  background: var(--color-danger-darker, #b91c1c);
 }
 
 .pos-queue-card__body {

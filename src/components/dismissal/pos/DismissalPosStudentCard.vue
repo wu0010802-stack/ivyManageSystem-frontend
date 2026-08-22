@@ -1,13 +1,16 @@
 <script setup lang="ts">
 /**
- * 中欄單一學生卡片（T-006）：姓名（大字）＋狀態徽章＋3-dots more-icon 選單。
- * status 由父層傳入（吃 T-002 useStudentPosStatus 的輸出），本元件不自己判斷
- * 學生狀態。more-icon 的「已被娃娃車接走」「請假」兩項本輪皆 disabled 且不綁
- * 任何 handler（對齊 D3/D4：本輪不開發後端，只留視覺 placeholder）。
+ * 中欄單一學生卡片（T-006，2026-08-22 密度調整）：姓名（大字）＋狀態徽章＋3-dots
+ * more-icon 選單。status 由父層傳入（吃 T-002 useStudentPosStatus 的輸出），本
+ * 元件不自己判斷學生狀態。more-icon 的「已被娃娃車接走」「請假」兩項本輪皆
+ * disabled 且不綁任何 handler（對齊 D3/D4：本輪不開發後端，只留視覺 placeholder）。
+ *
+ * 對照 docs/mockups/2026-08-22-dismissal-pos-card-density.html：卡片縮小、姓名放大，
+ * 拿掉「👆 點卡片＝現場接送」「👆 點卡片可再次通知」等操作提示文字——只留姓名＋⋮，
+ * 狀態徽章（🌙／🚌／✅）維持不變（那是狀態資訊，不是操作提示）。
  *
  * 卡片本體用 div[role=button]（非 <button>）：more-icon 是巢狀真按鈕，
- * <button> 不能包 <button>（比照 docs/mockups/2026-08-20-dismissal-pos-queue.html
- * 的既有理由）。
+ * <button> 不能包 <button>（比照既有 mockup 的既有理由）。
  */
 import { computed } from 'vue'
 import { ElDropdown, ElDropdownMenu, ElDropdownItem } from 'element-plus'
@@ -105,17 +108,11 @@ function handleDispatch() {
 
     <div class="pos-student-card__name">{{ student.name }}</div>
 
-    <div v-if="statusMeta" class="pos-student-card__resolved-info">
-      <span
-        class="pos-student-card__status"
-        :class="`pos-student-card__status--${statusMeta.tone}`"
-      >{{ statusMeta.icon }} {{ statusMeta.label }}</span>
-      <span
-        v-if="canDispatch"
-        class="pos-student-card__redispatch-hint"
-      >👆 點卡片可再次通知</span>
-    </div>
-    <span v-else class="pos-student-card__tap-hint">👆 點卡片＝現場接送</span>
+    <span
+      v-if="statusMeta"
+      class="pos-student-card__status"
+      :class="`pos-student-card__status--${statusMeta.tone}`"
+    >{{ statusMeta.icon }} {{ statusMeta.label }}</span>
   </div>
 </template>
 
@@ -125,8 +122,8 @@ function handleDispatch() {
   background: var(--surface-color);
   border: 1.5px solid var(--border-color);
   border-radius: var(--radius-lg, 12px);
-  padding: var(--space-4, 16px);
-  min-height: 128px;
+  padding: var(--space-3, 12px);
+  min-height: 88px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -153,18 +150,12 @@ function handleDispatch() {
 }
 
 .pos-student-card__name {
-  font-size: var(--text-xl, 18px);
-  font-weight: var(--font-weight-bold, 700);
+  font-size: var(--text-3xl, 24px);
+  font-weight: 800;
   color: var(--text-primary);
-  line-height: 1.3;
+  line-height: 1.2;
   word-break: break-word;
-}
-
-.pos-student-card__tap-hint {
-  margin-top: var(--space-2, 8px);
-  font-size: var(--text-xs, 12px);
-  color: var(--brand-primary, var(--color-primary));
-  font-weight: 600;
+  padding-right: var(--space-6, 24px);
 }
 
 .pos-student-card__more {
@@ -254,16 +245,4 @@ function handleDispatch() {
   box-shadow: var(--shadow-md);
 }
 
-.pos-student-card__resolved-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1, 4px);
-}
-
-.pos-student-card__redispatch-hint {
-  font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary);
-  font-weight: 600;
-}
 </style>
