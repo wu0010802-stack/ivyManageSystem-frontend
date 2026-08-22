@@ -90,6 +90,29 @@ export function etaRelativeText(
 }
 
 /**
+ * 家長預約接送語音／文字播報：「{班級}班{學生}的家長{N}分鐘後會抵達」。
+ * 教師 Portal（usePortalDismissalAlerts）與後台接送佇列
+ * （useDismissalReservationChime）共用，確保兩端唸法一致。
+ * 無法解析 ETA（已抵達或時間有誤）時退化為「即將抵達」。
+ */
+export function reservationAnnouncementText(
+  call: {
+    student_name?: string
+    classroom_name?: string
+    expected_arrival_at?: string | null
+  },
+  nowMs: number,
+): string {
+  const eta = etaDeltaMinutes(call.expected_arrival_at, nowMs)
+  const etaText = eta != null && eta > 0 ? `${eta}分鐘後會抵達` : '即將抵達'
+  // 部分租戶班級本身即以「XX班」命名（如小班/中班/大班），避免疊字唸成「XX班班」。
+  const classroom = call.classroom_name
+    ? (call.classroom_name.endsWith('班') ? call.classroom_name : `${call.classroom_name}班`)
+    : ''
+  return `${classroom}${call.student_name || '學生'}的家長${etaText}`
+}
+
+/**
  * active queue 排序（管理端與教師端共用，語意單一來源）：
  * 1. 已抵達者優先，依 arrived_at 最舊到最新（等最久的孩子最前）
  * 2. 尚未抵達者依 expected_arrival_at 由近到遠（已超過 ETA 自然排最前）

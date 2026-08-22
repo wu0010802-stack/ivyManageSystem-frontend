@@ -105,7 +105,7 @@ describe('created：預告 vs staff 的提醒強度分流', () => {
     expect(api.activeCalls.value.some((c) => c.id === 101)).toBe(true)
     expect(vibrate).not.toHaveBeenCalled()
     expect(api.liveAnnounce.value).toContain('預告接送')
-    expect(api.liveAnnounce.value).toContain('王小明家長')
+    expect(api.liveAnnounce.value).toContain('王小明的家長')
     expect(api.liveAnnounce.value).not.toContain('等待接送')
   })
 
