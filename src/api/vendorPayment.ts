@@ -1,6 +1,5 @@
 import type { ApiBody, AxiosResp } from './_generated/typed'
 import api, { API_BASE } from './index'
-import type { ApiBody, AxiosResp } from './_generated/typed'
 export { PAYMENT_METHOD_OPTIONS, paymentMethodLabel } from '@/constants/signoff'
 export type { SignoffSummary as VendorPaymentSummary } from '@/constants/signoff'
 
