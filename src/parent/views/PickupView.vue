@@ -281,7 +281,11 @@ onMounted(async () => {
             </div>
             <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
           </div>
-          <div v-if="a.pickup_code" class="auth-code" data-testid="active-pickup-code">
+          <div
+            v-if="a.pickup_code && a.effective_status === 'active'"
+            class="auth-code"
+            data-testid="active-pickup-code"
+          >
             取件碼：<span class="auth-code-value">{{ a.pickup_code }}</span>
           </div>
           <div class="auth-actions">
@@ -330,9 +334,6 @@ onMounted(async () => {
                 <span class="auth-meta">{{ a.person_name }}（{{ a.person_relation }}）· {{ a.pickup_date }}</span>
               </div>
               <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
-            </div>
-            <div v-if="a.pickup_code" class="auth-code" data-testid="history-pickup-code">
-              取件碼：<span class="auth-code-value">{{ a.pickup_code }}</span>
             </div>
           </M3Card>
         </template>

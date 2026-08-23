@@ -139,6 +139,32 @@ describe('PickupView 明碼持續顯示（T-024）', () => {
     expect(w.text()).not.toContain('取件碼：')
   })
 
+  // Review 修復（2026-08-23）：後端已是正確的資安邊界（active 才回傳明碼），
+  // 這裡驗證前端額外的縱深防禦——即使後端未來某次改動不小心讓已結案授權的
+  // pickup_code 沒有正確清空，前端仍不得渲染，不能單靠 `v-if="a.pickup_code"`。
+  it('pickup_code 有值但 effective_status 非 active（模擬後端未清空）時不顯示明碼', async () => {
+    listAuthMock.mockResolvedValue({
+      data: {
+        items: [
+          {
+            id: 4, student_id: 1, student_name: '小明', person_name: '陳阿姨',
+            person_relation: '阿姨', person_phone: '0922', pickup_date: '2026-08-01',
+            status: 'completed', effective_status: 'completed', batch_key: null,
+            pickup_code: '999999',
+          },
+        ],
+      },
+    })
+
+    const w = await mountView()
+    await w.find('.section-toggle').trigger('click')
+    await flushPromises()
+
+    expect(w.find('[data-testid="active-pickup-code"]').exists()).toBe(false)
+    expect(w.find('[data-testid="history-pickup-code"]').exists()).toBe(false)
+    expect(w.text()).not.toContain('999999')
+  })
+
   it('active 授權但 pickup_code 缺漏（undefined／空字串）時不顯示明碼區塊', async () => {
     listAuthMock.mockResolvedValue({
       data: {
