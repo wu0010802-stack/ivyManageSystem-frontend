@@ -8241,10 +8241,11 @@ export interface paths {
          *     - X-Content-Type-Options: nosniff（防 MIME sniffing）
          *     - Cache-Control: no-store（代理 / CDN 不快取含 PII 的 ZIP）
          *
-         *     TODO follow-up：uvicorn access log token redaction（ASGI middleware 攔 query string
-         *     或 --access-log False）。目前 endpoint 本身不 echo token 到 logger，但 uvicorn
-         *     預設 access log 會記完整 URL（含 ?token=...），建議後續 PR 加 ASGI middleware
-         *     做 query string sanitize 或改用 --access-log False。
+         *     Access log token 遮罩：已由 ``MagicLinkLogScrubMiddleware``（main.py 註冊）處理
+         *     ——uvicorn 預設 access log 會記完整 URL（含 ``?token=...``），middleware 在
+         *     ASGI 層把 query string 的 token 換成遮罩值、原始 token 改放 scope。
+         *     （此處原有「待後續 PR 加 middleware」的 TODO，該 middleware 已於 R6-9 落地，
+         *     測試見 tests/test_magic_link_log_scrub.py。）
          */
         get: operations["download_offboarding_bundle_api_offboarding_download_get"];
         put?: never;
@@ -18378,6 +18379,75 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** AlbumDetailOut */
+        AlbumDetailOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Cover Thumb Url */
+            cover_thumb_url: string | null;
+            /** Description */
+            description: string | null;
+            /** Event Date */
+            event_date: string;
+            /** Id */
+            id: number;
+            /** Photo Count */
+            photo_count: number;
+            /** Photos */
+            photos: components["schemas"]["AlbumPhotoOut"][];
+            /** Published At */
+            published_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published";
+            /** Title */
+            title: string;
+            /** Untagged Count */
+            untagged_count: number;
+        };
+        /** AlbumPhotoOut */
+        AlbumPhotoOut: {
+            /** Created At */
+            created_at: string;
+            /** Display Url */
+            display_url: string;
+            /** Id */
+            id: number;
+            /** Original Filename */
+            original_filename: string | null;
+            /** Students */
+            students: components["schemas"]["TaggedStudentOut"][];
+            /** Thumb Url */
+            thumb_url: string | null;
+        };
+        /** AlbumSummaryOut */
+        AlbumSummaryOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Cover Thumb Url */
+            cover_thumb_url: string | null;
+            /** Description */
+            description: string | null;
+            /** Event Date */
+            event_date: string;
+            /** Id */
+            id: number;
+            /** Photo Count */
+            photo_count: number;
+            /** Published At */
+            published_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published";
+            /** Title */
+            title: string;
+            /** Untagged Count */
+            untagged_count: number;
+        };
         /** AlbumUpdate */
         AlbumUpdate: {
             /** Description */
@@ -20884,6 +20954,13 @@ export interface components {
             semester_label: string;
             /** Student Preview */
             student_preview: components["schemas"]["ClassroomStudentPreviewOut"][];
+        };
+        /** ClassroomOptionOut */
+        ClassroomOptionOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /**
          * ClassroomStudentPreviewOut
@@ -28140,6 +28217,33 @@ export interface components {
         PhotoTagsPayload: {
             /** Items */
             items: components["schemas"]["PhotoTagsItem"][];
+        };
+        /** PhotoTagsResultOut */
+        PhotoTagsResultOut: {
+            /** Updated */
+            updated: number;
+        };
+        /**
+         * PhotoUploadItemOut
+         * @description 一次上傳一張的結果。成功帶 photo、失敗帶 error，**兩者互斥且不共存**。
+         *
+         *     端點掛 `response_model_exclude_unset=True` 來保住這個 union 形狀：沒有它，
+         *     成功項目會多冒出 `"error": null`、失敗項目多冒出 `"photo": null`，等於在補型別
+         *     的同時偷改了 wire format。
+         */
+        PhotoUploadItemOut: {
+            /** Error */
+            error?: string | null;
+            /** Filename */
+            filename: string;
+            /** Ok */
+            ok: boolean;
+            photo?: components["schemas"]["UploadedPhotoOut"] | null;
+        };
+        /** PhotoUploadResponseOut */
+        PhotoUploadResponseOut: {
+            /** Items */
+            items: components["schemas"]["PhotoUploadItemOut"][];
         };
         /**
          * PickupAuthorizationCreatedOut
@@ -36544,6 +36648,13 @@ export interface components {
             /** Description */
             description?: string | null;
         };
+        /** TaggedStudentOut */
+        TaggedStudentOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
         /** TeacherImpact */
         TeacherImpact: {
             /** Change */
@@ -37017,6 +37128,17 @@ export interface components {
             permission_names?: string[] | null;
             /** Role */
             role?: string | null;
+        };
+        /** UploadedPhotoOut */
+        UploadedPhotoOut: {
+            /** Display Url */
+            display_url: string;
+            /** Id */
+            id: number;
+            /** Original Filename */
+            original_filename: string | null;
+            /** Thumb Url */
+            thumb_url: string | null;
         };
         /**
          * UptimeWebhookOut
@@ -56486,7 +56608,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"][];
                 };
             };
         };
@@ -56510,7 +56632,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -56541,7 +56663,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -56605,7 +56727,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -56640,7 +56762,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PhotoUploadResponseOut"];
                 };
             };
             /** @description Validation Error */
@@ -56705,7 +56827,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PhotoTagsResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -56736,7 +56858,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -56765,7 +56887,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ClassroomOptionOut"][];
                 };
             };
         };

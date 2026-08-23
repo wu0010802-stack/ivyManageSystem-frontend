@@ -1,72 +1,62 @@
 import api from './index'
-import type { AxiosResponse } from 'axios'
+import type { components } from './_generated/schema'
+import type { AxiosResp } from './_generated/typed'
 
 // ----- 班級相簿（教師端） -----
-// 後端尚未標 response_model → 手動描形（對齊 api/portal/class_albums.py）
-export interface AlbumSummary {
-  id: number
-  classroom_id: number
-  title: string
-  description: string | null
-  event_date: string
-  status: 'draft' | 'published'
-  published_at: string | null
-  photo_count: number
-  untagged_count: number
-  cover_thumb_url: string | null
-}
+// 型別一律來自 OpenAPI codegen（後端 api/portal/class_albums.py 已標 response_model）。
+// 本檔曾手刻 interface 描形，其中 thumb_url / original_filename 漏標 null，實際後端
+// 兩者都可能是 null——手描形跟不上後端是遲早的事，故改為型別由契約長出來。
+// 下方 export 的別名只是把 codegen 的 schema 名字換成呼叫端慣用的名字，保持既有
+// import 不必改；欄位形狀完全由後端決定。
+type Schemas = components['schemas']
 
-export interface AlbumClassroomOption {
-  id: number
-  name: string
-}
+export type AlbumSummary = Schemas['AlbumSummaryOut']
+export type AlbumClassroomOption = Schemas['ClassroomOptionOut']
+export type AlbumTaggedStudent = Schemas['TaggedStudentOut']
+export type AlbumPhoto = Schemas['AlbumPhotoOut']
+export type AlbumDetail = Schemas['AlbumDetailOut']
+export type PhotoUploadResultItem = Schemas['PhotoUploadItemOut']
+export type PhotoUploadResponse = Schemas['PhotoUploadResponseOut']
 
-export interface AlbumTaggedStudent {
-  id: number
-  name: string
-}
+export const listAlbums = (): AxiosResp<'/portal/class-albums', 'get'> =>
+  api.get('/portal/class-albums')
 
-export interface AlbumPhoto {
-  id: number
-  thumb_url: string
-  display_url: string
-  original_filename: string
-  created_at: string
-  students: AlbumTaggedStudent[]
-}
+export const getAlbumClassrooms = (): AxiosResp<'/portal/class-albums/my-classrooms', 'get'> =>
+  api.get('/portal/class-albums/my-classrooms')
 
-export interface AlbumDetail extends AlbumSummary {
-  photos: AlbumPhoto[]
-}
+export const createAlbum = (
+  data: { classroom_id: number; title: string; event_date: string; description?: string },
+): AxiosResp<'/portal/class-albums', 'post'> => api.post('/portal/class-albums', data)
 
-export interface PhotoUploadResultItem {
-  filename: string
-  ok: boolean
-  photo?: AlbumPhoto
-  error?: string
-}
+export const getAlbum = (albumId: number): AxiosResp<'/portal/class-albums/{album_id}', 'get'> =>
+  api.get(`/portal/class-albums/${albumId}`)
 
-export interface PhotoUploadResponse {
-  items: PhotoUploadResultItem[]
-}
-
-export const listAlbums = () =>
-  api.get('/portal/class-albums') as Promise<AxiosResponse<AlbumSummary[]>> // TODO(ts-strict): waiting on backend response_model
-export const getAlbumClassrooms = () =>
-  api.get('/portal/class-albums/my-classrooms') as Promise<AxiosResponse<AlbumClassroomOption[]>> // TODO(ts-strict): waiting on backend response_model
-export const createAlbum = (data: { classroom_id: number; title: string; event_date: string; description?: string }) =>
-  api.post('/portal/class-albums', data) as Promise<AxiosResponse<AlbumSummary>> // TODO(ts-strict): waiting on backend response_model
-export const getAlbum = (albumId: number) =>
-  api.get(`/portal/class-albums/${albumId}`) as Promise<AxiosResponse<AlbumDetail>> // TODO(ts-strict): waiting on backend response_model
-export const updateAlbum = (albumId: number, data: { title?: string; description?: string; event_date?: string }) =>
+export const updateAlbum = (
+  albumId: number,
+  data: { title?: string; description?: string; event_date?: string },
+): AxiosResp<'/portal/class-albums/{album_id}', 'patch'> =>
   api.patch(`/portal/class-albums/${albumId}`, data)
+
 export const deleteAlbum = (albumId: number) => api.delete(`/portal/class-albums/${albumId}`)
-export const uploadAlbumPhotos = (albumId: number, formData: FormData) =>
+
+export const uploadAlbumPhotos = (
+  albumId: number,
+  formData: FormData,
+): AxiosResp<'/portal/class-albums/{album_id}/photos', 'post'> =>
   api.post(`/portal/class-albums/${albumId}/photos`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
-  }) as Promise<AxiosResponse<PhotoUploadResponse>> // TODO(ts-strict): waiting on backend response_model
+  })
+
 export const deleteAlbumPhoto = (albumId: number, attachmentId: number) =>
-  api.delete(`/portal/class-albums/${albumId}/photos/${attachmentId}`) as Promise<AxiosResponse<unknown>> // TODO(ts-strict): waiting on backend response_model
-export const setPhotoTags = (albumId: number, items: Array<{ attachment_id: number; student_ids: number[] }>) =>
+  api.delete(`/portal/class-albums/${albumId}/photos/${attachmentId}`)
+
+export const setPhotoTags = (
+  albumId: number,
+  items: Array<{ attachment_id: number; student_ids: number[] }>,
+): AxiosResp<'/portal/class-albums/{album_id}/photos/tags', 'put'> =>
   api.put(`/portal/class-albums/${albumId}/photos/tags`, { items })
-export const publishAlbum = (albumId: number) => api.post(`/portal/class-albums/${albumId}/publish`)
+
+export const publishAlbum = (
+  albumId: number,
+): AxiosResp<'/portal/class-albums/{album_id}/publish', 'post'> =>
+  api.post(`/portal/class-albums/${albumId}/publish`)
