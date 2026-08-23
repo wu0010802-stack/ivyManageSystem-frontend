@@ -28,6 +28,12 @@ export const generateCertificate = (studentId: number, payload: unknown) =>
 export const listCertificateHistory = (params: unknown = {}) =>
   api.get('/gov-moe/certificates/history', { params })
 
+// 批次開立（1~60 位學生；partial-success，見 BatchGenerateCertResponse）
+export const batchGenerateCertificates = (
+  payload: ApiBody<'/gov-moe/certificates/batch-generate', 'post'>,
+): AxiosResp<'/gov-moe/certificates/batch-generate', 'post'> =>
+  api.post('/gov-moe/certificates/batch-generate', payload)
+
 // --- Special Subsidies (Phase 4B) ---
 export const listSubsidies = (params: unknown = {}) =>
   api.get('/gov-moe/subsidies', { params })

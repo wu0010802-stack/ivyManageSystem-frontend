@@ -65,6 +65,7 @@ function setupStores() {
 
 const STUBS = {
   'router-link': { template: '<a class="rl-stub"><slot /></a>' },
+  teleport: true, // AppModal 用 <Teleport to="body">：stub 掉讓內容留在原地，測試才找得到
 }
 
 let wrapper: VueWrapper | null = null
@@ -72,6 +73,12 @@ async function mountView() {
   wrapper = mount(PickupNoticeView, { global: { stubs: STUBS } })
   await flushPromises()
   return wrapper
+}
+
+/** 「已抵達校門口」流程：點大按鈕 → 二次確認 dialog → 點確定送出。 */
+async function clickArriveNow(w: VueWrapper) {
+  await w.find('[data-testid="pn-arrive-btn"]').trigger('click')
+  await w.find('[data-testid="pn-arrive-confirm-btn"]').trigger('click')
 }
 
 beforeEach(() => {
@@ -82,6 +89,7 @@ beforeEach(() => {
   arriveMock.mockReset()
   cancelMock.mockReset()
   listMock.mockResolvedValue({ data: { items: [], total: 0 } })
+  localStorage.clear()
 })
 
 afterEach(() => {
@@ -90,11 +98,15 @@ afterEach(() => {
 })
 
 describe('建立表單', () => {
-  it('渲染 7 個 ETA chips（5/10/15/20/30/45/60）與辨異提示文案', async () => {
+  it('渲染 3 個常用時間 chips（5/10/20）、滾輪與辨異提示文案', async () => {
     const w = await mountView()
-    for (const m of [5, 10, 15, 20, 30, 45, 60]) {
+    for (const m of [5, 10, 20]) {
       expect(w.find(`[data-testid="pn-eta-chip-${m}"]`).exists()).toBe(true)
     }
+    for (const m of [15, 30, 45, 60]) {
+      expect(w.find(`[data-testid="pn-eta-chip-${m}"]`).exists()).toBe(false)
+    }
+    expect(w.find('[data-testid="pn-eta-wheel"]').exists()).toBe(true)
     expect(w.text()).toContain('這只會通知園所您即將抵達')
     expect(w.text()).toContain('臨時接送授權')
     // 顯示目前選中的學生與班級
@@ -105,7 +117,7 @@ describe('建立表單', () => {
   it('選 ETA chip 後送出 payload 帶 eta_minutes 與 client_request_id', async () => {
     createMock.mockResolvedValue({ data: { ...ACTIVE_NOTICE } })
     const w = await mountView()
-    await w.find('[data-testid="pn-eta-chip-30"]').trigger('click')
+    await w.find('[data-testid="pn-eta-chip-20"]').trigger('click')
     await w.find('[data-testid="pn-note-input"]').setValue('  開白色轎車  ')
     await w.find('[data-testid="pn-submit-btn"]').trigger('click')
     await flushPromises()
@@ -113,7 +125,7 @@ describe('建立表單', () => {
     expect(createMock).toHaveBeenCalledTimes(1)
     const payload = createMock.mock.calls[0][0] as Record<string, unknown>
     expect(payload.student_id).toBe(11)
-    expect(payload.eta_minutes).toBe(30)
+    expect(payload.eta_minutes).toBe(20)
     expect(payload.note).toBe('開白色轎車')
     expect(typeof payload.client_request_id).toBe('string')
     expect((payload.client_request_id as string).length).toBeGreaterThan(8)
@@ -176,18 +188,61 @@ describe('追蹤卡', () => {
     expect(w.find('[data-testid="pn-cancel-btn"]').exists()).toBe(true)
   })
 
-  it('我已到門口：呼叫 arrive 並更新步驟', async () => {
+  it('已抵達校門口（進行中預告）：首次點擊先彈二次確認，確定後才呼叫 arrive', async () => {
     listMock.mockResolvedValue({ data: { items: [ACTIVE_NOTICE], total: 1 } })
     arriveMock.mockResolvedValue({
       data: { ...ACTIVE_NOTICE, arrived_at: '2026-08-14T15:14:00' },
     })
     const w = await mountView()
     await w.find('[data-testid="pn-arrive-btn"]').trigger('click')
+    expect(arriveMock).not.toHaveBeenCalled() // 對話框跳出前不能先送出
+    expect(w.find('[data-testid="pn-arrive-confirm-dialog"]').exists()).toBe(true)
+
+    await w.find('[data-testid="pn-arrive-confirm-btn"]').trigger('click')
     await flushPromises()
     expect(arriveMock).toHaveBeenCalledWith(900)
+    expect(createMock).not.toHaveBeenCalled() // 已有進行中預告，不用重新建立
     expect(w.find('[data-testid="pn-step-arrived"]').classes()).toContain('is-done')
-    // 已抵達後不再顯示「我已到門口」
+    // 已抵達（尚未完成）的中間態不再顯示按鈕，避免重複觸發
     expect(w.find('[data-testid="pn-arrive-btn"]').exists()).toBe(false)
+  })
+
+  it('已抵達校門口（尚無預告）：用最小 eta_minutes 建立一筆後立即標成已到', async () => {
+    createMock.mockResolvedValue({ data: { ...ACTIVE_NOTICE, arrived_at: null } })
+    arriveMock.mockResolvedValue({
+      data: { ...ACTIVE_NOTICE, arrived_at: '2026-08-14T15:00:30' },
+    })
+    const w = await mountView()
+    await clickArriveNow(w)
+    await flushPromises()
+
+    expect(createMock).toHaveBeenCalledTimes(1)
+    const payload = createMock.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.eta_minutes).toBe(1)
+    expect(arriveMock).toHaveBeenCalledWith(900)
+  })
+
+  it('已抵達校門口：勾選「以後不再提示」後，下次（重新整理）點擊不再彈對話框', async () => {
+    listMock.mockResolvedValue({ data: { items: [ACTIVE_NOTICE], total: 1 } })
+    arriveMock.mockResolvedValue({ data: { ...ACTIVE_NOTICE, arrived_at: '2026-08-14T15:14:00' } })
+    const w1 = await mountView()
+
+    await w1.find('[data-testid="pn-arrive-btn"]').trigger('click')
+    await w1.find('[data-testid="pn-arrive-confirm-skip-checkbox"]').setValue(true)
+    await w1.find('[data-testid="pn-arrive-confirm-btn"]').trigger('click')
+    await flushPromises()
+    expect(localStorage.getItem('parent_pn_arrive_skip_confirm')).toBe('1')
+    w1.unmount()
+
+    // 模擬重新整理：同一台裝置（localStorage 沿用），換一筆進行中、尚未抵達的預告
+    listMock.mockResolvedValue({
+      data: { items: [{ ...ACTIVE_NOTICE, id: 901, arrived_at: null }], total: 1 },
+    })
+    const w2 = await mountView()
+    await w2.find('[data-testid="pn-arrive-btn"]').trigger('click')
+    await flushPromises()
+    expect(w2.find('[data-testid="pn-arrive-confirm-dialog"]').exists()).toBe(false)
+    expect(arriveMock).toHaveBeenCalledWith(901)
   })
 
   it('取消預告：兩段式確認後呼叫 cancel、回到建立表單', async () => {
@@ -221,7 +276,8 @@ describe('追蹤卡', () => {
     })
     const w = await mountView()
     expect(w.text()).toContain('今天的接送已完成')
-    expect(w.find('[data-testid="pn-arrive-btn"]').exists()).toBe(false)
+    // 沒有進行中的預告了（已完成）：「已抵達校門口」重新可按，供同一天再次需要時使用
+    expect(w.find('[data-testid="pn-arrive-btn"]').exists()).toBe(true)
     expect(w.find('[data-testid="pn-cancel-btn"]').exists()).toBe(false)
     expect(w.find('[data-testid="pn-create-form"]').exists()).toBe(true)
   })

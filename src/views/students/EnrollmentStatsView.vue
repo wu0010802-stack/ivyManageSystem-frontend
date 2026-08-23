@@ -63,8 +63,9 @@ watch(selectedTerm, () => {
 })
 
 onMounted(async () => {
-  await fetchOptions()
-  await fetchStats()
+  // 效能（2026-08-21）：fetchStats 讀 termStore.school_year/semester、不依賴
+  // fetchOptions 回傳的 termOptions，零交集，改平行發送。
+  await Promise.all([fetchOptions(), fetchStats()])
 })
 
 // ---------------------------------------------------------------------------

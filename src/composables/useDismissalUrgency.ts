@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import { parseTaipeiDate } from '@/utils/taipeiTime'
+import { parseTaipeiDate, formatTaipeiClock } from '@/utils/taipeiTime'
 
 /**
  * 接送通知「等候時間 / 緊急度」共用邏輯。
@@ -22,17 +22,24 @@ export type UrgencyLevel = 'normal' | 'warning' | 'critical'
 /** 接送通知 payload 的最小形狀（管理端 / portal 共用欄位，見後端 _call_base_dict）。 */
 export interface DismissalCallView {
   id: number
+  student_id?: number
   student_name?: string
   classroom_name?: string
   status?: string
   requested_at?: string
   requested_by_name?: string
   note?: string
-  /** pnotice01 家長預告接送：staff（舊流程，視同已在門口）/ parent（預告） */
+  /** pnotice01 家長預告接送：staff（舊流程，視同已在門口）/ parent（預告）/ proxy（委託代理人，T-021） */
   request_source?: string | null
   expected_arrival_at?: string | null
   arrived_at?: string | null
   cancelled_at?: string | null
+  /** T-021 起 request_source='proxy' 才有值：代理人姓名／關係／6 位明碼取件碼，其餘來源恆為 null。 */
+  person_name?: string | null
+  person_relation?: string | null
+  pickup_code?: string | null
+  /** T-022 起 request_source='proxy' 才有值：對應的 pickup_authorizations.id，供辦公室一鍵確認接送呼叫 confirm-visual-match。 */
+  pickup_authorization_id?: number | null
   [key: string]: unknown
 }
 
@@ -56,13 +63,14 @@ export function waitAnchorIso(call: {
   return call.arrived_at || call.requested_at
 }
 
-/** 「預計 HH:MM」（台北時間）。無法解析回空字串。 */
+/**
+ * 「預計 HH:MM」（台北時間）。無法解析回空字串。
+ * 走 formatTaipeiClock 顯式以 Asia/Taipei 格式化——原本的 getHours()/getMinutes()
+ * 吃裝置本地時區，非台灣裝置（與 UTC 的 CI runner）會差 8 小時。
+ */
 export function formatExpectedArrival(iso: string | null | undefined): string {
-  const d = parseTaipeiDate(iso)
-  if (!d) return ''
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `預計 ${hh}:${mm}`
+  const clock = formatTaipeiClock(iso)
+  return clock ? `預計 ${clock}` : ''
 }
 
 /** ETA 差（分鐘，向零取整）：未到為正、已過為負。無法解析回 null。 */
@@ -85,6 +93,29 @@ export function etaRelativeText(
   if (delta > 0) return `還有 ${delta} 分`
   if (delta === 0) return '即將抵達'
   return `預計時間已過 ${-delta} 分`
+}
+
+/**
+ * 家長預約接送語音／文字播報：「{班級}班{學生}的家長{N}分鐘後會抵達」。
+ * 教師 Portal（usePortalDismissalAlerts）與後台接送佇列
+ * （useDismissalReservationChime）共用，確保兩端唸法一致。
+ * 無法解析 ETA（已抵達或時間有誤）時退化為「即將抵達」。
+ */
+export function reservationAnnouncementText(
+  call: {
+    student_name?: string
+    classroom_name?: string
+    expected_arrival_at?: string | null
+  },
+  nowMs: number,
+): string {
+  const eta = etaDeltaMinutes(call.expected_arrival_at, nowMs)
+  const etaText = eta != null && eta > 0 ? `${eta}分鐘後會抵達` : '即將抵達'
+  // 部分租戶班級本身即以「XX班」命名（如小班/中班/大班），避免疊字唸成「XX班班」。
+  const classroom = call.classroom_name
+    ? (call.classroom_name.endsWith('班') ? call.classroom_name : `${call.classroom_name}班`)
+    : ''
+  return `${classroom}${call.student_name || '學生'}的家長${etaText}`
 }
 
 /**

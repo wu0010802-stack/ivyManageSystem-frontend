@@ -59,8 +59,12 @@ export interface RosterGroup {
   students: RosterStudent[]
 }
 
-/** 視為「進行中」的通知狀態（佔用學生、不可重複建立）。 */
-const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['pending', 'acknowledged'])
+/**
+ * 視為「進行中」的通知狀態（佔用學生、不可重複建立）。全 repo 對「這筆通知還在
+ * 走流程」的單一事實來源——useDismissalPosQueue.ts 的右欄 active 佇列判斷也
+ * import 這個常數，避免兩處各自定義同一組字面值。
+ */
+export const ACTIVE_STATUSES: ReadonlySet<string> = new Set(['pending', 'acknowledged'])
 
 const UNASSIGNED_NAME = '未分班'
 const UNKNOWN_NAME = '其他班級'

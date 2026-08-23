@@ -274,6 +274,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 
 import { POS_MODES, computeOwed, formatTWD, normalizeByDateRow } from '@/constants/pos'
+import { todayTaipeiISO } from '@/utils/format'
 
 const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -449,19 +450,14 @@ const placeholder = computed(() => {
 
 function extractDateKey(iso: string | null | undefined) {
   if (!iso) return ''
-  // created_at 為 UTC ISO，以 Asia/Taipei 時區為準切出 YYYY-MM-DD
+  // created_at 為 UTC ISO，以 Asia/Taipei 時區為準切出 YYYY-MM-DD。
+  // 效能（2026-08-21）：原本每次呼叫都新建一個 `Intl.DateTimeFormat`，被
+  // dateMap computed 逐列呼叫成本高；改用 format.ts 既有的 module 級單例
+  // formatter（todayTaipeiISO 雖名為「今日」，實作上是任意 Date → Asia/Taipei
+  // YYYY-MM-DD，POSApprovalView.vue 已有相同用法先例）。
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10)
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d)
-  const y = parts.find((p) => p.type === 'year')?.value
-  const m = parts.find((p) => p.type === 'month')?.value
-  const day = parts.find((p) => p.type === 'day')?.value
-  return `${y}-${m}-${day}`
+  return todayTaipeiISO(d)
 }
 
 // 每日欠款彙總：Map<YYYY-MM-DD, { rows, amount }>

@@ -127,4 +127,33 @@ describe('PortalAlbumDetailView', () => {
     expect(deleteAlbumPhoto).not.toHaveBeenCalled()
     expect(getAlbum).toHaveBeenCalledTimes(1)
   })
+
+  it('縮圖未產生（thumb_url 為 null）時退回原圖，不留破圖', async () => {
+    // 後端 AlbumPhotoOut.thumb_url 是 string | null（Attachment.thumb_key 可能沒產出）。
+    // 本 api wrapper 原本手刻型別誤標成 string，`:src="null"` 會讓 Vue 整個不渲染
+    // src 屬性——畫面上就是破圖。補 response_model 後型別露出真相，這裡鎖住 fallback。
+    vi.mocked(getAlbum).mockResolvedValue({
+      data: {
+        ...detailFixture,
+        photos: [
+          {
+            id: 11,
+            thumb_url: null,
+            display_url: '/d1.jpg',
+            original_filename: null,
+            created_at: '2026-07-25T10:00:00',
+            students: [],
+          },
+        ],
+      },
+    } as never)
+
+    const wrapper = mount(PortalAlbumDetailView)
+    await flushPromises()
+
+    const img = wrapper.find('img.photo-thumb')
+    expect(img.exists()).toBe(true)
+    expect(img.attributes('src')).toBe('/d1.jpg')
+    expect(img.attributes('alt')).toBe('相簿照片')
+  })
 })

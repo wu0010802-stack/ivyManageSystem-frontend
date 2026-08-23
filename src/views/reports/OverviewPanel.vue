@@ -228,7 +228,7 @@ const missingFixedCostMonths = computed(() => {
   return out
 })
 
-// 待簽收數字（廠商付款/雜項收款）：summary 端點不吃年度參數——全期間、全狀態
+// 待補憑證數字（廠商付款/雜項收款）：summary 端點不吃年度參數——全期間、全狀態
 // 拆桶（pending/signed），待辦語意本來就是「現在待處理」，故不傳 year；文案冠
 // 「目前」避免被誤讀為所選年度的數字。null = 查不到（無權限/載入中/失敗/shape
 // 不符），比照上方固定支出檢查模式：查不到就整項不顯示，絕不顯示 0 假資料。
@@ -258,7 +258,7 @@ if (canCheckMiscSignoff) {
 }
 
 // 簽收連結四態：hidden（兩權限皆無，連 /finance-signoffs 都進不去）/
-// action（有待簽收，數字已列在待辦清單）/ omitted（兩來源皆確知 0 筆，無事可辦）/
+// action（有待補憑證，數字已列在待辦清單）/ omitted（兩來源皆確知 0 筆，無事可辦）/
 // neutral（至少一來源查不到——無權限或失敗——不能宣稱「無待辦」，給中性導覽連結）。
 const signoffLinkState = computed<'hidden' | 'action' | 'omitted' | 'neutral'>(() => {
   if (!canCheckVendorSignoff && !canCheckMiscSignoff) return 'hidden'
@@ -285,13 +285,13 @@ const todoItems = computed<TodoItem[]>(() => {
   if (vendorSignoff.value && vendorSignoff.value.count > 0) {
     items.push({
       key: 'vendor-pending',
-      text: `目前 ${vendorSignoff.value.count} 筆廠商付款待簽收（${money(vendorSignoff.value.amount)}）`,
+      text: `目前 ${vendorSignoff.value.count} 筆廠商付款待補憑證（${money(vendorSignoff.value.amount)}）`,
     })
   }
   if (miscSignoff.value && miscSignoff.value.count > 0) {
     items.push({
       key: 'misc-pending',
-      text: `目前 ${miscSignoff.value.count} 筆雜項收款待簽收（${money(miscSignoff.value.amount)}）`,
+      text: `目前 ${miscSignoff.value.count} 筆雜項收款待補憑證（${money(miscSignoff.value.amount)}）`,
     })
   }
   return items
@@ -389,8 +389,8 @@ const formatFetchedAt = (ts: number) => {
           >
             <el-icon :size="14"><LinkIcon /></el-icon>
             {{ signoffLinkState === 'action'
-              ? '前往「收支簽收」處理待簽收項目'
-              : '廠商付款／雜項收款簽收狀態請至「收支簽收」查看' }}
+              ? '前往「收付款管理」處理待補憑證項目'
+              : '廠商付款／雜項收款憑證狀態請至「收付款管理」查看' }}
           </router-link>
         </el-card>
       </el-col>
@@ -465,7 +465,7 @@ const formatFetchedAt = (ts: number) => {
           <dt>狀態篩選</dt>
           <dd>
             薪資僅計入已封存且不需重算的紀錄（草稿/待重算不計入，避免中間態影響管理層數字）；
-            廠商付款與雜項收款「待簽收」與「已簽收」皆計入；才藝收支僅計入未作廢紀錄。
+            廠商付款與雜項收款「待補憑證」與「已附憑證」皆計入；才藝收支僅計入未作廢紀錄。
           </dd>
           <dt>KPI 口徑</dt>
           <dd>

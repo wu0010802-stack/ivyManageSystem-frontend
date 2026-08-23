@@ -12,6 +12,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
+import AppModal from '../components/AppModal.vue'
 import {
   createDismissalNotice,
   listDismissalNotices,
@@ -33,8 +34,12 @@ interface ChildItem {
   classroom_name?: string | null
 }
 
-const ETA_OPTIONS = [5, 10, 15, 20, 30, 45, 60]
+const ETA_OPTIONS = [5, 10, 20]
 const NOTE_MAX = 200
+const WHEEL_ITEM_H = 44
+const WHEEL_MIN = 1
+const WHEEL_MAX = 60
+const ARRIVE_SKIP_CONFIRM_KEY = 'parent_pn_arrive_skip_confirm'
 
 const childrenStore = useChildrenStore()
 const { selectedId, setSelected, ensureSelected } = useChildSelection()
@@ -52,9 +57,12 @@ const actioning = ref(false)
 const errorText = ref('')
 const confirmCancel = ref(false)
 
-const etaMinutes = ref(15)
+const etaMinutes = ref(10)
 const note = ref('')
 const clientRequestId = ref(genClientRequestId())
+const wheelScrollEl = ref<HTMLElement | null>(null)
+const arriveConfirmOpen = ref(false)
+const arriveConfirmSkipCheckbox = ref(false)
 
 function genClientRequestId(): string {
   try {
@@ -67,12 +75,58 @@ function genClientRequestId(): string {
 
 /** 每次「新的建立意圖」重置表單與冪等 key（成功後 / 換小孩）。 */
 function resetForm(): void {
-  etaMinutes.value = 15
+  etaMinutes.value = 10
   note.value = ''
   clientRequestId.value = genClientRequestId()
   errorText.value = ''
   confirmCancel.value = false
+  scrollWheelTo(etaMinutes.value, 'auto')
 }
+
+function scrollWheelTo(minute: number, behavior: ScrollBehavior = 'smooth'): void {
+  wheelScrollEl.value?.scrollTo({ top: (minute - WHEEL_MIN) * WHEEL_ITEM_H, behavior })
+}
+
+/** 選常用時間：連動滾輪跳到對應分鐘數。 */
+function selectPreset(minute: number): void {
+  etaMinutes.value = minute
+  scrollWheelTo(minute)
+}
+
+let wheelScrollFrame: number | null = null
+/** 滾輪捲動時即時算出目前置中的分鐘數；原生 scroll-snap 負責最終停靠位置。 */
+function onWheelScroll(): void {
+  const el = wheelScrollEl.value
+  if (!el) return
+  if (wheelScrollFrame !== null) cancelAnimationFrame(wheelScrollFrame)
+  wheelScrollFrame = requestAnimationFrame(() => {
+    const idx = Math.round(el.scrollTop / WHEEL_ITEM_H)
+    etaMinutes.value = Math.min(WHEEL_MAX, Math.max(WHEEL_MIN, idx + WHEEL_MIN))
+  })
+}
+
+/** 滾輪的鍵盤可操作性（role="slider" 需支援方向鍵，不能只靠觸控滾動）。 */
+function onWheelKeydown(e: KeyboardEvent): void {
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    selectPreset(Math.max(WHEEL_MIN, etaMinutes.value - 1))
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    selectPreset(Math.min(WHEEL_MAX, etaMinutes.value + 1))
+  } else if (e.key === 'Home') {
+    e.preventDefault()
+    selectPreset(WHEEL_MIN)
+  } else if (e.key === 'End') {
+    e.preventDefault()
+    selectPreset(WHEEL_MAX)
+  }
+}
+
+// 滾輪只在「建立表單」卡片顯示時才掛載（v-if="!activeNotice"）；每次重新掛載
+// （例如取消預告、換小孩）都要對齊當下的 etaMinutes，不能停在瀏覽器預設 0。
+watch(wheelScrollEl, (el) => {
+  if (el) scrollWheelTo(etaMinutes.value, 'auto')
+})
 
 const ACTIVE_STATUSES = ['pending', 'acknowledged']
 
@@ -168,17 +222,72 @@ async function submit(): Promise<void> {
   }
 }
 
-async function markArrived(): Promise<void> {
-  const n = activeNotice.value
-  if (!n || actioning.value) return
+/**
+ * 「已抵達校門口」永遠顯示在頁面上（不用先送出「多久後抵達」）；已經標成
+ * 抵達、只等園方完成的中間態才隱藏，避免同一筆重複觸發。
+ */
+const showArriveNowButton = computed(
+  () => !(activeNotice.value && activeNotice.value.arrived_at),
+)
+
+function hasArriveSkipConfirm(): boolean {
+  try {
+    return localStorage.getItem(ARRIVE_SKIP_CONFIRM_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function storeArriveSkipConfirm(): void {
+  try {
+    localStorage.setItem(ARRIVE_SKIP_CONFIRM_KEY, '1')
+  } catch {
+    /* private mode 等 throw 時忽略 */
+  }
+}
+
+function onArriveNowClick(): void {
+  if (actioning.value || submitting.value || !selectedId.value || !showArriveNowButton.value) return
+  if (hasArriveSkipConfirm()) {
+    performArriveNow()
+    return
+  }
+  arriveConfirmSkipCheckbox.value = false
+  arriveConfirmOpen.value = true
+}
+
+function onArriveConfirm(): void {
+  if (arriveConfirmSkipCheckbox.value) storeArriveSkipConfirm()
+  arriveConfirmOpen.value = false
+  performArriveNow()
+}
+
+/** 有進行中預告就直接標成已到；沒有就用最小 eta_minutes 建立一筆後立即標成已到。 */
+async function performArriveNow(): Promise<void> {
+  if (actioning.value || !selectedId.value) return
   errorText.value = ''
   actioning.value = true
   try {
-    const res = await arriveDismissalNotice(n.id)
-    notices.value = notices.value.map((x) => (x.id === n.id ? res.data : x))
+    let target = activeNotice.value
+    if (!target) {
+      const res = await createDismissalNotice({
+        student_id: selectedId.value,
+        eta_minutes: WHEEL_MIN,
+        note: null,
+        client_request_id: clientRequestId.value,
+      })
+      notices.value = [res.data, ...notices.value.filter((n) => n.id !== res.data.id)]
+      target = res.data
+      clientRequestId.value = genClientRequestId()
+    }
+    if (!target) return
+    const arriveRes = await arriveDismissalNotice(target.id)
+    const arrivedId = target.id
+    notices.value = notices.value.map((x) => (x.id === arrivedId ? arriveRes.data : x))
   } catch (e) {
-    errorText.value = errMessage(e, '操作失敗，請重試')
-    await refresh()
+    const status = (e as { response?: { status?: number } }).response?.status
+    if (status === 409) await refresh()
+    errorText.value = errMessage(e, '送出失敗，請確認網路後重試')
   } finally {
     actioning.value = false
   }
@@ -255,13 +364,26 @@ watch(selectedId, () => {
     </div>
 
     <template v-else-if="selectedChild">
-      <!-- 目前選中的學生與班級 -->
+      <!-- 目前選中的學生與班級 + 已抵達校門口（永遠顯示，不需先送出「多久後抵達」） -->
       <div class="pn-student">
-        <span class="material-symbols-rounded pn-student__ico" aria-hidden="true">child_care</span>
-        <div>
-          <p class="pn-student__name">{{ selectedChild.name }}</p>
-          <p class="pn-student__room">{{ selectedChild.classroom_name || '未分班' }}</p>
+        <div class="pn-student__info">
+          <span class="material-symbols-rounded pn-student__ico" aria-hidden="true">child_care</span>
+          <div class="pn-student__text">
+            <p class="pn-student__name">{{ selectedChild.name }}</p>
+            <p class="pn-student__room">{{ selectedChild.classroom_name || '未分班' }}</p>
+          </div>
         </div>
+        <button
+          v-if="showArriveNowButton"
+          type="button"
+          class="pn-btn pn-arrive-now-btn"
+          :disabled="actioning || submitting"
+          data-testid="pn-arrive-btn"
+          @click="onArriveNowClick"
+        >
+          <span class="material-symbols-rounded" aria-hidden="true">pin_drop</span>
+          已抵達校門口
+        </button>
       </div>
 
       <!-- 錯誤誠實呈現 -->
@@ -291,14 +413,6 @@ watch(selectedId, () => {
         <p v-if="trackedNotice.note" class="pn-track__note">備註：{{ trackedNotice.note }}</p>
 
         <div v-if="activeNotice" class="pn-track__actions">
-          <button
-            v-if="!activeNotice.arrived_at"
-            type="button"
-            class="pn-btn pn-btn--primary"
-            :disabled="actioning"
-            data-testid="pn-arrive-btn"
-            @click="markArrived"
-          >我已到門口</button>
           <template v-if="!confirmCancel">
             <button
               type="button"
@@ -332,7 +446,7 @@ watch(selectedId, () => {
       <section v-if="!activeNotice" class="pn-card" data-testid="pn-create-form">
         <h2 class="pn-card__title">{{ doneNotice ? '再建立一筆預告' : '我多久後會抵達？' }}</h2>
 
-        <div class="pn-chips" role="radiogroup" aria-label="預計抵達時間">
+        <div class="pn-chips" role="radiogroup" aria-label="常用時間">
           <button
             v-for="m in ETA_OPTIONS"
             :key="m"
@@ -342,9 +456,38 @@ watch(selectedId, () => {
             role="radio"
             :aria-checked="etaMinutes === m ? 'true' : 'false'"
             :data-testid="`pn-eta-chip-${m}`"
-            @click="etaMinutes = m"
+            @click="selectPreset(m)"
           >{{ m }} 分鐘</button>
         </div>
+
+        <div class="pn-wheel">
+          <div class="pn-wheel__fade pn-wheel__fade--top" aria-hidden="true"></div>
+          <div class="pn-wheel__band" aria-hidden="true"></div>
+          <div
+            ref="wheelScrollEl"
+            class="pn-wheel__scroll"
+            role="slider"
+            aria-label="預計抵達分鐘數"
+            :aria-valuenow="etaMinutes"
+            aria-valuemin="1"
+            aria-valuemax="60"
+            tabindex="0"
+            data-testid="pn-eta-wheel"
+            @scroll="onWheelScroll"
+            @keydown="onWheelKeydown"
+          >
+            <div class="pn-wheel__pad" aria-hidden="true"></div>
+            <div
+              v-for="m in WHEEL_MAX"
+              :key="m"
+              class="pn-wheel__item"
+              :class="{ 'is-center': m === etaMinutes }"
+            >{{ m }} 分鐘</div>
+            <div class="pn-wheel__pad" aria-hidden="true"></div>
+          </div>
+          <div class="pn-wheel__fade pn-wheel__fade--bottom" aria-hidden="true"></div>
+        </div>
+        <p class="pn-wheel-hint" data-testid="pn-eta-wheel-hint">預計 {{ etaMinutes }} 分鐘後抵達</p>
 
         <label class="pn-note">
           <span class="pn-note__label">備註（選填）</span>
@@ -368,12 +511,42 @@ watch(selectedId, () => {
         <button
           type="button"
           class="pn-btn pn-btn--primary pn-submit"
-          :disabled="submitting || !selectedId"
+          :disabled="submitting || actioning || !selectedId"
           data-testid="pn-submit-btn"
           @click="submit"
         >{{ submitting ? '送出中…' : '通知園所' }}</button>
       </section>
     </template>
+
+    <!-- 已抵達校門口：首次二次確認，可勾選「以後不再提示」 -->
+    <AppModal :open="arriveConfirmOpen" labelled-by="pn-arrive-confirm-title" @update:open="(v) => (arriveConfirmOpen = v)">
+      <div class="pn-arrive-dialog" data-testid="pn-arrive-confirm-dialog">
+        <h2 id="pn-arrive-confirm-title" class="pn-arrive-dialog__title">送出「已抵達校門口」通知？</h2>
+        <p class="pn-arrive-dialog__msg">會立即通知園所與教師您已經在校門口，確定要送出嗎？</p>
+        <label class="pn-arrive-dialog__check">
+          <input
+            type="checkbox"
+            v-model="arriveConfirmSkipCheckbox"
+            data-testid="pn-arrive-confirm-skip-checkbox"
+          />
+          以後不再提示
+        </label>
+        <div class="pn-arrive-dialog__actions">
+          <button
+            type="button"
+            class="pn-btn pn-btn--ghost"
+            data-testid="pn-arrive-confirm-cancel-btn"
+            @click="arriveConfirmOpen = false"
+          >取消</button>
+          <button
+            type="button"
+            class="pn-btn pn-btn--primary"
+            data-testid="pn-arrive-confirm-btn"
+            @click="onArriveConfirm"
+          >確定送出</button>
+        </div>
+      </div>
+    </AppModal>
   </div>
 </template>
 
@@ -449,23 +622,41 @@ watch(selectedId, () => {
 .pn-student {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 12px;
+}
+.pn-student__info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 .pn-student__ico {
   font-size: 32px;
   color: var(--pn-primary);
+  flex-shrink: 0;
+}
+.pn-student__text {
+  min-width: 0;
 }
 .pn-student__name {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   color: var(--pn-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pn-student__room {
   margin: 0;
   font-size: 13px;
   color: var(--pn-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pn-error {
@@ -475,6 +666,24 @@ watch(selectedId, () => {
   background: var(--pn-error-container);
   color: var(--pn-on-error-container);
   font-size: 14px;
+}
+
+/* ─── 已抵達校門口：與學生資訊同一排（永遠顯示） ─── */
+.pn-arrive-now-btn {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
+  background: var(--pn-error);
+  color: var(--pn-on-error);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.pn-arrive-now-btn .material-symbols-rounded {
+  font-size: 18px;
 }
 
 .pn-card {
@@ -495,6 +704,7 @@ watch(selectedId, () => {
 .pn-chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -514,6 +724,78 @@ watch(selectedId, () => {
   border-color: var(--pn-primary);
   color: var(--pn-on-primary);
   font-weight: 700;
+}
+
+/* ─── 計時器滾輪（iOS 計時器風格，微調分鐘數） ─── */
+.pn-wheel {
+  position: relative;
+  height: 176px;
+  margin: 0 auto 6px;
+  max-width: 220px;
+  border-radius: 16px;
+  background: var(--pn-secondary-container);
+  overflow: hidden;
+}
+.pn-wheel__band {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 66px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--pn-on-surface) 12%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+.pn-wheel__fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 66px;
+  pointer-events: none;
+  z-index: 2;
+}
+.pn-wheel__fade--top {
+  top: 0;
+  background: linear-gradient(to bottom, var(--pn-secondary-container), transparent);
+}
+.pn-wheel__fade--bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--pn-secondary-container), transparent);
+}
+.pn-wheel__scroll {
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.pn-wheel__scroll::-webkit-scrollbar { display: none; }
+.pn-wheel__pad { height: 66px; }
+.pn-wheel__item {
+  height: 44px;
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pn-on-surface-variant);
+  opacity: .45;
+  transition: opacity var(--transition-fast), font-size var(--transition-fast);
+}
+.pn-wheel__item.is-center {
+  opacity: 1;
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--pn-on-surface);
+}
+.pn-wheel-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--pn-on-surface-variant);
+  margin: 0 0 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ─── 備註 ─── */
@@ -669,5 +951,38 @@ watch(selectedId, () => {
   text-align: center;
   color: var(--pn-on-surface-variant);
   font-size: 14px;
+}
+
+/* ─── 已抵達校門口：二次確認 dialog ─── */
+.pn-arrive-dialog {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pn-arrive-dialog__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pn-on-surface);
+}
+.pn-arrive-dialog__msg {
+  margin: 0;
+  font-size: 14px;
+  color: var(--pn-on-surface-variant);
+  line-height: 1.6;
+}
+.pn-arrive-dialog__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--pn-on-surface);
+}
+.pn-arrive-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
 }
 </style>

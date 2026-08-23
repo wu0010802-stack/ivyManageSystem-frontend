@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>預告接送｜計時器滾輪 + 已抵達校門口 — 設計預覽</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --pn-primary: #006d3d;
+    --pn-on-primary: #ffffff;
+    --pn-primary-container: #cdeeda;
+    --pn-on-primary-container: #00210f;
+    --pn-secondary-container: #eef4e9;
+    --pn-on-secondary-container: #121f13;
+    --pn-surface: #f7fbf3;
+    --pn-surface-card: #ffffff;
+    --pn-on-surface: #1a1c19;
+    --pn-on-surface-variant: #414942;
+    --pn-outline-variant: #c7cdc1;
+    --pn-error: #ba1a1a;
+    --pn-on-error: #ffffff;
+    --pn-error-container: #ffdad6;
+    --pn-on-error-container: #410002;
+    --pn-arrive: #b3261e;
+    --pn-arrive-container: #ffdad4;
+    --pn-arrive-on-container: #410000;
+
+    --page-bg: #f4f1ea;
+    --panel-bg: #ffffff;
+    --panel-border: #e4e0d6;
+    --ink: #23241f;
+    --ink-faint: #6b6f66;
+    --accent: #006d3d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", sans-serif;
+    padding: 28px 20px 60px;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .lede { color: var(--ink-faint); font-size: 13.5px; margin: 0 0 24px; max-width: 640px; line-height: 1.7; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 380px) 400px;
+    gap: 28px;
+    align-items: start;
+    max-width: 1160px;
+    margin: 0 auto;
+  }
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; max-width: 420px; }
+  }
+
+  /* ── 設計筆記面板 ── */
+  .notes {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 18px 20px;
+    order: 2;
+  }
+  .notes h2 { font-size: 14px; margin: 0 0 10px; }
+  .notes h2.sp { margin-top: 20px; }
+  .notes ul { margin: 0 0 4px; padding-left: 18px; font-size: 13px; line-height: 1.75; color: var(--ink); }
+  .notes li b { color: var(--accent); }
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px;
+    border-radius: 999px; margin-right: 6px;
+  }
+  .tag.decided { background: var(--pn-primary-container); color: var(--pn-on-primary-container); }
+  .tag.open { background: #fff2cc; color: #6b4c00; }
+
+  /* ── phone frame ── */
+  .phone-col { order: 1; }
+  .phone {
+    width: 380px;
+    max-width: 100%;
+    margin: 0 auto;
+    background: var(--pn-surface);
+    border: 1px solid var(--panel-border);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.10);
+  }
+  .phone-bar {
+    background: #f0ede4; padding: 10px 16px; font-size: 12px; color: var(--ink-faint);
+    display: flex; justify-content: space-between; border-bottom: 1px solid var(--panel-border);
+  }
+  .before-block { padding: 16px; }
+  .before-title { font-size: 12px; font-weight: 700; color: var(--ink-faint); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .before-chips { display: flex; flex-wrap: wrap; gap: 6px; opacity: .55; }
+  .before-chip {
+    min-height: 34px; padding: 0 12px; border-radius: 18px; border: 1px solid var(--pn-outline-variant);
+    display: flex; align-items: center; font-size: 13px; color: var(--pn-on-surface); background: var(--pn-surface-card);
+  }
+  .before-chip.on { background: var(--pn-primary); color: var(--pn-on-primary); border-color: var(--pn-primary); font-weight: 700; }
+  .divider { height: 1px; background: var(--panel-border); margin: 4px 0 0; }
+
+  .pn-view {
+    padding: 14px 16px 26px;
+    background: var(--pn-surface);
+  }
+
+  .pn-student { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .pn-student__ico {
+    width: 40px; height: 40px; border-radius: 50%; background: var(--pn-primary-container);
+    display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--pn-primary); flex-shrink: 0;
+  }
+  .pn-student__name { margin: 0; font-size: 17px; font-weight: 700; }
+  .pn-student__room { margin: 0; font-size: 12.5px; color: var(--pn-on-surface-variant); }
+
+  /* ── NEW: 已抵達校門口 大按鈕 ── */
+  .pn-arrive-card {
+    background: var(--pn-surface-card);
+    border: 1.5px solid var(--pn-arrive);
+    border-radius: 18px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .pn-arrive-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .pn-arrive-hd__ico { font-size: 18px; }
+  .pn-arrive-hd__text { font-size: 12.5px; color: var(--pn-on-surface-variant); line-height: 1.5; }
+  .pn-arrive-btn {
+    width: 100%;
+    min-height: 60px;
+    border-radius: 16px;
+    border: none;
+    background: var(--pn-arrive);
+    color: #fff;
+    font-size: 18px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    cursor: pointer;
+    letter-spacing: .01em;
+  }
+  .pn-arrive-btn:active { transform: scale(0.98); }
+  .pn-arrive-btn .ico { font-size: 24px; line-height: 1; }
+  .pn-arrive-note { margin: 8px 2px 0; font-size: 11.5px; color: var(--pn-on-surface-variant); }
+
+  .pn-card {
+    background: var(--pn-surface-card);
+    border: 1px solid var(--pn-outline-variant);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .pn-card__title { margin: 0 0 12px; font-size: 16px; font-weight: 700; }
+
+  .pn-chips { display: flex; gap: 8px; margin-bottom: 4px; }
+  .pn-chip {
+    flex: 1;
+    min-height: 46px;
+    border-radius: 14px;
+    border: 1px solid var(--pn-outline-variant);
+    background: var(--pn-surface);
+    color: var(--pn-on-surface);
+    font-size: 15px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+  }
+  .pn-chip.is-active {
+    background: var(--pn-primary);
+    border-color: var(--pn-primary);
+    color: var(--pn-on-primary);
+    font-weight: 800;
+  }
+
+  /* ── iOS 風格計時器滾輪 ── */
+  .wheel-label { text-align: center; font-size: 12.5px; color: var(--pn-on-surface-variant); margin: 14px 0 6px; }
+  .wheel-wrap {
+    position: relative;
+    height: 176px;
+    margin: 0 auto 6px;
+    max-width: 220px;
+    border-radius: 16px;
+    background: var(--pn-secondary-container);
+    overflow: hidden;
+  }
+  .wheel-band {
+    position: absolute;
+    left: 8px; right: 8px;
+    top: 66px; height: 44px;
+    border-radius: 12px;
+    background: var(--pn-surface-card);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06) inset;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .wheel-fade {
+    position: absolute; left: 0; right: 0; height: 66px; pointer-events: none; z-index: 2;
+  }
+  .wheel-fade.top { top: 0; background: linear-gradient(to bottom, var(--pn-secondary-container), rgba(238,244,233,0)); }
+  .wheel-fade.bottom { bottom: 0; background: linear-gradient(to top, var(--pn-secondary-container), rgba(238,244,233,0)); }
+  .wheel-scroll {
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .wheel-scroll::-webkit-scrollbar { display: none; }
+  .wheel-pad { height: 66px; }
+  .wheel-item {
+    height: 44px;
+    scroll-snap-align: center;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    font-variant-numeric: tabular-nums;
+    color: var(--pn-on-surface-variant);
+    opacity: .45;
+    transition: opacity 80ms linear, font-size 80ms linear, color 80ms linear;
+  }
+  .wheel-item.is-center {
+    opacity: 1;
+    font-size: 21px;
+    font-weight: 800;
+    color: var(--pn-on-primary-container);
+  }
+  .wheel-hint { text-align: center; font-size: 11px; color: var(--pn-on-surface-variant); margin: 0 0 14px; }
+
+  .pn-note { display: block; position: relative; margin-bottom: 12px; }
+  .pn-note__label { display: block; font-size: 13px; color: var(--pn-on-surface-variant); margin-bottom: 4px; }
+  .pn-note__input {
+    width: 100%; border: 1px solid var(--pn-outline-variant); border-radius: 12px;
+    padding: 10px 12px; font-size: 15px; background: var(--pn-surface-card); resize: vertical; box-sizing: border-box;
+  }
+  .pn-hint {
+    margin: 8px 0 12px; padding: 10px 12px; border-radius: 12px;
+    background: var(--pn-secondary-container); color: var(--pn-on-secondary-container);
+    font-size: 12.5px; line-height: 1.6;
+  }
+  .pn-btn {
+    min-height: 46px; padding: 0 18px; border-radius: 22px; border: none;
+    font-size: 15px; font-weight: 700; cursor: pointer; width: 100%;
+    background: var(--pn-primary); color: var(--pn-on-primary);
+  }
+
+  /* ── 首頁常用功能 delta ── */
+  .home-mock { padding: 16px; }
+  .home-title { font-size: 12px; font-weight: 700; color: var(--ink-faint); margin: 0 0 10px; text-transform: uppercase; letter-spacing: .04em; }
+  .qa-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .qa-mod {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 13px 4px 11px; border-radius: 18px; border: 1px solid transparent;
+    background: #f3f4ef; box-shadow: 0 1px 2px rgba(0,0,0,.05);
+  }
+  .qa-mod.is-new { border: 1.5px dashed var(--pn-arrive); }
+  .qa-mod-icon {
+    width: 34px; height: 34px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
+    background: var(--pn-arrive-container); color: var(--pn-arrive);
+    font-size: 16px;
+  }
+  .qa-mod-icon.teal { background: #d7f0ec; color: #0c6b62; }
+  .qa-mod-label { font-size: 12px; font-weight: 700; }
+  .qa-mod-sub { font-size: 10px; color: var(--ink-faint); }
+  .sheet-mock {
+    border: 1px dashed var(--panel-border); border-radius: 14px; padding: 10px 12px; font-size: 12.5px; color: var(--ink-faint);
+  }
+  .sheet-mock .row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .sheet-mock .row b { color: var(--ink); font-weight: 700; }
+  .sheet-mock .dot {
+    width: 26px; height: 26px; border-radius: 9px; background: var(--pn-arrive-container); color: var(--pn-arrive);
+    display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+
+  <h1>預告接送：常用時間精簡 + 計時器滾輪 + 已抵達校門口</h1>
+  <p class="lede">
+    範圍：<code>src/parent/views/PickupNoticeView.vue</code>（ETA chips 7 選改 3 選 + 新增滾輪微調）與
+    <code>src/parent/utils/quickActionModules.ts</code>（首頁常用功能新增可替換模組）。
+    這份是互動預覽稿，滾輪可實際滾動測試手感；裁定後才會動到實際元件與 API 呼叫序列。
+  </p>
+
+  <div class="layout">
+    <div class="phone-col">
+      <div class="phone">
+        <div class="phone-bar"><span>Before（現況）</span><span>7 個時間 chip</span></div>
+        <div class="before-block">
+          <div class="before-chips">
+            <span class="before-chip">5 分鐘</span>
+            <span class="before-chip">10 分鐘</span>
+            <span class="before-chip on">15 分鐘</span>
+            <span class="before-chip">20 分鐘</span>
+            <span class="before-chip">30 分鐘</span>
+            <span class="before-chip">45 分鐘</span>
+            <span class="before-chip">60 分鐘</span>
+          </div>
+        </div>
+        <div class="divider"></div>
+
+        <div class="phone-bar"><span>After（本次改版）</span><span>互動預覽</span></div>
+        <div class="pn-view">
+          <div class="pn-student">
+            <span class="pn-student__ico">🧒</span>
+            <div>
+              <p class="pn-student__name">吳逸倫</p>
+              <p class="pn-student__room">天堂鳥</p>
+            </div>
+          </div>
+
+          <!-- NEW: 已抵達校門口，永遠顯示，不需先建立預告 -->
+          <div class="pn-arrive-card">
+            <div class="pn-arrive-hd">
+              <span class="pn-arrive-hd__text">已經到校門口了？不用選時間，直接送出：</span>
+            </div>
+            <button type="button" class="pn-arrive-btn" id="arriveBtn">
+              <span class="ico">📍</span> 已抵達校門口
+            </button>
+            <p class="pn-arrive-note">按下後立即通知園所與教師端；若您先前已送出「多久後抵達」，會直接把那筆標記為已到。</p>
+          </div>
+
+          <div class="pn-card">
+            <h2 class="pn-card__title">我多久後會抵達？</h2>
+
+            <div class="pn-chips" role="radiogroup" aria-label="常用時間">
+              <button type="button" class="pn-chip" data-min="5">5 分鐘</button>
+              <button type="button" class="pn-chip is-active" data-min="10">10 分鐘</button>
+              <button type="button" class="pn-chip" data-min="20">20 分鐘</button>
+            </div>
+
+            <p class="wheel-label">或滾動微調分鐘數</p>
+            <div class="wheel-wrap">
+              <div class="wheel-fade top"></div>
+              <div class="wheel-band"></div>
+              <div class="wheel-scroll" id="wheelScroll">
+                <div class="wheel-pad"></div>
+                <!-- items injected by JS: 1~60 -->
+                <div class="wheel-pad"></div>
+              </div>
+              <div class="wheel-fade bottom"></div>
+            </div>
+            <p class="wheel-hint" id="wheelHint">預計 10 分鐘後抵達</p>
+
+            <label class="pn-note">
+              <span class="pn-note__label">備註（選填）</span>
+              <textarea class="pn-note__input" rows="2" placeholder="例如：開白色轎車，停在側門"></textarea>
+            </label>
+
+            <p class="pn-hint">
+              這只會通知園所您即將抵達；若由親友代接，請另外建立 <u>臨時接送授權</u>。
+            </p>
+
+            <button type="button" class="pn-btn">通知園所</button>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="phone-bar"><span>首頁常用功能（delta）</span><span>可替換模組</span></div>
+        <div class="home-mock">
+          <p class="home-title">首頁三格 — 其中一格已替換成新模組</p>
+          <div class="qa-row">
+            <div class="qa-mod">
+              <span class="qa-mod-icon teal">🚶</span>
+              <span class="qa-mod-label">接送</span>
+              <span class="qa-mod-sub">預告接送</span>
+            </div>
+            <div class="qa-mod is-new">
+              <span class="qa-mod-icon">📍</span>
+              <span class="qa-mod-label">已抵達</span>
+              <span class="qa-mod-sub">校門口報到</span>
+            </div>
+            <div class="qa-mod">
+              <span class="qa-mod-icon" style="background:#ffe6cf;color:#a15b00;">📣</span>
+              <span class="qa-mod-label">公告</span>
+              <span class="qa-mod-sub">最新公告</span>
+            </div>
+          </div>
+          <p class="home-title">編輯態底部選單 — 候選模組新增一筆</p>
+          <div class="sheet-mock">
+            <div class="row"><span class="dot">📍</span><b>已抵達</b>　校門口報到</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="notes">
+      <h2>已裁定</h2>
+      <ul>
+        <li><span class="tag decided">chips</span>常用時間從 7 個縮成 <b>5 / 10 / 20 分鐘</b>三個。</li>
+        <li><span class="tag decided">滾輪</span>中間新增 iOS 計時器風格「單欄分鐘滾輪」（1~60，對齊後端 <code>eta_minutes</code> 的 1~60 限制），可滾動微調；選 chip 會連動滾輪跳到對應值，滾輪停在非 5/10/20 的值時三個 chip 都不反白。</li>
+        <li><span class="tag decided">按鈕位置</span>「已抵達校門口」<b>永遠顯示</b>在頁面上（不需先送出「多久後抵達」預告），比照您的要求放在頁面上半部、視覺最先看到的位置。</li>
+        <li><span class="tag decided">按鈕行為</span>點下去：若目前已有進行中的預告 → 直接把那筆標成已到；若還沒有 → 用最小 <code>eta_minutes=1</code> 建立一筆後立即標成已到（後端 <code>eta_minutes</code> 下限是 1，技術上可行，不需要新後端 API）。兩種情況結果都是立刻通知後台＋教師端。</li>
+        <li><span class="tag decided">首頁模組</span>新增一個獨立的常用功能模組「已抵達」（沿用既有可替換三格機制，同樣導到 <code>/pickup-notice</code>，只是家長可以選擇把「已抵達」而非「接送」放上首頁捷徑）。</li>
+      </ul>
+
+      <h2 class="sp">尚待您確認</h2>
+      <ul>
+        <li><span class="tag open">預設值</span>滾輪與分鐘的預設起始值：目前示範是 <b>10 分鐘</b>（新 chip 組的中間值）；現況程式碼預設是 15。改成 10 還是維持 15（滾輪會停在一個沒有對應 chip 反白的值）？</li>
+        <li><span class="tag open">追蹤卡舊按鈕</span>目前「進行中預告」追蹤卡裡原本也有一顆「我已到門口」——新版是否要拿掉，避免跟頁面上新的大按鈕重複？（本稿已假設拿掉，只保留新按鈕。）</li>
+        <li><span class="tag open">誤觸保護</span>「已抵達校門口」直接送出、沒有二次確認。是否要加一個輕量確認（例如按住 0.5 秒 / 二次點擊確認），還是維持現有「取消預告」機制已經足夠當作誤觸的救濟手段？</li>
+        <li><span class="tag open">圖示</span>本稿用 📍 佔位；正式實作要挑一個已收錄在 <code>material-symbols-manifest.json</code> 的圖示（例如 <code>near_me</code> / <code>pin_drop</code>），避免另外跑字型子集抽取。</li>
+      </ul>
+    </div>
+  </div>
+
+<script>
+  (function () {
+    var ITEM_H = 44;
+    var MIN = 1, MAX = 60;
+    var scroller = document.getElementById('wheelScroll');
+    var hint = document.getElementById('wheelHint');
+    var chips = Array.prototype.slice.call(document.querySelectorAll('.pn-chip'));
+    var arriveBtn = document.getElementById('arriveBtn');
+
+    // 產生 1~60 的滾輪項目，插入在兩個 pad 之間
+    var pads = scroller.querySelectorAll('.wheel-pad');
+    var frag = document.createDocumentFragment();
+    for (var m = MIN; m <= MAX; m++) {
+      var el = document.createElement('div');
+      el.className = 'wheel-item';
+      el.textContent = m + ' 分鐘';
+      el.dataset.min = m;
+      frag.appendChild(el);
+    }
+    scroller.insertBefore(frag, pads[1]);
+
+    var items = Array.prototype.slice.call(scroller.querySelectorAll('.wheel-item'));
+
+    function setValue(min, opts) {
+      opts = opts || {};
+      items.forEach(function (it) {
+        it.classList.toggle('is-center', Number(it.dataset.min) === min);
+      });
+      hint.textContent = '預計 ' + min + ' 分鐘後抵達';
+      chips.forEach(function (c) {
+        c.classList.toggle('is-active', Number(c.dataset.min) === min);
+      });
+      if (!opts.skipScroll) {
+        scroller.scrollTo({ top: (min - MIN) * ITEM_H, behavior: opts.smooth === false ? 'auto' : 'smooth' });
+      }
+    }
+
+    var raf = null;
+    scroller.addEventListener('scroll', function () {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(function () {
+        var idx = Math.round(scroller.scrollTop / ITEM_H);
+        var min = Math.min(MAX, Math.max(MIN, idx + MIN));
+        setValue(min, { skipScroll: true });
+      });
+    });
+
+    chips.forEach(function (c) {
+      c.addEventListener('click', function () {
+        setValue(Number(c.dataset.min));
+      });
+    });
+
+    // 初值：10 分鐘（示範用，見右側「尚待確認」）
+    setValue(10, { skipScroll: true, smooth: false });
+    requestAnimationFrame(function () {
+      scroller.scrollTop = (10 - MIN) * ITEM_H;
+    });
+
+    arriveBtn.addEventListener('click', function () {
+      arriveBtn.textContent = '';
+      var span = document.createElement('span');
+      span.textContent = '✓ 已通知園所與教師';
+      arriveBtn.appendChild(span);
+      arriveBtn.style.background = '#2e7d32';
+      arriveBtn.disabled = true;
+    });
+  })();
+</script>
+</body>
+</html>

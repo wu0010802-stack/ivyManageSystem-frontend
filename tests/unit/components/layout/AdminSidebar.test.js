@@ -100,12 +100,18 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('工作台')
   })
 
-  it('「報表」一級子選單存在且含操作紀錄子項', async () => {
+  it('「報表」一級子選單存在（操作紀錄已於 2026-08-20 移出至稽核與資料品質）', async () => {
     const wrapper = await mountSidebar()
     expect(wrapper.text()).toContain('報表')
-    const auditItem = wrapper.find('[data-index="/audit-logs"]')
-    expect(auditItem.exists()).toBe(true)
-    expect(auditItem.text()).toContain('操作紀錄')
+    expect(wrapper.find('[data-index="/audit-logs"]').exists()).toBe(false)
+    expect(wrapper.find('[data-index="/data-quality"]').exists()).toBe(false)
+  })
+
+  it('「稽核與資料品質」為獨立入口，涵蓋操作紀錄與資料異常待辦', async () => {
+    const wrapper = await mountSidebar()
+    const item = wrapper.find('[data-index="/governance"]')
+    expect(item.exists()).toBe(true)
+    expect(item.text()).toContain('稽核與資料品質')
   })
 
   it('「報表」含修改紀錄 /activity/changes', async () => {
@@ -145,11 +151,11 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('考核與年終')
   })
 
-  it('「收支簽收」整合入口在園務行政（廠商付款/雜項收款已整併）', async () => {
+  it('「收付款管理」整合入口在園務行政（廠商付款/雜項收款已整併；2026-08 內控改版更名）', async () => {
     const wrapper = await mountSidebar()
     const item = wrapper.find('[data-index="/finance-signoffs"]')
     expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('收支簽收')
+    expect(item.text()).toContain('收付款管理')
     expect(wrapper.find('[data-index="/vendor-payments"]').exists()).toBe(false)
     expect(wrapper.find('[data-index="/misc-receipts"]').exists()).toBe(false)
   })
@@ -162,12 +168,13 @@ describe('AdminSidebar 9-IA structure', () => {
 })
 
 describe('AdminSidebar workbenchBadge', () => {
-  it('workbenchBadge = pendingApprovals + pendingHighRiskAudit 時顯示合計', async () => {
+  // 2026-08-20：高風險事件移出工作台後兩個 badge 分家——工作台只算待簽核，
+  // 高風險未確認數改掛「稽核與資料品質」。相加會讓工作台的 badge 指向它已無的分頁。
+  it('工作台 badge 只算待簽核；高風險未確認數掛在稽核與資料品質', async () => {
     const wrapper = await mountSidebar({ pendingApprovals: 3, pendingHighRiskAudit: 2 })
-    // badge stub renders value as text
-    const badges = wrapper.findAll('.mock-badge')
-    const badgeValues = badges.map((b) => b.text())
-    expect(badgeValues).toContain('5')
+    expect(wrapper.find('[data-index="/workbench"]').find('.mock-badge').text()).toBe('3')
+    expect(wrapper.find('[data-index="/governance"]').find('.mock-badge').text()).toBe('2')
+    expect(wrapper.findAll('.mock-badge').map((b) => b.text())).not.toContain('5')
   })
 
   it('兩者皆為 0 時不渲染 badge', async () => {

@@ -60,6 +60,7 @@ const SECTION_STUBS = {
   SalarySection: true,
   CredentialsSection: true,
   AttendanceSection: true,
+  OvertimeSection: true,
   ClassHistorySection: true,
   OffboardingModal: true,
   EmployeeFormDialog: true,
@@ -86,16 +87,16 @@ function localISOOffset(days: number): string {
 describe('EmployeeDetailView 第一屏重排', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('右欄 section 順序為 職務→個資→薪資→證照合約→出勤', () => {
+  it('右欄 section 順序為 職務→個資→薪資→證照合約→出勤→加班', () => {
     const w = mountDetail()
     const ids = w.findAll('.detail-section').map((s) => s.attributes('id'))
-    expect(ids).toEqual(['emp-sec-job', 'emp-sec-basic', 'emp-sec-salary', 'emp-sec-credentials', 'emp-sec-attendance'])
+    expect(ids).toEqual(['emp-sec-job', 'emp-sec-basic', 'emp-sec-salary', 'emp-sec-credentials', 'emp-sec-attendance', 'emp-sec-overtime'])
   })
 
   it('錨點導覽順序與文字同步（含「基本資料」改名「個資・聯絡」）', () => {
     const w = mountDetail()
     const labels = w.findAll('.anchor-link').map((a) => a.text())
-    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄'])
+    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄', '加班紀錄'])
   })
 
   it('個資 section 標題改為「個資・聯絡」', () => {
@@ -298,7 +299,7 @@ describe('EmployeeDetailView 錨點導覽升級', () => {
   it('無到期證照 → 錨點無徽章（既有文字斷言不變）', () => {
     const w = mountDetail()
     const labels = w.findAll('.anchor-link').map((a) => a.text())
-    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄'])
+    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄', '加班紀錄'])
   })
 
   it('點擊錨點 → 該錨點取得 is-active（預設第一個 active）', async () => {

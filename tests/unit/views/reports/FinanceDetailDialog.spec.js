@@ -142,9 +142,9 @@ describe('FinanceDetailDialog 雜項收款下鑽分頁', () => {
     // 收付方式中文
     expect(text).toContain('現金')
     expect(text).toContain('銀行匯款')
-    // 狀態 pending/signed → 待簽收/已簽收
-    expect(text).toContain('已簽收')
-    expect(text).toContain('待簽收')
+    // 狀態 pending/signed → 待補憑證/已附憑證（2026-08 內控改版與收付款管理頁同語彙）
+    expect(text).toContain('已附憑證')
+    expect(text).toContain('待補憑證')
     // 其他欄位原樣渲染
     expect(text).toContain('王小明')
     expect(text).toContain('MR-002')

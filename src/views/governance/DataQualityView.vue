@@ -2,7 +2,6 @@
   <div class="data-quality-view">
     <header class="header">
       <div class="header__title">
-        <h2>{{ PAGE_TERMS.dataQuality }}</h2>
         <p class="header__hint">
           系統每日自動檢查資料是否互相矛盾（例如已離職的員工仍列為在職）。
           <span v-if="lastRunText" class="header__lastrun">最後檢查：{{ lastRunText }}</span>
@@ -200,7 +199,6 @@ import {
 } from '@/constants/dataQualityRules'
 import { hasPermission } from '@/utils/auth'
 import { formatDateTimeTW } from '@/utils/format'
-import { PAGE_TERMS } from '@/constants/moduleTerms'
 
 const {
   filters,

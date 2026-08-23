@@ -398,8 +398,9 @@ watch(selectedTermKey, () => {
 })
 
 onMounted(async () => {
-  await fetchStatsAll()
-  await fetchTable()
+  // 效能（2026-08-21）：兩者皆只讀 termStore.school_year/semester，互不依賴對方
+  // 的回傳資料，改平行發送縮短首屏等待。
+  await Promise.all([fetchStatsAll(), fetchTable()])
 })
 
 async function handleExportTable() {

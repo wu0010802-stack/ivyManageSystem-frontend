@@ -52,7 +52,7 @@ const RosterColumnStub = {
 const AnomalyQueueColumnStub = {
   name: 'AnomalyQueueColumn',
   props: ['items', 'selectedIndex', 'loading'],
-  emits: ['select', 'filterChange'],
+  emits: ['select', 'filterChange', 'resolved'],
   template: `<div class="anomaly-queue-column-stub"><slot /></div>`,
 }
 
@@ -206,6 +206,20 @@ describe('AttendanceWorkspaceView', () => {
 
     const dc = wrapper.findComponent(DetailColumnStub)
     await dc.vm.$emit('resolved')
+    await flushPromises()
+    expect(getSummaryMock).toHaveBeenCalledTimes(2)
+    expect(getAnomalyListMock).toHaveBeenCalledTimes(2)
+  })
+
+  // ── 異常多選批次處理 resolved → refresh ──────────────────────────────────
+  it('AnomalyQueueColumn emit resolved → getSummary/getAnomalyList 再次被呼叫', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(getSummaryMock).toHaveBeenCalledTimes(1)
+    expect(getAnomalyListMock).toHaveBeenCalledTimes(1)
+
+    const aqc = wrapper.findComponent(AnomalyQueueColumnStub)
+    await aqc.vm.$emit('resolved')
     await flushPromises()
     expect(getSummaryMock).toHaveBeenCalledTimes(2)
     expect(getAnomalyListMock).toHaveBeenCalledTimes(2)

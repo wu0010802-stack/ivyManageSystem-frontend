@@ -137,7 +137,10 @@ describe('麵包屑父層完整性守衛', () => {
 
     // 容器撤銷：這三個模組有自己的 segmented/tabs 橫向導覽，父層點下去會被
     // redirect 轉回原頁，故刻意無父層（spec §3.2）。
-    expect(resolveFor(pageAt('/workbench/approvals'))).toBeNull()
+    // 2026-08-20：審核工作台收斂為單頁（/workbench 本身即實頁、不再是容器），
+    // 分頁容器的代表案例改由稽核與資料品質三分頁承擔。
+    expect(resolveFor(pageAt('/governance/audit-logs'))).toBeNull()
+    expect(resolveFor(pageAt('/governance/high-risk'))).toBeNull()
     expect(resolveFor(pageAt('/bus/monitor'))).toBeNull()
     expect(resolveFor(pageAt('/appraisal-year-end/overview'))).toBeNull()
   })

@@ -3,6 +3,7 @@ import { nextTick } from 'vue'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import DismissalQueueView from '@/views/DismissalQueueView.vue'
+import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
 
 // ─── Mock API ────────────────────────────────────────────
 const getDismissalCalls = vi.fn(() => Promise.resolve({ data: [] }))
@@ -101,9 +102,11 @@ describe('DismissalQueueView', () => {
     getDismissalCalls.mockResolvedValue({ data: [SAMPLE_CALL] })
     const wrapper = mountView()
     await nextTick()
-    // filter=active 合併為單次查詢，傳 status=pending,acknowledged
+    // filter=active 不帶 status 參數（D5：今日全狀態一次撈回，中欄徽章需要吃到
+    // completed 記錄；pending/acknowledged 的過濾交給前端 sortedCalls/右欄佇列）
     expect(getDismissalCalls).toHaveBeenCalledTimes(1)
-    expect(getDismissalCalls).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending,acknowledged' }))
+    expect(getDismissalCalls).toHaveBeenCalledWith({})
+    expect(wrapper.vm.calls).toEqual([SAMPLE_CALL])
   })
 
   it('filterStatus 為 all 時只呼叫一次 getDismissalCalls', async () => {
@@ -182,58 +185,29 @@ describe('DismissalQueueView', () => {
     expect(wrapper.vm.calls).toHaveLength(0)
   })
 
-  // ─── 點名單一鍵發起 ───────────────────────────────────
-  it('掛載後應呼叫 getStudents 載入點名單', async () => {
+  // ─── 學生清單載入（供 DismissalPosBoard 中欄使用）─────────
+  // 【T-012 改版】原本的 handleQuickCreate（點名單一鍵發起）已隨 isActiveView
+  // 分支換成 DismissalPosBoard 整個移除，對應的發起邏輯現在活在
+  // useDismissalPosQueue.addToQueue（見 useDismissalPosQueue.test.ts 的
+  // addToQueue 相關測試，含 409/重複發起防呆），這裡不再有 handleQuickCreate
+  // 可測。學生清單本身仍在掛載時載入，只是消費端換成 DismissalPosBoard。
+  it('掛載後應呼叫 getStudents 載入學生清單', async () => {
     mountView()
     await flushPromises()
     expect(getStudents).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }))
   })
 
-  it('handleQuickCreate: 一鍵發起應建立通知並重抓列表，完成後清除 inFlight', async () => {
+  // ─── T-012：篩選狀態切換三欄 POS 佈局 vs. 歷史表格（D7）─────
+  it('filterStatus=active（待處理）時渲染 DismissalPosBoard 三欄佈局，其他狀態渲染歷史表格', async () => {
     const wrapper = mountView()
     await flushPromises()
-    vi.clearAllMocks()
-    getDismissalCalls.mockResolvedValue({ data: [] })
-    createDismissalCall.mockResolvedValue({ data: {} })
+    expect(wrapper.findComponent(DismissalPosBoard).exists()).toBe(true)
+    expect(wrapper.find('.calls-table').exists()).toBe(false)
 
-    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: 5, notifying: false })
-    await flushPromises()
-
-    expect(createDismissalCall).toHaveBeenCalledWith({ student_id: 10, classroom_id: 5 })
-    expect(getDismissalCalls).toHaveBeenCalled() // 成功後 refetch 保證入列
-    expect(wrapper.vm.inFlight.has(10)).toBe(false)
-  })
-
-  it('handleQuickCreate: 已在通知中的學生不重複發起（從源頭擋 409）', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    vi.clearAllMocks()
-
-    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: 5, notifying: true })
-    expect(createDismissalCall).not.toHaveBeenCalled()
-  })
-
-  it('handleQuickCreate: 未分班（classroomId 為 null）不發起', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    vi.clearAllMocks()
-
-    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: null, notifying: false })
-    expect(createDismissalCall).not.toHaveBeenCalled()
-  })
-
-  it('handleQuickCreate: 409 時補抓狀態並清除 inFlight', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    vi.clearAllMocks()
-    getDismissalCalls.mockResolvedValue({ data: [] })
-    createDismissalCall.mockRejectedValue({ response: { status: 409, data: { detail: '已存在' } } })
-
-    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: 5, notifying: false })
-    await flushPromises()
-
-    expect(getDismissalCalls).toHaveBeenCalled() // 409 後仍 refetch 補狀態
-    expect(wrapper.vm.inFlight.has(10)).toBe(false)
+    wrapper.vm.filterStatus = 'completed'
+    await nextTick()
+    expect(wrapper.findComponent(DismissalPosBoard).exists()).toBe(false)
+    expect(wrapper.find('.calls-table').exists()).toBe(true)
   })
 
   it('handleWsEvent: dismissal_call_created 對已存在 id 去重，不重複插入', async () => {

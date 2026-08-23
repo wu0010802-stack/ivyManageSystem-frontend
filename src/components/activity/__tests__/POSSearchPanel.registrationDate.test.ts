@@ -96,4 +96,41 @@ describe('POSSearchPanel 報名日期（取代「只看逾期」開關）', () =
     expect(wrapper.find('.pos-reg__date').exists()).toBe(false)
     expect(wrapper.html()).not.toContain('Invalid Date')
   })
+
+  it('日期 key 格式化重用單例 Intl.DateTimeFormat，建構次數不隨報名列數增加（2026-08-21 效能修復）', () => {
+    // 修復前 extractDateKey 每筆報名都會 new 一次 Intl.DateTimeFormat（被
+    // registeredOnLabel 逐列呼叫），12 列會遠高於 2 列；改用 format.ts 的
+    // module 級單例後，建構次數只剩與列數無關的既有呼叫（如 taipeiToday()），
+    // 兩次掛載應相等。
+    // vi.spyOn 對建構子的預設 call-through 在此環境不保留原型鏈（formatToParts
+    // 遺失），改用手動替換 + Reflect.construct 轉呼叫原生實作、計數。
+    const OriginalDateTimeFormat = Intl.DateTimeFormat
+    const countConstructions = (fn: () => void): number => {
+      let count = 0
+      // @ts-expect-error 測試用途暫時覆寫全域建構子以計數，finally 內還原
+      Intl.DateTimeFormat = function (...args: unknown[]) {
+        count += 1
+        return Reflect.construct(OriginalDateTimeFormat, args)
+      }
+      try {
+        fn()
+      } finally {
+        Intl.DateTimeFormat = OriginalDateTimeFormat
+      }
+      return count
+    }
+
+    const many = Array.from({ length: 12 }, (_, i) =>
+      outstandingReg(300 + i, `2026-08-${String((i % 27) + 1).padStart(2, '0')}T02:00:00+00:00`))
+
+    const fewCount = countConstructions(() => {
+      mountPanel([outstandingReg(101), outstandingReg(102)])
+    })
+    const manyCount = countConstructions(() => {
+      mountPanel(many)
+    })
+
+    expect(manyCount).toBeGreaterThan(0) // 確認替換有攔到呼叫，非假陽性
+    expect(manyCount).toBe(fewCount)
+  })
 })

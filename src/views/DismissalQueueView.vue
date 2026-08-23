@@ -2,11 +2,11 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
-import { Search, Plus, Check, Loading, Refresh } from '@element-plus/icons-vue'
-import { getDismissalCalls, cancelDismissalCall, createDismissalCall, arriveDismissalCall } from '@/api/dismissalCalls'
+import { Plus, Refresh } from '@element-plus/icons-vue'
+import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
-import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
+import DismissalPosBoard from '@/components/dismissal/pos/DismissalPosBoard.vue'
 import {
   classifyWebSocketClose,
   closeWebSocketSafely,
@@ -18,15 +18,12 @@ import { formatTaipeiClock } from '@/utils/taipeiTime'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import {
-  useNowClock,
   sortActiveQueue,
-  isPreArrivalNotice,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 import {
-  buildRoster,
   classroomOptionsForStudents,
-  type RosterStudent,
+  ACTIVE_STATUSES,
   type ClassroomInput,
 } from '@/composables/useDismissalRoster'
 
@@ -61,12 +58,23 @@ const loading = ref(false)
 // 不跟學期，暑假期間學生已編入下學年班級，用當期清單會全部對不上班級（2026-07-30 根因）。
 const classrooms = ref<ClassroomInput[]>([])
 
-// 等候時間活著跳＋看板排序（與教師端共用 sortActiveQueue：已抵達優先依
-// arrived_at 舊→新，未抵達的預告依 expected_arrival_at 近→遠；staff 舊資料
-// arrived_at=requested_at → 等價原 FIFO）
-const { now } = useNowClock()
+// 看板排序（與教師端共用 sortActiveQueue：已抵達優先依 arrived_at 舊→新，
+// 未抵達的預告依 expected_arrival_at 近→遠；staff 舊資料 arrived_at=requested_at
+// → 等價原 FIFO）。isActiveView 時仍用來算頁首「待接送 N」計數徽章；calls.value
+// 在 active 檢視下現在可能含 completed 記錄（見下方 fetchCalls 的 D5 修正），
+// 這裡明確只算 pending/acknowledged，避免計數把已放學的孩子也算進「待接送」。
 const isActiveView = computed(() => filterStatus.value === 'active')
-const sortedCalls = computed(() => sortActiveQueue(calls.value as DismissalCallView[]))
+const sortedCalls = computed(() =>
+  sortActiveQueue(
+    (calls.value as DismissalCallView[]).filter(c => ACTIVE_STATUSES.has(c.status ?? '')),
+  ),
+)
+// 供 T-011 DismissalPosBoard 使用（中欄 roster 分組 + 右欄 active 佇列共用同一份，不重複打 API）。
+// D5：中欄「家長已接送」徽章與右欄的 done（已放學）卡都需要今日 completed 記錄，
+// 所以 active 檢視下 calls.value 本身就不再過濾狀態（見 fetchCalls）；右欄的
+// active／done 分流交給 useDismissalPosQueue.ts 自己做（同一份 ACTIVE_STATUSES
+// 單一事實來源）。
+const posBoardCalls = computed(() => calls.value as DismissalCallView[])
 
 // 篩選
 const filterStatus = ref('active') // active=pending+acknowledged | completed | cancelled | all
@@ -78,26 +86,6 @@ const createLoading = ref(false)
 const students = ref<StudentItem[]>([])
 const createForm = ref<{ student_id: number | null; classroom_id: number | null; note: string }>({ student_id: null, classroom_id: null, note: '' })
 const createFilterClassroomId = ref(null)
-
-// ─── 點名單一鍵發起 ──────────────────────────────────────
-// 在籍學生依班級分組，點 chip 即建立通知；已在通知中的學生由 buildRoster 標 notifying
-// （從源頭擋後端 409），建立中的學生暫存 inFlight 給即時回饋。
-const rosterQuery = ref('')
-const inFlight = ref<Set<number>>(new Set())
-
-const roster = computed(() => {
-  const groups = buildRoster(
-    students.value,
-    classrooms.value,
-    calls.value,
-    rosterQuery.value,
-  )
-  // 與看板共用 filterClassroomId：選了班級時點名單也只顯示該班
-  if (filterClassroomId.value == null) return groups
-  return groups.filter(g => g.classroomId === filterClassroomId.value)
-})
-
-const rosterFlatStudents = computed(() => roster.value.flatMap(g => g.students))
 
 // 班級篩選選項：班級清單含歷年班級，只列出實際有在籍學生的班（同名班補學期標籤）。
 const classroomOptions = computed(() =>
@@ -150,9 +138,14 @@ const fetchCalls = async () => {
   try {
     const params: Record<string, unknown> = {}
     if (filterClassroomId.value) params.classroom_id = filterClassroomId.value
-    if (filterStatus.value !== 'all') {
-      // active = pending + acknowledged，後端支援逗號分隔多狀態，一次查詢
-      params.status = filterStatus.value === 'active' ? 'pending,acknowledged' : filterStatus.value
+    // active 篩選不帶 status 參數：D5 定案「家長已接送」＝今日 completed 的既有
+    // 資料，POS 中欄徽章需要吃得到這筆，而 GET /api/dismissal-calls 不帶 status
+    // 篩選即回今日全部狀態（含 completed）。右欄佇列只顯示 pending/acknowledged
+    // 由 sortedCalls／useDismissalPosQueue 各自過濾（同一份 ACTIVE_STATUSES），
+    // 不靠這裡的查詢參數把 completed 擋在外面。completed/cancelled 篩選狀態仍
+    // 明確帶 status，維持既有歷史表格行為不變。
+    if (filterStatus.value !== 'all' && filterStatus.value !== 'active') {
+      params.status = filterStatus.value
     }
     const res = await getDismissalCalls(params)
     if (mySeq !== fetchDispatchSeq) return
@@ -179,23 +172,6 @@ const handleCancel = async (call: DismissalCall) => {
   } catch (e) {
     if (e === 'cancel') return
     ElMessage.error((e as { response?: { data?: { detail?: string } } }).response?.data?.detail || '取消失敗')
-  }
-}
-
-// ─── 標記已到門口（pnotice01：辦公室代替忘記按抵達的家長）─────────────
-const handleArrive = async (call: DismissalCall) => {
-  try {
-    await arriveDismissalCall(call.id)
-    ElMessage.success(`已標記到門口：${call.student_name}`)
-    fetchCalls()
-  } catch (e) {
-    const err = e as { response?: { status?: number } }
-    if (err.response?.status === 409) {
-      await fetchCalls() // 多半家長剛自己按了，補抓現況
-      ElMessage.info(friendlyError('此通知狀態已變更', e))
-    } else {
-      ElMessage.error(friendlyError('標記失敗', e))
-    }
   }
 }
 
@@ -276,41 +252,6 @@ const submitCreate = async () => {
     ElMessage.error((e as { response?: { data?: { detail?: string } } }).response?.data?.detail || '建立失敗')
   } finally {
     createLoading.value = false
-  }
-}
-
-// ─── 點名單一鍵發起 ──────────────────────────────────────
-// inFlight 即時回饋 → 成功後 refetch 保證新通知入列、chip 轉 notifying。
-// WS echo 由 handleWsEvent 的 id 去重擋掉重覆。
-const handleQuickCreate = async (student: RosterStudent) => {
-  if (student.classroomId == null) return // 未分班無法建立（後端需 classroom_id）
-  if (student.notifying || inFlight.value.has(student.id)) return
-  inFlight.value.add(student.id)
-  try {
-    await createDismissalCall({ student_id: student.id, classroom_id: student.classroomId })
-    await fetchCalls()
-    ElMessage.success(`已通知接送：${student.name}`)
-  } catch (e) {
-    const err = e as { response?: { status?: number; data?: { detail?: string } } }
-    if (err.response?.status === 409) {
-      await fetchCalls() // 多半他人剛建立，補狀態讓 chip 轉灰
-      ElMessage.info(`${student.name} 已有進行中的接送通知`)
-    } else {
-      ElMessage.error(err.response?.data?.detail || '建立失敗')
-    }
-  } finally {
-    inFlight.value.delete(student.id)
-  }
-}
-
-// 搜尋框按 Enter：若篩到剩唯一可發起的學生，直接建立並清空搜尋。
-const onRosterEnter = () => {
-  const candidates = rosterFlatStudents.value.filter(
-    s => !s.notifying && !inFlight.value.has(s.id) && s.classroomId != null,
-  )
-  if (candidates.length === 1) {
-    handleQuickCreate(candidates[0])
-    rosterQuery.value = ''
   }
 }
 
@@ -456,14 +397,13 @@ const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
     }
   } else if (type === 'dismissal_call_updated' || type === 'dismissal_call_arrived') {
     // arrived（pnotice01 家長/辦公室標記已到門口）與 updated 同為 upsert 語意；
-    // 重複事件以 id 定位 splice 替換，天然 idempotent 不重複插卡。
+    // 重複事件以 id 定位 splice 替換，天然 idempotent 不重複插卡。轉為 completed
+    // 時不再從 calls.value 移除（D5：中欄「家長已接送」徽章要吃得到這筆），單純
+    // upsert 成最新狀態即可——它會自然從 sortedCalls／右欄佇列的 active 過濾中
+    // 消失，改以右欄尾端的 done（已放學）卡與中欄徽章（useStudentPosStatus）呈現。
     const idx = calls.value.findIndex(c => c.id === payload.id)
     if (idx !== -1) {
-      if (filterStatus.value === 'active' && payload.status === 'completed') {
-        calls.value.splice(idx, 1)
-      } else {
-        calls.value.splice(idx, 1, payload)
-      }
+      calls.value.splice(idx, 1, payload)
     } else if (
       type === 'dismissal_call_arrived' &&
       (filterStatus.value === 'active' || filterStatus.value === 'all')
@@ -604,97 +544,15 @@ onUnmounted(() => {
       </el-col>
     </el-row>
 
-    <!-- active 視圖：搜尋 + 待接送看板 + 點名單一鍵發起 -->
+    <!-- active 視圖：三欄 POS 佈局（左＝班級列表／中＝該班學生 card／右＝接送排序佇列），
+         取代原本的搜尋框＋待接送看板＋點名單三段（D7）。DismissalPosBoard 內部自行組裝
+         T-005/T-007/T-010，並用 useDismissalPosQueue 管理右欄 5 秒倒數＋合併排序。 -->
     <template v-if="isActiveView">
-      <!-- 搜尋框：篩點名單，按 Enter 若剩唯一相符即直接發起 -->
-      <el-input
-        v-model="rosterQuery"
-        class="roster-search"
-        placeholder="搜尋學生姓名，點選即可通知接送"
-        clearable
-        :prefix-icon="Search"
-        @keyup.enter="onRosterEnter"
+      <DismissalPosBoard
+        :classrooms="classrooms"
+        :students="students"
+        :calls="posBoardCalls"
       />
-
-      <!-- 待接送（進行中）：最久優先，等候時間升級色一眼看出哪班老師還沒回應 -->
-      <section class="board-section">
-        <h3 class="section-title">
-          待接送<span class="section-title__count">{{ sortedCalls.length }}</span>
-        </h3>
-        <div v-if="sortedCalls.length === 0 && !loading" class="board-empty">
-          目前沒有等待接送的孩子，點下方點名單即可通知
-        </div>
-        <div v-else class="board-wrap" v-loading="loading">
-          <TransitionGroup tag="div" name="dcall-list" class="board">
-            <DismissalCallCard
-              v-for="call in sortedCalls"
-              :key="call.id"
-              :call="call"
-              :now="now"
-            >
-              <template #secondary>
-                <span v-if="call.requested_by_name" class="req-by">{{ call.requested_by_name }} 通知</span>
-              </template>
-              <template #action>
-                <el-button
-                  v-if="isPreArrivalNotice(call) && (call.status === 'pending' || call.status === 'acknowledged')"
-                  type="primary"
-                  plain
-                  size="small"
-                  data-testid="dismissal-arrive-btn"
-                  @click="handleArrive(call as DismissalCall)"
-                >標記已到門口</el-button>
-                <el-button
-                  v-if="call.status === 'pending' || call.status === 'acknowledged'"
-                  type="danger"
-                  plain
-                  size="small"
-                  @click="handleCancel(call as DismissalCall)"
-                >取消通知</el-button>
-              </template>
-            </DismissalCallCard>
-          </TransitionGroup>
-        </div>
-      </section>
-
-      <!-- 點名單：點學生 chip 一鍵發起；已在通知中灰底停用 -->
-      <section class="roster-section">
-        <h3 class="section-title">點名單</h3>
-        <div v-if="roster.length === 0" class="roster-empty">
-          {{ rosterQuery ? '找不到符合的學生' : '沒有在籍學生' }}
-        </div>
-        <div
-          v-for="group in roster"
-          :key="group.kind === 'classroom' ? group.classroomId! : group.kind"
-          class="roster-group"
-        >
-          <div class="roster-group__head">
-            <span class="roster-group__name">{{ group.classroomName }}</span>
-            <!-- 非正常班級的兩種情形結果不同（一種點得動、一種點不動），要講明白 -->
-            <span v-if="group.kind !== 'classroom'" class="roster-group__hint">
-              {{ group.kind === 'unknown' ? '班級不在目前清單中，仍可通知' : '沒有班級，無法通知' }}
-            </span>
-          </div>
-          <div class="roster-chips">
-            <button
-              v-for="s in group.students"
-              :key="s.id"
-              type="button"
-              class="chip"
-              :class="{ 'is-notifying': s.notifying, 'is-inflight': inFlight.has(s.id) }"
-              :disabled="s.notifying || inFlight.has(s.id) || s.classroomId == null"
-              :title="s.classroomId == null ? '未分班，無法發起' : s.name"
-              @click="handleQuickCreate(s)"
-            >
-              <el-icon v-if="inFlight.has(s.id)" class="chip__ico is-loading"><Loading /></el-icon>
-              <el-icon v-else-if="s.notifying" class="chip__ico"><Check /></el-icon>
-              <el-icon v-else class="chip__ico"><Plus /></el-icon>
-              <span class="chip__name">{{ s.name }}</span>
-              <span v-if="s.notifying" class="chip__tag">通知中</span>
-            </button>
-          </div>
-        </div>
-      </section>
     </template>
 
     <!-- 歷史紀錄：已放學 / 已取消 / 全部，走密集表格 -->
@@ -780,6 +638,25 @@ onUnmounted(() => {
 <style scoped>
 .dismissal-queue-view {
   padding: var(--space-5);
+  /* 接上 AdminLayout.vue .content-container 的 height:100% 鏈，讓下方三欄 POS
+     佈局（.pos-board）的 flex:1; min-height:0 真的有邊界高度可用，三欄才能各自
+     overflow-y:auto 獨立捲動，而不是整個 .dismissal-queue-view 撐高、改由外層
+     .el-main 產生單一整頁捲動。PageHeader／連線 banner／篩選列皆維持預設
+     flex-shrink，內容多高就多高，只有最下面那個 flex 項目（POS 版或歷史表格）
+     會吃掉剩餘空間；歷史表格分支未設 min-height:0，維持既有『內容撐高、
+     el-main 捲動』行為不變（D7）。
+
+     repo 內另一個「固定高度＋內部捲動」的既有案例是
+     src/components/activity/POSCheckoutPanel.vue 的 .pos-panel-wrap__col--pay
+     （max-height: calc(100vh - 140px) + sticky），靠魔術數字貼齊已知的 header
+     高度。這裡改走 height:100% 這條鏈是刻意選的不同解法——POS 佈局的
+     PageHeader／連線 banner／篩選列高度會隨篩選狀態、連線是否異常而變動，
+     魔術數字算不準；height:100% 鏈不受這些高度變化影響，但需要 AdminLayout.vue
+     多一行 height:100%（見該檔 .content-container 的註解）。 */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 /* 待接送即時計數：與教師端 portal 一致，一眼掌握還有幾位待處理
@@ -850,194 +727,10 @@ onUnmounted(() => {
   font-size: var(--text-sm);
 }
 
-/* ─── 待處理看板 ─── */
-.board {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: var(--space-3);
-}
-
-/* 手機：看板改單欄、頁面 padding 收斂，避免 320px 卡片最小寬在窄螢幕橫向溢出 */
+/* 手機：頁面 padding 收斂（歷史表格窄螢幕仍需要，POS 三欄本身另有自己的斷點） */
 @media (max-width: 560px) {
   .dismissal-queue-view {
     padding: var(--space-3);
-  }
-  .board {
-    grid-template-columns: 1fr;
-  }
-}
-
-.req-by {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-/* ─── 搜尋框 + 區段標題 ─── */
-.roster-search {
-  margin-bottom: var(--space-4);
-  max-width: 420px;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-3);
-  font-size: var(--text-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-secondary);
-}
-.section-title__count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--color-primary);
-  color: #fff;
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-}
-
-.board-section {
-  margin-bottom: var(--space-6);
-}
-.board-empty {
-  padding: var(--space-4);
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-tertiary);
-  font-size: var(--text-sm);
-  text-align: center;
-}
-
-/* ─── 點名單 ─── */
-.roster-empty {
-  padding: var(--space-3) 0;
-  color: var(--text-tertiary);
-  font-size: var(--text-sm);
-}
-.roster-group {
-  margin-bottom: var(--space-4);
-}
-.roster-group__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-.roster-group__name {
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-tertiary);
-}
-.roster-group__hint {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-.roster-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-/* 學生 chip：點 = 一鍵發起 */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: var(--touch-target-min);
-  padding: 0 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--surface-color);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    background-color var(--transition-fast),
-    color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-.chip:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  box-shadow: var(--shadow-sm);
-}
-.chip:active:not(:disabled) {
-  transform: translateY(1px);
-}
-.chip:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-.chip__ico {
-  font-size: 14px;
-  color: var(--color-primary);
-}
-.chip__name {
-  white-space: nowrap;
-}
-.chip:disabled {
-  cursor: default;
-}
-
-/* 已在通知中：綠底打勾、停用，從源頭擋重複建立 */
-.chip.is-notifying {
-  background: var(--color-success-soft);
-  border-color: var(--color-success);
-  color: #1a7f4b;
-}
-.chip.is-notifying .chip__ico {
-  color: #1a7f4b;
-}
-.chip__tag {
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-semibold);
-}
-/* 建立中 */
-.chip.is-inflight {
-  cursor: progress;
-  opacity: 0.75;
-}
-
-/* 卡片進場 / 移除 / 重排序動畫 */
-.dcall-list-enter-active {
-  transition:
-    opacity 0.24s cubic-bezier(0.25, 1, 0.5, 1),
-    transform 0.24s cubic-bezier(0.25, 1, 0.5, 1);
-}
-.dcall-list-leave-active {
-  transition:
-    opacity 0.16s ease,
-    transform 0.16s ease;
-}
-.dcall-list-move {
-  transition: transform 0.24s cubic-bezier(0.25, 1, 0.5, 1);
-}
-.dcall-list-enter-from {
-  opacity: 0;
-  transform: translateY(8px);
-}
-.dcall-list-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dcall-list-enter-active,
-  .dcall-list-leave-active,
-  .dcall-list-move {
-    transition: opacity 0.15s linear;
-  }
-  .dcall-list-enter-from,
-  .dcall-list-leave-to {
-    transform: none;
   }
 }
 </style>

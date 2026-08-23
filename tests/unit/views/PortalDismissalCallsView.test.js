@@ -4,8 +4,10 @@
  * Task 2 重構（純消費者）：WS / beep / lifecycle 已移至 usePortalDismissalAlerts composable。
  * 此測試改為 mock composable，僅驗證 view 自身行為：
  *   - mount 時呼叫 fetchCalls（進頁補抓最新）
- *   - handleAcknowledge 更新 activeCalls
- *   - handleComplete 從 activeCalls 移除
+ *   - handleAcknowledge：教師端不再有獨立「帶出去放學」步驟，按「我收到了」
+ *     即等同完成——家長已在門口（或 staff 舊流程）時立即 acknowledge + complete
+ *     並從 activeCalls 移除；家長預告尚未抵達時先停在 acknowledged，等
+ *     dismissal_call_arrived 事件到達由 composable 自動完成（見 composable 測試）。
  *
  * WS liveness / reconnect / ping-pong 行為已移至 composable 單元測試（若另建）。
  */
@@ -53,10 +55,18 @@ vi.mock('@/composables/usePortalDismissalAlerts', () => ({
 }))
 
 // ─── Mock useDismissalUrgency（useNowClock 供計時）────────
-vi.mock('@/composables/useDismissalUrgency', () => ({
-  useNowClock: () => ({ now: ref(new Date()) }),
-  sortByOldestFirst: (calls) => [...calls],
-}))
+// partial mock（importOriginal）：只覆寫需要決定性的 useNowClock 與排序，
+// 其餘 export（isPreArrivalNotice / formatExpectedArrival / etaRelativeText…）
+// 用真實實作——view 新增使用任何 export 都不會再因 mock 缺項而掛載炸掉
+// （2026-08-21 CI 紅根因：pnotice01 後 view 用了 isPreArrivalNotice，這裡沒補）。
+vi.mock('@/composables/useDismissalUrgency', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useNowClock: () => ({ now: ref(new Date()) }),
+    sortByOldestFirst: (calls) => [...calls],
+  }
+})
 
 // ─── Mock element-plus（ElMessageBox.confirm 給 handleComplete）
 vi.mock('element-plus', async (importOriginal) => {
@@ -111,41 +121,35 @@ describe('PortalDismissalCallsView（純消費者）', () => {
     expect(fetchCallsMock).toHaveBeenCalled()
   })
 
-  it('handleAcknowledge: 確認後應更新 activeCalls 中的 status', async () => {
+  it('handleAcknowledge: 家長已在門口（無 request_source 的 staff 舊流程）應立即 acknowledge + complete 並從 activeCalls 移除', async () => {
     activeCalls.value = [{ ...SAMPLE_CALL }]
     const wrapper = mountView()
     await nextTick()
     await wrapper.vm.handleAcknowledge({ ...SAMPLE_CALL })
     expect(acknowledgeDismissalCall).toHaveBeenCalledWith(SAMPLE_CALL.id)
+    expect(completeDismissalCall).toHaveBeenCalledWith(SAMPLE_CALL.id)
+    expect(activeCalls.value).toHaveLength(0)
+  })
+
+  it('handleAcknowledge: 家長預告尚未抵達時只 acknowledge，停在 acknowledged 且不呼叫 complete', async () => {
+    const preArrivalCall = { ...SAMPLE_CALL, request_source: 'parent', arrived_at: null }
+    activeCalls.value = [{ ...preArrivalCall }]
+    const wrapper = mountView()
+    await nextTick()
+    await wrapper.vm.handleAcknowledge({ ...preArrivalCall })
+    expect(acknowledgeDismissalCall).toHaveBeenCalledWith(SAMPLE_CALL.id)
+    expect(completeDismissalCall).not.toHaveBeenCalled()
+    expect(activeCalls.value).toHaveLength(1)
     expect(activeCalls.value[0].status).toBe('acknowledged')
   })
 
-  it('handleAcknowledge: API 失敗時 activeCalls 不變', async () => {
+  it('handleAcknowledge: acknowledge API 失敗時 activeCalls 不變、不呼叫 complete', async () => {
     activeCalls.value = [{ ...SAMPLE_CALL }]
     acknowledgeDismissalCall.mockRejectedValueOnce(new Error('fail'))
     const wrapper = mountView()
     await nextTick()
     await wrapper.vm.handleAcknowledge({ ...SAMPLE_CALL })
-    expect(activeCalls.value[0].status).toBe('pending')
-  })
-
-  it('handleComplete: 完成後應從 activeCalls 移除', async () => {
-    activeCalls.value = [{ ...SAMPLE_CALL }]
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.vm.handleComplete({ ...SAMPLE_CALL })
-    expect(completeDismissalCall).toHaveBeenCalledWith(SAMPLE_CALL.id)
-    expect(activeCalls.value).toHaveLength(0)
-  })
-
-  it('handleComplete: 使用者取消確認時 completeDismissalCall 不被呼叫', async () => {
-    const { ElMessageBox } = await import('element-plus')
-    ElMessageBox.confirm.mockRejectedValueOnce(new Error('cancel'))
-    activeCalls.value = [{ ...SAMPLE_CALL }]
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.vm.handleComplete({ ...SAMPLE_CALL })
     expect(completeDismissalCall).not.toHaveBeenCalled()
-    expect(activeCalls.value).toHaveLength(1)
+    expect(activeCalls.value[0].status).toBe('pending')
   })
 })

@@ -42,6 +42,10 @@ const PII_KEY_SUBSTRINGS = [
   // 臨時接送授權（2026-08-11）：接送人姓名快照/名單欄位（與 BE 同步；
   // person_phone 已被上方 phone substring 命中）
   'person_name',
+  // 臨時接送取件碼（T-020/T-024，2026-08-23）：授權列表 API 從「建立當下一次性回應」
+  // 改為 active 授權每次列表都持續回傳解密明碼，Sentry 事件暴露面顯著增加（與 BE
+  // utils/sentry_init.py _PII_KEY_SUBSTRINGS 同步）。
+  'pickup_code',
   // 入學文件電子簽署（esign01，2026-08-11）：signature_data/signature_key 為簽名圖
   // base64/storage key，content_md 為快照含學生/家長姓名的自由文字（與 BE 同步）
   'signature_data', 'signature_key', 'content_md',

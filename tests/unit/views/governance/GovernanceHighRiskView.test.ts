@@ -11,9 +11,9 @@ vi.mock("@/api/audit", () => ({
 }));
 
 import { getHighRiskAudits, ackAudit, ackAllAudits } from "@/api/audit";
-import WorkbenchHighRiskView from "@/views/workbench/WorkbenchHighRiskView.vue";
+import GovernanceHighRiskView from "@/views/governance/GovernanceHighRiskView.vue";
 
-describe("WorkbenchHighRiskView", () => {
+describe("GovernanceHighRiskView", () => {
   beforeEach(() => {
     vi.mocked(getHighRiskAudits).mockResolvedValue({
       data: {
@@ -29,7 +29,7 @@ describe("WorkbenchHighRiskView", () => {
   });
 
   it("渲染 3 種 risk_kind 各一筆", async () => {
-    const wrapper = mount(WorkbenchHighRiskView, { global: { plugins: [ElementPlus] } });
+    const wrapper = mount(GovernanceHighRiskView, { global: { plugins: [ElementPlus] } });
     await flushPromises();
     expect(wrapper.text()).toContain("王小明");
     expect(wrapper.text()).toContain("拒絕刪除");
@@ -39,7 +39,7 @@ describe("WorkbenchHighRiskView", () => {
   });
 
   it("單筆 ack 按鈕呼叫 ackAudit", async () => {
-    const wrapper = mount(WorkbenchHighRiskView, { global: { plugins: [ElementPlus] } });
+    const wrapper = mount(GovernanceHighRiskView, { global: { plugins: [ElementPlus] } });
     await flushPromises();
     const ackButtons = wrapper.findAll("[data-test='ack-btn']");
     expect(ackButtons.length).toBeGreaterThan(0);
@@ -49,7 +49,7 @@ describe("WorkbenchHighRiskView", () => {
   });
 
   it("「全部標已讀」按鈕呼叫 ackAllAudits", async () => {
-    const wrapper = mount(WorkbenchHighRiskView, { global: { plugins: [ElementPlus] } });
+    const wrapper = mount(GovernanceHighRiskView, { global: { plugins: [ElementPlus] } });
     await flushPromises();
     const ackAllBtn = wrapper.find("[data-test='ack-all-btn']");
     await ackAllBtn.trigger("click");
@@ -62,7 +62,7 @@ describe("WorkbenchHighRiskView", () => {
     vi.mocked(getHighRiskAudits).mockResolvedValueOnce({
       data: { items: [], unack_count: 0, total: 0 },
     } as any);
-    const wrapper = mount(WorkbenchHighRiskView, { global: { plugins: [ElementPlus] } });
+    const wrapper = mount(GovernanceHighRiskView, { global: { plugins: [ElementPlus] } });
     await flushPromises();
     expect(wrapper.text()).toMatch(/沒有|無高風險|空/);
   });

@@ -230,8 +230,13 @@ const onCancel = async () => {
 
 onMounted(async () => {
   if (!authorized) return
-  await loadClassrooms()
-  if (isEdit.value) await loadSurvey()
+  // 效能（2026-08-21）：loadClassrooms 與 loadSurvey 各自獨立來源、互不依賴，
+  // isEdit 時改平行發送；非 isEdit（新建）路徑行為不變，仍只呼叫 loadClassrooms。
+  if (isEdit.value) {
+    await Promise.all([loadClassrooms(), loadSurvey()])
+  } else {
+    await loadClassrooms()
+  }
 })
 </script>
 

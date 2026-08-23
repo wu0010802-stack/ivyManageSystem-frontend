@@ -5,8 +5,9 @@ import { getFinanceSummaryDetail } from '@/api/reports'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 // 雜項收款 6 類（rent/donation/subsidy/secondhand_sale/refund_recovery/other）中文
-// 標籤沿用收支簽收頁的共用常數，避免同一 enum 兩處映射漂移。
+// 標籤沿用收付款管理頁的共用常數，避免同一 enum 兩處映射漂移。
 import { categoryLabel as miscCategoryLabel } from '@/constants/signoff'
+import { evidenceStatusLabel } from '@/utils/financeSignoff'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -154,7 +155,7 @@ const fixedCostCategoryLabel = (c: string) => FIXED_COST_CATEGORY_LABEL[c] || c
           <el-table-column label="狀態" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="row.status === 'signed' ? 'success' : 'warning'" size="small">
-                {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
+                {{ evidenceStatusLabel(String(row.status)) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -210,7 +211,7 @@ const fixedCostCategoryLabel = (c: string) => FIXED_COST_CATEGORY_LABEL[c] || c
           <el-table-column label="狀態" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="row.status === 'signed' ? 'success' : 'warning'" size="small">
-                {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
+                {{ evidenceStatusLabel(String(row.status)) }}
               </el-tag>
             </template>
           </el-table-column>

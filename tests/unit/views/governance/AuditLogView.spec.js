@@ -36,7 +36,7 @@ vi.mock('element-plus', () => ({
   },
 }))
 
-import AuditLogView from '@/views/AuditLogView.vue'
+import AuditLogView from '@/views/governance/AuditLogView.vue'
 
 const mountOptions = {
   global: {

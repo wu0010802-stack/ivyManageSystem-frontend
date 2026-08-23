@@ -12,7 +12,7 @@ describe('WCAG AA 顏色收斂', () => {
     expect(css).toMatch(/\.el-tag--info[^{]*\{[^}]*--color-info-darker/)
   })
   it('AuditLogView diff 文字不再用硬編 #c0392b/#27ae60', () => {
-    const css = read('src/views/AuditLogView.vue')
+    const css = read('src/views/governance/AuditLogView.vue')
     expect(css).not.toContain('#c0392b')
     expect(css).not.toContain('#27ae60')
   })

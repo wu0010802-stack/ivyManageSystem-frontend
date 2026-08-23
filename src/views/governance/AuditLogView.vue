@@ -67,7 +67,7 @@ const includeAuth = ref(false)
 // 避免點「#5」卻跳去列表頁這種假導航（其他 entity 只有列表頁）。
 const ENTITY_ROUTES: Record<string, (id: number | string | null | undefined) => { path: string; query?: Record<string, string | number> } | null> = {
   student: (id) => (id ? { path: `/students/profile/${id}` } : null),
-  // 收支簽收：整合頁支援 ?tab=<模組>&highlight=<id> 自動開啟該筆編輯 dialog
+  // 收付款管理：整合頁支援 ?tab=<模組>&highlight=<id> 自動開啟該筆編輯 dialog
   vendor_payment: (id) =>
     id ? { path: '/finance-signoffs', query: { tab: 'vendor', highlight: String(id) } } : null,
   misc_receipt: (id) =>
@@ -478,8 +478,6 @@ defineExpose({ formatOperator })
 
 <template>
   <div class="audit-page">
-    <h2>操作紀錄</h2>
-
     <el-card class="filter-card">
       <div class="filters">
         <el-input

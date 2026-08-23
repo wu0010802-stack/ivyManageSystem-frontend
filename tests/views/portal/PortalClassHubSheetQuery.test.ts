@@ -46,7 +46,8 @@ import PortalClassHubView from '@/views/portal/PortalClassHubView.vue'
 async function mountHub() {
   setActivePinia(createPinia())
   const wrapper = mount(PortalClassHubView, {
-    global: { plugins: [ElementPlus], stubs: { teleport: true } },
+    // RouterLink stub：ClassHubLeaveCard 內有「查看全部」連結，測試不掛 router
+    global: { plugins: [ElementPlus], stubs: { teleport: true, RouterLink: true } },
   })
   await flushPromises()
   return wrapper

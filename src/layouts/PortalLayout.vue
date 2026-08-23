@@ -397,6 +397,9 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/class-hub">
             <span>今日班級工作台</span>
           </el-menu-item>
+          <el-menu-item index="/portal/student-leaves">
+            <span>學生請假</span>
+          </el-menu-item>
           <el-menu-item index="/portal/observations">
             <span>課堂觀察</span>
           </el-menu-item>
