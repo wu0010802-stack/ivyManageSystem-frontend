@@ -11,6 +11,28 @@
  * 對照 docs/mockups/2026-08-22-dismissal-pos-card-density.html：不分 staging／
  * active，統一用同一顆滑開才出現的取消按鈕，未額外做「已送出通知」的二次確認 strip
  * （彈開＋需再點按鈕本身已是一次確認，如需要更強的二次確認可另拆 task）。
+ *
+ * proxy（委託代理人，T-021）刻意不吃 ETA／等候標記路徑：後端建立 proxy 的
+ * dismissal_call 時 expected_arrival_at 填的是「建立當下時間」，不是真的
+ * 預計抵達時間，顯示 ETA 倒數／相對文案會誤導辦公室。proxy 分支改顯示
+ * 代理人姓名（＋關係）＋明碼取件碼＋靜態狀態文字，不呼叫
+ * formatExpectedArrival/etaRelativeText，也不套用「老師已收到」兩階段等候文案
+ * （那是給家長/現場通知用的，proxy 走的是完全不同的核銷流程）。
+ *
+ * 確認接送（T-022，D10④）：proxy 卡片在代理人姓名／明碼取件碼旁新增「確認接送」
+ * 按鈕，辦公室人員目視比對本卡明碼與代理人所述一致後一鍵確認，不重新輸入 6 碼。
+ * 點擊 emit confirm-pickup(item)，呼叫端（DismissalPosQueuePanel → DismissalPosBoard）
+ * 轉呼叫 useDismissalPosQueue.confirmProxyPickup 打 confirm-visual-match。與 swipe
+ * 取消是兩個獨立動作，proxy 卡片仍保留既有 swipe 手勢露出取消鈕的能力。
+ *
+ * 按鈕 review 修復（2026-08-23）：
+ *  - `confirming` prop（呼叫端傳入 useDismissalPosQueue.confirmingIds 的 membership）
+ *    在呼叫進行中 disable 按鈕，防止連點在第一次 confirm-visual-match resolve 前
+ *    發出第二次請求（打破『呼叫端點恰一次』acceptance criteria）。
+ *  - 按鈕加 `@pointerdown.stop`：body 容器綁了 useSwipeReveal 的 onPointerDown
+ *    （內部 setPointerCapture），事件會從按鈕冒泡上去，一旦容器對這次互動
+ *    setPointerCapture，後續 pointer 事件會被導向 capturing element 而非按鈕，
+ *    在觸控裝置上可能讓點擊失效或不穩定。stop 讓這次 pointerdown 不冒泡到容器。
  */
 import { computed } from 'vue'
 import {
@@ -28,12 +50,16 @@ const props = withDefaults(
     item: PosQueueItem
     /** 供 ETA 相對文案計算「現在」；未帶則退回掛載當下的 Date.now()（父層建議傳入 useNowClock 的 now 讓文案活著跳）。 */
     now?: number
+    /** 確認接送呼叫進行中（T-022 review 修復）：true 時 disable 按鈕，防連點重複呼叫。 */
+    confirming?: boolean
   }>(),
-  { now: () => Date.now() },
+  { now: () => Date.now(), confirming: false },
 )
 
 const emit = defineEmits<{
   cancel: [item: PosQueueItem]
+  /** 目視比對明碼後一鍵確認接送（T-022，D10④），僅 proxy 卡片會 emit。 */
+  'confirm-pickup': [item: PosQueueItem]
 }>()
 
 const SOURCE_LABEL: Record<PosQueueSource, string> = {
@@ -44,20 +70,61 @@ const SOURCE_LABEL: Record<PosQueueSource, string> = {
 
 const sourceLabel = computed(() => SOURCE_LABEL[props.item.source])
 
-/** 家長預約且尚未抵達：顯示 ETA，不顯示「已通知教師端」等候標記。 */
+const isProxy = computed(() => props.item.source === 'proxy')
+
+/** 代理人姓名（＋關係，如「王小明（阿姨）」），沿用既有 PickupAuthorizationsView 等頁的顯示慣例。 */
+const proxyPersonLabel = computed(() => {
+  if (!isProxy.value) return ''
+  const name = props.item.call?.person_name
+  if (!name) return ''
+  const relation = props.item.call?.person_relation
+  return relation ? `${name}（${relation}）` : name
+})
+
+const proxyPickupCode = computed(() =>
+  isProxy.value ? (props.item.call?.pickup_code ?? '') : '',
+)
+
+/**
+ * 確認接送按鈕（T-022，D10④）：辦公室人員目視比對本卡明碼與代理人所述一致後
+ * 一鍵確認，不重新輸入 6 碼。需要 pickup_authorization_id 才能呼叫
+ * confirm-visual-match，proxy active call 理論上恆有值（見 useDismissalUrgency.ts），
+ * 缺值時保守不顯示按鈕，避免帶 undefined 呼叫後端。
+ */
+const proxyAuthId = computed(() => props.item.call?.pickup_authorization_id)
+const showConfirmButton = computed(
+  () => isProxy.value && props.item.phase === 'active' && typeof proxyAuthId.value === 'number',
+)
+
+/** 家長預約且尚未抵達：顯示 ETA，不顯示「已通知教師端」等候標記。proxy 一律不算 preArrival（見檔頭註解）。 */
 const preArrival = computed(
-  () => props.item.phase === 'active' && !!props.item.call && isPreArrivalNotice(props.item.call),
+  () =>
+    !isProxy.value &&
+    props.item.phase === 'active' &&
+    !!props.item.call &&
+    isPreArrivalNotice(props.item.call),
 )
 
 const etaText = computed(() => {
-  if (!preArrival.value || !props.item.call) return ''
+  if (isProxy.value || !preArrival.value || !props.item.call) return ''
   const expected = formatExpectedArrival(props.item.call.expected_arrival_at)
   const rel = etaRelativeText(props.item.call.expected_arrival_at, props.now)
   return [expected, rel].filter(Boolean).join(' · ')
 })
 
-/** 已送出（active）且非預約未抵達：顯示等候標記，文案依老師是否已確認分兩階段。 */
-const showWaitingFlag = computed(() => props.item.phase === 'active' && !preArrival.value)
+/** proxy 且已送出：顯示靜態委託接送狀態文字，不進 ETA／等候標記／兩階段文案路徑。 */
+const showProxyStatus = computed(() => props.item.phase === 'active' && isProxy.value)
+
+/** 已送出（active）且非預約未抵達、非 proxy：顯示等候標記，文案依老師是否已確認分兩階段。 */
+const showWaitingFlag = computed(
+  () => props.item.phase === 'active' && !isProxy.value && !preArrival.value,
+)
+
+/** 按鈕本身也擋一次（belt-and-suspenders）：:disabled 理論上已擋掉 click，這裡防呆避免測試/未來改動繞過 disabled 屬性。 */
+function handleConfirmClick() {
+  if (props.confirming) return
+  emit('confirm-pickup', props.item)
+}
 
 /** 老師已按下確認（acknowledged）：等候標記進入第二階段，讓櫃台知道教師端已接手。 */
 const isAcknowledged = computed(() => props.item.call?.status === 'acknowledged')
@@ -139,6 +206,24 @@ const bodyStyle = computed(() => ({
         </span>
       </div>
 
+      <div v-if="isProxy && (proxyPersonLabel || proxyPickupCode)" class="pos-queue-card__proxy-info">
+        <span v-if="proxyPersonLabel" class="pos-queue-card__proxy-person">{{ proxyPersonLabel }}</span>
+        <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
+        <el-button
+          v-if="showConfirmButton"
+          type="primary"
+          size="small"
+          class="pos-queue-card__confirm-btn"
+          data-testid="pos-queue-card-confirm-pickup"
+          :loading="confirming"
+          :disabled="confirming"
+          @pointerdown.stop
+          @click="handleConfirmClick"
+        >
+          確認接送
+        </el-button>
+      </div>
+
       <DismissalPosCountdownBar
         v-if="item.phase === 'staging' && item.countdown"
         :started-at="item.countdown.startedAt"
@@ -146,6 +231,9 @@ const bodyStyle = computed(() => ({
       />
       <div v-else-if="isDone" class="pos-queue-card__done-flag">✅ {{ doneText }}</div>
       <div v-else-if="etaText" class="pos-queue-card__eta-flag">{{ etaText }}</div>
+      <div v-else-if="showProxyStatus" class="pos-queue-card__waiting-flag">
+        <span class="pos-queue-card__waiting-dot" aria-hidden="true" />今日委託接送，等待到場
+      </div>
       <div
         v-else-if="showWaitingFlag"
         class="pos-queue-card__waiting-flag"
@@ -246,6 +334,30 @@ const bodyStyle = computed(() => ({
 .pos-queue-card__source-tag--proxy {
   background: var(--neutral-700);
   color: #fff;
+}
+
+.pos-queue-card__proxy-info {
+  margin-top: var(--space-2, 8px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--space-2, 8px);
+}
+
+.pos-queue-card__proxy-person {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-secondary);
+}
+
+.pos-queue-card__proxy-code {
+  font-size: var(--text-sm, 13px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.pos-queue-card__confirm-btn {
+  margin-left: auto;
 }
 
 .pos-queue-card__eta-flag {

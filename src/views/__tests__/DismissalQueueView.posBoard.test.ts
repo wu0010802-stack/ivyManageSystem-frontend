@@ -85,7 +85,7 @@ async function mountView() {
   return wrapper
 }
 
-/** 讓 swipe body 元素有非零寬度，模擬真實 layout，讓 useSwipeToCancel 的閾值計算生效（比照 DismissalPosQueueCard.test.ts 慣例）。 */
+/** 讓 swipe body 元素有非零寬度，模擬真實 layout，讓 useSwipeReveal 的閾值計算生效（比照 DismissalPosQueueCard.test.ts 慣例）。 */
 function withMeasuredWidth(body: HTMLElement, width = 200) {
   Object.defineProperty(body, 'offsetWidth', { value: width, configurable: true })
   body.setPointerCapture = vi.fn()
@@ -141,8 +141,13 @@ describe('DismissalQueueView POS 整合測試', () => {
     )
 
     await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
-    await body.dispatchEvent(new PointerEvent('pointermove', { clientX: 100, pointerId: 1 })) // 100/200=50%>40% 閾值
-    await body.dispatchEvent(new PointerEvent('pointerup', { clientX: 100, pointerId: 1 }))
+    await body.dispatchEvent(new PointerEvent('pointermove', { clientX: -100, pointerId: 1 })) // 100/200=50%>45% 開啟閾值，往左滑露出取消鈕
+    await body.dispatchEvent(new PointerEvent('pointerup', { clientX: -100, pointerId: 1 }))
+    await flushPromises()
+
+    // useSwipeReveal 是兩段式手勢：滑開只露出取消鈕，卡片本身還在，需再點一次按鈕才真正取消
+    expect(wrapper.findAll('.pos-queue-card')).toHaveLength(1)
+    await wrapper.find('.pos-queue-card__cancel-btn').trigger('click')
     await flushPromises()
 
     // 佇列卡已消失，且取消動作本身不打任何 API（D1：staging 純前端丟棄）

@@ -2,12 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { effectScope, ref } from 'vue'
 import { useDismissalPosQueue, type PosDispatchStudent } from '../useDismissalPosQueue'
 import { createDismissalCall, cancelDismissalCall } from '@/api/dismissalCalls'
+import { confirmVisualMatch } from '@/api/pickupAuthorizations'
 import { ElMessage } from 'element-plus'
 import type { DismissalCallView } from '../useDismissalUrgency'
 
 vi.mock('@/api/dismissalCalls', () => ({
   createDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
   cancelDismissalCall: vi.fn().mockResolvedValue({ data: {} }),
+}))
+
+vi.mock('@/api/pickupAuthorizations', () => ({
+  confirmVisualMatch: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
 vi.mock('element-plus', () => ({
@@ -343,6 +348,34 @@ describe('useDismissalPosQueue', () => {
     stop()
   })
 
+  it('request_source=proxy 的後端 active call 轉出 source=proxy 的 PosQueueItem，並帶出代理人/取件碼資訊（T-021）', () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      {
+        id: 60,
+        student_id: 7,
+        student_name: '陳小華',
+        classroom_name: '彩虹班',
+        status: 'pending',
+        request_source: 'proxy',
+        requested_at: '2026-08-23T08:00:00+08:00',
+        expected_arrival_at: '2026-08-23T08:00:00+08:00',
+        person_name: '王小明',
+        person_relation: '阿姨',
+        pickup_code: '482913',
+      },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    expect(api.queue.value).toHaveLength(1)
+    const item = api.queue.value[0]
+    expect(item.phase).toBe('active')
+    expect(item.source).toBe('proxy')
+    expect(item.call?.person_name).toBe('王小明')
+    expect(item.call?.person_relation).toBe('阿姨')
+    expect(item.call?.pickup_code).toBe('482913')
+    stop()
+  })
+
   it('元件卸載（effectScope.stop）時清除所有未到期的 timer，不留殭屍呼叫', async () => {
     const activeCalls = ref<DismissalCallView[]>([])
     const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
@@ -454,5 +487,116 @@ describe('useDismissalPosQueue', () => {
     await vi.advanceTimersByTimeAsync(5000)
     expect(createDismissalCall).toHaveBeenCalledTimes(2)
     stop()
+  })
+
+  describe('confirmProxyPickup（T-022，目視比對一鍵確認接送）', () => {
+    function proxyActiveCalls(): DismissalCallView[] {
+      return [
+        {
+          id: 70,
+          student_id: 7,
+          student_name: '陳小華',
+          classroom_name: '彩虹班',
+          status: 'pending',
+          request_source: 'proxy',
+          requested_at: '2026-08-23T08:00:00+08:00',
+          expected_arrival_at: '2026-08-23T08:00:00+08:00',
+          person_name: '王小明',
+          person_relation: '阿姨',
+          pickup_code: '482913',
+          pickup_authorization_id: 900,
+        },
+      ]
+    }
+
+    it('確認成功呼叫 confirm-visual-match 恰一次（帶 pickup_authorization_id），並立即從佇列移除該卡片', async () => {
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+      const item = api.queue.value.find(i => i.id === 70)
+      expect(item).toBeTruthy()
+
+      await api.confirmProxyPickup(item!)
+
+      expect(confirmVisualMatch).toHaveBeenCalledTimes(1)
+      expect(confirmVisualMatch).toHaveBeenCalledWith(900)
+      expect(api.queue.value.filter(i => i.id === 70)).toHaveLength(0)
+      expect(ElMessage.error).not.toHaveBeenCalled()
+      stop()
+    })
+
+    it('確認失敗（例如已被其他人員搶先核銷，409）時顯示明確錯誤訊息，卡片保留在佇列不誤刪', async () => {
+      vi.mocked(confirmVisualMatch).mockRejectedValueOnce({
+        response: { data: { detail: '此授權已被核銷' } },
+      })
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+      const item = api.queue.value.find(i => i.id === 70)
+      await api.confirmProxyPickup(item!)
+
+      expect(ElMessage.error).toHaveBeenCalledWith('此授權已被核銷')
+      expect(api.queue.value.filter(i => i.id === 70)).toHaveLength(1)
+      stop()
+    })
+
+    it('外部 activeCalls 追上（狀態變 completed）後，卡片以 phase=done 保留在佇列尾端供回顧（與現場/預約一致），不重複出現、不無界成長', async () => {
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+      const item = api.queue.value.find(i => i.id === 70)
+      await api.confirmProxyPickup(item!)
+      // 確認成功、外部資料還沒追上：這段期間卡片完全不出現（不是 active、也還不是 done）。
+      expect(api.queue.value.filter(i => i.id === 70)).toHaveLength(0)
+
+      // WS/輪詢追上：狀態變 completed，比照現場/預約一致地以 phase='done' 重新出現一次
+      // （不是永遠消失，也不會同時出現兩張）。
+      activeCalls.value = [{ ...proxyActiveCalls()[0], status: 'completed' }]
+      const doneItems = api.queue.value.filter(i => i.id === 70)
+      expect(doneItems).toHaveLength(1)
+      expect(doneItems[0].phase).toBe('done')
+      stop()
+    })
+
+    it('防連點（review 修復，2026-08-23）：第一次呼叫 resolve 前對同一張卡再次呼叫 confirmProxyPickup 只會實際打一次 confirm-visual-match', async () => {
+      let resolveCall!: () => void
+      vi.mocked(confirmVisualMatch).mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveCall = () => resolve({ data: {} })
+        }),
+      )
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+      const item = api.queue.value.find(i => i.id === 70)!
+
+      const firstCall = api.confirmProxyPickup(item)
+      // 呼叫進行中：confirmingIds 已標記該卡，供呼叫端 disable 按鈕
+      expect(api.confirmingIds.has(70)).toBe(true)
+
+      // 第一次尚未 resolve 前再次觸發（模擬連點）
+      await api.confirmProxyPickup(item)
+      expect(confirmVisualMatch).toHaveBeenCalledTimes(1)
+
+      resolveCall()
+      await firstCall
+
+      expect(confirmVisualMatch).toHaveBeenCalledTimes(1)
+      expect(api.confirmingIds.has(70)).toBe(false)
+      stop()
+    })
+
+    it('確認失敗後 confirmingIds 也會解鎖，允許重新嘗試', async () => {
+      vi.mocked(confirmVisualMatch).mockRejectedValueOnce({
+        response: { data: { detail: '此授權已被核銷' } },
+      })
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+      const item = api.queue.value.find(i => i.id === 70)!
+
+      await api.confirmProxyPickup(item)
+
+      expect(api.confirmingIds.has(70)).toBe(false)
+      stop()
+    })
   })
 })

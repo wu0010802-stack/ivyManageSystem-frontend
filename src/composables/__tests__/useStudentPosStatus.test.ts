@@ -66,6 +66,56 @@ describe('useStudentPosStatus', () => {
     expect(result.status).toBe('unpicked')
   })
 
+  describe('proxy_picked（T-023：委託代理人代接）', () => {
+    it('同一學生有 completed 且 request_source=proxy 的 call → status=proxy_picked', () => {
+      const calls: PosStudentCallInput[] = [
+        { student_id: 1, status: 'completed', request_source: 'proxy' },
+      ]
+      const result = useStudentPosStatus(student, calls)
+      expect(result.status).toBe('proxy_picked')
+    })
+
+    it('completed 但 request_source 非 proxy（如 parent）仍算 guardian_picked', () => {
+      const calls: PosStudentCallInput[] = [
+        { student_id: 1, status: 'completed', request_source: 'parent' },
+      ]
+      const result = useStudentPosStatus(student, calls)
+      expect(result.status).toBe('guardian_picked')
+    })
+
+    it('completed 且 request_source 為 null/undefined 仍算 guardian_picked（既有資料無此欄位）', () => {
+      const calls: PosStudentCallInput[] = [{ student_id: 1, status: 'completed' }]
+      const result = useStudentPosStatus(student, calls)
+      expect(result.status).toBe('guardian_picked')
+    })
+
+    it('pending 的 proxy call 仍算 unpicked（還沒完成）', () => {
+      const calls: PosStudentCallInput[] = [
+        { student_id: 1, status: 'pending', request_source: 'proxy' },
+      ]
+      const result = useStudentPosStatus(student, calls)
+      expect(result.status).toBe('unpicked')
+    })
+
+    it('防禦性優先權：同日同時有 proxy 與非 proxy 的 completed call（資料異常）→ proxy_picked 優先', () => {
+      const calls: PosStudentCallInput[] = [
+        { student_id: 1, status: 'completed', request_source: 'parent' },
+        { student_id: 1, status: 'completed', request_source: 'proxy' },
+      ]
+      const result = useStudentPosStatus(student, calls)
+      expect(result.status).toBe('proxy_picked')
+    })
+
+    it('proxy completed ＋ pending 並存（代理人接走後又重新發起通知）→ 以進行中為準，回到 unpicked', () => {
+      const calls: PosStudentCallInput[] = [
+        { student_id: 1, status: 'completed', request_source: 'proxy' },
+        { student_id: 1, status: 'pending' },
+      ]
+      const result = useStudentPosStatus(student, calls)
+      expect(result.status).toBe('unpicked')
+    })
+  })
+
   describe('sortWeight — unpicked 全部排在已完成狀態之前', () => {
     it('混合陣列依 sortWeight 排序後，unpicked 都在 guardian_picked 之前', () => {
       const students = [
@@ -95,6 +145,39 @@ describe('useStudentPosStatus', () => {
       const unpicked = useStudentPosStatus(student, [])
       const picked = useStudentPosStatus(student, [{ student_id: 1, status: 'completed' }])
       expect(unpicked.sortWeight).toBeLessThan(picked.sortWeight)
+    })
+
+    it('混合陣列排序後，unpicked 都在已完成狀態（含 proxy_picked）之前', () => {
+      const students = [
+        { id: 1, name: 'A' },
+        { id: 2, name: 'B' },
+        { id: 3, name: 'C' },
+        { id: 4, name: 'D' },
+      ]
+      const calls: PosStudentCallInput[] = [
+        { student_id: 1, status: 'completed', request_source: 'proxy' },
+        { student_id: 3, status: 'completed' },
+      ]
+      const results = students
+        .map(s => ({ ...s, ...useStudentPosStatus(s, calls) }))
+        .sort((a, b) => a.sortWeight - b.sortWeight)
+
+      expect(results.map(r => r.status).slice(0, 2)).toEqual(['unpicked', 'unpicked'])
+      expect(results.map(r => r.status).slice(2)).toEqual(
+        expect.arrayContaining(['guardian_picked', 'proxy_picked']),
+      )
+    })
+
+    it('proxy_picked 的 sortWeight 小於 unpicked 之後、與 guardian_picked 相同', () => {
+      const proxyPicked = useStudentPosStatus(student, [
+        { student_id: 1, status: 'completed', request_source: 'proxy' },
+      ])
+      const guardianPicked = useStudentPosStatus(student, [
+        { student_id: 1, status: 'completed' },
+      ])
+      const unpicked = useStudentPosStatus(student, [])
+      expect(unpicked.sortWeight).toBeLessThan(proxyPicked.sortWeight)
+      expect(proxyPicked.sortWeight).toBe(guardianPicked.sortWeight)
     })
   })
 })

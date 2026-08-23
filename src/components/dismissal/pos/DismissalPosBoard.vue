@@ -53,7 +53,8 @@ const classroomRailItems = computed(() =>
 )
 
 const activeCalls = computed(() => props.calls)
-const { queue, addToQueue, cancel } = useDismissalPosQueue(activeCalls)
+const { queue, addToQueue, cancel, confirmProxyPickup, confirmingIds } =
+  useDismissalPosQueue(activeCalls)
 // 右欄家長預約倒數 10 / 5 分鐘柔和提示（見 useDismissalReservationChime.ts）。
 useDismissalReservationChime(activeCalls)
 
@@ -85,7 +86,13 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
       :calls="calls"
       @quick-dispatch="handleQuickDispatch"
     />
-    <DismissalPosQueuePanel class="pos-board__queue" :items="queue" @cancel="cancel" />
+    <DismissalPosQueuePanel
+      class="pos-board__queue"
+      :items="queue"
+      :confirming-ids="confirmingIds"
+      @cancel="cancel"
+      @confirm-pickup="confirmProxyPickup"
+    />
   </div>
 </template>
 

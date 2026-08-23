@@ -29,11 +29,17 @@ export interface DismissalCallView {
   requested_at?: string
   requested_by_name?: string
   note?: string
-  /** pnotice01 家長預告接送：staff（舊流程，視同已在門口）/ parent（預告） */
+  /** pnotice01 家長預告接送：staff（舊流程，視同已在門口）/ parent（預告）/ proxy（委託代理人，T-021） */
   request_source?: string | null
   expected_arrival_at?: string | null
   arrived_at?: string | null
   cancelled_at?: string | null
+  /** T-021 起 request_source='proxy' 才有值：代理人姓名／關係／6 位明碼取件碼，其餘來源恆為 null。 */
+  person_name?: string | null
+  person_relation?: string | null
+  pickup_code?: string | null
+  /** T-022 起 request_source='proxy' 才有值：對應的 pickup_authorizations.id，供辦公室一鍵確認接送呼叫 confirm-visual-match。 */
+  pickup_authorization_id?: number | null
   [key: string]: unknown
 }
 
