@@ -241,7 +241,7 @@ function scrollToCurrentMonth() {
         show-icon
       >
         <template #title>
-          以下項目尚未自動整合，請至「收支簽收」登錄：收入類（如畢冊、預繳）至
+          以下項目尚未自動整合，請至「收付款管理」登錄：收入類（如畢冊、預繳）至
           <router-link :to="{ path: '/finance-signoffs', query: { tab: 'misc' } }">雜項收款</router-link>
           分頁；支出類至
           <router-link :to="{ path: '/finance-signoffs', query: { tab: 'vendor' } }">廠商付款</router-link>

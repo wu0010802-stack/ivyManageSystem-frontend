@@ -8423,6 +8423,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/misc-receipts/{receipt_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Misc Receipt
+         * @description 核准／駁回（Checker）：建立者不可核准自己的收款（403）。
+         *
+         *     已收款（settled）的送審單被駁回時，reconciliation 轉入 exception 佇列
+         *     ——現金已入帳，不得從報表消失。
+         */
+        post: operations["approve_misc_receipt_api_misc_receipts__receipt_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/misc-receipts/{receipt_id}/attachments": {
         parameters: {
             query?: never;
@@ -8455,6 +8478,68 @@ export interface paths {
         get: operations["download_attachment_api_misc_receipts__receipt_id__attachments_download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Misc Receipt Events
+         * @description 單據 append-only 事件時間軸（依發生順序）。
+         */
+        get: operations["list_misc_receipt_events_api_misc_receipts__receipt_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Misc Receipt
+         * @description 完成對帳或標記差異：完成對帳前必須 approved；對帳人不可是登記收款的
+         *     同一人（403）。
+         */
+        post: operations["reconcile_misc_receipt_api_misc_receipts__receipt_id__reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Misc Receipt
+         * @description 登記實際收款：**不需先核准**（實際收到錢必須立即可記錄，不得因
+         *     尚未核准而漏掉真實現金流）；寫入真實收款日／方式／參考號。
+         */
+        post: operations["settle_misc_receipt_api_misc_receipts__receipt_id__settle_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8503,6 +8588,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/misc-receipts/{receipt_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Misc Receipt
+         * @description 送審：draft / rejected → pending_approval。
+         */
+        post: operations["submit_misc_receipt_api_misc_receipts__receipt_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/misc-receipts/batch-sign": {
         parameters: {
             query?: never;
@@ -8541,11 +8646,12 @@ export interface paths {
         };
         /**
          * Misc Receipts Summary
-         * @description 區間彙總（跨狀態）：供前端 KPI 卡。
+         * @description 區間彙總（跨狀態）：供前端 KPI 卡與流程摘要列。
          *
-         *     range 篩選（日期 / 繳款方 / 類別 / 收付方式）與列表一致，但**不吃 status**——
-         *     一律回全狀態並拆 pending / signed，讓「本期總額 / 待簽收 / 已簽收」
-         *     三張卡同時有意義。sum 走 SQL group_by 聚合，不受列表分頁限制、無 N+1。
+         *     range 篩選（日期 / 繳款方 / 類別 / 收付方式）與列表一致，但**不吃狀態
+         *     篩選**——一律回全狀態並拆桶。除既有 pending/signed（簽收軸，向後相容）
+         *     外，另回內控流程分桶：待核准 / 已核准待收款 / 待補憑證 / 待對帳 / 異常。
+         *     單一 SELECT 多條件聚合，不受列表分頁限制、無 N+1。
          *
          *     NOTE: 本路由必須宣告在 ``/misc-receipts/{receipt_id}`` 之前，否則
          *     "summary" 會被當成 receipt_id 解析（422）。
@@ -17731,6 +17837,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments/{payment_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Vendor Payment
+         * @description 核准／駁回（Checker）：建立者不可核准自己的單據（403）。
+         */
+        post: operations["approve_vendor_payment_api_vendor_payments__payment_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vendor-payments/{payment_id}/attachments": {
         parameters: {
             query?: never;
@@ -17760,6 +17886,66 @@ export interface paths {
         get: operations["download_attachment_api_vendor_payments__payment_id__attachments_download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Vendor Payment Events
+         * @description 單據 append-only 事件時間軸（依發生順序）。
+         */
+        get: operations["list_vendor_payment_events_api_vendor_payments__payment_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Vendor Payment
+         * @description 完成對帳或標記差異：對帳人不可是確認付款的同一人（403）。
+         */
+        post: operations["reconcile_vendor_payment_api_vendor_payments__payment_id__reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Vendor Payment
+         * @description 確認實際付款：已核准的單據才可標記，寫入真實付款日／方式／參考號。
+         */
+        post: operations["settle_vendor_payment_api_vendor_payments__payment_id__settle_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17797,6 +17983,26 @@ export interface paths {
         get: operations["get_signature_image_api_vendor_payments__payment_id__signature_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Vendor Payment
+         * @description 送審：draft / rejected → pending_approval。
+         */
+        post: operations["submit_vendor_payment_api_vendor_payments__payment_id__submit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17849,11 +18055,12 @@ export interface paths {
         };
         /**
          * Vendor Payments Summary
-         * @description 區間彙總（跨狀態）：供前端 KPI 卡。
+         * @description 區間彙總（跨狀態）：供前端 KPI 卡與流程摘要列。
          *
-         *     range 篩選（日期 / 廠商 / 收付方式）與列表一致，但**不吃 status**——
-         *     一律回全狀態並拆 pending / signed，讓「本期總額 / 待簽收 / 已簽收」
-         *     三張卡同時有意義。sum 走 SQL group_by 聚合，不受列表分頁限制、無 N+1。
+         *     range 篩選（日期 / 廠商 / 類別 / 收付方式）與列表一致，但**不吃狀態
+         *     篩選**——一律回全狀態並拆桶。除既有 pending/signed（簽收軸，向後相容）
+         *     外，另回內控流程分桶：待核准 / 已核准待付款 / 待補憑證 / 待對帳 / 異常。
+         *     單一 SELECT 多條件聚合，不受列表分頁限制、無 N+1。
          *
          *     NOTE: 本路由必須宣告在 ``/vendor-payments/{payment_id}`` 之前，否則
          *     "summary" 會被當成 payment_id 解析（422）。
@@ -25509,6 +25716,81 @@ export interface components {
             /** Year */
             year: number;
         };
+        /** FinanceApproveRequest */
+        FinanceApproveRequest: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approve" | "reject";
+            /** Reason */
+            reason?: string | null;
+        };
+        /** FinanceEventListOut */
+        FinanceEventListOut: {
+            /** Items */
+            items: components["schemas"]["FinanceEventOut"][];
+        };
+        /**
+         * FinanceEventOut
+         * @description 單筆 append-only 事件（時間軸）。
+         */
+        FinanceEventOut: {
+            /** Action */
+            action: string;
+            /** Actor Employee Id */
+            actor_employee_id?: number | null;
+            /** Actor Name */
+            actor_name?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** From Status */
+            from_status?: string | null;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** To Status */
+            to_status?: string | null;
+        };
+        /** FinanceReconcileRequest */
+        FinanceReconcileRequest: {
+            /** Note */
+            note?: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "reconciled" | "exception";
+        };
+        /** FinanceSettleRequest */
+        FinanceSettleRequest: {
+            /**
+             * Actual Date
+             * Format: date
+             */
+            actual_date: string;
+            /** Payment Method */
+            payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+            /** Transaction Ref */
+            transaction_ref?: string | null;
+        };
+        /**
+         * FinanceTransitionOut
+         * @description 轉換端點統一回傳：三狀態軸 snapshot 供前端就地更新。
+         */
+        FinanceTransitionOut: {
+            /** Approval Status */
+            approval_status: string;
+            /** Id */
+            id: number;
+            /** Message */
+            message: string;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Settlement Status */
+            settlement_status: string;
+        };
         /** FunnelBoardOut */
         FunnelBoardOut: {
             /** Stages */
@@ -27960,6 +28242,8 @@ export interface components {
             category: string;
             /** Description */
             description?: string | null;
+            /** Expected Receipt Date */
+            expected_receipt_date?: string | null;
             /** Notes */
             notes?: string | null;
             /** Payer Name */
@@ -27969,11 +28253,6 @@ export interface components {
              * @enum {string}
              */
             payment_method: "cash" | "bank_transfer" | "check" | "linepay" | "other";
-            /**
-             * Receipt Date
-             * Format: date
-             */
-            receipt_date: string;
             /** Receipt Number */
             receipt_number?: string | null;
         };
@@ -27998,6 +28277,14 @@ export interface components {
         MiscReceiptOut: {
             /** Amount */
             amount?: number | null;
+            /** Approval Status */
+            approval_status: string;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By Id */
+            approved_by_id?: number | null;
+            /** Approved By Name */
+            approved_by_name?: string | null;
             /** Attachments */
             attachments: components["schemas"]["MiscReceiptAttachmentMetaOut"][];
             /** Category */
@@ -28010,6 +28297,8 @@ export interface components {
             created_by_name?: string | null;
             /** Description */
             description?: string | null;
+            /** Expected Receipt Date */
+            expected_receipt_date?: string | null;
             /** Has Signature */
             has_signature: boolean;
             /** Id */
@@ -28024,6 +28313,32 @@ export interface components {
             receipt_date?: string | null;
             /** Receipt Number */
             receipt_number?: string | null;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Reconciled By Id */
+            reconciled_by_id?: number | null;
+            /** Reconciled By Name */
+            reconciled_by_name?: string | null;
+            /** Reconciliation Note */
+            reconciliation_note?: string | null;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected By Id */
+            rejected_by_id?: number | null;
+            /** Rejected By Name */
+            rejected_by_name?: string | null;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By Id */
+            settled_by_id?: number | null;
+            /** Settled By Name */
+            settled_by_name?: string | null;
+            /** Settlement Status */
+            settlement_status: string;
             /** Signature Kind */
             signature_kind?: string | null;
             /** Signed At */
@@ -28034,6 +28349,14 @@ export interface components {
             signer_name?: string | null;
             /** Status */
             status: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Submitted By Id */
+            submitted_by_id?: number | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
+            /** Transaction Ref */
+            transaction_ref?: string | null;
             /** Updated At */
             updated_at?: string | null;
         };
@@ -28049,11 +28372,35 @@ export interface components {
         };
         /**
          * MiscReceiptSummaryOut
-         * @description GET /misc-receipts/summary 區間彙總（KPI 卡，跨狀態，含 pending）。
+         * @description GET /misc-receipts/summary 區間彙總（KPI 卡＋內控流程分桶，跨狀態）。
+         *
+         *     口徑註記同 VendorPaymentSummaryOut：`awaiting_evidence`＝憑證軸 pending
+         *     的已收款單（待補憑證），與對帳守衛 EVIDENCE_REQUIRED 的三取一最低門檻
+         *     刻意不同；桶與桶非互斥。
          */
         MiscReceiptSummaryOut: {
+            /** Approved Unsettled Amount */
+            approved_unsettled_amount: number;
+            /** Approved Unsettled Count */
+            approved_unsettled_count: number;
+            /** Awaiting Evidence Amount */
+            awaiting_evidence_amount: number;
+            /** Awaiting Evidence Count */
+            awaiting_evidence_count: number;
+            /** Awaiting Reconcile Amount */
+            awaiting_reconcile_amount: number;
+            /** Awaiting Reconcile Count */
+            awaiting_reconcile_count: number;
+            /** Exception Amount */
+            exception_amount: number;
+            /** Exception Count */
+            exception_count: number;
             /** Pending Amount */
             pending_amount: number;
+            /** Pending Approval Amount */
+            pending_approval_amount: number;
+            /** Pending Approval Count */
+            pending_approval_count: number;
             /** Pending Count */
             pending_count: number;
             /** Signed Amount */
@@ -28073,14 +28420,14 @@ export interface components {
             category?: string | null;
             /** Description */
             description?: string | null;
+            /** Expected Receipt Date */
+            expected_receipt_date?: string | null;
             /** Notes */
             notes?: string | null;
             /** Payer Name */
             payer_name?: string | null;
             /** Payment Method */
             payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
-            /** Receipt Date */
-            receipt_date?: string | null;
             /** Receipt Number */
             receipt_number?: string | null;
         };
@@ -40148,15 +40495,12 @@ export interface components {
             category: string;
             /** Description */
             description?: string | null;
+            /** Due Date */
+            due_date?: string | null;
             /** Invoice Number */
             invoice_number?: string | null;
             /** Notes */
             notes?: string | null;
-            /**
-             * Payment Date
-             * Format: date
-             */
-            payment_date: string;
             /**
              * Payment Method
              * @enum {string}
@@ -40188,6 +40532,14 @@ export interface components {
         VendorPaymentOut: {
             /** Amount */
             amount?: number | null;
+            /** Approval Status */
+            approval_status: string;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By Id */
+            approved_by_id?: number | null;
+            /** Approved By Name */
+            approved_by_name?: string | null;
             /** Attachments */
             attachments: components["schemas"]["VendorPaymentAttachmentMetaOut"][];
             /** Category */
@@ -40200,6 +40552,8 @@ export interface components {
             created_by_name?: string | null;
             /** Description */
             description?: string | null;
+            /** Due Date */
+            due_date?: string | null;
             /** Has Signature */
             has_signature: boolean;
             /** Id */
@@ -40212,6 +40566,32 @@ export interface components {
             payment_date?: string | null;
             /** Payment Method */
             payment_method: string;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Reconciled By Id */
+            reconciled_by_id?: number | null;
+            /** Reconciled By Name */
+            reconciled_by_name?: string | null;
+            /** Reconciliation Note */
+            reconciliation_note?: string | null;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected By Id */
+            rejected_by_id?: number | null;
+            /** Rejected By Name */
+            rejected_by_name?: string | null;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By Id */
+            settled_by_id?: number | null;
+            /** Settled By Name */
+            settled_by_name?: string | null;
+            /** Settlement Status */
+            settlement_status: string;
             /** Signature Kind */
             signature_kind?: string | null;
             /** Signed At */
@@ -40222,6 +40602,14 @@ export interface components {
             signer_name?: string | null;
             /** Status */
             status: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Submitted By Id */
+            submitted_by_id?: number | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
+            /** Transaction Ref */
+            transaction_ref?: string | null;
             /** Updated At */
             updated_at?: string | null;
             /** Vendor Name */
@@ -40239,16 +40627,42 @@ export interface components {
         };
         /**
          * VendorPaymentSummaryOut
-         * @description GET /vendor-payments/summary 區間彙總（供前端 KPI 卡使用）。
+         * @description GET /vendor-payments/summary 區間彙總（KPI 卡＋流程摘要列）。
          *
          *     依與列表相同的 range 篩選（start_date / end_date / vendor_name /
-         *     payment_method）彙總，但**不**受 status 篩選影響——一律回全狀態並拆
-         *     pending / signed，讓 KPI 卡同時呈現「本期總額 / 待簽收 / 已簽收」。
-         *     跨狀態 sum 走 SQL 聚合（非 N+1），不受列表分頁限制。
+         *     category / payment_method）彙總，但**不**受狀態篩選影響。pending/signed
+         *     為簽收軸既有欄位（向後相容）；其餘為內控流程分桶（方案 A）：
+         *     待核准 / 已核准待付款 / 待補憑證（已收付未簽收）/ 待對帳 / 異常。
+         *     單一 SELECT 條件聚合（非 N+1），不受列表分頁限制。
+         *
+         *     口徑註記：`awaiting_evidence` 桶＝憑證軸（status）仍為 pending 的已付款
+         *     單，語意同「待補憑證」文案；與對帳守衛 EVIDENCE_REQUIRED（簽名/附件/
+         *     交易參考號三取一的**最低門檻**）刻意不同——有參考號但未附簽收單的交易
+         *     已可對帳，但仍列在此桶提醒補簽收憑證。桶與桶非互斥。
          */
         VendorPaymentSummaryOut: {
+            /** Approved Unsettled Amount */
+            approved_unsettled_amount: number;
+            /** Approved Unsettled Count */
+            approved_unsettled_count: number;
+            /** Awaiting Evidence Amount */
+            awaiting_evidence_amount: number;
+            /** Awaiting Evidence Count */
+            awaiting_evidence_count: number;
+            /** Awaiting Reconcile Amount */
+            awaiting_reconcile_amount: number;
+            /** Awaiting Reconcile Count */
+            awaiting_reconcile_count: number;
+            /** Exception Amount */
+            exception_amount: number;
+            /** Exception Count */
+            exception_count: number;
             /** Pending Amount */
             pending_amount: number;
+            /** Pending Approval Amount */
+            pending_approval_amount: number;
+            /** Pending Approval Count */
+            pending_approval_count: number;
             /** Pending Count */
             pending_count: number;
             /** Signed Amount */
@@ -40268,12 +40682,12 @@ export interface components {
             category?: string | null;
             /** Description */
             description?: string | null;
+            /** Due Date */
+            due_date?: string | null;
             /** Invoice Number */
             invoice_number?: string | null;
             /** Notes */
             notes?: string | null;
-            /** Payment Date */
-            payment_date?: string | null;
             /** Payment Method */
             payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
             /** Vendor Name */
@@ -54760,12 +55174,15 @@ export interface operations {
     list_misc_receipts_api_misc_receipts_get: {
         parameters: {
             query?: {
+                approval_status?: ("draft" | "pending_approval" | "approved" | "rejected" | "legacy") | null;
                 category?: string | null;
                 end_date?: string | null;
                 page?: number;
                 page_size?: number;
                 payer_name?: string | null;
                 payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                reconciliation_status?: ("unreconciled" | "reconciled" | "exception") | null;
+                settlement_status?: ("unsettled" | "settled") | null;
                 start_date?: string | null;
                 status?: ("pending" | "signed") | null;
             };
@@ -54925,6 +55342,41 @@ export interface operations {
             };
         };
     };
+    approve_misc_receipt_api_misc_receipts__receipt_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upload_attachment_api_misc_receipts__receipt_id__attachments_post: {
         parameters: {
             query?: never;
@@ -55026,6 +55478,107 @@ export interface operations {
             };
         };
     };
+    list_misc_receipt_events_api_misc_receipts__receipt_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceEventListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_misc_receipt_api_misc_receipts__receipt_id__reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_misc_receipt_api_misc_receipts__receipt_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceSettleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sign_misc_receipt_api_misc_receipts__receipt_id__sign_post: {
         parameters: {
             query?: never;
@@ -55079,6 +55632,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_misc_receipt_api_misc_receipts__receipt_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
                 };
             };
             /** @description Validation Error */
@@ -71101,10 +71685,14 @@ export interface operations {
     list_vendor_payments_api_vendor_payments_get: {
         parameters: {
             query?: {
+                approval_status?: ("draft" | "pending_approval" | "approved" | "rejected" | "legacy") | null;
+                category?: string | null;
                 end_date?: string | null;
                 page?: number;
                 page_size?: number;
                 payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                reconciliation_status?: ("unreconciled" | "reconciled" | "exception") | null;
+                settlement_status?: ("unsettled" | "settled") | null;
                 start_date?: string | null;
                 status?: ("pending" | "signed") | null;
                 vendor_name?: string | null;
@@ -71265,6 +71853,41 @@ export interface operations {
             };
         };
     };
+    approve_vendor_payment_api_vendor_payments__payment_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upload_attachment_api_vendor_payments__payment_id__attachments_post: {
         parameters: {
             query?: never;
@@ -71366,6 +71989,107 @@ export interface operations {
             };
         };
     };
+    list_vendor_payment_events_api_vendor_payments__payment_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceEventListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_vendor_payment_api_vendor_payments__payment_id__reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_vendor_payment_api_vendor_payments__payment_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceSettleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sign_vendor_payment_api_vendor_payments__payment_id__sign_post: {
         parameters: {
             query?: never;
@@ -71432,6 +72156,37 @@ export interface operations {
             };
         };
     };
+    submit_vendor_payment_api_vendor_payments__payment_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     batch_sign_vendor_payments_api_vendor_payments_batch_sign_post: {
         parameters: {
             query?: never;
@@ -71468,6 +72223,7 @@ export interface operations {
     vendor_payments_summary_api_vendor_payments_summary_get: {
         parameters: {
             query?: {
+                category?: string | null;
                 end_date?: string | null;
                 payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
                 start_date?: string | null;

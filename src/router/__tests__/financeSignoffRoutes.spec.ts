@@ -11,11 +11,11 @@ function flatten(routes: readonly RouteRecordRaw[]): RouteRecordRaw[] {
 
 const all = flatten(router.options.routes)
 
-describe('收支簽收路由', () => {
-  it('/finance-signoffs 存在且標題為收支簽收', () => {
+describe('收付款管理路由', () => {
+  it('/finance-signoffs 存在且標題為收付款管理', () => {
     const rec = all.find((r) => r.path === '/finance-signoffs')
     expect(rec).toBeTruthy()
-    expect(rec?.meta?.title).toBe('收支簽收')
+    expect(rec?.meta?.title).toBe('收付款管理')
   })
 
   it('/vendor-payments redirect 到 vendor tab 並透傳 query（含 highlight）', () => {

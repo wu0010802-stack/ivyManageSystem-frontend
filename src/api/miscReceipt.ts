@@ -1,3 +1,4 @@
+import type { ApiBody, AxiosResp } from './_generated/typed'
 import api, { API_BASE } from './index'
 import type { ApiBody, AxiosResp } from './_generated/typed'
 export {
@@ -53,3 +54,33 @@ export const downloadMiscReceiptAttachmentUrl = (id: number, key: string) =>
 
 export const miscReceiptSignatureUrl = (id: number) =>
   `${API_BASE}/misc-receipts/${id}/signature`
+
+// ─── 內控流程端點（方案 A；收入側：可先 settle 再送審）──────────────────
+
+export const submitMiscReceipt = (
+  id: number,
+): Promise<AxiosResp<'/misc-receipts/{receipt_id}/submit', 'post'>> =>
+  api.post(`/misc-receipts/${id}/submit`)
+
+export const approveMiscReceipt = (
+  id: number,
+  data: ApiBody<'/misc-receipts/{receipt_id}/approve', 'post'>,
+): Promise<AxiosResp<'/misc-receipts/{receipt_id}/approve', 'post'>> =>
+  api.post(`/misc-receipts/${id}/approve`, data)
+
+export const settleMiscReceipt = (
+  id: number,
+  data: ApiBody<'/misc-receipts/{receipt_id}/settle', 'post'>,
+): Promise<AxiosResp<'/misc-receipts/{receipt_id}/settle', 'post'>> =>
+  api.post(`/misc-receipts/${id}/settle`, data)
+
+export const reconcileMiscReceipt = (
+  id: number,
+  data: ApiBody<'/misc-receipts/{receipt_id}/reconcile', 'post'>,
+): Promise<AxiosResp<'/misc-receipts/{receipt_id}/reconcile', 'post'>> =>
+  api.post(`/misc-receipts/${id}/reconcile`, data)
+
+export const listMiscReceiptEvents = (
+  id: number,
+): Promise<AxiosResp<'/misc-receipts/{receipt_id}/events', 'get'>> =>
+  api.get(`/misc-receipts/${id}/events`)

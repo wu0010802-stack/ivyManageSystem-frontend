@@ -73,9 +73,9 @@ describe('SignoffSignDialog', () => {
     }
   })
 
-  it('dialog 標題來自 config.texts.signTitle', () => {
+  it('dialog 標題來自 config.texts.signTitle（內控改版後為「付款憑證」）', () => {
     const wrapper = mountDialog(vi.fn())
-    expect(wrapper.find('.dialog-stub').attributes('data-title')).toBe('廠商簽收')
+    expect(wrapper.find('.dialog-stub').attributes('data-title')).toBe('付款憑證')
   })
 
   it('photo tab 未選照片就送出 → 警告且不打 API', async () => {
