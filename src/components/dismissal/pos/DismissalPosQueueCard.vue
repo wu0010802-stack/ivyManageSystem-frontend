@@ -207,8 +207,10 @@ const bodyStyle = computed(() => ({
       </div>
 
       <div v-if="isProxy && (proxyPersonLabel || proxyPickupCode)" class="pos-queue-card__proxy-info">
-        <span v-if="proxyPersonLabel" class="pos-queue-card__proxy-person">{{ proxyPersonLabel }}</span>
-        <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
+        <div class="pos-queue-card__proxy-detail">
+          <span v-if="proxyPersonLabel" class="pos-queue-card__proxy-person">{{ proxyPersonLabel }}</span>
+          <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
+        </div>
         <el-button
           v-if="showConfirmButton"
           type="primary"
@@ -339,9 +341,17 @@ const bodyStyle = computed(() => ({
 .pos-queue-card__proxy-info {
   margin-top: var(--space-2, 8px);
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2, 8px);
+}
+
+.pos-queue-card__proxy-detail {
+  width: 100%;
+  display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 6px var(--space-2, 8px);
+  align-items: baseline;
+  gap: 4px 10px;
 }
 
 .pos-queue-card__proxy-person {
@@ -357,7 +367,7 @@ const bodyStyle = computed(() => ({
 }
 
 .pos-queue-card__confirm-btn {
-  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .pos-queue-card__eta-flag {
