@@ -6110,6 +6110,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exports/fees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Fees
+         * @description 匯出學費繳費紀錄 Excel（對帳用途）。
+         *
+         *     聚焦金流對帳，刻意不含家長聯絡資訊（比照 export_students 需
+         *     assert_guardian_pii_access 的複雜度——本匯出不需要，故不放家長欄位）；
+         *     全校 scope 匯出比照 export_students 鎖 :all，禁 own_class 自訂角色
+         *     匯出全校對帳明細。
+         */
+        get: operations["export_fees_api_exports_fees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exports/holidays": {
         parameters: {
             query?: never;
@@ -6417,6 +6442,10 @@ export interface paths {
          *     - record 上的 amount_paid / payment_date / payment_method 保持「最後一次」
          *       快照供清單顯示；真正的月度聚合看 StudentFeePayment
          *     - idempotency_key：全域唯一，同 key 重送回放（DB UNIQUE 兜底）
+         *
+         *     核心邏輯抽至 `_pay_core.pay_fee_record_core`（供後續批次端點共用，純重構、
+         *     行為不變）；本函式只負責交易邊界與「非回放路徑才失效報表快取」（與重構前
+         *     逐字相同：回放路徑在 core 內部提早 return，不會走到快取失效那行）。
          */
         put: operations["pay_fee_record_api_fees_records__record_id__pay_put"];
         post?: never;
@@ -6493,6 +6522,38 @@ export interface paths {
         get: operations["list_fee_refunds_api_fees_records__record_id__refunds_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/records/batch-pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Pay Fee Records
+         * @description 批次登記繳費 — 逐筆 SAVEPOINT 部分成功，語意固定「繳清全額」。
+         *
+         *     - 每筆等同呼叫單筆 PUT /records/{id}/pay 且 amount_paid=None（繳清
+         *       amount_due）；需部分繳費請改走單筆端點。
+         *     - 單筆失敗（已繳清 / F-034 班級 scope 拒絕 / 需金流簽核 / 記錄不存在 /
+         *       冪等 key 上下文不符）只記入該筆 failed，不影響其餘筆——與
+         *       appraisal.batch_sign_summaries 同款逐筆 begin_nested() SAVEPOINT 模式。
+         *     - 需金流簽核（該 record 新累計 >= FEE_PAYMENT_APPROVAL_THRESHOLD）一律
+         *       fail，附固定訊息，不揭露門檻/累計金額細節、不做簽核互動——請走單筆
+         *       流程由具金流簽核權限者處理。
+         *     - 依 record_id 排序後才逐筆取 with_for_update() 鎖，避免與其他並發批次
+         *       交錯順序造成 ABBA 死鎖（同 appraisal.batch_sign_summaries）；回傳
+         *       results 順序仍與請求 payload.items 一致，方便前端逐列對應。
+         */
+        post: operations["batch_pay_fee_records_api_fees_records_batch_pay_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -20193,6 +20254,71 @@ export interface components {
         BatchConfirmResultOut: {
             /** Processed */
             processed: number;
+        };
+        /**
+         * BatchFeePayItem
+         * @description 批次繳費單筆項目：只帶 record_id + 選填冪等鍵，金額固定「繳清全額」。
+         */
+        BatchFeePayItem: {
+            /**
+             * Idempotency Key
+             * @description 本筆繳費冪等鍵（語意同 PayRequest.idempotency_key）
+             */
+            idempotency_key?: string | null;
+            /** Record Id */
+            record_id: number;
+        };
+        /**
+         * BatchFeePayRequest
+         * @description 批次登記繳費——固定「繳清全額」語意（沿用單筆 amount_paid=None→amount_due）。
+         *
+         *     部分繳費（指定金額 < amount_due）仍須走單筆 PUT /records/{id}/pay；
+         *     批次端點不接受逐筆自訂金額，避免對帳單需求逐漸長成單筆端點的完整介面。
+         */
+        BatchFeePayRequest: {
+            /**
+             * Items
+             * @description 批次項目（1~200 筆）
+             */
+            items: components["schemas"]["BatchFeePayItem"][];
+            /**
+             * Notes
+             * @default
+             */
+            notes: string | null;
+            /**
+             * Payment Date
+             * Format: date
+             */
+            payment_date: string;
+            /** Payment Method */
+            payment_method: string;
+        };
+        /**
+         * BatchFeePayResultItem
+         * @description 批次繳費單筆結果。error 僅失敗時有值；amount_paid 僅成功時有值。
+         */
+        BatchFeePayResultItem: {
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Record Id */
+            record_id: number;
+        };
+        /**
+         * BatchFeePayResultOut
+         * @description POST /fees/records/batch-pay 回傳。results 順序與請求 items 一致。
+         */
+        BatchFeePayResultOut: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["BatchFeePayResultItem"][];
+            /** Succeeded */
+            succeeded: number;
         };
         /** BatchIn */
         BatchIn: {
@@ -50267,6 +50393,39 @@ export interface operations {
             };
         };
     };
+    export_fees_api_exports_fees_get: {
+        parameters: {
+            query?: {
+                classroom_name?: string | null;
+                period?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_holidays_api_exports_holidays_get: {
         parameters: {
             query: {
@@ -50913,6 +51072,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_pay_fee_records_api_fees_records_batch_pay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchFeePayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchFeePayResultOut"];
                 };
             };
             /** @description Validation Error */
