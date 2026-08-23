@@ -52,7 +52,7 @@ const classroomRailItems = computed(() =>
 )
 
 const activeCalls = computed(() => props.calls)
-const { queue, addToQueue, cancel, confirmProxyPickup } = useDismissalPosQueue(activeCalls)
+const { queue, addToQueue, cancel, confirmProxyPickup, confirmingIds } = useDismissalPosQueue(activeCalls)
 
 function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
   if (selectedClassroomId.value == null) return
@@ -85,6 +85,7 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
     <DismissalPosQueuePanel
       class="pos-board__queue"
       :items="queue"
+      :confirming-ids="confirmingIds"
       @cancel="cancel"
       @confirm-pickup="confirmProxyPickup"
     />

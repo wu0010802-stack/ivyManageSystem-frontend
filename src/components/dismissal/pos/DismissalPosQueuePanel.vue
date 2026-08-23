@@ -18,6 +18,8 @@ import DismissalPosQueueCard from './DismissalPosQueueCard.vue'
 
 defineProps<{
   items: PosQueueItem[]
+  /** 進行中的確認接送呼叫 call id 集合（T-022 review 修復）：轉傳給子卡片決定按鈕是否 disable。 */
+  confirmingIds?: Set<number>
 }>()
 
 const emit = defineEmits<{
@@ -40,6 +42,7 @@ const { now } = useNowClock()
         :key="item.id"
         :item="item"
         :now="now"
+        :confirming="confirmingIds?.has(Number(item.id)) ?? false"
         @cancel="emit('cancel', $event)"
         @confirm-pickup="emit('confirm-pickup', $event)"
       />

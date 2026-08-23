@@ -155,6 +155,56 @@ describe('DismissalPosQueueCard', () => {
         expect(w.find('[data-testid="pos-queue-card-confirm-pickup"]').exists()).toBe(false)
       })
     })
+
+    describe('確認接送按鈕防連點與 swipe 手勢隔離（review 修復，2026-08-23）', () => {
+      function proxyItemWithAuth(overrides: Partial<PosQueueItem> = {}) {
+        return proxyItem({
+          call: { ...proxyItem().call!, pickup_authorization_id: 900 },
+          ...overrides,
+        })
+      }
+
+      it('confirming=true 時按鈕 disabled，點擊不會 emit confirm-pickup（防連點）', async () => {
+        const item = proxyItemWithAuth()
+        const w = mount(DismissalPosQueueCard, { props: { item, confirming: true } })
+        const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
+
+        expect(btn.attributes('disabled')).not.toBeUndefined()
+
+        await btn.trigger('click')
+
+        expect(w.emitted('confirm-pickup')).toBeUndefined()
+      })
+
+      it('confirming=false→true 轉換模擬連點：第二次點擊發生在 confirming 已變 true 後不再 emit', async () => {
+        const item = proxyItemWithAuth()
+        const w = mount(DismissalPosQueueCard, { props: { item, confirming: false } })
+        const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
+
+        await btn.trigger('click')
+        expect(w.emitted('confirm-pickup')).toHaveLength(1)
+
+        // 呼叫端（composable）在第一次呼叫進行中會把 confirming 設回 true
+        await w.setProps({ confirming: true })
+        await btn.trigger('click')
+
+        // 仍只有第一次點擊觸發的那一筆
+        expect(w.emitted('confirm-pickup')).toHaveLength(1)
+      })
+
+      it('按鈕的 pointerdown 不會冒泡到卡片容器（不觸發 useSwipeToCancel 的 setPointerCapture）', async () => {
+        const item = proxyItemWithAuth()
+        const w = mount(DismissalPosQueueCard, { props: { item } })
+        const body = withMeasuredWidth(w)
+        const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]').element as HTMLElement
+
+        btn.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1, bubbles: true }))
+        await w.vm.$nextTick()
+
+        // body 是 useSwipeToCancel 的 onPointerDown 綁定對象；若事件冒泡上去會呼叫 setPointerCapture
+        expect(body.setPointerCapture).not.toHaveBeenCalled()
+      })
+    })
   })
 
   describe('倒數條顯示邏輯', () => {

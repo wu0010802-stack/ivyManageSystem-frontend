@@ -464,5 +464,46 @@ describe('useDismissalPosQueue', () => {
       expect(api.queue.value.filter(i => i.id === 70)).toHaveLength(0)
       stop()
     })
+
+    it('防連點（review 修復，2026-08-23）：第一次呼叫 resolve 前對同一張卡再次呼叫 confirmProxyPickup 只會實際打一次 confirm-visual-match', async () => {
+      let resolveCall!: () => void
+      vi.mocked(confirmVisualMatch).mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveCall = () => resolve({ data: {} })
+        }),
+      )
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+      const item = api.queue.value.find(i => i.id === 70)!
+
+      const firstCall = api.confirmProxyPickup(item)
+      // 呼叫進行中：confirmingIds 已標記該卡，供呼叫端 disable 按鈕
+      expect(api.confirmingIds.has(70)).toBe(true)
+
+      // 第一次尚未 resolve 前再次觸發（模擬連點）
+      await api.confirmProxyPickup(item)
+      expect(confirmVisualMatch).toHaveBeenCalledTimes(1)
+
+      resolveCall()
+      await firstCall
+
+      expect(confirmVisualMatch).toHaveBeenCalledTimes(1)
+      expect(api.confirmingIds.has(70)).toBe(false)
+      stop()
+    })
+
+    it('確認失敗後 confirmingIds 也會解鎖，允許重新嘗試', async () => {
+      vi.mocked(confirmVisualMatch).mockRejectedValueOnce({
+        response: { data: { detail: '此授權已被核銷' } },
+      })
+      const activeCalls = ref<DismissalCallView[]>(proxyActiveCalls())
+      const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+      const item = api.queue.value.find(i => i.id === 70)!
+
+      await api.confirmProxyPickup(item)
+
+      expect(api.confirmingIds.has(70)).toBe(false)
+      stop()
+    })
   })
 })

@@ -22,6 +22,15 @@
  * 點擊 emit confirm-pickup(item)，呼叫端（DismissalPosQueuePanel → DismissalPosBoard）
  * 轉呼叫 useDismissalPosQueue.confirmProxyPickup 打 confirm-visual-match。與 swipe
  * 取消是兩個獨立動作，proxy 卡片仍保留既有 swipe cancel 手勢。
+ *
+ * 按鈕 review 修復（2026-08-23）：
+ *  - `confirming` prop（呼叫端傳入 useDismissalPosQueue.confirmingIds 的 membership）
+ *    在呼叫進行中 disable 按鈕，防止連點在第一次 confirm-visual-match resolve 前
+ *    發出第二次請求（打破『呼叫端點恰一次』acceptance criteria）。
+ *  - 按鈕加 `@pointerdown.stop`：body 容器綁了 useSwipeToCancel 的 onPointerDown
+ *    （內部 setPointerCapture），事件會從按鈕冒泡上去，一旦容器對這次互動
+ *    setPointerCapture，後續 pointer 事件會被導向 capturing element 而非按鈕，
+ *    在觸控裝置上可能讓點擊失效或不穩定。stop 讓這次 pointerdown 不冒泡到容器。
  */
 import { computed } from 'vue'
 import {
@@ -38,8 +47,10 @@ const props = withDefaults(
     item: PosQueueItem
     /** 供 ETA 相對文案計算「現在」；未帶則退回掛載當下的 Date.now()（父層建議傳入 useNowClock 的 now 讓文案活著跳）。 */
     now?: number
+    /** 確認接送呼叫進行中（T-022 review 修復）：true 時 disable 按鈕，防連點重複呼叫。 */
+    confirming?: boolean
   }>(),
-  { now: () => Date.now() },
+  { now: () => Date.now(), confirming: false },
 )
 
 const emit = defineEmits<{
@@ -106,6 +117,12 @@ const showWaitingFlag = computed(
   () => props.item.phase === 'active' && !isProxy.value && !preArrival.value,
 )
 
+/** 按鈕本身也擋一次（belt-and-suspenders）：:disabled 理論上已擋掉 click，這裡防呆避免測試/未來改動繞過 disabled 屬性。 */
+function handleConfirmClick() {
+  if (props.confirming) return
+  emit('confirm-pickup', props.item)
+}
+
 const { dragX, reboundInstant, onPointerDown, onPointerMove, onPointerUp, onPointerCancel } =
   useSwipeToCancel({
     onCommit: () => emit('cancel', props.item),
@@ -148,7 +165,10 @@ const bodyStyle = computed(() => ({
           size="small"
           class="pos-queue-card__confirm-btn"
           data-testid="pos-queue-card-confirm-pickup"
-          @click="emit('confirm-pickup', item)"
+          :loading="confirming"
+          :disabled="confirming"
+          @pointerdown.stop
+          @click="handleConfirmClick"
         >
           確認接送
         </el-button>

@@ -126,6 +126,13 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
   // 避免無界成長。
   const confirmedActiveIds = reactive(new Set<number>())
 
+  // 確認接送呼叫進行中的 call id（T-022 review 修復，2026-08-23）：防連點——
+  // 第一次 confirm-visual-match 尚未 resolve 前，同一張卡再次觸發直接忽略，
+  // 避免「呼叫端點恰一次」acceptance criteria 被打破（後端 with_for_update 保
+  // 資料安全，但重複呼叫仍會讓使用者看到剛成功操作後又跳出困惑的失敗 toast）。
+  // 呼叫端（DismissalPosQueueCard）用這個 Set 判斷是否 disable 按鈕。
+  const confirmingIds = reactive(new Set<number>())
+
   watch(
     activeCalls,
     (calls) => {
@@ -273,13 +280,18 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
   async function confirmProxyPickup(item: PosQueueItem) {
     const authId = item.call?.pickup_authorization_id
     if (typeof authId !== 'number') return
+    const id = Number(item.id)
+    if (confirmingIds.has(id)) return
+    confirmingIds.add(id)
     try {
       await confirmVisualMatch(authId)
-      confirmedActiveIds.add(Number(item.id))
-      localActiveCalls.delete(Number(item.id))
+      confirmedActiveIds.add(id)
+      localActiveCalls.delete(id)
     } catch (e) {
       const err = e as { response?: { data?: { detail?: string } } }
       ElMessage.error(err.response?.data?.detail || `確認接送失敗：${item.studentName}`)
+    } finally {
+      confirmingIds.delete(id)
     }
   }
 
@@ -291,7 +303,8 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     staging.clear()
     localActiveCalls.clear()
     confirmedActiveIds.clear()
+    confirmingIds.clear()
   })
 
-  return { queue, addToQueue, cancel, confirmProxyPickup }
+  return { queue, addToQueue, cancel, confirmProxyPickup, confirmingIds }
 }
