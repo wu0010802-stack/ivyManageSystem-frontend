@@ -28,3 +28,6 @@ CLAUDE.md.before-*
 # 由 scripts/gen-tenant-brand-conf.mjs 於 prebuild 產生（不進版控）
 nginx-tenant-brand.conf
 public/brand-version.json
+
+# vitest blob 分片報告（CI artifact，--merge-reports 用；不入 repo）
+.vitest-reports/
