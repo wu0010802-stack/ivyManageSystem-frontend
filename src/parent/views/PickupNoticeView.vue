@@ -364,22 +364,17 @@ watch(selectedId, () => {
     </div>
 
     <template v-else-if="selectedChild">
-      <!-- 目前選中的學生與班級 -->
+      <!-- 目前選中的學生與班級 + 已抵達校門口（永遠顯示，不需先送出「多久後抵達」） -->
       <div class="pn-student">
-        <span class="material-symbols-rounded pn-student__ico" aria-hidden="true">child_care</span>
-        <div>
-          <p class="pn-student__name">{{ selectedChild.name }}</p>
-          <p class="pn-student__room">{{ selectedChild.classroom_name || '未分班' }}</p>
+        <div class="pn-student__info">
+          <span class="material-symbols-rounded pn-student__ico" aria-hidden="true">child_care</span>
+          <div class="pn-student__text">
+            <p class="pn-student__name">{{ selectedChild.name }}</p>
+            <p class="pn-student__room">{{ selectedChild.classroom_name || '未分班' }}</p>
+          </div>
         </div>
-      </div>
-
-      <!-- 錯誤誠實呈現 -->
-      <p v-if="errorText" class="pn-error" role="alert">{{ errorText }}</p>
-
-      <!-- 已抵達校門口：永遠顯示，不需先送出「多久後抵達」 -->
-      <section v-if="showArriveNowButton" class="pn-arrive-card" data-testid="pn-arrive-now-card">
-        <p class="pn-arrive-card__hint">已經到校門口了？不用選時間，直接送出：</p>
         <button
+          v-if="showArriveNowButton"
           type="button"
           class="pn-btn pn-arrive-now-btn"
           :disabled="actioning || submitting"
@@ -389,8 +384,10 @@ watch(selectedId, () => {
           <span class="material-symbols-rounded" aria-hidden="true">pin_drop</span>
           已抵達校門口
         </button>
-        <p class="pn-arrive-card__note">按下後立即通知園所與教師端。</p>
-      </section>
+      </div>
+
+      <!-- 錯誤誠實呈現 -->
+      <p v-if="errorText" class="pn-error" role="alert">{{ errorText }}</p>
 
       <!-- 追蹤卡：有進行中（或今天已完成）的預告 -->
       <section v-if="trackedNotice" class="pn-card pn-track" data-testid="pn-tracking-card">
@@ -463,7 +460,6 @@ watch(selectedId, () => {
           >{{ m }} 分鐘</button>
         </div>
 
-        <p class="pn-wheel-label">或滾動微調分鐘數</p>
         <div class="pn-wheel">
           <div class="pn-wheel__fade pn-wheel__fade--top" aria-hidden="true"></div>
           <div class="pn-wheel__band" aria-hidden="true"></div>
@@ -626,23 +622,41 @@ watch(selectedId, () => {
 .pn-student {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 10px;
   margin-bottom: 12px;
+}
+.pn-student__info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 .pn-student__ico {
   font-size: 32px;
   color: var(--pn-primary);
+  flex-shrink: 0;
+}
+.pn-student__text {
+  min-width: 0;
 }
 .pn-student__name {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   color: var(--pn-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .pn-student__room {
   margin: 0;
   font-size: 13px;
   color: var(--pn-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pn-error {
@@ -654,38 +668,22 @@ watch(selectedId, () => {
   font-size: 14px;
 }
 
-/* ─── 已抵達校門口（永遠顯示） ─── */
-.pn-arrive-card {
-  background: var(--pn-surface-card);
-  border: 1.5px solid var(--pn-error);
-  border-radius: 16px;
-  padding: 14px;
-  margin-bottom: 16px;
-}
-.pn-arrive-card__hint {
-  margin: 0 0 10px;
-  font-size: 13px;
-  color: var(--pn-on-surface-variant);
-}
+/* ─── 已抵達校門口：與學生資訊同一排（永遠顯示） ─── */
 .pn-arrive-now-btn {
-  width: 100%;
-  min-height: 56px;
-  border-radius: 16px;
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 20px;
   background: var(--pn-error);
   color: var(--pn-on-error);
-  font-size: 17px;
+  font-size: 13px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 4px;
+  white-space: nowrap;
 }
 .pn-arrive-now-btn .material-symbols-rounded {
-  font-size: 22px;
-}
-.pn-arrive-card__note {
-  margin: 8px 2px 0;
-  font-size: 11.5px;
-  color: var(--pn-on-surface-variant);
+  font-size: 18px;
 }
 
 .pn-card {
@@ -706,6 +704,7 @@ watch(selectedId, () => {
 .pn-chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -728,12 +727,6 @@ watch(selectedId, () => {
 }
 
 /* ─── 計時器滾輪（iOS 計時器風格，微調分鐘數） ─── */
-.pn-wheel-label {
-  text-align: center;
-  font-size: 12.5px;
-  color: var(--pn-on-surface-variant);
-  margin: 4px 0 6px;
-}
 .pn-wheel {
   position: relative;
   height: 176px;
@@ -750,7 +743,7 @@ watch(selectedId, () => {
   top: 66px;
   height: 44px;
   border-radius: 12px;
-  background: var(--pn-surface-card);
+  background: color-mix(in srgb, var(--pn-on-surface) 12%, transparent);
   pointer-events: none;
   z-index: 1;
 }
@@ -795,7 +788,7 @@ watch(selectedId, () => {
   opacity: 1;
   font-size: 19px;
   font-weight: 800;
-  color: var(--pn-on-primary-container);
+  color: var(--pn-on-surface);
 }
 .pn-wheel-hint {
   text-align: center;
