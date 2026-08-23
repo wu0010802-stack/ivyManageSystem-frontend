@@ -10,6 +10,8 @@ export const getPortalDismissalCalls = () => api.get('/portal/dismissal-calls')
 export const getPortalPendingCount = () => api.get('/portal/dismissal-calls/pending-count')
 export const acknowledgeDismissalCall = (id: number) => api.post(`/portal/dismissal-calls/${id}/acknowledge`)
 export const completeDismissalCall = (id: number) => api.post(`/portal/dismissal-calls/${id}/complete`)
+// 教師端取消（pending/acknowledged 可取消；誤建/家長改口，不必再找管理端）
+export const cancelPortalDismissalCall = (id: number) => api.post(`/portal/dismissal-calls/${id}/cancel`)
 
 // ---------------------------------------------------------------------------
 // WebSocket 自訂關閉碼（對應後端 dismissal_ws.py 定義）

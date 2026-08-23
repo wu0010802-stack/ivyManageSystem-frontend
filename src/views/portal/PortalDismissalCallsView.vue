@@ -5,6 +5,7 @@ import { Bell, CircleCheck, Mute, Refresh } from '@element-plus/icons-vue'
 import {
   acknowledgeDismissalCall,
   completeDismissalCall,
+  cancelPortalDismissalCall,
 } from '@/api/dismissalCalls'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
 import {
@@ -87,6 +88,32 @@ const handleComplete = async (call: DismissalCall) => {
     await completeDismissalCall(call.id)
     activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
     ElMessage.success('已標記為放學')
+  } catch (e) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '操作失敗')
+  }
+}
+
+// ─── 取消通知（誤建／家長改口）───────────────────────────
+// 2026-08-24 起教師可自行取消 pending/acknowledged 通知，不必再找管理端。
+const handleCancel = async (call: DismissalCall) => {
+  try {
+    await ElMessageBox.confirm(
+      `確定取消 ${call.student_name}（${call.classroom_name}）的接送通知？\n取消後這筆通知即結束，若家長仍會來接請重新建立。`,
+      '取消接送通知',
+      {
+        confirmButtonText: '取消通知',
+        cancelButtonText: '返回',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return // 使用者返回
+  }
+  try {
+    await cancelPortalDismissalCall(call.id)
+    activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
+    ElMessage.success('已取消接送通知')
   } catch (e) {
     const err = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(err.response?.data?.detail || '操作失敗')
@@ -205,6 +232,13 @@ onMounted(() => {
               class="act-btn"
               @click="handleComplete(call)"
             >帶出去放學</el-button>
+            <el-button
+              v-if="call.status === 'pending' || call.status === 'acknowledged'"
+              type="danger"
+              plain
+              class="act-btn act-btn--cancel"
+              @click="handleCancel(call)"
+            >取消通知</el-button>
           </template>
         </DismissalCallCard>
       </TransitionGroup>
@@ -418,6 +452,11 @@ onMounted(() => {
 .act-btn {
   min-height: var(--touch-target-min);
   font-weight: var(--font-weight-semibold);
+}
+/* 卡片 action slot 已用 flex gap 排版；清掉 Element Plus 相鄰按鈕的預設
+   margin-left，避免與 gap 疊加（手機直排時更會歪一邊） */
+.act-btn--cancel {
+  margin-left: 0;
 }
 
 /* 卡片進場 / 移除 / 重排序動畫 */
