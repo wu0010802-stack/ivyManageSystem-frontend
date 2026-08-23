@@ -6,6 +6,12 @@
  * 家長預約且未抵達的 ETA 顯示重用 useDismissalUrgency.ts 既有的
  * formatExpectedArrival / etaRelativeText（不重造等候/ETA 文案邏輯）。
  *
+ * proxy（委託代理人，T-021）刻意不吃這條 ETA 路徑：後端建立 proxy 的
+ * dismissal_call 時 expected_arrival_at 填的是「建立當下時間」，不是真的
+ * 預計抵達時間，顯示 ETA 倒數／相對文案會誤導辦公室。proxy 分支改顯示
+ * 代理人姓名（＋關係）＋明碼取件碼＋靜態狀態文字，不呼叫
+ * formatExpectedArrival/etaRelativeText。
+ *
  * 範圍說明：mockup（docs/mockups/2026-08-20-dismissal-pos-queue.html）對「已送出
  * 通知」的 active call 多做了一層 swipe 後二次確認 strip（避免手滑誤取消已通知
  * 教師端的項目）；T-009 acceptance_criteria 只要求「swipe 完成後 emit cancel(item)
@@ -42,20 +48,44 @@ const SOURCE_LABEL: Record<PosQueueSource, string> = {
 
 const sourceLabel = computed(() => SOURCE_LABEL[props.item.source])
 
-/** 家長預約且尚未抵達：顯示 ETA，不顯示「已通知教師端」等候標記。 */
+const isProxy = computed(() => props.item.source === 'proxy')
+
+/** 代理人姓名（＋關係，如「王小明（阿姨）」），沿用既有 PickupAuthorizationsView 等頁的顯示慣例。 */
+const proxyPersonLabel = computed(() => {
+  if (!isProxy.value) return ''
+  const name = props.item.call?.person_name
+  if (!name) return ''
+  const relation = props.item.call?.person_relation
+  return relation ? `${name}（${relation}）` : name
+})
+
+const proxyPickupCode = computed(() =>
+  isProxy.value ? (props.item.call?.pickup_code ?? '') : '',
+)
+
+/** 家長預約且尚未抵達：顯示 ETA，不顯示「已通知教師端」等候標記。proxy 一律不算 preArrival（見檔頭註解）。 */
 const preArrival = computed(
-  () => props.item.phase === 'active' && !!props.item.call && isPreArrivalNotice(props.item.call),
+  () =>
+    !isProxy.value &&
+    props.item.phase === 'active' &&
+    !!props.item.call &&
+    isPreArrivalNotice(props.item.call),
 )
 
 const etaText = computed(() => {
-  if (!preArrival.value || !props.item.call) return ''
+  if (isProxy.value || !preArrival.value || !props.item.call) return ''
   const expected = formatExpectedArrival(props.item.call.expected_arrival_at)
   const rel = etaRelativeText(props.item.call.expected_arrival_at, props.now)
   return [expected, rel].filter(Boolean).join(' · ')
 })
 
-/** 已送出（active）且非預約未抵達：顯示「已通知教師端，等待確認」等候標記。 */
-const showWaitingFlag = computed(() => props.item.phase === 'active' && !preArrival.value)
+/** proxy 且已送出：顯示靜態委託接送狀態文字，不進 ETA／等候標記路徑。 */
+const showProxyStatus = computed(() => props.item.phase === 'active' && isProxy.value)
+
+/** 已送出（active）且非預約未抵達、非 proxy：顯示「已通知教師端，等待確認」等候標記。 */
+const showWaitingFlag = computed(
+  () => props.item.phase === 'active' && !isProxy.value && !preArrival.value,
+)
 
 const { dragX, reboundInstant, onPointerDown, onPointerMove, onPointerUp, onPointerCancel } =
   useSwipeToCancel({
@@ -90,12 +120,20 @@ const bodyStyle = computed(() => ({
         </span>
       </div>
 
+      <div v-if="isProxy && (proxyPersonLabel || proxyPickupCode)" class="pos-queue-card__proxy-info">
+        <span v-if="proxyPersonLabel" class="pos-queue-card__proxy-person">{{ proxyPersonLabel }}</span>
+        <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
+      </div>
+
       <DismissalPosCountdownBar
         v-if="item.phase === 'staging' && item.countdown"
         :started-at="item.countdown.startedAt"
         :duration-ms="item.countdown.durationMs"
       />
       <div v-else-if="etaText" class="pos-queue-card__eta-flag">{{ etaText }}</div>
+      <div v-else-if="showProxyStatus" class="pos-queue-card__waiting-flag">
+        <span class="pos-queue-card__waiting-dot" aria-hidden="true" />今日委託接送，等待到場
+      </div>
       <div v-else-if="showWaitingFlag" class="pos-queue-card__waiting-flag">
         <span class="pos-queue-card__waiting-dot" aria-hidden="true" />已通知教師端，等待確認
       </div>
@@ -178,6 +216,26 @@ const bodyStyle = computed(() => ({
 .pos-queue-card__source-tag--proxy {
   background: var(--neutral-700);
   color: #fff;
+}
+
+.pos-queue-card__proxy-info {
+  margin-top: var(--space-2, 8px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px var(--space-2, 8px);
+}
+
+.pos-queue-card__proxy-person {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-secondary);
+}
+
+.pos-queue-card__proxy-code {
+  font-size: var(--text-sm, 13px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
 }
 
 .pos-queue-card__eta-flag {

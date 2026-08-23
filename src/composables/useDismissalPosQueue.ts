@@ -56,9 +56,19 @@ function stagingItemId(studentId: number): string {
   return `${STAGING_ID_PREFIX}${studentId}`
 }
 
-/** 後端 active call → PosQueueItem（phase='active'）。request_source 對齊 D2：staff=現場／parent=預約。 */
+/**
+ * 後端 active call → PosQueueItem（phase='active'）。request_source 對齊
+ * D2：staff=現場／parent=預約／proxy=委託代理人（T-021）。proxy 的 call 一律是
+ * 家長建立授權當下後端就直接建立成立的 dismissal_call，不會經過 staging／5 秒
+ * 倒數（addToQueue/submit 只服務 POS 現場點擊發起的 onsite 流程）。
+ */
 function toActiveItem(call: DismissalCallView): PosQueueItem {
-  const source: PosQueueSource = call.request_source === 'parent' ? 'reservation' : 'onsite'
+  const source: PosQueueSource =
+    call.request_source === 'parent'
+      ? 'reservation'
+      : call.request_source === 'proxy'
+        ? 'proxy'
+        : 'onsite'
   return {
     id: call.id,
     phase: 'active',

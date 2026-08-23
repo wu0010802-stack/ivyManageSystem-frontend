@@ -254,6 +254,34 @@ describe('useDismissalPosQueue', () => {
     stop()
   })
 
+  it('request_source=proxy 的後端 active call 轉出 source=proxy 的 PosQueueItem，並帶出代理人/取件碼資訊（T-021）', () => {
+    const activeCalls = ref<DismissalCallView[]>([
+      {
+        id: 60,
+        student_id: 7,
+        student_name: '陳小華',
+        classroom_name: '彩虹班',
+        status: 'pending',
+        request_source: 'proxy',
+        requested_at: '2026-08-23T08:00:00+08:00',
+        expected_arrival_at: '2026-08-23T08:00:00+08:00',
+        person_name: '王小明',
+        person_relation: '阿姨',
+        pickup_code: '482913',
+      },
+    ])
+    const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
+
+    expect(api.queue.value).toHaveLength(1)
+    const item = api.queue.value[0]
+    expect(item.phase).toBe('active')
+    expect(item.source).toBe('proxy')
+    expect(item.call?.person_name).toBe('王小明')
+    expect(item.call?.person_relation).toBe('阿姨')
+    expect(item.call?.pickup_code).toBe('482913')
+    stop()
+  })
+
   it('元件卸載（effectScope.stop）時清除所有未到期的 timer，不留殭屍呼叫', async () => {
     const activeCalls = ref<DismissalCallView[]>([])
     const { api, stop } = run(() => useDismissalPosQueue(activeCalls))
