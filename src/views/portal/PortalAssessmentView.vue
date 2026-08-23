@@ -2,7 +2,7 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassAssessments, createPortalAssessment } from '@/api/studentAssessments'
-import api from '@/api/index'
+import { getMyStudents } from '@/api/portal'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG as _RATING_TAG } from '@/constants/studentRecords'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
@@ -47,7 +47,7 @@ const currentStudents = ref<ClassroomStudent[]>([])
 const fetchMyStudents = async () => {
   classLoading.value = true
   try {
-    const res = await api.get('/portal/my-students')
+    const res = await getMyStudents()
     classrooms.value = res.data.classrooms || []
     if (classrooms.value.length > 0) {
       activeClassroom.value = String(classrooms.value[0].classroom_id)

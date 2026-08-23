@@ -876,8 +876,10 @@ html.dark .portal-layout {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
-  background: #f0fdf4;
-  border-bottom: 1px solid var(--color-success-soft);
+  /* token 化（原硬編 #f0fdf4 淺綠不翻色，dark 下成刺眼亮條——finding #2 既有債清償）：
+     light=soft pastel、dark=alpha tint，文字 *-darker 兩模式各自對比達標 */
+  background: var(--color-success-soft);
+  border-bottom: 1px solid var(--color-success);
   font-size: var(--text-base);
   color: var(--color-success-darker);
 }
@@ -1095,9 +1097,4 @@ html.dark .portal-layout {
   font-size: 22px;
 }
 
-/* dark mode：install-banner 背景是硬編淺綠（不翻色，finding #2 既有債），上游 a11y.css
-   把 --color-success-darker 翻成亮色會讓提示文字塌對比；dark scope 還原可讀深字。 */
-html.dark .install-banner {
-  color: #15803d;
-}
 </style>
