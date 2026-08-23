@@ -6110,6 +6110,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exports/fees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Fees
+         * @description 匯出學費繳費紀錄 Excel（對帳用途）。
+         *
+         *     聚焦金流對帳，刻意不含家長聯絡資訊（比照 export_students 需
+         *     assert_guardian_pii_access 的複雜度——本匯出不需要，故不放家長欄位）；
+         *     全校 scope 匯出比照 export_students 鎖 :all，禁 own_class 自訂角色
+         *     匯出全校對帳明細。
+         */
+        get: operations["export_fees_api_exports_fees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exports/holidays": {
         parameters: {
             query?: never;
@@ -6142,6 +6167,27 @@ export interface paths {
          * @description 匯出請假記錄 Excel
          */
         get: operations["export_leaves_api_exports_leaves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/misc-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Misc Receipts
+         * @description 匯出雜項收款簽收紀錄 Excel。理由與 scope 判斷同 export_vendor_payments
+         *     （雙生模組，財務簽收無班級層級 scope 概念）。
+         */
+        get: operations["export_misc_receipts_api_exports_misc_receipts_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6214,6 +6260,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exports/vendor-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Vendor Payments
+         * @description 匯出廠商付款簽收紀錄 Excel。
+         *
+         *     篩選（date range / category / status）與 GET /api/vendor-payments 列表一致。
+         *     財務簽收為全園務層級資料（`require_staff_permission` 本身即全有全無，
+         *     VENDOR_PAYMENT_READ 目前無 own_class/all 之類的 scope-qualified 授權），
+         *     不同於 export_students 的班級層級 PII 才需要的 assert_all_scope 分流，
+         *     故本端點不套用。
+         */
+        get: operations["export_vendor_payments_api_exports_vendor_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/extra-bonuses": {
         parameters: {
             query?: never;
@@ -6276,6 +6348,31 @@ export interface paths {
         get: operations["list_categories_api_extra_bonuses_categories_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fee-due/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Scheduler Now
+         * @description 手動立即跑一次逾期學費催繳排程（idempotent 重跑安全）。
+         *
+         *     直接呼叫與 asyncio scheduler 相同的 `tick_fee_due_reminders`——內部已含
+         *     `for_each_tenant` 逐租戶迭代、per-tenant advisory lock（同租戶同日內
+         *     並發觸發會自動略過）、以及 `NotificationLog` 去重窗（repeat_days 內
+         *     不重推同一學生）。本端點僅加權限守衛，不重複實作鎖定 / 去重邏輯。
+         */
+        post: operations["run_scheduler_now_api_fee_due_run_now_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6417,6 +6514,10 @@ export interface paths {
          *     - record 上的 amount_paid / payment_date / payment_method 保持「最後一次」
          *       快照供清單顯示；真正的月度聚合看 StudentFeePayment
          *     - idempotency_key：全域唯一，同 key 重送回放（DB UNIQUE 兜底）
+         *
+         *     核心邏輯抽至 `_pay_core.pay_fee_record_core`（供後續批次端點共用，純重構、
+         *     行為不變）；本函式只負責交易邊界與「非回放路徑才失效報表快取」（與重構前
+         *     逐字相同：回放路徑在 core 內部提早 return，不會走到快取失效那行）。
          */
         put: operations["pay_fee_record_api_fees_records__record_id__pay_put"];
         post?: never;
@@ -6493,6 +6594,38 @@ export interface paths {
         get: operations["list_fee_refunds_api_fees_records__record_id__refunds_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/records/batch-pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Pay Fee Records
+         * @description 批次登記繳費 — 逐筆 SAVEPOINT 部分成功，語意固定「繳清全額」。
+         *
+         *     - 每筆等同呼叫單筆 PUT /records/{id}/pay 且 amount_paid=None（繳清
+         *       amount_due）；需部分繳費請改走單筆端點。
+         *     - 單筆失敗（已繳清 / F-034 班級 scope 拒絕 / 需金流簽核 / 記錄不存在 /
+         *       冪等 key 上下文不符）只記入該筆 failed，不影響其餘筆——與
+         *       appraisal.batch_sign_summaries 同款逐筆 begin_nested() SAVEPOINT 模式。
+         *     - 需金流簽核（該 record 新累計 >= FEE_PAYMENT_APPROVAL_THRESHOLD）一律
+         *       fail，附固定訊息，不揭露門檻/累計金額細節、不做簽核互動——請走單筆
+         *       流程由具金流簽核權限者處理。
+         *     - 依 record_id 排序後才逐筆取 with_for_update() 鎖，避免與其他並發批次
+         *       交錯順序造成 ABBA 死鎖（同 appraisal.batch_sign_summaries）；回傳
+         *       results 順序仍與請求 payload.items 一致，方便前端逐列對應。
+         */
+        post: operations["batch_pay_fee_records_api_fees_records_batch_pay_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6577,6 +6710,34 @@ export interface paths {
          * @description 軟刪除(is_active=False),保留歷史記錄。
          */
         delete: operations["delete_fee_template_api_fees_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance-reconciliation/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Scheduler Now
+         * @description 手動立即跑一次才藝 POS 對帳（bypass 每日 02:00 時刻門檻）。
+         *
+         *     對帳本身唯讀比對（僅寫入 `finance_reconciliation` watermark 游標）；發現
+         *     不一致才推 LINE 警示給老闆。per-tenant advisory lock 仍會擋同租戶同日內
+         *     的並發觸發（該租戶回傳 `skipped: True`，不算失敗）。
+         *
+         *     權限沿用全站「金流簽核」統一門檻 `ACTIVITY_PAYMENT_APPROVE`（見
+         *     services/finance/finance_guards.py）：本端點會觸發真實 LINE 推播且直接
+         *     回傳逐筆金額落差，收斂到金流簽核角色，不對一般 ACTIVITY/FEES 編輯者開放。
+         */
+        post: operations["run_scheduler_now_api_finance_reconciliation_run_now_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -8336,6 +8497,35 @@ export interface paths {
         get: operations["get_signature_image_api_misc_receipts__receipt_id__signature_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/batch-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Sign Misc Receipts
+         * @description 批次簽收：一次簽名（drawn/photo）套用到勾選的多筆待簽收收款。
+         *
+         *     NOTE: 本路由必須宣告在 ``/misc-receipts/{receipt_id}`` 之前，否則
+         *     "batch-sign" 會被當成 receipt_id 解析（422），同 summary 路由的既有慣例。
+         *
+         *     簽名儲存策略、SAVEPOINT 部分成功語意與失敗原因分類，完全對齊
+         *     api/vendor_payments.py::batch_sign_vendor_payments（雙生模組，理由見該端點
+         *     docstring：逐筆各自 put_attachment 落一份 storage 副本，不共用 signature_key
+         *     ——現行 delete 端點雖已擋掉「刪除已簽收紀錄」，但那是隱性耦合而非資料模型
+         *     不變式，複製成本遠低於耦合風險）。
+         */
+        post: operations["batch_sign_misc_receipts_api_misc_receipts_batch_sign_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10742,6 +10932,26 @@ export interface paths {
         get: operations["list_authorizations_api_pickup_authorizations_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pickup-authorizations/{auth_id}/confirm-visual-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Confirm Visual Match
+         * @description D10④：POS 佇列卡目視比對明碼後一鍵確認，不重新輸入 6 碼。
+         */
+        post: operations["admin_confirm_visual_match_api_pickup_authorizations__auth_id__confirm_visual_match_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17592,6 +17802,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments/batch-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Sign Vendor Payments
+         * @description 批次簽收：一次簽名（drawn/photo）套用到勾選的多筆待簽收付款。
+         *
+         *     NOTE: 本路由必須宣告在 ``/vendor-payments/{payment_id}`` 之前，否則
+         *     "batch-sign" 會被當成 payment_id 解析（422），同 summary 路由的既有慣例。
+         *
+         *     簽名只解析一次（整批共用同一次簽名動作）：格式不合法（base64/大小/magic
+         *     bytes）直接 400，不動任何一筆。逐筆各自落一份 storage 副本（不共用同一個
+         *     signature_key）——雖然本模組現行 delete 端點已擋掉「刪除已簽收紀錄」
+         *     （status != pending 一律 409），共用 key 在*現況*程式碼下不會被刪除路徑
+         *     互相破壞；但這是靠「delete 守衛恰好擋住」的隱性耦合，非可驗證的資料模型
+         *     不變式（未來若加沖銷/GC/資料保留等新刪除路徑，共用 key 會讓多筆紀錄一次
+         *     失去簽名佐證）。signature_key 語意上是「這一筆的簽名副本」而非「這批的
+         *     簽名副本」，複製成本（單張簽名 <1MB）遠低於耦合風險，故選擇逐筆各自
+         *     put_attachment（`utils.portfolio_storage` 以 uuid4 產生 key，天然不撞）。
+         *
+         *     逐筆 SAVEPOINT 部分成功：非 pending / 不存在（含跨租戶，兩者同歸「不存在」，
+         *     比照 `_load_payment` 慣例不洩漏跨租戶存在性）/ 建立者自行簽收（職責分離）
+         *     各自記失敗原因，不影響同批其他筆。
+         */
+        post: operations["batch_sign_vendor_payments_api_vendor_payments_batch_sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vendor-payments/summary": {
         parameters: {
             query?: never;
@@ -20228,6 +20475,71 @@ export interface components {
             /** Processed */
             processed: number;
         };
+        /**
+         * BatchFeePayItem
+         * @description 批次繳費單筆項目：只帶 record_id + 選填冪等鍵，金額固定「繳清全額」。
+         */
+        BatchFeePayItem: {
+            /**
+             * Idempotency Key
+             * @description 本筆繳費冪等鍵（語意同 PayRequest.idempotency_key）
+             */
+            idempotency_key?: string | null;
+            /** Record Id */
+            record_id: number;
+        };
+        /**
+         * BatchFeePayRequest
+         * @description 批次登記繳費——固定「繳清全額」語意（沿用單筆 amount_paid=None→amount_due）。
+         *
+         *     部分繳費（指定金額 < amount_due）仍須走單筆 PUT /records/{id}/pay；
+         *     批次端點不接受逐筆自訂金額，避免對帳單需求逐漸長成單筆端點的完整介面。
+         */
+        BatchFeePayRequest: {
+            /**
+             * Items
+             * @description 批次項目（1~200 筆）
+             */
+            items: components["schemas"]["BatchFeePayItem"][];
+            /**
+             * Notes
+             * @default
+             */
+            notes: string | null;
+            /**
+             * Payment Date
+             * Format: date
+             */
+            payment_date: string;
+            /** Payment Method */
+            payment_method: string;
+        };
+        /**
+         * BatchFeePayResultItem
+         * @description 批次繳費單筆結果。error 僅失敗時有值；amount_paid 僅成功時有值。
+         */
+        BatchFeePayResultItem: {
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Record Id */
+            record_id: number;
+        };
+        /**
+         * BatchFeePayResultOut
+         * @description POST /fees/records/batch-pay 回傳。results 順序與請求 items 一致。
+         */
+        BatchFeePayResultOut: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["BatchFeePayResultItem"][];
+            /** Succeeded */
+            succeeded: number;
+        };
         /** BatchGenerateCertRequest */
         BatchGenerateCertRequest: {
             /**
@@ -20944,6 +21256,18 @@ export interface components {
             reason: string;
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * BulkOpItemResult
+         * @description 批次操作單筆結果。
+         */
+        BulkOpItemResult: {
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id?: number | null;
+            /** Ok */
+            ok: boolean;
         };
         /** BulkStudentsRequest */
         BulkStudentsRequest: {
@@ -23824,6 +24148,14 @@ export interface components {
             id: number;
             /** Note */
             note: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Person Relation */
+            person_relation?: string | null;
+            /** Pickup Authorization Id */
+            pickup_authorization_id?: number | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /** Request Source */
             request_source: string;
             /**
@@ -27528,6 +27860,21 @@ export interface components {
             /** Uploaded By Id */
             uploaded_by_id?: number | null;
         };
+        /**
+         * MiscReceiptBatchSignRequest
+         * @description 批次簽收：一次簽名套用到勾選的多筆待簽收收款（月結高頻手動痛點）。
+         */
+        MiscReceiptBatchSignRequest: {
+            /** Ids */
+            ids: number[];
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
+        };
         /** MiscReceiptCreate */
         MiscReceiptCreate: {
             /** Amount */
@@ -29874,10 +30221,15 @@ export interface components {
         /**
          * PickupAuthorizationCreatedOut
          * @description POST /pickup-authorizations 回傳 — 明碼取件碼僅此一次。
+         *
+         *     `dismissal_call_skipped_student_ids`：本次批次中，因該學生今天已有進行中
+         *     接送通知而跳過建立 dismissal_call 的學生 id（授權本身仍正常建立）。
          */
         PickupAuthorizationCreatedOut: {
             /** Code */
             code: string;
+            /** Dismissal Call Skipped Student Ids */
+            dismissal_call_skipped_student_ids?: number[];
             /** Items */
             items: components["schemas"]["PickupAuthorizationOut"][];
         };
@@ -29921,6 +30273,8 @@ export interface components {
             person_relation: string;
             /** Photo Url */
             photo_url?: string | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /**
              * Pickup Date
              * Format: date
@@ -31240,7 +31594,9 @@ export interface components {
         };
         /**
          * PortalPickupAuthOut
-         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊，永不含取件碼。
+         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊。
+         *
+         *     T-020 起繼承 `pickup_code`：僅 active 授權回傳明碼，供 POS 佇列卡目視比對。
          */
         PortalPickupAuthOut: {
             /** Batch Key */
@@ -31279,6 +31635,8 @@ export interface components {
             person_relation: string;
             /** Photo Url */
             photo_url?: string | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /**
              * Pickup Date
              * Format: date
@@ -37278,6 +37636,23 @@ export interface components {
             /** Signed On */
             signed_on?: string | null;
         };
+        /**
+         * SignoffBatchSignResultOut
+         * @description 財務簽收批次簽收回傳共用 shape — {results, succeeded, failed}。
+         *
+         *     results 為每筆 {id, ok, error?}（沿用 `BulkOpItemResult`）；succeeded/failed
+         *     為成功/失敗**筆數**（非 id 清單，與 `BatchApproveResultOut` 的
+         *     list[int] `succeeded` 形狀不同——此為前端批次簽收 UI 的既定契約）。
+         *     vendor_payments / misc_receipts 兩個 batch-sign 端點回傳形狀一致，共用此 schema。
+         */
+        SignoffBatchSignResultOut: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["BulkOpItemResult"][];
+            /** Succeeded */
+            succeeded: number;
+        };
         /** SignRequestOut */
         SignRequestOut: {
             /** Batch Id */
@@ -39627,6 +40002,21 @@ export interface components {
             uploaded_at?: string | null;
             /** Uploaded By Id */
             uploaded_by_id?: number | null;
+        };
+        /**
+         * VendorPaymentBatchSignRequest
+         * @description 批次簽收：一次簽名套用到勾選的多筆待簽收付款（月結高頻手動痛點）。
+         */
+        VendorPaymentBatchSignRequest: {
+            /** Ids */
+            ids: number[];
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
         };
         /** VendorPaymentCreate */
         VendorPaymentCreate: {
@@ -49111,7 +49501,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DismissalCallOut"][];
                 };
             };
             /** @description Validation Error */
@@ -50332,6 +50722,39 @@ export interface operations {
             };
         };
     };
+    export_fees_api_exports_fees_get: {
+        parameters: {
+            query?: {
+                classroom_name?: string | null;
+                period?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_holidays_api_exports_holidays_get: {
         parameters: {
             query: {
@@ -50369,6 +50792,40 @@ export interface operations {
             query: {
                 month: number;
                 year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_misc_receipts_api_exports_misc_receipts_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
             };
             header?: never;
             path?: never;
@@ -50467,6 +50924,40 @@ export interface operations {
                 classroom_id?: number | null;
                 /** @description 在籍狀態篩選（不填=在籍＋離校皆含） */
                 is_active?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_vendor_payments_api_exports_vendor_payments_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
             };
             header?: never;
             path?: never;
@@ -50643,6 +51134,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExtraBonusCategoryOut"][];
+                };
+            };
+        };
+    };
+    run_scheduler_now_api_fee_due_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -51005,6 +51516,39 @@ export interface operations {
             };
         };
     };
+    batch_pay_fee_records_api_fees_records_batch_pay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchFeePayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchFeePayResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_refunded_records_api_fees_refunds_get: {
         parameters: {
             query?: {
@@ -51203,6 +51747,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_scheduler_now_api_finance_reconciliation_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -54393,6 +54957,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_sign_misc_receipts_api_misc_receipts_batch_sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiscReceiptBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignoffBatchSignResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -58251,6 +58848,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortalPickupAuthListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_confirm_visual_match_api_pickup_authorizations__auth_id__confirm_visual_match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
                 };
             };
             /** @description Validation Error */
@@ -70669,6 +71297,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_sign_vendor_payments_api_vendor_payments_batch_sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorPaymentBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignoffBatchSignResultOut"];
                 };
             };
             /** @description Validation Error */
