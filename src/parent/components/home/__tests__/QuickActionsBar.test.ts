@@ -178,7 +178,7 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     expect(w.find('.sheet-stub-title').text()).toContain('接送')
     const candidateLabels = w.findAll('.qa-sheet-label').map((n) => n.text())
     expect(candidateLabels).toEqual([
-      '娃娃車', '學費', '待簽文件', '行事曆',
+      '已抵達', '娃娃車', '學費', '待簽文件', '行事曆',
       '請假', '用藥委託', '課後才藝', '活動調查',
       '孩子檔案', '成長報告', '照片牆', '健康紀錄',
     ])
@@ -189,12 +189,12 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     await flushPromises()
     await w.find('.qa-edit').trigger('click')
     await w.findAll('.qa-mod')[0].trigger('click')
-    await w.findAll('.qa-sheet-item')[0].trigger('click') // 選「娃娃車」
+    await w.findAll('.qa-sheet-item')[0].trigger('click') // 選「已抵達」
     await flushPromises()
 
-    expect(updateQuickActions).toHaveBeenCalledWith({ slots: ['bus', 'proxy', 'announce'] })
+    expect(updateQuickActions).toHaveBeenCalledWith({ slots: ['arrived', 'proxy', 'announce'] })
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['娃娃車', '代理接送', '公告'])
+    expect(labels).toEqual(['已抵達', '代理接送', '公告'])
     expect(w.find('.sheet-stub').exists()).toBe(false)
   })
 
@@ -259,8 +259,8 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     await w.findAll('.qa-mod')[0].trigger('click')
 
     const items = w.findAll('.qa-sheet-item')
-    await items[0].trigger('click') // 選「娃娃車」，PUT 掛著
-    await items[1].trigger('click') // 立刻再點「學費」，應被忽略
+    await items[0].trigger('click') // 選第一個候選，PUT 掛著
+    await items[1].trigger('click') // 立刻再點第二個，應被忽略
 
     expect(updateQuickActions).toHaveBeenCalledTimes(1)
     resolvePut({ data: {} })

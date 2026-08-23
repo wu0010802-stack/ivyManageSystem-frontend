@@ -1,7 +1,7 @@
 {
   "note": "由 npm run gen:parent-icons 產生；candidates 供 iconFontSubset.spec.ts 守衛比對，勿手改",
   "axes": "opsz,wght,FILL,GRAD@24,400,0..1,0",
-  "iconCount": 134,
+  "iconCount": 135,
   "icons": [
     "account_balance_wallet",
     "account_circle",
@@ -104,6 +104,7 @@
     "photo",
     "photo_camera",
     "photo_library",
+    "pin_drop",
     "plus",
     "privacy_rights",
     "rail",
@@ -240,6 +241,7 @@
     "photo",
     "photo_camera",
     "photo_library",
+    "pin_drop",
     "plus",
     "privacy_rights",
     "rail",
