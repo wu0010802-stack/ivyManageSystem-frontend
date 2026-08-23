@@ -14,24 +14,30 @@ describe('DismissalPosStudentCard', () => {
     expect(w.find('.pos-student-card').classes()).not.toContain('is-resolved')
   })
 
-  it('status=guardian_picked 時卡片視覺降階且不再 emit quick-dispatch', async () => {
+  it('status=guardian_picked 時卡片視覺降階（淡灰）但仍可點擊再次通知', async () => {
     const w = mount(DismissalPosStudentCard, {
       props: { student: STUDENT, status: 'guardian_picked' },
     })
-    await w.find('.pos-student-card').trigger('click')
-    expect(w.emitted('quick-dispatch')).toBeUndefined()
     expect(w.find('.pos-student-card').classes()).toContain('is-resolved')
+    expect(w.find('.pos-student-card').classes()).toContain('is-redispatchable')
     expect(w.find('.pos-student-card__status--picked').exists()).toBe(true)
     expect(w.text()).toContain('家長已接送')
+
+    await w.find('.pos-student-card').trigger('click')
+    expect(w.emitted('quick-dispatch')).toEqual([[STUDENT]])
   })
 
-  it('status=on_leave 時顯示請假徽章且視覺降階', async () => {
+  it('status=on_leave 時顯示請假徽章且視覺降階、不可點擊', async () => {
     const w = mount(DismissalPosStudentCard, {
       props: { student: STUDENT, status: 'on_leave' },
     })
     expect(w.find('.pos-student-card').classes()).toContain('is-resolved')
+    expect(w.find('.pos-student-card').classes()).not.toContain('is-redispatchable')
     expect(w.find('.pos-student-card__status--leave').exists()).toBe(true)
     expect(w.text()).toContain('請假')
+
+    await w.find('.pos-student-card').trigger('click')
+    expect(w.emitted('quick-dispatch')).toBeUndefined()
   })
 
   it('status=bus_picked 時顯示娃娃車已接送徽章且視覺降階', async () => {
@@ -83,7 +89,9 @@ describe('DismissalPosStudentCard', () => {
     const picked = mount(DismissalPosStudentCard, {
       props: { student: STUDENT, status: 'guardian_picked' },
     })
-    expect(picked.find('.pos-student-card').attributes('aria-label')).toBe('王小明，家長已接送')
+    expect(picked.find('.pos-student-card').attributes('aria-label')).toBe(
+      '王小明，家長已接送，點擊可再次通知',
+    )
 
     const proxyPicked = mount(DismissalPosStudentCard, {
       props: { student: STUDENT, status: 'proxy_picked' },

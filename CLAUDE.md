@@ -28,6 +28,14 @@ npm run test:watch     # 監視模式（開發中使用）
 npm run test:coverage  # 含覆蓋率報告
 ```
 
+### 本地驗證範圍（lint / typecheck / test）
+本地開發／改動後驗證，**只跑改動或相依範圍**，不要每次都跑全倉：
+- lint：`npx eslint <改動的檔案或目錄>`（`npm run lint` = `eslint .` 是全倉，本地不建議常態跑）
+- test：`npm run test -- --run <改動相關的測試檔或目錄>`（家長端改動仍要照上面「測試」段落跑滿三棵樹）
+- typecheck：`vue-tsc --noEmit` 本身是全專案型別檢查，無法只測部分檔案，改動後照跑一次即可（成本遠低於全量 test/lint）
+
+全倉 lint／全量 `npm run test -- --run`（無參數）留給 CI 或使用者明確要求「跑全部」時才做；PR 合併前 CI 的 blocking gate 仍會跑全套，本地沒必要重複跑一次全倉再等一次 CI。
+
 ### CI/CD
 `.github/workflows/ci.yml`：push/PR 到 `main`、`staging`，以及 `release` 分支的相應事件時執行 audit、test、build 與 OpenAPI drift 等 gate；精確觸發條件與命令以 workflow 為準。
 

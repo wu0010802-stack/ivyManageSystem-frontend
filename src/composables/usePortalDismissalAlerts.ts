@@ -10,7 +10,8 @@
  * 純前端：不依賴後端推播。由 PortalLayout 呼叫 initPortalDismissalAlerts() 一次。
  */
 import { ref, computed } from 'vue'
-import { getPortalDismissalCalls } from '@/api/dismissalCalls'
+import { getPortalDismissalCalls, completeDismissalCall } from '@/api/dismissalCalls'
+import { drawSoftChime, drawChimeTones, speakZh, speechSupported } from '@/composables/useDismissalChime'
 import {
   classifyWebSocketClose,
   closeWebSocketSafely,
@@ -21,7 +22,7 @@ import {
 import {
   sortActiveQueue,
   isPreArrivalNotice,
-  etaDeltaMinutes,
+  reservationAnnouncementText,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
@@ -74,9 +75,6 @@ const wsRecentlyCreated = new Map<number, number>()
 const WS_MAX_RETRIES = 5
 // 三音提示約 0.70s 響完才唸，避免尾音與語音重疊。
 const SPEECH_LEAD_MS = 720
-// 語速稍慢、音高微亮，讓班級與名字清楚又不顯得生硬。
-const SPEECH_RATE = 0.9
-const SPEECH_PITCH = 1.04
 const speechTimers = new Set<ReturnType<typeof setTimeout>>()
 
 // ── 聲音 / 震動 ──
@@ -99,18 +97,9 @@ function unlockAudio(): void {
   } catch { /* 解鎖失敗：audioUnlocked 維持 false，UI 顯示提示 */ }
 }
 
-// 上行 C 大調三音（C5 → E5 → G5）。以 triangle 波形與低音量短包絡模擬木琴，
-// 保留通知辨識度、避開傳統高頻門鈴的尖銳感，適合幼兒園教室／走廊廣播。
-const DISMISSAL_CHIME_TONES = [
-  { freq: 523.25, at: 0, dur: 0.28 },  // C5
-  { freq: 659.25, at: 0.16, dur: 0.28 }, // E5
-  { freq: 783.99, at: 0.32, dur: 0.38 }, // G5
-]
-const CHIME_PEAK_GAIN = 0.12
-
-// 家長預告（尚未抵達）的柔和提示：單音、低音量、無震動無語音。
-// 強提醒（三音+震動+語音）保留給「已到門口」與 staff 即時通知。
-const SOFT_CHIME_GAIN = 0.06
+// 家長預告（尚未抵達）的柔和提示：單音、低音量、無震動、原本無語音（now 已加播報，見
+// handleWsEvent）。強提醒（三音+震動+語音）保留給「已到門口」與 staff 即時通知。
+// 音色描繪與後台接送佇列的 useDismissalReservationChime 共用，見 useDismissalChime.ts。
 function playSoftChime(): void {
   if (muted.value) return
   try {
@@ -120,17 +109,7 @@ function playSoftChime(): void {
       audioCtx = new Ctx()
     }
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {})
-    const t0 = audioCtx.currentTime
-    const osc = audioCtx.createOscillator()
-    const gain = audioCtx.createGain()
-    osc.type = 'triangle'
-    osc.frequency.value = 523.25 // C5 單音
-    gain.gain.setValueAtTime(0, t0)
-    gain.gain.linearRampToValueAtTime(SOFT_CHIME_GAIN, t0 + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3)
-    osc.connect(gain).connect(audioCtx.destination)
-    osc.start(t0)
-    osc.stop(t0 + 0.32)
+    drawSoftChime(audioCtx)
   } catch { /* ignore */ }
 }
 
@@ -143,29 +122,13 @@ function playBeep(): void {
       audioCtx = new Ctx()
     }
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {})
-    const t0 = audioCtx.currentTime
-    for (const tone of DISMISSAL_CHIME_TONES) {
-      const osc = audioCtx.createOscillator()
-      const gain = audioCtx.createGain()
-      osc.type = 'triangle'
-      osc.frequency.value = tone.freq
-      const start = t0 + tone.at
-      gain.gain.setValueAtTime(0, start)
-      gain.gain.linearRampToValueAtTime(CHIME_PEAK_GAIN, start + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.001, start + tone.dur)
-      osc.connect(gain).connect(audioCtx.destination)
-      osc.start(start)
-      osc.stop(start + tone.dur + 0.02)
-    }
+    drawChimeTones(audioCtx)
   } catch { /* ignore */ }
 }
 
 // ── 語音播報（Web Speech API，best-effort；beep 為不支援時的保底）──
-function speechSupported(): boolean {
-  return typeof window !== 'undefined'
-    && typeof window.speechSynthesis !== 'undefined'
-    && typeof window.SpeechSynthesisUtterance === 'function'
-}
+// speechSupported / voice 挑選 / speak 邏輯移至 useDismissalChime.ts::speakZh，
+// 與後台接送佇列（useDismissalReservationChime）共用，避免兩處各自維護一份。
 
 // iOS Safari 與 AudioContext 同樣需在首次 user gesture 內解鎖 speechSynthesis，
 // 否則之後的 speak() 永不發聲。LINE in-app WebView 多半不支援，feature-detect no-op。
@@ -178,39 +141,22 @@ function unlockSpeech(): void {
   } catch { /* 解鎖失敗：維持靜默，beep 仍為保底 */ }
 }
 
-// 挑指定語言的 voice：優先精確匹配（zh-TW），否則同語系前綴（zh）。
-// hasVoices=false 代表 getVoices() 尚未載入（部分瀏覽器首呼回空，需 voiceschanged）。
-function pickVoice(exact: string, prefix: string): { hasVoices: boolean; voice: SpeechSynthesisVoice | null } {
-  let voices: SpeechSynthesisVoice[] = []
-  try { voices = window.speechSynthesis.getVoices?.() || [] } catch { /* ignore */ }
-  if (!voices.length) return { hasVoices: false, voice: null }
-  const voice = voices.find((v) => v.lang === exact)
-    || voices.find((v) => v.lang?.toLowerCase().startsWith(prefix))
-    || null
-  return { hasVoices: true, voice }
-}
-
 // 全中文播報，避免裝置的英文 voice 把學生姓名唸得不自然。
-// 班級／名字皆缺時退化為「學生」，與 liveAnnounce fallback 一致；若 voice 清單已載入但
-// 沒有中文 voice，寧可只保留提示音，不使用錯語系 voice。清單尚未載入時仍帶 lang 退化播報。
+// 班級／名字皆缺時退化為「學生」，與 liveAnnounce fallback 一致。
 function speakAnnouncement(
   call: { student_name?: string; classroom_name?: string },
   phrase = '，請準備回家囉',
 ): void {
   if (muted.value) return
-  if (!speechSupported()) return
-  try {
-    const studentLabel = [call.classroom_name, call.student_name].filter(Boolean).join(' ') || '學生'
-    const zhPick = pickVoice('zh-TW', 'zh')
-    if (!zhPick.hasVoices || zhPick.voice) {
-      const zh = new window.SpeechSynthesisUtterance(`${studentLabel}${phrase}`)
-      zh.lang = 'zh-TW'
-      zh.rate = SPEECH_RATE
-      zh.pitch = SPEECH_PITCH
-      if (zhPick.voice) zh.voice = zhPick.voice
-      window.speechSynthesis.speak(zh)
-    }
-  } catch { /* ignore：beep 仍為保底 */ }
+  const studentLabel = [call.classroom_name, call.student_name].filter(Boolean).join(' ') || '學生'
+  speakZh(`${studentLabel}${phrase}`)
+}
+
+// 家長預約接送：送出即播報「XX班XX的家長XX分鐘後會抵達」（不論剩幾分鐘）。
+// 文字組成與後台接送佇列共用，見 useDismissalUrgency.ts::reservationAnnouncementText。
+function speakReservationAnnouncement(call: DismissalCall): void {
+  if (muted.value) return
+  speakZh(reservationAnnouncementText(call, Date.now()))
 }
 
 // 統一的「提示音 + 播報」序列：提示音同步先響，SPEECH_LEAD_MS 後才唸（不重疊）。
@@ -267,6 +213,19 @@ function requestNotificationPermission(): void {
 // ── HTTP ──
 function isActiveStatus(status?: string): boolean {
   return status !== 'completed' && status !== 'cancelled'
+}
+
+// 教師端不再有「帶出去放學」按鈕：老師按「我收到了」時若家長預告尚未抵達，
+// 通知先停在 acknowledged；家長此刻抵達門口（dismissal_call_arrived）才補一刀
+// 自動完成放學，教師不需再操作第二次。422/網路錯誤靜默吞掉——多半是已被
+// 其他路徑完成，稍後 dismissal_call_updated 廣播到達時狀態仍會正確收斂。
+async function autoCompleteOnArrival(callId: number): Promise<void> {
+  try {
+    await completeDismissalCall(callId)
+    const idx = activeCalls.value.findIndex((c) => c.id === callId)
+    if (idx !== -1) activeCalls.value.splice(idx, 1)
+    wsRecentlyCreated.delete(callId)
+  } catch { /* ignore：見上方註解 */ }
 }
 
 // server 快照為權威基準，但【保留】在此 fetch 發出之後才由 WS 加入、快照尚未涵蓋、且仍在
@@ -403,14 +362,17 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
     // 記錄「加入當下的 fetch 序號」，讓 in-flight fetch 的晚到快照不會把這張新卡抹除。
     wsRecentlyCreated.set(payload.id, fetchDispatchSeq)
     if (isPreArrivalNotice(payload)) {
-      // 家長預告（尚未抵達）：柔和提示——單音 + 視覺插卡 + 報讀，
-      // 不震動、不語音；強提醒保留給 dismissal_call_arrived。
+      // 家長預告（尚未抵達）：送出即播報——柔和單音 + 語音唸出「XX班XX的家長
+      // XX分鐘後會抵達」+ 視覺插卡 + 報讀，不震動；強提醒保留給 dismissal_call_arrived。
       playSoftChime()
-      const eta = etaDeltaMinutes(payload.expected_arrival_at, Date.now())
-      const etaText = eta != null && eta > 0 ? `預計 ${eta} 分鐘後抵達` : '即將抵達'
-      const line = `${payload.student_name || '學生'}家長${etaText}`
-      notifyBrowser(payload, `${line}（${payload.classroom_name || ''}）`)
-      liveAnnounce.value = `預告接送：${line}`
+      const announceText = reservationAnnouncementText(payload, Date.now())
+      const speechTimer = setTimeout(() => {
+        speechTimers.delete(speechTimer)
+        speakReservationAnnouncement(payload)
+      }, SPEECH_LEAD_MS)
+      speechTimers.add(speechTimer)
+      notifyBrowser(payload, announceText)
+      liveAnnounce.value = `預告接送：${announceText}`
     } else {
       notifyBrowser(payload)
       playAlert(payload)
@@ -427,6 +389,10 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
       notifyBrowser(payload, `${payload.student_name || '學生'}家長已到門口，請準備放學`)
       playAlert(payload, '家長已到門口，請準備放學')
       liveAnnounce.value = `${payload.student_name || '學生'}家長已到門口，請準備放學`
+    }
+    // 教師已按過「我收到了」（acknowledged）且家長此刻才抵達：自動完成放學。
+    if (payload.status === 'acknowledged') {
+      autoCompleteOnArrival(payload.id)
     }
   } else if (type === 'dismissal_call_updated') {
     const idx = activeCalls.value.findIndex((c) => c.id === payload.id)

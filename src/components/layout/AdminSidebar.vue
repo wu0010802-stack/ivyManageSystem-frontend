@@ -20,12 +20,26 @@
       <el-icon><Close /></el-icon>
     </button>
     <div class="logo-container">
-      <!-- /LOGO.png 的 URL 刻意不變（L3）：nginx 依 $host 從 /brand/<slug>/ overlay
-           換檔案內容，HTML/template/manifest/SW 四處引用點零改動。 -->
-      <img src="/LOGO.png" class="logo-icon-img" :alt="branding.short_name" />
-      <transition name="fade">
-        <span v-if="!isCollapse" class="logo-text">{{ branding.titles.admin }}</span>
-      </transition>
+      <!-- 折疊時（!isMobile）僅保留收合/展開按鈕本身的 icon，logo 圖片與文字一併隱藏，
+           避免 64px 寬度同時塞 logo 與按鈕兩顆可視元素。 -->
+      <template v-if="isMobile || !isCollapse">
+        <!-- /LOGO.png 的 URL 刻意不變（L3）：nginx 依 $host 從 /brand/<slug>/ overlay
+             換檔案內容，HTML/template/manifest/SW 四處引用點零改動。 -->
+        <img src="/LOGO.png" class="logo-icon-img" :alt="branding.short_name" />
+        <transition name="fade">
+          <span v-if="!isCollapse" class="logo-text">{{ branding.titles.admin }}</span>
+        </transition>
+      </template>
+      <button
+        v-if="!isMobile"
+        type="button"
+        class="collapse-toggle"
+        :aria-label="isCollapse ? '展開側邊欄' : '收合側邊欄'"
+        @click="toggleCollapse"
+      >
+        <el-icon v-if="isCollapse"><Expand /></el-icon>
+        <el-icon v-else><Fold /></el-icon>
+      </button>
     </div>
 
     <el-scrollbar>
@@ -89,17 +103,6 @@
         </el-menu-item>
       </el-menu>
     </el-scrollbar>
-
-    <button
-      v-if="!isMobile"
-      type="button"
-      class="collapse-toggle"
-      :aria-label="isCollapse ? '展開側邊欄' : '收合側邊欄'"
-      @click="toggleCollapse"
-    >
-      <el-icon v-if="isCollapse"><Expand /></el-icon>
-      <el-icon v-else><Fold /></el-icon>
-    </button>
   </el-aside>
 </template>
 
@@ -258,7 +261,8 @@ const onMenuSelect = () => {
   height: 64px;
   display: flex;
   align-items: center;
-  padding: 0 var(--space-5);
+  justify-content: space-between;
+  padding: 0 var(--space-3) 0 var(--space-5);
   background-color: var(--neutral-900);
   border-bottom: 1px solid var(--neutral-700);
   overflow: hidden;
@@ -406,14 +410,15 @@ const onMenuSelect = () => {
   border: none;
   padding: 0;
   font: inherit;
-  color: inherit;
   cursor: pointer;
-  height: 48px;
-  display: flex;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
-  border-top: 1px solid var(--neutral-700);
   transition: background-color var(--transition-base), color var(--transition-base);
 }
 

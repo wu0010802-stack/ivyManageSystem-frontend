@@ -4,14 +4,18 @@
  * - created（parent 預告、arrived_at=null）→ 柔和提示：不震動、liveAnnounce 帶 ETA
  * - created（staff 舊流程、arrived_at=requested_at）→ 強提醒行為不變（震動）
  * - dismissal_call_arrived → 此刻才強提醒（震動 + 「已到門口」播報）；重複事件不重播
+ * - dismissal_call_arrived 到達時若通知已 acknowledged（教師已按過我收到了）
+ *   → 自動呼叫 complete，教師不需再操作「帶出去放學」（該按鈕已移除）
  * - created 重複事件（重連補送）→ 不重複插卡、不重播
  * - cancelled → 移卡
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 let getCallsImpl: () => Promise<{ data: unknown[] }> = () => Promise.resolve({ data: [] })
+const completeDismissalCall = vi.fn(() => Promise.resolve({ data: {} }))
 vi.mock('@/api/dismissalCalls', () => ({
   getPortalDismissalCalls: () => getCallsImpl(),
+  completeDismissalCall: (...args: [number]) => completeDismissalCall(...args),
 }))
 
 class FakeWebSocket {
@@ -58,6 +62,7 @@ afterEach(() => {
   mod = null
   getCallsImpl = () => Promise.resolve({ data: [] })
   FakeWebSocket.instances = []
+  completeDismissalCall.mockClear()
 })
 
 const PARENT_NOTICE = {
@@ -100,7 +105,7 @@ describe('created：預告 vs staff 的提醒強度分流', () => {
     expect(api.activeCalls.value.some((c) => c.id === 101)).toBe(true)
     expect(vibrate).not.toHaveBeenCalled()
     expect(api.liveAnnounce.value).toContain('預告接送')
-    expect(api.liveAnnounce.value).toContain('王小明家長')
+    expect(api.liveAnnounce.value).toContain('王小明的家長')
     expect(api.liveAnnounce.value).not.toContain('等待接送')
   })
 
@@ -153,6 +158,29 @@ describe('dismissal_call_arrived：到門口才強提醒', () => {
     socket.emit({ type: 'dismissal_call_arrived', payload: arrived })
     expect(api.activeCalls.value.filter((c) => c.id === 101)).toHaveLength(1)
     expect(vibrate).toHaveBeenCalledTimes(1)
+  })
+
+  it('通知已是 acknowledged（教師已按我收到了）時收到 arrived → 自動 complete 並從清單移除，教師不需再操作', async () => {
+    const { socket, api } = await setup()
+    socket.emit({
+      type: 'dismissal_call_created',
+      payload: { ...PARENT_NOTICE, status: 'acknowledged' },
+    })
+    const arrived = { ...PARENT_NOTICE, status: 'acknowledged', arrived_at: '2026-08-14T15:14:00' }
+    socket.emit({ type: 'dismissal_call_arrived', payload: arrived })
+    await flush()
+    expect(completeDismissalCall).toHaveBeenCalledWith(101)
+    expect(api.activeCalls.value.some((c) => c.id === 101)).toBe(false)
+  })
+
+  it('通知仍是 pending（教師尚未按我收到了）時收到 arrived → 不自動 complete', async () => {
+    const { socket, api } = await setup()
+    socket.emit({ type: 'dismissal_call_created', payload: PARENT_NOTICE })
+    const arrived = { ...PARENT_NOTICE, arrived_at: '2026-08-14T15:14:00' }
+    socket.emit({ type: 'dismissal_call_arrived', payload: arrived })
+    await flush()
+    expect(completeDismissalCall).not.toHaveBeenCalled()
+    expect(api.activeCalls.value.some((c) => c.id === 101)).toBe(true)
   })
 })
 

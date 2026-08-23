@@ -56,6 +56,14 @@ export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = {
     route: '/pickup-notice',
     icon: 'directions_walk',
   },
+  arrived: {
+    key: 'arrived',
+    label: '已抵達',
+    sub: '校門口報到',
+    tone: 'coral',
+    route: '/pickup-notice',
+    icon: 'pin_drop',
+  },
   proxy: {
     key: 'proxy',
     label: '代理接送',

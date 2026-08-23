@@ -79,7 +79,7 @@ describe('DismissalPosBoard', () => {
     expect(w.find('.pos-student-grid__empty').exists()).toBe(true)
   })
 
-  it('傳入的 calls 驅動中欄狀態徽章，但 completed 記錄不會出現在右欄佇列（D5：右欄只顯示還在流程中的 pending/acknowledged，由 useDismissalPosQueue 依 ACTIVE_STATUSES 過濾，不靠呼叫端先篩過）', () => {
+  it('傳入的 calls 驅動中欄狀態徽章；completed 記錄保留在右欄佇列，但以 done（已放學）卡呈現、不畫成「等待確認」', () => {
     const calls: DismissalCallView[] = [
       {
         id: 1,
@@ -90,13 +90,37 @@ describe('DismissalPosBoard', () => {
       },
     ]
     const w = mountBoard(calls)
-    // 中欄：guardian_picked（completed call）→ 卡片降階、不可再點擊
-    expect(w.find('.pos-student-card.is-resolved').exists()).toBe(true)
-    // 右欄：completed 已經放學完成，不該再顯示成「等待確認」的進行中佇列卡
-    expect(w.findAll('.pos-queue-card')).toHaveLength(0)
+    // 中欄：guardian_picked（completed call）→ 卡片降階（淡灰）但仍可再次點擊通知
+    const studentCard = w.find('.pos-student-card.is-resolved')
+    expect(studentCard.exists()).toBe(true)
+    expect(studentCard.classes()).toContain('is-redispatchable')
+    // 右欄：completed 保留為 done 卡供回顧，不顯示成「等待確認」的進行中佇列卡
+    const queueCards = w.findAll('.pos-queue-card')
+    expect(queueCards).toHaveLength(1)
+    expect(queueCards[0].classes()).toContain('pos-queue-card--done')
+    expect(queueCards[0].find('.pos-queue-card__waiting-flag').exists()).toBe(false)
   })
 
-  it('傳入 pending 的 call 會同時出現在右欄佇列（與上一則 completed 案例對照，證明過濾的是狀態而非整份 calls）', () => {
+  it('中欄「家長已接送」的淡灰卡片點擊後仍可再次發起通知（staging 卡進入右欄）', async () => {
+    const calls: DismissalCallView[] = [
+      {
+        id: 1,
+        student_id: 101,
+        student_name: '王小明',
+        classroom_name: '陽光班',
+        status: 'completed',
+      },
+    ]
+    const w = mountBoard(calls)
+    await w.find('.pos-student-card.is-resolved').trigger('click')
+
+    // 再次通知進入 5 秒倒數：右欄同一學生只顯示 staging 卡（舊的 done 卡讓位）
+    const queueCards = w.findAll('.pos-queue-card')
+    expect(queueCards).toHaveLength(1)
+    expect(queueCards[0].find('.pos-countdown-bar__track').exists()).toBe(true)
+  })
+
+  it('傳入 pending 的 call 會同時出現在右欄佇列（與 completed 案例對照，證明依狀態分流而非整份 calls）', () => {
     const calls: DismissalCallView[] = [
       {
         id: 2,

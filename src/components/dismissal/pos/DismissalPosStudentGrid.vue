@@ -3,8 +3,9 @@
  * 中欄容器（T-007）：吃 selectedClassroomId + 學生清單 + 今日 calls，重用既有
  * src/composables/useDismissalRoster.ts 的 buildRoster 取得『該班在籍學生』
  * 分組（不重寫分班/去重邏輯），再用 T-002 useStudentPosStatus 算出每位學生的
- * status/sortWeight 排序後渲染 DismissalPosStudentCard grid（auto-fill 卡片寬度
- * 190px，平板寬度下自然呈現 2–3 欄，比照 mockup 的 .students-grid 慣例）。
+ * status/sortWeight 排序後渲染 DismissalPosStudentCard grid（auto-fill 卡片最小寬度
+ * 148px，2026-08-22 密度調整比照 docs/mockups/2026-08-22-dismissal-pos-card-density.html
+ * 縮小，同寬度下可多排一欄）。
  *
  * 範圍註記：buildRoster 同時算得出「進行中通知」(notifying)，但這裡沒有拿來讓
  * 卡片額外降階顯示——T-002 的 4 值 status 本身就把 pending/acknowledged 歸在
@@ -84,7 +85,8 @@ function handleQuickDispatch(student: DismissalPosStudentCardStudent) {
 <style scoped>
 .pos-student-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  align-items: start;
   gap: var(--space-3, 12px);
 }
 

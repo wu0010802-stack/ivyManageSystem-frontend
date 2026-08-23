@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="ivy-mockup-status" content="design-preview-non-functional" />
+<title>接送排隊台 — 卡片密度與 swipe 互動調整</title>
+<style>
+/* ============================================================
+   Design tokens — 逐值核對自 src/assets/design-tokens.css（2026-08-22 讀檔核對，
+   與 2026-08-20 既有 mockup 一致，未變動）。正式實作一律改回 var(--...)。
+   ============================================================ */
+:root {
+  --brand-primary: #0284c7; --brand-primary-hover: #0369a1; --brand-primary-soft: #e0f2fe;
+  --neutral-0: #ffffff; --neutral-50: #f8fafc; --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0; --neutral-300: #cbd5e1; --neutral-400: #94a3b8;
+  --neutral-500: #64748b; --neutral-600: #475569; --neutral-700: #334155;
+  --neutral-800: #1e293b; --neutral-900: #0f172a;
+  --color-success: #10b981; --color-success-soft: #dcfce7; --color-success-darker: #15803d;
+  --color-warning: #f59e0b; --color-warning-soft: #fef3c7; --color-warning-darker: #b45309;
+  --color-danger: #ef4444; --color-danger-soft: #fee2e2; --color-danger-darker: #b91c1c;
+  --color-info: #3b82f6; --color-info-soft: #dbeafe; --color-info-darker: #1d4ed8;
+  --bg-color: var(--neutral-50); --bg-color-soft: var(--neutral-100);
+  --surface-color: var(--neutral-0);
+  --text-primary: var(--neutral-800); --text-secondary: var(--neutral-500); --text-tertiary: var(--neutral-400);
+  --border-color: var(--neutral-200); --border-color-light: var(--neutral-100);
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --transition-fast: .15s ease; --transition-base: .2s ease;
+  --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-lg: 16px;
+  --text-xl: 18px; --text-2xl: 20px; --text-3xl: 24px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Segoe UI", Roboto, sans-serif;
+  font-size: var(--text-base); line-height: 1.5; color: var(--text-primary);
+  background: var(--bg-color);
+}
+.preview-banner {
+  position: sticky; top: 0; z-index: 500; padding: 8px 20px; background: var(--neutral-800); color: #fff;
+  font-size: var(--text-xs); text-align: center; letter-spacing: .02em;
+}
+.wrap { max-width: 1240px; margin: 0 auto; padding: var(--space-6) var(--space-5) var(--space-8); }
+h1 { font-size: var(--text-2xl); margin-bottom: 4px; }
+.subtitle { color: var(--text-secondary); font-size: var(--text-sm); margin-bottom: var(--space-6); }
+
+section.compare { margin-bottom: var(--space-8); }
+section.compare > h2 {
+  font-size: var(--text-lg); margin-bottom: var(--space-2); display: flex; align-items: center; gap: var(--space-2);
+}
+.decision-note {
+  background: var(--brand-primary-soft); border: 1px solid #7dd3fc; border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4); font-size: var(--text-sm); color: var(--neutral-800);
+  margin-bottom: var(--space-4); line-height: 1.6;
+}
+.decision-note b { color: var(--brand-primary-hover); }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); }
+.col-panel {
+  background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+  padding: var(--space-4); box-shadow: var(--shadow-sm);
+}
+.col-panel__label {
+  font-size: var(--text-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  margin-bottom: var(--space-3); display: flex; align-items: center; gap: 6px;
+}
+.col-panel__label.is-before { color: var(--text-tertiary); }
+.col-panel__label.is-after { color: var(--brand-primary-hover); }
+.col-panel__label .tag {
+  font-size: 10px; padding: 1px 7px; border-radius: var(--radius-full); font-weight: 700;
+}
+.is-before .tag { background: var(--neutral-100); color: var(--text-tertiary); }
+.is-after .tag { background: var(--brand-primary-soft); color: var(--brand-primary-hover); }
+
+/* ---- 版面比例圖示 ---- */
+.layout-bar { display: flex; height: 64px; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border-color); }
+.layout-bar__seg { display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; }
+.seg-rail { background: var(--neutral-600); }
+.seg-grid { background: var(--brand-primary); }
+.seg-queue { background: var(--neutral-400); }
+.layout-caption { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--text-secondary); text-align: center; }
+
+/* ---- 中間學生卡片 ---- */
+.students-grid-before { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--space-3); }
+.students-grid-after { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: var(--space-3); }
+
+.student-card {
+  position: relative; background: var(--surface-color); border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-lg); cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.student-card--before { padding: var(--space-4); min-height: 128px; }
+.student-card--after { padding: var(--space-3) var(--space-3) var(--space-3); min-height: 84px; }
+
+.student-card__more {
+  position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border-radius: var(--radius-md);
+  border: none; background: transparent; color: var(--text-tertiary); font-size: 17px; cursor: pointer;
+  display: grid; place-items: center;
+}
+.student-card__more:hover { background: var(--bg-color-soft); color: var(--text-secondary); }
+
+.student-card--before .student-card__name { font-size: var(--text-xl); font-weight: 700; line-height: 1.3; padding-right: 28px; }
+.student-card--after .student-card__name { font-size: var(--text-3xl); font-weight: 800; line-height: 1.2; padding-right: 30px; margin-top: 2px; }
+
+.student-card__tap-hint { margin-top: var(--space-2); font-size: var(--text-xs); color: var(--brand-primary); font-weight: 600; }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; padding: 4px 10px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 700; }
+.status-pill--bus { background: var(--color-info-soft); color: var(--color-info-darker); }
+.status-pill--leave { background: var(--color-warning-soft); color: var(--color-warning-darker); }
+.status-pill--picked { background: var(--color-success-soft); color: var(--color-success-darker); }
+.student-card.is-resolved { background: var(--bg-color-soft); }
+.student-card.is-resolved .student-card__name { color: var(--text-secondary); }
+.redispatch-hint { font-size: var(--text-xs); color: var(--text-tertiary); font-weight: 600; margin-top: 4px; }
+
+/* ---- 右側佇列卡片 ---- */
+.queue-list-demo { display: flex; flex-direction: column; gap: var(--space-3); }
+.queue-card { position: relative; overflow: hidden; border-radius: var(--radius-lg); border: 1px solid var(--border-color); background: var(--surface-color); box-shadow: var(--shadow-sm); }
+
+/* before：整卡即為滑動取消提示底 */
+.queue-card--before .queue-card__swipe-bg {
+  position: absolute; inset: 0; background: var(--color-danger); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); font-weight: 700;
+}
+.queue-card--before .queue-card__body { position: relative; background: var(--surface-color); padding: var(--space-3) var(--space-4); }
+
+/* after：底層只有固定寬度的取消按鈕，其餘留白（非取消色滿版），強調「按鈕」而非「整卡即刪除區」 */
+.queue-card--after .queue-card__reveal {
+  position: absolute; inset: 0; display: flex; justify-content: flex-end; align-items: stretch;
+}
+.queue-card--after .queue-card__cancel-btn {
+  width: 84px; border: none; background: var(--color-danger); color: #fff; font-size: var(--text-sm); font-weight: 700;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.queue-card--after .queue-card__cancel-btn:hover { background: var(--color-danger-darker, #b91c1c); }
+.queue-card--after .queue-card__body {
+  position: relative; background: var(--surface-color); padding: var(--space-3) var(--space-4);
+  touch-action: pan-y; cursor: grab; user-select: none;
+}
+.queue-card--after .queue-card__body:active { cursor: grabbing; }
+.queue-card--after .queue-card__body.is-dragging { transition: none; }
+.queue-card--after .queue-card__body:not(.is-dragging) { transition: transform .2s ease; }
+
+.queue-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+.queue-card__name { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+.queue-card__room { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 2px; }
+.source-tag { flex-shrink: 0; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 700; }
+.source-tag--onsite { background: var(--brand-primary); color: #fff; }
+.source-tag--reservation { background: var(--color-info-soft); color: var(--color-info-darker); }
+.source-tag--proxy { background: var(--neutral-700); color: #fff; }
+.waiting-flag { margin-top: var(--space-3); display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: 600; color: var(--color-success-darker); }
+.waiting-flag__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
+.eta-flag { margin-top: var(--space-3); font-size: var(--text-xs); color: var(--color-info-darker); font-weight: 600; }
+.swipe-caption { margin-top: var(--space-2); font-size: 10px; color: var(--text-tertiary); text-align: center; }
+
+.try-hint { font-size: var(--text-xs); color: var(--brand-primary-hover); font-weight: 600; margin-bottom: var(--space-3); display: flex; align-items: center; gap: 6px; }
+
+.open-questions { background: #fff7ed; border: 1px solid #fdba74; border-radius: var(--radius-md); padding: var(--space-4); font-size: var(--text-sm); line-height: 1.8; }
+.open-questions h3 { font-size: var(--text-base); margin-bottom: var(--space-2); color: #9a3412; }
+.open-questions ol { padding-left: 1.3em; }
+
+@media (max-width: 860px) {
+  .cols { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="preview-banner">🎨 設計稿預覽 — 僅示意異動區域（學生卡片／佇列卡片／版面比例），非串接真實 API；右側佇列卡片「新設計」可實際拖曳互動</div>
+
+<div class="wrap">
+  <h1>接送排隊台：卡片密度與 swipe 取消互動調整</h1>
+  <p class="subtitle">對照現況（src/components/dismissal/pos/*.vue 現行實作）與新設計，僅列出本次異動範圍。</p>
+
+  <section class="compare">
+    <h2>① 三欄版面比例</h2>
+    <div class="decision-note">
+      右欄從 <b>360px（窄螢幕 300px）</b> 收窄為 <b>280px（窄螢幕 240px）</b>，讓中欄多出的寬度自然分給學生 grid（<code>.pos-board</code> 的 <code>grid-template-columns</code>）。
+    </div>
+    <div class="cols">
+      <div class="col-panel">
+        <div class="col-panel__label is-before"><span class="tag">現況</span>200px｜1fr｜360px</div>
+        <div class="layout-bar">
+          <div class="layout-bar__seg seg-rail" style="flex:0 0 14%">班級</div>
+          <div class="layout-bar__seg seg-grid" style="flex:1">學生名單</div>
+          <div class="layout-bar__seg seg-queue" style="flex:0 0 26%">接送排序</div>
+        </div>
+      </div>
+      <div class="col-panel">
+        <div class="col-panel__label is-after"><span class="tag">新設計</span>200px｜1fr｜280px</div>
+        <div class="layout-bar">
+          <div class="layout-bar__seg seg-rail" style="flex:0 0 15%">班級</div>
+          <div class="layout-bar__seg seg-grid" style="flex:1">學生名單（更寬）</div>
+          <div class="layout-bar__seg seg-queue" style="flex:0 0 20%">接送排序</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="compare">
+    <h2>② 中間學生卡片</h2>
+    <div class="decision-note">
+      卡片最小寬度 <b>190px → 148px</b>（同寬度下多排 1 欄）；姓名 <b>18px → 24px</b> 且加粗（<code>--text-3xl</code>）；移除「👆 點卡片＝現場接送」「👆 點卡片可再次通知」等操作提示文字。<b>狀態徽章（🌙請假／🚌娃娃車已接送／✅家長已接送）予以保留</b>——那是狀態資訊，不是操作提示，如需一併拿掉請告知。
+    </div>
+    <div class="cols">
+      <div class="col-panel">
+        <div class="col-panel__label is-before"><span class="tag">現況</span>190px min・姓名 18px・含提示文字</div>
+        <div class="students-grid-before">
+          <div class="student-card student-card--before" role="button" tabindex="0">
+            <button type="button" class="student-card__more">⋮</button>
+            <div class="student-card__name">王小美</div>
+            <div class="student-card__tap-hint">👆 點卡片＝現場接送</div>
+          </div>
+          <div class="student-card student-card--before is-resolved">
+            <button type="button" class="student-card__more">⋮</button>
+            <div class="student-card__name">黃詩涵</div>
+            <span class="status-pill status-pill--bus">🚌 娃娃車已接送</span>
+          </div>
+          <div class="student-card student-card--before is-resolved">
+            <button type="button" class="student-card__more">⋮</button>
+            <div class="student-card__name">李佳穎</div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+              <span class="status-pill status-pill--picked">✅ 家長已接送</span>
+              <span class="redispatch-hint">👆 點卡片可再次通知</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-panel">
+        <div class="col-panel__label is-after"><span class="tag">新設計</span>148px min・姓名 24px・僅姓名＋⋮</div>
+        <div class="students-grid-after">
+          <div class="student-card student-card--after" role="button" tabindex="0">
+            <button type="button" class="student-card__more">⋮</button>
+            <div class="student-card__name">王小美</div>
+          </div>
+          <div class="student-card student-card--after is-resolved">
+            <button type="button" class="student-card__more">⋮</button>
+            <div class="student-card__name">黃詩涵</div>
+            <span class="status-pill status-pill--bus">🚌 娃娃車已接送</span>
+          </div>
+          <div class="student-card student-card--after is-resolved">
+            <button type="button" class="student-card__more">⋮</button>
+            <div class="student-card__name">李佳穎</div>
+            <span class="status-pill status-pill--picked">✅ 家長已接送</span>
+          </div>
+          <div class="student-card student-card--after" role="button" tabindex="0">
+            <button type="button" class="student-card__more">⋮</button>
+            <div class="student-card__name">陳彥廷</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="compare">
+    <h2>③ 右側佇列卡片：swipe 取消互動</h2>
+    <div class="decision-note">
+      現況左右滑動超過 40% 卡寬即直接觸發取消（<code>useSwipeToCancel</code>，release 當下 commit）。新設計改為<b>兩段式</b>：向左拖曳釋放後卡片「彈開」固定露出一顆取消按鈕（84px 寬），<b>需再點一次按鈕</b>才真正取消；未點按鈕前可再滑回去關閉，或直接點按鈕。已放學（done）卡片維持不可滑動。
+    </div>
+    <div class="cols">
+      <div class="col-panel">
+        <div class="col-panel__label is-before"><span class="tag">現況</span>滑動釋放＝直接取消</div>
+        <div class="queue-list-demo">
+          <div class="queue-card queue-card--before">
+            <div class="queue-card__swipe-bg">滑動取消</div>
+            <div class="queue-card__body">
+              <div class="queue-card__top">
+                <div><div class="queue-card__name">簡妤蓁</div><div class="queue-card__room">星星班</div></div>
+                <span class="source-tag source-tag--onsite">現場</span>
+              </div>
+              <div class="waiting-flag"><span class="waiting-flag__dot"></span>已通知教師端，等待確認</div>
+            </div>
+          </div>
+          <div class="queue-card queue-card--before">
+            <div class="queue-card__swipe-bg">滑動取消</div>
+            <div class="queue-card__body">
+              <div class="queue-card__top">
+                <div><div class="queue-card__name">曾詠絮</div><div class="queue-card__room">陽光班</div></div>
+                <span class="source-tag source-tag--reservation">預約</span>
+              </div>
+              <div class="eta-flag">⏱ 預計還有 12 分鐘 · 尚未抵達</div>
+            </div>
+          </div>
+        </div>
+        <div class="swipe-caption">（示意用滑動釋放後即消失，此欄不做互動 demo）</div>
+      </div>
+      <div class="col-panel">
+        <div class="col-panel__label is-after"><span class="tag">新設計</span>滑開才出現取消鈕</div>
+        <div class="try-hint">👉 試試看：滑鼠在卡片上左拖或用觸控裝置滑動</div>
+        <div class="queue-list-demo" id="afterQueueList">
+          <div class="queue-card queue-card--after" data-id="q1">
+            <div class="queue-card__reveal"><button type="button" class="queue-card__cancel-btn" data-cancel="q1">取消</button></div>
+            <div class="queue-card__body" data-body="q1">
+              <div class="queue-card__top">
+                <div><div class="queue-card__name">簡妤蓁</div><div class="queue-card__room">星星班</div></div>
+                <span class="source-tag source-tag--onsite">現場</span>
+              </div>
+              <div class="waiting-flag"><span class="waiting-flag__dot"></span>已通知教師端，等待確認</div>
+            </div>
+          </div>
+          <div class="queue-card queue-card--after" data-id="q2">
+            <div class="queue-card__reveal"><button type="button" class="queue-card__cancel-btn" data-cancel="q2">取消</button></div>
+            <div class="queue-card__body" data-body="q2">
+              <div class="queue-card__top">
+                <div><div class="queue-card__name">曾詠絮</div><div class="queue-card__room">陽光班</div></div>
+                <span class="source-tag source-tag--reservation">預約</span>
+              </div>
+              <div class="eta-flag">⏱ 預計還有 12 分鐘 · 尚未抵達</div>
+            </div>
+          </div>
+        </div>
+        <div class="swipe-caption">拖曳釋放 → 彈開露出「取消」按鈕（未點擊不會取消）；再點一下按鈕才真正移除</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="compare">
+    <h2>待你裁定的問題</h2>
+    <div class="open-questions">
+      <h3>互動與範圍細節（新設計皆已先取一個合理預設，如需調整請指出）</h3>
+      <ol>
+        <li>右側佇列卡片寬度縮小後，<b>是否也要放大姓名字級</b>（目前 demo 維持 18px 不變，因寬度縮減後空間更緊）？</li>
+        <li>學生卡片「已處理」狀態（🌙／🚌／✅）目前<b>保留狀態徽章、只拿掉操作提示文字</b>——這樣可以嗎？或你希望已處理卡片也一併極簡到只剩姓名＋⋮？</li>
+        <li>佇列卡片彈開後，<b>點卡片本身（非取消鈕）是否應收合</b>？demo 目前是「再往回滑」或「點取消鈕」兩種方式收合／取消，未做點空白處自動收合。</li>
+        <li>學生卡片最小寬度 148px、姓名 24px 是否符合你要的縮小/放大幅度？這兩個數字目前是我抓的預設值，可以再調。</li>
+      </ol>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  const REVEAL_WIDTH = 84;
+  const OPEN_THRESHOLD = REVEAL_WIDTH * 0.45;
+
+  document.querySelectorAll('#afterQueueList .queue-card--after .queue-card__body').forEach(body => {
+    let startX = 0, dx = 0, dragging = false, openOffset = 0;
+
+    function setX(x) { body.style.transform = `translateX(${x}px)`; }
+
+    function onDown(e) {
+      dragging = true;
+      body.classList.add('is-dragging');
+      startX = (e.touches ? e.touches[0].clientX : e.clientX) - openOffset;
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+    function onMove(e) {
+      if (!dragging) return;
+      const x = (e.touches ? e.touches[0].clientX : e.clientX);
+      dx = Math.min(0, Math.max(-REVEAL_WIDTH, x - startX));
+      setX(dx);
+    }
+    function onUp() {
+      if (!dragging) return;
+      dragging = false;
+      body.classList.remove('is-dragging');
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      openOffset = Math.abs(dx) >= OPEN_THRESHOLD ? -REVEAL_WIDTH : 0;
+      setX(openOffset);
+      dx = 0;
+    }
+
+    body.addEventListener('mousedown', onDown);
+    body.addEventListener('touchstart', onDown, { passive: true });
+    body.addEventListener('touchmove', onMove, { passive: true });
+    body.addEventListener('touchend', onUp);
+  });
+
+  document.querySelectorAll('#afterQueueList [data-cancel]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const card = document.querySelector(`.queue-card--after[data-id="${btn.dataset.cancel}"]`);
+      if (!card) return;
+      card.style.transition = 'opacity .18s ease, transform .18s ease';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(-24px)';
+      setTimeout(() => card.remove(), 180);
+    });
+  });
+})();
+</script>
+</body>
+</html>
