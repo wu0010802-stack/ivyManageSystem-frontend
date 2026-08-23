@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /**
  * 右欄容器（T-010）：吃 T-003 useDismissalPosQueue 輸出的合併排序清單，
- * 渲染 DismissalPosQueueCard 列表，swipe cancel 事件原樣轉呼叫端。
+ * 渲染 DismissalPosQueueCard 列表，swipe cancel／confirm-pickup（T-022）
+ * 事件原樣轉呼叫端（DismissalPosBoard 才是真正持有 useDismissalPosQueue
+ * composable 實例的地方，本檔不直接呼叫 API）。
  *
  * 進場/離場動畫沿用既有 .dcall-list-* class 命名慣例（src/views/portal/PortalDismissalCallsView.vue
  * 既有的 TransitionGroup name="dcall-list"，數值逐字一致）——Vue scoped style 不跨元件套用，
@@ -20,6 +22,7 @@ defineProps<{
 
 const emit = defineEmits<{
   cancel: [item: PosQueueItem]
+  'confirm-pickup': [item: PosQueueItem]
 }>()
 
 const { now } = useNowClock()
@@ -38,6 +41,7 @@ const { now } = useNowClock()
         :item="item"
         :now="now"
         @cancel="emit('cancel', $event)"
+        @confirm-pickup="emit('confirm-pickup', $event)"
       />
     </TransitionGroup>
   </div>

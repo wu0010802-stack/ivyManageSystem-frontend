@@ -46,6 +46,17 @@ describe('DismissalPosQueuePanel', () => {
     expect(emitted?.[0]).toEqual([items[0]])
   })
 
+  it('子卡片 emit confirm-pickup 會原樣轉呼叫端（帶正確 item，T-022）', async () => {
+    const items = [item()]
+    const w = mount(DismissalPosQueuePanel, { props: { items } })
+    const card = w.findComponent(DismissalPosQueueCard)
+    await card.vm.$emit('confirm-pickup', items[0])
+
+    const emitted = w.emitted('confirm-pickup')
+    expect(emitted).toHaveLength(1)
+    expect(emitted?.[0]).toEqual([items[0]])
+  })
+
   it('每張卡片都用 item.id 當 :key（透過 TransitionGroup 渲染，具備 dcall-list 進出場 class 命名）', () => {
     const items = [item({ id: 'staging:1' }), item({ id: 'staging:2', studentId: 2 })]
     const w = mount(DismissalPosQueuePanel, { props: { items } })

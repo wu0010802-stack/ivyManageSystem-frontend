@@ -19,3 +19,9 @@ export const overridePickupAuthorization = (
   data: ApiBody<'/pickup-authorizations/{auth_id}/override-complete', 'post'>,
 ): AxiosResp<'/pickup-authorizations/{auth_id}/override-complete', 'post'> =>
   api.post(`/pickup-authorizations/${authId}/override-complete`, data)
+
+// D10④：POS 佇列卡目視比對明碼後一鍵確認，不重新輸入 6 碼（T-022）。
+export const confirmVisualMatch = (
+  authId: number,
+): AxiosResp<'/pickup-authorizations/{auth_id}/confirm-visual-match', 'post'> =>
+  api.post(`/pickup-authorizations/${authId}/confirm-visual-match`)

@@ -38,6 +38,8 @@ export interface DismissalCallView {
   person_name?: string | null
   person_relation?: string | null
   pickup_code?: string | null
+  /** T-022 起 request_source='proxy' 才有值：對應的 pickup_authorizations.id，供辦公室一鍵確認接送呼叫 confirm-visual-match。 */
+  pickup_authorization_id?: number | null
   [key: string]: unknown
 }
 

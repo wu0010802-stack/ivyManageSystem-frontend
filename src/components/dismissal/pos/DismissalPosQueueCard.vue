@@ -16,6 +16,12 @@
  * 通知」的 active call 多做了一層 swipe 後二次確認 strip（避免手滑誤取消已通知
  * 教師端的項目）；T-009 acceptance_criteria 只要求「swipe 完成後 emit cancel(item)
  * 恰一次」，未要求二次確認，本輪不加這層，避免超出 task 範圍——如需要可另拆 task。
+ *
+ * 確認接送（T-022，D10④）：proxy 卡片在代理人姓名／明碼取件碼旁新增「確認接送」
+ * 按鈕，辦公室人員目視比對本卡明碼與代理人所述一致後一鍵確認，不重新輸入 6 碼。
+ * 點擊 emit confirm-pickup(item)，呼叫端（DismissalPosQueuePanel → DismissalPosBoard）
+ * 轉呼叫 useDismissalPosQueue.confirmProxyPickup 打 confirm-visual-match。與 swipe
+ * 取消是兩個獨立動作，proxy 卡片仍保留既有 swipe cancel 手勢。
  */
 import { computed } from 'vue'
 import {
@@ -38,6 +44,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   cancel: [item: PosQueueItem]
+  /** 目視比對明碼後一鍵確認接送（T-022，D10④），僅 proxy 卡片會 emit。 */
+  'confirm-pickup': [item: PosQueueItem]
 }>()
 
 const SOURCE_LABEL: Record<PosQueueSource, string> = {
@@ -61,6 +69,17 @@ const proxyPersonLabel = computed(() => {
 
 const proxyPickupCode = computed(() =>
   isProxy.value ? (props.item.call?.pickup_code ?? '') : '',
+)
+
+/**
+ * 確認接送按鈕（T-022，D10④）：辦公室人員目視比對本卡明碼與代理人所述一致後
+ * 一鍵確認，不重新輸入 6 碼。需要 pickup_authorization_id 才能呼叫
+ * confirm-visual-match，proxy active call 理論上恆有值（見 useDismissalUrgency.ts），
+ * 缺值時保守不顯示按鈕，避免帶 undefined 呼叫後端。
+ */
+const proxyAuthId = computed(() => props.item.call?.pickup_authorization_id)
+const showConfirmButton = computed(
+  () => isProxy.value && props.item.phase === 'active' && typeof proxyAuthId.value === 'number',
 )
 
 /** 家長預約且尚未抵達：顯示 ETA，不顯示「已通知教師端」等候標記。proxy 一律不算 preArrival（見檔頭註解）。 */
@@ -123,6 +142,16 @@ const bodyStyle = computed(() => ({
       <div v-if="isProxy && (proxyPersonLabel || proxyPickupCode)" class="pos-queue-card__proxy-info">
         <span v-if="proxyPersonLabel" class="pos-queue-card__proxy-person">{{ proxyPersonLabel }}</span>
         <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
+        <el-button
+          v-if="showConfirmButton"
+          type="primary"
+          size="small"
+          class="pos-queue-card__confirm-btn"
+          data-testid="pos-queue-card-confirm-pickup"
+          @click="emit('confirm-pickup', item)"
+        >
+          確認接送
+        </el-button>
       </div>
 
       <DismissalPosCountdownBar
@@ -236,6 +265,10 @@ const bodyStyle = computed(() => ({
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
+}
+
+.pos-queue-card__confirm-btn {
+  margin-left: auto;
 }
 
 .pos-queue-card__eta-flag {

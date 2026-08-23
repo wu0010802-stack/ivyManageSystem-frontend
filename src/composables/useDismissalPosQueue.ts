@@ -26,6 +26,7 @@
 import { reactive, computed, watch, onScopeDispose, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createDismissalCall, cancelDismissalCall } from '@/api/dismissalCalls'
+import { confirmVisualMatch } from '@/api/pickupAuthorizations'
 import type { Schema } from '@/api/_generated/typed'
 import { sortActiveQueue, type DismissalCallView } from '@/composables/useDismissalUrgency'
 import { activeCallStudentIds, ACTIVE_STATUSES } from '@/composables/useDismissalRoster'
@@ -118,6 +119,26 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     { deep: true },
   )
 
+  // confirmProxyPickup 成功後立即隱藏的 call id（T-022，D10④）：confirm-visual-match
+  // 成功後後端狀態會變成 completed，但那要等 WS/輪詢才反映到 activeCalls，這段期間
+  // 卡片仍會依 ACTIVE_STATUSES 判斷留在右欄。用這個 Set 讓卡片馬上消失，等外部
+  // activeCalls 真的追上（該 id 不再是 pending/acknowledged）後就沒有存在必要，清掉
+  // 避免無界成長。
+  const confirmedActiveIds = reactive(new Set<number>())
+
+  watch(
+    activeCalls,
+    (calls) => {
+      if (confirmedActiveIds.size === 0) return
+      for (const call of calls) {
+        if (confirmedActiveIds.has(call.id) && !ACTIVE_STATUSES.has(call.status ?? '')) {
+          confirmedActiveIds.delete(call.id)
+        }
+      }
+    },
+    { deep: true },
+  )
+
   const queue = computed<PosQueueItem[]>(() => {
     // 呼叫端傳入的 activeCalls 不保證只含 pending/acknowledged——D5 要求中欄
     // 「家長已接送」徽章要吃得到今日 completed 記錄，呼叫端因此可能把完整的
@@ -127,7 +148,9 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     const knownIds = new Set(activeCalls.value.map(c => c.id))
     const localOnly = Array.from(localActiveCalls.values()).filter(c => !knownIds.has(c.id))
     const activeItems = sortActiveQueue(
-      [...activeCalls.value, ...localOnly].filter(c => ACTIVE_STATUSES.has(c.status ?? '')),
+      [...activeCalls.value, ...localOnly].filter(
+        c => ACTIVE_STATUSES.has(c.status ?? '') && !confirmedActiveIds.has(c.id),
+      ),
     ).map(toActiveItem)
     // WS 推播與本地 createDismissalCall 的 HTTP response 是不同通道，前者偶爾會
     // 更早抵達：這個瞬間 activeCalls 已經有這個學生、但 submit() 的 finally 還沒
@@ -240,6 +263,26 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     }
   }
 
+  /**
+   * 確認接送（T-022，D10④）：辦公室人員目視比對佇列卡上的明碼與代理人所述
+   * 一致後一鍵確認，不重新輸入 6 碼。呼叫 confirm-visual-match，成功後把該
+   * 卡片從佇列移除（見上方 confirmedActiveIds），失敗時比照既有 cancel() 的
+   * try/catch + ElMessage 慣例呈現錯誤——例如已被其他人員搶先核銷（409），
+   * 卡片必須保留在佇列，讓使用者能重新整理或再試一次，不能誤刪。
+   */
+  async function confirmProxyPickup(item: PosQueueItem) {
+    const authId = item.call?.pickup_authorization_id
+    if (typeof authId !== 'number') return
+    try {
+      await confirmVisualMatch(authId)
+      confirmedActiveIds.add(Number(item.id))
+      localActiveCalls.delete(Number(item.id))
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string } } }
+      ElMessage.error(err.response?.data?.detail || `確認接送失敗：${item.studentName}`)
+    }
+  }
+
   // onScopeDispose（非 onUnmounted）：元件卸載與純 effectScope.stop() 皆會觸發，方便測試與非元件場景重用。
   onScopeDispose(() => {
     for (const entry of staging.values()) {
@@ -247,7 +290,8 @@ export function useDismissalPosQueue(activeCalls: Ref<DismissalCallView[]>) {
     }
     staging.clear()
     localActiveCalls.clear()
+    confirmedActiveIds.clear()
   })
 
-  return { queue, addToQueue, cancel }
+  return { queue, addToQueue, cancel, confirmProxyPickup }
 }

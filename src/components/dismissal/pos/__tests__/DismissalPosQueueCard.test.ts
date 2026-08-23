@@ -125,6 +125,36 @@ describe('DismissalPosQueueCard', () => {
       expect(w.text()).toContain('今日委託接送，等待到場')
       expect(w.text()).not.toContain('已通知教師端')
     })
+
+    describe('確認接送按鈕（T-022）', () => {
+      it('proxy 卡片帶 pickup_authorization_id 時顯示「確認接送」按鈕，點擊 emit confirm-pickup(item) 恰一次', async () => {
+        const item = proxyItem({
+          call: { ...proxyItem().call!, pickup_authorization_id: 900 },
+        })
+        const w = mount(DismissalPosQueueCard, { props: { item } })
+        const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
+        expect(btn.exists()).toBe(true)
+
+        await btn.trigger('click')
+
+        const emitted = w.emitted('confirm-pickup')
+        expect(emitted).toHaveLength(1)
+        expect(emitted?.[0]).toEqual([item])
+      })
+
+      it('proxy 卡片缺 pickup_authorization_id 時不顯示按鈕（保守不呼叫後端）', () => {
+        const item = proxyItem({
+          call: { ...proxyItem().call!, pickup_authorization_id: null },
+        })
+        const w = mount(DismissalPosQueueCard, { props: { item } })
+        expect(w.find('[data-testid="pos-queue-card-confirm-pickup"]').exists()).toBe(false)
+      })
+
+      it('非 proxy 卡片不顯示確認接送按鈕', () => {
+        const w = mount(DismissalPosQueueCard, { props: { item: activeItem({ source: 'onsite' }) } })
+        expect(w.find('[data-testid="pos-queue-card-confirm-pickup"]').exists()).toBe(false)
+      })
+    })
   })
 
   describe('倒數條顯示邏輯', () => {
