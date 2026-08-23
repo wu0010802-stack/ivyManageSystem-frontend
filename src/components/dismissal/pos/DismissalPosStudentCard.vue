@@ -30,14 +30,19 @@ const emit = defineEmits<{
 interface StatusMeta {
   label: string
   icon: string
-  tone: 'leave' | 'bus' | 'picked'
+  tone: 'leave' | 'bus' | 'picked' | 'proxy'
 }
 
-/** 已完成狀態的徽章文案（比照 mockup STATUS_META）。unpicked 不進這張表。 */
+/**
+ * 已完成狀態的徽章文案（比照 mockup STATUS_META）。unpicked 不進這張表。
+ * proxy_picked（T-023）刻意用不同 icon／tone 與 guardian_picked 區分，
+ * 讓辦公室一眼分辨是本人家長還是委託代理人接走（D10）。
+ */
 const STATUS_META: Record<Exclude<PosStudentStatus, 'unpicked'>, StatusMeta> = {
   on_leave: { label: '請假', icon: '🌙', tone: 'leave' },
   bus_picked: { label: '娃娃車已接送', icon: '🚌', tone: 'bus' },
   guardian_picked: { label: '家長已接送', icon: '✅', tone: 'picked' },
+  proxy_picked: { label: '代理人已接走', icon: '🪪', tone: 'proxy' },
 }
 
 const isUnpicked = computed(() => props.status === 'unpicked')
@@ -213,6 +218,12 @@ function handleDispatch() {
 .pos-student-card__status--picked {
   background: var(--color-success-soft);
   color: var(--color-success-darker);
+}
+
+/* proxy_picked（T-023）：刻意用 danger 色階與 guardian_picked 的 success 綠區分，讓辦公室一眼看出是委託代理人接走 */
+.pos-student-card__status--proxy {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
 }
 
 /* 已處理（請假／娃娃車已接送／家長已接送）卡片：降低視覺優先度、不可再點 */

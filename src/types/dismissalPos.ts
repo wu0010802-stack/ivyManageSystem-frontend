@@ -10,8 +10,12 @@
 
 import type { DismissalCallView } from '@/composables/useDismissalUrgency'
 
-/** 學生接送狀態（供卡片徽章與排序）。on_leave / bus_picked 本輪無資料來源（D3/D4），永遠回傳固定值。 */
-export type PosStudentStatus = 'unpicked' | 'on_leave' | 'bus_picked' | 'guardian_picked'
+/**
+ * 學生接送狀態（供卡片徽章與排序）。on_leave / bus_picked 本輪無資料來源（D3/D4），永遠回傳固定值。
+ * proxy_picked（T-023）：委託代理人（request_source='proxy' 的 completed call）已接走，
+ * 與 guardian_picked（本人家長）刻意分開成獨立值，讓辦公室能一眼分辨是誰接走學生（D10）。
+ */
+export type PosStudentStatus = 'unpicked' | 'on_leave' | 'bus_picked' | 'guardian_picked' | 'proxy_picked'
 
 /**
  * 佇列項目來源標籤。

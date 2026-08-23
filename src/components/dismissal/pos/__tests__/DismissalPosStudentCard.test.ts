@@ -43,6 +43,18 @@ describe('DismissalPosStudentCard', () => {
     expect(w.text()).toContain('娃娃車已接送')
   })
 
+  it('status=proxy_picked 時顯示代理人已接走徽章，且與 guardian_picked 視覺可分辨', async () => {
+    const w = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'proxy_picked' },
+    })
+    await w.find('.pos-student-card').trigger('click')
+    expect(w.emitted('quick-dispatch')).toBeUndefined()
+    expect(w.find('.pos-student-card').classes()).toContain('is-resolved')
+    expect(w.find('.pos-student-card__status--proxy').exists()).toBe(true)
+    expect(w.find('.pos-student-card__status--picked').exists()).toBe(false)
+    expect(w.text()).toContain('代理人已接走')
+  })
+
   it('more-icon 觸發按鈕點擊不會冒泡到卡片本體（不誤觸 quick-dispatch）', async () => {
     const w = mount(DismissalPosStudentCard, {
       props: { student: STUDENT, status: 'unpicked' },
@@ -72,6 +84,11 @@ describe('DismissalPosStudentCard', () => {
       props: { student: STUDENT, status: 'guardian_picked' },
     })
     expect(picked.find('.pos-student-card').attributes('aria-label')).toBe('王小明，家長已接送')
+
+    const proxyPicked = mount(DismissalPosStudentCard, {
+      props: { student: STUDENT, status: 'proxy_picked' },
+    })
+    expect(proxyPicked.find('.pos-student-card').attributes('aria-label')).toBe('王小明，代理人已接走')
   })
 
   it('Enter 鍵可觸發 quick-dispatch（鍵盤可操作）', async () => {
