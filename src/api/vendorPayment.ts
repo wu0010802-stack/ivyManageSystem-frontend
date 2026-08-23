@@ -1,4 +1,5 @@
 import api, { API_BASE } from './index'
+import type { ApiBody, AxiosResp } from './_generated/typed'
 export { PAYMENT_METHOD_OPTIONS, paymentMethodLabel } from '@/constants/signoff'
 export type { SignoffSummary as VendorPaymentSummary } from '@/constants/signoff'
 
@@ -24,6 +25,15 @@ export const deleteVendorPayment = (id: number) => api.delete(`/vendor-payments/
 
 export const signVendorPayment = (id: number, data: unknown) =>
   api.post(`/vendor-payments/${id}/sign`, data)
+
+/**
+ * 批次簽收：一次簽名套用到多筆待簽收付款（ids 1~100，去重）。
+ * results 為每筆 {id, ok, error?}；succeeded/failed 為成功/失敗**筆數**（非 id 清單）。
+ */
+export const batchSignVendorPayments = (
+  payload: ApiBody<'/vendor-payments/batch-sign', 'post'>,
+): AxiosResp<'/vendor-payments/batch-sign', 'post'> =>
+  api.post('/vendor-payments/batch-sign', payload)
 
 export const uploadVendorPaymentAttachment = (id: number, formData: FormData) =>
   api.post(`/vendor-payments/${id}/attachments`, formData, {

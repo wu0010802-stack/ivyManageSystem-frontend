@@ -1,12 +1,26 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="config.texts.signTitle"
+    :title="dialogTitle"
     width="540px"
     :close-on-click-modal="false"
     destroy-on-close
     @close="reset"
   >
+    <!-- 批次模式：列出勾選單據的對象／金額與合計，簽名板/照片與單筆模式共用同一套邏輯 -->
+    <div v-if="isBatch" class="so-batch-list">
+      <div class="so-batch-list__header">
+        已選取 {{ records!.length }} 筆待簽收
+        <span class="so-batch-list__total">合計 {{ formatMoney(batchTotal) }}</span>
+      </div>
+      <ul class="so-batch-list__items">
+        <li v-for="r in records" :key="r.id">
+          <span class="so-batch-list__party">{{ r.partyName }}</span>
+          <span class="so-batch-list__amount">{{ formatMoney(r.amount) }}</span>
+        </li>
+      </ul>
+    </div>
+
     <el-tabs v-model="activeTab" class="so-sign-tabs">
       <!-- 主要路徑：上傳簽好的紙本照片 -->
       <el-tab-pane label="上傳紙本照片" name="photo">
@@ -64,31 +78,57 @@
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
       <el-button type="primary" :loading="submitting" @click="submit">
-        確認簽收
+        {{ isBatch ? `確認批次簽收（${records!.length}）` : '確認簽收' }}
       </el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import type { SignoffModuleConfig } from '@/config/signoffModules'
 import { compressImageToDataUrl } from '@/utils/imageCompress'
+import { formatCurrency } from '@/utils/currency'
+
+/** 批次模式下要簽收的單一筆紀錄摘要（供對象／金額清單顯示）。 */
+interface BatchSignRecord {
+  id: number
+  partyName: string
+  amount: number
+}
+
+/** 批次簽收回傳（沿用後端 SignoffBatchSignResultOut shape）。 */
+interface BatchSignResult {
+  results: Array<{ id: number | null; ok: boolean; error?: string | null }>
+  succeeded: number
+  failed: number
+}
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
   recordId?: number | null
+  /** 非空陣列時進入批次模式：忽略 recordId，改對這批 id 送同一次簽名。 */
+  records?: BatchSignRecord[] | null
   config: SignoffModuleConfig
 }>(), {
   modelValue: false,
   recordId: null,
+  records: null,
 })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  'signed': []
+  /** 單筆模式：無 payload；批次模式：帶完整 {results, succeeded, failed} 供上層做逐筆回饋。 */
+  'signed': [result?: BatchSignResult]
 }>()
+
+const isBatch = computed(() => Array.isArray(props.records) && props.records.length > 0)
+const batchTotal = computed(() => (props.records ?? []).reduce((sum, r) => sum + r.amount, 0))
+const dialogTitle = computed(() =>
+  isBatch.value ? `批次簽收（${props.records!.length} 筆）` : props.config.texts.signTitle,
+)
+const formatMoney = (value: number) => formatCurrency(value)
 
 const visible = ref(props.modelValue)
 watch(
@@ -101,7 +141,7 @@ watch(
 watch(visible, (v) => emit('update:modelValue', v))
 
 // 預設走主要路徑：上傳紙本照片
-const activeTab = ref<string>('photo')
+const activeTab = ref<'drawn' | 'photo'>('photo')
 const submitting = ref<boolean>(false)
 
 // ── 畫板 ──
@@ -196,10 +236,10 @@ function reset() {
 }
 
 async function submit() {
-  if (!props.recordId) return
+  if (isBatch.value ? !props.records?.length : !props.recordId) return
   const kind = activeTab.value
 
-  // 先驗證輸入，再開 loading
+  // 先驗證輸入，再開 loading（單筆／批次共用同一套簽名擷取邏輯，僅送出目標不同）
   if (kind === 'drawn' && !drawn) {
     ElMessage.warning('請先簽名')
     return
@@ -217,12 +257,22 @@ async function submit() {
     } else {
       dataUrl = await compressImageToDataUrl(photoFile.value!)
     }
-    await props.config.api.sign(props.recordId, {
-      signature_kind: kind,
-      signature_data: dataUrl,
-    })
-    ElMessage.success('簽收成功')
-    emit('signed')
+    if (isBatch.value) {
+      const res = await props.config.api.batchSign({
+        ids: props.records!.map((r) => r.id),
+        signature_kind: kind,
+        signature_data: dataUrl,
+      })
+      // per-筆成功/失敗回饋交由上層（Panel）處理：toast、失敗原因列表、保留失敗筆勾選重試
+      emit('signed', res.data as BatchSignResult)
+    } else {
+      await props.config.api.sign(props.recordId!, {
+        signature_kind: kind,
+        signature_data: dataUrl,
+      })
+      ElMessage.success('簽收成功')
+      emit('signed')
+    }
     visible.value = false
   } catch (e) {
     const axiosErr = e as { response?: { data?: { detail?: string } } }
@@ -236,6 +286,51 @@ async function submit() {
 <style scoped>
 .so-sign-tabs {
   min-height: 240px;
+}
+
+/* 批次模式：勾選清單 */
+.so-batch-list {
+  border: 1px solid var(--neutral-200, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  padding: var(--space-3, 12px);
+  margin-bottom: var(--space-3, 12px);
+  background: var(--neutral-50, #f8fafc);
+}
+.so-batch-list__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--text-sm, 13px);
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--text-secondary, #64748b);
+  margin-bottom: var(--space-2, 8px);
+}
+.so-batch-list__total {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-primary, #1e293b);
+}
+.so-batch-list__items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.so-batch-list__items li {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm, 13px);
+}
+.so-batch-list__party {
+  color: var(--text-primary, #1e293b);
+}
+.so-batch-list__amount {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary, #64748b);
 }
 
 /* 上傳區 */

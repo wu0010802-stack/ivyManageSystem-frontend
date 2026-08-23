@@ -6,9 +6,11 @@ vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn().mockResolvedValue(true) },
 }))
+vi.mock('@/utils/download', () => ({ downloadFile: vi.fn().mockResolvedValue(true) }))
 
 import { hasPermission } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { downloadFile } from '@/utils/download'
 import {
   VENDOR_SIGNOFF_MODULE,
   MISC_SIGNOFF_MODULE,
@@ -105,6 +107,7 @@ function makeMockApi(cfg: SignoffModuleConfig): SignoffModuleApi {
     update: vi.fn().mockResolvedValue({ data: { message: 'ok' } }),
     remove: vi.fn().mockResolvedValue({ data: { message: 'ok' } }),
     sign: vi.fn().mockResolvedValue({ data: { message: 'ok' } }),
+    batchSign: vi.fn().mockResolvedValue({ data: { results: [], succeeded: 0, failed: 0 } }),
     uploadAttachment: vi.fn().mockResolvedValue({ data: {} }),
     deleteAttachment: vi.fn().mockResolvedValue({ data: {} }),
     attachmentDownloadUrl: (id: number, key: string) => `/x/${id}/${key}`,
@@ -112,16 +115,31 @@ function makeMockApi(cfg: SignoffModuleConfig): SignoffModuleApi {
   }
 }
 
+interface BatchSignResult {
+  results: Array<{ id: number | null; ok: boolean; error?: string | null }>
+  succeeded: number
+  failed: number
+}
+
 interface PanelVm {
-  filters: { status: string; partyName: string; category: string }
+  filters: { status: string; partyName: string; category: string; dateRange: string[] | null }
   form: Record<string, unknown>
   editingId: number | null
   dialogVisible: boolean
+  items: Record<string, unknown>[]
+  selectedRows: Record<string, unknown>[]
+  batchSignRows: Array<{ id: number; partyName: string; amount: number }>
+  signDialogVisible: boolean
   fetchList: () => Promise<void>
   openCreate: () => void
   handleSave: () => Promise<unknown>
   handleDelete: (row: Record<string, unknown>) => Promise<void>
   disabledFutureDate: (t: Date) => boolean
+  selectableRow: (row: Record<string, unknown>) => boolean
+  onSelectionChange: (rows: Record<string, unknown>[]) => void
+  openBatchSign: () => void
+  onSigned: (result?: BatchSignResult) => Promise<void>
+  handleExport: () => Promise<void>
 }
 
 const CASES: [string, SignoffModuleConfig][] = [
@@ -273,5 +291,125 @@ describe.each(CASES)('SignoffPanel (%s)', (_name, baseCfg) => {
     const vm = wrapper.vm as unknown as PanelVm
     expect(vm.dialogVisible).toBe(true)
     expect(vm.editingId).toBe(1)
+  })
+
+  describe('批次簽收與匯出', () => {
+    it('selectableRow 只允許 pending 列被勾選', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      expect(vm.selectableRow({ status: 'pending' })).toBe(true)
+      expect(vm.selectableRow({ status: 'signed' })).toBe(false)
+    })
+
+    it('未勾選時批次簽收按鈕停用；有勾選後啟用且顯示筆數', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const btn = wrapper.find('.so-toolbar__batch-btn')
+      expect(btn.attributes('disabled')).toBeDefined()
+      expect(btn.text()).toContain('0')
+
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.onSelectionChange([{ id: 1, status: 'pending' }])
+      await flushPromises()
+      expect(wrapper.find('.so-toolbar__batch-btn').attributes('disabled')).toBeUndefined()
+      expect(wrapper.find('.so-toolbar__batch-btn').text()).toContain('1')
+    })
+
+    it('openBatchSign 以選取列組出 {id, partyName, amount} 並開啟簽收 dialog', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.onSelectionChange([
+        { id: 1, [cfg.fields.partyName.key]: '甲方一號', amount: 1200, status: 'pending' },
+        { id: 3, [cfg.fields.partyName.key]: '丙方三號', amount: 500, status: 'pending' },
+      ])
+      vm.openBatchSign()
+      await flushPromises()
+      expect(vm.batchSignRows).toEqual([
+        { id: 1, partyName: '甲方一號', amount: 1200 },
+        { id: 3, partyName: '丙方三號', amount: 500 },
+      ])
+      expect(vm.signDialogVisible).toBe(true)
+    })
+
+    it('無勾選時 openBatchSign 不動作', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.openBatchSign()
+      expect(vm.signDialogVisible).toBe(false)
+    })
+
+    it('onSigned 全數成功 → 成功 toast、清空選取、重新載入列表與彙總', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.onSelectionChange([{ id: 1, status: 'pending' }])
+      vi.mocked(mockApi.list).mockClear()
+      vi.mocked(mockApi.summary).mockClear()
+      await vm.onSigned({ results: [{ id: 1, ok: true }], succeeded: 1, failed: 0 })
+      expect(ElMessage.success).toHaveBeenCalledWith('已成功簽收 1 筆')
+      expect(vm.selectedRows).toEqual([])
+      expect(mockApi.list).toHaveBeenCalled()
+      expect(mockApi.summary).toHaveBeenCalled()
+    })
+
+    it('onSigned 部分失敗 → 警告 toast 含原因、失敗筆保留勾選供重試', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.onSelectionChange([
+        { id: 1, [cfg.fields.partyName.key]: '甲方一號', amount: 1200, status: 'pending' },
+      ])
+      vm.batchSignRows = [{ id: 1, partyName: '甲方一號', amount: 1200 }]
+      await vm.onSigned({
+        results: [{ id: 1, ok: false, error: '非 pending' }],
+        succeeded: 0,
+        failed: 1,
+      })
+      expect(ElMessage.warning).toHaveBeenCalledWith(
+        expect.stringContaining('甲方一號：非 pending'),
+      )
+      // id=1 在 makeItems 中仍為 pending，重刷後應保留在勾選清單裡供重試
+      expect(vm.selectedRows.map((r) => r.id)).toEqual([1])
+    })
+
+    it('onSigned 無 payload（單筆簽收）→ 清空選取並重新整理', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.onSelectionChange([{ id: 1, status: 'pending' }])
+      await vm.onSigned()
+      expect(vm.selectedRows).toEqual([])
+    })
+
+    it('handleExport 帶目前篩選條件（日期區間/類別/狀態）呼叫 downloadFile', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.filters.dateRange = ['2026-05-01', '2026-05-31']
+      vm.filters.status = 'pending'
+      if (cfg.category) vm.filters.category = 'rent'
+      await vm.handleExport()
+      expect(downloadFile).toHaveBeenCalledWith(
+        cfg.exportPath,
+        cfg.exportFilename,
+        expect.objectContaining({
+          start_date: '2026-05-01',
+          end_date: '2026-05-31',
+          status: 'pending',
+          ...(cfg.category ? { category: 'rent' } : {}),
+        }),
+      )
+    })
+
+    it('handleExport 無篩選時仍可呼叫（params 為空物件）', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      await vm.handleExport()
+      expect(downloadFile).toHaveBeenCalledWith(cfg.exportPath, cfg.exportFilename, {})
+    })
   })
 })

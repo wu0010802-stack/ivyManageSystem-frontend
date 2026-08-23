@@ -1,4 +1,5 @@
 import api, { API_BASE } from './index'
+import type { ApiBody, AxiosResp } from './_generated/typed'
 export {
   PAYMENT_METHOD_OPTIONS,
   paymentMethodLabel,
@@ -29,6 +30,15 @@ export const deleteMiscReceipt = (id: number) => api.delete(`/misc-receipts/${id
 
 export const signMiscReceipt = (id: number, data: unknown) =>
   api.post(`/misc-receipts/${id}/sign`, data)
+
+/**
+ * 批次簽收：一次簽名套用到多筆待簽收收款（ids 1~100，去重）。
+ * results 為每筆 {id, ok, error?}；succeeded/failed 為成功/失敗**筆數**（非 id 清單）。
+ */
+export const batchSignMiscReceipts = (
+  payload: ApiBody<'/misc-receipts/batch-sign', 'post'>,
+): AxiosResp<'/misc-receipts/batch-sign', 'post'> =>
+  api.post('/misc-receipts/batch-sign', payload)
 
 export const uploadMiscReceiptAttachment = (id: number, formData: FormData) =>
   api.post(`/misc-receipts/${id}/attachments`, formData, {

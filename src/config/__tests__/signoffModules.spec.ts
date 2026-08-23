@@ -40,11 +40,19 @@ describe('signoffModules config', () => {
     })
   })
 
-  it('api 綁定齊備（11 支皆為函式）', () => {
+  it('api 綁定齊備（12 支皆為函式，含 batchSign）', () => {
     for (const m of SIGNOFF_MODULES) {
       for (const fn of Object.values(m.api)) expect(typeof fn).toBe('function')
-      expect(Object.keys(m.api)).toHaveLength(11)
+      expect(Object.keys(m.api)).toHaveLength(12)
+      expect(m.api.batchSign).toBeTypeOf('function')
     }
+  })
+
+  it('exportPath/exportFilename 對齊後端匯出路由與檔名', () => {
+    expect(VENDOR_SIGNOFF_MODULE.exportPath).toBe('/exports/vendor-payments')
+    expect(VENDOR_SIGNOFF_MODULE.exportFilename).toBe('廠商付款簽收紀錄.xlsx')
+    expect(MISC_SIGNOFF_MODULE.exportPath).toBe('/exports/misc-receipts')
+    expect(MISC_SIGNOFF_MODULE.exportFilename).toBe('雜項收款簽收紀錄.xlsx')
   })
 
   it('texts 全部非空字串且兩模組 key 集合一致', () => {

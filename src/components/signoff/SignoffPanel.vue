@@ -91,17 +91,31 @@
       </div>
     </div>
 
+    <!-- 工具列：批次簽收（勾選待簽收列後啟用）＋ 匯出 Excel（帶目前篩選） -->
+    <div class="so-toolbar">
+      <el-button
+        v-if="canWrite"
+        class="so-toolbar__batch-btn"
+        :disabled="selectedRows.length === 0"
+        @click="openBatchSign"
+      >批次簽收（{{ selectedRows.length }}）</el-button>
+      <el-button class="so-toolbar__export-btn" :loading="exporting" @click="handleExport">匯出 Excel</el-button>
+    </div>
+
     <!-- 首次載入用骨架，避免置中 spinner 突兀 -->
     <el-skeleton v-if="loading && !items.length" :rows="6" animated class="so-skeleton" />
 
     <el-table
       v-else
+      ref="tableRef"
       :data="items"
       v-loading="loading && items.length > 0"
       row-key="id"
       class="so-table"
       @row-click="onRowClick"
+      @selection-change="onSelectionChange"
     >
+      <el-table-column type="selection" width="46" :selectable="selectableRow" />
       <el-table-column :prop="config.fields.date.key" :label="config.fields.date.label" width="116" />
       <el-table-column :prop="config.fields.partyName.key" :label="config.fields.partyName.label" min-width="160">
         <template #default="{ row }">
@@ -385,6 +399,7 @@
     <SignoffSignDialog
       v-model="signDialogVisible"
       :record-id="signingId"
+      :records="batchSignRows.length ? batchSignRows : null"
       :config="config"
       @signed="onSigned"
     />
@@ -392,12 +407,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Paperclip } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { todayISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
+import { downloadFile } from '@/utils/download'
 import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel, type SignoffSummary } from '@/constants/signoff'
 import type { SignoffModuleConfig } from '@/config/signoffModules'
 import SignoffSignDialog from './SignoffSignDialog.vue'
@@ -424,6 +440,26 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
+
+// ── 批次簽收（表格勾選）與匯出 ──
+interface BatchSignRecord { id: number; partyName: string; amount: number }
+interface BatchSignResult {
+  results: Array<{ id: number | null; ok: boolean; error?: string | null }>
+  succeeded: number
+  failed: number
+}
+const tableRef = ref<{ toggleRowSelection?: (row: unknown, selected?: boolean) => void } | null>(null)
+const selectedRows = ref<Record<string, unknown>[]>([])
+const batchSignRows = ref<BatchSignRecord[]>([])
+const exporting = ref(false)
+
+function selectableRow(row: Record<string, unknown>) {
+  return row.status === 'pending'
+}
+
+function onSelectionChange(rows: Record<string, unknown>[]) {
+  selectedRows.value = rows
+}
 
 const EMPTY_SUMMARY: SignoffSummary = {
   total_count: 0,
@@ -527,6 +563,29 @@ function buildRangeParams(): Record<string, unknown> {
   if (filters.paymentMethod) params.payment_method = filters.paymentMethod
   if (config.category && filters.category) params.category = filters.category
   return params
+}
+
+// 匯出端點吃 start_date/end_date/category/status（對齊 GET /exports/vendor-payments
+// 與 GET /exports/misc-receipts 的 query，不含 partyName/payment_method——與
+// buildRangeParams 用途不同故各自獨立，避免共用 helper 之後兩邊需求分岔互相牽動）。
+function buildExportParams(): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
+  if (filters.dateRange?.length === 2) {
+    params.start_date = filters.dateRange[0]
+    params.end_date = filters.dateRange[1]
+  }
+  if (config.category && filters.category) params.category = filters.category
+  if (filters.status) params.status = filters.status
+  return params
+}
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    await downloadFile(config.exportPath, config.exportFilename, buildExportParams())
+  } finally {
+    exporting.value = false
+  }
 }
 
 async function fetchList() {
@@ -636,12 +695,25 @@ function openEdit(row: Record<string, unknown>) {
 
 function openSign(row: Record<string, unknown>) {
   signingId.value = row.id as number | null
+  batchSignRows.value = []
+  signDialogVisible.value = true
+}
+
+function openBatchSign() {
+  if (!selectedRows.value.length) return
+  batchSignRows.value = selectedRows.value.map((r) => ({
+    id: r.id as number,
+    partyName: String(r[config.fields.partyName.key] ?? ''),
+    amount: Number(r.amount) || 0,
+  }))
+  signingId.value = null
   signDialogVisible.value = true
 }
 
 function openSignFromDialog() {
   if (!editingId.value) return
   signingId.value = editingId.value
+  batchSignRows.value = []
   dialogVisible.value = false
   signDialogVisible.value = true
 }
@@ -731,8 +803,47 @@ async function removeAttachment(key: string) {
   }
 }
 
-function onSigned() {
-  refresh()
+/**
+ * 單筆簽收（SignoffSignDialog 未帶 result）：沿用既有 refresh 行為。
+ * 批次簽收：per-筆結果回饋——toast（成功/失敗筆數＋失敗原因）、重新載入，
+ * 失敗筆從新載入的列表裡找回並保留勾選，讓操作者可直接重試。
+ */
+async function onSigned(result?: BatchSignResult) {
+  if (!result) {
+    selectedRows.value = []
+    batchSignRows.value = []
+    refresh()
+    return
+  }
+
+  const failedItems = result.results.filter((r) => !r.ok)
+  if (failedItems.length === 0) {
+    ElMessage.success(`已成功簽收 ${result.succeeded} 筆`)
+  } else {
+    const detail = failedItems
+      .map((r) => {
+        const rec = batchSignRows.value.find((b) => b.id === r.id)
+        return `${rec?.partyName ?? `#${r.id}`}：${r.error || '簽收失敗'}`
+      })
+      .join('；')
+    ElMessage.warning(`批次簽收完成：成功 ${result.succeeded} 筆，失敗 ${result.failed} 筆（${detail}）`)
+  }
+
+  await fetchList()
+  fetchSummary()
+
+  const failedIds = new Set(failedItems.map((r) => r.id))
+  if (failedIds.size) {
+    const rowsToReselect = items.value.filter((r) => failedIds.has(r.id as number))
+    selectedRows.value = rowsToReselect
+    await nextTick()
+    rowsToReselect.forEach((r) => {
+      tableRef.value?.toggleRowSelection?.(r, true)
+    })
+  } else {
+    selectedRows.value = []
+  }
+  batchSignRows.value = []
 }
 
 function formatMoney(value: unknown) {
@@ -859,6 +970,15 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2, 8px);
+}
+
+/* ── 工具列（批次簽收／匯出） ── */
+.so-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2, 8px);
+  margin-bottom: var(--space-3, 12px);
 }
 
 /* ── 骨架 ── */

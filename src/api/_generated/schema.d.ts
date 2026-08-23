@@ -6175,6 +6175,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exports/misc-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Misc Receipts
+         * @description 匯出雜項收款簽收紀錄 Excel。理由與 scope 判斷同 export_vendor_payments
+         *     （雙生模組，財務簽收無班級層級 scope 概念）。
+         */
+        get: operations["export_misc_receipts_api_exports_misc_receipts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exports/overtimes": {
         parameters: {
             query?: never;
@@ -6231,6 +6252,32 @@ export interface paths {
          * @description 匯出學生名冊 Excel
          */
         get: operations["export_students_api_exports_students_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/vendor-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Vendor Payments
+         * @description 匯出廠商付款簽收紀錄 Excel。
+         *
+         *     篩選（date range / category / status）與 GET /api/vendor-payments 列表一致。
+         *     財務簽收為全園務層級資料（`require_staff_permission` 本身即全有全無，
+         *     VENDOR_PAYMENT_READ 目前無 own_class/all 之類的 scope-qualified 授權），
+         *     不同於 export_students 的班級層級 PII 才需要的 assert_all_scope 分流，
+         *     故本端點不套用。
+         */
+        get: operations["export_vendor_payments_api_exports_vendor_payments_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8374,6 +8421,35 @@ export interface paths {
         get: operations["get_signature_image_api_misc_receipts__receipt_id__signature_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/batch-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Sign Misc Receipts
+         * @description 批次簽收：一次簽名（drawn/photo）套用到勾選的多筆待簽收收款。
+         *
+         *     NOTE: 本路由必須宣告在 ``/misc-receipts/{receipt_id}`` 之前，否則
+         *     "batch-sign" 會被當成 receipt_id 解析（422），同 summary 路由的既有慣例。
+         *
+         *     簽名儲存策略、SAVEPOINT 部分成功語意與失敗原因分類，完全對齊
+         *     api/vendor_payments.py::batch_sign_vendor_payments（雙生模組，理由見該端點
+         *     docstring：逐筆各自 put_attachment 落一份 storage 副本，不共用 signature_key
+         *     ——現行 delete 端點雖已擋掉「刪除已簽收紀錄」，但那是隱性耦合而非資料模型
+         *     不變式，複製成本遠低於耦合風險）。
+         */
+        post: operations["batch_sign_misc_receipts_api_misc_receipts_batch_sign_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17650,6 +17726,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments/batch-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Sign Vendor Payments
+         * @description 批次簽收：一次簽名（drawn/photo）套用到勾選的多筆待簽收付款。
+         *
+         *     NOTE: 本路由必須宣告在 ``/vendor-payments/{payment_id}`` 之前，否則
+         *     "batch-sign" 會被當成 payment_id 解析（422），同 summary 路由的既有慣例。
+         *
+         *     簽名只解析一次（整批共用同一次簽名動作）：格式不合法（base64/大小/magic
+         *     bytes）直接 400，不動任何一筆。逐筆各自落一份 storage 副本（不共用同一個
+         *     signature_key）——雖然本模組現行 delete 端點已擋掉「刪除已簽收紀錄」
+         *     （status != pending 一律 409），共用 key 在*現況*程式碼下不會被刪除路徑
+         *     互相破壞；但這是靠「delete 守衛恰好擋住」的隱性耦合，非可驗證的資料模型
+         *     不變式（未來若加沖銷/GC/資料保留等新刪除路徑，共用 key 會讓多筆紀錄一次
+         *     失去簽名佐證）。signature_key 語意上是「這一筆的簽名副本」而非「這批的
+         *     簽名副本」，複製成本（單張簽名 <1MB）遠低於耦合風險，故選擇逐筆各自
+         *     put_attachment（`utils.portfolio_storage` 以 uuid4 產生 key，天然不撞）。
+         *
+         *     逐筆 SAVEPOINT 部分成功：非 pending / 不存在（含跨租戶，兩者同歸「不存在」，
+         *     比照 `_load_payment` 慣例不洩漏跨租戶存在性）/ 建立者自行簽收（職責分離）
+         *     各自記失敗原因，不影響同批其他筆。
+         */
+        post: operations["batch_sign_vendor_payments_api_vendor_payments_batch_sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vendor-payments/summary": {
         parameters: {
             query?: never;
@@ -21025,6 +21138,18 @@ export interface components {
             reason: string;
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * BulkOpItemResult
+         * @description 批次操作單筆結果。
+         */
+        BulkOpItemResult: {
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id?: number | null;
+            /** Ok */
+            ok: boolean;
         };
         /** BulkStudentsRequest */
         BulkStudentsRequest: {
@@ -27616,6 +27741,21 @@ export interface components {
             uploaded_at?: string | null;
             /** Uploaded By Id */
             uploaded_by_id?: number | null;
+        };
+        /**
+         * MiscReceiptBatchSignRequest
+         * @description 批次簽收：一次簽名套用到勾選的多筆待簽收收款（月結高頻手動痛點）。
+         */
+        MiscReceiptBatchSignRequest: {
+            /** Ids */
+            ids: number[];
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
         };
         /** MiscReceiptCreate */
         MiscReceiptCreate: {
@@ -37373,6 +37513,23 @@ export interface components {
             /** Signed On */
             signed_on?: string | null;
         };
+        /**
+         * SignoffBatchSignResultOut
+         * @description 財務簽收批次簽收回傳共用 shape — {results, succeeded, failed}。
+         *
+         *     results 為每筆 {id, ok, error?}（沿用 `BulkOpItemResult`）；succeeded/failed
+         *     為成功/失敗**筆數**（非 id 清單，與 `BatchApproveResultOut` 的
+         *     list[int] `succeeded` 形狀不同——此為前端批次簽收 UI 的既定契約）。
+         *     vendor_payments / misc_receipts 兩個 batch-sign 端點回傳形狀一致，共用此 schema。
+         */
+        SignoffBatchSignResultOut: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["BulkOpItemResult"][];
+            /** Succeeded */
+            succeeded: number;
+        };
         /** SignRequestOut */
         SignRequestOut: {
             /** Batch Id */
@@ -39722,6 +39879,21 @@ export interface components {
             uploaded_at?: string | null;
             /** Uploaded By Id */
             uploaded_by_id?: number | null;
+        };
+        /**
+         * VendorPaymentBatchSignRequest
+         * @description 批次簽收：一次簽名套用到勾選的多筆待簽收付款（月結高頻手動痛點）。
+         */
+        VendorPaymentBatchSignRequest: {
+            /** Ids */
+            ids: number[];
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
         };
         /** VendorPaymentCreate */
         VendorPaymentCreate: {
@@ -50524,6 +50696,40 @@ export interface operations {
             };
         };
     };
+    export_misc_receipts_api_exports_misc_receipts_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_overtimes_api_exports_overtimes_get: {
         parameters: {
             query: {
@@ -50604,6 +50810,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_vendor_payments_api_exports_vendor_payments_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -54507,6 +54747,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_sign_misc_receipts_api_misc_receipts_batch_sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiscReceiptBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignoffBatchSignResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -70814,6 +71087,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_sign_vendor_payments_api_vendor_payments_batch_sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorPaymentBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignoffBatchSignResultOut"];
                 };
             };
             /** @description Validation Error */
