@@ -10725,6 +10725,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pickup-authorizations/{auth_id}/confirm-visual-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Confirm Visual Match
+         * @description D10④：POS 佇列卡目視比對明碼後一鍵確認，不重新輸入 6 碼。
+         */
+        post: operations["admin_confirm_visual_match_api_pickup_authorizations__auth_id__confirm_visual_match_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pickup-authorizations/{auth_id}/override-complete": {
         parameters: {
             query?: never;
@@ -23759,6 +23779,14 @@ export interface components {
             id: number;
             /** Note */
             note: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Person Relation */
+            person_relation?: string | null;
+            /** Pickup Authorization Id */
+            pickup_authorization_id?: number | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /** Request Source */
             request_source: string;
             /**
@@ -29856,6 +29884,8 @@ export interface components {
             person_relation: string;
             /** Photo Url */
             photo_url?: string | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /**
              * Pickup Date
              * Format: date
@@ -31175,7 +31205,9 @@ export interface components {
         };
         /**
          * PortalPickupAuthOut
-         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊，永不含取件碼。
+         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊。
+         *
+         *     T-020 起繼承 `pickup_code`：僅 active 授權回傳明碼，供 POS 佇列卡目視比對。
          */
         PortalPickupAuthOut: {
             /** Batch Key */
@@ -31214,6 +31246,8 @@ export interface components {
             person_relation: string;
             /** Photo Url */
             photo_url?: string | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /**
              * Pickup Date
              * Format: date
@@ -49046,7 +49080,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DismissalCallOut"][];
                 };
             };
             /** @description Validation Error */
@@ -58139,6 +58173,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PortalPickupAuthListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_confirm_visual_match_api_pickup_authorizations__auth_id__confirm_visual_match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
                 };
             };
             /** @description Validation Error */
