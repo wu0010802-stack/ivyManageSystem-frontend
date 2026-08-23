@@ -71,7 +71,7 @@ describe('StepCalculate — async 計算 + 輪詢', () => {
     await wrapper.vm.onCalculate()
     await flushPromises()
 
-    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5)
+    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5, true)
     expect(h.getSalaryCalcJob).toHaveBeenCalledWith('j1')
     expect(settlement.refresh).toHaveBeenCalled()
     expect(wrapper.emitted('next')).toBeTruthy()

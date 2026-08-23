@@ -66936,6 +66936,8 @@ export interface operations {
             query: {
                 /** @description Calculate for which month */
                 month: number;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（寫審計） */
+                use_snapshot?: boolean;
                 /** @description Calculate for which year */
                 year: number;
             };
@@ -66969,6 +66971,8 @@ export interface operations {
         parameters: {
             query: {
                 month: number;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（寫審計） */
+                use_snapshot?: boolean;
                 year: number;
             };
             header?: never;

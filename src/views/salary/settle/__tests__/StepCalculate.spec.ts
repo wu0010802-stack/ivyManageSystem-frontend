@@ -41,6 +41,12 @@ const STUBS = {
         template: '<button :disabled="disabled" v-bind="$attrs"><slot /></button>',
         props: ['disabled', 'loading'],
     },
+    'el-checkbox': {
+        template:
+            '<label class="cb-stub"><input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" /><slot /></label>',
+        props: ['modelValue'],
+        emits: ['update:modelValue'],
+    },
 }
 
 const mountStep = (settlement: ReturnType<typeof makeSettlement>, month = 5) =>
@@ -92,7 +98,7 @@ describe('StepCalculate', () => {
         const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
         await btn!.trigger('click')
         await flushPromises()
-        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5)
+        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5, true)
         expect(settlement.refresh).toHaveBeenCalled()
         expect(wrapper.emitted('next')).toBeTruthy()
         expect(ElMessage.success).toHaveBeenCalled()
@@ -251,5 +257,45 @@ describe('StepCalculate', () => {
             expect(wrapper.emitted('next')).toBeFalsy()
             expect(ElMessage.success).not.toHaveBeenCalled()
         })
+    })
+})
+
+describe('StepCalculate 改用現行主檔（use_snapshot）', () => {
+    beforeEach(() => {
+        calculateAsyncMock.mockReset()
+        getSalaryCalcJobMock.mockReset()
+        getSnapshotMock.mockReset()
+        getSnapshotMock.mockResolvedValue({ data: { covered_months: [], rows: [] } })
+        hasPermissionMock.mockReturnValue(true)
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        vi.mocked(ElMessage.success).mockReset()
+    })
+
+    const okJob = () => {
+        calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-s', total: 1 } })
+        getSalaryCalcJobMock.mockResolvedValue({
+            data: { job_id: 'job-s', status: 'completed', errors: [], done: 1, total: 1, current_employee: '' },
+        })
+    }
+
+    it('預設未勾 → calculateAsync 第三參數 true（沿用輸入快照）', async () => {
+        okJob()
+        const wrapper = mountStep(makeSettlement('reviewing'))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5, true)
+    })
+
+    it('勾選改用現行主檔 → calculateAsync 第三參數 false', async () => {
+        okJob()
+        const wrapper = mountStep(makeSettlement('reviewing'))
+        const cb = wrapper.find('input[type="checkbox"]')
+        expect(cb.exists()).toBe(true)
+        await cb.setValue(true)
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5, false)
     })
 })
