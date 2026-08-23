@@ -38,10 +38,18 @@
         :filters="statusFilterGroups"
         :filter-values="statusFilterValues"
         :total="recordTotal"
+        exportable
+        :exporting="exporting"
         @update:search="onSearchInput"
         @update:filter-values="onStatusFilterChange"
+        @export="exportRecords"
       >
         <template #actions>
+          <el-button
+            data-test="fee-batch-pay-open"
+            :disabled="selectedRows.length === 0"
+            @click="openBatchPayDialog"
+          >批次登記繳費（{{ selectedRows.length }}）</el-button>
           <el-button data-test="fee-reset-filters" @click="resetRecordFilters">清除篩選</el-button>
         </template>
       </AdminListToolbar>
@@ -120,7 +128,14 @@
       </template>
 
       <template v-else>
-        <el-table :data="feeRecords" v-loading="recordsLoading" border>
+        <el-table
+          ref="recordsTableRef"
+          :data="feeRecords"
+          v-loading="recordsLoading"
+          border
+          @selection-change="onSelectionChange"
+        >
+          <el-table-column type="selection" :selectable="rowSelectable" width="42" />
           <el-table-column label="學生" prop="student_name" min-width="80" />
           <el-table-column label="班級" prop="classroom_name" min-width="80" />
           <el-table-column label="費用項目" prop="fee_item_name" min-width="110" />
@@ -278,6 +293,16 @@
       :record="refundTarget"
       @refunded="fetchRecords"
     />
+
+    <!-- ================================================================
+         Dialog：批次登記繳費（多選、繳清全額）
+    ================================================================ -->
+    <BatchPayDialog
+      v-if="batchPayDialogVisible"
+      v-model="batchPayDialogVisible"
+      :records="selectedRows"
+      @paid="onBatchPaid"
+    />
   </div>
 </template>
 
@@ -289,11 +314,13 @@ import type { FormInstance } from 'element-plus'
 import { getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
 import { todayISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
+import { downloadFile } from '@/utils/download'
 import { confirmDiscardChanges } from '@/composables/useUnsavedChangesGuard'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
+import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
 
 interface Classroom {
   id: number
@@ -576,6 +603,52 @@ function openRefundModal(row: FeeRow) {
   refundModalVisible.value = true
 }
 
+// ─── 批次登記繳費（多選，消除逐筆開對話框的痛） ──────────────────────────────
+interface ElTableInstance {
+  clearSelection?: () => void
+}
+const recordsTableRef = ref<ElTableInstance | null>(null)
+const selectedRows = ref<FeeRow[]>([])
+const batchPayDialogVisible = ref<boolean>(false)
+
+// 已繳清列不可勾選：批次端點語意固定「繳清全額」，paid 列再勾也只會落地失敗
+function rowSelectable(row: FeeRow): boolean {
+  return row.status !== 'paid'
+}
+
+function onSelectionChange(rows: FeeRow[]) {
+  selectedRows.value = rows
+}
+
+function openBatchPayDialog() {
+  if (selectedRows.value.length === 0) return
+  batchPayDialogVisible.value = true
+}
+
+// BatchPayDialog 每次送出取得回應（含全數失敗）都會 emit paid，統一重新
+// 載入清單反映最新狀態（全敗時為 no-op 但無害）；選取狀態隨舊列被新陣列取代
+// 而失去意義，一併清空（對話框若還開著，其內部重試流程不依賴這份選取）。
+function onBatchPaid() {
+  fetchRecords()
+  selectedRows.value = []
+  recordsTableRef.value?.clearSelection?.()
+}
+
+// ─── 匯出 Excel（帶目前 學期/班級/狀態 篩選值） ──────────────────────────────
+const exporting = ref<boolean>(false)
+async function exportRecords() {
+  exporting.value = true
+  try {
+    const params: Record<string, string> = {}
+    if (recordFilter.value.period) params.period = recordFilter.value.period
+    if (recordFilter.value.classroom_name) params.classroom_name = recordFilter.value.classroom_name
+    if (recordFilter.value.status) params.status = recordFilter.value.status
+    await downloadFile('/exports/fees', '學費繳費記錄.xlsx', Object.keys(params).length ? params : undefined)
+  } finally {
+    exporting.value = false
+  }
+}
+
 // ─── 篩選 watcher（下拉／段落鈕即時套用；reset 期間由 suppress 旗標靜默） ────
 watch(() => recordFilter.value.period, () => {
   if (!_suppressFilterWatch) searchRecords()
@@ -603,6 +676,15 @@ defineExpose({
   openPayDialog,
   submitPay,
   resetRecordFilters,
+  // 批次登記繳費／匯出（測試用白盒存取）
+  selectedRows,
+  rowSelectable,
+  onSelectionChange,
+  batchPayDialogVisible,
+  openBatchPayDialog,
+  onBatchPaid,
+  exportRecords,
+  exporting,
 })
 </script>
 

@@ -9,6 +9,11 @@ export const getFeeRecords = (
 ): Promise<ApiResponse<'/fees/records', 'get'>> =>
   api.get('/fees/records', { params }).then((res) => res.data)
 export const payFeeRecord = (id: number, data: unknown) => api.put(`/fees/records/${id}/pay`, data).then((res) => res.data)
+// 批次登記繳費（語意固定「繳清全額」；部分繳費仍走單筆 payFeeRecord）
+export const batchPayFeeRecords = (
+  payload: ApiBody<'/fees/records/batch-pay', 'post'>,
+): Promise<ApiResponse<'/fees/records/batch-pay', 'post'>> =>
+  api.post('/fees/records/batch-pay', payload).then((res) => res.data)
 export const refundFeeRecord = (id: number, data: unknown) => api.post(`/fees/records/${id}/refund`, data).then((res) => res.data)
 export const suggestRefund = (recordId: number, payload: unknown) =>
   api.post(`/fees/records/${recordId}/refund-suggest`, payload).then((res) => res.data)
