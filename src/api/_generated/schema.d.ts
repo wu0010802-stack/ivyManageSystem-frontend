@@ -11681,6 +11681,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/dismissal-calls/{call_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Portal Cancel
+         * @description 老師取消接送通知（pending / acknowledged → cancelled）。
+         *
+         *     後台版本（api/dismissal_calls.py）限原建立者或管理角色；本端點開放給
+         *     持 DISMISSAL_CALLS_WRITE 的班級教師處理自班誤建／家長改口的通知，
+         *     班級 scope 與 403 collapse 沿用 acknowledge/complete 同一套守衛。
+         */
+        post: operations["portal_cancel_api_portal_dismissal_calls__call_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/dismissal-calls/{call_id}/complete": {
         parameters: {
             query?: never;
@@ -28995,6 +29019,126 @@ export interface components {
             /** Registration Id */
             registration_id: number;
         };
+        /**
+         * PortalAttendanceSheetDayOut
+         * @description 考勤表單日列。punch_in/punch_out 為 HH:MM 字串。
+         */
+        PortalAttendanceSheetDayOut: {
+            /** Date */
+            date: string;
+            /** Day */
+            day: number;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Is Early Leave */
+            is_early_leave: boolean;
+            /** Is Holiday */
+            is_holiday: boolean;
+            /** Is Late */
+            is_late: boolean;
+            /** Is Makeup Workday */
+            is_makeup_workday: boolean;
+            /** Is Missing Punch In */
+            is_missing_punch_in: boolean;
+            /** Is Missing Punch Out */
+            is_missing_punch_out: boolean;
+            /** Is Weekend */
+            is_weekend: boolean;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Leave Requests */
+            leave_requests: components["schemas"]["PortalAttendanceSheetLeaveRequestOut"][];
+            /** Leave Type */
+            leave_type?: string | null;
+            /** Leave Type Label */
+            leave_type_label?: string | null;
+            /** Overtime Requests */
+            overtime_requests: components["schemas"]["PortalAttendanceSheetOvertimeRequestOut"][];
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Scheduled End */
+            scheduled_end?: string | null;
+            /** Scheduled Start */
+            scheduled_start?: string | null;
+            /** Shift Name */
+            shift_name?: string | null;
+            /** Status */
+            status: string;
+            /** Weekday */
+            weekday: string;
+            /** Work Hours */
+            work_hours?: number | null;
+            /** Workday Override Name */
+            workday_override_name?: string | null;
+        };
+        /**
+         * PortalAttendanceSheetLeaveRequestOut
+         * @description 考勤表單日掛載的假單（全部狀態，供顯示）。
+         */
+        PortalAttendanceSheetLeaveRequestOut: {
+            /** Leave Hours */
+            leave_hours: number;
+            /** Leave Type */
+            leave_type: string;
+            /** Leave Type Label */
+            leave_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        };
+        /**
+         * PortalAttendanceSheetOut
+         * @description GET /portal/attendance-sheet — 教師個人月考勤表。
+         */
+        PortalAttendanceSheetOut: {
+            /** Days */
+            days: components["schemas"]["PortalAttendanceSheetDayOut"][];
+            /** Employee Name */
+            employee_name: string;
+            /** Month */
+            month: number;
+            summary: components["schemas"]["PortalAttendanceSheetSummaryOut"];
+            /** Uses Shift */
+            uses_shift: boolean;
+            /** Year */
+            year: number;
+        };
+        /**
+         * PortalAttendanceSheetOvertimeRequestOut
+         * @description 考勤表單日掛載的加班單（全部狀態，供顯示）。
+         */
+        PortalAttendanceSheetOvertimeRequestOut: {
+            /** Hours */
+            hours: number;
+            /** Overtime Type */
+            overtime_type: string;
+            /** Overtime Type Label */
+            overtime_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        };
+        /** PortalAttendanceSheetSummaryOut */
+        PortalAttendanceSheetSummaryOut: {
+            /** Avg Work Hours */
+            avg_work_hours: number;
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Late Count */
+            late_count: number;
+            /** Leave Count */
+            leave_count: number;
+            /** Missing Punch Count */
+            missing_punch_count: number;
+            /** Total Work Days */
+            total_work_days: number;
+        };
         /** PortalBatchAttendanceResultOut */
         PortalBatchAttendanceResultOut: {
             /** Ok */
@@ -29008,6 +29152,106 @@ export interface components {
         PortalBatchAttendanceUpdate: {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
+        };
+        /**
+         * PortalCalendarEventOut
+         * @description 行事曆 feed 單一事件（手動事件與官方假日/補班共用形狀）。
+         */
+        PortalCalendarEventOut: {
+            /** Description */
+            description?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** End Time */
+            end_time?: string | null;
+            /** Event Date */
+            event_date: string;
+            /** Event Type */
+            event_type: string;
+            /** Event Type Label */
+            event_type_label: string;
+            /** Id */
+            id: number | string;
+            /** Is All Day */
+            is_all_day: boolean;
+            /** Is Official */
+            is_official: boolean;
+            /** Is Read Only */
+            is_read_only: boolean;
+            /** Location */
+            location?: string | null;
+            /** Official Kind */
+            official_kind?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** Title */
+            title: string;
+        };
+        /**
+         * PortalCalendarOfficialSyncOut
+         * @description 官方行事曆同步狀態（services/official_calendar.get_cached_official_sync_status）。
+         */
+        PortalCalendarOfficialSyncOut: {
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "synced" | "cached" | "warning";
+            /** Used Cache */
+            used_cache: boolean;
+            /** Warning */
+            warning?: string | null;
+        };
+        /**
+         * PortalCalendarOut
+         * @description GET /portal/calendar — 教師檢視學校行事曆。
+         */
+        PortalCalendarOut: {
+            /** Events */
+            events: components["schemas"]["PortalCalendarEventOut"][];
+            /** Month */
+            month: number;
+            official_sync: components["schemas"]["PortalCalendarOfficialSyncOut"];
+            /** Year */
+            year: number;
+        };
+        /**
+         * PortalClassAttendanceMonthlyOut
+         * @description GET /portal/my-class-attendance/monthly — 班級整月出席統計。
+         *
+         *     status_totals key 為 VALID_STATUSES 中文狀態名（出席/缺席/病假/事假/遲到）。
+         */
+        PortalClassAttendanceMonthlyOut: {
+            /** Alerts */
+            alerts: components["schemas"]["PortalMonthlyAlertOut"][];
+            /** Calendar Days */
+            calendar_days: components["schemas"]["PortalMonthlyCalendarDayOut"][];
+            /** Classroom Attendance Rate */
+            classroom_attendance_rate: number;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Classroom Record Completion Rate */
+            classroom_record_completion_rate: number;
+            /** Days In Month */
+            days_in_month: number;
+            /** Holiday Count */
+            holiday_count: number;
+            /** Month */
+            month: number;
+            /** School Days Count */
+            school_days_count: number;
+            /** Status Totals */
+            status_totals: {
+                [key: string]: number;
+            };
+            /** Students */
+            students: components["schemas"]["PortalMonthlyStudentRowOut"][];
+            /** Year */
+            year: number;
         };
         /** PortalClassStatusOut */
         PortalClassStatusOut: {
@@ -29065,6 +29309,96 @@ export interface components {
         PortalCompLeaveGrantsOut: {
             /** Grants */
             grants: components["schemas"]["PortalCompLeaveGrantItemOut"][];
+        };
+        /**
+         * PortalMonthlyAlertOut
+         * @description 連續缺席告警條目（longest_absence_streak >= ALERT_STREAK_THRESHOLD）。
+         */
+        PortalMonthlyAlertOut: {
+            /** Current Absence Streak */
+            current_absence_streak: number;
+            /** Longest Absence Streak */
+            longest_absence_streak: number;
+            /** Name */
+            name: string;
+            /** Student Id */
+            student_id: number;
+            /** Student No */
+            student_no: string;
+        };
+        /** PortalMonthlyCalendarDayOut */
+        PortalMonthlyCalendarDayOut: {
+            /** Date */
+            date: string;
+            /** Day */
+            day: number;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Is Holiday */
+            is_holiday: boolean;
+            /** Is School Day */
+            is_school_day: boolean;
+            /** Is Weekend */
+            is_weekend: boolean;
+            /** Weekday */
+            weekday: string;
+        };
+        /**
+         * PortalMonthlyDailyRecordOut
+         * @description 學生單日出席紀錄（status 為 VALID_STATUSES 中文值或 None＝未點名）。
+         *
+         *     status 維持 str 不用 Literal：欄位為 String(10) 無 DB CHECK，防歷史資料
+         *     含白名單外值時 response 驗證直接 500。
+         */
+        PortalMonthlyDailyRecordOut: {
+            /** Date */
+            date: string;
+            /** Is School Day */
+            is_school_day: boolean;
+            /** Remark */
+            remark?: string | null;
+            /** Status */
+            status?: string | null;
+        };
+        /**
+         * PortalMonthlyStudentRowOut
+         * @description monthly report 單一學生統計列（含中文狀態計數欄位）。
+         */
+        PortalMonthlyStudentRowOut: {
+            /** Absence Alert */
+            absence_alert: boolean;
+            /** Attendance Rate */
+            attendance_rate: number;
+            /** Current Absence Streak */
+            current_absence_streak: number;
+            /** Daily Records */
+            daily_records: components["schemas"]["PortalMonthlyDailyRecordOut"][];
+            /** Longest Absence Streak */
+            longest_absence_streak: number;
+            /** Name */
+            name: string;
+            /** Record Completion Rate */
+            record_completion_rate: number;
+            /** Recorded Days */
+            recorded_days: number;
+            /** School Days */
+            school_days: number;
+            /** Student Id */
+            student_id: number;
+            /** Student No */
+            student_no: string;
+            /** 事假 */
+            "\u4E8B\u5047": number;
+            /** 出席 */
+            "\u51FA\u5E2D": number;
+            /** 未點名 */
+            "\u672A\u9EDE\u540D": number;
+            /** 病假 */
+            "\u75C5\u5047": number;
+            /** 缺席 */
+            "\u7F3A\u5E2D": number;
+            /** 遲到 */
+            "\u9072\u5230": number;
         };
         /**
          * PortalMyDataExportOut
@@ -29496,6 +29830,11 @@ export interface components {
             emergency_contact_phone?: string | null;
             /** Employee Id */
             employee_id: string;
+            /**
+             * Has Punch Pin
+             * @default false
+             */
+            has_punch_pin: boolean;
             /** Hire Date */
             hire_date?: string | null;
             /** Job Title */
@@ -29553,6 +29892,104 @@ export interface components {
             total_registrations: number;
             /** Total Waitlist */
             total_waitlist: number;
+        };
+        /** PortalSalaryAttendanceStatsOut */
+        PortalSalaryAttendanceStatsOut: {
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Late Count */
+            late_count: number;
+            /** Leave Days */
+            leave_days: number;
+            /** Leave Hours */
+            leave_hours: number;
+            /** Missing Punch Count */
+            missing_punch_count: number;
+            /** Work Days */
+            work_days: number;
+        };
+        /**
+         * PortalSalaryBreakdownChildOut
+         * @description 明細列 informational 子列（如健保下的二代補充保費拆列）。
+         */
+        PortalSalaryBreakdownChildOut: {
+            /** Amount */
+            amount: number;
+            /** Informational */
+            informational: boolean;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * PortalSalaryBreakdownLineOut
+         * @description 薪條三區（收入/獨立轉帳/扣款）單一明細列。
+         *
+         *     note 僅 extra_allowance 帶名目時出現；children 僅健保列含補充保費時出現
+         *     （exclude_unset 下不會冒出 null）。
+         */
+        PortalSalaryBreakdownLineOut: {
+            /** Amount */
+            amount: number;
+            /** Children */
+            children?: components["schemas"]["PortalSalaryBreakdownChildOut"][] | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * PortalSalaryDetailOut
+         * @description 定案薪資單三區明細（api/salary_fields.build_history_breakdown 形狀）。
+         */
+        PortalSalaryDetailOut: {
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
+            /** Deduction Subtotal */
+            deduction_subtotal: number;
+            /** Deductions */
+            deductions: components["schemas"]["PortalSalaryBreakdownLineOut"][];
+            /** Income */
+            income: components["schemas"]["PortalSalaryBreakdownLineOut"][];
+            /** Income Subtotal */
+            income_subtotal: number;
+            /** Is Finalized */
+            is_finalized: boolean;
+            /** Needs Recalc */
+            needs_recalc: boolean;
+            /** Net Salary */
+            net_salary: number;
+            /** Separate Subtotal */
+            separate_subtotal: number;
+            /** Separate Transfer */
+            separate_transfer: components["schemas"]["PortalSalaryBreakdownLineOut"][];
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
+            /** Version */
+            version: number;
+        };
+        /**
+         * PortalSalaryPreviewOut
+         * @description GET /portal/salary-preview — 個人薪資預覽。
+         *
+         *     salary 僅在 salary_status == "finalized" 時有值；草稿/重算中一律 None
+         *     （與 LINE「我的薪資」對齊，避免向員工顯示未定案金額）。
+         */
+        PortalSalaryPreviewOut: {
+            attendance_stats: components["schemas"]["PortalSalaryAttendanceStatsOut"];
+            /** Month */
+            month: number;
+            salary?: components["schemas"]["PortalSalaryDetailOut"] | null;
+            /**
+             * Salary Status
+             * @enum {string}
+             */
+            salary_status: "none" | "draft" | "recalc_pending" | "finalized";
+            /** Year */
+            year: number;
         };
         /** PortalStudentLeaveListOut */
         PortalStudentLeaveListOut: {
@@ -56147,7 +56584,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalAttendanceSheetOut"];
                 };
             };
             /** @description Validation Error */
@@ -56457,7 +56894,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalCalendarOut"];
                 };
             };
             /** @description Validation Error */
@@ -56789,7 +57226,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentAttendanceBatchSaveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -57386,6 +57823,37 @@ export interface operations {
             };
         };
     };
+    portal_cancel_api_portal_dismissal_calls__call_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     portal_complete_api_portal_dismissal_calls__call_id__complete_post: {
         parameters: {
             query?: never;
@@ -57805,7 +58273,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalClassAttendanceMonthlyOut"];
                 };
             };
             /** @description Validation Error */
@@ -58956,7 +59424,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalSalaryPreviewOut"];
                 };
             };
             /** @description Validation Error */
