@@ -32,10 +32,20 @@
           </p>
           <p v-if="lastCalculatedAt" class="calc-hint">上次計算：{{ lastCalculatedAt }}</p>
           <!-- 曾封存後解封的紀錄預設以「封存當下的輸入快照」重算（位元重現）；
-               勾選後改讀現行員工主檔（例如主檔修正錯誤後要以新值重算），後端寫審計 -->
+               勾選後改讀現行員工主檔（例如主檔修正錯誤後要以新值重算），
+               需填原因 ≥10 字（後端 422 強制），與操作者一併寫入審計 -->
           <el-checkbox v-model="useLiveMaster" class="calc-hint">
             改用現行主檔重算（忽略已封存紀錄的輸入快照）
           </el-checkbox>
+          <el-input
+            v-if="useLiveMaster"
+            v-model="liveMasterReason"
+            type="textarea"
+            :rows="2"
+            maxlength="500"
+            class="calc-mb"
+            placeholder="請說明改用現行主檔的原因（至少 10 字，將寫入審計）"
+          />
         </div>
         <el-tooltip :content="disabledReason" :disabled="!disabledReason" placement="top">
           <span>
@@ -90,6 +100,8 @@ const { notify } = useErrorNotify()
 const calculating = inject<Ref<boolean>>('settleCalculating', ref(false))
 // 改用現行主檔重算（use_snapshot=false）：預設關——曾封存列沿用輸入快照位元重現
 const useLiveMaster = ref(false)
+// 改用現行主檔的原因（後端強制 ≥10 字入審計）
+const liveMasterReason = ref('')
 const calcErrors = ref<{ employee_name?: string; error?: string }[]>([])
 // async 計算進度（done/total/current）；null = 未在計算
 const progress = ref<{ done: number; total: number; current: string } | null>(null)
@@ -170,6 +182,11 @@ const pollCalcJob = async (jobId: string, isStale: () => boolean): Promise<Salar
 }
 
 const onCalculate = async () => {
+    // 改用現行主檔：原因 <10 字直接擋（與後端 422 同準則，先在前端給明確提示）
+    if (useLiveMaster.value && liveMasterReason.value.trim().length < 10) {
+        ElMessage.warning('改用現行主檔重算需填寫原因（至少 10 字），將寫入審計')
+        return
+    }
     try {
         await ElMessageBox.confirm(
             `將計算 ${q.year} 年 ${q.month} 月全員薪資。重算會保留手動調整、跳過已封存紀錄，確定執行？`,
@@ -189,7 +206,12 @@ const onCalculate = async () => {
     const isStale = () => unmounted || q.year !== startYear || q.month !== startMonth
     try {
         // 走 async 端點：立即拿 job_id，背景計算 + 輪詢進度，避免大園所同步計算 HTTP 逾時
-        const startRes = await calculateAsync(q.year, q.month, !useLiveMaster.value)
+        const startRes = await calculateAsync(
+            q.year,
+            q.month,
+            !useLiveMaster.value,
+            useLiveMaster.value ? liveMasterReason.value.trim() : undefined,
+        )
         const started = startRes.data as { job_id: string; total: number }
         progress.value = { done: 0, total: started.total ?? 0, current: '' }
 

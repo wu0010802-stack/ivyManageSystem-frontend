@@ -77,7 +77,7 @@ describe('StepCalculate — async 計算 + 輪詢', () => {
     await wrapper.vm.onCalculate()
     await flushPromises()
 
-    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5, true)
+    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5, true, undefined)
     expect(h.getSalaryCalcJob).toHaveBeenCalledWith('j1')
     expect(settlement.refresh).toHaveBeenCalled()
     expect(wrapper.emitted('next')).toBeTruthy()
@@ -148,8 +148,9 @@ describe('StepCalculate — 改用現行主檔（use_snapshot）', () => {
     const cb = wrapper.find('input[type="checkbox"]')
     expect(cb.exists()).toBe(true)
     await cb.setValue(true)
+    wrapper.vm.liveMasterReason = '主檔錯誤修正後改用現行重算'
     await wrapper.vm.onCalculate()
     await flushPromises()
-    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5, false)
+    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5, false, '主檔錯誤修正後改用現行重算')
   })
 })

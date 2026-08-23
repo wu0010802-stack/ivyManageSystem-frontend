@@ -66936,7 +66936,9 @@ export interface operations {
             query: {
                 /** @description Calculate for which month */
                 month: number;
-                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（寫審計） */
+                /** @description use_snapshot=false 時必填（≥10 字）：改用現行主檔的原因，入審計 */
+                reason?: string | null;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（需 reason ≥10 字，寫審計） */
                 use_snapshot?: boolean;
                 /** @description Calculate for which year */
                 year: number;
@@ -66971,7 +66973,9 @@ export interface operations {
         parameters: {
             query: {
                 month: number;
-                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（寫審計） */
+                /** @description use_snapshot=false 時必填（≥10 字）：改用現行主檔的原因，入審計 */
+                reason?: string | null;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（需 reason ≥10 字，寫審計） */
                 use_snapshot?: boolean;
                 year: number;
             };

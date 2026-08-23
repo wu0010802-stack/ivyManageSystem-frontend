@@ -1,9 +1,15 @@
 import api from './index'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
-// useSnapshot=false：「改用現行主檔重算」——曾封存列忽略輸入快照、全走現值（後端寫審計）
-export const calculate = (year: number, month: number, useSnapshot = true): AxiosResp<'/salaries/calculate', 'post'> =>
-    api.post(`/salaries/calculate?year=${year}&month=${month}&use_snapshot=${useSnapshot}`)
+// useSnapshot=false：「改用現行主檔重算」——曾封存列忽略輸入快照、全走現值；
+// 後端要求 reason ≥10 字並寫入審計（422 擋無原因）
+export const calculate = (
+    year: number, month: number, useSnapshot = true, reason?: string,
+): AxiosResp<'/salaries/calculate', 'post'> =>
+    api.post(
+        `/salaries/calculate?year=${year}&month=${month}&use_snapshot=${useSnapshot}`
+        + (reason ? `&reason=${encodeURIComponent(reason)}` : ''),
+    )
 
 // async 批次計算（後端 calculate-async + job registry；同步 calculate 對 >300 員工會擋並
 // 指向此路徑）。後端兩端點無 response_model（回 job.to_dict() 純 dict）→ 前端自訂型別。
@@ -22,9 +28,15 @@ export interface SalaryCalcJobStatus {
 }
 
 /** 啟動 async 批次計算 job（202，立即回 job_id；實際計算於背景）。409=同月已有進行中 job/已封存。
- *  useSnapshot=false：「改用現行主檔重算」——曾封存列忽略輸入快照、全走現值（後端寫審計）。 */
-export const calculateAsync = (year: number, month: number, useSnapshot = true): AxiosResp<'/salaries/calculate-async', 'post'> =>
-    api.post(`/salaries/calculate-async?year=${year}&month=${month}&use_snapshot=${useSnapshot}`)
+ *  useSnapshot=false：「改用現行主檔重算」——曾封存列忽略輸入快照、全走現值；
+ *  後端要求 reason ≥10 字並寫入審計（422 擋無原因）。 */
+export const calculateAsync = (
+    year: number, month: number, useSnapshot = true, reason?: string,
+): AxiosResp<'/salaries/calculate-async', 'post'> =>
+    api.post(
+        `/salaries/calculate-async?year=${year}&month=${month}&use_snapshot=${useSnapshot}`
+        + (reason ? `&reason=${encodeURIComponent(reason)}` : ''),
+    )
 
 /** 查詢 async 計算 job 狀態 / 進度（輪詢用）。 */
 export const getSalaryCalcJob = (jobId: string): AxiosResp<'/salaries/calculate-jobs/{job_id}', 'get'> =>
