@@ -6203,7 +6203,7 @@ export interface paths {
         };
         /**
          * Export Students
-         * @description 匯出學生名冊 Excel
+         * @description 匯出學生名冊 Excel（可選 classroom_id / is_active 篩選，預設全校全狀態）
          */
         get: operations["export_students_api_exports_students_get"];
         put?: never;
@@ -6593,6 +6593,29 @@ export interface paths {
         put?: never;
         /** Generate Certificate */
         post: operations["generate_certificate_api_gov_moe_certificates__student_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gov-moe/certificates/batch-generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Generate Certificates
+         * @description 全班/多人批次開立在學證明：逐人各自產生證明記錄與流水號（沿用單筆
+         *     `_next_seq`/serial 邏輯），單一 PDF 文件內每位成功者各一頁（順序＝
+         *     `student_ids` 去重後順序）。單筆失敗（學生不存在／非在籍等）以
+         *     SAVEPOINT 隔離，不影響其餘筆——partial-success，最終單一 commit。
+         */
+        post: operations["batch_generate_certificates_api_gov_moe_certificates_batch_generate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -20173,6 +20196,17 @@ export interface components {
             /** Records */
             records: components["schemas"]["AttendanceRecordItem"][];
         };
+        /** BatchCertResultItem */
+        BatchCertResultItem: {
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Serial */
+            serial?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
         /**
          * BatchConfirmRequest
          * @description 批次確認請求。
@@ -20193,6 +20227,37 @@ export interface components {
         BatchConfirmResultOut: {
             /** Processed */
             processed: number;
+        };
+        /** BatchGenerateCertRequest */
+        BatchGenerateCertRequest: {
+            /**
+             * Copies
+             * @default 1
+             */
+            copies: number;
+            /**
+             * Issue Date
+             * Format: date
+             */
+            issue_date: string;
+            /** Purpose */
+            purpose: string;
+            /**
+             * Student Ids
+             * @description 待開立學生 id 清單，1~60 筆（重複自動去重）
+             */
+            student_ids: number[];
+        };
+        /** BatchGenerateCertResponse */
+        BatchGenerateCertResponse: {
+            /** Failed */
+            failed: number;
+            /** Pdf Base64 */
+            pdf_base64?: string | null;
+            /** Results */
+            results: components["schemas"]["BatchCertResultItem"][];
+            /** Succeeded */
+            succeeded: number;
         };
         /** BatchIn */
         BatchIn: {
@@ -50397,7 +50462,12 @@ export interface operations {
     };
     export_students_api_exports_students_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 班級篩選（不填=全校） */
+                classroom_id?: number | null;
+                /** @description 在籍狀態篩選（不填=在籍＋離校皆含） */
+                is_active?: boolean | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -50411,6 +50481,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -51150,6 +51229,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["api__gov_moe__certificates__CertificateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_generate_certificates_api_gov_moe_certificates_batch_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchGenerateCertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchGenerateCertResponse"];
                 };
             };
             /** @description Validation Error */

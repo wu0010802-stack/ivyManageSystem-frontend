@@ -92,6 +92,17 @@ describe('govMoe api', () => {
     expect(mockGet).toHaveBeenCalledWith('/gov-moe/certificates/history', { params: {} })
   })
 
+  it('batchGenerateCertificates POST /gov-moe/certificates/batch-generate', async () => {
+    const payload = {
+      student_ids: [1, 2, 3],
+      issue_date: '2026-08-23',
+      purpose: '入學申請',
+      copies: 1,
+    }
+    await mod.batchGenerateCertificates(payload)
+    expect(mockPost).toHaveBeenCalledWith('/gov-moe/certificates/batch-generate', payload)
+  })
+
   // Special Subsidies
   it('listSubsidies GET /gov-moe/subsidies with params', async () => {
     await mod.listSubsidies({ year: 2026 })

@@ -4,6 +4,11 @@
       :title="PAGE_TERMS.govCertificates"
       subtitle="查詢已開立的在學證明；開立入口在學生資料頁"
     >
+      <template #actions>
+        <el-button v-if="canBatchIssue" type="primary" @click="batchDialogVisible = true">
+          批次開立
+        </el-button>
+      </template>
       <template #filters>
         <el-form :model="filters" inline @submit.prevent="load">
           <el-form-item label="學生">
@@ -52,18 +57,26 @@
     <p v-if="rows.length >= HISTORY_LIMIT" class="limit-hint">
       後端單次最多回傳 {{ HISTORY_LIMIT }} 筆，請縮小期間範圍以查看更早的紀錄。
     </p>
+
+    <CertificateBatchDialog v-model="batchDialogVisible" @generated="load" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { listCertificateHistory } from '@/api/govMoe'
 import { getStudents } from '@/api/students'
 import PageHeader from '@/components/common/PageHeader.vue'
+import CertificateBatchDialog from '@/components/gov-reports/CertificateBatchDialog.vue'
 import { getErrorMessage } from '@/utils/errorHandler'
+import { hasPermission } from '@/utils/auth'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+
+// 比照單筆開立入口 StudentEnrollmentCertButton 的權限守衛
+const canBatchIssue = computed(() => hasPermission('GOV_REPORTS_EXPORT'))
+const batchDialogVisible = ref(false)
 
 // 後端 list_history 以 .limit(200) 截斷且無分頁，達上限時需提示使用者縮小範圍
 const HISTORY_LIMIT = 200
