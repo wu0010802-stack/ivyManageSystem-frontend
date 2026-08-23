@@ -342,7 +342,7 @@ const bodyStyle = computed(() => ({
   margin-top: var(--space-2, 8px);
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: stretch;
   gap: var(--space-2, 8px);
 }
 
@@ -367,7 +367,7 @@ const bodyStyle = computed(() => ({
 }
 
 .pos-queue-card__confirm-btn {
-  flex-shrink: 0;
+  width: 100%;
 }
 
 .pos-queue-card__eta-flag {
