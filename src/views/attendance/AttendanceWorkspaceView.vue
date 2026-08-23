@@ -27,6 +27,7 @@
           :loading="ws.loading.value"
           @select="onAnomalySelect"
           @filter-change="onFilterChange"
+          @resolved="onResolved"
         />
       </div>
       <div class="col-detail">
@@ -66,6 +67,7 @@
             :loading="ws.loading.value"
             @select="onAnomalySelect"
             @filter-change="onFilterChange"
+            @resolved="onResolved"
           />
         </div>
       </el-tab-pane>

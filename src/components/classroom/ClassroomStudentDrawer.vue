@@ -12,6 +12,7 @@ import {
   Switch as SwitchIcon,
 } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
+import { downloadFile } from '@/utils/download'
 import { capacityPercent, capacityStatus } from '@/utils/classroomCapacity'
 import { useConfirmDelete } from '@/composables'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -231,6 +232,16 @@ const handleOpenFullPage = () => {
   })
 }
 
+// ── 匯出名冊（本班在籍＋離班；沿用 /exports/students，篩選限定 classroom_id）──
+const handleExportRoster = () => {
+  if (!props.classroom?.id) return
+  void downloadFile(
+    '/exports/students',
+    `${props.classroom.name || '班級'}名冊.xlsx`,
+    { classroom_id: props.classroom.id },
+  )
+}
+
 const close = () => emit('update:visible', false)
 </script>
 
@@ -274,6 +285,11 @@ const close = () => emit('update:visible', false)
               class="banner-btn"
               @click="handleOpenFullPage"
             >開完整檔案</el-button>
+            <el-button
+              size="small"
+              class="banner-btn"
+              @click="handleExportRoster"
+            >匯出名冊</el-button>
             <el-button size="small" class="banner-btn" @click="close">關閉</el-button>
           </div>
         </div>

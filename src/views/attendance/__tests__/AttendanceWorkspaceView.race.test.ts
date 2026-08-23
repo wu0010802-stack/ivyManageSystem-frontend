@@ -63,7 +63,7 @@ const RosterColumnStub = {
 const AnomalyQueueColumnStub = {
   name: 'AnomalyQueueColumn',
   props: ['items', 'selectedIndex', 'loading'],
-  emits: ['select', 'filterChange'],
+  emits: ['select', 'filterChange', 'resolved'],
   template: `<div class="anomaly-queue-column-stub"><slot /></div>`,
 }
 const DetailColumnStub = {
