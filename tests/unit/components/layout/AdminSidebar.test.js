@@ -145,11 +145,11 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('考核與年終')
   })
 
-  it('「收支簽收」整合入口在園務行政（廠商付款/雜項收款已整併）', async () => {
+  it('「收付款管理」整合入口在園務行政（廠商付款/雜項收款已整併；2026-08 內控改版更名）', async () => {
     const wrapper = await mountSidebar()
     const item = wrapper.find('[data-index="/finance-signoffs"]')
     expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('收支簽收')
+    expect(item.text()).toContain('收付款管理')
     expect(wrapper.find('[data-index="/vendor-payments"]').exists()).toBe(false)
     expect(wrapper.find('[data-index="/misc-receipts"]').exists()).toBe(false)
   })

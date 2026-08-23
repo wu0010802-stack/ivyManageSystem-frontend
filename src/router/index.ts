@@ -263,7 +263,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/finance-signoffs',
             name: 'finance-signoffs',
             component: () => import('../views/FinanceSignoffView.vue'),
-            meta: { title: '收支簽收' }
+            meta: { title: '收付款管理' }
         },
         // 舊入口 redirect：保留書籤與稽核深連結（?highlight 等 query 原樣透傳）
         {

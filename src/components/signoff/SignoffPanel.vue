@@ -1,46 +1,28 @@
 <template>
   <div class="signoff-panel">
-    <!-- 頁首 -->
-    <header class="so-header">
-      <p class="so-header__sub">{{ config.texts.headerSub }}</p>
-      <el-button
-        v-if="canWrite"
-        type="primary"
-        @click="openCreate"
-      >{{ config.texts.addButton }}</el-button>
-    </header>
+    <p class="so-sub">{{ config.texts.headerSub }}</p>
 
-    <!-- 區間彙總（跨狀態，隨日期/對象/收付方式篩選連動；不受狀態篩選影響） -->
-    <section class="so-summary" aria-label="本期彙總">
-      <div class="so-summary__cards" v-loading="summaryLoading">
-        <div class="kpi-card">
-          <div class="kpi-label">{{ config.texts.kpiTotalLabel }}</div>
-          <div class="kpi-value">{{ formatMoney(summary.total_amount) }}</div>
-          <div class="kpi-meta">共 {{ summary.total_count }} 筆</div>
-        </div>
-        <div class="kpi-card" :class="{ 'kpi-warning': summary.pending_count > 0 }">
-          <div class="kpi-label">{{ config.texts.kpiPendingLabel }}</div>
-          <div class="kpi-value">{{ formatMoney(summary.pending_amount) }}</div>
-          <div class="kpi-meta">{{ summary.pending_count }} 筆等待回簽</div>
-        </div>
-        <div class="kpi-card" :class="{ 'kpi-success': summary.signed_count > 0 }">
-          <div class="kpi-label">已簽收</div>
-          <div class="kpi-value">{{ formatMoney(summary.signed_amount) }}</div>
-          <div class="kpi-meta">{{ summary.signed_count }} 筆已完成</div>
-        </div>
-      </div>
-      <p class="so-summary__period">本期：{{ rangeLabel }}</p>
-    </section>
+    <!-- 流程摘要列（可點擊套用篩選；不做四張相同 KPI 卡） -->
+    <SignoffFlowSummary
+      v-loading="summaryLoading"
+      :summary="summary"
+      :active="filters.flow"
+      :direction="config.key"
+      :period-label="rangeLabel"
+      @select="onFlowSelect"
+    />
 
-    <!-- 篩選：狀態為主軸（分段），其餘為次要條件 -->
-    <div class="so-filters">
-      <el-radio-group v-model="filters.status" class="so-filters__status" @change="fetchList">
-        <el-radio-button value="">全部</el-radio-button>
-        <el-radio-button value="pending">待簽收</el-radio-button>
-        <el-radio-button value="signed">已簽收</el-radio-button>
-      </el-radio-group>
-
-      <div class="so-filters__rest">
+    <!-- 篩選：搜尋／類別／收付方式走標準 toolbar；日期與清除放 actions slot -->
+    <AdminListToolbar
+      :search="searchInput"
+      :search-placeholder="config.texts.searchPlaceholder"
+      :filters="toolbarFilters"
+      :filter-values="toolbarFilterValues"
+      :total="total"
+      @update:search="onSearchInput"
+      @update:filter-values="onToolbarFilterChange"
+    >
+      <template #actions>
         <el-date-picker
           v-model="filters.dateRange"
           type="daterange"
@@ -48,51 +30,65 @@
           start-placeholder="開始日期"
           end-placeholder="結束日期"
           value-format="YYYY-MM-DD"
+          class="so-date-range"
           @change="refresh"
         />
-        <el-input
-          v-model="filters.partyName"
-          :placeholder="config.texts.searchPlaceholder"
-          clearable
-          style="width: 200px"
-          @keyup.enter="refresh"
-          @clear="refresh"
-        />
-        <el-select
-          v-if="config.category"
-          v-model="filters.category"
-          :placeholder="config.category.label"
-          clearable
-          style="width: 140px"
-          @change="refresh"
-        >
-          <el-option
-            v-for="opt in config.category.options"
-            :key="opt.value"
-            :label="opt.label"
-            :value="opt.value"
-          />
-        </el-select>
-        <el-select
-          v-model="filters.paymentMethod"
-          placeholder="收付方式"
-          clearable
-          style="width: 140px"
-          @change="refresh"
-        >
-          <el-option
-            v-for="opt in paymentMethodOptions"
-            :key="opt.value"
-            :label="opt.label"
-            :value="opt.value"
-          />
-        </el-select>
-        <el-button v-if="hasActiveFilters" text @click="clearFilters">清除篩選</el-button>
-      </div>
-    </div>
+        <el-button
+          v-if="hasActiveFilters"
+          text
+          data-test="clear-filters"
+          @click="clearFilters"
+        >清除篩選</el-button>
+      </template>
+    </AdminListToolbar>
 
-    <!-- 首次載入用骨架，避免置中 spinner 突兀 -->
-    <el-skeleton v-if="loading && !items.length" :rows="6" animated class="so-skeleton" />
+    <!-- 桌面：表格；行動：卡片列表（不做水平捲動表格） -->
+    <TableSkeleton v-if="loading && !items.length" :columns="7" :rows="6" />
+
+    <AdminListCards
+      v-else-if="isMobile"
+      :items="items"
+      :columns="mobileColumns"
+      row-key="id"
+      :loading="loading"
+      data-test="signoff-cards"
+    >
+      <template #empty>
+        <EmptyState
+          :title="hasActiveFilters ? '目前篩選條件下沒有符合的紀錄' : config.texts.emptyTitle"
+          :description="hasActiveFilters ? '' : config.texts.emptyHint"
+        >
+          <template #action>
+            <el-button v-if="hasActiveFilters" text type="primary" @click="clearFilters">
+              清除篩選條件
+            </el-button>
+            <el-button
+              v-else-if="canWrite"
+              type="primary"
+              data-test="empty-create-cta"
+              @click="openCreate"
+            >{{ config.texts.addButton }}</el-button>
+          </template>
+        </EmptyState>
+      </template>
+      <template #title="{ item }">
+        <button type="button" class="so-card-title" @click="openEdit(item)">
+          {{ item[config.fields.partyName.key] }}
+        </button>
+      </template>
+      <template #cell-amount="{ item }">
+        <span class="so-amount">{{ formatMoney(item.amount) }}</span>
+      </template>
+      <template #actions="{ item }">
+        <el-button
+          v-if="rowPrimaryAction(item)"
+          type="primary"
+          :disabled="rowPrimaryDisabled(item)"
+          @click="runPrimaryAction(item)"
+        >{{ rowPrimaryAction(item)!.label }}</el-button>
+        <el-button @click="openEdit(item)">詳細資料</el-button>
+      </template>
+    </AdminListCards>
 
     <el-table
       v-else
@@ -102,80 +98,74 @@
       class="so-table"
       @row-click="onRowClick"
     >
-      <el-table-column :prop="config.fields.date.key" :label="config.fields.date.label" width="116" />
-      <el-table-column :prop="config.fields.partyName.key" :label="config.fields.partyName.label" min-width="160">
+      <el-table-column label="單據日期" width="128">
+        <template #default="{ row }">
+          <span :class="{ 'so-muted': !row.payment_date }">{{ rowDateText(row) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column :label="config.fields.partyName.label" min-width="150">
         <template #default="{ row }">
           <span class="so-party">{{ row[config.fields.partyName.key] }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="config.category" :label="config.category.label" width="104">
+      <el-table-column v-if="config.category" :label="config.category.label" width="100">
         <template #default="{ row }">
           {{ config.category.labelOf(String(row.category ?? '')) }}
         </template>
       </el-table-column>
-      <el-table-column label="金額" width="132" align="right">
+      <el-table-column label="金額" width="128" align="right" class-name="num-cell">
         <template #default="{ row }">
           <span class="so-amount">{{ formatMoney(row.amount) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="收付方式" width="104">
+      <el-table-column label="流程狀態" min-width="150">
         <template #default="{ row }">
-          {{ paymentMethodLabel(row.payment_method as string) }}
+          <span class="so-status" :class="`so-status--${statusChip(row).tone}`">
+            {{ statusChip(row).label }}
+          </span>
+          <span
+            v-if="row.settlement_status === 'settled'"
+            class="so-status so-status--evidence"
+          >{{ evidenceStatusLabel(String(row.status)) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="description" label="項目／說明" min-width="180">
+      <el-table-column label="目前待辦" width="112">
         <template #default="{ row }">
-          <span :class="{ 'so-muted': !row.description }">{{ row.description || '未填寫' }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="狀態" width="92" align="center">
-        <template #default="{ row }">
-          <span class="so-status" :class="`so-status--${row.status}`">
-            {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
+          <span :class="{ 'so-muted': !rowPrimaryAction(row) }">
+            {{ rowPrimaryAction(row)?.label ?? '流程完成' }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="簽收" min-width="128">
-        <template #default="{ row }">
-          <template v-if="row.status === 'signed'">
-            <div class="so-signer">{{ row.signer_name || '已簽收' }}</div>
-            <div class="so-signer__meta">{{ signKindLabel(row.signature_kind as string | null) }}</div>
-          </template>
-          <span v-else class="so-muted">尚未回簽</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="附件" width="76" align="center">
-        <template #default="{ row }">
-          <span v-if="(row.attachments as Attachment[] | undefined)?.length" class="so-attach-chip" title="附件數">
-            <el-icon class="so-attach-chip__clip"><Paperclip /></el-icon>{{ (row.attachments as Attachment[]).length }}
-          </span>
-          <span v-else class="so-muted">—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="150" fixed="right" align="right">
+      <el-table-column label="操作" width="168" fixed="right" align="right">
         <template #default="{ row }">
           <div class="so-actions" @click.stop>
+            <el-tooltip
+              v-if="rowPrimaryAction(row) && rowSelfBlockReason(row)"
+              :content="rowSelfBlockReason(row)!"
+              placement="top"
+            >
+              <span>
+                <el-button size="small" type="primary" disabled>
+                  {{ rowPrimaryAction(row)!.label }}
+                </el-button>
+              </span>
+            </el-tooltip>
             <el-button
-              v-if="canWrite && row.status === 'pending'"
+              v-else-if="rowPrimaryAction(row) && hasPermission(rowPrimaryAction(row)!.permission)"
               size="small"
               type="primary"
-              @click="openSign(row)"
-            >簽收</el-button>
-            <el-button
-              v-else
-              size="small"
-              @click="openEdit(row)"
-            >明細</el-button>
+              @click="runPrimaryAction(row)"
+            >{{ rowPrimaryAction(row)!.label }}</el-button>
 
-            <el-dropdown trigger="click" @command="(c) => onRowCommand(c, row)">
+            <el-dropdown trigger="click" @command="(c: string) => onRowCommand(c, row)">
               <el-button size="small" class="so-actions__more" aria-label="更多操作">⋯</el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="edit">
-                    {{ canWrite ? '編輯' : '檢視' }}
+                    {{ isRecordEditable(asControlRecord(row)) && canWrite ? '編輯' : '檢視' }}
                   </el-dropdown-item>
                   <el-dropdown-item
-                    v-if="canWrite && row.status === 'pending'"
+                    v-if="canWrite && isRecordDeletable(asControlRecord(row))"
                     command="delete"
                     divided
                   >刪除</el-dropdown-item>
@@ -187,17 +177,22 @@
       </el-table-column>
 
       <template #empty>
-        <div class="so-empty">
-          <template v-if="hasActiveFilters">
-            <p class="so-empty__title">目前篩選條件下沒有符合的紀錄</p>
-            <el-button text type="primary" @click="clearFilters">清除篩選條件</el-button>
+        <EmptyState
+          :title="hasActiveFilters ? '目前篩選條件下沒有符合的紀錄' : config.texts.emptyTitle"
+          :description="hasActiveFilters ? '' : config.texts.emptyHint"
+        >
+          <template #action>
+            <el-button v-if="hasActiveFilters" text type="primary" @click="clearFilters">
+              清除篩選條件
+            </el-button>
+            <el-button
+              v-else-if="canWrite"
+              type="primary"
+              data-test="empty-create-cta"
+              @click="openCreate"
+            >{{ config.texts.addButton }}</el-button>
           </template>
-          <template v-else>
-            <p class="so-empty__title">{{ config.texts.emptyTitle }}</p>
-            <p class="so-empty__hint">{{ config.texts.emptyHint }}</p>
-            <el-button v-if="canWrite" type="primary" @click="openCreate">{{ config.texts.addButton }}</el-button>
-          </template>
-        </div>
+        </EmptyState>
       </template>
     </el-table>
 
@@ -214,91 +209,137 @@
       />
     </div>
 
-    <!-- 編輯 / 檢視 / 新增 Dialog（分區表單） -->
+    <!-- 詳細資料 / 編輯 / 新增 Dialog -->
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="600px"
+      width="640px"
       destroy-on-close
+      :before-close="handleDialogBeforeClose"
       class="so-dialog"
     >
-      <el-form :model="form" label-position="top" class="so-form">
-        <div class="so-form__section">
-          <div class="so-form__section-title">{{ config.texts.formSectionTitle }}</div>
-          <div class="so-form__grid">
-            <el-form-item :label="config.fields.date.label" required>
-              <el-date-picker
-                v-model="form.date"
-                type="date"
-                value-format="YYYY-MM-DD"
-                placeholder="選擇日期"
-                style="width: 100%"
-                :disabled="!canWrite"
-                :disabled-date="disabledFutureDate"
-              />
-            </el-form-item>
-            <el-form-item label="收付方式" required>
-              <el-select v-model="form.paymentMethod" style="width: 100%" :disabled="!canWrite">
-                <el-option
-                  v-for="opt in paymentMethodOptions"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item :label="config.texts.formPartyLabel" required class="so-form__col-2">
-              <el-input v-model="form.partyName" maxlength="120" :disabled="!canWrite" :placeholder="config.texts.formPartyPlaceholder" />
-            </el-form-item>
-            <el-form-item v-if="config.category" :label="config.category.label" required class="so-form__col-2">
-              <el-select v-model="form.category" style="width: 100%" :disabled="!canWrite">
-                <el-option
-                  v-for="opt in config.category.options"
-                  :key="opt.value"
-                  :label="opt.label"
-                  :value="opt.value"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="金額" required class="so-form__col-2">
-              <el-input-number
-                v-model="form.amount"
-                :min="1"
-                :max="99999999"
-                :precision="0"
-                :step="100"
-                controls-position="right"
-                style="width: 100%"
-                :disabled="!canWrite"
-              />
-              <span class="so-form__amount-echo">{{ formatMoney(form.amount) }}</span>
-            </el-form-item>
-          </div>
-        </div>
+      <!-- 頂部：流程狀態與鎖定說明 -->
+      <div v-if="editingId" class="so-flow-head">
+        <span class="so-status" :class="`so-status--${statusChip(form).tone}`">
+          {{ statusChip(form).label }}
+        </span>
+        <span class="so-status so-status--evidence">
+          {{ evidenceStatusLabel(form.status) }}
+        </span>
+        <span
+          v-if="form.reconciliation_status === 'reconciled'"
+          class="so-status so-status--signed"
+        >已對帳</span>
+        <span v-if="form.rejection_reason" class="so-flow-head__reject">
+          駁回原因：{{ form.rejection_reason }}
+        </span>
+      </div>
+      <el-alert
+        v-if="editingId && formLockReason"
+        type="info"
+        :closable="false"
+        class="so-lock-alert"
+        show-icon
+        :title="formLockReason"
+        data-test="lock-reason"
+      />
 
-        <div class="so-form__section">
-          <div class="so-form__section-title">單據明細</div>
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="formRules"
+        label-position="top"
+        class="so-form"
+        @submit.prevent
+      >
+        <FormSection :title="config.texts.formSectionTitle">
+          <el-row :gutter="16">
+            <el-col :span="12">
+              <el-form-item :label="config.texts.plannedDateLabel" prop="plannedDate">
+                <el-date-picker
+                  v-model="form.plannedDate"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="選填，用於排程提醒"
+                  style="width: 100%"
+                  :disabled="isFormLocked"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="收付方式" prop="paymentMethod">
+                <el-select v-model="form.paymentMethod" style="width: 100%" :disabled="isFormLocked">
+                  <el-option
+                    v-for="opt in paymentMethodOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item :label="config.texts.formPartyLabel" prop="partyName">
+            <el-input
+              v-model="form.partyName"
+              maxlength="120"
+              :disabled="isFormLocked"
+              :placeholder="config.texts.formPartyPlaceholder"
+            />
+          </el-form-item>
+          <el-form-item v-if="config.category" :label="config.category.label" prop="category">
+            <el-select v-model="form.category" style="width: 100%" :disabled="isFormLocked">
+              <el-option
+                v-for="opt in config.category.options"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="金額" prop="amount">
+            <el-input-number
+              v-model="form.amount"
+              :min="1"
+              :max="99999999"
+              :precision="0"
+              :step="100"
+              controls-position="right"
+              style="width: 100%"
+              :disabled="isFormLocked"
+            />
+            <span class="so-form__amount-echo">{{ formatMoney(form.amount) }}</span>
+          </el-form-item>
+          <el-form-item v-if="form.payment_date" :label="config.texts.actualDateLabel">
+            <el-input :model-value="form.payment_date" disabled />
+            <div class="form-hint">實際{{ config.texts.unitLabel }}日由「{{ config.texts.settleAction }}」流程寫入，不可手動修改</div>
+          </el-form-item>
+        </FormSection>
+
+        <FormSection title="補充資料" collapsible :default-open="false">
           <el-form-item label="項目／說明">
-            <el-input v-model="form.description" maxlength="255" :disabled="!canWrite" :placeholder="config.texts.descPlaceholder" />
+            <el-input
+              v-model="form.description"
+              maxlength="255"
+              :disabled="isFormLocked"
+              :placeholder="config.texts.descPlaceholder"
+            />
           </el-form-item>
-          <div class="so-form__grid">
-            <el-form-item :label="config.fields.docNumber.label">
-              <el-input v-model="form.docNumber" maxlength="60" :disabled="!canWrite" />
-            </el-form-item>
-          </div>
+          <el-form-item :label="config.fields.docNumber.label">
+            <el-input v-model="form.docNumber" maxlength="60" :disabled="isFormLocked" />
+          </el-form-item>
           <el-form-item label="備註">
-            <el-input v-model="form.notes" type="textarea" :rows="2" :disabled="!canWrite" />
+            <el-input v-model="form.notes" type="textarea" :rows="2" :disabled="isFormLocked" />
           </el-form-item>
-        </div>
+          <el-form-item v-if="form.transaction_ref" label="交易參考號">
+            <el-input :model-value="form.transaction_ref" disabled />
+          </el-form-item>
+        </FormSection>
 
-        <div v-if="editingId" class="so-form__section">
-          <div class="so-form__section-title">
-            簽收憑證
-            <span class="so-form__section-hint">{{ config.texts.signedCertHint }}</span>
-          </div>
+        <FormSection v-if="editingId" :title="config.texts.signTitle">
           <div v-if="form.status === 'signed'" class="so-signed-block">
             <div class="so-signed-block__info">
-              <span class="so-status so-status--signed">已簽收</span>
+              <span class="so-status so-status--signed">已附憑證</span>
               <span>{{ form.signer_name || '—' }}</span>
               <span class="so-muted">{{ formatDateTime(form.signed_at) }}・{{ signKindLabel(form.signature_kind) }}</span>
             </div>
@@ -308,35 +349,38 @@
               target="_blank"
               class="so-signed-block__thumb"
             >
-              <img :src="signatureUrl(editingId)" alt="簽收憑證" />
+              <img :src="signatureUrl(editingId)" alt="收付憑證" />
             </a>
           </div>
           <div v-else class="so-signed-block so-signed-block--pending">
-            <span class="so-muted">尚未回簽</span>
-            <el-button v-if="canWrite" size="small" type="primary" @click="openSignFromDialog">上傳簽收憑證</el-button>
+            <span class="so-muted">{{ config.texts.signedCertHint }}</span>
+            <el-button
+              v-if="canWrite"
+              size="small"
+              type="primary"
+              @click="openSignFromDialog"
+            >上傳憑證</el-button>
           </div>
-        </div>
+        </FormSection>
 
-        <div v-if="editingId" class="so-form__section">
-          <div class="so-form__section-title">
-            單據附件
-            <span class="so-form__section-hint">{{ config.texts.attachmentsHint }}</span>
-          </div>
+        <FormSection v-if="editingId" title="單據附件">
           <div class="so-attachments">
-            <div v-if="!form.attachments?.length" class="so-muted so-attachments__empty">尚無附件</div>
+            <div v-if="!form.attachments?.length" class="so-muted so-attachments__empty">
+              {{ config.texts.attachmentsHint }}
+            </div>
             <div class="so-attachments__grid">
-              <div
-                v-for="att in form.attachments || []"
-                :key="att.key"
-                class="so-att"
-              >
+              <div v-for="att in form.attachments || []" :key="att.key" class="so-att">
                 <a
                   :href="downloadAttachmentUrl(editingId, att.key)"
                   target="_blank"
                   class="so-att__preview"
                   :title="att.filename"
                 >
-                  <img v-if="isImageAttachment(att)" :src="downloadAttachmentUrl(editingId, att.key)" :alt="att.filename" />
+                  <img
+                    v-if="isImageAttachment(att)"
+                    :src="downloadAttachmentUrl(editingId, att.key)"
+                    :alt="att.filename"
+                  />
                   <span v-else class="so-att__doc" aria-hidden="true">PDF</span>
                 </a>
                 <div class="so-att__meta">
@@ -344,7 +388,7 @@
                   <span class="so-att__size">{{ formatSize(att.size) }}</span>
                 </div>
                 <el-button
-                  v-if="canWrite"
+                  v-if="canWrite && canMutateAttachments"
                   size="small"
                   link
                   type="danger"
@@ -354,7 +398,7 @@
               </div>
             </div>
             <el-upload
-              v-if="canWrite && (form.attachments?.length || 0) < 5"
+              v-if="canWrite && canAddAttachments && (form.attachments?.length || 0) < 5"
               :auto-upload="true"
               :http-request="handleAttachmentUpload"
               :show-file-list="false"
@@ -364,7 +408,11 @@
               <el-button size="small" plain>＋ 上傳附件</el-button>
             </el-upload>
           </div>
-        </div>
+        </FormSection>
+
+        <FormSection v-if="editingId" title="流程紀錄">
+          <SignoffTimeline :events="events" :loading="eventsLoading" />
+        </FormSection>
 
         <p v-if="editingId && form.created_by_name" class="so-form__audit">
           建立：{{ form.created_by_name }}・{{ formatDateTime(form.created_at) }}
@@ -372,13 +420,69 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">關閉</el-button>
-        <el-button
-          v-if="canWrite"
-          type="primary"
-          :loading="saving"
-          @click="handleSave"
-        >儲存</el-button>
+        <div class="so-dialog-footer">
+          <span v-if="approveSelfBlocked" class="so-dialog-footer__hint" data-test="self-approve-hint">
+            不可核准自己建立的單據
+          </span>
+          <span v-else-if="reconcileSelfBlocked && showReconcileActions" class="so-dialog-footer__hint">
+            不可對帳自己確認{{ config.texts.unitLabel }}的交易
+          </span>
+          <el-button @click="requestClose">關閉</el-button>
+
+          <!-- 草稿 / 被駁回：儲存草稿與送出審核是不同動作 -->
+          <template v-if="!isFormLocked && canWrite">
+            <el-button :loading="saving" data-test="save-draft" @click="handleSave">
+              儲存草稿
+            </el-button>
+            <el-button
+              type="primary"
+              :loading="saving"
+              data-test="save-submit"
+              @click="handleSaveAndSubmit"
+            >{{ form.approval_status === 'rejected' ? '重新送審' : '送出審核' }}</el-button>
+          </template>
+
+          <!-- 送審中：核准 / 駁回（Checker；建立者本人 disabled） -->
+          <template v-else-if="showApproveActions">
+            <el-button
+              type="danger"
+              plain
+              :disabled="approveSelfBlocked"
+              data-test="reject-btn"
+              @click="handleReject"
+            >駁回</el-button>
+            <el-button
+              type="primary"
+              :disabled="approveSelfBlocked"
+              data-test="approve-btn"
+              @click="handleApprove"
+            >核准</el-button>
+          </template>
+
+          <!-- 已核准未收付：確認收付 -->
+          <el-button
+            v-else-if="showSettleAction"
+            type="primary"
+            data-test="settle-btn"
+            @click="openSettleFromDialog"
+          >{{ config.texts.settleAction }}</el-button>
+
+          <!-- 已收付：對帳／標記異常 -->
+          <template v-else-if="showReconcileActions">
+            <el-button
+              plain
+              :disabled="reconcileSelfBlocked"
+              data-test="exception-btn"
+              @click="handleMarkException"
+            >標記異常</el-button>
+            <el-button
+              type="primary"
+              :disabled="reconcileSelfBlocked"
+              data-test="reconcile-btn"
+              @click="handleReconcile"
+            >完成對帳</el-button>
+          </template>
+        </div>
       </template>
     </el-dialog>
 
@@ -388,27 +492,62 @@
       :config="config"
       @signed="onSigned"
     />
+    <SignoffSettleDialog
+      v-model="settleDialogVisible"
+      :record-id="settlingId"
+      :config="config"
+      :default-method="settlingMethod"
+      @settled="onSettled"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Paperclip } from '@element-plus/icons-vue'
-import { hasPermission } from '@/utils/auth'
-import { todayISO } from '@/utils/format'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { getUserInfo, hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
-import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel, type SignoffSummary } from '@/constants/signoff'
+import {
+  EMPTY_SIGNOFF_SUMMARY,
+  PAYMENT_METHOD_OPTIONS,
+  type SignoffSummary,
+} from '@/constants/signoff'
 import type { SignoffModuleConfig } from '@/config/signoffModules'
+import {
+  evidenceStatusLabel,
+  extractApiErrorMessage,
+  isRecordDeletable,
+  isRecordEditable,
+  recordLockReason,
+  resolveNextAction,
+  settlementStatusLabel,
+  approvalStatusLabel,
+  type NextAction,
+  type SignoffControlRecord,
+} from '@/utils/financeSignoff'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import AdminListToolbar, {
+  type FilterGroup,
+} from '@/components/common/AdminListToolbar.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import FormSection from '@/components/common/FormSection.vue'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import SignoffFlowSummary, {
+  type FlowFilterKey,
+} from './SignoffFlowSummary.vue'
+import SignoffSettleDialog from './SignoffSettleDialog.vue'
 import SignoffSignDialog from './SignoffSignDialog.vue'
+import SignoffTimeline, { type SignoffEvent } from './SignoffTimeline.vue'
 
 const props = withDefaults(
   defineProps<{
     config: SignoffModuleConfig
-    /** 深連結：掛載後自動開啟該筆編輯／明細（由 FinanceSignoffView 從 ?highlight 解析傳入） */
+    /** 深連結：掛載後自動開啟該筆詳細（由 FinanceSignoffView 從 ?highlight 解析傳入） */
     highlightId?: number | null
+    /** 行動版由外層 View 統一判斷傳入（sticky CTA 與卡片列表共用同一斷點） */
+    isMobile?: boolean
   }>(),
-  { highlightId: null },
+  { highlightId: null, isMobile: false },
 )
 
 // config 視為掛載期常量：外層 FinanceSignoffView 以 :key="config.key" 切 tab 重掛載
@@ -417,6 +556,11 @@ const config = props.config
 const paymentMethodOptions = PAYMENT_METHOD_OPTIONS
 
 const canWrite = computed(() => hasPermission(config.permissions.write))
+const currentEmployeeId = computed<number | null>(() => {
+  const raw = (getUserInfo() as { employee_id?: unknown } | null)?.employee_id
+  const n = Number(raw)
+  return Number.isInteger(n) && n > 0 ? n : null
+})
 
 interface Attachment { key: string; filename: string; size: number; mime_type?: string | null }
 const items = ref<Record<string, unknown>[]>([])
@@ -425,15 +569,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 
-const EMPTY_SUMMARY: SignoffSummary = {
-  total_count: 0,
-  total_amount: 0,
-  pending_count: 0,
-  pending_amount: 0,
-  signed_count: 0,
-  signed_amount: 0,
-}
-const summary = ref<SignoffSummary>({ ...EMPTY_SUMMARY })
+const summary = ref<SignoffSummary>({ ...EMPTY_SIGNOFF_SUMMARY })
 const summaryLoading = ref(false)
 
 const filters = reactive<{
@@ -442,13 +578,57 @@ const filters = reactive<{
   status: string
   paymentMethod: string
   category: string
+  flow: FlowFilterKey | null
 }>({
   dateRange: null,
   partyName: '',
   status: '',
   paymentMethod: '',
   category: '',
+  flow: null,
 })
+
+const searchInput = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+function onSearchInput(value: string) {
+  searchInput.value = value
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    filters.partyName = value.trim()
+    refresh()
+  }, 300)
+}
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+})
+
+const toolbarFilters = computed<FilterGroup[]>(() => {
+  const groups: FilterGroup[] = []
+  if (config.category) {
+    groups.push({
+      key: 'category',
+      label: config.category.label,
+      options: config.category.options.map((o) => ({ label: o.label, value: o.value })),
+    })
+  }
+  groups.push({
+    key: 'payment_method',
+    label: '收付方式',
+    options: PAYMENT_METHOD_OPTIONS.map((o) => ({ label: o.label, value: o.value })),
+  })
+  return groups
+})
+
+const toolbarFilterValues = computed<Record<string, unknown>>(() => ({
+  ...(filters.category ? { category: filters.category } : {}),
+  ...(filters.paymentMethod ? { payment_method: filters.paymentMethod } : {}),
+}))
+
+function onToolbarFilterChange(values: Record<string, unknown>) {
+  filters.category = String(values.category ?? '')
+  filters.paymentMethod = String(values.payment_method ?? '')
+  refresh()
+}
 
 const hasActiveFilters = computed(
   () =>
@@ -456,6 +636,7 @@ const hasActiveFilters = computed(
     !!filters.partyName ||
     !!filters.paymentMethod ||
     !!filters.category ||
+    !!filters.flow ||
     (filters.dateRange?.length === 2),
 )
 
@@ -466,57 +647,25 @@ const rangeLabel = computed(() => {
   return '全部期間'
 })
 
-const dialogVisible = ref(false)
-const editingId = ref<number | null>(null)
-const saving = ref(false)
-const dialogTitle = computed(() =>
-  editingId.value
-    ? (canWrite.value ? `編輯${config.texts.unitLabel}` : `檢視${config.texts.unitLabel}`)
-    : config.texts.addButton,
-)
+// ─── 流程摘要點擊 → 複合篩選 ────────────────────────────────────────────
+const FLOW_FILTER_PARAMS: Record<FlowFilterKey, Record<string, string>> = {
+  pending_approval: { approval_status: 'pending_approval' },
+  approved_unsettled: { approval_status: 'approved', settlement_status: 'unsettled' },
+  awaiting_evidence: { settlement_status: 'settled', status: 'pending' },
+  awaiting_reconcile: {
+    settlement_status: 'settled',
+    reconciliation_status: 'unreconciled',
+  },
+  exception: { reconciliation_status: 'exception' },
+}
 
-const form = reactive<{
-  date: string
-  partyName: string
-  amount: number
-  paymentMethod: string
-  description: string
-  docNumber: string
-  category: string
-  notes: string
-  attachments: Attachment[]
-  status: string
-  signer_name: string | null
-  signed_at: string | null
-  signature_kind: string | null
-  has_signature: boolean
-  created_by_name: string | null
-  created_at: string | null
-}>({
-  date: '',
-  partyName: '',
-  amount: 0,
-  paymentMethod: 'cash',
-  description: '',
-  docNumber: '',
-  category: '',
-  notes: '',
-  attachments: [],
-  status: 'pending',
-  signer_name: null,
-  signed_at: null,
-  signature_kind: null,
-  has_signature: false,
-  created_by_name: null,
-  created_at: null,
-})
+function onFlowSelect(key: FlowFilterKey | null) {
+  filters.flow = key
+  page.value = 1
+  fetchList()
+}
 
-const signDialogVisible = ref(false)
-const signingId = ref<number | null>(null)
-
-const downloadAttachmentUrl = config.api.attachmentDownloadUrl
-const signatureUrl = config.api.signatureUrl
-
+// ─── 資料載入 ────────────────────────────────────────────────────────────
 function buildRangeParams(): Record<string, unknown> {
   const params: Record<string, unknown> = {}
   if (filters.dateRange?.length === 2) {
@@ -536,14 +685,14 @@ async function fetchList() {
     params.page = page.value
     params.page_size = pageSize.value
     if (filters.status) params.status = filters.status
+    if (filters.flow) Object.assign(params, FLOW_FILTER_PARAMS[filters.flow])
 
     const res = await config.api.list(params)
     const data = res.data as { items: Record<string, unknown>[]; total: number }
     items.value = data.items
     total.value = data.total
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err?.response?.data?.detail || '載入失敗')
+    ElMessage.error(extractApiErrorMessage(e, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -555,13 +704,13 @@ async function fetchSummary() {
     const res = await config.api.summary(buildRangeParams())
     summary.value = res.data as SignoffSummary
   } catch {
-    summary.value = { ...EMPTY_SUMMARY }
+    summary.value = { ...EMPTY_SIGNOFF_SUMMARY }
   } finally {
     summaryLoading.value = false
   }
 }
 
-// range 篩選變動時，列表與彙總一起刷新（彙總不吃 status，故單獨改 status 只刷列表）
+// range 篩選變動時，列表與彙總一起刷新（彙總不吃狀態篩選，單獨改狀態只刷列表）
 function refresh() {
   page.value = 1
   fetchList()
@@ -574,19 +723,263 @@ function clearFilters() {
   filters.status = ''
   filters.paymentMethod = ''
   filters.category = ''
+  filters.flow = null
+  searchInput.value = ''
   refresh()
 }
 
-// 禁未來日：與後端 validate_payment_date 守衛對齊（收付日不可晚於今日）。
-// 90 天回補上限由後端權威把關（避免 JS 午夜/時區與台北日的邊界誤差）。
-function disabledFutureDate(time: Date): boolean {
-  return time.getTime() > Date.now()
+// ─── 列狀態顯示 ──────────────────────────────────────────────────────────
+function asControlRecord(row: Record<string, unknown>): SignoffControlRecord {
+  return row as unknown as SignoffControlRecord
+}
+
+function statusChip(row: {
+  approval_status?: unknown
+  settlement_status?: unknown
+  reconciliation_status?: unknown
+}): { label: string; tone: string } {
+  const rc = String(row.reconciliation_status ?? '')
+  if (rc === 'reconciled') return { label: '已對帳', tone: 'signed' }
+  if (rc === 'exception') return { label: '異常待處理', tone: 'danger' }
+  if (String(row.settlement_status) === 'settled') {
+    return {
+      label: settlementStatusLabel('settled', config.key),
+      tone: 'settled',
+    }
+  }
+  const ap = String(row.approval_status ?? 'draft')
+  const tone =
+    ap === 'pending_approval' ? 'pending' : ap === 'rejected' ? 'danger' : 'neutral'
+  return { label: approvalStatusLabel(ap), tone }
+}
+
+function rowDateText(row: Record<string, unknown>): string {
+  const actual = row[config.fields.date.key]
+  if (actual) return String(actual)
+  const planned = row[config.fields.plannedDate.key]
+  if (planned) return `${planned}（預計）`
+  const created = String(row.created_at ?? '')
+  return created ? `${created.slice(0, 10)}（建立）` : '—'
+}
+
+const mobileColumns = computed(() => [
+  { label: '單據日期', prop: 'payment_date', formatter: rowDateText },
+  { label: '金額', prop: 'amount' },
+  {
+    label: '流程狀態',
+    prop: 'approval_status',
+    formatter: (item: Record<string, unknown>) => statusChip(item).label,
+  },
+  {
+    label: '目前待辦',
+    prop: 'reconciliation_status',
+    formatter: (item: Record<string, unknown>) =>
+      rowPrimaryAction(item)?.label ?? '流程完成',
+  },
+])
+
+// ─── 每列唯一 primary next-action ───────────────────────────────────────
+function rowPrimaryAction(row: Record<string, unknown>): NextAction | null {
+  return resolveNextAction(asControlRecord(row), config.key)
+}
+
+function rowSelfBlockReason(row: Record<string, unknown>): string | null {
+  const act = rowPrimaryAction(row)
+  if (!act || !hasPermission(act.permission)) return null
+  const me = currentEmployeeId.value
+  if (!me) return null
+  if (act.key === 'approve' && Number(row.created_by_id) === me) {
+    return '不可核准自己建立的單據'
+  }
+  if (
+    (act.key === 'reconcile' || act.key === 'resolve_exception') &&
+    Number(row.settled_by_id) === me
+  ) {
+    return `不可對帳自己確認${config.texts.unitLabel}的交易`
+  }
+  return null
+}
+
+function rowPrimaryDisabled(row: Record<string, unknown>): boolean {
+  const act = rowPrimaryAction(row)
+  if (!act) return true
+  return !hasPermission(act.permission) || !!rowSelfBlockReason(row)
+}
+
+function runPrimaryAction(row: Record<string, unknown>) {
+  const act = rowPrimaryAction(row)
+  if (!act || rowPrimaryDisabled(row)) return
+  const id = row.id as number
+  switch (act.key) {
+    case 'submit':
+      void confirmSubmit(id, row)
+      break
+    case 'settle':
+      openSettle(row)
+      break
+    case 'sign':
+      openSign(row)
+      break
+    default:
+      // approve / edit_resubmit / reconcile / resolve_exception：先看單再操作
+      openEdit(row)
+  }
+}
+
+async function confirmSubmit(id: number, row: Record<string, unknown>) {
+  try {
+    await ElMessageBox.confirm(
+      `確定將「${row[config.fields.partyName.key]}」送出審核？送審後將無法編輯，需由核准人處理。`,
+      '送出審核',
+      { type: 'info', confirmButtonText: '送出審核' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await config.api.submit(id)
+    ElMessage.success('已送出審核')
+    refresh()
+  } catch (e) {
+    ElMessage.error(extractApiErrorMessage(e))
+  }
+}
+
+// ─── Dialog（新增／詳細）────────────────────────────────────────────────
+const dialogVisible = ref(false)
+const editingId = ref<number | null>(null)
+const saving = ref(false)
+const formRef = ref<FormInstance>()
+const dialogTitle = computed(() => {
+  if (!editingId.value) return config.texts.addButton
+  return isFormLocked.value
+    ? `檢視${config.texts.unitLabel}`
+    : `編輯${config.texts.unitLabel}`
+})
+
+const form = reactive<{
+  plannedDate: string
+  partyName: string
+  amount: number
+  paymentMethod: string
+  description: string
+  docNumber: string
+  category: string
+  notes: string
+  attachments: Attachment[]
+  status: string
+  approval_status: string
+  settlement_status: string
+  reconciliation_status: string
+  rejection_reason: string | null
+  payment_date: string | null
+  transaction_ref: string | null
+  created_by_id: number | null
+  settled_by_id: number | null
+  signer_name: string | null
+  signed_at: string | null
+  signature_kind: string | null
+  has_signature: boolean
+  created_by_name: string | null
+  created_at: string | null
+}>({
+  plannedDate: '',
+  partyName: '',
+  amount: 0,
+  paymentMethod: 'cash',
+  description: '',
+  docNumber: '',
+  category: '',
+  notes: '',
+  attachments: [],
+  status: 'pending',
+  approval_status: 'draft',
+  settlement_status: 'unsettled',
+  reconciliation_status: 'unreconciled',
+  rejection_reason: null,
+  payment_date: null,
+  transaction_ref: null,
+  created_by_id: null,
+  settled_by_id: null,
+  signer_name: null,
+  signed_at: null,
+  signature_kind: null,
+  has_signature: false,
+  created_by_name: null,
+  created_at: null,
+})
+
+const formRules = computed<FormRules>(() => ({
+  partyName: [
+    { required: true, message: `請填寫${config.texts.formPartyLabel}`, trigger: 'blur' },
+  ],
+  amount: [
+    { required: true, message: '請填寫金額', trigger: 'change' },
+    {
+      validator: (_r, v: number, cb) =>
+        v && v > 0 ? cb() : cb(new Error('金額必須大於 0')),
+      trigger: 'change',
+    },
+  ],
+  ...(config.category
+    ? {
+        category: [
+          { required: true, message: `請選擇${config.category.label}`, trigger: 'change' },
+        ],
+      }
+    : {}),
+}))
+
+const isFormLocked = computed(() => {
+  if (!editingId.value) return false
+  if (!canWrite.value) return true
+  return !isRecordEditable(form)
+})
+
+const formLockReason = computed(() => {
+  if (!editingId.value) return null
+  return recordLockReason(form, config.key)
+})
+
+// dirty 檢查：關閉有未儲存內容的表單前提示
+let formSnapshot = ''
+function editableSnapshot(): string {
+  return JSON.stringify({
+    plannedDate: form.plannedDate,
+    partyName: form.partyName,
+    amount: form.amount,
+    paymentMethod: form.paymentMethod,
+    description: form.description,
+    docNumber: form.docNumber,
+    category: form.category,
+    notes: form.notes,
+  })
+}
+const isFormDirty = () => !isFormLocked.value && editableSnapshot() !== formSnapshot
+
+function handleDialogBeforeClose(done: () => void) {
+  if (!isFormDirty()) {
+    done()
+    return
+  }
+  ElMessageBox.confirm('表單內容尚未儲存，確定要離開嗎？', '尚未儲存', {
+    type: 'warning',
+    confirmButtonText: '放棄變更',
+    cancelButtonText: '留在此頁',
+  })
+    .then(() => done())
+    .catch(() => {})
+}
+
+function requestClose() {
+  handleDialogBeforeClose(() => {
+    dialogVisible.value = false
+  })
 }
 
 function resetForm() {
   Object.assign(form, {
-    // 用本地時區今日，避免 toISOString() 走 UTC 在台北 00:00-08:00 預設成昨天
-    date: todayISO(),
+    plannedDate: '',
     partyName: '',
     amount: 0,
     paymentMethod: 'cash',
@@ -596,6 +989,14 @@ function resetForm() {
     notes: '',
     attachments: [],
     status: 'pending',
+    approval_status: 'draft',
+    settlement_status: 'unsettled',
+    reconciliation_status: 'unreconciled',
+    rejection_reason: null,
+    payment_date: null,
+    transaction_ref: null,
+    created_by_id: null,
+    settled_by_id: null,
     signer_name: null,
     signed_at: null,
     signature_kind: null,
@@ -608,13 +1009,15 @@ function resetForm() {
 function openCreate() {
   editingId.value = null
   resetForm()
+  events.value = []
+  formSnapshot = editableSnapshot()
   dialogVisible.value = true
 }
 
 function openEdit(row: Record<string, unknown>) {
   editingId.value = row.id as number | null
   Object.assign(form, {
-    date: row[config.fields.date.key],
+    plannedDate: row[config.fields.plannedDate.key] || '',
     partyName: row[config.fields.partyName.key],
     amount: Number(row.amount),
     paymentMethod: row.payment_method,
@@ -624,6 +1027,14 @@ function openEdit(row: Record<string, unknown>) {
     notes: row.notes || '',
     attachments: row.attachments || [],
     status: row.status,
+    approval_status: row.approval_status || 'draft',
+    settlement_status: row.settlement_status || 'unsettled',
+    reconciliation_status: row.reconciliation_status || 'unreconciled',
+    rejection_reason: row.rejection_reason ?? null,
+    payment_date: row[config.fields.date.key] ?? null,
+    transaction_ref: row.transaction_ref ?? null,
+    created_by_id: (row.created_by_id as number | null) ?? null,
+    settled_by_id: (row.settled_by_id as number | null) ?? null,
     signer_name: row.signer_name,
     signed_at: row.signed_at,
     signature_kind: row.signature_kind,
@@ -631,19 +1042,9 @@ function openEdit(row: Record<string, unknown>) {
     created_by_name: row.created_by_name,
     created_at: row.created_at,
   })
+  formSnapshot = editableSnapshot()
   dialogVisible.value = true
-}
-
-function openSign(row: Record<string, unknown>) {
-  signingId.value = row.id as number | null
-  signDialogVisible.value = true
-}
-
-function openSignFromDialog() {
-  if (!editingId.value) return
-  signingId.value = editingId.value
-  dialogVisible.value = false
-  signDialogVisible.value = true
+  void fetchEvents()
 }
 
 function onRowClick(row: Record<string, unknown>) {
@@ -655,36 +1056,77 @@ function onRowCommand(command: string, row: Record<string, unknown>) {
   else if (command === 'delete') handleDelete(row)
 }
 
-async function handleSave() {
-  if (!form.date || !form.partyName || form.amount == null || (config.category && !form.category)) {
-    return ElMessage.warning(config.texts.requiredMsg)
+// ─── 事件時間軸 ──────────────────────────────────────────────────────────
+const events = ref<SignoffEvent[]>([])
+const eventsLoading = ref(false)
+
+async function fetchEvents() {
+  if (!editingId.value) return
+  eventsLoading.value = true
+  try {
+    const res = await config.api.events(editingId.value)
+    events.value = (res.data as { items: SignoffEvent[] }).items
+  } catch {
+    events.value = []
+  } finally {
+    eventsLoading.value = false
   }
+}
+
+// ─── 儲存（草稿）與送審 ─────────────────────────────────────────────────
+function buildSavePayload(): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    [config.fields.plannedDate.key]: form.plannedDate || null,
+    [config.fields.partyName.key]: form.partyName,
+    amount: form.amount,
+    payment_method: form.paymentMethod,
+    description: form.description || null,
+    [config.fields.docNumber.key]: form.docNumber || null,
+    notes: form.notes || null,
+  }
+  if (config.category) payload.category = form.category
+  return payload
+}
+
+async function handleSave(): Promise<number | null> {
+  // inline validation：驗證失敗停留在表單（el-form rules 標紅），不跳全域 warning
+  const validateFn = formRef.value?.validate
+  const valid = validateFn
+    ? await validateFn.call(formRef.value).catch(() => false)
+    : true
+  if (valid === false) return null
   saving.value = true
   try {
-    const payload: Record<string, unknown> = {
-      [config.fields.date.key]: form.date,
-      [config.fields.partyName.key]: form.partyName,
-      amount: form.amount,
-      payment_method: form.paymentMethod,
-      description: form.description || null,
-      [config.fields.docNumber.key]: form.docNumber || null,
-      notes: form.notes || null,
-    }
-    if (config.category) payload.category = form.category
-    if (editingId.value) {
-      await config.api.update(editingId.value, payload)
-      ElMessage.success('更新成功')
+    let id = editingId.value
+    if (id) {
+      await config.api.update(id, buildSavePayload())
+      ElMessage.success('已儲存')
     } else {
-      await config.api.create(payload)
-      ElMessage.success('新增成功')
+      const res = await config.api.create(buildSavePayload())
+      id = (res.data as { id: number }).id
+      ElMessage.success('草稿已建立')
     }
+    formSnapshot = editableSnapshot()
     dialogVisible.value = false
     refresh()
+    return id
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err?.response?.data?.detail || '操作失敗')
+    ElMessage.error(extractApiErrorMessage(e))
+    return null
   } finally {
     saving.value = false
+  }
+}
+
+async function handleSaveAndSubmit() {
+  const id = await handleSave()
+  if (!id) return
+  try {
+    await config.api.submit(id)
+    ElMessage.success('已送出審核')
+    refresh()
+  } catch (e) {
+    ElMessage.error(extractApiErrorMessage(e, '送審失敗（草稿已儲存）'))
   }
 }
 
@@ -699,9 +1141,184 @@ async function handleDelete(row: Record<string, unknown>) {
     ElMessage.success('已刪除')
     refresh()
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    if (e !== 'cancel') ElMessage.error(err?.response?.data?.detail || '刪除失敗')
+    if (e !== 'cancel') ElMessage.error(extractApiErrorMessage(e, '刪除失敗'))
   }
+}
+
+// ─── 核准／駁回（Checker）───────────────────────────────────────────────
+const showApproveActions = computed(
+  () =>
+    !!editingId.value &&
+    form.approval_status === 'pending_approval' &&
+    hasPermission(config.permissions.approve),
+)
+const approveSelfBlocked = computed(
+  () =>
+    showApproveActions.value &&
+    !!currentEmployeeId.value &&
+    form.created_by_id === currentEmployeeId.value,
+)
+
+async function handleApprove() {
+  if (!editingId.value || approveSelfBlocked.value) return
+  try {
+    await ElMessageBox.confirm(
+      `確認核准這筆 ${formatMoney(form.amount)} 的${config.texts.unitLabel}？`,
+      '核准',
+      { type: 'info', confirmButtonText: '核准' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await config.api.approve(editingId.value, { decision: 'approve' })
+    ElMessage.success('已核准')
+    dialogVisible.value = false
+    refresh()
+  } catch (e) {
+    ElMessage.error(extractApiErrorMessage(e))
+  }
+}
+
+async function handleReject() {
+  if (!editingId.value || approveSelfBlocked.value) return
+  let reason: string
+  try {
+    const res = (await ElMessageBox.prompt('請填寫駁回原因（必填）', '駁回', {
+      confirmButtonText: '駁回',
+      cancelButtonText: '取消',
+      inputValidator: (v: string) => (v && v.trim() ? true : '駁回必須填寫原因'),
+    })) as { value: string }
+    reason = res.value.trim()
+  } catch {
+    return
+  }
+  try {
+    await config.api.approve(editingId.value, { decision: 'reject', reason })
+    ElMessage.success('已駁回')
+    dialogVisible.value = false
+    refresh()
+  } catch (e) {
+    ElMessage.error(extractApiErrorMessage(e))
+  }
+}
+
+// ─── 確認收付（settle）──────────────────────────────────────────────────
+const settleDialogVisible = ref(false)
+const settlingId = ref<number | null>(null)
+const settlingMethod = ref('cash')
+
+const showSettleAction = computed(() => {
+  if (!editingId.value || form.settlement_status !== 'unsettled') return false
+  if (!hasPermission(config.permissions.settle)) return false
+  if (config.key === 'vendor') return form.approval_status === 'approved'
+  // 收入側：rejected 須先修改重送，其餘狀態皆可先收款
+  return form.approval_status !== 'rejected'
+})
+
+function openSettle(row: Record<string, unknown>) {
+  settlingId.value = row.id as number
+  settlingMethod.value = String(row.payment_method ?? 'cash')
+  settleDialogVisible.value = true
+}
+
+function openSettleFromDialog() {
+  if (!editingId.value) return
+  settlingId.value = editingId.value
+  settlingMethod.value = form.paymentMethod
+  dialogVisible.value = false
+  settleDialogVisible.value = true
+}
+
+function onSettled() {
+  refresh()
+}
+
+// ─── 對帳（reconcile）───────────────────────────────────────────────────
+const showReconcileActions = computed(
+  () =>
+    !!editingId.value &&
+    form.settlement_status === 'settled' &&
+    form.reconciliation_status !== 'reconciled' &&
+    hasPermission(config.permissions.reconcile),
+)
+const reconcileSelfBlocked = computed(
+  () =>
+    !!currentEmployeeId.value && form.settled_by_id === currentEmployeeId.value,
+)
+
+async function handleReconcile() {
+  if (!editingId.value || reconcileSelfBlocked.value) return
+  try {
+    await ElMessageBox.confirm(
+      '確認這筆交易的金額、對象與憑證都核對無誤，完成對帳？',
+      '完成對帳',
+      { type: 'info', confirmButtonText: '完成對帳' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await config.api.reconcile(editingId.value, { result: 'reconciled' })
+    ElMessage.success('已完成對帳')
+    dialogVisible.value = false
+    refresh()
+  } catch (e) {
+    ElMessage.error(extractApiErrorMessage(e))
+  }
+}
+
+async function handleMarkException() {
+  if (!editingId.value || reconcileSelfBlocked.value) return
+  let note: string
+  try {
+    const res = (await ElMessageBox.prompt('請說明差異或異常原因（必填）', '標記異常', {
+      confirmButtonText: '標記異常',
+      cancelButtonText: '取消',
+      inputValidator: (v: string) => (v && v.trim() ? true : '標記差異必須說明原因'),
+    })) as { value: string }
+    note = res.value.trim()
+  } catch {
+    return
+  }
+  try {
+    await config.api.reconcile(editingId.value, { result: 'exception', note })
+    ElMessage.warning('已標記異常，待後續處理')
+    dialogVisible.value = false
+    refresh()
+  } catch (e) {
+    ElMessage.error(extractApiErrorMessage(e))
+  }
+}
+
+// ─── 憑證與附件 ──────────────────────────────────────────────────────────
+const signDialogVisible = ref(false)
+const signingId = ref<number | null>(null)
+
+const downloadAttachmentUrl = config.api.attachmentDownloadUrl
+const signatureUrl = config.api.signatureUrl
+
+// 與後端守衛一致：已簽收後附件凍結（防抽換佐證）；已收付後仍可補（補憑證
+// 流程），但刪除僅限未收付且未簽收
+const canAddAttachments = computed(() => form.status === 'pending')
+const canMutateAttachments = computed(
+  () => form.status === 'pending' && form.settlement_status === 'unsettled',
+)
+
+function openSign(row: Record<string, unknown>) {
+  signingId.value = row.id as number | null
+  signDialogVisible.value = true
+}
+
+function openSignFromDialog() {
+  if (!editingId.value) return
+  signingId.value = editingId.value
+  dialogVisible.value = false
+  signDialogVisible.value = true
+}
+
+function onSigned() {
+  refresh()
 }
 
 async function handleAttachmentUpload({ file }: { file: File }) {
@@ -714,8 +1331,7 @@ async function handleAttachmentUpload({ file }: { file: File }) {
     ElMessage.success('附件已上傳')
     fetchList()
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err?.response?.data?.detail || '上傳失敗')
+    ElMessage.error(extractApiErrorMessage(e, '上傳失敗'))
   }
 }
 
@@ -726,15 +1342,11 @@ async function removeAttachment(key: string) {
     form.attachments = (form.attachments || []).filter((a) => a.key !== key)
     fetchList()
   } catch (e) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    if (e !== 'cancel') ElMessage.error(err?.response?.data?.detail || '刪除失敗')
+    if (e !== 'cancel') ElMessage.error(extractApiErrorMessage(e, '刪除失敗'))
   }
 }
 
-function onSigned() {
-  refresh()
-}
-
+// ─── 顯示 helpers ────────────────────────────────────────────────────────
 function formatMoney(value: unknown) {
   return formatCurrency(Number(value ?? 0) || 0)
 }
@@ -747,7 +1359,7 @@ function isImageAttachment(att: Attachment) {
 function signKindLabel(kind: string | null | undefined) {
   if (kind === 'photo') return '紙本照片'
   if (kind === 'drawn') return '當場手寫'
-  return '已簽收'
+  return '已附憑證'
 }
 
 function formatSize(bytes: number) {
@@ -760,6 +1372,11 @@ function formatSize(bytes: number) {
 function formatDateTime(iso: string | null | undefined) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('zh-TW')
+}
+
+// 禁未來日（與後端 settle 守衛一致）；SignoffSettleDialog 亦有同款
+function disabledFutureDate(time: Date): boolean {
+  return time.getTime() > Date.now()
 }
 
 async function tryOpenHighlight() {
@@ -776,94 +1393,26 @@ onMounted(async () => {
   await Promise.all([fetchList(), fetchSummary()])
   await tryOpenHighlight()
 })
+
+defineExpose({
+  openCreate,
+  // 測試沿用的 vm 介面
+  fetchList,
+  handleSave,
+  handleDelete,
+  disabledFutureDate,
+})
 </script>
 
 <style scoped>
-/* ── 頁首 ── */
-.so-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-4, 16px);
-  margin-bottom: var(--space-5, 20px);
-}
-.so-header__sub {
-  margin: 4px 0 0;
+.so-sub {
+  margin: 0 0 var(--space-3, 12px);
   font-size: var(--text-sm, 13px);
   color: var(--text-secondary, var(--neutral-500));
 }
 
-/* ── 彙總 KPI（對齊 FeesTab .kpi-card 慣例） ── */
-.so-summary {
-  margin-bottom: var(--space-5, 20px);
-}
-.so-summary__cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--space-3, 12px);
-}
-.kpi-card {
-  border: 1px solid var(--neutral-200);
-  border-radius: var(--radius-lg, 12px);
-  padding: var(--space-4, 16px) var(--space-5, 20px);
-  background: var(--neutral-0);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.kpi-label {
-  font-size: var(--text-xs, 12px);
-  color: var(--text-secondary, var(--neutral-500));
-}
-.kpi-value {
-  font-size: 26px;
-  font-weight: var(--font-weight-bold, 700);
-  color: var(--text-primary, var(--neutral-800));
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-.kpi-meta {
-  font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary, var(--neutral-400));
-}
-/* 待簽收：唯一注意力焦點（有待簽時才亮 amber，沿用 FeesTab 條件上色慣例） */
-.kpi-warning {
-  border-color: var(--color-warning);
-  background: var(--color-warning-soft);
-}
-.kpi-warning .kpi-value {
-  color: var(--color-warning-darker);
-}
-.kpi-warning .kpi-label {
-  color: var(--color-warning-darker);
-}
-.kpi-success .kpi-value {
-  color: var(--color-success-darker);
-}
-.so-summary__period {
-  margin: var(--space-2, 8px) 0 0;
-  font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary, var(--neutral-400));
-}
-
-/* ── 篩選 ── */
-.so-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3, 12px) var(--space-4, 16px);
-  margin-bottom: var(--space-4, 16px);
-}
-.so-filters__rest {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2, 8px);
-}
-
-/* ── 骨架 ── */
-.so-skeleton {
-  padding: var(--space-4, 16px) var(--space-2, 8px);
+.so-date-range {
+  max-width: 260px;
 }
 
 /* ── 表格 ── */
@@ -882,16 +1431,8 @@ onMounted(async () => {
 .so-muted {
   color: var(--text-tertiary, var(--neutral-400));
 }
-.so-signer {
-  font-size: var(--text-sm, 13px);
-  color: var(--text-primary, var(--neutral-800));
-}
-.so-signer__meta {
-  font-size: var(--text-xs, 12px);
-  color: var(--text-tertiary, var(--neutral-400));
-}
 
-/* 狀態：用低彩度 soft 底，pending 為待辦語意（amber）、signed 完成（green） */
+/* 狀態 chip：一律有文字，顏色僅輔助 */
 .so-status {
   display: inline-block;
   padding: 2px 10px;
@@ -899,27 +1440,28 @@ onMounted(async () => {
   font-size: var(--text-xs, 12px);
   font-weight: var(--font-weight-medium, 500);
   line-height: 1.6;
+  margin-right: var(--space-1, 4px);
+}
+.so-status--neutral {
+  background: var(--neutral-100);
+  color: var(--text-secondary, var(--neutral-500));
 }
 .so-status--pending {
   background: var(--color-warning-soft);
   color: var(--color-warning-darker);
 }
+.so-status--settled,
 .so-status--signed {
   background: var(--color-success-soft);
   color: var(--color-success-darker);
 }
-
-.so-attach-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, var(--neutral-500));
-  font-variant-numeric: tabular-nums;
+.so-status--danger {
+  background: var(--color-danger-soft, var(--color-warning-soft));
+  color: var(--color-danger-darker, var(--color-danger));
 }
-.so-attach-chip__clip {
-  font-size: 14px;
-  color: var(--text-tertiary, var(--neutral-400));
+.so-status--evidence {
+  background: var(--neutral-100);
+  color: var(--text-secondary, var(--neutral-500));
 }
 
 .so-actions {
@@ -934,64 +1476,37 @@ onMounted(async () => {
   font-weight: 700;
 }
 
-/* ── 空狀態 ── */
-.so-empty {
-  padding: var(--space-8, 32px) var(--space-4, 16px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-2, 8px);
-}
-.so-empty__title {
-  margin: 0;
-  font-size: var(--text-base, 14px);
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--text-secondary, var(--neutral-500));
-}
-.so-empty__hint {
-  margin: 0 0 var(--space-2, 8px);
-  font-size: var(--text-sm, 13px);
-  color: var(--text-tertiary, var(--neutral-400));
-}
-
 .so-pagination {
   margin-top: var(--space-4, 16px);
   display: flex;
   justify-content: flex-end;
 }
 
-/* ── Dialog 分區表單 ── */
-.so-form__section {
-  padding-bottom: var(--space-4, 16px);
-  margin-bottom: var(--space-4, 16px);
-  border-bottom: 1px solid var(--neutral-100);
+/* 手機卡片標題可點 */
+.so-card-title {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
-.so-form__section:last-of-type {
-  border-bottom: none;
-  margin-bottom: 0;
-  padding-bottom: 0;
-}
-.so-form__section-title {
-  font-size: var(--text-sm, 13px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--text-primary, var(--neutral-800));
-  margin-bottom: var(--space-3, 12px);
+
+/* ── Dialog ── */
+.so-flow-head {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1, 4px);
+  margin-bottom: var(--space-3, 12px);
 }
-.so-form__section-hint {
-  font-size: var(--text-xs, 12px);
-  font-weight: var(--font-weight-regular, 400);
-  color: var(--text-tertiary, var(--neutral-400));
+.so-flow-head__reject {
+  flex-basis: 100%;
+  font-size: var(--text-sm, 13px);
+  color: var(--color-danger-darker, var(--color-danger));
 }
-.so-form__grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 var(--space-4, 16px);
-}
-.so-form__col-2 {
-  grid-column: span 2;
+.so-lock-alert {
+  margin-bottom: var(--space-3, 12px);
 }
 .so-form__amount-echo {
   margin-left: var(--space-3, 12px);
@@ -1004,17 +1519,26 @@ onMounted(async () => {
   font-size: var(--text-xs, 12px);
   color: var(--text-tertiary, var(--neutral-400));
 }
+.so-dialog-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2, 8px);
+  flex-wrap: wrap;
+}
+.so-dialog-footer__hint {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary, var(--neutral-400));
+  margin-right: auto;
+}
 
-/* 簽收憑證區 */
+/* 憑證區 */
 .so-signed-block {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4, 16px);
   flex-wrap: wrap;
-}
-.so-signed-block--pending {
-  justify-content: flex-start;
 }
 .so-signed-block__info {
   display: flex;
@@ -1086,17 +1610,5 @@ onMounted(async () => {
 }
 .so-att__remove {
   align-self: flex-start;
-}
-
-@media (max-width: 640px) {
-  .so-header {
-    flex-direction: column;
-  }
-  .so-form__grid {
-    grid-template-columns: 1fr;
-  }
-  .so-form__col-2 {
-    grid-column: span 1;
-  }
 }
 </style>

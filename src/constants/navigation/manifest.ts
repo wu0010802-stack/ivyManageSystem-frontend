@@ -420,15 +420,23 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Calendar') },
         },
         {
-          // 收支簽收：廠商付款／雜項收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。
-          key: 'financeSignoffs', title: '收支簽收', routePath: '/finance-signoffs',
+          // 收付款管理（2026-08 內控改版，前身「收支簽收」）：廠商付款／雜項
+          // 收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。路由沿用
+          // /finance-signoffs 保住深連結。
+          key: 'financeSignoffs', title: '收付款管理', routePath: '/finance-signoffs',
           views: [
             { code: 'VENDOR_PAYMENT_READ', label: '廠商付款檢視' },
             { code: 'MISC_RECEIPT_READ', label: '雜項收款檢視' },
           ],
           actions: [
             { code: 'VENDOR_PAYMENT_WRITE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_APPROVE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_SETTLE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_RECONCILE', requiresView: 'VENDOR_PAYMENT_READ' },
             { code: 'MISC_RECEIPT_WRITE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_APPROVE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_SETTLE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_RECONCILE', requiresView: 'MISC_RECEIPT_READ' },
           ],
           menu: { icon: icon('Wallet') },
         },

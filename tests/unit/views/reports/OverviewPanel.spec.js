@@ -360,7 +360,7 @@ describe('OverviewPanel 異常與待辦', () => {
   })
 })
 
-describe('OverviewPanel 待簽收數字（vendor/misc summary）', () => {
+describe('OverviewPanel 待補憑證數字（vendor/misc summary）', () => {
   // 讓固定支出/薪資無待辦，聚焦簽收項斷言
   function mockNoOtherTodos() {
     mockGetFinanceSummary.mockResolvedValue({
@@ -371,7 +371,7 @@ describe('OverviewPanel 待簽收數字（vendor/misc summary）', () => {
     )
   }
 
-  it('pending > 0 時顯示「目前 N 筆…待簽收（NT$X）」並保留收支簽收連結', async () => {
+  it('pending > 0 時顯示「目前 N 筆…待補憑證（NT$X）」並保留收付款管理連結', async () => {
     mockNoOtherTodos()
     mockGetVendorPaymentSummary.mockResolvedValue({ data: signoffSummary(3, 4500) })
     mockGetMiscReceiptSummary.mockResolvedValue({ data: signoffSummary(2, 800) })
@@ -381,12 +381,12 @@ describe('OverviewPanel 待簽收數字（vendor/misc summary）', () => {
     const vendorItem = w.find('[data-test="todo-item-vendor-pending"]')
     expect(vendorItem.exists()).toBe(true)
     // 「目前」冠詞：summary 不吃年度參數（全期間），避免被誤讀為所選年度的數字
-    expect(vendorItem.text()).toContain('目前 3 筆廠商付款待簽收')
+    expect(vendorItem.text()).toContain('目前 3 筆廠商付款待補憑證')
     expect(vendorItem.text()).toContain('NT$4,500')
 
     const miscItem = w.find('[data-test="todo-item-misc-pending"]')
     expect(miscItem.exists()).toBe(true)
-    expect(miscItem.text()).toContain('目前 2 筆雜項收款待簽收')
+    expect(miscItem.text()).toContain('目前 2 筆雜項收款待補憑證')
     expect(miscItem.text()).toContain('NT$800')
 
     // 導向 /finance-signoffs 的連結保留
@@ -406,9 +406,9 @@ describe('OverviewPanel 待簽收數字（vendor/misc summary）', () => {
 
     expect(mockGetMiscReceiptSummary).not.toHaveBeenCalled()
     expect(w.find('[data-test="todo-item-misc-pending"]').exists()).toBe(false)
-    expect(w.text()).not.toContain('雜項收款待簽收')
+    expect(w.text()).not.toContain('雜項收款待補憑證')
     // vendor 有權限且有 pending，照常顯示
-    expect(w.find('[data-test="todo-item-vendor-pending"]').text()).toContain('3 筆廠商付款待簽收')
+    expect(w.find('[data-test="todo-item-vendor-pending"]').text()).toContain('3 筆廠商付款待補憑證')
   })
 
   it('summary API 失敗時該項不顯示（不偽裝 0 筆），連結退為中性導覽', async () => {
@@ -419,16 +419,16 @@ describe('OverviewPanel 待簽收數字（vendor/misc summary）', () => {
     await flushPromises()
 
     expect(w.find('[data-test="todo-item-vendor-pending"]').exists()).toBe(false)
-    expect(w.text()).not.toContain('廠商付款待簽收')
+    expect(w.text()).not.toContain('廠商付款待補憑證')
     expect(w.text()).not.toContain('0 筆')
     // 其他來源皆無待辦 → 顯示無異常；vendor 狀態未知 → 保留中性連結（不能宣稱無待辦）
     expect(w.find('[data-test="todo-empty"]').exists()).toBe(true)
     const link = w.find('[data-test="todo-signoff-link"]')
     expect(link.exists()).toBe(true)
-    expect(link.text()).toContain('收支簽收')
+    expect(link.text()).toContain('收付款管理')
   })
 
-  it('兩來源皆確知 0 筆待簽收時省略簽收連結（無事可辦）', async () => {
+  it('兩來源皆確知 0 筆待補憑證時省略簽收連結（無事可辦）', async () => {
     mockNoOtherTodos()
     // beforeEach 預設兩 summary 皆 pending 0
     const w = mountPanel(REAL_YEAR - 1)
