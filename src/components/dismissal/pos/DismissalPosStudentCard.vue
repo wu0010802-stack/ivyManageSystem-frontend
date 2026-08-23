@@ -220,10 +220,14 @@ function handleDispatch() {
   color: var(--color-success-darker);
 }
 
-/* proxy_picked（T-023）：刻意用 danger 色階與 guardian_picked 的 success 綠區分，讓辦公室一眼看出是委託代理人接走 */
+/* proxy_picked（T-023 review 修復，2026-08-23）：原用 --color-danger-soft，但這是正常完成的
+   接送事件，用紅色系容易讓辦公室人員誤讀成異常/警示狀態。改用既有 neutral 色階（非新增變數，
+   與 --color-*-soft/*-darker 相同的「淺底深字」配對慣例，已在 a11y.css 隨深色/高對比模式調整），
+   維持與 guardian_picked（success 綠）/bus_picked（info 藍）/on_leave（warning 橙）三色視覺區隔，
+   同時不再誤傳「警示」語意。 */
 .pos-student-card__status--proxy {
-  background: var(--color-danger-soft);
-  color: var(--color-danger-darker);
+  background: var(--neutral-200);
+  color: var(--neutral-700);
 }
 
 /* 已處理（請假／娃娃車已接送／家長已接送）卡片：降低視覺優先度、不可再點 */
