@@ -334,6 +334,17 @@ describe('scrubMapping', () => {
     expect(res.status).toBe('active')
   })
 
+  // T-020/T-024（2026-08-23）：授權列表 API 從一次性回應改為 active 授權每次都
+  // 回傳解密明碼，與 BE _PII_KEY_SUBSTRINGS 同步新增 pickup_code。
+  it('filters pickup_code (T-020/T-024 2026-08-23)', () => {
+    const res = scrubMapping({
+      pickup_code: '482913',
+      effective_status: 'active',
+    })
+    expect(res.pickup_code).toBe('[Filtered]')
+    expect(res.effective_status).toBe('active')
+  })
+
   it('does not over-match bare name fields like course_name (D2 2026-07-22)', () => {
     const res = scrubMapping({
       name: 'Alice',
