@@ -19,6 +19,7 @@ import {
   updateVendorPayment,
   deleteVendorPayment,
   signVendorPayment,
+  batchSignVendorPayments,
   uploadVendorPaymentAttachment,
   deleteVendorPaymentAttachment,
   downloadVendorPaymentAttachmentUrl,
@@ -32,6 +33,7 @@ import {
   updateMiscReceipt,
   deleteMiscReceipt,
   signMiscReceipt,
+  batchSignMiscReceipts,
   uploadMiscReceiptAttachment,
   deleteMiscReceiptAttachment,
   downloadMiscReceiptAttachmentUrl,
@@ -49,6 +51,12 @@ export interface SignoffModuleApi {
   update: (id: number, data: Record<string, unknown>) => ReturnType<ApiCall>
   remove: (id: number) => ReturnType<ApiCall>
   sign: (id: number, data: { signature_kind: string; signature_data: string }) => ReturnType<ApiCall>
+  /** 批次簽收：一次簽名（drawn/photo）套用到多筆待簽收紀錄，ids 1~100。 */
+  batchSign: (payload: {
+    ids: number[]
+    signature_kind: 'drawn' | 'photo'
+    signature_data: string
+  }) => ReturnType<ApiCall>
   uploadAttachment: (id: number, formData: FormData) => ReturnType<ApiCall>
   deleteAttachment: (id: number, key: string) => ReturnType<ApiCall>
   attachmentDownloadUrl: (id: number, key: string) => string
@@ -101,6 +109,10 @@ export interface SignoffModuleConfig {
   } | null
   permissions: { read: PermissionName; write: PermissionName }
   texts: SignoffTexts
+  /** GET 匯出端點路徑（query: start_date?/end_date?/category?/status?），對齊 api/exports.py */
+  exportPath: string
+  /** 匯出無 Content-Disposition 時的預設檔名 fallback（對齊後端 _to_response 實際檔名） */
+  exportFilename: string
 }
 
 export const VENDOR_SIGNOFF_MODULE: SignoffModuleConfig = {
@@ -114,6 +126,7 @@ export const VENDOR_SIGNOFF_MODULE: SignoffModuleConfig = {
     update: updateVendorPayment,
     remove: deleteVendorPayment,
     sign: signVendorPayment,
+    batchSign: batchSignVendorPayments,
     uploadAttachment: uploadVendorPaymentAttachment,
     deleteAttachment: deleteVendorPaymentAttachment,
     attachmentDownloadUrl: downloadVendorPaymentAttachmentUrl,
@@ -133,6 +146,8 @@ export const VENDOR_SIGNOFF_MODULE: SignoffModuleConfig = {
     read: PERMISSION_NAMES.VENDOR_PAYMENT_READ,
     write: PERMISSION_NAMES.VENDOR_PAYMENT_WRITE,
   },
+  exportPath: '/exports/vendor-payments',
+  exportFilename: '廠商付款簽收紀錄.xlsx',
   texts: {
     headerSub: '逐筆登記廠商請款，上傳廠商簽收的紙本憑證留存',
     addButton: '新增付款',
@@ -166,6 +181,7 @@ export const MISC_SIGNOFF_MODULE: SignoffModuleConfig = {
     update: updateMiscReceipt,
     remove: deleteMiscReceipt,
     sign: signMiscReceipt,
+    batchSign: batchSignMiscReceipts,
     uploadAttachment: uploadMiscReceiptAttachment,
     deleteAttachment: deleteMiscReceiptAttachment,
     attachmentDownloadUrl: downloadMiscReceiptAttachmentUrl,
@@ -185,6 +201,8 @@ export const MISC_SIGNOFF_MODULE: SignoffModuleConfig = {
     read: PERMISSION_NAMES.MISC_RECEIPT_READ,
     write: PERMISSION_NAMES.MISC_RECEIPT_WRITE,
   },
+  exportPath: '/exports/misc-receipts',
+  exportFilename: '雜項收款簽收紀錄.xlsx',
   texts: {
     headerSub: '逐筆登記雜項收款，上傳繳款方簽收的紙本憑證留存',
     addButton: '新增收款',
