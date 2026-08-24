@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ElCard } from 'element-plus'
 import { deltaKind } from './financeTrend'
 
 export interface KpiTrendItem {
@@ -20,7 +21,13 @@ const props = defineProps<{
   sub?: string
   note?: string
   noteTest?: string
+  /** cell：無卡片外框的壓縮帶格（給 OverviewPanel KPI band 用）；預設 card 行為不變 */
+  variant?: 'card' | 'cell'
 }>()
+
+const isCell = computed(() => props.variant === 'cell')
+const rootIs = computed(() => (isCell.value ? 'div' : ElCard))
+const rootProps = computed(() => (isCell.value ? {} : { shadow: 'never' }))
 
 function fmtPct(v: number): string {
   const sign = v > 0 ? '+' : ''
@@ -48,8 +55,16 @@ const visibleTrends = computed(() =>
 </script>
 
 <template>
-  <el-card class="report-kpi" :class="accent ? `report-kpi--${accent}` : ''" shadow="never">
-    <div class="kpi-label">{{ label }}</div>
+  <component
+    :is="rootIs"
+    v-bind="rootProps"
+    class="report-kpi"
+    :class="[accent ? `report-kpi--${accent}` : '', isCell ? 'report-kpi--cell' : '']"
+  >
+    <div class="kpi-label">
+      <span v-if="isCell" class="kpi-dot" aria-hidden="true"></span>
+      {{ label }}
+    </div>
     <div class="kpi-value" :class="valueClass" :data-test="valueTest">{{ value }}</div>
     <div v-for="item in visibleTrends" :key="item.label" class="kpi-trend" :data-test="item.test">
       <template v-if="item.delta != null">
@@ -60,7 +75,7 @@ const visibleTrends = computed(() =>
     </div>
     <div v-if="note" class="kpi-note" :data-test="noteTest">{{ note }}</div>
     <div v-if="sub" class="kpi-sub">{{ sub }}</div>
-  </el-card>
+  </component>
 </template>
 
 <style scoped>
@@ -74,6 +89,21 @@ const visibleTrends = computed(() =>
 .report-kpi--orange { border-top-color: var(--color-warning); }
 .report-kpi--red    { border-top-color: var(--color-danger); }
 .report-kpi--blue   { border-top-color: var(--color-info); }
+
+/* cell 變體：無外框、靠左、色點取代頂邊 accent（順序在 accent 規則之後，
+   border-top-style:none 蓋掉上方 border-top-color 規則） */
+.report-kpi--cell {
+  border-top: none;
+  text-align: left;
+  padding: 16px 20px;
+  height: auto;
+}
+.report-kpi--cell .kpi-label { display: flex; align-items: center; gap: 7px; }
+.kpi-dot { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; background: var(--text-secondary); }
+.report-kpi--cell.report-kpi--green  .kpi-dot { background: var(--color-success); }
+.report-kpi--cell.report-kpi--orange .kpi-dot { background: var(--color-warning); }
+.report-kpi--cell.report-kpi--red    .kpi-dot { background: var(--color-danger); }
+.report-kpi--cell.report-kpi--blue   .kpi-dot { background: var(--color-info); }
 
 .kpi-label { font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: 6px; }
 .kpi-value { font-size: 26px; font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }

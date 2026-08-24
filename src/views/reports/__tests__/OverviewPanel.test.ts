@@ -74,7 +74,7 @@ vi.mock('@/api/monthlyFixedCost', () => ({ getMonthlyFixedCosts: vi.fn().mockRes
 vi.mock('@/api/vendorPayment', () => ({ getVendorPaymentSummary: vi.fn().mockResolvedValue({ data: {} }) }))
 vi.mock('@/api/miscReceipt', () => ({ getMiscReceiptSummary: vi.fn().mockResolvedValue({ data: {} }) }))
 
-import { getFinanceSummary } from '@/api/reports'
+import { getFinanceSummary, getDashboard } from '@/api/reports'
 import OverviewPanel from '@/views/reports/OverviewPanel.vue'
 
 // fake timers 用畢還原：無 afterEach 還原時，本檔收尾（auto-unmount、後續 hook）
@@ -195,5 +195,61 @@ describe('OverviewPanel 異常與待辦卡獨立於 finance 可用性（F2 修�
     expect(w.find('[data-test="kpi-total-revenue"]').exists()).toBe(false)
     // 但待辦卡不應連坐消失——資料源是 dashboard/fixedCost/signoff，與 finance 無關
     expect(w.find('[data-test="todo-list"]').exists()).toBe(true)
+  })
+})
+
+describe('OverviewPanel 方向A版面（行動指揮塔，2026-08-24 改版）', () => {
+  it('KPI 為單一壓縮帶：kpi-band 容器存在且四個 KPI 值都在帶內', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const band = w.find('[data-test="kpi-band"]')
+    expect(band.exists()).toBe(true)
+    for (const sel of ['kpi-net-cashflow', 'kpi-total-revenue', 'kpi-total-expense', 'kpi-total-refund']) {
+      expect(band.find(`[data-test="${sel}"]`).exists()).toBe(true)
+    }
+  })
+
+  it('右欄 rail 常駐：overview-rail 內同時含待辦卡與資料說明', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const rail = w.find('[data-test="overview-rail"]')
+    expect(rail.exists()).toBe(true)
+    expect(rail.find('[data-test="todo-list"]').exists()).toBe(true)
+    expect(rail.find('[data-test="data-notes"]').exists()).toBe(true)
+  })
+
+  it('趨勢圖與三張摘要卡同在左欄 overview-main', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const main = w.find('[data-test="overview-main"]')
+    expect(main.exists()).toBe(true)
+    expect(main.find('[data-test="attendance-summary-card"]').exists()).toBe(true)
+    expect(main.find('[data-test="salary-summary-card"]').exists()).toBe(true)
+    // 摘要卡不應再出現在右欄
+    expect(w.find('[data-test="overview-rail"]').find('[data-test="attendance-summary-card"]').exists()).toBe(false)
+  })
+
+  it('無待辦時不顯示計數 badge', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('[data-test="todo-empty"]').exists()).toBe(true)
+    expect(w.find('[data-test="todo-count"]').exists()).toBe(false)
+  })
+
+  it('有待辦時標題旁顯示計數 badge，且薪資未封存項帶 danger 圓點', async () => {
+    vi.mocked(getDashboard).mockResolvedValueOnce({
+      data: {
+        attendance_monthly: [
+          { month: 5, rate: 90, total_records: 100 },
+        ],
+        salary_monthly: [{ month: 6, employee_count_pending: 3 }],
+      },
+    })
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('[data-test="todo-count"]').text()).toBe('1')
+    const item = w.find('[data-test="todo-item-salary-pending"]')
+    expect(item.exists()).toBe(true)
+    expect(item.find('.todo-dot--danger').exists()).toBe(true)
   })
 })
