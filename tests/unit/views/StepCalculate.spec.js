@@ -40,6 +40,12 @@ const stubs = {
   'el-button': { template: '<button><slot/></button>' },
   'el-tooltip': { template: '<div><slot/></div>' },
   'el-progress': { template: '<div class="el-progress-stub"/>' },
+  'el-checkbox': {
+    template:
+      '<label class="cb-stub"><input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" /><slot /></label>',
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+  },
 }
 
 function mountStep(settlement, query = { year: 2026, month: 5 }) {
@@ -71,7 +77,7 @@ describe('StepCalculate — async 計算 + 輪詢', () => {
     await wrapper.vm.onCalculate()
     await flushPromises()
 
-    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5)
+    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5, true, undefined)
     expect(h.getSalaryCalcJob).toHaveBeenCalledWith('j1')
     expect(settlement.refresh).toHaveBeenCalled()
     expect(wrapper.emitted('next')).toBeTruthy()
@@ -128,5 +134,23 @@ describe('StepCalculate — async 計算 + 輪詢', () => {
 
     expect(h.calculateAsync).not.toHaveBeenCalled()
     expect(wrapper.emitted('next')).toBeFalsy()
+  })
+})
+
+describe('StepCalculate — 改用現行主檔（use_snapshot）', () => {
+  it('勾選 checkbox → calculateAsync 第三參數 false（方向守衛，與主測試樹等量保護）', async () => {
+    h.calculateAsync.mockResolvedValue({ data: { job_id: 'j9', total: 1 } })
+    h.getSalaryCalcJob.mockResolvedValue({
+      data: { status: 'completed', errors: [], done: 1, total: 1 },
+    })
+    const wrapper = mountStep(makeSettlement())
+    await flushPromises()
+    const cb = wrapper.find('input[type="checkbox"]')
+    expect(cb.exists()).toBe(true)
+    await cb.setValue(true)
+    wrapper.vm.liveMasterReason = '主檔錯誤修正後改用現行重算'
+    await wrapper.vm.onCalculate()
+    await flushPromises()
+    expect(h.calculateAsync).toHaveBeenCalledWith(2026, 5, false, '主檔錯誤修正後改用現行重算')
   })
 })
