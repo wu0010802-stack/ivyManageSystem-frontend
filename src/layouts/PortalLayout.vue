@@ -13,6 +13,7 @@ import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
+import ApplySheet from '@/components/portal/ApplySheet.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
 import { useIsMobile } from '@/composables/useIsMobile'
 import {
@@ -29,7 +30,7 @@ import {
   Warning,
   Brush,
   Bell,
-  Clock,
+  Plus,
 } from '@element-plus/icons-vue'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
@@ -51,6 +52,14 @@ const route = useRoute()
 const router = useRouter()
 const activeIndex = computed(() => route.path)
 const userInfo = computed<UserInfo>(() => (getUserInfo() || {}) as UserInfo)
+
+// 申請集中入口（底部「＋」FAB）
+const applySheetOpen = ref(false)
+
+// 班級 tab active：班級工作台 + 班級學生（含 /portal/student-detail 等單數路徑）
+const classTabActive = computed(
+  () => route.path.startsWith('/portal/class-hub') || route.path.startsWith('/portal/student'),
+)
 
 const showPasswordDialog = ref(false)
 const passwordForm = ref<{ old_password: string; new_password: string; confirm_password: string }>(
@@ -195,6 +204,9 @@ const dismissInstallBanner = () => {
 }
 
 onMounted(() => {
+  // portal 品牌色 scope（soft-ui.css 的 html.ivy-portal 區塊，EP primary 收斂 indigo）；
+  // 比照 AdminLayout 的 ivy-admin：掛在 <html> 讓 teleport 到 body 的 dialog/sheet 也吃到
+  document.documentElement.classList.add('ivy-portal')
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.addEventListener('visibilitychange', onVisibilityChange)
@@ -202,8 +214,8 @@ onMounted(() => {
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
   initPortalDismissalAlerts()
 
-  // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
-  const PORTAL_LAYOUT_VERSION = '1'
+  // 導航更新一次性提示（v=2: Phase 1 殼層改版；v=1: 2026-05 教師端 ACD 改造）
+  const PORTAL_LAYOUT_VERSION = '2'
   const stored = tenantGetItem('portal_layout_v')
   if (stored !== PORTAL_LAYOUT_VERSION) {
     setTimeout(() => {
@@ -211,10 +223,10 @@ onMounted(() => {
         title: '導航更新',
         message:
           '教師端介面已更新：\n\n' +
-          '• 底部 tab 第 5 個從「更多」改為「我的」（個人選單）\n' +
-          '• 側邊欄「班級教務」拆為「班級 — 教學」與「班級 — 管理」\n' +
-          '• 新增「今日工作台」為預設首頁\n\n' +
-          '原本的選單仍可由側邊欄找到。',
+          '• 底部導覽改版：「工作台」改名「今日」、新增「班級」分頁\n' +
+          '• 中央「＋」按鈕集中請假／加班／補打卡／異常確認申請\n' +
+          '• 「排班」入口移到出勤頁上方、「學生」入口移到班級工作台\n\n' +
+          '桌機側邊欄選單維持不變。',
         type: 'info',
         confirmButtonText: '我知道了',
         showCancelButton: false,
@@ -228,6 +240,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.documentElement.classList.remove('ivy-portal')
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
   window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -554,53 +567,50 @@ const submitPassword = async () => {
         <RouterView />
       </el-main>
 
-      <!-- Bottom Navigation (mobile only) -->
+      <!-- Bottom Navigation (mobile only)：Phase 1 殼層改版 —— 今日/班級/＋申請/出勤/我的。
+           排班入口移至出勤頁上方、學生入口移至班級工作台（桌機側欄不變）。 -->
       <nav v-if="isMobile" class="bottom-nav" aria-label="主要導覽">
         <button
           type="button"
           class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }"
-          :aria-current="route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') ? 'page' : undefined"
+          :class="{ active: route.path.startsWith('/portal/home') }"
+          :aria-current="route.path.startsWith('/portal/home') ? 'page' : undefined"
           @click="router.push('/portal/home')"
         >
           <div class="tab-icon-wrapper">
             <el-icon><HomeFilled /></el-icon>
             <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
           </div>
-          <span>工作台</span>
+          <span>今日</span>
         </button>
         <button
           type="button"
           class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/attendance') }"
-          :aria-current="route.path.startsWith('/portal/attendance') ? 'page' : undefined"
+          :class="{ active: classTabActive }"
+          :aria-current="classTabActive ? 'page' : undefined"
+          @click="router.push('/portal/class-hub')"
+        >
+          <el-icon><School /></el-icon>
+          <span>班級</span>
+        </button>
+        <div class="bottom-fab-slot">
+          <button type="button" class="bottom-fab" aria-label="開啟申請選單" @click="applySheetOpen = true">
+            <el-icon><Plus /></el-icon>
+          </button>
+          <span class="bottom-fab-label" aria-hidden="true">申請</span>
+        </div>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/attendance') || route.path.startsWith('/portal/schedule') }"
+          :aria-current="route.path.startsWith('/portal/attendance') || route.path.startsWith('/portal/schedule') ? 'page' : undefined"
           @click="router.push('/portal/attendance')"
         >
-          <el-icon><Calendar /></el-icon>
-          <span>出勤</span>
-        </button>
-        <button
-          type="button"
-          class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/schedule') }"
-          :aria-current="route.path.startsWith('/portal/schedule') ? 'page' : undefined"
-          @click="router.push('/portal/schedule')"
-        >
           <div class="tab-icon-wrapper">
-            <el-icon><Clock /></el-icon>
+            <el-icon><Calendar /></el-icon>
             <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="tab-badge" />
           </div>
-          <span>排班</span>
-        </button>
-        <button
-          type="button"
-          class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }"
-          :aria-current="route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') ? 'page' : undefined"
-          @click="router.push('/portal/students')"
-        >
-          <el-icon><User /></el-icon>
-          <span>學生</span>
+          <span>出勤</span>
         </button>
         <button
           type="button"
@@ -620,6 +630,9 @@ const submitPassword = async () => {
 
     <!-- 全域快速搜尋 Palette (Cmd+K) -->
     <PortalSearchPalette />
+
+    <!-- 申請集中入口（底部「＋」FAB 開啟；收攏側欄假勤申請群組四項） -->
+    <ApplySheet v-model="applySheetOpen" :substitute-pending-count="substitutePendingCount" />
 
     <!-- Change Password Dialog -->
     <el-dialog v-model="showPasswordDialog" title="修改密碼" :width="isMobile ? '90%' : '400px'">
@@ -962,6 +975,53 @@ html.dark .portal-layout {
 
 .bottom-tab .el-icon {
   font-size: 20px;
+}
+
+/* 中央申請 FAB（Phase 1 殼層改版） */
+.bottom-fab-slot {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 7px;
+}
+
+.bottom-fab {
+  position: absolute;
+  top: -18px;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: none;
+  background: var(--pt-gradient-portal);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(79, 70, 229, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-fab:active {
+  transform: scale(0.94);
+}
+
+.bottom-fab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.bottom-fab .el-icon {
+  font-size: 26px;
+}
+
+.bottom-fab-label {
+  font-size: 12px;
+  color: var(--pt-text-muted, #64748b);
 }
 
 .tab-icon-wrapper {

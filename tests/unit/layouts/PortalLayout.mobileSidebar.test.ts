@@ -59,7 +59,7 @@ const SEL = '[data-test="portal-sidebar-toggle"]'
 
 describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
   beforeEach(() => {
-    localStorage.setItem('portal_layout_v', '1') // 防 onboarding setTimeout 干擾
+    localStorage.setItem('portal_layout_v', '2') // 防 onboarding setTimeout 干擾
     userInfoData = { name: '陳老師', role: 'teacher', impersonation_mode: null }
   })
   // RWD P0 後 PortalLayout 的 isMobile 來自 useIsMobile()（matchMedia 驅動，

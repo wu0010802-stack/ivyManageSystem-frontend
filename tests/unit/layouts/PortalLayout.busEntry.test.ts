@@ -61,7 +61,7 @@ async function mountLayout() {
 
 describe('PortalLayout — 娃娃車班次入口', () => {
   beforeEach(() => {
-    localStorage.setItem('portal_layout_v', '1') // 防 onboarding setTimeout 干擾
+    localStorage.setItem('portal_layout_v', '2') // 防 onboarding setTimeout 干擾
     hasPortalPermission.mockReset()
   })
 

@@ -203,4 +203,18 @@ describe('PortalClassHubView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('今日任務都完成')
   })
+
+  // Phase 1 殼層改版：學生 tab 退出底部導覽後，班級工作台補「班級學生」入口
+  it('header 提供班級學生入口並導向 /portal/students', async () => {
+    const wrapper = mount(PortalClassHubView)
+    await flushPromises()
+    // 本檔的 element-plus module mock 不含全域元件註冊，SFC 內 <el-button>
+    // 會以未解析 custom element 渲染，需用 tag selector 找
+    const entry = wrapper
+      .findAll('el-button, button')
+      .find((b) => b.text().includes('班級學生'))
+    expect(entry).toBeTruthy()
+    await entry.trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/portal/students?from=hub')
+  })
 })
