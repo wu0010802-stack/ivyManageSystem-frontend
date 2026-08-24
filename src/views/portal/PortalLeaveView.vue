@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   getMyColleagues,
@@ -128,7 +129,19 @@ const onLeaveFormSubmitted = () => {
 // ── PortalLeaveList ref（供 onMounted 初次 fetch）──
 const leaveListRef = ref<{ fetchLeaves?: () => Promise<void> } | null>(null)
 
+// ＋申請 deep-link（Phase 3）：?new=1 進頁直開表單；replace 清 query 防重新整理又彈。
+// optional chaining：部分測試環境 mount 時無 router provider，useRoute/useRouter 回 undefined
+const route = useRoute()
+const router = useRouter()
+const maybeOpenFormFromQuery = () => {
+  if (route?.query?.new === '1') {
+    showForm.value = true
+    router?.replace({ query: { ...route.query, new: undefined } })
+  }
+}
+
 onMounted(() => {
+  maybeOpenFormFromQuery()
   Promise.all([
     leaveListRef.value?.fetchLeaves?.() ?? Promise.resolve(),
     fetchLeaveStats(),

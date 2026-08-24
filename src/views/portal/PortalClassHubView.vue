@@ -24,6 +24,10 @@
       <el-button :loading="loading" size="small" @click="manualRefresh">
         手動刷新
       </el-button>
+      <!-- Phase 1 殼層改版：學生 tab 退出底部導覽，這裡補班級學生入口 -->
+      <el-button size="small" @click="goStudents">
+        班級學生
+      </el-button>
     </div>
 
     <!-- 載入失敗（error）與「今日沒有任務」（empty）必須分辨：
@@ -238,6 +242,11 @@ function onJumpPage(task: SlotTask) {
 function jumpDeep(deepLink: string) {
   if (!deepLink) return
   router.push(deepLink)
+}
+
+// Phase 1 殼層改版：學生 tab 退出底部導覽後的班級學生入口
+function goStudents() {
+  router.push('/portal/students?from=hub')
 }
 
 function formatTime(iso: string | null | undefined) {
