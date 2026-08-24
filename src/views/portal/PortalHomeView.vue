@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { Warning } from '@element-plus/icons-vue'
 import { usePortalDashboard } from '@/composables/usePortalDashboard'
 import { getMyLeaveQuotaExpiry } from '@/api/portalLeaveQuotaExpiry'
+import { getTodayHub } from '@/api/portalClassHub'
 import PendingActionsCard from '@/components/portal/home/PendingActionsCard.vue'
-import TodayShiftCard from '@/components/portal/home/TodayShiftCard.vue'
+import TodayFocusCard from '@/components/portal/home/TodayFocusCard.vue'
 import ClassroomOpsCard from '@/components/portal/home/ClassroomOpsCard.vue'
 import QuickLinksCard from '@/components/portal/home/QuickLinksCard.vue'
 
 const { summary, loading, error, refresh } = usePortalDashboard()
+const router = useRouter()
 
 interface LeaveQuotaExpiryInfo {
   compensatory_balance: number
@@ -32,7 +35,45 @@ const loadLeaveQuotaExpiry = async () => {
   }
 }
 
-onMounted(loadLeaveQuotaExpiry)
+// ===== Phase 2 任務流首頁：班級工作台摘要（現在該做置頂卡） =====
+interface HubSummary {
+  classroom_id?: number
+  classroom_name?: string
+  sticky_next?: Record<string, unknown> | null
+  counts?: Record<string, number>
+  [key: string]: unknown
+}
+
+const hub = ref<HubSummary | null>(null)
+
+const loadHub = async () => {
+  try {
+    const data = (await getTodayHub()) as HubSummary
+    // classroom_id=0＝未綁班（class-hub 同語意）；403/錯誤走 catch。兩者都隱藏置頂卡
+    hub.value = data && data.classroom_id ? data : null
+  } catch {
+    hub.value = null
+  }
+}
+
+function onFocusJump(deepLink?: string) {
+  router.push(deepLink || '/portal/class-hub')
+}
+
+function openHub() {
+  router.push('/portal/class-hub')
+}
+
+const doRefresh = () => {
+  refresh()
+  loadHub()
+  loadLeaveQuotaExpiry()
+}
+
+onMounted(() => {
+  loadLeaveQuotaExpiry()
+  loadHub()
+})
 
 const greeting = computed(() => {
   const h = new Date().getHours()
@@ -49,19 +90,85 @@ const me = computed(() => summaryData.value?.me || {})
 const today = computed(() => summaryData.value?.today || {})
 const classrooms = computed(() => summaryData.value?.classrooms || [])
 const actions = computed(() => summaryData.value?.actions || {})
+
+// ===== Hero：日期／班次／打卡（原 TodayShiftCard 內容併入） =====
+interface TodayShift { name?: string; work_start?: string; work_end?: string }
+interface TodayAttendance { punch_in_at?: string | null; punch_out_at?: string | null; is_anomaly?: boolean }
+
+const dateLabel = computed(() => {
+  const iso = today.value?.date as string | undefined
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const w = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
+  return `${d.getMonth() + 1}/${d.getDate()}（週${w}）`
+})
+
+const shiftLabel = computed(() => {
+  const s = today.value?.shift as TodayShift | null | undefined
+  if (!s) return '今日無班次'
+  return `${s.name}（${s.work_start || '—'}–${s.work_end || '—'}）`
+})
+
+function formatTime(iso: string | null | undefined) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const attendance = computed(() => (today.value?.attendance as TodayAttendance | null | undefined) || {})
+const punchInLabel = computed(() => formatTime(attendance.value?.punch_in_at))
+const punchOutLabel = computed(() => formatTime(attendance.value?.punch_out_at))
+const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
 </script>
 
 <template>
   <div class="portal-home">
-    <header class="home-header">
-      <div>
-        <h2>{{ greeting }}，{{ me.name || '老師' }}</h2>
-        <p class="sub">今日辛苦了 ✨</p>
+    <header class="home-hero">
+      <div class="home-hero__top">
+        <div>
+          <h2 class="home-hero__greeting">{{ greeting }}，{{ me.name || '老師' }}</h2>
+          <p class="home-hero__sub">
+            <template v-if="dateLabel">{{ dateLabel }}・</template>{{ shiftLabel }}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="home-hero__refresh"
+          :disabled="loading"
+          aria-label="重新整理"
+          @click="doRefresh"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
+            <path d="M18.5 2.5v4h-4" />
+          </svg>
+        </button>
       </div>
-      <el-button :loading="loading" plain @click="refresh">重新整理</el-button>
+      <button type="button" class="home-hero__punch" @click="router.push('/portal/attendance')">
+        <svg class="home-hero__punch-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+        <span class="home-hero__punch-text">上班 {{ punchInLabel }}｜下班 {{ punchOutLabel }}</span>
+        <span v-if="isAnomaly" class="home-hero__punch-anomaly">出勤異常</span>
+        <svg class="home-hero__punch-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M9.5 6.5 15 12l-5.5 5.5" />
+        </svg>
+      </button>
     </header>
 
     <div v-if="error" class="error-banner">載入失敗：{{ (error as Record<string, unknown>).message || '請稍後再試' }}</div>
+
+    <TodayFocusCard
+      v-if="hub"
+      :next="hub.sticky_next"
+      :counts="hub.counts"
+      :classroom-name="hub.classroom_name"
+      @jump="onFocusJump"
+      @open-hub="openHub"
+    />
 
     <div v-if="!summary && loading" class="loading-state">
       <div class="pt-shimmer skeleton-block" v-for="i in 3" :key="i"></div>
@@ -69,7 +176,6 @@ const actions = computed(() => summaryData.value?.actions || {})
 
     <template v-else-if="summary">
       <PendingActionsCard :actions="actions" />
-      <TodayShiftCard :today="today" />
 
       <el-card v-if="leaveQuotaInfo" class="leave-quota-card" shadow="hover">
         <template #header>
@@ -126,22 +232,111 @@ const actions = computed(() => summaryData.value?.actions || {})
   margin: 0 auto;
 }
 
-.home-header {
+/* ===== Hero（Phase 2 任務流首頁）===== */
+.home-hero {
+  background: var(--pt-gradient-portal);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.home-hero__top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: var(--space-2);
+  align-items: flex-start;
+  gap: var(--space-3);
 }
-.home-header h2 {
+
+.home-hero__greeting {
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: 700;
-  color: var(--pt-text-strong);
+  color: #ffffff;
 }
-.home-header .sub {
+
+.home-hero__sub {
   margin: 4px 0 0;
-  color: var(--pt-text-muted);
+  color: rgba(255, 255, 255, 0.78);
   font-size: var(--text-sm);
+}
+
+.home-hero__refresh {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-lg);
+  color: #ffffff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-hero__refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.home-hero__refresh svg {
+  width: 20px;
+  height: 20px;
+}
+
+.home-hero__refresh:focus-visible,
+.home-hero__punch:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.home-hero__punch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-lg);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.home-hero__punch-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.home-hero__punch-text {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.home-hero__punch-anomaly {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.home-hero__punch-chev {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+  flex-shrink: 0;
 }
 
 .error-banner {
