@@ -71,7 +71,7 @@ function go(to: string) {
 
 <template>
   <div class="pt-card pending-actions">
-    <h3 class="card-title">待辦事項</h3>
+    <h3 class="card-title">今日待辦</h3>
     <div class="action-grid">
       <button
         v-for="item in items"

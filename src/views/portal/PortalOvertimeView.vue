@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMyOvertimes, createMyOvertime, deleteMyOvertime } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
@@ -78,7 +79,21 @@ const withdrawOvertime = async (id: number) => {
 const totalHours = () => overtimes.value.reduce((sum, o) => sum + ((o.hours as number) || 0), 0)
 const totalPay = () => overtimes.value.reduce((sum, o) => sum + ((o.overtime_pay as number) || 0), 0)
 
-onMounted(fetchOvertimes)
+// ＋申請 deep-link（Phase 3）：?new=1 進頁直開表單；replace 清 query 防重新整理又彈。
+// optional chaining：部分測試環境 mount 時無 router provider，useRoute/useRouter 回 undefined
+const route = useRoute()
+const router = useRouter()
+const maybeOpenFormFromQuery = () => {
+    if (route?.query?.new === '1') {
+        showForm.value = true
+        router?.replace({ query: { ...route.query, new: undefined } })
+    }
+}
+
+onMounted(() => {
+    maybeOpenFormFromQuery()
+    fetchOvertimes()
+})
 </script>
 
 <template>

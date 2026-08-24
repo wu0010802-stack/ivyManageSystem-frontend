@@ -138,3 +138,19 @@
 @media (prefers-reduced-motion: reduce) {
   .pt-shimmer { animation: none; }
 }
+
+/* ========== Element Plus primary 收斂 indigo（Phase 1 殼層改版） ==========
+ * portal 內 EP 元件原吃預設藍 #409eff，與 --color-primary（indigo #4f46e5）
+ * 兩套主色並存。scope 比照 main.css 的 html.ivy-admin 青藍區塊：
+ * PortalLayout onMounted 掛 html.ivy-portal、onUnmounted 移除；
+ * :not(.dark) 是因 dark 模式由 EP dark css-vars 供色，不在此覆寫以免對比翻車。
+ * light-N = primary 與 white 依 N*10% 混色；dark-2 用既有 hover token #4338ca。 */
+html.ivy-portal:not(.dark) {
+  --el-color-primary: #4f46e5;
+  --el-color-primary-light-3: #847eed;
+  --el-color-primary-light-5: #a7a2f2;
+  --el-color-primary-light-7: #cac7f7;
+  --el-color-primary-light-8: #dcdafa;
+  --el-color-primary-light-9: #edecfc;
+  --el-color-primary-dark-2: #4338ca;
+}
