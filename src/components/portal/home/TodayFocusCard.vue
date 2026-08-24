@@ -127,8 +127,8 @@ const chips = computed(() =>
 .today-focus__class {
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--pt-text-muted);
-  background: var(--pt-surface-mute);
+  color: var(--text-secondary);
+  background: var(--bg-color-soft);
   border-radius: var(--radius-full);
   padding: 2px 10px;
 }
@@ -147,7 +147,7 @@ const chips = computed(() =>
 .today-focus__detail {
   font-size: var(--text-lg);
   font-weight: 700;
-  color: var(--pt-text-strong);
+  color: var(--text-primary);
 }
 
 .today-focus__meta {
@@ -155,7 +155,7 @@ const chips = computed(() =>
   display: flex;
   gap: var(--space-2);
   font-size: var(--text-sm);
-  color: var(--pt-text-muted);
+  color: var(--text-secondary);
 }
 
 .today-focus__cta {
@@ -216,8 +216,8 @@ const chips = computed(() =>
   flex-wrap: wrap;
   min-height: 44px;
   padding: var(--space-2) var(--space-3);
-  background: var(--pt-surface-mute);
-  border: var(--pt-hairline);
+  background: var(--bg-color-soft);
+  border: 1px solid var(--border-color-light);
   border-radius: var(--radius-md);
   font-family: inherit;
   cursor: pointer;
@@ -231,17 +231,17 @@ const chips = computed(() =>
 
 .today-focus__chip {
   font-size: var(--text-sm);
-  color: var(--pt-text-muted);
+  color: var(--text-secondary);
 }
 
 .today-focus__chip strong {
-  color: var(--pt-text-strong);
+  color: var(--text-primary);
 }
 
 .today-focus__chev {
   width: 14px;
   height: 14px;
-  color: var(--pt-text-faint);
+  color: var(--text-tertiary);
   margin-left: auto;
   flex-shrink: 0;
 }

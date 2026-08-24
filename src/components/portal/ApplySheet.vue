@@ -111,8 +111,8 @@ function go(item: ApplyItem) {
   gap: var(--space-3);
   min-height: 64px;
   padding: var(--space-3);
-  background: var(--pt-surface-card);
-  border: 1px solid var(--pt-border);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   font-family: inherit;
   text-align: left;
@@ -145,10 +145,10 @@ function go(item: ApplyItem) {
   height: 20px;
 }
 
-.apply-sheet__icon--leave { background: var(--pt-tint-leave); color: var(--pt-tint-leave-fg); }
-.apply-sheet__icon--overtime { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
-.apply-sheet__icon--punch { background: var(--pt-tint-message); color: var(--pt-tint-message-fg); }
-.apply-sheet__icon--anomaly { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
+.apply-sheet__icon--leave { background: var(--color-tint-leave); color: var(--color-tint-leave-fg); }
+.apply-sheet__icon--overtime { background: var(--color-tint-event); color: var(--color-tint-event-fg); }
+.apply-sheet__icon--punch { background: var(--color-tint-message); color: var(--color-tint-message-fg); }
+.apply-sheet__icon--anomaly { background: var(--color-tint-announcement); color: var(--color-tint-announcement-fg); }
 
 .apply-sheet__text {
   flex: 1 1 auto;
@@ -161,12 +161,12 @@ function go(item: ApplyItem) {
 .apply-sheet__label {
   font-size: 15px;
   font-weight: 600;
-  color: var(--pt-text-strong);
+  color: var(--text-primary);
 }
 
 .apply-sheet__desc {
   font-size: var(--text-xs);
-  color: var(--pt-text-faint);
+  color: var(--text-tertiary);
 }
 
 .apply-sheet__badge {
@@ -187,7 +187,7 @@ function go(item: ApplyItem) {
 .apply-sheet__chev {
   width: 16px;
   height: 16px;
-  color: var(--pt-text-faint);
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 </style>

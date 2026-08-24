@@ -103,6 +103,20 @@
   --color-info-hover: #2563eb;
   --color-info-darker: #1d4ed8;
 
+  /* ===== Tint palette（分類底色/前景成對，canonical raw）=====
+   * 原僅存在於 soft-ui.css 的 --pt-tint-*（deprecated prefix）；升格 canonical
+   * 供新元件直接引用，--pt-tint-* 改為指向此處的 alias（TOKENS.md 階段 2 方向）。 */
+  --color-tint-money: #dcfce7;          --color-tint-money-fg: #15803d;
+  --color-tint-message: #dbeafe;        --color-tint-message-fg: #1d4ed8;
+  --color-tint-event: #f3e8ff;          --color-tint-event-fg: #7c3aed;
+  --color-tint-announcement: #fef3c7;   --color-tint-announcement-fg: #b45309;
+  --color-tint-leave: #ffedd5;          --color-tint-leave-fg: #c2410c;
+  --color-tint-activity: #fce7f3;       --color-tint-activity-fg: #be185d;
+  --color-tint-medication: #ddd6fe;     --color-tint-medication-fg: #5b21b6;
+  --color-tint-pickup: #cffafe;         --color-tint-pickup-fg: #0e7490;
+  --color-tint-calendar: #e0e7ff;       --color-tint-calendar-fg: #3730a3;
+  --color-tint-contact: #d1fae5;        --color-tint-contact-fg: #065f46;
+
   /* ===== Neutral / Surface (共用基底) ===== */
   --neutral-0: #ffffff;
   --neutral-50: #f8fafc;

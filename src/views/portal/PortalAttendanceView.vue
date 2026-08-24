@@ -258,10 +258,10 @@ onUnmounted(() => {
   min-height: 52px;
   padding: var(--space-2) var(--space-4);
   margin: calc(-1 * var(--space-4)) 0 var(--space-4);
-  background: var(--pt-surface-card, #ffffff);
-  border: var(--pt-hairline, 1px solid rgba(15, 23, 42, 0.06));
+  background: var(--surface-color);
+  border: 1px solid var(--border-color-light);
   border-radius: var(--radius-lg);
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--shadow-sm);
   font-family: inherit;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;

@@ -62,7 +62,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-// Phase 1 殼層改版：emoji 圖示改線稿 SVG，tint 色塊對應 soft-ui.css 的 --pt-tint-*
+// Phase 1 殼層改版：emoji 圖示改線稿 SVG，tint 色塊走 canonical --color-tint-*
 const KIND_META: Record<string, { label: string }> = {
   attendance:   { label: '到園點名' },
   medication:   { label: '用藥執行' },
@@ -116,12 +116,12 @@ const iconKind = computed(() => (KIND_META[props.kind] ? props.kind : 'unknown')
   width: 16px;
   height: 16px;
 }
-.task-row__icon--attendance { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
-.task-row__icon--medication { background: var(--pt-tint-medication); color: var(--pt-tint-medication-fg); }
-.task-row__icon--observation { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
-.task-row__icon--incident { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
-.task-row__icon--contact_book { background: var(--pt-tint-contact); color: var(--pt-tint-contact-fg); }
-.task-row__icon--unknown { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
+.task-row__icon--attendance { background: var(--color-tint-calendar); color: var(--color-tint-calendar-fg); }
+.task-row__icon--medication { background: var(--color-tint-medication); color: var(--color-tint-medication-fg); }
+.task-row__icon--observation { background: var(--color-tint-event); color: var(--color-tint-event-fg); }
+.task-row__icon--incident { background: var(--color-tint-announcement); color: var(--color-tint-announcement-fg); }
+.task-row__icon--contact_book { background: var(--color-tint-contact); color: var(--color-tint-contact-fg); }
+.task-row__icon--unknown { background: var(--bg-color-soft); color: var(--text-secondary); }
 .task-row__label {
   font-weight: 500;
 }

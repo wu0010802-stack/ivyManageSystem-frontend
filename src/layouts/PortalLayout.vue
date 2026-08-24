@@ -1024,7 +1024,7 @@ html.dark .portal-layout {
 
 .bottom-fab-label {
   font-size: 12px;
-  color: var(--pt-text-muted, #64748b);
+  color: var(--text-secondary, #64748b);
 }
 
 .tab-icon-wrapper {

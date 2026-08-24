@@ -35,17 +35,18 @@
   --pt-text-faint: var(--text-tertiary, #94a3b8);
   --pt-border: var(--border-color, #e2e8f0);
 
-  /* Icon tint：與家長端一致，方便共用元件 */
-  --pt-tint-money: #dcfce7;            --pt-tint-money-fg: #15803d;
-  --pt-tint-message: #dbeafe;          --pt-tint-message-fg: #1d4ed8;
-  --pt-tint-event: #f3e8ff;            --pt-tint-event-fg: #7c3aed;
-  --pt-tint-announcement: #fef3c7;     --pt-tint-announcement-fg: #b45309;
-  --pt-tint-leave: #ffedd5;            --pt-tint-leave-fg: #c2410c;
-  --pt-tint-activity: #fce7f3;         --pt-tint-activity-fg: #be185d;
-  --pt-tint-medication: #ddd6fe;       --pt-tint-medication-fg: #5b21b6;
-  --pt-tint-pickup: #cffafe;           --pt-tint-pickup-fg: #0e7490;
-  --pt-tint-calendar: #e0e7ff;         --pt-tint-calendar-fg: #3730a3;
-  --pt-tint-contact: #d1fae5;          --pt-tint-contact-fg: #065f46;
+  /* Icon tint：與家長端一致，方便共用元件。
+   * 值升格為 canonical --color-tint-*（design-tokens.css），此處僅為存量 alias */
+  --pt-tint-money: var(--color-tint-money);            --pt-tint-money-fg: var(--color-tint-money-fg);
+  --pt-tint-message: var(--color-tint-message);        --pt-tint-message-fg: var(--color-tint-message-fg);
+  --pt-tint-event: var(--color-tint-event);            --pt-tint-event-fg: var(--color-tint-event-fg);
+  --pt-tint-announcement: var(--color-tint-announcement); --pt-tint-announcement-fg: var(--color-tint-announcement-fg);
+  --pt-tint-leave: var(--color-tint-leave);            --pt-tint-leave-fg: var(--color-tint-leave-fg);
+  --pt-tint-activity: var(--color-tint-activity);      --pt-tint-activity-fg: var(--color-tint-activity-fg);
+  --pt-tint-medication: var(--color-tint-medication);  --pt-tint-medication-fg: var(--color-tint-medication-fg);
+  --pt-tint-pickup: var(--color-tint-pickup);          --pt-tint-pickup-fg: var(--color-tint-pickup-fg);
+  --pt-tint-calendar: var(--color-tint-calendar);      --pt-tint-calendar-fg: var(--color-tint-calendar-fg);
+  --pt-tint-contact: var(--color-tint-contact);        --pt-tint-contact-fg: var(--color-tint-contact-fg);
 
   /* 漸層（portal 用 indigo） */
   --pt-gradient-portal: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
