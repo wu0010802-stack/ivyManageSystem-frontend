@@ -151,7 +151,11 @@ interface CloseSnapshot {
   unlock_reason?: string | null
 }
 
-const props = defineProps<{ closeDate: string }>()
+const props = defineProps<{
+  closeDate: string
+  /** 父層在解鎖成功後遞增此值，強制重載——日期沒變時 watch 才有東西可觸發。 */
+  reloadToken?: number
+}>()
 const emit = defineEmits<{ 'update:count': [number] }>()
 
 const snapshots = ref<CloseSnapshot[]>([])
@@ -211,7 +215,7 @@ async function load() {
   }
 }
 
-watch(() => props.closeDate, load, { immediate: true })
+watch([() => props.closeDate, () => props.reloadToken], load, { immediate: true })
 </script>
 
 <style scoped>

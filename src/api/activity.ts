@@ -1,5 +1,5 @@
 import api from './index'
-import type { AxiosResponse } from 'axios'
+import type { AxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiQuery, ApiBody, AxiosResp, Schema } from './_generated/typed'
 
 // 統計
@@ -301,10 +301,30 @@ export const getCoursePaymentSlipsPdf = (courseId: number, dueDate?: string): Pr
     params: dueDate ? { due_date: dueDate } : {},
     responseType: 'blob',
   })
-export const getPOSDailySummary = (date?: string): AxiosResp<'/activity/pos/daily-summary', 'get'> =>
-  api.get('/activity/pos/daily-summary', { params: date ? { date } : {} })
-export const getPOSRecentTransactions = (params?: ApiQuery<'/activity/pos/recent-transactions', 'get'>): AxiosResp<'/activity/pos/recent-transactions', 'get'> =>
-  api.get('/activity/pos/recent-transactions', { params })
+/**
+ * 刷新選項（CONC-03，2026-08-24）。
+ *
+ * `src/utils/apiDedupe.ts` 對「同 key 且仍在途」的 GET 直接回傳既有 promise，且
+ * **不快取已完成結果**。下面兩支刷新的 dedupe key 恆定（daily-summary 無參數、
+ * recent-transactions `{limit:100}`），所以櫃台只要在結帳前按過「重新整理」、該請求
+ * 還在途中，結帳成功後的刷新就不會發出新請求，直接領到**結帳前**的快照——彙總條
+ * 顯示不含本筆的金額且不會自我修正，櫃台據此點鈔會少算。
+ *
+ * `force: true` 走 apiDedupe 的逃生口（`config.meta.allowConcurrent`）繞過去重，
+ * 供「動作完成後的刷新」使用。**不帶參數的既有呼叫端行為逐字不變**——去重仍生效，
+ * 那層本來就是為了擋多元件同時 mount 各自打同一支 endpoint。
+ */
+export interface PosRefreshOptions {
+  force?: boolean
+}
+type DedupeAwareConfig = AxiosRequestConfig & { meta?: { allowConcurrent?: boolean } }
+function withDedupeEscape(config: DedupeAwareConfig, force?: boolean): DedupeAwareConfig {
+  return force ? { ...config, meta: { allowConcurrent: true } } : config
+}
+export const getPOSDailySummary = (date?: string, opts: PosRefreshOptions = {}): AxiosResp<'/activity/pos/daily-summary', 'get'> =>
+  api.get('/activity/pos/daily-summary', withDedupeEscape({ params: date ? { date } : {} }, opts.force))
+export const getPOSRecentTransactions = (params?: ApiQuery<'/activity/pos/recent-transactions', 'get'>, opts: PosRefreshOptions = {}): AxiosResp<'/activity/pos/recent-transactions', 'get'> =>
+  api.get('/activity/pos/recent-transactions', withDedupeEscape({ params }, opts.force))
 
 // POS 日結簽核（老闆核對每日流水）
 export const getPOSDailyClosePending = (params?: ApiQuery<'/activity/pos/daily-close/pending', 'get'>): AxiosResp<'/activity/pos/daily-close/pending', 'get'> =>

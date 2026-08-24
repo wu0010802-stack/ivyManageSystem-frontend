@@ -226,9 +226,15 @@ export function usePOSCheckout() {
         searchTruncation.truncated = res.data?.truncated ?? false
         searchTruncation.total = res.data?.total_active ?? 0
       } else {
+        // 收款模式必須連 no_fee 一起查（FECASH-05 / CONTRACT-04，2026-08-24）：
+        // 待審核報名的課程全是 pending_review，後端不計價 → total_amount=0 →
+        // _derive_payment_status 判成 no_fee。只查 partial/unpaid 會讓整批待審核學生
+        // 在「依日期」模式徹底消失，而「依學生」模式（outstanding-by-student）自
+        // 2026-08-16 起刻意放行這類報名以防現場漏收——同一頁兩個模式對同一批人給出
+        // 相反答案。撈回後再由下方的過濾條件排除「真正的空報名」。
         const statuses = isRefundMode.value
           ? ['paid', 'partial', 'overpaid']
-          : ['partial', 'unpaid']
+          : ['partial', 'unpaid', 'no_fee']
         const baseParams: Record<string, unknown> = {
           payment_status: undefined,
           limit: 200,
@@ -244,16 +250,21 @@ export function usePOSCheckout() {
         if (seq !== searchSeq) return
         // 截斷偵測：/registrations 每狀態上限 200，後端回 total。total 超過實際抓回
         // 筆數即代表此狀態尚有未載入交易，日曆與金額會少算（code review P2）。各狀態
-        // payment_status 互斥（一筆只屬一狀態），total 直接相加為符合條件母體上界。
+        // payment_status 互斥（一筆只屬一狀態），故待收各桶的 total 相加即符合條件的
+        // 母體上界（no_fee 桶不計入，理由見迴圈內註解）。
         let dateTruncated = false
         let dateTotal = 0
-        for (const r of results) {
+        results.forEach((r, i) => {
           const d = r.data as { items?: unknown[]; total?: number }
           const shown = d?.items?.length ?? 0
           const tot = Number(d?.total ?? shown)
-          dateTotal += tot
+          // no_fee 這桶只是「待審核報名的落點」（FECASH-05），裡面絕大多數是下方會被
+          // 濾掉的真正空報名。把它計進 total 會讓截斷提示的母體數字灌水，也與後端
+          // group_total 不含待確認應收的口徑不符，故不加總；但這桶若被 200 上限截斷，
+          // 待審核學生仍可能落在後面沒抓到，旗標照立（fail-visible）。
+          if (statuses[i] !== 'no_fee') dateTotal += tot
           if (tot > shown) dateTruncated = true
-        }
+        })
         searchTruncation.truncated = dateTruncated
         searchTruncation.total = dateTotal
         const items = results.flatMap((r) => (r.data as { items?: Record<string, unknown>[] })?.items || [])
@@ -270,9 +281,15 @@ export function usePOSCheckout() {
           //   模式看不到 → 漏退。
           const total = Number(item.total_amount || 0)
           const paid = Number(item.paid_amount || 0)
+          // 待審核（或有待確認課程）的報名 total 恆為 0，但現場要收得到錢，必須留下；
+          // 口徑對齊後端 outstanding-by-student 的 `pending_amt > 0` 放行條件。
+          // pending_amount 目前只有 outstanding-by-student 會回，/registrations 沒有，
+          // 故以 pending_review 旗標為主、pending_amount 為輔（後端補欄位後自動生效）。
+          const awaitingReview =
+            Boolean(item.pending_review) || Number(item.pending_amount || 0) > 0
           if (isRefundMode.value) {
             if (paid <= 0) continue
-          } else if (total <= 0) {
+          } else if (total <= 0 && !awaitingReview) {
             continue
           }
           merged.push(item)
@@ -521,9 +538,11 @@ export function usePOSCheckout() {
       await nextTick()
       resetTransactionInputs()
       // 刷新：日結、最近交易、搜尋結果（讓剛收款的學生立即從欠費列表消失）
+      // force：這兩支的 dedupe key 恆定，若櫃台在送出前按過「重新整理」而該請求仍在途，
+      // 不繞過去重就會領到**結帳前**的快照（CONC-03）。
       await Promise.allSettled([
-        refreshDailySummary(),
-        refreshRecentTransactions(),
+        refreshDailySummary({ force: true }),
+        refreshRecentTransactions({ force: true }),
         runSearch(),
         onSubmitted?.(),
       ])
@@ -534,18 +553,40 @@ export function usePOSCheckout() {
         pendingIdempotencyKey = null
       }
       const detailMsg = err?.response?.data?.detail || '結帳失敗'
-      // 409 = 這把 idempotency_key 已經成立過一筆**未作廢的有效收據**（後端只在命中
-      // 有效收據時才拋），也就是前一筆已經入帳。若比照其他 4xx 只彈幾秒即消的 toast、
-      // 又不刷新任何清單，櫃台看不到那筆收據就會再按一次——新 key 產生第二筆＝重複收款
-      // （2026-08-15 code review P2-04）。先刷新今日交易與搜尋讓那筆現形，再用阻斷式
-      // 對話框說明，把「是否重收」的決定交回櫃台。
+      // 409 有**兩種意義相反**的情境（後端 api/activity/pos.py，2026-08-24 STATE-03）：
+      //
+      // ① 前一筆仍然有效：命中未作廢的收據（replay 不成立／內容不符），detail 為
+      //    「idempotency_key 已用於既有繳費紀錄…該筆繳費仍然有效…」或「已用於不同內容
+      //    的收據…」。此時錢已經入帳，再按一次＝新 key 產生第二筆＝重複收款
+      //    （2026-08-15 code review P2-04）。
+      // ② 該 key 的紀錄**已全數作廢**：detail 為「idempotency_key 已被使用且關聯紀錄
+      //    已作廢…」（後端 spec C5，前置守衛與 UNIQUE race 兩處文案一致）。此時一毛都
+      //    沒入帳，後端要的正是「換新 key 重收」；若照 ① 的提示叫櫃台別再收款，這筆會
+      //    **永久漏收**。
+      //
+      // 兩者都先刷新今日交易與搜尋（force：不繞過去重會看到結帳前的舊清單），再用
+      // 阻斷式對話框說明，把決定交回櫃台。
       if (status === 409) {
-        await Promise.allSettled([refreshRecentTransactions(), runSearch()])
-        ElMessageBox.alert(
-          `${detailMsg}\n\n前一筆交易已成功入帳，本次未再產生新收據。請先在下方「今日交易」列表確認該筆收據後，再決定是否需要重收。`,
-          '前一筆已入帳，請勿重複收款',
-          { type: 'warning', confirmButtonText: '我知道了，先去確認交易列表' }
-        ).catch(() => {})
+        await Promise.allSettled([
+          refreshRecentTransactions({ force: true }),
+          runSearch(),
+        ])
+        // 情境判別以後端 detail 的「已作廢」字樣為準（只有 ② 的兩處 raise 會出現）。
+        const voidedConflict = /已作廢/.test(detailMsg)
+        if (voidedConflict) {
+          // pendingIdempotencyKey 已於上方 4xx 分支清空 → 下一次送出必為全新交易。
+          ElMessageBox.alert(
+            `${detailMsg}\n\n這筆交易的收據已被作廢、款項未有效入帳，本次沒有產生任何收據。請確認後以新交易重新收款（系統下一次送出會自動使用新的交易編號）。`,
+            '這筆已作廢，款項未入帳',
+            { type: 'warning', confirmButtonText: '了解，將以新交易重收' }
+          ).catch(() => {})
+        } else {
+          ElMessageBox.alert(
+            `${detailMsg}\n\n前一筆交易已成功入帳，本次未再產生新收據。請先在下方「今日交易」列表確認該筆收據後，再決定是否需要重收。`,
+            '前一筆已入帳，請勿重複收款',
+            { type: 'warning', confirmButtonText: '我知道了，先去確認交易列表' }
+          ).catch(() => {})
+        }
       } else if (status === 400 && /日結簽核/.test(detailMsg)) {
         // 400 且 detail 包含「日結」→ 用 alert 對話框顯示更清楚的指引
         ElMessageBox.alert(
@@ -565,17 +606,22 @@ export function usePOSCheckout() {
    * 列印收據 PDF。
    * @param options.reprint 是否標記為補印。結帳當下的首印傳 false（正本）；
    *   從交易列表或收據 dialog 再印一次維持預設 true（2026-08-14 bug hunt）。
+   * @returns 是否真的印出（PDF 取得成功）。呼叫端據此決定「這張收據已印過」——
+   *   失敗（取 PDF 出錯／新分頁被擋）不能算首印，否則下一次補救列印會被標成補印，
+   *   家長手上永遠拿不到未標補印的正本（FECASH-06）。
    */
-  async function printReceipt(options: { reprint?: boolean } = {}) {
+  async function printReceipt(options: { reprint?: boolean } = {}): Promise<boolean> {
     const { reprint = true } = options
     const receiptNo = lastReceipt.value?.receipt_no
     if (!receiptNo) {
       ElMessage.warning('找不到收據編號，無法列印')
-      return
+      return false
     }
+    let printed = false
     await openPdfInNewTab({
       fetchBlob: async () => {
         const res = await getPOSReceiptPdf(receiptNo as string, { reprint })
+        printed = true
         return res.data
       },
       loadingText: '收據載入中…',
@@ -583,9 +629,11 @@ export function usePOSCheckout() {
       // 只會拿到「Request failed with status code 400」；真正的原因（例如「該收據已作廢」）
       // 要先把 Blob 讀成 JSON 才拿得到（2026-08-15 code review P3-15）。
       onError: async (err: unknown) => {
+        printed = false
         ElMessage.error(await readBlobErrorDetail(err, '收據 PDF 載入失敗'))
       },
     })
+    return printed
   }
 
   // 重印防抖：避免連點兩次送兩次列印
@@ -623,28 +671,58 @@ export function usePOSCheckout() {
   }
 
   // ── 日結 ──────────────────────────────────────────────────────
-  async function refreshDailySummary() {
+  /**
+   * 刷新日結彙總。
+   *
+   * @param options.force 繞過 apiDedupe 的 in-flight 去重（CONC-03）。去重層對同 key
+   *   仍在途的 GET 直接回傳既有 promise 且不快取結果，而本支的 key 恆定；櫃台在結帳前
+   *   按過「重新整理」而請求還在途中時，結帳後的刷新會被吞成**結帳前**的快照，彙總條
+   *   顯示不含本筆的金額且不會自我修正（櫃台據此點鈔會少算）。故「動作完成後的刷新」
+   *   一律帶 force；手動／mount 刷新維持去重（那層是為了擋多元件同時 mount）。
+   *
+   * dailySummarySeq：請求序號守衛，寫法同 runSearch 的 searchSeq。較早發出的舊回應
+   * 晚到時不得覆蓋較新一輪的結果（結帳後強制刷新的正是「較新那輪」）。
+   */
+  let dailySummarySeq = 0
+  async function refreshDailySummary(options: { force?: boolean } = {}) {
+    const seq = ++dailySummarySeq
     dailySummary.loading = true
     try {
-      const res = await getPOSDailySummary()
+      // 不帶 force 時維持單一參數呼叫，既有 api 契約逐字不變
+      const res = options.force
+        ? await getPOSDailySummary(undefined, { force: true })
+        : await getPOSDailySummary()
+      if (seq !== dailySummarySeq) return
       dailySummary.data = res.data
       dailySummary.error = false
     } catch {
+      if (seq !== dailySummarySeq) return
       // fail-visible（P3-05）：不可靜默。留著上一次的數字＝顯示「不含剛收那筆」的
       // 舊金額，櫃台照著點鈔會少算；顯示 NT$0 又分不清「沒資料」與「今天真的是零」。
       // 清值 + 立旗標，由 POSDailySummaryBar 顯示「—」與重試。
       dailySummary.data = null
       dailySummary.error = true
     } finally {
-      dailySummary.loading = false
+      if (seq === dailySummarySeq) dailySummary.loading = false
     }
   }
 
   // ── 今日交易明細 ─────────────────────────────────────────────
-  async function refreshRecentTransactions() {
+  /**
+   * 刷新今日交易明細。
+   * @param options.force 同 refreshDailySummary：繞過 in-flight 去重（CONC-03）。
+   *   409 之後的刷新也必須 force——否則櫃台被提示「去交易列表確認」時看到的仍是
+   *   結帳前的清單，那筆已入帳的收據不會現形。
+   */
+  let recentTransactionsSeq = 0
+  async function refreshRecentTransactions(options: { force?: boolean } = {}) {
+    const seq = ++recentTransactionsSeq
     recentTransactions.loading = true
     try {
-      const res = await getPOSRecentTransactions({ limit: RECENT_TRANSACTIONS_LIMIT })
+      const res = options.force
+        ? await getPOSRecentTransactions({ limit: RECENT_TRANSACTIONS_LIMIT }, { force: true })
+        : await getPOSRecentTransactions({ limit: RECENT_TRANSACTIONS_LIMIT })
+      if (seq !== recentTransactionsSeq) return
       const items = res.data?.transactions || []
       recentTransactions.items = items
       // total 缺漏（舊版後端）時退回顯示筆數，至少不會顯示成 0 張
@@ -652,11 +730,12 @@ export function usePOSCheckout() {
       recentTransactions.truncated = res.data?.truncated ?? false
       recentTransactions.error = false
     } catch {
+      if (seq !== recentTransactionsSeq) return
       // fail-visible（P3-05）：清單保留（既有收據仍需可重印），但立錯誤旗標讓 UI
       // 明講「這份清單可能不是最新」，避免櫃台在 409 提示後看不到新交易卻以為沒收到。
       recentTransactions.error = true
     } finally {
-      recentTransactions.loading = false
+      if (seq === recentTransactionsSeq) recentTransactions.loading = false
     }
   }
 

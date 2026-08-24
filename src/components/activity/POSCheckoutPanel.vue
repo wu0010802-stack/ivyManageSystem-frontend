@@ -3,7 +3,7 @@
     <POSDailySummaryBar
       :data="dailySummary.data"
       :error="dailySummary.error"
-      @retry="refreshDailySummary"
+      @retry="handleDailySummaryRetry"
     />
 
     <div class="pos-panel-wrap__body">
@@ -61,11 +61,14 @@
             僅顯示最新 {{ recentTransactions.items.length }} 筆，完整清單請至「POS 日結簽核」查看
           </el-tag>
         </div>
+        <!-- 送出期間停用（CONC-03）：這顆刷新與結帳後的刷新是同一把 dedupe key，
+             在途時會把結帳後的刷新吞成「結帳前」的快照，彙總條就少算本筆。 -->
         <el-button
           size="small"
           :icon="RefreshRight"
           :loading="recentTransactions.loading"
-          @click="refreshRecentTransactions"
+          :disabled="submitting"
+          @click="refreshRecentTransactions()"
         >
           重新整理
         </el-button>
@@ -197,13 +200,14 @@
         <el-button @click="receiptDialogVisible = false">關閉</el-button>
         <!-- 明確傳 reprint：is_reprint 為真（來自 reprintTransaction）代表這顆按鈕
              是再印一次、標補印；一般結帳成功後首次點擊視為本收據的正本列印
-             （②收款改造起不再自動列印，改由此按鈕手動觸發）。不可寫成
-             @click="printReceipt"——那會把 MouseEvent 當 options 傳進去。 -->
+             （②收款改造起不再自動列印，改由此按鈕手動觸發）。第二次以後改標補印
+             （FECASH-06）。不可寫成 @click="printReceipt"——那會把 MouseEvent
+             當 options 傳進去。 -->
         <el-button
           type="primary"
-          @click="printReceipt({ reprint: !!lastReceipt?.is_reprint })"
+          @click="handlePrintReceipt"
         >
-          {{ lastReceipt?.is_reprint ? '重印收據' : '列印收據' }}
+          {{ printButtonLabel }}
         </el-button>
       </template>
     </el-dialog>
@@ -293,6 +297,51 @@ const receiptTotalAmount = computed(() => primaryReceiptItem.value?.total_amount
 const receiptRemaining = computed(() =>
   Math.max(0, receiptTotalAmount.value - receiptPaidAfter.value)
 )
+
+// FECASH-06（2026-08-24）：同一張收據在對話框裡被連按兩次「列印收據」時，第二次
+// 以後仍送 reprint=false，於是市面上出現兩張外觀完全相同的正本，後端稽核也記成兩次
+// 「列印」而非「補印」。用一個「這張收據已經印過」旗標分流。
+// ⚠ 2026-08-15 才修好反向的 bug（首印被誤標補印）：**首次列印必須是 reprint=false**，
+// 旗標只在列印成功後才立起來（printReceipt 回 false 代表 PDF 沒印出來，不算首印）。
+const receiptPrinted = ref(false)
+// 換一張收據（結帳成功、或從交易列表重印）就重置，避免下一張收據一開始就被當補印。
+watch(lastReceipt, () => {
+  receiptPrinted.value = false
+})
+
+// 從交易列表重印進來的收據（is_reprint）本來就是補印，維持既有「重印收據」文案。
+const isReprintSource = computed((): boolean => !!lastReceipt.value?.is_reprint)
+const printAsReprint = computed((): boolean => isReprintSource.value || receiptPrinted.value)
+const printButtonLabel = computed((): string => {
+  if (isReprintSource.value) return '重印收據'
+  return receiptPrinted.value ? '補印收據' : '列印收據'
+})
+
+// 列印在途旗標：連點兩次時第二次不再送出（避免同時開兩個 PDF 分頁）。
+const printing = ref(false)
+
+async function handlePrintReceipt() {
+  if (printing.value) return
+  printing.value = true
+  const asReprint = printAsReprint.value
+  // 樂觀立旗標：即使使用者在 await 期間再點一次，第二次也已經是補印而非正本。
+  receiptPrinted.value = true
+  try {
+    const ok = await printReceipt({ reprint: asReprint })
+    // 首印失敗（沒真的印出正本）就把旗標放回去，否則補救的那次會被誤標補印，
+    // 家長手上永遠拿不到未標補印的正本。
+    if (ok === false && !asReprint) receiptPrinted.value = false
+  } finally {
+    printing.value = false
+  }
+}
+
+// 送出期間不重整日結（CONC-03）：與「重新整理」按鈕同理，在途的刷新會把結帳後的
+// 刷新吞成結帳前的快照。POSDailySummaryBar 沒有 disabled 介面，故在此擋下。
+function handleDailySummaryRetry() {
+  if (submitting.value) return
+  refreshDailySummary()
+}
 
 function handleToggle(row: Record<string, unknown>, studentName: string) {
   selectItem(row, studentName)

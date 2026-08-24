@@ -725,6 +725,9 @@ export interface paths {
          *     - `confirm_close_today`（P2-05）：簽核今日需明示確認。
          *     - `expected_net_total` / `expected_transaction_count`（P2-01）：樂觀鎖，
          *       與後端重算不符即 409。
+         *
+         *     一道職務分離硬守衛（AUTHZ-03）：本日若曾被解鎖，且簽核人就是最近一次的
+         *     解鎖人 → 403（唯一例外：該次解鎖走 admin override 且本人為 admin，見內文）。
          */
         post: operations["approve_daily_close_api_activity_pos_daily_close__date_str__post"];
         /**
@@ -734,6 +737,9 @@ export interface paths {
          *     Why: 解鎖會刪 snapshot，原簽核者可重簽不同金額；無原因/無原 snapshot 摘要的解鎖
          *     不利事後追蹤。本端點要求填寫具體原因，並將原 payment_total/refund_total/net_total
          *     凍結於 ApprovalLog.comment 與 audit_changes，便於對帳查核。
+         *
+         *     一般 4-eye 路徑的兩道身分守衛：解鎖人 ≠ 原簽核人，且解鎖人 ≠ 當日 POS
+         *     收銀者（AUTHZ-03）。兩者皆可由 admin override 逃生口繞過（留痕）。
          */
         delete: operations["unlock_daily_close_api_activity_pos_daily_close__date_str__delete"];
         options?: never;
@@ -965,12 +971,36 @@ export interface paths {
         /**
          * List Semester Signoffs
          * @description 列出當期簽收流水（含作廢列）＋未作廢累計。
+         *
+         *     ACTIVITY_READ 即可看金額（對帳需要），但經手人與作廢原因僅
+         *     ACTIVITY_PAYMENT_APPROVE 可見（AUTHZ-05，遮罩見 `_serialize_signoff`）。
          */
         get: operations["list_semester_signoffs_api_activity_pos_semester_signoffs_get"];
         put?: never;
         /**
          * Create Semester Signoff
          * @description 登記一筆整筆簽收。signed_by 取當前登入者，不信任前端。
+         *
+         *     **重送冪等（CONC-01）**：後端已 commit 但回應在網路端遺失時（冷啟、proxy
+         *     timeout、Wi-Fi 斷線），對話框仍開著、金額還在，使用者自然再按一次；帳本
+         *     因此出現兩列相同金額，`signoff_total` 翻倍，學期未簽收差額直接少算一半。
+         *     防護分兩層：
+         *
+         *     1. `_acquire_semester_signoff_lock` 序列化「同租戶 × 同學期」的登記，讓
+         *        下面的查重不會被並發重送穿過（PG only，SQLite no-op）。
+         *     2. 鎖內回查「同學年 + 同學期 + 同金額 + 同簽收人 + 未作廢 + signed_at 在
+         *        最近 `_SIGNOFF_REPLAY_WINDOW_SECONDS` 秒內」的列：存在即視為重送，
+         *        **原樣回傳該列**（replay，不新增），並留 logger.info 供維運辨識。
+         *
+         *     **已知取捨**：窗口內「刻意登記兩筆完全相同金額的交款」會被判成重試而只
+         *     留一列。實務上會計整筆交款不會在兩分鐘內重複同額；真要補登第二筆，等窗口
+         *     過或改動金額/作廢重開即可（`test_same_amount_outside_window_creates_new_row`
+         *     /`test_voided_row_is_not_replayed` 守住這兩條出路）。
+         *
+         *     **為什麼不用 idempotency_key 欄位**：那是更精準的做法（POS checkout 即用
+         *     此法），但需要新欄位＋新 unique index＝一支 alembic migration。本批次的
+         *     落地決定是零 migration，故改用「鎖 + 窗口內容比對」這個不需 schema 變更
+         *     的等效防護；日後若要升級為 key-based，本函式的臨界區已經備妥。
          */
         post: operations["create_semester_signoff_api_activity_pos_semester_signoffs_post"];
         delete?: never;
@@ -992,6 +1022,10 @@ export interface paths {
         /**
          * Void Semester Signoff
          * @description 作廢一筆簽收（軟刪，必填原因）。已作廢再作廢回 409。
+         *
+         *     以 id 定位時**必帶 tenant_id**（TENANT-01）：id 是全庫序列，缺租戶條件時
+         *     他租戶的簽收列可被本租戶作廢（對方帳本被改、對方 unsigned_gap 變動）。
+         *     找不到一律 404，不洩漏「這個 id 存在但不是你的」。
          */
         delete: operations["void_semester_signoff_api_activity_pos_semester_signoffs__signoff_id__delete"];
         options?: never;
@@ -15923,6 +15957,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shifts/copy-month": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Month Assignments
+         * @description 整月複製週排班（單一 transaction、封存月保護、冪等）。
+         *
+         *     週配對＝來源月與目標月各取「週一落在該月」的清單，按 index 配對、
+         *     取 min 截斷（與前端 getMonthWeeks 一致）。只動 ShiftAssignment，
+         *     每日調班（DailyShift）不受影響。dry_run=true 回報預估不落地。
+         */
+        post: operations["copy_month_assignments_api_shifts_copy_month_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shifts/daily": {
         parameters: {
             query?: never;
@@ -15938,7 +15996,10 @@ export interface paths {
         put?: never;
         /**
          * Upsert Daily Shift
-         * @description 新增或更新每日排班（支援 UPSERT）
+         * @description 新增或更新每日排班（支援 UPSERT；day_off=true 落明確排休列）。
+         *
+         *     回傳實際落地的列（DailyShiftOut），取代舊的純 message 回應——排休列的
+         *     shift_type_id 為 null，前端據此渲染三態。
          */
         post: operations["upsert_daily_shift_api_shifts_daily_post"];
         delete?: never;
@@ -15959,7 +16020,13 @@ export interface paths {
         post?: never;
         /**
          * Delete Daily Shift
-         * @description 刪除每日排班（恢復為週排班或預設）
+         * @description 刪除每日排班列＝**恢復繼承**（週排班或員工預設班別）。
+         *
+         *     三態語意（與 POST /daily 對偶）：
+         *     - 有列且 shift_type_id 非 NULL → 指定日班
+         *     - 有列且 shift_type_id 為 NULL → 明確排休（POST /daily day_off=true 產生）
+         *     - 無列 → 繼承週排班／預設；本端點就是把任一種列刪掉回到這一態。
+         *     要表達「該日休假」請用 POST /daily 的 day_off=true，不要刪列。
          */
         delete: operations["delete_daily_shift_api_shifts_daily__shift_id__delete"];
         options?: never;
@@ -16007,6 +16074,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shifts/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Roster
+         * @description 排班工作台專用最小員工名冊（2026-08-19 P0）。
+         *
+         *     取代前端過去用 GET /employees（EMPLOYEES_READ＋全量 EmployeeOut）支撐
+         *     排班頁的做法：權限解耦（只需 SCHEDULE）、欄位收斂到排班必要 9 欄
+         *     （白名單見 ScheduleRosterOut docstring）、classroom_name 由本端點 join
+         *     填值（GET /employees 列表端點不填此欄，是排班頁班級欄整欄「-」的根因）。
+         */
+        get: operations["get_schedule_roster_api_shifts_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shifts/swap-history": {
         parameters: {
             query?: never;
@@ -16034,7 +16126,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Shift Types */
+        /**
+         * List Shift Types
+         * @description 列出當前租戶班別模板。
+         *
+         *     include_usage=true 時每筆附三張引用表計數（每週排班／每日調班／換班快照），
+         *     供設定頁顯示「使用中的排班數」與停用/刪除防呆；計數即時查詢不進快取。
+         */
         get: operations["list_shift_types_api_shifts_types_get"];
         put?: never;
         /** Create Shift Type */
@@ -17708,6 +17806,9 @@ export interface paths {
         /**
          * Upsert Config
          * @description 新增或更新單筆設定（upsert）。
+         *
+         *     金流管控門檻（`FINANCE_CONTROLLED_CONFIG_KEYS`）另需金流簽核權，見
+         *     `require_finance_control_permission`。
          */
         put: operations["upsert_config_api_system_configs__config_key__put"];
         post?: never;
@@ -23426,6 +23527,65 @@ export interface components {
             /** Target Semester */
             target_semester: number;
         };
+        /**
+         * CopyMonthRequest
+         * @description 整月週排班複製請求（取代前端逐週迴圈呼叫的部分成功黑洞）。
+         *
+         *     - overwrite：目標週既有排班以來源覆蓋
+         *     - merge：只補目標週沒有排班的員工週
+         *     - skip：目標月已有**任何**排班的員工整員跳過
+         */
+        CopyMonthRequest: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Mode
+             * @default overwrite
+             * @enum {string}
+             */
+            mode: "overwrite" | "merge" | "skip";
+            /** Source Month */
+            source_month: number;
+            /** Source Year */
+            source_year: number;
+            /** Target Month */
+            target_month: number;
+            /** Target Year */
+            target_year: number;
+        };
+        /**
+         * CopyMonthResultOut
+         * @description POST /copy-month 回傳。
+         *
+         *     applied=false（dry_run 或被封存擋下）時 created/updated/skipped 為預估值；
+         *     blocked 列出被薪資封存擋下的（員工, 月份）人可讀訊息。
+         */
+        CopyMonthResultOut: {
+            /** Applied */
+            applied: boolean;
+            /**
+             * Blocked
+             * @default []
+             */
+            blocked: string[];
+            /** Created */
+            created: number;
+            /** Mode */
+            mode: string;
+            /** Skipped */
+            skipped: number;
+            /** Source Month */
+            source_month: string;
+            /** Target Month */
+            target_month: string;
+            /** Updated */
+            updated: number;
+            /** Weeks Paired */
+            weeks_paired: number;
+        };
         /** CopyYesterdayPayload */
         CopyYesterdayPayload: {
             /** Classroom Id */
@@ -24093,17 +24253,30 @@ export interface components {
         };
         /**
          * DailyShiftCreate
-         * @description 每日排班（調班）請求
+         * @description 每日排班（調班）三態契約（2026-08-19 P0）。
+         *
+         *     - shift_type_id=<int>（day_off=False）→ 指定日班
+         *     - day_off=True（shift_type_id 必為空）→ 明確排休：DB 落 shift_type_id=NULL
+         *       的列（models/shift.py 自始支援，過去只有換班 accept 內部路徑寫得出來）
+         *     - 「恢復繼承週排班」不走本 schema——用 DELETE /daily/{shift_id} 刪列表達
+         *
+         *     day_off 必須顯式為 True 才能落排休，兩者皆空回 422：防止 caller 忘了帶
+         *     shift_type_id 被誤存成排休。
          */
         DailyShiftCreate: {
             /** Date */
             date: string;
+            /**
+             * Day Off
+             * @default false
+             */
+            day_off: boolean;
             /** Employee Id */
             employee_id: number;
             /** Notes */
             notes?: string | null;
             /** Shift Type Id */
-            shift_type_id: number;
+            shift_type_id?: number | null;
         };
         /**
          * DailyShiftOut
@@ -32604,12 +32777,33 @@ export interface components {
          *     by_method 為 list（依付款方式聚合，員工只可輸入「現金」）；
          *     cash_warning=True 時前端顯示「請存銀行」橘色提示
          *     （cash_in_drawer >= cash_warning_threshold）。
+         *
+         *     ⚠ payment_total / refund_total / net 是**所有付款方式**的總額（含
+         *     `payment_method='系統補齊'` 的帳務調整，那些沒有現金經手），保留原語義供
+         *     既有 caller 使用。**櫃台點鈔要對的是抽屜**，請用 cash_* 三欄
+         *     （2026-08-24 修正：收銀頁彙總條原本主顯示含非現金的總額，且那筆沖帳在
+         *     「今日交易」清單被濾掉查不到，櫃台會誤判短溢）。
          */
         PosDailySummaryOut: {
             /** By Method */
             by_method: components["schemas"]["PosDailySummaryByMethodItemOut"][];
             /** Cash In Drawer */
             cash_in_drawer: number;
+            /**
+             * Cash Net
+             * @default 0
+             */
+            cash_net: number;
+            /**
+             * Cash Payment Total
+             * @default 0
+             */
+            cash_payment_total: number;
+            /**
+             * Cash Refund Total
+             * @default 0
+             */
+            cash_refund_total: number;
             /** Cash Warning */
             cash_warning: boolean;
             /** Cash Warning Threshold */
@@ -32623,6 +32817,16 @@ export interface components {
             is_approved: boolean;
             /** Net */
             net: number;
+            /**
+             * Noncash Payment Total
+             * @default 0
+             */
+            noncash_payment_total: number;
+            /**
+             * Noncash Refund Total
+             * @default 0
+             */
+            noncash_refund_total: number;
             /** Payment Count */
             payment_count: number;
             /** Payment Total */
@@ -32806,6 +33010,11 @@ export interface components {
             class_name: string;
             /** Group Owed Total */
             group_owed_total: number;
+            /**
+             * Group Pending Total
+             * @default 0
+             */
+            group_pending_total: number;
             /** Registrations */
             registrations: components["schemas"]["PosOutstandingRegistrationItemOut"][];
             /** Student Key */
@@ -33140,10 +33349,23 @@ export interface components {
          * PosSemesterReconciliationTotalsOut
          * @description GET /pos/semester-reconciliation totals 區段。
          *
-         *     signoff_total/unsigned_gap（2026-08-16 新增）：老闆學期簽收帳本累計，與
-         *     POS 淨實收（approved_paid_amount + pending_paid_amount）的差額。
          *     pending_review_count/pending_review_amount：待審核報名（系統比對非自動成功）
          *     的待確認應收，**不併入** total_amount，避免審核拖延造成少收。
+         *
+         *     ⚠ 兩種母體並存，勿混用（2026-08-24 P1 修正）：
+         *     - `approved_paid_amount` / `pending_paid_amount` / `offline_paid_amount`
+         *       是**套用畫面篩選（班級／繳費狀態／簽核狀態／review_status）並受
+         *       _POS_LIST_QUERY_LIMIT 截斷影響**的合計，只供下方明細表的小計使用。
+         *     - `term_cash_net_paid` / `term_noncash_net_paid` / `signoff_total` /
+         *       `unsigned_gap` 是**全學期、不受任何篩選與截斷影響**的稽核指標。
+         *       簽收帳本記的是「會計整筆交款」，本身沒有班級或狀態維度，拿篩選後的合計
+         *       去減它必然得到假帳差（舊 bug：篩一個班就跳出「簽收超過 POS 實收」）。
+         *     - `unsigned_gap = term_cash_net_paid - signoff_total`。
+         *       基準只計 `payment_method='現金'`：POS 結帳硬鎖現金（`pos.py` checkout
+         *       守衛），而簽收比對的是實體交款；`payment_method='系統補齊'` 那些帳務調整
+         *       （批次標記已繳費／標記未繳費沖帳／移除用品／退課 force_refund／離園沖帳）
+         *       沒有任何現金經手，計入會讓差額兩個方向都算錯。非現金淨額另以
+         *       `term_noncash_net_paid` 呈現，資訊不丟失。
          */
         PosSemesterReconciliationTotalsOut: {
             /** Approved Paid Amount */
@@ -33156,6 +33378,11 @@ export interface components {
             by_payment_status: {
                 [key: string]: number;
             };
+            /**
+             * Filters Applied
+             * @default false
+             */
+            filters_applied: boolean;
             /** Offline Paid Amount */
             offline_paid_amount: number;
             /** Outstanding Amount */
@@ -33181,6 +33408,16 @@ export interface components {
              * @default 0
              */
             signoff_total: number;
+            /**
+             * Term Cash Net Paid
+             * @default 0
+             */
+            term_cash_net_paid: number;
+            /**
+             * Term Noncash Net Paid
+             * @default 0
+             */
+            term_noncash_net_paid: number;
             /** Total Amount */
             total_amount: number;
             /**
@@ -35070,6 +35307,11 @@ export interface components {
             parent_phone?: string | null;
             /** Payment Status */
             payment_status: string;
+            /**
+             * Pending Amount
+             * @default 0
+             */
+            pending_amount: number;
             /** Pending Review */
             pending_review?: boolean | null;
             /** Query Token */
@@ -37174,6 +37416,35 @@ export interface components {
             worker_pid: number;
         };
         /**
+         * ScheduleRosterOut
+         * @description 排班工作台最小名冊單筆 (GET /roster)。
+         *
+         *     欄位白名單即 PII 邊界（2026-08-19 P0）：排班只需要「這個人是誰、在哪個
+         *     班、什麼職類、在不在職、到離職界」。**勿加**地址／身分證／銀行／薪資／
+         *     聯絡電話等欄位——那些屬 EMPLOYEES_READ 的 EmployeeOut，不屬排班名冊；
+         *     tests/test_shifts_roster_2026_08_19.py 鎖此白名單。
+         */
+        ScheduleRosterOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Hire Date */
+            hire_date?: string | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Resign Date */
+            resign_date?: string | null;
+            /** Staff Role Category */
+            staff_role_category?: string | null;
+            /** Title Name */
+            title_name?: string | null;
+        };
+        /**
          * SchedulersHealthOut
          * @description GET /health/schedulers — UptimeRobot 公開 endpoint。
          *
@@ -38022,6 +38293,13 @@ export interface components {
         };
         /** ShiftTypeCreate */
         ShiftTypeCreate: {
+            /**
+             * Break Minutes
+             * @default 0
+             */
+            break_minutes: number;
+            /** Color */
+            color?: string | null;
             /** Name */
             name: string;
             /**
@@ -38039,6 +38317,13 @@ export interface components {
          * @description 班別模板單筆 (GET /types list / POST /types / PUT /types/{id})。
          */
         ShiftTypeOut: {
+            /**
+             * Break Minutes
+             * @default 0
+             */
+            break_minutes: number;
+            /** Color */
+            color?: string | null;
             /** Id */
             id: number;
             /** Is Active */
@@ -38047,6 +38332,7 @@ export interface components {
             name: string;
             /** Sort Order */
             sort_order: number;
+            usage?: components["schemas"]["ShiftTypeUsageOut"] | null;
             /** Work End */
             work_end: string;
             /** Work Start */
@@ -38054,6 +38340,10 @@ export interface components {
         };
         /** ShiftTypeUpdate */
         ShiftTypeUpdate: {
+            /** Break Minutes */
+            break_minutes?: number | null;
+            /** Color */
+            color?: string | null;
             /** Is Active */
             is_active?: boolean | null;
             /** Name */
@@ -38064,6 +38354,23 @@ export interface components {
             work_end?: string | null;
             /** Work Start */
             work_start?: string | null;
+        };
+        /**
+         * ShiftTypeUsageOut
+         * @description 班別被引用的計數 (GET /types?include_usage=true 子物件)。
+         *
+         *     供設定頁顯示「使用中的排班數」與停用/刪除防呆 UX；delete 端點的
+         *     使用中保護仍在後端獨立計數，不依賴此顯示值。
+         */
+        ShiftTypeUsageOut: {
+            /** Assignments */
+            assignments: number;
+            /** Daily */
+            daily: number;
+            /** Swaps */
+            swaps: number;
+            /** Total */
+            total: number;
         };
         /** SignBodyIn */
         SignBodyIn: {
@@ -66735,6 +67042,10 @@ export interface operations {
             query: {
                 /** @description Calculate for which month */
                 month: number;
+                /** @description use_snapshot=false 時必填（≥10 字）：改用現行主檔的原因，入審計 */
+                reason?: string | null;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（需 reason ≥10 字，寫審計） */
+                use_snapshot?: boolean;
                 /** @description Calculate for which year */
                 year: number;
             };
@@ -66768,6 +67079,10 @@ export interface operations {
         parameters: {
             query: {
                 month: number;
+                /** @description use_snapshot=false 時必填（≥10 字）：改用現行主檔的原因，入審計 */
+                reason?: string | null;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（需 reason ≥10 字，寫審計） */
+                use_snapshot?: boolean;
                 year: number;
             };
             header?: never;
@@ -67578,6 +67893,39 @@ export interface operations {
             };
         };
     };
+    copy_month_assignments_api_shifts_copy_month_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyMonthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyMonthResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_daily_shifts_api_shifts_daily_get: {
         parameters: {
             query: {
@@ -67630,7 +67978,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DeleteResultOut"];
+                    "application/json": components["schemas"]["DailyShiftOut"];
                 };
             };
             /** @description Validation Error */
@@ -67731,6 +68079,37 @@ export interface operations {
             };
         };
     };
+    get_schedule_roster_api_shifts_roster_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRosterOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_swap_history_api_shifts_swap_history_get: {
         parameters: {
             query?: {
@@ -67766,7 +68145,9 @@ export interface operations {
     };
     list_shift_types_api_shifts_types_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_usage?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -67780,6 +68161,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShiftTypeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

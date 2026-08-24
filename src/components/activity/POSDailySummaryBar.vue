@@ -50,6 +50,21 @@
       </template>
     </el-alert>
 
+    <el-alert
+      v-if="noncashTotal > 0"
+      type="info"
+      :closable="false"
+      show-icon
+      class="pos-daily-bar__noncash-alert"
+    >
+      <template #title>
+        本日另有帳務調整（非現金）收 {{ formatTWD(data?.noncash_payment_total ?? 0) }} ·
+        退 {{ formatTWD(data?.noncash_refund_total ?? 0) }}，
+        來自退課沖帳／批次標記已繳費等系統作業，<strong>不影響抽屜現金</strong>，
+        也不會出現在下方「今日交易」清單。
+      </template>
+    </el-alert>
+
     <StatStrip :items="stripItems" />
   </div>
 </template>
@@ -87,18 +102,45 @@ const countText = computed((): string => {
   return `${props.data.payment_count ?? 0} / ${props.data.refund_count ?? 0}`
 })
 
+// MONEY-03（2026-08-24）：主數字要對得上抽屜。
+// payment_total / refund_total / net 是**所有付款方式**的總額，含
+// payment_method='系統補齊' 的帳務調整（退課 force_refund、離園沖帳等）——那些沒有
+// 任何現金經手，而且因為沒有收據編號，「今日交易」清單預設也查不到。櫃台照舊主數字
+// 點鈔會誤判短溢，還找不到那筆是誰。
+//
+// 新欄位缺席時（前後端部署有時間差）退回舊行為並拿掉「現金」字樣：顯示 0 會讓櫃台
+// 以為今天沒收到錢，比顯示含沖帳的總額更糟。
+const hasCashBreakdown = computed((): boolean => props.data?.cash_payment_total !== undefined)
+
+const noncashTotal = computed((): number =>
+  Math.abs(props.data?.noncash_payment_total ?? 0) +
+  Math.abs(props.data?.noncash_refund_total ?? 0),
+)
+
 // 退款只在真的發生時上警示色；淨額是收銀員一眼要看的錨點。
 // 無資料（「—」）時一律不上色，避免把缺值染成有語意的狀態。
-const stripItems = computed((): StatStripItem[] => [
-  { label: '今日收款', value: amountText(props.data?.payment_total) },
-  {
-    label: '今日退款',
-    value: amountText(props.data?.refund_total),
-    tone: props.data && (props.data.refund_total ?? 0) > 0 ? 'warning' : undefined,
-  },
-  { label: '淨額', value: amountText(props.data?.net), emphasis: true },
-  { label: '筆數（收/退）', value: countText.value },
-])
+const stripItems = computed((): StatStripItem[] => {
+  const d = props.data
+  const cashMode = hasCashBreakdown.value
+  const refundValue = cashMode ? d?.cash_refund_total : d?.refund_total
+  return [
+    {
+      label: cashMode ? '今日現金收款' : '今日收款',
+      value: amountText(cashMode ? d?.cash_payment_total : d?.payment_total),
+    },
+    {
+      label: cashMode ? '今日現金退款' : '今日退款',
+      value: amountText(refundValue),
+      tone: d && (refundValue ?? 0) > 0 ? 'warning' : undefined,
+    },
+    {
+      label: cashMode ? '抽屜淨額' : '淨額',
+      value: amountText(cashMode ? d?.cash_net : d?.net),
+      emphasis: true,
+    },
+    { label: '筆數（收/退）', value: countText.value },
+  ]
+})
 </script>
 
 <style scoped>
@@ -108,6 +150,7 @@ const stripItems = computed((): StatStripItem[] => [
   gap: 12px;
 }
 
+.pos-daily-bar__noncash-alert :deep(.el-alert__content),
 .pos-daily-bar__cash-alert :deep(.el-alert__content),
 .pos-daily-bar__approved-alert :deep(.el-alert__content),
 .pos-daily-bar__error-alert :deep(.el-alert__content) {
