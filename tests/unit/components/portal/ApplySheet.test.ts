@@ -48,19 +48,19 @@ describe('ApplySheet — 申請集中入口', () => {
     expect(wrapper.findAll('.apply-sheet__row')).toHaveLength(4)
   })
 
-  it('(b) 點列 push 對應路由並關閉', async () => {
+  it('(b) 點列 push 對應路由（表單頁帶 ?new=1 直開表單）並關閉', async () => {
     const wrapper = doMount()
     const rows = wrapper.findAll('.apply-sheet__row')
     const byLabel = (label: string) => rows.find((r) => r.text().includes(label))
 
     await byLabel('請假申請')!.trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/portal/leave')
+    expect(routerPush).toHaveBeenCalledWith('/portal/leave?new=1')
 
     await byLabel('加班申請')!.trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/portal/overtime')
+    expect(routerPush).toHaveBeenCalledWith('/portal/overtime?new=1')
 
     await byLabel('補打卡申請')!.trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/portal/punch-correction')
+    expect(routerPush).toHaveBeenCalledWith('/portal/punch-correction?new=1')
 
     await byLabel('異常確認')!.trigger('click')
     expect(routerPush).toHaveBeenCalledWith('/portal/anomalies')

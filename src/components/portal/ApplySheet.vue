@@ -30,10 +30,11 @@ interface ApplyItem {
   path: string
 }
 
+// 表單頁帶 ?new=1：進頁自動開表單 sheet（Phase 3 deep-link），異常確認為列表頁不帶
 const ITEMS: ApplyItem[] = [
-  { kind: 'leave', label: '請假申請', desc: '特休・病假・事假・家庭照顧假', path: '/portal/leave' },
-  { kind: 'overtime', label: '加班申請', desc: '平日延長・假日活動支援', path: '/portal/overtime' },
-  { kind: 'punch', label: '補打卡申請', desc: '忘刷卡・缺卡補登', path: '/portal/punch-correction' },
+  { kind: 'leave', label: '請假申請', desc: '特休・病假・事假・家庭照顧假', path: '/portal/leave?new=1' },
+  { kind: 'overtime', label: '加班申請', desc: '平日延長・假日活動支援', path: '/portal/overtime?new=1' },
+  { kind: 'punch', label: '補打卡申請', desc: '忘刷卡・缺卡補登', path: '/portal/punch-correction?new=1' },
   { kind: 'anomaly', label: '異常確認', desc: '出勤異常紀錄確認', path: '/portal/anomalies' },
 ]
 
