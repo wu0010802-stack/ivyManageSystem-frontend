@@ -44,3 +44,161 @@ export const updateFeeAdjustment = (
 ) => api.put(`/fees/adjustments/${id}`, payload).then((res) => res.data)
 export const deleteFeeAdjustment = (id: number) =>
   api.delete(`/fees/adjustments/${id}`).then((res) => res.data)
+
+// ============================================================================
+// SPEC-014：銀行對帳 / 銷帳碼 / 預繳款 / 現金交接 / 關帳
+// 型別自 OpenAPI codegen 下放（後端全數標 response_model）；沿用本檔自解包慣例。
+// ============================================================================
+
+// ===== 銷帳末四碼 =====
+export const getBillingCodes = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/billing-codes', 'get'>> =>
+  api.get('/fees/billing-codes', { params }).then((res) => res.data)
+export const suggestBillingCodes = (
+  payload: ApiBody<'/fees/billing-codes/suggest', 'post'>,
+): Promise<ApiResponse<'/fees/billing-codes/suggest', 'post'>> =>
+  api.post('/fees/billing-codes/suggest', payload).then((res) => res.data)
+export const activateBillingCodes = (
+  payload: ApiBody<'/fees/billing-codes/activate', 'post'>,
+): Promise<ApiResponse<'/fees/billing-codes/activate', 'post'>> =>
+  api.post('/fees/billing-codes/activate', payload).then((res) => res.data)
+export const deactivateBillingCode = (
+  id: number,
+  payload: ApiBody<'/fees/billing-codes/{assignment_id}/deactivate', 'post'>,
+) => api.post(`/fees/billing-codes/${id}/deactivate`, payload).then((res) => res.data)
+
+// ===== 永豐 CSV 匯入 =====
+export const previewBankImport = (
+  file: File,
+): Promise<ApiResponse<'/fees/bank-imports/preview', 'post'>> => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post('/fees/bank-imports/preview', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((res) => res.data)
+}
+export const confirmBankImport = (
+  file: File,
+): Promise<ApiResponse<'/fees/bank-imports', 'post'>> => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post('/fees/bank-imports', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((res) => res.data)
+}
+export const getBankImports = (): Promise<ApiResponse<'/fees/bank-imports', 'get'>> =>
+  api.get('/fees/bank-imports').then((res) => res.data)
+
+// ===== 銀行交易工作台 =====
+export const getBankTransactions = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/bank-transactions', 'get'>> =>
+  api.get('/fees/bank-transactions', { params }).then((res) => res.data)
+export const getTransactionCandidates = (
+  txnId: number,
+): Promise<ApiResponse<'/fees/bank-transactions/{txn_id}/candidates', 'get'>> =>
+  api.get(`/fees/bank-transactions/${txnId}/candidates`).then((res) => res.data)
+export const allocateTransaction = (
+  txnId: number,
+  payload: ApiBody<'/fees/bank-transactions/{txn_id}/allocate', 'post'>,
+): Promise<ApiResponse<'/fees/bank-transactions/{txn_id}/allocate', 'post'>> =>
+  api.post(`/fees/bank-transactions/${txnId}/allocate`, payload).then((res) => res.data)
+export const ignoreTransaction = (
+  txnId: number,
+  payload: ApiBody<'/fees/bank-transactions/{txn_id}/ignore', 'post'>,
+) => api.post(`/fees/bank-transactions/${txnId}/ignore`, payload).then((res) => res.data)
+export const reverseTransaction = (
+  txnId: number,
+  payload: ApiBody<'/fees/bank-transactions/{txn_id}/reverse', 'post'>,
+) => api.post(`/fees/bank-transactions/${txnId}/reverse`, payload).then((res) => res.data)
+
+// ===== 現金收款 / 收款流水 =====
+export const createCashReceipt = (
+  payload: ApiBody<'/fees/cash-receipts', 'post'>,
+): Promise<ApiResponse<'/fees/cash-receipts', 'post'>> =>
+  api.post('/fees/cash-receipts', payload).then((res) => res.data)
+export const getFeeReceipts = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/receipts', 'get'>> =>
+  api.get('/fees/receipts', { params }).then((res) => res.data)
+
+// ===== 預繳款 =====
+export const getPrepayments = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/prepayments', 'get'>> =>
+  api.get('/fees/prepayments', { params }).then((res) => res.data)
+export const getPrepaymentMovements = (
+  creditId: number,
+): Promise<ApiResponse<'/fees/prepayments/{credit_id}/movements', 'get'>> =>
+  api.get(`/fees/prepayments/${creditId}/movements`).then((res) => res.data)
+export const applyPrepayment = (
+  creditId: number,
+  payload: ApiBody<'/fees/prepayments/{credit_id}/apply', 'post'>,
+) => api.post(`/fees/prepayments/${creditId}/apply`, payload).then((res) => res.data)
+export const transferPrepayment = (creditId: number) =>
+  api.post(`/fees/prepayments/${creditId}/transfer`).then((res) => res.data)
+export const reversePrepaymentApply = (
+  creditId: number,
+  payload: ApiBody<'/fees/prepayments/{credit_id}/reverse', 'post'>,
+) => api.post(`/fees/prepayments/${creditId}/reverse`, payload).then((res) => res.data)
+
+// ===== 預繳現金退款 =====
+export const getPrepaymentRefunds = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/prepayment-refunds', 'get'>> =>
+  api.get('/fees/prepayment-refunds', { params }).then((res) => res.data)
+export const createPrepaymentRefund = (
+  payload: ApiBody<'/fees/prepayment-refunds', 'post'>,
+) => api.post('/fees/prepayment-refunds', payload).then((res) => res.data)
+export const approvePrepaymentRefund = (refundId: number) =>
+  api.post(`/fees/prepayment-refunds/${refundId}/approve`).then((res) => res.data)
+export const completePrepaymentRefund = (
+  refundId: number,
+  payload: ApiBody<'/fees/prepayment-refunds/{refund_id}/complete', 'post'>,
+) => api.post(`/fees/prepayment-refunds/${refundId}/complete`, payload).then((res) => res.data)
+export const cancelPrepaymentRefund = (
+  refundId: number,
+  payload: ApiBody<'/fees/prepayment-refunds/{refund_id}/cancel', 'post'>,
+) => api.post(`/fees/prepayment-refunds/${refundId}/cancel`, payload).then((res) => res.data)
+
+// ===== 現金交接 =====
+export const getCashHandovers = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/cash-handovers', 'get'>> =>
+  api.get('/fees/cash-handovers', { params }).then((res) => res.data)
+export const submitCashHandover = (batchId: number) =>
+  api.post(`/fees/cash-handovers/${batchId}/submit`).then((res) => res.data)
+export const confirmCashHandover = (
+  batchId: number,
+  payload: ApiBody<'/fees/cash-handovers/{batch_id}/confirm', 'post'>,
+) => api.post(`/fees/cash-handovers/${batchId}/confirm`, payload).then((res) => res.data)
+export const reopenCashHandover = (
+  batchId: number,
+  payload: ApiBody<'/fees/cash-handovers/{batch_id}/reopen', 'post'>,
+) => api.post(`/fees/cash-handovers/${batchId}/reopen`, payload).then((res) => res.data)
+
+// ===== 當期關帳 =====
+export const getCloseSummary = (
+  year: number,
+  month: number,
+): Promise<ApiResponse<'/fees/close-periods/summary', 'get'>> =>
+  api
+    .get('/fees/close-periods/summary', { params: { year, month } })
+    .then((res) => res.data)
+export const getClosePeriods = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/close-periods', 'get'>> =>
+  api.get('/fees/close-periods', { params }).then((res) => res.data)
+export const closePeriod = (
+  payload: ApiBody<'/fees/close-periods', 'post'>,
+): Promise<ApiResponse<'/fees/close-periods', 'post'>> =>
+  api.post('/fees/close-periods', payload).then((res) => res.data)
+export const reopenClosePeriod = (
+  closeId: number,
+  payload: ApiBody<'/fees/close-periods/{close_id}/reopen', 'post'>,
+) => api.post(`/fees/close-periods/${closeId}/reopen`, payload).then((res) => res.data)

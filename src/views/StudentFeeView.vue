@@ -27,6 +27,25 @@
       <el-tab-pane label="退費管理" name="refunds">
         <FeeRefundsTab :period-options="periodOptions" />
       </el-tab-pane>
+
+      <!-- ================================================================
+           SPEC-014：銀行對帳 / 預繳款 / 現金交接 / 關帳 / 銷帳碼
+      ================================================================ -->
+      <el-tab-pane label="銀行對帳" name="bankRecon" lazy>
+        <BankReconTab />
+      </el-tab-pane>
+      <el-tab-pane label="預繳款" name="prepayments" lazy>
+        <PrepaymentsTab />
+      </el-tab-pane>
+      <el-tab-pane label="現金交接" name="cashHandover" lazy>
+        <CashHandoverTab />
+      </el-tab-pane>
+      <el-tab-pane label="當期關帳" name="close" lazy>
+        <CloseTab />
+      </el-tab-pane>
+      <el-tab-pane label="銷帳碼" name="billingCodes" lazy>
+        <BillingCodesTab />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -41,6 +60,11 @@ import { useAllClassroomStore } from '@/stores/classroomAll'
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
+import BankReconTab from '@/components/fees/BankReconTab.vue'
+import PrepaymentsTab from '@/components/fees/PrepaymentsTab.vue'
+import CashHandoverTab from '@/components/fees/CashHandoverTab.vue'
+import CloseTab from '@/components/fees/CloseTab.vue'
+import BillingCodesTab from '@/components/fees/BillingCodesTab.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────

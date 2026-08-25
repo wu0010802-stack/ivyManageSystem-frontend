@@ -52,6 +52,23 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
   default: { name: 'FeeRefundsTab', template: '<div data-testid="fee-refunds-tab" />' },
 }))
 
+// SPEC-014 新頁籤：一律 stub（各自的 API 呼叫在 FeeReconTabs.test.ts 覆蓋）
+vi.mock('@/components/fees/BankReconTab.vue', () => ({
+  default: { name: 'BankReconTab', template: '<div data-testid="bank-recon-tab" />' },
+}))
+vi.mock('@/components/fees/PrepaymentsTab.vue', () => ({
+  default: { name: 'PrepaymentsTab', template: '<div data-testid="prepayments-tab" />' },
+}))
+vi.mock('@/components/fees/CashHandoverTab.vue', () => ({
+  default: { name: 'CashHandoverTab', template: '<div data-testid="cash-handover-tab" />' },
+}))
+vi.mock('@/components/fees/CloseTab.vue', () => ({
+  default: { name: 'CloseTab', template: '<div data-testid="close-tab" />' },
+}))
+vi.mock('@/components/fees/BillingCodesTab.vue', () => ({
+  default: { name: 'BillingCodesTab', template: '<div data-testid="billing-codes-tab" />' },
+}))
+
 // ── global stubs ───────────────────────────────────────────────────────────
 const GLOBAL_STUBS = {
   'el-tabs': { template: '<div><slot /></div>' },

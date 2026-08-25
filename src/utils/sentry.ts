@@ -43,6 +43,9 @@ const PII_KEY_SUBSTRINGS = [
   // 入學文件電子簽署（esign01，2026-08-11）：signature_data/signature_key 為簽名圖
   // base64/storage key，content_md 為快照含學生/家長姓名的自由文字（與 BE 同步）
   'signature_data', 'signature_key', 'content_md',
+  // 學費對帳（feerecon01，2026-08-25，SPEC-014）：銷帳編號為金融識別資訊；
+  // 銀行備註/付款人備註含姓名片段；退款領款人姓名為 PII（與 BE 同步）
+  'collection_number', 'collection_suffix', 'code_suffix', 'payer_note', 'recipient_name', 'memo',
 ]
 
 // 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：
