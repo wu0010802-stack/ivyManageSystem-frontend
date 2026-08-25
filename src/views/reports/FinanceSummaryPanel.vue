@@ -12,7 +12,7 @@ import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 import { downloadFile } from '@/utils/download'
 import { computeReportPeriod } from './useReportPeriod'
-import { buildTrendChartData, inProgressIndex } from './trendChart'
+import { buildTrendChartData, inProgressIndex, resolveTrendPalette, withAlpha, formatAxisTick } from './trendChart'
 import { sumTrendUpTo, futurePreloggedExpense, pctChange, type FinanceTrendRow } from './financeTrend'
 import type { ChartOptions } from 'chart.js'
 
@@ -126,13 +126,15 @@ const trendChartData = computed(() => {
   const refund = monthList.map(m => byMonth[m]?.refund || 0)
   const expense = monthList.map(m => byMonth[m]?.expense || 0)
   const net = monthList.map(m => byMonth[m]?.net || 0)
+  // 線色走 design tokens（稽核 C2）：與年度模式（buildTrendChartData 內部解析）同一來源
+  const pal = resolveTrendPalette()
   return {
     labels,
     datasets: [
-      { label: '收入', data: revenue, borderColor: '#67c23a', backgroundColor: 'rgba(103,194,58,0.1)', fill: true, tension: 0.3 },
-      { label: '退款', data: refund, borderColor: '#e6a23c', backgroundColor: 'rgba(230,162,60,0.1)', borderDash: [4, 4], tension: 0.3 },
-      { label: '支出', data: expense, borderColor: '#f56c6c', backgroundColor: 'rgba(245,108,108,0.1)', tension: 0.3 },
-      { label: '淨現金', data: net, borderColor: '#409eff', backgroundColor: 'rgba(64,158,255,0.1)', borderWidth: 3, tension: 0.3 },
+      { label: '收入', data: revenue, borderColor: pal.revenue, backgroundColor: withAlpha(pal.revenue, 0.1), fill: true, tension: 0.3 },
+      { label: '退款', data: refund, borderColor: pal.refund, backgroundColor: withAlpha(pal.refund, 0.1), borderDash: [4, 4], tension: 0.3 },
+      { label: '支出', data: expense, borderColor: pal.expense, backgroundColor: withAlpha(pal.expense, 0.1), tension: 0.3 },
+      { label: '淨現金', data: net, borderColor: pal.net, backgroundColor: withAlpha(pal.net, 0.1), borderWidth: 3, tension: 0.3 },
     ],
   }
 })
@@ -155,7 +157,7 @@ const trendChartOptions = {
     },
   },
   scales: {
-    y: { beginAtZero: false, ticks: { callback: (v: number | string) => '$' + (Number(v) / 1000).toFixed(0) + 'k' } },
+    y: { beginAtZero: false, ticks: { callback: (v: number | string) => formatAxisTick(v) } },
   },
 } as unknown as ChartOptions<'line'>
 
@@ -292,10 +294,11 @@ const exportXlsx = async () => {
       <el-col :xs="24" :lg="12">
         <el-card class="chart-card" shadow="hover">
           <template #header><span class="chart-title">收入分類</span></template>
+          <!-- DOM 渲染可直接吃 CSS 變數（稽核 C2：色彩走 design tokens，勿寫死 hex） -->
           <CategoryBarList
             v-if="hasRevenue"
             :items="data.revenue_by_category"
-            :colors="['#67c23a', '#409eff', '#9b59b6', '#e6a23c']"
+            :colors="['var(--color-success)', 'var(--color-info)', 'var(--color-info-darker)', 'var(--color-warning)']"
           />
           <el-empty v-else description="無收入資料" :image-size="60" />
         </el-card>
@@ -306,7 +309,7 @@ const exportXlsx = async () => {
           <CategoryBarList
             v-if="hasExpense"
             :items="data.expense_by_category"
-            :colors="['#f56c6c', '#e6a23c', '#909399', '#9b59b6']"
+            :colors="['var(--color-danger)', 'var(--color-warning)', 'var(--neutral-400)', 'var(--color-danger-darker)']"
           />
           <el-empty v-else description="無支出資料" :image-size="60" />
         </el-card>
