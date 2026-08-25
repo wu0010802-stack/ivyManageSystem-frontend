@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import type {
@@ -7,9 +7,10 @@ import type {
   EventClickArg,
   EventDropArg,
 } from '@fullcalendar/core'
-import { createEvent, deleteEvent, getCalendarFeed, updateEvent } from '@/api/events'
+import { createEvent, deleteEvent, getCalendarFeed, getEvent, updateEvent } from '@/api/events'
 import { getAdminFeed } from '@/api/calendar'
 import { useCalendarLayers } from '@/composables/useCalendarLayers'
+import { useEmployeeStore } from '@/stores/employee'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import CalendarToolbar from '@/components/calendar/CalendarToolbar.vue'
@@ -17,10 +18,18 @@ import RecurrenceEditor from '@/components/calendar/RecurrenceEditor.vue'
 import type { RecurrenceRule } from '@/components/calendar/types'
 import type { CalendarLayer } from '@/api/calendar'
 import CalendarBoard from '@/components/calendar/CalendarBoard.vue'
+import CalendarImportDialog from '@/components/calendar/CalendarImportDialog.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import CalendarEventDetailDialog from '@/components/calendar/CalendarEventDetailDialog.vue'
 import { EVENT_TYPES, eventTypeColor } from '@/constants/calendarEventTypes'
+import {
+  EVENT_CATEGORY_OPTIONS,
+  EVENT_SEMESTER_OPTIONS,
+  EVENT_VISIBILITY_LABELS,
+  EVENT_VISIBILITY_OPTIONS,
+  eventVisibilityTagType,
+} from '@/constants/eventVisibility'
 
 interface CalendarEvent {
   id: number
@@ -37,8 +46,18 @@ interface CalendarEvent {
   event_type_label?: string
   is_official?: boolean
   recurrence_rule?: RecurrenceRule | null
+  visibility?: string
+  category?: string
+  academic_year?: number | null
+  semester?: string | null
+  week_no?: number | null
+  owner_employee_id?: number | null
+  owner_employee_name?: string | null
+  source?: string
   [key: string]: unknown
 }
+
+type EmployeeOption = { id: number; name: string; employee_id?: string }
 
 interface OfficialSync {
   warning?: string
@@ -57,9 +76,15 @@ const events = ref<CalendarEvent[]>([])
 const deleting = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
+const importVisible = ref(false)
 const isEdit = ref(false)
 const officialSync = ref<OfficialSync | null>(null)
 const searchText = ref('')
+
+const employeeStore = useEmployeeStore()
+onMounted(() => {
+  employeeStore.fetchEmployees()
+})
 
 // FC 當前可見區間（datesSet 維護），用於決定 admin_feed window
 const viewRange = ref<{ start: Date; end: Date }>({
@@ -88,6 +113,12 @@ const form = reactive<{
   end_time: string
   location: string
   recurrence_rule: RecurrenceRule | null
+  visibility: string
+  category: string
+  academic_year: number | null
+  semester: string | null
+  week_no: number | null
+  owner_employee_id: number | null
 }>({
   id: null,
   title: '',
@@ -100,6 +131,14 @@ const form = reactive<{
   end_time: '',
   location: '',
   recurrence_rule: null,
+  // 手動建立預設 parent（與後端相容預設一致＝改版前行為）；
+  // UI 會對 parent 顯示明顯警示
+  visibility: 'parent',
+  category: 'general',
+  academic_year: null,
+  semester: null,
+  week_no: null,
+  owner_employee_id: null,
 })
 
 const selectedEvent = ref<CalendarEvent | null>(null)
@@ -116,6 +155,12 @@ const resetForm = () => {
   form.end_time = ''
   form.location = ''
   form.recurrence_rule = null
+  form.visibility = 'parent'
+  form.category = 'general'
+  form.academic_year = null
+  form.semester = null
+  form.week_no = null
+  form.owner_employee_id = null
 }
 
 const officialSyncAlertType = computed(() => {
@@ -199,24 +244,40 @@ const showDetail = (event: CalendarEvent) => {
   detailVisible.value = true
 }
 
-const openEvent = (event: CalendarEvent) => {
+const openEvent = async (event: CalendarEvent) => {
   if (event.is_read_only) {
     showDetail(event)
     return
   }
+  // calendar-feed 是精簡 shape（無 category/學年/負責人等欄位）——編輯前必須
+  // 先抓單筆完整資料，否則存檔會把這些欄位靜默打回預設值（資料遺失）
+  let detail: CalendarEvent
+  try {
+    const res = await getEvent(event.id)
+    detail = res.data as CalendarEvent
+  } catch (error) {
+    ElMessage.error(apiError(error, '載入事件資料失敗'))
+    return
+  }
   isEdit.value = true
   Object.assign(form, {
-    id: event.id,
-    title: event.title,
-    description: event.description || '',
-    event_date: event.event_date,
-    end_date: event.end_date || null,
-    event_type: event.event_type,
-    is_all_day: event.is_all_day,
-    start_time: event.start_time || '',
-    end_time: event.end_time || '',
-    location: event.location || '',
-    recurrence_rule: event.recurrence_rule ?? null,
+    id: detail.id,
+    title: detail.title,
+    description: detail.description || '',
+    event_date: detail.event_date,
+    end_date: detail.end_date || null,
+    event_type: detail.event_type,
+    is_all_day: detail.is_all_day,
+    start_time: detail.start_time || '',
+    end_time: detail.end_time || '',
+    location: detail.location || '',
+    recurrence_rule: detail.recurrence_rule ?? null,
+    visibility: detail.visibility || 'parent',
+    category: detail.category || 'general',
+    academic_year: detail.academic_year ?? null,
+    semester: detail.semester ?? null,
+    week_no: detail.week_no ?? null,
+    owner_employee_id: detail.owner_employee_id ?? null,
   })
   dialogVisible.value = true
 }
@@ -238,12 +299,20 @@ const saveEvent = async () => {
       end_time: form.is_all_day ? null : (form.end_time || null),
       location: form.location || null,
       recurrence_rule: form.recurrence_rule || null,
+      visibility: form.visibility,
+      category: form.category,
+      academic_year: form.academic_year ?? null,
+      semester: form.semester || null,
+      week_no: form.week_no ?? null,
+      owner_employee_id: form.owner_employee_id ?? null,
     }
     if (isEdit.value) {
       await updateEvent(form.id!, payload)
       ElMessage.success('事件已更新')
     } else {
-      await createEvent(payload)
+      // requires_acknowledgment 僅 create 時送預設值；update 絕不送（表單
+      // 未管理此欄，送出會覆寫既有事件的簽閱設定）
+      await createEvent({ ...payload, requires_acknowledgment: false })
       ElMessage.success('事件已新增')
     }
     dialogVisible.value = false
@@ -373,6 +442,7 @@ const onEventDrop = async (info: EventDropArg) => {
       <template #actions>
         <el-button type="success" @click="exportCalendar">匯出行事曆</el-button>
         <el-button @click="exportHolidays">匯出假日</el-button>
+        <el-button @click="importVisible = true">匯入分校行事曆</el-button>
         <el-button type="primary" @click="handleAdd(null)">新增事件</el-button>
       </template>
     </PageHeader>
@@ -425,6 +495,18 @@ const onEventDrop = async (info: EventDropArg) => {
               style="border: none; color: #fff"
             >
               {{ row.event_type_label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="可見範圍" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag
+              v-if="!row.is_official && row.visibility"
+              :type="eventVisibilityTagType(row.visibility)"
+              size="small"
+              :effect="row.visibility === 'parent' ? 'dark' : 'plain'"
+            >
+              {{ EVENT_VISIBILITY_LABELS[row.visibility] || row.visibility }}
             </el-tag>
           </template>
         </el-table-column>
@@ -484,6 +566,85 @@ const onEventDrop = async (info: EventDropArg) => {
         <el-form-item label="地點">
           <el-input v-model="form.location" placeholder="例：會議室A" />
         </el-form-item>
+        <el-form-item label="可見範圍">
+          <div class="visibility-field">
+            <el-radio-group v-model="form.visibility">
+              <el-radio-button
+                v-for="opt in EVENT_VISIBILITY_OPTIONS"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </el-radio-button>
+            </el-radio-group>
+            <el-alert
+              v-if="form.visibility === 'parent'"
+              title="此事件將對「家長端」公開顯示，請確認內容不含內部事項（薪資、對帳、考核、負責人分工等）。"
+              type="warning"
+              :closable="false"
+              show-icon
+              class="visibility-warning"
+              data-test="parent-visibility-warning"
+            />
+            <div v-else class="visibility-hint">
+              {{ EVENT_VISIBILITY_OPTIONS.find((o) => o.value === form.visibility)?.hint }}
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item label="工作分類">
+          <el-select v-model="form.category" style="width: 100%">
+            <el-option
+              v-for="opt in EVENT_CATEGORY_OPTIONS"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="學年/學期">
+          <div class="term-row">
+            <el-input-number
+              v-model="form.academic_year"
+              :min="100"
+              :max="200"
+              :controls="false"
+              placeholder="學年 例:115"
+              style="width: 110px"
+            />
+            <el-select v-model="form.semester" clearable placeholder="學期" style="width: 110px">
+              <el-option
+                v-for="opt in EVENT_SEMESTER_OPTIONS"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+            <el-input-number
+              v-model="form.week_no"
+              :min="0"
+              :max="60"
+              :controls="false"
+              placeholder="週次"
+              style="width: 90px"
+            />
+          </div>
+        </el-form-item>
+        <el-form-item label="負責人">
+          <el-select
+            v-model="form.owner_employee_id"
+            clearable
+            filterable
+            placeholder="選擇負責員工（可空）"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="emp in (employeeStore.employees as EmployeeOption[])"
+              :key="emp.id"
+              :label="emp.employee_id ? `${emp.name}（${emp.employee_id}）` : emp.name"
+              :value="emp.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="重複">
           <RecurrenceEditor v-model="form.recurrence_rule" />
         </el-form-item>
@@ -498,6 +659,7 @@ const onEventDrop = async (info: EventDropArg) => {
     </el-dialog>
 
     <CalendarEventDetailDialog v-model="detailVisible" :event="selectedEvent" />
+    <CalendarImportDialog v-model="importVisible" @imported="refreshAll" />
   </div>
 </template>
 
@@ -530,5 +692,25 @@ const onEventDrop = async (info: EventDropArg) => {
 .readonly-label {
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+.visibility-field {
+  width: 100%;
+}
+
+.visibility-warning {
+  margin-top: 8px;
+}
+
+.visibility-hint {
+  margin-top: 4px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.term-row {
+  display: flex;
+  gap: 8px;
 }
 </style>

@@ -6030,6 +6030,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/events/import-commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Events Commit
+         * @description 分校行事曆匯入確認寫入。
+         *
+         *     - server 端**重新驗證**（不信任 client）；任一列 error → 422 整批拒絕。
+         *     - ``visibility='parent'`` 必須帶 ``parent_visibility_confirmed=true``。
+         *     - 同 ``(tenant, source, source_key)`` 重傳 = update（冪等，不重複建立）。
+         *     - 匯入為批次操作，**不**觸發家長簽閱推播（要通知家長請事後於單筆事件
+         *       編輯流程操作，由既有 push gate 把關）。
+         *     - 成功後主動清家長 calendar 快取（批次寫入不等 30s TTL）。
+         */
+        post: operations["import_events_commit_api_events_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/import-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Events Preview
+         * @description 分校行事曆 XLSX 匯入預覽——**只解析與驗證，不寫 DB**。
+         *
+         *     回傳 normalized rows（含逐列 errors/warnings/duplicate 狀態）供前端預覽表；
+         *     visibility 空值一律預設 admin（家長可見必須由使用者在預覽介面明確確認）。
+         */
+        post: operations["import_events_preview_api_events_import_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exports/attendance": {
         parameters: {
             query?: never;
@@ -12619,7 +12669,7 @@ export interface paths {
         };
         /**
          * Get Portal Calendar
-         * @description 取得學校行事曆（與後台同步的教師檢視）。
+         * @description 取得學校行事曆（與後台同步的教師檢視，僅 staff/parent 可見範圍）。
          */
         get: operations["get_portal_calendar_api_portal_calendar_get"];
         put?: never;
@@ -22006,6 +22056,11 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /** Body_import_events_preview_api_events_import_preview_post */
+        Body_import_events_preview_api_events_import_preview_post: {
+            /** File */
+            file: string;
+        };
         /** Body_import_excel_api_appraisal_cycles_import_excel_post */
         Body_import_excel_api_appraisal_cycles_import_excel_post: {
             /** File */
@@ -26238,6 +26293,8 @@ export interface components {
             start_time?: string | null;
             /** Title */
             title: string;
+            /** Visibility */
+            visibility?: string | null;
         };
         /**
          * EventCalendarFeedOut
@@ -26269,8 +26326,15 @@ export interface components {
         };
         /** EventCreate */
         EventCreate: {
+            /** Academic Year */
+            academic_year?: number | null;
             /** Ack Deadline */
             ack_deadline?: string | null;
+            /**
+             * Category
+             * @default general
+             */
+            category: string;
             /** Description */
             description?: string | null;
             /** End Date */
@@ -26294,6 +26358,8 @@ export interface components {
             is_all_day: boolean;
             /** Location */
             location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
@@ -26303,10 +26369,170 @@ export interface components {
              * @default false
              */
             requires_acknowledgment: boolean;
+            /** Semester */
+            semester?: string | null;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title: string;
+            /**
+             * Visibility
+             * @default parent
+             */
+            visibility: string;
+            /** Week No */
+            week_no?: number | null;
+        };
+        /** EventImportCommitIn */
+        EventImportCommitIn: {
+            /** Rows */
+            rows: components["schemas"]["EventImportRowIn"][];
+        };
+        /**
+         * EventImportCommitResultOut
+         * @description ``POST /events/import-commit`` 回傳。同 source_key 重傳 = update（冪等）。
+         */
+        EventImportCommitResultOut: {
+            /** Created */
+            created: number;
+            /** Message */
+            message: string;
+            /** Total */
+            total: number;
+            /** Updated */
+            updated: number;
+        };
+        /**
+         * EventImportPreviewOut
+         * @description ``POST /events/import-preview`` 回傳（只解析驗證，不寫 DB）。
+         */
+        EventImportPreviewOut: {
+            /** Rows */
+            rows: components["schemas"]["EventImportRowOut"][];
+            summary: components["schemas"]["EventImportSummaryOut"];
+        };
+        /**
+         * EventImportRowIn
+         * @description import-commit 的單列輸入（= preview 確認後的 normalized row）。
+         *
+         *     server 端會**重新驗證全部欄位**（不信任 client）；``visibility='parent'``
+         *     必須帶 ``parent_visibility_confirmed=true``（預覽介面逐列/批次明確確認），
+         *     否則整批 422——Excel 空值或未確認列一律落 admin。
+         */
+        EventImportRowIn: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Ack Deadline */
+            ack_deadline?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Event Type */
+            event_type?: string | null;
+            /** Location */
+            location?: string | null;
+            /** Owner Employee No */
+            owner_employee_no?: string | null;
+            /**
+             * Parent Visibility Confirmed
+             * @default false
+             */
+            parent_visibility_confirmed: boolean;
+            /**
+             * Requires Acknowledgment
+             * @default false
+             */
+            requires_acknowledgment: boolean;
+            /** Semester */
+            semester?: string | null;
+            /** Source Row Key */
+            source_row_key: string;
+            /** Start Date */
+            start_date: string;
+            /** Title */
+            title: string;
+            /** Visibility */
+            visibility?: string | null;
+            /** Week No */
+            week_no?: number | null;
+        };
+        /**
+         * EventImportRowOut
+         * @description import-preview 的單列輸出（normalized + 驗證結果）。
+         */
+        EventImportRowOut: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Ack Deadline */
+            ack_deadline?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: string[];
+            /** Event Type */
+            event_type?: string | null;
+            /**
+             * Is Duplicate
+             * @default false
+             */
+            is_duplicate: boolean;
+            /** Location */
+            location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
+            /** Owner Employee Name */
+            owner_employee_name?: string | null;
+            /** Owner Employee No */
+            owner_employee_no?: string | null;
+            /**
+             * Requires Acknowledgment
+             * @default false
+             */
+            requires_acknowledgment: boolean;
+            /** Row Number */
+            row_number: number;
+            /** Semester */
+            semester?: string | null;
+            /** Source Row Key */
+            source_row_key?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+            /** Week No */
+            week_no?: number | null;
+        };
+        /** EventImportSummaryOut */
+        EventImportSummaryOut: {
+            /** Duplicates */
+            duplicates: number;
+            /** Error Rows */
+            error_rows: number;
+            /** Importable */
+            importable: number;
+            /** Parent Candidates */
+            parent_candidates: number;
+            /** Total */
+            total: number;
+            /** Warning Rows */
+            warning_rows: number;
         };
         /**
          * EventMutationResultOut
@@ -26316,6 +26542,10 @@ export interface components {
          *     從 ``{message, id}`` 強縮減造成既有 e2e/log 噪音）。
          */
         EventMutationResultOut: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Category */
+            category: string;
             /** Created At */
             created_at?: string | null;
             /** Description */
@@ -26338,24 +26568,44 @@ export interface components {
             location?: string | null;
             /** Message */
             message: string;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
+            /** Owner Employee Name */
+            owner_employee_name?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
+            /** Semester */
+            semester?: string | null;
+            /** Source */
+            source: string;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title: string;
             /** Updated At */
             updated_at?: string | null;
+            /** Visibility */
+            visibility: string;
+            /** Week No */
+            week_no?: number | null;
         };
         /**
          * EventOut
          * @description 單筆行事曆事件（對應 router 端 ``_event_to_dict``）。
          *
          *     日期欄位皆為 router 已 ``.isoformat()`` 後的 str；recurrence_rule 為 JSON dict。
+         *
+         *     calimp01（分校行事曆整合）新增欄位皆**僅管理端**回傳（本 schema 只掛在
+         *     ``require_staff_permission(CALENDAR)`` 的端點）；家長端 serializer 在
+         *     ``api/parent_portal/*`` 自組 dict，不含 owner/source 等內部欄位。
          */
         EventOut: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Category */
+            category: string;
             /** Created At */
             created_at?: string | null;
             /** Description */
@@ -26376,21 +26626,37 @@ export interface components {
             is_all_day: boolean;
             /** Location */
             location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
+            /** Owner Employee Name */
+            owner_employee_name?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
+            /** Semester */
+            semester?: string | null;
+            /** Source */
+            source: string;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title: string;
             /** Updated At */
             updated_at?: string | null;
+            /** Visibility */
+            visibility: string;
+            /** Week No */
+            week_no?: number | null;
         };
         /** EventUpdate */
         EventUpdate: {
+            /** Academic Year */
+            academic_year?: number | null;
             /** Ack Deadline */
             ack_deadline?: string | null;
+            /** Category */
+            category?: string | null;
             /** Description */
             description?: string | null;
             /** End Date */
@@ -26405,16 +26671,24 @@ export interface components {
             is_all_day?: boolean | null;
             /** Location */
             location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
             /** Requires Acknowledgment */
             requires_acknowledgment?: boolean | null;
+            /** Semester */
+            semester?: string | null;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+            /** Week No */
+            week_no?: number | null;
         };
         /**
          * ExcelUploadResultOut
@@ -52622,6 +52896,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    import_events_commit_api_events_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventImportCommitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventImportCommitResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_events_preview_api_events_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_events_preview_api_events_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
