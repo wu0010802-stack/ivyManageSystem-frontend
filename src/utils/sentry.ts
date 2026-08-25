@@ -61,6 +61,9 @@ const PII_KEY_SUBSTRINGS = [
   // per-tenant 醫療欄位加密金鑰材料（Tenant.medical_dek_wrapped / medical_dek_lookup）。
   // 用 medical_dek 而非過短的 dek，避免誤傷無關欄位。
   'medical_dek',
+  // 學費對帳（feerecon01，2026-08-25，SPEC-014）：銷帳編號為金融識別資訊；
+  // 銀行備註/付款人備註含姓名片段；退款領款人姓名為 PII（與 BE 同步）
+  'collection_number', 'collection_suffix', 'code_suffix', 'payer_note', 'recipient_name', 'memo',
 ]
 
 // 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：

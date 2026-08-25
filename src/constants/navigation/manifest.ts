@@ -418,7 +418,9 @@ export const NAVIGATION_MANIFEST = {
         {
           key: 'fees', title: '學費管理', routePath: '/fees',
           views: [{ code: 'FEES_READ' }],
-          actions: [{ code: 'FEES_WRITE' }],
+          // FEE_CLOSE_APPROVE（SPEC-014）：老闆簽核——現金交接確認、預繳退款
+          // 核准/完成、當期關帳與 reopen
+          actions: [{ code: 'FEES_WRITE' }, { code: 'FEE_CLOSE_APPROVE' }],
           menu: { icon: icon('CreditCard') },
         },
         {
