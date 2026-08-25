@@ -121,7 +121,8 @@ defineExpose({
   <div class="reports-page">
     <PageHeader :title="PAGE_TERMS.reports">
       <template #title-extra>
-        <span class="viewer-tag">{{ viewerName }} 的{{ PAGE_TERMS.reports }}</span>
+        <!-- 稽核 m9：勿與左側標題複讀「經營報表」 -->
+        <span class="viewer-tag">檢視者：{{ viewerName }}</span>
       </template>
       <template #actions>
         <el-tag type="info" effect="plain" size="small" data-test="data-cutoff-badge">{{ cutoffBadgeText }}</el-tag>

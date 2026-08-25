@@ -335,3 +335,14 @@ describe('資料截至 badge', () => {
     expect(badgeText).not.toMatch(/資料截至/)
   })
 })
+
+describe('ReportsView 頁首檢視者標籤（2026-08-25 稽核 m9：不與標題複讀）', () => {
+  it('viewer-tag 顯示「檢視者：<名>」而非「<名> 的經營報表」', async () => {
+    const w = mountView()
+    await flushPromises()
+    const tag = w.find('.viewer-tag')
+    expect(tag.exists()).toBe(true)
+    expect(tag.text()).toBe('檢視者：測試管理員')
+    expect(tag.text()).not.toContain('的經營報表')
+  })
+})
