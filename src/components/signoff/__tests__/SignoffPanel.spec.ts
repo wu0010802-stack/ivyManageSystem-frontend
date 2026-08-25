@@ -528,6 +528,51 @@ describe.each(CASES)('SignoffPanel (%s)', (_name, baseCfg) => {
     })
   })
 
+  describe('上傳憑證前置核准檢查（P1，2026-08-25 對抗式掃描）', () => {
+    it('草稿（未送審）不顯示上傳憑證按鈕，改顯示待核准提示', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      vm.openEdit(makeItems(cfg)[0]) // draft + unsettled + pending
+      await flushPromises()
+      expect(wrapper.find('[data-test="upload-cert-btn"]').exists()).toBe(false)
+      expect(wrapper.find('[data-test="upload-cert-hint"]').text()).toContain('尚未核准')
+    })
+
+    it('送審中（pending_approval）同樣不顯示上傳憑證按鈕', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      const [row] = makeItems(cfg)
+      vm.openEdit({ ...row, approval_status: 'pending_approval' })
+      await flushPromises()
+      expect(wrapper.find('[data-test="upload-cert-btn"]').exists()).toBe(false)
+    })
+
+    it('已核准（approved）顯示上傳憑證按鈕，點擊後開啟簽收對話框', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      const [row] = makeItems(cfg)
+      vm.openEdit({ ...row, approval_status: 'approved' })
+      await flushPromises()
+      const btn = wrapper.find('[data-test="upload-cert-btn"]')
+      expect(btn.exists()).toBe(true)
+      await btn.trigger('click')
+      expect(vm.signDialogVisible).toBe(true)
+    })
+
+    it('既有 legacy 資料（2026-08-23 內控上線前存量）仍可上傳憑證，不被新守衛誤傷', async () => {
+      const wrapper = mountPanel()
+      await flushPromises()
+      const vm = wrapper.vm as unknown as PanelVm
+      const [row] = makeItems(cfg)
+      vm.openEdit({ ...row, approval_status: 'legacy' })
+      await flushPromises()
+      expect(wrapper.find('[data-test="upload-cert-btn"]').exists()).toBe(true)
+    })
+  })
+
   describe('批次簽收與匯出', () => {
     it('selectableRow 只允許 pending 列被勾選', async () => {
       const wrapper = mountPanel()

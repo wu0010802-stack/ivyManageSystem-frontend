@@ -367,11 +367,14 @@
             </a>
           </div>
           <div v-else class="so-signed-block so-signed-block--pending">
-            <span class="so-muted">{{ config.texts.signedCertHint }}</span>
+            <span class="so-muted" data-test="upload-cert-hint">
+              {{ canSignFromDialog ? config.texts.signedCertHint : '尚未核准，核准後才能上傳憑證' }}
+            </span>
             <el-button
-              v-if="canWrite"
+              v-if="canWrite && canSignFromDialog"
               size="small"
               type="primary"
+              data-test="upload-cert-btn"
               @click="openSignFromDialog"
             >上傳憑證</el-button>
           </div>
@@ -1363,6 +1366,16 @@ const signatureUrl = config.api.signatureUrl
 const canAddAttachments = computed(() => form.status === 'pending')
 const canMutateAttachments = computed(
   () => form.status === 'pending' && form.settlement_status === 'unsettled',
+)
+
+// 2026-08-25 P1：與後端 sign_vendor_payment / sign_misc_receipt 的核准軸守衛
+// 對齊（approval_status 須為 approved/legacy）。修法前本頁「上傳憑證」按鈕
+// 只看 canWrite，草稿/待核准的單據也能被點去簽收——簽收後 status 變 signed，
+// isRecordEditable 認 status!=pending 即永久鎖死，形同卡死一筆永遠無法核准
+// 也無法修改的孤兒紀錄。後端已補上真正的守衛（403/409 一定擋得住），這裡是
+// 縱深防禦：避免使用者點了按鈕卻先看到伺服器錯誤才發現卡關。
+const canSignFromDialog = computed(
+  () => form.approval_status === 'approved' || form.approval_status === 'legacy',
 )
 
 function openSign(row: Record<string, unknown>) {

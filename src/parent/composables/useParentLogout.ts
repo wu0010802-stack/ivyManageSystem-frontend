@@ -68,8 +68,16 @@ async function purgePersonalizedRuntimeCaches(): Promise<void> {
   }
 }
 
-export function clearParentLocalState(): Promise<void> {
-  const authStore = useParentAuthStore()
+/**
+ * 清除「跟使用者身分綁定」的個人化本地狀態，但**不動 authStore**。
+ *
+ * 抽出這一步是為了讓「登出」與「（共用裝置）新使用者登入前清舊資料」共用
+ * 同一份清單——2026-08-25 P1 修法：LoginView.completeLogin() 在
+ * `authStore.setUser(newUser)` 之前呼叫本函式，避免前一位家長（家庭 A）
+ * 沒點登出就離開共用裝置時，家庭 B 登入後在快取 TTL 內／store `loaded`
+ * 旗標歸零前沿用到 A 的資料（PII 外洩）。見 LoginView.vue completeLogin。
+ */
+export function clearParentPersonalizedCaches(): void {
   // 先讓舊 async 工作失效，再清畫面資料；後端 logout 網路等待期間也不能回填 A 的 PII。
   resetParentApiSessionState()
   resetParentOfflineQueueRuntime()
@@ -87,6 +95,11 @@ export function clearParentLocalState(): Promise<void> {
   } catch {
     /* ignore disabled storage */
   }
+}
+
+export function clearParentLocalState(): Promise<void> {
+  const authStore = useParentAuthStore()
+  clearParentPersonalizedCaches()
   authStore.clear()
   return purgePersonalizedRuntimeCaches()
 }

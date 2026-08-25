@@ -15,6 +15,7 @@ import {
   type PolicyVersionOut,
 } from '../api/consent'
 import { useParentAuthStore } from '../stores/parentAuth'
+import { clearParentPersonalizedCaches } from '../composables/useParentLogout'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import ConsentModal from '../components/ConsentModal.vue'
@@ -54,6 +55,12 @@ function _setLocalError(message: string, nextStep?: string) {
 // （{status:'ok', user:{user_id,name,role}}），刻意共用同一條路徑，不要
 // 分岔——否則兩條登入方式的 consent gate / 深連結行為會慢慢長歪。
 async function completeLogin(user: unknown) {
+  // 2026-08-25 P1：共用裝置（園所平板／設定碼登入常見情境）下，前一位家長
+  // 若沒點登出就離開，today-status/useCachedAsync 快取與 children/messages
+  // store 會原樣留在裝置上；在設定新使用者前先清掉，避免下一位家長在快取
+  // TTL 內看到上一位家長的小孩資料。與登出流程共用同一份清單，見
+  // useParentLogout.ts::clearParentPersonalizedCaches。
+  clearParentPersonalizedCaches()
   authStore.setUser(user)
   const needsConsent = await checkConsentRequired()
   if (needsConsent) {
