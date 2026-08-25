@@ -5985,6 +5985,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exports/students/k12ea": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Students K12Ea
+         * @description 匯出教育局全國幼生管理系統（kids.k12ea.gov.tw）匯入檔（.xls）
+         *
+         *     以官方「幼生資料匯入格式（私立）」範本為底續寫（前 14 列保留、資料自第
+         *     15 列起），行政可直接上傳教育局系統填報。篩選參數語意對齊 GET /students：
+         *     頁面當下篩到誰就匯出誰。
+         */
+        get: operations["export_students_k12ea_api_exports_students_k12ea_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/extra-bonuses": {
         parameters: {
             query?: never;
@@ -47639,6 +47663,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    export_students_k12ea_api_exports_students_k12ea_get: {
+        parameters: {
+            query?: {
+                classroom_id?: number | null;
+                is_active?: boolean;
+                school_year?: number | null;
+                search?: string | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
