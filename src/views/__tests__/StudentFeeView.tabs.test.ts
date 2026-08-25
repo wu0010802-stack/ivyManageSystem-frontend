@@ -1,145 +1,191 @@
 /**
- * StudentFeeView：tab lazy mount 與 ?tab= URL 同步。
+ * StudentFeeView：工作區 lazy mount 與 ?ws=/?view=（含舊 ?tab=）URL 同步。
+ * （2026-08-25 任務導向 IA 改版：8 同層 tab → 工作台/帳單/對帳/結算＋費用設定）
  *
- * - 非作用中的 tab（費用總覽/退費管理）不得在進頁時就 mount（三套資料不重複載）。
- * - active tab 同步到 ?tab=records|templates|refunds（allowlist，非法值 fallback records）。
- * - 既有 ?search=<學生姓名> 行為保留，且 tab 同步不得覆寫/移除其他 query。
+ * - 非作用中的工作區不得在進頁時就 mount（各套資料不重複載）。
+ * - 舊 ?tab= 深連結相容映射；非法值 fallback 工作台。
+ * - 外部 query 變動（瀏覽器上一頁）→ 工作區跟隨。
+ * - 既有 ?search=<學生姓名> 行為保留，且 query 正規化不得新增其他鍵。
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { reactive, defineComponent, h } from 'vue'
-import { shallowMount, flushPromises } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
 
-vi.mock('@/api/fees', () => ({
-  getFeePeriods: vi.fn().mockResolvedValue(['114-1', '114-2']),
+// --- Mock vue-router（replace/push 實際改 query，模擬導航收斂循環）---
+const routerMocks = vi.hoisted(() => ({
+  route: null as { query: Record<string, unknown> } | null,
+  router: null as { replace: ReturnType<typeof vi.fn>; push: ReturnType<typeof vi.fn> } | null,
 }))
+vi.mock('vue-router', async () => {
+  const { reactive } = await import('vue')
+  routerMocks.route = reactive({ query: {} as Record<string, unknown> })
+  const apply = (to?: { query?: Record<string, unknown> }) => {
+    routerMocks.route!.query = { ...(to?.query ?? {}) }
+  }
+  routerMocks.router = { replace: vi.fn(apply), push: vi.fn(apply) }
+  return {
+    useRoute: () => routerMocks.route,
+    useRouter: () => routerMocks.router,
+  }
+})
 
-vi.mock('@/stores/classroomAll', () => ({
-  useAllClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }),
+// --- 五個工作區元件 stub（async chunk；各自行為由其專屬測試涵蓋）---
+vi.mock('@/components/fees/workspace/FeeWorkbench.vue', () => ({
+  __esModule: true,
+  default: { name: 'FeeWorkbench', template: '<div data-test="ws-workbench" />' },
 }))
-
-// --- Mock vue-router（reactive query 讓 watch(() => route.query.tab) 可被觸發）---
-const replace = vi.fn()
-let mockQuery: Record<string, unknown> = reactive({})
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: mockQuery }),
-  useRouter: () => ({ replace }),
+vi.mock('@/components/fees/workspace/FeeBillingWorkspace.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeBillingWorkspace',
+    props: ['view', 'studentSearch'],
+    template: '<div data-test="ws-billing" :data-view="view" :data-search="studentSearch" />',
+  },
+}))
+vi.mock('@/components/fees/BankReconTab.vue', () => ({
+  __esModule: true,
+  default: { name: 'BankReconTab', template: '<div data-test="ws-recon" />' },
+}))
+vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeSettlementWorkspace',
+    props: ['view'],
+    template: '<div data-test="ws-settlement" :data-view="view" />',
+  },
+}))
+vi.mock('@/components/fees/workspace/FeeSettingsWorkspace.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeSettingsWorkspace',
+    props: ['view'],
+    template: '<div data-test="ws-settings" :data-view="view" />',
+  },
 }))
 
 import StudentFeeView from '../StudentFeeView.vue'
 
-// 子 tab 元件 stub：可觀察是否 mount，並提供 records tab 需要的方法
-const applySearch = vi.fn()
-const fetchRecords = vi.fn()
-const FeeRecordsTabStub = defineComponent({
-  name: 'FeeRecordsTab',
-  setup(_, { expose }) {
-    expose({ applySearch, fetchRecords })
-    return () => h('div', { 'data-test': 'records-tab' })
-  },
-})
-const FeeTemplateTabStub = defineComponent({
-  name: 'FeeTemplateTab',
-  setup: () => () => h('div', { 'data-test': 'templates-tab' }),
-})
-const FeeRefundsTabStub = defineComponent({
-  name: 'FeeRefundsTab',
-  setup: () => () => h('div', { 'data-test': 'refunds-tab' }),
-})
-
 const globalConfig = {
   stubs: {
-    'el-tabs': {
-      name: 'ElTabs',
-      template: '<div data-test="tabs"><slot /></div>',
-      props: ['modelValue', 'type'],
-      emits: ['update:modelValue', 'tab-change'],
+    'el-segmented': {
+      name: 'ElSegmented',
+      props: ['modelValue', 'options', 'size'],
+      emits: ['change'],
+      template: `
+        <div>
+          <button
+            v-for="o in options"
+            :key="o.value"
+            type="button"
+            :data-seg="o.value"
+            @click="$emit('change', o.value)"
+          >{{ o.label }}</button>
+        </div>
+      `,
     },
-    'el-tab-pane': {
-      template: '<section :data-name="name"><slot /></section>',
-      props: ['label', 'name'],
-    },
-    FeeRecordsTab: FeeRecordsTabStub,
-    FeeTemplateTab: FeeTemplateTabStub,
-    FeeRefundsTab: FeeRefundsTabStub,
+    'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
+    'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
     PageHeader: {
-      template: '<header data-test="page-header">{{ title }}|{{ subtitle }}</header>',
+      template:
+        '<header data-test="page-header">{{ title }}|{{ subtitle }}<slot name="actions" /></header>',
       props: ['title', 'subtitle'],
     },
   },
 }
 
-const mountView = () => shallowMount(StudentFeeView, { global: globalConfig })
+// async component（vitest 模組載入含 macrotask）＋ watch flush
+const flushAll = async () => {
+  for (let i = 0; i < 4; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await nextTick()
+  }
+}
 
-describe('StudentFeeView lazy tabs 與 ?tab= 同步', () => {
+const mountView = (query: Record<string, unknown> = {}) => {
+  routerMocks.route!.query = { ...query }
+  return mount(StudentFeeView, { global: globalConfig })
+}
+
+describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockQuery = reactive({})
+    routerMocks.route!.query = {}
   })
 
-  it('預設 records tab；templates / refunds 不預先 mount', async () => {
+  it('預設工作台；其他工作區不預先 mount', async () => {
     const w = mountView()
-    await flushPromises()
-    expect(w.find('[data-test="records-tab"]').exists()).toBe(true)
-    expect(w.find('[data-test="templates-tab"]').exists()).toBe(false)
-    expect(w.find('[data-test="refunds-tab"]').exists()).toBe(false)
+    await flushAll()
+    expect(w.find('[data-test="ws-workbench"]').exists()).toBe(true)
+    expect(w.find('[data-test="ws-billing"]').exists()).toBe(false)
+    expect(w.find('[data-test="ws-recon"]').exists()).toBe(false)
+    expect(w.find('[data-test="ws-settlement"]').exists()).toBe(false)
+    expect(w.find('[data-test="ws-settings"]').exists()).toBe(false)
   })
 
-  it('切到 refunds → refunds mount 並 replace ?tab=refunds（保留其他 query）', async () => {
-    mockQuery = reactive({ search: '小明' })
+  it('切到帳單 → push 保存 ws/view 且保留其他 query（?search=）', async () => {
+    const w = mountView({ search: '小明' })
+    await flushAll()
+    routerMocks.router!.push.mockClear()
+
+    // ?search= 無 ws 時已導向帳單；先切走再切回，驗證 push 保留 search
+    await w.find('[data-seg="recon"]').trigger('click')
+    await flushAll()
+    await w.find('[data-seg="billing"]').trigger('click')
+    await flushAll()
+
+    expect(w.find('[data-test="ws-billing"]').exists()).toBe(true)
+    const lastPush = routerMocks.router!.push.mock.calls.at(-1)![0] as {
+      query: Record<string, unknown>
+    }
+    expect(lastPush.query.search).toBe('小明')
+    expect(lastPush.query.ws).toBe('billing')
+  })
+
+  it('舊深連結 ?tab=templates → 費用設定範本分頁 mount，工作台不 mount', async () => {
+    const w = mountView({ tab: 'templates' })
+    await flushAll()
+    const settings = w.find('[data-test="ws-settings"]')
+    expect(settings.exists()).toBe(true)
+    expect(settings.attributes('data-view')).toBe('templates')
+    expect(w.find('[data-test="ws-workbench"]').exists()).toBe(false)
+    expect(routerMocks.route!.query.tab).toBeUndefined()
+  })
+
+  it('非法 ?tab=bogus → fallback 工作台', async () => {
+    const w = mountView({ tab: 'bogus' })
+    await flushAll()
+    expect(w.find('[data-test="ws-workbench"]').exists()).toBe(true)
+  })
+
+  it('外部 query 變動（上一頁）→ 工作區跟隨且新工作區 mount', async () => {
     const w = mountView()
-    await flushPromises()
-    replace.mockClear()
-
-    w.findComponent({ name: 'ElTabs' }).vm.$emit('tab-change', 'refunds')
-    await flushPromises()
-
-    expect(w.find('[data-test="refunds-tab"]').exists()).toBe(true)
-    expect(replace).toHaveBeenCalledWith({ query: { search: '小明', tab: 'refunds' } })
+    await flushAll()
+    routerMocks.route!.query = { ws: 'settlement', view: 'close' }
+    await flushAll()
+    const settlement = w.find('[data-test="ws-settlement"]')
+    expect(settlement.exists()).toBe(true)
+    expect(settlement.attributes('data-view')).toBe('close')
   })
 
-  it('深連結 ?tab=templates → templates 為 active 且已 mount，records 不 mount', async () => {
-    mockQuery = reactive({ tab: 'templates' })
-    const w = mountView()
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('templates')
-    expect(w.find('[data-test="templates-tab"]').exists()).toBe(true)
-    expect(w.find('[data-test="records-tab"]').exists()).toBe(false)
-  })
-
-  it('非法 ?tab=bogus → fallback records（allowlist）', async () => {
-    mockQuery = reactive({ tab: 'bogus' })
-    const w = mountView()
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('records')
-    expect(w.find('[data-test="records-tab"]').exists()).toBe(true)
-  })
-
-  it('外部 query 變動（上一頁）→ activeTab 跟隨且新 tab mount', async () => {
-    const w = mountView()
-    await flushPromises()
-    mockQuery.tab = 'refunds'
-    await flushPromises()
-    expect(w.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('refunds')
-    expect(w.find('[data-test="refunds-tab"]').exists()).toBe(true)
-  })
-
-  it('?search= 預填學生姓名（既有行為保留），且不把姓名寫進 replace 的 query 之外新增鍵', async () => {
-    mockQuery = reactive({ search: '王小美' })
-    mountView()
-    await flushPromises()
-    expect(applySearch).toHaveBeenCalledWith('王小美')
-    // tab 同步只會補 tab 鍵；不得新增任何含姓名的新 query 鍵
-    for (const call of replace.mock.calls) {
+  it('?search= 導向帳款並下傳姓名；query 正規化不得新增其他鍵', async () => {
+    const w = mountView({ search: '王小美' })
+    await flushAll()
+    const billing = w.find('[data-test="ws-billing"]')
+    expect(billing.exists()).toBe(true)
+    expect(billing.attributes('data-search')).toBe('王小美')
+    // 正規化只補 ws/view 鍵；不得新增任何含姓名的新 query 鍵
+    for (const call of routerMocks.router!.replace.mock.calls) {
       const q = (call[0] as { query: Record<string, unknown> }).query
-      expect(Object.keys(q).sort()).toEqual(['search', 'tab'])
+      expect(Object.keys(q).sort()).toEqual(['search', 'view', 'ws'])
+      expect(q.search).toBe('王小美')
     }
   })
 
-  it('subtitle 為不誤導文案（不再宣稱「本學期」）', async () => {
+  it('subtitle 為不誤導文案（不宣稱「本學期」）', async () => {
     const w = mountView()
-    await flushPromises()
+    await flushAll()
     const header = w.find('[data-test="page-header"]').text()
-    expect(header).toContain('查看各學期、班級的應收費用與繳費狀態')
+    expect(header).toContain('收款、對帳與結算的日常工作區')
     expect(header).not.toContain('本學期')
   })
 })
