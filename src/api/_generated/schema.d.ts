@@ -7837,6 +7837,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gov-reports/staff-qualification-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Staff Qualification Checklist
+         * @description 匯出單月教職員 4 合 1 資格核對表。
+         *
+         *     清冊勾選欄預設留白：本系統沒有教育局、勞保局與健保署清冊的即時權威
+         *     資料，承辦人須下載後依官方清冊逐欄核對，避免把內部推論誤標為已核對。
+         */
+        get: operations["export_staff_qualification_checklist_api_gov_reports_staff_qualification_checklist_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gov-reports/withholding": {
         parameters: {
             query?: never;
@@ -56335,6 +56358,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_staff_qualification_checklist_api_gov_reports_staff_qualification_checklist_get: {
+        parameters: {
+            query: {
+                /** @description 核對月份 */
+                month: number;
+                /** @description 核對年份 */
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 教職員 4 合 1 資格核對表 Excel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
             /** @description Validation Error */

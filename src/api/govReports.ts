@@ -2,7 +2,12 @@ import type { AxiosResponse } from 'axios'
 import api from './index'
 import type { ApiQuery } from './_generated/typed'
 
-// 四個端點皆回傳檔案（Excel / TXT），response 一律 Blob
+// 五個端點皆回傳檔案（Excel / TXT），response 一律 Blob
+export const getStaffQualificationChecklist = (
+  params: ApiQuery<'/gov-reports/staff-qualification-checklist', 'get'>,
+): Promise<AxiosResponse<Blob>> =>
+  api.get('/gov-reports/staff-qualification-checklist', { params, responseType: 'blob' })
+
 export const getLaborInsurance = (params: ApiQuery<'/gov-reports/labor-insurance', 'get'>): Promise<AxiosResponse<Blob>> =>
   api.get('/gov-reports/labor-insurance', { params, responseType: 'blob' })
 

@@ -12,6 +12,21 @@ vi.mock('@/api/salary', () => ({
     getRecords: (...args: unknown[]) => getRecordsMock(...args),
 }))
 
+const qualificationExportMock = vi.fn()
+vi.mock('@/api/govReports', () => ({
+    getStaffQualificationChecklist: (...args: unknown[]) => qualificationExportMock(...args),
+}))
+
+const hasPermissionMock = vi.fn()
+vi.mock('@/utils/auth', () => ({
+    hasPermission: (...args: unknown[]) => hasPermissionMock(...args),
+}))
+
+const saveBlobResponseMock = vi.fn()
+vi.mock('@/utils/download', () => ({
+    saveBlobResponse: (...args: unknown[]) => saveBlobResponseMock(...args),
+}))
+
 const rec = (over: Record<string, unknown> = {}) => ({
     id: 1,
     employee_id: 'E1',
@@ -40,6 +55,10 @@ describe('SalaryHubView', () => {
     beforeEach(() => {
         pushMock.mockReset()
         getRecordsMock.mockReset()
+        qualificationExportMock.mockReset()
+        hasPermissionMock.mockReset()
+        hasPermissionMock.mockReturnValue(false)
+        saveBlobResponseMock.mockReset()
     })
 
     it('覆核中狀態：顯示封存進度與需注意數，深連結到 review 步驟', async () => {
@@ -104,6 +123,45 @@ describe('SalaryHubView', () => {
         await wrapper.find('button').trigger('click')
         expect(pushMock).toHaveBeenCalledWith(
             expect.objectContaining({ query: expect.objectContaining({ step: 'export' }) }),
+        )
+    })
+
+    it('沒有政府報表匯出權限時不顯示 4 合 1 下載入口', async () => {
+        getRecordsMock.mockResolvedValue({ data: [] })
+        const wrapper = mountHub()
+        await flushPromises()
+
+        expect(
+            wrapper.find('[data-testid="qualification-checklist-export"]').exists(),
+        ).toBe(false)
+    })
+
+    it('持政府報表匯出權限時，可依目前年月下載 4 合 1 核對表', async () => {
+        hasPermissionMock.mockImplementation(
+            (permission: string) => permission === 'GOV_REPORTS_EXPORT',
+        )
+        getRecordsMock.mockResolvedValue({ data: [] })
+        const response = {
+            data: new Blob(['xlsx']),
+            headers: {},
+        }
+        qualificationExportMock.mockResolvedValue(response)
+        const wrapper = mountHub()
+        await flushPromises()
+
+        const button = wrapper.get('[data-testid="qualification-checklist-export"]')
+        await button.trigger('click')
+        await flushPromises()
+
+        const now = new Date()
+        expect(hasPermissionMock).toHaveBeenCalledWith('GOV_REPORTS_EXPORT')
+        expect(qualificationExportMock).toHaveBeenCalledWith({
+            year: now.getFullYear(),
+            month: now.getMonth() + 1,
+        })
+        expect(saveBlobResponseMock).toHaveBeenCalledWith(
+            response,
+            expect.stringContaining('教職員4合1資格核對表'),
         )
     })
 })
