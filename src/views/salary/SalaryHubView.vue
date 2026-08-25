@@ -8,6 +8,16 @@
         <el-select v-model="query.month" style="width: 90px" aria-label="月份">
           <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
         </el-select>
+        <el-button
+          v-if="canExportGovReports"
+          data-testid="qualification-checklist-export"
+          :icon="Download"
+          :loading="qualificationExporting"
+          aria-label="下載教職員 4 合 1 資格核對表"
+          @click="exportQualificationChecklist"
+        >
+          下載 4 合 1 核對表
+        </el-button>
       </template>
     </PageHeader>
 
@@ -48,17 +58,28 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, toRef, onMounted } from 'vue'
+import { reactive, computed, toRef, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useSalarySettlement, type SettlementStatus } from '@/composables/useSalarySettlement'
+import { getStaffQualificationChecklist } from '@/api/govReports'
+import { PERMISSION_NAMES } from '@/constants/permissions'
+import { hasPermission } from '@/utils/auth'
+import { saveBlobResponse } from '@/utils/download'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const router = useRouter()
 const now = new Date()
 const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
 const yearOptions = computed(() => [query.year - 1, query.year, query.year + 1])
+const canExportGovReports = computed(() =>
+    hasPermission(PERMISSION_NAMES.GOV_REPORTS_EXPORT),
+)
+const qualificationExporting = ref(false)
 
 const { records, loading, status, anomalies, finalizedCount, refresh } = useSalarySettlement(
     toRef(query, 'year'),
@@ -104,6 +125,25 @@ const goSettle = () =>
         path: '/salary/settle',
         query: { year: String(query.year), month: String(query.month), step: statusMeta.value.step },
     })
+
+const exportQualificationChecklist = async () => {
+    qualificationExporting.value = true
+    try {
+        const response = await getStaffQualificationChecklist({
+            year: query.year,
+            month: query.month,
+        })
+        saveBlobResponse(
+            response,
+            `教職員4合1資格核對表_${query.year - 1911}年${String(query.month).padStart(2, '0')}月.xlsx`,
+        )
+        ElMessage.success('4 合 1 資格核對表已下載')
+    } catch (error: unknown) {
+        ElMessage.error(getErrorMessage(error, '下載 4 合 1 資格核對表失敗'))
+    } finally {
+        qualificationExporting.value = false
+    }
+}
 
 const links = [
     { path: '/salary/history', title: '薪資總覽與歷史', desc: '全員月度對帳、個人歷史與快照' },
