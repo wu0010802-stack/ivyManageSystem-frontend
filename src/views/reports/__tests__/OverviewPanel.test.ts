@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
@@ -251,5 +252,73 @@ describe('OverviewPanel 方向A版面（行動指揮塔，2026-08-24 改版）',
     const item = w.find('[data-test="todo-item-salary-pending"]')
     expect(item.exists()).toBe(true)
     expect(item.find('.todo-dot--danger').exists()).toBe(true)
+  })
+})
+
+describe('OverviewPanel 稽核修正（2026-08-25）', () => {
+  it('無待辦時待辦卡為中性底：不帶 todo-card--active（M4 平靜狀態不穿警示色）', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const card = w.find('[data-test="todo-card"]')
+    expect(card.exists()).toBe(true)
+    expect(card.classes()).not.toContain('todo-card--active')
+  })
+
+  it('有待辦時待辦卡帶 todo-card--active（琥珀警示底只在真有事時出現）', async () => {
+    vi.mocked(getDashboard).mockResolvedValueOnce({
+      data: {
+        attendance_monthly: [],
+        salary_monthly: [{ month: 6, employee_count_pending: 3 }],
+      },
+    })
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('[data-test="todo-card"]').classes()).toContain('todo-card--active')
+  })
+
+  it('趨勢圖卡 header 提供鍵盤可及的收支彙總入口（m10 不再滑鼠限定）', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    const link = w.find('[data-test="chart-detail-link"]')
+    expect(link.exists()).toBe(true)
+    expect(link.element.tagName).toBe('BUTTON')
+    await link.trigger('click')
+    expect(w.emitted('navigate')?.[0]).toEqual([{ tab: 'finance' }])
+  })
+
+  it('雙欄與摘要卡列帶 row-gap 類名（M3 堆疊斷點垂直間距）', async () => {
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.find('.overview-grid').exists()).toBe(true)
+    expect(w.find('.summary-row').exists()).toBe(true)
+  })
+})
+
+describe('OverviewPanel/ReportKpiCard 樣式 token 紀律（design.md 硬規則；M5/M6/m7）', () => {
+  // vitest css:false 無法斷言 computed style，比照 ReportKpiCard.test.ts
+  // 既有慣例改斷言 SFC 原始碼的 style 段。
+  it('scoped style 不得出現裸 px 字級／裸 4px 圓角／裸秒數 transition', () => {
+    for (const f of ['src/views/reports/OverviewPanel.vue', 'src/views/reports/ReportKpiCard.vue']) {
+      const src = readFileSync(f, 'utf8')
+      expect(src, `${f} 仍有裸 font-size px`).not.toMatch(/font-size:\s*\d+px/)
+      expect(src, `${f} 仍有裸 border-radius: 4px`).not.toMatch(/border-radius:\s*4px/)
+      expect(src, `${f} 仍有裸 transition 時長`).not.toMatch(/transition:[^;]*\d+(\.\d+)?s/)
+    }
+  })
+
+  it('summary-value 與 kpi-value 一致使用 tabular-nums', () => {
+    const src = readFileSync('src/views/reports/OverviewPanel.vue', 'utf8')
+    expect(src).toMatch(/\.summary-value\s*\{[^}]*tabular-nums/s)
+  })
+
+  it('row-gap 規則存在（.overview-grid／.summary-row）', () => {
+    const src = readFileSync('src/views/reports/OverviewPanel.vue', 'utf8')
+    expect(src).toMatch(/\.overview-grid[^{]*\{[^}]*row-gap/s)
+  })
+
+  it('待辦計數徽章不再以白字壓 warning 主色（M5 AA 對比：改 warning-darker 底）', () => {
+    const src = readFileSync('src/views/reports/OverviewPanel.vue', 'utf8')
+    const badge = /\.todo-count\s*\{[^}]*\}/s.exec(src)?.[0] ?? ''
+    expect(badge).toContain('var(--color-warning-darker)')
   })
 })

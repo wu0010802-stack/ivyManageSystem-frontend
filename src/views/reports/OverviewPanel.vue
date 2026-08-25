@@ -13,7 +13,7 @@ import { LineChart } from './chartSetup'
 import ReportKpiCard from './ReportKpiCard.vue'
 import SparkLine from './SparkLine.vue'
 import { computeReportPeriod } from './useReportPeriod'
-import { buildTrendChartData, inProgressIndex } from './trendChart'
+import { buildTrendChartData, inProgressIndex, formatAxisTick } from './trendChart'
 import {
   pctChange, sumTrendUpTo, futurePreloggedExpense, type FinanceTrendRow,
 } from './financeTrend'
@@ -144,7 +144,7 @@ const trendChartOptions = computed(() => ({
       },
     },
   },
-  scales: { y: { ticks: { callback: (v: number | string) => '$' + (Number(v) / 1000).toFixed(0) + 'k' } } },
+  scales: { y: { ticks: { callback: (v: number | string) => formatAxisTick(v) } } },
   onClick: (_e: unknown, elements: Array<{ index: number }>) => {
     if (!elements.length) return
     emit('navigate', { tab: 'finance', month: elements[0].index + 1 })
@@ -362,18 +362,31 @@ const formatFetchedAt = (ts: number) => {
     </template>
 
     <!-- 主雙欄（方向A 行動指揮塔）：左＝趨勢圖＋摘要卡；右＝待辦與資料說明常駐 rail -->
-    <el-row :gutter="16">
+    <el-row :gutter="16" class="overview-grid">
       <el-col :xs="24" :lg="16">
         <div class="main-col" data-test="overview-main">
           <div v-if="financeUnavailable" class="section-error" data-test="finance-error">
             <el-empty :description="financeErrorText" />
           </div>
           <el-card v-else class="chart-card" shadow="never">
-            <template #header><span class="chart-title">年度收支趨勢（點擊資料點看該月明細）</span></template>
+            <template #header>
+              <div class="chart-header">
+                <span class="chart-title">年度收支趨勢（點擊資料點看該月明細）</span>
+                <!-- 鍵盤可及的下鑽入口：canvas 點擊只有滑鼠能用（稽核 m10） -->
+                <button
+                  type="button"
+                  class="chart-detail-link"
+                  data-test="chart-detail-link"
+                  @click="emit('navigate', { tab: 'finance' })"
+                >
+                  查看收支彙總 →
+                </button>
+              </div>
+            </template>
             <div class="chart-container"><LineChart :data="trendChartData" :options="trendChartOptions" /></div>
           </el-card>
 
-          <el-row :gutter="16">
+          <el-row :gutter="16" class="summary-row">
             <el-col :xs="24" :sm="8">
               <el-card
                 v-if="!dashboardUnavailable"
@@ -430,7 +443,12 @@ const formatFetchedAt = (ts: number) => {
         <div class="rail" data-test="overview-rail">
           <!-- 異常與待辦：資料源為 dashboard/fixedCost/signoff，與 finance 是否可用無關
                （2026-07-11 review F2），故獨立於 financeUnavailable 之外渲染，不受連坐。 -->
-          <el-card class="todo-card" shadow="never">
+          <el-card
+            class="todo-card"
+            :class="{ 'todo-card--active': todoItems.length > 0 }"
+            data-test="todo-card"
+            shadow="never"
+          >
             <template #header>
               <div class="todo-header">
                 <span class="chart-title">異常與待辦</span>
@@ -519,17 +537,18 @@ const formatFetchedAt = (ts: number) => {
 }
 
 .kpi-band-note {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-align: center;
-  margin-top: -4px;
+  /* 收攏與上方 KPI 帶的視覺距離（.overview gap 的反向微調） */
+  margin-top: calc(-1 * var(--space-1));
 }
 
 /* netClass 動態：正數綠／負數紅，提示營運盈虧；非裝飾性色，保留 */
 .value-red { color: var(--color-danger); }
 .value-green { color: var(--color-success); }
 
-.section-error { padding: 16px 0; }
+.section-error { padding: var(--space-4) 0; }
 
 .kpi-label {
   font-size: var(--text-sm);
@@ -539,33 +558,51 @@ const formatFetchedAt = (ts: number) => {
 
 /* 左欄／右欄容器：欄內卡片垂直堆疊 */
 .main-col, .rail { display: flex; flex-direction: column; gap: var(--space-4); }
-/* <lg 雙欄塌成單欄堆疊時，左右欄之間補回間距（el-row gutter 只給水平向） */
-@media (--to-md) {
-  .main-col { margin-bottom: var(--space-4); }
-}
+/* 堆疊斷點垂直間距（稽核 M3）：el-row gutter 只給水平向，改在 flex row 上補
+   row-gap——雙欄 <lg（1200px）塌單欄、摘要卡 <sm 塌單欄時自動生效，同列並排時
+   無作用。（舊版只在 --to-md ≤1023.98px 補 margin-bottom，1024–1199px 區間
+   左右欄會垂直貼死。） */
+.overview-grid, .summary-row { row-gap: var(--space-4); }
 
-/* 待辦卡：琥珀底常駐提醒（token 走 -soft 變體，dark 模式由 a11y.css 自動換 alpha tint） */
-.todo-card {
+/* 待辦卡：中性底；琥珀警示底只在真有待辦時上（--active，稽核 M4——
+   「目前無異常待辦」的平靜狀態不穿警示色）。dark 模式由 a11y.css 自動換 alpha tint */
+.todo-card--active {
   background: var(--color-warning-soft);
   border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
 }
-.todo-card :deep(.el-card__header) {
+.todo-card--active :deep(.el-card__header) {
   border-bottom-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
 }
 .todo-card :deep(.el-card__body) { display: flex; flex-direction: column; gap: 10px; }
-.todo-header { display: flex; align-items: center; gap: 8px; }
+.todo-header { display: flex; align-items: center; gap: var(--space-2); }
 .todo-count {
-  background: var(--color-warning);
+  /* warning-darker 底＋白字 ≈ 5.0:1 過 AA（稽核 M5；warning 主色＋白字僅 ~2.2:1） */
+  background: var(--color-warning-darker);
   color: var(--neutral-0);
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 700;
   line-height: 18px;
   border-radius: var(--radius-full);
-  padding: 0 8px;
+  padding: 0 var(--space-2);
 }
-.chart-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.chart-title { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.chart-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.chart-detail-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-xs);
+  color: var(--el-color-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chart-detail-link:hover { text-decoration: underline; }
+.chart-detail-link:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
 .todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.todo-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--text-primary); }
+.todo-item { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-primary); }
 .todo-dot { width: 8px; height: 8px; border-radius: var(--radius-full); flex: 0 0 auto; margin-top: 5px; }
 .todo-dot--danger { background: var(--color-danger); }
 .todo-dot--warning { background: var(--color-warning); }
@@ -573,11 +610,12 @@ const formatFetchedAt = (ts: number) => {
 .todo-icon-ok { color: var(--color-success); }
 .todo-link {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; color: var(--el-color-primary);
+  font-size: var(--text-sm); color: var(--el-color-primary);
   text-decoration: none;
   padding-top: 6px;
-  border-top: 1px solid color-mix(in srgb, var(--color-warning) 25%, transparent);
+  border-top: 1px solid var(--el-border-color-lighter);
 }
+.todo-card--active .todo-link { border-top-color: color-mix(in srgb, var(--color-warning) 25%, transparent); }
 .todo-link:hover { text-decoration: underline; }
 
 /* 資料說明：右欄卡片化外觀（el-collapse 本體透明化，讓外框當卡片） */
@@ -586,20 +624,20 @@ const formatFetchedAt = (ts: number) => {
   border-bottom: none;
   background: var(--surface-color);
   border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-4);
 }
 .data-notes :deep(.el-collapse-item__header),
 .data-notes :deep(.el-collapse-item__wrap) {
   background: transparent;
   border-bottom: none;
 }
-.notes-dl { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin: 0; }
+.notes-dl { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.7; margin: 0; }
 .notes-dl dt { font-weight: 600; color: var(--text-primary); margin-top: 10px; }
 .notes-dl dt:first-child { margin-top: 0; }
 .notes-dl dd { margin: 2px 0 0 0; }
 
-.summary-card { text-align: center; padding: 12px 8px; cursor: pointer; height: 100%; transition: border-color 0.2s; }
+.summary-card { text-align: center; padding: var(--space-3) var(--space-2); cursor: pointer; height: 100%; transition: border-color var(--transition-base); }
 .summary-card:hover { border-color: var(--el-color-primary); }
 /* 鍵盤可及性：可點卡片 role=button + tabindex=0，聚焦時給明顯 outline（比照 ClassroomView 卡片範式） */
 .summary-card:focus-visible {
@@ -608,8 +646,15 @@ const formatFetchedAt = (ts: number) => {
 }
 .summary-card--static { cursor: default; }
 .summary-card--static:hover { border-color: var(--el-border-color-lighter); }
-.summary-value { font-size: 24px; font-weight: 700; color: var(--text-primary); margin: 4px 0; }
-.summary-sub { font-size: 12px; color: var(--text-secondary); }
-.summary-link { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--el-color-primary); }
+.summary-value {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  /* 與 kpi-value 一致的等寬數字（稽核 m7） */
+  font-variant-numeric: tabular-nums;
+  margin: var(--space-1) 0;
+}
+.summary-sub { font-size: var(--text-xs); color: var(--text-secondary); }
+.summary-link { display: inline-block; margin-top: 6px; font-size: var(--text-xs); color: var(--el-color-primary); }
 .chart-container { height: 320px; position: relative; }
 </style>
