@@ -6421,6 +6421,354 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/bank-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bank Imports */
+        get: operations["list_bank_imports_api_fees_bank_imports_get"];
+        put?: never;
+        /** Confirm Bank Import */
+        post: operations["confirm_bank_import_api_fees_bank_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Bank Import */
+        post: operations["preview_bank_import_api_fees_bank_imports_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bank Transactions */
+        get: operations["list_bank_transactions_api_fees_bank_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/allocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allocate Transaction */
+        post: operations["allocate_transaction_api_fees_bank_transactions__txn_id__allocate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Transaction Candidates */
+        get: operations["get_transaction_candidates_api_fees_bank_transactions__txn_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ignore Transaction Route */
+        post: operations["ignore_transaction_route_api_fees_bank_transactions__txn_id__ignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse Transaction Route */
+        post: operations["reverse_transaction_route_api_fees_bank_transactions__txn_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Billing Codes */
+        get: operations["list_billing_codes_api_fees_billing_codes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes/{assignment_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Billing Code */
+        post: operations["deactivate_billing_code_api_fees_billing_codes__assignment_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Billing Codes
+         * @description 會計確認後批次啟用（關舊開新，不覆蓋歷史）。
+         */
+        post: operations["activate_billing_codes_api_fees_billing_codes_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Billing Codes
+         * @description 依現況產生建議末四碼（僅 preview，不寫入）。
+         */
+        post: operations["suggest_billing_codes_api_fees_billing_codes_suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Handovers */
+        get: operations["list_handovers_api_fees_cash_handovers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers/{batch_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Handover */
+        post: operations["confirm_handover_api_fees_cash_handovers__batch_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers/{batch_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Handover */
+        post: operations["reopen_handover_api_fees_cash_handovers__batch_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers/{batch_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Handover */
+        post: operations["submit_handover_api_fees_cash_handovers__batch_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Cash Receipt Route */
+        post: operations["create_cash_receipt_route_api_fees_cash_receipts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Close Periods */
+        get: operations["list_close_periods_api_fees_close_periods_get"];
+        put?: never;
+        /** Close Period Route */
+        post: operations["close_period_route_api_fees_close_periods_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods/{close_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Close Period */
+        get: operations["get_close_period_api_fees_close_periods__close_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods/{close_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Close Route */
+        post: operations["reopen_close_route_api_fees_close_periods__close_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Close Summary */
+        get: operations["close_summary_api_fees_close_periods_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/generate": {
         parameters: {
             query?: never;
@@ -6464,6 +6812,217 @@ export interface paths {
         get: operations["list_fee_periods_api_fees_periods_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Refunds */
+        get: operations["list_refunds_api_fees_prepayment_refunds_get"];
+        put?: never;
+        /** Create Refund */
+        post: operations["create_refund_api_fees_prepayment_refunds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Refund Route */
+        post: operations["approve_refund_route_api_fees_prepayment_refunds__refund_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Refund Route */
+        post: operations["cancel_refund_route_api_fees_prepayment_refunds__refund_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Refund Route */
+        post: operations["complete_refund_route_api_fees_prepayment_refunds__refund_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse Refund Route
+         * @description 沖銷已完成的退款（P2-7：誤按完成/實際未交付；老闆簽核權限）。
+         */
+        post: operations["reverse_refund_route_api_fees_prepayment_refunds__refund_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Prepayments */
+        get: operations["list_prepayments_api_fees_prepayments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Prepayment */
+        post: operations["apply_prepayment_api_fees_prepayments__credit_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Movements */
+        get: operations["list_movements_api_fees_prepayments__credit_id__movements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse Prepayment Apply */
+        post: operations["reverse_prepayment_apply_api_fees_prepayments__credit_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfer Prepayment */
+        post: operations["transfer_prepayment_api_fees_prepayments__credit_id__transfer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Receipts */
+        get: operations["list_receipts_api_fees_receipts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/receipts/{receipt_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse Cash Receipt Route
+         * @description 現金收款沖銷（P1-5：誤登現金的正規更正路徑；銀行交易走交易沖銷）。
+         */
+        post: operations["reverse_cash_receipt_route_api_fees_receipts__receipt_id__reverse_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -19858,6 +20417,48 @@ export interface components {
             /** Severity */
             severity?: ("mild" | "moderate" | "severe") | null;
         };
+        /** AllocateOut */
+        AllocateOut: {
+            /** Allocated Total */
+            allocated_total: number;
+            /** Allocation Ids */
+            allocation_ids: number[];
+            /** Receipt Id */
+            receipt_id: number;
+            /** Transaction Status */
+            transaction_status: string;
+            /** Unallocated */
+            unallocated: number;
+        };
+        /** AllocateRequest */
+        AllocateRequest: {
+            /**
+             * Allow Partial
+             * @default false
+             */
+            allow_partial: boolean;
+            /** Parts */
+            parts: components["schemas"]["AllocationPartIn"][];
+        };
+        /** AllocationPartIn */
+        AllocationPartIn: {
+            /** Amount */
+            amount: number;
+            /** Fee Record Id */
+            fee_record_id?: number | null;
+            /** Part Type */
+            part_type: string;
+            /** Reason */
+            reason?: string | null;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Student Id */
+            student_id?: number | null;
+            /** Target School Year */
+            target_school_year?: number | null;
+            /** Target Semester */
+            target_semester?: number | null;
+        };
         /**
          * AnnouncementAttachmentOut
          * @description 單筆公告附件（list 內嵌）。
@@ -20726,6 +21327,129 @@ export interface components {
             /** Reference Date */
             reference_date?: string | null;
         };
+        /** BankImportOut */
+        BankImportOut: {
+            /** Bank */
+            bank: string;
+            /** Created */
+            created?: boolean | null;
+            /** Credit Total */
+            credit_total: number;
+            /** Debit Total */
+            debit_total: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Id */
+            id: number;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+            /** Status */
+            status: string;
+        };
+        /** BankImportPreviewOut */
+        BankImportPreviewOut: {
+            /** Already Imported */
+            already_imported: boolean;
+            /** Credit Total */
+            credit_total: number;
+            /** Debit Total */
+            debit_total: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Errors */
+            errors: components["schemas"]["RowErrorOut"][];
+            /** Existing Import Id */
+            existing_import_id?: number | null;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Filename */
+            filename: string;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+            /** With Collection Number */
+            with_collection_number: number;
+        };
+        /** BankTransactionListOut */
+        BankTransactionListOut: {
+            /** Items */
+            items: components["schemas"]["BankTransactionOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** BankTransactionOut */
+        BankTransactionOut: {
+            /**
+             * Allocated Total
+             * @default 0
+             */
+            allocated_total: number;
+            /** Amount */
+            amount: number;
+            /** Balance */
+            balance?: number | null;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Import Id */
+            import_id: number;
+            /** Memo */
+            memo?: string | null;
+            /** Occurrence Index */
+            occurrence_index: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Status Note */
+            status_note?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /**
+             * Transaction At
+             * Format: date-time
+             */
+            transaction_at: string;
+            /**
+             * Unallocated
+             * @default 0
+             */
+            unallocated: number;
+        };
         /**
          * BatchApproveFailItem
          * @description 批次核准/駁回單筆失敗紀錄 — {id, reason}。
@@ -21053,6 +21777,120 @@ export interface components {
             /** Template Id */
             template_id: number;
         };
+        /** BillingCodeActivateItem */
+        BillingCodeActivateItem: {
+            /** Code Suffix */
+            code_suffix: string;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /** BillingCodeActivateOut */
+        BillingCodeActivateOut: {
+            /** Activated */
+            activated: number;
+            /** Closed */
+            closed: number;
+        };
+        /** BillingCodeActivateRequest */
+        BillingCodeActivateRequest: {
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Items */
+            items: components["schemas"]["BillingCodeActivateItem"][];
+            /** Reason */
+            reason?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
+        /** BillingCodeAssignmentOut */
+        BillingCodeAssignmentOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Code Suffix */
+            code_suffix: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
+            /** Id */
+            id: number;
+            /** Reason */
+            reason?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /** BillingCodeDeactivateRequest */
+        BillingCodeDeactivateRequest: {
+            /**
+             * Effective To
+             * Format: date
+             */
+            effective_to: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** BillingCodeSuggestionOut */
+        BillingCodeSuggestionOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Current Suffix */
+            current_suffix?: string | null;
+            /** Grade Name */
+            grade_name: string;
+            /** State */
+            state: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+            /** Suggested Suffix */
+            suggested_suffix: string;
+        };
+        /** BillingCodeSuggestOut */
+        BillingCodeSuggestOut: {
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Suggestions */
+            suggestions: components["schemas"]["BillingCodeSuggestionOut"][];
+            /** Unassignable */
+            unassignable: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** BillingCodeSuggestRequest */
+        BillingCodeSuggestRequest: {
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
         /**
          * BindAdditionalChildOut
          * @description POST /bind-additional 綁定多個小孩成功回傳。
@@ -21097,6 +21935,11 @@ export interface components {
         };
         /** Body_batch_import_api_art_teacher_payroll_batch_import_post */
         Body_batch_import_api_art_teacher_payroll_batch_import_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_confirm_bank_import_api_fees_bank_imports_post */
+        Body_confirm_bank_import_api_fees_bank_imports_post: {
             /** File */
             file: string;
         };
@@ -21171,6 +22014,11 @@ export interface components {
         };
         /** Body_preview_attendance_excel_api_attendance_upload_preview_excel_post */
         Body_preview_attendance_excel_api_attendance_upload_preview_excel_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_bank_import_api_fees_bank_imports_preview_post */
+        Body_preview_bank_import_api_fees_bank_imports_preview_post: {
             /** File */
             file: string;
         };
@@ -22229,6 +23077,105 @@ export interface components {
              */
             travel_mode: string;
         };
+        /** CandidateItemOut */
+        CandidateItemOut: {
+            /** Fee Record Id */
+            fee_record_id: number;
+            /** Fee Type */
+            fee_type?: string | null;
+            /** Label */
+            label: string;
+            /** Remaining */
+            remaining: number;
+        };
+        /** CandidateOut */
+        CandidateOut: {
+            /** Cross Student */
+            cross_student: boolean;
+            /** Parts */
+            parts: components["schemas"]["CandidatePartOut"][];
+            /** Total */
+            total: number;
+        };
+        /** CandidatePartOut */
+        CandidatePartOut: {
+            /** Amount */
+            amount: number;
+            /** Fee Record Id */
+            fee_record_id?: number | null;
+            /** Label */
+            label: string;
+            /** Part Type */
+            part_type: string;
+            /** Student Id */
+            student_id: number;
+            /** Target School Year */
+            target_school_year?: number | null;
+            /** Target Semester */
+            target_semester?: number | null;
+        };
+        /** CandidatePrepayOptionOut */
+        CandidatePrepayOptionOut: {
+            /** Amount */
+            amount: number;
+            /** Target School Year */
+            target_school_year: number;
+            /** Target Semester */
+            target_semester: number;
+        };
+        /** CandidatesOut */
+        CandidatesOut: {
+            /** Candidates */
+            candidates: components["schemas"]["CandidateOut"][];
+            /** Level */
+            level: string;
+            /** Reasons */
+            reasons: string[];
+            /** Students */
+            students: components["schemas"]["CandidateStudentOut"][];
+            /** Transaction Id */
+            transaction_id: number;
+        };
+        /** CandidateStudentOut */
+        CandidateStudentOut: {
+            /** Display Name */
+            display_name: string;
+            /** Items */
+            items: components["schemas"]["CandidateItemOut"][];
+            prepayment?: components["schemas"]["CandidatePrepayOptionOut"] | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /** CashReceiptOut */
+        CashReceiptOut: {
+            /**
+             * Allocation Ids
+             * @default []
+             */
+            allocation_ids: number[];
+            /** Handover Batch Id */
+            handover_batch_id?: number | null;
+            /** Idempotent Replay */
+            idempotent_replay: boolean;
+            /** Receipt Id */
+            receipt_id: number;
+        };
+        /** CashReceiptRequest */
+        CashReceiptRequest: {
+            /** Amount */
+            amount: number;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Parts */
+            parts: components["schemas"]["AllocationPartIn"][];
+            /** Payer Note */
+            payer_note?: string | null;
+            /**
+             * Received Date
+             * Format: date
+             */
+            received_date: string;
+        };
         /** CatalogOut */
         CatalogOut: {
             /** Code */
@@ -22393,12 +23340,16 @@ export interface components {
             avg_monthly_enrollment: string;
             /** Class Performance Rate */
             class_performance_rate: string;
+            /** Class Performance Rate Override */
+            class_performance_rate_override?: string | null;
             /** Classroom Id */
             classroom_id: number;
             /** Classroom Name */
             classroom_name?: string | null;
             /** Deputy Teacher Name */
             deputy_teacher_name?: string | null;
+            /** Effective Class Performance Rate */
+            effective_class_performance_rate: string;
             /** Head Count Target */
             head_count_target: number;
             /** Head Teacher Employee Id */
@@ -22967,6 +23918,57 @@ export interface components {
             target_grade_id?: number | null;
             /** Target Name */
             target_name?: string | null;
+        };
+        /** ClosePeriodListOut */
+        ClosePeriodListOut: {
+            /** Items */
+            items: components["schemas"]["ClosePeriodOut"][];
+            /** Total */
+            total: number;
+        };
+        /** ClosePeriodOut */
+        ClosePeriodOut: {
+            /** Close Month */
+            close_month: number;
+            /** Close Year */
+            close_year: number;
+            /**
+             * Closed At
+             * Format: date-time
+             */
+            closed_at: string;
+            /** Closed By */
+            closed_by: number;
+            /** Exception Note */
+            exception_note?: string | null;
+            /** Has Exceptions */
+            has_exceptions: boolean;
+            /** Id */
+            id: number;
+            /** Reopen Reason */
+            reopen_reason?: string | null;
+            /** Reopened At */
+            reopened_at?: string | null;
+            /** Snapshot */
+            snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+        };
+        /** ClosePeriodRequest */
+        ClosePeriodRequest: {
+            /** Close Month */
+            close_month: number;
+            /** Close Year */
+            close_year: number;
+            /** Exception Note */
+            exception_note?: string | null;
+        };
+        /** CloseReopenRequest */
+        CloseReopenRequest: {
+            /** Reason */
+            reason: string;
         };
         /** CommentIn */
         CommentIn: {
@@ -25641,6 +26643,47 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** FeeReceiptListOut */
+        FeeReceiptListOut: {
+            /** Items */
+            items: components["schemas"]["FeeReceiptOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** FeeReceiptOut */
+        FeeReceiptOut: {
+            /**
+             * Allocated Total
+             * @default 0
+             */
+            allocated_total: number;
+            /** Amount */
+            amount: number;
+            /** Bank Transaction Id */
+            bank_transaction_id?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Handover Batch Id */
+            handover_batch_id?: number | null;
+            /** Id */
+            id: number;
+            /** Payment Method */
+            payment_method: string;
+            /**
+             * Received Date
+             * Format: date
+             */
+            received_date: string;
+            /** Status */
+            status: string;
+        };
         /**
          * FeeRecordListOut
          * @description GET /fees/records 回傳（分頁）。
@@ -26673,6 +27716,57 @@ export interface components {
             /** Sort Order */
             sort_order?: number | null;
         };
+        /** HandoverBatchOut */
+        HandoverBatchOut: {
+            /** Accountant User Id */
+            accountant_user_id?: number | null;
+            /**
+             * Business Date
+             * Format: date
+             */
+            business_date: string;
+            /** Cash Receipt Total */
+            cash_receipt_total: number;
+            /** Expected Cash Amount */
+            expected_cash_amount?: number | null;
+            /** Id */
+            id: number;
+            /** Owner Actual Amount */
+            owner_actual_amount?: number | null;
+            /** Owner Confirmed At */
+            owner_confirmed_at?: string | null;
+            /** Owner Confirmed By */
+            owner_confirmed_by?: number | null;
+            /** Reopen Reason */
+            reopen_reason?: string | null;
+            /** Status */
+            status: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Variance */
+            variance?: number | null;
+            /** Variance Reason */
+            variance_reason?: string | null;
+        };
+        /** HandoverConfirmRequest */
+        HandoverConfirmRequest: {
+            /** Owner Actual Amount */
+            owner_actual_amount: number;
+            /** Variance Reason */
+            variance_reason?: string | null;
+        };
+        /** HandoverListOut */
+        HandoverListOut: {
+            /** Items */
+            items: components["schemas"]["HandoverBatchOut"][];
+            /** Total */
+            total: number;
+        };
+        /** HandoverReopenRequest */
+        HandoverReopenRequest: {
+            /** Reason */
+            reason: string;
+        };
         /** HighRiskListResponse */
         HighRiskListResponse: {
             /** Items */
@@ -26817,6 +27911,11 @@ export interface components {
             /** Note */
             note: string;
         };
+        /** IgnoreRequest */
+        IgnoreRequest: {
+            /** Reason */
+            reason: string;
+        };
         /** ImpersonateRequest */
         ImpersonateRequest: {
             /** Employee Id */
@@ -26871,6 +27970,11 @@ export interface components {
             participants_updated: number;
             /** Score Items Upserted */
             score_items_upserted: number;
+            /**
+             * Skipped Finalized Names
+             * @default []
+             */
+            skipped_finalized_names: string[];
             /** Skipped Unresolved Names */
             skipped_unresolved_names: string[];
             /** Summaries Upserted */
@@ -33478,6 +34582,137 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        /** PrepaymentApplyOut */
+        PrepaymentApplyOut: {
+            /** Credit Id */
+            credit_id: number;
+            /** Fee Adjustment Id */
+            fee_adjustment_id?: number | null;
+            /** Idempotent Replay */
+            idempotent_replay: boolean;
+            /** Movement Id */
+            movement_id: number;
+        };
+        /** PrepaymentApplyRequest */
+        PrepaymentApplyRequest: {
+            /** Fee Record Id */
+            fee_record_id: number;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+        };
+        /** PrepaymentCreditListOut */
+        PrepaymentCreditListOut: {
+            /** Items */
+            items: components["schemas"]["PrepaymentCreditOut"][];
+            /** Total */
+            total: number;
+        };
+        /** PrepaymentCreditOut */
+        PrepaymentCreditOut: {
+            /** Balance */
+            balance: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Original Amount */
+            original_amount: number;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name?: string | null;
+            /** Target School Year */
+            target_school_year: number;
+            /** Target Semester */
+            target_semester: number;
+            /** Visit Child Name */
+            visit_child_name?: string | null;
+        };
+        /** PrepaymentMovementOut */
+        PrepaymentMovementOut: {
+            /** Allocation Id */
+            allocation_id?: number | null;
+            /** Amount */
+            amount: number;
+            /** Fee Record Id */
+            fee_record_id?: number | null;
+            /** Id */
+            id: number;
+            /** Movement Type */
+            movement_type: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Reason */
+            reason?: string | null;
+            /** Refund Id */
+            refund_id?: number | null;
+            /** Reversal Of Id */
+            reversal_of_id?: number | null;
+        };
+        /** PrepaymentRefundListOut */
+        PrepaymentRefundListOut: {
+            /** Items */
+            items: components["schemas"]["PrepaymentRefundOut"][];
+            /** Total */
+            total: number;
+        };
+        /** PrepaymentRefundOut */
+        PrepaymentRefundOut: {
+            /** Amount */
+            amount: number;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Cancel Reason */
+            cancel_reason?: string | null;
+            /** Disbursed At */
+            disbursed_at?: string | null;
+            /** Id */
+            id: number;
+            /** Prepayment Credit Id */
+            prepayment_credit_id: number;
+            /** Reason */
+            reason: string;
+            /** Receipt Number */
+            receipt_number?: string | null;
+            /** Recipient Name */
+            recipient_name?: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Status */
+            status: string;
+        };
+        /** PrepaymentReverseOut */
+        PrepaymentReverseOut: {
+            /** Credit Id */
+            credit_id: number;
+            /** Reversed Movement Id */
+            reversed_movement_id: number;
+        };
+        /** PrepaymentReverseRequest */
+        PrepaymentReverseRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /** PrepaymentTransferOut */
+        PrepaymentTransferOut: {
+            /** Credit Id */
+            credit_id: number;
+            /** Student Id */
+            student_id: number;
+        };
         /** PreviewClassOut */
         PreviewClassOut: {
             /** Art Teacher Name */
@@ -34825,6 +36060,27 @@ export interface components {
             /** T Total */
             T_total?: number | null;
         };
+        /** RefundCancelRequest */
+        RefundCancelRequest: {
+            /** Cancel Reason */
+            cancel_reason: string;
+        };
+        /** RefundCompleteRequest */
+        RefundCompleteRequest: {
+            /** Receipt Number */
+            receipt_number?: string | null;
+            /** Recipient Name */
+            recipient_name: string;
+        };
+        /** RefundCreateRequest */
+        RefundCreateRequest: {
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Prepayment Credit Id */
+            prepayment_credit_id: number;
+            /** Reason */
+            reason: string;
+        };
         /**
          * RefundRequest
          * @description 退款請求。退款走獨立流程，於 StudentFeeRefund 表留下歷史。
@@ -36157,6 +37413,18 @@ export interface components {
             /** Target */
             target: string;
         };
+        /** ReverseOut */
+        ReverseOut: {
+            /** Receipt Id */
+            receipt_id: number;
+            /** Reversed Count */
+            reversed_count: number;
+        };
+        /** ReverseRequest */
+        ReverseRequest: {
+            /** Reason */
+            reason: string;
+        };
         /**
          * RevokeSessionOut
          * @description DELETE /sessions/{family_id} — Per-session revoke.
@@ -36262,6 +37530,13 @@ export interface components {
             is_active?: boolean | null;
             /** Name */
             name?: string | null;
+        };
+        /** RowErrorOut */
+        RowErrorOut: {
+            /** Reason */
+            reason: string;
+            /** Row Number */
+            row_number: number;
         };
         /** RunNowOut */
         RunNowOut: {
@@ -52027,6 +53302,731 @@ export interface operations {
             };
         };
     };
+    list_bank_imports_api_fees_bank_imports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankImportOut"][];
+                };
+            };
+        };
+    };
+    confirm_bank_import_api_fees_bank_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_confirm_bank_import_api_fees_bank_imports_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_bank_import_api_fees_bank_imports_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_bank_import_api_fees_bank_imports_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bank_transactions_api_fees_bank_transactions_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                import_id?: number | null;
+                page?: number;
+                page_size?: number;
+                status?: string | null;
+                suffix?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankTransactionListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    allocate_transaction_api_fees_bank_transactions__txn_id__allocate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transaction_candidates_api_fees_bank_transactions__txn_id__candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ignore_transaction_route_api_fees_bank_transactions__txn_id__ignore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IgnoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_transaction_route_api_fees_bank_transactions__txn_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_billing_codes_api_fees_billing_codes_get: {
+        parameters: {
+            query?: {
+                active_only?: boolean;
+                student_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeAssignmentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_billing_code_api_fees_billing_codes__assignment_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCodeDeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeAssignmentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_billing_codes_api_fees_billing_codes_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCodeActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeActivateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_billing_codes_api_fees_billing_codes_suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCodeSuggestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeSuggestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_handovers_api_fees_cash_handovers_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_handover_api_fees_cash_handovers__batch_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoverConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_handover_api_fees_cash_handovers__batch_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoverReopenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_handover_api_fees_cash_handovers__batch_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_cash_receipt_route_api_fees_cash_receipts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashReceiptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashReceiptOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_close_periods_api_fees_close_periods_get: {
+        parameters: {
+            query?: {
+                include_snapshot?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_period_route_api_fees_close_periods_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosePeriodRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_close_period_api_fees_close_periods__close_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                close_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_close_route_api_fees_close_periods__close_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                close_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseReopenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_summary_api_fees_close_periods_summary_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     generate_from_templates_api_fees_generate_post: {
         parameters: {
             query?: never;
@@ -52076,6 +54076,442 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_refunds_api_fees_prepayment_refunds_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_refund_api_fees_prepayment_refunds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_refund_route_api_fees_prepayment_refunds__refund_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_refund_route_api_fees_prepayment_refunds__refund_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_refund_route_api_fees_prepayment_refunds__refund_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_refund_route_api_fees_prepayment_refunds__refund_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_prepayments_api_fees_prepayments_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                student_id?: number | null;
+                target_school_year?: number | null;
+                target_semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentCreditListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_prepayment_api_fees_prepayments__credit_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepaymentApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentApplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_movements_api_fees_prepayments__credit_id__movements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentMovementOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_prepayment_apply_api_fees_prepayments__credit_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepaymentReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transfer_prepayment_api_fees_prepayments__credit_id__transfer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentTransferOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_receipts_api_fees_receipts_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                method?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeReceiptListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_cash_receipt_route_api_fees_receipts__receipt_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
