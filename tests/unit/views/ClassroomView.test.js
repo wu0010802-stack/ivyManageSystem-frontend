@@ -183,7 +183,9 @@ describe('ClassroomView 班級搜尋', () => {
     await nextTick()
 
     expect(state.filteredClassrooms).toEqual([classrooms[1]])
-    expect(state.classroomShown).toBe(1)
+    // 2026-08-24 改版：「顯示筆數」改由 visibleClassrooms（搜尋∩年級∩統計篩選）供給，
+    // 無結構化篩選時語意與舊 classroomShown 相同
+    expect(state.visibleClassrooms.length).toBe(1)
     expect(state.classroomTotal).toBe(2)
   })
 
