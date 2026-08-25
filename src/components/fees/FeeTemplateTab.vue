@@ -10,10 +10,10 @@
           <el-option :value="2" label="下學期" />
         </el-select>
       </div>
-      <!-- 頂層最多 3 個 action：主要（產單）、次要（管理範本）、檢視選單（其餘收斂） -->
+      <!-- IA 改版：「產生費用單」移至帳單工作區 header，本頁只管範本與總覽。
+           頂層兩個 action：主要（管理範本）、檢視選單（其餘收斂） -->
       <div class="view-actions">
-        <el-button type="primary" @click="generateVisible = true">產生費用單</el-button>
-        <el-button @click="manageVisible = true">管理範本</el-button>
+        <el-button type="primary" @click="manageVisible = true">管理範本</el-button>
         <el-dropdown trigger="click" @command="onViewCommand">
           <el-button aria-label="檢視選項">
             檢視<el-icon class="view-actions__caret"><ArrowDown /></el-icon>
@@ -36,7 +36,8 @@
         :closable="false"
         show-icon
       >
-        該學期尚未建立任何費用範本。
+        該學期尚未建立任何費用範本：請先用右上「管理範本」逐年級建立，
+        再回「帳單」工作區以「產生費用單」批次產單。
       </el-alert>
       <el-empty
         v-else-if="!overviewLoading && gradeSections.length === 0"
@@ -122,12 +123,6 @@
       :grades="drawerGrades"
       @changed="loadOverview"
     />
-    <FeeGenerateModal
-      v-model="generateVisible"
-      :school-year="filterYear"
-      :semester="filterSemester"
-      @generated="loadOverview"
-    />
   </div>
 </template>
 
@@ -142,7 +137,6 @@ import { getCurrentAcademicTerm, currentRocYear } from '@/utils/academic'
 import { formatCurrency } from '@/utils/currency'
 import { FEE_TYPES } from '@/components/fees/feeTypes'
 import FeeTemplateManageDrawer from '@/components/fees/FeeTemplateManageDrawer.vue'
-import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
 
 interface FeeTemplate {
   grade_id: number | null
@@ -206,8 +200,8 @@ const _initTerm = getCurrentAcademicTerm()
 const filterYear = ref(_initTerm.school_year)
 const filterSemester = ref(_initTerm.semester)
 
+// 「產生費用單」已移至帳單工作區 header（IA 改版）；本頁只管範本與總覽
 const manageVisible = ref(false)
-const generateVisible = ref(false)
 // 本檔 Grade.id 為 number | string（展示用寬鬆型別），Drawer/Dialog 需 number
 const drawerGrades = computed(() =>
   grades.value

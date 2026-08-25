@@ -5,6 +5,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
+// 暖載：element-plus 與 @element-plus/icons-vue 首次 transform 很重（各上千個
+// module）。本檔各 tab 皆在 it() 內動態 import 元件，若讓第一個測試付這筆載入
+// 成本，8GB 機器高負載時會撞 5s testTimeout 假紅（實測首測可達 10s+）。
+// 移到收集階段一次付清；收集階段不受 testTimeout 限制。
+import 'element-plus'
+import '@element-plus/icons-vue'
 
 const apiMocks = vi.hoisted(() => ({
   getCashHandovers: vi.fn(() => Promise.resolve({ total: 0, items: [] })),

@@ -6,9 +6,10 @@
         type="month"
         value-format="YYYY-MM"
         placeholder="選擇月份"
+        aria-label="選擇關帳月份"
         @change="fetchSummary"
       />
-      <el-button @click="fetchSummary">重算</el-button>
+      <el-button aria-label="重新計算關帳試算" @click="fetchSummary">重算</el-button>
     </div>
 
     <template v-if="summary">
@@ -65,16 +66,36 @@
         {{ summary.checklist.equation_balanced ? '✓ 平衡' : '✗ 不平衡，請先處理' }}
       </el-alert>
 
-      <!-- 關帳 checklist -->
+      <!-- 關帳 checklist：已通過 / 未通過（阻擋直接關帳，可修正或帶例外） -->
       <h4 class="section-title">關帳前檢查</h4>
       <ul class="checklist" data-test="close-checklist">
         <li v-for="(ok, key) in summary.checklist" :key="key">
-          <el-icon :class="ok ? 'ok' : 'bad'">
+          <el-icon :class="ok ? 'ok' : 'bad'" aria-hidden="true">
             <component :is="ok ? CircleCheck : CircleClose" />
           </el-icon>
-          {{ CHECKLIST_LABELS[key] ?? key }}
+          <span>
+            {{ CHECKLIST_LABELS[key] ?? key }}
+            <span class="check-state">{{ ok ? '（已通過）' : '（未通過，阻擋直接關帳）' }}</span>
+          </span>
+          <el-button
+            v-if="!ok && CHECKLIST_FIX_TARGETS[key]"
+            size="small"
+            text
+            type="primary"
+            class="fix-link"
+            :aria-label="`前往修正：${CHECKLIST_LABELS[key] ?? key}`"
+            :data-test="`close-fix-${key}`"
+            @click="emit('navigate', CHECKLIST_FIX_TARGETS[key])"
+          >
+            前往修正
+          </el-button>
         </li>
       </ul>
+
+      <p v-if="!allChecksPass" class="blocked-hint" data-test="close-blocked-hint">
+        {{ failingCount }} 項檢查未通過，無法直接關帳：請逐項修正後按「重算」，
+        或於下方填寫例外說明改為「帶例外關帳」（快照會標記有差異）。
+      </p>
 
       <div class="close-bar">
         <el-input
@@ -83,14 +104,16 @@
           type="textarea"
           :rows="2"
           placeholder="存在未分類交易/差異：帶例外關帳必須填寫例外說明"
+          aria-label="帶例外關帳的例外說明"
           style="max-width: 480px"
           data-test="exception-note"
         />
         <el-button
           v-if="canApprove"
-          type="danger"
+          :type="allChecksPass ? 'primary' : 'warning'"
           data-test="close-btn"
           :disabled="!allChecksPass && !exceptionNote.trim()"
+          :aria-label="allChecksPass ? '關帳並凍結本月快照' : '帶例外關帳（需填例外說明）'"
           @click="doClose"
         >
           {{ allChecksPass ? '關帳' : '帶例外關帳' }}
@@ -130,9 +153,10 @@
             size="small"
             type="warning"
             text
+            aria-label="重開此月份關帳"
             @click="doReopen(row)"
           >
-            Reopen
+            重開
           </el-button>
         </template>
       </el-table-column>
@@ -200,6 +224,20 @@ const CHECKLIST_LABELS: Record<string, string> = {
   equation_balanced: '收款等式平衡',
 }
 
+// 每個阻擋項目的修正入口（由結算工作區冒泡給 StudentFeeView 導頁）
+const CHECKLIST_FIX_TARGETS: Record<string, { ws: 'billing' | 'recon' | 'settlement'; view?: string }> = {
+  all_bank_transactions_classified: { ws: 'recon' },
+  bank_fully_allocated: { ws: 'recon' },
+  handover_all_confirmed: { ws: 'settlement', view: 'handover' },
+  handover_variance_zero: { ws: 'settlement', view: 'handover' },
+  no_pending_refunds: { ws: 'billing', view: 'prepayments' },
+  equation_balanced: { ws: 'recon' },
+}
+
+const emit = defineEmits<{
+  navigate: [target: { ws: 'billing' | 'recon' | 'settlement'; view?: string }]
+}>()
+
 const canApprove = computed(() => hasPermission(PERMISSION_NAMES.FEE_CLOSE_APPROVE))
 
 const month = ref(todayISO().slice(0, 7))
@@ -209,6 +247,11 @@ const exceptionNote = ref('')
 
 const allChecksPass = computed(
   () => !!summary.value && Object.values(summary.value.checklist).every(Boolean),
+)
+const failingCount = computed(() =>
+  summary.value
+    ? Object.values(summary.value.checklist).filter((ok) => !ok).length
+    : 0,
 )
 
 function parseMonth(): { year: number; monthNum: number } | null {
@@ -269,7 +312,7 @@ async function doClose() {
 async function doReopen(row: CloseRow) {
   let reason = ''
   try {
-    const result = await ElMessageBox.prompt('請輸入 reopen 原因', 'Reopen 關帳', {
+    const result = await ElMessageBox.prompt('請輸入重開原因', '重開關帳', {
       inputValidator: (v) => (v && v.trim().length >= 5 ? true : '原因至少 5 字'),
     })
     reason = typeof result === 'object' ? result.value : ''
@@ -278,10 +321,10 @@ async function doReopen(row: CloseRow) {
   }
   try {
     await reopenClosePeriod(row.id, { reason })
-    ElMessage.success('已 reopen；快照保留為歷史')
+    ElMessage.success('已重開；原快照保留為歷史')
     fetchCloses()
   } catch (e) {
-    ElMessage.error(friendlyError('reopen 失敗', e))
+    ElMessage.error(friendlyError('重開失敗', e))
   }
 }
 
@@ -333,6 +376,18 @@ defineExpose({ fetchSummary, fetchCloses })
   align-items: center;
   gap: 6px;
   padding: 2px 0;
+}
+.check-state {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+.fix-link {
+  padding: 0 4px;
+}
+.blocked-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--el-color-warning-dark-2, var(--el-color-warning));
 }
 .checklist .ok {
   color: var(--el-color-success);

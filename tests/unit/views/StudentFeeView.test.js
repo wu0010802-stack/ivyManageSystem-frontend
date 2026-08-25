@@ -1,163 +1,226 @@
+/**
+ * 學費管理 IA 殼層測試（2026-08-25 任務導向改版）。
+ *
+ * 涵蓋：預設進入工作台、四主入口切換、舊 ?tab= 深連結相容映射、
+ * 費用設定入口/返回、lazy（同時只掛載一個工作區）、全域搜尋導向帳款。
+ * 各工作區內部行為在 FeeWorkbench / FeeWorkspaces / FeeReconTabs 等測試覆蓋。
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 
-// admin-search merge 後 view 於 setup 讀 useRoute().query.search 做預篩，
-// 無 router 注入時 mount 即炸，mock 之
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {} }),
-  useRouter: () => ({ replace: vi.fn() }),
-}))
+// ── vue-router mock：replace/push 會實際改 route.query（模擬導航循環）──────
+const routerMocks = vi.hoisted(() => ({ route: null, router: null }))
 
-// ── API mocks ──────────────────────────────────────────────────────────────
-const getFeePeriods = vi.fn()
-
-vi.mock('@/api/fees', () => ({
-  getFeePeriods: (...a) => getFeePeriods(...a),
-}))
-
-const getClassrooms = vi.fn()
-vi.mock('@/api/classrooms', () => ({
-  getClassrooms: (...a) => getClassrooms(...a),
-}))
-
-vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-  ElMessageBox: { confirm: vi.fn() },
-}))
-
-// ── stub children that pull in heavy dependencies ──────────────────────────
-// FeeRecordsTab：暴露 fetchRecords 讓父層觸發
-vi.mock('@/components/fees/FeeRecordsTab.vue', () => {
-  const fetchRecords = vi.fn()
+vi.mock('vue-router', async () => {
+  const { reactive } = await import('vue')
+  routerMocks.route = reactive({ query: {} })
+  const apply = (to) => {
+    routerMocks.route.query = { ...(to?.query ?? {}) }
+  }
+  routerMocks.router = { replace: vi.fn(apply), push: vi.fn(apply) }
   return {
-    __fetchRecords: fetchRecords,
-    default: {
-      name: 'FeeRecordsTab',
-      props: ['periodOptions', 'classrooms'],
-      setup(_, { expose }) {
-        expose({ fetchRecords })
-        return {}
-      },
-      template: '<div data-testid="fee-records-tab" />',
-    },
+    useRoute: () => routerMocks.route,
+    useRouter: () => routerMocks.router,
   }
 })
 
-vi.mock('@/components/fees/FeeTemplateTab.vue', () => ({
-  default: { name: 'FeeTemplateTab', template: '<div data-testid="fee-template-tab" />' },
+// ── 工作區元件全部 stub（lazy chunk 的實際內容各自有測試）─────────────────
+vi.mock('@/components/fees/workspace/FeeWorkbench.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeWorkbench',
+    template: '<div data-testid="ws-workbench" />',
+  },
 }))
-
-vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
-  default: { name: 'FeeRefundsTab', template: '<div data-testid="fee-refunds-tab" />' },
+vi.mock('@/components/fees/workspace/FeeBillingWorkspace.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeBillingWorkspace',
+    props: ['view', 'studentSearch'],
+    template: '<div data-testid="ws-billing" :data-view="view" :data-search="studentSearch" />',
+  },
 }))
-
-// SPEC-014 新頁籤：一律 stub（各自的 API 呼叫在 FeeReconTabs.test.ts 覆蓋）
 vi.mock('@/components/fees/BankReconTab.vue', () => ({
-  default: { name: 'BankReconTab', template: '<div data-testid="bank-recon-tab" />' },
+  __esModule: true,
+  default: { name: 'BankReconTab', template: '<div data-testid="ws-recon" />' },
 }))
-vi.mock('@/components/fees/PrepaymentsTab.vue', () => ({
-  default: { name: 'PrepaymentsTab', template: '<div data-testid="prepayments-tab" />' },
+vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeSettlementWorkspace',
+    props: ['view'],
+    template: '<div data-testid="ws-settlement" :data-view="view" />',
+  },
 }))
-vi.mock('@/components/fees/CashHandoverTab.vue', () => ({
-  default: { name: 'CashHandoverTab', template: '<div data-testid="cash-handover-tab" />' },
-}))
-vi.mock('@/components/fees/CloseTab.vue', () => ({
-  default: { name: 'CloseTab', template: '<div data-testid="close-tab" />' },
-}))
-vi.mock('@/components/fees/BillingCodesTab.vue', () => ({
-  default: { name: 'BillingCodesTab', template: '<div data-testid="billing-codes-tab" />' },
+vi.mock('@/components/fees/workspace/FeeSettingsWorkspace.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeSettingsWorkspace',
+    props: ['view'],
+    template: '<div data-testid="ws-settings" :data-view="view" />',
+  },
 }))
 
-// ── global stubs ───────────────────────────────────────────────────────────
-const GLOBAL_STUBS = {
-  'el-tabs': { template: '<div><slot /></div>' },
-  'el-tab-pane': { props: ['name', 'label'], template: '<div><slot /></div>' },
+// ── EP stubs ───────────────────────────────────────────────────────────────
+const ElSegmentedStub = {
+  name: 'ElSegmented',
+  props: ['modelValue', 'options', 'size'],
+  emits: ['change'],
+  template: `
+    <div>
+      <button
+        v-for="o in options"
+        :key="o.value"
+        type="button"
+        :data-seg="o.value"
+        :data-active="o.value === modelValue"
+        @click="$emit('change', o.value)"
+      >{{ o.label }}</button>
+    </div>
+  `,
 }
 
-const flushPromises = async () => {
-  await Promise.resolve()
-  await Promise.resolve()
+const GLOBAL_STUBS = {
+  'el-segmented': ElSegmentedStub,
+  'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
+  'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
+}
+
+const flushAll = async () => {
+  // async component（vitest 模組載入含 macrotask）＋ watch flush
+  for (let i = 0; i < 4; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await nextTick()
+  }
 }
 
 import StudentFeeView from '@/views/StudentFeeView.vue'
-import * as FeeRecordsTabModule from '@/components/fees/FeeRecordsTab.vue'
 
-function mountFeeView() {
-  return mount(StudentFeeView, {
-    global: { directives: { loading: () => {} }, stubs: GLOBAL_STUBS },
-  })
+function mountView(query = {}) {
+  routerMocks.route.query = { ...query }
+  return mount(StudentFeeView, { global: { stubs: GLOBAL_STUBS } })
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────
-describe('StudentFeeView', () => {
+describe('StudentFeeView（任務導向 IA 殼層）', () => {
   beforeEach(() => {
-    setActivePinia(createPinia())
     vi.clearAllMocks()
-    getFeePeriods.mockResolvedValue(['2025-1', '2024-2'])
-    getClassrooms.mockResolvedValue({ data: [] })
+    routerMocks.route.query = {}
   })
 
-  it('掛載後呼叫 getFeePeriods 與 getClassrooms（不再呼叫 items API）', async () => {
-    mountFeeView()
-    await flushPromises()
-
-    expect(getFeePeriods).toHaveBeenCalled()
-    expect(getClassrooms).toHaveBeenCalled()
+  it('預設進入工作台，且 URL 正規化為 ?ws=workbench', async () => {
+    const wrapper = mountView()
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
+    expect(routerMocks.router.replace).toHaveBeenCalledWith({
+      query: expect.objectContaining({ ws: 'workbench' }),
+    })
   })
 
-  it('預設 activeTab 為 records', async () => {
-    const wrapper = mountFeeView()
-    await flushPromises()
-    expect(wrapper.vm.$.setupState.activeTab).toBe('records')
+  it('主導航恰為四項：工作台/帳單/對帳/結算', async () => {
+    const wrapper = mountView()
+    await flushAll()
+    const nav = wrapper.find('[data-test="fee-main-nav"]')
+    expect(nav.exists()).toBe(true)
+    const labels = nav.findAll('button').map((b) => b.text())
+    expect(labels).toEqual(['工作台', '帳單', '對帳', '結算'])
   })
 
-  it('mounted 時自動觸發子元件 fetchRecords（預設即在繳費記錄）', async () => {
-    FeeRecordsTabModule.__fetchRecords.mockClear()
-    mountFeeView()
-    await flushPromises()
-    expect(FeeRecordsTabModule.__fetchRecords).toHaveBeenCalled()
+  it('lazy：同時只掛載目前工作區（其餘不出現在 DOM）', async () => {
+    const wrapper = mountView()
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ws-billing"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ws-recon"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ws-settlement"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ws-settings"]').exists()).toBe(false)
   })
 
-  it('lazy mount：初始只渲染 records，其他 tab 造訪後才 mount（2026-08-17 UI/UX 重構）', async () => {
-    const wrapper = mountFeeView()
-    await flushPromises()
+  it('四個主入口可切換並以 query 保存工作區', async () => {
+    const wrapper = mountView()
+    await flushAll()
 
-    expect(wrapper.find('[data-testid="fee-records-tab"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="fee-template-tab"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="fee-refunds-tab"]').exists()).toBe(false)
+    await wrapper.find('[data-seg="billing"]').trigger('click')
+    await flushAll()
+    expect(routerMocks.router.push).toHaveBeenCalledWith({
+      query: expect.objectContaining({ ws: 'billing', view: 'records' }),
+    })
+    expect(wrapper.find('[data-testid="ws-billing"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ws-billing"]').attributes('data-view')).toBe('records')
 
-    // 造訪後 mount（走真實切換路徑 onTabChange，同步 visitedTabs）
-    wrapper.vm.$.setupState.onTabChange('templates')
-    await nextTick()
-    expect(wrapper.find('[data-testid="fee-template-tab"]').exists()).toBe(true)
+    await wrapper.find('[data-seg="recon"]').trigger('click')
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-recon"]').exists()).toBe(true)
+
+    await wrapper.find('[data-seg="settlement"]').trigger('click')
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-settlement"]').attributes('data-view')).toBe('handover')
+
+    await wrapper.find('[data-seg="workbench"]').trigger('click')
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
   })
 
-  it('切換至「繳費記錄」Tab 時呼叫子元件 fetchRecords', async () => {
-    const wrapper = mountFeeView()
-    await flushPromises()
-    // 預設已在 records；先切走再切回，驗證 watch(activeTab)（走真實 onTabChange 路徑）
-    wrapper.vm.$.setupState.onTabChange('templates')
-    await nextTick()
-    FeeRecordsTabModule.__fetchRecords.mockClear()
-
-    wrapper.vm.$.setupState.onTabChange('records')
-    await nextTick()
-    await flushPromises()
-
-    expect(FeeRecordsTabModule.__fetchRecords).toHaveBeenCalled()
+  it.each([
+    ['records', 'ws-billing', 'records'],
+    ['templates', 'ws-settings', 'templates'],
+    ['refunds', 'ws-billing', 'refunds'],
+    ['bankRecon', 'ws-recon', null],
+    ['prepayments', 'ws-billing', 'prepayments'],
+    ['cashHandover', 'ws-settlement', 'handover'],
+    ['close', 'ws-settlement', 'close'],
+    ['billingCodes', 'ws-settings', 'billingCodes'],
+  ])('舊深連結 ?tab=%s 映射到 %s（view=%s）', async (tab, testid, view) => {
+    const wrapper = mountView({ tab })
+    await flushAll()
+    const target = wrapper.find(`[data-testid="${testid}"]`)
+    expect(target.exists()).toBe(true)
+    if (view) expect(target.attributes('data-view')).toBe(view)
+    // tab 參數被正規化移除
+    expect(routerMocks.route.query.tab).toBeUndefined()
   })
 
-  it('切換至「退費管理」Tab 不會觸發 fetchRecords', async () => {
-    const wrapper = mountFeeView()
-    await flushPromises()
-    FeeRecordsTabModule.__fetchRecords.mockClear()
+  it('費用設定：由右上入口進入完整設定畫面，主導航隱藏、可返回', async () => {
+    const wrapper = mountView()
+    await flushAll()
 
-    wrapper.vm.$.setupState.onTabChange('refunds')
-    await nextTick()
-    await flushPromises()
+    await wrapper.find('[data-test="open-fee-settings"]').trigger('click')
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-settings"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ws-settings"]').attributes('data-view')).toBe('templates')
+    expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="open-fee-settings"]').exists()).toBe(false)
 
-    expect(FeeRecordsTabModule.__fetchRecords).not.toHaveBeenCalled()
+    await wrapper.find('[data-test="exit-fee-settings"]').trigger('click')
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(true)
+  })
+
+  it('費用設定可直達銷帳碼（?ws=settings&view=billingCodes）', async () => {
+    const wrapper = mountView({ ws: 'settings', view: 'billingCodes' })
+    await flushAll()
+    expect(wrapper.find('[data-testid="ws-settings"]').attributes('data-view')).toBe(
+      'billingCodes',
+    )
+  })
+
+  it('全域搜尋 ?search= 導向帳款並下傳關鍵字', async () => {
+    const wrapper = mountView({ search: '王小明' })
+    await flushAll()
+    const billing = wrapper.find('[data-testid="ws-billing"]')
+    expect(billing.exists()).toBe(true)
+    expect(billing.attributes('data-view')).toBe('records')
+    expect(billing.attributes('data-search')).toBe('王小明')
+  })
+
+  it('accessible name：主導航與費用設定入口具 aria-label', async () => {
+    const wrapper = mountView()
+    await flushAll()
+    expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(true)
+    expect(wrapper.find('nav[aria-label="學費管理工作區"]').exists()).toBe(true)
+    expect(
+      wrapper.find('[data-test="open-fee-settings"]').attributes('aria-label'),
+    ).toBeTruthy()
   })
 })

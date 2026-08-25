@@ -2,21 +2,22 @@
   <div class="prepayments-tab">
     <!-- ── 預繳額度 ─────────────────────────────────────────────── -->
     <div class="toolbar">
-      <el-select v-model="filters.status" clearable placeholder="狀態" style="width: 150px" @change="fetchCredits">
+      <el-select v-model="filters.status" clearable placeholder="狀態" aria-label="篩選預繳狀態" style="width: 150px" @change="fetchCredits">
         <el-option v-for="(label, key) in CREDIT_STATUS_LABELS" :key="key" :label="label" :value="key" />
       </el-select>
       <el-input-number
         v-model="filters.target_school_year"
         :controls="false"
         placeholder="目標學年"
+        aria-label="篩選目標學年"
         style="width: 110px"
         @change="fetchCredits"
       />
-      <el-select v-model="filters.target_semester" clearable placeholder="學期" style="width: 100px" @change="fetchCredits">
+      <el-select v-model="filters.target_semester" clearable placeholder="學期" aria-label="篩選目標學期" style="width: 100px" @change="fetchCredits">
         <el-option label="上" :value="1" />
         <el-option label="下" :value="2" />
       </el-select>
-      <el-button @click="fetchCredits">重新整理</el-button>
+      <el-button aria-label="重新整理預繳清單" @click="fetchCredits">重新整理</el-button>
       <span class="hint">每名幼生每學期固定預繳 NT$5,000；銀行/現金收款於對帳與現金收款流程建立</span>
     </div>
 

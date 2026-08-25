@@ -123,7 +123,7 @@
         <EmptyState
           v-else
           title="尚無費用紀錄"
-          description="可先到「費用總覽」建立範本並產生費用單"
+          description="可先到右上「費用設定」維護費用範本，再以上方「產生費用單」批次建立"
         />
       </template>
 
@@ -307,7 +307,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import type { FormInstance } from 'element-plus'
@@ -355,9 +355,18 @@ interface FeeSummary {
 const props = withDefaults(defineProps<{
   periodOptions?: string[]
   classrooms?: Classroom[]
+  /** 預設聚焦的學期（帳單工作區帶入當前學期）；空字串＝全部（IA 改版） */
+  defaultPeriod?: string
+  /** 全域搜尋帶入的學生姓名預篩（IA 改版：由本元件自行套用） */
+  initialSearch?: string
+  /** true 時掛載即自行載入（帳單工作區用）；false 維持由父層觸發的既有行為 */
+  autoLoad?: boolean
 }>(), {
   periodOptions: () => [],
   classrooms: () => [],
+  defaultPeriod: '',
+  initialSearch: '',
+  autoLoad: false,
 })
 
 // 這個篩選的值是 classroom_name（後端按班名比對），而班級清單是跨學期的，
@@ -382,7 +391,16 @@ const emptyRecordFilter = () => ({
   status: '',
   student_name: '',
 })
-const recordFilter = ref(emptyRecordFilter())
+// IA 改版預設範圍（僅 autoLoad＝帳單工作區）：聚焦當前學期＋未繳，
+// 「清除篩選」仍可一鍵回到全部；全域搜尋帶學生進來時改看該生「全部」帳款。
+// 「未繳＋部分」合併檢視因後端 status 參數僅支援單值（unpaid|partial|paid
+// regex）無法一次查詢，降級為狀態段落鈕一鍵切換，不做跨分頁的錯誤聚合。
+// 非 autoLoad 掛載（既有呼叫端與測試）維持全空初始 filter，行為不變。
+const recordFilter = ref({
+  ...emptyRecordFilter(),
+  period: props.autoLoad ? props.defaultPeriod || '' : '',
+  status: props.autoLoad && !props.initialSearch ? 'unpaid' : '',
+})
 const recordPage = ref<number>(1)
 const recordPageSize = ref<number>(50)
 const recordTotal = ref<number>(0)
@@ -415,12 +433,23 @@ function onSearchInput(v: string) {
   recordFilter.value.student_name = v
 }
 
-function _buildRecordParams() {
-  const params: Record<string, unknown> = { page: recordPage.value, page_size: recordPageSize.value }
+// 學期/班級/姓名範圍（不含狀態）：summary 用它統計，讓 summary strip 的
+// 各狀態筆數在預設鎖「未繳」時仍涵蓋全狀態分佈（IA 改版）
+function _buildScopeParams() {
+  const params: Record<string, unknown> = {}
   if (recordFilter.value.period) params.period = recordFilter.value.period
   if (recordFilter.value.classroom_name) params.classroom_name = recordFilter.value.classroom_name
-  if (recordFilter.value.status) params.status = recordFilter.value.status
   if (recordFilter.value.student_name) params.student_name = recordFilter.value.student_name
+  return params
+}
+
+function _buildRecordParams() {
+  const params: Record<string, unknown> = {
+    ..._buildScopeParams(),
+    page: recordPage.value,
+    page_size: recordPageSize.value,
+  }
+  if (recordFilter.value.status) params.status = recordFilter.value.status
   return params
 }
 
@@ -431,10 +460,9 @@ async function fetchRecords() {
   const seq = ++_fetchSeq
   recordsLoading.value = true
   try {
-    const params = _buildRecordParams()
     const [res, sum] = await Promise.all([
-      getFeeRecords(params),
-      getFeeSummary(params),
+      getFeeRecords(_buildRecordParams()),
+      getFeeSummary(_buildScopeParams()),
     ])
     if (seq !== _fetchSeq) return
     feeRecords.value = (res as { items: FeeRow[] }).items
@@ -658,6 +686,15 @@ watch(() => recordFilter.value.status, () => {
 })
 watch(() => recordFilter.value.classroom_name, () => {
   if (!_suppressFilterWatch) searchRecords()
+})
+
+// IA 改版：帳單工作區（autoLoad）下由本元件自行首載；帶全域搜尋時只設姓名，
+// 由 300ms debounce watcher 觸發唯一一次 fetch，避免重複請求。
+// autoLoad=false 維持既有「父層觸發」行為（既有測試與呼叫端不受影響）。
+onMounted(() => {
+  if (!props.autoLoad) return
+  if (props.initialSearch) applySearch(props.initialSearch)
+  else fetchRecords()
 })
 
 defineExpose({

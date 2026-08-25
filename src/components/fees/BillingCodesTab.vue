@@ -1,10 +1,10 @@
 <template>
   <div class="billing-codes-tab">
     <div class="toolbar">
-      <el-select v-model="schoolYear" style="width: 120px" data-test="bc-year">
+      <el-select v-model="schoolYear" aria-label="選擇學年" style="width: 120px" data-test="bc-year">
         <el-option v-for="y in yearOptions" :key="y" :label="`${y} 學年`" :value="y" />
       </el-select>
-      <el-radio-group v-model="semester">
+      <el-radio-group v-model="semester" aria-label="選擇學期">
         <el-radio-button :value="1">上學期</el-radio-button>
         <el-radio-button :value="2">下學期</el-radio-button>
       </el-radio-group>
@@ -13,6 +13,7 @@
         type="primary"
         data-test="bc-suggest"
         :loading="suggesting"
+        aria-label="依現況班級與座號產生建議末四碼（僅預覽）"
         @click="runSuggest"
       >
         產生建議末四碼（預覽）
@@ -20,54 +21,96 @@
       <span class="hint">規則：第 1 碼年級（1大 2中 3小 4幼）＋班序＋班內編號</span>
     </div>
 
-    <!-- 建議預覽 -->
-    <el-alert
-      v-if="suggestResult && unresolvedCount > 0"
-      type="warning"
-      :closable="false"
-      class="mb-2"
-      :title="`有 ${unresolvedCount} 筆重複或衝突，啟用前請先人工處理`"
-    />
-    <el-table
-      v-if="suggestResult"
-      :data="suggestResult.suggestions"
-      size="small"
-      border
-      max-height="360"
-      data-test="bc-suggest-table"
-    >
-      <el-table-column prop="student_name" label="學生" width="110" />
-      <el-table-column prop="classroom_name" label="班級" width="90" />
-      <el-table-column prop="grade_name" label="年級" width="80" />
-      <el-table-column prop="suggested_suffix" label="建議末四碼" width="100" />
-      <el-table-column prop="current_suffix" label="現行末四碼" width="100">
-        <template #default="{ row }">{{ row.current_suffix || '—' }}</template>
-      </el-table-column>
-      <el-table-column label="狀態" width="110">
-        <template #default="{ row }">
-          <el-tag :type="stateTag(row.state)" size="small">{{ stateLabel(row.state) }}</el-tag>
-        </template>
-      </el-table-column>
-    </el-table>
-    <div v-if="suggestResult" class="activate-bar">
-      <el-date-picker
-        v-model="effectiveFrom"
-        type="date"
-        value-format="YYYY-MM-DD"
-        placeholder="生效日"
-        style="width: 150px"
+    <!-- 建議預覽：摘要 → 需處理優先 → 無變更以篩選查看 -->
+    <template v-if="suggestResult">
+      <p class="suggest-summary" data-test="bc-suggest-summary">
+        建議結果：新配發 {{ stateCounts.new }}
+        <span aria-hidden="true">・</span>與現行衝突 {{ stateCounts.conflict }}
+        <span aria-hidden="true">・</span>重複 {{ stateCounts.duplicate }}
+        <span aria-hidden="true">・</span>無變更 {{ stateCounts.unchanged }}
+        <span aria-hidden="true">・</span>無法產碼 {{ suggestResult.unassignable.length }}
+      </p>
+      <el-alert
+        v-if="unresolvedCount > 0"
+        type="warning"
+        :closable="false"
+        class="mb-2"
+        :title="`有 ${unresolvedCount} 筆重複、衝突或無法產碼，啟用前請先人工處理`"
       />
-      <el-button
-        v-if="canWrite"
-        type="success"
-        data-test="bc-activate"
-        :disabled="activatableItems.length === 0 || !effectiveFrom"
-        :loading="activating"
-        @click="runActivate"
+
+      <div class="scope-row" role="group" aria-label="建議預覽篩選">
+        <button
+          v-for="scope in PREVIEW_SCOPES"
+          :key="scope.value"
+          type="button"
+          class="scope-chip"
+          :class="{ 'scope-chip--active': previewScope === scope.value }"
+          :aria-pressed="previewScope === scope.value"
+          :data-test="`bc-preview-scope-${scope.value}`"
+          @click="previewScope = scope.value"
+        >
+          {{ scope.label }}
+        </button>
+      </div>
+
+      <el-table
+        :data="visibleSuggestions"
+        size="small"
+        border
+        max-height="360"
+        data-test="bc-suggest-table"
       >
-        確認啟用 {{ activatableItems.length }} 筆（略過衝突/重複）
-      </el-button>
-    </div>
+        <el-table-column prop="student_name" label="學生" width="110" />
+        <el-table-column prop="classroom_name" label="班級" width="90" />
+        <el-table-column prop="grade_name" label="年級" width="80" />
+        <el-table-column prop="suggested_suffix" label="建議末四碼" width="100" />
+        <el-table-column prop="current_suffix" label="現行末四碼" width="100">
+          <template #default="{ row }">{{ row.current_suffix || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="狀態" width="110">
+          <template #default="{ row }">
+            <el-tag :type="stateTag(row.state)" size="small">{{ stateLabel(row.state) }}</el-tag>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <span>
+            {{ previewScope === 'pending' ? '沒有需處理的建議：全部為無變更，切換「無變更」或「全部」查看' : '此篩選下沒有資料' }}
+          </span>
+        </template>
+      </el-table>
+
+      <div v-if="suggestResult.unassignable.length" class="unassignable" data-test="bc-unassignable">
+        <p class="unassignable__title">無法產碼名單（需人工處理）</p>
+        <ul>
+          <li v-for="(item, idx) in suggestResult.unassignable" :key="idx">
+            {{ unassignableLabel(item) }}：{{ String(item.reason ?? '原因不明') }}
+          </li>
+        </ul>
+      </div>
+
+      <!-- 批次啟用固定在預覽區底部；只寫入「新配發」，不覆蓋衝突/重複 -->
+      <div class="activate-bar">
+        <el-date-picker
+          v-model="effectiveFrom"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="生效日"
+          aria-label="批次啟用生效日"
+          style="width: 150px"
+        />
+        <el-button
+          v-if="canWrite"
+          type="primary"
+          data-test="bc-activate"
+          :disabled="activatableItems.length === 0 || !effectiveFrom"
+          :loading="activating"
+          :aria-label="`批次啟用 ${activatableItems.length} 筆新配發末四碼`"
+          @click="runActivate"
+        >
+          確認啟用 {{ activatableItems.length }} 筆（略過衝突/重複）
+        </el-button>
+      </div>
+    </template>
 
     <!-- 現行配置 -->
     <h4 class="section-title">現行有效配置</h4>
@@ -86,7 +129,7 @@
       </el-table-column>
       <el-table-column v-if="canWrite" label="操作" width="90">
         <template #default="{ row }">
-          <el-button size="small" type="danger" text @click="deactivate(row)">停用</el-button>
+          <el-button size="small" type="danger" text aria-label="停用此學生的末四碼" @click="deactivate(row)">停用</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -160,6 +203,36 @@ const activatableItems = computed(() =>
   (suggestResult.value?.suggestions ?? []).filter((s) => s.state === 'new'),
 )
 
+// 預覽篩選：預設「需處理」（新配發/衝突/重複），無變更以篩選查看
+const PREVIEW_SCOPES = [
+  { value: 'pending', label: '需處理' },
+  { value: 'unchanged', label: '無變更' },
+  { value: 'all', label: '全部' },
+] as const
+type PreviewScope = (typeof PREVIEW_SCOPES)[number]['value']
+const previewScope = ref<PreviewScope>('pending')
+
+const stateCounts = computed(() => {
+  const counts = { new: 0, unchanged: 0, conflict: 0, duplicate: 0 }
+  for (const s of suggestResult.value?.suggestions ?? []) {
+    if (s.state in counts) counts[s.state as keyof typeof counts] += 1
+  }
+  return counts
+})
+
+const visibleSuggestions = computed(() => {
+  const all = suggestResult.value?.suggestions ?? []
+  if (previewScope.value === 'all') return all
+  if (previewScope.value === 'unchanged') return all.filter((s) => s.state === 'unchanged')
+  return all.filter((s) => s.state !== 'unchanged')
+})
+
+function unassignableLabel(item: Record<string, unknown>): string {
+  if (item.student_id != null) return `學生 #${item.student_id}`
+  if (item.classroom_id != null) return `班級 #${item.classroom_id}`
+  return '項目'
+}
+
 function maskCollection(value: string | null): string {
   if (!value) return '—'
   if (value.length <= 4) return value
@@ -204,6 +277,7 @@ async function runSuggest() {
       school_year: schoolYear.value,
       semester: semester.value,
     })) as SuggestResult
+    previewScope.value = 'pending'
   } catch (e) {
     ElMessage.error(friendlyError('產生建議失敗', e))
   } finally {
@@ -212,6 +286,16 @@ async function runSuggest() {
 }
 
 async function runActivate() {
+  try {
+    await ElMessageBox.confirm(
+      `將啟用 ${activatableItems.value.length} 筆「新配發」末四碼（生效日 ${effectiveFrom.value}），` +
+        '衝突與重複項目將略過、既有有效碼不會被覆蓋。',
+      '確認批次啟用',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
   activating.value = true
   try {
     const result = await activateBillingCodes({
@@ -271,10 +355,77 @@ defineExpose({ fetchAssignments })
   color: var(--el-text-color-secondary);
   font-size: 12px;
 }
+.suggest-summary {
+  margin: 0 0 8px;
+  font-size: var(--text-sm, 13px);
+  color: var(--el-text-color-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.scope-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.scope-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-md, 6px);
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: var(--text-sm, 13px);
+  line-height: 1.4;
+  cursor: pointer;
+  transition: border-color var(--transition-fast, 0.15s), color var(--transition-fast, 0.15s);
+}
+
+.scope-chip:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+
+.scope-chip:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 1px;
+}
+
+.scope-chip--active {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.unassignable {
+  margin-top: 8px;
+  font-size: var(--text-sm, 13px);
+  color: var(--el-text-color-regular);
+}
+
+.unassignable__title {
+  margin: 0 0 4px;
+  font-weight: 600;
+  color: var(--el-color-danger);
+}
+
+.unassignable ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
 .activate-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   gap: 12px;
+  align-items: center;
   margin: 12px 0;
+  padding: 8px 0;
+  background: var(--el-bg-color);
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 .section-title {
   margin: 16px 0 8px;

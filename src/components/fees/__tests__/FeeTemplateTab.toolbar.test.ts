@@ -1,12 +1,12 @@
 /**
- * FeeTemplateTab toolbar 收斂（2026-08-17 UI/UX 重構）：
- * 頂層最多 3 個 action——產生費用單（primary）、管理範本（secondary）、檢視選單
- * （展開全部／收合全部／重新載入收進 dropdown）；產單 modal 繼承目前選定學年/學期。
+ * FeeTemplateTab toolbar（2026-08-25 IA 改版後）：
+ * 「產生費用單」已移至帳單工作區 header（見 FeeWorkspaces.test.ts），本頁
+ * 頂層剩兩個 action——管理範本（primary）＋檢視選單（展開/收合/重新載入
+ * 收進 dropdown，沿用 2026-08-17 toolbar 收斂）。
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
-import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
 
 const getFeeTemplates = vi.fn(() => Promise.resolve([]))
 vi.mock('@/api/fees', () => ({
@@ -32,7 +32,6 @@ const mountTab = () =>
     global: {
       stubs: {
         FeeTemplateManageDrawer: true,
-        FeeGenerateModal: true,
         'el-collapse': true,
         'el-collapse-item': true,
         'el-table': true,
@@ -50,20 +49,19 @@ interface TabVm {
 
 beforeEach(() => vi.clearAllMocks())
 
-describe('FeeTemplateTab toolbar 收斂', () => {
-  it('產生費用單為 primary；管理範本非 primary；展開/收合/重新載入不再是頂層按鈕', async () => {
+describe('FeeTemplateTab toolbar（IA 改版後）', () => {
+  it('本頁不再有「產生費用單」（移至帳單工作區）；管理範本升為 primary', async () => {
     const w = mountTab()
     await flushPromises()
 
     const buttons = w.findAll('el-button')
-    const generateBtn = buttons.find((b) => b.text().includes('產生費用單'))
-    const manageBtn = buttons.find((b) => b.text().includes('管理範本'))
-    expect(generateBtn).toBeTruthy()
-    expect(generateBtn!.attributes('type')).toBe('primary')
-    expect(manageBtn).toBeTruthy()
-    expect(manageBtn!.attributes('type')).not.toBe('primary')
+    expect(buttons.find((b) => b.text().includes('產生費用單'))).toBeUndefined()
 
-    // 三個檢視動作收進 dropdown（不再是頂層 el-button）
+    const manageBtn = buttons.find((b) => b.text().includes('管理範本'))
+    expect(manageBtn).toBeTruthy()
+    expect(manageBtn!.attributes('type')).toBe('primary')
+
+    // 檢視動作維持收斂在 dropdown（不再是頂層 el-button）
     expect(buttons.find((b) => b.text().includes('展開全部'))).toBeUndefined()
     expect(buttons.find((b) => b.text().includes('收合全部'))).toBeUndefined()
     expect(buttons.find((b) => b.text().includes('重新載入'))).toBeUndefined()
@@ -76,7 +74,6 @@ describe('FeeTemplateTab toolbar 收斂', () => {
     const vm = w.vm as unknown as TabVm
 
     vm.onViewCommand('expand')
-    // 沒班級資料時仍應可呼叫（空 map），collapse 清空
     vm.onViewCommand('collapse')
     expect(Object.keys(vm.expandedClassrooms)).toHaveLength(0)
 
@@ -84,19 +81,5 @@ describe('FeeTemplateTab toolbar 收斂', () => {
     vm.onViewCommand('reload')
     await flushPromises()
     expect(getFeeTemplates.mock.calls.length).toBe(callsBefore + 1)
-  })
-
-  it('FeeGenerateModal 繼承 FeeTemplateTab 目前選定的 schoolYear/semester', async () => {
-    const w = mountTab()
-    await flushPromises()
-    const vm = w.vm as unknown as TabVm
-    vm.filterYear = 116
-    vm.filterSemester = 2
-    await flushPromises()
-
-    const modal = w.findComponent(FeeGenerateModal)
-    expect(modal.exists()).toBe(true)
-    expect(modal.props('schoolYear')).toBe(116)
-    expect(modal.props('semester')).toBe(2)
   })
 })

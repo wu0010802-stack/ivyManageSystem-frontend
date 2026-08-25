@@ -1,10 +1,28 @@
 <template>
   <div class="cash-handover-tab">
+    <!-- 今日交接狀態：每日交接的核心問句「今天交接了沒」 -->
+    <div
+      v-if="!loading"
+      class="today-banner"
+      :data-state="todayState.kind"
+      role="status"
+      data-test="today-banner"
+    >
+      <span class="today-banner__dot" aria-hidden="true" />
+      <span class="today-banner__text">{{ todayState.text }}</span>
+    </div>
+
     <div class="toolbar">
-      <el-button v-if="canWrite" type="primary" data-test="open-cash" @click="openCashDialog">
+      <el-button
+        v-if="canWrite"
+        type="primary"
+        data-test="open-cash"
+        aria-label="登記一筆現金收款"
+        @click="openCashDialog"
+      >
         ＋ 登記現金收款
       </el-button>
-      <el-button @click="fetchBatches">重新整理</el-button>
+      <el-button aria-label="重新整理交接批次" @click="fetchBatches">重新整理</el-button>
       <span class="hint">
         鐵律：會計收多少現金就全額交付老闆；預繳退款是老闆另行支出、不從交接扣除
       </span>
@@ -71,9 +89,10 @@
             size="small"
             type="warning"
             text
+            aria-label="重開此交接批"
             @click="doReopen(row)"
           >
-            Reopen
+            重開
           </el-button>
         </template>
       </el-table-column>
@@ -83,16 +102,17 @@
     <el-dialog v-model="cashVisible" title="登記現金收款" width="640px" data-test="cash-dialog">
       <el-form label-width="90px">
         <el-form-item label="收款日期">
-          <el-date-picker v-model="cashForm.received_date" type="date" value-format="YYYY-MM-DD" />
+          <el-date-picker v-model="cashForm.received_date" type="date" value-format="YYYY-MM-DD" aria-label="收款日期" />
         </el-form-item>
         <el-form-item label="學生姓名">
           <el-input
             v-model="cashSearch"
             placeholder="輸入姓名關鍵字查未繳費用單"
+            aria-label="以學生姓名查詢未繳費用單"
             style="width: 240px"
             @keyup.enter="searchUnpaid"
           />
-          <el-button @click="searchUnpaid">查詢</el-button>
+          <el-button aria-label="查詢未繳費用單" @click="searchUnpaid">查詢</el-button>
         </el-form-item>
         <el-table
           :data="unpaidRecords"
@@ -163,6 +183,7 @@
               v-model="confirmForm.actual"
               :min="0"
               :controls="false"
+              aria-label="老闆實際收到金額"
               style="width: 180px"
               data-test="owner-actual-input"
             />
@@ -173,7 +194,7 @@
             </span>
           </el-form-item>
           <el-form-item v-if="confirmVariance !== 0" label="差異原因" required>
-            <el-input v-model="confirmForm.reason" type="textarea" :rows="2" data-test="variance-reason" />
+            <el-input v-model="confirmForm.reason" type="textarea" :rows="2" aria-label="差異原因" data-test="variance-reason" />
           </el-form-item>
         </el-form>
       </template>
@@ -261,6 +282,32 @@ const confirmVariance = computed(() =>
     ? confirmForm.actual - (confirmBatch.value.expected_cash_amount ?? 0)
     : 0,
 )
+
+// 今日交接狀態（區分：尚無收款 / 會計待提交 / 待老闆簽收 / 已完成含差異）
+const todayState = computed<{ kind: 'idle' | 'pending' | 'done'; text: string }>(() => {
+  const today = todayISO()
+  const batch = batches.value.find((b) => b.business_date === today)
+  if (!batch) {
+    return { kind: 'idle', text: `今日（${today}）尚無現金收款，無待交接款項` }
+  }
+  if (batch.status === 'draft' || batch.status === 'reopened') {
+    return {
+      kind: 'pending',
+      text: `今日已收現金 ${formatCurrency(batch.cash_receipt_total)}，尚未提交交接`,
+    }
+  }
+  if (batch.status === 'submitted') {
+    return { kind: 'pending', text: '今日交接已由會計提交，待老闆簽收' }
+  }
+  const variance = batch.variance ?? 0
+  return {
+    kind: 'done',
+    text:
+      variance === 0
+        ? '今日交接已完成，金額無差異'
+        : `今日交接已完成，簽收差異 ${formatCurrency(variance)}（原因見批次紀錄）`,
+  }
+})
 
 const cashTotal = computed(() => {
   const records = selectedRecords.value.reduce(
@@ -389,7 +436,7 @@ async function submitConfirm() {
 async function doReopen(row: BatchRow) {
   let reason = ''
   try {
-    const result = await ElMessageBox.prompt('請輸入 reopen 原因', 'Reopen 交接批', {
+    const result = await ElMessageBox.prompt('請輸入重開原因', '重開交接批', {
       inputValidator: (v) => (v && v.trim().length >= 5 ? true : '原因至少 5 字'),
     })
     reason = typeof result === 'object' ? result.value : ''
@@ -398,10 +445,10 @@ async function doReopen(row: BatchRow) {
   }
   try {
     await reopenCashHandover(row.id, { reason })
-    ElMessage.success('已 reopen')
+    ElMessage.success('已重開')
     fetchBatches()
   } catch (e) {
-    ElMessage.error(friendlyError('reopen 失敗', e))
+    ElMessage.error(friendlyError('重開失敗', e))
   }
 }
 
@@ -410,6 +457,40 @@ defineExpose({ fetchBatches })
 </script>
 
 <style scoped>
+.today-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md, 6px);
+  font-size: var(--text-sm);
+  color: var(--el-text-color-primary);
+  background: var(--el-fill-color-blank);
+}
+
+.today-banner__dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--el-text-color-placeholder);
+}
+
+.today-banner[data-state='done'] .today-banner__dot {
+  background: var(--el-color-success);
+}
+
+.today-banner[data-state='pending'] {
+  border-color: var(--el-color-warning-light-5);
+  background: var(--el-color-warning-light-9);
+}
+
+.today-banner[data-state='pending'] .today-banner__dot {
+  background: var(--el-color-warning);
+}
+
 .toolbar {
   display: flex;
   gap: 8px;
