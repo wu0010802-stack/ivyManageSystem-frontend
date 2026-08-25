@@ -6870,6 +6870,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/monthly-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fee Monthly Statement
+         * @description 月繳總表：指定月份的 per-student 費用聚合（帳單工作區「彙總繳費表」）。
+         *
+         *     歸月規則（與 generation 寫入語意對齊）：
+         *     - monthly 記錄一律依 ``target_month == month``（即使 due_date 落在他月，
+         *       也不因 due_date 重複歸月）
+         *     - 非 monthly（``target_month IS NULL``）依 ``due_date`` 落在該月曆月
+         *     - 兩者皆空的記錄不入任何月表（逐筆明細檢視仍可見）
+         *
+         *     園所規模（單租戶 ≤ 數百學生/月）下單月記錄量小，故不分頁、
+         *     不收 status 參數——狀態快篩由前端在聚合結果上即時切換。
+         */
+        get: operations["fee_monthly_statement_api_fees_monthly_statement_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/periods": {
         parameters: {
             query?: never;
@@ -30041,6 +30070,90 @@ export interface components {
             notes?: string | null;
             /** Year */
             year: number;
+        };
+        /**
+         * MonthlyStatementItemOut
+         * @description 月繳總表內單筆費用項目（隸屬某位學生）。
+         */
+        MonthlyStatementItemOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Due Date */
+            due_date?: string | null;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Fee Type */
+            fee_type?: string | null;
+            /** Id */
+            id: number;
+            /** Payment Date */
+            payment_date?: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Target Month */
+            target_month?: string | null;
+        };
+        /**
+         * MonthlyStatementOut
+         * @description GET /fees/monthly-statement 回傳。students 依班名、學生名排序。
+         */
+        MonthlyStatementOut: {
+            /** Month */
+            month: string;
+            /** Students */
+            students: components["schemas"]["MonthlyStatementStudentOut"][];
+            summary: components["schemas"]["MonthlyStatementSummaryOut"];
+        };
+        /**
+         * MonthlyStatementStudentOut
+         * @description 月繳總表 per-student 聚合列。
+         *
+         *     status 為聚合推導值：total_paid<=0 且尚有應繳 → unpaid；
+         *     total_paid>=total_due → paid；其餘 → partial。
+         */
+        MonthlyStatementStudentOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Items */
+            items: components["schemas"]["MonthlyStatementItemOut"][];
+            /** Outstanding */
+            outstanding: number;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+            /** Total Due */
+            total_due: number;
+            /** Total Paid */
+            total_paid: number;
+        };
+        /**
+         * MonthlyStatementSummaryOut
+         * @description 月繳總表統計：金額三項 + 學生數四項（以聚合狀態計人）。
+         */
+        MonthlyStatementSummaryOut: {
+            /** Outstanding */
+            outstanding: number;
+            /** Paid Count */
+            paid_count: number;
+            /** Partial Count */
+            partial_count: number;
+            /** Student Count */
+            student_count: number;
+            /** Total Due */
+            total_due: number;
+            /** Total Paid */
+            total_paid: number;
+            /** Unpaid Count */
+            unpaid_count: number;
         };
         /**
          * MonthOptionOut
@@ -54469,6 +54582,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fee_monthly_statement_api_fees_monthly_statement_get: {
+        parameters: {
+            query: {
+                classroom_name?: string | null;
+                month: string;
+                student_name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyStatementOut"];
                 };
             };
             /** @description Validation Error */

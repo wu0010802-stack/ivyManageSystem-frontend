@@ -1,5 +1,5 @@
 import api from './index'
-import type { ApiBody, ApiResponse } from './_generated/typed'
+import type { ApiBody, ApiQuery, ApiResponse } from './_generated/typed'
 
 export const getFeePeriods = () => api.get('/fees/periods').then((res) => res.data)
 // params 維持 unknown：FeesTab.vue 以 Record<string, unknown> 建構（含條件式賦值），
@@ -25,6 +25,11 @@ export const getRefundedFeeRecords = (
 ): Promise<ApiResponse<'/fees/refunds', 'get'>> =>
   api.get('/fees/refunds', { params }).then((res) => res.data)
 export const getFeeSummary = (params: unknown) => api.get('/fees/summary', { params }).then((res) => res.data)
+// 月繳總表（帳單工作區「彙總繳費表」）：per-student 聚合，單月一次撈全、前端快篩
+export const getFeeMonthlyStatement = (
+  params: ApiQuery<'/fees/monthly-statement', 'get'>,
+): Promise<ApiResponse<'/fees/monthly-statement', 'get'>> =>
+  api.get('/fees/monthly-statement', { params }).then((res) => res.data)
 
 // ===== 費用範本 =====
 export const getFeeTemplates = (params: unknown = {}) =>

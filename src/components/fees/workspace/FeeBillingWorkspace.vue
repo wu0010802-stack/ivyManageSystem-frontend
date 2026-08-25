@@ -1,13 +1,24 @@
 <template>
   <section class="fee-billing-workspace" aria-label="帳單工作區">
     <div class="workspace-bar">
-      <el-segmented
-        :model-value="view"
-        :options="viewOptions"
-        aria-label="帳單檢視切換"
-        data-test="billing-view-switch"
-        @change="onViewChange"
-      />
+      <div class="workspace-bar__nav">
+        <el-segmented
+          :model-value="view"
+          :options="viewOptions"
+          aria-label="帳單檢視切換"
+          data-test="billing-view-switch"
+          @change="onViewChange"
+        />
+        <el-segmented
+          v-if="view === 'records'"
+          :model-value="recordsMode"
+          :options="recordsModeOptions"
+          size="small"
+          aria-label="帳款檢視模式"
+          data-test="records-mode-switch"
+          @change="onRecordsModeChange"
+        />
+      </div>
       <el-button
         v-if="canWrite"
         type="primary"
@@ -23,8 +34,14 @@
       <el-skeleton :rows="4" animated />
     </div>
     <KeepAlive v-else>
+      <FeeMonthlyStatement
+        v-if="view === 'records' && recordsMode === 'statement'"
+        ref="statementRef"
+        :classrooms="classrooms"
+        @open-list="onOpenList"
+      />
       <FeeRecordsTab
-        v-if="view === 'records'"
+        v-else-if="view === 'records'"
         ref="recordsTabRef"
         auto-load
         :period-options="periodOptions"
@@ -49,8 +66,12 @@
 /**
  * 帳單工作區：整合帳款（繳費記錄）/ 預繳款 / 學費退費三個次層檢視。
  * 「產生費用單」自費用範本頁移到本工作區 header，成為帳單的主要操作。
+ *
+ * 帳款檢視自 2026-08 起有兩個模式：彙總繳費表（月繳總表，預設）與
+ * 逐筆明細（原 FeeRecordsTab，行為不變）；部分繳費／退款等單項操作
+ * 由彙總表 emit open-list 導向逐筆明細。
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getFeePeriods } from '@/api/fees'
@@ -58,6 +79,7 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import { useAllClassroomStore } from '@/stores/classroomAll'
+import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import PrepaymentsTab from '@/components/fees/PrepaymentsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
@@ -81,6 +103,17 @@ const viewOptions = FEE_WORKSPACE_VIEWS.billing.map((v) => ({
   value: v.key,
 }))
 
+// 帳款檢視模式：彙總繳費表（預設）⇄ 逐筆明細；帶全域搜尋進場時直接落地逐筆
+const recordsModeOptions = [
+  { label: '彙總繳費表', value: 'statement' },
+  { label: '逐筆明細', value: 'list' },
+]
+const recordsMode = ref<'statement' | 'list'>(props.studentSearch ? 'list' : 'statement')
+
+function onRecordsModeChange(val: string | number) {
+  recordsMode.value = String(val) === 'list' ? 'list' : 'statement'
+}
+
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
 // ─── 學期選項與預設學期（等載入完成再掛帳款表，確保首次查詢就聚焦當前學期）───
@@ -96,6 +129,8 @@ const recordsTabRef = ref<{
   fetchRecords?: () => void
   applySearch?: (name: string) => void
 } | null>(null)
+
+const statementRef = ref<{ refresh?: () => void } | null>(null)
 
 const generateVisible = ref(false)
 
@@ -128,29 +163,47 @@ function onViewChange(val: string | number) {
   if (next !== props.view) emit('change-view', next)
 }
 
+// 刷新目前作用中的帳款檢視（彙總表或逐筆明細）
+function refreshActiveRecordsView() {
+  if (recordsMode.value === 'statement') statementRef.value?.refresh?.()
+  else recordsTabRef.value?.fetchRecords?.()
+}
+
 function onGenerated() {
-  // 產單後刷新帳款清單（若已掛載）
-  recordsTabRef.value?.fetchRecords?.()
+  // 產單後刷新帳款檢視（若已掛載）
+  refreshActiveRecordsView()
+}
+
+// 彙總表「到逐筆明細處理」：切換模式並預帶學生姓名
+async function onOpenList(studentName: string) {
+  recordsMode.value = 'list'
+  await nextTick()
+  if (studentName) recordsTabRef.value?.applySearch?.(studentName)
 }
 
 // 回到帳款檢視時刷新（沿用舊版切回「繳費記錄」自動重載的行為；
-// 首次掛載由 FeeRecordsTab 自行載入，此處只處理「切回」既存實例）。
+// 首次掛載由子元件自行載入，此處只處理「切回」既存實例）。
 // flush: 'post' 確保 KeepAlive 重新啟用後 ref 已恢復。
 watch(
   () => props.view,
   (next, prev) => {
     if (next === 'records' && prev !== undefined && prev !== 'records') {
-      recordsTabRef.value?.fetchRecords?.()
+      refreshActiveRecordsView()
     }
   },
   { flush: 'post' },
 )
 
-// 全域搜尋（?search=學生姓名）：轉交帳款清單預篩
+// 全域搜尋（?search=學生姓名）：落地逐筆明細並轉交預篩
 watch(
   () => props.studentSearch,
-  (kw) => {
-    if (kw) recordsTabRef.value?.applySearch?.(kw)
+  async (kw) => {
+    if (!kw) return
+    if (recordsMode.value !== 'list') {
+      recordsMode.value = 'list'
+      await nextTick()
+    }
+    recordsTabRef.value?.applySearch?.(kw)
   },
   { flush: 'post' },
 )
@@ -162,6 +215,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.workspace-bar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
 .workspace-bar {
   display: flex;
   justify-content: space-between;

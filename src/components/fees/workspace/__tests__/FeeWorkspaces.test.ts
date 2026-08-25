@@ -29,6 +29,21 @@ vi.mock('@/stores/classroomAll', () => ({
 }))
 
 // ── 子分頁全部 stub ────────────────────────────────────────────────────────
+const statementMocks = vi.hoisted(() => ({ refresh: vi.fn() }))
+vi.mock('@/components/fees/FeeMonthlyStatement.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeMonthlyStatement',
+    props: { classrooms: { type: Array, default: () => [] } },
+    emits: ['open-list'],
+    setup(_: unknown, { expose }: { expose: (o: Record<string, unknown>) => void }) {
+      expose({ refresh: statementMocks.refresh })
+      return {}
+    },
+    template: '<div data-testid="monthly-statement" />',
+  },
+}))
+
 const recordsMocks = vi.hoisted(() => ({
   fetchRecords: vi.fn(),
   applySearch: vi.fn(),
@@ -132,7 +147,7 @@ beforeEach(() => {
 })
 
 describe('FeeBillingWorkspace（帳單）', () => {
-  it('次層導航為帳款/預繳/退款，預設顯示帳款並帶入當前學期（autoLoad 自載）', async () => {
+  it('次層導航為帳款/預繳/退款，預設顯示帳款＝彙總繳費表（2026-08 改版）', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     const labels = wrapper
@@ -140,6 +155,15 @@ describe('FeeBillingWorkspace（帳單）', () => {
       .findAll('button')
       .map((b) => b.text())
     expect(labels).toEqual(['帳款', '預繳', '退款'])
+    expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="records-tab"]').exists()).toBe(false)
+  })
+
+  it('切到逐筆明細模式時帶入當前學期（autoLoad 自載，行為不變）', async () => {
+    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    await wrapper.find('[data-seg="list"]').trigger('click')
+    await flushAll()
     const records = wrapper.find('[data-testid="records-tab"]')
     expect(records.exists()).toBe(true)
     expect(records.attributes('data-default-period')).toBe('115-1')
@@ -189,16 +213,16 @@ describe('FeeBillingWorkspace（帳單）', () => {
     expect(wrapper.find('[data-test="billing-generate"]').exists()).toBe(false)
   })
 
-  it('切回帳款檢視時刷新清單（沿用舊版行為）', async () => {
+  it('切回帳款檢視時刷新作用中的檢視（預設＝彙總繳費表）', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
-    recordsMocks.fetchRecords.mockClear()
+    statementMocks.refresh.mockClear()
     await wrapper.setProps({ view: 'prepayments' })
     await flushAll()
-    expect(recordsMocks.fetchRecords).not.toHaveBeenCalled()
+    expect(statementMocks.refresh).not.toHaveBeenCalled()
     await wrapper.setProps({ view: 'records' })
     await flushAll()
-    expect(recordsMocks.fetchRecords).toHaveBeenCalledTimes(1)
+    expect(statementMocks.refresh).toHaveBeenCalledTimes(1)
   })
 
   it('學期列表只載入一次（次層切換不重複請求）', async () => {
