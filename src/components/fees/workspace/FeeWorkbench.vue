@@ -303,11 +303,13 @@ function billingItem(): QueueItem {
     return { ...base, state: 'unknown', detail: '無法載入收款統計，點入帳單查看' }
   }
   if (!currentPeriod.value) {
+    // 產單已改每日排程自動化：空狀態導向費用設定確認範本，而非手動產單
     return {
       ...base,
       state: 'muted',
-      detail: '尚未產生任何費用單；請至帳單以「產生費用單」建立本學期帳款',
-      actionLabel: '前往產單',
+      detail: '尚未產生任何費用單；啟用費用範本後，系統將於每日自動產生本學期帳款',
+      actionLabel: '前往費用設定',
+      target: { ws: 'settings' as const, view: 'templates' },
     }
   }
   const s = feeSummary.value

@@ -140,12 +140,13 @@ describe('FeeWorkbench 工作佇列', () => {
     expect(wrapper.find('[data-test="workbench-action-handover"]').exists()).toBe(true)
   })
 
-  it('空資料狀態說明下一步：尚無費用單時導向產單', async () => {
+  it('空資料狀態說明下一步：尚無費用單時導向費用設定（產單已改每日排程自動化）', async () => {
     apiMocks.getFeePeriods.mockResolvedValue([])
     const wrapper = mountWorkbench()
     await flushAll()
     expect(wrapper.text()).toContain('尚未產生任何費用單')
-    expect(wrapper.text()).toContain('產生費用單')
+    expect(wrapper.text()).toContain('自動產生')
+    expect(wrapper.text()).toContain('前往費用設定')
     expect(apiMocks.getFeeSummary).not.toHaveBeenCalled()
   })
 

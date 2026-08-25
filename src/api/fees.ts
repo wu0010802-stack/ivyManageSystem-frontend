@@ -41,9 +41,7 @@ export const updateFeeTemplate = (id: number, payload: unknown) =>
 export const deleteFeeTemplate = (id: number) =>
   api.delete(`/fees/templates/${id}`).then((res) => res.data)
 
-// ===== 依範本批量產生費用單 =====
-export const generateFeeRecords = (payload: unknown) =>
-  api.post('/fees/generate', payload).then((res) => res.data)
+// 產生費用單已改後端每日排程自動化（POST /fees/generate 僅維運保底，前端不再呼叫）
 
 // ===== 學費折抵 CRUD（同胞優惠 / 預繳 / 請假扣款 / 其他）=====
 // getFeeAdjustments 參數維持 unknown：FeesTab.vue 以 Record<string, unknown> 傳入，

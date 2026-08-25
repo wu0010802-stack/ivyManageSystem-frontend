@@ -123,7 +123,7 @@
         <EmptyState
           v-else
           title="尚無費用紀錄"
-          description="可先到右上「費用設定」維護費用範本，再以上方「產生費用單」批次建立"
+          description="可先到右上「費用設定」維護費用範本，系統將於每日依啟用範本自動產生費用單"
         />
       </template>
 

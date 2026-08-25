@@ -5,7 +5,8 @@
  * - 模式切換渲染 FeeRecordsTab（auto-load 行為不變）
  * - 全域搜尋（studentSearch）落地逐筆明細並轉交 applySearch
  * - 彙總表 open-list（到逐筆明細處理）切換模式＋預帶姓名
- * - 產單後/切回帳款時刷新當前作用中的檢視
+ * - 切回帳款時刷新當前作用中的檢視
+ *（產單已改每日排程自動化，本工作區不再有產單 modal 與其刷新路徑）
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -84,16 +85,6 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     template: '<div data-testid="refunds-tab" />',
   },
 }))
-vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
-  __esModule: true,
-  default: {
-    name: 'FeeGenerateModal',
-    props: ['modelValue', 'schoolYear', 'semester'],
-    emits: ['update:modelValue', 'generated'],
-    template: '<div data-testid="generate-modal" />',
-  },
-}))
-
 const ElSegmentedStub = {
   name: 'ElSegmented',
   props: ['modelValue', 'options'],
@@ -196,26 +187,6 @@ describe('FeeBillingWorkspace 帳款模式切換', () => {
     await flushAll()
     expect(wrapper.find('[data-testid="records-tab"]').exists()).toBe(true)
     expect(recordsMocks.applySearch).toHaveBeenCalledWith('陳部分')
-  })
-
-  it('產單後刷新作用中的彙總表', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
-    await flushAll()
-    statementMocks.refresh.mockClear()
-    wrapper.findComponent({ name: 'FeeGenerateModal' }).vm.$emit('generated')
-    await flushAll()
-    expect(statementMocks.refresh).toHaveBeenCalledTimes(1)
-  })
-
-  it('產單後（逐筆模式）刷新逐筆清單', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
-    await flushAll()
-    await wrapper.find('[data-seg="list"]').trigger('click')
-    await flushAll()
-    recordsMocks.fetchRecords.mockClear()
-    wrapper.findComponent({ name: 'FeeGenerateModal' }).vm.$emit('generated')
-    await flushAll()
-    expect(recordsMocks.fetchRecords).toHaveBeenCalledTimes(1)
   })
 
   it('切回帳款檢視時刷新作用中的彙總表', async () => {

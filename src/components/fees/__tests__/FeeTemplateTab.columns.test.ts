@@ -45,7 +45,6 @@ const mountTab = () =>
     global: {
       stubs: {
         FeeTemplateManageDrawer: true,
-        FeeGenerateModal: true,
         'el-collapse': true,
         'el-collapse-item': true,
         'el-table': true,

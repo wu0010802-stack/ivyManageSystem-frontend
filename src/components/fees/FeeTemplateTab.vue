@@ -10,7 +10,7 @@
           <el-option :value="2" label="下學期" />
         </el-select>
       </div>
-      <!-- IA 改版：「產生費用單」移至帳單工作區 header，本頁只管範本與總覽。
+      <!-- 產單已改每日排程自動化（無手動入口），本頁只管範本與總覽。
            頂層兩個 action：主要（管理範本）、檢視選單（其餘收斂） -->
       <div class="view-actions">
         <el-button type="primary" @click="manageVisible = true">管理範本</el-button>
@@ -37,7 +37,7 @@
         show-icon
       >
         該學期尚未建立任何費用範本：請先用右上「管理範本」逐年級建立，
-        再回「帳單」工作區以「產生費用單」批次產單。
+        啟用後系統將於每日自動產生費用單。
       </el-alert>
       <el-empty
         v-else-if="!overviewLoading && gradeSections.length === 0"
@@ -200,7 +200,7 @@ const _initTerm = getCurrentAcademicTerm()
 const filterYear = ref(_initTerm.school_year)
 const filterSemester = ref(_initTerm.semester)
 
-// 「產生費用單」已移至帳單工作區 header（IA 改版）；本頁只管範本與總覽
+// 產單已改每日排程自動化（無手動入口）；本頁只管範本與總覽
 const manageVisible = ref(false)
 // 本檔 Grade.id 為 number | string（展示用寬鬆型別），Drawer/Dialog 需 number
 const drawerGrades = computed(() =>

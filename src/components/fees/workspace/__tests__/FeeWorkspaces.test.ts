@@ -1,6 +1,7 @@
 /**
- * 三個包裝工作區的測試：帳單（次層導航＋產生費用單權限 gate＋預設學期）、
- * 結算（每日交接/月結切換＋navigate 冒泡）、費用設定（範本/銷帳碼切換）。
+ * 三個包裝工作區的測試：帳單（次層導航＋預設學期；產單已改每日排程自動化，
+ * header 不再有「產生費用單」）、結算（每日交接/月結切換＋navigate 冒泡）、
+ * 費用設定（範本/銷帳碼切換）。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -78,14 +79,6 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     name: 'FeeRefundsTab',
     props: ['periodOptions'],
     template: '<div data-testid="refunds-tab" />',
-  },
-}))
-vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
-  default: {
-    name: 'FeeGenerateModal',
-    props: ['modelValue', 'schoolYear', 'semester'],
-    template:
-      '<div data-testid="generate-modal" :data-open="modelValue ? \'1\' : \'0\'" :data-year="schoolYear" :data-semester="semester" />',
   },
 }))
 vi.mock('@/components/fees/CashHandoverTab.vue', () => ({
@@ -170,14 +163,6 @@ describe('FeeBillingWorkspace（帳單）', () => {
     expect(records.attributes('data-auto-load')).toBe('1')
   })
 
-  it('產生費用單 modal 繼承目前聚焦學期（"115-1" → 學年 115／上學期）', async () => {
-    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
-    await flushAll()
-    const modal = wrapper.find('[data-testid="generate-modal"]')
-    expect(modal.attributes('data-year')).toBe('115')
-    expect(modal.attributes('data-semester')).toBe('1')
-  })
-
   it('切換次層檢視 emit change-view（由殼層寫回 query）', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
@@ -202,15 +187,11 @@ describe('FeeBillingWorkspace（帳單）', () => {
     expect(refunds.find('[data-testid="refunds-tab"]').exists()).toBe(true)
   })
 
-  it('「產生費用單」只在具 FEES_WRITE 時出現（權限 gate）', async () => {
-    let wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
-    await flushAll()
-    expect(wrapper.find('[data-test="billing-generate"]').exists()).toBe(true)
-
-    authMocks.perms = new Set(['FEES_READ'])
-    wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+  it('header 不再有「產生費用單」按鈕（產單改每日排程自動化，具 FEES_WRITE 亦然）', async () => {
+    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     expect(wrapper.find('[data-test="billing-generate"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('產生費用單')
   })
 
   it('切回帳款檢視時刷新作用中的檢視（預設＝彙總繳費表）', async () => {

@@ -121,7 +121,7 @@
       <el-button size="small" data-test="stmt-retry" @click="fetchStatement">重試</el-button>
     </div>
     <div v-else-if="students.length === 0" class="stmt-state" data-test="stmt-empty">
-      <p>{{ monthLabel }}尚無費用單——可先從右上「產生費用單」建立本學期費用</p>
+      <p>{{ monthLabel }}尚無費用單——啟用費用範本後，系統將於每日自動產生</p>
     </div>
     <div v-else class="stmt-table-wrap">
       <table class="stmt-table" data-test="stmt-table">

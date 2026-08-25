@@ -1,8 +1,8 @@
 /**
  * FeeTemplateTab toolbar（2026-08-25 IA 改版後）：
- * 「產生費用單」已移至帳單工作區 header（見 FeeWorkspaces.test.ts），本頁
- * 頂層剩兩個 action——管理範本（primary）＋檢視選單（展開/收合/重新載入
- * 收進 dropdown，沿用 2026-08-17 toolbar 收斂）。
+ * 「產生費用單」已改後端每日排程自動化（全前端無手動入口，見
+ * FeeWorkspaces.test.ts），本頁頂層剩兩個 action——管理範本（primary）＋
+ * 檢視選單（展開/收合/重新載入收進 dropdown，沿用 2026-08-17 toolbar 收斂）。
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -50,7 +50,7 @@ interface TabVm {
 beforeEach(() => vi.clearAllMocks())
 
 describe('FeeTemplateTab toolbar（IA 改版後）', () => {
-  it('本頁不再有「產生費用單」（移至帳單工作區）；管理範本升為 primary', async () => {
+  it('本頁不再有「產生費用單」（產單已自動化）；管理範本升為 primary', async () => {
     const w = mountTab()
     await flushPromises()
 
