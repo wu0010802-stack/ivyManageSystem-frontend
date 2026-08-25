@@ -4,6 +4,7 @@ import {
   futurePreloggedExpense,
   cutSeries,
   deltaKind,
+  pctChange,
   type FinanceTrendRow,
 } from '../financeTrend'
 
@@ -61,6 +62,26 @@ describe('cutSeries', () => {
     const s = cutSeries(sparse, 'revenue', 12)
     expect(s[0]).toBeNull()
     expect(s[1]).toBe(5)
+  })
+})
+
+describe('pctChange（2026-08-25 稽核 C1：負基期方向）', () => {
+  it('正基期：(150-100)/100 = +50%', () => {
+    expect(pctChange(150, 100)).toBeCloseTo(50)
+  })
+  it('基期為 0 → null（無資料，不顯示）', () => {
+    expect(pctChange(100, 0)).toBeNull()
+  })
+  it('負基期惡化（更負）必須是負值/down：淨現金 -50 萬 → -176.8 萬 = -253.6%', () => {
+    // 帶號分母的舊實作會回 +253.7%（綠色「改善」），與事實相反
+    const v = pctChange(-1768000, -500000)
+    expect(v).toBeCloseTo(-253.6)
+    expect(deltaKind(v)).toBe('down')
+  })
+  it('負基期改善（虧損收斂）必須是正值/up：-500 → -100 = +80%', () => {
+    const v = pctChange(-100, -500)
+    expect(v).toBeCloseTo(80)
+    expect(deltaKind(v)).toBe('up')
   })
 })
 
