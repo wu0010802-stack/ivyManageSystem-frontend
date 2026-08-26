@@ -53,6 +53,15 @@ const busTodayMock = vi.hoisted(() => ({
   getBusToday: vi.fn().mockResolvedValue({
     data: { trip: null, position: null, stale: false, school: null, children: [] },
   }),
+  // FE-PARENT-04：「今天不搭」入口的載入路徑。不列出來的話 vitest 會在**呼叫時**
+  // 丟「No "getRideCancellations" export is defined on the mock」，被
+  // `loadRideCancellations()` 的 catch 吞掉——本檔是首頁 bento 顯示條件的主測試檔，
+  // 那樣等於整條新路徑都沒被覆蓋，之後改壞也不會變紅。
+  getRideCancellations: vi.fn().mockResolvedValue({
+    data: { date: '2026-08-26', children: [] },
+  }),
+  createRideCancellation: vi.fn(),
+  revokeRideCancellation: vi.fn(),
 }))
 vi.mock('@/parent/api/bus', () => busTodayMock)
 

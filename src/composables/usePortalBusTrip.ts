@@ -620,15 +620,24 @@ export function usePortalBusTrip() {
       applyActive((res as { data?: ActivePayload }).data)
     } catch (e) {
       if (errorStatus(e) === 409) {
-        ElMessage.warning('已有進行中的班次，為您接手')
         try {
           await loadActive(routeId)
         } catch (inner) {
-          ElMessage.error(apiError(inner, '接手班次失敗，請重新整理'))
+          // 接手查詢本身失敗：只留這一個訊息就走。**不可**再往下把 409 原訊息
+          // 寫進 startBlockedMessage——畫面會同時出現「接手班次失敗，請重新整理」
+          // 與「已有進行中的班次」，兩句指向完全不同的下一步動作。
+          startBlockedMessage.value = apiError(inner, '接手班次失敗，請重新整理')
+          return
         }
-        // 接手落空（例如 409 其實是 bus_count 達上限，這條路線並沒有我的班次）：
-        // 不可靜默停在「沒有班次」的畫面，那看起來像什麼都沒發生。
-        if (!trip.value) startBlockedMessage.value = apiError(e, '目前無法開始班次')
+        if (trip.value) {
+          // 真的接到了才說「為您接手」——先彈再查的話，接手落空時那句是假話。
+          ElMessage.warning('已有進行中的班次，為您接手')
+        } else {
+          // 接手落空：這種 409 通常是 bus_count 達上限（那筆進行中的班次不是
+          // 這條路線的），查不到自己的班次。不可靜默停在「沒有班次」的畫面，
+          // 那看起來像什麼都沒發生。
+          startBlockedMessage.value = apiError(e, '目前無法開始班次')
+        }
       } else if (errorStatus(e) === 422) {
         startBlockedMessage.value = startValidationMessage(e)
       } else {
@@ -710,6 +719,14 @@ export function usePortalBusTrip() {
     fallbackMessage: string,
     isRetry = false,
   ): Promise<void> {
+    // excused 守衛也要蓋到重送路徑：司機在隧道按了離站 → 進重試佇列 → 期間家長
+    // 申報今天不搭（站轉 excused）→ 恢復連線後重送一筆離站。後端的條件式 UPDATE
+    // （`WHERE status='pending'`）會擋成 409 不會落錯資料，但這道守衛的註解宣稱
+    // 「以 stops 內的權威狀態判定」，覆蓋面就該包含這條路徑。
+    if (isExcused(stopId)) {
+      dequeueStopRetry(stopId, kind)
+      return
+    }
     try {
       const res = await STOP_ACTION_CALLS[kind](tripId, stopId)
       syncClock(res as ApiHeaders)

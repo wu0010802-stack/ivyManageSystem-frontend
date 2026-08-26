@@ -10,7 +10,7 @@ import {
   revokeRideCancellation,
 } from '../api/bus'
 import BusRideCancellationSheet from '../components/bus/BusRideCancellationSheet.vue'
-import { todayISO } from '@/utils/format'
+import { todayTaipeiISO } from '@/utils/format'
 import { listPickupAuthorizations } from '../api/pickup'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
@@ -246,7 +246,12 @@ async function onRideCancelSubmit(directions: BusDirection[]): Promise<void> {
   try {
     const res = await createRideCancellation({
       student_id: child.student_id,
-      date: todayISO(),
+      // **必須是 todayTaipeiISO 而不是 todayISO**：後端 RideCancellationCreateIn
+      // 以 `today_taipei()` 驗 date window，裝置在 UTC+9 時台北 23:10 送出的
+      // todayISO() 是「明天」——落在 +7 天 window 內照收，但明天的 trip 還沒生成
+      // → 後端回 no_stop → 前端顯示成功文案，家長以為報成了，隔天車照常來接。
+      // 裝置在美洲時區則會送出「昨天」→ 422 → 重試永遠不會好。
+      date: todayTaipeiISO(),
       directions,
     })
     const payload = res.data as {

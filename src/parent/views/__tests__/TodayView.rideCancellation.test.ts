@@ -192,6 +192,34 @@ describe('TodayView — 今天不搭送出與撤銷', () => {
     wrapper.unmount()
   })
 
+  it('送出的 date 是**台北**的今天，不是裝置本地的今天', async () => {
+    // 後端 RideCancellationCreateIn 以 today_taipei() 驗 date window。
+    // 裝置在 UTC+9 時，台北 23:10 的 todayISO() 是「明天」——落在 +7 天 window
+    // 內照收，但明天的 trip 還沒生成 → 後端回 no_stop → 前端顯示**成功**文案，
+    // 家長以為報成了，隔天早上車照常來接。裝置在美洲則送出「昨天」→ 422 →
+    // catch 成「回報失敗」，重試永遠不會好。
+    vi.useFakeTimers()
+    // 2026-08-26 15:10 UTC ＝ 台北 2026-08-26 23:10（同日）＝ 東京 8/27 00:10
+    vi.setSystemTime(new Date('2026-08-26T15:10:00Z'))
+    createRideCancellationMock.mockResolvedValue({
+      data: { results: [{ direction: 'morning', success: true, message: 'ok' }] },
+    })
+    try {
+      const wrapper = await mountToday()
+      const vm = wrapper.vm as unknown as Vm
+      vm.openCancelSheet(1)
+      await vm.onRideCancelSubmit(['morning'])
+      await flushPromises()
+
+      expect(createRideCancellationMock.mock.calls[0][0]).toMatchObject({
+        date: '2026-08-26',
+      })
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('部分成功：兩筆結果原樣分筆交給 sheet，不收斂成單一成敗', async () => {
     createRideCancellationMock.mockResolvedValue({
       data: {

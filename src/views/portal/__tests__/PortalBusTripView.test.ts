@@ -479,15 +479,43 @@ describe('PortalBusTripView — 站點卡片新揭露面（FE-PORTAL-02）', () 
     expect(link.text()).toContain('王媽媽')
   })
 
-  it('電話不進 aria-label（輔助技術唸整串號碼無益，且 aria-label 易被工具抄走）', async () => {
+  it('PII 一律不進 Sentry 會抄走的四個屬性（aria-label/title/alt/name）', async () => {
+    // 隱私 review must-fix：@sentry/core 的 htmlTreeAsString() 對 DOM click
+    // breadcrumb 會逐字抄走這四個屬性，而 scrubBreadcrumb 只跑 redactPiiValue()
+    // 的四條正則——中文姓名一個字都不遮。於是「撥打給 王媽媽」會原樣進 Sentry。
+    // 它抄的是屬性不是文字節點，所以可及名稱改交給可見文字承擔。
     s.trip.value = { id: 7 }
     s.stops.value = [stop(CONTACT_STOP)]
     const wrapper = mount(PortalBusTripView)
     await flushPromises()
 
-    const label = wrapper.find('[data-testid="bus-stop-contact-11"]').attributes('aria-label')
-    expect(label).toBe('撥打給 王媽媽')
-    expect(label).not.toContain('0912345678')
+    const html = wrapper.html()
+    for (const attr of ['aria-label', 'title', 'alt', 'name']) {
+      const values = [...html.matchAll(new RegExp(`${attr}="([^"]*)"`, 'g'))].map((m) => m[1])
+      expect(values.join(' | ')).not.toContain('王媽媽')
+      expect(values.join(' | ')).not.toContain('0912345678')
+      expect(values.join(' | ')).not.toContain('小明')
+      expect(values.join(' | ')).not.toContain('高雄市')
+    }
+    // 可及名稱仍在：聯絡人連結的可見文字含姓名與號碼
+    const link = wrapper.find('[data-testid="bus-stop-contact-11"]')
+    expect(link.attributes('aria-label')).toBeUndefined()
+    expect(link.text()).toContain('王媽媽')
+  })
+
+  it('操作鈕以 aria-labelledby 引用姓名 id 保住語境（屬性值只有 id，不含 PII）', async () => {
+    // 直接把 aria-label 拿掉會讓螢幕閱讀器只聽到三顆「離站」，分不出是哪個學生；
+    // aria-labelledby 的值是 id 參照，Sentry 抄走也只是一串 id。
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const card = wrapper.find('[data-testid="bus-stop-11"]')
+    expect(card.find('#stop-name-11').text()).toBe('小明')
+    const depart = card.findAll('el-button')[0]
+    expect(depart.attributes('aria-labelledby')).toBe('stop-name-11 stop-depart-11')
+    expect(depart.attributes('id')).toBe('stop-depart-11')
   })
 
   it('座標一律不渲染（家庭住址，spec 硬規則）', async () => {
@@ -542,5 +570,75 @@ describe('PortalBusTripView — 站點卡片新揭露面（FE-PORTAL-02）', () 
     expect(wrapper.find('[data-testid="bus-stop-eta-11"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="bus-stop-address-11"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="bus-stop-contact-11"]').exists()).toBe(false)
+  })
+})
+
+describe('PortalBusTripView — review findings 回歸', () => {
+  it('改選別的班次會清掉上一輪的阻擋訊息（N3）', async () => {
+    // A 線 422「缺座標」→ 改選 B 線 → 那則針對 A 線的紅字若還掛著，行車情境下
+    // 極易誤讀成「B 線也被擋」。
+    s.routes.value = [routeItem({ id: 3 }), routeItem({ id: 4, name: 'B 線' })]
+    s.selectedRouteId.value = 3
+    s.startBlockedMessage.value = '部分學生缺少接送座標（共 3 位）'
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-start-blocked"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="bus-route-4"]').trigger('click')
+    await flushPromises()
+
+    expect(s.startBlockedMessage.value).toBeNull()
+    expect(wrapper.find('[data-testid="bus-start-blocked"]').exists()).toBe(false)
+  })
+
+  it('沒有電話的聯絡人整個不進 DOM，不留空的 tel: 連結（N4）', async () => {
+    // v-show 只是 display:none，空連結對輔助技術仍可見可聚焦。
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({
+      contacts: [
+        { name: '有電話的', phone: '0912345678' },
+        { name: '沒電話的', phone: null },
+      ],
+    })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const links = wrapper.findAll('[data-testid="bus-stop-contact-11"]')
+    expect(links).toHaveLength(1)
+    expect(links[0].attributes('href')).toBe('tel:0912345678')
+    expect(wrapper.html()).not.toContain('沒電話的')
+    // 以元素層斷言而非 raw html 掃字串：Vue 會把 template 註解一起渲染進 DOM，
+    // 註解裡若提到 tel: 就會誤命中（這條測試第一版正是這樣自己咬自己）。
+    for (const a of wrapper.findAll('a')) {
+      expect(a.attributes('href')).not.toBe('tel:')
+    }
+  })
+
+  it('全部聯絡人都沒電話時整個區塊不渲染（N4）', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({ contacts: [{ name: '沒電話的', phone: null }] })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('.stop-contacts').exists()).toBe(false)
+  })
+
+  it('同名同號的兩筆聯絡人不會撞 key（N4）', async () => {
+    // 後端沒回 guardian id，資料重複建檔時 name+phone 組出的 key 會重複，
+    // Vue 會警告並可能複用錯 DOM 節點。
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({
+      contacts: [
+        { name: '王媽媽', phone: '0912345678' },
+        { name: '王媽媽', phone: '0912345678' },
+      ],
+    })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="bus-stop-contact-11"]')).toHaveLength(2)
+    expect(warn.mock.calls.flat().join(' ')).not.toContain('Duplicate keys')
+    warn.mockRestore()
   })
 })

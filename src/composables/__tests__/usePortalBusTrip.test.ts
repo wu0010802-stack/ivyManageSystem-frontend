@@ -1637,3 +1637,81 @@ describe('usePortalBusTrip — excused 是當日不搭的單一事實來源（FE
     expect(departBusStop).toHaveBeenCalledWith(7, 11)
   })
 })
+
+describe('usePortalBusTrip — review findings 回歸', () => {
+  it('409 接手查詢失敗時只留一個訊息，不與 409 原訊息並存（N1）', async () => {
+    // 兩則訊息會指向完全不同的下一步動作（「重新整理」vs「已有進行中的班次」）。
+    vi.mocked(startBusTrip).mockRejectedValue(
+      axiosError(409, { message: '已有進行中的班次', trip_id: 7 }),
+    )
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+    vi.mocked(getActiveBusTrip).mockRejectedValue(axiosError(500, '伺服器忙碌中'))
+
+    await bus.start()
+    await flushPromises()
+
+    expect(bus.startBlockedMessage.value).toBe('伺服器忙碌中')
+    expect(bus.startBlockedMessage.value).not.toContain('已有進行中的班次')
+  })
+
+  it('接手落空時不得先彈「為您接手」再說開不了（N1）', async () => {
+    vi.mocked(startBusTrip).mockRejectedValue(
+      axiosError(409, '目前已有 2 輛車在路上，達本校可用車輛數上限（2）'),
+    )
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null, stops: null }) as never)
+
+    await bus.start()
+    await flushPromises()
+
+    // 沒真的接到就不該說「為您接手」——那是句假話
+    expect(ElMessage.warning).not.toHaveBeenCalled()
+    expect(bus.startBlockedMessage.value)
+      .toBe('目前已有 2 輛車在路上，達本校可用車輛數上限（2）')
+  })
+
+  it('真的接到班次時才提示「為您接手」（N1 的另一半不得被改壞）', async () => {
+    vi.mocked(startBusTrip).mockRejectedValue(
+      axiosError(409, { message: '已有進行中的班次', trip_id: 7 }),
+    )
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload()) as never)
+
+    await bus.start()
+    await flushPromises()
+
+    expect(ElMessage.warning).toHaveBeenCalled()
+    expect(bus.trip.value?.id).toBe(7)
+    expect(bus.startBlockedMessage.value).toBeNull()
+  })
+
+  it('重送佇列也套 excused 守衛，不會重送一筆已不該做的離站（N2）', async () => {
+    // 司機在隧道按離站 → 進佇列 → 期間家長申報不搭（站轉 excused）→ 恢復連線。
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
+    await bus.departStop({ stop_id: 11 } as never)
+    await flushPromises()
+    expect(bus.pendingStopActionCount.value).toBe(1)
+
+    // 期間該站轉 excused（家長申報不搭，後台 WS 推播後 resync 回來的權威狀態）
+    bus.stops.value = [{
+      stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'excused',
+      excuse_reason: 'parent',
+    }] as never
+    vi.mocked(departBusStop).mockClear()
+
+    // 下一輪自動重送
+    await vi.advanceTimersByTimeAsync(PING_FLUSH_INTERVAL_MS)
+    await flushPromises()
+
+    expect(departBusStop).not.toHaveBeenCalled()
+    // 佇列要清掉，否則會永遠卡著一筆重送不掉的動作
+    expect(bus.pendingStopActionCount.value).toBe(0)
+  })
+})

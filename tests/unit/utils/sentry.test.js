@@ -155,6 +155,50 @@ describe('scrubMapping', () => {
     }
   })
 
+  it('filters contacts 整包 (娃娃車司機端接送聯絡人，2026-08-26 bussch)', () => {
+    // 為什麼整包遮而不是只靠內層的 phone：`contacts` 這個 key 不命中任何 needle，
+    // scrubber 會遞迴進去，而內層的裸字 `name` 也不在清單裡（清單是逐一列舉
+    // student_name / parent_name / person_name…），聯絡人姓名會原樣通過。
+    // 裸字 `name` 刻意不加進 denylist——同檔下方那支測試釘住 `name: 'Alice'`
+    // 不該被遮（會誤傷 route_name / classroom_name 等非 PII 欄位）。
+    const res = scrubMapping({
+      contacts: [{ name: '王媽媽', phone: '0912345678' }],
+    })
+    expect(res.contacts).toBe('[Filtered]')
+    expect(JSON.stringify(res)).not.toContain('王媽媽')
+  })
+
+  it('filters 站點座標 lat/lng (接送地址 geocode 快照＝家庭住址，2026-08-26 bussch)', () => {
+    // 走 PII_KEY_EXACT 而非 substring：'lat' 會誤傷 latest / related / translation。
+    const res = scrubMapping({
+      lat: 22.61, lng: 120.28, latest_version: 3, translation_key: 'bus.title',
+    })
+    expect(res.lat).toBe('[Filtered]')
+    expect(res.lng).toBe('[Filtered]')
+    // 整字相等比對不得誤傷這兩個
+    expect(res.latest_version).toBe(3)
+    expect(res.translation_key).toBe('bus.title')
+  })
+
+  it('filters camelCase Vue prop 名 (attachProps 會把 props 塞進 contexts.vue.propsData)', () => {
+    // @sentry/vue 預設 attachProps: true。denylist 詞條全是 snake_case，
+    // 'childName'.toLowerCase() = 'childname' 不含 'child_name' 子字串，
+    // 也不等於 PII_KEY_EXACT 的 'child'——原樣上傳。
+    const res = scrubMapping({
+      childName: '王小明',
+      studentName: '王小明',
+      parentName: '王媽媽',
+      personName: '王阿嬤',
+      routeName: 'A 線',
+    })
+    expect(res.childName).toBe('[Filtered]')
+    expect(res.studentName).toBe('[Filtered]')
+    expect(res.parentName).toBe('[Filtered]')
+    expect(res.personName).toBe('[Filtered]')
+    // 非 PII 的 camelCase 欄位不得誤遮
+    expect(res.routeName).toBe('A 線')
+  })
+
   it('filters exclude_reason (新學年預編班行政自由輸入，對齊既有 resign_reason 先例)', () => {
     const res = scrubMapping({
       exclude_reason: '家長要求轉學，疑似家庭因素',

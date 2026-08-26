@@ -63,7 +63,7 @@
               :class="{ 'route-item--selected': selectedRouteId === r.id }"
               :aria-pressed="selectedRouteId === r.id"
               :data-testid="`bus-route-${r.id}`"
-              @click="selectedRouteId = r.id"
+              @click="selectRoute(r.id)"
             >
               <span class="route-main">
                 <span class="route-direction">{{ DIRECTION_LABELS[r.direction] ?? r.direction }}</span>
@@ -171,7 +171,11 @@
           >
             <div class="stop-row">
               <span class="stop-seq">{{ stop.seq }}</span>
-              <span class="stop-name">{{ stop.student_name }}</span>
+              <!--
+                `:id` 供下方操作鈕與聯絡人連結以 `aria-labelledby` 引用——姓名／電話
+                一律不進 `aria-label`，理由見 script 區塊的「隱私」段。
+              -->
+              <span :id="`stop-name-${stop.stop_id}`" class="stop-name">{{ stop.student_name }}</span>
               <el-tag v-if="stop.status === 'departed'" type="success">已離站</el-tag>
               <el-tag v-else-if="stop.status === 'skipped'" type="info">已跳過</el-tag>
               <!--
@@ -201,15 +205,20 @@
               聯絡人電話：行車情境用 `tel:` 直撥（司機不必抄號碼再切到撥號 App）。
               後端已依 is_primary／is_emergency／fallback 規則挑好，前端不再篩。
             -->
-            <div v-if="stop.contacts?.length" class="stop-contacts">
+            <div v-if="callableContacts(stop).length" class="stop-contacts">
+              <!--
+                無電話者**整個不進 DOM**（不是 v-show 隱藏）：v-show 只是
+                display:none，會留下一個 tel: 後面沒有號碼的空連結，對輔助技術
+                仍然可見可聚焦。
+                `:key` 用索引而非 name+phone——後端沒回 guardian id，同名同號的
+                兩筆（資料重複建檔）會撞 key。
+              -->
               <a
-                v-for="c in stop.contacts"
-                :key="`${stop.stop_id}-${c.name}-${c.phone}`"
-                v-show="c.phone"
+                v-for="(c, i) in callableContacts(stop)"
+                :key="`${stop.stop_id}-${i}`"
                 class="stop-contact"
                 :href="`tel:${c.phone}`"
                 :data-testid="`bus-stop-contact-${stop.stop_id}`"
-                :aria-label="`撥打給 ${c.name}`"
               >
                 <span class="stop-contact-name">{{ c.name }}</span>
                 <span class="stop-contact-phone">{{ c.phone }}</span>
@@ -224,7 +233,8 @@
                   size="large"
                   :loading="actingStopId === stop.stop_id"
                   :disabled="actingStopId !== null"
-                  :aria-label="`${stop.student_name} 已離站`"
+                  :id="`stop-depart-${stop.stop_id}`"
+                  :aria-labelledby="`stop-name-${stop.stop_id} stop-depart-${stop.stop_id}`"
                   @click="departStop(stop)"
                 >
                   離站
@@ -232,7 +242,8 @@
                 <el-button
                   size="large"
                   :disabled="actingStopId !== null"
-                  :aria-label="`跳過 ${stop.student_name}`"
+                  :id="`stop-skip-${stop.stop_id}`"
+                  :aria-labelledby="`stop-name-${stop.stop_id} stop-skip-${stop.stop_id}`"
                   @click="skipStop(stop)"
                 >
                   跳過
@@ -243,7 +254,8 @@
                 text
                 size="large"
                 :disabled="actingStopId !== null"
-                :aria-label="`撤銷 ${stop.student_name}`"
+                :id="`stop-undo-${stop.stop_id}`"
+                :aria-labelledby="`stop-name-${stop.stop_id} stop-undo-${stop.stop_id}`"
                 @click="undoStop(stop)"
               >
                 撤銷
@@ -277,9 +289,17 @@
  * ── 第二期揭露面（spec「司機端（Portal）」）──────────────────────────────────
  * 站點卡片新增**接送地址**與**聯絡人姓名＋電話**（`tel:` 直撥）。這是
  * `BUS_TRIPS_OPERATE` 授權範圍內的刻意揭露——但既有隱私硬規則完全不變，反而更要緊：
- * 電話與地址**只渲染在卡片上**，不進 console／Sentry／URL query／任何 storage，
- * 也不塞進 `aria-label`（螢幕閱讀器唸出整串電話沒有幫助，而 aria-label 會被各種
- * 輔助技術與自動化工具抄走）——`aria-label` 一律只帶學生姓名。座標仍完全不渲染。
+ * 電話與地址**只渲染在卡片上**，不進 console／Sentry／URL query／任何 storage。
+ *
+ * ⚠ **任何 PII 都不得寫進 `aria-label`／`title`／`alt`／`name` 這四個屬性**
+ * （隱私 review must-fix）。理由不是 a11y 而是 Sentry：`@sentry/core` 的
+ * `htmlTreeAsString()` 對 DOM click breadcrumb 會**逐字抄走**這四個屬性
+ * （見 `node_modules/@sentry/core/build/cjs/utils/browser.js` 的屬性白名單），
+ * 而 `src/utils/sentry.ts::scrubBreadcrumb` 對 breadcrumb message 只跑
+ * `redactPiiValue()`（身分證／手機／市話／LINE uid 四條正則）——**中文姓名一個字
+ *都不遮**。於是「撥打給 王媽媽」會原樣進 Sentry，被沒有 `BUS_TRIPS_OPERATE` 的人
+ * 看到。它抄的是**屬性**不是文字節點，所以做法是：可及名稱交給可見文字，需要額外
+ * 語境時用 `aria-labelledby` 引用 id（屬性值只有 id，不含 PII）。座標仍完全不渲染。
  *
  * 行車情境的可用性取捨：按鈕一律 `size="large"`（手套／晃動下也點得到）、
  * 操作進行中鎖住整列避免重複送出、結束班次為 danger 並帶二次確認。
@@ -289,6 +309,7 @@ import {
   DIRECTION_LABELS,
   usePortalBusTrip,
   type BusRouteTodayStatus,
+  type BusStopContact,
   type BusTripStop,
 } from '@/composables/usePortalBusTrip'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
@@ -320,6 +341,15 @@ const TODAY_STATUS_TAG: Record<BusRouteTodayStatus, 'info' | 'warning' | 'succes
  * 主按鈕文案隨所選班次的當日狀態變化。`completed` 仍可開同日第二趟（spec 明文），
  * 所以那一態的文案是「再開一趟」而不是把按鈕擋掉——擋掉會讓下午的第二趟開不了。
  */
+/**
+ * 選班次時一併清掉上一輪的阻擋訊息：A 線因缺座標被擋（紅色 alert）後改選 B 線，
+ * 那則針對 A 線的訊息若留在按鈕上方，行車情境下極易誤讀成「B 線也被擋」。
+ */
+function selectRoute(routeId: number): void {
+  selectedRouteId.value = routeId
+  startBlockedMessage.value = null
+}
+
 const startButtonLabel = computed(() => {
   const selected = routes.value.find((r) => r.id === selectedRouteId.value)
   if (!selected) return '開始班次'
@@ -327,6 +357,11 @@ const startButtonLabel = computed(() => {
   if (selected.today_status === 'in_progress') return '接手這一班'
   return '開始班次'
 })
+
+/** 可直撥的聯絡人（沒有電話的不渲染——`tel:` 空連結點下去沒有意義）。 */
+function callableContacts(stop: BusTripStop): BusStopContact[] {
+  return (stop.contacts ?? []).filter((c) => !!c.phone)
+}
 
 const EXCUSE_LABELS: Record<string, string> = {
   leave: '今日請假',
