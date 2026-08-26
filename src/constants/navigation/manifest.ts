@@ -404,6 +404,10 @@ export const NAVIGATION_MANIFEST = {
             { code: 'BUS_READ', label: '娃娃車檢視' },
             { code: 'BUS_WRITE', label: '娃娃車路線管理' },
           ],
+          // 今日調度（/bus/dispatch，FE-NAV-02 掛路由）發車後編輯的寫入碼：
+          // 頁面進入權限仍為 BUS_READ，本碼只控制 in_progress 階段的操作可見性
+          // （後端 handler 內 status 分流強制）。
+          actions: [{ code: 'BUS_IN_PROGRESS_WRITE', label: '娃娃車追蹤 (發車後調整)' }],
           menu: { icon: icon('MapLocation') },
           extraRoutes: [
             { path: '/bus/monitor', permission: 'BUS_READ' },

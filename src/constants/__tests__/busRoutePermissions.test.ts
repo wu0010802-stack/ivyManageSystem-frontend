@@ -126,3 +126,16 @@ describe('canAccessRoute', () => {
     }
   })
 })
+
+describe('BUS_IN_PROGRESS_WRITE 常數（FE-NAV-01，2026-08-26 班次排程）', () => {
+  it('常數存在且與後端 enum 字面一致', () => {
+    expect(PERMISSION_NAMES.BUS_IN_PROGRESS_WRITE).toBe('BUS_IN_PROGRESS_WRITE')
+  })
+
+  it('主屬娃娃車管理群組 actions（頁面進入權限仍為 BUS_READ，不進 route 規則）', () => {
+    // 尚未有 /bus/dispatch 路由（FE-NAV-02），本碼不應出現在任何 route 規則
+    expect(
+      ROUTE_PERMISSION_RULES.some((r) => r.permission === 'BUS_IN_PROGRESS_WRITE'),
+    ).toBe(false)
+  })
+})
