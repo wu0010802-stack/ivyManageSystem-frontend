@@ -5,6 +5,8 @@
  * 資料源＝班級工作台摘要（getTodayHub）：sticky_next 為下一件班級任務、
  * counts 為四類待辦計數。把班級待辦帶進首頁，細項營運仍在 ClassroomOpsCard
  * 與班級工作台，這裡只做「當下焦點＋一眼計數」。
+ *
+ * 完成狀態＝sticky_next 為空 **且** counts 四類皆 0（見 pendingTotal 註解）。
  */
 import { computed } from 'vue'
 
@@ -56,6 +58,20 @@ const chips = computed(() =>
     .map((c) => ({ ...c, count: (props.counts?.[c.key] as number) || 0 }))
     .filter((c) => c.count > 0),
 )
+
+/**
+ * 未完成的班級任務總數。
+ *
+ * sticky_next 只由 medication 驅動（後端 class_hub.py 組 sticky_candidates 時
+ * 只放 medication，註解自承「v1 僅 medication 有 due_at」），沒有待餵藥就回
+ * null。若把 null 一律當成「全部做完」，在點名／課堂觀察／聯絡簿都還沒做的
+ * 日子照樣顯示「今日班級任務都完成」——而幼兒園多數日子本來就沒有用藥委託，
+ * 等於幾乎每天誤報，老師會因此漏做整天的點名與聯絡簿。
+ * 完成狀態必須同時滿足「沒有下一件排程任務」與「四類計數皆為 0」。
+ */
+const pendingTotal = computed(() =>
+  chips.value.reduce((sum, c) => sum + c.count, 0),
+)
 </script>
 
 <template>
@@ -78,13 +94,23 @@ const chips = computed(() =>
       </button>
     </div>
 
-    <div v-else class="today-focus__done">
+    <div v-else-if="!pendingTotal" class="today-focus__done">
       <span class="today-focus__done-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M5 12.5l4.5 4.5L19 7" />
         </svg>
       </span>
       今日班級任務都完成
+    </div>
+
+    <div v-else class="today-focus__pending">
+      <span class="today-focus__pending-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+      </span>
+      尚有 {{ pendingTotal }} 項待完成
     </div>
 
     <button
@@ -205,6 +231,32 @@ const chips = computed(() =>
 }
 
 .today-focus__done-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.today-focus__pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-warning-darker);
+}
+
+.today-focus__pending-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.today-focus__pending-icon svg {
   width: 16px;
   height: 16px;
 }
