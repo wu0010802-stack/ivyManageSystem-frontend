@@ -84,6 +84,23 @@ function progressText(child: { stop_status: string; stops_ahead: number }): stri
   return '今日略過此站'
 }
 
+/**
+ * 自己這一站的預估到達時刻（spec「家長端」第 2 點）。
+ *
+ * 只在 `pending` 顯示：車已駛過（`departed`）或當日不搭（`excused`）之後，
+ * 「預計 07:35 到」只會誤導。`eta` 是 naive 台北牆鐘字串，一律走
+ * `formatTaipeiClock`——裸 `new Date()` 會以裝置時區解析，非台北時區的裝置
+ * 整個位移 8 小時（CLAUDE.md「Datetime 與 Taipei TZ」）。
+ *
+ * 後端已把 `eta_live`（行進間即時重算）優先、無值退 `eta_planned` 的判斷做完，
+ * 前端拿到的就是單一結果值，不重算也不改優先序。
+ */
+function etaText(child: { stop_status: string; eta: string | null }): string | null {
+  if (child.stop_status !== 'pending') return null
+  const clock = formatTaipeiClock(child.eta)
+  return clock ? `預計 ${clock} 到` : null
+}
+
 // ── Leaflet（動態載入）──
 // leaflet 沒有 @types 套件，比照 RecruitmentAddressHeatmap.vue 的既有慣例以 any + 逐行
 // eslint-disable 承接（棘輪規則：修掉 any 時必須連同 disable 註解一起刪）。
@@ -282,7 +299,12 @@ onBeforeUnmount(() => {
 
         <M3Card v-for="child in state.children" :key="child.student_id" class="bus-progress-card">
           <div class="bus-progress-title">{{ child.student_name }}</div>
-          <div class="bus-progress-text">{{ progressText(child) }}</div>
+          <div class="bus-progress-text">
+            {{ progressText(child) }}
+            <span v-if="etaText(child)" data-testid="bus-eta" class="bus-eta">
+              {{ etaText(child) }}
+            </span>
+          </div>
         </M3Card>
       </template>
 
@@ -347,6 +369,11 @@ onBeforeUnmount(() => {
   margin-top: 2px;
   font-size: 0.9rem;
   color: var(--pt-text-soft, #64748b);
+}
+.bus-eta {
+  margin-left: 6px;
+  color: var(--pt-text, #0f172a);
+  font-variant-numeric: tabular-nums;
 }
 .bus-progress-note {
   margin-top: 6px;

@@ -25,6 +25,19 @@ const props = defineProps<{
   activeCancellations: Array<{ id: number; direction: BusDirection; revocable: boolean }>
   submitting: boolean
   results: Array<{ direction: BusDirection; ok: boolean; message: string }> | null
+  /**
+   * 這孩子當天實際排定搭車的方向（FE-PARENT-04 起由
+   * `GET /parent/bus/ride-cancellations` 的 `scheduled_directions` 供給）。
+   *
+   * 省略＝兩個方向都提供（FE-PARENT-02 落地時的原行為，向後相容）。給了就
+   * 只列排定的那些——只搭下午車的家庭看到「早上不搭接車」會困惑，而且送出
+   * 後端只會回 `no_stop`（「已記錄，當日班次產生時會自動套用」），對一個
+   * 本來就不存在的班次做無意義的登記。
+   *
+   * 例外：已有有效申報的方向一律保留（見 `visibleDirections`）——名單事後
+   * 被後台改掉時，家長仍須看得到並撤銷得掉自己先前送出的那筆。
+   */
+  scheduledDirections?: BusDirection[]
 }>()
 
 const emit = defineEmits<{
@@ -53,8 +66,17 @@ const activeByDirection = computed(() => {
   return map
 })
 
+/** 這次 sheet 要列出的方向：排定的 ∪ 已有有效申報的（理由見 props 註解）。 */
+const visibleDirections = computed<BusDirection[]>(() => {
+  const scheduled = props.scheduledDirections
+  if (!scheduled) return ['morning', 'afternoon']
+  return (['morning', 'afternoon'] as const).filter(
+    (d) => scheduled.includes(d) || activeByDirection.value.has(d),
+  )
+})
+
 const availableDirections = computed<BusDirection[]>(() =>
-  (['morning', 'afternoon'] as const).filter((d) => !activeByDirection.value.has(d)),
+  visibleDirections.value.filter((d) => !activeByDirection.value.has(d)),
 )
 
 const selectedList = computed<BusDirection[]>(() =>
@@ -120,7 +142,7 @@ function onConfirmSubmit(): void {
 
     <template v-else>
       <div
-        v-for="direction in (['morning', 'afternoon'] as const)"
+        v-for="direction in visibleDirections"
         :key="direction"
         class="ride-cancel__row"
         :data-test="`row-${direction}`"

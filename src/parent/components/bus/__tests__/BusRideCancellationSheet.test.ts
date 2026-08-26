@@ -86,3 +86,30 @@ describe('BusRideCancellationSheet', () => {
     w.unmount()
   })
 })
+
+describe('BusRideCancellationSheet — scheduledDirections（FE-PARENT-04）', () => {
+  it('省略 scheduledDirections 時兩方向都列（向後相容 FE-PARENT-02 原行為）', async () => {
+    await mountSheet()
+    expect(q('[data-test="row-morning"]')).not.toBeNull()
+    expect(q('[data-test="row-afternoon"]')).not.toBeNull()
+  })
+
+  it('只排定下午時不列早上選項（送出只會拿到 no_stop，列出來只會誤導）', async () => {
+    await mountSheet({ scheduledDirections: ['afternoon'] })
+    expect(q('[data-test="row-morning"]')).toBeNull()
+    expect(q('[data-test="row-afternoon"]')).not.toBeNull()
+    // 只剩一個可選方向 → 不出現「整天都不搭」
+    expect(q('[data-test="whole-day-btn"]')).toBeNull()
+  })
+
+  it('排定方向被後台改掉後，已申報的那個方向仍列出且可撤銷', async () => {
+    // 家長先報了早上不搭，之後後台把他移出早上班次名單。若只依
+    // scheduled_directions 過濾，那筆申報會從畫面上消失、再也撤銷不掉。
+    await mountSheet({
+      scheduledDirections: ['afternoon'],
+      activeCancellations: [{ id: 9, direction: 'morning', revocable: true }],
+    })
+    expect(q('[data-test="row-morning"]')).not.toBeNull()
+    expect(q('[data-test="revoke-morning"]')).not.toBeNull()
+  })
+})

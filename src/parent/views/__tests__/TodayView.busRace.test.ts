@@ -36,6 +36,13 @@ const getBusTodayMock = vi.fn(() => {
 })
 vi.mock('@/parent/api/bus', () => ({
   getBusToday: (...args: unknown[]) => getBusTodayMock(...args),
+  // FE-PARENT-04 起 TodayView 也 import 這三支。不列出來的話它們會是
+  // undefined，`loadRideCancellations()` 拋 TypeError 被自己的 catch 吞掉——
+  // 測試照樣綠，但綠的理由是錯的（本檔測的是娃娃車小卡競態，不該把另一條
+  // 載入路徑靜默壞掉當成正常）。
+  getRideCancellations: vi.fn().mockResolvedValue({ data: { date: '2026-08-26', children: [] } }),
+  createRideCancellation: vi.fn(),
+  revokeRideCancellation: vi.fn(),
 }))
 
 // ── 可控 mock：home summary（提供權威子女清單，避免其他分支噪音） ────────────

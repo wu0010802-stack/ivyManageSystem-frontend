@@ -69,6 +69,19 @@ interface BusChild {
   stops_ahead: number
   stop_lat: number | null
   stop_lng: number | null
+  /**
+   * 自己這一站的預估到達時刻（naive 台北牆鐘 ISO 字串，`null`＝尚未排定）。
+   *
+   * ⚠ 後端只回**一個**收斂後的欄位，不是 `eta_live` / `eta_planned` 兩欄
+   * （tasks.json 的 FE-PARENT-03 描述是早期版本）。live 優先、退回 planned
+   * 的判斷唯一實作在 `services/bus_events.py::build_parent_children_payload`
+   * ——那也是家長端隱私過濾的唯一實作點，前端不得自行拼裝或改變優先序。
+   *
+   * 後端亦未對家長端揭露「這個值是不是 local_fallback 估算的」，故 UI 無從
+   * 標示「估算」字樣；要做的話得先在後端 payload 補旗標（會動到隱私守門
+   * 測試的欄位白名單），本期不做。
+   */
+  eta: string | null
 }
 interface BusSchoolCoords {
   lat: number
@@ -173,6 +186,10 @@ function normalizeChildren(raw: unknown): BusChild[] | null {
       stops_ahead: asNum(r.stops_ahead) ?? 0,
       stop_lat: asNum(r.stop_lat),
       stop_lng: asNum(r.stop_lng),
+      // eta 歸在 children 欄位群，因此自動吃到既有的「欄位群 × 事件序號」
+      // 過時快照守衛——WS `bus_stop_update` 與 HTTP 快照都經過本函式，
+      // 晚到的快照不會用舊 ETA 蓋掉 WS 剛推來的新值。
+      eta: asStr(r.eta),
     }
   })
 }

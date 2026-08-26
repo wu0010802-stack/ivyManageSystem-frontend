@@ -679,3 +679,75 @@ describe('useBusTracking — 快照失敗可見性（F4）', () => {
     expect(state.lastFetchFailedAt).toBeNull()
   })
 })
+
+describe('useBusTracking — 自己站 ETA（FE-PARENT-03）', () => {
+  it('HTTP 快照的 eta 會進 state', async () => {
+    getBusTodayImpl = () => Promise.resolve(fullSnapshot({
+      children: [{
+        student_id: 3, student_name: '王小明', stop_status: 'pending',
+        stops_ahead: 2, stop_lat: 22.61, stop_lng: 120.28,
+        eta: '2026-07-29T07:35:00',
+      }],
+    }))
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init } = useBusTracking()
+    await init()
+    expect(state.children[0].eta).toBe('2026-07-29T07:35:00')
+  })
+
+  it('後端沒帶 eta（尚未排定）時為 null，不得變成空字串或 undefined', async () => {
+    getBusTodayImpl = () => Promise.resolve(fullSnapshot())
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init } = useBusTracking()
+    await init()
+    expect(state.children[0].eta).toBeNull()
+  })
+
+  it('WS bus_stop_update 的 eta 會覆寫（行進間動態重算的主要送達路徑）', async () => {
+    getBusTodayImpl = () => Promise.resolve(fullSnapshot())
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init } = useBusTracking()
+    await init()
+    FakeWebSocket.instances[0].emit({
+      type: 'bus_stop_update',
+      payload: {
+        children: [{
+          student_id: 3, student_name: '王小明', stop_status: 'pending',
+          stops_ahead: 1, eta: '2026-07-29T07:41:00',
+        }],
+      },
+    })
+    expect(state.children[0].eta).toBe('2026-07-29T07:41:00')
+  })
+
+  it('晚到的快照不得用舊 eta 蓋掉 WS 剛推來的新值（eta 歸 children 欄位群）', async () => {
+    // eta 若被放在 children 以外的欄位群（或漏掉守衛），這裡會退回 07:35。
+    let resolveSnapshot: ((v: BusTodayResp) => void) | null = null
+    getBusTodayImpl = () => Promise.resolve(fullSnapshot())
+    const { useBusTracking } = await loadFreshModule()
+    const { state, init, refresh } = useBusTracking()
+    await init()
+
+    getBusTodayImpl = () => new Promise<BusTodayResp>((r) => { resolveSnapshot = r })
+    const pending = refresh()
+    FakeWebSocket.instances[0].emit({
+      type: 'bus_stop_update',
+      payload: {
+        children: [{
+          student_id: 3, student_name: '王小明', stop_status: 'pending',
+          stops_ahead: 1, eta: '2026-07-29T07:41:00',
+        }],
+      },
+    })
+    resolveSnapshot!(fullSnapshot({
+      children: [{
+        student_id: 3, student_name: '王小明', stop_status: 'pending',
+        stops_ahead: 2, stop_lat: 22.61, stop_lng: 120.28,
+        eta: '2026-07-29T07:35:00',
+      }],
+    }))
+    await pending
+    await flush()
+    expect(state.children[0].eta).toBe('2026-07-29T07:41:00')
+  })
+})
