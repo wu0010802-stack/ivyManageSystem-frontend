@@ -51,9 +51,17 @@ export function excuseReasonLabel(
  * 查不到時退回權限碼本身：寧可讓使用者看到 `BUS_IN_PROGRESS_WRITE`（至少搜尋得到），
  * 也不要顯示一個過期的中文名。
  */
-function findActionLabel(manifest: NavigationManifest, code: string): string | undefined {
+/**
+ * ⚠ 必須同時掃 `views` 與 `actions`：manifest 把「進頁的檢視碼」放 `views`、
+ * 「頁內的操作碼」放 `actions`，兩者都會出現在權限編輯器上。只掃 `actions` 的話，
+ * `BUS_WRITE`（views）會查無而靜默退回權限碼字面，畫面上就出現一串英文
+ * ——正是這個 helper 要防的那件事（2026-08-26 由 FE-NAV-02 的 session 抓到）。
+ */
+function findPermissionLabel(manifest: NavigationManifest, code: string): string | undefined {
   const pages = [...manifest.topLevel, ...manifest.groups.flatMap((g) => [...g.pages])]
   for (const page of pages) {
+    const view = page.views.find((v) => v.code === code)
+    if (view?.label) return view.label
     const action = page.actions?.find((a) => a.code === code)
     if (action?.label) return action.label
   }
@@ -62,11 +70,11 @@ function findActionLabel(manifest: NavigationManifest, code: string): string | u
 
 export function busInProgressWriteLabel(): string {
   const code = PERMISSION_NAMES.BUS_IN_PROGRESS_WRITE
-  return findActionLabel(NAVIGATION_MANIFEST, code) ?? code
+  return findPermissionLabel(NAVIGATION_MANIFEST, code) ?? code
 }
 
 /** `BUS_WRITE` 的顯示名稱，理由同上（設定頁的唯讀提示要叫得出正確的權限名）。 */
 export function busWriteLabel(): string {
   const code = PERMISSION_NAMES.BUS_WRITE
-  return findActionLabel(NAVIGATION_MANIFEST, code) ?? code
+  return findPermissionLabel(NAVIGATION_MANIFEST, code) ?? code
 }

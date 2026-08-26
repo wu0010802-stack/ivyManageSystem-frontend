@@ -49,7 +49,11 @@ vi.mock('@/components/bus/BusStopMapTuner.vue', () => ({
 
 import BusSettingsPanel from '@/views/bus/BusSettingsPanel.vue'
 import { busWriteLabel } from '@/constants/bus'
+import { PERMISSION_NAMES } from '@/constants/permissions'
 
+// 動態取 label 才不會綁死 manifest 文案；但若 helper 退回權限碼字面，這個斷言會
+// 與畫面同時退化而恆真——所以下面另外咬一次「不是權限碼」。
+// helper 本身的守衛在 src/constants/__tests__/busPermissionLabels.test.ts。
 const BUS_WRITE_LABEL = busWriteLabel()
 
 const SAVED = {
@@ -524,6 +528,7 @@ describe('BusSettingsPanel —— 權限與離頁保護', () => {
     expect(at(w, 'readonly-notice').exists()).toBe(true)
     // 提示裡的權限名稱必須取自 manifest（權限編輯器上看得到的那個），不可手抄中文
     expect(at(w, 'readonly-permission-name').text()).toContain(BUS_WRITE_LABEL)
+    expect(BUS_WRITE_LABEL).not.toBe(PERMISSION_NAMES.BUS_WRITE)
     expect(at(w, 'address-input').attributes('disabled')).toBeDefined()
     expect(at(w, 'bus-count-input').attributes('disabled')).toBeDefined()
     expect(at(w, 'geocode-btn').attributes('disabled')).toBeDefined()
