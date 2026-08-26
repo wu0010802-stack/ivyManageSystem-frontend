@@ -319,6 +319,37 @@ describe('編輯與釘選', () => {
     expect(editor.dirty.value).toBe(true)
   })
 
+  it('往後拖：splice 語意必須與 sortable 的 newIndex（移動後索引）一致', async () => {
+    // 這條若搞反，送出的 seq 順序會錯，而後端只檢查「集合相等／seq 不重複」
+    // 不檢查順序意圖——不會 422，會靜默寫入錯誤的接送順序。
+    const editor = await boot([routeA({
+      stops: [
+        stop({ student_id: 101, seq: 1 }),
+        stop({ student_id: 102, seq: 2 }),
+        stop({ student_id: 103, seq: 3 }),
+      ],
+    })])
+    editor.moveStop(0, 2)
+    expect(editor.stops.value.map((s) => s.student_id)).toEqual([102, 103, 101])
+    expect(editor.stops.value[2].pinned).toBe(true)
+    expect(editor.stops.value.map((s) => s.seq)).toEqual([1, 2, 3])
+  })
+
+  it('往後拖的順序會原樣進到 replace-all payload（後端不驗順序，錯了不會被擋）', async () => {
+    const editor = await boot([routeA({
+      stops: [
+        stop({ student_id: 101, seq: 1 }),
+        stop({ student_id: 102, seq: 2 }),
+        stop({ student_id: 103, seq: 3 }),
+      ],
+    })])
+    editor.moveStop(0, 2)
+    vi.mocked(replaceBusRouteStops).mockResolvedValue({ data: { stops: [] } } as never)
+    await editor.save()
+    const sent = vi.mocked(replaceBusRouteStops).mock.calls[0][1] as Array<{ student_id: number; seq: number }>
+    expect(sent.map((s) => [s.student_id, s.seq])).toEqual([[102, 1], [103, 2], [101, 3]])
+  })
+
   it('釘選可一鍵解除', async () => {
     const editor = await boot([routeA({ stops: [stop({ pinned: true })] })])
     editor.togglePinned(0)
