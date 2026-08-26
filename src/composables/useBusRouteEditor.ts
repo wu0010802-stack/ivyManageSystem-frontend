@@ -93,6 +93,14 @@ export interface BusStopContact {
 export interface BusStopDraft {
   student_id: number
   student_name: string
+  /**
+   * 學生班級名。
+   *
+   * ⚠ 與 `contacts` 同一個缺口：後端 `BusRouteStopOut` 目前不回這個欄位
+   * （spec 名單表格列了「學生＋班級」）。缺值時為 null，表格只顯示姓名，
+   * 後端補上同名欄位後自動帶入。
+   */
+  classroom_name: string | null
   seq: number
   lat: number | null
   lng: number | null
@@ -205,6 +213,7 @@ function normalizeStops(raw: unknown): BusStopDraft[] {
     return [{
       student_id: studentId,
       student_name: asStr(r.student_name) ?? '',
+      classroom_name: asStr(r.classroom_name),
       seq: asNum(r.seq) ?? 0,
       lat: asNum(r.lat),
       lng: asNum(r.lng),
@@ -554,6 +563,7 @@ export function useBusRouteEditor() {
       {
         student_id: student.id,
         student_name: student.name,
+        classroom_name: null,
         seq: 0,
         lat: null,
         lng: null,
