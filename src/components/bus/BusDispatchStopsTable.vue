@@ -22,7 +22,8 @@
  * 接送地址與聯絡人電話會顯示在畫面上（管理端本就有權查看）。**座標根本不在 props
  * 裡**——`DispatchStop` 已在 composable 去掉 `lat`/`lng`，因為本頁不需要它們。
  * 這不只是「不渲染」：`@sentry/vue` 預設 `attachProps: true`，render error 會把整包
- * props 送進 `contexts.vue.propsData`，而 Sentry 的 denylist 沒有 `lat`/`lng`。
+ * props 送進 `contexts.vue.propsData`。Sentry 的 denylist 現已涵蓋 `lat`/`lng`，
+ * 但那是事後過濾、只擋一條通道；不帶進來則擋所有通道。
  */
 import { computed } from 'vue'
 import draggable from 'vuedraggable'

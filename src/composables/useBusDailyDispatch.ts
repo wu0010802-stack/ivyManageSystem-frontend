@@ -58,14 +58,15 @@ const MAX_STUDENT_PAGES = 20
  *
  * 本頁從頭到尾沒有一處讀 `stop.lat`/`stop.lng`——地圖微調與插入用的座標一律來自
  * `BusPickupAddressSelect` 的 `resolved` 事件，不是站點資料。既然不需要，就**不要
- * 讓它進狀態**：`@sentry/vue`（本專案 10.62.0）預設 `attachProps: true`，任何
- * render error 都會把元件 props 整包塞進 `contexts.vue.propsData`，而
- * `src/utils/sentry.ts` 的 denylist 有 `address`／`student_name`／`phone`，
- * **沒有 `lat`/`lng`**——一次未預期的渲染錯誤就會把全車學生家門口的六位小數座標
- * 送上 Sentry。過濾不如不帶：少一個欄位，就少一條外洩路徑。
+ * 讓它進狀態**。
  *
- * （`useBusMonitor` 與班次設定頁確實需要座標畫地圖，那兩處的 Sentry denylist 缺口
- * 要另外補；見交付說明的 follow-up。）
+ * 起因是一條實際存在的外洩路徑：`@sentry/vue`（本專案 10.62.0）預設
+ * `attachProps: true`，任何 render error 都會把元件 props 整包塞進
+ * `contexts.vue.propsData`。當時 `src/utils/sentry.ts` 的 denylist 有 `address`／
+ * `student_name`／`phone`，**沒有 `lat`/`lng``。該缺口已由 bus-portal lane 補上
+ * （`lat`/`lng` 進 `PII_KEY_EXACT`，前後端 parity 同步），但這裡**仍然不帶座標**：
+ * denylist 是事後過濾、只涵蓋 Sentry 這一條通道，而「資料根本不在這裡」涵蓋所有
+ * 通道。少一個欄位就少一條外洩路徑，何況本頁根本用不到。
  */
 export type DispatchStop = Omit<Schema<'BusStopAdminOut'>, 'lat' | 'lng'>
 
