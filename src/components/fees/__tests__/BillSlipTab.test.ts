@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   importBillSlipBatch: vi.fn(),
   getBillSlipBatches: vi.fn(),
   getOutstandingReport: vi.fn(),
+  deleteBillSlipBatch: vi.fn(() => Promise.resolve({ ok: true })),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -22,8 +23,10 @@ const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
 vi.mock('@/utils/auth', () => ({
   hasPermission: (name: string) => authMocks.perms.has(name),
 }))
+const mbMocks = vi.hoisted(() => ({ confirm: vi.fn() }))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessageBox: { confirm: mbMocks.confirm },
 }))
 
 const ElTableStub = defineComponent({
@@ -139,6 +142,9 @@ describe('BillSlipTab 匯入', () => {
       errors: [],
       already_imported: false,
       existing_batch_id: null,
+      overlap_count: 0,
+      overlap_ratio: 0,
+      overlap_batch_ids: [],
     })
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
@@ -238,5 +244,134 @@ describe('BillSlipTab 未繳名單', () => {
     await vm.selectBatch(BATCH)
     await nextTick()
     expect(wrapper.find('.tile--warn').text()).toContain('未收')
+  })
+})
+
+
+describe('BillSlipTab 重複批次防護', () => {
+  it('高比例帳號重疊時警示可能是重傳修正版', async () => {
+    apiMocks.previewBillSlipBatch.mockResolvedValue({
+      bill_year: 2026,
+      bill_month: 8,
+      row_count: 197,
+      net_total: 1775200,
+      zero_amount_count: 78,
+      error_count: 0,
+      errors: [],
+      already_imported: false,
+      existing_batch_id: null,
+      overlap_count: 197,
+      overlap_ratio: 1,
+      overlap_batch_ids: [3],
+    })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      runPreview: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'Check_v2.xls')
+    await vm.runPreview()
+    await nextTick()
+    const alert = wrapper.find('[data-test="overlap-alert"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('100%')
+    expect(alert.text()).toContain('重複計算')
+  })
+
+  it('低重疊不警示', async () => {
+    apiMocks.previewBillSlipBatch.mockResolvedValue({
+      bill_year: 2026,
+      bill_month: 8,
+      row_count: 10,
+      net_total: 100,
+      zero_amount_count: 0,
+      error_count: 0,
+      errors: [],
+      already_imported: false,
+      existing_batch_id: null,
+      overlap_count: 1,
+      overlap_ratio: 0.1,
+      overlap_batch_ids: [3],
+    })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      runPreview: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'Check.xls')
+    await vm.runPreview()
+    await nextTick()
+    expect(wrapper.find('[data-test="overlap-alert"]').exists()).toBe(false)
+  })
+
+  it('刪除批次需確認後才送出', async () => {
+    mbMocks.confirm.mockResolvedValue('confirm')
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      removeBatch: (row: unknown) => Promise<void>
+    }
+    await vm.removeBatch(BATCH)
+    expect(mbMocks.confirm).toHaveBeenCalled()
+    expect(apiMocks.deleteBillSlipBatch).toHaveBeenCalledWith(7)
+  })
+
+  it('取消確認不送出刪除', async () => {
+    mbMocks.confirm.mockRejectedValue('cancel')
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      removeBatch: (row: unknown) => Promise<void>
+    }
+    await vm.removeBatch(BATCH)
+    expect(apiMocks.deleteBillSlipBatch).not.toHaveBeenCalled()
+  })
+
+  it('唯讀權限隱藏刪除按鈕', async () => {
+    authMocks.perms = new Set(['FEES_READ'])
+    const wrapper = await mountTab()
+    expect(wrapper.find('[data-test="delete-batch"]').exists()).toBe(false)
+  })
+})
+
+
+describe('BillSlipTab 匯入衝突處理', () => {
+  it('後端 409（重傳修正版）以錯誤訊息呈現，不中斷頁面', async () => {
+    const { ElMessage } = await import('element-plus')
+    apiMocks.importBillSlipBatch.mockRejectedValue({
+      response: {
+        status: 409,
+        data: { detail: '與同期別既有批次有 197 筆重疊，多半是同一批的修正版重傳。' },
+      },
+    })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      form: { title: string; batch_no: string }
+      runImport: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'Check_v2.xls')
+    vm.form.title = '註冊費(修正)'
+    await vm.runImport()
+    expect(ElMessage.error).toHaveBeenCalled()
+    // 檔案保留，讓會計可先去刪舊批次再重試
+    expect(vm.pickedFile).not.toBeNull()
+  })
+
+  it('匯入成功後清空選檔並重載清單', async () => {
+    apiMocks.importBillSlipBatch.mockResolvedValue({
+      ...BATCH,
+      created: true,
+    })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      pickedFile: File | null
+      form: { title: string }
+      runImport: () => Promise<void>
+    }
+    vm.pickedFile = new File(['x'], 'Check.xls')
+    vm.form.title = '註冊費'
+    apiMocks.getBillSlipBatches.mockClear()
+    await vm.runImport()
+    expect(vm.pickedFile).toBeNull()
+    expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()
   })
 })

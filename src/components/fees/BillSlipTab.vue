@@ -75,6 +75,15 @@
         title="此檔案先前已匯入（同檔重送不會重複建立）"
         data-test="dup-slip-alert"
       />
+      <el-alert
+        v-else-if="preview && preview.overlap_ratio >= 0.5"
+        type="warning"
+        :closable="false"
+        class="mt-1"
+        data-test="overlap-alert"
+        :title="`與同期別既有批次有 ${preview.overlap_count} 個帳號重疊（${Math.round(preview.overlap_ratio * 100)}%）`"
+        description="高比例重疊多半是同一批的修正版重傳。直接匯入會讓應收被重複計算、繳足的家長被判短繳——請先刪除舊批次，或填入不同的銀行上傳批號以區分（未填批號時後端會擋下）。"
+      />
       <div v-if="preview" class="mt-1">
         <el-button
           v-if="canWrite"
@@ -118,7 +127,7 @@
       <el-table-column label="零元單" width="80" align="right" class-name="num-cell">
         <template #default="{ row }">{{ row.zero_amount_count }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="120">
+      <el-table-column label="操作" width="170">
         <template #default="{ row }">
           <el-button
             size="small"
@@ -129,6 +138,17 @@
             @click.stop="selectBatch(row)"
           >
             未繳名單
+          </el-button>
+          <el-button
+            v-if="canWrite"
+            size="small"
+            type="danger"
+            text
+            data-test="delete-batch"
+            aria-label="刪除此發單快照批次"
+            @click.stop="removeBatch(row)"
+          >
+            刪除
           </el-button>
         </template>
       </el-table-column>
@@ -241,13 +261,14 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import {
+  deleteBillSlipBatch,
   getBillSlipBatches,
   getOutstandingReport,
   importBillSlipBatch,
@@ -370,6 +391,29 @@ async function selectBatch(row: BillSlipBatchRow) {
 async function setStatus(value: string) {
   statusFilter.value = value
   await fetchReport()
+}
+
+async function removeBatch(row: BillSlipBatchRow) {
+  try {
+    await ElMessageBox.confirm(
+      `確定刪除發單快照「${row.title}」（${row.row_count} 筆）？`,
+      '刪除發單快照',
+      { type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  try {
+    await deleteBillSlipBatch(row.id)
+    ElMessage.success('已刪除發單快照')
+    if (selectedBatchId.value === row.id) {
+      selectedBatchId.value = null
+      report.value = null
+    }
+    await fetchBatches()
+  } catch (e) {
+    ElMessage.error(friendlyError('刪除失敗', e))
+  }
 }
 
 onMounted(fetchBatches)

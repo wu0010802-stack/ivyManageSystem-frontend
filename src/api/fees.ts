@@ -211,6 +211,10 @@ export const getBillSlipBatches = (
   params?: unknown,
 ): Promise<ApiResponse<'/fees/bill-slip-batches', 'get'>> =>
   api.get('/fees/bill-slip-batches', { params }).then((res) => res.data)
+export const deleteBillSlipBatch = (
+  batchId: number,
+): Promise<ApiResponse<'/fees/bill-slip-batches/{batch_id}', 'delete'>> =>
+  api.delete(`/fees/bill-slip-batches/${batchId}`).then((res) => res.data)
 export const getOutstandingReport = (
   batchId: number,
   params?: unknown,

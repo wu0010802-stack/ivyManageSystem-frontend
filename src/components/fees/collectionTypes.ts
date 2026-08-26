@@ -126,6 +126,10 @@ export interface BillSlipPreview {
   errors: { row_number: number; reason: string }[]
   already_imported: boolean
   existing_batch_id: number | null
+  /** 同期別既有批次的帳號重疊（高比例多半是同一批重傳 → 應收會雙計） */
+  overlap_count: number
+  overlap_ratio: number
+  overlap_batch_ids: number[]
 }
 
 export interface OutstandingItem {

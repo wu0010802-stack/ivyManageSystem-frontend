@@ -6633,6 +6633,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/bill-slip-batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Bill Slip Batch
+         * @description 刪除發單快照批次（匯錯或要換成修正版時重來）。
+         *
+         *     快照是可由檢核檔重建的匯入資料，非金流憑證本身，故允許刪除；
+         *     連帶刪除明細，並寫入 audit。
+         */
+        delete: operations["delete_bill_slip_batch_api_fees_bill_slip_batches__batch_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/bill-slip-batches/{batch_id}/outstanding": {
         parameters: {
             query?: never;
@@ -22257,6 +22280,23 @@ export interface components {
             /** Zero Amount Count */
             zero_amount_count: number;
         };
+        /** BillSlipDeleteOut */
+        BillSlipDeleteOut: {
+            /** Batch Id */
+            batch_id: number;
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /** Net Total */
+            net_total: number;
+            /** Ok */
+            ok: boolean;
+            /** Row Count */
+            row_count: number;
+            /** Title */
+            title: string;
+        };
         /** BillSlipPreviewOut */
         BillSlipPreviewOut: {
             /** Already Imported */
@@ -22277,6 +22317,21 @@ export interface components {
             filename: string;
             /** Net Total */
             net_total: number;
+            /**
+             * Overlap Batch Ids
+             * @default []
+             */
+            overlap_batch_ids: number[];
+            /**
+             * Overlap Count
+             * @default 0
+             */
+            overlap_count: number;
+            /**
+             * Overlap Ratio
+             * @default 0
+             */
+            overlap_ratio: number;
             /** Parser Version */
             parser_version: string;
             /** Row Count */
@@ -54834,6 +54889,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillSlipBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_bill_slip_batch_api_fees_bill_slip_batches__batch_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipDeleteOut"];
                 };
             };
             /** @description Validation Error */
