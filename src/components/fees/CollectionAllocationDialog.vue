@@ -64,6 +64,24 @@
               加入分配
             </el-button>
           </div>
+          <div v-if="stu.prepayment" class="stu-item">
+            <el-tag size="small" type="info" effect="plain">預繳</el-tag>
+            <span>
+              可收預繳（目標 {{ stu.prepayment.target_school_year }}-{{
+                stu.prepayment.target_semester
+              }}）
+            </span>
+            <span class="stu-amt">{{ formatCurrency(stu.prepayment.amount) }}</span>
+            <el-button
+              size="small"
+              text
+              type="primary"
+              data-test="add-prepayment"
+              @click="addPrepaymentPart(stu.student_id, stu.prepayment)"
+            >
+              加入分配
+            </el-button>
+          </div>
         </div>
       </div>
 
@@ -173,10 +191,17 @@ interface StudentItem {
   fee_type: string | null
   in_bill_period: boolean
 }
+interface PrepaymentOption {
+  target_school_year: number
+  target_semester: number
+  amount: number
+}
 interface CandidateStudent {
   student_id: number
   display_name: string
   items: StudentItem[]
+  /** 該生於目標學期尚無有效預繳時，BE 回傳可新收的 5,000 預繳選項 */
+  prepayment: PrepaymentOption | null
 }
 interface Candidates {
   level: string
@@ -253,6 +278,16 @@ function addItemPart(studentId: number, item: StudentItem) {
     amount: item.remaining,
     fee_record_id: item.fee_record_id,
     student_id: studentId,
+  })
+}
+
+function addPrepaymentPart(studentId: number, option: PrepaymentOption) {
+  parts.value.push({
+    part_type: 'prepayment',
+    amount: option.amount,
+    student_id: studentId,
+    target_school_year: option.target_school_year,
+    target_semester: option.target_semester,
   })
 }
 

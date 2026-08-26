@@ -35,6 +35,14 @@ export interface CollectionImportPreview {
   parser_version: string
 }
 
+export interface CoveragePair {
+  payment_id: number | null
+  transaction_id: number
+  amount: number
+  /** per_row＝逐筆銷帳編號比對；day_total＝當日淨額小計（無編號的整批列） */
+  match_mode: string
+}
+
 export interface CoverageDay {
   posting_date: string
   collection_net_total: number

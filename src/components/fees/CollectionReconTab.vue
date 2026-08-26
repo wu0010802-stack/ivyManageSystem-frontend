@@ -316,6 +316,7 @@ import type {
   CollectionImportPreview,
   CollectionPaymentRow,
   CoverageDay,
+  CoveragePair,
 } from './collectionTypes'
 
 const FLOW_STEPS = [
@@ -486,7 +487,11 @@ async function runCoverage(dryRun: boolean) {
       date_from: coverage.date_from,
       date_to: coverage.date_to,
       dry_run: dryRun,
-    } as never)) as unknown as { covered_count: number; days: CoverageDay[] }
+    } as never)) as unknown as {
+      covered_count: number
+      matched_pairs: CoveragePair[]
+      days: CoverageDay[]
+    }
     coverageDays.value = result.days ?? []
     if (!dryRun) {
       ElMessage.success(`已標記 ${result.covered_count} 筆存摺交易為代收覆蓋`)

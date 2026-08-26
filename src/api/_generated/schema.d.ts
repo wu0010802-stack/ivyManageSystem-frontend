@@ -25510,6 +25510,19 @@ export interface components {
             covered_count: number;
             /** Days */
             days: components["schemas"]["CoverageDayOut"][];
+            /** Matched Pairs */
+            matched_pairs: components["schemas"]["CoveragePairOut"][];
+        };
+        /** CoveragePairOut */
+        CoveragePairOut: {
+            /** Amount */
+            amount: number;
+            /** Match Mode */
+            match_mode: string;
+            /** Payment Id */
+            payment_id?: number | null;
+            /** Transaction Id */
+            transaction_id: number;
         };
         /** CoverageRequest */
         CoverageRequest: {
