@@ -219,6 +219,14 @@ async function submitDeviceSetup() {
     const e = err as { response?: { status?: number } }
     if (e?.response?.status === 429) {
       deviceSetupError.value = '嘗試次數過多，請稍後再試'
+    } else if (!e?.response) {
+      // 傳輸層失敗（斷線／逾時／請求被中止／DNS 失敗）：後端根本沒回應，不帶任何
+      // 枚舉價值，不適用下面那句「碼無效」——照套會害家長白跑一趟回園所重領碼
+      // （2026-08-26 staging 實測 net::ERR_ABORTED 就是顯示成「設定碼無效」）。
+      // 文案要求「立即」重試是有意的：後端是認領即消耗，這次請求若其實已抵達
+      // 伺服器，碼就已經用掉了，只有 _reclaim_recent_device_setup_code 的 120 秒
+      // 窗口能救回來；拖過窗口就真的只能向園所重新索取。
+      deviceSetupError.value = '連線中斷，請確認網路後立即再試一次；拖太久需向園所重新索取設定碼'
     } else {
       // 後端對「碼不存在／已過期／已使用」一律回同一個 BusinessError code
       // 避免碼枚舉；前端也不採用後端實際訊息字串，固定顯示這句，避免後端
