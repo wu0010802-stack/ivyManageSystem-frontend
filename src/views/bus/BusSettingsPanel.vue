@@ -38,7 +38,11 @@
  * console／Sentry／URL query／storage。
  *
  * 版面：分頁列由 BusLayout 負責（分頁註冊在 FE-NAV-02），頁面標題比照四個姊妹分頁
- * 由各自的 view 自帶 PageHeader。
+ * 由各自的 view 自帶 PageHeader（與 FE-NAV-02 議定：BusLayout 不再另加標題）。
+ *
+ * ⚠ 掛載前提：未儲存保護走 `onBeforeRouteLeave`，只在本元件是 `/bus` 底下**被 matched
+ * 的子路由**時有效。若改用 `<component :is>` 或 el-tab-pane 內嵌來掛這個分頁，
+ * vue-router 只會印一行 dev warning，離頁保護會**靜默失效**。
  */
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -46,6 +50,7 @@ import { getBusSettings, putBusSettings } from '@/api/bus'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
+import { busWriteLabel } from '@/constants/bus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import BusStopMapTuner from '@/components/bus/BusStopMapTuner.vue'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
@@ -62,9 +67,9 @@ const ADDRESS_MAX = 200
  * 術語沿用本模組既有的「路徑最佳化」（`useBusDailyDispatch` 的錯誤文案），不新造。
  */
 const COPY = {
-  coordsRole: '園所座標是路徑最佳化的起終點',
-  busCountRole: '同時進行中班次的總數上限；同時發車的班次超過此上限時會被拒絕',
-  geocodeWrites: '按「查座標」會立即儲存地址與查到的座標；查不到時可用「地圖微調」手動定位。',
+  /** 主詞由呼叫端組：貼在「園所座標」label 右邊當提示時，再帶一次主詞會變成同義反覆。 */
+  coordsRole: '路徑最佳化的起終點',
+  busCountRole: '同時進行中班次的總數上限，超過時無法再發車',
 } as const
 
 /** 伺服器上的現值；null＝還沒讀到（載入中或載入失敗）。 */
@@ -79,16 +84,22 @@ const busCount = ref<number | undefined>(1)
 
 const loading = ref(false)
 const loadError = ref<string | null>(null)
+// saving／geocoding 只餵按鈕的 loading 狀態；互斥一律看 writing。
 const saving = ref(false)
 const geocoding = ref(false)
-/** 二次確認框開著的期間；與 saving/geocoding 一起構成寫入互斥（見檔頭 3.）。 */
-const confirming = ref(false)
+/**
+ * 寫入互斥鎖，**涵蓋二次確認開著的整段期間**（見檔頭 3.）。
+ * 由 onSave／onGeocode 在函式入口取得、在同一個 finally 釋放——不下放給
+ * `confirmWrite` 自己釋放：那樣「確認框關閉」到「送出」之間就會出現一個沒有鎖的
+ * 空窗，今天沒有 await 所以安全，但只要有人在中間插一段前置檢查，洞就開了。
+ */
+const writing = ref(false)
 /** 最近一次寫入失敗訊息；留在原地而不是彈一次就消失的 toast。 */
 const lastError = ref<string | null>(null)
 const tuneVisible = ref(false)
 
 const canWrite = computed(() => hasPermission('BUS_WRITE'))
-const busy = computed(() => saving.value || geocoding.value || confirming.value)
+const busy = computed(() => writing.value)
 /** 唯讀（無寫入權限）或有寫入在途時，所有編輯入口一律鎖住。 */
 const locked = computed(() => busy.value || !canWrite.value)
 
@@ -125,7 +136,9 @@ const coordsLabel = computed(() =>
 
 // 後端是 `int`，小數會被 pydantic 拒成 422；`:min` 不擋鍵盤直接輸入的 2.5。
 const busCountInvalid = computed(
-  () => !Number.isInteger(busCount.value) || (busCount.value as number) < 1,
+  () => typeof busCount.value !== 'number'
+    || !Number.isInteger(busCount.value)
+    || busCount.value < 1,
 )
 
 /** 只收集與伺服器值不同的欄位；`geocode` 一律顯式帶值（後端 schema 為必填）。 */
@@ -175,8 +188,8 @@ function confirmLines(payload: BusSettingsPayload): string[] {
   }
   if (coordsChanged) {
     lines.push(
-      `${COPY.coordsRole}：儲存後，之後的自動排序建議與 ETA 都會依新座標計算`
-      + '（既有班次已排好的順序不會自動重排）。',
+      `園所座標是${COPY.coordsRole}：儲存後，之後的自動排序建議與 ETA 都會依新座標`
+      + '計算（既有班次已排好的順序不會自動重排）。',
     )
   }
   if ('bus_count' in payload) {
@@ -186,7 +199,6 @@ function confirmLines(payload: BusSettingsPayload): string[] {
 }
 
 async function confirmWrite(lines: string[], title: string, confirmText: string): Promise<boolean> {
-  confirming.value = true
   try {
     await ElMessageBox.confirm(lines.join('\n'), title, {
       type: 'warning',
@@ -196,19 +208,18 @@ async function confirmWrite(lines: string[], title: string, confirmText: string)
     return true
   } catch {
     return false
-  } finally {
-    confirming.value = false
   }
 }
 
 async function onSave(): Promise<void> {
   if (locked.value || !hasChanges.value) return
-  const payload = changed.value
-  if (!(await confirmWrite(confirmLines(payload), '儲存娃娃車設定', '儲存'))) return
-
-  saving.value = true
-  lastError.value = null
+  writing.value = true
   try {
+    const payload = changed.value
+    if (!(await confirmWrite(confirmLines(payload), '儲存娃娃車設定', '儲存'))) return
+
+    saving.value = true
+    lastError.value = null
     const res = await putBusSettings(payload)
     fill(res.data)
     ElMessage.success('娃娃車設定已儲存')
@@ -219,6 +230,7 @@ async function onSave(): Promise<void> {
     ElMessage.error(message)
   } finally {
     saving.value = false
+    writing.value = false
   }
 }
 
@@ -238,24 +250,25 @@ async function onGeocode(): Promise<void> {
     return
   }
 
-  const { school_lat: _lat, school_lng: _lng, ...rest } = changed.value
-  const payload: BusSettingsPayload = { ...rest, school_address: trimmed, geocode: true }
-
-  const lines = [
-    `將以「${trimmed}」向地圖服務查詢座標，並立即儲存地址與查到的座標。`,
-    `${COPY.coordsRole}：之後的自動排序建議與 ETA 都會依新座標計算。`,
-  ]
-  if ('bus_count' in payload) {
-    lines.push(`同時會一併儲存目前的車輛數 ${payload.bus_count}。`)
-  }
-  if (_lat !== undefined || _lng !== undefined) {
-    lines.push('你剛才用地圖微調的座標會被查到的座標取代。')
-  }
-  if (!(await confirmWrite(lines, '查座標並儲存', '查座標並儲存'))) return
-
-  geocoding.value = true
-  lastError.value = null
+  writing.value = true
   try {
+    const { school_lat: tunedLat, school_lng: tunedLng, ...rest } = changed.value
+    const payload: BusSettingsPayload = { ...rest, school_address: trimmed, geocode: true }
+
+    const lines = [
+      `將以「${trimmed}」向地圖服務查詢座標，並立即儲存地址與查到的座標。`,
+      `園所座標是${COPY.coordsRole}：之後的自動排序建議與 ETA 都會依新座標計算。`,
+    ]
+    if ('bus_count' in payload) {
+      lines.push(`同時會一併儲存目前的車輛數 ${payload.bus_count}。`)
+    }
+    if (tunedLat !== undefined || tunedLng !== undefined) {
+      lines.push('你剛才用地圖微調的座標會被查到的座標取代。')
+    }
+    if (!(await confirmWrite(lines, '查座標並儲存', '查座標並儲存'))) return
+
+    geocoding.value = true
+    lastError.value = null
     const res = await putBusSettings(payload)
     fill(res.data)
     if (res.data.school_lat == null || res.data.school_lng == null) {
@@ -265,12 +278,14 @@ async function onGeocode(): Promise<void> {
       ElMessage.success('已取得座標並儲存')
     }
   } catch (e) {
-    // 502＝地圖服務查不到；後端不落任何變更，畫面也不能動（fill 只在成功路徑）。
+    // 502＝地圖服務查不到；後端不落任何變更——連一起帶上的車輛數也沒存，所以
+    // 訊息要講「都沒有儲存」，不能只講座標失敗（表單維持 dirty，重按儲存即可）。
     const message = apiError(e, '地址轉座標失敗')
-    lastError.value = `${message}（可改用「地圖微調」在地圖上手動定位）`
+    lastError.value = `${message}（這次的變更都沒有儲存；可改用「地圖微調」手動定位）`
     ElMessage.error(lastError.value)
   } finally {
     geocoding.value = false
+    writing.value = false
   }
 }
 
@@ -296,6 +311,14 @@ function onTuneConfirm(nextLat: number, nextLng: number): void {
       data-test="load-failed"
     >
       <p>讀不到目前設定就無法判斷你改了哪些欄位，儲存會覆寫沒看過的設定，因此先不開放編輯。</p>
+      <!--
+        後端 GET 要 BUS_READ、PUT 才要 BUS_WRITE，而路由 gate 是 OR 語意寫不出 AND：
+        只被授予編輯權限的帳號進得來、卻在第一支 GET 就 403（既有 /bus/routes 同症狀）。
+        錯誤卡本身已經是誠實的降級，但光看「權限不足」猜不到缺的是哪一個，故明說。
+      -->
+      <p class="bus-settings-panel__hint" data-test="permission-hint">
+        若你只被授予娃娃車的編輯權限，讀取設定仍需要檢視權限，請一併請管理員授予。
+      </p>
       <el-button size="small" data-test="reload-btn" @click="load">重新載入</el-button>
     </el-alert>
 
@@ -309,7 +332,13 @@ function onTuneConfirm(nextLat: number, nextLng: number): void {
         title="你沒有編輯娃娃車設定的權限，以下為唯讀檢視"
         data-test="readonly-notice"
       >
-        <p>需要調整請聯絡系統管理員授權「娃娃車管理（編輯）」。</p>
+        <!--
+          權限名稱一律取自 navigation manifest（唯一事實來源）：手抄一份中文到頁面裡，
+          manifest 改文案時畫面就會指向一個權限清單裡找不到的名字。
+        -->
+        <p data-test="readonly-permission-name">
+          需要調整請聯絡系統管理員授權「{{ busWriteLabel() }}」。
+        </p>
       </el-alert>
 
       <el-alert
@@ -341,7 +370,9 @@ function onTuneConfirm(nextLat: number, nextLng: number): void {
             查座標
           </el-button>
         </div>
-        <span class="bus-settings-panel__hint">{{ COPY.geocodeWrites }}</span>
+        <span class="bus-settings-panel__hint">
+          按「查座標」會立即儲存地址與查到的座標；查不到時可用「地圖微調」手動定位。
+        </span>
       </el-form-item>
 
       <el-form-item label="園所座標">

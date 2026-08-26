@@ -48,6 +48,9 @@ vi.mock('@/components/bus/BusStopMapTuner.vue', () => ({
 }))
 
 import BusSettingsPanel from '@/views/bus/BusSettingsPanel.vue'
+import { busWriteLabel } from '@/constants/bus'
+
+const BUS_WRITE_LABEL = busWriteLabel()
 
 const SAVED = {
   school_lat: 22.6835,
@@ -147,6 +150,9 @@ describe('BusSettingsPanel —— 載入回填', () => {
 
     expect(at(w, 'load-failed').attributes('title')).toContain('沒有權限檢視娃娃車設定')
     expect(at(w, 'save-btn').exists()).toBe(false)
+    // 只授 BUS_WRITE 沒授 BUS_READ 的帳號會卡在這裡（route gate 是 OR 寫不出 AND），
+    // 光看「權限不足」猜不到缺的是哪一個。
+    expect(at(w, 'permission-hint').text()).toContain('讀取設定仍需要檢視權限')
   })
 
   it('讀取失敗後重試成功可復原；再次失敗則仍停在錯誤態', async () => {
@@ -417,6 +423,20 @@ describe('BusSettingsPanel —— 查座標', () => {
     expect(at(w, 'coords-readonly').text()).toBe('尚未設定')
   })
 
+  it('不送手動微調的座標（後端會依地址覆寫），並在確認框說它會被取代', async () => {
+    const w = await mountPanel()
+    w.findComponent({ name: 'BusStopMapTuner' }).vm.$emit('confirm', 22.7, 120.3)
+    await flushPromises()
+
+    await at(w, 'geocode-btn').trigger('click')
+    await flushPromises()
+
+    expect(lastPayload()).toEqual({
+      school_address: SAVED.school_address, geocode: true,
+    })
+    expect(lastConfirmMessage()).toContain('地圖微調的座標會被查到的座標取代')
+  })
+
   it('查不到座標時提示改用地圖微調，且畫面座標不動（後端 502 不落任何變更）', async () => {
     mocks.putBusSettings.mockRejectedValueOnce({
       response: { data: { detail: '地址轉座標失敗，請稍後重試或手動輸入座標' } },
@@ -429,6 +449,7 @@ describe('BusSettingsPanel —— 查座標', () => {
 
     const error = at(w, 'last-error').attributes('title') ?? ''
     expect(error).toContain('地址轉座標失敗')
+    expect(error).toContain('這次的變更都沒有儲存')
     expect(error).toContain('地圖微調')
     expect(at(w, 'coords-readonly').text()).toContain('22.683500')
   })
@@ -447,6 +468,25 @@ describe('BusSettingsPanel —— 寫入互斥', () => {
 
     await at(w, 'save-btn').trigger('click')
     await flushPromises()
+    expect(mocks.putBusSettings).toHaveBeenCalledTimes(1)
+
+    release()
+    await flushPromises()
+  })
+
+  it('寫入在途時按 Enter 送出表單也擋得住（disabled 攔不到的那條路徑）', async () => {
+    const release = pendingPut()
+    const w = await mountPanel()
+    await at(w, 'address-input').setValue('高雄市三民區新地址 1 號')
+
+    await at(w, 'geocode-btn').trigger('click')
+    await flushPromises()
+    expect(mocks.putBusSettings).toHaveBeenCalledTimes(1)
+
+    // el-form 的 @submit.prevent 不看按鈕的 disabled，只有函式入口的 locked 早退擋得住
+    await w.find('form').trigger('submit')
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalledTimes(1)
     expect(mocks.putBusSettings).toHaveBeenCalledTimes(1)
 
     release()
@@ -482,6 +522,8 @@ describe('BusSettingsPanel —— 權限與離頁保護', () => {
 
     expect(mocks.hasPermission).toHaveBeenCalledWith('BUS_WRITE')
     expect(at(w, 'readonly-notice').exists()).toBe(true)
+    // 提示裡的權限名稱必須取自 manifest（權限編輯器上看得到的那個），不可手抄中文
+    expect(at(w, 'readonly-permission-name').text()).toContain(BUS_WRITE_LABEL)
     expect(at(w, 'address-input').attributes('disabled')).toBeDefined()
     expect(at(w, 'bus-count-input').attributes('disabled')).toBeDefined()
     expect(at(w, 'geocode-btn').attributes('disabled')).toBeDefined()

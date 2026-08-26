@@ -64,3 +64,9 @@ export function busInProgressWriteLabel(): string {
   const code = PERMISSION_NAMES.BUS_IN_PROGRESS_WRITE
   return findActionLabel(NAVIGATION_MANIFEST, code) ?? code
 }
+
+/** `BUS_WRITE` 的顯示名稱，理由同上（設定頁的唯讀提示要叫得出正確的權限名）。 */
+export function busWriteLabel(): string {
+  const code = PERMISSION_NAMES.BUS_WRITE
+  return findActionLabel(NAVIGATION_MANIFEST, code) ?? code
+}
