@@ -218,8 +218,14 @@ interface CloseRow {
 const CHECKLIST_LABELS: Record<string, string> = {
   all_bank_transactions_classified: '所有銀行交易已分類（分配/非學費/未媒合處理完畢）',
   bank_fully_allocated: '銀行入帳已全額分配',
+  all_collection_payments_classified: '所有代收明細已分類',
+  collection_fully_allocated: '代收款已全額分配',
   handover_all_confirmed: '現金交接已全數老闆簽收',
   handover_variance_zero: '現金交接差異為零',
+  // 帳單頁收款寫 StudentFeePayment、現金交接與關帳只認 FeeReceipt，兩條路徑
+  // 不互通。缺口不會讓收款等式失衡（等式兩側都不含這條路徑的錢），所以另立
+  // 一項明確標示，避免整筆現金在關帳時靜默消失。
+  legacy_cash_reconciled: '帳單頁收的現金皆已建立對帳收據',
   no_pending_refunds: '無待處理預繳退款',
   equation_balanced: '收款等式平衡',
 }
@@ -230,6 +236,10 @@ const CHECKLIST_FIX_TARGETS: Record<string, { ws: 'billing' | 'recon' | 'settlem
   bank_fully_allocated: { ws: 'recon' },
   handover_all_confirmed: { ws: 'settlement', view: 'handover' },
   handover_variance_zero: { ws: 'settlement', view: 'handover' },
+  // 修正方式＝到現金交接頁為這些收款補建收據
+  legacy_cash_reconciled: { ws: 'settlement', view: 'handover' },
+  all_collection_payments_classified: { ws: 'recon' },
+  collection_fully_allocated: { ws: 'recon' },
   no_pending_refunds: { ws: 'billing', view: 'records' },
   equation_balanced: { ws: 'recon' },
 }
