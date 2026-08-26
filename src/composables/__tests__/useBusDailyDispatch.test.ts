@@ -266,6 +266,27 @@ describe('站點編輯', () => {
     ])
   })
 
+  it('往後拖也要對：把第一個 pending 拖到最後', async () => {
+    // 後端 reorder 只檢查「集合相等」不檢查順序意圖（daily_plans.py 的
+    // `set(body.reorder) != pending_ids`），所以順序算錯不會 422，會**靜默寫入
+    // 錯誤的接送順序**——往前拖與往後拖必須各有一則守衛。
+    const d = await boot([planItem({
+      stops: [
+        stop({ stop_id: 11, student_id: 101, seq: 1 }),
+        stop({ stop_id: 12, student_id: 102, seq: 2 }),
+        stop({ stop_id: 13, student_id: 103, seq: 3 }),
+      ],
+    })])
+    vi.mocked(patchBusDailyPlanStops).mockResolvedValue({
+      data: { trip: trip(), stops: [stop()], capacity: { departed_pending: 1, capacity: 20 } },
+    } as never)
+
+    expect(await d.moveStop(0, 2)).toBe(true)
+    expect(vi.mocked(patchBusDailyPlanStops).mock.calls[0]).toEqual([
+      7, { reorder: [102, 103, 101] },
+    ])
+  })
+
   it('已 departed 的站不進 reorder 清單（後端要求恰好等於 pending 集合）', async () => {
     const d = await boot([planItem({
       stops: [
