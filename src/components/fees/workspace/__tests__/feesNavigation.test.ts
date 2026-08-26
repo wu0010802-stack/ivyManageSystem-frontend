@@ -36,6 +36,26 @@ describe('feesNavigation：主導航形狀', () => {
       'billingCodes',
     ])
   })
+
+  it('對帳工作區次層＝代收明細（預設）＋存摺明細（SPEC-016）', () => {
+    expect(FEE_WORKSPACE_VIEWS.recon.map((v) => v.key)).toEqual([
+      'collection',
+      'passbook',
+    ])
+    expect(FEE_WORKSPACE_VIEWS.recon[0].label).toContain('代收')
+  })
+
+  it('?ws=recon 未指定 view 時預設代收明細', () => {
+    const loc = resolveFeesLocation({ ws: 'recon' })
+    expect(loc.view).toBe('collection')
+    expect(loc.normalizedQuery.view).toBe('collection')
+  })
+
+  it('?ws=recon&view=passbook 保留存摺檢視', () => {
+    const loc = resolveFeesLocation({ ws: 'recon', view: 'passbook' })
+    expect(loc.view).toBe('passbook')
+    expect(loc.needsNormalize).toBe(false)
+  })
 })
 
 describe('feesNavigation：舊 tab 深連結相容映射（8 個舊 tab 全數涵蓋）', () => {
@@ -43,7 +63,8 @@ describe('feesNavigation：舊 tab 深連結相容映射（8 個舊 tab 全數�
     ['records', 'billing', 'records'],
     ['templates', 'settings', 'templates'],
     ['refunds', 'billing', 'refunds'],
-    ['bankRecon', 'recon', null],
+    // SPEC-016：對帳工作區新增代收/存摺次層，舊 bankRecon 深連結落存摺檢視
+    ['bankRecon', 'recon', 'passbook'],
     // 預繳已併入帳款（彙總繳費表「預繳」欄），舊深連結導向帳款
     ['prepayments', 'billing', 'records'],
     ['cashHandover', 'settlement', 'handover'],

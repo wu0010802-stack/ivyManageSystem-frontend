@@ -32,7 +32,11 @@ export const FEE_WORKSPACE_VIEWS: Record<FeeWorkspaceKey, FeeWorkspaceViewDef[]>
     { key: 'records', label: '帳款' },
     { key: 'refunds', label: '退款' },
   ],
-  recon: [],
+  // SPEC-016：代收明細為對帳主來源（預設），存摺明細降為勾稽層
+  recon: [
+    { key: 'collection', label: '代收明細' },
+    { key: 'passbook', label: '存摺明細' },
+  ],
   settlement: [
     { key: 'handover', label: '每日交接' },
     { key: 'close', label: '月結' },
@@ -48,7 +52,8 @@ export const LEGACY_FEE_TAB_MAP: Record<string, { ws: FeeWorkspaceKey; view?: st
   records: { ws: 'billing', view: 'records' },
   templates: { ws: 'settings', view: 'templates' },
   refunds: { ws: 'billing', view: 'refunds' },
-  bankRecon: { ws: 'recon' },
+  // 舊 bankRecon 深連結指的是存摺對帳，SPEC-016 後落在存摺次層
+  bankRecon: { ws: 'recon', view: 'passbook' },
   // 預繳自 2026-08-26 起併入帳款（彙總繳費表「預繳」欄），舊深連結導向帳款
   prepayments: { ws: 'billing', view: 'records' },
   cashHandover: { ws: 'settlement', view: 'handover' },

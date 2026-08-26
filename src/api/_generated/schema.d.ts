@@ -6843,6 +6843,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/collection-coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Coverage Route
+         * @description 勾稽存摺代收批次入帳；dry_run=True 只預覽不寫入。
+         */
+        post: operations["reconcile_coverage_route_api_fees_collection_coverage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Collection Import Route */
+        post: operations["confirm_collection_import_route_api_fees_collection_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Collection Import Route */
+        post: operations["preview_collection_import_route_api_fees_collection_imports_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Collection Payments
+         * @description 代收繳費列表（日期篩選以顧客繳費日為準——歸月口徑）。
+         */
+        get: operations["list_collection_payments_api_fees_collection_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments/{payment_id}/allocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allocate Collection Payment Route */
+        post: operations["allocate_collection_payment_route_api_fees_collection_payments__payment_id__allocate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments/{payment_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Collection Candidates */
+        get: operations["get_collection_candidates_api_fees_collection_payments__payment_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments/{payment_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse Collection Payment Route */
+        post: operations["reverse_collection_payment_route_api_fees_collection_payments__payment_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/generate": {
         parameters: {
             query?: never;
@@ -22097,6 +22222,11 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_confirm_collection_import_route_api_fees_collection_imports_post */
+        Body_confirm_collection_import_route_api_fees_collection_imports_post: {
+            /** File */
+            file: string;
+        };
         /** Body_create_authorizations_api_parent_pickup_authorizations_post */
         Body_create_authorizations_api_parent_pickup_authorizations_post: {
             /** Note */
@@ -22178,6 +22308,11 @@ export interface components {
         };
         /** Body_preview_bank_import_api_fees_bank_imports_preview_post */
         Body_preview_bank_import_api_fees_bank_imports_preview_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_collection_import_route_api_fees_collection_imports_preview_post */
+        Body_preview_collection_import_route_api_fees_collection_imports_preview_post: {
             /** File */
             file: string;
         };
@@ -24129,6 +24264,195 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** CollectionAllocateOut */
+        CollectionAllocateOut: {
+            /** Allocated Total */
+            allocated_total: number;
+            /** Allocation Ids */
+            allocation_ids: number[];
+            /** Payment Status */
+            payment_status: string;
+            /** Receipt Id */
+            receipt_id: number;
+            /** Unallocated */
+            unallocated: number;
+        };
+        /** CollectionCandidateItemOut */
+        CollectionCandidateItemOut: {
+            /** Fee Record Id */
+            fee_record_id: number;
+            /** Fee Type */
+            fee_type?: string | null;
+            /**
+             * In Bill Period
+             * @default false
+             */
+            in_bill_period: boolean;
+            /** Label */
+            label: string;
+            /** Remaining */
+            remaining: number;
+        };
+        /** CollectionCandidatesOut */
+        CollectionCandidatesOut: {
+            /** Bill Period */
+            bill_period?: string | null;
+            /** Bill Target Month */
+            bill_target_month?: string | null;
+            /** Candidates */
+            candidates: components["schemas"]["CandidateOut"][];
+            /** Level */
+            level: string;
+            /** Payment Id */
+            payment_id: number;
+            /** Reasons */
+            reasons: string[];
+            /** Students */
+            students: components["schemas"]["CollectionCandidateStudentOut"][];
+        };
+        /** CollectionCandidateStudentOut */
+        CollectionCandidateStudentOut: {
+            /** Display Name */
+            display_name: string;
+            /** Items */
+            items: components["schemas"]["CollectionCandidateItemOut"][];
+            prepayment?: components["schemas"]["CandidatePrepayOptionOut"] | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /** CollectionImportOut */
+        CollectionImportOut: {
+            /** Bank */
+            bank: string;
+            /** Created */
+            created?: boolean | null;
+            /** Credit Total */
+            credit_total: number;
+            /** Debit Total */
+            debit_total: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Id */
+            id: number;
+            /** Import Type */
+            import_type: string;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+            /** Status */
+            status: string;
+        };
+        /** CollectionImportPreviewOut */
+        CollectionImportPreviewOut: {
+            /** Already Imported */
+            already_imported: boolean;
+            /** Decoded Count */
+            decoded_count: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Errors */
+            errors: components["schemas"]["RowErrorOut"][];
+            /** Existing Import Id */
+            existing_import_id?: number | null;
+            /** Fee Total */
+            fee_total: number;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Filename */
+            filename: string;
+            /** Gross Total */
+            gross_total: number;
+            /** Net Total */
+            net_total: number;
+            /** Old Period Count */
+            old_period_count: number;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+        };
+        /** CollectionPaymentListOut */
+        CollectionPaymentListOut: {
+            /** Items */
+            items: components["schemas"]["CollectionPaymentOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** CollectionPaymentOut */
+        CollectionPaymentOut: {
+            /**
+             * Allocated Total
+             * @default 0
+             */
+            allocated_total: number;
+            /** Bill Month */
+            bill_month?: number | null;
+            /** Bill Year */
+            bill_year?: number | null;
+            /** Channel */
+            channel: string;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
+            /**
+             * Customer Paid Date
+             * Format: date
+             */
+            customer_paid_date: string;
+            /** Expected Posting Date */
+            expected_posting_date?: string | null;
+            /** Fee Amount */
+            fee_amount: number;
+            /** Gross Amount */
+            gross_amount: number;
+            /** Id */
+            id: number;
+            /** Import Id */
+            import_id: number;
+            /** Net Amount */
+            net_amount: number;
+            /** Occurrence Index */
+            occurrence_index: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Status Note */
+            status_note?: string | null;
+            /**
+             * Unallocated
+             * @default 0
+             */
+            unallocated: number;
+        };
         /** CommentIn */
         CommentIn: {
             /** Comment */
@@ -25159,6 +25483,51 @@ export interface components {
             course_name: string;
             /** Items */
             items: components["schemas"]["CourseWaitlistItemOut"][];
+        };
+        /** CoverageDayOut */
+        CoverageDayOut: {
+            /** Collection Count */
+            collection_count: number;
+            /** Collection Net Total */
+            collection_net_total: number;
+            /** Difference */
+            difference: number;
+            /** Matched */
+            matched: boolean;
+            /** Passbook Total */
+            passbook_total: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Transaction Ids */
+            transaction_ids: number[];
+        };
+        /** CoverageOut */
+        CoverageOut: {
+            /** Covered Count */
+            covered_count: number;
+            /** Days */
+            days: components["schemas"]["CoverageDayOut"][];
+        };
+        /** CoverageRequest */
+        CoverageRequest: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
         };
         /** CreateDismissalNoticeRequest */
         CreateDismissalNoticeRequest: {
@@ -54628,6 +54997,243 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_coverage_route_api_fees_collection_coverage_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_collection_import_route_api_fees_collection_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_confirm_collection_import_route_api_fees_collection_imports_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_collection_import_route_api_fees_collection_imports_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_collection_import_route_api_fees_collection_imports_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_collection_payments_api_fees_collection_payments_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                import_id?: number | null;
+                page?: number;
+                page_size?: number;
+                status?: string | null;
+                suffix?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionPaymentListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    allocate_collection_payment_route_api_fees_collection_payments__payment_id__allocate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAllocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection_candidates_api_fees_collection_payments__payment_id__candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionCandidatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_collection_payment_route_api_fees_collection_payments__payment_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseOut"];
                 };
             };
             /** @description Validation Error */
