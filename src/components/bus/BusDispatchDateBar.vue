@@ -79,8 +79,14 @@ defineExpose({ disabledDate })
       show-icon
       data-test="holiday-alert"
     >
+      <!--
+        後端 `calendar_warnings` 回的是完整句子（「本日為假日：中秋節」），不是純
+        名稱——再套一層「本日為假日／非上課日（…）」會疊成
+        「本日為假日／非上課日（本日為假日：中秋節）」。這裡只補「仍可照常發車」
+        這句後端不會說、但行政需要知道的話。
+      -->
       <template #title>
-        本日為假日／非上課日（{{ holidayNotice.label }}），仍可照常發車
+        {{ holidayNotice.label }}，仍可照常發車
       </template>
     </el-alert>
   </div>

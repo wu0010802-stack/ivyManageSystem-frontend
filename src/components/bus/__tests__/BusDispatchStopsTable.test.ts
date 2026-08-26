@@ -92,7 +92,7 @@ describe('分區與狀態呈現', () => {
         stop({ stop_id: 13, student_id: 103, status: 'excused', excuse_reason: 'admin' }),
       ],
     })
-    expect(w.find('[data-test="excuse-101"]').text()).toBe('請假')
+    expect(w.find('[data-test="excuse-101"]').text()).toBe('今日請假')
     expect(w.find('[data-test="excuse-102"]').text()).toBe('家長取消')
     expect(w.find('[data-test="excuse-103"]').text()).toBe('後台排除')
   })
@@ -131,6 +131,68 @@ describe('分區與狀態呈現', () => {
   it('沒有待接送站點時顯示空狀態而非空白', () => {
     const w = mountTable({ stops: [stop({ status: 'departed' })] })
     expect(w.find('[data-test="pending-empty"]').exists()).toBe(true)
+  })
+})
+
+describe('版面與鍵盤', () => {
+  // grid 是 7 欄。excused 列若把「原因」拆成獨立 grid item 就會變 8 個，
+  // 最後一格（動作按鈕）溢位到下一列最左邊，看起來像屬於下一位學生——
+  // 而 excused 正是這張表最常出現的列。jsdom 不算 layout，但子元素數是確定的。
+  it('settled 列的 grid item 數不超過欄數（excused 也一樣）', () => {
+    const w = mountTable({
+      stops: [
+        stop({ student_id: 100, status: 'departed' }),
+        stop({ stop_id: 12, student_id: 102, status: 'excused', excuse_reason: 'leave' }),
+      ],
+    })
+    expect(w.find('[data-test="settled-100"]').element.children.length).toBeLessThanOrEqual(7)
+    expect(w.find('[data-test="settled-102"]').element.children.length).toBeLessThanOrEqual(7)
+  })
+
+  it('pending 列的 grid item 數不超過欄數', () => {
+    const w = mountTable({ stops: [stop({ pinned: true, source: 'added' })] })
+    expect(w.find('[data-test="pending-101"]').element.children.length).toBeLessThanOrEqual(7)
+  })
+
+  it('提供鍵盤可達的上移／下移，拖拉不是唯一的重排路徑', async () => {
+    const w = mountTable({
+      stops: [
+        stop({ stop_id: 11, student_id: 101 }),
+        stop({ stop_id: 12, student_id: 102 }),
+        stop({ stop_id: 13, student_id: 103 }),
+      ],
+    })
+    await w.find('[data-test="down-101"]').trigger('click')
+    await w.find('[data-test="up-103"]').trigger('click')
+    expect(w.emitted('reorder')).toEqual([[0, 1], [2, 1]])
+  })
+
+  it('第一列不能再上移、最後一列不能再下移', () => {
+    const w = mountTable({
+      stops: [stop({ stop_id: 11, student_id: 101 }), stop({ stop_id: 12, student_id: 102 })],
+    })
+    expect(w.find('[data-test="up-101"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-test="down-102"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('拖拉握把可聚焦且吃方向鍵（role=button 卻不可聚焦本身就違反 ARIA）', async () => {
+    const w = mountTable({
+      stops: [stop({ stop_id: 11, student_id: 101 }), stop({ stop_id: 12, student_id: 102 })],
+    })
+    const handle = w.find('[data-test="handle-101"]')
+    expect(handle.attributes('tabindex')).toBe('0')
+    await handle.trigger('keydown.down')
+    expect(w.emitted('reorder')).toEqual([[0, 1]])
+  })
+
+  it('釘選圖示有文字替代（報讀器聽得到釘選狀態）', () => {
+    const w = mountTable({ stops: [stop({ pinned: true })] })
+    expect(w.find('[data-test="pinned-101"]').attributes('aria-label')).toContain('已釘選')
+  })
+
+  it('busy 時顯示「順序儲存中」，慢網路下不會看起來像沒反應', () => {
+    expect(mountTable().find('[data-test="saving"]').exists()).toBe(false)
+    expect(mountTable({ busy: true }).find('[data-test="saving"]').exists()).toBe(true)
   })
 })
 

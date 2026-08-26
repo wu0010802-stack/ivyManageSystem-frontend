@@ -36,6 +36,7 @@ import BusPickupAddressSelect from '@/components/bus/BusPickupAddressSelect.vue'
 import BusStopMapTuner from '@/components/bus/BusStopMapTuner.vue'
 import { useBusDailyDispatch } from '@/composables/useBusDailyDispatch'
 import { DIRECTION_LABELS } from '@/composables/useBusRouteEditor'
+import { busInProgressWriteLabel } from '@/constants/bus'
 
 const dispatch = useBusDailyDispatch()
 const {
@@ -72,7 +73,9 @@ function toCardStatus(status: string): CardStatus {
 /**
  * `end_time_estimated` 固定為 null：後端 `DailyPlanTripOut`（`api/bus/daily_plans.py::
  * _trip_out`）**沒有帶這個欄位**，只有 `BusTripAdminOut` 有。與其自己拿別的數字充數，
- * 不如照實留空——卡片對 null 已經是「不顯示」。後端補上同名欄位後這裡即可接上。
+ * 不如照實留空——卡片對 null 已經是「不顯示」。
+ * TODO(backend): `DailyPlanTripOut` 補 `end_time_estimated` 後改成
+ * `p.trip.end_time_estimated ?? null`；在那之前卡片的「預計 … 結束」永遠不會渲染。
  */
 const cards = computed(() => plans.value.map((p) => ({
   route_id: p.trip.route_id,
@@ -165,6 +168,13 @@ async function retryLoadStudents(): Promise<void> {
   await dispatch.loadStudents()
 }
 
+/** 由 student_id 取當日名單上的姓名；查不到時退回編號而不是空字串。 */
+function stopNameOf(studentId: number | null): string {
+  if (studentId === null) return ''
+  const stop = selectedPlan.value?.stops.find((s) => s.student_id === studentId)
+  return stop?.student_name ?? `學生 #${studentId}`
+}
+
 // ── 接送地址（含地圖微調）────────────────────────────────────────────────
 /**
  * 為什麼地址與座標一起送：`BusStopAdminOut` 不含 `pickup_address_id`，前端無從
@@ -177,12 +187,15 @@ const addressStudentId = ref<number | null>(null)
 const addressPickupId = ref<number | null>(null)
 const addressResolved = ref<{ id: number | null; lat: number | null; lng: number | null; address: string } | null>(null)
 const mapTunerVisible = ref(false)
+/** 套用地址失敗時的持久訊息（Dialog 不關，讓使用者照著後端原話改）。 */
+const addressError = ref<string | null>(null)
 
 const addressVisible = computed(() => addressStudentId.value !== null)
-const addressStudentName = computed(() => {
-  const id = addressStudentId.value
-  return selectedPlan.value?.stops.find((s) => s.student_id === id)?.student_name ?? ''
-})
+const addressStudentName = computed(() => stopNameOf(addressStudentId.value))
+/** 當日名單上這位學生目前的接送地址快照（給地址選單當住家項的備援顯示）。 */
+const addressCurrent = computed(
+  () => selectedPlan.value?.stops.find((s) => s.student_id === addressStudentId.value)?.address ?? null,
+)
 const addressCanSubmit = computed(
   () => addressResolved.value !== null
     && addressResolved.value.lat != null
@@ -194,12 +207,14 @@ function openAddress(studentId: number): void {
   addressStudentId.value = studentId
   addressPickupId.value = null
   addressResolved.value = null
+  addressError.value = null
 }
 
 function closeAddress(): void {
   addressStudentId.value = null
   addressPickupId.value = null
   addressResolved.value = null
+  addressError.value = null
   mapTunerVisible.value = false
 }
 
@@ -218,13 +233,20 @@ async function submitAddress(): Promise<void> {
   const studentId = addressStudentId.value
   const resolved = addressResolved.value
   if (studentId === null || !resolved || resolved.lat == null || resolved.lng == null) return
+  addressError.value = null
   const ok = await dispatch.changeAddress({
     student_id: studentId,
     pickup_address_id: resolved.id,
     lat: resolved.lat,
     lng: resolved.lng,
   })
-  if (ok) closeAddress()
+  if (ok) {
+    closeAddress()
+    return
+  }
+  // 與插入 Dialog 同一條原則：失敗時 Dialog 不關、把後端原話留在畫面上，
+  // 而不是只彈一次三秒後就消失的 toast。null＝重入守衛擋下、根本沒送出。
+  addressError.value = lastError.value
 }
 
 // ── 重設為預設名單 ─────────────────────────────────────────────────────────
@@ -247,11 +269,22 @@ async function onReset(): Promise<void> {
 }
 
 // ── 名單動作 ────────────────────────────────────────────────────────────────
+/**
+ * 移除站點的二次確認。
+ *
+ * 一定要帶出**姓名**：這是一張十幾列、每列按鈕長得都一樣的表，點錯一行而確認框
+ * 又沒有任何可核對的資訊，結果就是錯的孩子從今天的名單消失、早上七點司機不會去
+ * 接他。也要說清楚**怎麼救回來**——不是按個 undo，而是要重走「插入學生」並重選
+ * 接送地址。
+ */
 async function onRemove(studentId: number): Promise<void> {
+  const name = stopNameOf(studentId)
   try {
-    await ElMessageBox.confirm('將這位學生從今天的名單移除？', '移除站點', {
-      type: 'warning', confirmButtonText: '移除', cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      `確定要把「${name}」從今天的名單移除嗎？移除後若要恢復，需重新用「插入學生」並重選接送地址。`,
+      '移除站點',
+      { type: 'warning', confirmButtonText: '移除', cancelButtonText: '取消' },
+    )
   } catch {
     return
   }
@@ -292,7 +325,7 @@ onMounted(() => { void dispatch.load() })
       <el-empty
         v-else-if="!plans.length"
         data-testid="bus-dispatch-empty"
-        description="尚未建立任何啟用中的班次，請先到「班次設定」新增"
+        description="尚未建立任何啟用中的班次，請先到「路線管理」新增"
       />
 
       <template v-else>
@@ -346,7 +379,7 @@ onMounted(() => { void dispatch.load() })
             show-icon
             :closable="false"
             :title="inProgress
-              ? '此班次已發車，調整名單需要「娃娃車追蹤 (發車後調整)」權限'
+              ? `此班次已發車，調整名單需要「${busInProgressWriteLabel()}」權限`
               : '你沒有編輯娃娃車班次的權限，以下為唯讀檢視'"
             description="需要調整請聯絡系統管理員授權。"
           />
@@ -417,13 +450,28 @@ onMounted(() => { void dispatch.load() })
       @close="closeAddress"
     >
       <p class="bus-dispatch__hint">{{ addressStudentName }}・僅影響今天這一趟</p>
+      <!--
+        `home-address` 傳該站現有的 address 快照：後端住家虛擬項若沒帶 address
+        （學生資料未填住址），選單會顯示「住家（尚未填寫地址）」而不是實際住址。
+        這一格拿得到真值，就不該傳 null。
+      -->
       <BusPickupAddressSelect
         v-if="addressStudentId !== null"
         v-model="addressPickupId"
         :student-id="addressStudentId"
-        :home-address="null"
+        :home-address="addressCurrent"
         @resolved="onAddressResolved"
       />
+      <el-alert
+        v-if="addressError"
+        class="bus-dispatch__address-warning"
+        type="error"
+        :closable="false"
+        show-icon
+        data-testid="bus-dispatch-address-error"
+      >
+        <template #title>{{ addressError }}</template>
+      </el-alert>
       <el-alert
         v-if="addressResolved && (addressResolved.lat == null || addressResolved.lng == null)"
         class="bus-dispatch__address-warning"

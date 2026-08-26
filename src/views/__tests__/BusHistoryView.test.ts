@@ -322,7 +322,19 @@ describe('BusHistoryView 第二期契約適配', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('今日不搭')
-    expect(wrapper.find('[data-testid="bus-history-drawer-excuse"]').text()).toBe('請假')
+    expect(wrapper.find('[data-testid="bus-history-drawer-excuse"]').text()).toBe('今日請假')
+  })
+
+  it('路線清單載入失敗時明說，而不是給一個看起來像「這園沒有路線」的空下拉', async () => {
+    listBusRoutes.mockRejectedValue(new Error('boom'))
+    const wrapper = mountView()
+    await flushPromises()
+
+    const select = wrapper.find('[data-testid="bus-history-filter-route"]')
+    expect(select.attributes('placeholder')).toBe('路線清單載入失敗')
+    // 歷史查詢本身不受影響
+    expect(listBusTrips).toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="bus-history-error"]').exists()).toBe(false)
   })
 
   it('路線篩選下拉只取 id/name/is_active，端點一併回傳的座標不進畫面', async () => {

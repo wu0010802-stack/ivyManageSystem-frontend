@@ -65,8 +65,13 @@ function excuseText(status: string, reason: string | null): string {
  * 站點 ETA：`eta_live`（行進間即時重算）優先，退回 `eta_planned`（當日平移值）。
  * 與後端 `services/bus_events.py::build_stop_update_event` 的 `eta` 取值同順序，
  * 家長端與監看頁看到的是同一個數字。
+ *
+ * **只有 `pending` 的站才有 ETA**：excused 的站後端會跳過、departed／skipped 已經
+ * 過去了。對一件不會發生的事給出精確時間，行政（或被行政轉述的家長）會照著在門口
+ * 等——那比不顯示更糟。
  */
-function stopEtaText(etaLive: string | null, etaPlanned: string | null): string {
+function stopEtaText(status: string, etaLive: string | null, etaPlanned: string | null): string {
+  if (status !== 'pending') return '—'
   return formatTaipeiClock(etaLive ?? etaPlanned) ?? '—'
 }
 
@@ -290,7 +295,7 @@ onBeforeUnmount(() => {
           <el-table-column label="預計抵達" width="110">
             <template #default="{ row }">
               <span :data-testid="`bus-monitor-eta-${row.stop_id}`">
-                {{ stopEtaText(row.eta_live, row.eta_planned) }}
+                {{ stopEtaText(row.status, row.eta_live, row.eta_planned) }}
               </span>
             </template>
           </el-table-column>

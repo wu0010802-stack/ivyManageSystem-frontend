@@ -4,7 +4,7 @@
  *
  * 純呈現元件——所有動作只 emit，落庫與錯誤處理一律由 `useBusDailyDispatch` 負責。
  *
- * ── 為什麼分成「已處理」與「待接送」兩區，而不是一張依 seq 排的表 ──────────
+ * ── 為什麼分成「已離站」與「待接送」兩區，而不是一張依 seq 排的表 ──────────
  * 後端的 `reorder` 只作用在 `pending` 站，且會把它們整批排到所有非 pending 站
  * 之後（`fixed_max_seq + offset`）。一張混排的表會讓使用者以為可以把某站拖到
  * 已離站的站之前——那個操作在後端根本不存在。分兩區之後「哪些還能動」是看得見的，
@@ -19,9 +19,10 @@
  * 對不上就是打錯人。
  *
  * ── 隱私 ────────────────────────────────────────────────────────────────────
- * 接送地址與聯絡人電話會顯示在畫面上（管理端本就有權查看），但座標數字一律不
- * 呈現、不進任何 log／URL／storage——`lat`/`lng` 只作為「地圖微調」的起始位置
- * 交給呼叫端。
+ * 接送地址與聯絡人電話會顯示在畫面上（管理端本就有權查看）。**座標根本不在 props
+ * 裡**——`DispatchStop` 已在 composable 去掉 `lat`/`lng`，因為本頁不需要它們。
+ * 這不只是「不渲染」：`@sentry/vue` 預設 `attachProps: true`，render error 會把整包
+ * props 送進 `contexts.vue.propsData`，而 Sentry 的 denylist 沒有 `lat`/`lng`。
  */
 import { computed } from 'vue'
 import draggable from 'vuedraggable'
@@ -128,6 +129,17 @@ interface DragChangeEvent {
   moved?: { oldIndex: number; newIndex: number }
 }
 
+/**
+ * 鍵盤上移／下移。拖拉是滑鼠專屬的——沒有這組按鈕，只用鍵盤或報讀器的行政
+ * **完全無法完成這一頁的核心動作**（調整接送順序），而「自動排序」只能套演算法
+ * 建議、不能指定順位。走的是同一個 `reorder` emit，index 語意與拖拉一致。
+ */
+function moveBy(index: number, delta: number): void {
+  const target = index + delta
+  if (target < 0 || target >= pendingStops.value.length) return
+  emit('reorder', index, target)
+}
+
 function onDragChange(evt: DragChangeEvent): void {
   if (!evt.moved) return
   emit('reorder', evt.moved.oldIndex, evt.moved.newIndex)
@@ -151,7 +163,7 @@ function onDragChange(evt: DragChangeEvent): void {
 
     <!-- ── 已處理／不搭車：純呈現，不可拖拉 ── -->
     <section v-if="settledStops.length" class="bus-dispatch-stops__section">
-      <h4 class="bus-dispatch-stops__heading">已處理・不搭車</h4>
+      <h4 class="bus-dispatch-stops__heading">已離站・不搭車</h4>
       <ul class="bus-dispatch-stops__list">
         <li
           v-for="s in settledStops"
@@ -166,15 +178,22 @@ function onDragChange(evt: DragChangeEvent): void {
               臨時
             </el-tag>
           </span>
-          <el-tag :type="statusMeta(s.status).type" size="small" data-test="status-tag">
-            {{ statusMeta(s.status).label }}
-          </el-tag>
-          <span
-            v-if="s.status === 'excused'"
-            class="bus-dispatch-stops__reason"
-            :data-test="`excuse-${s.student_id}`"
-          >
-            {{ excuseReasonLabel(s.excuse_reason) }}
+          <!--
+            原因與狀態 tag 併在同一個 grid cell：分成兩個 grid item 的話 excused 列
+            會比其他列多一欄，最後一格（動作按鈕）就溢位到下一列最左邊，看起來像
+            屬於下一位學生——而 excused 正是這張表最常出現的列。
+          -->
+          <span class="bus-dispatch-stops__status-cell">
+            <el-tag :type="statusMeta(s.status).type" size="small" data-test="status-tag">
+              {{ statusMeta(s.status).label }}
+            </el-tag>
+            <span
+              v-if="s.status === 'excused'"
+              class="bus-dispatch-stops__reason"
+              :data-test="`excuse-${s.student_id}`"
+            >
+              {{ excuseReasonLabel(s.excuse_reason) }}
+            </span>
           </span>
           <span class="bus-dispatch-stops__address">{{ s.address ?? '—' }}</span>
           <span class="bus-dispatch-stops__eta">
@@ -212,6 +231,14 @@ function onDragChange(evt: DragChangeEvent): void {
         待接送順序
         <span v-if="editable" class="bus-dispatch-stops__hint">（拖拉調整順序，調整後該站會自動釘選）</span>
       </h4>
+      <!--
+        拖拉是 controlled 用法：放手後列會先彈回原位，等 PATCH 回來才真的重排。
+        慢網路下那兩秒畫面毫無變化，使用者會以為拖拉沒生效而重拖——此時 busy 已把
+        握把收起來，看起來就像頁面壞了。
+      -->
+      <p v-if="busy" class="bus-dispatch-stops__saving" role="status" data-test="saving">
+        順序儲存中⋯
+      </p>
       <div v-if="!pendingStops.length" class="bus-dispatch-stops__empty" data-test="pending-empty">
         沒有待接送的站點
       </div>
@@ -221,20 +248,28 @@ function onDragChange(evt: DragChangeEvent): void {
         item-key="student_id"
         handle=".bus-dispatch-stops__handle"
         :disabled="!editable"
+        tag="ul"
         class="bus-dispatch-stops__list"
         data-test="pending-list"
         @change="onDragChange"
       >
         <template #item="{ element: s, index }">
-          <div class="bus-dispatch-stops__row" :data-test="`pending-${s.student_id}`">
+          <li class="bus-dispatch-stops__row" :data-test="`pending-${s.student_id}`">
             <span
               v-if="editable"
               class="bus-dispatch-stops__handle"
               role="button"
-              :aria-label="`拖拉調整 ${s.student_name} 的順序`"
+              tabindex="0"
+              :aria-label="`調整 ${s.student_name} 的順序：拖拉，或用上下方向鍵`"
               :data-test="`handle-${s.student_id}`"
+              @keydown.up.prevent="moveBy(index, -1)"
+              @keydown.down.prevent="moveBy(index, 1)"
             >⠿</span>
-            <span v-else class="bus-dispatch-stops__handle bus-dispatch-stops__handle--off">⠿</span>
+            <span
+              v-else
+              class="bus-dispatch-stops__handle bus-dispatch-stops__handle--off"
+              aria-hidden="true"
+            >⠿</span>
             <span class="bus-dispatch-stops__seq">{{ index + 1 }}</span>
             <span class="bus-dispatch-stops__name">
               {{ s.student_name }}
@@ -244,7 +279,8 @@ function onDragChange(evt: DragChangeEvent): void {
               <span
                 v-if="s.pinned"
                 class="bus-dispatch-stops__pinned"
-                title="已釘選：自動排序不會改變此站順位"
+                role="img"
+                aria-label="已釘選，自動排序不會改變此站順位"
                 :data-test="`pinned-${s.student_id}`"
               >📌</span>
             </span>
@@ -259,6 +295,30 @@ function onDragChange(evt: DragChangeEvent): void {
               {{ etaText(s) }}
             </span>
             <span class="bus-dispatch-stops__actions">
+              <el-button
+                v-if="editable"
+                link
+                type="primary"
+                size="small"
+                :disabled="index === 0"
+                :aria-label="`把 ${s.student_name} 往前移一位`"
+                :data-test="`up-${s.student_id}`"
+                @click="moveBy(index, -1)"
+              >
+                ↑
+              </el-button>
+              <el-button
+                v-if="editable"
+                link
+                type="primary"
+                size="small"
+                :disabled="index === pendingStops.length - 1"
+                :aria-label="`把 ${s.student_name} 往後移一位`"
+                :data-test="`down-${s.student_id}`"
+                @click="moveBy(index, 1)"
+              >
+                ↓
+              </el-button>
               <el-button
                 v-if="editable"
                 link
@@ -290,7 +350,7 @@ function onDragChange(evt: DragChangeEvent): void {
                 移除
               </el-button>
             </span>
-          </div>
+          </li>
         </template>
       </draggable>
     </section>
@@ -322,21 +382,28 @@ function onDragChange(evt: DragChangeEvent): void {
 
 .bus-dispatch-stops__row {
   display: grid;
-  grid-template-columns: 24px 36px minmax(120px, 1fr) 88px minmax(160px, 2fr) 72px auto;
+  grid-template-columns: 24px 36px minmax(120px, 1fr) 120px minmax(160px, 2fr) 72px auto;
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
-/* 已處理區沒有拖拉握把，第一欄留空維持與待接送區對齊 */
 .bus-dispatch-stops__row--settled {
-  grid-template-columns: 24px 36px minmax(120px, 1fr) 88px minmax(160px, 2fr) 72px auto;
   opacity: 0.75;
 }
 
+/* 已離站區沒有拖拉握把；把 seq 明確定位到第 2 欄，與待接送區對齊 */
 .bus-dispatch-stops__row--settled .bus-dispatch-stops__seq {
   grid-column: 2;
+}
+
+/* 狀態與不搭原因共用一格，避免 excused 列比其他列多一欄而把動作欄擠到下一列 */
+.bus-dispatch-stops__status-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .bus-dispatch-stops__handle {
@@ -391,5 +458,11 @@ function onDragChange(evt: DragChangeEvent): void {
 
 .bus-dispatch-stops__stale {
   margin-bottom: 8px;
+}
+
+.bus-dispatch-stops__saving {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>

@@ -135,6 +135,37 @@ describe('載入', () => {
     expect(JSON.stringify(d.plans.value)).not.toContain('120.9')
   })
 
+  it('站點座標完全不進狀態——本頁不需要，而 Sentry 的 propsData 沒有 lat/lng denylist', async () => {
+    const d = await boot()
+    const stopState = d.plans.value[0].stops[0] as Record<string, unknown>
+    expect(stopState).not.toHaveProperty('lat')
+    expect(stopState).not.toHaveProperty('lng')
+    // 其餘欄位照常帶進來，不是把整個 stop 砍掉
+    expect(stopState.student_name).toBe('小明')
+    expect(stopState.address).toBe('高雄市…')
+    expect(JSON.stringify(d.plans.value)).not.toContain('22.61')
+    expect(JSON.stringify(d.plans.value)).not.toContain('120.31')
+  })
+
+  it('PATCH 與 reset 回應的座標同樣不落進狀態', async () => {
+    const d = await boot()
+    vi.mocked(patchBusDailyPlanStops).mockResolvedValue({
+      data: {
+        trip: trip(),
+        stops: [stop({ lat: 25.55, lng: 121.55 })],
+        capacity: { departed_pending: 1, capacity: 20 },
+      },
+    } as never)
+    await d.markExcusedAdmin(101)
+    expect(JSON.stringify(d.plans.value)).not.toContain('25.55')
+
+    vi.mocked(resetBusDailyPlan).mockResolvedValue({
+      data: { trip: trip(), stops: [stop({ lat: 26.66, lng: 122.66 })] },
+    } as never)
+    await d.resetPlan()
+    expect(JSON.stringify(d.plans.value)).not.toContain('26.66')
+  })
+
   it('計畫載入失敗時 loadFailed 亮起，不得讓空清單被讀成「今天沒有班次」', async () => {
     vi.mocked(getBusDailyPlan).mockRejectedValue(new Error('boom'))
     const d = useBusDailyDispatch()
@@ -381,6 +412,18 @@ describe('臨時插入的候選學生', () => {
       { id: 101, name: '小明' }, { id: 201, name: '小華' }, { id: 202, name: '小美' },
     ])
     expect(JSON.stringify(d.students.value)).not.toContain('住址')
+  })
+
+  it('缺名的學生退成編號，不變成一個點得下去的空白選項', async () => {
+    vi.mocked(getStudents).mockResolvedValue({
+      data: { items: [{ id: 301, name: '' }, { id: 302, name: null }], total: 2 },
+    } as never)
+    const d = await boot([planItem({ stops: [] })])
+    await d.loadStudents()
+    expect(d.students.value).toEqual([
+      { id: 301, name: '學生 #301' },
+      { id: 302, name: '學生 #302' },
+    ])
   })
 
   it('載過一次就不重載（同一次進頁內名冊不會變）', async () => {

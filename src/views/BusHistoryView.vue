@@ -42,7 +42,10 @@ const { isMobile } = useIsMobile()
 
 // ── 路線選單（篩選用，不需站點名冊）──
 const routes = ref<RouteOption[]>([])
+/** 路線選單載入失敗：下拉是空的，但**不是**「這園沒有任何路線」。 */
+const routesFailed = ref(false)
 const fetchRoutes = async () => {
+  routesFailed.value = false
   try {
     const res = await listBusRoutes()
     // 第二期契約：回應是 `{routes: [...]}`（route 層帶 direction，已無 morning/
@@ -50,7 +53,10 @@ const fetchRoutes = async () => {
     // 與家庭座標，那些一個欄位都不該進本頁狀態。
     routes.value = res.data.routes.map((r) => ({ id: r.id, name: r.name, is_active: r.is_active }))
   } catch {
-    // 路線選單抓不到不影響歷史查詢本身，篩選列會少一個下拉但查詢仍可用
+    // 路線選單抓不到不影響歷史查詢本身（其餘篩選與查詢照常），但一個空的下拉
+    // 看起來就是「這園沒有任何路線」——要明說是載入失敗。
+    routesFailed.value = true
+    routes.value = []
   }
 }
 
@@ -238,7 +244,7 @@ onMounted(() => {
         <el-select
           :model-value="filters.route_id"
           data-testid="bus-history-filter-route"
-          placeholder="全部路線"
+          :placeholder="routesFailed ? '路線清單載入失敗' : '全部路線'"
           clearable
           style="width: 160px"
           @change="onRouteFilterChange"

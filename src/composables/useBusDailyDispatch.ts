@@ -53,8 +53,26 @@ export const MAX_DAYS_AHEAD = 7
 /** 翻頁保險絲：後端 total 異常時不至於變成無窮迴圈（比照 useBusRouteEditor）。 */
 const MAX_STUDENT_PAGES = 20
 
-/** 後端 `BusStopAdminOut` 原樣（禁止手抄；codegen 是契約唯一事實來源）。 */
-export type DispatchStop = Schema<'BusStopAdminOut'>
+/**
+ * 後端 `BusStopAdminOut` **去掉座標**（型別仍由 codegen 衍生，不手抄欄位）。
+ *
+ * 本頁從頭到尾沒有一處讀 `stop.lat`/`stop.lng`——地圖微調與插入用的座標一律來自
+ * `BusPickupAddressSelect` 的 `resolved` 事件，不是站點資料。既然不需要，就**不要
+ * 讓它進狀態**：`@sentry/vue`（本專案 10.62.0）預設 `attachProps: true`，任何
+ * render error 都會把元件 props 整包塞進 `contexts.vue.propsData`，而
+ * `src/utils/sentry.ts` 的 denylist 有 `address`／`student_name`／`phone`，
+ * **沒有 `lat`/`lng`**——一次未預期的渲染錯誤就會把全車學生家門口的六位小數座標
+ * 送上 Sentry。過濾不如不帶：少一個欄位，就少一條外洩路徑。
+ *
+ * （`useBusMonitor` 與班次設定頁確實需要座標畫地圖，那兩處的 Sentry denylist 缺口
+ * 要另外補；見交付說明的 follow-up。）
+ */
+export type DispatchStop = Omit<Schema<'BusStopAdminOut'>, 'lat' | 'lng'>
+
+/** 丟掉座標（見 `DispatchStop`）。後端回應的其餘欄位原樣保留。 */
+function stripCoordinates(stops: Schema<'BusStopAdminOut'>[]): DispatchStop[] {
+  return stops.map(({ lat: _lat, lng: _lng, ...rest }) => rest)
+}
 
 /**
  * 一條班次的當日計畫。後端 `DailyPlanItemOut` 加上兩個**只有班次表才有**的欄位
@@ -156,6 +174,11 @@ export function useBusDailyDispatch() {
   /**
    * 假日警示（spec「行事曆整合」：顯著警示但**不阻擋**發車）。
    * 後端逐班次回同一份 `calendar_warnings`（只依日期計算），取第一筆即可。
+   *
+   * ⚠ 後端回的是**完整句子**（`services/bus_daily_plan.py::calendar_warnings` 產出
+   * 「本日為假日：中秋節」「園所行事曆：校慶補假」），不是純名稱——所以警示條不可
+   * 再自己套一層「本日為假日／非上課日（…）」的外框，會變成「本日為假日／非上課日
+   * （本日為假日：中秋節）」。`BusDispatchDateBar` 的文案已配合改為直接呈現這串。
    */
   const holidayNotice = computed<{ is_holiday: boolean; label: string } | null>(() => {
     const warnings = plans.value[0]?.calendar_warnings ?? []
@@ -250,7 +273,7 @@ export function useBusDailyDispatch() {
       const meta = routeMeta.value.get(item.trip.route_id)
       return {
         trip: item.trip,
-        stops: item.stops,
+        stops: stripCoordinates(item.stops),
         calendar_warnings: item.calendar_warnings,
         capacity: item.capacity.capacity,
         eta_may_be_stale: item.eta_may_be_stale,
@@ -338,7 +361,11 @@ export function useBusDailyDispatch() {
       for (let page = 0; page < MAX_STUDENT_PAGES; page += 1) {
         const res = await getStudents({ limit: STUDENT_PAGE_SIZE, skip, is_active: true })
         const items = res.data.items ?? []
-        for (const item of items) collected.push({ id: item.id, name: item.name })
+        for (const item of items) {
+          // 缺名的學生若原樣放進下拉，會是一個「點得下去、送得出去」的空白選項。
+          // 與 `useBusRouteEditor.loadStudents` 同一條退化規則。
+          collected.push({ id: item.id, name: item.name || `學生 #${item.id}` })
+        }
         const total = res.data.total ?? collected.length
         skip += items.length
         if (items.length === 0 || collected.length >= total) break
@@ -409,7 +436,12 @@ export function useBusDailyDispatch() {
       const res = await patchBusDailyPlanStops(plan.trip.id, payload)
       plans.value = plans.value.map((p) => (
         p.trip.id === plan.trip.id
-          ? { ...p, trip: res.data.trip, stops: res.data.stops, capacity: res.data.capacity.capacity }
+          ? {
+            ...p,
+            trip: res.data.trip,
+            stops: stripCoordinates(res.data.stops),
+            capacity: res.data.capacity.capacity,
+          }
           : p
       ))
       return true
@@ -553,7 +585,9 @@ export function useBusDailyDispatch() {
       // `DailyPlanResetOut` 只有 trip + stops（沒有 capacity）——載客數與超載警示
       // 因此一律由 `departedPendingCount(stops)` 現算，不存欄位（見該函式註解）。
       plans.value = plans.value.map((p) => (
-        p.trip.id === plan.trip.id ? { ...p, trip: res.data.trip, stops: res.data.stops } : p
+        p.trip.id === plan.trip.id
+          ? { ...p, trip: res.data.trip, stops: stripCoordinates(res.data.stops) }
+          : p
       ))
       ElMessage.success('已重設為預設名單')
       return true

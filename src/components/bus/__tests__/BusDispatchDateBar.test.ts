@@ -43,6 +43,17 @@ describe('BusDispatchDateBar', () => {
     expect(alert.text()).toContain('仍可照常發車')
   })
 
+  it('label 已是完整句子時不再套外框（後端 calendar_warnings 就是整句）', () => {
+    // `services/bus_daily_plan.py::calendar_warnings` 回的是「本日為假日：中秋節」，
+    // 若元件再包一層「本日為假日／非上課日（…）」就會疊字。
+    const w = mountBar({
+      holidayNotice: { is_holiday: true, label: '本日為假日：中秋節' },
+    })
+    const text = w.find('[data-test="holiday-alert"]').text()
+    expect(text).toBe('本日為假日：中秋節，仍可照常發車')
+    expect(text).not.toContain('非上課日（')
+  })
+
   it('無假日不顯示警示條', () => {
     const w = mountBar({ holidayNotice: { is_holiday: false, label: '' } })
     expect(w.find('[data-test="holiday-alert"]').exists()).toBe(false)

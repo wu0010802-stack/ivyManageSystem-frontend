@@ -197,7 +197,7 @@ describe('BusMonitorView', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="bus-monitor-excused-11"]').text()).toBe('家長取消')
-    expect(wrapper.find('[data-testid="bus-monitor-excused-12"]').text()).toBe('請假')
+    expect(wrapper.find('[data-testid="bus-monitor-excused-12"]').text()).toBe('今日請假')
     expect(wrapper.find('[data-testid="bus-monitor-excused-13"]').text()).toBe('後台排除')
   })
 
@@ -262,6 +262,33 @@ describe('BusMonitorView', () => {
 
     expect(wrapper.find('[data-testid="bus-monitor-eta-11"]').text()).toBe('09:18')
     expect(wrapper.find('[data-testid="bus-monitor-eta-12"]').text()).toBe('09:20')
+    expect(wrapper.find('[data-testid="bus-monitor-eta-13"]').text()).toBe('—')
+  })
+
+  it('excused／departed／skipped 的站不顯示預計抵達——車不會去，給精確時間會讓人白等', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'excused', excuse_reason: 'parent', lat: 22.61, lng: 120.31,
+        departed_at: null, eta_planned: '2026-07-29T09:20:00', eta_live: null,
+      },
+      {
+        stop_id: 12, student_id: 102, student_name: '小華', seq: 2,
+        status: 'departed', excuse_reason: null, lat: 22.62, lng: 120.32,
+        departed_at: '2026-07-29T09:05:00', eta_planned: '2026-07-29T09:00:00', eta_live: null,
+      },
+      {
+        stop_id: 13, student_id: 103, student_name: '小美', seq: 3,
+        status: 'skipped', excuse_reason: null, lat: 22.63, lng: 120.33,
+        departed_at: null, eta_planned: '2026-07-29T09:30:00', eta_live: null,
+      },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-monitor-eta-11"]').text()).toBe('—')
+    expect(wrapper.find('[data-testid="bus-monitor-eta-12"]').text()).toBe('—')
     expect(wrapper.find('[data-testid="bus-monitor-eta-13"]').text()).toBe('—')
   })
 
