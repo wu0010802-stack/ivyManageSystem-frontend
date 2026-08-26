@@ -29,6 +29,14 @@
       </div>
     </div>
 
+    <!-- SPEC-015 學年檢視：上＋下學期缺格總覽＋一鍵複製上學年 -->
+    <FeeYearTemplateGrid
+      ref="yearGridRef"
+      :school-year="filterYear"
+      :grades="drawerGrades"
+      @changed="loadOverview"
+    />
+
     <div v-loading="overviewLoading" class="overview">
       <el-alert
         v-if="!overviewLoading && templates.length === 0"
@@ -121,7 +129,7 @@
       :school-year="filterYear"
       :semester="filterSemester"
       :grades="drawerGrades"
-      @changed="loadOverview"
+      @changed="onTemplatesChanged"
     />
   </div>
 </template>
@@ -137,6 +145,7 @@ import { getCurrentAcademicTerm, currentRocYear } from '@/utils/academic'
 import { formatCurrency } from '@/utils/currency'
 import { FEE_TYPES } from '@/components/fees/feeTypes'
 import FeeTemplateManageDrawer from '@/components/fees/FeeTemplateManageDrawer.vue'
+import FeeYearTemplateGrid from '@/components/fees/FeeYearTemplateGrid.vue'
 
 interface FeeTemplate {
   grade_id: number | null
@@ -202,6 +211,13 @@ const filterSemester = ref(_initTerm.semester)
 
 // 產單已改每日排程自動化（無手動入口）；本頁只管範本與總覽
 const manageVisible = ref(false)
+const yearGridRef = ref<InstanceType<typeof FeeYearTemplateGrid> | null>(null)
+
+// 範本增修（Drawer）後同時刷新單學期總覽與學年缺格網格
+function onTemplatesChanged() {
+  void loadOverview()
+  void yearGridRef.value?.load()
+}
 // 本檔 Grade.id 為 number | string（展示用寬鬆型別），Drawer/Dialog 需 number
 const drawerGrades = computed(() =>
   grades.value

@@ -6884,8 +6884,10 @@ export interface paths {
          *     歸月規則（與 generation 寫入語意對齊）：
          *     - monthly 記錄一律依 ``target_month == month``（即使 due_date 落在他月，
          *       也不因 due_date 重複歸月）
-         *     - 非 monthly（``target_month IS NULL``）依 ``due_date`` 落在該月曆月
-         *     - 兩者皆空的記錄不入任何月表（逐筆明細檢視仍可見）
+         *     - 非 monthly（``target_month IS NULL``）優先依 ``billing_start_date``
+         *       （收費開始日快照，SPEC-015）落在該月曆月；無快照的舊資料 fallback
+         *       ``due_date`` 落在該月曆月
+         *     - 皆空的記錄不入任何月表（逐筆明細檢視仍可見）
          *
          *     園所規模（單租戶 ≤ 數百學生/月）下單月記錄量小，故不分頁、
          *     不收 status 參數——狀態快篩由前端在聚合結果上即時切換。
@@ -7372,6 +7374,32 @@ export interface paths {
          * @description 軟刪除(is_active=False),保留歷史記錄。
          */
         delete: operations["delete_fee_template_api_fees_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/templates/copy-year": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Year Fee Templates
+         * @description SPEC-015 年度設定：複製整學年（上＋下學期）範本到新學年。
+         *
+         *     - 金額/名稱/breakdown/offset/is_active 照抄；billing_start_date 與
+         *       overdue_date 自動平移 (to - from) 年（monthly 的每月幾號欄照抄）。
+         *     - 已存在的 (grade, to_year, semester, fee_type) 跳過（冪等，可重跑）。
+         *     - **不觸發同步產單**：新學年日期金額未經業主確認前不該出帳；後續在
+         *       學年檢視上調整後，由每日排程（掃當前＋下一學期）自然產單。
+         */
+        post: operations["copy_year_fee_templates_api_fees_templates_copy_year_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -24682,6 +24710,39 @@ export interface components {
             /** Weeks Paired */
             weeks_paired: number;
         };
+        /** CopyYearTemplateItem */
+        CopyYearTemplateItem: {
+            /** Amount */
+            amount: number;
+            /** Fee Type */
+            fee_type: string;
+            /** Grade Id */
+            grade_id: number;
+            /** Name */
+            name: string;
+            /** Semester */
+            semester: number;
+        };
+        /** CopyYearTemplatesOut */
+        CopyYearTemplatesOut: {
+            /** Created */
+            created: number;
+            /** From School Year */
+            from_school_year: number;
+            /** Items */
+            items: components["schemas"]["CopyYearTemplateItem"][];
+            /** Skipped */
+            skipped: number;
+            /** To School Year */
+            to_school_year: number;
+        };
+        /** CopyYearTemplatesRequest */
+        CopyYearTemplatesRequest: {
+            /** From School Year */
+            from_school_year: number;
+            /** To School Year */
+            to_school_year: number;
+        };
         /** CopyYesterdayPayload */
         CopyYesterdayPayload: {
             /** Classroom Id */
@@ -27148,6 +27209,8 @@ export interface components {
         FeeTemplateCreate: {
             /** Amount */
             amount: number;
+            /** Billing Start Date */
+            billing_start_date?: string | null;
             /** Breakdown */
             breakdown?: {
                 [key: string]: unknown;
@@ -27166,8 +27229,14 @@ export interface components {
              * @default true
              */
             is_active: boolean;
+            /** Monthly Billing Day */
+            monthly_billing_day?: number | null;
+            /** Monthly Due Day */
+            monthly_due_day?: number | null;
             /** Name */
             name: string;
+            /** Overdue Date */
+            overdue_date?: string | null;
             /** School Year */
             school_year: number;
             /** Semester */
@@ -27177,6 +27246,8 @@ export interface components {
         FeeTemplateUpdate: {
             /** Amount */
             amount?: number | null;
+            /** Billing Start Date */
+            billing_start_date?: string | null;
             /** Breakdown */
             breakdown?: {
                 [key: string]: unknown;
@@ -27185,8 +27256,14 @@ export interface components {
             due_date_offset_days?: number | null;
             /** Is Active */
             is_active?: boolean | null;
+            /** Monthly Billing Day */
+            monthly_billing_day?: number | null;
+            /** Monthly Due Day */
+            monthly_due_day?: number | null;
             /** Name */
             name?: string | null;
+            /** Overdue Date */
+            overdue_date?: string | null;
         };
         /** FinalizeMonthRequest */
         FinalizeMonthRequest: {
@@ -30080,6 +30157,8 @@ export interface components {
             amount_due: number;
             /** Amount Paid */
             amount_paid?: number | null;
+            /** Billing Start Date */
+            billing_start_date?: string | null;
             /** Due Date */
             due_date?: string | null;
             /** Fee Item Name */
@@ -55479,6 +55558,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    copy_year_fee_templates_api_fees_templates_copy_year_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyYearTemplatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyYearTemplatesOut"];
                 };
             };
             /** @description Validation Error */

@@ -101,6 +101,22 @@
           {{ tile.count }}<small> 人</small>
         </div>
       </button>
+      <!-- SPEC-015 逾期快篩：衍生標註（due_date 已過且未繳清），與狀態維度正交 -->
+      <button
+        type="button"
+        class="stat-tile stat-tile--toggle"
+        data-test="stmt-flt-overdue"
+        :aria-pressed="overdueOnly"
+        @click="overdueOnly = !overdueOnly"
+      >
+        <div class="stat-tile__label">
+          <span class="stat-dot stat-dot--overdue" />
+          逾期
+        </div>
+        <div class="stat-tile__value">
+          {{ overdueCount }}<small> 人</small>
+        </div>
+      </button>
       <div class="summary-side">
         本月應收 <strong class="num-cell">{{ formatCurrency(scopeDue) }}</strong>
         <br />
@@ -224,6 +240,16 @@
               <td>
                 <el-tag :type="statusTagType(stu.status)" size="small">
                   {{ statusLabel(stu.status) }}
+                </el-tag>
+                <el-tag
+                  v-if="isOverdueStudent(stu)"
+                  type="danger"
+                  size="small"
+                  effect="plain"
+                  class="overdue-tag"
+                  data-test="stmt-overdue-tag"
+                >
+                  逾期
                 </el-tag>
               </td>
               <td v-if="canWrite">
@@ -557,8 +583,25 @@ const scopeStudents = computed(() => {
   )
 })
 
+// ─── 逾期（SPEC-015 衍生標註）：任一費用項 due_date 已過且該項未繳清 ───────
+// 只標註、不擋操作；與 unpaid/partial/paid 狀態維度正交（獨立 toggle）。
+const overdueOnly = ref(false)
+
+function isOverdueStudent(s: StatementStudent): boolean {
+  const today = todayISO()
+  return (s.items ?? []).some(
+    (it) => !!it.due_date && it.due_date < today && it.status !== 'paid',
+  )
+}
+
+const overdueCount = computed(
+  () => scopeStudents.value.filter((s) => isOverdueStudent(s)).length,
+)
+
 const visibleStudents = computed(() =>
-  scopeStudents.value.filter((s) => statusOn.value[s.status] ?? true),
+  scopeStudents.value.filter(
+    (s) => (statusOn.value[s.status] ?? true) && (!overdueOnly.value || isOverdueStudent(s)),
+  ),
 )
 
 const scopeDue = computed(() => scopeStudents.value.reduce((a, s) => a + s.total_due, 0))
@@ -937,6 +980,15 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 
 .stat-dot--paid {
   background: var(--el-color-success);
+}
+
+.stat-dot--overdue {
+  background: var(--el-color-danger);
+  outline: 2px solid var(--el-color-danger-light-7);
+}
+
+.overdue-tag {
+  margin-left: var(--space-1);
 }
 
 .summary-side {

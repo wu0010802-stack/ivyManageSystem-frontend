@@ -40,6 +40,11 @@ export const updateFeeTemplate = (id: number, payload: unknown) =>
   api.put(`/fees/templates/${id}`, payload).then((res) => res.data)
 export const deleteFeeTemplate = (id: number) =>
   api.delete(`/fees/templates/${id}`).then((res) => res.data)
+// 整學年複製（SPEC-015 年度設定）：金額照抄、收費/逾期日自動平移、既有組合冪等 skip
+export const copyYearFeeTemplates = (
+  payload: ApiBody<'/fees/templates/copy-year', 'post'>,
+): Promise<ApiResponse<'/fees/templates/copy-year', 'post'>> =>
+  api.post('/fees/templates/copy-year', payload).then((res) => res.data)
 
 // 產生費用單已改後端每日排程自動化（POST /fees/generate 僅維運保底，前端不再呼叫）
 

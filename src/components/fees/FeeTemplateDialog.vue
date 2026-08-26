@@ -47,10 +47,43 @@
         <div v-if="needsFinanceApprove" class="hint" data-test="finance-approve-hint">
           此金額達 NT$50,000 財務簽核門檻，需具備「金流簽核」權限者操作，否則將被拒絕。
         </div>
-        <el-form-item label="繳費期限">
-          <el-input-number v-model="form.due_date_offset_days" :min="0" :max="365" :step="1" :precision="0" />
-          <span class="hint">天 (產生日起算)</span>
-        </el-form-item>
+        <!-- SPEC-015 收費日期：非月費＝明確日期成對；月費＝每月幾號（1-28）。
+             全空則沿用舊制（產生日＋14 天）。 -->
+        <template v-if="form.fee_type === 'monthly'">
+          <el-form-item label="每月開帳日" data-test="monthly-billing-day">
+            <el-input-number v-model="form.monthly_billing_day" :min="1" :max="28" :step="1" :precision="0" />
+            <span class="hint">號當天自動產生當月帳單（不填視為每月 1 號）</span>
+          </el-form-item>
+          <el-form-item label="每月逾期日" data-test="monthly-due-day">
+            <el-input-number v-model="form.monthly_due_day" :min="1" :max="28" :step="1" :precision="0" />
+            <span class="hint">號起未繳標「逾期」（不填沿用舊制：月初＋14 天）</span>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="收費開始日" data-test="billing-start-date">
+            <el-date-picker
+              v-model="form.billing_start_date"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="選擇日期"
+            />
+          </el-form-item>
+          <el-form-item label="逾期日" data-test="overdue-date">
+            <el-date-picker
+              v-model="form.overdue_date"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="選擇日期"
+            />
+          </el-form-item>
+          <div class="hint" data-test="date-pair-hint">
+            兩欄需成對填寫（逾期日不得早於收費開始日）；都不填則沿用舊制（產生日＋14 天到期）。
+            逾期日只標註「逾期」，不擋繳費、不加滯納金。
+          </div>
+          <div v-if="datePairError" class="error-hint" data-test="date-pair-error">
+            {{ datePairError }}
+          </div>
+        </template>
       </FormSection>
 
       <!-- 月費組成（僅月費，退費依此計算） -->
@@ -109,6 +142,10 @@ interface FeeTemplateRow {
   name: string
   amount: number
   due_date_offset_days?: number
+  billing_start_date?: string | null
+  overdue_date?: string | null
+  monthly_billing_day?: number | null
+  monthly_due_day?: number | null
   breakdown?: { tuition?: number; meal?: number; transport?: number }
 }
 
@@ -156,7 +193,10 @@ interface FormState {
   fee_type: string
   name: string
   amount: number
-  due_date_offset_days: number
+  billing_start_date: string | null
+  overdue_date: string | null
+  monthly_billing_day: number | null
+  monthly_due_day: number | null
 }
 
 const form = reactive<FormState>({
@@ -165,7 +205,10 @@ const form = reactive<FormState>({
   fee_type: 'registration',
   name: '',
   amount: 0,
-  due_date_offset_days: 14,
+  billing_start_date: null,
+  overdue_date: null,
+  monthly_billing_day: null,
+  monthly_due_day: null,
 })
 
 const breakdown = reactive({ tuition: 0, meal: 0, transport: 0 })
@@ -173,7 +216,20 @@ const breakdown = reactive({ tuition: 0, meal: 0, transport: 0 })
 const breakdownSum = computed(
   () => (breakdown.tuition || 0) + (breakdown.meal || 0) + (breakdown.transport || 0),
 )
+// SPEC-015 非月費日期配對檢查（後端 validate_template_billing_dates 同口徑）
+const datePairError = computed(() => {
+  if (form.fee_type === 'monthly') return ''
+  const hasStart = !!form.billing_start_date
+  const hasOverdue = !!form.overdue_date
+  if (hasStart !== hasOverdue) return '收費開始日與逾期日需成對填寫'
+  if (hasStart && hasOverdue && form.overdue_date! < form.billing_start_date!) {
+    return '逾期日不得早於收費開始日'
+  }
+  return ''
+})
+
 const canSave = computed(() => {
+  if (datePairError.value) return false
   if (form.fee_type === 'monthly') {
     return breakdownSum.value === form.amount && form.amount > 0
   }
@@ -215,7 +271,10 @@ watch(
         fee_type: t.fee_type,
         name: t.name,
         amount: t.amount,
-        due_date_offset_days: t.due_date_offset_days ?? 14,
+        billing_start_date: t.billing_start_date ?? null,
+        overdue_date: t.overdue_date ?? null,
+        monthly_billing_day: t.monthly_billing_day ?? null,
+        monthly_due_day: t.monthly_due_day ?? null,
       })
       if (t.breakdown) {
         breakdown.tuition = t.breakdown.tuition || 0
@@ -233,7 +292,10 @@ watch(
         fee_type: 'registration',
         name: '',
         amount: 0,
-        due_date_offset_days: 14,
+        billing_start_date: null,
+        overdue_date: null,
+        monthly_billing_day: null,
+        monthly_due_day: null,
       })
       breakdown.tuition = 0
       breakdown.meal = 0
@@ -252,18 +314,28 @@ async function onSave() {
   saving.value = true
   try {
     const payload: typeof form & { breakdown?: { tuition: number; meal: number; transport: number } } = { ...form }
+    // SPEC-015：依費用類型只送對應的日期欄組（切換類型後的殘值不得外洩，
+    // 否則後端 validate_template_billing_dates 會 422）
     if (form.fee_type === 'monthly') {
       payload.breakdown = { ...breakdown }
+      payload.billing_start_date = null
+      payload.overdue_date = null
+    } else {
+      payload.monthly_billing_day = null
+      payload.monthly_due_day = null
     }
     if (isEdit.value) {
       // 編輯不可變更 grade_id / school_year / semester / fee_type（後端 unique key）
       // 故只送 mutable 欄位
       const { grade_id: _gi, school_year: _sy, semester: _sm, fee_type: _ft, ...editable } = payload
       await updateFeeTemplate((props.template as FeeTemplateRow).id, editable)
+      ElMessage.success('已更新')
     } else {
-      await createFeeTemplate(payload)
+      // SPEC-015：建立即同步產單，回傳含 generation 摘要
+      const res = (await createFeeTemplate(payload)) as { generation?: { created?: number } | null }
+      const created = res?.generation?.created ?? 0
+      ElMessage.success(created > 0 ? `已建立，並自動產生 ${created} 筆費用單` : '已建立')
     }
-    ElMessage.success(isEdit.value ? '已更新' : '已建立')
     emit('saved')
   } catch (e: unknown) {
     ElMessage.error(apiError(e, '儲存失敗'))
