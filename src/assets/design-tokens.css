@@ -219,4 +219,9 @@ html.ivy-admin {
   --brand-primary: #0284c7;
   --brand-primary-hover: #0369a1;
   --brand-primary-soft: #e0f2fe;
+  /* --brand-primary 深一階，專供「需要過 4.5:1 的文字情境」：實心按鈕的白字底色、
+   * 淺底上的連結／tab 文字。#0284c7 本身白字只有 4.10:1、當白底文字 3.91:1，兩邊都不過線；
+   * #0277b5 兩邊皆 4.87:1，色相不變（仍為青藍），視覺上與品牌色無法區辨。
+   * 圖形／填色情境（圖示、色塊、border）維持用 --brand-primary，那裡門檻是 3:1。 */
+  --brand-primary-strong: #0277b5;
 }

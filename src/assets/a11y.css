@@ -9,7 +9,14 @@
  * Phase 2 會在本檔追加 .ivy-size-* / .ivy-contrast-high 的預設類別。
  */
 
-:root {
+/* ⚠ 選擇器是 `html:root` 而非 `:root`，且不可改回。
+ * import 順序（main.ts）雖然把本檔排在 element-plus 之後，但 Vite build 會把本檔切進
+ * shared-common chunk、EP 切進 main chunk，產物中 <link> 順序反轉成 shared-common 先載，
+ * 同 specificity 下 EP 原廠 :root 覆蓋回本檔的值（2026-08-26 於 staging 實測：
+ * --el-text-color-secondary 為 EP 的 #909399 而非本檔的 #5e6266）。
+ * `html:root` 特異性 (0,1,1) 壓過 EP 的 (0,1,0)，且與下方 html.dark 同分、
+ * 靠本檔內後出現的位置讓深色模式仍能覆寫——換成 :root:root (0,2,0) 會反而打死 html.dark。 */
+html:root {
   /* ----- 字級基準升級：14px → 15px ----- */
   --el-font-size-extra-small: 13px;   /* 12 → 13 */
   --el-font-size-small: 14px;          /* 13 → 14 */
@@ -24,6 +31,17 @@
   --el-text-color-secondary: #5e6266;     /* 原 #909399 (3.4:1, AA Fail) → 7.1:1 AA Pass */
   --el-text-color-placeholder: #767a82;   /* 原 #a8abb2 (2.8:1, AA Fail) → 4.6:1 AA Pass */
   /* disabled #c0c4cc - 維持（disabled 允許低對比） */
+
+  /* ----- 語意色：實心按鈕白字對比（WCAG AA，門檻 4.5:1）-----
+   * EP 原廠的 success/danger 當實心按鈕底色時，白字分別只有 2.24:1 與 2.90:1，
+   * 是全站所有 type="success" / type="danger" 按鈕共同的缺陷（非單一頁面問題）。
+   * 加深後色相不變，仍讀得出綠／紅語意；dark-2（hover）同步加深維持層次。
+   * ⚠ warning #e6a23c 未在此處理：黃橘色要達 4.5:1 需深到變褐色、失去警示語意，
+   *   正解是改用深色文字而非加深底色，屬設計決策，另案處理。 */
+  --el-color-success: #15803d;            /* 原 #67c23a (2.24:1) → 5.01:1 */
+  --el-color-success-dark-2: #126a33;
+  --el-color-danger: #dc2626;             /* 原 #f56c6c (2.90:1) → 4.83:1 */
+  --el-color-danger-dark-2: #b91c1c;
 }
 
 /* ----- 全站 focus 統一規格 ----- */
