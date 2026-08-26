@@ -40,7 +40,6 @@
         :default-period="defaultPeriod"
         :initial-search="studentSearch"
       />
-      <PrepaymentsTab v-else-if="view === 'prepayments'" />
       <FeeRefundsTab v-else :period-options="periodOptions" />
     </KeepAlive>
   </section>
@@ -48,7 +47,9 @@
 
 <script setup lang="ts">
 /**
- * 帳單工作區：整合帳款（繳費記錄）/ 預繳款 / 學費退費三個次層檢視。
+ * 帳單工作區：整合帳款（繳費記錄）/ 學費退費兩個次層檢視。
+ * 預繳款自 2026-08-26 起併入帳款：彙總繳費表「預繳」欄＋工具列
+ * 訪視預繳/退款入口（見 FeeMonthlyStatement），不再有獨立子檢視。
  * 費用單自 2026-08-25 起由後端排程依啟用範本每日自動產生，本工作區
  * 不再提供「產生費用單」手動入口。
  *
@@ -64,7 +65,6 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 import { useAllClassroomStore } from '@/stores/classroomAll'
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
-import PrepaymentsTab from '@/components/fees/PrepaymentsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
 import { FEE_WORKSPACE_VIEWS } from './feesNavigation'
 

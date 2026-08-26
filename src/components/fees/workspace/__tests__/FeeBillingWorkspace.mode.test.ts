@@ -73,10 +73,6 @@ vi.mock('@/components/fees/FeeRecordsTab.vue', () => ({
       '<div data-testid="records-tab" :data-auto-load="autoLoad ? \'1\' : \'0\'" :data-initial-search="initialSearch" />',
   },
 }))
-vi.mock('@/components/fees/PrepaymentsTab.vue', () => ({
-  __esModule: true,
-  default: { name: 'PrepaymentsTab', template: '<div data-testid="prepayments-tab" />' },
-}))
 vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
   __esModule: true,
   default: {
@@ -150,9 +146,9 @@ describe('FeeBillingWorkspace 帳款模式切換', () => {
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(true)
   })
 
-  it('模式切換只在帳款檢視顯示（預繳/退款不顯示）', async () => {
+  it('模式切換只在帳款檢視顯示（退款不顯示）', async () => {
     const wrapper = mount(FeeBillingWorkspace, {
-      props: { view: 'prepayments' },
+      props: { view: 'refunds' },
       global: { stubs: GLOBAL_STUBS },
     })
     await flushAll()
@@ -193,7 +189,7 @@ describe('FeeBillingWorkspace 帳款模式切換', () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     statementMocks.refresh.mockClear()
-    await wrapper.setProps({ view: 'prepayments' })
+    await wrapper.setProps({ view: 'refunds' })
     await flushAll()
     expect(statementMocks.refresh).not.toHaveBeenCalled()
     await wrapper.setProps({ view: 'records' })

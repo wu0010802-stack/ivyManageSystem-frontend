@@ -22,10 +22,9 @@ describe('feesNavigation：主導航形狀', () => {
     ])
   })
 
-  it('次層檢視定義完整（帳單三項、結算兩項、設定兩項）', () => {
+  it('次層檢視定義完整（帳單兩項、結算兩項、設定兩項）', () => {
     expect(FEE_WORKSPACE_VIEWS.billing.map((v) => v.key)).toEqual([
       'records',
-      'prepayments',
       'refunds',
     ])
     expect(FEE_WORKSPACE_VIEWS.settlement.map((v) => v.key)).toEqual([
@@ -45,7 +44,8 @@ describe('feesNavigation：舊 tab 深連結相容映射（8 個舊 tab 全數�
     ['templates', 'settings', 'templates'],
     ['refunds', 'billing', 'refunds'],
     ['bankRecon', 'recon', null],
-    ['prepayments', 'billing', 'prepayments'],
+    // 預繳已併入帳款（彙總繳費表「預繳」欄），舊深連結導向帳款
+    ['prepayments', 'billing', 'records'],
     ['cashHandover', 'settlement', 'handover'],
     ['close', 'settlement', 'close'],
     ['billingCodes', 'settings', 'billingCodes'],
@@ -101,6 +101,14 @@ describe('feesNavigation：ws/view 解析', () => {
     const loc = resolveFeesLocation({ ws: 'settlement', view: 'bogus' })
     expect(loc.view).toBe('handover')
     expect(loc.needsNormalize).toBe(true)
+  })
+
+  it('舊網址 ?ws=billing&view=prepayments 正規化為帳款（預繳已併入）', () => {
+    const loc = resolveFeesLocation({ ws: 'billing', view: 'prepayments' })
+    expect(loc.ws).toBe('billing')
+    expect(loc.view).toBe('records')
+    expect(loc.needsNormalize).toBe(true)
+    expect(loc.normalizedQuery.view).toBe('records')
   })
 
   it('非法 ws 退回工作台', () => {

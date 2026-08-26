@@ -166,7 +166,7 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     ['templates', 'ws-settings', 'templates'],
     ['refunds', 'ws-billing', 'refunds'],
     ['bankRecon', 'ws-recon', null],
-    ['prepayments', 'ws-billing', 'prepayments'],
+    ['prepayments', 'ws-billing', 'records'],
     ['cashHandover', 'ws-settlement', 'handover'],
     ['close', 'ws-settlement', 'close'],
     ['billingCodes', 'ws-settings', 'billingCodes'],

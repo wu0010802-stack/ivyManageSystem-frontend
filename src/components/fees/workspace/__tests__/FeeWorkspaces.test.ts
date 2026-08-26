@@ -71,9 +71,6 @@ vi.mock('@/components/fees/FeeRecordsTab.vue', () => ({
       '<div data-testid="records-tab" :data-default-period="defaultPeriod" :data-auto-load="autoLoad ? \'1\' : \'0\'" />',
   },
 }))
-vi.mock('@/components/fees/PrepaymentsTab.vue', () => ({
-  default: { name: 'PrepaymentsTab', template: '<div data-testid="prepayments-tab" />' },
-}))
 vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
   default: {
     name: 'FeeRefundsTab',
@@ -140,14 +137,14 @@ beforeEach(() => {
 })
 
 describe('FeeBillingWorkspace（帳單）', () => {
-  it('次層導航為帳款/預繳/退款，預設顯示帳款＝彙總繳費表（2026-08 改版）', async () => {
+  it('次層導航為帳款/退款（預繳已併入帳款），預設顯示帳款＝彙總繳費表', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     const labels = wrapper
       .find('[data-test="billing-view-switch"]')
       .findAll('button')
       .map((b) => b.text())
-    expect(labels).toEqual(['帳款', '預繳', '退款'])
+    expect(labels).toEqual(['帳款', '退款'])
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="records-tab"]').exists()).toBe(false)
   })
@@ -166,25 +163,19 @@ describe('FeeBillingWorkspace（帳單）', () => {
   it('切換次層檢視 emit change-view（由殼層寫回 query）', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
-    await wrapper.find('[data-seg="prepayments"]').trigger('click')
-    expect(wrapper.emitted('change-view')).toEqual([['prepayments']])
+    await wrapper.find('[data-seg="refunds"]').trigger('click')
+    expect(wrapper.emitted('change-view')).toEqual([['refunds']])
   })
 
-  it('view=prepayments / refunds 各自渲染對應分頁', async () => {
-    const prepay = mount(FeeBillingWorkspace, {
-      props: { view: 'prepayments' },
-      global: { stubs: GLOBAL_STUBS },
-    })
-    await flushAll()
-    expect(prepay.find('[data-testid="prepayments-tab"]').exists()).toBe(true)
-    expect(prepay.find('[data-testid="records-tab"]').exists()).toBe(false)
-
+  it('view=refunds 渲染退款分頁（預繳無獨立分頁）', async () => {
     const refunds = mount(FeeBillingWorkspace, {
       props: { view: 'refunds' },
       global: { stubs: GLOBAL_STUBS },
     })
     await flushAll()
     expect(refunds.find('[data-testid="refunds-tab"]').exists()).toBe(true)
+    expect(refunds.find('[data-testid="monthly-statement"]').exists()).toBe(false)
+    expect(refunds.find('[data-testid="prepayments-tab"]').exists()).toBe(false)
   })
 
   it('header 不再有「產生費用單」按鈕（產單改每日排程自動化，具 FEES_WRITE 亦然）', async () => {
@@ -198,7 +189,7 @@ describe('FeeBillingWorkspace（帳單）', () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     statementMocks.refresh.mockClear()
-    await wrapper.setProps({ view: 'prepayments' })
+    await wrapper.setProps({ view: 'refunds' })
     await flushAll()
     expect(statementMocks.refresh).not.toHaveBeenCalled()
     await wrapper.setProps({ view: 'records' })
@@ -209,7 +200,7 @@ describe('FeeBillingWorkspace（帳單）', () => {
   it('學期列表只載入一次（次層切換不重複請求）', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
-    await wrapper.setProps({ view: 'prepayments' })
+    await wrapper.setProps({ view: 'refunds' })
     await flushAll()
     await wrapper.setProps({ view: 'records' })
     await flushAll()

@@ -122,7 +122,7 @@ describe('FeeWorkbench 工作佇列', () => {
     expect(events).toEqual([
       [{ ws: 'recon' }],
       [{ ws: 'settlement', view: 'handover' }],
-      [{ ws: 'billing', view: 'prepayments' }],
+      [{ ws: 'billing', view: 'records' }],
     ])
   })
 

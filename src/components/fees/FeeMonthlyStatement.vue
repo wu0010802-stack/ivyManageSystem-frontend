@@ -39,6 +39,19 @@
         clearable
         aria-label="搜尋學生姓名"
       />
+      <div class="stmt-prepay-entries" role="group" aria-label="預繳款入口">
+        <el-button
+          v-if="visitCredits.length"
+          size="small"
+          data-test="stmt-visit-prepay"
+          @click="openVisitDrawer"
+        >
+          訪視預繳 {{ visitCredits.length }} 筆
+        </el-button>
+        <el-button size="small" data-test="stmt-refund-todo" @click="refundsVisible = true">
+          預繳退款{{ pendingRefundCount ? `（${pendingRefundCount} 待辦）` : '' }}
+        </el-button>
+      </div>
     </div>
 
     <!-- 班級 chips 直列快篩 -->
@@ -140,6 +153,7 @@
             <th v-for="b in visibleBuckets" :key="b.key" class="num-col">{{ b.label }}</th>
             <th class="num-col">應繳合計</th>
             <th class="num-col">未收</th>
+            <th>預繳</th>
             <th>狀態</th>
             <th v-if="canWrite">操作</th>
           </tr>
@@ -191,6 +205,21 @@
               <td class="num-cell total-due">{{ formatCurrency(stu.total_due) }}</td>
               <td class="num-cell" :class="stu.outstanding > 0 ? 'outstanding-pos' : 'cell-empty'">
                 {{ stu.outstanding > 0 ? formatCurrency(stu.outstanding) : '—' }}
+              </td>
+              <td>
+                <button
+                  v-if="prepayCells.get(stu.student_id)"
+                  type="button"
+                  class="prepay-cell-btn"
+                  data-test="stmt-prepay-cell"
+                  :aria-label="`開啟 ${stu.student_name} 預繳管理`"
+                  @click="openStudentDrawer(stu)"
+                >
+                  <el-tag :type="prepayCells.get(stu.student_id)!.tagType" size="small">
+                    {{ prepayCells.get(stu.student_id)!.label }}
+                  </el-tag>
+                </button>
+                <span v-else class="cell-empty">—</span>
               </td>
               <td>
                 <el-tag :type="statusTagType(stu.status)" size="small">
@@ -262,13 +291,24 @@
             <td :colspan="2 + visibleBuckets.length">合計（目前篩選 {{ visibleStudents.length }} 人）</td>
             <td class="num-cell">{{ formatCurrency(visibleDue) }}</td>
             <td class="num-cell outstanding-pos">{{ formatCurrency(visibleOutstanding) }}</td>
-            <td :colspan="canWrite ? 2 : 1" />
+            <td :colspan="canWrite ? 3 : 2" />
           </tr>
         </tfoot>
       </table>
     </div>
 
     <BatchPayDialog v-model="payDialogVisible" :records="payRecords" @paid="onPaid" />
+    <PrepaymentDrawer
+      v-model="drawerVisible"
+      :credits="drawerCredits"
+      :title="drawerTitle"
+      @refresh="onPrepayMutated"
+    />
+    <PrepaymentRefundsDialog
+      v-model="refundsVisible"
+      :refunds="prepayRefunds"
+      @refresh="onPrepayMutated"
+    />
   </section>
 </template>
 
@@ -280,14 +320,28 @@
  * 班級 chips／狀態快篩／姓名搜尋全部前端即時切換（園所規模單月 ≤ 數百人）。
  * 收款走 BatchPayDialog（繳清全額語意）；部分繳費／退款導向逐筆明細
  * （emit open-list 由帳單工作區切換模式）。
+ *
+ * 預繳款自 2026-08-26 起併入本表：每列「預繳」欄顯示該生額度狀態，
+ * 點擊開 PrepaymentDrawer 管理；工具列另有「訪視預繳」（尚未轉正式
+ * 學生的訪視額度）與「預繳退款」（老闆核准/交付）兩個入口。
  */
 import { computed, onMounted, ref, watch } from 'vue'
-import { getFeeMonthlyStatement } from '@/api/fees'
+import { getFeeMonthlyStatement, getPrepaymentRefunds, getPrepayments } from '@/api/fees'
+import { ElMessage } from 'element-plus'
+import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
+import PrepaymentDrawer from '@/components/fees/PrepaymentDrawer.vue'
+import PrepaymentRefundsDialog from '@/components/fees/PrepaymentRefundsDialog.vue'
+import {
+  CREDIT_STATUS_LABELS,
+  creditStatusTag,
+  type PrepayCreditRow,
+  type PrepayRefundRow,
+} from '@/components/fees/prepayTypes'
 
 type MonthlyStatement = Awaited<ReturnType<typeof getFeeMonthlyStatement>>
 type StatementStudent = MonthlyStatement['students'][number]
@@ -358,9 +412,116 @@ watch(month, () => {
   expandedIds.value = new Set()
   fetchStatement()
 })
-onMounted(fetchStatement)
+onMounted(() => {
+  fetchStatement()
+  fetchPrepayData()
+})
 
-defineExpose({ refresh: fetchStatement })
+function refreshAll() {
+  fetchStatement()
+  fetchPrepayData()
+}
+
+defineExpose({ refresh: refreshAll })
+
+// ─── 預繳款（2026-08-26 併入帳款）────────────────────────────────────────
+const prepayCredits = ref<PrepayCreditRow[]>([])
+const prepayRefunds = ref<PrepayRefundRow[]>([])
+
+async function fetchPrepayData() {
+  try {
+    const [creditsRes, refundsRes] = await Promise.all([
+      getPrepayments(),
+      getPrepaymentRefunds(),
+    ])
+    prepayCredits.value = (creditsRes.items ?? []) as PrepayCreditRow[]
+    prepayRefunds.value = (refundsRes.items ?? []) as PrepayRefundRow[]
+  } catch (e) {
+    // 不阻擋帳款主表；欄位顯示 '—' 但明講載入失敗，避免誤讀成「無預繳」
+    ElMessage.error(friendlyError('載入預繳款失敗', e))
+  }
+}
+
+/** 每位學生的預繳欄內容：可用（合計餘額）＞退款處理中＞已套用；終態不顯示 */
+const prepayCells = computed(() => {
+  const byStudent = new Map<number, PrepayCreditRow[]>()
+  prepayCredits.value.forEach((c) => {
+    if (c.student_id == null) return
+    const list = byStudent.get(c.student_id) ?? []
+    list.push(c)
+    byStudent.set(c.student_id, list)
+  })
+  const cells = new Map<
+    number,
+    { label: string; tagType: 'success' | 'info' | 'warning' | 'danger' }
+  >()
+  byStudent.forEach((list, studentId) => {
+    const availableTotal = list
+      .filter((c) => c.status === 'available')
+      .reduce((a, c) => a + c.balance, 0)
+    if (availableTotal > 0) {
+      cells.set(studentId, {
+        label: `${CREDIT_STATUS_LABELS.available} ${formatCurrency(availableTotal)}`,
+        tagType: creditStatusTag('available'),
+      })
+      return
+    }
+    const next = list.find((c) => c.status === 'refund_pending') ?? list.find((c) => c.status === 'applied')
+    if (next) {
+      cells.set(studentId, {
+        label: CREDIT_STATUS_LABELS[next.status] ?? next.status,
+        tagType: creditStatusTag(next.status),
+      })
+    }
+  })
+  return cells
+})
+
+/** 尚未綁定正式學生、仍有效的訪視預繳（工具列入口，有才顯示） */
+const visitCredits = computed(() =>
+  prepayCredits.value.filter(
+    (c) => c.student_id == null && ['available', 'refund_pending'].includes(c.status),
+  ),
+)
+
+const pendingRefundCount = computed(
+  () => prepayRefunds.value.filter((r) => ['requested', 'approved'].includes(r.status)).length,
+)
+
+// 抽屜：單一學生模式（點預繳欄）或訪視模式（工具列入口）
+const drawerVisible = ref(false)
+const drawerMode = ref<'student' | 'visits'>('student')
+const drawerStudent = ref<{ id: number; name: string } | null>(null)
+
+const drawerCredits = computed(() =>
+  drawerMode.value === 'visits'
+    ? visitCredits.value
+    : prepayCredits.value.filter((c) => c.student_id === drawerStudent.value?.id),
+)
+
+const drawerTitle = computed(() =>
+  drawerMode.value === 'visits'
+    ? '訪視預繳（待轉正式學生）'
+    : `${drawerStudent.value?.name ?? ''} 的預繳款`,
+)
+
+function openStudentDrawer(stu: StatementStudent) {
+  drawerMode.value = 'student'
+  drawerStudent.value = { id: stu.student_id, name: stu.student_name ?? '' }
+  drawerVisible.value = true
+}
+
+function openVisitDrawer() {
+  drawerMode.value = 'visits'
+  drawerVisible.value = true
+}
+
+const refundsVisible = ref(false)
+
+// 預繳 mutation（套用會建立折抵，影響應繳）→ 帳款與預繳一起重抓
+function onPrepayMutated() {
+  refreshAll()
+}
 
 // ─── 前端快篩狀態 ──────────────────────────────────────────────────────────
 const searchName = ref('')
@@ -487,7 +648,7 @@ function bucketCell(stu: StatementStudent, bucketKey: string) {
 }
 
 const totalColumns = computed(
-  () => 5 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
+  () => 6 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
 )
 
 // ─── 展開明細 ──────────────────────────────────────────────────────────────
@@ -618,6 +779,20 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 
 .stmt-search {
   max-width: 220px;
+}
+
+.stmt-prepay-entries {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 預繳欄：整格可點開抽屜，本身無外觀（外觀交給內部 el-tag） */
+.prepay-cell-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
 }
 
 /* 班級 chips */

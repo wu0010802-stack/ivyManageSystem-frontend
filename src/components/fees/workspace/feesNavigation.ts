@@ -30,7 +30,6 @@ export const FEE_WORKSPACE_VIEWS: Record<FeeWorkspaceKey, FeeWorkspaceViewDef[]>
   workbench: [],
   billing: [
     { key: 'records', label: '帳款' },
-    { key: 'prepayments', label: '預繳' },
     { key: 'refunds', label: '退款' },
   ],
   recon: [],
@@ -50,7 +49,8 @@ export const LEGACY_FEE_TAB_MAP: Record<string, { ws: FeeWorkspaceKey; view?: st
   templates: { ws: 'settings', view: 'templates' },
   refunds: { ws: 'billing', view: 'refunds' },
   bankRecon: { ws: 'recon' },
-  prepayments: { ws: 'billing', view: 'prepayments' },
+  // 預繳自 2026-08-26 起併入帳款（彙總繳費表「預繳」欄），舊深連結導向帳款
+  prepayments: { ws: 'billing', view: 'records' },
   cashHandover: { ws: 'settlement', view: 'handover' },
   close: { ws: 'settlement', view: 'close' },
   billingCodes: { ws: 'settings', view: 'billingCodes' },

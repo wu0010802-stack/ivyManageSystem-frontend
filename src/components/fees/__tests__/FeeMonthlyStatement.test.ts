@@ -12,8 +12,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const getFeeMonthlyStatement = vi.fn()
+const getPrepayments = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
+const getPrepaymentRefunds = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
 vi.mock('@/api/fees', () => ({
   getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
+  getPrepayments: (...args: unknown[]) => getPrepayments(...args),
+  getPrepaymentRefunds: (...args: unknown[]) => getPrepaymentRefunds(...args),
 }))
 
 const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
@@ -26,6 +30,14 @@ vi.mock('@/utils/format', () => ({
   todayISO: () => '2026-08-25',
 }))
 
+vi.mock('@/components/fees/PrepaymentDrawer.vue', () => ({
+  __esModule: true,
+  default: { name: 'PrepaymentDrawer', template: '<div data-testid="prepay-drawer-stub" />' },
+}))
+vi.mock('@/components/fees/PrepaymentRefundsDialog.vue', () => ({
+  __esModule: true,
+  default: { name: 'PrepaymentRefundsDialog', template: '<div data-testid="prepay-refunds-stub" />' },
+}))
 vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
   __esModule: true,
   default: {

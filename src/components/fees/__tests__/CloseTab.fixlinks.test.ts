@@ -117,7 +117,7 @@ describe('CloseTab 阻擋項目與修正入口', () => {
     expect(wrapper.emitted('navigate')).toEqual([
       [{ ws: 'recon' }],
       [{ ws: 'settlement', view: 'handover' }],
-      [{ ws: 'billing', view: 'prepayments' }],
+      [{ ws: 'billing', view: 'records' }],
     ])
   })
 

@@ -1,6 +1,6 @@
 /**
- * SPEC-014 前端頁籤測試：交接差異計算/權限 gate、預繳狀態、匯入預覽、
- * 關帳 checklist、分配合計檢核。
+ * SPEC-014 前端頁籤測試：交接差異計算/權限 gate、預繳抽屜與退款對話框
+ * （2026-08-26 預繳併入帳款）、匯入預覽、關帳 checklist、分配合計檢核。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -99,6 +99,7 @@ const globalStubs = {
   'el-table': ElTableStub,
   'el-table-column': ElTableColumnStub,
   'el-dialog': DialogStub,
+  'el-drawer': DialogStub,
 }
 
 beforeEach(() => {
@@ -185,35 +186,34 @@ describe('CashHandoverTab', () => {
   })
 })
 
-describe('PrepaymentsTab', () => {
-  async function mountTab() {
-    const { default: PrepaymentsTab } = await import(
-      '@/components/fees/PrepaymentsTab.vue'
+describe('PrepaymentDrawer（預繳併入帳款後的額度管理抽屜）', () => {
+  const CREDITS = [
+    {
+      id: 1, student_id: 5, student_name: '王小明',
+      recruitment_visit_id: null, visit_child_name: null,
+      target_school_year: 115, target_semester: 1,
+      original_amount: 5000, status: 'available', balance: 5000,
+    },
+    {
+      id: 2, student_id: null, student_name: null,
+      recruitment_visit_id: 9, visit_child_name: '陳新生',
+      target_school_year: 115, target_semester: 1,
+      original_amount: 5000, status: 'available', balance: 5000,
+    },
+  ]
+
+  async function mountDrawer(credits = CREDITS) {
+    const { default: PrepaymentDrawer } = await import(
+      '@/components/fees/PrepaymentDrawer.vue'
     )
-    return mount(PrepaymentsTab, { global: { stubs: globalStubs } })
+    return mount(PrepaymentDrawer, {
+      props: { modelValue: true, credits, title: '預繳款' },
+      global: { stubs: globalStubs },
+    })
   }
 
-  it('顯示預繳額度與狀態；訪視預繳提供轉正式學生', async () => {
-    apiMocks.getPrepayments.mockResolvedValueOnce({
-      total: 2,
-      items: [
-        {
-          id: 1, student_id: 5, student_name: '王小明',
-          recruitment_visit_id: null, visit_child_name: null,
-          target_school_year: 115, target_semester: 1,
-          original_amount: 5000, status: 'available', balance: 5000,
-          created_at: '2026-06-15T10:00:00',
-        },
-        {
-          id: 2, student_id: null, student_name: null,
-          recruitment_visit_id: 9, visit_child_name: '陳新生',
-          target_school_year: 115, target_semester: 1,
-          original_amount: 5000, status: 'available', balance: 5000,
-          created_at: '2026-06-16T10:00:00',
-        },
-      ],
-    })
-    const wrapper = await mountTab()
+  it('顯示預繳額度與狀態；訪視預繳提供轉正式學生、學生額度提供套用', async () => {
+    const wrapper = await mountDrawer()
     await flushPromises()
     expect(wrapper.text()).toContain('王小明（學生）')
     expect(wrapper.text()).toContain('陳新生（招生訪視）')
@@ -221,45 +221,17 @@ describe('PrepaymentsTab', () => {
     expect(wrapper.find('[data-test="apply-btn"]').exists()).toBe(true)
   })
 
-  it('退款核准/完成按鈕只在具 FEE_CLOSE_APPROVE 時顯示', async () => {
-    apiMocks.getPrepaymentRefunds.mockResolvedValue({
-      total: 2,
-      items: [
-        {
-          id: 11, prepayment_credit_id: 1, amount: 5000, status: 'requested',
-          reason: '不就讀', recipient_name: null, disbursed_at: null,
-        },
-        {
-          id: 12, prepayment_credit_id: 2, amount: 5000, status: 'approved',
-          reason: '不就讀', recipient_name: null, disbursed_at: null,
-        },
-      ],
-    })
-    let wrapper = await mountTab()
+  it('無 FEES_WRITE 時只能看流水，無任何操作按鈕', async () => {
+    authMocks.perms = new Set(['FEES_READ'])
+    const wrapper = await mountDrawer()
     await flushPromises()
-    expect(wrapper.find('[data-test="approve-refund"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="complete-refund"]').exists()).toBe(true)
-
-    authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
-    wrapper = await mountTab()
-    await flushPromises()
-    expect(wrapper.find('[data-test="approve-refund"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="complete-refund"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="movements-btn"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="transfer-btn"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="apply-btn"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="refund-btn"]').exists()).toBe(false)
   })
 
   it('預繳流水 timeline 顯示 received/applied', async () => {
-    apiMocks.getPrepayments.mockResolvedValueOnce({
-      total: 1,
-      items: [
-        {
-          id: 1, student_id: 5, student_name: '王小明',
-          recruitment_visit_id: null, visit_child_name: null,
-          target_school_year: 115, target_semester: 1,
-          original_amount: 5000, status: 'applied', balance: 0,
-          created_at: '2026-06-15T10:00:00',
-        },
-      ],
-    })
     apiMocks.getPrepaymentMovements.mockResolvedValueOnce([
       {
         id: 1, movement_type: 'received', amount: 5000,
@@ -270,7 +242,14 @@ describe('PrepaymentsTab', () => {
         occurred_at: '2026-08-10T09:00:00', reason: '套用註冊費',
       },
     ])
-    const wrapper = await mountTab()
+    const wrapper = await mountDrawer([
+      {
+        id: 1, student_id: 5, student_name: '王小明',
+        recruitment_visit_id: null, visit_child_name: null,
+        target_school_year: 115, target_semester: 1,
+        original_amount: 5000, status: 'applied', balance: 0,
+      },
+    ])
     await flushPromises()
     const movementBtn = wrapper.find('[data-test="movements-btn"]')
     expect(movementBtn.exists()).toBe(true)
@@ -279,6 +258,77 @@ describe('PrepaymentsTab', () => {
     expect(apiMocks.getPrepaymentMovements).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('收到預繳')
     expect(wrapper.text()).toContain('套用註冊費')
+  })
+
+  it('套用註冊費：只列學期相符的註冊費費用單，確認後 emit refresh', async () => {
+    apiMocks.getFeeRecords.mockResolvedValueOnce({
+      total: 2,
+      items: [
+        {
+          id: 21, fee_item_name: '註冊費', period: '115-1',
+          amount_due: 12000, amount_paid: 0, fee_type: 'registration',
+        },
+        {
+          id: 22, fee_item_name: '月費', period: '115-1',
+          amount_due: 9000, amount_paid: 0, fee_type: 'monthly',
+        },
+      ],
+    })
+    apiMocks.applyPrepayment.mockResolvedValueOnce({})
+    const wrapper = await mountDrawer([CREDITS[0]])
+    await flushPromises()
+    await wrapper.find('[data-test="apply-btn"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('註冊費')
+    expect(wrapper.text()).not.toContain('月費')
+  })
+})
+
+describe('PrepaymentRefundsDialog（退款核准/交付）', () => {
+  const REFUNDS = [
+    {
+      id: 11, prepayment_credit_id: 1, amount: 5000, status: 'requested',
+      reason: '不就讀', recipient_name: null, disbursed_at: null,
+    },
+    {
+      id: 12, prepayment_credit_id: 2, amount: 5000, status: 'approved',
+      reason: '不就讀', recipient_name: null, disbursed_at: null,
+    },
+  ]
+
+  async function mountDialog() {
+    const { default: PrepaymentRefundsDialog } = await import(
+      '@/components/fees/PrepaymentRefundsDialog.vue'
+    )
+    return mount(PrepaymentRefundsDialog, {
+      props: { modelValue: true, refunds: REFUNDS },
+      global: { stubs: globalStubs },
+    })
+  }
+
+  it('退款核准/完成按鈕只在具 FEE_CLOSE_APPROVE 時顯示', async () => {
+    let wrapper = await mountDialog()
+    await flushPromises()
+    expect(wrapper.find('[data-test="approve-refund"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="complete-refund"]').exists()).toBe(true)
+
+    authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
+    wrapper = await mountDialog()
+    await flushPromises()
+    expect(wrapper.find('[data-test="approve-refund"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="complete-refund"]').exists()).toBe(false)
+    // 會計仍可取消 requested/approved
+    expect(wrapper.find('[data-test="cancel-refund"]').exists()).toBe(true)
+  })
+
+  it('核准成功後 emit refresh（由父層重抓清單）', async () => {
+    apiMocks.approvePrepaymentRefund.mockResolvedValueOnce({})
+    const wrapper = await mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-test="approve-refund"]').trigger('click')
+    await flushPromises()
+    expect(apiMocks.approvePrepaymentRefund).toHaveBeenCalledWith(11)
+    expect(wrapper.emitted('refresh')).toBeTruthy()
   })
 })
 

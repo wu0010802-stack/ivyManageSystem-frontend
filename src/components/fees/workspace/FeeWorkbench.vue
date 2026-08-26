@@ -258,11 +258,11 @@ function refundItem(): QueueItem {
     key: 'refunds',
     title: '預繳退款',
     actionLabel: '前往處理',
-    target: { ws: 'billing' as const, view: 'prepayments' },
+    target: { ws: 'billing' as const, view: 'records' },
   }
   const s = closeSummary.value
   if (!s) {
-    return { ...base, state: 'unknown', detail: '無法載入退款狀態，點入預繳查看' }
+    return { ...base, state: 'unknown', detail: '無法載入退款狀態，點入帳款查看' }
   }
   const pending = s.owner.pending_refunds
   if (pending > 0) {

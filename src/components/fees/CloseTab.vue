@@ -230,7 +230,7 @@ const CHECKLIST_FIX_TARGETS: Record<string, { ws: 'billing' | 'recon' | 'settlem
   bank_fully_allocated: { ws: 'recon' },
   handover_all_confirmed: { ws: 'settlement', view: 'handover' },
   handover_variance_zero: { ws: 'settlement', view: 'handover' },
-  no_pending_refunds: { ws: 'billing', view: 'prepayments' },
+  no_pending_refunds: { ws: 'billing', view: 'records' },
   equation_balanced: { ws: 'recon' },
 }
 
