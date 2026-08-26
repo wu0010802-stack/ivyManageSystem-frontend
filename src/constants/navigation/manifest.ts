@@ -391,9 +391,9 @@ export const NAVIGATION_MANIFEST = {
           // 同一碼，沒有唯讀模式）。主路由 /bus 承載兩碼 OR（只持其中一碼也進得來，
           // 落點由 router redirect 依權限決定、分頁可見性由 BusLayout 各自判斷）。
           //
-          // **不可 routePrefix**：三個分頁子路由權限不同，prefix 會讓 /bus 的
-          // BUS_WRITE 外溢到監看／歷史（或 BUS_READ 外溢到路線管理），故子路由
-          // 一律走 extraRoutes 各自 exact。
+          // **不可 routePrefix**：五個分頁子路由權限不同，prefix 會讓 /bus 的
+          // BUS_WRITE 外溢到監看／歷史／今日調度（或 BUS_READ 外溢到路線管理／
+          // 設定），故子路由一律走 extraRoutes 各自 exact。
           //
           // ⚠ 授權路線管理時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：
           // 該分頁進頁後還會打 GET /bus/routes（後端 BUS_READ）與 GET /students
@@ -404,15 +404,21 @@ export const NAVIGATION_MANIFEST = {
             { code: 'BUS_READ', label: '娃娃車檢視' },
             { code: 'BUS_WRITE', label: '娃娃車路線管理' },
           ],
-          // 今日調度（/bus/dispatch，FE-NAV-02 掛路由）發車後編輯的寫入碼：
-          // 頁面進入權限仍為 BUS_READ，本碼只控制 in_progress 階段的操作可見性
-          // （後端 handler 內 status 分流強制）。
+          // 今日調度（/bus/dispatch）發車後編輯的寫入碼：頁面進入權限仍為
+          // BUS_READ，本碼只控制 in_progress 階段的操作可見性（後端 handler 內
+          // status 分流強制）。刻意**不**進 extraRoutes——掛成 route 規則會讓
+          // 「只想看今日名單」的行政被擋在門外。
           actions: [{ code: 'BUS_IN_PROGRESS_WRITE', label: '娃娃車追蹤 (發車後調整)' }],
           menu: { icon: icon('MapLocation') },
           extraRoutes: [
             { path: '/bus/monitor', permission: 'BUS_READ' },
             { path: '/bus/history', permission: 'BUS_READ' },
             { path: '/bus/routes', permission: 'BUS_WRITE' },
+            // 2026-08-26 班次排程新增兩分頁。今日調度是「讀當日名單」的頁，寫入
+            // 分兩段（planned 用 BUS_WRITE、in_progress 用 BUS_IN_PROGRESS_WRITE）
+            // 由頁內判定，故進頁碼取最寬的 BUS_READ；設定頁只有寫入語意 → BUS_WRITE。
+            { path: '/bus/dispatch', permission: 'BUS_READ' },
+            { path: '/bus/settings', permission: 'BUS_WRITE' },
             // 舊路徑 redirect 保留規則（比照 /approvals → /workbench/approvals）。
             { path: '/bus-monitor', permission: 'BUS_READ' },
             { path: '/bus-history', permission: 'BUS_READ' },

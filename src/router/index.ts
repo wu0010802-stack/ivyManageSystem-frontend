@@ -554,6 +554,11 @@ export const routes: RouteRecordRaw[] = [
         // 2026-08-13 三頁整合單一入口＋頁內分頁（比照 /workbench）：分頁權限不同
         //（monitor/history=BUS_READ、routes=BUS_WRITE），只持其中一碼者硬導對面
         // 分頁會撞路由守衛，故落點依權限決定。
+        // 2026-08-26 班次排程再加兩頁：dispatch（今日調度）=BUS_READ 進頁——發車後
+        // 的寫入另由 BUS_IN_PROGRESS_WRITE 在頁內控制，故**不可**掛成 BUS_WRITE，
+        // 否則只有檢視碼的行政連當日名單都看不到；settings（娃娃車設定）=BUS_WRITE。
+        // 落點維持「有 BUS_READ → monitor、否則 routes」：兩碼分別對應的最左分頁，
+        // 加了 dispatch/settings 也不變（dispatch 排在 monitor 之後、settings 在最後）。
         {
             path: '/bus',
             component: () => import('../views/bus/BusLayout.vue'),
@@ -567,6 +572,12 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '娃娃車即時監看' },
                 },
                 {
+                    path: 'dispatch',
+                    name: 'bus-dispatch',
+                    component: () => import('../views/bus/BusDispatchView.vue'),
+                    meta: { title: '娃娃車今日調度' },
+                },
+                {
                     path: 'history',
                     name: 'bus-history',
                     component: () => import('../views/BusHistoryView.vue'),
@@ -577,6 +588,14 @@ export const routes: RouteRecordRaw[] = [
                     name: 'bus-routes',
                     component: () => import('../views/BusRoutesView.vue'),
                     meta: { title: '娃娃車路線管理' },
+                },
+                {
+                    // BusSettingsPanel 為自足元件（無 props、自行載入 system_configs
+                    // 四個 bus.* key），直接當 route component 掛載，不另包 view。
+                    path: 'settings',
+                    name: 'bus-settings',
+                    component: () => import('../views/bus/BusSettingsPanel.vue'),
+                    meta: { title: '娃娃車設定' },
                 },
             ],
         },
