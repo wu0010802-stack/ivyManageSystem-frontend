@@ -43,8 +43,9 @@
           :value="month"
         />
       </el-select>
+      <!-- primary 而非 success：匯出是本頁的主要輸出動作，不是「成功」狀態 -->
       <el-button
-        type="success"
+        type="primary"
         size="small"
         :loading="exportingExcel"
         @click="handleExportExcel"

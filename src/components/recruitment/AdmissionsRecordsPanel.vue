@@ -445,8 +445,9 @@ defineExpose({ handleDelete, openAddDialog, fetchDetail })
 <style scoped>
 .panel-toolbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 </style>

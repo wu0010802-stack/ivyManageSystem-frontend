@@ -167,7 +167,9 @@
             type="success"
             @click="$emit('convert', row)"
           >轉為學生</el-button>
-          <el-button v-if="canWrite" size="small" type="danger" @click="$emit('delete', row.id)">刪除</el-button>
+          <!-- plain 而非實心：實心 danger 是這一列裡唯一有填色的按鈕，視覺重量高過「編輯」
+               與「轉為學生」，等於每列都在把眼睛引向不可逆的動作 -->
+          <el-button v-if="canWrite" size="small" type="danger" plain @click="$emit('delete', row.id)">刪除</el-button>
         </template>
       </el-table-column>
     </el-table>
