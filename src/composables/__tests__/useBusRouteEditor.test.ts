@@ -439,6 +439,31 @@ describe('儲存（整條班次 replace-all）', () => {
     expect(vi.mocked(replaceBusRouteStops).mock.calls[0]).toHaveLength(2)
   })
 
+  it('422 的後端 detail 必須原樣呈現，不得吞成通用文案', async () => {
+    // 後端這兩則 422 都直接告訴使用者「去哪裡改」——跨班次衝突指出衝突班次名稱、
+    // capacity 超載指出是哪幾個星期。吞成「儲存失敗，請確認名單後再試」等於
+    // 把唯一可行動的資訊丟掉。
+    const editor = await boot()
+    editor.togglePinned(0)
+    vi.mocked(replaceBusRouteStops).mockRejectedValue({
+      response: { status: 422, data: { detail: '下列學生的搭車星期與其他班次的同方向名單衝突：學生 103（早 B）' } },
+    })
+    await editor.save()
+    expect(ElMessage.error).toHaveBeenCalledWith(
+      '下列學生的搭車星期與其他班次的同方向名單衝突：學生 103（早 B）',
+    )
+  })
+
+  it('capacity 超載的 422 同樣要指出是哪幾個星期', async () => {
+    const editor = await boot()
+    editor.togglePinned(0)
+    vi.mocked(replaceBusRouteStops).mockRejectedValue({
+      response: { status: 422, data: { detail: '下列星期搭車人數超過座位上限：週一（21／20）' } },
+    })
+    await editor.save()
+    expect(ElMessage.error).toHaveBeenCalledWith('下列星期搭車人數超過座位上限：週一（21／20）')
+  })
+
   it('清空整條班次要二次確認；使用者取消就不送出', async () => {
     const editor = await boot()
     editor.removeStop(0)
