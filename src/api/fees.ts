@@ -136,6 +136,93 @@ export const reverseTransaction = (
   payload: ApiBody<'/fees/bank-transactions/{txn_id}/reverse', 'post'>,
 ) => api.post(`/fees/bank-transactions/${txnId}/reverse`, payload).then((res) => res.data)
 
+// ===== 永豐代收核銷明細（SPEC-016：對帳主來源）=====
+export const previewCollectionImport = (
+  file: File,
+): Promise<ApiResponse<'/fees/collection-imports/preview', 'post'>> => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post('/fees/collection-imports/preview', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((res) => res.data)
+}
+export const confirmCollectionImport = (
+  file: File,
+): Promise<ApiResponse<'/fees/collection-imports', 'post'>> => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post('/fees/collection-imports', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((res) => res.data)
+}
+export const getCollectionPayments = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/collection-payments', 'get'>> =>
+  api.get('/fees/collection-payments', { params }).then((res) => res.data)
+export const getCollectionCandidates = (
+  paymentId: number,
+): Promise<ApiResponse<'/fees/collection-payments/{payment_id}/candidates', 'get'>> =>
+  api.get(`/fees/collection-payments/${paymentId}/candidates`).then((res) => res.data)
+export const allocateCollectionPayment = (
+  paymentId: number,
+  payload: ApiBody<'/fees/collection-payments/{payment_id}/allocate', 'post'>,
+): Promise<ApiResponse<'/fees/collection-payments/{payment_id}/allocate', 'post'>> =>
+  api.post(`/fees/collection-payments/${paymentId}/allocate`, payload).then((res) => res.data)
+export const reverseCollectionPayment = (
+  paymentId: number,
+  payload: ApiBody<'/fees/collection-payments/{payment_id}/reverse', 'post'>,
+) => api.post(`/fees/collection-payments/${paymentId}/reverse`, payload).then((res) => res.data)
+export const reconcileCollectionCoverage = (
+  payload: ApiBody<'/fees/collection-coverage', 'post'>,
+): Promise<ApiResponse<'/fees/collection-coverage', 'post'>> =>
+  api.post('/fees/collection-coverage', payload).then((res) => res.data)
+
+// ===== 發單快照與未繳差集（SPEC-016 Phase 3）=====
+export const previewBillSlipBatch = (
+  file: File,
+): Promise<ApiResponse<'/fees/bill-slip-batches/preview', 'post'>> => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post('/fees/bill-slip-batches/preview', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((res) => res.data)
+}
+export const importBillSlipBatch = (
+  file: File,
+  meta: { title: string; batch_no?: string },
+): Promise<ApiResponse<'/fees/bill-slip-batches', 'post'>> => {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('title', meta.title)
+  if (meta.batch_no) form.append('batch_no', meta.batch_no)
+  return api
+    .post('/fees/bill-slip-batches', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((res) => res.data)
+}
+export const getBillSlipBatches = (
+  params?: unknown,
+): Promise<ApiResponse<'/fees/bill-slip-batches', 'get'>> =>
+  api.get('/fees/bill-slip-batches', { params }).then((res) => res.data)
+export const deleteBillSlipBatch = (
+  batchId: number,
+): Promise<ApiResponse<'/fees/bill-slip-batches/{batch_id}', 'delete'>> =>
+  api.delete(`/fees/bill-slip-batches/${batchId}`).then((res) => res.data)
+export const getOutstandingReport = (
+  batchId: number,
+  params?: unknown,
+): Promise<ApiResponse<'/fees/bill-slip-batches/{batch_id}/outstanding', 'get'>> =>
+  api
+    .get(`/fees/bill-slip-batches/${batchId}/outstanding`, { params })
+    .then((res) => res.data)
+
 // ===== 現金收款 / 收款流水 =====
 export const createCashReceipt = (
   payload: ApiBody<'/fees/cash-receipts', 'post'>,

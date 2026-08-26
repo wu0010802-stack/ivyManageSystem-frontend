@@ -41,9 +41,13 @@ vi.mock('@/components/fees/workspace/FeeBillingWorkspace.vue', () => ({
     template: '<div data-testid="ws-billing" :data-view="view" :data-search="studentSearch" />',
   },
 }))
-vi.mock('@/components/fees/BankReconTab.vue', () => ({
+vi.mock('@/components/fees/workspace/FeeReconWorkspace.vue', () => ({
   __esModule: true,
-  default: { name: 'BankReconTab', template: '<div data-testid="ws-recon" />' },
+  default: {
+    name: 'FeeReconWorkspace',
+    props: ['view'],
+    template: '<div data-testid="ws-recon" :data-view="view" />',
+  },
 }))
 vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
   __esModule: true,
@@ -165,7 +169,8 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     ['records', 'ws-billing', 'records'],
     ['templates', 'ws-settings', 'templates'],
     ['refunds', 'ws-billing', 'refunds'],
-    ['bankRecon', 'ws-recon', null],
+    // SPEC-016：對帳新增代收/存摺次層，舊 bankRecon 深連結落存摺檢視
+    ['bankRecon', 'ws-recon', 'passbook'],
     ['prepayments', 'ws-billing', 'records'],
     ['cashHandover', 'ws-settlement', 'handover'],
     ['close', 'ws-settlement', 'close'],

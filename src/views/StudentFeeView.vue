@@ -51,7 +51,11 @@
         :student-search="studentSearch"
         @change-view="onViewChange"
       />
-      <BankReconTab v-else-if="activeWs === 'recon'" />
+      <FeeReconWorkspace
+        v-else-if="activeWs === 'recon'"
+        :view="activeView ?? undefined"
+        @change-view="onViewChange"
+      />
       <FeeSettlementWorkspace
         v-else-if="activeWs === 'settlement'"
         :view="activeView ?? undefined"
@@ -92,8 +96,8 @@ const FeeWorkbench = defineAsyncComponent(
 const FeeBillingWorkspace = defineAsyncComponent(
   () => import('@/components/fees/workspace/FeeBillingWorkspace.vue'),
 )
-const BankReconTab = defineAsyncComponent(
-  () => import('@/components/fees/BankReconTab.vue'),
+const FeeReconWorkspace = defineAsyncComponent(
+  () => import('@/components/fees/workspace/FeeReconWorkspace.vue'),
 )
 const FeeSettlementWorkspace = defineAsyncComponent(
   () => import('@/components/fees/workspace/FeeSettlementWorkspace.vue'),

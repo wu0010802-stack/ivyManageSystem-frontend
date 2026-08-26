@@ -42,9 +42,13 @@ vi.mock('@/components/fees/workspace/FeeBillingWorkspace.vue', () => ({
     template: '<div data-test="ws-billing" :data-view="view" :data-search="studentSearch" />',
   },
 }))
-vi.mock('@/components/fees/BankReconTab.vue', () => ({
+vi.mock('@/components/fees/workspace/FeeReconWorkspace.vue', () => ({
   __esModule: true,
-  default: { name: 'BankReconTab', template: '<div data-test="ws-recon" />' },
+  default: {
+    name: 'FeeReconWorkspace',
+    props: ['view'],
+    template: '<div data-test="ws-recon" :data-view="view" />',
+  },
 }))
 vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
   __esModule: true,
