@@ -30,12 +30,12 @@
     <!-- 尚未開班 -->
     <template v-else-if="!trip">
       <!--
-        路線清單載入失敗**不得**畫成「尚未設定娃娃車路線」的空狀態——那會讓司機
+        班次清單載入失敗**不得**畫成「尚未設定娃娃車班次」的空狀態——那會讓司機
         去追一個不存在的問題（與 Task 13 在 BusRoutesView 修掉的是同一個缺口）。
         排在空狀態之前。
       -->
       <el-card v-if="routesFailed" class="bus-card" data-testid="bus-routes-failed">
-        <h3 class="bus-title">無法載入路線清單</h3>
+        <h3 class="bus-title">無法載入班次清單</h3>
         <p class="bus-hint">目前無法開始新班次。請確認連線後重新載入；若持續失敗請洽行政人員。</p>
         <el-button type="primary" size="large" data-testid="bus-retry-routes" @click="init">
           重新載入
@@ -43,51 +43,78 @@
       </el-card>
 
       <el-card v-else-if="routes.length === 0" class="bus-card" data-testid="bus-no-routes">
-        <h3 class="bus-title">尚未設定娃娃車路線</h3>
-        <p class="bus-hint">請洽行政人員於後台建立路線與站點後再開始班次。</p>
+        <h3 class="bus-title">尚未設定娃娃車班次</h3>
+        <p class="bus-hint">請洽行政人員於後台建立班次與名單後再開始班次。</p>
       </el-card>
 
       <el-card v-else class="bus-card" data-testid="bus-start-card">
         <h3 class="bus-title">開始娃娃車班次</h3>
 
-        <div class="bus-field">
-          <label class="bus-label" for="bus-route-select">路線</label>
-          <el-select
-            id="bus-route-select"
-            v-model="selectedRouteId"
-            placeholder="請選擇路線"
-            size="large"
-            class="bus-select"
-            data-testid="bus-route-select"
-          >
-            <el-option v-for="r in routes" :key="r.id" :label="r.name" :value="r.id" />
-          </el-select>
-        </div>
+        <!--
+          方向 radio 已移除（spec「第一期契約破壞清單」：TripStartIn.direction 移除，
+          方向由班次衍生）。改為依 sort_order 的班次列表，每列自帶方向＋出發時間＋
+          當日狀態，司機選的是「哪一班」而不是「哪條路線的哪個方向」。
+        -->
+        <ul class="route-list" aria-label="班次清單">
+          <li v-for="r in routes" :key="r.id">
+            <button
+              type="button"
+              class="route-item"
+              :class="{ 'route-item--selected': selectedRouteId === r.id }"
+              :aria-pressed="selectedRouteId === r.id"
+              :data-testid="`bus-route-${r.id}`"
+              @click="selectedRouteId = r.id"
+            >
+              <span class="route-main">
+                <span class="route-direction">{{ DIRECTION_LABELS[r.direction] ?? r.direction }}</span>
+                <span class="route-name">{{ r.name }}</span>
+              </span>
+              <span class="route-meta">
+                <span class="route-time">{{ r.depart_time }}</span>
+                <el-tag
+                  :type="TODAY_STATUS_TAG[r.today_status]"
+                  size="small"
+                  :data-testid="`bus-route-status-${r.id}`"
+                >
+                  {{ TODAY_STATUS_LABELS[r.today_status] }}
+                </el-tag>
+              </span>
+            </button>
+          </li>
+        </ul>
 
-        <div class="bus-field">
-          <span class="bus-label" id="bus-direction-label">方向</span>
-          <el-radio-group v-model="direction" size="large" aria-labelledby="bus-direction-label">
-            <el-radio-button value="morning">早上接學生</el-radio-button>
-            <el-radio-button value="afternoon">下午送學生</el-radio-button>
-          </el-radio-group>
-        </div>
+        <!--
+          發車被擋（422 缺座標／超座位上限，或 409 車輛數達上限且接手落空）：
+          持久顯示而非 toast——司機在車上手邊在忙，一閃即逝的提示看不到就再也回不來，
+          而這幾種錯誤都要人去後台改資料才會好。
+        -->
+        <el-alert
+          v-if="startBlockedMessage"
+          type="error"
+          :closable="false"
+          show-icon
+          class="bus-blocked"
+          data-testid="bus-start-blocked"
+          :title="startBlockedMessage"
+        />
 
         <el-button
           type="primary"
           size="large"
           class="bus-primary-btn"
           :loading="starting"
+          :disabled="selectedRouteId === null"
           data-testid="bus-start"
           @click="start"
         >
-          開始班次
+          {{ startButtonLabel }}
         </el-button>
       </el-card>
     </template>
 
     <!-- 班次進行中 -->
     <template v-else>
-      <!-- 路線與方向必須看得見：接手到別條路線時，這是司機唯一能自己察覺的訊號 -->
+      <!-- 班次與方向必須看得見：接手到別班時，這是司機唯一能自己察覺的訊號 -->
       <h2 class="trip-summary" data-testid="bus-trip-summary">{{ tripSummary }}</h2>
       <!--
         定位權限被拒與其他定位失敗（POSITION_UNAVAILABLE / TIMEOUT）分開呈現：
@@ -139,7 +166,7 @@
       <ul class="stop-list" aria-label="站點清單">
         <li v-for="stop in stops" :key="stop.stop_id" class="stop-item">
           <el-card
-            :class="['stop-card', `stop-${stop.status}`, { 'stop-on-leave': stop.on_leave }]"
+            :class="['stop-card', `stop-${stop.status}`]"
             :data-testid="`bus-stop-${stop.stop_id}`"
           >
             <div class="stop-row">
@@ -148,14 +175,49 @@
               <el-tag v-if="stop.status === 'departed'" type="success">已離站</el-tag>
               <el-tag v-else-if="stop.status === 'skipped'" type="info">已跳過</el-tag>
               <!--
-                請假是「明顯標示 + 讓司機自己決定」，不是自動跳站（後端刻意不動這站，
-                怕請假資料有誤會漏接）。標示排在既有狀態 tag 之外，任何 status 下都要看得到。
+                excused＝當日不搭的既成事實（請假核准／家長今天不搭／後台排除三條
+                路徑的單一落點）。第一期的 `on_leave`「標示但仍要司機自己按跳過」
+                已退場；司機端**不提供恢復**（spec「司機端（Portal）」明文）。
               -->
-              <el-tag v-if="stop.on_leave" type="warning" :data-testid="`bus-stop-onleave-${stop.stop_id}`">
-                今日已請假
+              <el-tag
+                v-else-if="stop.status === 'excused'"
+                type="warning"
+                :data-testid="`bus-stop-excused-${stop.stop_id}`"
+              >
+                {{ excuseLabel(stop.excuse_reason) }}
               </el-tag>
+              <span
+                v-if="stopEta(stop)"
+                class="stop-eta"
+                :data-testid="`bus-stop-eta-${stop.stop_id}`"
+              >{{ stopEta(stop) }}</span>
             </div>
-            <div class="stop-actions">
+
+            <p v-if="stop.address" class="stop-address" :data-testid="`bus-stop-address-${stop.stop_id}`">
+              {{ stop.address }}
+            </p>
+
+            <!--
+              聯絡人電話：行車情境用 `tel:` 直撥（司機不必抄號碼再切到撥號 App）。
+              後端已依 is_primary／is_emergency／fallback 規則挑好，前端不再篩。
+            -->
+            <div v-if="stop.contacts?.length" class="stop-contacts">
+              <a
+                v-for="c in stop.contacts"
+                :key="`${stop.stop_id}-${c.name}-${c.phone}`"
+                v-show="c.phone"
+                class="stop-contact"
+                :href="`tel:${c.phone}`"
+                :data-testid="`bus-stop-contact-${stop.stop_id}`"
+                :aria-label="`撥打給 ${c.name}`"
+              >
+                <span class="stop-contact-name">{{ c.name }}</span>
+                <span class="stop-contact-phone">{{ c.phone }}</span>
+              </a>
+            </div>
+
+            <!-- excused 站不渲染任何操作鈕（灰態、不可操作、不提供恢復） -->
+            <div v-if="stop.status !== 'excused'" class="stop-actions">
               <template v-if="stop.status === 'pending'">
                 <el-button
                   type="primary"
@@ -169,7 +231,6 @@
                 </el-button>
                 <el-button
                   size="large"
-                  :type="stop.on_leave ? 'warning' : undefined"
                   :disabled="actingStopId !== null"
                   :aria-label="`跳過 ${stop.student_name}`"
                   @click="skipStop(stop)"
@@ -213,23 +274,80 @@
  * 本檔只負責畫面與生命週期；班次狀態、GPS 節流上報、站點推進全在
  * `@/composables/usePortalBusTrip`（可獨立測試）。
  *
- * 隱私：站點含學生姓名與家庭座標，屬個資——畫面上只呈現姓名與順序，座標不渲染、
- * 不進網址、不寫入任何 storage。
+ * ── 第二期揭露面（spec「司機端（Portal）」）──────────────────────────────────
+ * 站點卡片新增**接送地址**與**聯絡人姓名＋電話**（`tel:` 直撥）。這是
+ * `BUS_TRIPS_OPERATE` 授權範圍內的刻意揭露——但既有隱私硬規則完全不變，反而更要緊：
+ * 電話與地址**只渲染在卡片上**，不進 console／Sentry／URL query／任何 storage，
+ * 也不塞進 `aria-label`（螢幕閱讀器唸出整串電話沒有幫助，而 aria-label 會被各種
+ * 輔助技術與自動化工具抄走）——`aria-label` 一律只帶學生姓名。座標仍完全不渲染。
  *
  * 行車情境的可用性取捨：按鈕一律 `size="large"`（手套／晃動下也點得到）、
  * 操作進行中鎖住整列避免重複送出、結束班次為 danger 並帶二次確認。
  */
-import { onBeforeUnmount, onMounted } from 'vue'
-import { usePortalBusTrip } from '@/composables/usePortalBusTrip'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
+import {
+  DIRECTION_LABELS,
+  usePortalBusTrip,
+  type BusRouteTodayStatus,
+  type BusTripStop,
+} from '@/composables/usePortalBusTrip'
+import { formatTaipeiClock } from '@/utils/taipeiTime'
 
 const {
-  trip, stops, routes, selectedRouteId, direction,
-  loading, starting, completing, actingStopId,
+  trip, stops, routes, selectedRouteId,
+  loading, starting, completing, actingStopId, startBlockedMessage,
   gpsActive, gpsSupported, gpsClockSuspect, gpsPermissionDenied,
   snapshotFailed, employeeUnlinked, routesFailed,
   pendingPingCount, pendingStopActionCount, tripSummary,
   init, start, departStop, skipStop, undoStop, complete, teardown,
 } = usePortalBusTrip()
+
+/** 當日四態的徽章文案（spec「司機端（Portal）」）。 */
+const TODAY_STATUS_LABELS: Record<BusRouteTodayStatus, string> = {
+  none: '未生成',
+  planned: '已排定',
+  in_progress: '進行中',
+  completed: '已完成',
+}
+const TODAY_STATUS_TAG: Record<BusRouteTodayStatus, 'info' | 'warning' | 'success' | 'primary'> = {
+  none: 'info',
+  planned: 'primary',
+  in_progress: 'warning',
+  completed: 'success',
+}
+
+/**
+ * 主按鈕文案隨所選班次的當日狀態變化。`completed` 仍可開同日第二趟（spec 明文），
+ * 所以那一態的文案是「再開一趟」而不是把按鈕擋掉——擋掉會讓下午的第二趟開不了。
+ */
+const startButtonLabel = computed(() => {
+  const selected = routes.value.find((r) => r.id === selectedRouteId.value)
+  if (!selected) return '開始班次'
+  if (selected.today_status === 'completed') return '再開一趟'
+  if (selected.today_status === 'in_progress') return '接手這一班'
+  return '開始班次'
+})
+
+const EXCUSE_LABELS: Record<string, string> = {
+  leave: '今日請假',
+  parent: '家長回報不搭',
+  admin: '後台排除',
+}
+/** excuse_reason 缺值或未知值時只講結論，不編造原因。 */
+function excuseLabel(reason?: string | null): string {
+  return (reason && EXCUSE_LABELS[reason]) || '今日不搭'
+}
+
+/**
+ * 站點 ETA：`eta_live`（行進間動態重算）優先、無值退 `eta_planned`。
+ * 已離站／已跳過／不搭的站不顯示——「預計 07:35 到」對已經發生的事只會誤導。
+ * naive 台北牆鐘字串一律走 formatTaipeiClock，禁裸 `new Date()`。
+ */
+function stopEta(stop: BusTripStop): string | null {
+  if (stop.status !== 'pending') return null
+  const clock = formatTaipeiClock(stop.eta_live || stop.eta_planned)
+  return clock ? `預計 ${clock}` : null
+}
 
 onMounted(init)
 // 離開頁面 = 停止追蹤：殘留的 watchPosition 回呼不得再收集座標（隱私守衛），
@@ -247,19 +365,64 @@ onBeforeUnmount(teardown)
 .bus-card { border-radius: 10px; }
 .bus-title { margin: 0 0 8px; font-size: 18px; }
 .bus-hint { margin: 0 0 16px; color: var(--el-text-color-regular); line-height: 1.6; }
-.bus-field { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
-.bus-label { font-weight: 600; }
-.bus-select { width: 100%; max-width: 320px; }
 .bus-primary-btn { width: 100%; max-width: 320px; }
+.bus-blocked { margin-bottom: 12px; }
+
+/* 班次列表：整列可點（行車情境的觸控目標要夠大），選中狀態靠邊框與底色雙訊號 */
+.route-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.route-item {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 2px solid var(--el-border-color);
+  border-radius: 10px;
+  background: var(--el-bg-color);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.route-item--selected {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.route-main { display: flex; flex-direction: column; gap: 2px; }
+.route-direction { font-size: 13px; color: var(--el-text-color-regular); }
+.route-name { font-size: 16px; font-weight: 700; }
+.route-meta { display: flex; align-items: center; gap: 8px; }
+.route-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+
 .trip-summary { margin: 0; font-size: 18px; font-weight: 700; }
 .stop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.stop-row { display: flex; align-items: center; gap: 10px; }
+.stop-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .stop-seq { font-weight: 700; min-width: 1.5em; }
 .stop-name { font-size: 16px; }
+.stop-eta { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--el-text-color-regular); }
+.stop-address { margin: 6px 0 0; font-size: 14px; color: var(--el-text-color-regular); line-height: 1.5; }
+.stop-contacts { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+/* 直撥連結做成大按鈕：行車中單手點，不能是一行小字 */
+.stop-contact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  text-decoration: none;
+  font-size: 15px;
+}
+.stop-contact-name { font-weight: 600; }
+.stop-contact-phone { font-variant-numeric: tabular-nums; }
 .stop-departed { opacity: 0.6; }
 .stop-skipped { opacity: 0.5; }
-/* 請假站視覺弱化：司機一瞄就知道這站不用等人，但仍保留操作（不隱藏、不 disable）。 */
-.stop-on-leave { opacity: 0.7; border-style: dashed; }
+/* excused 灰態：一瞄就知道這站不用停，且卡片內不渲染任何操作鈕 */
+.stop-excused { opacity: 0.55; border-style: dashed; }
 .stop-actions { margin-top: 8px; display: flex; gap: 8px; }
 .complete-btn { margin-top: 16px; }
 </style>

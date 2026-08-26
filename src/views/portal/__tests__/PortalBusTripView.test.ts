@@ -8,10 +8,10 @@ const h = vi.hoisted(() => {
     api: {
       trip: r<Record<string, unknown> | null>(null),
       stops: r<Array<Record<string, unknown>>>([]),
-      routes: r<Array<{ id: number; name: string }>>([]),
+      routes: r<Array<Record<string, unknown>>>([]),
       selectedRouteId: r<number | null>(null),
-      direction: r('morning'),
       loading: r(false),
+      startBlockedMessage: r<string | null>(null),
       starting: r(false),
       completing: r(false),
       actingStopId: r<number | null>(null),
@@ -36,7 +36,12 @@ const h = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/composables/usePortalBusTrip', () => ({ usePortalBusTrip: () => h.api }))
+// `DIRECTION_LABELS` 是同模組的具名匯出，view 直接 import 來渲染班次列的方向。
+// mock factory 漏掉它 → template 讀到 undefined 就整個 render 爆掉。
+vi.mock('@/composables/usePortalBusTrip', () => ({
+  usePortalBusTrip: () => h.api,
+  DIRECTION_LABELS: { morning: '早上接學生', afternoon: '下午送學生' },
+}))
 
 import PortalBusTripView from '@/views/portal/PortalBusTripView.vue'
 
@@ -47,8 +52,8 @@ function resetState() {
   s.stops.value = []
   s.routes.value = []
   s.selectedRouteId.value = null
-  s.direction.value = 'morning'
   s.loading.value = false
+  s.startBlockedMessage.value = null
   s.starting.value = false
   s.completing.value = false
   s.actingStopId.value = null
@@ -66,6 +71,14 @@ function resetState() {
 
 function stop(overrides: Record<string, unknown> = {}) {
   return { stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'pending', ...overrides }
+}
+
+/** 開班選單的一列（BE-API-PORTAL-01 起是班次列表：單方向＋出發時間＋當日四態）。 */
+function routeItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 3, name: 'A 線', direction: 'morning', depart_time: '07:30',
+    sort_order: 1, today_status: 'none', today_trip_id: null, ...overrides,
+  }
 }
 
 beforeEach(() => {
@@ -127,11 +140,14 @@ describe('PortalBusTripView', () => {
     expect(wrapper.find('[data-testid="bus-no-routes"]').exists()).toBe(true)
   })
 
-  it('有路線時顯示開班卡，按下開始班次會呼叫 start', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線' }]
+  it('有班次時顯示開班卡，選一班後按下開始班次會呼叫 start', async () => {
+    s.routes.value = [routeItem()]
     const wrapper = mount(PortalBusTripView)
     await flushPromises()
 
+    // 未選班次前主按鈕 disabled（避免空送出換一個後端 400）
+    await wrapper.find('[data-testid="bus-route-3"]').trigger('click')
+    await flushPromises()
     await wrapper.find('[data-testid="bus-start"]').trigger('click')
     expect(s.start).toHaveBeenCalledTimes(1)
   })
@@ -277,40 +293,45 @@ describe('PortalBusTripView', () => {
     expect(wrapper.html()).not.toContain('120.3014')
   })
 
-  it('on_leave=true 的站顯示請假標示，且該站卡片視覺弱化，跳過/離站操作仍在', async () => {
+  it('excused 站顯示原因徽章、卡片灰態，且**完全沒有**操作鈕', async () => {
+    // spec「司機端（Portal）」：excused 一律灰態不可操作，且不提供恢復——
+    // 第一期「標示請假但仍要司機自己按跳過」的語意整個退場。
     s.trip.value = { id: 7 }
-    s.stops.value = [stop({ on_leave: true })]
+    s.stops.value = [stop({ status: 'excused', excuse_reason: 'parent' })]
     const wrapper = mount(PortalBusTripView)
     await flushPromises()
 
     const card = wrapper.find('[data-testid="bus-stop-11"]')
-    expect(card.find('[data-testid="bus-stop-onleave-11"]').exists()).toBe(true)
-    expect(card.classes()).toContain('stop-on-leave')
-    // 請假不可讓司機少了操作選項：仍要看得到離站與跳過
-    const btns = card.findAll('el-button')
+    expect(card.find('[data-testid="bus-stop-excused-11"]').text()).toBe('家長回報不搭')
+    expect(card.classes()).toContain('stop-excused')
+    expect(card.findAll('el-button')).toHaveLength(0)
+  })
+
+  it('excuse_reason 三種來源各自對應文案；未知值只講結論不編造原因', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [
+      stop({ stop_id: 11, seq: 1, status: 'excused', excuse_reason: 'leave' }),
+      stop({ stop_id: 12, seq: 2, status: 'excused', excuse_reason: 'parent' }),
+      stop({ stop_id: 13, seq: 3, status: 'excused', excuse_reason: 'admin' }),
+      stop({ stop_id: 14, seq: 4, status: 'excused', excuse_reason: null }),
+    ]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-excused-11"]').text()).toBe('今日請假')
+    expect(wrapper.find('[data-testid="bus-stop-excused-12"]').text()).toBe('家長回報不搭')
+    expect(wrapper.find('[data-testid="bus-stop-excused-13"]').text()).toBe('後台排除')
+    expect(wrapper.find('[data-testid="bus-stop-excused-14"]').text()).toBe('今日不搭')
+  })
+
+  it('pending 站不受影響，離站與跳過都在', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const btns = wrapper.find('[data-testid="bus-stop-11"]').findAll('el-button')
     expect(btns.map((b) => b.text())).toEqual(['離站', '跳過'])
-  })
-
-  it('on_leave=false 或欄位不存在時不顯示請假標示', async () => {
-    s.trip.value = { id: 7 }
-    s.stops.value = [stop({ on_leave: false }), stop({ stop_id: 12, seq: 2 })]
-    const wrapper = mount(PortalBusTripView)
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="bus-stop-onleave-11"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="bus-stop-onleave-12"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="bus-stop-11"]').classes()).not.toContain('stop-on-leave')
-  })
-
-  it('請假站的跳過按鈕更容易被看見（type=warning 突顯）', async () => {
-    s.trip.value = { id: 7 }
-    s.stops.value = [stop({ on_leave: true })]
-    const wrapper = mount(PortalBusTripView)
-    await flushPromises()
-
-    const card = wrapper.find('[data-testid="bus-stop-11"]')
-    const skipBtn = card.findAll('el-button').find((b) => b.text() === '跳過')
-    expect(skipBtn?.attributes('type')).toBe('warning')
   })
 })
 
@@ -334,5 +355,192 @@ describe('PortalBusTripView — helper 自檢', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="bus-complete"]').exists()).toBe(true)
     expect(ref(1).value).toBe(1) // vue 的 ref 有正常載入（避免 hoisted require 拿到假物件）
+  })
+})
+
+describe('PortalBusTripView — 班次列表四態（FE-PORTAL-02）', () => {
+  it('依序列出方向、名稱、出發時間與當日狀態徽章', async () => {
+    s.routes.value = [routeItem()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const row = wrapper.find('[data-testid="bus-route-3"]')
+    expect(row.text()).toContain('早上接學生')
+    expect(row.text()).toContain('A 線')
+    expect(row.text()).toContain('07:30')
+    expect(wrapper.find('[data-testid="bus-route-status-3"]').text()).toBe('未生成')
+  })
+
+  it('四態各自的徽章文案', async () => {
+    s.routes.value = [
+      routeItem({ id: 3, today_status: 'none' }),
+      routeItem({ id: 4, today_status: 'planned' }),
+      routeItem({ id: 5, today_status: 'in_progress' }),
+      routeItem({ id: 6, today_status: 'completed' }),
+    ]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-route-status-3"]').text()).toBe('未生成')
+    expect(wrapper.find('[data-testid="bus-route-status-4"]').text()).toBe('已排定')
+    expect(wrapper.find('[data-testid="bus-route-status-5"]').text()).toBe('進行中')
+    expect(wrapper.find('[data-testid="bus-route-status-6"]').text()).toBe('已完成')
+  })
+
+  it('已完成的班次仍可再開一趟（同日第二趟，spec 明文）——不得把按鈕擋掉', async () => {
+    s.routes.value = [routeItem({ today_status: 'completed' })]
+    s.selectedRouteId.value = 3
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const btn = wrapper.find('[data-testid="bus-start"]')
+    expect(btn.text()).toBe('再開一趟')
+    // el-button 在本測試環境是未註冊元件，:disabled="false" 會序列化成字串 "false"
+    expect(btn.attributes('disabled')).not.toBe('true')
+  })
+
+  it('進行中的班次主按鈕文案是「接手這一班」', async () => {
+    s.routes.value = [routeItem({ today_status: 'in_progress' })]
+    s.selectedRouteId.value = 3
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-start"]').text()).toBe('接手這一班')
+  })
+
+  it('沒有方向 radio（方向由班次衍生，第一期契約已破壞）', async () => {
+    s.routes.value = [routeItem()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.findAll('el-radio-button')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('方向')
+  })
+
+  it('點選班次會設定 selectedRouteId 並標記選中', async () => {
+    s.routes.value = [routeItem({ id: 3 }), routeItem({ id: 4, name: 'B 線' })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    await wrapper.find('[data-testid="bus-route-4"]').trigger('click')
+    await flushPromises()
+    expect(s.selectedRouteId.value).toBe(4)
+    expect(wrapper.find('[data-testid="bus-route-4"]').attributes('aria-pressed')).toBe('true')
+  })
+})
+
+describe('PortalBusTripView — 發車被擋的持久訊息（FE-PORTAL-02）', () => {
+  it('startBlockedMessage 有值時以 alert 留在畫面上（不是會消失的 toast）', async () => {
+    s.routes.value = [routeItem()]
+    s.startBlockedMessage.value = '部分學生缺少接送座標，請先於班次編輯補設接送地址（共 3 位）'
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const alert = wrapper.find('[data-testid="bus-start-blocked"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.attributes('title')).toContain('共 3 位')
+  })
+
+  it('沒有阻擋訊息時不渲染 alert', async () => {
+    s.routes.value = [routeItem()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-start-blocked"]').exists()).toBe(false)
+  })
+})
+
+describe('PortalBusTripView — 站點卡片新揭露面（FE-PORTAL-02）', () => {
+  const CONTACT_STOP = {
+    address: '高雄市三民區某路 1 號',
+    contacts: [{ name: '王媽媽', phone: '0912345678' }],
+    eta_planned: '2026-08-26T07:35:00',
+    eta_live: null,
+  }
+
+  it('顯示接送地址', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop(CONTACT_STOP)]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-address-11"]').text())
+      .toBe('高雄市三民區某路 1 號')
+  })
+
+  it('聯絡人以 tel: 直撥連結呈現（行車情境不該要司機自己抄號碼）', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop(CONTACT_STOP)]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const link = wrapper.find('[data-testid="bus-stop-contact-11"]')
+    expect(link.attributes('href')).toBe('tel:0912345678')
+    expect(link.text()).toContain('王媽媽')
+  })
+
+  it('電話不進 aria-label（輔助技術唸整串號碼無益，且 aria-label 易被工具抄走）', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop(CONTACT_STOP)]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const label = wrapper.find('[data-testid="bus-stop-contact-11"]').attributes('aria-label')
+    expect(label).toBe('撥打給 王媽媽')
+    expect(label).not.toContain('0912345678')
+  })
+
+  it('座標一律不渲染（家庭住址，spec 硬規則）', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({ ...CONTACT_STOP, lat: 22.61, lng: 120.28 })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.html()).not.toContain('22.61')
+    expect(wrapper.html()).not.toContain('120.28')
+  })
+
+  it('ETA：eta_live 優先於 eta_planned', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({ ...CONTACT_STOP, eta_live: '2026-08-26T07:43:00' })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-eta-11"]').text()).toBe('預計 07:43')
+  })
+
+  it('ETA：naive 台北時間以台北時區格式化，不受裝置時區影響', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop({ eta_planned: '2026-08-26T16:05:00' })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-eta-11"]').text()).toBe('預計 16:05')
+  })
+
+  it('已離站／已跳過／不搭的站不顯示 ETA（對已發生的事講預計時刻只會誤導）', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [
+      stop({ stop_id: 11, seq: 1, status: 'departed', eta_planned: '2026-08-26T07:35:00' }),
+      stop({ stop_id: 12, seq: 2, status: 'skipped', eta_planned: '2026-08-26T07:36:00' }),
+      stop({ stop_id: 13, seq: 3, status: 'excused', eta_planned: '2026-08-26T07:37:00' }),
+    ]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-eta-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-stop-eta-12"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-stop-eta-13"]').exists()).toBe(false)
+  })
+
+  it('沒有 ETA／地址／聯絡人時各區塊不渲染，不留空殼', async () => {
+    s.trip.value = { id: 7 }
+    s.stops.value = [stop()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-eta-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-stop-address-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-stop-contact-11"]').exists()).toBe(false)
   })
 })

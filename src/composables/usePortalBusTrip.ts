@@ -4,7 +4,9 @@
  * 三條主軸：
  * 1. **班次狀態**：進頁**並行**打 `GET /portal/bus/trips/active?mine=true` 與
  *    `GET /portal/bus/routes`（兩支都只需 `BUS_TRIPS_OPERATE`）——有進行中班次就直接
- *    接手，沒有才用路線清單讓司機開新班次。兩支各自判定成敗，見下方 `init`。
+ *    接手，沒有才用班次列表讓司機開新班次。兩支各自判定成敗，見下方 `init`。
+ *    開班選單自 BE-API-PORTAL-01 起是**班次列表**（單方向、含出發時間與當日四態），
+ *    司機不再自己選方向——方向由班次衍生。
  * 2. **GPS 上報**：`watchPosition` 的高頻回呼交給 `@/utils/busPingBuffer` 節流成
  *    每 5 秒一批，再由本檔負責送出與**重送**。
  * 3. **站點推進**：離站／跳站／撤銷，回應的 `stops` 為權威值直接覆寫。
@@ -25,8 +27,8 @@
  *    前端同樣不得吞掉：`employeeUnlinked` 旗標讓畫面明講「請先綁定員工資料」，
  *    因為這條路徑重試不會變好，而開班（`_require_employee_id`）同樣會 403。
  *
- * `tripSummary`（「路線・方向」）保留：接手來的班次未必是自己選的那條，
- * 而 `start()` 的 409 接手仍是以 route＋direction 限縮、非 operator 維度。
+ * `tripSummary`（「班次名稱・方向」）保留：接手來的班次未必是自己選的那條，
+ * 而 `start()` 的 409 接手仍是以 route 限縮、非 operator 維度。
  *
  * ⚠ **`mine=true` 的必然代價（使用者可見）**：司機**中途換手**後，接手的老師重載頁面
  * 會查不到那一班——`operator_employee_id` 仍是原司機，`mine=true` 依定義就不回它。
@@ -51,8 +53,13 @@
  *
  * ── 隱私（spec 硬規則）────────────────────────────────────────────────────
  * 站點座標與 GPS 座標都是位置資料：本檔不 log、不進任何 storage、不進 URL query，
- * 錯誤訊息一律用後端文案不夾帶座標；路線清單只留 `id`/`name`，回應裡的學生名冊
- * 與家庭座標不進前端狀態（連 Vue devtools 都看不到）。
+ * 錯誤訊息一律用後端文案不夾帶座標。
+ *
+ * ⚠ 第二期揭露面放寬（spec「司機端（Portal）」）：站點卡片要顯示**接送地址與
+ * 聯絡人電話**，因此 `stops` 內確實持有地址與電話——這是 `BUS_TRIPS_OPERATE`
+ * 授權範圍內的刻意揭露，但「不進 log／Sentry／URL／storage」的既有硬規則
+ * **完全不變**，反而更重要（電話比座標更容易被順手 log 出來）。開班選單
+ * （`routes`）仍不含任何名冊，只有班次本身的中繼資料。
  */
 import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -89,7 +96,7 @@ export const SUSPECT_TIMESTAMP_STREAK = 3
  */
 export const ACTIVE_TRIP_RESYNC_INTERVAL_MS = 60_000
 
-/** 方向的中文標籤；後端 `direction` 只有這兩個值（`TripStartIn` 的 pattern 限定）。 */
+/** 方向的中文標籤；後端 `direction` 只有這兩個值（`ck_bus_routes_direction` 限定）。 */
 export const DIRECTION_LABELS: Record<string, string> = {
   morning: '早上接學生',
   afternoon: '下午送學生',
@@ -100,20 +107,66 @@ export const DIRECTION_LABELS: Record<string, string> = {
  * `src/api/_generated/schema.d.ts` 尚未涵蓋 `/bus` 路徑，故在此以最小欄位 narrow；
  * codegen 補上後應改用產生型別（比照 `src/parent/composables/useBusTracking.ts`）。
  */
+/** 接送聯絡人（後端已依 is_primary／is_emergency／fallback 規則挑好，前端不再篩）。 */
+export interface BusStopContact {
+  name: string
+  phone: string | null
+}
+
 export interface BusTripStop {
   stop_id: number
   student_id: number
   student_name: string
   seq: number
-  status: string
-  departed_at?: string | null
   /**
-   * 該生今日已核准請假（後端即時計算，非落庫）。**只是標示，不改變流程**：
-   * 站仍是 pending、司機仍要自己按跳過——請假資料若有誤，自動跳站會漏接。
-   * 選填：舊回應或此欄位缺席時視同 false。
+   * `pending`／`departed`／`skipped`／`excused`。
+   *
+   * ⚠ 契約破壞（spec「第一期契約破壞清單」）：第一期的 `on_leave` 即時查詢已
+   * 移除，**`excused` 是「當日不搭」的單一事實來源**（請假核准／家長今天不搭／
+   * 後台排除三條路徑都落成 excused）。司機端對 excused 站不提供任何操作，也
+   * **不**提供恢復——第一期「標示請假但仍要司機自己按跳過」的語意整個退場。
    */
-  on_leave?: boolean
+  status: string
+  /** `leave`／`parent`／`admin`；status 為 excused 時才有值。 */
+  excuse_reason?: string | null
+  source?: string | null
+  pinned?: boolean
+  /** 接送地址快照（＝所選接送地址，不一定是住家）。 */
+  address?: string | null
+  contacts?: BusStopContact[]
+  /** 最佳化排定的 ETA（naive 台北牆鐘 ISO 字串）。 */
+  eta_planned?: string | null
+  /** 行進間動態重算的 ETA；有值時優先於 `eta_planned`。 */
+  eta_live?: string | null
+  lat?: number | null
+  lng?: number | null
+  departed_at?: string | null
 }
+
+/**
+ * 開班選單的一筆班次（`GET /portal/bus/routes`，BE-API-PORTAL-01）。
+ *
+ * `today_status` 四態（spec「司機端（Portal）」）：
+ * - `none`：今日尚無班次（`expired` 也歸此態，開班走懶生成）
+ * - `planned`：今日已排定但未發車（開班＝接手轉 in_progress）
+ * - `in_progress`：今日進行中
+ * - `completed`：今日已完成，**仍可再開同日第二趟**
+ *
+ * 後端 openapi 只標 `type: string`（無 enum），故型別上是 string，此處以聯集
+ * narrow 供 UI 分支；收到未知值時一律當 `none` 處理（見 `normalizeTodayStatus`）。
+ */
+export type BusRouteTodayStatus = 'none' | 'planned' | 'in_progress' | 'completed'
+
+export interface BusRouteBrief {
+  id: number
+  name: string
+  direction: 'morning' | 'afternoon'
+  depart_time: string
+  sort_order: number
+  today_status: BusRouteTodayStatus
+  today_trip_id: number | null
+}
+
 export interface BusTripBrief {
   id: number
   route_id: number
@@ -129,13 +182,31 @@ function errorStatus(e: unknown): number | undefined {
   return (e as { response?: { status?: number } } | null)?.response?.status
 }
 
+const TODAY_STATUSES: readonly BusRouteTodayStatus[] = ['none', 'planned', 'in_progress', 'completed']
+
+/**
+ * 後端 openapi 對 `today_status` 只標 `type: string`（無 enum），型別上拿到的是
+ * string。未知值一律當 `none`——保守方向：`none` 的 UI 是「可開班」，最壞情況是
+ * 司機按下去讓後端擋，而不是把一班真的能開的車顯示成不能開。
+ */
+function normalizeTodayStatus(raw: unknown): BusRouteTodayStatus {
+  return TODAY_STATUSES.includes(raw as BusRouteTodayStatus)
+    ? (raw as BusRouteTodayStatus)
+    : 'none'
+}
+
 export function usePortalBusTrip() {
   const trip = ref<BusTripBrief | null>(null)
   const stops = ref<BusTripStop[]>([])
-  const routes = ref<Array<{ id: number; name: string }>>([])
+  const routes = ref<BusRouteBrief[]>([])
   const selectedRouteId = ref<number | null>(null)
-  const direction = ref<'morning' | 'afternoon'>('morning')
   const loading = ref(true)
+  /**
+   * 發車被擋下的原因（422：缺座標／超座位上限）。**刻意不是 toast**：司機在
+   * 車上、手邊在忙，一閃即逝的提示看不到就再也回不來，而這兩種錯誤都要人去
+   * 後台改資料才會好，訊息必須留在畫面上直到下一次嘗試。
+   */
+  const startBlockedMessage = ref<string | null>(null)
   const starting = ref(false)
   const completing = ref(false)
   const actingStopId = ref<number | null>(null)
@@ -181,8 +252,8 @@ export function usePortalBusTrip() {
   const pendingStopActionCount = computed(() => stopRetryQueue.value.length)
   /**
    * 「A 線・早上接學生」。班次進行中一定要顯示：進頁復原雖已用 `mine=true` 收斂到
-   * 「我的班次」，但 `start()` 的 409 接手仍以 route＋direction 限縮（非 operator 維度），
-   * 且同路線兩個方向同時在跑時仍可能接到非預期方向——這一行是司機自己察覺的訊號。
+   * 「我的班次」，但 `start()` 的 409 接手仍以 route 限縮（非 operator 維度）
+   * ——接到的未必是自己按下去的那一班，這一行是司機自己察覺的訊號。
    * 一律取自 `trip.route_id`（**不是** `selectedRouteId`）：接手來的班次未必是自己選的那條，
    * 用選單值會顯示成「看起來沒問題」，正好把要暴露的問題蓋掉。
    */
@@ -421,11 +492,11 @@ export function usePortalBusTrip() {
     const current = trip.value
     if (!current) return
     try {
-      const res = await getActiveBusTrip(current.route_id, current.direction)
+      const res = await getActiveBusTrip(current.route_id, null)
       syncClock(res as ApiHeaders)
       const data = (res as { data?: ActivePayload }).data
       // 這支查詢**不帶** `mine=true`（理由見上方註解：司機中途換手後仍要能核到
-      // 「班次還在」），代價是同 route+direction 若已被另一位司機開了新班次，
+      // 「班次還在」），代價是同一班次若已被另一位司機開了新的一趟，
       // 回傳的會是「別人的班次」——不同 `trip.id`。這裡只用來核對「我手上這張
       // 是否還在」，絕不可拿別人的 trip.id 覆寫過來：那會讓這支裝置的畫面載入
       // 別人班次的學生姓名與家庭座標（PII），並把自己的 GPS 灌進別人的班次。
@@ -442,27 +513,43 @@ export function usePortalBusTrip() {
 
   /**
    * 取進行中的班次。**至少要帶一個維度**（後端一個都不帶時是全域查詢，多路線同時開班
-   * 會回到別條路線的完整站點名冊＝學生姓名與家庭座標）：已知路線時帶 route/direction，
-   * 進頁復原沒有已知路線，改帶 `mine=true`。
+   * 會回到別條路線的完整站點名冊＝學生姓名、家庭座標與聯絡電話）：已知班次時帶
+   * `route_id`，進頁復原沒有已知班次，改帶 `mine=true`。
    */
-  async function loadActive(
-    routeId?: number | null,
-    dir?: 'morning' | 'afternoon' | null,
-    mine = false,
-  ): Promise<void> {
-    const res = await getActiveBusTrip(routeId ?? null, dir ?? null, mine)
+  async function loadActive(routeId?: number | null, mine = false): Promise<void> {
+    // `direction` 一律不帶：班次已是單方向（bussch03），route_id 本身就決定了
+    // 方向，多帶一個維度只會在「後端 trip.direction 與 route.direction 不同步」
+    // 這種資料異常時把查得到的班次濾掉。
+    const res = await getActiveBusTrip(routeId ?? null, null, mine)
     syncClock(res as ApiHeaders)
     applyActive((res as { data?: ActivePayload }).data)
   }
 
-  /** 開班選單（`GET /portal/bus/routes`，與開班同權限、不含站點名冊）。失敗往上拋。 */
+  /**
+   * 開班選單（`GET /portal/bus/routes`，與開班同權限、不含站點名冊）。失敗往上拋。
+   *
+   * BE-API-PORTAL-01 起是**班次列表**（單方向、含出發時間與當日四態），不再是
+   * 「路線 × 自己選方向」。依 `sort_order` 排序（後端已排，這裡再排一次是防禦：
+   * 排序是司機找班次的唯一線索，不該押在「後端一定照順序回」）。
+   */
   async function loadRoutes(): Promise<void> {
     const res = await listPortalBusRoutes()
     syncClock(res as ApiHeaders)
-    const raw = (res as { data?: { routes?: Array<{ id: number; name: string; is_active: boolean }> } })
+    const raw = (res as { data?: { routes?: Array<Record<string, unknown>> } })
       .data?.routes ?? []
-    // 只留 id/name；`is_active` 過濾是防禦（端點已只回啟用中，欄位仍在 schema 裡）。
-    routes.value = raw.filter((r) => r.is_active).map((r) => ({ id: r.id, name: r.name }))
+    // `is_active` 過濾是防禦（端點已只回啟用中，欄位仍在 schema 裡）。
+    routes.value = raw
+      .filter((r) => r.is_active !== false)
+      .map((r): BusRouteBrief => ({
+        id: Number(r.id),
+        name: String(r.name ?? ''),
+        direction: r.direction === 'afternoon' ? 'afternoon' : 'morning',
+        depart_time: typeof r.depart_time === 'string' ? r.depart_time : '',
+        sort_order: typeof r.sort_order === 'number' ? r.sort_order : 0,
+        today_status: normalizeTodayStatus(r.today_status),
+        today_trip_id: typeof r.today_trip_id === 'number' ? r.today_trip_id : null,
+      }))
+      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
     selectedRouteId.value = routes.value.length === 1 ? routes.value[0].id : null
   }
 
@@ -471,7 +558,7 @@ export function usePortalBusTrip() {
    * 也就是別人的班次）。錯誤一律往上拋，由 `init` 依兩支請求的組合判定。
    */
   async function findActiveTrip(): Promise<void> {
-    await loadActive(null, null, true)
+    await loadActive(null, true)
   }
 
   /**
@@ -509,29 +596,62 @@ export function usePortalBusTrip() {
     loading.value = false
   }
 
+  /**
+   * 開班。契約破壞（spec「第一期契約破壞清單—POST /portal/bus/trips」）：
+   * **不再帶 `direction`**，方向由班次衍生；「有今日 planned 就接手轉
+   * in_progress、沒有就懶生成再轉」整段由後端處理，前端不先打 daily-plans。
+   *
+   * 錯誤分流：
+   * - 409：已有進行中班次（含昨天忘按結束的）→ 沿用既有接手邏輯，但限縮維度
+   *   從「route＋direction」降為 **route_id 單維度**（班次已是單方向）。
+   *   bus_count 併發上限也是 409，但那種情況查不到自己的班次，接手會落空，
+   *   由 `loadActive` 後的空結果 + 後端訊息呈現。
+   * - 422：發車驗證失敗（缺座標／超座位上限）→ 留在畫面上的持久訊息，見
+   *   `startBlockedMessage`。
+   */
   async function start(): Promise<void> {
     const routeId = selectedRouteId.value
-    if (!routeId) { ElMessage.error('請先選擇路線'); return }
+    if (!routeId) { ElMessage.error('請先選擇班次'); return }
     starting.value = true
+    startBlockedMessage.value = null
     try {
-      const res = await startBusTrip(routeId, direction.value)
+      const res = await startBusTrip(routeId)
       syncClock(res as ApiHeaders)
       applyActive((res as { data?: ActivePayload }).data)
     } catch (e) {
       if (errorStatus(e) === 409) {
-        // 已有進行中班次（含昨天忘記按結束的）：以自己這條路線＋方向限縮接手。
         ElMessage.warning('已有進行中的班次，為您接手')
         try {
-          await loadActive(routeId, direction.value)
+          await loadActive(routeId)
         } catch (inner) {
           ElMessage.error(apiError(inner, '接手班次失敗，請重新整理'))
         }
+        // 接手落空（例如 409 其實是 bus_count 達上限，這條路線並沒有我的班次）：
+        // 不可靜默停在「沒有班次」的畫面，那看起來像什麼都沒發生。
+        if (!trip.value) startBlockedMessage.value = apiError(e, '目前無法開始班次')
+      } else if (errorStatus(e) === 422) {
+        startBlockedMessage.value = startValidationMessage(e)
       } else {
         ElMessage.error(apiError(e, '開始班次失敗'))
       }
     } finally {
       starting.value = false
     }
+  }
+
+  /**
+   * 發車驗證 422 的訊息。缺座標那條後端帶 `student_ids`——**故意不顯示 id**
+   * （司機看不懂學號序號，顯示出來只是雜訊，也把內部識別碼帶進了畫面），
+   * 只補上「共 N 位」讓司機知道要請行政補幾筆。
+   */
+  function startValidationMessage(e: unknown): string {
+    const base = apiError(e, '發車前檢查未通過')
+    const detail = (e as { response?: { data?: { detail?: unknown } } } | null)
+      ?.response?.data?.detail
+    const ids = detail && typeof detail === 'object' && !Array.isArray(detail)
+      ? (detail as { student_ids?: unknown }).student_ids
+      : null
+    return Array.isArray(ids) && ids.length > 0 ? `${base}（共 ${ids.length} 位）` : base
   }
 
   // ── 站點推進 ──────────────────────────────────────────────────────────────
@@ -610,7 +730,7 @@ export function usePortalBusTrip() {
           ElMessage.info('此站狀態已由其他裝置更新')
         }
         const current = trip.value
-        if (current) await loadActive(current.route_id, current.direction).catch(() => {})
+        if (current) await loadActive(current.route_id).catch(() => {})
         return
       }
       if (status !== undefined && status < 500) {
@@ -643,6 +763,18 @@ export function usePortalBusTrip() {
     }
   }
 
+  /**
+   * `excused` 站一律不可操作（spec「司機端（Portal）」：灰態、且**不提供恢復**）。
+   *
+   * UI 已經不會渲染這些按鈕，這道守衛是縱深防禦：excused 的三種來源（請假核准／
+   * 家長今天不搭／後台排除）都是「這孩子今天不在車上」的既成事實，司機端誤按
+   * 離站等於在系統裡記下一筆沒發生過的接送。以 `stops` 內的權威狀態判定，不信
+   * 呼叫端傳進來的物件——重排／resync 後呼叫端手上的可能是舊的。
+   */
+  function isExcused(stopId: number): boolean {
+    return stops.value.find((s) => s.stop_id === stopId)?.status === 'excused'
+  }
+
   async function runStopAction(
     kind: StopActionKind,
     stop: { stop_id: number },
@@ -650,6 +782,7 @@ export function usePortalBusTrip() {
   ): Promise<void> {
     const current = trip.value
     if (!current || actingStopId.value !== null) return
+    if (isExcused(stop.stop_id)) return
     actingStopId.value = stop.stop_id
     try {
       await performStopAction(kind, current.id, stop.stop_id, fallbackMessage)
@@ -708,8 +841,8 @@ export function usePortalBusTrip() {
   }
 
   return {
-    trip, stops, routes, selectedRouteId, direction,
-    loading, starting, completing, actingStopId,
+    trip, stops, routes, selectedRouteId,
+    loading, starting, completing, actingStopId, startBlockedMessage,
     gpsActive, gpsSupported, gpsClockSuspect, gpsPermissionDenied,
     snapshotFailed, employeeUnlinked, routesFailed,
     pendingPingCount, pendingStopActionCount, tripSummary,

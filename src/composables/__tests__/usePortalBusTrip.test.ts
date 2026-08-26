@@ -63,13 +63,30 @@ function tripPayload(overrides: Record<string, unknown> = {}) {
   }
 }
 
+/**
+ * 開班選單（BE-API-PORTAL-01 後是**班次列表**：單方向、含出發時間與當日四態）。
+ * `sort_order` 刻意亂序給，用來咬住前端那道防禦性排序。
+ */
 function routesPayload() {
   return {
     routes: [
-      { id: 3, name: 'A 線', is_active: true },
-      // 端點理應只回啟用中的路線；保留一筆停用的用來咬住前端那道防禦性過濾
-      { id: 4, name: 'B 線（停用）', is_active: false },
+      {
+        id: 3, name: 'A 線', is_active: true, direction: 'morning',
+        depart_time: '07:30', sort_order: 1, today_status: 'none', today_trip_id: null,
+      },
+      // 端點理應只回啟用中的班次；保留一筆停用的用來咬住前端那道防禦性過濾
+      { id: 4, name: 'B 線（停用）', is_active: false, direction: 'morning',
+        depart_time: '07:40', sort_order: 2, today_status: 'none', today_trip_id: null },
     ],
+  }
+}
+
+/** 造一筆班次列表項目（只覆寫要測的欄位）。 */
+function routeItem(over: Record<string, unknown> = {}) {
+  return {
+    id: 3, name: 'A 線', is_active: true, direction: 'morning',
+    depart_time: '07:30', sort_order: 1, today_status: 'none', today_trip_id: null,
+    ...over,
   }
 }
 
@@ -341,13 +358,52 @@ describe('usePortalBusTrip — 進頁載入', () => {
     expect(bus.routesFailed.value).toBe(false)
   })
 
-  it('路線清單只保留啟用中的路線，且只留 id/name（不把學生名冊留在前端狀態）', async () => {
+  it('班次列表保留四態欄位、濾掉停用班次，且不含任何學生名冊', async () => {
     const bus = createBus()
     await bus.init()
     await flushPromises()
 
-    expect(bus.routes.value).toEqual([{ id: 3, name: 'A 線' }])
+    expect(bus.routes.value).toEqual([{
+      id: 3, name: 'A 線', direction: 'morning', depart_time: '07:30',
+      sort_order: 1, today_status: 'none', today_trip_id: null,
+    }])
+    // 開班選單的授權面（BUS_TRIPS_OPERATE）比 BUS_READ 寬，端點刻意不回 stops；
+    // 前端狀態也不得出現任何名冊痕跡。
     expect(JSON.stringify(bus.routes.value)).not.toContain('is_active')
+    expect(JSON.stringify(bus.routes.value)).not.toContain('stops')
+  })
+
+  it('班次依 sort_order 排序（司機找班次的唯一線索，不押在後端回傳順序）', async () => {
+    vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
+      routes: [
+        routeItem({ id: 9, name: 'C 線', sort_order: 3 }),
+        routeItem({ id: 5, name: 'B 線', sort_order: 2 }),
+        routeItem({ id: 3, name: 'A 線', sort_order: 1 }),
+      ],
+    }) as never)
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.routes.value.map((r) => r.name)).toEqual(['A 線', 'B 線', 'C 線'])
+  })
+
+  it('當日四態原樣帶進狀態；未知值一律保守當 none（可開班，讓後端擋）', async () => {
+    vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
+      routes: [
+        routeItem({ id: 3, sort_order: 1, today_status: 'planned', today_trip_id: 71 }),
+        routeItem({ id: 5, sort_order: 2, today_status: 'in_progress', today_trip_id: 72 }),
+        routeItem({ id: 7, sort_order: 3, today_status: 'completed', today_trip_id: 73 }),
+        routeItem({ id: 9, sort_order: 4, today_status: 'wat', today_trip_id: null }),
+      ],
+    }) as never)
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.routes.value.map((r) => r.today_status))
+      .toEqual(['planned', 'in_progress', 'completed', 'none'])
+    expect(bus.routes.value[0].today_trip_id).toBe(71)
   })
 
   it('只有一條啟用路線時自動選取', async () => {
@@ -379,7 +435,7 @@ describe('usePortalBusTrip — 進頁載入', () => {
     await flushPromises()
 
     expect(listPortalBusRoutes).toHaveBeenCalledTimes(1)
-    expect(bus.routes.value).toEqual([{ id: 3, name: 'A 線' }])
+    expect(bus.routes.value.map((r) => r.id)).toEqual([3])
   })
 })
 
@@ -391,14 +447,15 @@ describe('usePortalBusTrip — 開始班次', () => {
     return bus
   }
 
-  it('成功開班後套用班次並開始追蹤', async () => {
+  it('成功開班後套用班次並開始追蹤；start 不再帶 direction（方向由班次衍生）', async () => {
     vi.mocked(startBusTrip).mockResolvedValue(resp(tripPayload()) as never)
     const bus = await bootForStart()
-    bus.direction.value = 'afternoon'
     await bus.start()
     await flushPromises()
 
-    expect(startBusTrip).toHaveBeenCalledWith(3, 'afternoon')
+    // 契約破壞（spec「第一期契約破壞清單—POST /portal/bus/trips」）：
+    // TripStartIn.direction 已移除，多傳一個參數就是回到舊契約。
+    expect(startBusTrip).toHaveBeenCalledWith(3)
     expect(bus.trip.value?.id).toBe(7)
     expect(geolocation.watchPosition).toHaveBeenCalledTimes(1)
   })
@@ -412,33 +469,90 @@ describe('usePortalBusTrip — 開始班次', () => {
     expect(ElMessage.error).toHaveBeenCalled()
   })
 
-  it('409 已有進行中班次：接手時以 route_id + direction 限縮查詢（不得撈到別條路線的名冊）', async () => {
+  it('409 已有進行中班次：接手時以 route_id 單維度限縮（不得撈到別條班次的名冊）', async () => {
     vi.mocked(startBusTrip).mockRejectedValue(
       axiosError(409, { message: '已有進行中的班次', trip_id: 7 }),
     )
     const bus = await bootForStart() // 進頁時沒有班次，才會走到「選路線 → 開班」
     vi.mocked(getActiveBusTrip).mockResolvedValue(resp(tripPayload()) as never)
-    bus.direction.value = 'morning'
     await bus.start()
     await flushPromises()
 
     // 接手／重新同步一律 `mine=false`：後端刻意允許任一持 BUS_TRIPS_OPERATE 的帳號
     // 接手別人開的班次（司機中途換手），帶 mine 會把換手情境擋成「查無班次」。
-    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, 'morning', false)
+    // direction 一律 null：班次已是單方向，route_id 本身就決定了方向。
+    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, null, false)
     expect(bus.trip.value?.id).toBe(7)
     expect(ElMessage.warning).toHaveBeenCalled()
     expect(geolocation.watchPosition).toHaveBeenCalledTimes(1)
   })
 
   it('其他錯誤顯示後端訊息且不開始追蹤', async () => {
-    vi.mocked(startBusTrip).mockRejectedValue(axiosError(422, '此方向尚未設定站點'))
+    vi.mocked(startBusTrip).mockRejectedValue(axiosError(500, '伺服器忙碌中'))
     const bus = await bootForStart()
     await bus.start()
     await flushPromises()
 
-    expect(ElMessage.error).toHaveBeenCalledWith('此方向尚未設定站點')
+    expect(ElMessage.error).toHaveBeenCalledWith('伺服器忙碌中')
     expect(bus.trip.value).toBeNull()
     expect(geolocation.watchPosition).not.toHaveBeenCalled()
+  })
+
+  it('422 缺座標：訊息留在畫面上（不是 toast）並補上人數，不外洩 student_id', async () => {
+    // 司機在車上手邊在忙，一閃即逝的 toast 看不到就再也回不來；而這種錯誤要人去
+    // 後台補資料才會好。student_ids 是內部識別碼，司機看不懂，只給「共 N 位」。
+    vi.mocked(startBusTrip).mockRejectedValue(axiosError(422, {
+      message: '部分學生缺少接送座標，請先於班次編輯補設接送地址',
+      student_ids: [101, 102, 103],
+    }))
+    const bus = await bootForStart()
+    await bus.start()
+    await flushPromises()
+
+    expect(bus.startBlockedMessage.value)
+      .toBe('部分學生缺少接送座標，請先於班次編輯補設接送地址（共 3 位）')
+    expect(bus.startBlockedMessage.value).not.toContain('101')
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    expect(bus.trip.value).toBeNull()
+  })
+
+  it('422 超過座位上限：後端字串訊息原樣留在畫面上', async () => {
+    vi.mocked(startBusTrip).mockRejectedValue(
+      axiosError(422, '座位上限為 20，目前已有 22 位學生'),
+    )
+    const bus = await bootForStart()
+    await bus.start()
+    await flushPromises()
+
+    expect(bus.startBlockedMessage.value).toBe('座位上限為 20，目前已有 22 位學生')
+  })
+
+  it('下一次開班先清掉上一輪的阻擋訊息', async () => {
+    vi.mocked(startBusTrip).mockRejectedValue(axiosError(422, '座位上限為 20，目前已有 22 位學生'))
+    const bus = await bootForStart()
+    await bus.start()
+    await flushPromises()
+    expect(bus.startBlockedMessage.value).not.toBeNull()
+
+    vi.mocked(startBusTrip).mockResolvedValue(resp(tripPayload()) as never)
+    await bus.start()
+    await flushPromises()
+    expect(bus.startBlockedMessage.value).toBeNull()
+  })
+
+  it('409 但接手落空（bus_count 達上限）不得靜默停在開班畫面', async () => {
+    // 這種 409 的 trip 不是自己的，接手查不到；若不留訊息，畫面看起來像什麼都沒發生。
+    vi.mocked(startBusTrip).mockRejectedValue(
+      axiosError(409, '目前已有 2 輛車在路上，達本校可用車輛數上限（2）'),
+    )
+    const bus = await bootForStart()
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null, stops: null }) as never)
+    await bus.start()
+    await flushPromises()
+
+    expect(bus.trip.value).toBeNull()
+    expect(bus.startBlockedMessage.value)
+      .toBe('目前已有 2 輛車在路上，達本校可用車輛數上限（2）')
   })
 
   it('starting 旗標在成功與失敗後都會歸位', async () => {
@@ -1047,7 +1161,7 @@ describe('usePortalBusTrip — 站點操作', () => {
     expect(ElMessage.error).toHaveBeenCalledWith('此站已處理')
     // 接手／重新同步一律 `mine=false`：後端刻意允許任一持 BUS_TRIPS_OPERATE 的帳號
     // 接手別人開的班次（司機中途換手），帶 mine 會把換手情境擋成「查無班次」。
-    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, 'morning', false)
+    expect(getActiveBusTrip).toHaveBeenLastCalledWith(3, null, false)
     expect(bus.stops.value.map((s) => s.status)).toEqual(['departed'])
     // 重新同步時已在追蹤中，不得再開一組 watch／計時器（舊的會變成無人持有的孤兒）
     expect(geolocation.watchPosition).toHaveBeenCalledTimes(1)
@@ -1423,5 +1537,103 @@ describe('測試輔助函式自檢', () => {
     emitPosition(LOCAL_NOW_MS)
     await advanceToFlush()
     expect(sentPoints()[0].at).toBe(new Date(LOCAL_NOW_MS + ONE_HOUR_MS).toISOString())
+  })
+})
+
+describe('usePortalBusTrip — excused 是當日不搭的單一事實來源（FE-PORTAL-01）', () => {
+  function excusedPayload() {
+    return {
+      trip: { id: 7, route_id: 3, direction: 'morning', status: 'in_progress' },
+      stops: [
+        {
+          stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'excused',
+          excuse_reason: 'parent', address: '高雄市三民區某路 1 號',
+          contacts: [{ name: '王媽媽', phone: '0912345678' }],
+          eta_planned: '2026-08-26T07:35:00', eta_live: null,
+        },
+        {
+          stop_id: 12, student_id: 102, student_name: '小華', seq: 2, status: 'pending',
+          address: '高雄市三民區某路 9 號',
+          contacts: [{ name: '李爸爸', phone: '0987654321' }],
+          eta_planned: '2026-08-26T07:40:00', eta_live: '2026-08-26T07:43:00',
+        },
+      ],
+    }
+  }
+
+  async function bootExcused() {
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp(excusedPayload()) as never)
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+    return bus
+  }
+
+  it('第二期新欄位（地址／聯絡人／ETA／excuse_reason）完整進狀態供卡片渲染', async () => {
+    const bus = await bootExcused()
+    const [excused, pending] = bus.stops.value
+
+    expect(excused.status).toBe('excused')
+    expect(excused.excuse_reason).toBe('parent')
+    expect(pending.address).toBe('高雄市三民區某路 9 號')
+    expect(pending.contacts?.[0]).toEqual({ name: '李爸爸', phone: '0987654321' })
+    expect(pending.eta_live).toBe('2026-08-26T07:43:00')
+  })
+
+  it('excused 站不可離站／跳過／撤銷（司機端不提供恢復，spec 明文）', async () => {
+    const bus = await bootExcused()
+    const excused = bus.stops.value[0]
+
+    await bus.departStop(excused as never)
+    await bus.skipStop(excused as never)
+    await bus.undoStop(excused as never)
+    await flushPromises()
+
+    expect(departBusStop).not.toHaveBeenCalled()
+    expect(skipBusStop).not.toHaveBeenCalled()
+    expect(undoBusStop).not.toHaveBeenCalled()
+  })
+
+  it('守衛以 stops 內的權威狀態判定，不信呼叫端傳進來的舊物件', async () => {
+    // resync／重排後，畫面上那份 stop 物件可能還是舊的（status=pending），
+    // 若照著它判定就會對一個已經 excused 的站送出離站。
+    const bus = await bootExcused()
+    const staleObject = { stop_id: 11, status: 'pending' }
+
+    await bus.departStop(staleObject as never)
+    await flushPromises()
+
+    expect(departBusStop).not.toHaveBeenCalled()
+  })
+
+  it('pending 站不受影響，照常可以離站', async () => {
+    const bus = await bootExcused()
+    vi.mocked(departBusStop).mockResolvedValue(resp(excusedPayload()) as never)
+
+    await bus.departStop(bus.stops.value[1] as never)
+    await flushPromises()
+
+    expect(departBusStop).toHaveBeenCalledWith(7, 12)
+  })
+
+  it('第一期的 on_leave 完全不再影響流程（excused 已取代它）', async () => {
+    // 後端 build_admin_stops_payload 已不回這個欄位。若前端還殘留任何對它的
+    // 判斷，帶著 on_leave=true 的 pending 站會被誤當成不可操作。
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({
+      trip: { id: 7, route_id: 3, direction: 'morning', status: 'in_progress' },
+      stops: [{
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'pending', on_leave: true,
+      }],
+    }) as never)
+    const bus = createBus()
+    await bus.init()
+    await flushPromises()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ trip: null, stops: [] }) as never)
+
+    await bus.departStop(bus.stops.value[0] as never)
+    await flushPromises()
+
+    expect(departBusStop).toHaveBeenCalledWith(7, 11)
   })
 })
