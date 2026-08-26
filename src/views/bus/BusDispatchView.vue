@@ -45,6 +45,21 @@ const {
 } = dispatch
 
 // ── 班次卡片 ────────────────────────────────────────────────────────────────
+type CardStatus = 'none' | 'planned' | 'in_progress' | 'completed' | 'expired'
+
+const CARD_STATUSES: readonly CardStatus[] = ['none', 'planned', 'in_progress', 'completed', 'expired']
+
+/**
+ * `trip.status` 在 codegen 只是 `string`（後端 Pydantic 宣告 `status: str`，沒有 enum）。
+ * 直接 `as` 成聯集會把型別檢查關掉，而 `BusDispatchRouteCard` 內部是
+ * `STATUS_META[status]` 查表——查不到回 `undefined`，template 再讀 `.label` 就是整頁
+ * render 崩，型別上還完全看不出來。未知值一律退 `none`（保守方向：顯示成「未生成」
+ * 而不是猜一個可編輯的狀態；真正的寫入權限另由 `editable` 依後端規則判定）。
+ */
+function toCardStatus(status: string): CardStatus {
+  return (CARD_STATUSES as readonly string[]).includes(status) ? (status as CardStatus) : 'none'
+}
+
 /**
  * `end_time_estimated` 固定為 null：後端 `DailyPlanTripOut`（`api/bus/daily_plans.py::
  * _trip_out`）**沒有帶這個欄位**，只有 `BusTripAdminOut` 有。與其自己拿別的數字充數，
@@ -55,7 +70,7 @@ const cards = computed(() => plans.value.map((p) => ({
   route_name: p.route_name,
   direction: p.direction,
   depart_time: p.depart_time,
-  status: p.trip.status as 'none' | 'planned' | 'in_progress' | 'completed' | 'expired',
+  status: toCardStatus(p.trip.status),
   departed_count: p.stops.filter((s) => s.status === 'departed').length,
   pending_count: p.stops.filter((s) => s.status === 'pending').length,
   capacity: p.capacity,

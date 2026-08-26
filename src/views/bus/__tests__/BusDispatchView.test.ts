@@ -223,6 +223,17 @@ describe('班次卡片', () => {
     expect(card.pending_count).toBe(2)
   })
 
+  it('未知的 trip.status 退成 none，不讓卡片的狀態查表撈到 undefined 而整頁崩', async () => {
+    // 後端 Pydantic 宣告 status: str（沒有 enum），codegen 也就只是 string；
+    // 卡片內部是 STATUS_META[status] 查表，查不到會讓 template 讀 undefined.label
+    s.plans.value = [plan({}, { status: 'cancelled_by_future_migration' })]
+    const w = mountView()
+    await flushPromises()
+    const card = w.findComponent({ name: 'BusDispatchRouteCard' })
+    expect((card.props('plan') as { status: string }).status).toBe('none')
+    expect(card.text()).toContain('未生成')
+  })
+
   it('點卡片以該班次的 trip_id 切換（卡片 emit 的是 route_id）', async () => {
     s.plans.value = [plan({}, { id: 7, route_id: 3 }), plan({}, { id: 8, route_id: 4 })]
     const w = mountView()
