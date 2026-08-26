@@ -1,55 +1,69 @@
 /**
- * 路線管理頁的呈現守衛。
+ * 班次設定頁的組裝守衛。
  *
- * 重點：**沒有任何路線時不得自作主張建立**（後端沒有刪除／停用端點），以及
- * 缺座標與未儲存這兩個狀態必須看得見——它們分別對應「家長端看不到站點位置」
- * 與「整方向 replace-all 會蓋掉伺服器名冊」。
+ * 重點不在重測子元件（各自有 co-located 測試），而在**頁面層的判斷**：
+ * ①載入失敗優先於空狀態（否則會誘導建出刪不掉的班次）
+ * ②未儲存／缺地址／超載／帶入衝突四個危險狀態必須看得見
+ * ③新增班次含 copy-from、自動排序預覽開啟與套用
+ * ④名單表格符合 2026-08-26 決策：無「定位」按鈕、無座標數字
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { defineComponent, h, ref, computed } from 'vue'
+import ElementPlus from 'element-plus'
 
 const mocks = vi.hoisted(() => {
-  const { ref: r, computed: c } = require('vue') as typeof import('vue')
-  const routes = r<Array<Record<string, unknown>>>([])
-  const stops = r<Array<Record<string, unknown>>>([])
+  const { ref, computed } = require('vue') as typeof import('vue')
+  const routes = ref<Array<Record<string, unknown>>>([])
+  const stops = ref<Array<Record<string, unknown>>>([])
   return {
     api: {
       routes,
-      activeRoute: c(() => routes.value[0] ?? null),
-      activeRouteId: r<number | null>(null),
-      direction: r('morning'),
       stops,
-      students: r<Array<{ id: number; name: string }>>([]),
-      candidates: r<Array<{ id: number; name: string }>>([]),
-      savedStops: r<Array<Record<string, unknown>>>([]),
-      missingCoordinateCount: c(
+      activeRoute: computed(() => routes.value[0] ?? null),
+      activeRouteId: ref<number | null>(3),
+      students: ref<Array<{ id: number; name: string }>>([]),
+      candidates: ref<Array<{ id: number; name: string }>>([{ id: 103, name: '小美' }]),
+      savedStops: ref<Array<Record<string, unknown>>>([]),
+      capacity: computed(() => (routes.value[0]?.capacity as number) ?? 0),
+      weekdayLoads: computed(() => [0, 0, 0, 0, 0]),
+      maxWeekdayLoad: computed(() => 0),
+      overloadedWeekdays: ref<number[]>([]),
+      missingCoordinateCount: computed(
         () => stops.value.filter((s) => s.lat == null || s.lng == null).length,
       ),
-      staleAddressCount: c(
-        () => stops.value.filter((s) => s.address_stale === true).length,
-      ),
-      loading: r(false),
-      saving: r(false),
-      creating: r(false),
-      geocodingStudentId: r<number | null>(null),
-      dirty: r(false),
-      loadFailed: r(false),
-      studentsFailed: r(false),
-      updatingRoute: r(false),
+      staleAddressCount: computed(() => stops.value.filter((s) => s.address_stale === true).length),
+      assignedElsewhere: computed(() => new Map()),
+      copyConflicts: ref<Array<Record<string, unknown>>>([]),
+      loading: ref(false),
+      saving: ref(false),
+      creating: ref(false),
+      updatingRoute: ref(false),
+      reordering: ref(false),
+      optimizing: ref(false),
+      copying: ref(false),
+      dirty: ref(false),
+      loadFailed: ref(false),
+      studentsFailed: ref(false),
       init: vi.fn(),
       loadRoutes: vi.fn(),
-      createRoute: vi.fn(),
-      selectRoute: vi.fn(),
-      setDirection: vi.fn().mockResolvedValue(true),
+      createRoute: vi.fn().mockResolvedValue(11),
+      selectRoute: vi.fn().mockResolvedValue(true),
       updateRoute: vi.fn().mockResolvedValue(true),
+      reorderRoutes: vi.fn().mockResolvedValue(true),
+      confirmDiscard: vi.fn().mockResolvedValue(true),
       addStop: vi.fn(),
       removeStop: vi.fn(),
-      move: vi.fn(),
+      moveStop: vi.fn(),
+      togglePinned: vi.fn(),
+      setRideDays: vi.fn(),
+      setPickupAddress: vi.fn(),
       setCoordinates: vi.fn(),
-      geocodeStop: vi.fn(),
-      mirrorFromMorning: vi.fn(),
+      copyFromRoute: vi.fn().mockResolvedValue(true),
+      optimizePreview: vi.fn().mockResolvedValue(null),
+      applyOptimize: vi.fn(),
+      recomputeEtas: vi.fn().mockResolvedValue(true),
       save: vi.fn(),
+      freeRideDaysFor: vi.fn().mockReturnValue(0b11111),
     },
   }
 })
@@ -60,416 +74,278 @@ vi.mock('@/composables/useBusRouteEditor', async () => {
   )
   return { ...actual, useBusRouteEditor: () => mocks.api }
 })
-vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
-  ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
+vi.mock('@/api/employees', () => ({ getEmployees: vi.fn().mockResolvedValue({ data: [] }) }))
+vi.mock('@/api/bus', () => ({
+  listStudentPickupAddresses: vi.fn().mockResolvedValue({ data: { addresses: [] } }),
+  createStudentPickupAddress: vi.fn(),
+  deleteStudentPickupAddress: vi.fn(),
 }))
 // onBeforeRouteLeave 需要 router 上下文；本檔只驗呈現，直接 no-op
 vi.mock('vue-router', () => ({ onBeforeRouteLeave: vi.fn() }))
 
-import { ElMessageBox } from 'element-plus'
 import BusRoutesView from '@/views/BusRoutesView.vue'
 
 const s = mocks.api
 
-const ElTableColumnStub = defineComponent({
-  name: 'ElTableColumnStub',
-  props: { data: { type: Array, default: () => [] } },
-  setup(props, { slots }) {
-    return () => h('div', {}, (props.data as unknown[]).map(
-      (row, index) => h('div', { key: index }, slots.default ? slots.default({ row, $index: index }) : []),
-    ))
-  },
-})
-const ElTableStub = defineComponent({
-  name: 'ElTableStub',
-  props: { data: { type: Array, default: () => [] } },
-  setup(props, { slots }) {
-    return () => h('div', { class: 'el-table' }, (slots.default?.() ?? []).map(
-      (vnode, index) => h(vnode.type, { ...vnode.props, data: props.data, key: index }, vnode.children),
-    ))
-  },
-})
-/**
- * inheritAttrs:false 避免 `$attrs.onClick` fallthrough 造成雙觸發；但 data-testid
- * 之類的其餘屬性必須自己轉手，否則查詢錨點全部消失（測試會以「元素不存在」的
- * 形式假紅，很容易誤判成元件真的沒渲染）。
- */
-const ElButtonStub = defineComponent({
-  name: 'ElButtonStub',
-  inheritAttrs: false,
-  setup(_, { emit, slots, attrs }) {
-    return () => {
-      const { onClick: _ignored, ...rest } = attrs
-      return h('button', { ...rest, onClick: () => emit('click') }, slots.default?.())
-    }
-  },
-})
-const ElInputStub = defineComponent({
-  props: { modelValue: { type: String, default: '' } },
-  emits: ['update:modelValue'],
-  setup(props, { emit, attrs }) {
-    return () => h('input', {
-      ...attrs,
-      value: props.modelValue,
-      onInput: (e: Event) => emit('update:modelValue', (e.target as HTMLInputElement).value),
-    })
-  },
-})
-const ElSwitchStub = defineComponent({
-  props: { modelValue: { type: Boolean, default: false } },
-  emits: ['update:modelValue'],
-  setup(props, { emit, attrs }) {
-    return () => h('input', {
-      ...attrs,
-      type: 'checkbox',
-      checked: props.modelValue,
-      onChange: (e: Event) => emit('update:modelValue', (e.target as HTMLInputElement).checked),
-    })
-  },
-})
-/** 條件渲染：需要驗證「開啟才看得到對話框內容」的互動測試才用得到 modelValue。 */
-const ElDialogStub = defineComponent({
-  props: { modelValue: { type: Boolean, default: false } },
-  setup(props, { slots }) {
-    return () => (props.modelValue ? h('div', {}, [slots.default?.(), slots.footer?.()]) : null)
-  },
-})
-const GLOBAL_STUBS = {
-  'el-table': ElTableStub,
-  'el-table-column': ElTableColumnStub,
-  'el-button': ElButtonStub,
-  'el-tag': { template: '<span><slot /></span>' },
-  'el-select': { template: '<div><slot /></div>' },
-  'el-option': { props: ['label', 'value'], template: '<div>{{ label }}</div>' },
-  'el-icon': { template: '<span />' },
-  'el-tabs': { template: '<div><slot /></div>' },
-  'el-tab-pane': true,
-  'el-dialog': ElDialogStub,
-  'el-skeleton': true,
-  'el-empty': { template: '<div><slot /></div>' },
-  'el-alert': true,
-  'el-input': ElInputStub,
-  'el-switch': ElSwitchStub,
-  'el-form': { template: '<form><slot /></form>' },
-  'el-form-item': { template: '<label><slot /></label>' },
+function route(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 3,
+    name: '早 A',
+    is_active: true,
+    direction: 'morning',
+    depart_time: '07:30:00',
+    end_time_planned: '08:10:00',
+    sort_order: 0,
+    capacity: 20,
+    operators: [],
+    stops: [],
+    ...overrides,
+  }
 }
-const mountView = () => mount(BusRoutesView, { global: { stubs: GLOBAL_STUBS } })
 
 function stop(overrides: Record<string, unknown> = {}) {
-  return { student_id: 101, student_name: '小明', seq: 1, lat: 22.61, lng: 120.31, ...overrides }
+  return {
+    student_id: 101,
+    student_name: '小明',
+    classroom_name: '小班',
+    seq: 1,
+    lat: 22.61,
+    lng: 120.31,
+    address_snapshot: '高雄市三民區某路 1 號',
+    address_stale: false,
+    ride_days: 0b11111,
+    pinned: false,
+    pickup_address_id: null,
+    eta_planned: '07:35:00',
+    contacts: [],
+    ...overrides,
+  }
+}
+
+async function mountView() {
+  const w = mount(BusRoutesView, { global: { plugins: [ElementPlus] } })
+  await flushPromises()
+  return w
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  s.routes.value = []
-  s.stops.value = []
-  s.candidates.value = []
-  s.activeRouteId.value = null
-  s.direction.value = 'morning'
+  s.routes.value = [route()]
+  s.stops.value = [stop()]
+  s.activeRouteId.value = 3
+  s.copyConflicts.value = []
+  s.overloadedWeekdays.value = []
   s.loading.value = false
-  s.dirty.value = false
   s.loadFailed.value = false
   s.studentsFailed.value = false
+  s.dirty.value = false
+  s.optimizePreview.mockResolvedValue(null)
+  s.createRoute.mockResolvedValue(11)
+  s.copyFromRoute.mockResolvedValue(true)
 })
 
-describe('BusRoutesView', () => {
-  it('進頁載入資料', async () => {
-    mountView()
-    await flushPromises()
-    expect(s.init).toHaveBeenCalledTimes(1)
-  })
-
-  it('沒有任何路線時顯示空狀態，**不得**自動建立路線', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-routes-empty"]').exists()).toBe(true)
-    expect(s.createRoute).not.toHaveBeenCalled()
-  })
-
-  it('載入失敗時顯示錯誤卡，**不得**顯示「尚未建立任何路線」的空狀態', async () => {
-    // 空的 routes 被畫成「園裡沒有路線」＋一顆建立按鈕，一次 403 就會誘導管理者
-    // 建出一條後端沒有端點可以刪除的重複路線。
+describe('BusRoutesView — 誠實降級', () => {
+  it('載入失敗顯示錯誤卡，且**不得**出現空狀態的「建立第一個班次」', async () => {
     s.loadFailed.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-routes-load-error"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="bus-routes-empty"]').exists()).toBe(false)
+    s.routes.value = []
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-routes-load-error"]').exists()).toBe(true)
+    expect(w.find('[data-testid="bus-routes-empty"]').exists()).toBe(false)
   })
 
-  it('載入失敗時「新增路線」按鈕停用', async () => {
+  it('載入失敗時新增班次按鈕 disabled（避免建出重複且刪不掉的班次）', async () => {
     s.loadFailed.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-routes-create"]').attributes('disabled')).toBeDefined()
+    s.routes.value = []
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-routes-create"]').attributes('disabled')).toBeDefined()
   })
 
-  it('載入正常時「新增路線」按鈕可用', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-routes-create"]').attributes('disabled')).toBeUndefined()
+  it('真的沒有班次才顯示空狀態', async () => {
+    s.routes.value = []
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-routes-empty"]').exists()).toBe(true)
   })
 
-  it('學生名單載入失敗時明說（空選單不是「沒有學生可以加」）', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
+  it('學生名單載入失敗要明說，不得讓空選單看起來像「沒有學生可以加」', async () => {
     s.studentsFailed.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-students-error"]').exists()).toBe(true)
-  })
-
-  it('建立路線一律先跳確認（建錯了後端沒有刪除端點）', async () => {
-    vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: 'C 線' } as never)
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-routes-empty"] button').trigger('click')
-    await flushPromises()
-    expect(ElMessageBox.prompt).toHaveBeenCalled()
-    expect(s.createRoute).toHaveBeenCalledWith('C 線')
-  })
-
-  it('取消建立時不呼叫 createRoute', async () => {
-    vi.mocked(ElMessageBox.prompt).mockRejectedValue(new Error('cancel'))
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-routes-empty"] button').trigger('click')
-    await flushPromises()
-    expect(s.createRoute).not.toHaveBeenCalled()
-  })
-
-  it('有站點缺座標時亮出警示（家長端看不到該站位置）', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.stops.value = [stop(), stop({ student_id: 102, student_name: '小華', seq: 2, lat: null, lng: null })]
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-missing-coords"]').exists()).toBe(true)
-  })
-
-  it('座標齊全時不顯示警示', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.stops.value = [stop()]
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-missing-coords"]').exists()).toBe(false)
-  })
-
-  it('站點 address_stale 時該列顯示過期警示（學生搬家後座標可能還指向舊址）', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.stops.value = [stop({ address_stale: true })]
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-stop-address-stale"]').exists()).toBe(true)
-  })
-
-  it('站點 address_stale:false 或未帶欄位時不顯示過期警示', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.stops.value = [stop({ address_stale: false }), stop({ student_id: 102, student_name: '小華' })]
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-stop-address-stale"]').exists()).toBe(false)
-  })
-
-  it('多站地址過期時頁面彙總提示顯示正確站數', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.stops.value = [
-      stop({ address_stale: true }),
-      stop({ student_id: 102, student_name: '小華', address_stale: true }),
-      stop({ student_id: 103, student_name: '小美', address_stale: false }),
-    ]
-    const wrapper = mountView()
-    await flushPromises()
-    const alert = wrapper.find('[data-testid="bus-stale-addresses"]')
-    expect(alert.exists()).toBe(true)
-    expect(alert.attributes('title')).toContain('2')
-  })
-
-  it('沒有過期站時不顯示彙總提示', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.stops.value = [stop({ address_stale: false })]
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-stale-addresses"]').exists()).toBe(false)
-  })
-
-  it('未儲存時亮出提示（整方向 replace-all，離開就沒了）', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.dirty.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-dirty"]').exists()).toBe(true)
-  })
-
-  it('儲存按鈕呼叫 save', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-save"]').trigger('click')
-    expect(s.save).toHaveBeenCalledTimes(1)
-  })
-
-  it('未儲存時關分頁／重新整理要被 beforeunload 擋下', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.dirty.value = true
-    mountView()
-    await flushPromises()
-    const ev = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
-    window.dispatchEvent(ev)
-    expect(ev.defaultPrevented).toBe(true)
-  })
-
-  it('沒有未儲存變更時 beforeunload 不攔截', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    s.dirty.value = false
-    mountView()
-    await flushPromises()
-    const ev = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
-    window.dispatchEvent(ev)
-    expect(ev.defaultPrevented).toBe(false)
-  })
-
-  it('離開頁面（unmount）後移除 beforeunload listener，不殘留', async () => {
-    const addSpy = vi.spyOn(window, 'addEventListener')
-    const removeSpy = vi.spyOn(window, 'removeEventListener')
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    const wrapper = mountView()
-    await flushPromises()
-    const addedCall = addSpy.mock.calls.find((c) => c[0] === 'beforeunload')
-    expect(addedCall).toBeDefined()
-    const handler = addedCall?.[1]
-    wrapper.unmount()
-    expect(removeSpy).toHaveBeenCalledWith('beforeunload', handler)
-    addSpy.mockRestore()
-    removeSpy.mockRestore()
-  })
-
-  it('「編輯路線」按鈕開啟對話框並帶入目前名稱與啟用狀態', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="bus-route-edit-name"]').exists()).toBe(false)
-    await wrapper.find('[data-testid="bus-route-edit"]').trigger('click')
-    await flushPromises()
-    const nameInput = wrapper.find('[data-testid="bus-route-edit-name"]')
-    expect(nameInput.exists()).toBe(true)
-    expect((nameInput.element as HTMLInputElement).value).toBe('A 線')
-    const activeSwitch = wrapper.find('[data-testid="bus-route-edit-active"]')
-    expect((activeSwitch.element as HTMLInputElement).checked).toBe(true)
-  })
-
-  it('只改名稱不涉及停用時直接呼叫 updateRoute，不跳二次確認', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit"]').trigger('click')
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit-name"]').setValue('A 線新名')
-    await wrapper.find('[data-testid="bus-route-edit-save"]').trigger('click')
-    await flushPromises()
-    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
-    expect(s.updateRoute).toHaveBeenCalledWith(3, { name: 'A 線新名' })
-  })
-
-  it('停用需二次確認；確認後才呼叫 updateRoute 帶 is_active:false', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit"]').trigger('click')
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit-active"]').setValue(false)
-    await wrapper.find('[data-testid="bus-route-edit-save"]').trigger('click')
-    await flushPromises()
-    expect(ElMessageBox.confirm).toHaveBeenCalled()
-    expect(s.updateRoute).toHaveBeenCalledWith(3, { is_active: false })
-  })
-
-  it('停用取消二次確認時不呼叫 updateRoute', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    vi.mocked(ElMessageBox.confirm).mockRejectedValue(new Error('cancel'))
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit"]').trigger('click')
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit-active"]').setValue(false)
-    await wrapper.find('[data-testid="bus-route-edit-save"]').trigger('click')
-    await flushPromises()
-    expect(s.updateRoute).not.toHaveBeenCalled()
-  })
-
-  it('沒有任何變更時「儲存」不呼叫 updateRoute', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit"]').trigger('click')
-    await flushPromises()
-    await wrapper.find('[data-testid="bus-route-edit-save"]').trigger('click')
-    await flushPromises()
-    expect(s.updateRoute).not.toHaveBeenCalled()
-  })
-
-  it('停用中的路線在下拉選單仍顯示並標示（否則停用後改不回來）', async () => {
-    s.routes.value = [
-      { id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } },
-      { id: 4, name: 'B 線', is_active: false, stops: { morning: [], afternoon: [] } },
-    ]
-    s.activeRouteId.value = 3
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.text()).toContain('B 線（停用）')
-  })
-
-  it('「帶入早接反序」只在下午分頁出現', async () => {
-    s.routes.value = [{ id: 3, name: 'A 線', is_active: true, stops: { morning: [], afternoon: [] } }]
-    s.activeRouteId.value = 3
-    const morningView = mountView()
-    await flushPromises()
-    expect(morningView.find('[data-testid="bus-mirror"]').exists()).toBe(false)
-    s.direction.value = 'afternoon'
-    const afternoonView = mountView()
-    await flushPromises()
-    expect(afternoonView.find('[data-testid="bus-mirror"]').exists()).toBe(true)
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-students-error"]').exists()).toBe(true)
   })
 })
 
-// ── 測試輔助函式自檢 ──
-describe('測試輔助函式自檢', () => {
-  it('el-table stub 真的會把 row 傳進 column 的 default slot', () => {
-    const probe = defineComponent({
-      setup() {
-        const data = ref([{ name: 'x' }])
-        return () => h(ElTableStub, { data: data.value }, {
-          default: () => [h(ElTableColumnStub, null, {
-            default: ({ row }: { row: { name: string } }) => h('span', { class: 'probe' }, row.name),
-          })],
-        })
-      },
-    })
-    const wrapper = mount(probe)
-    expect(wrapper.find('.probe').text()).toBe('x')
+describe('BusRoutesView — 危險狀態必須看得見', () => {
+  it('未儲存標記', async () => {
+    s.dirty.value = true
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-dirty"]').exists()).toBe(true)
   })
 
-  it('missingCoordinateCount 的假實作真的會隨 lat/lng 變動（否則兩條警示測試同真同假）', () => {
-    const stops = ref<Array<Record<string, unknown>>>([stop()])
-    const count = computed(() => stops.value.filter((x) => x.lat == null).length)
-    expect(count.value).toBe(0)
-    stops.value = [stop({ lat: null })]
-    expect(count.value).toBe(1)
+  it('缺可定位地址的站數（這個班次無法發車）', async () => {
+    s.stops.value = [stop({ lat: null, lng: null, address_snapshot: null })]
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-missing-coords"]').exists()).toBe(true)
+  })
+
+  it('地址已變更的站數彙總提示', async () => {
+    s.stops.value = [stop({ address_stale: true })]
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-stale-addresses"]').exists()).toBe(true)
+  })
+
+  it('capacity 逐星期超載提示指出是哪幾個星期', async () => {
+    s.overloadedWeekdays.value = [0, 3]
+    const w = await mountView()
+    const alert = w.find('[data-testid="bus-capacity-overload"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('週一、四')
+  })
+
+  it('帶入名單的衝突學生逐筆列出（預覽呈現、儲存才擋）', async () => {
+    s.copyConflicts.value = [
+      { student_id: 104, student_name: '小強', conflict_route_name: '早 B' },
+    ]
+    const w = await mountView()
+    const alert = w.find('[data-testid="bus-copy-conflicts"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.text()).toContain('小強')
+    expect(alert.text()).toContain('早 B')
+  })
+
+  it('停用的班次要標示不會出現在開班選單', async () => {
+    s.routes.value = [route({ is_active: false })]
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-route-inactive"]').exists()).toBe(true)
+  })
+})
+
+describe('BusRoutesView — 名單表格符合 2026-08-26 地址導向決策', () => {
+  it('操作欄是「設定接送地址」，沒有舊版「定位」按鈕', async () => {
+    const w = await mountView()
+    expect(w.find('[data-test="pick-address-101"]').text()).toBe('設定接送地址')
+    expect(w.findAll('button').map((b) => b.text())).not.toContain('定位')
+  })
+
+  it('地址欄顯示地址文字，畫面上不出現任何經緯度數字', async () => {
+    const w = await mountView()
+    expect(w.find('[data-test="address-cell"]').text()).toContain('高雄市三民區某路 1 號')
+    expect(w.html()).not.toContain('22.61')
+    expect(w.html()).not.toContain('120.31')
+  })
+})
+
+describe('BusRoutesView — 新增班次（含 copy-from）', () => {
+  it('建立成功後才帶名單（copy-from 需要一個已存在的目標班次）', async () => {
+    const w = await mountView()
+    await w.find('[data-testid="bus-routes-create"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-testid="create-name"]').setValue('早 C')
+    w.findComponent('[data-testid="create-copy-source"]').vm.$emit('update:modelValue', 5)
+    await flushPromises()
+    await w.find('[data-testid="create-submit"]').trigger('click')
+    await flushPromises()
+    expect(s.createRoute).toHaveBeenCalledWith(expect.objectContaining({
+      name: '早 C', direction: 'morning',
+    }))
+    expect(s.copyFromRoute).toHaveBeenCalledWith(5, true)
+    expect(s.copyFromRoute.mock.invocationCallOrder[0])
+      .toBeGreaterThan(s.createRoute.mock.invocationCallOrder[0])
+  })
+
+  it('建立失敗（回 null）就不帶名單，也不關 Dialog', async () => {
+    s.createRoute.mockResolvedValue(null)
+    const w = await mountView()
+    await w.find('[data-testid="bus-routes-create"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-testid="create-submit"]').trigger('click')
+    await flushPromises()
+    expect(s.copyFromRoute).not.toHaveBeenCalled()
+    expect(w.find('[data-testid="create-submit"]').exists()).toBe(true)
+  })
+
+  it('沒選來源班次就不呼叫 copy-from', async () => {
+    const w = await mountView()
+    await w.find('[data-testid="bus-routes-create"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-testid="create-submit"]').trigger('click')
+    await flushPromises()
+    expect(s.createRoute).toHaveBeenCalled()
+    expect(s.copyFromRoute).not.toHaveBeenCalled()
+  })
+})
+
+describe('BusRoutesView — 自動排序預覽', () => {
+  const preview = {
+    applied: false,
+    end_time_planned: '08:05:00',
+    moved_unpinned_student_ids: [101],
+    stops: [{ student_id: 101, seq: 1, eta_planned: '07:33:00' }],
+  }
+
+  it('預覽被擋下（回 null）時不開 Dialog——composable 已說明原因，不再給一個空對話框', async () => {
+    const w = await mountView()
+    await w.find('[data-testid="bus-optimize"]').trigger('click')
+    await flushPromises()
+    expect(w.findComponent({ name: 'BusOptimizePreviewDialog' }).props('visible')).toBe(false)
+  })
+
+  it('預覽成功後開啟 Dialog，並把後端原樣補成可讀 diff（姓名／新舊順位／被移動）', async () => {
+    s.optimizePreview.mockResolvedValue(preview)
+    const w = await mountView()
+    await w.find('[data-testid="bus-optimize"]').trigger('click')
+    await flushPromises()
+    const dialog = w.findComponent({ name: 'BusOptimizePreviewDialog' })
+    expect(dialog.props('visible')).toBe(true)
+    const p = dialog.props('preview') as { order: Array<Record<string, unknown>>; moved_unpinned_count: number }
+    expect(p.order[0]).toMatchObject({
+      student_id: 101, student_name: '小明', old_seq: 1, new_seq: 1, moved: true,
+    })
+    expect(p.moved_unpinned_count).toBe(1)
+  })
+
+  it('套用只寫進編輯緩衝，不自動儲存', async () => {
+    s.optimizePreview.mockResolvedValue(preview)
+    const w = await mountView()
+    await w.find('[data-testid="bus-optimize"]').trigger('click')
+    await flushPromises()
+    w.findComponent({ name: 'BusOptimizePreviewDialog' }).vm.$emit('apply')
+    await flushPromises()
+    expect(s.applyOptimize).toHaveBeenCalledWith(preview)
+    expect(s.save).not.toHaveBeenCalled()
+  })
+})
+
+describe('BusRoutesView — 工具列接線', () => {
+  it('加入學生後清空選單（避免同一位被連按兩次）', async () => {
+    const w = await mountView()
+    w.findComponent('[data-testid="bus-student-select"]').vm.$emit('update:modelValue', 103)
+    await flushPromises()
+    await w.find('[data-testid="bus-add-stop"]').trigger('click')
+    await flushPromises()
+    expect(s.addStop).toHaveBeenCalledWith(103)
+    expect(w.find('[data-testid="bus-add-stop"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('儲存、重算 ETA 各自接對 composable', async () => {
+    const w = await mountView()
+    await w.find('[data-testid="bus-save"]').trigger('click')
+    expect(s.save).toHaveBeenCalled()
+    await w.find('[data-testid="bus-recompute-etas"]').trigger('click')
+    expect(s.recomputeEtas).toHaveBeenCalled()
+  })
+
+  it('側欄拖拉排序把該方向的完整 ids 交給 composable', async () => {
+    const w = await mountView()
+    w.findComponent({ name: 'BusRouteSidebar' }).vm.$emit('reorder', {
+      direction: 'morning', ids: [5, 3],
+    })
+    await flushPromises()
+    expect(s.reorderRoutes).toHaveBeenCalledWith([5, 3])
+  })
+
+  it('側欄選取一律經 composable（先跑未儲存確認），頁面不自行改 activeRouteId', async () => {
+    const w = await mountView()
+    w.findComponent({ name: 'BusRouteSidebar' }).vm.$emit('select', 5)
+    await flushPromises()
+    expect(s.selectRoute).toHaveBeenCalledWith(5)
   })
 })
