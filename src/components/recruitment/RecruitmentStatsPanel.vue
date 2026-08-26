@@ -571,7 +571,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   --rv-accent:       var(--color-warning-hover);
   --rv-bg:           var(--bg-color);
   --rv-surface:      var(--surface-color);
-  --rv-muted:        var(--neutral-200);
+  --rv-muted:        var(--bg-color-soft);
   --rv-border:       var(--border-color);
   --rv-text:         var(--text-primary);
   --rv-text-2:       var(--text-secondary);
