@@ -36,6 +36,11 @@ const mocks = vi.hoisted(() => {
       optimizePreviewData: r<Record<string, unknown> | null>(null),
       optimizing: r(false),
       optimizeError: r<string | null>(null),
+      lastError: r<string | null>(null),
+      departedPending: c(() => {
+        const stops = (selectedPlan.value?.stops ?? []) as Array<{ status: string }>
+        return stops.filter((st) => st.status === 'departed' || st.status === 'pending').length
+      }),
       insertCandidates: r<Array<{ id: number; name: string }>>([]),
       studentsLoading: r(false),
       students: r([]),
@@ -132,7 +137,6 @@ function plan(overrides: Record<string, unknown> = {}, tripOverrides: Record<str
     stops: [stop()],
     calendar_warnings: [],
     capacity: 20,
-    departed_pending: 1,
     eta_may_be_stale: false,
     route_name: 'A 線',
     direction: 'morning',
@@ -159,6 +163,9 @@ beforeEach(() => {
   s.lockedByPermission.value = false
   s.optimizePreviewData.value = null
   s.optimizeError.value = null
+  s.lastError.value = null
+  s.studentsLoading.value = false
+  s.studentsFailed.value = false
   s.insertCandidates.value = []
 })
 
@@ -314,6 +321,37 @@ describe('超載與 ETA 提示', () => {
     await flushPromises()
     expect(w.findComponent({ name: 'BusDispatchStopsTable' }).props('etaStale')).toBe(true)
   })
+
+  it('超載警示帶出實際人數與上限，不只說「超過了」', async () => {
+    s.overCapacity.value = true
+    s.plans.value = [plan({
+      capacity: 2,
+      stops: [
+        stop({ stop_id: 10, student_id: 100, status: 'departed' }),
+        stop({ stop_id: 11, student_id: 101, status: 'pending' }),
+        stop({ stop_id: 12, student_id: 102, status: 'pending' }),
+      ],
+    })]
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-testid="bus-dispatch-overcapacity"]').attributes('title')).toContain('3 / 2')
+  })
+})
+
+describe('併發互鎖（saving 與 optimizing 是兩把鎖，名單表要吃兩把）', () => {
+  it('套用建議順序 in-flight 時名單表轉 busy，避免拖拉結果被 load() 靜默覆蓋', async () => {
+    s.optimizing.value = true
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent({ name: 'BusDispatchStopsTable' }).props('busy')).toBe(true)
+  })
+
+  it('寫入 in-flight 時同樣轉 busy', async () => {
+    s.saving.value = true
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent({ name: 'BusDispatchStopsTable' }).props('busy')).toBe(true)
+  })
 })
 
 describe('重設為預設名單（二次確認要說出破壞範圍）', () => {
@@ -373,8 +411,11 @@ describe('插入學生', () => {
     expect(w.findComponent({ name: 'BusDispatchInsertStudentDialog' }).props('visible')).toBe(false)
   })
 
-  it('失敗（422）時 Dialog 保持開啟並帶回錯誤訊息', async () => {
-    s.insertStop.mockResolvedValue(false)
+  it('失敗（422）時 Dialog 保持開啟並帶回**後端原話**，不換成自己編的通用句', async () => {
+    s.insertStop.mockImplementation(() => {
+      s.lastError.value = '學生 202 今日已排入其他班次「B 線」'
+      return Promise.resolve(false)
+    })
     const w = mountView()
     await flushPromises()
     await w.find('[data-testid="bus-dispatch-insert"]').trigger('click')
@@ -384,7 +425,36 @@ describe('插入學生', () => {
     dialog.vm.$emit('submit', { student_id: 202 })
     await flushPromises()
     expect(dialog.props('visible')).toBe(true)
-    expect(dialog.props('errorMessage')).toBeTruthy()
+    // 那句話直接指出是哪個班次撞了；換成通用文案等於把可行動的資訊丟掉
+    expect(dialog.props('errorMessage')).toBe('學生 202 今日已排入其他班次「B 線」')
+  })
+
+  it('因重入守衛而根本沒送出時（lastError 為 null）不顯示假錯誤', async () => {
+    s.insertStop.mockResolvedValue(false) // lastError 維持 null
+    const w = mountView()
+    await flushPromises()
+    await w.find('[data-testid="bus-dispatch-insert"]').trigger('click')
+    await flushPromises()
+
+    const dialog = w.findComponent({ name: 'BusDispatchInsertStudentDialog' })
+    dialog.vm.$emit('submit', { student_id: 202 })
+    await flushPromises()
+    expect(dialog.props('errorMessage')).toBeNull()
+  })
+
+  it('名冊載入中／失敗的三態透傳給 Dialog（空候選不得被講成沒人可插入）', async () => {
+    s.studentsFailed.value = true
+    const w = mountView()
+    await flushPromises()
+    await w.find('[data-testid="bus-dispatch-insert"]').trigger('click')
+    await flushPromises()
+
+    const dialog = w.findComponent({ name: 'BusDispatchInsertStudentDialog' })
+    expect(dialog.props('candidatesFailed')).toBe(true)
+
+    dialog.vm.$emit('retryCandidates')
+    await flushPromises()
+    expect(s.loadStudents).toHaveBeenCalledTimes(2)
   })
 })
 

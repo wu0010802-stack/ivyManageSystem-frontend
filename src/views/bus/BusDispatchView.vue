@@ -41,8 +41,17 @@ const dispatch = useBusDailyDispatch()
 const {
   date, plans, selectedPlan, selectedTripId, loading, saving, loadFailed,
   holidayNotice, etaStale, overCapacity, editable, inProgress, lockedByPermission,
-  optimizePreviewData, optimizing, optimizeError, insertCandidates, studentsLoading,
+  optimizePreviewData, optimizing, optimizeError, lastError, departedPending,
+  insertCandidates, studentsLoading, studentsFailed,
 } = dispatch
+
+/**
+ * 任一寫入或最佳化 in-flight。`saving` 與 `optimizing` 是兩把互不相擋的鎖——
+ * 只吃 `saving` 的話，使用者在「套用建議順序」in-flight 時拖一列，reorder PATCH
+ * 會照送（不會 422，optimize 不改 pending 集合只改 seq），然後被 applyOptimize
+ * 後的 `load()` 靜默覆蓋掉。收斂到的是一致狀態，但不是使用者以為的那個。
+ */
+const busy = computed(() => saving.value || optimizing.value)
 
 // ── 班次卡片 ────────────────────────────────────────────────────────────────
 type CardStatus = 'none' | 'planned' | 'in_progress' | 'completed' | 'expired'
@@ -145,8 +154,15 @@ async function onInsertSubmit(payload: Parameters<typeof dispatch.insertStop>[0]
     insertVisible.value = false
     return
   }
-  // 422（跨班次重複／超 capacity）：Dialog 保持開啟且不清空，只把後端原話帶回去
-  insertError.value = '插入失敗，請確認該學生今天是否已排在其他班次，或座位是否已滿'
+  // 422（跨班次重複／超 capacity／缺座標）：Dialog 保持開啟且不清空，把**後端原話**
+  // 帶回去——那三句都直接指出下一步（是哪個班次撞了、超了幾人、誰缺座標），
+  // 換成自己編的通用句等於把可行動的資訊丟掉。
+  // `lastError` 為 null 代表「因重入守衛根本沒送出」，不是失敗，不顯示假錯誤。
+  insertError.value = lastError.value
+}
+
+async function retryLoadStudents(): Promise<void> {
+  await dispatch.loadStudents()
 }
 
 // ── 接送地址（含地圖微調）────────────────────────────────────────────────
@@ -349,7 +365,7 @@ onMounted(() => { void dispatch.load() })
             type="warning"
             show-icon
             :closable="false"
-            title="今日人數已超過座位上限"
+            :title="`今日人數已超過座位上限（${departedPending} / ${selectedPlan.capacity} 人）`"
             description="銷假還原不會自動拒載，請確認是否需要改排到其他班次或加派車輛。"
           />
 
@@ -358,7 +374,7 @@ onMounted(() => { void dispatch.load() })
             :readonly="!editable"
             :trip-status="selectedPlan.trip.status"
             :eta-stale="etaStale"
-            :busy="saving"
+            :busy="busy"
             data-testid="bus-dispatch-stops"
             @reorder="dispatch.moveStop"
             @mark-excused="dispatch.markExcusedAdmin"
@@ -383,9 +399,12 @@ onMounted(() => { void dispatch.load() })
     <BusDispatchInsertStudentDialog
       :visible="insertVisible"
       :candidates="insertCandidates"
-      :inserting="saving || studentsLoading"
+      :candidates-loading="studentsLoading"
+      :candidates-failed="studentsFailed"
+      :inserting="saving"
       :error-message="insertError"
       @submit="onInsertSubmit"
+      @retry-candidates="retryLoadStudents"
       @cancel="insertVisible = false"
     />
 

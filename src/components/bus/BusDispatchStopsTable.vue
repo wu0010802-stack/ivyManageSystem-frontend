@@ -110,9 +110,18 @@ function canUnexcuse(s: DispatchStop): boolean {
   return props.tripStatus === 'in_progress' || s.excuse_reason === 'admin'
 }
 
-/** 已離站的站不可移除（後端 422）；預設名單的站在 planned 下可移除。 */
+/**
+ * 能否移除這一站。後端條件是「非 `departed` **且**（`source === 'added'` 或
+ * `status === 'pending'`）」——差集正是**預設名單裡今日不搭的人**
+ * （`source='default'` 且 `status='excused'`），也就是每天最常見的那一群：
+ * 只判「非 departed」會對每個請假的孩子亮出一顆按下去必定 422 的「移除」。
+ *
+ * 語意上也對：excused 的預設名單站要拿掉，該做的是從假單／家長端撤銷，
+ * 而不是把人從當日名單刪掉（明天生成時他還是會回來）。
+ */
 function canRemove(s: DispatchStop): boolean {
-  return canMutateRoster.value && s.status !== 'departed'
+  if (!canMutateRoster.value || s.status === 'departed') return false
+  return s.source === 'added' || s.status === 'pending'
 }
 
 interface DragChangeEvent {

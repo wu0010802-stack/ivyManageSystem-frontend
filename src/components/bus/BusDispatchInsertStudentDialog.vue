@@ -28,6 +28,10 @@ const props = defineProps<{
   visible: boolean
   /** 可插入的學生（呼叫端已過濾掉當日任一班次已在名單上的人）。 */
   candidates: Array<{ id: number; name: string }>
+  /** 全園名冊載入中——此時候選是空的，但那不是「沒有人可插入」。 */
+  candidatesLoading: boolean
+  /** 全園名冊載入失敗——同上，且要給重試而不是一句空狀態。 */
+  candidatesFailed: boolean
   inserting: boolean
   /** 後端 422 的訊息；有值時表單保留、只在上方顯示原因。 */
   errorMessage: string | null
@@ -35,6 +39,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   submit: [payload: Schema<'DailyPlanStopInsertIn'>]
+  retryCandidates: []
   cancel: []
 }>()
 
@@ -112,7 +117,25 @@ function onSubmit(): void {
         >
           <el-option v-for="c in candidates" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
-        <p v-if="!candidates.length" class="bus-insert-student__hint" data-test="no-candidates">
+        <!--
+          三態必須分開：候選為空可能是「還在載」「載失敗」或「真的沒有」。
+          把前兩者講成「今天沒有可插入的學生」，管理員的結論會是「全園都排好了」
+          ——而實際上是名冊根本沒撈到。
+        -->
+        <p v-if="candidatesLoading" class="bus-insert-student__hint" data-test="candidates-loading">
+          正在載入學生名冊…
+        </p>
+        <p
+          v-else-if="candidatesFailed"
+          class="bus-insert-student__hint bus-insert-student__hint--error"
+          data-test="candidates-failed"
+        >
+          學生名冊載入失敗，目前無法判斷有哪些學生可插入。
+          <el-button link type="primary" data-test="candidates-retry" @click="emit('retryCandidates')">
+            重試
+          </el-button>
+        </p>
+        <p v-else-if="!candidates.length" class="bus-insert-student__hint" data-test="no-candidates">
           今天沒有可插入的學生（其餘學生都已排在某一班次的當日名單上）
         </p>
       </el-form-item>
@@ -173,5 +196,9 @@ function onSubmit(): void {
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+}
+
+.bus-insert-student__hint--error {
+  color: var(--el-color-danger);
 }
 </style>

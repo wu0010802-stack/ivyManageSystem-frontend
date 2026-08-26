@@ -20,6 +20,14 @@ vi.mock('@/api/bus', () => ({
   resetBusDailyPlan: vi.fn(),
 }))
 vi.mock('@/api/students', () => ({ getStudents: vi.fn() }))
+// 「今天」必須用**台北**時鐘（後端 `today_taipei()`），不是瀏覽器本地時鐘。
+// 這台機器與 CI 都可能是 Asia/Taipei，兩者剛好一致 → 用系統時間測不出差別。
+// 故把 `todayTaipeiISO` 換成固定值、且**刻意與系統時間所在的日期不同**：
+// 若實作退回 `todayISO()`（本地時鐘），`date` 初值就不會是這個值，測試立刻紅。
+vi.mock('@/utils/format', async () => {
+  const actual = await vi.importActual<typeof import('@/utils/format')>('@/utils/format')
+  return { ...actual, todayTaipeiISO: vi.fn(() => '2026-08-26') }
+})
 vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), warning: vi.fn(), success: vi.fn() },
@@ -32,8 +40,9 @@ import { getStudents } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
 import { useBusDailyDispatch, MAX_DAYS_AHEAD } from '@/composables/useBusDailyDispatch'
 
-// 時間軸固定在台北 2026-08-26（週三）09:00，避免「今天」隨執行日期漂移
-const LOCAL_NOW_MS = Date.UTC(2026, 7, 26, 1, 0, 0)
+// 系統時間刻意設在**別的月份**（2026-01-15），台北「今天」則由上面的 mock 固定成
+// 2026-08-26——兩者不同才能證明實作讀的是台北時鐘而不是本地時鐘。
+const LOCAL_NOW_MS = Date.UTC(2026, 0, 15, 1, 0, 0)
 const TODAY = '2026-08-26'
 
 function stop(overrides: Record<string, unknown> = {}) {
@@ -178,6 +187,25 @@ describe('日期範圍（GET 有寫入副作用，超界不得白跑一趟）', 
   it('MAX_DAYS_AHEAD 與後端 daily_plans.py 對齊', () => {
     expect(MAX_DAYS_AHEAD).toBe(7)
   })
+
+  it('「今天」讀台北時鐘而非瀏覽器本地時鐘（後端用 today_taipei）', async () => {
+    // mock 的 todayTaipeiISO 回 2026-08-26，系統時間卻在 2026-01-15。
+    // 若實作退回 todayISO()，date 初值會是 2026-01-15，下面兩條都會紅。
+    //
+    // 真實世界的失效情境：台北 00:30（＝UTC 前一日 16:30），裝置時區非台北 →
+    // 本地「今天」還是昨天 → 進頁就送出後端眼中已過期的 date → 422 → 整頁只剩
+    // 「無法取得當日計畫」。上界反向同理（東京在台北 23:30 後會放行到後端的 +8 天）。
+    const d = await boot()
+    expect(d.date.value).toBe('2026-08-26')
+    expect(vi.mocked(getBusDailyPlan).mock.calls[0][0]).toEqual({ date: '2026-08-26' })
+  })
+
+  it('日期範圍守衛也以台北今天為基準（本地日期不得影響上下界）', async () => {
+    const d = await boot()
+    // 以本地時鐘（2026-01-15）算的話，這兩個日期會落在完全不同的區間
+    expect(await d.setDate('2026-01-15')).toBe(false) // 本地的「今天」，台北眼中是過去
+    expect(await d.setDate('2026-09-02')).toBe(true) // 台北今天 +7
+  })
 })
 
 describe('編輯權限（雙碼、依 trip.status 分流）', () => {
@@ -237,6 +265,28 @@ describe('站點編輯', () => {
     expect(await d.unmarkExcused(101)).toBe(true)
     expect(vi.mocked(patchBusDailyPlanStops).mock.calls[0]).toEqual([7, { unexcuse: [101] }])
     expect(d.plans.value[0].stops[0].status).toBe('pending')
+  })
+
+  it('失敗時把後端 detail 存進 lastError（那句話才告訴使用者去哪裡改）', async () => {
+    const d = await boot()
+    vi.mocked(patchBusDailyPlanStops).mockRejectedValue({
+      response: { data: { detail: '學生 202 今日已排入其他班次「B 線」' } },
+    })
+    expect(await d.insertStop({ student_id: 202 })).toBe(false)
+    expect(d.lastError.value).toBe('學生 202 今日已排入其他班次「B 線」')
+  })
+
+  it('成功時清掉 lastError，不讓上一次的錯誤黏在畫面上', async () => {
+    const d = await boot()
+    vi.mocked(patchBusDailyPlanStops).mockRejectedValue(new Error('422'))
+    await d.markExcusedAdmin(101)
+    expect(d.lastError.value).toBeTruthy()
+
+    vi.mocked(patchBusDailyPlanStops).mockResolvedValue({
+      data: { trip: trip(), stops: [stop()], capacity: { departed_pending: 1, capacity: 20 } },
+    } as never)
+    await d.markExcusedAdmin(101)
+    expect(d.lastError.value).toBeNull()
   })
 
   it('失敗時完全不動本地狀態（後端整批 422 什麼都沒落庫）', async () => {
@@ -394,15 +444,58 @@ describe('ETA 過期與超載旗標', () => {
     expect(d.etaStale.value).toBe(true)
   })
 
+  it('標記不搭車之後 etaStale 立刻成立——PATCH 回應不帶 eta_may_be_stale，不可沿用舊快照', async () => {
+    const d = await boot([planItem({ eta_may_be_stale: false })])
+    expect(d.etaStale.value).toBe(false)
+
+    // 後端此刻已認定 stale（少一站後平移出來的 eta_planned 就失真），但
+    // DailyPlanStopsPatchOut 沒有這個欄位——只讀伺服器快照的話警示永遠不會亮
+    vi.mocked(patchBusDailyPlanStops).mockResolvedValue({
+      data: {
+        trip: trip(),
+        stops: [stop({ status: 'excused', excuse_reason: 'admin' })],
+        capacity: { departed_pending: 0, capacity: 20 },
+      },
+    } as never)
+    await d.markExcusedAdmin(101)
+    expect(d.etaStale.value).toBe(true)
+  })
+
   it('departed+pending 超過 capacity 時亮警示，但不擋任何動作', async () => {
-    const d = await boot([planItem({ capacity: { departed_pending: 21, capacity: 20 } })])
+    const d = await boot([planItem({
+      capacity: { departed_pending: 3, capacity: 2 },
+      stops: [
+        stop({ stop_id: 10, student_id: 100, status: 'departed' }),
+        stop({ stop_id: 11, student_id: 101, status: 'pending' }),
+        stop({ stop_id: 12, student_id: 102, status: 'pending' }),
+      ],
+    })])
+    expect(d.departedPending.value).toBe(3)
     expect(d.overCapacity.value).toBe(true)
     expect(d.editable.value).toBe(true) // 銷假還原造成的超額不得反過來鎖住編輯
   })
 
   it('恰好等於 capacity 不算超載', async () => {
-    const d = await boot([planItem({ capacity: { departed_pending: 20, capacity: 20 } })])
+    const d = await boot([planItem({
+      capacity: { departed_pending: 2, capacity: 2 },
+      stops: [
+        stop({ stop_id: 11, student_id: 101, status: 'pending' }),
+        stop({ stop_id: 12, student_id: 102, status: 'pending' }),
+      ],
+    })])
     expect(d.overCapacity.value).toBe(false)
+  })
+
+  it('載客數只算 departed + pending，excused／skipped 不計', async () => {
+    const d = await boot([planItem({
+      stops: [
+        stop({ stop_id: 10, student_id: 100, status: 'departed' }),
+        stop({ stop_id: 11, student_id: 101, status: 'pending' }),
+        stop({ stop_id: 12, student_id: 102, status: 'excused', excuse_reason: 'leave' }),
+        stop({ stop_id: 13, student_id: 103, status: 'skipped' }),
+      ],
+    })])
+    expect(d.departedPending.value).toBe(2)
   })
 })
 
@@ -467,6 +560,28 @@ describe('重設為預設名單', () => {
     expect(await d.resetPlan()).toBe(true)
     expect(vi.mocked(resetBusDailyPlan).mock.calls[0]).toEqual([7])
     expect(d.plans.value[0].stops[0].source).toBe('default')
+  })
+
+  it('重設後載客數與超載警示跟著更新——DailyPlanResetOut 沒有 capacity 欄位', async () => {
+    const d = await boot([planItem({
+      capacity: { departed_pending: 0, capacity: 1 },
+      stops: [stop({ status: 'excused', excuse_reason: 'admin' })],
+    })])
+    expect(d.departedPending.value).toBe(0)
+    expect(d.overCapacity.value).toBe(false)
+
+    vi.mocked(resetBusDailyPlan).mockResolvedValue({
+      data: {
+        trip: trip(),
+        stops: [
+          stop({ stop_id: 11, student_id: 101 }),
+          stop({ stop_id: 12, student_id: 102 }),
+        ],
+      },
+    } as never)
+    expect(await d.resetPlan()).toBe(true)
+    expect(d.departedPending.value).toBe(2)
+    expect(d.overCapacity.value).toBe(true)
   })
 
   it('失敗（in_progress 重設後超 capacity 的 422）不動本地狀態', async () => {

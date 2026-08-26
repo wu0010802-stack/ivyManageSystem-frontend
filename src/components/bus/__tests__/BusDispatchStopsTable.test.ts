@@ -170,6 +170,34 @@ describe('in_progress 的動作收斂（後端一律 422 的先不要給）', ()
     const w = mountTable({ stops: [stop({ status: 'departed' })] })
     expect(w.find('[data-test="remove-101"]').exists()).toBe(false)
   })
+
+  // 後端條件是「非 departed **且**（source==='added' 或 status==='pending'）」。
+  // 只判「非 departed」的話，每個請假的孩子都會多出一顆按下去必定 422 的「移除」
+  // ——而那正是每天最常見的那一群人。
+  it('預設名單裡今日不搭的站不可移除（要從假單／家長端撤銷，不是刪當日名單）', () => {
+    const w = mountTable({
+      stops: [
+        stop({ student_id: 101, status: 'excused', excuse_reason: 'leave', source: 'default' }),
+        stop({ stop_id: 12, student_id: 102, status: 'excused', excuse_reason: 'parent', source: 'default' }),
+        stop({ stop_id: 13, student_id: 103, status: 'excused', excuse_reason: 'admin', source: 'default' }),
+      ],
+    })
+    expect(w.find('[data-test="remove-101"]').exists()).toBe(false)
+    expect(w.find('[data-test="remove-102"]').exists()).toBe(false)
+    expect(w.find('[data-test="remove-103"]').exists()).toBe(false)
+  })
+
+  it('臨時插入的站即使已 excused 仍可移除（source=added，後端允許）', () => {
+    const w = mountTable({
+      stops: [stop({ status: 'excused', excuse_reason: 'admin', source: 'added' })],
+    })
+    expect(w.find('[data-test="remove-101"]').exists()).toBe(true)
+  })
+
+  it('skipped 的預設名單站不可移除（非 pending 也非 added）', () => {
+    const w = mountTable({ stops: [stop({ status: 'skipped' })] })
+    expect(w.find('[data-test="remove-101"]').exists()).toBe(false)
+  })
 })
 
 describe('取消不搭車（excused 救援路徑）', () => {

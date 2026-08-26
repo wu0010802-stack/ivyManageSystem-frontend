@@ -42,9 +42,10 @@ import {
 import { getStudents } from '@/api/students'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
 import { STUDENT_PAGE_SIZE, type BusDirection } from '@/composables/useBusRouteEditor'
+import { PERMISSION_NAMES } from '@/constants/permissions'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
-import { dateToLocalISO, parseLocalISODate, todayISO } from '@/utils/format'
+import { dateToLocalISO, parseLocalISODate, todayTaipeiISO } from '@/utils/format'
 
 /** 與後端 `api/bus/daily_plans.py::MAX_DAYS_AHEAD` 對齊（今天~+7，超界 422）。 */
 export const MAX_DAYS_AHEAD = 7
@@ -65,12 +66,28 @@ export interface DispatchPlan {
   stops: DispatchStop[]
   calendar_warnings: string[]
   capacity: number
-  /** `departed + pending`（後端算好的載客數；excused／skipped 不計）。 */
-  departed_pending: number
+  /**
+   * 載入當下的 `eta_may_be_stale`。**不要直接讀這個**——它只是伺服器快照，
+   * 之後的編輯不會更新它（`DailyPlanStopsPatchOut`／`DailyPlanResetOut` 都不回
+   * 這個欄位）。要判斷 ETA 是否過期請用 composable 的 `etaStale`。
+   */
   eta_may_be_stale: boolean
   route_name: string
   direction: BusDirection
   depart_time: string
+}
+
+/**
+ * 載客數＝`departed + pending`（excused／skipped 不計）。
+ *
+ * **從 stops 現算而不存欄位**：後端只有 `GET /daily-plans` 與 PATCH 的回應帶
+ * `capacity.departed_pending`，`POST …/reset` 的 `DailyPlanResetOut` 沒有——存成
+ * 欄位就會出現「重設後名單顯示 2 人、班次卡片還寫 0 人、超載警示不亮」。
+ * 算式與後端 `daily_plans.py` 的 `sum(1 for st in ... if st.status in ("departed","pending"))`
+ * 同口徑。
+ */
+export function departedPendingCount(stops: readonly DispatchStop[]): number {
+  return stops.filter((s) => s.status === 'departed' || s.status === 'pending').length
 }
 
 /** `GET /bus/routes` 中本頁需要的欄位；名冊與座標不進狀態（隱私）。 */
@@ -100,7 +117,7 @@ function isoPlusDays(base: string, days: number): string {
 }
 
 export function useBusDailyDispatch() {
-  const date = ref<string>(todayISO())
+  const date = ref<string>(todayTaipeiISO())
   const plans = ref<DispatchPlan[]>([])
   const selectedTripId = ref<number | null>(null)
   const loading = ref(true)
@@ -115,6 +132,12 @@ export function useBusDailyDispatch() {
   const optimizePreviewData = ref<OptimizePreviewOut | null>(null)
   const optimizing = ref(false)
   const optimizeError = ref<string | null>(null)
+  /**
+   * 最近一次寫入失敗的訊息（優先取後端 detail）。給「要把錯誤留在原地而不是彈
+   * 一次 toast 就消失」的呼叫端用；`null` 代表「沒有失敗」——包含「因重入守衛
+   * 而根本沒送出」的情況，呼叫端不可把 null 當成失敗。
+   */
+  const lastError = ref<string | null>(null)
 
   /** 班次名稱／出發時間查表；daily-plans 回應不帶這兩欄。 */
   const routeMeta = ref<Map<number, RouteMeta>>(new Map())
@@ -140,7 +163,31 @@ export function useBusDailyDispatch() {
     return { is_holiday: true, label: warnings.join('、') }
   })
 
-  const etaStale = computed(() => selectedPlan.value?.eta_may_be_stale ?? false)
+  /**
+   * ETA 可能已過期（spec「eta_planned 雙存語意」）。
+   *
+   * 後端算式＝`depart_time_planned != route.depart_time or 任一站 excused`，但它只在
+   * `GET /daily-plans` 回應裡出現——`DailyPlanStopsPatchOut` 與 `DailyPlanResetOut`
+   * 都不帶這個欄位。若直接讀載入當下的快照，管理員標記一位學生今日不搭之後，後端
+   * 認定的 stale 已經成立（少一站後平移出來的 eta_planned 就失真了），畫面卻還在
+   * 若無其事地顯示那排 ETA——那正是 `src/api/bus.ts` 自己寫的「不可默默顯示可能
+   * 失真的 ETA」。
+   *
+   * 故改為「伺服器快照 OR 本地可觀察到的 excused」：後半段涵蓋本頁能造成的所有變化
+   * （標記／取消不搭車、重設），前半段涵蓋 `depart_time_planned` 被改（本頁沒有這個
+   * 動作，載入時的值就是最新的）。**刻意不在前端比對兩個時間字串**——route 的
+   * `depart_time` 與 trip 的 `depart_time_planned` 格式未必逐字相同（`07:00` vs
+   * `07:00:00`），比錯會變成永遠亮著的假警示。
+   */
+  const etaStale = computed(() => {
+    const plan = selectedPlan.value
+    if (!plan) return false
+    return plan.eta_may_be_stale || plan.stops.some((s) => s.status === 'excused')
+  })
+
+  /** 目前選中班次的載客數（departed + pending）。 */
+  const departedPending = computed(() => departedPendingCount(selectedPlan.value?.stops ?? []))
+
   /**
    * 超過座位上限。**不擋任何動作**——銷假還原（`excused/leave → pending`）會讓
    * 人數回升到超額，spec 明定「不自動拒載，站照還原、由管理員處置」，所以這只是
@@ -148,7 +195,7 @@ export function useBusDailyDispatch() {
    */
   const overCapacity = computed(() => {
     const plan = selectedPlan.value
-    return plan ? plan.departed_pending > plan.capacity : false
+    return plan ? departedPending.value > plan.capacity : false
   })
 
   /**
@@ -159,8 +206,10 @@ export function useBusDailyDispatch() {
    */
   function canEdit(plan: DispatchPlan | null): boolean {
     if (!plan) return false
-    if (plan.trip.status === 'planned') return hasPermission('BUS_WRITE')
-    if (plan.trip.status === 'in_progress') return hasPermission('BUS_IN_PROGRESS_WRITE')
+    if (plan.trip.status === 'planned') return hasPermission(PERMISSION_NAMES.BUS_WRITE)
+    if (plan.trip.status === 'in_progress') {
+      return hasPermission(PERMISSION_NAMES.BUS_IN_PROGRESS_WRITE)
+    }
     return false // completed／expired 全面唯讀（後端 409）
   }
 
@@ -204,7 +253,6 @@ export function useBusDailyDispatch() {
         stops: item.stops,
         calendar_warnings: item.calendar_warnings,
         capacity: item.capacity.capacity,
-        departed_pending: item.capacity.departed_pending,
         eta_may_be_stale: item.eta_may_be_stale,
         route_name: meta?.name ?? `班次 #${item.trip.route_id}`,
         direction: asDirection(item.trip.direction),
@@ -251,7 +299,7 @@ export function useBusDailyDispatch() {
    * **有寫入副作用的 GET** 白跑一趟，也不讓畫面短暫清空）。
    */
   async function setDate(next: string): Promise<boolean> {
-    const today = todayISO()
+    const today = todayTaipeiISO()
     if (next < today || next > isoPlusDays(today, MAX_DAYS_AHEAD)) {
       ElMessage.error(`只能調度今天起 ${MAX_DAYS_AHEAD} 天內的班次`)
       return false
@@ -313,6 +361,13 @@ export function useBusDailyDispatch() {
    * 2. 同日、**同方向**的其他班次上有非 excused 站的（後端
    *    `_daily_cross_trip_conflict`：整批 422）。反方向不衝突——早上 A 線接、
    *    下午 B 線送是正常排法。
+   *
+   * ⚠ **已知不完備（刻意不補）**：`GET /bus/daily-plans` 只回未完成的 trip
+   * （planned／in_progress），但後端的衝突檢查會查同日**所有**其他 trip、
+   * 不過濾 `status`。所以「早班已 completed → 同日又開第二趟」的情境下，
+   * 本清單會列出實際上會被 422 的學生。為此多打一支查歷史 trip 的 API 不划算：
+   * 情境低頻，而且後端 422 的訊息會指名是哪一條班次撞了，Dialog 也保留表單
+   * 讓使用者直接改選——失效方向安全（多列，不是少列）。
    */
   const insertCandidates = computed(() => {
     const plan = selectedPlan.value
@@ -335,29 +390,42 @@ export function useBusDailyDispatch() {
    *
    * 只重填**這一條**班次：其他班次的當日計畫沒有變，整批重載會多打一次懶生成
    * GET（有寫入副作用），也會讓畫面閃一下。
+   *
+   * `silent` 給「呼叫端自己要把錯誤顯示在原地」的流程用（例如插入 Dialog 要把
+   * 422 留在表單上），避免同一則訊息既彈 toast 又印在 Dialog 裡。
    */
-  async function patchStops(payload: PatchPayload, failMessage: string): Promise<boolean> {
+  async function patchStops(
+    payload: PatchPayload,
+    failMessage: string,
+    { silent = false }: { silent?: boolean } = {},
+  ): Promise<boolean> {
     const plan = selectedPlan.value
-    if (!plan || saving.value) return false
+    // 重入守衛：**不碰 `lastError`**——這裡是「根本沒送出」，不是失敗。若清成
+    // 某個字串，呼叫端會顯示一個不存在的錯誤（雙擊送出鈕就會看到）。
+    if (!plan || saving.value || optimizing.value) return false
     saving.value = true
+    lastError.value = null
     try {
       const res = await patchBusDailyPlanStops(plan.trip.id, payload)
       plans.value = plans.value.map((p) => (
         p.trip.id === plan.trip.id
-          ? {
-            ...p,
-            trip: res.data.trip,
-            stops: res.data.stops,
-            capacity: res.data.capacity.capacity,
-            departed_pending: res.data.capacity.departed_pending,
-          }
+          ? { ...p, trip: res.data.trip, stops: res.data.stops, capacity: res.data.capacity.capacity }
           : p
       ))
       return true
     } catch (e) {
       // 失敗不動本地狀態：後端整批 422（跨班次重複、超 capacity、狀態不符）時
       // 什麼都沒落庫，把畫面改掉反而是說謊。
-      ElMessage.error(apiError(e, failMessage))
+      //
+      // 後端這幾則 422 的 detail 是**可行動**的（「學生 X 今日已排入其他班次
+      // 『B 線』」「人數 21 超過座位上限 20」「學生 X 缺少接送座標，請先定位」）
+      // ——每一句都直接告訴使用者下一步要去哪裡改，吞成通用文案等於把它丟掉。
+      // ⚠ `apiError` 不處理 FastAPI Pydantic validator 吐的陣列形狀 detail
+      // （`[{loc,msg,type}]`，見 `src/utils/error.ts` 檔頭），那種會退回 failMessage。
+      // 本檔送出的 payload 一律至少含一項操作，不會觸發那條 model_validator。
+      const message = apiError(e, failMessage)
+      lastError.value = message
+      if (!silent) ElMessage.error(message)
       return false
     } finally {
       saving.value = false
@@ -366,7 +434,8 @@ export function useBusDailyDispatch() {
 
   /** 名單外學生臨時插入（spec「planned 階段編輯」第 3 點）。 */
   function insertStop(insert: Schema<'DailyPlanStopInsertIn'>): Promise<boolean> {
-    return patchStops({ inserts: [insert] }, '插入學生失敗')
+    // silent：422 要留在 Dialog 上讓使用者照著改，不是彈一次就消失的 toast
+    return patchStops({ inserts: [insert] }, '插入學生失敗', { silent: true })
   }
 
   /** 後台標記今日不搭（`excused/admin`）。只有 pending 站可標，後端 422 擋其餘。 */
@@ -476,17 +545,22 @@ export function useBusDailyDispatch() {
    */
   async function resetPlan(): Promise<boolean> {
     const plan = selectedPlan.value
-    if (!plan || saving.value) return false
+    if (!plan || saving.value || optimizing.value) return false
     saving.value = true
+    lastError.value = null
     try {
       const res = await resetBusDailyPlan(plan.trip.id)
+      // `DailyPlanResetOut` 只有 trip + stops（沒有 capacity）——載客數與超載警示
+      // 因此一律由 `departedPendingCount(stops)` 現算，不存欄位（見該函式註解）。
       plans.value = plans.value.map((p) => (
         p.trip.id === plan.trip.id ? { ...p, trip: res.data.trip, stops: res.data.stops } : p
       ))
       ElMessage.success('已重設為預設名單')
       return true
     } catch (e) {
-      ElMessage.error(apiError(e, '重設失敗，請稍後再試'))
+      const message = apiError(e, '重設失敗，請稍後再試')
+      lastError.value = message
+      ElMessage.error(message)
       return false
     } finally {
       saving.value = false
@@ -496,7 +570,7 @@ export function useBusDailyDispatch() {
   return {
     date, plans, selectedPlan, selectedTripId, loading, saving, loadFailed,
     holidayNotice, etaStale, overCapacity, editable, inProgress, lockedByPermission,
-    optimizePreviewData, optimizing, optimizeError,
+    optimizePreviewData, optimizing, optimizeError, lastError, departedPending,
     students, studentsLoading, studentsFailed, insertCandidates, loadStudents,
     load, setDate, selectTrip, canEdit,
     insertStop, markExcusedAdmin, unmarkExcused, changeAddress, removeStop, moveStop,

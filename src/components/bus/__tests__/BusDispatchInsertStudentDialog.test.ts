@@ -49,6 +49,8 @@ function mountDialog(props: Record<string, unknown> = {}) {
     props: {
       visible: true,
       candidates: [{ id: 201, name: '小華' }, { id: 202, name: '小美' }],
+      candidatesLoading: false,
+      candidatesFailed: false,
       inserting: false,
       errorMessage: null,
       ...props,
@@ -157,6 +159,25 @@ describe('422 與狀態切換', () => {
   it('沒有候選學生時明說原因，而不是給一個空下拉', () => {
     const w = mountDialog({ candidates: [] })
     expect(w.find('[data-test="no-candidates"]').exists()).toBe(true)
+  })
+
+  // 候選為空有三種成因，講錯的代價不同：載入中／載失敗被講成「全園都排好了」，
+  // 管理員會停止追查，實際上是名冊根本沒撈到。
+  it('名冊載入中不得講成「今天沒有可插入的學生」', () => {
+    const w = mountDialog({ candidates: [], candidatesLoading: true })
+    expect(w.find('[data-test="candidates-loading"]').exists()).toBe(true)
+    expect(w.find('[data-test="no-candidates"]').exists()).toBe(false)
+  })
+
+  it('名冊載入失敗時明說失敗並提供重試，不得講成沒有人可插入', async () => {
+    const w = mountDialog({ candidates: [], candidatesFailed: true })
+    expect(w.find('[data-test="no-candidates"]').exists()).toBe(false)
+    const failed = w.find('[data-test="candidates-failed"]')
+    expect(failed.exists()).toBe(true)
+    expect(failed.text()).toContain('學生名冊載入失敗')
+
+    await w.find('[data-test="candidates-retry"]').trigger('click')
+    expect(w.emitted('retryCandidates')).toHaveLength(1)
   })
 
   it('取消 emit cancel', async () => {
