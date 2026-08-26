@@ -407,10 +407,12 @@ export const NAVIGATION_MANIFEST = {
             { code: 'BUS_READ', label: '娃娃車檢視' },
             // 2026-08-26 起本碼同時開通 /bus/settings（園所座標＋車輛數，寫
             // system_configs），label 要講得出來——否則授權者在權限編輯器只看到
-            // 「路線管理」，勾下去卻一併授出設定頁。⚠ 這裡只是 fallback：picker
-            // 實際顯示以後端 PERMISSION_LABELS 為準（現值「娃娃車追蹤 (路線管理)」），
-            // 後端字面同步屬跨 repo follow-up。
-            { code: 'BUS_WRITE', label: '娃娃車路線與設定管理' },
+            // 「路線管理」，勾下去卻一併授出設定頁。
+            // ⚠ 必須與後端 utils/permissions.py 的 PERMISSION_LABELS['BUS_WRITE']
+            // **逐字相同**：picker 顯示以後端為準，而設定頁的唯讀提示走
+            // busWriteLabel() 讀這裡——兩邊不一致會讓同一個權限在畫面上有兩個名字。
+            // 後端同步已隨 alembic buswrlbl01 落地（連既有 DB 列一起改）。
+            { code: 'BUS_WRITE', label: '娃娃車追蹤 (路線與設定管理)' },
           ],
           // 今日調度（/bus/dispatch）發車後編輯的寫入碼：頁面進入權限仍為
           // BUS_READ，本碼只控制 in_progress 階段的操作可見性（後端 handler 內
