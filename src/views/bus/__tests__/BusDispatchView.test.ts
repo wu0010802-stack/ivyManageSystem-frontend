@@ -105,6 +105,9 @@ const GLOBAL_STUBS = {
   },
   'el-tag': { template: '<span><slot /></span>' },
   'el-date-picker': { template: '<input />' },
+  // 預覽 Dialog 有自己的測試；這裡只驗「傳進去的東西對不對」，內部 el-table 的
+  // slot 渲染不是本檔的關注點（真的渲染還得補一整組可傳 row 的 table stub）。
+  BusOptimizePreviewDialog: true,
 }
 
 function stop(overrides: Record<string, unknown> = {}) {
