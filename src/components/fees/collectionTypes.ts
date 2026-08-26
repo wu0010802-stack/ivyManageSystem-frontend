@@ -97,3 +97,99 @@ export function isOldPeriod(row: {
   if (!y || !m) return false
   return row.bill_year * 12 + row.bill_month < y * 12 + m
 }
+
+// ── 發單快照與未繳差集（SPEC-016 Phase 3）────────────────────────────
+
+export interface BillSlipBatchRow {
+  id: number
+  batch_no: string | null
+  bill_year: number
+  bill_month: number
+  title: string
+  source: string
+  original_filename: string | null
+  row_count: number
+  net_total: number
+  zero_amount_count: number
+  note: string | null
+  created_at: string
+  created?: boolean | null
+}
+
+export interface BillSlipPreview {
+  bill_year: number | null
+  bill_month: number | null
+  row_count: number
+  net_total: number
+  zero_amount_count: number
+  error_count: number
+  errors: { row_number: number; reason: string }[]
+  already_imported: boolean
+  existing_batch_id: number | null
+}
+
+export interface OutstandingItem {
+  item_id: number
+  student_id: number | null
+  student_name: string
+  classroom_name: string | null
+  grade_name: string | null
+  collection_suffix: string
+  full_collection_number: string
+  /** 本批該帳號應收 */
+  net_amount: number
+  /** 同期別跨批應收合計（狀態判定基準；帳號被多批共用） */
+  expected_total: number
+  paid_amount: number
+  shortfall: number
+  excess: number
+  status: string
+}
+
+export interface OutstandingReport {
+  batch: BillSlipBatchRow & {
+    sibling_batch_count: number
+    likely_missing_sibling_batch: boolean
+  }
+  totals: {
+    expected: number
+    paid: number
+    outstanding: number
+    excess: number
+    row_count: number
+    settled_count: number
+    unpaid_count: number
+    partial_count: number
+    paid_count: number
+    overpaid_count: number
+  }
+  items: OutstandingItem[]
+}
+
+export const OUTSTANDING_STATUS_LABELS: Record<string, string> = {
+  settled: '已收訖',
+  unpaid: '未繳',
+  partial: '短繳',
+  paid: '足額',
+  overpaid: '溢繳',
+}
+
+/** 未繳名單快篩（第一個為預設：優先看需要催的） */
+export const OUTSTANDING_SCOPES: { value: string; label: string }[] = [
+  { value: 'unpaid', label: '未繳' },
+  { value: 'partial', label: '短繳' },
+  { value: 'overpaid', label: '溢繳' },
+  { value: 'paid', label: '足額' },
+  { value: 'settled', label: '已收訖' },
+  { value: '', label: '全部' },
+]
+
+export function outstandingStatusTag(
+  status: string,
+): 'success' | 'info' | 'warning' | 'danger' | 'primary' {
+  if (status === 'paid') return 'success'
+  if (status === 'settled') return 'info'
+  if (status === 'partial') return 'warning'
+  if (status === 'overpaid') return 'primary'
+  return 'danger'
+}

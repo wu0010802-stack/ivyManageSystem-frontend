@@ -11,6 +11,9 @@ vi.mock('@/components/fees/CollectionReconTab.vue', () => ({
 vi.mock('@/components/fees/BankReconTab.vue', () => ({
   default: { name: 'BankReconTab', template: '<div data-testid="passbook-tab" />' },
 }))
+vi.mock('@/components/fees/BillSlipTab.vue', () => ({
+  default: { name: 'BillSlipTab', template: '<div data-testid="billslip-tab" />' },
+}))
 
 const STUBS = {
   'el-segmented': {
@@ -48,6 +51,12 @@ describe('FeeReconWorkspace', () => {
     const wrapper = await mountWorkspace('collection')
     await wrapper.find('[data-test="view-passbook"]').trigger('click')
     expect(wrapper.emitted('change-view')).toEqual([['passbook']])
+  })
+
+  it('view=billslips 顯示發單快照並提示為應收母體', async () => {
+    const wrapper = await mountWorkspace('billslips')
+    expect(wrapper.find('[data-testid="billslip-tab"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('應收母體')
   })
 
   it('點目前檢視不重複發事件', async () => {

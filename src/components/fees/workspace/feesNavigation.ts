@@ -32,10 +32,12 @@ export const FEE_WORKSPACE_VIEWS: Record<FeeWorkspaceKey, FeeWorkspaceViewDef[]>
     { key: 'records', label: '帳款' },
     { key: 'refunds', label: '退款' },
   ],
-  // SPEC-016：代收明細為對帳主來源（預設），存摺明細降為勾稽層
+  // SPEC-016：代收明細為對帳主來源（預設），存摺明細降為勾稽層，
+  // 發單快照提供應收母體（誰該繳而沒繳）
   recon: [
     { key: 'collection', label: '代收明細' },
     { key: 'passbook', label: '存摺明細' },
+    { key: 'billslips', label: '發單與未繳' },
   ],
   settlement: [
     { key: 'handover', label: '每日交接' },

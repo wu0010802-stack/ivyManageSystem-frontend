@@ -8,17 +8,12 @@
         data-test="recon-view-switch"
         @change="onViewChange"
       />
-      <span class="workspace-hint">
-        {{
-          view === 'passbook'
-            ? '存摺明細為勾稽層：超商代收在此為每日整批入帳，逐筆核銷請用代收明細'
-            : '代收明細為對帳主來源：每筆家長繳費一列，帳號已錨定學生與帳單期別'
-        }}
-      </span>
+      <span class="workspace-hint">{{ VIEW_HINTS[view] ?? VIEW_HINTS.collection }}</span>
     </div>
 
     <KeepAlive>
       <BankReconTab v-if="view === 'passbook'" />
+      <BillSlipTab v-else-if="view === 'billslips'" />
       <CollectionReconTab v-else />
     </KeepAlive>
   </section>
@@ -26,14 +21,22 @@
 
 <script setup lang="ts">
 /**
- * 對帳工作區（SPEC-016）：代收明細（主來源，預設）＋存摺明細（勾稽層）。
+ * 對帳工作區（SPEC-016）：代收明細（主來源，預設）＋存摺明細（勾稽層）
+ * ＋發單快照（應收母體）。
  *
  * 代收核銷明細每筆家長繳費一列、含完整 14 碼銷帳編號，媒合為帳號定錨；
- * 存摺明細僅供勾稽超商每日整批入帳與非代收款項（利息/支出）。
+ * 存摺明細與代收逐筆去重（同一批錢的兩種視角）；發單快照回答「誰該繳而沒繳」。
  */
 import BankReconTab from '@/components/fees/BankReconTab.vue'
+import BillSlipTab from '@/components/fees/BillSlipTab.vue'
 import CollectionReconTab from '@/components/fees/CollectionReconTab.vue'
 import { FEE_WORKSPACE_VIEWS } from './feesNavigation'
+
+const VIEW_HINTS: Record<string, string> = {
+  collection: '代收明細為對帳主來源：每筆家長繳費一列，帳號已錨定學生與帳單期別',
+  passbook: '存摺明細為勾稽層：與代收明細逐筆去重，避免同一筆錢被分配兩次',
+  billslips: '發單快照＝應收母體：匯入銀行檢核檔後即可自算未繳／短繳／溢繳',
+}
 
 const props = withDefaults(defineProps<{ view?: string }>(), { view: 'collection' })
 

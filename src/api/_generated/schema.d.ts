@@ -6615,6 +6615,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/bill-slip-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bill Slip Batches */
+        get: operations["list_bill_slip_batches_api_fees_bill_slip_batches_get"];
+        put?: never;
+        /** Import Bill Slip Batch */
+        post: operations["import_bill_slip_batch_api_fees_bill_slip_batches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bill-slip-batches/{batch_id}/outstanding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Outstanding Report
+         * @description 發單 vs 已繳差集；status 篩選只影響清單，totals 恆為全批母體。
+         */
+        get: operations["get_outstanding_report_api_fees_bill_slip_batches__batch_id__outstanding_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bill-slip-batches/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Bill Slip Batch */
+        post: operations["preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/billing-codes": {
         parameters: {
             query?: never;
@@ -22170,6 +22225,65 @@ export interface components {
             /** Semester */
             semester: number;
         };
+        /** BillSlipBatchOut */
+        BillSlipBatchOut: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /** Created */
+            created?: boolean | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Net Total */
+            net_total: number;
+            /** Note */
+            note?: string | null;
+            /** Original Filename */
+            original_filename?: string | null;
+            /** Row Count */
+            row_count: number;
+            /** Source */
+            source: string;
+            /** Title */
+            title: string;
+            /** Zero Amount Count */
+            zero_amount_count: number;
+        };
+        /** BillSlipPreviewOut */
+        BillSlipPreviewOut: {
+            /** Already Imported */
+            already_imported: boolean;
+            /** Bill Month */
+            bill_month?: number | null;
+            /** Bill Year */
+            bill_year?: number | null;
+            /** Error Count */
+            error_count: number;
+            /** Errors */
+            errors: components["schemas"]["RowErrorOut"][];
+            /** Existing Batch Id */
+            existing_batch_id?: number | null;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Filename */
+            filename: string;
+            /** Net Total */
+            net_total: number;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Zero Amount Count */
+            zero_amount_count: number;
+        };
         /**
          * BindAdditionalChildOut
          * @description POST /bind-additional 綁定多個小孩成功回傳。
@@ -22266,6 +22380,15 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /** Body_import_bill_slip_batch_api_fees_bill_slip_batches_post */
+        Body_import_bill_slip_batch_api_fees_bill_slip_batches_post: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** File */
+            file: string;
+            /** Title */
+            title: string;
+        };
         /** Body_import_events_preview_api_events_import_preview_post */
         Body_import_events_preview_api_events_import_preview_post: {
             /** File */
@@ -22308,6 +22431,11 @@ export interface components {
         };
         /** Body_preview_bank_import_api_fees_bank_imports_preview_post */
         Body_preview_bank_import_api_fees_bank_imports_preview_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post */
+        Body_preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post: {
             /** File */
             file: string;
         };
@@ -31298,6 +31426,101 @@ export interface components {
             semester_first: boolean;
             /** Year End Cycle Id */
             year_end_cycle_id: number;
+        };
+        /** OutstandingBatchOut */
+        OutstandingBatchOut: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /**
+             * Likely Missing Sibling Batch
+             * @default false
+             */
+            likely_missing_sibling_batch: boolean;
+            /** Net Total */
+            net_total: number;
+            /** Row Count */
+            row_count: number;
+            /**
+             * Sibling Batch Count
+             * @default 0
+             */
+            sibling_batch_count: number;
+            /** Source */
+            source: string;
+            /** Title */
+            title: string;
+            /** Zero Amount Count */
+            zero_amount_count: number;
+        };
+        /** OutstandingItemOut */
+        OutstandingItemOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Collection Suffix */
+            collection_suffix: string;
+            /** Excess */
+            excess: number;
+            /** Expected Total */
+            expected_total: number;
+            /** Full Collection Number */
+            full_collection_number: string;
+            /** Grade Name */
+            grade_name?: string | null;
+            /** Item Id */
+            item_id: number;
+            /** Net Amount */
+            net_amount: number;
+            /** Paid Amount */
+            paid_amount: number;
+            /** Shortfall */
+            shortfall: number;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name: string;
+        };
+        /** OutstandingReportOut */
+        OutstandingReportOut: {
+            batch: components["schemas"]["OutstandingBatchOut"];
+            /** Items */
+            items: components["schemas"]["OutstandingItemOut"][];
+            totals: components["schemas"]["OutstandingTotalsOut"];
+        };
+        /** OutstandingTotalsOut */
+        OutstandingTotalsOut: {
+            /** Excess */
+            excess: number;
+            /** Expected */
+            expected: number;
+            /** Outstanding */
+            outstanding: number;
+            /** Overpaid Count */
+            overpaid_count: number;
+            /** Paid */
+            paid: number;
+            /** Paid Count */
+            paid_count: number;
+            /** Partial Count */
+            partial_count: number;
+            /** Row Count */
+            row_count: number;
+            /** Settled Count */
+            settled_count: number;
+            /** Unpaid Count */
+            unpaid_count: number;
         };
         /**
          * OvertimeApproveRequest
@@ -54546,6 +54769,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bill_slip_batches_api_fees_bill_slip_batches_get: {
+        parameters: {
+            query?: {
+                bill_month?: number | null;
+                bill_year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipBatchOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_bill_slip_batch_api_fees_bill_slip_batches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_bill_slip_batch_api_fees_bill_slip_batches_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_outstanding_report_api_fees_bill_slip_batches__batch_id__outstanding_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutstandingReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipPreviewOut"];
                 };
             };
             /** @description Validation Error */
