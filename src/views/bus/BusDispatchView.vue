@@ -63,8 +63,13 @@ const CARD_STATUSES: readonly CardStatus[] = ['none', 'planned', 'in_progress', 
  * `trip.status` 在 codegen 只是 `string`（後端 Pydantic 宣告 `status: str`，沒有 enum）。
  * 直接 `as` 成聯集會把型別檢查關掉，而 `BusDispatchRouteCard` 內部是
  * `STATUS_META[status]` 查表——查不到回 `undefined`，template 再讀 `.label` 就是整頁
- * render 崩，型別上還完全看不出來。未知值一律退 `none`（保守方向：顯示成「未生成」
- * 而不是猜一個可編輯的狀態；真正的寫入權限另由 `editable` 依後端規則判定）。
+ * render 崩，型別上還完全看不出來。未知值一律退 `none`。
+ *
+ * ⚠ 「未生成」對一個**確實存在、只是狀態不認識**的 trip 略失真。之所以仍選它：
+ * 五個既有狀態每一個都會讓卡片對編輯能力做出承諾，`none` 是唯一不承諾任何事的；
+ * 真正的寫入權限另由 `editable` 依後端規則判定，所以失真只在文案、不在行為。
+ * 要更誠實得在 `BusDispatchRouteCard` 的 `STATUS_META` 加一個 `unknown` 態——
+ * 那支是共用元件，不為一個「後端擴 enum 才會發生」的情境去動它。
  */
 function toCardStatus(status: string): CardStatus {
   return (CARD_STATUSES as readonly string[]).includes(status) ? (status as CardStatus) : 'none'

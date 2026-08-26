@@ -223,6 +223,19 @@ describe('BusMonitorView', () => {
     expect(wrapper.find('[data-testid="bus-monitor-excused-12"]').exists()).toBe(false)
   })
 
+  it('未知的 status 原樣顯示，不落進「待接送」（後端 status 是裸 str，值域可能再擴）', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [{
+      stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+      status: 'boarded_by_future_migration', excuse_reason: null,
+      lat: 22.61, lng: 120.31, departed_at: null, eta_planned: null, eta_live: null,
+    }]
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('boarded_by_future_migration')
+    expect(wrapper.text()).not.toContain('待接送')
+  })
+
   it('未知的 excuse_reason 原樣顯示，不吞成已知原因', async () => {
     s.trip.value = inProgressTrip()
     s.stops.value = [

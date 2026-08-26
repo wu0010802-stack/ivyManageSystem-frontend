@@ -51,11 +51,19 @@ function stopTagType(status: string): 'success' | 'info' | 'warning' | undefined
   if (status === 'excused') return 'warning'
   return undefined
 }
+/**
+ * 後端 `status` 是裸 `str`（沒有 enum），值域日後可能再擴。未知值**原樣顯示**而不是
+ * 落進「待接送」——把一個不認識的狀態說成「等一下會接」是這一頁最不該犯的謊，
+ * 而印出裸英文碼至少讓行政知道要回報。與 `BusDispatchStopsTable.statusMeta` 同慣例。
+ */
+const STOP_LABELS: Record<string, string> = {
+  pending: '待接送',
+  departed: '已離站',
+  skipped: '已跳過',
+  excused: '今日不搭',
+}
 function stopLabel(status: string): string {
-  if (status === 'departed') return '已離站'
-  if (status === 'skipped') return '已跳過'
-  if (status === 'excused') return '今日不搭'
-  return '待接送'
+  return STOP_LABELS[status] ?? status
 }
 /** excused 站才有原因；其餘狀態不顯示（空字串＝該欄留白）。 */
 function excuseText(status: string, reason: string | null): string {
