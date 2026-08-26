@@ -64,6 +64,14 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 水平溢出護欄：任何一張寬表格或一串不斷行的長字元都足以讓整頁橫向捲動。
+ * 必須是 clip 不是 hidden——hidden 會讓根元素成為捲動容器，
+ * 使頁內所有 position: sticky（表頭、tab 列、工具列）失效。 */
+html,
+body {
+  overflow-x: clip;
+}
+
 #app {
   height: 100vh;
 }
