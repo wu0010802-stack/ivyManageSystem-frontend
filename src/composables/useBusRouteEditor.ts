@@ -267,8 +267,26 @@ export function useBusRouteEditor() {
   const studentsFailed = ref(false)
   /** 編輯緩衝與伺服器名冊已分岔；切換班次與離開頁面前要提醒。 */
   const dirty = ref(false)
+  /**
+   * 本 composable 之外的「未儲存」來源（目前是班次設定表單的欄位編輯）。
+   *
+   * `dirty` 只追蹤 `stops`，但 `loadRoutes()` 會重建整個 route 物件、連帶把表單
+   * 欄位重置回伺服器值。若不把表單納入同一條防線，改了座位上限沒存、按一下
+   * 「儲存名單」或拖一下側欄，表單編輯就靜默消失。
+   */
+  const extraDirtySources = ref<Array<() => boolean>>([])
+  function registerExtraDirty(fn: () => boolean): void {
+    extraDirtySources.value = [...extraDirtySources.value, fn]
+  }
+  /** 任何一個來源有未儲存變更即為 true。供 view 的離頁／關分頁保護使用。 */
+  const anyDirty = computed(() => dirty.value || extraDirtySources.value.some((fn) => fn()))
   /** 最近一次「帶入其他班次名單」預覽標示出的衝突學生（供 view 呈現）。 */
   const copyConflicts = ref<CopyFromConflict[]>([])
+  /**
+   * 最近一次自動排序**失敗**的訊息（Azure 不可用時後端回 502）。
+   * 與「被 dirty 前置擋下」區分開來：那不是錯誤，不該開一個帶重試鈕的錯誤對話框。
+   */
+  const optimizeErrorMessage = ref<string | null>(null)
 
   const activeRoute = computed(() => routes.value.find((r) => r.id === activeRouteId.value) ?? null)
   /** 伺服器上目前這條班次的名冊（用來判斷「儲存會不會清空」）。 */
@@ -422,7 +440,7 @@ export function useBusRouteEditor() {
   // ── 切換（未儲存的編輯要先確認）─────────────────────────────────────────────
 
   async function confirmDiscard(): Promise<boolean> {
-    if (!dirty.value) return true
+    if (!anyDirty.value) return true
     try {
       await ElMessageBox.confirm(
         '這個班次有尚未儲存的變更，離開後會遺失。確定要切換嗎？', '尚未儲存',
@@ -454,6 +472,10 @@ export function useBusRouteEditor() {
     sort_order?: number
     operator_employee_ids?: number[]
   }): Promise<number | null> {
+    // 這支內部會 loadRoutes() → resetEditing()，等於把名單編輯緩衝整份蓋掉。
+    // 「新增班次」按鈕在任何時候都能按（頁首與側欄各一個），不擋的話使用者排了
+    // 半小時的順序會因為一個語意上毫不相關的動作而消失。
+    if (!await confirmDiscard()) return null
     const name = payload.name.trim()
     if (!name) {
       ElMessage.error('請輸入班次名稱')
@@ -536,14 +558,20 @@ export function useBusRouteEditor() {
     reordering.value = true
     try {
       await reorderBusRoutes(orderedIds.map((id, i) => ({ id, sort_order: i })))
-      await loadRoutes()
-      return true
     } catch (e) {
       ElMessage.error(apiError(e, '調整班次順序失敗，請稍後再試'))
-      return false
-    } finally {
       reordering.value = false
+      return false
     }
+    try {
+      // **獨立 try**：PATCH 已經 commit 了，重讀失敗不可以再喊一次「調整順序失敗」——
+      // 使用者會照著提示再拖一次，等於對同一批班次再寫一次 sort_order。
+      await loadRoutes()
+    } catch (e) {
+      ElMessage.warning(apiError(e, '已調整順序，但重新載入班次清單失敗，畫面可能不是最新狀態'))
+    }
+    reordering.value = false
+    return true
   }
 
   // ── 編輯 ──────────────────────────────────────────────────────────────────
@@ -646,15 +674,23 @@ export function useBusRouteEditor() {
     resolved: { id: number | null; lat: number | null; lng: number | null; address: string | null },
   ): void {
     if (index < 0 || index >= stops.value.length) return
-    stops.value = stops.value.map((s, i) => (i === index ? {
-      ...s,
-      pickup_address_id: resolved.id,
-      lat: resolved.lat,
-      lng: resolved.lng,
-      address_snapshot: resolved.address,
-      // 剛從地址簿選出來的就是現值，不可能是過期快照。
-      address_stale: false,
-    } : s))
+    stops.value = stops.value.map((s, i) => {
+      if (i !== index) return s
+      // **選同一筆地址時不得把既有座標清成 null**。後端的「住家」虛擬項是寫死的
+      // `lat/lng: None`（api/bus/pickup_addresses.py），所以對一個原本就用住家、
+      // 且已經微調好座標的站再點一次住家，無條件覆寫等於把它推進「無法發車」，
+      // 而且沒有回頭路。地址真的換了（id 不同）才允許座標歸零。
+      const sameAddress = s.pickup_address_id === resolved.id
+      return {
+        ...s,
+        pickup_address_id: resolved.id,
+        lat: resolved.lat ?? (sameAddress ? s.lat : null),
+        lng: resolved.lng ?? (sameAddress ? s.lng : null),
+        address_snapshot: resolved.address ?? (sameAddress ? s.address_snapshot : null),
+        // 剛從地址簿選出來的就是現值，不可能是過期快照。
+        address_stale: false,
+      }
+    })
     dirty.value = true
   }
 
@@ -676,7 +712,9 @@ export function useBusRouteEditor() {
   async function copyFromRoute(sourceRouteId: number, reverse = true): Promise<boolean> {
     const routeId = activeRouteId.value
     if (routeId === null || copying.value) return false
-    if (stops.value.length > 0) {
+    // 站點被全部刪光時 `length === 0` 但 `dirty === true`，那也是「會被覆寫掉的
+    // 未儲存編輯」，不能跳過確認。
+    if (stops.value.length > 0 || dirty.value) {
       try {
         await ElMessageBox.confirm(
           '目前的名單會被帶入的名單取代，確定嗎？', '帶入其他班次名單',
@@ -744,6 +782,7 @@ export function useBusRouteEditor() {
     const routeId = activeRouteId.value
     if (routeId === null || optimizing.value) return null
     if (!requireSavedBuffer('自動排序')) return null
+    optimizeErrorMessage.value = null
     optimizing.value = true
     try {
       const res = await optimizeBusRoute(routeId, { apply: false })
@@ -770,7 +809,9 @@ export function useBusRouteEditor() {
         }),
       }
     } catch (e) {
-      ElMessage.error(apiError(e, '自動排序失敗，請稍後再試'))
+      const message = apiError(e, '自動排序失敗，請稍後再試')
+      optimizeErrorMessage.value = message
+      ElMessage.error(message)
       return null
     } finally {
       optimizing.value = false
@@ -842,6 +883,7 @@ export function useBusRouteEditor() {
         return
       }
     }
+    const hadEta = stops.value.some((s) => s.eta_planned !== null)
     saving.value = true
     try {
       await replaceBusRouteStops(
@@ -874,6 +916,13 @@ export function useBusRouteEditor() {
           `仍有 ${missingCoordinateCount.value} 站沒有座標，需先設定接送地址才能發車`,
         )
       }
+      // 後端 `replace_stops` 不寫 `eta_planned`、也不動 `route.end_time_planned`
+      // （StopIn 沒有這個欄位，前端也送不上去）。所以只要儲存前緩衝裡有 ETA，
+      // 重讀回來就會整欄變「—」而 end_time_planned 停在舊順序的過期預估。
+      // 這件事不講，使用者只會看到 ETA 集體消失，不知道要按「重算預計抵達」。
+      if (hadEta) {
+        ElMessage.warning('名單已儲存；順序或名單變更後的預計抵達時間，請按「重算預計抵達」重新計算')
+      }
     } catch (e) {
       ElMessage.warning(apiError(e, '已儲存，但重新載入名冊失敗，畫面可能不是最新狀態'))
     } finally {
@@ -885,6 +934,7 @@ export function useBusRouteEditor() {
     routes, activeRoute, activeRouteId, stops, students, candidates, savedStops,
     capacity, weekdayLoads, maxWeekdayLoad, overloadedWeekdays,
     missingCoordinateCount, staleAddressCount, assignedElsewhere, copyConflicts,
+    optimizeErrorMessage, anyDirty, registerExtraDirty,
     loading, saving, creating, updatingRoute, reordering, optimizing, copying, dirty,
     loadFailed, studentsFailed,
     init, loadRoutes, createRoute, selectRoute, updateRoute, reorderRoutes, confirmDiscard,

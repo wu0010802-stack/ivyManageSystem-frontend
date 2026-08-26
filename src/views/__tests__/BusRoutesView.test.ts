@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => {
       staleAddressCount: computed(() => stops.value.filter((s) => s.address_stale === true).length),
       assignedElsewhere: computed(() => new Map()),
       copyConflicts: ref<Array<Record<string, unknown>>>([]),
+      optimizeErrorMessage: ref<string | null>(null),
       loading: ref(false),
       saving: ref(false),
       creating: ref(false),
@@ -42,6 +43,8 @@ const mocks = vi.hoisted(() => {
       optimizing: ref(false),
       copying: ref(false),
       dirty: ref(false),
+      anyDirty: ref(false),
+      registerExtraDirty: vi.fn(),
       loadFailed: ref(false),
       studentsFailed: ref(false),
       init: vi.fn(),
@@ -74,15 +77,29 @@ vi.mock('@/composables/useBusRouteEditor', async () => {
   )
   return { ...actual, useBusRouteEditor: () => mocks.api }
 })
-vi.mock('@/api/employees', () => ({ getEmployees: vi.fn().mockResolvedValue({ data: [] }) }))
+vi.mock('@/api/employees', () => ({ getEmployees: vi.fn() }))
 vi.mock('@/api/bus', () => ({
   listStudentPickupAddresses: vi.fn().mockResolvedValue({ data: { addresses: [] } }),
   createStudentPickupAddress: vi.fn(),
   deleteStudentPickupAddress: vi.fn(),
+  geocodeBusStudent: vi.fn(),
+  getBusSettings: vi.fn().mockResolvedValue({ data: { school_lat: 22.6, school_lng: 120.3 } }),
 }))
-// onBeforeRouteLeave 需要 router 上下文；本檔只驗呈現，直接 no-op
+vi.mock('element-plus', async () => {
+  const actual = await vi.importActual<typeof import('element-plus')>('element-plus')
+  return {
+    ...actual,
+    ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+    ElMessageBox: { confirm: vi.fn() },
+  }
+})
+// onBeforeRouteLeave 需要 router 上下文；這裡攔下註冊的守衛以便直接呼叫
 vi.mock('vue-router', () => ({ onBeforeRouteLeave: vi.fn() }))
 
+import { onBeforeRouteLeave } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { geocodeBusStudent } from '@/api/bus'
+import { getEmployees } from '@/api/employees'
 import BusRoutesView from '@/views/BusRoutesView.vue'
 
 const s = mocks.api
@@ -139,9 +156,160 @@ beforeEach(() => {
   s.loadFailed.value = false
   s.studentsFailed.value = false
   s.dirty.value = false
+  s.anyDirty.value = false
+  s.optimizeErrorMessage.value = null
   s.optimizePreview.mockResolvedValue(null)
   s.createRoute.mockResolvedValue(11)
   s.copyFromRoute.mockResolvedValue(true)
+  vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+  vi.mocked(getEmployees).mockResolvedValue({ data: [] } as never)
+})
+
+describe('BusRoutesView — 未儲存離頁保護', () => {
+  async function leaveGuard() {
+    await mountView()
+    const calls = vi.mocked(onBeforeRouteLeave).mock.calls
+    return calls.at(-1)?.[0] as () => Promise<boolean>
+  }
+
+  it('沒有未儲存變更時直接放行，不打擾使用者', async () => {
+    s.anyDirty.value = false
+    const guard = await leaveGuard()
+    await expect(guard()).resolves.toBe(true)
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+  })
+
+  it('有未儲存變更時攔下；使用者選「留在這裡」就不離開', async () => {
+    s.anyDirty.value = true
+    const guard = await leaveGuard()
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+    await expect(guard()).resolves.toBe(false)
+  })
+
+  it('使用者確認捨棄才放行', async () => {
+    s.anyDirty.value = true
+    const guard = await leaveGuard()
+    await expect(guard()).resolves.toBe(true)
+  })
+})
+
+describe('BusRoutesView — 關分頁／重新整理保護', () => {
+  it('未儲存時 beforeunload 要攔下', async () => {
+    s.anyDirty.value = true
+    await mountView()
+    const ev = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
+    window.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(true)
+  })
+
+  it('沒有未儲存變更時 beforeunload 不攔截', async () => {
+    s.anyDirty.value = false
+    await mountView()
+    const ev = new Event('beforeunload', { cancelable: true }) as BeforeUnloadEvent
+    window.dispatchEvent(ev)
+    expect(ev.defaultPrevented).toBe(false)
+  })
+
+  it('unmount 後移除 beforeunload listener，不殘留', async () => {
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const w = await mountView()
+    const added = addSpy.mock.calls.find((c) => c[0] === 'beforeunload')
+    expect(added).toBeDefined()
+    w.unmount()
+    expect(removeSpy).toHaveBeenCalledWith('beforeunload', added?.[1])
+    addSpy.mockRestore()
+    removeSpy.mockRestore()
+  })
+
+  it('班次設定表單回報 dirty 後，離頁保護要跟著生效（表單編輯也不能靜默消失）', async () => {
+    s.anyDirty.value = false
+    const w = await mountView()
+    // 表單 dirty 走 registerExtraDirty 進 composable，這裡驗證頁面確實有註冊與接線
+    expect(s.registerExtraDirty).toHaveBeenCalled()
+    w.findComponent({ name: 'BusRouteForm' }).vm.$emit('update:dirty', true)
+    await flushPromises()
+    const isDirty = (s.registerExtraDirty.mock.calls[0][0] as () => boolean)()
+    expect(isDirty).toBe(true)
+  })
+})
+
+describe('BusRoutesView — 自動排序失敗要給重試入口', () => {
+  it('被未儲存變更擋下時不開錯誤對話框（重試也還是會被擋）', async () => {
+    s.optimizePreview.mockResolvedValue(null)
+    s.optimizeErrorMessage.value = null
+    const w = await mountView()
+    await w.find('[data-testid="bus-optimize"]').trigger('click')
+    await flushPromises()
+    expect(w.findComponent({ name: 'BusOptimizePreviewDialog' }).props('visible')).toBe(false)
+  })
+
+  it('真的失敗（Azure 502）時開 Dialog 並帶錯誤訊息，讓「重試」可按', async () => {
+    s.optimizePreview.mockResolvedValue(null)
+    s.optimizeErrorMessage.value = '路徑服務暫時無法使用，請稍後再試'
+    const w = await mountView()
+    await w.find('[data-testid="bus-optimize"]').trigger('click')
+    await flushPromises()
+    const dialog = w.findComponent({ name: 'BusOptimizePreviewDialog' })
+    expect(dialog.props('visible')).toBe(true)
+    expect(dialog.props('error')).toBe('路徑服務暫時無法使用，請稍後再試')
+  })
+})
+
+describe('BusRoutesView — 新增班次 Dialog 的不可逆警語', () => {
+  it('明說建立後無法刪除、方向不可更改', async () => {
+    const w = await mountView()
+    await w.find('[data-testid="bus-routes-create"]').trigger('click')
+    await flushPromises()
+    const warning = w.find('[data-testid="create-warning"]')
+    expect(warning.exists()).toBe(true)
+    expect(warning.text()).toContain('無法刪除')
+    expect(warning.text()).toContain('方向也不可更改')
+  })
+})
+
+describe('BusRoutesView — 隨車老師名單載入失敗', () => {
+  it('明說是載入失敗，不得讓空選單看起來像「園裡沒有老師」', async () => {
+    vi.mocked(getEmployees).mockRejectedValueOnce(new Error('boom'))
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-employees-error"]').exists()).toBe(true)
+  })
+})
+
+describe('BusRoutesView — 住家地址沒有座標時補 geocode', () => {
+  function pickAddress(w: ReturnType<typeof mount>, resolved: Record<string, unknown>) {
+    w.findComponent({ name: 'BusRouteStopsTable' }).vm.$emit('pick-address', 0)
+    return w.vm.$nextTick().then(() => {
+      w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('resolved', resolved)
+      return flushPromises()
+    })
+  }
+
+  it('選住家（後端恆不帶座標）會呼叫 geocode 端點補上，再寫回站點', async () => {
+    vi.mocked(geocodeBusStudent).mockResolvedValue({ data: { lat: 22.65, lng: 120.35 } } as never)
+    const w = await mountView()
+    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址' })
+    expect(geocodeBusStudent).toHaveBeenCalledWith(101)
+    expect(s.setPickupAddress).toHaveBeenCalledWith(0, {
+      id: null, lat: 22.65, lng: 120.35, address: '住家地址',
+    })
+  })
+
+  it('geocode 查不到座標要明說改用地圖微調，不留一個沒有下一步的死巷', async () => {
+    vi.mocked(geocodeBusStudent).mockResolvedValue({ data: { lat: null, lng: null } } as never)
+    const w = await mountView()
+    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址' })
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('地圖微調'))
+    expect(s.setPickupAddress).toHaveBeenCalledWith(0, {
+      id: null, lat: null, lng: null, address: '住家地址',
+    })
+  })
+
+  it('地址簿的地址本來就有座標，不多打一次 geocode', async () => {
+    const w = await mountView()
+    await pickAddress(w, { id: 7, lat: 22.7, lng: 120.4, address: '阿嬤家' })
+    expect(geocodeBusStudent).not.toHaveBeenCalled()
+  })
 })
 
 describe('BusRoutesView — 誠實降級', () => {

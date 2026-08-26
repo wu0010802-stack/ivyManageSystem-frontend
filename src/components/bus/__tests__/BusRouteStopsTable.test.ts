@@ -72,10 +72,10 @@ describe('BusRouteStopsTable', () => {
     expect(w.findAll('button').map((b) => b.text())).not.toContain('定位')
   })
 
-  it('地圖微調在沒有座標時 disabled（沒有起始點可微調，先去設定地址）', () => {
+  it('沒有座標時「地圖微調」仍可用——那是替 geocode 失敗的站補座標的唯一路徑', () => {
     expect(
       mountTable([stop({ lat: null, lng: null })]).find('[data-test="tune-map-101"]').attributes('disabled'),
-    ).toBeDefined()
+    ).toBeUndefined()
     expect(
       mountTable([stop()]).find('[data-test="tune-map-101"]').attributes('disabled'),
     ).toBeUndefined()
@@ -116,19 +116,68 @@ describe('BusRouteStopsTable', () => {
       stop({ student_id: 103, student_name: '小美', seq: 3 }),
     ]
     const w = mountTable(stops)
-    const draggable = w.findComponent({ name: 'draggable' })
-    draggable.vm.$emit('update:modelValue', [stops[2], stops[0], stops[1]])
+    w.findComponent({ name: 'draggable' }).vm.$emit('change', {
+      moved: { element: stops[2], oldIndex: 2, newIndex: 0 },
+    })
     await w.vm.$nextTick()
     expect(w.emitted('reorder')?.[0]).toEqual([2, 0])
     expect(stops[2].pinned).toBe(false)
   })
 
-  it('順序沒變時不 emit（避免拖回原位也算一次變更）', async () => {
-    const stops = [stop({ student_id: 101 }), stop({ student_id: 102, seq: 2 })]
+  it('往後拖也要算對（用 vuedraggable 的 oldIndex/newIndex，不從新舊陣列反推）', async () => {
+    const stops = [
+      stop({ student_id: 101, seq: 1 }),
+      stop({ student_id: 102, student_name: '小華', seq: 2 }),
+      stop({ student_id: 103, student_name: '小美', seq: 3 }),
+    ]
     const w = mountTable(stops)
-    w.findComponent({ name: 'draggable' }).vm.$emit('update:modelValue', [...stops])
+    // 把第一站拖到最後：反推法會誤判成 moveStop(1, 0)，順序與自動釘選都會錯
+    w.findComponent({ name: 'draggable' }).vm.$emit('change', {
+      moved: { element: stops[0], oldIndex: 0, newIndex: 2 },
+    })
+    await w.vm.$nextTick()
+    expect(w.emitted('reorder')?.[0]).toEqual([0, 2])
+  })
+
+  it('落回原位不 emit（避免拖回原處也算一次變更）', async () => {
+    const w = mountTable([stop({ student_id: 101 }), stop({ student_id: 102, seq: 2 })])
+    w.findComponent({ name: 'draggable' }).vm.$emit('change', {
+      moved: { element: null, oldIndex: 1, newIndex: 1 },
+    })
     await w.vm.$nextTick()
     expect(w.emitted('reorder')).toBeUndefined()
+  })
+
+  it('非 moved 的 change 事件（added/removed）一律忽略', async () => {
+    const w = mountTable([stop()])
+    w.findComponent({ name: 'draggable' }).vm.$emit('change', { added: { newIndex: 0 } })
+    await w.vm.$nextTick()
+    expect(w.emitted('reorder')).toBeUndefined()
+  })
+
+  it('鍵盤替代方案：上下移按鈕走同一個 reorder（拖拉對鍵盤使用者不可用）', async () => {
+    const stops = [
+      stop({ student_id: 101, seq: 1 }),
+      stop({ student_id: 102, student_name: '小華', seq: 2 }),
+      stop({ student_id: 103, student_name: '小美', seq: 3 }),
+    ]
+    const w = mountTable(stops)
+    await w.find('[data-test="move-down-101"]').trigger('click')
+    expect(w.emitted('reorder')?.[0]).toEqual([0, 1])
+    await w.find('[data-test="move-up-103"]').trigger('click')
+    expect(w.emitted('reorder')?.[1]).toEqual([2, 1])
+  })
+
+  it('第一站不能再上移、最後一站不能再下移', () => {
+    const w = mountTable([stop({ student_id: 101 }), stop({ student_id: 102, seq: 2 })])
+    expect(w.find('[data-test="move-up-101"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-test="move-down-102"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-test="move-down-101"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('上下移按鈕有可讀的 aria-label（純箭頭字元對螢幕閱讀器無意義）', () => {
+    const w = mountTable([stop(), stop({ student_id: 102, seq: 2 })])
+    expect(w.find('[data-test="move-down-101"]').attributes('aria-label')).toContain('小明')
   })
 
   it('表尾逐星期顯示載客數／capacity（後端口徑是逐星期，不是總站數）', () => {

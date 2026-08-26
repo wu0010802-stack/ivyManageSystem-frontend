@@ -34,16 +34,29 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   submit: [payload: BusRouteFormPayload]
+  /** 表單有未儲存變更；由頁面納入離頁／切換班次的未儲存保護。 */
+  'update:dirty': [dirty: boolean]
 }>()
 
 const name = ref('')
 const departTime = ref('')
-const capacity = ref(1)
+// el-input-number 可以被清成 undefined；那不是「改成 0」也不是「沒改」，
+// 直接送出去會讓 payload 掉成 {} 而撞後端 RouteUpdateIn 的「至少一項」422。
+const capacity = ref<number | undefined>(1)
 const operatorIds = ref<number[]>([])
 const isActive = ref(true)
 
-/** 以 route 為權威重置表單；切換班次或外部重讀後都要跟著回到伺服器值。 */
-watch(() => props.route, (route) => {
+/**
+ * 只在**換班次**時重置表單。
+ *
+ * ⚠ 刻意 watch `route?.id` 而不是 `route` 物件本身：`loadRoutes()` 每次都用
+ * `flatMap` 重建全新物件，reference 必變。若 watch 整個物件，使用者改了座位上限
+ * 沒按儲存、只是按一下「儲存名單」或拖一下側欄排序（兩者都會重讀），表單編輯就
+ * 被伺服器值靜默蓋掉。更新成功後 `changed` 自然變空、儲存鈕自動 disable，
+ * 本來就不需要靠 reference 變更來重置。
+ */
+watch(() => props.route?.id, () => {
+  const route = props.route
   name.value = route?.name ?? ''
   departTime.value = route?.depart_time ?? ''
   capacity.value = route?.capacity ?? 1
@@ -55,13 +68,31 @@ const directionLabel = computed(() =>
   props.route ? DIRECTION_LABELS[props.route.direction] : '—',
 )
 
+/**
+ * 選單＝候選員工 ∪ 這個班次**已設定**的隨車老師。
+ * `getEmployees({ is_active: true })` 會濾掉已停用的老師，而 `el-select multiple`
+ * 找不到對應 option 時會直接把原始 value（employee id 數字）渲染出來——名單載入
+ * 失敗或老師已停用時，畫面就變成一串看不懂的數字。
+ */
+const operatorOptions = computed(() => {
+  const seen = new Set(props.employees.map((e) => e.id))
+  const extra = (props.route?.operators ?? [])
+    .filter((o) => !seen.has(o.employee_id))
+    .map((o) => ({ id: o.employee_id, name: o.name }))
+  return [...props.employees, ...extra]
+})
+
 const endTimeLabel = computed(() => {
   const t = props.route?.end_time_planned
   return t ? t.slice(0, 5) : '尚未計算'
 })
 
+/** 隨車老師是「集合」語意：只有順序不同不算變更，不必送出一次無意義的覆寫。 */
 function sameIds(a: number[], b: number[]): boolean {
-  return a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i])
+  if (a.length !== b.length) return false
+  const sortedA = [...a].sort((x, y) => x - y)
+  const sortedB = [...b].sort((x, y) => x - y)
+  return sortedA.every((v, i) => v === sortedB[i])
 }
 
 /** 只收集與伺服器值不同的欄位。 */
@@ -74,7 +105,9 @@ const changed = computed<BusRouteFormPayload>(() => {
   if (departTime.value && departTime.value !== route.depart_time) {
     payload.depart_time = departTime.value
   }
-  if (capacity.value !== route.capacity) payload.capacity = capacity.value
+  if (typeof capacity.value === 'number' && capacity.value !== route.capacity) {
+    payload.capacity = capacity.value
+  }
   const currentIds = route.operators.map((o) => o.employee_id)
   if (!sameIds(operatorIds.value, currentIds)) {
     payload.operator_employee_ids = [...operatorIds.value]
@@ -84,6 +117,8 @@ const changed = computed<BusRouteFormPayload>(() => {
 })
 
 const hasChanges = computed(() => Object.keys(changed.value).length > 0)
+
+watch(hasChanges, (v) => emit('update:dirty', v), { immediate: true })
 
 async function onSubmit(): Promise<void> {
   const payload = changed.value
@@ -149,7 +184,7 @@ async function onSubmit(): Promise<void> {
         placeholder="選擇隨車老師"
         data-test="operators-select"
       >
-        <el-option v-for="e in employees" :key="e.id" :label="e.name" :value="e.id" />
+        <el-option v-for="e in operatorOptions" :key="e.id" :label="e.name" :value="e.id" />
       </el-select>
     </el-form-item>
 

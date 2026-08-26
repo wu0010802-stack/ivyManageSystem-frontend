@@ -120,6 +120,44 @@ describe('BusRouteForm', () => {
     expect(w.find('[data-test="submit-btn"]').attributes('disabled')).toBeDefined()
   })
 
+  it('同一個班次被重讀（物件 reference 換掉但 id 沒變）時**不得**丟掉未儲存的表單編輯', async () => {
+    const w = mountForm()
+    await w.findComponent({ name: 'ElInput' }).setValue('改到一半')
+    // loadRoutes() 每次都 flatMap 重建物件；watch 若盯整個物件就會靜默覆蓋使用者的編輯
+    await w.setProps({ route: route({ name: '早 A' }) })
+    expect(w.find('[data-test="submit-btn"]').attributes('disabled')).toBeUndefined()
+    await w.find('[data-test="submit-btn"]').trigger('click')
+    expect(w.emitted('submit')?.[0]).toEqual([{ name: '改到一半' }])
+  })
+
+  it('回報 update:dirty 讓頁面把表單納入未儲存保護', async () => {
+    const w = mountForm()
+    expect(w.emitted('update:dirty')?.[0]).toEqual([false])
+    await w.findComponent({ name: 'ElInput' }).setValue('早 A 新名')
+    expect(w.emitted('update:dirty')?.at(-1)).toEqual([true])
+    await w.findComponent({ name: 'ElInput' }).setValue('早 A')
+    expect(w.emitted('update:dirty')?.at(-1)).toEqual([false])
+  })
+
+  it('座位上限被清空（undefined）時不送出——否則 payload 掉成 {} 撞後端「至少一項」422', async () => {
+    const w = mountForm()
+    await w.findComponent({ name: 'ElInputNumber' }).setValue(undefined)
+    expect(w.find('[data-test="submit-btn"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('已設定但不在候選名單的隨車老師（已停用／名單載入失敗）仍顯示姓名而非 id', () => {
+    const w = mount(BusRouteForm, {
+      props: {
+        route: route({ operators: [{ employee_id: 77, name: '陳老師' }] }),
+        employees: [],
+        saving: false,
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    const labels = w.findAllComponents({ name: 'ElOption' }).map((o) => o.props('label'))
+    expect(labels).toContain('陳老師')
+  })
+
   it('沒有選中班次時不渲染表單', () => {
     expect(mountForm(null).find('[data-test="bus-route-form"]').exists()).toBe(false)
   })

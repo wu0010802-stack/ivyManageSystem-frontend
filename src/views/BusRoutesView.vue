@@ -34,8 +34,10 @@ import BusPickupAddressSelect from '@/components/bus/BusPickupAddressSelect.vue'
 import type { OptimizePreview } from '@/components/bus/BusOptimizePreviewDialog.vue'
 import type { BusRouteFormPayload } from '@/components/bus/BusRouteForm.vue'
 import { getEmployees } from '@/api/employees'
+import { geocodeBusStudent, getBusSettings } from '@/api/bus'
+import { apiError } from '@/utils/error'
 import {
-  useBusRouteEditor, DIRECTION_LABELS, MAX_STOPS_PER_ROUTE,
+  useBusRouteEditor, DIRECTION_LABELS, MAX_STOPS_PER_ROUTE, WEEKDAY_LABELS,
   type BusDirection, type RouteOptimizePreview,
 } from '@/composables/useBusRouteEditor'
 
@@ -44,16 +46,31 @@ const {
   routes, activeRoute, activeRouteId, stops, candidates, capacity,
   loading, saving, creating, updatingRoute, reordering, optimizing, copying, dirty,
   missingCoordinateCount, staleAddressCount, overloadedWeekdays, copyConflicts,
-  loadFailed, studentsFailed,
+  loadFailed, studentsFailed, anyDirty,
 } = editor
 
 const pickStudentId = ref<number | null>(null)
 const employees = ref<Array<{ id: number; name: string }>>([])
+/**
+ * 園所座標，只給 `BusStopMapTuner` 當「站點還沒有座標」時的地圖初始中心。
+ * 取不到就傳 null，元件自己會退租戶 branding.map，不會白畫面。
+ */
+const schoolCoords = ref<{ lat: number; lng: number } | null>(null)
+/** 班次設定表單的未儲存旗標（composable 的 `dirty` 只追蹤名單）。 */
+const formDirty = ref(false)
+/**
+ * 把表單也接進 composable 的 `confirmDiscard` 防線，`selectRoute` /
+ * `updateRoute` / `reorderRoutes` / `createRoute` 四條既有路徑就自動涵蓋表單。
+ */
+editor.registerExtraDirty(() => formDirty.value)
+/** 員工名單載入失敗：隨車老師選單是空的，但**不是**「園裡沒有老師」。 */
+const employeesFailed = ref(false)
 
 void editor.init()
 
 // ── 隨車老師候選（只留 id/name；員工回應還帶身分證／薪資等欄位）──────────────
 async function loadEmployees(): Promise<void> {
+  employeesFailed.value = false
   try {
     const res = await getEmployees({ is_active: true })
     const raw = (res as { data?: unknown }).data
@@ -69,11 +86,27 @@ async function loadEmployees(): Promise<void> {
         : []
     })
   } catch {
-    // 隨車老師選單空掉不影響其他編輯；表單自己會顯示空選單，不必擋整頁。
+    // 不擋整頁（其他編輯照樣能做），但空選單看起來就像「園裡沒有可指派的老師」，
+    // 必須明說是載入失敗——與同頁 loadFailed／studentsFailed 同一條誠實降級標準。
+    employeesFailed.value = true
     employees.value = []
   }
 }
 void loadEmployees()
+
+async function loadSchoolCoords(): Promise<void> {
+  try {
+    const res = await getBusSettings()
+    const data = (res as { data?: { school_lat?: number | null; school_lng?: number | null } }).data
+    const lat = data?.school_lat
+    const lng = data?.school_lng
+    schoolCoords.value = typeof lat === 'number' && typeof lng === 'number' ? { lat, lng } : null
+  } catch {
+    // 只是地圖初始中心，取不到不影響任何編輯；元件有 branding fallback。
+    schoolCoords.value = null
+  }
+}
+void loadSchoolCoords()
 
 // ── 側欄 ──────────────────────────────────────────────────────────────────
 
@@ -91,7 +124,7 @@ const createVisible = ref(false)
 const createName = ref('')
 const createDirection = ref<BusDirection>('morning')
 const createDepartTime = ref('07:30:00')
-const createCapacity = ref(20)
+const createCapacity = ref<number | undefined>(20)
 const copySourceRouteId = ref<number | null>(null)
 const copyReverse = ref(true)
 
@@ -114,6 +147,11 @@ function openCreateDialog(): void {
 }
 
 async function onCreateRoute(): Promise<void> {
+  // RouteCreateIn.capacity 是必填 gt=0；el-input-number 被清空時是 undefined。
+  if (typeof createCapacity.value !== 'number') {
+    ElMessage.error('請輸入座位上限')
+    return
+  }
   const newId = await editor.createRoute({
     name: createName.value,
     direction: createDirection.value,
@@ -157,16 +195,35 @@ function openAddressDialog(index: number): void {
   addressDialogVisible.value = true
 }
 
-function onAddressResolved(
+/**
+ * 後端的「住家」虛擬項是寫死的 `lat/lng: None`（住家地址不入地址簿表，自然沒有
+ * geocode 結果）。若不補這一段，選住家就等於把站點座標清空 → 該班次無法發車。
+ * `POST /bus/routes/geocode` 正是為這條路徑保留的：依學生住址查座標，不落庫、
+ * 隨名單一起儲存。查不到就明說要改用地圖微調，不留一個沒有下一步的死巷。
+ */
+async function onAddressResolved(
   resolved: { id: number | null; lat: number | null; lng: number | null; address: string },
-): void {
-  if (addressStopIndex.value === null) return
-  editor.setPickupAddress(addressStopIndex.value, {
-    id: resolved.id,
-    lat: resolved.lat,
-    lng: resolved.lng,
-    address: resolved.address || null,
-  })
+): Promise<void> {
+  const index = addressStopIndex.value
+  const stop = addressStop.value
+  if (index === null || !stop) return
+  let { lat, lng } = resolved
+  if (resolved.id === null && (lat === null || lng === null)) {
+    try {
+      const res = await geocodeBusStudent(stop.student_id)
+      const data = (res as { data?: { lat?: number | null; lng?: number | null } }).data
+      if (typeof data?.lat === 'number' && typeof data?.lng === 'number') {
+        lat = data.lat
+        lng = data.lng
+        ElMessage.success('已帶入住家座標（僅到巷弄層級，請用地圖微調到實際上下車點）')
+      } else {
+        ElMessage.warning('住家地址查不到座標，請用「地圖微調」手動放置，否則無法發車')
+      }
+    } catch (e) {
+      ElMessage.warning(apiError(e, '住家地址查不到座標，請用「地圖微調」手動放置，否則無法發車'))
+    }
+  }
+  editor.setPickupAddress(index, { id: resolved.id, lat, lng, address: resolved.address || null })
   addressDialogVisible.value = false
 }
 
@@ -233,7 +290,16 @@ async function runOptimize(): Promise<void> {
   optimizeError.value = null
   const preview = await editor.optimizePreview()
   if (!preview) {
-    // composable 已用 ElMessage 說明原因（未儲存變更／API 失敗）；不重複開空 Dialog。
+    // 兩種 null 要分開處理：
+    // - 被「有未儲存變更」前置擋下 → 不是錯誤，composable 已用 ElMessage 說明，
+    //   不該彈一個帶「重試」鈕的錯誤對話框（重試也還是會被擋）。
+    // - 真的失敗（Azure 不可用時後端 502）→ spec「錯誤處理與邊界」要求給重試提示，
+    //   一閃而過的 ElMessage 沒有重試入口。
+    const message = editor.optimizeErrorMessage.value
+    if (message) {
+      optimizeError.value = message
+      optimizeVisible.value = true
+    }
     return
   }
   rawPreview.value = preview
@@ -249,13 +315,14 @@ function onApplyOptimize(): void {
 
 function onCancelOptimize(): void {
   optimizeVisible.value = false
+  optimizeError.value = null
   rawPreview.value = null
 }
 
 // ── 未儲存保護 ────────────────────────────────────────────────────────────
 
 onBeforeRouteLeave(async () => {
-  if (!dirty.value) return true
+  if (!anyDirty.value) return true
   try {
     await ElMessageBox.confirm(
       '這個班次有尚未儲存的變更，離開後會遺失。確定要離開嗎？', '尚未儲存',
@@ -270,7 +337,7 @@ onBeforeRouteLeave(async () => {
 // 關分頁／重新整理的未儲存保護；SPA 內部導航已由上面的 onBeforeRouteLeave 涵蓋，
 // 這兩者互不重疊（同慣例見 ActivityPublicView.vue／ActivityPublicQueryView.vue）。
 function handleBeforeUnload(event: BeforeUnloadEvent): void {
-  if (!dirty.value) return
+  if (!anyDirty.value) return
   event.preventDefault()
   event.returnValue = ''
 }
@@ -306,7 +373,7 @@ async function onSave(): Promise<void> {
 }
 
 const overloadedLabel = computed(() =>
-  overloadedWeekdays.value.map((i) => ['一', '二', '三', '四', '五'][i]).join('、'),
+  overloadedWeekdays.value.map((i) => WEEKDAY_LABELS[i]).join('、'),
 )
 </script>
 
@@ -374,11 +441,22 @@ const overloadedLabel = computed(() =>
           此班次已停用，不會出現在司機開班選單
         </el-tag>
 
+        <el-alert
+          v-if="employeesFailed"
+          data-testid="bus-employees-error"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="隨車老師名單載入失敗"
+          description="選單目前是空的——這不代表園內沒有可指派的老師，請重新整理後再設定。"
+        />
+
         <BusRouteForm
           :route="activeRoute"
           :employees="employees"
           :saving="updatingRoute"
           @submit="onSubmitRouteForm"
+          @update:dirty="formDirty = $event"
         />
 
         <div class="bus-routes__toolbar">
@@ -465,7 +543,7 @@ const overloadedLabel = computed(() =>
         <BusRouteStopsTable
           :stops="stops"
           :capacity="capacity"
-          :readonly="saving"
+          :readonly="saving || optimizing"
           @reorder="editor.moveStop"
           @remove="editor.removeStop"
           @toggle-pinned="editor.togglePinned"
@@ -478,6 +556,18 @@ const overloadedLabel = computed(() =>
 
     <!-- 新增班次（含「帶入其他班次名單」選項）-->
     <el-dialog v-model="createVisible" title="新增班次" width="480px">
+      <!--
+        舊版用 ElMessageBox.prompt 時這句警語在標題列；改成 Dialog 後不能就這樣
+        消失——後端沒有班次刪除端點（只能停用），方向也因為 migration 依方向拆分
+        而建立後唯讀，兩者都只有在建立當下講才有用。
+      -->
+      <el-alert
+        type="warning"
+        show-icon
+        :closable="false"
+        data-testid="create-warning"
+        title="班次建立後無法刪除（只能停用），方向也不可更改，請先確認名稱與方向。"
+      />
       <el-form label-width="110px">
         <el-form-item label="班次名稱">
           <el-input v-model="createName" maxlength="50" data-testid="create-name" />
@@ -562,7 +652,7 @@ const overloadedLabel = computed(() =>
         v-if="addressStop"
         :student-id="addressStop.student_id"
         :model-value="addressStop.pickup_address_id"
-        :home-address="addressStop.address_snapshot"
+        :home-address="null"
         @resolved="onAddressResolved"
       />
     </el-dialog>
@@ -572,7 +662,7 @@ const overloadedLabel = computed(() =>
       :lat="tuneStop?.lat ?? null"
       :lng="tuneStop?.lng ?? null"
       :label="tuneStop?.student_name ?? ''"
-      :school-coords="null"
+      :school-coords="schoolCoords"
       @confirm="onTuneConfirm"
       @cancel="onTuneCancel"
     />

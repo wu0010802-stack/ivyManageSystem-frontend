@@ -78,16 +78,27 @@ function onWeekdaysChange(index: number, days: Array<string | number | boolean>)
 }
 
 /**
- * vuedraggable 只回「新陣列」，但 composable 的 `moveStop(from, to)` 需要位移對。
- * 用 student_id 比對出第一個位置不同的元素當 `to`，其在舊陣列的 index 當 `from`。
+ * 拖拉位移。用 vuedraggable 的 `change` 事件（`{ moved: { oldIndex, newIndex } }`）
+ * 而**不是**從新舊陣列反推——反推在「往後拖」的情境會算錯：
+ * `[A,B,C] → [B,C,A]`（把 A 拖到最後）用「第一個不同的位置」推出來會是
+ * `moveStop(1, 0)`（把 B 往前移），順序錯、連帶自動釘選也釘到錯的那一站。
  */
-function onDragUpdate(list: BusStopDraft[]): void {
-  const before = props.stops.map((s) => s.student_id)
-  const after = list.map((s) => s.student_id)
-  const to = after.findIndex((id, i) => id !== before[i])
-  if (to === -1) return
-  const from = before.indexOf(after[to])
-  if (from === -1 || from === to) return
+/**
+ * 鍵盤替代方案。拖拉對鍵盤與螢幕閱讀器使用者不可用，而排序**是這張表的主要工作**
+ * ——舊版 BusRoutesView 的「↑／↓」上下移按鈕在改成拖拉後不能就這樣消失。
+ * 兩條路徑都走同一個 `reorder`，因此自動釘選的語意一致。
+ */
+function moveBy(index: number, delta: number): void {
+  const to = index + delta
+  if (to < 0 || to >= props.stops.length) return
+  emit('reorder', index, to)
+}
+
+function onDragChange(event: unknown): void {
+  const moved = (event as { moved?: { oldIndex?: number; newIndex?: number } } | null)?.moved
+  const from = moved?.oldIndex
+  const to = moved?.newIndex
+  if (typeof from !== 'number' || typeof to !== 'number' || from === to) return
   emit('reorder', from, to)
 }
 </script>
@@ -95,6 +106,7 @@ function onDragUpdate(list: BusStopDraft[]): void {
 <template>
   <div class="bus-route-stops-table" data-test="bus-route-stops-table">
     <table class="bus-route-stops-table__table">
+      <caption class="bus-route-stops-table__caption">班次名單（拖拉把手或上下移按鈕可調整順序）</caption>
       <thead>
         <tr>
           <th scope="col" class="is-narrow">順序</th>
@@ -114,7 +126,7 @@ function onDragUpdate(list: BusStopDraft[]): void {
         :disabled="readonly"
         :animation="150"
         handle=".bus-route-stops-table__handle"
-        @update:model-value="onDragUpdate"
+        @change="onDragChange"
       >
         <template #item="{ element, index }">
           <tr :data-test="`stop-${element.student_id}`">
@@ -125,6 +137,26 @@ function onDragUpdate(list: BusStopDraft[]): void {
                 data-test="drag-handle"
               >⋮⋮</span>
               <span class="bus-route-stops-table__seq">{{ index + 1 }}</span>
+              <el-button
+                link
+                size="small"
+                :disabled="readonly || index === 0"
+                :aria-label="`將 ${element.student_name} 上移一位`"
+                :data-test="`move-up-${element.student_id}`"
+                @click="moveBy(index, -1)"
+              >
+                ↑
+              </el-button>
+              <el-button
+                link
+                size="small"
+                :disabled="readonly || index === stops.length - 1"
+                :aria-label="`將 ${element.student_name} 下移一位`"
+                :data-test="`move-down-${element.student_id}`"
+                @click="moveBy(index, 1)"
+              >
+                ↓
+              </el-button>
             </td>
 
             <td data-test="student-cell">{{ studentLabel(element) }}</td>
@@ -154,7 +186,11 @@ function onDragUpdate(list: BusStopDraft[]): void {
 
             <td data-test="contacts-cell">
               <template v-if="element.contacts.length">
-                <span v-for="c in element.contacts" :key="c.name" class="bus-route-stops-table__contact">
+                <span
+                  v-for="(c, ci) in element.contacts"
+                  :key="`${c.name}-${ci}`"
+                  class="bus-route-stops-table__contact"
+                >
                   {{ c.name }}<template v-if="c.phone"> {{ c.phone }}</template>
                 </span>
               </template>
@@ -164,6 +200,7 @@ function onDragUpdate(list: BusStopDraft[]): void {
             <td data-test="ride-days-cell">
               <el-checkbox-group
                 :model-value="selectedWeekdays(element)"
+                :aria-label="`${element.student_name} 的搭乘日`"
                 :disabled="readonly"
                 @update:model-value="(days: Array<string | number | boolean>) => onWeekdaysChange(index, days)"
               >
@@ -187,11 +224,14 @@ function onDragUpdate(list: BusStopDraft[]): void {
                 :type="element.pinned ? 'primary' : 'info'"
                 :disabled="readonly"
                 :aria-pressed="element.pinned ? 'true' : 'false'"
+                :aria-label="element.pinned
+                  ? `取消釘選 ${element.student_name} 這一站`
+                  : `釘選 ${element.student_name} 這一站（自動排序不會移動）`"
                 :title="element.pinned ? '已釘選（自動排序不會移動這一站）' : '未釘選'"
                 :data-test="`pin-${element.student_id}`"
                 @click="emit('toggle-pinned', index)"
               >
-                {{ element.pinned ? '📌' : '📍' }}
+                <span aria-hidden="true">{{ element.pinned ? '📌' : '📍' }}</span>
               </el-button>
             </td>
 
@@ -205,10 +245,15 @@ function onDragUpdate(list: BusStopDraft[]): void {
               >
                 設定接送地址
               </el-button>
+              <!--
+                無座標時**不 disable**：BusStopMapTuner 支援「無座標時以園所座標為
+                初始中心」，那是使用者唯一能替一個 geocode 失敗的站補上座標的路徑。
+                在這裡 disable 等於把死巷變成死路。
+              -->
               <el-button
                 link
                 type="primary"
-                :disabled="readonly || isUnlocated(element)"
+                :disabled="readonly"
                 :data-test="`tune-map-${element.student_id}`"
                 @click="emit('tune-map', element.student_id)"
               >
@@ -258,6 +303,18 @@ function onDragUpdate(list: BusStopDraft[]): void {
 .bus-route-stops-table__table {
   width: 100%;
   border-collapse: collapse;
+}
+/* 只給輔助科技用；視覺上由頁面既有標題承擔。 */
+.bus-route-stops-table__caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .bus-route-stops-table__table th,
 .bus-route-stops-table__table td {

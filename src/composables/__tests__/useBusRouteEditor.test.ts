@@ -334,6 +334,23 @@ describe('編輯與釘選', () => {
     })
   })
 
+  it('重選同一筆地址時不得把既有座標清成 null（住家虛擬項後端永遠不帶座標）', async () => {
+    const editor = await boot([routeA({ stops: [stop({ pickup_address_id: null, lat: 22.61, lng: 120.31 })] })])
+    editor.setPickupAddress(0, { id: null, lat: null, lng: null, address: null })
+    expect(editor.stops.value[0]).toMatchObject({
+      pickup_address_id: null, lat: 22.61, lng: 120.31,
+      address_snapshot: '高雄市三民區某路 1 號',
+    })
+  })
+
+  it('真的換成另一筆地址而該地址沒座標時，座標才歸零（不能沿用別的地址的座標）', async () => {
+    const editor = await boot([routeA({ stops: [stop({ pickup_address_id: null, lat: 22.61, lng: 120.31 })] })])
+    editor.setPickupAddress(0, { id: 7, lat: null, lng: null, address: '阿嬤家' })
+    expect(editor.stops.value[0]).toMatchObject({
+      pickup_address_id: 7, lat: null, lng: null, address_snapshot: '阿嬤家',
+    })
+  })
+
   it('站數上限與後端對齊，超過就擋（否則是整批 422）', async () => {
     const many = Array.from({ length: MAX_STOPS_PER_ROUTE }, (_, i) => stop({
       student_id: 1000 + i, student_name: `學生${i}`, seq: i + 1,
@@ -569,6 +586,33 @@ describe('班次建立與排序', () => {
     expect(ElMessage.error).toHaveBeenCalled()
   })
 
+  it('reorder 已落庫但重讀失敗只給 warning，不得喊「調整順序失敗」誘導再拖一次', async () => {
+    const editor = await boot([routeA(), routeA({ id: 5, name: '早 B', sort_order: 1 })])
+    vi.mocked(reorderBusRoutes).mockResolvedValue({ data: { routes: [] } } as never)
+    vi.mocked(listBusRoutes).mockRejectedValueOnce(new Error('boom'))
+    const ok = await editor.reorderRoutes([5, 3])
+    expect(ok).toBe(true)
+    expect(ElMessage.error).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('儲存後若原本有 ETA 要提醒需重算（後端 replace_stops 不寫 eta_planned）', async () => {
+    const editor = await boot([routeA({ stops: [stop({ eta_planned: '07:35:00' })] })])
+    editor.togglePinned(0)
+    vi.mocked(replaceBusRouteStops).mockResolvedValue({ data: { stops: [] } } as never)
+    await editor.save()
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('重算預計抵達'))
+  })
+
+  it('原本就沒有 ETA 時不要多嘴提醒重算', async () => {
+    const editor = await boot([routeA({ stops: [stop({ eta_planned: null })] })])
+    editor.togglePinned(0)
+    vi.mocked(replaceBusRouteStops).mockResolvedValue({ data: { stops: [] } } as never)
+    await editor.save()
+    expect(vi.mocked(ElMessage.warning).mock.calls.flat().join(''))
+      .not.toContain('重算預計抵達')
+  })
+
   it('reorder 由 index 衍生 sort_order 一次送出', async () => {
     const editor = await boot([routeA(), routeA({ id: 5, name: '早 B', sort_order: 1 })])
     vi.mocked(reorderBusRoutes).mockResolvedValue({ data: { routes: [] } } as never)
@@ -576,5 +620,116 @@ describe('班次建立與排序', () => {
     expect(reorderBusRoutes).toHaveBeenCalledWith([
       { id: 5, sort_order: 0 }, { id: 3, sort_order: 1 },
     ])
+  })
+})
+
+// ── 隱私守衛（自舊版原樣搬回，流程換成本期新 API）──
+describe('隱私', () => {
+  it('全流程不得把座標、地址、電話或名冊寫進 console 或任何 storage', async () => {
+    vi.mocked(replaceBusRouteStops).mockResolvedValue({ data: { stops: [] } } as never)
+    vi.mocked(copyBusRouteFrom).mockResolvedValue({
+      data: { preview: true, stops: [stop({ student_id: 103, student_name: '小美', seq: 1 })] },
+    } as never)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // ⚠ 兩個恆綠陷阱：tests/setup.js 的 localStorage 是純物件 mock（Storage.prototype
+    // 的 spy 抓不到），happy-dom 的 sessionStorage 是 Proxy（instance spy 的賦值被吞）。
+    // 故 localStorage 對實際物件下 spy、sessionStorage 整個換掉；自檢見本 describe 末。
+    const storageSpy = vi.spyOn(localStorage, 'setItem')
+    const sessionSpy = vi.fn()
+    const originalSession = globalThis.sessionStorage
+    vi.stubGlobal('sessionStorage', { setItem: sessionSpy, getItem: () => null, removeItem: vi.fn(), clear: vi.fn() })
+    // 本期新增的外洩面：address_snapshot、contacts[].phone、pickup 座標
+    const editor = await boot([routeA({
+      stops: [stop({ contacts: [{ name: '媽媽', phone: '0912345678' }] })],
+    })])
+    editor.addStop(103)
+    editor.setPickupAddress(0, { id: 7, lat: 22.7, lng: 120.4, address: '高雄市左營區某街 2 號' })
+    editor.moveStop(1, 0)
+    await editor.copyFromRoute(5)
+    await editor.save()
+    expect(logSpy).not.toHaveBeenCalled()
+    expect(warnSpy).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
+    expect(storageSpy).not.toHaveBeenCalled()
+    expect(sessionSpy).not.toHaveBeenCalled()
+    logSpy.mockRestore()
+    warnSpy.mockRestore()
+    errorSpy.mockRestore()
+    storageSpy.mockRestore()
+    vi.stubGlobal('sessionStorage', originalSession)
+  })
+
+  it('守衛自檢：storage spy 真的抓得到寫入', () => {
+    const storageSpy = vi.spyOn(localStorage, 'setItem')
+    const sessionSpy = vi.fn()
+    const originalSession = globalThis.sessionStorage
+    vi.stubGlobal('sessionStorage', { setItem: sessionSpy, getItem: () => null, removeItem: vi.fn(), clear: vi.fn() })
+    localStorage.setItem('probe', '1')
+    sessionStorage.setItem('probe', '1')
+    expect(storageSpy).toHaveBeenCalled()
+    expect(sessionSpy).toHaveBeenCalled()
+    storageSpy.mockRestore()
+    vi.stubGlobal('sessionStorage', originalSession)
+  })
+
+  it('守衛自檢：console spy 真的抓得到輸出', () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    console.log('probe')
+    expect(logSpy).toHaveBeenCalled()
+    logSpy.mockRestore()
+  })
+})
+
+// ── 測試輔助函式自檢 ──
+describe('測試輔助函式自檢', () => {
+  it('studentsPayload 真的帶著家長 PII（否則「只留 id/name」的斷言形同虛設）', () => {
+    const payload = studentsPayload([{ id: 1, name: 'x' }])
+    expect(payload.data.items[0]).toMatchObject({ parent_phone: '0912345678' })
+  })
+
+  it('routeA 的名冊第一站真的帶座標、第二站真的沒有', () => {
+    const r = routeA()
+    expect(r.stops[0]).toMatchObject({ lat: 22.61, lng: 120.31 })
+    expect(r.stops[1]).toMatchObject({ lat: null, lng: null })
+  })
+})
+
+// ── 未儲存來源可擴充（表單欄位也要納入同一條防線）──
+describe('registerExtraDirty', () => {
+  it('外部來源回報 dirty 時，切換班次同樣要先確認', async () => {
+    const editor = await boot([routeA(), routeA({ id: 5, name: '早 B', stops: [] })])
+    let formDirty = false
+    editor.registerExtraDirty(() => formDirty)
+    // 名單本身沒動，只有表單有未儲存變更
+    expect(editor.dirty.value).toBe(false)
+    formDirty = true
+    expect(editor.anyDirty.value).toBe(true)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+    expect(await editor.selectRoute(5)).toBe(false)
+    expect(editor.activeRouteId.value).toBe(3)
+  })
+
+  it('建立班次也走同一條防線（內部會重讀而蓋掉名單緩衝）', async () => {
+    const editor = await boot()
+    editor.addStop(103)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+    const id = await editor.createRoute({
+      name: '早 C', direction: 'morning', depart_time: '07:40:00', capacity: 18,
+    })
+    expect(id).toBeNull()
+    expect(createBusRoute).not.toHaveBeenCalled()
+  })
+
+  it('站點被刪光（length 0 但 dirty）時，帶入名單仍要先確認', async () => {
+    const editor = await boot()
+    editor.removeStop(0)
+    editor.removeStop(0)
+    expect(editor.stops.value).toHaveLength(0)
+    expect(editor.dirty.value).toBe(true)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+    expect(await editor.copyFromRoute(5)).toBe(false)
+    expect(copyBusRouteFrom).not.toHaveBeenCalled()
   })
 })

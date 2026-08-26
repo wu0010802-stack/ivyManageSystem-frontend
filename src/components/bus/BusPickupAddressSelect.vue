@@ -18,7 +18,7 @@
  * 隱私：地址是個資，只渲染在選單內；不進 console／Sentry／URL query／storage。
  */
 import { computed, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createStudentPickupAddress, deleteStudentPickupAddress, listStudentPickupAddresses,
 } from '@/api/bus'
@@ -193,6 +193,18 @@ async function onCreate(): Promise<void> {
 }
 
 async function onDelete(id: number): Promise<void> {
+  // 地址是使用者手動輸入、後端 geocode 過的資料，刪掉沒有還原入口——與同 codebase
+  // 的「停用班次」「清空站點」同一條二次確認標準。
+  const option = sortedOptions.value.find((o) => o.id === id)
+  try {
+    await ElMessageBox.confirm(
+      `確定要刪除「${option ? optionLabel(option) : '這筆地址'}」嗎？刪除後需要重新輸入地址。`,
+      '刪除接送地址',
+      { type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
   deletingId.value = id
   try {
     await deleteStudentPickupAddress(props.studentId, id)

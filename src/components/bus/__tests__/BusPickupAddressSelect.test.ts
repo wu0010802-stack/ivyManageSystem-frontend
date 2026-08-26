@@ -12,13 +12,14 @@ vi.mock('element-plus', async () => {
   return {
     ...actual,
     ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+    ElMessageBox: { confirm: vi.fn() },
   }
 })
 
 import {
   listStudentPickupAddresses, createStudentPickupAddress, deleteStudentPickupAddress,
 } from '@/api/bus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import BusPickupAddressSelect from '../BusPickupAddressSelect.vue'
 
 const HOME = { id: null, label: '住家', address: '高雄市三民區某路 1 號', lat: 22.6, lng: 120.3, is_home: true }
@@ -41,6 +42,7 @@ beforeEach(() => {
   vi.mocked(listStudentPickupAddresses).mockResolvedValue(
     addressesPayload([HOME, GRANDMA]) as never,
   )
+  vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
 })
 afterEach(() => { vi.clearAllMocks() })
 
@@ -140,6 +142,14 @@ describe('BusPickupAddressSelect', () => {
     await w.find('[data-test="delete-7"]').trigger('click')
     await flushPromises()
     expect(w.emitted('update:modelValue')?.[0]).toEqual([null])
+  })
+
+  it('刪除地址要二次確認（刪掉沒有還原入口）；取消就不送出', async () => {
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+    const w = await mountSelect()
+    await w.find('[data-test="delete-7"]').trigger('click')
+    await flushPromises()
+    expect(deleteStudentPickupAddress).not.toHaveBeenCalled()
   })
 
   it('住家選項不提供刪除鈕（它是虛擬項，不在地址簿表裡）', async () => {
