@@ -128,7 +128,17 @@ function fakeTripDetail(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   mockIsMobile.value = false
-  listBusRoutes.mockResolvedValue({ data: [{ id: 1, name: '主線', is_active: true }] })
+  // 第二期契約：`GET /bus/routes` 回 `{routes: [...]}`（route 層帶 direction，
+  // 已無 morning/afternoon 兩桶），且會連全車名冊與家庭座標一起回。
+  listBusRoutes.mockResolvedValue({
+    data: {
+      routes: [{
+        id: 1, name: '主線', is_active: true, direction: 'morning',
+        depart_time: '07:00:00', sort_order: 0, capacity: 20,
+        stops: [{ student_id: 100, student_name: '王小明', seq: 1, lat: 22.9, lng: 120.9 }],
+      }],
+    },
+  })
   listBusTrips.mockResolvedValue({ data: { items: [fakeTrip()], total: 1, page: 1, page_size: 20 } })
   getBusTrip.mockResolvedValue({ data: fakeTripDetail() })
 })
@@ -247,6 +257,82 @@ describe('BusHistoryView 詳情', () => {
     expect(html).not.toContain(String(FAKE_LNG))
     expect(html).not.toContain('22.2')
     expect(html).not.toContain('120.7')
+  })
+})
+
+// ── 第二期契約（FE-DISPATCH-07）──
+// status 域擴為 planned/in_progress/completed/expired；operator_employee_id／
+// started_at 轉 Optional（planned 階段司機還沒按開始，三者皆 NULL）。
+describe('BusHistoryView 第二期契約適配', () => {
+  it('planned／expired 有對應標籤字典，不會漏成裸英文碼', async () => {
+    listBusTrips.mockResolvedValue({
+      data: {
+        items: [fakeTrip({ id: 1, status: 'planned' }), fakeTrip({ id: 2, status: 'expired' })],
+        total: 2, page: 1, page_size: 20,
+      },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('已排定（未發車）')
+    expect(wrapper.text()).toContain('未發車已過期')
+    expect(wrapper.text()).not.toContain('planned')
+    expect(wrapper.text()).not.toContain('expired')
+  })
+
+  it('planned 班次的 operator/started_at 為 null 時以 — 呈現，不印出 null', async () => {
+    listBusTrips.mockResolvedValue({
+      data: {
+        items: [fakeTrip({
+          status: 'planned', started_at: null,
+          operator_employee_id: null, operator_employee_name: null,
+        })],
+        total: 1, page: 1, page_size: 20,
+      },
+    })
+    getBusTrip.mockResolvedValue({
+      data: fakeTripDetail({
+        status: 'planned', started_at: null,
+        operator_employee_id: null, operator_employee_name: null,
+      }),
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('null')
+
+    await wrapper.find('[data-testid="bus-history-detail-btn"]').trigger('click')
+    await flushPromises()
+    const operatorLine = wrapper.find('[data-testid="bus-history-drawer-operator"]').text()
+    expect(operatorLine).toContain('隨車老師：—')
+    expect(operatorLine).toContain('發車時間：—')
+  })
+
+  it('明細的 excused 站顯示原因（申訴查證時「為什麼沒接」比「沒接」重要）', async () => {
+    getBusTrip.mockResolvedValue({
+      data: fakeTripDetail({
+        stops: [{
+          stop_id: 10, student_id: 100, student_name: '王小明', seq: 1,
+          lat: 22.9, lng: 120.9, status: 'excused', excuse_reason: 'leave', departed_at: null,
+        }],
+      }),
+    })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.find('[data-testid="bus-history-detail-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('今日不搭')
+    expect(wrapper.find('[data-testid="bus-history-drawer-excuse"]').text()).toBe('請假')
+  })
+
+  it('路線篩選下拉只取 id/name/is_active，端點一併回傳的座標不進畫面', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    // 讀錯層級（把 `{routes: [...]}` 當陣列）會讓 map 拋錯被 catch 吞掉 → 0 個選項
+    const options = wrapper.find('[data-testid="bus-history-filter-route"]').findAll('option')
+    expect(options).toHaveLength(1)
+    expect(options[0].attributes('value')).toBe('1')
+    expect(wrapper.html()).not.toContain('120.9')
   })
 })
 

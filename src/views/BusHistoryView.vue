@@ -23,6 +23,7 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import { listBusTrips, getBusTrip, listBusRoutes } from '@/api/bus'
 import type { Schema } from '@/api/_generated/typed'
 import { DIRECTION_LABELS } from '@/composables/useBusMonitor'
+import { excuseReasonLabel } from '@/constants/bus'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 
 interface BusTripListItem extends Schema<'BusTripListItemOut'> {
@@ -44,7 +45,10 @@ const routes = ref<RouteOption[]>([])
 const fetchRoutes = async () => {
   try {
     const res = await listBusRoutes()
-    routes.value = (res.data as RouteOption[]) ?? []
+    // 第二期契約：回應是 `{routes: [...]}`（route 層帶 direction，已無 morning/
+    // afternoon 兩桶）。這裡只取篩選下拉需要的三欄——同一支端點會一併回傳全車名冊
+    // 與家庭座標，那些一個欄位都不該進本頁狀態。
+    routes.value = res.data.routes.map((r) => ({ id: r.id, name: r.name, is_active: r.is_active }))
   } catch {
     // 路線選單抓不到不影響歷史查詢本身，篩選列會少一個下拉但查詢仍可用
   }
@@ -133,21 +137,36 @@ const directionLabelOf = (row: BusTripRow): string => {
   const d = row.direction ?? ''
   return DIRECTION_LABELS[d] ?? d
 }
+/**
+ * 第二期 status 域擴為 planned／in_progress／completed／expired。
+ * 列表**預設排除** planned／expired（`listBusTrips` 不帶 `include_planned`），
+ * 這兩個標籤是防禦性補齊：後端預設值哪天改了，畫面不會退化成印出裸英文碼。
+ */
 const STATUS_LABELS: Record<string, string> = {
+  planned: '已排定（未發車）',
   in_progress: '行駛中',
   completed: '已完成',
+  expired: '未發車已過期',
   cancelled: '已取消',
 }
 const statusLabelOf = (row: BusTripRow): string => {
   const s = row.status ?? ''
   return STATUS_LABELS[s] ?? s
 }
-const statusTagType = (row: BusTripRow): 'success' | 'warning' | undefined => {
+const statusTagType = (row: BusTripRow): 'success' | 'warning' | 'info' | 'danger' | undefined => {
   if (row.status === 'completed') return 'success'
   if (row.status === 'in_progress') return 'warning'
+  if (row.status === 'planned') return 'info'
+  if (row.status === 'expired') return 'danger'
   return undefined
 }
+/**
+ * `operator_employee_id`／`operator_employee_name`／`started_at` 第二期改 Optional
+ * （planned 階段司機還沒按開始，三者皆為 NULL）——一律以 `—` 呈現，不可讓
+ * `null` 直接漏到畫面上。
+ */
 const operatorNameOf = (row: BusTripRow): string => row.operator_employee_name || '—'
+const startedAtOf = (row: BusTripRow): string => formatTaipeiClock(row.started_at ?? null) ?? '—'
 const stopStatsOf = (row: BusTripListItem): string => {
   const stats = row.stop_stats
   if (!stats) return '—'
@@ -156,11 +175,13 @@ const stopStatsOf = (row: BusTripListItem): string => {
 const stopStatusLabel = (status: string): string => {
   if (status === 'departed') return '已離站'
   if (status === 'skipped') return '已跳過'
+  if (status === 'excused') return '今日不搭'
   return '未處理'
 }
-const stopStatusTagType = (status: string): 'success' | 'info' | undefined => {
+const stopStatusTagType = (status: string): 'success' | 'info' | 'warning' | undefined => {
   if (status === 'departed') return 'success'
   if (status === 'skipped') return 'info'
+  if (status === 'excused') return 'warning'
   return undefined
 }
 
@@ -377,8 +398,8 @@ onMounted(() => {
         <p class="bus-history__detail-summary">
           {{ detail.trip.route_name }}・{{ directionLabelOf(detail.trip) }}・{{ detail.trip.trip_date }}
         </p>
-        <p class="bus-history__detail-summary">
-          隨車老師：{{ operatorNameOf(detail.trip) }}
+        <p class="bus-history__detail-summary" data-testid="bus-history-drawer-operator">
+          隨車老師：{{ operatorNameOf(detail.trip) }}・發車時間：{{ startedAtOf(detail.trip) }}
         </p>
         <el-tag
           v-if="detail.trip.auto_closed"
@@ -391,11 +412,19 @@ onMounted(() => {
         <el-table :data="detail.trip.stops" size="small" style="margin-top: 12px">
           <el-table-column prop="seq" label="站序" width="70" />
           <el-table-column prop="student_name" label="學生" />
-          <el-table-column label="狀態" width="100">
+          <el-table-column label="狀態" width="140">
             <template #default="{ row }">
               <el-tag :type="stopStatusTagType(row.status)" size="small">
                 {{ stopStatusLabel(row.status) }}
               </el-tag>
+              <!-- excused 是落庫事實，申訴查證時「為什麼沒接」比「沒接」本身重要 -->
+              <span
+                v-if="row.status === 'excused'"
+                class="bus-history__excuse"
+                data-testid="bus-history-drawer-excuse"
+              >
+                {{ excuseReasonLabel(row.excuse_reason) }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column label="離站時間" width="110">
@@ -422,5 +451,10 @@ onMounted(() => {
 .bus-history__detail-summary {
   margin: 0 0 var(--space-2, 8px);
   color: var(--text-secondary, #606266);
+}
+.bus-history__excuse {
+  margin-left: var(--space-1, 4px);
+  font-size: var(--text-sm, 13px);
+  color: var(--text-tertiary, #909399);
 }
 </style>

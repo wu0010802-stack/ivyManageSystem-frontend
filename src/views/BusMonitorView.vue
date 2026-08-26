@@ -19,6 +19,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, watch, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import { useBusMonitor, DIRECTION_LABELS } from '@/composables/useBusMonitor'
+import { excuseReasonLabel } from '@/constants/bus'
 
 const monitor = useBusMonitor()
 const {
@@ -39,15 +40,34 @@ const directionLabel = computed(
   () => DIRECTION_LABELS[trip.value?.direction ?? ''] ?? trip.value?.direction ?? '',
 )
 
-function stopTagType(status: string): 'success' | 'info' | undefined {
+const endTimeText = computed(() => {
+  const clock = formatTaipeiClock(trip.value?.end_time_estimated ?? null)
+  return clock ? `預計 ${clock} 回到園所` : ''
+})
+
+function stopTagType(status: string): 'success' | 'info' | 'warning' | undefined {
   if (status === 'departed') return 'success'
   if (status === 'skipped') return 'info'
+  if (status === 'excused') return 'warning'
   return undefined
 }
 function stopLabel(status: string): string {
   if (status === 'departed') return '已離站'
   if (status === 'skipped') return '已跳過'
+  if (status === 'excused') return '今日不搭'
   return '待接送'
+}
+/** excused 站才有原因；其餘狀態不顯示（空字串＝該欄留白）。 */
+function excuseText(status: string, reason: string | null): string {
+  return status === 'excused' ? excuseReasonLabel(reason) : ''
+}
+/**
+ * 站點 ETA：`eta_live`（行進間即時重算）優先，退回 `eta_planned`（當日平移值）。
+ * 與後端 `services/bus_events.py::build_stop_update_event` 的 `eta` 取值同順序，
+ * 家長端與監看頁看到的是同一個數字。
+ */
+function stopEtaText(etaLive: string | null, etaPlanned: string | null): string {
+  return formatTaipeiClock(etaLive ?? etaPlanned) ?? '—'
 }
 
 async function onRouteChange(routeId: number): Promise<void> {
@@ -252,18 +272,26 @@ onBeforeUnmount(() => {
             </template>
           </el-table-column>
           <!--
-            這站仍是 pending（後端刻意不自動跳站，怕請假資料有誤漏接）——沒有這欄，
-            行政只會看到「這站沒接」而誤判成漏接，得靠這個標示明講「預期如此」。
+            excused 站的原因（第二期起 excused 是落庫事實，後端會跳站）。沒有這欄，
+            行政只看得到「這站沒接」，分不出是家長按了今天不搭、老師准的假，還是
+            後台自己排除的——三者的後續處置完全不同。
           -->
-          <el-table-column label="請假" width="90">
+          <el-table-column label="不搭原因" width="110">
             <template #default="{ row }">
               <el-tag
-                v-if="row.on_leave"
+                v-if="row.status === 'excused'"
                 type="warning"
-                :data-testid="`bus-monitor-onleave-${row.stop_id}`"
+                :data-testid="`bus-monitor-excused-${row.stop_id}`"
               >
-                已請假
+                {{ excuseText(row.status, row.excuse_reason) }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="預計抵達" width="110">
+            <template #default="{ row }">
+              <span :data-testid="`bus-monitor-eta-${row.stop_id}`">
+                {{ stopEtaText(row.eta_live, row.eta_planned) }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column label="離站時間" width="140">
@@ -272,6 +300,9 @@ onBeforeUnmount(() => {
             </template>
           </el-table-column>
         </el-table>
+        <p v-if="isLive && endTimeText" data-testid="bus-monitor-end-time" class="bus-monitor__direction">
+          {{ endTimeText }}
+        </p>
         <p class="bus-monitor__direction">方向：{{ directionLabel }}</p>
       </template>
     </template>

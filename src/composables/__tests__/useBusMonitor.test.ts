@@ -169,6 +169,62 @@ describe('進頁與快照', () => {
   })
 })
 
+// ── 第二期契約（FE-DISPATCH-07）──
+// `on_leave` 即時衍生旗標退場，excused 落庫欄位接手；ETA 由 eta_planned（當日平移）
+// 與 eta_live（行進間重算）兩層構成。normalize 漏欄位的後果不是崩潰而是**靜默少一
+// 欄**——畫面照樣渲染，只是永遠顯示「—」，所以這幾條斷言必須逐欄檢查。
+describe('excused 與 ETA 欄位（第二期契約破壞：on_leave 退場）', () => {
+  it('站點 normalize 帶出 excuse_reason／eta_planned／eta_live，且不再有 on_leave', async () => {
+    vi.mocked(getBusTripToday).mockResolvedValue(tripPayload({}, [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'excused', excuse_reason: 'parent', lat: 22.61, lng: 120.31,
+        eta_planned: '2026-07-29T09:10:00', eta_live: null, departed_at: null,
+      },
+    ]) as never)
+    const m = await bootMonitor()
+    expect(m.stops.value[0]).toEqual({
+      stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+      status: 'excused', excuse_reason: 'parent', lat: 22.61, lng: 120.31,
+      eta_planned: '2026-07-29T09:10:00', eta_live: null, departed_at: null,
+    })
+    expect(m.stops.value[0]).not.toHaveProperty('on_leave')
+  })
+
+  it('缺席欄位一律 null，不會變成 undefined 而在畫面上印出空白以外的東西', async () => {
+    const m = await bootMonitor()
+    expect(m.stops.value[0].excuse_reason).toBeNull()
+    expect(m.stops.value[0].eta_planned).toBeNull()
+    expect(m.stops.value[0].eta_live).toBeNull()
+  })
+
+  it('trip 帶出 end_time_estimated（行進間重算的預計回園時間）', async () => {
+    vi.mocked(getBusTripToday).mockResolvedValue(
+      tripPayload({ end_time_estimated: '2026-07-29T09:45:00' }) as never,
+    )
+    const m = await bootMonitor()
+    expect(m.trip.value?.end_time_estimated).toBe('2026-07-29T09:45:00')
+  })
+
+  it('WS bus_stop_update 的 eta_live 會覆寫快照值（行進間重算是較新的事實）', async () => {
+    const m = await bootMonitor()
+    lastSocket().emit({
+      type: 'bus_stop_update',
+      payload: {
+        trip: { ...tripPayload().data.trip, end_time_estimated: '2026-07-29T09:50:00' },
+        stops: [{
+          stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+          status: 'pending', lat: 22.61, lng: 120.31, departed_at: null,
+          eta_planned: '2026-07-29T09:10:00', eta_live: '2026-07-29T09:18:00',
+        }],
+      },
+    })
+    await flushPromises()
+    expect(m.stops.value[0].eta_live).toBe('2026-07-29T09:18:00')
+    expect(m.trip.value?.end_time_estimated).toBe('2026-07-29T09:50:00')
+  })
+})
+
 describe('WS 事件的班次比對（admin channel 是全園共用）', () => {
   it('別條路線的位置事件不得覆寫目前班次的座標', async () => {
     const m = await bootMonitor()
