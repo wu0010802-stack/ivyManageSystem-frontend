@@ -3,6 +3,7 @@ import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission, isPlatformAdmin } from '@/utils/auth'
 import { captureException } from '@/utils/sentry'
+import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
@@ -1127,8 +1128,13 @@ router.afterEach(() => {
     finishRouteLoading()
 })
 
-router.onError(() => {
+router.onError((err) => {
     finishRouteLoading()
+    // 部署後舊 index.html 指向已被刪除的 hashed chunk 時，vue-router 會把 lazy route
+    // 的 import() rejection 送到這裡，且**不會**冒泡到 window——不在這裡顯式接手，
+    // installChunkSelfHeal 掛的 error / unhandledrejection 兩個監聽永遠收不到，
+    // 使用者只會看到「點了連結但畫面沒換」且沒有任何提示。
+    selfHealIfChunkError(err)
 })
 
 export default router
