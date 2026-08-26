@@ -17,8 +17,10 @@ const router = useRouter()
 const canRead = computed(() => hasPermission('BUS_READ'))
 const canManageRoutes = computed(() => hasPermission('BUS_WRITE'))
 
-// 尾段比對而非 endsWith 串接：分頁多了以後串接式三元運算子的落點會越來越難讀，
-// 且未知子路徑（例如未來的 detail 頁）不該被靜默算成 monitor。
+// 尾段比對而非 endsWith 串接：分頁多了以後串接式三元運算子的落點會越來越難讀。
+// 認不出的尾段一律退回 monitor（與改寫前逐字同行為）——這表示未來若加了帶子段
+// 的路由（/bus/dispatch/123）或尾隨斜線，分頁 highlight 會跳回即時監看；真要支援
+// 時得改成前綴比對，而不是往這張表加項目。
 // 宣告成 as const tuple 而非 Record<string, string>：分頁名同時是路徑尾段與
 // el-tab-pane 的 name，型別收成字面量聯集後，改錯一邊 vue-tsc 會當場擋下。
 const TAB_SEGMENTS = ['monitor', 'dispatch', 'history', 'routes', 'settings'] as const

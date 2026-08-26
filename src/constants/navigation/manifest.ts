@@ -397,10 +397,11 @@ export const NAVIGATION_MANIFEST = {
           // BUS_WRITE 外溢到監看／歷史／今日調度（或 BUS_READ 外溢到路線管理／
           // 設定），故子路由一律走 extraRoutes 各自 exact。
           //
-          // ⚠ 授權路線管理時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：
-          // 該分頁進頁後還會打 GET /bus/routes（後端 BUS_READ）與 GET /students
-          // （後端 STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授
-          // BUS_WRITE 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
+          // ⚠ 授權路線管理／設定時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起
+          // 給：route gate 是 OR 語意、寫不出 AND，所以只授 BUS_WRITE 的角色進得了
+          // 頁，但進頁後的載入全 403（畫面退化成錯誤卡）。兩頁各自的讀端點——
+          // 路線管理：GET /bus/routes（後端 BUS_READ）＋ GET /students（STUDENTS_READ）；
+          // 設定：GET /bus/settings（後端 BUS_READ；只有 PUT 才是 BUS_WRITE）。
           key: 'bus', title: '娃娃車管理', routePath: '/bus',
           views: [
             { code: 'BUS_READ', label: '娃娃車檢視' },
@@ -422,7 +423,9 @@ export const NAVIGATION_MANIFEST = {
             { path: '/bus/history', permission: 'BUS_READ' },
             { path: '/bus/routes', permission: 'BUS_WRITE' },
             // 2026-08-26 班次排程新增兩分頁（dispatch 取 BUS_READ 的理由見上方
-            // actions 註解；settings 只有寫入語意 → BUS_WRITE）。
+            // actions 註解；settings 取 BUS_WRITE ——該頁存在的目的是改設定，比照
+            // 路線管理「能進入＝能寫入、無唯讀模式」。⚠ 它的 GET 是 BUS_READ，
+            // 只授 BUS_WRITE 會進得去但載入 403，見上方 ⚠ 段）。
             { path: '/bus/dispatch', permission: 'BUS_READ' },
             { path: '/bus/settings', permission: 'BUS_WRITE' },
             // 舊路徑 redirect 保留規則（比照 /approvals → /workbench/approvals）。

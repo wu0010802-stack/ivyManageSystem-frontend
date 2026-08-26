@@ -98,6 +98,37 @@ describe('路由結構（/bus 巢狀 + 舊路徑 redirect）', () => {
 
     setUserInfo(null)
   })
+
+  // 上面兩條是落點的**字面值**，這條是落點的**不變式**：進得了 /bus 的人，
+  // redirect 送他去的分頁自己也必須進得去。硬編字面值擋不住「加了分頁、順手改
+  // redirect」造成的自撞——落到進不去的分頁會被 guard 再彈一次到 /error，使用者
+  // 看到的是「側欄點得到、點進去變錯誤頁」，而且完全無從診斷。
+  it('落點不變式：凡進得了 /bus 的權限組合，其 redirect 落點自己也進得去', () => {
+    const record = routes.find((r) => r.path === '/bus')
+    const resolveRedirect = record?.redirect as (to: unknown) => string
+
+    const combos: { role: string; permission_names: string[] }[] = [
+      { role: 'admin', permission_names: ['BUS_READ'] },
+      { role: 'admin', permission_names: ['BUS_WRITE'] },
+      { role: 'admin', permission_names: ['BUS_READ', 'BUS_WRITE'] },
+      { role: 'admin', permission_names: ['*'] },
+      { role: 'admin', permission_names: ['BUS_READ', 'BUS_IN_PROGRESS_WRITE'] },
+      { role: 'admin', permission_names: ['BUS_WRITE', 'BUS_IN_PROGRESS_WRITE'] },
+      { role: 'admin', permission_names: ['BUS_IN_PROGRESS_WRITE'] },
+      { role: 'admin', permission_names: ['BUS_TRIPS_OPERATE'] },
+      { role: 'teacher', permission_names: ['*'] },
+    ]
+
+    for (const combo of combos) {
+      setUserInfo(combo)
+      const label = `${combo.role}:${combo.permission_names.join('+')}`
+      // 進不了 /bus 的人根本不會走到 redirect（guard 先彈），不在本不變式範圍。
+      if (!canAccessRoute('/bus')) continue
+      expect(canAccessRoute(resolveRedirect({})), label).toBe(true)
+    }
+
+    setUserInfo(null)
+  })
 })
 
 describe('canAccessRoute', () => {
