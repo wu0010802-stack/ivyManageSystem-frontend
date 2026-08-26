@@ -568,7 +568,9 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   --rv-primary:      var(--brand-primary);
   --rv-primary-lt:   var(--brand-primary-soft);
   --rv-secondary:    var(--color-info);
-  --rv-accent:       var(--color-warning-hover);
+  /* -darker 而非 -hover：--rv-accent 是當「白底上的強調文字」用（KPI 卡的轉換率數字），
+     #d97706 在白底只有 3.19:1；-darker #b45309 為 5.02:1。 */
+  --rv-accent:       var(--color-warning-darker);
   --rv-bg:           var(--bg-color);
   --rv-surface:      var(--surface-color);
   --rv-muted:        var(--bg-color-soft);

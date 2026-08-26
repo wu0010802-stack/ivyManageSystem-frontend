@@ -29,7 +29,10 @@ html:root {
   /* primary  #303133 (12.6:1) - 維持 */
   /* regular  #606266 ( 7.0:1) - 維持 */
   --el-text-color-secondary: #5e6266;     /* 原 #909399 (3.4:1, AA Fail) → 7.1:1 AA Pass */
-  --el-text-color-placeholder: #767a82;   /* 原 #a8abb2 (2.8:1, AA Fail) → 4.6:1 AA Pass */
+  /* 原 #a8abb2 為 2.30:1。註：舊值 #767a82 的註解宣稱 4.6:1，但實際驗算是 4.31:1，
+   * 仍未達 4.5——2026-08-26 於 staging 量到「入學學年」等 placeholder 正是這個值。
+   * #6b6f77 為 5.04:1。 */
+  --el-text-color-placeholder: #6b6f77;
   /* disabled #c0c4cc - 維持（disabled 允許低對比） */
 
   /* ----- 語意色：實心按鈕白字對比（WCAG AA，門檻 4.5:1）-----

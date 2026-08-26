@@ -125,6 +125,17 @@ describe('品牌色在「需要過 4.5:1 的文字情境」有專用色階', () 
   })
 })
 
+describe('Element Plus 文字色覆寫的實際對比', () => {
+  it.each([
+    ['--el-text-color-secondary'],
+    ['--el-text-color-placeholder'],
+  ])('%s 在白底達 AA（placeholder 舊值 #767a82 的註解宣稱 4.6:1，實測只有 4.31:1）', (varName) => {
+    const m = a11yCss.match(new RegExp(`${varName}\\s*:\\s*(#[0-9a-fA-F]{6})`))
+    expect(m).not.toBeNull()
+    expect(contrast(m![1], PAPER_WHITE)).toBeGreaterThanOrEqual(AA_TEXT)
+  })
+})
+
 describe('語意色實心按鈕的白字對比', () => {
   it.each([
     ['--el-color-success', 'success'],
