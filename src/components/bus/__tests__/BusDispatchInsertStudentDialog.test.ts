@@ -9,22 +9,24 @@
  */
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent } from 'vue'
 
-// FE-ROUTES-07 的元件由 bus-admin session 維護；本檔只驗自己的流程，
-// 以 stub 承接它的契約（props: studentId/modelValue/homeAddress；
-// emits: update:modelValue、resolved）。
-const AddressSelectStub = defineComponent({
-  name: 'BusPickupAddressSelect',
-  props: {
-    studentId: { type: Number, required: true },
-    modelValue: { type: Number, default: null },
-    homeAddress: { type: String, default: null },
+// FE-ROUTES-07 的元件由 bus-admin session 維護；本檔只驗自己的流程，以 stub 承接
+// 它的契約（props: studentId/modelValue/homeAddress；emits: update:modelValue、
+// resolved）。用 vi.hoisted 定義：vi.mock 的 factory 會被提到檔首，直接引用外層
+// 變數會 ReferenceError。
+const stubs = vi.hoisted(() => ({
+  addressSelect: {
+    name: 'BusPickupAddressSelect',
+    props: {
+      studentId: { type: Number, required: true },
+      modelValue: { type: Number, default: null },
+      homeAddress: { type: String, default: null },
+    },
+    emits: ['update:modelValue', 'resolved'],
+    template: '<div data-test="address-stub" :data-student="studentId" />',
   },
-  emits: ['update:modelValue', 'resolved'],
-  template: '<div data-test="address-stub" :data-student="studentId" />',
-})
-vi.mock('@/components/bus/BusPickupAddressSelect.vue', () => ({ default: AddressSelectStub }))
+}))
+vi.mock('@/components/bus/BusPickupAddressSelect.vue', () => ({ default: stubs.addressSelect }))
 
 import BusDispatchInsertStudentDialog from '@/components/bus/BusDispatchInsertStudentDialog.vue'
 
@@ -62,7 +64,7 @@ async function pickStudentAndAddress(
   resolved: Record<string, unknown> = { id: 9, lat: 22.7, lng: 120.4, address: '高雄市…' },
 ) {
   await w.find('[data-test="student-select"]').setValue(String(studentId))
-  await w.findComponent(AddressSelectStub).vm.$emit('resolved', resolved)
+  await w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('resolved', resolved)
   await w.vm.$nextTick()
   return w
 }
