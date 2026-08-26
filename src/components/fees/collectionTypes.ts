@@ -146,11 +146,30 @@ export interface OutstandingItem {
   status: string
 }
 
+/**
+ * 差集報表中的批次投影——**不是** BillSlipBatchRow 的超集。
+ * 後端 OutstandingBatchOut 刻意不含 note/original_filename/created
+ * （那三個屬匯入語境，報表用不到），宣告成交集才不會誤導後續開發。
+ */
+export interface OutstandingBatchInfo {
+  id: number
+  title: string
+  batch_no: string | null
+  bill_year: number
+  bill_month: number
+  source: string
+  row_count: number
+  net_total: number
+  zero_amount_count: number
+  created_at: string
+  /** 同期別其他批次數（>0 表示帳號與其他批共用，狀態已跨批判定） */
+  sibling_batch_count: number
+  /** 大量溢繳＋同期別無其他批次＝多半是另一批發單快照還沒匯入 */
+  likely_missing_sibling_batch: boolean
+}
+
 export interface OutstandingReport {
-  batch: BillSlipBatchRow & {
-    sibling_batch_count: number
-    likely_missing_sibling_batch: boolean
-  }
+  batch: OutstandingBatchInfo
   totals: {
     expected: number
     paid: number
