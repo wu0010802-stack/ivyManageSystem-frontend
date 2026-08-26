@@ -19,6 +19,7 @@ vi.mock('@/api/bus', () => ({
   optimizeBusDailyPlan: vi.fn(),
   resetBusDailyPlan: vi.fn(),
 }))
+vi.mock('@/api/students', () => ({ getStudents: vi.fn() }))
 vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), warning: vi.fn(), success: vi.fn() },
@@ -27,6 +28,7 @@ vi.mock('element-plus', () => ({
 import {
   getBusDailyPlan, listBusRoutes, patchBusDailyPlanStops, optimizeBusDailyPlan, resetBusDailyPlan,
 } from '@/api/bus'
+import { getStudents } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
 import { useBusDailyDispatch, MAX_DAYS_AHEAD } from '@/composables/useBusDailyDispatch'
 
@@ -92,6 +94,17 @@ beforeEach(() => {
   vi.setSystemTime(LOCAL_NOW_MS)
   vi.mocked(hasPermission).mockReturnValue(true)
   vi.mocked(listBusRoutes).mockResolvedValue(routesPayload() as never)
+  vi.mocked(getStudents).mockResolvedValue({
+    data: {
+      items: [
+        // 端點還會回家長姓名／電話／住址；composable 只該留 id/name
+        { id: 101, name: '小明', address: '不該進狀態的住址' },
+        { id: 201, name: '小華' },
+        { id: 202, name: '小美' },
+      ],
+      total: 3,
+    },
+  } as never)
 })
 
 afterEach(() => {
@@ -284,6 +297,73 @@ describe('站點編輯', () => {
     expect(vi.mocked(patchBusDailyPlanStops).mock.calls[0]).toEqual([
       7, { inserts: [{ student_id: 202, pickup_address_id: 9, lat: 22.7, lng: 120.4 }] },
     ])
+  })
+})
+
+describe('臨時插入的候選學生', () => {
+  it('進頁不撈全園名冊（延後到開啟 Dialog 才載），且只留 id/name', async () => {
+    const d = await boot()
+    expect(getStudents).not.toHaveBeenCalled()
+
+    await d.loadStudents()
+    expect(d.students.value).toEqual([
+      { id: 101, name: '小明' }, { id: 201, name: '小華' }, { id: 202, name: '小美' },
+    ])
+    expect(JSON.stringify(d.students.value)).not.toContain('住址')
+  })
+
+  it('載過一次就不重載（同一次進頁內名冊不會變）', async () => {
+    const d = await boot()
+    await d.loadStudents()
+    await d.loadStudents()
+    expect(getStudents).toHaveBeenCalledTimes(1)
+  })
+
+  it('學生清單失敗時 studentsFailed 亮起，不得讓空候選被讀成「沒有人可插入」', async () => {
+    vi.mocked(getStudents).mockRejectedValue(new Error('boom'))
+    const d = await boot()
+    await d.loadStudents()
+    expect(d.studentsFailed.value).toBe(true)
+    expect(d.insertCandidates.value).toEqual([])
+  })
+
+  it('排掉已在本班次名單上的學生（含 excused——那要用「取消不搭車」而非重新插入）', async () => {
+    const d = await boot([planItem({
+      stops: [
+        stop({ student_id: 101 }),
+        stop({ stop_id: 12, student_id: 201, status: 'excused', excuse_reason: 'parent' }),
+      ],
+    })])
+    await d.loadStudents()
+    expect(d.insertCandidates.value.map((s) => s.id)).toEqual([202])
+  })
+
+  it('排掉同日同方向其他班次上的非 excused 學生（後端跨班次重複整批 422）', async () => {
+    const d = await boot([
+      planItem({ stops: [stop({ student_id: 101 })] }),
+      planItem({
+        trip: trip({ id: 8, route_id: 4, direction: 'morning' }),
+        stops: [
+          stop({ stop_id: 20, student_id: 201 }),
+          stop({ stop_id: 21, student_id: 202, status: 'excused', excuse_reason: 'leave' }),
+        ],
+      }),
+    ])
+    await d.loadStudents()
+    // 101 在本班次、201 在同方向別班次；202 在別班次但已 excused → 可插入
+    expect(d.insertCandidates.value.map((s) => s.id)).toEqual([202])
+  })
+
+  it('反方向的班次不構成衝突（早上 A 線接、下午 B 線送是正常排法）', async () => {
+    const d = await boot([
+      planItem({ stops: [stop({ student_id: 101 })] }),
+      planItem({
+        trip: trip({ id: 8, route_id: 4, direction: 'afternoon' }),
+        stops: [stop({ stop_id: 20, student_id: 201 })],
+      }),
+    ])
+    await d.loadStudents()
+    expect(d.insertCandidates.value.map((s) => s.id)).toEqual([201, 202])
   })
 })
 

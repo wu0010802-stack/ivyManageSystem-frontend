@@ -141,7 +141,6 @@ describe('唯讀鎖', () => {
     expect(w.find('[data-test="handle-101"]').exists()).toBe(false)
     expect(w.find('[data-test="excuse-btn-101"]').exists()).toBe(false)
     expect(w.find('[data-test="address-btn-101"]').exists()).toBe(false)
-    expect(w.find('[data-test="map-btn-101"]').exists()).toBe(false)
     expect(w.find('[data-test="remove-101"]').exists()).toBe(false)
   })
 
@@ -157,7 +156,6 @@ describe('in_progress 的動作收斂（後端一律 422 的先不要給）', ()
     const w = mountTable({ tripStatus: 'in_progress' })
     expect(w.find('[data-test="remove-101"]').exists()).toBe(false)
     expect(w.find('[data-test="address-btn-101"]').exists()).toBe(false)
-    expect(w.find('[data-test="map-btn-101"]').exists()).toBe(false)
     expect(w.find('[data-test="excuse-btn-101"]').exists()).toBe(true)
     expect(w.find('[data-test="pending-list"]').attributes('data-disabled')).toBe('false')
   })
@@ -218,12 +216,10 @@ describe('emit', () => {
     const w = mountTable({ stops: [stop({ student_id: 555 })] })
     await w.find('[data-test="excuse-btn-555"]').trigger('click')
     await w.find('[data-test="address-btn-555"]').trigger('click')
-    await w.find('[data-test="map-btn-555"]').trigger('click')
     await w.find('[data-test="remove-555"]').trigger('click')
 
     expect(w.emitted('mark-excused')).toEqual([[555]])
     expect(w.emitted('change-address')).toEqual([[555]])
-    expect(w.emitted('tune-map')).toEqual([[555]])
     expect(w.emitted('remove')).toEqual([[555]])
   })
 

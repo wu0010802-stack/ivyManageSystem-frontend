@@ -39,14 +39,18 @@ import {
   patchBusDailyPlanStops,
   resetBusDailyPlan,
 } from '@/api/bus'
+import { getStudents } from '@/api/students'
 import type { ApiBody, Schema } from '@/api/_generated/typed'
-import type { BusDirection } from '@/composables/useBusRouteEditor'
+import { STUDENT_PAGE_SIZE, type BusDirection } from '@/composables/useBusRouteEditor'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { dateToLocalISO, parseLocalISODate, todayISO } from '@/utils/format'
 
 /** 與後端 `api/bus/daily_plans.py::MAX_DAYS_AHEAD` 對齊（今天~+7，超界 422）。 */
 export const MAX_DAYS_AHEAD = 7
+
+/** 翻頁保險絲：後端 total 異常時不至於變成無窮迴圈（比照 useBusRouteEditor）。 */
+const MAX_STUDENT_PAGES = 20
 
 /** 後端 `BusStopAdminOut` 原樣（禁止手抄；codegen 是契約唯一事實來源）。 */
 export type DispatchStop = Schema<'BusStopAdminOut'>
@@ -114,6 +118,13 @@ export function useBusDailyDispatch() {
 
   /** 班次名稱／出發時間查表；daily-plans 回應不帶這兩欄。 */
   const routeMeta = ref<Map<number, RouteMeta>>(new Map())
+
+  /** 全園在讀學生，**只留 id/name**（插入 Dialog 用；延後到開啟時才載）。 */
+  const students = ref<Array<{ id: number; name: string }>>([])
+  const studentsLoading = ref(false)
+  /** 學生清單載入失敗：候選是空的，但**不是**「沒有學生可以插入」。 */
+  const studentsFailed = ref(false)
+  let studentsLoaded = false
 
   const selectedPlan = computed(
     () => plans.value.find((p) => p.trip.id === selectedTripId.value) ?? null,
@@ -259,6 +270,63 @@ export function useBusDailyDispatch() {
     optimizePreviewData.value = null
     optimizeError.value = null
   }
+
+  // ── 臨時插入的候選學生 ─────────────────────────────────────────────────────
+
+  /**
+   * 在讀學生清單（翻頁到底）。只留 `id`/`name`——回應還帶家長姓名／電話／住址，
+   * 那些一個欄位都不需要進前端狀態（比照 `useBusRouteEditor.loadStudents`）。
+   *
+   * **延後載入**：全園名冊只有按下「插入學生」才需要，進頁就撈等於每個看調度頁的
+   * 人都把整份學生名冊拉進瀏覽器。載過一次就不再重載（同一次進頁內名冊不會變）。
+   */
+  async function loadStudents(): Promise<void> {
+    if (studentsLoaded || studentsLoading.value) return
+    studentsLoading.value = true
+    studentsFailed.value = false
+    const collected: Array<{ id: number; name: string }> = []
+    try {
+      let skip = 0
+      for (let page = 0; page < MAX_STUDENT_PAGES; page += 1) {
+        const res = await getStudents({ limit: STUDENT_PAGE_SIZE, skip, is_active: true })
+        const items = res.data.items ?? []
+        for (const item of items) collected.push({ id: item.id, name: item.name })
+        const total = res.data.total ?? collected.length
+        skip += items.length
+        if (items.length === 0 || collected.length >= total) break
+      }
+      students.value = collected
+      studentsLoaded = true
+    } catch (e) {
+      studentsFailed.value = true
+      ElMessage.error(apiError(e, '載入學生名單失敗，暫時無法插入學生'))
+    } finally {
+      studentsLoading.value = false
+    }
+  }
+
+  /**
+   * 可插入目前這條班次的學生＝排掉「後端一定會 422」的兩種人：
+   *
+   * 1. 已在**本班次**當日名單上的（任何狀態，含 excused——後端擋的是
+   *    `學生 X 已在當日名單中`，excused 的人要用「取消不搭車」而不是重新插入）。
+   * 2. 同日、**同方向**的其他班次上有非 excused 站的（後端
+   *    `_daily_cross_trip_conflict`：整批 422）。反方向不衝突——早上 A 線接、
+   *    下午 B 線送是正常排法。
+   */
+  const insertCandidates = computed(() => {
+    const plan = selectedPlan.value
+    if (!plan) return []
+    const blocked = new Set<number>(plan.stops.map((s) => s.student_id))
+    for (const other of plans.value) {
+      if (other.trip.id === plan.trip.id) continue
+      if (other.direction !== plan.direction) continue
+      for (const s of other.stops) {
+        if (s.status !== 'excused') blocked.add(s.student_id)
+      }
+    }
+    return students.value.filter((s) => !blocked.has(s.id))
+  })
 
   // ── 編輯（每個動作立即送出，以回應為權威）──────────────────────────────
 
@@ -429,6 +497,7 @@ export function useBusDailyDispatch() {
     date, plans, selectedPlan, selectedTripId, loading, saving, loadFailed,
     holidayNotice, etaStale, overCapacity, editable, inProgress, lockedByPermission,
     optimizePreviewData, optimizing, optimizeError,
+    students, studentsLoading, studentsFailed, insertCandidates, loadStudents,
     load, setDate, selectTrip, canEdit,
     insertStop, markExcusedAdmin, unmarkExcused, changeAddress, removeStop, moveStop,
     optimizePreview, applyOptimize, cancelOptimize, resetPlan,

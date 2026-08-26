@@ -47,8 +47,16 @@ const emit = defineEmits<{
   'mark-excused': [studentId: number]
   'unmark-excused': [studentId: number]
   remove: [studentId: number]
+  /**
+   * 開啟「接送地址」流程（選地址簿 ＋ 可在地圖上微調座標）。
+   *
+   * ⚠ 這裡刻意**沒有**獨立的「地圖微調」動作。`BusStopAdminOut` 不含
+   * `pickup_address_id`（後端 2026-08-26 實查），所以前端無從只改座標而保留原本
+   * 選定的接送地址——`address_changes` 少帶 `pickup_address_id` 會讓後端把該站
+   * 重設回住家地址並改寫 `address_snapshot`，那是使用者沒要求的靜默資料異動。
+   * 因此地圖微調收進地址流程內，由呼叫端在同一次 PATCH 一起送出。
+   */
   'change-address': [studentId: number]
-  'tune-map': [studentId: number]
 }>()
 
 const STATUS_META: Record<string, { label: string; type: 'success' | 'info' | 'warning' | undefined }> = {
@@ -261,16 +269,6 @@ function onDragChange(evt: DragChangeEvent): void {
                 @click="emit('change-address', s.student_id)"
               >
                 接送地址
-              </el-button>
-              <el-button
-                v-if="canMutateRoster"
-                link
-                type="primary"
-                size="small"
-                :data-test="`map-btn-${s.student_id}`"
-                @click="emit('tune-map', s.student_id)"
-              >
-                地圖微調
               </el-button>
               <el-button
                 v-if="canRemove(s)"
