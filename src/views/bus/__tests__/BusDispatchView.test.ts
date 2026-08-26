@@ -74,6 +74,18 @@ vi.mock('@/components/bus/BusPickupAddressSelect.vue', () => ({
 vi.mock('@/components/bus/BusStopMapTuner.vue', () => ({
   default: { name: 'BusStopMapTuner', props: ['visible', 'lat', 'lng', 'label', 'schoolCoords'], template: '<div />' },
 }))
+// sortablejs 在 jsdom 卸載時會踩 null 節點（`Cannot set properties of null`）；
+// 拖拉本身由 BusDispatchStopsTable 自己的測試涵蓋，這裡只需要它渲染出 item slot。
+vi.mock('vuedraggable', () => ({
+  default: {
+    name: 'draggable',
+    props: ['modelValue', 'itemKey', 'handle', 'disabled'],
+    emits: ['change'],
+    template:
+      '<div><template v-for="(el, i) in modelValue" :key="el.student_id">'
+      + '<slot name="item" :element="el" :index="i" /></template></div>',
+  },
+}))
 
 import BusDispatchView from '@/views/bus/BusDispatchView.vue'
 
