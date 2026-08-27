@@ -70,7 +70,8 @@
                 <span class="route-name">{{ r.name }}</span>
               </span>
               <span class="route-meta">
-                <span class="route-time">{{ r.depart_time }}</span>
+                <!-- 後端 Time.isoformat() 帶秒（07:30:00），司機只需要 HH:mm -->
+                <span class="route-time">{{ r.depart_time.slice(0, 5) }}</span>
                 <el-tag
                   :type="TODAY_STATUS_TAG[r.today_status]"
                   size="small"

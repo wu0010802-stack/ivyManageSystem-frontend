@@ -848,6 +848,10 @@ export function usePortalBusTrip() {
     trip.value = null
     stops.value = []
     completing.value = false
+    // 回到開班卡時徽章與主按鈕文案要反映「這班今天已完成」：routes 的
+    // today_status 是進頁時的快照，不重抓會顯示成「進行中／接手這一班」的過期
+    // 狀態。失敗靜默——選單只是輔助資訊，班次本身已成功結束，不值得為它彈錯誤。
+    void loadRoutes().catch(() => {})
     ElMessage.success('班次已結束')
     if (leftover > 0) ElMessage.warning('最後一批位置未能上報，不影響班次結束')
   }

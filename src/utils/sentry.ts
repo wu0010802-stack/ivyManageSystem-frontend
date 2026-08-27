@@ -95,7 +95,11 @@ const PII_KEY_SUBSTRINGS = [
 // 娃娃車第二期（bussch，2026-08-26，與 BE _PII_KEY_EXACT 同步）新增 lat / lng：
 // 站點座標＝接送地址 geocode 快照，多數情況就是家庭住址（spec 明列為位置資料）。
 // 走整字相等而非 substring——'lat' 會誤傷 latest / related / translation。
-const PII_KEY_EXACT = ['student', 'child', 'parent', 'lat', 'lng']
+// stop_lat / stop_lng（2026-08-26 review 補漏，與 BE 同步）：家長端
+// `/parent/bus/today` 與 WS payload 的家庭座標鍵名是這兩個（BusChildOut），
+// 裸字 lat/lng 只涵蓋司機端鍵名——同一類資料兩種鍵名，缺一即漏。同樣走整字
+// 相等：substring 'lat' 的誤傷問題不因加了前綴而消失。
+const PII_KEY_EXACT = ['student', 'child', 'parent', 'lat', 'lng', 'stop_lat', 'stop_lng']
 
 const FILTERED = '[Filtered]'
 
@@ -274,6 +278,19 @@ export function scrubEvent(event: unknown) {
 
   for (const sect of ['extra', 'contexts', 'tags', 'user']) {
     if (sect in ev) ev[sect] = scrubMapping(ev[sect])
+  }
+
+  // contexts.vue.propsData 整包遮罩：`@sentry/vue` 預設 attachProps: true，render
+  // error 會把出錯元件的整包 props 塞進來。上面的 key 比對攔得住 childName 等
+  // 具名 PII prop，但攔不住**通用鍵名**承載 PII 的情況——StatTile 的 `value`
+  // prop 就承載學生姓名，而 'value' 不可能進 denylist（會誤遮全站）。props 對
+  // debug 的價值遠低於這個暴露面，整包收掉；後端無此 context，不影響 parity。
+  const contexts = ev['contexts']
+  if (contexts && typeof contexts === 'object') {
+    const vue = (contexts as Record<string, unknown>)['vue']
+    if (vue && typeof vue === 'object' && 'propsData' in (vue as object)) {
+      ;(vue as Record<string, unknown>)['propsData'] = FILTERED
+    }
   }
 
   // user.id 對映 employees.id / parents.id —— hash 化避免直連個人

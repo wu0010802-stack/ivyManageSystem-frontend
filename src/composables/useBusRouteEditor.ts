@@ -257,8 +257,14 @@ export function useBusRouteEditor() {
   const updatingRoute = ref(false)
   /** 班次排序（PATCH /routes/reorder）的 in-flight 旗標。 */
   const reordering = ref(false)
-  /** 最佳化／重算 ETA 的 in-flight 旗標。 */
+  /**
+   * 自動排序預覽的 in-flight 旗標。與 `recomputingEtas` 分開：兩顆按鈕各轉各的
+   * loading，使用者才分得清是哪個動作在跑；但兩支端點都對伺服器名單運算，
+   * 仍互斥（見各自開頭的 guard）。
+   */
   const optimizing = ref(false)
+  /** 順序固定重算 ETA 的 in-flight 旗標。 */
+  const recomputingEtas = ref(false)
   /** 「帶入其他班次名單」的 in-flight 旗標。 */
   const copying = ref(false)
   /** 班次清單載入失敗：`routes` 是空的，但**不是**「園裡沒有班次」。 */
@@ -270,9 +276,11 @@ export function useBusRouteEditor() {
   /**
    * 本 composable 之外的「未儲存」來源（目前是班次設定表單的欄位編輯）。
    *
-   * `dirty` 只追蹤 `stops`，但 `loadRoutes()` 會重建整個 route 物件、連帶把表單
-   * 欄位重置回伺服器值。若不把表單納入同一條防線，改了座位上限沒存、按一下
-   * 「儲存名單」或拖一下側欄，表單編輯就靜默消失。
+   * `dirty` 只追蹤 `stops`。表單（BusRouteForm）刻意只在 route **id 變更**時
+   * 重置欄位，同 id 的 `loadRoutes()` 重讀不會動它——因此會蓋掉表單編輯的只有
+   * 「切換班次／建立班次」（id 會變）與離頁，那幾條路徑要看 `anyDirty`；
+   * 同 id 的重讀（改設定、reorder、儲存名單）只需要守 `stops`（見
+   * `confirmDiscard` 的 scope 參數）。
    */
   const extraDirtySources = ref<Array<() => boolean>>([])
   function registerExtraDirty(fn: () => boolean): void {
@@ -439,8 +447,17 @@ export function useBusRouteEditor() {
 
   // ── 切換（未儲存的編輯要先確認）─────────────────────────────────────────────
 
-  async function confirmDiscard(): Promise<boolean> {
-    if (!anyDirty.value) return true
+  /**
+   * `scope` 依「這個動作實際會蓋掉什麼」選：
+   * - `'any'`（預設）：動作會換掉 activeRouteId（切換／建立班次）——表單會因
+   *   id 變更而重置，所有未儲存來源都要確認。
+   * - `'stops'`：動作只觸發同 id 重讀（改設定、reorder）——重讀只會經
+   *   `resetEditing()` 蓋掉名單緩衝，表單編輯安然無恙；若這時還看 `anyDirty`，
+   *   「儲存班次設定」本身就必然帶著表單變更，每按一次都會彈出一個語意顛倒的
+   *   「捨棄變更」對話框（按「留在這裡」反而取消儲存）。
+   */
+  async function confirmDiscard(scope: 'any' | 'stops' = 'any'): Promise<boolean> {
+    if (!(scope === 'stops' ? dirty.value : anyDirty.value)) return true
     try {
       await ElMessageBox.confirm(
         '這個班次有尚未儲存的變更，離開後會遺失。確定要切換嗎？', '尚未儲存',
@@ -508,10 +525,11 @@ export function useBusRouteEditor() {
   /**
    * 班次基本設定部分更新（`PATCH /bus/routes/{id}`）。**沒有 `direction`**：方向唯讀。
    *
-   * 與 `selectRoute` 同一條「未儲存編輯先確認」防線：更新成功後一律 `loadRoutes()`
-   * 重讀，而 `loadRoutes` 內部的 `resetEditing()` 會把編輯緩衝蓋回伺服器名冊——若當前
-   * 有未儲存的站點編輯，不先確認就直接改設定，等於用一個語意上毫不相關的動作，
-   * 靜默丟棄使用者剛排好的順序。
+   * 更新成功後一律 `loadRoutes()` 重讀，而 `loadRoutes` 內部的 `resetEditing()`
+   * 會把編輯緩衝蓋回伺服器名冊——若當前有未儲存的**站點**編輯，不先確認就直接
+   * 改設定，等於用一個語意上毫不相關的動作，靜默丟棄使用者剛排好的順序。
+   * 只看 `'stops'`：表單自己的變更就是這次要送出的 payload，不是要被捨棄的東西
+   * （同 id 重讀也不會重置表單），看 `anyDirty` 會讓每一次表單儲存都彈確認框。
    */
   async function updateRoute(
     routeId: number,
@@ -523,7 +541,7 @@ export function useBusRouteEditor() {
       is_active?: boolean
     },
   ): Promise<boolean> {
-    if (!await confirmDiscard()) return false
+    if (!await confirmDiscard('stops')) return false
     updatingRoute.value = true
     try {
       await updateBusRoute(routeId, payload)
@@ -549,12 +567,17 @@ export function useBusRouteEditor() {
    * 班次排序批次調整（`PATCH /bus/routes/reorder`）。`orderedIds` 是**同一方向組內**
    * 的完整順序；`sort_order` 由 index 衍生，由後端一次寫入。
    *
-   * 這支不動站點編輯緩衝，故不需要 `confirmDiscard`——但成功後重讀班次清單會經
-   * `resetEditing()`，因此仍先確認，避免拖一下側欄就丟掉名單編輯。
+   * 這支不動站點編輯緩衝，故本身不需要確認——但成功後重讀班次清單會經
+   * `resetEditing()`，因此仍先確認（只看 `'stops'`：同 id 重讀不會重置表單），
+   * 避免拖一下側欄就丟掉名單編輯。
+   *
+   * 回 false（確認被取消或 PATCH 失敗）＝**什麼都沒寫進去**：呼叫端（view）要
+   * 依這個回傳強制側欄重繪——vuedraggable 是單向 `:model-value`，拖放已經動了
+   * DOM，若放著不管，畫面會停在「看起來排好了、實際上沒寫進去」的順序。
    */
   async function reorderRoutes(orderedIds: number[]): Promise<boolean> {
     if (!orderedIds.length) return true
-    if (!await confirmDiscard()) return false
+    if (!await confirmDiscard('stops')) return false
     reordering.value = true
     try {
       await reorderBusRoutes(orderedIds.map((id, i) => ({ id, sort_order: i })))
@@ -780,7 +803,7 @@ export function useBusRouteEditor() {
   /** 自動排序預覽（不落庫）。回 null＝失敗或被擋下，由 view 決定不開 Dialog。 */
   async function optimizePreview(): Promise<RouteOptimizePreview | null> {
     const routeId = activeRouteId.value
-    if (routeId === null || optimizing.value) return null
+    if (routeId === null || optimizing.value || recomputingEtas.value) return null
     if (!requireSavedBuffer('自動排序')) return null
     optimizeErrorMessage.value = null
     optimizing.value = true
@@ -844,14 +867,14 @@ export function useBusRouteEditor() {
    */
   async function recomputeEtas(): Promise<boolean> {
     const routeId = activeRouteId.value
-    if (routeId === null || optimizing.value) return false
+    if (routeId === null || optimizing.value || recomputingEtas.value) return false
     if (!requireSavedBuffer('重算 ETA')) return false
-    optimizing.value = true
+    recomputingEtas.value = true
     try {
       await recomputeBusRouteEtas(routeId)
     } catch (e) {
       ElMessage.error(apiError(e, '重算 ETA 失敗，請稍後再試'))
-      optimizing.value = false
+      recomputingEtas.value = false
       return false
     }
     try {
@@ -861,7 +884,7 @@ export function useBusRouteEditor() {
       // recompute 已經落庫，重讀失敗不可以再喊一次「重算失敗」讓使用者重送。
       ElMessage.warning(apiError(e, '已重算，但重新載入名冊失敗，畫面可能不是最新狀態'))
     } finally {
-      optimizing.value = false
+      recomputingEtas.value = false
     }
     return true
   }
@@ -935,7 +958,8 @@ export function useBusRouteEditor() {
     capacity, weekdayLoads, maxWeekdayLoad, overloadedWeekdays,
     missingCoordinateCount, staleAddressCount, assignedElsewhere, copyConflicts,
     optimizeErrorMessage, anyDirty, registerExtraDirty,
-    loading, saving, creating, updatingRoute, reordering, optimizing, copying, dirty,
+    loading, saving, creating, updatingRoute, reordering, optimizing, recomputingEtas,
+    copying, dirty,
     loadFailed, studentsFailed,
     init, loadRoutes, createRoute, selectRoute, updateRoute, reorderRoutes, confirmDiscard,
     addStop, removeStop, moveStop, togglePinned, setRideDays, setPickupAddress, setCoordinates,

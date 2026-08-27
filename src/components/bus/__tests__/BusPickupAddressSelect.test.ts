@@ -69,7 +69,7 @@ describe('BusPickupAddressSelect', () => {
     await flushPromises()
     expect(w.emitted('update:modelValue')?.[0]).toEqual([null])
     expect(w.emitted('resolved')?.[0]).toEqual([{
-      id: null, lat: 22.6, lng: 120.3, address: '高雄市三民區某路 1 號',
+      id: null, lat: 22.6, lng: 120.3, address: '高雄市三民區某路 1 號', reason: 'selected',
     }])
   })
 
@@ -79,7 +79,7 @@ describe('BusPickupAddressSelect', () => {
     await flushPromises()
     expect(w.emitted('update:modelValue')?.[0]).toEqual([7])
     expect(w.emitted('resolved')?.[0]).toEqual([{
-      id: 7, lat: 22.7, lng: 120.4, address: '高雄市左營區某街 2 號',
+      id: 7, lat: 22.7, lng: 120.4, address: '高雄市左營區某街 2 號', reason: 'selected',
     }])
   })
 
@@ -142,6 +142,8 @@ describe('BusPickupAddressSelect', () => {
     await w.find('[data-test="delete-7"]').trigger('click')
     await flushPromises()
     expect(w.emitted('update:modelValue')?.[0]).toEqual([null])
+    // 被動退回要標 fallback：使用者還在管理地址簿，頁面不得因此關掉整個 Dialog。
+    expect(w.emitted('resolved')?.[0]?.[0]).toMatchObject({ id: null, reason: 'fallback' })
   })
 
   it('刪除地址要二次確認（刪掉沒有還原入口）；取消就不送出', async () => {

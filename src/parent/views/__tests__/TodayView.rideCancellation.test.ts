@@ -319,6 +319,114 @@ describe('TodayView — 今天不搭送出與撤銷', () => {
     wrapper.unmount()
   })
 
+  it('撤銷失敗也要重載列表（revocable/存在性不得停留在過期值）', async () => {
+    // 不重載的話，422 之後列表仍畫著撤銷鈕，家長會一直重按同一顆永遠失敗的按鈕。
+    rideChildren = [{
+      ...CHILD_A,
+      cancellations: [{ id: 5, direction: 'morning', revocable: true }],
+    }]
+    revokeRideCancellationMock.mockRejectedValue({ response: { status: 422 } })
+    const wrapper = await mountToday()
+    const vm = wrapper.vm as unknown as Vm
+    vm.openCancelSheet(1)
+    const callsBefore = getRideCancellationsMock.mock.calls.length
+
+    rideChildren = [{
+      ...CHILD_A,
+      cancellations: [{ id: 5, direction: 'morning', revocable: false }],
+    }]
+    await vm.onRideCancelRevoke(5)
+    await flushPromises()
+
+    expect(getRideCancellationsMock.mock.calls.length).toBeGreaterThan(callsBefore)
+    expect(vm.busRideChildren[0].cancellations[0].revocable).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('404（已由其他人撤銷）分流成專屬文案，不誤講成「已出發」', async () => {
+    // 兩位監護人各自開著首頁：A 撤銷成功後 B 再按 → 後端 404「取消申請不存在」。
+    // 對 B 而言事實是「這筆已經撤掉了」，講「該站可能已經出發」指向完全錯誤的原因。
+    rideChildren = [{
+      ...CHILD_A,
+      cancellations: [{ id: 5, direction: 'morning', revocable: true }],
+    }]
+    revokeRideCancellationMock.mockRejectedValue({ response: { status: 404 } })
+    const wrapper = await mountToday()
+    const vm = wrapper.vm as unknown as Vm
+    vm.openCancelSheet(1)
+
+    rideChildren = [{ ...CHILD_A, cancellations: [] }]
+    await vm.onRideCancelRevoke(5)
+    await flushPromises()
+
+    expect(vm.cancelResults).toEqual([
+      { direction: 'morning', ok: false, message: '此申報已由其他人撤銷，已為您更新狀態' },
+    ])
+    // 重載後列表已同步為「無申報」
+    expect(vm.busRideChildren[0].cancellations).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('同一 tick 雙擊送出只發一個 request（disabled 要等下一輪 render 才落到 DOM）', async () => {
+    // 沒有 guard 時第二發撞後端 partial unique 回 already_active（success=false），
+    // 把第一發的成功結果覆寫成失敗，家長誤以為沒報成。
+    createRideCancellationMock.mockResolvedValue({
+      data: { results: [{ direction: 'morning', success: true, message: 'ok' }] },
+    })
+    const wrapper = await mountToday()
+    const vm = wrapper.vm as unknown as Vm
+    vm.openCancelSheet(1)
+
+    const first = vm.onRideCancelSubmit(['morning'])
+    const second = vm.onRideCancelSubmit(['morning'])
+    await Promise.all([first, second])
+    await flushPromises()
+
+    expect(createRideCancellationMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('同一 tick 雙擊撤銷只發一個 request', async () => {
+    // 撤銷鈕是直接 emit（沒有 ConfirmDialog 攔一層）；第二發會回 404，用
+    // 「撤銷失敗」蓋掉第一發已成功的事實。
+    rideChildren = [{
+      ...CHILD_A,
+      cancellations: [{ id: 5, direction: 'morning', revocable: true }],
+    }]
+    revokeRideCancellationMock.mockResolvedValue({ data: { success: true } })
+    const wrapper = await mountToday()
+    const vm = wrapper.vm as unknown as Vm
+    vm.openCancelSheet(1)
+
+    const first = vm.onRideCancelRevoke(5)
+    const second = vm.onRideCancelRevoke(5)
+    await Promise.all([first, second])
+    await flushPromises()
+
+    expect(revokeRideCancellationMock).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('重載失敗保留既有資料（sheet 開啟中不得連同結果畫面一起被拆掉）', async () => {
+    // submit 成功後的重載若網路瞬斷，清空 busRideChildren 會讓 cancelSheetChild
+    // 變 null → sheet 連同剛拿到的分筆結果整個 unmount，家長來不及看。
+    createRideCancellationMock.mockResolvedValue({
+      data: { results: [{ direction: 'morning', success: true, message: 'ok' }] },
+    })
+    const wrapper = await mountToday()
+    const vm = wrapper.vm as unknown as Vm
+    vm.openCancelSheet(1)
+
+    getRideCancellationsMock.mockRejectedValueOnce(new Error('network'))
+    await vm.onRideCancelSubmit(['morning'])
+    await flushPromises()
+
+    expect(vm.busRideChildren).toHaveLength(1)
+    expect(vm.cancelSheetChild).not.toBeNull()
+    expect(vm.cancelResults).toEqual([{ direction: 'morning', ok: true, message: 'ok' }])
+    wrapper.unmount()
+  })
+
   it('關閉 sheet 會清掉上一輪結果，再開不會殘留', async () => {
     createRideCancellationMock.mockResolvedValue({
       data: { results: [{ direction: 'morning', success: true, message: 'ok' }] },

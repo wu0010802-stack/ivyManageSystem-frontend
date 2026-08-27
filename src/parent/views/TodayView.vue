@@ -204,8 +204,10 @@ async function loadRideCancellations() {
     busRideChildren.value = data?.children ?? []
   } catch {
     if (mySeq !== rideCancelSeq) return
-    // 與娃娃車卡同樣策略：失敗不擋首頁其他區塊，入口單純不出現
-    busRideChildren.value = []
+    // 與娃娃車卡同樣策略：失敗不擋首頁其他區塊（初載失敗＝初始空值，入口單純
+    // 不出現）。**不清空既有資料**：submit 成功後的重載若網路瞬斷，清空會讓
+    // cancelSheetChild 變 null，sheet 連同剛拿到的「部分成功」分筆結果被整個
+    // 拆掉——寧可留舊值（下一次刷新會修正），也不能把結果畫面從家長眼前抽走。
   }
 }
 
@@ -240,6 +242,11 @@ function closeCancelSheet(): void {
  * 收斂成單一成功/失敗。
  */
 async function onRideCancelSubmit(directions: BusDirection[]): Promise<void> {
+  // re-entrancy guard：sheet 的 `:disabled="submitting"` 要等下一輪 render 才落到
+  // DOM，同一 tick 內的雙擊會重入——第二發撞後端 partial unique 回 already_active
+  // （success=false），把第一發的成功結果覆寫成「此方向已有有效的取消申請」，
+  // 家長誤以為沒報成。
+  if (cancelSubmitting.value) return
   const child = cancelSheetChild.value
   if (!child || directions.length === 0) return
   cancelSubmitting.value = true
@@ -282,6 +289,10 @@ async function onRideCancelSubmit(directions: BusDirection[]): Promise<void> {
  * 撤銷成功、照常在家等車。
  */
 async function onRideCancelRevoke(cancellationId: number): Promise<void> {
+  // re-entrancy guard 同 onRideCancelSubmit：撤銷鈕是直接 emit（沒有 ConfirmDialog
+  // 攔一層），雙擊會發兩個 request——第二發回 404，用「撤銷失敗」蓋掉第一發
+  // 已成功的事實。
+  if (cancelSubmitting.value) return
   const target = cancelSheetChild.value?.cancellations.find((c) => c.id === cancellationId)
   cancelSubmitting.value = true
   try {
@@ -290,14 +301,21 @@ async function onRideCancelRevoke(cancellationId: number): Promise<void> {
     void loadBusToday()
     // 撤銷成功後回到選項畫面（撤銷後可再申請），不停留在結果頁
     cancelResults.value = null
-  } catch {
+  } catch (e) {
+    // 失敗也要重載：不重載的話 revocable/存在性停留在過期值——404（另一位監護人
+    // 或另一台裝置已先撤銷）時列表仍畫著「已回報＋撤銷鈕」，家長會一直重按。
+    // 後端 detail 不外流到畫面（沿用家長端慣例），只依 status 分流成看得懂的文案。
+    const status = (e as { response?: { status?: number } } | null)?.response?.status
     if (target) {
       cancelResults.value = [{
         direction: target.direction,
         ok: false,
-        message: '撤銷失敗，該站可能已經出發',
+        message: status === 404
+          ? '此申報已由其他人撤銷，已為您更新狀態'
+          : '撤銷失敗，該站可能已經出發',
       }]
     }
+    await loadRideCancellations()
   } finally {
     cancelSubmitting.value = false
   }

@@ -81,6 +81,9 @@ function progressText(child: { stop_status: string; stops_ahead: number }): stri
   if (child.stop_status === 'departed') {
     return state.trip?.direction === 'morning' ? '已上車前往學校' : '已完成接送'
   }
+  // excused（請假核准／家長今天不搭／後台排除）與司機主動 skipped 是不同語意：
+  // 家長剛申報完不搭進來看到「略過此站」會誤解為司機漏接。
+  if (child.stop_status === 'excused') return '今日不搭車'
   return '今日略過此站'
 }
 

@@ -146,6 +146,21 @@ describe('BusTrackingView — 四態', () => {
     expect(textOf('王小美')).toContain('今日略過此站')
   })
 
+  it('excused（當日不搭）與 skipped 的文案要分開，不得混用「略過」', async () => {
+    // excused 是請假核准／家長今天不搭／後台排除的既成事實——家長剛申報完不搭
+    // 進來看到「略過此站」會誤解為司機漏接。
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      children: [
+        { ...CHILD_PENDING, stop_status: 'excused', stops_ahead: 0 },
+      ],
+    })
+    const w = await mountView()
+    expect(w.text()).toContain('今日不搭車')
+    expect(w.text()).not.toContain('今日略過此站')
+  })
+
   it('班次已結束顯示完成狀態且不渲染地圖', async () => {
     setState({ trip: { ...IN_PROGRESS_TRIP, status: 'completed' }, position: null })
     const w = await mountView()

@@ -1388,6 +1388,21 @@ describe('usePortalBusTrip — 結束班次', () => {
     expect(postBusPings).toHaveBeenCalledTimes(before)
   })
 
+  it('結束成功後重抓班次列表（回到開班卡時四態不得停留在過期快照）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(completeBusTrip).mockResolvedValue(resp({ trip: { id: 7 } }) as never)
+    const callsBefore = vi.mocked(listPortalBusRoutes).mock.calls.length
+    vi.mocked(listPortalBusRoutes).mockResolvedValue(resp({
+      routes: [routeItem({ today_status: 'completed', today_trip_id: 7 })],
+    }) as never)
+
+    await bus.complete()
+    await flushPromises()
+
+    expect(vi.mocked(listPortalBusRoutes).mock.calls.length).toBe(callsBefore + 1)
+    expect(bus.routes.value[0].today_status).toBe('completed')
+  })
+
   it('使用者取消確認時什麼都不做，GPS 繼續跑', async () => {
     const bus = await bootWithActiveTrip()
     vi.mocked(ElMessageBox.confirm).mockRejectedValue(new Error('cancel'))

@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
       updatingRoute: ref(false),
       reordering: ref(false),
       optimizing: ref(false),
+      recomputingEtas: ref(false),
       copying: ref(false),
       dirty: ref(false),
       anyDirty: ref(false),
@@ -157,6 +158,10 @@ beforeEach(() => {
   s.studentsFailed.value = false
   s.dirty.value = false
   s.anyDirty.value = false
+  s.saving.value = false
+  s.optimizing.value = false
+  s.recomputingEtas.value = false
+  s.copying.value = false
   s.optimizeErrorMessage.value = null
   s.optimizePreview.mockResolvedValue(null)
   s.createRoute.mockResolvedValue(11)
@@ -286,9 +291,11 @@ describe('BusRoutesView — 住家地址沒有座標時補 geocode', () => {
   }
 
   it('選住家（後端恆不帶座標）會呼叫 geocode 端點補上，再寫回站點', async () => {
+    // 站點還沒有座標，補 geocode 才是這條路徑的本意（有座標時見下一條：不得覆寫）。
+    s.stops.value = [stop({ lat: null, lng: null })]
     vi.mocked(geocodeBusStudent).mockResolvedValue({ data: { lat: 22.65, lng: 120.35 } } as never)
     const w = await mountView()
-    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址' })
+    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址', reason: 'selected' })
     expect(geocodeBusStudent).toHaveBeenCalledWith(101)
     expect(s.setPickupAddress).toHaveBeenCalledWith(0, {
       id: null, lat: 22.65, lng: 120.35, address: '住家地址',
@@ -296,9 +303,10 @@ describe('BusRoutesView — 住家地址沒有座標時補 geocode', () => {
   })
 
   it('geocode 查不到座標要明說改用地圖微調，不留一個沒有下一步的死巷', async () => {
+    s.stops.value = [stop({ lat: null, lng: null })]
     vi.mocked(geocodeBusStudent).mockResolvedValue({ data: { lat: null, lng: null } } as never)
     const w = await mountView()
-    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址' })
+    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址', reason: 'selected' })
     expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('地圖微調'))
     expect(s.setPickupAddress).toHaveBeenCalledWith(0, {
       id: null, lat: null, lng: null, address: '住家地址',
@@ -307,8 +315,36 @@ describe('BusRoutesView — 住家地址沒有座標時補 geocode', () => {
 
   it('地址簿的地址本來就有座標，不多打一次 geocode', async () => {
     const w = await mountView()
-    await pickAddress(w, { id: 7, lat: 22.7, lng: 120.4, address: '阿嬤家' })
+    await pickAddress(w, { id: 7, lat: 22.7, lng: 120.4, address: '阿嬤家', reason: 'selected' })
     expect(geocodeBusStudent).not.toHaveBeenCalled()
+  })
+
+  it('原本就用住家且已有（微調好的）座標的站，重選住家不得用 geocode 覆寫', async () => {
+    // fixture 預設 pickup_address_id: null ＋ lat/lng 非 null＝「用住家、已微調」。
+    // 這裡若照樣 geocode，巷弄級結果會把微調好的上下車點蓋掉；lat/lng 送 null
+    // 交給 composable setPickupAddress 的 sameAddress 分支保留既有座標。
+    vi.mocked(geocodeBusStudent).mockResolvedValue({ data: { lat: 22.65, lng: 120.35 } } as never)
+    const w = await mountView()
+    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址', reason: 'selected' })
+    expect(geocodeBusStudent).not.toHaveBeenCalled()
+    expect(s.setPickupAddress).toHaveBeenCalledWith(0, {
+      id: null, lat: null, lng: null, address: '住家地址',
+    })
+  })
+
+  it('刪除選中地址被動退回住家（reason: fallback）不關 Dialog；主動選定才關', async () => {
+    // 站點原本指向被刪的那筆（id 7）→ 與住家 id 不同，照樣補 geocode。
+    s.stops.value = [stop({ pickup_address_id: 7 })]
+    vi.mocked(geocodeBusStudent).mockResolvedValue({ data: { lat: 22.65, lng: 120.35 } } as never)
+    const w = await mountView()
+    await pickAddress(w, { id: null, lat: null, lng: null, address: '住家地址', reason: 'fallback' })
+    expect(geocodeBusStudent).toHaveBeenCalledWith(101)
+    // Dialog 還開著：使用者是在管理地址簿，不是選完要離開
+    const dialog = w.findAllComponents({ name: 'ElDialog' })
+      .find((d) => d.props('title') === '設定接送地址')
+    expect(dialog?.props('modelValue')).toBe(true)
+    await pickAddress(w, { id: null, lat: 22.65, lng: 120.35, address: '住家地址', reason: 'selected' })
+    expect(dialog?.props('modelValue')).toBe(false)
   })
 })
 
@@ -515,5 +551,60 @@ describe('BusRoutesView — 工具列接線', () => {
     w.findComponent({ name: 'BusRouteSidebar' }).vm.$emit('select', 5)
     await flushPromises()
     expect(s.selectRoute).toHaveBeenCalledWith(5)
+  })
+})
+
+describe('BusRoutesView — in-flight 編輯鎖與 loading 拆分', () => {
+  it('重算 ETA in-flight 時鎖住加入／帶入／儲存與表格（完成後的重讀會清掉這期間的編輯）', async () => {
+    s.recomputingEtas.value = true
+    const w = await mountView()
+    w.findComponent('[data-testid="bus-student-select"]').vm.$emit('update:modelValue', 103)
+    await flushPromises()
+    expect(w.find('[data-testid="bus-add-stop"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="bus-copy-from"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="bus-save"]').attributes('disabled')).toBeDefined()
+    expect(w.findComponent({ name: 'BusRouteStopsTable' }).props('readonly')).toBe(true)
+  })
+
+  it('儲存 in-flight 也走同一組鎖', async () => {
+    s.saving.value = true
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-copy-from"]').attributes('disabled')).toBeDefined()
+    expect(w.findComponent({ name: 'BusRouteStopsTable' }).props('readonly')).toBe(true)
+  })
+
+  it('重算 ETA 只轉自己的 loading，「自動排序」不跟著轉（反之亦然）', async () => {
+    s.recomputingEtas.value = true
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-recompute-etas"]').classes()).toContain('is-loading')
+    expect(w.find('[data-testid="bus-optimize"]').classes()).not.toContain('is-loading')
+  })
+})
+
+describe('BusRoutesView — reorder 沒寫進去時側欄要重繪', () => {
+  it('reorderRoutes 回 false（取消或失敗）強制側欄重掛，畫面不得停在沒寫進去的順序', async () => {
+    // vuedraggable 是單向 :model-value，拖放已動了 DOM；props 沒變不會重繪，
+    // 只能換 key 重掛，讓側欄依 props（實際 sort_order）重新渲染。
+    s.reorderRoutes.mockResolvedValue(false)
+    const w = await mountView()
+    // 以 internal instance 的 uid 判斷是否 remount（findComponent 每次回新 proxy，
+    // reference 比較不可靠）
+    const before = w.findComponent({ name: 'BusRouteSidebar' }).vm.$.uid
+    w.findComponent({ name: 'BusRouteSidebar' }).vm.$emit('reorder', {
+      direction: 'morning', ids: [5, 3],
+    })
+    await flushPromises()
+    expect(w.findComponent({ name: 'BusRouteSidebar' }).vm.$.uid).not.toBe(before)
+  })
+
+  it('reorder 成功時不重掛（重掛會丟 draggable 的動畫與 scroll 位置）', async () => {
+    s.reorderRoutes.mockResolvedValue(true)
+    const w = await mountView()
+    const before = w.findComponent({ name: 'BusRouteSidebar' }).vm.$.uid
+    w.findComponent({ name: 'BusRouteSidebar' }).vm.$emit('reorder', {
+      direction: 'morning', ids: [5, 3],
+    })
+    await flushPromises()
+    expect(w.findComponent({ name: 'BusRouteSidebar' }).vm.$.uid).toBe(before)
   })
 })

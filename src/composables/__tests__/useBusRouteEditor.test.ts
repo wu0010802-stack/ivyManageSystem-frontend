@@ -788,4 +788,28 @@ describe('registerExtraDirty', () => {
     expect(await editor.copyFromRoute(5)).toBe(false)
     expect(copyBusRouteFrom).not.toHaveBeenCalled()
   })
+
+  it('**只有**表單 dirty 時，改班次設定不彈確認——表單變更就是這次要送出的 payload，不是要捨棄的東西', async () => {
+    // 若這裡看 anyDirty，「儲存班次設定」按下去（表單必然有變更）每次都會彈出
+    // 「捨棄變更」對話框，且按「留在這裡」反而取消儲存——語意顛倒。
+    const editor = await boot()
+    editor.registerExtraDirty(() => true)
+    expect(editor.dirty.value).toBe(false)
+    expect(editor.anyDirty.value).toBe(true)
+    vi.mocked(updateBusRoute).mockResolvedValue({ data: {} } as never)
+    const ok = await editor.updateRoute(3, { capacity: 18 })
+    expect(ok).toBe(true)
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(updateBusRoute).toHaveBeenCalledWith(3, { capacity: 18 })
+  })
+
+  it('只有表單 dirty 時，reorder 也不彈確認（表單只在換班次時重置，同 id 重讀動不到它）', async () => {
+    const editor = await boot([routeA(), routeA({ id: 5, name: '早 B', stops: [] })])
+    editor.registerExtraDirty(() => true)
+    vi.mocked(reorderBusRoutes).mockResolvedValue(routesPayload([]) as never)
+    const ok = await editor.reorderRoutes([5, 3])
+    expect(ok).toBe(true)
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(reorderBusRoutes).toHaveBeenCalled()
+  })
 })

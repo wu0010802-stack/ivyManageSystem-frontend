@@ -42,7 +42,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [id: number | null]
-  resolved: [payload: { id: number | null; lat: number | null; lng: number | null; address: string }]
+  /**
+   * `reason` 讓頁面分辨兩種選定：`'selected'`＝使用者主動選了一筆（頁面可以收
+   * Dialog）；`'fallback'`＝刪除「目前選中」的地址後被動退回住家（使用者還在
+   * 管理地址簿，頁面不該把整個 Dialog 關掉）。
+   */
+  resolved: [payload: {
+    id: number | null
+    lat: number | null
+    lng: number | null
+    address: string
+    reason: 'selected' | 'fallback'
+  }]
 }>()
 
 const options = ref<PickupAddressOption[]>([])
@@ -146,7 +157,7 @@ watch(() => props.studentId, () => {
   void load()
 }, { immediate: true })
 
-function onSelect(raw: number): void {
+function onSelect(raw: number, reason: 'selected' | 'fallback' = 'selected'): void {
   const id = raw === HOME_VALUE ? null : raw
   emit('update:modelValue', id)
   const option = sortedOptions.value.find((o) => o.id === id)
@@ -156,6 +167,7 @@ function onSelect(raw: number): void {
     lat: option.lat,
     lng: option.lng,
     address: option.address ?? (option.is_home ? (props.homeAddress ?? '') : ''),
+    reason,
   })
 }
 
@@ -208,7 +220,8 @@ async function onDelete(id: number): Promise<void> {
   deletingId.value = id
   try {
     await deleteStudentPickupAddress(props.studentId, id)
-    if (props.modelValue === id) onSelect(HOME_VALUE)
+    // 被動退回住家（不能留一個指向已刪除地址的 id）；標 fallback，頁面不關 Dialog。
+    if (props.modelValue === id) onSelect(HOME_VALUE, 'fallback')
     await load()
     ElMessage.success('已刪除接送地址')
   } catch (e) {

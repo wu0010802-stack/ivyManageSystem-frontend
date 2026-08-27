@@ -44,10 +44,20 @@ import {
 const editor = useBusRouteEditor()
 const {
   routes, activeRoute, activeRouteId, stops, candidates, capacity,
-  loading, saving, creating, updatingRoute, reordering, optimizing, copying, dirty,
+  loading, saving, creating, updatingRoute, reordering, optimizing, recomputingEtas,
+  copying, dirty,
   missingCoordinateCount, staleAddressCount, overloadedWeekdays, copyConflicts,
   loadFailed, studentsFailed, anyDirty,
 } = editor
+
+/**
+ * 名單編輯的整組鎖：任何一支「完成後會 loadRoutes → resetEditing」的請求 in-flight
+ * 時，表格與 toolbar 的編輯入口一起鎖。表格 readonly 但 toolbar 還能按的話，
+ * 使用者在 recompute（Azure，可能跑數秒）期間加的站會被完成後的重讀無聲清掉。
+ */
+const editingLocked = computed(
+  () => saving.value || optimizing.value || recomputingEtas.value || copying.value,
+)
 
 const pickStudentId = ref<number | null>(null)
 const employees = ref<Array<{ id: number; name: string }>>([])
@@ -114,8 +124,16 @@ async function onSelectRoute(routeId: number): Promise<void> {
   await editor.selectRoute(routeId)
 }
 
+/**
+ * reorder 沒寫進去（確認被取消或 PATCH 失敗）時強制側欄重掛：vuedraggable 是單向
+ * `:model-value`，拖放已經動了 DOM，而 props 沒變不會觸發重繪（keyed diff 對相同
+ * key 順序也不會把 DOM 搬回來），畫面會停在「看起來排好了、實際上沒寫進去」的順序。
+ */
+const sidebarRenderKey = ref(0)
+
 async function onReorderRoutes(payload: { direction: BusDirection; ids: number[] }): Promise<void> {
-  await editor.reorderRoutes(payload.ids)
+  const ok = await editor.reorderRoutes(payload.ids)
+  if (!ok) sidebarRenderKey.value += 1
 }
 
 // ── 新增班次 Dialog（含「帶入其他班次名單」）────────────────────────────────
@@ -200,15 +218,28 @@ function openAddressDialog(index: number): void {
  * geocode 結果）。若不補這一段，選住家就等於把站點座標清空 → 該班次無法發車。
  * `POST /bus/routes/geocode` 正是為這條路徑保留的：依學生住址查座標，不落庫、
  * 隨名單一起儲存。查不到就明說要改用地圖微調，不留一個沒有下一步的死巷。
+ *
+ * **重選同一筆且站點已有座標時跳過 geocode**：原本就用住家、已用地圖微調好
+ * 上下車點的站，再點一次住家不能被巷弄級的 geocode 結果蓋回去（composable 的
+ * `setPickupAddress` 對 sameAddress 會保留既有座標，這裡不 geocode 它就不會被動）。
+ * 刪除地址退回住家的路徑不受影響——站點原本指向被刪的那筆，id 必不同，照樣重查。
  */
 async function onAddressResolved(
-  resolved: { id: number | null; lat: number | null; lng: number | null; address: string },
+  resolved: {
+    id: number | null
+    lat: number | null
+    lng: number | null
+    address: string
+    reason: 'selected' | 'fallback'
+  },
 ): Promise<void> {
   const index = addressStopIndex.value
   const stop = addressStop.value
   if (index === null || !stop) return
   let { lat, lng } = resolved
-  if (resolved.id === null && (lat === null || lng === null)) {
+  const sameAddressWithCoords =
+    resolved.id === stop.pickup_address_id && stop.lat !== null && stop.lng !== null
+  if (resolved.id === null && (lat === null || lng === null) && !sameAddressWithCoords) {
     try {
       const res = await geocodeBusStudent(stop.student_id)
       const data = (res as { data?: { lat?: number | null; lng?: number | null } }).data
@@ -224,7 +255,8 @@ async function onAddressResolved(
     }
   }
   editor.setPickupAddress(index, { id: resolved.id, lat, lng, address: resolved.address || null })
-  addressDialogVisible.value = false
+  // fallback（刪除選中地址被動退回住家）時使用者還在管理地址簿，不關 Dialog。
+  if (resolved.reason !== 'fallback') addressDialogVisible.value = false
 }
 
 // ── 地圖微調 Dialog ────────────────────────────────────────────────────────
@@ -423,6 +455,7 @@ const overloadedLabel = computed(() =>
 
     <div v-else class="bus-routes__layout">
       <BusRouteSidebar
+        :key="sidebarRenderKey"
         class="bus-routes__sidebar"
         :routes="routes"
         :active-route-id="activeRouteId"
@@ -460,29 +493,60 @@ const overloadedLabel = computed(() =>
         />
 
         <div class="bus-routes__toolbar">
+          <!--
+            編輯入口與表格的 readonly 同一組鎖（editingLocked）：這幾支請求完成後
+            都會重讀名冊而 resetEditing，in-flight 期間放行編輯等於邀請使用者做
+            一筆馬上會被無聲清掉的變更。
+          -->
           <el-select
             v-model="pickStudentId"
             filterable
             clearable
+            :disabled="editingLocked"
             placeholder="加入搭車學生"
             style="width: 220px"
             data-testid="bus-student-select"
           >
             <el-option v-for="s in candidates" :key="s.id" :label="s.name" :value="s.id" />
           </el-select>
-          <el-button :disabled="pickStudentId === null" data-testid="bus-add-stop" @click="onAddStop">
+          <el-button
+            :disabled="pickStudentId === null || editingLocked"
+            data-testid="bus-add-stop"
+            @click="onAddStop"
+          >
             加入
           </el-button>
-          <el-button data-testid="bus-copy-from" :loading="copying" @click="openCopyDialog">
+          <el-button
+            data-testid="bus-copy-from"
+            :loading="copying"
+            :disabled="editingLocked"
+            @click="openCopyDialog"
+          >
             帶入其他班次名單
           </el-button>
-          <el-button data-testid="bus-optimize" :loading="optimizing" @click="runOptimize">
+          <el-button
+            data-testid="bus-optimize"
+            :loading="optimizing"
+            :disabled="editingLocked"
+            @click="runOptimize"
+          >
             自動排序
           </el-button>
-          <el-button data-testid="bus-recompute-etas" :loading="optimizing" @click="onRecomputeEtas">
+          <el-button
+            data-testid="bus-recompute-etas"
+            :loading="recomputingEtas"
+            :disabled="editingLocked"
+            @click="onRecomputeEtas"
+          >
             重算預計抵達
           </el-button>
-          <el-button type="primary" :loading="saving" data-testid="bus-save" @click="onSave">
+          <el-button
+            type="primary"
+            :loading="saving"
+            :disabled="editingLocked"
+            data-testid="bus-save"
+            @click="onSave"
+          >
             儲存名單
           </el-button>
           <el-tag v-if="dirty" type="warning" data-testid="bus-dirty">尚未儲存</el-tag>
@@ -543,7 +607,7 @@ const overloadedLabel = computed(() =>
         <BusRouteStopsTable
           :stops="stops"
           :capacity="capacity"
-          :readonly="saving || optimizing"
+          :readonly="editingLocked"
           @reorder="editor.moveStop"
           @remove="editor.removeStop"
           @toggle-pinned="editor.togglePinned"

@@ -371,6 +371,16 @@ describe('PortalBusTripView — 班次列表四態（FE-PORTAL-02）', () => {
     expect(wrapper.find('[data-testid="bus-route-status-3"]').text()).toBe('未生成')
   })
 
+  it('depart_time 帶秒（後端 Time.isoformat 的實際形狀）時只顯示 HH:mm', async () => {
+    s.routes.value = [routeItem({ depart_time: '07:30:00' })]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const row = wrapper.find('[data-testid="bus-route-3"]')
+    expect(row.text()).toContain('07:30')
+    expect(row.text()).not.toContain('07:30:00')
+  })
+
   it('四態各自的徽章文案', async () => {
     s.routes.value = [
       routeItem({ id: 3, today_status: 'none' }),
