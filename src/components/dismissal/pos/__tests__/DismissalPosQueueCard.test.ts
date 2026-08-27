@@ -149,14 +149,37 @@ describe('DismissalPosQueueCard', () => {
       expect(w.text()).not.toContain('已通知教師端')
     })
 
-    describe('確認接送按鈕（T-022）', () => {
-      it('proxy 卡片帶 pickup_authorization_id 時顯示「確認接送」按鈕，點擊 emit confirm-pickup(item) 恰一次', async () => {
-        const item = proxyItem({
+    describe('確認接送按鈕（T-022，2026-08-23 改走 swipe reveal）', () => {
+      function proxyItemWithAuth(overrides: Partial<PosQueueItem> = {}) {
+        return proxyItem({
           call: { ...proxyItem().call!, pickup_authorization_id: 900 },
+          ...overrides,
         })
+      }
+
+      /** 向左滑動超過開啟閾值（此時 revealWidth=168，拖 120px≈71%>45% 已足夠），彈開露出鈕。 */
+      async function swipeOpen(w: ReturnType<typeof mount>) {
+        const body = withPointerCaptureStub(w)
+        await body.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1 }))
+        await body.dispatchEvent(new PointerEvent('pointermove', { clientX: -120, pointerId: 1 }))
+        await body.dispatchEvent(new PointerEvent('pointerup', { clientX: -120, pointerId: 1 }))
+      }
+
+      it('未滑開前不顯示「確認接送」按鈕文字（藏在 reveal 區），但按鈕已存在 DOM 且 disabled', () => {
+        const item = proxyItemWithAuth()
         const w = mount(DismissalPosQueueCard, { props: { item } })
         const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
         expect(btn.exists()).toBe(true)
+        expect(btn.attributes('disabled')).not.toBeUndefined()
+      })
+
+      it('proxy 卡片帶 pickup_authorization_id 時，滑開後點擊確認接送按鈕 emit confirm-pickup(item) 恰一次', async () => {
+        const item = proxyItemWithAuth()
+        const w = mount(DismissalPosQueueCard, { props: { item } })
+
+        await swipeOpen(w)
+        const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
+        expect(btn.attributes('disabled')).toBeUndefined()
 
         await btn.trigger('click')
 
@@ -165,34 +188,41 @@ describe('DismissalPosQueueCard', () => {
         expect(emitted?.[0]).toEqual([item])
       })
 
-      it('proxy 卡片缺 pickup_authorization_id 時不顯示按鈕（保守不呼叫後端）', () => {
+      it('proxy 卡片缺 pickup_authorization_id 時不渲染按鈕（保守不呼叫後端），reveal 區只有取消鈕', async () => {
         const item = proxyItem({
           call: { ...proxyItem().call!, pickup_authorization_id: null },
         })
         const w = mount(DismissalPosQueueCard, { props: { item } })
+        await swipeOpen(w)
         expect(w.find('[data-testid="pos-queue-card-confirm-pickup"]').exists()).toBe(false)
+        expect(w.find('.pos-queue-card__cancel-btn').exists()).toBe(true)
       })
 
-      it('非 proxy 卡片不顯示確認接送按鈕', () => {
+      it('非 proxy 卡片不渲染確認接送按鈕，reveal 區只有取消鈕', async () => {
         const w = mount(DismissalPosQueueCard, { props: { item: activeItem({ source: 'onsite' }) } })
+        await swipeOpen(w)
         expect(w.find('[data-testid="pos-queue-card-confirm-pickup"]').exists()).toBe(false)
+        expect(w.find('.pos-queue-card__cancel-btn').exists()).toBe(true)
       })
-    })
 
-    describe('確認接送按鈕防連點與 swipe 手勢隔離（review 修復，2026-08-23）', () => {
-      function proxyItemWithAuth(overrides: Partial<PosQueueItem> = {}) {
-        return proxyItem({
-          call: { ...proxyItem().call!, pickup_authorization_id: 900 },
-          ...overrides,
+      it('卡面顯示「左滑確認」提示；非 proxy 或缺 authId 時不顯示', () => {
+        const withHint = mount(DismissalPosQueueCard, { props: { item: proxyItemWithAuth() } })
+        expect(withHint.find('.pos-queue-card__swipe-hint').text()).toContain('左滑確認')
+
+        const withoutHint = mount(DismissalPosQueueCard, {
+          props: { item: activeItem({ source: 'onsite' }) },
         })
-      }
+        expect(withoutHint.find('.pos-queue-card__swipe-hint').exists()).toBe(false)
+      })
 
       it('confirming=true 時按鈕 disabled，點擊不會 emit confirm-pickup（防連點）', async () => {
         const item = proxyItemWithAuth()
         const w = mount(DismissalPosQueueCard, { props: { item, confirming: true } })
+        await swipeOpen(w)
         const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
 
         expect(btn.attributes('disabled')).not.toBeUndefined()
+        expect(btn.text()).toBe('確認中…')
 
         await btn.trigger('click')
 
@@ -202,6 +232,7 @@ describe('DismissalPosQueueCard', () => {
       it('confirming=false→true 轉換模擬連點：第二次點擊發生在 confirming 已變 true 後不再 emit', async () => {
         const item = proxyItemWithAuth()
         const w = mount(DismissalPosQueueCard, { props: { item, confirming: false } })
+        await swipeOpen(w)
         const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]')
 
         await btn.trigger('click')
@@ -209,23 +240,21 @@ describe('DismissalPosQueueCard', () => {
 
         // 呼叫端（composable）在第一次呼叫進行中會把 confirming 設回 true
         await w.setProps({ confirming: true })
-        await btn.trigger('click')
+        await w.find('[data-testid="pos-queue-card-confirm-pickup"]').trigger('click')
 
         // 仍只有第一次點擊觸發的那一筆
         expect(w.emitted('confirm-pickup')).toHaveLength(1)
       })
 
-      it('按鈕的 pointerdown 不會冒泡到卡片容器（不觸發 useSwipeReveal 的 setPointerCapture）', async () => {
+      it('點擊確認接送後不會自動收合（留在滑開狀態供失敗重試）', async () => {
         const item = proxyItemWithAuth()
         const w = mount(DismissalPosQueueCard, { props: { item } })
-        const body = withPointerCaptureStub(w)
-        const btn = w.find('[data-testid="pos-queue-card-confirm-pickup"]').element as HTMLElement
+        await swipeOpen(w)
 
-        btn.dispatchEvent(new PointerEvent('pointerdown', { clientX: 0, pointerId: 1, bubbles: true }))
-        await w.vm.$nextTick()
+        await w.find('[data-testid="pos-queue-card-confirm-pickup"]').trigger('click')
 
-        // body 是 useSwipeReveal 的 onPointerDown 綁定對象；若事件冒泡上去會呼叫 setPointerCapture
-        expect(body.setPointerCapture).not.toHaveBeenCalled()
+        expect(w.find('[data-testid="pos-queue-card-confirm-pickup"]').attributes('disabled')).toBeUndefined()
+        expect(w.find('.pos-queue-card__cancel-btn').attributes('disabled')).toBeUndefined()
       })
     })
   })

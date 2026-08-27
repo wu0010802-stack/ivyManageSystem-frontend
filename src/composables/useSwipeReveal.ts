@@ -26,12 +26,16 @@ const DEFAULT_OPEN_THRESHOLD_RATIO = 0.45
  *   const { dragX, isOpen, reboundInstant, onPointerDown, onPointerMove, onPointerUp, close } =
  *     useSwipeReveal()
  *   // 按鈕 click handler 中：emit('cancel', item); close()
+ *
+ * revealWidth 也可傳 getter（() => number）而非固定數字：同一張卡片（同一 composable
+ * 實例）背後露出的按鈕數量可能隨 props 變化（如 proxy 卡片從只有取消鈕變成取消+確認
+ * 兩顆），用 getter 讓每次讀取都拿到當下寬度，而不是 mount 當下就凍結的舊值。
  */
 export function useSwipeReveal({
   revealWidth = DEFAULT_REVEAL_WIDTH,
   openThresholdRatio = DEFAULT_OPEN_THRESHOLD_RATIO,
 }: {
-  revealWidth?: number
+  revealWidth?: number | (() => number)
   openThresholdRatio?: number
 } = {}) {
   const dragX = ref(0)
@@ -44,8 +48,12 @@ export function useSwipeReveal({
   let baseOffset = 0
   let activePointerId: number | null = null
 
+  function currentRevealWidth() {
+    return typeof revealWidth === 'function' ? revealWidth() : revealWidth
+  }
+
   function restingX() {
-    return isOpen.value ? -revealWidth : 0
+    return isOpen.value ? -currentRevealWidth() : 0
   }
 
   function onPointerDown(e: PointerEvent) {
@@ -67,7 +75,7 @@ export function useSwipeReveal({
   function onPointerMove(e: PointerEvent) {
     if (!dragging.value || e.pointerId !== activePointerId) return
     const delta = e.clientX - startX
-    dragX.value = Math.min(0, Math.max(-revealWidth, baseOffset + delta))
+    dragX.value = Math.min(0, Math.max(-currentRevealWidth(), baseOffset + delta))
   }
 
   function onPointerUp(e: PointerEvent) {
@@ -78,7 +86,7 @@ export function useSwipeReveal({
       target.releasePointerCapture?.(e.pointerId)
     }
 
-    const ratio = Math.abs(dragX.value) / revealWidth
+    const ratio = Math.abs(dragX.value) / currentRevealWidth()
     isOpen.value = ratio >= openThresholdRatio
 
     dragging.value = false

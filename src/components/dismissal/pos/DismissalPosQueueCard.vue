@@ -19,20 +19,21 @@
  * formatExpectedArrival/etaRelativeText，也不套用「老師已收到」兩階段等候文案
  * （那是給家長/現場通知用的，proxy 走的是完全不同的核銷流程）。
  *
- * 確認接送（T-022，D10④）：proxy 卡片在代理人姓名／明碼取件碼旁新增「確認接送」
- * 按鈕，辦公室人員目視比對本卡明碼與代理人所述一致後一鍵確認，不重新輸入 6 碼。
- * 點擊 emit confirm-pickup(item)，呼叫端（DismissalPosQueuePanel → DismissalPosBoard）
- * 轉呼叫 useDismissalPosQueue.confirmProxyPickup 打 confirm-visual-match。與 swipe
- * 取消是兩個獨立動作，proxy 卡片仍保留既有 swipe 手勢露出取消鈕的能力。
+ * 確認接送（T-022，D10④，2026-08-23 改走 swipe reveal）：辦公室人員目視比對本卡
+ * 明碼與代理人所述一致後一鍵確認，不重新輸入 6 碼。按鈕不再常駐卡面，改與取消鈕
+ * 一起收在向左滑開的 reveal 區（僅 proxy 卡片才有，非 proxy 只有取消鈕），滑開後
+ * 點擊才 emit confirm-pickup(item)；呼叫端（DismissalPosQueuePanel → DismissalPosBoard）
+ * 轉呼叫 useDismissalPosQueue.confirmProxyPickup 打 confirm-visual-match。卡面另外
+ * 顯示「左滑確認」提示文字，告知辦公室人員動作藏在哪裡。revealWidth 依 showConfirmButton
+ * 動態切換（僅取消鈕 84 vs 確認+取消 168）——同一張卡可能在 mount 後從 staging 轉
+ * active 而讓 showConfirmButton 由 false 變 true，故傳 getter 而非固定數字給
+ * useSwipeReveal，讓寬度跟著目前狀態走。
  *
- * 按鈕 review 修復（2026-08-23）：
- *  - `confirming` prop（呼叫端傳入 useDismissalPosQueue.confirmingIds 的 membership）
- *    在呼叫進行中 disable 按鈕，防止連點在第一次 confirm-visual-match resolve 前
- *    發出第二次請求（打破『呼叫端點恰一次』acceptance criteria）。
- *  - 按鈕加 `@pointerdown.stop`：body 容器綁了 useSwipeReveal 的 onPointerDown
- *    （內部 setPointerCapture），事件會從按鈕冒泡上去，一旦容器對這次互動
- *    setPointerCapture，後續 pointer 事件會被導向 capturing element 而非按鈕，
- *    在觸控裝置上可能讓點擊失效或不穩定。stop 讓這次 pointerdown 不冒泡到容器。
+ * `confirming` prop（呼叫端傳入 useDismissalPosQueue.confirmingIds 的 membership）
+ * 在呼叫進行中 disable 確認鈕，防止連點在第一次 confirm-visual-match resolve 前
+ * 發出第二次請求（打破『呼叫端點恰一次』acceptance criteria）。點擊後刻意不主動
+ * close()（不同於取消鈕）：失敗時（如已被搶先核銷）卡片留在滑開狀態，讓使用者能
+ * 直接再點一次重試，不必重新滑開。
  */
 import { computed } from 'vue'
 import {
@@ -96,6 +97,13 @@ const showConfirmButton = computed(
   () => isProxy.value && props.item.phase === 'active' && typeof proxyAuthId.value === 'number',
 )
 
+/** reveal 區寬度：與內部按鈕實際佔用寬度一一對齊，見下方 CANCEL_BTN_WIDTH / CONFIRM_BTN_WIDTH。 */
+const CANCEL_BTN_WIDTH = 84
+const CONFIRM_BTN_WIDTH = 84
+const revealWidth = computed(() =>
+  showConfirmButton.value ? CANCEL_BTN_WIDTH + CONFIRM_BTN_WIDTH : CANCEL_BTN_WIDTH,
+)
+
 /** 家長預約且尚未抵達：顯示 ETA，不顯示「已通知教師端」等候標記。proxy 一律不算 preArrival（見檔頭註解）。 */
 const preArrival = computed(
   () =>
@@ -151,7 +159,7 @@ const {
   onPointerUp,
   onPointerCancel,
   close,
-} = useSwipeReveal()
+} = useSwipeReveal({ revealWidth: () => revealWidth.value })
 
 /** done 卡沒有取消語意：不進入 swipe 手勢，卡片維持靜止。 */
 function handlePointerDown(e: PointerEvent) {
@@ -176,6 +184,17 @@ const bodyStyle = computed(() => ({
     :class="[`pos-queue-card--${item.source}`, { 'pos-queue-card--done': isDone }]"
   >
     <div v-if="!isDone" class="pos-queue-card__reveal">
+      <button
+        v-if="showConfirmButton"
+        type="button"
+        class="pos-queue-card__confirm-reveal-btn"
+        data-testid="pos-queue-card-confirm-pickup"
+        :disabled="!isOpen || confirming"
+        :tabindex="isOpen ? 0 : -1"
+        @click="handleConfirmClick"
+      >
+        {{ confirming ? '確認中…' : '確認接送' }}
+      </button>
       <button
         type="button"
         class="pos-queue-card__cancel-btn"
@@ -207,23 +226,8 @@ const bodyStyle = computed(() => ({
       </div>
 
       <div v-if="isProxy && (proxyPersonLabel || proxyPickupCode)" class="pos-queue-card__proxy-info">
-        <div class="pos-queue-card__proxy-detail">
-          <span v-if="proxyPersonLabel" class="pos-queue-card__proxy-person">{{ proxyPersonLabel }}</span>
-          <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
-        </div>
-        <el-button
-          v-if="showConfirmButton"
-          type="primary"
-          size="small"
-          class="pos-queue-card__confirm-btn"
-          data-testid="pos-queue-card-confirm-pickup"
-          :loading="confirming"
-          :disabled="confirming"
-          @pointerdown.stop
-          @click="handleConfirmClick"
-        >
-          確認接送
-        </el-button>
+        <span v-if="proxyPersonLabel" class="pos-queue-card__proxy-person">{{ proxyPersonLabel }}</span>
+        <span v-if="proxyPickupCode" class="pos-queue-card__proxy-code">取件碼 {{ proxyPickupCode }}</span>
       </div>
 
       <DismissalPosCountdownBar
@@ -242,6 +246,10 @@ const bodyStyle = computed(() => ({
         :class="{ 'pos-queue-card__waiting-flag--ack': isAcknowledged }"
       >
         <span class="pos-queue-card__waiting-dot" aria-hidden="true" />{{ waitingText }}
+      </div>
+
+      <div v-if="showConfirmButton" class="pos-queue-card__swipe-hint">
+        <span aria-hidden="true">←</span> 左滑確認
       </div>
     </div>
   </div>
@@ -281,6 +289,25 @@ const bodyStyle = computed(() => ({
 
 .pos-queue-card__cancel-btn:not(:disabled):hover {
   background: var(--color-danger-darker, #b91c1c);
+}
+
+.pos-queue-card__confirm-reveal-btn {
+  width: 84px;
+  border: none;
+  background: var(--brand-primary);
+  color: #fff;
+  font-size: var(--text-sm, 13px);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pos-queue-card__confirm-reveal-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.pos-queue-card__confirm-reveal-btn:not(:disabled):hover {
+  background: var(--brand-primary-hover);
 }
 
 .pos-queue-card__body {
@@ -341,14 +368,6 @@ const bodyStyle = computed(() => ({
 .pos-queue-card__proxy-info {
   margin-top: var(--space-2, 8px);
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2, 8px);
-}
-
-.pos-queue-card__proxy-detail {
-  width: 100%;
-  display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 10px;
@@ -366,8 +385,13 @@ const bodyStyle = computed(() => ({
   color: var(--text-primary);
 }
 
-.pos-queue-card__confirm-btn {
-  width: 100%;
+.pos-queue-card__swipe-hint {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 .pos-queue-card__eta-flag {
