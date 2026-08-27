@@ -5635,6 +5635,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/e2e/runtime-safety": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get E2E Runtime Safety
+         * @description 驗證實際 API process 與 request tenant 皆無外送能力。
+         *
+         *     端點只在明確 ``ENV=staging`` 存在；其他環境一律 404，避免把測試探針
+         *     當作一般管理功能。所有資料表查詢都帶 tenant filter，RLS 僅作縱深防禦。
+         */
+        get: operations["get_e2e_runtime_safety_api_e2e_runtime_safety_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees": {
         parameters: {
             query?: never;
@@ -8352,7 +8375,7 @@ export interface paths {
          *
          *     Returns:
          *         {
-         *             "code": "<8 位明碼，僅此次回傳>",
+         *             "code": "<明碼，僅此次回傳；長度見 _CODE_LENGTH（現為 12）>",
          *             "expires_at": "<24h 後的 ISO 時間>"
          *         }
          */
@@ -26418,6 +26441,40 @@ export interface components {
             /** Submitted At */
             submitted_at: string;
         };
+        /**
+         * E2ERuntimeSafetyResponse
+         * @description 只揭露安全布林，不回傳任何憑證、網域或租戶資料值。
+         */
+        E2ERuntimeSafetyResponse: {
+            /** Activity Email Disabled */
+            activity_email_disabled: boolean;
+            /** Explicit Staging */
+            explicit_staging: boolean;
+            /** External Delivery Disabled */
+            external_delivery_disabled: boolean;
+            /** Line Credentials Absent */
+            line_credentials_absent: boolean;
+            /** Ops Line Credentials Absent */
+            ops_line_credentials_absent: boolean;
+            /** Resend Credentials Absent */
+            resend_credentials_absent: boolean;
+            /** Safe */
+            safe: boolean;
+            /** Scheduler Api Only */
+            scheduler_api_only: boolean;
+            /** Sentry Credentials Absent */
+            sentry_credentials_absent: boolean;
+            /** Tenant Base Domain Configured */
+            tenant_base_domain_configured: boolean;
+            /** Tenant Claim Enforced */
+            tenant_claim_enforced: boolean;
+            /** Tenant Email Delivery Disabled */
+            tenant_email_delivery_disabled: boolean;
+            /** Tenant Header Enforced */
+            tenant_header_enforced: boolean;
+            /** Tenant Line Delivery Disabled */
+            tenant_line_delivery_disabled: boolean;
+        };
         /** EducationCreate */
         EducationCreate: {
             /** Degree */
@@ -42537,6 +42594,28 @@ export interface components {
             /** Source Ref */
             source_ref: string;
         };
+        /** SystemConfigOut */
+        SystemConfigOut: {
+            /** Config Key */
+            config_key: string;
+            /**
+             * Config Type
+             * @default general
+             */
+            config_type: string;
+            /** Config Value */
+            config_value: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is Default
+             * @description True=DB 無此 key，目前顯示的是預設值
+             * @default false
+             */
+            is_default: boolean;
+            /** Updated At */
+            updated_at?: string | null;
+        };
         /** SystemConfigUpdate */
         SystemConfigUpdate: {
             /** Config Value */
@@ -52791,6 +52870,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_e2e_runtime_safety_api_e2e_runtime_safety_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2ERuntimeSafetyResponse"];
                 };
             };
         };
@@ -76013,7 +76112,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SystemConfigOut"];
                 };
             };
             /** @description Validation Error */
