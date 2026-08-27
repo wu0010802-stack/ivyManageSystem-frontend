@@ -51,9 +51,10 @@ const STEPS: StepDef[] = [
 const route = useRoute()
 const router = useRouter()
 const now = new Date()
+const routeNumber = (value: unknown): number => Number(Array.isArray(value) ? value[0] : value)
 const query = reactive({
-    year: Number(route.query.year) || now.getFullYear(),
-    month: Number(route.query.month) || now.getMonth() + 1,
+    year: routeNumber(route.query.year) || now.getFullYear(),
+    month: routeNumber(route.query.month) || now.getMonth() + 1,
 })
 const yearOptions = computed(() => [query.year - 1, query.year, query.year + 1])
 
@@ -77,7 +78,19 @@ const goManual = (i: number) => {
     go(i)
 }
 // 年/月切換時同步到 URL（深連結可分享、重整不掉狀態）
-watch(() => [query.year, query.month], () => go(stepIndex.value))
+watch(() => [query.year, query.month], ([year, month]) => {
+    if (routeNumber(route.query.year) === year && routeNumber(route.query.month) === month) return
+    go(stepIndex.value)
+})
+// 同一路由只改 query 時 Vue Router 會重用元件；同步外部 deep-link／上一頁／下一頁，
+// 否則 URL 已換月但結薪畫面與 composable 仍停在舊月份。
+watch(() => [route.query.year, route.query.month], ([routeYear, routeMonth]) => {
+    const year = routeNumber(routeYear)
+    const month = routeNumber(routeMonth)
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return
+    if (query.year !== year) query.year = year
+    if (query.month !== month) query.month = month
+})
 
 const settlement = useSalarySettlement(toRef(query, 'year'), toRef(query, 'month'))
 provide('settlement', settlement)
