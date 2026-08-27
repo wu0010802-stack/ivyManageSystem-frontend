@@ -226,11 +226,11 @@ function onDragChange(evt: DragChangeEvent): void {
       </ul>
     </section>
 
-    <!-- ── 待接送：可拖拉重排（拖拉＝該站自動釘選，由後端在同一次 PATCH 完成） ── -->
+    <!-- ── 待接送：可拖拉重排（2026-08-27 起**不動釘選**，釘選一律手動維護） ── -->
     <section class="bus-dispatch-stops__section">
       <h4 class="bus-dispatch-stops__heading">
         待接送順序
-        <span v-if="editable" class="bus-dispatch-stops__hint">（拖拉調整順序，調整後該站會自動釘選）</span>
+        <span v-if="editable" class="bus-dispatch-stops__hint">（拖拉調整順序；釘選狀態沿用班次名單，不會因為調整順序而改變）</span>
       </h4>
       <!--
         拖拉是 controlled 用法：放手後列會先彈回原位，等 PATCH 回來才真的重排。

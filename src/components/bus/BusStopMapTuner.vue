@@ -127,7 +127,7 @@ onBeforeUnmount(destroyMap)
     @close="emit('cancel')"
   >
     <p class="bus-stop-map-tuner__hint" data-test="tune-hint">
-      {{ label }}：地址定位只到巷弄層級，請拖曳到實際位置。
+      {{ label }}：若定位跟實際上下車點有落差，請拖曳圖釘微調。
     </p>
     <!--
       role 用 region 而非 img：img 會讓容器內容變 presentational，連 Leaflet 的

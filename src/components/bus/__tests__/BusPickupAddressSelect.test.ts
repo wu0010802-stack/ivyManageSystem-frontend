@@ -5,6 +5,7 @@ import ElementPlus from 'element-plus'
 vi.mock('@/api/bus', () => ({
   listStudentPickupAddresses: vi.fn(),
   createStudentPickupAddress: vi.fn(),
+  updateStudentPickupAddress: vi.fn(),
   deleteStudentPickupAddress: vi.fn(),
 }))
 vi.mock('element-plus', async () => {
@@ -17,7 +18,8 @@ vi.mock('element-plus', async () => {
 })
 
 import {
-  listStudentPickupAddresses, createStudentPickupAddress, deleteStudentPickupAddress,
+  listStudentPickupAddresses, createStudentPickupAddress, updateStudentPickupAddress,
+  deleteStudentPickupAddress,
 } from '@/api/bus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import BusPickupAddressSelect from '../BusPickupAddressSelect.vue'
@@ -99,6 +101,41 @@ describe('BusPickupAddressSelect', () => {
       label: '安親班', address: '高雄市苓雅區某路 3 號',
     })
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([11])
+    expect(w.find('[data-test="create-form"]').exists()).toBe(false)
+  })
+
+  it('點編輯會把既有 label／地址帶入表單，送出時呼叫更新而非新增', async () => {
+    const updated = { id: 7, label: '阿嬤家（新）', address: '高雄市左營區某街 9 號', lat: 22.9, lng: 120.6, is_home: false }
+    vi.mocked(updateStudentPickupAddress).mockResolvedValue({ data: updated } as never)
+    vi.mocked(listStudentPickupAddresses)
+      .mockResolvedValueOnce(addressesPayload([HOME, GRANDMA]) as never)
+      .mockResolvedValueOnce(addressesPayload([HOME, updated]) as never)
+    const w = await mountSelect()
+    await w.find('[data-test="edit-7"]').trigger('click')
+    expect((w.find('[data-test="new-label"]').element as HTMLInputElement).value).toBe('阿嬤家')
+    expect((w.find('[data-test="new-address"]').element as HTMLInputElement).value)
+      .toBe('高雄市左營區某街 2 號')
+
+    await w.find('[data-test="new-label"]').setValue('阿嬤家（新）')
+    await w.find('[data-test="new-address"]').setValue('高雄市左營區某街 9 號')
+    await w.find('[data-test="create-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(updateStudentPickupAddress).toHaveBeenCalledWith(101, 7, {
+      label: '阿嬤家（新）', address: '高雄市左營區某街 9 號',
+    })
+    expect(createStudentPickupAddress).not.toHaveBeenCalled()
+    expect(w.emitted('update:modelValue')?.at(-1)).toEqual([7])
+    expect(ElMessage.success).toHaveBeenCalledWith(expect.stringContaining('更新'))
+    expect(w.find('[data-test="create-form"]').exists()).toBe(false)
+  })
+
+  it('取消編輯不會呼叫更新，也不影響原資料', async () => {
+    const w = await mountSelect()
+    await w.find('[data-test="edit-7"]').trigger('click')
+    await w.find('[data-test="new-label"]').setValue('隨便改改')
+    await w.find('[data-test="cancel-create-btn"]').trigger('click')
+    expect(updateStudentPickupAddress).not.toHaveBeenCalled()
     expect(w.find('[data-test="create-form"]').exists()).toBe(false)
   })
 

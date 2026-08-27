@@ -91,6 +91,13 @@ export interface DispatchPlan {
    * 這個欄位）。要判斷 ETA 是否過期請用 composable 的 `etaStale`。
    */
   eta_may_be_stale: boolean
+  /**
+   * 這班次的 `pending`／`excused` 站是否已落後於「路線名單現在應該長怎樣」
+   * （懶生成只在 trip 首次建立時跑一次，之後路線名單/接送地址的異動不會回填，
+   * 見後端 `services/bus_daily_plan.py::is_roster_out_of_sync` docstring）。
+   * True 時應提示「請按重設同步」——這是軟提示，重設本身仍會另外二次確認。
+   */
+  roster_out_of_sync: boolean
   route_name: string
   direction: BusDirection
   depart_time: string
@@ -209,6 +216,14 @@ export function useBusDailyDispatch() {
     return plan.eta_may_be_stale || plan.stops.some((s) => s.status === 'excused')
   })
 
+  /**
+   * 目前選中班次是否落後於路線名單（見 `DispatchPlan.roster_out_of_sync`）。
+   * 直接讀伺服器快照——`patchStops` 的回應（`DailyPlanStopsPatchOut`）不帶這個
+   * 欄位（比照 `eta_may_be_stale` 的既有處理：非重設的當日編輯不即時重算，
+   * 下次重載自然會更新），`resetPlan` 成功後另外顯式清成 `false`（見下方）。
+   */
+  const rosterOutOfSync = computed(() => selectedPlan.value?.roster_out_of_sync ?? false)
+
   /** 目前選中班次的載客數（departed + pending）。 */
   const departedPending = computed(() => departedPendingCount(selectedPlan.value?.stops ?? []))
 
@@ -278,6 +293,7 @@ export function useBusDailyDispatch() {
         calendar_warnings: item.calendar_warnings,
         capacity: item.capacity.capacity,
         eta_may_be_stale: item.eta_may_be_stale,
+        roster_out_of_sync: item.roster_out_of_sync,
         route_name: meta?.name ?? `班次 #${item.trip.route_id}`,
         direction: asDirection(item.trip.direction),
         // 當日可改出發時間；未改時後端已從 route 複製，兩者相同
@@ -585,9 +601,14 @@ export function useBusDailyDispatch() {
       const res = await resetBusDailyPlan(plan.trip.id)
       // `DailyPlanResetOut` 只有 trip + stops（沒有 capacity）——載客數與超載警示
       // 因此一律由 `departedPendingCount(stops)` 現算，不存欄位（見該函式註解）。
+      // `roster_out_of_sync` 同理沒回傳，但重設的定義就是「依路線名單現況重建」，
+      // 重設完必為 in-sync，這裡可以直接斷言 `false`，不必等下次重載。
       plans.value = plans.value.map((p) => (
         p.trip.id === plan.trip.id
-          ? { ...p, trip: res.data.trip, stops: stripCoordinates(res.data.stops) }
+          ? {
+            ...p, trip: res.data.trip, stops: stripCoordinates(res.data.stops),
+            roster_out_of_sync: false,
+          }
           : p
       ))
       ElMessage.success('已重設為預設名單')
@@ -604,7 +625,7 @@ export function useBusDailyDispatch() {
 
   return {
     date, plans, selectedPlan, selectedTripId, loading, saving, loadFailed,
-    holidayNotice, etaStale, overCapacity, editable, inProgress, lockedByPermission,
+    holidayNotice, etaStale, rosterOutOfSync, overCapacity, editable, inProgress, lockedByPermission,
     optimizePreviewData, optimizing, optimizeError, lastError, departedPending,
     students, studentsLoading, studentsFailed, insertCandidates, loadStudents,
     load, setDate, selectTrip, canEdit,

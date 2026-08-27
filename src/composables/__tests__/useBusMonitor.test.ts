@@ -169,6 +169,36 @@ describe('進頁與快照', () => {
   })
 })
 
+describe('roster_out_of_sync（名單落後路線設定，提示去調度頁重設）', () => {
+  it('快照帶 roster_out_of_sync=true 時透傳給 view', async () => {
+    vi.mocked(getBusTripToday).mockResolvedValue({
+      data: { ...tripPayload().data, roster_out_of_sync: true },
+    } as never)
+    const m = await bootMonitor()
+    expect(m.rosterOutOfSync.value).toBe(true)
+  })
+
+  it('預設（後端沒帶或 false）不亮提示', async () => {
+    const m = await bootMonitor()
+    expect(m.rosterOutOfSync.value).toBe(false)
+  })
+
+  it('換路線先樂觀清成 false，等新路線的快照回來才校正', async () => {
+    vi.mocked(getBusTripToday).mockResolvedValue({
+      data: { ...tripPayload().data, roster_out_of_sync: true },
+    } as never)
+    const m = await bootMonitor()
+    expect(m.rosterOutOfSync.value).toBe(true)
+
+    vi.mocked(getBusTripToday).mockResolvedValue({
+      data: { ...tripPayload({ id: 9, route_id: 4 }).data, roster_out_of_sync: false },
+    } as never)
+    await m.selectRoute(4)
+    await flushPromises()
+    expect(m.rosterOutOfSync.value).toBe(false)
+  })
+})
+
 // ── 第二期契約（FE-DISPATCH-07）──
 // `on_leave` 即時衍生旗標退場，excused 落庫欄位接手；ETA 由 eta_planned（當日平移）
 // 與 eta_live（行進間重算）兩層構成。normalize 漏欄位的後果不是崩潰而是**靜默少一

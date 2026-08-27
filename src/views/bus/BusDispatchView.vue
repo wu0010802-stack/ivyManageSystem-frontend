@@ -41,7 +41,7 @@ import { busInProgressWriteLabel } from '@/constants/bus'
 const dispatch = useBusDailyDispatch()
 const {
   date, plans, selectedPlan, selectedTripId, loading, saving, loadFailed,
-  holidayNotice, etaStale, overCapacity, editable, inProgress, lockedByPermission,
+  holidayNotice, etaStale, rosterOutOfSync, overCapacity, editable, inProgress, lockedByPermission,
   optimizePreviewData, optimizing, optimizeError, lastError, departedPending,
   insertCandidates, studentsLoading, studentsFailed,
 } = dispatch
@@ -125,6 +125,7 @@ const optimizePreview = computed<OptimizePreview | null>(() => {
         pinned: current?.pinned ?? false,
         eta: s.eta_planned ?? null,
         moved: moved.has(s.student_id),
+        address: current?.address ?? null,
       }
     }),
     end_time_planned: preview.end_time_estimated ?? null,
@@ -396,6 +397,34 @@ onMounted(() => { void dispatch.load() })
             :closable="false"
             title="此班次已結束，名單為唯讀"
           />
+
+          <!--
+            懶生成只在 trip 首次建立時跑一次，之後路線名單／接送地址的異動不會
+            自動回填（見 useBusDailyDispatch.ts::rosterOutOfSync）——不提示的話
+            使用者只會看到「人數對不上」卻不知道為什麼、也不知道要做什麼。
+          -->
+          <el-alert
+            v-if="rosterOutOfSync && editable"
+            data-testid="bus-dispatch-roster-out-of-sync"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="班次名單有更新，此班次的名單/地址與路線設定不同步"
+          >
+            <template #default>
+              <p>路線管理的名單或接送地址在這個班次生成後被異動過，需要按「重設為預設名單」才會套用最新內容。</p>
+              <el-button
+                type="warning"
+                plain
+                size="small"
+                :loading="saving"
+                data-testid="bus-dispatch-roster-out-of-sync-reset"
+                @click="onReset"
+              >
+                立即重設
+              </el-button>
+            </template>
+          </el-alert>
 
           <el-alert
             v-if="overCapacity"

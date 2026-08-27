@@ -226,6 +226,29 @@ export const createStudentPickupAddress = (
   api.post(`/bus/students/${studentId}/pickup-addresses`, payload)
 
 /**
+ * 編輯接送地址（`PATCH …/{address_id}`）。
+ * 地址文字有異動才重新 geocode（只改 label 不必白打一次外部 API）；geocode
+ * 失敗時 `lat`/`lng` 回 null，語意比照新增——可後補，不代表編輯失敗。
+ */
+export const updateStudentPickupAddress = (
+  studentId: number,
+  addressId: number,
+  payload: ApiBody<'/bus/students/{student_id}/pickup-addresses/{address_id}', 'patch'>,
+): AxiosResp<'/bus/students/{student_id}/pickup-addresses/{address_id}', 'patch'> =>
+  api.patch(`/bus/students/${studentId}/pickup-addresses/${addressId}`, payload)
+
+/**
+ * 重新定位（`POST …/{address_id}/relocate`）：地址文字不變，無條件重跑一次
+ * geocode。跟 `updateStudentPickupAddress` 的差異是後者只在文字**有改**才重查；
+ * 這支端點文字沒改也重查，供「尚未定位」或懷疑座標不準時手動重試。
+ */
+export const relocateStudentPickupAddress = (
+  studentId: number,
+  addressId: number,
+): AxiosResp<'/bus/students/{student_id}/pickup-addresses/{address_id}/relocate', 'post'> =>
+  api.post(`/bus/students/${studentId}/pickup-addresses/${addressId}/relocate`)
+
+/**
  * 刪除接送地址（`DELETE …/{address_id}`，204 無 body）。
  * 被任何 `pickup_address_id`（班次名單或未完成當日站點）引用中的地址禁刪，
  * 422 訊息列出引用班次——呼叫端直接呈現後端訊息，不自行推測。

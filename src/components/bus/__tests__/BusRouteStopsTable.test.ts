@@ -81,6 +81,12 @@ describe('BusRouteStopsTable', () => {
     ).toBeUndefined()
   })
 
+  it('點「重新定位」emit relocate(index)，供頁面對這一站目前的地址無條件重查一次', async () => {
+    const w = mountTable([stop(), stop({ student_id: 102, seq: 2 })])
+    await w.find('[data-test="relocate-102"]').trigger('click')
+    expect(w.emitted('relocate')?.[0]).toEqual([1])
+  })
+
   it('聯絡人欄在後端未回該欄位時顯示「—」，不是空白或崩潰', () => {
     expect(mountTable([stop()]).find('[data-test="contacts-cell"]').text()).toBe('—')
     const w = mountTable([stop({ contacts: [{ name: '媽媽', phone: '0912345678' }] })])
@@ -107,6 +113,19 @@ describe('BusRouteStopsTable', () => {
     expect(w.find('[data-test="pin-101"]').attributes('aria-pressed')).toBe('true')
     await w.find('[data-test="pin-101"]').trigger('click')
     expect(w.emitted('toggle-pinned')?.[0]).toEqual([0])
+  })
+
+  /**
+   * 2026-08-27 起釘選一律手動（調整順序不再自動釘選），釘選鈕因此從獨立欄位
+   * 移進操作欄，與設定接送地址／重新定位／地圖微調／移除同排。
+   */
+  it('釘選鈕在操作欄內，表頭不再有獨立的釘選欄', () => {
+    const w = mountTable([stop()])
+    const actions = w.find('.bus-route-stops-table__actions')
+    expect(actions.exists()).toBe(true)
+    expect(actions.find('[data-test="pin-101"]').exists()).toBe(true)
+    expect(actions.find('[data-test="remove-101"]').exists()).toBe(true)
+    expect(w.findAll('thead th').map((th) => th.text())).not.toContain('釘選')
   })
 
   it('拖拉只 emit reorder(from, to)，元件本身不改 pinned（由 composable 決定）', async () => {
@@ -204,6 +223,7 @@ describe('BusRouteStopsTable', () => {
   it('readonly 時所有編輯操作 disabled', () => {
     const w = mountTable([stop()], 20, true)
     expect(w.find('[data-test="pick-address-101"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-test="relocate-101"]').attributes('disabled')).toBeDefined()
     expect(w.find('[data-test="remove-101"]').attributes('disabled')).toBeDefined()
     expect(w.find('[data-test="pin-101"]').attributes('disabled')).toBeDefined()
   })

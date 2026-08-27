@@ -82,6 +82,8 @@ vi.mock('@/api/employees', () => ({ getEmployees: vi.fn() }))
 vi.mock('@/api/bus', () => ({
   listStudentPickupAddresses: vi.fn().mockResolvedValue({ data: { addresses: [] } }),
   createStudentPickupAddress: vi.fn(),
+  updateStudentPickupAddress: vi.fn(),
+  relocateStudentPickupAddress: vi.fn(),
   deleteStudentPickupAddress: vi.fn(),
   geocodeBusStudent: vi.fn(),
   getBusSettings: vi.fn().mockResolvedValue({ data: { school_lat: 22.6, school_lng: 120.3 } }),
@@ -99,7 +101,7 @@ vi.mock('vue-router', () => ({ onBeforeRouteLeave: vi.fn() }))
 
 import { onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { geocodeBusStudent } from '@/api/bus'
+import { geocodeBusStudent, relocateStudentPickupAddress } from '@/api/bus'
 import { getEmployees } from '@/api/employees'
 import BusRoutesView from '@/views/BusRoutesView.vue'
 
@@ -345,6 +347,85 @@ describe('BusRoutesView — 住家地址沒有座標時補 geocode', () => {
     expect(dialog?.props('modelValue')).toBe(true)
     await pickAddress(w, { id: null, lat: 22.65, lng: 120.35, address: '住家地址', reason: 'selected' })
     expect(dialog?.props('modelValue')).toBe(false)
+  })
+})
+
+describe('BusRoutesView — 接送地址 Dialog 內重新定位', () => {
+  function openDialogAndRelocate(
+    w: ReturnType<typeof mount>, payload: { id: number; lat: number | null; lng: number | null },
+  ) {
+    w.findComponent({ name: 'BusRouteStopsTable' }).vm.$emit('pick-address', 0)
+    return w.vm.$nextTick().then(() => {
+      w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('relocated', payload)
+      return flushPromises()
+    })
+  }
+
+  it('重新定位的地址正是這一站目前用的那筆，直接覆寫座標（跳過 sameAddress 保護）', async () => {
+    s.stops.value = [stop({ pickup_address_id: 7, lat: 22.61, lng: 120.31 })]
+    const w = await mountView()
+    await openDialogAndRelocate(w, { id: 7, lat: 22.9, lng: 120.6 })
+    expect(s.setCoordinates).toHaveBeenCalledWith(101, 22.9, 120.6)
+  })
+
+  it('重新定位的地址不是這一站目前用的那筆（純管理地址簿），不動這一站的座標', async () => {
+    s.stops.value = [stop({ pickup_address_id: 7, lat: 22.61, lng: 120.31 })]
+    const w = await mountView()
+    await openDialogAndRelocate(w, { id: 9, lat: 22.9, lng: 120.6 })
+    expect(s.setCoordinates).not.toHaveBeenCalled()
+  })
+
+  it('重新定位仍查無座標，不寫入 null 座標', async () => {
+    s.stops.value = [stop({ pickup_address_id: 7, lat: 22.61, lng: 120.31 })]
+    const w = await mountView()
+    await openDialogAndRelocate(w, { id: 7, lat: null, lng: null })
+    expect(s.setCoordinates).not.toHaveBeenCalled()
+  })
+})
+
+describe('BusRoutesView — 名單表格「重新定位」', () => {
+  it('住家地址（pickup_address_id 為 null）重新定位走 geocodeBusStudent', async () => {
+    s.stops.value = [stop({ pickup_address_id: null })]
+    vi.mocked(geocodeBusStudent).mockResolvedValue({ data: { lat: 22.9, lng: 120.6 } } as never)
+    const w = await mountView()
+    w.findComponent({ name: 'BusRouteStopsTable' }).vm.$emit('relocate', 0)
+    await flushPromises()
+    expect(geocodeBusStudent).toHaveBeenCalledWith(101)
+    expect(relocateStudentPickupAddress).not.toHaveBeenCalled()
+    expect(s.setCoordinates).toHaveBeenCalledWith(101, 22.9, 120.6)
+    expect(ElMessage.success).toHaveBeenCalledWith(expect.stringContaining('已重新定位'))
+  })
+
+  it('地址簿地址（pickup_address_id 非 null）重新定位走 relocate 端點', async () => {
+    s.stops.value = [stop({ pickup_address_id: 7 })]
+    vi.mocked(relocateStudentPickupAddress).mockResolvedValue({ data: { lat: 22.9, lng: 120.6 } } as never)
+    const w = await mountView()
+    w.findComponent({ name: 'BusRouteStopsTable' }).vm.$emit('relocate', 0)
+    await flushPromises()
+    expect(relocateStudentPickupAddress).toHaveBeenCalledWith(101, 7)
+    expect(geocodeBusStudent).not.toHaveBeenCalled()
+    expect(s.setCoordinates).toHaveBeenCalledWith(101, 22.9, 120.6)
+  })
+
+  it('重新定位仍查無座標要提示改用地圖微調，不寫入座標', async () => {
+    s.stops.value = [stop({ pickup_address_id: 7 })]
+    vi.mocked(relocateStudentPickupAddress).mockResolvedValue({ data: { lat: null, lng: null } } as never)
+    const w = await mountView()
+    w.findComponent({ name: 'BusRouteStopsTable' }).vm.$emit('relocate', 0)
+    await flushPromises()
+    expect(s.setCoordinates).not.toHaveBeenCalled()
+    expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('地圖微調'))
+  })
+
+  it('重新定位 API 失敗要顯示錯誤訊息', async () => {
+    s.stops.value = [stop({ pickup_address_id: 7 })]
+    vi.mocked(relocateStudentPickupAddress).mockRejectedValue({
+      response: { status: 500, data: { detail: 'boom' } },
+    })
+    const w = await mountView()
+    w.findComponent({ name: 'BusRouteStopsTable' }).vm.$emit('relocate', 0)
+    await flushPromises()
+    expect(ElMessage.error).toHaveBeenCalled()
   })
 })
 

@@ -188,6 +188,15 @@ export function useBusMonitor() {
    * 「沒有車在跑」，是這一頁最不該說的謊。
    */
   const snapshotFailed = ref(false)
+  /**
+   * 這班次是否已落後於「路線名單現在應該長怎樣」（同 `useBusDailyDispatch.ts`
+   * 的 `rosterOutOfSync`，語意見後端 `services/bus_daily_plan.py::
+   * is_roster_out_of_sync`）。**只由 HTTP 快照更新**——`GET /trips/today` 的
+   * 回應才有這個欄位，WS 事件（`bus_stop_update`／`bus_trip_started`）payload
+   * 跟開班 API 回應同形狀、不含它；換班次時先樂觀清成 false，等下一次快照
+   * 校正即可，這個旗標本來就只是軟提示。
+   */
+  const rosterOutOfSync = ref(false)
   const wsConnected = ref(false)
   /** 是否真的斷過線；只看 wsConnected 的話進頁必先閃一次「連線中斷」。 */
   const wsEverClosed = ref(false)
@@ -280,6 +289,7 @@ export function useBusMonitor() {
         ? { ...nextTrip, status: 'completed' }
         : nextTrip
       stops.value = normalizeStops(data.stops) ?? []
+      rosterOutOfSync.value = data.roster_out_of_sync === true
       snapshotFailed.value = false
       return true
     } catch {
@@ -318,6 +328,7 @@ export function useBusMonitor() {
     lastUnknownProbeAt = 0
     trip.value = null
     stops.value = []
+    rosterOutOfSync.value = false
     loading.value = true
     await refresh()
   }
@@ -379,6 +390,8 @@ export function useBusMonitor() {
       // 同路線即接手（可能是本路線剛發車、我們還沒收到快照的新班次）
       trip.value = nextTrip
       stops.value = nextStops
+      // payload 跟這個欄位無關（見上方宣告），樂觀清成 false，下一次快照會校正
+      rosterOutOfSync.value = false
       foreignTripIds.delete(nextTrip.id)
       // 這裡刻意**沒有** `completedTripIds.delete(nextTrip.id)`（家長端的
       // `bus_trip_started` 分支有）。併入 `bus_trip_started` 之後這個論證仍成立，
@@ -404,6 +417,8 @@ export function useBusMonitor() {
       // 顯示「行駛中」直到 60 秒後 stale 介入，說成「位置訊號暫時中斷」（更難診斷的謊）。
       // 與家長端 `src/parent/composables/useBusTracking.ts:276-291` 同語意。
       completedTripIds.add(tripId)
+      // 已結束的班次不用再提示重設（後端同語意：只有 planned／in_progress 才算）
+      rosterOutOfSync.value = false
       if (!current) return
       trip.value = { ...current, status: 'completed' }
       // payload 只有 `{trip_id}`（手動結束與 `bus_maintenance_scheduler` 的逾時自動
@@ -600,7 +615,7 @@ export function useBusMonitor() {
   }
 
   return {
-    routes, selectedRouteId, trip, stops, loading, snapshotFailed,
+    routes, selectedRouteId, trip, stops, loading, snapshotFailed, rosterOutOfSync,
     wsConnected, reconnecting, isLive, stale, showMap, tripSummary,
     init, refresh, selectRoute, retryWs, teardown,
   }

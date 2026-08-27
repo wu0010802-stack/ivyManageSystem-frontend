@@ -23,7 +23,7 @@ import { excuseReasonLabel } from '@/constants/bus'
 
 const monitor = useBusMonitor()
 const {
-  routes, selectedRouteId, trip, stops, loading, snapshotFailed,
+  routes, selectedRouteId, trip, stops, loading, snapshotFailed, rosterOutOfSync,
   reconnecting, isLive, stale, showMap, tripSummary,
 } = monitor
 
@@ -241,6 +241,20 @@ onBeforeUnmount(() => {
           {{ tripSummary }}
           <el-tag v-if="isLive" type="success" size="small">行駛中</el-tag>
         </div>
+
+        <!--
+          監看頁是唯讀（沒有重設按鈕）——只能引導去調度頁操作，語意同
+          BusDispatchView.vue 的同名警示，見 useBusMonitor.ts::rosterOutOfSync。
+        -->
+        <el-alert
+          v-if="rosterOutOfSync"
+          data-testid="bus-monitor-roster-out-of-sync"
+          type="warning"
+          show-icon
+          :closable="false"
+          title="班次名單有更新，此班次的名單/地址與路線設定不同步"
+          description="請到「今日調度」頁按「重設為預設名單」套用最新內容。"
+        />
 
         <el-alert
           v-if="!isLive"

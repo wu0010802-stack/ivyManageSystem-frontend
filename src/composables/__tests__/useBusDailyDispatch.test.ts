@@ -72,6 +72,7 @@ function planItem(overrides: Record<string, unknown> = {}) {
     calendar_warnings: [],
     capacity: { departed_pending: 1, capacity: 20 },
     eta_may_be_stale: false,
+    roster_out_of_sync: false,
     ...overrides,
   }
 }
@@ -487,6 +488,16 @@ describe('ETA 過期與超載旗標', () => {
     expect(d.etaStale.value).toBe(true)
   })
 
+  it('roster_out_of_sync 透傳給 view——名單已落後路線設定要提示重設', async () => {
+    const d = await boot([planItem({ roster_out_of_sync: true })])
+    expect(d.rosterOutOfSync.value).toBe(true)
+  })
+
+  it('roster_out_of_sync 為 false 時不亮提示', async () => {
+    const d = await boot([planItem({ roster_out_of_sync: false })])
+    expect(d.rosterOutOfSync.value).toBe(false)
+  })
+
   it('標記不搭車之後 etaStale 立刻成立——PATCH 回應不帶 eta_may_be_stale，不可沿用舊快照', async () => {
     const d = await boot([planItem({ eta_may_be_stale: false })])
     expect(d.etaStale.value).toBe(false)
@@ -633,5 +644,16 @@ describe('重設為預設名單', () => {
     vi.mocked(resetBusDailyPlan).mockRejectedValue(new Error('422'))
     expect(await d.resetPlan()).toBe(false)
     expect(JSON.stringify(d.plans.value)).toBe(before)
+  })
+
+  it('重設後 roster_out_of_sync 直接斷言 false——DailyPlanResetOut 沒有這個欄位，但重設的定義就是依路線名單現況重建', async () => {
+    const d = await boot([planItem({ roster_out_of_sync: true })])
+    expect(d.rosterOutOfSync.value).toBe(true)
+
+    vi.mocked(resetBusDailyPlan).mockResolvedValue({
+      data: { trip: trip(), stops: [stop()] },
+    } as never)
+    expect(await d.resetPlan()).toBe(true)
+    expect(d.rosterOutOfSync.value).toBe(false)
   })
 })

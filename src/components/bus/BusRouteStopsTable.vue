@@ -15,8 +15,12 @@
  * 起始位置使用。電話同理只在聯絡人欄呈現，不進 console／URL／storage。
  *
  * ── 元件不改資料 ────────────────────────────────────────────────────────────
- * 拖拉只 emit `reorder`（由 composable 決定「被拖動的站自動釘選」），星期只 emit
- * bitmask（由 composable 檢查跨班次衝突）。元件自行改 props 會繞過那兩道檢查。
+ * 拖拉只 emit `reorder`、星期只 emit bitmask（由 composable 檢查跨班次衝突）。
+ * 元件自行改 props 會繞過那道檢查。
+ *
+ * ── 2026-08-27 決策（釘選一律手動）──────────────────────────────────────────
+ * 調整順序（拖拉／上下移）**不再自動釘選**，釘選改成操作欄裡的顯式按鈕。
+ * 原本自動釘選會讓站數一多就整批變釘選，而全站釘選使自動排序變成 no-op。
  */
 import { computed } from 'vue'
 import draggable from 'vuedraggable'
@@ -38,6 +42,7 @@ const emit = defineEmits<{
   'update-ride-days': [index: number, rideDays: number]
   'pick-address': [index: number]
   'tune-map': [studentId: number]
+  relocate: [index: number]
 }>()
 
 /** 逐星期（一~五）載客數；後端 capacity 檢查是逐星期取 max，不是總站數。 */
@@ -81,12 +86,12 @@ function onWeekdaysChange(index: number, days: Array<string | number | boolean>)
  * 拖拉位移。用 vuedraggable 的 `change` 事件（`{ moved: { oldIndex, newIndex } }`）
  * 而**不是**從新舊陣列反推——反推在「往後拖」的情境會算錯：
  * `[A,B,C] → [B,C,A]`（把 A 拖到最後）用「第一個不同的位置」推出來會是
- * `moveStop(1, 0)`（把 B 往前移），順序錯、連帶自動釘選也釘到錯的那一站。
+ * `moveStop(1, 0)`（把 B 往前移），送出的接送順序就錯了。
  */
 /**
  * 鍵盤替代方案。拖拉對鍵盤與螢幕閱讀器使用者不可用，而排序**是這張表的主要工作**
  * ——舊版 BusRoutesView 的「↑／↓」上下移按鈕在改成拖拉後不能就這樣消失。
- * 兩條路徑都走同一個 `reorder`，因此自動釘選的語意一致。
+ * 兩條路徑都走同一個 `reorder`，語意一致。
  */
 function moveBy(index: number, delta: number): void {
   const to = index + delta
@@ -115,7 +120,6 @@ function onDragChange(event: unknown): void {
           <th scope="col">聯絡人</th>
           <th scope="col">搭乘日</th>
           <th scope="col" class="is-narrow">預計抵達</th>
-          <th scope="col" class="is-narrow">釘選</th>
           <th scope="col">操作</th>
         </tr>
       </thead>
@@ -218,56 +222,81 @@ function onDragChange(event: unknown): void {
               <span v-if="element.eta_planned" class="bus-route-stops-table__muted">預計</span>
             </td>
 
-            <td class="is-narrow">
-              <el-button
-                link
-                :type="element.pinned ? 'primary' : 'info'"
-                :disabled="readonly"
-                :aria-pressed="element.pinned ? 'true' : 'false'"
-                :aria-label="element.pinned
-                  ? `取消釘選 ${element.student_name} 這一站`
-                  : `釘選 ${element.student_name} 這一站（自動排序不會移動）`"
-                :title="element.pinned ? '已釘選（自動排序不會移動這一站）' : '未釘選'"
-                :data-test="`pin-${element.student_id}`"
-                @click="emit('toggle-pinned', index)"
-              >
-                <span aria-hidden="true">{{ element.pinned ? '📌' : '📍' }}</span>
-              </el-button>
-            </td>
-
             <td>
-              <el-button
-                link
-                type="primary"
-                :disabled="readonly"
-                :data-test="`pick-address-${element.student_id}`"
-                @click="emit('pick-address', index)"
-              >
-                設定接送地址
-              </el-button>
+              <div class="bus-route-stops-table__actions">
+                <!--
+                  釘選：2026-08-27 起唯一的釘選入口（調整順序不再自動釘選）。
+                  已釘選用實心 warning 撐出狀態差，未釘選用 plain 與其他操作同級。
+                -->
+                <el-button
+                  size="small"
+                  :type="element.pinned ? 'warning' : ''"
+                  :plain="!element.pinned"
+                  :disabled="readonly"
+                  :aria-pressed="element.pinned ? 'true' : 'false'"
+                  :aria-label="element.pinned
+                    ? `取消釘選 ${element.student_name} 這一站`
+                    : `釘選 ${element.student_name} 這一站（自動排序不會移動）`"
+                  :title="element.pinned
+                    ? '已釘選：自動排序不會移動這一站'
+                    : '未釘選：自動排序可能移動這一站'"
+                  :data-test="`pin-${element.student_id}`"
+                  @click="emit('toggle-pinned', index)"
+                >
+                  <span aria-hidden="true">{{ element.pinned ? '📌' : '📍' }}</span>
+                  {{ element.pinned ? '已釘選' : '釘選' }}
+                </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :disabled="readonly"
+                  :data-test="`pick-address-${element.student_id}`"
+                  @click="emit('pick-address', index)"
+                >
+                  設定接送地址
+                </el-button>
+              <!--
+                重新定位：對這一站目前用著的地址（住家或地址簿該筆）無條件重跑一次
+                geocode，不改地址文字。用於「尚未定位」或懷疑座標不準時手動重試，
+                跟「地圖微調」互補（前者是自動重查、後者是手動拖曳）。
+              -->
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :disabled="readonly"
+                  :data-test="`relocate-${element.student_id}`"
+                  @click="emit('relocate', index)"
+                >
+                  重新定位
+                </el-button>
               <!--
                 無座標時**不 disable**：BusStopMapTuner 支援「無座標時以園所座標為
                 初始中心」，那是使用者唯一能替一個 geocode 失敗的站補上座標的路徑。
                 在這裡 disable 等於把死巷變成死路。
               -->
-              <el-button
-                link
-                type="primary"
-                :disabled="readonly"
-                :data-test="`tune-map-${element.student_id}`"
-                @click="emit('tune-map', element.student_id)"
-              >
-                地圖微調
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                :disabled="readonly"
-                :data-test="`remove-${element.student_id}`"
-                @click="emit('remove', index)"
-              >
-                移除
-              </el-button>
+                <el-button
+                  size="small"
+                  type="primary"
+                  plain
+                  :disabled="readonly"
+                  :data-test="`tune-map-${element.student_id}`"
+                  @click="emit('tune-map', element.student_id)"
+                >
+                  地圖微調
+                </el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  plain
+                  :disabled="readonly"
+                  :data-test="`remove-${element.student_id}`"
+                  @click="emit('remove', index)"
+                >
+                  移除
+                </el-button>
+              </div>
             </td>
           </tr>
         </template>
@@ -338,6 +367,18 @@ function onDragChange(event: unknown): void {
 }
 .bus-route-stops-table__contact + .bus-route-stops-table__contact {
   margin-left: 8px;
+}
+/*
+  操作欄按鈕改為有底色（原本是無背景的 link），需要顯式 gap——el-button 相鄰
+  margin 只處理同層兄弟，換行後上下會黏在一起。
+*/
+.bus-route-stops-table__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bus-route-stops-table__actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 .bus-route-stops-table__muted {
   color: var(--el-text-color-secondary);

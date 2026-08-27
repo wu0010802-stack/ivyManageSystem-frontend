@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
       stops,
       loading: r(false),
       snapshotFailed,
+      rosterOutOfSync: r(false),
       stale,
       isLive,
       reconnecting: r(false),
@@ -96,6 +97,7 @@ beforeEach(() => {
   s.stops.value = []
   s.loading.value = false
   s.snapshotFailed.value = false
+  s.rosterOutOfSync.value = false
   s.stale.value = false
   s.reconnecting.value = false
 })
@@ -147,6 +149,24 @@ describe('BusMonitorView', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="bus-monitor-map"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="bus-monitor-done"]').attributes('title')).toContain('自動關閉')
+  })
+
+  it('roster_out_of_sync 時顯示提示並指引去調度頁重設（監看頁唯讀，沒有重設按鈕）', async () => {
+    s.trip.value = inProgressTrip()
+    s.rosterOutOfSync.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    const alert = wrapper.find('[data-testid="bus-monitor-roster-out-of-sync"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.attributes('description')).toContain('今日調度')
+  })
+
+  it('roster_out_of_sync 為 false 時不顯示提示', async () => {
+    s.trip.value = inProgressTrip()
+    s.rosterOutOfSync.value = false
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-monitor-roster-out-of-sync"]').exists()).toBe(false)
   })
 
   it('斷線時顯示重連提示（只有兩態：正常 / 重連中）', async () => {

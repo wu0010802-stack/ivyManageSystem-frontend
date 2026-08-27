@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
       loadFailed: r(false),
       holidayNotice: r<Record<string, unknown> | null>(null),
       etaStale: r(false),
+      rosterOutOfSync: r(false),
       overCapacity: r(false),
       editable: r(true),
       inProgress: r(false),
@@ -100,7 +101,7 @@ const GLOBAL_STUBS = {
   'el-skeleton': { template: '<div class="el-skeleton" />' },
   'el-empty': { template: '<div class="el-empty">{{ description }}</div>', props: ['description'] },
   'el-alert': {
-    template: '<div class="el-alert" :title="title" :description="description"><slot name="title" /></div>',
+    template: '<div class="el-alert" :title="title" :description="description"><slot name="title" /><slot /></div>',
     props: ['title', 'description'],
   },
   'el-button': { template: '<button v-bind="$attrs"><slot /></button>' },
@@ -157,6 +158,7 @@ beforeEach(() => {
   s.loadFailed.value = false
   s.holidayNotice.value = null
   s.etaStale.value = false
+  s.rosterOutOfSync.value = false
   s.overCapacity.value = false
   s.editable.value = true
   s.inProgress.value = false
@@ -336,6 +338,31 @@ describe('超載與 ETA 提示', () => {
     await flushPromises()
     expect(w.find('[data-testid="bus-dispatch-overcapacity"]').attributes('title')).toContain('3 / 2')
   })
+
+  it('roster_out_of_sync 時顯示提示，並提供「立即重設」捷徑', async () => {
+    s.rosterOutOfSync.value = true
+    const w = mountView()
+    await flushPromises()
+    const alert = w.find('[data-testid="bus-dispatch-roster-out-of-sync"]')
+    expect(alert.exists()).toBe(true)
+    await w.find('[data-testid="bus-dispatch-roster-out-of-sync-reset"]').trigger('click')
+    await flushPromises()
+    expect(mocks.confirm).toHaveBeenCalled()
+    expect(s.resetPlan).toHaveBeenCalled()
+  })
+
+  it('roster_out_of_sync 為 false 或無編輯權限時不顯示提示（唯讀檢視按了也沒用）', async () => {
+    s.rosterOutOfSync.value = false
+    const w1 = mountView()
+    await flushPromises()
+    expect(w1.find('[data-testid="bus-dispatch-roster-out-of-sync"]').exists()).toBe(false)
+
+    s.rosterOutOfSync.value = true
+    s.editable.value = false
+    const w2 = mountView()
+    await flushPromises()
+    expect(w2.find('[data-testid="bus-dispatch-roster-out-of-sync"]').exists()).toBe(false)
+  })
 })
 
 describe('併發互鎖（saving 與 optimizing 是兩把鎖，名單表要吃兩把）', () => {
@@ -486,9 +513,12 @@ describe('自動排序預覽', () => {
       end_time_planned: string | null
       moved_unpinned_count: number
     }
+    // address 供 Dialog 列出接送地址——光看學生名判斷不了順序合不合理
     expect(preview.order).toEqual([
-      { student_id: 101, student_name: '小明', old_seq: 2, new_seq: 1, pinned: true, eta: '07:15', moved: false },
-      { student_id: 102, student_name: '小華', old_seq: 1, new_seq: 2, pinned: false, eta: '07:25', moved: true },
+      { student_id: 101, student_name: '小明', old_seq: 2, new_seq: 1, pinned: true, eta: '07:15',
+        moved: false, address: '高雄市…' },
+      { student_id: 102, student_name: '小華', old_seq: 1, new_seq: 2, pinned: false, eta: '07:25',
+        moved: true, address: '高雄市…' },
     ])
     expect(preview.end_time_planned).toBe('07:50')
     expect(preview.moved_unpinned_count).toBe(1)

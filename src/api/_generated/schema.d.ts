@@ -4843,6 +4843,36 @@ export interface paths {
         delete: operations["delete_pickup_address_api_bus_students__student_id__pickup_addresses__address_id__delete"];
         options?: never;
         head?: never;
+        /**
+         * Update Pickup Address
+         * @description 編輯既有地址的 label／地址文字；地址文字有異動才重新 geocode（只改 label
+         *     不必白打一次外部 API）。座標可能因此變成 None（geocode 失敗），比照建立時
+         *     「失敗不擋、可後補」的語意——沿用此地址的班次站點座標不受影響，仍是各自
+         *     獨立欄位（`BusRouteStop.lat/lng`），不因地址簿更新被動改寫。
+         */
+        patch: operations["update_pickup_address_api_bus_students__student_id__pickup_addresses__address_id__patch"];
+        trace?: never;
+    };
+    "/bus/students/{student_id}/pickup-addresses/{address_id}/relocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Relocate Pickup Address
+         * @description 對既有地址文字重新跑一次 geocode（文字不變），供「尚未定位」或懷疑座標
+         *     不準時手動重試——例如 geocoding provider 邏輯調整過、或原本查詢當下失敗，
+         *     現在有機會查到。跟 `update_pickup_address` 的差異：後者只在文字**有改**才
+         *     重查，這支端點文字沒改也無條件重查。
+         */
+        post: operations["relocate_pickup_address_api_bus_students__student_id__pickup_addresses__address_id__relocate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -10739,7 +10769,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Ride Cancellations
+         * @description 自己小孩在指定日期的「排定搭車方向」與「有效今天不搭申報」。
+         *
+         *     為什麼需要這支（FE-PARENT-04 落地時補的契約缺口）：`GET /bus/today` 依
+         *     spec「家長端」第 3 點排除 `planned`／`expired`，無班次時回 `_empty()`
+         *     ——家長最需要申報不搭的時段（前一晚 ~ 當天發車前）恰好是它的空窗，前端
+         *     無從判斷該不該顯示入口；而 `POST /ride-cancellations` 只回本次結果，重新
+         *     整理後就拿不到既有申報的 id，撤銷功能等同不存在。
+         *
+         *     隱私（納入 BE-GUARD-01 守門測試）：只回自己監護學生的 student_id／姓名
+         *     ／排定方向／自己的 cancellation；**不回**路線名稱、站序、座標、地址、
+         *     其他學生任何資訊。
+         *
+         *     `scheduled_directions` 只來自 `bus_route_stops`（預設名單，與 trip 生命
+         *     週期無關），**不**併入當日 trip 上臨時插入的站——spec owner 2026-08-26
+         *     拍板嚴守「家長端不揭露當日 trip 是否存在」：被臨時插入名單外的學生，
+         *     家長端不顯示申報入口（已知並接受的功能缺口；曾有補查版本，見 git 歷史）。
+         *
+         *     `scheduled_directions` 走 SECURITY DEFINER 函式 `bus_student_ride_
+         *     directions`（bussch07）——家長角色對 `bus_route_stops` 沒有 SELECT
+         *     GRANT，那張表是全園名冊，不可為了這個需求整張開放。
+         */
+        get: operations["list_ride_cancellations_api_parent_bus_ride_cancellations_get"];
         put?: never;
         /**
          * Create Ride Cancellation
@@ -23356,8 +23409,9 @@ export interface components {
         };
         /**
          * BusGeocodeOut
-         * @description 座標為 provider 依**巷弄層級去識別化**地址所回，非精確門牌；
-         *     `address` 是學生主檔原文，供管理端在地圖上手動微調到正確門口。
+         * @description 座標為 provider 依**完整地址**（`deidentify=False`）查得的門牌級結果；
+         *     provider 仍可能查不到精確門牌或本身有誤差，`address` 是學生主檔原文，
+         *     供管理端在地圖上核對、必要時用「地圖微調」／「重新定位」校正。
          */
         BusGeocodeOut: {
             /** Address */
@@ -23756,6 +23810,11 @@ export interface components {
         };
         /** BusTripsTodayOut */
         BusTripsTodayOut: {
+            /**
+             * Roster Out Of Sync
+             * @default false
+             */
+            roster_out_of_sync: boolean;
             /** Stops */
             stops: components["schemas"]["BusStopAdminOut"][];
             trip?: components["schemas"]["BusTripAdminOut"] | null;
@@ -26542,6 +26601,8 @@ export interface components {
             capacity: components["schemas"]["DailyPlanCapacityOut"];
             /** Eta May Be Stale */
             eta_may_be_stale: boolean;
+            /** Roster Out Of Sync */
+            roster_out_of_sync: boolean;
             /** Stops */
             stops: components["schemas"]["BusStopAdminOut"][];
             trip: components["schemas"]["DailyPlanTripOut"];
@@ -26565,6 +26626,7 @@ export interface components {
             end_time_estimated?: string | null;
             /** Moved Unpinned Student Ids */
             moved_unpinned_student_ids?: number[];
+            route_shape?: components["schemas"]["RouteShapeOut"] | null;
             /** Stops */
             stops: components["schemas"]["DailyPlanOptimizeStopOut"][];
         };
@@ -39859,6 +39921,17 @@ export interface components {
             /** Revoked */
             revoked: number;
         };
+        /** RideCancellationChildOut */
+        RideCancellationChildOut: {
+            /** Cancellations */
+            cancellations: components["schemas"]["RideCancellationItemOut"][];
+            /** Scheduled Directions */
+            scheduled_directions: string[];
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
         /** RideCancellationCreateIn */
         RideCancellationCreateIn: {
             /**
@@ -39875,6 +39948,25 @@ export interface components {
         RideCancellationCreateOut: {
             /** Results */
             results: components["schemas"]["RideCancellationResultOut"][];
+        };
+        /** RideCancellationItemOut */
+        RideCancellationItemOut: {
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Revocable */
+            revocable: boolean;
+        };
+        /** RideCancellationListOut */
+        RideCancellationListOut: {
+            /** Children */
+            children: components["schemas"]["RideCancellationChildOut"][];
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
         };
         /** RideCancellationResultOut */
         RideCancellationResultOut: {
@@ -40002,6 +40094,24 @@ export interface components {
             sort_order: number;
         };
         /**
+         * RouteLegOut
+         * @description 單段行駛資料（前一點 → 下一點），純顯示用。
+         *
+         *     段序與點序對齊：`legs[0]`＝園所→第 1 站、`legs[i]`＝第 i 站→第 i+1 站、
+         *     最後一段＝最後一站→回園所。`polyline` 是**這一段**的道路折線，供 UI 高亮
+         *     單段（hover 某一站時標出「上一站 → 這一站」）——全程折線無法切回段。
+         */
+        RouteLegOut: {
+            /** Distance M */
+            distance_m?: number | null;
+            /** Duration S */
+            duration_s?: number | null;
+            /** Duration Traffic S */
+            duration_traffic_s?: number | null;
+            /** Polyline */
+            polyline?: number[][];
+        };
+        /**
          * RouteOptimizeIn
          * @description `apply=False`（預設）回傳預覽、不落庫；`apply=True` 直接落庫（前端
          *     「套用」按鈕）。絕不在拖拉時打 API——本端點只由「自動排序」按鈕觸發。
@@ -40025,6 +40135,7 @@ export interface components {
             end_time_planned?: string | null;
             /** Moved Unpinned Student Ids */
             moved_unpinned_student_ids?: number[];
+            route_shape?: components["schemas"]["RouteShapeOut"] | null;
             /** Stops */
             stops: components["schemas"]["RouteOptimizeStopOut"][];
         };
@@ -40043,6 +40154,23 @@ export interface components {
             id: number;
             /** Sort Order */
             sort_order: number;
+        };
+        /**
+         * RouteShapeOut
+         * @description 實際道路折線與逐段行駛資料（管理端路線預覽）。
+         *
+         *     來自 Azure 同一次全程 ETA 回應（`routeOutputOptions` 本來就含 `routePath`），
+         *     **不額外計費**。`polyline` 是 `[lat, lng]` 序列；幾何缺漏時為空陣列，
+         *     UI 自行降級成只畫站點，不視為錯誤。
+         *
+         *     隱私：折線貼著接送地址，與站點座標同級——只回給有 BUS_WRITE 的管理端畫
+         *     地圖，不得進 log／Sentry／URL query／storage。
+         */
+        RouteShapeOut: {
+            /** Legs */
+            legs?: components["schemas"]["RouteLegOut"][];
+            /** Polyline */
+            polyline?: number[][];
         };
         /**
          * RouteUpdateIn
@@ -53006,6 +53134,74 @@ export interface operations {
             };
         };
     };
+    update_pickup_address_api_bus_students__student_id__pickup_addresses__address_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                address_id: number;
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickupAddressCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAddressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    relocate_pickup_address_api_bus_students__student_id__pickup_addresses__address_id__relocate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                address_id: number;
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PickupAddressOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_trips_api_bus_trips_get: {
         parameters: {
             query?: {
@@ -63638,6 +63834,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParentRefreshOut"];
+                };
+            };
+        };
+    };
+    list_ride_cancellations_api_parent_bus_ride_cancellations_get: {
+        parameters: {
+            query?: {
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RideCancellationListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

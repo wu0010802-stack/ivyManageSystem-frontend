@@ -4,7 +4,7 @@
  *
  * 本檔只負責組裝與呈現；業務邏輯全在 `@/composables/useBusRouteEditor`
  * （replace-all 語意、未儲存保護、跨班次 ride_days 交集判定、逐星期 capacity、
- * 拖拉自動釘選、最佳化預覽）。
+ * 拖拉重排、手動釘選、最佳化預覽）。
  *
  * 組裝的子元件：
  * - `BusRouteSidebar`（FE-ROUTES-02）：早接／午送分組、拖拉 sort_order
@@ -34,7 +34,7 @@ import BusPickupAddressSelect from '@/components/bus/BusPickupAddressSelect.vue'
 import type { OptimizePreview } from '@/components/bus/BusOptimizePreviewDialog.vue'
 import type { BusRouteFormPayload } from '@/components/bus/BusRouteForm.vue'
 import { getEmployees } from '@/api/employees'
-import { geocodeBusStudent, getBusSettings } from '@/api/bus'
+import { geocodeBusStudent, getBusSettings, relocateStudentPickupAddress } from '@/api/bus'
 import { apiError } from '@/utils/error'
 import {
   useBusRouteEditor, DIRECTION_LABELS, MAX_STOPS_PER_ROUTE, WEEKDAY_LABELS,
@@ -246,7 +246,7 @@ async function onAddressResolved(
       if (typeof data?.lat === 'number' && typeof data?.lng === 'number') {
         lat = data.lat
         lng = data.lng
-        ElMessage.success('已帶入住家座標（僅到巷弄層級，請用地圖微調到實際上下車點）')
+        ElMessage.success('已帶入住家座標，如與實際上下車點有落差請用地圖微調')
       } else {
         ElMessage.warning('住家地址查不到座標，請用「地圖微調」手動放置，否則無法發車')
       }
@@ -257,6 +257,47 @@ async function onAddressResolved(
   editor.setPickupAddress(index, { id: resolved.id, lat, lng, address: resolved.address || null })
   // fallback（刪除選中地址被動退回住家）時使用者還在管理地址簿，不關 Dialog。
   if (resolved.reason !== 'fallback') addressDialogVisible.value = false
+}
+
+/**
+ * 地址簿裡某一筆重新定位完成。只有「這一站目前真的用著這筆地址」才更新座標——
+ * 地址簿是跨站共用的，重新定位一筆不代表其他也在用它的站點座標要跟著動
+ * （那些站各自的 `lat/lng` 是獨立快照，語意見 `pickup_addresses.py` 的
+ * `relocate_pickup_address` docstring）。刻意直接呼叫 `setCoordinates`
+ * 而不是 `setPickupAddress`：後者的 `sameAddress` 保護會鎖住座標不被動覆蓋，
+ * 但這裡使用者就是主動要求刷新，語意相反，必須真的寫進去。
+ */
+function onAddressRelocated(payload: { id: number; lat: number | null; lng: number | null }): void {
+  const stop = addressStop.value
+  if (!stop || stop.pickup_address_id !== payload.id) return
+  if (payload.lat === null || payload.lng === null) return
+  editor.setCoordinates(stop.student_id, payload.lat, payload.lng)
+}
+
+/**
+ * 名單表格操作欄的「重新定位」：對這一站目前用著的地址無條件重跑一次
+ * geocode（不改地址文字），不透過 `setPickupAddress`——道理同 `onAddressRelocated`，
+ * 這是主動刷新，不受 `sameAddress` 保護節制。住家（`pickup_address_id === null`）
+ * 走既有的 `geocodeBusStudent`（不落庫，查了直接回傳）；地址簿地址走 relocate
+ * 端點（落庫，其他也用這筆地址的站不受影響，各自獨立快照）。
+ */
+async function onRelocateStop(index: number): Promise<void> {
+  const stop = stops.value[index]
+  if (!stop) return
+  try {
+    const res = stop.pickup_address_id === null
+      ? await geocodeBusStudent(stop.student_id)
+      : await relocateStudentPickupAddress(stop.student_id, stop.pickup_address_id)
+    const data = (res as { data?: { lat?: number | null; lng?: number | null } }).data
+    if (typeof data?.lat === 'number' && typeof data?.lng === 'number') {
+      editor.setCoordinates(stop.student_id, data.lat, data.lng)
+      ElMessage.success('已重新定位，如與實際上下車點有落差請用「地圖微調」')
+    } else {
+      ElMessage.warning('重新定位仍查無座標，請改用「地圖微調」手動設定')
+    }
+  } catch (e) {
+    ElMessage.error(apiError(e, '重新定位失敗，請稍後再試'))
+  }
 }
 
 // ── 地圖微調 Dialog ────────────────────────────────────────────────────────
@@ -309,12 +350,18 @@ const dialogPreview = computed<OptimizePreview | null>(() => {
       pinned: stop.pinned,
       eta: s.eta_planned,
       moved: moved.has(s.student_id),
+      address: stop.address_snapshot,
+      // 座標只交給 Dialog 內的 Leaflet 畫點，不渲染成任何欄位（FE-ROUTES-04）
+      lat: stop.lat,
+      lng: stop.lng,
     }]
   })
   return {
     order,
     end_time_planned: preview.end_time_planned,
     moved_unpinned_count: preview.moved_unpinned_student_ids.length,
+    polyline: preview.polyline,
+    legs: preview.legs,
   }
 })
 
@@ -349,6 +396,20 @@ function onCancelOptimize(): void {
   optimizeVisible.value = false
   optimizeError.value = null
   rawPreview.value = null
+}
+
+/**
+ * 預覽顯示「全站釘選 → 自動排序不會有任何變化」時的出口。解除只落在編輯緩衝，
+ * 而 `optimizePreview()` 有「有未儲存變更就擋下」的前置檢查，所以這裡**不能**
+ * 直接重跑自動排序——關掉 Dialog 請使用者先儲存，比彈一個必定被擋的請求誠實。
+ */
+function onUnpinAll(): void {
+  const changed = editor.unpinAll()
+  optimizeVisible.value = false
+  rawPreview.value = null
+  ElMessage.success(changed
+    ? '已解除全部釘選，請先按儲存，再重新執行自動排序'
+    : '目前沒有釘選的站點')
 }
 
 // ── 未儲存保護 ────────────────────────────────────────────────────────────
@@ -614,6 +675,7 @@ const overloadedLabel = computed(() =>
           @update-ride-days="editor.setRideDays"
           @pick-address="openAddressDialog"
           @tune-map="openMapTune"
+          @relocate="onRelocateStop"
         />
       </div>
     </div>
@@ -718,6 +780,7 @@ const overloadedLabel = computed(() =>
         :model-value="addressStop.pickup_address_id"
         :home-address="null"
         @resolved="onAddressResolved"
+        @relocated="onAddressRelocated"
       />
     </el-dialog>
 
@@ -736,9 +799,12 @@ const overloadedLabel = computed(() =>
       :loading="optimizing"
       :preview="dialogPreview"
       :error="optimizeError"
+      :can-unpin-all="!editingLocked"
+      :school-coords="schoolCoords"
       @apply="onApplyOptimize"
       @cancel="onCancelOptimize"
       @retry="runOptimize"
+      @unpin-all="onUnpinAll"
     />
   </div>
 </template>

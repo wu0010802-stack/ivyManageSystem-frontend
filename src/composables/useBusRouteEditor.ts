@@ -155,11 +155,58 @@ export interface BusRouteRow {
 }
 
 /** 自動排序／重算 ETA 的預覽結果（不落庫，套用後仍需儲存）。 */
+/**
+ * 逐段行駛資料（後端 `route_shape.legs`），純顯示用。
+ *
+ * 段序與點序對齊：`legs[0]`＝園所→第 1 站、`legs[i]`＝第 i 站→第 i+1 站、
+ * 最後一段＝最後一站→回園所。`polyline` 是**這一段**的折線，地圖高亮單段用。
+ */
+export interface RouteShapeLeg {
+  distance_m: number | null
+  duration_s: number | null
+  duration_traffic_s: number | null
+  polyline: number[][]
+}
+
 export interface RouteOptimizePreview {
   applied: boolean
   end_time_planned: string | null
   moved_unpinned_student_ids: number[]
   stops: Array<{ student_id: number; seq: number; eta_planned: string | null }>
+  /**
+   * 實際道路折線（`[lat, lng]` 序列）與逐段行駛資料，來自後端 `route_shape`
+   * ——與最佳化同一次 Azure 回應，不額外計費。後端沒給幾何時為空陣列，
+   * 地圖自行降級成示意直線。
+   */
+  polyline: number[][]
+  legs: RouteShapeLeg[]
+}
+
+/** 折線是外部輸入：逐點檢查後才進地圖，壞資料一律丟掉而非畫錯。 */
+function normalizePolyline(raw: unknown): number[][] {
+  return (Array.isArray(raw) ? raw : []).flatMap((point) => {
+    if (!Array.isArray(point) || point.length < 2) return []
+    const lat = asNum(point[0])
+    const lng = asNum(point[1])
+    return lat === null || lng === null ? [] : [[lat, lng]]
+  })
+}
+
+/** `route_shape` 是外部輸入：逐點檢查後才進地圖，壞資料一律丟掉而非畫錯。 */
+function normalizeRouteShape(raw: unknown): { polyline: number[][]; legs: RouteShapeLeg[] } {
+  const shape = asRecord(raw)
+  if (!shape) return { polyline: [], legs: [] }
+  const polyline = normalizePolyline(shape.polyline)
+  const legs = (Array.isArray(shape.legs) ? shape.legs : []).flatMap((item) => {
+    const leg = asRecord(item)
+    return leg === null ? [] : [{
+      distance_m: asNum(leg.distance_m),
+      duration_s: asNum(leg.duration_s),
+      duration_traffic_s: asNum(leg.duration_traffic_s),
+      polyline: normalizePolyline(leg.polyline),
+    }]
+  })
+  return { polyline, legs }
 }
 
 /** 「帶入其他班次名單」預覽中，與現有班次衝突的學生。 */
@@ -643,16 +690,20 @@ export function useBusRouteEditor() {
   }
 
   /**
-   * 拖拉落點重排（`from` → `to`）。**被拖動的那一站自動釘選**（spec 手動調整決策：
-   * 釘選權重 > 系統排序），否則下一次自動排序會把剛調好的順序洗掉。
-   * 使用者可用 `togglePinned` 一鍵解除。
+   * 拖拉落點重排（`from` → `to`）。**不動釘選旗標**——2026-08-27 起釘選一律手動
+   * （操作欄的釘選鈕），調整順序不再自動釘選。
+   *
+   * 原本的「被拖動的站自動釘選」是 spec 的手動調整決策（釘選權重 > 系統排序），
+   * 但站數一多就整批變釘選，而全站釘選會讓自動排序變成 no-op（後端分段最佳化
+   * 每段 0 個自由站，最佳化一次都不會呼叫），使用者只看到「順序沒變」。
+   * 代價是手調完的順序若沒手動釘選，下一次自動排序會被重排——這是刻意的取捨。
    */
   function moveStop(from: number, to: number): void {
     const list = stops.value
     if (from < 0 || from >= list.length || to < 0 || to >= list.length || from === to) return
     const next = [...list]
     const [moved] = next.splice(from, 1)
-    next.splice(to, 0, { ...moved, pinned: true })
+    next.splice(to, 0, moved)
     stops.value = renumber(next)
     dirty.value = true
   }
@@ -661,6 +712,21 @@ export function useBusRouteEditor() {
     if (index < 0 || index >= stops.value.length) return
     stops.value = stops.value.map((s, i) => (i === index ? { ...s, pinned: !s.pinned } : s))
     dirty.value = true
+  }
+
+  /**
+   * 一次解除所有釘選。出口情境：全站釘選時自動排序必然 no-op（分段最佳化每段
+   * 0 個自由站，Azure 一次都不會被呼叫），使用者只看到「順序沒變」，需要一個
+   * 不必逐站點 📌 的解除入口（釘選改手動前留下的資料仍可能整批是釘選）。
+   *
+   * 與 `togglePinned` 同語意：只改編輯緩衝，仍需按儲存才落庫。
+   * 回傳是否真的有站被解除，供 view 決定提示文案。
+   */
+  function unpinAll(): boolean {
+    if (!stops.value.some((s) => s.pinned)) return false
+    stops.value = stops.value.map((s) => (s.pinned ? { ...s, pinned: false } : s))
+    dirty.value = true
+    return true
   }
 
   /**
@@ -699,16 +765,20 @@ export function useBusRouteEditor() {
     if (index < 0 || index >= stops.value.length) return
     stops.value = stops.value.map((s, i) => {
       if (i !== index) return s
-      // **選同一筆地址時不得把既有座標清成 null**。後端的「住家」虛擬項是寫死的
-      // `lat/lng: None`（api/bus/pickup_addresses.py），所以對一個原本就用住家、
-      // 且已經微調好座標的站再點一次住家，無條件覆寫等於把它推進「無法發車」，
-      // 而且沒有回頭路。地址真的換了（id 不同）才允許座標歸零。
+      // **選同一筆地址時座標一律沿用站點目前值，不採用地址簿的座標**。原因有二：
+      // ①後端「住家」虛擬項是寫死的 `lat/lng: None`（api/bus/pickup_addresses.py），
+      // 對一個原本就用住家、且已經微調好座標的站再點一次住家，若採用 resolved 就會
+      // 把座標推進「無法發車」且沒有回頭路；②非住家地址簿項本身就存有座標，重選
+      // 同一筆時若直接採用 resolved.lat/lng，會把使用者用地圖微調過的精確座標
+      // 退回成地址簿的原始（未微調）geocode 值。地址真的換了（id 不同）才採用
+      // 新地址的座標。地址文字沒有「微調」這回事，永遠反映地址簿目前文字
+      // （含事後編輯過的），所以不受 sameAddress 影響。
       const sameAddress = s.pickup_address_id === resolved.id
       return {
         ...s,
         pickup_address_id: resolved.id,
-        lat: resolved.lat ?? (sameAddress ? s.lat : null),
-        lng: resolved.lng ?? (sameAddress ? s.lng : null),
+        lat: sameAddress ? s.lat : resolved.lat,
+        lng: sameAddress ? s.lng : resolved.lng,
         address_snapshot: resolved.address ?? (sameAddress ? s.address_snapshot : null),
         // 剛從地址簿選出來的就是現值，不可能是過期快照。
         address_stale: false,
@@ -811,9 +881,12 @@ export function useBusRouteEditor() {
       const res = await optimizeBusRoute(routeId, { apply: false })
       const data = dataOf(res)
       const raw = Array.isArray(data.stops) ? data.stops : []
+      const shape = normalizeRouteShape(data.route_shape)
       return {
         applied: asBool(data.applied),
         end_time_planned: asStr(data.end_time_planned),
+        polyline: shape.polyline,
+        legs: shape.legs,
         moved_unpinned_student_ids: (Array.isArray(data.moved_unpinned_student_ids)
           ? data.moved_unpinned_student_ids
           : []).flatMap((v) => {
@@ -962,7 +1035,8 @@ export function useBusRouteEditor() {
     copying, dirty,
     loadFailed, studentsFailed,
     init, loadRoutes, createRoute, selectRoute, updateRoute, reorderRoutes, confirmDiscard,
-    addStop, removeStop, moveStop, togglePinned, setRideDays, setPickupAddress, setCoordinates,
+    addStop, removeStop, moveStop, togglePinned, unpinAll, setRideDays, setPickupAddress,
+    setCoordinates,
     copyFromRoute, optimizePreview, applyOptimize, recomputeEtas, save,
     freeRideDaysFor,
   }

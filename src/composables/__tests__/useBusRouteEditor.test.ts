@@ -303,18 +303,22 @@ describe('capacity 逐星期口徑', () => {
 })
 
 describe('編輯與釘選', () => {
-  it('拖拉落點重排，被拖動的那一站自動釘選（防止下次自動排序洗掉手動順序）', async () => {
+  /**
+   * 2026-08-27 起釘選一律手動：調整順序**不動釘選旗標**。舊行為（被拖動的站
+   * 自動釘選）會讓站數一多就整批變釘選，而全站釘選使自動排序變成 no-op。
+   */
+  it('拖拉落點重排不動釘選旗標（釘選一律手動）', async () => {
     const editor = await boot([routeA({
       stops: [
         stop({ student_id: 101, seq: 1 }),
         stop({ student_id: 102, seq: 2 }),
-        stop({ student_id: 103, seq: 3 }),
+        stop({ student_id: 103, seq: 3, pinned: true }),
       ],
     })])
     editor.moveStop(2, 0)
     expect(editor.stops.value.map((s) => s.student_id)).toEqual([103, 101, 102])
-    expect(editor.stops.value[0].pinned).toBe(true)
-    expect(editor.stops.value[1].pinned).toBe(false)
+    // 原本就釘選的站保持釘選、其餘不因為被移動而變釘選
+    expect(editor.stops.value.map((s) => s.pinned)).toEqual([true, false, false])
     expect(editor.stops.value.map((s) => s.seq)).toEqual([1, 2, 3])
     expect(editor.dirty.value).toBe(true)
   })
@@ -331,7 +335,7 @@ describe('編輯與釘選', () => {
     })])
     editor.moveStop(0, 2)
     expect(editor.stops.value.map((s) => s.student_id)).toEqual([102, 103, 101])
-    expect(editor.stops.value[2].pinned).toBe(true)
+    expect(editor.stops.value.every((s) => !s.pinned)).toBe(true)
     expect(editor.stops.value.map((s) => s.seq)).toEqual([1, 2, 3])
   })
 
@@ -354,6 +358,38 @@ describe('編輯與釘選', () => {
     const editor = await boot([routeA({ stops: [stop({ pinned: true })] })])
     editor.togglePinned(0)
     expect(editor.stops.value[0].pinned).toBe(false)
+  })
+
+  /**
+   * 全站釘選時自動排序必然 no-op（後端分段最佳化每段 0 個自由站），unpinAll 是
+   * 預覽 Dialog 給的出口，免得使用者逐站點 📌。
+   */
+  it('unpinAll 解除全部釘選並標記未儲存，回傳是否真的有站被解除', async () => {
+    const editor = await boot([routeA({
+      stops: [
+        stop({ student_id: 101, pinned: true }),
+        stop({ student_id: 102, pinned: true }),
+      ],
+    })])
+    expect(editor.unpinAll()).toBe(true)
+    expect(editor.stops.value.every((s) => !s.pinned)).toBe(true)
+    expect(editor.dirty.value).toBe(true)
+    // 已經沒有釘選站時回 false，view 才能改講「目前沒有釘選的站點」
+    expect(editor.unpinAll()).toBe(false)
+  })
+
+  it('unpinAll 不動順序，只改釘選旗標', async () => {
+    const editor = await boot([routeA({
+      stops: [
+        stop({ student_id: 101, pinned: true }),
+        stop({ student_id: 102, pinned: false }),
+        stop({ student_id: 103, pinned: true }),
+      ],
+    })])
+    const seqBefore = editor.stops.value.map((s) => s.seq)
+    editor.unpinAll()
+    expect(editor.stops.value.map((s) => s.student_id)).toEqual([101, 102, 103])
+    expect(editor.stops.value.map((s) => s.seq)).toEqual(seqBefore)
   })
 
   it('setPickupAddress 的 id=null 是「住家」，且會一併帶入座標與地址文字、清掉過期旗標', async () => {
@@ -379,6 +415,16 @@ describe('編輯與釘選', () => {
     editor.setPickupAddress(0, { id: 7, lat: null, lng: null, address: '阿嬤家' })
     expect(editor.stops.value[0]).toMatchObject({
       pickup_address_id: 7, lat: null, lng: null, address_snapshot: '阿嬤家',
+    })
+  })
+
+  it('重選同一筆非住家地址簿地址時，不得用地址簿原始座標覆蓋掉已手動微調過的座標', async () => {
+    const editor = await boot([routeA({ stops: [stop({ pickup_address_id: 7, lat: 24.0, lng: 121.0 })] })])
+    // 地址簿裡這筆地址的原始 geocode 座標（22.61/120.31）跟站點目前已微調過的座標（24.0/121.0）不同；
+    // 重選同一筆（id 沒變）不該把已微調的座標退回原始 geocode 值。
+    editor.setPickupAddress(0, { id: 7, lat: 22.61, lng: 120.31, address: '阿嬤家' })
+    expect(editor.stops.value[0]).toMatchObject({
+      pickup_address_id: 7, lat: 24.0, lng: 121.0, address_snapshot: '阿嬤家',
     })
   })
 
