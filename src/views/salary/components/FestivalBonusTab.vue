@@ -5,9 +5,13 @@
 // 由父層外部單一「儲存所有薪資設定」按鈕一起送出）。此處僅接 props 直改
 // nested 欄位，同一份物件參照會直接反映回父層。
 interface FestivalBonusConfig {
-  head_teacher_ab: number
+  // 節慶基數 A/B 自 festab01（2026-08-28）起分開設定：拆分前 A、B 共用
+  // 後端 head_teacher_ab 一欄，業主無法對幼兒園教師（A）與教保員（B）給不同基數。
+  head_teacher_a: number
+  head_teacher_b: number
   head_teacher_c: number
-  assistant_teacher_ab: number
+  assistant_teacher_a: number
+  assistant_teacher_b: number
   assistant_teacher_c: number
   principal_festival: number
   director_festival: number
@@ -38,8 +42,11 @@ defineProps<{
   <el-row :gutter="20" class="mb-6">
     <el-col :span="12">
       <el-card header="班導師" shadow="never" class="box-card">
-        <el-form-item label="A/B 級">
-          <el-input-number v-model="bonusConfig.head_teacher_ab" :min="0" style="width: 100%" />
+        <el-form-item label="A 級">
+          <el-input-number v-model="bonusConfig.head_teacher_a" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="B 級">
+          <el-input-number v-model="bonusConfig.head_teacher_b" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="C 級">
           <el-input-number v-model="bonusConfig.head_teacher_c" :min="0" style="width: 100%" />
@@ -48,8 +55,11 @@ defineProps<{
     </el-col>
     <el-col :span="12">
       <el-card header="副班導" shadow="never" class="box-card">
-        <el-form-item label="A/B 級">
-          <el-input-number v-model="bonusConfig.assistant_teacher_ab" :min="0" style="width: 100%" />
+        <el-form-item label="A 級">
+          <el-input-number v-model="bonusConfig.assistant_teacher_a" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="B 級">
+          <el-input-number v-model="bonusConfig.assistant_teacher_b" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="C 級">
           <el-input-number v-model="bonusConfig.assistant_teacher_c" :min="0" style="width: 100%" />

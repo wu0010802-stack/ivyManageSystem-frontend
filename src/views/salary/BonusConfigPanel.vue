@@ -22,9 +22,11 @@ const canSaveBonusSettings = computed(
 )
 
 const bonusConfig = reactive({
-  head_teacher_ab: 0,
+  head_teacher_a: 0,
+  head_teacher_b: 0,
   head_teacher_c: 0,
-  assistant_teacher_ab: 0,
+  assistant_teacher_a: 0,
+  assistant_teacher_b: 0,
   assistant_teacher_c: 0,
   principal_festival: 0,
   director_festival: 0,

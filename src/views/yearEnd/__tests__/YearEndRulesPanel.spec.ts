@@ -52,9 +52,11 @@ type PanelVm = {
 const FULL_BONUS_CONFIG_RESPONSE = {
   id: 1,
   config_year: 2026,
-  head_teacher_ab: 3000,
+  head_teacher_a: 3000,
+  head_teacher_b: 3000,
   head_teacher_c: 2500,
-  assistant_teacher_ab: 2000,
+  assistant_teacher_a: 2000,
+  assistant_teacher_b: 2000,
   assistant_teacher_c: 1500,
   principal_festival: 5000,
   director_festival: 4000,
