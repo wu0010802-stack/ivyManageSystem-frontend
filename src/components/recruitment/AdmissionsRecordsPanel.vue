@@ -44,6 +44,7 @@
       :source-categories="sourceCategories"
       :teacher-options="teacherOptions"
       @save="handleSave"
+      @save-next="handleSaveAndNext"
     />
 
     <RecruitmentConvertDialog
@@ -383,6 +384,29 @@ const handleSave = async () => {
     }
     recruitmentDraft.clear()
     dialogVisible.value = false
+    await fetchDetail()
+    emit('changed')
+  } catch (e) {
+    ElMessage.error(apiError(e, '儲存失敗'))
+  } finally {
+    saving.value = false
+  }
+}
+
+// 儲存並新增下一筆（招生旺季連續登記；僅新增模式）：成功後不關 dialog、
+// 換上新的空白表單繼續填。入學學期沿用上一筆——同一場參觀活動的家長
+// 幾乎都衝著同一個學期來。
+const handleSaveAndNext = async () => {
+  saving.value = true
+  const { month_raw: _mr, ...payload } = form.value
+  try {
+    await createRecruitmentRecord(payload)
+    ElMessage.success('已儲存，可繼續新增下一筆')
+    recruitmentDraft.clear()
+    const next = emptyVisitForm()
+    next.target_school_year = form.value.target_school_year
+    next.target_semester = form.value.target_semester
+    form.value = next
     await fetchDetail()
     emit('changed')
   } catch (e) {

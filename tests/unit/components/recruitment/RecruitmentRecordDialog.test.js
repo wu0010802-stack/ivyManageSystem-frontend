@@ -66,20 +66,22 @@ describe('RecruitmentRecordDialog — geocoding_consent', () => {
     expect(form.geocoding_consent).toBe(false)
   })
 
-  it('el-alert 在 geocoding_consent=false 時應顯示', () => {
+  // 2026-08-28 UX：大 el-alert 收斂為單行動態 hint（off/ok 兩態）
+  it('未勾選時顯示「不會進入區位分析」hint', () => {
     const { wrapper } = factory({ formOverrides: { geocoding_consent: false } })
-    const alert = wrapper.find('.el-alert')
-    expect(alert.exists()).toBe(true)
-    expect(alert.text()).toContain('未勾選同意')
+    const hint = wrapper.find('[data-test="consent-hint-off"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.text()).toContain('不會進入招生熱點區位分析')
+    expect(wrapper.find('.el-alert').exists()).toBe(false)
   })
 
-  it('el-alert 在 geocoding_consent=true 時不顯示', async () => {
+  it('勾選後切換為確認 hint', async () => {
     const { wrapper, form } = factory({ formOverrides: { geocoding_consent: false } })
     // 模擬勾選
     form.geocoding_consent = true
     await wrapper.vm.$nextTick()
-    const alert = wrapper.find('.el-alert')
-    expect(alert.exists()).toBe(false)
+    expect(wrapper.find('[data-test="consent-hint-ok"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="consent-hint-off"]').exists()).toBe(false)
   })
 
   it('el-checkbox 存在且 label 含「需明確確認」', () => {
@@ -107,21 +109,21 @@ describe('RecruitmentRecordDialog — geocoding_consent', () => {
     expect(form.geocoding_consent).toBe(true)
   })
 
-  it('edit 模式：geocoding_consent=true 傳入時 checkbox 應已勾選且無 el-alert', async () => {
+  it('edit 模式：geocoding_consent=true 傳入時 checkbox 已勾選且顯示確認 hint', async () => {
     const { wrapper, form } = factory({
       mode: 'edit',
       formOverrides: { geocoding_consent: true },
     })
     await wrapper.vm.$nextTick()
     expect(form.geocoding_consent).toBe(true)
-    expect(wrapper.find('.el-alert').exists()).toBe(false)
+    expect(wrapper.find('[data-test="consent-hint-ok"]').exists()).toBe(true)
   })
 
-  it('edit 模式：geocoding_consent=false 傳入時有 el-alert', () => {
+  it('edit 模式：geocoding_consent=false 傳入時顯示未勾選 hint', () => {
     const { wrapper } = factory({
       mode: 'edit',
       formOverrides: { geocoding_consent: false },
     })
-    expect(wrapper.find('.el-alert').exists()).toBe(true)
+    expect(wrapper.find('[data-test="consent-hint-off"]').exists()).toBe(true)
   })
 })

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>設計稿：新增訪視紀錄 UI/UX 優化</title>
+<style>
+/* ============================================================
+   Design tokens — 值複製自 src/assets/design-tokens.css（html.ivy-admin scope）
+   ============================================================ */
+:root {
+  --brand-primary: #0284c7;
+  --brand-primary-hover: #0369a1;
+  --brand-primary-soft: #e0f2fe;
+  --neutral-0: #ffffff; --neutral-50: #f8fafc; --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0; --neutral-300: #cbd5e1; --neutral-400: #94a3b8;
+  --neutral-500: #64748b; --neutral-600: #475569; --neutral-700: #334155;
+  --neutral-800: #1e293b; --neutral-900: #0f172a;
+  --success: #10b981; --success-soft: #dcfce7; --success-darker: #15803d;
+  --warning: #f59e0b; --warning-soft: #fef3c7; --warning-darker: #b45309;
+  --danger: #ef4444;  --danger-soft: #fee2e2;  --danger-darker: #b91c1c;
+  --info: #3b82f6;    --info-soft: #dbeafe;    --info-darker: #1d4ed8;
+  --sidebar-bg: #1e2a3a; --sidebar-bg-active: #314257;
+  --sidebar-text: #94a3b8; --sidebar-text-hover: #e2e8f0; --sidebar-text-active: #7dd3fc;
+  --bg-color: var(--neutral-50); --bg-color-soft: var(--neutral-100);
+  --surface-color: var(--neutral-0);
+  --text-primary: var(--neutral-800); --text-secondary: var(--neutral-500); --text-tertiary: var(--neutral-400);
+  --border-color: var(--neutral-200); --border-color-light: var(--neutral-100);
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px;
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 12px; --radius-xl: 16px; --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --transition-fast: .15s ease; --transition-base: .2s ease;
+  --transition-slow: .3s cubic-bezier(.4,0,.2,1);
+  --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-lg: 16px;
+  --text-xl: 18px; --text-2xl: 20px; --text-3xl: 24px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--text-base); line-height: 1.5; color: var(--text-primary);
+  background: var(--bg-color); overflow: hidden;
+}
+
+/* ============================ App shell ============================ */
+.admin-layout { display: flex; height: 100vh; }
+.admin-sidebar {
+  width: 260px; flex-shrink: 0; height: 100vh;
+  display: flex; flex-direction: column;
+  background: var(--sidebar-bg); color: #fff;
+  border-right: 1px solid var(--neutral-700);
+  box-shadow: 4px 0 24px rgba(0,0,0,.1); z-index: 20;
+}
+.logo-container {
+  height: 64px; flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 var(--space-5); background: var(--neutral-900);
+  border-bottom: 1px solid var(--neutral-700);
+}
+.logo-icon {
+  width: 36px; height: 36px; border-radius: var(--radius-md); flex-shrink: 0;
+  background: linear-gradient(135deg, #4EB87A, #2D8F5A);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: 15px;
+}
+.logo-text { margin-left: var(--space-3); font-size: var(--text-xl); font-weight: 700; color: #fff; letter-spacing: .5px; white-space: nowrap; }
+.sidebar-menu { flex: 1; overflow-y: auto; padding: var(--space-2) 0; }
+.sidebar-menu::-webkit-scrollbar { width: 6px; }
+.sidebar-menu::-webkit-scrollbar-thumb { background: var(--neutral-700); border-radius: 3px; }
+.menu-item, .submenu-title {
+  display: flex; align-items: center; gap: 10px;
+  height: 50px; line-height: 50px; margin: var(--space-1) var(--space-3);
+  padding: 0 var(--space-4); border-radius: var(--radius-md);
+  color: var(--sidebar-text); font-size: var(--text-base);
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  text-decoration: none;
+}
+.menu-item:hover, .submenu-title:hover { color: var(--sidebar-text-hover); background: rgba(255,255,255,.05); }
+.menu-item.is-active { background: var(--sidebar-bg-active); color: var(--sidebar-text-active); font-weight: 500; }
+.menu-icon { width: 18px; height: 18px; flex-shrink: 0; display: inline-flex; }
+.menu-icon svg { width: 100%; height: 100%; stroke: currentColor; fill: none; stroke-width: 1.8; }
+.submenu-arrow { margin-left: auto; transition: transform var(--transition-base); font-size: 12px; }
+.submenu.is-open .submenu-arrow { transform: rotate(180deg); }
+.submenu-items { display: none; }
+.submenu.is-open .submenu-items { display: block; }
+.submenu-items .menu-item { height: 44px; line-height: 44px; padding-left: 36px; font-size: var(--text-sm); }
+.collapse-toggle {
+  height: 48px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  border-top: 1px solid var(--neutral-700); color: var(--sidebar-text); cursor: pointer;
+}
+.main-content-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.admin-header {
+  height: 64px; flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 var(--space-6); gap: var(--space-3);
+  background: var(--surface-color); border-bottom: 1px solid var(--border-color-light);
+}
+.page-title { font-size: var(--text-2xl); font-weight: 600; color: var(--text-primary); }
+.page-title .parent-title { color: var(--text-tertiary); font-weight: 400; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-3); }
+.global-search {
+  display: flex; align-items: center; gap: var(--space-2);
+  height: 36px; padding: 0 var(--space-3); min-width: 180px;
+  background: var(--bg-color-soft); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); color: var(--text-tertiary); font-size: var(--text-sm); cursor: pointer;
+}
+.global-search kbd {
+  margin-left: auto; font-family: inherit; font-size: 11px; color: var(--text-secondary);
+  background: var(--surface-color); border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm); padding: 1px 5px;
+}
+.header-icon-btn {
+  width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+  border: none; background: none; border-radius: var(--radius-md);
+  color: var(--text-secondary); cursor: pointer; position: relative; font-size: 18px;
+}
+.header-icon-btn .dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.user-menu { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; padding: var(--space-1) var(--space-2); border-radius: var(--radius-md); }
+.avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--brand-primary-soft);
+  color: var(--brand-primary); display: flex; align-items: center; justify-content: center; font-weight: 600;
+}
+.user-name { font-size: var(--text-sm); }
+.user-role { font-size: var(--text-xs); color: var(--text-tertiary); }
+#admin-main { flex: 1; overflow-y: auto; }
+.content-container { padding: var(--space-8); max-width: 1600px; margin: 0 auto; }
+
+/* ============================ ep-* 元件 ============================ */
+.ep-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 15px; font-size: var(--text-base); font-family: inherit;
+  border-radius: var(--radius-sm); border: 1px solid #dcdfe6;
+  background: var(--surface-color); color: var(--text-primary); cursor: pointer;
+  transition: all var(--transition-fast); white-space: nowrap;
+}
+.ep-button:hover { color: var(--brand-primary); border-color: var(--brand-primary-soft); background: var(--brand-primary-soft); }
+.ep-button--primary { background: var(--brand-primary); border-color: var(--brand-primary); color: #fff; }
+.ep-button--primary:hover { background: var(--brand-primary-hover); border-color: var(--brand-primary-hover); color: #fff; }
+.ep-button--small { height: 28px; padding: 0 11px; font-size: var(--text-xs); }
+.ep-button--warning.is-plain { background: var(--warning-soft); border-color: #fcd34d; color: var(--warning-darker); }
+.ep-button--primary.is-plain { background: var(--brand-primary-soft); border-color: #7dd3fc; color: var(--brand-primary); }
+.ep-input {
+  height: 36px; padding: 0 11px; font-size: var(--text-base); font-family: inherit;
+  border: 1px solid #dcdfe6; border-radius: var(--radius-sm); color: var(--text-primary);
+  background: var(--surface-color); outline: none; transition: border-color var(--transition-fast);
+  width: 100%;
+}
+.ep-input:focus { border-color: var(--brand-primary); }
+.ep-input::placeholder { color: var(--text-tertiary); }
+.ep-input[disabled] { background: var(--neutral-100); color: var(--text-tertiary); cursor: not-allowed; }
+.ep-select { position: relative; }
+.ep-select::after { content: "▾"; position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); pointer-events: none; }
+.ep-date { position: relative; }
+.ep-date::before { content: "🗓"; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: .55; }
+.ep-date .ep-input { padding-left: 32px; }
+.ep-card {
+  background: var(--surface-color); border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-sm);
+}
+.ep-tag {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 9px;
+  font-size: var(--text-xs); border-radius: var(--radius-sm); border: 1px solid transparent;
+}
+.ep-tag--success { background: var(--success-soft); color: var(--success-darker); border-color: #bbf7d0; }
+.ep-tag--danger  { background: var(--danger-soft); color: var(--danger-darker); border-color: #fecaca; }
+.ep-tag--info    { background: var(--neutral-100); color: var(--neutral-600); border-color: var(--neutral-200); }
+.ep-table { width: 100%; border-collapse: collapse; background: var(--surface-color); font-size: var(--text-base); }
+.ep-table th {
+  text-align: left; font-weight: 600; color: var(--text-secondary); font-size: var(--text-sm);
+  padding: 12px 16px; background: var(--neutral-50); border-bottom: 1px solid var(--border-color);
+}
+.ep-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color-light); }
+.ep-table tbody tr:hover { background: var(--neutral-50); }
+.list-toolbar { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); flex-wrap: wrap; }
+.list-toolbar .spacer { flex: 1; }
+
+/* ---- switch ---- */
+.ep-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: var(--text-base); }
+.ep-switch .track {
+  width: 40px; height: 20px; border-radius: var(--radius-full); background: var(--neutral-300);
+  position: relative; transition: background var(--transition-base); flex-shrink: 0;
+}
+.ep-switch .track::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; transition: left var(--transition-base); box-shadow: var(--shadow-sm);
+}
+.ep-switch.is-checked .track { background: var(--brand-primary); }
+.ep-switch.is-checked .track::after { left: 22px; }
+.ep-switch .sw-label { color: var(--text-tertiary); }
+.ep-switch .sw-label.on { order: -1; }
+.ep-switch.is-checked .sw-label.on, .ep-switch:not(.is-checked) .sw-label.off { color: var(--brand-primary); font-weight: 500; }
+.ep-switch:not(.is-checked) .sw-label.off { color: var(--text-primary); }
+
+/* ---- segmented（el-radio-button）---- */
+.ep-seg { display: inline-flex; }
+.ep-seg button {
+  height: 36px; padding: 0 16px; font-size: var(--text-base); font-family: inherit;
+  background: var(--surface-color); border: 1px solid #dcdfe6; cursor: pointer; color: var(--text-primary);
+}
+.ep-seg button:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.ep-seg button:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+.ep-seg button.is-active { background: var(--brand-primary); border-color: var(--brand-primary); color: #fff; }
+
+/* ---- checkbox ---- */
+.ep-check { display: inline-flex; align-items: flex-start; gap: 8px; cursor: pointer; user-select: none; }
+.ep-check .box {
+  width: 15px; height: 15px; margin-top: 3px; border: 1px solid #dcdfe6; border-radius: 3px; flex-shrink: 0;
+  background: var(--surface-color); position: relative; transition: all var(--transition-fast);
+}
+.ep-check.is-checked .box { background: var(--brand-primary); border-color: var(--brand-primary); }
+.ep-check.is-checked .box::after {
+  content: ""; position: absolute; left: 4.5px; top: 1.5px; width: 3px; height: 7px;
+  border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+
+/* ---- alert（改前現況用）---- */
+.ep-alert {
+  display: flex; gap: 8px; align-items: flex-start; padding: 9px 13px; border-radius: var(--radius-sm);
+  background: var(--info-soft); color: var(--info-darker); font-size: var(--text-sm); margin: var(--space-2) 0;
+}
+
+/* ============================ Dialog ============================ */
+.ep-dialog-overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 100;
+  display: none; align-items: flex-start; justify-content: center; padding: 6vh 16px 40px;
+}
+.ep-dialog-overlay.is-open { display: flex; }
+.ep-dialog {
+  background: var(--surface-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  width: 680px; max-width: calc(100vw - 32px); max-height: 86vh; overflow-y: auto;
+}
+.ep-dialog__header { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-5) var(--space-6) var(--space-3); }
+.ep-dialog__title { font-size: var(--text-lg); font-weight: 600; }
+.ep-dialog__close { border: none; background: none; font-size: 18px; color: var(--text-tertiary); cursor: pointer; margin-left: auto; }
+.ep-dialog__body { padding: var(--space-2) var(--space-6); }
+.ep-dialog__footer { padding: var(--space-4) var(--space-6) var(--space-5); display: flex; justify-content: flex-end; gap: var(--space-2); }
+
+/* ---- 表單（label-position: top）---- */
+.frm-row { display: flex; gap: 16px; }
+.frm-row > .frm-item { flex: 1; min-width: 0; }
+.frm-item { margin-bottom: var(--space-4); }
+.frm-item > label { display: block; font-size: var(--text-base); color: var(--neutral-600); margin-bottom: 6px; line-height: 22px; }
+.frm-item.is-required > label::before { content: "*"; color: var(--danger); margin-right: 4px; }
+.form-hint { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 4px; line-height: 1.5; }
+.form-hint.ok { color: var(--success-darker); }
+.required-legend { font-size: var(--text-xs); color: var(--text-secondary); margin: 0 0 var(--space-3); }
+.required-legend .req { color: var(--danger); }
+
+/* ---- FormSection（hairline 分段，照抄 FormSection.vue 視覺）---- */
+.form-section + .form-section { border-top: 1px solid var(--border-color-light); margin-top: var(--space-3); padding-top: var(--space-2); }
+.form-section__header {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) 0; cursor: pointer; user-select: none; border-radius: var(--radius-sm);
+}
+.form-section__header:hover .form-section__title, .form-section__header:hover .chev { color: var(--brand-primary); }
+.chev { color: var(--text-secondary); font-size: 12px; transition: transform var(--transition-base); display: inline-block; }
+.form-section.is-open .chev { transform: rotate(90deg); }
+.form-section__title, .form-section__label { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.form-section__label { padding: var(--space-2) 0; }
+.form-section__body { display: none; padding: var(--space-2) 0 var(--space-3); }
+.form-section.is-open .form-section__body { display: block; }
+.form-section--static .form-section__body { display: block; }
+.sec-badge {
+  margin-left: auto; min-width: 18px; height: 18px; padding: 0 7px; border-radius: var(--radius-full);
+  font-size: var(--text-xs); line-height: 18px; text-align: center;
+}
+.sec-badge.filled { background: var(--neutral-100); color: var(--neutral-600); border: 1px solid var(--neutral-200); }
+.sec-badge.error { background: var(--danger); color: #fff; }
+
+/* 序號 meta chip（改後 dialog header） */
+.seq-chip {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px;
+  border-radius: var(--radius-full); background: var(--neutral-100); color: var(--neutral-600);
+  font-size: var(--text-xs); border: 1px solid var(--neutral-200); white-space: nowrap;
+}
+
+/* ============================ 設計稿專用 ============================ */
+body:not(.mock-view-before) .mock-before { display: none !important; }
+body.mock-view-before .mock-after { display: none !important; }
+body.mock-view-before .mock-badge { display: none !important; }
+body.mock-view-before .mock-changed { outline: none; }
+.mock-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  padding: 3px 7px; border-radius: var(--radius-full);
+  background: #fdf4ff; color: #a21caf; border: 1px dashed #d946ef;
+  vertical-align: middle; margin-left: 6px;
+}
+.mock-changed { outline: 2px dashed #d946ef; outline-offset: 3px; border-radius: var(--radius-md); }
+body.hide-annotations .mock-badge, body.hide-annotations .mock-changed { outline: none; }
+body.hide-annotations .mock-badge { display: none; }
+.mock-toolbar {
+  position: fixed; bottom: 16px; right: 16px; z-index: 2000;
+  display: flex; gap: 8px; align-items: center;
+  background: var(--neutral-900); color: #fff; font-size: 12px;
+  padding: 8px 12px; border-radius: var(--radius-full); box-shadow: var(--shadow-lg); opacity: .92;
+}
+.mock-toolbar button { border: none; background: var(--neutral-700); color: #fff; border-radius: var(--radius-full); padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.mock-toolbar button:hover { background: var(--neutral-600); }
+.mock-seg { display: flex; background: var(--neutral-700); border-radius: var(--radius-full); padding: 2px; }
+.mock-seg button { background: none; padding: 3px 10px; }
+.mock-seg button.is-active { background: #7dd3fc; color: var(--neutral-900); font-weight: 600; }
+.mock-seg button.is-active:hover { background: #7dd3fc; }
+</style>
+</head>
+<body>
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="logo-container">
+      <div class="logo-icon">常</div>
+      <span class="logo-text">常春藤管理系統</span>
+    </div>
+    <nav class="sidebar-menu">
+      <a class="menu-item" href="#/"><span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>儀表板</a>
+      <a class="menu-item" href="#/workbench"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M21 12v6a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2h11"/></svg></span>審核工作台</a>
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg></span>人事薪資<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/employees">員工管理</a>
+          <a class="menu-item" href="#/salary">薪資管理</a>
+          <a class="menu-item" href="#/attendance">出勤管理</a>
+        </div>
+      </div>
+      <div class="submenu is-open">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg></span>學生與班級<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/classrooms">班級管理</a>
+          <a class="menu-item" href="#/enrollment-stats">統計圖表</a>
+          <a class="menu-item" href="#/students">學生</a>
+          <a class="menu-item" href="#/portfolio/medication-today">健康與給藥</a>
+          <a class="menu-item" href="#/growth-books">成長冊工作台</a>
+          <a class="menu-item is-active" href="#/students/admissions">招生入學</a>
+          <a class="menu-item" href="#/dismissal-queue">接送管理</a>
+          <a class="menu-item" href="#/fees">學費管理</a>
+        </div>
+      </div>
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9l-7-7z"/><path d="M13 2v7h7"/></svg></span>園務行政<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/announcements">公告管理</a>
+          <a class="menu-item" href="#/calendar">學校行事曆</a>
+        </div>
+      </div>
+      <div class="submenu">
+        <div class="submenu-title" onclick="toggleSubmenu(this)"><span class="menu-icon"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg></span>報表<span class="submenu-arrow">▾</span></div>
+        <div class="submenu-items">
+          <a class="menu-item" href="#/reports">經營報表</a>
+        </div>
+      </div>
+    </nav>
+    <div class="collapse-toggle" title="收合側邊欄">⟨</div>
+  </aside>
+
+  <div class="main-content-wrapper">
+    <header class="admin-header">
+      <h1 class="page-title"><span class="parent-title">學生與班級 / </span>招生入學</h1>
+      <div class="header-right">
+        <div class="global-search">🔍 搜尋…<kbd>Ctrl K</kbd></div>
+        <button class="header-icon-btn" title="通知">🔔<span class="dot"></span></button>
+        <button class="ep-button ep-button--warning is-plain ep-button--small">檢視老師教師端</button>
+        <button class="ep-button ep-button--primary is-plain ep-button--small">進入前台</button>
+        <div class="user-menu">
+          <div class="avatar">管</div>
+          <div><div class="user-name">園長</div><div class="user-role">系統管理員</div></div>
+        </div>
+      </div>
+    </header>
+
+    <main id="admin-main">
+      <div class="content-container">
+        <div class="ep-card">
+          <div class="list-toolbar">
+            <span style="font-weight:600;font-size:var(--text-lg)">訪視紀錄</span>
+            <div class="spacer"></div>
+            <button class="ep-button ep-button--small">管理月份</button>
+            <button class="ep-button ep-button--primary ep-button--small" onclick="openDialog('dlg')">新增訪視紀錄</button>
+          </div>
+          <table class="ep-table">
+            <thead><tr>
+              <th>參觀日期</th><th>姓名</th><th>班別</th><th>入學學期</th><th>預繳</th><th>已註冊</th><th>娃娃車</th><th>操作</th>
+            </tr></thead>
+            <tbody>
+              <tr><td>115.08.27</td><td>林芯妤</td><td>中班</td><td>115 上</td><td><span class="ep-tag ep-tag--success">是</span></td><td><span class="ep-tag ep-tag--success">是</span></td><td><span class="ep-tag ep-tag--info">要搭</span></td><td><button class="ep-button ep-button--small">編輯</button></td></tr>
+              <tr><td>115.08.25</td><td>陳宥廷</td><td>小班</td><td>115 上</td><td><span class="ep-tag ep-tag--danger">否</span></td><td>—</td><td>—</td><td><button class="ep-button ep-button--small">編輯</button></td></tr>
+              <tr><td>115.08.21</td><td>黃睿恩</td><td>幼幼班</td><td>115 下</td><td><span class="ep-tag ep-tag--success">是</span></td><td>—</td><td><span class="ep-tag ep-tag--info">要搭</span></td><td><button class="ep-button ep-button--small">編輯</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ==================== 新增訪視紀錄 Dialog ==================== -->
+<div class="ep-dialog-overlay is-open" id="dlg">
+  <div class="ep-dialog">
+
+    <!-- ─────────── 改後（提案） ─────────── -->
+    <div class="mock-after">
+      <div class="ep-dialog__header">
+        <span class="ep-dialog__title">新增訪視紀錄</span>
+        <span class="seq-chip mock-changed">序號 <b>自動產生</b></span><span class="mock-badge">✦ 變更：序號移出表單</span>
+        <button class="ep-dialog__close" onclick="closeDialog('dlg')">✕</button>
+      </div>
+      <div class="ep-dialog__body">
+        <p class="required-legend"><span class="req">*</span> 為必填（僅 4 欄），其餘可日後補</p>
+
+        <!-- 基本資料 -->
+        <div class="form-section form-section--static">
+          <div class="form-section__label">基本資料 <span class="mock-badge">✦ 變更：依接待動線重排</span></div>
+          <div class="form-section__body">
+            <div class="frm-row mock-changed">
+              <div class="frm-item is-required">
+                <label>幼生姓名</label>
+                <input class="ep-input" value="王小寶">
+              </div>
+              <div class="frm-item is-required">
+                <label>生日</label>
+                <div class="ep-date"><input class="ep-input" value="2022-10-15"></div>
+              </div>
+            </div>
+            <div class="frm-row">
+              <div class="frm-item mock-changed">
+                <label>適讀班級 <span class="mock-badge">✦ 新增：依生日自動判定</span></label>
+                <div class="ep-select"><input class="ep-input" value="中班" readonly style="cursor:pointer"></div>
+                <div class="form-hint ok">✓ 已依生日 × 115 學年自動判定，可手動修改</div>
+              </div>
+              <div class="frm-item">
+                <label>電話</label>
+                <input class="ep-input" placeholder="例：0912-345-678">
+              </div>
+            </div>
+            <div class="frm-row">
+              <div class="frm-item is-required mock-changed">
+                <label>參觀日期 <span class="mock-badge">✦ 變更：預設今天</span></label>
+                <div class="ep-date"><input class="ep-input" value="2026-08-28"></div>
+                <div class="form-hint">民國：115.08.28（月份：115.08）· 已預設今天，可改</div>
+              </div>
+              <div class="frm-item">
+                <label>是否搭乘娃娃車</label>
+                <span class="ep-switch is-checked" onclick="this.classList.toggle('is-checked')">
+                  <span class="sw-label off">不搭乘</span>
+                  <span class="track"></span>
+                  <span class="sw-label on-txt" style="color:var(--brand-primary);font-weight:500">要搭乘</span>
+                </span>
+                <div class="form-hint">參觀當下的意願；實際路線在「娃娃車路線」頁編排。</div>
+              </div>
+            </div>
+            <div class="frm-item is-required" style="margin-bottom:var(--space-2)">
+              <label>入學學期</label>
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                <div class="ep-select" style="width:130px"><input class="ep-input" value="115 學年" readonly style="cursor:pointer"></div>
+                <div class="ep-seg">
+                  <button class="is-active" onclick="segPick(this)">上學期</button>
+                  <button onclick="segPick(this)">下學期</button>
+                </div>
+              </div>
+              <div class="form-hint">小孩預計入學的學期（預設當前學期，可改）。</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 聯絡與來源 -->
+        <div class="form-section" id="sec-contact-after">
+          <div class="form-section__header" onclick="toggleSection('sec-contact-after')">
+            <span class="chev">▶</span>
+            <span class="form-section__title">聯絡與來源</span>
+            <span class="sec-badge filled mock-changed">已填 1 項</span><span class="mock-badge">✦ 新增：收合區摘要</span>
+          </div>
+          <div class="form-section__body">
+            <div class="frm-item">
+              <label>地址</label>
+              <input class="ep-input" value="高雄市三民區建工路 415 號">
+            </div>
+            <div class="frm-row">
+              <div class="frm-item">
+                <label>來源分類</label>
+                <div class="ep-select"><input class="ep-input" placeholder="選擇來源（決定獎金點數）" readonly style="cursor:pointer"></div>
+                <div class="form-hint">對應招生獎勵辦法點數表；舊資料未歸類時獎金頁會提示補填。</div>
+              </div>
+              <div class="frm-item">
+                <label>帶參觀老師</label>
+                <div class="ep-select"><input class="ep-input" placeholder="自報生／邀約類獎金歸此人" readonly style="cursor:pointer"></div>
+              </div>
+            </div>
+            <div class="frm-row">
+              <div class="frm-item">
+                <label>來源備註</label>
+                <input class="ep-input" placeholder="原自由文字來源欄">
+              </div>
+              <div class="frm-item">
+                <label>介紹者</label>
+                <input class="ep-input">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 預繳狀態 -->
+        <div class="form-section" id="sec-deposit-after">
+          <div class="form-section__header" onclick="toggleSection('sec-deposit-after')">
+            <span class="chev">▶</span>
+            <span class="form-section__title">預繳狀態</span>
+            <span class="sec-badge filled">未填</span>
+          </div>
+          <div class="form-section__body">
+            <div class="frm-row">
+              <div class="frm-item"><label>是否預繳</label>
+                <span class="ep-switch" onclick="this.classList.toggle('is-checked')"><span class="sw-label off">未預繳</span><span class="track"></span><span class="sw-label">已預繳</span></span>
+              </div>
+              <div class="frm-item"><label>收預繳人員</label><input class="ep-input" placeholder="預繳時填寫" disabled></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 備註 -->
+        <div class="form-section" id="sec-notes-after">
+          <div class="form-section__header" onclick="toggleSection('sec-notes-after')">
+            <span class="chev">▶</span>
+            <span class="form-section__title">備註</span>
+            <span class="sec-badge filled">未填</span>
+          </div>
+          <div class="form-section__body">
+            <div class="frm-item"><label>備註</label><input class="ep-input"></div>
+            <div class="frm-item"><label>電訪回應</label><input class="ep-input"></div>
+          </div>
+        </div>
+
+        <!-- 地址分析同意（常駐、壓縮為單行） -->
+        <div class="form-section form-section--static mock-changed">
+          <div class="form-section__label">地址分析同意 <span class="mock-badge">✦ 變更：大提示框收斂成單行</span></div>
+          <div class="form-section__body" style="padding-top:0">
+            <label class="ep-check" onclick="toggleConsent(this)">
+              <span class="box"></span>
+              <span>家長已口頭同意以本住址進行招生區位分析（送至 Google Maps）— <b>需明確確認</b></span>
+            </label>
+            <div class="form-hint" id="consent-hint-after">未勾選：本筆不會進入招生熱點區位分析（可日後補勾）。</div>
+          </div>
+        </div>
+      </div>
+      <div class="ep-dialog__footer">
+        <button class="ep-button" onclick="closeDialog('dlg')">取消</button>
+        <button class="ep-button mock-changed" onclick="fakeSaveNext(this)">儲存並新增下一筆</button><span class="mock-badge">✦ 新增：連續登記</span>
+        <button class="ep-button ep-button--primary">儲存</button>
+      </div>
+    </div>
+
+    <!-- ─────────── 改前現況 ─────────── -->
+    <div class="mock-before">
+      <div class="ep-dialog__header">
+        <span class="ep-dialog__title">新增訪視紀錄</span>
+        <button class="ep-dialog__close" onclick="closeDialog('dlg')">✕</button>
+      </div>
+      <div class="ep-dialog__body">
+        <p class="required-legend"><span class="req">*</span> 為必填，其餘可日後補</p>
+
+        <div class="form-section form-section--static">
+          <div class="form-section__label">基本資料</div>
+          <div class="form-section__body">
+            <div class="frm-row">
+              <div class="frm-item is-required">
+                <label>參觀日期</label>
+                <div class="ep-date"><input class="ep-input" placeholder="選擇參觀日期（年月日）"></div>
+              </div>
+              <div class="frm-item">
+                <label>序號</label>
+                <input class="ep-input" value="儲存後自動產生" disabled>
+                <div class="form-hint">系統依當月參觀順序自動編號，不需填寫。</div>
+              </div>
+            </div>
+            <div class="frm-row">
+              <div class="frm-item is-required"><label>幼生姓名</label><input class="ep-input"></div>
+              <div class="frm-item"><label>適讀班級</label>
+                <div class="ep-select"><input class="ep-input" placeholder="" readonly style="cursor:pointer"></div>
+              </div>
+            </div>
+            <div class="frm-item is-required">
+              <label>入學學期</label>
+              <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+                <div class="ep-select" style="width:130px"><input class="ep-input" value="115 學年" readonly style="cursor:pointer"></div>
+                <div class="ep-seg">
+                  <button class="is-active" onclick="segPick(this)">上學期</button>
+                  <button onclick="segPick(this)">下學期</button>
+                </div>
+              </div>
+              <div class="form-hint">小孩預計入學的學期（預設當前學期，可改）。</div>
+            </div>
+            <div class="frm-row">
+              <div class="frm-item is-required"><label>生日</label>
+                <div class="ep-date"><input class="ep-input" placeholder="選擇生日"></div>
+              </div>
+              <div class="frm-item"><label>電話</label>
+                <input class="ep-input">
+                <div class="form-hint">例：0912-345-678</div>
+              </div>
+            </div>
+            <div class="frm-row">
+              <div class="frm-item"><label>是否搭乘娃娃車</label>
+                <span class="ep-switch" onclick="this.classList.toggle('is-checked')"><span class="sw-label off">不搭乘</span><span class="track"></span><span class="sw-label">要搭乘</span></span>
+                <div class="form-hint">參觀當下的意願；實際路線與站點仍在「娃娃車路線」頁編排。</div>
+              </div>
+              <div class="frm-item"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="sec-contact-before">
+          <div class="form-section__header" onclick="toggleSection('sec-contact-before')">
+            <span class="chev">▶</span><span class="form-section__title">聯絡與來源</span>
+          </div>
+          <div class="form-section__body">
+            <div class="frm-item"><label>地址</label><input class="ep-input"></div>
+            <div class="frm-row">
+              <div class="frm-item"><label>來源分類</label><div class="ep-select"><input class="ep-input" placeholder="選擇來源（決定獎金點數）" readonly></div></div>
+              <div class="frm-item"><label>帶參觀老師</label><div class="ep-select"><input class="ep-input" placeholder="自報生／邀約類獎金歸此人" readonly></div></div>
+            </div>
+            <div class="frm-row">
+              <div class="frm-item"><label>來源備註</label><input class="ep-input"></div>
+              <div class="frm-item"><label>介紹者</label><input class="ep-input"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="sec-deposit-before">
+          <div class="form-section__header" onclick="toggleSection('sec-deposit-before')">
+            <span class="chev">▶</span><span class="form-section__title">預繳狀態</span>
+          </div>
+          <div class="form-section__body">
+            <div class="frm-row">
+              <div class="frm-item"><label>是否預繳</label>
+                <span class="ep-switch" onclick="this.classList.toggle('is-checked')"><span class="sw-label off">未預繳</span><span class="track"></span><span class="sw-label">已預繳</span></span>
+              </div>
+              <div class="frm-item"><label>收預繳人員</label><input class="ep-input" placeholder="預繳時填寫" disabled></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" id="sec-notes-before">
+          <div class="form-section__header" onclick="toggleSection('sec-notes-before')">
+            <span class="chev">▶</span><span class="form-section__title">備註</span>
+          </div>
+          <div class="form-section__body">
+            <div class="frm-item"><label>備註</label><input class="ep-input"></div>
+            <div class="frm-item"><label>電訪回應</label><input class="ep-input"></div>
+          </div>
+        </div>
+
+        <div class="form-section form-section--static">
+          <div class="form-section__label">地址分析同意</div>
+          <div class="form-section__body" style="padding-top:0">
+            <label class="ep-check" onclick="this.classList.toggle('is-checked')">
+              <span class="box"></span>
+              <span>家長已口頭同意以本住址進行招生區位分析（送至 Google Maps）— <b>需明確確認</b></span>
+            </label>
+            <div class="form-hint">招生人員負責確認家長口頭同意後再勾選；預設不勾（explicit attestation 責任）。</div>
+            <div class="ep-alert">ℹ️ 未勾選同意 → 本筆 visit 不會進入招生 heatmap 區位分析</div>
+          </div>
+        </div>
+      </div>
+      <div class="ep-dialog__footer">
+        <button class="ep-button" onclick="closeDialog('dlg')">取消</button>
+        <button class="ep-button ep-button--primary">儲存</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="mock-toolbar">
+  <span>📐 設計稿</span>
+  <div class="mock-seg" id="mock-version-seg">
+    <button class="is-active" data-view="after" onclick="setMockView('after')">改後</button>
+    <button data-view="before" onclick="setMockView('before')">改前現況</button>
+  </div>
+  <button onclick="document.body.classList.toggle('hide-annotations')">切換變更標註</button>
+</div>
+
+<script>
+function toggleSubmenu(el) { el.parentElement.classList.toggle('is-open'); }
+function setMockView(view) {
+  document.body.classList.toggle('mock-view-before', view === 'before');
+  document.querySelectorAll('#mock-version-seg button').forEach(function (b) {
+    b.classList.toggle('is-active', b.dataset.view === view);
+  });
+}
+function openDialog(id) { document.getElementById(id).classList.add('is-open'); }
+function closeDialog(id) { document.getElementById(id).classList.remove('is-open'); }
+document.addEventListener('click', function (e) {
+  if (e.target.classList.contains('ep-dialog-overlay')) e.target.classList.remove('is-open');
+});
+function toggleSection(id) { document.getElementById(id).classList.toggle('is-open'); }
+function segPick(btn) {
+  btn.parentElement.querySelectorAll('button').forEach(function (b) { b.classList.remove('is-active'); });
+  btn.classList.add('is-active');
+}
+function toggleConsent(el) {
+  el.classList.toggle('is-checked');
+  var hint = document.getElementById('consent-hint-after');
+  if (el.classList.contains('is-checked')) {
+    hint.textContent = '✓ 已確認家長口頭同意；本筆將納入招生熱點區位分析。';
+    hint.classList.add('ok');
+  } else {
+    hint.textContent = '未勾選：本筆不會進入招生熱點區位分析（可日後補勾）。';
+    hint.classList.remove('ok');
+  }
+}
+function fakeSaveNext(btn) {
+  var old = btn.textContent;
+  btn.textContent = '✓ 已儲存，表單已清空';
+  btn.disabled = true;
+  setTimeout(function () { btn.textContent = old; btn.disabled = false; }, 1600);
+}
+</script>
+</body>
+</html>

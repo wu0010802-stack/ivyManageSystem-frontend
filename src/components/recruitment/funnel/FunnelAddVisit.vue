@@ -16,6 +16,7 @@
       :referrer-suggestions="referrerSuggestions"
       :no-deposit-reasons="noDepositReasons"
       @save="handleSave"
+      @save-next="handleSaveAndNext"
     />
   </span>
 </template>
@@ -81,5 +82,24 @@ async function handleSave(): Promise<void> {
   }
 }
 
-defineExpose({ form, dialogVisible, saving, openDialog, handleSave })
+// 儲存並新增下一筆：成功後不關 dialog，換空白表單續填（入學學期沿用上一筆）。
+async function handleSaveAndNext(): Promise<void> {
+  saving.value = true
+  const { month_raw: _mr, ...payload } = form.value
+  try {
+    const res = await createRecruitmentRecord(payload)
+    ElMessage.success('已儲存，可繼續新增下一筆')
+    emit('created', (res as { data: { id: number; [k: string]: unknown } }).data)
+    const next = emptyVisitForm()
+    next.target_school_year = form.value.target_school_year
+    next.target_semester = form.value.target_semester
+    form.value = next
+  } catch (e) {
+    ElMessage.error(apiError(e, '儲存失敗'))
+  } finally {
+    saving.value = false
+  }
+}
+
+defineExpose({ form, dialogVisible, saving, openDialog, handleSave, handleSaveAndNext })
 </script>
