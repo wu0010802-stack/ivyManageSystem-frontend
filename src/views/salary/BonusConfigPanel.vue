@@ -210,7 +210,7 @@ onMounted(() => {
 
       <!-- 階段 2-D：職稱→節慶獎金等級對應 -->
       <el-tab-pane label="職稱等級對應" name="job_title_grade">
-        <JobTitleGradeTab />
+        <JobTitleGradeTab :bonus-config="bonusConfig" />
       </el-tab-pane>
     </el-tabs>
   </div>
