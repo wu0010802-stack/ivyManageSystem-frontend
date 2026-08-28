@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getAssignments, saveAssignments, copyMonthAssignments, getDaily, saveDaily, deleteDaily, getScheduleRoster, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
+import { getAssignments, saveAssignments, copyMonthAssignments, getDaily, saveDaily, deleteDaily, getScheduleRoster, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts, getLeaveContext } from '@/api/shifts'
+import { computeWeekCoverage, leaveWindowForDate, type LeaveContextItem, type DailyOverrideLike, type AbsenceWindow } from '@/utils/scheduleCoverage'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -90,8 +91,41 @@ const teacherEmployees = computed(() => {
   return roster.value.filter((e) => e.classroom_id)
 })
 
+// --- 請假整合（2026-08-28）：週請假摘要＋全員每日調整 → 空班判定 ---
+const weekLeaves = ref<LeaveContextItem[]>([])
+const weekDailyOverrides = ref<DailyOverrideLike[]>([])
+
+const weekEndDate = computed(() => {
+  const d = new Date(weekStart.value)
+  d.setDate(d.getDate() + 6)
+  return formatDate(d)
+})
+
+const fetchLeaveContext = async () => {
+  try {
+    const res = await getLeaveContext({ start_date: weekStart.value, end_date: weekEndDate.value })
+    weekLeaves.value = res.data as LeaveContextItem[]
+  } catch (e) {
+    ElMessage.error(friendlyError('載入請假資訊失敗', e))
+  }
+}
+
+// 全員每日調整（供空班判定用；每日調整 dialog 另按單一員工查詢）
+const fetchWeekDailyOverrides = async () => {
+  try {
+    const res = await getDaily({ start_date: weekStart.value, end_date: weekEndDate.value })
+    weekDailyOverrides.value = (res.data as { employee_id: number; date: string; shift_type_id: number | null }[])
+      .map((d) => ({ employee_id: d.employee_id, date: d.date, shift_type_id: d.shift_type_id }))
+  } catch (e) {
+    ElMessage.error(friendlyError('載入每日調整失敗', e))
+  }
+}
+
 const fetchAssignments = async () => {
   loading.value = true
+  // 請假摘要與全員每日調整跟著週切換一起刷新（各自有錯誤處理，不擋主流程）
+  fetchLeaveContext()
+  fetchWeekDailyOverrides()
   try {
     const res = await getAssignments({ week_start: weekStart.value })
     // Build map: employee_id -> assignment
@@ -298,6 +332,47 @@ const getDayName = (dateStr: string) => {
   return days[d.getDay()]
 }
 
+// --- 請假覆蓋／空班判定（純邏輯在 utils/scheduleCoverage，含測試） ---
+const weekCoverage = computed(() =>
+  computeWeekCoverage({
+    dates: currentWeekDates.value,
+    employeeIds: teacherEmployees.value.map((e) => e.id),
+    weeklyShiftByEmp: Object.fromEntries(
+      teacherEmployees.value.map((e) => [e.id, getAssignment(e.id)])
+    ),
+    dailyOverrides: weekDailyOverrides.value,
+    shiftTypes: shiftTypes.value,
+    leaves: weekLeaves.value,
+  })
+)
+
+// 桌機恆列 7 天；手機只列有請假或空班的天，避免整條空卡
+const coverageDaysToShow = computed(() =>
+  isMobile.value
+    ? weekCoverage.value.filter((d) => d.leaves.length || d.gaps.length)
+    : weekCoverage.value
+)
+
+const leavesByEmployee = computed(() => {
+  const map = new Map<number, LeaveContextItem[]>()
+  for (const lv of weekLeaves.value) {
+    const list = map.get(lv.employee_id)
+    if (list) list.push(lv)
+    else map.set(lv.employee_id, [lv])
+  }
+  return map
+})
+
+const empWeekLeaves = (empId: number) => leavesByEmployee.value.get(empId) ?? []
+
+const empLeavesOnDate = (empId: number, dateStr: string) =>
+  empWeekLeaves(empId)
+    .map((lv) => ({ lv, window: leaveWindowForDate(lv, dateStr) }))
+    .filter((x): x is { lv: LeaveContextItem; window: AbsenceWindow } => x.window != null)
+
+const windowLabel = (win: AbsenceWindow) =>
+  win.start === '00:00' && win.end === '24:00' ? '全天' : `${win.start}~${win.end}`
+
 const openDailyDialog = async (emp: EmployeeRow) => {
   currentEmployee.value = emp
   dailyDialogVisible.value = true
@@ -485,8 +560,9 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
         ElMessage.success('已清除（恢復繼承週排班）')
       }
     }
-    // Refresh
+    // Refresh（dialog 單人清單＋全員每日調整都要刷新，空班判定才會跟上）
     await fetchDailyShiftsForDialog()
+    fetchWeekDailyOverrides()
   } catch (error) {
     ElMessage.error(friendlyError('更新排班失敗', error))
   }
@@ -545,9 +621,58 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
           <div v-for="w in saveWarnings" :key="w.employee_id">{{ w.message }}</div>
         </el-alert>
 
+        <!-- 本週請假與空班概覽（資料：GET /shifts/leave-context＋全員每日調整） -->
+        <div
+          v-if="coverageDaysToShow.length"
+          class="week-leave-strip"
+          :class="{ mobile: isMobile }"
+          data-test="leave-strip"
+        >
+          <div
+            v-for="day in coverageDaysToShow"
+            :key="day.date"
+            class="day-card"
+            :class="{ 'has-gap': day.gaps.length }"
+          >
+            <div class="day-head">{{ day.date.slice(5).replace('-', '/') }}（{{ getDayName(day.date) }}）</div>
+            <div
+              v-for="gap in day.gaps"
+              :key="gap.shiftTypeId"
+              class="gap-alert"
+              :class="gap.severity"
+              :data-test="`gap-${day.date}`"
+            >
+              ⚠ {{ gap.shiftTypeName }}（{{ gap.workStart }}~{{ gap.workEnd }}）{{ gap.severity === 'empty' ? '無人上班' : '待審通過將無人' }}
+            </div>
+            <div
+              v-for="entry in day.leaves"
+              :key="entry.leave.id"
+              class="leave-entry"
+              :class="{ pending: entry.leave.status === 'pending' }"
+            >
+              <span class="leave-name">{{ entry.leave.employee_name }}</span>
+              <span class="leave-window">{{ windowLabel(entry.window) }}</span>
+              <span class="leave-type">{{ entry.leave.leave_type_label }}</span>
+              <el-tag v-if="entry.leave.status === 'pending'" type="warning" size="small">待審</el-tag>
+            </div>
+            <div v-if="!day.leaves.length && !day.gaps.length" class="leave-none">無請假</div>
+          </div>
+        </div>
+
         <!-- Assignment Table -->
         <el-table v-if="!isMobile" :data="teacherEmployees" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
-          <el-table-column prop="name" label="姓名" width="100" fixed />
+          <el-table-column label="姓名" width="130" fixed>
+            <template #default="{ row }">
+              {{ row.name }}
+              <el-tag
+                v-if="empWeekLeaves(row.id).length"
+                size="small"
+                type="warning"
+                class="row-leave-tag"
+                data-test="row-leave-tag"
+              >請假</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="班級" width="120">
             <template #default="{ row }">
               {{ row.classroom_name || '-' }}
@@ -601,7 +726,15 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
           :loading="loading"
           empty-text="尚無班導老師資料（需有班級指派的員工）"
         >
-          <template #title="{ item }">{{ item.name }}</template>
+          <template #title="{ item }">
+            {{ item.name }}
+            <el-tag
+              v-if="empWeekLeaves(item.id as number).length"
+              size="small"
+              type="warning"
+              class="row-leave-tag"
+            >請假</el-tag>
+          </template>
           <template #cell-__shift="{ item }">
             <el-select
               :model-value="getAssignment(item.id as number)"
@@ -786,6 +919,21 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
               {{ row.date }} ({{ getDayName(row.date) }})
             </template>
           </el-table-column>
+          <el-table-column label="請假" width="150">
+            <template #default="{ row }">
+              <template v-if="currentEmployee && empLeavesOnDate(currentEmployee.id, row.date).length">
+                <div
+                  v-for="e in empLeavesOnDate(currentEmployee.id, row.date)"
+                  :key="e.lv.id"
+                  class="dlg-leave"
+                  :class="{ pending: e.lv.status === 'pending' }"
+                >
+                  {{ e.lv.leave_type_label }} {{ windowLabel(e.window) }}<span v-if="e.lv.status === 'pending'">（待審）</span>
+                </div>
+              </template>
+              <span v-else class="text-muted">—</span>
+            </template>
+          </el-table-column>
           <el-table-column label="當日安排">
             <template #default="{ row }">
               <el-select
@@ -856,5 +1004,72 @@ const handleDailyShiftChange = async (dateStr: string, value: number | null) => 
 .card-shift-select {
   width: 100%;
   min-width: 160px;
+}
+
+/* 本週請假與空班概覽 */
+.week-leave-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  margin-top: 12px;
+}
+.week-leave-strip.mobile {
+  grid-template-columns: 1fr;
+}
+.day-card {
+  border: 1px solid var(--el-border-color, #e4e7ed);
+  border-radius: 8px;
+  padding: var(--space-2);
+  font-size: 12px;
+  min-width: 0;
+}
+.day-card.has-gap {
+  border-color: var(--el-color-danger, #f56c6c);
+}
+.day-head {
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+.gap-alert {
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+.gap-alert.empty {
+  color: var(--el-color-danger, #f56c6c);
+  background: var(--el-color-danger-light-9, rgba(245, 108, 108, 0.12));
+}
+.gap-alert.risk {
+  color: var(--el-color-warning, #e6a23c);
+  background: var(--el-color-warning-light-9, rgba(230, 162, 60, 0.12));
+}
+.leave-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.leave-entry.pending {
+  opacity: 0.75;
+}
+.leave-window,
+.leave-type {
+  color: var(--text-secondary);
+}
+.leave-none {
+  color: var(--neutral-300);
+}
+.row-leave-tag {
+  margin-left: 4px;
+}
+.dlg-leave {
+  font-size: 12px;
+  color: var(--el-color-danger, #f56c6c);
+}
+.dlg-leave.pending {
+  color: var(--el-color-warning, #e6a23c);
 }
 </style>

@@ -16956,6 +16956,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shifts/leave-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Shift Leave Context
+         * @description 排班頁請假摘要（2026-08-28）。
+         *
+         *     園長排班時要就地看到「誰請假、哪個時段不在」才能判斷空班；權限沿用
+         *     SCHEDULE（比照 /roster 的解耦——排班使用者不需 LEAVES_READ）。回傳
+         *     pending＋approved（待審也顯示，供預見性排班；rejected 排除），欄位
+         *     收斂到排班必要 10 欄（白名單見 ShiftLeaveContextOut docstring），
+         *     不含 reason／附件等完整請假管理才有的敏感資訊。
+         */
+        get: operations["get_shift_leave_context_api_shifts_leave_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shifts/roster": {
         parameters: {
             query?: never;
@@ -40631,6 +40657,37 @@ export interface components {
             saved: number;
             /** Total */
             total: number;
+        };
+        /**
+         * ShiftLeaveContextOut
+         * @description 排班頁請假摘要單筆 (GET /leave-context)。
+         *
+         *     欄位白名單即資訊面邊界（2026-08-28）：排班只需要「誰、哪幾天、
+         *     哪個時段不在、假單狀態」。**勿加** reason／附件／駁回原因／代理人
+         *     等欄位——那些屬 LEAVES_READ 的完整請假管理，不屬排班摘要；
+         *     tests/test_shifts_leave_context_2026_08_28.py 鎖此白名單。
+         */
+        ShiftLeaveContextOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** End Date */
+            end_date: string;
+            /** End Time */
+            end_time?: string | null;
+            /** Id */
+            id: number;
+            /** Leave Type */
+            leave_type: string;
+            /** Leave Type Label */
+            leave_type_label: string;
+            /** Start Date */
+            start_date: string;
+            /** Start Time */
+            start_time?: string | null;
+            /** Status */
+            status: string;
         };
         /**
          * ShiftSwapHistoryOut
@@ -72205,6 +72262,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_shift_leave_context_api_shifts_leave_context_get: {
+        parameters: {
+            query: {
+                /** @description 區間迄（含） */
+                end_date: string;
+                /** @description 區間起（含） */
+                start_date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftLeaveContextOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

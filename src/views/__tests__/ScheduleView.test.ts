@@ -25,6 +25,7 @@ const {
   mockImportShifts,
   mockGetTemplate,
   mockExportShifts,
+  mockGetLeaveContext,
 } = vi.hoisted(() => ({
   mockGetAssignments: vi.fn(),
   mockSaveAssignments: vi.fn(),
@@ -37,6 +38,7 @@ const {
   mockImportShifts: vi.fn(),
   mockGetTemplate: vi.fn(),
   mockExportShifts: vi.fn(),
+  mockGetLeaveContext: vi.fn(),
 }))
 
 vi.mock('@/api/shifts', () => ({
@@ -51,6 +53,7 @@ vi.mock('@/api/shifts', () => ({
   getShiftImportTemplate: mockGetTemplate,
   importShifts: mockImportShifts,
   exportShifts: mockExportShifts,
+  getLeaveContext: mockGetLeaveContext,
 }))
 
 const { mockMessage, mockConfirm } = vi.hoisted(() => ({
@@ -192,6 +195,7 @@ describe('ScheduleView', () => {
     mockGetAssignments.mockResolvedValue({ data: [] })
     mockGetSwapHistory.mockResolvedValue({ data: [] })
     mockGetDaily.mockResolvedValue({ data: [] })
+    mockGetLeaveContext.mockResolvedValue({ data: [] })
     mockSaveDaily.mockResolvedValue({ data: {} })
     mockDeleteDaily.mockResolvedValue({ data: {} })
     mockSaveAssignments.mockResolvedValue({ data: { message: 'ok', week_start_date: MONDAY } })
