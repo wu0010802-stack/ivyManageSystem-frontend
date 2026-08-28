@@ -22595,8 +22595,10 @@ export interface components {
             art_teacher_festival?: number | null;
             /** Art Teacher Unit Price */
             art_teacher_unit_price?: number | null;
-            /** Assistant Teacher Ab */
-            assistant_teacher_ab?: number | null;
+            /** Assistant Teacher A */
+            assistant_teacher_a?: number | null;
+            /** Assistant Teacher B */
+            assistant_teacher_b?: number | null;
             /** Assistant Teacher C */
             assistant_teacher_c?: number | null;
             /** Config Year */
@@ -22631,8 +22633,10 @@ export interface components {
              * @description 在籍人數模式：month_end=月底快照 / daily_weighted=按日加權
              */
             enrollment_count_mode?: string | null;
-            /** Head Teacher Ab */
-            head_teacher_ab?: number | null;
+            /** Head Teacher A */
+            head_teacher_a?: number | null;
+            /** Head Teacher B */
+            head_teacher_b?: number | null;
             /** Head Teacher C */
             head_teacher_c?: number | null;
             /** Late Deduction Per Time */
