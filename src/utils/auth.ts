@@ -15,6 +15,7 @@ import {
 import { tenantHeaders, tenantSlug } from '@/utils/tenant'
 import { tenantRemoveItem } from '@/utils/tenantStorage'
 import { captureException } from '@/utils/sentry'
+import { clearSalarySimulationStorage } from '@/utils/salarySimulationStorage'
 
 export { PERMISSION_NAMES, ROUTE_PERMISSION_RULES }
 
@@ -153,6 +154,7 @@ export function waitForAdminSessionCleanup(): Promise<void> {
 function _resetAdminSessionRuntimeState(context: AdminSessionResetContext): void {
   // Pinia 是同步 in-memory state，先立即清掉，不留一個 render tick 的 PII。
   _resetStores()
+  clearSalarySimulationStorage()
 
   // 另一分頁換了身分：本分頁的 userInfo 已經不對應目前的共享 Cookie，
   // 必須立刻失效並退出受保護畫面，否則會用新帳號的 Cookie 續打舊帳號的 API。

@@ -18,7 +18,11 @@ vi.mock('@/api/salary', () => ({
 }))
 
 const hasPermissionMock = vi.fn()
-vi.mock('@/utils/auth', () => ({ hasPermission: (...a: unknown[]) => hasPermissionMock(...a) }))
+const getUserInfoMock = vi.fn()
+vi.mock('@/utils/auth', () => ({
+    hasPermission: (...a: unknown[]) => hasPermissionMock(...a),
+    getUserInfo: () => getUserInfoMock(),
+}))
 
 vi.mock('element-plus', async (importOriginal) => {
     const actual = await importOriginal<typeof import('element-plus')>()
@@ -78,6 +82,7 @@ describe('StepFinalize', () => {
         finalizeMonthMock.mockReset()
         unfinalizeSalaryMock.mockReset()
         hasPermissionMock.mockReturnValue(true)
+        getUserInfoMock.mockReturnValue({ role: 'hr' })
         vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
         vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '理由理由理由理由理由' } as never)
         vi.mocked(ElMessage.success).mockReset()
@@ -92,7 +97,11 @@ describe('StepFinalize', () => {
         const btn = wrapper.findAll('button').find((b) => b.text().includes('整月定案'))
         await btn!.trigger('click')
         await flushPromises()
-        expect(finalizeMonthMock).toHaveBeenCalledWith({ year: 2026, month: 5 })
+        expect(finalizeMonthMock).toHaveBeenCalledWith({
+            year: 2026,
+            month: 5,
+            force: false,
+        })
         expect(settlement.refresh).toHaveBeenCalled()
         expect(ElMessage.success).toHaveBeenCalled()
     })
@@ -142,6 +151,18 @@ describe('StepFinalize', () => {
         expect(settlement.refresh).toHaveBeenCalled()
     })
 
+    it('非 admin/hr 即使持有兩項權限，也不可呼叫個別退回', async () => {
+        getUserInfoMock.mockReturnValue({ role: 'accountant' })
+        const settlement = makeSettlement([rec({ id: 9, is_finalized: true })])
+        const wrapper = mountStep(settlement)
+        const vm = wrapper.vm as unknown as { onUnfinalize: (row: SettlementRecord) => Promise<void> }
+
+        await vm.onUnfinalize(settlement.records.value[0])
+
+        expect(ElMessageBox.prompt).not.toHaveBeenCalled()
+        expect(unfinalizeSalaryMock).not.toHaveBeenCalled()
+    })
+
     it('全數封存 → 定案鈕 disabled、下一步可前進', () => {
         const wrapper = mountStep(makeSettlement([rec({ is_finalized: true })]))
         const finalizeBtn = wrapper.findAll('button').find((b) => b.text().includes('整月定案'))
@@ -162,6 +183,7 @@ describe('StepFinalize', () => {
 describe('StepFinalize 退回防連點', () => {
     it('退回進行中再觸發同列 → unfinalizeSalary 只呼叫一次', async () => {
         hasPermissionMock.mockReturnValue(true)
+        getUserInfoMock.mockReturnValue({ role: 'hr' })
         vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '理由理由理由理由理由' } as never)
         const settlement = makeSettlement([rec({ id: 9, is_finalized: true })])
         unfinalizeSalaryMock.mockImplementation(

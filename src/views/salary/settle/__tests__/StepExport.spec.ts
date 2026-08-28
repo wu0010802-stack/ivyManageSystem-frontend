@@ -6,7 +6,11 @@ import type { SettlementRecord } from '@/composables/useSalarySettlement'
 
 const downloadFileMock = vi.fn()
 vi.mock('@/utils/download', () => ({ downloadFile: (...a: unknown[]) => downloadFileMock(...a) }))
-vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn().mockReturnValue(true) }))
+const getUserInfoMock = vi.fn()
+vi.mock('@/utils/auth', () => ({
+    hasPermission: vi.fn().mockReturnValue(true),
+    getUserInfo: () => getUserInfoMock(),
+}))
 
 const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
     id: 1,
@@ -38,7 +42,10 @@ const STUBS = {
     'el-alert': { template: '<div class="alert-stub">{{ $attrs.title }}</div>' },
     'el-card': { template: '<div><slot /></div>' },
     'el-result': { template: '<div class="result-stub">{{ $attrs.title }}<slot name="extra" /></div>' },
-    'el-button': { template: '<button><slot /></button>' },
+    'el-button': {
+        props: ['disabled', 'loading'],
+        template: '<button :disabled="disabled"><slot /></button>',
+    },
     SalarySnapshotDialog: true,
 }
 
@@ -52,7 +59,23 @@ const mountStep = (settlement: ReturnType<typeof makeSettlement>) =>
     })
 
 describe('StepExport', () => {
-    beforeEach(() => downloadFileMock.mockReset())
+    beforeEach(() => {
+        downloadFileMock.mockReset()
+        getUserInfoMock.mockReturnValue({ role: 'hr' })
+    })
+
+    it('非 admin/hr 即使持有薪資權限，也不可操作全員名冊或總表匯出', async () => {
+        getUserInfoMock.mockReturnValue({ role: 'accountant' })
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const exportButtons = wrapper.findAll('button').filter((button) =>
+            button.text().includes('名冊') || button.text().includes('Excel') || button.text().includes('PDF'),
+        )
+
+        expect(exportButtons).toHaveLength(6)
+        expect(exportButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+        await exportButtons[0].trigger('click')
+        expect(downloadFileMock).not.toHaveBeenCalled()
+    })
 
     it('未全封存 → 顯示僅含已封存警示', () => {
         const wrapper = mountStep(makeSettlement([rec(), rec({ employee_id: 'E2', is_finalized: false })]))
