@@ -15,7 +15,6 @@ vi.mock('@/parent/composables/useHomeSummary', () => ({
     badges: {
       value: {
         unreadAnnouncements: 0,
-        unreadMessages: 0,
         outstandingFees: 0,
         overdueFees: 0,
         pendingEventAcks: 0,

@@ -28,7 +28,7 @@ function onClick(): void {
       </span>
       <div>
         <div class="push-cta-title">尚未加 LINE 為好友</div>
-        <div class="push-cta-sub">公告、訊息與審核結果可能會延遲看到</div>
+        <div class="push-cta-sub">公告、聯絡簿與審核結果可能會延遲看到</div>
       </div>
     </div>
     <button class="push-cta-btn press-scale" type="button" @click="onClick">

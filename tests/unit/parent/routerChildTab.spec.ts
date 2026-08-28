@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import router from '@/parent/router'
 
+// 2026-08-28：聯絡簿升格為自己的 tab（訊息下架後空出來的那一格），
+// 因此 /contact-book* 不再屬 child tab；孩子 hub 仍留連結過去。
 const CHILD_TAB_PATHS = [
-  '/contact-book',
-  '/contact-book/:entryId',
   '/children/:studentId',
   '/children/:studentId/reports',
   '/children/:studentId/photos',

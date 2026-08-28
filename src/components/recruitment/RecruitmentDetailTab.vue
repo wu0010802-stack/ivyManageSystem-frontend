@@ -147,6 +147,12 @@
           <span v-else>—</span>
         </template>
       </el-table-column>
+      <el-table-column label="娃娃車" align="center" width="80">
+        <template #default="{ row }">
+          <el-tag v-if="row.rides_bus" type="info" size="small">要搭</el-tag>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />

@@ -184,7 +184,7 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
 
     type SummaryShape = {
       fees?: { outstanding_count?: number; outstanding?: number; overdue?: number }
-      pending_event_acks?: number; unread_messages?: number; pending_activity_promotions?: number
+      pending_event_acks?: number; pending_activity_promotions?: number
       unread_announcements?: number; recent_leave_reviews?: number
     }
     const sv = summaryV as SummaryShape | null | undefined
@@ -214,19 +214,6 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
         secondary: `${sv?.pending_event_acks} 件`,
         tone: 'event',
         path: '/events',
-      })
-    }
-
-    if ((sv?.unread_messages ?? 0) > 0) {
-      out.push({
-        id: 'messages',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: '未讀訊息',
-        secondary: `${sv?.unread_messages} 則`,
-        tone: 'message',
-        path: '/messages',
       })
     }
 

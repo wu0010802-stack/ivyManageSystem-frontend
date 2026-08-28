@@ -764,17 +764,6 @@ export const routes: RouteRecordRaw[] = [
                     component: () => import('../views/portal/PortalAttendanceView.vue'),
                 },
                 {
-                    path: 'messages',
-                    redirect: { name: 'portal-class-hub', query: { panel: 'messages' } },
-                },
-                {
-                    path: 'messages/:threadId',
-                    redirect: (to) => ({
-                        name: 'portal-class-hub',
-                        query: { panel: 'messages', thread: String(to.params.threadId) },
-                    }),
-                },
-                {
                     path: 'students/:studentId',
                     name: 'portal-student-detail',
                     component: () => import('../views/portal/PortalStudentDetailView.vue'),

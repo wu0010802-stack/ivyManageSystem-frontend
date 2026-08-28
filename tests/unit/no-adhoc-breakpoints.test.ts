@@ -8,7 +8,6 @@ const SRC = resolve(process.cwd(), 'src')
 // 合法的非斷點用法（佈局計算 / 斷點來源本體）允許保留裸用法。
 const ALLOW = new Set([
   'views/public/components/CoursePickerSection.vue', // popover 定位計算
-  'components/portal/class-hub/ClassHubMessagesDrawer.vue', // responsive 寬度計算
   'composables/useIsMobile.ts', // 斷點單一來源本體
 ])
 

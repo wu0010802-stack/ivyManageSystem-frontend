@@ -37141,6 +37141,8 @@ export interface components {
             provisional_grade_id?: number | null;
             /** Referrer */
             referrer?: string | null;
+            /** Rides Bus */
+            rides_bus?: boolean | null;
             /** Seq No */
             seq_no?: string | null;
             /** Source */
@@ -37216,6 +37218,11 @@ export interface components {
             phone?: string | null;
             /** Referrer */
             referrer?: string | null;
+            /**
+             * Rides Bus
+             * @default false
+             */
+            rides_bus: boolean;
             /** Seq No */
             seq_no?: string | null;
             /** Source */
@@ -37273,6 +37280,8 @@ export interface components {
             phone?: string | null;
             /** Referrer */
             referrer?: string | null;
+            /** Rides Bus */
+            rides_bus?: boolean | null;
             /** Seq No */
             seq_no?: string | null;
             /** Source */

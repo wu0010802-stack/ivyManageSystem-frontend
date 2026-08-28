@@ -16,11 +16,15 @@ import {
 } from '@/utils/offlineQueue'
 import { isNetworkError } from '@/composables/useOnlineStatus'
 import { useParentAuthStore } from '@/parent/stores/parentAuth'
-import { sendThreadMessage } from '@/parent/api/messages'
+import api from '@/parent/api'
 import { replyContactBook, ackContactBook } from '@/parent/api/contactBook'
 import { acknowledgeEvent } from '@/parent/api/events'
 import { createLeave } from '@/parent/api/leaves'
 
+// PARENT_MESSAGE 仍在清單裡：親師訊息已於 2026-08-28 自家長端下架，但裝置上
+// 可能還躺著離線時寫好、尚未送出的訊息。移出清單會讓那些 op 變成永遠不被
+// flush、也不被計數的孤兒（ParentOfflineIndicator 走同一份 PARENT_KINDS），
+// 等於靜默吞掉家長打的字。保留送出路徑讓既有佇列收斂完畢。
 const PARENT_KINDS = [
   OP_KINDS.PARENT_MESSAGE,
   OP_KINDS.CONTACT_BOOK_REPLY,
@@ -82,7 +86,8 @@ export async function enqueueParent(args: ParentEnqueueArgs) {
 }
 
 const SAVE_FN_BY_KIND: Record<ParentOpKind, (payload: Record<string, unknown>) => Promise<unknown>> = {
-  [OP_KINDS.PARENT_MESSAGE]: (p) => sendThreadMessage(p['thread_id'] as number, p),
+  // 後端端點仍在（本次只下架家長端 UI），故直接打；不再經 api/messages wrapper。
+  [OP_KINDS.PARENT_MESSAGE]: (p) => api.post(`/parent/messages/threads/${p['thread_id']}/messages`, p),
   [OP_KINDS.CONTACT_BOOK_REPLY]: (p) => replyContactBook(p['entry_id'] as number, {
     body: p['body'] as string,
     client_request_id: p['client_request_id'] as string | undefined,
