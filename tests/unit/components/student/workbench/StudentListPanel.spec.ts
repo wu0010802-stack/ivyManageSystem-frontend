@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { reactive, nextTick } from 'vue'
+import {
+  computed,
+  defineComponent,
+  h,
+  inject,
+  nextTick,
+  provide,
+  reactive,
+  type ComputedRef,
+} from 'vue'
 import { shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import StudentListPanel from '@/components/student/workbench/StudentListPanel.vue'
@@ -56,6 +65,31 @@ const flushPromises = async () => {
   await Promise.resolve()
 }
 
+const tableRowsKey = Symbol('student-table-rows')
+
+const ElTableStub = defineComponent({
+  props: {
+    data: {
+      type: Array,
+      default: () => [],
+    },
+  },
+  setup(props, { slots }) {
+    provide(tableRowsKey, computed(() => props.data))
+    return () => h('div', { 'data-testid': 'student-table' }, slots.default?.())
+  },
+})
+
+const ElTableColumnStub = defineComponent({
+  setup(_, { slots }) {
+    const rows = inject<ComputedRef<unknown[]>>(tableRowsKey)
+    return () => h(
+      'div',
+      rows?.value.flatMap((row) => slots.default?.({ row }) ?? []) ?? [],
+    )
+  },
+})
+
 const mountPanel = () => shallowMount(StudentListPanel, {
   global: {
     directives: {
@@ -66,8 +100,8 @@ const mountPanel = () => shallowMount(StudentListPanel, {
       'el-tabs': { template: '<div><slot /></div>' },
       'el-tab-pane': { template: '<div><slot /></div>' },
       'el-input': { template: '<input />' },
-      'el-table': { template: '<div><slot /></div>' },
-      'el-table-column': true,
+      'el-table': ElTableStub,
+      'el-table-column': ElTableColumnStub,
       'el-pagination': true,
       'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
       'el-form': { template: '<form><slot /></form>' },
@@ -78,8 +112,12 @@ const mountPanel = () => shallowMount(StudentListPanel, {
       'el-button': { template: '<button><slot /></button>' },
       'el-date-picker': true,
       'el-radio-group': { template: '<div><slot /></div>' },
+      'el-radio-button': { template: '<label><slot /></label>' },
       'el-radio': { template: '<label><slot /></label>' },
       'el-divider': true,
+      'el-dropdown': { template: '<div><slot /><slot name="dropdown" /></div>' },
+      'el-dropdown-menu': { template: '<div><slot /></div>' },
+      'el-dropdown-item': { template: '<div><slot /></div>' },
       'el-tag': true,
       'el-tooltip': { template: '<div><slot /></div>' },
       'el-icon': true,
@@ -150,5 +188,49 @@ describe('StudentListPanel', () => {
         classroom_id: 8,
       }),
     )
+  })
+
+  it('顯示所選學期的歷史班級，不顯示學生目前班級', async () => {
+    getClassrooms.mockResolvedValue({
+      data: [
+        {
+          id: 10,
+          name: '歷史學期班',
+          school_year: 2025,
+          semester: 2,
+          semester_label: '2025學年度下學期',
+          grade_name: '中班',
+        },
+        {
+          id: 20,
+          name: '目前班級',
+          school_year: 2026,
+          semester: 1,
+          semester_label: '2026學年度上學期',
+          grade_name: '大班',
+        },
+      ],
+    })
+    getStudents.mockResolvedValue({
+      data: {
+        items: [{
+          id: 1,
+          student_id: 'TEST-001',
+          name: '測試學生',
+          classroom_id: 20,
+          term_classroom_id: 10,
+        }],
+        total: 1,
+      },
+    })
+
+    const wrapper = mountPanel()
+    await flushPromises()
+    await nextTick()
+    await flushPromises()
+
+    const table = wrapper.get('[data-testid="student-table"]')
+    expect(table.text()).toContain('歷史學期班')
+    expect(table.text()).not.toContain('目前班級')
   })
 })
