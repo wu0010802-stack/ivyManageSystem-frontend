@@ -6,14 +6,11 @@ import {
   getFeeRecords,
   getFeeAdjustments,
   getFeePeriods,
-  payFeeRecord,
 } from '@/api/fees'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
-import { todayISO } from '@/utils/format'
 import { getCurrentAcademicTerm } from '@/utils/academic'
-import { FEE_TYPES, FEE_TYPE_LABELS, bucketByFeeType } from '@/components/fees/feeTypes'
-import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
+import { FEE_TYPES, bucketByFeeType } from '@/components/fees/feeTypes'
 import AdjustmentEditDialog from '@/components/fees/AdjustmentEditDialog.vue'
 
 const props = withDefaults(defineProps<{
@@ -152,54 +149,9 @@ const totals = computed(() => {
   return { due, paid, adjTotal, netDue, unpaid: Math.max(netDue - paid, 0) }
 })
 
-// ─── 繳費 dialog（單筆 record） ───────────────────────────────────────────────
-const payDialogVisible = ref(false)
-const payingRecord = ref<Record<string, unknown> | null>(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const payFormRef = ref<any>(null)
-const saving = ref(false)
-const payForm = ref({ payment_date: '', amount_paid: 0, payment_method: '現金', notes: '' })
-const payRules = {
-  payment_date: [{ required: true, message: '請選擇繳費日期', trigger: 'change' }],
-  payment_method: [{ required: true, message: '請選擇繳費方式', trigger: 'change' }],
-}
-
-function openPayDialog(rec: Record<string, unknown>) {
-  if (!canWrite.value) return
-  payingRecord.value = rec
-  payForm.value = {
-    payment_date: (rec.payment_date as string) || todayISO(),
-    amount_paid: rec.status === 'partial' ? (rec.amount_paid as number) : (rec.amount_due as number),
-    payment_method: (rec.payment_method as string) || '現金',
-    notes: (rec.notes as string) || '',
-  }
-  payDialogVisible.value = true
-}
-
-async function submitPay() {
-  const valid = await payFormRef.value?.validate().catch(() => false)
-  if (!valid) return
-  saving.value = true
-  try {
-    await payFeeRecord(payingRecord.value!.id as number, payForm.value)
-    ElMessage.success('繳費登記成功')
-    payDialogVisible.value = false
-    fetchData()
-  } catch (err) {
-    ElMessage.error(apiError(err, '登記繳費失敗'))
-  } finally {
-    saving.value = false
-  }
-}
-
-// ─── 退費 modal ───────────────────────────────────────────────────────────────
-const refundModalVisible = ref(false)
-const refundTarget = ref<Record<string, unknown> | null>(null)
-function openRefundModal(rec: Record<string, unknown>) {
-  if (!canWrite.value) return
-  refundTarget.value = rec
-  refundModalVisible.value = true
-}
+// ─── 繳費／退費：本分頁唯讀 ──────────────────────────────────────────────────
+// 學生檔案的「費用」分頁只做檢視。收款與退費一律回「學費管理 › 帳單 › 帳款」，
+// 讓現金流走同一條會進每日交接與月結的路徑（見 workspace CLAUDE.md）。
 
 // ─── 折抵編輯 dialog ──────────────────────────────────────────────────────────
 const adjDialogVisible = ref(false)
@@ -210,9 +162,6 @@ const adjDialogExisting = ref<Record<string, unknown>[]>([])
 const adjEditablePeriod = computed(() => period.value && period.value !== ALL_PERIODS)
 
 // template helpers for typed access
-const payingRecordAmountDue = computed(() => (payingRecord.value?.amount_due as number) ?? 999999)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const refundTargetTyped = computed(() => refundTarget.value as any)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const adjDialogExistingTyped = computed(() => adjDialogExisting.value as any)
 
@@ -291,7 +240,7 @@ defineExpose({
       <section v-loading="loading" class="fee-section">
         <header class="section-header">
           <span class="section-title">應收項目</span>
-          <span class="section-meta">點開操作繳費 / 退費</span>
+          <span class="section-meta">唯讀檢視 · 繳費／退費請至「學費管理 › 帳單 › 帳款」</span>
         </header>
         <el-table :data="recordRows" size="small" stripe row-key="fee_type">
           <el-table-column label="費用類型" prop="label" width="120" />
@@ -325,7 +274,7 @@ defineExpose({
               <span v-else>{{ row.records.length }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="明細與操作" min-width="280">
+          <el-table-column label="明細" min-width="280">
             <template #default="{ row }">
               <div v-if="row.records.length === 0" class="muted">—</div>
               <div v-else class="record-lines">
@@ -338,20 +287,6 @@ defineExpose({
                   <el-tag :type="RECORD_STATUS_TYPE[rec.status as string] || 'info'" size="small">
                     {{ RECORD_STATUS_LABEL[rec.status as string] || rec.status }}
                   </el-tag>
-                  <el-button
-                    v-if="canWrite && rec.status !== 'paid'"
-                    size="small"
-                    type="primary"
-                    link
-                    @click="openPayDialog(rec)"
-                  >{{ rec.status === 'partial' ? '更新繳費' : '繳費' }}</el-button>
-                  <el-button
-                    v-if="canWrite && ((rec.amount_paid as number) || 0) > 0"
-                    size="small"
-                    type="danger"
-                    link
-                    @click="openRefundModal(rec)"
-                  >退費</el-button>
                 </div>
               </div>
             </template>
@@ -410,62 +345,6 @@ defineExpose({
       <el-empty
         v-if="loaded && !loading && records.length === 0 && adjustments.length === 0"
         description="尚無學費紀錄"
-      />
-
-      <!-- ── 繳費 dialog ── -->
-      <el-dialog v-model="payDialogVisible" title="登記繳費" width="420px" destroy-on-close>
-        <div v-if="payingRecord">
-          <p>
-            費用項目：{{ payingRecord.fee_item_name || (FEE_TYPE_LABELS as Record<string, string>)[payingRecord.fee_type as string] || payingRecord.fee_type }}
-            — 應繳 <strong>{{ (payingRecord.amount_due || 0).toLocaleString() }} 元</strong>
-          </p>
-          <p v-if="payingRecord.status === 'partial'" class="hint">
-            目前已登記 {{ (payingRecord.amount_paid || 0).toLocaleString() }} 元，請輸入更新後的累計已繳金額。
-          </p>
-          <el-form :model="payForm" :rules="payRules" ref="payFormRef" label-width="90px">
-            <el-form-item label="繳費日期" prop="payment_date">
-              <el-date-picker
-                v-model="payForm.payment_date"
-                type="date"
-                placeholder="選擇日期"
-                style="width: 100%"
-                value-format="YYYY-MM-DD"
-              />
-            </el-form-item>
-            <el-form-item label="累計已繳" prop="amount_paid">
-              <el-input-number
-                v-model="payForm.amount_paid"
-                :min="1"
-                :max="Math.min(payingRecordAmountDue, 999999)"
-                :step="1"
-                :precision="0"
-                style="width: 100%"
-              />
-            </el-form-item>
-            <el-form-item label="繳費方式" prop="payment_method">
-              <el-select v-model="payForm.payment_method" style="width: 100%">
-                <el-option label="現金" value="現金" />
-                <el-option label="轉帳" value="轉帳" />
-                <el-option label="其他" value="其他" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="備註">
-              <el-input v-model="payForm.notes" type="textarea" :rows="2" />
-            </el-form-item>
-          </el-form>
-        </div>
-        <template #footer>
-          <el-button @click="payDialogVisible = false">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="submitPay">確認繳費</el-button>
-        </template>
-      </el-dialog>
-
-      <!-- ── 退費 modal ── -->
-      <RefundSuggestModal
-        v-if="refundModalVisible"
-        v-model="refundModalVisible"
-        :record="refundTargetTyped"
-        @refunded="fetchData"
       />
 
       <!-- ── 折抵編輯 ── -->
@@ -583,10 +462,4 @@ defineExpose({
 
 .muted { color: var(--text-tertiary, #999); }
 .text-warning { color: var(--el-color-warning, #e6a23c); font-weight: 600; }
-
-.hint {
-  color: var(--text-tertiary, #999);
-  font-size: var(--text-sm, 13px);
-  margin-top: var(--space-2, 8px);
-}
 </style>
