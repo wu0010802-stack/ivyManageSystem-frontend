@@ -12,7 +12,6 @@
       mode="add"
       :form="form"
       :saving="saving"
-      :district-suggestions="districtSuggestions"
       :source-suggestions="sourceSuggestions"
       :referrer-suggestions="referrerSuggestions"
       :no-deposit-reasons="noDepositReasons"
@@ -47,13 +46,8 @@ const saving = ref(false)
 const form = ref<VisitFormState>(emptyVisitForm())
 
 // dashboard 提供 autocomplete 建議來源（與 AdmissionsRecordsPanel 取法一致）
-const { options, stats, fetchOptions } = props.dashboard
+const { options, fetchOptions } = props.dashboard
 
-const districtSuggestions = computed((): string[] =>
-  ((stats.value.by_district as { district?: string }[] | undefined) || [])
-    .map((d) => d.district)
-    .filter((d): d is string => typeof d === 'string'),
-)
 const sourceSuggestions = computed((): string[] =>
   (options.value.sources as string[] | undefined) || [],
 )

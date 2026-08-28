@@ -28,7 +28,8 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="序號">
-              <el-input v-model="form.seq_no" placeholder="選填" />
+              <el-input :model-value="seqNoDisplay" disabled data-test="seq-no-display" />
+              <div class="form-hint">系統依當月參觀順序自動編號，不需填寫。</div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -60,8 +61,8 @@
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="生日">
-              <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+            <el-form-item label="生日" prop="birthday">
+              <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" placeholder="選擇生日" style="width:100%" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -71,17 +72,18 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="是否搭乘娃娃車">
+              <el-switch v-model="form.rides_bus" active-text="要搭乘" inactive-text="不搭乘" data-test="rides-bus-switch" />
+              <div class="form-hint">參觀當下的意願；實際路線與站點仍在「娃娃車路線」頁編排。</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </FormSection>
 
       <!-- 聯絡與來源 -->
       <FormSection ref="contactRef" data-test="section-contact" title="聯絡與來源" collapsible :default-open="false" :badge-count="sectionErrors.contact" badge-type="error">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="行政區">
-              <el-autocomplete v-model="form.district" :fetch-suggestions="districtQuery" clearable style="width:100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
         <el-form-item label="地址">
           <el-input v-model="form.address" />
         </el-form-item>
@@ -215,11 +217,11 @@ interface VisitForm {
   grade?: string | number | null
   birthday?: string | number | null
   phone?: string | number | null
-  district?: string | number | undefined
   address?: string | number | null
   source?: string | number | undefined
   referrer?: string | number | undefined
   has_deposit?: string | number | boolean
+  rides_bus?: boolean
   deposit_collector?: string | number | null
   enrolled?: string | number | boolean
   transfer_term?: string | number | boolean
@@ -240,7 +242,6 @@ const props = withDefaults(defineProps<{
   mode?: string
   form: VisitForm
   saving?: boolean
-  districtSuggestions?: string[]
   sourceSuggestions?: string[]
   referrerSuggestions?: string[]
   noDepositReasons?: string[]
@@ -249,7 +250,6 @@ const props = withDefaults(defineProps<{
 }>(), {
   mode: 'add',
   saving: false,
-  districtSuggestions: () => [],
   sourceSuggestions: () => [],
   referrerSuggestions: () => [],
   noDepositReasons: () => [],
@@ -300,7 +300,19 @@ const enrollYearOptions = computed(() => {
 const formRules = {
   month: [{ required: true, message: '請選擇參觀日期', trigger: 'blur' }],
   child_name: [{ required: true, message: '請填寫姓名', trigger: 'blur' }],
+  // 生日在招生階段就決定適讀班級與入學學期，補填成本高於當場問一句，故列必填。
+  birthday: [{ required: true, message: '請選擇生日', trigger: 'change' }],
 }
+
+// 序號改由後端依當月順序自動產生（POST /recruitment/records 不帶 seq_no 即自動編號），
+// 表單只做唯讀呈現：新增時尚未有號、編輯時顯示既有號。
+const seqNoDisplay = computed(() => {
+  const raw = props.form.seq_no
+  if (raw === null || raw === undefined || String(raw).trim() === '') {
+    return props.mode === 'add' ? '儲存後自動產生' : '—'
+  }
+  return String(raw)
+})
 
 // -------- 日期轉換（西元 ↔ 民國）--------
 const isoToRoc = (iso: string) => {
@@ -338,9 +350,6 @@ const _makeSuggestions = (list: string[], query: string, cb: (items: { value: st
   cb(items)
 }
 
-const districtQuery = (query: string, cb: (items: { value: string }[]) => void) => {
-  _makeSuggestions(props.districtSuggestions.filter(Boolean), query, cb)
-}
 const sourceQuery = (query: string, cb: (items: { value: string }[]) => void) =>
   _makeSuggestions(props.sourceSuggestions, query, cb)
 const referrerQuery = (query: string, cb: (items: { value: string }[]) => void) =>

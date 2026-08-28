@@ -18,6 +18,9 @@ export const ROC_MONTH_PATTERN = /^\d{3}\.\d{2}$/
 
 // 招生訪視表單空白預設值（明細 tab 與漏斗看板新增共用，避免兩份定義漂移）。
 // month_raw 為前端日期選擇器暫存（YYYY-MM-DD），送後端前需移除。
+// seq_no 新增時恆為空字串：序號由後端依當月順序自動產生（2026-08-28 起），表單只讀不寫。
+// district 已於 2026-08-28 自表單移除：行政區由後端從 address 解析（區位分析 fallback），
+// 不再要求行政重複輸入。
 export interface VisitFormState {
   month: string
   month_raw: string | null
@@ -28,13 +31,14 @@ export interface VisitFormState {
   grade: string | null
   phone: string
   address: string
-  district: string
   source: string
   source_category: string | null
   referrer: string
   deposit_collector: string
   tour_guide_employee_id: number | null
   has_deposit: boolean
+  /** 是否搭乘娃娃車（訪視當下的意願調查；實際路線編排在娃娃車路線頁） */
+  rides_bus: boolean
   enrolled: boolean
   transfer_term: boolean
   target_school_year: number
@@ -51,9 +55,9 @@ export function emptyVisitForm(): VisitFormState {
   return {
     month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
     birthday: null, grade: null, phone: '', address: '',
-    district: '', source: '', source_category: null, referrer: '',
+    source: '', source_category: null, referrer: '',
     deposit_collector: '', tour_guide_employee_id: null,
-    has_deposit: false, enrolled: false, transfer_term: false,
+    has_deposit: false, rides_bus: false, enrolled: false, transfer_term: false,
     target_school_year: term.school_year,
     target_semester: term.semester as 1 | 2,
     no_deposit_reason: null, no_deposit_reason_detail: '',

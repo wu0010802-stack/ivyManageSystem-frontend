@@ -38,7 +38,6 @@
       :mode="dialogMode"
       :form="form"
       :saving="saving"
-      :district-suggestions="districtSuggestions"
       :source-suggestions="((options.sources as string[] | undefined) || [])"
       :referrer-suggestions="((options.referrers as string[] | undefined) || [])"
       :no-deposit-reasons="((options.no_deposit_reasons as string[] | undefined) || [])"
@@ -97,7 +96,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ changed: [] }>()
 
-const { options, stats, invalidateOptions, fetchOptions } = props.dashboard
+const { options, invalidateOptions, fetchOptions } = props.dashboard
 
 // -------- 來源分類（獎金點數）與帶參觀老師選項 --------
 type SourceCategoryOption = { code: string; label: string; points: number }
@@ -231,7 +230,7 @@ const form = ref<VisitFormState>(emptyVisitForm())
 
 // 表單草稿暫存：招生表單聯絡 PII 一律排除，草稿僅留訪視/年級/來源等工作欄位
 const RECRUITMENT_DRAFT_EXCLUDE = [
-  'child_name', 'birthday', 'phone', 'address', 'district',
+  'child_name', 'birthday', 'phone', 'address',
   'parent_response', 'notes', 'month_raw',
 ]
 const recruitmentDraft = useFormDraft({
@@ -269,12 +268,8 @@ const rocMonthToISO = (rm: string) => {
 }
 
 // 訪視記錄對話框內的 form helpers（watch / _makeSuggestions / onDepositChange）
-// 已搬到 RecruitmentRecordDialog.vue；這裡僅保留 district 建議清單的 computed。
-const districtSuggestions = computed((): string[] =>
-  ((stats.value.by_district as { district?: string }[] | undefined) || [])
-    .map((d) => d.district)
-    .filter((d): d is string => typeof d === 'string')
-)
+// 已搬到 RecruitmentRecordDialog.vue。行政區欄位已於 2026-08-28 自表單移除
+// （後端從 address 解析），故此處不再需要 by_district 建議清單。
 
 const fetchDetail = async () => {
   loadingDetail.value = true
@@ -349,13 +344,13 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     grade: (row.grade ?? null) as string | null,
     phone: String(row.phone ?? ''),
     address: String(row.address ?? ''),
-    district: String(row.district ?? ''),
     source: String(row.source ?? ''),
     source_category: (row.source_category ?? null) as string | null,
     referrer: String(row.referrer ?? ''),
     deposit_collector: String(row.deposit_collector ?? ''),
     tour_guide_employee_id: (row.tour_guide_employee_id ?? null) as number | null,
     has_deposit: Boolean(row.has_deposit),
+    rides_bus: Boolean(row.rides_bus ?? false),
     enrolled: Boolean(row.enrolled ?? false),
     transfer_term: Boolean(row.transfer_term ?? false),
     target_school_year: Number(row.target_school_year ?? getCurrentAcademicTerm().school_year),
