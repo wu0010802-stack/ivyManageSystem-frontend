@@ -38,7 +38,11 @@ vi.mock('@/api/extraBonuses', () => ({
 
 // ---- auth mock ----
 const hasPermissionMock = vi.fn()
-vi.mock('@/utils/auth', () => ({ hasPermission: (...a: unknown[]) => hasPermissionMock(...a) }))
+const hasFullSalaryViewMock = vi.fn()
+vi.mock('@/utils/auth', () => ({
+    hasPermission: (...a: unknown[]) => hasPermissionMock(...a),
+    hasFullSalaryView: () => hasFullSalaryViewMock(),
+}))
 
 // ---- employee store mock ----
 vi.mock('@/stores/employee', () => ({
@@ -90,6 +94,10 @@ const STUBS = {
     'el-alert': {
         props: ['title', 'description'],
         template: '<div class="alert-stub"><div class="alert-title">{{ title }}</div><div class="alert-desc">{{ description }}</div></div>',
+    },
+    'el-result': {
+        props: ['title', 'subTitle'],
+        template: '<div class="result-stub">{{ title }} {{ subTitle }}</div>',
     },
 }
 
@@ -216,6 +224,7 @@ describe('GrowthContractView', () => {
     beforeEach(() => {
         vi.setSystemTime(FIXED_NOW)
         hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
         listGrowthHoursMock.mockReset().mockResolvedValue({ data: { items: [] } })
         createGrowthHourMock.mockReset()
         patchGrowthHourMock.mockReset()
@@ -228,6 +237,18 @@ describe('GrowthContractView', () => {
         vi.mocked(ElMessage.error).mockReset()
         vi.mocked(ElMessage.warning).mockReset()
         vi.mocked(ElMessageBox.confirm).mockReset()
+    })
+
+    it('非完整薪資角色不載入跨員工資料並顯示拒絕狀態', async () => {
+        hasFullSalaryViewMock.mockReturnValue(false)
+
+        const wrapper = mountView()
+        await flushPromises()
+
+        expect(wrapper.text()).toContain('無法檢視全員薪資資料')
+        expect(listGrowthHoursMock).not.toHaveBeenCalled()
+        expect(getGrowthPreviewMock).not.toHaveBeenCalled()
+        expect(listExtraBonusesMock).not.toHaveBeenCalled()
     })
 
     afterEach(() => {
@@ -655,6 +676,7 @@ describe('GrowthContractView', () => {
 
 describe('GrowthContractView 簽約日帶出來源', () => {
     beforeEach(() => {
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
         getGrowthPreviewMock.mockReset()
         listGrowthHoursMock.mockReset()
         patchSignedOnMock.mockReset()

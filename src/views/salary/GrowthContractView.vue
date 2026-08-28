@@ -1,5 +1,12 @@
 <template>
   <div>
+    <el-result
+      v-if="!canViewFullSalary"
+      icon="warning"
+      title="無法檢視全員薪資資料"
+      sub-title="此功能僅開放具完整薪資視野的角色使用"
+    />
+    <template v-else>
     <PageHeader title="自主成長獎勵金" subtitle="研習時數登記、學年結算預覽與每年 8 月發放">
       <template #actions>
         <el-select v-model="schoolYear" style="width: 120px" aria-label="學年">
@@ -210,6 +217,7 @@
         <el-button type="primary" @click="saveSignedOn">儲存</el-button>
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -219,7 +227,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { hasPermission } from '@/utils/auth'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import { useEmployeeStore } from '@/stores/employee'
@@ -284,7 +292,12 @@ function currentSchoolYear(d = new Date()): number {
     return d.getMonth() + 1 >= 8 ? rocYear : rocYear - 1
 }
 
-const canWrite = computed(() => hasPermission('SALARY_WRITE'))
+const canViewFullSalary = computed(
+    () => hasPermission('SALARY_READ') && hasFullSalaryView(),
+)
+const canWrite = computed(
+    () => canViewFullSalary.value && hasPermission('SALARY_WRITE'),
+)
 const employeeStore = useEmployeeStore()
 const employeeOptions = computed<EmployeeOption[]>(() => (employeeStore.employees || []) as EmployeeOption[])
 
@@ -308,6 +321,7 @@ const hourTableData = computed(() =>
 // 較晚送出但先回來的仍會贏，較早送出但晚回來的一律被忽略（比對 seq，不是比對到達順序）。
 let hoursSeq = 0
 const fetchHours = async () => {
+    if (!canViewFullSalary.value) return
     const seq = ++hoursSeq
     hoursLoading.value = true
     try {
@@ -334,6 +348,7 @@ const onlyEligiblePayable = ref(false)
 
 let previewSeq = 0
 const fetchPreview = async () => {
+    if (!canViewFullSalary.value) return
     const seq = ++previewSeq
     previewLoading.value = true
     try {
@@ -475,10 +490,13 @@ const fetchSettledPayments = async () => {
 }
 
 watch(schoolYear, () => {
+    if (!canViewFullSalary.value) return
     fetchHours()
     fetchPreview()
 })
-watch(hoursEmployeeFilter, fetchHours)
+watch(hoursEmployeeFilter, () => {
+    if (canViewFullSalary.value) fetchHours()
+})
 
 // ---- 時數 dialog ----
 interface HourForm {
@@ -640,6 +658,7 @@ const clearSignedOn = async () => {
 }
 
 onMounted(() => {
+    if (!canViewFullSalary.value) return
     fetchHours()
     fetchPreview()
     employeeStore.fetchEmployees?.()

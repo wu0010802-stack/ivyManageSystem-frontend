@@ -6,6 +6,10 @@ import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
+import {
+  SALARY_SIMULATION_CACHE_KEY as STORAGE_KEY_CACHE,
+  SALARY_SIMULATION_LAST_KEY as STORAGE_KEY_LAST,
+} from '@/utils/salarySimulationStorage'
 
 interface EmployeeOption { id: number; name: string; title?: string; job_title?: string; is_active?: boolean; employee_type?: string }
 
@@ -71,8 +75,6 @@ const form = reactive({
 // 避免重新整理頁面或切換 tab 時丟失上一次試算結果；
 // 也能讓相同參數不再打 API（省 rate-limit + 後端 CPU）。
 // v2: 移除 missing_punch_count 欄位（deprecated）
-const STORAGE_KEY_LAST = 'salary_simulate_last_v2'
-const STORAGE_KEY_CACHE = 'salary_simulate_cache_v2'
 const CACHE_TTL_MS = 10 * 60 * 1000 // 10 分鐘
 const CACHE_MAX_ENTRIES = 20
 

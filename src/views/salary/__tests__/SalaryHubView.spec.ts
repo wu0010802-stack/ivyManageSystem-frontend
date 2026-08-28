@@ -18,8 +18,10 @@ vi.mock('@/api/govReports', () => ({
 }))
 
 const hasPermissionMock = vi.fn()
+const hasFullSalaryViewMock = vi.fn()
 vi.mock('@/utils/auth', () => ({
     hasPermission: (...args: unknown[]) => hasPermissionMock(...args),
+    hasFullSalaryView: () => hasFullSalaryViewMock(),
 }))
 
 const saveBlobResponseMock = vi.fn()
@@ -58,7 +60,20 @@ describe('SalaryHubView', () => {
         qualificationExportMock.mockReset()
         hasPermissionMock.mockReset()
         hasPermissionMock.mockReturnValue(false)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
         saveBlobResponseMock.mockReset()
+    })
+
+    it('非完整薪資角色不顯示跨員工獎金入口', async () => {
+        hasFullSalaryViewMock.mockReturnValue(false)
+        getRecordsMock.mockResolvedValue({ data: [] })
+
+        const wrapper = mountHub()
+        await flushPromises()
+
+        expect(wrapper.text()).not.toContain('招生獎金')
+        expect(wrapper.text()).not.toContain('自主成長獎勵金')
+        expect(wrapper.text()).toContain('薪資總覽與歷史')
     })
 
     it('覆核中狀態：顯示封存進度與需注意數，深連結到 review 步驟', async () => {

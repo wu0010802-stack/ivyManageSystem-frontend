@@ -1,4 +1,5 @@
 import api from './index'
+import type { AxiosResp } from './_generated/typed'
 
 export const getDashboard = (params: unknown) => api.get('/reports/dashboard', { params })
 
@@ -8,7 +9,7 @@ export const getFinanceSummary = (year: number, month?: number | null) => {
   return api.get('/reports/finance-summary', { params })
 }
 
-export const getFinanceSummaryDetail = (year: number, month: number) =>
+export const getFinanceSummaryDetail = (year: number, month: number): AxiosResp<'/reports/finance-summary/detail', 'get'> =>
   api.get('/reports/finance-summary/detail', { params: { year, month } })
 
 // 配合 utils/download.js 的 downloadFile(url)：回傳端點路徑

@@ -57,7 +57,7 @@ export const getCampaignReport = (
 ): AxiosResp<'/recruitment-bonus/campaigns/{campaign_id}/report', 'get'> =>
     api.get(`/recruitment-bonus/campaigns/${campaignId}/report`)
 
-/** 轉帳名冊；無完整薪資檢視權限時後端回遮罩帳號（account_masked=true）。 */
+/** 轉帳名冊；需完整薪資檢視權限，無權限時後端回 403。 */
 export const getTransferRoster = (
     campaignId: number,
 ): AxiosResp<'/recruitment-bonus/campaigns/{campaign_id}/transfer-roster', 'get'> =>

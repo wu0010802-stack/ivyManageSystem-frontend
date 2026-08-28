@@ -8,6 +8,7 @@ import {
     confirmEnrollmentSnapshot,
 } from '@/api/salary'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { hasPermission } from '@/utils/auth'
 
 interface SnapshotRow {
     id: number
@@ -27,6 +28,7 @@ const generating = ref(false)
 const months = ref<[number, number][]>([])
 const activeKey = ref('')
 const rowsByMonth = reactive<Record<string, SnapshotRow[]>>({})
+const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
 
 const key = (m: [number, number]) => `${m[0]}-${m[1]}`
 const rows = computed(() => rowsByMonth[activeKey.value] || [])
@@ -78,10 +80,11 @@ onMounted(async () => {
 })
 
 const generateAll = async () => {
+    if (!canWriteSalary.value) return
     generating.value = true
     try {
         for (const m of months.value) {
-            await generateEnrollmentSnapshot({ year: m[0], month: m[1] })
+            await generateEnrollmentSnapshot({ year: m[0], month: m[1], force: false })
         }
         ElMessage.success('快照已產生')
         await refresh()
@@ -93,6 +96,7 @@ const generateAll = async () => {
 }
 
 const confirmActive = async () => {
+    if (!canWriteSalary.value) return
     const m = activeMonth.value
     if (!m) return
     try {
@@ -111,6 +115,7 @@ const editTarget = ref<SnapshotRow | null>(null)
 const editForm = reactive({ student_count: 0, reason: '' })
 
 const openEdit = (row: SnapshotRow) => {
+    if (!canWriteSalary.value) return
     editTarget.value = row
     editForm.student_count = row.student_count
     editForm.reason = ''
@@ -118,6 +123,7 @@ const openEdit = (row: SnapshotRow) => {
 }
 
 const saveEdit = async () => {
+    if (!canWriteSalary.value) return
     if (!editTarget.value) return
     if (editForm.reason.trim().length < 10) {
         ElMessage.warning('請填寫至少 10 個字的調整原因')
@@ -146,10 +152,10 @@ const saveEdit = async () => {
       <div class="snap-header">
         <span>節慶/超額獎金在籍人數快照（涵蓋 {{ coveredLabel }}）</span>
         <div>
-          <el-button size="small" :loading="generating" @click="generateAll">
+          <el-button size="small" :loading="generating" :disabled="!canWriteSalary" @click="generateAll">
             {{ anyExists ? '重新產生' : '產生快照' }}
           </el-button>
-          <el-button size="small" type="success" :disabled="!currentExists" @click="confirmActive">
+          <el-button size="small" type="success" :disabled="!canWriteSalary || !currentExists" @click="confirmActive">
             確認本月
           </el-button>
         </div>
@@ -181,7 +187,7 @@ const saveEdit = async () => {
       <el-table-column prop="adjust_reason" label="調整原因" min-width="140" show-overflow-tooltip />
       <el-table-column label="操作" width="76">
         <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openEdit(row)">調整</el-button>
+          <el-button v-if="canWriteSalary" link type="primary" size="small" @click="openEdit(row)">調整</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -211,7 +217,7 @@ const saveEdit = async () => {
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="editSaving" @click="saveEdit">儲存</el-button>
+        <el-button type="primary" :loading="editSaving" :disabled="!canWriteSalary" @click="saveEdit">儲存</el-button>
       </template>
     </el-dialog>
   </el-card>

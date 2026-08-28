@@ -6,12 +6,17 @@ const getMock = vi.fn()
 const generateMock = vi.fn()
 const patchMock = vi.fn()
 const confirmMock = vi.fn()
+const hasPermissionMock = vi.fn()
 
 vi.mock('@/api/salary', () => ({
     getEnrollmentSnapshot: (...a: unknown[]) => getMock(...a),
     generateEnrollmentSnapshot: (...a: unknown[]) => generateMock(...a),
     patchEnrollmentSnapshot: (...a: unknown[]) => patchMock(...a),
     confirmEnrollmentSnapshot: (...a: unknown[]) => confirmMock(...a),
+}))
+
+vi.mock('@/utils/auth', () => ({
+    hasPermission: (...a: unknown[]) => hasPermissionMock(...a),
 }))
 
 vi.mock('element-plus', async (importOriginal) => {
@@ -35,7 +40,10 @@ const STUBS = {
     'el-form-item': true,
     'el-input': true,
     'el-input-number': true,
-    'el-button': { template: '<button><slot /></button>' },
+    'el-button': {
+        props: ['disabled', 'loading'],
+        template: '<button :disabled="disabled"><slot /></button>',
+    },
 }
 
 const snapshotResponse = (rows: unknown[], covered: number[][] = []) => ({
@@ -54,6 +62,7 @@ describe('EnrollmentSnapshotPanel — 發放月涵蓋月人數快照', () => {
         generateMock.mockReset()
         patchMock.mockReset()
         confirmMock.mockReset()
+        hasPermissionMock.mockReturnValue(true)
     })
 
     it('以結算月查 covered_months 並逐涵蓋月載入快照列', async () => {
@@ -107,8 +116,8 @@ describe('EnrollmentSnapshotPanel — 發放月涵蓋月人數快照', () => {
         await flushPromises()
 
         expect(generateMock).toHaveBeenCalledTimes(2)
-        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 2 })
-        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 3 })
+        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 2, force: false })
+        expect(generateMock).toHaveBeenCalledWith({ year: 2026, month: 3, force: false })
         expect(getMock).toHaveBeenCalled() // refresh
     })
 
@@ -117,5 +126,36 @@ describe('EnrollmentSnapshotPanel — 發放月涵蓋月人數快照', () => {
         const wrapper = mountPanel(2026, 5)
         await flushPromises()
         expect(wrapper.find('.snap-card').exists()).toBe(false)
+    })
+
+    it('沒有 SALARY_WRITE 時產生與確認按鈕皆停用，且不能呼叫寫入 API', async () => {
+        hasPermissionMock.mockReturnValue(false)
+        getMock.mockImplementation((_y: number, month: number) =>
+            Promise.resolve(
+                month === 6
+                    ? snapshotResponse([], [[2026, 2]])
+                    : snapshotResponse([{
+                        id: 1,
+                        classroom_id: 1,
+                        classroom_name: '天堂鳥',
+                        student_count: 24,
+                        count_mode: 'month_end',
+                        is_confirmed: false,
+                        adjust_reason: null,
+                    }]),
+            ),
+        )
+        const wrapper = mountPanel(2026, 6)
+        await flushPromises()
+        const writeButtons = wrapper.findAll('button').filter((button) =>
+            button.text().includes('產生') || button.text().includes('確認本月'),
+        )
+
+        expect(writeButtons).toHaveLength(2)
+        expect(writeButtons.every((button) => button.attributes('disabled') !== undefined)).toBe(true)
+        await writeButtons[0].trigger('click')
+        await writeButtons[1].trigger('click')
+        expect(generateMock).not.toHaveBeenCalled()
+        expect(confirmMock).not.toHaveBeenCalled()
     })
 })

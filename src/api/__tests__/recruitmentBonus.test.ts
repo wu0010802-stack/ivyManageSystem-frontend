@@ -238,13 +238,13 @@ describe('recruitmentBonus API wrapper', () => {
       data: {
         campaign_id: 1,
         campaign_name: '115.03',
-        account_masked: true,
+        account_masked: false,
         rows: [
           {
             employee_id: 5,
             employee_name: '林慧慈',
             bank_code: '013',
-            bank_account: '＊＊＊＊6436',
+            bank_account: '1234566436',
             bank_account_name: '林慧慈',
             amount: 960,
             missing_account: false,

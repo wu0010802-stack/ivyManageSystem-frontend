@@ -68,7 +68,7 @@ import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useSalarySettlement, type SettlementStatus } from '@/composables/useSalarySettlement'
 import { getStaffQualificationChecklist } from '@/api/govReports'
 import { PERMISSION_NAMES } from '@/constants/permissions'
-import { hasPermission } from '@/utils/auth'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { saveBlobResponse } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errorHandler'
 
@@ -145,13 +145,16 @@ const exportQualificationChecklist = async () => {
     }
 }
 
-const links = [
+const allLinks = [
     { path: '/salary/history', title: '薪資總覽與歷史', desc: '全員月度對帳、個人歷史與快照' },
     { path: '/salary/simulate', title: '薪資試算', desc: '人事談薪情境試算（不寫入）' },
     { path: '/salary/settings', title: '薪資設定', desc: '獎金規則、才藝老師、系統參數' },
-    { path: '/salary/recruitment-bonus', title: '招生獎金', desc: '個人招生獎勵核算與結算轉帳' },
-    { path: '/salary/growth-contract', title: '自主成長獎勵金', desc: '研習時數登記、學年結算與每年 8 月發放' },
+    { path: '/salary/recruitment-bonus', title: '招生獎金', desc: '個人招生獎勵核算與結算轉帳', fullSalaryOnly: true },
+    { path: '/salary/growth-contract', title: '自主成長獎勵金', desc: '研習時數登記、學年結算與每年 8 月發放', fullSalaryOnly: true },
 ]
+const links = computed(() =>
+    allLinks.filter((link) => !link.fullSalaryOnly || hasFullSalaryView()),
+)
 </script>
 
 <style scoped>

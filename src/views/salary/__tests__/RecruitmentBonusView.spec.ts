@@ -43,7 +43,11 @@ vi.mock('@/api/extraBonuses', () => ({
 
 // ---- auth mock ----
 const hasPermissionMock = vi.fn()
-vi.mock('@/utils/auth', () => ({ hasPermission: (...a: unknown[]) => hasPermissionMock(...a) }))
+const hasFullSalaryViewMock = vi.fn()
+vi.mock('@/utils/auth', () => ({
+    hasPermission: (...a: unknown[]) => hasPermissionMock(...a),
+    hasFullSalaryView: () => hasFullSalaryViewMock(),
+}))
 
 // ---- employee store mock ----
 vi.mock('@/stores/employee', () => ({
@@ -97,6 +101,10 @@ const STUBS = {
     'el-button': {
         props: ['disabled', 'loading'],
         template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+    },
+    'el-result': {
+        props: ['title', 'subTitle'],
+        template: '<div class="result-stub">{{ title }} {{ subTitle }}</div>',
     },
 }
 
@@ -203,6 +211,7 @@ interface ViewVm {
 describe('RecruitmentBonusView', () => {
     beforeEach(() => {
         hasPermissionMock.mockReset().mockReturnValue(true)
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
         listCampaignsMock.mockReset().mockResolvedValue({ data: { items: [] } })
         createCampaignMock.mockReset()
         getCampaignMock.mockReset()
@@ -215,6 +224,18 @@ describe('RecruitmentBonusView', () => {
         vi.mocked(ElMessage.error).mockReset()
         vi.mocked(ElMessage.warning).mockReset()
         vi.mocked(ElMessageBox.confirm).mockReset()
+    })
+
+    it('非完整薪資角色不載入 campaign 或員工獎金資料', async () => {
+        hasFullSalaryViewMock.mockReturnValue(false)
+
+        const wrapper = mountView()
+        await flushPromises()
+
+        expect(wrapper.text()).toContain('無法檢視全員薪資資料')
+        expect(listCampaignsMock).not.toHaveBeenCalled()
+        expect(getCampaignMock).not.toHaveBeenCalled()
+        expect(listExtraBonusesMock).not.toHaveBeenCalled()
     })
 
     it('① campaign 列表渲染：名稱／期間／狀態／pending／confirmed', async () => {
@@ -565,6 +586,7 @@ describe('RecruitmentBonusView', () => {
 
 describe('RecruitmentBonusView 幼生欄顯示', () => {
     beforeEach(() => {
+        hasFullSalaryViewMock.mockReset().mockReturnValue(true)
         listCampaignsMock.mockReset()
         getCampaignMock.mockReset()
         listExtraBonusesMock.mockReset()

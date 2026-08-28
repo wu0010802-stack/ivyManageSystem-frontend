@@ -15,6 +15,7 @@ import {
 import { tenantHeaders, tenantSlug } from '@/utils/tenant'
 import { tenantRemoveItem } from '@/utils/tenantStorage'
 import { captureException } from '@/utils/sentry'
+import { clearSalarySimulationStorage } from '@/utils/salarySimulationStorage'
 
 export { PERMISSION_NAMES, ROUTE_PERMISSION_RULES }
 
@@ -153,6 +154,7 @@ export function waitForAdminSessionCleanup(): Promise<void> {
 function _resetAdminSessionRuntimeState(context: AdminSessionResetContext): void {
   // Pinia 是同步 in-memory state，先立即清掉，不留一個 render tick 的 PII。
   _resetStores()
+  clearSalarySimulationStorage()
 
   // 另一分頁換了身分：本分頁的 userInfo 已經不對應目前的共享 Cookie，
   // 必須立刻失效並退出受保護畫面，否則會用新帳號的 Cookie 續打舊帳號的 API。
@@ -515,6 +517,19 @@ export function isSuperAdmin(): boolean {
   const flags = userInfo['flags']
   if (Array.isArray(flags) && (flags as unknown[]).includes('super_admin')) return true
   return userInfo['role'] === 'admin'
+}
+
+/**
+ * 是否具備全員薪資視野。角色集合須與後端
+ * `services/finance/salary_access.py::FULL_SALARY_ROLES` 保持一致；此判斷僅供
+ * UI 隱藏跨員工薪資入口，真正授權仍由後端 `enforce_full_salary_view` 決定。
+ */
+export function hasFullSalaryView(): boolean {
+  const role = getUserInfo()?.['role']
+  return (
+    typeof role === 'string' &&
+    ['admin', 'hr', 'accountant', 'principal'].includes(role)
+  )
 }
 
 /**

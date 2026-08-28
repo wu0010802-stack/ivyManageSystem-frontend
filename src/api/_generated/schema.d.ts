@@ -15153,7 +15153,7 @@ export interface paths {
         };
         /**
          * Get Transfer Roster
-         * @description 轉帳名冊：戶名／帳號／金額／合計；無完整薪資檢視權限時帳號遮罩尾四碼。
+         * @description 轉帳名冊：戶名／完整帳號／金額／合計；無完整薪資檢視權限時回 403。
          */
         get: operations["get_transfer_roster_api_recruitment_bonus_campaigns__campaign_id__transfer_roster_get"];
         put?: never;
@@ -15989,7 +15989,7 @@ export interface paths {
         };
         /**
          * Get Finance Summary Detail
-         * @description 單月收支明細：學費 / 才藝 / 薪資等七來源原始交易列表（下鑽用）。
+         * @description 單月收支明細：學費 / 才藝 / 薪資等八來源原始交易列表（下鑽用）。
          *
          *     F-031：薪資逐員金額（gross/net/festival/overtime/employer_benefit/real_cost）
          *     屬 SALARY_READ 範疇；REPORTS 持有者若非 admin/hr 不可下鑽到逐員實發/獎金，
@@ -16017,8 +16017,8 @@ export interface paths {
          * Export Finance Summary
          * @description 匯出收支彙總為 Excel。
          *
-         *     指定 month 時，額外附七張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出、
-         *     年終撥款）；未指定 month 時只輸出月度彙總與分類統計兩張分頁。
+         *     指定 month 時，額外附八張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出、
+         *     年終撥款、表外獎金）；未指定 month 時只輸出月度彙總與分類統計兩張分頁。
          *
          *     F-031：薪資明細 Sheet 5 在非 admin/hr 角色下需以「—」遮罩金額欄位，
          *     避免 supervisor / 自訂 REPORTS 角色透過匯出取得逐員實發名冊。年終撥款明細
@@ -26889,6 +26889,79 @@ export interface components {
             /** Work Start Time */
             work_start_time?: string | null;
         };
+        /** EnrollmentSnapshotChangeOut */
+        EnrollmentSnapshotChangeOut: {
+            /** After */
+            after: number;
+            /** Before */
+            before?: number | null;
+            /** Classroom Id */
+            classroom_id?: number | null;
+        };
+        /** EnrollmentSnapshotConfirmOut */
+        EnrollmentSnapshotConfirmOut: {
+            /** Confirmed */
+            confirmed: number;
+            /** Message */
+            message: string;
+        };
+        /** EnrollmentSnapshotGenerateOut */
+        EnrollmentSnapshotGenerateOut: {
+            /** Changes */
+            changes: components["schemas"]["EnrollmentSnapshotChangeOut"][];
+            /** Generated */
+            generated: number;
+            /** Message */
+            message: string;
+        };
+        /** EnrollmentSnapshotOut */
+        EnrollmentSnapshotOut: {
+            /** Covered Months */
+            covered_months: [
+                number,
+                number
+            ][];
+            /** Exists */
+            exists: boolean;
+            /** Month */
+            month: number;
+            /** Rows */
+            rows: components["schemas"]["EnrollmentSnapshotRowOut"][];
+            /** Year */
+            year: number;
+        };
+        /** EnrollmentSnapshotPatchOut */
+        EnrollmentSnapshotPatchOut: {
+            /** After */
+            after: number;
+            /** Before */
+            before: number;
+            /** Message */
+            message: string;
+        };
+        /** EnrollmentSnapshotRowOut */
+        EnrollmentSnapshotRowOut: {
+            /** Adjust Reason */
+            adjust_reason?: string | null;
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Confirmed By */
+            confirmed_by?: string | null;
+            /** Count Mode */
+            count_mode: string;
+            /** Generated At */
+            generated_at?: string | null;
+            /** Id */
+            id: number;
+            /** Is Confirmed */
+            is_confirmed: boolean;
+            /** Student Count */
+            student_count: number;
+            /** Updated By */
+            updated_by?: string | null;
+        };
         /** EnrollmentStatsResponse */
         EnrollmentStatsResponse: {
             /** By Grade */
@@ -36685,8 +36758,11 @@ export interface components {
         };
         /** RecruitmentBonusRosterOut */
         RecruitmentBonusRosterOut: {
-            /** Account Masked */
-            account_masked: boolean;
+            /**
+             * Account Masked
+             * @constant
+             */
+            account_masked: false;
             /** Campaign Id */
             campaign_id: number;
             /** Campaign Name */
@@ -36698,7 +36774,7 @@ export interface components {
         };
         /**
          * RecruitmentBonusRosterRowOut
-         * @description 轉帳名冊單列；無完整薪資檢視權限時 bank_account 只回尾四碼遮罩。
+         * @description 轉帳名冊單列；端點僅允許完整薪資視野角色，bank_account 回完整帳號。
          */
         RecruitmentBonusRosterRowOut: {
             /** Amount */
@@ -38131,6 +38207,26 @@ export interface components {
             student_name?: string | null;
         };
         /**
+         * ReportsFinanceDetailExtraBonusItemOut
+         * @description `get_extra_bonus_payout_detail` 單筆；金額遮罩語意同年終撥款。
+         */
+        ReportsFinanceDetailExtraBonusItemOut: {
+            /** Amount */
+            amount?: number | null;
+            /** Category */
+            category: string;
+            /** Category Label */
+            category_label: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Paid Date */
+            paid_date?: string | null;
+            /** Period */
+            period: string;
+        };
+        /**
          * ReportsFinanceDetailFixedCostItemOut
          * @description `get_monthly_fixed_cost_detail` 單筆。
          */
@@ -38273,11 +38369,13 @@ export interface components {
         };
         /**
          * ReportsFinanceSummaryDetailOut
-         * @description GET /reports/finance-summary/detail 回應（下鑽七來源明細）。
+         * @description GET /reports/finance-summary/detail 回應（下鑽八來源明細）。
          */
         ReportsFinanceSummaryDetailOut: {
             /** Activity */
             activity: components["schemas"]["ReportsFinanceDetailActivityItemOut"][];
+            /** Extra Bonus */
+            extra_bonus: components["schemas"]["ReportsFinanceDetailExtraBonusItemOut"][];
             /** Fixed Cost */
             fixed_cost: components["schemas"]["ReportsFinanceDetailFixedCostItemOut"][];
             /** Misc Receipt */
@@ -38765,6 +38863,128 @@ export interface components {
             /** Brackets Year */
             brackets_year: number;
         };
+        /** SalaryCalculateAsyncStartOut */
+        SalaryCalculateAsyncStartOut: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed";
+            /** Total */
+            total: number;
+        };
+        /** SalaryCalculateJobOut */
+        SalaryCalculateJobOut: {
+            /** Created At */
+            created_at: number;
+            /** Current Employee */
+            current_employee: string;
+            /** Done */
+            done: number;
+            /** Error Message */
+            error_message?: string | null;
+            /** Errors */
+            errors: components["schemas"]["SalaryCalculationErrorOut"][];
+            /** Finished At */
+            finished_at?: number | null;
+            /** Job Id */
+            job_id: string;
+            /** Month */
+            month: number;
+            /** Progress Ratio */
+            progress_ratio: number;
+            /** Result Count */
+            result_count: number;
+            /** Results */
+            results?: components["schemas"]["SalaryCalculationResultItemOut"][] | null;
+            /** Started At */
+            started_at?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed";
+            /** Total */
+            total: number;
+            /** Year */
+            year: number;
+        };
+        /** SalaryCalculateOut */
+        SalaryCalculateOut: {
+            /** Errors */
+            errors: components["schemas"]["SalaryCalculationErrorOut"][];
+            /** Results */
+            results: components["schemas"]["SalaryCalculationResultItemOut"][];
+        };
+        /** SalaryCalculationErrorOut */
+        SalaryCalculationErrorOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Error */
+            error: string;
+        };
+        /**
+         * SalaryCalculationResultItemOut
+         * @description 單一員工的批次計算結果；金額屬薪資 PII。
+         */
+        SalaryCalculationResultItemOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Attendance Deduction */
+            attendance_deduction: number;
+            /** Base Salary */
+            base_salary: number;
+            /** Birthday Bonus */
+            birthday_bonus: number;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Health Insurance */
+            health_insurance: number;
+            /**
+             * Input Source
+             * @default live
+             * @enum {string}
+             */
+            input_source: "snapshot" | "as_of_history" | "live";
+            /** Labor Insurance */
+            labor_insurance: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: number;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: number;
+            /** Missing Punch Deduction */
+            missing_punch_deduction: number;
+            /** Net Pay */
+            net_pay: number;
+            /** Net Salary */
+            net_salary: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Pension Self */
+            pension_self: number;
+            /** Supervisor Dividend */
+            supervisor_dividend: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Total Deductions */
+            total_deductions: number;
+        };
         /**
          * SalaryDetailAuditLogItemOut
          * @description 單筆稽核記錄。
@@ -38977,6 +39197,30 @@ export interface components {
             /** Total Amount */
             total_amount: number;
         };
+        /** SalaryFinalizeEmployeeOut */
+        SalaryFinalizeEmployeeOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** SalaryFinalizeMonthOut */
+        SalaryFinalizeMonthOut: {
+            /** Count */
+            count: number;
+            /** Finalized At */
+            finalized_at: string;
+            /** Finalized By */
+            finalized_by: string;
+            /** Force */
+            force: boolean;
+            /** Message */
+            message: string;
+            /** Skipped Missing */
+            skipped_missing: components["schemas"]["SalaryFinalizeEmployeeOut"][];
+            /** Skipped Stale */
+            skipped_stale: components["schemas"]["SalaryFinalizeEmployeeOut"][];
+        };
         /**
          * SalaryHistoryAllEmployeeOut
          * @description GET /salaries/history-all 內單筆員工（被 SalaryHistoryAllOut.items 內嵌）。
@@ -39121,6 +39365,59 @@ export interface components {
             reset: number;
             /** Year */
             year: number;
+        };
+        /** SalaryManualAdjustOut */
+        SalaryManualAdjustOut: {
+            /** Message */
+            message: string;
+            record: components["schemas"]["SalaryManualAdjustRecordOut"];
+        };
+        /** SalaryManualAdjustRecordOut */
+        SalaryManualAdjustRecordOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Birthday Bonus */
+            birthday_bonus: number;
+            /** Bonus Amount */
+            bonus_amount: number;
+            /** Bonus Separate */
+            bonus_separate: boolean;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Extra Allowance */
+            extra_allowance: number;
+            /** Extra Allowance Label */
+            extra_allowance_label?: string | null;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Gross Salary */
+            gross_salary: number;
+            /** Id */
+            id: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Manual Overrides */
+            manual_overrides: string[];
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: number;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: number;
+            /** Net Salary */
+            net_salary: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Remark */
+            remark?: string | null;
+            /** Supervisor Dividend */
+            supervisor_dividend: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Version */
+            version: number;
         };
         /** SalaryManualAdjustRequest */
         SalaryManualAdjustRequest: {
@@ -39444,6 +39741,18 @@ export interface components {
             /** Year */
             year: number;
         };
+        /** SalarySimulateOut */
+        SalarySimulateOut: {
+            actual?: components["schemas"]["SalarySimulationValuesOut"] | null;
+            diff?: components["schemas"]["SalarySimulationDiffOut"] | null;
+            employee: components["schemas"]["SalarySimulationEmployeeOut"];
+            /** Overrides Active */
+            overrides_active: string[];
+            /** Overrides Ineffective */
+            overrides_ineffective?: components["schemas"]["SalarySimulationIneffectiveOverrideOut"][];
+            period: components["schemas"]["SalarySimulationPeriodOut"];
+            simulated: components["schemas"]["SalarySimulationValuesOut"];
+        };
         /**
          * SalarySimulateOverride
          * @description 薪資試算覆蓋參數（None = 使用 DB 實際資料）
@@ -39495,6 +39804,111 @@ export interface components {
             overrides: components["schemas"]["SalarySimulateOverride"];
             /** Year */
             year: number;
+        };
+        /** SalarySimulationDiffOut */
+        SalarySimulationDiffOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Base Salary */
+            base_salary: number;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Gross Salary */
+            gross_salary: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Net Pay */
+            net_pay: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Supplementary Health Employee */
+            supplementary_health_employee: number;
+            /** Total Deductions */
+            total_deductions: number;
+        };
+        /** SalarySimulationEmployeeOut */
+        SalarySimulationEmployeeOut: {
+            /** Employee Id */
+            employee_id: string;
+            /** Id */
+            id: number;
+            /** Job Title */
+            job_title?: string | null;
+            /** Name */
+            name: string;
+        };
+        /** SalarySimulationIneffectiveOverrideOut */
+        SalarySimulationIneffectiveOverrideOut: {
+            /** Field */
+            field: string;
+            /** Reason */
+            reason: string;
+        };
+        /** SalarySimulationPeriodOut */
+        SalarySimulationPeriodOut: {
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** SalarySimulationValuesOut */
+        SalarySimulationValuesOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Base Salary */
+            base_salary: number;
+            /** Birthday Bonus */
+            birthday_bonus: number;
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Gross Salary */
+            gross_salary: number;
+            /** Health Insurance */
+            health_insurance: number;
+            /** Labor Insurance */
+            labor_insurance: number;
+            /** Late Count */
+            late_count: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: number;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: number;
+            /** Missing Punch Count */
+            missing_punch_count: number;
+            /** Missing Punch Deduction */
+            missing_punch_deduction: number;
+            /** Net Pay */
+            net_pay: number;
+            /** Net Salary */
+            net_salary: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Pension Self */
+            pension_self: number;
+            /** Supervisor Dividend */
+            supervisor_dividend: number;
+            /** Supplementary Health Employee */
+            supplementary_health_employee: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Total Deductions */
+            total_deductions: number;
         };
         /**
          * SalarySnapshotCreateResultOut
@@ -39716,6 +40130,11 @@ export interface components {
              * @default 0
              */
             unused_leave_payout: number;
+        };
+        /** SalaryUnfinalizeOut */
+        SalaryUnfinalizeOut: {
+            /** Message */
+            message: string;
         };
         /**
          * ScheduleDayItem
@@ -71084,7 +71503,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryUnfinalizeOut"];
                 };
             };
             /** @description Validation Error */
@@ -71121,7 +71540,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryManualAdjustOut"];
                 };
             };
             /** @description Validation Error */
@@ -71225,7 +71644,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryCalculateOut"];
                 };
             };
             /** @description Validation Error */
@@ -71261,7 +71680,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryCalculateAsyncStartOut"];
                 };
             };
             /** @description Validation Error */
@@ -71295,7 +71714,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryCalculateJobOut"];
                 };
             };
             /** @description Validation Error */
@@ -71392,9 +71811,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotOut"];
                 };
             };
             /** @description Validation Error */
@@ -71429,9 +71846,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotPatchOut"];
                 };
             };
             /** @description Validation Error */
@@ -71464,9 +71879,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotConfirmOut"];
                 };
             };
             /** @description Validation Error */
@@ -71499,9 +71912,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotGenerateOut"];
                 };
             };
             /** @description Validation Error */
@@ -71633,7 +72044,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryFinalizeMonthOut"];
                 };
             };
             /** @description Validation Error */
@@ -71817,7 +72228,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalarySimulateOut"];
                 };
             };
             /** @description Validation Error */

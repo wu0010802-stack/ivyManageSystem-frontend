@@ -1,5 +1,12 @@
 <template>
   <div>
+    <el-result
+      v-if="!canViewFullSalary"
+      icon="warning"
+      title="無法檢視全員薪資資料"
+      sub-title="此功能僅開放具完整薪資視野的角色使用"
+    />
+    <template v-else>
     <PageHeader title="招生獎金" subtitle="教職員個人招生獎勵：候選同步、確認歸屬、結算轉帳">
       <template #actions>
         <el-button v-if="!selectedCampaignId && canWrite" type="primary" :icon="Plus" @click="openCreateDialog">
@@ -282,6 +289,7 @@
         <el-button type="primary" @click="submitAdd">新增</el-button>
       </template>
     </el-dialog>
+    </template>
   </div>
 </template>
 
@@ -291,7 +299,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { hasPermission } from '@/utils/auth'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { formatCurrency } from '@/utils/currency'
 import { friendlyError } from '@/utils/errorMessages'
 import { useEmployeeStore } from '@/stores/employee'
@@ -342,7 +350,12 @@ const ATTR_STATUS_LABELS: Record<string, string> = {
 const ATTR_STATUS_OPTIONS = Object.entries(ATTR_STATUS_LABELS).map(([value, label]) => ({ value, label }))
 const PAGE_SIZE = 20
 
-const canWrite = computed(() => hasPermission('SALARY_WRITE'))
+const canViewFullSalary = computed(
+    () => hasPermission('SALARY_READ') && hasFullSalaryView(),
+)
+const canWrite = computed(
+    () => canViewFullSalary.value && hasPermission('SALARY_WRITE'),
+)
 
 const employeeStore = useEmployeeStore()
 const employeeOptions = computed<EmployeeOption[]>(() => (employeeStore.employees || []) as EmployeeOption[])
@@ -355,6 +368,7 @@ const campaignTableData = computed(() =>
 )
 
 const fetchCampaigns = async () => {
+    if (!canViewFullSalary.value) return
     listLoading.value = true
     try {
         const res = await listCampaigns()
@@ -428,6 +442,7 @@ const isSettled = computed(() => detail.value?.status === 'settled')
 const readOnly = computed(() => isSettled.value || !canWrite.value)
 
 const fetchDetail = async (id: number) => {
+    if (!canViewFullSalary.value) return
     detailLoading.value = true
     try {
         const res = await getCampaign(id)
@@ -645,6 +660,7 @@ const fetchSettledPayments = async () => {
 }
 
 onMounted(() => {
+    if (!canViewFullSalary.value) return
     fetchCampaigns()
     employeeStore.fetchEmployees?.()
 })

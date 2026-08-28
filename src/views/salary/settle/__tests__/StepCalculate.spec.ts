@@ -94,6 +94,13 @@ describe('StepCalculate', () => {
         expect(wrapper.text()).toContain('建議重新計算')
     })
 
+    it('說明應符合後端整月拒絕語意，不宣稱會跳過已封存紀錄', () => {
+        const wrapper = mountStep(makeSettlement('reviewing'))
+
+        expect(wrapper.text()).toContain('系統會拒絕整月重算')
+        expect(wrapper.text()).not.toContain('已封存的紀錄不會被覆蓋')
+    })
+
     it('計算成功 → refresh + emit next', async () => {
         const settlement = makeSettlement('reviewing')
         calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-1', total: 3 } })

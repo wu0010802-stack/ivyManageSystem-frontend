@@ -28,7 +28,7 @@
         <div>
           <p class="calc-title">計算 {{ q.year }} 年 {{ q.month }} 月全員薪資</p>
           <p class="calc-hint">
-            重新計算會保留已存在的手動調整；已封存的紀錄不會被覆蓋。
+            重新計算會保留已存在的手動調整；若本月已有封存紀錄，系統會拒絕整月重算，需先在「定案」步驟逐筆退回。
           </p>
           <p v-if="lastCalculatedAt" class="calc-hint">上次計算：{{ lastCalculatedAt }}</p>
           <!-- 曾封存後解封的紀錄預設以「封存當下的輸入快照」重算（位元重現）；
@@ -189,7 +189,7 @@ const onCalculate = async () => {
     }
     try {
         await ElMessageBox.confirm(
-            `將計算 ${q.year} 年 ${q.month} 月全員薪資。重算會保留手動調整、跳過已封存紀錄，確定執行？`,
+            `將計算 ${q.year} 年 ${q.month} 月全員薪資。重算會保留手動調整；若本月已有封存紀錄，系統會拒絕整月重算。確定執行？`,
             '計算薪資',
             { confirmButtonText: '執行計算', cancelButtonText: '取消', type: 'warning' },
         )
