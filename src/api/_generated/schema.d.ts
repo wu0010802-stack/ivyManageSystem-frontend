@@ -41782,6 +41782,8 @@ export interface components {
             status_tag?: string | null;
             /** Student Id */
             student_id: string;
+            /** Term Classroom Id */
+            term_classroom_id?: number | null;
         };
         /**
          * StudentListOut
