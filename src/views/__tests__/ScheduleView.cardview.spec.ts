@@ -27,6 +27,7 @@ vi.mock('@/api/shifts', () => ({
   getShiftImportTemplate: vi.fn(),
   importShifts: vi.fn(),
   exportShifts: vi.fn(),
+  getLeaveContext: vi.fn(() => Promise.resolve({ data: [] })),
   // shift store 由同一個模組取用，未 mock 會整包 import 失敗
   getShiftTypes: vi.fn(() => Promise.resolve({ data: [] })),
 }))

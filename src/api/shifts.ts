@@ -57,6 +57,14 @@ export const deleteDaily = (
   id: number
 ): AxiosResp<'/shifts/daily/{shift_id}', 'delete'> => api.delete(`/shifts/daily/${id}`)
 
+// ── 排班頁請假摘要 ──────────────────────────────────────────────────────────
+// SCHEDULE 權限即可（勿改走 GET /leaves：那需要 LEAVES_READ 且含 reason 等
+// 完整假單資訊；排班只需要「誰、哪個時段不在」的白名單 10 欄）。
+
+export const getLeaveContext = (
+  params: ApiQuery<'/shifts/leave-context', 'get'>
+): AxiosResp<'/shifts/leave-context', 'get'> => api.get('/shifts/leave-context', { params })
+
 // ── 換班歷史（管理端） ──────────────────────────────────────────────────────
 
 export const getSwapHistory = (
