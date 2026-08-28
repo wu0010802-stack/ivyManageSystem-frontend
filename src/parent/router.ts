@@ -47,7 +47,7 @@ const routes: RouteRecordRaw[] = [
       path: '/announcements',
       name: 'parent-announcements',
       component: () => import('./views/AnnouncementsView.vue'),
-      meta: { title: '公告', tab: 'messages' },
+      meta: { title: '公告', tab: 'contact-book' },
     },
     {
       path: '/leaves',
@@ -56,16 +56,15 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '請假', tab: 'admin', showBack: true },
     },
     {
+      // 親師訊息功能已於 2026-08-28 自家長端下架，第三個 tab 換成聯絡簿。
+      // 這兩條 redirect 只為既有 LINE 推播深連結而留——直接刪掉會落到
+      // catch-all（把家長丟回首頁），redirect 至少維持「要看老師說了什麼」的脈絡。
       path: '/messages',
-      name: 'parent-messages',
-      component: () => import('./views/MessagesView.vue'),
-      meta: { title: '訊息', tab: 'messages' },
+      redirect: '/contact-book',
     },
     {
       path: '/messages/:threadId',
-      name: 'parent-message-thread',
-      component: () => import('./views/MessageThreadView.vue'),
-      meta: { title: '對話', tab: 'messages', showBack: true, hideTabBar: true },
+      redirect: '/contact-book',
     },
     {
       path: '/assistant',
@@ -210,13 +209,14 @@ const routes: RouteRecordRaw[] = [
       path: '/contact-book',
       name: 'parent-contact-book',
       component: () => import('./views/ContactBookView.vue'),
-      meta: { title: '聯絡簿', tab: 'child', showBack: true },
+      // tab 根頁：不給 showBack（返回鍵留給 /contact-book/:entryId 這類深層頁）
+      meta: { title: '聯絡簿', tab: 'contact-book' },
     },
     {
       path: '/contact-book/:entryId',
       name: 'parent-contact-book-detail',
       component: () => import('./views/ContactBookDetailView.vue'),
-      meta: { title: '聯絡簿詳情', tab: 'child', showBack: true },
+      meta: { title: '聯絡簿詳情', tab: 'contact-book', showBack: true },
     },
     {
       path: '/surveys',

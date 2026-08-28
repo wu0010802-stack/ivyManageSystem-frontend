@@ -23,8 +23,6 @@ const h = vi.hoisted(() => ({
   createLeave: vi.fn(),
   listEvents: vi.fn(),
   acknowledgeEvent: vi.fn(),
-  storeSend: vi.fn(),
-  getMessageThread: vi.fn(),
   childrenLoad: vi.fn(),
   enqueueParent: vi.fn(),
   flushParentQueue: vi.fn(),
@@ -85,28 +83,7 @@ vi.mock('@/parent/api/medications', () => ({
   uploadAckSignature: vi.fn(),
 }))
 
-vi.mock('@/parent/api/messages', () => ({
-  getMessageThread: h.getMessageThread,
-  sendThreadMessage: vi.fn(),
-  attachToMessage: vi.fn(),
-}))
 
-vi.mock('@/parent/stores/messages', () => ({
-  useMessagesStore: () => ({
-    send: h.storeSend,
-    messagesByThread: { 5: { items: [], hasMore: false } },
-    threads: [],
-    threadsLoaded: true,
-    unreadCount: 0,
-    fetchMessages: vi.fn().mockResolvedValue(undefined),
-    fetchThreads: vi.fn().mockResolvedValue(undefined),
-    markRead: vi.fn().mockResolvedValue(undefined),
-    recall: vi.fn().mockResolvedValue(undefined),
-    refreshUnread: vi.fn().mockResolvedValue(undefined),
-    invalidate: vi.fn(),
-    clear: vi.fn(),
-  }),
-}))
 
 vi.mock('@/parent/stores/children', () => ({
   useChildrenStore: () => ({
@@ -123,8 +100,6 @@ vi.mock('@/parent/stores/children', () => ({
 import { OP_KINDS } from '@/utils/offlineQueue'
 import ContactBookDetailView from '@/parent/views/ContactBookDetailView.vue'
 import EventAckView from '@/parent/views/EventAckView.vue'
-import MessageThreadView from '@/parent/views/MessageThreadView.vue'
-import MessageComposer from '@/parent/components/MessageComposer.vue'
 import LeavesView from '@/parent/views/LeavesView.vue'
 import LeaveForm from '@/parent/components/leaves/LeaveForm.vue'
 
@@ -154,7 +129,6 @@ beforeEach(() => {
   h.flushParentQueue.mockResolvedValue({ succeeded: 0, needs_review: 0, kept: 0, auth_failed: false })
   h.flushAllParent.mockResolvedValue({ succeeded: 0, needs_review: 0, kept: 0, auth_failed: false })
   h.childrenLoad.mockResolvedValue(undefined)
-  h.getMessageThread.mockResolvedValue({ data: { id: 5, subject: '測試主旨', messages: [] } })
   h.listEvents.mockResolvedValue({
     data: { items: [{ id: 7, title: '校外教學同意書', require_signature: false, content: '內容' }] },
   })
@@ -222,27 +196,6 @@ describe('家長端假線上 → 寫入必須 fallback 進離線佇列', () => {
       expect.objectContaining({
         kind: OP_KINDS.EVENT_ACK,
         payload: expect.objectContaining({ event_id: 7, student_id: 3 }),
-      })
-    )
-  })
-
-  it('訊息送出：store.send 丟 ERR_NETWORK → enqueue PARENT_MESSAGE，訊息不遺失', async () => {
-    h.storeSend.mockRejectedValue(networkError())
-
-    const w = mount(MessageThreadView)
-    await flushPromises()
-
-    const composer = w.findComponent(MessageComposer)
-    expect(composer.exists()).toBe(true)
-    const done = vi.fn()
-    composer.vm.$emit('send', { body: '老師午安', attachments: [], done })
-    await flushPromises()
-
-    expect(h.storeSend).toHaveBeenCalled()
-    expect(h.enqueueParent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: OP_KINDS.PARENT_MESSAGE,
-        payload: expect.objectContaining({ thread_id: 5, body: '老師午安' }),
       })
     )
   })
@@ -338,41 +291,6 @@ describe('家長端離線（navigator.onLine === false）→ 直接入列不打 
     expect(h.enqueueParent).toHaveBeenCalledWith(
       expect.objectContaining({ kind: OP_KINDS.EVENT_ACK })
     )
-  })
-
-  it('純文字訊息 → enqueue PARENT_MESSAGE，不呼叫 store.send', async () => {
-    const w = mount(MessageThreadView)
-    await flushPromises()
-
-    const done = vi.fn()
-    w.findComponent(MessageComposer).vm.$emit('send', { body: '離線訊息', attachments: [], done })
-    await flushPromises()
-
-    expect(h.storeSend).not.toHaveBeenCalled()
-    expect(h.enqueueParent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: OP_KINDS.PARENT_MESSAGE,
-        payload: expect.objectContaining({ body: '離線訊息' }),
-      })
-    )
-    expect(done).toHaveBeenCalledWith(true)
-  })
-
-  it('帶附件的訊息 → 阻擋不入列（佇列無法帶檔案）', async () => {
-    const w = mount(MessageThreadView)
-    await flushPromises()
-
-    const done = vi.fn()
-    w.findComponent(MessageComposer).vm.$emit('send', {
-      body: '照片',
-      attachments: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })],
-      done,
-    })
-    await flushPromises()
-
-    expect(h.enqueueParent).not.toHaveBeenCalled()
-    expect(h.storeSend).not.toHaveBeenCalled()
-    expect(done).toHaveBeenCalledWith(false)
   })
 
   it('請假送出 → enqueue PARENT_LEAVE_REQUEST，不呼叫 createLeave', async () => {

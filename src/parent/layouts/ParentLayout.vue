@@ -38,8 +38,8 @@ const isHomeRoute = computed(() => route.name === 'parent-home')
 /**
  * 點再次點 active tab → scroll-to-top。
  * 條件嚴格：必須「目前路徑等於 tab.path」才觸發；若使用者在深層頁
- * （/messages/123，meta.tab 仍為 'messages'）點 messages tab，仍應
- * 走 router 正常導回 /messages（不阻止預設行為）。
+ * （/contact-book/123，meta.tab 仍為 'contact-book'）點聯絡簿 tab，仍應
+ * 走 router 正常導回 /contact-book（不阻止預設行為）。
  */
 function onTabSelect(_key: string, item: { key: string; icon: string; label: string; badge?: number; path?: string }) {
   if (route.path === item.path) {
@@ -57,15 +57,15 @@ function onTabSelect(_key: string, item: { key: string; icon: string; label: str
  * tab 徽章全部取自 home/summary 這一支。
  *
  * 這裡原本另外打 announcements/unread-count 與 messages/unread-count 兩支，
- * 但 summary 早就同時回傳 unread_announcements 與 unread_messages，等於每次
- * 換頁都多送兩個請求拿已經有的數字。改走共用 composable 後，同 key 的
+ * 但 summary 早就回傳 unread_announcements，等於每次換頁都多送請求拿
+ * 已經有的數字。改走共用 composable 後，同 key 的
  * useCachedAsync 會與首頁 / 事務頁共用 cache 並 dedupe in-flight 請求，
  * 節流也由它的 60s TTL 負責（原本的 unreadThrottle 因此退場）。
  *
  * immediate: false —— 這個 layout 在 /login、/bind 等公開頁也會掛載，
  * 未登入就打 summary 會拿到 401。
  */
-const { refresh: refreshSummary, messagesTabBadge, adminTabBadge } = useHomeSummary({
+const { refresh: refreshSummary, contactBookTabBadge, adminTabBadge } = useHomeSummary({
   immediate: false,
 })
 
@@ -85,12 +85,13 @@ const TABS = computed<TabItem[]>(() => [
     path: '/child',
   },
   {
-    key: 'messages',
-    label: '訊息',
-    icon: 'chat_bubble',
-    activeIcon: 'chat_bubble',
-    path: '/messages',
-    badge: messagesTabBadge.value,
+    // 2026-08-28：親師訊息自家長端下架，這一格改放聯絡簿（公告併為其第二分頁）。
+    key: 'contact-book',
+    label: '聯絡簿',
+    icon: 'menu_book',
+    activeIcon: 'menu_book',
+    path: '/contact-book',
+    badge: contactBookTabBadge.value,
   },
   {
     key: 'admin',
@@ -139,7 +140,7 @@ function onBack() {
       :on-back="onBack"
       variant="small"
     >
-      <!-- 主分頁（home/child/messages/admin/me）無 showBack，需要 BrandMark 補位；
+      <!-- 主分頁（home/child/contact-book/admin/me）無 showBack，需要 BrandMark 補位；
            深層頁有 back button 不用蓋。CLAUDE.md 列為 polish 階段 acceptance：
            保留 LaurelWreath/CrownIcon brand。bug sweep round 4 (2026-05-14) F-FE-3。 -->
       <template v-if="!headerShowBack" #leading>

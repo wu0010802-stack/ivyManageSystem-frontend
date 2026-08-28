@@ -25,9 +25,17 @@ vi.mock('@/parent/composables/useChildSelection', () => ({
 
 const pushMock = vi.fn()
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: pushMock }),
-  useRoute: () => ({}),
+  useRouter: () => ({ push: pushMock, replace: vi.fn() }),
+  // 分頁狀態（聯絡簿 / 公告）讀 route.query.tab，缺 query 會讓元件炸開
+  useRoute: () => ({ path: '/contact-book', query: {} }),
 }))
+
+vi.mock('@/parent/api/announcements', () => ({
+  getUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
+  listAnnouncements: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  markRead: vi.fn(),
+}))
+
 
 import ContactBookView from '@/parent/views/ContactBookView.vue'
 

@@ -3,7 +3,6 @@ import { logout } from '../api/auth'
 import { resetParentApiSessionState } from '../api/index'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useChildrenStore } from '../stores/children'
-import { useMessagesStore } from '../stores/messages'
 import { clearTodayStatusCache } from './useTodayStatusCache'
 import { clearChildSelection } from './useChildSelection'
 import { clearFaqCache } from './useFaq'
@@ -84,7 +83,6 @@ export function clearParentPersonalizedCaches(): void {
   clearTodayStatusCache()
   invalidateCachedAsync('parent/')
   useChildrenStore().clear()
-  useMessagesStore().clear()
   clearChildSelection()
   clearFaqCache()
   useConsentGate().reset()

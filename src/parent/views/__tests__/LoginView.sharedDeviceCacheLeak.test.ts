@@ -5,9 +5,9 @@
  * 情境：園所設定碼登入（/device-login）或 LIFF 登入常用在共用裝置（如園所
  * 辦公室的平板），前一位家長（家庭 A）若未主動點「登出」就離開（token 過期
  * / 直接關頁），`useTodayStatusCache`（sessionStorage + module state）、
- * `useCachedAsync`（module-level in-memory cache）與 `useChildrenStore` /
- * `useMessagesStore`（Pinia store，`loaded` 旗標無 TTL）都會把家庭 A 的資料
- * 留在裝置上。家庭 B 在 60s TTL（今日狀態）或 `loaded=true`（子女/訊息 store，
+ * `useCachedAsync`（module-level in-memory cache）與 `useChildrenStore`
+ * （Pinia store，`loaded` 旗標無 TTL）都會把家庭 A 的資料留在裝置上。
+ * 家庭 B 在 60s TTL（今日狀態）或 `loaded=true`（子女 store，
  * 無 TTL、只認旗標）內完成登入時，`completeLogin` 只呼叫了
  * `authStore.setUser(user)` 就直接導頁，這些殘留全部原樣沿用 → 家庭 B 看到
  * 家庭 A 的小孩資料（PII 外洩）。
@@ -24,7 +24,6 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../LoginView.vue'
 import { useChildrenStore } from '@/parent/stores/children'
-import { useMessagesStore } from '@/parent/stores/messages'
 import { useCachedAsync, _resetCacheForTesting } from '@/composables/useCachedAsync'
 
 const { mockInitLiff, mockLiffLogin, mockDeviceSetup, mockLiff, mockGetCurrentPolicy, mockGetMyConsents } = vi.hoisted(() => ({
@@ -97,7 +96,7 @@ beforeEach(() => {
 })
 
 describe('LoginView — 共用裝置換家庭登入清除殘留個人化快取', () => {
-  it('登入完成前清掉前一位家長留下的今日狀態快取、useCachedAsync 快取與子女/訊息 store', async () => {
+  it('登入完成前清掉前一位家長留下的今日狀態快取、useCachedAsync 快取與子女 store', async () => {
     // LoginView 掛載時吃這個 pinia（見 mountLoginView）；測試在此先 seed 殘留資料，
     // 必須是同一顆 pinia 實例，completeLogin 內的 useChildrenStore() 等呼叫才會
     // 命中同一份 store，而不是另開一顆互不相干的 pinia。
@@ -112,13 +111,10 @@ describe('LoginView — 共用裝置換家庭登入清除殘留個人化快取',
     const cachedA = useCachedAsync('parent/some-widget', async () => ({ owner: 'A' }))
     await flushPromises()
     expect(cachedA.data.value).toEqual({ owner: 'A' })
-    // 家庭 A 的殘留：children / messages store（loaded=true，無 TTL，只認旗標）
+    // 家庭 A 的殘留：children store（loaded=true，無 TTL，只認旗標）
     const children = useChildrenStore()
-    const messages = useMessagesStore()
     children.items = [{ student_id: 11, name: '家庭A的小孩' }]
     children.loaded = true
-    messages.threads = [{ id: 21, title: '家庭A的對話' }]
-    messages.unreadCount = 3
 
     // 家庭 B 用設定碼登入（未事先登出——共用裝置常見情境：A 沒點登出就離開）
     mockConsentNotRequired()
@@ -136,7 +132,5 @@ describe('LoginView — 共用裝置換家庭登入清除殘留個人化快取',
     expect(cachedA.data.value).toBeNull()
     expect(children.items).toEqual([])
     expect(children.loaded).toBe(false)
-    expect(messages.threads).toEqual([])
-    expect(messages.unreadCount).toBe(0)
   })
 })

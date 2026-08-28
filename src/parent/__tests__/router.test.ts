@@ -65,8 +65,6 @@ describe('parent router IA (2026-05-22 restructure)', () => {
       expect(r?.meta?.tab).toBe('child')
     })
     it.each([
-      '/contact-book',
-      '/contact-book/:entryId',
       '/children/:studentId',
       '/children/:studentId/reports',
       '/children/:studentId/photos',
@@ -76,13 +74,23 @@ describe('parent router IA (2026-05-22 restructure)', () => {
     })
   })
 
-  describe('Messages tab 子頁（spec §5.1）', () => {
+  describe('Contact-book tab（2026-08-28：訊息下架，第三個 tab 換成聯絡簿）', () => {
     it.each([
-      '/messages',
-      '/messages/:threadId',
+      '/contact-book',
+      '/contact-book/:entryId',
       '/announcements',
-    ])('%s 應有 tab=messages', (path) => {
-      expect(tabOf(path)).toBe('messages')
+    ])('%s 應有 tab=contact-book', (path) => {
+      expect(tabOf(path)).toBe('contact-book')
+    })
+
+    it('/contact-book 是 tab 根頁，不顯示返回鍵', () => {
+      expect(findRoute('/contact-book')?.meta?.showBack).toBeUndefined()
+    })
+
+    it('訊息路由已移除，改為 redirect 到 /contact-book', () => {
+      expect(findRoute('/messages')?.name).toBeUndefined()
+      expect(findRoute('/messages')?.redirect).toBe('/contact-book')
+      expect(findRoute('/messages/:threadId')?.redirect).toBe('/contact-book')
     })
   })
 

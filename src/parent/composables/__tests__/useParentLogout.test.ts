@@ -14,15 +14,6 @@ vi.mock('@/parent/api/profile', () => ({
   getMyChildren: mockGetMyChildren,
   getTodayStatus: vi.fn(),
 }))
-vi.mock('@/parent/api/messages', () => ({
-  listMessageThreads: vi.fn(),
-  listThreadMessages: vi.fn(),
-  sendThreadMessage: vi.fn(),
-  attachToMessage: vi.fn(),
-  markThreadRead: vi.fn(),
-  recallMessage: vi.fn(),
-  getMessageUnreadCount: vi.fn(),
-}))
 
 import {
   _resetParentLogoutIsolationForTesting,
@@ -32,7 +23,6 @@ import {
 } from '@/parent/composables/useParentLogout'
 import { useParentAuthStore } from '@/parent/stores/parentAuth'
 import { useChildrenStore } from '@/parent/stores/children'
-import { useMessagesStore } from '@/parent/stores/messages'
 import { useChildSelection } from '@/parent/composables/useChildSelection'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
 import { useSnackbar } from '@/parent/composables/useSnackbar'
@@ -94,7 +84,6 @@ describe('performParentLogout（家長端統一登出清理）', () => {
   it('清除所有家長 store、全域狀態與舊版個人化 CacheStorage', async () => {
     const auth = useParentAuthStore()
     const children = useChildrenStore()
-    const messages = useMessagesStore()
     const childSelection = useChildSelection()
     const consent = useConsentGate()
     const snackbar = useSnackbar()
@@ -102,11 +91,6 @@ describe('performParentLogout（家長端統一登出清理）', () => {
     auth.setUser({ user_id: 1, name: '家長甲' })
     children.items = [{ student_id: 11, name: '甲小孩' }]
     children.loaded = true
-    messages.threads = [{ id: 21, title: '甲的對話' }]
-    messages.messagesByThread = {
-      21: { items: [{ id: 22, body: '甲的訊息' }], next_cursor: null, hasMore: false },
-    }
-    messages.unreadCount = 3
     childSelection.setSelected(11)
     consent.require('contact_book')
     snackbar.show({ message: '甲的提示' })
@@ -119,9 +103,6 @@ describe('performParentLogout（家長端統一登出清理）', () => {
     expect(auth.user).toBeNull()
     expect(children.items).toEqual([])
     expect(children.loaded).toBe(false)
-    expect(messages.threads).toEqual([])
-    expect(messages.messagesByThread).toEqual({})
-    expect(messages.unreadCount).toBe(0)
     expect(childSelection.selectedId.value).toBeNull()
     expect(consent.visible.value).toBe(false)
     expect(snackbar.snackbars.value).toEqual([])

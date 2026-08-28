@@ -79,8 +79,8 @@ async function openReviewDialog() {
     }
     await manualFlush()
   } catch {
-    // 取消 = 聯絡管理員：v1 簡單導向 messages
-    window.location.href = '/parent/#/messages'
+    // 取消 = 聯絡管理員：訊息下架後導向聯絡簿（家長能留言給老師的地方）
+    window.location.href = '/parent/#/contact-book'
   }
 }
 

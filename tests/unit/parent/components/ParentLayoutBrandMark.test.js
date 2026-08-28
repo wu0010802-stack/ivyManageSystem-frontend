@@ -15,9 +15,6 @@ import ParentLayout from '@/parent/layouts/ParentLayout.vue'
 vi.mock('@/parent/api/announcements', () => ({
   getUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
 }))
-vi.mock('@/parent/api/messages', () => ({
-  getMessageUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
-}))
 
 function makeRouter(initialPath, meta = {}) {
   const router = createRouter({
