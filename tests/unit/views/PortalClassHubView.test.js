@@ -11,21 +11,6 @@ vi.mock('@/api/portalClassHub', () => ({
   getTodayHub: vi.fn(),
 }))
 
-// ---- Mock portalMessages api 防止 usePortalMessagesStore.refreshUnread 真打網路 ----
-vi.mock('@/api/portalMessages', () => ({
-  listThreads: vi.fn(() => Promise.resolve({ data: { items: [] } })),
-  listMessages: vi.fn(() =>
-    Promise.resolve({ data: { items: [], next_cursor: null } }),
-  ),
-  postReply: vi.fn(),
-  createThread: vi.fn(),
-  attachToMessage: vi.fn(),
-  markThreadRead: vi.fn(),
-  recallMessage: vi.fn(),
-  getUnreadCount: vi.fn(() =>
-    Promise.resolve({ data: { unread_count: 0 } }),
-  ),
-}))
 
 // ---- Mock auth so hasPermission / hasPortalPermission 為 deterministic ----
 // PortalClassHubView 用 hasPortalPermission（不對 teacher 短路）守 PARENT_MESSAGES_WRITE，

@@ -1,10 +1,5 @@
 <template>
   <div class="class-hub" v-loading="loading && !data">
-    <ClassHubCommBar
-      :messages-unread="messagesUnread"
-      @open-panel="onOpenPanel"
-    />
-
     <ClassHubStickyNext :next="stickyNext" @jump="(dl) => jumpDeep(dl || '')" />
 
     <ClassHubBatchMeasurementCard
@@ -69,15 +64,6 @@
       @done="manualRefresh"
     />
 
-    <ClassHubMessagesDrawer
-      v-if="canMessages"
-      :model-value="panel === 'messages'"
-      :thread-id="threadId"
-      @update:model-value="onMessagesDrawerToggle"
-      @open-thread="openThread"
-      @close-thread="closeThread"
-    />
-
     <PortalBatchMeasurementSheet
       v-model="batchSheetOpen"
       @done="onBatchDone"
@@ -88,18 +74,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { storeToRefs } from 'pinia'
 import { usePortalClassHub } from '@/composables/usePortalClassHub'
-import { useClassHubPanelQuery } from '@/composables/useClassHubPanelQuery'
-import { usePortalMessagesStore } from '@/stores/portalMessages'
-import { hasPortalPermission } from '@/utils/auth'
 import ClassHubStickyNext from '@/components/portal/class-hub/ClassHubStickyNext.vue'
 import ClassHubTimeSlotCard from '@/components/portal/class-hub/ClassHubTimeSlotCard.vue'
 import ClassHubAttendanceSheet from '@/components/portal/class-hub/ClassHubAttendanceSheet.vue'
 import ClassHubMedicationSheet from '@/components/portal/class-hub/ClassHubMedicationSheet.vue'
 import ClassHubIncidentQuickSheet from '@/components/portal/class-hub/ClassHubIncidentQuickSheet.vue'
-import ClassHubCommBar from '@/components/portal/class-hub/ClassHubCommBar.vue'
-import ClassHubMessagesDrawer from '@/components/portal/class-hub/ClassHubMessagesDrawer.vue'
 import ClassHubBatchMeasurementCard from '@/components/portal/class-hub/ClassHubBatchMeasurementCard.vue'
 import ClassHubLeaveCard from '@/components/portal/class-hub/ClassHubLeaveCard.vue'
 import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
@@ -114,20 +94,6 @@ const { data, loading, error, refresh, decrementCount } = usePortalClassHub() as
   decrementCount: (key: string) => void
 }
 const router = useRouter()
-const messagesStore = usePortalMessagesStore()
-const { unreadCount: messagesUnread } = storeToRefs(messagesStore)
-const {
-  panel,
-  threadId,
-  openPanel,
-  closePanel,
-  openThread,
-  closeThread,
-} = useClassHubPanelQuery()
-
-// PARENT_MESSAGES_WRITE 是教師專屬權限（後端 ROLE_TEMPLATES['teacher'] 有授予），
-// 必須用不對 teacher 短路的 hasPortalPermission，否則教師端家園溝通入口被永久隱藏。
-const canMessages = computed(() => hasPortalPermission('PARENT_MESSAGES_WRITE'))
 
 // Typed accessors for data fields
 interface NextTask { kind?: string; student_name?: string; detail?: string; due_at?: string | null; deep_link?: string }
@@ -180,16 +146,6 @@ watch(
   { immediate: true },
 )
 
-// 訊息未讀也要主動拉一次（store 沒有 auto-fetch）
-async function refreshMessagesUnread() {
-  if (!hasPortalPermission('PARENT_MESSAGES_WRITE')) return
-  try {
-    await messagesStore.refreshUnread()
-  } catch {
-    /* silent */
-  }
-}
-
 // Re-evaluate which slot is current every minute
 const nowTick = ref(Date.now())
 let tickTimer: ReturnType<typeof setInterval> | null = null
@@ -197,7 +153,6 @@ onMounted(() => {
   tickTimer = setInterval(() => {
     nowTick.value = Date.now()
   }, 60_000)
-  refreshMessagesUnread()
 })
 onMounted(refreshLastBatchDate)
 onBeforeUnmount(() => {
@@ -217,7 +172,6 @@ const currentSlotId = computed(() => {
 
 function manualRefresh() {
   refresh().catch(() => {})
-  refreshMessagesUnread()
 }
 
 function onOpenSheet(task: SlotTask) {
@@ -258,19 +212,6 @@ function formatTime(iso: string | null | undefined) {
   return `${hh}:${mm}`
 }
 
-// drawer 控制
-function onOpenPanel(name: string) {
-  openPanel(name)
-}
-
-function onMessagesDrawerToggle(val: boolean) {
-  if (!val) closePanel()
-}
-
-// 關閉 panel / thread 時刷未讀
-watch(panel, (newPanel, oldPanel) => {
-  if (oldPanel === 'messages' && newPanel !== 'messages') refreshMessagesUnread()
-})
 </script>
 
 <style scoped>

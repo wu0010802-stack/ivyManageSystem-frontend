@@ -127,11 +127,4 @@ describe('PortalSearchPalette', () => {
     })
     wrapper.unmount()
   })
-
-  it('selecting a message routes through messages/:threadId (query not dropped)', async () => {
-    const wrapper = mount(PortalSearchPalette, mountOpts())
-    await typeAndEnter(wrapper, { messages: [{ thread_id: 99, student_name: '小明', snippet: '你好' }] })
-    expect(pushMock).toHaveBeenCalledWith('/portal/messages/99')
-    wrapper.unmount()
-  })
 })

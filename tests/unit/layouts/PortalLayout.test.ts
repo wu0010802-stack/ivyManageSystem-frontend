@@ -51,9 +51,6 @@ vi.mock('@/api/dismissalCalls', () => ({
   getPortalPendingCount: vi.fn(() => Promise.resolve({ data: { count: 0 } })),
 }))
 
-vi.mock('@/api/portalMessages', () => ({
-  getUnreadCount: vi.fn(() => Promise.resolve({ data: { unread_count: 0 } })),
-}))
 
 vi.mock('@/api/portalClassHub', () => ({
   getTodayHub: vi.fn(() => Promise.resolve({ counts: {} })),

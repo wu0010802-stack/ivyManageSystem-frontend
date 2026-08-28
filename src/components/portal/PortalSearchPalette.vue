@@ -11,7 +11,6 @@ import {
   Money,
   Calendar,
   View,
-  ChatDotRound,
   Bell,
   HomeFilled,
   User,
@@ -32,7 +31,6 @@ const COMMANDS: { id: string; keywords: string[]; label: string; icon: Component
   { id: 'salary', keywords: ['薪資', '薪水', 'salary'], label: '薪資預覽', icon: Money, route: '/portal/salary' },
   { id: 'calendar', keywords: ['行事曆', 'calendar'], label: '行事曆', icon: Calendar, route: '/portal/calendar' },
   { id: 'observation', keywords: ['觀察', '新增觀察', 'observation'], label: '新增觀察', icon: View, route: '/portal/observations' },
-  { id: 'messages', keywords: ['訊息', '家長訊息', 'messages'], label: '家長訊息', icon: ChatDotRound, route: '/portal/messages' },
   { id: 'announcement', keywords: ['公告', 'announcement'], label: '公告通知', icon: Bell, route: '/portal/announcements' },
   { id: 'hub', keywords: ['今日', '工作台', 'hub', 'today'], label: '今日工作台', icon: HomeFilled, route: '/portal/class-hub' },
 ]
@@ -41,7 +39,6 @@ const COMMANDS: { id: string; keywords: string[]; label: string; icon: Component
 const KIND_ICON: Record<string, Component> = {
   student: User,
   guardian: UserFilled,
-  message: ChatDotRound,
   contact_book: Notebook,
   announcement: Bell,
 }
@@ -50,13 +47,11 @@ const query = ref('')
 const results = ref<{
   students: Record<string, unknown>[]
   guardians: Record<string, unknown>[]
-  messages: Record<string, unknown>[]
   contact_book: Record<string, unknown>[]
   announcements: Record<string, unknown>[]
 }>({
   students: [],
   guardians: [],
-  messages: [],
   contact_book: [],
   announcements: [],
 })
@@ -70,8 +65,7 @@ let previouslyFocused: HTMLElement | null = null
 // 各分類在扁平清單中的起始 index（供 role=option 的 aria-selected / id 定位）
 const stuBase = computed(() => commandResults.value.length)
 const guaBase = computed(() => stuBase.value + results.value.students.length)
-const msgBase = computed(() => guaBase.value + results.value.guardians.length)
-const cbBase = computed(() => msgBase.value + results.value.messages.length)
+const cbBase = computed(() => guaBase.value + results.value.guardians.length)
 const annBase = computed(() => cbBase.value + results.value.contact_book.length)
 const activeDescId = computed(() =>
   flatItems.value.length ? `psp-opt-${activeIndex.value}` : undefined,
@@ -94,7 +88,6 @@ const flatItems = computed(() => {
   for (const c of commandResults.value) items.push({ kind: 'command', payload: c })
   for (const s of results.value.students) items.push({ kind: 'student', payload: s })
   for (const g of results.value.guardians) items.push({ kind: 'guardian', payload: g })
-  for (const m of results.value.messages) items.push({ kind: 'message', payload: m })
   for (const e of results.value.contact_book) items.push({ kind: 'contact_book', payload: e })
   for (const a of results.value.announcements) items.push({ kind: 'announcement', payload: a })
   return items
@@ -104,7 +97,7 @@ watch(isOpen, async (v) => {
   if (v) {
     previouslyFocused = (document.activeElement as HTMLElement) ?? null
     query.value = ''
-    results.value = { students: [], guardians: [], messages: [], contact_book: [], announcements: [] }
+    results.value = { students: [], guardians: [], contact_book: [], announcements: [] }
     activeIndex.value = 0
     await nextTick()
     inputRef.value?.focus()
@@ -126,7 +119,7 @@ watch(query, (q) => {
   activeIndex.value = 0
   if (debounceTimer) clearTimeout(debounceTimer)
   if (q.trim().length < 2) {
-    results.value = { students: [], guardians: [], messages: [], contact_book: [], announcements: [] }
+    results.value = { students: [], guardians: [], contact_book: [], announcements: [] }
     return
   }
   debounceTimer = setTimeout(async () => {
@@ -136,7 +129,6 @@ watch(query, (q) => {
       results.value = {
         students: data.students || [],
         guardians: data.guardians || [],
-        messages: data.messages || [],
         contact_book: data.contact_book || [],
         announcements: data.announcements || [],
       }
@@ -167,11 +159,6 @@ function selectItem(item: { kind: string; payload: Record<string, unknown> } | n
         params: { studentId: String(item.payload.student_id) },
         query: { tab: 'guardians' },
       })
-      break
-    case 'message':
-      // /portal/messages 靜態 redirect 會丟棄 query；改走 messages/:threadId
-      // redirect（會把 threadId 轉為 class-hub ?panel=messages&thread=<id>）。
-      router.push(`/portal/messages/${item.payload.thread_id}`)
       break
     case 'contact_book':
       router.push({ name: 'portal-contact-book', query: { log_date: item.payload.log_date as string } })
@@ -236,12 +223,12 @@ defineExpose({ activeIndex })
             ref="inputRef"
             v-model="query"
             class="psp-input"
-            placeholder="搜尋學生 / 家長 / 訊息 / 聯絡簿 / 公告…"
+            placeholder="搜尋學生 / 家長 / 聯絡簿 / 公告…"
             autocomplete="off"
             role="combobox"
             aria-expanded="true"
             aria-controls="psp-listbox"
-            aria-label="搜尋學生、家長、訊息、聯絡簿、公告"
+            aria-label="搜尋學生、家長、聯絡簿、公告"
             :aria-activedescendant="activeDescId"
             data-test="search-input"
             @keydown="onKeydown"
@@ -305,24 +292,6 @@ defineExpose({ activeIndex })
               <el-icon class="psp-item-icon"><component :is="KIND_ICON.guardian" /></el-icon>
               <span class="psp-item-label">{{ g.name }}</span>
               <span class="psp-item-sub">{{ g.child_name }} · {{ g.phone_masked }}</span>
-            </div>
-          </template>
-
-          <template v-if="results.messages.length">
-            <div class="psp-section" role="presentation">親師訊息</div>
-            <div
-              v-for="(m, i) in results.messages"
-              :id="`psp-opt-${msgBase + i}`"
-              :key="`msg-${m.thread_id}`"
-              role="option"
-              :aria-selected="activeIndex === msgBase + i"
-              :class="['psp-item', { active: activeIndex === msgBase + i }]"
-              @click="selectItem({ kind: 'message', payload: m })"
-              @mouseenter="activeIndex = msgBase + i"
-            >
-              <el-icon class="psp-item-icon"><component :is="KIND_ICON.message" /></el-icon>
-              <span class="psp-item-label">{{ m.student_name }}</span>
-              <span class="psp-item-sub">{{ m.snippet }}</span>
             </div>
           </template>
 

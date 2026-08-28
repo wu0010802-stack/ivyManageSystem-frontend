@@ -4,7 +4,6 @@ import { computed, ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
-import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
 import { initPortalDismissalAlerts, teardownPortalDismissalAlerts, usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getTodayHub } from '@/api/portalClassHub'
 import { changePassword, endImpersonate } from '@/api/auth'
@@ -87,16 +86,12 @@ const substitutePendingCount = ref(0)
 // 接送待處理數：由 module-singleton composable 即時維護（WS 推播驅動），殼層不另外 fetch
 const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
 
-// 家園溝通：家長訊息未讀
-const messagesUnreadCount = ref(0)
 // 今日工作台待辦數
 const hubPendingCount = ref(0)
 
-// 「今日工作台」menu badge 聚合：hub 待辦 + 家長訊息未讀。
+// 「今日工作台」menu badge。親師訊息已於 2026-08-28 下架，這裡只剩 hub 待辦；
 // 不含公告（unreadCount），因為「公告通知」已是獨立頂層 menu item 自帶 badge。
-const totalHubBadge = computed(
-  () => hubPendingCount.value + messagesUnreadCount.value,
-)
+const totalHubBadge = computed(() => hubPendingCount.value)
 
 // Badge 刷新節流：避免短時間內被多次觸發（route 切換、tab 切回）打爆後端。
 // 30 秒內已 refresh 過就不再全量重抓；個別事件（如代理人狀態變更）仍可 force。
@@ -130,15 +125,6 @@ const fetchSubstitutePendingCount = async () => {
   }
 }
 
-const fetchMessagesUnreadCount = async () => {
-  try {
-    const res = await getMessagesUnreadCount()
-    messagesUnreadCount.value = (res.data as Record<string, unknown>)?.unread_count as number || 0
-  } catch {
-    // 沒有 PARENT_MESSAGES_WRITE 權限會 403，靜默忽略
-  }
-}
-
 const fetchHubPendingCount = async () => {
   try {
     const data = await getTodayHub()
@@ -161,7 +147,6 @@ const refreshPortalCounts = ({ force = false }: { force?: boolean } = {}) => {
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
   // dismissal count 由 composable 透過 WS 即時維護，不走輪詢
-  fetchMessagesUnreadCount()
   fetchHubPendingCount()
 }
 

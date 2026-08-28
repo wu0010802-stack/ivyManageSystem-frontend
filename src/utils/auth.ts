@@ -227,7 +227,7 @@ function _resetStores() {
   // 正式版登出時 PII 全數殘留（vitest 跑在 NODE_ENV=test，恰好走會 throw 的分支而測不出來）。
   // 故改為兩者都無條件嘗試、各自吞例外：option store 的 invalidate 為 undefined 自然略過，
   // setup store 的 $reset 在 dev 會 throw、在 prod 是 noop，兩種情形都不影響 invalidate 已完成。
-  // setup store（如 portalMessages / portalDashboard）含家長對話、學生過敏/用藥/缺席等 PII，
+  // setup store（如 portalDashboard）含學生過敏/用藥/缺席等 PII，
   // 共享平板登出時必須清乾淨；登出/登入皆 SPA router.push 不 reload，記憶體不會被自然清掉。
   // 泛型涵蓋所有已實例化 store（不在此 import 個別 store，避免循環依賴）。
   // module-level inflight 由 advanceAdminSession() 的 reset listeners 統一清理，
