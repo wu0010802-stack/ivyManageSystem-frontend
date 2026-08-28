@@ -8352,7 +8352,7 @@ export interface paths {
          *
          *     Returns:
          *         {
-         *             "code": "<8 位明碼，僅此次回傳>",
+         *             "code": "<明碼，僅此次回傳；長度見 _CODE_LENGTH（現為 12）>",
          *             "expires_at": "<24h 後的 ISO 時間>"
          *         }
          */
@@ -20795,26 +20795,7 @@ export interface components {
              */
             allow_partial: boolean;
             /** Parts */
-            parts: components["schemas"]["AllocationPartIn"][];
-        };
-        /** AllocationPartIn */
-        AllocationPartIn: {
-            /** Amount */
-            amount: number;
-            /** Fee Record Id */
-            fee_record_id?: number | null;
-            /** Part Type */
-            part_type: string;
-            /** Reason */
-            reason?: string | null;
-            /** Recruitment Visit Id */
-            recruitment_visit_id?: number | null;
-            /** Student Id */
-            student_id?: number | null;
-            /** Target School Year */
-            target_school_year?: number | null;
-            /** Target Semester */
-            target_semester?: number | null;
+            parts: (components["schemas"]["FeeRecordAllocationPartIn"] | components["schemas"]["PrepaymentAllocationPartIn"] | components["schemas"]["NonTuitionAllocationPartIn"])[];
         };
         /**
          * AnnouncementAttachmentOut
@@ -23644,7 +23625,7 @@ export interface components {
             /** Idempotency Key */
             idempotency_key?: string | null;
             /** Parts */
-            parts: components["schemas"]["AllocationPartIn"][];
+            parts: (components["schemas"]["FeeRecordAllocationPartIn"] | components["schemas"]["PrepaymentAllocationPartIn"] | components["schemas"]["NonTuitionAllocationPartIn"])[];
             /** Payer Note */
             payer_note?: string | null;
             /**
@@ -27660,6 +27641,18 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** FeeRecordAllocationPartIn */
+        FeeRecordAllocationPartIn: {
+            /** Amount */
+            amount: number;
+            /** Fee Record Id */
+            fee_record_id: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            part_type: "fee_record";
+        };
         /**
          * FeeRecordListOut
          * @description GET /fees/records 回傳（分頁）。
@@ -31197,6 +31190,18 @@ export interface components {
         NhiUnenrollRequest: {
             /** Submitted */
             submitted: boolean;
+        };
+        /** NonTuitionAllocationPartIn */
+        NonTuitionAllocationPartIn: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            part_type: "non_tuition";
+            /** Reason */
+            reason: string;
         };
         /** ObservationCreate */
         ObservationCreate: {
@@ -35754,6 +35759,24 @@ export interface components {
             prefs: {
                 [key: string]: boolean;
             };
+        };
+        /** PrepaymentAllocationPartIn */
+        PrepaymentAllocationPartIn: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            part_type: "prepayment";
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Student Id */
+            student_id?: number | null;
+            /** Target School Year */
+            target_school_year: number;
+            /** Target Semester */
+            target_semester: number;
         };
         /** PrepaymentApplyOut */
         PrepaymentApplyOut: {

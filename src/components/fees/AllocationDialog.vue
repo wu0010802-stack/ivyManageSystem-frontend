@@ -231,15 +231,29 @@ async function submit() {
   submitting.value = true
   try {
     await allocateTransaction(props.txn.id, {
-      parts: parts.value.map((p) => ({
-        part_type: p.part_type,
-        amount: p.amount,
-        fee_record_id: p.fee_record_id ?? null,
-        student_id: p.student_id ?? null,
-        target_school_year: p.target_school_year ?? null,
-        target_semester: p.target_semester ?? null,
-        reason: p.reason ?? null,
-      })),
+      parts: parts.value.map((p) => {
+        if (p.part_type === 'fee_record') {
+          return {
+            part_type: p.part_type,
+            amount: p.amount,
+            fee_record_id: p.fee_record_id as number,
+          }
+        }
+        if (p.part_type === 'prepayment') {
+          return {
+            part_type: p.part_type,
+            amount: p.amount,
+            student_id: p.student_id as number,
+            target_school_year: p.target_school_year as number,
+            target_semester: p.target_semester as number,
+          }
+        }
+        return {
+          part_type: p.part_type,
+          amount: p.amount,
+          reason: p.reason as string,
+        }
+      }),
       allow_partial: partsTotal.value < props.txn.unallocated,
     })
     ElMessage.success('分配完成')
