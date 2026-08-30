@@ -75,6 +75,12 @@
       請以班級／繳費／簽核狀態篩選縮小範圍後再逐段對帳，以免漏算。
     </div>
 
+    <div v-if="filtersApplied && !truncated" class="pos-semester__filter-note" role="note">
+      目前套用了篩選：下方橫幅左半與統計卡為<strong>該範圍的部分合計</strong>；
+      右側「老闆已簽收」與未簽收差額一律以<strong>全學期</strong>為準（簽收帳本記的是整筆交款，
+      沒有班級或狀態之分），兩者不可互推。
+    </div>
+
     <!-- 核對橫幅（③學期對帳改造，2026-08-16）：應收 → 實收 → 老闆已簽收，一眼看出
          哪個環節還沒對上。 -->
     <div class="pos-semester__banner" :class="{ 'is-balanced': isBalanced }">
@@ -90,6 +96,12 @@
           POS 已簽核 {{ formatTWD(totals.approved_paid_amount || 0) }} ·
           待簽核 {{ formatTWD(totals.pending_paid_amount || 0) }} ·
           非 POS {{ formatTWD(totals.offline_paid_amount || 0) }}
+        </small>
+        <small v-if="typeof totals.term_cash_net_paid === 'number'">
+          全學期現金淨實收 {{ formatTWD(totals.term_cash_net_paid) }}（簽收比對基準）
+          <template v-if="(totals.term_noncash_net_paid || 0) !== 0">
+            · 另有非現金帳務調整 {{ formatTWD(totals.term_noncash_net_paid || 0) }}（不進比對）
+          </template>
         </small>
       </div>
       <div class="pos-semester__banner-arrow">→</div>
@@ -128,7 +140,7 @@
     <POSSignoffLedger
       :school-year="termStore.school_year"
       :semester="termStore.semester"
-      :pos-net-paid="(totals.approved_paid_amount || 0) + (totals.pending_paid_amount || 0)"
+      :pos-net-paid="posNetPaidForSignoff"
       @changed="reload"
     />
 
@@ -352,6 +364,10 @@ const totals = ref<{
   unsigned_gap?: number
   pending_review_count?: number
   pending_review_amount?: number
+  // 稽核指標（全學期、只計現金、不受篩選與截斷影響）——與上方明細小計是不同母體。
+  term_cash_net_paid?: number
+  term_noncash_net_paid?: number
+  filters_applied?: boolean
   [key: string]: unknown
 }>({})
 const classroomOptions = ref<string[]>([])
@@ -407,8 +423,23 @@ watch(groups, (next) => {
   activeGroupKeys.value = next.map((g) => g.key)
 })
 
+// 簽收帳本比對的基準（P1-1，2026-08-24）：必須是**全學期現金淨實收**。
+// 舊版把 approved_paid_amount + pending_paid_amount（套完四道篩選、還受 2000 筆
+// 截斷影響的明細小計）當成 POS 淨實收傳下去，於是篩任一條件就讓簽收帳本的
+// 「建議金額」整個歪掉——而那張帳本只能作廢、不能修改。
+// 後端還沒部署新欄位時退回舊算式：基準變成 0 會讓「帶入」永遠是 0，比舊行為更糟。
+const posNetPaidForSignoff = computed((): number => {
+  const t = totals.value
+  if (typeof t.term_cash_net_paid === 'number') return t.term_cash_net_paid
+  return (t.approved_paid_amount || 0) + (t.pending_paid_amount || 0)
+})
+
+const filtersApplied = computed((): boolean => totals.value.filters_applied === true)
+
 const isBalanced = computed(
   () =>
+    // 套用篩選時 outstanding_amount 只是子集的欠款，宣稱「本期已對平」會誤導。
+    !filtersApplied.value &&
     (totals.value.outstanding_amount || 0) === 0 &&
     (totals.value.unsigned_gap || 0) === 0 &&
     (totals.value.pending_review_count || 0) === 0 &&
@@ -605,6 +636,15 @@ onMounted(() => {
   padding: 8px 12px;
   border-radius: 4px;
   margin-top: 10px;
+}
+
+.pos-semester__filter-note {
+  padding: 8px 12px;
+  border-left: 3px solid var(--el-color-info);
+  background: var(--el-fill-color-lighter);
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .pos-semester__trunc-warn {

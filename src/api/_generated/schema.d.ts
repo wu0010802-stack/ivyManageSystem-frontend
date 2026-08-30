@@ -725,6 +725,9 @@ export interface paths {
          *     - `confirm_close_today`（P2-05）：簽核今日需明示確認。
          *     - `expected_net_total` / `expected_transaction_count`（P2-01）：樂觀鎖，
          *       與後端重算不符即 409。
+         *
+         *     一道職務分離硬守衛（AUTHZ-03）：本日若曾被解鎖，且簽核人就是最近一次的
+         *     解鎖人 → 403（唯一例外：該次解鎖走 admin override 且本人為 admin，見內文）。
          */
         post: operations["approve_daily_close_api_activity_pos_daily_close__date_str__post"];
         /**
@@ -734,6 +737,9 @@ export interface paths {
          *     Why: 解鎖會刪 snapshot，原簽核者可重簽不同金額；無原因/無原 snapshot 摘要的解鎖
          *     不利事後追蹤。本端點要求填寫具體原因，並將原 payment_total/refund_total/net_total
          *     凍結於 ApprovalLog.comment 與 audit_changes，便於對帳查核。
+         *
+         *     一般 4-eye 路徑的兩道身分守衛：解鎖人 ≠ 原簽核人，且解鎖人 ≠ 當日 POS
+         *     收銀者（AUTHZ-03）。兩者皆可由 admin override 逃生口繞過（留痕）。
          */
         delete: operations["unlock_daily_close_api_activity_pos_daily_close__date_str__delete"];
         options?: never;
@@ -965,12 +971,36 @@ export interface paths {
         /**
          * List Semester Signoffs
          * @description 列出當期簽收流水（含作廢列）＋未作廢累計。
+         *
+         *     ACTIVITY_READ 即可看金額（對帳需要），但經手人與作廢原因僅
+         *     ACTIVITY_PAYMENT_APPROVE 可見（AUTHZ-05，遮罩見 `_serialize_signoff`）。
          */
         get: operations["list_semester_signoffs_api_activity_pos_semester_signoffs_get"];
         put?: never;
         /**
          * Create Semester Signoff
          * @description 登記一筆整筆簽收。signed_by 取當前登入者，不信任前端。
+         *
+         *     **重送冪等（CONC-01）**：後端已 commit 但回應在網路端遺失時（冷啟、proxy
+         *     timeout、Wi-Fi 斷線），對話框仍開著、金額還在，使用者自然再按一次；帳本
+         *     因此出現兩列相同金額，`signoff_total` 翻倍，學期未簽收差額直接少算一半。
+         *     防護分兩層：
+         *
+         *     1. `_acquire_semester_signoff_lock` 序列化「同租戶 × 同學期」的登記，讓
+         *        下面的查重不會被並發重送穿過（PG only，SQLite no-op）。
+         *     2. 鎖內回查「同學年 + 同學期 + 同金額 + 同簽收人 + 未作廢 + signed_at 在
+         *        最近 `_SIGNOFF_REPLAY_WINDOW_SECONDS` 秒內」的列：存在即視為重送，
+         *        **原樣回傳該列**（replay，不新增），並留 logger.info 供維運辨識。
+         *
+         *     **已知取捨**：窗口內「刻意登記兩筆完全相同金額的交款」會被判成重試而只
+         *     留一列。實務上會計整筆交款不會在兩分鐘內重複同額；真要補登第二筆，等窗口
+         *     過或改動金額/作廢重開即可（`test_same_amount_outside_window_creates_new_row`
+         *     /`test_voided_row_is_not_replayed` 守住這兩條出路）。
+         *
+         *     **為什麼不用 idempotency_key 欄位**：那是更精準的做法（POS checkout 即用
+         *     此法），但需要新欄位＋新 unique index＝一支 alembic migration。本批次的
+         *     落地決定是零 migration，故改用「鎖 + 窗口內容比對」這個不需 schema 變更
+         *     的等效防護；日後若要升級為 key-based，本函式的臨界區已經備妥。
          */
         post: operations["create_semester_signoff_api_activity_pos_semester_signoffs_post"];
         delete?: never;
@@ -992,6 +1022,10 @@ export interface paths {
         /**
          * Void Semester Signoff
          * @description 作廢一筆簽收（軟刪，必填原因）。已作廢再作廢回 409。
+         *
+         *     以 id 定位時**必帶 tenant_id**（TENANT-01）：id 是全庫序列，缺租戶條件時
+         *     他租戶的簽收列可被本租戶作廢（對方帳本被改、對方 unsigned_gap 變動）。
+         *     找不到一律 404，不洩漏「這個 id 存在但不是你的」。
          */
         delete: operations["void_semester_signoff_api_activity_pos_semester_signoffs__signoff_id__delete"];
         options?: never;
@@ -18714,6 +18748,9 @@ export interface paths {
         /**
          * Upsert Config
          * @description 新增或更新單筆設定（upsert）。
+         *
+         *     金流管控門檻（`FINANCE_CONTROLLED_CONFIG_KEYS`）另需金流簽核權，見
+         *     `require_finance_control_permission`。
          */
         put: operations["upsert_config_api_system_configs__config_key__put"];
         post?: never;
@@ -35120,12 +35157,33 @@ export interface components {
          *     by_method 為 list（依付款方式聚合，員工只可輸入「現金」）；
          *     cash_warning=True 時前端顯示「請存銀行」橘色提示
          *     （cash_in_drawer >= cash_warning_threshold）。
+         *
+         *     ⚠ payment_total / refund_total / net 是**所有付款方式**的總額（含
+         *     `payment_method='系統補齊'` 的帳務調整，那些沒有現金經手），保留原語義供
+         *     既有 caller 使用。**櫃台點鈔要對的是抽屜**，請用 cash_* 三欄
+         *     （2026-08-24 修正：收銀頁彙總條原本主顯示含非現金的總額，且那筆沖帳在
+         *     「今日交易」清單被濾掉查不到，櫃台會誤判短溢）。
          */
         PosDailySummaryOut: {
             /** By Method */
             by_method: components["schemas"]["PosDailySummaryByMethodItemOut"][];
             /** Cash In Drawer */
             cash_in_drawer: number;
+            /**
+             * Cash Net
+             * @default 0
+             */
+            cash_net: number;
+            /**
+             * Cash Payment Total
+             * @default 0
+             */
+            cash_payment_total: number;
+            /**
+             * Cash Refund Total
+             * @default 0
+             */
+            cash_refund_total: number;
             /** Cash Warning */
             cash_warning: boolean;
             /** Cash Warning Threshold */
@@ -35139,6 +35197,16 @@ export interface components {
             is_approved: boolean;
             /** Net */
             net: number;
+            /**
+             * Noncash Payment Total
+             * @default 0
+             */
+            noncash_payment_total: number;
+            /**
+             * Noncash Refund Total
+             * @default 0
+             */
+            noncash_refund_total: number;
             /** Payment Count */
             payment_count: number;
             /** Payment Total */
@@ -35322,6 +35390,11 @@ export interface components {
             class_name: string;
             /** Group Owed Total */
             group_owed_total: number;
+            /**
+             * Group Pending Total
+             * @default 0
+             */
+            group_pending_total: number;
             /** Registrations */
             registrations: components["schemas"]["PosOutstandingRegistrationItemOut"][];
             /** Student Key */
@@ -35656,10 +35729,23 @@ export interface components {
          * PosSemesterReconciliationTotalsOut
          * @description GET /pos/semester-reconciliation totals 區段。
          *
-         *     signoff_total/unsigned_gap（2026-08-16 新增）：老闆學期簽收帳本累計，與
-         *     POS 淨實收（approved_paid_amount + pending_paid_amount）的差額。
          *     pending_review_count/pending_review_amount：待審核報名（系統比對非自動成功）
          *     的待確認應收，**不併入** total_amount，避免審核拖延造成少收。
+         *
+         *     ⚠ 兩種母體並存，勿混用（2026-08-24 P1 修正）：
+         *     - `approved_paid_amount` / `pending_paid_amount` / `offline_paid_amount`
+         *       是**套用畫面篩選（班級／繳費狀態／簽核狀態／review_status）並受
+         *       _POS_LIST_QUERY_LIMIT 截斷影響**的合計，只供下方明細表的小計使用。
+         *     - `term_cash_net_paid` / `term_noncash_net_paid` / `signoff_total` /
+         *       `unsigned_gap` 是**全學期、不受任何篩選與截斷影響**的稽核指標。
+         *       簽收帳本記的是「會計整筆交款」，本身沒有班級或狀態維度，拿篩選後的合計
+         *       去減它必然得到假帳差（舊 bug：篩一個班就跳出「簽收超過 POS 實收」）。
+         *     - `unsigned_gap = term_cash_net_paid - signoff_total`。
+         *       基準只計 `payment_method='現金'`：POS 結帳硬鎖現金（`pos.py` checkout
+         *       守衛），而簽收比對的是實體交款；`payment_method='系統補齊'` 那些帳務調整
+         *       （批次標記已繳費／標記未繳費沖帳／移除用品／退課 force_refund／離園沖帳）
+         *       沒有任何現金經手，計入會讓差額兩個方向都算錯。非現金淨額另以
+         *       `term_noncash_net_paid` 呈現，資訊不丟失。
          */
         PosSemesterReconciliationTotalsOut: {
             /** Approved Paid Amount */
@@ -35672,6 +35758,11 @@ export interface components {
             by_payment_status: {
                 [key: string]: number;
             };
+            /**
+             * Filters Applied
+             * @default false
+             */
+            filters_applied: boolean;
             /** Offline Paid Amount */
             offline_paid_amount: number;
             /** Outstanding Amount */
@@ -35697,6 +35788,16 @@ export interface components {
              * @default 0
              */
             signoff_total: number;
+            /**
+             * Term Cash Net Paid
+             * @default 0
+             */
+            term_cash_net_paid: number;
+            /**
+             * Term Noncash Net Paid
+             * @default 0
+             */
+            term_noncash_net_paid: number;
             /** Total Amount */
             total_amount: number;
             /**
@@ -37750,6 +37851,11 @@ export interface components {
             parent_phone?: string | null;
             /** Payment Status */
             payment_status: string;
+            /**
+             * Pending Amount
+             * @default 0
+             */
+            pending_amount: number;
             /** Pending Review */
             pending_review?: boolean | null;
             /** Query Token */

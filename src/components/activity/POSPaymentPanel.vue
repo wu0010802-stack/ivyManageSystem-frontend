@@ -86,10 +86,18 @@
         <span v-if="refundSuggestionLoading" class="pos-payment__suggestion-loading">
           退費建議試算中…
         </span>
+        <!-- ⚠ `:min` 必須是 0，不可回頭寫成 1（FECASH-02）。Element Plus 會把落在
+             區間外的 modelValue **立刻 clamp 並回寫**（input-number 對 modelValue 的
+             immediate watcher → `verifyValue(value, true)` → emit update:modelValue）。
+             min=1 時，usePOSCheckout 退費建議 fail-closed 特意留下的 0 會在面板掛上的
+             瞬間被改寫成 1 回傳父層，送出鈕跟著解鎖 → 開出一張 NT$1 的退費收據。
+             「金額 0 不可送出」不靠輸入框把關，靠 usePOSCheckout.canSubmit
+             （`applied <= 0` → false，收款／退費兩模式皆然）。
+             守衛測試見 __tests__/POSPaymentPanel.zeroAmount.test.ts。 -->
         <el-input-number
           :model-value="selectedItemTyped.amount_applied"
-          :min="1"
-          :max="isRefundMode ? (selectedItemTyped.paid_amount || 1) : PAYMENT_INPUT_MAX"
+          :min="0"
+          :max="isRefundMode ? refundMaxAmount : PAYMENT_INPUT_MAX"
           :step="1"
           :precision="0"
           :controls="false"
@@ -251,6 +259,18 @@ const overpayAmount = computed((): number => {
   const owed = Number(item.owed ?? computeOwed(item.total_amount, item.paid_amount))
   const applied = Number(item.amount_applied) || 0
   return applied > owed ? applied - owed : 0
+})
+
+/**
+ * 退費輸入框上限＝該筆已繳金額（與後端「退費金額不得超過已繳」同口徑）。
+ * 舊寫法 `paid_amount || 1` 是為了配合 min=1（max 不得小於 min，否則 Element Plus
+ * 直接 throwError）。min 改 0 後 fallback 也必須是 0——已繳 0 的報名本來就退不了，
+ * 上限給 1 反而讓輸入框允許一個後端必定 400 的金額。
+ */
+const refundMaxAmount = computed((): number => {
+  const item = selectedItemTyped.value
+  if (!item) return 0
+  return Math.max(0, Number(item.paid_amount) || 0)
 })
 
 const emit = defineEmits<{

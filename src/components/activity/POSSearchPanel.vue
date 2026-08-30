@@ -99,13 +99,15 @@
             :class="{
               'pos-reg--selected': isSelected(reg.id),
               'pos-reg--flat': isFlatGroup(g),
+              'pos-reg--blocked': isNotCollectible(reg),
             }"
-            @click="emit('toggle', reg, g.student_name || '')"
+            @click="onRegClick(reg, g.student_name || '')"
           >
             <el-checkbox
               :model-value="isSelected(reg.id)"
+              :disabled="isNotCollectible(reg)"
               @click.stop
-              @change="emit('toggle', reg, g.student_name || '')"
+              @change="onRegClick(reg, g.student_name || '')"
             />
             <div class="pos-reg__info">
               <div v-if="isFlatGroup(g)" class="pos-reg__student">
@@ -142,7 +144,9 @@
               </div>
               <!-- 待審核防漏（③學期對帳追加，2026-08-16）：課程 pending_review 的
                    報名 total_amount 算不到，過去 owed=0 會在收款清單隱形；現場
-                   收銀員仍要看得到人與待確認金額，提醒需先完成審核才能正式收款。 -->
+                   收銀員仍要看得到人與待確認金額，提醒需先完成審核才能正式收款。
+                   「待確認 NT$X」刻意保留（那是防漏收的資訊），但收款模式下必須
+                   同時講明現在收不了，否則會被讀成「請跟家長收這個數字」（STATE-04）。 -->
               <el-tag
                 v-if="reg.pending_review"
                 type="danger"
@@ -150,8 +154,14 @@
                 effect="dark"
                 class="pos-reg__pending-tag"
               >
-                待審核 · 待確認 {{ formatTWD(reg.pending_amount || 0) }}
+                待審核 · 待確認 {{ formatTWD(reg.pending_amount || 0) }}<template
+                  v-if="isNotCollectible(reg)"
+                >（尚不可收款）</template>
               </el-tag>
+              <!-- 只 disable 不說原因等於把櫃台丟在原地：就地寫出下一步該去哪。 -->
+              <div v-if="isNotCollectible(reg)" class="pos-reg__blocked-hint">
+                {{ NOT_COLLECTIBLE_HINT }}
+              </div>
             </div>
             <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
               <span v-if="isFlatGroup(g)" class="pos-reg__owed-label">{{ groupTotalLabel }}</span>
@@ -241,11 +251,15 @@
               v-for="row in selectedDateRows"
               :key="row.id"
               class="pos-reg pos-reg--solo"
-              :class="{ 'pos-reg--selected': isSelected(row.id) }"
+              :class="{
+                'pos-reg--selected': isSelected(row.id),
+                'pos-reg--blocked': isNotCollectible(row),
+              }"
               @click="handleSingleToggle(row)"
             >
               <el-checkbox
                 :model-value="isSelected(row.id)"
+                :disabled="isNotCollectible(row)"
                 @click.stop
                 @change="handleSingleToggle(row)"
               />
@@ -256,6 +270,9 @@
                 </div>
                 <div class="pos-reg__meta">
                   應繳 {{ formatTWD(row.total_amount) }} · 已繳 {{ formatTWD(row.paid_amount) }}
+                </div>
+                <div v-if="isNotCollectible(row)" class="pos-reg__blocked-hint">
+                  {{ NOT_COLLECTIBLE_HINT }}
                 </div>
               </div>
               <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
@@ -413,6 +430,36 @@ function hasPartialPayment(r: RegistrationEntry): boolean {
  * 認定哪筆該催繳（2026-08-17 業主確認，舊 overdue_only 過濾即因此整條移除）。
  * created_at 缺值或不可解析時回空字串，由 v-if 收掉整行（不得印 Invalid Date）。
  */
+/**
+ * 收款模式下「這一列根本收不了」的判定（STATE-04）。
+ *
+ * 後端 `POST /pos/checkout` 對繳費是**結構性拒收**：`total_amount <= 0` 直接
+ * 400「無應繳金額，無法收款」（api/activity/pos.py 空報名守衛）。而 outstanding
+ * 清單刻意放行 `pending_amount > 0` 的待審核報名讓收銀員看得見人（防漏收），
+ * 於是清單裡必然存在一批 total=0、後端保證拒收的列。
+ *
+ * 前端這裡的條件必須逐字對齊後端那一條，兩端才會對「能不能收款」給同一個答案：
+ * - 只看 `total_amount <= 0`，不看 `pending_review`——待審核但已有計費金額的
+ *   混合報名（部分課程已審核）是**可以合法收款**的，誤擋等於擋掉真實現金收入。
+ * - 反之，`pending_review=false` 但課程全是 promoted_pending 的列同樣 total=0、
+ *   同樣會被後端拒收，一樣要擋。
+ * - 退費模式一律回 false：退費守衛是「金額不得超過已繳」，與 total 無關，
+ *   total=0 而已繳 > 0 的超繳報名本來就必須能退（行為不得改變）。
+ */
+function isNotCollectible(r: RegistrationEntry): boolean {
+  if (props.isRefundMode) return false
+  return (Number(r.total_amount) || 0) <= 0
+}
+
+/** 擋下時的就地指引：只變灰不說原因，櫃台會拿著現金卡在原地。 */
+const NOT_COLLECTIBLE_HINT = '待審核報名需先於「報名管理」完成審核才能收款'
+
+/** 收款模式下不可收的列：整列點擊也要擋，只 disable checkbox 擋不住列點擊。 */
+function onRegClick(reg: RegistrationEntry, studentName: string) {
+  if (isNotCollectible(reg)) return
+  emit('toggle', reg, studentName)
+}
+
 function registeredOnLabel(r: RegistrationEntry): string {
   const key = extractDateKey(r.created_at)
   const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(key)
@@ -650,6 +697,10 @@ const totalAmount = computed(() => {
 const isSelected = (id: unknown) => props.selectedIds.includes(id as number | string)
 
 function handleSingleToggle(row: RegistrationEntry) {
+  // 收款模式下 total<=0 的列後端保證拒收（STATE-04），整列點擊一併擋下。
+  // 依日期模式的資料來源 usePOSCheckout.runSearch 目前已先濾掉 total<=0，
+  // 這裡是同一條規則的第二道防線，避免日後上游放寬時又出現「收了現金才吃 400」。
+  if (isNotCollectible(row)) return
   // 優先使用後端回傳的真實 courses / supplies（含 price），
   // 若缺失則 fallback 到 course_names 拆解（normalizeByDateRow 內部處理）。
   const normalized = normalizeByDateRow(row as Record<string, unknown>)
@@ -861,6 +912,27 @@ function handleSingleToggle(row: RegistrationEntry) {
 
 .pos-reg__pending-tag {
   margin-top: 4px;
+}
+
+/* 收款模式下後端保證拒收的列（STATE-04）：游標與底色都要一眼看出「這列點不動」，
+   但**不可**整列調淡到讀不到——它存在的理由就是讓收銀員看得見這個人與待確認金額
+   （防漏收）。只換游標與底色，文字對比維持原樣。 */
+.pos-reg--blocked {
+  cursor: not-allowed;
+  background: var(--bg-color-soft);
+}
+
+.pos-reg--blocked:hover {
+  background: var(--bg-color-soft);
+}
+
+/* 文字色走 *-darker：a11y.css 已把該組在 html.dark 翻成亮階，
+   *-hover 是互動態 token、深色模式下當文字色只有 2.5–3.6:1（見 POSDarkContrast 守衛）。 */
+.pos-reg__blocked-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-warning-darker);
 }
 
 .pos-reg__owed {

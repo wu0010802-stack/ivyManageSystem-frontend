@@ -311,6 +311,7 @@
         <POSCloseHistoryPanel
           v-if="canApprove"
           :close-date="selectedDate"
+          :reload-token="historyReloadToken"
           @update:count="historyCount = $event"
         />
       </el-card>
@@ -470,6 +471,10 @@ const pendingMeta = reactive<{ older_pending_count: number; oldest_pending_date:
 })
 // 本日曾被解鎖重簽的次數（由 POSCloseHistoryPanel 回拋）
 const historyCount = ref(0)
+// 歷史快照面板的重載訊號：面板只 watch closeDate，解鎖後日期沒變就不會重載，
+// 於是剛寫下的解鎖原因與解鎖前帳面當場看不到；第一次解鎖時面板更因 count===0
+// 自身不渲染，要切走再切回來才會出現（FEAPV-03）。
+const historyReloadToken = ref(0)
 // 日期選擇器重掛用：取消切換時 selectedDate 沒變，需要靠換 key 把 picker 顯示拉回來
 const pickerNonce = ref(0)
 
@@ -570,22 +575,82 @@ function resetForm() {
 }
 
 
-async function loadPending() {
+// 後端 pending 端點的查詢區間上限（見 api/activity/pos_approval.py 的 92 天守衛），
+// 而 oldest_pending_date **不受**該上限。直接送 (oldest, today) 在積壓超過 92 天時
+// 必定 400——正好是最需要「放寬查詢區間」的時候（FEAPV-02 / CONTRACT-03）。
+// 超過上限時自動分段送出再合併，讓積壓真的看得到、點得到。
+const PENDING_RANGE_MAX_DAYS = 92
+// 分段數上限（約兩年）。再多就不再往前查，避免一次噴出幾十個請求。
+const PENDING_RANGE_MAX_SEGMENTS = 8
+
+/** 以 UTC 曆算推移天數（與 taipeiOffsetISO 同一套做法，避免本地時區偏移）。 */
+function isoShiftDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10)
+}
+
+function splitPendingRange(
+  start: string,
+  end: string,
+): Array<{ start_date: string; end_date: string }> {
+  const segments: Array<{ start_date: string; end_date: string }> = []
+  let cursor = start
+  while (cursor <= end && segments.length < PENDING_RANGE_MAX_SEGMENTS) {
+    const segEnd = isoShiftDays(cursor, PENDING_RANGE_MAX_DAYS)
+    segments.push({ start_date: cursor, end_date: segEnd > end ? end : segEnd })
+    cursor = isoShiftDays(cursor, PENDING_RANGE_MAX_DAYS + 1)
+  }
+  return segments
+}
+
+// 亂序回應守衛：放寬區間後若在途的預設區間回應才回來，會把清單縮回去，
+// 使用者看起來像按鈕沒作用，而 pendingRange 其實已經是放寬值（CRITIC-04）。
+let pendingReqSeq = 0
+
+/** 回傳是否成功，供 widenPendingRange 決定要不要還原區間。 */
+async function loadPending(): Promise<boolean> {
+  const seq = ++pendingReqSeq
   loadingPending.value = true
   try {
-    const res = await getPOSDailyClosePending(pendingRange.value || undefined)
-    const data = res.data as {
+    const range = pendingRange.value
+    const segments =
+      range?.start_date && range?.end_date
+        ? splitPendingRange(range.start_date, range.end_date)
+        : null
+    const responses = await Promise.all(
+      (segments || [range || undefined]).map((seg) => getPOSDailyClosePending(seg)),
+    )
+    if (seq !== pendingReqSeq) return true // 已有更新的請求發出，此為過時回應 → 丟棄
+
+    type PendingPayload = {
       pending?: PendingRow[]
       older_pending_count?: number
       oldest_pending_date?: string | null
     }
-    pending.value = data?.pending || []
-    pendingMeta.older_pending_count = data?.older_pending_count ?? 0
-    pendingMeta.oldest_pending_date = data?.oldest_pending_date ?? null
+    const first = responses[0]?.data as PendingPayload
+    if (!segments || segments.length === 1) {
+      // 單段：行為與分段改動前逐字相同（含後端回傳的排序）。
+      pending.value = first?.pending || []
+    } else {
+      const merged = new Map<string, PendingRow>()
+      for (const res of responses) {
+        for (const row of ((res.data as PendingPayload)?.pending || [])) {
+          merged.set(row.date, row)
+        }
+      }
+      pending.value = [...merged.values()].sort((a, b) => a.date.localeCompare(b.date))
+    }
+    // 「還有更早」的線索只在**最早那一段**才有意義：後段的起點本來就比較晚，
+    // 拿它的值會把真正的線索覆蓋掉。
+    pendingMeta.older_pending_count = first?.older_pending_count ?? 0
+    pendingMeta.oldest_pending_date = first?.oldest_pending_date ?? null
+    return true
   } catch (err) {
+    if (seq !== pendingReqSeq) return false
     ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取待簽核日期失敗')
+    return false
   } finally {
-    loadingPending.value = false
+    if (seq === pendingReqSeq) loadingPending.value = false
   }
 }
 
@@ -593,8 +658,13 @@ async function loadPending() {
 async function widenPendingRange() {
   const oldest = pendingMeta.oldest_pending_date
   if (!oldest) return
+  const previous = pendingRange.value
   pendingRange.value = { start_date: oldest, end_date: todayTaipeiISO() }
-  await loadPending()
+  const ok = await loadPending()
+  // 失敗就把區間還原。否則 pendingRange 卡在無效值，之後每次簽核／解鎖後的
+  // refreshAll 都再失敗一次，待簽核清單凍結在舊資料還每次多彈一個錯誤 toast，
+  // 直到整頁重新整理。
+  if (!ok) pendingRange.value = previous
 }
 
 // 亂序回應守衛（request sequence guard）：快速切換 selectedDate 時，舊日期的慢回應
@@ -910,6 +980,8 @@ async function doUnlock({ isOverride, minLen }: { isOverride: boolean; minLen: n
         }).catch(() => {})
       }
     }
+    // 解鎖前帳面 snapshot 與剛寫下的原因要立刻看得到，作為重簽前的比對基準。
+    historyReloadToken.value += 1
     await refreshAll()
   } catch (err) {
     ElMessage.error((err as ApiErr)?.response?.data?.detail || '解鎖失敗')
@@ -928,6 +1000,9 @@ watch(selectedDate, () => {
   // （配合 loadDetail / loadDailyTransactions 的序號守衛，杜絕舊日資料誤導簽核）。
   detail.value = null
   dailyTransactions.value = []
+  // 前一天的解鎖次數不可掛在新日期上：子元件 load 完成前，卡頭會短暫顯示
+  // 「本日曾解鎖 N 次」指著一個根本沒被解鎖過的日期。
+  historyCount.value = 0
   loadDetail()
   loadDailyTransactions()
 })
