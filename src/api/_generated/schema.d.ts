@@ -26464,6 +26464,8 @@ export interface components {
             scheduler_api_only: boolean;
             /** Sentry Credentials Absent */
             sentry_credentials_absent: boolean;
+            /** Source Commit Attested */
+            source_commit_attested: boolean;
             /** Tenant Base Domain Configured */
             tenant_base_domain_configured: boolean;
             /** Tenant Claim Enforced */
@@ -52888,6 +52890,7 @@ export interface operations {
             /** @description Successful Response */
             200: {
                 headers: {
+                    "X-Ivy-Backend-Commit-Sha"?: string;
                     [name: string]: unknown;
                 };
                 content: {
