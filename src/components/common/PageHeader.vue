@@ -73,12 +73,51 @@ withDefaults(defineProps<{
 @media (--to-sm) {
   .page-header {
     flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
   }
   .page-header__left {
-    flex: 1 1 auto;
+    flex: 1 1 100%;
   }
+
+  /* 緊湊標題：--text-3xl 在 390px 手機吃掉整個第一屏，且過長頁名會斷成兩行把
+     副標推更下面。降一階字級並限制兩行，資訊不刪、只收高度。 */
+  .page-header h2 {
+    font-size: var(--text-xl);
+    line-height: 1.3;
+  }
+  .page-header__subtitle {
+    font-size: var(--text-xs);
+  }
+
+  /* 動作區：原本 flex-wrap 讓 4–6 個按鈕堆成兩三行按鈕牆。改為整寬、每列兩顆
+     等寬，觸控目標 44px；動作全部保留可見，不靠橫捲藏起來。 */
   .header-actions {
     flex-wrap: wrap;
+    width: 100%;
+    gap: var(--space-2);
+  }
+  /* 動作是 parent 傳進來的 slot 內容，帶的是 parent 的 scope id，
+     必須用 :deep 才選得到 */
+  :deep(.header-actions > *) {
+    flex: 1 1 calc(50% - var(--space-2));
+    min-width: 0;
+  }
+  :deep(.header-actions .el-button) {
+    min-height: var(--touch-target-min);
+    margin-left: 0;
+  }
+  /* EP 的按鈕群組／下拉本身就是一個單位，內部不再切半 */
+  :deep(.header-actions .el-button-group),
+  :deep(.header-actions .el-dropdown) {
+    display: flex;
+  }
+  :deep(.header-actions .el-button-group .el-button) {
+    flex: 1 1 0;
+  }
+
+  .filter-bar {
+    gap: var(--space-2);
   }
 }
 </style>

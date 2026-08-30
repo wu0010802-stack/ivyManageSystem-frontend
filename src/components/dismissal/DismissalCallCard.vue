@@ -341,7 +341,10 @@ html.dark .dcall--ack .dcall__mono {
   gap: var(--space-2);
 }
 
-@media (max-width: 560px) {
+/* 斷點改用專案 custom media（原本寫死 560px 不在斷點系統內，違反 DESIGN.md 硬規則）。
+   ⚠ 本元件同時被教師 Portal 的 PortalDismissalCallsView 消費：561–767px（小平板）
+   的卡片會比改版前更早收成直向堆疊，屬預期的一致化，非 admin 專屬變更。 */
+@media (--to-sm) {
   .dcall__note,
   .dcall__foot {
     padding-left: 0;
@@ -355,6 +358,11 @@ html.dark .dcall--ack .dcall__mono {
   }
   .dcall__action {
     flex-direction: column;
+  }
+  /* 卡片動作（取消通知／標記抵達）是接送看板最關鍵的觸控目標，實測只有 24px。
+     消費端用 size="small" 是為了桌機密度，手機一律撐到 44px。 */
+  .dcall__action :deep(.el-button) {
+    min-height: var(--touch-target-min);
   }
 }
 

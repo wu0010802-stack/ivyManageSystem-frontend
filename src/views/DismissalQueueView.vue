@@ -16,6 +16,8 @@ import {
 } from '@/utils/ws'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import {
   sortActiveQueue,
@@ -64,6 +66,16 @@ const classrooms = ref<ClassroomInput[]>([])
 // 在 active 檢視下現在可能含 completed 記錄（見下方 fetchCalls 的 D5 修正），
 // 這裡明確只算 pending/acknowledged，避免計數把已放學的孩子也算進「待接送」。
 const isActiveView = computed(() => filterStatus.value === 'active')
+const { isMobile } = useIsMobile()
+
+// 手機歷史卡片只留「這筆是誰、什麼狀態、何時通知、何時放學」；
+// 抵達／確認時間、通知人、備註屬追溯欄位，留在桌機表格。
+const HISTORY_CARD_COLUMNS = [
+  { label: '班級', prop: 'classroom_name' },
+  { label: '通知時間', prop: 'requested_at', formatter: (r: Record<string, unknown>) => formatTime(r.requested_at as string | undefined) },
+  { label: '放學時間', prop: 'completed_at', formatter: (r: Record<string, unknown>) => formatTime(r.completed_at as string | undefined) },
+]
+
 const sortedCalls = computed(() =>
   sortActiveQueue(
     (calls.value as DismissalCallView[]).filter(c => ACTIVE_STATUSES.has(c.status ?? '')),
@@ -556,6 +568,34 @@ onUnmounted(() => {
     </template>
 
     <!-- 歷史紀錄：已放學 / 已取消 / 全部，走密集表格 -->
+    <!-- 手機歷史視圖：10 欄約 1000px 的表格要橫捲才按得到「取消通知」，改任務卡片 -->
+    <AdminListCards
+      v-else-if="isMobile"
+      :items="calls as unknown as Record<string, unknown>[]"
+      :columns="HISTORY_CARD_COLUMNS"
+      row-key="id"
+      :loading="loading"
+      empty-text="沒有符合條件的紀錄"
+    >
+      <template #title="{ item }">
+        <div class="card-title">
+          <span>{{ item.student_name }}</span>
+          <el-tag :type="statusType(String(item.status))" size="small">
+            {{ statusLabel(String(item.status)) }}
+          </el-tag>
+        </div>
+      </template>
+      <template #actions="{ item }">
+        <el-button
+          v-if="item.status === 'pending' || item.status === 'acknowledged'"
+          data-test="dismissal-card-cancel"
+          type="danger"
+          plain
+          @click="handleCancel(item as unknown as DismissalCall)"
+        >取消通知</el-button>
+      </template>
+    </AdminListCards>
+
     <el-table v-else :data="calls" v-loading="loading" border style="width:100%" class="calls-table">
       <el-table-column label="學生" prop="student_name" width="100" />
       <el-table-column label="班級" prop="classroom_name" width="100" />
@@ -731,6 +771,22 @@ onUnmounted(() => {
 @media (max-width: 560px) {
   .dismissal-queue-view {
     padding: var(--space-3);
+  }
+}
+
+/* 手機歷史卡片（AdminListCards，由 useIsMobile 於 --to-sm 區間接手表格）之樣式。
+   刻意與上方 560px 分開：那段是 POS 三欄版的頁面 padding，斷點理由不同。 */
+@media (--to-sm) {
+  .card-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+  /* 篩選列的「重新整理」是預設尺寸 el-button（32px），手機補足觸控下限 */
+  .filter-bar :deep(.el-button) {
+    min-height: var(--touch-target-min);
+    width: 100%;
   }
 }
 </style>

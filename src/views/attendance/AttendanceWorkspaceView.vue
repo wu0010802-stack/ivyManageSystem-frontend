@@ -47,9 +47,10 @@
       </div>
     </div>
 
-    <!-- 行動三 tab -->
-    <el-tabs v-else class="workspace-tabs">
-      <el-tab-pane label="名冊">
+    <!-- 行動三段流程：名冊／異常 → 明細。tab 受控，選取後自動推進到明細，
+         否則使用者在名冊點了人卻停在原頁，看不出發生了什麼。 -->
+    <el-tabs v-else v-model="mobileTab" class="workspace-tabs">
+      <el-tab-pane label="名冊" name="roster">
         <div class="col-roster">
           <RosterColumn
             :roster="ws.roster.value"
@@ -59,7 +60,7 @@
           />
         </div>
       </el-tab-pane>
-      <el-tab-pane label="異常">
+      <el-tab-pane :label="anomalyTabLabel" name="anomaly">
         <div class="col-anomaly">
           <AnomalyQueueColumn
             :items="ws.anomalyQueue.value"
@@ -71,8 +72,17 @@
           />
         </div>
       </el-tab-pane>
-      <el-tab-pane label="明細">
+      <el-tab-pane label="明細" name="detail">
         <div class="col-detail">
+          <el-button
+            class="mobile-detail-back"
+            data-test="mobile-detail-back"
+            text
+            :icon="ArrowLeft"
+            @click="backFromDetail"
+          >
+            {{ detailMode === 'resolve' ? '回異常佇列' : '回名冊' }}
+          </el-button>
           <DetailColumn
             :mode="detailMode"
             :anomaly="currentAnomaly"
@@ -103,6 +113,7 @@
 <script setup lang="ts">
 import { reactive, toRef, onMounted, provide, computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
 import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -139,6 +150,22 @@ const selectedEmployeeId = ref<number | null>(null)
 const selectedAnomalyIndex = ref(0)
 const detailMode = ref<'resolve' | 'month'>('resolve')
 const importOpen = ref(false)
+
+// ── 手機三段流程 ────────────────────────────────────────────────────────────
+// 桌機三欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
+type MobileTab = 'roster' | 'anomaly' | 'detail'
+const mobileTab = ref<MobileTab>('roster')
+
+// 異常分頁標籤帶待處理筆數，讓使用者不必切過去才知道有沒有事情要處理
+const anomalyTabLabel = computed(() => {
+  const n = ws.anomalyQueue.value.length
+  return n > 0 ? `異常（${n}）` : '異常'
+})
+
+// 返回鍵回到「來的那一段」：resolve 模式來自異常佇列，month 模式來自名冊
+function backFromDetail(): void {
+  mobileTab.value = detailMode.value === 'resolve' ? 'anomaly' : 'roster'
+}
 
 // ── 員工月記錄快取 ───────────────────────────────────────────────────────────
 // key = employee_id，val = 該員工在當月的記錄陣列
@@ -211,12 +238,14 @@ const context = computed(() => {
 function onRosterSelect(id: number): void {
   selectedEmployeeId.value = id
   detailMode.value = 'month'
+  if (isMobile.value) mobileTab.value = 'detail'
 }
 
 function onAnomalySelect(idx: number): void {
   selectedAnomalyIndex.value = idx
   selectedEmployeeId.value = null // 走 anomaly.employee_number → roster 對照
   detailMode.value = 'resolve'
+  if (isMobile.value) mobileTab.value = 'detail'
 }
 
 function clampSelectedIndex(): void {
@@ -298,5 +327,29 @@ provide('attendanceWs', ws)
 
 .workspace-tabs {
   margin-top: var(--space-3);
+}
+
+/* 返回鍵是手機明細頁的主要退路，觸控目標對齊 44px 並靠左貼齊內容 */
+.mobile-detail-back {
+  min-height: var(--touch-target-min);
+  margin-bottom: var(--space-2);
+  padding-left: 0;
+}
+
+@media (--to-sm) {
+  .attendance-workspace {
+    padding: var(--space-3);
+  }
+  /* 三段標籤在窄機平均分配寬度，避免「異常（12）」把「明細」擠出視窗 */
+  .workspace-tabs :deep(.el-tabs__nav) {
+    display: flex;
+    width: 100%;
+  }
+  .workspace-tabs :deep(.el-tabs__item) {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: var(--touch-target-min);
+    padding: 0 var(--space-2);
+  }
 }
 </style>
