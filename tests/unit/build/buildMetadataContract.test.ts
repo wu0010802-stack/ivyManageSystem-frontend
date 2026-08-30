@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -28,6 +28,7 @@ describe('frontend build commit attestation', () => {
     expect(result.status).toBe(0)
     expect(readFileSync(outputPath, 'utf8')).toBe(`{"commitSha":"${validSha}"}\n`)
     expect(JSON.parse(readFileSync(outputPath, 'utf8'))).toEqual({ commitSha: validSha })
+    expect(statSync(outputPath).mode & 0o777).toBe(0o644)
     expect(readdirSync(outputDir)).toEqual(['build-metadata.json'])
   })
 
