@@ -36,9 +36,11 @@ describe('salary api', () => {
     mockDelete.mockResolvedValue({ data: {} })
   })
 
-  it('calculate POST /salaries/calculate?year=&month=', async () => {
+  it('calculate 預設帶 use_snapshot=true', async () => {
     await mod.calculate(2026, 5)
-    expect(mockPost).toHaveBeenCalledWith('/salaries/calculate?year=2026&month=5')
+    expect(mockPost).toHaveBeenCalledWith(
+      '/salaries/calculate?year=2026&month=5&use_snapshot=true',
+    )
   })
 
   it('getFestivalBonus GET /salaries/festival-bonus?year=&month=', async () => {

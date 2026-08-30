@@ -40,7 +40,36 @@ function runAudit() {
   }
 }
 
-const report = JSON.parse(runAudit())
+function parseAuditReport(raw) {
+  const report = JSON.parse(raw)
+  if (!report || typeof report !== 'object' || Array.isArray(report)) {
+    throw new Error('npm audit 未回傳物件格式報告')
+  }
+  if (report.error) {
+    const code = typeof report.error.code === 'string' ? ` (${report.error.code})` : ''
+    throw new Error(`npm audit 執行失敗${code}`)
+  }
+  if (
+    !Object.hasOwn(report, 'vulnerabilities')
+    || !report.vulnerabilities
+    || typeof report.vulnerabilities !== 'object'
+    || Array.isArray(report.vulnerabilities)
+  ) {
+    throw new Error('npm audit 報告缺少 vulnerabilities，拒絕視為零弱點')
+  }
+  if (!report.metadata || typeof report.metadata !== 'object') {
+    throw new Error('npm audit 報告缺少 metadata，無法確認掃描完整性')
+  }
+  return report
+}
+
+let report
+try {
+  report = parseAuditReport(runAudit())
+} catch (error) {
+  console.error(`✖ 依賴掃描工具執行失敗：${error instanceof Error ? error.message : String(error)}`)
+  process.exit(1)
+}
 const allowlist = JSON.parse(readFileSync(allowlistPath, 'utf-8'))
 const allowed = new Map(allowlist.allow.map((entry) => [entry.package, entry]))
 

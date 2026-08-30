@@ -160,6 +160,37 @@ describe('BonusConfigPanel — saveAllBonusSettings 儲存閘門', () => {
     expect(updateGradeTargets).toHaveBeenCalled()
     expect(ElMessage.success).toHaveBeenCalledWith('所有薪資設定已儲存')
   })
+
+  it('GET 回應的唯讀與舊欄位不得原樣送回嚴格 PUT 契約', async () => {
+    getBonusConfig.mockResolvedValue({
+      data: {
+        id: 42,
+        config_year: 2027,
+        head_teacher_a: 2500,
+        head_teacher_ab: 1800,
+        assistant_teacher_ab: 1700,
+      },
+    })
+    ;(ElMessageBox.prompt as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      value: '確認只送出目前支援的獎金設定欄位',
+    })
+
+    const wrapper = mountPanel()
+    await flushPromises()
+    const state = wrapper.vm.$.setupState as unknown as SetupState
+
+    await state.saveAllBonusSettings()
+    await flushPromises()
+
+    expect(updateBonusConfig).toHaveBeenCalledTimes(1)
+    const payload = updateBonusConfig.mock.calls[0]?.[0] as Record<string, unknown>
+    expect(payload.config_year).toBe(2027)
+    expect(payload.head_teacher_a).toBe(2500)
+    expect(payload.reason).toBe('確認只送出目前支援的獎金設定欄位')
+    expect(payload).not.toHaveProperty('id')
+    expect(payload).not.toHaveProperty('head_teacher_ab')
+    expect(payload).not.toHaveProperty('assistant_teacher_ab')
+  })
 })
 
 // 薪資模組稽核 P2：saveAllBonusSettings 最終送到 PUT /config/bonus，後端除

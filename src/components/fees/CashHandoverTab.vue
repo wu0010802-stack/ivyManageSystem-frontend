@@ -221,6 +221,7 @@ import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
+import type { ApiBody } from '@/api/_generated/typed'
 import {
   confirmCashHandover,
   createCashReceipt,
@@ -247,6 +248,8 @@ interface FeeRecordRow {
   amount_due: number
   amount_paid: number
 }
+
+type CashReceiptBody = ApiBody<'/fees/cash-receipts', 'post'>
 
 const STATUS_LABELS: Record<string, string> = {
   draft: '收款中',
@@ -361,18 +364,25 @@ async function searchUnpaid() {
 }
 
 async function submitCash() {
-  const parts: Record<string, unknown>[] = selectedRecords.value.map((r) => ({
-    part_type: 'fee_record',
+  const parts: CashReceiptBody['parts'] = selectedRecords.value.map((r) => ({
+    part_type: 'fee_record' as const,
     fee_record_id: r.id,
     amount: r.amount_due - r.amount_paid,
   }))
   if (cashForm.withPrepay) {
+    const studentId = cashForm.prepayStudentId
+    const schoolYear = cashForm.prepayYear
+    const semester = cashForm.prepaySemester
+    if (studentId == null || schoolYear == null || semester == null) {
+      ElMessage.warning('請完整選擇預繳學生、目標學年與學期')
+      return
+    }
     parts.push({
       part_type: 'prepayment',
-      student_id: cashForm.prepayStudentId,
+      student_id: studentId,
       amount: 5000,
-      target_school_year: cashForm.prepayYear,
-      target_semester: cashForm.prepaySemester,
+      target_school_year: schoolYear,
+      target_semester: semester,
     })
   }
   cashSubmitting.value = true
@@ -380,7 +390,7 @@ async function submitCash() {
     await createCashReceipt({
       amount: cashTotal.value,
       received_date: cashForm.received_date,
-      parts: parts as never,
+      parts,
       idempotency_key: `cashui-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
     })
     ElMessage.success('現金收款已登記並掛入當日交接批')
