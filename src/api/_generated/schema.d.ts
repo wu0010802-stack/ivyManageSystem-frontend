@@ -5635,6 +5635,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/e2e/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get E2E Public Preflight
+         * @description 登入前唯讀驗證 clone marker、tenant、外送關閉與 build attestation。
+         */
+        get: operations["get_e2e_public_preflight_api_e2e_preflight_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/e2e/runtime-safety": {
         parameters: {
             query?: never;
@@ -52875,6 +52895,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_e2e_public_preflight_api_e2e_preflight_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Ivy-E2E-Clone-Marker-Sha256"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 隔離 clone 可安全進入登入流程。 */
+            204: {
+                headers: {
+                    "X-Ivy-Backend-Commit-Sha"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 環境不符合隔離 clone 安全條件。 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
