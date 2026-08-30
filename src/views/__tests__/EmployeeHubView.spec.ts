@@ -4,9 +4,13 @@ import { nextTick } from 'vue'
 
 const replace = vi.fn()
 let mockQuery: Record<string, unknown> = {}
+let fullSalaryView = true
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: mockQuery }),
   useRouter: () => ({ replace }),
+}))
+vi.mock('@/utils/auth', () => ({
+  hasFullSalaryView: () => fullSalaryView,
 }))
 
 import EmployeeHubView from '../EmployeeHubView.vue'
@@ -29,7 +33,10 @@ function mountWith(query: Record<string, unknown> = {}) {
 }
 
 describe('EmployeeHubView shell', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fullSalaryView = true
+  })
 
   it('預設（無 section query）→ 渲染員工子元件並 normalize URL', () => {
     const w = mountWith()
@@ -62,5 +69,16 @@ describe('EmployeeHubView shell', () => {
     w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'offboarding')
     await nextTick()
     expect(replace).toHaveBeenCalledWith({ query: { section: 'offboarding' } })
+  })
+
+  it('非全員薪資視野隱藏離職管理並拒絕 deep link', () => {
+    fullSalaryView = false
+    const w = mountWith({ section: 'offboarding' })
+    expect(w.find('.stub-employees').exists()).toBe(true)
+    expect(w.find('.stub-offboarding').exists()).toBe(false)
+    expect(w.findComponent({ name: 'ElSegmented' }).props('options')).toEqual([
+      { label: '員工管理', value: 'employees' },
+    ])
+    expect(replace).toHaveBeenCalledWith({ query: { section: 'employees' } })
   })
 })

@@ -3,7 +3,13 @@ import { ref, nextTick } from 'vue'
 import { shallowMount } from '@vue/test-utils'
 
 const mockIsMobile = ref(false)
+let fullSalaryView = true
+let salaryWrite = true
 vi.mock('@/composables/useIsMobile', () => ({ useIsMobile: () => ({ isMobile: mockIsMobile, cleanup: () => {} }) }))
+vi.mock('@/utils/auth', () => ({
+  hasFullSalaryView: () => fullSalaryView,
+  hasPermission: (permission: string) => permission !== 'SALARY_WRITE' || salaryWrite,
+}))
 // 避免 onMounted 抓資料炸：mock store 與 API 依賴為最小空集合
 // employees 給一筆假資料，避免 loading && !employees.length = true 讓 TableSkeleton 遮住表格
 const fakeEmployee = { employee_id: 'T001', name: '測試員工', title: '', position: '', hire_date: '', is_active: true, employee_type: 'regular', base_salary: 30000, status: 'active' }
@@ -38,5 +44,20 @@ describe('EmployeeListView 手機卡片切換', () => {
     mockIsMobile.value = true
     await nextTick()
     expect(w.findComponent({ name: 'AdminListCards' }).exists()).toBe(true)
+  })
+
+  it('辦理離職入口同時要求 SALARY_WRITE 與全員薪資視野', () => {
+    fullSalaryView = false
+    salaryWrite = true
+    const nonFull = shallowMount(EmployeeListView, { global: globalStubs })
+    expect((nonFull.vm as unknown as { canManageOffboarding: boolean }).canManageOffboarding).toBe(false)
+
+    fullSalaryView = true
+    salaryWrite = false
+    const noSalaryWrite = shallowMount(EmployeeListView, { global: globalStubs })
+    expect((noSalaryWrite.vm as unknown as { canManageOffboarding: boolean }).canManageOffboarding).toBe(false)
+
+    fullSalaryView = true
+    salaryWrite = true
   })
 })

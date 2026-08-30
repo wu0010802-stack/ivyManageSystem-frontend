@@ -1,5 +1,5 @@
 import api from './index'
-import type { ApiQuery, AxiosResp } from './_generated/typed'
+import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 export const getStudents = (
   params: ApiQuery<'/students', 'get'> = {},
@@ -35,7 +35,9 @@ export const bulkTransferStudents = (data: unknown) => api.post('/students/bulk-
 // 批次畢業/轉出（整班學年末一次處理）；新端點，push 前 gen:api 補 schema.d.ts
 export const bulkGraduateStudents = (data: unknown) => api.post('/students/bulk-graduate', data)
 
-export const previewBonusImpact = (data: unknown) => api.post('/bonus-impact-preview', data)
+export const previewBonusImpact = (
+  data: ApiBody<'/bonus-impact-preview', 'post'>,
+): AxiosResp<'/bonus-impact-preview', 'post'> => api.post('/bonus-impact-preview', data)
 
 // ============ 學生生命週期追蹤（Phase A） ============
 

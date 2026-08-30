@@ -8663,7 +8663,7 @@ export interface paths {
         };
         /**
          * Calculate Insurance
-         * @description 計算勞健保
+         * @description 以當月 DB 設定計算勞健保。
          */
         get: operations["calculate_insurance_api_insurance_calculate_get"];
         put?: never;

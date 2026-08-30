@@ -17,7 +17,7 @@ import { useEmployeeStore } from '@/stores/employee'
 import { useLatestSearch } from '@/composables'
 import { downloadFile } from '@/utils/download'
 import { mapEmployeeError } from '@/utils/error'
-import { hasPermission } from '@/utils/auth'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useResetPunchPin } from '@/composables/useResetPunchPin'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -49,6 +49,9 @@ const tableMaxHeight = 'calc(100dvh - 352px)'
 // ── 權限 ──────────────────────────────────────────────
 const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
 const canResetPunchPin = computed(() => hasPermission('ATTENDANCE_WRITE'))
+const canManageOffboarding = computed(
+  () => canWriteEmployees.value && hasPermission('SALARY_WRITE') && hasFullSalaryView(),
+)
 
 const { resetEmployeePin } = useResetPunchPin()
 
@@ -73,6 +76,7 @@ const offboardVisible = ref(false)
 const offboardTarget = ref<EmployeeRow | null>(null)
 
 const openOffboard = (emp: Record<string, unknown>) => {
+  if (!canManageOffboarding.value) return
   offboardTarget.value = emp as EmployeeRow
   offboardVisible.value = true
 }
@@ -466,7 +470,7 @@ onMounted(async () => {
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item v-if="scope.row.is_active" command="offboard">辦理離職</el-dropdown-item>
+                  <el-dropdown-item v-if="scope.row.is_active && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
                   <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
                   <el-dropdown-item v-if="scope.row.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
                 </el-dropdown-menu>
@@ -514,7 +518,7 @@ onMounted(async () => {
           <el-button link type="primary" size="small">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item v-if="item.is_active" command="offboard">辦理離職</el-dropdown-item>
+              <el-dropdown-item v-if="item.is_active && canManageOffboarding" command="offboard">辦理離職</el-dropdown-item>
               <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
               <el-dropdown-item v-if="item.is_active" command="quick-resign" divided>僅停用帳號（不跑離職流程）</el-dropdown-item>
             </el-dropdown-menu>
@@ -528,7 +532,7 @@ onMounted(async () => {
 
     <!-- Offboard Modal -->
     <OffboardingModal
-      v-if="offboardTarget"
+      v-if="offboardTarget && canManageOffboarding"
       v-model="offboardVisible"
       :employee-id="offboardTarget.id"
       :employee-name="offboardTarget.name || ''"
