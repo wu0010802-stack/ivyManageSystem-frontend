@@ -52912,6 +52912,8 @@ export interface operations {
             /** @description 隔離 clone 可安全進入登入流程。 */
             204: {
                 headers: {
+                    "Cache-Control"?: "no-store";
+                    Vary?: "X-Ivy-E2E-Clone-Marker-Sha256";
                     "X-Ivy-Backend-Commit-Sha"?: string;
                     [name: string]: unknown;
                 };
@@ -52920,6 +52922,8 @@ export interface operations {
             /** @description 環境不符合隔離 clone 安全條件。 */
             404: {
                 headers: {
+                    "Cache-Control"?: "no-store";
+                    Vary?: "X-Ivy-E2E-Clone-Marker-Sha256";
                     [name: string]: unknown;
                 };
                 content?: never;
