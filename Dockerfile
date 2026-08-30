@@ -10,6 +10,10 @@ RUN npm ci
 
 COPY . .
 
+# Zeabur 只在 Git service 的 build phase 提供此值。不得設預設值或改用
+# VITE_SENTRY_RELEASE：沒有可驗證的完整 commit SHA 時，Docker build 必須失敗。
+ARG ZEABUR_GIT_COMMIT_SHA
+
 # VITE_* 變數會被烤進 bundle，必須在 build 階段提供
 ARG VITE_API_BASE_URL=/api
 ARG VITE_GOOGLE_MAPS_API_KEY=
@@ -68,6 +72,9 @@ ENV SENTRY_UPLOAD_TRUSTED=$SENTRY_UPLOAD_TRUSTED \
 # 產出 nginx-tenant-brand.conf 與 public/brand-version.json（後者必須在 build 之前
 # 就位，才會被 vite 拷進 dist 並被 workbox 收進 precache manifest，CT-F-04）。
 RUN npm run build
+# 寫在 Vite/Workbox build 完成後，避免 build-metadata.json 被收進 PWA precache。
+# generator 會先驗證完整 lowercase SHA，再以同目錄暫存檔原子替換正式檔案。
+RUN node scripts/generate-build-metadata.mjs --sha "$ZEABUR_GIT_COMMIT_SHA" --out dist/build-metadata.json
 
 # ---------- Runtime stage ----------
 FROM nginx:alpine AS runtime
