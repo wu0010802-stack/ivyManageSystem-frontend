@@ -2,7 +2,7 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
-import api from '@/api/index'
+import { getMyStudents } from '@/api/portal'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TAG as _SEVERITY_TAG } from '@/constants/studentRecords'
 import { useIsMobile } from '@/composables/useIsMobile'
 import AdminListCards from '@/components/common/AdminListCards.vue'
@@ -53,7 +53,7 @@ const currentStudents = ref<ClassroomStudent[]>([])
 const fetchMyStudents = async () => {
   classLoading.value = true
   try {
-    const res = await api.get('/portal/my-students')
+    const res = await getMyStudents()
     classrooms.value = res.data.classrooms || []
     if (classrooms.value.length > 0) {
       activeClassroom.value = String(classrooms.value[0].classroom_id)

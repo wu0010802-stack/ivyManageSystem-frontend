@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { shallowMount, flushPromises } from '@vue/test-utils'
+import { shallowMount, mount, flushPromises } from '@vue/test-utils'
+import ElementPlus from 'element-plus'
 
 // ---- composable mocks ----
 vi.mock('@/composables/useIsMobile', () => ({
@@ -67,5 +68,52 @@ describe('PortalProfileView 打卡 PIN', () => {
 
     const { setPunchPin } = await import('@/api/portal')
     expect(setPunchPin).toHaveBeenCalledWith({ pin: '1234' })
+  })
+})
+
+
+// ---- PIN 已設定/尚未設定狀態標籤（2026-08-24 has_punch_pin）----
+// el-tag 文案是 slot 內容，shallowMount 的 stub 不渲染 slot，故此組用 full mount。
+describe('PortalProfileView PIN 狀態標籤', () => {
+  it('has_punch_pin=false 顯示「尚未設定」', async () => {
+    const { getProfile } = await import('@/api/portal')
+    vi.mocked(getProfile).mockResolvedValueOnce({
+      data: { employee_id: 'T1', name: '老師', has_punch_pin: false },
+    } as never)
+    const wrapper = mount(PortalProfileView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const tag = wrapper.find('.pin-status-tag')
+    expect(tag.exists()).toBe(true)
+    expect(tag.text()).toBe('尚未設定')
+  })
+
+  it('has_punch_pin=true 顯示「已設定」', async () => {
+    const { getProfile } = await import('@/api/portal')
+    vi.mocked(getProfile).mockResolvedValueOnce({
+      data: { employee_id: 'T1', name: '老師', has_punch_pin: true },
+    } as never)
+    const wrapper = mount(PortalProfileView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.find('.pin-status-tag').text()).toBe('已設定')
+  })
+
+  it('成功設定 PIN 後標籤即時翻成「已設定」', async () => {
+    const { getProfile } = await import('@/api/portal')
+    vi.mocked(getProfile).mockResolvedValueOnce({
+      data: { employee_id: 'T1', name: '老師', has_punch_pin: false },
+    } as never)
+    const wrapper = mount(PortalProfileView, { global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    expect(wrapper.find('.pin-status-tag').text()).toBe('尚未設定')
+
+    const vm = wrapper.vm as unknown as {
+      pinForm: { new_pin: string; confirm_pin: string }
+      savePunchPin: () => Promise<void>
+    }
+    vm.pinForm.new_pin = '1234'
+    vm.pinForm.confirm_pin = '1234'
+    await vm.savePunchPin()
+    await flushPromises()
+    expect(wrapper.find('.pin-status-tag').text()).toBe('已設定')
   })
 })

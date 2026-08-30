@@ -39,6 +39,7 @@ interface ProfileData {
   bank_code?: string | null
   bank_account?: string | null
   bank_account_name?: string | null
+  has_punch_pin?: boolean
   [key: string]: unknown
 }
 const profile = ref<ProfileData>({})
@@ -213,6 +214,7 @@ async function savePunchPin() {
   try {
     await setPunchPin({ pin: pinForm.new_pin })
     ElMessage.success('打卡 PIN 已更新')
+    profile.value.has_punch_pin = true
     pinForm.new_pin = ''
     pinForm.confirm_pin = ''
   } catch {
@@ -383,7 +385,15 @@ onMounted(() => {
 
     <!-- 打卡 PIN 設定 -->
     <el-card class="profile-card" shadow="hover">
-      <template #header><span class="card-title">打卡 PIN 設定</span></template>
+      <template #header>
+        <span class="card-title">打卡 PIN 設定</span>
+        <el-tag
+          :type="profile.has_punch_pin ? 'success' : 'warning'"
+          size="small"
+          effect="light"
+          class="pin-status-tag"
+        >{{ profile.has_punch_pin ? '已設定' : '尚未設定' }}</el-tag>
+      </template>
       <el-form label-width="100px">
         <el-form-item label="新 PIN">
           <el-input v-model="pinForm.new_pin" type="password" maxlength="6"
@@ -413,6 +423,11 @@ onMounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.pin-status-tag {
+  margin-left: var(--space-2, 8px);
+  vertical-align: middle;
 }
 
 .card-header {

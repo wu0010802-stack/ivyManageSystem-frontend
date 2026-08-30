@@ -20,9 +20,15 @@ const portalSource = readFileSync(
 )
 
 describe('薪資實領口徑跨畫面一致', () => {
-  it('snapshot 與 portal 都透過共用 helper 顯示主薪轉金額', () => {
+  it('snapshot 與 portal 都以同一「主薪轉金額」口徑顯示', () => {
     expect(snapshotSource).toContain('computeBaseTransferAmount(row)')
-    expect(portalSource).toContain('computeBaseTransferAmount(salary.value)')
+    // portal 自 2026-08-24 起吃後端 build_history_breakdown 契約，直接顯示後端算好的
+    // base_transfer_amount（services/salary/amounts.py::base_transfer_amount
+    // = net_salary + unused_leave_payout，與前端 computeBaseTransferAmount 同式；
+    // 該 docstring 明訂銀行名冊／薪資單／員工查詢畫面一律走此 helper）。
+    // 口徑一致性因此由後端單一來源保證，比前端各自重算更強——但仍鎖住 portal
+    // 顯示的是主薪轉金額而非 net_salary，避免把獨立轉帳混進「實發」。
+    expect(portalSource).toContain('salary.base_transfer_amount')
   })
 
   it('純 simulate 不再宣稱是包含未休折現的最終到手', () => {

@@ -129,18 +129,46 @@ export const PUBLIC_ROUTE_PREFIXES = ['/public/']
 // 等合法管理端角色（2026-07 修正：/settings 把角色改成非 admin 後帳號無法登入的 bug）。
 export const PORTAL_ONLY_ROLES = ['teacher', 'parent']
 
+// 教師端可直達的靜態頁面清單（排除 :param 動態路由、純轉址與 noAuth 登入頁）。
+// 唯一消費端：getAllowedRoutes() 的 teacher 分支。曾停在 11 條舊路由、漂移近 20 頁
+// （2026-08-24 同步）；與 router 路由樹的一致性由
+// tests/unit/constants/teacherPortalRoutes.sync.test.ts 守衛，新增/移除 portal
+// 頁面時須同步本清單。
 export const TEACHER_PORTAL_ROUTES = [
   '/portal',
+  '/portal/home',
+  '/portal/class-hub',
   '/portal/attendance',
   '/portal/leave',
+  '/portal/leave-history',
   '/portal/overtime',
+  '/portal/punch-correction',
   '/portal/schedule',
   '/portal/anomalies',
   '/portal/students',
+  '/portal/student-attendance',
+  '/portal/student-leaves',
+  '/portal/medications',
+  '/portal/observations',
+  '/portal/work-samples',
+  '/portal/incidents',
+  '/portal/assessments',
+  '/portal/albums',
+  '/portal/contact-book',
+  '/portal/dismissal-calls',
+  '/portal/pickup-authorizations',
+  '/portal/bus-trip',
+  '/portal/activity',
+  '/portal/surveys',
+  '/portal/growth',
   '/portal/calendar',
   '/portal/salary',
   '/portal/announcements',
   '/portal/profile',
+  '/portal/change-password',
+  // 403 落點頁：無 meta.permission（否則權限不足者連錯誤頁都進不去），
+  // 但屬 /portal 下可直達的靜態頁，計入本清單以維持與 router 同步。
+  '/portal/error',
 ]
 
 // ROUTE_PERMISSION_RULES 自 2026-07-31 起由 src/constants/navigation/ 的

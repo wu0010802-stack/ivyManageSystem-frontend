@@ -56,9 +56,17 @@ describe('深色模式 *-darker 反向用法回歸防護（對抗式覆核 2026-
     expect(gs).toMatch(/html\.dark[^{]*\.search-highlight/)
   })
 
-  it('PortalLayout 的 .install-banner（success-darker 疊硬編淺綠底）有 dark-mode 覆寫', () => {
+  it('PortalLayout 的 .install-banner 改用會翻深底的 *-soft token，不留硬編淺底 #f0fdf4', () => {
+    // 2026-08-24 債務清償：原為「硬編 #f0fdf4 淺底＋success-darker 文字」的反向站點，
+    // 靠 `html.dark .install-banner` 窄覆寫還原深字。背景改吃 --color-success-soft
+    // 後 dark 下會翻成 alpha tint 深底，該窄覆寫反而會造成「深底＋深字」——
+    // 故改鎖 token 化本身（與上方 travel-badge--yellow 同一形式）。
     const layout = read('../../src/layouts/PortalLayout.vue')
-    expect(layout).toMatch(/html\.dark[^{]*\.install-banner/)
+    // 鎖 background 宣告本身，不鎖整個 block——說明用的註解會提到舊 hex。
+    expect(layout).not.toMatch(/\.install-banner\s*\{[^}]*background:\s*#f0fdf4/)
+    expect(layout).toMatch(
+      /\.install-banner\s*\{[^}]*background:\s*var\(--color-success-soft\)/,
+    )
   })
 
   it('AddressHeatmap 跨元素受害者（白卡/淺底上的 darker 文字）有 dark-mode 覆寫', () => {

@@ -106,8 +106,10 @@ describe('DismissalQueueView 歷史視圖手機卡片', () => {
   it('手機看板卡片不做巢狀卡片（歷史卡片與看板不同時渲染）', async () => {
     const wrapper = mount(DismissalQueueView, { global: { plugins: [ElementPlus] } })
     await flushPromises()
-    // active 視圖：看板在，歷史卡片不在
-    expect(wrapper.find('.board-section').exists()).toBe(true)
+    // active 視圖：看板在，歷史卡片不在。
+    // 待接送區已由 T-011 的 DismissalPosBoard 三欄版取代舊 .board-section 卡片牆，
+    // 斷言改指新元件（意圖不變：看板與歷史卡片不同時渲染）。
+    expect(wrapper.findComponent({ name: 'DismissalPosBoard' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'AdminListCards' }).exists()).toBe(false)
   })
 })
