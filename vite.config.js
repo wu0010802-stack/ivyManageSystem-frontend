@@ -90,6 +90,14 @@ function manualChunks(id) {
         id.includes('/src/utils/academic.ts') ||
         id.includes('/src/composables/useCachedAsync.ts') ||
         id.includes('/src/components/common/MobileErrorRetry.vue') ||
+        // EmptyState：三端共用空狀態元件（inline SVG、EP-free，見該檔 docstring——
+        // 它就是為了斷開 EP 依賴才改 inline SVG 的）。2026-08-28 家長端聯絡簿改版把
+        // ContactBookView 升為 tab 根頁（連同新 AnnouncementsPanel eager 進 parent-app
+        // entry），EmptyState 被 Rollup 吸進 parent-app chunk → 20 個 admin/portal
+        // route chunk（SalaryHistory/Platform*/Calibration/PortalContactBook…）靜態
+        // 橋接 parent-app 整包，check-entry-chunks 紅、staging 連兩筆 build FAILED。
+        // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第六次同型回歸。
+        id.includes('/src/components/common/EmptyState.vue') ||
         // 友善錯誤/連線狀態/捲動鎖/品牌裝飾元件：portal views 與家長端共用（皆 EP-free）。
         // 未顯式指派時落 portal chunk → parent-app 靜態橋接整包 portal，連帶 cascade
         // fullcalendar/chart-vendor/activity-admin/qrcode/markdown（~285KB gz）。
