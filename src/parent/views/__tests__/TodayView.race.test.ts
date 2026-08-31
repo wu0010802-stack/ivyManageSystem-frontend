@@ -59,6 +59,15 @@ vi.mock('@/parent/api/bus', () => ({
   getBusToday: vi.fn().mockResolvedValue({
     data: { trip: null, position: null, stale: false, school: null, children: [] },
   }),
+  // FE-PARENT-04 起 TodayView 也 import 這三支。不列出來的話 vitest 會在**呼叫時**
+  // 丟「No "getRideCancellations" export is defined on the mock」，正好被
+  // `loadRideCancellations()` 自己的 catch 吞掉——測試照樣綠，但綠的理由是錯的
+  // （新的載入路徑整段沒被走到）。
+  getRideCancellations: vi.fn().mockResolvedValue({
+    data: { date: '2026-08-26', children: [] },
+  }),
+  createRideCancellation: vi.fn(),
+  revokeRideCancellation: vi.fn(),
 }))
 
 vi.mock('@/parent/composables/useTodayStatusCache', () => ({

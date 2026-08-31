@@ -35,10 +35,12 @@ export const PERMISSION_NAMES = {
   DISMISSAL_CALLS_WRITE: 'DISMISSAL_CALLS_WRITE',
   // 娃娃車追蹤（後端 utils/permissions.py Permission）：BUS_TRIPS_OPERATE 為
   // per-user 顯式授權（無 role 預設），隨車老師 portal 頁專用；BUS_READ/BUS_WRITE
-  // 為管理端路線管理與監看。
+  // 為管理端路線管理與監看；BUS_IN_PROGRESS_WRITE 為發車後（in_progress）
+  // 當日計畫調整（2026-08-26 班次排程 spec，「娃娃車追蹤 (發車後調整)」）。
   BUS_READ: 'BUS_READ',
   BUS_WRITE: 'BUS_WRITE',
   BUS_TRIPS_OPERATE: 'BUS_TRIPS_OPERATE',
+  BUS_IN_PROGRESS_WRITE: 'BUS_IN_PROGRESS_WRITE',
   FEES_READ: 'FEES_READ',
   FEES_WRITE: 'FEES_WRITE',
   FEE_CLOSE_APPROVE: 'FEE_CLOSE_APPROVE',

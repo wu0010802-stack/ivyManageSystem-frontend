@@ -64,6 +64,23 @@ const PII_KEY_SUBSTRINGS = [
   // 學費對帳（feerecon01，2026-08-25，SPEC-014）：銷帳編號為金融識別資訊；
   // 銀行備註/付款人備註含姓名片段；退款領款人姓名為 PII（與 BE 同步）
   'collection_number', 'collection_suffix', 'code_suffix', 'payer_note', 'recipient_name', 'memo',
+  // 娃娃車第二期（bussch，2026-08-26，與 BE 同步）：司機端站點 payload 新增
+  // 接送聯絡人 contacts（每筆含 name 與 phone 兩個欄位）。**整包遮掉**而不是只靠
+  // 內層的 phone——contacts 這個 key 不命中任何 needle，scrubber 會遞迴進去，而
+  // 內層的裸字 name 也不在清單裡（清單是逐一列舉 student_name / parent_name /
+  // person_name…），聯絡人姓名會原樣通過。司機端 debug 不需要看到聯絡人。
+  // ⚠ 本 array 內的註解**一律不得出現右方括號**（含 regex 字面）：後端
+  // tests/test_pii_denylist_parity.py 以非貪婪比對抽取這個 array 的內容，
+  // 遇到第一個右方括號就收尾，之後的詞條會在 parity 比對中「消失」而誤報 drift。
+  'contacts',
+  // camelCase 的 Vue prop 名（2026-08-26）：`@sentry/vue` 預設 `attachProps: true`，
+  // render error 會把整包 props 塞進 `contexts.vue.propsData`（本檔 scrubEvent 有掃
+  // contexts，故走的是 key 比對）。但 denylist 的詞條全是 snake_case——
+  // `childName` 小寫後是 `childname`，**不含** `child_name` 這個子字串，也不等於
+  // exact 清單的 `child`，於是原樣上傳。`BusRideCancellationSheet` 的 `childName`
+  // prop（＝學生姓名）就在這個暴露面上。
+  // ⚠ 新增 camelCase PII prop 時要記得補這裡；snake_case 詞條不會自動涵蓋它。
+  'childname', 'studentname', 'parentname', 'personname',
 ]
 
 // 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：
@@ -75,7 +92,14 @@ const PII_KEY_SUBSTRINGS = [
 // students_count 等非 PII 延伸欄位（加進 substring 清單會變成 'student_id'.includes('student')
 // → true，誤遮）。新增裸字 PII key 請加進本集合，勿加進上方 substring 清單（會打破
 // tests/test_pii_denylist_parity.py 的 array parity）。
-const PII_KEY_EXACT = ['student', 'child', 'parent']
+// 娃娃車第二期（bussch，2026-08-26，與 BE _PII_KEY_EXACT 同步）新增 lat / lng：
+// 站點座標＝接送地址 geocode 快照，多數情況就是家庭住址（spec 明列為位置資料）。
+// 走整字相等而非 substring——'lat' 會誤傷 latest / related / translation。
+// stop_lat / stop_lng（2026-08-26 review 補漏，與 BE 同步）：家長端
+// `/parent/bus/today` 與 WS payload 的家庭座標鍵名是這兩個（BusChildOut），
+// 裸字 lat/lng 只涵蓋司機端鍵名——同一類資料兩種鍵名，缺一即漏。同樣走整字
+// 相等：substring 'lat' 的誤傷問題不因加了前綴而消失。
+const PII_KEY_EXACT = ['student', 'child', 'parent', 'lat', 'lng', 'stop_lat', 'stop_lng']
 
 const FILTERED = '[Filtered]'
 
@@ -254,6 +278,19 @@ export function scrubEvent(event: unknown) {
 
   for (const sect of ['extra', 'contexts', 'tags', 'user']) {
     if (sect in ev) ev[sect] = scrubMapping(ev[sect])
+  }
+
+  // contexts.vue.propsData 整包遮罩：`@sentry/vue` 預設 attachProps: true，render
+  // error 會把出錯元件的整包 props 塞進來。上面的 key 比對攔得住 childName 等
+  // 具名 PII prop，但攔不住**通用鍵名**承載 PII 的情況——StatTile 的 `value`
+  // prop 就承載學生姓名，而 'value' 不可能進 denylist（會誤遮全站）。props 對
+  // debug 的價值遠低於這個暴露面，整包收掉；後端無此 context，不影響 parity。
+  const contexts = ev['contexts']
+  if (contexts && typeof contexts === 'object') {
+    const vue = (contexts as Record<string, unknown>)['vue']
+    if (vue && typeof vue === 'object' && 'propsData' in (vue as object)) {
+      ;(vue as Record<string, unknown>)['propsData'] = FILTERED
+    }
   }
 
   // user.id 對映 employees.id / parents.id —— hash 化避免直連個人

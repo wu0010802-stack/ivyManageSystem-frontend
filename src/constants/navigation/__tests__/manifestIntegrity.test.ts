@@ -258,6 +258,10 @@ const INTENTIONAL_DIVERGENCE = {
     '/bus/monitor × BUS_READ',
     '/bus/history × BUS_READ',
     '/bus/routes × BUS_WRITE',
+    // 2026-08-26 班次排程新增兩分頁：今日調度（進頁 BUS_READ，發車後寫入由
+    // BUS_IN_PROGRESS_WRITE 在頁內控制，故不進 route 規則）與娃娃車設定（BUS_WRITE）。
+    '/bus/dispatch × BUS_READ',
+    '/bus/settings × BUS_WRITE',
     // 2026-08-18 總部「政府資料同步」頁新增（fixture 凍結於 2026-07-31）。
     // 借道 PLATFORM_TENANTS_MANAGE 而非新增第四個 PLATFORM_* 碼——後端
     // PLATFORM_ONLY_CODES parity 與角色 seed 都吃那三碼。

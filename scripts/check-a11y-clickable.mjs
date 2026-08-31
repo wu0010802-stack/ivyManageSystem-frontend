@@ -60,7 +60,7 @@ const SELF_PATH = 'scripts/check-a11y-clickable.mjs';
  *        外層 @click 只是「點整列也能選」的便利。補 tabindex 會讓同一個功能
  *        出現兩個 Tab 停點，反而更糟。這類**不必**再收斂。
  */
-const BASELINE = 5;
+const BASELINE = 4;
 
 /** 非語意元素：本身不帶互動語意，掛 @click 就需要自己補鍵盤可及性。 */
 const NON_SEMANTIC = new Set([

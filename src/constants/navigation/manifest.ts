@@ -385,30 +385,51 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('User') },
         },
         {
-          // 娃娃車管理（2026-08-13 三頁整合單一入口＋頁內分頁，比照 workbench）：
+          // 娃娃車管理（2026-08-13 三頁整合單一入口＋頁內分頁，比照 workbench；
+          // 2026-08-26 班次排程再加今日調度與設定，共五分頁）：
           // 即時監看／乘車歷史＝BUS_READ（後端 GET /bus/trips/today 與 /bus/trips(/{id})
-          // 守衛）、路線管理＝BUS_WRITE（三個寫端點守衛；該分頁「能進入」與「能寫入」
+          // 守衛）、今日調度＝BUS_READ 進頁（寫入鎖在頁內，見下方 actions 註解）、
+          // 路線管理／設定＝BUS_WRITE（寫端點守衛；這兩個分頁「能進入」與「能寫入」
           // 同一碼，沒有唯讀模式）。主路由 /bus 承載兩碼 OR（只持其中一碼也進得來，
           // 落點由 router redirect 依權限決定、分頁可見性由 BusLayout 各自判斷）。
           //
-          // **不可 routePrefix**：三個分頁子路由權限不同，prefix 會讓 /bus 的
-          // BUS_WRITE 外溢到監看／歷史（或 BUS_READ 外溢到路線管理），故子路由
-          // 一律走 extraRoutes 各自 exact。
+          // **不可 routePrefix**：五個分頁子路由權限不同，prefix 會讓 /bus 的
+          // BUS_WRITE 外溢到監看／歷史／今日調度（或 BUS_READ 外溢到路線管理／
+          // 設定），故子路由一律走 extraRoutes 各自 exact。
           //
-          // ⚠ 授權路線管理時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：
-          // 該分頁進頁後還會打 GET /bus/routes（後端 BUS_READ）與 GET /students
-          // （後端 STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授
-          // BUS_WRITE 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
+          // ⚠ 授權路線管理／設定時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起
+          // 給：route gate 是 OR 語意、寫不出 AND，所以只授 BUS_WRITE 的角色進得了
+          // 頁，但進頁後的載入全 403（畫面退化成錯誤卡）。兩頁各自的讀端點——
+          // 路線管理：GET /bus/routes（後端 BUS_READ）＋ GET /students（STUDENTS_READ）；
+          // 設定：GET /bus/settings（後端 BUS_READ；只有 PUT 才是 BUS_WRITE）。
           key: 'bus', title: '娃娃車管理', routePath: '/bus',
           views: [
             { code: 'BUS_READ', label: '娃娃車檢視' },
-            { code: 'BUS_WRITE', label: '娃娃車路線管理' },
+            // 2026-08-26 起本碼同時開通 /bus/settings（園所座標＋車輛數，寫
+            // system_configs），label 要講得出來——否則授權者在權限編輯器只看到
+            // 「路線管理」，勾下去卻一併授出設定頁。
+            // ⚠ 必須與後端 utils/permissions.py 的 PERMISSION_LABELS['BUS_WRITE']
+            // **逐字相同**：picker 顯示以後端為準，而設定頁的唯讀提示走
+            // busWriteLabel() 讀這裡——兩邊不一致會讓同一個權限在畫面上有兩個名字。
+            // 後端同步已隨 alembic buswrlbl01 落地（連既有 DB 列一起改）。
+            { code: 'BUS_WRITE', label: '娃娃車追蹤 (路線與設定管理)' },
           ],
+          // 今日調度（/bus/dispatch）發車後編輯的寫入碼：頁面進入權限仍為
+          // BUS_READ，本碼只控制 in_progress 階段的操作可見性（後端 handler 內
+          // status 分流強制）。刻意**不**進 extraRoutes——掛成 route 規則會讓
+          // 「只想看今日名單」的行政被擋在門外。
+          actions: [{ code: 'BUS_IN_PROGRESS_WRITE', label: '娃娃車追蹤 (發車後調整)' }],
           menu: { icon: icon('MapLocation') },
           extraRoutes: [
             { path: '/bus/monitor', permission: 'BUS_READ' },
             { path: '/bus/history', permission: 'BUS_READ' },
             { path: '/bus/routes', permission: 'BUS_WRITE' },
+            // 2026-08-26 班次排程新增兩分頁（dispatch 取 BUS_READ 的理由見上方
+            // actions 註解；settings 取 BUS_WRITE ——該頁存在的目的是改設定，比照
+            // 路線管理「能進入＝能寫入、無唯讀模式」。⚠ 它的 GET 是 BUS_READ，
+            // 只授 BUS_WRITE 會進得去但載入 403，見上方 ⚠ 段）。
+            { path: '/bus/dispatch', permission: 'BUS_READ' },
+            { path: '/bus/settings', permission: 'BUS_WRITE' },
             // 舊路徑 redirect 保留規則（比照 /approvals → /workbench/approvals）。
             { path: '/bus-monitor', permission: 'BUS_READ' },
             { path: '/bus-history', permission: 'BUS_READ' },

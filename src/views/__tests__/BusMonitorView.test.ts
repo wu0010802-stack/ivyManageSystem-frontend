@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
       stops,
       loading: r(false),
       snapshotFailed,
+      rosterOutOfSync: r(false),
       stale,
       isLive,
       reconnecting: r(false),
@@ -96,6 +97,7 @@ beforeEach(() => {
   s.stops.value = []
   s.loading.value = false
   s.snapshotFailed.value = false
+  s.rosterOutOfSync.value = false
   s.stale.value = false
   s.reconnecting.value = false
 })
@@ -149,6 +151,24 @@ describe('BusMonitorView', () => {
     expect(wrapper.find('[data-testid="bus-monitor-done"]').attributes('title')).toContain('自動關閉')
   })
 
+  it('roster_out_of_sync 時顯示提示並指引去調度頁重設（監看頁唯讀，沒有重設按鈕）', async () => {
+    s.trip.value = inProgressTrip()
+    s.rosterOutOfSync.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    const alert = wrapper.find('[data-testid="bus-monitor-roster-out-of-sync"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.attributes('description')).toContain('今日調度')
+  })
+
+  it('roster_out_of_sync 為 false 時不顯示提示', async () => {
+    s.trip.value = inProgressTrip()
+    s.rosterOutOfSync.value = false
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="bus-monitor-roster-out-of-sync"]').exists()).toBe(false)
+  })
+
   it('斷線時顯示重連提示（只有兩態：正常 / 重連中）', async () => {
     s.trip.value = inProgressTrip()
     s.reconnecting.value = true
@@ -170,36 +190,150 @@ describe('BusMonitorView', () => {
     expect(map.attributes('aria-label')).toBe('娃娃車即時位置地圖')
   })
 
-  it('on_leave=true 的站在站點表格顯示請假標示，讓行政知道這站沒接是預期的', async () => {
+  // ── 第二期契約（FE-DISPATCH-07）：excused 取代 on_leave ──
+  // 第一期 on_leave 只是「這站沒接是預期的」的提示，站仍會被接送；第二期 excused 是
+  // 落庫事實、後端會跳站。因此原因必須顯示到字面——家長取消／老師准假／後台排除三者
+  // 的後續處置完全不同，只印一個「不搭」等於把追查責任丟回給行政。
+  it('excused 站顯示原因文案（家長取消／請假／後台排除各自可辨）', async () => {
     s.trip.value = inProgressTrip()
     s.stops.value = [
       {
         stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
-        status: 'pending', lat: 22.61, lng: 120.31, departed_at: null, on_leave: true,
-      },
-    ]
-    const wrapper = mountView()
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="bus-monitor-onleave-11"]').exists()).toBe(true)
-  })
-
-  it('on_leave=false 或欄位不存在時不顯示請假標示', async () => {
-    s.trip.value = inProgressTrip()
-    s.stops.value = [
-      {
-        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
-        status: 'pending', lat: 22.61, lng: 120.31, departed_at: null, on_leave: false,
+        status: 'excused', excuse_reason: 'parent',
+        lat: 22.61, lng: 120.31, departed_at: null, eta_planned: null, eta_live: null,
       },
       {
         stop_id: 12, student_id: 102, student_name: '小華', seq: 2,
-        status: 'pending', lat: 22.62, lng: 120.32, departed_at: null,
+        status: 'excused', excuse_reason: 'leave',
+        lat: 22.62, lng: 120.32, departed_at: null, eta_planned: null, eta_live: null,
+      },
+      {
+        stop_id: 13, student_id: 103, student_name: '小美', seq: 3,
+        status: 'excused', excuse_reason: 'admin',
+        lat: 22.63, lng: 120.33, departed_at: null, eta_planned: null, eta_live: null,
       },
     ]
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="bus-monitor-onleave-11"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="bus-monitor-onleave-12"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-monitor-excused-11"]').text()).toBe('家長取消')
+    expect(wrapper.find('[data-testid="bus-monitor-excused-12"]').text()).toBe('今日請假')
+    expect(wrapper.find('[data-testid="bus-monitor-excused-13"]').text()).toBe('後台排除')
+  })
+
+  it('非 excused 的站不顯示不搭原因標示', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'pending', excuse_reason: null,
+        lat: 22.61, lng: 120.31, departed_at: null, eta_planned: null, eta_live: null,
+      },
+      {
+        stop_id: 12, student_id: 102, student_name: '小華', seq: 2,
+        status: 'departed', excuse_reason: null,
+        lat: 22.62, lng: 120.32, departed_at: '2026-07-29T09:05:00',
+        eta_planned: null, eta_live: null,
+      },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-monitor-excused-11"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-monitor-excused-12"]').exists()).toBe(false)
+  })
+
+  it('未知的 status 原樣顯示，不落進「待接送」（後端 status 是裸 str，值域可能再擴）', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [{
+      stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+      status: 'boarded_by_future_migration', excuse_reason: null,
+      lat: 22.61, lng: 120.31, departed_at: null, eta_planned: null, eta_live: null,
+    }]
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('boarded_by_future_migration')
+    expect(wrapper.text()).not.toContain('待接送')
+  })
+
+  it('未知的 excuse_reason 原樣顯示，不吞成已知原因', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'excused', excuse_reason: 'future_reason',
+        lat: 22.61, lng: 120.31, departed_at: null, eta_planned: null, eta_live: null,
+      },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-monitor-excused-11"]').text()).toBe('future_reason')
+  })
+
+  it('站點 ETA：eta_live 優先，無值退回 eta_planned，兩者皆無顯示 —', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'pending',
+        excuse_reason: null, lat: 22.61, lng: 120.31, departed_at: null,
+        eta_planned: '2026-07-29T09:10:00', eta_live: '2026-07-29T09:18:00',
+      },
+      {
+        stop_id: 12, student_id: 102, student_name: '小華', seq: 2, status: 'pending',
+        excuse_reason: null, lat: 22.62, lng: 120.32, departed_at: null,
+        eta_planned: '2026-07-29T09:20:00', eta_live: null,
+      },
+      {
+        stop_id: 13, student_id: 103, student_name: '小美', seq: 3, status: 'pending',
+        excuse_reason: null, lat: 22.63, lng: 120.33, departed_at: null,
+        eta_planned: null, eta_live: null,
+      },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-monitor-eta-11"]').text()).toBe('09:18')
+    expect(wrapper.find('[data-testid="bus-monitor-eta-12"]').text()).toBe('09:20')
+    expect(wrapper.find('[data-testid="bus-monitor-eta-13"]').text()).toBe('—')
+  })
+
+  it('excused／departed／skipped 的站不顯示預計抵達——車不會去，給精確時間會讓人白等', async () => {
+    s.trip.value = inProgressTrip()
+    s.stops.value = [
+      {
+        stop_id: 11, student_id: 101, student_name: '小明', seq: 1,
+        status: 'excused', excuse_reason: 'parent', lat: 22.61, lng: 120.31,
+        departed_at: null, eta_planned: '2026-07-29T09:20:00', eta_live: null,
+      },
+      {
+        stop_id: 12, student_id: 102, student_name: '小華', seq: 2,
+        status: 'departed', excuse_reason: null, lat: 22.62, lng: 120.32,
+        departed_at: '2026-07-29T09:05:00', eta_planned: '2026-07-29T09:00:00', eta_live: null,
+      },
+      {
+        stop_id: 13, student_id: 103, student_name: '小美', seq: 3,
+        status: 'skipped', excuse_reason: null, lat: 22.63, lng: 120.33,
+        departed_at: null, eta_planned: '2026-07-29T09:30:00', eta_live: null,
+      },
+    ]
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-monitor-eta-11"]').text()).toBe('—')
+    expect(wrapper.find('[data-testid="bus-monitor-eta-12"]').text()).toBe('—')
+    expect(wrapper.find('[data-testid="bus-monitor-eta-13"]').text()).toBe('—')
+  })
+
+  it('行駛中且有 end_time_estimated 時顯示預計回園時間；無值時不顯示空殼', async () => {
+    s.trip.value = inProgressTrip({ end_time_estimated: '2026-07-29T09:45:00' })
+    const withEnd = mountView()
+    await flushPromises()
+    expect(withEnd.find('[data-testid="bus-monitor-end-time"]').text()).toContain('09:45')
+
+    s.trip.value = inProgressTrip({ end_time_estimated: null })
+    const withoutEnd = mountView()
+    await flushPromises()
+    expect(withoutEnd.find('[data-testid="bus-monitor-end-time"]').exists()).toBe(false)
   })
 })

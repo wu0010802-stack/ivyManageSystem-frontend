@@ -8,13 +8,28 @@ import { hasPermission } from '@/utils/auth'
 const route = useRoute()
 const router = useRouter()
 
-// 監看／歷史＝BUS_READ、路線管理＝BUS_WRITE（與後端 api/bus/admin_routes.py 守衛
-// 及 ROUTE_PERMISSION_RULES 對齊）；只持單一碼者由 /bus 的 redirect 落到可見分頁。
+// 監看／今日調度／歷史＝BUS_READ、路線管理／設定＝BUS_WRITE（與後端
+// api/bus/admin_routes.py 守衛及 ROUTE_PERMISSION_RULES 對齊）；只持單一碼者由
+// /bus 的 redirect 落到可見分頁。
+//
+// 今日調度掛 canRead 而非 canManageRoutes：該頁進頁即讀當日名單，發車後的編輯
+// 另由頁內 BUS_IN_PROGRESS_WRITE 控制，分頁層再收一次會讓唯讀行政看不到名單。
 const canRead = computed(() => hasPermission('BUS_READ'))
 const canManageRoutes = computed(() => hasPermission('BUS_WRITE'))
 
-const tabFromPath = (path: string): string =>
-  path.endsWith('/history') ? 'history' : path.endsWith('/routes') ? 'routes' : 'monitor'
+// 尾段比對而非 endsWith 串接：分頁多了以後串接式三元運算子的落點會越來越難讀。
+// 認不出的尾段一律退回 monitor（與改寫前逐字同行為）——這表示未來若加了帶子段
+// 的路由（/bus/dispatch/123）或尾隨斜線，分頁 highlight 會跳回即時監看；真要支援
+// 時得改成前綴比對，而不是往這張表加項目。
+// 宣告成 as const tuple 而非 Record<string, string>：分頁名同時是路徑尾段與
+// el-tab-pane 的 name，型別收成字面量聯集後，改錯一邊 vue-tsc 會當場擋下。
+const TAB_SEGMENTS = ['monitor', 'dispatch', 'history', 'routes', 'settings'] as const
+type BusTab = (typeof TAB_SEGMENTS)[number]
+
+const tabFromPath = (path: string): BusTab => {
+  const segment = path.split('/').pop() ?? ''
+  return TAB_SEGMENTS.find((tab) => tab === segment) ?? 'monitor'
+}
 
 const activeTab = ref(tabFromPath(route.path))
 
@@ -31,8 +46,10 @@ watch(() => route.path, (path) => {
   <div class="bus-layout">
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <el-tab-pane v-if="canRead" label="即時監看" name="monitor" />
+      <el-tab-pane v-if="canRead" label="今日調度" name="dispatch" />
       <el-tab-pane v-if="canRead" label="乘車歷史" name="history" />
       <el-tab-pane v-if="canManageRoutes" label="路線管理" name="routes" />
+      <el-tab-pane v-if="canManageRoutes" label="設定" name="settings" />
     </el-tabs>
     <RouterView />
   </div>

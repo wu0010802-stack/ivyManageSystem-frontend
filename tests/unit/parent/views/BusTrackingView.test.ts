@@ -146,6 +146,21 @@ describe('BusTrackingView — 四態', () => {
     expect(textOf('王小美')).toContain('今日略過此站')
   })
 
+  it('excused（當日不搭）與 skipped 的文案要分開，不得混用「略過」', async () => {
+    // excused 是請假核准／家長今天不搭／後台排除的既成事實——家長剛申報完不搭
+    // 進來看到「略過此站」會誤解為司機漏接。
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      children: [
+        { ...CHILD_PENDING, stop_status: 'excused', stops_ahead: 0 },
+      ],
+    })
+    const w = await mountView()
+    expect(w.text()).toContain('今日不搭車')
+    expect(w.text()).not.toContain('今日略過此站')
+  })
+
   it('班次已結束顯示完成狀態且不渲染地圖', async () => {
     setState({ trip: { ...IN_PROGRESS_TRIP, status: 'completed' }, position: null })
     const w = await mountView()
@@ -370,5 +385,53 @@ describe('BusTrackingView — 生命週期與隱私', () => {
       vi.stubGlobal('sessionStorage', realSessionStorage)
       ;[...spies, localSetItem].forEach((s) => { s.mockRestore() })
     }
+  })
+})
+
+describe('BusTrackingView — 自己站 ETA（FE-PARENT-03）', () => {
+  it('pending 站顯示「預計 HH:mm 到」，緊接在還有 N 站之後', async () => {
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      children: [{ ...CHILD_PENDING, eta: '2026-07-29T07:35:00' }],
+    })
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-eta"]').text()).toBe('預計 07:35 到')
+    expect(w.text()).toContain('前面還有 2 站')
+  })
+
+  it('naive 台北時間字串以台北時區格式化，不受裝置時區影響', async () => {
+    // 若實作誤用裸 `new Date(naive)`，非台北時區的測試環境會位移 8 小時
+    // （顯示 23:35 之類）。這條是那個 bug 的定位測試。
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      children: [{ ...CHILD_PENDING, eta: '2026-07-29T16:05:00' }],
+    })
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-eta"]').text()).toBe('預計 16:05 到')
+  })
+
+  it('尚未排定（eta=null）時不顯示 ETA 區塊', async () => {
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      children: [{ ...CHILD_PENDING, eta: null }],
+    })
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-eta"]').exists()).toBe(false)
+  })
+
+  it('已上車／略過的站不顯示 ETA（「預計 07:35 到」對已發生的事只會誤導）', async () => {
+    setState({
+      trip: IN_PROGRESS_TRIP,
+      position: POSITION,
+      children: [
+        { ...CHILD_PENDING, student_id: 3, stop_status: 'departed', stops_ahead: 0, eta: '2026-07-29T07:35:00' },
+        { ...CHILD_PENDING, student_id: 4, stop_status: 'excused', stops_ahead: 0, eta: '2026-07-29T07:40:00' },
+      ],
+    })
+    const w = await mountView()
+    expect(w.find('[data-testid="bus-eta"]').exists()).toBe(false)
   })
 })

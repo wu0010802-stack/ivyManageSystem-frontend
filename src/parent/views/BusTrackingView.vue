@@ -81,7 +81,27 @@ function progressText(child: { stop_status: string; stops_ahead: number }): stri
   if (child.stop_status === 'departed') {
     return state.trip?.direction === 'morning' ? '已上車前往學校' : '已完成接送'
   }
+  // excused（請假核准／家長今天不搭／後台排除）與司機主動 skipped 是不同語意：
+  // 家長剛申報完不搭進來看到「略過此站」會誤解為司機漏接。
+  if (child.stop_status === 'excused') return '今日不搭車'
   return '今日略過此站'
+}
+
+/**
+ * 自己這一站的預估到達時刻（spec「家長端」第 2 點）。
+ *
+ * 只在 `pending` 顯示：車已駛過（`departed`）或當日不搭（`excused`）之後，
+ * 「預計 07:35 到」只會誤導。`eta` 是 naive 台北牆鐘字串，一律走
+ * `formatTaipeiClock`——裸 `new Date()` 會以裝置時區解析，非台北時區的裝置
+ * 整個位移 8 小時（CLAUDE.md「Datetime 與 Taipei TZ」）。
+ *
+ * 後端已把 `eta_live`（行進間即時重算）優先、無值退 `eta_planned` 的判斷做完，
+ * 前端拿到的就是單一結果值，不重算也不改優先序。
+ */
+function etaText(child: { stop_status: string; eta: string | null }): string | null {
+  if (child.stop_status !== 'pending') return null
+  const clock = formatTaipeiClock(child.eta)
+  return clock ? `預計 ${clock} 到` : null
 }
 
 // ── Leaflet（動態載入）──
@@ -282,7 +302,12 @@ onBeforeUnmount(() => {
 
         <M3Card v-for="child in state.children" :key="child.student_id" class="bus-progress-card">
           <div class="bus-progress-title">{{ child.student_name }}</div>
-          <div class="bus-progress-text">{{ progressText(child) }}</div>
+          <div class="bus-progress-text">
+            {{ progressText(child) }}
+            <span v-if="etaText(child)" data-testid="bus-eta" class="bus-eta">
+              {{ etaText(child) }}
+            </span>
+          </div>
         </M3Card>
       </template>
 
@@ -347,6 +372,11 @@ onBeforeUnmount(() => {
   margin-top: 2px;
   font-size: 0.9rem;
   color: var(--pt-text-soft, #64748b);
+}
+.bus-eta {
+  margin-left: 6px;
+  color: var(--pt-text, #0f172a);
+  font-variant-numeric: tabular-nums;
 }
 .bus-progress-note {
   margin-top: 6px;
