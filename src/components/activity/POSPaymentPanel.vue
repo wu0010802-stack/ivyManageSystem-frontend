@@ -83,19 +83,51 @@
         <span class="pos-payment__label">
           {{ isRefundMode ? '本次退費' : '本次收取' }}
         </span>
+        <span v-if="refundSuggestionLoading" class="pos-payment__suggestion-loading">
+          退費建議試算中…
+        </span>
+        <!-- ⚠ `:min` 必須是 0，不可回頭寫成 1（FECASH-02）。Element Plus 會把落在
+             區間外的 modelValue **立刻 clamp 並回寫**（input-number 對 modelValue 的
+             immediate watcher → `verifyValue(value, true)` → emit update:modelValue）。
+             min=1 時，usePOSCheckout 退費建議 fail-closed 特意留下的 0 會在面板掛上的
+             瞬間被改寫成 1 回傳父層，送出鈕跟著解鎖 → 開出一張 NT$1 的退費收據。
+             「金額 0 不可送出」不靠輸入框把關，靠 usePOSCheckout.canSubmit
+             （`applied <= 0` → false，收款／退費兩模式皆然）。
+             守衛測試見 __tests__/POSPaymentPanel.zeroAmount.test.ts。 -->
         <el-input-number
           :model-value="selectedItemTyped.amount_applied"
-          :min="1"
-          :max="isRefundMode ? (selectedItemTyped.paid_amount || 1) : 999999"
+          :min="0"
+          :max="isRefundMode ? refundMaxAmount : PAYMENT_INPUT_MAX"
           :step="1"
           :precision="0"
           :controls="false"
           size="small"
           class="pos-payment__applied-input"
-          :class="{ 'pos-payment__applied-input--refund': isRefundMode }"
+          :class="{
+            'pos-payment__applied-input--refund': isRefundMode,
+            'pos-payment__applied-input--overpay': overpayAmount > 0,
+          }"
           @update:model-value="(v) => $emit('update:appliedAmount', v ?? null)"
         />
       </div>
+
+      <!-- 溢繳軟提示：後端不擋超收是業主 2026-06-23 明確裁定（家長常一次多付、
+           或用整鈔湊整），所以這裡**只提示不阻擋**。 -->
+      <p v-if="overpayAmount > 0" class="pos-payment__overpay-hint">
+        超過應繳 {{ formatTWD(overpayAmount) }}，將產生溢繳
+      </p>
+      <!-- 應收差額提示（繳費模式）：分期收款是合法情境，不阻擋送出，僅提醒收銀員
+           口頭與家長確認金額（②收款改造，2026-08-16） -->
+      <el-alert
+        v-if="!isRefundMode && amountDiff !== 0"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="pos-payment__diff-hint"
+      >
+        與應收差 {{ formatTWD(Math.abs(amountDiff)) }}（應收 {{ formatTWD(owedAmount) }}）——
+        分期收款屬正常情況，請口頭與家長確認
+      </el-alert>
     </div>
 
     <div class="pos-payment__summary">
@@ -138,23 +170,14 @@
         清空
       </el-button>
       <el-button
-        size="large"
-        :loading="submitting"
-        :disabled="!canSubmit"
-        class="pos-payment__submit pos-payment__submit--plain"
-        @click="$emit('submit', { print: false })"
-      >
-        {{ isRefundMode ? '只確認退費' : '只確認收款' }}
-      </el-button>
-      <el-button
         :type="isRefundMode ? 'danger' : 'primary'"
         size="large"
-        :loading="submitting"
+        :loading="submitting || refundSuggestionLoading"
         :disabled="!canSubmit"
         class="pos-payment__submit"
-        @click="$emit('submit', { print: true })"
+        @click="$emit('submit')"
       >
-        {{ isRefundMode ? '確認退費並列印' : '確認收款並列印' }}
+        {{ isRefundMode ? '確認退費' : '確認收款' }}
       </el-button>
     </div>
   </el-card>
@@ -165,7 +188,13 @@ import { computed } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 
 import { COURSE_STATUS_LABEL } from '@/constants/activity'
-import { formatTWD } from '@/constants/pos'
+import { computeOwed, formatTWD } from '@/constants/pos'
+
+/**
+ * 收款金額輸入框的上限：純粹是輸入框的防呆天花板（防手滑多打幾個 0），
+ * 不是業務規則——超收由後端接受、由下方 `.pos-payment__overpay-hint` 軟提示。
+ */
+const PAYMENT_INPUT_MAX = 999999
 
 interface SelectedCourse {
   name?: string
@@ -200,12 +229,18 @@ const props = withDefaults(defineProps<{
   submitting: boolean
   checkoutType?: string
   isRefundMode?: boolean
+  /**
+   * 退費建議試算進行中。canSubmit 在此期間為 false（避免盲送全額預填），
+   * 但若不下傳這個旗標，櫃台只會看到送出鈕莫名變灰、沒有任何原因（P3-07）。
+   */
+  refundSuggestionLoading?: boolean
 }>(), {
   selectedItem: null,
   notes: '',
   refundApprovalBlocked: false,
   checkoutType: 'payment',
   isRefundMode: false,
+  refundSuggestionLoading: false,
 })
 
 // 將 Record<string, unknown> 轉型為可在模板直接存取的型別
@@ -213,18 +248,56 @@ const selectedItemTyped = computed((): SelectedItem | null =>
   props.selectedItem as SelectedItem | null
 )
 
+/**
+ * 溢繳金額（本次收取 − 應繳餘額），僅收款模式有意義。
+ * 為 0 代表沒有超收；> 0 時顯示軟提示（不阻擋送出，見模板註解）。
+ */
+const overpayAmount = computed((): number => {
+  if (props.isRefundMode) return 0
+  const item = selectedItemTyped.value
+  if (!item) return 0
+  const owed = Number(item.owed ?? computeOwed(item.total_amount, item.paid_amount))
+  const applied = Number(item.amount_applied) || 0
+  return applied > owed ? applied - owed : 0
+})
+
+/**
+ * 退費輸入框上限＝該筆已繳金額（與後端「退費金額不得超過已繳」同口徑）。
+ * 舊寫法 `paid_amount || 1` 是為了配合 min=1（max 不得小於 min，否則 Element Plus
+ * 直接 throwError）。min 改 0 後 fallback 也必須是 0——已繳 0 的報名本來就退不了，
+ * 上限給 1 反而讓輸入框允許一個後端必定 400 的金額。
+ */
+const refundMaxAmount = computed((): number => {
+  const item = selectedItemTyped.value
+  if (!item) return 0
+  return Math.max(0, Number(item.paid_amount) || 0)
+})
+
 const emit = defineEmits<{
   'update:notes': [value: string]
   'update:checkoutType': [value: string | number | boolean]
   'update:appliedAmount': [value: number | null]
   'clear-selection': []
   'clear': []
-  'submit': [payload?: { print?: boolean }]
+  'submit': []
 }>()
 
 function onCheckoutTypeChange(v: string | number | boolean | undefined) {
   if (v !== undefined) emit('update:checkoutType', v)
 }
+
+// 應收差額提示（②收款改造，2026-08-16）：金額輸入預設已由父層預填欠款
+// （既有 buildSelection 邏輯不動），此處只在使用者手動改動、與應收不一致時提示。
+const owedAmount = computed(() => {
+  const it = selectedItemTyped.value
+  if (!it) return 0
+  return Math.max(0, (it.total_amount || 0) - (it.paid_amount || 0))
+})
+const amountDiff = computed(() => {
+  const it = selectedItemTyped.value
+  if (!it) return 0
+  return (Number(it.amount_applied) || 0) - owedAmount.value
+})
 </script>
 
 <style scoped>
@@ -251,12 +324,18 @@ function onCheckoutTypeChange(v: string | number | boolean | undefined) {
   font-size: 18px;
 }
 
+/* 退費卡頂部染紅提醒。必須走 token：舊版寫死淺紅→純白的漸層，深色模式沒有任何
+   覆寫，於是淺色底疊上深色模式的亮字，退費金額與按鈕幾乎讀不到（P2-11）。
+   --color-danger-soft 在 html.dark 已翻成 alpha tint、--surface-color 亦有深色值。 */
 .pos-panel--refund :deep(.el-card__body) {
-  background: linear-gradient(180deg, #fff1f1 0%, #ffffff 15%);
+  background: linear-gradient(180deg, var(--color-danger-soft) 0%, var(--surface-color) 15%);
 }
 
+/* 文字色一律走 *-darker（a11y.css 的 html.dark 已把該組翻成亮階）。*-hover 是互動態
+   token、dark 刻意未覆寫（站上多處拿它當背景／邊框），當文字色用在深色底只有
+   2.5–3.6:1（P3-10）。守衛見 __tests__/POSDarkContrast.test.ts。 */
 .pos-payment__amount--refund {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
 }
 
 .pos-payment__empty {
@@ -323,11 +402,13 @@ function onCheckoutTypeChange(v: string | number | boolean | undefined) {
   color: var(--neutral-700);
 }
 
+/* 課程項目圓點：原本寫死一個 indigo 色碼，深色模式下與深底幾乎融在一起（P2-11）。
+   --brand-primary 在 html.dark 已釘亮一階。 */
 .pos-payment__selected-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #6366f1;
+  background: var(--brand-primary);
 }
 
 .pos-payment__selected-dot--supply {
@@ -366,7 +447,25 @@ function onCheckoutTypeChange(v: string | number | boolean | undefined) {
 }
 
 .pos-payment__applied-input--refund :deep(input) {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
+}
+
+/* 溢繳：只描邊警示、不擋送出（業主裁定超收合法） */
+.pos-payment__applied-input--overpay :deep(.el-input__wrapper) {
+  box-shadow: 0 0 0 1px var(--color-warning) inset;
+}
+
+.pos-payment__overpay-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-warning-darker);
+}
+
+.pos-payment__suggestion-loading {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: auto;
+  margin-right: 8px;
 }
 
 .pos-payment__field {
@@ -418,7 +517,7 @@ function onCheckoutTypeChange(v: string | number | boolean | undefined) {
   min-width: 140px;
 }
 
-.pos-payment__submit--plain {
-  flex: 0.8;
+.pos-payment__diff-hint {
+  margin-top: -4px;
 }
 </style>

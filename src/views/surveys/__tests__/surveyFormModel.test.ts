@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { addQuestion, emptyDraft, moveQuestion, removeQuestion, validateDraft, type SurveyDraft } from '../surveyFormModel'
+import { addQuestion, emptyDraft, isDraftDirty, moveQuestion, removeQuestion, validateDraft, type SurveyDraft } from '../surveyFormModel'
 
 /** 產生一份除待測欄位外皆合法的草稿，用來隔離單一規則。 */
 function validBaseDraft(): SurveyDraft {
@@ -91,6 +91,48 @@ describe('surveyFormModel', () => {
       d.questions[0].question_text = '備註'
       d.questions[0].options = ['不該有這個']
       expect(validateDraft(d).some(m => m.includes('非選擇題'))).toBe(true)
+    })
+  })
+
+  describe('isDraftDirty', () => {
+    it('未改動時為 false', () => {
+      const base = emptyDraft()
+      expect(isDraftDirty(base, emptyDraft())).toBe(false)
+    })
+
+    it('改標題後為 true', () => {
+      const base = emptyDraft()
+      const draft = { ...emptyDraft(), title: '春季親子日' }
+      expect(isDraftDirty(base, draft)).toBe(true)
+    })
+
+    it('陣列內容改動也偵測得到（非淺比較）', () => {
+      const base = { ...emptyDraft(), classroom_ids: [1, 2] }
+      const draft = { ...emptyDraft(), classroom_ids: [1, 3] }
+      expect(isDraftDirty(base, draft)).toBe(true)
+    })
+
+    it('陣列長度改變偵測得到', () => {
+      const base = { ...emptyDraft(), classroom_ids: [1] }
+      const draft = { ...emptyDraft(), classroom_ids: [1, 2] }
+      expect(isDraftDirty(base, draft)).toBe(true)
+    })
+
+    it('題目結構改動也偵測得到（使用者取消前多半是動了題目）', () => {
+      const base = emptyDraft()
+      const draft = emptyDraft()
+      addQuestion(draft, 'single_choice')
+      expect(isDraftDirty(base, draft)).toBe(true)
+    })
+
+    it('只改某題文字也偵測得到——isDraftDirty 註解宣稱的正是這個情境', () => {
+      const draft = emptyDraft()
+      addQuestion(draft, 'number')
+      // 比照 SurveyFormView.loadSurvey() 的真實流程：baseline 是深拷貝快照，
+      // 之後使用者只動巢狀欄位（題目文字），top-level 欄位數量與型別都沒變。
+      const base = JSON.parse(JSON.stringify(draft)) as SurveyDraft
+      draft.questions[0].question_text = '交通方式'
+      expect(isDraftDirty(base, draft)).toBe(true)
     })
   })
 })

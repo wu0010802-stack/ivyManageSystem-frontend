@@ -44,6 +44,7 @@ vi.mock('@/api/appraisal', () => ({
   batchSignSummaries: vi.fn(),
   listScoringRules: () => Promise.resolve({ data: [] }),
   createScoringRule: vi.fn(),
+  getAppraisalAllEmployeesStatus: () => Promise.resolve({ data: { participants: [] } }),
 }))
 
 vi.mock('@/utils/error', () => ({

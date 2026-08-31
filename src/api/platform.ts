@@ -200,3 +200,42 @@ export function getPlatformAudit(
 ): AxiosResp<'/platform/audit', 'get'> {
   return api.get('/platform/audit', { params })
 }
+
+// ── 政府資料同步（勞健保級距／費率）──
+
+/**
+ * 總部政府資料總覽：實算生效的級距版本 ＋ 指定年度級距 ＋ 費率 ＋ 與程式內建
+ * 表的逐列差異。
+ *
+ * 為何不打 `/insurance/brackets` 與 `/config/insurance-rates`：那兩個 GET 掛的是
+ * **租戶內**權限（`SALARY_READ` / `SETTINGS_READ`，園所要看得到自己員工保費的
+ * 依據），而 platform admin 只持 `PLATFORM_*` 三碼 → 打過去一律 403。
+ */
+export function getGovData(
+  params?: ApiQuery<'/platform/gov-data', 'get'>,
+): AxiosResp<'/platform/gov-data', 'get'> {
+  return api.get('/platform/gov-data', { params })
+}
+
+/**
+ * 解析貼上的級距表並與現行年度逐列比對，**不寫入**。
+ *
+ * 確認 diff 後由 `updateInsuranceBrackets` 實際寫入——後者是既有的 platform-only
+ * 端點，會要求 reason ≥10 字、二次確認封存月、並標記全租戶需重算。
+ */
+export function previewGovBrackets(
+  body: ApiBody<'/platform/gov-data/brackets/preview', 'post'>,
+): AxiosResp<'/platform/gov-data/brackets/preview', 'post'> {
+  return api.post('/platform/gov-data/brackets/preview', body)
+}
+
+/**
+ * 寫入指定年度整張級距表（既有 platform-only 端點，非 `/platform/*` 前綴）。
+ *
+ * ⚠ 一改對**全平台所有租戶**生效，並會把該年度所有未封存薪資標為需重算。
+ */
+export function updateInsuranceBrackets(
+  body: ApiBody<'/insurance/brackets', 'put'>,
+): AxiosResp<'/insurance/brackets', 'put'> {
+  return api.put('/insurance/brackets', body)
+}

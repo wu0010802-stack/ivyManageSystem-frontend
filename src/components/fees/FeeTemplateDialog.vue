@@ -47,10 +47,43 @@
         <div v-if="needsFinanceApprove" class="hint" data-test="finance-approve-hint">
           此金額達 NT$50,000 財務簽核門檻，需具備「金流簽核」權限者操作，否則將被拒絕。
         </div>
-        <el-form-item label="繳費期限">
-          <el-input-number v-model="form.due_date_offset_days" :min="0" :max="365" :step="1" :precision="0" />
-          <span class="hint">天 (產生日起算)</span>
-        </el-form-item>
+        <!-- SPEC-015 收費日期：非月費＝明確日期成對；月費＝每月幾號（1-28）。
+             全空則沿用舊制（產生日＋14 天）。 -->
+        <template v-if="form.fee_type === 'monthly'">
+          <el-form-item label="每月開帳日" data-test="monthly-billing-day">
+            <el-input-number v-model="form.monthly_billing_day" :min="1" :max="28" :step="1" :precision="0" />
+            <span class="hint">號當天自動產生當月帳單（不填視為每月 1 號）</span>
+          </el-form-item>
+          <el-form-item label="每月逾期日" data-test="monthly-due-day">
+            <el-input-number v-model="form.monthly_due_day" :min="1" :max="28" :step="1" :precision="0" />
+            <span class="hint">號起未繳標「逾期」（不填沿用舊制：月初＋14 天）</span>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="收費開始日" data-test="billing-start-date">
+            <el-date-picker
+              v-model="form.billing_start_date"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="選擇日期"
+            />
+          </el-form-item>
+          <el-form-item label="逾期日" data-test="overdue-date">
+            <el-date-picker
+              v-model="form.overdue_date"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="選擇日期"
+            />
+          </el-form-item>
+          <div class="hint" data-test="date-pair-hint">
+            兩欄需成對填寫（逾期日不得早於收費開始日）；都不填則沿用舊制（產生日＋14 天到期）。
+            逾期日只標註「逾期」，不擋繳費、不加滯納金。
+          </div>
+          <div v-if="datePairError" class="error-hint" data-test="date-pair-error">
+            {{ datePairError }}
+          </div>
+        </template>
       </FormSection>
 
       <!-- 月費組成（僅月費，退費依此計算） -->
@@ -89,6 +122,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { createFeeTemplate, updateFeeTemplate } from '@/api/fees'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 import FormSection from '@/components/common/FormSection.vue'
 import { formatCurrency } from '@/utils/currency'
 import { FEE_TYPES } from '@/components/fees/feeTypes'
@@ -108,6 +142,10 @@ interface FeeTemplateRow {
   name: string
   amount: number
   due_date_offset_days?: number
+  billing_start_date?: string | null
+  overdue_date?: string | null
+  monthly_billing_day?: number | null
+  monthly_due_day?: number | null
   breakdown?: { tuition?: number; meal?: number; transport?: number }
 }
 
@@ -121,9 +159,23 @@ const props = withDefaults(defineProps<{
   modelValue: boolean
   template?: FeeTemplateRow | null
   grades?: Grade[]
+  /** 新增模式的預設學年（由 Drawer 傳入目前選定期別）；編輯模式以 template 為準 */
+  defaultSchoolYear?: number
+  /** 新增模式的預設學期；編輯模式以 template 為準 */
+  defaultSemester?: number
 }>(), {
   template: null,
   grades: () => [],
+  defaultSchoolYear: undefined,
+  defaultSemester: undefined,
+})
+
+// 新增模式預設期別：Drawer 傳入的目前選定期別優先；未傳時退回當前學年期
+// （修正舊行為：無論現在是哪個學期，新增一律固定回 114-1）
+const _fallbackTerm = getCurrentAcademicTerm()
+const defaultTerm = () => ({
+  school_year: props.defaultSchoolYear ?? _fallbackTerm.school_year,
+  semester: props.defaultSemester ?? _fallbackTerm.semester,
 })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -141,17 +193,22 @@ interface FormState {
   fee_type: string
   name: string
   amount: number
-  due_date_offset_days: number
+  billing_start_date: string | null
+  overdue_date: string | null
+  monthly_billing_day: number | null
+  monthly_due_day: number | null
 }
 
 const form = reactive<FormState>({
   grade_id: null,
-  school_year: 114,
-  semester: 1,
+  ...defaultTerm(),
   fee_type: 'registration',
   name: '',
   amount: 0,
-  due_date_offset_days: 14,
+  billing_start_date: null,
+  overdue_date: null,
+  monthly_billing_day: null,
+  monthly_due_day: null,
 })
 
 const breakdown = reactive({ tuition: 0, meal: 0, transport: 0 })
@@ -159,7 +216,20 @@ const breakdown = reactive({ tuition: 0, meal: 0, transport: 0 })
 const breakdownSum = computed(
   () => (breakdown.tuition || 0) + (breakdown.meal || 0) + (breakdown.transport || 0),
 )
+// SPEC-015 非月費日期配對檢查（後端 validate_template_billing_dates 同口徑）
+const datePairError = computed(() => {
+  if (form.fee_type === 'monthly') return ''
+  const hasStart = !!form.billing_start_date
+  const hasOverdue = !!form.overdue_date
+  if (hasStart !== hasOverdue) return '收費開始日與逾期日需成對填寫'
+  if (hasStart && hasOverdue && form.overdue_date! < form.billing_start_date!) {
+    return '逾期日不得早於收費開始日'
+  }
+  return ''
+})
+
 const canSave = computed(() => {
+  if (datePairError.value) return false
   if (form.fee_type === 'monthly') {
     return breakdownSum.value === form.amount && form.amount > 0
   }
@@ -201,7 +271,10 @@ watch(
         fee_type: t.fee_type,
         name: t.name,
         amount: t.amount,
-        due_date_offset_days: t.due_date_offset_days ?? 14,
+        billing_start_date: t.billing_start_date ?? null,
+        overdue_date: t.overdue_date ?? null,
+        monthly_billing_day: t.monthly_billing_day ?? null,
+        monthly_due_day: t.monthly_due_day ?? null,
       })
       if (t.breakdown) {
         breakdown.tuition = t.breakdown.tuition || 0
@@ -215,12 +288,14 @@ watch(
     } else if (visible) {
       Object.assign(form, {
         grade_id: null,
-        school_year: 114,
-        semester: 1,
+        ...defaultTerm(),
         fee_type: 'registration',
         name: '',
         amount: 0,
-        due_date_offset_days: 14,
+        billing_start_date: null,
+        overdue_date: null,
+        monthly_billing_day: null,
+        monthly_due_day: null,
       })
       breakdown.tuition = 0
       breakdown.meal = 0
@@ -239,18 +314,28 @@ async function onSave() {
   saving.value = true
   try {
     const payload: typeof form & { breakdown?: { tuition: number; meal: number; transport: number } } = { ...form }
+    // SPEC-015：依費用類型只送對應的日期欄組（切換類型後的殘值不得外洩，
+    // 否則後端 validate_template_billing_dates 會 422）
     if (form.fee_type === 'monthly') {
       payload.breakdown = { ...breakdown }
+      payload.billing_start_date = null
+      payload.overdue_date = null
+    } else {
+      payload.monthly_billing_day = null
+      payload.monthly_due_day = null
     }
     if (isEdit.value) {
       // 編輯不可變更 grade_id / school_year / semester / fee_type（後端 unique key）
       // 故只送 mutable 欄位
       const { grade_id: _gi, school_year: _sy, semester: _sm, fee_type: _ft, ...editable } = payload
       await updateFeeTemplate((props.template as FeeTemplateRow).id, editable)
+      ElMessage.success('已更新')
     } else {
-      await createFeeTemplate(payload)
+      // SPEC-015：建立即同步產單，回傳含 generation 摘要
+      const res = (await createFeeTemplate(payload)) as { generation?: { created?: number } | null }
+      const created = res?.generation?.created ?? 0
+      ElMessage.success(created > 0 ? `已建立，並自動產生 ${created} 筆費用單` : '已建立')
     }
-    ElMessage.success(isEdit.value ? '已更新' : '已建立')
     emit('saved')
   } catch (e: unknown) {
     ElMessage.error(apiError(e, '儲存失敗'))
@@ -258,20 +343,25 @@ async function onSave() {
     saving.value = false
   }
 }
+
+// 供測試檢視內部狀態（比照 RefundSuggestModal 慣例）
+defineExpose({ form })
 </script>
 
 <style scoped>
+/* 必要資訊用 --text-secondary（tertiary 對小字對比不足）；--danger/--bg-subtle 不存在，
+   有效 token 見 DESIGN.md（--color-danger 系列） */
 .hint {
-  color: var(--text-tertiary, #888);
-  margin-left: 8px;
-  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: var(--space-2);
+  font-size: var(--text-xs);
 }
 .error-hint {
-  color: var(--danger, #d33);
-  margin-left: 12px;
-  font-size: 12px;
+  color: var(--color-danger-darker);
+  margin-left: var(--space-3);
+  font-size: var(--text-xs);
 }
-.required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
+.required-legend { font-size: var(--text-xs); color: var(--el-text-color-secondary); margin: 0 0 var(--space-4); }
 .required-legend .req { color: var(--el-color-danger); }
-.mb-12 { margin-bottom: 12px; }
+.mb-12 { margin-bottom: var(--space-3); }
 </style>

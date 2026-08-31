@@ -43,6 +43,6 @@ defineProps<{
 .row-top { display: flex; gap: 6px; align-items: baseline; margin-bottom: 2px; }
 .title { font-weight: 600; font-size: 14px; }
 .badge { flex-shrink: 0; align-self: center; }
-.date { margin-left: auto; font-size: 12px; color: var(--text-tertiary); flex-shrink: 0; }
-.summary { font-size: 13px; color: var(--neutral-600); line-height: 1.4; }
+.date { margin-left: auto; font-size: 12px; color: var(--pt-text-faint, #6b7280); flex-shrink: 0; }
+.summary { font-size: 13px; color: var(--pt-text-muted, #64748b); line-height: 1.4; }
 </style>

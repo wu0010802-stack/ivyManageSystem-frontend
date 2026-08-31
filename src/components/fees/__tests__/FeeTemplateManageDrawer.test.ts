@@ -96,4 +96,20 @@ describe('FeeTemplateManageDrawer', () => {
     // 唯一觸發來源是 stub 模擬 el-drawer 真實行為送出的 @open
     expect(getFeeTemplates).toHaveBeenCalledWith({ school_year: 115, semester: 1 })
   })
+
+  it('把目前期別傳給 FeeTemplateDialog（新增模式不再固定 114-1）', async () => {
+    const wrapper = mountDrawer()
+    await flushPromises(); await nextTick()
+    const dialog = wrapper.findComponent({ name: 'FeeTemplateDialog' })
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.props('defaultSchoolYear')).toBe(115)
+    expect(dialog.props('defaultSemester')).toBe(1)
+  })
+
+  it('drawer 尺寸為響應式（窄幅不固定 720px 造成截斷）', async () => {
+    const wrapper = mountDrawer()
+    await flushPromises(); await nextTick()
+    // size 以 CSS min() 收斂：桌面 720px、窄幅隨 viewport
+    expect(wrapper.html()).toContain('min(720px')
+  })
 })

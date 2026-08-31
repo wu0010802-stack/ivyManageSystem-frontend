@@ -147,6 +147,12 @@
           <span v-else>—</span>
         </template>
       </el-table-column>
+      <el-table-column label="娃娃車" align="center" width="80">
+        <template #default="{ row }">
+          <el-tag v-if="row.rides_bus" type="info" size="small">要搭</el-tag>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
@@ -167,7 +173,9 @@
             type="success"
             @click="$emit('convert', row)"
           >轉為學生</el-button>
-          <el-button v-if="canWrite" size="small" type="danger" @click="$emit('delete', row.id)">刪除</el-button>
+          <!-- plain 而非實心：實心 danger 是這一列裡唯一有填色的按鈕，視覺重量高過「編輯」
+               與「轉為學生」，等於每列都在把眼睛引向不可逆的動作 -->
+          <el-button v-if="canWrite" size="small" type="danger" plain @click="$emit('delete', row.id)">刪除</el-button>
         </template>
       </el-table-column>
     </el-table>

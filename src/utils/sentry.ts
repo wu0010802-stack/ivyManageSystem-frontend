@@ -21,6 +21,8 @@ import type { ErrorEvent as SentryErrorEvent, Breadcrumb } from '@sentry/vue'
 // PII 欄位 denylist（與後端 utils/sentry_init.py 保持一致）
 const PII_KEY_SUBSTRINGS = [
   'salary', 'insured', 'dependent', 'bonus_amount', 'unused_leave_payout', 'base_transfer_amount',
+  // 月總覽（2026-08-18）：雇主負擔／完整人事成本為薪資衍生 PII（與後端同步）
+  'employer_burden', 'employer_cost',
   'bank_account', 'bank_code', 'card_no', 'credit_card',
   'id_number', 'passport', 'phone', 'mobile', 'email',
   'line_user_id', 'liff', 'address',
@@ -40,9 +42,28 @@ const PII_KEY_SUBSTRINGS = [
   // 臨時接送授權（2026-08-11）：接送人姓名快照/名單欄位（與 BE 同步；
   // person_phone 已被上方 phone substring 命中）
   'person_name',
+  // 臨時接送取件碼（T-020/T-024，2026-08-23）：授權列表 API 從「建立當下一次性回應」
+  // 改為 active 授權每次列表都持續回傳解密明碼，Sentry 事件暴露面顯著增加（與 BE
+  // utils/sentry_init.py _PII_KEY_SUBSTRINGS 同步）。
+  'pickup_code',
   // 入學文件電子簽署（esign01，2026-08-11）：signature_data/signature_key 為簽名圖
   // base64/storage key，content_md 為快照含學生/家長姓名的自由文字（與 BE 同步）
   'signature_data', 'signature_key', 'content_md',
+  // 資安稽核（2026-08-10，與 BE _PII_KEY_SUBSTRINGS 同步）：
+  // 勞保費欄位（SalaryRecord.labor_insurance_employee / _employer）。同構的
+  // health_insurance_* 因含 'health' 已被遮，勞保側漏網。
+  // ⚠ 刻意用 labor_insurance 而非裸字 insurance：後者會誤傷 insurance_brackets /
+  // insurance_rates / insurance_salary_level 等純制度設定欄位（非 PII，prod debug 需要）。
+  'labor_insurance',
+  // 學生政府申報敏感類別個資（Student.nationality / is_disadvantaged /
+  // low_income_status / indigenous_status）；對應班級統計聚合欄位走 exempt，見下方。
+  'nationality', 'indigenous', 'disadvantaged', 'low_income',
+  // per-tenant 醫療欄位加密金鑰材料（Tenant.medical_dek_wrapped / medical_dek_lookup）。
+  // 用 medical_dek 而非過短的 dek，避免誤傷無關欄位。
+  'medical_dek',
+  // 學費對帳（feerecon01，2026-08-25，SPEC-014）：銷帳編號為金融識別資訊；
+  // 銀行備註/付款人備註含姓名片段；退款領款人姓名為 PII（與 BE 同步）
+  'collection_number', 'collection_suffix', 'code_suffix', 'payer_note', 'recipient_name', 'memo',
 ]
 
 // 精確比對 denylist（#11 資安稽核，2026-07-30；與後端 utils/sentry_init._PII_KEY_EXACT 對齊）：
@@ -69,6 +90,13 @@ const PII_KEY_EXEMPT_SUBSTRINGS = [
   'growth_funnel', 'growth_rate', 'growth_count',
   'measurement_unit', 'measurement_type',
   'default_weight', // 考核加減分項目權重（AppraisalScoreItemCatalog）；避免 weight substring 誤遮
+  // 2026-08-10：教育部班級統計聚合（BE models/gov_moe.py GovMoeClassStat）。這些是
+  // 「該班有幾位」的人數/百分比，非個人身分屬性，遮掉會讓政府報表 debug 失去 context。
+  // 個人身分屬性走 is_disadvantaged / indigenous_status（不含 _count/_pct 後綴，仍被遮）。
+  'disadvantaged_count', 'disadvantaged_pct',
+  'indigenous_count', 'indigenous_pct',
+  // 同表 disability_count：既有 disability denylist 的同構誤遮（本次順帶修正）。
+  'disability_count',
 ]
 
 // URL path「/數字」→「/:id」，e.g.

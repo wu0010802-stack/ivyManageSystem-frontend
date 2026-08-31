@@ -41,10 +41,14 @@ export function lastMonthWithData(trend: FinanceTrendRow[]): number | null {
 /**
  * 百分比變化。分母為 0（含「無資料」情況）時回傳 null，UI 應顯示替代文案
  * （如「無去年資料」），而非誤導性的 -100% / Infinity。
+ *
+ * 分母取絕對值（2026-08-25 稽核 C1）：基期為負（如淨現金虧損月）時，正負號
+ * 必須跟隨 curr - prev 的方向（虧損擴大=負/down、虧損收斂=正/up）；帶號分母
+ * 會把「更負」算成正百分比，UI 因而顯示綠色「改善」，與事實相反。
  */
 export function pctChange(curr: number, prev: number): number | null {
   if (!prev) return null
-  return ((curr - prev) / prev) * 100
+  return ((curr - prev) / Math.abs(prev)) * 100
 }
 
 export interface TrendSums { revenue: number; refund: number; expense: number; net: number }

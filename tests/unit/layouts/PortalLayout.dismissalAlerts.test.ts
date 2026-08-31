@@ -42,9 +42,6 @@ vi.mock('@/api/portal', () => ({
   getSwapPendingCount: vi.fn(() => Promise.resolve({ data: { pending_count: 0 } })),
 }))
 
-vi.mock('@/api/portalMessages', () => ({
-  getUnreadCount: vi.fn(() => Promise.resolve({ data: { unread_count: 0 } })),
-}))
 
 vi.mock('@/api/portalClassHub', () => ({
   getTodayHub: vi.fn(() => Promise.resolve({ counts: {} })),
@@ -109,7 +106,7 @@ describe('PortalLayout — 接送提醒 composable 接線', () => {
     mockIsMobile.value = false
     pendingCount.value = 0
     // 壓制 onMounted 導航更新提示
-    localStorage.setItem('portal_layout_v', '1')
+    localStorage.setItem('portal_layout_v', '2')
     // jsdom matchMedia stub
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false,

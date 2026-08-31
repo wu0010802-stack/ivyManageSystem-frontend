@@ -14,7 +14,6 @@ import {
   getMyClassAttendance,
   batchSaveClassAttendance,
   getMyClassAttendanceMonthly,
-  exportMyClassAttendance,
   getAnomalies,
   confirmAnomaly,
   getSalaryPreview,
@@ -150,16 +149,6 @@ describe('portal api', () => {
     const params = { year: 2026, month: 5 }
     await getMyClassAttendanceMonthly(params)
     expect(api.get).toHaveBeenCalledWith('/portal/my-class-attendance/monthly', { params })
-  })
-
-  it('exportMyClassAttendance hits export endpoint with responseType blob', async () => {
-    api.get.mockResolvedValue({ data: new Blob() })
-    const params = { year: 2026, month: 5 }
-    await exportMyClassAttendance(params)
-    expect(api.get).toHaveBeenCalledWith('/portal/my-class-attendance/export', {
-      params,
-      responseType: 'blob',
-    })
   })
 
   // ----- 異常 -----

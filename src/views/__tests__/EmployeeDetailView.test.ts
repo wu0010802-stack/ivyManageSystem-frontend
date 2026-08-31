@@ -5,7 +5,7 @@ import ElementPlus from 'element-plus'
 
 // ── Mocks（比照 EmployeeHubView.spec.ts / EmployeeListView.cardview.spec.ts 既有慣例）──
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn() }),
 }))
 vi.mock('@/utils/auth', () => ({ hasPermission: vi.fn(() => true) }))
 vi.mock('@/stores/employee', () => ({ useEmployeeStore: () => ({ fetchEmployees: vi.fn() }) }))
@@ -60,6 +60,7 @@ const SECTION_STUBS = {
   SalarySection: true,
   CredentialsSection: true,
   AttendanceSection: true,
+  OvertimeSection: true,
   ClassHistorySection: true,
   OffboardingModal: true,
   EmployeeFormDialog: true,
@@ -86,16 +87,16 @@ function localISOOffset(days: number): string {
 describe('EmployeeDetailView 第一屏重排', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('右欄 section 順序為 職務→個資→薪資→證照合約→出勤', () => {
+  it('右欄 section 順序為 職務→個資→薪資→證照合約→出勤→加班', () => {
     const w = mountDetail()
     const ids = w.findAll('.detail-section').map((s) => s.attributes('id'))
-    expect(ids).toEqual(['emp-sec-job', 'emp-sec-basic', 'emp-sec-salary', 'emp-sec-credentials', 'emp-sec-attendance'])
+    expect(ids).toEqual(['emp-sec-job', 'emp-sec-basic', 'emp-sec-salary', 'emp-sec-credentials', 'emp-sec-attendance', 'emp-sec-overtime'])
   })
 
   it('錨點導覽順序與文字同步（含「基本資料」改名「個資・聯絡」）', () => {
     const w = mountDetail()
     const labels = w.findAll('.anchor-link').map((a) => a.text())
-    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄'])
+    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄', '加班紀錄'])
   })
 
   it('個資 section 標題改為「個資・聯絡」', () => {
@@ -298,7 +299,7 @@ describe('EmployeeDetailView 錨點導覽升級', () => {
   it('無到期證照 → 錨點無徽章（既有文字斷言不變）', () => {
     const w = mountDetail()
     const labels = w.findAll('.anchor-link').map((a) => a.text())
-    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄'])
+    expect(labels).toEqual(['職務・班級', '個資・聯絡', '薪資・投保', '學歷・證照・合約', '出勤紀錄', '加班紀錄'])
   })
 
   it('點擊錨點 → 該錨點取得 is-active（預設第一個 active）', async () => {
@@ -325,5 +326,16 @@ describe('EmployeeDetailView 英文名顯示', () => {
       employee: { id: 1, name: '王小明', english_name: null, is_active: true, employee_type: 'regular', base_salary: 30000 },
     })
     expect(w.find('.emp-english-name').exists()).toBe(false)
+  })
+})
+
+describe('EmployeeDetailView 返回入口收斂', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('返回入口已上移至頂列麵包屑，頁內不再重複放返回鍵', () => {
+    // 全站唯一的「回上一層」機制是 AdminHeader 的麵包屑父層。
+    // 頁內再放一顆等於同一動作兩個入口、位置還各不相同（本次收斂的原因）。
+    const w = mountDetail()
+    expect(w.text()).not.toContain('返回員工列表')
   })
 })

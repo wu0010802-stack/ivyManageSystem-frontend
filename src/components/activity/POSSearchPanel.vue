@@ -28,31 +28,25 @@
       @keyup.enter="$emit('search')"
     />
 
-    <div class="pos-panel__filters">
-      <el-select
-        :model-value="classroomFilter"
-        placeholder="全部班級"
-        clearable
-        size="small"
-        class="pos-panel__classroom"
-        @update:model-value="$emit('update:classroomFilter', $event ?? '')"
+    <!-- 班級快選（①快速找到繳費的學生，2026-08-16）：現場收費時家長多半自報班級，
+         點一下即列出全班，比打字搜尋更快命中；改自原本的下拉選單。 -->
+    <div class="pos-search__class-chips" role="group" aria-label="班級快選">
+      <el-check-tag
+        class="pos-search__class-chip"
+        :checked="!classroomFilter"
+        @change="$emit('update:classroomFilter', '')"
       >
-        <el-option label="全部班級" value="" />
-        <el-option
-          v-for="c in classroomOptions"
-          :key="c"
-          :label="c"
-          :value="c"
-        />
-      </el-select>
-      <el-switch
-        v-if="!isRefundMode"
-        :model-value="overdueOnly"
-        size="small"
-        active-text="只看逾期"
-        inline-prompt
-        @update:model-value="$emit('update:overdueOnly', $event)"
-      />
+        全部
+      </el-check-tag>
+      <el-check-tag
+        v-for="c in classroomOptions"
+        :key="c"
+        class="pos-search__class-chip"
+        :checked="classroomFilter === c"
+        @change="$emit('update:classroomFilter', classroomFilter === c ? '' : c)"
+      >
+        {{ c }}
+      </el-check-tag>
     </div>
 
     <el-alert
@@ -73,15 +67,20 @@
 
     <el-scrollbar class="pos-panel__results" v-loading="searching">
       <template v-if="mode === 'by-student'">
-        <div v-if="typedGroups.length === 0 && searchQuery && !searching" class="pos-panel__empty">
-          無結果
+        <!-- 空狀態不能綁「有關鍵字」：搜尋框是過濾器不是啟動條件（一進頁就預載全部），
+             且父層載入失敗時會 fail-closed 清空清單。兩種情況關鍵字都是空的，
+             綁著就變成整片空白，看起來像「全部繳清」。 -->
+        <div v-if="typedGroups.length === 0 && !searching" class="pos-panel__empty">
+          {{ emptyStateText }}
         </div>
         <div
           v-for="g in typedGroups"
           :key="g.student_key"
           class="pos-group"
         >
-          <div class="pos-group__head">
+          <!-- 只有一筆報名時整組攤平成單列：群組表頭在那種情況下只是把姓名與同一個
+               金額再印一次（多數學生只報一門課）。多筆才需要表頭承載合計。 -->
+          <div v-if="!isFlatGroup(g)" class="pos-group__head">
             <div>
               <div class="pos-group__name">{{ g.student_name }}</div>
               <div class="pos-group__sub">
@@ -97,15 +96,27 @@
             v-for="reg in g.registrations"
             :key="reg.id"
             class="pos-reg"
-            :class="{ 'pos-reg--selected': isSelected(reg.id) }"
-            @click="emit('toggle', reg, g.student_name || '')"
+            :class="{
+              'pos-reg--selected': isSelected(reg.id),
+              'pos-reg--flat': isFlatGroup(g),
+              'pos-reg--blocked': isNotCollectible(reg),
+            }"
+            @click="onRegClick(reg, g.student_name || '')"
           >
             <el-checkbox
               :model-value="isSelected(reg.id)"
+              :disabled="isNotCollectible(reg)"
               @click.stop
-              @change="emit('toggle', reg, g.student_name || '')"
+              @change="onRegClick(reg, g.student_name || '')"
             />
             <div class="pos-reg__info">
+              <div v-if="isFlatGroup(g)" class="pos-reg__student">
+                <span class="pos-reg__student-name">{{ g.student_name }}</span>
+                <span class="pos-reg__student-class">
+                  {{ g.class_name || '—' }}
+                  <template v-if="g.birthday">· 生日 {{ g.birthday }}</template>
+                </span>
+              </div>
               <div class="pos-reg__lines">
                 <span
                   v-for="(c, i) in reg.courses"
@@ -122,11 +133,38 @@
                   {{ s.name }}
                 </span>
               </div>
-              <div class="pos-reg__meta">
+              <!-- 已繳 0 時這行只是把欠款金額換句話再說一次；部分繳費才有資訊量，
+                   順帶讓這種人在滿是「未繳」的清單裡自然凸顯。 -->
+              <div v-if="hasPartialPayment(reg)" class="pos-reg__meta">
                 應繳 {{ formatTWD(reg.total_amount) }} · 已繳 {{ formatTWD(reg.paid_amount) }}
+              </div>
+              <!-- 報名日期（2026-08-17）：中性事實，語意見 registeredOnLabel -->
+              <div v-if="registeredOnLabel(reg)" class="pos-reg__date">
+                {{ registeredOnLabel(reg) }}
+              </div>
+              <!-- 待審核防漏（③學期對帳追加，2026-08-16）：課程 pending_review 的
+                   報名 total_amount 算不到，過去 owed=0 會在收款清單隱形；現場
+                   收銀員仍要看得到人與待確認金額，提醒需先完成審核才能正式收款。
+                   「待確認 NT$X」刻意保留（那是防漏收的資訊），但收款模式下必須
+                   同時講明現在收不了，否則會被讀成「請跟家長收這個數字」（STATE-04）。 -->
+              <el-tag
+                v-if="reg.pending_review"
+                type="danger"
+                size="small"
+                effect="dark"
+                class="pos-reg__pending-tag"
+              >
+                待審核 · 待確認 {{ formatTWD(reg.pending_amount || 0) }}<template
+                  v-if="isNotCollectible(reg)"
+                >（尚不可收款）</template>
+              </el-tag>
+              <!-- 只 disable 不說原因等於把櫃台丟在原地：就地寫出下一步該去哪。 -->
+              <div v-if="isNotCollectible(reg)" class="pos-reg__blocked-hint">
+                {{ NOT_COLLECTIBLE_HINT }}
               </div>
             </div>
             <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
+              <span v-if="isFlatGroup(g)" class="pos-reg__owed-label">{{ groupTotalLabel }}</span>
               {{ formatTWD(isRefundMode ? reg.paid_amount : reg.owed) }}
             </div>
           </div>
@@ -141,37 +179,64 @@
           <el-button size="small" plain @click="gotoToday">今日</el-button>
         </div>
 
-        <div class="pos-cal__weekdays">
-          <div v-for="d in weekdayLabels" :key="d">{{ d }}</div>
-        </div>
+        <!-- 月曆走完整 grid 語意（grid > row > gridcell）＋ roving tabindex，
+             鍵盤與讀屏使用者才選得到日期；純 div + @click 對他們是死路。 -->
+        <div ref="gridRef" class="pos-cal__grid" role="grid" aria-label="報名日期月曆">
+          <div class="pos-cal__weekdays" role="row">
+            <div v-for="d in weekdayLabels" :key="d" role="columnheader">{{ d }}</div>
+          </div>
 
-        <div class="pos-cal__grid">
           <div
-            v-for="cell in calendarCells"
-            :key="cell.dateKey"
-            class="pos-cal__cell"
-            :class="{
-              'pos-cal__cell--out': !cell.inMonth,
-              'pos-cal__cell--active': cell.dateKey === selectedDate,
-              'pos-cal__cell--today': cell.dateKey === todayKey,
-              'pos-cal__cell--has': cell.count > 0,
-            }"
-            @click="selectDate(cell.dateKey)"
+            v-for="(row, ri) in calendarRows"
+            :key="`row-${ri}`"
+            class="pos-cal__row"
+            role="row"
           >
-            <div class="pos-cal__day">{{ cell.day }}</div>
             <div
-              v-if="cell.count > 0"
-              class="pos-cal__amt"
-              :class="{ 'pos-cal__amt--refund': isRefundMode }"
+              v-for="cell in row"
+              :key="cell.dateKey"
+              class="pos-cal__cell"
+              role="gridcell"
+              :data-cell-index="cell.index"
+              :tabindex="cell.index === activeFocusIndex ? 0 : -1"
+              :aria-selected="cell.dateKey === selectedDate ? 'true' : 'false'"
+              :aria-label="cellAriaLabel(cell)"
+              :class="{
+                'pos-cal__cell--out': !cell.inMonth,
+                'pos-cal__cell--active': cell.dateKey === selectedDate,
+                'pos-cal__cell--today': cell.dateKey === todayKey,
+                'pos-cal__cell--has': cell.count > 0,
+              }"
+              @click="activateCell(cell)"
+              @focus="focusedCellIndex = cell.index"
+              @keydown.enter.prevent="activateCell(cell)"
+              @keydown.space.prevent="activateCell(cell)"
+              @keydown.left.prevent="moveFocus(cell.index, -1)"
+              @keydown.right.prevent="moveFocus(cell.index, 1)"
+              @keydown.up.prevent="moveFocus(cell.index, -7)"
+              @keydown.down.prevent="moveFocus(cell.index, 7)"
+              @keydown.home.prevent="moveFocus(cell.index, -(cell.index % 7))"
+              @keydown.end.prevent="moveFocus(cell.index, 6 - (cell.index % 7))"
             >
-              {{ compactTWD(cell.amount) }}
+              <div class="pos-cal__day">{{ cell.day }}</div>
+              <div
+                v-if="cell.count > 0"
+                class="pos-cal__amt"
+                :class="{ 'pos-cal__amt--refund': isRefundMode }"
+              >
+                {{ compactTWD(cell.amount) }}
+              </div>
+              <div v-if="cell.count > 0" class="pos-cal__cnt">{{ cell.count }} 筆</div>
             </div>
-            <div v-if="cell.count > 0" class="pos-cal__cnt">{{ cell.count }} 筆</div>
           </div>
         </div>
 
         <div class="pos-cal__list">
-          <div v-if="!selectedDate" class="pos-panel__empty">點日期查看當日報名</div>
+          <!-- loadError 要排在「點日期查看當日報名」之前：載入失敗時整份月曆都是空的，
+               照原樣提示點日期，櫃台會點遍每一天都看到「當日無未結清報名」，
+               與依學生模式同款誤導（P3-06）。 -->
+          <div v-if="loadError" class="pos-panel__empty">{{ emptyStateText }}</div>
+          <div v-else-if="!selectedDate" class="pos-panel__empty">點日期查看當日報名</div>
           <template v-else>
             <div class="pos-cal__list-head">
               {{ selectedDate }} · {{ selectedDateRows.length }} 筆報名
@@ -186,11 +251,15 @@
               v-for="row in selectedDateRows"
               :key="row.id"
               class="pos-reg pos-reg--solo"
-              :class="{ 'pos-reg--selected': isSelected(row.id) }"
+              :class="{
+                'pos-reg--selected': isSelected(row.id),
+                'pos-reg--blocked': isNotCollectible(row),
+              }"
               @click="handleSingleToggle(row)"
             >
               <el-checkbox
                 :model-value="isSelected(row.id)"
+                :disabled="isNotCollectible(row)"
                 @click.stop
                 @change="handleSingleToggle(row)"
               />
@@ -201,6 +270,9 @@
                 </div>
                 <div class="pos-reg__meta">
                   應繳 {{ formatTWD(row.total_amount) }} · 已繳 {{ formatTWD(row.paid_amount) }}
+                </div>
+                <div v-if="isNotCollectible(row)" class="pos-reg__blocked-hint">
+                  {{ NOT_COLLECTIBLE_HINT }}
                 </div>
               </div>
               <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
@@ -215,10 +287,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 
 import { POS_MODES, computeOwed, formatTWD, normalizeByDateRow } from '@/constants/pos'
+import { todayTaipeiISO } from '@/utils/format'
 
 const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -262,6 +335,8 @@ interface RegistrationEntry {
   supplies?: { name: string }[]
   course_names?: string
   created_at?: string
+  pending_review?: boolean
+  pending_amount?: number
   [key: string]: unknown
 }
 
@@ -279,8 +354,9 @@ const props = withDefaults(defineProps<{
   mode: string
   searchQuery: string
   classroomFilter?: string
-  overdueOnly?: boolean
   searching?: boolean
+  /** 父層 runSearch 失敗（P3-06）：空清單要說「讀取失敗」而非「目前沒有未結清」 */
+  loadError?: boolean
   // Using Record<string, unknown>[] for compatibility with composable return types
   groups?: Record<string, unknown>[]
   registrations?: Record<string, unknown>[]
@@ -291,8 +367,8 @@ const props = withDefaults(defineProps<{
   truncatedTotal?: number
 }>(), {
   classroomFilter: '',
-  overdueOnly: false,
   searching: false,
+  loadError: false,
   groups: () => [],
   registrations: () => [],
   selectedIds: () => [],
@@ -319,11 +395,82 @@ const truncationText = computed(() => {
 // 都對齊上方「待退／待收合計」。語意正規化理應在父層 composable 做，此處先於元件內收斂。
 const groupTotalLabel = computed(() => (props.isRefundMode ? '可退' : '欠'))
 
+// 空狀態文案：關鍵字只是過濾器，沒關鍵字也可能是空清單（母體本來就空，或父層載入
+// 失敗 fail-closed 清空）。空白畫面會被讀成「全部繳清」，所以任何時候都要說話。
+// loadError 分支必須排在最前面：載入失敗與「真的沒資料」在畫面上長得一模一樣，
+// 講成「目前沒有未結清的報名」等於叫櫃台放人走，漏收款（P3-06）。
+const emptyStateText = computed(() => {
+  if (props.loadError) return '讀取清單失敗，請按重新整理重試'
+  if (props.searchQuery) return `找不到符合「${props.searchQuery}」的學生`
+  return props.isRefundMode ? '目前沒有可退費的報名' : '目前沒有未結清的報名'
+})
+
+/**
+ * 只有一筆報名 → 攤平成單列（姓名與金額同行、品項在下），不再包群組表頭。
+ * 表頭在這種情況下只是把姓名與同一個金額再印一次，而多數學生只報一門課。
+ * 多筆時表頭仍要留著承載合計，各列才不必逐列重複姓名。
+ */
+function isFlatGroup(g: GroupEntry): boolean {
+  return (g.registrations?.length ?? 0) === 1
+}
+
+/**
+ * 是否為部分繳費（已繳 > 0 但尚未結清）。
+ * 只有這種列才印「應繳 X · 已繳 Y」——已繳 0 時那行等於把欠款金額換句話再說一次。
+ */
+function hasPartialPayment(r: RegistrationEntry): boolean {
+  const paid = Number(r.paid_amount || 0)
+  const total = Number(r.total_amount || 0)
+  return paid > 0 && paid < total
+}
+
+/**
+ * 報名日期標籤（台北時區，例：`8/01 報名`）。
+ * 刻意只給日期、不算「報名幾天」也不判逾期——園方收費期晚於報名日，系統無從
+ * 認定哪筆該催繳（2026-08-17 業主確認，舊 overdue_only 過濾即因此整條移除）。
+ * created_at 缺值或不可解析時回空字串，由 v-if 收掉整行（不得印 Invalid Date）。
+ */
+/**
+ * 收款模式下「這一列根本收不了」的判定（STATE-04）。
+ *
+ * 後端 `POST /pos/checkout` 對繳費是**結構性拒收**：`total_amount <= 0` 直接
+ * 400「無應繳金額，無法收款」（api/activity/pos.py 空報名守衛）。而 outstanding
+ * 清單刻意放行 `pending_amount > 0` 的待審核報名讓收銀員看得見人（防漏收），
+ * 於是清單裡必然存在一批 total=0、後端保證拒收的列。
+ *
+ * 前端這裡的條件必須逐字對齊後端那一條，兩端才會對「能不能收款」給同一個答案：
+ * - 只看 `total_amount <= 0`，不看 `pending_review`——待審核但已有計費金額的
+ *   混合報名（部分課程已審核）是**可以合法收款**的，誤擋等於擋掉真實現金收入。
+ * - 反之，`pending_review=false` 但課程全是 promoted_pending 的列同樣 total=0、
+ *   同樣會被後端拒收，一樣要擋。
+ * - 退費模式一律回 false：退費守衛是「金額不得超過已繳」，與 total 無關，
+ *   total=0 而已繳 > 0 的超繳報名本來就必須能退（行為不得改變）。
+ */
+function isNotCollectible(r: RegistrationEntry): boolean {
+  if (props.isRefundMode) return false
+  return (Number(r.total_amount) || 0) <= 0
+}
+
+/** 擋下時的就地指引：只變灰不說原因，櫃台會拿著現金卡在原地。 */
+const NOT_COLLECTIBLE_HINT = '待審核報名需先於「報名管理」完成審核才能收款'
+
+/** 收款模式下不可收的列：整列點擊也要擋，只 disable checkbox 擋不住列點擊。 */
+function onRegClick(reg: RegistrationEntry, studentName: string) {
+  if (isNotCollectible(reg)) return
+  emit('toggle', reg, studentName)
+}
+
+function registeredOnLabel(r: RegistrationEntry): string {
+  const key = extractDateKey(r.created_at)
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(key)
+  if (!m) return ''
+  return `${Number(m[1])}/${m[2]} 報名`
+}
+
 const emit = defineEmits<{
   'update:mode': [value: string | number | boolean]
   'update:searchQuery': [value: string | number | boolean]
   'update:classroomFilter': [value: string | number | boolean | null | undefined]
-  'update:overdueOnly': [value: boolean | string | number]
   'search': []
   'toggle': [row: Record<string, unknown>, studentName: string]
 }>()
@@ -350,19 +497,14 @@ const placeholder = computed(() => {
 
 function extractDateKey(iso: string | null | undefined) {
   if (!iso) return ''
-  // created_at 為 UTC ISO，以 Asia/Taipei 時區為準切出 YYYY-MM-DD
+  // created_at 為 UTC ISO，以 Asia/Taipei 時區為準切出 YYYY-MM-DD。
+  // 效能（2026-08-21）：原本每次呼叫都新建一個 `Intl.DateTimeFormat`，被
+  // dateMap computed 逐列呼叫成本高；改用 format.ts 既有的 module 級單例
+  // formatter（todayTaipeiISO 雖名為「今日」，實作上是任意 Date → Asia/Taipei
+  // YYYY-MM-DD，POSApprovalView.vue 已有相同用法先例）。
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10)
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Taipei',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d)
-  const y = parts.find((p) => p.type === 'year')?.value
-  const m = parts.find((p) => p.type === 'month')?.value
-  const day = parts.find((p) => p.type === 'day')?.value
-  return `${y}-${m}-${day}`
+  return todayTaipeiISO(d)
 }
 
 // 每日欠款彙總：Map<YYYY-MM-DD, { rows, amount }>
@@ -442,8 +584,57 @@ const calendarCells = computed(() => {
     })
     nd++
   }
-  return cells
+  // 帶上 index：roving tabindex 與方向鍵移動都以扁平索引為準
+  return cells.map((c, index) => ({ ...c, index }))
 })
+
+type CalendarCell = (typeof calendarCells)['value'][number]
+
+// 切成每列 7 格，讓 DOM 有 role="row" 這層——grid 直接掛 gridcell 對讀屏是壞結構。
+const calendarRows = computed((): CalendarCell[][] => {
+  const rows: CalendarCell[][] = []
+  const cells = calendarCells.value
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7))
+  return rows
+})
+
+const gridRef = ref<HTMLElement | null>(null)
+// null＝尚未用鍵盤移動過，此時焦點格取預設（已選日 → 今日 → 當月第一天）
+const focusedCellIndex = ref<number | null>(null)
+
+const defaultFocusIndex = computed(() => {
+  const cells = calendarCells.value
+  const selected = cells.findIndex((c) => c.dateKey === selectedDate.value)
+  if (selected >= 0) return selected
+  const today = cells.findIndex((c) => c.dateKey === todayKey && c.inMonth)
+  if (today >= 0) return today
+  const firstInMonth = cells.findIndex((c) => c.inMonth)
+  return firstInMonth >= 0 ? firstInMonth : 0
+})
+
+const activeFocusIndex = computed(() => focusedCellIndex.value ?? defaultFocusIndex.value)
+
+function cellAriaLabel(cell: CalendarCell) {
+  const action = props.isRefundMode ? '可退費' : '未結清'
+  if (cell.count <= 0) return `${cell.dateKey}，無${action}報名`
+  return `${cell.dateKey}，${cell.count} 筆${action}報名，合計 ${formatTWD(cell.amount)}`
+}
+
+function activateCell(cell: CalendarCell) {
+  focusedCellIndex.value = cell.index
+  selectDate(cell.dateKey)
+}
+
+function moveFocus(from: number, delta: number) {
+  const next = from + delta
+  if (next < 0 || next >= calendarCells.value.length) return
+  focusedCellIndex.value = next
+  nextTick(() => {
+    gridRef.value
+      ?.querySelector<HTMLElement>(`[data-cell-index="${next}"]`)
+      ?.focus()
+  })
+}
 
 function shiftMonth(delta: number) {
   const { year, month } = currentMonth.value
@@ -452,12 +643,15 @@ function shiftMonth(delta: number) {
   else if (newIdx > 11) currentMonth.value = { year: year + 1, month: 0 }
   else currentMonth.value = { year, month: newIdx }
   selectedDate.value = ''
+  // 換月後扁平索引整組位移，鍵盤焦點格回到預設
+  focusedCellIndex.value = null
 }
 
 function gotoToday() {
   const t = taipeiToday()
   currentMonth.value = { year: t.year, month: t.month }
   selectedDate.value = `${t.year}-${pad2(t.month + 1)}-${pad2(t.day)}`
+  focusedCellIndex.value = null
 }
 
 function selectDate(key: string) {
@@ -465,6 +659,7 @@ function selectDate(key: string) {
   const [y, m] = key.split('-').map(Number)
   if (y !== currentMonth.value.year || m - 1 !== currentMonth.value.month) {
     currentMonth.value = { year: y, month: m - 1 }
+    focusedCellIndex.value = null
   }
   selectedDate.value = selectedDate.value === key ? '' : key
 }
@@ -502,6 +697,10 @@ const totalAmount = computed(() => {
 const isSelected = (id: unknown) => props.selectedIds.includes(id as number | string)
 
 function handleSingleToggle(row: RegistrationEntry) {
+  // 收款模式下 total<=0 的列後端保證拒收（STATE-04），整列點擊一併擋下。
+  // 依日期模式的資料來源 usePOSCheckout.runSearch 目前已先濾掉 total<=0，
+  // 這裡是同一條規則的第二道防線，避免日後上游放寬時又出現「收了現金才吃 400」。
+  if (isNotCollectible(row)) return
   // 優先使用後端回傳的真實 courses / supplies（含 price），
   // 若缺失則 fallback 到 course_names 拆解（normalizeByDateRow 內部處理）。
   const normalized = normalizeByDateRow(row as Record<string, unknown>)
@@ -529,15 +728,10 @@ function handleSingleToggle(row: RegistrationEntry) {
   justify-content: center;
 }
 
-.pos-panel__filters {
+.pos-search__class-chips {
   display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.pos-panel__classroom {
-  flex: 1;
-  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .pos-panel__summary {
@@ -551,8 +745,10 @@ function handleSingleToggle(row: RegistrationEntry) {
   border-radius: 8px;
 }
 
+/* 金額／警示一律走 *-darker：*-hover 是互動態 token，a11y.css 的 html.dark 刻意
+   沒翻（站上有多處拿它當背景／邊框），深色下疊深底只有 2.5–3.6:1。 */
 .pos-panel__summary-total strong {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
   font-size: 15px;
   margin-left: 4px;
 }
@@ -581,7 +777,9 @@ function handleSingleToggle(row: RegistrationEntry) {
   justify-content: space-between;
   align-items: center;
   padding: 10px 14px;
-  background: #eef0fd;
+  /* 寫死 #eef0fd 在深色模式下是淺底配翻轉後的近白字＝隱形，而這塊正是櫃台辨識
+     收款對象的主要區塊。沿用 AttendanceMonthSticky 的既有 token 寫法。 */
+  background: var(--brand-primary-soft, #eef0fd);
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -599,13 +797,13 @@ function handleSingleToggle(row: RegistrationEntry) {
 
 .pos-group__owed {
   font-weight: 700;
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
   font-size: 15px;
 }
 
 /* 退費模式不是欠款警示，配色與單列可退金額（.pos-reg__owed--refund）一致 */
 .pos-group__owed--refund {
-  color: #0284c7;
+  color: var(--color-info-darker);
 }
 
 .pos-reg {
@@ -616,6 +814,36 @@ function handleSingleToggle(row: RegistrationEntry) {
   border-top: 1px solid var(--border-color);
   cursor: pointer;
   transition: background 0.15s;
+}
+
+/* 攤平列：姓名與金額必須落在同一行，所以改頂端對齊——置中會讓金額浮在
+   姓名與品項之間，掃描「誰欠多少」時對不上。 */
+.pos-reg--flat {
+  align-items: flex-start;
+}
+
+.pos-reg__student {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-bottom: 4px;
+}
+
+.pos-reg__student-name {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.pos-reg__student-class {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pos-reg__owed-label {
+  font-weight: 500;
+  font-size: 13px;
 }
 
 .pos-reg:first-child {
@@ -675,15 +903,47 @@ function handleSingleToggle(row: RegistrationEntry) {
   margin-top: 2px;
 }
 
+/* 報名日期：純參考資訊，比 meta 再弱一階，不與欠款金額搶視線 */
+.pos-reg__date {
+  font-size: 11px;
+  color: var(--text-placeholder, var(--text-secondary));
+  margin-top: 2px;
+}
+
+.pos-reg__pending-tag {
+  margin-top: 4px;
+}
+
+/* 收款模式下後端保證拒收的列（STATE-04）：游標與底色都要一眼看出「這列點不動」，
+   但**不可**整列調淡到讀不到——它存在的理由就是讓收銀員看得見這個人與待確認金額
+   （防漏收）。只換游標與底色，文字對比維持原樣。 */
+.pos-reg--blocked {
+  cursor: not-allowed;
+  background: var(--bg-color-soft);
+}
+
+.pos-reg--blocked:hover {
+  background: var(--bg-color-soft);
+}
+
+/* 文字色走 *-darker：a11y.css 已把該組在 html.dark 翻成亮階，
+   *-hover 是互動態 token、深色模式下當文字色只有 2.5–3.6:1（見 POSDarkContrast 守衛）。 */
+.pos-reg__blocked-hint {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-warning-darker);
+}
+
 .pos-reg__owed {
   font-weight: 600;
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
   font-size: 14px;
   white-space: nowrap;
 }
 
 .pos-reg__owed--refund {
-  color: #0284c7;
+  color: var(--color-info-darker);
 }
 
 /* ── 月曆視圖 ─────────────────────────────────────────────── */
@@ -711,13 +971,22 @@ function handleSingleToggle(row: RegistrationEntry) {
   text-align: center;
   padding: 4px 0;
   border-bottom: 1px solid var(--border-color);
+  margin-bottom: 4px;
 }
 
+/* grid 語意需要 row 這一層，所以外層改直列堆疊、每列自己開七欄 grid，
+   視覺與原本的單層七欄 grid 等價。 */
 .pos-cal__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.pos-cal__row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  padding: 8px 0;
 }
 
 .pos-cal__cell {
@@ -748,13 +1017,13 @@ function handleSingleToggle(row: RegistrationEntry) {
 }
 
 .pos-cal__cell--today .pos-cal__day {
-  color: var(--color-info-hover);
+  color: var(--color-info-darker);
   font-weight: 700;
 }
 
 .pos-cal__cell--active {
   background: var(--color-info-soft) !important;
-  border-color: var(--color-info-hover) !important;
+  border-color: var(--color-info-darker) !important;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
 
@@ -776,12 +1045,12 @@ function handleSingleToggle(row: RegistrationEntry) {
 .pos-cal__amt {
   font-size: 12px;
   font-weight: 700;
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
   margin-top: auto;
 }
 
 .pos-cal__amt--refund {
-  color: #0284c7;
+  color: var(--color-info-darker);
 }
 
 .pos-cal__cnt {

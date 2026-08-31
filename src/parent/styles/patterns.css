@@ -36,7 +36,8 @@
   margin: 0 16px;
   background: var(--pt-surface-card, #fff);
   border: 1px solid var(--pt-border-light, #ecf5f9);
-  border-radius: 18px;
+  border-radius: var(--pt-card-radius, 26px);
+  box-shadow: var(--pt-shadow-card);
   padding: 16px 18px;
 }
 .pt-card + .pt-card { margin-top: 12px; }
@@ -65,10 +66,11 @@
   letter-spacing: 0.04em;
 }
 
-/* ===== Page Hero（cream→leaf 漸層）===== */
+/* ===== Page Hero（M3 Expressive 三色漸層）===== */
 .pt-page-hero {
   padding: 18px 20px 20px;
-  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, var(--leaf-100, #dcf4e6) 100%);
+  background: var(--pt-gradient-hero);
+  border-radius: var(--pt-hero-radius, 30px);
 }
 .pt-page-hero-eyebrow {
   margin: 0;
@@ -111,7 +113,7 @@
   text-decoration: none;
   color: inherit;
   background: transparent;
-  transition: background 160ms ease;
+  transition: background var(--motion-quick, 160ms) ease;
 }
 .pt-list-row:hover { background: var(--pt-surface-mute-soft, #fefcf3); }
 .pt-list-row:active { background: var(--cream, #fffcf2); }
@@ -135,11 +137,11 @@
   background: var(--pt-surface-mute, #f5fbe6);
   color: var(--pt-text-strong);
 }
-.pt-pill-success { background: var(--leaf-100, #dcf4e6); color: var(--brand-primary, #0d9053); }
-.pt-pill-warn    { background: var(--sun-100, #fff4c9); color: var(--sun-700, #c99500); }
-.pt-pill-danger  { background: var(--coral-100, #ffe3e0); color: var(--coral-700, #b14545); }
-.pt-pill-info    { background: var(--sky-100, #dceef5); color: var(--sky-700, #2d6f8e); }
-.pt-pill-violet  { background: var(--grape-100, #ebe0f5); color: var(--grape-700, #6e3f94); }
+.pt-pill-success { background: var(--pt-accent-leaf-container); color: var(--pt-accent-leaf-on); }
+.pt-pill-warn    { background: var(--pt-accent-sun-container); color: var(--pt-accent-sun-on); }
+.pt-pill-danger  { background: var(--pt-accent-coral-container); color: var(--pt-accent-coral-on); }
+.pt-pill-info    { background: var(--pt-accent-sky-container); color: var(--pt-accent-sky-on); }
+.pt-pill-violet  { background: var(--pt-accent-grape-container); color: var(--pt-accent-grape-on); }
 
 /* ===== Action buttons ===== */
 .pt-action-btn {
@@ -148,18 +150,18 @@
   justify-content: center;
   gap: 6px;
   background: var(--m3-primary, #006d3d);
-  color: #fff;
+  color: var(--m3-on-primary, #fff); /* 寫死 #fff 在 dark 的 mint 底上隱形 */
   border: none;
   padding: 10px 18px;
   border-radius: 999px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 800;
   cursor: pointer;
-  transition: background 160ms ease, transform 120ms ease;
+  transition: background var(--motion-quick, 160ms) ease, transform var(--motion-base, 260ms) var(--motion-spring, ease);
   text-decoration: none;
   font-family: inherit;
 }
-.pt-action-btn:active { transform: scale(0.97); background: var(--m3-primary, #006d3d); }
+.pt-action-btn:active { transform: scale(0.96); background: var(--m3-primary, #006d3d); }
 .pt-action-btn:disabled,
 .pt-action-btn[aria-disabled='true'] {
   background: var(--brand-primary-soft, #f5fbe6);
@@ -186,6 +188,7 @@
   border-radius: 8px;
   font-family: inherit;
   text-decoration: none;
+  transition: background var(--motion-quick, 160ms) ease;
 }
 .pt-ghost-btn:hover { background: var(--brand-primary-soft, #f5fbe6); }
 .pt-ghost-btn:active { transform: scale(0.97); }
@@ -205,7 +208,7 @@
   border: 1px solid var(--pt-border-light, #ecf5f9);
   color: var(--brand-primary, #0d9053);
   cursor: pointer;
-  transition: background 160ms ease, transform 120ms ease;
+  transition: background var(--motion-quick, 160ms) ease, transform var(--motion-base, 260ms) var(--motion-spring, ease);
   font-family: inherit;
 }
 .pt-icon-btn:active { transform: scale(0.95); background: var(--leaf-100, #dcf4e6); }
@@ -236,7 +239,7 @@
   background: var(--cream, #fffcf2);
   color: var(--brand-primary, #0d9053);
 }
-.pt-empty-title { font-size: 15px; font-weight: 600; color: var(--pt-text-muted); }
+.pt-empty-title { font-size: 15px; font-weight: 900; color: var(--pt-text-muted); }
 .pt-empty-note { margin-top: 6px; font-size: 13px; }
 
 /* Motion safety */

@@ -3,8 +3,8 @@ import { mount } from '@vue/test-utils'
 import { normalizeStep, WORKSPACE_STEPS } from '../workspaceSteps'
 
 describe('workspaceSteps', () => {
-  it('三步定義齊全且順序為 config→grid→detail', () => {
-    expect(WORKSPACE_STEPS.map((s) => s.key)).toEqual(['config', 'grid', 'detail'])
+  it('四步定義齊全且順序為 config→grid→detail→payout', () => {
+    expect(WORKSPACE_STEPS.map((s) => s.key)).toEqual(['config', 'grid', 'detail', 'payout'])
   })
   it('normalizeStep 對非法值回退 detail', () => {
     expect(normalizeStep('grid')).toBe('grid')
@@ -54,6 +54,7 @@ const STUBS = {
   YearEndConfigView: { template: '<div data-test="stub-config" />' },
   YearEndGridView: { template: '<div data-test="stub-grid" />' },
   YearEndDetailView: { template: '<div data-test="stub-detail" />' },
+  AppraisalPayoutView: { template: '<div data-test="stub-payout" />' },
 }
 
 async function mountShell() {
@@ -85,7 +86,7 @@ describe('YearEndWorkspaceView', () => {
     const wrapper = await mountShell()
     expect(wrapper.find('[data-test="stub-detail"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="stub-grid"]').exists()).toBe(false)
-    expect(wrapper.findAll('[data-test^="rail-step-"]').length).toBe(3)
+    expect(wrapper.findAll('[data-test^="rail-step-"]').length).toBe(4)
   })
 
   it('點 rail-step-grid → goStep 呼叫 router.replace 帶 step:grid', async () => {
@@ -126,6 +127,17 @@ describe('YearEndWorkspaceView', () => {
     expect(wrapper.find('[data-test="reopen-locked-button"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="lock-cycle-button"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(false)
+  })
+
+  it('CLOSED 週期 → 頭部顯示已封存唯讀提示', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 9, academic_year: 114, status: 'CLOSED', bonus_calc_date: '2026-01-15' }],
+    } as never)
+
+    const wrapper = await mountShell()
+
+    expect(wrapper.find('[data-test="closed-readonly-hint"]').exists()).toBe(true)
   })
 
   it('無 YEAR_END_FINALIZE 權限 → 不顯示任何狀態機按鈕', async () => {
@@ -249,5 +261,54 @@ describe('YearEndWorkspaceView', () => {
     // 成功後重載 cycle + progress（表頭狀態 tag 與導軌數字一併更新）
     expect(api.listYearEndCycles).toHaveBeenCalledTimes(2)
     expect(api.getCycleProgress).toHaveBeenCalledTimes(2)
+  })
+
+  it('step=payout 時掛載發放內容', async () => {
+    routeRef.value = { params: { id: '9' }, query: { step: 'payout', year: '2027' } }
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="stub-payout"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="stub-detail"]').exists()).toBe(false)
+  })
+
+  it('點 rail-step-payout 且 URL 尚無 year → goStep 補上以週期學年換算的 year（academic_year+1913）', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    const wrapper = await mountShell()
+    replaceMock.mockClear()
+
+    await wrapper.find('[data-test="rail-step-payout"]').trigger('click')
+
+    expect(replaceMock).toHaveBeenCalledWith({ query: { step: 'payout', year: '2027' } })
+  })
+
+  it('點 rail-step-payout 且 URL 已有 year → goStep 保留原 year 不覆寫', async () => {
+    routeRef.value = { params: { id: '9' }, query: { year: '2026' } }
+    const wrapper = await mountShell()
+    replaceMock.mockClear()
+
+    await wrapper.find('[data-test="rail-step-payout"]').trigger('click')
+
+    expect(replaceMock).toHaveBeenCalledWith({ query: { year: '2026', step: 'payout' } })
+  })
+
+  it('無 APPRAISAL_FINALIZE 權限時，導軌不顯示發放按鈕', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    mockHasPermission.mockImplementation((p: string) => p === 'YEAR_END_FINALIZE')
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="rail-step-payout"]').exists()).toBe(false)
+  })
+
+  it('有 APPRAISAL_FINALIZE 權限時，導軌顯示發放按鈕', async () => {
+    routeRef.value = { params: { id: '9' }, query: {} }
+    mockHasPermission.mockImplementation((p: string) => p === 'APPRAISAL_FINALIZE')
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="rail-step-payout"]').exists()).toBe(true)
+  })
+
+  it('無 APPRAISAL_FINALIZE 權限但直接以 step=payout 網址進入時，退回顯示簽核內容而非發放內容（雙重防線）', async () => {
+    routeRef.value = { params: { id: '9' }, query: { step: 'payout' } }
+    mockHasPermission.mockImplementation((p: string) => p === 'YEAR_END_FINALIZE')
+    const wrapper = await mountShell()
+    expect(wrapper.find('[data-test="stub-payout"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="stub-detail"]').exists()).toBe(true)
   })
 })

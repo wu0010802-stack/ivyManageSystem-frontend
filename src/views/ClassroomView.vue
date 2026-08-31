@@ -14,8 +14,9 @@ import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } f
 import { getIntakePlan } from '@/api/recruitmentIntake'
 import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/utils/classroomReserved'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Clock, Delete, Edit, Grid, Plus, RefreshRight, User, Reading, MoreFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Clock, Delete, Edit, Grid, Plus, MoreFilled } from '@element-plus/icons-vue'
 import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
+import { formatTeacherOptionLabel } from '@/utils/teacherOption'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
@@ -26,12 +27,13 @@ import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogD
 import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import EnrollmentRosterDialog from '@/components/enrollment/EnrollmentRosterDialog.vue'
 
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
-interface TeacherOption { id: number; name: string; [key: string]: unknown }
+interface TeacherOption { id: number; name: string; employee_id?: string | null; position?: string | null; [key: string]: unknown }
 
 const classroomStore = useClassroomStore()
 const termStore = useAcademicTermStore()
@@ -69,11 +71,80 @@ const {
   searchQuery: classroomSearch,
   filtered: filteredClassrooms,
   total: classroomTotal,
-  shown: classroomShown,
 } = useClientTableFilter<ClassroomRow>({
   source: () => classrooms.value,
   searchFields: (r) => [r.name, r.head_teacher_name],
 })
+
+// ── 結構化篩選（2026-08-24 改版）───────────────────────────────────────────
+// 統計列（接近額滿/已滿/未指派班導）與年級為客端篩選，疊在關鍵字搜尋之上取交集；
+// filteredClassrooms 維持「僅關鍵字」語意不變（既有測試與 total 口徑沿用）。
+type StatFilterKey = 'near' | 'full' | 'nohead'
+const statFilter = ref<StatFilterKey | null>(null)
+const gradeFilter = ref<string | null>(null)
+
+const activeClassrooms = computed(() => classrooms.value.filter((c) => c.is_active !== false))
+
+const rosterStats = computed(() => {
+  let enrolled = 0
+  let capacity = 0
+  let near = 0
+  let full = 0
+  let noHead = 0
+  for (const c of activeClassrooms.value) {
+    enrolled += c.current_count ?? 0
+    capacity += c.capacity ?? 0
+    const s = capacityStatus(c.current_count, c.capacity)
+    if (s === 'full') full += 1
+    else if (s === 'warning') near += 1
+    if (!c.head_teacher_name) noHead += 1
+  }
+  return { classCount: activeClassrooms.value.length, enrolled, capacity, near, full, noHead }
+})
+
+const toggleStatFilter = (key: StatFilterKey) => {
+  statFilter.value = statFilter.value === key ? null : key
+}
+
+const matchesStatFilter = (c: ClassroomRow): boolean => {
+  if (!statFilter.value) return true
+  // 統計列只統計啟用中的班級，篩選口徑一致：停用班不落入任何統計桶
+  if (c.is_active === false) return false
+  const s = capacityStatus(c.current_count, c.capacity)
+  if (statFilter.value === 'near') return s === 'warning'
+  if (statFilter.value === 'full') return s === 'full'
+  return !c.head_teacher_name
+}
+
+const visibleClassrooms = computed(() => filteredClassrooms.value.filter((c) => (
+  (!gradeFilter.value || c.grade_name === gradeFilter.value) && matchesStatFilter(c)
+)))
+
+// 年級選項：取當前清單實際出現的年級（避免死選項），依 grades.sort_order 排序
+const gradeFilterGroup = computed(() => {
+  const names = Array.from(new Set(
+    classrooms.value.map((c) => c.grade_name).filter((n): n is string => Boolean(n)),
+  ))
+  if (names.length === 0) return []
+  const order = new Map(grades.value.map((g) => [g.name, g.sort_order ?? 0]))
+  names.sort((a, b) => ((order.get(a) ?? 99) - (order.get(b) ?? 99)) || a.localeCompare(b, 'zh-Hant'))
+  return [{
+    key: 'grade',
+    label: '年級',
+    options: names.map((n) => ({ label: n, value: n })),
+  }]
+})
+const listFilterValues = computed<Record<string, unknown>>(() => (
+  gradeFilter.value ? { grade: gradeFilter.value } : {}
+))
+const onFilterValuesUpdate = (v: Record<string, unknown>) => {
+  gradeFilter.value = typeof v.grade === 'string' && v.grade ? v.grade : null
+}
+const clearListFilters = () => {
+  classroomSearch.value = ''
+  gradeFilter.value = null
+  statFilter.value = null
+}
 
 const filterSchoolYear = computed({
   get: () => termStore.school_year,
@@ -146,9 +217,48 @@ const progressStatus = (classroom: ClassroomRow): '' | 'success' | 'warning' | '
   if (s === 'warning') return 'warning'
   return 'success'
 }
-// 卡片右上角「⋯」選單：把破壞性的「停用」從主熱區移到次要選單，降低誤觸
+
+// 容量狀態文案：與 capacityStatus 同口徑，容量缺失時不顯示（count-text 已是「N / —」）
+const capacityCaption = (classroom: ClassroomRow): string => {
+  const cap = Number(classroom.capacity)
+  if (!Number.isFinite(cap) || cap <= 0) return ''
+  const count = Math.max(0, classroom.current_count ?? 0)
+  const s = getCapacityStatus(classroom)
+  if (s === 'full') return '已滿'
+  const remaining = Math.max(0, cap - count)
+  if (s === 'warning') return `接近額滿・尚餘 ${remaining} 名`
+  return `尚餘 ${remaining} 名`
+}
+
+// 年級 chip 上色：幼幼藍/小黃/中綠/大紫，方便整片卡片網格掃視；
+// 名稱比對先查「幼幼」再查「小」，避免「幼幼班」誤落小班桶
+const gradeChipClass = (name?: string): string => {
+  if (!name) return 'grade-chip--default'
+  if (name.includes('幼幼')) return 'grade-chip--nursery'
+  if (name.includes('小')) return 'grade-chip--junior'
+  if (name.includes('中')) return 'grade-chip--middle'
+  if (name.includes('大')) return 'grade-chip--senior'
+  return 'grade-chip--default'
+}
+
+// 學生預覽頭像：student_preview（後端固定回前 3 名）以姓名末字呈現，
+// 色票依序輪替（同一卡片內三色錯開即可，無個資語意）
+const AVATAR_CLASSES = ['avatar--sky', 'avatar--green', 'avatar--amber', 'avatar--violet', 'avatar--rose']
+const previewStudents = (classroom: ClassroomRow) => (
+  (classroom.student_preview ?? []).slice(0, 3).map((s, i) => ({
+    key: (s.id as number | string | undefined) ?? `p-${i}`,
+    initial: typeof s.name === 'string' && s.name.length > 0 ? s.name.charAt(s.name.length - 1) : '—',
+    cls: AVATAR_CLASSES[i % AVATAR_CLASSES.length],
+  }))
+)
+const studentCountText = (classroom: ClassroomRow): string => (
+  (classroom.current_count ?? 0) > 0 ? `${classroom.current_count} 名學生` : '尚無學生'
+)
+
+// 卡片右上角「⋯」選單：編輯/歷史紀錄/停用集中一處，卡片主熱區只留「點卡開名單」
 const handleCardCommand = (command: string, classroom: ClassroomRow) => {
   if (command === 'edit') void openEdit(classroom)
+  else if (command === 'history') openChangeLogDrawer(classroom)
   else if (command === 'disable') void handleDelete(classroom)
 }
 
@@ -386,6 +496,10 @@ watch(showInactive, () => {
 })
 
 watch([filterSchoolYear, filterSemester], () => {
+  // 換學期＝換資料集：結構化篩選（年級/統計）歸零避免殘留到不適用的名單；
+  // 關鍵字搜尋是使用者顯式輸入，保留（與員工頁行為一致）
+  gradeFilter.value = null
+  statFilter.value = null
   fetchClassrooms()
 })
 
@@ -415,7 +529,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 
 <template>
   <div class="classroom-page">
-    <PageHeader :title="PAGE_TERMS.classrooms">
+    <PageHeader :title="PAGE_TERMS.classrooms" subtitle="各班在籍概況、師資指派與容量狀態">
       <template #actions>
         <el-select v-model="selectedTermKey" style="width: 220px">
           <el-option
@@ -425,17 +539,51 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
             :value="t.key"
           />
         </el-select>
-        <el-switch
-          v-model="showInactive"
-          inline-prompt
-          active-text="顯示停用"
-          inactive-text="僅顯示啟用"
-        />
-        <el-button :icon="RefreshRight" @click="fetchClassrooms">重新整理</el-button>
         <el-button :icon="Grid" @click="statsDialogVisible = true">統計表</el-button>
         <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </template>
     </PageHeader>
+
+    <div class="roster-stats" role="group" aria-label="班級統計與快速篩選">
+      <div class="stat-tile" data-test="stat-tile-classes">
+        <span class="stat-tile__label">班級數</span>
+        <span class="stat-tile__value">{{ rosterStats.classCount }}</span>
+      </div>
+      <div class="stat-tile" data-test="stat-tile-enrolled">
+        <span class="stat-tile__label">在籍幼生／容量</span>
+        <span class="stat-tile__value">{{ rosterStats.enrolled }} / {{ rosterStats.capacity }}</span>
+      </div>
+      <button
+        type="button"
+        class="stat-tile stat-tile--toggle"
+        data-test="stat-tile-near"
+        :aria-pressed="statFilter === 'near' ? 'true' : 'false'"
+        @click="toggleStatFilter('near')"
+      >
+        <span class="stat-tile__label">接近額滿</span>
+        <span class="stat-tile__value stat-tile__value--warning">{{ rosterStats.near }}</span>
+      </button>
+      <button
+        type="button"
+        class="stat-tile stat-tile--toggle"
+        data-test="stat-tile-full"
+        :aria-pressed="statFilter === 'full' ? 'true' : 'false'"
+        @click="toggleStatFilter('full')"
+      >
+        <span class="stat-tile__label">已滿</span>
+        <span class="stat-tile__value stat-tile__value--danger">{{ rosterStats.full }}</span>
+      </button>
+      <button
+        type="button"
+        class="stat-tile stat-tile--toggle"
+        data-test="stat-tile-nohead"
+        :aria-pressed="statFilter === 'nohead' ? 'true' : 'false'"
+        @click="toggleStatFilter('nohead')"
+      >
+        <span class="stat-tile__label">未指派班導</span>
+        <span class="stat-tile__value stat-tile__value--info">{{ rosterStats.noHead }}</span>
+      </button>
+    </div>
 
     <PlanStatusCard />
 
@@ -448,16 +596,25 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 
     <template v-else>
     <AdminListToolbar
-      v-if="classrooms.length > 0"
       v-model:search="classroomSearch"
       search-placeholder="搜尋班級名稱或帶班老師"
+      :filters="gradeFilterGroup"
+      :filter-values="listFilterValues"
       :total="classroomTotal"
-      :shown="classroomShown"
-    />
+      :shown="visibleClassrooms.length"
+      @update:filter-values="onFilterValuesUpdate"
+    >
+      <template #actions>
+        <label class="show-inactive-toggle">
+          <span>顯示停用班級</span>
+          <el-switch v-model="showInactive" />
+        </label>
+      </template>
+    </AdminListToolbar>
 
-    <div class="classroom-grid" v-if="filteredClassrooms.length > 0" v-loading="loading">
+    <div class="classroom-grid" v-if="visibleClassrooms.length > 0" v-loading="loading">
       <el-card
-        v-for="classroom in filteredClassrooms"
+        v-for="classroom in visibleClassrooms"
         :key="classroom.id"
         class="classroom-card"
         shadow="hover"
@@ -472,29 +629,42 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           <div class="card-header">
             <div class="header-title">
               <span class="class-name">{{ classroom.name }}</span>
+              <span class="grade-chip" :class="gradeChipClass(classroom.grade_name)">
+                {{ classroom.grade_name || '未設定年級' }}
+              </span>
               <el-tag v-if="!classroom.is_active" type="info" size="small">已停用</el-tag>
             </div>
-            <div class="card-tags">
-              <el-tag size="small" effect="plain" type="primary">
-                {{ classroom.semester_label }}
-              </el-tag>
-              <el-tag size="small" effect="plain" type="info">
-                {{ classroom.grade_name || '未設定年級' }}
-              </el-tag>
+            <div class="card-actions" @click.stop>
+              <el-dropdown
+                v-if="canWrite || canReadStudents"
+                trigger="click"
+                @command="(cmd: string) => handleCardCommand(cmd, classroom)"
+              >
+                <el-button size="small" text :icon="MoreFilled" aria-label="更多操作" />
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="canWrite" command="edit" :icon="Edit">編輯班級</el-dropdown-item>
+                    <el-dropdown-item v-if="canReadStudents" command="history" :icon="Clock">歷史紀錄</el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="canWrite && classroom.is_active"
+                      command="disable"
+                      :icon="Delete"
+                      divided
+                      class="dropdown-danger"
+                    >停用班級</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </div>
+          <p class="class-code">班級代號 {{ classroom.class_code || '—' }}</p>
         </template>
 
         <div class="card-content">
-          <dl class="card-meta">
-            <div class="meta-row">
-              <dt>班級代號</dt>
-              <dd>{{ classroom.class_code || '—' }}</dd>
-            </div>
-            <div class="meta-row">
-              <dt>學生人數</dt>
-              <dd class="count-cell">
-                <span class="count-text">{{ classroom.current_count ?? 0 }} / {{ classroom.capacity ?? '—' }}</span>
+          <div class="capacity-block">
+            <div class="capacity-line">
+              <span class="count-text">{{ classroom.current_count ?? 0 }} / {{ classroom.capacity ?? '—' }} 人</span>
+              <span class="capacity-side">
                 <el-tag
                   v-if="reservedCountFor(reservedByGrade, classroom) > 0"
                   type="warning"
@@ -502,76 +672,67 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
                   size="small"
                   :title="`同年級暫定編班（未註冊）${reservedCountFor(reservedByGrade, classroom)} 人`"
                 >保留 {{ reservedCountFor(reservedByGrade, classroom) }}</el-tag>
-                <el-tag v-if="getCapacityStatus(classroom) === 'full'" type="danger" size="small">已滿</el-tag>
-                <el-tag v-else-if="getCapacityStatus(classroom) === 'warning'" type="warning" size="small">接近額滿</el-tag>
-              </dd>
+                <span class="capacity-caption" :class="`capacity-caption--${getCapacityStatus(classroom)}`">
+                  {{ capacityCaption(classroom) }}
+                </span>
+              </span>
             </div>
-          </dl>
-
-          <el-progress
-            class="capacity-progress"
-            :percentage="capacityPercent(classroom.current_count, classroom.capacity)"
-            :status="progressStatus(classroom)"
-            :stroke-width="8"
-            :show-text="false"
-            aria-hidden="true"
-          />
-
-          <div class="teacher-info">
-            <p :class="{ 'text-muted': !classroom.head_teacher_name }">
-              <el-icon><User /></el-icon>
-              <span class="role-label">班導</span>{{ classroom.head_teacher_name || '未指派' }}
-            </p>
-            <p v-if="classroom.assistant_teacher_name">
-              <el-icon><User /></el-icon>
-              <span class="role-label">副班</span>{{ classroom.assistant_teacher_name }}
-            </p>
-            <p v-if="classroom.english_teacher_name || classroom.art_teacher_name">
-              <el-icon><Reading /></el-icon>
-              <span class="role-label">美語</span>{{ classroom.english_teacher_name || classroom.art_teacher_name }}
-            </p>
+            <el-progress
+              class="capacity-progress"
+              :percentage="capacityPercent(classroom.current_count, classroom.capacity)"
+              :status="progressStatus(classroom)"
+              :stroke-width="6"
+              :show-text="false"
+              aria-hidden="true"
+            />
           </div>
 
-          <div class="card-actions" @click.stop>
-            <el-button
-              v-if="canReadStudents"
-              size="small"
-              :icon="Clock"
-              @click="openChangeLogDrawer(classroom)"
-            >
-              歷史紀錄
-            </el-button>
-            <el-dropdown
-              v-if="canWrite"
-              trigger="click"
-              @command="(cmd: string) => handleCardCommand(cmd, classroom)"
-            >
-              <el-button size="small" :icon="MoreFilled" aria-label="更多操作" />
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="edit" :icon="Edit">編輯班級</el-dropdown-item>
-                  <el-dropdown-item
-                    v-if="classroom.is_active"
-                    command="disable"
-                    :icon="Delete"
-                    divided
-                    class="dropdown-danger"
-                  >停用班級</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
+          <div class="teacher-info">
+            <span v-if="!classroom.head_teacher_name" class="teacher-chip teacher-chip--missing">未指派班導</span>
+            <span v-else class="teacher-chip">班導・{{ classroom.head_teacher_name }}</span>
+            <span v-if="classroom.assistant_teacher_name" class="teacher-chip">副班・{{ classroom.assistant_teacher_name }}</span>
+            <span v-if="classroom.english_teacher_name || classroom.art_teacher_name" class="teacher-chip">
+              美語・{{ classroom.english_teacher_name || classroom.art_teacher_name }}
+            </span>
+          </div>
+
+          <div class="card-footer">
+            <div class="student-preview">
+              <span
+                v-for="s in previewStudents(classroom)"
+                :key="s.key"
+                class="student-avatar"
+                :class="s.cls"
+                aria-hidden="true"
+              >{{ s.initial }}</span>
+              <span class="student-count">{{ studentCountText(classroom) }}</span>
+            </div>
+            <span v-if="canReadStudents" class="card-go" aria-hidden="true">
+              查看名單
+              <el-icon><ArrowRight /></el-icon>
+            </span>
           </div>
         </div>
       </el-card>
     </div>
 
-    <el-empty v-else-if="classrooms.length > 0" description="沒有符合搜尋條件的班級" />
+    <EmptyState
+      v-else-if="classrooms.length > 0"
+      title="沒有符合條件的班級"
+      description="調整搜尋、年級或統計列篩選後再試"
+    >
+      <template #action>
+        <el-button data-test="clear-filters" @click="clearListFilters">清除篩選條件</el-button>
+      </template>
+    </EmptyState>
 
-    <el-empty v-else description="尚無班級資料">
-      <el-button v-if="canWrite" type="primary" :icon="Plus" class="empty-create-btn" @click="openCreate">
-        新增班級
-      </el-button>
-    </el-empty>
+    <EmptyState v-else title="尚無班級資料">
+      <template #action>
+        <el-button v-if="canWrite" type="primary" :icon="Plus" class="empty-create-btn" @click="openCreate">
+          新增班級
+        </el-button>
+      </template>
+    </EmptyState>
     </template>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="720px">
@@ -641,21 +802,21 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
             <el-col :span="8">
               <el-form-item label="班導師" label-width="90px">
                 <el-select v-model="form.head_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
+                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8">
               <el-form-item label="副班導" label-width="90px">
                 <el-select v-model="form.assistant_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
+                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
                 </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8">
               <el-form-item label="美語老師" label-width="90px">
                 <el-select v-model="form.english_teacher_id" :disabled="!canWrite" placeholder="選擇教師" clearable style="width: 100%">
-                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="teacher.name" :value="teacher.id" />
+                  <el-option v-for="teacher in teachers" :key="teacher.id" :label="formatTeacherOptionLabel(teacher)" :value="teacher.id" />
                 </el-select>
               </el-form-item>
             </el-col>
@@ -713,10 +874,81 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 </template>
 
 <style scoped>
+/* ── 統計列（可點擊快速篩選）───────────────────────────────────────────── */
+.roster-stats {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 16px;
+  min-width: 112px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  text-align: left;
+}
+
+button.stat-tile {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: border-color var(--transition-base), background var(--transition-base);
+}
+
+button.stat-tile:hover {
+  border-color: var(--el-color-primary-light-5);
+}
+
+button.stat-tile:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+button.stat-tile[aria-pressed='true'] {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.stat-tile__label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.stat-tile__value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.stat-tile__value--warning { color: var(--color-warning-darker); }
+.stat-tile__value--danger { color: var(--color-danger-darker); }
+.stat-tile__value--info { color: var(--color-info-darker); }
+
+/* ── 工具列 ──────────────────────────────────────────────────────────── */
+.show-inactive-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ── 卡片網格 ─────────────────────────────────────────────────────────── */
 .classroom-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--space-4);
 }
 
 .classroom-card {
@@ -726,7 +958,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 }
 
 .classroom-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
 }
 
 .classroom-card:focus-visible {
@@ -757,8 +989,8 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
+  align-items: flex-start;
+  gap: var(--space-2);
 }
 
 .header-title {
@@ -766,14 +998,40 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  flex-wrap: wrap;
 }
 
-.card-tags {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.class-name {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+
+.class-code {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+/* 年級 chip：幼幼藍/小黃/中綠/大紫（含 dark mode 對應） */
+.grade-chip {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+.grade-chip--nursery { background: #e0f2fe; color: #0369a1; }
+.grade-chip--junior { background: #fef3c7; color: #b45309; }
+.grade-chip--middle { background: #dcfce7; color: #15803d; }
+.grade-chip--senior { background: #ede9fe; color: #6d28d9; }
+.grade-chip--default { background: var(--bg-color-soft); color: var(--text-secondary); }
+html.dark .grade-chip--nursery { background: rgba(2, 132, 199, 0.28); color: #7dd3fc; }
+html.dark .grade-chip--junior { background: rgba(180, 83, 9, 0.28); color: #fcd34d; }
+html.dark .grade-chip--middle { background: rgba(21, 128, 61, 0.3); color: #86efac; }
+html.dark .grade-chip--senior { background: rgba(109, 40, 217, 0.3); color: #c4b5fd; }
 
 .card-content {
   display: flex;
@@ -782,80 +1040,130 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   height: 100%;
 }
 
-.class-name {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 結構化 metadata：label 在左、值在右，取代原本的「粗體冒號」inline 排版 */
-.card-meta {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.meta-row {
+/* ── 容量主視覺 ───────────────────────────────────────────────────────── */
+.capacity-line {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
-}
-
-.meta-row dt {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.meta-row dd {
-  margin: 0;
-  font-weight: 600;
-  text-align: right;
-}
-
-.count-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .count-text {
+  font-size: var(--text-2xl);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
-.capacity-progress {
-  margin-top: calc(-1 * var(--space-1, 4px));
+.capacity-side {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
+.capacity-caption {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+.capacity-caption--normal { color: var(--color-success-darker); }
+.capacity-caption--warning { color: var(--color-warning-darker); }
+.capacity-caption--full { color: var(--color-danger-darker); }
+
+.capacity-progress {
+  margin-top: var(--space-2);
+}
+
+/* ── 教師 chips ───────────────────────────────────────────────────────── */
 .teacher-info {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.teacher-info p {
-  margin: 0;
-  font-size: 0.9em;
+.teacher-chip {
+  font-size: var(--text-xs);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--bg-color-soft);
+  color: var(--text-secondary);
+}
+
+.teacher-chip--missing {
+  background: var(--el-color-warning-light-9);
+  border: 1px dashed var(--el-color-warning-light-3);
+  color: var(--color-warning-darker);
+}
+
+/* ── 卡片 footer：學生預覽 + 導向提示 ─────────────────────────────────── */
+.card-footer {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--el-border-color-lighter);
 }
 
-.teacher-info .el-icon {
-  color: var(--text-tertiary);
+.student-preview {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.student-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--el-bg-color);
+  margin-right: -6px;
   flex-shrink: 0;
 }
+.avatar--sky { background: #e0f2fe; color: #0369a1; }
+.avatar--green { background: #dcfce7; color: #15803d; }
+.avatar--amber { background: #fef3c7; color: #b45309; }
+.avatar--violet { background: #ede9fe; color: #6d28d9; }
+.avatar--rose { background: #ffe4e6; color: #be123c; }
+html.dark .avatar--sky { background: rgba(2, 132, 199, 0.28); color: #7dd3fc; }
+html.dark .avatar--green { background: rgba(21, 128, 61, 0.3); color: #86efac; }
+html.dark .avatar--amber { background: rgba(180, 83, 9, 0.28); color: #fcd34d; }
+html.dark .avatar--violet { background: rgba(109, 40, 217, 0.3); color: #c4b5fd; }
+html.dark .avatar--rose { background: rgba(190, 18, 60, 0.3); color: #fda4af; }
 
-.role-label {
-  display: inline-block;
-  min-width: 2.4em;
+.student-count {
+  margin-left: var(--space-3);
+  font-size: var(--text-xs);
   color: var(--text-secondary);
-  font-size: 0.82em;
+  white-space: nowrap;
+}
+
+.card-go {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--el-color-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  white-space: nowrap;
+}
+
+.classroom-card:hover .card-go,
+.classroom-card:focus-visible .card-go,
+.classroom-card:focus-within .card-go {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-go {
+    transition: none;
+  }
 }
 
 .dropdown-danger {
@@ -867,11 +1175,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 }
 
 .card-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-2);
-  margin-top: auto;
-  padding-top: var(--space-2);
+  flex-shrink: 0;
 }
 
 .detail-section {
@@ -893,10 +1197,16 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 }
 
 @media (--to-sm) {
-  /* 觸控目標：卡片動作按鈕在手機上加大到 ≥44px，降低誤觸 */
+  /* 觸控目標：卡片動作按鈕與統計列在手機上維持 ≥44px，降低誤觸 */
   .card-actions :deep(.el-button) {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+  }
+  .stat-tile {
+    min-height: var(--touch-target-min);
+  }
+  .show-inactive-toggle {
+    min-height: var(--touch-target-min);
   }
 }
 </style>

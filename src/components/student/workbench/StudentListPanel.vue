@@ -132,6 +132,17 @@ const exportStudents = () => {
   downloadFile('/exports/students', '學生名冊.xlsx')
 }
 
+// 教育局全國幼生管理系統（kids.k12ea.gov.tw）匯入檔：頁面當下篩到誰就匯出誰
+const exportK12ea = () => {
+  downloadFile('/exports/students/k12ea', '幼生資料匯入.xls', {
+    is_active: activeTab.value === 'active',
+    school_year: normalizeSchoolYear(filterSchoolYear.value),
+    semester: filterSemester.value,
+    classroom_id: filterClassroomId.value || undefined,
+    search: debouncedSearch.value || undefined,
+  })
+}
+
 // 接送通知：有 pending/acknowledged 通知的學生 ID 集合
 const activeCallStudentIds = ref(new Set())
 
@@ -477,6 +488,7 @@ onMounted(async () => {
     <div class="page-header">
       <div class="header-actions">
         <el-button @click="exportStudents">匯出 Excel</el-button>
+        <el-button @click="exportK12ea">匯出教育局格式</el-button>
         <el-button
           v-if="activeTab === 'active'"
           plain

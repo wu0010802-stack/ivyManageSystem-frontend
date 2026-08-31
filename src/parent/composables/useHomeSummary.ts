@@ -2,9 +2,12 @@
 /**
  * 家長端 `GET /parent/home/summary` 的共用讀取層。
  *
- * summary 一支就帶齊 7 個計數（未讀公告 / 未讀訊息 / 待繳 / 待簽 /
- * 才藝候補待確認 / 假單審核結果 / 今日用藥單），所以事務頁列徽章、
- * 底部 tab 徽章都從這裡拿，不再各自打 API。
+ * summary 一支就帶齊多個計數（未讀公告 / 待繳 / 待簽 / 才藝候補待確認 /
+ * 假單審核結果 / 今日用藥單），所以事務頁列徽章、底部 tab 徽章都從這裡拿，
+ * 不再各自打 API。
+ *
+ * 後端仍回傳 unread_messages，但親師訊息已於 2026-08-28 自家長端下架，
+ * 前端不再讀取該欄位。
  *
  * 快取鍵刻意與 TodayView 相同：useCachedAsync 對同 key 共用 cache 條目
  * 並 dedupe in-flight 請求，因此首頁與事務頁同時掛載也只會有一次網路請求。
@@ -17,7 +20,6 @@ export const HOME_SUMMARY_CACHE_KEY = 'parent/today/summary'
 
 export interface HomeBadges {
   unreadAnnouncements: number
-  unreadMessages: number
   /** 未繳費用「筆數」（非金額） */
   outstandingFees: number
   overdueFees: number
@@ -57,7 +59,6 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
     const fees = (s.fees ?? {}) as Record<string, unknown>
     return {
       unreadAnnouncements: num(s.unread_announcements),
-      unreadMessages: num(s.unread_messages),
       outstandingFees: num(fees.outstanding_count),
       overdueFees: num(fees.overdue),
       pendingEventAcks: num(s.pending_event_acks),
@@ -83,9 +84,14 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
     )
   })
 
-  /** 底部「訊息」tab 徽章＝未讀公告 + 未讀訊息。 */
-  const messagesTabBadge = computed<number>(
-    () => badges.value.unreadAnnouncements + badges.value.unreadMessages,
+  /**
+   * 底部「聯絡簿」tab 徽章。
+   *
+   * 目前只有未讀公告——後端 summary 尚無「未讀聯絡簿」計數，加上去要另開欄位；
+   * 聯絡簿本身的未讀在頁內以「N 則未讀」pill 呈現。
+   */
+  const contactBookTabBadge = computed<number>(
+    () => badges.value.unreadAnnouncements,
   )
 
   return {
@@ -96,6 +102,6 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
     summary,
     badges,
     adminTabBadge,
-    messagesTabBadge,
+    contactBookTabBadge,
   }
 }

@@ -1,5 +1,5 @@
 import api from './index'
-import type { AxiosResponse } from 'axios'
+import type { AxiosRequestConfig, AxiosResponse } from 'axios'
 import type { ApiQuery, ApiBody, AxiosResp, Schema } from './_generated/typed'
 
 // 統計
@@ -283,14 +283,48 @@ export const getPOSOutstandingByStudent = (q: string, limit = 100, opts: Record<
 }
 export const posCheckout = (payload: ApiBody<'/activity/pos/checkout', 'post'>): AxiosResp<'/activity/pos/checkout', 'post'> =>
   api.post('/activity/pos/checkout', payload)
-export const getPOSReceiptPdf = (receiptNo: string): Promise<AxiosResponse<Blob>> =>
+// reprint（2026-08-14 bug hunt）：本端點是唯一列印路徑，結帳後首印與交易列表補印
+// 都打這支。後端據此決定收據抬頭是否加「（補印）」；**首印務必傳 false**，否則家長
+// 拿到的正本會印著補印章。預設 true 與後端一致（保守：寧可多標一次補印，也不能讓
+// 補印看起來像正本）。
+export const getPOSReceiptPdf = (
+  receiptNo: string,
+  opts: { reprint?: boolean } = {}
+): Promise<AxiosResponse<Blob>> =>
   api.get(`/activity/pos/receipts/${encodeURIComponent(receiptNo)}/print.pdf`, {
+    params: { reprint: opts.reprint ?? true },
     responseType: 'blob',
   })
-export const getPOSDailySummary = (date?: string): AxiosResp<'/activity/pos/daily-summary', 'get'> =>
-  api.get('/activity/pos/daily-summary', { params: date ? { date } : {} })
-export const getPOSRecentTransactions = (params?: ApiQuery<'/activity/pos/recent-transactions', 'get'>): AxiosResp<'/activity/pos/recent-transactions', 'get'> =>
-  api.get('/activity/pos/recent-transactions', { params })
+// 課程繳費單批次列印（A4 八格 + QR，裁切貼信封袋）
+export const getCoursePaymentSlipsPdf = (courseId: number, dueDate?: string): Promise<AxiosResponse<Blob>> =>
+  api.get(`/activity/courses/${courseId}/payment-slips.pdf`, {
+    params: dueDate ? { due_date: dueDate } : {},
+    responseType: 'blob',
+  })
+/**
+ * 刷新選項（CONC-03，2026-08-24）。
+ *
+ * `src/utils/apiDedupe.ts` 對「同 key 且仍在途」的 GET 直接回傳既有 promise，且
+ * **不快取已完成結果**。下面兩支刷新的 dedupe key 恆定（daily-summary 無參數、
+ * recent-transactions `{limit:100}`），所以櫃台只要在結帳前按過「重新整理」、該請求
+ * 還在途中，結帳成功後的刷新就不會發出新請求，直接領到**結帳前**的快照——彙總條
+ * 顯示不含本筆的金額且不會自我修正，櫃台據此點鈔會少算。
+ *
+ * `force: true` 走 apiDedupe 的逃生口（`config.meta.allowConcurrent`）繞過去重，
+ * 供「動作完成後的刷新」使用。**不帶參數的既有呼叫端行為逐字不變**——去重仍生效，
+ * 那層本來就是為了擋多元件同時 mount 各自打同一支 endpoint。
+ */
+export interface PosRefreshOptions {
+  force?: boolean
+}
+type DedupeAwareConfig = AxiosRequestConfig & { meta?: { allowConcurrent?: boolean } }
+function withDedupeEscape(config: DedupeAwareConfig, force?: boolean): DedupeAwareConfig {
+  return force ? { ...config, meta: { allowConcurrent: true } } : config
+}
+export const getPOSDailySummary = (date?: string, opts: PosRefreshOptions = {}): AxiosResp<'/activity/pos/daily-summary', 'get'> =>
+  api.get('/activity/pos/daily-summary', withDedupeEscape({ params: date ? { date } : {} }, opts.force))
+export const getPOSRecentTransactions = (params?: ApiQuery<'/activity/pos/recent-transactions', 'get'>, opts: PosRefreshOptions = {}): AxiosResp<'/activity/pos/recent-transactions', 'get'> =>
+  api.get('/activity/pos/recent-transactions', withDedupeEscape({ params }, opts.force))
 
 // POS 日結簽核（老闆核對每日流水）
 export const getPOSDailyClosePending = (params?: ApiQuery<'/activity/pos/daily-close/pending', 'get'>): AxiosResp<'/activity/pos/daily-close/pending', 'get'> =>
@@ -303,6 +337,10 @@ export const approvePOSDailyClose = (dateStr: string, payload?: ApiBody<'/activi
 // 後端 response: 200 + { close_date, unlocked_at, is_admin_override, notification_delivered }
 export const unlockPOSDailyClose = (date: string, payload: ApiBody<'/activity/pos/daily-close/{date_str}', 'delete'>): AxiosResp<'/activity/pos/daily-close/{date_str}', 'delete'> =>
   api.delete(`/activity/pos/daily-close/${date}`, { data: payload })
+// 單一日期的日結歷史快照（每次 unlock 前的完整帳面 + 解鎖原因）。
+// 權限與日結簽核同一顆 ACTIVITY_PAYMENT_APPROVE；後端依 unlocked_at 倒序、上限 50 筆。
+export const getPOSCloseHistory = (closeDate: string): AxiosResp<'/activity/audit/pos-close-history', 'get'> =>
+  api.get('/activity/audit/pos-close-history', { params: { close_date: closeDate } })
 export const getPOSUnlockEvents = (days = 30): AxiosResp<'/activity/audit/pos-unlock-events', 'get'> =>
   api.get('/activity/audit/pos-unlock-events', { params: { days } })
 export const getPOSOperatorActivity = (days = 30): AxiosResp<'/activity/audit/operator-activity', 'get'> =>
@@ -313,6 +351,16 @@ export const getPOSReconciliation = (startDate: string, endDate: string): AxiosR
   })
 export const getPOSSemesterReconciliation = (params?: ApiQuery<'/activity/pos/semester-reconciliation', 'get'>): AxiosResp<'/activity/pos/semester-reconciliation', 'get'> =>
   api.get('/activity/pos/semester-reconciliation', { params })
+
+// POS 學期簽收帳本（老闆整筆簽收）
+export const getPOSSemesterSignoffs = (params?: ApiQuery<'/activity/pos/semester-signoffs', 'get'>): AxiosResp<'/activity/pos/semester-signoffs', 'get'> =>
+  api.get('/activity/pos/semester-signoffs', { params })
+export const createPOSSemesterSignoff = (payload: ApiBody<'/activity/pos/semester-signoffs', 'post'>): AxiosResp<'/activity/pos/semester-signoffs', 'post'> =>
+  api.post('/activity/pos/semester-signoffs', payload)
+export const voidPOSSemesterSignoff = (id: number, payload: ApiBody<'/activity/pos/semester-signoffs/{signoff_id}', 'delete'>): AxiosResp<'/activity/pos/semester-signoffs/{signoff_id}', 'delete'> =>
+  api.delete(`/activity/pos/semester-signoffs/${id}`, { data: payload })
+export const getPOSSemesterRegistrationChanges = (params?: ApiQuery<'/activity/pos/semester-registration-changes', 'get'>): AxiosResp<'/activity/pos/semester-registration-changes', 'get'> =>
+  api.get('/activity/pos/semester-registration-changes', { params })
 
 // Portal - 才藝查詢
 export const getPortalActivityRegistrations = (): AxiosResp<'/portal/activity/registrations', 'get'> =>

@@ -38,11 +38,13 @@
       :mode="dialogMode"
       :form="form"
       :saving="saving"
-      :district-suggestions="districtSuggestions"
       :source-suggestions="((options.sources as string[] | undefined) || [])"
       :referrer-suggestions="((options.referrers as string[] | undefined) || [])"
       :no-deposit-reasons="((options.no_deposit_reasons as string[] | undefined) || [])"
+      :source-categories="sourceCategories"
+      :teacher-options="teacherOptions"
       @save="handleSave"
+      @save-next="handleSaveAndNext"
     />
 
     <RecruitmentConvertDialog
@@ -79,6 +81,7 @@ import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useFormDraft } from '@/composables/useFormDraft'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useAllClassroomStore } from '@/stores/classroomAll'
+import { getTeacherOptions } from '@/api/classrooms'
 import { toAdYear, getCurrentAcademicTerm } from '@/utils/academic'
 import { emptyVisitForm, type VisitFormState } from '@/constants/recruitment'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
@@ -94,7 +97,26 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ changed: [] }>()
 
-const { options, stats, invalidateOptions, fetchOptions } = props.dashboard
+const { options, invalidateOptions, fetchOptions } = props.dashboard
+
+// -------- 來源分類（獎金點數）與帶參觀老師選項 --------
+type SourceCategoryOption = { code: string; label: string; points: number }
+type TeacherOption = { id: number; name: string; employee_id?: string | null; position?: string | null }
+const sourceCategories = computed(
+  (): SourceCategoryOption[] =>
+    ((options.value.source_categories as SourceCategoryOption[] | undefined) || []),
+)
+const teacherOptions = ref<TeacherOption[]>([])
+async function loadTeacherOptionsOnce() {
+  if (teacherOptions.value.length) return
+  try {
+    const res = await getTeacherOptions()
+    teacherOptions.value = (res.data as TeacherOption[]) || []
+  } catch {
+    // 失敗靜默：不阻擋 dialog 開啟，仍可手填其他欄位
+    teacherOptions.value = []
+  }
+}
 
 // -------- 權限 --------
 const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
@@ -209,7 +231,7 @@ const form = ref<VisitFormState>(emptyVisitForm())
 
 // 表單草稿暫存：招生表單聯絡 PII 一律排除，草稿僅留訪視/年級/來源等工作欄位
 const RECRUITMENT_DRAFT_EXCLUDE = [
-  'child_name', 'birthday', 'phone', 'address', 'district',
+  'child_name', 'birthday', 'phone', 'address',
   'parent_response', 'notes', 'month_raw',
 ]
 const recruitmentDraft = useFormDraft({
@@ -247,12 +269,8 @@ const rocMonthToISO = (rm: string) => {
 }
 
 // 訪視記錄對話框內的 form helpers（watch / _makeSuggestions / onDepositChange）
-// 已搬到 RecruitmentRecordDialog.vue；這裡僅保留 district 建議清單的 computed。
-const districtSuggestions = computed((): string[] =>
-  ((stats.value.by_district as { district?: string }[] | undefined) || [])
-    .map((d) => d.district)
-    .filter((d): d is string => typeof d === 'string')
-)
+// 已搬到 RecruitmentRecordDialog.vue。行政區欄位已於 2026-08-28 自表單移除
+// （後端從 address 解析），故此處不再需要 by_district 建議清單。
 
 const fetchDetail = async () => {
   loadingDetail.value = true
@@ -306,7 +324,7 @@ const onPageChange = (page: number) => {
 
 // -------- 訪視記錄 CRUD --------
 const openAddDialog = async () => {
-  await fetchOptions()
+  await Promise.all([fetchOptions(), loadTeacherOptionsOnce()])
   form.value = emptyVisitForm()
   dialogMode.value = 'add'
   editingId.value = null
@@ -316,7 +334,7 @@ const openAddDialog = async () => {
 }
 
 const openEditDialog = async (row: Record<string, unknown>) => {
-  await fetchOptions()
+  await Promise.all([fetchOptions(), loadTeacherOptionsOnce()])
   form.value = {
     month: String(row.month ?? ''),
     month_raw: rocDateToISO(String(row.visit_date ?? '')) ?? rocMonthToISO(String(row.month ?? '')),
@@ -327,11 +345,13 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     grade: (row.grade ?? null) as string | null,
     phone: String(row.phone ?? ''),
     address: String(row.address ?? ''),
-    district: String(row.district ?? ''),
     source: String(row.source ?? ''),
+    source_category: (row.source_category ?? null) as string | null,
     referrer: String(row.referrer ?? ''),
     deposit_collector: String(row.deposit_collector ?? ''),
+    tour_guide_employee_id: (row.tour_guide_employee_id ?? null) as number | null,
     has_deposit: Boolean(row.has_deposit),
+    rides_bus: Boolean(row.rides_bus ?? false),
     enrolled: Boolean(row.enrolled ?? false),
     transfer_term: Boolean(row.transfer_term ?? false),
     target_school_year: Number(row.target_school_year ?? getCurrentAcademicTerm().school_year),
@@ -364,6 +384,29 @@ const handleSave = async () => {
     }
     recruitmentDraft.clear()
     dialogVisible.value = false
+    await fetchDetail()
+    emit('changed')
+  } catch (e) {
+    ElMessage.error(apiError(e, '儲存失敗'))
+  } finally {
+    saving.value = false
+  }
+}
+
+// 儲存並新增下一筆（招生旺季連續登記；僅新增模式）：成功後不關 dialog、
+// 換上新的空白表單繼續填。入學學期沿用上一筆——同一場參觀活動的家長
+// 幾乎都衝著同一個學期來。
+const handleSaveAndNext = async () => {
+  saving.value = true
+  const { month_raw: _mr, ...payload } = form.value
+  try {
+    await createRecruitmentRecord(payload)
+    ElMessage.success('已儲存，可繼續新增下一筆')
+    recruitmentDraft.clear()
+    const next = emptyVisitForm()
+    next.target_school_year = form.value.target_school_year
+    next.target_semester = form.value.target_semester
+    form.value = next
     await fetchDetail()
     emit('changed')
   } catch (e) {
@@ -421,8 +464,9 @@ defineExpose({ handleDelete, openAddDialog, fetchDetail })
 <style scoped>
 .panel-toolbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 </style>

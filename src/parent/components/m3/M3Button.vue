@@ -67,8 +67,14 @@ const classes = computed<Record<string, boolean>>(() => ({
   cursor: pointer;
   transition:
     background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
-    box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+    box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
+    transform var(--motion-base, 260ms) var(--motion-spring, ease);
   font-family: var(--m3-font-body, 'Roboto', sans-serif);
+}
+.m3-button:active:not(.is-disabled) { transform: scale(0.96); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-button { transition: none; }
+  .m3-button:active:not(.is-disabled) { transform: none; }
 }
 .m3-button::before {
   content: '';

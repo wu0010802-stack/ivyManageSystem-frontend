@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useHomeSummary } from '../composables/useHomeSummary'
@@ -8,7 +8,6 @@ import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
 import M3IconButton from '../components/m3/M3IconButton.vue'
 import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
-import MeDrawer from '../components/layout/MeDrawer.vue'
 import ParentOfflineIndicator from '../components/ParentOfflineIndicator.vue'
 import { useTenantBranding } from '@/composables/useTenantBranding'
 
@@ -28,12 +27,19 @@ const authStore = useParentAuthStore()
 const isPublic = computed(() => route.meta?.public === true)
 const hideTabBar = computed(() => route.meta?.hideTabBar === true)
 const currentTab = computed(() => (route.meta?.tab as string) || '')
+/**
+ * 首頁改版（2026-08-17）：只有 /home 本身拿掉頂部 sticky bar，logo 併入
+ * HomeHeroHeader 的問候語 chip。同分頁（tab: 'home'）底下的次頁面
+ * （/bus、/calendar，皆 showBack: true）仍需要返回鍵與標題，不受影響——
+ * 故用 route.name 精準比對，不能只看 currentTab === 'home'。
+ */
+const isHomeRoute = computed(() => route.name === 'parent-home')
 
 /**
  * 點再次點 active tab → scroll-to-top。
  * 條件嚴格：必須「目前路徑等於 tab.path」才觸發；若使用者在深層頁
- * （/messages/123，meta.tab 仍為 'messages'）點 messages tab，仍應
- * 走 router 正常導回 /messages（不阻止預設行為）。
+ * （/contact-book/123，meta.tab 仍為 'contact-book'）點聯絡簿 tab，仍應
+ * 走 router 正常導回 /contact-book（不阻止預設行為）。
  */
 function onTabSelect(_key: string, item: { key: string; icon: string; label: string; badge?: number; path?: string }) {
   if (route.path === item.path) {
@@ -51,15 +57,15 @@ function onTabSelect(_key: string, item: { key: string; icon: string; label: str
  * tab 徽章全部取自 home/summary 這一支。
  *
  * 這裡原本另外打 announcements/unread-count 與 messages/unread-count 兩支，
- * 但 summary 早就同時回傳 unread_announcements 與 unread_messages，等於每次
- * 換頁都多送兩個請求拿已經有的數字。改走共用 composable 後，同 key 的
+ * 但 summary 早就回傳 unread_announcements，等於每次換頁都多送請求拿
+ * 已經有的數字。改走共用 composable 後，同 key 的
  * useCachedAsync 會與首頁 / 事務頁共用 cache 並 dedupe in-flight 請求，
  * 節流也由它的 60s TTL 負責（原本的 unreadThrottle 因此退場）。
  *
  * immediate: false —— 這個 layout 在 /login、/bind 等公開頁也會掛載，
  * 未登入就打 summary 會拿到 401。
  */
-const { refresh: refreshSummary, messagesTabBadge, adminTabBadge } = useHomeSummary({
+const { refresh: refreshSummary, contactBookTabBadge, adminTabBadge } = useHomeSummary({
   immediate: false,
 })
 
@@ -72,12 +78,20 @@ const TABS = computed<TabItem[]>(() => [
     path: '/home',
   },
   {
-    key: 'messages',
-    label: '訊息',
-    icon: 'chat_bubble',
-    activeIcon: 'chat_bubble',
-    path: '/messages',
-    badge: messagesTabBadge.value,
+    key: 'child',
+    label: '孩子',
+    icon: 'child_care',
+    activeIcon: 'child_care',
+    path: '/child',
+  },
+  {
+    // 2026-08-28：親師訊息自家長端下架，這一格改放聯絡簿（公告併為其第二分頁）。
+    key: 'contact-book',
+    label: '聯絡簿',
+    icon: 'menu_book',
+    activeIcon: 'menu_book',
+    path: '/contact-book',
+    badge: contactBookTabBadge.value,
   },
   {
     key: 'admin',
@@ -87,9 +101,14 @@ const TABS = computed<TabItem[]>(() => [
     path: '/admin',
     badge: adminTabBadge.value,
   },
+  {
+    key: 'me',
+    label: '我的',
+    icon: 'account_circle',
+    activeIcon: 'account_circle',
+    path: '/me',
+  },
 ])
-
-const drawerOpen = ref(false)
 
 function refreshBadges() {
   if (!authStore.isAuthed()) return
@@ -115,36 +134,45 @@ function onBack() {
 <template>
   <div class="parent-layout">
     <M3TopAppBar
-      v-if="!isPublic"
+      v-if="!isPublic && !isHomeRoute"
       :title="headerTitle"
       :show-back="headerShowBack"
       :on-back="onBack"
       variant="small"
     >
-      <!-- 主分頁（home/messages/admin）無 showBack，需要 BrandMark 補位；
+      <!-- 主分頁（home/child/contact-book/admin/me）無 showBack，需要 BrandMark 補位；
            深層頁有 back button 不用蓋。CLAUDE.md 列為 polish 階段 acceptance：
            保留 LaurelWreath/CrownIcon brand。bug sweep round 4 (2026-05-14) F-FE-3。 -->
       <template v-if="!headerShowBack" #leading>
         <BrandMark variant="mini" :size="28" />
       </template>
       <template #actions>
+        <!-- P2 IA 重整（2026-08-14）：頭像不再開抽屜，直接導向常駐「我的」tab。
+             MeDrawer 的全部功能（個人資料/通知偏好/加綁子女/登出）已存在於 /me 頁，
+             元件檔案保留一個 release 週期再清除，見 spec §7。 -->
         <M3IconButton
           icon="account_circle"
-          aria-label="開啟個人選單"
-          @click="drawerOpen = true"
+          aria-label="我的"
+          @click="router.push('/me')"
         />
       </template>
     </M3TopAppBar>
 
-    <MeDrawer v-if="!isPublic" v-model="drawerOpen" />
-
-    <div v-if="!isPublic" class="parent-conn-slot">
+    <div
+      v-if="!isPublic"
+      class="parent-conn-slot"
+      :class="{ 'no-topbar': isHomeRoute }"
+    >
       <ConnectionBanner />
     </div>
 
     <main
       class="parent-main"
-      :class="{ 'is-public': isPublic, 'with-tabbar': !hideTabBar && !isPublic }"
+      :class="{
+        'is-public': isPublic,
+        'with-tabbar': !hideTabBar && !isPublic,
+        'no-topbar': isHomeRoute && !isPublic,
+      }"
     >
       <slot />
     </main>
@@ -178,6 +206,10 @@ function onBack() {
   top: 64px;
   z-index: 9;
 }
+/* 首頁沒有頂部 sticky bar（64px），banner 直接貼齊頂端 */
+.parent-conn-slot.no-topbar {
+  top: 0;
+}
 
 .parent-main {
   flex: 1;
@@ -186,6 +218,11 @@ function onBack() {
 }
 .parent-main.with-tabbar {
   padding-bottom: 80px;
+}
+/* 首頁沒有頂部 sticky bar 吸收瀏海／狀態列安全區，補回這段 padding，
+   避免 HomeHeroHeader 內容被裝置瀏海遮住 */
+.parent-main.no-topbar {
+  padding-top: env(safe-area-inset-top, 0);
 }
 
 .parent-navbar {

@@ -349,6 +349,22 @@ describe('CurrentSemesterOverview', () => {
     expect(getAppraisalAllEmployeesStatus).not.toHaveBeenCalled()
   })
 
+  it('cycle 載入失敗時顯示錯誤卡而非「尚未建立週期」banner，重試成功後恢復正常', async () => {
+    getAppraisalCurrentCycle.mockRejectedValueOnce(new Error('network error'))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="cycle-fetch-error-banner"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="no-cycle-banner"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="create-cycle-btn"]').exists()).toBe(false)
+
+    getAppraisalCurrentCycle.mockResolvedValueOnce({ data: SAMPLE_CYCLE })
+    await wrapper.find('[data-test="cycle-fetch-retry-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="cycle-fetch-error-banner"]').exists()).toBe(false)
+    expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(2)
+  })
+
   it('cycle 存在時渲染 4 個 KPI 卡', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
@@ -1073,7 +1089,7 @@ describe('CurrentSemesterOverview 引導條（Task A3）', () => {
     expect(getAppraisalCurrentCycle).toHaveBeenCalledTimes(2)
   })
 
-  it('已同步時點 sign 引導步驟，導向 /appraisal-year-end/appraisal/history', async () => {
+  it('已同步時點 sign 引導步驟，導向 /appraisal-year-end/appraisal?stage=sign', async () => {
     getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
     getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
     getSignStatusSummary.mockResolvedValue({
@@ -1086,6 +1102,6 @@ describe('CurrentSemesterOverview 引導條（Task A3）', () => {
     await wrapper.find('[data-test="guide-step-sign"]').trigger('click')
     await flushPromises()
 
-    expect(guidePushMock).toHaveBeenCalledWith('/appraisal-year-end/appraisal/history')
+    expect(guidePushMock).toHaveBeenCalledWith('/appraisal-year-end/appraisal?stage=sign')
   })
 })

@@ -24,7 +24,7 @@
       :shown="courseShown"
     />
 
-    <el-table :data="filteredCourses" v-loading="loading" border>
+    <el-table v-if="!isMobile" :data="filteredCourses" v-loading="loading" border>
       <template #empty>
         <el-empty :description="courseSearch ? '沒有符合搜尋條件的課程' : '尚無課程資料'" />
       </template>
@@ -115,14 +115,76 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column v-if="canWrite" label="操作" width="240" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="310" align="center" fixed="right">
         <template #default="{ row }">
+          <el-button size="small" :data-test="`payment-slips-btn-${row.id}`" @click="openSlipDialog(row)">繳費單</el-button>
           <el-button size="small" :data-test="`reorder-enrolled-btn-${row.id}`" @click="openEnrolled(row)">報名排序</el-button>
           <el-button size="small" @click="openEdit(row)">編輯</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">停用</el-button>
         </template>
       </el-table-column>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="filteredCourses"
+      :columns="courseCardColumns"
+      row-key="id"
+      :loading="loading"
+      :empty-text="courseSearch ? '沒有符合搜尋條件的課程' : '尚無課程資料'"
+    >
+      <template #title="{ item }">{{ item.name }}</template>
+      <template #cell-__grades="{ item }">
+        <template v-if="(item.allowed_grades as string[])?.length">
+          <el-tag
+            v-for="g in (item.allowed_grades as string[])"
+            :key="g"
+            size="small"
+            effect="plain"
+            class="grade-tag"
+          >{{ g }}</el-tag>
+        </template>
+        <span v-else>不限</span>
+      </template>
+      <template #cell-__capacity="{ item }">
+        <el-button
+          v-if="occupying(item as unknown as Course) > 0"
+          link type="primary" size="small"
+          @click="openEnrolled(item as unknown as Course)"
+        >{{ occupying(item as unknown as Course) }}/{{ item.capacity }}</el-button>
+        <span v-else>0/{{ item.capacity }}</span>
+        <div v-if="((item.promoted_pending as number) || 0) > 0" class="pending-occupancy-hint">
+          含 {{ item.promoted_pending }} 待確認
+        </div>
+        <div v-if="((item.pending_review as number) || 0) > 0" class="pending-occupancy-hint">
+          含 {{ item.pending_review }} 待審核
+        </div>
+        <div
+          v-if="pendingReviewWaitlist(item as unknown as Course) > 0"
+          class="pending-occupancy-hint pending-occupancy-hint--waitlist"
+        >
+          {{ pendingReviewWaitlist(item as unknown as Course) }} 待審候補（不佔位）
+          <span class="pending-occupancy-hint__note">須先完成審核才能升正式</span>
+        </div>
+      </template>
+      <template #cell-__waitlist="{ item }">
+        <el-button
+          v-if="(item.waitlist_count as number) > 0"
+          link type="warning" size="small"
+          @click="openWaitlist(item as unknown as Course)"
+        >{{ item.waitlist_count }}</el-button>
+        <span v-else>0</span>
+      </template>
+      <template #cell-__allowWaitlist="{ item }">
+        <el-tag :type="item.allow_waitlist ? 'success' : 'info'" size="small">
+          {{ item.allow_waitlist ? '是' : '否' }}
+        </el-tag>
+      </template>
+      <template v-if="canWrite" #actions="{ item }">
+        <el-button size="small" @click="openEnrolled(item as unknown as Course)">報名排序</el-button>
+        <el-button size="small" @click="openEdit(item as unknown as Course)">編輯</el-button>
+        <el-button size="small" type="danger" :loading="deletingId === item.id" @click="handleDelete(item as unknown as Course)">停用</el-button>
+      </template>
+    </AdminListCards>
 
     <!-- 新增/編輯對話框 -->
     <el-dialog v-model="dialogVisible" :title="editingId ? '編輯課程' : '新增課程'" width="480px" destroy-on-close>
@@ -242,6 +304,29 @@
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSave" :loading="saving" :disabled="saving">儲存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 繳費單批次列印：A4 一頁 8 格（含 QR），裁切後貼信封袋發給家長 -->
+    <el-dialog v-model="slipDialogVisible" :title="`列印繳費單 — ${slipCourse?.name ?? ''}`" width="380px" destroy-on-close>
+      <el-form label-width="90px" size="default" @submit.prevent>
+        <el-form-item label="繳費期限">
+          <el-date-picker
+            v-model="slipDueDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="留空則單上不印期限"
+            style="width: 100%"
+            data-test="slip-due-date"
+          />
+        </el-form-item>
+      </el-form>
+      <div style="font-size: 12px; color: var(--text-tertiary);">
+        產出該課程所有未結清學生的繳費單（同學生同學期多課程合併一張；已繳清與純候補不出單）。
+      </div>
+      <template #footer>
+        <el-button @click="slipDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="slipPrinting" data-test="slip-print-confirm" @click="handlePrintSlips">列印</el-button>
       </template>
     </el-dialog>
   <!-- 候補名單 Drawer -->
@@ -503,7 +588,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { CopyDocument, Rank, Sort, VideoPlay } from '@element-plus/icons-vue'
 import draggable from 'vuedraggable'
-import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
+import { openPdfInNewTab } from '@/utils/printPdfWindow'
+import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse, getCoursePaymentSlipsPdf,
          getCourseWaitlist, getCourseEnrolled, reorderCourseEnrolled, promoteWaitlist,
          reorderCourses, sweepExpiredWaitlist } from '@/api/activity'
 import type {
@@ -515,6 +601,8 @@ import type { ApiBody } from '@/api/_generated/typed'
 import { COURSE_STATUS_LABEL, COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useClientTableFilter } from '@/composables'
 import { hasPermission } from '@/utils/auth'
@@ -566,7 +654,67 @@ function formatSchedule(row: Course) {
   return formatWeekdaySchedule(row)
 }
 
+// ── 繳費單批次列印 ──────────────────────────────────────────────
+const slipDialogVisible = ref(false)
+const slipCourse = ref<{ id: number; name: string } | null>(null)
+const slipDueDate = ref<string>('')
+const slipPrinting = ref(false)
+
+function defaultSlipDueDate(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 14)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function openSlipDialog(row: Course) {
+  slipCourse.value = { id: row.id, name: row.name }
+  slipDueDate.value = defaultSlipDueDate()
+  slipDialogVisible.value = true
+}
+
+// blob 回應的錯誤 body 也是 Blob，得先讀文字才能取出後端 detail（例如「無未結清報名」）
+async function slipErrorDetail(err: unknown): Promise<string | null> {
+  const data = (err as { response?: { data?: unknown } })?.response?.data
+  if (data instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await data.text()) as { detail?: string }
+      return parsed.detail ?? null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+async function handlePrintSlips() {
+  const course = slipCourse.value
+  if (!course) return
+  slipPrinting.value = true
+  try {
+    // openPdfInNewTab 內部吞錯走 onError，成功回 win、失敗回 null——失敗時保留 dialog 供重試
+    const win = await openPdfInNewTab({
+      fetchBlob: async () => {
+        const res = await getCoursePaymentSlipsPdf(course.id, slipDueDate.value || undefined)
+        return res.data
+      },
+      loadingText: '繳費單產生中…',
+      onError: (err: unknown) => {
+        void slipErrorDetail(err).then((detail) => {
+          ElMessage.error(detail || friendlyError('繳費單 PDF 載入失敗', err))
+        })
+      },
+    })
+    if (win) slipDialogVisible.value = false
+  } finally {
+    slipPrinting.value = false
+  }
+}
+
 const courses = ref<Course[]>([])
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
 const loading = ref(false)
 const deletingId = ref<number | null>(null)
 const dialogVisible = ref(false)
@@ -624,6 +772,18 @@ const {
   source: () => courses.value as unknown as Record<string, unknown>[],
   searchFields: (r) => [r.name as string | undefined, instructorName(r as unknown as Course)],
 })
+
+// 手機卡片欄位（__ 前綴為 slot-only 欄）。容量／候補的多行提示改由 slot 沿用原邏輯
+const courseCardColumns = [
+  { label: '價格', prop: '__price', formatter: (r: Record<string, unknown>) => `$${(r.price as number)?.toLocaleString() ?? '-'}` },
+  { label: '堂數', prop: '__sessions', formatter: (r: Record<string, unknown>) => (r.sessions ?? '-') },
+  { label: '上課時段', prop: '__schedule', formatter: (r: Record<string, unknown>) => formatSchedule(r as unknown as Course) || '-' },
+  { label: '限定年級', prop: '__grades' },
+  { label: '負責老師', prop: '__instructor', formatter: (r: Record<string, unknown>) => instructorName(r as unknown as Course) || '未設定' },
+  { label: '容量', prop: '__capacity' },
+  { label: '候補', prop: '__waitlist' },
+  { label: '允許候補', prop: '__allowWaitlist' },
+]
 
 const waitlistDrawer = ref(false)
 const waitlistCourse = ref<{ id: number; name: string } | null>(null)

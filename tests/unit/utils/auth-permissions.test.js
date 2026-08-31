@@ -156,22 +156,27 @@ describe('權限邏輯（text[] 版本）', () => {
       expect(canAccessRoute('/workbench/approvals')).toBe(true)
       // 僅有 APPROVALS 不得進高風險頁（精確 scope，避免過度授權）
       expect(canAccessRoute('/workbench/high-risk')).toBe(false)
+      expect(canAccessRoute('/governance/high-risk')).toBe(false)
     })
 
-    it('工作台高風險頁 /workbench/high-risk 需要 HIGH_RISK_READ', () => {
+    it('高風險事件頁需要 HIGH_RISK_READ（新舊路徑同權限）', () => {
+      // 2026-08-20 整併：頁面移至 /governance/high-risk，舊路徑保留 redirect 與同一條規則。
       setUserInfo({ role: 'admin', permission_names: ['HIGH_RISK_READ'] })
+      expect(canAccessRoute('/governance/high-risk')).toBe(true)
       expect(canAccessRoute('/workbench/high-risk')).toBe(true)
-      // 只被授予高風險事件者仍可進工作台外層（落點由 router redirect 導到 high-risk）
-      expect(canAccessRoute('/workbench')).toBe(true)
-      // 僅有 HIGH_RISK_READ 不得進待簽核頁
+      // 整併後工作台只剩待簽核：高風險碼不再是它的入場券
+      expect(canAccessRoute('/workbench')).toBe(false)
       expect(canAccessRoute('/workbench/approvals')).toBe(false)
     })
 
-    it('AUDIT_LOGS（操作紀錄）不再能進高風險事件頁', () => {
-      // 2026-08-03 細分：高風險事件改吃 HIGH_RISK_READ，授「報表 › 操作紀錄」
-      // 不等於授「審核工作台 › 高風險事件」。
+    it('AUDIT_LOGS（操作紀錄）不能進高風險事件或資料異常待辦分頁', () => {
+      // 2026-08-03 細分：高風險事件改吃 HIGH_RISK_READ；2026-08-20 三頁整併為
+      // /governance 三分頁後，分頁之間一樣不互相授權（子路徑一律 exact，禁 prefix）。
       setUserInfo({ role: 'admin', permission_names: ['AUDIT_LOGS'] })
       expect(canAccessRoute('/audit-logs')).toBe(true)
+      expect(canAccessRoute('/governance/audit-logs')).toBe(true)
+      expect(canAccessRoute('/governance/high-risk')).toBe(false)
+      expect(canAccessRoute('/governance/data-quality')).toBe(false)
       expect(canAccessRoute('/workbench/high-risk')).toBe(false)
     })
 

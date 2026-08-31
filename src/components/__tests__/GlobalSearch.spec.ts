@@ -6,8 +6,9 @@ import GlobalSearch from '../GlobalSearch.vue'
 import * as searchApi from '@/api/search'
 
 const push = vi.fn()
+const mockRoutes: Array<{ path: string; meta?: { title?: string } }> = []
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push, getRoutes: () => [] }),
+  useRouter: () => ({ push, getRoutes: () => mockRoutes }),
 }))
 vi.mock('@/utils/auth', () => ({ canAccessRoute: () => true }))
 vi.mock('@/utils/highlight', () => ({ highlight: (s: string) => s }))
@@ -21,11 +22,13 @@ const mountOpts = () => ({
 const emptyData = {
   q: '', students: [], employees: [], guardians: [], classrooms: [],
   fees: [], activity_registrations: [], recruitment: [], announcements: [],
+  leaves: [], overtimes: [], surveys: [], activity_catalog: [],
 }
 
 describe('GlobalSearch', () => {
   beforeEach(() => {
     push.mockClear()
+    mockRoutes.length = 0
     // NOTE: do NOT call mockReset here - it breaks the component's live binding
     // in subsequent tests. Instead set implementation fresh per test.
     vi.mocked(searchApi.globalSearch).mockResolvedValue({ data: emptyData } as never)
@@ -63,6 +66,208 @@ describe('GlobalSearch', () => {
     await wrapper.find('.gs-item').trigger('click')
     expect(push).toHaveBeenCalledWith('/students/profile/7')
     wrapper.unmount()
+  })
+
+  it('員工結果點擊直達員工詳情頁（非清單頁帶 search）', async () => {
+    vi.mocked(searchApi.globalSearch).mockResolvedValue({
+      data: {
+        ...emptyData,
+        q: '王老',
+        employees: [{ id: 3, name: '王老師', employee_id: 'E1', title: '導師' }],
+      },
+    } as never)
+    const wrapper = mount(GlobalSearch, mountOpts())
+    ;(wrapper.vm as any).open()
+    await nextTick()
+    await wrapper.find('input').setValue('王老')
+    await new Promise(r => setTimeout(r, 350))
+    await flushPromises()
+    await nextTick()
+    await wrapper.find('.gs-item').trigger('click')
+    expect(push).toHaveBeenCalledWith('/employees/3')
+    wrapper.unmount()
+  })
+
+  it('班級結果點擊帶 selected 深連結開啟該班抽屜', async () => {
+    vi.mocked(searchApi.globalSearch).mockResolvedValue({
+      data: {
+        ...emptyData,
+        q: '蘋果',
+        classrooms: [{ id: 5, name: '蘋果班', school_year: 114, semester: 1 }],
+      },
+    } as never)
+    const wrapper = mount(GlobalSearch, mountOpts())
+    ;(wrapper.vm as any).open()
+    await nextTick()
+    await wrapper.find('input').setValue('蘋果')
+    await new Promise(r => setTimeout(r, 350))
+    await flushPromises()
+    await nextTick()
+    await wrapper.find('.gs-item').trigger('click')
+    expect(push).toHaveBeenCalledWith({ path: '/classrooms', query: { selected: '5' } })
+    wrapper.unmount()
+  })
+
+  describe('新增類別導航（請假/加班/問卷/才藝課程用品）', () => {
+    const openWith = async (data: Record<string, unknown>, q: string) => {
+      vi.mocked(searchApi.globalSearch).mockResolvedValue({
+        data: { ...emptyData, q, ...data },
+      } as never)
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue(q)
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      return wrapper
+    }
+
+    it('請假結果點擊導清單頁帶 search 預填', async () => {
+      const wrapper = await openWith({
+        leaves: [{ id: 1, employee_name: '林美麗', leave_type: 'sick', start_date: '2026-08-03', status: 'approved' }],
+      }, '林美麗')
+      expect(wrapper.text()).toContain('病假')
+      await wrapper.find('.gs-item').trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/leaves', query: { search: '林美麗' } })
+      wrapper.unmount()
+    })
+
+    it('加班結果點擊導清單頁帶 search 預填', async () => {
+      const wrapper = await openWith({
+        overtimes: [{ id: 2, employee_name: '林美麗', overtime_date: '2026-08-05', hours: 2, status: 'pending' }],
+      }, '林美麗')
+      await wrapper.find('.gs-item').trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/overtime', query: { search: '林美麗' } })
+      wrapper.unmount()
+    })
+
+    it('問卷結果點擊直達問卷詳情頁', async () => {
+      const wrapper = await openWith({
+        surveys: [{ id: 9, title: '運動會參加調查', status: 'published', event_date: null }],
+      }, '運動會')
+      await wrapper.find('.gs-item').trigger('click')
+      expect(push).toHaveBeenCalledWith('/surveys/9')
+      wrapper.unmount()
+    })
+
+    it('才藝課程/用品依 kind 導到對應設定 tab', async () => {
+      const wrapper = await openWith({
+        activity_catalog: [
+          { id: 4, name: '直排輪課程', kind: 'course', school_year: 115, semester: 1 },
+          { id: 5, name: '直排輪護具組', kind: 'supply', school_year: 115, semester: 1 },
+        ],
+      }, '直排輪')
+      const items = wrapper.findAll('.gs-item')
+      await items[0].trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/activity/settings', query: { tab: 'courses' } })
+      await items[1].trigger('click')
+      expect(push).toHaveBeenCalledWith({ path: '/activity/settings', query: { tab: 'supplies' } })
+      wrapper.unmount()
+    })
+  })
+
+  describe('頁面標題同義詞', () => {
+    it('查「薪水」可命中標題含「薪資」的頁面', async () => {
+      mockRoutes.push({ path: '/salary', meta: { title: '薪資管理' } })
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('薪水')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      expect(wrapper.text()).toContain('薪資管理')
+      wrapper.unmount()
+    })
+
+    it('無同義詞時仍走原本標題包含比對', async () => {
+      mockRoutes.push({ path: '/salary', meta: { title: '薪資管理' } })
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('不存在詞')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      expect(wrapper.text()).not.toContain('薪資管理')
+      wrapper.unmount()
+    })
+  })
+
+  describe('UX：最近搜尋 / 常用頁面 / skeleton', () => {
+    beforeEach(() => {
+      localStorage.clear()
+    })
+
+    it('空 query 顯示常用頁面快捷（權限內），點擊導航並關閉', async () => {
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      expect(wrapper.text()).toContain('常用頁面')
+      const opts = wrapper.findAll('[role="option"]')
+      expect(opts.length).toBeGreaterThan(0)
+      await opts[0].trigger('click')
+      expect(push).toHaveBeenCalledTimes(1)
+      wrapper.unmount()
+    })
+
+    it('選擇結果後記錄最近搜尋；重開顯示且點擊回填 query 重新搜尋', async () => {
+      vi.mocked(searchApi.globalSearch).mockResolvedValue({
+        data: {
+          ...emptyData,
+          q: '王小',
+          students: [{ id: 7, name: '王小明', student_id: 'S1', classroom_name: 'A班' }],
+        },
+      } as never)
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('王小')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      await nextTick()
+      await wrapper.find('.gs-item').trigger('click')
+
+      // 重開：最近搜尋出現在空 query 狀態
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      expect(wrapper.text()).toContain('最近搜尋')
+      expect(wrapper.text()).toContain('王小')
+
+      // 點最近搜尋 → 回填 query → debounce 後重打 API
+      vi.mocked(searchApi.globalSearch).mockClear()
+      await wrapper.find('.gs-item').trigger('click')
+      await new Promise(r => setTimeout(r, 350))
+      await flushPromises()
+      expect(searchApi.globalSearch).toHaveBeenCalledWith('王小')
+      wrapper.unmount()
+    })
+
+    it('清除最近搜尋後空狀態不再顯示', async () => {
+      localStorage.setItem('gs_recent_searches_v1', JSON.stringify(['王小明']))
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      expect(wrapper.text()).toContain('最近搜尋')
+      await wrapper.find('.gs-clear-btn').trigger('click')
+      await nextTick()
+      expect(wrapper.text()).not.toContain('最近搜尋')
+      expect(localStorage.getItem('gs_recent_searches_v1')).toBeNull()
+      wrapper.unmount()
+    })
+
+    it('API 載入中顯示 skeleton', async () => {
+      vi.mocked(searchApi.globalSearch).mockReturnValue(new Promise(() => {}) as never)
+      const wrapper = mount(GlobalSearch, mountOpts())
+      ;(wrapper.vm as any).open()
+      await nextTick()
+      await wrapper.find('input').setValue('王小')
+      await new Promise(r => setTimeout(r, 350))
+      await nextTick()
+      expect(wrapper.find('.gs-skel-row').exists()).toBe(true)
+      wrapper.unmount()
+    })
   })
 
   describe('combobox ARIA 契約', () => {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
 import {
@@ -49,7 +50,19 @@ const specialBonuses = ref<SpecialBonus[]>([])
 const classTargets = ref<ClassTarget[]>([])
 const loading = ref(false)
 const busy = ref(false)
-const tab = ref('settlements')
+const route = useRoute()
+const router = useRouter()
+
+// tab／employee 上 URL query：分享連結或重整能停在同一個分頁／同一個員工的
+// 計算軌跡，不用重新點（比照 CycleDetailPanel.vue 的 view query 同步 pattern）。
+const VALID_TABS = ['settlements', 'bonuses', 'classes']
+const initialQueryTab = String(route?.query?.tab ?? '')
+const tab = ref(VALID_TABS.includes(initialQueryTab) ? initialQueryTab : 'settlements')
+watch(tab, (next) => {
+  if (router?.replace) {
+    router.replace({ query: { ...(route?.query || {}), tab: next } })
+  }
+})
 
 // ── Provenance Drawer ─────────────────────────────────────────────
 const provenanceDrawerVisible = ref(false)
@@ -72,7 +85,22 @@ const DEDUCTION_KEYS: ProvenanceKey[] = Object.keys(DEDUCTION_KEY_LABELS).map((k
 function openProvenanceDrawer(employeeId: number) {
   provenanceEmployeeId.value = employeeId
   provenanceDrawerVisible.value = true
+  if (router?.replace) {
+    router.replace({ query: { ...(route?.query || {}), employee: String(employeeId) } })
+  }
 }
+
+// drawer 關閉時清掉 employee query（同 CycleDetailPanel.vue 的 openDetail 收尾 pattern）。
+// ⚠ 不可加 `if (!route?.query?.employee) return` 這種依賴 route.query 即時反應性的
+// guard：測試 mock 的 router.replace 無 side effect，不會回寫 route.query，guard
+// 會誤判「本來就沒有」而整個跳過清除（Task 1 CycleDetailPanel.vue 已踩過同一坑，
+// 此處比照拿掉 guard，改無條件呼叫）。
+watch(provenanceDrawerVisible, (visible) => {
+  if (visible) return
+  const q = { ...(route?.query || {}) }
+  delete q.employee
+  router?.replace?.({ query: q })
+})
 // ─────────────────────────────────────────────────────────────────
 
 // 文案取自單一來源（constants/appraisalYearEnd.STATUS_LABEL），保留本地名供 template 與既有測試
@@ -118,8 +146,11 @@ function sortBySettlementStatus(a: Settlement, b: Settlement) {
   return order.indexOf(a.status) - order.indexOf(b.status)
 }
 
+const loadError = ref(false)
+
 async function load() {
   loading.value = true
+  loadError.value = false
   try {
     // 四支彼此無依賴、皆只吃 cycleId → 併發載入，首載等待取最慢者而非四次 round-trip 相加
     const [cyclesRes, settRes, sbRes, ctRes] = await Promise.all([
@@ -135,6 +166,7 @@ async function load() {
     classTargets.value = ctRes.data
   } catch (e) {
     ElMessage.error(apiError(e, '載入失敗'))
+    loadError.value = true
   } finally {
     loading.value = false
   }
@@ -228,7 +260,13 @@ async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  load()
+  const initialEmployee = Number(route?.query?.employee)
+  if (!Number.isNaN(initialEmployee) && initialEmployee > 0) {
+    openProvenanceDrawer(initialEmployee)
+  }
+})
 </script>
 
 <template>
@@ -240,6 +278,11 @@ onMounted(load)
       <el-button :icon="Refresh" @click="load">重新載入</el-button>
       <el-button :icon="Download" tag="a" :href="exportYearEndSummaryXlsxUrl(cycleId)">年終獎金總表</el-button>
       <el-button :icon="Download" tag="a" :href="exportYearEndTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
+    </div>
+
+    <div v-if="loadError" class="ye-detail-error">
+      載入失敗
+      <el-button data-test="detail-load-retry" size="small" text type="primary" @click="load">重試</el-button>
     </div>
 
     <el-tabs v-model="tab">
@@ -430,6 +473,14 @@ onMounted(load)
 </template>
 
 <style scoped>
+.ye-detail-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
 .ye-detail { padding: var(--space-4); }
 .sign-progress-wrap { margin: 0 0 var(--space-3); }
 .toolbar { margin: var(--space-4) 0; display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }

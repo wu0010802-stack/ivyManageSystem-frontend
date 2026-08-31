@@ -15,7 +15,7 @@
               ref="inputRef"
               v-model="query"
               class="gs-input"
-              placeholder="搜尋學生、員工、家長、班級、學費、才藝、招生、公告、頁面…"
+              placeholder="搜尋學生、員工、家長、班級、學費、才藝、招生、公告、請假、加班、問卷、頁面…"
               autocomplete="off"
               role="combobox"
               aria-controls="gs-listbox"
@@ -29,8 +29,16 @@
 
           <div class="gs-results" ref="resultsRef" id="gs-listbox" role="listbox" aria-label="搜尋結果">
             <template v-if="query.trim().length >= 2">
+              <div v-if="isLoading && !groups.length && !pageEntries.length" class="gs-skeleton" aria-hidden="true">
+                <div v-for="n in 3" :key="n" class="gs-skel-row">
+                  <span class="gs-skel-icon"></span>
+                  <span class="gs-skel-bar" :style="{ width: `${72 - n * 14}%` }"></span>
+                </div>
+              </div>
               <template v-for="group in groups" :key="group.key">
-                <div class="gs-section-title" role="presentation">{{ group.title }}</div>
+                <div class="gs-section-title" role="presentation">
+                  {{ group.title }}<span class="gs-count">{{ group.items.length }}</span>
+                </div>
                 <div
                   v-for="entry in group.items"
                   :key="group.key + '-' + entry.flatIndex"
@@ -71,7 +79,49 @@
                 無符合「{{ query }}」的結果
               </div>
             </template>
-            <div v-else class="gs-hint">輸入至少 2 個字搜尋</div>
+            <template v-else>
+              <template v-if="idleRecentEntries.length">
+                <div class="gs-section-title" role="presentation">
+                  最近搜尋
+                  <button class="gs-clear-btn" type="button" @click="clearRecent">清除</button>
+                </div>
+                <div
+                  v-for="entry in idleRecentEntries"
+                  :key="'recent-' + entry.flatIndex"
+                  :id="`gs-opt-${entry.flatIndex}`"
+                  class="gs-item"
+                  role="option"
+                  :aria-selected="activeIndex === entry.flatIndex"
+                  :class="{ 'gs-item--active': activeIndex === entry.flatIndex }"
+                  @mouseenter="activeIndex = entry.flatIndex"
+                  @click="selectByFlat(entry.flatIndex)"
+                >
+                  <el-icon class="gs-item-icon"><Clock /></el-icon>
+                  <span class="gs-item-label">{{ entry.label }}</span>
+                </div>
+              </template>
+
+              <template v-if="idleQuickEntries.length">
+                <div class="gs-section-title" role="presentation">常用頁面</div>
+                <div
+                  v-for="entry in idleQuickEntries"
+                  :key="'quick-' + entry.flatIndex"
+                  :id="`gs-opt-${entry.flatIndex}`"
+                  class="gs-item"
+                  role="option"
+                  :aria-selected="activeIndex === entry.flatIndex"
+                  :class="{ 'gs-item--active': activeIndex === entry.flatIndex }"
+                  @mouseenter="activeIndex = entry.flatIndex"
+                  @click="selectByFlat(entry.flatIndex)"
+                >
+                  <el-icon class="gs-item-icon"><Grid /></el-icon>
+                  <span class="gs-item-label">{{ entry.label }}</span>
+                  <span class="gs-item-sub">{{ entry.sub }}</span>
+                </div>
+              </template>
+
+              <div v-if="!idleEntries.length" class="gs-hint">輸入至少 2 個字搜尋</div>
+            </template>
           </div>
 
           <div class="gs-footer">
@@ -88,10 +138,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, User, Avatar, Bell, Grid } from '@element-plus/icons-vue'
+import { Search, User, Avatar, Bell, Grid, Clock, Calendar, AlarmClock, Document, ShoppingBag } from '@element-plus/icons-vue'
 import { globalSearch } from '@/api/search'
 import { canAccessRoute } from '@/utils/auth'
 import { highlight } from '@/utils/highlight'
+import { tenantGetItem, tenantSetItem, tenantRemoveItem } from '@/utils/tenantStorage'
+import { LEAVE_TYPE_MAP } from '@/utils/leaves'
 
 const router = useRouter()
 
@@ -105,6 +157,50 @@ const modalRef = ref<HTMLElement | null>(null)
 
 type Item = Record<string, unknown>
 const data = ref<Record<string, Item[]>>({})
+
+// ── 最近搜尋（per-tenant localStorage）────────────────────────────────────────
+const RECENT_KEY = 'gs_recent_searches_v1'
+const RECENT_MAX = 8
+const recent = ref<string[]>([])
+
+function loadRecent() {
+  try {
+    const raw = tenantGetItem(RECENT_KEY)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    recent.value = Array.isArray(parsed)
+      ? parsed.filter((s): s is string => typeof s === 'string').slice(0, RECENT_MAX)
+      : []
+  } catch {
+    recent.value = []
+  }
+}
+
+function recordRecent(q: string) {
+  const s = q.trim()
+  if (s.length < 2) return
+  const next = [s, ...recent.value.filter(x => x !== s)].slice(0, RECENT_MAX)
+  recent.value = next
+  tenantSetItem(RECENT_KEY, JSON.stringify(next))
+}
+
+function clearRecent() {
+  recent.value = []
+  tenantRemoveItem(RECENT_KEY)
+}
+
+// ── 常用頁面快捷（空 query 狀態；依權限過濾）─────────────────────────────────
+interface QuickLink { title: string; path: string }
+const QUICK_LINKS: QuickLink[] = [
+  { title: '學生管理', path: '/students' },
+  { title: '員工管理', path: '/employees' },
+  { title: '班級管理', path: '/classrooms' },
+  { title: '考勤管理', path: '/attendance' },
+  { title: '請假管理', path: '/leaves' },
+  { title: '薪資管理', path: '/salary' },
+  { title: '學費管理', path: '/fees' },
+  { title: '公告', path: '/announcements' },
+]
+const quickLinks = computed(() => QUICK_LINKS.filter(l => canAccessRoute(l.path)))
 
 interface SectionDef {
   key: string
@@ -123,7 +219,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'employees', title: '員工', icon: markRaw(User),
     label: i => String(i.name ?? ''),
     sub: i => String(i.title || i.employee_id || ''),
-    navigate: i => router.push({ path: '/employees', query: { section: 'employees', search: String(i.name ?? '') } }) },
+    navigate: i => router.push(`/employees/${i.id}`) },
   { key: 'guardians', title: '家長', icon: markRaw(Avatar),
     label: i => String(i.name ?? ''),
     sub: i => [i.child_name, i.phone_masked].filter(Boolean).join('．'),
@@ -131,7 +227,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'classrooms', title: '班級', icon: markRaw(Grid),
     label: i => String(i.name ?? ''),
     sub: i => i.school_year ? `${i.school_year} 學年` : '',
-    navigate: () => router.push('/classrooms') },
+    navigate: i => router.push({ path: '/classrooms', query: { selected: String(i.id) } }) },
   { key: 'fees', title: '學費', icon: markRaw(Grid),
     label: i => String(i.student_name ?? ''),
     sub: i => [i.period, i.status === 'paid' ? '已繳' : '未繳'].filter(Boolean).join('．'),
@@ -148,6 +244,22 @@ const SECTIONS: SectionDef[] = [
     label: i => String(i.title ?? ''),
     sub: () => '',
     navigate: () => router.push('/announcements') },
+  { key: 'leaves', title: '請假', icon: markRaw(Calendar),
+    label: i => String(i.employee_name ?? ''),
+    sub: i => [LEAVE_TYPE_MAP[String(i.leave_type)]?.label ?? i.leave_type, i.start_date].filter(Boolean).join('．'),
+    navigate: i => router.push({ path: '/leaves', query: { search: String(i.employee_name ?? '') } }) },
+  { key: 'overtimes', title: '加班', icon: markRaw(AlarmClock),
+    label: i => String(i.employee_name ?? ''),
+    sub: i => String(i.overtime_date ?? ''),
+    navigate: i => router.push({ path: '/overtime', query: { search: String(i.employee_name ?? '') } }) },
+  { key: 'surveys', title: '問卷', icon: markRaw(Document),
+    label: i => String(i.title ?? ''),
+    sub: i => String(i.event_date ?? ''),
+    navigate: i => router.push(`/surveys/${i.id}`) },
+  { key: 'activity_catalog', title: '才藝課程/用品', icon: markRaw(ShoppingBag),
+    label: i => String(i.name ?? ''),
+    sub: i => [i.kind === 'supply' ? '用品' : '課程', i.school_year ? `${i.school_year}-${i.semester ?? ''}` : ''].filter(Boolean).join('．'),
+    navigate: i => router.push({ path: '/activity/settings', query: { tab: i.kind === 'supply' ? 'supplies' : 'courses' } }) },
 ]
 
 interface RenderedEntry { item: Item; flatIndex: number; label: string; sub: string }
@@ -164,17 +276,40 @@ const groups = computed<RenderedGroup[]>(() => {
   return out
 })
 
+// 口語同義詞 → 頁面標題關鍵字：query 與左側詞互含時，額外用右側詞比對標題
+const PAGE_TITLE_ALIASES: Record<string, string[]> = {
+  薪水: ['薪資'],
+  打卡: ['考勤', '出勤'],
+  出勤: ['考勤'],
+  小孩: ['學生'],
+  幼生: ['學生'],
+  小朋友: ['學生'],
+  休假: ['請假'],
+  放假: ['請假', '行事曆'],
+  繳費: ['學費', '收費'],
+  收費: ['學費'],
+}
+
+function pageMatchTerms(q: string): string[] {
+  const terms = [q]
+  for (const [alias, targets] of Object.entries(PAGE_TITLE_ALIASES)) {
+    if (q.includes(alias) || alias.includes(q)) terms.push(...targets)
+  }
+  return terms
+}
+
 interface PageRow { title: string; path: string }
 const pages = computed<PageRow[]>(() => {
   const q = query.value.trim()
   if (q.length < 2) return []
+  const terms = pageMatchTerms(q)
   const seen = new Set<string>()
   const out: PageRow[] = []
   for (const r of router.getRoutes()) {
     const title = r.meta?.title
     if (!title || r.path.includes(':') || seen.has(r.path)) continue
     if (!canAccessRoute(r.path)) continue
-    if (!String(title).includes(q)) continue
+    if (!terms.some(t => String(title).includes(t))) continue
     seen.add(r.path)
     out.push({ title: String(title), path: r.path })
   }
@@ -186,18 +321,47 @@ const pageEntries = computed<RenderedEntry[]>(() =>
   pages.value.map((p, i) => ({ item: p as unknown as Item, flatIndex: pageBase.value + i, label: p.title, sub: p.path })),
 )
 
-const totalCount = computed(() => pageBase.value + pages.value.length)
+// ── 空 query（idle）狀態的扁平清單：最近搜尋 + 常用頁面，共用鍵盤導航 ─────────
+const isIdle = computed(() => query.value.trim().length < 2)
+
+interface IdleEntry { kind: 'recent' | 'quick'; label: string; sub: string; flatIndex: number; path?: string }
+const idleEntries = computed<IdleEntry[]>(() => {
+  if (!isIdle.value) return []
+  let idx = 0
+  const out: IdleEntry[] = []
+  for (const s of recent.value) out.push({ kind: 'recent', label: s, sub: '', flatIndex: idx++ })
+  for (const l of quickLinks.value) out.push({ kind: 'quick', label: l.title, sub: l.path, flatIndex: idx++, path: l.path })
+  return out
+})
+const idleRecentEntries = computed(() => idleEntries.value.filter(e => e.kind === 'recent'))
+const idleQuickEntries = computed(() => idleEntries.value.filter(e => e.kind === 'quick'))
+
+const totalCount = computed(() =>
+  isIdle.value ? idleEntries.value.length : pageBase.value + pages.value.length,
+)
 
 function selectByFlat(flat: number) {
+  if (isIdle.value) {
+    const entry = idleEntries.value[flat]
+    if (!entry) return
+    if (entry.kind === 'recent') { query.value = entry.label; return } // 回填後交給 watch 重新搜尋
+    if (entry.path) { router.push(entry.path); close() }
+    return
+  }
   // 先找實體區塊
   let idx = 0
   for (const sec of SECTIONS) {
     const rows = data.value[sec.key] || []
-    if (flat < idx + rows.length) { sec.navigate(rows[flat - idx]); close(); return }
+    if (flat < idx + rows.length) {
+      recordRecent(query.value)
+      sec.navigate(rows[flat - idx])
+      close()
+      return
+    }
     idx += rows.length
   }
   const page = pages.value[flat - idx]
-  if (page) { router.push(page.path); close() }
+  if (page) { recordRecent(query.value); router.push(page.path); close() }
 }
 
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -274,6 +438,7 @@ function open() {
   query.value = ''
   activeIndex.value = -1
   data.value = {}
+  loadRecent()
   nextTick(() => inputRef.value?.focus())
 }
 
@@ -435,6 +600,59 @@ defineExpose({ open })
   font-size: 12px;
   color: var(--text-tertiary, #9ca3af);
   flex-shrink: 0;
+}
+
+.gs-count {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--text-tertiary, #9ca3af);
+}
+
+.gs-clear-btn {
+  float: right;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--text-tertiary, #9ca3af);
+  cursor: pointer;
+  padding: 0;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.gs-clear-btn:hover {
+  color: var(--color-primary, #4f46e5);
+  text-decoration: underline;
+}
+
+/* ===== Loading skeleton ===== */
+.gs-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  margin: 0 8px;
+}
+
+.gs-skel-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: var(--border-color-light, #e5e7eb);
+  flex-shrink: 0;
+  animation: gs-pulse 1.2s ease-in-out infinite;
+}
+
+.gs-skel-bar {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--border-color-light, #e5e7eb);
+  animation: gs-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes gs-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .gs-empty,

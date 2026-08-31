@@ -1,9 +1,11 @@
 /**
- * 收支簽收（廠商付款／雜項收款）共用常數。
+ * 收付款管理（廠商付款／雜項收款）共用常數。
  * 原本 PAYMENT_METHOD_OPTIONS / paymentMethodLabel 在 vendorPayment.ts 與
  * miscReceipt.ts 重複定義（值相同），Summary interface 亦兩檔各一份；
  * 收斂於此，兩 api 模組 re-export 維持既有 import 路徑。
  */
+export type PaymentMethod = 'cash' | 'bank_transfer' | 'check' | 'linepay' | 'other'
+
 export const PAYMENT_METHOD_OPTIONS = [
   { value: 'cash', label: '現金' },
   { value: 'bank_transfer', label: '銀行匯款' },
@@ -40,7 +42,8 @@ export const VENDOR_CATEGORY_OPTIONS = [
 export const vendorCategoryLabel = (value: string) =>
   VENDOR_CATEGORY_OPTIONS.find((o) => o.value === value)?.label || value
 
-/** 區間彙總（跨狀態），對應後端 GET /vendor-payments/summary 與 /misc-receipts/summary（shape 相同）。 */
+/** 區間彙總（跨狀態），對應後端 GET /vendor-payments/summary 與 /misc-receipts/summary（shape 相同）。
+ *  pending/signed 為憑證軸既有欄位；其餘為內控流程分桶（方案 A）。 */
 export interface SignoffSummary {
   total_count: number
   total_amount: number
@@ -48,4 +51,33 @@ export interface SignoffSummary {
   pending_amount: number
   signed_count: number
   signed_amount: number
+  pending_approval_count: number
+  pending_approval_amount: number
+  approved_unsettled_count: number
+  approved_unsettled_amount: number
+  awaiting_evidence_count: number
+  awaiting_evidence_amount: number
+  awaiting_reconcile_count: number
+  awaiting_reconcile_amount: number
+  exception_count: number
+  exception_amount: number
+}
+
+export const EMPTY_SIGNOFF_SUMMARY: SignoffSummary = {
+  total_count: 0,
+  total_amount: 0,
+  pending_count: 0,
+  pending_amount: 0,
+  signed_count: 0,
+  signed_amount: 0,
+  pending_approval_count: 0,
+  pending_approval_amount: 0,
+  approved_unsettled_count: 0,
+  approved_unsettled_amount: 0,
+  awaiting_evidence_count: 0,
+  awaiting_evidence_amount: 0,
+  awaiting_reconcile_count: 0,
+  awaiting_reconcile_amount: 0,
+  exception_count: 0,
+  exception_amount: 0,
 }

@@ -13,7 +13,7 @@
  *
  * `vite build` 會把 NODE_ENV 換成 'production'，setup store 的 $reset 變成 noop →
  * 不 throw → catch 永不執行 → invalidate() 一次都沒被呼叫 → 教師 A 登出、B 登入後
- * 仍讀得到 A 的家長對話與學生過敏/用藥/缺席。
+ * 仍讀得到 A 的學生過敏/用藥/缺席。
  *
  * 姊妹測試 clearAuth_resets_setup_stores_2026_06_25.test.ts 跑在 NODE_ENV=test，
  * 走的正是唯一會正常運作的那條分支，因此恆綠、遮蔽本問題。
@@ -23,7 +23,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
 import { clearAuth } from '@/utils/auth'
-import { usePortalMessagesStore } from '@/stores/portalMessages'
 import { usePortalDashboardStore } from '@/stores/portalDashboard'
 
 describe('clearAuth 在正式版語意下仍需清空 setup store', () => {
@@ -38,24 +37,8 @@ describe('clearAuth 在正式版語意下仍需清空 setup store', () => {
   })
 
   it('setup store 的 $reset 在 production 是 noop（釘住前提，避免 pinia 改版後本檔失去意義）', () => {
-    const store = usePortalMessagesStore()
+    const store = usePortalDashboardStore()
     expect(() => store.$reset()).not.toThrow()
-  })
-
-  it('登出時清空 portalMessages 的 threads / threadsLoaded / messagesByThread', () => {
-    const store = usePortalMessagesStore()
-    // 灌入前一位教師的家長訊息串（含學生姓名 + 對話 PII）
-    store.threads = [{ id: 1, student_name: '王小明', last_body: '請假事宜' }]
-    store.threadsLoaded = true
-    store.messagesByThread = {
-      1: { items: [{ id: 10, body: '收到' }], next_cursor: null, hasMore: false },
-    }
-
-    clearAuth({ notifyServer: false })
-
-    expect(store.threads).toEqual([])
-    expect(store.threadsLoaded).toBe(false)
-    expect(store.messagesByThread).toEqual({})
   })
 
   it('登出時清空 portalDashboard 的 summary（含過敏/用藥/缺席）', () => {

@@ -73,7 +73,7 @@
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="scope">
             <el-button
-              v-if="canWriteSalary"
+              v-if="canUnfinalize"
               type="danger"
               size="small"
               link
@@ -105,7 +105,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Money, User, WarningFilled } from '@element-plus/icons-vue'
 import StatCard from '@/components/common/StatCard.vue'
 import { finalizeMonth, unfinalizeSalary } from '@/api/salary'
-import { hasPermission } from '@/utils/auth'
+import { getUserInfo, hasPermission } from '@/utils/auth'
 import { money } from '@/utils/format'
 import { computeBaseTransferAmount } from '@/utils/salaryAmounts'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -121,7 +121,13 @@ const q = inject<{ year: number; month: number }>('settleQuery', {
 const { notify } = useErrorNotify()
 
 const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
-const canForceFinalize = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
+const canForceFinalize = computed(
+    () => canWriteSalary.value && hasPermission('ACTIVITY_PAYMENT_APPROVE'),
+)
+const canUnfinalize = computed(() => {
+    const role = (getUserInfo() as { role?: string } | null)?.role
+    return canForceFinalize.value && (role === 'admin' || role === 'hr')
+})
 
 const totalGross = computed(() =>
     settlement.records.value.reduce((s, r) => s + Number(r.gross_salary || 0), 0),
@@ -147,7 +153,8 @@ const runFinalize = async (force = false, forceReason = '') => {
         const res = await finalizeMonth({
             year: q.year,
             month: q.month,
-            ...(force ? { force: true, force_reason: forceReason } : {}),
+            force,
+            ...(force ? { force_reason: forceReason } : {}),
         })
         blockers.value = []
         const d = res.data
@@ -204,7 +211,7 @@ const onForceFinalize = async () => {
 const unfinalizingId = ref<number | null>(null)
 
 const onUnfinalize = async (row: SettlementRecord) => {
-    if (unfinalizingId.value !== null) return
+    if (!canUnfinalize.value || unfinalizingId.value !== null) return
     unfinalizingId.value = row.id
     let reason: string
     try {

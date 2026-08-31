@@ -319,13 +319,13 @@ const hasFooterSlot = computed<boolean>(() => !!slots.footer)
 .pt-bsheet-dialog {
   background: var(--m3-surface-container-low, var(--pt-surface-card, #fff));
   border: var(--pt-hairline);
-  border-radius: 28px 28px 0 0;
-  box-shadow: var(--m3-elev-3, var(--pt-elev-3));
+  border-radius: var(--pt-hero-radius, 30px) var(--pt-hero-radius, 30px) 0 0;
+  box-shadow: var(--pt-shadow-float, var(--m3-elev-3, var(--pt-elev-3)));
   width: 100%;
   max-width: 640px;
   height: var(--pt-bsheet-h, 60vh);
   max-height: 92vh; /* 硬上限：防止 snap 值被覆寫成異常值時撐破畫面 */
-  transition: height var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+  transition: height var(--motion-page, 350ms) var(--motion-emphasized, cubic-bezier(0.05, 0.7, 0.1, 1));
   display: flex;
   flex-direction: column;
   outline: none;
@@ -352,7 +352,7 @@ const hasFooterSlot = computed<boolean>(() => !!slots.footer)
 }
 .pt-bsheet-enter-active .pt-bsheet-dialog,
 .pt-bsheet-leave-active .pt-bsheet-dialog {
-  transition: transform var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
+  transition: transform var(--motion-page, 350ms) var(--motion-emphasized, cubic-bezier(0.05, 0.7, 0.1, 1));
 }
 .pt-bsheet-enter-from, .pt-bsheet-leave-to { opacity: 0; }
 .pt-bsheet-enter-from .pt-bsheet-dialog,

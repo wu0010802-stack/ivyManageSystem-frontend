@@ -27,6 +27,7 @@
           :loading="ws.loading.value"
           @select="onAnomalySelect"
           @filter-change="onFilterChange"
+          @resolved="onResolved"
         />
       </div>
       <div class="col-detail">
@@ -46,9 +47,10 @@
       </div>
     </div>
 
-    <!-- 行動三 tab -->
-    <el-tabs v-else class="workspace-tabs">
-      <el-tab-pane label="名冊">
+    <!-- 行動三段流程：名冊／異常 → 明細。tab 受控，選取後自動推進到明細，
+         否則使用者在名冊點了人卻停在原頁，看不出發生了什麼。 -->
+    <el-tabs v-else v-model="mobileTab" class="workspace-tabs">
+      <el-tab-pane label="名冊" name="roster">
         <div class="col-roster">
           <RosterColumn
             :roster="ws.roster.value"
@@ -58,7 +60,7 @@
           />
         </div>
       </el-tab-pane>
-      <el-tab-pane label="異常">
+      <el-tab-pane :label="anomalyTabLabel" name="anomaly">
         <div class="col-anomaly">
           <AnomalyQueueColumn
             :items="ws.anomalyQueue.value"
@@ -66,11 +68,21 @@
             :loading="ws.loading.value"
             @select="onAnomalySelect"
             @filter-change="onFilterChange"
+            @resolved="onResolved"
           />
         </div>
       </el-tab-pane>
-      <el-tab-pane label="明細">
+      <el-tab-pane label="明細" name="detail">
         <div class="col-detail">
+          <el-button
+            class="mobile-detail-back"
+            data-test="mobile-detail-back"
+            text
+            :icon="ArrowLeft"
+            @click="backFromDetail"
+          >
+            {{ detailMode === 'resolve' ? '回異常佇列' : '回名冊' }}
+          </el-button>
           <DetailColumn
             :mode="detailMode"
             :anomaly="currentAnomaly"
@@ -101,25 +113,22 @@
 <script setup lang="ts">
 import { reactive, toRef, onMounted, provide, computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
-import type { AnomalyItem } from '@/composables/useAttendanceWorkspace'
+import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
 import { getRecords } from '@/api/attendance'
+import type { ApiResponse } from '@/api/_generated/typed'
 import WorkspaceHeader from '@/components/attendance/WorkspaceHeader.vue'
 import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
 
-// ── 最小 interface for getRecords 回傳列 ──────────────────────────────────────
-interface RecordRow {
-  date: string
-  punch_in: string | null
-  punch_out: string | null
-  status: string | null
-}
+// ── getRecords 回傳列（OpenAPI 契約型別）────────────────────────────────────
+type RecordRow = ApiResponse<'/attendance/records', 'get'>[number]
 
 // ── 查詢狀態 ────────────────────────────────────────────────────────────────
 const now = new Date()
@@ -142,12 +151,28 @@ const selectedAnomalyIndex = ref(0)
 const detailMode = ref<'resolve' | 'month'>('resolve')
 const importOpen = ref(false)
 
+// ── 手機三段流程 ────────────────────────────────────────────────────────────
+// 桌機三欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
+type MobileTab = 'roster' | 'anomaly' | 'detail'
+const mobileTab = ref<MobileTab>('roster')
+
+// 異常分頁標籤帶待處理筆數，讓使用者不必切過去才知道有沒有事情要處理
+const anomalyTabLabel = computed(() => {
+  const n = ws.anomalyQueue.value.length
+  return n > 0 ? `異常（${n}）` : '異常'
+})
+
+// 返回鍵回到「來的那一段」：resolve 模式來自異常佇列，month 模式來自名冊
+function backFromDetail(): void {
+  mobileTab.value = detailMode.value === 'resolve' ? 'anomaly' : 'roster'
+}
+
 // ── 員工月記錄快取 ───────────────────────────────────────────────────────────
 // key = employee_id，val = 該員工在當月的記錄陣列
 const recordsCache = ref<Map<number, RecordRow[]>>(new Map())
 
-// ── derived: 當前異常筆 ────────────────────────────────────────────────────
-const currentAnomaly = computed<AnomalyItem | null>(
+// ── derived: 當前異常日卡 ──────────────────────────────────────────────────
+const currentAnomaly = computed<AnomalyDayCard | null>(
   () => ws.anomalyQueue.value[selectedAnomalyIndex.value] ?? null,
 )
 
@@ -182,8 +207,7 @@ watch(
       const res = await getRecords({ year: y, month: m, employee_id: empId })
       // 較新一次 watch 觸發已使本次回應過期 → 丟棄，避免舊月 in-flight 回填快取
       if (seq !== recSeq) return
-      const rows = (res.data ?? []) as RecordRow[]
-      recordsCache.value = new Map(recordsCache.value).set(empId, rows)
+      recordsCache.value = new Map(recordsCache.value).set(empId, res.data ?? [])
     } catch (err) {
       notify(err, 'AttendanceWorkspaceView.loadRecords', null, { prefix: '載入打卡記錄失敗' })
     }
@@ -203,7 +227,9 @@ const context = computed(() => {
     punch_in: rec?.punch_in ?? null,
     punch_out: rec?.punch_out ?? null,
     has_leave: typeof rec?.status === 'string' && rec.status.includes('leave'),
-    estimated_deduction: a?.estimated_deduction ?? 0,
+    // 日卡合計（遮罩 null 不列入）；處理動作套用整天，扣款也以整天合計呈現
+    estimated_deduction:
+      a?.items.reduce((sum, i) => sum + (i.estimated_deduction ?? 0), 0) ?? 0,
   }
 })
 
@@ -212,26 +238,49 @@ const context = computed(() => {
 function onRosterSelect(id: number): void {
   selectedEmployeeId.value = id
   detailMode.value = 'month'
+  if (isMobile.value) mobileTab.value = 'detail'
 }
 
 function onAnomalySelect(idx: number): void {
   selectedAnomalyIndex.value = idx
   selectedEmployeeId.value = null // 走 anomaly.employee_number → roster 對照
   detailMode.value = 'resolve'
+  if (isMobile.value) mobileTab.value = 'detail'
 }
 
-function onFilterChange(): void {
-  // status 篩選完整支援列為 follow-up（目前 AnomalyQueueColumn 本地只篩 type）；
-  // 此處觸發 refresh 讓佇列重新拉取最新資料
-  ws.refresh()
-}
-
-async function onResolved(): Promise<void> {
-  await ws.refresh()
-  // clamp：解決最後一筆後 index 不超界
+function clampSelectedIndex(): void {
   if (selectedAnomalyIndex.value >= ws.anomalyQueue.value.length) {
     selectedAnomalyIndex.value = Math.max(0, ws.anomalyQueue.value.length - 1)
   }
+}
+
+// 明細快取失效（P1-4）：resolve/import/upsert/delete 後打卡事實已變，
+// 不失效會讓 ResolveCard/EmployeeMonthPanel 讀到舊資料。清空後立即補抓
+// 當前員工，其餘員工待選取時 cache-miss 重載。
+async function invalidateRecordsCache(): Promise<void> {
+  recordsCache.value = new Map()
+  const empId = currentEmployeeId.value
+  if (empId == null) return
+  const seq = ++recSeq
+  try {
+    const res = await getRecords({ year: query.year, month: query.month, employee_id: empId })
+    if (seq !== recSeq) return
+    recordsCache.value = new Map(recordsCache.value).set(empId, res.data ?? [])
+  } catch (err) {
+    notify(err, 'AttendanceWorkspaceView.reloadRecords', null, { prefix: '載入打卡記錄失敗' })
+  }
+}
+
+function onFilterChange(): void {
+  // 狀態/類型篩選由 AnomalyQueueColumn 本地過濾（真的生效）；此處 refresh
+  // 拉最新資料，並 clamp index 防列表縮短後選取超界
+  void ws.refresh().then(clampSelectedIndex)
+}
+
+async function onResolved(): Promise<void> {
+  await Promise.all([ws.refresh(), invalidateRecordsCache()])
+  // clamp：解決最後一筆後 index 不超界
+  clampSelectedIndex()
 }
 
 function onNavigate(delta: number): void {
@@ -240,7 +289,8 @@ function onNavigate(delta: number): void {
 }
 
 async function onImported(): Promise<void> {
-  await ws.refresh()
+  await Promise.all([ws.refresh(), invalidateRecordsCache()])
+  clampSelectedIndex()
   ElMessage.success('匯入完成')
 }
 
@@ -277,5 +327,29 @@ provide('attendanceWs', ws)
 
 .workspace-tabs {
   margin-top: var(--space-3);
+}
+
+/* 返回鍵是手機明細頁的主要退路，觸控目標對齊 44px 並靠左貼齊內容 */
+.mobile-detail-back {
+  min-height: var(--touch-target-min);
+  margin-bottom: var(--space-2);
+  padding-left: 0;
+}
+
+@media (--to-sm) {
+  .attendance-workspace {
+    padding: var(--space-3);
+  }
+  /* 三段標籤在窄機平均分配寬度，避免「異常（12）」把「明細」擠出視窗 */
+  .workspace-tabs :deep(.el-tabs__nav) {
+    display: flex;
+    width: 100%;
+  }
+  .workspace-tabs :deep(.el-tabs__item) {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: var(--touch-target-min);
+    padding: 0 var(--space-2);
+  }
 }
 </style>

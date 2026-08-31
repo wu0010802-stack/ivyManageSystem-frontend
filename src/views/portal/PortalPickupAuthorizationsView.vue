@@ -3,8 +3,7 @@
  * 教師 Portal：今日接送授權清單與核銷。
  *
  * 核銷流程：輸入取件碼驗證 → 成功即核銷；後端回 code_locked 時切人工核對模式
- * （必填備註 + 二次確認），比照 PortalDismissalCallsView 的 handleComplete
- * 不可逆操作二次確認慣例。
+ * （必填備註 + 二次確認）——不可逆操作二次確認慣例。
  */
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

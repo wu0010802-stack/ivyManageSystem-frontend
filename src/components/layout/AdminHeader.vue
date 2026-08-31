@@ -18,8 +18,18 @@
           <span class="hamburger-line"></span>
         </button>
         <h1 v-if="pageTitle" class="page-title">
-          <span v-if="parentTitle" class="page-title__parent">{{ parentTitle }} / </span>
-          <span>{{ pageTitle }}</span>
+          <template v-if="parentLink">
+            <router-link
+              :to="parentLink.path"
+              class="page-title__parent"
+              :aria-label="`返回${parentLink.title}`"
+            >
+              <el-icon class="page-title__back"><ArrowLeft /></el-icon>
+              <span class="page-title__parent-text">{{ parentLink.title }}</span>
+            </router-link>
+            <span class="page-title__sep" aria-hidden="true">/</span>
+          </template>
+          <span class="page-title__current">{{ pageTitle }}</span>
         </h1>
       </div>
 
@@ -36,9 +46,11 @@
 
         <A11yMenu />
 
-        <!-- 檢視老師教師端按鈕（園長/admin 持有 PORTAL_PREVIEW 可達） -->
+        <!-- 檢視老師教師端按鈕（園長/admin 持有 PORTAL_PREVIEW 可達）。
+             手機收進帳號選單（見下方 dropdown），常駐列只留搜尋／通知／無障礙／帳號。 -->
         <el-button
-          v-if="canPreviewPortal"
+          v-if="!isMobile && canPreviewPortal"
+          data-test="header-preview-portal"
           type="warning"
           size="small"
           plain
@@ -52,7 +64,8 @@
 
         <!-- 進入前台按鈕 -->
         <el-button
-          v-if="canEnterPortal"
+          v-if="!isMobile && canEnterPortal"
+          data-test="header-enter-portal"
           type="primary"
           size="small"
           plain
@@ -79,7 +92,29 @@
           </button>
           <template #dropdown>
             <el-dropdown-menu class="user-dropdown">
-              <el-dropdown-item command="profile">
+              <!-- 手機 overflow：兩個前台入口在窄螢幕不佔常駐位，改成選單項。
+                   顯示條件與桌機按鈕逐字相同（canPreviewPortal / canEnterPortal），
+                   實際授權仍由後端把關——這裡只是版面優先級，不是權限。 -->
+              <el-dropdown-item
+                v-if="isMobile && canPreviewPortal"
+                data-test="menu-preview-portal"
+                command="preview-portal"
+              >
+                <el-icon><Monitor /></el-icon>檢視老師教師端
+              </el-dropdown-item>
+              <el-dropdown-item
+                v-if="isMobile && canEnterPortal"
+                data-test="menu-enter-portal"
+                command="enter-portal"
+                :divided="!canPreviewPortal ? false : undefined"
+              >
+                <el-icon><Monitor /></el-icon>進入前台
+              </el-dropdown-item>
+
+              <el-dropdown-item
+                :divided="isMobile && (canPreviewPortal || canEnterPortal)"
+                command="profile"
+              >
                 <el-icon><User /></el-icon>個人資料
               </el-dropdown-item>
               <el-dropdown-item command="settings">
@@ -133,7 +168,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Search, Setting, SwitchButton, User, ArrowDown } from '@element-plus/icons-vue'
+import { Monitor, Search, Setting, SwitchButton, User, ArrowDown, ArrowLeft } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo, hasPermission } from '@/utils/auth'
@@ -143,6 +178,8 @@ import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import { roleDisplayLabel } from '@/constants/roleDisplay'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import { BREADCRUMB_PARENTS } from '@/constants/navigation'
+import { resolveBreadcrumbParent } from '@/utils/breadcrumb'
 
 withDefaults(defineProps<{
   isMobile?: boolean
@@ -176,7 +213,23 @@ const route = useRoute()
 const router = useRouter()
 
 const pageTitle = computed(() => route.meta?.title || '')
-const parentTitle = computed(() => (route.meta?.parentTitle as string) || '')
+
+const parentLink = computed(() =>
+  resolveBreadcrumbParent(route.path, {
+    parents: BREADCRUMB_PARENTS,
+    // 純 redirect 容器（/workbench、/bus、/appraisal-year-end）點下去會被守衛
+    // 轉走，常落回原頁 → 視為不可用父層。
+    isContainer: (p) => {
+      const matched = router.resolve(p).matched
+      return Boolean(matched[matched.length - 1]?.redirect)
+    },
+    titleOf: (p) => {
+      const title = router.resolve(p).meta?.title
+      return typeof title === 'string' ? title : ''
+    },
+    metaParent: typeof route.meta?.parent === 'string' ? route.meta.parent : undefined,
+  }),
+)
 
 const userInfo = computed(() => (getUserInfo() || {}) as Record<string, unknown>)
 const displayName = computed(() => (userInfo.value.name as string | undefined) || '管理員')
@@ -262,7 +315,12 @@ const doImpersonate = async (employeeId: number) => {
 }
 
 const handleCommand = (command: string) => {
-  if (command === 'logout') {
+  if (command === 'preview-portal') {
+    // 與桌機按鈕同一支 handler，行為零分岔
+    openTeacherPicker()
+  } else if (command === 'enter-portal') {
+    goToPortal()
+  } else if (command === 'logout') {
     clearAuth()
     router.push('/login')
     ElMessage.success('已登出')
@@ -316,13 +374,35 @@ const handleCommand = (command: string) => {
 }
 
 .page-title__parent {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   color: var(--text-tertiary);
   font-weight: 400;
-  margin-right: 4px;
   white-space: nowrap;
+  text-decoration: none;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease;
 }
 
-.page-title > span {
+.page-title__parent:hover,
+.page-title__parent:focus-visible {
+  color: var(--el-color-primary);
+  text-decoration: underline;
+}
+
+.page-title__back {
+  font-size: 0.9em;
+}
+
+.page-title__sep {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  margin: 0 4px;
+  flex: 0 0 auto;
+}
+
+.page-title__current {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -479,6 +559,15 @@ const handleCommand = (command: string) => {
     padding: 2px 4px;
   }
 
+  .page-title__parent-text {
+    display: inline-block;
+    max-width: 6em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+
   .user-info {
     display: none;
   }
@@ -508,6 +597,24 @@ const handleCommand = (command: string) => {
   .header-right :deep(.el-button) {
     min-width: 44px;
     min-height: 44px;
+  }
+  /* A11yMenu 的觸發鈕是裸 <button>（非 .el-button），上一條選不到，實測只有 36px。
+     在此就地補足；:deep 限定在 AdminHeader 內，教師 Portal 的同元件不受影響。 */
+  .header-right :deep(.a11y-trigger) {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+  }
+
+  /* 把寬度還給標題：320px 下右側四個動作＋帳號鈕佔 240px，頁名只剩 12px（一個
+     被切掉的字）。頭像旁的展開箭頭純裝飾（整顆帳號鈕本來就可點），手機收掉；
+     帳號鈕左右內距也收窄。實測 320px 下頁名可用寬度從 12px 增至 46px（約 3 字＋刪節號）。 */
+  .user-profile :deep(.el-icon--right) {
+    display: none;
+  }
+  .user-profile {
+    padding-left: var(--space-1);
+    padding-right: var(--space-1);
+    gap: 0;
   }
   .search-trigger {
     min-width: 44px;

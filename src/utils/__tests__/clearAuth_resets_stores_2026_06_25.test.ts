@@ -13,6 +13,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia, defineStore } from 'pinia'
 
 import { clearAuth } from '@/utils/auth'
+import { advanceAdminSession } from '@/utils/adminSession'
 
 describe('clearAuth 重置 Pinia stores（共享裝置殘留）', () => {
   beforeEach(() => {
@@ -64,5 +65,25 @@ describe('clearAuth 重置 Pinia stores（共享裝置殘留）', () => {
 
     expect(a.v).toBe(0)
     expect(b.list).toEqual([])
+  })
+
+  it('登出時清除可能含員工薪資的試算快取', async () => {
+    sessionStorage.setItem('salary_simulate_last_v2', '{"employee":"前一位員工"}')
+    sessionStorage.setItem('salary_simulate_cache_v2', '{"salary":42000}')
+
+    await clearAuth({ notifyServer: false })
+
+    expect(sessionStorage.getItem('salary_simulate_last_v2')).toBeNull()
+    expect(sessionStorage.getItem('salary_simulate_cache_v2')).toBeNull()
+  })
+
+  it('代操作或重新登入造成管理端身分切換時也清除薪資試算快取', () => {
+    sessionStorage.setItem('salary_simulate_last_v2', '{"employee":"舊身分員工"}')
+    sessionStorage.setItem('salary_simulate_cache_v2', '{"salary":39000}')
+
+    advanceAdminSession()
+
+    expect(sessionStorage.getItem('salary_simulate_last_v2')).toBeNull()
+    expect(sessionStorage.getItem('salary_simulate_cache_v2')).toBeNull()
   })
 })

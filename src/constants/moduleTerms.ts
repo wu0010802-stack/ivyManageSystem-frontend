@@ -44,8 +44,10 @@ export const PAGE_TERMS = {
   overtime: '加班與園務會議',
   /** /calendar。側欄原簡稱「行事曆」。 */
   calendar: '學校行事曆',
-  /** /data-quality。原「資料品質(報告)」像報表，實際是可確認／標記已修正／忽略的待辦佇列。 */
+  /** /governance/data-quality。原「資料品質(報告)」像報表，實際是可確認／標記已修正／忽略的待辦佇列。 */
   dataQuality: '資料異常待辦',
+  /** /governance。高風險事件 + 操作紀錄 + 資料異常待辦的整合入口（2026-08-20 整併）。 */
+  governance: '稽核與資料品質',
   /** /reports。原「報表統計」在「報表」群組下疊詞。 */
   reports: '經營報表',
   /** /settings。原側欄「一般設定」vs meta「系統設定」，且與側欄群組同名致麵包屑「系統設定 › 系統設定」。 */

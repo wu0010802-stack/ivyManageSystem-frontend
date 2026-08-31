@@ -23,7 +23,7 @@ describe('multi-entry build contract', () => {
 
   it.each([
     ['index.html', '/manifest.webmanifest'],
-    ['parent.html', '/parent.webmanifest'],
+    ['parent/index.html', '/parent.webmanifest'],
     ['public.html', '/public.webmanifest'],
   ])('%s explicitly owns exactly one manifest', (entry, expectedManifest) => {
     expect(manifestHrefs(readProjectFile(entry))).toEqual([expectedManifest])
@@ -84,7 +84,7 @@ describe('multi-entry build contract', () => {
   // 哪個 PWA scope），與品牌無關，不得一起 token 化。
   it.each([
     ['public/manifest.webmanifest', '{{TB_MANIFEST_ADMIN_NAME}}', './', './'],
-    ['public/parent.webmanifest', '{{TB_MANIFEST_PARENT_NAME}}', '/parent.html', '/parent.html'],
+    ['public/parent.webmanifest', '{{TB_MANIFEST_PARENT_NAME}}', '/parent/', '/parent/'],
     ['public/public.webmanifest', '{{TB_MANIFEST_PUBLIC_NAME}}', '/public.html', '/public.html'],
   ])('%s has entry-scoped install identity', (path, name, startUrl, scope) => {
     const manifest = JSON.parse(readProjectFile(path))

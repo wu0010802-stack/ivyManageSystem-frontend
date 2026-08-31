@@ -100,6 +100,8 @@ describe('scrubMapping', () => {
       bonus_amount: 1000,
       unused_leave_payout: 5000,
       base_transfer_amount: 35000,
+      employer_burden: 6500,
+      total_employer_cost: 73000,
       id_number: 'A123456789',
       phone: '0912345678',
       child_name: '小明',
@@ -122,6 +124,8 @@ describe('scrubMapping', () => {
     expect(res.diagnosis).toBe('[Filtered]')
     expect(res.growth_record).toBe('[Filtered]')
     expect(res.weight_kg).toBe('[Filtered]')
+    expect(res.employer_burden).toBe('[Filtered]')
+    expect(res.total_employer_cost).toBe('[Filtered]')
     expect(res.name).toBe('Alice')
     expect(res.ok).toBe('yes')
   })
@@ -238,6 +242,51 @@ describe('scrubMapping', () => {
     }
   })
 
+  // 資安稽核（2026-08-10）：三組漏網欄位補齊；與 BE
+  // tests/test_sentry_pii_security_audit_2026_08_10.py 對應（陷阱 #8 要求兩端各自補測試）。
+  it('filters labor insurance / student sensitive category / medical DEK keys', () => {
+    const res = scrubMapping({
+      labor_insurance_employee: 1234,
+      labor_insurance_employer: 5678,
+      health_insurance_employee: 900, // 既有行為，不得回歸
+      nationality: '越南',
+      is_disadvantaged: true,
+      low_income_status: 'low',
+      indigenous_status: '阿美族',
+      medical_dek_wrapped: 'base64blob',
+      medical_dek_lookup: 'hash',
+      classroom_id: 3, // 非 PII 保留
+    })
+    expect(res.labor_insurance_employee).toBe('[Filtered]')
+    expect(res.labor_insurance_employer).toBe('[Filtered]')
+    expect(res.health_insurance_employee).toBe('[Filtered]')
+    expect(res.nationality).toBe('[Filtered]')
+    expect(res.is_disadvantaged).toBe('[Filtered]')
+    expect(res.low_income_status).toBe('[Filtered]')
+    expect(res.indigenous_status).toBe('[Filtered]')
+    expect(res.medical_dek_wrapped).toBe('[Filtered]')
+    expect(res.medical_dek_lookup).toBe('[Filtered]')
+    expect(res.classroom_id).toBe(3)
+  })
+
+  it('does not overmatch insurance settings or gov-MoE aggregate stats', () => {
+    // insurance_brackets / insurance_rates 是制度設定（非 PII）——若有人把詞條
+    // 從 labor_insurance 放寬成 insurance，這裡會紅。
+    // *_count / *_pct 是報教育部的班級人數統計，非個人身分屬性。
+    const res = scrubMapping({
+      insurance_brackets: [1, 2, 3],
+      insurance_rates: { labor: 0.11 },
+      disadvantaged_count: 2,
+      disadvantaged_pct: 8,
+      indigenous_count: 1,
+      indigenous_pct: 4,
+      disability_count: 1,
+    })
+    for (const [k, v] of Object.entries(res)) {
+      expect(v, `${k} was wrongly filtered`).not.toBe('[Filtered]')
+    }
+  })
+
   it('still filters personal growth / measurement despite exempt', () => {
     const res = scrubMapping({
       growth_record: { data: '...' },
@@ -283,6 +332,17 @@ describe('scrubMapping', () => {
     // relation/status 非強識別欄位，不在 denylist，維持原值
     expect(res.person_relation).toBe('祖母')
     expect(res.status).toBe('active')
+  })
+
+  // T-020/T-024（2026-08-23）：授權列表 API 從一次性回應改為 active 授權每次都
+  // 回傳解密明碼，與 BE _PII_KEY_SUBSTRINGS 同步新增 pickup_code。
+  it('filters pickup_code (T-020/T-024 2026-08-23)', () => {
+    const res = scrubMapping({
+      pickup_code: '482913',
+      effective_status: 'active',
+    })
+    expect(res.pickup_code).toBe('[Filtered]')
+    expect(res.effective_status).toBe('active')
   })
 
   it('does not over-match bare name fields like course_name (D2 2026-07-22)', () => {

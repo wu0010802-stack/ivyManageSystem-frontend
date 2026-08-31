@@ -7,7 +7,15 @@ const props = defineProps<{
   colors?: string[]
 }>()
 
-const DEFAULT_COLORS = ['#67c23a', '#409eff', '#9b59b6', '#e6a23c', '#f56c6c', '#909399']
+// DOM 渲染（:style background）可直接吃 CSS 變數：色彩走 design tokens，勿寫死 hex
+const DEFAULT_COLORS = [
+  'var(--color-success)',
+  'var(--color-info)',
+  'var(--color-info-darker)',
+  'var(--color-warning)',
+  'var(--color-danger)',
+  'var(--neutral-400)',
+]
 
 const sorted = computed(() =>
   [...props.items].sort((a, b) => (b.amount || 0) - (a.amount || 0)),

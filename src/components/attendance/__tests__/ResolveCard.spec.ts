@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ResolveCard from '../ResolveCard.vue'
-import type { AnomalyItem } from '@/composables/useAttendanceWorkspace'
+import type { AnomalyDayCard } from '@/composables/useAttendanceWorkspace'
 
 // ── mock hasPermission ─────────────────────────────────────────────────────────
 vi.mock('@/utils/auth', () => ({
@@ -15,30 +15,28 @@ import { hasPermission } from '@/utils/auth'
 const mockHasPermission = hasPermission as ReturnType<typeof vi.fn>
 
 // ── fixture data ───────────────────────────────────────────────────────────────
-const itemLate: AnomalyItem = {
+const itemLate: AnomalyDayCard = {
   id: 10,
   employee_name: '王遲到',
   employee_number: 'E002',
   date: '2026-06-01',
   weekday: '一',
-  type: 'late',
-  type_label: '遲到',
-  detail: '遲到 15 分',
-  estimated_deduction: 300,
   confirmed_action: null,
+  items: [
+    { type: 'late', type_label: '遲到', detail: '遲到 15 分', estimated_deduction: 300 },
+  ],
 }
 
-const itemMissingPunch: AnomalyItem = {
+const itemMissingPunch: AnomalyDayCard = {
   id: 20,
   employee_name: '李缺卡',
   employee_number: 'E003',
   date: '2026-06-02',
   weekday: '二',
-  type: 'missing_punch',
-  type_label: '未打卡',
-  detail: '缺下班卡',
-  estimated_deduction: 0,
   confirmed_action: null,
+  items: [
+    { type: 'missing_punch', type_label: '未打卡', detail: '缺下班卡', estimated_deduction: 0 },
+  ],
 }
 
 const defaultContext = {
@@ -92,10 +90,11 @@ const stubs = {
 
 // ── mount helper ───────────────────────────────────────────────────────────────
 function mountCard(overrides: {
-  item?: AnomalyItem
+  item?: AnomalyDayCard
   index?: number
   total?: number
   context?: typeof defaultContext | typeof missingOutContext
+  busy?: boolean
 }) {
   return mount(ResolveCard, {
     props: {
@@ -103,6 +102,7 @@ function mountCard(overrides: {
       index: overrides.index ?? 0,
       total: overrides.total ?? 3,
       context: overrides.context ?? defaultContext,
+      busy: overrides.busy ?? false,
     },
     global: { stubs },
   })
@@ -277,6 +277,28 @@ describe('ResolveCard', () => {
     const pickersAfter = wrapper.findAll('.el-time-picker')
     const outPickerAfter = pickersAfter[pickersAfter.length - 1]
     expect(outPickerAfter.element.value).toBe('')
+  })
+
+  it('busy=true 時三動作鈕 disabled 且點擊不 emit（P1-4 防重複送出）', async () => {
+    const wrapper = mountCard({ busy: true })
+    const btns = wrapper.findAll('button')
+    const acceptBtn = btns.find((b) => b.text().includes('接受扣款'))
+    expect(acceptBtn!.attributes('disabled')).toBeDefined()
+    await acceptBtn!.trigger('click')
+    expect(wrapper.emitted('resolve')).toBeFalsy()
+  })
+
+  it('日卡多異常 → 每個異常各一個 el-tag，且顯示整天套用提示', () => {
+    const multi: AnomalyDayCard = {
+      ...itemLate,
+      items: [
+        { type: 'late', type_label: '遲到', detail: '遲到 15 分', estimated_deduction: 300 },
+        { type: 'missing_punch', type_label: '未打卡(下班)', detail: '缺下班卡', estimated_deduction: 0 },
+      ],
+    }
+    const wrapper = mountCard({ item: multi })
+    expect(wrapper.findAll('.el-tag').length).toBe(2)
+    expect(wrapper.text()).toContain('整天')
   })
 
   it('props.item 變更後補卡時間 ref 被 reset（換筆清空）', async () => {

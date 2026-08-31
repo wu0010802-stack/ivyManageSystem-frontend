@@ -2,22 +2,40 @@
   <div class="fee-template-tab">
     <div class="toolbar">
       <div class="filters">
-        <el-select v-model="filterYear" placeholder="學年" style="width: 130px">
+        <el-select v-model="filterYear" placeholder="學年" aria-label="學年" class="filter-year">
           <el-option v-for="y in availableYears" :key="y" :value="y" :label="`${y} 學年度`" />
         </el-select>
-        <el-select v-model="filterSemester" placeholder="學期" style="width: 110px">
+        <el-select v-model="filterSemester" placeholder="學期" aria-label="學期" class="filter-semester">
           <el-option :value="1" label="上學期" />
           <el-option :value="2" label="下學期" />
         </el-select>
       </div>
+      <!-- 產單已改每日排程自動化（無手動入口），本頁只管範本與總覽。
+           頂層兩個 action：主要（管理範本）、檢視選單（其餘收斂） -->
       <div class="view-actions">
         <el-button type="primary" @click="manageVisible = true">管理範本</el-button>
-        <el-button @click="generateVisible = true">產生費用單</el-button>
-        <el-button text @click="expandAll">展開全部</el-button>
-        <el-button text @click="collapseAll">收合全部</el-button>
-        <el-button @click="loadOverview">重新載入</el-button>
+        <el-dropdown trigger="click" @command="onViewCommand">
+          <el-button aria-label="檢視選項">
+            檢視<el-icon class="view-actions__caret"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="expand">展開全部</el-dropdown-item>
+              <el-dropdown-item command="collapse">收合全部</el-dropdown-item>
+              <el-dropdown-item command="reload" divided>重新載入</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
+
+    <!-- SPEC-015 學年檢視：上＋下學期缺格總覽＋一鍵複製上學年 -->
+    <FeeYearTemplateGrid
+      ref="yearGridRef"
+      :school-year="filterYear"
+      :grades="drawerGrades"
+      @changed="loadOverview"
+    />
 
     <div v-loading="overviewLoading" class="overview">
       <el-alert
@@ -26,7 +44,8 @@
         :closable="false"
         show-icon
       >
-        該學期尚未建立任何費用範本。
+        該學期尚未建立任何費用範本：請先用右上「管理範本」逐年級建立，
+        啟用後系統將於每日自動產生費用單。
       </el-alert>
       <el-empty
         v-else-if="!overviewLoading && gradeSections.length === 0"
@@ -110,15 +129,15 @@
       :school-year="filterYear"
       :semester="filterSemester"
       :grades="drawerGrades"
-      @changed="loadOverview"
+      @changed="onTemplatesChanged"
     />
-    <FeeGenerateModal v-model="generateVisible" @generated="loadOverview" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { getFeeTemplates } from '@/api/fees'
 import { getGrades, getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
@@ -126,7 +145,7 @@ import { getCurrentAcademicTerm, currentRocYear } from '@/utils/academic'
 import { formatCurrency } from '@/utils/currency'
 import { FEE_TYPES } from '@/components/fees/feeTypes'
 import FeeTemplateManageDrawer from '@/components/fees/FeeTemplateManageDrawer.vue'
-import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
+import FeeYearTemplateGrid from '@/components/fees/FeeYearTemplateGrid.vue'
 
 interface FeeTemplate {
   grade_id: number | null
@@ -190,8 +209,15 @@ const _initTerm = getCurrentAcademicTerm()
 const filterYear = ref(_initTerm.school_year)
 const filterSemester = ref(_initTerm.semester)
 
+// 產單已改每日排程自動化（無手動入口）；本頁只管範本與總覽
 const manageVisible = ref(false)
-const generateVisible = ref(false)
+const yearGridRef = ref<InstanceType<typeof FeeYearTemplateGrid> | null>(null)
+
+// 範本增修（Drawer）後同時刷新單學期總覽與學年缺格網格
+function onTemplatesChanged() {
+  void loadOverview()
+  void yearGridRef.value?.load()
+}
 // 本檔 Grade.id 為 number | string（展示用寬鬆型別），Drawer/Dialog 需 number
 const drawerGrades = computed(() =>
   grades.value
@@ -211,6 +237,13 @@ function expandAll() {
 }
 function collapseAll() {
   expandedClassrooms.value = {}
+}
+
+// 檢視選單（展開全部／收合全部／重新載入收進 dropdown，降低頂層 action 密度）
+function onViewCommand(cmd: string) {
+  if (cmd === 'expand') expandAll()
+  else if (cmd === 'collapse') collapseAll()
+  else if (cmd === 'reload') void loadOverview()
 }
 
 const templates = ref<FeeTemplate[]>([])
@@ -401,37 +434,48 @@ defineExpose({
   expandedClassrooms,
   expandAll,
   collapseAll,
+  onViewCommand,
 })
 </script>
 
 <style scoped>
 .fee-template-tab {
-  padding-top: var(--space-2, 8px);
+  padding-top: var(--space-2);
   font-variant-numeric: tabular-nums;
 }
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-3, 12px);
-  margin-bottom: var(--space-4, 16px);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
   flex-wrap: wrap;
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--el-bg-color, #fff);
-  padding: var(--space-2, 8px) 0;
-  border-bottom: 1px solid var(--el-border-color-lighter, #e4e7ed);
+  background: var(--el-bg-color);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 .filters {
   display: flex;
-  gap: var(--space-3, 12px);
+  gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
 }
 .view-actions {
   display: flex;
-  gap: var(--space-2, 8px);
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.view-actions__caret {
+  margin-left: var(--space-1);
+}
+.filter-year {
+  width: 130px;
+}
+.filter-semester {
+  width: 110px;
 }
 
 .overview {
@@ -440,40 +484,40 @@ defineExpose({
 .grade-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5, 20px);
+  gap: var(--space-5);
 }
 .grade-section {
-  border: 1px solid var(--el-border-color, #dcdfe6);
-  border-radius: 10px;
-  padding: var(--space-3, 12px);
-  background: var(--el-bg-color, #fff);
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3);
+  background: var(--el-bg-color);
 }
 .grade-header {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-3, 12px);
-  margin-bottom: var(--space-3, 12px);
-  padding-bottom: var(--space-2, 8px);
-  border-bottom: 2px solid var(--el-border-color-lighter, #e4e7ed);
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 2px solid var(--el-border-color-lighter);
 }
 .grade-title {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2, 8px);
+  gap: var(--space-2);
 }
 .grade-name {
   font-weight: 700;
-  font-size: var(--text-xl, 18px);
-  color: var(--el-color-primary, #409eff);
+  font-size: var(--text-xl);
+  color: var(--el-color-primary);
 }
 .grade-totals {
   display: flex;
-  gap: var(--space-4, 16px);
-  font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, #555);
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .class-collapse-title {
@@ -481,25 +525,25 @@ defineExpose({
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--space-3, 12px);
+  gap: var(--space-3);
   width: 100%;
-  padding-right: var(--space-3, 12px);
+  padding-right: var(--space-3);
 }
 .class-title {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2, 8px);
+  gap: var(--space-2);
 }
 .class-name {
   font-weight: 600;
-  font-size: var(--text-base, 14px);
+  font-size: var(--text-base);
 }
 .class-totals {
   display: flex;
-  gap: var(--space-3, 12px);
-  font-size: var(--text-sm, 13px);
-  color: var(--text-secondary, #555);
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
 }
 
 .col-header {
@@ -509,12 +553,12 @@ defineExpose({
   line-height: 1.2;
 }
 .col-detail {
-  font-size: 11px;
-  color: var(--text-tertiary, #999);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   font-weight: normal;
 }
 
 .muted {
-  color: var(--text-tertiary, #999);
+  color: var(--text-secondary);
 }
 </style>

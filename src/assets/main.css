@@ -23,8 +23,12 @@
   --bg-color-soft: var(--neutral-100);
   --surface-color: var(--neutral-0);
   --text-primary: var(--neutral-800);
-  --text-secondary: var(--neutral-500);
-  --text-tertiary: var(--neutral-400);
+  /* secondary/tertiary 各降一階（原 500/400）：neutral-400 #94a3b8 在 --bg-color #f8fafc 上
+   * 只有 2.45:1、白底 2.56:1，AA 需 4.5:1；tertiary 有 265 個消費點、secondary 303 個，
+   * 全站灰字整片不合格。現值 neutral-600 #475569 = 7.1:1、neutral-500 #64748b = 4.76:1（白底）
+   * 與 4.55:1（#f8fafc 底），三階層次維持且都過線。深色模式另由 a11y.css html.dark 覆寫。 */
+  --text-secondary: var(--neutral-600);
+  --text-tertiary: var(--neutral-500);
   --border-color: var(--neutral-200);
   --border-color-light: var(--neutral-100);
 }
@@ -37,7 +41,10 @@
  * 消費點對比塌陷）。dark 版青藍色階由 a11y.css 的 html.dark.ivy-admin 提供。 */
 html.ivy-admin:not(.dark) {
   --color-primary-light: #38bdf8;
-  --el-color-primary: var(--brand-primary);
+  /* 用 -strong 而非 --brand-primary：EP 拿 --el-color-primary 同時當實心按鈕底色（配白字）
+   * 與 tab/連結文字色（配白底），兩種都是 4.5:1 門檻，#0284c7 分別只有 4.10 / 3.91。
+   * hover 的 dark-2 #026a9f 仍比 -strong 深，層次不變。 */
+  --el-color-primary: var(--brand-primary-strong);
   --el-color-primary-light-3: #4ea9d8;
   --el-color-primary-light-5: #80c1e3;
   --el-color-primary-light-7: #b3daee;
@@ -55,6 +62,14 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 水平溢出護欄：任何一張寬表格或一串不斷行的長字元都足以讓整頁橫向捲動。
+ * 必須是 clip 不是 hidden——hidden 會讓根元素成為捲動容器，
+ * 使頁內所有 position: sticky（表頭、tab 列、工具列）失效。 */
+html,
+body {
+  overflow-x: clip;
 }
 
 #app {
@@ -327,6 +342,15 @@ html.ivy-admin .el-table .el-table__cell {
     flex-wrap: wrap;
     row-gap: var(--space-2);
     justify-content: center;
+  }
+
+  /* 側向抽屜手機一律滿版：15+ 個 admin drawer 寫死 px 寬（420–1100px），
+     在 390px 手機會橫向溢出。EP 以 inline style 設寬，故需 !important
+     覆蓋（同 .el-dialog 手機規則手法）。只收側向（rtl/ltr）——ttb/btt
+     的 size 是高度，不可套。個別 drawer 因此不必再自寫 isMobile 分岔。 */
+  .el-drawer.rtl,
+  .el-drawer.ltr {
+    width: 100% !important;
   }
 }
 

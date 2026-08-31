@@ -5,7 +5,6 @@
         <el-button
           v-if="canApprove"
           size="small"
-          :icon="Warning"
           @click="$router.push('/activity/audit/pos-unlock')"
         >
           異常稽核軌跡
@@ -16,7 +15,7 @@
     <el-tabs v-model="activeTab" class="pos-approval__tabs">
       <el-tab-pane label="日結簽核" name="daily">
     <div class="pos-approval__body">
-      <el-card class="pos-approval__pane" shadow="never">
+      <el-card class="pos-approval__pane" shadow="never" v-loading="loadingPending">
         <template #header>
           <div class="pos-approval__pane-head">
             <span>待簽核日期</span>
@@ -25,6 +24,24 @@
             </el-tag>
           </div>
         </template>
+
+        <!--
+          區間外積壓提示：預設只查近 30 天，更早的未簽核日在畫面上完全消失，
+          老闆會誤以為「全部簽完了」。後端另以獨立 aggregate 回傳區間起點之前的
+          未簽核天數與最早日期（不受 92 天上限）。
+        -->
+        <div
+          v-if="pendingMeta.older_pending_count > 0"
+          class="pos-approval__older-pending"
+        >
+          <span>
+            另有 {{ pendingMeta.older_pending_count }} 天更早的未簽核日（最早
+            {{ pendingMeta.oldest_pending_date }}）
+          </span>
+          <el-button size="small" link type="primary" @click="widenPendingRange">
+            放寬查詢區間
+          </el-button>
+        </div>
 
         <el-empty
           v-if="!loadingPending && pending.length === 0"
@@ -58,8 +75,15 @@
 
         <div class="pos-approval__jump">
           <span class="pos-approval__field-label">指定日期：</span>
+          <!--
+            不用 v-model：切換日期會清空表單，需先過 requestDateChange 的髒值守衛。
+            取消時 selectedDate 不變 → el-date-picker 的 modelValue watcher 不會觸發、
+            內部顯示會停在使用者剛選的日期；靠 :key 重掛把顯示拉回真正的 selectedDate。
+          -->
           <el-date-picker
-            v-model="selectedDate"
+            :key="`${selectedDate}#${pickerNonce}`"
+            :model-value="selectedDate"
+            @update:model-value="requestDateChange"
             type="date"
             value-format="YYYY-MM-DD"
             :clearable="false"
@@ -73,47 +97,24 @@
         <template #header>
           <div class="pos-approval__pane-head">
             <span>{{ selectedDate }} 簽核狀態</span>
-            <el-tag
-              v-if="detail"
-              :type="detail.status === 'approved' ? 'success' : 'info'"
-              size="small"
-            >
-              {{ detail.status === 'approved' ? '已簽核' : '未簽核' }}
-            </el-tag>
+            <span class="pos-approval__pane-tags">
+              <!-- 一天被解鎖重簽過幾次，原本畫面完全看不出來 -->
+              <el-tag v-if="historyCount > 0" type="warning" size="small">
+                本日曾解鎖 {{ historyCount }} 次
+              </el-tag>
+              <el-tag
+                v-if="detail"
+                :type="detail.status === 'approved' ? 'success' : 'info'"
+                size="small"
+              >
+                {{ detail.status === 'approved' ? '已簽核' : '未簽核' }}
+              </el-tag>
+            </span>
           </div>
         </template>
 
         <div v-if="detail" class="pos-approval__detail">
-          <div class="pos-approval__stat-grid">
-            <StatCard
-              label="收款"
-              :value="formatTWD(detail.payment_total)"
-              :icon="Money"
-              color="success"
-              variant="filled"
-            />
-            <StatCard
-              label="退款"
-              :value="formatTWD(detail.refund_total)"
-              :icon="RefreshLeft"
-              color="warning"
-              variant="filled"
-            />
-            <StatCard
-              label="淨額"
-              :value="formatTWD(detail.net_total)"
-              :icon="Wallet"
-              color="primary"
-              variant="filled"
-            />
-            <StatCard
-              label="筆數"
-              :value="String(detail.transaction_count)"
-              :icon="Tickets"
-              color="info"
-              variant="filled"
-            />
-          </div>
+          <StatStrip :items="detailStripItems" />
 
           <div v-if="methodEntries.length" class="pos-approval__methods">
             <span
@@ -259,14 +260,14 @@
           <!-- 未簽核：簽核表單 -->
           <div v-else class="pos-approval__form">
             <el-form label-width="120px" label-position="left" size="small">
-              <el-form-item label="實際現金盤點">
+              <el-form-item label="實際現金盤點" :required="cashCountRequired">
                 <el-input-number
                   v-model="form.actualCashCount"
                   :min="0"
                   :max="9999999"
                   :step="100"
                   :precision="0"
-                  placeholder="可選；不填則不計算差異"
+                  :placeholder="cashCountPlaceholder"
                   class="pos-approval__num"
                 />
                 <div v-if="cashVariancePreview !== null" class="pos-approval__hint">
@@ -301,6 +302,18 @@
             </el-form>
           </div>
         </div>
+
+        <!--
+          本日歷次解鎖前的完整快照（count === 0 時自身不渲染）。
+          端點權限與簽核同為 ACTIVITY_PAYMENT_APPROVE，故僅簽核者掛載，
+          避免唯讀者每次換日期都打一發必然 403 的請求。
+        -->
+        <POSCloseHistoryPanel
+          v-if="canApprove"
+          :close-date="selectedDate"
+          :reload-token="historyReloadToken"
+          @update:count="historyCount = $event"
+        />
       </el-card>
     </div>
 
@@ -308,7 +321,7 @@
     <el-card class="pos-approval__reconciliation" shadow="never" v-loading="loadingRecon">
       <template #header>
         <div class="pos-approval__pane-head">
-          <span>近 30 天對帳</span>
+          <span>近 30 天對帳<em class="pos-approval__pane-hint">（點任一列可切換至該日）</em></span>
           <div>
             <el-button size="small" :icon="RefreshRight" @click="loadReconciliation">
               重新整理
@@ -326,7 +339,8 @@
         :data="reconciliation.items"
         size="small"
         :max-height="320"
-        @row-click="(row) => (selectedDate = row.date)"
+        class="pos-approval__recon-table"
+        @row-click="handleReconRowClick"
       >
         <el-table-column label="日期" prop="date" width="110" />
         <el-table-column label="狀態" width="90">
@@ -392,19 +406,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Money,
-  RefreshLeft,
-  RefreshRight,
-  Tickets,
-  Wallet,
-  Warning,
-} from '@element-plus/icons-vue'
+import { RefreshRight } from '@element-plus/icons-vue'
 
 import PageHeader from '@/components/common/PageHeader.vue'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
+import POSCloseHistoryPanel from '@/components/activity/POSCloseHistoryPanel.vue'
 import POSSemesterReconciliation from '@/components/activity/POSSemesterReconciliation.vue'
-import StatCard from '@/components/common/StatCard.vue'
+import StatStrip, { type StatStripItem } from '@/components/common/StatStrip.vue'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 import { useClientTableFilter } from '@/composables'
 import { CASH_METHOD, formatTWD } from '@/constants/pos'
@@ -417,7 +425,20 @@ import {
   unlockPOSDailyClose,
 } from '@/api/activity'
 import { getUserInfo, hasPermission } from '@/utils/auth'
-import { todayISO, offsetISO, formatDateTimeTW, formatTimeTW } from '@/utils/format'
+import { todayTaipeiISO, formatDateTimeTW, formatTimeTW } from '@/utils/format'
+
+// 台北基準的「今日 ± n 天」。
+// Why: 收銀端與後端的「當日」一律是 Asia/Taipei；utils/format 的 todayISO()/
+// offsetISO() 走瀏覽器本地時區，海外或旅行中的裝置會整天位移，對帳區間與
+// 「今日簽核」判定就會錯一天。以 todayTaipeiISO() 為錨、用 UTC 曆算推移
+// （UTC 無日光節約，純日曆加減不會漂）。
+function taipeiOffsetISO(days: number, now: Date = new Date()): string {
+  const [y, m, d] = todayTaipeiISO(now).split('-').map(Number)
+  const anchor = new Date(Date.UTC(y, m - 1, d))
+  anchor.setUTCDate(anchor.getUTCDate() + days)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${anchor.getUTCFullYear()}-${pad(anchor.getUTCMonth() + 1)}-${pad(anchor.getUTCDate())}`
+}
 
 type ApiErr = { response?: { data?: { detail?: string } } }
 
@@ -438,20 +459,28 @@ const canApprove = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
 
 const activeTab = ref('daily')
 
-const selectedDate = ref(todayISO())
+const selectedDate = ref(todayTaipeiISO())
 const pending = ref<PendingRow[]>([])
 const loadingPending = ref(false)
+// 待簽核查詢區間（null = 用後端預設近 30 天）；「放寬查詢區間」會把起點推到最早未簽核日
+const pendingRange = ref<{ start_date?: string; end_date?: string } | null>(null)
+// 區間起點之前的未簽核積壓（後端獨立 aggregate，不受 92 天上限）
+const pendingMeta = reactive<{ older_pending_count: number; oldest_pending_date: string | null }>({
+  older_pending_count: 0,
+  oldest_pending_date: null,
+})
+// 本日曾被解鎖重簽的次數（由 POSCloseHistoryPanel 回拋）
+const historyCount = ref(0)
+// 歷史快照面板的重載訊號：面板只 watch closeDate，解鎖後日期沒變就不會重載，
+// 於是剛寫下的解鎖原因與解鎖前帳面當場看不到；第一次解鎖時面板更因 count===0
+// 自身不渲染，要切走再切回來才會出現（FEAPV-03）。
+const historyReloadToken = ref(0)
+// 日期選擇器重掛用：取消切換時 selectedDate 沒變，需要靠換 key 把 picker 顯示拉回來
+const pickerNonce = ref(0)
 
 const detail = ref<DailyDetail | null>(null)
 const loadingDetail = ref(false)
 const submitting = ref(false)
-
-// 簽核按鈕停用：無權限 / 送出中 / detail 載入中皆停用。
-// 載入中停用可避免切換日期後、detail 尚未到位時，用舊 context（cashInSystem /
-// cash_count_required）誤簽。
-const approveDisabled = computed(
-  () => !canApprove.value || submitting.value || loadingDetail.value,
-)
 
 const dailyTransactions = ref<Record<string, unknown>[]>([])
 const loadingTx = ref(false)
@@ -480,6 +509,49 @@ const form = reactive<{ actualCashCount: number | null; note: string }>({
   note: '',
 })
 
+// 盤點門檻由後端權威判定（現金毛流量 ≥ 門檻）並以 cash_count_required 回傳。
+const cashCountRequired = computed(() => detail.value?.cash_count_required === true)
+const cashCountPlaceholder = computed(() =>
+  cashCountRequired.value ? '當日現金流量已達門檻，必填' : '可選；不填則不計算差異',
+)
+// 必填卻沒填 → 直接停用送出鈕，而不是等按下去才被後端 400 擋回。
+const cashCountMissing = computed(
+  () => cashCountRequired.value && form.actualCashCount == null,
+)
+
+// 簽核按鈕停用：無權限 / 送出中 / detail 載入中 / 必填盤點未填皆停用。
+// 載入中停用可避免切換日期後、detail 尚未到位時，用舊 context（cashInSystem /
+// cash_count_required）誤簽。
+const approveDisabled = computed(
+  () =>
+    !canApprove.value
+    || submitting.value
+    || loadingDetail.value
+    || cashCountMissing.value,
+)
+
+// 表單髒值＝主管已經動手填過的盤點金額或備註。切換日期會 resetForm() 把它清掉，
+// 因此任何切換路徑都必須先過確認（2026-08-14 審查 P2-08：原本靜默清空）。
+const isFormDirty = computed(
+  () => form.actualCashCount != null || (form.note || '').trim() !== '',
+)
+
+// 與 POS 收銀頁的日結列同一套呈現：退款只在發生時上色，淨額是簽核人核對的錨點
+const detailStripItems = computed((): StatStripItem[] => {
+  const d = detail.value
+  if (!d) return []
+  return [
+    { label: '收款', value: formatTWD(d.payment_total ?? 0) },
+    {
+      label: '退款',
+      value: formatTWD(d.refund_total ?? 0),
+      tone: (d.refund_total ?? 0) > 0 ? 'warning' : undefined,
+    },
+    { label: '淨額', value: formatTWD(d.net_total ?? 0), emphasis: true },
+    { label: '筆數', value: String(d.transaction_count ?? 0) },
+  ]
+})
+
 const methodEntries = computed((): [string, number][] => {
   if (!detail.value || !detail.value.by_method) return []
   return (Object.entries(detail.value.by_method) as [string, number][]).sort((a, b) => a[0].localeCompare(b[0]))
@@ -503,16 +575,96 @@ function resetForm() {
 }
 
 
-async function loadPending() {
+// 後端 pending 端點的查詢區間上限（見 api/activity/pos_approval.py 的 92 天守衛），
+// 而 oldest_pending_date **不受**該上限。直接送 (oldest, today) 在積壓超過 92 天時
+// 必定 400——正好是最需要「放寬查詢區間」的時候（FEAPV-02 / CONTRACT-03）。
+// 超過上限時自動分段送出再合併，讓積壓真的看得到、點得到。
+const PENDING_RANGE_MAX_DAYS = 92
+// 分段數上限（約兩年）。再多就不再往前查，避免一次噴出幾十個請求。
+const PENDING_RANGE_MAX_SEGMENTS = 8
+
+/** 以 UTC 曆算推移天數（與 taipeiOffsetISO 同一套做法，避免本地時區偏移）。 */
+function isoShiftDays(iso: string, days: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d) + days * 86400000).toISOString().slice(0, 10)
+}
+
+function splitPendingRange(
+  start: string,
+  end: string,
+): Array<{ start_date: string; end_date: string }> {
+  const segments: Array<{ start_date: string; end_date: string }> = []
+  let cursor = start
+  while (cursor <= end && segments.length < PENDING_RANGE_MAX_SEGMENTS) {
+    const segEnd = isoShiftDays(cursor, PENDING_RANGE_MAX_DAYS)
+    segments.push({ start_date: cursor, end_date: segEnd > end ? end : segEnd })
+    cursor = isoShiftDays(cursor, PENDING_RANGE_MAX_DAYS + 1)
+  }
+  return segments
+}
+
+// 亂序回應守衛：放寬區間後若在途的預設區間回應才回來，會把清單縮回去，
+// 使用者看起來像按鈕沒作用，而 pendingRange 其實已經是放寬值（CRITIC-04）。
+let pendingReqSeq = 0
+
+/** 回傳是否成功，供 widenPendingRange 決定要不要還原區間。 */
+async function loadPending(): Promise<boolean> {
+  const seq = ++pendingReqSeq
   loadingPending.value = true
   try {
-    const res = await getPOSDailyClosePending()
-    pending.value = (res.data as { pending?: PendingRow[] })?.pending || []
+    const range = pendingRange.value
+    const segments =
+      range?.start_date && range?.end_date
+        ? splitPendingRange(range.start_date, range.end_date)
+        : null
+    const responses = await Promise.all(
+      (segments || [range || undefined]).map((seg) => getPOSDailyClosePending(seg)),
+    )
+    if (seq !== pendingReqSeq) return true // 已有更新的請求發出，此為過時回應 → 丟棄
+
+    type PendingPayload = {
+      pending?: PendingRow[]
+      older_pending_count?: number
+      oldest_pending_date?: string | null
+    }
+    const first = responses[0]?.data as PendingPayload
+    if (!segments || segments.length === 1) {
+      // 單段：行為與分段改動前逐字相同（含後端回傳的排序）。
+      pending.value = first?.pending || []
+    } else {
+      const merged = new Map<string, PendingRow>()
+      for (const res of responses) {
+        for (const row of ((res.data as PendingPayload)?.pending || [])) {
+          merged.set(row.date, row)
+        }
+      }
+      pending.value = [...merged.values()].sort((a, b) => a.date.localeCompare(b.date))
+    }
+    // 「還有更早」的線索只在**最早那一段**才有意義：後段的起點本來就比較晚，
+    // 拿它的值會把真正的線索覆蓋掉。
+    pendingMeta.older_pending_count = first?.older_pending_count ?? 0
+    pendingMeta.oldest_pending_date = first?.oldest_pending_date ?? null
+    return true
   } catch (err) {
+    if (seq !== pendingReqSeq) return false
     ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取待簽核日期失敗')
+    return false
   } finally {
-    loadingPending.value = false
+    if (seq === pendingReqSeq) loadingPending.value = false
   }
+}
+
+// 一鍵把查詢起點推到最早的未簽核日，讓區間外的積壓真的看得到、點得到。
+async function widenPendingRange() {
+  const oldest = pendingMeta.oldest_pending_date
+  if (!oldest) return
+  const previous = pendingRange.value
+  pendingRange.value = { start_date: oldest, end_date: todayTaipeiISO() }
+  const ok = await loadPending()
+  // 失敗就把區間還原。否則 pendingRange 卡在無效值，之後每次簽核／解鎖後的
+  // refreshAll 都再失敗一次，待簽核清單凍結在舊資料還每次多彈一個錯誤 toast，
+  // 直到整頁重新整理。
+  if (!ok) pendingRange.value = previous
 }
 
 // 亂序回應守衛（request sequence guard）：快速切換 selectedDate 時，舊日期的慢回應
@@ -579,7 +731,7 @@ async function loadDailyTransactions() {
 async function loadReconciliation() {
   loadingRecon.value = true
   try {
-    const res = await getPOSReconciliation(offsetISO(-29), todayISO())
+    const res = await getPOSReconciliation(taipeiOffsetISO(-29), todayTaipeiISO())
     reconciliation.items = (res.data as { items?: ReconItem[] })?.items || []
     reconciliation.totals = (res.data as { totals?: Partial<ReconTotals> })?.totals || {}
   } catch (err) {
@@ -598,8 +750,41 @@ async function refreshAll() {
   ])
 }
 
+/**
+ * 所有「切換 selectedDate」的路徑都走這裡。
+ *
+ * watch(selectedDate) 會 resetForm()，主管已填的盤點金額與備註會被清空；原本
+ * 點一下對帳表就靜默清掉，連個提示都沒有（2026-08-14 審查 P2-08）。
+ */
+async function requestDateChange(next: unknown) {
+  const date = typeof next === 'string' ? next : ''
+  if (!date || date === selectedDate.value) return
+  if (isFormDirty.value) {
+    try {
+      await ElMessageBox.confirm(
+        `切換到 ${date} 會清空已填的盤點金額與備註，確定要切換嗎？`,
+        '尚未送出的簽核輸入',
+        {
+          type: 'warning',
+          confirmButtonText: '切換並清空',
+          cancelButtonText: '留在原日期',
+        },
+      )
+    } catch {
+      // 取消：日期不動，但 el-date-picker 內部已顯示新日期 → 換 key 逼它重掛回舊值
+      pickerNonce.value += 1
+      return
+    }
+  }
+  selectedDate.value = date
+}
+
 function handlePendingSelect(row: PendingRow | null) {
-  if (row?.date) selectedDate.value = row.date
+  if (row?.date) requestDateChange(row.date)
+}
+
+function handleReconRowClick(row: ReconItem) {
+  if (row?.date) requestDateChange(row.date)
 }
 
 async function handleApprove() {
@@ -627,11 +812,37 @@ async function handleApprove() {
     return
   }
 
+  // 簽核「當日」的後果比補簽昨日嚴重得多：當下起所有 POS 收款與自動沖帳都會被擋，
+  // 且簽核人自己不能解鎖（4-eye）。因此改為明確 opt-in，後端亦要求 confirm_close_today。
+  const isToday = selectedDate.value === todayTaipeiISO()
+  if (isToday) {
+    try {
+      await ElMessageBox.confirm(
+        `${selectedDate.value} 就是今天。簽核當日將立即擋住後續所有 POS 收款與自動沖帳，`
+          + '且你本人無法自行解鎖（須由其他簽核者解鎖）。\n\n'
+          + '若今天還會有收款，請改在營業結束後再簽核。',
+        '確認要簽核「今天」？',
+        {
+          type: 'warning',
+          confirmButtonText: '我了解，仍要簽核今日',
+          cancelButtonText: '取消',
+        },
+      )
+    } catch {
+      return
+    }
+  }
+
   submitting.value = true
   try {
     const { data } = await approvePOSDailyClose(selectedDate.value, {
       note: form.note || null,
       actual_cash_count: cash == null ? null : Number(cash),
+      // 樂觀鎖：把「你送出時看到的帳」一併帶上，帳在檢視期間被改動時後端回 409，
+      // 不會讓主管把已經對不上的 snapshot 凍結掉。
+      expected_net_total: detail.value?.net_total ?? null,
+      expected_transaction_count: detail.value?.transaction_count ?? null,
+      confirm_close_today: isToday,
     })
     const approveData = data as { warnings?: string[] }
     const warnings = approveData?.warnings || []
@@ -642,7 +853,26 @@ async function handleApprove() {
     resetForm()
     await refreshAll()
   } catch (err) {
-    ElMessage.error((err as ApiErr)?.response?.data?.detail || '簽核失敗')
+    const e = err as ApiErr & { response?: { status?: number } }
+    const status = e?.response?.status
+    const detailMsg = e?.response?.data?.detail
+    // 失敗後畫面原本停在「還可以再按一次送出」的舊表單上（P3-03）；一律重載狀態，
+    // 讓主管看到的是最新的帳與簽核狀態。
+    await loadDetail()
+    if (status === 409) {
+      const alreadyApproved = detail.value?.status === 'approved'
+      const body = alreadyApproved
+        ? `該日已由他人簽核（簽核人 ${detail.value?.approver_username || '—'}），已為你重新載入最新狀態。`
+        : '帳目在你檢視期間有變動，本次簽核未送出。\n\n'
+          + `${detailMsg || ''}\n\n`
+          + '已為你重新載入最新狀態，請重新核對後再簽核。'
+      await ElMessageBox.alert(body, '簽核未完成', {
+        type: 'warning',
+        confirmButtonText: '了解',
+      }).catch(() => {})
+    } else {
+      ElMessage.error(detailMsg || '簽核失敗')
+    }
   } finally {
     submitting.value = false
   }
@@ -750,9 +980,13 @@ async function doUnlock({ isOverride, minLen }: { isOverride: boolean; minLen: n
         }).catch(() => {})
       }
     }
+    // 解鎖前帳面 snapshot 與剛寫下的原因要立刻看得到，作為重簽前的比對基準。
+    historyReloadToken.value += 1
     await refreshAll()
   } catch (err) {
     ElMessage.error((err as ApiErr)?.response?.data?.detail || '解鎖失敗')
+    // 解鎖失敗同樣要重載：可能是別人已先解鎖／已重簽，畫面不可停在舊狀態（P3-03）。
+    await loadDetail()
   } finally {
     submitting.value = false
   }
@@ -766,6 +1000,9 @@ watch(selectedDate, () => {
   // （配合 loadDetail / loadDailyTransactions 的序號守衛，杜絕舊日資料誤導簽核）。
   detail.value = null
   dailyTransactions.value = []
+  // 前一天的解鎖次數不可掛在新日期上：子元件 load 完成前，卡頭會短暫顯示
+  // 「本日曾解鎖 N 次」指著一個根本沒被解鎖過的日期。
+  historyCount.value = 0
   loadDetail()
   loadDailyTransactions()
 })
@@ -799,6 +1036,38 @@ onMounted(refreshAll)
   font-weight: 600;
 }
 
+.pos-approval__pane-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pos-approval__pane-hint {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pos-approval__older-pending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--color-warning);
+  background: var(--bg-color-soft);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+/* 對帳表整列可點（點列＝切換至該日），沒有游標提示時使用者不會知道 */
+.pos-approval__recon-table :deep(.el-table__row) {
+  cursor: pointer;
+}
+
 .pos-approval__jump {
   display: flex;
   align-items: center;
@@ -814,12 +1083,6 @@ onMounted(refreshAll)
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.pos-approval__stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
 }
 
 .pos-approval__methods {
@@ -858,8 +1121,12 @@ onMounted(refreshAll)
   color: var(--text-secondary);
 }
 
+/* 警示文字一律走 *-darker（a11y.css 的 html.dark 已翻成亮階）。*-hover 是互動態
+   token、dark 刻意未覆寫，當文字色用在深色底只有 2.5–3.6:1——這裡承載的是盤點差額
+   與退費風險提示，看不清等於簽核放行（P3-10）。守衛見
+   components/activity/__tests__/POSDarkContrast.test.ts。 */
 .pos-approval__info-row--danger strong {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
 }
 
 .pos-approval__action {
@@ -878,7 +1145,7 @@ onMounted(refreshAll)
 }
 
 .pos-approval__hint--danger {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
 }
 
 .pos-approval__tx-block {
@@ -942,16 +1209,13 @@ onMounted(refreshAll)
 }
 
 .pos-approval__variance {
-  color: var(--color-danger-hover);
+  color: var(--color-danger-darker);
   font-weight: 600;
 }
 
 @media (max-width: 1000px) {
   .pos-approval__body {
     grid-template-columns: 1fr;
-  }
-  .pos-approval__stat-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

@@ -52,7 +52,7 @@ const RosterColumnStub = {
 const AnomalyQueueColumnStub = {
   name: 'AnomalyQueueColumn',
   props: ['items', 'selectedIndex', 'loading'],
-  emits: ['select', 'filterChange'],
+  emits: ['select', 'filterChange', 'resolved'],
   template: `<div class="anomaly-queue-column-stub"><slot /></div>`,
 }
 
@@ -163,7 +163,12 @@ describe('AttendanceWorkspaceView', () => {
     await aqc.vm.$emit('select', 1)
     await flushPromises()
     const dc = wrapper.findComponent(DetailColumnStub)
-    expect(dc.props('anomaly')).toEqual(sampleAnomalies[1])
+    // P1-4：佇列元素為日卡（依 attendance id 分組，異常收在 items[]）
+    expect(dc.props('anomaly')).toMatchObject({
+      id: sampleAnomalies[1].id,
+      employee_name: sampleAnomalies[1].employee_name,
+      items: [expect.objectContaining({ type: sampleAnomalies[1].type })],
+    })
     expect(dc.props('mode')).toBe('resolve')
   })
 
@@ -174,7 +179,10 @@ describe('AttendanceWorkspaceView', () => {
     await aqc.vm.$emit('select', 0)
     await flushPromises()
     const dc = wrapper.findComponent(DetailColumnStub)
-    expect(dc.props('anomaly')).toEqual(sampleAnomalies[0])
+    expect(dc.props('anomaly')).toMatchObject({
+      id: sampleAnomalies[0].id,
+      items: [expect.objectContaining({ type: sampleAnomalies[0].type })],
+    })
   })
 
   // ── 人員選取 → DetailColumn mode=month ────────────────────────────────────
@@ -198,6 +206,20 @@ describe('AttendanceWorkspaceView', () => {
 
     const dc = wrapper.findComponent(DetailColumnStub)
     await dc.vm.$emit('resolved')
+    await flushPromises()
+    expect(getSummaryMock).toHaveBeenCalledTimes(2)
+    expect(getAnomalyListMock).toHaveBeenCalledTimes(2)
+  })
+
+  // ── 異常多選批次處理 resolved → refresh ──────────────────────────────────
+  it('AnomalyQueueColumn emit resolved → getSummary/getAnomalyList 再次被呼叫', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    expect(getSummaryMock).toHaveBeenCalledTimes(1)
+    expect(getAnomalyListMock).toHaveBeenCalledTimes(1)
+
+    const aqc = wrapper.findComponent(AnomalyQueueColumnStub)
+    await aqc.vm.$emit('resolved')
     await flushPromises()
     expect(getSummaryMock).toHaveBeenCalledTimes(2)
     expect(getAnomalyListMock).toHaveBeenCalledTimes(2)
@@ -282,6 +304,54 @@ describe('AttendanceWorkspaceView', () => {
     expect(getRecordsMock).toHaveBeenCalledTimes(2)
     const callMonth7 = getRecordsMock.mock.calls[1][0].month
     expect(callMonth7).toBe(callMonth6 + 1)
+  })
+
+  // ── P1-4：resolve 後 recordsCache 失效（明細不得顯示舊資料）────────────────
+  it('resolved 後 recordsCache 失效並重抓當前員工明細', async () => {
+    getRecordsMock.mockResolvedValue({
+      data: [{ date: '2026-06-05', punch_in: null, punch_out: '17:00', status: null }],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const rc = wrapper.findComponent(RosterColumnStub)
+    await rc.vm.$emit('select', 1)
+    await flushPromises()
+    expect(getRecordsMock).toHaveBeenCalledTimes(1)
+
+    // 補卡成功（DetailColumn emit resolved）→ 快取應失效並以同員工重抓
+    getRecordsMock.mockResolvedValue({
+      data: [{ date: '2026-06-05', punch_in: '08:00', punch_out: '17:00', status: null }],
+    })
+    const dc = wrapper.findComponent(DetailColumnStub)
+    await dc.vm.$emit('resolved')
+    await flushPromises()
+
+    expect(getRecordsMock).toHaveBeenCalledTimes(2)
+    expect(getRecordsMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({ employee_id: 1 }),
+    )
+  })
+
+  // ── P1-4：匯入後 recordsCache 失效 ─────────────────────────────────────────
+  it('imported 後 recordsCache 失效（下次選取重抓）', async () => {
+    getRecordsMock.mockResolvedValue({ data: [] })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const rc = wrapper.findComponent(RosterColumnStub)
+    await rc.vm.$emit('select', 1)
+    await flushPromises()
+    expect(getRecordsMock).toHaveBeenCalledTimes(1)
+
+    const dialog = wrapper.findComponent(ImportPreviewDialogStub)
+    await dialog.vm.$emit('imported', {})
+    await flushPromises()
+
+    // 匯入後對當前員工立即重抓（快取已失效）
+    expect(getRecordsMock).toHaveBeenCalledTimes(2)
   })
 })
 

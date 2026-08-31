@@ -5,10 +5,12 @@ import { Bell, CircleCheck, Mute, Refresh } from '@element-plus/icons-vue'
 import {
   acknowledgeDismissalCall,
   completeDismissalCall,
+  cancelPortalDismissalCall,
 } from '@/api/dismissalCalls'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
 import {
   useNowClock,
+  isPreArrivalNotice,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
@@ -55,38 +57,46 @@ const testSound = () => {
 }
 
 // ─── 確認已收到 ──────────────────────────────────────────
+// 教師端不再有獨立「帶出去放學」步驟：按下「我收到了」即視為完成。
+// 家長已在門口（或 staff 舊流程建立，arrived_at 已寫入）→ 確認已收到後立即帶出放學。
+// 家長預告尚未抵達 → 先標記已收到；待 usePortalDismissalAlerts 收到
+// dismissal_call_arrived 事件（家長抵達門口）時自動完成放學，教師不需再操作第二次。
 const handleAcknowledge = async (call: DismissalCall) => {
   try {
     await acknowledgeDismissalCall(call.id)
-    const idx = activeCalls.value.findIndex(c => c.id === call.id)
-    if (idx !== -1) activeCalls.value[idx].status = 'acknowledged'
+    if (isPreArrivalNotice(call)) {
+      const idx = activeCalls.value.findIndex(c => c.id === call.id)
+      if (idx !== -1) activeCalls.value[idx].status = 'acknowledged'
+      return
+    }
+    await completeDismissalCall(call.id)
+    activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
   } catch (e) {
     const err = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(err.response?.data?.detail || '操作失敗')
   }
 }
 
-// ─── 確認已放學 ──────────────────────────────────────────
-// 此操作無法撤銷（後端無 reverse-complete 端點，且家長端會收到放學通知），
-// 因此先二次確認再送出。
-const handleComplete = async (call: DismissalCall) => {
+// ─── 取消通知（誤建／家長改口）───────────────────────────
+// 2026-08-24 起教師可自行取消 pending/acknowledged 通知，不必再找管理端。
+const handleCancel = async (call: DismissalCall) => {
   try {
     await ElMessageBox.confirm(
-      `確定 ${call.student_name}（${call.classroom_name}）已交給家長放學？\n此操作無法撤銷，家長端將收到放學通知。`,
-      '確認放學',
+      `確定取消 ${call.student_name}（${call.classroom_name}）的接送通知？\n取消後這筆通知即結束，若家長仍會來接請重新建立。`,
+      '取消接送通知',
       {
-        confirmButtonText: '確定放學',
+        confirmButtonText: '取消通知',
         cancelButtonText: '返回',
         type: 'warning',
       },
     )
   } catch {
-    return // 使用者取消
+    return // 使用者返回
   }
   try {
-    await completeDismissalCall(call.id)
+    await cancelPortalDismissalCall(call.id)
     activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
-    ElMessage.success('已標記為放學')
+    ElMessage.success('已取消接送通知')
   } catch (e) {
     const err = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(err.response?.data?.detail || '操作失敗')
@@ -199,12 +209,15 @@ onMounted(() => {
               class="act-btn"
               @click="handleAcknowledge(call)"
             >我收到了</el-button>
+            <!-- acknowledged：教師端已完成操作。家長尚未抵達時等待
+                 dismissal_call_arrived 事件自動完成放學，不需教師再次操作。 -->
             <el-button
-              v-else-if="call.status === 'acknowledged'"
-              type="success"
-              class="act-btn"
-              @click="handleComplete(call)"
-            >帶出去放學</el-button>
+              v-if="call.status === 'pending' || call.status === 'acknowledged'"
+              type="danger"
+              plain
+              class="act-btn act-btn--cancel"
+              @click="handleCancel(call)"
+            >取消通知</el-button>
           </template>
         </DismissalCallCard>
       </TransitionGroup>
@@ -418,6 +431,11 @@ onMounted(() => {
 .act-btn {
   min-height: var(--touch-target-min);
   font-weight: var(--font-weight-semibold);
+}
+/* 卡片 action slot 已用 flex gap 排版；清掉 Element Plus 相鄰按鈕的預設
+   margin-left，避免與 gap 疊加（手機直排時更會歪一邊） */
+.act-btn--cancel {
+  margin-left: 0;
 }
 
 /* 卡片進場 / 移除 / 重排序動畫 */

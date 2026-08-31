@@ -8,6 +8,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 import { extractErrorCode, extractErrorDetail } from '@/utils/error'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { PAGE_TERMS } from '@/constants/moduleTerms'
 import {
   listPickupAuthorizations,
@@ -35,6 +37,14 @@ interface PickupAuth {
 }
 
 const canWrite = computed(() => hasPermission('GUARDIANS_WRITE'))
+const { isMobile } = useIsMobile()
+
+// 手機卡片只留「要不要放行」需要看的欄位；授權家長、核銷方式等追溯欄位留在桌機表格。
+const CARD_COLUMNS = [
+  { label: '接送人', prop: 'person_name' },
+  { label: '聯絡電話', prop: 'person_phone' },
+  { label: '接送日', prop: 'pickup_date' },
+]
 
 const items = ref<PickupAuth[]>([])
 const loading = ref(false)
@@ -147,27 +157,36 @@ onMounted(fetchData)
   <div class="pickup-auth-admin-view">
     <PageHeader :title="PAGE_TERMS.pickupAuthorizations" />
 
+    <!-- 篩選列：手機一律單欄。原本固定 :span="6" 在 375px 下每欄只剩約 85px，
+         日期選擇器內容撐開後造成頁面級橫向溢出。 -->
     <el-row :gutter="12" class="filter-row">
-      <el-col :span="6">
+      <el-col :xs="24" :sm="6">
         <el-date-picker
           v-model="dateFrom"
           type="date"
           placeholder="起日"
           value-format="YYYY-MM-DD"
+          class="filter-control"
           @change="fetchData"
         />
       </el-col>
-      <el-col :span="6">
+      <el-col :xs="24" :sm="6">
         <el-date-picker
           v-model="dateTo"
           type="date"
           placeholder="迄日"
           value-format="YYYY-MM-DD"
+          class="filter-control"
           @change="fetchData"
         />
       </el-col>
-      <el-col :span="6">
-        <el-select v-model="statusFilter" placeholder="狀態" @change="fetchData">
+      <el-col :xs="24" :sm="6">
+        <el-select
+          v-model="statusFilter"
+          placeholder="狀態"
+          class="filter-control"
+          @change="fetchData"
+        >
           <el-option
             v-for="opt in STATUS_OPTIONS"
             :key="opt.value"
@@ -178,7 +197,47 @@ onMounted(fetchData)
       </el-col>
     </el-row>
 
-    <el-table :data="items" v-loading="loading" style="width: 100%">
+    <!-- 手機：9 欄表格要橫捲才按得到「核銷」，改任務卡片 -->
+    <AdminListCards
+      v-if="isMobile"
+      :items="items"
+      :columns="CARD_COLUMNS"
+      row-key="id"
+      :loading="loading"
+      empty-text="今日無接送授權"
+    >
+      <template #title="{ item }">
+        <div class="card-title">
+          <img
+            v-if="item.photo_url"
+            :src="String(item.photo_url)"
+            alt="接送人照片"
+            class="thumb"
+          />
+          <span class="card-title__name">{{ item.student_name }}</span>
+          <span class="card-title__class">{{ item.classroom_name }}</span>
+          <el-tag
+            :type="STATUS_TAG[String(item.effective_status)] || 'info'"
+            size="small"
+          >
+            {{ STATUS_LABEL[String(item.effective_status)] || item.effective_status }}
+          </el-tag>
+        </div>
+      </template>
+      <template #cell-person_name="{ item }">
+        {{ item.person_name }}（{{ item.person_relation }}）
+      </template>
+      <template #actions="{ item }">
+        <el-button
+          v-if="canWrite && item.effective_status === 'active'"
+          data-test="pickup-card-verify"
+          type="primary"
+          @click="openVerify(item as unknown as PickupAuth)"
+        >核銷</el-button>
+      </template>
+    </AdminListCards>
+
+    <el-table v-else :data="items" v-loading="loading" style="width: 100%">
       <el-table-column label="照片" width="70">
         <template #default="{ row }">
           <img v-if="row.photo_url" :src="row.photo_url" alt="接送人照片" class="thumb" />
@@ -220,7 +279,14 @@ onMounted(fetchData)
       </template>
     </el-table>
 
-    <el-dialog v-model="verifyDialogOpen" title="接送核銷" width="480px">
+    <!-- 手機滿版：核銷要看照片＋輸入 6 位碼，虛擬鍵盤彈出時 480px 置中 dialog
+         的底部按鈕會被蓋住。滿版下 main.css 的 dialog 殼層讓 footer 常駐可見。 -->
+    <el-dialog
+      v-model="verifyDialogOpen"
+      title="接送核銷"
+      width="480px"
+      :fullscreen="isMobile"
+    >
       <template v-if="verifyTarget">
         <p class="verify-target-name">
           {{ verifyTarget.student_name }} · {{ verifyTarget.person_name }}（{{ verifyTarget.person_relation }}）
@@ -277,6 +343,31 @@ onMounted(fetchData)
 }
 .filter-row {
   margin-bottom: 12px;
+}
+.card-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.card-title__class {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-normal);
+  color: var(--text-secondary);
+}
+
+@media (--to-sm) {
+  /* 外層 .content-container 已有 padding，這裡再補一層會吃掉窄機寬度 */
+  .pickup-auth-admin-view {
+    padding: 0;
+  }
+  .filter-row :deep(.el-col) {
+    margin-bottom: var(--space-2);
+  }
+  /* 單欄後控制項撐滿，避免右側留一段空白且觸控目標偏窄。桌機不套，版面零變動。 */
+  .filter-control {
+    width: 100%;
+  }
 }
 .thumb {
   width: 40px;

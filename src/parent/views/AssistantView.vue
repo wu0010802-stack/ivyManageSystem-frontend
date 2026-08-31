@@ -52,7 +52,8 @@ function toggleQuestion(item: FaqItem) {
 }
 
 function goContactTeacher() {
-  router.push('/messages')
+  // 訊息下架後，聯絡老師走聯絡簿回覆。
+  router.push('/contact-book')
 }
 
 onMounted(load)

@@ -100,7 +100,7 @@ describe('FeeRecordsTab', () => {
     expect(getFeeRecords).toHaveBeenCalled()
   })
 
-  it('fetchRecords 會把 student_name 與 partial 狀態一起送到 records/summary', async () => {
+  it('fetchRecords：records 帶 status/分頁；summary 只帶範圍（IA 改版統計涵蓋全狀態）', async () => {
     const wrapper = mountTab()
     await flushPromises()
     vi.clearAllMocks()
@@ -117,17 +117,20 @@ describe('FeeRecordsTab', () => {
     await wrapper.vm.$.setupState.fetchRecords()
     await flushPromises()
 
-    const expectedParams = {
+    expect(getFeeRecords).toHaveBeenCalledWith({
       page: 2,
       page_size: 20,
       period: '2025-1',
       classroom_name: '大班A',
       status: 'partial',
       student_name: '小明',
-    }
-
-    expect(getFeeRecords).toHaveBeenCalledWith(expectedParams)
-    expect(getFeeSummary).toHaveBeenCalledWith(expectedParams)
+    })
+    // summary strip 的各狀態筆數要涵蓋全狀態分佈 → 不帶 status/分頁
+    expect(getFeeSummary).toHaveBeenCalledWith({
+      period: '2025-1',
+      classroom_name: '大班A',
+      student_name: '小明',
+    })
   })
 
   it('resetRecordFilters 會清空條件並回到第一頁', async () => {
@@ -154,7 +157,7 @@ describe('FeeRecordsTab', () => {
       student_name: '',
     })
     expect(getFeeRecords).toHaveBeenCalledWith({ page: 1, page_size: 50 })
-    expect(getFeeSummary).toHaveBeenCalledWith({ page: 1, page_size: 50 })
+    expect(getFeeSummary).toHaveBeenCalledWith({})
   })
 
   it('expose fetchRecords 給父層', async () => {

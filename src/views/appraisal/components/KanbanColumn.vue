@@ -4,13 +4,21 @@ import SummaryCard from './SummaryCard.vue'
 
 interface Summary { id: number; [key: string]: unknown }
 
-const props = defineProps<{
-  status: string
-  label: string
-  summaries?: Summary[]
-  selectedIds?: number[]
-  collapsedByDefault?: boolean
-}>()
+// ⚠ canWriteCycle 需 withDefaults 給 true，理由同 KanbanView.vue 同款註解——
+// 未傳的 boolean-only prop 會被 Vue 轉型成顯式 false，若不擋在這一層，會沿著
+// 下方 :can-write-cycle="canWriteCycle" 綁定把「顯式 false」帶給 SummaryCard，
+// 蓋掉它自己的 withDefaults(true) fallback。
+const props = withDefaults(
+  defineProps<{
+    status: string
+    label: string
+    summaries?: Summary[]
+    selectedIds?: number[]
+    collapsedByDefault?: boolean
+    canWriteCycle?: boolean
+  }>(),
+  { canWriteCycle: true },
+)
 const emit = defineEmits<{
   'toggle-select': [payload: { summaryId: number; selected: boolean }]
   'select-all': [payload: { status: string; selected: boolean }]
@@ -48,6 +56,7 @@ function onSelectAll(v: string | number | boolean) {
         :key="summary.id"
         :summary="summary"
         :selected="(selectedIds ?? []).includes(summary.id)"
+        :can-write-cycle="canWriteCycle"
         show-menu
         @update:selected="(v) => onCardSelectChange(summary.id, v as boolean)"
         @action="(payload) => emit('action', payload)"

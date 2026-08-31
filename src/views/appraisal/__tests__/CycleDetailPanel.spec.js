@@ -22,16 +22,24 @@ vi.mock('@/api/appraisal', () => ({
   getSignStatusSummary: vi.fn().mockResolvedValue({
     data: { cycle_id: 5, counts: { DRAFT: 2, SUPERVISOR_SIGNED: 1, ACCOUNTING_SIGNED: 0, FINALIZED: 3 }, buckets: [] },
   }),
+  getAppraisalAllEmployeesStatus: vi.fn().mockResolvedValue({
+    data: { participants: [{ employee_id: 42, employee_name: '林靜宜', role_group: 'HOMEROOM', attendance: {}, retention: null, activity: null, disciplinary: {} }] },
+  }),
+  listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
 }))
+import { listAppraisalParticipants, listAppraisalCycles } from '@/api/appraisal'
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }))
 
 // 內嵌元件仍讀 route.query.view 覆寫預設 view；query 可由測試逐案調整
 const routeQuery = { value: {} }
+// module-scope 共用物件，讓測試可以斷言 router.replace 被呼叫的參數
+// （query 同步邏輯若不驗證呼叫內容，等於只測到「沒噴錯」，測不出寫錯 key）。
+const mockRouter = { back: vi.fn(), replace: vi.fn() }
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: routeQuery.value }),
-  useRouter: () => ({ back: vi.fn(), replace: vi.fn() }),
+  useRouter: () => mockRouter,
 }))
 
 vi.mock('@/utils/auth', () => ({
@@ -50,7 +58,7 @@ const stubs = {
   ListView: defineComponent({
     name: 'ListView',
     props: ['cycleId', 'participants', 'summaryByParticipant', 'catalog', 'selectedIds', 'busy'],
-    emits: ['sign', 'reject', 'comment', 'open-log', 'update:selected-ids'],
+    emits: ['sign', 'reject', 'comment', 'open-log', 'open-detail', 'update:selected-ids'],
     setup() {
       return () => h('div', { 'data-test': 'list-view-stub' }, 'list')
     },
@@ -90,13 +98,13 @@ const stubs = {
       return () => h('div', { 'data-test': 'sign-progress-bar-stub' }, JSON.stringify(props.counts))
     },
   }),
-  SummaryLogDrawer: defineComponent({
-    name: 'SummaryLogDrawer',
-    props: ['visible', 'summaryId'],
+  EmployeeSummaryDrawer: defineComponent({
+    name: 'EmployeeSummaryDrawer',
+    props: ['visible', 'participant', 'summary', 'rules', 'cycleId'],
     emits: ['update:visible'],
     setup(props) {
       return () => (props.visible
-        ? h('div', { 'data-test': 'log-drawer-stub' }, 'log')
+        ? h('div', { 'data-test': 'employee-summary-drawer-stub' }, props.participant?.employee_name ?? '')
         : null)
     },
   }),
@@ -196,5 +204,124 @@ describe('CycleDetailPanel', () => {
     wrapper.vm.openReject({ id: 7, status: 'SUPERVISOR_SIGNED' })
     await nextTick()
     expect(wrapper.find('[data-test="reject-dialog-stub"]').exists()).toBe(true)
+  })
+
+  it('openEmployeeDrawer(employeeId) 找到對應明細時開啟員工明細抽屜', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
+    wrapper.vm.openEmployeeDrawer(42)
+    await nextTick()
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
+  })
+
+  it('openEmployeeDrawer(employeeId) 找不到對應明細時顯示警告、不開啟抽屜', async () => {
+    const { ElMessage } = await import('element-plus')
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openEmployeeDrawer(9999)
+    await nextTick()
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('kanban 觸發 action=detail 時開啟對應員工的明細抽屜', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.view = 'kanban'
+    await nextTick()
+    await wrapper.findComponent({ name: 'KanbanView' }).vm.$emit('action', { action: 'detail', summary: { id: 1, employee_id: 42, employee_name: '林靜宜' } })
+    await nextTick()
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
+  })
+
+  it('kanban 觸發 action=log 時開啟對應員工的明細抽屜', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.view = 'kanban'
+    await nextTick()
+    await wrapper.findComponent({ name: 'KanbanView' }).vm.$emit('action', { action: 'log', summary: { id: 1, employee_id: 42, employee_name: '林靜宜' } })
+    await nextTick()
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
+  })
+
+  it('openEmployeeDrawer(undefined) 為 no-op', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openEmployeeDrawer(undefined)
+    await nextTick()
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
+  })
+
+  it('openEmployeeDrawer 成功開啟時同步 employee query', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openEmployeeDrawer(42)
+    await nextTick()
+    const lastCall = mockRouter.replace.mock.calls.at(-1)
+    expect(lastCall[0].query.employee).toBe('42')
+  })
+
+  it('關閉員工明細抽屜時清除 employee query', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    wrapper.vm.openEmployeeDrawer(42)
+    await nextTick()
+    await wrapper.findComponent({ name: 'EmployeeSummaryDrawer' }).vm.$emit('update:visible', false)
+    await nextTick()
+    const lastCall = mockRouter.replace.mock.calls.at(-1)
+    expect(lastCall[0].query.employee).toBeUndefined()
+  })
+
+  it('URL 帶 employee query 時，載入完成後自動開啟該員工明細抽屜', async () => {
+    routeQuery.value = { employee: '42' }
+    const wrapper = mountPanel()
+    await flush()
+    const drawer = wrapper.find('[data-test="employee-summary-drawer-stub"]')
+    expect(drawer.exists()).toBe(true)
+    expect(drawer.text()).toContain('林靜宜')
+  })
+
+  it('URL 帶不存在的 employee query 時，不噴錯、不開啟抽屜', async () => {
+    routeQuery.value = { employee: '9999' }
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="employee-summary-drawer-stub"]').exists()).toBe(false)
+  })
+
+  it('load() 失敗時顯示錯誤區塊，點重試成功後消失', async () => {
+    listAppraisalParticipants.mockRejectedValueOnce(new Error('network error'))
+    const wrapper = mountPanel()
+    await flush()
+
+    expect(wrapper.find('[data-test="cdp-retry"]').exists()).toBe(true)
+
+    listAppraisalParticipants.mockResolvedValueOnce({ data: [] })
+    await wrapper.find('[data-test="cdp-retry"]').trigger('click')
+    await flush()
+
+    expect(wrapper.find('[data-test="cdp-retry"]').exists()).toBe(false)
+    expect(listAppraisalParticipants).toHaveBeenCalledTimes(2)
+  })
+
+  it('cycle 非 OPEN 時隱藏重算按鈕（List 檢視）', async () => {
+    listAppraisalCycles.mockResolvedValueOnce({
+      data: [{ id: 5, academic_year: 114, semester: 'FIRST', base_score_calc_date: '2025-09-15', base_score: 75.6, status: 'LOCKED' }],
+    })
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="recompute-btn"]').exists()).toBe(false)
+  })
+
+  it('cycle 為 OPEN 時仍依權限顯示重算按鈕（不受本次改動影響的既有行為）', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="recompute-btn"]').exists()).toBe(true)
   })
 })

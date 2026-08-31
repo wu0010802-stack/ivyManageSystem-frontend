@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>接送管理｜代理接送卡片 swipe reveal</title>
+<style>
+  :root {
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --text-xs: 12px;
+    --text-sm: 13px;
+    --text-xl: 18px;
+    --radius-lg: 12px;
+    --radius-full: 9999px;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --transition-base: 0.2s ease;
+
+    --color-success: #10b981;
+    --color-success-darker: #15803d;
+    --color-danger: #ef4444;
+    --color-danger-darker: #b91c1c;
+    --neutral-700: #334155;
+
+    --brand-primary: #0284c7;
+    --brand-primary-hover: #0369a1;
+
+    --bg-color: #f8fafc;
+    --bg-color-soft: #f1f5f9;
+    --surface-color: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-tertiary: #94a3b8;
+    --border-color: #e2e8f0;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 40px 24px 64px;
+    background: var(--bg-color);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  }
+
+  .page-head { max-width: 900px; margin: 0 auto 32px; }
+  .page-head h1 { font-size: 22px; margin: 0 0 6px; }
+  .page-head p { margin: 0; color: var(--text-secondary); font-size: var(--text-sm); line-height: 1.6; }
+  .page-head code { background: var(--bg-color-soft); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+
+  .compare { max-width: 900px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 720px) { .compare { grid-template-columns: 1fr; } }
+
+  .card-shell { width: 280px; max-width: 100%; }
+
+  .col-label { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: var(--text-sm); font-weight: 700; }
+  .col-note { font-size: 12px; color: var(--text-secondary); margin: 8px 0 20px; line-height: 1.6; }
+  .col-note b { color: var(--text-primary); }
+
+  /* ===== 卡片本體，逐一對應 DismissalPosQueueCard.vue ===== */
+  .pos-queue-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    background: var(--surface-color);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .pos-queue-card__reveal {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-end;
+  }
+
+  .pos-queue-card__cancel-btn {
+    width: 84px;
+    border: none;
+    background: var(--color-danger);
+    color: #fff;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .pos-queue-card__confirm-reveal-btn {
+    width: 84px;
+    border: none;
+    background: var(--brand-primary);
+    color: #fff;
+    font-size: var(--text-sm);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .pos-queue-card__body {
+    position: relative;
+    background: var(--surface-color);
+    padding: var(--space-3) var(--space-4);
+    transition: transform var(--transition-base);
+  }
+
+  .pos-queue-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); }
+  .pos-queue-card__name { font-size: var(--text-xl); font-weight: 700; color: var(--text-primary); line-height: 1.25; }
+  .pos-queue-card__room { font-size: var(--text-xs); color: var(--text-tertiary); margin-top: 2px; }
+
+  .pos-queue-card__source-tag { flex-shrink: 0; padding: 3px 9px; border-radius: var(--radius-full); font-size: 11px; font-weight: 700; }
+  .pos-queue-card__source-tag--proxy { background: var(--neutral-700); color: #fff; }
+
+  .pos-queue-card__proxy-info {
+    margin-top: var(--space-2);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+  }
+  .pos-queue-card__proxy-person { font-size: var(--text-sm); color: var(--text-secondary); }
+  .pos-queue-card__proxy-code { font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); }
+
+  .pos-queue-card__waiting-flag {
+    margin-top: var(--space-3);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-success-darker);
+  }
+  .pos-queue-card__waiting-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-success); }
+
+  .pos-queue-card__swipe-hint {
+    margin-top: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
+
+  /* demo-only：右欄用 class 模擬「滑開後」狀態，不需要真的拖曳 */
+  .demo-open .pos-queue-card__body { transform: translateX(-168px); }
+</style>
+</head>
+<body>
+
+  <div class="page-head">
+    <h1>接送管理｜代理接送卡片 swipe reveal</h1>
+    <p>
+      元件：<code>src/components/dismissal/pos/DismissalPosQueueCard.vue</code>。
+      改動：確認接送按鈕不再常駐卡面，改與取消鈕一起收在向左滑開的 reveal 區（僅 proxy 卡片才有兩顆按鈕，
+      非 proxy 只有取消鈕），卡面改顯示「← 左滑確認」提示文字。此頁用靜態 class 模擬「滑開後」狀態，
+      不含真實拖曳互動（拖曳邏輯已由 useSwipeReveal 單元測試與元件測試覆蓋）。
+    </p>
+  </div>
+
+  <div class="compare">
+    <div>
+      <div class="col-label">未滑開（卡面常態）</div>
+      <div class="card-shell">
+        <div class="pos-queue-card">
+          <div class="pos-queue-card__reveal">
+            <button class="pos-queue-card__confirm-reveal-btn" type="button">確認接送</button>
+            <button class="pos-queue-card__cancel-btn" type="button">取消</button>
+          </div>
+          <div class="pos-queue-card__body">
+            <div class="pos-queue-card__top">
+              <div>
+                <div class="pos-queue-card__name">吳逸倫</div>
+                <div class="pos-queue-card__room">天堂鳥</div>
+              </div>
+              <span class="pos-queue-card__source-tag pos-queue-card__source-tag--proxy">代理</span>
+            </div>
+            <div class="pos-queue-card__proxy-info">
+              <span class="pos-queue-card__proxy-person">測試（其他）</span>
+              <span class="pos-queue-card__proxy-code">取件碼 624366</span>
+            </div>
+            <div class="pos-queue-card__waiting-flag">
+              <span class="pos-queue-card__waiting-dot"></span>今日委託接送，等待到場
+            </div>
+            <div class="pos-queue-card__swipe-hint">
+              <span aria-hidden="true">←</span> 左滑確認
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="col-note">
+        卡面比先前更乾淨：只剩姓名、班級、代理人、取件碼、狀態，最下面用小字提示
+        <b>「← 左滑確認」</b>告知動作藏在哪。
+      </p>
+    </div>
+
+    <div>
+      <div class="col-label">向左滑開後（露出兩顆按鈕）</div>
+      <div class="card-shell">
+        <div class="pos-queue-card demo-open">
+          <div class="pos-queue-card__reveal">
+            <button class="pos-queue-card__confirm-reveal-btn" type="button">確認接送</button>
+            <button class="pos-queue-card__cancel-btn" type="button">取消</button>
+          </div>
+          <div class="pos-queue-card__body">
+            <div class="pos-queue-card__top">
+              <div>
+                <div class="pos-queue-card__name">吳逸倫</div>
+                <div class="pos-queue-card__room">天堂鳥</div>
+              </div>
+              <span class="pos-queue-card__source-tag pos-queue-card__source-tag--proxy">代理</span>
+            </div>
+            <div class="pos-queue-card__proxy-info">
+              <span class="pos-queue-card__proxy-person">測試（其他）</span>
+              <span class="pos-queue-card__proxy-code">取件碼 624366</span>
+            </div>
+            <div class="pos-queue-card__waiting-flag">
+              <span class="pos-queue-card__waiting-dot"></span>今日委託接送，等待到場
+            </div>
+            <div class="pos-queue-card__swipe-hint">
+              <span aria-hidden="true">←</span> 左滑確認
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="col-note">
+        卡身整體向左滑開 168px（確認接送 84px ＋ 取消 84px），露出藍色「確認接送」與紅色「取消」。
+        非 proxy 卡片（現場／預約）滑開只會露出 84px 寬的單一取消鈕，跟現在線上行為一致。
+      </p>
+    </div>
+  </div>
+
+</body>
+</html>

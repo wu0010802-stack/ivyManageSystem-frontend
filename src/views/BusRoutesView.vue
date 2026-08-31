@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 管理端娃娃車路線管理（route `/bus-routes`，權限 `BUS_WRITE`）。
+ * 管理端娃娃車路線管理（route `/bus/routes`，權限 `BUS_WRITE`）。
  *
  * 業務邏輯全在 `@/composables/useBusRouteEditor`（含 replace-all 語意、未儲存保護、
  * 站數上限、候選名單過濾）；本檔只負責呈現與地圖微調。

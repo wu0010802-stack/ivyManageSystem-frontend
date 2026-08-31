@@ -20,7 +20,6 @@ export const updateProfile = (
 ): AxiosResp<'/portal/profile', 'put'> => api.put('/portal/profile', data)
 
 // ----- 考勤 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getAttendanceSheet = (
   params: ApiQuery<'/portal/attendance-sheet', 'get'>,
 ): AxiosResp<'/portal/attendance-sheet', 'get'> =>
@@ -31,7 +30,6 @@ export const getAttendanceSheetPdf = (
 ) => api.get('/portal/attendance-sheet.pdf', { params, responseType: 'blob' })
 
 // ----- 行事曆 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getCalendar = (
   params: ApiQuery<'/portal/calendar', 'get'>,
 ): AxiosResp<'/portal/calendar', 'get'> => api.get('/portal/calendar', { params })
@@ -58,21 +56,15 @@ export const getMyClassAttendance = (
 ): AxiosResp<'/portal/my-class-attendance', 'get'> =>
   api.get('/portal/my-class-attendance', { params })
 
-// TODO(ts-strict): 後端缺 response_model
 export const batchSaveClassAttendance = (
   data: ApiBody<'/portal/class-attendance/batch', 'post'>,
 ): AxiosResp<'/portal/class-attendance/batch', 'post'> =>
   api.post('/portal/class-attendance/batch', data)
 
-// TODO(ts-strict): 後端缺 response_model
 export const getMyClassAttendanceMonthly = (
   params: ApiQuery<'/portal/my-class-attendance/monthly', 'get'>,
 ): AxiosResp<'/portal/my-class-attendance/monthly', 'get'> =>
   api.get('/portal/my-class-attendance/monthly', { params })
-
-export const exportMyClassAttendance = (
-  params: ApiQuery<'/portal/my-class-attendance/export', 'get'>,
-) => api.get('/portal/my-class-attendance/export', { params, responseType: 'blob' })
 
 // ----- 異常 -----
 export const getAnomalies = (
@@ -95,7 +87,6 @@ export const confirmAnomaly = (
   })
 
 // ----- 薪資 -----
-// TODO(ts-strict): 後端缺 response_model
 export const getSalaryPreview = (
   params: ApiQuery<'/portal/salary-preview', 'get'>,
 ): AxiosResp<'/portal/salary-preview', 'get'> =>

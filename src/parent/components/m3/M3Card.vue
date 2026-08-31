@@ -48,15 +48,16 @@ const rootAttrs = computed(() =>
 <style scoped>
 .m3-card {
   position: relative;
-  border-radius: 12px;
+  border-radius: var(--pt-card-radius, 26px);
   color: var(--m3-on-surface, #181d18);
   transition:
     background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
-    box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+    box-shadow var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
+    transform var(--motion-base, 260ms) var(--motion-spring, ease);
 }
 .m3-card-elevated {
   background: var(--m3-surface-container-low, #f1f5ee);
-  box-shadow: var(--m3-elev-1, 0 1px 2px rgba(0, 0, 0, 0.3));
+  box-shadow: var(--pt-shadow-card, var(--m3-elev-1, 0 1px 2px rgba(0, 0, 0, 0.3)));
 }
 .m3-card-filled {
   background: var(--m3-surface-container-highest, #e0e4dc);
@@ -68,6 +69,11 @@ const rootAttrs = computed(() =>
 
 .m3-card.is-clickable {
   cursor: pointer;
+}
+.m3-card.is-clickable:active { transform: scale(0.96); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-card { transition: none; }
+  .m3-card.is-clickable:active { transform: none; }
 }
 .m3-card.is-clickable::before {
   content: '';

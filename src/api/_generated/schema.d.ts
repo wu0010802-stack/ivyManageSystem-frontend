@@ -259,6 +259,13 @@ export interface paths {
          *
          *     時間倒序，限 200 筆；ApprovalLog 為 source of truth。
          *     供老闆/簽核者隨時查看異常解鎖記錄，補強稽核獨立性。
+         *
+         *     ⚠ 顯式租戶縮域（P1-01）：`approval_logs` 沒有 `tenant_id` 欄，RLS policy 靠
+         *     `approver_id → users.tenant_id` 推導，且 `models/tenant_rls_ddl._NULLABLE_PATH_TABLES`
+         *     對 `approver_id IS NULL` 的列**明文 fail-open**。本端點回傳的 comment 含金額、
+         *     原簽核人與解鎖原因全文，不能只靠 RLS，故在應用層再縮一次域（縱深防禦，
+         *     對齊 workspace CLAUDE.md「應用層顯式 tenant filter 仍為必要」）。
+         *     approver_id 為 NULL 的歷史列一律不回（fail-closed）——那批列無法歸屬租戶。
          */
         get: operations["list_pos_unlock_events_api_activity_audit_pos_unlock_events_get"];
         put?: never;
@@ -460,6 +467,26 @@ export interface paths {
          *     activity_service.reorder_course_roster docstring。
          */
         put: operations["reorder_course_enrolled_api_activity_courses__course_id__enrolled_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/courses/{course_id}/payment-slips.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Print Course Payment Slips
+         * @description 批次列印課程繳費單（A4 一頁 8 格，未結清學生一人一格）。
+         */
+        get: operations["print_course_payment_slips_api_activity_courses__course_id__payment_slips_pdf_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -685,12 +712,22 @@ export interface paths {
         /**
          * Get Daily Close
          * @description 查某日日結簽核狀態。未簽核時 is_approved=False 並附即時 preview。
+         *
+         *     approver_username 對無 ACTIVITY_PAYMENT_APPROVE 者遮罩（P3-12）。
          */
         get: operations["get_daily_close_api_activity_pos_daily_close__date_str__get"];
         put?: never;
         /**
          * Approve Daily Close
          * @description 老闆簽核某日 POS 流水：凍結 snapshot，同時寫 ApprovalLog。
+         *
+         *     兩道與前端協同的守衛：
+         *     - `confirm_close_today`（P2-05）：簽核今日需明示確認。
+         *     - `expected_net_total` / `expected_transaction_count`（P2-01）：樂觀鎖，
+         *       與後端重算不符即 409。
+         *
+         *     一道職務分離硬守衛（AUTHZ-03）：本日若曾被解鎖，且簽核人就是最近一次的
+         *     解鎖人 → 403（唯一例外：該次解鎖走 admin override 且本人為 admin，見內文）。
          */
         post: operations["approve_daily_close_api_activity_pos_daily_close__date_str__post"];
         /**
@@ -700,6 +737,9 @@ export interface paths {
          *     Why: 解鎖會刪 snapshot，原簽核者可重簽不同金額；無原因/無原 snapshot 摘要的解鎖
          *     不利事後追蹤。本端點要求填寫具體原因，並將原 payment_total/refund_total/net_total
          *     凍結於 ApprovalLog.comment 與 audit_changes，便於對帳查核。
+         *
+         *     一般 4-eye 路徑的兩道身分守衛：解鎖人 ≠ 原簽核人，且解鎖人 ≠ 當日 POS
+         *     收銀者（AUTHZ-03）。兩者皆可由 admin override 逃生口繞過（留痕）。
          */
         delete: operations["unlock_daily_close_api_activity_pos_daily_close__date_str__delete"];
         options?: never;
@@ -761,9 +801,33 @@ export interface paths {
          *     filter=outstanding：未結清（繳費模式）
          *     filter=refundable ：已繳 > 0（退費模式）
          *     搜尋 q 為空時回傳該學期全部符合其他條件的項目（預設瀏覽清單）。
-         *     overdue_only=True 僅在 outstanding 模式下生效。
+         *     刻意不提供任何以報名時間為準的過濾：園方收費期晚於報名日（報名後隔一段時間
+         *     才開始收費），「報名滿 N 天未結清＝逾期」不成立，見 test_registration_age_
+         *     never_filters_the_list。
          */
         get: operations["outstanding_by_student_api_activity_pos_outstanding_by_student_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/payment-slips/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve Payment Slip Token
+         * @description 驗證繳費單 QR token，回報名群組定位資訊。
+         *
+         *     無效/竄改/跨租戶/已刪報名一律 404「無效的繳費單條碼」，不洩漏內部判定。
+         */
+        get: operations["resolve_payment_slip_token_api_activity_pos_payment_slips_resolve_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -781,7 +845,13 @@ export interface paths {
         };
         /**
          * Print Pos Receipt Pdf
-         * @description 重印 POS 收據 PDF（80mm 寬窄條）。
+         * @description 列印 / 補印 POS 收據 PDF（80mm 寬窄條）。
+         *
+         *     `reprint`（2026-08-14 bug hunt）：本端點是前端**唯一**的列印路徑——結帳成功後的
+         *     首印與交易列表的補印都打這支。舊版無條件標 `is_reprint=True`，家長拿到的正本
+         *     收據抬頭因而印著「（補印）」。預設仍為 True 是刻意保守：漏傳時寧可把正本多標
+         *     一次補印，也不能讓真正的補印看起來像正本（後者會讓同一筆款項的兩張紙看起來
+         *     都是正本，對帳時無從分辨）。
          */
         get: operations["print_pos_receipt_pdf_api_activity_pos_receipts__receipt_no__print_pdf_get"];
         put?: never;
@@ -855,11 +925,109 @@ export interface paths {
          *     - partially_approved: 部分繳費記錄落在已簽核日
          *     - pending_approval: 有繳費但都在未簽核日
          *     - no_payment: 完全尚未繳費（paid_amount == 0）
+         *
+         *     待審核防漏（2026-08-16）：課程 status='pending_review' 的報名不計入
+         *     total_amount（既有 enrolled-only 應繳口徑，不動），故待審核報名在對帳頁
+         *     過去顯示「應繳 $0」，審核拖延即形成少收缺口。totals.pending_review_amount
+         *     獨立呈現此待確認金額（不含 waitlist/pending_review_waitlist 兩態，候補
+         *     即使過審也不產生應收）。
          */
         get: operations["pos_semester_reconciliation_api_activity_pos_semester_reconciliation_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/semester-registration-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Semester Registration Changes
+         * @description 按學期彙整退課/加報異動，供老闆對帳審視。
+         */
+        get: operations["list_semester_registration_changes_api_activity_pos_semester_registration_changes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/semester-signoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Semester Signoffs
+         * @description 列出當期簽收流水（含作廢列）＋未作廢累計。
+         *
+         *     ACTIVITY_READ 即可看金額（對帳需要），但經手人與作廢原因僅
+         *     ACTIVITY_PAYMENT_APPROVE 可見（AUTHZ-05，遮罩見 `_serialize_signoff`）。
+         */
+        get: operations["list_semester_signoffs_api_activity_pos_semester_signoffs_get"];
+        put?: never;
+        /**
+         * Create Semester Signoff
+         * @description 登記一筆整筆簽收。signed_by 取當前登入者，不信任前端。
+         *
+         *     **重送冪等（CONC-01）**：後端已 commit 但回應在網路端遺失時（冷啟、proxy
+         *     timeout、Wi-Fi 斷線），對話框仍開著、金額還在，使用者自然再按一次；帳本
+         *     因此出現兩列相同金額，`signoff_total` 翻倍，學期未簽收差額直接少算一半。
+         *     防護分兩層：
+         *
+         *     1. `_acquire_semester_signoff_lock` 序列化「同租戶 × 同學期」的登記，讓
+         *        下面的查重不會被並發重送穿過（PG only，SQLite no-op）。
+         *     2. 鎖內回查「同學年 + 同學期 + 同金額 + 同簽收人 + 未作廢 + signed_at 在
+         *        最近 `_SIGNOFF_REPLAY_WINDOW_SECONDS` 秒內」的列：存在即視為重送，
+         *        **原樣回傳該列**（replay，不新增），並留 logger.info 供維運辨識。
+         *
+         *     **已知取捨**：窗口內「刻意登記兩筆完全相同金額的交款」會被判成重試而只
+         *     留一列。實務上會計整筆交款不會在兩分鐘內重複同額；真要補登第二筆，等窗口
+         *     過或改動金額/作廢重開即可（`test_same_amount_outside_window_creates_new_row`
+         *     /`test_voided_row_is_not_replayed` 守住這兩條出路）。
+         *
+         *     **為什麼不用 idempotency_key 欄位**：那是更精準的做法（POS checkout 即用
+         *     此法），但需要新欄位＋新 unique index＝一支 alembic migration。本批次的
+         *     落地決定是零 migration，故改用「鎖 + 窗口內容比對」這個不需 schema 變更
+         *     的等效防護；日後若要升級為 key-based，本函式的臨界區已經備妥。
+         */
+        post: operations["create_semester_signoff_api_activity_pos_semester_signoffs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/semester-signoffs/{signoff_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Void Semester Signoff
+         * @description 作廢一筆簽收（軟刪，必填原因）。已作廢再作廢回 409。
+         *
+         *     以 id 定位時**必帶 tenant_id**（TENANT-01）：id 是全庫序列，缺租戶條件時
+         *     他租戶的簽收列可被本租戶作廢（對方帳本被改、對方 unsigned_gap 變動）。
+         *     找不到一律 404，不洩漏「這個 id 存在但不是你的」。
+         */
+        delete: operations["void_semester_signoff_api_activity_pos_semester_signoffs__signoff_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1342,34 +1510,13 @@ export interface paths {
         };
         /**
          * Get Registration Detail
-         * @description 取得報名詳情（含課程/用品/修改紀錄）。
-         *
-         *     2026-08-06：唯讀詳情放行 `match_status='rejected'` 的軟刪列。被拒報名自
-         *     2026-07-31「只留拒絕（軟刪）」改版後刻意保留在列表中供稽核與復原（見
-         *     GET /registrations 的 include_inactive 說明，前端預設就帶
-         *     include_inactive=true 且詳情鈕無 v-if），原本寫死 is_active=True 讓這些列
-         *     點「詳情」必定 404 —— 連帶把繳費/退費明細也擋死：前端 openDetail 先 await
-         *     詳情、拋錯就進 catch，`loadPayments` 永遠不會被呼叫，而
-         *     registrations_payments.get_registration_payments 刻意不要求 is_active
-         *     （軟刪報名的沖帳歷史仍需供財務查核）等於白放寬。已繳費後被拒（force_refund
-         *     沖帳）的報名，後台唯一的退費明細入口就是這裡。
-         *     一般刪除／學生離園自動軟刪的列仍維持 404（那些列 match_status 保留刪除前
-         *     原值、無任何「已刪除」標記，同 list 端點的收斂口徑）。**只放寬本唯讀端點**，
-         *     下方所有寫入型端點維持 is_active=True。
+         * @description 取得報名詳情（含課程/用品/修改紀錄）
          */
         get: operations["get_registration_detail_api_activity_registrations__registration_id__get"];
         /**
          * Update Registration Basic
          * @description 後台編輯報名基本欄位（姓名、生日、班級、Email）。
          *     學期不可變更，若需更改請重新建立報名。
-         *
-         *     2026-08-06 起 `birthday` 為 **partial-update** 語意（與前端議定的契約）：
-         *     request body **未帶** birthday key ＝ 不變更該欄位；帶了 key 但值為
-         *     null/空字串 ＝ 明確清空為 None。Why：缺 STUDENTS_READ 的員工在詳情看到的
-         *     生日空白是**遮罩**（`reg.birthday if can_see_student else None`），不是真的
-         *     沒資料；原本無條件 `reg.birthday = new_bday` 會讓這種員工一按儲存就把真實
-         *     生日靜默清成 NULL（2026-08-03 生日退出公開表單、前端解除必填後必然發生）。
-         *     前端對應行為：生日欄未載入到值時 payload 不帶 birthday key。
          */
         put: operations["update_registration_basic_api_activity_registrations__registration_id__put"];
         post?: never;
@@ -3580,6 +3727,9 @@ export interface paths {
         /**
          * Kiosk Preview
          * @description 打卡預判（確認用，不寫入）：驗 PIN 後回傳即將記為上班/下班。
+         *
+         *     與 `/kiosk/punch` 共用同一組失敗桶：preview 一樣會回「PIN 對不對」，
+         *     是等價的 oracle，限流若只掛 punch 端，攻擊者改打 preview 即可繞過。
          */
         post: operations["kiosk_preview_api_attendance_kiosk_preview_post"];
         delete?: never;
@@ -3618,6 +3768,13 @@ export interface paths {
         /**
          * Kiosk Roster
          * @description 打卡名單：在職員工 + 是否已設 PIN + 今日打卡狀態。最小揭露，無 PII。
+         *
+         *     SEC-16 取捨（2026-08-17）：本端點無 JWT、無權限守衛，回傳內容等於一份可
+         *     直接拿來噴灑的名冊，因此加掛 per-IP 刮取限流（`_roster_limiter`）。
+         *     `has_pin` 則**保留**——前端 `KioskPunchView.vue` 靠它擋掉未設 PIN 的員工並
+         *     引導去教師入口設定（`pickEmployee()`），拿掉會讓使用者按下去才吃 400、
+         *     且屬跨 repo 契約異動。此欄的洩漏面是「哪些員工還沒設 PIN」，而未設 PIN 的
+         *     帳號本來就打不了卡（400），對攻擊者的剪枝價值遠低於它的 UX 價值。
          */
         get: operations["kiosk_roster_api_attendance_kiosk_roster_get"];
         put?: never;
@@ -3660,7 +3817,12 @@ export interface paths {
         post?: never;
         /**
          * Delete Single Attendance Record
-         * @description 刪除單筆考勤記錄
+         * @deprecated
+         * @description 刪除單筆考勤記錄。
+         *
+         *     Deprecated（2026-08-17）：與 DELETE /records/{employee_id}/{date_str} 重複；
+         *     前端只用後者。本端點保留相容不移除，新程式請改用 /records/ 版本；
+         *     確認無外部呼叫端後可於下一版移除。
          */
         delete: operations["delete_single_attendance_record_api_attendance_record__employee_id___date__delete"];
         options?: never;
@@ -3760,7 +3922,13 @@ export interface paths {
         };
         /**
          * Get Today Attendance Summary
-         * @description 取得今日出勤即時狀態
+         * @description 取得今日出勤即時狀態。
+         *
+         *     P1-3（2026-08-17）absent 語意修正——不再用「active employees − present」粗算：
+         *     - **到離職有效期**：hire_date > 今天（未到職）或 resign_date < 今天（已離職、
+         *       is_active 可能尚未更新）者不列入今日母體
+         *     - **核准請假**涵蓋今天者不算 absent（另回傳 on_leave_count）
+         *     - **週末/假日（非補班日）**：僅「當日有 DailyShift 排班」者期望出勤
          */
         get: operations["get_today_attendance_summary_api_attendance_today_get"];
         put?: never;
@@ -3848,6 +4016,29 @@ export interface paths {
          *     逐列分類並回傳 check 結果，不寫入任何考勤記錄。
          */
         post: operations["preview_attendance_upload_api_attendance_upload_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/upload/preview-excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Attendance Excel
+         * @description 新格式 Excel 匯入預覽（唯讀）。
+         *
+         *     P1-1：Excel 匯入改「先 preview 再 confirm」兩段式——本端點解析並逐列
+         *     分類，confirm 由前端把 normalized 列送 POST /attendance/upload-csv。
+         */
+        post: operations["preview_attendance_excel_api_attendance_upload_preview_excel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4791,6 +4982,8 @@ export interface paths {
         /**
          * Get Teacher Options
          * @description 取得可指派教師清單。
+         *
+         *     帶工號與職稱：同名教師只看姓名無法辨識（見 TeacherOptionOut docstring）。
          */
         get: operations["get_teacher_options_api_classrooms_teacher_options_get"];
         put?: never;
@@ -4988,17 +5181,31 @@ export interface paths {
         get: operations["get_insurance_rates_api_config_insurance_rates_get"];
         /**
          * Update Insurance Rates
-         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）。
+         * @description 更新勞健保費率設定（建立新版本，保留舊版歷程）。**總部限定**。
          *
-         *     金流硬化（資安 R-13 mitigation (a) InsuranceRate 分支，2026-07-21）：
-         *     - 只有 SETTINGS_WRITE 不夠（HR 行政都有）→ 額外要求 has_finance_approve
-         *       （ACTIVITY_PAYMENT_APPROVE）。否則持 SETTINGS_WRITE 的 admin 可建立惡意金額
-         *       的費率版本（甚至 is_active=False 的歷史 rate_year），被 `_select_active_at` /
-         *       歷史補算以 id desc 撿到且無稽核軌跡（見 SPEC-002 R-13 / SPEC-001 §18）。
-         *       與 PUT /bonus（api/config/bonus.py）、PUT/DELETE /insurance/brackets
-         *       （api/insurance.py）三處守衛對齊。
-         *     - reason 必填，會與 changed_fields 一併寫入 audit_logs.changes。
+         *     授權（SEC-02，資安稽核 2026-08-17，業主裁定）：本端點改掛
+         *     `require_platform_admin`。理由——`insurance_rates` 是 GLOBAL 表，一改對
+         *     **全平台所有租戶**生效，而勞健保費率是全國統一的法定值，本來就該由總部
+         *     維護；掛租戶內權限等於讓任一園所的行政人員改動其他園所全體員工的保費
+         *     扣繳。改動後須從總部網域（`kind='platform'` 租戶的 Host）以平台管理員
+         *     身分操作。
+         *
+         *     ⚠ 連帶移除原本的 `has_finance_approve` 二簽（2026-07-21 資安 R-13
+         *     mitigation (a)）。不是放寬，而是它與新守衛**互斥**：`platform_admin` 角色
+         *     只持 `PLATFORM_*` 三個平台治理權限，本來就不會有園所端的
+         *     `ACTIVITY_PAYMENT_APPROVE` → 兩者並存會讓端點對所有人 403。R-13 當時要防
+         *     的是「HR 行政都有 SETTINGS_WRITE，門檻太低」，而 `require_platform_admin`
+         *     的雙條件（platform_admin role flag ＋ 請求來自總部網域）遠嚴於當初的
+         *     SETTINGS_WRITE + 金流簽核組合。
+         *     - reason 仍必填，會與 changed_fields 一併寫入 audit_logs.changes。
          *     - 守衛置於 try 之外：try 內 except 會經 raise_safe_500 把 403 洗成 500。
+         *
+         *     多租戶（SEC-02，資安稽核 2026-08-17）：`insurance_rates` 列在
+         *     `models/tenant_registry.py::GLOBAL_TABLES`（無 `tenant_id`、無 policy），
+         *     一改對**全平台**生效；但 `salary_records` 是 VIA `employees.tenant_id` 的表，
+         *     請求 session 被 RLS 縮在操作者當前租戶 → 原本的 stale 標記只涵蓋自己園所，
+         *     其他園所會拿著新費率把舊金額靜默封存。改為逐 active 租戶標記，見
+         *     `_mark_all_unfinalized_salary_stale_across_tenants()`。
          */
         put: operations["update_insurance_rates_api_config_insurance_rates_put"];
         post?: never;
@@ -5396,6 +5603,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dismissal-calls/{call_id}/arrive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arrive Dismissal Call
+         * @description 辦公室代替忘記按抵達的家長標記「已到門口」（家長預告接送 fallback）。
+         *
+         *     沿用既有 staff dismissal 邊界（STUDENTS_WRITE + :all，見 create/cancel 註解，
+         *     勿正名 DISMISSAL_CALLS_*）。staff 舊流程建立時 arrived_at 已寫入 → 409。
+         */
+        post: operations["arrive_dismissal_call_api_dismissal_calls__call_id__arrive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dismissal-calls/{call_id}/cancel": {
         parameters: {
             query?: never;
@@ -5767,12 +5997,24 @@ export interface paths {
         put?: never;
         /**
          * Import Holidays
-         * @description 批次匯入國定假日（UPSERT by date，同日期若已存在則更新）。
+         * @description 批次匯入國定假日（UPSERT by date，同日期若已存在則更新）。**總部限定**。
+         *
+         *     授權（SEC-02，資安稽核 2026-08-17，業主裁定）：改掛
+         *     `require_platform_admin`。`holidays` 是 GLOBAL 表（無 tenant_id、無 policy，
+         *     且 `date` 有 unique 約束＝本來就不支援各校自訂行事曆），資料來源是人事行政
+         *     總處公告，一改對**全平台**生效並連動出勤異常判定、假日加班費與薪資基礎。
+         *     原本掛的 `CALENDAR` 是門檻最低的租戶內權限（行政助理級即可，且沒有金流
+         *     二簽），等於讓任一園所的助理改掉其他園所的工作日曆。須從總部網域以平台
+         *     管理員身分操作。
          *
          *     封存月禁改:任一涉及月份有薪資 is_finalized=True 即整批 409;
          *     force=true 配合 force_reason(≥ 10 字)可繞過,留稽核日誌。
          *     匯入成功後,該月份所有未封存的 SalaryRecord 將被標 needs_recalc=True,
          *     避免後續 finalize 把舊曠職/加班判定的薪資誤封存。
+         *
+         *     ⚠ 多租戶(SEC-02):`holidays` 是全域表,一改對全平台生效——封存月掃描與
+         *     stale 標記**都涵蓋全部 active 租戶**,因此 409 訊息可能列出其他園所的
+         *     封存月,這是預期行為。
          */
         post: operations["import_holidays_api_events_holidays_import_post"];
         delete?: never;
@@ -5795,6 +6037,56 @@ export interface paths {
         get: operations["get_holiday_import_template_api_events_holidays_import_template_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/import-commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Events Commit
+         * @description 分校行事曆匯入確認寫入。
+         *
+         *     - server 端**重新驗證**（不信任 client）；任一列 error → 422 整批拒絕。
+         *     - ``visibility='parent'`` 必須帶 ``parent_visibility_confirmed=true``。
+         *     - 同 ``(tenant, source, source_key)`` 重傳 = update（冪等，不重複建立）。
+         *     - 匯入為批次操作，**不**觸發家長簽閱推播（要通知家長請事後於單筆事件
+         *       編輯流程操作，由既有 push gate 把關）。
+         *     - 成功後主動清家長 calendar 快取（批次寫入不等 30s TTL）。
+         */
+        post: operations["import_events_commit_api_events_import_commit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/import-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Events Preview
+         * @description 分校行事曆 XLSX 匯入預覽——**只解析與驗證，不寫 DB**。
+         *
+         *     回傳 normalized rows（含逐列 errors/warnings/duplicate 狀態）供前端預覽表；
+         *     visibility 空值一律預設 admin（家長可見必須由使用者在預覽介面明確確認）。
+         */
+        post: operations["import_events_preview_api_events_import_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5881,6 +6173,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/exports/fees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Fees
+         * @description 匯出學費繳費紀錄 Excel（對帳用途）。
+         *
+         *     聚焦金流對帳，刻意不含家長聯絡資訊（比照 export_students 需
+         *     assert_guardian_pii_access 的複雜度——本匯出不需要，故不放家長欄位）；
+         *     全校 scope 匯出比照 export_students 鎖 :all，禁 own_class 自訂角色
+         *     匯出全校對帳明細。
+         */
+        get: operations["export_fees_api_exports_fees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/exports/holidays": {
         parameters: {
             query?: never;
@@ -5913,6 +6230,27 @@ export interface paths {
          * @description 匯出請假記錄 Excel
          */
         get: operations["export_leaves_api_exports_leaves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/misc-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Misc Receipts
+         * @description 匯出雜項收款簽收紀錄 Excel。理由與 scope 判斷同 export_vendor_payments
+         *     （雙生模組，財務簽收無班級層級 scope 概念）。
+         */
+        get: operations["export_misc_receipts_api_exports_misc_receipts_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5974,9 +6312,59 @@ export interface paths {
         };
         /**
          * Export Students
-         * @description 匯出學生名冊 Excel
+         * @description 匯出學生名冊 Excel（可選 classroom_id / is_active 篩選，預設全校全狀態）
          */
         get: operations["export_students_api_exports_students_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/students/k12ea": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Students K12Ea
+         * @description 匯出教育局全國幼生管理系統（kids.k12ea.gov.tw）匯入檔（.xls）
+         *
+         *     以官方「幼生資料匯入格式（私立）」範本為底續寫（前 14 列保留、資料自第
+         *     15 列起），行政可直接上傳教育局系統填報。篩選參數語意對齊 GET /students：
+         *     頁面當下篩到誰就匯出誰。
+         */
+        get: operations["export_students_k12ea_api_exports_students_k12ea_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/exports/vendor-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Vendor Payments
+         * @description 匯出廠商付款簽收紀錄 Excel。
+         *
+         *     篩選（date range / category / status）與 GET /api/vendor-payments 列表一致。
+         *     財務簽收為全園務層級資料（`require_staff_permission` 本身即全有全無，
+         *     VENDOR_PAYMENT_READ 目前無 own_class/all 之類的 scope-qualified 授權），
+         *     不同於 export_students 的班級層級 PII 才需要的 assert_all_scope 分流，
+         *     故本端點不套用。
+         */
+        get: operations["export_vendor_payments_api_exports_vendor_payments_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6053,6 +6441,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fee-due/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Scheduler Now
+         * @description 手動立即跑一次逾期學費催繳排程（idempotent 重跑安全）。
+         *
+         *     直接呼叫與 asyncio scheduler 相同的 `tick_fee_due_reminders`——內部已含
+         *     `for_each_tenant` 逐租戶迭代、per-tenant advisory lock（同租戶同日內
+         *     並發觸發會自動略過）、以及 `NotificationLog` 去重窗（repeat_days 內
+         *     不重推同一學生）。本端點僅加權限守衛，不重複實作鎖定 / 去重邏輯。
+         */
+        post: operations["run_scheduler_now_api_fee_due_run_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/adjustments": {
         parameters: {
             query?: never;
@@ -6095,6 +6508,557 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/bank-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bank Imports */
+        get: operations["list_bank_imports_api_fees_bank_imports_get"];
+        put?: never;
+        /** Confirm Bank Import */
+        post: operations["confirm_bank_import_api_fees_bank_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Bank Import */
+        post: operations["preview_bank_import_api_fees_bank_imports_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bank Transactions */
+        get: operations["list_bank_transactions_api_fees_bank_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/allocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allocate Transaction */
+        post: operations["allocate_transaction_api_fees_bank_transactions__txn_id__allocate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Transaction Candidates */
+        get: operations["get_transaction_candidates_api_fees_bank_transactions__txn_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ignore Transaction Route */
+        post: operations["ignore_transaction_route_api_fees_bank_transactions__txn_id__ignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bank-transactions/{txn_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse Transaction Route */
+        post: operations["reverse_transaction_route_api_fees_bank_transactions__txn_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bill-slip-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Bill Slip Batches */
+        get: operations["list_bill_slip_batches_api_fees_bill_slip_batches_get"];
+        put?: never;
+        /** Import Bill Slip Batch */
+        post: operations["import_bill_slip_batch_api_fees_bill_slip_batches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bill-slip-batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Bill Slip Batch
+         * @description 刪除發單快照批次（匯錯或要換成修正版時重來）。
+         *
+         *     快照是可由檢核檔重建的匯入資料，非金流憑證本身，故允許刪除；
+         *     連帶刪除明細，並寫入 audit。
+         */
+        delete: operations["delete_bill_slip_batch_api_fees_bill_slip_batches__batch_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bill-slip-batches/{batch_id}/outstanding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Outstanding Report
+         * @description 發單 vs 已繳差集；status 篩選只影響清單，totals 恆為全批母體。
+         */
+        get: operations["get_outstanding_report_api_fees_bill_slip_batches__batch_id__outstanding_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bill-slip-batches/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Bill Slip Batch */
+        post: operations["preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Billing Codes */
+        get: operations["list_billing_codes_api_fees_billing_codes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes/{assignment_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate Billing Code */
+        post: operations["deactivate_billing_code_api_fees_billing_codes__assignment_id__deactivate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate Billing Codes
+         * @description 會計確認後批次啟用（關舊開新，不覆蓋歷史）。
+         */
+        post: operations["activate_billing_codes_api_fees_billing_codes_activate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/billing-codes/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Billing Codes
+         * @description 依現況產生建議末四碼（僅 preview，不寫入）。
+         */
+        post: operations["suggest_billing_codes_api_fees_billing_codes_suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Handovers */
+        get: operations["list_handovers_api_fees_cash_handovers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers/{batch_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Handover */
+        post: operations["confirm_handover_api_fees_cash_handovers__batch_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers/{batch_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Handover */
+        post: operations["reopen_handover_api_fees_cash_handovers__batch_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-handovers/{batch_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Handover */
+        post: operations["submit_handover_api_fees_cash_handovers__batch_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Cash Receipt Route */
+        post: operations["create_cash_receipt_route_api_fees_cash_receipts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Close Periods */
+        get: operations["list_close_periods_api_fees_close_periods_get"];
+        put?: never;
+        /** Close Period Route */
+        post: operations["close_period_route_api_fees_close_periods_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods/{close_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Close Period */
+        get: operations["get_close_period_api_fees_close_periods__close_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods/{close_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Close Route */
+        post: operations["reopen_close_route_api_fees_close_periods__close_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/close-periods/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Close Summary */
+        get: operations["close_summary_api_fees_close_periods_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Coverage Route
+         * @description 勾稽存摺代收批次入帳；dry_run=True 只預覽不寫入。
+         */
+        post: operations["reconcile_coverage_route_api_fees_collection_coverage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Collection Import Route */
+        post: operations["confirm_collection_import_route_api_fees_collection_imports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-imports/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Collection Import Route */
+        post: operations["preview_collection_import_route_api_fees_collection_imports_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Collection Payments
+         * @description 代收繳費列表（日期篩選以顧客繳費日為準——歸月口徑）。
+         */
+        get: operations["list_collection_payments_api_fees_collection_payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments/{payment_id}/allocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allocate Collection Payment Route */
+        post: operations["allocate_collection_payment_route_api_fees_collection_payments__payment_id__allocate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments/{payment_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Collection Candidates */
+        get: operations["get_collection_candidates_api_fees_collection_payments__payment_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments/{payment_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse Collection Payment Route */
+        post: operations["reverse_collection_payment_route_api_fees_collection_payments__payment_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/generate": {
         parameters: {
             query?: never;
@@ -6122,6 +7086,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/monthly-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fee Monthly Statement
+         * @description 月繳總表：指定月份的 per-student 費用聚合（帳單工作區「彙總繳費表」）。
+         *
+         *     歸月規則（與 generation 寫入語意對齊）：
+         *     - monthly 記錄一律依 ``target_month == month``（即使 due_date 落在他月，
+         *       也不因 due_date 重複歸月）
+         *     - 非 monthly（``target_month IS NULL``）優先依 ``billing_start_date``
+         *       （收費開始日快照，SPEC-015）落在該月曆月；無快照的舊資料 fallback
+         *       ``due_date`` 落在該月曆月
+         *     - 皆空的記錄不入任何月表（逐筆明細檢視仍可見）
+         *
+         *     園所規模（單租戶 ≤ 數百學生/月）下單月記錄量小，故不分頁、
+         *     不收 status 參數——狀態快篩由前端在聚合結果上即時切換。
+         */
+        get: operations["fee_monthly_statement_api_fees_monthly_statement_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/periods": {
         parameters: {
             query?: never;
@@ -6138,6 +7133,217 @@ export interface paths {
         get: operations["list_fee_periods_api_fees_periods_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Refunds */
+        get: operations["list_refunds_api_fees_prepayment_refunds_get"];
+        put?: never;
+        /** Create Refund */
+        post: operations["create_refund_api_fees_prepayment_refunds_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Refund Route */
+        post: operations["approve_refund_route_api_fees_prepayment_refunds__refund_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Refund Route */
+        post: operations["cancel_refund_route_api_fees_prepayment_refunds__refund_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Refund Route */
+        post: operations["complete_refund_route_api_fees_prepayment_refunds__refund_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayment-refunds/{refund_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse Refund Route
+         * @description 沖銷已完成的退款（P2-7：誤按完成/實際未交付；老闆簽核權限）。
+         */
+        post: operations["reverse_refund_route_api_fees_prepayment_refunds__refund_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Prepayments */
+        get: operations["list_prepayments_api_fees_prepayments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Prepayment */
+        post: operations["apply_prepayment_api_fees_prepayments__credit_id__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Movements */
+        get: operations["list_movements_api_fees_prepayments__credit_id__movements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reverse Prepayment Apply */
+        post: operations["reverse_prepayment_apply_api_fees_prepayments__credit_id__reverse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/prepayments/{credit_id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfer Prepayment */
+        post: operations["transfer_prepayment_api_fees_prepayments__credit_id__transfer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Receipts */
+        get: operations["list_receipts_api_fees_receipts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/receipts/{receipt_id}/reverse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reverse Cash Receipt Route
+         * @description 現金收款沖銷（P1-5：誤登現金的正規更正路徑；銀行交易走交易沖銷）。
+         */
+        post: operations["reverse_cash_receipt_route_api_fees_receipts__receipt_id__reverse_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6188,6 +7394,10 @@ export interface paths {
          *     - record 上的 amount_paid / payment_date / payment_method 保持「最後一次」
          *       快照供清單顯示；真正的月度聚合看 StudentFeePayment
          *     - idempotency_key：全域唯一，同 key 重送回放（DB UNIQUE 兜底）
+         *
+         *     核心邏輯抽至 `_pay_core.pay_fee_record_core`（供後續批次端點共用，純重構、
+         *     行為不變）；本函式只負責交易邊界與「非回放路徑才失效報表快取」（與重構前
+         *     逐字相同：回放路徑在 core 內部提早 return，不會走到快取失效那行）。
          */
         put: operations["pay_fee_record_api_fees_records__record_id__pay_put"];
         post?: never;
@@ -6270,6 +7480,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/records/batch-pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Pay Fee Records
+         * @description 批次登記繳費 — 逐筆 SAVEPOINT 部分成功，語意固定「繳清全額」。
+         *
+         *     - 每筆等同呼叫單筆 PUT /records/{id}/pay 且 amount_paid=None（繳清
+         *       amount_due）；需部分繳費請改走單筆端點。
+         *     - 單筆失敗（已繳清 / F-034 班級 scope 拒絕 / 需金流簽核 / 記錄不存在 /
+         *       冪等 key 上下文不符）只記入該筆 failed，不影響其餘筆——與
+         *       appraisal.batch_sign_summaries 同款逐筆 begin_nested() SAVEPOINT 模式。
+         *     - 需金流簽核（該 record 新累計 >= FEE_PAYMENT_APPROVAL_THRESHOLD）一律
+         *       fail，附固定訊息，不揭露門檻/累計金額細節、不做簽核互動——請走單筆
+         *       流程由具金流簽核權限者處理。
+         *     - 依 record_id 排序後才逐筆取 with_for_update() 鎖，避免與其他並發批次
+         *       交錯順序造成 ABBA 死鎖（同 appraisal.batch_sign_summaries）；回傳
+         *       results 順序仍與請求 payload.items 一致，方便前端逐列對應。
+         */
+        post: operations["batch_pay_fee_records_api_fees_records_batch_pay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Refunded Records
+         * @description 退費列表（伺服器分頁）：只列「有退費紀錄」的費用記錄，一 record 一列。
+         *
+         *     取代前端掃描前 100 筆 records 再逐筆查 refunds 的 N+1 fan-out；
+         *     彙總（總額/筆數/最近退費時間）以 aggregate subquery 計算，
+         *     當頁 records 的退費明細再以單一 IN 查詢帶出。排序＝最近退費新→舊。
+         */
+        get: operations["list_refunded_records_api_fees_refunds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/summary": {
         parameters: {
             query?: never;
@@ -6329,6 +7595,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/templates/copy-year": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Year Fee Templates
+         * @description SPEC-015 年度設定：複製整學年（上＋下學期）範本到新學年。
+         *
+         *     - 金額/名稱/breakdown/offset/is_active 照抄；billing_start_date 與
+         *       overdue_date 自動平移 (to - from) 年（monthly 的每月幾號欄照抄）。
+         *     - 已存在的 (grade, to_year, semester, fee_type) 跳過（冪等，可重跑）。
+         *     - **不觸發同步產單**：新學年日期金額未經業主確認前不該出帳；後續在
+         *       學年檢視上調整後，由每日排程（掃當前＋下一學期）自然產單。
+         */
+        post: operations["copy_year_fee_templates_api_fees_templates_copy_year_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/finance-reconciliation/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Scheduler Now
+         * @description 手動立即跑一次才藝 POS 對帳（bypass 每日 02:00 時刻門檻）。
+         *
+         *     對帳本身唯讀比對（僅寫入 `finance_reconciliation` watermark 游標）；發現
+         *     不一致才推 LINE 警示給老闆。per-tenant advisory lock 仍會擋同租戶同日內
+         *     的並發觸發（該租戶回傳 `skipped: True`，不算失敗）。
+         *
+         *     權限沿用全站「金流簽核」統一門檻 `ACTIVITY_PAYMENT_APPROVE`（見
+         *     services/finance/finance_guards.py）：本端點會觸發真實 LINE 推播且直接
+         *     回傳逐筆金額落差，收斂到金流簽核角色，不對一般 ACTIVITY/FEES 編輯者開放。
+         */
+        post: operations["run_scheduler_now_api_finance_reconciliation_run_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gov-moe/certificates/{student_id}/generate": {
         parameters: {
             query?: never;
@@ -6340,6 +7660,29 @@ export interface paths {
         put?: never;
         /** Generate Certificate */
         post: operations["generate_certificate_api_gov_moe_certificates__student_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gov-moe/certificates/batch-generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Generate Certificates
+         * @description 全班/多人批次開立在學證明：逐人各自產生證明記錄與流水號（沿用單筆
+         *     `_next_seq`/serial 邏輯），單一 PDF 文件內每位成功者各一頁（順序＝
+         *     `student_ids` 去重後順序）。單筆失敗（學生不存在／非在籍等）以
+         *     SAVEPOINT 隔離，不影響其餘筆——partial-success，最終單一 commit。
+         */
+        post: operations["batch_generate_certificates_api_gov_moe_certificates_batch_generate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6767,6 +8110,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gov-reports/staff-qualification-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Staff Qualification Checklist
+         * @description 匯出單月教職員 4 合 1 資格核對表。
+         *
+         *     清冊勾選欄預設留白：本系統沒有教育局、勞保局與健保署清冊的即時權威
+         *     資料，承辦人須下載後依官方清冊逐欄核對，避免把內部推論誤標為已核對。
+         */
+        get: operations["export_staff_qualification_checklist_api_gov_reports_staff_qualification_checklist_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gov-reports/withholding": {
         parameters: {
             query?: never;
@@ -6844,6 +8210,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/growth-contract/employees/{employee_id}/signed-on": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Signed On
+         * @description 設定或清空自主成長契約簽約日。
+         *
+         *     用 `model_fields_set` 區分「body 完全省略 signed_on」（不異動）與
+         *     「顯式傳 `{"signed_on": null}`」（清空為未簽約，HR 誤設可撤銷）——
+         *     見本檔頂部 docstring 與計畫 Task 7 回報 (d)。
+         */
+        patch: operations["update_signed_on_api_growth_contract_employees__employee_id__signed_on_patch"];
+        trace?: never;
+    };
+    "/growth-contract/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Growth Hours
+         * @description 列出某學年的時數登記；`employee_id` 可選——省略時回全園該學年所有列
+         *     （(a) 見計畫 Task 7 回報：以 `school_year` 天然分區，單學年全園筆數量級小，
+         *     暫不需分頁，理由詳回報）。
+         */
+        get: operations["list_growth_hours_api_growth_contract_hours_get"];
+        put?: never;
+        /**
+         * Create Growth Hour
+         * @description 新增一筆時數登記。`hours<=0`／`semester` 非 1/2 由 Pydantic Field 擋
+         *     422；員工不存在 → 404。
+         */
+        post: operations["create_growth_hour_api_growth_contract_hours_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/growth-contract/hours/{hour_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Growth Hour
+         * @description 刪除一筆時數登記；紀錄不存在 → 404。
+         */
+        delete: operations["delete_growth_hour_api_growth_contract_hours__hour_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Growth Hour
+         * @description 改一筆時數登記；紀錄不存在 → 404。
+         */
+        patch: operations["update_growth_hour_api_growth_contract_hours__hour_id__patch"];
+        trace?: never;
+    };
+    "/growth-contract/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Growth Contract Preview
+         * @description 學年結算預覽（唯讀，不落表、不寫錢）；直接 passthrough
+         *     `build_growth_contract_preview`，含 `pending_rule` 標記與逐員工 gate
+         *     明細。該學年查無在職／該學年內離職的員工 → 200 + `rows: []`（非錯誤，
+         *     見計畫 Task 7 回報 (b)）。
+         */
+        get: operations["get_growth_contract_preview_api_growth_contract_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/growth-contract/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Growth Contract
+         * @description 學年結算：把 preview 中 `eligible` 且 `amount > 0` 的員工寫入表外獎金
+         *     通道（`ExtraBonusPayment`，`category="growth_contract"`）。
+         *
+         *     防呆順序（缺一不可，比照 `api/recruitment_bonus.py` 的 `settle_campaign`）：
+         *     1. 取鎖（`acquire_growth_contract_settle_lock`）**必須在讀 preview 資料
+         *        之前**——本結算無 campaign 狀態機可擋重複呼叫，冪等性完全依賴下面第 3
+         *        步的查詢，取鎖太晚會讓兩個並發 request 都通過冪等檢查（見 HR
+         *        double-click race，詳 advisory_lock 該函式 docstring）。
+         *     2. 用 `build_growth_contract_preview` 算出該學年所有列，只挑
+         *        `eligible is True` 且 `amount > 0` 者為候選（不符資格／金額為 0 者
+         *        不寫列，也不算跳過——它們從未進過候選名單）。
+         *     3. per-employee 冪等：該員工該學年（＝該發放年月）已有
+         *        `category="growth_contract"` 的 `ExtraBonusPayment` → 跳過，列入
+         *        `skipped_already_paid`（支援「時數後來補齊才符合資格」的補發場景，
+         *        不是整批鎖死）。
+         *     4. 對剩餘候選逐筆寫 `ExtraBonusPayment`：`period_year/period_month` 為
+         *        該學年「期滿次月」（民國 school_year 學年 → 西元 school_year+1912
+         *        年 8 月，見 `paid_period_for_school_year`）；`counts_for_supplementary
+         *        =False`（業主 2026-08-14 裁定，與同日招生獎金裁定同口徑）。連帶
+         *        **不做** stale 傳播——該機制存在的理由是補充保費 ytd 基數會變，
+         *        `counts_for_supplementary=False` 下基數不變，沒有重算需求。
+         *     5. 全部寫完才一次 `session.commit()`——單一 DB transaction，任何一步
+         *        失敗（含寫入途中的例外）整批回滾，不留孤兒紀錄。
+         */
+        post: operations["settle_growth_contract_api_growth_contract_settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/guardians/{guardian_id}/binding-code": {
         parameters: {
             query?: never;
@@ -6859,7 +8365,7 @@ export interface paths {
          *
          *     Returns:
          *         {
-         *             "code": "<8 位明碼，僅此次回傳>",
+         *             "code": "<明碼，僅此次回傳；長度見 _CODE_LENGTH（現為 12）>",
          *             "expires_at": "<24h 後的 ISO 時間>"
          *         }
          */
@@ -7100,20 +8606,29 @@ export interface paths {
         get: operations["list_brackets_api_insurance_brackets_get"];
         /**
          * Upsert Brackets
-         * @description 新增/更新指定年度的整張級距表。
+         * @description 新增/更新指定年度的整張級距表。**總部限定**。
          *
-         *     用法（每年公告新分級表）：行政上傳 effective_year=新年度 + 全部級距列；
+         *     用法（每年公告新分級表）：總部上傳 effective_year=新年度 + 全部級距列；
          *     `replace_existing=True` 適合「整張表重整」，否則以 (year, amount) UPSERT。
          *
          *     寫入後立即呼叫 service.load_brackets_from_db() 讓計算端立刻反映新資料，
          *     避免要重啟 server 才生效（與 BonusConfig PATCH 流程一致）。
          *
-         *     守衛（audit 2026-05-07 P0 #9）：
-         *     - 雖只需 SALARY_WRITE 即可呼叫（級距表為政府公告，常規業務動作），但
-         *       變更會影響全員保費；額外要求 has_finance_approve（即 ACTIVITY_PAYMENT_APPROVE）
-         *       或符合「正規行政上傳」流程；reason 必填 ≥10 字落 audit。
+         *     授權（SEC-02，資安稽核 2026-08-17，業主裁定）：改掛
+         *     `require_platform_admin`。`insurance_brackets` 是 GLOBAL 表（無 tenant_id、
+         *     無 policy），一改對**全平台**生效，而級距表是政府公告的全國統一值——
+         *     掛租戶內 `SALARY_WRITE` 等於讓任一園所的會計清空或竄改所有園所的投保
+         *     級距。須從總部網域以平台管理員身分操作。
+         *
+         *     ⚠ 連帶移除 `has_finance_approve` 二簽（audit 2026-05-07 P0 #9）：它與新
+         *     守衛**互斥**（`platform_admin` 只持 `PLATFORM_*` 權限，不會有園所端的
+         *     `ACTIVITY_PAYMENT_APPROVE`），並存會讓端點對所有人 403。新守衛的雙條件
+         *     （role flag ＋ 請求來自總部網域）門檻遠高於原本的 SALARY_WRITE + 金流簽核。
+         *     - reason 仍必填 ≥10 字落 audit。
          *     - 寫入成功後對該 effective_year 所有未封存 SalaryRecord 標 needs_recalc=True，
          *       避免「stale 未標 → finalize 用新（可能被改低）級距值落帳」的攻擊。
+         *       ⚠ 級距表是 GLOBAL 表，stale 標記與封存月掃描一律**跨全部 active 租戶**
+         *       （SEC-02，見 `_bulk_mark_salary_stale_for_year_all_tenants`）。
          */
         put: operations["upsert_brackets_api_insurance_brackets_put"];
         post?: never;
@@ -7135,14 +8650,16 @@ export interface paths {
         post?: never;
         /**
          * Delete Bracket
-         * @description 刪除單一級距列（行政誤新增時的修正用）。
+         * @description 刪除單一級距列（誤新增時的修正用）。**總部限定**。
          *
          *     刪除後立即同步 service 的 in-memory 級距表（與 PUT /brackets 行為一致），
          *     避免要重啟 server 才生效。
          *
-         *     守衛（audit 2026-05-07 P0 #9）：與 PUT 對齊，刪一筆級距會讓該級距金額落入
-         *     fallback 邏輯，足以低估保費，故同樣要求 finance_approve + reason ≥10 字 +
-         *     bulk mark stale。
+         *     授權（SEC-02，資安稽核 2026-08-17）：與 PUT /brackets 同一裁定，改掛
+         *     `require_platform_admin`——刪一筆級距會讓該級距金額落入 fallback 邏輯、
+         *     足以低估**全平台**保費。連帶移除與新守衛互斥的 `has_finance_approve`
+         *     二簽（理由見 PUT /brackets 的 docstring）。reason ≥10 字與 bulk mark
+         *     stale 維持不變（SEC-02 起 stale 與封存月掃描皆跨全部 active 租戶）。
          */
         delete: operations["delete_bracket_api_insurance_brackets__bracket_id__delete"];
         options?: never;
@@ -7159,7 +8676,7 @@ export interface paths {
         };
         /**
          * Calculate Insurance
-         * @description 計算勞健保
+         * @description 以當月 DB 設定計算勞健保。
          */
         get: operations["calculate_insurance_api_insurance_calculate_get"];
         put?: never;
@@ -7835,6 +9352,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/misc-receipts/{receipt_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Misc Receipt
+         * @description 核准／駁回（Checker）：建立者不可核准自己的收款（403）。
+         *
+         *     已收款（settled）的送審單被駁回時，reconciliation 轉入 exception 佇列
+         *     ——現金已入帳，不得從報表消失。
+         */
+        post: operations["approve_misc_receipt_api_misc_receipts__receipt_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/misc-receipts/{receipt_id}/attachments": {
         parameters: {
             query?: never;
@@ -7867,6 +9407,68 @@ export interface paths {
         get: operations["download_attachment_api_misc_receipts__receipt_id__attachments_download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Misc Receipt Events
+         * @description 單據 append-only 事件時間軸（依發生順序）。
+         */
+        get: operations["list_misc_receipt_events_api_misc_receipts__receipt_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Misc Receipt
+         * @description 完成對帳或標記差異：完成對帳前必須 approved；對帳人不可是登記收款的
+         *     同一人（403）。
+         */
+        post: operations["reconcile_misc_receipt_api_misc_receipts__receipt_id__reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Misc Receipt
+         * @description 登記實際收款：**不需先核准**（實際收到錢必須立即可記錄，不得因
+         *     尚未核准而漏掉真實現金流）；寫入真實收款日／方式／參考號。
+         */
+        post: operations["settle_misc_receipt_api_misc_receipts__receipt_id__settle_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7915,6 +9517,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/misc-receipts/{receipt_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Misc Receipt
+         * @description 送審：draft / rejected → pending_approval。
+         */
+        post: operations["submit_misc_receipt_api_misc_receipts__receipt_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/batch-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Sign Misc Receipts
+         * @description 批次簽收：一次簽名（drawn/photo）套用到勾選的多筆待簽收收款。
+         *
+         *     NOTE: 本路由必須宣告在 ``/misc-receipts/{receipt_id}`` 之前，否則
+         *     "batch-sign" 會被當成 receipt_id 解析（422），同 summary 路由的既有慣例。
+         *
+         *     簽名儲存策略、SAVEPOINT 部分成功語意與失敗原因分類，完全對齊
+         *     api/vendor_payments.py::batch_sign_vendor_payments（雙生模組，理由見該端點
+         *     docstring：逐筆各自 put_attachment 落一份 storage 副本，不共用 signature_key
+         *     ——現行 delete 端點雖已擋掉「刪除已簽收紀錄」，但那是隱性耦合而非資料模型
+         *     不變式，複製成本遠低於耦合風險）。
+         */
+        post: operations["batch_sign_misc_receipts_api_misc_receipts_batch_sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/misc-receipts/summary": {
         parameters: {
             query?: never;
@@ -7924,11 +9575,12 @@ export interface paths {
         };
         /**
          * Misc Receipts Summary
-         * @description 區間彙總（跨狀態）：供前端 KPI 卡。
+         * @description 區間彙總（跨狀態）：供前端 KPI 卡與流程摘要列。
          *
-         *     range 篩選（日期 / 繳款方 / 類別 / 收付方式）與列表一致，但**不吃 status**——
-         *     一律回全狀態並拆 pending / signed，讓「本期總額 / 待簽收 / 已簽收」
-         *     三張卡同時有意義。sum 走 SQL group_by 聚合，不受列表分頁限制、無 N+1。
+         *     range 篩選（日期 / 繳款方 / 類別 / 收付方式）與列表一致，但**不吃狀態
+         *     篩選**——一律回全狀態並拆桶。除既有 pending/signed（簽收軸，向後相容）
+         *     外，另回內控流程分桶：待核准 / 已核准待收款 / 待補憑證 / 待對帳 / 異常。
+         *     單一 SELECT 多條件聚合，不受列表分頁限制、無 N+1。
          *
          *     NOTE: 本路由必須宣告在 ``/misc-receipts/{receipt_id}`` 之前，否則
          *     "summary" 會被當成 receipt_id 解析（422）。
@@ -8241,10 +9893,11 @@ export interface paths {
          *     - X-Content-Type-Options: nosniff（防 MIME sniffing）
          *     - Cache-Control: no-store（代理 / CDN 不快取含 PII 的 ZIP）
          *
-         *     TODO follow-up：uvicorn access log token redaction（ASGI middleware 攔 query string
-         *     或 --access-log False）。目前 endpoint 本身不 echo token 到 logger，但 uvicorn
-         *     預設 access log 會記完整 URL（含 ?token=...），建議後續 PR 加 ASGI middleware
-         *     做 query string sanitize 或改用 --access-log False。
+         *     Access log token 遮罩：已由 ``MagicLinkLogScrubMiddleware``（main.py 註冊）處理
+         *     ——uvicorn 預設 access log 會記完整 URL（含 ``?token=...``），middleware 在
+         *     ASGI 層把 query string 的 token 換成遮罩值、原始 token 改放 scope。
+         *     （此處原有「待後續 PR 加 middleware」的 TODO，該 middleware 已於 R6-9 落地，
+         *     測試見 tests/test_magic_link_log_scrub.py。）
          */
         get: operations["download_offboarding_bundle_api_offboarding_download_get"];
         put?: never;
@@ -9024,6 +10677,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/dismissal-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dismissal Notices
+         * @description 列出自家子女指定日期（預設今天）的接送通知（含 staff 建立與各狀態）。
+         */
+        get: operations["list_dismissal_notices_api_parent_dismissal_calls_get"];
+        put?: never;
+        /**
+         * Create Dismissal Notice
+         * @description 建立預告接送：同一學生同一天只能有一筆進行中通知。
+         */
+        post: operations["create_dismissal_notice_api_parent_dismissal_calls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/dismissal-calls/{call_id}/arrive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Arrive Dismissal Notice
+         * @description 家長標記「我已到門口」——教師端此時才觸發強提醒。
+         */
+        post: operations["arrive_dismissal_notice_api_parent_dismissal_calls__call_id__arrive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/dismissal-calls/{call_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Dismissal Notice
+         * @description 家長取消自己建立的進行中預告。
+         */
+        post: operations["cancel_dismissal_notice_api_parent_dismissal_calls__call_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/events": {
         parameters: {
             query?: never;
@@ -9613,6 +11330,8 @@ export interface paths {
         /**
          * Upload Medication Photo
          * @description 為已建立的用藥單上傳藥袋/處方照（一次一張）。
+         *
+         *     限流：每位家長每 10 分鐘 30 次（見 `_upload_limits.py`）。
          */
         post: operations["upload_medication_photo_api_parent_medication_orders__order_id__photos_post"];
         delete?: never;
@@ -9728,6 +11447,8 @@ export interface paths {
         /**
          * Attach To Message
          * @description 為自己剛送出的訊息上傳一個附件（一次一檔）。
+         *
+         *     限流：每位家長每 10 分鐘 30 次（見 `_upload_limits.py`）。
          */
         post: operations["attach_to_message_api_parent_messages_threads__thread_id__messages__message_id__attach_post"];
         delete?: never;
@@ -9990,6 +11711,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/quick-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Quick Actions
+         * @description 取得家長自己目前的常用功能三格；沒設定過回預設值（is_default=True）。
+         */
+        get: operations["get_quick_actions_api_parent_quick_actions_get"];
+        /**
+         * Update Quick Actions
+         * @description 整組覆寫家長自己的常用功能三格（upsert）。
+         *
+         *     row 帶 `(tenant_id, user_id)` 複合 unique key（見 model 檔頭說明），
+         *     這裡用「先 UPDATE 既有列，沒有才 INSERT」+ `IntegrityError` 收斂並發
+         *     首次寫入的 race（同一家長兩台裝置同時第一次存，兩邊都讀到 None）：
+         *     第二個 INSERT 撞 unique key 時視為「已被另一個請求建立」，改走 UPDATE。
+         */
+        put: operations["update_quick_actions_api_parent_quick_actions_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/student-leaves": {
         parameters: {
             query?: never;
@@ -10040,6 +11790,8 @@ export interface paths {
          *
          *     僅在 status='approved' 且 start_date > 今天時允許上傳；請假已開始或已取消後
          *     不再受理變更。若需補件，請聯絡老師。
+         *
+         *     限流：每位家長每 10 分鐘 30 次（見 `_upload_limits.py`）。
          */
         post: operations["upload_leave_attachment_api_parent_student_leaves__leave_id__attachments_post"];
         delete?: never;
@@ -10222,6 +11974,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/pickup-authorizations/{auth_id}/confirm-visual-match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Confirm Visual Match
+         * @description D10④：POS 佇列卡目視比對明碼後一鍵確認，不重新輸入 6 碼。
+         */
+        post: operations["admin_confirm_visual_match_api_pickup_authorizations__auth_id__confirm_visual_match_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/pickup-authorizations/{auth_id}/override-complete": {
         parameters: {
             query?: never;
@@ -10270,6 +12042,56 @@ export interface paths {
         get: operations["query_platform_audit_api_platform_audit_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/gov-data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Gov Data
+         * @description 總部政府資料總覽：生效版本 ＋ 級距表 ＋ 費率 ＋ 與內建表的差異。
+         *
+         *     `builtin_consistency` 是 DB 級距與程式內建 `INSURANCE_TABLE_2026` 的逐列
+         *     比對，用途是「DB 被改壞時看得出來」，**不是**要求兩者永遠相同——新年度
+         *     公告後本來就會整張表不同，故只回差異、不判對錯。
+         */
+        get: operations["get_gov_data_api_platform_gov_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/platform/gov-data/brackets/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Brackets
+         * @description 解析貼上的級距表並與現行年度逐列比對。**不寫入任何資料。**
+         *
+         *     解析規則與寫入端共用 `services/finance/insurance_bracket_import`——這張表
+         *     錯一列就是全平台每位員工每月扣繳金額錯誤，驗證規則不能有第二份。
+         *
+         *     確認 diff 後由前端改呼叫既有的 `PUT /api/insurance/brackets`（同樣是
+         *     platform-only，且會要求 reason、二次確認封存月、標記跨租戶需重算）。
+         */
+        post: operations["preview_brackets_api_platform_gov_data_brackets_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11143,7 +12965,7 @@ export interface paths {
         };
         /**
          * Get Portal Calendar
-         * @description 取得學校行事曆（與後台同步的教師檢視）。
+         * @description 取得學校行事曆（與後台同步的教師檢視，僅 staff/parent 可見範圍）。
          */
         get: operations["get_portal_calendar_api_portal_calendar_get"];
         put?: never;
@@ -11675,6 +13497,30 @@ export interface paths {
          * @description 老師確認已收到接送通知（pending → acknowledged）。
          */
         post: operations["portal_acknowledge_api_portal_dismissal_calls__call_id__acknowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/dismissal-calls/{call_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Portal Cancel
+         * @description 老師取消接送通知（pending / acknowledged → cancelled）。
+         *
+         *     後台版本（api/dismissal_calls.py）限原建立者或管理角色；本端點開放給
+         *     持 DISMISSAL_CALLS_WRITE 的班級教師處理自班誤建／家長改口的通知，
+         *     班級 scope 與 403 collapse 沿用 acknowledge/complete 同一套守衛。
+         */
+        post: operations["portal_cancel_api_portal_dismissal_calls__call_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13146,6 +14992,215 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recruitment-bonus/campaigns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Campaigns
+         * @description 列出所有招生獎金期（含每期 pending/confirmed 列數，供列表頁快速判斷狀態）。
+         */
+        get: operations["list_campaigns_api_recruitment_bonus_campaigns_get"];
+        put?: never;
+        /**
+         * Create Campaign
+         * @description 建立招生獎金期；未給的參數帶入辦法預設值（守衛 1）。
+         */
+        post: operations["create_campaign_api_recruitment_bonus_campaigns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Campaign Detail
+         * @description 招生獎金期明細：逐列歸屬 ＋ 每師彙總（確認人數／級距單價／金額，守衛 2）。
+         */
+        get: operations["get_campaign_detail_api_recruitment_bonus_campaigns__campaign_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Campaign
+         * @description 改招生獎金期參數；已結算的期一律 409（守衛 6）。
+         */
+        patch: operations["update_campaign_api_recruitment_bonus_campaigns__campaign_id__patch"];
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/attributions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Attribution
+         * @description 手動加一筆歸屬列（Excel 外補件、邀約拆分第二列）。
+         */
+        post: operations["create_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/attributions/{attribution_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Attribution
+         * @description 改一筆歸屬列：point_code／points／grade_multiplier／employee_id／
+         *     collector／status／notes（守衛 3）。point_code 不在目錄 → 422（守衛 4）；
+         *     confirmed 但 employee_id 空 → 422（守衛 5）；已結算的期 → 409（守衛 6）。
+         */
+        patch: operations["update_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions__attribution_id__patch"];
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Campaign Xlsx
+         * @description 匯出招生獎金 Excel（統計表／獎金條／轉帳名冊三 sheet，仿園方 1150317）。
+         *
+         *     含完整銀行帳號 → 需 has_full_salary_view，否則 403；並寫顯式匯出稽核
+         *     （GET 不經 AuditMiddleware，比照 api/art_teacher_payroll.py）。
+         */
+        get: operations["export_campaign_xlsx_api_recruitment_bonus_campaigns__campaign_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Campaign Report
+         * @description 統計表（園方 Excel 格式）：每師區塊＋逐生明細＋計算式＋下次核算名單。
+         */
+        get: operations["get_campaign_report_api_recruitment_bonus_campaigns__campaign_id__report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Campaign
+         * @description 結算：把已確認歸屬換算成錢，寫入表外獎金通道（`ExtraBonusPayment`）。
+         *
+         *     防呆順序（缺一不可，見 spec §3.4／§6 P5）：
+         *     1. campaign 必須存在且 `open`（已 `settled` → 409，冪等——重複呼叫不
+         *        重複發錢，守衛 6 沿用 `_assert_campaign_open`）。
+         *     2. 不得有 `pending` 列（否則 409，回應列出未處理的歸屬列 id，供 HR
+         *        前往歸屬列表處理——`excluded`／`deferred` 不算未處理，不擋）。
+         *     3. 用 Task 2 引擎（透過 `_compute_employee_summary` 重用，不重複彙總
+         *        邏輯）算出每師合計；任一員工 `total_amount < 0`（讓出的代收分潤
+         *        超過自己的招生金額，非邊際級距下理論可能發生）→ 整批 409 帶明細，
+         *        不寫任何一筆錢，要求人工處理。
+         *     4. 對 `total_amount > 0` 者逐筆寫 `ExtraBonusPayment`；`== 0` 者不寫列
+         *        （DB CHECK `ck_extra_bonus_amount_positive` 要求 amount > 0）。
+         *     5. 全部寫完、campaign 轉 `settled` 後才一次 `session.commit()`——單一
+         *        DB transaction，任何一步失敗（含寫入途中的例外）整批回滾，不會
+         *        留下「部分員工已入帳但 campaign 仍是 open」的孤兒狀態（見計畫
+         *        Task 5 回報 (a)）。
+         */
+        post: operations["settle_campaign_api_recruitment_bonus_campaigns__campaign_id__settle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/sync-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Campaign Candidates
+         * @description 候選同步（冪等）；已結算的期一律 409（守衛 6），回傳四個計數（守衛 7）。
+         */
+        post: operations["sync_campaign_candidates_api_recruitment_bonus_campaigns__campaign_id__sync_candidates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment-bonus/campaigns/{campaign_id}/transfer-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Transfer Roster
+         * @description 轉帳名冊：戶名／完整帳號／金額／合計；無完整薪資檢視權限時回 403。
+         */
+        get: operations["get_transfer_roster_api_recruitment_bonus_campaigns__campaign_id__transfer_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recruitment/address-hotspots": {
         parameters: {
             query?: never;
@@ -13971,7 +16026,7 @@ export interface paths {
         };
         /**
          * Get Finance Summary Detail
-         * @description 單月收支明細：學費 / 才藝 / 薪資等七來源原始交易列表（下鑽用）。
+         * @description 單月收支明細：學費 / 才藝 / 薪資等八來源原始交易列表（下鑽用）。
          *
          *     F-031：薪資逐員金額（gross/net/festival/overtime/employer_benefit/real_cost）
          *     屬 SALARY_READ 範疇；REPORTS 持有者若非 admin/hr 不可下鑽到逐員實發/獎金，
@@ -13999,8 +16054,8 @@ export interface paths {
          * Export Finance Summary
          * @description 匯出收支彙總為 Excel。
          *
-         *     指定 month 時，額外附七張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出、
-         *     年終撥款）；未指定 month 時只輸出月度彙總與分類統計兩張分頁。
+         *     指定 month 時，額外附八張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出、
+         *     年終撥款、表外獎金）；未指定 month 時只輸出月度彙總與分類統計兩張分頁。
          *
          *     F-031：薪資明細 Sheet 5 在非 admin/hr 角色下需以「—」遮罩金額欄位，
          *     避免 supervisor / 自訂 REPORTS 角色透過匯出取得逐員實發名冊。年終撥款明細
@@ -14645,6 +16700,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/salaries/monthly-overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Monthly Overview
+         * @description 全員月薪資總覽（persisted SalaryRecord + ExtraBonusPayment 純彙總）。
+         *
+         *     - admin/hr：全員（scope=all）；其他 SALARY_READ 角色：僅本人（scope=self）。
+         *     - 所有金額口徑走 services/salary/amounts.py 共用 helper，不重跑 SalaryEngine。
+         *     - 常數查詢數：薪資列 1 查、表外獎金聚合 1 查、僅領獎金員工補查 1 查。
+         */
+        get: operations["get_salary_monthly_overview_api_salaries_monthly_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/salaries/records": {
         parameters: {
             query?: never;
@@ -14761,7 +16840,7 @@ export interface paths {
          * @description 後台全域搜尋。
          *
          *     Returns:
-         *         GlobalSearchResult 含 8 類 entity，各類 ≤ 8 筆。
+         *         GlobalSearchResult 含 12 類 entity，各類 ≤ 8 筆。
          *         無對應 READ 權限的類別回空陣列。
          */
         get: operations["global_search_api_search_get"];
@@ -14797,6 +16876,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shifts/copy-month": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Month Assignments
+         * @description 整月複製週排班（單一 transaction、封存月保護、冪等）。
+         *
+         *     週配對＝來源月與目標月各取「週一落在該月」的清單，按 index 配對、
+         *     取 min 截斷（與前端 getMonthWeeks 一致）。只動 ShiftAssignment，
+         *     每日調班（DailyShift）不受影響。dry_run=true 回報預估不落地。
+         */
+        post: operations["copy_month_assignments_api_shifts_copy_month_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shifts/daily": {
         parameters: {
             query?: never;
@@ -14812,7 +16915,10 @@ export interface paths {
         put?: never;
         /**
          * Upsert Daily Shift
-         * @description 新增或更新每日排班（支援 UPSERT）
+         * @description 新增或更新每日排班（支援 UPSERT；day_off=true 落明確排休列）。
+         *
+         *     回傳實際落地的列（DailyShiftOut），取代舊的純 message 回應——排休列的
+         *     shift_type_id 為 null，前端據此渲染三態。
          */
         post: operations["upsert_daily_shift_api_shifts_daily_post"];
         delete?: never;
@@ -14833,7 +16939,13 @@ export interface paths {
         post?: never;
         /**
          * Delete Daily Shift
-         * @description 刪除每日排班（恢復為週排班或預設）
+         * @description 刪除每日排班列＝**恢復繼承**（週排班或員工預設班別）。
+         *
+         *     三態語意（與 POST /daily 對偶）：
+         *     - 有列且 shift_type_id 非 NULL → 指定日班
+         *     - 有列且 shift_type_id 為 NULL → 明確排休（POST /daily day_off=true 產生）
+         *     - 無列 → 繼承週排班／預設；本端點就是把任一種列刪掉回到這一態。
+         *     要表達「該日休假」請用 POST /daily 的 day_off=true，不要刪列。
          */
         delete: operations["delete_daily_shift_api_shifts_daily__shift_id__delete"];
         options?: never;
@@ -14881,6 +16993,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shifts/leave-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Shift Leave Context
+         * @description 排班頁請假摘要（2026-08-28）。
+         *
+         *     園長排班時要就地看到「誰請假、哪個時段不在」才能判斷空班；權限沿用
+         *     SCHEDULE（比照 /roster 的解耦——排班使用者不需 LEAVES_READ）。回傳
+         *     pending＋approved（待審也顯示，供預見性排班；rejected 排除），欄位
+         *     收斂到排班必要 10 欄（白名單見 ShiftLeaveContextOut docstring），
+         *     不含 reason／附件等完整請假管理才有的敏感資訊。
+         */
+        get: operations["get_shift_leave_context_api_shifts_leave_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shifts/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Schedule Roster
+         * @description 排班工作台專用最小員工名冊（2026-08-19 P0）。
+         *
+         *     取代前端過去用 GET /employees（EMPLOYEES_READ＋全量 EmployeeOut）支撐
+         *     排班頁的做法：權限解耦（只需 SCHEDULE）、欄位收斂到排班必要 9 欄
+         *     （白名單見 ScheduleRosterOut docstring）、classroom_name 由本端點 join
+         *     填值（GET /employees 列表端點不填此欄，是排班頁班級欄整欄「-」的根因）。
+         */
+        get: operations["get_schedule_roster_api_shifts_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shifts/swap-history": {
         parameters: {
             query?: never;
@@ -14908,7 +17071,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Shift Types */
+        /**
+         * List Shift Types
+         * @description 列出當前租戶班別模板。
+         *
+         *     include_usage=true 時每筆附三張引用表計數（每週排班／每日調班／換班快照），
+         *     供設定頁顯示「使用中的排班數」與停用/刪除防呆；計數即時查詢不進快取。
+         */
         get: operations["list_shift_types_api_shifts_types_get"];
         put?: never;
         /** Create Shift Type */
@@ -16582,6 +18751,9 @@ export interface paths {
         /**
          * Upsert Config
          * @description 新增或更新單筆設定（upsert）。
+         *
+         *     金流管控門檻（`FINANCE_CONTROLLED_CONFIG_KEYS`）另需金流簽核權，見
+         *     `require_finance_control_permission`。
          */
         put: operations["upsert_config_api_system_configs__config_key__put"];
         post?: never;
@@ -16711,6 +18883,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments/{payment_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Vendor Payment
+         * @description 核准／駁回（Checker）：建立者不可核准自己的單據（403）。
+         */
+        post: operations["approve_vendor_payment_api_vendor_payments__payment_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vendor-payments/{payment_id}/attachments": {
         parameters: {
             query?: never;
@@ -16740,6 +18932,66 @@ export interface paths {
         get: operations["download_attachment_api_vendor_payments__payment_id__attachments_download_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Vendor Payment Events
+         * @description 單據 append-only 事件時間軸（依發生順序）。
+         */
+        get: operations["list_vendor_payment_events_api_vendor_payments__payment_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconcile Vendor Payment
+         * @description 完成對帳或標記差異：對帳人不可是確認付款的同一人（403）。
+         */
+        post: operations["reconcile_vendor_payment_api_vendor_payments__payment_id__reconcile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/settle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settle Vendor Payment
+         * @description 確認實際付款：已核准的單據才可標記，寫入真實付款日／方式／參考號。
+         */
+        post: operations["settle_vendor_payment_api_vendor_payments__payment_id__settle_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16783,6 +19035,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments/{payment_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Vendor Payment
+         * @description 送審：draft / rejected → pending_approval。
+         */
+        post: operations["submit_vendor_payment_api_vendor_payments__payment_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/batch-sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Sign Vendor Payments
+         * @description 批次簽收：一次簽名（drawn/photo）套用到勾選的多筆待簽收付款。
+         *
+         *     NOTE: 本路由必須宣告在 ``/vendor-payments/{payment_id}`` 之前，否則
+         *     "batch-sign" 會被當成 payment_id 解析（422），同 summary 路由的既有慣例。
+         *
+         *     簽名只解析一次（整批共用同一次簽名動作）：格式不合法（base64/大小/magic
+         *     bytes）直接 400，不動任何一筆。逐筆各自落一份 storage 副本（不共用同一個
+         *     signature_key）——雖然本模組現行 delete 端點已擋掉「刪除已簽收紀錄」
+         *     （status != pending 一律 409），共用 key 在*現況*程式碼下不會被刪除路徑
+         *     互相破壞；但這是靠「delete 守衛恰好擋住」的隱性耦合，非可驗證的資料模型
+         *     不變式（未來若加沖銷/GC/資料保留等新刪除路徑，共用 key 會讓多筆紀錄一次
+         *     失去簽名佐證）。signature_key 語意上是「這一筆的簽名副本」而非「這批的
+         *     簽名副本」，複製成本（單張簽名 <1MB）遠低於耦合風險，故選擇逐筆各自
+         *     put_attachment（`utils.portfolio_storage` 以 uuid4 產生 key，天然不撞）。
+         *
+         *     逐筆 SAVEPOINT 部分成功：非 pending / 不存在（含跨租戶，兩者同歸「不存在」，
+         *     比照 `_load_payment` 慣例不洩漏跨租戶存在性）/ 建立者自行簽收（職責分離）
+         *     各自記失敗原因，不影響同批其他筆。
+         */
+        post: operations["batch_sign_vendor_payments_api_vendor_payments_batch_sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/vendor-payments/summary": {
         parameters: {
             query?: never;
@@ -16792,11 +19101,12 @@ export interface paths {
         };
         /**
          * Vendor Payments Summary
-         * @description 區間彙總（跨狀態）：供前端 KPI 卡。
+         * @description 區間彙總（跨狀態）：供前端 KPI 卡與流程摘要列。
          *
-         *     range 篩選（日期 / 廠商 / 收付方式）與列表一致，但**不吃 status**——
-         *     一律回全狀態並拆 pending / signed，讓「本期總額 / 待簽收 / 已簽收」
-         *     三張卡同時有意義。sum 走 SQL group_by 聚合，不受列表分頁限制、無 N+1。
+         *     range 篩選（日期 / 廠商 / 類別 / 收付方式）與列表一致，但**不吃狀態
+         *     篩選**——一律回全狀態並拆桶。除既有 pending/signed（簽收軸，向後相容）
+         *     外，另回內控流程分桶：待核准 / 已核准待付款 / 待補憑證 / 待對帳 / 異常。
+         *     單一 SELECT 多條件聚合，不受列表分頁限制、無 N+1。
          *
          *     NOTE: 本路由必須宣告在 ``/vendor-payments/{payment_id}`` 之前，否則
          *     "summary" 會被當成 payment_id 解析（422）。
@@ -18378,6 +20688,75 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** AlbumDetailOut */
+        AlbumDetailOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Cover Thumb Url */
+            cover_thumb_url: string | null;
+            /** Description */
+            description: string | null;
+            /** Event Date */
+            event_date: string;
+            /** Id */
+            id: number;
+            /** Photo Count */
+            photo_count: number;
+            /** Photos */
+            photos: components["schemas"]["AlbumPhotoOut"][];
+            /** Published At */
+            published_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published";
+            /** Title */
+            title: string;
+            /** Untagged Count */
+            untagged_count: number;
+        };
+        /** AlbumPhotoOut */
+        AlbumPhotoOut: {
+            /** Created At */
+            created_at: string;
+            /** Display Url */
+            display_url: string;
+            /** Id */
+            id: number;
+            /** Original Filename */
+            original_filename: string | null;
+            /** Students */
+            students: components["schemas"]["TaggedStudentOut"][];
+            /** Thumb Url */
+            thumb_url: string | null;
+        };
+        /** AlbumSummaryOut */
+        AlbumSummaryOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Cover Thumb Url */
+            cover_thumb_url: string | null;
+            /** Description */
+            description: string | null;
+            /** Event Date */
+            event_date: string;
+            /** Id */
+            id: number;
+            /** Photo Count */
+            photo_count: number;
+            /** Published At */
+            published_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "published";
+            /** Title */
+            title: string;
+            /** Untagged Count */
+            untagged_count: number;
+        };
         /** AlbumUpdate */
         AlbumUpdate: {
             /** Description */
@@ -18460,6 +20839,29 @@ export interface components {
             reaction_symptom?: string | null;
             /** Severity */
             severity?: ("mild" | "moderate" | "severe") | null;
+        };
+        /** AllocateOut */
+        AllocateOut: {
+            /** Allocated Total */
+            allocated_total: number;
+            /** Allocation Ids */
+            allocation_ids: number[];
+            /** Receipt Id */
+            receipt_id: number;
+            /** Transaction Status */
+            transaction_status: string;
+            /** Unallocated */
+            unallocated: number;
+        };
+        /** AllocateRequest */
+        AllocateRequest: {
+            /**
+             * Allow Partial
+             * @default false
+             */
+            allow_partial: boolean;
+            /** Parts */
+            parts: (components["schemas"]["FeeRecordAllocationPartIn"] | components["schemas"]["PrepaymentAllocationPartIn"] | components["schemas"]["NonTuitionAllocationPartIn"])[];
         };
         /**
          * AnnouncementAttachmentOut
@@ -18648,6 +21050,44 @@ export interface components {
             anomaly_type: string;
             /** Remark */
             remark?: string | null;
+        };
+        /** AnomalyItemOut */
+        AnomalyItemOut: {
+            /** Confirmed Action */
+            confirmed_action?: string | null;
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Confirmed By */
+            confirmed_by?: string | null;
+            /** Date */
+            date: string;
+            /** Detail */
+            detail: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Number */
+            employee_number: string;
+            /** Estimated Deduction */
+            estimated_deduction?: number | null;
+            /** Id */
+            id: number;
+            /** Type */
+            type: string;
+            /** Type Label */
+            type_label: string;
+            /** Weekday */
+            weekday: string;
+        };
+        /** AnomalyListOut */
+        AnomalyListOut: {
+            /** Confirmed */
+            confirmed: number;
+            /** Items */
+            items: components["schemas"]["AnomalyItemOut"][];
+            /** Pending */
+            pending: number;
+            /** Total */
+            total: number;
         };
         /** CertificateOut */
         api__gov_moe__certificates__CertificateOut: {
@@ -18848,6 +21288,20 @@ export interface components {
             /** Suggested Score Delta */
             suggested_score_delta: string;
         };
+        /** AttendanceCalendarOut */
+        AttendanceCalendarOut: {
+            /** Days */
+            days: components["schemas"]["CalendarDayOut"][];
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Employee Name */
+            employee_name: string;
+            /** Month */
+            month: number;
+            summary: components["schemas"]["CalendarSummaryOut"];
+            /** Year */
+            year: number;
+        };
         /**
          * AttendanceCSVRow
          * @description CSV 考勤記錄格式
@@ -18917,10 +21371,14 @@ export interface components {
         };
         /** AttendancePreviewRequest */
         AttendancePreviewRequest: {
+            /** Month */
+            month?: number | null;
             /** Raw Text */
             raw_text?: string | null;
             /** Records */
             records?: components["schemas"]["AttendanceCSVRow"][] | null;
+            /** Year */
+            year?: number | null;
         };
         /** AttendancePreviewResult */
         AttendancePreviewResult: {
@@ -19017,9 +21475,38 @@ export interface components {
             /** Status */
             status?: string | null;
         };
+        /** AttendanceSummaryRowOut */
+        AttendanceSummaryRowOut: {
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Number */
+            employee_number?: string | null;
+            /** Late Count */
+            late_count: number;
+            /** Missing Punch In */
+            missing_punch_in: number;
+            /** Missing Punch Out */
+            missing_punch_out: number;
+            /** Normal Days */
+            normal_days: number;
+            /** Total Days */
+            total_days: number;
+            /** Total Early Minutes */
+            total_early_minutes: number;
+            /** Total Late Minutes */
+            total_late_minutes: number;
+        };
         /**
          * AttendanceUploadRequest
-         * @description CSV 考勤上傳請求
+         * @description CSV 考勤上傳請求。
+         *
+         *     year/month＝目標匯入月份（P1-1 起為**真契約**）：所有 records 的日期必須
+         *     落在該月份，否則該列以 row-level error 拒絕（見 upload_attendance_csv），
+         *     不再靜默寫進別的月份。
          */
         AttendanceUploadRequest: {
             /** Month */
@@ -19028,6 +21515,82 @@ export interface components {
             records: components["schemas"]["AttendanceCSVRow"][];
             /** Year */
             year: number;
+        };
+        /** AttributionCreate */
+        AttributionCreate: {
+            /** Collector Employee Id */
+            collector_employee_id?: number | null;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Grade Multiplier */
+            grade_multiplier: number;
+            /** Notes */
+            notes?: string | null;
+            /** Point Code */
+            point_code: string;
+            /** Points */
+            points: number;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+        };
+        /** AttributionOut */
+        AttributionOut: {
+            /** Campaign Id */
+            campaign_id: number;
+            /** Child Name */
+            child_name?: string | null;
+            /** Collector Employee Id */
+            collector_employee_id?: number | null;
+            /** Collector Name */
+            collector_name?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Grade Multiplier */
+            grade_multiplier: number;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Point Code */
+            point_code: string;
+            /** Points */
+            points: number;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Status */
+            status: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Visit Grade */
+            visit_grade?: string | null;
+            /** Visit Month */
+            visit_month?: string | null;
+        };
+        /** AttributionUpdate */
+        AttributionUpdate: {
+            /** Collector Employee Id */
+            collector_employee_id?: number | null;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Grade Multiplier */
+            grade_multiplier?: number | null;
+            /** Notes */
+            notes?: string | null;
+            /** Point Code */
+            point_code?: string | null;
+            /** Points */
+            points?: number | null;
+            /** Status */
+            status?: string | null;
         };
         /** AuditLogHighRiskItem */
         AuditLogHighRiskItem: {
@@ -19168,6 +21731,129 @@ export interface components {
             /** Reference Date */
             reference_date?: string | null;
         };
+        /** BankImportOut */
+        BankImportOut: {
+            /** Bank */
+            bank: string;
+            /** Created */
+            created?: boolean | null;
+            /** Credit Total */
+            credit_total: number;
+            /** Debit Total */
+            debit_total: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Id */
+            id: number;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+            /** Status */
+            status: string;
+        };
+        /** BankImportPreviewOut */
+        BankImportPreviewOut: {
+            /** Already Imported */
+            already_imported: boolean;
+            /** Credit Total */
+            credit_total: number;
+            /** Debit Total */
+            debit_total: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Errors */
+            errors: components["schemas"]["RowErrorOut"][];
+            /** Existing Import Id */
+            existing_import_id?: number | null;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Filename */
+            filename: string;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+            /** With Collection Number */
+            with_collection_number: number;
+        };
+        /** BankTransactionListOut */
+        BankTransactionListOut: {
+            /** Items */
+            items: components["schemas"]["BankTransactionOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** BankTransactionOut */
+        BankTransactionOut: {
+            /**
+             * Allocated Total
+             * @default 0
+             */
+            allocated_total: number;
+            /** Amount */
+            amount: number;
+            /** Balance */
+            balance?: number | null;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
+            /** Direction */
+            direction: string;
+            /** Id */
+            id: number;
+            /** Import Id */
+            import_id: number;
+            /** Memo */
+            memo?: string | null;
+            /** Occurrence Index */
+            occurrence_index: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Status Note */
+            status_note?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /**
+             * Transaction At
+             * Format: date-time
+             */
+            transaction_at: string;
+            /**
+             * Unallocated
+             * @default 0
+             */
+            unallocated: number;
+        };
         /**
          * BatchApproveFailItem
          * @description 批次核准/駁回單筆失敗紀錄 — {id, reason}。
@@ -19226,7 +21912,25 @@ export interface components {
             /** Records */
             records: components["schemas"]["AttendanceRecordItem"][];
         };
-        /** BatchConfirmRequest */
+        /** BatchCertResultItem */
+        BatchCertResultItem: {
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Serial */
+            serial?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /**
+         * BatchConfirmRequest
+         * @description 批次確認請求。
+         *
+         *     attendance_ids 契約（2026-08-17）：空集合 422（無意義請求）、上限 500
+         *     （防超大批次撐爆單一 transaction）；**不存在／跨租戶的 id 靜默跳過**，
+         *     僅計入實際處理的 processed。
+         */
         BatchConfirmRequest: {
             /** Action */
             action: string;
@@ -19234,6 +21938,107 @@ export interface components {
             attendance_ids: number[];
             /** Remark */
             remark?: string | null;
+        };
+        /** BatchConfirmResultOut */
+        BatchConfirmResultOut: {
+            /** Processed */
+            processed: number;
+        };
+        /**
+         * BatchFeePayItem
+         * @description 批次繳費單筆項目：只帶 record_id + 選填冪等鍵，金額固定「繳清全額」。
+         */
+        BatchFeePayItem: {
+            /**
+             * Idempotency Key
+             * @description 本筆繳費冪等鍵（語意同 PayRequest.idempotency_key）
+             */
+            idempotency_key?: string | null;
+            /** Record Id */
+            record_id: number;
+        };
+        /**
+         * BatchFeePayRequest
+         * @description 批次登記繳費——固定「繳清全額」語意（沿用單筆 amount_paid=None→amount_due）。
+         *
+         *     部分繳費（指定金額 < amount_due）仍須走單筆 PUT /records/{id}/pay；
+         *     批次端點不接受逐筆自訂金額，避免對帳單需求逐漸長成單筆端點的完整介面。
+         */
+        BatchFeePayRequest: {
+            /**
+             * Items
+             * @description 批次項目（1~200 筆）
+             */
+            items: components["schemas"]["BatchFeePayItem"][];
+            /**
+             * Notes
+             * @default
+             */
+            notes: string | null;
+            /**
+             * Payment Date
+             * Format: date
+             */
+            payment_date: string;
+            /** Payment Method */
+            payment_method: string;
+        };
+        /**
+         * BatchFeePayResultItem
+         * @description 批次繳費單筆結果。error 僅失敗時有值；amount_paid 僅成功時有值。
+         */
+        BatchFeePayResultItem: {
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Record Id */
+            record_id: number;
+        };
+        /**
+         * BatchFeePayResultOut
+         * @description POST /fees/records/batch-pay 回傳。results 順序與請求 items 一致。
+         */
+        BatchFeePayResultOut: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["BatchFeePayResultItem"][];
+            /** Succeeded */
+            succeeded: number;
+        };
+        /** BatchGenerateCertRequest */
+        BatchGenerateCertRequest: {
+            /**
+             * Copies
+             * @default 1
+             */
+            copies: number;
+            /**
+             * Issue Date
+             * Format: date
+             */
+            issue_date: string;
+            /** Purpose */
+            purpose: string;
+            /**
+             * Student Ids
+             * @description 待開立學生 id 清單，1~60 筆（重複自動去重）
+             */
+            student_ids: number[];
+        };
+        /** BatchGenerateCertResponse */
+        BatchGenerateCertResponse: {
+            /** Failed */
+            failed: number;
+            /** Pdf Base64 */
+            pdf_base64?: string | null;
+            /** Results */
+            results: components["schemas"]["BatchCertResultItem"][];
+            /** Succeeded */
+            succeeded: number;
         };
         /** BatchIn */
         BatchIn: {
@@ -19376,6 +22181,211 @@ export interface components {
             /** Template Id */
             template_id: number;
         };
+        /** BillingCodeActivateItem */
+        BillingCodeActivateItem: {
+            /** Code Suffix */
+            code_suffix: string;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /** BillingCodeActivateOut */
+        BillingCodeActivateOut: {
+            /** Activated */
+            activated: number;
+            /** Closed */
+            closed: number;
+        };
+        /** BillingCodeActivateRequest */
+        BillingCodeActivateRequest: {
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Items */
+            items: components["schemas"]["BillingCodeActivateItem"][];
+            /** Reason */
+            reason?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
+        /** BillingCodeAssignmentOut */
+        BillingCodeAssignmentOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Code Suffix */
+            code_suffix: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Effective From
+             * Format: date
+             */
+            effective_from: string;
+            /** Effective To */
+            effective_to?: string | null;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
+            /** Id */
+            id: number;
+            /** Reason */
+            reason?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /** BillingCodeDeactivateRequest */
+        BillingCodeDeactivateRequest: {
+            /**
+             * Effective To
+             * Format: date
+             */
+            effective_to: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** BillingCodeSuggestionOut */
+        BillingCodeSuggestionOut: {
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Current Suffix */
+            current_suffix?: string | null;
+            /** Grade Name */
+            grade_name: string;
+            /** State */
+            state: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+            /** Suggested Suffix */
+            suggested_suffix: string;
+        };
+        /** BillingCodeSuggestOut */
+        BillingCodeSuggestOut: {
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Suggestions */
+            suggestions: components["schemas"]["BillingCodeSuggestionOut"][];
+            /** Unassignable */
+            unassignable: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** BillingCodeSuggestRequest */
+        BillingCodeSuggestRequest: {
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
+        /** BillSlipBatchOut */
+        BillSlipBatchOut: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /** Created */
+            created?: boolean | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Net Total */
+            net_total: number;
+            /** Note */
+            note?: string | null;
+            /** Original Filename */
+            original_filename?: string | null;
+            /** Row Count */
+            row_count: number;
+            /** Source */
+            source: string;
+            /** Title */
+            title: string;
+            /** Zero Amount Count */
+            zero_amount_count: number;
+        };
+        /** BillSlipDeleteOut */
+        BillSlipDeleteOut: {
+            /** Batch Id */
+            batch_id: number;
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /** Net Total */
+            net_total: number;
+            /** Ok */
+            ok: boolean;
+            /** Row Count */
+            row_count: number;
+            /** Title */
+            title: string;
+        };
+        /** BillSlipPreviewOut */
+        BillSlipPreviewOut: {
+            /** Already Imported */
+            already_imported: boolean;
+            /** Bill Month */
+            bill_month?: number | null;
+            /** Bill Year */
+            bill_year?: number | null;
+            /** Error Count */
+            error_count: number;
+            /** Errors */
+            errors: components["schemas"]["RowErrorOut"][];
+            /** Existing Batch Id */
+            existing_batch_id?: number | null;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Filename */
+            filename: string;
+            /** Net Total */
+            net_total: number;
+            /**
+             * Overlap Batch Ids
+             * @default []
+             */
+            overlap_batch_ids: number[];
+            /**
+             * Overlap Count
+             * @default 0
+             */
+            overlap_count: number;
+            /**
+             * Overlap Ratio
+             * @default 0
+             */
+            overlap_ratio: number;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Zero Amount Count */
+            zero_amount_count: number;
+        };
         /**
          * BindAdditionalChildOut
          * @description POST /bind-additional 綁定多個小孩成功回傳。
@@ -19423,6 +22433,16 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_confirm_bank_import_api_fees_bank_imports_post */
+        Body_confirm_bank_import_api_fees_bank_imports_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_confirm_collection_import_route_api_fees_collection_imports_post */
+        Body_confirm_collection_import_route_api_fees_collection_imports_post: {
+            /** File */
+            file: string;
+        };
         /** Body_create_authorizations_api_parent_pickup_authorizations_post */
         Body_create_authorizations_api_parent_pickup_authorizations_post: {
             /** Note */
@@ -19462,6 +22482,20 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /** Body_import_bill_slip_batch_api_fees_bill_slip_batches_post */
+        Body_import_bill_slip_batch_api_fees_bill_slip_batches_post: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** File */
+            file: string;
+            /** Title */
+            title: string;
+        };
+        /** Body_import_events_preview_api_events_import_preview_post */
+        Body_import_events_preview_api_events_import_preview_post: {
+            /** File */
+            file: string;
+        };
         /** Body_import_excel_api_appraisal_cycles_import_excel_post */
         Body_import_excel_api_appraisal_cycles_import_excel_post: {
             /** File */
@@ -19489,6 +22523,26 @@ export interface components {
         };
         /** Body_import_shifts_api_shifts_import_post */
         Body_import_shifts_api_shifts_import_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_attendance_excel_api_attendance_upload_preview_excel_post */
+        Body_preview_attendance_excel_api_attendance_upload_preview_excel_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_bank_import_api_fees_bank_imports_preview_post */
+        Body_preview_bank_import_api_fees_bank_imports_preview_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post */
+        Body_preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_preview_collection_import_route_api_fees_collection_imports_preview_post */
+        Body_preview_collection_import_route_api_fees_collection_imports_preview_post: {
             /** File */
             file: string;
         };
@@ -19607,8 +22661,10 @@ export interface components {
             art_teacher_festival?: number | null;
             /** Art Teacher Unit Price */
             art_teacher_unit_price?: number | null;
-            /** Assistant Teacher Ab */
-            assistant_teacher_ab?: number | null;
+            /** Assistant Teacher A */
+            assistant_teacher_a?: number | null;
+            /** Assistant Teacher B */
+            assistant_teacher_b?: number | null;
             /** Assistant Teacher C */
             assistant_teacher_c?: number | null;
             /** Config Year */
@@ -19643,8 +22699,10 @@ export interface components {
              * @description 在籍人數模式：month_end=月底快照 / daily_weighted=按日加權
              */
             enrollment_count_mode?: string | null;
-            /** Head Teacher Ab */
-            head_teacher_ab?: number | null;
+            /** Head Teacher A */
+            head_teacher_a?: number | null;
+            /** Head Teacher B */
+            head_teacher_b?: number | null;
             /** Head Teacher C */
             head_teacher_c?: number | null;
             /** Late Deduction Per Time */
@@ -19764,6 +22822,79 @@ export interface components {
              */
             sort_order: number;
         };
+        /** BracketDiffOut */
+        BracketDiffOut: {
+            /** Rows */
+            rows?: components["schemas"]["BracketDiffRowOut"][];
+            summary: components["schemas"]["BracketDiffSummaryOut"];
+        };
+        /** BracketDiffRowOut */
+        BracketDiffRowOut: {
+            /** Amount */
+            amount: number;
+            /** Changed Fields */
+            changed_fields?: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            current?: components["schemas"]["BracketRowOut"] | null;
+            incoming?: components["schemas"]["BracketRowOut"] | null;
+            /** Status */
+            status: string;
+        };
+        /** BracketDiffSummaryOut */
+        BracketDiffSummaryOut: {
+            /** Added */
+            added: number;
+            /** Changed */
+            changed: number;
+            /** Removed */
+            removed: number;
+            /** Unchanged */
+            unchanged: number;
+        };
+        /** BracketPreviewIn */
+        BracketPreviewIn: {
+            /** Content */
+            content: string;
+            /** Effective Year */
+            effective_year: number;
+        };
+        /** BracketPreviewOut */
+        BracketPreviewOut: {
+            /** Compared Year */
+            compared_year?: number | null;
+            diff: components["schemas"]["BracketDiffOut"];
+            /** Effective Year */
+            effective_year: number;
+            /** Parsed Count */
+            parsed_count: number;
+        };
+        /** BracketRowOut */
+        BracketRowOut: {
+            /** Amount */
+            amount: number;
+            /** Health Employee */
+            health_employee: number;
+            /** Health Employer */
+            health_employer: number;
+            /** Labor Employee */
+            labor_employee: number;
+            /** Labor Employer */
+            labor_employer: number;
+            /** Pension */
+            pension: number;
+        };
+        /** BracketsOut */
+        BracketsOut: {
+            /** Effective Year */
+            effective_year?: number | null;
+            /** Requested Year */
+            requested_year: number;
+            /** Rows */
+            rows?: components["schemas"]["BracketRowOut"][];
+        };
         /** BuildResultOut */
         BuildResultOut: {
             /** Built */
@@ -19842,6 +22973,18 @@ export interface components {
             reason: string;
             /** Student Id */
             student_id: number;
+        };
+        /**
+         * BulkOpItemResult
+         * @description 批次操作單筆結果。
+         */
+        BulkOpItemResult: {
+            /** Error */
+            error?: string | null;
+            /** Id */
+            id?: number | null;
+            /** Ok */
+            ok: boolean;
         };
         /** BulkStudentsRequest */
         BulkStudentsRequest: {
@@ -20197,6 +23340,37 @@ export interface components {
             stops: components["schemas"]["BusStopAdminOut"][];
             trip: components["schemas"]["BusTripAdminOut"];
         };
+        /** CalendarDayOut */
+        CalendarDayOut: {
+            /** Date */
+            date: string;
+            /** Is Early Leave */
+            is_early_leave?: boolean | null;
+            /** Is Late */
+            is_late?: boolean | null;
+            /** Late Minutes */
+            late_minutes?: number | null;
+            /** Leave Hours */
+            leave_hours?: number | null;
+            /** Leave Type */
+            leave_type?: string | null;
+            /** Leave Type Label */
+            leave_type_label?: string | null;
+            /** Overtime Hours */
+            overtime_hours?: number | null;
+            /** Overtime Type */
+            overtime_type?: string | null;
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Weekday */
+            weekday: number;
+        };
         /**
          * CalendarFeedItem
          * @description 單筆行事曆事件，統一 envelope。
@@ -20247,6 +23421,17 @@ export interface components {
              */
             to: string;
         };
+        /** CalendarSummaryOut */
+        CalendarSummaryOut: {
+            /** Late Count */
+            late_count: number;
+            /** Leave Days */
+            leave_days: number;
+            /** Overtime Hours */
+            overtime_hours: number;
+            /** Work Days */
+            work_days: number;
+        };
         /** CalibrationRowOut */
         CalibrationRowOut: {
             /** Bonus Amount */
@@ -20268,6 +23453,139 @@ export interface components {
             /** Total Score */
             total_score: string;
         };
+        /** CampaignCreate */
+        CampaignCreate: {
+            /** Collector Share */
+            collector_share?: number | null;
+            /** End Date */
+            end_date: string;
+            /** Grade Multipliers */
+            grade_multipliers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Name */
+            name: string;
+            /** Point Catalog */
+            point_catalog?: {
+                [key: string]: unknown;
+            } | null;
+            /** Start Date */
+            start_date: string;
+            /** Tier Config */
+            tier_config?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
+        /** CampaignDetailOut */
+        CampaignDetailOut: {
+            /** Attributions */
+            attributions: components["schemas"]["AttributionOut"][];
+            /** Collector Share */
+            collector_share: number;
+            /** Confirmed Count */
+            confirmed_count: number;
+            /** Created At */
+            created_at?: string | null;
+            /** Employee Summary */
+            employee_summary: components["schemas"]["EmployeeSummaryOut"][];
+            /** End Date */
+            end_date: string;
+            /** Grade Multipliers */
+            grade_multipliers: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Pending Count */
+            pending_count: number;
+            /** Point Catalog */
+            point_catalog: {
+                [key: string]: unknown;
+            };
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By */
+            settled_by?: number | null;
+            /** Start Date */
+            start_date: string;
+            /** Status */
+            status: string;
+            /** Tier Config */
+            tier_config: {
+                [key: string]: unknown;
+            }[];
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** CampaignListOut */
+        CampaignListOut: {
+            /** Items */
+            items: components["schemas"]["CampaignOut"][];
+        };
+        /** CampaignOut */
+        CampaignOut: {
+            /** Collector Share */
+            collector_share: number;
+            /** Confirmed Count */
+            confirmed_count: number;
+            /** Created At */
+            created_at?: string | null;
+            /** End Date */
+            end_date: string;
+            /** Grade Multipliers */
+            grade_multipliers: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Pending Count */
+            pending_count: number;
+            /** Point Catalog */
+            point_catalog: {
+                [key: string]: unknown;
+            };
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By */
+            settled_by?: number | null;
+            /** Start Date */
+            start_date: string;
+            /** Status */
+            status: string;
+            /** Tier Config */
+            tier_config: {
+                [key: string]: unknown;
+            }[];
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** CampaignUpdate */
+        CampaignUpdate: {
+            /** Collector Share */
+            collector_share?: number | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Grade Multipliers */
+            grade_multipliers?: {
+                [key: string]: unknown;
+            } | null;
+            /** Name */
+            name?: string | null;
+            /** Point Catalog */
+            point_catalog?: {
+                [key: string]: unknown;
+            } | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Tier Config */
+            tier_config?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
         /** CampusSettingPayload */
         CampusSettingPayload: {
             /**
@@ -20286,6 +23604,105 @@ export interface components {
              * @default driving
              */
             travel_mode: string;
+        };
+        /** CandidateItemOut */
+        CandidateItemOut: {
+            /** Fee Record Id */
+            fee_record_id: number;
+            /** Fee Type */
+            fee_type?: string | null;
+            /** Label */
+            label: string;
+            /** Remaining */
+            remaining: number;
+        };
+        /** CandidateOut */
+        CandidateOut: {
+            /** Cross Student */
+            cross_student: boolean;
+            /** Parts */
+            parts: components["schemas"]["CandidatePartOut"][];
+            /** Total */
+            total: number;
+        };
+        /** CandidatePartOut */
+        CandidatePartOut: {
+            /** Amount */
+            amount: number;
+            /** Fee Record Id */
+            fee_record_id?: number | null;
+            /** Label */
+            label: string;
+            /** Part Type */
+            part_type: string;
+            /** Student Id */
+            student_id: number;
+            /** Target School Year */
+            target_school_year?: number | null;
+            /** Target Semester */
+            target_semester?: number | null;
+        };
+        /** CandidatePrepayOptionOut */
+        CandidatePrepayOptionOut: {
+            /** Amount */
+            amount: number;
+            /** Target School Year */
+            target_school_year: number;
+            /** Target Semester */
+            target_semester: number;
+        };
+        /** CandidatesOut */
+        CandidatesOut: {
+            /** Candidates */
+            candidates: components["schemas"]["CandidateOut"][];
+            /** Level */
+            level: string;
+            /** Reasons */
+            reasons: string[];
+            /** Students */
+            students: components["schemas"]["CandidateStudentOut"][];
+            /** Transaction Id */
+            transaction_id: number;
+        };
+        /** CandidateStudentOut */
+        CandidateStudentOut: {
+            /** Display Name */
+            display_name: string;
+            /** Items */
+            items: components["schemas"]["CandidateItemOut"][];
+            prepayment?: components["schemas"]["CandidatePrepayOptionOut"] | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /** CashReceiptOut */
+        CashReceiptOut: {
+            /**
+             * Allocation Ids
+             * @default []
+             */
+            allocation_ids: number[];
+            /** Handover Batch Id */
+            handover_batch_id?: number | null;
+            /** Idempotent Replay */
+            idempotent_replay: boolean;
+            /** Receipt Id */
+            receipt_id: number;
+        };
+        /** CashReceiptRequest */
+        CashReceiptRequest: {
+            /** Amount */
+            amount: number;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Parts */
+            parts: (components["schemas"]["FeeRecordAllocationPartIn"] | components["schemas"]["PrepaymentAllocationPartIn"] | components["schemas"]["NonTuitionAllocationPartIn"])[];
+            /** Payer Note */
+            payer_note?: string | null;
+            /**
+             * Received Date
+             * Format: date
+             */
+            received_date: string;
         };
         /** CatalogOut */
         CatalogOut: {
@@ -20451,12 +23868,16 @@ export interface components {
             avg_monthly_enrollment: string;
             /** Class Performance Rate */
             class_performance_rate: string;
+            /** Class Performance Rate Override */
+            class_performance_rate_override?: string | null;
             /** Classroom Id */
             classroom_id: number;
             /** Classroom Name */
             classroom_name?: string | null;
             /** Deputy Teacher Name */
             deputy_teacher_name?: string | null;
+            /** Effective Class Performance Rate */
+            effective_class_performance_rate: string;
             /** Head Count Target */
             head_count_target: number;
             /** Head Teacher Employee Id */
@@ -20885,6 +24306,13 @@ export interface components {
             /** Student Preview */
             student_preview: components["schemas"]["ClassroomStudentPreviewOut"][];
         };
+        /** ClassroomOptionOut */
+        ClassroomOptionOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
         /**
          * ClassroomStudentPreviewOut
          * @description list /classrooms 內單班最多 3 個學生 preview。
@@ -21018,6 +24446,246 @@ export interface components {
             target_grade_id?: number | null;
             /** Target Name */
             target_name?: string | null;
+        };
+        /** ClosePeriodListOut */
+        ClosePeriodListOut: {
+            /** Items */
+            items: components["schemas"]["ClosePeriodOut"][];
+            /** Total */
+            total: number;
+        };
+        /** ClosePeriodOut */
+        ClosePeriodOut: {
+            /** Close Month */
+            close_month: number;
+            /** Close Year */
+            close_year: number;
+            /**
+             * Closed At
+             * Format: date-time
+             */
+            closed_at: string;
+            /** Closed By */
+            closed_by: number;
+            /** Exception Note */
+            exception_note?: string | null;
+            /** Has Exceptions */
+            has_exceptions: boolean;
+            /** Id */
+            id: number;
+            /** Reopen Reason */
+            reopen_reason?: string | null;
+            /** Reopened At */
+            reopened_at?: string | null;
+            /** Snapshot */
+            snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+        };
+        /** ClosePeriodRequest */
+        ClosePeriodRequest: {
+            /** Close Month */
+            close_month: number;
+            /** Close Year */
+            close_year: number;
+            /** Exception Note */
+            exception_note?: string | null;
+        };
+        /** CloseReopenRequest */
+        CloseReopenRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /** CollectionAllocateOut */
+        CollectionAllocateOut: {
+            /** Allocated Total */
+            allocated_total: number;
+            /** Allocation Ids */
+            allocation_ids: number[];
+            /** Payment Status */
+            payment_status: string;
+            /** Receipt Id */
+            receipt_id: number;
+            /** Unallocated */
+            unallocated: number;
+        };
+        /** CollectionCandidateItemOut */
+        CollectionCandidateItemOut: {
+            /** Fee Record Id */
+            fee_record_id: number;
+            /** Fee Type */
+            fee_type?: string | null;
+            /**
+             * In Bill Period
+             * @default false
+             */
+            in_bill_period: boolean;
+            /** Label */
+            label: string;
+            /** Remaining */
+            remaining: number;
+        };
+        /** CollectionCandidatesOut */
+        CollectionCandidatesOut: {
+            /** Bill Period */
+            bill_period?: string | null;
+            /** Bill Target Month */
+            bill_target_month?: string | null;
+            /** Candidates */
+            candidates: components["schemas"]["CandidateOut"][];
+            /** Level */
+            level: string;
+            /** Payment Id */
+            payment_id: number;
+            /** Reasons */
+            reasons: string[];
+            /** Students */
+            students: components["schemas"]["CollectionCandidateStudentOut"][];
+        };
+        /** CollectionCandidateStudentOut */
+        CollectionCandidateStudentOut: {
+            /** Display Name */
+            display_name: string;
+            /** Items */
+            items: components["schemas"]["CollectionCandidateItemOut"][];
+            prepayment?: components["schemas"]["CandidatePrepayOptionOut"] | null;
+            /** Student Id */
+            student_id: number;
+        };
+        /** CollectionImportOut */
+        CollectionImportOut: {
+            /** Bank */
+            bank: string;
+            /** Created */
+            created?: boolean | null;
+            /** Credit Total */
+            credit_total: number;
+            /** Debit Total */
+            debit_total: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Id */
+            id: number;
+            /** Import Type */
+            import_type: string;
+            /**
+             * Imported At
+             * Format: date-time
+             */
+            imported_at: string;
+            /** Original Filename */
+            original_filename: string;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+            /** Status */
+            status: string;
+        };
+        /** CollectionImportPreviewOut */
+        CollectionImportPreviewOut: {
+            /** Already Imported */
+            already_imported: boolean;
+            /** Decoded Count */
+            decoded_count: number;
+            /** Duplicate Count */
+            duplicate_count: number;
+            /** Error Count */
+            error_count: number;
+            /** Errors */
+            errors: components["schemas"]["RowErrorOut"][];
+            /** Existing Import Id */
+            existing_import_id?: number | null;
+            /** Fee Total */
+            fee_total: number;
+            /** File Sha256 */
+            file_sha256: string;
+            /** Filename */
+            filename: string;
+            /** Gross Total */
+            gross_total: number;
+            /** Net Total */
+            net_total: number;
+            /** Old Period Count */
+            old_period_count: number;
+            /** Parser Version */
+            parser_version: string;
+            /** Row Count */
+            row_count: number;
+            /** Statement End */
+            statement_end?: string | null;
+            /** Statement Start */
+            statement_start?: string | null;
+        };
+        /** CollectionPaymentListOut */
+        CollectionPaymentListOut: {
+            /** Items */
+            items: components["schemas"]["CollectionPaymentOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** CollectionPaymentOut */
+        CollectionPaymentOut: {
+            /**
+             * Allocated Total
+             * @default 0
+             */
+            allocated_total: number;
+            /** Bill Month */
+            bill_month?: number | null;
+            /** Bill Year */
+            bill_year?: number | null;
+            /** Channel */
+            channel: string;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
+            /**
+             * Customer Paid Date
+             * Format: date
+             */
+            customer_paid_date: string;
+            /** Expected Posting Date */
+            expected_posting_date?: string | null;
+            /** Fee Amount */
+            fee_amount: number;
+            /** Gross Amount */
+            gross_amount: number;
+            /** Id */
+            id: number;
+            /** Import Id */
+            import_id: number;
+            /** Net Amount */
+            net_amount: number;
+            /** Occurrence Index */
+            occurrence_index: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Status Note */
+            status_note?: string | null;
+            /**
+             * Unallocated
+             * @default 0
+             */
+            unallocated: number;
         };
         /** CommentIn */
         CommentIn: {
@@ -21541,6 +25209,98 @@ export interface components {
             /** Target Semester */
             target_semester: number;
         };
+        /**
+         * CopyMonthRequest
+         * @description 整月週排班複製請求（取代前端逐週迴圈呼叫的部分成功黑洞）。
+         *
+         *     - overwrite：目標週既有排班以來源覆蓋
+         *     - merge：只補目標週沒有排班的員工週
+         *     - skip：目標月已有**任何**排班的員工整員跳過
+         */
+        CopyMonthRequest: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Mode
+             * @default overwrite
+             * @enum {string}
+             */
+            mode: "overwrite" | "merge" | "skip";
+            /** Source Month */
+            source_month: number;
+            /** Source Year */
+            source_year: number;
+            /** Target Month */
+            target_month: number;
+            /** Target Year */
+            target_year: number;
+        };
+        /**
+         * CopyMonthResultOut
+         * @description POST /copy-month 回傳。
+         *
+         *     applied=false（dry_run 或被封存擋下）時 created/updated/skipped 為預估值；
+         *     blocked 列出被薪資封存擋下的（員工, 月份）人可讀訊息。
+         */
+        CopyMonthResultOut: {
+            /** Applied */
+            applied: boolean;
+            /**
+             * Blocked
+             * @default []
+             */
+            blocked: string[];
+            /** Created */
+            created: number;
+            /** Mode */
+            mode: string;
+            /** Skipped */
+            skipped: number;
+            /** Source Month */
+            source_month: string;
+            /** Target Month */
+            target_month: string;
+            /** Updated */
+            updated: number;
+            /** Weeks Paired */
+            weeks_paired: number;
+        };
+        /** CopyYearTemplateItem */
+        CopyYearTemplateItem: {
+            /** Amount */
+            amount: number;
+            /** Fee Type */
+            fee_type: string;
+            /** Grade Id */
+            grade_id: number;
+            /** Name */
+            name: string;
+            /** Semester */
+            semester: number;
+        };
+        /** CopyYearTemplatesOut */
+        CopyYearTemplatesOut: {
+            /** Created */
+            created: number;
+            /** From School Year */
+            from_school_year: number;
+            /** Items */
+            items: components["schemas"]["CopyYearTemplateItem"][];
+            /** Skipped */
+            skipped: number;
+            /** To School Year */
+            to_school_year: number;
+        };
+        /** CopyYearTemplatesRequest */
+        CopyYearTemplatesRequest: {
+            /** From School Year */
+            from_school_year: number;
+            /** To School Year */
+            to_school_year: number;
+        };
         /** CopyYesterdayPayload */
         CopyYesterdayPayload: {
             /** Classroom Id */
@@ -21958,6 +25718,84 @@ export interface components {
             /** Items */
             items: components["schemas"]["CourseWaitlistItemOut"][];
         };
+        /** CoverageDayOut */
+        CoverageDayOut: {
+            /** Collection Count */
+            collection_count: number;
+            /** Collection Net Total */
+            collection_net_total: number;
+            /** Difference */
+            difference: number;
+            /** Matched */
+            matched: boolean;
+            /** Passbook Total */
+            passbook_total: number;
+            /**
+             * Posting Date
+             * Format: date
+             */
+            posting_date: string;
+            /** Transaction Ids */
+            transaction_ids: number[];
+        };
+        /** CoverageOut */
+        CoverageOut: {
+            /** Covered Count */
+            covered_count: number;
+            /** Days */
+            days: components["schemas"]["CoverageDayOut"][];
+            /** Matched Pairs */
+            matched_pairs: components["schemas"]["CoveragePairOut"][];
+        };
+        /** CoveragePairOut */
+        CoveragePairOut: {
+            /** Amount */
+            amount: number;
+            /** Match Mode */
+            match_mode: string;
+            /** Payment Id */
+            payment_id?: number | null;
+            /** Transaction Id */
+            transaction_id: number;
+        };
+        /** CoverageRequest */
+        CoverageRequest: {
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /** CreateDismissalNoticeRequest */
+        CreateDismissalNoticeRequest: {
+            /**
+             * Client Request Id
+             * @description 前端產生的 UUID，partial UNIQUE 提供冪等性
+             */
+            client_request_id?: string | null;
+            /**
+             * Eta Minutes
+             * @description 預計幾分鐘後抵達（1~60）
+             */
+            eta_minutes: number;
+            /**
+             * Note
+             * @description 備註，trim 後最多 200 字
+             */
+            note?: string | null;
+            /** Student Id */
+            student_id: number;
+        };
         /** CreateLeaveRequest */
         CreateLeaveRequest: {
             /**
@@ -22008,6 +25846,27 @@ export interface components {
             role: string;
             /** Username */
             username: string;
+        };
+        /** CsvUploadResultOut */
+        CsvUploadResultOut: {
+            /** Message */
+            message: string;
+            results: components["schemas"]["CsvUploadResults"];
+        };
+        /** CsvUploadResults */
+        CsvUploadResults: {
+            /** Errors */
+            errors: string[];
+            /** Failed */
+            failed: number;
+            /** Success */
+            success: number;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            }[];
+            /** Total */
+            total: number;
         };
         /** CycleCreate */
         CycleCreate: {
@@ -22109,13 +25968,40 @@ export interface components {
             enrollment_target?: number | null;
             status?: components["schemas"]["CycleStatus"] | null;
         };
-        /** DailyCloseCreate */
+        /**
+         * DailyCloseCreate
+         * @description POST /pos/daily-close/{date} 請求。
+         *
+         *     `expected_*` 為樂觀鎖（P2-01）：前端送出時帶「畫面上正在看的」淨額與筆數，
+         *     後端重算 snapshot 後不符即 409。Why: 老闆核對到按下簽核之間若有人補登或作廢
+         *     交易，原本會靜默把另一組數字凍結，事後對帳才發現。未帶（舊前端）維持原行為。
+         *
+         *     `confirm_close_today` 為當日簽核的 opt-in（P2-05）：簽核今日會立刻擋住當天
+         *     後續所有 POS 收款與自動沖帳，且簽核人本人受 4-eye 守衛無法自行解鎖，
+         *     故必須明示確認。
+         */
         DailyCloseCreate: {
             /**
              * Actual Cash Count
              * @description 實際現金盤點金額（可選）
              */
             actual_cash_count?: number | null;
+            /**
+             * Confirm Close Today
+             * @description 簽核當日（台北時區今日）必須明示確認，否則 400
+             * @default false
+             */
+            confirm_close_today: boolean;
+            /**
+             * Expected Net Total
+             * @description 樂觀鎖：前端送出時畫面顯示的淨額；與後端重算不符即 409
+             */
+            expected_net_total?: number | null;
+            /**
+             * Expected Transaction Count
+             * @description 樂觀鎖：前端送出時畫面顯示的交易筆數；與後端重算不符即 409
+             */
+            expected_transaction_count?: number | null;
             /** Note */
             note?: string | null;
         };
@@ -22140,17 +26026,30 @@ export interface components {
         };
         /**
          * DailyShiftCreate
-         * @description 每日排班（調班）請求
+         * @description 每日排班（調班）三態契約（2026-08-19 P0）。
+         *
+         *     - shift_type_id=<int>（day_off=False）→ 指定日班
+         *     - day_off=True（shift_type_id 必為空）→ 明確排休：DB 落 shift_type_id=NULL
+         *       的列（models/shift.py 自始支援，過去只有換班 accept 內部路徑寫得出來）
+         *     - 「恢復繼承週排班」不走本 schema——用 DELETE /daily/{shift_id} 刪列表達
+         *
+         *     day_off 必須顯式為 True 才能落排休，兩者皆空回 422：防止 caller 忘了帶
+         *     shift_type_id 被誤存成排休。
          */
         DailyShiftCreate: {
             /** Date */
             date: string;
+            /**
+             * Day Off
+             * @default false
+             */
+            day_off: boolean;
             /** Employee Id */
             employee_id: number;
             /** Notes */
             notes?: string | null;
             /** Shift Type Id */
-            shift_type_id: number;
+            shift_type_id?: number | null;
         };
         /**
          * DailyShiftOut
@@ -22455,6 +26354,53 @@ export interface components {
             note?: string | null;
             /** Student Id */
             student_id: number;
+        };
+        /** DismissalCallOut */
+        DismissalCallOut: {
+            /** Acknowledged At */
+            acknowledged_at: string | null;
+            /** Arrived At */
+            arrived_at: string | null;
+            /** Cancelled At */
+            cancelled_at: string | null;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Expected Arrival At
+             * Format: date-time
+             */
+            expected_arrival_at: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Person Relation */
+            person_relation?: string | null;
+            /** Pickup Authorization Id */
+            pickup_authorization_id?: number | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
+            /** Request Source */
+            request_source: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested By Name */
+            requested_by_name: string;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /**
          * DsrDecisionIn
@@ -22851,6 +26797,30 @@ export interface components {
             /** Work Start Time */
             work_start_time?: string | null;
         };
+        /**
+         * EmployeeSummaryOut
+         * @description 每師彙總：前端 grid「確認人數／級距單價／金額」的資料來源。
+         */
+        EmployeeSummaryOut: {
+            /** Counted Persons */
+            counted_persons: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Gross Amount */
+            gross_amount: number;
+            /** Resigned */
+            resigned: boolean;
+            /** Share In */
+            share_in: number;
+            /** Share Out */
+            share_out: number;
+            /** Total Amount */
+            total_amount: number;
+            /** Unit Price */
+            unit_price: number;
+        };
         /** EmployeeUpdate */
         EmployeeUpdate: {
             /** Address */
@@ -22939,6 +26909,79 @@ export interface components {
             work_end_time?: string | null;
             /** Work Start Time */
             work_start_time?: string | null;
+        };
+        /** EnrollmentSnapshotChangeOut */
+        EnrollmentSnapshotChangeOut: {
+            /** After */
+            after: number;
+            /** Before */
+            before?: number | null;
+            /** Classroom Id */
+            classroom_id?: number | null;
+        };
+        /** EnrollmentSnapshotConfirmOut */
+        EnrollmentSnapshotConfirmOut: {
+            /** Confirmed */
+            confirmed: number;
+            /** Message */
+            message: string;
+        };
+        /** EnrollmentSnapshotGenerateOut */
+        EnrollmentSnapshotGenerateOut: {
+            /** Changes */
+            changes: components["schemas"]["EnrollmentSnapshotChangeOut"][];
+            /** Generated */
+            generated: number;
+            /** Message */
+            message: string;
+        };
+        /** EnrollmentSnapshotOut */
+        EnrollmentSnapshotOut: {
+            /** Covered Months */
+            covered_months: [
+                number,
+                number
+            ][];
+            /** Exists */
+            exists: boolean;
+            /** Month */
+            month: number;
+            /** Rows */
+            rows: components["schemas"]["EnrollmentSnapshotRowOut"][];
+            /** Year */
+            year: number;
+        };
+        /** EnrollmentSnapshotPatchOut */
+        EnrollmentSnapshotPatchOut: {
+            /** After */
+            after: number;
+            /** Before */
+            before: number;
+            /** Message */
+            message: string;
+        };
+        /** EnrollmentSnapshotRowOut */
+        EnrollmentSnapshotRowOut: {
+            /** Adjust Reason */
+            adjust_reason?: string | null;
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Confirmed By */
+            confirmed_by?: string | null;
+            /** Count Mode */
+            count_mode: string;
+            /** Generated At */
+            generated_at?: string | null;
+            /** Id */
+            id: number;
+            /** Is Confirmed */
+            is_confirmed: boolean;
+            /** Student Count */
+            student_count: number;
+            /** Updated By */
+            updated_by?: string | null;
         };
         /** EnrollmentStatsResponse */
         EnrollmentStatsResponse: {
@@ -23052,6 +27095,8 @@ export interface components {
             start_time?: string | null;
             /** Title */
             title: string;
+            /** Visibility */
+            visibility?: string | null;
         };
         /**
          * EventCalendarFeedOut
@@ -23083,8 +27128,15 @@ export interface components {
         };
         /** EventCreate */
         EventCreate: {
+            /** Academic Year */
+            academic_year?: number | null;
             /** Ack Deadline */
             ack_deadline?: string | null;
+            /**
+             * Category
+             * @default general
+             */
+            category: string;
             /** Description */
             description?: string | null;
             /** End Date */
@@ -23108,6 +27160,8 @@ export interface components {
             is_all_day: boolean;
             /** Location */
             location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
@@ -23117,10 +27171,170 @@ export interface components {
              * @default false
              */
             requires_acknowledgment: boolean;
+            /** Semester */
+            semester?: string | null;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title: string;
+            /**
+             * Visibility
+             * @default parent
+             */
+            visibility: string;
+            /** Week No */
+            week_no?: number | null;
+        };
+        /** EventImportCommitIn */
+        EventImportCommitIn: {
+            /** Rows */
+            rows: components["schemas"]["EventImportRowIn"][];
+        };
+        /**
+         * EventImportCommitResultOut
+         * @description ``POST /events/import-commit`` 回傳。同 source_key 重傳 = update（冪等）。
+         */
+        EventImportCommitResultOut: {
+            /** Created */
+            created: number;
+            /** Message */
+            message: string;
+            /** Total */
+            total: number;
+            /** Updated */
+            updated: number;
+        };
+        /**
+         * EventImportPreviewOut
+         * @description ``POST /events/import-preview`` 回傳（只解析驗證，不寫 DB）。
+         */
+        EventImportPreviewOut: {
+            /** Rows */
+            rows: components["schemas"]["EventImportRowOut"][];
+            summary: components["schemas"]["EventImportSummaryOut"];
+        };
+        /**
+         * EventImportRowIn
+         * @description import-commit 的單列輸入（= preview 確認後的 normalized row）。
+         *
+         *     server 端會**重新驗證全部欄位**（不信任 client）；``visibility='parent'``
+         *     必須帶 ``parent_visibility_confirmed=true``（預覽介面逐列/批次明確確認），
+         *     否則整批 422——Excel 空值或未確認列一律落 admin。
+         */
+        EventImportRowIn: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Ack Deadline */
+            ack_deadline?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Event Type */
+            event_type?: string | null;
+            /** Location */
+            location?: string | null;
+            /** Owner Employee No */
+            owner_employee_no?: string | null;
+            /**
+             * Parent Visibility Confirmed
+             * @default false
+             */
+            parent_visibility_confirmed: boolean;
+            /**
+             * Requires Acknowledgment
+             * @default false
+             */
+            requires_acknowledgment: boolean;
+            /** Semester */
+            semester?: string | null;
+            /** Source Row Key */
+            source_row_key: string;
+            /** Start Date */
+            start_date: string;
+            /** Title */
+            title: string;
+            /** Visibility */
+            visibility?: string | null;
+            /** Week No */
+            week_no?: number | null;
+        };
+        /**
+         * EventImportRowOut
+         * @description import-preview 的單列輸出（normalized + 驗證結果）。
+         */
+        EventImportRowOut: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Ack Deadline */
+            ack_deadline?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: string[];
+            /** Event Type */
+            event_type?: string | null;
+            /**
+             * Is Duplicate
+             * @default false
+             */
+            is_duplicate: boolean;
+            /** Location */
+            location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
+            /** Owner Employee Name */
+            owner_employee_name?: string | null;
+            /** Owner Employee No */
+            owner_employee_no?: string | null;
+            /**
+             * Requires Acknowledgment
+             * @default false
+             */
+            requires_acknowledgment: boolean;
+            /** Row Number */
+            row_number: number;
+            /** Semester */
+            semester?: string | null;
+            /** Source Row Key */
+            source_row_key?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
+            /** Week No */
+            week_no?: number | null;
+        };
+        /** EventImportSummaryOut */
+        EventImportSummaryOut: {
+            /** Duplicates */
+            duplicates: number;
+            /** Error Rows */
+            error_rows: number;
+            /** Importable */
+            importable: number;
+            /** Parent Candidates */
+            parent_candidates: number;
+            /** Total */
+            total: number;
+            /** Warning Rows */
+            warning_rows: number;
         };
         /**
          * EventMutationResultOut
@@ -23130,6 +27344,10 @@ export interface components {
          *     從 ``{message, id}`` 強縮減造成既有 e2e/log 噪音）。
          */
         EventMutationResultOut: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Category */
+            category: string;
             /** Created At */
             created_at?: string | null;
             /** Description */
@@ -23152,24 +27370,44 @@ export interface components {
             location?: string | null;
             /** Message */
             message: string;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
+            /** Owner Employee Name */
+            owner_employee_name?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
+            /** Semester */
+            semester?: string | null;
+            /** Source */
+            source: string;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title: string;
             /** Updated At */
             updated_at?: string | null;
+            /** Visibility */
+            visibility: string;
+            /** Week No */
+            week_no?: number | null;
         };
         /**
          * EventOut
          * @description 單筆行事曆事件（對應 router 端 ``_event_to_dict``）。
          *
          *     日期欄位皆為 router 已 ``.isoformat()`` 後的 str；recurrence_rule 為 JSON dict。
+         *
+         *     calimp01（分校行事曆整合）新增欄位皆**僅管理端**回傳（本 schema 只掛在
+         *     ``require_staff_permission(CALENDAR)`` 的端點）；家長端 serializer 在
+         *     ``api/parent_portal/*`` 自組 dict，不含 owner/source 等內部欄位。
          */
         EventOut: {
+            /** Academic Year */
+            academic_year?: number | null;
+            /** Category */
+            category: string;
             /** Created At */
             created_at?: string | null;
             /** Description */
@@ -23190,21 +27428,37 @@ export interface components {
             is_all_day: boolean;
             /** Location */
             location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
+            /** Owner Employee Name */
+            owner_employee_name?: string | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
+            /** Semester */
+            semester?: string | null;
+            /** Source */
+            source: string;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title: string;
             /** Updated At */
             updated_at?: string | null;
+            /** Visibility */
+            visibility: string;
+            /** Week No */
+            week_no?: number | null;
         };
         /** EventUpdate */
         EventUpdate: {
+            /** Academic Year */
+            academic_year?: number | null;
             /** Ack Deadline */
             ack_deadline?: string | null;
+            /** Category */
+            category?: string | null;
             /** Description */
             description?: string | null;
             /** End Date */
@@ -23219,16 +27473,41 @@ export interface components {
             is_all_day?: boolean | null;
             /** Location */
             location?: string | null;
+            /** Owner Employee Id */
+            owner_employee_id?: number | null;
             /** Recurrence Rule */
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
             /** Requires Acknowledgment */
             requires_acknowledgment?: boolean | null;
+            /** Semester */
+            semester?: string | null;
             /** Start Time */
             start_time?: string | null;
             /** Title */
             title?: string | null;
+            /** Visibility */
+            visibility?: string | null;
+            /** Week No */
+            week_no?: number | null;
+        };
+        /**
+         * ExcelUploadResultOut
+         * @description Excel 匯入結果。summary 列在新格式（員工統計，中文鍵）與 legacy
+         *     （parser DataFrame records）形狀不同，維持鬆散 dict。
+         */
+        ExcelUploadResultOut: {
+            /** Anomalies */
+            anomalies: unknown[];
+            /** Anomaly Count */
+            anomaly_count: number;
+            /** Message */
+            message: string;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            }[];
         };
         /** ExceptionItemOut */
         ExceptionItemOut: {
@@ -23464,6 +27743,59 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /** FeeReceiptListOut */
+        FeeReceiptListOut: {
+            /** Items */
+            items: components["schemas"]["FeeReceiptOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** FeeReceiptOut */
+        FeeReceiptOut: {
+            /**
+             * Allocated Total
+             * @default 0
+             */
+            allocated_total: number;
+            /** Amount */
+            amount: number;
+            /** Bank Transaction Id */
+            bank_transaction_id?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Handover Batch Id */
+            handover_batch_id?: number | null;
+            /** Id */
+            id: number;
+            /** Payment Method */
+            payment_method: string;
+            /**
+             * Received Date
+             * Format: date
+             */
+            received_date: string;
+            /** Status */
+            status: string;
+        };
+        /** FeeRecordAllocationPartIn */
+        FeeRecordAllocationPartIn: {
+            /** Amount */
+            amount: number;
+            /** Fee Record Id */
+            fee_record_id: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            part_type: "fee_record";
+        };
         /**
          * FeeRecordListOut
          * @description GET /fees/records 回傳（分頁）。
@@ -23510,10 +27842,76 @@ export interface components {
             /** Student Name */
             student_name?: string | null;
         };
+        /**
+         * FeeRefundEntryOut
+         * @description 單筆退費明細（對應 StudentFeeRefund）。
+         */
+        FeeRefundEntryOut: {
+            /** Amount */
+            amount: number;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Reason */
+            reason: string;
+            /** Refunded At */
+            refunded_at?: string | null;
+            /** Refunded By */
+            refunded_by?: string | null;
+        };
+        /**
+         * FeeRefundListOut
+         * @description GET /fees/refunds 回傳（分頁）。
+         */
+        FeeRefundListOut: {
+            /** Items */
+            items: components["schemas"]["FeeRefundRecordOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * FeeRefundRecordOut
+         * @description 一筆「有退費」的學費紀錄列（record 彙總 + 明細）。
+         */
+        FeeRefundRecordOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Fee Type */
+            fee_type?: string | null;
+            /** Latest Refund At */
+            latest_refund_at?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Record Id */
+            record_id: number;
+            /** Refund Count */
+            refund_count: number;
+            /** Refunds */
+            refunds: components["schemas"]["FeeRefundEntryOut"][];
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+            /** Total Refunded */
+            total_refunded: number;
+        };
         /** FeeTemplateCreate */
         FeeTemplateCreate: {
             /** Amount */
             amount: number;
+            /** Billing Start Date */
+            billing_start_date?: string | null;
             /** Breakdown */
             breakdown?: {
                 [key: string]: unknown;
@@ -23532,8 +27930,14 @@ export interface components {
              * @default true
              */
             is_active: boolean;
+            /** Monthly Billing Day */
+            monthly_billing_day?: number | null;
+            /** Monthly Due Day */
+            monthly_due_day?: number | null;
             /** Name */
             name: string;
+            /** Overdue Date */
+            overdue_date?: string | null;
             /** School Year */
             school_year: number;
             /** Semester */
@@ -23543,6 +27947,8 @@ export interface components {
         FeeTemplateUpdate: {
             /** Amount */
             amount?: number | null;
+            /** Billing Start Date */
+            billing_start_date?: string | null;
             /** Breakdown */
             breakdown?: {
                 [key: string]: unknown;
@@ -23551,8 +27957,14 @@ export interface components {
             due_date_offset_days?: number | null;
             /** Is Active */
             is_active?: boolean | null;
+            /** Monthly Billing Day */
+            monthly_billing_day?: number | null;
+            /** Monthly Due Day */
+            monthly_due_day?: number | null;
             /** Name */
             name?: string | null;
+            /** Overdue Date */
+            overdue_date?: string | null;
         };
         /** FinalizeMonthRequest */
         FinalizeMonthRequest: {
@@ -23610,6 +28022,81 @@ export interface components {
             unused_annual_leave_hours: number;
             /** Year */
             year: number;
+        };
+        /** FinanceApproveRequest */
+        FinanceApproveRequest: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "approve" | "reject";
+            /** Reason */
+            reason?: string | null;
+        };
+        /** FinanceEventListOut */
+        FinanceEventListOut: {
+            /** Items */
+            items: components["schemas"]["FinanceEventOut"][];
+        };
+        /**
+         * FinanceEventOut
+         * @description 單筆 append-only 事件（時間軸）。
+         */
+        FinanceEventOut: {
+            /** Action */
+            action: string;
+            /** Actor Employee Id */
+            actor_employee_id?: number | null;
+            /** Actor Name */
+            actor_name?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** From Status */
+            from_status?: string | null;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** To Status */
+            to_status?: string | null;
+        };
+        /** FinanceReconcileRequest */
+        FinanceReconcileRequest: {
+            /** Note */
+            note?: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "reconciled" | "exception";
+        };
+        /** FinanceSettleRequest */
+        FinanceSettleRequest: {
+            /**
+             * Actual Date
+             * Format: date
+             */
+            actual_date: string;
+            /** Payment Method */
+            payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+            /** Transaction Ref */
+            transaction_ref?: string | null;
+        };
+        /**
+         * FinanceTransitionOut
+         * @description 轉換端點統一回傳：三狀態軸 snapshot 供前端就地更新。
+         */
+        FinanceTransitionOut: {
+            /** Approval Status */
+            approval_status: string;
+            /** Id */
+            id: number;
+            /** Message */
+            message: string;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Settlement Status */
+            settlement_status: string;
         };
         /** FunnelBoardOut */
         FunnelBoardOut: {
@@ -23759,6 +28246,11 @@ export interface components {
         /** GlobalSearchResult */
         GlobalSearchResult: {
             /**
+             * Activity Catalog
+             * @default []
+             */
+            activity_catalog: components["schemas"]["SearchActivityCatalogItem"][];
+            /**
              * Activity Registrations
              * @default []
              */
@@ -23788,6 +28280,16 @@ export interface components {
              * @default []
              */
             guardians: components["schemas"]["SearchGuardianItem"][];
+            /**
+             * Leaves
+             * @default []
+             */
+            leaves: components["schemas"]["SearchLeaveItem"][];
+            /**
+             * Overtimes
+             * @default []
+             */
+            overtimes: components["schemas"]["SearchOvertimeItem"][];
             /** Q */
             q: string;
             /**
@@ -23800,6 +28302,18 @@ export interface components {
              * @default []
              */
             students: components["schemas"]["SearchStudentItem"][];
+            /**
+             * Surveys
+             * @default []
+             */
+            surveys: components["schemas"]["SearchSurveyItem"][];
+        };
+        /** GovDataOut */
+        GovDataOut: {
+            brackets: components["schemas"]["BracketsOut"];
+            builtin_consistency: components["schemas"]["BracketDiffOut"];
+            rates?: components["schemas"]["RateOut"] | null;
+            runtime: components["schemas"]["RuntimeOut"];
         };
         /**
          * Grade
@@ -24016,6 +28530,131 @@ export interface components {
             /** Work Sample Ids */
             work_sample_ids?: number[];
         };
+        /** GrowthHourCreate */
+        GrowthHourCreate: {
+            /** Activity Date */
+            activity_date: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Hours */
+            hours: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Title */
+            title: string;
+        };
+        /** GrowthHourListOut */
+        GrowthHourListOut: {
+            /** Items */
+            items: components["schemas"]["GrowthHourOut"][];
+        };
+        /** GrowthHourOut */
+        GrowthHourOut: {
+            /** Activity Date */
+            activity_date: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By */
+            created_by?: number | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name?: string | null;
+            /** Hours */
+            hours: number;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** GrowthHourUpdate */
+        GrowthHourUpdate: {
+            /** Activity Date */
+            activity_date?: string | null;
+            /** Hours */
+            hours?: number | null;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * GrowthPreviewGateOut
+         * @description 單一資格條件：`status` 為前端渲染三態（✓pass／✗fail／⚠no_data）的依據，
+         *     `detail` 為對應中文說明文字，前端可直接顯示不需自行組字串。
+         */
+        GrowthPreviewGateOut: {
+            /** Code */
+            code: string;
+            /** Detail */
+            detail: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * GrowthPreviewOut
+         * @description 學年結算預覽（`services.growth_contract.preview.build_growth_contract_preview`
+         *     的 passthrough）。`pending_rule` 放最外層——整份預覽只有一份標記，不逐列
+         *     重複；`rows` 為空陣列代表「該學年查無在職／該學年內離職的員工」，非錯誤
+         *     （見計畫 Task 7 回報 (b)：錯誤情境走 422/500，不會回這個 200 形狀）。
+         */
+        GrowthPreviewOut: {
+            /** Paid Period */
+            paid_period: string;
+            /** Pending Rule */
+            pending_rule: string;
+            /** Rows */
+            rows: components["schemas"]["GrowthPreviewRowOut"][];
+            /** School Year */
+            school_year: number;
+        };
+        /** GrowthPreviewRowOut */
+        GrowthPreviewRowOut: {
+            /** Actual Hours */
+            actual_hours: number;
+            /** Amount */
+            amount: number;
+            /** Amount If Eligible */
+            amount_if_eligible: number;
+            /** Eligible */
+            eligible: boolean;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Gates */
+            gates: components["schemas"]["GrowthPreviewGateOut"][];
+            /** Hours Ratio */
+            hours_ratio: number;
+            /** Monthly Rate */
+            monthly_rate: number;
+            /** Position Key */
+            position_key: string;
+            /** Position Unknown */
+            position_unknown: boolean;
+            /** Required Hours */
+            required_hours: number;
+            /** Signed On */
+            signed_on?: string | null;
+            /** Tenure Months */
+            tenure_months: number;
+        };
         /**
          * GrowthReportListOut
          * @description GET /students/{id}/growth-reports 回傳。
@@ -24071,6 +28710,49 @@ export interface components {
             line_sent_at?: string | null;
             /** Sent Count */
             sent_count: number;
+        };
+        /**
+         * GrowthSettleCreatedOut
+         * @description 結算回應中單一員工的實發明細。
+         */
+        GrowthSettleCreatedOut: {
+            /** Amount */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+        };
+        /** GrowthSettleRequest */
+        GrowthSettleRequest: {
+            /** School Year */
+            school_year: number;
+        };
+        /**
+         * GrowthSettleResultOut
+         * @description 自主成長契約獎勵金學年結算結果。
+         */
+        GrowthSettleResultOut: {
+            /** Created */
+            created: components["schemas"]["GrowthSettleCreatedOut"][];
+            /** Paid Period */
+            paid_period: string;
+            /** School Year */
+            school_year: number;
+            /** Skipped Already Paid */
+            skipped_already_paid: components["schemas"]["GrowthSettleSkippedOut"][];
+            /** Total Amount */
+            total_amount: number;
+        };
+        /**
+         * GrowthSettleSkippedOut
+         * @description 該學年已入帳、本次結算跳過的員工（per-employee 冪等）。
+         */
+        GrowthSettleSkippedOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
         };
         /** GuardianCreate */
         GuardianCreate: {
@@ -24161,6 +28843,57 @@ export interface components {
             relation?: string | null;
             /** Sort Order */
             sort_order?: number | null;
+        };
+        /** HandoverBatchOut */
+        HandoverBatchOut: {
+            /** Accountant User Id */
+            accountant_user_id?: number | null;
+            /**
+             * Business Date
+             * Format: date
+             */
+            business_date: string;
+            /** Cash Receipt Total */
+            cash_receipt_total: number;
+            /** Expected Cash Amount */
+            expected_cash_amount?: number | null;
+            /** Id */
+            id: number;
+            /** Owner Actual Amount */
+            owner_actual_amount?: number | null;
+            /** Owner Confirmed At */
+            owner_confirmed_at?: string | null;
+            /** Owner Confirmed By */
+            owner_confirmed_by?: number | null;
+            /** Reopen Reason */
+            reopen_reason?: string | null;
+            /** Status */
+            status: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Variance */
+            variance?: number | null;
+            /** Variance Reason */
+            variance_reason?: string | null;
+        };
+        /** HandoverConfirmRequest */
+        HandoverConfirmRequest: {
+            /** Owner Actual Amount */
+            owner_actual_amount: number;
+            /** Variance Reason */
+            variance_reason?: string | null;
+        };
+        /** HandoverListOut */
+        HandoverListOut: {
+            /** Items */
+            items: components["schemas"]["HandoverBatchOut"][];
+            /** Total */
+            total: number;
+        };
+        /** HandoverReopenRequest */
+        HandoverReopenRequest: {
+            /** Reason */
+            reason: string;
         };
         /** HighRiskListResponse */
         HighRiskListResponse: {
@@ -24306,6 +29039,11 @@ export interface components {
             /** Note */
             note: string;
         };
+        /** IgnoreRequest */
+        IgnoreRequest: {
+            /** Reason */
+            reason: string;
+        };
         /** ImpersonateRequest */
         ImpersonateRequest: {
             /** Employee Id */
@@ -24360,6 +29098,11 @@ export interface components {
             participants_updated: number;
             /** Score Items Upserted */
             score_items_upserted: number;
+            /**
+             * Skipped Finalized Names
+             * @default []
+             */
+            skipped_finalized_names: string[];
             /** Skipped Unresolved Names */
             skipped_unresolved_names: string[];
             /** Summaries Upserted */
@@ -25844,6 +30587,21 @@ export interface components {
             /** Uploaded By Id */
             uploaded_by_id?: number | null;
         };
+        /**
+         * MiscReceiptBatchSignRequest
+         * @description 批次簽收：一次簽名套用到勾選的多筆待簽收收款（月結高頻手動痛點）。
+         */
+        MiscReceiptBatchSignRequest: {
+            /** Ids */
+            ids: number[];
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
+        };
         /** MiscReceiptCreate */
         MiscReceiptCreate: {
             /** Amount */
@@ -25852,6 +30610,8 @@ export interface components {
             category: string;
             /** Description */
             description?: string | null;
+            /** Expected Receipt Date */
+            expected_receipt_date?: string | null;
             /** Notes */
             notes?: string | null;
             /** Payer Name */
@@ -25861,11 +30621,6 @@ export interface components {
              * @enum {string}
              */
             payment_method: "cash" | "bank_transfer" | "check" | "linepay" | "other";
-            /**
-             * Receipt Date
-             * Format: date
-             */
-            receipt_date: string;
             /** Receipt Number */
             receipt_number?: string | null;
         };
@@ -25890,6 +30645,14 @@ export interface components {
         MiscReceiptOut: {
             /** Amount */
             amount?: number | null;
+            /** Approval Status */
+            approval_status: string;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By Id */
+            approved_by_id?: number | null;
+            /** Approved By Name */
+            approved_by_name?: string | null;
             /** Attachments */
             attachments: components["schemas"]["MiscReceiptAttachmentMetaOut"][];
             /** Category */
@@ -25902,6 +30665,8 @@ export interface components {
             created_by_name?: string | null;
             /** Description */
             description?: string | null;
+            /** Expected Receipt Date */
+            expected_receipt_date?: string | null;
             /** Has Signature */
             has_signature: boolean;
             /** Id */
@@ -25916,6 +30681,32 @@ export interface components {
             receipt_date?: string | null;
             /** Receipt Number */
             receipt_number?: string | null;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Reconciled By Id */
+            reconciled_by_id?: number | null;
+            /** Reconciled By Name */
+            reconciled_by_name?: string | null;
+            /** Reconciliation Note */
+            reconciliation_note?: string | null;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected By Id */
+            rejected_by_id?: number | null;
+            /** Rejected By Name */
+            rejected_by_name?: string | null;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By Id */
+            settled_by_id?: number | null;
+            /** Settled By Name */
+            settled_by_name?: string | null;
+            /** Settlement Status */
+            settlement_status: string;
             /** Signature Kind */
             signature_kind?: string | null;
             /** Signed At */
@@ -25926,6 +30717,14 @@ export interface components {
             signer_name?: string | null;
             /** Status */
             status: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Submitted By Id */
+            submitted_by_id?: number | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
+            /** Transaction Ref */
+            transaction_ref?: string | null;
             /** Updated At */
             updated_at?: string | null;
         };
@@ -25941,11 +30740,35 @@ export interface components {
         };
         /**
          * MiscReceiptSummaryOut
-         * @description GET /misc-receipts/summary 區間彙總（KPI 卡，跨狀態，含 pending）。
+         * @description GET /misc-receipts/summary 區間彙總（KPI 卡＋內控流程分桶，跨狀態）。
+         *
+         *     口徑註記同 VendorPaymentSummaryOut：`awaiting_evidence`＝憑證軸 pending
+         *     的已收款單（待補憑證），與對帳守衛 EVIDENCE_REQUIRED 的三取一最低門檻
+         *     刻意不同；桶與桶非互斥。
          */
         MiscReceiptSummaryOut: {
+            /** Approved Unsettled Amount */
+            approved_unsettled_amount: number;
+            /** Approved Unsettled Count */
+            approved_unsettled_count: number;
+            /** Awaiting Evidence Amount */
+            awaiting_evidence_amount: number;
+            /** Awaiting Evidence Count */
+            awaiting_evidence_count: number;
+            /** Awaiting Reconcile Amount */
+            awaiting_reconcile_amount: number;
+            /** Awaiting Reconcile Count */
+            awaiting_reconcile_count: number;
+            /** Exception Amount */
+            exception_amount: number;
+            /** Exception Count */
+            exception_count: number;
             /** Pending Amount */
             pending_amount: number;
+            /** Pending Approval Amount */
+            pending_approval_amount: number;
+            /** Pending Approval Count */
+            pending_approval_count: number;
             /** Pending Count */
             pending_count: number;
             /** Signed Amount */
@@ -25965,14 +30788,14 @@ export interface components {
             category?: string | null;
             /** Description */
             description?: string | null;
+            /** Expected Receipt Date */
+            expected_receipt_date?: string | null;
             /** Notes */
             notes?: string | null;
             /** Payer Name */
             payer_name?: string | null;
             /** Payment Method */
             payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
-            /** Receipt Date */
-            receipt_date?: string | null;
             /** Receipt Number */
             receipt_number?: string | null;
         };
@@ -26025,6 +30848,92 @@ export interface components {
             notes?: string | null;
             /** Year */
             year: number;
+        };
+        /**
+         * MonthlyStatementItemOut
+         * @description 月繳總表內單筆費用項目（隸屬某位學生）。
+         */
+        MonthlyStatementItemOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid?: number | null;
+            /** Billing Start Date */
+            billing_start_date?: string | null;
+            /** Due Date */
+            due_date?: string | null;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Fee Type */
+            fee_type?: string | null;
+            /** Id */
+            id: number;
+            /** Payment Date */
+            payment_date?: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Period */
+            period?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Target Month */
+            target_month?: string | null;
+        };
+        /**
+         * MonthlyStatementOut
+         * @description GET /fees/monthly-statement 回傳。students 依班名、學生名排序。
+         */
+        MonthlyStatementOut: {
+            /** Month */
+            month: string;
+            /** Students */
+            students: components["schemas"]["MonthlyStatementStudentOut"][];
+            summary: components["schemas"]["MonthlyStatementSummaryOut"];
+        };
+        /**
+         * MonthlyStatementStudentOut
+         * @description 月繳總表 per-student 聚合列。
+         *
+         *     status 為聚合推導值：total_paid<=0 且尚有應繳 → unpaid；
+         *     total_paid>=total_due → paid；其餘 → partial。
+         */
+        MonthlyStatementStudentOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Items */
+            items: components["schemas"]["MonthlyStatementItemOut"][];
+            /** Outstanding */
+            outstanding: number;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+            /** Total Due */
+            total_due: number;
+            /** Total Paid */
+            total_paid: number;
+        };
+        /**
+         * MonthlyStatementSummaryOut
+         * @description 月繳總表統計：金額三項 + 學生數四項（以聚合狀態計人）。
+         */
+        MonthlyStatementSummaryOut: {
+            /** Outstanding */
+            outstanding: number;
+            /** Paid Count */
+            paid_count: number;
+            /** Partial Count */
+            partial_count: number;
+            /** Student Count */
+            student_count: number;
+            /** Total Due */
+            total_due: number;
+            /** Total Paid */
+            total_paid: number;
+            /** Unpaid Count */
+            unpaid_count: number;
         };
         /**
          * MonthOptionOut
@@ -26425,6 +31334,18 @@ export interface components {
             /** Submitted */
             submitted: boolean;
         };
+        /** NonTuitionAllocationPartIn */
+        NonTuitionAllocationPartIn: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            part_type: "non_tuition";
+            /** Reason */
+            reason: string;
+        };
         /** ObservationCreate */
         ObservationCreate: {
             /** Domain */
@@ -26708,6 +31629,101 @@ export interface components {
             semester_first: boolean;
             /** Year End Cycle Id */
             year_end_cycle_id: number;
+        };
+        /** OutstandingBatchOut */
+        OutstandingBatchOut: {
+            /** Batch No */
+            batch_no?: string | null;
+            /** Bill Month */
+            bill_month: number;
+            /** Bill Year */
+            bill_year: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /**
+             * Likely Missing Sibling Batch
+             * @default false
+             */
+            likely_missing_sibling_batch: boolean;
+            /** Net Total */
+            net_total: number;
+            /** Row Count */
+            row_count: number;
+            /**
+             * Sibling Batch Count
+             * @default 0
+             */
+            sibling_batch_count: number;
+            /** Source */
+            source: string;
+            /** Title */
+            title: string;
+            /** Zero Amount Count */
+            zero_amount_count: number;
+        };
+        /** OutstandingItemOut */
+        OutstandingItemOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Collection Suffix */
+            collection_suffix: string;
+            /** Excess */
+            excess: number;
+            /** Expected Total */
+            expected_total: number;
+            /** Full Collection Number */
+            full_collection_number: string;
+            /** Grade Name */
+            grade_name?: string | null;
+            /** Item Id */
+            item_id: number;
+            /** Net Amount */
+            net_amount: number;
+            /** Paid Amount */
+            paid_amount: number;
+            /** Shortfall */
+            shortfall: number;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name: string;
+        };
+        /** OutstandingReportOut */
+        OutstandingReportOut: {
+            batch: components["schemas"]["OutstandingBatchOut"];
+            /** Items */
+            items: components["schemas"]["OutstandingItemOut"][];
+            totals: components["schemas"]["OutstandingTotalsOut"];
+        };
+        /** OutstandingTotalsOut */
+        OutstandingTotalsOut: {
+            /** Excess */
+            excess: number;
+            /** Expected */
+            expected: number;
+            /** Outstanding */
+            outstanding: number;
+            /** Overpaid Count */
+            overpaid_count: number;
+            /** Paid */
+            paid: number;
+            /** Paid Count */
+            paid_count: number;
+            /** Partial Count */
+            partial_count: number;
+            /** Row Count */
+            row_count: number;
+            /** Settled Count */
+            settled_count: number;
+            /** Unpaid Count */
+            unpaid_count: number;
         };
         /**
          * OvertimeApproveRequest
@@ -27182,6 +32198,52 @@ export interface components {
             items: components["schemas"]["ParentCourseItemOut"][];
             /** Total */
             total: number;
+        };
+        /** ParentDismissalCallListOut */
+        ParentDismissalCallListOut: {
+            /** Items */
+            items: components["schemas"]["ParentDismissalCallOut"][];
+            /** Total */
+            total: number;
+        };
+        /** ParentDismissalCallOut */
+        ParentDismissalCallOut: {
+            /** Acknowledged At */
+            acknowledged_at?: string | null;
+            /** Arrived At */
+            arrived_at?: string | null;
+            /** Cancelled At */
+            cancelled_at?: string | null;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Expected Arrival At
+             * Format: date-time
+             */
+            expected_arrival_at: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** Request Source */
+            request_source: string;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested By Name */
+            requested_by_name: string;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /**
          * ParentMedicationLogOut
@@ -28141,13 +33203,45 @@ export interface components {
             /** Items */
             items: components["schemas"]["PhotoTagsItem"][];
         };
+        /** PhotoTagsResultOut */
+        PhotoTagsResultOut: {
+            /** Updated */
+            updated: number;
+        };
+        /**
+         * PhotoUploadItemOut
+         * @description 一次上傳一張的結果。成功帶 photo、失敗帶 error，**兩者互斥且不共存**。
+         *
+         *     端點掛 `response_model_exclude_unset=True` 來保住這個 union 形狀：沒有它，
+         *     成功項目會多冒出 `"error": null`、失敗項目多冒出 `"photo": null`，等於在補型別
+         *     的同時偷改了 wire format。
+         */
+        PhotoUploadItemOut: {
+            /** Error */
+            error?: string | null;
+            /** Filename */
+            filename: string;
+            /** Ok */
+            ok: boolean;
+            photo?: components["schemas"]["UploadedPhotoOut"] | null;
+        };
+        /** PhotoUploadResponseOut */
+        PhotoUploadResponseOut: {
+            /** Items */
+            items: components["schemas"]["PhotoUploadItemOut"][];
+        };
         /**
          * PickupAuthorizationCreatedOut
          * @description POST /pickup-authorizations 回傳 — 明碼取件碼僅此一次。
+         *
+         *     `dismissal_call_skipped_student_ids`：本次批次中，因該學生今天已有進行中
+         *     接送通知而跳過建立 dismissal_call 的學生 id（授權本身仍正常建立）。
          */
         PickupAuthorizationCreatedOut: {
             /** Code */
             code: string;
+            /** Dismissal Call Skipped Student Ids */
+            dismissal_call_skipped_student_ids?: number[];
             /** Items */
             items: components["schemas"]["PickupAuthorizationOut"][];
         };
@@ -28191,6 +33285,8 @@ export interface components {
             person_relation: string;
             /** Photo Url */
             photo_url?: string | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /**
              * Pickup Date
              * Format: date
@@ -28983,6 +34079,59 @@ export interface components {
             /** Weekday */
             weekday: string;
         };
+        /** PortalAttendanceDayOut */
+        PortalAttendanceDayOut: {
+            /** Date */
+            date: string;
+            /** Day */
+            day: number;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Is Early Leave */
+            is_early_leave: boolean;
+            /** Is Holiday */
+            is_holiday: boolean;
+            /** Is Late */
+            is_late: boolean;
+            /** Is Makeup Workday */
+            is_makeup_workday: boolean;
+            /** Is Missing Punch In */
+            is_missing_punch_in: boolean;
+            /** Is Missing Punch Out */
+            is_missing_punch_out: boolean;
+            /** Is Weekend */
+            is_weekend: boolean;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Leave Requests */
+            leave_requests: components["schemas"]["PortalLeaveRequestOut"][];
+            /** Leave Type */
+            leave_type?: string | null;
+            /** Leave Type Label */
+            leave_type_label?: string | null;
+            /** Overtime Requests */
+            overtime_requests: components["schemas"]["PortalOvertimeRequestOut"][];
+            /** Punch In */
+            punch_in?: string | null;
+            /** Punch Out */
+            punch_out?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Scheduled End */
+            scheduled_end?: string | null;
+            /** Scheduled Start */
+            scheduled_start?: string | null;
+            /** Shift Name */
+            shift_name?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Weekday */
+            weekday: string;
+            /** Work Hours */
+            work_hours?: number | null;
+            /** Workday Override Name */
+            workday_override_name?: string | null;
+        };
         /** PortalAttendanceRecordItem */
         PortalAttendanceRecordItem: {
             /** Is Present */
@@ -28994,6 +34143,35 @@ export interface components {
             notes: string | null;
             /** Registration Id */
             registration_id: number;
+        };
+        /** PortalAttendanceSheetOut */
+        PortalAttendanceSheetOut: {
+            /** Days */
+            days: components["schemas"]["PortalAttendanceDayOut"][];
+            /** Employee Name */
+            employee_name: string;
+            /** Month */
+            month: number;
+            summary: components["schemas"]["PortalAttendanceSummaryOut"];
+            /** Uses Shift */
+            uses_shift: boolean;
+            /** Year */
+            year: number;
+        };
+        /** PortalAttendanceSummaryOut */
+        PortalAttendanceSummaryOut: {
+            /** Avg Work Hours */
+            avg_work_hours: number;
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Late Count */
+            late_count: number;
+            /** Leave Count */
+            leave_count: number;
+            /** Missing Punch Count */
+            missing_punch_count: number;
+            /** Total Work Days */
+            total_work_days: number;
         };
         /** PortalBatchAttendanceResultOut */
         PortalBatchAttendanceResultOut: {
@@ -29008,6 +34186,106 @@ export interface components {
         PortalBatchAttendanceUpdate: {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
+        };
+        /**
+         * PortalCalendarEventOut
+         * @description 行事曆 feed 單一事件（手動事件與官方假日/補班共用形狀）。
+         */
+        PortalCalendarEventOut: {
+            /** Description */
+            description?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** End Time */
+            end_time?: string | null;
+            /** Event Date */
+            event_date: string;
+            /** Event Type */
+            event_type: string;
+            /** Event Type Label */
+            event_type_label: string;
+            /** Id */
+            id: number | string;
+            /** Is All Day */
+            is_all_day: boolean;
+            /** Is Official */
+            is_official: boolean;
+            /** Is Read Only */
+            is_read_only: boolean;
+            /** Location */
+            location?: string | null;
+            /** Official Kind */
+            official_kind?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** Title */
+            title: string;
+        };
+        /**
+         * PortalCalendarOfficialSyncOut
+         * @description 官方行事曆同步狀態（services/official_calendar.get_cached_official_sync_status）。
+         */
+        PortalCalendarOfficialSyncOut: {
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "synced" | "cached" | "warning";
+            /** Used Cache */
+            used_cache: boolean;
+            /** Warning */
+            warning?: string | null;
+        };
+        /**
+         * PortalCalendarOut
+         * @description GET /portal/calendar — 教師檢視學校行事曆。
+         */
+        PortalCalendarOut: {
+            /** Events */
+            events: components["schemas"]["PortalCalendarEventOut"][];
+            /** Month */
+            month: number;
+            official_sync: components["schemas"]["PortalCalendarOfficialSyncOut"];
+            /** Year */
+            year: number;
+        };
+        /**
+         * PortalClassAttendanceMonthlyOut
+         * @description GET /portal/my-class-attendance/monthly — 班級整月出席統計。
+         *
+         *     status_totals key 為 VALID_STATUSES 中文狀態名（出席/缺席/病假/事假/遲到）。
+         */
+        PortalClassAttendanceMonthlyOut: {
+            /** Alerts */
+            alerts: components["schemas"]["PortalMonthlyAlertOut"][];
+            /** Calendar Days */
+            calendar_days: components["schemas"]["PortalMonthlyCalendarDayOut"][];
+            /** Classroom Attendance Rate */
+            classroom_attendance_rate: number;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Classroom Name */
+            classroom_name: string;
+            /** Classroom Record Completion Rate */
+            classroom_record_completion_rate: number;
+            /** Days In Month */
+            days_in_month: number;
+            /** Holiday Count */
+            holiday_count: number;
+            /** Month */
+            month: number;
+            /** School Days Count */
+            school_days_count: number;
+            /** Status Totals */
+            status_totals: {
+                [key: string]: number;
+            };
+            /** Students */
+            students: components["schemas"]["PortalMonthlyStudentRowOut"][];
+            /** Year */
+            year: number;
         };
         /** PortalClassStatusOut */
         PortalClassStatusOut: {
@@ -29065,6 +34343,109 @@ export interface components {
         PortalCompLeaveGrantsOut: {
             /** Grants */
             grants: components["schemas"]["PortalCompLeaveGrantItemOut"][];
+        };
+        /** PortalLeaveRequestOut */
+        PortalLeaveRequestOut: {
+            /** Leave Hours */
+            leave_hours?: number | null;
+            /** Leave Type */
+            leave_type: string;
+            /** Leave Type Label */
+            leave_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
+        };
+        /**
+         * PortalMonthlyAlertOut
+         * @description 連續缺席告警條目（longest_absence_streak >= ALERT_STREAK_THRESHOLD）。
+         */
+        PortalMonthlyAlertOut: {
+            /** Current Absence Streak */
+            current_absence_streak: number;
+            /** Longest Absence Streak */
+            longest_absence_streak: number;
+            /** Name */
+            name: string;
+            /** Student Id */
+            student_id: number;
+            /** Student No */
+            student_no: string;
+        };
+        /** PortalMonthlyCalendarDayOut */
+        PortalMonthlyCalendarDayOut: {
+            /** Date */
+            date: string;
+            /** Day */
+            day: number;
+            /** Holiday Name */
+            holiday_name?: string | null;
+            /** Is Holiday */
+            is_holiday: boolean;
+            /** Is School Day */
+            is_school_day: boolean;
+            /** Is Weekend */
+            is_weekend: boolean;
+            /** Weekday */
+            weekday: string;
+        };
+        /**
+         * PortalMonthlyDailyRecordOut
+         * @description 學生單日出席紀錄（status 為 VALID_STATUSES 中文值或 None＝未點名）。
+         *
+         *     status 維持 str 不用 Literal：欄位為 String(10) 無 DB CHECK，防歷史資料
+         *     含白名單外值時 response 驗證直接 500。
+         */
+        PortalMonthlyDailyRecordOut: {
+            /** Date */
+            date: string;
+            /** Is School Day */
+            is_school_day: boolean;
+            /** Remark */
+            remark?: string | null;
+            /** Status */
+            status?: string | null;
+        };
+        /**
+         * PortalMonthlyStudentRowOut
+         * @description monthly report 單一學生統計列（含中文狀態計數欄位）。
+         */
+        PortalMonthlyStudentRowOut: {
+            /** Absence Alert */
+            absence_alert: boolean;
+            /** Attendance Rate */
+            attendance_rate: number;
+            /** Current Absence Streak */
+            current_absence_streak: number;
+            /** Daily Records */
+            daily_records: components["schemas"]["PortalMonthlyDailyRecordOut"][];
+            /** Longest Absence Streak */
+            longest_absence_streak: number;
+            /** Name */
+            name: string;
+            /** Record Completion Rate */
+            record_completion_rate: number;
+            /** Recorded Days */
+            recorded_days: number;
+            /** School Days */
+            school_days: number;
+            /** Student Id */
+            student_id: number;
+            /** Student No */
+            student_no: string;
+            /** 事假 */
+            "\u4E8B\u5047": number;
+            /** 出席 */
+            "\u51FA\u5E2D": number;
+            /** 未點名 */
+            "\u672A\u9EDE\u540D": number;
+            /** 病假 */
+            "\u75C5\u5047": number;
+            /** 缺席 */
+            "\u7F3A\u5E2D": number;
+            /** 遲到 */
+            "\u9072\u5230": number;
         };
         /**
          * PortalMyDataExportOut
@@ -29201,6 +34582,19 @@ export interface components {
             overtime_pay?: number | null;
             /** Use Comp Leave */
             use_comp_leave?: boolean | null;
+        };
+        /** PortalOvertimeRequestOut */
+        PortalOvertimeRequestOut: {
+            /** Hours */
+            hours?: number | null;
+            /** Overtime Type */
+            overtime_type: string;
+            /** Overtime Type Label */
+            overtime_type_label: string;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status: string;
         };
         /**
          * PortalParentMessageAttachmentOut
@@ -29402,7 +34796,9 @@ export interface components {
         };
         /**
          * PortalPickupAuthOut
-         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊，永不含取件碼。
+         * @description 教師 Portal / admin 核銷視角 — 額外含班級與家長資訊。
+         *
+         *     T-020 起繼承 `pickup_code`：僅 active 授權回傳明碼，供 POS 佇列卡目視比對。
          */
         PortalPickupAuthOut: {
             /** Batch Key */
@@ -29441,6 +34837,8 @@ export interface components {
             person_relation: string;
             /** Photo Url */
             photo_url?: string | null;
+            /** Pickup Code */
+            pickup_code?: string | null;
             /**
              * Pickup Date
              * Format: date
@@ -29496,6 +34894,11 @@ export interface components {
             emergency_contact_phone?: string | null;
             /** Employee Id */
             employee_id: string;
+            /**
+             * Has Punch Pin
+             * @default false
+             */
+            has_punch_pin: boolean;
             /** Hire Date */
             hire_date?: string | null;
             /** Job Title */
@@ -29553,6 +34956,104 @@ export interface components {
             total_registrations: number;
             /** Total Waitlist */
             total_waitlist: number;
+        };
+        /** PortalSalaryAttendanceStatsOut */
+        PortalSalaryAttendanceStatsOut: {
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Late Count */
+            late_count: number;
+            /** Leave Days */
+            leave_days: number;
+            /** Leave Hours */
+            leave_hours: number;
+            /** Missing Punch Count */
+            missing_punch_count: number;
+            /** Work Days */
+            work_days: number;
+        };
+        /**
+         * PortalSalaryBreakdownChildOut
+         * @description 明細列 informational 子列（如健保下的二代補充保費拆列）。
+         */
+        PortalSalaryBreakdownChildOut: {
+            /** Amount */
+            amount: number;
+            /** Informational */
+            informational: boolean;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * PortalSalaryBreakdownLineOut
+         * @description 薪條三區（收入/獨立轉帳/扣款）單一明細列。
+         *
+         *     note 僅 extra_allowance 帶名目時出現；children 僅健保列含補充保費時出現
+         *     （exclude_unset 下不會冒出 null）。
+         */
+        PortalSalaryBreakdownLineOut: {
+            /** Amount */
+            amount: number;
+            /** Children */
+            children?: components["schemas"]["PortalSalaryBreakdownChildOut"][] | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * PortalSalaryDetailOut
+         * @description 定案薪資單三區明細（api/salary_fields.build_history_breakdown 形狀）。
+         */
+        PortalSalaryDetailOut: {
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
+            /** Deduction Subtotal */
+            deduction_subtotal: number;
+            /** Deductions */
+            deductions: components["schemas"]["PortalSalaryBreakdownLineOut"][];
+            /** Income */
+            income: components["schemas"]["PortalSalaryBreakdownLineOut"][];
+            /** Income Subtotal */
+            income_subtotal: number;
+            /** Is Finalized */
+            is_finalized: boolean;
+            /** Needs Recalc */
+            needs_recalc: boolean;
+            /** Net Salary */
+            net_salary: number;
+            /** Separate Subtotal */
+            separate_subtotal: number;
+            /** Separate Transfer */
+            separate_transfer: components["schemas"]["PortalSalaryBreakdownLineOut"][];
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
+            /** Version */
+            version: number;
+        };
+        /**
+         * PortalSalaryPreviewOut
+         * @description GET /portal/salary-preview — 個人薪資預覽。
+         *
+         *     salary 僅在 salary_status == "finalized" 時有值；草稿/重算中一律 None
+         *     （與 LINE「我的薪資」對齊，避免向員工顯示未定案金額）。
+         */
+        PortalSalaryPreviewOut: {
+            attendance_stats: components["schemas"]["PortalSalaryAttendanceStatsOut"];
+            /** Month */
+            month: number;
+            salary?: components["schemas"]["PortalSalaryDetailOut"] | null;
+            /**
+             * Salary Status
+             * @enum {string}
+             */
+            salary_status: "none" | "draft" | "recalc_pending" | "finalized";
+            /** Year */
+            year: number;
         };
         /** PortalStudentLeaveListOut */
         PortalStudentLeaveListOut: {
@@ -29697,9 +35198,9 @@ export interface components {
             notes: string;
             /**
              * Payment Date
-             * Format: date
+             * @description 帳務日（YYYY-MM-DD）。**省略時由後端以台北時區當日決定**——櫃台機器的時鐘／時區偏差會把款項記到錯誤帳務日，該日一旦日結簽核就再也修不回來，故前端不再送此欄。有傳時仍走 validate_payment_date 驗證（補登路徑）。
              */
-            payment_date: string;
+            payment_date?: string | null;
             /**
              * Payment Method
              * @description 目前 POS 僅支援現金；payment_method 欄位保留供未來擴充
@@ -29957,12 +35458,33 @@ export interface components {
          *     by_method 為 list（依付款方式聚合，員工只可輸入「現金」）；
          *     cash_warning=True 時前端顯示「請存銀行」橘色提示
          *     （cash_in_drawer >= cash_warning_threshold）。
+         *
+         *     ⚠ payment_total / refund_total / net 是**所有付款方式**的總額（含
+         *     `payment_method='系統補齊'` 的帳務調整，那些沒有現金經手），保留原語義供
+         *     既有 caller 使用。**櫃台點鈔要對的是抽屜**，請用 cash_* 三欄
+         *     （2026-08-24 修正：收銀頁彙總條原本主顯示含非現金的總額，且那筆沖帳在
+         *     「今日交易」清單被濾掉查不到，櫃台會誤判短溢）。
          */
         PosDailySummaryOut: {
             /** By Method */
             by_method: components["schemas"]["PosDailySummaryByMethodItemOut"][];
             /** Cash In Drawer */
             cash_in_drawer: number;
+            /**
+             * Cash Net
+             * @default 0
+             */
+            cash_net: number;
+            /**
+             * Cash Payment Total
+             * @default 0
+             */
+            cash_payment_total: number;
+            /**
+             * Cash Refund Total
+             * @default 0
+             */
+            cash_refund_total: number;
             /** Cash Warning */
             cash_warning: boolean;
             /** Cash Warning Threshold */
@@ -29976,6 +35498,16 @@ export interface components {
             is_approved: boolean;
             /** Net */
             net: number;
+            /**
+             * Noncash Payment Total
+             * @default 0
+             */
+            noncash_payment_total: number;
+            /**
+             * Noncash Refund Total
+             * @default 0
+             */
+            noncash_refund_total: number;
             /** Payment Count */
             payment_count: number;
             /** Payment Total */
@@ -30159,6 +35691,11 @@ export interface components {
             class_name: string;
             /** Group Owed Total */
             group_owed_total: number;
+            /**
+             * Group Pending Total
+             * @default 0
+             */
+            group_pending_total: number;
             /** Registrations */
             registrations: components["schemas"]["PosOutstandingRegistrationItemOut"][];
             /** Student Key */
@@ -30190,6 +35727,11 @@ export interface components {
         /**
          * PosOutstandingRegistrationItemOut
          * @description GET /pos/outstanding-by-student groups[].registrations[] 單筆。
+         *
+         *     pending_review/pending_amount（2026-08-16）：課程 status='pending_review'
+         *     的報名 total_amount 算不到待審課程金額，過去在 outstanding 模式下 total=0
+         *     會直接從搜尋結果隱形，造成現場收費防漏破口。此欄位讓收銀員仍看得到人與
+         *     待確認金額（提示需先完成審核才能正式收款）。
          */
         PosOutstandingRegistrationItemOut: {
             /** Class Name */
@@ -30204,6 +35746,16 @@ export interface components {
             owed: number;
             /** Paid Amount */
             paid_amount: number;
+            /**
+             * Pending Amount
+             * @default 0
+             */
+            pending_amount: number;
+            /**
+             * Pending Review
+             * @default false
+             */
+            pending_review: boolean;
             /** Supplies */
             supplies: components["schemas"]["PosSupplyDetailItemOut"][];
             /** Total Amount */
@@ -30228,10 +35780,22 @@ export interface components {
         /**
          * PosPendingDailyClosesOut
          * @description GET /pos/daily-close/pending 完整回應。
+         *
+         *     `older_pending_count` / `oldest_pending_date` 為區間**起點之前**的未簽核積壓
+         *     （P2-02）：pending 查詢受 92 天上限，若老闆停簽超過該區間，更早的積壓日在
+         *     UI 上完全隱形。此兩欄為獨立 aggregate，不受上限影響，讓前端能提示
+         *     「另有 N 天更早的未簽核日」。無積壓時為 0 / None。
          */
         PosPendingDailyClosesOut: {
             /** End Date */
             end_date: string;
+            /**
+             * Older Pending Count
+             * @default 0
+             */
+            older_pending_count: number;
+            /** Oldest Pending Date */
+            oldest_pending_date?: string | null;
             /** Pending */
             pending: components["schemas"]["PosPendingDailyCloseItemOut"][];
             /** Start Date */
@@ -30300,12 +35864,26 @@ export interface components {
         /**
          * PosRecentTransactionsOut
          * @description GET /pos/recent-transactions 完整回應。
+         *
+         *     total/truncated（P2-07）：`total` 為**截斷前**當日收據總張數、`truncated` 表示
+         *     清單被 `limit` 截掉。舊版無聲截斷，櫃台會把畫面上的張數當成當日全部而對帳漏張；
+         *     前端據此顯示「今日交易（顯示 N／共 M 張）」。
          */
         PosRecentTransactionsOut: {
             /** Date */
             date: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
             /** Transactions */
             transactions: components["schemas"]["PosRecentTransactionOut"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * PosReconciliationItemOut
@@ -30390,6 +35968,11 @@ export interface components {
             is_active: boolean;
             /** Latest Payment Date */
             latest_payment_date?: string | null;
+            /**
+             * Match Status
+             * @default unmatched
+             */
+            match_status: string;
             /** Offline Paid Amount */
             offline_paid_amount: number;
             /** Owed */
@@ -30398,8 +35981,18 @@ export interface components {
             paid_amount: number;
             /** Payment Status */
             payment_status: string;
+            /**
+             * Pending Amount
+             * @default 0
+             */
+            pending_amount: number;
             /** Pending Paid Amount */
             pending_paid_amount: number;
+            /**
+             * Pending Review
+             * @default false
+             */
+            pending_review: boolean;
             /** Student Name */
             student_name: string;
             /** Total Amount */
@@ -30436,6 +36029,24 @@ export interface components {
         /**
          * PosSemesterReconciliationTotalsOut
          * @description GET /pos/semester-reconciliation totals 區段。
+         *
+         *     pending_review_count/pending_review_amount：待審核報名（系統比對非自動成功）
+         *     的待確認應收，**不併入** total_amount，避免審核拖延造成少收。
+         *
+         *     ⚠ 兩種母體並存，勿混用（2026-08-24 P1 修正）：
+         *     - `approved_paid_amount` / `pending_paid_amount` / `offline_paid_amount`
+         *       是**套用畫面篩選（班級／繳費狀態／簽核狀態／review_status）並受
+         *       _POS_LIST_QUERY_LIMIT 截斷影響**的合計，只供下方明細表的小計使用。
+         *     - `term_cash_net_paid` / `term_noncash_net_paid` / `signoff_total` /
+         *       `unsigned_gap` 是**全學期、不受任何篩選與截斷影響**的稽核指標。
+         *       簽收帳本記的是「會計整筆交款」，本身沒有班級或狀態維度，拿篩選後的合計
+         *       去減它必然得到假帳差（舊 bug：篩一個班就跳出「簽收超過 POS 實收」）。
+         *     - `unsigned_gap = term_cash_net_paid - signoff_total`。
+         *       基準只計 `payment_method='現金'`：POS 結帳硬鎖現金（`pos.py` checkout
+         *       守衛），而簽收比對的是實體交款；`payment_method='系統補齊'` 那些帳務調整
+         *       （批次標記已繳費／標記未繳費沖帳／移除用品／退課 force_refund／離園沖帳）
+         *       沒有任何現金經手，計入會讓差額兩個方向都算錯。非現金淨額另以
+         *       `term_noncash_net_paid` 呈現，資訊不丟失。
          */
         PosSemesterReconciliationTotalsOut: {
             /** Approved Paid Amount */
@@ -30448,6 +36059,11 @@ export interface components {
             by_payment_status: {
                 [key: string]: number;
             };
+            /**
+             * Filters Applied
+             * @default false
+             */
+            filters_applied: boolean;
             /** Offline Paid Amount */
             offline_paid_amount: number;
             /** Outstanding Amount */
@@ -30456,10 +36072,136 @@ export interface components {
             paid_amount: number;
             /** Pending Paid Amount */
             pending_paid_amount: number;
+            /**
+             * Pending Review Amount
+             * @default 0
+             */
+            pending_review_amount: number;
+            /**
+             * Pending Review Count
+             * @default 0
+             */
+            pending_review_count: number;
             /** Registration Count */
             registration_count: number;
+            /**
+             * Signoff Total
+             * @default 0
+             */
+            signoff_total: number;
+            /**
+             * Term Cash Net Paid
+             * @default 0
+             */
+            term_cash_net_paid: number;
+            /**
+             * Term Noncash Net Paid
+             * @default 0
+             */
+            term_noncash_net_paid: number;
             /** Total Amount */
             total_amount: number;
+            /**
+             * Unsigned Gap
+             * @default 0
+             */
+            unsigned_gap: number;
+        };
+        /** PosSemesterRegChangeItemOut */
+        PosSemesterRegChangeItemOut: {
+            /** Change Type */
+            change_type: string;
+            /** Changed By */
+            changed_by?: string | null;
+            /** Class Name */
+            class_name: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Description */
+            description: string;
+            /** Student Name */
+            student_name: string;
+        };
+        /**
+         * PosSemesterRegChangesOut
+         * @description GET /pos/semester-registration-changes 回應。
+         *
+         *     已知限制：registration_id 為 NULL 的異動列（報名硬刪除後 SET NULL）無法
+         *     歸屬學期不會出現；現行報名為軟刪不硬刪，實務上不發生。
+         */
+        PosSemesterRegChangesOut: {
+            /** Items */
+            items: components["schemas"]["PosSemesterRegChangeItemOut"][];
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Total */
+            total: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** PosSemesterSignoffCreate */
+        PosSemesterSignoffCreate: {
+            /**
+             * Amount
+             * @description 簽收金額（元）
+             */
+            amount: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
+        /**
+         * PosSemesterSignoffItemOut
+         * @description 學期簽收帳本單列。作廢列保留輸出（voided_at 非 NULL），前端刪除線呈現。
+         */
+        PosSemesterSignoffItemOut: {
+            /** Amount */
+            amount: number;
+            /** Id */
+            id: number;
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Signed At */
+            signed_at?: string | null;
+            /** Signed By */
+            signed_by: string;
+            /** Void Reason */
+            void_reason?: string | null;
+            /** Voided At */
+            voided_at?: string | null;
+            /** Voided By */
+            voided_by?: string | null;
+        };
+        /**
+         * PosSemesterSignoffListOut
+         * @description GET /pos/semester-signoffs 回應。signoff_total 只計未作廢列。
+         */
+        PosSemesterSignoffListOut: {
+            /** Items */
+            items: components["schemas"]["PosSemesterSignoffItemOut"][];
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Signoff Total */
+            signoff_total: number;
+        };
+        /** PosSemesterSignoffVoid */
+        PosSemesterSignoffVoid: {
+            /** Reason */
+            reason: string;
         };
         /**
          * PosSupplyDetailItemOut
@@ -30518,6 +36260,155 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        /** PrepaymentAllocationPartIn */
+        PrepaymentAllocationPartIn: {
+            /** Amount */
+            amount: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            part_type: "prepayment";
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Student Id */
+            student_id?: number | null;
+            /** Target School Year */
+            target_school_year: number;
+            /** Target Semester */
+            target_semester: number;
+        };
+        /** PrepaymentApplyOut */
+        PrepaymentApplyOut: {
+            /** Credit Id */
+            credit_id: number;
+            /** Fee Adjustment Id */
+            fee_adjustment_id?: number | null;
+            /** Idempotent Replay */
+            idempotent_replay: boolean;
+            /** Movement Id */
+            movement_id: number;
+        };
+        /** PrepaymentApplyRequest */
+        PrepaymentApplyRequest: {
+            /** Fee Record Id */
+            fee_record_id: number;
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+        };
+        /** PrepaymentCreditListOut */
+        PrepaymentCreditListOut: {
+            /** Items */
+            items: components["schemas"]["PrepaymentCreditOut"][];
+            /** Total */
+            total: number;
+        };
+        /** PrepaymentCreditOut */
+        PrepaymentCreditOut: {
+            /** Balance */
+            balance: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Original Amount */
+            original_amount: number;
+            /** Recruitment Visit Id */
+            recruitment_visit_id?: number | null;
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name?: string | null;
+            /** Target School Year */
+            target_school_year: number;
+            /** Target Semester */
+            target_semester: number;
+            /** Visit Child Name */
+            visit_child_name?: string | null;
+        };
+        /** PrepaymentMovementOut */
+        PrepaymentMovementOut: {
+            /** Allocation Id */
+            allocation_id?: number | null;
+            /** Amount */
+            amount: number;
+            /** Fee Record Id */
+            fee_record_id?: number | null;
+            /** Id */
+            id: number;
+            /** Movement Type */
+            movement_type: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Reason */
+            reason?: string | null;
+            /** Refund Id */
+            refund_id?: number | null;
+            /** Reversal Of Id */
+            reversal_of_id?: number | null;
+        };
+        /** PrepaymentRefundListOut */
+        PrepaymentRefundListOut: {
+            /** Items */
+            items: components["schemas"]["PrepaymentRefundOut"][];
+            /** Total */
+            total: number;
+        };
+        /** PrepaymentRefundOut */
+        PrepaymentRefundOut: {
+            /** Amount */
+            amount: number;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Cancel Reason */
+            cancel_reason?: string | null;
+            /** Disbursed At */
+            disbursed_at?: string | null;
+            /** Id */
+            id: number;
+            /** Prepayment Credit Id */
+            prepayment_credit_id: number;
+            /** Reason */
+            reason: string;
+            /** Receipt Number */
+            receipt_number?: string | null;
+            /** Recipient Name */
+            recipient_name?: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Status */
+            status: string;
+        };
+        /** PrepaymentReverseOut */
+        PrepaymentReverseOut: {
+            /** Credit Id */
+            credit_id: number;
+            /** Reversed Movement Id */
+            reversed_movement_id: number;
+        };
+        /** PrepaymentReverseRequest */
+        PrepaymentReverseRequest: {
+            /** Reason */
+            reason: string;
+        };
+        /** PrepaymentTransferOut */
+        PrepaymentTransferOut: {
+            /** Credit Id */
+            credit_id: number;
+            /** Student Id */
+            student_id: number;
+        };
         /** PreviewClassOut */
         PreviewClassOut: {
             /** Art Teacher Name */
@@ -30558,7 +36449,7 @@ export interface components {
              * Check
              * @enum {string}
              */
-            check: "importable" | "employee_not_found" | "invalid_date" | "month_finalized" | "overwrite";
+            check: "importable" | "employee_not_found" | "invalid_date" | "month_finalized" | "overwrite" | "missing_fields" | "invalid_time" | "equal_punch" | "duplicate_row" | "month_mismatch";
             /** Date */
             date?: string | null;
             /** Employee Name */
@@ -31136,12 +37027,61 @@ export interface components {
             /** Sort Order */
             sort_order: number;
         };
+        /** QuickActionSlotsUpdate */
+        QuickActionSlotsUpdate: {
+            /** Slots */
+            slots: string[];
+        };
         /** QuotaUpdate */
         QuotaUpdate: {
             /** Note */
             note?: string | null;
             /** Total Hours */
             total_hours: number;
+        };
+        /**
+         * RateOut
+         * @description 生效中的勞健保費率版本（`insurance_rates` 至多一筆 is_active）。
+         */
+        RateOut: {
+            /** Average Dependents */
+            average_dependents?: number | null;
+            /** Changed By */
+            changed_by?: string | null;
+            /** Health Employee Ratio */
+            health_employee_ratio?: number | null;
+            /** Health Employer Ratio */
+            health_employer_ratio?: number | null;
+            /** Health Max Insured */
+            health_max_insured?: number | null;
+            /** Health Rate */
+            health_rate?: number | null;
+            /** Id */
+            id: number;
+            /** Labor Employee Ratio */
+            labor_employee_ratio?: number | null;
+            /** Labor Employer Ratio */
+            labor_employer_ratio?: number | null;
+            /** Labor Government Ratio */
+            labor_government_ratio?: number | null;
+            /** Labor Max Insured */
+            labor_max_insured?: number | null;
+            /** Labor Rate */
+            labor_rate?: number | null;
+            /** Pension Employer Rate */
+            pension_employer_rate?: number | null;
+            /** Pension Max Insured */
+            pension_max_insured?: number | null;
+            /** Rate Year */
+            rate_year: number;
+            /** Supplementary Health Rate */
+            supplementary_health_rate?: number | null;
+            /** Supplementary Health Threshold */
+            supplementary_health_threshold?: number | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Version */
+            version?: number | null;
         };
         /** ReactPayload */
         ReactPayload: {
@@ -31162,6 +37102,150 @@ export interface components {
             name: string;
             /** Read At */
             read_at?: string | null;
+        };
+        /**
+         * RecruitmentBonusReportBlockOut
+         * @description 統計表每師一區塊（含計算式字串與下次核算名單）。
+         */
+        RecruitmentBonusReportBlockOut: {
+            /** Counted Persons */
+            counted_persons: number;
+            /** Deferred Rows */
+            deferred_rows: components["schemas"]["RecruitmentBonusReportRowOut"][];
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Employee Name */
+            employee_name: string;
+            /** Formula Text */
+            formula_text: string;
+            /** Gross Amount */
+            gross_amount: number;
+            /** Resigned */
+            resigned: boolean;
+            /** Rows */
+            rows: components["schemas"]["RecruitmentBonusReportRowOut"][];
+            /** Share In */
+            share_in: number;
+            /** Share Out */
+            share_out: number;
+            /** Total Amount */
+            total_amount: number;
+            /** Unit Price */
+            unit_price: number;
+        };
+        /** RecruitmentBonusReportOut */
+        RecruitmentBonusReportOut: {
+            /** Blocks */
+            blocks: components["schemas"]["RecruitmentBonusReportBlockOut"][];
+            /** Campaign Id */
+            campaign_id: number;
+            /** Campaign Name */
+            campaign_name: string;
+            /** Settled Mismatches */
+            settled_mismatches: components["schemas"]["RecruitmentBonusSettledMismatchOut"][];
+            /** Status */
+            status: string;
+            /** Total Amount */
+            total_amount: number;
+            /** Unassigned Rows */
+            unassigned_rows: components["schemas"]["RecruitmentBonusReportRowOut"][];
+        };
+        /**
+         * RecruitmentBonusReportRowOut
+         * @description 統計表單一幼生列（Excel 逐生欄）。
+         */
+        RecruitmentBonusReportRowOut: {
+            /** Attribution Id */
+            attribution_id: number;
+            /** Child Name */
+            child_name?: string | null;
+            /** Employee Assigned */
+            employee_assigned: boolean;
+            /** Grade Multiplier */
+            grade_multiplier: number;
+            /** Point Code */
+            point_code: string;
+            /** Point Label */
+            point_label: string;
+            /** Points */
+            points: number;
+            /** Status */
+            status: string;
+            /** Uncategorized */
+            uncategorized: boolean;
+            /** Visit Grade */
+            visit_grade?: string | null;
+        };
+        /** RecruitmentBonusRosterOut */
+        RecruitmentBonusRosterOut: {
+            /**
+             * Account Masked
+             * @constant
+             */
+            account_masked: false;
+            /** Campaign Id */
+            campaign_id: number;
+            /** Campaign Name */
+            campaign_name: string;
+            /** Rows */
+            rows: components["schemas"]["RecruitmentBonusRosterRowOut"][];
+            /** Total Amount */
+            total_amount: number;
+        };
+        /**
+         * RecruitmentBonusRosterRowOut
+         * @description 轉帳名冊單列；端點僅允許完整薪資視野角色，bank_account 回完整帳號。
+         */
+        RecruitmentBonusRosterRowOut: {
+            /** Amount */
+            amount: number;
+            /** Bank Account */
+            bank_account?: string | null;
+            /** Bank Account Name */
+            bank_account_name?: string | null;
+            /** Bank Code */
+            bank_code?: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Missing Account */
+            missing_account: boolean;
+        };
+        /**
+         * RecruitmentBonusSettledMismatchOut
+         * @description 結算後引擎重算值與實際入帳不一致的警示列（正常應為空）。
+         */
+        RecruitmentBonusSettledMismatchOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Engine Amount */
+            engine_amount: number;
+            /** Paid Amount */
+            paid_amount: number;
+        };
+        /**
+         * RecruitmentBonusSyncResultOut
+         * @description 招生候選同步結果。
+         *
+         *     ⚠ 類別名稱必須帶模組前綴：FastAPI 以 Pydantic 類別名當 OpenAPI schema key，
+         *     與 `schemas/appraisal.py` 既有的 `SyncResultOut`（考核評分項同步）同名會
+         *     **互相覆蓋**，讓 `/appraisal/cycles/{id}/sync_score_items` 的前端型別靜默
+         *     變成招生獎金的欄位。命名對齊既有的 `RecruitmentMarketSyncResultOut`。
+         */
+        RecruitmentBonusSyncResultOut: {
+            /** Carried Over */
+            carried_over: number;
+            /** Created */
+            created: number;
+            /** Excluded */
+            excluded: number;
+            /** Note */
+            note: string;
+            /** Skipped Other Campaign */
+            skipped_other_campaign: number;
         };
         /**
          * RecruitmentCampusSettingOut
@@ -31385,6 +37469,8 @@ export interface components {
             no_deposit_reasons: string[];
             /** Referrers */
             referrers: string[];
+            /** Source Categories */
+            source_categories: components["schemas"]["RecruitmentSourceCategoryOut"][];
             /** Sources */
             sources: string[];
         };
@@ -31475,20 +37561,38 @@ export interface components {
             provisional_grade_id?: number | null;
             /** Referrer */
             referrer?: string | null;
+            /** Rides Bus */
+            rides_bus?: boolean | null;
             /** Seq No */
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Source Category */
+            source_category?: string | null;
             /** Target School Year */
             target_school_year?: number | null;
             /** Target Semester */
             target_semester?: number | null;
+            /** Tour Guide Employee Id */
+            tour_guide_employee_id?: number | null;
             /** Transfer Term */
             transfer_term?: boolean | null;
             /** Updated At */
             updated_at?: string | null;
             /** Visit Date */
             visit_date?: string | null;
+        };
+        /**
+         * RecruitmentSourceCategoryOut
+         * @description 來源固定分類（對應招生獎金 point_catalog；招生頁下拉顯示「label（points）」）。
+         */
+        RecruitmentSourceCategoryOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Points */
+            points: number;
         };
         /** RecruitmentVisitCreate */
         RecruitmentVisitCreate: {
@@ -31534,14 +37638,23 @@ export interface components {
             phone?: string | null;
             /** Referrer */
             referrer?: string | null;
+            /**
+             * Rides Bus
+             * @default false
+             */
+            rides_bus: boolean;
             /** Seq No */
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Source Category */
+            source_category?: string | null;
             /** Target School Year */
             target_school_year?: number | null;
             /** Target Semester */
             target_semester?: number | null;
+            /** Tour Guide Employee Id */
+            tour_guide_employee_id?: number | null;
             /**
              * Transfer Term
              * @default false
@@ -31587,14 +37700,20 @@ export interface components {
             phone?: string | null;
             /** Referrer */
             referrer?: string | null;
+            /** Rides Bus */
+            rides_bus?: boolean | null;
             /** Seq No */
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Source Category */
+            source_category?: string | null;
             /** Target School Year */
             target_school_year?: number | null;
             /** Target Semester */
             target_semester?: number | null;
+            /** Tour Guide Employee Id */
+            tour_guide_employee_id?: number | null;
             /** Transfer Term */
             transfer_term?: boolean | null;
             /** Visit Date */
@@ -31648,6 +37767,27 @@ export interface components {
             T_served?: number | null;
             /** T Total */
             T_total?: number | null;
+        };
+        /** RefundCancelRequest */
+        RefundCancelRequest: {
+            /** Cancel Reason */
+            cancel_reason: string;
+        };
+        /** RefundCompleteRequest */
+        RefundCompleteRequest: {
+            /** Receipt Number */
+            receipt_number?: string | null;
+            /** Recipient Name */
+            recipient_name: string;
+        };
+        /** RefundCreateRequest */
+        RefundCreateRequest: {
+            /** Idempotency Key */
+            idempotency_key?: string | null;
+            /** Prepayment Credit Id */
+            prepayment_credit_id: number;
+            /** Reason */
+            reason: string;
         };
         /**
          * RefundRequest
@@ -32030,6 +38170,11 @@ export interface components {
             parent_phone?: string | null;
             /** Payment Status */
             payment_status: string;
+            /**
+             * Pending Amount
+             * @default 0
+             */
+            pending_amount: number;
             /** Pending Review */
             pending_review?: boolean | null;
             /** Query Token */
@@ -32496,6 +38641,26 @@ export interface components {
             student_name?: string | null;
         };
         /**
+         * ReportsFinanceDetailExtraBonusItemOut
+         * @description `get_extra_bonus_payout_detail` 單筆；金額遮罩語意同年終撥款。
+         */
+        ReportsFinanceDetailExtraBonusItemOut: {
+            /** Amount */
+            amount?: number | null;
+            /** Category */
+            category: string;
+            /** Category Label */
+            category_label: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Paid Date */
+            paid_date?: string | null;
+            /** Period */
+            period: string;
+        };
+        /**
          * ReportsFinanceDetailFixedCostItemOut
          * @description `get_monthly_fixed_cost_detail` 單筆。
          */
@@ -32638,11 +38803,13 @@ export interface components {
         };
         /**
          * ReportsFinanceSummaryDetailOut
-         * @description GET /reports/finance-summary/detail 回應（下鑽七來源明細）。
+         * @description GET /reports/finance-summary/detail 回應（下鑽八來源明細）。
          */
         ReportsFinanceSummaryDetailOut: {
             /** Activity */
             activity: components["schemas"]["ReportsFinanceDetailActivityItemOut"][];
+            /** Extra Bonus */
+            extra_bonus: components["schemas"]["ReportsFinanceDetailExtraBonusItemOut"][];
             /** Fixed Cost */
             fixed_cost: components["schemas"]["ReportsFinanceDetailFixedCostItemOut"][];
             /** Misc Receipt */
@@ -32981,6 +39148,18 @@ export interface components {
             /** Target */
             target: string;
         };
+        /** ReverseOut */
+        ReverseOut: {
+            /** Receipt Id */
+            receipt_id: number;
+            /** Reversed Count */
+            reversed_count: number;
+        };
+        /** ReverseRequest */
+        ReverseRequest: {
+            /** Reason */
+            reason: string;
+        };
         /**
          * RevokeSessionOut
          * @description DELETE /sessions/{family_id} — Per-session revoke.
@@ -33087,6 +39266,13 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** RowErrorOut */
+        RowErrorOut: {
+            /** Reason */
+            reason: string;
+            /** Row Number */
+            row_number: number;
+        };
         /** RunNowOut */
         RunNowOut: {
             /** Detected */
@@ -33095,6 +39281,143 @@ export interface components {
             new_open: number;
             /** Ran At */
             ran_at: string;
+        };
+        /**
+         * RuntimeOut
+         * @description 薪資實算此刻真正使用的級距版本。
+         *
+         *     `brackets_source == "builtin"` 代表 DB 整表無級距、正走 `INSURANCE_TABLE_2026`
+         *     fallback——fresh／DR 部署漏 seed 的故障指紋，前端須紅字告警。
+         */
+        RuntimeOut: {
+            /** Bracket Count */
+            bracket_count: number;
+            /** Brackets Source */
+            brackets_source: string;
+            /** Brackets Year */
+            brackets_year: number;
+        };
+        /** SalaryCalculateAsyncStartOut */
+        SalaryCalculateAsyncStartOut: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed";
+            /** Total */
+            total: number;
+        };
+        /** SalaryCalculateJobOut */
+        SalaryCalculateJobOut: {
+            /** Created At */
+            created_at: number;
+            /** Current Employee */
+            current_employee: string;
+            /** Done */
+            done: number;
+            /** Error Message */
+            error_message?: string | null;
+            /** Errors */
+            errors: components["schemas"]["SalaryCalculationErrorOut"][];
+            /** Finished At */
+            finished_at?: number | null;
+            /** Job Id */
+            job_id: string;
+            /** Month */
+            month: number;
+            /** Progress Ratio */
+            progress_ratio: number;
+            /** Result Count */
+            result_count: number;
+            /** Results */
+            results?: components["schemas"]["SalaryCalculationResultItemOut"][] | null;
+            /** Started At */
+            started_at?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "running" | "completed" | "failed";
+            /** Total */
+            total: number;
+            /** Year */
+            year: number;
+        };
+        /** SalaryCalculateOut */
+        SalaryCalculateOut: {
+            /** Errors */
+            errors: components["schemas"]["SalaryCalculationErrorOut"][];
+            /** Results */
+            results: components["schemas"]["SalaryCalculationResultItemOut"][];
+        };
+        /** SalaryCalculationErrorOut */
+        SalaryCalculationErrorOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Error */
+            error: string;
+        };
+        /**
+         * SalaryCalculationResultItemOut
+         * @description 單一員工的批次計算結果；金額屬薪資 PII。
+         */
+        SalaryCalculationResultItemOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Attendance Deduction */
+            attendance_deduction: number;
+            /** Base Salary */
+            base_salary: number;
+            /** Birthday Bonus */
+            birthday_bonus: number;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Health Insurance */
+            health_insurance: number;
+            /**
+             * Input Source
+             * @default live
+             * @enum {string}
+             */
+            input_source: "snapshot" | "as_of_history" | "live";
+            /** Labor Insurance */
+            labor_insurance: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: number;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: number;
+            /** Missing Punch Deduction */
+            missing_punch_deduction: number;
+            /** Net Pay */
+            net_pay: number;
+            /** Net Salary */
+            net_salary: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Pension Self */
+            pension_self: number;
+            /** Supervisor Dividend */
+            supervisor_dividend: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Total Deductions */
+            total_deductions: number;
         };
         /**
          * SalaryDetailAuditLogItemOut
@@ -33308,6 +39631,30 @@ export interface components {
             /** Total Amount */
             total_amount: number;
         };
+        /** SalaryFinalizeEmployeeOut */
+        SalaryFinalizeEmployeeOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
+        /** SalaryFinalizeMonthOut */
+        SalaryFinalizeMonthOut: {
+            /** Count */
+            count: number;
+            /** Finalized At */
+            finalized_at: string;
+            /** Finalized By */
+            finalized_by: string;
+            /** Force */
+            force: boolean;
+            /** Message */
+            message: string;
+            /** Skipped Missing */
+            skipped_missing: components["schemas"]["SalaryFinalizeEmployeeOut"][];
+            /** Skipped Stale */
+            skipped_stale: components["schemas"]["SalaryFinalizeEmployeeOut"][];
+        };
         /**
          * SalaryHistoryAllEmployeeOut
          * @description GET /salaries/history-all 內單筆員工（被 SalaryHistoryAllOut.items 內嵌）。
@@ -33453,6 +39800,59 @@ export interface components {
             /** Year */
             year: number;
         };
+        /** SalaryManualAdjustOut */
+        SalaryManualAdjustOut: {
+            /** Message */
+            message: string;
+            record: components["schemas"]["SalaryManualAdjustRecordOut"];
+        };
+        /** SalaryManualAdjustRecordOut */
+        SalaryManualAdjustRecordOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Birthday Bonus */
+            birthday_bonus: number;
+            /** Bonus Amount */
+            bonus_amount: number;
+            /** Bonus Separate */
+            bonus_separate: boolean;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Extra Allowance */
+            extra_allowance: number;
+            /** Extra Allowance Label */
+            extra_allowance_label?: string | null;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Gross Salary */
+            gross_salary: number;
+            /** Id */
+            id: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Manual Overrides */
+            manual_overrides: string[];
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: number;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: number;
+            /** Net Salary */
+            net_salary: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Remark */
+            remark?: string | null;
+            /** Supervisor Dividend */
+            supervisor_dividend: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Version */
+            version: number;
+        };
         /** SalaryManualAdjustRequest */
         SalaryManualAdjustRequest: {
             /** Absence Deduction */
@@ -33502,6 +39902,163 @@ export interface components {
             special_bonus?: number | null;
             /** Supervisor Dividend */
             supervisor_dividend?: number | null;
+        };
+        /**
+         * SalaryMonthlyCategoryOut
+         * @description 轉帳構成單一分類（各分類合計 == summary.total_salary_cash_payout）。
+         */
+        SalaryMonthlyCategoryOut: {
+            /** Amount */
+            amount: number;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * SalaryMonthlyCheckOut
+         * @description reconciliation 檢查單項；delta 非 0 時 ok=False，UI 必須警示。
+         */
+        SalaryMonthlyCheckOut: {
+            /** Actual */
+            actual: number;
+            /** Delta */
+            delta: number;
+            /** Expected */
+            expected: number;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Ok */
+            ok: boolean;
+        };
+        /**
+         * SalaryMonthlyEmployeeOut
+         * @description 全員月總覽單列（admin/hr 全員；其他 SALARY_READ 角色僅本人）。
+         */
+        SalaryMonthlyEmployeeOut: {
+            /** Base Transfer Amount */
+            base_transfer_amount: number;
+            /** Employee Code */
+            employee_code: string;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Type */
+            employee_type: string;
+            /** Employer Burden */
+            employer_burden: number;
+            /** Employer Cost */
+            employer_cost: number;
+            /** Extra Bonus Amount */
+            extra_bonus_amount: number;
+            /**
+             * Extra Bonus Items
+             * @default []
+             */
+            extra_bonus_items: components["schemas"]["SalaryHistoryLineOut"][];
+            /** Gross Salary */
+            gross_salary: number;
+            /** Has Manual Adjust */
+            has_manual_adjust: boolean;
+            /** Has Salary Record */
+            has_salary_record: boolean;
+            /** Health Insurance Employer */
+            health_insurance_employer: number;
+            /** Is Finalized */
+            is_finalized: boolean;
+            /** Job Title */
+            job_title: string;
+            /** Labor Insurance Employer */
+            labor_insurance_employer: number;
+            /** Needs Recalc */
+            needs_recalc: boolean;
+            /** Net Salary */
+            net_salary: number;
+            payslip_detail?: components["schemas"]["SalaryHistoryBreakdownOut"] | null;
+            /** Pension Employer */
+            pension_employer: number;
+            /** Salary Cash Payout */
+            salary_cash_payout: number;
+            /** Salary Record Id */
+            salary_record_id?: number | null;
+            /** Salary Separate Transfer */
+            salary_separate_transfer: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Unused Leave Payout */
+            unused_leave_payout: number;
+        };
+        /**
+         * SalaryMonthlyOverviewOut
+         * @description GET /salaries/monthly-overview 回傳 wrapper。
+         */
+        SalaryMonthlyOverviewOut: {
+            /** Checks */
+            checks: components["schemas"]["SalaryMonthlyCheckOut"][];
+            /** Checks Status */
+            checks_status: string;
+            /** Employees */
+            employees: components["schemas"]["SalaryMonthlyEmployeeOut"][];
+            /** Month */
+            month: number;
+            /** Scope */
+            scope: string;
+            summary: components["schemas"]["SalaryMonthlySummaryOut"];
+            /** Total */
+            total: number;
+            /** Transfer Categories */
+            transfer_categories: components["schemas"]["SalaryMonthlyCategoryOut"][];
+            /** Year */
+            year: number;
+        };
+        /**
+         * SalaryMonthlySummaryOut
+         * @description 全園（或 scope=self 時本人）月度彙總；口徑見 services/salary/amounts.py。
+         */
+        SalaryMonthlySummaryOut: {
+            /** Employee Count */
+            employee_count: number;
+            /** Finalized Count */
+            finalized_count: number;
+            /** Hourly Count */
+            hourly_count: number;
+            /** Manual Adjust Count */
+            manual_adjust_count: number;
+            /** Needs Recalc Count */
+            needs_recalc_count: number;
+            /** Regular Count */
+            regular_count: number;
+            /** Total Base Transfer Amount */
+            total_base_transfer_amount: number;
+            /** Total Employer Burden */
+            total_employer_burden: number;
+            /** Total Employer Cost */
+            total_employer_cost: number;
+            /** Total Extra Bonus Amount */
+            total_extra_bonus_amount: number;
+            /** Total Gross Salary */
+            total_gross_salary: number;
+            /** Total Health Insurance Employer */
+            total_health_insurance_employer: number;
+            /** Total Labor Insurance Employer */
+            total_labor_insurance_employer: number;
+            /** Total Net Salary */
+            total_net_salary: number;
+            /** Total Pension Employer */
+            total_pension_employer: number;
+            /** Total Salary Cash Payout */
+            total_salary_cash_payout: number;
+            /** Total Salary Deduction */
+            total_salary_deduction: number;
+            /** Total Salary Separate Transfer */
+            total_salary_separate_transfer: number;
+            /** Total Unused Leave Payout */
+            total_unused_leave_payout: number;
+            /** Unfinalized Count */
+            unfinalized_count: number;
         };
         /**
          * SalaryRecordItemOut
@@ -33618,6 +40175,18 @@ export interface components {
             /** Year */
             year: number;
         };
+        /** SalarySimulateOut */
+        SalarySimulateOut: {
+            actual?: components["schemas"]["SalarySimulationValuesOut"] | null;
+            diff?: components["schemas"]["SalarySimulationDiffOut"] | null;
+            employee: components["schemas"]["SalarySimulationEmployeeOut"];
+            /** Overrides Active */
+            overrides_active: string[];
+            /** Overrides Ineffective */
+            overrides_ineffective?: components["schemas"]["SalarySimulationIneffectiveOverrideOut"][];
+            period: components["schemas"]["SalarySimulationPeriodOut"];
+            simulated: components["schemas"]["SalarySimulationValuesOut"];
+        };
         /**
          * SalarySimulateOverride
          * @description 薪資試算覆蓋參數（None = 使用 DB 實際資料）
@@ -33669,6 +40238,111 @@ export interface components {
             overrides: components["schemas"]["SalarySimulateOverride"];
             /** Year */
             year: number;
+        };
+        /** SalarySimulationDiffOut */
+        SalarySimulationDiffOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Base Salary */
+            base_salary: number;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Gross Salary */
+            gross_salary: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Net Pay */
+            net_pay: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Supplementary Health Employee */
+            supplementary_health_employee: number;
+            /** Total Deductions */
+            total_deductions: number;
+        };
+        /** SalarySimulationEmployeeOut */
+        SalarySimulationEmployeeOut: {
+            /** Employee Id */
+            employee_id: string;
+            /** Id */
+            id: number;
+            /** Job Title */
+            job_title?: string | null;
+            /** Name */
+            name: string;
+        };
+        /** SalarySimulationIneffectiveOverrideOut */
+        SalarySimulationIneffectiveOverrideOut: {
+            /** Field */
+            field: string;
+            /** Reason */
+            reason: string;
+        };
+        /** SalarySimulationPeriodOut */
+        SalarySimulationPeriodOut: {
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** SalarySimulationValuesOut */
+        SalarySimulationValuesOut: {
+            /** Absence Deduction */
+            absence_deduction: number;
+            /** Base Salary */
+            base_salary: number;
+            /** Birthday Bonus */
+            birthday_bonus: number;
+            /** Early Leave Count */
+            early_leave_count: number;
+            /** Early Leave Deduction */
+            early_leave_deduction: number;
+            /** Festival Bonus */
+            festival_bonus: number;
+            /** Gross Salary */
+            gross_salary: number;
+            /** Health Insurance */
+            health_insurance: number;
+            /** Labor Insurance */
+            labor_insurance: number;
+            /** Late Count */
+            late_count: number;
+            /** Late Deduction */
+            late_deduction: number;
+            /** Leave Deduction */
+            leave_deduction: number;
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: number;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: number;
+            /** Missing Punch Count */
+            missing_punch_count: number;
+            /** Missing Punch Deduction */
+            missing_punch_deduction: number;
+            /** Net Pay */
+            net_pay: number;
+            /** Net Salary */
+            net_salary: number;
+            /** Overtime Bonus */
+            overtime_bonus: number;
+            /** Overtime Pay */
+            overtime_pay: number;
+            /** Pension Self */
+            pension_self: number;
+            /** Supervisor Dividend */
+            supervisor_dividend: number;
+            /** Supplementary Health Employee */
+            supplementary_health_employee: number;
+            /** Total Deduction */
+            total_deduction: number;
+            /** Total Deductions */
+            total_deductions: number;
         };
         /**
          * SalarySnapshotCreateResultOut
@@ -33891,6 +40565,11 @@ export interface components {
              */
             unused_leave_payout: number;
         };
+        /** SalaryUnfinalizeOut */
+        SalaryUnfinalizeOut: {
+            /** Message */
+            message: string;
+        };
         /**
          * ScheduleDayItem
          * @description my-schedule 內某一日的排班資訊。
@@ -33960,6 +40639,35 @@ export interface components {
             };
             /** Worker Pid */
             worker_pid: number;
+        };
+        /**
+         * ScheduleRosterOut
+         * @description 排班工作台最小名冊單筆 (GET /roster)。
+         *
+         *     欄位白名單即 PII 邊界（2026-08-19 P0）：排班只需要「這個人是誰、在哪個
+         *     班、什麼職類、在不在職、到離職界」。**勿加**地址／身分證／銀行／薪資／
+         *     聯絡電話等欄位——那些屬 EMPLOYEES_READ 的 EmployeeOut，不屬排班名冊；
+         *     tests/test_shifts_roster_2026_08_19.py 鎖此白名單。
+         */
+        ScheduleRosterOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Hire Date */
+            hire_date?: string | null;
+            /** Id */
+            id: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Resign Date */
+            resign_date?: string | null;
+            /** Staff Role Category */
+            staff_role_category?: string | null;
+            /** Title Name */
+            title_name?: string | null;
         };
         /**
          * SchedulersHealthOut
@@ -34345,6 +41053,19 @@ export interface components {
              */
             rule_type: "PER_UNIT" | "TIER" | "FLAT_THRESHOLD" | "DISCIPLINARY_TIERED" | "MANUAL_DELTA";
         };
+        /** SearchActivityCatalogItem */
+        SearchActivityCatalogItem: {
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+        };
         /** SearchActivityItem */
         SearchActivityItem: {
             /**
@@ -34437,6 +41158,44 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /** SearchLeaveItem */
+        SearchLeaveItem: {
+            /** Employee Name */
+            employee_name: string;
+            /** Id */
+            id: number;
+            /**
+             * Leave Type
+             * @default
+             */
+            leave_type: string;
+            /** Start Date */
+            start_date?: string | null;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+        };
+        /** SearchOvertimeItem */
+        SearchOvertimeItem: {
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Hours
+             * @default 0
+             */
+            hours: number;
+            /** Id */
+            id: number;
+            /** Overtime Date */
+            overtime_date?: string | null;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+        };
         /** SearchRecruitmentItem */
         SearchRecruitmentItem: {
             /** Child Name */
@@ -34464,6 +41223,20 @@ export interface components {
             name: string;
             /** Student Id */
             student_id?: string | null;
+        };
+        /** SearchSurveyItem */
+        SearchSurveyItem: {
+            /** Event Date */
+            event_date?: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /** Title */
+            title: string;
         };
         /**
          * Semester
@@ -34635,6 +41408,32 @@ export interface components {
             reason: string;
         };
         /**
+         * SettlePaymentOut
+         * @description 結算回應中單一員工的發放明細（前端結算結果彈窗顯示用）。
+         */
+        SettlePaymentOut: {
+            /** Amount */
+            amount: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Resigned */
+            resigned: boolean;
+        };
+        /**
+         * SettleResultOut
+         * @description 結算結果：campaign 轉 settled 後，每位員工實際入帳的金額清單。
+         */
+        SettleResultOut: {
+            /** Campaign Id */
+            campaign_id: number;
+            /** Payments */
+            payments: components["schemas"]["SettlePaymentOut"][];
+            /** Settled At */
+            settled_at: string;
+        };
+        /**
          * ShiftAssignmentOut
          * @description 每週排班單筆 (GET /assignments)。
          */
@@ -34690,6 +41489,37 @@ export interface components {
             total: number;
         };
         /**
+         * ShiftLeaveContextOut
+         * @description 排班頁請假摘要單筆 (GET /leave-context)。
+         *
+         *     欄位白名單即資訊面邊界（2026-08-28）：排班只需要「誰、哪幾天、
+         *     哪個時段不在、假單狀態」。**勿加** reason／附件／駁回原因／代理人
+         *     等欄位——那些屬 LEAVES_READ 的完整請假管理，不屬排班摘要；
+         *     tests/test_shifts_leave_context_2026_08_28.py 鎖此白名單。
+         */
+        ShiftLeaveContextOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** End Date */
+            end_date: string;
+            /** End Time */
+            end_time?: string | null;
+            /** Id */
+            id: number;
+            /** Leave Type */
+            leave_type: string;
+            /** Leave Type Label */
+            leave_type_label: string;
+            /** Start Date */
+            start_date: string;
+            /** Start Time */
+            start_time?: string | null;
+            /** Status */
+            status: string;
+        };
+        /**
          * ShiftSwapHistoryOut
          * @description 換班歷史單筆 (GET /swap-history)。
          */
@@ -34719,6 +41549,13 @@ export interface components {
         };
         /** ShiftTypeCreate */
         ShiftTypeCreate: {
+            /**
+             * Break Minutes
+             * @default 0
+             */
+            break_minutes: number;
+            /** Color */
+            color?: string | null;
             /** Name */
             name: string;
             /**
@@ -34736,6 +41573,13 @@ export interface components {
          * @description 班別模板單筆 (GET /types list / POST /types / PUT /types/{id})。
          */
         ShiftTypeOut: {
+            /**
+             * Break Minutes
+             * @default 0
+             */
+            break_minutes: number;
+            /** Color */
+            color?: string | null;
             /** Id */
             id: number;
             /** Is Active */
@@ -34744,6 +41588,7 @@ export interface components {
             name: string;
             /** Sort Order */
             sort_order: number;
+            usage?: components["schemas"]["ShiftTypeUsageOut"] | null;
             /** Work End */
             work_end: string;
             /** Work Start */
@@ -34751,6 +41596,10 @@ export interface components {
         };
         /** ShiftTypeUpdate */
         ShiftTypeUpdate: {
+            /** Break Minutes */
+            break_minutes?: number | null;
+            /** Color */
+            color?: string | null;
             /** Is Active */
             is_active?: boolean | null;
             /** Name */
@@ -34762,12 +41611,61 @@ export interface components {
             /** Work Start */
             work_start?: string | null;
         };
+        /**
+         * ShiftTypeUsageOut
+         * @description 班別被引用的計數 (GET /types?include_usage=true 子物件)。
+         *
+         *     供設定頁顯示「使用中的排班數」與停用/刪除防呆 UX；delete 端點的
+         *     使用中保護仍在後端獨立計數，不依賴此顯示值。
+         */
+        ShiftTypeUsageOut: {
+            /** Assignments */
+            assignments: number;
+            /** Daily */
+            daily: number;
+            /** Swaps */
+            swaps: number;
+            /** Total */
+            total: number;
+        };
         /** SignBodyIn */
         SignBodyIn: {
             /** Confirmed Read */
             confirmed_read: boolean;
             /** Signature Data */
             signature_data: string;
+        };
+        /**
+         * SignedOnOut
+         * @description 簽約日維護回應：`growth_contract_signed_on` 為 None 代表未簽約／已清空。
+         */
+        SignedOnOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Growth Contract Signed On */
+            growth_contract_signed_on?: string | null;
+        };
+        /** SignedOnUpdate */
+        SignedOnUpdate: {
+            /** Signed On */
+            signed_on?: string | null;
+        };
+        /**
+         * SignoffBatchSignResultOut
+         * @description 財務簽收批次簽收回傳共用 shape — {results, succeeded, failed}。
+         *
+         *     results 為每筆 {id, ok, error?}（沿用 `BulkOpItemResult`）；succeeded/failed
+         *     為成功/失敗**筆數**（非 id 清單，與 `BatchApproveResultOut` 的
+         *     list[int] `succeeded` 形狀不同——此為前端批次簽收 UI 的既定契約）。
+         *     vendor_payments / misc_receipts 兩個 batch-sign 端點回傳形狀一致，共用此 schema。
+         */
+        SignoffBatchSignResultOut: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["BulkOpItemResult"][];
+            /** Succeeded */
+            succeeded: number;
         };
         /** SignRequestOut */
         SignRequestOut: {
@@ -34849,6 +41747,22 @@ export interface components {
         SkipPayload: {
             /** Skipped Reason */
             skipped_reason: string;
+        };
+        /**
+         * SlipResolveOut
+         * @description 繳費單 QR 掃碼解析結果（供 POS 以既有 outstanding-by-student 反查群組）。
+         */
+        SlipResolveOut: {
+            /** Class Name */
+            class_name: string;
+            /** Registration Id */
+            registration_id: number;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+            /** Student Name */
+            student_name: string;
         };
         /** SnapshotConfirmRequest */
         SnapshotConfirmRequest: {
@@ -36544,6 +43458,13 @@ export interface components {
             /** Description */
             description?: string | null;
         };
+        /** TaggedStudentOut */
+        TaggedStudentOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
         /** TeacherImpact */
         TeacherImpact: {
             /** Change */
@@ -36568,12 +43489,20 @@ export interface components {
         /**
          * TeacherOptionOut
          * @description GET /classrooms/teacher-options 單筆。
+         *
+         *     employee_id（工號）與 position（職稱）供前端區分同名教師：只給姓名時操作者
+         *     無從判斷選中的是哪一位（2026-08-14 staging：同名兩筆使班導師指派到與登入帳號
+         *     綁定不同的員工，教師 Portal 因此看不到班級）。
          */
         TeacherOptionOut: {
+            /** Employee Id */
+            employee_id?: string | null;
             /** Id */
             id: number;
             /** Name */
             name: string;
+            /** Position */
+            position?: string | null;
         };
         /**
          * TeacherOut
@@ -36931,6 +43860,41 @@ export interface components {
             /** Total Items */
             total_items: number;
         };
+        /** TodayAnomaliesOut */
+        TodayAnomaliesOut: {
+            /** Anomalies */
+            anomalies: components["schemas"]["TodayAnomalyItemOut"][];
+            /** Date */
+            date: string;
+        };
+        /** TodayAnomalyItemOut */
+        TodayAnomalyItemOut: {
+            /** Anomaly Type */
+            anomaly_type: string;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Employee Name */
+            employee_name: string;
+            /** Late Minutes */
+            late_minutes?: number | null;
+        };
+        /** TodayAttendanceOut */
+        TodayAttendanceOut: {
+            /** Absent Count */
+            absent_count: number;
+            /** Date */
+            date: string;
+            /** Late Count */
+            late_count: number;
+            /** Missing Count */
+            missing_count: number;
+            /** On Leave Count */
+            on_leave_count: number;
+            /** Present Count */
+            present_count: number;
+            /** Total Employees */
+            total_employees: number;
+        };
         /**
          * TodayMedicationSummaryOut
          * @description GET /portfolio/today-medication 回傳。
@@ -37018,6 +43982,17 @@ export interface components {
             /** Role */
             role?: string | null;
         };
+        /** UploadedPhotoOut */
+        UploadedPhotoOut: {
+            /** Display Url */
+            display_url: string;
+            /** Id */
+            id: number;
+            /** Original Filename */
+            original_filename: string | null;
+            /** Thumb Url */
+            thumb_url: string | null;
+        };
         /**
          * UptimeWebhookOut
          * @description POST /uptime-webhook — UptimeRobot callback ack.
@@ -37060,6 +44035,21 @@ export interface components {
             /** Uploaded By Id */
             uploaded_by_id?: number | null;
         };
+        /**
+         * VendorPaymentBatchSignRequest
+         * @description 批次簽收：一次簽名套用到勾選的多筆待簽收付款（月結高頻手動痛點）。
+         */
+        VendorPaymentBatchSignRequest: {
+            /** Ids */
+            ids: number[];
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
+        };
         /** VendorPaymentCreate */
         VendorPaymentCreate: {
             /** Amount */
@@ -37068,15 +44058,12 @@ export interface components {
             category: string;
             /** Description */
             description?: string | null;
+            /** Due Date */
+            due_date?: string | null;
             /** Invoice Number */
             invoice_number?: string | null;
             /** Notes */
             notes?: string | null;
-            /**
-             * Payment Date
-             * Format: date
-             */
-            payment_date: string;
             /**
              * Payment Method
              * @enum {string}
@@ -37108,6 +44095,14 @@ export interface components {
         VendorPaymentOut: {
             /** Amount */
             amount?: number | null;
+            /** Approval Status */
+            approval_status: string;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By Id */
+            approved_by_id?: number | null;
+            /** Approved By Name */
+            approved_by_name?: string | null;
             /** Attachments */
             attachments: components["schemas"]["VendorPaymentAttachmentMetaOut"][];
             /** Category */
@@ -37120,6 +44115,8 @@ export interface components {
             created_by_name?: string | null;
             /** Description */
             description?: string | null;
+            /** Due Date */
+            due_date?: string | null;
             /** Has Signature */
             has_signature: boolean;
             /** Id */
@@ -37132,6 +44129,32 @@ export interface components {
             payment_date?: string | null;
             /** Payment Method */
             payment_method: string;
+            /** Reconciled At */
+            reconciled_at?: string | null;
+            /** Reconciled By Id */
+            reconciled_by_id?: number | null;
+            /** Reconciled By Name */
+            reconciled_by_name?: string | null;
+            /** Reconciliation Note */
+            reconciliation_note?: string | null;
+            /** Reconciliation Status */
+            reconciliation_status: string;
+            /** Rejected At */
+            rejected_at?: string | null;
+            /** Rejected By Id */
+            rejected_by_id?: number | null;
+            /** Rejected By Name */
+            rejected_by_name?: string | null;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Settled At */
+            settled_at?: string | null;
+            /** Settled By Id */
+            settled_by_id?: number | null;
+            /** Settled By Name */
+            settled_by_name?: string | null;
+            /** Settlement Status */
+            settlement_status: string;
             /** Signature Kind */
             signature_kind?: string | null;
             /** Signed At */
@@ -37142,6 +44165,14 @@ export interface components {
             signer_name?: string | null;
             /** Status */
             status: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+            /** Submitted By Id */
+            submitted_by_id?: number | null;
+            /** Submitted By Name */
+            submitted_by_name?: string | null;
+            /** Transaction Ref */
+            transaction_ref?: string | null;
             /** Updated At */
             updated_at?: string | null;
             /** Vendor Name */
@@ -37159,16 +44190,42 @@ export interface components {
         };
         /**
          * VendorPaymentSummaryOut
-         * @description GET /vendor-payments/summary 區間彙總（供前端 KPI 卡使用）。
+         * @description GET /vendor-payments/summary 區間彙總（KPI 卡＋流程摘要列）。
          *
          *     依與列表相同的 range 篩選（start_date / end_date / vendor_name /
-         *     payment_method）彙總，但**不**受 status 篩選影響——一律回全狀態並拆
-         *     pending / signed，讓 KPI 卡同時呈現「本期總額 / 待簽收 / 已簽收」。
-         *     跨狀態 sum 走 SQL 聚合（非 N+1），不受列表分頁限制。
+         *     category / payment_method）彙總，但**不**受狀態篩選影響。pending/signed
+         *     為簽收軸既有欄位（向後相容）；其餘為內控流程分桶（方案 A）：
+         *     待核准 / 已核准待付款 / 待補憑證（已收付未簽收）/ 待對帳 / 異常。
+         *     單一 SELECT 條件聚合（非 N+1），不受列表分頁限制。
+         *
+         *     口徑註記：`awaiting_evidence` 桶＝憑證軸（status）仍為 pending 的已付款
+         *     單，語意同「待補憑證」文案；與對帳守衛 EVIDENCE_REQUIRED（簽名/附件/
+         *     交易參考號三取一的**最低門檻**）刻意不同——有參考號但未附簽收單的交易
+         *     已可對帳，但仍列在此桶提醒補簽收憑證。桶與桶非互斥。
          */
         VendorPaymentSummaryOut: {
+            /** Approved Unsettled Amount */
+            approved_unsettled_amount: number;
+            /** Approved Unsettled Count */
+            approved_unsettled_count: number;
+            /** Awaiting Evidence Amount */
+            awaiting_evidence_amount: number;
+            /** Awaiting Evidence Count */
+            awaiting_evidence_count: number;
+            /** Awaiting Reconcile Amount */
+            awaiting_reconcile_amount: number;
+            /** Awaiting Reconcile Count */
+            awaiting_reconcile_count: number;
+            /** Exception Amount */
+            exception_amount: number;
+            /** Exception Count */
+            exception_count: number;
             /** Pending Amount */
             pending_amount: number;
+            /** Pending Approval Amount */
+            pending_approval_amount: number;
+            /** Pending Approval Count */
+            pending_approval_count: number;
             /** Pending Count */
             pending_count: number;
             /** Signed Amount */
@@ -37188,12 +44245,12 @@ export interface components {
             category?: string | null;
             /** Description */
             description?: string | null;
+            /** Due Date */
+            due_date?: string | null;
             /** Invoice Number */
             invoice_number?: string | null;
             /** Notes */
             notes?: string | null;
-            /** Payment Date */
-            payment_date?: string | null;
             /** Payment Method */
             payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
             /** Vendor Name */
@@ -38264,6 +45321,40 @@ export interface operations {
             };
         };
     };
+    print_course_payment_slips_api_activity_courses__course_id__payment_slips_pdf_get: {
+        parameters: {
+            query?: {
+                /** @description 繳費期限（印在單上；留空不印期限行） */
+                due_date?: string | null;
+            };
+            header?: never;
+            path: {
+                course_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_course_waitlist_api_activity_courses__course_id__waitlist_get: {
         parameters: {
             query?: never;
@@ -38763,8 +45854,6 @@ export interface operations {
                 /** @description outstanding=未結清(paid<total)，refundable=已繳>0(供退費使用) */
                 filter?: "outstanding" | "refundable";
                 limit?: number;
-                /** @description 只列報名超過 14 天仍未結清的『逾期』項目 */
-                overdue_only?: boolean;
                 /** @description 關鍵字模糊搜尋（姓名 / 班級 / 家長手機）；留空則列出全部 */
                 q?: string | null;
                 school_year?: number | null;
@@ -38796,9 +45885,43 @@ export interface operations {
             };
         };
     };
+    resolve_payment_slip_token_api_activity_pos_payment_slips_resolve_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlipResolveOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     print_pos_receipt_pdf_api_activity_pos_receipts__receipt_no__print_pdf_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 是否標記為補印。結帳後的第一次列印請傳 false；從交易列表補印請傳 true（預設） */
+                reprint?: boolean;
+            };
             header?: never;
             path: {
                 receipt_no: string;
@@ -38903,6 +46026,8 @@ export interface operations {
                 approval_status?: string | null;
                 classroom_name?: string | null;
                 payment_status?: ("paid" | "partial" | "unpaid" | "overpaid" | "no_fee") | null;
+                /** @description 待審核防漏篩選：pending=待審核（pending_review 或 match_status='pending'，**不含** 'unmatched' 舊資料）；non_auto=非系統自動比對（match_status != 'matched'，含 unmatched/pending/manual/forced） */
+                review_status?: ("all" | "pending" | "non_auto") | null;
                 school_year?: number | null;
                 semester?: number | null;
             };
@@ -38919,6 +46044,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PosSemesterReconciliationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_semester_registration_changes_api_activity_pos_semester_registration_changes_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+                /** @description CSV 過濾異動類型；預設＝退課/加報四類；白名單外回 400 */
+                types?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterRegChangesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_semester_signoffs_api_activity_pos_semester_signoffs_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterSignoffListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_semester_signoff_api_activity_pos_semester_signoffs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosSemesterSignoffCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterSignoffItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_semester_signoff_api_activity_pos_semester_signoffs__signoff_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                signoff_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PosSemesterSignoffVoid"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PosSemesterSignoffItemOut"];
                 };
             };
             /** @description Validation Error */
@@ -43092,7 +50351,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnomalyListOut"];
                 };
             };
             /** @description Validation Error */
@@ -43125,7 +50384,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BatchConfirmResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -43223,7 +50482,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AttendanceCalendarOut"];
                 };
             };
             /** @description Validation Error */
@@ -43503,7 +50762,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AttendanceSummaryRowOut"][];
                 };
             };
             /** @description Validation Error */
@@ -43532,7 +50791,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TodayAttendanceOut"];
                 };
             };
         };
@@ -43552,7 +50811,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TodayAnomaliesOut"];
                 };
             };
         };
@@ -43576,7 +50835,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ExcelUploadResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -43609,7 +50868,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CsvUploadResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -43633,6 +50892,42 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AttendancePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttendancePreviewResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_attendance_excel_api_attendance_upload_preview_excel_post: {
+        parameters: {
+            query?: {
+                month?: number | null;
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_attendance_excel_api_attendance_upload_preview_excel_post"];
             };
         };
         responses: {
@@ -46305,7 +53600,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DismissalCallOut"][];
                 };
             };
             /** @description Validation Error */
@@ -46339,6 +53634,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    arrive_dismissal_call_api_dismissal_calls__call_id__arrive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissalCallOut"];
                 };
             };
             /** @description Validation Error */
@@ -47363,6 +54689,72 @@ export interface operations {
             };
         };
     };
+    import_events_commit_api_events_import_commit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventImportCommitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventImportCommitResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_events_preview_api_events_import_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_events_preview_api_events_import_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_attendance_api_exports_attendance_get: {
         parameters: {
             query: {
@@ -47495,6 +54887,39 @@ export interface operations {
             };
         };
     };
+    export_fees_api_exports_fees_get: {
+        parameters: {
+            query?: {
+                classroom_name?: string | null;
+                period?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_holidays_api_exports_holidays_get: {
         parameters: {
             query: {
@@ -47532,6 +54957,40 @@ export interface operations {
             query: {
                 month: number;
                 year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_misc_receipts_api_exports_misc_receipts_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
             };
             header?: never;
             path?: never;
@@ -47625,7 +55084,12 @@ export interface operations {
     };
     export_students_api_exports_students_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 班級篩選（不填=全校） */
+                classroom_id?: number | null;
+                /** @description 在籍狀態篩選（不填=在籍＋離校皆含） */
+                is_active?: boolean | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -47639,6 +55103,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_students_k12ea_api_exports_students_k12ea_get: {
+        parameters: {
+            query?: {
+                classroom_id?: number | null;
+                is_active?: boolean;
+                school_year?: number | null;
+                search?: string | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_vendor_payments_api_exports_vendor_payments_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -47796,6 +55338,26 @@ export interface operations {
             };
         };
     };
+    run_scheduler_now_api_fee_due_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_adjustments_api_fees_adjustments_get: {
         parameters: {
             query?: {
@@ -47928,6 +55490,1130 @@ export interface operations {
             };
         };
     };
+    list_bank_imports_api_fees_bank_imports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankImportOut"][];
+                };
+            };
+        };
+    };
+    confirm_bank_import_api_fees_bank_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_confirm_bank_import_api_fees_bank_imports_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_bank_import_api_fees_bank_imports_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_bank_import_api_fees_bank_imports_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bank_transactions_api_fees_bank_transactions_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                import_id?: number | null;
+                page?: number;
+                page_size?: number;
+                status?: string | null;
+                suffix?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankTransactionListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    allocate_transaction_api_fees_bank_transactions__txn_id__allocate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transaction_candidates_api_fees_bank_transactions__txn_id__candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ignore_transaction_route_api_fees_bank_transactions__txn_id__ignore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IgnoreRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_transaction_route_api_fees_bank_transactions__txn_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                txn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_bill_slip_batches_api_fees_bill_slip_batches_get: {
+        parameters: {
+            query?: {
+                bill_month?: number | null;
+                bill_year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipBatchOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_bill_slip_batch_api_fees_bill_slip_batches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_bill_slip_batch_api_fees_bill_slip_batches_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_bill_slip_batch_api_fees_bill_slip_batches__batch_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipDeleteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_outstanding_report_api_fees_bill_slip_batches__batch_id__outstanding_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutstandingReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_bill_slip_batch_api_fees_bill_slip_batches_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_billing_codes_api_fees_billing_codes_get: {
+        parameters: {
+            query?: {
+                active_only?: boolean;
+                student_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeAssignmentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deactivate_billing_code_api_fees_billing_codes__assignment_id__deactivate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assignment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCodeDeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeAssignmentOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activate_billing_codes_api_fees_billing_codes_activate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCodeActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeActivateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_billing_codes_api_fees_billing_codes_suggest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillingCodeSuggestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingCodeSuggestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_handovers_api_fees_cash_handovers_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_handover_api_fees_cash_handovers__batch_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoverConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_handover_api_fees_cash_handovers__batch_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoverReopenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_handover_api_fees_cash_handovers__batch_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HandoverBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_cash_receipt_route_api_fees_cash_receipts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashReceiptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashReceiptOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_close_periods_api_fees_close_periods_get: {
+        parameters: {
+            query?: {
+                include_snapshot?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_period_route_api_fees_close_periods_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClosePeriodRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_close_period_api_fees_close_periods__close_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                close_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_close_route_api_fees_close_periods__close_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                close_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseReopenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClosePeriodOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_summary_api_fees_close_periods_summary_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_coverage_route_api_fees_collection_coverage_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_collection_import_route_api_fees_collection_imports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_confirm_collection_import_route_api_fees_collection_imports_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionImportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_collection_import_route_api_fees_collection_imports_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_collection_import_route_api_fees_collection_imports_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_collection_payments_api_fees_collection_payments_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                import_id?: number | null;
+                page?: number;
+                page_size?: number;
+                status?: string | null;
+                suffix?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionPaymentListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    allocate_collection_payment_route_api_fees_collection_payments__payment_id__allocate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionAllocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection_candidates_api_fees_collection_payments__payment_id__candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionCandidatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_collection_payment_route_api_fees_collection_payments__payment_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     generate_from_templates_api_fees_generate_post: {
         parameters: {
             query?: never;
@@ -47961,6 +56647,39 @@ export interface operations {
             };
         };
     };
+    fee_monthly_statement_api_fees_monthly_statement_get: {
+        parameters: {
+            query: {
+                classroom_name?: string | null;
+                month: string;
+                student_name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyStatementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_fee_periods_api_fees_periods_get: {
         parameters: {
             query?: never;
@@ -47977,6 +56696,442 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_refunds_api_fees_prepayment_refunds_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_refund_api_fees_prepayment_refunds_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_refund_route_api_fees_prepayment_refunds__refund_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_refund_route_api_fees_prepayment_refunds__refund_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_refund_route_api_fees_prepayment_refunds__refund_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_refund_route_api_fees_prepayment_refunds__refund_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refund_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentRefundOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_prepayments_api_fees_prepayments_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                student_id?: number | null;
+                target_school_year?: number | null;
+                target_semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentCreditListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_prepayment_api_fees_prepayments__credit_id__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepaymentApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentApplyOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_movements_api_fees_prepayments__credit_id__movements_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentMovementOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_prepayment_apply_api_fees_prepayments__credit_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepaymentReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transfer_prepayment_api_fees_prepayments__credit_id__transfer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                credit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepaymentTransferOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_receipts_api_fees_receipts_get: {
+        parameters: {
+            query?: {
+                date_from?: string | null;
+                date_to?: string | null;
+                method?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeReceiptListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reverse_cash_receipt_route_api_fees_receipts__receipt_id__reverse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReverseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -48141,6 +57296,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_pay_fee_records_api_fees_records_batch_pay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchFeePayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchFeePayResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_refunded_records_api_fees_refunds_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                period?: string | null;
+                student_id?: number | null;
+                student_name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRefundListOut"];
                 };
             };
             /** @description Validation Error */
@@ -48321,6 +57544,59 @@ export interface operations {
             };
         };
     };
+    copy_year_fee_templates_api_fees_templates_copy_year_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyYearTemplatesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyYearTemplatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_scheduler_now_api_finance_reconciliation_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     generate_certificate_api_gov_moe_certificates__student_id__generate_post: {
         parameters: {
             query?: never;
@@ -48343,6 +57619,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["api__gov_moe__certificates__CertificateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_generate_certificates_api_gov_moe_certificates_batch_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchGenerateCertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchGenerateCertResponse"];
                 };
             };
             /** @description Validation Error */
@@ -49293,6 +58602,40 @@ export interface operations {
             };
         };
     };
+    export_staff_qualification_checklist_api_gov_reports_staff_qualification_checklist_get: {
+        parameters: {
+            query: {
+                /** @description 核對月份 */
+                month: number;
+                /** @description 核對年份 */
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 教職員 4 合 1 資格核對表 Excel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_withholding_api_gov_reports_withholding_get: {
         parameters: {
             query: {
@@ -49406,6 +58749,236 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_signed_on_api_growth_contract_employees__employee_id__signed_on_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignedOnUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignedOnOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_growth_hours_api_growth_contract_hours_get: {
+        parameters: {
+            query: {
+                employee_id?: number | null;
+                school_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthHourListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_growth_hour_api_growth_contract_hours_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthHourCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthHourOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_growth_hour_api_growth_contract_hours__hour_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hour_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_growth_hour_api_growth_contract_hours__hour_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hour_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthHourUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthHourOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_growth_contract_preview_api_growth_contract_preview_get: {
+        parameters: {
+            query: {
+                school_year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_growth_contract_api_growth_contract_settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrowthSettleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrowthSettleResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -50925,12 +60498,15 @@ export interface operations {
     list_misc_receipts_api_misc_receipts_get: {
         parameters: {
             query?: {
+                approval_status?: ("draft" | "pending_approval" | "approved" | "rejected" | "legacy") | null;
                 category?: string | null;
                 end_date?: string | null;
                 page?: number;
                 page_size?: number;
                 payer_name?: string | null;
                 payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                reconciliation_status?: ("unreconciled" | "reconciled" | "exception") | null;
+                settlement_status?: ("unsettled" | "settled") | null;
                 start_date?: string | null;
                 status?: ("pending" | "signed") | null;
             };
@@ -51090,6 +60666,41 @@ export interface operations {
             };
         };
     };
+    approve_misc_receipt_api_misc_receipts__receipt_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upload_attachment_api_misc_receipts__receipt_id__attachments_post: {
         parameters: {
             query?: never;
@@ -51191,6 +60802,107 @@ export interface operations {
             };
         };
     };
+    list_misc_receipt_events_api_misc_receipts__receipt_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceEventListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_misc_receipt_api_misc_receipts__receipt_id__reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_misc_receipt_api_misc_receipts__receipt_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceSettleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sign_misc_receipt_api_misc_receipts__receipt_id__sign_post: {
         parameters: {
             query?: never;
@@ -51244,6 +60956,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_misc_receipt_api_misc_receipts__receipt_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_sign_misc_receipts_api_misc_receipts_batch_sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiscReceiptBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignoffBatchSignResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -52913,6 +62689,133 @@ export interface operations {
             };
         };
     };
+    list_dismissal_notices_api_parent_dismissal_calls_get: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD，預設今日 */
+                target_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_dismissal_notice_api_parent_dismissal_calls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDismissalNoticeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    arrive_dismissal_notice_api_parent_dismissal_calls__call_id__arrive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_dismissal_notice_api_parent_dismissal_calls__call_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentDismissalCallOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_events_api_parent_events_get: {
         parameters: {
             query?: never;
@@ -54531,6 +64434,59 @@ export interface operations {
             };
         };
     };
+    get_quick_actions_api_parent_quick_actions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    update_quick_actions_api_parent_quick_actions_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuickActionSlotsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_leaves_api_parent_student_leaves_get: {
         parameters: {
             query?: never;
@@ -54935,6 +64891,37 @@ export interface operations {
             };
         };
     };
+    admin_confirm_visual_match_api_pickup_authorizations__auth_id__confirm_visual_match_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                auth_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalPickupAuthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     admin_override_api_pickup_authorizations__auth_id__override_complete_post: {
         parameters: {
             query?: never;
@@ -55034,6 +65021,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlatformAuditOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gov_data_api_platform_gov_data_get: {
+        parameters: {
+            query?: {
+                /** @description 預設取當年 */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GovDataOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_brackets_api_platform_gov_data_brackets_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BracketPreviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BracketPreviewOut"];
                 };
             };
             /** @description Validation Error */
@@ -56147,7 +66199,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalAttendanceSheetOut"];
                 };
             };
             /** @description Validation Error */
@@ -56457,7 +66509,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalCalendarOut"];
                 };
             };
             /** @description Validation Error */
@@ -56486,7 +66538,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"][];
                 };
             };
         };
@@ -56510,7 +66562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -56541,7 +66593,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -56605,7 +66657,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -56640,7 +66692,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PhotoUploadResponseOut"];
                 };
             };
             /** @description Validation Error */
@@ -56705,7 +66757,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PhotoTagsResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -56736,7 +66788,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AlbumSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -56765,7 +66817,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ClassroomOptionOut"][];
                 };
             };
         };
@@ -56789,7 +66841,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentAttendanceBatchSaveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -57386,6 +67438,37 @@ export interface operations {
             };
         };
     };
+    portal_cancel_api_portal_dismissal_calls__call_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     portal_complete_api_portal_dismissal_calls__call_id__complete_post: {
         parameters: {
             query?: never;
@@ -57805,7 +67888,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalClassAttendanceMonthlyOut"];
                 };
             };
             /** @description Validation Error */
@@ -58956,7 +69039,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalSalaryPreviewOut"];
                 };
             };
             /** @description Validation Error */
@@ -59651,6 +69734,351 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchApproveResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_campaigns_api_recruitment_bonus_campaigns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignListOut"];
+                };
+            };
+        };
+    };
+    create_campaign_api_recruitment_bonus_campaigns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_campaign_detail_api_recruitment_bonus_campaigns__campaign_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_campaign_api_recruitment_bonus_campaigns__campaign_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CampaignUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_attribution_api_recruitment_bonus_campaigns__campaign_id__attributions__attribution_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attribution_id: number;
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttributionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttributionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_campaign_xlsx_api_recruitment_bonus_campaigns__campaign_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_campaign_report_api_recruitment_bonus_campaigns__campaign_id__report_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentBonusReportOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_campaign_api_recruitment_bonus_campaigns__campaign_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettleResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_campaign_candidates_api_recruitment_bonus_campaigns__campaign_id__sync_candidates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentBonusSyncResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_transfer_roster_api_recruitment_bonus_campaigns__campaign_id__transfer_roster_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                campaign_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecruitmentBonusRosterOut"];
                 };
             };
             /** @description Validation Error */
@@ -61540,7 +71968,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryUnfinalizeOut"];
                 };
             };
             /** @description Validation Error */
@@ -61577,7 +72005,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryManualAdjustOut"];
                 };
             };
             /** @description Validation Error */
@@ -61662,6 +72090,10 @@ export interface operations {
             query: {
                 /** @description Calculate for which month */
                 month: number;
+                /** @description use_snapshot=false 時必填（≥10 字）：改用現行主檔的原因，入審計 */
+                reason?: string | null;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（需 reason ≥10 字，寫審計） */
+                use_snapshot?: boolean;
                 /** @description Calculate for which year */
                 year: number;
             };
@@ -61677,7 +72109,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryCalculateOut"];
                 };
             };
             /** @description Validation Error */
@@ -61695,6 +72127,10 @@ export interface operations {
         parameters: {
             query: {
                 month: number;
+                /** @description use_snapshot=false 時必填（≥10 字）：改用現行主檔的原因，入審計 */
+                reason?: string | null;
+                /** @description 曾封存列重算是否沿用輸入快照（預設是）；false=改用現行主檔重算（需 reason ≥10 字，寫審計） */
+                use_snapshot?: boolean;
                 year: number;
             };
             header?: never;
@@ -61709,7 +72145,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryCalculateAsyncStartOut"];
                 };
             };
             /** @description Validation Error */
@@ -61743,7 +72179,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryCalculateJobOut"];
                 };
             };
             /** @description Validation Error */
@@ -61840,9 +72276,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotOut"];
                 };
             };
             /** @description Validation Error */
@@ -61877,9 +72311,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotPatchOut"];
                 };
             };
             /** @description Validation Error */
@@ -61912,9 +72344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotConfirmOut"];
                 };
             };
             /** @description Validation Error */
@@ -61947,9 +72377,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EnrollmentSnapshotGenerateOut"];
                 };
             };
             /** @description Validation Error */
@@ -62081,7 +72509,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryFinalizeMonthOut"];
                 };
             };
             /** @description Validation Error */
@@ -62180,6 +72608,38 @@ export interface operations {
             };
         };
     };
+    get_salary_monthly_overview_api_salaries_monthly_overview_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalaryMonthlyOverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_salary_records_api_salaries_records_get: {
         parameters: {
             query: {
@@ -62233,7 +72693,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalarySimulateOut"];
                 };
             };
             /** @description Validation Error */
@@ -62473,6 +72933,39 @@ export interface operations {
             };
         };
     };
+    copy_month_assignments_api_shifts_copy_month_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyMonthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyMonthResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_daily_shifts_api_shifts_daily_get: {
         parameters: {
             query: {
@@ -62525,7 +73018,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DeleteResultOut"];
+                    "application/json": components["schemas"]["DailyShiftOut"];
                 };
             };
             /** @description Validation Error */
@@ -62626,6 +73119,71 @@ export interface operations {
             };
         };
     };
+    get_shift_leave_context_api_shifts_leave_context_get: {
+        parameters: {
+            query: {
+                /** @description 區間迄（含） */
+                end_date: string;
+                /** @description 區間起（含） */
+                start_date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftLeaveContextOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_schedule_roster_api_shifts_roster_get: {
+        parameters: {
+            query?: {
+                include_inactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleRosterOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_swap_history_api_shifts_swap_history_get: {
         parameters: {
             query?: {
@@ -62661,7 +73219,9 @@ export interface operations {
     };
     list_shift_types_api_shifts_types_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_usage?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -62675,6 +73235,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ShiftTypeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -66580,10 +77149,14 @@ export interface operations {
     list_vendor_payments_api_vendor_payments_get: {
         parameters: {
             query?: {
+                approval_status?: ("draft" | "pending_approval" | "approved" | "rejected" | "legacy") | null;
+                category?: string | null;
                 end_date?: string | null;
                 page?: number;
                 page_size?: number;
                 payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                reconciliation_status?: ("unreconciled" | "reconciled" | "exception") | null;
+                settlement_status?: ("unsettled" | "settled") | null;
                 start_date?: string | null;
                 status?: ("pending" | "signed") | null;
                 vendor_name?: string | null;
@@ -66744,6 +77317,41 @@ export interface operations {
             };
         };
     };
+    approve_vendor_payment_api_vendor_payments__payment_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upload_attachment_api_vendor_payments__payment_id__attachments_post: {
         parameters: {
             query?: never;
@@ -66845,6 +77453,107 @@ export interface operations {
             };
         };
     };
+    list_vendor_payment_events_api_vendor_payments__payment_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceEventListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reconcile_vendor_payment_api_vendor_payments__payment_id__reconcile_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settle_vendor_payment_api_vendor_payments__payment_id__settle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinanceSettleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sign_vendor_payment_api_vendor_payments__payment_id__sign_post: {
         parameters: {
             query?: never;
@@ -66911,9 +77620,74 @@ export interface operations {
             };
         };
     };
+    submit_vendor_payment_api_vendor_payments__payment_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FinanceTransitionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_sign_vendor_payments_api_vendor_payments_batch_sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorPaymentBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignoffBatchSignResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     vendor_payments_summary_api_vendor_payments_summary_get: {
         parameters: {
             query?: {
+                category?: string | null;
                 end_date?: string | null;
                 payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
                 start_date?: string | null;

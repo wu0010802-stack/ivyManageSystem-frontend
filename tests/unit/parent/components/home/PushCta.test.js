@@ -14,7 +14,7 @@ describe('PushCta', () => {
 
   it('顯示推播延遲的精簡說明', () => {
     const wrapper = mount(PushCta, { global: { stubs } })
-    expect(wrapper.text()).toContain('公告、訊息與審核結果可能會延遲看到')
+    expect(wrapper.text()).toContain('公告、聯絡簿與審核結果可能會延遲看到')
     expect(wrapper.findAll('.push-cta-list li')).toHaveLength(0)
   })
 

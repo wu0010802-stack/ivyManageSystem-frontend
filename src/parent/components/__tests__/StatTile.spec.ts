@@ -37,4 +37,9 @@ describe('StatTile', () => {
     const w = mountTile({ label: 'x', value: '1', tone: 'amber' })
     expect(w.find('.stat-tile').classes()).toContain('tone-amber')
   })
+
+  it('tone=leaf 套對應 class', () => {
+    const w = mountTile({ label: 'x', value: '1', tone: 'leaf' })
+    expect(w.find('.stat-tile').classes()).toContain('tone-leaf')
+  })
 })

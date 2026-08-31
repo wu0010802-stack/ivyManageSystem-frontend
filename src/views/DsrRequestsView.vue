@@ -5,8 +5,13 @@ import { listDsrRequests, approveDsrRequest, rejectDsrRequest } from '@/api/dsr'
 import { apiError } from '@/utils/error'
 import type { Schema } from '@/api/_generated/typed'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 type DsrRecord = Schema<'DsrRequestAdminOut'>
+
+// 手機版（≤767.98px）：清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
 
 // --- Label maps ---
 const REQUEST_TYPE_LABEL: Record<string, string> = {
@@ -47,6 +52,14 @@ const dsrFilterGroups = [{
   ],
 }]
 const dsrFilterValues = computed<Record<string, unknown>>(() => ({ status: statusFilter.value }))
+
+// 手機卡片欄位（__ 前綴為 slot-only 欄）
+const dsrCardColumns = [
+  { label: '狀態', prop: '__status' },
+  { label: '主體', prop: '__subject' },
+  { label: '提交時間', prop: 'submitted_at' },
+  { label: '申請原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+]
 
 // Approve dialog
 const approveDialogVisible = ref(false)
@@ -146,7 +159,7 @@ onMounted(fetchList)
       @update:filter-values="onStatusFilterChange"
     />
 
-    <el-table :data="pagedRecords" v-loading="loading" style="width: 100%">
+    <el-table v-if="!isMobile" :data="pagedRecords" v-loading="loading" style="width: 100%">
       <el-table-column prop="id" label="編號" width="80" />
       <el-table-column label="類型" width="120">
         <template #default="{ row }">
@@ -181,6 +194,37 @@ onMounted(fetchList)
         </template>
       </el-table-column>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="(pagedRecords as unknown as Record<string, unknown>[])"
+      :columns="dsrCardColumns"
+      row-key="id"
+      :loading="loading"
+      empty-text="目前沒有符合條件的請求"
+    >
+      <template #title="{ item }">
+        {{ REQUEST_TYPE_LABEL[item.request_type as string] ?? item.request_type }} #{{ item.id }}
+      </template>
+      <template #cell-__status="{ item }">
+        <el-tag :type="STATUS_TAG_TYPE[item.status as string] ?? 'info'" size="small">
+          {{ STATUS_LABEL[item.status as string] ?? item.status }}
+        </el-tag>
+      </template>
+      <template #cell-__subject="{ item }">
+        <span v-if="item.subject_entity_type">
+          {{ item.subject_entity_type }}
+          <span v-if="item.subject_entity_id"> #{{ item.subject_entity_id }}</span>
+        </span>
+        <span v-else>—</span>
+      </template>
+      <template #actions="{ item }">
+        <template v-if="item.status === 'pending'">
+          <el-button link type="success" @click="openApproveDialog(item as unknown as DsrRecord)">核准</el-button>
+          <el-button link type="danger" @click="openRejectDialog(item as unknown as DsrRecord)">駁回</el-button>
+        </template>
+        <span v-else style="color: var(--text-tertiary);">已處理</span>
+      </template>
+    </AdminListCards>
 
     <div v-if="records.length > pageSize" style="display: flex; justify-content: flex-end; margin-top: 16px">
       <el-pagination

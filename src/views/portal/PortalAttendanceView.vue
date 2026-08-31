@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Printer } from '@element-plus/icons-vue'
-import { getAttendanceSheet, getAttendanceSheetPdf } from '@/api/portal'
+import { getAttendanceSheet, getAttendanceSheetPdf, getSwapPendingCount } from '@/api/portal'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
@@ -14,6 +15,20 @@ import AttendanceTableView from './components/attendance/AttendanceTableView.vue
 
 const loading = ref(false)
 const userInfo = getUserInfo()
+const router = useRouter()
+
+// Phase 1 殼層改版：排班 tab 退出底部導覽，手機在本頁補「我的排班」入口
+// （badge 與側欄「我的排班」同源：換班待確認數）
+const swapPendingCount = ref(0)
+const goSchedule = () => router.push('/portal/schedule')
+const fetchSwapPendingCount = async () => {
+  try {
+    const res = await getSwapPendingCount()
+    swapPendingCount.value = ((res.data as Record<string, unknown>)?.pending_count as number) || 0
+  } catch {
+    // Silent fail（入口列照常顯示，只是沒 badge）
+  }
+}
 
 const now = new Date()
 const query = reactive({
@@ -134,6 +149,7 @@ const scrollToToday = () => {
 
 onMounted(() => {
   fetchSheet()
+  fetchSwapPendingCount()
   if ('IntersectionObserver' in window && topSentinel.value) {
     stickyObserver = new IntersectionObserver(
       ([entry]) => { showStickyBar.value = !entry.isIntersecting },
@@ -178,6 +194,21 @@ onUnmounted(() => {
       </div>
     </el-card>
 
+    <!-- Phase 1 殼層改版：手機限定「我的排班」入口列（桌機側欄仍有排班項，不重複） -->
+    <button v-if="isMobile" type="button" class="schedule-entry" @click="goSchedule">
+      <span class="schedule-entry__icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M12 7.5V12l3 2" />
+        </svg>
+      </span>
+      <span class="schedule-entry__label">我的排班</span>
+      <span v-if="swapPendingCount > 0" class="schedule-entry__badge">{{ swapPendingCount }}</span>
+      <svg class="schedule-entry__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9.5 6.5 15 12l-5.5 5.5" />
+      </svg>
+    </button>
+
     <!-- Sentinel: 觀察 header-card 是否仍在 viewport，控制 sticky bar 顯示 -->
     <div ref="topSentinel" class="top-sentinel" aria-hidden="true" />
 
@@ -216,6 +247,80 @@ onUnmounted(() => {
 .header-card {
   margin-bottom: var(--space-6);
   background-color: var(--surface-color);
+}
+
+/* 我的排班入口列（手機限定，Phase 1 殼層改版） */
+.schedule-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-2) var(--space-4);
+  margin: calc(-1 * var(--space-4)) 0 var(--space-4);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.schedule-entry:active {
+  transform: scale(0.98);
+}
+
+.schedule-entry:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.schedule-entry__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-lighter, #e0e7ff);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.schedule-entry__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.schedule-entry__label {
+  flex: 1 1 auto;
+  text-align: left;
+  font-size: var(--text-lg);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.schedule-entry__badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: var(--color-danger);
+  color: #ffffff;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.schedule-entry__chev {
+  width: 16px;
+  height: 16px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
 }
 
 .sheet-header {

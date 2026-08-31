@@ -4,7 +4,6 @@ import { computed, ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
-import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
 import { initPortalDismissalAlerts, teardownPortalDismissalAlerts, usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getTodayHub } from '@/api/portalClassHub'
 import { changePassword, endImpersonate } from '@/api/auth'
@@ -13,6 +12,7 @@ import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
+import ApplySheet from '@/components/portal/ApplySheet.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
 import { useIsMobile } from '@/composables/useIsMobile'
 import {
@@ -29,7 +29,7 @@ import {
   Warning,
   Brush,
   Bell,
-  Clock,
+  Plus,
 } from '@element-plus/icons-vue'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
@@ -51,6 +51,14 @@ const route = useRoute()
 const router = useRouter()
 const activeIndex = computed(() => route.path)
 const userInfo = computed<UserInfo>(() => (getUserInfo() || {}) as UserInfo)
+
+// 申請集中入口（底部「＋」FAB）
+const applySheetOpen = ref(false)
+
+// 班級 tab active：班級工作台 + 班級學生（含 /portal/student-detail 等單數路徑）
+const classTabActive = computed(
+  () => route.path.startsWith('/portal/class-hub') || route.path.startsWith('/portal/student'),
+)
 
 const showPasswordDialog = ref(false)
 const passwordForm = ref<{ old_password: string; new_password: string; confirm_password: string }>(
@@ -78,16 +86,12 @@ const substitutePendingCount = ref(0)
 // 接送待處理數：由 module-singleton composable 即時維護（WS 推播驅動），殼層不另外 fetch
 const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
 
-// 家園溝通：家長訊息未讀
-const messagesUnreadCount = ref(0)
 // 今日工作台待辦數
 const hubPendingCount = ref(0)
 
-// 「今日工作台」menu badge 聚合：hub 待辦 + 家長訊息未讀。
+// 「今日工作台」menu badge。親師訊息已於 2026-08-28 下架，這裡只剩 hub 待辦；
 // 不含公告（unreadCount），因為「公告通知」已是獨立頂層 menu item 自帶 badge。
-const totalHubBadge = computed(
-  () => hubPendingCount.value + messagesUnreadCount.value,
-)
+const totalHubBadge = computed(() => hubPendingCount.value)
 
 // Badge 刷新節流：避免短時間內被多次觸發（route 切換、tab 切回）打爆後端。
 // 30 秒內已 refresh 過就不再全量重抓；個別事件（如代理人狀態變更）仍可 force。
@@ -121,15 +125,6 @@ const fetchSubstitutePendingCount = async () => {
   }
 }
 
-const fetchMessagesUnreadCount = async () => {
-  try {
-    const res = await getMessagesUnreadCount()
-    messagesUnreadCount.value = (res.data as Record<string, unknown>)?.unread_count as number || 0
-  } catch {
-    // 沒有 PARENT_MESSAGES_WRITE 權限會 403，靜默忽略
-  }
-}
-
 const fetchHubPendingCount = async () => {
   try {
     const data = await getTodayHub()
@@ -152,7 +147,6 @@ const refreshPortalCounts = ({ force = false }: { force?: boolean } = {}) => {
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
   // dismissal count 由 composable 透過 WS 即時維護，不走輪詢
-  fetchMessagesUnreadCount()
   fetchHubPendingCount()
 }
 
@@ -195,6 +189,9 @@ const dismissInstallBanner = () => {
 }
 
 onMounted(() => {
+  // portal 品牌色 scope（soft-ui.css 的 html.ivy-portal 區塊，EP primary 收斂 indigo）；
+  // 比照 AdminLayout 的 ivy-admin：掛在 <html> 讓 teleport 到 body 的 dialog/sheet 也吃到
+  document.documentElement.classList.add('ivy-portal')
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
   window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.addEventListener('visibilitychange', onVisibilityChange)
@@ -202,8 +199,8 @@ onMounted(() => {
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
   initPortalDismissalAlerts()
 
-  // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
-  const PORTAL_LAYOUT_VERSION = '1'
+  // 導航更新一次性提示（v=2: Phase 1 殼層改版；v=1: 2026-05 教師端 ACD 改造）
+  const PORTAL_LAYOUT_VERSION = '2'
   const stored = tenantGetItem('portal_layout_v')
   if (stored !== PORTAL_LAYOUT_VERSION) {
     setTimeout(() => {
@@ -211,10 +208,10 @@ onMounted(() => {
         title: '導航更新',
         message:
           '教師端介面已更新：\n\n' +
-          '• 底部 tab 第 5 個從「更多」改為「我的」（個人選單）\n' +
-          '• 側邊欄「班級教務」拆為「班級 — 教學」與「班級 — 管理」\n' +
-          '• 新增「今日工作台」為預設首頁\n\n' +
-          '原本的選單仍可由側邊欄找到。',
+          '• 底部導覽改版：「工作台」改名「今日」、新增「班級」分頁\n' +
+          '• 中央「＋」按鈕集中請假／加班／補打卡／異常確認申請\n' +
+          '• 「排班」入口移到出勤頁上方、「學生」入口移到班級工作台\n\n' +
+          '桌機側邊欄選單維持不變。',
         type: 'info',
         confirmButtonText: '我知道了',
         showCancelButton: false,
@@ -228,6 +225,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.documentElement.classList.remove('ivy-portal')
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
   window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -397,6 +395,9 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/class-hub">
             <span>今日班級工作台</span>
           </el-menu-item>
+          <el-menu-item index="/portal/student-leaves">
+            <span>學生請假</span>
+          </el-menu-item>
           <el-menu-item index="/portal/observations">
             <span>課堂觀察</span>
           </el-menu-item>
@@ -554,53 +555,50 @@ const submitPassword = async () => {
         <RouterView />
       </el-main>
 
-      <!-- Bottom Navigation (mobile only) -->
+      <!-- Bottom Navigation (mobile only)：Phase 1 殼層改版 —— 今日/班級/＋申請/出勤/我的。
+           排班入口移至出勤頁上方、學生入口移至班級工作台（桌機側欄不變）。 -->
       <nav v-if="isMobile" class="bottom-nav" aria-label="主要導覽">
         <button
           type="button"
           class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }"
-          :aria-current="route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') ? 'page' : undefined"
+          :class="{ active: route.path.startsWith('/portal/home') }"
+          :aria-current="route.path.startsWith('/portal/home') ? 'page' : undefined"
           @click="router.push('/portal/home')"
         >
           <div class="tab-icon-wrapper">
             <el-icon><HomeFilled /></el-icon>
             <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
           </div>
-          <span>工作台</span>
+          <span>今日</span>
         </button>
         <button
           type="button"
           class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/attendance') }"
-          :aria-current="route.path.startsWith('/portal/attendance') ? 'page' : undefined"
+          :class="{ active: classTabActive }"
+          :aria-current="classTabActive ? 'page' : undefined"
+          @click="router.push('/portal/class-hub')"
+        >
+          <el-icon><School /></el-icon>
+          <span>班級</span>
+        </button>
+        <div class="bottom-fab-slot">
+          <button type="button" class="bottom-fab" aria-label="開啟申請選單" @click="applySheetOpen = true">
+            <el-icon><Plus /></el-icon>
+          </button>
+          <span class="bottom-fab-label" aria-hidden="true">申請</span>
+        </div>
+        <button
+          type="button"
+          class="bottom-tab"
+          :class="{ active: route.path.startsWith('/portal/attendance') || route.path.startsWith('/portal/schedule') }"
+          :aria-current="route.path.startsWith('/portal/attendance') || route.path.startsWith('/portal/schedule') ? 'page' : undefined"
           @click="router.push('/portal/attendance')"
         >
-          <el-icon><Calendar /></el-icon>
-          <span>出勤</span>
-        </button>
-        <button
-          type="button"
-          class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/schedule') }"
-          :aria-current="route.path.startsWith('/portal/schedule') ? 'page' : undefined"
-          @click="router.push('/portal/schedule')"
-        >
           <div class="tab-icon-wrapper">
-            <el-icon><Clock /></el-icon>
+            <el-icon><Calendar /></el-icon>
             <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="tab-badge" />
           </div>
-          <span>排班</span>
-        </button>
-        <button
-          type="button"
-          class="bottom-tab"
-          :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }"
-          :aria-current="route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') ? 'page' : undefined"
-          @click="router.push('/portal/students')"
-        >
-          <el-icon><User /></el-icon>
-          <span>學生</span>
+          <span>出勤</span>
         </button>
         <button
           type="button"
@@ -620,6 +618,9 @@ const submitPassword = async () => {
 
     <!-- 全域快速搜尋 Palette (Cmd+K) -->
     <PortalSearchPalette />
+
+    <!-- 申請集中入口（底部「＋」FAB 開啟；收攏側欄假勤申請群組四項） -->
+    <ApplySheet v-model="applySheetOpen" :substitute-pending-count="substitutePendingCount" />
 
     <!-- Change Password Dialog -->
     <el-dialog v-model="showPasswordDialog" title="修改密碼" :width="isMobile ? '90%' : '400px'">
@@ -876,8 +877,10 @@ html.dark .portal-layout {
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
-  background: #f0fdf4;
-  border-bottom: 1px solid var(--color-success-soft);
+  /* token 化（原硬編 #f0fdf4 淺綠不翻色，dark 下成刺眼亮條——finding #2 既有債清償）：
+     light=soft pastel、dark=alpha tint，文字 *-darker 兩模式各自對比達標 */
+  background: var(--color-success-soft);
+  border-bottom: 1px solid var(--color-success);
   font-size: var(--text-base);
   color: var(--color-success-darker);
 }
@@ -962,6 +965,53 @@ html.dark .portal-layout {
 
 .bottom-tab .el-icon {
   font-size: 20px;
+}
+
+/* 中央申請 FAB（Phase 1 殼層改版） */
+.bottom-fab-slot {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: 7px;
+}
+
+.bottom-fab {
+  position: absolute;
+  top: -18px;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: none;
+  background: var(--pt-gradient-portal);
+  color: #ffffff;
+  box-shadow: 0 8px 16px rgba(79, 70, 229, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-fab:active {
+  transform: scale(0.94);
+}
+
+.bottom-fab:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.bottom-fab .el-icon {
+  font-size: 26px;
+}
+
+.bottom-fab-label {
+  font-size: 12px;
+  color: var(--text-secondary, #64748b);
 }
 
 .tab-icon-wrapper {
@@ -1095,9 +1145,4 @@ html.dark .portal-layout {
   font-size: 22px;
 }
 
-/* dark mode：install-banner 背景是硬編淺綠（不翻色，finding #2 既有債），上游 a11y.css
-   把 --color-success-darker 翻成亮色會讓提示文字塌對比；dark scope 還原可讀深字。 */
-html.dark .install-banner {
-  color: #15803d;
-}
 </style>

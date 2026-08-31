@@ -145,7 +145,7 @@ describe('RulesSettingsLayout', () => {
       expect(alert.text()).toContain('重算')
       const link = w.find('.rules-open-cycle-alert__link')
       expect(link.exists()).toBe(true)
-      expect(link.attributes('href')).toBe('/appraisal-year-end/appraisal/current')
+      expect(link.attributes('href')).toBe('/appraisal-year-end/appraisal')
     })
 
     it('listAppraisalCycles 失敗時不顯示 banner（靜默回退，不干擾主流程）', async () => {

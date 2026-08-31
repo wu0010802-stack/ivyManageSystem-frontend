@@ -34,7 +34,8 @@ function runAction(): void {
   const a = props.item.action
   if (!a) return
   if (a.type === 'route') router.push(a.path ?? '/')
-  else if (a.type === 'contact_teacher') router.push('/messages')
+  // 訊息下架（2026-08-28）後，「聯絡老師」改導聯絡簿——家長在聯絡簿詳情可回覆老師。
+  else if (a.type === 'contact_teacher') router.push('/contact-book')
   else if (a.type === 'external' && a.url) {
     // 只放行 http(s)：擋掉 javascript: 等 scheme（window.open('javascript:…') 在部分引擎會執行）
     const href = sanitizeHref(a.url)

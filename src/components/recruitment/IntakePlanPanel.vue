@@ -38,8 +38,13 @@
     </el-table>
 
     <div class="intake-plan-panel__total">
-      合計：計畫 {{ total.target }} · 保留 {{ total.reserved }} · 註冊 {{ total.enrolled }} · 剩餘
-      {{ total.remaining }}
+      <span class="total-caption">合計</span>
+      <span class="total-item">計畫 <b>{{ total.target }}</b></span>
+      <span class="total-item">保留 <b>{{ total.reserved }}</b></span>
+      <span class="total-item">註冊 <b>{{ total.enrolled }}</b></span>
+      <span class="total-item total-item--key" :class="{ 'remaining-neg': total.remaining < 0 }">
+        剩餘 <b>{{ total.remaining }}</b>
+      </span>
     </div>
   </div>
 </template>
@@ -157,14 +162,59 @@ onMounted(reload)
 <style scoped>
 .intake-plan-panel__toolbar {
   display: flex;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: var(--space-3);
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
+
+/* 主要動作靠右，與漏斗看板／統計分析的動作位置對齊——原本擠在學年、學期選擇器旁邊，
+ * 每切一個 tab 就要重新找按鈕在哪 */
+.intake-plan-panel__toolbar .el-button {
+  margin-left: auto;
+}
+
+/* 這一行是本頁的結論（尤其「剩餘」是決策數字），原本是 13px 灰字貼在表格外、
+ * 看起來像註腳。改為與表格同寬的 footer 帶，數字對齊、可掃讀。 */
 .intake-plan-panel__total {
-  margin-top: 12px;
-  color: #606266;
-  font-size: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-5);
+  margin-top: calc(var(--space-1) * -1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  background: var(--bg-color);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.total-caption {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.total-item b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.total-item--key {
+  margin-left: auto;
+  color: var(--text-primary);
+}
+
+.total-item--key b {
+  font-size: var(--text-lg);
+}
+
+@media (--to-sm) {
+  .intake-plan-panel__toolbar .el-button,
+  .total-item--key {
+    margin-left: 0;
+  }
 }
 .remaining-neg {
   color: var(--el-color-danger);

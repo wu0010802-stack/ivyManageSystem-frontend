@@ -80,9 +80,4 @@ describe('fees api — non-template endpoints', () => {
     expect(mockGet).toHaveBeenCalledWith('/fees/summary', { params })
   })
 
-  it('generateFeeRecords POST /fees/generate with payload', async () => {
-    const payload = { template_ids: [1, 2], student_ids: [10, 20] }
-    await mod.generateFeeRecords(payload)
-    expect(mockPost).toHaveBeenCalledWith('/fees/generate', payload)
-  })
 })

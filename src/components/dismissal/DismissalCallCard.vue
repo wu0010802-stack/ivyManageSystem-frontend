@@ -6,13 +6,17 @@ import {
   urgencyLevel,
   formatWaited,
   monogramOf,
+  isPreArrivalNotice,
+  waitAnchorIso,
+  formatExpectedArrival,
+  etaRelativeText,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 
 /**
  * 接送通知卡片（管理端佇列 + 老師 portal 共用的呈現元件）。
  * 負責孩子辨識（姓名首字圓徽 + 放大姓名 + 班級）、等候時間升級色、狀態。
- * 動作（已收到 / 帶出去放學 / 取消）由父層用 #action slot 注入；
+ * 動作（我收到了 / 取消）由父層用 #action slot 注入；老師端按「我收到了」即完成放學；
  * #secondary slot 放額外脈絡（管理端的「通知人」）。
  */
 const props = defineProps<{
@@ -28,7 +32,15 @@ const STATUS_TEXT: Record<string, string> = {
   cancelled: '已取消',
 }
 
-const minutes = computed(() => elapsedMinutes(props.call.requested_at, props.now))
+/** 家長預告且未抵達：顯示 ETA、不套 3/8 分鐘等候警示（pnotice01）。 */
+const preArrival = computed(() => isPreArrivalNotice(props.call))
+/**
+ * 等候起算點＝實際到門口時間（arrived_at）；staff 舊流程 arrived_at=requested_at
+ * → 數字與改造前逐字相同。預告未抵達不計等候。
+ */
+const minutes = computed(() =>
+  preArrival.value ? null : elapsedMinutes(waitAnchorIso(props.call), props.now),
+)
 /** 等候時間本身的緊急度（恆為事實，不受狀態影響）。 */
 const waitLevel = computed(() => urgencyLevel(minutes.value))
 /** 卡片底色語氣：已收到 = 老師正在處理，轉藍冷靜；未確認則隨等候時間升級。 */
@@ -37,6 +49,19 @@ const tone = computed(() =>
 )
 const monogram = computed(() => monogramOf(props.call.student_name))
 const waited = computed(() => formatWaited(minutes.value))
+/** 預告卡的 ETA chip：「預計 15:40 · 還有 12 分」。 */
+const etaText = computed(() => {
+  if (!preArrival.value) return ''
+  const expected = formatExpectedArrival(props.call.expected_arrival_at)
+  const rel = etaRelativeText(props.call.expected_arrival_at, props.now)
+  return [expected, rel].filter(Boolean).join(' · ')
+})
+/** 來源/抵達標記：家長預告（未抵達）→「家長預告」；家長已到門口 →「已到門口」。 */
+const sourceFlag = computed<{ text: string; kind: 'notice' | 'arrived' } | null>(() => {
+  if (props.call.request_source !== 'parent') return null
+  if (!props.call.arrived_at) return { text: '家長預告', kind: 'notice' }
+  return { text: '已到門口', kind: 'arrived' }
+})
 const statusText = computed(
   () => STATUS_TEXT[props.call.status ?? ''] ?? props.call.status ?? '',
 )
@@ -52,6 +77,8 @@ const ariaLabel = computed(() => {
     props.call.classroom_name || '未分班',
     statusText.value,
   ]
+  if (sourceFlag.value) parts.push(sourceFlag.value.text)
+  if (etaText.value) parts.push(etaText.value)
   if (waited.value) parts.push(waited.value)
   return parts.filter(Boolean).join('，')
 })
@@ -65,11 +92,21 @@ const ariaLabel = computed(() => {
         <h3 class="dcall__name">{{ call.student_name || '未知學生' }}</h3>
         <div class="dcall__sub">
           <span class="dcall__room">{{ call.classroom_name || '未分班' }}</span>
+          <span
+            v-if="sourceFlag"
+            class="dcall__flag"
+            :class="`dcall__flag--${sourceFlag.kind}`"
+            data-testid="dcall-source-flag"
+          >{{ sourceFlag.text }}</span>
           <slot name="secondary" />
         </div>
       </div>
+      <!-- 預告未抵達：ETA chip（不套 3/8 分鐘警示）；其餘顯示等候 chip -->
+      <span v-if="etaText" class="dcall__wait dcall__wait--eta" data-testid="dcall-eta-chip">
+        <el-icon class="dcall__wait-ico"><Clock /></el-icon>{{ etaText }}
+      </span>
       <span
-        v-if="waited"
+        v-else-if="waited"
         class="dcall__wait"
         :class="`dcall__wait--${waitLevel}`"
       >
@@ -234,6 +271,29 @@ html.dark .dcall--ack .dcall__mono {
   font-size: var(--text-base);
   padding: 5px 12px;
 }
+/* 預告 ETA chip：資訊藍、不進警示色階（3/8 分鐘警示對預告不適用） */
+.dcall__wait--eta {
+  background: var(--color-info-soft);
+  color: var(--color-info-darker);
+}
+
+/* 來源/抵達標記（pnotice01）：家長預告＝藍、已到門口＝綠 */
+.dcall__flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+}
+.dcall__flag--notice {
+  background: var(--color-info-soft);
+  color: var(--color-info-darker);
+}
+.dcall__flag--arrived {
+  background: var(--color-success-soft);
+  color: var(--color-success-darker);
+}
 
 .dcall__note {
   margin: var(--space-3) 0 0;
@@ -281,7 +341,10 @@ html.dark .dcall--ack .dcall__mono {
   gap: var(--space-2);
 }
 
-@media (max-width: 560px) {
+/* 斷點改用專案 custom media（原本寫死 560px 不在斷點系統內，違反 DESIGN.md 硬規則）。
+   ⚠ 本元件同時被教師 Portal 的 PortalDismissalCallsView 消費：561–767px（小平板）
+   的卡片會比改版前更早收成直向堆疊，屬預期的一致化，非 admin 專屬變更。 */
+@media (--to-sm) {
   .dcall__note,
   .dcall__foot {
     padding-left: 0;
@@ -295,6 +358,11 @@ html.dark .dcall--ack .dcall__mono {
   }
   .dcall__action {
     flex-direction: column;
+  }
+  /* 卡片動作（取消通知／標記抵達）是接送看板最關鍵的觸控目標，實測只有 24px。
+     消費端用 size="small" 是為了桌機密度，手機一律撐到 44px。 */
+  .dcall__action :deep(.el-button) {
+    min-height: var(--touch-target-min);
   }
 }
 

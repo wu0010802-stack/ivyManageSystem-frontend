@@ -47,7 +47,7 @@ const routes: RouteRecordRaw[] = [
       path: '/announcements',
       name: 'parent-announcements',
       component: () => import('./views/AnnouncementsView.vue'),
-      meta: { title: '公告', tab: 'messages' },
+      meta: { title: '公告', tab: 'contact-book' },
     },
     {
       path: '/leaves',
@@ -56,16 +56,15 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '請假', tab: 'admin', showBack: true },
     },
     {
+      // 親師訊息功能已於 2026-08-28 自家長端下架，第三個 tab 換成聯絡簿。
+      // 這兩條 redirect 只為既有 LINE 推播深連結而留——直接刪掉會落到
+      // catch-all（把家長丟回首頁），redirect 至少維持「要看老師說了什麼」的脈絡。
       path: '/messages',
-      name: 'parent-messages',
-      component: () => import('./views/MessagesView.vue'),
-      meta: { title: '訊息', tab: 'messages' },
+      redirect: '/contact-book',
     },
     {
       path: '/messages/:threadId',
-      name: 'parent-message-thread',
-      component: () => import('./views/MessageThreadView.vue'),
-      meta: { title: '對話', tab: 'messages', showBack: true, hideTabBar: true },
+      redirect: '/contact-book',
     },
     {
       path: '/assistant',
@@ -157,6 +156,14 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '臨時接送', tab: 'admin', showBack: true },
     },
     {
+      // 預告接送（pnotice01）：家長本人提前通知抵達時間。
+      // ⚠ 與 /pickup（臨時接送授權，親友代接）是兩個功能，不可合併或改名。
+      path: '/pickup-notice',
+      name: 'parent-pickup-notice',
+      component: () => import('./views/PickupNoticeView.vue'),
+      meta: { title: '預告接送', tab: 'admin', showBack: true },
+    },
+    {
       path: '/pickup/new',
       name: 'parent-pickup-new',
       component: () => import('./views/PickupCreateView.vue'),
@@ -172,25 +179,25 @@ const routes: RouteRecordRaw[] = [
       path: '/children/:studentId',
       name: 'parent-child-profile',
       component: () => import('./views/ChildProfileView.vue'),
-      meta: { title: '孩子檔案', tab: 'admin', showBack: true },
+      meta: { title: '孩子檔案', tab: 'child', showBack: true },
     },
     {
       path: '/children/:studentId/reports',
       name: 'parent-child-reports',
       component: () => import('./views/ChildReportsView.vue'),
-      meta: { title: '歷次成長報告', tab: 'admin', showBack: true },
+      meta: { title: '歷次成長報告', tab: 'child', showBack: true },
     },
     {
       path: '/children/:studentId/photos',
       name: 'parent-child-photos',
       component: () => import('./views/ChildPhotosView.vue'),
-      meta: { title: '照片牆', tab: 'admin', showBack: true },
+      meta: { title: '照片牆', tab: 'child', showBack: true },
     },
     {
       path: '/children/:studentId/measurements',
       name: 'parent-child-measurements',
       component: () => import('./views/ChildMeasurementsView.vue'),
-      meta: { title: '健康紀錄', tab: 'admin', showBack: true },
+      meta: { title: '健康紀錄', tab: 'child', showBack: true },
     },
     {
       path: '/calendar',
@@ -202,13 +209,14 @@ const routes: RouteRecordRaw[] = [
       path: '/contact-book',
       name: 'parent-contact-book',
       component: () => import('./views/ContactBookView.vue'),
-      meta: { title: '聯絡簿', tab: 'home', showBack: true },
+      // tab 根頁：不給 showBack（返回鍵留給 /contact-book/:entryId 這類深層頁）
+      meta: { title: '聯絡簿', tab: 'contact-book' },
     },
     {
       path: '/contact-book/:entryId',
       name: 'parent-contact-book-detail',
       component: () => import('./views/ContactBookDetailView.vue'),
-      meta: { title: '聯絡簿詳情', tab: 'home', showBack: true },
+      meta: { title: '聯絡簿詳情', tab: 'contact-book', showBack: true },
     },
     {
       path: '/surveys',
@@ -222,6 +230,12 @@ const routes: RouteRecordRaw[] = [
       name: 'parent-survey-detail',
       component: () => import('./views/SurveysView.vue'),
       meta: { title: '活動調查', tab: 'admin', showBack: true },
+    },
+    {
+      path: '/child',
+      name: 'parent-child-hub',
+      component: () => import('./views/ChildHubView.vue'),
+      meta: { title: '孩子', tab: 'child' },
     },
     {
       path: '/admin',

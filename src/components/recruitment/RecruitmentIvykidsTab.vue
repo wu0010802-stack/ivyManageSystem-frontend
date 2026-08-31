@@ -31,7 +31,16 @@
         <el-button type="primary" size="small" :loading="syncing" @click="handleSync">
           立即同步
         </el-button>
-        <el-button type="danger" size="small" plain :loading="deleting" @click="handleDeleteAll">
+        <!-- text 而非 plain，並以分隔線與「立即同步」隔開：兩者原本並排成一組看似對等的
+             選項，但一個是例行操作、另一個會清空整批資料（其 ElMessageBox 已明講不可復原） -->
+        <el-button
+          type="danger"
+          size="small"
+          text
+          class="ivk-danger-action"
+          :loading="deleting"
+          @click="handleDeleteAll"
+        >
           刪除全部資料
         </el-button>
       </div>
@@ -72,7 +81,15 @@
             :data="sourceBarData"
             :options="sourceChartOptions"
           />
-          <el-empty v-else-if="!loadingStats && !ivkStats.by_source.length" description="尚無來源資料" />
+          <el-empty
+            v-else-if="!loadingStats && !ivkStats.by_source.length"
+            :image-size="72"
+            description="還沒有官網報名資料，同步之後這裡會顯示家長從哪裡得知幼兒園。"
+          >
+            <el-button v-if="canWrite" type="primary" size="small" :loading="syncing" @click="handleSync">
+              立即同步
+            </el-button>
+          </el-empty>
         </div>
       </el-card>
       <el-card class="chart-card">
@@ -84,7 +101,15 @@
             :data="monthTrendData"
             :options="monthChartOptions"
           />
-          <el-empty v-else-if="!loadingStats && !ivkStats.by_month.length" description="尚無月份資料" />
+          <el-empty
+            v-else-if="!loadingStats && !ivkStats.by_month.length"
+            :image-size="72"
+            description="還沒有官網報名資料，同步之後這裡會顯示逐月的報名趨勢。"
+          >
+            <el-button v-if="canWrite" type="primary" size="small" :loading="syncing" @click="handleSync">
+              立即同步
+            </el-button>
+          </el-empty>
         </div>
       </el-card>
     </div>
@@ -552,14 +577,15 @@ onMounted(() => {
 .ivk-sync-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
-  padding: 14px 18px;
-  margin-bottom: 16px;
-  background: #FFFFFF;
-  border: 1px solid #DBEAFE;
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-4);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(30, 64, 175, 0.06);
+  /* 中性陰影：原 rgba(30,64,175,…) 是海軍藍，與 admin 青藍品牌不同源 */
+  box-shadow: 0 1px 4px rgb(15 23 42 / 6%);
 }
 
 .ivk-sync-info {
@@ -583,22 +609,30 @@ onMounted(() => {
 
 .ivk-sync-tags {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
   align-items: center;
   flex-wrap: wrap;
 }
 
 .ivk-sync-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.ivk-danger-action {
+  margin-left: var(--space-1);
+  padding-left: var(--space-3);
+  border-left: 1px solid var(--border-color);
+  border-radius: 0;
 }
 
 /* ── KPI 卡片 ── */
 .kpi-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .kpi-card {
@@ -606,17 +640,22 @@ onMounted(() => {
   border: 1px solid var(--border-color);
   border-left: 3px solid transparent;
   border-radius: 12px;
-  padding: 16px;
-  transition: box-shadow 0.15s ease;
+  padding: var(--space-4);
+  /* 走既有 --transition-fast token。註：該 token 目前的值是 `0.15s ease`，
+     用的是瀏覽器預設 easing；要換成命名曲線屬全站動效決策，不在本次範圍。 */
+  transition: box-shadow var(--transition-fast);
 }
 
 .kpi-card:hover {
-  box-shadow: 0 2px 12px rgba(30, 64, 175, 0.08);
+  box-shadow: 0 2px 12px rgb(15 23 42 / 8%);
 }
 
+/* ⚠ 四張卡的左框顏色目前不編碼任何語意（總報名／預繳／註冊／預繳率各配一色），
+   只是四個不同的顏色。收斂成「中性為主、僅異常值上色」需要先確認業務判讀習慣，
+   屬設計決策，此處僅把 indigo 的硬編碼 #6366f1 收回品牌色。 */
 .kpi-card--primary { border-left-color: var(--color-info-darker); }
 .kpi-card--green   { border-left-color: var(--color-success-hover); }
-.kpi-card--indigo  { border-left-color: #6366f1; }
+.kpi-card--indigo  { border-left-color: var(--brand-primary); }
 .kpi-card--amber   { border-left-color: var(--color-warning-hover); }
 
 .kpi-label {
@@ -625,7 +664,7 @@ onMounted(() => {
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-2);
 }
 
 .kpi-value {
@@ -635,7 +674,7 @@ onMounted(() => {
   color: var(--color-info-darker);
   line-height: 1;
   font-variant-numeric: tabular-nums;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-1);
 }
 
 .kpi-sub {
@@ -646,13 +685,15 @@ onMounted(() => {
 /* ── 圖表 ── */
 .chart-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
+  /* 原為固定 1fr 1fr + 960px 斷點切單欄。改 auto-fit：圖表低於可讀寬度就自動落一欄，
+     不需要另立一個與全站不同步的魔術斷點（本頁曾同時有 560/960/767.98 三種）。 */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 
 .chart-card :deep(.el-card__body) {
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
 }
 
 .chart-box-tall {
@@ -662,7 +703,7 @@ onMounted(() => {
 
 /* ── 來源統計表 ── */
 .source-table {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .num-cell {
@@ -677,9 +718,10 @@ onMounted(() => {
 /* ── 明細表 ── */
 .records-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .records-total {
@@ -690,13 +732,9 @@ onMounted(() => {
 
 .filter-bar {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
   flex-wrap: wrap;
-}
-
-@media (max-width: 960px) {
-  .chart-row { grid-template-columns: 1fr; }
 }
 </style>

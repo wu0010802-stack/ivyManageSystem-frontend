@@ -74,8 +74,8 @@ function onClick(): void {
   border: 2px solid var(--m3-on-surface-variant, #424941);
   border-radius: 2px;
   background: transparent;
-  transition: background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
-    border-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+  transition: background-color var(--motion-quick, 150ms) ease,
+    border-color var(--motion-quick, 150ms) ease;
   color: var(--m3-on-primary, #ffffff);
   font-size: 14px;
   line-height: 1;

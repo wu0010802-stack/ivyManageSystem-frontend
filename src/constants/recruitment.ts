@@ -1,4 +1,5 @@
-import { getCurrentAcademicTerm } from '@/utils/academic'
+import { getCurrentAcademicTerm, toAdYear, toRocYear } from '@/utils/academic'
+import { todayISO } from '@/utils/format'
 
 export const GRADES_ORDER = ['幼幼班', '小班', '中班', '大班']
 
@@ -16,8 +17,27 @@ export const TRAVEL_BANDS = [10, 15, 20]
 // 民國年.月格式驗證（例：114.03）
 export const ROC_MONTH_PATTERN = /^\d{3}\.\d{2}$/
 
+// 依生日 × 目標入學學年推適讀班級（2026-08-28 訪視表單 UX：填生日自動帶入，可手動改）。
+// 台灣學制：學年 N 於西元 (N+1911).09.01（含）前足歲——2 歲幼幼班、3 歲小班、
+// 4 歲中班、5 歲大班；範圍外（未滿 2 歲或已達學齡）回 null，不強行帶入。
+export function gradeForBirthday(birthdayISO: string, targetSchoolYear: number): string | null {
+  const parts = birthdayISO.split('-').map((p) => parseInt(p, 10))
+  if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return null
+  const [by, bm, bd] = parts
+  const cutoffYear = toAdYear(targetSchoolYear)
+  let age = cutoffYear - by
+  if (bm > 9 || (bm === 9 && bd > 1)) age -= 1 // 9/1（含）前未足歲者減一
+  const byAge: Record<number, string> = { 2: '幼幼班', 3: '小班', 4: '中班', 5: '大班' }
+  return byAge[age] ?? null
+}
+
 // 招生訪視表單空白預設值（明細 tab 與漏斗看板新增共用，避免兩份定義漂移）。
 // month_raw 為前端日期選擇器暫存（YYYY-MM-DD），送後端前需移除。
+// seq_no 新增時恆為空字串：序號由後端依當月順序自動產生（2026-08-28 起），表單只讀不寫。
+// district 已於 2026-08-28 自表單移除：行政區由後端從 address 解析（區位分析 fallback），
+// 不再要求行政重複輸入。
+// 參觀日期預設今天（2026-08-28 UX）：新增訪視九成是當天登記；month/visit_date 一併
+// 預填民國格式，避免依賴 dialog 內 watch 的觸發時機。
 export interface VisitFormState {
   month: string
   month_raw: string | null
@@ -28,11 +48,14 @@ export interface VisitFormState {
   grade: string | null
   phone: string
   address: string
-  district: string
   source: string
+  source_category: string | null
   referrer: string
   deposit_collector: string
+  tour_guide_employee_id: number | null
   has_deposit: boolean
+  /** 是否搭乘娃娃車（訪視當下的意願調查；實際路線編排在娃娃車路線頁） */
+  rides_bus: boolean
   enrolled: boolean
   transfer_term: boolean
   target_school_year: number
@@ -46,11 +69,16 @@ export interface VisitFormState {
 
 export function emptyVisitForm(): VisitFormState {
   const term = getCurrentAcademicTerm()
+  const today = todayISO()
+  const [ty, tm, td] = today.split('-')
+  const rocDate = `${toRocYear(parseInt(ty, 10))}.${tm}.${td}`
+  const rocMonth = `${toRocYear(parseInt(ty, 10))}.${tm}`
   return {
-    month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
+    month: rocMonth, month_raw: today, visit_date: rocDate, seq_no: '', child_name: '',
     birthday: null, grade: null, phone: '', address: '',
-    district: '', source: '', referrer: '', deposit_collector: '',
-    has_deposit: false, enrolled: false, transfer_term: false,
+    source: '', source_category: null, referrer: '',
+    deposit_collector: '', tour_guide_employee_id: null,
+    has_deposit: false, rides_bus: false, enrolled: false, transfer_term: false,
     target_school_year: term.school_year,
     target_semester: term.semester as 1 | 2,
     no_deposit_reason: null, no_deposit_reason_detail: '',

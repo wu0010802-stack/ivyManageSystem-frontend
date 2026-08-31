@@ -8,18 +8,27 @@
         <el-select v-model="query.month" style="width: 90px" aria-label="月份">
           <el-option v-for="m in 12" :key="m" :value="m" :label="`${m} 月`" />
         </el-select>
+        <el-button
+          v-if="canExportGovReports"
+          data-testid="qualification-checklist-export"
+          :icon="Download"
+          :loading="qualificationExporting"
+          aria-label="下載教職員 4 合 1 資格核對表"
+          @click="exportQualificationChecklist"
+        >
+          下載 4 合 1 核對表
+        </el-button>
       </template>
     </PageHeader>
 
     <LoadingPanel v-if="loading" />
     <template v-else>
       <div class="hub-stats">
-        <StatCard label="本月狀態" :value="statusMeta.label" :icon="Money" :color="statusMeta.color" />
-        <StatCard label="封存進度" :value="`${finalizedCount} / ${records.length} 人`" :icon="Finished" color="info" />
+        <StatCard label="本月狀態" :value="statusMeta.label" :color="statusMeta.color" />
+        <StatCard label="封存進度" :value="`${finalizedCount} / ${records.length} 人`" color="info" />
         <StatCard
           label="需注意"
           :value="`${anomalies.size} 筆`"
-          :icon="WarningFilled"
           :color="anomalies.size > 0 ? 'warning' : 'success'"
         />
       </div>
@@ -49,18 +58,28 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, computed, toRef, onMounted } from 'vue'
+import { reactive, computed, toRef, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Money, Finished, WarningFilled } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { Download } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useSalarySettlement, type SettlementStatus } from '@/composables/useSalarySettlement'
+import { getStaffQualificationChecklist } from '@/api/govReports'
+import { PERMISSION_NAMES } from '@/constants/permissions'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
+import { saveBlobResponse } from '@/utils/download'
+import { getErrorMessage } from '@/utils/errorHandler'
 
 const router = useRouter()
 const now = new Date()
 const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
 const yearOptions = computed(() => [query.year - 1, query.year, query.year + 1])
+const canExportGovReports = computed(() =>
+    hasPermission(PERMISSION_NAMES.GOV_REPORTS_EXPORT),
+)
+const qualificationExporting = ref(false)
 
 const { records, loading, status, anomalies, finalizedCount, refresh } = useSalarySettlement(
     toRef(query, 'year'),
@@ -107,11 +126,35 @@ const goSettle = () =>
         query: { year: String(query.year), month: String(query.month), step: statusMeta.value.step },
     })
 
-const links = [
-    { path: '/salary/history', title: '薪資歷史', desc: '歷月紀錄、快照與明細回看' },
+const exportQualificationChecklist = async () => {
+    qualificationExporting.value = true
+    try {
+        const response = await getStaffQualificationChecklist({
+            year: query.year,
+            month: query.month,
+        })
+        saveBlobResponse(
+            response,
+            `教職員4合1資格核對表_${query.year - 1911}年${String(query.month).padStart(2, '0')}月.xlsx`,
+        )
+        ElMessage.success('4 合 1 資格核對表已下載')
+    } catch (error: unknown) {
+        ElMessage.error(getErrorMessage(error, '下載 4 合 1 資格核對表失敗'))
+    } finally {
+        qualificationExporting.value = false
+    }
+}
+
+const allLinks = [
+    { path: '/salary/history', title: '薪資總覽與歷史', desc: '全員月度對帳、個人歷史與快照' },
     { path: '/salary/simulate', title: '薪資試算', desc: '人事談薪情境試算（不寫入）' },
     { path: '/salary/settings', title: '薪資設定', desc: '獎金規則、才藝老師、系統參數' },
+    { path: '/salary/recruitment-bonus', title: '招生獎金', desc: '個人招生獎勵核算與結算轉帳', fullSalaryOnly: true },
+    { path: '/salary/growth-contract', title: '自主成長獎勵金', desc: '研習時數登記、學年結算與每年 8 月發放', fullSalaryOnly: true },
 ]
+const links = computed(() =>
+    allLinks.filter((link) => !link.fullSalaryOnly || hasFullSalaryView()),
+)
 </script>
 
 <style scoped>
@@ -137,9 +180,11 @@ const links = [
   color: var(--text-secondary);
 }
 
+/* 入口卡數量會隨功能增減（目前 5 張）。固定 3 欄會排成 3+2 留下半列空洞，
+   改自適應：卡片維持可讀最小寬，剩餘空間平均分配，任意張數都填滿列。 */
 .hub-links {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: var(--space-4);
 }
 

@@ -2,6 +2,8 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLoca
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, setUserInfo, clearAuth, hasPortalPermission, hasPermission, isPlatformAdmin } from '@/utils/auth'
+import { captureException } from '@/utils/sentry'
+import { selfHealIfChunkError } from '@/utils/chunkSelfHeal'
 import { MODULE_TERMS, PAGE_TERMS } from '@/constants/moduleTerms'
 
 // 舊 ?section=&tab= 導覽 → 巢狀路由（2026-07-10 改版相容層；後端 exceptions deep_link 也走此格式）
@@ -15,12 +17,18 @@ function resolveLegacySectionQuery(to: RouteLocation): RouteLocationRaw | null {
     if (section === 'appraisal') {
         const tab = tabRaw === 'cycles' ? 'history' : tabRaw === 'institution_events' ? 'institution-events' : tabRaw
         if (tab === 'settings') return { path: '/appraisal-year-end/rules/scoring' }
-        if (tab && ['current', 'history', 'institution-events', 'disciplinary'].includes(tab)) {
-            // cycle/view 只對 history 有意義，其餘子頁清掉避免殘留
-            if (tab !== 'history') { delete q.cycle; delete q.view }
+        if (tab === 'history') {
+            const hq: Record<string, string> = {}
+            if (typeof q.cycle === 'string') hq.cycle = q.cycle
+            if (typeof q.view === 'string') hq.view = q.view
+            return { path: '/appraisal-year-end/appraisal', query: { ...hq, stage: 'sign' } }
+        }
+        if (tab === 'current') return { path: '/appraisal-year-end/appraisal' }
+        if (tab && ['institution-events', 'disciplinary', 'calibration'].includes(tab)) {
+            delete q.cycle; delete q.view
             return { path: `/appraisal-year-end/appraisal/${tab}`, query: q }
         }
-        return { path: '/appraisal-year-end/appraisal/current' }
+        return { path: '/appraisal-year-end/appraisal' }
     }
     if (section === 'year-end') return { path: '/appraisal-year-end/year-end', query: q }
     if (section === 'payout') return { path: '/appraisal-year-end/year-end/payout', query: q }
@@ -39,27 +47,52 @@ export const routes: RouteRecordRaw[] = [
         },
         {
             path: '/approvals',
-            redirect: '/workbench/approvals',
+            redirect: '/workbench',
         },
         {
+            // 2026-08-20：高風險事件分頁移至 /governance，工作台收斂成單頁待簽核。
             path: '/workbench',
-            component: () => import('../views/workbench/WorkbenchLayout.vue'),
-            // 兩分頁各自一碼（APPROVALS / HIGH_RISK_READ，2026-08-03 細分）；只被授予
-            // 高風險事件者若硬導 approvals 會撞路由守衛，故落點依權限決定。
-            redirect: () => hasPermission('APPROVALS') ? '/workbench/approvals' : '/workbench/high-risk',
+            name: 'WorkbenchApprovals',
+            component: () => import('../views/workbench/WorkbenchApprovalsView.vue'),
             meta: { title: PAGE_TERMS.workbench },
+        },
+        {
+            path: '/workbench/approvals',
+            redirect: '/workbench',
+        },
+        {
+            path: '/workbench/high-risk',
+            redirect: '/governance/high-risk',
+        },
+        {
+            // 稽核與資料品質整合頁：高風險事件 / 操作紀錄 / 資料異常待辦三分頁。
+            // 三碼各自獨立，落點取使用者實際持有的第一個分頁，避免硬導撞路由守衛。
+            path: '/governance',
+            component: () => import('../views/governance/GovernanceLayout.vue'),
+            redirect: () => {
+                if (hasPermission('HIGH_RISK_READ')) return '/governance/high-risk'
+                if (hasPermission('AUDIT_LOGS')) return '/governance/audit-logs'
+                return '/governance/data-quality'
+            },
+            meta: { title: PAGE_TERMS.governance },
             children: [
                 {
-                    path: 'approvals',
-                    name: 'WorkbenchApprovals',
-                    component: () => import('../views/workbench/WorkbenchApprovalsView.vue'),
-                    meta: { title: '待簽核' },
+                    path: 'high-risk',
+                    name: 'GovernanceHighRisk',
+                    component: () => import('../views/governance/GovernanceHighRiskView.vue'),
+                    meta: { title: '高風險事件' },
                 },
                 {
-                    path: 'high-risk',
-                    name: 'WorkbenchHighRisk',
-                    component: () => import('../views/workbench/WorkbenchHighRiskView.vue'),
-                    meta: { title: '高風險事件' },
+                    path: 'audit-logs',
+                    name: 'GovernanceAuditLogs',
+                    component: () => import('../views/governance/AuditLogView.vue'),
+                    meta: { title: '操作紀錄' },
+                },
+                {
+                    path: 'data-quality',
+                    name: 'GovernanceDataQuality',
+                    component: () => import('../views/governance/DataQualityView.vue'),
+                    meta: { title: PAGE_TERMS.dataQuality },
                 },
             ],
         },
@@ -102,25 +135,25 @@ export const routes: RouteRecordRaw[] = [
             path: '/student-attendance',
             name: 'student-attendance',
             component: () => import('../views/StudentAttendanceView.vue'),
-            meta: { title: '學生出席紀錄' }
+            meta: { title: '學生出席紀錄', parent: '/students' }
         },
         {
             path: '/student-leaves',
             name: 'student-leaves',
             component: () => import('../views/StudentLeavesListView.vue'),
-            meta: { title: '學生請假紀錄' }
+            meta: { title: '學生請假紀錄', parent: '/students' }
         },
         {
             path: '/student-assessments',
             name: 'student-assessments',
             component: () => import('../views/StudentAssessmentView.vue'),
-            meta: { title: PAGE_TERMS.studentAssessments }
+            meta: { title: PAGE_TERMS.studentAssessments, parent: '/students' }
         },
         {
             path: '/student-incidents',
             name: 'student-incidents',
             component: () => import('../views/StudentIncidentView.vue'),
-            meta: { title: '學生事件紀錄' }
+            meta: { title: '學生事件紀錄', parent: '/students' }
         },
         {
             path: '/student-academic-affairs',
@@ -130,7 +163,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/portfolio/medication-today',
             name: 'medication-today',
             component: () => import('../views/MedicationTodayView.vue'),
-            meta: { title: '今日用藥' }
+            meta: { title: '今日用藥', parent: '/students' }
         },
         {
             // 在籍記錄表已折入班級學生管理頁的「統計表」modal；統計圖表獨立為 /enrollment-stats。
@@ -221,25 +254,37 @@ export const routes: RouteRecordRaw[] = [
             path: '/salary/settle',
             name: 'salary-settle',
             component: () => import('../views/salary/SalarySettleView.vue'),
-            meta: { title: PAGE_TERMS.salarySettle, parentTitle: '薪資管理' }
+            meta: { title: PAGE_TERMS.salarySettle }
         },
         {
             path: '/salary/history',
             name: 'salary-history',
             component: () => import('../views/salary/SalaryHistoryView.vue'),
-            meta: { title: '薪資歷史', parentTitle: '薪資管理' }
+            meta: { title: '薪資總覽與歷史' }
         },
         {
             path: '/salary/simulate',
             name: 'salary-simulate',
             component: () => import('../views/salary/SalarySimulateView.vue'),
-            meta: { title: '薪資試算', parentTitle: '薪資管理' }
+            meta: { title: '薪資試算' }
         },
         {
             path: '/salary/settings',
             name: 'salary-settings',
             component: () => import('../views/salary/SalarySettingsView.vue'),
-            meta: { title: '薪資設定', parentTitle: '薪資管理' }
+            meta: { title: '薪資設定' }
+        },
+        {
+            path: '/salary/recruitment-bonus',
+            name: 'salary-recruitment-bonus',
+            component: () => import('../views/salary/RecruitmentBonusView.vue'),
+            meta: { title: '招生獎金' }
+        },
+        {
+            path: '/salary/growth-contract',
+            name: 'salary-growth-contract',
+            component: () => import('../views/salary/GrowthContractView.vue'),
+            meta: { title: '自主成長獎勵金' }
         },
         {
             path: '/calendar',
@@ -263,7 +308,7 @@ export const routes: RouteRecordRaw[] = [
             path: '/finance-signoffs',
             name: 'finance-signoffs',
             component: () => import('../views/FinanceSignoffView.vue'),
-            meta: { title: '收支簽收' }
+            meta: { title: '收付款管理' }
         },
         // 舊入口 redirect：保留書籤與稽核深連結（?highlight 等 query 原樣透傳）
         {
@@ -278,17 +323,19 @@ export const routes: RouteRecordRaw[] = [
             redirect: (to) => ({ path: '/finance-signoffs', query: { ...to.query, tab: 'misc' } }),
             meta: { title: '雜項收款簽收' }
         },
+        // 2026-08-20 整併至 /governance；兩條舊路徑（書籤／全域搜尋／稽核信件連結）
+        // 保留 redirect，操作紀錄的篩選 query 原樣帶過去（URL 深連結）。
+        // ⚠ 不掛 meta.title：全域搜尋的「頁面」區塊掃 router.getRoutes() × meta.title，
+        // 舊路徑沿用同名標題會讓搜尋結果出現兩筆同名項（頁名由新分頁承擔）。
         {
             path: '/audit-logs',
             name: 'audit-logs',
-            component: () => import('../views/AuditLogView.vue'),
-            meta: { title: '操作紀錄' }
+            redirect: (to) => ({ path: '/governance/audit-logs', query: { ...to.query } }),
         },
         {
             path: '/data-quality',
             name: 'data-quality',
-            component: () => import('../views/DataQualityView.vue'),
-            meta: { title: PAGE_TERMS.dataQuality }
+            redirect: (to) => ({ path: '/governance/data-quality', query: { ...to.query } }),
         },
         // ── 總部（platform / hq）console ──
         // 權限由 manifest 衍生的 ROUTE_PERMISSION_RULES 把關（canAccessRoute default-deny），
@@ -329,6 +376,12 @@ export const routes: RouteRecordRaw[] = [
             name: 'platform-audit',
             component: () => import('../views/platform/PlatformAuditView.vue'),
             meta: { title: '跨分校稽核' }
+        },
+        {
+            path: '/platform/gov-data',
+            name: 'platform-gov-data',
+            component: () => import('../views/platform/PlatformGovDataView.vue'),
+            meta: { title: '政府資料同步' }
         },
         {
             path: '/settings',
@@ -389,27 +442,21 @@ export const routes: RouteRecordRaw[] = [
             path: '/appraisal-year-end',
             component: () => import('../views/appraisalYearEnd/AppraisalYearEndLayout.vue'),
             // 舊 query 導覽（?section=&tab=&cycle=&view=）與例外中心 deep_link 相容層
-            redirect: (to) => resolveLegacySectionQuery(to) ?? '/appraisal-year-end/overview',
+            redirect: (to) => resolveLegacySectionQuery(to) ?? '/appraisal-year-end/todo',
             children: [
-                { path: 'overview', name: 'aye-overview', component: () => import('../views/appraisalYearEnd/OverviewWorkbenchView.vue'), meta: { title: '總覽' } },
-                {
-                    path: 'appraisal',
-                    component: () => import('../views/AppraisalManagementView.vue'),
-                    redirect: '/appraisal-year-end/appraisal/current',
-                    meta: { title: '考核' },
-                    children: [
-                        { path: 'current', name: 'aye-appraisal-current', component: () => import('../views/appraisal/CurrentSemesterOverview.vue'), meta: { title: '當期總覽' } },
-                        { path: 'history', name: 'aye-appraisal-history', component: () => import('../views/appraisal/CycleListView.vue'), meta: { title: '歷史週期與簽核' } },
-                        { path: 'institution-events', name: 'aye-appraisal-events', component: () => import('../views/appraisal/components/InstitutionEventPanel.vue'), meta: { title: '活動出席' } },
-                        { path: 'disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處紀錄' } },
-                        { path: 'calibration', name: 'aye-appraisal-calibration', component: () => import('../views/appraisal/CalibrationView.vue'), meta: { title: '等第校準' } },
-                    ],
-                },
+                { path: 'todo', name: 'aye-todo', component: () => import('../views/appraisalYearEnd/OverviewWorkbenchView.vue'), meta: { title: '待辦' } },
+                { path: 'overview', redirect: '/appraisal-year-end/todo' },
+                { path: 'appraisal', name: 'aye-appraisal', component: () => import('../views/appraisal/AppraisalWorkspaceView.vue'), meta: { title: '考核' } },
+                { path: 'appraisal/institution-events', name: 'aye-appraisal-events', component: () => import('../views/appraisal/components/InstitutionEventPanel.vue'), meta: { title: '活動出席' } },
+                { path: 'appraisal/disciplinary', name: 'aye-appraisal-disciplinary', component: () => import('../views/salary/DisciplinaryPanel.vue'), meta: { title: '懲處紀錄' } },
+                { path: 'appraisal/calibration', name: 'aye-appraisal-calibration', component: () => import('../views/appraisal/CalibrationView.vue'), meta: { title: '等第校準' } },
+                { path: 'appraisal/current', redirect: '/appraisal-year-end/appraisal' },
+                { path: 'appraisal/history', redirect: (to) => ({ path: '/appraisal-year-end/appraisal', query: { ...to.query, stage: 'sign' } }) },
                 { path: 'year-end', name: 'aye-year-end', component: () => import('../views/yearEnd/YearEndListView.vue'), meta: { title: '年終' } },
-                { path: 'year-end/cycles/:id', name: 'year-end-cycle-workspace', component: () => import('../views/yearEnd/YearEndWorkspaceView.vue'), meta: { title: '年終 › 結算工作區' } },
+                { path: 'year-end/cycles/:id', name: 'year-end-cycle-workspace', component: () => import('../views/yearEnd/YearEndWorkspaceView.vue'), meta: { title: '結算工作區', parent: '/appraisal-year-end/year-end' } },
                 { path: 'year-end/cycles/:id/grid', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'grid' } }) },
                 { path: 'year-end/cycles/:id/config', redirect: (to) => ({ path: `/appraisal-year-end/year-end/cycles/${to.params.id}`, query: { step: 'config' } }) },
-                { path: 'year-end/payout', name: 'aye-payout', component: () => import('../views/yearEnd/AppraisalPayoutView.vue'), meta: { title: '考核年終發放' } },
+                { path: 'year-end/payout', name: 'aye-payout', component: () => import('../views/yearEnd/YearEndPayoutEntry.vue'), meta: { title: '考核年終發放' } },
                 {
                     path: 'rules',
                     component: () => import('../views/appraisalYearEnd/RulesSettingsLayout.vue'),
@@ -504,55 +551,70 @@ export const routes: RouteRecordRaw[] = [
         // admin 路由的權限 gate 在 `ROUTE_PERMISSION_RULES`（canAccessRoute），
         // **不是** meta.permission——那只對 /portal/* 生效。漏了規則會被 default-deny
         // 鎖死（含 wildcard 管理員），加錯則是側欄看得到卻進不去。
+        // 2026-08-13 三頁整合單一入口＋頁內分頁（比照 /workbench）：分頁權限不同
+        //（monitor/history=BUS_READ、routes=BUS_WRITE），只持其中一碼者硬導對面
+        // 分頁會撞路由守衛，故落點依權限決定。
         {
-            path: '/bus-routes',
-            name: 'bus-routes',
-            component: () => import('../views/BusRoutesView.vue'),
-            meta: { title: '娃娃車路線' }
+            path: '/bus',
+            component: () => import('../views/bus/BusLayout.vue'),
+            redirect: () => hasPermission('BUS_READ') ? '/bus/monitor' : '/bus/routes',
+            meta: { title: '娃娃車管理' },
+            children: [
+                {
+                    path: 'monitor',
+                    name: 'bus-monitor',
+                    component: () => import('../views/BusMonitorView.vue'),
+                    meta: { title: '娃娃車即時監看' },
+                },
+                {
+                    path: 'history',
+                    name: 'bus-history',
+                    component: () => import('../views/BusHistoryView.vue'),
+                    meta: { title: '娃娃車乘車歷史' },
+                },
+                {
+                    path: 'routes',
+                    name: 'bus-routes',
+                    component: () => import('../views/BusRoutesView.vue'),
+                    meta: { title: '娃娃車路線管理' },
+                },
+            ],
         },
-        {
-            path: '/bus-monitor',
-            name: 'bus-monitor',
-            component: () => import('../views/BusMonitorView.vue'),
-            meta: { title: '娃娃車監看' }
-        },
-        {
-            path: '/bus-history',
-            name: 'bus-history',
-            component: () => import('../views/BusHistoryView.vue'),
-            meta: { title: '娃娃車乘車歷史' }
-        },
+        // 舊路徑 redirect（書籤／外部連結相容）。
+        { path: '/bus-monitor', redirect: '/bus/monitor' },
+        { path: '/bus-history', redirect: '/bus/history' },
+        { path: '/bus-routes', redirect: '/bus/routes' },
 
         // ============ 課後才藝 ============
         {
             path: '/activity/dashboard',
             name: 'activity-dashboard',
             component: () => import('../views/activity/ActivityDashboardView.vue'),
-            meta: { title: PAGE_TERMS.activityDashboard, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityDashboard }
         },
         {
             path: '/activity/registrations',
             name: 'activity-registrations',
             component: () => import('../views/activity/ActivityRegistrationView.vue'),
-            meta: { title: '報名管理', parentTitle: MODULE_TERMS.activity }
+            meta: { title: '報名管理' }
         },
         {
             path: '/activity/pos',
             name: 'activity-pos',
             component: () => import('../views/activity/POSView.vue'),
-            meta: { title: 'POS 收銀', parentTitle: MODULE_TERMS.activity }
+            meta: { title: 'POS 收銀' }
         },
         {
             path: '/activity/pos/approval',
             name: 'activity-pos-approval',
             component: () => import('../views/activity/POSApprovalView.vue'),
-            meta: { title: PAGE_TERMS.activityPosApproval, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityPosApproval }
         },
         {
             path: '/activity/audit/pos-unlock',
             name: 'POSAuditEvents',
             component: () => import('../views/activity/POSAuditEventsView.vue'),
-            meta: { title: PAGE_TERMS.activityPosAudit, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityPosAudit, parent: '/activity/pos' }
         },
         // 舊路徑保留相容：課程與用品已於 2026-07-31 併入 /activity/settings 的前兩個 tab
         {
@@ -571,25 +633,25 @@ export const routes: RouteRecordRaw[] = [
             path: '/activity/inquiries',
             name: 'activity-inquiries',
             component: () => import('../views/activity/ActivityInquiryView.vue'),
-            meta: { title: '家長提問', parentTitle: MODULE_TERMS.activity }
+            meta: { title: '家長提問' }
         },
         {
             path: '/activity/settings',
             name: 'activity-settings',
             component: () => import('../views/activity/ActivitySettingsView.vue'),
-            meta: { title: PAGE_TERMS.activitySettings, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activitySettings }
         },
         {
             path: '/activity/changes',
             name: 'activity-changes',
             component: () => import('../views/activity/ActivityChangesView.vue'),
-            meta: { title: PAGE_TERMS.activityChanges, parentTitle: MODULE_TERMS.activity }
+            meta: { title: PAGE_TERMS.activityChanges }
         },
         {
             path: '/activity/attendance',
             name: 'activity-attendance',
             component: () => import('../views/activity/ActivityAttendanceView.vue'),
-            meta: { title: '點名管理', parentTitle: MODULE_TERMS.activity }
+            meta: { title: '點名管理' }
         },
         // ============ 活動調查（Task 13） ============
         {
@@ -602,19 +664,19 @@ export const routes: RouteRecordRaw[] = [
             path: '/surveys/new',
             name: 'survey-new',
             component: () => import('../views/surveys/SurveyFormView.vue'),
-            meta: { title: '建立調查', parentTitle: '活動調查' }
+            meta: { title: '建立調查' }
         },
         {
             path: '/surveys/:id/edit',
             name: 'survey-edit',
             component: () => import('../views/surveys/SurveyFormView.vue'),
-            meta: { title: '編輯調查', parentTitle: '活動調查' }
+            meta: { title: '編輯調查' }
         },
         {
             path: '/surveys/:id',
             name: 'survey-detail',
             component: () => import('../views/surveys/SurveyDetailView.vue'),
-            meta: { title: '調查詳情', parentTitle: '活動調查' }
+            meta: { title: '調查詳情' }
         },
         // ============ 公開前台 ============
         {
@@ -644,6 +706,14 @@ export const routes: RouteRecordRaw[] = [
             // noAuth：beforeEach guard 不擋；bare：App.vue 直接 RouterView 不套 AdminLayout
             // public + hideNav 為其它 layer 共用旗標（hideNav 目前未被消費，留作未來擴充標註）
             meta: { title: '系統維護中', noAuth: true, public: true, bare: true, hideNav: true }
+        },
+
+        // ============ Admin 403 錯誤頁（權限守衛落點；errorPage 讓守衛跳過 default-deny 的 canAccessRoute） ============
+        {
+            path: '/error',
+            name: 'admin-error',
+            component: () => import('../views/ErrorStateView.vue'),
+            meta: { title: '無法存取', errorPage: true, errorType: 'forbidden' }
         },
 
         // ============ Admin Login / Change Password ============
@@ -692,17 +762,6 @@ export const routes: RouteRecordRaw[] = [
                     path: 'attendance',
                     name: 'portal-attendance',
                     component: () => import('../views/portal/PortalAttendanceView.vue'),
-                },
-                {
-                    path: 'messages',
-                    redirect: { name: 'portal-class-hub', query: { panel: 'messages' } },
-                },
-                {
-                    path: 'messages/:threadId',
-                    redirect: (to) => ({
-                        name: 'portal-class-hub',
-                        query: { panel: 'messages', thread: String(to.params.threadId) },
-                    }),
                 },
                 {
                     path: 'students/:studentId',
@@ -815,6 +874,12 @@ export const routes: RouteRecordRaw[] = [
                     meta: { title: '學生點名', permission: 'STUDENTS_READ' },
                 },
                 {
+                    path: 'student-leaves',
+                    name: 'portal-student-leaves',
+                    component: () => import('../views/portal/PortalStudentLeavesView.vue'),
+                    meta: { title: '學生請假', permission: 'STUDENTS_READ' },
+                },
+                {
                     path: 'contact-book',
                     name: 'portal-contact-book',
                     component: () => import('../views/portal/PortalContactBookView.vue'),
@@ -874,7 +939,23 @@ export const routes: RouteRecordRaw[] = [
                     component: () => import('../views/portal/PortalSurveyDetailView.vue'),
                     meta: { title: '班級回覆狀況' },
                 },
+                {
+                    // portal 403 錯誤頁：權限守衛落點。不得掛 meta.permission，
+                    // 否則權限不足者連錯誤頁都進不去（重導迴圈）。
+                    path: 'error',
+                    name: 'portal-error',
+                    component: () => import('../views/ErrorStateView.vue'),
+                    meta: { title: '無法存取', errorPage: true, errorType: 'forbidden' },
+                },
             ],
+        },
+
+        // ============ 404 catch-all（必須殿後；此前未知路徑會被守衛靜默導回首頁） ============
+        {
+            path: '/:pathMatch(.*)*',
+            name: 'not-found',
+            component: () => import('../views/ErrorStateView.vue'),
+            meta: { title: '找不到頁面', noAuth: true, bare: true, errorPage: true, errorType: 'not-found' },
         },
 ]
 
@@ -929,9 +1010,9 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
 // Auth guard
 // return-style（Vue Router 4）：回傳路由目標＝redirect、回傳 true＝放行；
 // 不再用已 deprecated 的 next() callback（每次導航會噴 deprecation warning）。
-router.beforeEach(async (to) => {
-    startRouteLoading()
-
+// 抽成具名匯出供單元測試（src/router/__tests__/authGuardErrorRedirects.spec.ts）；
+// startRouteLoading 留在 beforeEach wrapper，authGuard 本身不碰載入狀態。
+export async function authGuard(to: RouteLocationNormalized) {
     const { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁
@@ -969,12 +1050,31 @@ router.beforeEach(async (to) => {
         return '/portal/home'
     }
 
-    // 權限檢查：admin 路由且已登入（非 teacher）
+    // 權限檢查：admin 路由且已登入（非 teacher）。
+    // meta.errorPage 路由（/error、404）跳過檢查：canAccessRoute 是 default-deny、
+    // 錯誤頁不在 ROUTE_PERMISSION_RULES 內，不跳過會把錯誤頁再重導成迴圈。
     if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role !== 'teacher') {
-        if (!canAccessRoute(to.path)) {
-            // 無權限，導向第一個有權限的路由；完全沒有權限時導向登入頁
-            const allowedRoutes = getAllowedRoutes()
-            return allowedRoutes.length > 0 ? allowedRoutes[0] : '/login'
+        if (!to.meta.errorPage && !canAccessRoute(to.path)) {
+            // '/' 是登入後的預設落點：導向第一個有權限的路由屬自動落地、不是錯誤；
+            // 完全沒有權限時導向登入頁（維持既有行為）。
+            if (to.path === '/') {
+                const allowedRoutes = getAllowedRoutes()
+                return allowedRoutes.length > 0 ? allowedRoutes[0] : '/login'
+            }
+            // 指名頁面無權限：導 403 錯誤頁並上報 Sentry。先前是靜默導去第一個
+            // 允許路由，使用者觀感是「功能壞掉被丟到別頁」且維運端毫無紀錄。
+            void captureException(new Error('admin route access denied'), {
+                path: to.fullPath,
+                routeTitle: to.meta.title ?? null,
+            })
+            return {
+                path: '/error',
+                query: {
+                    type: 'forbidden',
+                    feature: typeof to.meta.title === 'string' ? to.meta.title : '',
+                    from: to.fullPath,
+                },
+            }
         }
     }
 
@@ -983,24 +1083,47 @@ router.beforeEach(async (to) => {
     // 導致任何登入的 portal 使用者（含缺對應權限的教師）可直接打 URL 進敏感子頁
     //（用藥/接送/學生個案等含學生 PII/健康資料）。在此對掛了 meta.permission 的 portal 子路由
     // 以 hasPortalPermission 判定（teacher 不短路，沿用其既有 scope-aware 語意，
-    // 與後端 require_permission 對齊），缺權限導回 /portal/home。
+    // 與後端 require_permission 對齊）。缺權限導 /portal/error 403 錯誤頁並上報
+    // Sentry——先前靜默導回 /portal/home，使用者觀感是「功能壞掉被丟回首頁」
+    // 且毫無紀錄（2026-08-14 班級相簿實例）。/portal/error 本身不掛 meta.permission，
+    // 不會回到這個分支。
     if (loggedIn && to.meta.portal && to.meta.permission) {
         if (!hasPortalPermission(to.meta.permission as string)) {
-            if (to.path !== '/portal/home') {
-                return '/portal/home'
+            void captureException(new Error('portal route permission denied'), {
+                permission: to.meta.permission,
+                path: to.fullPath,
+            })
+            return {
+                path: '/portal/error',
+                query: {
+                    type: 'forbidden',
+                    feature: typeof to.meta.title === 'string' ? to.meta.title : '',
+                    permission: to.meta.permission as string,
+                    from: to.fullPath,
+                },
             }
         }
     }
 
     return true
+}
+
+router.beforeEach(async (to) => {
+    startRouteLoading()
+    return authGuard(to)
 })
 
 router.afterEach(() => {
     finishRouteLoading()
 })
 
-router.onError(() => {
+router.onError((err) => {
     finishRouteLoading()
+    // 部署後舊 index.html 指向已被刪除的 hashed chunk 時，vue-router 會把 lazy route
+    // 的 import() rejection 送到這裡，且**不會**冒泡到 window——不在這裡顯式接手，
+    // installChunkSelfHeal 掛的 error / unhandledrejection 兩個監聽永遠收不到，
+    // 使用者只會看到「點了連結但畫面沒換」且沒有任何提示。
+    selfHealIfChunkError(err)
 })
 
 export default router

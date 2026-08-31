@@ -1,4 +1,5 @@
 import { computed, type Ref } from 'vue'
+import { escapeHtml as esc } from '@/utils/html'
 
 const DEFAULT_WORK_START = '09:00'
 const DEFAULT_WORK_END = '18:00'
@@ -50,15 +51,15 @@ export function useLeaveHintFormatter({ form, calcBreakdown, leaveMode }: { form
               let dayEnd = we
               if (day.date === startDateStr && startTime) dayStart = startTime > ws ? startTime : ws
               if (day.date === endDateStr && endTime) dayEnd = endTime < we ? endTime : we
-              return ` ${dayStart}–${dayEnd}`
+              return ` ${esc(dayStart)}–${esc(dayEnd)}`
             })()
           : ''
-        lines.push(`${day.date}（${wd}）${hours}h${timeRange}`)
+        lines.push(`${esc(day.date)}（${wd}）${hours}h${timeRange}`)
         total += hours
       } else if (day.type === 'holiday') {
-        lines.push(`${day.date}（${wd}）${day.holiday_name} 0h`)
+        lines.push(`${esc(day.date)}（${wd}）${esc(day.holiday_name)} 0h`)
       } else {
-        lines.push(`${day.date}（${wd}）週末 0h`)
+        lines.push(`${esc(day.date)}（${wd}）週末 0h`)
       }
     }
     lines.push(`合計 = ${total}h`)

@@ -58,7 +58,14 @@
           :model-value="selectedIds.has(photo.id)"
           @change="toggleSelect(photo.id)"
         />
-        <img class="photo-thumb" :src="photo.thumb_url" :alt="photo.original_filename" @click="toggleSelect(photo.id)" />
+        <!-- thumb_url 可能為 null（縮圖尚未產生／產生失敗）：退回原圖。否則
+             :src="null" 會讓 Vue 整個不渲染 src 屬性，畫面直接是破圖。 -->
+        <img
+          class="photo-thumb"
+          :src="photo.thumb_url ?? photo.display_url"
+          :alt="photo.original_filename ?? '相簿照片'"
+          @click="toggleSelect(photo.id)"
+        />
         <div class="photo-tags">
           <el-tag v-if="photo.students.length === 0" type="warning" size="small">未標記</el-tag>
           <el-tag v-for="s in photo.students" :key="s.id" size="small">{{ s.name }}</el-tag>

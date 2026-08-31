@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ivy 前端驗證"
+  short_description: "依 Vue 變更範圍執行 Vitest、型別、lint 與 UI gate"
+  default_prompt: "Use $ivy-frontend-verify to verify the current frontend changes."

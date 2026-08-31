@@ -10,8 +10,9 @@ vi.mock('@/api/portalHome', () => ({
     data: {
       me: { name: '老師' },
       today: {
-        shift: null,
-        attendance: { punch_in_at: null, punch_out_at: null, is_anomaly: false },
+        date: '2026-08-24',
+        shift: { name: '早班', work_start: '07:30', work_end: '16:30' },
+        attendance: { punch_in_at: '2026-08-24T08:02:00', punch_out_at: null, is_anomaly: false },
       },
       classrooms: [],
       actions: {
@@ -21,6 +22,27 @@ vi.mock('@/api/portalHome', () => ({
         pending_anomaly_confirms: 0,
         unread_announcements: 0,
       },
+    },
+  }),
+}))
+
+// mock 班級工作台摘要（Phase 2：首頁「現在該做」置頂卡資料源）
+vi.mock('@/api/portalClassHub', () => ({
+  getTodayHub: vi.fn().mockResolvedValue({
+    classroom_id: 1,
+    classroom_name: '小蜜蜂班',
+    sticky_next: {
+      kind: 'medication',
+      student_name: '王小明',
+      detail: '餵藥',
+      due_at: '2026-08-24T11:30:00',
+      deep_link: '/portal/class-hub?sheet=medication&id=5',
+    },
+    counts: {
+      attendance_pending: 4,
+      medications_pending: 2,
+      observations_pending: 0,
+      contact_books_pending: 17,
     },
   }),
 }))
@@ -48,7 +70,7 @@ function mountIt() {
       plugins: [createPinia(), router],
       stubs: {
         PendingActionsCard: true,
-        TodayShiftCard: true,
+        TodayFocusCard: true,
         ClassroomOpsCard: true,
         QuickLinksCard: true,
         ElButton: { template: '<button><slot /></button>' },
@@ -94,6 +116,47 @@ describe('PortalHomeView', () => {
     const w = mountIt()
     await flushPromises()
     expect(w.text()).toContain('我的班級')
+  })
+
+  // ── Phase 2 任務流首頁：hero + 現在該做 ─────────────────────
+
+  it('hero 渲染日期、班次與打卡 chip', async () => {
+    const w = mountIt()
+    await flushPromises()
+    expect(w.find('.home-hero').exists()).toBe(true)
+    const text = w.text()
+    expect(text).toContain('早班')
+    expect(text).toContain('08:02')
+  })
+
+  it('打卡 chip 點擊導向 /portal/attendance', async () => {
+    const push = vi.spyOn(router, 'push')
+    const w = mountIt()
+    await flushPromises()
+    await w.find('.home-hero__punch').trigger('click')
+    expect(push).toHaveBeenCalledWith('/portal/attendance')
+  })
+
+  it('hub 有班級時渲染 TodayFocusCard', async () => {
+    const w = mountIt()
+    await flushPromises()
+    expect(w.find('today-focus-card-stub').exists()).toBe(true)
+  })
+
+  it('hub 取得失敗（無班級/無權限）時隱藏 TodayFocusCard', async () => {
+    const { getTodayHub } = await import('@/api/portalClassHub')
+    getTodayHub.mockRejectedValueOnce(new Error('403'))
+    const w = mountIt()
+    await flushPromises()
+    expect(w.find('today-focus-card-stub').exists()).toBe(false)
+  })
+
+  it('hub classroom_id=0（未綁班）時隱藏 TodayFocusCard', async () => {
+    const { getTodayHub } = await import('@/api/portalClassHub')
+    getTodayHub.mockResolvedValueOnce({ classroom_id: 0, classroom_name: '', sticky_next: null, counts: {} })
+    const w = mountIt()
+    await flushPromises()
+    expect(w.find('today-focus-card-stub').exists()).toBe(false)
   })
 
   // ── 補休結餘 widget ───────────────────────────────────────

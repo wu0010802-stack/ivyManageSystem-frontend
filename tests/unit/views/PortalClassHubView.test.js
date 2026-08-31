@@ -3,26 +3,14 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
+// RouterLink stub：ClassHubLeaveCard 內有「查看全部」連結，測試不掛 router
+const MOUNT_OPTS = { global: { stubs: { RouterLink: true } } }
+
 // ---- Mock the api wrapper used by usePortalClassHub ----
 vi.mock('@/api/portalClassHub', () => ({
   getTodayHub: vi.fn(),
 }))
 
-// ---- Mock portalMessages api 防止 usePortalMessagesStore.refreshUnread 真打網路 ----
-vi.mock('@/api/portalMessages', () => ({
-  listThreads: vi.fn(() => Promise.resolve({ data: { items: [] } })),
-  listMessages: vi.fn(() =>
-    Promise.resolve({ data: { items: [], next_cursor: null } }),
-  ),
-  postReply: vi.fn(),
-  createThread: vi.fn(),
-  attachToMessage: vi.fn(),
-  markThreadRead: vi.fn(),
-  recallMessage: vi.fn(),
-  getUnreadCount: vi.fn(() =>
-    Promise.resolve({ data: { unread_count: 0 } }),
-  ),
-}))
 
 // ---- Mock auth so hasPermission / hasPortalPermission 為 deterministic ----
 // PortalClassHubView 用 hasPortalPermission（不對 teacher 短路）守 PARENT_MESSAGES_WRITE，
@@ -166,7 +154,7 @@ describe('PortalClassHubView', () => {
   })
 
   it('renders 4 time-slot cards after data loads', async () => {
-    const wrapper = mount(PortalClassHubView)
+    const wrapper = mount(PortalClassHubView, MOUNT_OPTS)
     await flushPromises()
     // Each TimeSlotCard root is `.slot-card` from its own scoped style;
     // since we're not stubbing it, it renders normally.
@@ -182,7 +170,7 @@ describe('PortalClassHubView', () => {
       classroom_name: '',
       slots: [],
     })
-    const wrapper = mount(PortalClassHubView)
+    const wrapper = mount(PortalClassHubView, MOUNT_OPTS)
     await flushPromises()
     // The empty-state container is rendered; check via html() since
     // el-empty renders as a custom element (description attr not text node).
@@ -190,7 +178,7 @@ describe('PortalClassHubView', () => {
   })
 
   it('polls every 60 seconds', async () => {
-    mount(PortalClassHubView)
+    mount(PortalClassHubView, MOUNT_OPTS)
     await flushPromises()
     expect(getTodayHub).toHaveBeenCalledTimes(1)
     await vi.advanceTimersByTimeAsync(60_000)
@@ -199,8 +187,22 @@ describe('PortalClassHubView', () => {
   })
 
   it('shows the sticky empty-state message when sticky_next is null', async () => {
-    const wrapper = mount(PortalClassHubView)
+    const wrapper = mount(PortalClassHubView, MOUNT_OPTS)
     await flushPromises()
     expect(wrapper.text()).toContain('今日任務都完成')
+  })
+
+  // Phase 1 殼層改版：學生 tab 退出底部導覽後，班級工作台補「班級學生」入口
+  it('header 提供班級學生入口並導向 /portal/students', async () => {
+    const wrapper = mount(PortalClassHubView, MOUNT_OPTS)
+    await flushPromises()
+    // 本檔的 element-plus module mock 不含全域元件註冊，SFC 內 <el-button>
+    // 會以未解析 custom element 渲染，需用 tag selector 找
+    const entry = wrapper
+      .findAll('el-button, button')
+      .find((b) => b.text().includes('班級學生'))
+    expect(entry).toBeTruthy()
+    await entry.trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/portal/students?from=hub')
   })
 })

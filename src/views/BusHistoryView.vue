@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 管理端娃娃車乘車歷史（route `/bus-history`，權限 `BUS_READ`）。
+ * 管理端娃娃車乘車歷史（route `/bus/history`，權限 `BUS_READ`）。
  *
  * 補「今日監看」（`BusMonitorView`）之外的空缺：家長申訴「昨天接晚了」時，
  * 園方要能查到過去班次的逐站接送紀錄，而不是只看得到當下。

@@ -168,6 +168,65 @@ describe('LoginView — 設定碼登入入口', () => {
     expect(wrapper.find('[data-testid="device-setup-error"]').text()).toContain('嘗試次數過多')
   })
 
+
+  /**
+   * 2026-08-26 staging 驗收：家長按下「使用設定碼登入」後請求在傳輸層被中止
+   * （net::ERR_ABORTED），畫面卻顯示「設定碼無效或已過期，請聯絡園所」。
+   *
+   * catch 分支原本只特判 429，其餘一律套那句統一文案——但那句文案的存在理由是
+   * 「後端對碼不存在/過期/已用一律回同一個 code，前端不要變成枚舉 oracle」，
+   * 那個理由**只適用於後端真的回了 HTTP 回應**的情況。傳輸層失敗（斷線、逾時、
+   * 請求被中止、DNS 失敗）根本沒有 err.response，不帶任何枚舉價值，卻被誤標成
+   * 碼有問題，害家長白跑一趟回園所重領碼。
+   */
+  it('傳輸層失敗（無 err.response）→ 不可誤報「設定碼無效」，要給可重試的連線錯誤', async () => {
+    mockDeviceSetup.mockRejectedValueOnce(
+      Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }),
+    )
+
+    const { wrapper } = await mountLoginView()
+    await flushPromises()
+    await wrapper.find('[data-testid="device-setup-toggle"]').trigger('click')
+    await wrapper.find('[data-testid="device-setup-input"]').setValue('ABCD1234EFGH')
+    await wrapper.find('[data-testid="device-setup-submit"]').trigger('click')
+    await flushPromises()
+
+    const err = wrapper.find('[data-testid="device-setup-error"]')
+    expect(err.exists()).toBe(true)
+    expect(err.text()).not.toContain('設定碼無效')
+    expect(err.text()).toContain('連線中斷')
+  })
+
+  it('逾時（ECONNABORTED，同樣沒有 response）→ 走連線錯誤分支', async () => {
+    mockDeviceSetup.mockRejectedValueOnce(
+      Object.assign(new Error('timeout of 15000ms exceeded'), { code: 'ECONNABORTED' }),
+    )
+
+    const { wrapper } = await mountLoginView()
+    await flushPromises()
+    await wrapper.find('[data-testid="device-setup-toggle"]').trigger('click')
+    await wrapper.find('[data-testid="device-setup-input"]').setValue('ABCD1234EFGH')
+    await wrapper.find('[data-testid="device-setup-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="device-setup-error"]').text()).toContain('連線中斷')
+  })
+
+  it('伺服器有回應但非 429（500）→ 仍走統一文案，維持不可枚舉', async () => {
+    mockDeviceSetup.mockRejectedValueOnce({ response: { status: 500, data: {} } })
+
+    const { wrapper } = await mountLoginView()
+    await flushPromises()
+    await wrapper.find('[data-testid="device-setup-toggle"]').trigger('click')
+    await wrapper.find('[data-testid="device-setup-input"]').setValue('ABCD1234EFGH')
+    await wrapper.find('[data-testid="device-setup-submit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="device-setup-error"]').text()).toBe(
+      '設定碼無效或已過期，請聯絡園所',
+    )
+  })
+
   it('空白碼不送出，顯示「請輸入設定碼」', async () => {
     const { wrapper } = await mountLoginView()
     await flushPromises()

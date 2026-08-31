@@ -36,7 +36,17 @@ const props = defineProps<{ cycleId: number }>()
 const router = useRouter()
 const cycleId = props.cycleId
 
-const canWrite = computed(() => hasPermission('YEAR_END_WRITE'))
+// Batch 12：後端 org_settings/class_targets 三個端點皆守 cycle.status != OPEN
+// 一律 400（services/year_end/cycle_guard.py::assert_cycle_writable）。cycleStatus
+// 借用 loadCycleTargets() 既有的 listYearEndCycles() 呼叫取得（不新增網路請求，
+// 見下方 loadCycleTargets 改動）。fail-open：查無/失敗時 cycleStatus 維持 null，
+// canWrite 視為「未知，不新增限制」——這裡純粹是 UX 提示，真正的寫入守衛在後端，
+// 寧可少擋一次非必要按鈕也不要多擋一次原本允許的操作（比照既有測試多數不 mock
+// listYearEndCycles 的現況，fail-open 才能保持這些既有測試不受影響）。
+const cycleStatus = ref<string | null>(null)
+const canWrite = computed(
+  () => hasPermission('YEAR_END_WRITE') && (cycleStatus.value === null || cycleStatus.value === 'OPEN'),
+)
 
 // ---- Org Settings state (two semesters) ----
 const orgSettings = ref<OrgSettingsRow[]>([])
@@ -109,8 +119,11 @@ function classroomName(id: number): string {
 }
 
 // ---- Load ----
+const orgLoadError = ref(false)
+
 async function loadOrgSettings() {
   orgLoading.value = true
+  orgLoadError.value = false
   try {
     const res = await getOrgSettings(cycleId)
     orgSettings.value = res.data
@@ -129,13 +142,17 @@ async function loadOrgSettings() {
     }
   } catch {
     ElMessage.error('全校設定載入失敗')
+    orgLoadError.value = true
   } finally {
     orgLoading.value = false
   }
 }
 
+const classLoadError = ref(false)
+
 async function loadClassTargets() {
   classLoading.value = true
+  classLoadError.value = false
   try {
     const res = await getClassTargets(cycleId)
     classTargets.value = res.data
@@ -149,6 +166,7 @@ async function loadClassTargets() {
     }
   } catch {
     ElMessage.error('班級設定載入失敗')
+    classLoadError.value = true
   } finally {
     classLoading.value = false
   }
@@ -161,6 +179,7 @@ async function loadCycleTargets() {
   try {
     const { data: yearEndCycles } = await listYearEndCycles()
     const yearEndCycle = yearEndCycles.find((c) => c.id === cycleId)
+    cycleStatus.value = yearEndCycle?.status ?? null
     if (!yearEndCycle) {
       cycleTargets.value = {}
       return
@@ -314,6 +333,8 @@ defineExpose({
   saveAllClassTargets,
   goToYearEndRules,
   cycleId,
+  orgLoadError,
+  classLoadError,
 })
 
 onMounted(async () => {
@@ -335,6 +356,10 @@ onMounted(async () => {
 
       <!-- 全校目標 (org_settings) -->
       <h3 class="sub-title">全校目標</h3>
+      <div v-if="orgLoadError" class="yec-error">
+        載入失敗
+        <el-button data-test="org-load-retry" size="small" text type="primary" @click="loadOrgSettings">重試</el-button>
+      </div>
       <div
         v-loading="orgLoading"
         class="org-settings-grid"
@@ -439,6 +464,10 @@ onMounted(async () => {
         >
           全部儲存
         </el-button>
+      </div>
+      <div v-if="classLoadError" class="yec-error">
+        載入失敗
+        <el-button data-test="class-load-retry" size="small" text type="primary" @click="loadClassTargets">重試</el-button>
       </div>
       <el-table
         v-loading="classLoading"
@@ -558,6 +587,14 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.yec-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
 .year-end-config-view {
   padding: var(--space-4);
 }

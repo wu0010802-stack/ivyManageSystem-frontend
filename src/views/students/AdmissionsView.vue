@@ -109,7 +109,7 @@ onMounted(() => {
  * 舊 --rv-* 海軍藍 local palette（#1e40af 系，抄自 RecruitmentView）已移除——與 admin
  * 品牌色相漂移，且 --rv-text/--rv-text-2 本檔並無消費者。 */
 .admissions-view {
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 /* 置於 PageHeader #icon slot（slot 內容持有本檔 scope id，樣式可達） */
 .page-header-icon {

@@ -6,14 +6,14 @@ import { getMonthlyFixedCosts } from '@/api/monthlyFixedCost'
 import { getVendorPaymentSummary } from '@/api/vendorPayment'
 import { getMiscReceiptSummary } from '@/api/miscReceipt'
 import { hasPermission } from '@/utils/auth'
-import { Warning, CircleCheck, Link as LinkIcon } from '@element-plus/icons-vue'
+import { CircleCheck, Link as LinkIcon } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
 import { apiError } from '@/utils/error'
 import { LineChart } from './chartSetup'
 import ReportKpiCard from './ReportKpiCard.vue'
 import SparkLine from './SparkLine.vue'
 import { computeReportPeriod } from './useReportPeriod'
-import { buildTrendChartData, inProgressIndex } from './trendChart'
+import { buildTrendChartData, inProgressIndex, formatAxisTick } from './trendChart'
 import {
   pctChange, sumTrendUpTo, futurePreloggedExpense, type FinanceTrendRow,
 } from './financeTrend'
@@ -144,7 +144,7 @@ const trendChartOptions = computed(() => ({
       },
     },
   },
-  scales: { y: { ticks: { callback: (v: number | string) => '$' + (Number(v) / 1000).toFixed(0) + 'k' } } },
+  scales: { y: { ticks: { callback: (v: number | string) => formatAxisTick(v) } } },
   onClick: (_e: unknown, elements: Array<{ index: number }>) => {
     if (!elements.length) return
     emit('navigate', { tab: 'finance', month: elements[0].index + 1 })
@@ -228,7 +228,7 @@ const missingFixedCostMonths = computed(() => {
   return out
 })
 
-// 待簽收數字（廠商付款/雜項收款）：summary 端點不吃年度參數——全期間、全狀態
+// 待補憑證數字（廠商付款/雜項收款）：summary 端點不吃年度參數——全期間、全狀態
 // 拆桶（pending/signed），待辦語意本來就是「現在待處理」，故不傳 year；文案冠
 // 「目前」避免被誤讀為所選年度的數字。null = 查不到（無權限/載入中/失敗/shape
 // 不符），比照上方固定支出檢查模式：查不到就整項不顯示，絕不顯示 0 假資料。
@@ -258,7 +258,7 @@ if (canCheckMiscSignoff) {
 }
 
 // 簽收連結四態：hidden（兩權限皆無，連 /finance-signoffs 都進不去）/
-// action（有待簽收，數字已列在待辦清單）/ omitted（兩來源皆確知 0 筆，無事可辦）/
+// action（有待補憑證，數字已列在待辦清單）/ omitted（兩來源皆確知 0 筆，無事可辦）/
 // neutral（至少一來源查不到——無權限或失敗——不能宣稱「無待辦」，給中性導覽連結）。
 const signoffLinkState = computed<'hidden' | 'action' | 'omitted' | 'neutral'>(() => {
   if (!canCheckVendorSignoff && !canCheckMiscSignoff) return 'hidden'
@@ -270,28 +270,34 @@ const signoffLinkState = computed<'hidden' | 'action' | 'omitted' | 'neutral'>((
   return bothKnownZero ? 'omitted' : 'neutral'
 })
 
-interface TodoItem { key: string; text: string }
+// severity：影響右欄待辦項的圓點顏色（方向A 改版）——薪資未封存擋結薪流程屬 danger；
+// 固定支出未登錄/廠商付款待補憑證屬 warning；雜項收款待補憑證屬 info。純視覺分級，
+// 不影響排序與導覽行為。
+interface TodoItem { key: string; text: string; severity: 'danger' | 'warning' | 'info' }
 const todoItems = computed<TodoItem[]>(() => {
   const items: TodoItem[] = []
   if (salaryPendingAlert.value) {
     items.push({
       key: 'salary-pending',
       text: `${salaryPendingAlert.value.month} 月尚有 ${salaryPendingAlert.value.count} 筆薪資未封存`,
+      severity: 'danger',
     })
   }
   for (const m of missingFixedCostMonths.value) {
-    items.push({ key: `fixed-cost-${m}`, text: `${m} 月固定支出尚未登錄` })
+    items.push({ key: `fixed-cost-${m}`, text: `${m} 月固定支出尚未登錄`, severity: 'warning' })
   }
   if (vendorSignoff.value && vendorSignoff.value.count > 0) {
     items.push({
       key: 'vendor-pending',
-      text: `目前 ${vendorSignoff.value.count} 筆廠商付款待簽收（${money(vendorSignoff.value.amount)}）`,
+      text: `目前 ${vendorSignoff.value.count} 筆廠商付款待補憑證（${money(vendorSignoff.value.amount)}）`,
+      severity: 'warning',
     })
   }
   if (miscSignoff.value && miscSignoff.value.count > 0) {
     items.push({
       key: 'misc-pending',
-      text: `目前 ${miscSignoff.value.count} 筆雜項收款待簽收（${money(miscSignoff.value.amount)}）`,
+      text: `目前 ${miscSignoff.value.count} 筆雜項收款待補憑證（${money(miscSignoff.value.amount)}）`,
+      severity: 'info',
     })
   }
   return items
@@ -308,10 +314,12 @@ const formatFetchedAt = (ts: number) => {
 <template>
   <el-skeleton v-if="loading" :rows="10" animated />
   <div v-else class="overview">
+    <!-- KPI 壓縮帶（方向A）：四指標併為一張卡，垂直空間留給趨勢圖與右欄待辦 -->
     <template v-if="!financeUnavailable">
-      <el-row :gutter="16" class="kpi-row">
-        <el-col :xs="12" :sm="6">
+      <el-card class="kpi-band" data-test="kpi-band" shadow="never">
+        <div class="kpi-band-cells">
           <ReportKpiCard
+            variant="cell"
             label="本年淨現金" accent="blue"
             :value="money(actuals.net)" :value-class="netClass" value-test="kpi-net-cashflow"
             :trends="[
@@ -320,9 +328,8 @@ const formatFetchedAt = (ts: number) => {
             ]"
             :note="netNote" note-test="kpi-net-note" sub="（收入-退款-支出）"
           />
-        </el-col>
-        <el-col :xs="12" :sm="6">
           <ReportKpiCard
+            variant="cell"
             label="本年總收入" accent="green"
             :value="money(actuals.revenue)" value-test="kpi-total-revenue"
             :trends="[
@@ -331,9 +338,8 @@ const formatFetchedAt = (ts: number) => {
             ]"
             sub="（未扣退款）"
           />
-        </el-col>
-        <el-col :xs="12" :sm="6">
           <ReportKpiCard
+            variant="cell"
             label="本年總支出" accent="red"
             :value="money(actuals.expense)" value-test="kpi-total-expense"
             :trends="[
@@ -342,168 +348,207 @@ const formatFetchedAt = (ts: number) => {
             ]"
             :note="expenseNote" note-test="kpi-expense-note"
           />
-        </el-col>
-        <el-col :xs="12" :sm="6">
           <ReportKpiCard
+            variant="cell"
             label="本年退款" accent="orange"
             :value="money(actuals.refund)" value-test="kpi-total-refund"
             sub="學費+才藝"
           />
-        </el-col>
-      </el-row>
+        </div>
+      </el-card>
       <div class="kpi-band-note" data-test="kpi-band-note">
         截至 {{ period.lastActualMonth ?? '—' }} 月實際發生；含固定支出、廠商付款；不含年終獎金（另行轉帳）
       </div>
     </template>
 
-    <el-row :gutter="16">
+    <!-- 主雙欄（方向A 行動指揮塔）：左＝趨勢圖＋摘要卡；右＝待辦與資料說明常駐 rail -->
+    <el-row :gutter="16" class="overview-grid">
       <el-col :xs="24" :lg="16">
-        <div v-if="financeUnavailable" class="section-error" data-test="finance-error">
-          <el-empty :description="financeErrorText" />
-        </div>
-        <el-card v-else class="chart-card" shadow="never">
-          <template #header><span class="chart-title">年度收支趨勢（點擊資料點看該月明細）</span></template>
-          <div class="chart-container"><LineChart :data="trendChartData" :options="trendChartOptions" /></div>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :lg="8">
-        <!-- c. 異常與待辦：資料源為 dashboard/fixedCost/signoff，與 finance 是否可用無關
-             （2026-07-11 review F2），故獨立於 financeUnavailable 之外渲染，不受連坐。 -->
-        <el-card class="todo-card" shadow="never">
-          <template #header><span class="chart-title">異常與待辦</span></template>
-          <ul class="todo-list" data-test="todo-list">
-            <li v-for="item in todoItems" :key="item.key" class="todo-item" :data-test="`todo-item-${item.key}`">
-              <el-icon :size="14" class="todo-icon-warn"><Warning /></el-icon>
-              <span>{{ item.text }}</span>
-            </li>
-            <li v-if="todoItems.length === 0" class="todo-item todo-empty" data-test="todo-empty">
-              <el-icon :size="14" class="todo-icon-ok"><CircleCheck /></el-icon>
-              <span>目前無異常待辦</span>
-            </li>
-          </ul>
-          <router-link
-            v-if="signoffLinkState === 'action' || signoffLinkState === 'neutral'"
-            class="todo-link"
-            :to="{ path: '/finance-signoffs' }"
-            data-test="todo-signoff-link"
-          >
-            <el-icon :size="14"><LinkIcon /></el-icon>
-            {{ signoffLinkState === 'action'
-              ? '前往「收支簽收」處理待簽收項目'
-              : '廠商付款／雜項收款簽收狀態請至「收支簽收」查看' }}
-          </router-link>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <el-row :gutter="16">
-      <el-col :xs="24" :sm="8">
-        <el-card
-          v-if="!dashboardUnavailable"
-          class="summary-card" shadow="never"
-          data-test="attendance-summary-card"
-          role="button"
-          tabindex="0"
-          aria-label="查看出勤報表"
-          @click="emit('navigate', { tab: 'attendance' })"
-          @keydown.enter.prevent="emit('navigate', { tab: 'attendance' })"
-          @keydown.space.prevent="emit('navigate', { tab: 'attendance' })"
-        >
-          <div class="kpi-label">年度出勤率（加權平均）</div>
-          <div class="summary-value" data-test="attendance-rate">{{ weightedAttendanceRate != null ? `${weightedAttendanceRate}%` : '-' }}</div>
-          <SparkLine :values="attendanceRateSeries" />
-          <span class="summary-link">查看出勤 →</span>
-        </el-card>
-        <div v-else class="section-error" data-test="attendance-rate-error">
-          <el-empty :description="dashboardErrorText" :image-size="50" />
-        </div>
-      </el-col>
-      <el-col :xs="24" :sm="8">
-        <el-card
-          v-if="!financeUnavailable"
-          class="summary-card" shadow="never"
-          data-test="salary-summary-card"
-          role="button"
-          tabindex="0"
-          aria-label="查看薪資報表"
-          @click="emit('navigate', { tab: 'salary' })"
-          @keydown.enter.prevent="emit('navigate', { tab: 'salary' })"
-          @keydown.space.prevent="emit('navigate', { tab: 'salary' })"
-        >
-          <div class="kpi-label">園方人事成本（本年）</div>
-          <div class="summary-value">{{ money(salaryGross + employerBenefit) }}</div>
-          <div class="summary-sub">應發 {{ money(salaryGross) }}＋雇主負擔 {{ money(employerBenefit) }}</div>
-          <span class="summary-link">查看薪資 →</span>
-        </el-card>
-      </el-col>
-      <el-col :xs="24" :sm="8">
-        <el-card v-if="!financeUnavailable" class="summary-card summary-card--static" shadow="never">
-          <div class="kpi-label">淨營收・收支比</div>
-          <div class="summary-value">{{ money(summary.net_revenue) }}</div>
-          <div class="summary-sub">
-            收支比 {{ summary.total_expense ? (summary.net_revenue / summary.total_expense).toFixed(2) : '-' }}（淨營收 / 總支出）
+        <div class="main-col" data-test="overview-main">
+          <div v-if="financeUnavailable" class="section-error" data-test="finance-error">
+            <el-empty :description="financeErrorText" />
           </div>
-        </el-card>
+          <el-card v-else class="chart-card" shadow="never">
+            <template #header>
+              <div class="chart-header">
+                <span class="chart-title">年度收支趨勢（點擊資料點看該月明細）</span>
+                <!-- 鍵盤可及的下鑽入口：canvas 點擊只有滑鼠能用（稽核 m10） -->
+                <button
+                  type="button"
+                  class="chart-detail-link"
+                  data-test="chart-detail-link"
+                  @click="emit('navigate', { tab: 'finance' })"
+                >
+                  查看收支彙總 →
+                </button>
+              </div>
+            </template>
+            <div class="chart-container"><LineChart :data="trendChartData" :options="trendChartOptions" /></div>
+          </el-card>
+
+          <el-row :gutter="16" class="summary-row">
+            <el-col :xs="24" :sm="8">
+              <el-card
+                v-if="!dashboardUnavailable"
+                class="summary-card" shadow="never"
+                data-test="attendance-summary-card"
+                role="button"
+                tabindex="0"
+                aria-label="查看出勤報表"
+                @click="emit('navigate', { tab: 'attendance' })"
+                @keydown.enter.prevent="emit('navigate', { tab: 'attendance' })"
+                @keydown.space.prevent="emit('navigate', { tab: 'attendance' })"
+              >
+                <div class="kpi-label">年度出勤率（加權平均）</div>
+                <div class="summary-value" data-test="attendance-rate">{{ weightedAttendanceRate != null ? `${weightedAttendanceRate}%` : '-' }}</div>
+                <SparkLine :values="attendanceRateSeries" />
+                <span class="summary-link">查看出勤 →</span>
+              </el-card>
+              <div v-else class="section-error" data-test="attendance-rate-error">
+                <el-empty :description="dashboardErrorText" :image-size="50" />
+              </div>
+            </el-col>
+            <el-col :xs="24" :sm="8">
+              <el-card
+                v-if="!financeUnavailable"
+                class="summary-card" shadow="never"
+                data-test="salary-summary-card"
+                role="button"
+                tabindex="0"
+                aria-label="查看薪資報表"
+                @click="emit('navigate', { tab: 'salary' })"
+                @keydown.enter.prevent="emit('navigate', { tab: 'salary' })"
+                @keydown.space.prevent="emit('navigate', { tab: 'salary' })"
+              >
+                <div class="kpi-label">園方人事成本（本年）</div>
+                <div class="summary-value">{{ money(salaryGross + employerBenefit) }}</div>
+                <div class="summary-sub">應發 {{ money(salaryGross) }}＋雇主負擔 {{ money(employerBenefit) }}</div>
+                <span class="summary-link">查看薪資 →</span>
+              </el-card>
+            </el-col>
+            <el-col :xs="24" :sm="8">
+              <el-card v-if="!financeUnavailable" class="summary-card summary-card--static" shadow="never">
+                <div class="kpi-label">淨營收・收支比</div>
+                <div class="summary-value">{{ money(summary.net_revenue) }}</div>
+                <div class="summary-sub">
+                  收支比 {{ summary.total_expense ? (summary.net_revenue / summary.total_expense).toFixed(2) : '-' }}（淨營收 / 總支出）
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
+        </div>
+      </el-col>
+
+      <el-col :xs="24" :lg="8">
+        <div class="rail" data-test="overview-rail">
+          <!-- 異常與待辦：資料源為 dashboard/fixedCost/signoff，與 finance 是否可用無關
+               （2026-07-11 review F2），故獨立於 financeUnavailable 之外渲染，不受連坐。 -->
+          <el-card
+            class="todo-card"
+            :class="{ 'todo-card--active': todoItems.length > 0 }"
+            data-test="todo-card"
+            shadow="never"
+          >
+            <template #header>
+              <div class="todo-header">
+                <span class="chart-title">異常與待辦</span>
+                <span v-if="todoItems.length" class="todo-count" data-test="todo-count">{{ todoItems.length }}</span>
+              </div>
+            </template>
+            <ul class="todo-list" data-test="todo-list">
+              <li v-for="item in todoItems" :key="item.key" class="todo-item" :data-test="`todo-item-${item.key}`">
+                <span class="todo-dot" :class="`todo-dot--${item.severity}`" aria-hidden="true"></span>
+                <span>{{ item.text }}</span>
+              </li>
+              <li v-if="todoItems.length === 0" class="todo-item todo-empty" data-test="todo-empty">
+                <el-icon :size="14" class="todo-icon-ok"><CircleCheck /></el-icon>
+                <span>目前無異常待辦</span>
+              </li>
+            </ul>
+            <router-link
+              v-if="signoffLinkState === 'action' || signoffLinkState === 'neutral'"
+              class="todo-link"
+              :to="{ path: '/finance-signoffs' }"
+              data-test="todo-signoff-link"
+            >
+              <el-icon :size="14"><LinkIcon /></el-icon>
+              {{ signoffLinkState === 'action'
+                ? '前往「收付款管理」處理待補憑證項目'
+                : '廠商付款／雜項收款憑證狀態請至「收付款管理」查看' }}
+            </router-link>
+          </el-card>
+
+          <!-- 資料說明：隨方向A 移入右欄常駐（原本沉在頁尾） -->
+          <el-collapse class="data-notes" data-test="data-notes">
+            <el-collapse-item title="資料說明（口徑／來源／已知缺漏）" name="notes">
+              <dl class="notes-dl">
+                <dt>計算口徑</dt>
+                <dd>
+                  現金收付實現制（非應計制）：收入/退款以實際收付款日認列，支出以薪資結算月／實際付款日認列。
+                  淨現金 = (總收入 − 總退款) − 總支出。
+                </dd>
+                <dt>資料來源</dt>
+                <dd>
+                  學費實收/退款、才藝收入/退款、雜項收款（現金已收即認列）計入收入；
+                  員工應發薪資＋雇主保費勞退、廠商付款（現金已付即認列）、固定支出（租金／水電／電話／
+                  零用金／餐點／舊制勞退準備金 8 類登錄）計入支出。
+                </dd>
+                <dt>狀態篩選</dt>
+                <dd>
+                  薪資僅計入已封存且不需重算的紀錄（草稿/待重算不計入，避免中間態影響管理層數字）；
+                  廠商付款與雜項收款「待補憑證」與「已附憑證」皆計入；才藝收支僅計入未作廢紀錄。
+                </dd>
+                <dt>KPI 口徑</dt>
+                <dd>
+                  KPI 主數字為「截至實際發生月」加總（不含未來月預登錄固定支出）；
+                  含未來月預登錄固定支出的全年口徑見各卡副行與 Excel 匯出。
+                </dd>
+                <dt>已知缺漏（本次未納入）</dt>
+                <dd>
+                  年終獎金 E 化撥款為表外獨立轉帳，未列入本頁任何數字（另行轉帳，非疏漏）；
+                  出勤率依員工「現行」班級回溯計算，班級異動員工的歷史月份會歸屬到現在班級；
+                  固定支出與廠商付款無結構性去重，兩表登錄紀律仰賴人工把關。
+                </dd>
+                <dt>資料更新時間</dt>
+                <dd data-test="notes-fetched-at">
+                  收支：{{ formatFetchedAt(finance.fetchedAt.value) }}；出勤／薪資：{{ formatFetchedAt(dashboard.fetchedAt.value) }}
+                </dd>
+              </dl>
+            </el-collapse-item>
+          </el-collapse>
+        </div>
       </el-col>
     </el-row>
-
-    <!-- e. 資料說明 -->
-    <el-collapse class="data-notes" data-test="data-notes">
-      <el-collapse-item title="資料說明（口徑／來源／已知缺漏）" name="notes">
-        <dl class="notes-dl">
-          <dt>計算口徑</dt>
-          <dd>
-            現金收付實現制（非應計制）：收入/退款以實際收付款日認列，支出以薪資結算月／實際付款日認列。
-            淨現金 = (總收入 − 總退款) − 總支出。
-          </dd>
-          <dt>資料來源</dt>
-          <dd>
-            學費實收/退款、才藝收入/退款、雜項收款（現金已收即認列）計入收入；
-            員工應發薪資＋雇主保費勞退、廠商付款（現金已付即認列）、固定支出（租金／水電／電話／
-            零用金／餐點／舊制勞退準備金 8 類登錄）計入支出。
-          </dd>
-          <dt>狀態篩選</dt>
-          <dd>
-            薪資僅計入已封存且不需重算的紀錄（草稿/待重算不計入，避免中間態影響管理層數字）；
-            廠商付款與雜項收款「待簽收」與「已簽收」皆計入；才藝收支僅計入未作廢紀錄。
-          </dd>
-          <dt>KPI 口徑</dt>
-          <dd>
-            KPI 主數字為「截至實際發生月」加總（不含未來月預登錄固定支出）；
-            含未來月預登錄固定支出的全年口徑見各卡副行與 Excel 匯出。
-          </dd>
-          <dt>已知缺漏（本次未納入）</dt>
-          <dd>
-            年終獎金 E 化撥款為表外獨立轉帳，未列入本頁任何數字（另行轉帳，非疏漏）；
-            出勤率依員工「現行」班級回溯計算，班級異動員工的歷史月份會歸屬到現在班級；
-            固定支出與廠商付款無結構性去重，兩表登錄紀律仰賴人工把關。
-          </dd>
-          <dt>資料更新時間</dt>
-          <dd data-test="notes-fetched-at">
-            收支：{{ formatFetchedAt(finance.fetchedAt.value) }}；出勤／薪資：{{ formatFetchedAt(dashboard.fetchedAt.value) }}
-          </dd>
-        </dl>
-      </el-collapse-item>
-    </el-collapse>
   </div>
 </template>
 
 <style scoped>
 .overview { display: flex; flex-direction: column; gap: var(--space-4); }
-.kpi-row { margin-bottom: 0; }
+
+/* KPI 壓縮帶：一張卡四格，隔線分隔；<1024 塌成 2×2 */
+.kpi-band :deep(.el-card__body) { padding: 0; }
+.kpi-band-cells { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kpi-band-cells > * + * { border-left: 1px solid var(--el-border-color-lighter); }
+@media (--to-md) {
+  .kpi-band-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-band-cells > * + * { border-left: none; }
+  .kpi-band-cells > :nth-child(2n) { border-left: 1px solid var(--el-border-color-lighter); }
+  .kpi-band-cells > :nth-child(n + 3) { border-top: 1px solid var(--el-border-color-lighter); }
+}
 
 .kpi-band-note {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-secondary);
   text-align: center;
-  margin-top: -4px;
+  /* 收攏與上方 KPI 帶的視覺距離（.overview gap 的反向微調） */
+  margin-top: calc(-1 * var(--space-1));
 }
 
 /* netClass 動態：正數綠／負數紅，提示營運盈虧；非裝飾性色，保留 */
 .value-red { color: var(--color-danger); }
 .value-green { color: var(--color-success); }
 
-.section-error { padding: 16px 0; }
+.section-error { padding: var(--space-4) 0; }
 
 .kpi-label {
   font-size: var(--text-sm);
@@ -511,28 +556,88 @@ const formatFetchedAt = (ts: number) => {
   margin-bottom: 6px;
 }
 
+/* 左欄／右欄容器：欄內卡片垂直堆疊 */
+.main-col, .rail { display: flex; flex-direction: column; gap: var(--space-4); }
+/* 堆疊斷點垂直間距（稽核 M3）：el-row gutter 只給水平向，改在 flex row 上補
+   row-gap——雙欄 <lg（1200px）塌單欄、摘要卡 <sm 塌單欄時自動生效，同列並排時
+   無作用。（舊版只在 --to-md ≤1023.98px 補 margin-bottom，1024–1199px 區間
+   左右欄會垂直貼死。） */
+.overview-grid, .summary-row { row-gap: var(--space-4); }
+
+/* 待辦卡：中性底；琥珀警示底只在真有待辦時上（--active，稽核 M4——
+   「目前無異常待辦」的平靜狀態不穿警示色）。dark 模式由 a11y.css 自動換 alpha tint */
+.todo-card--active {
+  background: var(--color-warning-soft);
+  border-color: color-mix(in srgb, var(--color-warning) 30%, transparent);
+}
+.todo-card--active :deep(.el-card__header) {
+  border-bottom-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
+}
 .todo-card :deep(.el-card__body) { display: flex; flex-direction: column; gap: 10px; }
-.chart-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.todo-header { display: flex; align-items: center; gap: var(--space-2); }
+.todo-count {
+  /* warning-darker 底＋白字 ≈ 5.0:1 過 AA（稽核 M5；warning 主色＋白字僅 ~2.2:1） */
+  background: var(--color-warning-darker);
+  color: var(--neutral-0);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 18px;
+  border-radius: var(--radius-full);
+  padding: 0 var(--space-2);
+}
+.chart-title { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.chart-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.chart-detail-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-xs);
+  color: var(--el-color-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chart-detail-link:hover { text-decoration: underline; }
+.chart-detail-link:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
 .todo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.todo-item { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-primary); }
-.todo-icon-warn { color: var(--color-warning); }
+.todo-item { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--text-sm); color: var(--text-primary); }
+.todo-dot { width: 8px; height: 8px; border-radius: var(--radius-full); flex: 0 0 auto; margin-top: 5px; }
+.todo-dot--danger { background: var(--color-danger); }
+.todo-dot--warning { background: var(--color-warning); }
+.todo-dot--info { background: var(--color-info); }
 .todo-icon-ok { color: var(--color-success); }
 .todo-link {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; color: var(--el-color-primary);
+  font-size: var(--text-sm); color: var(--el-color-primary);
   text-decoration: none;
   padding-top: 6px;
   border-top: 1px solid var(--el-border-color-lighter);
 }
+.todo-card--active .todo-link { border-top-color: color-mix(in srgb, var(--color-warning) 25%, transparent); }
 .todo-link:hover { text-decoration: underline; }
 
-.data-notes { border-top: none; }
-.notes-dl { font-size: 13px; color: var(--text-secondary); line-height: 1.7; margin: 0; }
+/* 資料說明：右欄卡片化外觀（el-collapse 本體透明化，讓外框當卡片） */
+.data-notes {
+  border-top: none;
+  border-bottom: none;
+  background: var(--surface-color);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-4);
+}
+.data-notes :deep(.el-collapse-item__header),
+.data-notes :deep(.el-collapse-item__wrap) {
+  background: transparent;
+  border-bottom: none;
+}
+.notes-dl { font-size: var(--text-sm); color: var(--text-secondary); line-height: 1.7; margin: 0; }
 .notes-dl dt { font-weight: 600; color: var(--text-primary); margin-top: 10px; }
 .notes-dl dt:first-child { margin-top: 0; }
 .notes-dl dd { margin: 2px 0 0 0; }
 
-.summary-card { text-align: center; padding: 12px 8px; cursor: pointer; height: 100%; transition: border-color 0.2s; }
+.summary-card { text-align: center; padding: var(--space-3) var(--space-2); cursor: pointer; height: 100%; transition: border-color var(--transition-base); }
 .summary-card:hover { border-color: var(--el-color-primary); }
 /* 鍵盤可及性：可點卡片 role=button + tabindex=0，聚焦時給明顯 outline（比照 ClassroomView 卡片範式） */
 .summary-card:focus-visible {
@@ -541,9 +646,15 @@ const formatFetchedAt = (ts: number) => {
 }
 .summary-card--static { cursor: default; }
 .summary-card--static:hover { border-color: var(--el-border-color-lighter); }
-.summary-value { font-size: 24px; font-weight: 700; color: var(--text-primary); margin: 4px 0; }
-.summary-sub { font-size: 12px; color: var(--text-secondary); }
-.summary-link { display: inline-block; margin-top: 6px; font-size: 12px; color: var(--el-color-primary); }
+.summary-value {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  /* 與 kpi-value 一致的等寬數字（稽核 m7） */
+  font-variant-numeric: tabular-nums;
+  margin: var(--space-1) 0;
+}
+.summary-sub { font-size: var(--text-xs); color: var(--text-secondary); }
+.summary-link { display: inline-block; margin-top: 6px; font-size: var(--text-xs); color: var(--el-color-primary); }
 .chart-container { height: 320px; position: relative; }
-.chart-card { height: 100%; }
 </style>

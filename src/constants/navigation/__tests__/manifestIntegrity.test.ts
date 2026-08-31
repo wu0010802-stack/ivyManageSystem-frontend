@@ -221,9 +221,19 @@ const INTENTIONAL_DIVERGENCE = {
   // 否則「授高風險事件」等於連「報表 › 操作紀錄」一起授出去。
   removedFromLegacy: ['/workbench/high-risk × AUDIT_LOGS'],
   addedByManifest: [
+    // 2026-08-20 稽核與資料品質整併：高風險事件（原 /workbench/high-risk）、操作紀錄
+    //（原 /audit-logs）、資料異常待辦（原 /data-quality）合為 /governance 一頁三分頁。
+    // 三條舊路徑的規則（fixture 內那三筆）維持不變，redirect 指向新分頁。
+    // 三個子路徑一律 exact：prefix 會讓三碼互相外溢。
+    '/governance × HIGH_RISK_READ',
+    '/governance × AUDIT_LOGS',
+    '/governance × DATA_QUALITY_READ',
+    '/governance/high-risk × HIGH_RISK_READ',
+    '/governance/audit-logs × AUDIT_LOGS',
+    '/governance/data-quality × DATA_QUALITY_READ',
+    // 2026-08-03 權限細分留下的規則：高風險事件頁自 AUDIT_LOGS 拆出 HIGH_RISK_READ。
+    // 整併後 /workbench/high-risk 成為純 redirect，規則保留供 redirect 解析。
     '/workbench/high-risk × HIGH_RISK_READ',
-    // 頁面 views 為 OR：只持高風險碼者也該能進 /workbench（落點由 router redirect 決定）
-    '/workbench × HIGH_RISK_READ',
     // 2026-08-04 4e：總部 console 五頁上線，三個 PLATFORM_* 碼從 standalonePermissions
     // 豁免表移出、改主屬本群組。fixture 凍結於 2026-07-31，故整組列為「新增」。
     '/platform/overview × PLATFORM_REPORTS_VIEW',
@@ -239,6 +249,19 @@ const INTENTIONAL_DIVERGENCE = {
     '/surveys/new × SURVEYS_WRITE',
     // 2026-08-11 入學文件電子簽署（esign01）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
     '/students/sign-documents × STUDENTS_READ',
+    // 2026-08-13 娃娃車三頁整合單一入口 /bus（頁內分頁）：主路由承載兩碼 OR、
+    // 分頁子路由各自 exact；舊 /bus-monitor|/bus-history|/bus-routes 規則保留供
+    // redirect 解析（fixture 的兩條舊規則因此不列 removedFromLegacy，
+    // '/bus-history × BUS_READ' 也續留本表）。
+    '/bus × BUS_READ',
+    '/bus × BUS_WRITE',
+    '/bus/monitor × BUS_READ',
+    '/bus/history × BUS_READ',
+    '/bus/routes × BUS_WRITE',
+    // 2026-08-18 總部「政府資料同步」頁新增（fixture 凍結於 2026-07-31）。
+    // 借道 PLATFORM_TENANTS_MANAGE 而非新增第四個 PLATFORM_* 碼——後端
+    // PLATFORM_ONLY_CODES parity 與角色 seed 都吃那三碼。
+    '/platform/gov-data × PLATFORM_TENANTS_MANAGE',
   ],
 }
 

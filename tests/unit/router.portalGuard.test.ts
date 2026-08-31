@@ -40,7 +40,7 @@ describe('C52: portal 敏感子路由逐路由 meta.permission', () => {
   })
 })
 
-describe('C52: beforeEach 對缺權限身分導回 /portal/home', () => {
+describe('C52: beforeEach 對缺權限身分導向 /portal/error 403 錯誤頁', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
     clearAuth({ notifyServer: false })
@@ -59,14 +59,20 @@ describe('C52: beforeEach 對缺權限身分導回 /portal/home', () => {
     })
   }
 
-  it('教師缺 STUDENTS_HEALTH_READ 進 /portal/medications 被導回 /portal/home', async () => {
+  it('教師缺 STUDENTS_HEALTH_READ 進 /portal/medications 被導向 /portal/error 並帶完整脈絡', async () => {
     // setUserInfo 同步寫 session validated → isLoggedIn 為 true，不走 refresh
     setUserInfo({
       role: 'teacher',
       permission_names: ['STUDENTS_READ:own_class'], // 無 health
     })
-    const landed = await navigate('/portal/medications')
-    expect(landed).toBe('/portal/home')
+    await navigate('/portal/medications')
+    expect(router.currentRoute.value.path).toBe('/portal/error')
+    expect(router.currentRoute.value.query).toMatchObject({
+      type: 'forbidden',
+      feature: '用藥執行',
+      permission: 'STUDENTS_HEALTH_READ',
+      from: '/portal/medications',
+    })
   })
 
   it('教師持有 STUDENTS_READ:own_class 可進 /portal/students', async () => {
@@ -78,12 +84,18 @@ describe('C52: beforeEach 對缺權限身分導回 /portal/home', () => {
     expect(landed).toBe('/portal/students')
   })
 
-  it('教師缺 DISMISSAL_CALLS_READ 進 /portal/dismissal-calls 被導回 /portal/home', async () => {
+  it('教師缺 DISMISSAL_CALLS_READ 進 /portal/dismissal-calls 被導向 /portal/error 並帶完整脈絡', async () => {
     setUserInfo({
       role: 'teacher',
       permission_names: ['STUDENTS_READ:own_class'],
     })
-    const landed = await navigate('/portal/dismissal-calls')
-    expect(landed).toBe('/portal/home')
+    await navigate('/portal/dismissal-calls')
+    expect(router.currentRoute.value.path).toBe('/portal/error')
+    expect(router.currentRoute.value.query).toMatchObject({
+      type: 'forbidden',
+      feature: '接送通知',
+      permission: 'DISMISSAL_CALLS_READ',
+      from: '/portal/dismissal-calls',
+    })
   })
 })

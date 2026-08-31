@@ -105,7 +105,8 @@ describe('useTodayTimeline — bucket 分組', () => {
     expect(item.variant).toBe('past')
   })
 
-  it('summary 待辦（fees / acks / messages / promotions） → later bucket pending', () => {
+  // 2026-08-28：訊息自家長端下架，unread_messages 不再產生 timeline 待辦項。
+  it('summary 待辦（fees / acks / promotions） → later bucket pending', () => {
     const { buckets } = setup({
       summaryValue: {
         fees: { outstanding: 5200, overdue: 0, outstanding_count: 1 },
@@ -115,7 +116,8 @@ describe('useTodayTimeline — bucket 分組', () => {
       },
     })
     const later = buckets.value.find((b) => b.key === 'later')
-    expect(later.items.length).toBe(4)
+    expect(later.items.length).toBe(3)
+    expect(later.items.some((i) => i.id === 'messages')).toBe(false)
     expect(later.items.every((i) => i.variant === 'pending')).toBe(true)
   })
 

@@ -76,7 +76,6 @@ const SIDEBAR_ICONS = {
   User: safeIcon(() => ElementPlusIcons.User),
   Van: safeIcon(() => ElementPlusIcons.Van),
   Wallet: safeIcon(() => ElementPlusIcons.Wallet),
-  WarningFilled: safeIcon(() => ElementPlusIcons.WarningFilled),
   Watch: safeIcon(() => ElementPlusIcons.Watch),
 } satisfies Record<string, Component>
 
@@ -126,7 +125,12 @@ export interface ManifestPage {
   /** 側欄設定；undefined = 不出現在側欄（隱藏頁 / picker-only 節點）。 */
   menu?: {
     icon: Component
-    badgeKey?: 'workbench' | 'activityInquiries' | 'activityReview'
+    badgeKey?: 'workbench' | 'governance' | 'activityInquiries' | 'activityReview'
+    /**
+     * 'bottom' = 渲染在所有群組之後（側欄最底），給「日常不進、但需要常駐入口」的
+     * 稽核類頁面；省略 = 照既有行為渲染在群組之前。
+     */
+    placement?: 'bottom'
   }
 }
 
@@ -155,21 +159,40 @@ export const NAVIGATION_MANIFEST = {
       menu: { icon: icon('DataBoard') },
     },
     {
+      // 2026-08-20 整併：高風險事件分頁移至 /governance，工作台收斂成單頁待簽核
+      //（分頁殼 WorkbenchLayout 一併移除）。/workbench 本身即實頁。
       key: 'workbench', title: PAGE_TERMS.workbench, routePath: '/workbench',
-      // 兩個分頁各自一碼（2026-08-03 細分）：高風險事件原本共用 AUDIT_LOGS，
-      // 想授出它就得連「報表 › 操作紀錄」一起給。頁面 views 為 OR，只持其中
-      // 一碼者仍能進 /workbench，由 WorkbenchLayout 決定看得到哪個分頁。
-      views: [
-        { code: 'APPROVALS', label: '待簽核' },
-        { code: 'HIGH_RISK_READ', label: '高風險事件' },
-      ],
+      views: [{ code: 'APPROVALS', label: '待簽核' }],
       menu: { icon: icon('Finished'), badgeKey: 'workbench' },
       extraRoutes: [
-        // /approvals 已 redirect 至 /workbench/approvals；規則保留供 redirect 解析。
+        // 兩條舊路徑已 redirect 至 /workbench；規則保留供 redirect 解析。
         { path: '/approvals', permission: 'APPROVALS' },
         { path: '/workbench/approvals', permission: 'APPROVALS' },
-        // 高風險事件頁走 api/audit.py 的 HIGH_RISK_READ 守衛。
+      ],
+    },
+    {
+      // 稽核與資料品質（2026-08-20 整併）：高風險事件（原審核工作台分頁）、操作紀錄、
+      // 資料異常待辦（原報表群組兩頁）合為一頁三分頁。
+      //
+      // 頁面 views 為 OR：只持其中一碼者仍能進 /governance，落點由 router redirect
+      // 依權限決定。⚠ 三個子路徑一律 exact 掛各自的碼、**禁用 routePrefix**——
+      // prefix 會讓三碼互相外溢（只持 DATA_QUALITY_READ 者深連結進操作紀錄）。
+      key: 'governance', title: PAGE_TERMS.governance, routePath: '/governance',
+      views: [
+        { code: 'HIGH_RISK_READ', label: '高風險事件' },
+        { code: 'AUDIT_LOGS', label: '操作紀錄' },
+        { code: 'DATA_QUALITY_READ', label: '資料異常待辦' },
+      ],
+      actions: [{ code: 'DATA_QUALITY_WRITE', label: '資料異常處理' }],
+      menu: { icon: icon('Memo'), badgeKey: 'governance', placement: 'bottom' },
+      extraRoutes: [
+        { path: '/governance/high-risk', permission: 'HIGH_RISK_READ' },
+        { path: '/governance/audit-logs', permission: 'AUDIT_LOGS' },
+        { path: '/governance/data-quality', permission: 'DATA_QUALITY_READ' },
+        // 三條舊路徑已 redirect 至上面三個分頁；規則保留供 redirect 解析。
         { path: '/workbench/high-risk', permission: 'HIGH_RISK_READ' },
+        { path: '/audit-logs', permission: 'AUDIT_LOGS' },
+        { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
       ],
     },
   ],
@@ -362,38 +385,42 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('User') },
         },
         {
-          // 娃娃車即時監看：對齊後端 api/bus/admin_routes.py 的 GET /bus/trips/today
-          // 守衛（BUS_READ）。與 /bus-routes 各自 exact、**不可** routePrefix——兩條
-          // 路徑同屬 /bus-* 但權限不同，prefix 會讓路線管理的 BUS_WRITE 外溢到監看頁。
-          key: 'busMonitor', title: '娃娃車即時監看', routePath: '/bus-monitor',
-          views: [{ code: 'BUS_READ', label: '娃娃車檢視' }],
-          menu: { icon: icon('MapLocation') },
-        },
-        {
-          // 娃娃車乘車歷史：GET /bus/trips(/{id}) 兩支皆 BUS_READ，與監看頁同權限碼。
-          // BUS_READ 已由 busMonitor 主屬（views），本頁改用 sharedViews 借道
-          // （M3：同一碼只能一處 owned），各自 exact（同屬 /bus-* 但頁面獨立，不可 routePrefix）。
-          key: 'busHistory', title: '娃娃車乘車歷史', routePath: '/bus-history',
-          views: [], sharedViews: ['BUS_READ'],
-          menu: { icon: icon('Clock') },
-        },
-        {
-          // 娃娃車路線管理：頁面 gate = BUS_WRITE（後端路線管理三個寫端點的守衛），
-          // 故 BUS_WRITE 主屬於此頁 views 而非 actions——本頁「能看見/能進入」與
-          // 「能寫入」是同一個碼，沒有唯讀模式。同樣 exact，不可 routePrefix。
+          // 娃娃車管理（2026-08-13 三頁整合單一入口＋頁內分頁，比照 workbench）：
+          // 即時監看／乘車歷史＝BUS_READ（後端 GET /bus/trips/today 與 /bus/trips(/{id})
+          // 守衛）、路線管理＝BUS_WRITE（三個寫端點守衛；該分頁「能進入」與「能寫入」
+          // 同一碼，沒有唯讀模式）。主路由 /bus 承載兩碼 OR（只持其中一碼也進得來，
+          // 落點由 router redirect 依權限決定、分頁可見性由 BusLayout 各自判斷）。
           //
-          // ⚠ 授權時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：本頁進頁後
-          // 還會打 GET /bus/routes（後端 BUS_READ）與 GET /students（後端
-          // STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授 BUS_WRITE
-          // 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
-          key: 'busRoutes', title: '娃娃車路線管理', routePath: '/bus-routes',
-          views: [{ code: 'BUS_WRITE', label: '娃娃車路線管理' }],
-          menu: { icon: icon('Guide') },
+          // **不可 routePrefix**：三個分頁子路由權限不同，prefix 會讓 /bus 的
+          // BUS_WRITE 外溢到監看／歷史（或 BUS_READ 外溢到路線管理），故子路由
+          // 一律走 extraRoutes 各自 exact。
+          //
+          // ⚠ 授權路線管理時 BUS_WRITE / BUS_READ / STUDENTS_READ 三碼要一起給：
+          // 該分頁進頁後還會打 GET /bus/routes（後端 BUS_READ）與 GET /students
+          // （後端 STUDENTS_READ）。route gate 是 OR 語意、寫不出 AND，所以只授
+          // BUS_WRITE 的角色進得了頁，但兩支載入全 403（畫面退化成錯誤卡）。
+          key: 'bus', title: '娃娃車管理', routePath: '/bus',
+          views: [
+            { code: 'BUS_READ', label: '娃娃車檢視' },
+            { code: 'BUS_WRITE', label: '娃娃車路線管理' },
+          ],
+          menu: { icon: icon('MapLocation') },
+          extraRoutes: [
+            { path: '/bus/monitor', permission: 'BUS_READ' },
+            { path: '/bus/history', permission: 'BUS_READ' },
+            { path: '/bus/routes', permission: 'BUS_WRITE' },
+            // 舊路徑 redirect 保留規則（比照 /approvals → /workbench/approvals）。
+            { path: '/bus-monitor', permission: 'BUS_READ' },
+            { path: '/bus-history', permission: 'BUS_READ' },
+            { path: '/bus-routes', permission: 'BUS_WRITE' },
+          ],
         },
         {
           key: 'fees', title: '學費管理', routePath: '/fees',
           views: [{ code: 'FEES_READ' }],
-          actions: [{ code: 'FEES_WRITE' }],
+          // FEE_CLOSE_APPROVE（SPEC-014）：老闆簽核——現金交接確認、預繳退款
+          // 核准/完成、當期關帳與 reopen
+          actions: [{ code: 'FEES_WRITE' }, { code: 'FEE_CLOSE_APPROVE' }],
           menu: { icon: icon('CreditCard') },
         },
         {
@@ -420,15 +447,43 @@ export const NAVIGATION_MANIFEST = {
           menu: { icon: icon('Calendar') },
         },
         {
-          // 收支簽收：廠商付款／雜項收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。
-          key: 'financeSignoffs', title: '收支簽收', routePath: '/finance-signoffs',
+          // 活動參加調查表（Task 13，2026-08-10）：SURVEYS_* 兩碼，單頁模組。
+          // 2026-08-17 業主指示：自獨立的「活動調查」群組移入本群組（原群組僅此一頁，
+          // 隨之移除）；權限碼主屬、路由規則與頁面 title 全不動，僅選單歸屬變更
+          // （title 亦為麵包屑來源，見 deriveBreadcrumbParents）。
+          // ⚠ 與 brief 草稿的差異（已跑 manifestRouteParity 驗證修正）：/surveys/:id/edit
+          // 是動態路由，實際導覽路徑帶真實數字 id（如 /surveys/123/edit），extraRoutes
+          // 的 permission rule 只做字面比對——寫 literal ':id' 字串永遠比對不到真實路徑，
+          // 規則命中不到即回空集合，manifest 權限判定 default-deny，等同把有權限的人
+          // 一起擋下（並非「完全不設防」）。改採 /employees 既有慣例：/surveys 掛
+          // routePrefix: true + SURVEYS_READ 涵蓋 list/detail/edit 全部子路由，WRITE 純作
+          // actions 級的按鈕/表單顯示控制（實際寫入仍由後端 SURVEYS_WRITE 守衛擋）；
+          // 唯一例外是 /surveys/new——純靜態路徑（無參數段），可用 exact extraRoute
+          // 精確要求 SURVEYS_WRITE（longest-match 優先於 /surveys prefix 的 READ）。
+          key: 'surveyList', title: '調查管理', routePath: '/surveys', routePrefix: true,
+          views: [{ code: 'SURVEYS_READ', label: '檢視' }],
+          actions: [{ code: 'SURVEYS_WRITE', label: '建立與管理' }],
+          menu: { icon: icon('EditPen') },
+          extraRoutes: [{ path: '/surveys/new', permission: 'SURVEYS_WRITE' }],
+        },
+        {
+          // 收付款管理（2026-08 內控改版，前身「收支簽收」）：廠商付款／雜項
+          // 收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。路由沿用
+          // /finance-signoffs 保住深連結。
+          key: 'financeSignoffs', title: '收付款管理', routePath: '/finance-signoffs',
           views: [
             { code: 'VENDOR_PAYMENT_READ', label: '廠商付款檢視' },
             { code: 'MISC_RECEIPT_READ', label: '雜項收款檢視' },
           ],
           actions: [
             { code: 'VENDOR_PAYMENT_WRITE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_APPROVE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_SETTLE', requiresView: 'VENDOR_PAYMENT_READ' },
+            { code: 'VENDOR_PAYMENT_RECONCILE', requiresView: 'VENDOR_PAYMENT_READ' },
             { code: 'MISC_RECEIPT_WRITE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_APPROVE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_SETTLE', requiresView: 'MISC_RECEIPT_READ' },
+            { code: 'MISC_RECEIPT_RECONCILE', requiresView: 'MISC_RECEIPT_READ' },
           ],
           menu: { icon: icon('Wallet') },
         },
@@ -535,40 +590,8 @@ export const NAVIGATION_MANIFEST = {
     },
 
     {
-      // 活動參加調查表（Task 13，2026-08-10）：SURVEYS_* 兩碼，單頁模組。
-      // ⚠ 與 brief 草稿的差異（已跑 manifestRouteParity 驗證修正）：/surveys/:id/edit
-      // 是動態路由，實際導覽路徑帶真實數字 id（如 /surveys/123/edit），extraRoutes
-      // 的 permission rule 只做字面比對——寫 literal ':id' 字串永遠比對不到真實路徑，
-      // 規則命中不到即回空集合，manifest 權限判定 default-deny，等同把有權限的人
-      // 一起擋下（並非「完全不設防」）。改採 /employees 既有慣例：/surveys 掛
-      // routePrefix: true + SURVEYS_READ 涵蓋 list/detail/edit 全部子路由，WRITE 純作
-      // actions 級的按鈕/表單顯示控制（實際寫入仍由後端 SURVEYS_WRITE 守衛擋）；
-      // 唯一例外是 /surveys/new——純靜態路徑（無參數段），可用 exact extraRoute
-      // 精確要求 SURVEYS_WRITE（longest-match 優先於 /surveys prefix 的 READ）。
-      key: 'surveys', title: '活動調查', icon: icon('EditPen'), pages: [
-        {
-          key: 'surveyList', title: '調查管理', routePath: '/surveys', routePrefix: true,
-          views: [{ code: 'SURVEYS_READ', label: '檢視' }],
-          actions: [{ code: 'SURVEYS_WRITE', label: '建立與管理' }],
-          menu: { icon: icon('EditPen') },
-          extraRoutes: [{ path: '/surveys/new', permission: 'SURVEYS_WRITE' }],
-        },
-      ],
-    },
-
-    {
+      // 2026-08-20：操作紀錄與資料異常待辦移至 topLevel 的 governance 節點（整合頁）。
       key: 'reports', title: '報表', icon: icon('DataAnalysis'), pages: [
-        {
-          key: 'auditLogs', title: '操作紀錄', routePath: '/audit-logs',
-          views: [{ code: 'AUDIT_LOGS' }],
-          menu: { icon: icon('Memo') },
-        },
-        {
-          key: 'dataQuality', title: PAGE_TERMS.dataQuality, routePath: '/data-quality',
-          views: [{ code: 'DATA_QUALITY_READ' }],
-          actions: [{ code: 'DATA_QUALITY_WRITE' }],
-          menu: { icon: icon('WarningFilled') },
-        },
         {
           key: 'reportsMain', title: PAGE_TERMS.reports, routePath: '/reports',
           views: [{ code: 'REPORTS' }],
@@ -652,6 +675,16 @@ export const NAVIGATION_MANIFEST = {
           key: 'platformAudit', title: '跨分校稽核', routePath: '/platform/audit',
           views: [{ code: 'PLATFORM_AUDIT_VIEW' }],
           menu: { icon: icon('List') },
+        },
+        {
+          // 勞健保級距／費率是 GLOBAL 表（無 tenant_id），一改對全平台生效，
+          // 後端寫入端已於 SEC-02 降為 require_platform_admin。此處借道
+          // PLATFORM_TENANTS_MANAGE（比照角色同步頁），**不新增第四個
+          // PLATFORM_* 碼**——會牽動後端 PLATFORM_ONLY_CODES parity 與角色 seed。
+          key: 'platformGovData', title: '政府資料同步', routePath: '/platform/gov-data',
+          views: [],
+          sharedViews: ['PLATFORM_TENANTS_MANAGE'],
+          menu: { icon: icon('Coin') },
         },
       ],
     },

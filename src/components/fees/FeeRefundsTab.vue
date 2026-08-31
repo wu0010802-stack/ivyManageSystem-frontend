@@ -8,8 +8,9 @@
         <el-select
           v-model="filter.period"
           placeholder="學期"
+          aria-label="學期"
           clearable
-          style="width: 150px"
+          class="filter-period"
         >
           <el-option
             v-for="period in effectivePeriodOptions"
@@ -21,19 +22,33 @@
         <el-input
           v-model="filter.student_name"
           placeholder="學生姓名"
+          aria-label="學生姓名"
           clearable
-          style="width: 160px"
+          class="filter-student"
           @keyup.enter="loadRefundedRecords"
         />
         <el-button @click="loadRefundedRecords" :loading="loading">重新整理</el-button>
       </div>
-      <el-button type="primary" @click="openNewRefundDialog">+ 新增退費</el-button>
+      <el-button type="primary" @click="openNewRefundDialog">新增退費</el-button>
     </div>
 
     <!-- ================================================================
-         退費歷史表
+         退費歷史表（GET /fees/refunds 伺服器分頁，Phase 2 起為完整退費歷史）
     ================================================================ -->
+    <div class="refunds-table-region" :aria-busy="loading ? 'true' : 'false'">
+    <EmptyState
+      v-if="loadError"
+      data-test="refund-error-state"
+      variant="error"
+      title="載入退費紀錄失敗"
+      description="請檢查網路連線後重試"
+    >
+      <template #action>
+        <el-button type="primary" data-test="refund-error-retry" @click="loadRefundedRecords">重試</el-button>
+      </template>
+    </EmptyState>
     <el-table
+      v-else-if="refundedRows.length > 0"
       :data="refundedRows"
       v-loading="loading"
       border
@@ -79,17 +94,25 @@
           </el-button>
         </template>
       </el-table-column>
-      <template #empty>
-        <div class="empty-state">
-          <p>目前期別內無退費紀錄</p>
-          <el-button type="primary" @click="openNewRefundDialog">+ 新增退費</el-button>
-        </div>
-      </template>
     </el-table>
-
-    <p v-if="!loading && refundedRows.length > 0" class="hint">
-      顯示 {{ filter.period || '全部期別' }} 篩選結果前 {{ scannedCount }} 筆 records 中有退費紀錄者（{{ refundedRows.length }} 筆）。如需擴大範圍，請使用上方期別或姓名篩選。
-    </p>
+    <!-- 空狀態外置：畫面上只留 toolbar 那一顆 primary「新增退費」CTA -->
+    <EmptyState
+      v-else-if="!loading"
+      title="目前條件內沒有退費紀錄"
+      description="可用右上「新增退費」選擇已繳費的記錄建立退費"
+    />
+    <el-pagination
+      v-if="!loadError && total > 0"
+      :current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      layout="total, sizes, prev, pager, next"
+      :page-sizes="[20, 50, 100]"
+      class="refunds-pagination"
+      @current-change="onPageChange"
+      @size-change="onPageSizeChange"
+    />
+    </div>
 
     <!-- ================================================================
          Dialog：新增退費（選 record → 開 RefundSuggestModal）
@@ -97,15 +120,16 @@
     <el-dialog
       v-model="pickerVisible"
       title="選擇要退費的費用記錄"
-      width="720px"
+      width="min(720px, 94vw)"
       destroy-on-close
     >
       <div class="picker-toolbar">
         <el-select
           v-model="pickerFilter.period"
           placeholder="學期"
+          aria-label="學期"
           clearable
-          style="width: 150px"
+          class="filter-period"
         >
           <el-option
             v-for="period in effectivePeriodOptions"
@@ -117,8 +141,9 @@
         <el-input
           v-model="pickerFilter.student_name"
           placeholder="學生姓名"
+          aria-label="學生姓名"
           clearable
-          style="width: 180px"
+          class="filter-student"
           @keyup.enter="loadPickerCandidates"
         />
         <el-button @click="loadPickerCandidates" :loading="pickerLoading">搜尋</el-button>
@@ -168,8 +193,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getFeeRecords, getFeeRefunds, getFeePeriods } from '@/api/fees'
+import { getFeeRecords, getRefundedFeeRecords, getFeePeriods } from '@/api/fees'
 import { formatCurrency } from '@/utils/currency'
+import EmptyState from '@/components/common/EmptyState.vue'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 
 const props = withDefaults(defineProps<{
@@ -195,10 +221,7 @@ async function ensurePeriods() {
   }
 }
 
-// ─── 主表：退費歷史 ──────────────────────────────────────────────────────────
-const FAN_OUT_LIMIT = 100 // 一次最多掃描的 records 數量上限
-const CONCURRENCY = 5
-
+// ─── 主表：退費歷史（GET /fees/refunds 伺服器分頁；一 record 一列，含彙總與明細） ───
 const filter = reactive({
   period: '',
   student_name: '',
@@ -206,78 +229,82 @@ const filter = reactive({
 const refundedRows = ref<FeeRecord[]>([])
 const expandedRowKeys = ref<string[]>([])
 const loading = ref<boolean>(false)
-const scannedCount = ref<number>(0)
+const loadError = ref<boolean>(false)
+const page = ref<number>(1)
+const pageSize = ref<number>(20)
+const total = ref<number>(0)
 
-function _buildRecordParams() {
-  const params: Record<string, unknown> = { page: 1, page_size: FAN_OUT_LIMIT }
+interface RefundListItem {
+  record_id: number
+  student_id: number
+  student_name?: string | null
+  classroom_name?: string | null
+  period?: string | null
+  fee_item_name?: string | null
+  fee_type?: string | null
+  amount_due: number
+  amount_paid?: number | null
+  total_refunded: number
+  refund_count: number
+  latest_refund_at?: string | null
+  refunds: Record<string, unknown>[]
+}
+
+function _buildListParams() {
+  const params: Record<string, unknown> = { page: page.value, page_size: pageSize.value }
   if (filter.period) params.period = filter.period
   if (filter.student_name) params.student_name = filter.student_name
   return params
 }
 
-/**
- * 對每筆 record 並發呼叫 getFeeRefunds，限制 concurrency。
- * 每筆失敗不阻斷整體（Promise.allSettled）。
- */
-async function _fetchRefundsForRecords(records: FeeRecord[]) {
-  const results: (Record<string, unknown> | null)[] = new Array(records.length).fill(null)
-  let cursor = 0
-
-  async function worker() {
-    while (cursor < records.length) {
-      const idx = cursor
-      cursor += 1
-      const rec = records[idx]
-      try {
-        results[idx] = await getFeeRefunds(rec.id as number)
-      } catch {
-        results[idx] = null
-      }
-    }
-  }
-
-  const workerCount = Math.min(CONCURRENCY, records.length)
-  const workerPromises = []
-  for (let i = 0; i < workerCount; i++) {
-    workerPromises.push(worker())
-  }
-  await Promise.allSettled(workerPromises)
-  return results
-}
+// request sequence 守衛：晚發先回時，舊 response 不得覆蓋新條件的結果
+let _listSeq = 0
 
 async function loadRefundedRecords() {
+  const seq = ++_listSeq
   loading.value = true
   try {
-    const params = _buildRecordParams()
-    const res = await getFeeRecords(params)
-    const records: FeeRecord[] = (res as { items?: FeeRecord[] })?.items || []
-    scannedCount.value = records.length
-
-    // 只挑「有已繳金額」的 records 跑 refunds 查詢（沒繳費的不可能退費）
-    const paidRecords = records.filter((r) => (r.amount_paid || 0) > 0)
-    const refundResps = await _fetchRefundsForRecords(paidRecords)
-
-    const rows: FeeRecord[] = []
-    paidRecords.forEach((rec, idx) => {
-      const resp = refundResps[idx]
-      const refunds = (resp as { refunds?: Record<string, unknown>[] })?.refunds || []
-      if (refunds.length === 0) return
-      rows.push({
-        ...rec,
-        _refunds: refunds,
-        _total_refunded: (resp as { total_refunded?: number })?.total_refunded || refunds.reduce((s, r) => s + ((r.amount as number) || 0), 0),
-        _latest_refund_at: (refunds[0] as { refunded_at?: string })?.refunded_at || null,
-      })
-    })
-
-    refundedRows.value = rows
+    const res = await getRefundedFeeRecords(_buildListParams())
+    if (seq !== _listSeq) return
+    const data = res as unknown as { total: number; items: RefundListItem[] }
+    total.value = data.total
+    // 映射為既有 row 形狀（id=record_id 供 row-key 與「再次退費」直接帶入 RefundSuggestModal）
+    refundedRows.value = (data.items || []).map((item) => ({
+      id: item.record_id,
+      student_id: item.student_id,
+      student_name: item.student_name ?? undefined,
+      classroom_name: item.classroom_name ?? undefined,
+      period: item.period ?? undefined,
+      fee_item_name: item.fee_item_name ?? undefined,
+      fee_type: item.fee_type ?? undefined,
+      amount_due: item.amount_due,
+      amount_paid: item.amount_paid ?? undefined,
+      _refunds: item.refunds || [],
+      _total_refunded: item.total_refunded,
+      _latest_refund_at: item.latest_refund_at ?? null,
+    }))
     expandedRowKeys.value = []
+    loadError.value = false
   } catch (err: unknown) {
+    if (seq !== _listSeq) return
+    // 錯誤要持久呈現（EmptyState + 重試），toast 只是輔助
+    loadError.value = true
     const e = err as { response?: { data?: { detail?: string } } }
     ElMessage.error(e?.response?.data?.detail || '載入退費紀錄失敗')
   } finally {
-    loading.value = false
+    if (seq === _listSeq) loading.value = false
   }
+}
+
+function onPageChange(p: number) {
+  page.value = p
+  void loadRefundedRecords()
+}
+
+function onPageSizeChange(size: number) {
+  pageSize.value = size
+  page.value = 1
+  void loadRefundedRecords()
 }
 
 function onExpandChange(_row: unknown, expandedRows: { id: number }[]) {
@@ -364,14 +391,20 @@ function formatDateTime(iso: string | null | undefined): string {
   }
 }
 
-// ─── 篩選 watcher ─────────────────────────────────────────────────────────
-watch(() => filter.period, () => loadRefundedRecords())
+// ─── 篩選 watcher（條件變更 → page 歸 1 重查） ─────────────────────────────
+watch(() => filter.period, () => {
+  page.value = 1
+  void loadRefundedRecords()
+})
 
 // 學生姓名 300ms debounce
 let _searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(() => filter.student_name, () => {
   clearTimeout(_searchTimer ?? undefined)
-  _searchTimer = setTimeout(() => loadRefundedRecords(), 300)
+  _searchTimer = setTimeout(() => {
+    page.value = 1
+    void loadRefundedRecords()
+  }, 300)
 })
 
 onMounted(async () => {
@@ -383,6 +416,12 @@ defineExpose({
   loadRefundedRecords,
   refundedRows,
   filter,
+  page,
+  pageSize,
+  total,
+  loadError,
+  onPageChange,
+  onPageSizeChange,
   pickerVisible,
   pickerCandidates,
   refundModalVisible,
@@ -415,29 +454,27 @@ defineExpose({
 
 .refund-history {
   padding: var(--space-3) var(--space-4);
-  background-color: var(--bg-subtle, #fafafa);
+  /* --bg-subtle 不存在；有效 token 為 --bg-color-soft（見 DESIGN.md） */
+  background-color: var(--bg-color-soft);
 }
 
 .history-title {
   margin: 0 0 var(--space-2) 0;
-  font-weight: 600;
-  color: var(--text-secondary, #555);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
 }
 
-.empty-state {
-  padding: var(--space-6) 0;
-  text-align: center;
-  color: var(--text-tertiary, #999);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  align-items: center;
-}
-
-.hint {
+.refunds-pagination {
   margin-top: var(--space-3);
-  color: var(--text-tertiary, #999);
-  font-size: var(--text-sm, 13px);
+  justify-content: flex-end;
+}
+
+.filter-period {
+  width: 150px;
+}
+
+.filter-student {
+  width: 160px;
 }
 
 .picker-toolbar {
@@ -445,5 +482,13 @@ defineExpose({
   gap: var(--space-2);
   margin-bottom: var(--space-3);
   flex-wrap: wrap;
+}
+
+@media (--to-sm) {
+  .filter-period,
+  .filter-student {
+    width: 100%;
+    flex: 1 1 auto;
+  }
 }
 </style>

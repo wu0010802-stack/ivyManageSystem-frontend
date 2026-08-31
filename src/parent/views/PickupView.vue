@@ -41,6 +41,7 @@ interface PickupAuth {
   status: string
   effective_status: string
   batch_key: string | null
+  pickup_code?: string | null
   [key: string]: unknown
 }
 
@@ -280,6 +281,13 @@ onMounted(async () => {
             </div>
             <M3Chip>{{ STATUS_LABEL[a.effective_status] || a.effective_status }}</M3Chip>
           </div>
+          <div
+            v-if="a.pickup_code && a.effective_status === 'active'"
+            class="auth-code"
+            data-testid="active-pickup-code"
+          >
+            取件碼：<span class="auth-code-value">{{ a.pickup_code }}</span>
+          </div>
           <div class="auth-actions">
             <button type="button" class="link-btn" @click="askRegenerate(a)">重發取件碼</button>
             <button type="button" class="link-btn danger" @click="askCancel(a)">取消授權</button>
@@ -450,6 +458,17 @@ onMounted(async () => {
 .auth-meta {
   font-size: 12px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
+}
+.auth-code {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
+}
+.auth-code-value {
+  font-weight: 700;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+  color: var(--m3-primary, var(--brand-primary));
 }
 .auth-actions {
   display: flex;

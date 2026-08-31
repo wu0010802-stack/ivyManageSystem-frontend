@@ -1,15 +1,22 @@
 import api from './index'
+import type { ApiBody, AxiosResp } from './_generated/typed'
 
 // 管理端
-export const createDismissalCall = (data: unknown) => api.post('/dismissal-calls', data)
+export const createDismissalCall = (
+  data: ApiBody<'/dismissal-calls', 'post'>,
+): AxiosResp<'/dismissal-calls', 'post'> => api.post('/dismissal-calls', data)
 export const getDismissalCalls = (params: unknown) => api.get('/dismissal-calls', { params })
 export const cancelDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/cancel`)
+// 標記已到門口（pnotice01 家長預告接送：辦公室代替忘記按抵達的家長操作）
+export const arriveDismissalCall = (id: number) => api.post(`/dismissal-calls/${id}/arrive`)
 
 // 教師 portal
 export const getPortalDismissalCalls = () => api.get('/portal/dismissal-calls')
 export const getPortalPendingCount = () => api.get('/portal/dismissal-calls/pending-count')
 export const acknowledgeDismissalCall = (id: number) => api.post(`/portal/dismissal-calls/${id}/acknowledge`)
 export const completeDismissalCall = (id: number) => api.post(`/portal/dismissal-calls/${id}/complete`)
+// 教師端取消（pending/acknowledged 可取消；誤建/家長改口，不必再找管理端）
+export const cancelPortalDismissalCall = (id: number) => api.post(`/portal/dismissal-calls/${id}/cancel`)
 
 // ---------------------------------------------------------------------------
 // WebSocket 自訂關閉碼（對應後端 dismissal_ws.py 定義）

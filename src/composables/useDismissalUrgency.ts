@@ -1,5 +1,5 @@
 import { ref, onMounted, onUnmounted } from 'vue'
-import { parseTaipeiDate } from '@/utils/taipeiTime'
+import { parseTaipeiDate, formatTaipeiClock } from '@/utils/taipeiTime'
 
 /**
  * 接送通知「等候時間 / 緊急度」共用邏輯。
@@ -22,13 +22,127 @@ export type UrgencyLevel = 'normal' | 'warning' | 'critical'
 /** 接送通知 payload 的最小形狀（管理端 / portal 共用欄位，見後端 _call_base_dict）。 */
 export interface DismissalCallView {
   id: number
+  student_id?: number
   student_name?: string
   classroom_name?: string
   status?: string
   requested_at?: string
   requested_by_name?: string
   note?: string
+  /** pnotice01 家長預告接送：staff（舊流程，視同已在門口）/ parent（預告）/ proxy（委託代理人，T-021） */
+  request_source?: string | null
+  expected_arrival_at?: string | null
+  arrived_at?: string | null
+  cancelled_at?: string | null
+  /** T-021 起 request_source='proxy' 才有值：代理人姓名／關係／6 位明碼取件碼，其餘來源恆為 null。 */
+  person_name?: string | null
+  person_relation?: string | null
+  pickup_code?: string | null
+  /** T-022 起 request_source='proxy' 才有值：對應的 pickup_authorizations.id，供辦公室一鍵確認接送呼叫 confirm-visual-match。 */
+  pickup_authorization_id?: number | null
   [key: string]: unknown
+}
+
+/** 家長預告且尚未抵達——顯示 ETA、不套 3/8 分鐘等候警示。 */
+export function isPreArrivalNotice(call: {
+  request_source?: string | null
+  arrived_at?: string | null
+}): boolean {
+  return call.request_source === 'parent' && !call.arrived_at
+}
+
+/**
+ * 等候時間起算點：實際到門口（arrived_at）優先；staff 舊流程 arrived_at＝
+ * requested_at（migration 已回填），無 arrived_at 時防禦性 fallback requested_at
+ * ——確保等候語意永遠是「家長在門口等多久」，不是「按下通知多久」。
+ */
+export function waitAnchorIso(call: {
+  requested_at?: string | null
+  arrived_at?: string | null
+}): string | null | undefined {
+  return call.arrived_at || call.requested_at
+}
+
+/**
+ * 「預計 HH:MM」（台北時間）。無法解析回空字串。
+ * 走 formatTaipeiClock 顯式以 Asia/Taipei 格式化——原本的 getHours()/getMinutes()
+ * 吃裝置本地時區，非台灣裝置（與 UTC 的 CI runner）會差 8 小時。
+ */
+export function formatExpectedArrival(iso: string | null | undefined): string {
+  const clock = formatTaipeiClock(iso)
+  return clock ? `預計 ${clock}` : ''
+}
+
+/** ETA 差（分鐘，向零取整）：未到為正、已過為負。無法解析回 null。 */
+export function etaDeltaMinutes(
+  iso: string | null | undefined,
+  nowMs: number,
+): number | null {
+  const d = parseTaipeiDate(iso)
+  if (!d) return null
+  return Math.trunc((d.getTime() - nowMs) / 60000)
+}
+
+/** ETA 相對文案：「還有 N 分」／「即將抵達」（±1 分內）／「預計時間已過 N 分」。 */
+export function etaRelativeText(
+  iso: string | null | undefined,
+  nowMs: number,
+): string {
+  const delta = etaDeltaMinutes(iso, nowMs)
+  if (delta == null) return ''
+  if (delta > 0) return `還有 ${delta} 分`
+  if (delta === 0) return '即將抵達'
+  return `預計時間已過 ${-delta} 分`
+}
+
+/**
+ * 家長預約接送語音／文字播報：「{班級}班{學生}的家長{N}分鐘後會抵達」。
+ * 教師 Portal（usePortalDismissalAlerts）與後台接送佇列
+ * （useDismissalReservationChime）共用，確保兩端唸法一致。
+ * 無法解析 ETA（已抵達或時間有誤）時退化為「即將抵達」。
+ */
+export function reservationAnnouncementText(
+  call: {
+    student_name?: string
+    classroom_name?: string
+    expected_arrival_at?: string | null
+  },
+  nowMs: number,
+): string {
+  const eta = etaDeltaMinutes(call.expected_arrival_at, nowMs)
+  const etaText = eta != null && eta > 0 ? `${eta}分鐘後會抵達` : '即將抵達'
+  // 部分租戶班級本身即以「XX班」命名（如小班/中班/大班），避免疊字唸成「XX班班」。
+  const classroom = call.classroom_name
+    ? (call.classroom_name.endsWith('班') ? call.classroom_name : `${call.classroom_name}班`)
+    : ''
+  return `${classroom}${call.student_name || '學生'}的家長${etaText}`
+}
+
+/**
+ * active queue 排序（管理端與教師端共用，語意單一來源）：
+ * 1. 已抵達者優先，依 arrived_at 最舊到最新（等最久的孩子最前）
+ * 2. 尚未抵達者依 expected_arrival_at 由近到遠（已超過 ETA 自然排最前）
+ * staff 舊資料 arrived_at=requested_at → 全體落在第 1 組，等價原 FIFO。
+ */
+export function sortActiveQueue<
+  T extends {
+    requested_at?: string | null
+    expected_arrival_at?: string | null
+    arrived_at?: string | null
+  },
+>(calls: T[]): T[] {
+  const ts = (iso: string | null | undefined) =>
+    parseTaipeiDate(iso)?.getTime() ?? Number.MAX_SAFE_INTEGER
+  return [...calls].sort((a, b) => {
+    const aArrived = !!a.arrived_at
+    const bArrived = !!b.arrived_at
+    if (aArrived !== bArrived) return aArrived ? -1 : 1
+    if (aArrived) return ts(a.arrived_at) - ts(b.arrived_at)
+    return (
+      ts(a.expected_arrival_at ?? a.requested_at) -
+      ts(b.expected_arrival_at ?? b.requested_at)
+    )
+  })
 }
 
 /** 已等候分鐘數（向下取整，下限 0）。無法解析回 null。 */

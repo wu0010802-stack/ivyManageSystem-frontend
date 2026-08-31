@@ -15,8 +15,10 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import MoodBadge from '../components/contact-book/MoodBadge.vue'
 import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
+import ContactBookHeroSparkle from '../components/illustrations/ContactBookHeroSparkle.vue'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
+import { isNetworkError } from '@/composables/useOnlineStatus'
 
 interface Reply {
   id: number | string
@@ -155,24 +157,33 @@ async function fetchData() {
   }
 }
 
+/**
+ * 把「標記已讀」寫進離線佇列（含樂觀 UI）。
+ * `!navigator.onLine` 的離線分流與「假線上」網路失敗的 fallback 共用這一條，
+ * 兩條路徑的行為不得再分歧。
+ */
+async function queueAck() {
+  await enqueueParent({
+    kind: OP_KINDS.CONTACT_BOOK_ACK,
+    payload: { entry_id: entryId.value },
+    meta: { entry_id: entryId.value },
+  })
+  // 樂觀 UI
+  if (entry.value) {
+    entry.value.isRead = true
+    entry.value.readAt = new Date().toISOString()
+  }
+  toast.success('已暫存，連線後自動送出')
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
+}
+
 async function markAsRead() {
   if (acking.value) return
   acking.value = true
 
   if (!navigator.onLine) {
     try {
-      await enqueueParent({
-        kind: OP_KINDS.CONTACT_BOOK_ACK,
-        payload: { entry_id: entryId.value },
-        meta: { entry_id: entryId.value },
-      })
-      // 樂觀 UI
-      if (entry.value) {
-        entry.value.isRead = true
-        entry.value.readAt = new Date().toISOString()
-      }
-      toast.success('已暫存，連線後自動送出')
-      flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
+      await queueAck()
     } catch (err) {
       const e = err as Record<string, unknown>
       toast.error(String(e?.displayMessage || '暫存失敗，請稍後再試'))
@@ -190,11 +201,35 @@ async function markAsRead() {
     }
     // 已讀軌：成功不跳 toast（被動行為，與「已讀」語意一致）
   } catch (err) {
+    // navigator.onLine 會說謊（弱訊號、行動網路連著但打不到 server）：網路層失敗
+    // 一律 fallback 進佇列，否則家長的操作直接遺失。非網路錯誤（4xx/5xx）維持原提示。
+    if (isNetworkError(err)) {
+      try {
+        await queueAck()
+        return
+      } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
+    }
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '標記失敗，請重試'))
   } finally {
     acking.value = false
   }
+}
+
+/**
+ * 把回覆寫進離線佇列（含樂觀 UI）。離線分流與假線上 fallback 共用。
+ */
+async function queueReply(body: string) {
+  await enqueueParent({
+    kind: OP_KINDS.CONTACT_BOOK_REPLY,
+    payload: { entry_id: entryId.value, body },
+    meta: { entry_id: entryId.value, content_preview: body.slice(0, 20) },
+  })
+  // 樂觀 UI
+  replies.value.push({ id: `pending-${Date.now()}`, body, created_at: new Date().toISOString() })
+  newReply.value = ''
+  toast.success('已暫存，連線後自動送出')
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
 }
 
 async function submitReply() {
@@ -208,16 +243,7 @@ async function submitReply() {
 
   if (!navigator.onLine) {
     try {
-      await enqueueParent({
-        kind: OP_KINDS.CONTACT_BOOK_REPLY,
-        payload: { entry_id: entryId.value, body },
-        meta: { entry_id: entryId.value, content_preview: body.slice(0, 20) },
-      })
-      // 樂觀 UI
-      replies.value.push({ id: `pending-${Date.now()}`, body, created_at: new Date().toISOString() })
-      newReply.value = ''
-      toast.success('已暫存，連線後自動送出')
-      flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
+      await queueReply(body)
     } catch (err) {
       const e = err as Record<string, unknown>
       toast.error(String(e?.displayMessage || '暫存失敗'))
@@ -232,6 +258,13 @@ async function submitReply() {
     replies.value.push(data as Reply)
     newReply.value = ''
   } catch (err) {
+    // 假線上：網路層失敗一律進佇列，家長打好的回覆不可因弱訊號蒸發。
+    if (isNetworkError(err)) {
+      try {
+        await queueReply(body)
+        return
+      } catch { /* 佇列也寫不進去 → 落回下方錯誤提示 */ }
+    }
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '送出失敗'))
   } finally {
@@ -324,12 +357,19 @@ function formatReplyTime(iso: string) {
     <template v-else-if="entry">
       <!-- Hero：日期 + 名字 + 大心情徽章 -->
       <header class="hero">
+        <ContactBookHeroSparkle class="hero-art" />
         <p class="hero-date">{{ dateLine }}</p>
         <div class="hero-row">
-          <MoodBadge :mood="entry.mood" size="lg" show-label />
+          <div class="mood-lg">
+            <MoodBadge :mood="entry.mood" size="lg" />
+          </div>
           <div class="hero-meta">
             <h1 class="hero-name">{{ studentInfo?.name || '聯絡簿' }}</h1>
             <p v-if="studentInfo?.classroom_name" class="hero-class">{{ studentInfo.classroom_name }}</p>
+            <span v-if="entry.mood && MOOD_LABEL[entry.mood]" class="mood-tag">
+              <span class="material-symbols-rounded" aria-hidden="true">sunny</span>
+              今天心情：{{ MOOD_LABEL[entry.mood] }}
+            </span>
           </div>
         </div>
       </header>
@@ -467,9 +507,17 @@ function formatReplyTime(iso: string) {
 
 /* Hero */
 .hero {
+  position: relative;
   padding: 16px 20px 18px;
-  background:
-    linear-gradient(135deg, var(--cream, #fffcf2) 0%, var(--leaf-100, #dcf4e6) 100%);
+  background: var(--pt-gradient-hero);
+  border-radius: var(--pt-hero-radius, 30px);
+  overflow: hidden;
+}
+.hero-art {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  opacity: 0.95;
 }
 .hero-date {
   margin: 0;
@@ -485,6 +533,32 @@ function formatReplyTime(iso: string) {
   gap: 16px;
 }
 .hero-meta { flex: 1; min-width: 0; }
+.mood-lg {
+  width: 76px;
+  height: 76px;
+  border-radius: 28px;
+  flex-shrink: 0;
+  background: var(--pt-surface-card, #fff);
+  box-shadow: var(--pt-shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mood-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  background: var(--pt-accent-sun-container);
+  color: var(--pt-accent-sun-on);
+  border-radius: 999px;
+  padding: 4px 12px 4px 8px;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+.mood-tag .material-symbols-rounded {
+  font-size: 15px;
+}
 .hero-name {
   margin: 0;
   font-size: 26px;
@@ -546,7 +620,7 @@ function formatReplyTime(iso: string) {
 /* 老師留言 */
 .note-card {
   background:
-    linear-gradient(180deg, var(--cream, #fffcf2) 0%, #ffffff 100%);
+    linear-gradient(180deg, var(--cream, #fffcf2) 0%, var(--pt-surface-card, #ffffff) 100%);
   border-color: var(--sun-300, #ffe285);
 }
 .note-card .card-title .material-symbols-rounded { color: var(--sun-700, #c99500); }
@@ -589,8 +663,8 @@ function formatReplyTime(iso: string) {
   color: var(--coral-700, #b14545);
 }
 .read-btn {
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 8px 16px;
   border-radius: 999px;
@@ -688,8 +762,8 @@ function formatReplyTime(iso: string) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 8px 16px;
   border-radius: 999px;

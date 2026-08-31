@@ -114,8 +114,8 @@ function goDetail(id: number): void {
 }
 
 onMounted(async () => {
-  await load()
-  const resp = await getAlbumClassrooms()
+  // 效能（2026-08-21）：load() 與 getAlbumClassrooms() 互不依賴，改平行請求。
+  const [, resp] = await Promise.all([load(), getAlbumClassrooms()])
   const list = resp.data
   classrooms.value = list
   if (list.length === 1) createForm.value.classroom_id = list[0].id

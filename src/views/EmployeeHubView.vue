@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
+import { hasFullSalaryView } from '@/utils/auth'
 
 const EmployeeListView = defineAsyncComponent(() => import('./EmployeeListView.vue'))
 const OffboardingView = defineAsyncComponent(() => import('./admin/OffboardingView.vue'))
@@ -12,14 +13,15 @@ const SECTIONS: { key: SectionKey; label: string }[] = [
   { key: 'offboarding', label: '離職管理' },
 ]
 
-const segmentedOptions = SECTIONS.map((s) => ({ label: s.label, value: s.key }))
+const availableSections = hasFullSalaryView() ? SECTIONS : SECTIONS.slice(0, 1)
+const segmentedOptions = availableSections.map((s) => ({ label: s.label, value: s.key }))
 
 const route = useRoute()
 const router = useRouter()
 
 const resolveSection = (raw: unknown): SectionKey => {
   const r = Array.isArray(raw) ? raw[0] : raw
-  return SECTIONS.find((s) => s.key === r)?.key ?? SECTIONS[0].key
+  return availableSections.find((s) => s.key === r)?.key ?? availableSections[0].key
 }
 
 const activeSection = ref<SectionKey>(resolveSection(route.query.section))
@@ -39,6 +41,7 @@ watch(
 
 const onSectionChange = (val: string | number) => {
   const next = String(val) as SectionKey
+  if (!availableSections.some((section) => section.key === next)) return
   if (next === activeSection.value) return
   const query: LocationQueryRaw = { ...route.query, section: next }
   router.replace({ query })

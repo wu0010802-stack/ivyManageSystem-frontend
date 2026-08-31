@@ -23,17 +23,18 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    if ($tb_reject_host) { return 404; }
+    # 本檔在 Zeabur 上是「container 內部埠 8080」被外層反代終止 TLS 後轉發進來，
+    # 對外實際埠是 443（或根本不露埠）。nginx 對「本地 URI」的 redirect（如下方
+    # /parent、/parent.html 的 return 301）預設會把自己的 listen port 塞進
+    # Location header（port_in_redirect 預設 on）——2026-08-16 加入這兩條 301 才
+    # 首次觸發，此前全站零 server 端產生的 redirect，故先前未暴露。
+    # 症狀：對外網址開出 Location: https://host:8080/parent/，8080 對外根本打不通。
+    # 關掉 absolute_redirect 讓 nginx 吐相對路徑（Location: /parent/），交給瀏覽器
+    # 用「使用者實際連線的 scheme/host/port」去解析，同時繞開 port 與 scheme 兩種
+    # 反代不透光的情境，比只關 port_in_redirect 更保守。
+    absolute_redirect off;
 
-    # ── Railway 私有網路 DNS 動態解析（修 upstream IP 快取斷線）──
-    # ivy-api 每次重部署會換內網 IP，而 nginx 預設在啟動時解析 upstream hostname
-    # 一次並永久快取 → api 換 IP 後 nginx 續連舊死 IP → /api 全 502（首頁靜態仍
-    # 200，易誤判為 DB 問題）。加 resolver ＋下方 location 的變數化 proxy_pass 強制
-    # 每請求重新解析，api 重部署後不必手動 redeploy 前端。
-    # fd12::10 = Railway 內部 DNS（容器 /etc/resolv.conf 的 nameserver，私有網路為
-    # IPv6）；valid=10s 每 10 秒重查一次。此值為 Railway 平台常數，非本專案專屬。
-    resolver [fd12::10] valid=10s;
-    resolver_timeout 5s;
+    if ($tb_reject_host) { return 404; }
 
     # ── 品牌注入：server 層宣告一次，所有 location 繼承 ──
     # HTML 檔 <5KB 且本就 no-cache，逐請求替換成本可忽略；/assets/ 的 js/css 因
@@ -76,15 +77,30 @@ server {
 
     # /api/* 反代到後端（內部網路）— 讓 cookie 變 first-party，
     # 解 LIFF in-app webview 第三方 cookie 被 ITP 擋的問題。
-    # BACKEND_URL 由 Zeabur frontend service 注入：
-    #   http://ivymanagesystem-backend-rulla.zeabur.internal:8080
+    # BACKEND_URL 由部署平台 frontend service 注入（Railway：
+    #   http://ivy-api.railway.internal:8080）。
     # WS 走 upgrade，HTTP 走標準反代
+    #
+    # ⚠ proxy_pass 必須走「變數」形式（2026-08-16 staging 全站 /api timeout 事故）：
+    # 字面 hostname 只在 nginx 啟動時解析一次並永久快取，後端 redeploy 換 IP 後
+    # 前端就一直反代到死 IP，直到前端自己重啟。改用 set 變數 + resolver 讓 nginx
+    # 逐請求依 TTL 重新解析（valid=10s → 後端換 IP 最多 ~10 秒收斂）。
+    #
+    # resolver 寫 Railway 內部 DNS 平台常數 [fd12::10]（容器 /etc/resolv.conf 的
+    # nameserver；私有網路為 IPv6）。2026-08-31 已於 Railway prod 實證：api 重部署
+    # 換 IP 後 /api 僅 4 秒 blip 即自癒。曾有 ${NGINX_LOCAL_RESOLVERS}（官方 image
+    # 15-local-resolvers.envsh 從 resolv.conf 算出）＋ ipv6=off 的 Zeabur 寫法；
+    # 該組合僅在 Zeabur/Railway staging 驗過，且 ipv6=off 依賴私網 dual-stack A
+    # 記錄，prod 不冒此險。若日後換平台，把此行改回 envsh 機制並重驗。
+    #
+    # 兩個 location 的上游路徑前綴與本地相同（/api/ → /api/），變數形式不帶 URI
+    # 部分時 nginx 原樣轉發原始請求 URI，語意與原 `${BACKEND_URL}/api/;` 逐字等價。
+    resolver [fd12::10] valid=10s;
+    resolver_timeout 5s;
+    set $backend_upstream ${BACKEND_URL};
+
     location /api/ws/ {
-        # 變數化 proxy_pass 強制走 server 段的 resolver 動態解析（見上方說明）。
-        # $ivy_api_backend 不含 URI 路徑 → nginx 以原始 $request_uri 透傳，語義同原
-        # ${BACKEND_URL}/api/ws/（location 前綴＝後端路徑，本就是透傳）。
-        set $ivy_api_backend "${BACKEND_URL}";
-        proxy_pass $ivy_api_backend;
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -97,9 +113,7 @@ server {
     }
 
     location /api/ {
-        # 變數化 proxy_pass 強制走 server 段的 resolver 動態解析（見上方說明）。
-        set $ivy_api_backend "${BACKEND_URL}";
-        proxy_pass $ivy_api_backend;
+        proxy_pass $backend_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -119,9 +133,27 @@ server {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
     }
-    location = /parent.html {
+    location = /parent/ {
         include /etc/nginx/security-headers.conf;
         add_header Cache-Control "no-cache" always;
+        try_files /parent/index.html =404;
+    }
+    # 乾淨網址（2026-08-16 由 /parent.html 改名）：裸路徑與舊網址皆 301 到正式的
+    # /parent/。舊網址保留轉址而非直接刪除，避免已在 LINE Developers console
+    # 設定過 endpoint URL＝/parent.html 的既有租戶登入流程中斷。
+    #
+    # ⚠ 必須帶 $is_args$args：LINE 開 LIFF 深連結時會在 endpoint URL 後面帶
+    # ?liff.state=... 這種 query string（src/parent/main.ts 的
+    # resolvePublicLiffStateTarget 就是在讀這個參數）。`return 301 URI;`
+    # 預設**不會**自動保留原始 query string，若後台 LIFF app 的 Endpoint URL
+    # 設定成不帶尾斜線的 /parent（而非 /parent/），每次 LIFF 深連結冷啟動都會
+    # 經過這條轉址，沒有 $is_args$args 會把 liff.state 整個吃掉、深連結靜默失效
+    # （不會報錯，只是打開後永遠是首頁）。
+    location = /parent {
+        return 301 /parent/$is_args$args;
+    }
+    location = /parent.html {
+        return 301 /parent/$is_args$args;
     }
     location = /public.html {
         include /etc/nginx/security-headers.conf;

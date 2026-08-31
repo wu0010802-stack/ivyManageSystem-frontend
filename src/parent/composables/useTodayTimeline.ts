@@ -38,6 +38,63 @@ function dismissalLabel(status: string | null | undefined) {
   return status || '處理中'
 }
 
+export interface TimelineDismissal {
+  status?: string
+  completed_at?: string
+  requested_at?: string
+  acknowledged_at?: string
+  /** pnotice01：家長預告接送新欄位（today-status 已回傳） */
+  request_source?: string
+  expected_arrival_at?: string
+  arrived_at?: string
+}
+
+/**
+ * dismissal 事件的時間軸語意（pnotice01，純函式可測）：
+ * - 家長預告未抵達：時間=預計抵達、secondary=「已預告 · 預計抵達 · 老師狀態」
+ * - 已到門口未完成：時間=arrived_at、secondary=「已到門口 · 老師狀態」
+ * - 完成/其他（含 staff 舊流程）：行為與改造前一致
+ * 家長預告的事件導向 /pickup-notice（追蹤卡同源，避免兩張矛盾接送卡）。
+ */
+export function dismissalTimelineParts(d: TimelineDismissal): {
+  sourceTs: string | undefined
+  secondary: string
+  path: string
+} {
+  const completed = d.status === 'completed'
+  const isParentNotice = d.request_source === 'parent'
+  const path = isParentNotice && !completed ? '/pickup-notice' : '/attendance'
+  if (completed) {
+    return {
+      sourceTs: d.completed_at || d.requested_at,
+      secondary: dismissalLabel(d.status),
+      path,
+    }
+  }
+  if (isParentNotice && !d.arrived_at) {
+    const clock = formatTaipeiClock(d.expected_arrival_at)
+    return {
+      sourceTs: d.expected_arrival_at || d.requested_at,
+      secondary: [clock ? `已預告 · 預計 ${clock} 抵達` : '已預告接送', dismissalLabel(d.status)]
+        .filter(Boolean)
+        .join(' · '),
+      path,
+    }
+  }
+  if (isParentNotice && d.arrived_at) {
+    return {
+      sourceTs: d.arrived_at,
+      secondary: `已到門口 · ${dismissalLabel(d.status)}`,
+      path,
+    }
+  }
+  return {
+    sourceTs: d.acknowledged_at || d.requested_at,
+    secondary: dismissalLabel(d.status),
+    path,
+  }
+}
+
 // 把後端 summary + today-status 攤平成依時段桶分組的事件流。
 // 桶子：morning (6-12) / noon (12-14) / afternoon (14-18) / later (其餘)
 // 每個 event：{ id, bucket, variant: 'past'|'pending'|'info', time, primary, secondary, tone, path, motif? }
@@ -52,7 +109,7 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
         student_id: unknown; name: string; birthday?: string; classroom_name?: string;
         attendance?: { status?: string }; leave?: { type?: string };
         medication?: { has_order?: boolean; order_count?: number };
-        dismissal?: { status?: string; completed_at?: string; requested_at?: string; acknowledged_at?: string }
+        dismissal?: TimelineDismissal
       }
       const crown = isBirthdayToday(c.birthday) ? 'crown' : null
 
@@ -109,9 +166,7 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
 
       if (c.dismissal) {
         const completed = c.dismissal.status === 'completed'
-        const sourceTs = completed
-          ? c.dismissal.completed_at || c.dismissal.requested_at
-          : c.dismissal.acknowledged_at || c.dismissal.requested_at
+        const { sourceTs, secondary, path } = dismissalTimelineParts(c.dismissal)
         const hour = taipeiHour(sourceTs)
         const inferredBucket = bucketFromHour(hour) || 'afternoon'
         out.push({
@@ -120,16 +175,16 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
           variant: completed ? 'past' : 'pending',
           time: formatTaipeiClock(sourceTs),
           primary: `${c.name} 接送`,
-          secondary: dismissalLabel(c.dismissal.status),
+          secondary,
           tone: 'info',
-          path: '/attendance',
+          path,
         })
       }
     }
 
     type SummaryShape = {
       fees?: { outstanding_count?: number; outstanding?: number; overdue?: number }
-      pending_event_acks?: number; unread_messages?: number; pending_activity_promotions?: number
+      pending_event_acks?: number; pending_activity_promotions?: number
       unread_announcements?: number; recent_leave_reviews?: number
     }
     const sv = summaryV as SummaryShape | null | undefined
@@ -159,19 +214,6 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
         secondary: `${sv?.pending_event_acks} 件`,
         tone: 'event',
         path: '/events',
-      })
-    }
-
-    if ((sv?.unread_messages ?? 0) > 0) {
-      out.push({
-        id: 'messages',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: '未讀訊息',
-        secondary: `${sv?.unread_messages} 則`,
-        tone: 'message',
-        path: '/messages',
       })
     }
 

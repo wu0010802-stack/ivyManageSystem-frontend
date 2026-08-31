@@ -1,9 +1,12 @@
 <script setup lang="ts">
-// 「新學年預編班」準備狀態卡：掛在 ClassroomView 工具列下方，mount 時打
+// 「新學年預編班」準備狀態橫幅：掛在 ClassroomView 統計列下方，mount 時打
 // GET /classroom-year-plans/status 顯示五態（none/draft/published/applied）＋
 // apply_overdue 疊加 warning 樣式。純顯示 + 導頁，不做任何寫入（草稿隔離鐵律）。
+// 2026-08-24 改版：由 el-card + el-alert 收斂為單列輕量橫幅（一行講清楚狀態，
+// 主動作只留導頁連結），狀態語意（info/warning/success/error）沿用不變。
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ArrowRight, Calendar } from '@element-plus/icons-vue'
 import { getClassroomYearPlanStatus } from '@/api/classroomYearPlan'
 import { hasPermission } from '@/utils/auth'
 import { formatDateTimeTW } from '@/utils/format'
@@ -34,6 +37,12 @@ const alertType = computed<'info' | 'warning' | 'success' | 'error'>(() => {
   return 'info'
 })
 
+// 橫幅標題：帶目標學年，一眼知道在準備哪一年
+const bannerTitle = computed(() => {
+  const year = status.value?.target_school_year
+  return year ? `新學年預編班（${year} 學年）` : '新學年預編班'
+})
+
 const displayMessage = computed(() => {
   if (loadError.value) return loadError.value
   if (applyOverdue.value) return '計畫尚未套用，排程器重試中'
@@ -59,7 +68,7 @@ const displayMessage = computed(() => {
 // none 態且有寫入權限時，連結文案改為更直接的行動呼籲；其餘情況（含唯讀使用者）
 // 一律顯示通用導頁文案——同一個連結、同一個目的地，只是文案依情境調整。
 const linkLabel = computed(() => (
-  state.value === 'none' && canWrite.value ? '前往建立' : '前往新學年預編班'
+  state.value === 'none' && canWrite.value ? '前往建立' : '前往預編班'
 ))
 
 const goWorkspace = () => {
@@ -83,44 +92,109 @@ onMounted(load)
 </script>
 
 <template>
-  <el-card v-loading="loading" class="plan-status-card" shadow="never">
-    <div class="plan-status-card__body">
-      <el-alert
-        v-if="!loading"
-        class="plan-status-card__alert"
-        :type="alertType"
-        :title="displayMessage"
-        :closable="false"
-        show-icon
-      />
-      <div class="plan-status-card__actions">
-        <el-link type="primary" :underline="false" @click="goWorkspace">
-          {{ linkLabel }}
-        </el-link>
-      </div>
-    </div>
-  </el-card>
+  <div
+    v-loading="loading"
+    class="plan-banner"
+    :class="`plan-banner--${alertType}`"
+    role="status"
+  >
+    <el-icon class="plan-banner__icon" aria-hidden="true"><Calendar /></el-icon>
+    <p v-if="!loading" class="plan-banner__text">
+      <strong>{{ bannerTitle }}</strong>
+      <span class="plan-banner__message">{{ displayMessage }}</span>
+    </p>
+    <el-button
+      class="plan-banner__link"
+      link
+      @click="goWorkspace"
+    >
+      {{ linkLabel }}
+      <el-icon><ArrowRight /></el-icon>
+    </el-button>
+  </div>
 </template>
 
 <style scoped>
-.plan-status-card {
-  margin-bottom: var(--space-5);
-}
-
-.plan-status-card__body {
+.plan-banner {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  padding: 10px 16px;
+  margin-bottom: var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  min-height: 44px;
+}
+
+.plan-banner__icon {
+  flex-shrink: 0;
+}
+
+.plan-banner__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-sm);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 
-.plan-status-card__alert {
-  flex: 1 1 auto;
-  min-width: 240px;
+.plan-banner__message {
+  color: var(--text-secondary);
 }
 
-.plan-status-card__actions {
+.plan-banner__link {
   flex-shrink: 0;
+  font-weight: 600;
+}
+
+/* 狀態語意：沿用 Element Plus 語意色的 soft 底＋darker 文字（AA 對比） */
+.plan-banner--info {
+  background: var(--el-color-info-light-9);
+  border-color: var(--el-color-info-light-7);
+}
+.plan-banner--info .plan-banner__icon,
+.plan-banner--info strong {
+  color: var(--color-info-darker);
+}
+
+.plan-banner--warning {
+  background: var(--el-color-warning-light-9);
+  border-color: var(--el-color-warning-light-7);
+}
+.plan-banner--warning .plan-banner__icon,
+.plan-banner--warning strong {
+  color: var(--color-warning-darker);
+}
+.plan-banner--warning .plan-banner__message {
+  color: var(--color-warning-darker);
+}
+
+.plan-banner--success {
+  background: var(--el-color-success-light-9);
+  border-color: var(--el-color-success-light-7);
+}
+.plan-banner--success .plan-banner__icon,
+.plan-banner--success strong {
+  color: var(--color-success-darker);
+}
+
+.plan-banner--error {
+  background: var(--el-color-danger-light-9);
+  border-color: var(--el-color-danger-light-7);
+}
+.plan-banner--error .plan-banner__icon,
+.plan-banner--error strong,
+.plan-banner--error .plan-banner__message {
+  color: var(--color-danger-darker);
+}
+
+@media (--to-sm) {
+  .plan-banner__link {
+    min-height: var(--touch-target-min);
+  }
 }
 </style>

@@ -107,10 +107,25 @@ async function load(): Promise<void> {
   loading.value = true
   try {
     const res = await getRecords({ employee_id: props.employeeId, year: props.year, month: props.month })
-    const data = res.data
-    const list: AttendanceRecord[] = Array.isArray(data)
-      ? data
-      : (data.records ?? data.items ?? [])
+    // OpenAPI 契約列 → 本地 view model（nullable 欄位正規化為預設值）
+    const list: AttendanceRecord[] = (res.data ?? []).map((r) => ({
+      id: r.id,
+      employee_id: r.employee_id,
+      employee_name: r.employee_name,
+      employee_number: r.employee_number,
+      date: r.date,
+      weekday: r.weekday ?? '',
+      punch_in: r.punch_in ?? null,
+      punch_out: r.punch_out ?? null,
+      status: r.status ?? '',
+      is_late: r.is_late ?? false,
+      is_early_leave: r.is_early_leave ?? false,
+      is_missing_punch_in: r.is_missing_punch_in ?? false,
+      is_missing_punch_out: r.is_missing_punch_out ?? false,
+      late_minutes: r.late_minutes ?? 0,
+      early_leave_minutes: r.early_leave_minutes ?? 0,
+      remark: r.remark ?? '',
+    }))
     records.value = list
     editPunchIn.value = list.map((r) => r.punch_in)
     editPunchOut.value = list.map((r) => r.punch_out)

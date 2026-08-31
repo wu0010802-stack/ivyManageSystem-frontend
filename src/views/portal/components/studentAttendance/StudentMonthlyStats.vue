@@ -88,7 +88,7 @@ const chartOptions = {
         :clearable="false"
         @update:model-value="emit('update:monthPicker', $event)"
       />
-      <el-button size="small" @click="emit('export-csv')">匯出 CSV</el-button>
+      <el-button size="small" @click="emit('export-csv')">匯出 Excel</el-button>
     </div>
 
     <div v-if="!data" class="empty-state">尚未載入月度資料</div>

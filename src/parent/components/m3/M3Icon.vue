@@ -4,7 +4,7 @@ import { computed, useAttrs } from 'vue'
 /**
  * Material Symbols Rounded icon 渲染元件。
  *
- * 用 font ligature 渲染（不是 SVG），由 parent.html 載入的 Material Symbols
+ * 用 font ligature 渲染（不是 SVG），由 parent/index.html 載入的 Material Symbols
  * Rounded font 提供字符。CSS font-variation-settings 控制 4 軸（FILL / wght /
  * GRAD / opsz）— 詳見 https://m3.material.io/styles/icons/overview
  *

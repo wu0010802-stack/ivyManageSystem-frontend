@@ -5,8 +5,10 @@ import { getFinanceSummaryDetail } from '@/api/reports'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 // 雜項收款 6 類（rent/donation/subsidy/secondhand_sale/refund_recovery/other）中文
-// 標籤沿用收支簽收頁的共用常數，避免同一 enum 兩處映射漂移。
+// 標籤沿用收付款管理頁的共用常數，避免同一 enum 兩處映射漂移。
 import { categoryLabel as miscCategoryLabel } from '@/constants/signoff'
+import { evidenceStatusLabel } from '@/utils/financeSignoff'
+import type { ApiResponse } from '@/api/_generated/typed'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -25,7 +27,8 @@ const visible = computed({
 })
 
 const loading = ref(false)
-const data = ref<{ tuition?: unknown[]; activity?: unknown[]; misc_receipt?: unknown[]; salary?: unknown[]; vendor_payment?: unknown[]; fixed_cost?: unknown[]; year_end?: unknown[] } | null>(null)
+type FinanceDetail = ApiResponse<'/reports/finance-summary/detail', 'get'>
+const data = ref<FinanceDetail | null>(null)
 const activeTab = ref('tuition')
 
 const load = async () => {
@@ -62,6 +65,9 @@ const fixedCostRows = computed(() => data.value?.fixed_cost || [])
 // amount 在非 admin/hr 角色下會被後端 mask_dict_fields 遮罩成 null（比照 salary），
 // money() 統一顯示既有 placeholder，故沿用 salary tab 寫法不用另做判斷。
 const yearEndRows = computed(() => data.value?.year_end || [])
+// 表外獎金依實際轉帳日（無 paid_date 時退回歸屬月）計入現金支出；逐員金額
+// 對非 admin/hr 由後端遮罩為 null，顯示語意與年終明細一致。
+const extraBonusRows = computed(() => data.value?.extra_bonus || [])
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const kindLabel = (k: string) => (k === 'payment' ? '繳費' : k === 'refund' ? '退款' : k)
@@ -154,7 +160,7 @@ const fixedCostCategoryLabel = (c: string) => FIXED_COST_CATEGORY_LABEL[c] || c
           <el-table-column label="狀態" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="row.status === 'signed' ? 'success' : 'warning'" size="small">
-                {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
+                {{ evidenceStatusLabel(String(row.status)) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -195,6 +201,18 @@ const fixedCostCategoryLabel = (c: string) => FIXED_COST_CATEGORY_LABEL[c] || c
         </el-table>
       </el-tab-pane>
 
+      <el-tab-pane :label="`表外獎金 (${extraBonusRows.length})`" name="extra_bonus">
+        <el-table :data="extraBonusRows" border stripe max-height="480" size="small" empty-text="無資料">
+          <el-table-column prop="employee_name" label="員工" width="120" fixed />
+          <el-table-column prop="category_label" label="類別" min-width="150" />
+          <el-table-column prop="period" label="歸屬期間" width="110" />
+          <el-table-column prop="paid_date" label="轉帳日" width="110" />
+          <el-table-column label="金額" width="110" align="right">
+            <template #default="{ row }">{{ money(row.amount) }}</template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
       <el-tab-pane :label="`廠商付款 (${vendorRows.length})`" name="vendor">
         <el-table :data="vendorRows" border stripe max-height="480" size="small" empty-text="無資料">
           <el-table-column prop="date" label="日期" width="110" />
@@ -210,7 +228,7 @@ const fixedCostCategoryLabel = (c: string) => FIXED_COST_CATEGORY_LABEL[c] || c
           <el-table-column label="狀態" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="row.status === 'signed' ? 'success' : 'warning'" size="small">
-                {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
+                {{ evidenceStatusLabel(String(row.status)) }}
               </el-tag>
             </template>
           </el-table-column>

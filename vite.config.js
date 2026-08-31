@@ -90,6 +90,14 @@ function manualChunks(id) {
         id.includes('/src/utils/academic.ts') ||
         id.includes('/src/composables/useCachedAsync.ts') ||
         id.includes('/src/components/common/MobileErrorRetry.vue') ||
+        // EmptyState：三端共用空狀態元件（inline SVG、EP-free，見該檔 docstring——
+        // 它就是為了斷開 EP 依賴才改 inline SVG 的）。2026-08-28 家長端聯絡簿改版把
+        // ContactBookView 升為 tab 根頁（連同新 AnnouncementsPanel eager 進 parent-app
+        // entry），EmptyState 被 Rollup 吸進 parent-app chunk → 20 個 admin/portal
+        // route chunk（SalaryHistory/Platform*/Calibration/PortalContactBook…）靜態
+        // 橋接 parent-app 整包，check-entry-chunks 紅、staging 連兩筆 build FAILED。
+        // 「三端共用 EP-free 檔漏 pin → 被吸進 parent-app」第六次同型回歸。
+        id.includes('/src/components/common/EmptyState.vue') ||
         // 友善錯誤/連線狀態/捲動鎖/品牌裝飾元件：portal views 與家長端共用（皆 EP-free）。
         // 未顯式指派時落 portal chunk → parent-app 靜態橋接整包 portal，連帶 cascade
         // fullcalendar/chart-vendor/activity-admin/qrcode/markdown（~285KB gz）。
@@ -195,7 +203,7 @@ function manualChunks(id) {
     // 那兩個 chunk → modulepreload 把 portal 85KB / activity-admin 55KB（gz）
     // 強制塞入管理端首屏 critical path。
     //
-    // 不能放 shared-common：parent.html 也載 shared-common，把 admin-only 的
+    // 不能放 shared-common：家長端 parent 入口（parent/index.html）也載 shared-common，把 admin-only 的
     // auth/permissions/employees 邏輯給家長端會浪費 bundle 並洩漏權限相關代碼。
     //
     // 必須在 activity-admin / portal 規則之前，否則同樣的 fall-through 路徑
@@ -421,7 +429,7 @@ export default defineConfig({
                 //     這是「L1 品牌改動能傳到已安裝 PWA」的唯一機制，勿刪。
                 globPatterns: [
                     'index.html',
-                    'parent.html',
+                    'parent/index.html',
                     'public.html',
                     'registerSW.js',
                     'brand-version.json',
@@ -440,9 +448,15 @@ export default defineConfig({
 
                 // hash routing：所有 SPA 內導航回傳 index.html；
                 // 家長 App 是另一個獨立 HTML，必須排除避免被導向管理端
+                //
+                // /^\/parent$/ 與 /^\/parent\.html/ 涵蓋「不帶尾斜線的裸路徑」與
+                // 「舊網址」——兩者在 nginx 都是 301 轉址到 /parent/，若 SW 攔截
+                // navigation request 直接吐快取的 index.html，302/301 就永遠打不到
+                // network，使用者會被導去管理端登入頁而非家長 App（2026-08-16
+                // /parent.html → /parent/ 改名時新增，防同型回歸）。
                 navigateFallback: 'index.html',
                 navigateFallbackDenylist: [
-                    /^\/parent\.html/, /^\/parent\//,
+                    /^\/parent$/, /^\/parent\.html/, /^\/parent\//,
                     /^\/public\.html/, /^\/public\//,
                 ],
 
@@ -571,12 +585,14 @@ export default defineConfig({
             // multi-page：管理端 + 家長 LIFF App + 公開報名頁 三個獨立 entry
             // dev/prod 路徑：
             //   - 管理端：/index.html（hash 模式 #/...）
-            //   - 家長 App：/parent.html（hash 模式 #/...，方便 LIFF endpoint URL 直接綁這個）
+            //   - 家長 App：/parent/（來源 parent/index.html，輸出 dist/parent/index.html；
+            //     hash 模式 #/...，乾淨網址方便 LIFF endpoint URL 直接綁這個。
+            //     2026-08-16 由 /parent.html 改名，nginx 對 /parent.html 保留 301 相容轉址）
             //   - 公開報名：/public.html（A2 把 /public/activity* 拆出，
             //     未登入家長不下載 admin-core / element-plus / activity-admin 整包）
             input: {
                 main: fileURLToPath(new URL('./index.html', import.meta.url)),
-                parent: fileURLToPath(new URL('./parent.html', import.meta.url)),
+                parent: fileURLToPath(new URL('./parent/index.html', import.meta.url)),
                 public: fileURLToPath(new URL('./public.html', import.meta.url)),
             },
             output: {

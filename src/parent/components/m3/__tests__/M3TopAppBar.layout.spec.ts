@@ -6,7 +6,7 @@
  * `grid-template-areas`，具名區域不存在 → 三個子元素全部掉進隱式軌道、
  * 疊在 header 右上角（實測 back/title/actions 三者 x 座標全在 ~342px），
  * 家長端**所有頁面** header 跑版。happy-dom 不做 grid 佈局，mount 測不出，
- * 故以 SFC 原始碼守衛（比照 tests/unit/mobile 的 parent.html 政策守衛手法）。
+ * 故以 SFC 原始碼守衛（比照 tests/unit/mobile 的 parent/index.html 政策守衛手法）。
  */
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

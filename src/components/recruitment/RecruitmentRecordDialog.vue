@@ -1,16 +1,53 @@
 <template>
   <el-dialog
     :model-value="visible"
-    :title="mode === 'add' ? '新增訪視紀錄' : '編輯訪視紀錄'"
     width="680px"
     destroy-on-close
     @update:model-value="$emit('update:visible', $event)"
   >
+    <!-- 序號是系統資訊不是輸入項：移出表單、放標題旁 meta chip（2026-08-28 UX） -->
+    <template #header>
+      <div class="dlg-header">
+        <span class="dlg-title">{{ mode === 'add' ? '新增訪視紀錄' : '編輯訪視紀錄' }}</span>
+        <span class="seq-chip" data-test="seq-no-chip">序號 <strong>{{ seqNoDisplay }}</strong></span>
+      </div>
+    </template>
     <el-form :model="form" :rules="formRules" ref="formRef" label-position="top">
-      <p class="required-legend"><span class="req">*</span> 為必填，其餘可日後補</p>
+      <p class="required-legend"><span class="req">*</span> 為必填（僅 4 欄），其餘可日後補</p>
 
-      <!-- 基本資料（核心，常駐）：成對短欄位雙欄，mobile 由 main.css 收回單欄 -->
+      <!-- 基本資料（核心，常駐）：依接待動線排序——先問小孩是誰，再談哪天來（2026-08-28 UX）。
+           成對短欄位雙欄，mobile 由 main.css 收回單欄 -->
       <FormSection title="基本資料" :collapsible="false">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="幼生姓名" prop="child_name">
+              <el-input v-model="form.child_name" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="生日" prop="birthday">
+              <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" placeholder="選擇生日" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="適讀班級">
+              <el-select v-model="form.grade" clearable style="width:100%" @change="onGradeManualChange">
+                <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
+              </el-select>
+              <div v-if="gradeAutoFilled" class="form-hint form-hint--ok" data-test="grade-auto-hint">
+                ✓ 已依生日 × {{ form.target_school_year }} 學年自動判定，可手動修改
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="電話">
+              <el-input v-model="form.phone" />
+              <div class="form-hint form-hint--example">例：0912-345-678</div>
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="參觀日期" prop="month">
@@ -27,22 +64,9 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="序號">
-              <el-input v-model="form.seq_no" placeholder="選填" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="幼生姓名" prop="child_name">
-              <el-input v-model="form.child_name" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="適讀班級">
-              <el-select v-model="form.grade" clearable style="width:100%">
-                <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
-              </el-select>
+            <el-form-item label="是否搭乘娃娃車">
+              <el-switch v-model="form.rides_bus" active-text="要搭乘" inactive-text="不搭乘" data-test="rides-bus-switch" />
+              <div class="form-hint">參觀當下的意願；實際路線與站點仍在「娃娃車路線」頁編排。</div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -58,37 +82,46 @@
           </div>
           <div class="form-hint">小孩預計入學的學期（預設當前學期，可改）。</div>
         </el-form-item>
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="生日">
-              <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="電話">
-              <el-input v-model="form.phone" />
-              <div class="form-hint form-hint--example">例：0912-345-678</div>
-            </el-form-item>
-          </el-col>
-        </el-row>
       </FormSection>
 
       <!-- 聯絡與來源 -->
-      <FormSection ref="contactRef" data-test="section-contact" title="聯絡與來源" collapsible :default-open="false" :badge-count="sectionErrors.contact" badge-type="error">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="行政區">
-              <el-autocomplete v-model="form.district" :fetch-suggestions="districtQuery" clearable style="width:100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+      <FormSection ref="contactRef" data-test="section-contact" title="聯絡與來源" collapsible :default-open="false" :badge-count="sectionErrors.contact" badge-type="error" :summary="contactSummary">
         <el-form-item label="地址">
           <el-input v-model="form.address" />
         </el-form-item>
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="幼生來源">
+            <el-form-item label="來源分類">
+              <el-select v-model="form.source_category" clearable placeholder="選擇來源（決定獎金點數）" style="width:100%">
+                <el-option
+                  v-for="c in sourceCategories"
+                  :key="c.code"
+                  :value="c.code"
+                  :label="`${c.label}（${c.points}）`"
+                />
+              </el-select>
+              <div class="form-hint">對應招生獎勵辦法點數表；舊資料未歸類時獎金頁會提示補填。</div>
+              <div v-if="splitHint" class="form-hint form-hint--warning">{{ splitHint }}</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="帶參觀老師">
+              <el-select v-model="form.tour_guide_employee_id" filterable clearable placeholder="自報生／邀約類獎金歸此人" style="width:100%">
+                <el-option
+                  v-for="t in teacherOptions"
+                  :key="t.id"
+                  :value="t.id"
+                  :label="t.employee_id ? `${t.name}（${t.employee_id}）` : t.name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="來源備註">
               <el-autocomplete v-model="form.source" :fetch-suggestions="sourceQuery" clearable style="width:100%" />
+              <div class="form-hint">原自由文字來源欄，保留舊資料原文。</div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -100,7 +133,7 @@
       </FormSection>
 
       <!-- 預繳狀態 -->
-      <FormSection ref="depositRef" data-test="section-deposit" title="預繳狀態" collapsible :default-open="false" :badge-count="sectionErrors.deposit" badge-type="error">
+      <FormSection ref="depositRef" data-test="section-deposit" title="預繳狀態" collapsible :default-open="false" :badge-count="sectionErrors.deposit" badge-type="error" :summary="depositSummary">
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="是否預繳">
@@ -138,7 +171,7 @@
       </FormSection>
 
       <!-- 備註 -->
-      <FormSection ref="notesRef" data-test="section-notes" title="備註" collapsible :default-open="false" :badge-count="sectionErrors.notes" badge-type="error">
+      <FormSection ref="notesRef" data-test="section-notes" title="備註" collapsible :default-open="false" :badge-count="sectionErrors.notes" badge-type="error" :summary="notesSummary">
         <el-form-item label="備註">
           <el-input v-model="form.notes" type="textarea" :rows="2" />
         </el-form-item>
@@ -147,24 +180,28 @@
         </el-form-item>
       </FormSection>
 
-      <!-- 地址分析同意（常駐，不收合：法律同意不該藏） -->
+      <!-- 地址分析同意（常駐，不收合：法律同意不該藏；2026-08-28 UX：大提示框收斂成單行動態 hint） -->
       <FormSection title="地址分析同意" :collapsible="false">
         <el-form-item label="家長同意">
           <el-checkbox v-model="form.geocoding_consent">家長已口頭同意以本住址進行招生區位分析（送至 Google Maps）&mdash; <strong>需明確確認</strong></el-checkbox>
-          <div class="form-hint">招生人員負責確認家長口頭同意後再勾選；預設不勾（explicit attestation 責任）。</div>
+          <div v-if="form.geocoding_consent" class="form-hint form-hint--ok" data-test="consent-hint-ok">
+            ✓ 已確認家長口頭同意；本筆將納入招生熱點區位分析。
+          </div>
+          <div v-else class="form-hint" data-test="consent-hint-off">
+            未勾選：本筆不會進入招生熱點區位分析（可日後補勾）。招生人員確認家長口頭同意後再勾選。
+          </div>
         </el-form-item>
-        <el-alert
-          v-if="!form.geocoding_consent"
-          type="info"
-          :closable="false"
-          title="未勾選同意 → 本筆 visit 不會進入招生 heatmap 區位分析"
-          style="margin-bottom:8px"
-        />
       </FormSection>
     </el-form>
     <template #footer>
       <el-button @click="$emit('update:visible', false)">取消</el-button>
-      <el-button type="primary" :loading="saving" @click="handleSave">儲存</el-button>
+      <el-button
+        v-if="mode === 'add'"
+        :loading="saving"
+        data-test="save-next-btn"
+        @click="handleSave('save-next')"
+      >儲存並新增下一筆</el-button>
+      <el-button type="primary" :loading="saving" @click="handleSave('save')">儲存</el-button>
     </template>
   </el-dialog>
 </template>
@@ -172,7 +209,7 @@
 <script setup lang="ts">
 import { ref, watch, reactive, nextTick, computed } from 'vue'
 import type { FormInstance } from 'element-plus'
-import { GRADES_ORDER } from '@/constants/recruitment'
+import { GRADES_ORDER, gradeForBirthday } from '@/constants/recruitment'
 import { toRocYear, currentRocYear } from '@/utils/academic'
 import FormSection from '@/components/common/FormSection.vue'
 import { sectionForRecruitmentField } from '@/constants/recruitmentFormSections'
@@ -186,11 +223,11 @@ interface VisitForm {
   grade?: string | number | null
   birthday?: string | number | null
   phone?: string | number | null
-  district?: string | number | undefined
   address?: string | number | null
   source?: string | number | undefined
   referrer?: string | number | undefined
   has_deposit?: string | number | boolean
+  rides_bus?: boolean
   deposit_collector?: string | number | null
   enrolled?: string | number | boolean
   transfer_term?: string | number | boolean
@@ -201,6 +238,8 @@ interface VisitForm {
   geocoding_consent?: boolean
   target_school_year?: number
   target_semester?: number
+  source_category?: string | null
+  tour_guide_employee_id?: number | null
   [key: string]: unknown
 }
 
@@ -209,22 +248,33 @@ const props = withDefaults(defineProps<{
   mode?: string
   form: VisitForm
   saving?: boolean
-  districtSuggestions?: string[]
   sourceSuggestions?: string[]
   referrerSuggestions?: string[]
   noDepositReasons?: string[]
+  sourceCategories?: { code: string; label: string; points: number }[]
+  teacherOptions?: { id: number; name: string; employee_id?: string | null; position?: string | null }[]
 }>(), {
   mode: 'add',
   saving: false,
-  districtSuggestions: () => [],
   sourceSuggestions: () => [],
   referrerSuggestions: () => [],
   noDepositReasons: () => [],
+  sourceCategories: () => [],
+  teacherOptions: () => [],
+})
+
+// 拆分提示（spec §6）：兄姊均分／邀約拆分是一生兩師，第二列要在獎金頁手動加
+const splitHint = computed(() => {
+  const code = props.form.source_category
+  if (code === 'sibling_split') return '兄姊二人均分：另一位老師的 0.5 點列，請於招生獎金頁「新增歸屬列」補建。'
+  if (code === 'invite_success' || code === 'invite_origin') return '邀約拆分（0.6／0.4）：另一位老師的列請於招生獎金頁「新增歸屬列」補建。'
+  return ''
 })
 
 const emit = defineEmits<{
   'update:visible': [value: boolean]
   'save': []
+  'save-next': []
 }>()
 
 const formRef = ref<FormInstance | null>(null)
@@ -257,7 +307,57 @@ const enrollYearOptions = computed(() => {
 const formRules = {
   month: [{ required: true, message: '請選擇參觀日期', trigger: 'blur' }],
   child_name: [{ required: true, message: '請填寫姓名', trigger: 'blur' }],
+  // 生日在招生階段就決定適讀班級與入學學期，補填成本高於當場問一句，故列必填。
+  birthday: [{ required: true, message: '請選擇生日', trigger: 'change' }],
 }
+
+// 序號改由後端依當月順序自動產生（POST /recruitment/records 不帶 seq_no 即自動編號），
+// 標題旁 chip 唯讀呈現：新增時尚未有號、編輯時顯示既有號。
+const seqNoDisplay = computed(() => {
+  const raw = props.form.seq_no
+  if (raw === null || raw === undefined || String(raw).trim() === '') {
+    return props.mode === 'add' ? '自動產生' : '—'
+  }
+  return String(raw)
+})
+
+// ── 適讀班級依生日自動判定（可手動覆寫）─────────────────────
+// 只在「班級為空」或「上一次就是自動帶入」時寫入，不覆蓋使用者手選值；
+// 換一筆資料（form 物件替換）即重置狀態。
+const gradeAutoFilled = ref(false)
+watch(() => props.form, () => { gradeAutoFilled.value = false })
+watch(
+  () => [props.form.birthday, props.form.target_school_year] as const,
+  ([birthday, year]) => {
+    if (typeof birthday !== 'string' || !birthday || typeof year !== 'number') return
+    const suggested = gradeForBirthday(birthday, year)
+    if (!suggested) return
+    if (!props.form.grade || gradeAutoFilled.value) {
+      props.form.grade = suggested
+      gradeAutoFilled.value = true
+    }
+  },
+)
+function onGradeManualChange() {
+  gradeAutoFilled.value = false
+}
+
+// ── 收合區摘要（badge 錯誤優先，FormSection 內建讓位）────────
+const isFilled = (v: unknown): boolean =>
+  typeof v === 'boolean' ? v : v !== null && v !== undefined && String(v).trim() !== ''
+const summaryText = (vals: unknown[]): string => {
+  const n = vals.filter(isFilled).length
+  return n > 0 ? `已填 ${n} 項` : '未填'
+}
+const contactSummary = computed(() => summaryText([
+  props.form.address, props.form.source_category, props.form.tour_guide_employee_id,
+  props.form.source, props.form.referrer,
+]))
+const depositSummary = computed(() => summaryText([
+  props.form.has_deposit, props.form.deposit_collector, props.form.enrolled,
+  props.form.transfer_term, props.form.no_deposit_reason, props.form.no_deposit_reason_detail,
+]))
+const notesSummary = computed(() => summaryText([props.form.notes, props.form.parent_response]))
 
 // -------- 日期轉換（西元 ↔ 民國）--------
 const isoToRoc = (iso: string) => {
@@ -295,9 +395,6 @@ const _makeSuggestions = (list: string[], query: string, cb: (items: { value: st
   cb(items)
 }
 
-const districtQuery = (query: string, cb: (items: { value: string }[]) => void) => {
-  _makeSuggestions(props.districtSuggestions.filter(Boolean), query, cb)
-}
 const sourceQuery = (query: string, cb: (items: { value: string }[]) => void) =>
   _makeSuggestions(props.sourceSuggestions, query, cb)
 const referrerQuery = (query: string, cb: (items: { value: string }[]) => void) =>
@@ -312,7 +409,7 @@ const onDepositChange = (val: unknown) => {
   }
 }
 
-const handleSave = async () => {
+const handleSave = async (kind: 'save' | 'save-next' = 'save') => {
   const formEl = formRef.value
   if (!formEl) return
   formEl.validate(async (valid, invalidFields) => {
@@ -323,7 +420,8 @@ const handleSave = async () => {
       if (invalidProps[0]) formEl.scrollToField(invalidProps[0])
       return
     }
-    emit('save')
+    if (kind === 'save-next') emit('save-next')
+    else emit('save')
   })
 }
 
@@ -332,6 +430,16 @@ defineExpose({ formRef, applyValidationErrors })
 
 <style scoped>
 .required-legend { font-size: var(--text-xs); color: var(--el-text-color-secondary); margin: 0 0 var(--space-3); }
+.form-hint--warning { color: var(--el-color-warning); }
+.form-hint--ok { color: var(--el-color-success); }
 .required-legend .req { color: var(--el-color-danger); }
 .enroll-term { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+.dlg-header { display: flex; align-items: center; gap: var(--space-3); }
+.dlg-title { font-size: var(--text-lg); font-weight: 600; color: var(--el-text-color-primary); }
+.seq-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px;
+  border-radius: var(--radius-full); font-size: var(--text-xs); white-space: nowrap;
+  color: var(--el-text-color-secondary); background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+}
 </style>

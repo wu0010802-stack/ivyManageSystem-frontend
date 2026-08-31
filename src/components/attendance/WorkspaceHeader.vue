@@ -22,7 +22,8 @@
     </div>
 
     <div class="workspace-header__kpis">
-      <el-statistic title="全勤人數" :value="kpis.fullAttendance" />
+      <!-- P1-3：語意=已有紀錄且無異常；expected workdays 未定義前不稱「全勤」 -->
+      <el-statistic title="已有紀錄且無異常" :value="kpis.fullAttendance" />
       <el-statistic title="遲到人次" :value="kpis.lateCount" />
       <el-statistic title="缺卡人次" :value="kpis.missingCount" />
       <el-statistic

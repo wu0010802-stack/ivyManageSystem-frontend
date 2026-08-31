@@ -32,9 +32,6 @@ const emit = defineEmits<{
       :aria-label="b.label"
     >
       <header class="bucket-head">
-        <span class="bucket-rail" aria-hidden="true">
-          <span class="bucket-tick"></span>
-        </span>
         <h2 class="bucket-label">{{ b.label }}</h2>
       </header>
       <ol class="bucket-items">
@@ -55,28 +52,21 @@ const emit = defineEmits<{
 <style scoped>
 .timeline {
   position: relative;
+  background: var(--pt-surface-card, #fff);
+  border-radius: var(--pt-card-radius, 26px);
+  box-shadow: var(--pt-shadow-card);
+  padding: 4px 12px;
 }
 .bucket + .bucket {
-  margin-top: var(--space-5, 20px);
+  margin-top: var(--space-4, 16px);
 }
 
 .bucket-head {
-  display: grid;
-  grid-template-columns: 56px 1fr;
+  display: flex;
   align-items: center;
   min-height: 28px;
   margin-bottom: var(--space-1, 4px);
-}
-.bucket-rail {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.bucket-tick {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: var(--pt-text-disabled);
+  padding: 0 4px;
 }
 .bucket-label {
   margin: 0;

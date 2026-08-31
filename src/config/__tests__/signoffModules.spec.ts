@@ -31,20 +31,58 @@ describe('signoffModules config', () => {
     expect(VENDOR_SIGNOFF_MODULE.category?.labelOf('其他')).toBe('其他')
   })
 
-  it('權限碼對齊 PERMISSION_NAMES', () => {
+  it('權限碼對齊 PERMISSION_NAMES（含內控三動作碼）', () => {
     expect(VENDOR_SIGNOFF_MODULE.permissions).toEqual({
-      read: 'VENDOR_PAYMENT_READ', write: 'VENDOR_PAYMENT_WRITE',
+      read: 'VENDOR_PAYMENT_READ',
+      write: 'VENDOR_PAYMENT_WRITE',
+      approve: 'VENDOR_PAYMENT_APPROVE',
+      settle: 'VENDOR_PAYMENT_SETTLE',
+      reconcile: 'VENDOR_PAYMENT_RECONCILE',
     })
     expect(MISC_SIGNOFF_MODULE.permissions).toEqual({
-      read: 'MISC_RECEIPT_READ', write: 'MISC_RECEIPT_WRITE',
+      read: 'MISC_RECEIPT_READ',
+      write: 'MISC_RECEIPT_WRITE',
+      approve: 'MISC_RECEIPT_APPROVE',
+      settle: 'MISC_RECEIPT_SETTLE',
+      reconcile: 'MISC_RECEIPT_RECONCILE',
     })
   })
 
-  it('api 綁定齊備（11 支皆為函式）', () => {
+  it('api 綁定齊備（17 支皆為函式，含內控流程 5 支與 batchSign）', () => {
     for (const m of SIGNOFF_MODULES) {
       for (const fn of Object.values(m.api)) expect(typeof fn).toBe('function')
-      expect(Object.keys(m.api)).toHaveLength(11)
+      expect(Object.keys(m.api)).toHaveLength(17)
+      for (const key of [
+        'submit',
+        'approve',
+        'settle',
+        'reconcile',
+        'events',
+        'batchSign',
+      ]) {
+        expect(m.api).toHaveProperty(key)
+      }
     }
+  })
+
+  it('預計日期欄位映射對齊後端（與實際收付日明確區分）', () => {
+    expect(VENDOR_SIGNOFF_MODULE.fields.plannedDate.key).toBe('due_date')
+    expect(MISC_SIGNOFF_MODULE.fields.plannedDate.key).toBe('expected_receipt_date')
+  })
+
+  it('文案不再使用「待簽收／繳款方簽收」語言（改稱憑證）', () => {
+    for (const m of SIGNOFF_MODULES) {
+      const joined = Object.values(m.texts).join(' ')
+      expect(joined).not.toContain('待簽收')
+      expect(m.texts.signTitle).toContain('憑證')
+    }
+  })
+
+  it('exportPath/exportFilename 對齊後端匯出路由與檔名', () => {
+    expect(VENDOR_SIGNOFF_MODULE.exportPath).toBe('/exports/vendor-payments')
+    expect(VENDOR_SIGNOFF_MODULE.exportFilename).toBe('廠商付款簽收紀錄.xlsx')
+    expect(MISC_SIGNOFF_MODULE.exportPath).toBe('/exports/misc-receipts')
+    expect(MISC_SIGNOFF_MODULE.exportFilename).toBe('雜項收款簽收紀錄.xlsx')
   })
 
   it('texts 全部非空字串且兩模組 key 集合一致', () => {

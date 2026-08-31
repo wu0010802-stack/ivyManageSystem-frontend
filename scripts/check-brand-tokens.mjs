@@ -32,7 +32,7 @@ const USE_HOST_HEADER = has('--host-header')
 const EXPECT_HOST_GUARD = has('--expect-host-guard')
 const UNKNOWN_HOST = arg('--unknown-host', 'definitely-not-a-tenant.invalid')
 
-const PATHS = ['/index.html', '/parent.html', '/public.html', '/manifest.webmanifest', '/parent.webmanifest', '/public.webmanifest']
+const PATHS = ['/index.html', '/parent/', '/public.html', '/manifest.webmanifest', '/parent.webmanifest', '/public.webmanifest']
 
 if (!BASE) {
   console.error('[check-brand-tokens] ✗ 需要 --base，例如 --base https://{host}')

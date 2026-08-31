@@ -17,7 +17,6 @@ vi.mock('@/composables/usePOSCheckout', async () => {
       mode: ref('checkout'),
       searchQuery: ref(''),
       classroomFilter: ref(''),
-      overdueOnly: ref(false),
       searching: ref(false),
       searchGroups: ref([]),
       searchRegistrations: ref([]),

@@ -11,7 +11,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', component: { template: '<div />' } },
-    { path: '/messages', component: { template: '<div />' } },
+    { path: '/contact-book', component: { template: '<div />' } },
   ],
 })
 

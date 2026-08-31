@@ -410,11 +410,12 @@ async function copyDeviceSetupCode() {
  * 家長端網址。
  *
  * 以目前後台的網域推導，多租戶下自動對應正確的分校（義華 / 仁武各自的
- * 子網域），不寫死任何品牌網址。家長端是獨立 entry（parent.html）+ hash router。
+ * 子網域），不寫死任何品牌網址。家長端是獨立 entry（parent/index.html，
+ * 網址 /parent/）+ hash router。
  */
 const parentAppUrl = computed<string>(() => {
-  if (typeof window === 'undefined') return '/parent.html'
-  return `${window.location.origin}/parent.html`
+  if (typeof window === 'undefined') return '/parent/'
+  return `${window.location.origin}/parent/`
 })
 
 async function copyParentAppUrl() {

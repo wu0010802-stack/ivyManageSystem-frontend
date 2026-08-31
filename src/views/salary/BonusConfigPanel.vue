@@ -22,9 +22,12 @@ const canSaveBonusSettings = computed(
 )
 
 const bonusConfig = reactive({
-  head_teacher_ab: 0,
+  config_year: null as number | null,
+  head_teacher_a: 0,
+  head_teacher_b: 0,
   head_teacher_c: 0,
-  assistant_teacher_ab: 0,
+  assistant_teacher_a: 0,
+  assistant_teacher_b: 0,
   assistant_teacher_c: 0,
   principal_festival: 0,
   director_festival: 0,
@@ -104,8 +107,35 @@ const saveBonusConfig = async (): Promise<boolean> => {
     return false // 使用者按取消
   }
 
-  const payload: ApiBody<'/config/bonus', 'put'> & { reason: string } = {
-    ...bonusConfig,
+  // GET 會包含 id 等唯讀欄位，舊版資料也可能帶 deprecated `_ab` 欄位；
+  // PUT 採 extra=forbid，故必須依 generated request body 明確挑選可寫欄位。
+  const payload: ApiBody<'/config/bonus', 'put'> = {
+    config_year: bonusConfig.config_year,
+    head_teacher_a: bonusConfig.head_teacher_a,
+    head_teacher_b: bonusConfig.head_teacher_b,
+    head_teacher_c: bonusConfig.head_teacher_c,
+    assistant_teacher_a: bonusConfig.assistant_teacher_a,
+    assistant_teacher_b: bonusConfig.assistant_teacher_b,
+    assistant_teacher_c: bonusConfig.assistant_teacher_c,
+    principal_festival: bonusConfig.principal_festival,
+    director_festival: bonusConfig.director_festival,
+    leader_festival: bonusConfig.leader_festival,
+    driver_festival: bonusConfig.driver_festival,
+    designer_festival: bonusConfig.designer_festival,
+    admin_festival: bonusConfig.admin_festival,
+    principal_dividend: bonusConfig.principal_dividend,
+    director_dividend: bonusConfig.director_dividend,
+    leader_dividend: bonusConfig.leader_dividend,
+    vice_leader_dividend: bonusConfig.vice_leader_dividend,
+    overtime_head_normal: bonusConfig.overtime_head_normal,
+    overtime_head_baby: bonusConfig.overtime_head_baby,
+    overtime_assistant_normal: bonusConfig.overtime_assistant_normal,
+    overtime_assistant_baby: bonusConfig.overtime_assistant_baby,
+    school_wide_target: bonusConfig.school_wide_target,
+    enrollment_count_mode: bonusConfig.enrollment_count_mode,
+    meeting_default_hours: bonusConfig.meeting_default_hours,
+    meeting_absence_penalty: bonusConfig.meeting_absence_penalty,
+    art_teacher_festival: bonusConfig.art_teacher_festival,
     reason,
   }
 
@@ -208,7 +238,7 @@ onMounted(() => {
 
       <!-- 階段 2-D：職稱→節慶獎金等級對應 -->
       <el-tab-pane label="職稱等級對應" name="job_title_grade">
-        <JobTitleGradeTab />
+        <JobTitleGradeTab :bonus-config="bonusConfig" />
       </el-tab-pane>
     </el-tabs>
   </div>

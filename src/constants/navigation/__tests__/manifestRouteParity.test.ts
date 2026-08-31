@@ -33,7 +33,14 @@ import type { ManifestPage } from '@/constants/navigation'
 // 所有實頁（含巢狀 children 與參數路由代樣本值後）皆被衍生規則的 exact/prefix
 // 涵蓋。新增豁免前先確認該頁真的不該有權限規則（幾乎不存在這種頁——已登入即可
 // 訪問的頁應收進 PUBLIC_ROUTES，如 /profile）。
-const ROUTE_COVERAGE_EXEMPT: readonly { path: string; reason: string }[] = []
+const ROUTE_COVERAGE_EXEMPT: readonly { path: string; reason: string }[] = [
+  {
+    path: '/error',
+    reason:
+      '403 錯誤頁：權限守衛的重導落點，guard 以 meta.errorPage 豁免 canAccessRoute；' +
+      '掛權限規則反而讓被擋下的人連錯誤頁都進不去（重導迴圈）。',
+  },
+]
 
 /**
  * 與 `src/utils/auth.ts` 的 `getRoutePermissions` 同邏輯（最長匹配那組的
@@ -115,13 +122,17 @@ describe('router ↔ manifest 路由覆蓋雙向 parity', () => {
     // 釘住代表性路徑：頂層頁、巢狀 child、深巢 child、參數路由（樣本值代換）
     expect(ADMIN_PAGE_PATHS).toContain('/dismissal-queue')
     expect(ADMIN_PAGE_PATHS).toContain('/admin/gov-reports/monthly')
-    expect(ADMIN_PAGE_PATHS).toContain('/workbench/high-risk')
+    expect(ADMIN_PAGE_PATHS).toContain('/governance/high-risk')
     expect(ADMIN_PAGE_PATHS).toContain('/appraisal-year-end/rules/scoring')
     expect(ADMIN_PAGE_PATHS).toContain('/employees/1')
     // 排除面也釘住：public / portal / 純 redirect 不得混入
     expect(ADMIN_PAGE_PATHS).not.toContain('/login')
     expect(ADMIN_PAGE_PATHS).not.toContain('/profile')
     expect(ADMIN_PAGE_PATHS).not.toContain('/recruitment')
+    // 2026-08-20 整併後三條舊入口都成了純 redirect
+    expect(ADMIN_PAGE_PATHS).not.toContain('/audit-logs')
+    expect(ADMIN_PAGE_PATHS).not.toContain('/data-quality')
+    expect(ADMIN_PAGE_PATHS).not.toContain('/workbench/high-risk')
     expect(ADMIN_PAGE_PATHS.some((p) => p.startsWith('/portal'))).toBe(false)
   })
 

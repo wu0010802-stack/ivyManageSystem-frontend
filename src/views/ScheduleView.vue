@@ -1,29 +1,63 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
+import { getAssignments, saveAssignments, copyMonthAssignments, getDaily, saveDaily, deleteDaily, getScheduleRoster, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts, getLeaveContext } from '@/api/shifts'
+import { computeWeekCoverage, leaveWindowForDate, type LeaveContextItem, type DailyOverrideLike, type AbsenceWindow } from '@/utils/scheduleCoverage'
+import type { ApiResponse } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { ArrowRight, Loading, UploadFilled } from '@element-plus/icons-vue'
-import { getMonthWeeks } from '@/utils/scheduleUtils'
-import { useEmployeeStore } from '@/stores/employee'
 import { useShiftStore } from '@/stores/shift'
 import { storeToRefs } from 'pinia'
 import { apiError } from '@/utils/error'
 import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useClientTableFilter } from '@/composables'
+
+// 手機版（≤767.98px）：兩個清單改卡片視圖（比照 EmployeeListView 範式）
+const { isMobile } = useIsMobile()
+
+// 班別指派卡片欄位：班別下拉與起訖時間為 slot（沿用表格內同一套 getter）
+const assignmentCardColumns = [
+  { label: '班級', prop: '__classroom', formatter: (r: Record<string, unknown>) => (r.classroom_name as string) || '-' },
+  { label: '班別', prop: '__shift' },
+  { label: '上班時間', prop: '__start' },
+  { label: '下班時間', prop: '__end' },
+]
+
+// 換班紀錄卡片欄位
+const swapCardColumns = [
+  { label: '換班日期', prop: 'swap_date' },
+  { label: '發起人', prop: '__requester' },
+  { label: '對象', prop: '__target' },
+  { label: '狀態', prop: '__status' },
+  { label: '申請時間', prop: 'created_at' },
+  { label: '回覆時間', prop: '__responded', formatter: (r: Record<string, unknown>) => (r.target_responded_at as string) || '—' },
+  { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+]
 
 // --- State ---
 interface AssignmentEntry { shift_type_id: number | null; notes: string | null }
-interface EmployeeRow { id: number; name: string; is_active?: boolean; classroom_id?: number | null; [key: string]: unknown }
-interface ShiftImportResult { failed: number; total: number; upserted: number; errors?: string[] }
+// 排班名冊列（GET /shifts/roster 最小欄位；勿改回全量 EmployeeOut）
+type EmployeeRow = ApiResponse<'/shifts/roster', 'get'>[number]
+type ShiftImportResult = ApiResponse<'/shifts/import', 'post'>
+type WeeklyWarning = NonNullable<ApiResponse<'/shifts/assignments', 'post'>['warnings']>[number]
 
 const loading = ref(false)
 const saving = ref(false)
-const employeeStore = useEmployeeStore()
 const shiftStore = useShiftStore()
-const { employees } = storeToRefs(employeeStore)
 const { activeShiftTypes: shiftTypes } = storeToRefs(shiftStore)
+const roster = ref<EmployeeRow[]>([])
 const assignments = ref<Record<string | number, AssignmentEntry>>({}) // { employee_id: { shift_type_id, notes } }
+
+const fetchRoster = async () => {
+  try {
+    const res = await getScheduleRoster()
+    roster.value = res.data
+  } catch (e) {
+    ElMessage.error(friendlyError('載入排班名冊失敗', e))
+  }
+}
 
 // Week selector - default to current week's Monday
 const getMonday = (d: Date) => {
@@ -52,12 +86,46 @@ const weekLabel = computed(() => {
 })
 
 // Filter: only show active employees with classroom assignment (teachers)
+// roster 預設只回在職者；沿用「有班級指派」的既有篩選語意
 const teacherEmployees = computed(() => {
-  return (employees.value as EmployeeRow[]).filter((e) => e.is_active && e.classroom_id)
+  return roster.value.filter((e) => e.classroom_id)
 })
+
+// --- 請假整合（2026-08-28）：週請假摘要＋全員每日調整 → 空班判定 ---
+const weekLeaves = ref<LeaveContextItem[]>([])
+const weekDailyOverrides = ref<DailyOverrideLike[]>([])
+
+const weekEndDate = computed(() => {
+  const d = new Date(weekStart.value)
+  d.setDate(d.getDate() + 6)
+  return formatDate(d)
+})
+
+const fetchLeaveContext = async () => {
+  try {
+    const res = await getLeaveContext({ start_date: weekStart.value, end_date: weekEndDate.value })
+    weekLeaves.value = res.data as LeaveContextItem[]
+  } catch (e) {
+    ElMessage.error(friendlyError('載入請假資訊失敗', e))
+  }
+}
+
+// 全員每日調整（供空班判定用；每日調整 dialog 另按單一員工查詢）
+const fetchWeekDailyOverrides = async () => {
+  try {
+    const res = await getDaily({ start_date: weekStart.value, end_date: weekEndDate.value })
+    weekDailyOverrides.value = (res.data as { employee_id: number; date: string; shift_type_id: number | null }[])
+      .map((d) => ({ employee_id: d.employee_id, date: d.date, shift_type_id: d.shift_type_id }))
+  } catch (e) {
+    ElMessage.error(friendlyError('載入每日調整失敗', e))
+  }
+}
 
 const fetchAssignments = async () => {
   loading.value = true
+  // 請假摘要與全員每日調整跟著週切換一起刷新（各自有錯誤處理，不擋主流程）
+  fetchLeaveContext()
+  fetchWeekDailyOverrides()
   try {
     const res = await getAssignments({ week_start: weekStart.value })
     // Build map: employee_id -> assignment
@@ -109,6 +177,9 @@ const shiftTypeMap = computed(() => {
 const getShiftInfo = (shiftTypeId: number | null) => shiftTypeId != null ? shiftTypeMap.value.get(shiftTypeId) : undefined
 
 // --- Save ---
+// 後端超時預警（>40h/週）——過去整包被丟棄，現以常駐 alert 呈現到下次儲存
+const saveWarnings = ref<WeeklyWarning[]>([])
+
 const saveAll = async () => {
   saving.value = true
   try {
@@ -121,11 +192,16 @@ const saveAll = async () => {
         notes: a?.notes || null,
       })
     }
-    await saveAssignments({
+    const res = await saveAssignments({
       week_start_date: weekStart.value,
       assignments: items,
     })
-    ElMessage.success('排班已儲存')
+    saveWarnings.value = res.data.warnings ?? []
+    if (saveWarnings.value.length) {
+      ElMessage.warning(`排班已儲存，但有 ${saveWarnings.value.length} 位員工週工時超過上限，詳見下方警告`)
+    } else {
+      ElMessage.success('排班已儲存')
+    }
   } catch (error) {
     ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
@@ -172,7 +248,8 @@ const onCopyWeekConfirm = () => {
   copyWeekPickerVisible.value = false
 }
 
-// 複製上月整月（直接寫入後端各目標週）
+// 複製上月整月：改走後端單一 transaction 端點（preview → 確認 → 套用）。
+// 舊版前端逐週 await 迴圈是部分成功黑洞：中途失敗不回滾也不告知已寫入週數。
 const monthCopyLoading = ref(false)
 
 const copyPrevMonth = async () => {
@@ -184,40 +261,38 @@ const copyPrevMonth = async () => {
   let sy = ty, sm = tm - 1
   if (sm === 0) { sy -= 1; sm = 12 }
 
-  const sourceWeeks = getMonthWeeks(sy, sm)
-  const targetWeeks = getMonthWeeks(ty, tm)
-  const copyCount = Math.min(sourceWeeks.length, targetWeeks.length)
-
-  const sourceLabel = `${sy}年${sm}月`
-  const targetLabel = `${ty}年${tm}月`
-
-  try {
-    await ElMessageBox.confirm(
-      `確定將 ${sourceLabel} 排班複製到 ${targetLabel}？\n這將覆蓋目標月現有週排班（每日調班不受影響）。`,
-      '複製上月整月',
-      { confirmButtonText: '確認複製', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch {
-    return // 使用者取消
+  const payload = {
+    source_year: sy,
+    source_month: sm,
+    target_year: ty,
+    target_month: tm,
+    mode: 'overwrite' as const,
   }
 
   monthCopyLoading.value = true
-  let copied = 0
   try {
-    for (let i = 0; i < copyCount; i++) {
-      const res = await getAssignments({ week_start: sourceWeeks[i] })
-      if (res.data.length === 0) continue // 來源週無資料，跳過不清空目標
-      await saveAssignments({
-        week_start_date: targetWeeks[i],
-        assignments: (res.data as { employee_id: number; shift_type_id: number | null; notes: string | null }[]).map((a) => ({
-          employee_id: a.employee_id,
-          shift_type_id: a.shift_type_id,
-          notes: a.notes,
-        })),
-      })
-      copied++
+    // 先 dry_run 取預覽：封存阻擋與筆數先攤在確認框，不做半套
+    const preview = await copyMonthAssignments({ ...payload, dry_run: true })
+    const p = preview.data
+    if (p.blocked.length) {
+      ElMessage.error(`無法複製，以下月份薪資已封存：${p.blocked.join('、')}`)
+      return
     }
-    ElMessage.success(`已複製 ${copied} 週排班`)
+    if (p.created + p.updated === 0) {
+      ElMessage.warning('來源月無可複製的週排班')
+      return
+    }
+    try {
+      await ElMessageBox.confirm(
+        `將 ${sy}年${sm}月 排班複製到 ${ty}年${tm}月（配對 ${p.weeks_paired} 週）：新增 ${p.created} 筆、覆蓋 ${p.updated} 筆。每日調班不受影響。`,
+        '複製上月整月',
+        { confirmButtonText: '確認複製', cancelButtonText: '取消', type: 'warning' }
+      )
+    } catch {
+      return // 使用者取消
+    }
+    const res = await copyMonthAssignments({ ...payload, dry_run: false })
+    ElMessage.success(`已複製：新增 ${res.data.created} 筆、覆蓋 ${res.data.updated} 筆`)
     fetchAssignments() // 重新載入當前週
   } catch (e) {
     ElMessage.error(friendlyError('整月複製排班失敗', e))
@@ -227,7 +302,7 @@ const copyPrevMonth = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([employeeStore.fetchEmployees(), shiftStore.fetchShiftTypes()])
+  await Promise.all([fetchRoster(), shiftStore.fetchShiftTypes()])
   fetchAssignments()
 })
 
@@ -237,12 +312,13 @@ const currentEmployee = ref<EmployeeRow | null>(null)
 const dailyShifts = ref<Record<string, unknown>[]>([]) // list of daily shifts from API
 const dailyShiftMap = ref<Record<string, Record<string, unknown>>>({}) // date -> shift record
 
-// Generate dates for current week (Mon-Fri)
+// Generate dates for current week（週一～週日整週 7 天——週末也可指定日班/排休，
+// 舊版寫死 5 天讓假日班與週末排休完全沒有入口）
 const currentWeekDates = computed(() => {
   if (!weekStart.value) return []
   const start = new Date(weekStart.value)
   const dates = []
-  for (let i = 0; i < 5; i++) { // Mon-Fri
+  for (let i = 0; i < 7; i++) {
     const d = new Date(start)
     d.setDate(d.getDate() + i)
     dates.push(formatDate(d))
@@ -256,6 +332,47 @@ const getDayName = (dateStr: string) => {
   return days[d.getDay()]
 }
 
+// --- 請假覆蓋／空班判定（純邏輯在 utils/scheduleCoverage，含測試） ---
+const weekCoverage = computed(() =>
+  computeWeekCoverage({
+    dates: currentWeekDates.value,
+    employeeIds: teacherEmployees.value.map((e) => e.id),
+    weeklyShiftByEmp: Object.fromEntries(
+      teacherEmployees.value.map((e) => [e.id, getAssignment(e.id)])
+    ),
+    dailyOverrides: weekDailyOverrides.value,
+    shiftTypes: shiftTypes.value,
+    leaves: weekLeaves.value,
+  })
+)
+
+// 桌機恆列 7 天；手機只列有請假或空班的天，避免整條空卡
+const coverageDaysToShow = computed(() =>
+  isMobile.value
+    ? weekCoverage.value.filter((d) => d.leaves.length || d.gaps.length)
+    : weekCoverage.value
+)
+
+const leavesByEmployee = computed(() => {
+  const map = new Map<number, LeaveContextItem[]>()
+  for (const lv of weekLeaves.value) {
+    const list = map.get(lv.employee_id)
+    if (list) list.push(lv)
+    else map.set(lv.employee_id, [lv])
+  }
+  return map
+})
+
+const empWeekLeaves = (empId: number) => leavesByEmployee.value.get(empId) ?? []
+
+const empLeavesOnDate = (empId: number, dateStr: string) =>
+  empWeekLeaves(empId)
+    .map((lv) => ({ lv, window: leaveWindowForDate(lv, dateStr) }))
+    .filter((x): x is { lv: LeaveContextItem; window: AbsenceWindow } => x.window != null)
+
+const windowLabel = (win: AbsenceWindow) =>
+  win.start === '00:00' && win.end === '24:00' ? '全天' : `${win.start}~${win.end}`
+
 const openDailyDialog = async (emp: EmployeeRow) => {
   currentEmployee.value = emp
   dailyDialogVisible.value = true
@@ -265,12 +382,12 @@ const openDailyDialog = async (emp: EmployeeRow) => {
 
 const fetchDailyShiftsForDialog = async () => {
   if (!currentEmployee.value) return
-  
-  // Calculate end date (Friday)
+
+  // Calculate end date（週日；整週 7 天）
   const start = new Date(weekStart.value)
   const end = new Date(start)
-  end.setDate(end.getDate() + 4)
-  
+  end.setDate(end.getDate() + 6)
+
   try {
     const res = await getDaily({
       start_date: weekStart.value,
@@ -290,9 +407,14 @@ const fetchDailyShiftsForDialog = async () => {
   }
 }
 
-const getDailyShiftId = (dateStr: string): number | null => {
+// 三態 select 的哨兵值：明確排休（後端 day_off=true → DailyShift.shift_type_id=NULL）
+const DAY_OFF_VALUE = -1
+
+/** 三態顯示值：無列=null（繼承）；列的 shift_type_id=null → 排休哨兵；否則班別 id */
+const getDailySelectValue = (dateStr: string): number | null => {
   const ds = dailyShiftMap.value[dateStr]
-  return ds ? (ds.shift_type_id as number | null) : null
+  if (!ds) return null
+  return (ds.shift_type_id as number | null) ?? DAY_OFF_VALUE
 }
 
 const getDailyShiftRecordId = (dateStr: string): number | null => {
@@ -395,10 +517,11 @@ const handleShiftImportFile = async (file: { raw?: File }) => {
   try {
     const res = await importShifts(formData, weekStart.value)
     shiftImportResult.value = res.data
+    // 後端欄位名是 saved（typed wrapper 上線前曾誤讀 upserted → UI 顯示 undefined）
     if (res.data.failed === 0) {
-      ElMessage.success(`匯入完成，共 ${res.data.upserted} 筆排班`)
+      ElMessage.success(`匯入完成，共 ${res.data.saved} 筆排班`)
     } else {
-      ElMessage.warning(`匯入完成，成功 ${res.data.upserted} 筆，失敗 ${res.data.failed} 筆`)
+      ElMessage.warning(`匯入完成，成功 ${res.data.saved} 筆，失敗 ${res.data.failed} 筆`)
     }
     fetchAssignments()
   } catch (error) {
@@ -408,28 +531,38 @@ const handleShiftImportFile = async (file: { raw?: File }) => {
   }
 }
 
-const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | null) => {
+const handleDailyShiftChange = async (dateStr: string, value: number | null) => {
   if (!currentEmployee.value) return
-  
+
   try {
-    if (shiftTypeId) {
-      // Upsert
+    if (value === DAY_OFF_VALUE) {
+      // 明確排休：留一筆 shift_type_id=NULL 的列（與「清除＝恢復繼承」是不同語意）
       await saveDaily({
         employee_id: currentEmployee.value.id,
-        shift_type_id: shiftTypeId,
-        date: dateStr
+        day_off: true,
+        date: dateStr,
+      })
+      ElMessage.success('已標記休假（該日不上班）')
+    } else if (value) {
+      // Upsert 指定日班
+      await saveDaily({
+        employee_id: currentEmployee.value.id,
+        shift_type_id: value,
+        day_off: false,
+        date: dateStr,
       })
       ElMessage.success('已更新每日排班')
     } else {
-      // Delete if exists
+      // 清除＝刪列＝恢復繼承週排班
       const recordId = getDailyShiftRecordId(dateStr)
       if (recordId != null) {
         await deleteDaily(recordId)
-        ElMessage.success('已清除每日排班 (恢復預設)')
+        ElMessage.success('已清除（恢復繼承週排班）')
       }
     }
-    // Refresh
+    // Refresh（dialog 單人清單＋全員每日調整都要刷新，空班判定才會跟上）
     await fetchDailyShiftsForDialog()
+    fetchWeekDailyOverrides()
   } catch (error) {
     ElMessage.error(friendlyError('更新排班失敗', error))
   }
@@ -475,9 +608,71 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
           </div>
         </el-card>
 
+        <!-- 週工時超時預警（後端 warnings；常駐到下次儲存或手動關閉） -->
+        <el-alert
+          v-if="saveWarnings.length"
+          type="warning"
+          title="週工時超上限預警"
+          :closable="true"
+          data-test="weekly-warnings"
+          style="margin-top: 12px;"
+          @close="saveWarnings = []"
+        >
+          <div v-for="w in saveWarnings" :key="w.employee_id">{{ w.message }}</div>
+        </el-alert>
+
+        <!-- 本週請假與空班概覽（資料：GET /shifts/leave-context＋全員每日調整） -->
+        <div
+          v-if="coverageDaysToShow.length"
+          class="week-leave-strip"
+          :class="{ mobile: isMobile }"
+          data-test="leave-strip"
+        >
+          <div
+            v-for="day in coverageDaysToShow"
+            :key="day.date"
+            class="day-card"
+            :class="{ 'has-gap': day.gaps.length }"
+          >
+            <div class="day-head">{{ day.date.slice(5).replace('-', '/') }}（{{ getDayName(day.date) }}）</div>
+            <div
+              v-for="gap in day.gaps"
+              :key="gap.shiftTypeId"
+              class="gap-alert"
+              :class="gap.severity"
+              :data-test="`gap-${day.date}`"
+            >
+              ⚠ {{ gap.shiftTypeName }}（{{ gap.workStart }}~{{ gap.workEnd }}）{{ gap.severity === 'empty' ? '無人上班' : '待審通過將無人' }}
+            </div>
+            <div
+              v-for="entry in day.leaves"
+              :key="entry.leave.id"
+              class="leave-entry"
+              :class="{ pending: entry.leave.status === 'pending' }"
+            >
+              <span class="leave-name">{{ entry.leave.employee_name }}</span>
+              <span class="leave-window">{{ windowLabel(entry.window) }}</span>
+              <span class="leave-type">{{ entry.leave.leave_type_label }}</span>
+              <el-tag v-if="entry.leave.status === 'pending'" type="warning" size="small">待審</el-tag>
+            </div>
+            <div v-if="!day.leaves.length && !day.gaps.length" class="leave-none">無請假</div>
+          </div>
+        </div>
+
         <!-- Assignment Table -->
-        <el-table :data="teacherEmployees" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
-          <el-table-column prop="name" label="姓名" width="100" fixed />
+        <el-table v-if="!isMobile" :data="teacherEmployees" v-loading="loading" style="width: 100%; margin-top: 16px;" stripe>
+          <el-table-column label="姓名" width="130" fixed>
+            <template #default="{ row }">
+              {{ row.name }}
+              <el-tag
+                v-if="empWeekLeaves(row.id).length"
+                size="small"
+                type="warning"
+                class="row-leave-tag"
+                data-test="row-leave-tag"
+              >請假</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="班級" width="120">
             <template #default="{ row }">
               {{ row.classroom_name || '-' }}
@@ -523,6 +718,55 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
             </template>
           </el-table-column>
         </el-table>
+        <AdminListCards
+          v-else
+          :items="(teacherEmployees as unknown as Record<string, unknown>[])"
+          :columns="assignmentCardColumns"
+          row-key="id"
+          :loading="loading"
+          empty-text="尚無班導老師資料（需有班級指派的員工）"
+        >
+          <template #title="{ item }">
+            {{ item.name }}
+            <el-tag
+              v-if="empWeekLeaves(item.id as number).length"
+              size="small"
+              type="warning"
+              class="row-leave-tag"
+            >請假</el-tag>
+          </template>
+          <template #cell-__shift="{ item }">
+            <el-select
+              :model-value="getAssignment(item.id as number)"
+              placeholder="選擇班別"
+              clearable
+              class="card-shift-select"
+              @update:model-value="(val) => setAssignment(item.id as number, val)"
+            >
+              <el-option
+                v-for="st in shiftTypes"
+                :key="st.id"
+                :label="`${st.name} (${st.work_start}~${st.work_end})`"
+                :value="st.id"
+              />
+            </el-select>
+          </template>
+          <template #cell-__start="{ item }">
+            <template v-if="getAssignment(item.id as number)">
+              {{ getShiftInfo(getAssignment(item.id as number))?.work_start || '' }}
+            </template>
+            <span v-else class="text-muted">-</span>
+          </template>
+          <template #cell-__end="{ item }">
+            <template v-if="getAssignment(item.id as number)">
+              {{ getShiftInfo(getAssignment(item.id as number))?.work_end || '' }}
+            </template>
+            <span v-else class="text-muted">-</span>
+          </template>
+          <template #actions="{ item }">
+            <el-button size="small" @click="openDailyDialog(item as unknown as EmployeeRow)">每日調整</el-button>
+          </template>
+        </AdminListCards>
 
         <el-empty v-if="teacherEmployees.length === 0 && !loading" description="尚無班導老師資料（需有班級指派的員工）" />
       </el-tab-pane>
@@ -561,7 +805,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
           :shown="swapShown"
         />
 
-        <el-table :data="filteredSwapHistory" v-loading="swapLoading" style="width: 100%; margin-top: 16px;" stripe>
+        <el-table v-if="!isMobile" :data="filteredSwapHistory" v-loading="swapLoading" style="width: 100%; margin-top: 16px;" stripe>
           <template #empty>
             <el-empty :description="swapSearch ? '沒有符合搜尋條件的換班紀錄' : '尚無換班紀錄'" />
           </template>
@@ -579,6 +823,28 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
           <el-table-column prop="target_responded_at" label="回覆時間" width="160" />
           <el-table-column prop="created_at" label="申請時間" width="160" />
         </el-table>
+        <AdminListCards
+          v-else
+          :items="filteredSwapHistory"
+          :columns="swapCardColumns"
+          row-key="id"
+          :loading="swapLoading"
+          :empty-text="swapSearch ? '沒有符合搜尋條件的換班紀錄' : '尚無換班紀錄'"
+        >
+          <!-- 卡片標題用「發起人 → 對象」把換班雙方一眼帶出 -->
+          <template #title="{ item }">
+            {{ item.requester_name }} <el-icon><ArrowRight /></el-icon> {{ item.target_name }}
+          </template>
+          <template #cell-__requester="{ item }">
+            {{ item.requester_name }}<span v-if="item.requester_shift">（{{ item.requester_shift }}）</span>
+          </template>
+          <template #cell-__target="{ item }">
+            {{ item.target_name }}<span v-if="item.target_shift">（{{ item.target_shift }}）</span>
+          </template>
+          <template #cell-__status="{ item }">
+            <el-tag :type="swapStatusType(item.status as string)" size="small">{{ swapStatusLabel(item.status as string) }}</el-tag>
+          </template>
+        </AdminListCards>
       </el-tab-pane>
     </el-tabs>
 
@@ -623,7 +889,7 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
       <div v-if="shiftImportResult" style="margin-top: 16px;">
         <el-alert
           :type="shiftImportResult.failed === 0 ? 'success' : 'warning'"
-          :title="`共 ${shiftImportResult.total} 筆，成功 ${shiftImportResult.upserted} 筆，失敗 ${shiftImportResult.failed} 筆`"
+          :title="`共 ${shiftImportResult.total} 筆，成功 ${shiftImportResult.saved} 筆，失敗 ${shiftImportResult.failed} 筆`"
           :closable="false"
         />
         <div v-if="shiftImportResult.errors?.length" style="margin-top: 8px; max-height: 150px; overflow-y: auto;">
@@ -653,12 +919,27 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
               {{ row.date }} ({{ getDayName(row.date) }})
             </template>
           </el-table-column>
-          <el-table-column label="當日班別">
+          <el-table-column label="請假" width="150">
+            <template #default="{ row }">
+              <template v-if="currentEmployee && empLeavesOnDate(currentEmployee.id, row.date).length">
+                <div
+                  v-for="e in empLeavesOnDate(currentEmployee.id, row.date)"
+                  :key="e.lv.id"
+                  class="dlg-leave"
+                  :class="{ pending: e.lv.status === 'pending' }"
+                >
+                  {{ e.lv.leave_type_label }} {{ windowLabel(e.window) }}<span v-if="e.lv.status === 'pending'">（待審）</span>
+                </div>
+              </template>
+              <span v-else class="text-muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="當日安排">
             <template #default="{ row }">
               <el-select
-                :model-value="getDailyShiftId(row.date)"
+                :model-value="getDailySelectValue(row.date)"
                 @update:model-value="(val) => handleDailyShiftChange(row.date, val)"
-                placeholder="預設 (同週排班)"
+                placeholder="繼承週排班"
                 clearable
                 style="width: 100%"
               >
@@ -668,12 +949,17 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
                   :label="st.name"
                   :value="st.id"
                 />
+                <el-option
+                  :value="DAY_OFF_VALUE"
+                  label="休假（明確不上班）"
+                  class="day-off-option"
+                />
               </el-select>
             </template>
           </el-table-column>
         </el-table>
         <div class="mt-4 text-gray-500 text-sm">
-          * 清除選擇即恢復為「週排班」設定
+          * 三種狀態：留空＝繼承「週排班」；選班別＝該日指定班；「休假」＝該日明確不上班（不再回落週排班）。清除選擇即恢復繼承。
         </div>
       </div>
     </el-dialog>
@@ -713,5 +999,77 @@ const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | nul
 }
 .text-sm {
   font-size: var(--text-base);
+}
+/* 手機卡片內的班別下拉：撐滿可用寬度，避免在窄卡片被壓成細長條 */
+.card-shift-select {
+  width: 100%;
+  min-width: 160px;
+}
+
+/* 本週請假與空班概覽 */
+.week-leave-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  margin-top: 12px;
+}
+.week-leave-strip.mobile {
+  grid-template-columns: 1fr;
+}
+.day-card {
+  border: 1px solid var(--el-border-color, #e4e7ed);
+  border-radius: 8px;
+  padding: var(--space-2);
+  font-size: 12px;
+  min-width: 0;
+}
+.day-card.has-gap {
+  border-color: var(--el-color-danger, #f56c6c);
+}
+.day-head {
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+.gap-alert {
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+.gap-alert.empty {
+  color: var(--el-color-danger, #f56c6c);
+  background: var(--el-color-danger-light-9, rgba(245, 108, 108, 0.12));
+}
+.gap-alert.risk {
+  color: var(--el-color-warning, #e6a23c);
+  background: var(--el-color-warning-light-9, rgba(230, 162, 60, 0.12));
+}
+.leave-entry {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 2px;
+}
+.leave-entry.pending {
+  opacity: 0.75;
+}
+.leave-window,
+.leave-type {
+  color: var(--text-secondary);
+}
+.leave-none {
+  color: var(--neutral-300);
+}
+.row-leave-tag {
+  margin-left: 4px;
+}
+.dlg-leave {
+  font-size: 12px;
+  color: var(--el-color-danger, #f56c6c);
+}
+.dlg-leave.pending {
+  color: var(--el-color-warning, #e6a23c);
 }
 </style>

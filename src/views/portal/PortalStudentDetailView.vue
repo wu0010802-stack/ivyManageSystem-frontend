@@ -92,10 +92,6 @@ const assessments = computed(() => detail.value?.recent_assessments as Record<st
 const incidents = computed(() => detail.value?.recent_incidents_30d as Record<string, unknown>[] | undefined)
 const contactBookRecent = computed(() => detail.value?.contact_book_recent as Record<string, unknown>[] | undefined)
 
-function goMessages() {
-  router.push('/portal/messages')
-}
-
 function goObservation() {
   router.push({ path: '/portal/observations', query: { student_id: props.studentId } })
 }
@@ -143,7 +139,6 @@ function back() {
           </span>
         </div>
         <div class="actions">
-          <el-button @click="goMessages">發訊息給家長</el-button>
           <el-button @click="goObservation">新增觀察</el-button>
           <el-button :icon="Odometer" @click="openMeasurementSheet">記量測</el-button>
           <el-button :icon="Star" @click="openMilestoneSheet">記里程碑</el-button>

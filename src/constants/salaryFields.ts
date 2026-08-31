@@ -5,7 +5,7 @@ export const EDITABLE_SALARY_FIELDS = Object.freeze([
   { key: 'overtime_bonus', label: '超額獎金' },
   { key: 'overtime_pay', label: '加班津貼' },
   { key: 'supervisor_dividend', label: '主管紅利' },
-  { key: 'meeting_overtime_pay', label: '會議加班' },
+  { key: 'meeting_overtime_pay', label: '園務會議' },
   { key: 'birthday_bonus', label: '生日禮金' },
   { key: 'extra_allowance', label: '額外加給' },
   { key: 'leave_deduction', label: '請假扣款' },

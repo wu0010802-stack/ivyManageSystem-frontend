@@ -73,7 +73,7 @@ function onClick(): void {
   border: 2px solid var(--m3-on-surface-variant, #424941);
   border-radius: 50%;
   background: transparent;
-  transition: border-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+  transition: border-color var(--motion-quick, 150ms) ease;
 }
 .m3-radio.is-selected .m3-radio-outer {
   border-color: var(--m3-primary, #006d3d);

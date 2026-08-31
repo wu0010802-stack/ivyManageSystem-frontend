@@ -1,0 +1,382 @@
+/**
+ * FeeMonthlyStatement（月繳總表，帳單工作區「彙總繳費表」檢視）。
+ *
+ * - 掛載即以本月查詢並渲染 per-student 聚合列（預設只顯示未繳＋部分繳費）
+ * - 狀態快篩 tiles 可切換；班級 chips 直列快篩（含未收齊人數）
+ * - 費用欄位依當月出現的 fee_type 動態顯示
+ * - 收款/批次收款重用 BatchPayDialog，只帶未繳清項目
+ * - 月份導航（上一月/本月）重新查詢
+ * - 展開明細列；「到逐筆明細處理」emit open-list
+ */
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+
+const getFeeMonthlyStatement = vi.fn()
+const getPrepayments = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
+const getPrepaymentRefunds = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
+vi.mock('@/api/fees', () => ({
+  getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
+  getPrepayments: (...args: unknown[]) => getPrepayments(...args),
+  getPrepaymentRefunds: (...args: unknown[]) => getPrepaymentRefunds(...args),
+}))
+
+const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (name: string) => authMocks.perms.has(name),
+}))
+
+// 固定「今天」：2026-08-25 → 本月 = 2026-08
+vi.mock('@/utils/format', () => ({
+  todayISO: () => '2026-08-25',
+}))
+
+vi.mock('@/components/fees/PrepaymentDrawer.vue', () => ({
+  __esModule: true,
+  default: { name: 'PrepaymentDrawer', template: '<div data-testid="prepay-drawer-stub" />' },
+}))
+vi.mock('@/components/fees/PrepaymentRefundsDialog.vue', () => ({
+  __esModule: true,
+  default: { name: 'PrepaymentRefundsDialog', template: '<div data-testid="prepay-refunds-stub" />' },
+}))
+vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'BatchPayDialog',
+    props: {
+      modelValue: { type: Boolean, default: false },
+      records: { type: Array, default: () => [] },
+    },
+    emits: ['update:modelValue', 'paid'],
+    template:
+      '<div data-testid="batch-pay-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-ids="records.map((r) => r.id).join(\',\')" />',
+  },
+}))
+
+import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
+
+const item = (over: Record<string, unknown>) => ({
+  fee_item_name: '月費 (2026-08)',
+  fee_type: 'monthly',
+  amount_due: 9500,
+  amount_paid: 0,
+  status: 'unpaid',
+  payment_date: null,
+  payment_method: null,
+  due_date: '2026-08-15',
+  target_month: '2026-08',
+  period: '115-1',
+  ...over,
+})
+
+const STATEMENT = {
+  month: '2026-08',
+  students: [
+    {
+      student_id: 1,
+      student_name: '林未繳',
+      classroom_name: '向日葵',
+      status: 'unpaid',
+      total_due: 10700,
+      total_paid: 0,
+      outstanding: 10700,
+      items: [
+        item({ id: 11 }),
+        item({ id: 12, fee_item_name: '教材費', fee_type: 'material', amount_due: 1200 }),
+      ],
+    },
+    {
+      student_id: 2,
+      student_name: '陳部分',
+      classroom_name: '向日葵',
+      status: 'partial',
+      total_due: 9680,
+      total_paid: 9500,
+      outstanding: 180,
+      items: [
+        item({
+          id: 21,
+          amount_paid: 9500,
+          status: 'paid',
+          payment_date: '2026-08-03',
+          payment_method: '現金',
+        }),
+        item({ id: 22, fee_item_name: '保險費', fee_type: 'insurance', amount_due: 180 }),
+      ],
+    },
+    {
+      student_id: 3,
+      student_name: '張全繳',
+      classroom_name: '櫻花',
+      status: 'paid',
+      total_due: 9500,
+      total_paid: 9500,
+      outstanding: 0,
+      items: [
+        item({
+          id: 31,
+          amount_paid: 9500,
+          status: 'paid',
+          payment_date: '2026-08-01',
+          payment_method: '轉帳',
+        }),
+      ],
+    },
+  ],
+  summary: {
+    total_due: 29880,
+    total_paid: 19000,
+    outstanding: 10880,
+    student_count: 3,
+    unpaid_count: 1,
+    partial_count: 1,
+    paid_count: 1,
+  },
+}
+
+const CLASSROOMS = [
+  { id: 1, name: '向日葵', grade_name: '小班' },
+  { id: 2, name: '櫻花', grade_name: '中班' },
+  // 跨學期同名班（應去重）
+  { id: 3, name: '向日葵', grade_name: '小班' },
+]
+
+const GLOBAL_STUBS = {
+  'el-button': {
+    template: '<button type="button" v-bind="$attrs" :disabled="disabled"><slot /></button>',
+    props: { disabled: { type: Boolean, default: false } },
+  },
+  'el-input': {
+    props: { modelValue: { type: String, default: '' } },
+    emits: ['update:modelValue'],
+    template:
+      '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
+  'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
+  'el-skeleton': { template: '<div data-testid="stmt-skeleton" />' },
+}
+
+const mountStatement = (props: Record<string, unknown> = {}) =>
+  mount(FeeMonthlyStatement, {
+    props: { classrooms: CLASSROOMS, ...props },
+    global: { stubs: GLOBAL_STUBS },
+  })
+
+const rowNames = (w: ReturnType<typeof mountStatement>) =>
+  w.findAll('[data-test="stmt-row"]').map((r) => r.attributes('data-student'))
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
+  getFeeMonthlyStatement.mockResolvedValue(STATEMENT)
+})
+
+describe('預設載入與聚合列', () => {
+  it('掛載即以本月查詢，預設只顯示未繳＋部分繳費（該繳的人）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenCalledWith({ month: '2026-08' })
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+    expect(w.text()).not.toContain('張全繳')
+  })
+
+  it('聚合列顯示合計/未收金額與聚合狀態', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const row = w.find('[data-test="stmt-row"][data-student="陳部分"]')
+    expect(row.text()).toContain('NT$9,680')
+    expect(row.text()).toContain('NT$180')
+    expect(row.text()).toContain('部分繳費')
+  })
+
+  it('費用欄依當月 fee_type 動態顯示（無註冊費/雜項欄）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const head = w.find('[data-test="stmt-table"] thead').text()
+    expect(head).toContain('月費')
+    expect(head).toContain('教材費')
+    expect(head).toContain('保險費')
+    expect(head).not.toContain('註冊費')
+    expect(head).not.toContain('雜項')
+  })
+
+  it('summary strip 顯示本月待收與各狀態人數', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const strip = w.find('[data-test="stmt-summary"]')
+    expect(strip.text()).toContain('NT$10,880')
+    expect(strip.text()).toContain('1')
+  })
+})
+
+describe('狀態快篩與班級 chips', () => {
+  it('點「已繳清」tile 後顯示已繳學生；關閉「未繳」後未繳學生隱藏', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-flt-paid"]').trigger('click')
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分', '張全繳'])
+    await w.find('[data-test="stmt-flt-unpaid"]').trigger('click')
+    expect(rowNames(w)).toEqual(['陳部分', '張全繳'])
+  })
+
+  it('班級 chips 直列（去重）含未收齊人數；點選即篩選、再點取消', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const chips = w.findAll('[data-test="stmt-class-chip"]')
+    // 全部班級 + 向日葵 + 櫻花（跨學期同名去重）
+    expect(chips.map((c) => c.attributes('data-classroom'))).toEqual([
+      '',
+      '向日葵',
+      '櫻花',
+    ])
+    // 向日葵未收齊 2 人
+    expect(chips[1].text()).toContain('2')
+
+    await chips[1].trigger('click')
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+    // 櫻花只有已繳生，預設狀態下無列
+    await w.find('[data-test="stmt-class-chip"][data-classroom="櫻花"]').trigger('click')
+    expect(rowNames(w)).toEqual([])
+    // 再點取消回全部
+    await w.find('[data-test="stmt-class-chip"][data-classroom="櫻花"]').trigger('click')
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('姓名搜尋即時過濾', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-search"]').setValue('陳')
+    expect(rowNames(w)).toEqual(['陳部分'])
+  })
+})
+
+describe('收款與批次收款', () => {
+  it('單一學生收款只帶未繳清項目開啟 BatchPayDialog', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w
+      .find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-pay"]')
+      .trigger('click')
+    const dialog = w.find('[data-testid="batch-pay-dialog"]')
+    expect(dialog.attributes('data-open')).toBe('1')
+    expect(dialog.attributes('data-ids')).toBe('22')
+  })
+
+  it('批次收款預設 disabled；勾選後帶所有勾選學生的未繳項目', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const batchBtn = w.find('[data-test="stmt-batch-pay"]')
+    expect(batchBtn.attributes('disabled')).toBeDefined()
+
+    await w.find('[data-test="stmt-row"][data-student="林未繳"] [data-test="stmt-check"]').setValue(true)
+    await w.find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-check"]').setValue(true)
+    expect(w.find('[data-test="stmt-batch-pay"]').text()).toContain('2')
+    await w.find('[data-test="stmt-batch-pay"]').trigger('click')
+    expect(w.find('[data-testid="batch-pay-dialog"]').attributes('data-ids')).toBe('11,12,22')
+  })
+
+  it('已繳清學生的列不可勾選、無收款鈕', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-flt-paid"]').trigger('click')
+    const paidRow = w.find('[data-test="stmt-row"][data-student="張全繳"]')
+    expect(paidRow.find('[data-test="stmt-check"]').attributes('disabled')).toBeDefined()
+    expect(paidRow.find('[data-test="stmt-pay"]').exists()).toBe(false)
+  })
+
+  it('收款完成（paid）後重新查詢', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    getFeeMonthlyStatement.mockClear()
+    const dialog = w.findComponent({ name: 'BatchPayDialog' })
+    dialog.vm.$emit('paid')
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenCalledWith({ month: '2026-08' })
+  })
+
+  it('無 FEES_WRITE 時不顯示勾選欄/收款/批次收款', async () => {
+    authMocks.perms = new Set(['FEES_READ'])
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-test="stmt-batch-pay"]').exists()).toBe(false)
+    expect(w.find('[data-test="stmt-check"]').exists()).toBe(false)
+    expect(w.find('[data-test="stmt-pay"]').exists()).toBe(false)
+  })
+})
+
+describe('月份導航', () => {
+  it('上一月重新查詢；「本月」在當月時 disabled、切走後可返回', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(
+      w.find('[data-test="stmt-month-current"]').attributes('disabled'),
+    ).toBeDefined()
+
+    await w.find('[data-test="stmt-month-prev"]').trigger('click')
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenLastCalledWith({ month: '2026-07' })
+    expect(w.find('[data-test="stmt-month-label"]').text()).toContain('115 年 7 月')
+
+    await w.find('[data-test="stmt-month-current"]').trigger('click')
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenLastCalledWith({ month: '2026-08' })
+  })
+
+  it('跨年往前導航正確（2026-01 → 2025-12）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    for (let i = 0; i < 8; i += 1) {
+      await w.find('[data-test="stmt-month-prev"]').trigger('click')
+    }
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenLastCalledWith({ month: '2025-12' })
+  })
+})
+
+describe('展開明細', () => {
+  it('點列展開單項明細；「到逐筆明細處理」emit open-list（帶學生姓名）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-expand"]').trigger('click')
+    const detail = w.find('[data-test="stmt-detail"]')
+    expect(detail.exists()).toBe(true)
+    expect(detail.text()).toContain('保險費')
+    expect(detail.text()).toContain('現金')
+
+    await detail.find('[data-test="stmt-open-list"]').trigger('click')
+    expect(w.emitted('open-list')).toEqual([['陳部分']])
+  })
+})
+
+describe('載入狀態', () => {
+  it('查詢失敗顯示錯誤與重試；重試成功恢復列表', async () => {
+    getFeeMonthlyStatement.mockRejectedValueOnce(new Error('boom'))
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-test="stmt-error"]').exists()).toBe(true)
+
+    getFeeMonthlyStatement.mockResolvedValue(STATEMENT)
+    await w.find('[data-test="stmt-retry"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="stmt-error"]').exists()).toBe(false)
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('當月無資料顯示空狀態提示', async () => {
+    getFeeMonthlyStatement.mockResolvedValue({
+      month: '2026-08',
+      students: [],
+      summary: {
+        total_due: 0,
+        total_paid: 0,
+        outstanding: 0,
+        student_count: 0,
+        unpaid_count: 0,
+        partial_count: 0,
+        paid_count: 0,
+      },
+    })
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-test="stmt-empty"]').exists()).toBe(true)
+  })
+})

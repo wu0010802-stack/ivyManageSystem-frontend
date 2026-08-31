@@ -45,9 +45,10 @@ describe('RecruitmentRecordDialog — A+C 收合', () => {
     const { wrapper } = mountDialog()
     expect(wrapper.find('.el-checkbox').exists()).toBe(true)
   })
+  // 代表欄位自 district 改為 address：行政區已於 2026-08-28 自表單移除。
   it('applyValidationErrors 展開含錯區段（聯絡欄錯→聯絡區展開 + 徽章）', async () => {
     const { wrapper } = mountDialog()
-    ;(wrapper.vm as unknown as { applyValidationErrors: (p: string[]) => void }).applyValidationErrors(['district'])
+    ;(wrapper.vm as unknown as { applyValidationErrors: (p: string[]) => void }).applyValidationErrors(['address'])
     await wrapper.vm.$nextTick()
     expect(isBodyHidden(wrapper, 'section-contact')).toBe(false)
     const badge = wrapper.find('[data-test="section-contact"] .form-section__badge')

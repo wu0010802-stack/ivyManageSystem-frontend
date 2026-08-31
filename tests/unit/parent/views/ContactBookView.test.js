@@ -23,6 +23,17 @@ vi.mock('@/parent/composables/useChildSelection', () => ({
   }),
 }))
 
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRoute: () => ({ path: '/contact-book', query: {} }),
+}))
+
+vi.mock('@/parent/api/announcements', () => ({
+  getUnreadCount: vi.fn().mockResolvedValue({ data: { unread_count: 0 } }),
+  listAnnouncements: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  markRead: vi.fn(),
+}))
+
 import ContactBookView from '@/parent/views/ContactBookView.vue'
 
 describe('ContactBookView today-card a11y', () => {

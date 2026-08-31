@@ -43,10 +43,6 @@ describe('parent router IA (2026-05-22 restructure)', () => {
       '/events',
       '/events/:eventId/ack',
       '/attendance',
-      '/children/:studentId',
-      '/children/:studentId/reports',
-      '/children/:studentId/photos',
-      '/children/:studentId/measurements',
     ])('%s 應有 tab=admin', (path) => {
       expect(tabOf(path)).toBe('admin')
     })
@@ -55,21 +51,46 @@ describe('parent router IA (2026-05-22 restructure)', () => {
   describe('Home tab 子頁（spec §5.1）', () => {
     it.each([
       '/home',
-      '/contact-book',
-      '/contact-book/:entryId',
       '/calendar',
     ])('%s 應有 tab=home', (path) => {
       expect(tabOf(path)).toBe('home')
     })
   })
 
-  describe('Messages tab 子頁（spec §5.1）', () => {
+  describe('Child tab（P2 IA 重整，2026-08-14：5-tab 導航新增「孩子」hub）', () => {
+    it('/child hub 存在且 tab=child', () => {
+      const r = findRoute('/child')
+      expect(r).toBeDefined()
+      expect(r?.name).toBe('parent-child-hub')
+      expect(r?.meta?.tab).toBe('child')
+    })
     it.each([
-      '/messages',
-      '/messages/:threadId',
+      '/children/:studentId',
+      '/children/:studentId/reports',
+      '/children/:studentId/photos',
+      '/children/:studentId/measurements',
+    ])('%s 應有 tab=child（P2 起自 admin/home 改歸屬，避免與孩子 hub 雙入口）', (path) => {
+      expect(tabOf(path)).toBe('child')
+    })
+  })
+
+  describe('Contact-book tab（2026-08-28：訊息下架，第三個 tab 換成聯絡簿）', () => {
+    it.each([
+      '/contact-book',
+      '/contact-book/:entryId',
       '/announcements',
-    ])('%s 應有 tab=messages', (path) => {
-      expect(tabOf(path)).toBe('messages')
+    ])('%s 應有 tab=contact-book', (path) => {
+      expect(tabOf(path)).toBe('contact-book')
+    })
+
+    it('/contact-book 是 tab 根頁，不顯示返回鍵', () => {
+      expect(findRoute('/contact-book')?.meta?.showBack).toBeUndefined()
+    })
+
+    it('訊息路由已移除，改為 redirect 到 /contact-book', () => {
+      expect(findRoute('/messages')?.name).toBeUndefined()
+      expect(findRoute('/messages')?.redirect).toBe('/contact-book')
+      expect(findRoute('/messages/:threadId')?.redirect).toBe('/contact-book')
     })
   })
 

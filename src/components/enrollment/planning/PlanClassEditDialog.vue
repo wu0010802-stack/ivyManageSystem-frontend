@@ -16,17 +16,17 @@
       <template v-if="mode === 'edit'">
         <el-form-item label="班導師">
           <el-select v-model="form.head_teacher_id" placeholder="選擇教師" clearable style="width: 100%">
-            <el-option v-for="t in teachers" :key="t.id" :label="t.name" :value="t.id" />
+            <el-option v-for="t in teachers" :key="t.id" :label="formatTeacherOptionLabel(t)" :value="t.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="副班導">
           <el-select v-model="form.assistant_teacher_id" placeholder="選擇教師" clearable style="width: 100%">
-            <el-option v-for="t in teachers" :key="t.id" :label="t.name" :value="t.id" />
+            <el-option v-for="t in teachers" :key="t.id" :label="formatTeacherOptionLabel(t)" :value="t.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="美語老師">
           <el-select v-model="form.art_teacher_id" placeholder="選擇教師" clearable style="width: 100%">
-            <el-option v-for="t in teachers" :key="t.id" :label="t.name" :value="t.id" />
+            <el-option v-for="t in teachers" :key="t.id" :label="formatTeacherOptionLabel(t)" :value="t.id" />
           </el-select>
         </el-form-item>
       </template>
@@ -47,6 +47,7 @@
 import { ref, computed, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { getGrades, getTeacherOptions } from '@/api/classrooms'
+import { formatTeacherOptionLabel } from '@/utils/teacherOption'
 import type { Schema } from '@/api/_generated/typed'
 
 type PlanClass = Schema<'PlanClassOut'>
@@ -54,7 +55,7 @@ type ClassCreatePayload = Omit<Schema<'ClassCreateRequest'>, 'base_version'>
 type ClassUpdatePayload = Omit<Schema<'ClassUpdateRequest'>, 'base_version'>
 
 interface GradeOption { id: number; name: string }
-interface TeacherOption { id: number; name: string }
+interface TeacherOption { id: number; name: string; employee_id?: string | null; position?: string | null }
 
 // 草稿班級編輯 dialog：create 模式只給班名/年級/容量（ClassCreateRequest 無教師欄
 // 位——教師只能在後續 PATCH 指派）；edit 模式額外開放三教師 select。刪除走同一

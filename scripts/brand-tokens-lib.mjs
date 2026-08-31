@@ -23,7 +23,7 @@ export const TENANTS_JSON = join(REPO_ROOT, 'branding', 'tenants.json')
 /** 帶 token 的檔案（相對 repo root / dist root，兩邊路徑相同除了 manifest 少一層 public/）。 */
 export const TOKENIZED_SOURCE_FILES = [
   'index.html',
-  'parent.html',
+  'parent/index.html',
   'public.html',
   'public/manifest.webmanifest',
   'public/parent.webmanifest',
@@ -32,7 +32,7 @@ export const TOKENIZED_SOURCE_FILES = [
 
 export const TOKENIZED_DIST_FILES = [
   'index.html',
-  'parent.html',
+  'parent/index.html',
   'public.html',
   'manifest.webmanifest',
   'parent.webmanifest',

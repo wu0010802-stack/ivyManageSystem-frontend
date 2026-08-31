@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, defineAsyncComponent, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { WORKSPACE_STEPS, normalizeStep, type WorkspaceStepKey } from './workspaceSteps'
 import { listYearEndCycles, updateCycleStatus, getCycleProgress } from '@/api/yearEnd'
@@ -13,6 +13,7 @@ import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 const YearEndConfigView = defineAsyncComponent(() => import('./YearEndConfigView.vue'))
 const YearEndGridView = defineAsyncComponent(() => import('./YearEndGridView.vue'))
 const YearEndDetailView = defineAsyncComponent(() => import('./YearEndDetailView.vue'))
+const AppraisalPayoutView = defineAsyncComponent(() => import('./AppraisalPayoutView.vue'))
 
 const route = useRoute()
 const router = useRouter()
@@ -21,8 +22,14 @@ const cycleId = Number(route.params.id)
 const step = computed<WorkspaceStepKey>(() => normalizeStep(route.query.step))
 function goStep(key: WorkspaceStepKey) {
   if (key === step.value) return
-  router.replace({ query: { ...route.query, step: key } })
+  const q: LocationQueryRaw = { ...route.query, step: key }
+  if (key === 'payout' && !q.year && cycle.value) {
+    q.year = String(cycle.value.academic_year + 1913)
+  }
+  router.replace({ query: q })
 }
+
+const visibleSteps = computed(() => WORKSPACE_STEPS.filter((s) => s.key !== 'payout' || canPayout.value))
 
 const RAIL_COLLAPSE_KEY = 'ye-workspace-rail-collapsed'
 const collapsed = ref(tenantGetItem(RAIL_COLLAPSE_KEY) === '1')
@@ -51,6 +58,7 @@ interface CycleProgress {
 const cycle = ref<YearEndCycle | null>(null)
 const progress = ref<CycleProgress | null>(null)
 const canFinalize = computed(() => hasPermission('YEAR_END_FINALIZE'))
+const canPayout = computed(() => hasPermission('APPRAISAL_FINALIZE'))
 const statusBusy = ref(false)
 
 // 批次 A①：載入失敗不再靜默（原空 catch 讓表頭/導軌數字無聲消失，使用者會誤信
@@ -152,7 +160,7 @@ function reopenToOpen() {
       <button class="ye-rail__toggle" type="button" @click="toggleCollapse"
         :aria-label="collapsed ? '展開導軌' : '收合導軌'">{{ collapsed ? '»' : '«' }}</button>
       <ul class="ye-rail__steps">
-        <li v-for="s in WORKSPACE_STEPS" :key="s.key">
+        <li v-for="s in visibleSteps" :key="s.key">
           <button
             type="button"
             class="ye-rail__step"
@@ -215,6 +223,16 @@ function reopenToOpen() {
           style="margin-bottom: 12px"
         />
 
+        <!-- CLOSED 週期語意明示——已封存，僅能操作退回鎖定（批次 A①／Batch 10 補齊，
+             原本只有 LOCKED 有對應提示，CLOSED 只能從按鈕組合變化間接推敲狀態） -->
+        <el-alert
+          v-if="cycle?.status === 'CLOSED'"
+          type="info" :closable="false" show-icon
+          title="週期已封存：僅可檢視與匯出；如需異動請先退回鎖定狀態。"
+          data-test="closed-readonly-hint"
+          style="margin-bottom: 12px"
+        />
+
         <div class="ye-toolbar">
           <template v-if="canFinalize && cycle">
             <el-button
@@ -249,6 +267,7 @@ function reopenToOpen() {
 
       <YearEndConfigView v-if="step === 'config'" :cycle-id="cycleId" />
       <YearEndGridView v-else-if="step === 'grid'" :cycle-id="cycleId" />
+      <AppraisalPayoutView v-else-if="step === 'payout' && canPayout" />
       <YearEndDetailView v-else :cycle-id="cycleId" />
     </section>
   </div>

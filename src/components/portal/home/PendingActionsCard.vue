@@ -3,7 +3,6 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
 interface PendingActions {
-  unread_messages?: number
   pending_substitute?: number
   pending_swap?: number
   pending_anomaly_confirms?: number
@@ -27,13 +26,6 @@ const anomalyTarget = computed(() => {
 })
 
 const items = computed(() => [
-  {
-    key: 'unread_messages',
-    label: '待回覆訊息',
-    count: props.actions?.unread_messages || 0,
-    to: '/portal/messages',
-    tint: 'message',
-  },
   {
     key: 'pending_substitute',
     label: '待回應代理',
@@ -71,7 +63,7 @@ function go(to: string) {
 
 <template>
   <div class="pt-card pending-actions">
-    <h3 class="card-title">待辦事項</h3>
+    <h3 class="card-title">今日待辦</h3>
     <div class="action-grid">
       <button
         v-for="item in items"
@@ -137,7 +129,6 @@ function go(to: string) {
   border-radius: 50%;
 }
 
-.tint-message { background: var(--pt-tint-message); color: var(--pt-tint-message-fg); }
 .tint-leave { background: var(--pt-tint-leave); color: var(--pt-tint-leave-fg); }
 .tint-calendar { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
 .tint-announcement { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }

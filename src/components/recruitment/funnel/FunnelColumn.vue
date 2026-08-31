@@ -23,11 +23,12 @@
         />
       </template>
     </draggable>
-    <div v-if="cards.length === 0" class="funnel-column-empty">尚無此階段卡片</div>
+    <div v-if="cards.length === 0" class="funnel-column-empty">{{ emptyHint }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import draggable from 'vuedraggable'
 import { ElBadge } from 'element-plus'
 import FunnelCard from './FunnelCard.vue'
@@ -46,6 +47,17 @@ const emit = defineEmits<{
   (e: 'card-click', card: FunnelCardData): void
   (e: 'transition-attempt', payload: { visitId: number; fromStage: Stage; toStage: Stage }): void
 }>()
+
+/* 四欄原本共用「尚無此階段卡片」一句，說了「沒有」卻沒說「然後呢」——而全空正是
+ * 新使用者第一次打開這頁看到的畫面。改為逐階段說明怎麼讓卡片出現在這一欄。 */
+const EMPTY_HINTS: Record<Stage, string> = {
+  visited: '還沒有訪視紀錄，用右上角的「新增訪視」建立第一筆。',
+  deposited: '家長完成預繳後，把「已訪視」的卡片拖到這一欄。',
+  enrolled: '家長完成註冊後，把「已預繳」的卡片拖到這一欄。',
+  withdrawn: '退預繳或退註冊的紀錄會落在這一欄。',
+}
+
+const emptyHint = computed(() => EMPTY_HINTS[props.stage] ?? '此階段目前沒有卡片。')
 
 interface DragChangeEvent {
   added?: { element: FunnelCardData; newIndex: number }

@@ -49,18 +49,9 @@ async function fetchData() {
   }
 }
 
-function goMessages() {
-  // 把建議文字塞到 sessionStorage，MessagesView 進去後可預填（若未實作 prefill 也只是個無害值）
-  try {
-    const student = data.value?.student as { name?: string } | null | undefined
-    sessionStorage.setItem(
-      'parent_message_prefill',
-      `想反應 ${student?.name || '孩子'} 的資料修改，內容：`,
-    )
-  } catch {
-    /* ignore */
-  }
-  router.push('/messages')
+function goContactBook() {
+  // 訊息功能已於 2026-08-28 自家長端下架，資料修改改請家長在聯絡簿留言給導師。
+  router.push('/contact-book')
 }
 
 function goReports() {
@@ -258,16 +249,16 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- 修改申請：走訊息給導師，不直接寫 DB -->
+      <!-- 修改申請：走聯絡簿留言給導師，不直接寫 DB -->
       <section class="pt-card change-card" aria-labelledby="change-card-title">
         <h2 id="change-card-title" class="section-title">資料有誤？</h2>
         <p class="change-text">
-          孩子個人資料、過敏資訊、接送人資訊如有錯誤或變更，請透過訊息聯絡導師處理；
+          孩子個人資料、過敏資訊、接送人資訊如有錯誤或變更，請在聯絡簿留言給導師處理；
           不會在此頁直接修改，以確保校方記錄一致。
         </p>
-        <button class="pt-action-btn change-btn" type="button" @click="goMessages">
-          <ParentIcon name="envelope" size="sm" />
-          開啟訊息聯絡導師
+        <button class="pt-action-btn change-btn" type="button" @click="goContactBook">
+          <ParentIcon name="notebook" size="sm" />
+          前往聯絡簿留言
         </button>
       </section>
     </template>
@@ -389,8 +380,8 @@ onMounted(() => {
 .child-avatar {
   width: 56px;
   height: 56px;
-  background: linear-gradient(135deg, var(--ivy-green-deep, #0d9053), var(--ivy-green-bright, #0caf76));
-  color: white;
+  background: linear-gradient(135deg, var(--m3-primary, #006d3d), var(--ivy-green-mid, #41a074));
+  color: var(--m3-on-primary, #fff);
   border-radius: 50%;
   display: flex;
   align-items: center;

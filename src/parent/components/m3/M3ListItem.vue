@@ -124,7 +124,7 @@ function onClick(e: MouseEvent): void {
 
 .m3-list-item.is-clickable {
   cursor: pointer;
-  transition: background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+  transition: background-color var(--motion-quick, 150ms) ease;
 }
 .m3-list-item.is-clickable::before {
   content: '';

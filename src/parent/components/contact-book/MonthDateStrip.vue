@@ -216,12 +216,12 @@ function onPick(d: DateChip): void {
 .chip.is-unread .dot { background: var(--coral-500, #ff8b8b); }
 
 .chip.is-today {
-  background: var(--brand-primary, #0d9053);
-  border-color: var(--brand-primary, #0d9053);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  border-color: var(--m3-primary, var(--brand-primary, #0d9053));
 }
 .chip.is-today .weekday,
-.chip.is-today .day { color: var(--pt-on-accent, #fff); }
-.chip.is-today .dot { background: var(--sun-300, #ffe285); }
+.chip.is-today .day { color: var(--m3-on-primary, #fff); }
+.chip.is-today .dot { background: var(--m3-on-primary, #fff); } /* sun-300 在 dark 的 mint 底上會隱形 */
 
 .chip.is-selected:not(.is-today) {
   background: var(--brand-primary-soft, #f5fbe6);

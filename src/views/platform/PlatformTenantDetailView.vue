@@ -7,7 +7,6 @@
         </el-tag>
       </template>
       <template #actions>
-        <el-button data-testid="back-to-list" @click="router.push('/platform/tenants')">回清單</el-button>
         <el-button :loading="loading" data-testid="detail-reload" @click="load">重新載入</el-button>
         <template v-if="canManage && tenant && tenant.kind !== 'platform'">
           <el-button v-if="tenant.status === 'active'" type="warning" data-testid="detail-suspend" @click="changeStatus('suspend')">停用</el-button>
@@ -44,7 +43,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { hasPermission } from '@/utils/auth'
@@ -58,7 +57,6 @@ import TenantLineTab from './TenantLineTab.vue'
 import { tenantStatusLabel, tenantStatusTagType } from './tenantDisplay'
 
 const route = useRoute()
-const router = useRouter()
 
 const canManage = computed(() => hasPermission('PLATFORM_TENANTS_MANAGE'))
 const activeTab = ref<'basic' | 'brand' | 'line' | 'email'>('basic')

@@ -41,6 +41,18 @@ const STUBS = {
         template: '<button :disabled="disabled" v-bind="$attrs"><slot /></button>',
         props: ['disabled', 'loading'],
     },
+    'el-checkbox': {
+        template:
+            '<label class="cb-stub"><input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" /><slot /></label>',
+        props: ['modelValue'],
+        emits: ['update:modelValue'],
+    },
+    'el-input': {
+        template:
+            '<textarea class="reason-stub" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)"></textarea>',
+        props: ['modelValue'],
+        emits: ['update:modelValue'],
+    },
 }
 
 const mountStep = (settlement: ReturnType<typeof makeSettlement>, month = 5) =>
@@ -82,6 +94,13 @@ describe('StepCalculate', () => {
         expect(wrapper.text()).toContain('建議重新計算')
     })
 
+    it('說明應符合後端整月拒絕語意，不宣稱會跳過已封存紀錄', () => {
+        const wrapper = mountStep(makeSettlement('reviewing'))
+
+        expect(wrapper.text()).toContain('系統會拒絕整月重算')
+        expect(wrapper.text()).not.toContain('已封存的紀錄不會被覆蓋')
+    })
+
     it('計算成功 → refresh + emit next', async () => {
         const settlement = makeSettlement('reviewing')
         calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-1', total: 3 } })
@@ -92,7 +111,7 @@ describe('StepCalculate', () => {
         const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
         await btn!.trigger('click')
         await flushPromises()
-        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5)
+        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5, true, undefined)
         expect(settlement.refresh).toHaveBeenCalled()
         expect(wrapper.emitted('next')).toBeTruthy()
         expect(ElMessage.success).toHaveBeenCalled()
@@ -251,5 +270,63 @@ describe('StepCalculate', () => {
             expect(wrapper.emitted('next')).toBeFalsy()
             expect(ElMessage.success).not.toHaveBeenCalled()
         })
+    })
+})
+
+describe('StepCalculate 改用現行主檔（use_snapshot）', () => {
+    beforeEach(() => {
+        calculateAsyncMock.mockReset()
+        getSalaryCalcJobMock.mockReset()
+        getSnapshotMock.mockReset()
+        getSnapshotMock.mockResolvedValue({ data: { covered_months: [], rows: [] } })
+        hasPermissionMock.mockReturnValue(true)
+        vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
+        vi.mocked(ElMessage.success).mockReset()
+        vi.mocked(ElMessage.warning).mockReset()
+    })
+
+    const okJob = () => {
+        calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-s', total: 1 } })
+        getSalaryCalcJobMock.mockResolvedValue({
+            data: { job_id: 'job-s', status: 'completed', errors: [], done: 1, total: 1, current_employee: '' },
+        })
+    }
+
+    it('預設未勾 → calculateAsync 第三參數 true（沿用輸入快照）', async () => {
+        okJob()
+        const wrapper = mountStep(makeSettlement('reviewing'))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5, true, undefined)
+    })
+
+    it('勾選改用現行主檔＋填原因 → calculateAsync(false, reason)', async () => {
+        okJob()
+        const wrapper = mountStep(makeSettlement('reviewing'))
+        const cb = wrapper.find('input[type="checkbox"]')
+        expect(cb.exists()).toBe(true)
+        await cb.setValue(true)
+        const reason = wrapper.find('textarea.reason-stub')
+        expect(reason.exists()).toBe(true)
+        await reason.setValue('主檔錯誤修正後改用現行重算')
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(calculateAsyncMock).toHaveBeenCalledWith(
+            2026, 5, false, '主檔錯誤修正後改用現行重算',
+        )
+    })
+
+    it('勾選但原因不足 10 字 → 警示且不呼叫', async () => {
+        okJob()
+        const wrapper = mountStep(makeSettlement('reviewing'))
+        await wrapper.find('input[type="checkbox"]').setValue(true)
+        await wrapper.find('textarea.reason-stub').setValue('太短')
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(calculateAsyncMock).not.toHaveBeenCalled()
+        expect(ElMessage.warning).toHaveBeenCalled()
     })
 })

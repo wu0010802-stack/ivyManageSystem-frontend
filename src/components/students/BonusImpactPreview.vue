@@ -25,19 +25,20 @@
           <div v-for="t in cls.teachers" :key="t.employee_id" class="teacher-row">
             <span class="teacher-name">{{ t.name }}</span>
             <span class="teacher-role">{{ t.role }}</span>
-            <span class="bonus-change">
-              ${{ t.current_bonus.toLocaleString() }}
+            <span v-if="hasVisibleAmounts(t)" class="bonus-change">
+              {{ formatCurrency(t.current_bonus) }}
               <el-icon style="margin: 0 4px; vertical-align: middle"><Right /></el-icon>
-              ${{ t.projected_bonus.toLocaleString() }}
+              {{ formatCurrency(t.projected_bonus) }}
               <el-tag
-                :type="t.change > 0 ? 'success' : t.change < 0 ? 'danger' : 'info'"
+                :type="changeTagType(t.change)"
                 size="small"
                 effect="plain"
                 style="margin-left: 6px"
               >
-                {{ t.change > 0 ? '+' : '' }}{{ t.change.toLocaleString() }}
+                {{ formatSignedChange(t.change) }}
               </el-tag>
             </span>
+            <span v-else class="bonus-masked">薪資金額已遮罩</span>
           </div>
           <div class="enrollment-hint">
             人數：{{ cls.teachers[0]?.current_enrollment ?? '—' }}
@@ -53,19 +54,20 @@
           <div v-for="s in result.school_wide_impact" :key="s.employee_id" class="teacher-row">
             <span class="teacher-name">{{ s.name }}</span>
             <span class="teacher-role">{{ s.category }}</span>
-            <span class="bonus-change">
-              ${{ s.current_bonus.toLocaleString() }}
+            <span v-if="hasVisibleAmounts(s)" class="bonus-change">
+              {{ formatCurrency(s.current_bonus) }}
               <el-icon style="margin: 0 4px; vertical-align: middle"><Right /></el-icon>
-              ${{ s.projected_bonus.toLocaleString() }}
+              {{ formatCurrency(s.projected_bonus) }}
               <el-tag
-                :type="s.change > 0 ? 'success' : s.change < 0 ? 'danger' : 'info'"
+                :type="changeTagType(s.change)"
                 size="small"
                 effect="plain"
                 style="margin-left: 6px"
               >
-                {{ s.change > 0 ? '+' : '' }}{{ s.change.toLocaleString() }}
+                {{ formatSignedChange(s.change) }}
               </el-tag>
             </span>
+            <span v-else class="bonus-masked">薪資金額已遮罩</span>
           </div>
         </el-collapse-item>
       </el-collapse>
@@ -85,9 +87,16 @@
 import { ref, watch, computed } from 'vue'
 import { Right } from '@element-plus/icons-vue'
 import { previewBonusImpact } from '@/api/students'
+import type { ApiBody, ApiResponse } from '@/api/_generated/typed'
+
+type BonusImpactRequest = ApiBody<'/bonus-impact-preview', 'post'>
+type BonusPreviewResult = ApiResponse<'/bonus-impact-preview', 'post'>
+type TeacherImpact = BonusPreviewResult['affected_classrooms'][number]['teachers'][number]
+type SchoolWideImpact = BonusPreviewResult['school_wide_impact'][number]
+type AmountImpact = TeacherImpact | SchoolWideImpact
 
 const props = withDefaults(defineProps<{
-  operation: string
+  operation: BonusImpactRequest['operation']
   classroomId?: number | null
   sourceClassroomId?: number | null
   studentCount?: number
@@ -97,36 +106,30 @@ const props = withDefaults(defineProps<{
   studentCount: 1,
 })
 
-interface TeacherImpact {
-  employee_id: number
-  name: string
-  role?: string
-  category?: string
-  current_bonus: number
-  projected_bonus: number
-  change: number
-  current_enrollment?: number
-  projected_enrollment?: number
-  target_enrollment?: number
-}
-
-interface ClassroomImpact {
-  classroom_id: number
-  classroom_name: string
-  grade_name: string
-  teachers: TeacherImpact[]
-}
-
-interface BonusPreviewResult {
-  is_festival_month: boolean
-  affected_classrooms?: ClassroomImpact[]
-  school_wide_impact?: TeacherImpact[]
-}
-
 const loading = ref<boolean>(false)
 const result = ref<BonusPreviewResult | null>(null)
 const error = ref<string>('')
 let _timer: ReturnType<typeof setTimeout> | null = null
+
+const hasVisibleAmounts = (impact: AmountImpact): boolean => (
+  typeof impact.current_bonus === 'number'
+  && typeof impact.projected_bonus === 'number'
+  && typeof impact.change === 'number'
+)
+
+const formatCurrency = (value: number | null | undefined): string => (
+  typeof value === 'number' ? `$${value.toLocaleString()}` : '薪資金額已遮罩'
+)
+
+const formatSignedChange = (value: number | null | undefined): string => {
+  if (typeof value !== 'number') return '薪資金額已遮罩'
+  return `${value > 0 ? '+' : ''}${value.toLocaleString()}`
+}
+
+const changeTagType = (value: number | null | undefined): 'success' | 'danger' | 'info' => {
+  if (typeof value !== 'number' || value === 0) return 'info'
+  return value > 0 ? 'success' : 'danger'
+}
 
 const visible = computed(() => {
   if (props.operation === 'add') return !!props.classroomId
@@ -212,6 +215,11 @@ watch(
 .bonus-change {
   display: flex;
   align-items: center;
+}
+
+.bonus-masked {
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 
 .enrollment-hint {

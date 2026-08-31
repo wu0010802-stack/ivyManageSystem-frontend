@@ -24,13 +24,16 @@ describe('router catch-all', () => {
   })
 })
 
-// IA v3（2026-05-22）將 4 tab 重組為 home/messages/admin/me（family 砍掉）
-describe('router meta.tab — IA v3 深層頁高亮對應 tab', () => {
-  it('每個深層頁都有 meta.tab，且為四個 tab key 之一', async () => {
+// IA v3（2026-05-22）將 4 tab 重組為 home/messages/admin/me（family 砍掉）；
+// P2（2026-08-14 M3 Expressive 改版）新增「孩子」hub，擴充為 5 tab，
+// 白名單同步加入 child——見 docs/superpowers/specs/2026-08-14-parent-liff-m3-expressive-redesign-design.md §7
+// 2026-08-28：訊息自家長端下架，messages tab 換成 contact-book。
+describe('router meta.tab — IA v3+P2 深層頁高亮對應 tab', () => {
+  it('每個深層頁都有 meta.tab，且為五個 tab key 之一', async () => {
     const { default: router } = await import('@/parent/router')
     const routes = router.options.routes
 
-    const validTabs = new Set(['home', 'messages', 'admin', 'me'])
+    const validTabs = new Set(['home', 'contact-book', 'admin', 'me', 'child'])
 
     // IA v3 後，所有深層頁都應有 meta.tab；assistant 因走 modal 不需 tab
     const deepPaths = [
@@ -53,10 +56,10 @@ describe('router meta.tab — IA v3 深層頁高亮對應 tab', () => {
       const r = routes.find((x) => x.path === p)
       expect(r, `route ${p} not found`).toBeTruthy()
       expect(r.meta?.tab, `${p} 應有 meta.tab`).toBeDefined()
-      expect(validTabs.has(r.meta.tab), `${p} meta.tab=${r.meta.tab} 須為 4 tab key 之一`).toBe(true)
+      expect(validTabs.has(r.meta.tab), `${p} meta.tab=${r.meta.tab} 須為五個 tab key 之一`).toBe(true)
     }
 
-    const tabPaths = ['/home', '/attendance', '/announcements', '/messages', '/messages/:threadId', '/me', '/admin']
+    const tabPaths = ['/home', '/attendance', '/announcements', '/contact-book', '/me', '/admin', '/child']
     for (const p of tabPaths) {
       const r = routes.find((x) => x.path === p)
       expect(r.meta?.tab, `${p} 應保留 meta.tab`).toBeDefined()

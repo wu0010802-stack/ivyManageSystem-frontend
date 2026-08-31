@@ -455,4 +455,55 @@ describe('ExceptionCenterView', () => {
       query: expect.objectContaining({ acycle: '5', ycycle: '12' }),
     })
   })
+
+  // Batch 8 Task 1：分類篩選上 URL query（atype/ytype），F5／分享連結保留篩選。
+  it('URL 帶 atype query 時，考核批次初始 typeFilter 採用該值', async () => {
+    vi.mocked(appraisalApi.listAppraisalCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    vi.mocked(appraisalApi.getAppraisalCycleExceptions).mockResolvedValue({
+      data: makeExceptionsOut({ counts_by_type: { missing_score_item: 1 } }),
+    } as never)
+    vi.mocked(yearEndApi.getYearEndCycleExceptions).mockResolvedValue({ data: makeExceptionsOut({ items: [], counts_by_type: {} }) } as never)
+    routeQuery.value = { atype: 'missing_score_item' }
+
+    const wrapper = await mountView()
+    const chip = wrapper.get('[data-test="appraisal-type-chip-missing_score_item"]')
+    expect(chip.classes()).toContain('type-chip--active')
+  })
+
+  it('點擊分類 chip 呼叫 setTypeFilter 並把 atype 寫進 query', async () => {
+    vi.mocked(appraisalApi.listAppraisalCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    vi.mocked(appraisalApi.getAppraisalCycleExceptions).mockResolvedValue({
+      data: makeExceptionsOut({ counts_by_type: { missing_score_item: 1 } }),
+    } as never)
+    vi.mocked(yearEndApi.getYearEndCycleExceptions).mockResolvedValue({ data: makeExceptionsOut({ items: [], counts_by_type: {} }) } as never)
+
+    const wrapper = await mountView()
+    replaceMock.mockClear()
+    await wrapper.get('[data-test="appraisal-type-chip-missing_score_item"]').trigger('click')
+    const lastCall = replaceMock.mock.calls.at(-1)
+    expect(lastCall[0].query.atype).toBe('missing_score_item')
+  })
+
+  it('切換週期時 typeFilter 重置為 all，與週期 query 合併成單次 replace（不分開呼叫）', async () => {
+    vi.mocked(appraisalApi.listAppraisalCycles).mockResolvedValue({
+      data: [makeCycle({ id: 1 }), makeCycle({ id: 2 })],
+    } as never)
+    vi.mocked(yearEndApi.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ id: 1 })] } as never)
+    vi.mocked(appraisalApi.getAppraisalCycleExceptions).mockResolvedValue({ data: makeExceptionsOut() } as never)
+    vi.mocked(yearEndApi.getYearEndCycleExceptions).mockResolvedValue({ data: makeExceptionsOut({ items: [], counts_by_type: {} }) } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { appraisal: { selectedCycleId: number; onCycleChange: () => void; typeFilter: string } }
+    vm.appraisal.typeFilter = 'missing_score_item'
+    replaceMock.mockClear()
+    vm.appraisal.selectedCycleId = 2
+    vm.appraisal.onCycleChange()
+    expect(replaceMock).toHaveBeenCalledTimes(1)
+    const lastCall = replaceMock.mock.calls.at(-1)
+    expect(lastCall[0].query.acycle).toBe('2')
+    expect(lastCall[0].query.atype).toBe('all')
+    expect(vm.appraisal.typeFilter).toBe('all')
+  })
 })

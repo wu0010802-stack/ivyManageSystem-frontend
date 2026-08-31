@@ -89,7 +89,7 @@ describe('L1 token ↔ L2 BRANDING_DEFAULTS 逐欄 parity', () => {
 describe('HTML / manifest 內的 token 集合 ⊆ tenants.json 已定義的 token', () => {
   const FILES = [
     'index.html',
-    'parent.html',
+    'parent/index.html',
     'public.html',
     'public/manifest.webmanifest',
     'public/parent.webmanifest',
@@ -105,7 +105,7 @@ describe('HTML / manifest 內的 token 集合 ⊆ tenants.json 已定義的 toke
   })
 
   it('三個 HTML 內不得再出現硬編的機構名（多租戶下等於所有租戶共用同一個名字）', () => {
-    for (const file of ['index.html', 'parent.html', 'public.html']) {
+    for (const file of ['index.html', 'parent/index.html', 'public.html']) {
       expect(read(file)).not.toContain(BRANDING_DEFAULTS.org_name)
     }
   })

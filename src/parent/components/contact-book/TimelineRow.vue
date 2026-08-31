@@ -76,11 +76,11 @@ withDefaults(defineProps<{
   min-height: 18px;
 }
 
-.tone-green .dot  { color: var(--brand-primary, #0d9053); background: var(--leaf-100, #dcf4e6); }
-.tone-coral .dot  { color: var(--coral-700, #b14545); background: var(--coral-100, #ffe3e0); }
-.tone-grape .dot  { color: var(--grape-700, #6e3f94); background: var(--grape-100, #ebe0f5); }
-.tone-sun   .dot  { color: var(--sun-700, #c99500); background: var(--sun-100, #fff4c9); }
-.tone-sky   .dot  { color: var(--sky-700, #2d6f8e); background: var(--sky-100, #dceef5); }
+.tone-green .dot  { color: var(--pt-accent-leaf-on); background: var(--pt-accent-leaf-container); }
+.tone-coral .dot  { color: var(--pt-accent-coral-on); background: var(--pt-accent-coral-container); }
+.tone-grape .dot  { color: var(--pt-accent-grape-on); background: var(--pt-accent-grape-container); }
+.tone-sun   .dot  { color: var(--pt-accent-sun-on); background: var(--pt-accent-sun-container); }
+.tone-sky   .dot  { color: var(--pt-accent-sky-on); background: var(--pt-accent-sky-container); }
 
 .content {
   flex: 1;

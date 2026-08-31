@@ -123,7 +123,7 @@ const DETAIL_ROWS: [string, string][] = [
   ['festival_bonus', '節慶獎金'],
   ['overtime_bonus', '超額獎金'],
   ['overtime_pay', '加班費'],
-  ['meeting_overtime_pay', '會議加班費'],
+  ['meeting_overtime_pay', '園務會議加班費'],
   ['birthday_bonus', '生日禮金'],
   ['supervisor_dividend', '主管紅利'],
   ['labor_insurance_employee', '勞保（員工）'],

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 管理端娃娃車即時監看（route `/bus-monitor`，權限 `BUS_READ`）。
+ * 管理端娃娃車即時監看（route `/bus/monitor`，權限 `BUS_READ`）。
  *
  * 連線／事件比對／探測邏輯全在 `@/composables/useBusMonitor`；本檔只負責呈現。
  *

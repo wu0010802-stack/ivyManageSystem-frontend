@@ -411,4 +411,37 @@ describe('AppraisalPayoutView', () => {
 
     expect(vm.notReady).toBe(false)
   })
+
+  it('loadPreview() 非422失敗時顯示錯誤區塊，重試成功後消失', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockRejectedValueOnce(new Error('network error'))
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="preview-load-retry"]').exists()).toBe(true)
+
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValueOnce({ data: [] } as never)
+    await wrapper.find('[data-test="preview-load-retry"]').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('[data-test="preview-load-retry"]').exists()).toBe(false)
+    expect(api.previewAppraisalPayout).toHaveBeenCalledTimes(2)
+  })
+
+  it('loadGenerated() 失敗時顯示錯誤區塊，重試成功後消失', async () => {
+    vi.mocked(api.previewAppraisalPayout).mockResolvedValue({ data: [] } as never)
+    vi.mocked(api.listAppraisalPayouts).mockRejectedValueOnce(new Error('network error'))
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { tab: 'preview' | 'generated' }
+    vm.tab = 'generated'
+    await nextTick()
+    await nextTick()
+
+    expect(wrapper.find('[data-test="generated-load-retry"]').exists()).toBe(true)
+
+    vi.mocked(api.listAppraisalPayouts).mockResolvedValueOnce({ data: [] } as never)
+    await wrapper.find('[data-test="generated-load-retry"]').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('[data-test="generated-load-retry"]').exists()).toBe(false)
+    expect(api.listAppraisalPayouts).toHaveBeenCalledTimes(2)
+  })
 })

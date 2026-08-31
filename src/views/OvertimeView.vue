@@ -40,7 +40,7 @@ const overtimeCardColumns = [
   { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.hours}h` },
   { label: '方式', prop: '__method' },
   { label: '加班費', prop: '__pay' },
-  { label: '原因', prop: 'reason', formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+  { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
   { label: '審核', prop: '__status' },
 ]
 
@@ -50,7 +50,7 @@ const pendingCardColumns = [
   { label: '類型', prop: 'overtime_type_label' },
   { label: '時數', prop: '__hours', formatter: (r: Record<string, unknown>) => `${r.hours}h` },
   { label: '方式', prop: '__method' },
-  { label: '原因', prop: 'reason', formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
+  { label: '原因', prop: 'reason', block: true, formatter: (r: Record<string, unknown>) => (r.reason as string) || '—' },
 ]
 
 const canViewOvertime = computed(() => hasPermission('OVERTIME_READ'))
@@ -73,6 +73,13 @@ const {
   source: () => overtimeRecords.value,
   searchFields: (r) => [r.employee_name as string | undefined, r.reason as string | undefined],
 })
+
+// 全域搜尋（Ctrl+K）深連結：?search=<員工姓名> 預填客端關鍵字過濾
+// （route 在無 router 的測試掛載下為 undefined，防禦式取值）
+{
+  const s = route?.query?.search
+  if (typeof s === 'string' && s) overtimeSearch.value = s
+}
 
 
 const form = reactive<{

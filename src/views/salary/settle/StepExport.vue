@@ -17,7 +17,7 @@
           type="primary"
           plain
           :loading="rosterLoading === type"
-          :disabled="rosterLoading !== null && rosterLoading !== type"
+          :disabled="!canExportFullSalary || (rosterLoading !== null && rosterLoading !== type)"
           @click="exportRoster(type)"
         >
           {{ label }}名冊
@@ -28,8 +28,8 @@
     <el-card shadow="never" class="no-hover export-card">
       <h4 class="export-title">薪資總表與快照</h4>
       <div class="export-buttons">
-        <el-button :loading="excelLoading" @click="exportAllExcel">匯出全部 Excel</el-button>
-        <el-button :loading="pdfLoading" @click="exportAllPdf">匯出全部 PDF</el-button>
+        <el-button :loading="excelLoading" :disabled="!canExportFullSalary" @click="exportAllExcel">匯出全部 Excel</el-button>
+        <el-button :loading="pdfLoading" :disabled="!canExportFullSalary" @click="exportAllPdf">匯出全部 PDF</el-button>
         <el-button @click="showSnapshotDialog = true">月底快照</el-button>
       </div>
     </el-card>
@@ -41,7 +41,7 @@
       :sub-title="`${q.year} 年 ${q.month} 月已全數封存並匯出轉帳名冊`"
     >
       <template #extra>
-        <el-button type="primary" @click="$router.push('/salary')">回工作台</el-button>
+        <el-button type="primary" @click="$router.push('/salary')">回薪資管理</el-button>
       </template>
     </el-result>
 
@@ -57,7 +57,7 @@
 <script setup lang="ts">
 import { ref, computed, inject } from 'vue'
 import SalarySnapshotDialog from '../SalarySnapshotDialog.vue'
-import { hasPermission } from '@/utils/auth'
+import { hasFullSalaryView, hasPermission } from '@/utils/auth'
 import { downloadFile } from '@/utils/download'
 import type { SalarySettlement } from '@/composables/useSalarySettlement'
 
@@ -69,6 +69,9 @@ const q = inject<{ year: number; month: number }>('settleQuery', {
     month: new Date().getMonth() + 1,
 })
 const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
+const canExportFullSalary = computed(
+    () => hasPermission('SALARY_READ') && hasFullSalaryView(),
+)
 const unfinalizedCount = computed(
     () => settlement.records.value.length - settlement.finalizedCount.value,
 )
@@ -90,7 +93,7 @@ const excelLoading = ref(false)
 const pdfLoading = ref(false)
 
 const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
-    if (rosterLoading.value) return
+    if (!canExportFullSalary.value || rosterLoading.value) return
     rosterLoading.value = type
     const label = ROSTER_TYPE_LABELS[type]
     const filename = `${q.year}年${String(q.month).padStart(2, '0')}月_${label}轉帳名冊.xlsx`
@@ -105,7 +108,7 @@ const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
 }
 
 const exportAllExcel = async () => {
-    if (excelLoading.value) return
+    if (!canExportFullSalary.value || excelLoading.value) return
     excelLoading.value = true
     try {
         await downloadFile(
@@ -118,7 +121,7 @@ const exportAllExcel = async () => {
 }
 
 const exportAllPdf = async () => {
-    if (pdfLoading.value) return
+    if (!canExportFullSalary.value || pdfLoading.value) return
     pdfLoading.value = true
     try {
         await downloadFile(

@@ -540,8 +540,8 @@ const children = computed(
 
 .submit-btn {
   width: 100%;
-  background: var(--brand-primary, #0d9053);
-  color: white;
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 12px;
   font-size: 15px;

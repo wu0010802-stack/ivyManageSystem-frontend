@@ -46,3 +46,15 @@
   --m3-dur-long-1:    450ms;
   --m3-dur-long-2:    500ms;
 }
+
+/* -----------------------------------------------------------------
+   M3 Expressive P1 語意動效 token（2026-08-14 spec §8）
+   元件層一律消費這五個，不直接寫 cubic-bezier/毫秒字面值。
+   ----------------------------------------------------------------- */
+:root {
+  --motion-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-emphasized: var(--m3-easing-emphasized-decel);
+  --motion-quick: 160ms;
+  --motion-base: 260ms;
+  --motion-page: 350ms;
+}

@@ -62,8 +62,8 @@ function onClick(): void {
   border-radius: 9999px;
   background: var(--m3-surface-container-highest, #e0e4dc);
   border: 2px solid var(--m3-outline, #727970);
-  transition: background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
-    border-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+  transition: background-color var(--motion-quick, 150ms) ease,
+    border-color var(--motion-quick, 150ms) ease;
 }
 
 .m3-switch-thumb {
@@ -75,10 +75,10 @@ function onClick(): void {
   border-radius: 50%;
   background: var(--m3-outline, #727970);
   transform: translateY(-50%);
-  transition: transform var(--m3-dur-short-3, 150ms) var(--m3-easing-emphasized-decel, ease),
-    width var(--m3-dur-short-3, 150ms) var(--m3-easing-emphasized-decel, ease),
-    height var(--m3-dur-short-3, 150ms) var(--m3-easing-emphasized-decel, ease),
-    background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+  transition: transform var(--motion-base, 260ms) var(--motion-spring, ease),
+    width var(--motion-base, 260ms) var(--motion-spring, ease),
+    height var(--motion-base, 260ms) var(--motion-spring, ease),
+    background-color var(--motion-quick, 150ms) ease;
 }
 
 .m3-switch.is-checked .m3-switch-track {

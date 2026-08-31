@@ -203,7 +203,7 @@ const today = todayISO()
 .med-card:hover { background: var(--pt-surface-mute-soft, #fefcf3); }
 .med-card:active { transform: scale(0.99); }
 .med-card.today {
-  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, #ffffff 70%);
+  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, var(--pt-surface-card, #ffffff) 70%);
   border-color: var(--sun-300, #ffe285);
 }
 

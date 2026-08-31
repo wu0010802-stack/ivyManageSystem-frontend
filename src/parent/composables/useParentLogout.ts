@@ -3,17 +3,22 @@ import { logout } from '../api/auth'
 import { resetParentApiSessionState } from '../api/index'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useChildrenStore } from '../stores/children'
-import { useMessagesStore } from '../stores/messages'
 import { clearTodayStatusCache } from './useTodayStatusCache'
 import { clearChildSelection } from './useChildSelection'
 import { clearFaqCache } from './useFaq'
 import { useConsentGate } from './useConsentGate'
 import { clearSnackbarQueue } from './useSnackbar'
 import { invalidateCachedAsync } from '@/composables/useCachedAsync'
-import { resetParentOfflineQueueRuntime } from '@/parent/utils/parentOfflineQueue'
+import {
+  flushAllParent,
+  resetParentOfflineQueueRuntime,
+  PARENT_KINDS,
+} from '@/parent/utils/parentOfflineQueue'
+import { listOpsForKinds } from '@/utils/offlineQueue'
 // 注意：liff（@line/liff SDK ~30KB gz）改為登出時才 dynamic import。此 composable
-// 經 MeDrawer → ParentLayout → App.vue 靜態鏈落在家長首屏；若靜態 import liff 會把整包
-// SDK 拖進首屏。登出是使用者動作，容忍一次動態載入（登入過的使用者該 chunk 已在快取）。
+// 經 MeView（/me route lazy component）引入；P2 起 MeDrawer 已移除掛載，本檔不再
+// 落在首屏靜態鏈上，但維持動態 import liff 的既有決策不變（無急迫理由改回靜態，
+// 且改動屬效能優化範疇，超出 P4 掃尾範圍）。
 
 /**
  * 家長端統一登出清理。抽成單一來源，避免 MeView / MeDrawer 兩條 doLogout 漂移
@@ -62,15 +67,22 @@ async function purgePersonalizedRuntimeCaches(): Promise<void> {
   }
 }
 
-export function clearParentLocalState(): Promise<void> {
-  const authStore = useParentAuthStore()
+/**
+ * 清除「跟使用者身分綁定」的個人化本地狀態，但**不動 authStore**。
+ *
+ * 抽出這一步是為了讓「登出」與「（共用裝置）新使用者登入前清舊資料」共用
+ * 同一份清單——2026-08-25 P1 修法：LoginView.completeLogin() 在
+ * `authStore.setUser(newUser)` 之前呼叫本函式，避免前一位家長（家庭 A）
+ * 沒點登出就離開共用裝置時，家庭 B 登入後在快取 TTL 內／store `loaded`
+ * 旗標歸零前沿用到 A 的資料（PII 外洩）。見 LoginView.vue completeLogin。
+ */
+export function clearParentPersonalizedCaches(): void {
   // 先讓舊 async 工作失效，再清畫面資料；後端 logout 網路等待期間也不能回填 A 的 PII。
   resetParentApiSessionState()
   resetParentOfflineQueueRuntime()
   clearTodayStatusCache()
   invalidateCachedAsync('parent/')
   useChildrenStore().clear()
-  useMessagesStore().clear()
   clearChildSelection()
   clearFaqCache()
   useConsentGate().reset()
@@ -81,6 +93,11 @@ export function clearParentLocalState(): Promise<void> {
   } catch {
     /* ignore disabled storage */
   }
+}
+
+export function clearParentLocalState(): Promise<void> {
+  const authStore = useParentAuthStore()
+  clearParentPersonalizedCaches()
   authStore.clear()
   return purgePersonalizedRuntimeCaches()
 }
@@ -134,10 +151,58 @@ export function useParentLogoutState() {
   return { inProgress: readonly(logoutInProgress) }
 }
 
+/**
+ * 登出前把離線佇列送出去（資安稽核 2026-08-17 SEC-24）。
+ *
+ * 佇列（IndexedDB `ivy-offline`）存的是尚未送出的請假／親師訊息 payload，
+ * 含病名與訊息全文。登出流程原本完全不碰它，PII 會留在共用裝置上。
+ *
+ * 刻意**不用** `clearAll()`：佇列裡只會有 pending / needs_review 兩種狀態
+ * （成功送出即 `removeOp`），無差別清除等同把家長離線寫的資料弄丟。改為先
+ * 嘗試送出——成功的 op 自然被移除，PII 不殘留也不遺失；送不出去的仍保留，
+ * 「不遺失」優先於「不殘留」，與 `offlineQueue.ts` 檔頭 CT-F-06 取捨一致。
+ *
+ * 必須在後端 `logout()` **之前**跑：登出後 cookie 失效，佇列只會拿到 401。
+ * 但登出是使用者按下就該完成的操作，所以加上 timeout 上限，送不完就放著。
+ */
+export const LOGOUT_FLUSH_TIMEOUT_MS = 3000
+
+async function flushPendingBeforeLogout(userId?: number | string): Promise<void> {
+  if (!userId) return
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    // 先確認真的有東西要送。`flushAllParent()` 帶 1 秒固定 debounce，佇列空著
+    // 也會等——登出是使用者按下就該完成的操作，不能為了空佇列平白多等。
+    const grouped = await listOpsForKinds({ kinds: [...PARENT_KINDS], userId })
+    const hasPending = PARENT_KINDS.some((kind) => grouped[kind]?.pending?.length)
+    if (!hasPending) return
+
+    await Promise.race([
+      flushAllParent(),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, LOGOUT_FLUSH_TIMEOUT_MS)
+      }),
+    ])
+  } catch {
+    /* 送不出去（離線／伺服器錯誤）就留在佇列，登出照常繼續 */
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export async function performParentLogout(): Promise<void> {
   logoutInProgress.value = true
+  // 清理會把 authStore 清空，先留住 user_id 供稍後查佇列用。
+  const flushUserId = (
+    useParentAuthStore().user as { user_id?: number | string } | null
+  )?.user_id
   broadcastParentSession({ type: 'logout-start' })
+  // 本地狀態必須**先同步**清掉（既有不變式：後端 logout 的網路等待期間也不能
+  // 讓上一位家長的 PII 回填畫面），所以 flush 只能排在它之後。
+  // `resetParentApiSessionState()` abort 舊請求後會換上新的 AbortController，
+  // 因此這之後才發起的 flush 請求不會被自己的清理中止。
   const cacheCleanup = clearParentLocalState()
+  await flushPendingBeforeLogout(flushUserId)
   try {
     await logout()
   } catch {

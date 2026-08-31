@@ -61,6 +61,7 @@ export default tseslint.config(
       'dist/**',
       'dist-debug/**',
       'coverage/**',
+      '.claude/worktrees/**',
       'src/api/_generated/**',
       'auto-imports.d.ts',
       'components.d.ts',

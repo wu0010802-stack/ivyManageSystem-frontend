@@ -18,10 +18,11 @@ import ChildrenStrip from '../components/home/ChildrenStrip.vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import PendingSignBanner from '../components/home/PendingSignBanner.vue'
 import PendingSurveyBanner from '../components/home/PendingSurveyBanner.vue'
-import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 import StatTile from '../components/StatTile.vue'
 import SectionHeader from '../components/SectionHeader.vue'
 import { listMySignRequests } from '../api/signDocuments'
+import HomeHeroHeader from '../components/home/HomeHeroHeader.vue'
+import QuickActionsBar from '../components/home/QuickActionsBar.vue'
 
 const router = useRouter()
 const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
@@ -195,12 +196,6 @@ watch(selectedStudentId, () => loadContactBook())
 
 const { buckets } = useTodayTimeline({ summary, todayChildren })
 
-const todayDateLine = computed(() => {
-  const d = new Date()
-  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
-  return `${d.getMonth() + 1} 月 ${d.getDate()} 日　星期${wd}`
-})
-
 function isOffDay() {
   const d = new Date().getDay()
   return d === 0 || d === 6
@@ -237,7 +232,7 @@ const isUnbound = computed<boolean>(
   () => !!summaryData.value && (children.value || []).length === 0,
 )
 
-/** 今日卡要顯示的出席狀態（單孩取唯一那位，多寶取選中那位）。 */
+/** QuickActionsBar 聯絡簿大按鈕要顯示的出席狀態（單孩取唯一那位，多寶取選中那位）。 */
 const heroStatus = computed<{ label: string; tone: 'ok' | 'warn' | 'danger' | 'neutral' | 'info' }>(() => {
   const tc = todayChildren.value || []
   const target = tc.length === 1 ? tc[0] : selectedTodayChild.value
@@ -246,9 +241,10 @@ const heroStatus = computed<{ label: string; tone: 'ok' | 'warn' | 'danger' | 'n
 })
 
 /**
- * 今日卡三態。聯絡簿不是每天都有（假日、請假、老師還沒填），
- * 但 hero 每天都要在同一個位置維持同一個形狀，所以改由 variant 驅動，
- * 不再「有 entry 才顯示卡、沒有就換一個 DashboardHero」。
+ * 聯絡簿三態，決定 contactBookSub 的文案該講什麼。原本另外驅動一張獨立
+ * 的「今日聯絡簿」hero 卡（cb-hero），2026-08-16 業主裁定該卡與 QuickActionsBar
+ * 的聯絡簿大按鈕（含出席狀態 pill）重複，整塊移除；三態判斷邏輯本身還在用
+ * （見下方 contactBookSub），故保留。
  */
 const todayVariant = computed<'full' | 'awaiting' | 'offday'>(() => {
   if (contactBookEntry.value) return 'full'
@@ -257,10 +253,21 @@ const todayVariant = computed<'full' | 'awaiting' | 'offday'>(() => {
   return 'awaiting'
 })
 
-/** 請假與放假都是 offday，但文案要分開講。 */
-const todayHint = computed<string>(() =>
-  heroStatus.value.label === '請假' ? '今天請假，好好休息' : '',
+/**
+ * 常用功能列（quickact01，2026-08-16 改版）的聯絡簿大按鈕連結／副標。
+ * 有今天的紀錄就直連該筆；沒有的話連去列表，副標依三態給對應文案，
+ * 呼應 ContactBookDayCard 原本的 awaiting/offday 語意，不重造一套判斷。
+ */
+const contactBookHref = computed<string>(() =>
+  contactBookEntry.value ? `/contact-book/${contactBookEntry.value.id}` : '/contact-book',
 )
+const contactBookSub = computed<string>(() => {
+  if (contactBookEntry.value) return '查看今天的完整紀錄'
+  if (todayVariant.value === 'offday') {
+    return heroStatus.value.label === '請假' ? '今天請假，暫無紀錄' : '今天放假，暫無紀錄'
+  }
+  return '老師還沒有寫今天的紀錄'
+})
 
 async function pullRefresh() {
   await Promise.all([
@@ -288,16 +295,34 @@ function go(path: string) {
     <PendingSignBanner :count="pendingSignCount" />
     <PendingSurveyBanner :count="pendingSurveyCount" />
 
-    <!-- 頂部：日期 + 多寶切換（單孩姓名由今日卡呈現，不重複） -->
-    <div class="today-head">
-      <p class="today-date">{{ todayDateLine }}</p>
-      <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
-    </div>
+    <!--
+      首頁頂部 hero（2026-08-16 改版）：問候語 chip（早中晚＋插畫）+ 孩子近期
+      照片輪播 + 姓名 + 日期/班級，取代原本的純問候語列。多寶切換沿用既有
+      ChildContextHeader，接在後面。
+    -->
+    <HomeHeroHeader
+      v-if="selectedChild"
+      :student-id="selectedChild.student_id"
+      :name="selectedChild.name || ''"
+      :classroom-name="selectedChild.classroom_name"
+    />
+    <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
 
     <!--
-      今日卡 = 首頁 hero。PRODUCT.md 的成功定義是「3 秒內看到孩子當日狀態」，
-      所以這張卡排在所有行政事項（待繳/待簽/娃娃車）之前，且三態都佔同一個位置。
+      常用功能列（quickact01，2026-08-16 改版）：聯絡簿大按鈕 + 三個模組
+      按鈕，家長各自在自己手機上編輯、存 DB（QuickActionsBar 內部自己
+      fetch /parent/quick-actions，不經 home-summary）。位在今日卡之上，
+      但聯絡簿大按鈕本身帶出席狀態 pill，「3 秒內看到孩子當日狀態」的
+      既有承諾不受影響。
     -->
+    <QuickActionsBar
+      v-if="selectedChild"
+      :contact-book-href="contactBookHref"
+      :contact-book-sub="contactBookSub"
+      :status-label="heroStatus.label"
+      :status-tone="heroStatus.tone"
+    />
+
     <!--
       刻意不用共用的 @/components/common/EmptyState：那支沒被 pin 進 vite.config
       的 shared-common，落在 admin-core chunk。首頁是家長端 entry 的首屏，靜態
@@ -312,43 +337,14 @@ function go(path: string) {
       </div>
     </section>
 
-    <section v-else-if="selectedChild" class="cb-hero">
-      <SectionHeader title="今日聯絡簿">
-        <template v-if="contactBookEntry" #action>
-          <router-link :to="`/contact-book/${contactBookEntry.id}`" class="cb-open">
-            查看完整
-            <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
-          </router-link>
-        </template>
-      </SectionHeader>
-
-      <router-link
-        v-if="contactBookEntry"
-        :to="`/contact-book/${contactBookEntry.id}`"
-        class="cb-card-link"
-      >
-        <ContactBookDayCard
-          :entry="contactBookEntry"
-          :student-name="selectedChild.name"
-          :classroom-name="selectedChild.classroom_name"
-          variant="full"
-          :status-label="heroStatus.label"
-          :status-tone="heroStatus.tone"
-        />
-      </router-link>
-
-      <!-- 還沒有聯絡簿的日子：同一張卡的 awaiting / offday 態，不可點擊 -->
-      <ContactBookDayCard
-        v-else
-        :student-name="selectedChild.name"
-        :classroom-name="selectedChild.classroom_name"
-        :variant="todayVariant"
-        :date-line="todayDateLine"
-        :status-label="heroStatus.label"
-        :status-tone="heroStatus.tone"
-        :hint="todayHint"
-      />
-    </section>
+    <!--
+      2026-08-16 業主裁定移除：原本這裡有一張獨立的「今日聯絡簿」hero 卡
+      （ContactBookDayCard）＋下方「我要接小孩」CTA（pnotice01），與上面
+      QuickActionsBar 的聯絡簿大按鈕（本身已帶出席狀態 pill、連去聯絡簿）
+      及「接送」快捷模組重複，故整塊拿掉。contactBookEntry / todayVariant
+      等底層狀態邏輯仍保留，餵給 QuickActionsBar 的 contactBookHref /
+      contactBookSub props（見上方 script）。
+    -->
 
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
@@ -370,7 +366,7 @@ function go(path: string) {
         label="臨時接送"
         :value="`${pickupActiveCount} 筆進行中`"
         icon="hail"
-        tone="coral"
+        tone="leaf"
         to="/pickup"
       />
       <StatTile
@@ -460,23 +456,9 @@ function go(path: string) {
   gap: var(--space-4, 16px);
 }
 
-.today-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2, 8px);
-  padding: var(--space-6, 24px) var(--space-4, 16px) 0;
-}
-
-.today-date {
-  margin: 0;
-  font-size: var(--text-sm, 13px);
-  font-weight: 600;
-  color: var(--pt-text-muted);
-  letter-spacing: 0.02em;
-}
-
 .today-cch {
   margin-top: var(--space-1, 4px);
+  padding: 0 var(--space-4, 16px);
 }
 
 /* Bento 格：2 欄 StatTile */
@@ -532,19 +514,6 @@ function go(path: string) {
   font-variation-settings: 'wght' 500;
 }
 
-.cb-card-link {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.cb-card-link:active { transform: scale(0.99); }
-.cb-card-link:focus-visible {
-  outline: 2px solid var(--brand-primary, #0d9053);
-  outline-offset: 3px;
-  border-radius: 20px;
-}
-
 .skeleton-wrap {
   display: flex;
   flex-direction: column;
@@ -587,9 +556,5 @@ function go(path: string) {
   margin-left: auto;
   font-size: 20px !important;
   color: var(--pt-text-muted, #6b5e54) !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cb-card-link { transition: none; }
 }
 </style>

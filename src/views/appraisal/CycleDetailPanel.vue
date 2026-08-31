@@ -23,6 +23,8 @@ import {
   exportAppraisalCycleXlsxUrl,
   exportAppraisalTransferRosterXlsxUrl,
   getSignStatusSummary,
+  getAppraisalAllEmployeesStatus,
+  listScoringRules,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
@@ -33,12 +35,23 @@ import ListView from './components/ListView.vue'
 import RejectDialog from './components/RejectDialog.vue'
 import CommentDialog from './components/CommentDialog.vue'
 import BatchSignButton from './components/BatchSignButton.vue'
-import SummaryLogDrawer from './components/SummaryLogDrawer.vue'
 import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
+import EmployeeSummaryDrawer from './components/EmployeeSummaryDrawer.vue'
 
 interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; status?: string; [key: string]: unknown }
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
 interface Summary { id: number; participant_id?: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
+interface AggregatedParticipant {
+  employee_id?: number
+  employee_name?: string
+  role_group?: string
+  reinstate_count?: number
+  attendance?: Record<string, unknown>
+  retention?: Record<string, unknown> | null
+  activity?: Record<string, unknown> | null
+  disciplinary?: Record<string, unknown>
+  [key: string]: unknown
+}
 
 const props = defineProps<{ cycleId: number }>()
 
@@ -52,6 +65,8 @@ const summaries = ref<Summary[]>([])
 const catalog = ref<unknown[]>([])
 const loading = ref(false)
 const busy = ref(false)
+const aggregatedParticipants = ref<AggregatedParticipant[]>([])
+const rulesByCode = ref<Record<string, unknown>>({})
 
 // Task 8：頂部簽核進度列 counts（getSignStatusSummary 獨立於 kanban 自己的
 // data，list view 沒有 kanban 可看，故獨立載入才能兩種 view 都顯示進度）。
@@ -103,10 +118,16 @@ const summariesById = computed(() => {
 
 // P0-A：依後端 APPRAISAL_* 細粒度 permission bit 守衛 UI 動作。
 // `canBatchSign` 任一階段簽核權限即可顯示批次區（個別按鈕再各自守衛）。
-const canRecompute = computed(() => hasPermission('APPRAISAL_EVENT_WRITE'))
-const canSignSupervisor = computed(() => hasPermission('APPRAISAL_REVIEW'))
-const canSignAccounting = computed(() => hasPermission('APPRAISAL_ACCOUNTING'))
-const canFinalize = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+// Batch 12：後端 recompute/sign_supervisor/sign_accounting/finalize/reject 五個
+// 端點皆守 cycle.status != OPEN 一律 400（reject 於 2026-08-17 補齊，
+// ivy-backend fix/appraisal-reject-comment-cycle-guard 分支 commit 56115514）
+// ——前端補齊同款判斷，避免顯示點了必失敗的按鈕；父層 AppraisalWorkspaceView.vue
+// 的唯讀文案已說明「內容為唯讀」，此處純粹讓寫入 CTA 隨之隱藏。
+const canWriteCycle = computed(() => cycle.value?.status === 'OPEN')
+const canRecompute = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_EVENT_WRITE'))
+const canSignSupervisor = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_REVIEW'))
+const canSignAccounting = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_ACCOUNTING'))
+const canFinalize = computed(() => canWriteCycle.value && hasPermission('APPRAISAL_FINALIZE'))
 const canBatchSign = computed(
   () => canSignSupervisor.value || canSignAccounting.value || canFinalize.value,
 )
@@ -116,28 +137,87 @@ const canReject = computed(() => canBatchSign.value)
 
 // statusLabel 從 ./labels 集中載入（P2 i18n 過渡）
 
+const loadError = ref(false)
+
 async function load() {
   loading.value = true
+  loadError.value = false
   try {
-    // 四支彼此無資料依賴（皆只吃 cycleId 或無參）→ 併發載入，首載等待取最慢者
-    // 而非四次 round-trip 相加（比照 yearEnd/YearEndDetailView.vue load()）。
-    const [cyclesRes, participantsRes, summariesRes, catalogRes] = await Promise.all([
+    // 五支彼此無資料依賴（皆只吃 cycleId 或無參）→ 併發載入，首載等待取最慢者
+    // 而非五次 round-trip 相加（比照 yearEnd/YearEndDetailView.vue load()）。
+    const [cyclesRes, participantsRes, summariesRes, catalogRes, statusRes] = await Promise.all([
       listAppraisalCycles(),
       listAppraisalParticipants(cycleId.value),
       listAppraisalSummaries(cycleId.value),
       listAppraisalCatalog(),
+      getAppraisalAllEmployeesStatus(cycleId.value),
     ])
     const cycles = cyclesRes.data as unknown as Cycle[]
     cycle.value = cycles.find((c) => c.id === cycleId.value) || null
     participants.value = participantsRes.data as Participant[]
     summaries.value = summariesRes.data as Summary[]
     catalog.value = catalogRes.data as unknown[]
+    aggregatedParticipants.value = (statusRes.data as { participants?: AggregatedParticipant[] })?.participants ?? []
+    loadRules()
   } catch (e) {
     ElMessage.error(apiError(e, MSG.load_failed))
+    loadError.value = true
   } finally {
     loading.value = false
   }
 }
+
+// 詳情 dialog 的規則 tooltip 用資料，比照 CurrentSemesterOverview.vue 既有作法：
+// 失敗不影響主流程，rulesByCode 留空 dict、dialog 內 tooltip 自動隱藏。
+async function loadRules() {
+  if (!cycle.value?.base_score_calc_date) { rulesByCode.value = {}; return }
+  try {
+    const { data } = await listScoringRules(cycle.value.base_score_calc_date)
+    const list: { item_code?: string; [key: string]: unknown }[] = Array.isArray(data) ? data : ((data as { rules?: unknown[] })?.rules || [])
+    rulesByCode.value = Object.fromEntries(list.map((r) => [r.item_code, r]))
+  } catch {
+    rulesByCode.value = {}
+  }
+}
+
+const employeeDrawerVisible = ref(false)
+const employeeDrawerParticipant = ref<AggregatedParticipant | null>(null)
+const employeeDrawerSummary = ref<Summary | null>(null)
+
+function employeeIdForSummary(summary: Summary): number | undefined {
+  return participants.value.find((p) => p.id === summary.participant_id)?.employee_id
+}
+
+function openEmployeeDrawer(employeeId?: number) {
+  if (employeeId == null) return
+  const participant = aggregatedParticipants.value.find((p) => p.employee_id === employeeId) ?? null
+  if (!participant) {
+    ElMessage.warning('找不到明細資料，請重新整理後再試')
+    return
+  }
+  const targetParticipant = participants.value.find((p) => p.employee_id === employeeId)
+  const summary = targetParticipant
+    ? summaries.value.find((s) => s.participant_id === targetParticipant.id) ?? null
+    : null
+  employeeDrawerParticipant.value = participant
+  employeeDrawerSummary.value = summary
+  employeeDrawerVisible.value = true
+  if (router?.replace) {
+    router.replace({ query: { ...(route?.query || {}), employee: String(employeeId) } })
+  }
+}
+
+// 抽屜關閉時清掉 URL 上的 employee query，避免重整後又自動彈回同一個員工
+// （closeable drawer 的關閉是「使用者主動退出」語意，query 應跟著清空）。
+// 比照上方 view watch（96-101 行）：不額外判斷 query 是否已含 employee 才清，
+// 一律無條件 replace——避免依賴 route.query 在 router.replace 後同步更新的
+// 即時反應性（真實 vue-router 有、單元測試的簡化 mock 沒有）。
+watch(employeeDrawerVisible, (visible) => {
+  if (visible) return
+  const q = { ...(route?.query || {}) }
+  delete q.employee
+  router?.replace?.({ query: q })
+})
 
 const kanbanRef = ref<{ reload?: () => void } | null>(null)
 async function reload() {
@@ -229,10 +309,6 @@ const commentDialogVisible = ref(false)
 const commentTarget = ref<Summary | null>(null)
 function openComment(summary: Summary) { commentTarget.value = summary; commentDialogVisible.value = true }
 
-const logDrawerVisible = ref(false)
-const logTargetId = ref<number | null>(null)
-function openLog(summary: Summary) { logTargetId.value = summary.id; logDrawerVisible.value = true }
-
 function onKanbanAction({ action, summary }: { action: string; summary: Summary }) {
   if (action === 'sign') {
     const stage = ({
@@ -243,7 +319,8 @@ function onKanbanAction({ action, summary }: { action: string; summary: Summary 
     if (stage) sign({ summary: { id: summary.id }, stage })
   } else if (action === 'reject') openReject(summary)
   else if (action === 'comment') openComment(summary)
-  else if (action === 'log') openLog(summary)
+  else if (action === 'log') openEmployeeDrawer(summary.employee_id as number | undefined)
+  else if (action === 'detail') openEmployeeDrawer(summary.employee_id as number | undefined)
 }
 
 function onKanbanActionPayload(payload: unknown) {
@@ -255,21 +332,32 @@ defineExpose({
   selectedIds,
   openReject,
   openComment,
-  openLog,
+  openEmployeeDrawer,
   sign,
   signingIds,
   isSigning,
   summaries,
+  loadError,
 })
 
 onMounted(() => {
-  load()
+  load().then(() => {
+    const initialEmployee = Number(route?.query?.employee)
+    if (!Number.isNaN(initialEmployee) && initialEmployee > 0) {
+      openEmployeeDrawer(initialEmployee)
+    }
+  })
   loadSignCounts()
 })
 </script>
 
 <template>
-  <div class="cycle-detail">
+  <div v-loading="loading" class="cycle-detail">
+    <div v-if="loadError" class="cdp-error">
+      載入失敗
+      <el-button data-test="cdp-retry" size="small" text type="primary" @click="load">重試</el-button>
+    </div>
+
     <div v-if="cycle" class="meta">
       <strong>{{ cycle.academic_year }} 學年</strong>
       {{ cycle.semester === 'FIRST' ? '上學期' : '下學期' }} ｜
@@ -333,6 +421,7 @@ onMounted(() => {
       v-if="view === 'kanban'"
       ref="kanbanRef"
       :cycle-id="cycleId"
+      :can-write-cycle="canWriteCycle"
       @action="onKanbanActionPayload"
       @selected-changed="(ids) => (selectedIds = ids)"
     />
@@ -353,7 +442,8 @@ onMounted(() => {
       @sign="sign"
       @reject="openReject"
       @comment="openComment"
-      @open-log="openLog"
+      @open-log="(s) => openEmployeeDrawer(employeeIdForSummary(s))"
+      @open-detail="(p) => openEmployeeDrawer(p.employee_id)"
     />
 
     <RejectDialog
@@ -366,14 +456,25 @@ onMounted(() => {
       :summary="commentTarget"
       @commented="onCommented"
     />
-    <SummaryLogDrawer
-      v-model:visible="logDrawerVisible"
-      :summary-id="logTargetId"
+    <EmployeeSummaryDrawer
+      v-model:visible="employeeDrawerVisible"
+      :participant="employeeDrawerParticipant"
+      :summary="employeeDrawerSummary"
+      :rules="rulesByCode"
+      :cycle-id="cycleId"
     />
   </div>
 </template>
 
 <style scoped>
+.cdp-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-3);
+}
 .cycle-detail { padding: 0; }
 .meta { margin: var(--space-3) 0; padding: var(--space-3); background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
 .sign-progress-wrap { margin: 0 0 var(--space-3); }

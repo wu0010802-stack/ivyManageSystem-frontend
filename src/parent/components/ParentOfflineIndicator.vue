@@ -79,8 +79,8 @@ async function openReviewDialog() {
     }
     await manualFlush()
   } catch {
-    // 取消 = 聯絡管理員：v1 簡單導向 messages
-    window.location.href = '/parent.html#/messages'
+    // 取消 = 聯絡管理員：訊息下架後導向聯絡簿（家長能留言給老師的地方）
+    window.location.href = '/parent/#/contact-book'
   }
 }
 
@@ -184,11 +184,11 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
 }
 .indicator-btn.pending {
-  background: var(--brand-primary, #0d9053);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-primary, var(--brand-primary, #0d9053));
+  color: var(--m3-on-primary, #fff);
 }
 .indicator-btn.review {
-  background: var(--color-danger, #f56c6c);
-  color: var(--pt-on-accent, #fff);
+  background: var(--m3-error, var(--color-danger, #f56c6c));
+  color: var(--m3-on-error, #fff);
 }
 </style>

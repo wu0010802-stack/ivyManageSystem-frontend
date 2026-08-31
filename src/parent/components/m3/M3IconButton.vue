@@ -74,7 +74,13 @@ function handleClick(event: MouseEvent): void {
   background: transparent;
   cursor: pointer;
   transition:
-    background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease);
+    background-color var(--m3-dur-short-3, 150ms) var(--m3-easing-standard, ease),
+    transform var(--motion-base, 260ms) var(--motion-spring, ease);
+}
+.m3-icon-button:active:not(.is-disabled) { transform: scale(0.96); }
+@media (prefers-reduced-motion: reduce) {
+  .m3-icon-button { transition: none; }
+  .m3-icon-button:active:not(.is-disabled) { transform: none; }
 }
 .m3-icon-button::before {
   content: '';

@@ -43,8 +43,9 @@
           :value="month"
         />
       </el-select>
+      <!-- primary 而非 success：匯出是本頁的主要輸出動作，不是「成功」狀態 -->
       <el-button
-        type="success"
+        type="primary"
         size="small"
         :loading="exportingExcel"
         @click="handleExportExcel"
@@ -556,30 +557,38 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 </script>
 
 <style scoped>
-/* ── Design Tokens ── */
+/* ── Design Tokens ──
+ * --rv-* 原本是一整套寫死 hex 的平行色票，主色為海軍藍 #1e40af，與 admin 品牌青藍
+ * #0284c7 差了近 40 度色相，並排時看得出是兩套系統。父層 AdmissionsView 的樣式註解
+ * 已載明「舊 --rv-* 海軍藍 palette 已移除，因與 admin 品牌色相漂移」，但本子面板整套
+ * 還在。現全數轉為 canonical token 的別名——保留變數名以免動到 60+ 個引用點，值則
+ * 統一由設計系統供給。（多數值原本就等於 canonical：--rv-text/-danger/-bg/-surface
+ * 逐字相同，改動僅止於名稱收斂。） */
 .stats-panel {
-  --rv-primary:      #1e40af;
-  --rv-primary-lt:   #dbeafe;
-  --rv-secondary:    #3b82f6;
-  --rv-accent:       #d97706;
-  --rv-bg:           #f8fafc;
-  --rv-surface:      #ffffff;
-  --rv-muted:        #e9eef6;
-  --rv-border:       #dbeafe;
-  --rv-text:         #1e293b;
-  --rv-text-2:       #64748b;
-  --rv-success:      #16a34a;
-  --rv-danger:       #dc2626;
+  --rv-primary:      var(--brand-primary);
+  --rv-primary-lt:   var(--brand-primary-soft);
+  --rv-secondary:    var(--color-info);
+  /* -darker 而非 -hover：--rv-accent 是當「白底上的強調文字」用（KPI 卡的轉換率數字），
+     #d97706 在白底只有 3.19:1；-darker #b45309 為 5.02:1。 */
+  --rv-accent:       var(--color-warning-darker);
+  --rv-bg:           var(--bg-color);
+  --rv-surface:      var(--surface-color);
+  --rv-muted:        var(--bg-color-soft);
+  --rv-border:       var(--border-color);
+  --rv-text:         var(--text-primary);
+  --rv-text-2:       var(--text-secondary);
+  --rv-success:      var(--color-success-darker);
+  --rv-danger:       var(--color-danger-hover);
   --rv-font-num:     'Fira Code', ui-monospace, monospace;
 }
 
 .panel-toolbar {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .panel-toolbar-label {
@@ -592,12 +601,12 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 }
 
 .form-section-title {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 700;
-  color: #475569;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin: 12px 0 8px;
+  margin: var(--space-3) 0 var(--space-2);
   line-height: 1.4;
 }
 .form-section-title:first-child {
@@ -609,8 +618,8 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 :deep(.chart-row) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
 }
 :deep(.chart-card) { overflow: hidden; }
 :deep(.chart-box) {
@@ -621,32 +630,33 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 :deep(.filter-bar) {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   align-items: center;
 }
 :deep(.record-count) {
   margin-left: auto;
   font-size: 0.85rem;
-  color: #718096;
+  color: var(--text-tertiary);
 }
 :deep(.pagination) {
-  margin-top: 12px;
+  margin-top: var(--space-3);
   justify-content: flex-end;
 }
-:deep(.deposit-row) { background: #f0fff4 !important; }
+:deep(.deposit-row) { background: var(--color-success-soft) !important; }
 
 /* -------- 區域分析：標頭 -------- */
 .area-header-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
-  padding: 14px 18px;
-  margin-bottom: 16px;
-  background: var(--rv-surface, #fff);
-  border: 1px solid var(--rv-border, #DBEAFE);
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: var(--space-4);
+  background: var(--rv-surface);
+  border: 1px solid var(--rv-border);
   border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(30, 64, 175, 0.06);
+  /* 中性陰影：原為 rgba(30,64,175,…) 海軍藍，隨舊 --rv-primary 一起漂移 */
+  box-shadow: 0 1px 4px rgb(15 23 42 / 6%);
 }
 .area-campus-info {
   display: flex;
@@ -658,11 +668,11 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 .area-campus-name {
   font-weight: 700;
   font-size: 0.97rem;
-  color: var(--rv-text, #1e293b);
+  color: var(--rv-text);
 }
 .area-campus-addr {
   font-size: 0.8rem;
-  color: var(--rv-text-2, #64748b);
+  color: var(--rv-text-2);
 }
 .area-campus-coord {
   font-size: 0.75rem;
@@ -683,43 +693,45 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 
 /* -------- 園所座標狀態 -------- */
 .area-campus-coord-warn {
-  color: #c05621 !important;
+  color: var(--color-warning-darker) !important;
   font-weight: 600;
 }
 
 .campus-coord-preview {
-  margin-bottom: 12px;
-  padding: 6px 10px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: 8px;
-  background: #f0fff4;
-  border: 1px solid #c6f6d5;
+  background: var(--color-success-soft);
+  border: 1px solid color-mix(in srgb, var(--color-success-darker) 22%, transparent);
   font-size: 0.8rem;
-  color: #276749;
+  color: var(--color-success-darker);
 }
 .campus-coord-preview a {
-  color: #276749;
+  color: var(--color-success-darker);
 }
 
 /* -------- 區域 KPI 卡片 -------- */
 .area-kpi-row {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
-@media (max-width: 560px) {
+/* 原為魔術數字 560px；改用 canonical 斷點，全頁的重排點才會一致
+   （本頁曾同時存在 560 / 960 / 767.98 三個不同的行動斷點） */
+@media (--to-sm) {
   .area-kpi-row { grid-template-columns: 1fr; }
 }
 
 .area-kpi-card {
-  background: #fff;
+  background: var(--surface-color);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 14px 16px;
+  padding: var(--space-4);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 .area-kpi-value {
   font-family: 'Fira Code', ui-monospace, monospace;
@@ -762,48 +774,43 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
 }
 .travel-badge--green  { background: var(--color-success-soft); color: var(--color-success-darker); }
 .travel-badge--yellow { background: var(--color-warning-soft); color: var(--color-warning-darker); }
-.travel-badge--orange { background: #ffedd5; color: #c2410c; }
+.travel-badge--orange { background: var(--color-tint-leave); color: var(--color-tint-leave-fg); }
 .text-muted { color: var(--neutral-300); }
 
-.chart-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-tertiary);
-  font-size: 0.85rem;
-}
+/* 註：舊 .chart-empty 已移除——scoped 規則不穿透子元件，而本檔 template 無任何
+   消費者；真正渲染 .chart-empty 的五支子分頁（Overview/Source/Staff/Class/NoDeposit）
+   各自都有同名定義，這份自始未生效。 */
 
 /* -------- 行政區比較表 -------- */
 .area-table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .area-table-hint {
   font-size: 0.75rem;
-  color: #a0aec0;
+  color: var(--text-tertiary);
   font-weight: 400;
 }
 .area-table-filter-tag {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 2px 8px 2px 10px;
+  padding: 2px var(--space-2) 2px 10px;
   background: var(--color-info-soft);
-  border: 1px solid #bfdbfe;
+  border: 1px solid color-mix(in srgb, var(--color-info-darker) 25%, transparent);
   border-radius: 12px;
   font-size: 0.75rem;
   color: var(--color-info-darker);
   font-weight: 600;
 }
 :deep(.district-row-selected td) {
-  background: #f0fff4 !important;
+  background: var(--color-success-soft) !important;
   font-weight: 600;
 }
 :deep(.district-row-selected td .cell) {
-  color: #22543d;
+  color: var(--color-success-darker);
 }
 
 @media (--to-sm) {

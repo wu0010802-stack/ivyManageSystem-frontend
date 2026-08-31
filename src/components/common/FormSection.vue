@@ -9,11 +9,14 @@ const props = withDefaults(defineProps<{
   defaultOpen?: boolean
   badgeCount?: number
   badgeType?: 'error' | 'info'
+  /** 收合時的內容摘要（如「已填 2 項」「未填」）；badgeCount > 0 時讓位給錯誤徽章 */
+  summary?: string
 }>(), {
   collapsible: false,
   defaultOpen: true,
   badgeCount: 0,
   badgeType: 'info',
+  summary: '',
 })
 
 const isOpen = ref(props.collapsible ? props.defaultOpen : true)
@@ -48,6 +51,7 @@ defineExpose({ expand })
         class="form-section__badge"
         :class="{ 'is-error': badgeType === 'error', 'is-info': badgeType === 'info' }"
       >{{ badgeCount }}</span>
+      <span v-else-if="summary" class="form-section__summary" data-test="section-summary">{{ summary }}</span>
     </div>
     <div v-else class="form-section__label">{{ title }}</div>
 
@@ -95,5 +99,11 @@ defineExpose({ expand })
 }
 .form-section__badge.is-error { background: var(--el-color-danger); }
 .form-section__badge.is-info { background: var(--el-color-info); }
+.form-section__summary {
+  margin-left: auto; height: 18px; padding: 0 8px;
+  border-radius: var(--radius-full); font-size: var(--text-xs); line-height: 18px;
+  color: var(--el-text-color-secondary); background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+}
 .form-section__body { padding: var(--space-2) 0 var(--space-3); }
 </style>

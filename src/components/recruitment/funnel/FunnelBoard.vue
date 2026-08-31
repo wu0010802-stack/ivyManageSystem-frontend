@@ -238,13 +238,14 @@ onMounted(() => {
 
 <style scoped>
 .funnel-board {
-  padding: 12px;
+  padding: var(--space-3);
 }
 
 .funnel-board__toolbar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
   align-items: center;
 }
 
@@ -254,7 +255,39 @@ onMounted(() => {
 
 .funnel-board__columns {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   min-height: 500px;
+}
+
+/* 四欄原本是無 min-width 的 flex，既沒有 wrap 也沒有 overflow：窄螢幕下不換行、
+ * 不產生水平捲軸，而是等比壓扁（實測 390px 時每欄僅剩 83px，且 scrollWidth 等於
+ * clientWidth，代表內容連捲動去看的餘地都沒有）。以下兩段給壓扁兩條替代出路。 */
+
+/* 平板：保底欄寬 + 橫向捲動，看板的並排語意得以保留 */
+@media (--to-md) {
+  .funnel-board__columns {
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    padding-bottom: var(--space-2);
+  }
+
+  .funnel-board__columns > * {
+    flex: 0 0 clamp(240px, 42vw, 300px);
+    scroll-snap-align: start;
+  }
+}
+
+/* 手機：並排已無意義，改直向堆疊；min-height 必須一併解除，
+ * 否則四個空階段各自撐出 500px、要捲很久才看得完 */
+@media (--to-sm) {
+  .funnel-board__columns {
+    flex-direction: column;
+    overflow-x: visible;
+    min-height: 0;
+  }
+
+  .funnel-board__columns > * {
+    flex: 1 1 auto;
+  }
 }
 </style>

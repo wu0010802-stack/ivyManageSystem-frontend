@@ -100,6 +100,7 @@ function onSegmentClick(value: string): void {
   color: var(--m3-on-surface, #181d18);
   cursor: pointer;
   white-space: nowrap;
+  transition: background-color var(--motion-quick, 160ms) ease, color var(--motion-quick, 160ms) ease;
 }
 .m3-segment:first-child {
   border-left: none;

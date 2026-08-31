@@ -1,8 +1,10 @@
 /**
  * PlanStatusCard.spec.ts
  *
- * 「新學年預編班」狀態卡：涵蓋 StatusOut 五態渲染（none/draft/published/applied +
- * apply_overdue 疊加樣式）與「前往新學年預編班」連結導向。
+ * 「新學年預編班」狀態橫幅：涵蓋 StatusOut 五態渲染（none/draft/published/applied +
+ * apply_overdue 疊加樣式）與「前往預編班」連結導向。
+ * 2026-08-25 改版：el-card+el-alert → 單列橫幅，樣式斷言改看 .plan-banner--<type>
+ * class、連結改 el-button link（.plan-banner__link）；狀態文案語意不變。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -73,7 +75,7 @@ describe('PlanStatusCard', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('前往建立')
-    expect(wrapper.text()).toContain('前往新學年預編班')
+    expect(wrapper.text()).toContain('前往預編班')
   })
 
   it('draft 態：顯示草稿問題數', async () => {
@@ -137,8 +139,7 @@ describe('PlanStatusCard', () => {
     expect(wrapper.text()).toContain('草稿編輯中，有 4 項提醒')
     expect(wrapper.text()).not.toContain('項問題')
     // 提醒不升級樣式：無 blocking 時維持 info
-    const alert = wrapper.findComponent({ name: 'ElAlert' })
-    expect(alert.props('type')).toBe('info')
+    expect(wrapper.find('.plan-banner').classes()).toContain('plan-banner--info')
   })
 
   it('draft 態 + blocking_count=0：不顯示「尚有 0 項問題」，僅顯示「草稿編輯中」', async () => {
@@ -203,9 +204,7 @@ describe('PlanStatusCard', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('計畫尚未套用，排程器重試中')
-    const alert = wrapper.findComponent({ name: 'ElAlert' })
-    expect(alert.exists()).toBe(true)
-    expect(alert.props('type')).toBe('warning')
+    expect(wrapper.find('.plan-banner').classes()).toContain('plan-banner--warning')
   })
 
   it('applied 態：顯示套用時間', async () => {
@@ -246,7 +245,7 @@ describe('PlanStatusCard', () => {
     const wrapper = mountCard()
     await flushPromises()
 
-    await wrapper.findComponent({ name: 'ElLink' }).trigger('click')
+    await wrapper.find('.plan-banner__link').trigger('click')
     expect(push).toHaveBeenCalledWith('/students/year-plan')
   })
 

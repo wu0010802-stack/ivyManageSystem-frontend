@@ -6,8 +6,8 @@
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
-  "start_url": "/parent.html",
-  "scope": "/parent.html",
+  "start_url": "/parent/",
+  "scope": "/parent/",
   "icons": [
     { "src": "/parent-pwa-192x192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "/parent-pwa-512x512.png", "sizes": "512x512", "type": "image/png" },
