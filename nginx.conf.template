@@ -77,26 +77,26 @@ server {
 
     # /api/* 反代到後端（內部網路）— 讓 cookie 變 first-party，
     # 解 LIFF in-app webview 第三方 cookie 被 ITP 擋的問題。
-    # BACKEND_URL 由 Zeabur frontend service 注入：
-    #   http://backend.zeabur.internal:8080
+    # BACKEND_URL 由部署平台 frontend service 注入（Railway：
+    #   http://ivy-api.railway.internal:8080）。
     # WS 走 upgrade，HTTP 走標準反代
     #
     # ⚠ proxy_pass 必須走「變數」形式（2026-08-16 staging 全站 /api timeout 事故）：
     # 字面 hostname 只在 nginx 啟動時解析一次並永久快取，後端 redeploy 換 IP 後
     # 前端就一直反代到死 IP，直到前端自己重啟。改用 set 變數 + resolver 讓 nginx
-    # 逐請求依 TTL 重新解析（valid=30s → 後端換 IP 最多 30 秒收斂）。
+    # 逐請求依 TTL 重新解析（valid=10s → 後端換 IP 最多 ~10 秒收斂）。
     #
-    # resolver IP 每個環境不同（Zeabur/K8s cluster DNS、本機 Docker 127.0.0.11），
-    # 不能寫死：${NGINX_LOCAL_RESOLVERS} 由 nginx 官方 image 內建的
-    # /docker-entrypoint.d/15-local-resolvers.envsh 開機時從 /etc/resolv.conf 算出，
-    # 20-envsubst-on-templates.sh 替換進本檔——這是官方 image 對「template 需要
-    # resolver」的標準供給機制，不需自訂 entrypoint script（部署平台若存有
-    # Dockerfile 副本、repo Dockerfile 的新 COPY 不生效時，自訂 script 根本進不了
-    # image——2026-08-16 staging 實際踩到，故意不走那條路）。
+    # resolver 寫 Railway 內部 DNS 平台常數 [fd12::10]（容器 /etc/resolv.conf 的
+    # nameserver；私有網路為 IPv6）。2026-08-31 已於 Railway prod 實證：api 重部署
+    # 換 IP 後 /api 僅 4 秒 blip 即自癒。曾有 ${NGINX_LOCAL_RESOLVERS}（官方 image
+    # 15-local-resolvers.envsh 從 resolv.conf 算出）＋ ipv6=off 的 Zeabur 寫法；
+    # 該組合僅在 Zeabur/Railway staging 驗過，且 ipv6=off 依賴私網 dual-stack A
+    # 記錄，prod 不冒此險。若日後換平台，把此行改回 envsh 機制並重驗。
     #
     # 兩個 location 的上游路徑前綴與本地相同（/api/ → /api/），變數形式不帶 URI
     # 部分時 nginx 原樣轉發原始請求 URI，語意與原 `${BACKEND_URL}/api/;` 逐字等價。
-    resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
+    resolver [fd12::10] valid=10s;
+    resolver_timeout 5s;
     set $backend_upstream ${BACKEND_URL};
 
     location /api/ws/ {
