@@ -25,6 +25,16 @@ server {
 
     if ($tb_reject_host) { return 404; }
 
+    # ── Railway 私有網路 DNS 動態解析（修 upstream IP 快取斷線）──
+    # ivy-api 每次重部署會換內網 IP，而 nginx 預設在啟動時解析 upstream hostname
+    # 一次並永久快取 → api 換 IP 後 nginx 續連舊死 IP → /api 全 502（首頁靜態仍
+    # 200，易誤判為 DB 問題）。加 resolver ＋下方 location 的變數化 proxy_pass 強制
+    # 每請求重新解析，api 重部署後不必手動 redeploy 前端。
+    # fd12::10 = Railway 內部 DNS（容器 /etc/resolv.conf 的 nameserver，私有網路為
+    # IPv6）；valid=10s 每 10 秒重查一次。此值為 Railway 平台常數，非本專案專屬。
+    resolver [fd12::10] valid=10s;
+    resolver_timeout 5s;
+
     # ── 品牌注入：server 層宣告一次，所有 location 繼承 ──
     # HTML 檔 <5KB 且本就 no-cache，逐請求替換成本可忽略；/assets/ 的 js/css 因
     # type 不在 sub_filter_types 而完全不受影響。
@@ -70,7 +80,11 @@ server {
     #   http://ivymanagesystem-backend-rulla.zeabur.internal:8080
     # WS 走 upgrade，HTTP 走標準反代
     location /api/ws/ {
-        proxy_pass ${BACKEND_URL}/api/ws/;
+        # 變數化 proxy_pass 強制走 server 段的 resolver 動態解析（見上方說明）。
+        # $ivy_api_backend 不含 URI 路徑 → nginx 以原始 $request_uri 透傳，語義同原
+        # ${BACKEND_URL}/api/ws/（location 前綴＝後端路徑，本就是透傳）。
+        set $ivy_api_backend "${BACKEND_URL}";
+        proxy_pass $ivy_api_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -83,7 +97,9 @@ server {
     }
 
     location /api/ {
-        proxy_pass ${BACKEND_URL}/api/;
+        # 變數化 proxy_pass 強制走 server 段的 resolver 動態解析（見上方說明）。
+        set $ivy_api_backend "${BACKEND_URL}";
+        proxy_pass $ivy_api_backend;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
