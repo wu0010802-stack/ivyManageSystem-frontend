@@ -239,6 +239,9 @@ const INTENTIONAL_DIVERGENCE = {
     '/surveys/new × SURVEYS_WRITE',
     // 2026-08-11 入學文件電子簽署（esign01）新增（fixture 凍結於 2026-07-31，此模組更晚才有）。
     '/students/sign-documents × STUDENTS_READ',
+    // 2026-08-20 節慶人數月底結算：新頁掛在「考核與年終 › 規則設定」下，權限沿用
+    // SALARY_READ（業主裁定 D4；該碼本就在 appraisalYearEnd 群組 sharedViews 內）。
+    '/appraisal-year-end/rules/festival-headcount × SALARY_READ',
   ],
 }
 

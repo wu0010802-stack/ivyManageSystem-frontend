@@ -422,6 +422,8 @@ export const routes: RouteRecordRaw[] = [
                         { path: 'bonus-rates', name: 'aye-rules-bonus-rates', component: () => import('../views/appraisal/components/BonusRatesPanel.vue'), meta: { title: '年終獎金率' } },
                         { path: 'catalog', name: 'aye-rules-catalog', component: () => import('../views/appraisal/components/PenaltyCatalogPanel.vue'), meta: { title: PAGE_TERMS.appraisalCatalog } },
                         { path: 'enrollment-targets', name: 'aye-rules-enrollment', component: () => import('../views/appraisal/YearlyEnrollmentTargetSection.vue'), meta: { title: '學年目標人數' } },
+                        // 節慶人數（月度共用人數）：與薪資結算 StepPrecheck 共用同一元件與資料頁。
+                        { path: 'festival-headcount', name: 'aye-rules-festival-headcount', component: () => import('../views/appraisalYearEnd/FestivalHeadcountView.vue'), meta: { title: '節慶人數' } },
                         { path: 'year-end-rules', name: 'aye-rules-year-end', component: () => import('../views/yearEnd/YearEndRulesPanel.vue'), meta: { title: '年終規則' } },
                     ],
                 },

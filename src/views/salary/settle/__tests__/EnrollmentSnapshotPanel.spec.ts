@@ -14,6 +14,11 @@ vi.mock('@/api/salary', () => ({
     confirmEnrollmentSnapshot: (...a: unknown[]) => confirmMock(...a),
 }))
 
+// 2026-08-21：薄殼改為依 SALARY_WRITE 推導 readonly（rev-parity：只持 SALARY_READ
+// 者不該看到產生／確認／重開按鈕）。本 spec 未登入，需顯式 mock 成有寫入權，
+// 才能維持原本「點第一顆按鈕＝產生」的斷言。
+vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+
 vi.mock('element-plus', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>()
     return { ...actual, ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }

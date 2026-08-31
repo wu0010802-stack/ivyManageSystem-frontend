@@ -230,6 +230,8 @@ export const NAVIGATION_MANIFEST = {
             { path: '/appraisal-year-end/rules/bonus-rates', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/catalog', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/rules/enrollment-targets', permission: 'APPRAISAL_READ' },
+            // 節慶人數（月度共用人數）沿用薪資權限；SALARY_READ 已在本群組 sharedViews 內。
+            { path: '/appraisal-year-end/rules/festival-headcount', permission: 'SALARY_READ' },
             { path: '/appraisal-year-end/rules/year-end-rules', permission: 'SETTINGS_READ' },
             { path: '/appraisal-year-end/exceptions', permission: 'APPRAISAL_READ' },
             { path: '/appraisal-year-end/exceptions', permission: 'YEAR_END_READ' },

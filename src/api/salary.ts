@@ -34,18 +34,41 @@ export const getFestivalBonus = (year: number, month: number) =>
 export const getFestivalBonusPeriodAccrual = (year: number, month: number) =>
     api.get(`/salaries/festival-bonus/period-accrual?year=${year}&month=${month}`)
 
-// 在籍人數快照（L2，2026-06-13）：結算前產生/檢視/手調/確認，薪資計算優先讀快照
-export const getEnrollmentSnapshot = (year: number, month: number) =>
+// 節慶人數月底結算（2026-08-20；程式沿用 enrollment snapshot 命名，UI 稱「節慶人數」）
+// 產生 → HR 核對 → 必要時人工調整 → 確認本月 → 薪資/年終/考核共用同一份人數。
+export const getEnrollmentSnapshot = (
+    year: number,
+    month: number,
+): AxiosResp<'/salaries/enrollment-snapshot', 'get'> =>
     api.get(`/salaries/enrollment-snapshot?year=${year}&month=${month}`)
 
-export const generateEnrollmentSnapshot = (payload: { year: number; month: number; force?: boolean }) =>
+export const generateEnrollmentSnapshot = (
+    payload: ApiBody<'/salaries/enrollment-snapshot/generate', 'post'>,
+): AxiosResp<'/salaries/enrollment-snapshot/generate', 'post'> =>
     api.post('/salaries/enrollment-snapshot/generate', payload)
 
-export const patchEnrollmentSnapshot = (id: number, payload: { student_count: number; reason: string }) =>
+export const patchEnrollmentSnapshot = (
+    id: number,
+    payload: ApiBody<'/salaries/enrollment-snapshot/{snapshot_id}', 'patch'>,
+): AxiosResp<'/salaries/enrollment-snapshot/{snapshot_id}', 'patch'> =>
     api.patch(`/salaries/enrollment-snapshot/${id}`, payload)
 
-export const confirmEnrollmentSnapshot = (payload: { year: number; month: number }) =>
+export const confirmEnrollmentSnapshot = (
+    payload: ApiBody<'/salaries/enrollment-snapshot/confirm', 'post'>,
+): AxiosResp<'/salaries/enrollment-snapshot/confirm', 'post'> =>
     api.post('/salaries/enrollment-snapshot/confirm', payload)
+
+/** 重開已確認月份（需 ≥10 字原因）——唯一能覆寫已確認人數的途徑。 */
+export const reopenEnrollmentSnapshot = (
+    payload: ApiBody<'/salaries/enrollment-snapshot/reopen', 'post'>,
+): AxiosResp<'/salaries/enrollment-snapshot/reopen', 'post'> =>
+    api.post('/salaries/enrollment-snapshot/reopen', payload)
+
+/** 排除明細（長假／休學）；後端只回 student_id 與學號，不回姓名。 */
+export const getEnrollmentSnapshotExclusions = (
+    id: number,
+): AxiosResp<'/salaries/enrollment-snapshot/{snapshot_id}/exclusions', 'get'> =>
+    api.get(`/salaries/enrollment-snapshot/${id}/exclusions`)
 
 export const getRecords = (year: number, month: number): AxiosResp<'/salaries/records', 'get'> =>
     api.get(`/salaries/records?year=${year}&month=${month}`)
