@@ -19,7 +19,13 @@ import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 
 const route = useRoute()
 const router = useRouter()
-interface StudentRow { id: number; classroom_id?: number | null; name?: string; [key: string]: unknown }
+interface StudentRow {
+  id: number
+  classroom_id?: number | null
+  term_classroom_id?: number | null
+  name?: string
+  [key: string]: unknown
+}
 interface ClassroomRow { id: number; name: string; school_year?: number; semester?: number; semester_label?: string; grade_name?: string; [key: string]: unknown }
 
 const students = ref<StudentRow[]>([])
@@ -282,7 +288,10 @@ const handleSizeChange = (size: number) => {
   fetchStudents()
 }
 
-const classroomName = (id: number) => classroomLabel(classrooms.value.find((c) => c.id === id))
+const displayClassroomId = (row: StudentRow) => row.term_classroom_id ?? row.classroom_id ?? null
+const classroomName = (id: number | null | undefined) => (
+  id ? classroomLabel(classrooms.value.find((classroom) => classroom.id === id)) : '-'
+)
 const handleSelectionChange = (rows: StudentRow[]) => {
   selectedStudents.value = rows
 }
@@ -588,7 +597,7 @@ onMounted(async () => {
       </el-table-column>
       <el-table-column label="班級" width="120">
         <template #default="{ row }">
-          <span>{{ classroomName(row.classroom_id) }}</span>
+          <span>{{ classroomName(displayClassroomId(row)) }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="birthday" label="生日" width="120" />

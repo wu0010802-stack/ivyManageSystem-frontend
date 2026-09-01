@@ -1510,13 +1510,34 @@ export interface paths {
         };
         /**
          * Get Registration Detail
-         * @description 取得報名詳情（含課程/用品/修改紀錄）
+         * @description 取得報名詳情（含課程/用品/修改紀錄）。
+         *
+         *     2026-08-06：唯讀詳情放行 `match_status='rejected'` 的軟刪列。被拒報名自
+         *     2026-07-31「只留拒絕（軟刪）」改版後刻意保留在列表中供稽核與復原（見
+         *     GET /registrations 的 include_inactive 說明，前端預設就帶
+         *     include_inactive=true 且詳情鈕無 v-if），原本寫死 is_active=True 讓這些列
+         *     點「詳情」必定 404 —— 連帶把繳費/退費明細也擋死：前端 openDetail 先 await
+         *     詳情、拋錯就進 catch，`loadPayments` 永遠不會被呼叫，而
+         *     registrations_payments.get_registration_payments 刻意不要求 is_active
+         *     （軟刪報名的沖帳歷史仍需供財務查核）等於白放寬。已繳費後被拒（force_refund
+         *     沖帳）的報名，後台唯一的退費明細入口就是這裡。
+         *     一般刪除／學生離園自動軟刪的列仍維持 404（那些列 match_status 保留刪除前
+         *     原值、無任何「已刪除」標記，同 list 端點的收斂口徑）。**只放寬本唯讀端點**，
+         *     下方所有寫入型端點維持 is_active=True。
          */
         get: operations["get_registration_detail_api_activity_registrations__registration_id__get"];
         /**
          * Update Registration Basic
          * @description 後台編輯報名基本欄位（姓名、生日、班級、Email）。
          *     學期不可變更，若需更改請重新建立報名。
+         *
+         *     2026-08-06 起 `birthday` 為 **partial-update** 語意（與前端議定的契約）：
+         *     request body **未帶** birthday key ＝ 不變更該欄位；帶了 key 但值為
+         *     null/空字串 ＝ 明確清空為 None。Why：缺 STUDENTS_READ 的員工在詳情看到的
+         *     生日空白是**遮罩**（`reg.birthday if can_see_student else None`），不是真的
+         *     沒資料；原本無條件 `reg.birthday = new_bday` 會讓這種員工一按儲存就把真實
+         *     生日靜默清成 NULL（2026-08-03 生日退出公開表單、前端解除必填後必然發生）。
+         *     前端對應行為：生日欄未載入到值時 payload 不帶 birthday key。
          */
         put: operations["update_registration_basic_api_activity_registrations__registration_id__put"];
         post?: never;
@@ -5913,6 +5934,49 @@ export interface paths {
          *     F-044：僅原建立者或 admin/hr/supervisor 可取消，避免他人改寫線下流程。
          */
         post: operations["cancel_dismissal_call_api_dismissal_calls__call_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e2e/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get E2E Public Preflight
+         * @description 登入前唯讀驗證 clone marker、tenant、外送關閉與 build attestation。
+         */
+        get: operations["get_e2e_public_preflight_api_e2e_preflight_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/e2e/runtime-safety": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get E2E Runtime Safety
+         * @description 驗證實際 API process 與 request tenant 皆無外送能力。
+         *
+         *     端點只在明確 ``ENV=staging`` 存在；其他環境一律 404，避免把測試探針
+         *     當作一般管理功能。所有資料表查詢都帶 tenant filter，RLS 僅作縱深防禦。
+         */
+        get: operations["get_e2e_runtime_safety_api_e2e_runtime_safety_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -27188,6 +27252,42 @@ export interface components {
             /** Submitted At */
             submitted_at: string;
         };
+        /**
+         * E2ERuntimeSafetyResponse
+         * @description 只揭露安全布林，不回傳任何憑證、網域或租戶資料值。
+         */
+        E2ERuntimeSafetyResponse: {
+            /** Activity Email Disabled */
+            activity_email_disabled: boolean;
+            /** Explicit Staging */
+            explicit_staging: boolean;
+            /** External Delivery Disabled */
+            external_delivery_disabled: boolean;
+            /** Line Credentials Absent */
+            line_credentials_absent: boolean;
+            /** Ops Line Credentials Absent */
+            ops_line_credentials_absent: boolean;
+            /** Resend Credentials Absent */
+            resend_credentials_absent: boolean;
+            /** Safe */
+            safe: boolean;
+            /** Scheduler Api Only */
+            scheduler_api_only: boolean;
+            /** Sentry Credentials Absent */
+            sentry_credentials_absent: boolean;
+            /** Source Commit Attested */
+            source_commit_attested: boolean;
+            /** Tenant Base Domain Configured */
+            tenant_base_domain_configured: boolean;
+            /** Tenant Claim Enforced */
+            tenant_claim_enforced: boolean;
+            /** Tenant Email Delivery Disabled */
+            tenant_email_delivery_disabled: boolean;
+            /** Tenant Header Enforced */
+            tenant_header_enforced: boolean;
+            /** Tenant Line Delivery Disabled */
+            tenant_line_delivery_disabled: boolean;
+        };
         /** EducationCreate */
         EducationCreate: {
             /** Degree */
@@ -43583,6 +43683,8 @@ export interface components {
             status_tag?: string | null;
             /** Student Id */
             student_id: string;
+            /** Term Classroom Id */
+            term_classroom_id?: number | null;
         };
         /**
          * StudentListOut
@@ -44394,6 +44496,28 @@ export interface components {
             participant_id: number;
             /** Source Ref */
             source_ref: string;
+        };
+        /** SystemConfigOut */
+        SystemConfigOut: {
+            /** Config Key */
+            config_key: string;
+            /**
+             * Config Type
+             * @default general
+             */
+            config_type: string;
+            /** Config Value */
+            config_value: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Is Default
+             * @description True=DB 無此 key，目前顯示的是預設值
+             * @default false
+             */
+            is_default: boolean;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** SystemConfigUpdate */
         SystemConfigUpdate: {
@@ -55134,6 +55258,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_e2e_public_preflight_api_e2e_preflight_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Ivy-E2E-Clone-Marker-Sha256"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 隔離 clone 可安全進入登入流程。 */
+            204: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Vary?: "X-Ivy-E2E-Clone-Marker-Sha256";
+                    "X-Ivy-Backend-Commit-Sha"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 環境不符合隔離 clone 安全條件。 */
+            404: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    Vary?: "X-Ivy-E2E-Clone-Marker-Sha256";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_e2e_runtime_safety_api_e2e_runtime_safety_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    "X-Ivy-Backend-Commit-Sha"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["E2ERuntimeSafetyResponse"];
                 };
             };
         };
@@ -78508,7 +78685,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SystemConfigOut"];
                 };
             };
             /** @description Validation Error */
