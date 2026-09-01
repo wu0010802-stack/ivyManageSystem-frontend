@@ -36,24 +36,24 @@ describe('FeeSummaryCard', () => {
     expect(wrapper.html()).toContain('目前無待繳')
   })
 
-  it('提供 detailHref / historyHref 兩個 CTA', () => {
+  // 2026-09-01 起收斂為單一入口：原「查看明細／繳費紀錄」兩鈕連到同一
+  // /fees 是假選擇（詳見 src/parent/components/me/__tests__/FeeSummaryCard.test.ts）
+  it('只提供單一 CTA，預設連到 /fees', () => {
     const wrapper = mount(FeeSummaryCard, {
       props: { outstanding: 100, overdue: 0 },
       global: { stubs },
     })
     const links = wrapper.findAll('a')
-    expect(links.length).toBe(2)
+    expect(links.length).toBe(1)
     expect(links[0].attributes('data-to')).toBe('/fees')
-    expect(links[1].attributes('data-to')).toBe('/fees')
   })
 
-  it('passes through custom detailHref / historyHref props', () => {
+  it('passes through custom detailHref prop', () => {
     const wrapper = mount(FeeSummaryCard, {
-      props: { outstanding: 100, overdue: 0, detailHref: '/fees/123', historyHref: '/fees/history' },
+      props: { outstanding: 100, overdue: 0, detailHref: '/fees/123' },
       global: { stubs },
     })
     const links = wrapper.findAll('a')
     expect(links[0].attributes('data-to')).toBe('/fees/123')
-    expect(links[1].attributes('data-to')).toBe('/fees/history')
   })
 })
