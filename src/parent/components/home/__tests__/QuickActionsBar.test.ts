@@ -64,11 +64,11 @@ beforeEach(() => {
 })
 
 describe('QuickActionsBar — 掛載時載入設定', () => {
-  it('三格預設為接送・代理接送・公告', async () => {
+  it('三格預設為預告接送・臨時接送・公告', async () => {
     const w = mountBar()
     await flushPromises()
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['接送', '代理接送', '公告'])
+    expect(labels).toEqual(['預告接送', '臨時接送', '公告'])
   })
 
   it('套用家長之前存過的設定', async () => {
@@ -104,7 +104,7 @@ describe('QuickActionsBar — 三格模組載入態（2026-08-16 使用者實測
     resolveGet({ data: { slots: ['bus', 'fees', 'calendar'], is_default: false } })
     await flushPromises()
 
-    // 直接顯示家長存的設定，中間沒有出現過「接送・代理接送・公告」
+    // 直接顯示家長存的設定，中間沒有出現過「預告接送・臨時接送・公告」
     expect(w.findAll('.sk-line').length).toBe(0)
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
     expect(labels).toEqual(['娃娃車', '學費', '行事曆'])
@@ -118,7 +118,7 @@ describe('QuickActionsBar — 三格模組載入態（2026-08-16 使用者實測
 
     expect(w.findAll('.sk-line').length).toBe(0)
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['接送', '代理接送', '公告'])
+    expect(labels).toEqual(['預告接送', '臨時接送', '公告'])
   })
 })
 
@@ -130,7 +130,7 @@ describe('QuickActionsBar — 非編輯態：點模組即導覽', () => {
     expect(pushMock).toHaveBeenCalledWith('/pickup-notice')
   })
 
-  it('點「代理接送」導向 /pickup', async () => {
+  it('點「臨時接送」導向 /pickup', async () => {
     const w = mountBar()
     await flushPromises()
     await w.findAll('.qa-mod')[1].trigger('click')
@@ -194,7 +194,7 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
 
     expect(updateQuickActions).toHaveBeenCalledWith({ slots: ['arrived', 'proxy', 'announce'] })
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['已抵達', '代理接送', '公告'])
+    expect(labels).toEqual(['已抵達', '臨時接送', '公告'])
     expect(w.find('.sheet-stub').exists()).toBe(false)
   })
 
@@ -209,10 +209,10 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
 
     expect(toastError).toHaveBeenCalled()
     const labels = w.findAll('.qa-mod-label').map((n) => n.text())
-    expect(labels).toEqual(['接送', '代理接送', '公告'])
+    expect(labels).toEqual(['預告接送', '臨時接送', '公告'])
   })
 
-  it('恢復預設：呼叫 PUT 帶預設值，三格還原成接送・代理接送・公告', async () => {
+  it('恢復預設：呼叫 PUT 帶預設值，三格還原成預告接送・臨時接送・公告', async () => {
     getQuickActions.mockResolvedValue({ data: { slots: ['bus', 'fees', 'calendar'], is_default: false } })
     const w = mountBar()
     await flushPromises()
@@ -222,7 +222,7 @@ describe('QuickActionsBar — 編輯態：替換模組（存 DB）', () => {
     await flushPromises()
 
     expect(updateQuickActions).toHaveBeenCalledWith({ slots: ['pickup', 'proxy', 'announce'] })
-    expect(w.findAll('.qa-mod-label').map((n) => n.text())).toEqual(['接送', '代理接送', '公告'])
+    expect(w.findAll('.qa-mod-label').map((n) => n.text())).toEqual(['預告接送', '臨時接送', '公告'])
     expect(toastSuccess).toHaveBeenCalled()
   })
 

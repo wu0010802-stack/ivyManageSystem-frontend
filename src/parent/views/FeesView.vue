@@ -12,6 +12,7 @@ import {
   getFeePayments,
 } from '../api/fees'
 import { toast } from '../utils/toast'
+import { formatSemesterLabel } from '../utils/semesterLabel'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
@@ -214,7 +215,7 @@ async function copyText(text: string | null | undefined) {
 
 function buildReceiptText(record: FeeRecord, payments: Payment[]) {
   const lines = [
-    `${record.fee_item_name}（${record.period}）`,
+    `${record.fee_item_name}（${formatSemesterLabel(record.period)}）`,
     `學生：${record.student_name || '—'}`,
     `應繳：$${formatNum(record.amount_due)}`,
     `已繳：$${formatNum(record.amount_paid)}`,

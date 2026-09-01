@@ -11,9 +11,10 @@ import AnnouncementsPanel from '../components/announcements/AnnouncementsPanel.v
 <template>
   <AnnouncementsPanel>
     <template #hero="{ unreadCount, total }">
+      <!-- top bar 已標「公告」，hero 不再放同義 eyebrow（原「園所公告／學校的
+           訊息」為三層同義重複，且「學校」與全站「園所」用語不一致） -->
       <header class="page-hero pt-page-hero">
-        <p class="pt-page-hero-eyebrow">園所公告</p>
-        <h1 class="pt-page-hero-title">學校的訊息</h1>
+        <h1 class="pt-page-hero-title">園所最新消息</h1>
         <p v-if="unreadCount > 0" class="pt-page-hero-note">
           有 <strong>{{ unreadCount }}</strong> 則尚未閱讀
         </p>

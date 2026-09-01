@@ -136,8 +136,8 @@ function dayLabel(iso: string) {
 
 <template>
   <div class="cal-view">
+    <!-- top bar 已標「行事曆」，hero eyebrow 同名屬冗餘，僅留內容性標題 -->
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">行事曆</p>
       <h1 class="pt-page-hero-title">{{ rangeLabel }}</h1>
       <div class="day-filter" role="group" aria-label="行事曆範圍">
         <button

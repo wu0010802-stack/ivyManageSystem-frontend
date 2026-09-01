@@ -10,6 +10,7 @@
  *  - copy-no(receiptNo): 父層呼叫 copyText
  */
 import { computed } from 'vue'
+import { formatSemesterLabel } from '@/parent/utils/semesterLabel'
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 import ParentIcon from '@/parent/components/ParentIcon.vue'
 
@@ -68,7 +69,7 @@ const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as 
   >
     <template v-if="record">
       <div class="detail-name">{{ record.fee_item_name }}</div>
-      <div class="detail-period">{{ record.period }}</div>
+      <div class="detail-period">{{ formatSemesterLabel(record.period) }}</div>
       <div v-if="loading" class="detail-loading">載入中...</div>
       <template v-else>
         <h4 class="section-h">繳費紀錄</h4>

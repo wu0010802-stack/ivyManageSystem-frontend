@@ -13,6 +13,7 @@
  * 第一筆未繳/部分繳費的卡片會帶 data-unpaid-anchor，供 hero CTA scrollIntoView。
  */
 import StatusPill from '@/parent/components/StatusPill.vue'
+import { formatSemesterLabel } from '@/parent/utils/semesterLabel'
 
 interface FeeRecord {
   id: number
@@ -70,7 +71,7 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
     </div>
     <div class="record-row3">
       <span v-if="r.due_date" class="due">期限 {{ r.due_date }}</span>
-      <span v-if="r.period" class="period">{{ r.period }}</span>
+      <span v-if="r.period" class="period">{{ formatSemesterLabel(r.period) }}</span>
     </div>
   </div>
 </template>
