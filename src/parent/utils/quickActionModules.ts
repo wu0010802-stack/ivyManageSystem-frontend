@@ -1,8 +1,8 @@
 /**
  * 首頁「常用功能」三格模組目錄與驗證。
  *
- * 背景：2026-08-16 首頁改版——聯絡簿獨立成滿版大按鈕，下方三格預設「接送・
- * 代理接送・公告」，家長各自在自己手機上編輯、存 DB（`/parent/quick-actions`
+ * 背景：2026-08-16 首頁改版——聯絡簿獨立成滿版大按鈕，下方三格預設「預告接送・
+ * 臨時接送・公告」，家長各自在自己手機上編輯、存 DB（`/parent/quick-actions`
  * GET/PUT，見 composables/useQuickActionSlots.ts；不是租戶層級統一配置，
  * 也不是 localStorage）。
  *
@@ -48,10 +48,13 @@ export interface QuickActionModule {
  * 讓家長自己選）。
  */
 export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = {
+  // 接送兩模組的命名對齊事務頁（AdminListView）與 router title：
+  // /pickup-notice=預告接送、/pickup=臨時接送；勿再引入「接送」「代理接送」
+  // 等第三種叫法（同一功能多名會讓家長以為是不同功能）。
   pickup: {
     key: 'pickup',
-    label: '接送',
-    sub: '預告接送',
+    label: '預告接送',
+    sub: '通知抵達時間',
     tone: 'teal',
     route: '/pickup-notice',
     icon: 'directions_walk',
@@ -66,8 +69,8 @@ export const QUICK_ACTION_CATALOG: Record<string, QuickActionModule> = {
   },
   proxy: {
     key: 'proxy',
-    label: '代理接送',
-    sub: '接送授權',
+    label: '臨時接送',
+    sub: '授權親友代接',
     tone: 'grape',
     route: '/pickup',
     icon: 'hail',

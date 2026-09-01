@@ -5,12 +5,10 @@ const props = withDefaults(defineProps<{
   outstanding?: number
   overdue?: number
   detailHref?: string
-  historyHref?: string
 }>(), {
   outstanding: 0,
   overdue: 0,
   detailHref: '/fees',
-  historyHref: '/fees',
 })
 
 const hasOutstanding = computed<boolean>(() => props.outstanding > 0)
@@ -40,9 +38,12 @@ function fmt(n: number): string {
 
     <p v-else class="empty">目前無待繳費用</p>
 
+    <!-- 單一入口：原「查看明細／繳費紀錄」兩鈕連到同一 /fees 是假選擇，
+         收斂成一顆、文字隨狀態說清楚去那裡能做什麼 -->
     <div class="actions">
-      <router-link :to="detailHref" class="btn primary">查看明細</router-link>
-      <router-link :to="historyHref" class="btn ghost">繳費紀錄</router-link>
+      <router-link :to="detailHref" class="btn primary">
+        {{ hasOutstanding ? '查看待繳明細' : '查看繳費紀錄' }}
+      </router-link>
     </div>
   </section>
 </template>

@@ -43,6 +43,8 @@ function onClick(): void {
  * 推播 CTA — token-based 暖色卡
  * ========================================================== */
 .push-cta {
+  display: flex;
+  flex-direction: column;
   background: var(--pt-tint-sun, var(--pt-gradient-warm));
   border: 1px solid color-mix(in srgb, var(--ivy-tile-yellow-fg) 28%, transparent);
   border-radius: 16px;
@@ -83,22 +85,23 @@ function onClick(): void {
   font-size: var(--text-xs, 12px);
   line-height: 1.6;
 }
+/* 系統性提醒卡的按鈕走 tonal、靠右——原「近黑實底＋全寬＋投影」是整個
+   首頁視覺最重的元素，蓋過逾期繳費等真正待辦；提醒卡不該搶主角 */
 .push-cta-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 4px;
-  width: 100%;
-  margin-top: 12px;
-  padding: 11px 12px;
-  background: var(--pt-text-strong);
-  color: var(--neutral-0);
+  align-self: flex-end;
+  margin-top: 10px;
+  padding: 9px 14px;
+  background: color-mix(in srgb, var(--ivy-tile-yellow-fg) 14%, transparent);
+  color: var(--pt-warning-text);
   border: none;
-  border-radius: var(--pt-control-radius, 12px);
-  font-size: var(--text-base, 14px);
+  border-radius: 999px;
+  font-size: var(--text-sm, 13px);
   font-weight: var(--font-weight-semibold, 600);
   letter-spacing: 0.02em;
-  box-shadow: 0 8px 18px rgba(74, 55, 0, 0.16);
   cursor: pointer;
+  min-height: 40px;
 }
 </style>

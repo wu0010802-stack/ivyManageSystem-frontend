@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import DashboardHero from '../components/DashboardHero.vue'
+import SectionHeader from '../components/SectionHeader.vue'
 import FeeListGroup from '../components/fees/FeeListGroup.vue'
 import FeeReceiptSheet from '../components/fees/FeeReceiptSheet.vue'
 import { useChildrenStore } from '../stores/children'
@@ -12,6 +13,7 @@ import {
   getFeePayments,
 } from '../api/fees'
 import { toast } from '../utils/toast'
+import { formatSemesterLabel } from '../utils/semesterLabel'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
@@ -88,6 +90,17 @@ const unpaidRecords = computed(() =>
   records.value.filter((r) => r.status === 'unpaid' || r.status === 'partial'),
 )
 const unpaidCount = computed(() => unpaidRecords.value.length)
+
+// 列表分組：原本按 API 時間序混排、未繳散落中段要靠跳轉尋找；改為「待繳」
+// （到期日近→遠）置頂、「已結清」隨後（維持原序），家長打開即見要處理的項目。
+const pendingRecords = computed(() =>
+  unpaidRecords.value
+    .slice()
+    .sort((a, b) => String(a.due_date ?? '9999').localeCompare(String(b.due_date ?? '9999'))),
+)
+const settledRecords = computed(() =>
+  records.value.filter((r) => r.status !== 'unpaid' && r.status !== 'partial'),
+)
 const nearestDueDate = computed(() => {
   const sorted = unpaidRecords.value
     .filter((r) => r.due_date)
@@ -113,15 +126,6 @@ const heroStatusLabel = computed(() => {
   if (unpaidCount.value > 0) return '有待繳費用'
   return '繳費無欠款'
 })
-
-function onJumpUnpaid() {
-  const el = document.querySelector('[data-unpaid-anchor]')
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    el.classList.add('fee-highlight')
-    setTimeout(() => el.classList.remove('fee-highlight'), 1000)
-  }
-}
 
 async function fetchSummary() {
   try {
@@ -214,7 +218,7 @@ async function copyText(text: string | null | undefined) {
 
 function buildReceiptText(record: FeeRecord, payments: Payment[]) {
   const lines = [
-    `${record.fee_item_name}（${record.period}）`,
+    `${record.fee_item_name}（${formatSemesterLabel(record.period)}）`,
     `學生：${record.student_name || '—'}`,
     `應繳：$${formatNum(record.amount_due)}`,
     `已繳：$${formatNum(record.amount_paid)}`,
@@ -273,14 +277,6 @@ async function pullRefresh() {
       :status-label="heroStatusLabel"
       :status-tone="heroStatusTone"
     />
-    <!-- 有未繳款時提供跳至應繳的快捷按鈕 -->
-    <div v-if="summary && unpaidCount > 0" class="jump-unpaid-wrap">
-      <button type="button" class="jump-unpaid-btn" @click="onJumpUnpaid">
-        <span class="material-symbols-rounded" aria-hidden="true">arrow_downward</span>
-        跳到應繳
-      </button>
-    </div>
-
     <ChildContextHeader variant="page" />
 
     <div v-if="myTotals" class="single-totals">
@@ -309,9 +305,20 @@ async function pullRefresh() {
       <p class="pt-empty-note">園所開立帳單後會出現在這裡</p>
     </div>
 
-    <!-- 費用列表：使用 StatusPill tone 取代舊 STATUS_COLOR map -->
+    <!-- 費用列表：待繳置頂、已結清隨後；全繳清時單一列表不加組標題 -->
+    <template v-if="pendingRecords.length > 0">
+      <SectionHeader :title="`待繳（${pendingRecords.length} 筆）`" class="fee-group-head" />
+      <FeeListGroup
+        :records="pendingRecords"
+        :status-label="(s) => STATUS_LABEL[s] || s"
+        :status-tone="(s) => STATUS_TONE[s] ?? 'neutral'"
+        @record-click="(r) => { openDetail(r as FeeRecord) }"
+      />
+      <SectionHeader v-if="settledRecords.length > 0" title="已結清" class="fee-group-head" />
+    </template>
     <FeeListGroup
-      :records="records"
+      v-if="settledRecords.length > 0"
+      :records="settledRecords"
       :status-label="(s) => STATUS_LABEL[s] || s"
       :status-tone="(s) => STATUS_TONE[s] ?? 'neutral'"
       @record-click="(r) => { openDetail(r as FeeRecord) }"
@@ -369,26 +376,8 @@ async function pullRefresh() {
   color: var(--brand-primary, #0d9053);
 }
 
-/* 跳至應繳快捷列 */
-.jump-unpaid-wrap {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 16px;
-}
-.jump-unpaid-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--brand-primary, #0d9053);
-  background: var(--brand-primary-soft, color-mix(in srgb, var(--brand-primary, #0d9053) 10%, transparent));
-  border: 1px solid var(--brand-primary-border, color-mix(in srgb, var(--brand-primary, #0d9053) 20%, transparent));
-  border-radius: 999px;
-  padding: 6px 14px;
-  cursor: pointer;
-}
-.jump-unpaid-btn .material-symbols-rounded {
-  font-size: 16px;
+/* 分組標題：貼齊卡片左緣，與 hero/totals 拉開節奏 */
+.fee-group-head {
+  margin: 4px 16px -8px;
 }
 </style>
