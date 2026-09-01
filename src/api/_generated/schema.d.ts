@@ -22402,7 +22402,10 @@ export interface components {
              * Format: date
              */
             payment_date: string;
-            /** Payment Method */
+            /**
+             * Payment Method
+             * @description 收款方式（帳單頁僅接受現金；轉帳請至對帳工作區銷帳）
+             */
             payment_method: string;
         };
         /**
@@ -28638,12 +28641,16 @@ export interface components {
             amount_due: number;
             /** Amount Paid */
             amount_paid?: number | null;
+            /** Billing Code Suffix */
+            billing_code_suffix?: string | null;
             /** Classroom Name */
             classroom_name?: string | null;
             /** Fee Item Name */
             fee_item_name?: string | null;
             /** Fee Type */
             fee_type?: string | null;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
             /** Id */
             id: number;
             /** Notes */
@@ -28654,12 +28661,50 @@ export interface components {
             payment_method?: string | null;
             /** Period */
             period?: string | null;
+            settlement: components["schemas"]["FeeRecordSettlementOut"];
             /** Status */
             status?: string | null;
             /** Student Id */
             student_id: number;
             /** Student Name */
             student_name?: string | null;
+        };
+        /**
+         * FeeRecordSettlementOut
+         * @description 帳款收款確認分解（SPEC-014 §16；沿 allocation→receipt→交接批 聚合）。
+         *
+         *     - cash_registered：現金已登錄（收據掛 draft/reopened 交接批）
+         *     - cash_submitted：現金待老闆簽收（submitted 批）
+         *     - cash_confirmed：現金老闆已簽收（confirmed 批）
+         *     - bank_reconciled：網銀已銷帳（收據掛 bank_transaction／代收明細）
+         *     - unreceipted：繳費流水超出有效分配的餘額（改版前存量，未立據）
+         */
+        FeeRecordSettlementOut: {
+            /**
+             * Bank Reconciled
+             * @default 0
+             */
+            bank_reconciled: number;
+            /**
+             * Cash Confirmed
+             * @default 0
+             */
+            cash_confirmed: number;
+            /**
+             * Cash Registered
+             * @default 0
+             */
+            cash_registered: number;
+            /**
+             * Cash Submitted
+             * @default 0
+             */
+            cash_submitted: number;
+            /**
+             * Unreceipted
+             * @default 0
+             */
+            unreceipted: number;
         };
         /**
          * FeeRefundEntryOut
@@ -31677,6 +31722,8 @@ export interface components {
             amount_due: number;
             /** Amount Paid */
             amount_paid?: number | null;
+            /** Billing Code Suffix */
+            billing_code_suffix?: string | null;
             /** Billing Start Date */
             billing_start_date?: string | null;
             /** Due Date */
@@ -31685,6 +31732,8 @@ export interface components {
             fee_item_name?: string | null;
             /** Fee Type */
             fee_type?: string | null;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
             /** Id */
             id: number;
             /** Payment Date */
@@ -31693,6 +31742,7 @@ export interface components {
             payment_method?: string | null;
             /** Period */
             period?: string | null;
+            settlement: components["schemas"]["FeeRecordSettlementOut"];
             /** Status */
             status?: string | null;
             /** Target Month */
@@ -31717,8 +31767,12 @@ export interface components {
          *     total_paid>=total_due → paid；其餘 → partial。
          */
         MonthlyStatementStudentOut: {
+            /** Billing Code Suffix */
+            billing_code_suffix?: string | null;
             /** Classroom Name */
             classroom_name?: string | null;
+            /** Full Collection Number */
+            full_collection_number?: string | null;
             /** Items */
             items: components["schemas"]["MonthlyStatementItemOut"][];
             /** Outstanding */
@@ -31745,6 +31799,7 @@ export interface components {
             paid_count: number;
             /** Partial Count */
             partial_count: number;
+            settlement: components["schemas"]["FeeRecordSettlementOut"];
             /** Student Count */
             student_count: number;
             /** Total Due */
@@ -33722,7 +33777,10 @@ export interface components {
              * Format: date
              */
             payment_date: string;
-            /** Payment Method */
+            /**
+             * Payment Method
+             * @description 收款方式（帳單頁僅接受現金；轉帳請至對帳工作區銷帳）
+             */
             payment_method: string;
         };
         /**

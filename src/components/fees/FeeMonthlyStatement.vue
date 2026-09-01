@@ -124,6 +124,30 @@
       </div>
     </div>
 
+    <!-- 收款確認分解（SPEC-014 §16 老闆視角）：已收的錢各經過哪一層確認。
+         範圍與上方統計同軸（班級＋姓名篩選，不含狀態快篩）。 -->
+    <div class="stmt-settlement" data-test="stmt-settlement">
+      <span class="stmt-settlement__title">收款確認</span>
+      <template v-if="scopeSettlementTags.length">
+        <el-tag
+          v-for="tag in scopeSettlementTags"
+          :key="tag.key"
+          :type="tag.tagType"
+          size="small"
+          class="stmt-settlement__tag"
+          :class="{ 'stmt-settlement__tag--link': tag.jump }"
+          data-test="stmt-settlement-tag"
+          :data-bucket="tag.key"
+          @click="tag.jump && jumpToWorkspace(tag.jump)"
+        >
+          {{ tag.label }} {{ formatCurrency(tag.amount) }}
+        </el-tag>
+      </template>
+      <span v-else class="stmt-settlement__empty" data-test="stmt-settlement-empty">
+        本月尚無已入帳收款
+      </span>
+    </div>
+
     <!-- 批次列 -->
     <div v-if="canWrite" class="stmt-actions">
       <el-button
@@ -166,6 +190,7 @@
             </th>
             <th class="col-student">學生</th>
             <th>班級</th>
+            <th>銷帳碼</th>
             <th v-for="b in visibleBuckets" :key="b.key" class="num-col">{{ b.label }}</th>
             <th class="num-col">應繳合計</th>
             <th class="num-col">未收</th>
@@ -206,6 +231,12 @@
                 </button>
               </td>
               <td>{{ stu.classroom_name || '—' }}</td>
+              <td class="col-billing-code">
+                <BillingCodeCell
+                  :suffix="stu.billing_code_suffix"
+                  :full-number="stu.full_collection_number"
+                />
+              </td>
               <td v-for="b in visibleBuckets" :key="b.key" class="num-cell">
                 <template v-if="bucketCell(stu, b.key)">
                   <span
@@ -275,6 +306,7 @@
                       <th>狀態</th>
                       <th>繳費日期</th>
                       <th>方式</th>
+                      <th>收款確認</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -288,6 +320,22 @@
                       </td>
                       <td>{{ it.payment_date || '—' }}</td>
                       <td>{{ it.payment_method || '—' }}</td>
+                      <td>
+                        <template v-if="activeSettlementTags(it.settlement).length">
+                          <el-tag
+                            v-for="tag in activeSettlementTags(it.settlement)"
+                            :key="tag.key"
+                            :type="tag.tagType"
+                            size="small"
+                            class="stmt-settlement__tag"
+                            :title="`${tag.label} ${formatCurrency(tag.amount)}`"
+                            data-test="stmt-item-settlement-tag"
+                          >
+                            {{ tag.label }}
+                          </el-tag>
+                        </template>
+                        <span v-else class="cell-empty">—</span>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -314,7 +362,7 @@
         <tfoot v-if="visibleStudents.length">
           <tr>
             <td v-if="canWrite" />
-            <td :colspan="2 + visibleBuckets.length">合計（目前篩選 {{ visibleStudents.length }} 人）</td>
+            <td :colspan="3 + visibleBuckets.length">合計（目前篩選 {{ visibleStudents.length }} 人）</td>
             <td class="num-cell">{{ formatCurrency(visibleDue) }}</td>
             <td class="num-cell outstanding-pos">{{ formatCurrency(visibleOutstanding) }}</td>
             <td :colspan="canWrite ? 3 : 2" />
@@ -352,6 +400,7 @@
  * 學生的訪視額度）與「預繳退款」（老闆核准/交付）兩個入口。
  */
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { getFeeMonthlyStatement, getPrepaymentRefunds, getPrepayments } from '@/api/fees'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
@@ -360,6 +409,12 @@ import { todayISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
+import BillingCodeCell from '@/components/fees/BillingCodeCell.vue'
+import {
+  activeSettlementTags,
+  sumSettlements,
+} from '@/components/fees/settlementDisplay'
+import type { FeeWorkspaceKey } from '@/components/fees/workspace/feesNavigation'
 import PrepaymentDrawer from '@/components/fees/PrepaymentDrawer.vue'
 import PrepaymentRefundsDialog from '@/components/fees/PrepaymentRefundsDialog.vue'
 import {
@@ -604,6 +659,22 @@ const visibleStudents = computed(() =>
   ),
 )
 
+// ─── 收款確認分解（SPEC-014 §16）：scope 內逐項 settlement 加總 ────────────
+const scopeSettlementTags = computed(() =>
+  activeSettlementTags(
+    sumSettlements(
+      scopeStudents.value.flatMap((s) => s.items.map((it) => it.settlement)),
+    ),
+  ),
+)
+
+// 收款確認 tag 跳轉（現金桶→結算交接、網銀桶→對帳）。測試環境可能未掛
+// router：useRouter 回 undefined 時靜默略過。
+const router = useRouter()
+function jumpToWorkspace(target: { ws: FeeWorkspaceKey; view: string }) {
+  router?.push({ path: '/fees', query: { ws: target.ws, view: target.view } })
+}
+
 const scopeDue = computed(() => scopeStudents.value.reduce((a, s) => a + s.total_due, 0))
 const scopePaid = computed(() => scopeStudents.value.reduce((a, s) => a + s.total_paid, 0))
 const scopeOutstanding = computed(() =>
@@ -690,8 +761,10 @@ function bucketCell(stu: StatementStudent, bucketKey: string) {
   }
 }
 
+// 6 固定欄（學生/班級/應繳合計/未收/預繳/狀態）＋銷帳碼＋動態費用欄
+// ＋canWrite 時的勾選與操作兩欄
 const totalColumns = computed(
-  () => 6 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
+  () => 7 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
 )
 
 // ─── 展開明細 ──────────────────────────────────────────────────────────────
@@ -997,6 +1070,33 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   text-align: right;
   font-size: 12.5px;
   color: var(--el-text-color-secondary);
+}
+
+/* 收款確認分解列（SPEC-014 §16） */
+.stmt-settlement {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 6px 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md, 8px);
+  background: var(--el-fill-color-lighter);
+}
+
+.stmt-settlement__title {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.stmt-settlement__tag--link {
+  cursor: pointer;
+}
+
+.stmt-settlement__empty {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
 }
 
 /* 批次列 */

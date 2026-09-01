@@ -140,6 +140,14 @@
           <el-table-column label="班級" prop="classroom_name" min-width="80" />
           <el-table-column label="費用項目" prop="fee_item_name" min-width="110" />
           <el-table-column label="學期" prop="period" width="85" />
+          <el-table-column label="銷帳碼" width="90" align="center">
+            <template #default="{ row }">
+              <BillingCodeCell
+                :suffix="row.billing_code_suffix"
+                :full-number="row.full_collection_number"
+              />
+            </template>
+          </el-table-column>
           <el-table-column label="應繳" width="110" align="right" class-name="num-cell">
             <template #default="{ row }">{{ formatCurrency(row.amount_due) }}</template>
           </el-table-column>
@@ -158,6 +166,27 @@
           </el-table-column>
           <el-table-column label="繳費方式" width="90">
             <template #default="{ row }">{{ row.payment_method || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="收款確認" min-width="150">
+            <template #default="{ row }">
+              <template v-if="activeSettlementTags(row.settlement).length">
+                <el-tag
+                  v-for="tag in activeSettlementTags(row.settlement)"
+                  :key="tag.key"
+                  :type="tag.tagType"
+                  size="small"
+                  class="settlement-tag"
+                  :class="{ 'settlement-tag--link': tag.jump }"
+                  :title="`${tag.label} ${formatCurrency(tag.amount)}`"
+                  data-test="settlement-tag"
+                  :data-bucket="tag.key"
+                  @click="tag.jump && jumpToWorkspace(tag.jump)"
+                >
+                  {{ tag.label }}
+                </el-tag>
+              </template>
+              <span v-else class="cell-empty">—</span>
+            </template>
           </el-table-column>
           <el-table-column label="操作" width="150" align="center" fixed="right">
             <template #default="{ row }">
@@ -266,17 +295,20 @@
             description="送出後將以此金額「更正」原繳費紀錄，請確認是要修正先前登記的金額。"
           />
 
-          <el-form-item label="繳費方式" prop="payment_method">
-            <el-select v-model="payForm.payment_method" aria-label="繳費方式" style="width: 100%">
-              <el-option label="現金" value="現金" />
-              <el-option label="轉帳" value="轉帳" />
-              <el-option label="其他" value="其他" />
-            </el-select>
-            <p
-              v-if="payForm.payment_method === '現金'"
-              class="cash-handover-hint"
-              data-test="cash-handover-hint"
-            >
+          <!-- 帳單頁限現金（業主裁定 2026-09-01）：轉帳一律走對帳工作區
+               由網銀資料銷帳回寫，帳單頁不再提供轉帳／其他選項 -->
+          <el-form-item label="繳費方式">
+            <div class="pay-method-fixed" data-test="pay-method-cash-only">
+              <el-tag size="small">現金</el-tag>
+              <el-button
+                link
+                type="primary"
+                size="small"
+                data-test="pay-method-recon-link"
+                @click="jumpToWorkspace({ ws: 'recon', view: 'collection' })"
+              >轉帳請至對帳工作區銷帳</el-button>
+            </div>
+            <p class="cash-handover-hint" data-test="cash-handover-hint">
               現金會計入 {{ payForm.payment_date || '繳費日' }} 的現金交接批；該日交接送出後需先請老闆重新開啟才能再收款。
             </p>
           </el-form-item>
@@ -315,10 +347,17 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import type { FormInstance } from 'element-plus'
 import { getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
+import {
+  activeSettlementTags,
+  type FeeSettlement,
+} from '@/components/fees/settlementDisplay'
+import type { FeeWorkspaceKey } from '@/components/fees/workspace/feesNavigation'
+import BillingCodeCell from '@/components/fees/BillingCodeCell.vue'
 import { todayISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
 import { downloadFile } from '@/utils/download'
@@ -347,6 +386,10 @@ interface FeeRow {
   payment_method?: string
   notes?: string
   fee_type?: string
+  // SPEC-014 §16 帳單×對帳打通
+  billing_code_suffix?: string | null
+  full_collection_number?: string | null
+  settlement?: FeeSettlement
 }
 
 interface FeeSummary {
@@ -556,9 +599,16 @@ const payForm = ref({
   payment_method: '現金',
   notes: '',
 })
+// 帳單頁限現金：payment_method 固定「現金」不再由使用者選擇，僅日期需驗證
 const payRules = {
   payment_date: [{ required: true, message: '請選擇繳費日期', trigger: 'change' }],
-  payment_method: [{ required: true, message: '請選擇繳費方式', trigger: 'change' }],
+}
+
+// 收款確認 tag／轉帳改道提示的跳轉（帳單↔結算/對帳互相跳轉）。
+// 測試環境可能未掛 router：useRouter 回 undefined 時跳轉靜默略過。
+const router = useRouter()
+function jumpToWorkspace(target: { ws: FeeWorkspaceKey; view: string }) {
+  router?.push({ path: '/fees', query: { ws: target.ws, view: target.view } })
 }
 
 const payDialogTitle = computed(() =>
@@ -580,7 +630,8 @@ function openPayDialog(row: FeeRow, evt?: Event) {
   payForm.value = {
     payment_date: todayISO(),
     amount_paid: row.status === 'partial' ? row.amount_paid : row.amount_due,
-    payment_method: row.payment_method || '現金',
+    // 限現金：不沿用列上的歷史快照（存量「轉帳」會被後端 422 擋下）
+    payment_method: '現金',
     notes: row.notes || '',
   }
   _payFormSnapshot = JSON.stringify(payForm.value)
@@ -738,6 +789,26 @@ defineExpose({
   font-size: var(--font-size-xs);
   line-height: 1.6;
   color: var(--el-text-color-secondary);
+}
+
+/* 收款確認 tags（可點者游標提示，跳結算/對帳工作區） */
+.settlement-tag {
+  margin: 1px 4px 1px 0;
+}
+
+.settlement-tag--link {
+  cursor: pointer;
+}
+
+.cell-empty {
+  color: var(--el-text-color-placeholder);
+}
+
+/* 限現金：固定顯示現金＋轉帳改道入口 */
+.pay-method-fixed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .fee-records-tab {

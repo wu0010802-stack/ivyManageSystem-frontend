@@ -17,17 +17,14 @@
           style="width: 100%"
         />
       </el-form-item>
-      <el-form-item label="繳費方式" required>
-        <el-select v-model="form.payment_method" aria-label="繳費方式" style="width: 100%">
-          <el-option label="現金" value="現金" />
-          <el-option label="轉帳" value="轉帳" />
-          <el-option label="其他" value="其他" />
-        </el-select>
-        <p
-          v-if="form.payment_method === '現金'"
-          class="cash-handover-hint"
-          data-test="cash-handover-hint"
-        >
+      <!-- 帳單頁限現金（業主裁定 2026-09-01）：轉帳一律走對帳工作區
+           由網銀資料銷帳回寫，批次收款不再提供轉帳／其他選項 -->
+      <el-form-item label="繳費方式">
+        <div class="pay-method-fixed" data-test="pay-method-cash-only">
+          <el-tag size="small">現金</el-tag>
+          <span class="pay-method-fixed__hint">轉帳收款請至「對帳」工作區匯入網銀資料銷帳</span>
+        </div>
+        <p class="cash-handover-hint" data-test="cash-handover-hint">
           現金會計入 {{ form.payment_date || '繳費日' }} 的現金交接批；該日交接送出後需先請老闆重新開啟才能再收款。
         </p>
       </el-form-item>
@@ -209,6 +206,18 @@ defineExpose({ form, rows, pendingRows, totalDue, submit })
   margin: var(--space-1) 0 0;
   font-size: var(--font-size-xs);
   line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+/* 限現金：固定顯示現金＋轉帳改道說明 */
+.pay-method-fixed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pay-method-fixed__hint {
+  font-size: var(--text-xs);
   color: var(--el-text-color-secondary);
 }
 
