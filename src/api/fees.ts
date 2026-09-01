@@ -234,6 +234,16 @@ export const getOutstandingReport = (
   api
     .get(`/fees/bill-slip-batches/${batchId}/outstanding`, { params })
     .then((res) => res.data)
+// SPEC-018：發單批次一鍵產生費用單（一生一筆淨額單；dry_run 先預覽）
+export const generateBillSlipRecords = (
+  batchId: number,
+  payload: ApiBody<'/fees/bill-slip-batches/{batch_id}/generate-records', 'post'>,
+): Promise<
+  ApiResponse<'/fees/bill-slip-batches/{batch_id}/generate-records', 'post'>
+> =>
+  api
+    .post(`/fees/bill-slip-batches/${batchId}/generate-records`, payload)
+    .then((res) => res.data)
 
 // ===== 現金收款 / 收款流水 =====
 export const createCashReceipt = (

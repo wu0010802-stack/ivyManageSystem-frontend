@@ -127,8 +127,27 @@
       <el-table-column label="零元單" width="80" align="right" class-name="num-cell">
         <template #default="{ row }">{{ row.zero_amount_count }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="170">
+      <el-table-column label="費用單" width="90" align="right" class-name="num-cell">
         <template #default="{ row }">
+          <span v-if="row.records_generated_count > 0">
+            {{ row.records_generated_count }} 筆
+          </span>
+          <span v-else class="hint">未產生</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="260">
+        <template #default="{ row }">
+          <el-button
+            v-if="canWrite && row.records_generated_count === 0 && row.net_total > 0"
+            size="small"
+            type="success"
+            text
+            data-test="open-generate"
+            aria-label="依此批次淨額產生費用單"
+            @click.stop="openGenerateDialog(row)"
+          >
+            產生費用單
+          </el-button>
           <el-button
             size="small"
             type="primary"
@@ -160,6 +179,88 @@
         />
       </template>
     </el-table>
+
+    <!-- 產生費用單（SPEC-018：一生一筆淨額單） -->
+    <el-dialog
+      v-model="genDialogVisible"
+      title="產生費用單"
+      width="600px"
+      data-test="gen-dialog"
+    >
+      <template v-if="genPlan">
+        <p class="intro">
+          依批次淨額為每位學生建立一筆費用單（XLS 淨額已含請假／同胞等調整，
+          代收核銷與現金收款都對這張單銷帳）。
+        </p>
+        <el-descriptions :column="2" size="small" border>
+          <el-descriptions-item label="帳單期別">
+            {{ genPlan.target_month }}
+          </el-descriptions-item>
+          <el-descriptions-item label="將建立">
+            {{ genPlan.created }} 筆
+          </el-descriptions-item>
+          <el-descriptions-item label="應收合計">
+            {{ formatCurrency(genPlan.total_amount_due) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="零元跳過">
+            {{ genPlan.skipped_zero }} 筆
+          </el-descriptions-item>
+          <el-descriptions-item label="已產過（跳過）">
+            {{ genPlan.skipped_existing }} 筆
+          </el-descriptions-item>
+          <el-descriptions-item label="繳費期限">
+            <el-date-picker
+              v-model="genDueDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              size="small"
+              :placeholder="`預設 ${genPlan.due_date}`"
+              :clearable="true"
+              aria-label="費用單繳費期限（留空用預設）"
+            />
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-alert
+          v-if="genPlan.conflicts.length"
+          type="error"
+          :closable="false"
+          class="mt-1"
+          data-test="gen-conflict-alert"
+          :title="`同月已有其他來源的月費單 ${genPlan.conflicts.length} 筆，不可重複產生`"
+          :description="`XLS 為主、同月互擋：${conflictNames}。請先處理既有費用單（範本產或手動建）再產生。`"
+        />
+        <el-alert
+          v-if="genPlan.unresolved.length"
+          type="warning"
+          :closable="false"
+          class="mt-1"
+          data-test="gen-unresolved-alert"
+          :title="`${genPlan.unresolved.length} 筆學生未解析（銷帳碼查無當期配置）`"
+          :description="`${unresolvedNames}。請先到費用設定補銷帳碼配置，或勾選下方略過。`"
+        />
+        <label v-if="genPlan.unresolved.length" class="skip-row">
+          <el-checkbox
+            v-model="skipUnresolved"
+            data-test="gen-skip-unresolved"
+            aria-label="略過未解析學生，僅為已解析學生產單"
+          />
+          <span>略過未解析學生（之後補配置可再產）</span>
+        </label>
+      </template>
+      <el-skeleton v-else :rows="3" animated />
+      <template #footer>
+        <el-button @click="genDialogVisible = false">取消</el-button>
+        <el-button
+          type="success"
+          data-test="gen-confirm"
+          :loading="generating"
+          :disabled="!canConfirmGenerate"
+          @click="confirmGenerate"
+        >
+          確認產生
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- 未繳名單 -->
     <section v-if="report" class="report-section" data-test="outstanding-report">
@@ -269,6 +370,7 @@ import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import {
   deleteBillSlipBatch,
+  generateBillSlipRecords,
   getBillSlipBatches,
   getOutstandingReport,
   importBillSlipBatch,
@@ -282,6 +384,7 @@ import {
 } from './collectionTypes'
 import type {
   BillSlipBatchRow,
+  BillSlipGenerateResult,
   BillSlipPreview,
   OutstandingReport,
 } from './collectionTypes'
@@ -391,6 +494,77 @@ async function selectBatch(row: BillSlipBatchRow) {
 async function setStatus(value: string) {
   statusFilter.value = value
   await fetchReport()
+}
+
+// ===== 產生費用單（SPEC-018） =====
+const genDialogVisible = ref(false)
+const genBatch = ref<BillSlipBatchRow | null>(null)
+const genPlan = ref<BillSlipGenerateResult | null>(null)
+const skipUnresolved = ref(false)
+const genDueDate = ref<string | null>(null)
+const generating = ref(false)
+
+const conflictNames = computed(() =>
+  [...new Set((genPlan.value?.conflicts ?? []).map((c) => c.student_name))]
+    .slice(0, 5)
+    .join('、'),
+)
+const unresolvedNames = computed(() =>
+  (genPlan.value?.unresolved ?? [])
+    .slice(0, 5)
+    .map((r) => r.student_name)
+    .join('、'),
+)
+const canConfirmGenerate = computed(() => {
+  const plan = genPlan.value
+  if (!plan || generating.value) return false
+  if (plan.conflicts.length > 0) return false
+  if (plan.unresolved.length > 0 && !skipUnresolved.value) return false
+  return plan.created > 0
+})
+
+async function openGenerateDialog(row: BillSlipBatchRow) {
+  genBatch.value = row
+  genPlan.value = null
+  skipUnresolved.value = false
+  genDueDate.value = null
+  genDialogVisible.value = true
+  try {
+    genPlan.value = (await generateBillSlipRecords(row.id, {
+      dry_run: true,
+      skip_unresolved: false,
+    })) as unknown as BillSlipGenerateResult
+  } catch (e) {
+    genDialogVisible.value = false
+    ElMessage.error(friendlyError('預覽產單失敗', e))
+  }
+}
+
+async function confirmGenerate() {
+  if (!genBatch.value || !canConfirmGenerate.value) return
+  generating.value = true
+  try {
+    const payload: {
+      dry_run: boolean
+      skip_unresolved: boolean
+      due_date?: string
+    } = { dry_run: false, skip_unresolved: skipUnresolved.value }
+    if (genDueDate.value) payload.due_date = genDueDate.value
+    const result = (await generateBillSlipRecords(
+      genBatch.value.id,
+      payload,
+    )) as unknown as BillSlipGenerateResult
+    ElMessage.success(
+      `已產生 ${result.created} 筆費用單，應收 ${formatCurrency(result.total_amount_due)}`,
+    )
+    genDialogVisible.value = false
+    genPlan.value = null
+    await fetchBatches()
+  } catch (e) {
+    ElMessage.error(friendlyError('產生費用單失敗', e))
+  } finally {
+    generating.value = false
+  }
 }
 
 async function removeBatch(row: BillSlipBatchRow) {

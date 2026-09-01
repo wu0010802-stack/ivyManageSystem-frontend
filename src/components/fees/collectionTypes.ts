@@ -114,6 +114,39 @@ export interface BillSlipBatchRow {
   note: string | null
   created_at: string
   created?: boolean | null
+  /** SPEC-018：該批已產生的費用單筆數（0＝尚未產單） */
+  records_generated_count: number
+}
+
+/** SPEC-018：發單批次產生費用單的計畫/結果（dry_run 與實際產生同構） */
+export interface BillSlipGenerateResult {
+  batch_id: number
+  dry_run: boolean
+  created: number
+  skipped_zero: number
+  skipped_existing: number
+  unresolved: {
+    slip_item_id: number
+    student_name: string
+    collection_suffix: string
+    net_amount: number
+  }[]
+  conflicts: {
+    student_id: number
+    student_name: string
+    record_id: number
+    source: string
+    source_bill_slip_batch_id: number | null
+  }[]
+  total_amount_due: number
+  due_date: string
+  target_month: string
+  preview: {
+    student_id: number
+    student_name: string
+    classroom_name: string | null
+    amount_due: number
+  }[]
 }
 
 export interface BillSlipPreview {

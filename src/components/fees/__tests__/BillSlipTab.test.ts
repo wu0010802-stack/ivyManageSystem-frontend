@@ -16,6 +16,7 @@ const apiMocks = vi.hoisted(() => ({
   getBillSlipBatches: vi.fn(),
   getOutstandingReport: vi.fn(),
   deleteBillSlipBatch: vi.fn(() => Promise.resolve({ ok: true })),
+  generateBillSlipRecords: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -57,6 +58,13 @@ const STUBS = {
     template: '<div v-bind="$attrs"><p>{{ title }}</p><p>{{ description }}</p></div>',
   },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
+  'el-dialog': {
+    props: ['modelValue', 'title'],
+    template:
+      '<div v-if="modelValue" v-bind="$attrs"><p>{{ title }}</p><slot /><slot name="footer" /></div>',
+  },
+  'el-checkbox': { template: '<input type="checkbox" v-bind="$attrs" />' },
+  'el-date-picker': { template: '<input v-bind="$attrs" />' },
   EmptyState: {
     props: ['title', 'description'],
     template: '<div data-testid="empty-state"><p>{{ title }}</p></div>',
@@ -329,6 +337,143 @@ describe('BillSlipTab 重複批次防護', () => {
     authMocks.perms = new Set(['FEES_READ'])
     const wrapper = await mountTab()
     expect(wrapper.find('[data-test="delete-batch"]').exists()).toBe(false)
+  })
+})
+
+
+describe('BillSlipTab 產生費用單（SPEC-018）', () => {
+  const PLAN = {
+    batch_id: 7,
+    dry_run: true,
+    created: 119,
+    skipped_zero: 78,
+    skipped_existing: 0,
+    unresolved: [],
+    conflicts: [],
+    total_amount_due: 1775200,
+    due_date: '2026-08-10',
+    target_month: '2026-08',
+    preview: [],
+  }
+
+  it('開啟對話框先 dry_run 預覽，顯示筆數與合計', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue(PLAN)
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      openGenerateDialog: (row: unknown) => Promise<void>
+    }
+    await vm.openGenerateDialog(BATCH)
+    await nextTick()
+    expect(apiMocks.generateBillSlipRecords).toHaveBeenCalledWith(7, {
+      dry_run: true,
+      skip_unresolved: false,
+    })
+    const dialog = wrapper.find('[data-test="gen-dialog"]')
+    expect(dialog.exists()).toBe(true)
+    expect(dialog.text()).toContain('119')
+    expect(dialog.text()).toContain('零元')
+  })
+
+  it('確認後以非 dry_run 送出並刷新批次清單', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue(PLAN)
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      openGenerateDialog: (row: unknown) => Promise<void>
+      confirmGenerate: () => Promise<void>
+    }
+    await vm.openGenerateDialog(BATCH)
+    apiMocks.generateBillSlipRecords.mockResolvedValue({
+      ...PLAN,
+      dry_run: false,
+    })
+    apiMocks.getBillSlipBatches.mockClear()
+    await vm.confirmGenerate()
+    expect(apiMocks.generateBillSlipRecords).toHaveBeenLastCalledWith(7, {
+      dry_run: false,
+      skip_unresolved: false,
+    })
+    expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()
+    expect(wrapper.find('[data-test="gen-dialog"]').exists()).toBe(false)
+  })
+
+  it('有同月其他來源衝突時警示且不可確認', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue({
+      ...PLAN,
+      created: 0,
+      conflicts: [
+        {
+          student_id: 5,
+          student_name: '王小明',
+          record_id: 9,
+          source: 'template',
+          source_bill_slip_batch_id: null,
+        },
+      ],
+    })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      openGenerateDialog: (row: unknown) => Promise<void>
+      confirmGenerate: () => Promise<void>
+      canConfirmGenerate: boolean
+    }
+    await vm.openGenerateDialog(BATCH)
+    await nextTick()
+    expect(wrapper.find('[data-test="gen-conflict-alert"]').exists()).toBe(true)
+    expect(vm.canConfirmGenerate).toBe(false)
+    apiMocks.generateBillSlipRecords.mockClear()
+    await vm.confirmGenerate()
+    expect(apiMocks.generateBillSlipRecords).not.toHaveBeenCalled()
+  })
+
+  it('有未解析學生時需先勾選略過才能確認', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue({
+      ...PLAN,
+      unresolved: [
+        {
+          slip_item_id: 3,
+          student_name: '查無此生',
+          collection_suffix: '9999',
+          net_amount: 9720,
+        },
+      ],
+    })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      openGenerateDialog: (row: unknown) => Promise<void>
+      confirmGenerate: () => Promise<void>
+      canConfirmGenerate: boolean
+      skipUnresolved: boolean
+    }
+    await vm.openGenerateDialog(BATCH)
+    await nextTick()
+    expect(wrapper.find('[data-test="gen-unresolved-alert"]').text()).toContain(
+      '查無此生',
+    )
+    expect(vm.canConfirmGenerate).toBe(false)
+    vm.skipUnresolved = true
+    await nextTick()
+    expect(vm.canConfirmGenerate).toBe(true)
+    await vm.confirmGenerate()
+    expect(apiMocks.generateBillSlipRecords).toHaveBeenLastCalledWith(7, {
+      dry_run: false,
+      skip_unresolved: true,
+    })
+  })
+
+  it('全部已產過（created=0）時不可再確認', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue({
+      ...PLAN,
+      created: 0,
+      skipped_existing: 119,
+    })
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      openGenerateDialog: (row: unknown) => Promise<void>
+      canConfirmGenerate: boolean
+    }
+    await vm.openGenerateDialog(BATCH)
+    await nextTick()
+    expect(vm.canConfirmGenerate).toBe(false)
   })
 })
 

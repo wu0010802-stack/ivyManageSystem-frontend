@@ -7004,6 +7004,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/bill-slip-batches/{batch_id}/generate-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Bill Slip Records
+         * @description 發單批次一鍵產生費用單（SPEC-018：一生一筆淨額單）。
+         *
+         *     XLS 淨額＝應收權威（已含請假/同胞等調整），CS 代收媒合金額天生吻合。
+         *     零元單跳過；未解析列 fail-closed 422（skip_unresolved 明示跳過）；
+         *     同月其他來源月費單衝突 409（XLS 為主、同月互擋，SPEC-018 §2）。
+         */
+        post: operations["generate_bill_slip_records_api_fees_bill_slip_batches__batch_id__generate_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/bill-slip-batches/{batch_id}/outstanding": {
         parameters: {
             query?: never;
@@ -22743,6 +22767,11 @@ export interface components {
             note?: string | null;
             /** Original Filename */
             original_filename?: string | null;
+            /**
+             * Records Generated Count
+             * @default 0
+             */
+            records_generated_count: number;
             /** Row Count */
             row_count: number;
             /** Source */
@@ -22768,6 +22797,84 @@ export interface components {
             row_count: number;
             /** Title */
             title: string;
+        };
+        /** BillSlipGenerateConflictOut */
+        BillSlipGenerateConflictOut: {
+            /** Record Id */
+            record_id: number;
+            /** Source */
+            source: string;
+            /** Source Bill Slip Batch Id */
+            source_bill_slip_batch_id?: number | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /** BillSlipGenerateOut */
+        BillSlipGenerateOut: {
+            /** Batch Id */
+            batch_id: number;
+            /** Conflicts */
+            conflicts: components["schemas"]["BillSlipGenerateConflictOut"][];
+            /** Created */
+            created: number;
+            /** Dry Run */
+            dry_run: boolean;
+            /**
+             * Due Date
+             * Format: date
+             */
+            due_date: string;
+            /** Preview */
+            preview: components["schemas"]["BillSlipGeneratePreviewOut"][];
+            /** Skipped Existing */
+            skipped_existing: number;
+            /** Skipped Zero */
+            skipped_zero: number;
+            /** Target Month */
+            target_month: string;
+            /** Total Amount Due */
+            total_amount_due: number;
+            /** Unresolved */
+            unresolved: components["schemas"]["BillSlipGenerateUnresolvedOut"][];
+        };
+        /** BillSlipGeneratePreviewOut */
+        BillSlipGeneratePreviewOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
+        };
+        /** BillSlipGenerateRequest */
+        BillSlipGenerateRequest: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+            /** Due Date */
+            due_date?: string | null;
+            /**
+             * Skip Unresolved
+             * @default false
+             */
+            skip_unresolved: boolean;
+        };
+        /** BillSlipGenerateUnresolvedOut */
+        BillSlipGenerateUnresolvedOut: {
+            /** Collection Suffix */
+            collection_suffix: string;
+            /** Net Amount */
+            net_amount: number;
+            /** Slip Item Id */
+            slip_item_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /** BillSlipPreviewOut */
         BillSlipPreviewOut: {
@@ -57498,6 +57605,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillSlipDeleteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_bill_slip_records_api_fees_bill_slip_batches__batch_id__generate_records_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillSlipGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipGenerateOut"];
                 };
             };
             /** @description Validation Error */

@@ -56,6 +56,7 @@ import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import {
+  getBillSlipBatches,
   getCashHandovers,
   getClosePeriods,
   getCloseSummary,
@@ -96,6 +97,10 @@ interface ClosePeriodLite {
   close_year: number
   close_month: number
   status: string
+}
+interface BillSlipBatchLite {
+  net_total: number
+  records_generated_count: number
 }
 
 const emit = defineEmits<{
@@ -173,6 +178,23 @@ async function loadMonthClosed() {
   }
 }
 
+// SPEC-018：發單批次（XLS 檢核檔）是月費應收權威；匯入後未產生費用單＝
+// 收款與代收核銷都沒有正確金額的單可對，屬待辦。
+const billSlipStats = ref<{ total: number; pending: number } | null>(null)
+async function loadBillSlips() {
+  try {
+    const rows = (await getBillSlipBatches()) as unknown as BillSlipBatchLite[]
+    billSlipStats.value = {
+      total: rows.length,
+      pending: rows.filter(
+        (r) => r.net_total > 0 && r.records_generated_count === 0,
+      ).length,
+    }
+  } catch {
+    billSlipStats.value = null
+  }
+}
+
 async function loadAll(initial: boolean) {
   if (initial) loading.value = true
   await Promise.allSettled([
@@ -180,6 +202,7 @@ async function loadAll(initial: boolean) {
     loadTodayHandover(),
     loadFeeSummary(),
     loadMonthClosed(),
+    loadBillSlips(),
   ])
   loading.value = false
 }
@@ -303,11 +326,12 @@ function billingItem(): QueueItem {
     return { ...base, state: 'unknown', detail: '無法載入收款統計，點入帳單查看' }
   }
   if (!currentPeriod.value) {
-    // 產單已改每日排程自動化：空狀態導向費用設定確認範本，而非手動產單
+    // SPEC-018：月費以發單批次（XLS）為主要來源；範本產單保留給其他費用類型
     return {
       ...base,
       state: 'muted',
-      detail: '尚未產生任何費用單；啟用費用範本後，系統將於每日自動產生本學期帳款',
+      detail:
+        '尚未產生任何費用單；可在對帳匯入繳款單檢核檔一鍵產單，或啟用費用範本由系統每日自動產生',
       actionLabel: '前往費用設定',
       target: { ws: 'settings' as const, view: 'templates' },
     }
@@ -332,7 +356,47 @@ function billingItem(): QueueItem {
   }
 }
 
+function slipGenItem(): QueueItem {
+  const base = {
+    key: 'billslips',
+    title: '發單批次產單',
+    actionLabel: '前往產單',
+    target: { ws: 'recon' as const, view: 'billslips' },
+  }
+  const s = billSlipStats.value
+  if (!s) {
+    return {
+      ...base,
+      state: 'unknown',
+      detail: '無法載入發單批次，點入發單與未繳查看',
+      actionLabel: '前往查看',
+    }
+  }
+  if (s.total === 0) {
+    return {
+      ...base,
+      state: 'muted',
+      detail: '尚無發單批次；匯入繳款單檢核檔（Check_*.xls）即可一鍵產生費用單',
+      actionLabel: '前往匯入',
+    }
+  }
+  if (s.pending > 0) {
+    return {
+      ...base,
+      state: 'action',
+      detail: `${s.pending} 個發單批次已匯入、尚未產生費用單`,
+    }
+  }
+  return {
+    ...base,
+    state: 'ok',
+    detail: '發單批次皆已產生費用單',
+    actionLabel: '查看',
+  }
+}
+
 const queueItems = computed<QueueItem[]>(() => [
+  slipGenItem(),
   bankItem(),
   handoverItem(),
   refundItem(),

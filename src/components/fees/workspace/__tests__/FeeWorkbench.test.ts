@@ -12,6 +12,7 @@ const apiMocks = vi.hoisted(() => ({
   getFeePeriods: vi.fn(),
   getFeeSummary: vi.fn(),
   getClosePeriods: vi.fn(),
+  getBillSlipBatches: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -77,16 +78,17 @@ beforeEach(() => {
     total_unpaid: 480000,
   })
   apiMocks.getClosePeriods.mockResolvedValue({ total: 0, items: [] })
+  apiMocks.getBillSlipBatches.mockResolvedValue([])
 })
 
 describe('FeeWorkbench 工作佇列', () => {
-  it('載入中顯示 skeleton，完成後顯示五列佇列', async () => {
+  it('載入中顯示 skeleton，完成後顯示六列佇列', async () => {
     const wrapper = mountWorkbench()
     expect(wrapper.find('[data-testid="skeleton"]').exists()).toBe(true)
     await flushAll()
     expect(wrapper.find('[data-testid="skeleton"]').exists()).toBe(false)
     const rows = wrapper.findAll('.queue-row')
-    expect(rows).toHaveLength(5)
+    expect(rows).toHaveLength(6)
   })
 
   it('每個統計 API 只呼叫一次（不因佇列渲染重複請求）', async () => {
@@ -165,5 +167,51 @@ describe('FeeWorkbench 工作佇列', () => {
     const wrapper = mountWorkbench()
     await flushAll()
     expect(wrapper.text()).toContain('今日尚無現金收款')
+  })
+})
+
+describe('FeeWorkbench 發單批次產單卡（SPEC-018）', () => {
+  const SLIP = {
+    id: 7,
+    net_total: 2148669,
+    records_generated_count: 0,
+  }
+
+  it('有批次未產單時顯示待處理並導向發單與未繳', async () => {
+    apiMocks.getBillSlipBatches.mockResolvedValue([
+      SLIP,
+      { id: 8, net_total: 1775200, records_generated_count: 119 },
+    ])
+    const wrapper = mountWorkbench()
+    await flushAll()
+    expect(wrapper.text()).toContain('1 個發單批次已匯入、尚未產生費用單')
+    await wrapper.find('[data-test="workbench-action-billslips"]').trigger('click')
+    expect(wrapper.emitted('navigate')?.at(-1)).toEqual([
+      { ws: 'recon', view: 'billslips' },
+    ])
+  })
+
+  it('批次皆已產單時顯示完成', async () => {
+    apiMocks.getBillSlipBatches.mockResolvedValue([
+      { id: 8, net_total: 1775200, records_generated_count: 119 },
+    ])
+    const wrapper = mountWorkbench()
+    await flushAll()
+    expect(wrapper.text()).toContain('發單批次皆已產生費用單')
+  })
+
+  it('尚無批次時引導匯入檢核檔（不虛構數字）', async () => {
+    const wrapper = mountWorkbench()
+    await flushAll()
+    expect(wrapper.text()).toContain('尚無發單批次')
+    expect(wrapper.text()).toContain('檢核檔')
+  })
+
+  it('載入失敗時降級為狀態未知並保留入口', async () => {
+    apiMocks.getBillSlipBatches.mockRejectedValue(new Error('403'))
+    const wrapper = mountWorkbench()
+    await flushAll()
+    expect(wrapper.text()).toContain('無法載入發單批次')
+    expect(wrapper.find('[data-test="workbench-action-billslips"]').exists()).toBe(true)
   })
 })
