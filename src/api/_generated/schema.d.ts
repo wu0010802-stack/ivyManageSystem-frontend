@@ -22852,6 +22852,8 @@ export interface components {
         };
         /** BillSlipGenerateRequest */
         BillSlipGenerateRequest: {
+            /** Batch Kind */
+            batch_kind?: "monthly" | null;
             /**
              * Dry Run
              * @default false

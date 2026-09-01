@@ -374,14 +374,16 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
     expect(dialog.text()).toContain('零元')
   })
 
-  it('確認後以非 dry_run 送出並刷新批次清單', async () => {
+  it('確認後以非 dry_run 送出（含月費批聲明）並刷新批次清單', async () => {
     apiMocks.generateBillSlipRecords.mockResolvedValue(PLAN)
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
       openGenerateDialog: (row: unknown) => Promise<void>
       confirmGenerate: () => Promise<void>
+      kindConfirmed: boolean
     }
     await vm.openGenerateDialog(BATCH)
+    vm.kindConfirmed = true
     apiMocks.generateBillSlipRecords.mockResolvedValue({
       ...PLAN,
       dry_run: false,
@@ -391,9 +393,31 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
     expect(apiMocks.generateBillSlipRecords).toHaveBeenLastCalledWith(7, {
       dry_run: false,
       skip_unresolved: false,
+      batch_kind: 'monthly',
     })
     expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()
     expect(wrapper.find('[data-test="gen-dialog"]').exists()).toBe(false)
+  })
+
+  it('未勾選月費批聲明時不可確認（v1 僅支援月費批）', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue(PLAN)
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      openGenerateDialog: (row: unknown) => Promise<void>
+      confirmGenerate: () => Promise<void>
+      canConfirmGenerate: boolean
+      kindConfirmed: boolean
+    }
+    await vm.openGenerateDialog(BATCH)
+    await nextTick()
+    expect(wrapper.find('[data-test="gen-kind-confirm"]').exists()).toBe(true)
+    expect(vm.canConfirmGenerate).toBe(false)
+    apiMocks.generateBillSlipRecords.mockClear()
+    await vm.confirmGenerate()
+    expect(apiMocks.generateBillSlipRecords).not.toHaveBeenCalled()
+    vm.kindConfirmed = true
+    await nextTick()
+    expect(vm.canConfirmGenerate).toBe(true)
   })
 
   it('有同月其他來源衝突時警示且不可確認', async () => {
@@ -443,6 +467,7 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
       confirmGenerate: () => Promise<void>
       canConfirmGenerate: boolean
       skipUnresolved: boolean
+      kindConfirmed: boolean
     }
     await vm.openGenerateDialog(BATCH)
     await nextTick()
@@ -450,6 +475,7 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
       '查無此生',
     )
     expect(vm.canConfirmGenerate).toBe(false)
+    vm.kindConfirmed = true
     vm.skipUnresolved = true
     await nextTick()
     expect(vm.canConfirmGenerate).toBe(true)
@@ -457,6 +483,7 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
     expect(apiMocks.generateBillSlipRecords).toHaveBeenLastCalledWith(7, {
       dry_run: false,
       skip_unresolved: true,
+      batch_kind: 'monthly',
     })
   })
 

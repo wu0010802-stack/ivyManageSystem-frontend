@@ -246,6 +246,17 @@
           />
           <span>略過未解析學生（之後補配置可再產）</span>
         </label>
+        <label class="skip-row">
+          <el-checkbox
+            v-model="kindConfirmed"
+            data-test="gen-kind-confirm"
+            aria-label="確認此批為月費批次"
+          />
+          <span>
+            我確認此批為<strong>月費批次</strong>（註冊費等其他批次目前不支援產單，
+            檢核檔無類型資訊，請依批次名與樣張確認）
+          </span>
+        </label>
       </template>
       <el-skeleton v-else :rows="3" animated />
       <template #footer>
@@ -501,6 +512,8 @@ const genDialogVisible = ref(false)
 const genBatch = ref<BillSlipBatchRow | null>(null)
 const genPlan = ref<BillSlipGenerateResult | null>(null)
 const skipUnresolved = ref(false)
+// v1 僅支援月費批（SPEC-018 §3.6）：檢核檔無類型資訊，靠操作者明示聲明
+const kindConfirmed = ref(false)
 const genDueDate = ref<string | null>(null)
 const generating = ref(false)
 
@@ -518,6 +531,7 @@ const unresolvedNames = computed(() =>
 const canConfirmGenerate = computed(() => {
   const plan = genPlan.value
   if (!plan || generating.value) return false
+  if (!kindConfirmed.value) return false
   if (plan.conflicts.length > 0) return false
   if (plan.unresolved.length > 0 && !skipUnresolved.value) return false
   return plan.created > 0
@@ -527,6 +541,7 @@ async function openGenerateDialog(row: BillSlipBatchRow) {
   genBatch.value = row
   genPlan.value = null
   skipUnresolved.value = false
+  kindConfirmed.value = false
   genDueDate.value = null
   genDialogVisible.value = true
   try {
@@ -547,8 +562,13 @@ async function confirmGenerate() {
     const payload: {
       dry_run: boolean
       skip_unresolved: boolean
+      batch_kind: 'monthly'
       due_date?: string
-    } = { dry_run: false, skip_unresolved: skipUnresolved.value }
+    } = {
+      dry_run: false,
+      skip_unresolved: skipUnresolved.value,
+      batch_kind: 'monthly',
+    }
     if (genDueDate.value) payload.due_date = genDueDate.value
     const result = (await generateBillSlipRecords(
       genBatch.value.id,
