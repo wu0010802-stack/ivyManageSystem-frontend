@@ -438,6 +438,10 @@ html {
   -webkit-tap-highlight-color: transparent;
   text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
+  /* sticky top bar（M3TopAppBar，64px＋safe-area）下的捲動定位：沒有這條時
+     鍵盤聚焦與 scrollIntoView 會把目標元素捲進 bar 底下（tab 導航看不到焦點、
+     錨點跳轉被遮住頂端）。取 96px 含 bar 高與一點呼吸空間。 */
+  scroll-padding-top: 96px;
 }
 
 body {

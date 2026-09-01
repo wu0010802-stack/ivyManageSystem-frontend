@@ -77,9 +77,11 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 .hero-laurel {
+  /* 右下而非左上：左上會墊在「N 天已請」數字正下方，logo 線條干擾閱讀
+     （比照 DashboardHero 的 watermark 遠離主數字原則） */
   position: absolute;
-  left: -10px;
-  top: 4px;
+  right: -14px;
+  bottom: -18px;
   z-index: 0;
 }
 
