@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import ParentLayout from './layouts/ParentLayout.vue'
 import ConsentModal from './components/ConsentModal.vue'
 import ParentLogoutOverlay from './components/ParentLogoutOverlay.vue'
+import StaffSessionNotice from './components/StaffSessionNotice.vue'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import { useConsentGate } from './composables/useConsentGate'
 import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
@@ -87,6 +88,10 @@ router.beforeEach((to, from) => {
 
   <!-- 登出網路/LIFF 清理期間以不透明遮罩阻擋舊帳號 PII 與任何互動。 -->
   <ParentLogoutOverlay />
+
+  <!-- 這個瀏覽器目前是員工身分（管理端／家長端同源共用 access_token）時，
+       家長端每支 API 都會 403；用明確提示取代滿頁 api 錯誤。 -->
+  <StaffSessionNotice />
 </template>
 
 <style>

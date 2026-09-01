@@ -16,6 +16,7 @@ import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
 import { toast } from '@/parent/utils/toast'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
+import { useStaffSessionGate } from '@/parent/composables/useStaffSessionGate'
 import { tenantErrorCodeOf, tenantHeaders } from '@/utils/tenant'
 import { showTenantBlocked } from '@/utils/tenantBlocked'
 
@@ -47,6 +48,13 @@ declare module 'axios' {
 }
 
 export const PARENT_API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+/**
+ * 後端 `require_parent_role()` 對非家長身分回的 403 detail（ivy-backend
+ * utils/auth.py:918）。此文案是既有契約、後端有逐字斷言測試守著；家長端據此
+ * 分辨「身分不對」與「家長本人真的沒權限」兩種 403。
+ */
+export const PARENT_ROLE_REQUIRED_DETAIL = '此 API 僅限家長端使用'
 
 export function buildParentRefreshUrl(base: string = PARENT_API_BASE): string {
   return `${base}/parent/auth/refresh`
@@ -301,6 +309,18 @@ api.interceptors.response.use(
     const consentScope = error.response?.headers?.['x-consent-required']
     if (error.response?.status === 403 && consentScope) {
       useConsentGate().require(String(consentScope))
+    }
+
+    // 員工身分 cookie：管理端與家長端同源、共用同一顆 access_token（後端
+    // utils/cookie.py `_COOKIE_PATH = "/api"`），先登管理端再開家長端時每支
+    // API 都會撞 require_parent_role() 的 403。這種 403 refresh 與重試都救不了
+    // （cookie 本身就是別人的身分），也不該被當成一般 api 錯誤噴給使用者，
+    // 升成全域提示讓他知道要先登出或換無痕視窗（見 useStaffSessionGate）。
+    if (error.response?.status === 403 && !consentScope) {
+      const roleGuardDetail = (error.response?.data as { detail?: unknown } | undefined)?.detail
+      if (roleGuardDetail === PARENT_ROLE_REQUIRED_DETAIL) {
+        useStaffSessionGate().require()
+      }
     }
 
     // 正規化錯誤訊息：對齊 admin (src/api/index.ts) 對 BusinessError envelope 的處理
