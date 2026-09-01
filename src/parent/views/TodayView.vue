@@ -346,8 +346,6 @@ function go(path: string) {
       contactBookSub props（見上方 script）。
     -->
 
-    <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
-
     <!-- Bento 格：行政事項，位階刻意在今日卡之下 -->
     <div
       v-if="feesInfo || pendingSignCount > 0 || pendingSignDocCount > 0 || busInfo || pickupActiveCount > 0"
@@ -395,6 +393,10 @@ function go(path: string) {
         to="/sign"
       />
     </div>
+
+    <!-- LINE 好友提示：系統性提醒，位階刻意排在待辦（bento）之後——
+         不能比逾期繳費／待簽文件更早搶走注意力 -->
+    <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
     <template v-if="summaryPending && !summaryData">
       <div class="skeleton-wrap">
