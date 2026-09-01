@@ -106,7 +106,7 @@ export const diffRosters = (
   const moved: { member: RosterMemberDto; fromClass: string | null; toClass: string | null }[] = []
   for (const m of after) {
     const prev = beforeById.get(m.student_id)
-    if (prev && prev.class_name !== m.class_name) {
+    if (prev && prev.classroom_id !== m.classroom_id) {
       moved.push({ member: m, fromClass: prev.class_name, toClass: m.class_name })
     }
   }

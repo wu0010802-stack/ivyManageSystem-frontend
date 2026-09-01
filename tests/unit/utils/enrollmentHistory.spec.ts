@@ -68,15 +68,22 @@ describe('buildTrendChartData', () => {
 })
 
 describe('diffRosters', () => {
+  // 班級 ID 對照表（classroom_id 為穩定識別碼）
+  const classroomIds: Record<string, number> = {
+    小班: 101,
+    中班: 102,
+    大班: 103,
+  }
+
   const m = (id: number, cls: string | null): RosterMemberDto => ({
     student_id: id,
     student_name: `生${id}`,
-    classroom_id: cls ? cls.length : null,
+    classroom_id: cls ? classroomIds[cls] : null,
     class_name: cls,
     lifecycle_status_at: 'active',
   })
 
-  it('分出 joined / left / moved 三組', () => {
+  it('分出 joined / left / moved 三組（用 classroom_id 判定移動，非 class_name）', () => {
     const before = [m(1, '小班'), m(2, '小班'), m(3, '中班')]
     const after = [m(2, '中班'), m(3, '中班'), m(4, '大班')]
     const d = diffRosters(before, after)
@@ -85,5 +92,22 @@ describe('diffRosters', () => {
     expect(d.moved).toEqual([
       { member: m(2, '中班'), fromClass: '小班', toClass: '中班' },
     ])
+  })
+
+  it('同 classroom_id 不變、class_name 改變（模擬改班名）→ 不出現在 moved', () => {
+    const before = [m(1, '小班')]
+    const after = [
+      {
+        student_id: 1,
+        student_name: '生1',
+        classroom_id: classroomIds['小班'],
+        class_name: '小班（改名）',
+        lifecycle_status_at: 'active',
+      },
+    ]
+    const d = diffRosters(before, after)
+    expect(d.joined).toEqual([])
+    expect(d.left).toEqual([])
+    expect(d.moved).toEqual([])
   })
 })
