@@ -16,6 +16,7 @@ import { LineChart } from '@/composables/useChartJs'
 import {
   buildComparisonRows,
   buildTrendChartData,
+  changeQueryRange,
   classColumnNames,
   diffRosters,
   type RosterMemberDto,
@@ -28,7 +29,7 @@ type ChangeEventDto = Schema<'HeadcountChangeEvent'>
 const termStore = useAcademicTermStore()
 const loading = ref(false)
 const snapshots = ref<SnapshotEntryDto[]>([])
-const selectedClasses = ref<string[]>([])
+const selectedClasses = ref<number[]>([])
 const canWrite = computed(() => hasPermission('STUDENTS_WRITE'))
 
 const fetchHistory = async () => {
@@ -86,8 +87,9 @@ const openInterval = async (rowIndex: number) => {
   drawerVisible.value = true
   drawerLoading.value = true
   try {
+    const { date_from, date_to } = changeQueryRange(from, to)
     const [changesRes, beforeRes, afterRes] = await Promise.all([
-      getHeadcountChanges({ date_from: from, date_to: to }),
+      getHeadcountChanges({ date_from, date_to }),
       getSnapshotMembers({ date: from }),
       getSnapshotMembers({ date: to }),
     ])
@@ -150,7 +152,7 @@ const deltaText = (d: number | null) => (d == null ? '' : d > 0 ? `+${d}` : `${d
         placeholder="疊加班級曲線"
         style="width: 260px"
       >
-        <el-option v-for="n in columnNames" :key="n" :label="n" :value="n" />
+        <el-option v-for="col in columnNames" :key="col.id" :label="col.label" :value="col.id" />
       </el-select>
       <el-button
         v-if="canWrite"
@@ -206,17 +208,17 @@ const deltaText = (d: number | null) => (d == null ? '' : d > 0 ? `+${d}` : `${d
           </template>
         </el-table-column>
         <el-table-column
-          v-for="name in columnNames"
-          :key="name"
-          :label="name"
+          v-for="col in columnNames"
+          :key="col.id"
+          :label="col.label"
           width="100"
           align="center"
         >
           <template #default="{ row }">
-            <template v-if="row.cells[name]">
-              {{ row.cells[name].total }}
-              <span :class="deltaClass(row.cells[name].delta)" class="delta">
-                {{ deltaText(row.cells[name].delta) }}
+            <template v-if="row.cells[col.id]">
+              {{ row.cells[col.id].total }}
+              <span :class="deltaClass(row.cells[col.id].delta)" class="delta">
+                {{ deltaText(row.cells[col.id].delta) }}
               </span>
             </template>
             <span v-else class="cell-empty">—</span>

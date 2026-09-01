@@ -34,29 +34,44 @@ export interface ComparisonRow {
   source: string
   school_total: number
   school_delta: number | null
-  cells: Record<string, { total: number; delta: number | null } | undefined>
+  cells: Record<number, { total: number; delta: number | null } | undefined>
 }
 
-export const classColumnNames = (snapshots: SnapshotEntryDto[]): string[] => {
-  const seen = new Set<string>()
-  const out: string[] = []
+/** 班級對照欄：以 classroom_id（唯一鍵）識別，label 取該班最後一次出現的 class_name。
+ *
+ * `classroom_id` 而非 `class_name` 才是穩定識別碼——classrooms 的唯一鍵是
+ * (tenant, 學年, 學期, name)，跨學年同名班（例：每年都有「小班」）是不同 id，
+ * 用名字當 key 會讓同一序列裡的兩個「小班」互相覆蓋人數（fix round 2, finding #1）。
+ */
+export interface ClassColumn {
+  id: number
+  label: string
+}
+
+export const classColumnNames = (snapshots: SnapshotEntryDto[]): ClassColumn[] => {
+  const order: number[] = []
+  const seen = new Set<number>()
+  const labelById = new Map<number, string>()
   for (const s of snapshots) {
     for (const c of s.classes) {
-      const name = c.class_name ?? `#${c.classroom_id}`
-      if (!seen.has(name)) {
-        seen.add(name)
-        out.push(name)
+      if (c.classroom_id == null) continue
+      if (!seen.has(c.classroom_id)) {
+        seen.add(c.classroom_id)
+        order.push(c.classroom_id)
       }
+      // 每次出現都覆寫 → 最後一次出現的 class_name 勝出（防改名/刪班冗餘副本漂移）
+      labelById.set(c.classroom_id, c.class_name ?? `#${c.classroom_id}`)
     }
   }
-  return out
+  return order.map((id) => ({ id, label: labelById.get(id) ?? `#${id}` }))
 }
 
 export const buildComparisonRows = (snapshots: SnapshotEntryDto[]): ComparisonRow[] =>
   snapshots.map((s) => {
     const cells: ComparisonRow['cells'] = {}
     for (const c of s.classes) {
-      cells[c.class_name ?? `#${c.classroom_id}`] = {
+      if (c.classroom_id == null) continue
+      cells[c.classroom_id] = {
         total: c.total,
         delta: c.delta_total,
       }
@@ -73,22 +88,41 @@ export const buildComparisonRows = (snapshots: SnapshotEntryDto[]): ComparisonRo
 
 export const buildTrendChartData = (
   snapshots: SnapshotEntryDto[],
-  selectedClasses: string[],
+  selectedClassIds: number[],
 ): { labels: string[]; datasets: { label: string; data: (number | null)[] }[] } => {
   const labels = snapshots.map((s) => s.snapshot_date)
   const datasets: { label: string; data: (number | null)[] }[] = [
     { label: '全校', data: snapshots.map((s) => s.school.total) },
   ]
-  for (const name of selectedClasses) {
+  const labelById = new Map(classColumnNames(snapshots).map((c) => [c.id, c.label]))
+  for (const id of selectedClassIds) {
     datasets.push({
-      label: name,
+      label: labelById.get(id) ?? `#${id}`,
       data: snapshots.map((s) => {
-        const hit = s.classes.find((c) => (c.class_name ?? `#${c.classroom_id}`) === name)
+        const hit = s.classes.find((c) => c.classroom_id === id)
         return hit ? hit.total : null
       }),
     })
   }
   return { labels, datasets }
+}
+
+/** headcount-changes 查詢區間：快照對照表語意為「(前一快照, 本快照]」，
+ * 但 API 的 date_from/date_to 是雙閉區間——直接傳 (前快照日, 本快照日) 會讓
+ * 快照日當天的事件同時落進前後兩個相鄰區間，drawer 顯示重複（fix round 2,
+ * finding #2）。date_from 補一天即可對齊 (from, to] 語意；純日期字串運算走
+ * Date 物件處理跨月/跨年進位，不手動拆字串。
+ */
+export const changeQueryRange = (
+  from: string,
+  to: string,
+): { date_from: string; date_to: string } => {
+  const d = new Date(`${from}T00:00:00`)
+  d.setDate(d.getDate() + 1)
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return { date_from: `${yyyy}-${mm}-${dd}`, date_to: to }
 }
 
 export const diffRosters = (
