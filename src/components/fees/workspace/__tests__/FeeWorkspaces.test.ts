@@ -1,7 +1,7 @@
 /**
- * 三個包裝工作區的測試：帳單（次層導航＋預設學期；產單已改每日排程自動化，
- * header 不再有「產生費用單」）、結算（每日交接/月結切換＋navigate 冒泡）、
- * 費用設定（範本/銷帳碼切換）。
+ * 三個包裝工作區的測試：帳單（次層導航＋預設學期；產單為每日排程＋手動補產
+ * 並行，header 有「產生費用單」按鈕，2026-09-01 起）、結算（每日交接/月結
+ * 切換＋navigate 冒泡）、費用設定（範本/銷帳碼切換）。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -92,6 +92,22 @@ vi.mock('@/components/fees/CloseTab.vue', () => ({
 vi.mock('@/components/fees/FeeTemplateTab.vue', () => ({
   default: { name: 'FeeTemplateTab', template: '<div data-testid="templates-tab" />' },
 }))
+// 產單 modal stub：真元件會 import generateFeeRecords 與 currentRocYear，
+// 而本檔的 @/api/fees、@/utils/academic factory mock 未提供該兩個 export。
+vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeGenerateModal',
+    props: {
+      modelValue: { type: Boolean, default: false },
+      schoolYear: { type: Number, default: undefined },
+      semester: { type: Number, default: undefined },
+    },
+    emits: ['update:modelValue', 'generated'],
+    template:
+      '<div v-if="modelValue" data-testid="generate-modal" :data-school-year="schoolYear" :data-semester="semester" />',
+  },
+}))
 vi.mock('@/components/fees/BillingCodesTab.vue', () => ({
   default: { name: 'BillingCodesTab', template: '<div data-testid="billing-codes-tab" />' },
 }))
@@ -178,11 +194,40 @@ describe('FeeBillingWorkspace（帳單）', () => {
     expect(refunds.find('[data-testid="prepayments-tab"]').exists()).toBe(false)
   })
 
-  it('header 不再有「產生費用單」按鈕（產單改每日排程自動化，具 FEES_WRITE 亦然）', async () => {
+  it('具 FEES_WRITE：header 顯示「產生費用單」，點擊開啟 modal 並帶當前聚焦學期', async () => {
+    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    const btn = wrapper.find('[data-test="billing-generate"]')
+    expect(btn.exists()).toBe(true)
+    expect(wrapper.find('[data-testid="generate-modal"]').exists()).toBe(false)
+
+    await btn.trigger('click')
+    await nextTick()
+    const modal = wrapper.find('[data-testid="generate-modal"]')
+    expect(modal.exists()).toBe(true)
+    // defaultPeriod '115-1' → modal 繼承學年 115／上學期
+    expect(modal.attributes('data-school-year')).toBe('115')
+    expect(modal.attributes('data-semester')).toBe('1')
+  })
+
+  it('無 FEES_WRITE：header 不顯示「產生費用單」按鈕', async () => {
+    authMocks.perms = new Set(['FEES_READ'])
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     expect(wrapper.find('[data-test="billing-generate"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('產生費用單')
+  })
+
+  it('產單完成（modal emit generated）刷新作用中的帳款檢視', async () => {
+    const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    statementMocks.refresh.mockClear()
+    wrapper.findComponent({ name: 'FeeGenerateModal' }).vm.$emit('generated', {
+      created: 5,
+      skipped: 2,
+    })
+    await flushAll()
+    expect(statementMocks.refresh).toHaveBeenCalledTimes(1)
   })
 
   it('切回帳款檢視時刷新作用中的檢視（預設＝彙總繳費表）', async () => {

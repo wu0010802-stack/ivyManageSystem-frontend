@@ -46,7 +46,19 @@ export const copyYearFeeTemplates = (
 ): Promise<ApiResponse<'/fees/templates/copy-year', 'post'>> =>
   api.post('/fees/templates/copy-year', payload).then((res) => res.data)
 
-// 產生費用單已改後端每日排程自動化（POST /fees/generate 僅維運保底，前端不再呼叫）
+// 手動補產費用單（2026-09-01 起與每日排程並行）：dry_run 預覽 → 確認寫入；
+// 冪等，已存在（學生 × 範本 × 月份）組合自動跳過。後端未標 response_model，
+// 回傳形狀以 ivy-backend api/fees/generation.py 為準，於此手寫窄型別。
+export interface FeeGenerateResult {
+  created: number
+  skipped: number
+  dry_run: boolean
+  preview?: Record<string, unknown>[]
+}
+export const generateFeeRecords = (
+  payload: ApiBody<'/fees/generate', 'post'>,
+): Promise<FeeGenerateResult> =>
+  api.post('/fees/generate', payload).then((res) => res.data)
 
 // ===== 學費折抵 CRUD（同胞優惠 / 預繳 / 請假扣款 / 其他）=====
 // getFeeAdjustments 參數維持 unknown：FeesTab.vue 以 Record<string, unknown> 傳入，

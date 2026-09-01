@@ -19,6 +19,15 @@
           @change="onRecordsModeChange"
         />
       </div>
+      <el-button
+        v-if="canWrite"
+        type="primary"
+        aria-label="批次產生費用單"
+        data-test="billing-generate"
+        @click="generateVisible = true"
+      >
+        產生費用單
+      </el-button>
     </div>
 
     <div v-if="!periodsReady" class="workspace-loading">
@@ -42,6 +51,13 @@
       />
       <FeeRefundsTab v-else :period-options="periodOptions" />
     </KeepAlive>
+
+    <FeeGenerateModal
+      v-model="generateVisible"
+      :school-year="generateTerm?.schoolYear"
+      :semester="generateTerm?.semester"
+      @generated="onGenerated"
+    />
   </section>
 </template>
 
@@ -50,8 +66,9 @@
  * 帳單工作區：整合帳款（繳費記錄）/ 學費退費兩個次層檢視。
  * 預繳款自 2026-08-26 起併入帳款：彙總繳費表「預繳」欄＋工具列
  * 訪視預繳/退款入口（見 FeeMonthlyStatement），不再有獨立子檢視。
- * 費用單自 2026-08-25 起由後端排程依啟用範本每日自動產生，本工作區
- * 不再提供「產生費用單」手動入口。
+ * 費用單自 2026-08-25 起由後端排程依啟用範本每日自動產生；2026-09-01 起
+ * 恢復「產生費用單」手動入口與排程並行（同一冪等產單核心，重跑只會跳過，
+ * 手動用於立即補產、不需等隔日排程）。
  *
  * 帳款檢視自 2026-08 起有兩個模式：彙總繳費表（月繳總表，預設）與
  * 逐筆明細（原 FeeRecordsTab，行為不變）；部分繳費／退款等單項操作
@@ -62,10 +79,13 @@ import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getFeePeriods } from '@/api/fees'
 import { getCurrentAcademicTerm } from '@/utils/academic'
+import { hasPermission } from '@/utils/auth'
+import { PERMISSION_NAMES } from '@/constants/permissions'
 import { useAllClassroomStore } from '@/stores/classroomAll'
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
+import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
 import { FEE_WORKSPACE_VIEWS } from './feesNavigation'
 
 const props = withDefaults(
@@ -96,6 +116,8 @@ function onRecordsModeChange(val: string | number) {
   recordsMode.value = String(val) === 'list' ? 'list' : 'statement'
 }
 
+const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
+
 // ─── 學期選項與預設學期（等載入完成再掛帳款表，確保首次查詢就聚焦當前學期）───
 const periodOptions = ref<string[]>([])
 const periodsReady = ref(false)
@@ -111,6 +133,16 @@ const recordsTabRef = ref<{
 } | null>(null)
 
 const statementRef = ref<{ refresh?: () => void } | null>(null)
+
+const generateVisible = ref(false)
+
+// 產單 modal 繼承目前聚焦的學期脈絡（"115-1" → 學年 115／上學期）；
+// 尚無 defaultPeriod 時交由 modal 以當前學年預設
+const generateTerm = computed(() => {
+  const [y, s] = (defaultPeriod.value || '').split('-').map(Number)
+  if (!y || (s !== 1 && s !== 2)) return null
+  return { schoolYear: y, semester: s }
+})
 
 async function loadPeriods() {
   try {
@@ -137,6 +169,11 @@ function onViewChange(val: string | number) {
 function refreshActiveRecordsView() {
   if (recordsMode.value === 'statement') statementRef.value?.refresh?.()
   else recordsTabRef.value?.fetchRecords?.()
+}
+
+function onGenerated() {
+  // 產單後刷新帳款檢視（若已掛載）
+  refreshActiveRecordsView()
 }
 
 // 彙總表「到逐筆明細處理」：切換模式並預帶學生姓名

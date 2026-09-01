@@ -6,7 +6,8 @@
  * - 全域搜尋（studentSearch）落地逐筆明細並轉交 applySearch
  * - 彙總表 open-list（到逐筆明細處理）切換模式＋預帶姓名
  * - 切回帳款時刷新當前作用中的檢視
- *（產單已改每日排程自動化，本工作區不再有產單 modal 與其刷新路徑）
+ *（產單為每日排程＋手動補產並行；產單按鈕/modal 行為由 FeeWorkspaces.test 覆蓋，
+ * 本檔聚焦模式切換，modal 以 stub 隔離）
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -79,6 +80,16 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     name: 'FeeRefundsTab',
     props: ['periodOptions'],
     template: '<div data-testid="refunds-tab" />',
+  },
+}))
+// 產單 modal stub：真元件會 import generateFeeRecords 與 currentRocYear，
+// 本檔的 @/api/fees、@/utils/academic factory mock 未提供該兩個 export。
+vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeGenerateModal',
+    props: { modelValue: { type: Boolean, default: false } },
+    template: '<div />',
   },
 }))
 const ElSegmentedStub = {
