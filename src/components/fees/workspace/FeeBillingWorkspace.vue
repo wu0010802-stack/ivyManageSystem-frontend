@@ -74,7 +74,7 @@
  * 逐筆明細（原 FeeRecordsTab，行為不變）；部分繳費／退款等單項操作
  * 由彙總表 emit open-list 導向逐筆明細。
  */
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { getFeePeriods } from '@/api/fees'
@@ -182,6 +182,15 @@ async function onOpenList(studentName: string) {
   await nextTick()
   if (studentName) recordsTabRef.value?.applySearch?.(studentName)
 }
+
+// 切回帳單工作區時刷新（KeepAlive activate）：對帳工作區銷帳後回到這裡，
+// 舊實例會停在分配前的快照。首次 activate 與 mount 同一輪、子元件自己會載，
+// 故跳過第一次——用旗標而非 onMounted 時序，避免依賴 hook 執行順序。
+let activatedOnce = false
+onActivated(() => {
+  if (activatedOnce) refreshActiveRecordsView()
+  activatedOnce = true
+})
 
 // 回到帳款檢視時刷新（沿用舊版切回「繳費記錄」自動重載的行為；
 // 首次掛載由子元件自行載入，此處只處理「切回」既存實例）。
