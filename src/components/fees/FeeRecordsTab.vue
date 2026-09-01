@@ -272,6 +272,13 @@
               <el-option label="轉帳" value="轉帳" />
               <el-option label="其他" value="其他" />
             </el-select>
+            <p
+              v-if="payForm.payment_method === '現金'"
+              class="cash-handover-hint"
+              data-test="cash-handover-hint"
+            >
+              現金會計入 {{ payForm.payment_date || '繳費日' }} 的現金交接批；該日交接送出後需先請老闆重新開啟才能再收款。
+            </p>
           </el-form-item>
           <el-form-item label="備註">
             <el-input v-model="payForm.notes" type="textarea" :rows="2" aria-label="備註" />
@@ -726,6 +733,13 @@ defineExpose({
 </script>
 
 <style scoped>
+.cash-handover-hint {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
 .fee-records-tab {
   width: 100%;
 }
