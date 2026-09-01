@@ -8,6 +8,7 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
 import { BarChart, DoughnutChart } from '@/composables/useChartJs'
 import PageHeader from '@/components/common/PageHeader.vue'
+import EnrollmentHistoryPanel from './EnrollmentHistoryPanel.vue'
 
 interface TermOption { school_year: number; semester: number; label: string }
 interface GradeClassStat { class_name: string; male: number; female: number; total: number }
@@ -22,6 +23,7 @@ const termStore = useAcademicTermStore()
 const loading = ref(false)
 const stats = ref<EnrollmentStats | null>(null)
 const termOptions = ref<TermOption[]>([])
+const activeTab = ref('current')
 
 const selectedTerm = computed({
   get: () => `${termStore.school_year}-${termStore.semester}`,
@@ -335,119 +337,126 @@ const doughnutChartOptions = {
       </template>
     </PageHeader>
 
-    <div v-if="stats" class="page-meta">
-      <span>{{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}</span>
-      <span v-if="stats.summary?.total != null" class="meta-sep">|</span>
-      <span v-if="stats.summary?.total != null">在籍 {{ stats.summary.total }} 人</span>
-    </div>
-
-    <!-- Summary cards -->
-    <el-row :gutter="16" class="summary-cards">
-      <el-col :xs="12" :sm="6" v-for="card in summaryCards" :key="card.key">
-        <el-card class="summary-card" shadow="never">
-          <template v-if="loading && stats == null">
-            <el-skeleton :rows="2" animated />
-          </template>
-          <template v-else>
-            <div class="card-label">{{ card.label }}</div>
-            <div class="card-value">{{ card.value }}</div>
-            <div class="card-sub">{{ card.sub }}</div>
-          </template>
-        </el-card>
-      </el-col>
-    </el-row>
-
-    <!-- Statistics table -->
-    <el-card class="table-card" shadow="never">
-      <template #header>
-        <div class="card-header-row">
-          <span class="card-header-title">各班在籍人數表</span>
-          <span v-if="stats" class="card-header-meta">
-            {{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}
-          </span>
+    <el-tabs v-model="activeTab" class="stats-tabs">
+      <el-tab-pane label="目前在籍" name="current">
+        <div v-if="stats" class="page-meta">
+          <span>{{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}</span>
+          <span v-if="stats.summary?.total != null" class="meta-sep">|</span>
+          <span v-if="stats.summary?.total != null">在籍 {{ stats.summary.total }} 人</span>
         </div>
-      </template>
-      <el-skeleton v-if="loading && !tableData.length" :rows="6" animated />
-      <el-table
-        v-else-if="tableData.length"
-        :data="tableData"
-        border
-        stripe
-        style="width: 100%"
-        :span-method="spanMethod"
-        :row-class-name="rowClassName"
-        class="enrollment-table"
-      >
-        <el-table-column label="年級" prop="grade_name" width="120" align="center" />
-        <el-table-column label="班級" prop="class_name" width="110" align="center" />
-        <el-table-column label="男生" prop="male" width="90" align="center" />
-        <el-table-column label="女生" prop="female" width="90" align="center" />
-        <el-table-column label="合計" prop="total" width="90" align="center">
-          <template #default="{ row }">
-            <span class="num-total">{{ row.total }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="男女比例" min-width="180">
-          <template #default="{ row }">
-            <div v-if="row.total > 0" class="ratio-bar">
-              <div class="ratio-track">
-                <div class="ratio-male" :style="{ width: ratioPct(row.male, row.total) }" />
-                <div class="ratio-female" :style="{ width: ratioPct(row.female, row.total) }" />
-              </div>
-              <div class="ratio-text">
-                {{ ratioPct(row.male, row.total) }} / {{ ratioPct(row.female, row.total) }}
-              </div>
-            </div>
-            <span v-else class="ratio-empty">—</span>
-          </template>
-        </el-table-column>
-      </el-table>
-      <el-empty
-        v-else-if="!loading"
-        description="此學期尚無在籍資料"
-        :image-size="80"
-      />
-    </el-card>
 
-    <!-- Charts -->
-    <el-row :gutter="16" class="chart-row" v-if="stats?.by_grade?.length">
-      <el-col :xs="24" :md="14">
-        <el-card shadow="never" class="chart-card">
+        <!-- Summary cards -->
+        <el-row :gutter="16" class="summary-cards">
+          <el-col :xs="12" :sm="6" v-for="card in summaryCards" :key="card.key">
+            <el-card class="summary-card" shadow="never">
+              <template v-if="loading && stats == null">
+                <el-skeleton :rows="2" animated />
+              </template>
+              <template v-else>
+                <div class="card-label">{{ card.label }}</div>
+                <div class="card-value">{{ card.value }}</div>
+                <div class="card-sub">{{ card.sub }}</div>
+              </template>
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <!-- Statistics table -->
+        <el-card class="table-card" shadow="never">
           <template #header>
             <div class="card-header-row">
-              <span class="card-header-title">各班人數（男 / 女堆疊）</span>
-              <span class="card-header-meta">共 {{ classCount }} 班</span>
+              <span class="card-header-title">各班在籍人數表</span>
+              <span v-if="stats" class="card-header-meta">
+                {{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}
+              </span>
             </div>
           </template>
-          <div class="chart-wrapper">
-            <component
-              :is="BarChart"
-              v-if="barChartData"
-              :data="barChartData"
-              :options="barChartOptions"
-            />
-          </div>
+          <el-skeleton v-if="loading && !tableData.length" :rows="6" animated />
+          <el-table
+            v-else-if="tableData.length"
+            :data="tableData"
+            border
+            stripe
+            style="width: 100%"
+            :span-method="spanMethod"
+            :row-class-name="rowClassName"
+            class="enrollment-table"
+          >
+            <el-table-column label="年級" prop="grade_name" width="120" align="center" />
+            <el-table-column label="班級" prop="class_name" width="110" align="center" />
+            <el-table-column label="男生" prop="male" width="90" align="center" />
+            <el-table-column label="女生" prop="female" width="90" align="center" />
+            <el-table-column label="合計" prop="total" width="90" align="center">
+              <template #default="{ row }">
+                <span class="num-total">{{ row.total }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="男女比例" min-width="180">
+              <template #default="{ row }">
+                <div v-if="row.total > 0" class="ratio-bar">
+                  <div class="ratio-track">
+                    <div class="ratio-male" :style="{ width: ratioPct(row.male, row.total) }" />
+                    <div class="ratio-female" :style="{ width: ratioPct(row.female, row.total) }" />
+                  </div>
+                  <div class="ratio-text">
+                    {{ ratioPct(row.male, row.total) }} / {{ ratioPct(row.female, row.total) }}
+                  </div>
+                </div>
+                <span v-else class="ratio-empty">—</span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-empty
+            v-else-if="!loading"
+            description="此學期尚無在籍資料"
+            :image-size="80"
+          />
         </el-card>
-      </el-col>
-      <el-col :xs="24" :md="10">
-        <el-card shadow="never" class="chart-card">
-          <template #header>
-            <div class="card-header-row">
-              <span class="card-header-title">年級人數分布</span>
-              <span class="card-header-meta">{{ stats?.by_grade?.length ?? 0 }} 個年級</span>
-            </div>
-          </template>
-          <div class="chart-wrapper">
-            <component
-              :is="DoughnutChart"
-              v-if="doughnutChartData"
-              :data="doughnutChartData"
-              :options="doughnutChartOptions"
-            />
-          </div>
-        </el-card>
-      </el-col>
-    </el-row>
+
+        <!-- Charts -->
+        <el-row :gutter="16" class="chart-row" v-if="stats?.by_grade?.length">
+          <el-col :xs="24" :md="14">
+            <el-card shadow="never" class="chart-card">
+              <template #header>
+                <div class="card-header-row">
+                  <span class="card-header-title">各班人數（男 / 女堆疊）</span>
+                  <span class="card-header-meta">共 {{ classCount }} 班</span>
+                </div>
+              </template>
+              <div class="chart-wrapper">
+                <component
+                  :is="BarChart"
+                  v-if="barChartData"
+                  :data="barChartData"
+                  :options="barChartOptions"
+                />
+              </div>
+            </el-card>
+          </el-col>
+          <el-col :xs="24" :md="10">
+            <el-card shadow="never" class="chart-card">
+              <template #header>
+                <div class="card-header-row">
+                  <span class="card-header-title">年級人數分布</span>
+                  <span class="card-header-meta">{{ stats?.by_grade?.length ?? 0 }} 個年級</span>
+                </div>
+              </template>
+              <div class="chart-wrapper">
+                <component
+                  :is="DoughnutChart"
+                  v-if="doughnutChartData"
+                  :data="doughnutChartData"
+                  :options="doughnutChartOptions"
+                />
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
+      </el-tab-pane>
+      <el-tab-pane label="人數變化" name="history" lazy>
+        <EnrollmentHistoryPanel />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
