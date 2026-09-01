@@ -44,18 +44,26 @@ describe('frontend build commit attestation', () => {
     expect(readdirSync(outputDir)).toEqual([])
   })
 
-  it('Docker build 只接受 Zeabur Git commit SHA，並在 Vite build 後寫入 dist', () => {
+  it('Docker build 以平台中立變數取 SHA，缺值時跳過而非讓 build 失敗，且寫在 Vite build 之後', () => {
     const dockerfile = readFileSync(join(root, 'Dockerfile'), 'utf8')
     const buildIndex = dockerfile.indexOf('RUN npm run build')
-    const attestationIndex = dockerfile.indexOf('RUN node scripts/generate-build-metadata.mjs')
+    const attestationIndex = dockerfile.indexOf('node scripts/generate-build-metadata.mjs')
 
+    // 平台中立：GIT_COMMIT_SHA 為主，ZEABUR_* 僅為相容。
+    // 綁死 PaaS 專屬名稱曾讓 Railway 部署 FAILED at BUILD_IMAGE（2026-09-01）。
+    expect(dockerfile).toMatch(/^ARG GIT_COMMIT_SHA\s*$/m)
+    expect(dockerfile).not.toMatch(/^ARG GIT_COMMIT_SHA=/m)
     expect(dockerfile).toMatch(/^ARG ZEABUR_GIT_COMMIT_SHA\s*$/m)
     expect(dockerfile).not.toMatch(/^ARG ZEABUR_GIT_COMMIT_SHA=/m)
+
+    // 順序不變式：必須在 Vite/Workbox build 之後，否則會被收進 PWA precache。
     expect(attestationIndex).toBeGreaterThan(buildIndex)
-    expect(dockerfile.slice(attestationIndex, attestationIndex + 220))
-      .toContain('--sha "$ZEABUR_GIT_COMMIT_SHA" --out dist/build-metadata.json')
-    expect(dockerfile.slice(attestationIndex, attestationIndex + 220))
-      .not.toContain('VITE_SENTRY_RELEASE')
+
+    const attestation = dockerfile.slice(attestationIndex - 400, attestationIndex + 260)
+    // 缺值＝跳過（e2e 無法 attest 是安全降級），有值才產生。
+    expect(attestation).toContain('${GIT_COMMIT_SHA:-${ZEABUR_GIT_COMMIT_SHA:-}}')
+    expect(attestation).toContain('--out dist/build-metadata.json')
+    expect(attestation).not.toContain('VITE_SENTRY_RELEASE')
   })
 
   it('nginx 對 metadata 使用 exact location 與 no-store', () => {

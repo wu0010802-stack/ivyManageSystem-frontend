@@ -10,8 +10,11 @@ RUN npm ci
 
 COPY . .
 
-# Zeabur 只在 Git service 的 build phase 提供此值。不得設預設值或改用
-# VITE_SENTRY_RELEASE：沒有可驗證的完整 commit SHA 時，Docker build 必須失敗。
+# 建置版本證據的 commit SHA。
+# **平台中立**：優先讀 GIT_COMMIT_SHA，保留 ZEABUR_GIT_COMMIT_SHA 相容舊平台。
+# 綁死 PaaS 專屬變數名正是這個檔先前的 bug——Railway 上 ZEABUR_* 恆為空，
+# 讓 build 直接掛（2026-09-01 實測 staging 部署 FAILED at BUILD_IMAGE）。
+ARG GIT_COMMIT_SHA
 ARG ZEABUR_GIT_COMMIT_SHA
 
 # VITE_* 變數會被烤進 bundle，必須在 build 階段提供
@@ -74,7 +77,18 @@ ENV SENTRY_UPLOAD_TRUSTED=$SENTRY_UPLOAD_TRUSTED \
 RUN npm run build
 # 寫在 Vite/Workbox build 完成後，避免 build-metadata.json 被收進 PWA precache。
 # generator 會先驗證完整 lowercase SHA，再以同目錄暫存檔原子替換正式檔案。
-RUN node scripts/generate-build-metadata.mjs --sha "$ZEABUR_GIT_COMMIT_SHA" --out dist/build-metadata.json
+#
+# ⚠ **未提供 SHA ＝ 跳過，不讓 build 失敗**。缺這個檔時 nginx 回 404 →
+# e2e 的 attestFrontendBuild 失敗 → 只有 e2e 跑不了，正式服務不受影響。
+# 反之硬性要求會讓任何未設該變數的平台（Railway 即是）整個部署掛掉。
+# 有提供卻格式錯仍然失敗：那代表餵值的人搞錯了。
+RUN set -eu; \
+    sha="${GIT_COMMIT_SHA:-${ZEABUR_GIT_COMMIT_SHA:-}}"; \
+    if [ -z "$sha" ]; then \
+        echo "[build-metadata] 未提供 commit SHA，跳過產生 artifact（e2e 將無法 attest）"; \
+    else \
+        node scripts/generate-build-metadata.mjs --sha "$sha" --out dist/build-metadata.json; \
+    fi
 
 # ---------- Runtime stage ----------
 FROM nginx:alpine AS runtime
