@@ -100,3 +100,12 @@ describe('家長端 dark mode legacy 色階覆寫（2026-08-13 文字/背景對�
     expect(offenders, `違規檔案：${offenders.join(', ')}`).toEqual([])
   })
 })
+
+describe('家長端狀態語意色（2026-09-01 UI/UX 打磨）', () => {
+  it('DashboardHero 玻璃 pill 覆蓋不得吃掉 danger 警示色（逾期 chip 曾被白玻璃蓋到看不出事態）', () => {
+    const sfc = read('src/parent/components/DashboardHero.vue').replace(/\s+/g, ' ')
+    // 白玻璃覆蓋必須排除 tone-danger，讓 StatusPill 原生警示紅（淺紅底深紅字）呈現
+    expect(sfc).toMatch(/\.dash-hero-pill:not\(\.tone-danger\)/)
+    expect(sfc).not.toMatch(/\.dash-hero-pill \{[^}]*!important/)
+  })
+})

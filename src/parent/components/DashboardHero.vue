@@ -43,5 +43,9 @@ defineProps<{
 .dash-hero-title { margin: 2px 0 0; font-size: 17px; font-weight: 800; }
 .dash-hero-value { margin: 8px 0 0; font-size: 28px; font-weight: 900; letter-spacing: 0.5px; }
 .dash-hero-sub { margin: 3px 0 0; font-size: var(--text-xs, 11px); opacity: 0.95; }
-.dash-hero-pill { margin-top: 10px; background: color-mix(in srgb, var(--m3-on-primary, #fff) 22%, transparent) !important; color: var(--m3-on-primary, #fff) !important; }
+.dash-hero-pill { margin-top: 10px; }
+/* ok/warn/neutral 在綠漸層上走白玻璃融入 hero；danger（逾期）刻意不蓋——
+   保留 StatusPill 原生警示紅（淺紅底深紅字，pair 內聚 AA），逾期必須一眼看出事態 */
+.dash-hero-pill:not(.tone-danger) { background: color-mix(in srgb, var(--m3-on-primary, #fff) 22%, transparent) !important; color: var(--m3-on-primary, #fff) !important; }
+.dash-hero-pill.tone-danger { box-shadow: 0 0 0 1px color-mix(in srgb, var(--m3-on-primary, #fff) 45%, transparent); }
 </style>

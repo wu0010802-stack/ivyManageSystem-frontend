@@ -10,7 +10,8 @@
  * Emits:
  *  - record-click(record): 卡片點擊
  *
- * 第一筆未繳/部分繳費的卡片會帶 data-unpaid-anchor，供 hero CTA scrollIntoView。
+ * 第一筆未繳/部分繳費的卡片會帶 data-unpaid-anchor（外部捲動定位用；
+ * 原「跳到應繳」按鈕已因待繳置頂分組而移除，屬性保留供未來深連結）。
  */
 import StatusPill from '@/parent/components/StatusPill.vue'
 import { formatSemesterLabel } from '@/parent/utils/semesterLabel'
@@ -66,8 +67,14 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
         :tone="statusTone(r.status)"
       />
     </div>
-    <div class="record-row2">
-      應繳 ${{ fmt(r.amount_due) }} ・ 已繳 ${{ fmt(r.amount_paid) }} ・ 未繳 ${{ fmt(r.outstanding) }}
+    <!-- 已繳清：chip 已講完狀態，只留應繳金額，不再列「已繳／未繳 $0」噪音；
+         未結清：家長要行動的數字是「未繳多少」，強調它、明細降為次要 -->
+    <div v-if="r.status === 'paid'" class="record-row2">
+      應繳 ${{ fmt(r.amount_due) }}
+    </div>
+    <div v-else class="record-row2">
+      <strong class="record-outstanding">未繳 ${{ fmt(r.outstanding) }}</strong>
+      <span class="record-row2-detail">應繳 ${{ fmt(r.amount_due) }} ・ 已繳 ${{ fmt(r.amount_paid) }}</span>
     </div>
     <div class="record-row3">
       <span v-if="r.due_date" class="due">期限 {{ r.due_date }}</span>
@@ -102,6 +109,20 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
   margin-top: 6px;
   color: var(--pt-text-muted);
   font-size: 13px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.record-outstanding {
+  color: var(--coral-700, #b14545);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.record-row2-detail {
+  font-size: 12px;
 }
 
 .record-row3 {
@@ -110,14 +131,5 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
   font-size: 12px;
   display: flex;
   gap: 12px;
-}
-
-.fee-highlight {
-  animation: feeHighlight 1s ease;
-}
-
-@keyframes feeHighlight {
-  0% { background: var(--pt-tint-money, #fef3c7); }
-  100% { background: transparent; }
 }
 </style>
