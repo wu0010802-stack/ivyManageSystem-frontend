@@ -118,16 +118,12 @@ function mountWith(summary, today) {
         },
         ChildContextHeader: { props: ['variant'], template: '<div class="cch-stub" :data-variant="variant"></div>' },
         RouterLink: { template: '<a :href="to"><slot /></a>', props: ['to'] },
-        StatTile: {
-          props: ['label', 'value', 'sub', 'icon', 'tone', 'to'],
-          template: '<div class="stat-tile-stub" :data-label="label" :data-value="value" :data-tone="tone" :data-to="to"></div>',
-        },
         SectionHeader: {
           props: ['title'],
           template: '<div class="section-header-stub" :data-title="title"><slot name="action" /></div>',
         },
-        PendingSignBanner: { props: ['count'], template: '<div class="pending-sign-stub" :data-count="count"></div>' },
-        PendingSurveyBanner: true,
+        HomeTodoList: { template: '<div class="home-todo-stub"></div>' },
+        HomeBusRow: { template: '<div class="home-bus-stub"></div>' },
         M3Card: { template: '<div class="m3-card-stub"><slot /></div>' },
       },
     },
@@ -391,204 +387,41 @@ describe('TodayView 聯絡簿狀態 — cache hit 也要正確反映（P1-16）'
   })
 })
 
-describe('TodayView Bento 儀表板 — StatTile 依 summary 條件渲染', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    summaryRef.value = null
-    todayStatusRef.value = null
-    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
-    contactBookMock.getTodayContactBook.mockReset()
-    contactBookMock.getTodayContactBook.mockResolvedValue({ data: { entry: null } })
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  it('mount 後不拋例外、孩子 hero 區存在（render smoke）', async () => {
-    const w = mountWith(
-      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    expect(w.find('.hh-name').exists()).toBe(true)
-  })
-
-  it('summary.fees.outstanding_count > 0：渲染待繳學費 StatTile（tone=amber, to=/fees）', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { fees: { outstanding_count: 2, outstanding: 8000, overdue: 0 } },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const feeTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')
-    expect(feeTile).toBeTruthy()
-    expect(feeTile.attributes('data-tone')).toBe('amber')
-    expect(feeTile.attributes('data-to')).toBe('/fees')
-    expect(feeTile.attributes('data-value')).toBe('2 筆')
-  })
-
-  it('pending_event_acks > 0：渲染待簽文件 StatTile（tone=coral, to=/events）', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { pending_event_acks: 3 },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const signTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待簽文件')
-    expect(signTile).toBeTruthy()
-    expect(signTile.attributes('data-tone')).toBe('coral')
-    expect(signTile.attributes('data-to')).toBe('/events')
-    expect(signTile.attributes('data-value')).toBe('3 份')
-  })
-
-  it('summary 無學費欄位：不渲染待繳學費 StatTile', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: {},
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const feeTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')
-    expect(feeTile).toBeFalsy()
-  })
-
-  it('summary.fees.outstanding_count = 0：不渲染待繳學費 StatTile', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { fees: { outstanding_count: 0, outstanding: 0, overdue: 0 } },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const feeTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')
-    expect(feeTile).toBeFalsy()
-  })
-
-  it('pending_event_acks = 0：不渲染待簽文件 StatTile', async () => {
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { pending_event_acks: 0 },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    const signTile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待簽文件')
-    expect(signTile).toBeFalsy()
-  })
-})
-
-describe('TodayView 娃娃車入口卡', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    summaryRef.value = null
-    todayStatusRef.value = null
-    vi.setSystemTime(new Date('2026-05-14T09:30:00+08:00'))
-    busTodayMock.getBusToday.mockClear()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  const HOME = [
-    { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
-    { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-  ]
-
-  const inProgressBus = () => ({
-    data: {
-      trip: { id: 7, direction: 'morning', status: 'in_progress', auto_closed: false },
-      position: { lat: 22.63, lng: 120.3, at: '2026-05-14T09:29:00' },
-      stale: false,
-      school: { lat: 22.6, lng: 120.29 },
-      children: [{
-        student_id: 1, student_name: '小明', stop_status: 'pending',
-        stops_ahead: 2, stop_lat: 22.61, stop_lng: 120.28,
-      }],
-    },
-  })
-
-  it('班次進行中：顯示娃娃車 StatTile 並連到 /bus', async () => {
-    busTodayMock.getBusToday.mockResolvedValueOnce(inProgressBus())
-    const w = mountWith(...HOME)
-    await flushPromises()
-    const tile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')
-    expect(tile).toBeTruthy()
-    expect(tile.attributes('data-value')).toBe('還有 2 站')
-    expect(tile.attributes('data-to')).toBe('/bus')
-  })
-
-  it('已上車：顯示進行中而非站數', async () => {
-    const resp = inProgressBus()
-    resp.data.children[0].stop_status = 'departed'
-    resp.data.children[0].stops_ahead = 0
-    busTodayMock.getBusToday.mockResolvedValueOnce(resp)
-    const w = mountWith(...HOME)
-    await flushPromises()
-    const tile = w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')
-    expect(tile.attributes('data-value')).toBe('進行中')
-  })
-
-  it('班次未進行中：不渲染娃娃車卡', async () => {
-    const resp = inProgressBus()
-    resp.data.trip.status = 'completed'
-    busTodayMock.getBusToday.mockResolvedValueOnce(resp)
-    const w = mountWith(...HOME)
-    await flushPromises()
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
-  })
-
-  it('有待繳學費但今天沒有娃娃車班次：bento 出現但不得有空白娃娃車卡', async () => {
-    // 外層 .today-bento 的 v-if 會因為 feesInfo 有值而成立，內層 StatTile 必須自己擋住，
-    // 否則會渲染出 value 空白卻連到 /bus 的卡片。
-    busTodayMock.getBusToday.mockResolvedValueOnce({
-      data: { trip: null, position: null, stale: false, school: null, children: [] },
-    })
-    const w = mountWith(
-      {
-        me: { name: '王太太' },
-        children: [{ student_id: 1, name: '小明' }],
-        summary: { fees: { outstanding_count: 2, outstanding: 3000, overdue: 0 } },
-      },
-      { children: [{ student_id: 1, name: '小明', attendance: { status: '已入園' } }] },
-    )
-    await flushPromises()
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '待繳學費')).toBeTruthy()
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
-  })
-
-  it('娃娃車快照失敗不得擋住首頁其他區塊', async () => {
-    busTodayMock.getBusToday.mockRejectedValueOnce(new Error('boom'))
-    const w = mountWith(...HOME)
-    await flushPromises()
-    expect(heroNameOf(w)).toBe('小明')
-    expect(w.findAll('.stat-tile-stub').find(el => el.attributes('data-label') === '娃娃車')).toBeFalsy()
-  })
-
-  it('站點座標（家庭住址）不得進入首頁畫面', async () => {
-    busTodayMock.getBusToday.mockResolvedValueOnce(inProgressBus())
-    const w = mountWith(...HOME)
-    await flushPromises()
-    expect(w.html()).not.toContain('22.61')
-    expect(w.html()).not.toContain('120.28')
-  })
-})
-
 // 「我要接小孩」CTA（pnotice01 預告接送，獨立於今日聯絡簿卡的另一塊區域）
 // 2026-08-16 業主裁定：與 QuickActionsBar 常用功能列的「接送」快捷模組
 // （key=pickup，路由同為 /pickup-notice）重複，隨今日聯絡簿卡一併整塊移除
 // （見 TodayView.vue）。相關測試（原「TodayView 預告接送 CTA」describe）
 // 一併移除，不再保留。
+
+describe('TodayView 區塊收斂（2026-09-02）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('不再渲染頂部待簽橫幅與活動調查橫幅', () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: { pending_event_acks: 3, pending_survey_count: 2 } },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    expect(w.find('.pending-sign-stub').exists()).toBe(false)
+    expect(w.html()).not.toContain('pending-survey')
+  })
+
+  it('不再渲染 bento 方格容器與 StatTile', () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: { fees: { outstanding_count: 2, outstanding: 100, overdue: 0 } } },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    expect(w.find('.today-bento').exists()).toBe(false)
+    expect(w.find('.stat-tile-stub').exists()).toBe(false)
+  })
+
+  it('渲染待辦清單與娃娃車列兩個子元件', () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: {} },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    expect(w.find('.home-todo-stub').exists()).toBe(true)
+    expect(w.find('.home-bus-stub').exists()).toBe(true)
+  })
+})

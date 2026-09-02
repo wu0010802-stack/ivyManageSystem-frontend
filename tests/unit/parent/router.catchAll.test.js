@@ -35,7 +35,8 @@ describe('router meta.tab — IA v3+P2 深層頁高亮對應 tab', () => {
 
     const validTabs = new Set(['home', 'contact-book', 'admin', 'me', 'child'])
 
-    // IA v3 後，所有深層頁都應有 meta.tab；assistant 因走 modal 不需 tab
+    // IA v3 後，所有深層頁都應有 meta.tab。/assistant 自 2026-09-02 起也有了
+    // （「我的」頁補上入口，meta.tab = me）；原註解說它走 modal，早已不成立。
     const deepPaths = [
       '/leaves',
       '/fees',

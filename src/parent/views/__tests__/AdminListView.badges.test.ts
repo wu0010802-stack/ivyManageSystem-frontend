@@ -109,14 +109,43 @@ describe('AdminListView 待辦徽章', () => {
     setSummary({ pending_activity_promotions: 1, pending_event_acks: 4 })
     const w = mount(AdminListView)
     expect(badgeOf(w, '課後才藝')?.text()).toBe('1')
-    expect(badgeOf(w, '待簽紀錄')?.text()).toBe('4')
+    expect(badgeOf(w, '待簽文件')?.text()).toBe('4')
     w.unmount()
   })
 
   it('徽章帶 aria-label 說明數字語意，不讓螢幕閱讀器只念到裸數字', () => {
     setSummary({ pending_event_acks: 4 })
     const w = mount(AdminListView)
-    expect(badgeOf(w, '待簽紀錄')?.attributes('aria-label')).toBe('4 份待簽')
+    expect(badgeOf(w, '待簽文件')?.attributes('aria-label')).toBe('4 份待簽收')
     w.unmount()
+  })
+})
+
+describe('AdminListView 項目收斂（2026-09-02）', () => {
+  it('新增「入學文件簽署」與「出席紀錄」兩個入口', () => {
+    setSummary()
+    const w = mount(AdminListView, { global: { stubs: { 'router-link': true } } })
+    expect(w.text()).toContain('入學文件簽署')
+    expect(w.text()).toContain('出席紀錄')
+  })
+
+  it('「待簽紀錄」改名為「待簽文件」', () => {
+    setSummary()
+    const w = mount(AdminListView, { global: { stubs: { 'router-link': true } } })
+    expect(w.text()).toContain('待簽文件')
+    expect(w.text()).not.toContain('待簽紀錄')
+  })
+
+  it('預告接送不再有寫死為 0 的徽章欄位', () => {
+    setSummary()
+    const w = mount(AdminListView, { global: { stubs: { 'router-link': true } } })
+    const row = w.findAll('li').find((li) => li.text().includes('預告接送'))!
+    expect(row.find('.admin-badge').exists()).toBe(false)
+  })
+
+  it('活動調查徽章改讀 badges.pendingSurveyCount', () => {
+    setSummary({ pending_survey_count: 4 })
+    const w = mount(AdminListView, { global: { stubs: { 'router-link': true } } })
+    expect(badgeOf(w, '活動調查')!.text()).toBe('4')
   })
 })

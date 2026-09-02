@@ -1,6 +1,4 @@
 import { computed } from 'vue'
-// 純函式、零依賴，不會把 admin 端 chunk 拉進 parent bundle
-import { formatCurrency } from '@/utils/currency'
 // 接送時間是後端台北 naive 字串；統一走零依賴的 taipeiTime 工具顯式錨定 +08:00
 // 並以 Asia/Taipei 取時/格式化，避免非台灣裝置差 8 小時導致時段桶分錯、時間顯示錯
 // （與 admin 歷史表格 / portal 同源）。
@@ -10,7 +8,7 @@ const BUCKET_LABEL = {
   morning: '早上',
   noon: '中午',
   afternoon: '下午',
-  later: '晚一些',
+  later: '傍晚',
 }
 const BUCKET_ORDER = ['morning', 'noon', 'afternoon', 'later']
 
@@ -34,7 +32,8 @@ function isBirthdayToday(birthday: string | null | undefined) {
 function dismissalLabel(status: string | null | undefined) {
   if (status === 'pending') return '老師處理中'
   if (status === 'acknowledged') return '老師已收到'
-  if (status === 'completed') return '已接送'
+  // 2026-09-02：與首頁狀態 pill 統一為「已離園」（原為「已接送」，同一狀態兩種用詞）
+  if (status === 'completed') return '已離園'
   return status || '處理中'
 }
 
@@ -95,13 +94,15 @@ export function dismissalTimelineParts(d: TimelineDismissal): {
   }
 }
 
-// 把後端 summary + today-status 攤平成依時段桶分組的事件流。
+// 把 today-status 攤平成依時段桶分組的事件流。
 // 桶子：morning (6-12) / noon (12-14) / afternoon (14-18) / later (其餘)
 // 每個 event：{ id, bucket, variant: 'past'|'pending'|'info', time, primary, secondary, tone, path, motif? }
-export function useTodayTimeline({ summary, todayChildren }: { summary: { value: Record<string, unknown> | null | undefined }; todayChildren: { value: Record<string, unknown>[] | null | undefined } }) {
+//
+// 2026-09-02 瘦身後 `summary` 已不再被讀取（五種 summary 衍生待辦事件移交
+// HomeTodoList），但呼叫端仍會傳入，簽章刻意保留以免擴大影響面。
+export function useTodayTimeline({ summary: _summary, todayChildren }: { summary: { value: Record<string, unknown> | null | undefined }; todayChildren: { value: Record<string, unknown>[] | null | undefined } }) {
   const events = computed(() => {
     const out = []
-    const summaryV = summary.value
     const childrenStatus = todayChildren.value || []
 
     for (const _c of childrenStatus) {
@@ -137,19 +138,9 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
           path: '/leaves',
           motif: crown,
         })
-      } else {
-        out.push({
-          id: `pending:${c.student_id}`,
-          bucket: 'morning',
-          variant: 'info',
-          time: null,
-          primary: `${c.name} 尚未到校`,
-          secondary: c.classroom_name || null,
-          tone: 'muted',
-          path: '/attendance',
-          motif: crown,
-        })
       }
+      // 2026-09-02：原本這裡有「尚未到校」占位事件。首頁頂部聯絡簿按鈕的
+      // 狀態 pill 已經寫著同一句，時間軸再推一列等於同屏重複。
 
       if (c.medication?.has_order) {
         out.push({
@@ -182,79 +173,11 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
       }
     }
 
-    type SummaryShape = {
-      fees?: { outstanding_count?: number; outstanding?: number; overdue?: number }
-      pending_event_acks?: number; pending_activity_promotions?: number
-      unread_announcements?: number; recent_leave_reviews?: number
-    }
-    const sv = summaryV as SummaryShape | null | undefined
-    const fees = sv?.fees
-    if ((fees?.outstanding_count ?? 0) > 0) {
-      out.push({
-        id: 'fees',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: `待繳費 ${formatCurrency(fees?.outstanding ?? 0)}`,
-        secondary: (fees?.overdue ?? 0) > 0
-          ? `逾期 ${formatCurrency(fees?.overdue ?? 0)}`
-          : `${fees?.outstanding_count} 筆`,
-        tone: (fees?.overdue ?? 0) > 0 ? 'danger' : 'money',
-        path: '/fees',
-      })
-    }
-
-    if ((sv?.pending_event_acks ?? 0) > 0) {
-      out.push({
-        id: 'acks',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: '待簽閱事件',
-        secondary: `${sv?.pending_event_acks} 件`,
-        tone: 'event',
-        path: '/events',
-      })
-    }
-
-    if ((sv?.pending_activity_promotions ?? 0) > 0) {
-      out.push({
-        id: 'promotions',
-        bucket: 'later',
-        variant: 'pending',
-        time: null,
-        primary: '才藝候補待確認',
-        secondary: `${sv?.pending_activity_promotions} 件`,
-        tone: 'activity',
-        path: '/activity',
-      })
-    }
-
-    if ((sv?.unread_announcements ?? 0) > 0) {
-      out.push({
-        id: 'announcements',
-        bucket: 'later',
-        variant: 'info',
-        time: null,
-        primary: '未讀公告',
-        secondary: `${sv?.unread_announcements} 則`,
-        tone: 'announcement',
-        path: '/announcements',
-      })
-    }
-
-    if ((sv?.recent_leave_reviews ?? 0) > 0) {
-      out.push({
-        id: 'leaveReviews',
-        bucket: 'later',
-        variant: 'info',
-        time: null,
-        primary: '最近成立的請假',
-        secondary: `${sv?.recent_leave_reviews} 件`,
-        tone: 'leave',
-        path: '/leaves',
-      })
-    }
+    // 2026-09-02：原本這裡有五種 summary 衍生事件（待繳費／待簽閱／才藝候補／
+    // 未讀公告／請假審核結果），全部硬編碼塞進 later 桶——它們沒有時間點，
+    // 塞進時間軸讓「今日動態」變成第二份待辦清單，且與首頁 bento、頂部橫幅
+    // 三處重複。改由 HomeTodoList（useParentTodos）單一承載。
+    // 本 composable 從此只處理「今天真的發生了什麼」。
 
     return out
   })

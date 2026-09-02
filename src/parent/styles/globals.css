@@ -110,13 +110,6 @@
   --pt-info-link:         #5ba8cc;       /* link 色 */
   --pt-violet-text:       #6e3f94;       /* medication chip text */
 
-  /* 首頁待辦橫幅琥珀色（PendingSignBanner / PendingSurveyBanner）。
-     2026-08-13 前為未定義變數、永遠吃元件 fallback → dark 無法翻色，
-     近白 --pt-text-strong 配淺琥珀底看不到字。icon-bg 為飽和裝飾色，
-     兩主題共用不覆寫。 */
-  --pt-amber-bg: #fff4dc;
-  --pt-amber-icon-bg: #f5b637;
-
   color-scheme: light;
 
   /* ============================================================
@@ -392,7 +385,6 @@
   --leaf-700: #a8e6cf;
   --grape-100: rgba(181, 140, 217, 0.20);
   --grape-700: #d4bce6;
-  --pt-amber-bg: rgba(255, 222, 81, 0.14);
 }
 
 /* ========== Focus Visible ==========

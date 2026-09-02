@@ -1,17 +1,20 @@
 <script setup lang="ts">
+/**
+ * 2026-09-02：移除 FeeSummaryCard 與「費用查詢」項。費用入口收斂為首頁待辦
+ * 清單與事務頁兩處；這裡原本用的 cache key 是 parent/home/summary，與首頁
+ * 的 parent/today/summary 不同，等於每次進「我的」都多打一次同一支 API，
+ * 一併隨費用卡移除。
+ */
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { performParentLogout } from '../composables/useParentLogout'
-import { getHomeSummary } from '../api/profile'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useChildrenStore } from '../stores/children'
-import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useDataExport } from '../composables/useDataExport'
 import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import UserHeroCard from '../components/more/UserHeroCard.vue'
 import AppearanceSettings from '../components/more/AppearanceSettings.vue'
-import FeeSummaryCard from '../components/me/FeeSummaryCard.vue'
 import ChildrenList from '../components/me/ChildrenList.vue'
 
 const router = useRouter()
@@ -40,19 +43,6 @@ async function handleExport(): Promise<void> {
   }
 }
 
-const { data: summaryData } = useCachedAsync(
-  'parent/home/summary',
-  async () => {
-    const res = await getHomeSummary()
-    return res.data
-  },
-  { ttl: 60_000 },
-)
-
-const fees = computed(() => summaryData.value?.summary?.fees || null)
-const outstanding = computed(() => fees.value?.outstanding || 0)
-const overdue = computed(() => fees.value?.overdue || 0)
-
 const childrenTyped = computed(() => (childrenStore.items || []) as { student_id: number; name?: string; classroom_name?: string }[])
 
 const childrenLabel = computed(() => {
@@ -77,9 +67,32 @@ onMounted(async () => {
 
 const PREFS = [
   { key: 'notifications', label: '通知偏好', icon: 'notifications', path: '/notifications/preferences', hint: '推播 / 公告 / 聯絡簿' },
-  { key: 'fees', label: '費用查詢', icon: 'payments', path: '/fees', hint: '繳費紀錄與證明' },
   // P0c-3 法規/個資權利 (個資法 §3 五權)
   { key: 'privacy_rights', label: '個人資料權利', icon: 'gpp_good', path: '/me/privacy-rights', hint: '同意紀錄 / 申請刪除 / 更正 / 停止處理' },
+  // 2026-09-02：/assistant 原本全站沒有任何入口，只能靠外部深連結進入。
+  //
+  // 約束：這裡的 glyph 必須在自架子集字型內既有
+  // （src/parent/assets/fonts/material-symbols-manifest.json 的 icons 陣列，
+  // 由 iconFontSubset.spec.ts 守衛）。不在子集內的名字不會 fallback，會在 prod
+  // 直接 render 成 ligature 英文原文，2026-08-12/13 的 LIFF 跑版事故即此成因。
+  // 直覺會想用的 help、help_outline、quiz、contact_support 全部不在子集內。
+  //
+  // 選 tips_and_updates：它已在 BindView 的「下一步怎麼做」提示上使用，
+  // 在本 app 內既有語意就是引導使用者自己排除問題，與常見問題一致。
+  // 不用 info，是因為 utils/iconMapping.ts 把它與 warn／alert 並列，
+  // 屬狀態嚴重度語彙；不用 fact_check，是因為它已代表出席與待簽文件。
+  //
+  // 這一項刻意拆成多行、不與上面兩項一樣寫成單行：icon 子集守衛
+  // （scripts/lib/parent-icon-names.mjs）是逐行掃描，會把含 icon 字樣的那一行
+  // 上所有小寫字串字面值都當成 icon 名。寫成單行會讓 key 那個值被誤收為
+  // icon 名，讓 iconFontSubset.spec.ts 紅燈。收合回單行前請先想過這點。
+  {
+    key: 'assistant',
+    label: '常見問題',
+    icon: 'tips_and_updates',
+    path: '/assistant',
+    hint: '登入、綁定、接送與繳費常見問題',
+  },
 ]
 </script>
 
@@ -92,8 +105,6 @@ const PREFS = [
       :can-push="!!me?.can_push"
       :push-status-known="!!me"
     />
-
-    <FeeSummaryCard :outstanding="outstanding" :overdue="overdue" />
 
     <ChildrenList :children="childrenTyped" />
 

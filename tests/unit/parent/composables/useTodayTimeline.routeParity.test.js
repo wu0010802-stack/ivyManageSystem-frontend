@@ -33,7 +33,7 @@ function buildAllBranchesFixture() {
   const todayChildren = ref([
     { student_id: 1, name: '小明', attendance: { status: '出席' } },
     { student_id: 2, name: '小華', leave: { type: '病假' } },
-    { student_id: 3, name: '小芬' }, // 無 attendance/leave → 尚未到校（pending）
+    { student_id: 3, name: '小芬' }, // 無 attendance/leave → 瘦身後不再產生事件
     { student_id: 4, name: '小美', medication: { has_order: true, order_count: 1 } },
     {
       student_id: 5,
@@ -54,9 +54,9 @@ describe('useTodayTimeline — path × router parity', () => {
     const { events } = useTodayTimeline({ summary, todayChildren })
 
     // 防 fixture 本身失效（例如改壞了 buildAllBranchesFixture）造成假綠：
-    // 目前分支數應至少涵蓋 attendance/leave/pending/medication/dismissal 5 種
-    // 子女事件，加上 6 種 summary 待辦，共 11 個以上。
-    expect(events.value.length).toBeGreaterThanOrEqual(11)
+    // 瘦身後（2026-09-02）只剩 attendance/leave/medication/dismissal 四種子女
+    // 事件；summary 衍生待辦已移交 HomeTodoList，不再進時間軸。
+    expect(events.value.length).toBeGreaterThanOrEqual(4)
 
     const offenders = events.value
       .map((event) => ({ id: event.id, path: event.path, resolved: router.resolve(event.path) }))

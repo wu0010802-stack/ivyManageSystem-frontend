@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHomeSummary } from '../composables/useHomeSummary'
-import { listPickupAuthorizations } from '../api/pickup'
+import { useParentTodos } from '../composables/useParentTodos'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -15,31 +15,16 @@ const router = useRouter()
 // 錯誤態，只有兩者皆無資料（首次載入）時才擋住清單，避免誤導性的 0。
 const {
   badges,
-  summary,
   data: summaryData,
   error: summaryError,
   pending: summaryPending,
   refresh: refreshSummary,
 } = useHomeSummary()
 
-// pending_survey_count 尚未併入 HomeBadges（該 interface 之後才擴充），
-// 直接讀 summary 原始欄位，做法比照 TodayView 的 pendingSurveyCount。
-const pendingSurveyCount = computed(() => {
-  const v = (summary.value as { pending_survey_count?: unknown } | null)?.pending_survey_count
-  return typeof v === 'number' ? v : 0
-})
-
-// 臨時接送授權同樣尚未併入 HomeBadges（後端 home/summary 未加此欄位）；
-// 比照 TodayView 的 pickupActiveCount，走獨立輕量 fetch，失敗降為 0。
-const pendingPickupCount = ref(0)
-onMounted(async () => {
-  try {
-    const { data } = await listPickupAuthorizations({ status: 'active' })
-    pendingPickupCount.value = ((data as { items?: unknown[] })?.items || []).length
-  } catch {
-    pendingPickupCount.value = 0
-  }
-})
+// 入學文件簽署與臨時接送授權不在 home/summary 內（後端未聚合這兩個欄位）。
+// 2026-09-02 起改由首頁待辦清單的同一支 useParentTodos 供應，兩頁共用
+// useCachedAsync 的固定 key，同時掛載也只會各打一次；事務頁不再自己 fetch。
+const { signDocsCount, pickupActiveCount } = useParentTodos()
 
 /**
  * 徽章語意分兩種，色調要分開，否則「今天有藥要吃」會被讀成「有事沒處理」：
@@ -82,13 +67,33 @@ const items = computed<AdminItem[]>(() => {
           : `${b.outstandingFees} 筆待繳`,
     },
     {
-      headline: '用藥委託',
-      supportingText: '新增/查詢委託用藥單',
-      leadingIcon: 'medication',
-      path: '/medications',
-      badge: b.activeMedicationOrders,
-      badgeTone: 'info',
-      badgeLabel: `今日 ${b.activeMedicationOrders} 張用藥單`,
+      // 入學文件電子簽署。與下面的「待簽文件」（活動簽閱）是兩個功能，
+      // 用全名拉開距離，對齊首頁待辦清單的用詞。
+      headline: '入學文件簽署',
+      supportingText: '入學相關文件的電子簽署',
+      leadingIcon: 'history_edu',
+      path: '/sign',
+      badge: signDocsCount.value,
+      badgeTone: 'action',
+      badgeLabel: `${signDocsCount.value} 份待簽`,
+    },
+    {
+      headline: '待簽文件',
+      supportingText: '需家長簽收的通知事項',
+      leadingIcon: 'mark_email_read',
+      path: '/events',
+      badge: b.pendingEventAcks,
+      badgeTone: 'action',
+      badgeLabel: `${b.pendingEventAcks} 份待簽收`,
+    },
+    {
+      headline: '活動調查',
+      supportingText: '戶外教學/親子活動參加意願回覆',
+      leadingIcon: 'fact_check',
+      path: '/surveys',
+      badge: b.pendingSurveyCount,
+      badgeTone: 'action',
+      badgeLabel: `${b.pendingSurveyCount} 份待回覆`,
     },
     {
       headline: '課後才藝',
@@ -100,22 +105,24 @@ const items = computed<AdminItem[]>(() => {
       badgeLabel: `${b.pendingActivityPromotions} 筆候補待確認`,
     },
     {
-      headline: '待簽紀錄',
-      supportingText: '需家長簽收的通知事項',
-      leadingIcon: 'mark_email_read',
-      path: '/events',
-      badge: b.pendingEventAcks,
-      badgeTone: 'action',
-      badgeLabel: `${b.pendingEventAcks} 份待簽`,
+      headline: '用藥委託',
+      supportingText: '新增/查詢委託用藥單',
+      leadingIcon: 'medication',
+      path: '/medications',
+      badge: b.activeMedicationOrders,
+      badgeTone: 'info',
+      badgeLabel: `今日 ${b.activeMedicationOrders} 張用藥單`,
     },
     {
-      headline: '活動調查',
-      supportingText: '戶外教學/親子活動參加意願回覆',
-      leadingIcon: 'fact_check',
-      path: '/surveys',
-      badge: pendingSurveyCount.value,
-      badgeTone: 'action',
-      badgeLabel: `${pendingSurveyCount.value} 份待回覆`,
+      // 原本只能從首頁今日動態的出席事件進來，事務目錄裡看不到。
+      // how_to_reg 是 AttendanceView 自己就在用的 glyph，也已在自架子集字型內。
+      headline: '出席紀錄',
+      supportingText: '查詢到校與離園紀錄',
+      leadingIcon: 'how_to_reg',
+      path: '/attendance',
+      badge: 0,
+      badgeTone: 'info',
+      badgeLabel: '',
     },
     {
       // 預告接送與臨時接送是兩個功能：前者=本人預告抵達時間，後者=授權親友代接。
@@ -132,9 +139,9 @@ const items = computed<AdminItem[]>(() => {
       supportingText: '授權親友代為到園接送',
       leadingIcon: 'hail',
       path: '/pickup',
-      badge: pendingPickupCount.value,
+      badge: pickupActiveCount.value,
       badgeTone: 'info',
-      badgeLabel: `${pendingPickupCount.value} 筆進行中授權`,
+      badgeLabel: `${pickupActiveCount.value} 筆進行中授權`,
     },
   ]
 })
