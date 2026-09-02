@@ -524,14 +524,19 @@ onMounted(() => {
 
       <el-table-column label="對象" width="100" align="center">
         <template #default="{ row }">
-          <el-tag v-if="!row.recipient_count" type="primary" size="small">全員</el-tag>
-          <el-tag v-else type="warning" size="small">{{ row.recipient_count }} 位員工</el-tag>
+          <el-tag v-if="!row.recipient_count && !row.parent_recipient_count" type="primary" size="small">全員</el-tag>
+          <template v-else>
+            <el-tag v-if="row.recipient_count" type="warning" size="small">{{ row.recipient_count }} 位員工</el-tag>
+            <el-tag v-if="row.parent_recipient_count" type="success" size="small">含家長</el-tag>
+          </template>
         </template>
       </el-table-column>
 
       <el-table-column label="已讀預覽" min-width="220">
         <template #default="{ row }">
           <div class="read-preview-cell">
+            <!-- 家長已讀另計：純家長導向公告 read_count 恆 0，原本會誤顯「尚未有人已讀」 -->
+            <span v-if="row.parent_read_count > 0" class="parent-read-count">家長已讀 {{ row.parent_read_count }} 人</span>
             <template v-if="row.read_count > 0">
               <div class="read-preview-tags">
                 <el-tag
@@ -571,7 +576,7 @@ onMounted(() => {
                 </div>
               </el-popover>
             </template>
-            <span v-else class="text-muted">尚未有人已讀</span>
+            <span v-else-if="!row.parent_read_count" class="text-muted">尚未有人已讀</span>
           </div>
         </template>
       </el-table-column>
@@ -834,6 +839,12 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.parent-read-count {
+  font-size: var(--text-xs);
+  color: var(--color-success-darker);
+  font-weight: 600;
 }
 
 .read-preview-tags {
