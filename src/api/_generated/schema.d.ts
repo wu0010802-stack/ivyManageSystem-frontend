@@ -43996,7 +43996,7 @@ export interface components {
             /** Observation Date */
             observation_date?: string | null;
             /** Rating */
-            rating?: string | null;
+            rating?: number | null;
         };
         /**
          * StudentDetailStudent
