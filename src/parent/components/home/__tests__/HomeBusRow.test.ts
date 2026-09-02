@@ -6,6 +6,9 @@
  *  - 「今天不搭」入口吃 ride-cancellations，與 trip 生命週期無關（發車前就要在）
  *  - 站點座標（家庭住址）不得進入畫面
  *  - 送出與撤銷的 re-entrancy guard（雙擊不得覆寫第一發的結果）
+ *
+ * 本檔涵蓋原 TodayView.rideCancellation.test.ts 與 TodayView.busRace.test.ts 的
+ * 行為斷言（2026-09-02 隨元件抽出搬移）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
