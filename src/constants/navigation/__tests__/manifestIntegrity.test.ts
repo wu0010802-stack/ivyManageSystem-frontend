@@ -266,6 +266,9 @@ const INTENTIONAL_DIVERGENCE = {
     // 借道 PLATFORM_TENANTS_MANAGE 而非新增第四個 PLATFORM_* 碼——後端
     // PLATFORM_ONLY_CODES parity 與角色 seed 都吃那三碼。
     '/platform/gov-data × PLATFORM_TENANTS_MANAGE',
+    // 2026-08-20 節慶人數月底結算：新頁掛在「考核與年終 › 規則設定」下，權限沿用
+    // SALARY_READ（業主裁定 D4；該碼本就在 appraisalYearEnd 群組 sharedViews 內）。
+    '/appraisal-year-end/rules/festival-headcount × SALARY_READ',
   ],
 }
 

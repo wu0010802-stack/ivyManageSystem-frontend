@@ -16931,7 +16931,9 @@ export interface paths {
         };
         /**
          * Get Enrollment Snapshot
-         * @description 檢視該月快照列（含班名）。發放月時附 covered_months 供前端展開涵蓋月。
+         * @description 檢視該月節慶人數（含班名、breakdown、cutoff 狀態）。
+         *
+         *     發放月時附 `covered_months` 供前端展開涵蓋月。
          */
         get: operations["get_enrollment_snapshot_api_salaries_enrollment_snapshot_get"];
         put?: never;
@@ -16957,9 +16959,32 @@ export interface paths {
         head?: never;
         /**
          * Patch Enrollment Snapshot
-         * @description 手調單列人數（需原因 ≥10 字）；視為已確認並標記薪資需重算。
+         * @description 人工調整單列人數（需原因 ≥10 字）；視為已確認並標記下游需重算。
          */
         patch: operations["patch_enrollment_snapshot_api_salaries_enrollment_snapshot__snapshot_id__patch"];
+        trace?: never;
+    };
+    "/salaries/enrollment-snapshot/{snapshot_id}/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Enrollment Snapshot Exclusions
+         * @description 該列的排除明細（長假／休學）。
+         *
+         *     ⚠ **只回 `student_id` 與學號，不回姓名**——排除明細屬幼生個資，需要姓名時
+         *     請走既有具權限的學生查詢端點。
+         */
+        get: operations["list_enrollment_snapshot_exclusions_api_salaries_enrollment_snapshot__snapshot_id__exclusions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/salaries/enrollment-snapshot/confirm": {
@@ -16973,7 +16998,7 @@ export interface paths {
         put?: never;
         /**
          * Confirm Enrollment Snapshot
-         * @description 確認該月全部快照列（重產時不再被自動覆寫）。
+         * @description 確認該月全部節慶人數列（缺全校列或缺班級列 → 422）。
          */
         post: operations["confirm_enrollment_snapshot_api_salaries_enrollment_snapshot_confirm_post"];
         delete?: never;
@@ -16993,9 +17018,31 @@ export interface paths {
         put?: never;
         /**
          * Generate Enrollment Snapshot
-         * @description 產生/重產該月快照。值有變動時標記受影響發放月薪資需重算。
+         * @description 產生／重產該月節慶人數。已確認列保留不覆寫（要改先 `/reopen`）。
          */
         post: operations["generate_enrollment_snapshot_api_salaries_enrollment_snapshot_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/enrollment-snapshot/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen Enrollment Snapshot
+         * @description 重開已確認月份（需原因 ≥10 字），讓該月可被重新產生／調整。
+         *
+         *     這是唯一能覆寫已確認人數的途徑；`/generate` 刻意不提供 `force`。
+         */
+        post: operations["reopen_enrollment_snapshot_api_salaries_enrollment_snapshot_reopen_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -28025,10 +28072,13 @@ export interface components {
             /** Work Start Time */
             work_start_time?: string | null;
         };
-        /** EnrollmentSnapshotChangeOut */
+        /**
+         * EnrollmentSnapshotChangeOut
+         * @description 單列人數異動（產生／重產的 diff）。
+         */
         EnrollmentSnapshotChangeOut: {
             /** After */
-            after: number;
+            after?: number | null;
             /** Before */
             before?: number | null;
             /** Classroom Id */
@@ -28041,30 +28091,120 @@ export interface components {
             /** Message */
             message: string;
         };
+        /**
+         * EnrollmentSnapshotExclusionItemOut
+         * @description 排除明細單筆。
+         *
+         *     ⚠ **刻意沒有姓名欄位**：幼生姓名屬個資，排除明細只回 `student_id` 與
+         *     `student_number`（學號）；需要姓名時由前端另走既有具權限的學生查詢。
+         */
+        EnrollmentSnapshotExclusionItemOut: {
+            /** Leave Days */
+            leave_days?: number | null;
+            /** Reason Code */
+            reason_code: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Number */
+            student_number?: string | null;
+        };
+        /** EnrollmentSnapshotExclusionListOut */
+        EnrollmentSnapshotExclusionListOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Items */
+            items?: components["schemas"]["EnrollmentSnapshotExclusionItemOut"][];
+            /** Month */
+            month: number;
+            /** Snapshot Id */
+            snapshot_id: number;
+            /** Year */
+            year: number;
+        };
+        /**
+         * EnrollmentSnapshotGenerateIn
+         * @description 產生／重產該月節慶人數。
+         *
+         *     ⚠ 刻意**不提供 `force`**：唯一能覆寫已確認月份的途徑是 `/reopen`
+         *     （需 ≥10 字原因 + audit + 下游封存守衛），避免已確認數字被靜默改寫。
+         */
+        EnrollmentSnapshotGenerateIn: {
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
         /** EnrollmentSnapshotGenerateOut */
         EnrollmentSnapshotGenerateOut: {
             /** Changes */
-            changes: components["schemas"]["EnrollmentSnapshotChangeOut"][];
+            changes?: components["schemas"]["EnrollmentSnapshotChangeOut"][];
             /** Generated */
             generated: number;
             /** Message */
             message: string;
+            stale?: components["schemas"]["StaleDependentsOut"] | null;
         };
-        /** EnrollmentSnapshotOut */
-        EnrollmentSnapshotOut: {
+        /**
+         * EnrollmentSnapshotMonthIn
+         * @description 指定年月（confirm 用）。
+         */
+        EnrollmentSnapshotMonthIn: {
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /**
+         * EnrollmentSnapshotMonthOut
+         * @description 某月節慶人數總覽。
+         */
+        EnrollmentSnapshotMonthOut: {
             /** Covered Months */
-            covered_months: [
-                number,
-                number
-            ][];
+            covered_months?: number[][];
+            /** Cutoff Ym */
+            cutoff_ym?: string | null;
             /** Exists */
             exists: boolean;
+            /**
+             * Is Confirmed
+             * @default false
+             */
+            is_confirmed: boolean;
+            /**
+             * Is Post Cutoff
+             * @default false
+             */
+            is_post_cutoff: boolean;
+            /**
+             * Long Leave Mode
+             * @default observe
+             */
+            long_leave_mode: string;
+            /**
+             * Long Leave Threshold Days
+             * @default 10
+             */
+            long_leave_threshold_days: number;
             /** Month */
             month: number;
             /** Rows */
-            rows: components["schemas"]["EnrollmentSnapshotRowOut"][];
+            rows?: components["schemas"]["EnrollmentSnapshotRowOut"][];
+            school_reconciliation?: components["schemas"]["EnrollmentSnapshotReconciliationOut"] | null;
             /** Year */
             year: number;
+        };
+        /**
+         * EnrollmentSnapshotPatchIn
+         * @description 人工調整單列節慶人數（原因必填 ≥10 字，由 require_adjustment_reason 驗）。
+         */
+        EnrollmentSnapshotPatchIn: {
+            /**
+             * Reason
+             * @description 調整原因（必填，至少 10 個字）
+             */
+            reason?: string | null;
+            /** Student Count */
+            student_count: number;
         };
         /** EnrollmentSnapshotPatchOut */
         EnrollmentSnapshotPatchOut: {
@@ -28074,27 +28214,115 @@ export interface components {
             before: number;
             /** Message */
             message: string;
+            stale?: components["schemas"]["StaleDependentsOut"] | null;
         };
-        /** EnrollmentSnapshotRowOut */
+        /**
+         * EnrollmentSnapshotReconciliationOut
+         * @description 全校核對式：`school = Σclasses + unassigned`（未分班幼生使差額合理）。
+         */
+        EnrollmentSnapshotReconciliationOut: {
+            /**
+             * Balanced
+             * @default true
+             */
+            balanced: boolean;
+            /**
+             * Class Sum
+             * @default 0
+             */
+            class_sum: number;
+            /**
+             * School Count
+             * @default 0
+             */
+            school_count: number;
+            /**
+             * Unassigned Count
+             * @default 0
+             */
+            unassigned_count: number;
+        };
+        /**
+         * EnrollmentSnapshotReopenIn
+         * @description 重開已確認月份（原因必填 ≥10 字）。
+         */
+        EnrollmentSnapshotReopenIn: {
+            /** Month */
+            month: number;
+            /**
+             * Reason
+             * @description 重開原因（必填，至少 10 個字）
+             */
+            reason?: string | null;
+            /** Year */
+            year: number;
+        };
+        /** EnrollmentSnapshotReopenOut */
+        EnrollmentSnapshotReopenOut: {
+            /** Message */
+            message: string;
+            /** Reopened */
+            reopened: number;
+            stale?: components["schemas"]["StaleDependentsOut"] | null;
+        };
+        /**
+         * EnrollmentSnapshotRowOut
+         * @description 單列節慶人數（全校列 `classroom_id=None`，其餘為班級列）。
+         */
         EnrollmentSnapshotRowOut: {
             /** Adjust Reason */
             adjust_reason?: string | null;
+            /** Calc Breakdown */
+            calc_breakdown?: {
+                [key: string]: unknown;
+            } | null;
             /** Classroom Id */
             classroom_id?: number | null;
             /** Classroom Name */
             classroom_name: string;
+            /** Confirmed At */
+            confirmed_at?: string | null;
             /** Confirmed By */
             confirmed_by?: string | null;
             /** Count Mode */
             count_mode: string;
             /** Generated At */
             generated_at?: string | null;
+            /**
+             * Graduating Count
+             * @default 0
+             */
+            graduating_count: number;
             /** Id */
             id: number;
             /** Is Confirmed */
             is_confirmed: boolean;
+            /**
+             * Long Leave Excluded Count
+             * @default 0
+             */
+            long_leave_excluded_count: number;
+            /**
+             * Manual Delta
+             * @default 0
+             */
+            manual_delta: number;
+            /**
+             * On Leave Count
+             * @default 0
+             */
+            on_leave_count: number;
+            /**
+             * Other Excluded Count
+             * @default 0
+             */
+            other_excluded_count: number;
+            /** Rule Version */
+            rule_version: string;
             /** Student Count */
             student_count: number;
+            /** System Count */
+            system_count: number;
             /** Updated By */
             updated_by?: string | null;
         };
@@ -43230,26 +43458,6 @@ export interface components {
             /** Student Name */
             student_name: string;
         };
-        /** SnapshotConfirmRequest */
-        SnapshotConfirmRequest: {
-            /** Month */
-            month: number;
-            /** Year */
-            year: number;
-        };
-        /** SnapshotGenerateRequest */
-        SnapshotGenerateRequest: {
-            /**
-             * Force
-             * @description True 連已確認列一併覆寫
-             * @default false
-             */
-            force: boolean;
-            /** Month */
-            month: number;
-            /** Year */
-            year: number;
-        };
         /** SnapshotMemberEntry */
         SnapshotMemberEntry: {
             /** Class Name */
@@ -43271,16 +43479,6 @@ export interface components {
             members: components["schemas"]["SnapshotMemberEntry"][];
             /** Snapshot Date */
             snapshot_date: string;
-        };
-        /** SnapshotPatchRequest */
-        SnapshotPatchRequest: {
-            /**
-             * Reason
-             * @description 手調原因（必填 ≥10 字）
-             */
-            reason?: string | null;
-            /** Student Count */
-            student_count: number;
         };
         /**
          * SourceRecord
@@ -43380,6 +43578,23 @@ export interface components {
         StaffEntry: {
             /** Name */
             name: string;
+        };
+        /**
+         * StaleDependentsOut
+         * @description 人數異動後需重算的下游草稿。
+         *
+         *     薪資已寫 `needs_recalc`；年終／考核無該欄位，改以 id 清單提示前端。
+         */
+        StaleDependentsOut: {
+            /** Appraisal Summaries */
+            appraisal_summaries?: number[];
+            /**
+             * Salary Records
+             * @default 0
+             */
+            salary_records: number;
+            /** Year End Settlements */
+            year_end_settlements?: number[];
         };
         /** StatsClassroomOut */
         StatsClassroomOut: {
@@ -74473,7 +74688,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnrollmentSnapshotOut"];
+                    "application/json": components["schemas"]["EnrollmentSnapshotMonthOut"];
                 };
             };
             /** @description Validation Error */
@@ -74498,7 +74713,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SnapshotPatchRequest"];
+                "application/json": components["schemas"]["EnrollmentSnapshotPatchIn"];
             };
         };
         responses: {
@@ -74522,6 +74737,37 @@ export interface operations {
             };
         };
     };
+    list_enrollment_snapshot_exclusions_api_salaries_enrollment_snapshot__snapshot_id__exclusions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentSnapshotExclusionListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     confirm_enrollment_snapshot_api_salaries_enrollment_snapshot_confirm_post: {
         parameters: {
             query?: never;
@@ -74531,7 +74777,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SnapshotConfirmRequest"];
+                "application/json": components["schemas"]["EnrollmentSnapshotMonthIn"];
             };
         };
         responses: {
@@ -74564,7 +74810,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SnapshotGenerateRequest"];
+                "application/json": components["schemas"]["EnrollmentSnapshotGenerateIn"];
             };
         };
         responses: {
@@ -74575,6 +74821,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnrollmentSnapshotGenerateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_enrollment_snapshot_api_salaries_enrollment_snapshot_reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollmentSnapshotReopenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnrollmentSnapshotReopenOut"];
                 };
             };
             /** @description Validation Error */
