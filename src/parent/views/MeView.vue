@@ -71,20 +71,25 @@ const PREFS = [
   { key: 'privacy_rights', label: '個人資料權利', icon: 'gpp_good', path: '/me/privacy-rights', hint: '同意紀錄 / 申請刪除 / 更正 / 停止處理' },
   // 2026-09-02：/assistant 原本全站沒有任何入口，只能靠外部深連結進入。
   //
-  // icon 用 info 而非 help：help 不在自架子集字型的 135 個 glyph 內
-  // （src/parent/assets/fonts/material-symbols-manifest.json），會在 prod
-  // render 成 ligature 原文「help」；info 已在子集內。不用同樣在子集內的
-  // fact_check 是因為它在家長端已代表出席／待簽文件（iconMapping.attendance
-  // 與 quickActionModules），同一顆圖示再兼指常見問題會誤導。
+  // 約束：這裡的 glyph 必須在自架子集字型內既有
+  // （src/parent/assets/fonts/material-symbols-manifest.json 的 icons 陣列，
+  // 由 iconFontSubset.spec.ts 守衛）。不在子集內的名字不會 fallback，會在 prod
+  // 直接 render 成 ligature 英文原文，2026-08-12/13 的 LIFF 跑版事故即此成因。
+  // 直覺會想用的 help、help_outline、quiz、contact_support 全部不在子集內。
+  //
+  // 選 tips_and_updates：它已在 BindView 的「下一步怎麼做」提示上使用，
+  // 在本 app 內既有語意就是引導使用者自己排除問題，與常見問題一致。
+  // 不用 info，是因為 utils/iconMapping.ts 把它與 warn／alert 並列，
+  // 屬狀態嚴重度語彙；不用 fact_check，是因為它已代表出席與待簽文件。
   //
   // 這一項刻意拆成多行、不與上面兩項一樣寫成單行：icon 子集守衛
-  // （scripts/lib/parent-icon-names.mjs）是逐行掃描，會把「含 icon 字樣的那一行」
+  // （scripts/lib/parent-icon-names.mjs）是逐行掃描，會把含 icon 字樣的那一行
   // 上所有小寫字串字面值都當成 icon 名。寫成單行會讓 key 那個值被誤收為
   // icon 名，讓 iconFontSubset.spec.ts 紅燈。收合回單行前請先想過這點。
   {
     key: 'assistant',
     label: '常見問題',
-    icon: 'info',
+    icon: 'tips_and_updates',
     path: '/assistant',
     hint: '登入、綁定、接送與繳費常見問題',
   },
