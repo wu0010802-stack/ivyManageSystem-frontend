@@ -1467,16 +1467,53 @@ function dismissalLabel(status: string | null | undefined) {
 Run: `npx vitest run src/parent/composables/__tests__/useTodayTimeline.slim.test.ts`
 Expected: PASS，12 個測試全綠。
 
-- [ ] **Step 5: 跑既有 timeline 相關測試，記錄哪些紅了**
+- [ ] **Step 5: 更新三個會受影響的既有測試檔**
 
 Run: `npx vitest run src/parent/composables/__tests__/ tests/unit/parent/composables/`
-Expected: 既有 `useTodayTimeline` 測試中，斷言「晚一些」桶有待繳事件、或斷言「已接送」、或斷言「尚未到校」的案例會失敗。逐一更新這些斷言：反向斷言改為「不應出現」，用詞改為新值。不要為了讓測試過而改回實作。
+
+以下三個檔案必然紅，已預先盤點（全樹 grep 過，不會有第四個）：
+
+**5a. `tests/unit/parent/composables/dismissalTimelineParts.test.ts:37,45`**
+測試名「完成：行為與改造前一致（completed_at、已接送、/attendance）」與斷言 `expect(parts.secondary).toBe('已接送')`。改為「已離園」，測試名同步改。
+
+**5b. `tests/unit/parent/composables/useTodayTimeline.test.js:17`**
+測試名 `attendance / leave / 尚未到校 → morning bucket`。占位事件已刪，改測試名為 `attendance / leave → morning bucket`，並刪除該案例中對 `pending:*` 事件的斷言。若該案例還斷言事件總數，數字要跟著減。
+
+**5c. `tests/unit/parent/composables/useTodayTimeline.routeParity.test.js`（最需要小心的一支）**
+它有一條**防假綠的下限斷言**（約第 59 行）：
+```js
+// 目前分支數應至少涵蓋 attendance/leave/pending/medication/dismissal 5 種
+// 子女事件，加上 6 種 summary 待辦，共 11 個以上。
+expect(events.value.length).toBeGreaterThanOrEqual(11)
+```
+瘦身後 fixture 只會產生 4 個事件（attendance／leave／medication／dismissal，pending 與五種 summary 事件都沒了）。把數字改為 `4`，註解同步改寫為：
+```js
+// 瘦身後（2026-09-02）只剩 attendance/leave/medication/dismissal 四種子女
+// 事件；summary 衍生待辦已移交 HomeTodoList，不再進時間軸。
+expect(events.value.length).toBeGreaterThanOrEqual(4)
+```
+**這個下限的用途是擋 fixture 失效造成的假綠，不是要求事件變多**，所以跟著實際種類調整是正確的，不算弱化斷言。該檔第 36 行 fixture 註解 `// 無 attendance/leave → 尚未到校（pending）` 也改為 `// 無 attendance/leave → 瘦身後不再產生事件`，該筆 fixture 資料保留（用來證明它確實不再產生事件）。
+
+不要為了讓測試過而改回實作。改完重跑上面那條指令確認全綠。
+
+**不要動這兩處**（它們測的是首頁狀態 pill，不是時間軸，pill 保留「尚未到校」）：
+`tests/unit/parent/views/TodayView.test.js:196` 與 `:292`。
+
+`tests/unit/parent/components/home-timeline/TodayTimeline.test.js` 用手造 fixture 自己傳 label，不呼叫 composable，**不受本任務影響**，不要改它。
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/parent/composables/useTodayTimeline.ts src/parent/composables/__tests__/
-git commit -- src/parent/composables/useTodayTimeline.ts src/parent/composables/__tests__/
+git add src/parent/composables/useTodayTimeline.ts \
+        src/parent/composables/__tests__/useTodayTimeline.slim.test.ts \
+        tests/unit/parent/composables/dismissalTimelineParts.test.ts \
+        tests/unit/parent/composables/useTodayTimeline.test.js \
+        tests/unit/parent/composables/useTodayTimeline.routeParity.test.js
+git commit -F /tmp/ivy-msg.txt -- src/parent/composables/useTodayTimeline.ts \
+        src/parent/composables/__tests__/useTodayTimeline.slim.test.ts \
+        tests/unit/parent/composables/dismissalTimelineParts.test.ts \
+        tests/unit/parent/composables/useTodayTimeline.test.js \
+        tests/unit/parent/composables/useTodayTimeline.routeParity.test.js
 ```
 
 Commit message:
