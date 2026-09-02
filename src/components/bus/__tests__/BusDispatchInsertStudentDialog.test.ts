@@ -123,6 +123,25 @@ describe('submit payload', () => {
     }]])
   })
 
+  it('地址選單自動補到住家座標（reason: located）：不必再點一次住家就能插入', async () => {
+    const w = await pickStudentAndAddress(mountDialog(), 202, {
+      id: null, lat: 22.5, lng: 120.2, address: '學生住址', reason: 'located',
+    })
+    expect(w.find('[data-test="submit-btn"]').attributes('disabled')).toBeUndefined()
+    await w.find('[data-test="submit-btn"]').trigger('click')
+    expect(w.emitted('submit')).toEqual([[{
+      student_id: 202, pickup_address_id: null, lat: 22.5, lng: 120.2,
+    }]])
+  })
+
+  it('住家定位失敗（located 但無座標）：擋住送出並講出下一步', async () => {
+    const w = await pickStudentAndAddress(mountDialog(), 202, {
+      id: null, lat: null, lng: null, address: '學生住址', reason: 'located',
+    })
+    expect(w.find('[data-test="no-coordinates"]').exists()).toBe(true)
+    expect(w.find('[data-test="submit-btn"]').attributes('disabled')).toBeDefined()
+  })
+
   it('不送 position——後端一律接在末端，畫面也照實說明', async () => {
     const w = await pickStudentAndAddress(mountDialog())
     await w.find('[data-test="submit-btn"]').trigger('click')

@@ -410,6 +410,15 @@ describe('編輯與釘選', () => {
     })
   })
 
+  it('重選同一筆地址但站點本來就沒座標時，要採用帶來的座標（沒有東西可保護，不採用就永遠無法發車）', async () => {
+    const editor = await boot([routeA({ stops: [stop({ pickup_address_id: null, lat: null, lng: null, address_snapshot: null })] })])
+    editor.setPickupAddress(0, { id: null, lat: 22.65, lng: 120.35, address: '住家地址' })
+    expect(editor.stops.value[0]).toMatchObject({
+      pickup_address_id: null, lat: 22.65, lng: 120.35, address_snapshot: '住家地址', address_stale: false,
+    })
+    expect(editor.dirty.value).toBe(true)
+  })
+
   it('真的換成另一筆地址而該地址沒座標時，座標才歸零（不能沿用別的地址的座標）', async () => {
     const editor = await boot([routeA({ stops: [stop({ pickup_address_id: null, lat: 22.61, lng: 120.31 })] })])
     editor.setPickupAddress(0, { id: 7, lat: null, lng: null, address: '阿嬤家' })

@@ -12,6 +12,20 @@
  * 這種情況要明說「尚未定位」，不要讓使用者以為地址設好就一定能發車
  * （spec：班次內任一站無座標即無法發車）。
  *
+ * ── 住家自動定位（2026-09-02）────────────────────────────────────────────
+ * 後端住家虛擬項是**寫死** `lat/lng: null` 的（住家地址不入地址簿表，自然沒有
+ * geocode 結果，見 `api/bus/pickup_addresses.py`）。若照單全收，每一位學生的
+ * 「住家」都會被標成「尚未定位，無法發車」——那是誤報：住家明明可以定位，只是還
+ * 沒查；使用者被這句話逼去手動新增一筆一模一樣的地址（staging 回報）。所以清單
+ * 載入後若住家有地址文字但沒座標，元件自己打 `POST /bus/routes/geocode`（依
+ * `students.address` 查座標、不落庫）補上，三個使用端（班次設定／今日調度改地址
+ * ／臨時插入）才會一致拿到座標。結果快取在元件內：新增／編輯／刪除後的重載不重打。
+ *
+ * 補到座標時若「目前選的就是住家」，另外 emit `resolved` 帶 `reason: 'located'`
+ * ——這不是使用者的選擇（不動 v-model、頁面不該關 Dialog），只是把座標交給頁面去
+ * 填「還沒有座標」的站；已有（微調好的）座標的站由頁面自行忽略。定位失敗也回報
+ * 一次（座標 null），讓臨時插入 Dialog 能講出「請新增可定位的地址」的下一步。
+ *
  * 編輯：沿用同一份新增表單（`editingId` 區分新增／編輯，不重複刻一套 UI）；
  * PATCH 端點只在**地址文字**有異動時才重新 geocode，只改 label 不必白打一次
  * 外部 API。編輯完成後自動重選該筆——`useBusRouteEditor.setPickupAddress` 的
@@ -33,8 +47,8 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  createStudentPickupAddress, deleteStudentPickupAddress, listStudentPickupAddresses,
-  updateStudentPickupAddress, relocateStudentPickupAddress,
+  createStudentPickupAddress, deleteStudentPickupAddress, geocodeBusStudent,
+  listStudentPickupAddresses, updateStudentPickupAddress, relocateStudentPickupAddress,
 } from '@/api/bus'
 import { apiError } from '@/utils/error'
 
@@ -57,16 +71,17 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [id: number | null]
   /**
-   * `reason` 讓頁面分辨兩種選定：`'selected'`＝使用者主動選了一筆（頁面可以收
+   * `reason` 讓頁面分辨三種來源：`'selected'`＝使用者主動選了一筆（頁面可以收
    * Dialog）；`'fallback'`＝刪除「目前選中」的地址後被動退回住家（使用者還在
-   * 管理地址簿，頁面不該把整個 Dialog 關掉）。
+   * 管理地址簿，頁面不該把整個 Dialog 關掉）；`'located'`＝目前選的是住家而元件
+   * 剛替它補到座標（不是選擇，頁面只該拿來填「還沒有座標」的站、不關 Dialog）。
    */
   resolved: [payload: {
     id: number | null
     lat: number | null
     lng: number | null
     address: string
-    reason: 'selected' | 'fallback'
+    reason: 'selected' | 'fallback' | 'located'
   }]
   /** 重新定位完成，把最新座標交給頁面直接覆寫該站（跳過 sameAddress 保護）。 */
   relocated: [payload: { id: number; lat: number | null; lng: number | null }]
@@ -75,6 +90,14 @@ const emit = defineEmits<{
 const options = ref<PickupAddressOption[]>([])
 const loading = ref(false)
 const loadFailed = ref(false)
+const homeLocating = ref(false)
+/**
+ * 住家 geocode 結果快取：同一位學生只查一次，`load()` 重載清單（新增／編輯／刪除
+ * 後）把它重新套回住家項。`null`＝還沒查或查不到。
+ */
+const homeCoords = ref<{ lat: number; lng: number } | null>(null)
+/** 進行中的住家定位；定位中選住家要等它完成再回報，別帶著 null 座標出去。 */
+let homeLocatePromise: Promise<void> | null = null
 const submitting = ref(false)
 const deletingId = ref<number | null>(null)
 const relocatingId = ref<number | null>(null)
@@ -136,6 +159,10 @@ const selected = computed(
 
 const selectValue = computed(() => props.modelValue ?? HOME_VALUE)
 
+const homeOption = computed(() => sortedOptions.value.find((o) => o.is_home) ?? null)
+/** 住家能不能定位：後端 geocode 端點讀 `students.address`，主檔沒住址必 422，不必白打。 */
+const canLocateHome = computed(() => !!homeOption.value?.address)
+
 /**
  * 地址簿實際存在的那幾筆（不含住家虛擬項）。刪除操作掛在這份清單上而不是
  * `el-option` 的 slot 裡——下拉未展開時 option slot 不在 DOM，等於一個看得到
@@ -155,33 +182,14 @@ function isUnlocated(option: PickupAddressOption): boolean {
   return option.lat === null || option.lng === null
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  loadFailed.value = false
-  try {
-    const res = await listStudentPickupAddresses(props.studentId)
-    const data = asRecord((res as { data?: unknown }).data) ?? {}
-    options.value = normalize(data.addresses)
-  } catch (e) {
-    loadFailed.value = true
-    options.value = []
-    ElMessage.error(apiError(e, '載入接送地址失敗，請稍後再試'))
-  } finally {
-    loading.value = false
-  }
+/** 把快取的住家座標套回（後端住家項恆無座標；若哪天後端自己帶了就不覆蓋）。 */
+function applyHomeCoords(list: PickupAddressOption[]): PickupAddressOption[] {
+  const coords = homeCoords.value
+  if (!coords) return list
+  return list.map((o) => (o.is_home && isUnlocated(o) ? { ...o, lat: coords.lat, lng: coords.lng } : o))
 }
 
-watch(() => props.studentId, () => {
-  showCreateForm.value = false
-  editingId.value = null
-  void load()
-}, { immediate: true })
-
-function onSelect(raw: number, reason: 'selected' | 'fallback' = 'selected'): void {
-  const id = raw === HOME_VALUE ? null : raw
-  emit('update:modelValue', id)
-  const option = sortedOptions.value.find((o) => o.id === id)
-  if (!option) return
+function emitResolved(option: PickupAddressOption, reason: 'selected' | 'fallback' | 'located'): void {
   emit('resolved', {
     id: option.id,
     lat: option.lat,
@@ -189,6 +197,88 @@ function onSelect(raw: number, reason: 'selected' | 'fallback' = 'selected'): vo
     address: option.address ?? (option.is_home ? (props.homeAddress ?? '') : ''),
     reason,
   })
+}
+
+/**
+ * 依學生主檔住址查座標（`POST /bus/routes/geocode`，不落庫）補進住家項。
+ * 途中換了學生就把結果作廢——否則會把 A 的座標套到 B 的住家上。
+ * 失敗（主檔無住址 422／provider 502／網路）一律「維持尚未定位」，畫面上留
+ * 「重新定位」可重試；不彈 toast，開一次 Dialog 不該就被罵一次。
+ */
+async function locateHome(): Promise<void> {
+  const studentId = props.studentId
+  homeLocating.value = true
+  const run = (async () => {
+    let coords: { lat: number; lng: number } | null = null
+    try {
+      const res = await geocodeBusStudent(studentId)
+      const data = asRecord((res as { data?: unknown }).data)
+      const lat = asNum(data?.lat)
+      const lng = asNum(data?.lng)
+      if (lat !== null && lng !== null) coords = { lat, lng }
+    } catch {
+      coords = null
+    }
+    if (studentId !== props.studentId) return
+    homeCoords.value = coords
+    options.value = applyHomeCoords(options.value)
+    homeLocating.value = false
+    const home = homeOption.value
+    if (home && props.modelValue === null) emitResolved(home, 'located')
+  })()
+  homeLocatePromise = run
+  try {
+    await run
+  } finally {
+    if (homeLocatePromise === run) homeLocatePromise = null
+  }
+}
+
+function locateHomeIfNeeded(): void {
+  const home = homeOption.value
+  if (!home || !isUnlocated(home) || !canLocateHome.value || homeLocatePromise) return
+  void locateHome()
+}
+
+async function load(): Promise<void> {
+  loading.value = true
+  loadFailed.value = false
+  try {
+    const res = await listStudentPickupAddresses(props.studentId)
+    const data = asRecord((res as { data?: unknown }).data) ?? {}
+    options.value = applyHomeCoords(normalize(data.addresses))
+  } catch (e) {
+    loadFailed.value = true
+    options.value = []
+    ElMessage.error(apiError(e, '載入接送地址失敗，請稍後再試'))
+  } finally {
+    loading.value = false
+  }
+  locateHomeIfNeeded()
+}
+
+watch(() => props.studentId, () => {
+  showCreateForm.value = false
+  editingId.value = null
+  homeCoords.value = null
+  homeLocating.value = false
+  homeLocatePromise = null
+  void load()
+}, { immediate: true })
+
+async function onSelect(raw: number, reason: 'selected' | 'fallback' = 'selected'): Promise<void> {
+  const id = raw === HOME_VALUE ? null : raw
+  emit('update:modelValue', id)
+  // 定位中選住家：等結果再回報，否則頁面拿到 null 座標又得自己補一次。
+  if (id === null && homeLocatePromise) await homeLocatePromise
+  const option = sortedOptions.value.find((o) => o.id === id)
+  if (!option) return
+  emitResolved(option, reason)
+}
+
+async function onRelocateHome(): Promise<void> {
+  if (homeLocatePromise) return
+  await locateHome()
 }
 
 function onStartCreate(): void {
@@ -271,7 +361,7 @@ async function onDelete(id: number): Promise<void> {
   try {
     await deleteStudentPickupAddress(props.studentId, id)
     // 被動退回住家（不能留一個指向已刪除地址的 id）；標 fallback，頁面不關 Dialog。
-    if (props.modelValue === id) onSelect(HOME_VALUE, 'fallback')
+    if (props.modelValue === id) void onSelect(HOME_VALUE, 'fallback')
     if (editingId.value === id) onCancelForm()
     await load()
     ElMessage.success('已刪除接送地址')
@@ -371,14 +461,36 @@ async function onRelocate(id: number): Promise<void> {
       </li>
     </ul>
 
+    <!--
+      住家定位中不得顯示「尚未定位，無法發車」——那是誤報，使用者會照字面去手動
+      新增一筆一樣的地址。定位失敗才顯示，並附「重新定位住家」讓人有下一步。
+    -->
     <el-tag
-      v-if="selected && isUnlocated(selected)"
-      type="warning"
+      v-if="selected?.is_home && homeLocating"
+      type="info"
       size="small"
-      data-test="selected-unlocated"
+      data-test="home-locating"
     >
-      此地址尚未定位，無法發車
+      住家定位中…
     </el-tag>
+    <div
+      v-else-if="selected && isUnlocated(selected)"
+      class="bus-pickup-address-select__unlocated"
+    >
+      <el-tag type="warning" size="small" data-test="selected-unlocated">
+        {{ selected.is_home && !selected.address ? '學生資料未填住址，無法定位' : '此地址尚未定位，無法發車' }}
+      </el-tag>
+      <el-button
+        v-if="selected.is_home && canLocateHome"
+        link
+        type="primary"
+        size="small"
+        data-test="relocate-home"
+        @click="onRelocateHome"
+      >
+        重新定位住家
+      </el-button>
+    </div>
 
     <el-button
       v-if="!showCreateForm"
@@ -438,6 +550,11 @@ async function onRelocate(id: number): Promise<void> {
   list-style: none;
 }
 .bus-pickup-address-select__book li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bus-pickup-address-select__unlocated {
   display: flex;
   align-items: center;
   gap: 8px;

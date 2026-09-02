@@ -224,9 +224,23 @@ function closeAddress(): void {
   mapTunerVisible.value = false
 }
 
+/**
+ * `reason: 'located'`＝地址選單剛替住家自動補到座標，**不是使用者的選擇**，這裡
+ * 一律不採用：否則「套用」會在沒人選過任何東西的情況下亮起來，按下去就把這一站
+ * 微調過的上下車點換成巷弄級的 geocode 結果。本頁刻意不持有站點座標（見
+ * `useBusDailyDispatch.DispatchStop`），也無從分辨「這一站本來就沒座標、補進去是
+ * 救它」的情況——那種站使用者在下拉明確點一次住家即可（選項此時已帶座標）。
+ */
 function onAddressResolved(
-  payload: { id: number | null; lat: number | null; lng: number | null; address: string },
+  payload: {
+    id: number | null
+    lat: number | null
+    lng: number | null
+    address: string
+    reason?: 'selected' | 'fallback' | 'located'
+  },
 ): void {
+  if (payload.reason === 'located') return
   addressResolved.value = payload
 }
 

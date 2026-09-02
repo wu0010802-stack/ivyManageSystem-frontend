@@ -765,20 +765,25 @@ export function useBusRouteEditor() {
     if (index < 0 || index >= stops.value.length) return
     stops.value = stops.value.map((s, i) => {
       if (i !== index) return s
-      // **選同一筆地址時座標一律沿用站點目前值，不採用地址簿的座標**。原因有二：
-      // ①後端「住家」虛擬項是寫死的 `lat/lng: None`（api/bus/pickup_addresses.py），
-      // 對一個原本就用住家、且已經微調好座標的站再點一次住家，若採用 resolved 就會
-      // 把座標推進「無法發車」且沒有回頭路；②非住家地址簿項本身就存有座標，重選
-      // 同一筆時若直接採用 resolved.lat/lng，會把使用者用地圖微調過的精確座標
-      // 退回成地址簿的原始（未微調）geocode 值。地址真的換了（id 不同）才採用
-      // 新地址的座標。地址文字沒有「微調」這回事，永遠反映地址簿目前文字
-      // （含事後編輯過的），所以不受 sameAddress 影響。
+      // **選同一筆地址且站點已有座標時，座標沿用站點目前值，不採用地址簿的座標**。
+      // 原因有二：①後端「住家」虛擬項是寫死的 `lat/lng: None`（api/bus/pickup_
+      // addresses.py），對一個原本就用住家、且已經微調好座標的站再點一次住家，若採用
+      // resolved 就會把座標推進「無法發車」且沒有回頭路；②非住家地址簿項本身就存有
+      // 座標，重選同一筆時若直接採用 resolved.lat/lng，會把使用者用地圖微調過的精確
+      // 座標退回成地址簿的原始（未微調）geocode 值。地址真的換了（id 不同）才採用
+      // 新地址的座標。
+      // 站點**還沒有**座標時沒有東西可保護，一律採用帶來的座標——這正是
+      // `BusPickupAddressSelect` 替住家自動補到座標（reason: located）要填進來的路徑，
+      // 若也鎖住，新加的住家站永遠停在「尚未定位」。
+      // 地址文字沒有「微調」這回事，永遠反映地址簿目前文字（含事後編輯過的），
+      // 所以不受 sameAddress 影響。
       const sameAddress = s.pickup_address_id === resolved.id
+      const keepCoords = sameAddress && s.lat !== null && s.lng !== null
       return {
         ...s,
         pickup_address_id: resolved.id,
-        lat: sameAddress ? s.lat : resolved.lat,
-        lng: sameAddress ? s.lng : resolved.lng,
+        lat: keepCoords ? s.lat : resolved.lat,
+        lng: keepCoords ? s.lng : resolved.lng,
         address_snapshot: resolved.address ?? (sameAddress ? s.address_snapshot : null),
         // 剛從地址簿選出來的就是現值，不可能是過期快照。
         address_stale: false,

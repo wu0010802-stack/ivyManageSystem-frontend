@@ -215,14 +215,21 @@ function openAddressDialog(index: number): void {
 
 /**
  * 後端的「住家」虛擬項是寫死的 `lat/lng: None`（住家地址不入地址簿表，自然沒有
- * geocode 結果）。若不補這一段，選住家就等於把站點座標清空 → 該班次無法發車。
- * `POST /bus/routes/geocode` 正是為這條路徑保留的：依學生住址查座標，不落庫、
- * 隨名單一起儲存。查不到就明說要改用地圖微調，不留一個沒有下一步的死巷。
+ * geocode 結果）。`BusPickupAddressSelect` 自 2026-09-02 起會自己替住家補 geocode
+ * （選項載入後即查），所以正常情況下 resolved 已帶座標；這裡的 geocode 只剩
+ * 「元件那次查失敗、使用者仍明確選住家」的重試路徑——`POST /bus/routes/geocode`
+ * 依學生住址查座標，不落庫、隨名單一起儲存。查不到就明說要改用地圖微調，
+ * 不留一個沒有下一步的死巷。
+ *
+ * **`reason: 'located'`**＝元件剛替住家補到座標、而這一站目前選的就是住家。
+ * 那不是使用者的選擇：只替「還沒有座標」的站填進去（否則新加的住家站得再點
+ * 一次住家才有座標），已有（微調好的）座標的站一律不動、不標 dirty，Dialog 也不關。
  *
  * **重選同一筆且站點已有座標時跳過 geocode**：原本就用住家、已用地圖微調好
  * 上下車點的站，再點一次住家不能被巷弄級的 geocode 結果蓋回去（composable 的
- * `setPickupAddress` 對 sameAddress 會保留既有座標，這裡不 geocode 它就不會被動）。
- * 刪除地址退回住家的路徑不受影響——站點原本指向被刪的那筆，id 必不同，照樣重查。
+ * `setPickupAddress` 對「sameAddress 且已有座標」會保留既有座標，這裡不 geocode
+ * 它就不會被動）。刪除地址退回住家的路徑不受影響——站點原本指向被刪的那筆，
+ * id 必不同，照樣重查。
  */
 async function onAddressResolved(
   resolved: {
@@ -230,12 +237,25 @@ async function onAddressResolved(
     lat: number | null
     lng: number | null
     address: string
-    reason: 'selected' | 'fallback'
+    reason: 'selected' | 'fallback' | 'located'
   },
 ): Promise<void> {
   const index = addressStopIndex.value
   const stop = addressStop.value
   if (index === null || !stop) return
+  if (resolved.reason === 'located') {
+    const stopHasCoords = stop.lat !== null && stop.lng !== null
+    if (
+      resolved.id === null && stop.pickup_address_id === null && !stopHasCoords
+      && resolved.lat !== null && resolved.lng !== null
+    ) {
+      editor.setPickupAddress(index, {
+        id: null, lat: resolved.lat, lng: resolved.lng, address: resolved.address || null,
+      })
+      ElMessage.success('已帶入住家座標，如與實際上下車點有落差請用地圖微調')
+    }
+    return
+  }
   let { lat, lng } = resolved
   const sameAddressWithCoords =
     resolved.id === stop.pickup_address_id && stop.lat !== null && stop.lng !== null

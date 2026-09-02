@@ -596,6 +596,22 @@ describe('接送地址（含地圖微調，兩者一起送）', () => {
     })
   })
 
+  it('地址選單自動補到住家座標（reason: located）不算選擇：「套用」不亮，仍須使用者明確選一次', async () => {
+    // 本頁不持有站點座標，分不出「補進去是救一個沒座標的站」還是「蓋掉微調過的點」，
+    // 一律不採用；使用者明確點住家時選項已帶座標，走 selected 即可套用。
+    const w = await openAddressDialog()
+    w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('resolved', {
+      id: null, lat: 22.5, lng: 120.2, address: '學生住址', reason: 'located',
+    })
+    await w.vm.$nextTick()
+    expect(w.find('[data-testid="bus-dispatch-address-submit"]').attributes('disabled')).toBeDefined()
+    w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('resolved', {
+      id: null, lat: 22.5, lng: 120.2, address: '學生住址', reason: 'selected',
+    })
+    await w.vm.$nextTick()
+    expect(w.find('[data-testid="bus-dispatch-address-submit"]').attributes('disabled')).toBeUndefined()
+  })
+
   it('住家（pickup_address_id = null）是正常選項，一樣可套用', async () => {
     const w = await openAddressDialog()
     w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('resolved', {

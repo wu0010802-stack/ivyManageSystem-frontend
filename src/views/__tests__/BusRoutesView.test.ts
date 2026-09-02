@@ -350,6 +350,46 @@ describe('BusRoutesView — 住家地址沒有座標時補 geocode', () => {
   })
 })
 
+describe('BusRoutesView — 地址選單自動補到住家座標（reason: located）', () => {
+  function locate(w: ReturnType<typeof mount>, resolved: Record<string, unknown>) {
+    w.findComponent({ name: 'BusRouteStopsTable' }).vm.$emit('pick-address', 0)
+    return w.vm.$nextTick().then(() => {
+      w.findComponent({ name: 'BusPickupAddressSelect' }).vm.$emit('resolved', resolved)
+      return flushPromises()
+    })
+  }
+  const LOCATED = { id: null, lat: 22.65, lng: 120.35, address: '住家地址', reason: 'located' }
+
+  it('站點用住家且還沒座標：直接填進站點、不再打 geocode、Dialog 不關（不是使用者選定）', async () => {
+    s.stops.value = [stop({ pickup_address_id: null, lat: null, lng: null, address_snapshot: null })]
+    const w = await mountView()
+    await locate(w, LOCATED)
+    expect(geocodeBusStudent).not.toHaveBeenCalled()
+    expect(s.setPickupAddress).toHaveBeenCalledWith(0, {
+      id: null, lat: 22.65, lng: 120.35, address: '住家地址',
+    })
+    expect(ElMessage.success).toHaveBeenCalledWith(expect.stringContaining('住家座標'))
+    const dialog = w.findAllComponents({ name: 'ElDialog' })
+      .find((d) => d.props('title') === '設定接送地址')
+    expect(dialog?.props('modelValue')).toBe(true)
+  })
+
+  it('站點已有（微調好的）座標：located 一律不動站點，也不標 dirty', async () => {
+    // fixture 預設 pickup_address_id: null ＋ lat/lng 非 null＝「用住家、已微調」
+    const w = await mountView()
+    await locate(w, LOCATED)
+    expect(s.setPickupAddress).not.toHaveBeenCalled()
+    expect(s.setCoordinates).not.toHaveBeenCalled()
+  })
+
+  it('located 但仍查無座標（geocode 失敗）：不寫入 null 座標', async () => {
+    s.stops.value = [stop({ pickup_address_id: null, lat: null, lng: null, address_snapshot: null })]
+    const w = await mountView()
+    await locate(w, { ...LOCATED, lat: null, lng: null })
+    expect(s.setPickupAddress).not.toHaveBeenCalled()
+  })
+})
+
 describe('BusRoutesView — 接送地址 Dialog 內重新定位', () => {
   function openDialogAndRelocate(
     w: ReturnType<typeof mount>, payload: { id: number; lat: number | null; lng: number | null },

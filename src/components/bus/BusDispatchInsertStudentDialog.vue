@@ -16,6 +16,10 @@
  * ——真正的代價是「早上七點司機按不下開始」。所以這裡在按鈕層就擋，並明說要先去
  * 地址簿補一個可定位的地址，而不是讓人送出後才看到一句錯誤。
  *
+ * 住家（預設選項）的座標由 `BusPickupAddressSelect` 載入後自動 geocode 補上，並以
+ * `reason: 'located'` 回報——所以選完學生通常不必再點一次住家就能插入；定位失敗時
+ * 同樣回報一次（座標 null），上面那句「請先新增可定位的地址」才會出現。
+ *
  * ── 422 不清空表單 ─────────────────────────────────────────────────────────
  * 跨班次重複（同日其他班次已排這個學生）與超 capacity 都是整批 422、什麼都沒落庫。
  * 此時把選好的學生與地址清掉，等於要人重做一次才能看懂錯在哪。
@@ -69,7 +73,13 @@ const canSubmit = computed(
   () => studentId.value !== null && resolved.value !== null && hasCoordinates.value && !props.inserting,
 )
 
-function onResolved(payload: { id: number | null; lat: number | null; lng: number | null; address: string }) {
+function onResolved(payload: {
+  id: number | null
+  lat: number | null
+  lng: number | null
+  address: string
+  reason?: 'selected' | 'fallback' | 'located'
+}) {
   resolved.value = payload
 }
 

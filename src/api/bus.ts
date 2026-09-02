@@ -193,10 +193,12 @@ export const recomputeBusRouteEtas = (
   api.post(`/bus/routes/${routeId}/recompute-etas`)
 
 /**
- * 單一學生地理編碼（`POST /bus/routes/geocode`，`BUS_WRITE`）。
+ * 單一學生地理編碼（`POST /bus/routes/geocode`，`BUS_WRITE`）：依 `students.address`
+ * 查座標、**不落庫**（隨名單／當日站點一起存）。
  *
- * 地址簿上線後站點座標一律由「設定接送地址」流程取得（後端建立地址時即 geocode），
- * 此端點保留給既有資料補救路徑，班次設定頁不再提供獨立的「定位」按鈕。
+ * 地址簿上線後，地址簿各筆的座標由後端建立時即 geocode；**住家**虛擬項後端恆不帶
+ * 座標，由 `BusPickupAddressSelect` 載入後呼叫此端點補上（2026-09-02 起），另供
+ * 班次設定頁「重新定位」住家站使用。
  */
 export const geocodeBusStudent = (studentId: number) =>
   api.post('/bus/routes/geocode', { student_id: studentId })
