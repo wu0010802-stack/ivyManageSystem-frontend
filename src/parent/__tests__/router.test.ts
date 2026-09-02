@@ -112,10 +112,12 @@ describe('parent router IA (2026-05-22 restructure)', () => {
   describe('Assistant 走 FAQ 純頁面（不走 modal）', () => {
     // main da3667df 已將 Assistant 從 chatbot/modal 改為 FAQ 純頁面，
     // mass-merge 時 FE-4 IA-restructure 的 modal 化設計被 drop。
-    it('/assistant 無 modal、無 tab、有 showBack', () => {
+    // 2026-09-02：入口補進「我的」偏好清單，因此改為 tab='me'（原本無 tab，
+    // 是因為當時全站沒有任何入口連到這頁）。
+    it('/assistant 無 modal、tab=me、有 showBack', () => {
       const r = findRoute('/assistant')
       expect(r?.meta?.modal).toBeUndefined()
-      expect(r?.meta?.tab).toBeUndefined()
+      expect(r?.meta?.tab).toBe('me')
       expect(r?.meta?.showBack).toBe(true)
     })
   })

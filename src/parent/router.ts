@@ -70,7 +70,8 @@ const routes: RouteRecordRaw[] = [
       path: '/assistant',
       name: 'parent-assistant',
       component: () => import('./views/AssistantView.vue'),
-      meta: { title: '常見問題', showBack: true },
+      // tab: 'me' — 入口在「我的」偏好清單（2026-09-02 補），底部導覽維持在該分頁
+      meta: { title: '常見問題', tab: 'me', showBack: true },
     },
     {
       path: '/me',
