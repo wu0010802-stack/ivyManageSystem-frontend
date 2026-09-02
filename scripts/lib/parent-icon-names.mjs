@@ -38,7 +38,14 @@ function walk(dir, out) {
   return out
 }
 
-function collectFromSource(src, names) {
+/**
+ * @param {string} src 檔案內容
+ * @param {Set<string>} names 收集用
+ * @param {{ scanAllLines?: boolean }} [opts] scanAllLines：整檔每行都當 icon 行掃
+ *   （檔名含 icon 的檔，如 iconMapping.ts——它的 ICON_MAP 值行 `trophy: 'emoji_events',`
+ *   整行沒有 icon 字樣，規則 5 看不到；2026-09-02 孩子頁標題圖示缺字的根因）
+ */
+function collectFromSource(src, names, opts = {}) {
   // 1) <M3Icon name="x"> / <ParentIcon name="x">（含跨行屬性）
   for (const m of src.matchAll(/<(?:M3Icon|ParentIcon)\b[^>]*?\bname="([a-z][a-z0-9_]*)"/gs)) {
     names.add(m[1])
@@ -58,7 +65,7 @@ function collectFromSource(src, names) {
   // 5) 行內含 icon 字樣的字串字面值（涵蓋 icon: 'x'、icon: cond ? 'a' : 'b'、
   //    iconMapping 的 ICON_MAP 值等）。寬鬆但受 NAME_RE 過濾。
   for (const line of src.split('\n')) {
-    if (!/icon/i.test(line)) continue
+    if (!opts.scanAllLines && !/icon/i.test(line)) continue
     for (const lit of line.matchAll(/['"]([a-z][a-z0-9_]*)['"]/g)) names.add(lit[1])
   }
 }
@@ -74,7 +81,9 @@ export function extractIconNames(repoRoot) {
     const dir = path.join(repoRoot, root)
     if (!fs.existsSync(dir)) continue
     for (const file of walk(dir, [])) {
-      collectFromSource(fs.readFileSync(file, 'utf8'), names)
+      collectFromSource(fs.readFileSync(file, 'utf8'), names, {
+        scanAllLines: /icon/i.test(path.basename(file)),
+      })
     }
   }
   return [...names].filter((n) => NAME_RE.test(n)).sort()
