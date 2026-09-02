@@ -101,7 +101,7 @@
 
       <!-- 班級：改版前是 11 顆 chip 佔滿一整列，改為下拉並在選項內保留未收人數 -->
       <el-select
-        :model-value="selectedClassroom ?? ''"
+        :model-value="selectedClassroom ?? ALL_CLASSROOMS"
         class="stmt-class-select"
         data-test="stmt-class-select"
         aria-label="班級篩選"
@@ -109,8 +109,8 @@
       >
         <el-option
           v-for="chip in classChips"
-          :key="chip.name || '__all__'"
-          :value="chip.name"
+          :key="chip.name || ALL_CLASSROOMS"
+          :value="chip.name || ALL_CLASSROOMS"
           :label="chip.selectLabel"
           :data-classroom="chip.name"
         />
@@ -626,8 +626,12 @@ function toggleStatus(key: string) {
   statusOn.value = next
 }
 
+/** el-select 用空字串當值會被當成「未選」而顯示 placeholder，故全部班級用哨兵值 */
+const ALL_CLASSROOMS = '__all__'
+
 function onClassroomSelect(value: unknown) {
-  const name = typeof value === 'string' && value ? value : null
+  const name =
+    typeof value === 'string' && value && value !== ALL_CLASSROOMS ? value : null
   if (name === selectedClassroom.value) return
   selectedClassroom.value = name
   checkedIds.value = new Set()

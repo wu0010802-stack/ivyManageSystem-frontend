@@ -249,7 +249,15 @@ describe('狀態快篩與班級篩選', () => {
     const select = w.find('[data-test="stmt-class-select"]')
     const options = select.findAll('option')
     // 全部班級 + 向日葵 + 櫻花（跨學期同名去重）
-    expect(options.map((o) => o.attributes('value'))).toEqual(['', '向日葵', '櫻花'])
+    expect(options.map((o) => o.attributes('value'))).toEqual([
+      '__all__',
+      '向日葵',
+      '櫻花',
+    ])
+    // 預設選中「全部班級」而非顯示 placeholder（el-select 空字串會被當成未選）
+    expect(select.attributes('value') ?? (select.element as HTMLSelectElement).value).toBe(
+      '__all__',
+    )
     // 向日葵未收齊 2 人；選項文字帶年級與未收人數
     expect(options[1].text()).toContain('小班')
     expect(options[1].text()).toContain('2 人未收齊')
@@ -261,7 +269,7 @@ describe('狀態快篩與班級篩選', () => {
     await select.setValue('櫻花')
     expect(rowNames(w)).toEqual([])
     // 回全部班級
-    await select.setValue('')
+    await select.setValue('__all__')
     expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
   })
 
