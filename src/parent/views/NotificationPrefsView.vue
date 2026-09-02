@@ -15,6 +15,7 @@ const EVENT_LABELS: Record<string, string> = {
   fee_due: '學費到期',
   leave_result: '請假審核結果',
   attendance_alert: '出席異常',
+  contact_book_published: '每日聯絡簿',
   'bus.approaching': '娃娃車快到提醒',
 }
 
@@ -25,6 +26,7 @@ const EVENT_META: Record<string, { icon: string; tone: string }> = {
   fee_due:            { icon: 'payments',     tone: 'sun' },
   leave_result:       { icon: 'event_busy',   tone: 'sky' },
   attendance_alert:   { icon: 'notifications', tone: 'coral' },
+  contact_book_published: { icon: 'menu_book', tone: 'leaf' },
   'bus.approaching':  { icon: 'directions_bus', tone: 'sky' },
 }
 
@@ -35,6 +37,7 @@ const EVENT_HINTS: Record<string, string> = {
   fee_due: '學費到期前提醒',
   leave_result: '學生請假審核結果',
   attendance_alert: '孩子出席異常時提醒',
+  contact_book_published: '老師發布當日聯絡簿時通知',
   'bus.approaching': '娃娃車即將抵達站牌時通知',
 }
 

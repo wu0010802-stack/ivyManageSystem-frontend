@@ -67,7 +67,7 @@ const items = computed<AdminItem[]>(() => {
       path: '/leaves',
       badge: b.recentLeaveReviews,
       badgeTone: 'action',
-      badgeLabel: `${b.recentLeaveReviews} 筆假單有審核結果`,
+      badgeLabel: `${b.recentLeaveReviews} 筆請假近 7 天已成立`,
     },
     {
       headline: '繳費',

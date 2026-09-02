@@ -249,7 +249,7 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
         bucket: 'later',
         variant: 'info',
         time: null,
-        primary: '最近請假審核結果',
+        primary: '最近成立的請假',
         secondary: `${sv?.recent_leave_reviews} 件`,
         tone: 'leave',
         path: '/leaves',
