@@ -265,7 +265,7 @@ function go(path: string) {
 
     <HomeBusRow ref="busRow" />
 
-    <!-- LINE 好友提示：系統性提醒，位階刻意排在待辦（bento）之後——
+    <!-- LINE 好友提示：系統性提醒，位階刻意排在待辦清單之後，
          不能比逾期繳費／待簽文件更早搶走注意力 -->
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
