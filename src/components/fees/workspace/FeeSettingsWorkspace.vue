@@ -1,21 +1,31 @@
 <template>
   <section class="fee-settings-workspace" aria-label="費用設定">
-    <div class="workspace-bar">
-      <el-segmented
-        :model-value="view"
-        :options="viewOptions"
-        aria-label="費用設定分頁切換"
-        data-test="settings-view-switch"
-        @change="onViewChange"
-      />
-      <p class="settings-hint">
-        {{
-          view === 'billingCodes'
-            ? '銷帳末四碼為低頻學期設定；產生建議碼後請優先處理衝突與無法產碼名單。'
-            : '範本異動只影響之後產生的費用單；系統將於每日依啟用範本自動產生費用單。'
-        }}
-      </p>
-    </div>
+    <FeeWorkspaceToolbar
+      :views="views"
+      :view="view"
+      tabs-label="費用設定分頁切換"
+      tabs-test-id="settings-view"
+      help-label="顯示費用設定說明"
+      @change-view="onViewChange"
+    >
+      <template #help>
+        <template v-if="view === 'billingCodes'">
+          <p><strong>銷帳末四碼</strong></p>
+          <p>
+            低頻的學期設定：每學期產生一次建議碼，啟用前請優先處理衝突與
+            無法產碼名單，否則該生的代收明細無法自動媒合。
+          </p>
+        </template>
+        <template v-else>
+          <p><strong>費用範本</strong></p>
+          <p>
+            範本異動只影響之後產生的費用單；系統每日依啟用範本自動產生。
+            新學年（上＋下學期）的金額與收費日期請於 7 月底前設定完成，
+            缺格的年級×費別不會產單。
+          </p>
+        </template>
+      </template>
+    </FeeWorkspaceToolbar>
 
     <KeepAlive>
       <FeeTemplateTab v-if="view === 'templates'" />
@@ -31,6 +41,7 @@
  */
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
 import BillingCodesTab from '@/components/fees/BillingCodesTab.vue'
+import FeeWorkspaceToolbar from './FeeWorkspaceToolbar.vue'
 import { FEE_WORKSPACE_VIEWS } from './feesNavigation'
 
 const props = withDefaults(defineProps<{ view?: string }>(), { view: 'templates' })
@@ -39,29 +50,9 @@ const emit = defineEmits<{
   'change-view': [view: string]
 }>()
 
-const viewOptions = FEE_WORKSPACE_VIEWS.settings.map((v) => ({
-  label: v.label,
-  value: v.key,
-}))
+const views = FEE_WORKSPACE_VIEWS.settings
 
-function onViewChange(val: string | number) {
-  const next = String(val)
+function onViewChange(next: string) {
   if (next !== props.view) emit('change-view', next)
 }
 </script>
-
-<style scoped>
-.workspace-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-4);
-}
-
-.settings-hint {
-  margin: 0;
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-}
-</style>

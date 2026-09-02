@@ -1,46 +1,45 @@
 <template>
   <div class="student-fee-view">
-    <PageHeader title="學費管理" :subtitle="headerSubtitle">
-      <template #actions>
-        <el-button
-          v-if="activeWs !== 'settings'"
-          aria-label="開啟費用設定（費用範本與銷帳碼）"
+    <PageHeader title="學費管理" :subtitle="headerSubtitle" />
+
+    <!-- 主導航：底線頁籤（與次層的深色文字頁籤分層），右側為費用設定入口 -->
+    <nav class="fee-main-nav" aria-label="學費管理工作區">
+      <div class="fee-tabs" role="tablist" data-test="fee-main-nav">
+        <button
+          v-for="w in FEE_MAIN_WORKSPACES"
+          :key="w.key"
+          type="button"
+          role="tab"
+          class="fee-tab"
+          :class="{ 'fee-tab--active': w.key === activeWs }"
+          :aria-selected="w.key === activeWs"
+          :data-test="`fee-main-nav-${w.key}`"
+          @click="onWorkspaceChange(w.key)"
+        >
+          {{ w.label }}
+          <span
+            v-if="todoCounts[w.key]"
+            class="fee-tab__count"
+            :aria-label="`${todoCounts[w.key]} 項待處理`"
+            >{{ todoCounts[w.key] }}</span
+          >
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          class="fee-tab fee-tab--settings"
+          :class="{ 'fee-tab--active': activeWs === 'settings' }"
+          :aria-selected="activeWs === 'settings'"
+          aria-label="費用設定（費用範本與銷帳碼）"
           data-test="open-fee-settings"
-          @click="goToSettings"
+          @click="onWorkspaceChange('settings')"
         >
           <el-icon aria-hidden="true"><Setting /></el-icon>
           <span>費用設定</span>
-        </el-button>
-      </template>
-    </PageHeader>
-
-    <!-- 主導航：四個任務導向工作區；費用設定不佔主導航 -->
-    <nav
-      v-if="activeWs !== 'settings'"
-      class="fee-main-nav"
-      aria-label="學費管理工作區"
-    >
-      <el-segmented
-        :model-value="activeWs"
-        :options="mainNavOptions"
-        size="large"
-        aria-label="切換學費管理工作區"
-        data-test="fee-main-nav"
-        @change="onWorkspaceChange"
-      />
+        </button>
+      </div>
     </nav>
-    <div v-else class="settings-bar">
-      <el-button
-        text
-        aria-label="返回學費管理工作區"
-        data-test="exit-fee-settings"
-        @click="exitSettings"
-      >
-        <el-icon aria-hidden="true"><ArrowLeft /></el-icon>
-        <span>返回</span>
-      </el-button>
-      <span class="settings-bar__title">費用設定</span>
-    </div>
 
     <!-- 工作區內容：KeepAlive 保留各區篩選/時間脈絡；async import 延遲載入 -->
     <KeepAlive>
@@ -48,13 +47,13 @@
       <FeeBillingWorkspace
         v-else-if="activeWs === 'billing'"
         :view="activeView ?? undefined"
+        :source="activeSrc ?? undefined"
+        :imports-open="importsOpen"
         :student-search="studentSearch"
         @change-view="onViewChange"
-      />
-      <FeeReconWorkspace
-        v-else-if="activeWs === 'recon'"
-        :view="activeView ?? undefined"
-        @change-view="onViewChange"
+        @change-source="onSourceChange"
+        @update:imports-open="onImportsToggle"
+        @navigate="navigateTo"
       />
       <FeeSettlementWorkspace
         v-else-if="activeWs === 'settlement'"
@@ -73,31 +72,39 @@
 
 <script setup lang="ts">
 /**
- * 學費管理（任務導向 IA，2026-08-25 改版）。
+ * 學費管理（任務導向 IA）。
  *
- * 本檔只做資訊架構殼層：PageHeader、主導航、query（?ws=&view=）同步與
- * 工作區掛載；業務內容全部在 components/fees/ 與 workspace/ 子元件。
- * 舊版 8 個同層 tab 的 ?tab= 深連結由 resolveFeesLocation 相容映射。
+ * 本檔只做資訊架構殼層：PageHeader、主導航、query（?ws=&view=&src=&imports=）
+ * 同步與工作區掛載；業務內容全部在 components/fees/ 與 workspace/ 子元件。
+ *
+ * 2026-09-02 簡化改版：
+ * - 主導航由四項（工作台/帳單/對帳/結算）收成三項（工作台/收款/結算），
+ *   「帳單」與「對帳」合併為「收款」；費用設定從 PageHeader 右上角的獨立
+ *   「返回」模式改為頁籤列右側入口，不再切換整頁殼層。
+ * - 主導航樣式由 el-segmented（與次層同款 pill，三層看起來一樣）改為底線頁籤，
+ *   並顯示各工作區的待辦數（來源與工作台佇列同一份 useFeeOverview 載入）。
+ *
+ * 舊網址（?tab= 系列與 2026-08-25 的 ?ws=recon 系列）由 resolveFeesLocation
+ * 相容映射，於此以 router.replace 正規化。
  */
-import { computed, defineAsyncComponent, reactive, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, reactive, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
-import { ArrowLeft, Setting } from '@element-plus/icons-vue'
+import { Setting } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import {
   FEE_MAIN_WORKSPACES,
   FEE_WORKSPACE_VIEWS,
   resolveFeesLocation,
+  type FeeNavTarget,
   type FeeWorkspaceKey,
 } from '@/components/fees/workspace/feesNavigation'
+import { useFeeOverview } from '@/components/fees/workspace/useFeeOverview'
 
 const FeeWorkbench = defineAsyncComponent(
   () => import('@/components/fees/workspace/FeeWorkbench.vue'),
 )
 const FeeBillingWorkspace = defineAsyncComponent(
   () => import('@/components/fees/workspace/FeeBillingWorkspace.vue'),
-)
-const FeeReconWorkspace = defineAsyncComponent(
-  () => import('@/components/fees/workspace/FeeReconWorkspace.vue'),
 )
 const FeeSettlementWorkspace = defineAsyncComponent(
   () => import('@/components/fees/workspace/FeeSettlementWorkspace.vue'),
@@ -109,14 +116,13 @@ const FeeSettingsWorkspace = defineAsyncComponent(
 const route = useRoute()
 const router = useRouter()
 
-const mainNavOptions = FEE_MAIN_WORKSPACES.map((w) => ({
-  label: w.label,
-  value: w.key,
-}))
+const { todoCounts, ensureLoaded } = useFeeOverview()
 
 const resolved = computed(() => resolveFeesLocation(route.query))
 const activeWs = computed(() => resolved.value.ws)
 const activeView = computed(() => resolved.value.view)
+const activeSrc = computed(() => resolved.value.src)
+const importsOpen = computed(() => resolved.value.imports)
 const studentSearch = computed(() => {
   const raw = route.query.search
   const value = Array.isArray(raw) ? raw[0] : raw
@@ -128,6 +134,11 @@ const headerSubtitle = computed(() =>
     ? '費用範本與銷帳末四碼等低頻設定'
     : '收款、對帳與結算的日常工作區',
 )
+
+// 頁籤待辦數需要工作台那批唯讀統計；即使初次落在別的工作區也要載
+onMounted(() => {
+  ensureLoaded()
+})
 
 // 各工作區最後停留的檢視（session 內記憶；重新整理由 query 還原）
 const lastViews = reactive<Partial<Record<FeeWorkspaceKey, string>>>({})
@@ -145,40 +156,55 @@ watch(
   { immediate: true },
 )
 
-function queryFor(ws: FeeWorkspaceKey, view?: string): LocationQueryRaw {
-  const query: LocationQueryRaw = { ...route.query, ws }
+function queryFor(target: FeeNavTarget): LocationQueryRaw {
+  const query: LocationQueryRaw = { ...route.query, ws: target.ws }
   delete query.tab
   delete query.view
-  const views = FEE_WORKSPACE_VIEWS[ws]
+  delete query.src
+  delete query.imports
+
+  const views = FEE_WORKSPACE_VIEWS[target.ws]
+  let view: string | undefined
   if (views.length > 0) {
-    const candidate = view ?? lastViews[ws] ?? views[0].key
-    query.view = views.some((v) => v.key === candidate) ? candidate : views[0].key
+    const candidate = target.view ?? lastViews[target.ws] ?? views[0].key
+    view = views.some((v) => v.key === candidate) ? candidate : views[0].key
+    query.view = view
   }
+  if (target.src && target.ws === 'billing' && view === 'matching' && target.src !== 'collection') {
+    query.src = target.src
+  }
+  if (target.imports && target.ws === 'billing') query.imports = '1'
   return query
 }
 
-function onWorkspaceChange(val: string | number) {
-  const next = String(val) as FeeWorkspaceKey
+function onWorkspaceChange(next: FeeWorkspaceKey) {
   if (next === activeWs.value) return
-  router.push({ query: queryFor(next) })
+  router.push({ query: queryFor({ ws: next }) })
 }
 
 function onViewChange(view: string) {
   if (view === activeView.value) return
-  router.push({ query: queryFor(activeWs.value, view) })
+  router.push({ query: queryFor({ ws: activeWs.value, view }) })
 }
 
-function navigateTo(target: { ws: FeeWorkspaceKey; view?: string }) {
-  router.push({ query: queryFor(target.ws, target.view) })
+function onSourceChange(src: string) {
+  if (src === activeSrc.value) return
+  router.push({ query: queryFor({ ws: 'billing', view: 'matching', src }) })
 }
 
-function goToSettings() {
-  router.push({ query: queryFor('settings') })
+function onImportsToggle(open: boolean) {
+  if (open === importsOpen.value) return
+  router.push({
+    query: queryFor({
+      ws: 'billing',
+      view: activeView.value ?? undefined,
+      imports: open,
+    }),
+  })
 }
 
-function exitSettings() {
-  // 返回鍵回到工作台（設定屬支線；瀏覽器上一頁仍可回到原工作區）
-  router.push({ query: queryFor('workbench') })
+function navigateTo(target: FeeNavTarget) {
+  router.push({ query: queryFor(target) })
 }
 </script>
 
@@ -193,16 +219,70 @@ function exitSettings() {
   overflow-x: auto;
 }
 
-.settings-bar {
+.fee-tabs {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-4);
+  align-items: flex-end;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--border-color);
+  min-width: max-content;
 }
 
-.settings-bar__title {
+.fee-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target-min);
+  padding: var(--space-2) var(--space-4);
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--transition-fast);
+}
+
+.fee-tab:hover {
+  color: var(--text-primary);
+}
+
+.fee-tab--active {
+  color: var(--el-color-primary);
   font-weight: 600;
-  font-size: var(--text-base);
-  color: var(--el-text-color-primary);
+}
+
+.fee-tab--active::after {
+  content: '';
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--el-color-primary);
+}
+
+.fee-tab__count {
+  min-width: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.fee-tab--settings {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.fee-tab--settings:hover {
+  color: var(--text-primary);
 }
 </style>

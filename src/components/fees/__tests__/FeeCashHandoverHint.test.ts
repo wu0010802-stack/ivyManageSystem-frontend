@@ -5,7 +5,7 @@
  * 不能再收（後端回 409）。會計必須在按下收款前就知道這筆錢會落到哪個交接
  * 批，否則交接時對不上帳只能事後追。
  *
- * 自限現金裁定起，帳單頁不再提供「轉帳／其他」選項（轉帳一律走對帳工作區
+ * 自限現金裁定起，帳單頁不再提供「轉帳／其他」選項（轉帳一律走入帳媒合
  * 由網銀資料銷帳回寫），繳費方式固定顯示現金、交接提示恆顯示；本檔同時守
  * 「開啟 dialog 一律以現金送出（不得沿用存量列的轉帳快照，否則後端 422）」。
  */
@@ -90,14 +90,14 @@ describe('逐筆收款 dialog', () => {
     expect(hint.text()).toContain('交接')
   })
 
-  it('繳費方式固定現金、無選擇器，附轉帳改道對帳工作區的說明', async () => {
+  it('繳費方式固定現金、無選擇器，附轉帳改道入帳媒合的說明', async () => {
     const w = mountTab()
     ;(w.vm as unknown as TabVm).openPayDialog(UNPAID_ROW)
     await nextTick()
 
     expect(w.find(CASH_ONLY).exists()).toBe(true)
     expect(w.find('select, el-select-stub').exists()).toBe(false)
-    expect(w.find('[data-test="pay-method-recon-link"]').text()).toContain('對帳')
+    expect(w.find('[data-test="pay-method-recon-link"]').text()).toContain('入帳媒合')
   })
 
   it('存量列快照為轉帳時，開啟 dialog 仍強制現金（避免後端 422）', async () => {

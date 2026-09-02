@@ -295,8 +295,8 @@
             description="送出後將以此金額「更正」原繳費紀錄，請確認是要修正先前登記的金額。"
           />
 
-          <!-- 帳單頁限現金（業主裁定 2026-09-01）：轉帳一律走對帳工作區
-               由網銀資料銷帳回寫，帳單頁不再提供轉帳／其他選項 -->
+          <!-- 帳單頁限現金（業主裁定 2026-09-01）：轉帳一律走入帳媒合
+               由網銀資料銷帳回寫，此處不再提供轉帳／其他選項 -->
           <el-form-item label="繳費方式">
             <div class="pay-method-fixed" data-test="pay-method-cash-only">
               <el-tag size="small">現金</el-tag>
@@ -305,8 +305,8 @@
                 type="primary"
                 size="small"
                 data-test="pay-method-recon-link"
-                @click="jumpToWorkspace({ ws: 'recon', view: 'collection' })"
-              >轉帳請至對帳工作區銷帳</el-button>
+                @click="jumpToWorkspace({ ws: 'billing', view: 'matching' })"
+              >轉帳請至「入帳媒合」銷帳</el-button>
             </div>
             <p class="cash-handover-hint" data-test="cash-handover-hint">
               現金會計入 {{ payForm.payment_date || '繳費日' }} 的現金交接批；該日交接送出後需先請老闆重新開啟才能再收款。

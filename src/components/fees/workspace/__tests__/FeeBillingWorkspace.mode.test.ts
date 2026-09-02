@@ -1,11 +1,12 @@
 /**
- * 帳單工作區「帳款」檢視模式切換：彙總繳費表（預設）⇄ 逐筆明細。
+ * 收款工作區「應收帳款」檢視模式切換：月表（預設）⇄ 逐筆明細。
  *
  * - 預設渲染 FeeMonthlyStatement（月繳總表）
  * - 模式切換渲染 FeeRecordsTab（auto-load 行為不變）
+ * - 入帳媒合檢視改為代收／存摺來源切換（2026-09-02 IA 合併）
  * - 全域搜尋（studentSearch）落地逐筆明細並轉交 applySearch
- * - 彙總表 open-list（到逐筆明細處理）切換模式＋預帶姓名
- * - 切回帳款時刷新當前作用中的檢視
+ * - 月表 open-list（到逐筆明細處理）切換模式＋預帶姓名
+ * - 切回應收帳款時刷新當前作用中的檢視
  *（產單為每日排程＋手動補產並行；產單按鈕/modal 行為由 FeeWorkspaces.test 覆蓋，
  * 本檔聚焦模式切換，modal 以 stub 隔離）
  */
@@ -15,6 +16,13 @@ import { nextTick } from 'vue'
 
 const apiMocks = vi.hoisted(() => ({
   getFeePeriods: vi.fn(),
+  // useFeeOverview 的唯讀統計（本檔不驗待辦數）
+  getCloseSummary: vi.fn(),
+  getCashHandovers: vi.fn(),
+  getFeeSummary: vi.fn(),
+  getClosePeriods: vi.fn(),
+  getBillSlipBatches: vi.fn(),
+  getCollectionPayments: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -82,6 +90,22 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     template: '<div data-testid="refunds-tab" />',
   },
 }))
+vi.mock('../FeeMatchingPanel.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeMatchingPanel',
+    props: { source: { type: String, default: 'collection' } },
+    template: '<div data-testid="matching-panel" :data-source="source" />',
+  },
+}))
+vi.mock('../FeeBillSlipDrawer.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeBillSlipDrawer',
+    props: { modelValue: { type: Boolean, default: false } },
+    template: '<div />',
+  },
+}))
 // 產單 modal stub：真元件會 import generateFeeRecords 與 currentRocYear，
 // 本檔的 @/api/fees、@/utils/academic factory mock 未提供該兩個 export。
 vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
@@ -92,27 +116,15 @@ vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
     template: '<div />',
   },
 }))
-const ElSegmentedStub = {
-  name: 'ElSegmented',
-  props: ['modelValue', 'options'],
-  emits: ['change'],
-  template: `
-    <div>
-      <button
-        v-for="o in options"
-        :key="o.value"
-        type="button"
-        :data-seg="o.value"
-        @click="$emit('change', o.value)"
-      >{{ o.label }}</button>
-    </div>
-  `,
-}
 
 const GLOBAL_STUBS = {
-  'el-segmented': ElSegmentedStub,
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-skeleton': { template: '<div data-testid="skeleton" />' },
+  'el-popover': { template: '<div><slot name="reference" /></div>' },
+  'el-dropdown': { template: '<div><slot /></div>' },
+  'el-dropdown-menu': { template: '<div><slot /></div>' },
+  'el-dropdown-item': { template: '<div><slot /></div>' },
+  'el-icon': { template: '<i><slot /></i>' },
 }
 
 const flushAll = async () => {
@@ -123,14 +135,27 @@ const flushAll = async () => {
 }
 
 import FeeBillingWorkspace from '../FeeBillingWorkspace.vue'
+import { __resetFeeOverview } from '../useFeeOverview'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  __resetFeeOverview()
   apiMocks.getFeePeriods.mockResolvedValue(['115-1', '114-2'])
+  apiMocks.getCloseSummary.mockRejectedValue(new Error('n/a'))
+  apiMocks.getCashHandovers.mockResolvedValue({ items: [] })
+  apiMocks.getFeeSummary.mockResolvedValue({
+    total_count: 0,
+    unpaid_count: 0,
+    partial_count: 0,
+    total_unpaid: 0,
+  })
+  apiMocks.getClosePeriods.mockResolvedValue({ items: [] })
+  apiMocks.getBillSlipBatches.mockResolvedValue([])
+  apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
 })
 
-describe('FeeBillingWorkspace 帳款模式切換', () => {
-  it('預設渲染彙總繳費表（月繳總表），非逐筆明細', async () => {
+describe('FeeBillingWorkspace 應收帳款模式切換', () => {
+  it('預設渲染月表（月繳總表），非逐筆明細', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(true)
@@ -139,31 +164,56 @@ describe('FeeBillingWorkspace 帳款模式切換', () => {
       .find('[data-test="records-mode-switch"]')
       .findAll('button')
       .map((b) => b.text())
-    expect(labels).toEqual(['彙總繳費表', '逐筆明細'])
+    expect(labels).toEqual(['月表', '逐筆'])
   })
 
-  it('切到逐筆明細渲染 FeeRecordsTab（auto-load），切回彙總表', async () => {
+  it('切到逐筆明細渲染 FeeRecordsTab（auto-load），切回月表', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
-    await wrapper.find('[data-seg="list"]').trigger('click')
+    await wrapper.find('[data-test="records-mode-switch-list"]').trigger('click')
     await flushAll()
     const records = wrapper.find('[data-testid="records-tab"]')
     expect(records.exists()).toBe(true)
     expect(records.attributes('data-auto-load')).toBe('1')
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(false)
 
-    await wrapper.find('[data-seg="statement"]').trigger('click')
+    await wrapper.find('[data-test="records-mode-switch-statement"]').trigger('click')
     await flushAll()
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(true)
   })
 
-  it('模式切換只在帳款檢視顯示（退款不顯示）', async () => {
+  it('模式切換只在應收帳款檢視顯示（退款不顯示）', async () => {
     const wrapper = mount(FeeBillingWorkspace, {
       props: { view: 'refunds' },
       global: { stubs: GLOBAL_STUBS },
     })
     await flushAll()
     expect(wrapper.find('[data-test="records-mode-switch"]').exists()).toBe(false)
+  })
+
+  it('入帳媒合檢視改顯示來源切換（代收／存摺）', async () => {
+    const wrapper = mount(FeeBillingWorkspace, {
+      props: { view: 'matching' },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushAll()
+    expect(wrapper.find('[data-test="records-mode-switch"]').exists()).toBe(false)
+    const labels = wrapper
+      .find('[data-test="matching-source-switch"]')
+      .findAll('button')
+      .map((b) => b.text())
+    expect(labels).toEqual(['代收明細', '存摺明細'])
+    expect(wrapper.find('[data-testid="matching-panel"]').exists()).toBe(true)
+  })
+
+  it('切換入帳來源 emit change-source（由殼層寫回 query）', async () => {
+    const wrapper = mount(FeeBillingWorkspace, {
+      props: { view: 'matching', source: 'collection' },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushAll()
+    await wrapper.find('[data-test="matching-source-switch-passbook"]').trigger('click')
+    expect(wrapper.emitted('change-source')).toEqual([['passbook']])
   })
 
   it('全域搜尋（studentSearch）初始即落地逐筆明細並帶 initial-search', async () => {
@@ -187,7 +237,7 @@ describe('FeeBillingWorkspace 帳款模式切換', () => {
     expect(recordsMocks.applySearch).toHaveBeenCalledWith('陳小華')
   })
 
-  it('彙總表 open-list（到逐筆明細處理）切換模式並預帶姓名', async () => {
+  it('月表 open-list（到逐筆明細處理）切換模式並預帶姓名', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     wrapper.findComponent({ name: 'FeeMonthlyStatement' }).vm.$emit('open-list', '陳部分')
@@ -196,14 +246,14 @@ describe('FeeBillingWorkspace 帳款模式切換', () => {
     expect(recordsMocks.applySearch).toHaveBeenCalledWith('陳部分')
   })
 
-  it('切回帳款檢視時刷新作用中的彙總表', async () => {
+  it('切回應收帳款檢視時刷新作用中的月表', async () => {
     const wrapper = mount(FeeBillingWorkspace, { global: { stubs: GLOBAL_STUBS } })
     await flushAll()
     statementMocks.refresh.mockClear()
     await wrapper.setProps({ view: 'refunds' })
     await flushAll()
     expect(statementMocks.refresh).not.toHaveBeenCalled()
-    await wrapper.setProps({ view: 'records' })
+    await wrapper.setProps({ view: 'receivable' })
     await flushAll()
     expect(statementMocks.refresh).toHaveBeenCalledTimes(1)
   })

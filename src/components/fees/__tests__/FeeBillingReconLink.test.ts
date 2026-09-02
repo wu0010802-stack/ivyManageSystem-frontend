@@ -35,7 +35,7 @@ describe('settlementDisplay', () => {
     expect(cash.label).toBe('現金已簽收')
     expect(cash.amount).toBe(5000)
     expect(cash.jump).toEqual({ ws: 'settlement', view: 'handover' })
-    expect(tags[1].jump).toEqual({ ws: 'recon', view: 'collection' })
+    expect(tags[1].jump).toEqual({ ws: 'billing', view: 'matching' })
   })
 
   it('全 0 或無資料回空陣列；未立據桶不可跳轉', () => {

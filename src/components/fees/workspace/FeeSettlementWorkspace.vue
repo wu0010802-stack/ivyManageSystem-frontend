@@ -1,14 +1,25 @@
 <template>
   <section class="fee-settlement-workspace" aria-label="結算工作區">
-    <div class="workspace-bar">
-      <el-segmented
-        :model-value="view"
-        :options="viewOptions"
-        aria-label="結算檢視切換"
-        data-test="settlement-view-switch"
-        @change="onViewChange"
-      />
-    </div>
+    <FeeWorkspaceToolbar
+      :views="views"
+      :view="view"
+      tabs-label="結算檢視切換"
+      tabs-test-id="settlement-view"
+      help-label="顯示結算規則說明"
+      @change-view="onViewChange"
+    >
+      <template #help>
+        <p><strong>現金交接鐵律</strong></p>
+        <p>
+          會計收多少現金就全額交付老闆；預繳退款是老闆另行支出，不從交接扣除。
+        </p>
+        <p><strong>月結</strong></p>
+        <p>
+          關帳前檢查全數通過才能直接關帳；有例外時填寫說明改為「帶例外關帳」，
+          凍結快照會標記該筆有差異。
+        </p>
+      </template>
+    </FeeWorkspaceToolbar>
 
     <KeepAlive>
       <CashHandoverTab v-if="view === 'handover'" ref="handoverRef" />
@@ -25,22 +36,19 @@
 import { onActivated, ref } from 'vue'
 import CashHandoverTab from '@/components/fees/CashHandoverTab.vue'
 import CloseTab from '@/components/fees/CloseTab.vue'
-import { FEE_WORKSPACE_VIEWS, type FeeWorkspaceKey } from './feesNavigation'
+import FeeWorkspaceToolbar from './FeeWorkspaceToolbar.vue'
+import { FEE_WORKSPACE_VIEWS, type FeeNavTarget } from './feesNavigation'
 
 const props = withDefaults(defineProps<{ view?: string }>(), { view: 'handover' })
 
 const emit = defineEmits<{
   'change-view': [view: string]
-  navigate: [target: { ws: FeeWorkspaceKey; view?: string }]
+  navigate: [target: FeeNavTarget]
 }>()
 
-const viewOptions = FEE_WORKSPACE_VIEWS.settlement.map((v) => ({
-  label: v.label,
-  value: v.key,
-}))
+const views = FEE_WORKSPACE_VIEWS.settlement
 
-function onViewChange(val: string | number) {
-  const next = String(val)
+function onViewChange(next: string) {
   if (next !== props.view) emit('change-view', next)
 }
 
@@ -64,12 +72,3 @@ onActivated(() => {
   activatedOnce = true
 })
 </script>
-
-<style scoped>
-.workspace-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-</style>

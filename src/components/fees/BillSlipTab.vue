@@ -1,6 +1,6 @@
 <template>
   <div class="bill-slip-tab">
-    <p class="intro">
+    <p v-if="!embedded" class="intro">
       發單快照＝應收母體。匯入銀行回拋的檢核檔（Check_*.xls）後，系統即可自算
       未繳／短繳／溢繳，不必依賴銀行核銷狀態。
     </p>
@@ -372,6 +372,11 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * embedded＝嵌在收款工作區的「匯入紀錄」抽屜裡（2026-09-02 IA 合併）。
+ * 此模式下開頭說明改由抽屜標題與工具列問號提供；單獨使用時行為與改版前相同。
+ */
+
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
@@ -399,6 +404,11 @@ import type {
   BillSlipPreview,
   OutstandingReport,
 } from './collectionTypes'
+
+const { embedded } = defineProps<{ embedded?: boolean }>()
+
+/** 產出費用單後通知父層刷新應收帳款與待辦數 */
+const emit = defineEmits<{ generated: [] }>()
 
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
 
@@ -580,6 +590,7 @@ async function confirmGenerate() {
     genDialogVisible.value = false
     genPlan.value = null
     await fetchBatches()
+    emit('generated')
   } catch (e) {
     ElMessage.error(friendlyError('產生費用單失敗', e))
   } finally {
@@ -611,6 +622,8 @@ async function removeBatch(row: BillSlipBatchRow) {
 }
 
 onMounted(fetchBatches)
+
+defineExpose({ fetchBatches })
 </script>
 
 <style scoped>

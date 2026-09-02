@@ -1,6 +1,6 @@
 /**
- * 工作台測試：佇列項目的狀態/計數/導航、以及 API 失敗時的
- * 「不顯示假數字、只留狀態與入口」降級行為。
+ * 工作台測試：佇列項目的狀態/計數/導航、待處理優先排序（2026-09-02 改版），
+ * 以及 API 失敗時的「不顯示假數字、只留狀態與入口」降級行為。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -13,6 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   getFeeSummary: vi.fn(),
   getClosePeriods: vi.fn(),
   getBillSlipBatches: vi.fn(),
+  getCollectionPayments: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -25,7 +26,6 @@ vi.mock('@/utils/academic', () => ({
 
 const GLOBAL_STUBS = {
   'el-skeleton': { template: '<div data-testid="skeleton" />' },
-  'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
 }
 
@@ -37,6 +37,7 @@ const flushAll = async () => {
 }
 
 import FeeWorkbench from '../FeeWorkbench.vue'
+import { __resetFeeOverview } from '../useFeeOverview'
 
 const BASE_SUMMARY = {
   bank: { unallocated: 10800, unclassified_count: 3 },
@@ -57,6 +58,7 @@ function mountWorkbench() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  __resetFeeOverview()
   apiMocks.getCloseSummary.mockResolvedValue(BASE_SUMMARY)
   apiMocks.getCashHandovers.mockResolvedValue({
     total: 1,
@@ -79,16 +81,16 @@ beforeEach(() => {
   })
   apiMocks.getClosePeriods.mockResolvedValue({ total: 0, items: [] })
   apiMocks.getBillSlipBatches.mockResolvedValue([])
+  apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
 })
 
 describe('FeeWorkbench 工作佇列', () => {
-  it('載入中顯示 skeleton，完成後顯示六列佇列', async () => {
+  it('載入中顯示 skeleton，完成後顯示七列佇列', async () => {
     const wrapper = mountWorkbench()
     expect(wrapper.find('[data-testid="skeleton"]').exists()).toBe(true)
     await flushAll()
     expect(wrapper.find('[data-testid="skeleton"]').exists()).toBe(false)
-    const rows = wrapper.findAll('.queue-row')
-    expect(rows).toHaveLength(6)
+    expect(wrapper.findAll('.queue-row')).toHaveLength(7)
   })
 
   it('每個統計 API 只呼叫一次（不因佇列渲染重複請求）', async () => {
@@ -99,17 +101,36 @@ describe('FeeWorkbench 工作佇列', () => {
     expect(apiMocks.getFeePeriods).toHaveBeenCalledTimes(1)
     expect(apiMocks.getFeeSummary).toHaveBeenCalledTimes(1)
     expect(apiMocks.getClosePeriods).toHaveBeenCalledTimes(1)
+    expect(apiMocks.getCollectionPayments).toHaveBeenCalledTimes(1)
+  })
+
+  it('待處理項目排在最前，且金額大者優先', async () => {
+    const wrapper = mountWorkbench()
+    await flushAll()
+    const rows = wrapper.findAll('.queue-row')
+    const keys = rows.map((r) => r.attributes('data-test'))
+    // 待處理依金額大到小：費用單 480,000 → 交接 15,800 → 存摺 10,800
+    // → 退款（無金額語意，權重 1）→ 關帳（無金額，0）
+    expect(keys.slice(0, 5)).toEqual([
+      'workbench-row-receivable',
+      'workbench-row-handover',
+      'workbench-row-passbook',
+      'workbench-row-refunds',
+      'workbench-row-close',
+    ])
+    expect(rows.slice(0, 5).every((r) => r.classes('queue-row--action'))).toBe(true)
+    expect(rows.slice(5).some((r) => r.classes('queue-row--action'))).toBe(false)
   })
 
   it('可靠數據可得時顯示實際計數與金額', async () => {
     const wrapper = mountWorkbench()
     await flushAll()
     const text = wrapper.text()
-    expect(text).toContain('3 筆交易待媒合或分類')
+    expect(text).toContain('存摺交易 3 筆待分類')
     expect(text).toContain('NT$10,800')
-    expect(text).toContain('今日已收現金 NT$15,800，尚未提交交接')
-    expect(text).toContain('2 筆預繳退款待核准或交付現金')
-    expect(text).toContain('3 項關帳前檢查未通過')
+    expect(text).toContain('今日現金 NT$15,800 尚未提交交接')
+    expect(text).toContain('預繳退款 2 筆待處理')
+    expect(text).toContain('本月關帳有 3 項檢查未通過')
     expect(text).toContain('45 筆未收齊')
     expect(text).toContain('NT$480,000')
   })
@@ -117,14 +138,22 @@ describe('FeeWorkbench 工作佇列', () => {
   it('點擊行動導向對應工作區（emit navigate）', async () => {
     const wrapper = mountWorkbench()
     await flushAll()
-    await wrapper.find('[data-test="workbench-action-recon"]').trigger('click')
+    await wrapper.find('[data-test="workbench-action-passbook"]').trigger('click')
     await wrapper.find('[data-test="workbench-action-handover"]').trigger('click')
     await wrapper.find('[data-test="workbench-action-refunds"]').trigger('click')
-    const events = wrapper.emitted('navigate')
-    expect(events).toEqual([
-      [{ ws: 'recon' }],
+    expect(wrapper.emitted('navigate')).toEqual([
+      [{ ws: 'billing', view: 'matching', src: 'passbook' }],
       [{ ws: 'settlement', view: 'handover' }],
-      [{ ws: 'billing', view: 'records' }],
+      [{ ws: 'billing', view: 'refunds' }],
+    ])
+  })
+
+  it('整列可點（點擊列本身即導航，不必命中小按鈕）', async () => {
+    const wrapper = mountWorkbench()
+    await flushAll()
+    await wrapper.find('[data-test="workbench-row-receivable"] button').trigger('click')
+    expect(wrapper.emitted('navigate')?.[0]).toEqual([
+      { ws: 'billing', view: 'receivable' },
     ])
   })
 
@@ -138,7 +167,7 @@ describe('FeeWorkbench 工作佇列', () => {
     expect(text).toContain('無法載入交接狀態')
     expect(text).not.toContain('NT$10,800')
     // 入口仍在
-    expect(wrapper.find('[data-test="workbench-action-recon"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="workbench-action-passbook"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="workbench-action-handover"]').exists()).toBe(true)
   })
 
@@ -148,7 +177,7 @@ describe('FeeWorkbench 工作佇列', () => {
     await flushAll()
     expect(wrapper.text()).toContain('尚未產生任何費用單')
     expect(wrapper.text()).toContain('自動產生')
-    expect(wrapper.text()).toContain('前往費用設定')
+    expect(wrapper.text()).toContain('去設定')
     expect(apiMocks.getFeeSummary).not.toHaveBeenCalled()
   })
 
@@ -170,6 +199,27 @@ describe('FeeWorkbench 工作佇列', () => {
   })
 })
 
+describe('FeeWorkbench 代收明細待媒合（SPEC-016）', () => {
+  it('有待媒合時顯示筆數並導向入帳媒合（代收來源）', async () => {
+    apiMocks.getCollectionPayments.mockResolvedValue({ total: 7 })
+    const wrapper = mountWorkbench()
+    await flushAll()
+    expect(wrapper.text()).toContain('代收明細 7 筆待媒合')
+    await wrapper.find('[data-test="workbench-action-collection"]').trigger('click')
+    expect(wrapper.emitted('navigate')?.at(-1)).toEqual([
+      { ws: 'billing', view: 'matching', src: 'collection' },
+    ])
+  })
+
+  it('載入失敗時降級為狀態未知並保留入口', async () => {
+    apiMocks.getCollectionPayments.mockRejectedValue(new Error('403'))
+    const wrapper = mountWorkbench()
+    await flushAll()
+    expect(wrapper.text()).toContain('無法載入代收明細')
+    expect(wrapper.find('[data-test="workbench-action-collection"]').exists()).toBe(true)
+  })
+})
+
 describe('FeeWorkbench 發單批次產單卡（SPEC-018）', () => {
   const SLIP = {
     id: 7,
@@ -177,17 +227,18 @@ describe('FeeWorkbench 發單批次產單卡（SPEC-018）', () => {
     records_generated_count: 0,
   }
 
-  it('有批次未產單時顯示待處理並導向發單與未繳', async () => {
+  it('有批次未產單時顯示待處理並導向發單批次抽屜', async () => {
     apiMocks.getBillSlipBatches.mockResolvedValue([
       SLIP,
       { id: 8, net_total: 1775200, records_generated_count: 119 },
     ])
     const wrapper = mountWorkbench()
     await flushAll()
-    expect(wrapper.text()).toContain('1 個發單批次已匯入、尚未產生費用單')
+    expect(wrapper.text()).toContain('發單批次尚未產生費用單')
+    expect(wrapper.text()).toContain('1 個批次已匯入')
     await wrapper.find('[data-test="workbench-action-billslips"]').trigger('click')
     expect(wrapper.emitted('navigate')?.at(-1)).toEqual([
-      { ws: 'recon', view: 'billslips' },
+      { ws: 'billing', view: 'receivable', imports: true },
     ])
   })
 

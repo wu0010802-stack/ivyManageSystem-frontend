@@ -1,14 +1,19 @@
 <template>
   <div class="collection-recon-tab">
-    <ol class="flow-strip" aria-label="代收對帳流程">
+    <ol v-if="!embedded" class="flow-strip" aria-label="代收對帳流程">
       <li v-for="(step, i) in FLOW_STEPS" :key="step" class="flow-step">
         <span class="flow-step__num" aria-hidden="true">{{ i + 1 }}</span>
         <span>{{ step }}</span>
       </li>
     </ol>
 
-    <!-- 匯入 -->
-    <section class="import-section" aria-label="匯入永豐代收明細">
+    <!-- 匯入：嵌入模式下預設收合，由收款工作區工具列的「匯入」觸發展開 -->
+    <section
+      v-if="!embedded || importOpen"
+      class="import-section"
+      aria-label="匯入永豐代收明細"
+      data-test="collection-import-section"
+    >
       <div class="import-row">
         <el-upload :auto-upload="false" :show-file-list="false" accept=".csv" :on-change="onFileChange">
           <el-button
@@ -124,7 +129,7 @@
       />
       <el-button aria-label="重新整理繳費列表" @click="fetchPayments">重新整理</el-button>
       <el-button
-        v-if="canWrite"
+        v-if="canWrite && !embedded"
         data-test="open-coverage"
         aria-label="勾稽存摺代收批次入帳"
         @click="openCoverage"
@@ -319,6 +324,19 @@ import type {
   CoveragePair,
 } from './collectionTypes'
 
+/**
+ * embedded＝嵌在收款工作區的「入帳媒合」檢視裡（2026-09-02 IA 合併）。
+ * 此模式下流程說明改由工具列的問號 popover 提供、匯入面板收合成工具列按鈕、
+ * 「存摺勾稽」上移到工具列；元件單獨使用時（embedded=false）行為與改版前逐字相同。
+ */
+const { embedded } = defineProps<{ embedded?: boolean }>()
+
+const importOpen = ref(false)
+
+function openImport() {
+  importOpen.value = true
+}
+
 const FLOW_STEPS = [
   '匯入永豐代收明細',
   '帳號錨定自動媒合',
@@ -504,6 +522,7 @@ async function runCoverage(dryRun: boolean) {
 }
 
 onMounted(fetchPayments)
+defineExpose({ fetchPayments, openCoverage, openImport, setScope, filters })
 </script>
 
 <style scoped>

@@ -173,6 +173,7 @@ import { formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
+import type { FeeNavTarget } from './workspace/feesNavigation'
 import {
   closePeriod,
   getClosePeriods,
@@ -231,21 +232,21 @@ const CHECKLIST_LABELS: Record<string, string> = {
 }
 
 // 每個阻擋項目的修正入口（由結算工作區冒泡給 StudentFeeView 導頁）
-const CHECKLIST_FIX_TARGETS: Record<string, { ws: 'billing' | 'recon' | 'settlement'; view?: string }> = {
-  all_bank_transactions_classified: { ws: 'recon' },
-  bank_fully_allocated: { ws: 'recon' },
+const CHECKLIST_FIX_TARGETS: Record<string, FeeNavTarget> = {
+  all_bank_transactions_classified: { ws: 'billing', view: 'matching', src: 'passbook' },
+  bank_fully_allocated: { ws: 'billing', view: 'matching', src: 'passbook' },
   handover_all_confirmed: { ws: 'settlement', view: 'handover' },
   handover_variance_zero: { ws: 'settlement', view: 'handover' },
   // 修正方式＝到現金交接頁為這些收款補建收據
   legacy_cash_reconciled: { ws: 'settlement', view: 'handover' },
-  all_collection_payments_classified: { ws: 'recon' },
-  collection_fully_allocated: { ws: 'recon' },
-  no_pending_refunds: { ws: 'billing', view: 'records' },
-  equation_balanced: { ws: 'recon' },
+  all_collection_payments_classified: { ws: 'billing', view: 'matching' },
+  collection_fully_allocated: { ws: 'billing', view: 'matching' },
+  no_pending_refunds: { ws: 'billing', view: 'refunds' },
+  equation_balanced: { ws: 'billing', view: 'matching' },
 }
 
 const emit = defineEmits<{
-  navigate: [target: { ws: 'billing' | 'recon' | 'settlement'; view?: string }]
+  navigate: [target: FeeNavTarget]
 }>()
 
 const canApprove = computed(() => hasPermission(PERMISSION_NAMES.FEE_CLOSE_APPROVE))

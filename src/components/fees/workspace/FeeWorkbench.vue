@@ -7,31 +7,64 @@
     <el-skeleton v-if="loading" :rows="5" animated data-test="workbench-skeleton" />
 
     <ul v-else class="queue" data-test="workbench-queue">
-      <li v-for="item in queueItems" :key="item.key" class="queue-row">
-        <span class="row-status" :data-state="item.state">
-          <el-icon class="row-status__icon" aria-hidden="true">
-            <CircleCheck v-if="item.state === 'ok'" />
-            <Warning v-else-if="item.state === 'action'" />
-            <MoreFilled v-else />
-          </el-icon>
-          <span class="sr-only">{{ STATE_TEXT[item.state] }}</span>
-        </span>
-        <div class="row-main">
-          <span class="row-title">{{ item.title }}</span>
-          <span class="row-detail">{{ item.detail }}</span>
-        </div>
-        <el-button
-          class="row-action"
-          size="small"
-          :type="item.state === 'action' ? 'primary' : 'default'"
-          :plain="item.state === 'action'"
-          :text="item.state !== 'action'"
+      <li v-if="actionItems.length" class="queue-section">
+        待處理<span class="queue-section__count">{{ actionItems.length }}</span>
+      </li>
+      <li
+        v-for="item in actionItems"
+        :key="item.key"
+        class="queue-row queue-row--action"
+        :data-test="`workbench-row-${item.key}`"
+      >
+        <!-- 整列可點：按鈕只是視覺提示，真正的點擊目標是整列（Fitts' law） -->
+        <button
+          type="button"
+          class="queue-row__hit"
           :aria-label="`${item.title}：${item.actionLabel}`"
           :data-test="`workbench-action-${item.key}`"
           @click="emit('navigate', item.target)"
         >
-          {{ item.actionLabel }}
-        </el-button>
+          <span class="row-status" data-state="action">
+            <el-icon class="row-status__icon" aria-hidden="true"><Warning /></el-icon>
+            <span class="sr-only">待處理</span>
+          </span>
+          <span class="row-main">
+            <span class="row-title">{{ item.title }}</span>
+            <span v-if="item.detail" class="row-detail">{{ item.detail }}</span>
+          </span>
+          <span class="row-go">{{ item.actionLabel }}<span aria-hidden="true"> ›</span></span>
+        </button>
+      </li>
+
+      <li v-if="restItems.length" class="queue-section">沒有待辦</li>
+      <li
+        v-for="item in restItems"
+        :key="item.key"
+        class="queue-row"
+        :data-test="`workbench-row-${item.key}`"
+      >
+        <button
+          type="button"
+          class="queue-row__hit"
+          :aria-label="`${item.title}：${item.actionLabel}`"
+          :data-test="`workbench-action-${item.key}`"
+          @click="emit('navigate', item.target)"
+        >
+          <span class="row-status" :data-state="item.state">
+            <el-icon class="row-status__icon" aria-hidden="true">
+              <CircleCheck v-if="item.state === 'ok'" />
+              <MoreFilled v-else />
+            </el-icon>
+            <span class="sr-only">{{ FEE_QUEUE_STATE_TEXT[item.state] }}</span>
+          </span>
+          <span class="row-main">
+            <span class="row-title">{{ item.title }}</span>
+            <span v-if="item.detail" class="row-detail">{{ item.detail }}</span>
+          </span>
+          <span class="row-go row-go--muted">
+            {{ item.actionLabel }}<span aria-hidden="true"> ›</span>
+          </span>
+        </button>
       </li>
     </ul>
   </section>
@@ -41,368 +74,42 @@
 /**
  * 學費管理工作台：以工作佇列呈現「現在需要處理什麼」。
  *
- * 資料來源全部是既有唯讀 API（一次載入、失敗逐項降級）：
- * - GET /fees/close-periods/summary：本月銀行待分類/未分配、待處理退款數、關帳 checklist
- * - GET /fees/cash-handovers：今日現金交接狀態
- * - GET /fees/periods + /fees/summary：本學期費用單收款狀態
- * - GET /fees/close-periods：本月是否已關帳
+ * 2026-09-02 改版：
+ * - 待處理項目集中在最上方且依金額大到小排序，沒有待辦的收到下方分組；
+ *   改版前六項固定順序混排，使用者得逐列讀圖示才知道哪件事要做。
+ * - 整列可點（原本只有右側小按鈕是點擊目標）。
+ * - 資料載入抽到 useFeeOverview，與主導航頁籤的待辦數共用同一次載入。
  *
- * 原則：拿不到可靠數字的項目只顯示狀態與入口，絕不顯示推估/假數字。
+ * 原則：拿不到可靠數字的項目只顯示狀態與入口，絕不顯示推估／假數字。
  * 佇列不含任何學生姓名等 PII，只有聚合計數與金額。
  */
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { onActivated, onMounted } from 'vue'
 import { CircleCheck, MoreFilled, Warning } from '@element-plus/icons-vue'
-import { formatCurrency } from '@/utils/currency'
-import { todayISO } from '@/utils/format'
-import { getCurrentAcademicTerm } from '@/utils/academic'
-import {
-  getBillSlipBatches,
-  getCashHandovers,
-  getClosePeriods,
-  getCloseSummary,
-  getFeePeriods,
-  getFeeSummary,
-} from '@/api/fees'
-import type { FeeWorkspaceKey } from './feesNavigation'
+import type { FeeNavTarget } from './feesNavigation'
+import { FEE_QUEUE_STATE_TEXT, useFeeOverview } from './useFeeOverview'
 
-type RowState = 'ok' | 'action' | 'muted' | 'unknown'
+const emit = defineEmits<{ navigate: [target: FeeNavTarget] }>()
 
-interface QueueItem {
-  key: string
-  title: string
-  detail: string
-  state: RowState
-  actionLabel: string
-  target: { ws: FeeWorkspaceKey; view?: string }
-}
-
-interface CloseSummaryLite {
-  bank: { unallocated: number; unclassified_count: number }
-  owner: { pending_refunds: number }
-  checklist: Record<string, boolean>
-}
-interface HandoverLite {
-  business_date: string
-  status: string
-  cash_receipt_total: number
-  variance: number | null
-}
-interface FeeSummaryLite {
-  total_count: number
-  unpaid_count: number
-  partial_count: number
-  total_unpaid: number
-}
-interface ClosePeriodLite {
-  close_year: number
-  close_month: number
-  status: string
-}
-interface BillSlipBatchLite {
-  net_total: number
-  records_generated_count: number
-}
-
-const emit = defineEmits<{
-  navigate: [target: { ws: FeeWorkspaceKey; view?: string }]
-}>()
-
-const STATE_TEXT: Record<RowState, string> = {
-  ok: '已完成',
-  action: '待處理',
-  muted: '無待辦',
-  unknown: '狀態未知',
-}
-
-const today = todayISO()
-const monthLabel = today.slice(0, 7)
-
-const loading = ref(true)
-const closeSummary = ref<CloseSummaryLite | null>(null)
-const todayHandover = ref<HandoverLite | null>(null)
-const handoversLoaded = ref(false)
-const currentPeriod = ref<string | null>(null)
-const feeSummary = ref<FeeSummaryLite | null>(null)
-const feeSummaryLoaded = ref(false)
-const monthClosed = ref<boolean | null>(null)
-
-async function loadCloseSummary() {
-  const [y, m] = monthLabel.split('-').map(Number)
-  try {
-    closeSummary.value = (await getCloseSummary(y, m)) as unknown as CloseSummaryLite
-  } catch {
-    closeSummary.value = null // 降級：不顯示數字，只留入口
-  }
-}
-
-async function loadTodayHandover() {
-  try {
-    const data = await getCashHandovers()
-    const items = (data.items ?? []) as HandoverLite[]
-    todayHandover.value = items.find((b) => b.business_date === today) ?? null
-    handoversLoaded.value = true
-  } catch {
-    handoversLoaded.value = false
-  }
-}
-
-async function loadFeeSummary() {
-  try {
-    const periods = ((await getFeePeriods()) as string[]) ?? []
-    const term = getCurrentAcademicTerm()
-    const termPeriod = `${term.school_year}-${term.semester}`
-    currentPeriod.value = periods.includes(termPeriod) ? termPeriod : periods[0] ?? null
-    if (!currentPeriod.value) {
-      feeSummaryLoaded.value = true // 查得到 periods、但一筆都沒有＝尚未產單
-      return
-    }
-    feeSummary.value = (await getFeeSummary({
-      period: currentPeriod.value,
-    })) as FeeSummaryLite
-    feeSummaryLoaded.value = true
-  } catch {
-    feeSummaryLoaded.value = false
-  }
-}
-
-async function loadMonthClosed() {
-  const [y, m] = monthLabel.split('-').map(Number)
-  try {
-    const data = await getClosePeriods()
-    const items = (data.items ?? []) as ClosePeriodLite[]
-    monthClosed.value = items.some(
-      (row) => row.close_year === y && row.close_month === m && row.status === 'closed',
-    )
-  } catch {
-    monthClosed.value = null
-  }
-}
-
-// SPEC-018：發單批次（XLS 檢核檔）是月費應收權威；匯入後未產生費用單＝
-// 收款與代收核銷都沒有正確金額的單可對，屬待辦。
-const billSlipStats = ref<{ total: number; pending: number } | null>(null)
-async function loadBillSlips() {
-  try {
-    const rows = (await getBillSlipBatches()) as unknown as BillSlipBatchLite[]
-    billSlipStats.value = {
-      total: rows.length,
-      pending: rows.filter(
-        (r) => r.net_total > 0 && r.records_generated_count === 0,
-      ).length,
-    }
-  } catch {
-    billSlipStats.value = null
-  }
-}
-
-async function loadAll(initial: boolean) {
-  if (initial) loading.value = true
-  await Promise.allSettled([
-    loadCloseSummary(),
-    loadTodayHandover(),
-    loadFeeSummary(),
-    loadMonthClosed(),
-    loadBillSlips(),
-  ])
-  loading.value = false
-}
+const {
+  loading,
+  today,
+  monthLabel,
+  actionItems,
+  restItems,
+  ensureLoaded,
+  refresh,
+} = useFeeOverview()
 
 // KeepAlive 下切回工作台時重新整理待辦（不閃 skeleton）；
 // 首次 activated 與 mounted 連發，用旗標避免重複載入。
 let mountedOnce = false
 onMounted(async () => {
-  await loadAll(true)
+  await ensureLoaded()
   mountedOnce = true
 })
 onActivated(() => {
-  if (mountedOnce) loadAll(false)
+  if (mountedOnce) refresh()
 })
-
-function bankItem(): QueueItem {
-  const base = {
-    key: 'recon',
-    title: '銀行交易',
-    actionLabel: '前往對帳',
-    target: { ws: 'recon' as const },
-  }
-  const s = closeSummary.value
-  if (!s) {
-    return { ...base, state: 'unknown', detail: '無法載入本月統計，點入對帳工作區查看' }
-  }
-  const pending = s.bank.unclassified_count
-  if (pending > 0) {
-    return {
-      ...base,
-      state: 'action',
-      detail: `本月 ${pending} 筆交易待媒合或分類，未分配 ${formatCurrency(s.bank.unallocated)}`,
-    }
-  }
-  return { ...base, state: 'ok', detail: '本月銀行交易已全數分類', actionLabel: '查看' }
-}
-
-function handoverItem(): QueueItem {
-  const base = {
-    key: 'handover',
-    title: '今日現金交接',
-    actionLabel: '前往交接',
-    target: { ws: 'settlement' as const, view: 'handover' },
-  }
-  if (!handoversLoaded.value) {
-    return { ...base, state: 'unknown', detail: '無法載入交接狀態，點入每日交接查看' }
-  }
-  const batch = todayHandover.value
-  if (!batch) {
-    return {
-      ...base,
-      state: 'muted',
-      detail: '今日尚無現金收款；收到現金時請先登記收款',
-      actionLabel: '登記收款',
-    }
-  }
-  if (batch.status === 'draft' || batch.status === 'reopened') {
-    return {
-      ...base,
-      state: 'action',
-      detail: `今日已收現金 ${formatCurrency(batch.cash_receipt_total)}，尚未提交交接`,
-    }
-  }
-  if (batch.status === 'submitted') {
-    return { ...base, state: 'action', detail: '交接已提交，待老闆簽收' }
-  }
-  const varianceNote =
-    batch.variance != null && batch.variance !== 0
-      ? `，簽收差異 ${formatCurrency(batch.variance)}`
-      : ''
-  return { ...base, state: 'ok', detail: `今日交接已完成${varianceNote}`, actionLabel: '查看' }
-}
-
-function refundItem(): QueueItem {
-  const base = {
-    key: 'refunds',
-    title: '預繳退款',
-    actionLabel: '前往處理',
-    target: { ws: 'billing' as const, view: 'records' },
-  }
-  const s = closeSummary.value
-  if (!s) {
-    return { ...base, state: 'unknown', detail: '無法載入退款狀態，點入帳款查看' }
-  }
-  const pending = s.owner.pending_refunds
-  if (pending > 0) {
-    return { ...base, state: 'action', detail: `${pending} 筆預繳退款待核准或交付現金` }
-  }
-  return { ...base, state: 'ok', detail: '目前沒有待處理的預繳退款', actionLabel: '查看' }
-}
-
-function closeItem(): QueueItem {
-  const base = {
-    key: 'close',
-    title: '本月關帳',
-    actionLabel: '前往月結',
-    target: { ws: 'settlement' as const, view: 'close' },
-  }
-  if (monthClosed.value === true) {
-    return { ...base, state: 'ok', detail: '本月已關帳（快照已凍結）', actionLabel: '查看' }
-  }
-  const s = closeSummary.value
-  if (!s) {
-    return { ...base, state: 'unknown', detail: '無法載入關帳檢查，點入月結查看' }
-  }
-  const failing = Object.values(s.checklist).filter((ok) => !ok).length
-  if (failing > 0) {
-    return { ...base, state: 'action', detail: `${failing} 項關帳前檢查未通過，暫不具直接關帳條件` }
-  }
-  return { ...base, state: 'action', detail: '關帳前檢查全數通過，可進行本月關帳' }
-}
-
-function billingItem(): QueueItem {
-  const base = {
-    key: 'billing',
-    title: '本學期費用單',
-    actionLabel: '前往帳單',
-    target: { ws: 'billing' as const, view: 'records' },
-  }
-  if (!feeSummaryLoaded.value) {
-    return { ...base, state: 'unknown', detail: '無法載入收款統計，點入帳單查看' }
-  }
-  if (!currentPeriod.value) {
-    // SPEC-018：月費以發單批次（XLS）為主要來源；範本產單保留給其他費用類型
-    return {
-      ...base,
-      state: 'muted',
-      detail:
-        '尚未產生任何費用單；可在對帳匯入繳款單檢核檔一鍵產單，或啟用費用範本由系統每日自動產生',
-      actionLabel: '前往費用設定',
-      target: { ws: 'settings' as const, view: 'templates' },
-    }
-  }
-  const s = feeSummary.value
-  if (!s) {
-    return { ...base, state: 'unknown', detail: '無法載入收款統計，點入帳單查看' }
-  }
-  const outstanding = s.unpaid_count + s.partial_count
-  if (outstanding > 0) {
-    return {
-      ...base,
-      state: 'action',
-      detail: `${currentPeriod.value} 學期 ${outstanding} 筆未收齊，未收 ${formatCurrency(s.total_unpaid)}`,
-    }
-  }
-  return {
-    ...base,
-    state: 'ok',
-    detail: `${currentPeriod.value} 學期費用單已全數收齊`,
-    actionLabel: '查看',
-  }
-}
-
-function slipGenItem(): QueueItem {
-  const base = {
-    key: 'billslips',
-    title: '發單批次產單',
-    actionLabel: '前往產單',
-    target: { ws: 'recon' as const, view: 'billslips' },
-  }
-  const s = billSlipStats.value
-  if (!s) {
-    return {
-      ...base,
-      state: 'unknown',
-      detail: '無法載入發單批次，點入發單與未繳查看',
-      actionLabel: '前往查看',
-    }
-  }
-  if (s.total === 0) {
-    return {
-      ...base,
-      state: 'muted',
-      detail: '尚無發單批次；匯入繳款單檢核檔（Check_*.xls）即可一鍵產生費用單',
-      actionLabel: '前往匯入',
-    }
-  }
-  if (s.pending > 0) {
-    return {
-      ...base,
-      state: 'action',
-      detail: `${s.pending} 個發單批次已匯入、尚未產生費用單`,
-    }
-  }
-  return {
-    ...base,
-    state: 'ok',
-    detail: '發單批次皆已產生費用單',
-    actionLabel: '查看',
-  }
-}
-
-const queueItems = computed<QueueItem[]>(() => [
-  slipGenItem(),
-  bankItem(),
-  handoverItem(),
-  refundItem(),
-  closeItem(),
-  billingItem(),
-])
 </script>
 
 <style scoped>
@@ -420,15 +127,60 @@ const queueItems = computed<QueueItem[]>(() => [
   list-style: none;
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface-color);
+}
+
+.queue-section {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
+}
+
+.queue-section__count {
+  min-width: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
+  font-weight: 600;
+  text-align: center;
 }
 
 .queue-row {
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.queue-row:last-child {
+  border-bottom: none;
+}
+
+.queue-row__hit {
+  width: 100%;
+  min-height: var(--touch-target-min);
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-2);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.queue-row__hit:hover,
+.queue-row__hit:focus-visible {
+  background: var(--bg-color);
 }
 
 .row-status {
@@ -474,8 +226,15 @@ const queueItems = computed<QueueItem[]>(() => [
   font-variant-numeric: tabular-nums;
 }
 
-.row-action {
+.row-go {
   flex-shrink: 0;
+  font-size: var(--text-sm);
+  color: var(--el-color-primary);
+  white-space: nowrap;
+}
+
+.row-go--muted {
+  color: var(--text-tertiary);
 }
 
 .sr-only {
@@ -491,10 +250,10 @@ const queueItems = computed<QueueItem[]>(() => [
 }
 
 @media (--to-sm) {
-  .queue-row {
+  .queue-row__hit {
     flex-wrap: wrap;
   }
-  .row-action {
+  .row-go {
     margin-left: calc(18px + var(--space-3));
   }
 }

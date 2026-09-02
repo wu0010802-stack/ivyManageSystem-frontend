@@ -1,9 +1,10 @@
 /**
- * 學費管理 IA 殼層測試（2026-08-25 任務導向改版）。
+ * 學費管理 IA 殼層測試（2026-09-02 簡化改版：帳單＋對帳合併為「收款」）。
  *
- * 涵蓋：預設進入工作台、四主入口切換、舊 ?tab= 深連結相容映射、
- * 費用設定入口/返回、lazy（同時只掛載一個工作區）、全域搜尋導向帳款。
- * 各工作區內部行為在 FeeWorkbench / FeeWorkspaces / FeeReconTabs 等測試覆蓋。
+ * 涵蓋：預設進入工作台、三主入口切換、費用設定改為頁籤列入口（不再是
+ * 「返回」模式）、舊 ?tab= 與舊 ?ws=recon 深連結相容映射、lazy（同時只掛載
+ * 一個工作區）、全域搜尋導向應收帳款、入帳來源與匯入抽屜的 query 同步。
+ * 各工作區內部行為在 FeeWorkbench / FeeWorkspaces / FeeMatchingPanel 等測試覆蓋。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
@@ -25,6 +26,18 @@ vi.mock('vue-router', async () => {
   }
 })
 
+// 主導航待辦數的資料源（殼層 onMounted 會 ensureLoaded）
+const apiMocks = vi.hoisted(() => ({
+  getCloseSummary: vi.fn(),
+  getCashHandovers: vi.fn(),
+  getFeePeriods: vi.fn(),
+  getFeeSummary: vi.fn(),
+  getClosePeriods: vi.fn(),
+  getBillSlipBatches: vi.fn(),
+  getCollectionPayments: vi.fn(),
+}))
+vi.mock('@/api/fees', () => apiMocks)
+
 // ── 工作區元件全部 stub（lazy chunk 的實際內容各自有測試）─────────────────
 vi.mock('@/components/fees/workspace/FeeWorkbench.vue', () => ({
   __esModule: true,
@@ -37,16 +50,9 @@ vi.mock('@/components/fees/workspace/FeeBillingWorkspace.vue', () => ({
   __esModule: true,
   default: {
     name: 'FeeBillingWorkspace',
-    props: ['view', 'studentSearch'],
-    template: '<div data-testid="ws-billing" :data-view="view" :data-search="studentSearch" />',
-  },
-}))
-vi.mock('@/components/fees/workspace/FeeReconWorkspace.vue', () => ({
-  __esModule: true,
-  default: {
-    name: 'FeeReconWorkspace',
-    props: ['view'],
-    template: '<div data-testid="ws-recon" :data-view="view" />',
+    props: ['view', 'source', 'importsOpen', 'studentSearch'],
+    template:
+      '<div data-testid="ws-billing" :data-view="view" :data-source="source" :data-imports="importsOpen ? \'1\' : \'0\'" :data-search="studentSearch" />',
   },
 }))
 vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
@@ -67,26 +73,7 @@ vi.mock('@/components/fees/workspace/FeeSettingsWorkspace.vue', () => ({
 }))
 
 // ── EP stubs ───────────────────────────────────────────────────────────────
-const ElSegmentedStub = {
-  name: 'ElSegmented',
-  props: ['modelValue', 'options', 'size'],
-  emits: ['change'],
-  template: `
-    <div>
-      <button
-        v-for="o in options"
-        :key="o.value"
-        type="button"
-        :data-seg="o.value"
-        :data-active="o.value === modelValue"
-        @click="$emit('change', o.value)"
-      >{{ o.label }}</button>
-    </div>
-  `,
-}
-
 const GLOBAL_STUBS = {
-  'el-segmented': ElSegmentedStub,
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
 }
@@ -100,6 +87,7 @@ const flushAll = async () => {
 }
 
 import StudentFeeView from '@/views/StudentFeeView.vue'
+import { __resetFeeOverview } from '@/components/fees/workspace/useFeeOverview'
 
 function mountView(query = {}) {
   routerMocks.route.query = { ...query }
@@ -109,7 +97,20 @@ function mountView(query = {}) {
 describe('StudentFeeView（任務導向 IA 殼層）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetFeeOverview()
     routerMocks.route.query = {}
+    apiMocks.getCloseSummary.mockRejectedValue(new Error('n/a'))
+    apiMocks.getCashHandovers.mockResolvedValue({ items: [] })
+    apiMocks.getFeePeriods.mockResolvedValue([])
+    apiMocks.getFeeSummary.mockResolvedValue({
+      total_count: 0,
+      unpaid_count: 0,
+      partial_count: 0,
+      total_unpaid: 0,
+    })
+    apiMocks.getClosePeriods.mockResolvedValue({ items: [] })
+    apiMocks.getBillSlipBatches.mockResolvedValue([])
+    apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
   })
 
   it('預設進入工作台，且 URL 正規化為 ?ws=workbench', async () => {
@@ -121,13 +122,15 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     })
   })
 
-  it('主導航恰為四項：工作台/帳單/對帳/結算', async () => {
+  it('主導航恰為三項：工作台/收款/結算，費用設定為頁籤列右側入口', async () => {
     const wrapper = mountView()
     await flushAll()
     const nav = wrapper.find('[data-test="fee-main-nav"]')
     expect(nav.exists()).toBe(true)
-    const labels = nav.findAll('button').map((b) => b.text())
-    expect(labels).toEqual(['工作台', '帳單', '對帳', '結算'])
+    const labels = nav
+      .findAll('button')
+      .map((b) => b.text().replace(/\s+/g, ''))
+    expect(labels).toEqual(['工作台', '收款', '結算', '費用設定'])
   })
 
   it('lazy：同時只掛載目前工作區（其餘不出現在 DOM）', async () => {
@@ -135,43 +138,41 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     await flushAll()
     expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="ws-billing"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="ws-recon"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="ws-settlement"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="ws-settings"]').exists()).toBe(false)
   })
 
-  it('四個主入口可切換並以 query 保存工作區', async () => {
+  it('三個主入口可切換並以 query 保存工作區', async () => {
     const wrapper = mountView()
     await flushAll()
 
-    await wrapper.find('[data-seg="billing"]').trigger('click')
+    await wrapper.find('[data-test="fee-main-nav-billing"]').trigger('click')
     await flushAll()
     expect(routerMocks.router.push).toHaveBeenCalledWith({
-      query: expect.objectContaining({ ws: 'billing', view: 'records' }),
+      query: expect.objectContaining({ ws: 'billing', view: 'receivable' }),
     })
-    expect(wrapper.find('[data-testid="ws-billing"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="ws-billing"]').attributes('data-view')).toBe('records')
+    const billing = wrapper.find('[data-testid="ws-billing"]')
+    expect(billing.exists()).toBe(true)
+    expect(billing.attributes('data-view')).toBe('receivable')
 
-    await wrapper.find('[data-seg="recon"]').trigger('click')
+    await wrapper.find('[data-test="fee-main-nav-settlement"]').trigger('click')
     await flushAll()
-    expect(wrapper.find('[data-testid="ws-recon"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ws-settlement"]').attributes('data-view')).toBe(
+      'handover',
+    )
 
-    await wrapper.find('[data-seg="settlement"]').trigger('click')
-    await flushAll()
-    expect(wrapper.find('[data-testid="ws-settlement"]').attributes('data-view')).toBe('handover')
-
-    await wrapper.find('[data-seg="workbench"]').trigger('click')
+    await wrapper.find('[data-test="fee-main-nav-workbench"]').trigger('click')
     await flushAll()
     expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
   })
 
   it.each([
-    ['records', 'ws-billing', 'records'],
+    ['records', 'ws-billing', 'receivable'],
     ['templates', 'ws-settings', 'templates'],
     ['refunds', 'ws-billing', 'refunds'],
-    // SPEC-016：對帳新增代收/存摺次層，舊 bankRecon 深連結落存摺檢視
-    ['bankRecon', 'ws-recon', 'passbook'],
-    ['prepayments', 'ws-billing', 'records'],
+    // 舊 bankRecon 深連結＝存摺對帳，落在收款／入帳媒合的存摺來源
+    ['bankRecon', 'ws-billing', 'matching'],
+    ['prepayments', 'ws-billing', 'receivable'],
     ['cashHandover', 'ws-settlement', 'handover'],
     ['close', 'ws-settlement', 'close'],
     ['billingCodes', 'ws-settings', 'billingCodes'],
@@ -185,21 +186,63 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     expect(routerMocks.route.query.tab).toBeUndefined()
   })
 
-  it('費用設定：由右上入口進入完整設定畫面，主導航隱藏、可返回', async () => {
+  it('舊深連結 ?ws=recon&view=passbook 映射到收款／入帳媒合（存摺來源）', async () => {
+    const wrapper = mountView({ ws: 'recon', view: 'passbook' })
+    await flushAll()
+    const billing = wrapper.find('[data-testid="ws-billing"]')
+    expect(billing.attributes('data-view')).toBe('matching')
+    expect(billing.attributes('data-source')).toBe('passbook')
+    expect(routerMocks.route.query.ws).toBe('billing')
+  })
+
+  it('舊深連結 ?ws=recon&view=billslips 映射到應收帳款並開啟發單批次抽屜', async () => {
+    const wrapper = mountView({ ws: 'recon', view: 'billslips' })
+    await flushAll()
+    const billing = wrapper.find('[data-testid="ws-billing"]')
+    expect(billing.attributes('data-view')).toBe('receivable')
+    expect(billing.attributes('data-imports')).toBe('1')
+  })
+
+  it('入帳來源切換寫回 query（change-source）', async () => {
+    const wrapper = mountView({ ws: 'billing', view: 'matching' })
+    await flushAll()
+    wrapper.findComponent({ name: 'FeeBillingWorkspace' }).vm.$emit('change-source', 'passbook')
+    await flushAll()
+    expect(routerMocks.route.query.src).toBe('passbook')
+    expect(wrapper.find('[data-testid="ws-billing"]').attributes('data-source')).toBe(
+      'passbook',
+    )
+  })
+
+  it('發單批次抽屜開關寫回 query（update:imports-open）', async () => {
+    const wrapper = mountView({ ws: 'billing', view: 'receivable' })
+    await flushAll()
+    const ws = wrapper.findComponent({ name: 'FeeBillingWorkspace' })
+    ws.vm.$emit('update:imports-open', true)
+    await flushAll()
+    expect(routerMocks.route.query.imports).toBe('1')
+    ws.vm.$emit('update:imports-open', false)
+    await flushAll()
+    expect(routerMocks.route.query.imports).toBeUndefined()
+  })
+
+  it('費用設定：頁籤列右側入口進入，主導航仍在（不再是返回模式）', async () => {
     const wrapper = mountView()
     await flushAll()
 
     await wrapper.find('[data-test="open-fee-settings"]').trigger('click')
     await flushAll()
     expect(wrapper.find('[data-testid="ws-settings"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="ws-settings"]').attributes('data-view')).toBe('templates')
-    expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="open-fee-settings"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ws-settings"]').attributes('data-view')).toBe(
+      'templates',
+    )
+    // 主導航與設定入口都留在原地，可直接切回其他工作區
+    expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="open-fee-settings"]').exists()).toBe(true)
 
-    await wrapper.find('[data-test="exit-fee-settings"]').trigger('click')
+    await wrapper.find('[data-test="fee-main-nav-workbench"]').trigger('click')
     await flushAll()
     expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(true)
   })
 
   it('費用設定可直達銷帳碼（?ws=settings&view=billingCodes）', async () => {
@@ -210,12 +253,12 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     )
   })
 
-  it('全域搜尋 ?search= 導向帳款並下傳關鍵字', async () => {
+  it('全域搜尋 ?search= 導向應收帳款並下傳關鍵字', async () => {
     const wrapper = mountView({ search: '王小明' })
     await flushAll()
     const billing = wrapper.find('[data-testid="ws-billing"]')
     expect(billing.exists()).toBe(true)
-    expect(billing.attributes('data-view')).toBe('records')
+    expect(billing.attributes('data-view')).toBe('receivable')
     expect(billing.attributes('data-search')).toBe('王小明')
   })
 

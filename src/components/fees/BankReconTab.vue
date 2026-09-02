@@ -1,15 +1,20 @@
 <template>
   <div class="bank-recon-tab">
     <!-- ── 對帳流程（資訊性導引，非精靈）───────────────────────────── -->
-    <ol class="flow-strip" aria-label="銀行對帳流程">
+    <ol v-if="!embedded" class="flow-strip" aria-label="銀行對帳流程">
       <li v-for="(step, i) in FLOW_STEPS" :key="step" class="flow-step">
         <span class="flow-step__num" aria-hidden="true">{{ i + 1 }}</span>
         <span>{{ step }}</span>
       </li>
     </ol>
 
-    <!-- ── 步驟 1：匯入 ───────────────────────────────────────────── -->
-    <section class="import-section" aria-label="匯入永豐對帳單">
+    <!-- ── 步驟 1：匯入（嵌入模式下收合，由收款工作區工具列觸發）────────── -->
+    <section
+      v-if="!embedded || importOpen"
+      class="import-section"
+      aria-label="匯入永豐對帳單"
+      data-test="bank-import-section"
+    >
       <div class="import-row">
         <el-upload
           :auto-upload="false"
@@ -255,6 +260,19 @@ interface Preview {
   parser_version: string
 }
 
+/**
+ * embedded＝嵌在收款工作區的「入帳媒合」檢視裡（2026-09-02 IA 合併）。
+ * 此模式下流程說明改由工具列的問號 popover 提供、匯入面板收合成工具列按鈕；
+ * 元件單獨使用時（embedded=false）行為與改版前逐字相同。
+ */
+const { embedded } = defineProps<{ embedded?: boolean }>()
+
+const importOpen = ref(false)
+
+function openImport() {
+  importOpen.value = true
+}
+
 const FLOW_STEPS = ['匯入永豐 CSV', '自動媒合建議', '處理例外（拆分/非學費/沖銷）', '確認全數分類']
 
 const STATUS_LABELS: Record<string, string> = {
@@ -467,7 +485,7 @@ async function reverseTxn(row: TxnRow) {
 }
 
 onMounted(fetchTxns)
-defineExpose({ fetchTxns, setScope, filters })
+defineExpose({ fetchTxns, openImport, setScope, filters })
 </script>
 
 <style scoped>

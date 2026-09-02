@@ -1,6 +1,7 @@
 /**
  * StudentFeeView：工作區 lazy mount 與 ?ws=/?view=（含舊 ?tab=）URL 同步。
- * （2026-08-25 任務導向 IA 改版：8 同層 tab → 工作台/帳單/對帳/結算＋費用設定）
+ * （2026-09-02 簡化改版：帳單＋對帳合併為「收款」，主導航＝工作台/收款/結算
+ *   ＋頁籤列右側費用設定）
  *
  * - 非作用中的工作區不得在進頁時就 mount（各套資料不重複載）。
  * - 舊 ?tab= 深連結相容映射；非法值 fallback 工作台。
@@ -29,7 +30,19 @@ vi.mock('vue-router', async () => {
   }
 })
 
-// --- 五個工作區元件 stub（async chunk；各自行為由其專屬測試涵蓋）---
+// 主導航待辦數的資料源（殼層 onMounted 會 ensureLoaded）
+const apiMocks = vi.hoisted(() => ({
+  getCloseSummary: vi.fn(),
+  getCashHandovers: vi.fn(),
+  getFeePeriods: vi.fn(),
+  getFeeSummary: vi.fn(),
+  getClosePeriods: vi.fn(),
+  getBillSlipBatches: vi.fn(),
+  getCollectionPayments: vi.fn(),
+}))
+vi.mock('@/api/fees', () => apiMocks)
+
+// --- 四個工作區元件 stub（async chunk；各自行為由其專屬測試涵蓋）---
 vi.mock('@/components/fees/workspace/FeeWorkbench.vue', () => ({
   __esModule: true,
   default: { name: 'FeeWorkbench', template: '<div data-test="ws-workbench" />' },
@@ -38,16 +51,9 @@ vi.mock('@/components/fees/workspace/FeeBillingWorkspace.vue', () => ({
   __esModule: true,
   default: {
     name: 'FeeBillingWorkspace',
-    props: ['view', 'studentSearch'],
-    template: '<div data-test="ws-billing" :data-view="view" :data-search="studentSearch" />',
-  },
-}))
-vi.mock('@/components/fees/workspace/FeeReconWorkspace.vue', () => ({
-  __esModule: true,
-  default: {
-    name: 'FeeReconWorkspace',
-    props: ['view'],
-    template: '<div data-test="ws-recon" :data-view="view" />',
+    props: ['view', 'source', 'importsOpen', 'studentSearch'],
+    template:
+      '<div data-test="ws-billing" :data-view="view" :data-source="source" :data-search="studentSearch" />',
   },
 }))
 vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
@@ -68,25 +74,10 @@ vi.mock('@/components/fees/workspace/FeeSettingsWorkspace.vue', () => ({
 }))
 
 import StudentFeeView from '../StudentFeeView.vue'
+import { __resetFeeOverview } from '@/components/fees/workspace/useFeeOverview'
 
 const globalConfig = {
   stubs: {
-    'el-segmented': {
-      name: 'ElSegmented',
-      props: ['modelValue', 'options', 'size'],
-      emits: ['change'],
-      template: `
-        <div>
-          <button
-            v-for="o in options"
-            :key="o.value"
-            type="button"
-            :data-seg="o.value"
-            @click="$emit('change', o.value)"
-          >{{ o.label }}</button>
-        </div>
-      `,
-    },
     'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
     'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
     PageHeader: {
@@ -113,7 +104,20 @@ const mountView = (query: Record<string, unknown> = {}) => {
 describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetFeeOverview()
     routerMocks.route!.query = {}
+    apiMocks.getCloseSummary.mockRejectedValue(new Error('n/a'))
+    apiMocks.getCashHandovers.mockResolvedValue({ items: [] })
+    apiMocks.getFeePeriods.mockResolvedValue([])
+    apiMocks.getFeeSummary.mockResolvedValue({
+      total_count: 0,
+      unpaid_count: 0,
+      partial_count: 0,
+      total_unpaid: 0,
+    })
+    apiMocks.getClosePeriods.mockResolvedValue({ items: [] })
+    apiMocks.getBillSlipBatches.mockResolvedValue([])
+    apiMocks.getCollectionPayments.mockResolvedValue({ total: 0 })
   })
 
   it('預設工作台；其他工作區不預先 mount', async () => {
@@ -121,20 +125,19 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
     await flushAll()
     expect(w.find('[data-test="ws-workbench"]').exists()).toBe(true)
     expect(w.find('[data-test="ws-billing"]').exists()).toBe(false)
-    expect(w.find('[data-test="ws-recon"]').exists()).toBe(false)
     expect(w.find('[data-test="ws-settlement"]').exists()).toBe(false)
     expect(w.find('[data-test="ws-settings"]').exists()).toBe(false)
   })
 
-  it('切到帳單 → push 保存 ws/view 且保留其他 query（?search=）', async () => {
+  it('切到收款 → push 保存 ws/view 且保留其他 query（?search=）', async () => {
     const w = mountView({ search: '小明' })
     await flushAll()
     routerMocks.router!.push.mockClear()
 
-    // ?search= 無 ws 時已導向帳單；先切走再切回，驗證 push 保留 search
-    await w.find('[data-seg="recon"]').trigger('click')
+    // ?search= 無 ws 時已導向收款；先切走再切回，驗證 push 保留 search
+    await w.find('[data-test="fee-main-nav-settlement"]').trigger('click')
     await flushAll()
-    await w.find('[data-seg="billing"]').trigger('click')
+    await w.find('[data-test="fee-main-nav-billing"]').trigger('click')
     await flushAll()
 
     expect(w.find('[data-test="ws-billing"]').exists()).toBe(true)
@@ -171,7 +174,7 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
     expect(settlement.attributes('data-view')).toBe('close')
   })
 
-  it('?search= 導向帳款並下傳姓名；query 正規化不得新增其他鍵', async () => {
+  it('?search= 導向應收帳款並下傳姓名；query 正規化不得新增其他鍵', async () => {
     const w = mountView({ search: '王小美' })
     await flushAll()
     const billing = w.find('[data-test="ws-billing"]')

@@ -44,7 +44,7 @@ export const SETTLEMENT_TAGS: SettlementTagDef[] = [
     key: 'bank_reconciled',
     label: '網銀已銷帳',
     tagType: 'primary',
-    jump: { ws: 'recon', view: 'collection' },
+    jump: { ws: 'billing', view: 'matching' },
   },
   // 改版前存量（只有繳費流水、無收據）：顯示提醒即可，無對應工作區可跳
   { key: 'unreceipted', label: '未立據（存量）', tagType: 'danger', jump: null },

@@ -114,10 +114,11 @@ describe('CloseTab 阻擋項目與修正入口', () => {
       .trigger('click')
     await wrapper.find('[data-test="close-fix-handover_variance_zero"]').trigger('click')
     await wrapper.find('[data-test="close-fix-no_pending_refunds"]').trigger('click')
+    // 2026-09-02 IA：對帳併入收款，存摺分類落在收款／入帳媒合（存摺來源）
     expect(wrapper.emitted('navigate')).toEqual([
-      [{ ws: 'recon' }],
+      [{ ws: 'billing', view: 'matching', src: 'passbook' }],
       [{ ws: 'settlement', view: 'handover' }],
-      [{ ws: 'billing', view: 'records' }],
+      [{ ws: 'billing', view: 'refunds' }],
     ])
   })
 
