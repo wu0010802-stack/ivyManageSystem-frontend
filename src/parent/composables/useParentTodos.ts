@@ -171,9 +171,12 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
       },
       {
         key: 'leaveReviews',
-        label: '請假審核結果',
+        // 用詞對齊 origin/staging @ 1e8fcb1a：平行 session 於 2026-09-02 把請假
+        // 徽章統一為「已成立」語意（原為「審核結果」）。本分支底座 2fe63c14
+        // 早於該 commit，這裡直接寫新版，合併時不會把對方的文案蓋回舊版。
+        label: '請假已成立',
         count: num(s.recent_leave_reviews),
-        sub: `${num(s.recent_leave_reviews)} 筆有結果`,
+        sub: `近 7 天 ${num(s.recent_leave_reviews)} 筆`,
         tone: 'info',
         icon: 'event_busy',
         to: '/leaves',

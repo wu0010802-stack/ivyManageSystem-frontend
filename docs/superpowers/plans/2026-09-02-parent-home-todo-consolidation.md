@@ -1919,7 +1919,10 @@ const items = computed<AdminItem[]>(() => {
       path: '/leaves',
       badge: b.recentLeaveReviews,
       badgeTone: 'action',
-      badgeLabel: `${b.recentLeaveReviews} 筆假單有審核結果`,
+      // 文案對齊 origin/staging @ 1e8fcb1a（平行 session 於 2026-09-02 統一請假用詞
+      // 為「已成立」）。本分支底座 2fe63c14 早於該 commit，這裡先寫成新版，
+      // 合併回 staging 時就不會把對方的文案改動蓋回舊版。
+      badgeLabel: `${b.recentLeaveReviews} 筆請假近 7 天已成立`,
     },
     {
       headline: '繳費',

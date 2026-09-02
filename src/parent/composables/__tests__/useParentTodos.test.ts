@@ -131,12 +131,24 @@ describe('useParentTodos 列的產生條件', () => {
     expect(row.to).toBe('/pickup')
   })
 
-  it('未讀公告與請假審核結果為 info tone', async () => {
+  it('未讀公告與請假已成立為 info tone', async () => {
     setSummary({ unread_announcements: 5, recent_leave_reviews: 1 })
     const { todos } = useParentTodos()
     await flush()
     expect(todos.value.find((t) => t.key === 'announcements')!.tone).toBe('info')
     expect(todos.value.find((t) => t.key === 'leaveReviews')!.tone).toBe('info')
+  })
+
+  // 用詞對齊 origin/staging @ 1e8fcb1a（請假統一為「已成立」語意）。釘住它，
+  // 免得合併時被舊文案蓋回去。
+  it('請假列用「已成立」用詞，不再是「審核結果」', async () => {
+    setSummary({ recent_leave_reviews: 2 })
+    const { todos } = useParentTodos()
+    await flush()
+    const row = todos.value.find((t) => t.key === 'leaveReviews')!
+    expect(row.label).toBe('請假已成立')
+    expect(row.label).not.toContain('審核')
+    expect(row.sub).toBe('近 7 天 2 筆')
   })
 })
 
