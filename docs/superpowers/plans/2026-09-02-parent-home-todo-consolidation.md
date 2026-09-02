@@ -2233,9 +2233,29 @@ git rm src/parent/components/home/PendingSignBanner.vue \
 
 刪除後再跑一次 Step 1 的 grep，確認只剩 `tests/unit/parent/views/TodayView.test.js` 的 stub（Task 5 已處理）與 `globals.css` 的樣式（下一步處理）。若 `src/parent/views/__tests__/MeView.test.ts` 還出現 `FeeSummaryCard`，代表 Task 7 漏刪那個 `vi.mock`，回頭補。
 
-- [ ] **Step 3: 清理 globals.css**
+- [ ] **Step 3: 清理 globals.css 的琥珀色 token**
 
-若 Step 1 找到橫幅專用樣式（class 名如 `.pending-sign-banner`、`.pending-survey-banner`），刪除那些規則區塊。若沒有，跳過此步。
+已預先 grep 確認：`--pt-amber-bg` 與 `--pt-amber-icon-bg` 的**唯一消費者**就是這兩個橫幅元件，刪掉元件後它們變成零消費者的死碼。定義分散在明暗兩處，都要刪：
+
+1. **第 113-118 行**（light `:root`）：整段刪除，包含那則四行註解與兩個 token 宣告。
+```css
+  /* 首頁待辦橫幅琥珀色（PendingSignBanner / PendingSurveyBanner）。
+     2026-08-13 前為未定義變數、永遠吃元件 fallback → dark 無法翻色，
+     近白 --pt-text-strong 配淺琥珀底看不到字。icon-bg 為飽和裝飾色，
+     兩主題共用不覆寫。 */
+  --pt-amber-bg: #fff4dc;
+  --pt-amber-icon-bg: #f5b637;
+```
+
+2. **第 395 行**（dark 覆寫區塊內的單行）：`--pt-amber-bg: rgba(255, 222, 81, 0.14);` 刪除該行即可，不要動同區塊相鄰的 `--grape-700` 等其他 token。
+
+刪完再 grep 一次確認零殘留：
+```bash
+grep -rn 'pt-amber' src --include='*.vue' --include='*.css' --include='*.ts'
+```
+預期無輸出。若還有命中，代表有你沒發現的消費者，停下來回報而不是硬刪。
+
+> 這兩個 token 有一段歷史：2026-08-13 之前它們**沒有被定義過**，元件永遠吃 CSS 變數的 fallback 值，導致暗色主題下橫幅整個隱形。定義補上才一個月，現在隨元件一起退場。
 
 - [ ] **Step 4: 全量家長端測試**
 
