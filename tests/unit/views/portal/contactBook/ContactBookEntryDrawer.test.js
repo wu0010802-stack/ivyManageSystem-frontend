@@ -158,3 +158,47 @@ describe('ContactBookEntryDrawer', () => {
     expect(payload.mood).toBeNull()
   })
 })
+
+describe('ContactBookEntryDrawer 家長回應區（2026-09-02 對齊稽核）', () => {
+  const mountWith = (entry) =>
+    mount(ContactBookEntryDrawer, {
+      props: { modelValue: true, entry, studentName: '小美' },
+      global: { stubs: STUBS },
+    })
+
+  it('已發布＋有已讀與回覆：列出監護人稱謂、時間與回覆內容', () => {
+    const w = mountWith({
+      ...ENTRY_PUBLISHED,
+      parent_acks: [{ guardian_user_id: 7, guardian_name: '媽媽', read_at: '2026-05-06T18:30:00' }],
+      parent_replies: [
+        { id: 1, guardian_user_id: 7, guardian_name: '媽媽', body: '謝謝老師', created_at: '2026-05-06T18:31:00' },
+      ],
+    })
+    const box = w.find('[data-testid="cb-parent-signals"]')
+    expect(box.exists()).toBe(true)
+    expect(box.text()).toContain('家長回應')
+    expect(box.text()).toContain('已讀：媽媽')
+    expect(box.text()).toContain('05-06 18:30')
+    expect(box.text()).toContain('謝謝老師')
+  })
+
+  it('已發布但家長尚未讀取：顯示提示、不列回覆', () => {
+    const w = mountWith({ ...ENTRY_PUBLISHED, parent_acks: [], parent_replies: [] })
+    const box = w.find('[data-testid="cb-parent-signals"]')
+    expect(box.text()).toContain('家長尚未讀取')
+    expect(w.find('.parent-signals__replies').exists()).toBe(false)
+  })
+
+  it('guardian_name 缺值（PII 已抹除）退「家長」', () => {
+    const w = mountWith({
+      ...ENTRY_PUBLISHED,
+      parent_acks: [{ guardian_user_id: 9, guardian_name: null, read_at: '2026-05-06T18:30:00' }],
+    })
+    expect(w.find('[data-testid="cb-parent-signals"]').text()).toContain('已讀：家長')
+  })
+
+  it('草稿不顯示家長回應區', () => {
+    const w = mountWith(ENTRY_DRAFT)
+    expect(w.find('[data-testid="cb-parent-signals"]').exists()).toBe(false)
+  })
+})

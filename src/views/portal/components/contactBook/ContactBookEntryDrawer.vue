@@ -96,6 +96,17 @@ const visible = computed({
 const isPublished = computed(() => !!props.entry?.published_at)
 const photos = computed(() => props.entry?.photos || [])
 
+// 家長端回流（2026-09-02 對齊稽核前教師端完全看不到已讀／回覆）
+interface ParentAck { guardian_user_id: number; guardian_name?: string | null; read_at?: string | null }
+interface ParentReply { id: number; guardian_name?: string | null; body: string; created_at?: string | null }
+const parentAcks = computed<ParentAck[]>(() => (props.entry?.parent_acks as ParentAck[] | undefined) || [])
+const parentReplies = computed<ParentReply[]>(() => (props.entry?.parent_replies as ParentReply[] | undefined) || [])
+/** ISO naive 台北時間 → 'MM-DD HH:mm'；與上方發布時間同樣不走 new Date()（避免時區位移）。 */
+function fmtTs(iso?: string | null): string {
+  if (!iso) return ''
+  return iso.replace('T', ' ').slice(5, 16)
+}
+
 function buildPayload() {
   const f = form.value
   const norm = (v: unknown) => (v === '' || v === undefined ? null : v)
@@ -156,6 +167,23 @@ function handleClose() {
           此聯絡簿已於 {{ entry.published_at?.replace('T', ' ').slice(0, 16) }} 發布；修改後請點「再次發布」才會通知家長。
         </template>
       </el-alert>
+
+      <section v-if="isPublished" class="parent-signals" data-testid="cb-parent-signals" aria-label="家長回應">
+        <h4 class="parent-signals__title">家長回應</h4>
+        <p v-if="parentAcks.length" class="parent-signals__acks">
+          已讀：<span v-for="(a, i) in parentAcks" :key="a.guardian_user_id">{{ i ? '、' : '' }}{{ a.guardian_name || '家長' }}<span class="muted">（{{ fmtTs(a.read_at) }}）</span></span>
+        </p>
+        <p v-else class="parent-signals__acks muted">家長尚未讀取</p>
+        <ul v-if="parentReplies.length" class="parent-signals__replies">
+          <li v-for="r in parentReplies" :key="r.id" class="parent-signals__reply">
+            <div class="parent-signals__meta">
+              <strong>{{ r.guardian_name || '家長' }}</strong>
+              <span class="muted">{{ fmtTs(r.created_at) }}</span>
+            </div>
+            <p class="parent-signals__body">{{ r.body }}</p>
+          </li>
+        </ul>
+      </section>
 
       <el-form-item label="心情">
         <el-select v-model="form.mood" placeholder="選擇心情" clearable style="width: 220px; max-width: 100%">
@@ -348,5 +376,50 @@ function handleClose() {
   .form-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* 家長回應（唯讀；只在已發布時出現） */
+.parent-signals {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-color-light);
+  border-radius: var(--radius-md, 10px);
+  background: var(--bg-color-page);
+}
+.parent-signals__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.parent-signals__acks {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.parent-signals__replies {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.parent-signals__reply {
+  padding: var(--space-2) var(--space-3);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+}
+.parent-signals__meta {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  font-size: var(--text-xs);
+}
+.parent-signals__body {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

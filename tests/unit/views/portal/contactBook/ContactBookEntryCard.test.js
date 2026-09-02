@@ -167,3 +167,36 @@ describe('ContactBookEntryCard', () => {
     expect(w.emitted('click')[0][0]).toEqual(ITEM_PUBLISHED)
   })
 })
+
+describe('ContactBookEntryCard 家長回流訊號（2026-09-02 對齊稽核）', () => {
+  it('已發布且有已讀／回覆時顯示「已讀 N」「回覆 M」', () => {
+    const item = {
+      ...ITEM_PUBLISHED,
+      entry: { ...ITEM_PUBLISHED.entry, parent_ack_count: 1, parent_reply_count: 2 },
+    }
+    const w = mount(ContactBookEntryCard, {
+      props: { item, moodEmoji: MOOD_EMOJI },
+      global: globalConfig,
+    })
+    const box = w.find('[data-testid="cb-parent-signals"]')
+    expect(box.exists()).toBe(true)
+    expect(box.text()).toContain('已讀 1')
+    expect(box.text()).toContain('回覆 2')
+  })
+  it('已發布但無互動時顯示「已讀 0」且不顯示回覆', () => {
+    const w = mount(ContactBookEntryCard, {
+      props: { item: ITEM_PUBLISHED, moodEmoji: MOOD_EMOJI },
+      global: globalConfig,
+    })
+    const box = w.find('[data-testid="cb-parent-signals"]')
+    expect(box.text()).toContain('已讀 0')
+    expect(box.text()).not.toContain('回覆')
+  })
+  it('草稿不顯示家長訊號（家長根本看不到草稿）', () => {
+    const w = mount(ContactBookEntryCard, {
+      props: { item: ITEM_DRAFT, moodEmoji: MOOD_EMOJI },
+      global: globalConfig,
+    })
+    expect(w.find('[data-testid="cb-parent-signals"]').exists()).toBe(false)
+  })
+})
