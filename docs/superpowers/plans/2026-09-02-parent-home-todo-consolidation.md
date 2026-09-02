@@ -17,7 +17,12 @@
 - **零後端變更**：不改 `ivy-backend` 任何檔案，不重跑 OpenAPI codegen，`src/api/_generated/` 不動。
 - **Element-Plus-free**：`src/parent/` 內禁止 `import 'element-plus'` 與 `<el-*>`；禁止靜態 import `@/components/common/EmptyState.vue`（會把 admin-core chunk 拖進首屏）。允許 `@/components/common/MobileErrorRetry.vue`（既有首屏元件已在用）。
 - **TS strict**：禁 `: any` 與 `as any`（ESLint `no-explicit-any` 為 error）。`@ts-expect-error` 需附 ≥3 字說明。日期一律用 `@/utils/format` 的 `todayISO`／`dateToLocalISO` 或 `@/utils/taipeiTime`，禁 `toISOString().slice/split`。
-- **Icon 限自架子集既有 glyph**：只可用 `payments`、`history_edu`、`mark_email_read`、`fact_check`、`palette`、`hail`、`event_busy`、`campaign`、`chevron_right`、`directions_bus`、`help`（`help` 需在 Task 7 先確認子集內存在，不存在則改用 `mark_email_read` 以外的既有 glyph，見該 Task 步驟）。
+- **Icon 限自架子集既有 glyph，驗證看 manifest**：家長端的 Material Symbols 是自架子集字型，不在子集內的 glyph 會 render 成英文原文（2026-08-12 線上事故）。權威清單是 `src/parent/assets/fonts/material-symbols-manifest.json`（135 個），另有 `iconFontSubset.spec.ts` 守衛。**選任何 glyph 前先驗證它在那份 manifest 內**，這比「grep 別的元件有沒有在用」更可靠。
+  ```bash
+  python3 -c "import json; d=json.load(open('src/parent/assets/fonts/material-symbols-manifest.json')); ic=d.get('icons') or d.get('glyphs') or d; names=ic if isinstance(ic,list) else list(ic); print('<你要查的 glyph>' in names)"
+  ```
+  本案用到且已確認在子集內：`payments`、`history_edu`、`mark_email_read`、`fact_check`、`palette`、`hail`、`event_busy`、`campaign`、`chevron_right`、`directions_bus`、`how_to_reg`、`tips_and_updates`。
+  **已確認不在子集、不可用**：`help`、`help_outline`、`quiz`、`contact_support`、`live_help`、`checklist`。
 - **文案守則**（`DESIGN.md`）：全繁體中文、不用驚嘆號收尾、不用 em dash「—」於正文。固定用詞：`/events`＝「待簽文件」、`/sign`＝「入學文件簽署」、離園＝「已離園」、later 桶＝「傍晚」。
 - **快取鍵前綴**：新 `useCachedAsync` key 一律以 `parent/` 開頭，登出時 `invalidateCachedAsync('parent/')` 才清得到。
 - **測試兩棵樹**：`src/parent/**/__tests__/`（新測試放這裡）與 `tests/unit/parent/`（既有測試，改動元件行為時必須同步檢查）。
