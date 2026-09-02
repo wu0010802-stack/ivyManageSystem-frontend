@@ -2005,10 +2005,36 @@ const items = computed<AdminItem[]>(() => {
 
 「出席紀錄」的 `leadingIcon` 暫用 `fact_check`（與活動調查同 glyph）。若子集內有更貼切且已存在的 glyph（例如 `checklist`），改用之；判斷方式見 Task 9 Step 2 的 glyph 檢查。
 
+- [ ] **Step 4b: 更新第二棵樹的 `tests/unit/parent/views/AdminListView.test.js`**
+
+該檔（87 行）有三處必然紅，已預先盤點：
+
+1. **mock 的 badges 缺新欄位**（約第 13-28 行）：`vi.mock('@/parent/composables/useHomeSummary', ...)` 回傳的 `badges.value` 物件補一行 `pendingSurveyCount: 0,`。
+2. **改 pickup 的 mock 來源**：`AdminListView` 不再直接呼叫 `listPickupAuthorizations`，改為透過 `useParentTodos`。把第 30-33 行的 `vi.mock('@/parent/api/pickup', ...)` 換成：
+```js
+vi.mock('@/parent/composables/useParentTodos', () => ({
+  useParentTodos: () => ({
+    signDocsCount: { value: 0 },
+    pickupActiveCount: { value: 0 },
+  }),
+}))
+```
+同時刪除 `beforeEach` 裡對 `mockListPickupAuthorizations` 的兩行操作與該變數宣告。
+3. **項目數與路徑陣列**（第 46-49 行的 `渲染 8 個主行政 item`、第 67-76 行的 `8 行政 item 路徑對齊`）：改為 10 項，測試名同步改。新的路徑順序與 §Step 4 的 `items` 陣列一致：
+
+```js
+const paths = [
+  '/leaves', '/fees', '/sign', '/events', '/surveys',
+  '/activity', '/medications', '/attendance', '/pickup-notice', '/pickup',
+]
+```
+
+第一個案例的文字斷言改為含「入學文件簽署」「待簽文件」「出席紀錄」，並移除「待簽紀錄」那一行（改名了）。`expect(items).toHaveLength(8)` 改為 `10`。第 79-86 行的「預告接送（pnotice01）」describe 不受影響，保留不動。
+
 - [ ] **Step 5: 跑測試確認通過**
 
 Run: `npx vitest run src/parent/composables/__tests__/useHomeSummary.badges.test.ts src/parent/views/__tests__/AdminListView.badges.test.ts src/parent/views/__tests__/AdminListView.threestates.test.ts tests/unit/parent/views/AdminListView.test.js`
-Expected: PASS。第二棵樹的 `AdminListView.test.js` 若斷言舊的八項或「待簽紀錄」，同步更新。
+Expected: PASS。`AdminListView.threestates.test.ts` 若也 mock 了 `@/parent/api/pickup`，比照 Step 4b 第 2 點改為 mock `useParentTodos`。
 
 - [ ] **Step 6: Commit**
 
