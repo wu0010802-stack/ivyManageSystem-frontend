@@ -86,17 +86,47 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     template: '<div data-testid="refunds-tab" />',
   },
 }))
-vi.mock('@/components/fees/CashHandoverTab.vue', () => ({
-  default: { name: 'CashHandoverTab', template: '<div data-testid="handover-tab" />' },
+const handoverMocks = vi.hoisted(() => ({
+  fetchBatches: vi.fn(),
+  openCashDialog: vi.fn(),
 }))
-vi.mock('@/components/fees/CloseTab.vue', () => ({
+vi.mock('@/components/fees/CashHandoverTab.vue', () => ({
+  __esModule: true,
   default: {
-    name: 'CloseTab',
-    emits: ['navigate'],
-    template:
-      '<div data-testid="close-tab"><button data-testid="fake-fix" @click="$emit(\'navigate\', { ws: \'billing\', view: \'matching\' })" /></div>',
+    name: 'CashHandoverTab',
+    props: { embedded: { type: Boolean, default: false } },
+    setup(_: unknown, { expose }: { expose: (o: Record<string, unknown>) => void }) {
+      expose(handoverMocks)
+      return {}
+    },
+    template: '<div data-testid="handover-tab" :data-embedded="embedded ? \'1\' : \'0\'" />',
   },
 }))
+const closeMocks = vi.hoisted(() => ({ fetchSummary: vi.fn() }))
+vi.mock('@/components/fees/CloseTab.vue', async () => {
+  const { ref } = await import('vue')
+  return {
+    __esModule: true,
+    default: {
+      name: 'CloseTab',
+      emits: ['navigate'],
+      setup(_: unknown, { expose }: { expose: (o: Record<string, unknown>) => void }) {
+        const month = ref('2026-08')
+        expose({
+          ...closeMocks,
+          month,
+          setMonth: (next: string) => {
+            month.value = next
+            closeMocks.fetchSummary()
+          },
+        })
+        return { month }
+      },
+      template:
+        '<div data-testid="close-tab" :data-month="month"><button data-testid="fake-fix" @click="$emit(\'navigate\', { ws: \'billing\', view: \'matching\' })" /></div>',
+    },
+  }
+})
 vi.mock('@/components/fees/FeeTemplateTab.vue', () => ({
   default: { name: 'FeeTemplateTab', template: '<div data-testid="templates-tab" />' },
 }))
@@ -144,6 +174,12 @@ const GLOBAL_STUBS = {
   'el-dropdown-menu': { template: '<div><slot /></div>' },
   'el-dropdown-item': { template: '<div><slot /></div>' },
   'el-icon': { template: '<i><slot /></i>' },
+  'el-date-picker': {
+    props: { modelValue: { type: String, default: '' } },
+    emits: ['update:modelValue'],
+    template:
+      '<input v-bind="$attrs" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+  },
 }
 
 const flushAll = async () => {
@@ -318,6 +354,45 @@ describe('FeeSettlementWorkspace（結算）', () => {
     await flushAll()
     await wrapper.find('[data-test="settlement-view-close"]').trigger('click')
     expect(wrapper.emitted('change-view')).toEqual([['close']])
+  })
+
+  it('每日交接的動作上移到共用工具列（子元件以 embedded 掛載）', async () => {
+    const wrapper = mount(FeeSettlementWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    expect(wrapper.find('[data-testid="handover-tab"]').attributes('data-embedded')).toBe(
+      '1',
+    )
+    await wrapper.find('[data-test="handover-open-cash"]').trigger('click')
+    expect(handoverMocks.openCashDialog).toHaveBeenCalledTimes(1)
+    await wrapper.find('[data-test="handover-refresh"]').trigger('click')
+    expect(handoverMocks.fetchBatches).toHaveBeenCalledTimes(1)
+  })
+
+  it('月結的月份選擇與重算上移到共用工具列', async () => {
+    const wrapper = mount(FeeSettlementWorkspace, {
+      props: { view: 'close' },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushAll()
+    const picker = wrapper.find('[data-test="close-month"]')
+    expect((picker.element as HTMLInputElement).value).toBe('2026-08')
+
+    await picker.setValue('2026-07')
+    await flushAll()
+    expect(wrapper.find('[data-testid="close-tab"]').attributes('data-month')).toBe(
+      '2026-07',
+    )
+    expect(closeMocks.fetchSummary).toHaveBeenCalledTimes(1)
+
+    await wrapper.find('[data-test="close-recalc"]').trigger('click')
+    expect(closeMocks.fetchSummary).toHaveBeenCalledTimes(2)
+  })
+
+  it('無 FEES_WRITE 時工具列不顯示「登記現金收款」', async () => {
+    authMocks.perms = new Set(['FEES_READ'])
+    const wrapper = mount(FeeSettlementWorkspace, { global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    expect(wrapper.find('[data-test="handover-open-cash"]').exists()).toBe(false)
   })
 })
 

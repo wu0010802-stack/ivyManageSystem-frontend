@@ -95,6 +95,38 @@ describe('CloseTab 阻擋項目與修正入口', () => {
     expect(checklist.text()).toContain('（已通過）')
   })
 
+  it('未通過的檢查項排在最前（要處理的事不混在一長串已通過裡）', async () => {
+    const wrapper = mountTab()
+    await flushAll()
+    const items = wrapper.findAll('[data-test="close-checklist"] li')
+    const states = items.map((li) => li.text().includes('（未通過'))
+    // 5 紅 1 綠：前 5 項都是未通過
+    expect(states).toEqual([true, true, true, true, true, false])
+    expect(wrapper.find('[data-test="close-failing-count"]').text()).toContain('5 項未通過')
+  })
+
+  it('摘要列取代五張卡，五格數字一格不少', async () => {
+    const wrapper = mountTab()
+    await flushAll()
+    const cells = wrapper.findAll('[data-test="close-cards"] .close-cell')
+    expect(cells).toHaveLength(5)
+    expect(cells.map((c) => c.text())).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('銀行實際入帳'),
+        expect.stringContaining('會計現金收款'),
+        expect.stringContaining('學費分配'),
+        expect.stringContaining('預繳款'),
+        expect.stringContaining('預繳餘額'),
+      ]),
+    )
+  })
+
+  it('月份選擇與重算不再自帶一列（已上移到結算工具列）', async () => {
+    const wrapper = mountTab()
+    await flushAll()
+    expect(wrapper.find('.close-tab > .toolbar').exists()).toBe(false)
+  })
+
   it('顯示未通過數量的阻擋說明', async () => {
     const wrapper = mountTab()
     await flushAll()

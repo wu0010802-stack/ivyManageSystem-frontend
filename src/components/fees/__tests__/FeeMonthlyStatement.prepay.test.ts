@@ -160,6 +160,31 @@ const GLOBAL_STUBS = {
       '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
+  // el-dropdown 的 command 事件由 item 冒泡：stub 讓 item 直接呼叫父層 handler
+  'el-dropdown': {
+    emits: ['command'],
+    provide() {
+      return { epDropdownCommand: (cmd: string) => this.$emit('command', cmd) }
+    },
+    template: '<div><slot /><slot name="dropdown" /></div>',
+  },
+  'el-dropdown-menu': { template: '<div><slot /></div>' },
+  'el-dropdown-item': {
+    props: { command: { type: String, default: '' } },
+    inject: { epDropdownCommand: { default: null } },
+    template:
+      '<button type="button" v-bind="$attrs" @click="epDropdownCommand && epDropdownCommand(command)"><slot /></button>',
+  },
+  'el-select': {
+    props: { modelValue: { type: String, default: '' } },
+    emits: ['update:modelValue'],
+    template: '<select v-bind="$attrs" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
+  },
+  'el-option': {
+    props: { value: { type: String, default: '' }, label: { type: String, default: '' } },
+    template: '<option :value="value" v-bind="$attrs">{{ label }}</option>',
+  },
+  'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
   'el-skeleton': { template: '<div data-testid="stmt-skeleton" />' },
 }
 

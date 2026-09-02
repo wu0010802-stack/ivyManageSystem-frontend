@@ -1,7 +1,74 @@
 <template>
   <section class="fee-monthly-statement" aria-label="月繳總表">
-    <!-- 工具列：月份導航 + 姓名搜尋 -->
-    <div class="stmt-toolbar">
+    <!-- 摘要列（2026-09-02 收斂）：待收金額＋狀態快篩＋應收/已收＋收款確認
+         合併成一列。改版前這四塊各佔一列，表格被推到第五列才開始。 -->
+    <div class="stmt-strip" data-test="stmt-summary">
+      <div class="stmt-strip__main">
+        <div class="stmt-strip__label">{{ monthLabel }}待收</div>
+        <div class="stmt-strip__value">{{ formatCurrency(scopeOutstanding) }}</div>
+      </div>
+
+      <div class="stmt-strip__chips" role="group" aria-label="繳費狀態快篩">
+        <button
+          v-for="tile in statusTiles"
+          :key="tile.key"
+          type="button"
+          class="stmt-chip"
+          :class="{ 'stmt-chip--on': statusOn[tile.key] }"
+          :data-test="`stmt-flt-${tile.key}`"
+          :aria-pressed="statusOn[tile.key]"
+          @click="toggleStatus(tile.key)"
+        >
+          <span class="stmt-dot" :class="`stmt-dot--${tile.key}`" aria-hidden="true" />
+          {{ tile.label }} <b>{{ tile.count }}</b><small> 人</small>
+        </button>
+        <!-- SPEC-015 逾期快篩：衍生標註（due_date 已過且未繳清），與狀態維度正交 -->
+        <button
+          type="button"
+          class="stmt-chip"
+          :class="{ 'stmt-chip--on': overdueOnly }"
+          data-test="stmt-flt-overdue"
+          :aria-pressed="overdueOnly"
+          @click="overdueOnly = !overdueOnly"
+        >
+          <span class="stmt-dot stmt-dot--overdue" aria-hidden="true" />
+          逾期 <b>{{ overdueCount }}</b><small> 人</small>
+        </button>
+      </div>
+
+      <div class="stmt-strip__side">
+        <div class="stmt-strip__totals">
+          應收 <strong class="num-cell">{{ formatCurrency(scopeDue) }}</strong>
+          <span aria-hidden="true"> ・ </span>
+          已收 <strong class="num-cell">{{ formatCurrency(scopePaid) }}</strong>
+        </div>
+        <!-- 收款確認分解（SPEC-014 §16 老闆視角）：已收的錢各經過哪一層確認。
+             範圍與上方統計同軸（班級＋姓名篩選，不含狀態快篩）。 -->
+        <div class="stmt-strip__settlement" data-test="stmt-settlement">
+          <template v-if="scopeSettlementTags.length">
+            <el-tag
+              v-for="tag in scopeSettlementTags"
+              :key="tag.key"
+              :type="tag.tagType"
+              size="small"
+              class="stmt-settlement__tag"
+              :class="{ 'stmt-settlement__tag--link': tag.jump }"
+              data-test="stmt-settlement-tag"
+              :data-bucket="tag.key"
+              @click="tag.jump && jumpToWorkspace(tag.jump)"
+            >
+              {{ tag.label }} {{ formatCurrency(tag.amount) }}
+            </el-tag>
+          </template>
+          <span v-else class="stmt-strip__empty" data-test="stmt-settlement-empty">
+            本月尚無已入帳收款
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 篩選列：月份、班級、姓名、批次動作全部收在同一列 -->
+    <div class="stmt-filters">
       <div class="month-nav" role="group" aria-label="月份選擇">
         <el-button
           size="small"
@@ -31,6 +98,24 @@
           本月
         </el-button>
       </div>
+
+      <!-- 班級：改版前是 11 顆 chip 佔滿一整列，改為下拉並在選項內保留未收人數 -->
+      <el-select
+        :model-value="selectedClassroom ?? ''"
+        class="stmt-class-select"
+        data-test="stmt-class-select"
+        aria-label="班級篩選"
+        @update:model-value="onClassroomSelect"
+      >
+        <el-option
+          v-for="chip in classChips"
+          :key="chip.name || '__all__'"
+          :value="chip.name"
+          :label="chip.selectLabel"
+          :data-classroom="chip.name"
+        />
+      </el-select>
+
       <el-input
         v-model="searchName"
         class="stmt-search"
@@ -39,118 +124,35 @@
         clearable
         aria-label="搜尋學生姓名"
       />
-      <div class="stmt-prepay-entries" role="group" aria-label="預繳款入口">
-        <el-button
-          v-if="visitCredits.length"
-          size="small"
-          data-test="stmt-visit-prepay"
-          @click="openVisitDrawer"
-        >
-          訪視預繳 {{ visitCredits.length }} 筆
-        </el-button>
-        <el-button size="small" data-test="stmt-refund-todo" @click="refundsVisible = true">
-          預繳退款{{ pendingRefundCount ? `（${pendingRefundCount} 待辦）` : '' }}
-        </el-button>
-      </div>
-    </div>
 
-    <!-- 班級 chips 直列快篩 -->
-    <div class="class-chips" role="group" aria-label="班級快篩">
-      <button
-        v-for="chip in classChips"
-        :key="chip.name || '__all__'"
-        type="button"
-        class="class-chip"
-        data-test="stmt-class-chip"
-        :data-classroom="chip.name"
-        :aria-pressed="selectedClassroom === (chip.name || null)"
-        @click="toggleClassroom(chip.name || null)"
-      >
-        {{ chip.label }}
-        <span v-if="chip.gradeName" class="class-chip__grade">{{ chip.gradeName }}</span>
-        <span
-          class="class-chip__count"
-          :class="{ 'class-chip__count--clear': chip.oweCount === 0 }"
-          :aria-label="chip.oweCount === 0 ? '已收齊' : `未收齊 ${chip.oweCount} 人`"
-        >
-          {{ chip.oweCount === 0 ? '✓' : chip.oweCount }}
-        </span>
-      </button>
-    </div>
+      <span class="stmt-filters__spacer" />
 
-    <!-- 統計 + 狀態快篩 -->
-    <div class="summary-strip" data-test="stmt-summary">
-      <div class="stat-tile stat-tile--main">
-        <div class="stat-tile__label">本月待收金額</div>
-        <div class="stat-tile__value">{{ formatCurrency(scopeOutstanding) }}</div>
-      </div>
-      <button
-        v-for="tile in statusTiles"
-        :key="tile.key"
-        type="button"
-        class="stat-tile stat-tile--toggle"
-        :data-test="`stmt-flt-${tile.key}`"
-        :aria-pressed="statusOn[tile.key]"
-        @click="toggleStatus(tile.key)"
-      >
-        <div class="stat-tile__label">
-          <span class="stat-dot" :class="`stat-dot--${tile.key}`" />
-          {{ tile.label }}
-        </div>
-        <div class="stat-tile__value">
-          {{ tile.count }}<small> 人</small>
-        </div>
-      </button>
-      <!-- SPEC-015 逾期快篩：衍生標註（due_date 已過且未繳清），與狀態維度正交 -->
-      <button
-        type="button"
-        class="stat-tile stat-tile--toggle"
-        data-test="stmt-flt-overdue"
-        :aria-pressed="overdueOnly"
-        @click="overdueOnly = !overdueOnly"
-      >
-        <div class="stat-tile__label">
-          <span class="stat-dot stat-dot--overdue" />
-          逾期
-        </div>
-        <div class="stat-tile__value">
-          {{ overdueCount }}<small> 人</small>
-        </div>
-      </button>
-      <div class="summary-side">
-        本月應收 <strong class="num-cell">{{ formatCurrency(scopeDue) }}</strong>
-        <br />
-        已收 <strong class="num-cell">{{ formatCurrency(scopePaid) }}</strong>
-      </div>
-    </div>
-
-    <!-- 收款確認分解（SPEC-014 §16 老闆視角）：已收的錢各經過哪一層確認。
-         範圍與上方統計同軸（班級＋姓名篩選，不含狀態快篩）。 -->
-    <div class="stmt-settlement" data-test="stmt-settlement">
-      <span class="stmt-settlement__title">收款確認</span>
-      <template v-if="scopeSettlementTags.length">
-        <el-tag
-          v-for="tag in scopeSettlementTags"
-          :key="tag.key"
-          :type="tag.tagType"
-          size="small"
-          class="stmt-settlement__tag"
-          :class="{ 'stmt-settlement__tag--link': tag.jump }"
-          data-test="stmt-settlement-tag"
-          :data-bucket="tag.key"
-          @click="tag.jump && jumpToWorkspace(tag.jump)"
-        >
-          {{ tag.label }} {{ formatCurrency(tag.amount) }}
-        </el-tag>
-      </template>
-      <span v-else class="stmt-settlement__empty" data-test="stmt-settlement-empty">
-        本月尚無已入帳收款
+      <span class="stmt-filters__count" data-test="stmt-visible-count">
+        共 {{ visibleStudents.length }} 人
       </span>
-    </div>
 
-    <!-- 批次列 -->
-    <div v-if="canWrite" class="stmt-actions">
+      <el-dropdown v-if="canWrite" trigger="click" @command="onPrepayCommand">
+        <el-button data-test="stmt-prepay-menu">
+          預繳款<el-icon class="el-icon--right" aria-hidden="true"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              v-if="visitCredits.length"
+              command="visit"
+              data-test="stmt-visit-prepay"
+            >
+              訪視預繳 {{ visitCredits.length }} 筆
+            </el-dropdown-item>
+            <el-dropdown-item command="refunds" data-test="stmt-refund-todo">
+              預繳退款{{ pendingRefundCount ? `（${pendingRefundCount} 待辦）` : '' }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
       <el-button
+        v-if="canWrite"
         type="primary"
         data-test="stmt-batch-pay"
         :disabled="checkedIds.size === 0"
@@ -158,14 +160,16 @@
       >
         批次收款{{ checkedIds.size ? `（${checkedIds.size} 人）` : '' }}
       </el-button>
-      <span class="stmt-actions__hint" data-test="stmt-batch-hint">
-        <template v-if="checkedIds.size">
-          已選 {{ checkedIds.size }} 人，未收合計
-          <strong>{{ formatCurrency(checkedOutstanding) }}</strong>
-        </template>
-        <template v-else>勾選學生後可一次登記多人整筆繳費</template>
-      </span>
     </div>
+
+    <p
+      v-if="canWrite && checkedIds.size"
+      class="stmt-selected-hint"
+      data-test="stmt-batch-hint"
+    >
+      已選 {{ checkedIds.size }} 人，未收合計
+      <strong>{{ formatCurrency(checkedOutstanding) }}</strong>
+    </p>
 
     <!-- 載入/錯誤/內容 -->
     <el-skeleton v-if="loading && !statement" :rows="5" animated />
@@ -399,6 +403,7 @@
  * 點擊開 PrepaymentDrawer 管理；工具列另有「訪視預繳」（尚未轉正式
  * 學生的訪視額度）與「預繳退款」（老闆核准/交付）兩個入口。
  */
+import { ArrowDown } from '@element-plus/icons-vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getFeeMonthlyStatement, getPrepaymentRefunds, getPrepayments } from '@/api/fees'
@@ -621,9 +626,17 @@ function toggleStatus(key: string) {
   statusOn.value = next
 }
 
-function toggleClassroom(name: string | null) {
-  selectedClassroom.value = selectedClassroom.value === name ? null : name
+function onClassroomSelect(value: unknown) {
+  const name = typeof value === 'string' && value ? value : null
+  if (name === selectedClassroom.value) return
+  selectedClassroom.value = name
   checkedIds.value = new Set()
+}
+
+/** 預繳款下拉：訪視預繳（抽屜）／預繳退款（對話框） */
+function onPrepayCommand(command: string | number | object) {
+  if (command === 'visit') openVisitDrawer()
+  else if (command === 'refunds') refundsVisible.value = true
 }
 
 const students = computed<StatementStudent[]>(() => statement.value?.students ?? [])
@@ -708,23 +721,29 @@ const classChips = computed(() => {
     label: string
     gradeName: string
     oweCount: number
-  }> = [
-    {
-      name: '',
-      label: '全部班級',
-      gradeName: '',
-      oweCount: students.value.filter((s) => s.status !== 'paid').length,
-    },
-  ]
+    /** 下拉選項文字：班名（年級）＋未收人數／已收齊 */
+    selectLabel: string
+  }> = []
+  const allOwe = students.value.filter((s) => s.status !== 'paid').length
+  chips.push({
+    name: '',
+    label: '全部班級',
+    gradeName: '',
+    oweCount: allOwe,
+    selectLabel: allOwe ? `全部班級（${allOwe} 人未收齊）` : '全部班級（已收齊）',
+  })
   props.classrooms.forEach((c) => {
     const name = c.name ?? ''
     if (!name || seen.has(name)) return
     seen.add(name)
+    const grade = c.grade_name ?? ''
+    const owe = oweBy.get(name) ?? 0
     chips.push({
       name,
       label: name,
-      gradeName: c.grade_name ?? '',
-      oweCount: oweBy.get(name) ?? 0,
+      gradeName: grade,
+      oweCount: owe,
+      selectLabel: `${name}${grade ? `（${grade}）` : ''}　${owe ? `${owe} 人未收齊` : '已收齊'}`,
     })
   })
   return chips
@@ -872,244 +891,194 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 }
 
 /* 工具列 */
-.stmt-toolbar {
+/* ── 摘要列（2026-09-02 收斂）：待收＋狀態快篩＋應收/已收＋收款確認 ──────
+   改版前這四塊各佔一列（tile 群、summary-side、settlement 列、批次列），
+   表格要捲到第五列才開始。 */
+.stmt-strip {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
+  align-items: stretch;
   flex-wrap: wrap;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md, 8px);
+  background: var(--el-bg-color);
+  overflow: hidden;
 }
 
-.month-nav {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.month-label {
-  padding: 0 var(--space-2);
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
+.stmt-strip__main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px var(--space-4);
+  min-width: 180px;
   white-space: nowrap;
+  background: var(--el-color-primary-light-9);
+  border-right: 1px solid var(--el-border-color-lighter);
 }
 
-.stmt-search {
-  max-width: 220px;
+.stmt-strip__label {
+  font-size: 12px;
+  color: var(--el-color-primary);
 }
 
-.stmt-prepay-entries {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+.stmt-strip__value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--el-text-color-primary);
+  font-variant-numeric: tabular-nums;
 }
 
-/* 預繳欄：整格可點開抽屜，本身無外觀（外觀交給內部 el-tag） */
-.prepay-cell-btn {
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-/* 班級 chips */
-.class-chips {
+.stmt-strip__chips {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-2);
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
 }
 
-.class-chip {
+.stmt-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--el-border-color-light);
-  background: var(--el-fill-color-lighter);
-  color: var(--el-text-color-regular);
-  border-radius: var(--radius-full, 999px);
-  padding: 4px 12px;
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-full, 9999px);
+  background: var(--el-fill-color-blank);
+  font: inherit;
   font-size: 13px;
-  cursor: pointer;
-  transition: border-color 0.13s, background 0.13s, color 0.13s;
-}
-
-.class-chip:hover {
-  border-color: var(--el-color-primary);
-  color: var(--el-color-primary);
-}
-
-.class-chip[aria-pressed='true'] {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  font-weight: 600;
-}
-
-.class-chip__grade {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-  font-weight: 400;
-}
-
-.class-chip__count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: var(--radius-full, 999px);
-  background: var(--el-color-danger-light-9, #fef2f2);
-  color: var(--color-danger-darker, #b91c1c);
-  border: 1px solid var(--el-color-danger-light-7, #fecaca);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 16px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.class-chip__count--clear {
-  background: var(--el-color-success-light-9, #f0fdf4);
-  color: var(--color-success-darker, #15803d);
-  border-color: var(--el-color-success-light-7, #bbf7d0);
-}
-
-/* 統計 + 狀態快篩 */
-.summary-strip {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.stat-tile {
-  border: 1px solid var(--el-border-color-light);
-  border-radius: var(--radius-md, 8px);
-  padding: 8px 16px;
-  min-width: 112px;
-  background: var(--el-bg-color);
-  text-align: left;
-}
-
-.stat-tile__label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.stat-tile__value {
-  font-size: 18px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
   color: var(--el-text-color-primary);
-}
-
-.stat-tile__value small {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--el-text-color-secondary);
-}
-
-.stat-tile--main {
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary-light-7);
-}
-
-.stat-tile--main .stat-tile__label,
-.stat-tile--main .stat-tile__value {
-  color: var(--el-color-primary);
-}
-
-.stat-tile--toggle {
+  white-space: nowrap;
   cursor: pointer;
-  transition: border-color 0.13s, opacity 0.13s, box-shadow 0.13s;
 }
 
-.stat-tile--toggle:hover {
+.stmt-chip b {
+  font-variant-numeric: tabular-nums;
+}
+
+.stmt-chip small {
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.stmt-chip:hover {
   border-color: var(--el-color-primary);
 }
 
-.stat-tile--toggle[aria-pressed='true'] {
+.stmt-chip--on {
   border-color: var(--el-color-primary);
-  box-shadow: inset 0 0 0 1px var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary-dark-2);
 }
 
-.stat-tile--toggle[aria-pressed='false'] {
-  opacity: 0.55;
-}
-
-.stat-dot {
-  width: 8px;
-  height: 8px;
+.stmt-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  display: inline-block;
+  flex-shrink: 0;
 }
 
-.stat-dot--unpaid {
+.stmt-dot--unpaid {
   background: var(--el-color-danger);
 }
 
-.stat-dot--partial {
+.stmt-dot--partial {
   background: var(--el-color-warning);
 }
 
-.stat-dot--paid {
+.stmt-dot--paid {
   background: var(--el-color-success);
 }
 
-.stat-dot--overdue {
-  background: var(--el-color-danger);
-  outline: 2px solid var(--el-color-danger-light-7);
+.stmt-dot--overdue {
+  background: var(--el-color-danger-dark-2);
 }
 
-.overdue-tag {
-  margin-left: var(--space-1);
-}
-
-.summary-side {
+.stmt-strip__side {
   margin-left: auto;
-  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  padding: var(--space-2) var(--space-4);
   text-align: right;
+}
+
+.stmt-strip__totals {
   font-size: 12.5px;
   color: var(--el-text-color-secondary);
+  white-space: nowrap;
 }
 
-/* 收款確認分解列（SPEC-014 §16） */
-.stmt-settlement {
+/* 收款確認分解（SPEC-014 §16） */
+.stmt-strip__settlement {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  padding: 6px 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: var(--radius-md, 8px);
-  background: var(--el-fill-color-lighter);
-}
-
-.stmt-settlement__title {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .stmt-settlement__tag--link {
   cursor: pointer;
 }
 
-.stmt-settlement__empty {
+.stmt-strip__empty {
   font-size: 12px;
   color: var(--el-text-color-placeholder);
 }
 
-/* 批次列 */
-.stmt-actions {
+/* ── 篩選列：月份、班級、姓名、批次動作同一列 ───────────────────────────── */
+.stmt-filters {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
   flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.stmt-actions__hint {
+.stmt-filters__spacer {
+  flex: 1 1 auto;
+}
+
+.stmt-filters__count {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.month-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.month-label {
+  min-width: 96px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.stmt-class-select {
+  width: 200px;
+}
+
+.stmt-search {
+  width: 200px;
+}
+
+.stmt-selected-hint {
+  margin: 0;
   font-size: 12.5px;
   color: var(--el-text-color-secondary);
+}
+
+.prepay-cell-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
 }
 
 /* 表格 */
@@ -1262,15 +1231,21 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 }
 
 @media (max-width: 720px) {
-  .stmt-search {
+  .stmt-search,
+  .stmt-class-select {
     max-width: 100%;
     width: 100%;
   }
 
-  .summary-side {
+  .stmt-strip__side {
     margin-left: 0;
+    align-items: flex-start;
     text-align: left;
     width: 100%;
+  }
+
+  .stmt-strip__settlement {
+    justify-content: flex-start;
   }
 }
 </style>

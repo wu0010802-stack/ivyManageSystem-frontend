@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="modelValue"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
-    title="批次登記繳費"
+    title="批次收款"
     width="560"
     :close-on-click-modal="false"
     destroy-on-close
@@ -184,15 +184,15 @@ async function submit() {
     // 有成功筆就通知父層重新載入清單（即使還有失敗筆殘留在對話框內待重試）。
     emit('paid')
     if (resp.failed === 0) {
-      ElMessage.success(`批次登記繳費成功：${resp.succeeded} 筆`)
+      ElMessage.success(`批次收款成功：${resp.succeeded} 筆`)
       emit('update:modelValue', false)
     } else if (resp.succeeded > 0) {
       ElMessage.warning(`成功 ${resp.succeeded} 筆，失敗 ${resp.failed} 筆，請確認後重試`)
     } else {
-      ElMessage.error(`批次登記繳費失敗：${resp.failed} 筆`)
+      ElMessage.error(`批次收款失敗：${resp.failed} 筆`)
     }
   } catch (e: unknown) {
-    ElMessage.error(friendlyError('批次登記繳費失敗', e))
+    ElMessage.error(friendlyError('批次收款失敗', e))
   } finally {
     submitting.value = false
   }

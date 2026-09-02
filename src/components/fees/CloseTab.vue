@@ -1,57 +1,48 @@
 <template>
   <div class="close-tab">
-    <div class="toolbar">
-      <el-date-picker
-        v-model="month"
-        type="month"
-        value-format="YYYY-MM"
-        placeholder="選擇月份"
-        aria-label="選擇關帳月份"
-        @change="fetchSummary"
-      />
-      <el-button aria-label="重新計算關帳試算" @click="fetchSummary">重算</el-button>
-    </div>
-
     <template v-if="summary">
-      <!-- 摘要卡 -->
-      <div class="cards" data-test="close-cards">
-        <el-card shadow="never">
-          <div class="card-label">銀行實際入帳</div>
-          <div class="card-value">{{ formatCurrency(summary.bank.credit_total) }}</div>
-          <div class="card-sub">未分配 {{ formatCurrency(summary.bank.unallocated) }}</div>
-        </el-card>
-        <el-card shadow="never">
-          <div class="card-label">會計現金收款</div>
-          <div class="card-value">{{ formatCurrency(summary.cash.receipts_total) }}</div>
-          <div class="card-sub">
+      <!-- 摘要列（2026-09-02）：原本五張 el-card 各佔一格、把等式與 checklist
+           推到第二屏；改為與收款工作區同款的摘要列，資訊一格不少。 -->
+      <div class="close-strip" data-test="close-cards">
+        <div class="close-cell">
+          <div class="close-cell__label">銀行實際入帳</div>
+          <div class="close-cell__value">{{ formatCurrency(summary.bank.credit_total) }}</div>
+          <div class="close-cell__sub">未分配 {{ formatCurrency(summary.bank.unallocated) }}</div>
+        </div>
+        <div class="close-cell">
+          <div class="close-cell__label">會計現金收款</div>
+          <div class="close-cell__value">{{ formatCurrency(summary.cash.receipts_total) }}</div>
+          <div class="close-cell__sub">
             應交付 {{ formatCurrency(summary.cash.handover_expected) }}｜實收
             {{ formatCurrency(summary.cash.handover_actual) }}｜差異
             <span :class="{ 'variance-bad': summary.cash.handover_variance !== 0 }">
               {{ formatCurrency(summary.cash.handover_variance) }}
             </span>
           </div>
-        </el-card>
-        <el-card shadow="never">
-          <div class="card-label">學費分配（實收）</div>
-          <div class="card-value">{{ formatCurrency(summary.totals.fee_allocated) }}</div>
-          <div class="card-sub">非學費 {{ formatCurrency(summary.totals.non_tuition) }}</div>
-        </el-card>
-        <el-card shadow="never">
-          <div class="card-label">預繳款</div>
-          <div class="card-value">新收 {{ formatCurrency(summary.prepayment.received) }}</div>
-          <div class="card-sub">
+        </div>
+        <div class="close-cell">
+          <div class="close-cell__label">學費分配（實收）</div>
+          <div class="close-cell__value">{{ formatCurrency(summary.totals.fee_allocated) }}</div>
+          <div class="close-cell__sub">非學費 {{ formatCurrency(summary.totals.non_tuition) }}</div>
+        </div>
+        <div class="close-cell">
+          <div class="close-cell__label">預繳款</div>
+          <div class="close-cell__value">新收 {{ formatCurrency(summary.prepayment.received) }}</div>
+          <div class="close-cell__sub">
             已套用 {{ formatCurrency(summary.prepayment.applied) }}（非新收款）｜退款
             {{ formatCurrency(summary.prepayment.refunded) }}（老闆支出）
           </div>
-        </el-card>
-        <el-card shadow="never">
-          <div class="card-label">預繳餘額 roll-forward</div>
-          <div class="card-value">{{ formatCurrency(summary.prepayment.closing_balance) }}</div>
-          <div class="card-sub">
+        </div>
+        <div class="close-cell">
+          <div class="close-cell__label">預繳餘額 roll-forward</div>
+          <div class="close-cell__value">
+            {{ formatCurrency(summary.prepayment.closing_balance) }}
+          </div>
+          <div class="close-cell__sub">
             期初 {{ formatCurrency(summary.prepayment.opening_balance) }} ＋收
             −套 −退 ＝ 期末
           </div>
-        </el-card>
+        </div>
       </div>
 
       <!-- 核心等式 -->
@@ -66,10 +57,16 @@
         {{ summary.checklist.equation_balanced ? '✓ 平衡' : '✗ 不平衡，請先處理' }}
       </el-alert>
 
-      <!-- 關帳 checklist：已通過 / 未通過（阻擋直接關帳，可修正或帶例外） -->
-      <h4 class="section-title">關帳前檢查</h4>
+      <!-- 關帳 checklist：未通過的排最前（要處理的東西不該混在九個 ✓ 裡找），
+           桌機雙欄以免整頁被一長串已通過項目撐開 -->
+      <h4 class="section-title">
+        關帳前檢查
+        <span v-if="!allChecksPass" class="section-title__bad" data-test="close-failing-count">
+          ・{{ failingCount }} 項未通過
+        </span>
+      </h4>
       <ul class="checklist" data-test="close-checklist">
-        <li v-for="(ok, key) in summary.checklist" :key="key">
+        <li v-for="{ key, ok } in orderedChecklist" :key="key">
           <el-icon :class="ok ? 'ok' : 'bad'" aria-hidden="true">
             <component :is="ok ? CircleCheck : CircleClose" />
           </el-icon>
@@ -265,6 +262,15 @@ const failingCount = computed(() =>
     : 0,
 )
 
+/** 未通過的排最前（其餘維持後端給的順序）：要處理的事不該混在一長串 ✓ 裡找 */
+const orderedChecklist = computed<{ key: string; ok: boolean }[]>(() => {
+  const entries = Object.entries(summary.value?.checklist ?? {}).map(([key, ok]) => ({
+    key,
+    ok: !!ok,
+  }))
+  return [...entries.filter((e) => !e.ok), ...entries.filter((e) => e.ok)]
+})
+
 function parseMonth(): { year: number; monthNum: number } | null {
   const [y, m] = (month.value || '').split('-').map(Number)
   if (!y || !m) return null
@@ -343,31 +349,54 @@ onMounted(() => {
   fetchSummary()
   fetchCloses()
 })
-defineExpose({ fetchSummary, fetchCloses })
+/**
+ * 月份選擇與「重算」上移到結算工作區的共用工具列，故對外開放讀寫。
+ * 注意 defineExpose 會把 ref 解包，父層讀得到值但寫不回去，因此提供 setMonth。
+ */
+function setMonth(next: string) {
+  if (!next || next === month.value) return
+  month.value = next
+  fetchSummary()
+}
+
+defineExpose({ fetchSummary, fetchCloses, month, setMonth })
 </script>
 
 <style scoped>
-.toolbar {
+/* 摘要列（與收款工作區同款）：五格等分、格線分隔，取代原本五張獨立 el-card */
+.close-strip {
   display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md, 8px);
+  background: var(--el-bg-color);
+  overflow: hidden;
 }
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+.close-cell {
+  flex: 1 1 190px;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 10px var(--space-4);
+  border-right: 1px solid var(--el-border-color-lighter);
 }
-.card-label {
+.close-cell:last-child {
+  border-right: none;
+}
+.close-cell__label {
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
-.card-value {
-  font-size: 20px;
+.close-cell__value {
+  font-size: 18px;
   font-weight: 700;
-  margin: 4px 0;
+  margin: 2px 0;
+  font-variant-numeric: tabular-nums;
 }
-.card-sub {
-  font-size: 12px;
+.close-cell__sub {
+  font-size: 11px;
   color: var(--el-text-color-secondary);
 }
 .variance-bad {
@@ -377,10 +406,20 @@ defineExpose({ fetchSummary, fetchCloses })
 .section-title {
   margin: 18px 0 8px;
 }
+.section-title__bad {
+  font-weight: 400;
+  font-size: 13px;
+  color: var(--el-color-danger);
+}
+/* 雙欄：九項全展開會把關帳按鈕推出第一屏 */
 .checklist {
   list-style: none;
   padding: 0;
   margin: 0 0 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2px var(--space-6, 24px);
+  max-width: 960px;
 }
 .checklist li {
   display: flex;

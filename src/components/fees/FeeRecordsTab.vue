@@ -49,7 +49,7 @@
             data-test="fee-batch-pay-open"
             :disabled="selectedRows.length === 0"
             @click="openBatchPayDialog"
-          >批次登記繳費（{{ selectedRows.length }}）</el-button>
+          >批次收款（{{ selectedRows.length }}）</el-button>
           <el-button data-test="fee-reset-filters" @click="resetRecordFilters">清除篩選</el-button>
         </template>
       </AdminListToolbar>
@@ -195,7 +195,7 @@
                 link
                 type="primary"
                 @click="openPayDialog(row, $event)"
-              >{{ row.status === 'partial' ? '更新繳費' : '登記繳費' }}</el-button>
+              >{{ row.status === 'partial' ? '更新收款' : '收款' }}</el-button>
               <el-button
                 v-if="(row.amount_paid || 0) > 0"
                 link
@@ -221,7 +221,7 @@
     </div>
 
     <!-- ================================================================
-         Dialog：登記／更新繳費
+         Dialog：收款／更新收款
          鐵律：amount_paid 是「入帳後累計已繳」，payload 契約不可改成本次收款
     ================================================================ -->
     <el-dialog
@@ -334,7 +334,7 @@
     />
 
     <!-- ================================================================
-         Dialog：批次登記繳費（多選、繳清全額）
+         Dialog：批次收款（多選、繳清全額）
     ================================================================ -->
     <BatchPayDialog
       v-if="batchPayDialogVisible"
@@ -588,7 +588,7 @@ function getRecordStatusType(status: string): 'success' | 'warning' | 'info' {
   return 'info'
 }
 
-// ─── 登記／更新繳費 ──────────────────────────────────────────────────────────
+// ─── 收款／更新收款 ────────────────────────────────────────────────────────
 const payDialogVisible = ref<boolean>(false)
 const payingRecord = ref<FeeRow | null>(null)
 const payFormRef = ref<FormInstance | null>(null)
@@ -612,7 +612,7 @@ function jumpToWorkspace(target: { ws: FeeWorkspaceKey; view: string }) {
 }
 
 const payDialogTitle = computed(() =>
-  payingRecord.value?.status === 'partial' ? '更新繳費' : '登記繳費',
+  payingRecord.value?.status === 'partial' ? '更新收款' : '收款',
 )
 const payCurrentPaid = computed(() => payingRecord.value?.amount_paid || 0)
 // 差額／尚欠僅為呈現用試算；amount_paid payload 仍是「入帳後累計」，計算規則不變
@@ -665,7 +665,7 @@ async function submitPay() {
     nextTick(() => el?.focus?.())
   } catch (err: unknown) {
     const e = err as { response?: { data?: { detail?: string } } }
-    ElMessage.error(e?.response?.data?.detail || '登記繳費失敗')
+    ElMessage.error(e?.response?.data?.detail || '收款登記失敗')
   } finally {
     saving.value = false
   }
@@ -689,7 +689,7 @@ function openRefundModal(row: FeeRow) {
   refundModalVisible.value = true
 }
 
-// ─── 批次登記繳費（多選，消除逐筆開對話框的痛） ──────────────────────────────
+// ─── 批次收款（多選，消除逐筆開對話框的痛） ─────────────────────────────────
 interface ElTableInstance {
   clearSelection?: () => void
 }
@@ -771,7 +771,7 @@ defineExpose({
   openPayDialog,
   submitPay,
   resetRecordFilters,
-  // 批次登記繳費／匯出（測試用白盒存取）
+  // 批次收款／匯出（測試用白盒存取）
   selectedRows,
   rowSelectable,
   onSelectionChange,

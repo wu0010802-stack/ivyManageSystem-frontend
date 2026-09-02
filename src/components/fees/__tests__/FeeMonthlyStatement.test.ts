@@ -152,6 +152,31 @@ const GLOBAL_STUBS = {
       '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
+  // el-dropdown 的 command 事件由 item 冒泡：stub 讓 item 直接呼叫父層 handler
+  'el-dropdown': {
+    emits: ['command'],
+    provide() {
+      return { epDropdownCommand: (cmd: string) => this.$emit('command', cmd) }
+    },
+    template: '<div><slot /><slot name="dropdown" /></div>',
+  },
+  'el-dropdown-menu': { template: '<div><slot /></div>' },
+  'el-dropdown-item': {
+    props: { command: { type: String, default: '' } },
+    inject: { epDropdownCommand: { default: null } },
+    template:
+      '<button type="button" v-bind="$attrs" @click="epDropdownCommand && epDropdownCommand(command)"><slot /></button>',
+  },
+  'el-select': {
+    props: { modelValue: { type: String, default: '' } },
+    emits: ['update:modelValue'],
+    template: '<select v-bind="$attrs" :value="modelValue" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
+  },
+  'el-option': {
+    props: { value: { type: String, default: '' }, label: { type: String, default: '' } },
+    template: '<option :value="value" v-bind="$attrs">{{ label }}</option>',
+  },
+  'el-icon': { template: '<i aria-hidden="true"><slot /></i>' },
   'el-skeleton': { template: '<div data-testid="stmt-skeleton" />' },
 }
 
@@ -208,7 +233,7 @@ describe('預設載入與聚合列', () => {
   })
 })
 
-describe('狀態快篩與班級 chips', () => {
+describe('狀態快篩與班級篩選', () => {
   it('點「已繳清」tile 後顯示已繳學生；關閉「未繳」後未繳學生隱藏', async () => {
     const w = mountStatement()
     await flushPromises()
@@ -218,27 +243,32 @@ describe('狀態快篩與班級 chips', () => {
     expect(rowNames(w)).toEqual(['陳部分', '張全繳'])
   })
 
-  it('班級 chips 直列（去重）含未收齊人數；點選即篩選、再點取消', async () => {
+  it('班級下拉（去重）在選項內保留未收齊人數；選取即篩選、回全部班級即還原', async () => {
     const w = mountStatement()
     await flushPromises()
-    const chips = w.findAll('[data-test="stmt-class-chip"]')
+    const select = w.find('[data-test="stmt-class-select"]')
+    const options = select.findAll('option')
     // 全部班級 + 向日葵 + 櫻花（跨學期同名去重）
-    expect(chips.map((c) => c.attributes('data-classroom'))).toEqual([
-      '',
-      '向日葵',
-      '櫻花',
-    ])
-    // 向日葵未收齊 2 人
-    expect(chips[1].text()).toContain('2')
+    expect(options.map((o) => o.attributes('value'))).toEqual(['', '向日葵', '櫻花'])
+    // 向日葵未收齊 2 人；選項文字帶年級與未收人數
+    expect(options[1].text()).toContain('小班')
+    expect(options[1].text()).toContain('2 人未收齊')
+    expect(options[0].text()).toContain('全部班級')
 
-    await chips[1].trigger('click')
+    await select.setValue('向日葵')
     expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
     // 櫻花只有已繳生，預設狀態下無列
-    await w.find('[data-test="stmt-class-chip"][data-classroom="櫻花"]').trigger('click')
+    await select.setValue('櫻花')
     expect(rowNames(w)).toEqual([])
-    // 再點取消回全部
-    await w.find('[data-test="stmt-class-chip"][data-classroom="櫻花"]').trigger('click')
+    // 回全部班級
+    await select.setValue('')
     expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('篩選列顯示目前可見人數', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-test="stmt-visible-count"]').text()).toContain('2 人')
   })
 
   it('姓名搜尋即時過濾', async () => {

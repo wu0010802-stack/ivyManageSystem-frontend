@@ -12,7 +12,10 @@
       <span class="today-banner__text">{{ todayState.text }}</span>
     </div>
 
-    <div class="toolbar">
+    <!-- 2026-09-02：登記現金收款／重新整理上移到結算工作區的共用工具列，
+         鐵律說明收進該工具列的問號 popover；此處不再自帶一列。
+         embedded=false（單獨使用）時保留原本的工具列。 -->
+    <div v-if="!embedded" class="toolbar">
       <el-button
         v-if="canWrite"
         type="primary"
@@ -264,6 +267,8 @@ const canApprove = computed(() => hasPermission(PERMISSION_NAMES.FEE_CLOSE_APPRO
 const batches = ref<BatchRow[]>([])
 const loading = ref(false)
 
+const { embedded } = defineProps<{ embedded?: boolean }>()
+
 const cashVisible = ref(false)
 const cashSubmitting = ref(false)
 const cashSearch = ref('')
@@ -463,7 +468,7 @@ async function doReopen(row: BatchRow) {
 }
 
 onMounted(fetchBatches)
-defineExpose({ fetchBatches })
+defineExpose({ fetchBatches, openCashDialog, canWrite })
 </script>
 
 <style scoped>
