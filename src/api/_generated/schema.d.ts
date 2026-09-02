@@ -13577,7 +13577,13 @@ export interface paths {
         put?: never;
         /**
          * Batch Save Class Attendance
-         * @description 教師批量儲存（upsert）班級一個日期的出席記錄
+         * @description 教師批量儲存（upsert）班級一個日期的出席記錄。
+         *
+         *     缺席即時通知家長與管理端 `POST /api/student-attendance/batch` 對齊
+         *     （2026-09-02 教師端／家長端對齊稽核）：本端點是教師每日點名的實際入口
+         *     （獨立頁＋班級工作台 sheet 共用），原本完全沒有推播 → 缺席通知對教師形同虛設。
+         *     「轉為缺席」判定、att.id 去重、BackgroundTasks fan-out 全部沿用管理端的
+         *     `_dispatch_absence_alerts_bg`，避免兩條點名路徑再度分岔。
          */
         post: operations["batch_save_class_attendance_api_portal_class_attendance_batch_post"];
         delete?: never;
@@ -21476,6 +21482,16 @@ export interface components {
             id: number;
             /** Is Pinned */
             is_pinned: boolean;
+            /**
+             * Parent Read Count
+             * @default 0
+             */
+            parent_read_count: number;
+            /**
+             * Parent Recipient Count
+             * @default 0
+             */
+            parent_recipient_count: number;
             /** Priority */
             priority: string;
             /** Publish At */
@@ -25773,6 +25789,26 @@ export interface components {
             /** Nap Minutes */
             nap_minutes?: number | null;
             /**
+             * Parent Ack Count
+             * @default 0
+             */
+            parent_ack_count: number;
+            /**
+             * Parent Acks
+             * @default []
+             */
+            parent_acks: components["schemas"]["ContactBookParentAckOut"][];
+            /**
+             * Parent Replies
+             * @default []
+             */
+            parent_replies: components["schemas"]["ContactBookParentReplyOut"][];
+            /**
+             * Parent Reply Count
+             * @default 0
+             */
+            parent_reply_count: number;
+            /**
              * Photos
              * @default []
              */
@@ -25813,6 +25849,34 @@ export interface components {
             items: components["schemas"]["ContactBookListItem"][];
             /** Log Date */
             log_date: string;
+        };
+        /**
+         * ContactBookParentAckOut
+         * @description 家長已讀回條（教師端可見；2026-09-02 對齊稽核前只寫不讀）。
+         */
+        ContactBookParentAckOut: {
+            /** Guardian Name */
+            guardian_name?: string | null;
+            /** Guardian User Id */
+            guardian_user_id: number;
+            /** Read At */
+            read_at?: string | null;
+        };
+        /**
+         * ContactBookParentReplyOut
+         * @description 家長簡短回覆（教師端可見）。
+         */
+        ContactBookParentReplyOut: {
+            /** Body */
+            body: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Guardian Name */
+            guardian_name?: string | null;
+            /** Guardian User Id */
+            guardian_user_id: number;
+            /** Id */
+            id: number;
         };
         /**
          * ContactBookPhotoOut
