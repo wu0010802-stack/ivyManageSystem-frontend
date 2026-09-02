@@ -21,7 +21,12 @@
 - **文案守則**（`DESIGN.md`）：全繁體中文、不用驚嘆號收尾、不用 em dash「—」於正文。固定用詞：`/events`＝「待簽文件」、`/sign`＝「入學文件簽署」、離園＝「已離園」、later 桶＝「傍晚」。
 - **快取鍵前綴**：新 `useCachedAsync` key 一律以 `parent/` 開頭，登出時 `invalidateCachedAsync('parent/')` 才清得到。
 - **測試兩棵樹**：`src/parent/**/__tests__/`（新測試放這裡）與 `tests/unit/parent/`（既有測試，改動元件行為時必須同步檢查）。
-- **驗證指令**：測試 `npx vitest run <path>`；typecheck `npm run typecheck`；lint `npm run lint`；build **必須** `npm run build`（含 chunk gate），**不可**用 `npx vite build`。
+- **驗證指令**：測試 `npx vitest run <path>`；lint `npm run lint`；build **必須** `npm run build`（含 chunk gate），**不可**用 `npx vite build`。
+- **typecheck 必須加大 heap**：直接跑 `npm run typecheck` 會在這台機器 OOM 崩潰（node 進程 abort，輸出一長串 stack trace，看起來像 crash 而不是型別錯誤）。一律用：
+  ```bash
+  NODE_OPTIONS=--max-old-space-size=4096 npm run typecheck
+  ```
+  成功時只會印出兩行指令 echo、沒有其他輸出。看到 `LoadEnvironment` 之類的 stack trace 就是 OOM，不是你的程式碼有問題，加上 `NODE_OPTIONS` 重跑。
 - **Commit**：Conventional Commits、繁體中文訊息、一律 `git commit -- <明確檔案路徑>`（共用 checkout 有平行 session，裸 commit 會掃走別人的 staged 檔案）。每個 commit 訊息結尾加上：
   ```
   Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
@@ -574,13 +579,13 @@ export function useParentTodos(options: { immediate?: boolean } = {}) {
 - [ ] **Step 4: 跑測試確認通過**
 
 Run: `npx vitest run src/parent/composables/__tests__/useParentTodos.test.ts`
-Expected: PASS，13 個測試全綠。
+Expected: PASS，12 個測試全綠。
 
 若「順序固定」那個測試失敗且訊息顯示 `signDocs` 或 `pickup` 缺席，代表 `flush()` 的 microtask 輪數不夠，把 `flush()` 內的 `await Promise.resolve()` 增加到 5 次再跑。
 
 - [ ] **Step 5: typecheck**
 
-Run: `npm run typecheck`
+Run: `NODE_OPTIONS=--max-old-space-size=4096 npm run typecheck`
 Expected: 無錯誤輸出。
 
 - [ ] **Step 6: Commit**
@@ -892,7 +897,7 @@ Expected: PASS，8 個測試全綠。
 
 - [ ] **Step 5: typecheck 與 lint**
 
-Run: `npm run typecheck && npx eslint src/parent/components/home/HomeTodoList.vue src/parent/components/home/__tests__/HomeTodoList.test.ts`
+Run: `NODE_OPTIONS=--max-old-space-size=4096 npm run typecheck && npx eslint src/parent/components/home/HomeTodoList.vue src/parent/components/home/__tests__/HomeTodoList.test.ts`
 Expected: 兩者皆無錯誤。
 
 - [ ] **Step 6: Commit**
@@ -1225,7 +1230,7 @@ Expected: PASS，9 個測試全綠。
 
 - [ ] **Step 5: typecheck 與 lint**
 
-Run: `npm run typecheck && npx eslint src/parent/components/home/HomeBusRow.vue`
+Run: `NODE_OPTIONS=--max-old-space-size=4096 npm run typecheck && npx eslint src/parent/components/home/HomeBusRow.vue`
 Expected: 無錯誤。
 
 - [ ] **Step 6: Commit**
@@ -1452,7 +1457,7 @@ function dismissalLabel(status: string | null | undefined) {
 - [ ] **Step 4: 跑測試確認通過**
 
 Run: `npx vitest run src/parent/composables/__tests__/useTodayTimeline.slim.test.ts`
-Expected: PASS，13 個測試全綠。
+Expected: PASS，12 個測試全綠。
 
 - [ ] **Step 5: 跑既有 timeline 相關測試，記錄哪些紅了**
 
@@ -2215,7 +2220,7 @@ npx vitest run <該測試檔>
 
 - [ ] **Step 4: typecheck 與 lint**
 
-Run: `npm run typecheck && npm run lint`
+Run: `NODE_OPTIONS=--max-old-space-size=4096 npm run typecheck && npm run lint`
 Expected: 兩者皆無錯誤。
 
 - [ ] **Step 5: 頂部區塊零 diff 最終核對**
