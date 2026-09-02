@@ -165,7 +165,7 @@ interface ParentTodo {
 - 移除 `FeeSummaryCard` 區塊與偏好清單中的「費用查詢」項。費用入口只留首頁待辦列與事務頁。
 - 偏好清單新增「常見問題」項（hint「登入、綁定、接送與繳費常見問題」）→ `/assistant`。`router.ts` 該路由 meta 補 `tab: 'me'`，讓底部導覽維持在「我的」高亮。
 - `FeeSummaryCard.vue` 全站僅 `MeView` 使用，連同兩棵樹的測試一併刪除。
-- `MeView` 自己另打一次 `useCachedAsync('parent/today/summary')` 的邏輯隨費用卡移除；hero 的推播狀態改由 `useHomeSummary().summary` 取 `me.can_push`。
+- `MeView` 目前用的 cache key 是 `parent/home/summary`，與首頁／事務頁的 `parent/today/summary`（`HOME_SUMMARY_CACHE_KEY`）**不同**，等於同一支 API 在家長端存在兩條獨立快取、每次進「我的」多打一次。費用卡移除後這段 `useCachedAsync` 一併刪除，該筆多餘請求隨之消失。`UserHeroCard` 的推播狀態沿用既有的 `authStore.user.can_push`，不改來源。
 
 ### 3.8 快捷模組目錄
 
