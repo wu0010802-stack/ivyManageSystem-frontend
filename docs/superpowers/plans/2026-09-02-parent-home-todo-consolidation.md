@@ -1564,32 +1564,47 @@ Expected: bento 與娃娃車相關案例大量失敗（元素已移到子元件�
 - [ ] **Step 4: 更新既有測試**
 
 - `TodayView.rideCancellation.test.ts`（27 個案例）與 `TodayView.busRace.test.ts`：這些行為已由 Task 3 的 `HomeBusRow.test.ts` 覆蓋。刪除這兩個檔案，並在 `HomeBusRow.test.ts` 頂部註解補一行：「本檔涵蓋原 TodayView.rideCancellation.test.ts 與 TodayView.busRace.test.ts 的行為斷言（2026-09-02 隨元件抽出搬移）」。
-- `tests/unit/parent/views/TodayView.test.js`：刪除 `describe('TodayView Bento 儀表板 — StatTile 依 summary 條件渲染')` 與 `describe('TodayView 娃娃車入口卡')` 兩整段；在檔案末尾新增一個 describe：
+- `tests/unit/parent/views/TodayView.test.js`（該檔既有 helper 是 `mountWith(summary, today)`，定義在約第 103-135 行，**不是** `mountView()`）：
+  1. 刪除 `describe('TodayView Bento 儀表板 — StatTile 依 summary 條件渲染')` 與 `describe('TodayView 娃娃車入口卡')` 兩整段。
+  2. 改 `mountWith()` 的 `global.stubs`：移除 `StatTile`、`PendingSignBanner`、`PendingSurveyBanner` 三個 stub（元件已不在 TodayView 內），新增 `HomeTodoList: { template: '<div class="home-todo-stub"></div>' }` 與 `HomeBusRow: { template: '<div class="home-bus-stub"></div>' }`。其餘 stub 保留不動。
+  3. 在檔案末尾新增一個 describe（第一個參數是 home summary 回應物件、第二個是 today-status 回應物件，形狀比照該檔既有案例）：
 
 ```js
 describe('TodayView 區塊收斂（2026-09-02）', () => {
-  it('不再渲染頂部待簽橫幅與活動調查橫幅', async () => {
-    setSummary({ pending_event_acks: 3, pending_survey_count: 2 })
-    const wrapper = await mountView()
-    expect(wrapper.html()).not.toContain('pending-sign-banner')
-    expect(wrapper.html()).not.toContain('pending-survey-banner')
+  beforeEach(() => {
+    setActivePinia(createPinia())
   })
 
-  it('不再渲染 bento 方格容器', async () => {
-    setSummary({ fees: { outstanding_count: 2, outstanding: 100, overdue: 0 } })
-    const wrapper = await mountView()
-    expect(wrapper.find('.today-bento').exists()).toBe(false)
+  it('不再渲染頂部待簽橫幅與活動調查橫幅', () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: { pending_event_acks: 3, pending_survey_count: 2 } },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    expect(w.find('.pending-sign-stub').exists()).toBe(false)
+    expect(w.html()).not.toContain('pending-survey')
   })
 
-  it('渲染待辦清單與娃娃車列兩個子元件', async () => {
-    const wrapper = await mountView()
-    expect(wrapper.findComponent({ name: 'HomeTodoList' }).exists()).toBe(true)
-    expect(wrapper.findComponent({ name: 'HomeBusRow' }).exists()).toBe(true)
+  it('不再渲染 bento 方格容器與 StatTile', () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: { fees: { outstanding_count: 2, outstanding: 100, overdue: 0 } } },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    expect(w.find('.today-bento').exists()).toBe(false)
+    expect(w.find('.stat-tile-stub').exists()).toBe(false)
+  })
+
+  it('渲染待辦清單與娃娃車列兩個子元件', () => {
+    const w = mountWith(
+      { children: [{ student_id: 1, name: '小明' }], summary: {} },
+      { children: [{ student_id: 1, name: '小明' }] },
+    )
+    expect(w.find('.home-todo-stub').exists()).toBe(true)
+    expect(w.find('.home-bus-stub').exists()).toBe(true)
   })
 })
 ```
 
-若該檔沒有現成的 `mountView()` 與 `setSummary()` helper，沿用檔案既有的掛載寫法改寫這三個案例，並把 `HomeTodoList`／`HomeBusRow` 加入 `global.stubs`（`{ HomeTodoList: true, HomeBusRow: true }`）後改用 `findComponent` 以 stub 名稱斷言。
+若該檔既有案例傳給 `mountWith` 的物件形狀與上面不同（例如 summary 直接放頂層而非包在 `summary` 鍵下），比照檔案內既有案例調整參數，不要改 `mountWith` 的簽章。
 
 - [ ] **Step 4b: 加原始碼層級的退場守衛**
 
