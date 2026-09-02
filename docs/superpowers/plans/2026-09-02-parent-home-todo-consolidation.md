@@ -2034,7 +2034,9 @@ const paths = [
 - [ ] **Step 5: 跑測試確認通過**
 
 Run: `npx vitest run src/parent/composables/__tests__/useHomeSummary.badges.test.ts src/parent/views/__tests__/AdminListView.badges.test.ts src/parent/views/__tests__/AdminListView.threestates.test.ts tests/unit/parent/views/AdminListView.test.js`
-Expected: PASS。`AdminListView.threestates.test.ts` 若也 mock 了 `@/parent/api/pickup`，比照 Step 4b 第 2 點改為 mock `useParentTodos`。
+Expected: PASS。
+
+關於 `AdminListView.threestates.test.ts`：它 mock 了 `@/composables/useCachedAsync` 本身，所以 `useParentTodos` 內部的三個 `useCachedAsync` 呼叫都會拿到那個 mock、fetcher 根本不會執行。**它很可能完全不用改**（它只驗骨架／錯誤態／清單三種渲染，那些仍由 `useHomeSummary` 驅動）。先跑，真的紅了再看訊息決定，不要預先改它。
 
 - [ ] **Step 6: Commit**
 
