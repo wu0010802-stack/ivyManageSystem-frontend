@@ -119,7 +119,6 @@ onMounted(() => {
     <!-- 成長里程碑 carousel -->
     <section class="pt-card growth-section" aria-labelledby="growth-milestones-title">
       <h2 id="growth-milestones-title" class="section-title">
-        <ParentIcon name="trophy" size="sm" />
         成長里程碑
       </h2>
       <MilestoneCarousel v-if="studentId" :student-id="studentId" />
@@ -128,7 +127,6 @@ onMounted(() => {
     <!-- 最新動態 timeline feed -->
     <section class="pt-card growth-section" aria-labelledby="growth-timeline-title">
       <h2 id="growth-timeline-title" class="section-title">
-        <ParentIcon name="notebook" size="sm" />
         最新動態
       </h2>
       <MobileErrorRetry
@@ -305,7 +303,6 @@ onMounted(() => {
     <!-- 成長量測 -->
     <section class="pt-card growth-section" aria-labelledby="measurements-title">
       <h2 id="measurements-title" class="section-title">
-        <ParentIcon name="ruler" size="sm" />
         成長量測
       </h2>
       <button class="pt-ghost-btn link-btn" type="button" @click="goMeasurements">
@@ -317,7 +314,6 @@ onMounted(() => {
     <!-- 歷次報告 -->
     <section class="pt-card growth-section" aria-labelledby="reports-title">
       <h2 id="reports-title" class="section-title">
-        <ParentIcon name="document" size="sm" />
         歷次報告
       </h2>
       <button class="pt-ghost-btn link-btn" type="button" @click="goReports">
@@ -438,9 +434,6 @@ onMounted(() => {
   margin: 0 0 10px;
   letter-spacing: 0.02em;
 }
-.section-title :deep(.parent-icon) {
-  color: var(--brand-primary);
-}
 .empty {
   color: var(--pt-text-placeholder);
   font-size: 13px;
@@ -511,7 +504,6 @@ onMounted(() => {
 .feed {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 .load-more-btn {
   align-self: center;
