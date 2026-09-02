@@ -130,6 +130,30 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+describe('家長取消乘車事件（bus_ride_cancellation_changed）', () => {
+  it('同方向事件 → 重抓一次快照（站點 excused 狀態只在快照裡）', async () => {
+    await bootMonitor()
+    const before = vi.mocked(getBusTripToday).mock.calls.length
+    lastSocket().emit({
+      type: 'bus_ride_cancellation_changed',
+      payload: { student_id: 101, date: '2026-07-29', direction: 'morning', action: 'created' },
+    })
+    await flushPromises()
+    expect(vi.mocked(getBusTripToday).mock.calls.length).toBe(before + 1)
+  })
+
+  it('別方向的事件不重抓', async () => {
+    await bootMonitor()
+    const before = vi.mocked(getBusTripToday).mock.calls.length
+    lastSocket().emit({
+      type: 'bus_ride_cancellation_changed',
+      payload: { student_id: 101, date: '2026-07-29', direction: 'afternoon', action: 'revoked' },
+    })
+    await flushPromises()
+    expect(vi.mocked(getBusTripToday).mock.calls.length).toBe(before)
+  })
+})
+
 describe('進頁與快照', () => {
   it('快照一律帶 route_id（不帶是全域查詢，會回到別條路線的班次與名冊）', async () => {
     await bootMonitor()

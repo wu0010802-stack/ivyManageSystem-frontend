@@ -404,6 +404,14 @@ export function useBusMonitor() {
       // 班次狀態是終態的完整論證見 `completedTripIds` 的宣告；**若將來加了 reopen
       // 端點，這兩條與那裡的覆寫都要一起回來改**。
       snapshotFailed.value = false
+    } else if (type === 'bus_ride_cancellation_changed') {
+      // 家長「今天不搭」建立／撤銷（2026-09-02 對齊稽核前後端不推任何事件）：payload 只有
+      // student_id／date／direction／action，站點 excused 狀態要重抓快照才拿得到。
+      // 沒有顯示中的班次就不抓（沒東西可更新；快照仍會在下一次進頁／輪詢取得）。
+      if (!trip.value) return
+      const direction = asStr(payload.direction)
+      if (direction && direction !== trip.value.direction) return
+      void refresh()
     } else if (type === 'bus_trip_completed') {
       const tripId = asNum(payload.trip_id)
       if (tripId === null) return
