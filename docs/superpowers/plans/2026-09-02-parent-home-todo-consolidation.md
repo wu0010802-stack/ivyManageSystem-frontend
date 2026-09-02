@@ -1554,6 +1554,15 @@ import HomeTodoList from '../components/home/HomeTodoList.vue'
 import HomeBusRow from '../components/home/HomeBusRow.vue'
 ```
 
+**務必保留**（已 grep 確認這些仍被其他區塊依賴，誤刪會壞掉）：
+- `summary` computed（第 57 行）：仍傳給 `useTodayTimeline({ summary, todayChildren })`。Task 4 之後該 composable 內部不再讀它，但簽章保留，傳入仍合法。
+- `me`／`children`／`showPushCta`／`selectedChild`／`isUnbound`：頂部區塊與 PushCta 在用。
+- `contactBookEntry`／`loadContactBook`／`contactBookSeq` 整套與 `todayVariant`／`contactBookHref`／`contactBookSub`：餵給 `QuickActionsBar`（凍結區塊）。
+- `childStatusLabel()`／`childStatusTone()`／`heroStatus`／`selectedTodayChild`／`isOffDay()`：狀態 pill 在用。
+- `useTodayStatusCache`／`todayChildren`／`buckets`／`ChildrenStrip`／footer：今日動態與多寶列在用。
+
+已 grep 驗證要刪的那批（`pendingSignCount`／`pendingSurveyCount`／`pendingSignDocCount`／`feesInfo`／`pickupActiveCount`／`busInfo` 等）只出現在自身定義處與即將刪除的橫幅、bento、sheet template 內，沒有其他依賴。
+
 新增 ref 與調整刷新函式：
 ```ts
 const busRow = ref<{ reload: () => Promise<void> } | null>(null)
