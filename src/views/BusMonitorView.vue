@@ -12,14 +12,16 @@
  *    client 的自訂碼是 post-accept 的 4003（token 到期，composable 靜默 refresh 後重連）。
  *    因此**不做**「權限不足請聯絡管理員」這類永遠不觸發的 UI。
  *
- * 隱私：座標只交給 Leaflet 畫點，不進 console / Sentry / URL query / storage / 標題。
- * Leaflet 動態 import（含 CSS），理由同家長端。
+ * 隱私：座標只交給地圖 SDK 畫點，不進 console / Sentry / URL query / storage / 標題。
+ * 底圖 provider 見下方「底圖 provider」段：設了金鑰走 Google Maps，否則 Leaflet + OSM。
+ * 兩個 SDK 都動態 import（Leaflet 含 CSS），理由同家長端——不讓地圖庫進首屏 bundle。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, watch, ref } from 'vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { formatTaipeiClock } from '@/utils/taipeiTime'
 import { useBusMonitor, DIRECTION_LABELS } from '@/composables/useBusMonitor'
 import { excuseReasonLabel } from '@/constants/bus'
+import { ensureGoogleMaps } from '@/utils/googleMapsLoader'
 
 const monitor = useBusMonitor()
 const {
@@ -87,12 +89,18 @@ async function onRouteChange(routeId: number): Promise<void> {
   await monitor.selectRoute(routeId)
 }
 
-// ── Leaflet（動態載入）──
-// leaflet 無 @types，比照 repo 既有慣例以 any + 逐行 eslint-disable 承接。
+// ── 底圖 provider ──
+// 設了 VITE_GOOGLE_MAPS_API_KEY 就走 Google Maps，否則（含金鑰無效、SDK 被網路
+// 擋掉）退回 Leaflet + OpenStreetMap。兩條路徑畫的東西完全一樣：一個車輛 marker
+// ＋各站 marker，差別只在底圖與 SDK 的呼叫方式。
+// 兩個 SDK 都沒有 @types，比照 repo 既有慣例以 any + 逐行 eslint-disable 承接。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let leafletApi: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let leafletPromise: Promise<any> | null = null
+/** 非 null 代表目前這顆地圖是 Google 畫的（拆除方式與 Leaflet 不同）。 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let googleApi: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let map: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,30 +135,73 @@ function stopSignature(): string {
     .join('|')
 }
 
+/** 站名 tooltip 只放順位與學生名，**不放座標數字**（座標＝家庭住址等級資料）。 */
+function stopTitle(stop: { seq: number; student_name: string }): string {
+  return `${stop.seq}. ${stop.student_name}`
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function drawStopMarkers(L: any): void {
+function drawLeafletStopMarkers(L: any): void {
   const signature = stopSignature()
   if (signature === renderedStopSignature) return
   stopMarkers.forEach((m) => { m.remove?.() })
   stopMarkers = []
   for (const stop of stops.value) {
     if (stop.lat == null || stop.lng == null) continue
-    stopMarkers.push(
-      L.marker([stop.lat, stop.lng], { title: `${stop.seq}. ${stop.student_name}` }).addTo(map),
-    )
+    stopMarkers.push(L.marker([stop.lat, stop.lng], { title: stopTitle(stop) }).addTo(map))
   }
   renderedStopSignature = signature
 }
 
-async function renderMap(): Promise<void> {
-  if (!showMap.value) return
-  await nextTick()
-  const current = trip.value
-  if (!mapEl.value || !current || current.last_lat == null || current.last_lng == null) return
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function drawGoogleStopMarkers(gmaps: any): void {
+  const signature = stopSignature()
+  if (signature === renderedStopSignature) return
+  stopMarkers.forEach((m) => { m.setMap?.(null) })
+  stopMarkers = []
+  for (const stop of stops.value) {
+    if (stop.lat == null || stop.lng == null) continue
+    stopMarkers.push(new gmaps.Marker({
+      position: { lat: stop.lat, lng: stop.lng },
+      map,
+      title: stopTitle(stop),
+    }))
+  }
+  renderedStopSignature = signature
+}
+
+/**
+ * Google 的計費單位是「建立一次 Map 實例」，而位置每幾秒就更新一次——
+ * 所以**只有 map 不存在時才 new**，位置變動一律只移動 marker。
+ *
+ * 用 legacy `Marker` 而非 `AdvancedMarkerElement`：後者要求 `mapId`（雲端樣式）
+ * 且需多載 `libraries=marker`，對「一台車＋幾個站」的需求沒有好處。與招生熱點圖
+ * 的既有用法也一致。console 會有 deprecation 提示，屬預期。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function renderGoogleMap(gmaps: any, position: [number, number]): void {
+  const center = { lat: position[0], lng: position[1] }
+  if (!map) {
+    googleApi = gmaps
+    map = new gmaps.Map(mapEl.value, {
+      center,
+      zoom: MAP_ZOOM,
+      // 監看頁只要看車在哪，其餘控制項都是干擾
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+    })
+    busMarker = new gmaps.Marker({ position: center, map, title: '娃娃車' })
+  } else {
+    busMarker?.setPosition(center)
+  }
+  drawGoogleStopMarkers(gmaps)
+}
+
+async function renderLeafletMap(position: [number, number]): Promise<void> {
   const L = await ensureLeaflet()
   // await 期間可能已改判為不可信（stale / 快照失敗）或元件已卸載
   if (!mapEl.value || !showMap.value) return
-  const position: [number, number] = [current.last_lat, current.last_lng]
   if (!map) {
     map = L.map(mapEl.value).setView(position, MAP_ZOOM)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -160,12 +211,39 @@ async function renderMap(): Promise<void> {
   } else {
     busMarker?.setLatLng(position)
   }
-  drawStopMarkers(L)
+  drawLeafletStopMarkers(L)
+}
+
+async function renderMap(): Promise<void> {
+  if (!showMap.value) return
+  await nextTick()
+  const current = trip.value
+  if (!mapEl.value || !current || current.last_lat == null || current.last_lng == null) return
+  const position: [number, number] = [current.last_lat, current.last_lng]
+
+  // 已經有一顆 Google 地圖時就不必再問載入器（也不會重複載入）
+  const gmaps = googleApi ?? await ensureGoogleMaps()
+  // await 期間可能已改判為不可信（stale / 快照失敗）或元件已卸載
+  if (!mapEl.value || !showMap.value) return
+
+  if (gmaps) {
+    renderGoogleMap(gmaps, position)
+    return
+  }
+  await renderLeafletMap(position)
 }
 
 function destroyMap(): void {
   if (!map) return
-  map.remove?.()
+  if (googleApi) {
+    // Google Maps 沒有 map.remove()：解掉 marker 與地圖的綁定即可，
+    // 容器 DOM 由 v-if 移除，實例失去引用後由 GC 回收。
+    busMarker?.setMap?.(null)
+    stopMarkers.forEach((m) => { m.setMap?.(null) })
+  } else {
+    map.remove?.()
+  }
+  googleApi = null
   map = null
   busMarker = null
   stopMarkers = []
