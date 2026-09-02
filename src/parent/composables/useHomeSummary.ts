@@ -26,6 +26,8 @@ export interface HomeBadges {
   pendingEventAcks: number
   pendingActivityPromotions: number
   recentLeaveReviews: number
+  /** 待回覆的活動調查份數（2026-09-02 併入，原本事務頁自己 cast summary 讀） */
+  pendingSurveyCount: number
   /** 今日生效的委託用藥單張數；資訊性，不計入 tab 徽章 */
   activeMedicationOrders: number
 }
@@ -64,6 +66,7 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
       pendingEventAcks: num(s.pending_event_acks),
       pendingActivityPromotions: num(s.pending_activity_promotions),
       recentLeaveReviews: num(s.recent_leave_reviews),
+      pendingSurveyCount: num(s.pending_survey_count),
       activeMedicationOrders: num(s.active_medication_orders),
     }
   })
@@ -71,8 +74,12 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
   /**
    * 底部「事務」tab 的總數徽章。
    *
-   * 只加「需要家長動作或該知道結果」的四項。今日用藥單是資訊性的
+   * 只加「需要家長動作或該知道結果」的五項。今日用藥單是資訊性的
    * （家長已經送出、老師照表執行），計進去只會讓紅點天天亮著而失去意義。
+   *
+   * 刻意不加入首頁待辦清單的另外兩項（入學文件簽署、臨時接送）：那兩支是
+   * summary 之外的獨立 API，而 ParentLayout 在登入頁也會掛載，為了徽章
+   * 多打兩支請求不划算。因此待辦清單的件數可能比 tab 徽章多，屬已知取捨。
    */
   const adminTabBadge = computed<number>(() => {
     const b = badges.value
@@ -80,7 +87,8 @@ export function useHomeSummary(options: { immediate?: boolean } = {}) {
       b.outstandingFees +
       b.pendingEventAcks +
       b.pendingActivityPromotions +
-      b.recentLeaveReviews
+      b.recentLeaveReviews +
+      b.pendingSurveyCount
     )
   })
 
