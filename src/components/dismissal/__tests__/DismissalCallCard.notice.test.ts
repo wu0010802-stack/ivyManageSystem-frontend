@@ -110,3 +110,29 @@ describe('staff 舊流程行為不變', () => {
     expect(w.find('.dcall__wait--warning').exists()).toBe(true)
   })
 })
+
+
+describe('委託接送（臨時接送授權連動建立，request_source=proxy）', () => {
+  const call = {
+    id: 3,
+    student_name: '陳小美',
+    classroom_name: '中班',
+    status: 'pending',
+    request_source: 'proxy',
+    requested_at: '2026-08-14T15:20:00',
+    expected_arrival_at: '2026-08-14T15:20:00',
+    arrived_at: '2026-08-14T15:20:00',
+    note: '委託接送：王阿嬤（祖母）',
+  }
+  it('顯示「委託接送」來源標記（老師要核對證件／取件碼）', () => {
+    const w = mountCard(call)
+    const flag = w.find('[data-testid="dcall-source-flag"]')
+    expect(flag.exists()).toBe(true)
+    expect(flag.text()).toBe('委託接送')
+    expect(flag.classes()).toContain('dcall__flag--proxy')
+  })
+  it('staff 來源仍不顯示任何來源標記', () => {
+    const w = mountCard({ ...call, request_source: 'staff' })
+    expect(w.find('[data-testid="dcall-source-flag"]').exists()).toBe(false)
+  })
+})

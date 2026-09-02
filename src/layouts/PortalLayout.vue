@@ -422,6 +422,10 @@ const submitPassword = async () => {
             <span>接送通知</span>
             <el-badge v-if="dismissalPendingCount > 0" :value="dismissalPendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>
+          <!-- 2026-09-02 對齊稽核：原本只掛在首頁「快速進入」網格，側欄缺項與接送通知／學生請假（雙入口）不一致 -->
+          <el-menu-item index="/portal/pickup-authorizations">
+            <span>臨時接送授權</span>
+          </el-menu-item>
           <el-menu-item index="/portal/medications">
             <span>用藥執行</span>
           </el-menu-item>
