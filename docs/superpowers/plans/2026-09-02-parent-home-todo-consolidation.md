@@ -27,6 +27,7 @@
   NODE_OPTIONS=--max-old-space-size=4096 npm run typecheck
   ```
   成功時只會印出兩行指令 echo、沒有其他輸出。看到 `LoadEnvironment` 之類的 stack trace 就是 OOM，不是你的程式碼有問題，加上 `NODE_OPTIONS` 重跑。
+- **測試 stub 要用 `findComponent({ name })` 找的話，stub 物件必須自己寫 `name`**：inline stub 物件不會自動帶元件名，少了它 `findComponent` 只會拿到空 wrapper，接著 `.vm` 就丟 `Cannot call vm on an empty VueWrapper`。這是 Task 3 踩過的坑，修法是在 stub 物件加一行 `name: 'XxxComponent',`，斷言本身不用動。
 - **Commit**：Conventional Commits、繁體中文訊息、一律路徑限定（共用 checkout 有平行 session，裸 commit 會掃走別人的 staged 檔案）。**旗標必須排在 `--` 之前**，否則 git 把 `-m` 與訊息當成 pathspec 而失敗：
   ```bash
   # 對：訊息寫進暫存檔再用 -F（多行訊息最穩）
