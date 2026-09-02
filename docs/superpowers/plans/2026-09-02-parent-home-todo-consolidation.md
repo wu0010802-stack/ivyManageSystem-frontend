@@ -1993,29 +1993,33 @@ Claude-Session: https://claude.ai/code/session_01QsUSjwnrjHLZLNgRXtWfTn
 
 - [ ] **Step 1: 寫失敗測試**
 
-在 `src/parent/views/__tests__/MeView.test.ts` 末尾新增：
+`src/parent/views/__tests__/MeView.test.ts` 既有結構：第 27-29 行有 `vi.mock('@/parent/components/me/FeeSummaryCard.vue', ...)`（mock 一個即將刪除的檔案，Task 8 刪檔後這個 mock 會讓整個測試檔在解析階段就爆），第 54-61 行有 helper `mountMeView()`（已掛好 Pinia 與真實 router，不需要另外 stub `router-link`）。
+
+改法：
+1. **刪除**第 27-29 行的 `FeeSummaryCard` mock（連同它的三行）。
+2. 在檔案末尾新增：
 
 ```ts
 describe('MeView 入口收斂（2026-09-02）', () => {
   it('不再顯示費用摘要卡', () => {
-    const w = mount(MeView, { global: { stubs: { 'router-link': true } } })
-    expect(w.findComponent({ name: 'FeeSummaryCard' }).exists()).toBe(false)
+    const w = mountMeView()
+    expect(w.find('[data-testid="fee-summary-card"]').exists()).toBe(false)
   })
 
   it('偏好清單不再有「費用查詢」', () => {
-    const w = mount(MeView, { global: { stubs: { 'router-link': true } } })
+    const w = mountMeView()
     expect(w.text()).not.toContain('費用查詢')
   })
 
   it('偏好清單新增「常見問題」，連到 /assistant', () => {
-    const w = mount(MeView, { global: { stubs: { 'router-link': { props: ['to'], template: '<a :href="to"><slot /></a>' } } } })
+    const w = mountMeView()
     expect(w.text()).toContain('常見問題')
     expect(w.find('a[href="/assistant"]').exists()).toBe(true)
   })
 })
 ```
 
-若既有檔案的掛載方式不同（有自己的 helper 或 stubs），沿用該檔既有寫法改寫這三個案例。
+註：第一個案例改用 `data-testid` 而非 `findComponent({ name: 'FeeSummaryCard' })`，因為 mock 移除後該元件已不存在，用元件名查詢在 `<script setup>` 下本來就不可靠。
 
 - [ ] **Step 2: 跑測試確認失敗**
 
@@ -2105,9 +2109,12 @@ Claude-Session: https://claude.ai/code/session_01QsUSjwnrjHLZLNgRXtWfTn
 - Delete: `src/parent/components/home/PendingSurveyBanner.vue`
 - Delete: `src/parent/components/me/FeeSummaryCard.vue`
 - Delete: `src/parent/components/__tests__/PendingSurveyBanner.test.ts`
+- Delete: `src/parent/components/me/__tests__/FeeSummaryCard.test.ts`
 - Delete: `tests/unit/parent/components/home/PendingSignBanner.test.js`
 - Delete: `tests/unit/parent/components/me/FeeSummaryCard.test.js`
-- Modify: `src/parent/styles/globals.css`（若有兩個橫幅的專用樣式）
+- Modify: `src/parent/styles/globals.css:113` 附近（兩個橫幅的琥珀色專用樣式，註解已標明是給 `PendingSignBanner` / `PendingSurveyBanner` 用的）
+
+> 費用卡與待簽橫幅在**兩棵樹都有**測試（`src/parent/**/__tests__/` 與 `tests/unit/parent/`），四個檔案缺一不可刪乾淨。這是家長端反覆出現的 sibling sweep 陷阱。
 
 **Interfaces:**
 - Consumes: 無。
@@ -2128,9 +2135,12 @@ git rm src/parent/components/home/PendingSignBanner.vue \
        src/parent/components/home/PendingSurveyBanner.vue \
        src/parent/components/me/FeeSummaryCard.vue \
        src/parent/components/__tests__/PendingSurveyBanner.test.ts \
+       src/parent/components/me/__tests__/FeeSummaryCard.test.ts \
        tests/unit/parent/components/home/PendingSignBanner.test.js \
        tests/unit/parent/components/me/FeeSummaryCard.test.js
 ```
+
+刪除後再跑一次 Step 1 的 grep，確認只剩 `tests/unit/parent/views/TodayView.test.js` 的 stub（Task 5 已處理）與 `globals.css` 的樣式（下一步處理）。若 `src/parent/views/__tests__/MeView.test.ts` 還出現 `FeeSummaryCard`，代表 Task 7 漏刪那個 `vi.mock`，回頭補。
 
 - [ ] **Step 3: 清理 globals.css**
 
