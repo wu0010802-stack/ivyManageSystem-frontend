@@ -163,6 +163,35 @@ body {
   gap: var(--space-3);
 }
 
+/* ========== Admin 表單分型 grid（2026-08-18 admin 新增表單重整） ==========
+ * compact／standard／wide 分型共用的語意 grid vocabulary，取代逐檔手寫
+ * el-row/el-col 或各自的 CSS。直接把 .fg-* 加在 el-form-item（或包裹 div）上。
+ * 桌面 12-col；--to-md 短欄先收兩欄（逐步降階）；--to-sm 全收單欄
+ * （手機 dialog 95% 寬與 label 堆疊沿用本檔既有規則）。
+ * 欄距只用 column-gap：垂直節奏由 el-form-item 自身 margin-bottom 控制。
+ */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: var(--space-4);
+}
+.form-grid > * { min-width: 0; }
+.form-grid > .fg-12 { grid-column: span 12; }
+.form-grid > .fg-8 { grid-column: span 8; }
+.form-grid > .fg-6 { grid-column: span 6; }
+.form-grid > .fg-4 { grid-column: span 4; }
+.form-grid > .fg-3 { grid-column: span 3; }
+@media (--to-md) {
+  .form-grid > .fg-8 { grid-column: span 12; }
+  .form-grid > .fg-4,
+  .form-grid > .fg-3 { grid-column: span 6; }
+}
+@media (--to-sm) {
+  .form-grid > .fg-6,
+  .form-grid > .fg-4,
+  .form-grid > .fg-3 { grid-column: span 12; }
+}
+
 /* Filter/Control Bar */
 .filter-bar {
   display: flex;

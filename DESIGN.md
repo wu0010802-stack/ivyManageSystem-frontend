@@ -49,13 +49,20 @@
 
 全站 `el-dialog` 桌面殼層已由 `main.css` 全域接管（2026-07-30 起）：flex column + **body 內捲**（標題與「取消／儲存」動作列常駐可見）、header/footer 全寬 hairline 分隔線、`--radius-lg` 圓角、`max-height` 自適應視窗。個別 dialog **不要**再自己寫 max-height / overflow / 分隔線。
 
-表單型 dialog 的內容規範（範例實作：`src/components/recruitment/RecruitmentRecordDialog.vue`）：
+表單型 dialog 的內容規範（範例實作：`src/components/recruitment/RecruitmentRecordDialog.vue`；分型盤點：`docs/analysis/2026-08-18-admin-create-form-inventory.md`）：
 
+- **Admin 桌面表單依 compact／standard／wide 分型，採語意 responsive grid；窄螢幕收回單欄**（2026-08-18 起，取代舊「預設單欄」規範）：
+  - **compact**（1–6 欄）：dialog `FORM_DIALOG_WIDTH.compact`（520px），預設單欄；語意成對且短的欄位可雙欄
+  - **standard**（7–14 欄）：`standardNarrow`（760px）／`standard`（860px），`label-position="top"` ＋ `.form-grid` 語意兩欄（`main.css` 的 12-col vocabulary，`.fg-12/.fg-8/.fg-6/.fg-4/.fg-3` 直接加在 `el-form-item` 上）。textarea、地址、上傳、alert、checkbox 群與複合控制項一律 `.fg-12` 跨滿列；**依語意配對，不做順序盲目左右交錯**
+  - **wide**（15+ 欄）：`wide`（min(1040px, 94vw)）、寬 drawer 或獨立頁，依工作流程選容器（modal 不是預設答案）；左側可加 section navigation，右側 12-col grid；核心區段常駐展開，只有真正低頻的進階資料收合——**不用收合掩蓋不合理的資訊架構**
+  - **bulk／repeating**（批次、名單、金額明細、題目）：table/grid/workspace，不硬塞直式表單
+  - 寬度常數統一 import `src/constants/formDialog.ts` 的 `FORM_DIALOG_WIDTH`，不逐檔手寫 px
 - `el-form label-position="top"`，控制項用**預設尺寸**（勿 `size="small"`，表單不缺這點空間）
-- 分段用 `FormSection`（`src/components/common/FormSection.vue`）：核心欄位 `collapsible=false` 常駐，進階欄位收合 + 驗證失敗自動展開（機制見 `2026-06-02-form-ux-single-column-collapsible-design.md`）
-- 預設單欄；**語意成對且短**的欄位（日期＋序號、生日＋電話、成對 switch）用 `el-row :gutter="16"` + `el-col :span="12"` 併一列——mobile 斷點由 `main.css` 自動收回單欄，元件內不用寫 RWD
+- 分段用 `FormSection`（`src/components/common/FormSection.vue`，可收合標頭已是真正的 `<button type="button">`）：核心欄位 `collapsible=false` 常駐，進階欄位收合 + 驗證失敗自動展開並捲至第一個錯誤欄位（機制見 `2026-06-02-form-ux-single-column-collapsible-design.md`）
+- `.form-grid` 之外的既有 `el-row :gutter="16"` + `el-col :span="12"` 成對雙欄仍有效——mobile 斷點由 `main.css` 自動收回單欄（`.form-grid` 為 `--to-md` 短欄先收兩欄、`--to-sm` 全收單欄），元件內不用寫 RWD；手機維持既有 95%／fullscreen 行為
 - 欄位格式範例用 `.form-hint`／`.form-hint--example`，必填圖例 `required-legend` 置於表單頂部
 - 標題沿用 `mode === 'add' ? '新增X' : '編輯X'` 三元慣例
+- **新增入口按鈕**：頁面主要新增動作放 `PageHeader` actions 右側，用 `AdminCreateButton`（primary＋EP Plus icon＋「新增{資料類型}」；權限判斷留在 caller）；建立流程 submit 文案「建立{資料類型}」（語意更準的動詞如「發佈」可保留），不可只寫「確認」；**新增動作不可用 `type="success"`**（success 只表成功狀態）；contextual 子資源新增用 default／plain 避免與主動作競爭；同畫面不得兩顆同強度 primary CTA
 
 出處 spec：`docs/superpowers/specs/2026-07-30-admin-form-dialog-shell-design.md`。
 
