@@ -8,7 +8,7 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
 import { BarChart, DoughnutChart } from '@/composables/useChartJs'
 import PageHeader from '@/components/common/PageHeader.vue'
-import EnrollmentHistoryPanel from './EnrollmentHistoryPanel.vue'
+import EnrollmentLedgerPanel from './EnrollmentLedgerPanel.vue'
 
 interface TermOption { school_year: number; semester: number; label: string }
 interface GradeClassStat { class_name: string; male: number; female: number; total: number }
@@ -453,8 +453,8 @@ const doughnutChartOptions = {
           </el-col>
         </el-row>
       </el-tab-pane>
-      <el-tab-pane label="人數變化" name="history" lazy>
-        <EnrollmentHistoryPanel />
+      <el-tab-pane label="異動帳" name="ledger" lazy>
+        <EnrollmentLedgerPanel />
       </el-tab-pane>
     </el-tabs>
   </div>
