@@ -65,7 +65,7 @@ import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   completeBusTrip, departBusStop, getActiveBusTrip, listPortalBusRoutes,
-  postBusPings, skipBusStop, startBusTrip, undoBusStop,
+  postBusPings, postBusPingsKeepalive, skipBusStop, startBusTrip, undoBusStop,
 } from '@/api/bus'
 import {
   createPingBuffer, DEFAULT_MAX_SKEW_MS, MAX_BATCH_POINTS, type PingPoint,
@@ -278,6 +278,12 @@ export function usePortalBusTrip() {
    * ——保住「最近的軌跡」，這是家長端會看的部分。
    */
   let outbox: PingPoint[] = []
+  /**
+   * `shipOutbox` 已交給 axios、但尚未 settle 的那一批。存在的唯一理由是 `pagehide`：
+   * 分頁進入卸載流程時飛在半空的 XHR 會被瀏覽器取消，而那批點已經從 `outbox` 移除了
+   * ——不記著它，最後一批就是靜默遺失。settle（成功或走完錯誤分支）後歸 null。
+   */
+  let inFlightBatch: PingPoint[] | null = null
 
   function setOutbox(points: PingPoint[]): void {
     outbox = points.length > MAX_BATCH_POINTS ? points.slice(-MAX_BATCH_POINTS) : points
@@ -339,6 +345,7 @@ export function usePortalBusTrip() {
     const batch = outbox
     setOutbox([])
     shipping = true
+    inFlightBatch = batch
     try {
       const res = await postBusPings(tripId, batch)
       syncClock(res as ApiHeaders)
@@ -356,6 +363,7 @@ export function usePortalBusTrip() {
         setOutbox([...batch, ...outbox])
       }
     } finally {
+      inFlightBatch = null
       shipping = false
     }
   }
@@ -379,6 +387,35 @@ export function usePortalBusTrip() {
    * 這兩種情境都不會觸發，而 `visibilitychange` 是行動瀏覽器唯一可靠的「即將離開」
    * 訊號——隨車老師的手機正是最常被系統回收的那一類。
    */
+  /**
+   * 頁面即將消失：`visibilitychange` 的最後一道補強。
+   *
+   * 為什麼 `visibilitychange` 還不夠：轉 hidden 時走的 `shipOutbox` 是一般 XHR，
+   * 若分頁緊接著真的被關掉／被系統回收，那個請求會連同分頁一起被取消——點就沒了。
+   * `pagehide` 是規範上「分頁正在離開」的最後一個同步時機，這裡改用 `keepalive`
+   * 送出，明確要求瀏覽器在頁面消失後仍把請求送完。
+   *
+   * 為什麼不用 `beforeunload`：行動瀏覽器（尤其 iOS Safari）對它的支援不可靠，
+   * 而 `pagehide` 在「關分頁／切走／進 bfcache」三種情境都會觸發，正是隨車老師
+   * 的手機最常遇到的那幾種。
+   *
+   * 送出的兩批：`outbox`（還沒送的）＋ `inFlightBatch`（正在飛、很可能會被取消的）。
+   * 兩者都清掉，因為 `pagehide` 未必真的關頁（bfcache 會復原），留著會在回前景後
+   * 被定期送出重複送一次。**寧可重複也不要遺失**：後端 `BusLocationPing` 是軌跡
+   * 明細，重複點無害；`last_lat/lng` 有單調性守衛，不會被舊批次往回拉。
+   */
+  function onPageHide(): void {
+    const tripId = trip.value?.id
+    if (!tripId) return
+    buffer.flushNow()
+    const points = [...(inFlightBatch ?? []), ...outbox]
+    if (points.length === 0) return
+    setOutbox([])
+    inFlightBatch = null
+    // 上限與後端 `PingBatchIn.points` 的 max_length 一致；合併兩批可能超過，取最近的。
+    postBusPingsKeepalive(tripId, points.slice(-MAX_BATCH_POINTS))
+  }
+
   function onVisibilityChange(): void {
     if (document.visibilityState === 'visible') {
       void acquireWakeLock()
@@ -436,6 +473,7 @@ export function usePortalBusTrip() {
     // 只要還在追蹤中就跑，與 GPS 是否真的有點無關。
     resyncTimer = setInterval(() => { void resyncActiveTrip() }, ACTIVE_TRIP_RESYNC_INTERVAL_MS)
     document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', onPageHide)
     void acquireWakeLock()
   }
 
@@ -450,6 +488,7 @@ export function usePortalBusTrip() {
     if (shipTimer !== null) { clearInterval(shipTimer); shipTimer = null }
     if (resyncTimer !== null) { clearInterval(resyncTimer); resyncTimer = null }
     document.removeEventListener('visibilitychange', onVisibilityChange)
+    window.removeEventListener('pagehide', onPageHide)
     trackingActive = false
     void wakeLockSentinel?.release?.()
     wakeLockSentinel = null

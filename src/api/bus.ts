@@ -28,7 +28,8 @@
  * 呼叫端**不得**把座標數字或地址寫進 console／Sentry／URL query／localStorage；
  * 座標僅供最佳化、ETA 與地圖微調起始位置使用。
  */
-import api from './index'
+import api, { API_BASE } from './index'
+import { tenantHeaders } from '@/utils/tenant'
 import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // --- Portal（隨車老師，Permission.BUS_TRIPS_OPERATE） ---
@@ -86,6 +87,45 @@ export const postBusPings = (
   tripId: number,
   points: Array<{ lat: number; lng: number; accuracy?: number; at: string }>,
 ) => api.post(`/portal/bus/trips/${tripId}/pings`, { points })
+
+/**
+ * 頁面即將消失時的最後一次上報（`pagehide`）。**不走 axios**：分頁一旦進入
+ * 卸載流程，一般 XHR／fetch 會被瀏覽器連同分頁一起取消，最後一批座標就此消失。
+ * `keepalive: true` 明確要求瀏覽器在頁面消失後仍把這個請求送完。
+ *
+ * 為什麼不用 `navigator.sendBeacon`：beacon 無法帶自訂 header，多租戶的
+ * `X-Tenant-Slug` 斷言通道會整個斷掉（後端 `TENANT_HEADER_MODE` 一致性檢查會擋）。
+ *
+ * 契約與限制：
+ * - **同步回傳、不等結果**。頁面正在關閉，沒有可以 await 的未來；呼叫端不得依賴回傳值
+ *   判斷是否送達（真的送不出去也無從補救，這本來就是盡力而為的最後一搏）。
+ * - `keepalive` 的 body 上限是 64KB（規範值），30 點的批次約 3KB，遠低於上限。
+ * - CSRF 走後端 `CSRFOriginCheckMiddleware` 的 Origin 檢查，fetch 會自動帶正確
+ *   `Origin`，因此不需要額外的 token header。
+ * - cookie 用 `credentials: 'include'`，對齊 axios 實例的 `withCredentials`。
+ *
+ * 回傳 `false` 代表這個環境根本發不出去（沒有 fetch，或 fetch 同步就丟例外）；
+ * 回傳 `true` 只代表「已交給瀏覽器」，不保證後端收到。
+ */
+export function postBusPingsKeepalive(
+  tripId: number,
+  points: Array<{ lat: number; lng: number; accuracy?: number; at: string }>,
+): boolean {
+  if (typeof fetch !== 'function' || points.length === 0) return false
+  try {
+    void fetch(`${API_BASE}/portal/bus/trips/${tripId}/pings`, {
+      method: 'POST',
+      keepalive: true,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...tenantHeaders() },
+      body: JSON.stringify({ points }),
+      // 頁面正在消失，錯誤沒有任何可行動的後續；吞掉以免變成未處理的 rejection。
+    }).catch(() => {})
+    return true
+  } catch {
+    return false
+  }
+}
 
 export const departBusStop = (tripId: number, stopId: number) =>
   api.post(`/portal/bus/trips/${tripId}/stops/${stopId}/depart`)

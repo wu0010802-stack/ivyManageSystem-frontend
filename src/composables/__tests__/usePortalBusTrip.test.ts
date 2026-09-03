@@ -5,6 +5,7 @@ vi.mock('@/api/bus', () => ({
   startBusTrip: vi.fn(),
   getActiveBusTrip: vi.fn(),
   postBusPings: vi.fn(),
+  postBusPingsKeepalive: vi.fn(() => true),
   departBusStop: vi.fn(),
   skipBusStop: vi.fn(),
   undoBusStop: vi.fn(),
@@ -19,8 +20,8 @@ vi.mock('element-plus', () => ({
 
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  startBusTrip, getActiveBusTrip, postBusPings, departBusStop, skipBusStop,
-  undoBusStop, completeBusTrip, listPortalBusRoutes,
+  startBusTrip, getActiveBusTrip, postBusPings, postBusPingsKeepalive, departBusStop,
+  skipBusStop, undoBusStop, completeBusTrip, listPortalBusRoutes,
 } from '@/api/bus'
 import {
   usePortalBusTrip, PING_FLUSH_INTERVAL_MS, SUSPECT_TIMESTAMP_STREAK,
@@ -689,6 +690,61 @@ describe('usePortalBusTrip — GPS 上報', () => {
     }
 
     expect(sentPoints().map((p) => p.at)).toEqual(['2026-07-29T09:00:00.000Z'])
+  })
+
+  it('頁面即將消失（pagehide）時用 keepalive 送出待送的點', async () => {
+    await bootWithActiveTrip()
+    emitPosition(LOCAL_NOW_MS)
+
+    window.dispatchEvent(new Event('pagehide'))
+    await flushPromises()
+
+    expect(postBusPingsKeepalive).toHaveBeenCalledTimes(1)
+    const [tripId, points] = vi.mocked(postBusPingsKeepalive).mock.calls[0]
+    expect(tripId).toBe(7)
+    expect((points as Array<{ at: string }>).map((p) => p.at)).toEqual(['2026-07-29T09:00:00.000Z'])
+  })
+
+  it('pagehide 送出後 outbox 已清空，回前景不會把同一批再送一次', async () => {
+    await bootWithActiveTrip()
+    emitPosition(LOCAL_NOW_MS)
+
+    window.dispatchEvent(new Event('pagehide'))
+    await flushPromises()
+    // 頁面其實沒被關掉（行動瀏覽器的 pagehide 可能只是進 bfcache）：後續的定期送出
+    // 不得把已交給 keepalive 的那批再送一次，否則軌跡會出現重複點。
+    await advanceToFlush()
+
+    expect(postBusPingsKeepalive).toHaveBeenCalledTimes(1)
+    expect(sentPoints()).toEqual([])
+  })
+
+  it('pagehide 時把「還在飛的那一批」一併交給 keepalive（頁面關閉會取消 XHR）', async () => {
+    await bootWithActiveTrip()
+    emitPosition(LOCAL_NOW_MS)
+    // 讓 shipOutbox 送出但永不 settle：模擬請求正在飛的當下頁面被關掉。
+    vi.mocked(postBusPings).mockImplementation((() => new Promise(() => {})) as never)
+    await advanceToFlush()
+
+    window.dispatchEvent(new Event('pagehide'))
+    await flushPromises()
+
+    expect(postBusPingsKeepalive).toHaveBeenCalledTimes(1)
+    const [, points] = vi.mocked(postBusPingsKeepalive).mock.calls[0]
+    expect((points as Array<{ at: string }>).map((p) => p.at)).toEqual(['2026-07-29T09:00:00.000Z'])
+  })
+
+  it('停止追蹤後 pagehide 不再送出（監聽器已移除）', async () => {
+    const bus = await bootWithActiveTrip()
+    emitPosition(LOCAL_NOW_MS)
+    bus.teardown()
+    await flushPromises()
+    vi.mocked(postBusPingsKeepalive).mockClear()
+
+    window.dispatchEvent(new Event('pagehide'))
+    await flushPromises()
+
+    expect(postBusPingsKeepalive).not.toHaveBeenCalled()
   })
 
   it('停止追蹤後轉為隱藏不再送出（監聽器已移除）', async () => {
