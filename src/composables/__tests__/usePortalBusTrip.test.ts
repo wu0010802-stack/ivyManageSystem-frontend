@@ -25,7 +25,7 @@ import {
 } from '@/api/bus'
 import {
   usePortalBusTrip, PING_FLUSH_INTERVAL_MS, SUSPECT_TIMESTAMP_STREAK,
-  ACTIVE_TRIP_RESYNC_INTERVAL_MS,
+  ACTIVE_TRIP_RESYNC_INTERVAL_MS, DEPART_UNDO_WINDOW_MS,
 } from '@/composables/usePortalBusTrip'
 
 // ---------------------------------------------------------------------------
@@ -150,6 +150,15 @@ async function advanceToFlush(times = 1) {
     await vi.advanceTimersByTimeAsync(PING_FLUSH_INTERVAL_MS)
     await flushPromises()
   }
+}
+
+/**
+ * 推進「離站」的可取消緩衝期，讓它真的送出。
+ * `departStop()` 自 DEPART_UNDO_WINDOW_MS 起只是**排程**，不再立即打 API。
+ */
+async function settleDepart() {
+  await vi.advanceTimersByTimeAsync(DEPART_UNDO_WINDOW_MS)
+  await flushPromises()
 }
 
 /** 送出的所有點（依批次順序攤平）。 */
@@ -883,6 +892,7 @@ describe('usePortalBusTrip — 裝置不支援定位時的背景計時器', () =
 
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
       expect(bus.pendingStopActionCount.value).toBe(1)
 
@@ -1023,6 +1033,7 @@ describe('usePortalBusTrip — 上報失敗與重送', () => {
     // 站點操作的回應沒有 Date header
     vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }, '') as never)
     await bus.departStop({ stop_id: 11 } as never)
+    await settleDepart()
     await flushPromises()
 
     emitPosition(LOCAL_NOW_MS)
@@ -1186,6 +1197,7 @@ describe('usePortalBusTrip — 站點操作', () => {
     }) as never)
 
     await bus.departStop(bus.stops.value[0])
+    await settleDepart()
 
     expect(departBusStop).toHaveBeenCalledWith(7, 11)
     expect(bus.stops.value.map((s) => s.status)).toEqual(['departed'])
@@ -1212,6 +1224,7 @@ describe('usePortalBusTrip — 站點操作', () => {
     }) as never)
 
     await bus.departStop({ stop_id: 11 } as never)
+    await settleDepart()
     await flushPromises()
 
     expect(ElMessage.error).toHaveBeenCalledWith('此站已處理')
@@ -1229,24 +1242,31 @@ describe('usePortalBusTrip — 站點操作', () => {
     const before = vi.mocked(getActiveBusTrip).mock.calls.length
 
     await bus.departStop({ stop_id: 11 } as never)
+    await settleDepart()
     await flushPromises()
 
     expect(getActiveBusTrip).toHaveBeenCalledTimes(before)
     expect(ElMessage.error).toHaveBeenCalled()
   })
 
-  it('操作中的站點 id 對外可見（UI 可鎖按鈕防重複點擊）', async () => {
+  it('送出中的站點 id 對外可見（UI 可鎖按鈕防重複點擊）', async () => {
     const bus = await bootWithActiveTrip()
     let resolveDepart: (v: unknown) => void = () => {}
     vi.mocked(departBusStop).mockReturnValue(new Promise((r) => { resolveDepart = r }) as never)
 
-    const pending = bus.departStop({ stop_id: 11 } as never)
+    await bus.departStop({ stop_id: 11 } as never)
+    // 緩衝期內尚未送出，整列不該被鎖住——司機還要能按取消
+    expect(bus.actingStopId.value).toBeNull()
+
+    // 倒數到期真的送出後才鎖
+    await vi.advanceTimersByTimeAsync(DEPART_UNDO_WINDOW_MS)
     expect(bus.actingStopId.value).toBe(11)
-    // 進行中不接受第二個站點操作（司機在晃動的車上很容易連點）
+    // 送出中不接受第二個站點操作（司機在晃動的車上很容易連點）
     await bus.skipStop({ stop_id: 12 } as never)
     expect(skipBusStop).not.toHaveBeenCalled()
+
     resolveDepart(resp({ stops: [] }))
-    await pending
+    await flushPromises()
     expect(bus.actingStopId.value).toBeNull()
   })
 
@@ -1259,6 +1279,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
 
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
 
       expect(bus.pendingStopActionCount.value).toBe(1)
@@ -1269,6 +1290,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(503))
 
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
 
       expect(bus.pendingStopActionCount.value).toBe(1)
@@ -1278,6 +1300,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       const bus = await bootWithActiveTrip()
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
       expect(bus.pendingStopActionCount.value).toBe(1)
 
@@ -1296,6 +1319,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       const bus = await bootWithActiveTrip()
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
       expect(bus.pendingStopActionCount.value).toBe(1)
 
@@ -1321,6 +1345,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       const bus = await bootWithActiveTrip()
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
 
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(409, '此站已處理'))
@@ -1341,6 +1366,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(403, '無權限操作此站'))
 
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
 
       expect(bus.pendingStopActionCount.value).toBe(0)
@@ -1363,8 +1389,12 @@ describe('usePortalBusTrip — 站點操作', () => {
 
     it('佇列裡排著別站別 kind 的動作時，某動作成功不得連帶丟掉同站不同 kind 的待重送', async () => {
       const bus = await bootWithActiveTrip()
-      // 同一站先前的 skip 因網路錯誤進了佇列，仍待重送
-      vi.mocked(skipBusStop).mockRejectedValueOnce(axiosError(undefined))
+      // 同一站先前的 skip 因網路錯誤進了佇列，仍待重送。
+      // ⚠ 持續 reject（不是 Once）：離站緩衝期（DEPART_UNDO_WINDOW_MS）與 ping 送出
+      // 週期（PING_FLUSH_INTERVAL_MS）同為 5 秒，推進緩衝期必然順帶跑一輪重送——
+      // 用 Once 的話那一輪會讓 skip「意外成功」而清空佇列，斷言就測不到原本要測的
+      // dequeue 誤刪。持續失敗＝網路尚未恢復，才是這個測試設定的情境。
+      vi.mocked(skipBusStop).mockRejectedValue(axiosError(undefined))
       await bus.skipStop({ stop_id: 11 } as never)
       await flushPromises()
       expect(bus.pendingStopActionCount.value).toBe(1)
@@ -1372,6 +1402,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       // 司機接著對同一站發起一次全新的 depart 動作（非重送、非同一筆），且這次成功
       vi.mocked(departBusStop).mockResolvedValueOnce(resp({ stops: [] }) as never)
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
 
       // depart 成功只該清掉 depart 自己（佇列裡根本沒有它），佇列裡待重送的 skip
@@ -1383,6 +1414,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       const bus = await bootWithActiveTrip()
       vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
       await bus.departStop({ stop_id: 11 } as never)
+      await settleDepart()
       await flushPromises()
       expect(bus.pendingStopActionCount.value).toBe(1)
 
@@ -1402,6 +1434,7 @@ describe('usePortalBusTrip — 站點操作', () => {
       }) as never)
 
       await bus.departStop(bus.stops.value[0])
+      await settleDepart()
       await flushPromises()
 
       expect(ElMessage.error).not.toHaveBeenCalled()
@@ -1656,6 +1689,7 @@ describe('usePortalBusTrip — excused 是當日不搭的單一事實來源（FE
     const excused = bus.stops.value[0]
 
     await bus.departStop(excused as never)
+    await settleDepart()
     await bus.skipStop(excused as never)
     await bus.undoStop(excused as never)
     await flushPromises()
@@ -1672,6 +1706,7 @@ describe('usePortalBusTrip — excused 是當日不搭的單一事實來源（FE
     const staleObject = { stop_id: 11, status: 'pending' }
 
     await bus.departStop(staleObject as never)
+    await settleDepart()
     await flushPromises()
 
     expect(departBusStop).not.toHaveBeenCalled()
@@ -1682,6 +1717,7 @@ describe('usePortalBusTrip — excused 是當日不搭的單一事實來源（FE
     vi.mocked(departBusStop).mockResolvedValue(resp(excusedPayload()) as never)
 
     await bus.departStop(bus.stops.value[1] as never)
+    await settleDepart()
     await flushPromises()
 
     expect(departBusStop).toHaveBeenCalledWith(7, 12)
@@ -1703,6 +1739,7 @@ describe('usePortalBusTrip — excused 是當日不搭的單一事實來源（FE
     vi.mocked(departBusStop).mockResolvedValue(resp({ trip: null, stops: [] }) as never)
 
     await bus.departStop(bus.stops.value[0] as never)
+    await settleDepart()
     await flushPromises()
 
     expect(departBusStop).toHaveBeenCalledWith(7, 11)
@@ -1767,6 +1804,7 @@ describe('usePortalBusTrip — review findings 回歸', () => {
     const bus = await bootWithActiveTrip()
     vi.mocked(departBusStop).mockRejectedValueOnce(axiosError(undefined))
     await bus.departStop({ stop_id: 11 } as never)
+    await settleDepart()
     await flushPromises()
     expect(bus.pendingStopActionCount.value).toBe(1)
 
@@ -1784,5 +1822,305 @@ describe('usePortalBusTrip — review findings 回歸', () => {
     expect(departBusStop).not.toHaveBeenCalled()
     // 佇列要清掉，否則會永遠卡著一筆重送不掉的動作
     expect(bus.pendingStopActionCount.value).toBe(0)
+  })
+})
+
+/**
+ * 離站的可取消緩衝期（誤觸防線）。
+ *
+ * 為什麼是緩衝期而不是確認對話框：後端 `depart_stop` 一收到就對下一站監護人發
+ * 「快到提醒」並寫 `notified_at` 擋重發——事後撤銷只還原站點狀態，推播收不回、
+ * 真正到站也不會再提醒一次。而離站是每站都按的高頻動作，確認框只會換來反射性
+ * 點確認。緩衝期讓「取消」等於那支請求從未發生。
+ */
+describe('usePortalBusTrip — 離站的可取消緩衝期', () => {
+  it('按下離站不立即打 API，只留下待送狀態', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+
+    await bus.departStop({ stop_id: 11 } as never)
+
+    expect(departBusStop).not.toHaveBeenCalled()
+    expect(bus.pendingDepart.value?.stopId).toBe(11)
+    // 站點的權威狀態不被樂觀改寫（resync 會整份覆寫 stops，寫進去會被抹掉）
+    expect(bus.stops.value.find((s) => s.stop_id === 11)?.status).toBe('pending')
+  })
+
+  it('緩衝期倒數歸零後才真的送出', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({
+      stops: [{ stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' }],
+    }) as never)
+
+    await bus.departStop({ stop_id: 11 } as never)
+    await vi.advanceTimersByTimeAsync(DEPART_UNDO_WINDOW_MS - 100)
+    expect(departBusStop).not.toHaveBeenCalled()
+
+    await settleDepart()
+
+    expect(departBusStop).toHaveBeenCalledWith(7, 11)
+    expect(bus.pendingDepart.value).toBeNull()
+    expect(bus.stops.value.map((s) => s.status)).toEqual(['departed'])
+  })
+
+  it('倒數期間剩餘毫秒數對外遞減（UI 畫倒數用）', async () => {
+    const bus = await bootWithActiveTrip()
+    await bus.departStop({ stop_id: 11 } as never)
+    expect(bus.pendingDepart.value?.remainingMs).toBe(DEPART_UNDO_WINDOW_MS)
+
+    await vi.advanceTimersByTimeAsync(2000)
+
+    expect(bus.pendingDepart.value?.remainingMs).toBe(DEPART_UNDO_WINDOW_MS - 2000)
+  })
+
+  it('取消後完全沒打過 API——推播從未送出，這是本機制的全部意義', async () => {
+    const bus = await bootWithActiveTrip()
+    await bus.departStop({ stop_id: 11 } as never)
+
+    bus.cancelPendingDepart()
+    await settleDepart()
+
+    expect(departBusStop).not.toHaveBeenCalled()
+    expect(bus.pendingDepart.value).toBeNull()
+    expect(bus.stops.value.find((s) => s.stop_id === 11)?.status).toBe('pending')
+  })
+
+  it('取消後計時器不留殘骸（不會在之後某刻突然送出）', async () => {
+    const bus = await bootWithActiveTrip()
+    await bus.departStop({ stop_id: 11 } as never)
+    bus.cancelPendingDepart()
+
+    await vi.advanceTimersByTimeAsync(DEPART_UNDO_WINDOW_MS * 10)
+    await flushPromises()
+
+    expect(departBusStop).not.toHaveBeenCalled()
+  })
+
+  it('同一站重複點擊不重新計時（顛簸下的連點不該讓它永遠送不出去）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+
+    await bus.departStop({ stop_id: 11 } as never)
+    await vi.advanceTimersByTimeAsync(3000)
+    await bus.departStop({ stop_id: 11 } as never)
+    // 若連點會重新計時，再推 2 秒不會送出
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+
+    expect(departBusStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('按下一站的離站會把前一筆立刻送出（兩個各自成立的意圖，後者不吃掉前者）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+
+    await bus.departStop({ stop_id: 11 } as never)
+    await bus.departStop({ stop_id: 12 } as never)
+
+    expect(departBusStop).toHaveBeenCalledWith(7, 11)
+    expect(departBusStop).toHaveBeenCalledTimes(1)
+    expect(bus.pendingDepart.value?.stopId).toBe(12)
+
+    await settleDepart()
+    expect(departBusStop).toHaveBeenCalledWith(7, 12)
+  })
+
+  it('離開頁面（teardown）把待送的離站送出，不是丟掉', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+    await bus.departStop({ stop_id: 11 } as never)
+
+    bus.teardown()
+    await flushPromises()
+
+    expect(departBusStop).toHaveBeenCalledWith(7, 11)
+  })
+
+  it('結束班次前先把待送的離站送出（班次結束後那支離站永遠送不出去）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+    vi.mocked(completeBusTrip).mockResolvedValue(resp(null) as never)
+    await bus.departStop({ stop_id: 11 } as never)
+
+    await bus.complete()
+
+    expect(departBusStop).toHaveBeenCalledWith(7, 11)
+    const departOrder = vi.mocked(departBusStop).mock.invocationCallOrder[0]
+    const completeOrder = vi.mocked(completeBusTrip).mock.invocationCallOrder[0]
+    expect(departOrder).toBeLessThan(completeOrder)
+  })
+
+  /**
+   * 送出前的最終核對必須在 `flushPendingDepart` 內，不能只掛在 `applyActive`：
+   * 權威 stops 何時被覆寫不由緩衝期決定（60 秒一輪的 resync 遠慢於 5 秒緩衝，
+   * 期間內根本跑不到），唯一保證會在送出前執行的時點就是送出前本身。
+   */
+  it('緩衝期內該站已被別台裝置處理掉時不送出（送出只會撞 409）', async () => {
+    const bus = await bootWithActiveTrip()
+    await bus.departStop({ stop_id: 11 } as never)
+
+    // 期間權威狀態更新：11 站已被另一位司機按過離站
+    bus.stops.value = [
+      { stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' },
+    ] as never
+    await settleDepart()
+
+    expect(departBusStop).not.toHaveBeenCalled()
+    expect(bus.pendingDepart.value).toBeNull()
+    expect(ElMessage.info).toHaveBeenCalledWith('此站狀態已由其他裝置更新')
+  })
+
+  it('緩衝期內該站轉 excused（家長剛申報不搭）時不送出', async () => {
+    const bus = await bootWithActiveTrip()
+    await bus.departStop({ stop_id: 11 } as never)
+
+    bus.stops.value = [{
+      stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'excused',
+      excuse_reason: 'parent',
+    }] as never
+    await settleDepart()
+
+    expect(departBusStop).not.toHaveBeenCalled()
+  })
+
+  it('resync 發現該站已被處理時當場收掉待送（司機不必等到緩衝期結束才知道）', async () => {
+    const bus = await bootWithActiveTrip()
+    await bus.departStop({ stop_id: 11 } as never)
+
+    // 直接驗證 applyActive 這條路徑上的守衛；真實時間軸上 resync（60 秒）遠慢於
+    // 緩衝期（5 秒），這是縱深防禦而非主要防線。
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({
+      trip: { id: 7, route_id: 3, direction: 'morning', status: 'in_progress' },
+      stops: [{ stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' }],
+    }) as never)
+    await bus.init()
+    await flushPromises()
+
+    expect(bus.pendingDepart.value).toBeNull()
+    expect(ElMessage.info).toHaveBeenCalledWith('此站狀態已由其他裝置更新')
+  })
+
+  it('班次已消失時不送出待送離站（該班次的端點只會回 404）', async () => {
+    const bus = await bootWithActiveTrip()
+    await bus.departStop({ stop_id: 11 } as never)
+
+    // 班次消失（排程器逾時關班／被另一台裝置結束）
+    vi.mocked(getActiveBusTrip).mockResolvedValue(resp({ trip: null }) as never)
+    await vi.advanceTimersByTimeAsync(ACTIVE_TRIP_RESYNC_INTERVAL_MS)
+    await flushPromises()
+
+    expect(bus.trip.value).toBeNull()
+    expect(bus.pendingDepart.value).toBeNull()
+  })
+
+  it('excused 站按離站不排程（縱深防禦，UI 本來就不渲染按鈕）', async () => {
+    const bus = await bootWithActiveTrip()
+    bus.stops.value = [{
+      stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'excused',
+      excuse_reason: 'parent',
+    }] as never
+
+    await bus.departStop({ stop_id: 11 } as never)
+
+    expect(bus.pendingDepart.value).toBeNull()
+    await settleDepart()
+    expect(departBusStop).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 跳過另加確認框：低頻（一趟頂多一兩次）但後果最重——這孩子今天沒被接到，
+ * 且同樣觸發下一站的快到提醒。
+ */
+describe('usePortalBusTrip — 跳過的確認框', () => {
+  it('確認後才打 API，訊息帶學生姓名', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(skipBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+
+    await bus.skipStop({ stop_id: 12 } as never)
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('小華'), '跳過這一站', expect.anything(),
+    )
+    expect(skipBusStop).toHaveBeenCalledWith(7, 12)
+  })
+
+  it('取消確認框就不送出', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+
+    await bus.skipStop({ stop_id: 12 } as never)
+
+    expect(skipBusStop).not.toHaveBeenCalled()
+  })
+
+  it('取消確認框不影響待送中的離站（它繼續倒數）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+    await bus.departStop({ stop_id: 11 } as never)
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce(new Error('cancel'))
+
+    await bus.skipStop({ stop_id: 12 } as never)
+
+    expect(bus.pendingDepart.value?.stopId).toBe(11)
+    await settleDepart()
+    expect(departBusStop).toHaveBeenCalledWith(7, 11)
+  })
+
+  it('確認跳過前先把待送的離站送出', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(departBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+    vi.mocked(skipBusStop).mockResolvedValue(resp({ stops: [] }) as never)
+    await bus.departStop({ stop_id: 11 } as never)
+
+    await bus.skipStop({ stop_id: 12 } as never)
+
+    expect(vi.mocked(departBusStop).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(skipBusStop).mock.invocationCallOrder[0])
+  })
+})
+
+/** 結束班次的確認文案要講出「還有幾站沒處理」——誤觸這顆紅按鈕的成本最高。 */
+describe('usePortalBusTrip — 結束班次的確認文案', () => {
+  it('尚有未處理站點時，文案帶出站數', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(completeBusTrip).mockResolvedValue(resp(null) as never)
+
+    await bus.complete()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('還有 2 站尚未處理'), '結束班次', expect.anything(),
+    )
+  })
+
+  it('全部處理完畢時文案講的是另一件事', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(completeBusTrip).mockResolvedValue(resp(null) as never)
+    bus.stops.value = [
+      { stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' },
+      { stop_id: 12, student_id: 102, student_name: '小華', seq: 2, status: 'skipped' },
+    ] as never
+
+    await bus.complete()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('所有站點都已處理完畢'), '結束班次', expect.anything(),
+    )
+  })
+
+  it('excused 站不算「尚未處理」（司機本來就不必對它做任何事）', async () => {
+    const bus = await bootWithActiveTrip()
+    vi.mocked(completeBusTrip).mockResolvedValue(resp(null) as never)
+    bus.stops.value = [
+      { stop_id: 11, student_id: 101, student_name: '小明', seq: 1, status: 'departed' },
+      { stop_id: 12, student_id: 102, student_name: '小華', seq: 2, status: 'excused',
+        excuse_reason: 'leave' },
+    ] as never
+
+    await bus.complete()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('所有站點都已處理完畢'), '結束班次', expect.anything(),
+    )
   })
 })

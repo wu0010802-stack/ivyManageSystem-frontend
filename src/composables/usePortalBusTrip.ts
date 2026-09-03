@@ -96,6 +96,25 @@ export const SUSPECT_TIMESTAMP_STREAK = 3
  */
 export const ACTIVE_TRIP_RESYNC_INTERVAL_MS = 60_000
 
+/**
+ * 「離站」按下後真正送出前的可取消緩衝期（毫秒）。
+ *
+ * 離站是**不可逆**的：後端 `depart_stop` 一收到就對下一站的監護人發「快到提醒」
+ * 並寫 `notified_at` 擋重發——事後按「撤銷」只還原站點狀態，**推播收不回，真正到
+ * 站時也不會再提醒一次**。而它同時是**高頻**操作（每站一次），套確認對話框只會
+ * 換來行車中的反射性點確認（confirmation fatigue），防呆效果隨次數遞減。
+ *
+ * 因此改用可取消的緩衝：畫面立刻反映「已離站」（司機的認知不被打斷），API 延後送出，
+ * 期間按取消就當作沒發生過——**推播根本沒送出去**，不是送出後再補救。
+ *
+ * 訂 5 秒：足夠察覺按錯（誤觸多在按下當下就知道），又不至於讓連續兩站的操作卡住
+ * ——按下一站的離站會把前一筆立刻送出（見 `scheduleDepart`），不必等它倒數完。
+ */
+export const DEPART_UNDO_WINDOW_MS = 5000
+
+/** 倒數顯示的更新間隔；只影響畫面上的秒數，與送出時點無關。 */
+export const DEPART_TICK_MS = 250
+
 /** 方向的中文標籤；後端 `direction` 只有這兩個值（`ck_bus_routes_direction` 限定）。 */
 export const DIRECTION_LABELS: Record<string, string> = {
   morning: '早上接學生',
@@ -210,6 +229,15 @@ export function usePortalBusTrip() {
   const starting = ref(false)
   const completing = ref(false)
   const actingStopId = ref<number | null>(null)
+  /**
+   * 已按下離站、但還在緩衝期內尚未送出的那一站（同時最多一筆，見 `scheduleDepart`）。
+   *
+   * **刻意不去改 `stops` 內該站的 status**：`stops` 是後端權威值，60 秒一輪的
+   * `resyncActiveTrip` 與任何站點操作的回應都會整份覆寫它——把樂觀狀態寫進去，
+   * 下一輪 resync 就會把它抹掉，畫面在「已離站」與「未離站」之間跳。用獨立旗標，
+   * 權威資料與樂觀顯示各自為政，UI 疊加呈現。
+   */
+  const pendingDepart = ref<{ stopId: number; remainingMs: number } | null>(null)
   /** 定位權限被拒／取不到位置：家長端只看得到站點進度，UI 要明講。 */
   const gpsActive = ref(false)
   const gpsSupported = ref(true)
@@ -500,6 +528,9 @@ export function usePortalBusTrip() {
     setOutbox([])
     // 班次已消失，佇列裡待重送的站點動作已無意義（該班次的端點只會回 404/409）。
     stopRetryQueue.value = []
+    // 同理待送的離站：連同計時器一起收掉，否則緩衝期到期時會對一個已不存在的班次
+    // 送出離站，換來一則司機無從理解的錯誤。
+    discardPendingDepart()
     trip.value = null
     stops.value = []
     ElMessage.warning('班次已結束，已停止位置上報')
@@ -512,6 +543,9 @@ export function usePortalBusTrip() {
       trip.value = data.trip
       stops.value = data.stops ?? []
       beginTracking()
+      // 權威狀態進來後才核對：待送的那一站若已被別台裝置處理掉（輪班換手是官方支援
+      // 情境），這筆離站送出去只會撞 409，先收掉並讓司機知道畫面為何自己變了。
+      dropPendingDepartIfSettled()
     } else if (trip.value) {
       handleTripGone()
     }
@@ -847,18 +881,164 @@ export function usePortalBusTrip() {
     }
   }
 
-  const departStop = (stop: { stop_id: number }) => runStopAction('depart', stop, '離站失敗')
-  const skipStop = (stop: { stop_id: number }) => runStopAction('skip', stop, '跳過失敗')
-  const undoStop = (stop: { stop_id: number }) => runStopAction('undo', stop, '撤銷失敗')
+  // ── 離站：可取消的緩衝期 ──────────────────────────────────────────────────
+
+  let departTimer: ReturnType<typeof setTimeout> | null = null
+  let departTicker: ReturnType<typeof setInterval> | null = null
+
+  function clearDepartTimers(): void {
+    if (departTimer !== null) { clearTimeout(departTimer); departTimer = null }
+    if (departTicker !== null) { clearInterval(departTicker); departTicker = null }
+  }
+
+  /** 靜默丟棄待送的離站（班次已消失時用；此時任何提示對司機都沒有可行動的下一步）。 */
+  function discardPendingDepart(): void {
+    clearDepartTimers()
+    pendingDepart.value = null
+  }
+
+  /**
+   * 待送的那一站若在緩衝期內被**別台裝置**處理掉（輪班換手是官方支援情境），
+   * 送出去只會撞 409。先收掉，並明講一次畫面為何自己變了——靜默收掉會讓司機
+   * 以為自己剛才那下沒按到而重按。
+   */
+  function dropPendingDepartIfSettled(): void {
+    const p = pendingDepart.value
+    if (!p) return
+    const stop = stops.value.find((x) => x.stop_id === p.stopId)
+    if (stop && stop.status === 'pending') return
+    discardPendingDepart()
+    ElMessage.info('此站狀態已由其他裝置更新')
+  }
+
+  /**
+   * 取消待送的離站。**什麼都沒送出去過**——不是送出後再打一支撤銷 API，而是那支
+   * 離站請求從未發生，所以家長端的「快到提醒」也從未送出。這正是本機制存在的理由
+   * （`DEPART_UNDO_WINDOW_MS` 的 docstring 有完整緣由）。
+   */
+  function cancelPendingDepart(): void {
+    if (!pendingDepart.value) return
+    clearDepartTimers()
+    pendingDepart.value = null
+    ElMessage.info('已取消離站')
+  }
+
+  /**
+   * 把待送的離站立刻送出（緩衝期提前結束）。無待送時是 no-op。
+   *
+   * 呼叫點涵蓋所有「緩衝期不該再繼續等」的時機：倒數到期、司機按下一站、跳過／撤銷
+   * 其他站、結束班次、離開頁面。漏掉任何一個都會讓司機明明按過離站、家長端卻永遠
+   * 停在上一站。
+   */
+  async function flushPendingDepart(): Promise<void> {
+    const p = pendingDepart.value
+    if (!p) return
+    clearDepartTimers()
+    pendingDepart.value = null
+    // 送出前對權威 `stops` 做最終核對：緩衝期內該站可能已被**別台裝置**處理掉
+    // （輪班換手是官方支援情境），或家長剛申報今天不搭而轉 excused。送出去只會撞
+    // 409／污染一筆不該有的離站。
+    //
+    // ⚠ 這道核對必須在**這裡**，不能只放在 `applyActive`：權威 stops 何時被覆寫
+    // 不由緩衝期決定（60 秒一輪的 resync 遠慢於 5 秒緩衝，多數情況下根本不會在
+    // 期間內跑到），唯一保證會在送出前執行的時點就是送出前本身。
+    const stop = stops.value.find((x) => x.stop_id === p.stopId)
+    if (stop && stop.status !== 'pending') {
+      ElMessage.info('此站狀態已由其他裝置更新')
+      return
+    }
+    await runStopAction('depart', { stop_id: p.stopId }, '離站失敗')
+  }
+
+  /**
+   * 按下離站：畫面立刻反映、API 延後 `DEPART_UNDO_WINDOW_MS` 才送。
+   *
+   * 同時只保留一筆待送：司機按下一站的離站時，前一筆**立刻送出**而不是被取消
+   * ——那是兩個各自成立的意圖，後者不該把前者吃掉。同一站重複點擊則忽略（行車
+   * 顛簸下的連點不該把倒數重新計時，那會讓「5 秒後送出」變成永遠送不出去）。
+   */
+  async function departStop(stop: { stop_id: number }): Promise<void> {
+    if (!trip.value || actingStopId.value !== null) return
+    if (isExcused(stop.stop_id)) return
+    const current = pendingDepart.value
+    if (current) {
+      if (current.stopId === stop.stop_id) return
+      await flushPendingDepart()
+      // flush 期間班次可能已消失（409/404 走 handleTripGone）：再確認一次才排程，
+      // 否則會替一個已經不存在的班次起一顆永遠送不出去的計時器。
+      if (!trip.value) return
+    }
+    pendingDepart.value = { stopId: stop.stop_id, remainingMs: DEPART_UNDO_WINDOW_MS }
+    // 倒數以絕對時點計算，不做「每 tick 減 250ms」的累加——分頁被凍結（背景分頁的
+    // setInterval 會被節流）時累加會嚴重落後，畫面倒數與實際送出時點對不上。
+    const deadline = Date.now() + DEPART_UNDO_WINDOW_MS
+    departTicker = setInterval(() => {
+      const p = pendingDepart.value
+      if (!p) return
+      pendingDepart.value = { stopId: p.stopId, remainingMs: Math.max(0, deadline - Date.now()) }
+    }, DEPART_TICK_MS)
+    departTimer = setTimeout(() => { void flushPendingDepart() }, DEPART_UNDO_WINDOW_MS)
+  }
+
+  /**
+   * 跳過：**額外**帶一道確認框。與離站的緩衝期不同層級是刻意的——跳過是低頻動作
+   * （一趟車頂多一兩次），多一次點擊的成本低；而它的後果最重：這孩子今天沒被接到，
+   * 家長端會看到「已跳過」，且同樣觸發下一站的快到提醒。
+   *
+   * 姓名只進**訊息本文**（文字節點），不進 title——`title` 是 Sentry
+   * `htmlTreeAsString()` 會逐字抄走的四個屬性之一（理由見 View 的 script 註解）。
+   */
+  async function skipStop(stop: { stop_id: number }): Promise<void> {
+    if (!trip.value || actingStopId.value !== null) return
+    if (isExcused(stop.stop_id)) return
+    const name = stops.value.find((s) => s.stop_id === stop.stop_id)?.student_name
+    try {
+      await ElMessageBox.confirm(
+        name
+          ? `確定「${name}」今天不上車嗎？家長會收到通知，送出後無法收回。`
+          : '確定跳過這一站嗎？家長會收到通知，送出後無法收回。',
+        '跳過這一站',
+        { type: 'warning', confirmButtonText: '確定跳過', cancelButtonText: '再看看' },
+      )
+    } catch {
+      return // 使用者取消：待送的離站不受影響，繼續倒數
+    }
+    await flushPendingDepart()
+    await runStopAction('skip', stop, '跳過失敗')
+  }
+
+  /** 撤銷：不另設防呆（它本身就是還原動作），但要先把待送的離站送出去。 */
+  async function undoStop(stop: { stop_id: number }): Promise<void> {
+    await flushPendingDepart()
+    await runStopAction('undo', stop, '撤銷失敗')
+  }
 
   // ── 結束班次 ──────────────────────────────────────────────────────────────
+
+  /**
+   * 結束班次的確認文案。**帶上未處理站數**：原本的固定文案（「確定結束本班次？」）
+   * 對「還有兩個孩子在車上」和「全部都下車了」講的是同一句話，而這正是誤觸這顆
+   * 紅色按鈕最需要被攔下來的情境——按鈕就在站點清單正下方。
+   */
+  function completeConfirmMessage(): string {
+    const remaining = stops.value.filter((s) => s.status === 'pending').length
+    const base = '結束後家長端即看不到車輛位置。'
+    return remaining > 0
+      ? `還有 ${remaining} 站尚未處理（未離站也未跳過）。確定結束本班次？${base}`
+      : `所有站點都已處理完畢。確定結束本班次？${base}`
+  }
 
   async function complete(): Promise<void> {
     const current = trip.value
     if (!current || completing.value) return
+    // 待送的離站要先落地：班次一旦 completed，那支離站就再也送不出去（後端
+    // `_active_trip_or_404` 對已結束的班次一律 404），司機按過的最後一站會憑空消失。
+    await flushPendingDepart()
+    // flush 期間班次可能已消失（409/404 走 handleTripGone），沒有班次可結束了。
+    if (!trip.value) return
     try {
       await ElMessageBox.confirm(
-        '確定結束本班次？結束後家長端即看不到車輛位置。', '結束班次',
+        completeConfirmMessage(), '結束班次',
         { type: 'warning', confirmButtonText: '結束班次', cancelButtonText: '再看看' },
       )
     } catch {
@@ -897,12 +1077,16 @@ export function usePortalBusTrip() {
 
   function teardown(): void {
     stopTracking()
+    // 待送的離站在此**送出**而不是取消：司機按過離站就是按過了，關頁／切走不代表
+    // 反悔（真的反悔會按取消）。緩衝期只防誤觸，不該把已表達的意圖吃掉。
+    void flushPendingDepart()
     void shipOutbox()
   }
 
   return {
     trip, stops, routes, selectedRouteId,
     loading, starting, completing, actingStopId, startBlockedMessage,
+    pendingDepart, cancelPendingDepart,
     gpsActive, gpsSupported, gpsClockSuspect, gpsPermissionDenied,
     snapshotFailed, employeeUnlinked, routesFailed,
     pendingPingCount, pendingStopActionCount, tripSummary,

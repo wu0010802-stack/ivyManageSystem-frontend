@@ -66,3 +66,57 @@ export function taipeiHour(iso: string | null | undefined): number | null {
   if (!d) return null
   return taipeiParts(d).hour
 }
+
+// 以台北時區把 Date 拆成 {year, month, day} 數字。
+function taipeiDateParts(d: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Taipei',
+  }).formatToParts(d)
+  const pick = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? '0')
+  return { year: pick('year'), month: pick('month'), day: pick('day') }
+}
+
+const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'] as const
+
+/**
+ * 接受 ISO 字串或 `Date`（後者供「現在」用）。收 `Date` 是為了讓呼叫端不必寫
+ * `new Date().toISOString()` ——那個模式已被 eslint `no-restricted-syntax` 擋下
+ * （`toISOString()` 是 UTC，台北凌晨會跨日），即使這裡接得住，也不該讓每個呼叫端
+ * 各自繞過一條防呆規則。
+ */
+function toValidDate(value: string | Date | null | undefined): Date | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  return parseTaipeiDate(value)
+}
+
+/**
+ * 顯示用台北曆日 `M/D（週）`，例如 `9/3（四）`。接受 ISO 字串或 `Date`；空值 / 不合法回 null。
+ *
+ * 星期**不用** `Intl` 的 `weekday` 字串：測試機與使用者裝置的預設 locale 不保證
+ * 是 zh-TW，同一段程式在不同環境會回 `Wed` / `週三` / `三`。改以台北曆日重建成
+ * UTC 午夜再取 `getUTCDay()`，星期完全由曆日決定，環境無關。
+ */
+export function formatTaipeiDay(value: string | Date | null | undefined): string | null {
+  const d = toValidDate(value)
+  if (!d) return null
+  const { year, month, day } = taipeiDateParts(d)
+  const weekday = WEEKDAY_ZH[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]
+  return `${month}/${day}（${weekday}）`
+}
+
+/**
+ * 台北曆日鍵 `YYYY-MM-DD`，供「是不是同一天」的比對用（娃娃車班次頁靠它偵測
+ * 跨日殘留的班次）。接受 ISO 字串或 `Date`（後者供取「今天」）。
+ *
+ * ⚠ 一律走台北時區：UTC 日界比台北早 8 小時，用 `toISOString().slice(0, 10)`
+ * 會讓台北時間 00:00–07:59 的班次被算成「昨天」，跨日警示反而在正常班次上誤報。
+ */
+export function taipeiDayKey(value: string | Date | null | undefined): string | null {
+  const d = toValidDate(value)
+  if (!d) return null
+  const { year, month, day } = taipeiDateParts(d)
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}

@@ -48,6 +48,12 @@
       </el-card>
 
       <el-card v-else class="bus-card" data-testid="bus-start-card">
+        <!--
+          今天的日期要在選班次之前就看得到：下方每一列的「已排定／進行中／已完成」
+          徽章講的都是**今天**的狀態，沒有日期做錨點，跨日開著的頁面（車上專用裝置
+          整天不關）會讓司機拿昨天的認知去讀今天的徽章。
+        -->
+        <p class="bus-today" data-testid="bus-today">{{ todayLabel }}</p>
         <h3 class="bus-title">開始娃娃車班次</h3>
 
         <!--
@@ -116,7 +122,27 @@
     <!-- 班次進行中 -->
     <template v-else>
       <!-- 班次與方向必須看得見：接手到別班時，這是司機唯一能自己察覺的訊號 -->
-      <h2 class="trip-summary" data-testid="bus-trip-summary">{{ tripSummary }}</h2>
+      <header class="trip-header">
+        <p class="trip-date" data-testid="bus-trip-date">
+          <span class="trip-date-day">{{ tripDayLabel }}</span>
+          <span v-if="tripStartedClock" class="trip-date-clock">{{ tripStartedClock }} 開班</span>
+        </p>
+        <h2 class="trip-summary" data-testid="bus-trip-summary">{{ tripSummary }}</h2>
+      </header>
+      <!--
+        跨日殘留的班次：這正是「畫面上沒有日期」最實質的風險。娃娃車走的是車上專用
+        裝置（整天不關頁），昨天忘了按結束的班次會原樣停在畫面上，司機一按離站就對
+        今天的家長發出快到提醒、把接送記到昨天那一趟。排在所有 GPS 警示之前。
+      -->
+      <el-alert
+        v-if="tripFromAnotherDay"
+        type="error"
+        :closable="false"
+        show-icon
+        data-testid="bus-stale-trip"
+        :title="`這是 ${tripDayLabel} 開始的班次，不是今天的`"
+        description="很可能是上一趟忘了結束。請先結束這一班，再開始今天的班次。"
+      />
       <!--
         定位權限被拒與其他定位失敗（POSITION_UNAVAILABLE / TIMEOUT）分開呈現：
         `watchPosition` 一旦被拒不會再自動跳權限提示，「重新整理」對這條路徑沒用，
@@ -177,7 +203,19 @@
                 一律不進 `aria-label`，理由見 script 區塊的「隱私」段。
               -->
               <span :id="`stop-name-${stop.stop_id}`" class="stop-name">{{ stop.student_name }}</span>
-              <el-tag v-if="stop.status === 'departed'" type="success">已離站</el-tag>
+              <!--
+                待送出期間就先標「已離站」：司機按下去要立刻看到結果，緩衝期是給誤觸
+                用的後路，不該讓正常操作看起來像沒反應。權威 status 仍是 pending
+                （composable 刻意不樂觀改寫 stops），這裡疊加呈現。
+              -->
+              <el-tag
+                v-if="pendingDepart?.stopId === stop.stop_id"
+                type="success"
+                :data-testid="`bus-stop-departing-${stop.stop_id}`"
+              >
+                已離站
+              </el-tag>
+              <el-tag v-else-if="stop.status === 'departed'" type="success">已離站</el-tag>
               <el-tag v-else-if="stop.status === 'skipped'" type="info">已跳過</el-tag>
               <!--
                 excused＝當日不搭的既成事實（請假核准／家長今天不搭／後台排除三條
@@ -192,7 +230,7 @@
                 {{ excuseLabel(stop.excuse_reason) }}
               </el-tag>
               <span
-                v-if="stopEta(stop)"
+                v-if="stopEta(stop) && pendingDepart?.stopId !== stop.stop_id"
                 class="stop-eta"
                 :data-testid="`bus-stop-eta-${stop.stop_id}`"
               >{{ stopEta(stop) }}</span>
@@ -228,7 +266,26 @@
 
             <!-- excused 站不渲染任何操作鈕（灰態、不可操作、不提供恢復） -->
             <div v-if="stop.status !== 'excused'" class="stop-actions">
-              <template v-if="stop.status === 'pending'">
+              <!--
+                待送出的離站：整排操作鈕換成一顆「取消」＋倒數。按下離站的當下畫面
+                就已反映「已離站」（見上方 stop-row 的 pending 徽章），司機的認知不被
+                打斷；這 5 秒裡按取消，那支離站請求從未發生——家長端的快到提醒也就
+                從未送出。這是誤觸離站唯一救得回來的窗口（送出後撤銷只還原站點狀態，
+                推播收不回，真正到站時也不會再提醒一次）。
+              -->
+              <template v-if="pendingDepart?.stopId === stop.stop_id">
+                <el-button
+                  type="warning"
+                  size="large"
+                  class="stop-undo-btn"
+                  :id="`stop-cancel-${stop.stop_id}`"
+                  :aria-labelledby="`stop-name-${stop.stop_id} stop-cancel-${stop.stop_id}`"
+                  @click="cancelPendingDepart()"
+                >
+                  取消（{{ pendingDepartSeconds }} 秒後送出）
+                </el-button>
+              </template>
+              <template v-else-if="stop.status === 'pending'">
                 <el-button
                   type="primary"
                   size="large"
@@ -240,8 +297,15 @@
                 >
                   離站
                 </el-button>
+                <!--
+                  跳過刻意做成次要、靠右、與離站拉開距離：兩顆同尺寸並排（原本間距
+                  8px）時，行車顛簸下最容易誤按的就是它，而它的後果最重——這孩子今天
+                  沒被接到。composable 另有確認框把關。
+                -->
                 <el-button
                   size="large"
+                  plain
+                  class="stop-skip-btn"
                   :disabled="actingStopId !== null"
                   :id="`stop-skip-${stop.stop_id}`"
                   :aria-labelledby="`stop-name-${stop.stop_id} stop-skip-${stop.stop_id}`"
@@ -316,16 +380,49 @@ import {
   type BusStopContact,
   type BusTripStop,
 } from '@/composables/usePortalBusTrip'
-import { formatTaipeiClock } from '@/utils/taipeiTime'
+import { formatTaipeiClock, formatTaipeiDay, taipeiDayKey } from '@/utils/taipeiTime'
 
 const {
   trip, stops, routes, selectedRouteId,
   loading, starting, completing, actingStopId, startBlockedMessage,
+  pendingDepart, cancelPendingDepart,
   gpsActive, gpsSupported, gpsClockSuspect, gpsPermissionDenied,
   snapshotFailed, employeeUnlinked, routesFailed,
   pendingPingCount, pendingStopActionCount, tripSummary,
   init, start, departStop, skipStop, undoStop, complete, teardown,
 } = usePortalBusTrip()
+
+/**
+ * 今天的日期（`M/D（週）`）。娃娃車走車上專用裝置、整天不關頁，日期是司機辨認
+ * 「畫面上這一班是不是今天的」唯一線索。
+ *
+ * ⚠ 不快取成常數：`computed` 讓它在班次狀態變動時重算，跨午夜仍會更新——`ref`
+ * 或模組載入時算一次的常數會讓凌晨開的班次整天顯示前一天。
+ */
+const todayLabel = computed(() => formatTaipeiDay(new Date()) ?? '')
+
+/** 班次的日期；`started_at` 缺值（舊資料）時退回今天，不留空白。 */
+const tripDayLabel = computed(
+  () => formatTaipeiDay(trip.value?.started_at) ?? todayLabel.value,
+)
+
+/** 開班時刻 `HH:mm`；缺值不顯示（不編造）。 */
+const tripStartedClock = computed(() => formatTaipeiClock(trip.value?.started_at))
+
+/**
+ * 這張班次不是今天開的。比對台北曆日鍵而非字串前綴——`started_at` 是 naive 台北
+ * 牆鐘，裝置時區若不是台北，用 `toISOString().slice(0, 10)` 會在凌晨誤判。
+ * `started_at` 缺值時一律當「今天」，不對舊資料誤報。
+ */
+const tripFromAnotherDay = computed(() => {
+  const tripDay = taipeiDayKey(trip.value?.started_at)
+  return tripDay !== null && tripDay !== taipeiDayKey(new Date())
+})
+
+/** 倒數秒數；無條件進位，讓最後不足一秒仍顯示「1 秒」而不是「0 秒」。 */
+const pendingDepartSeconds = computed(
+  () => Math.max(1, Math.ceil((pendingDepart.value?.remainingMs ?? 0) / 1000)),
+)
 
 /** 當日四態的徽章文案（spec「司機端（Portal）」）。 */
 const TODAY_STATUS_LABELS: Record<BusRouteTodayStatus, string> = {
@@ -444,6 +541,14 @@ onBeforeUnmount(teardown)
 .route-meta { display: flex; align-items: center; gap: 8px; }
 .route-time { font-variant-numeric: tabular-nums; font-weight: 600; }
 
+/* 開班卡的今日日期：在選班次之前就給司機一個時間錨點 */
+.bus-today { margin: 0 0 6px; font-size: 15px; font-weight: 700; color: var(--el-text-color-regular); }
+
+/* 班次進行中的日期列：日期比班次名更靠上，因為「這是不是今天的班次」要先被回答 */
+.trip-header { display: flex; flex-direction: column; gap: 2px; }
+.trip-date { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 15px; }
+.trip-date-day { font-weight: 700; }
+.trip-date-clock { font-variant-numeric: tabular-nums; color: var(--el-text-color-regular); }
 .trip-summary { margin: 0; font-size: 18px; font-weight: 700; }
 .stop-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .stop-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -471,6 +576,17 @@ onBeforeUnmount(teardown)
 .stop-skipped { opacity: 0.5; }
 /* excused 灰態：一瞄就知道這站不用停，且卡片內不渲染任何操作鈕 */
 .stop-excused { opacity: 0.55; border-style: dashed; }
-.stop-actions { margin-top: 8px; display: flex; gap: 8px; }
-.complete-btn { margin-top: 16px; }
+.stop-actions { margin-top: 8px; display: flex; align-items: center; gap: 12px; }
+/*
+  跳過推到最右並與離站之間留白：兩顆同尺寸緊鄰（原為並排、間距 8px）時，行車顛簸
+  下最容易誤按的就是它，而它的後果最重。plain 樣式一併降低視覺權重。
+*/
+.stop-skip-btn { margin-left: auto; }
+/* 取消鈕撐滿整列：緩衝期只有 5 秒，這是最不能點不中的一顆按鈕 */
+.stop-undo-btn { flex: 1; }
+/*
+  結束班次與最後一張站點卡拉開一整段距離（原為 16px）：這顆紅色按鈕原本緊接在
+  最後一張卡片下方，滑到底的慣性下最容易誤觸，而它結束的是整趟車。
+*/
+.complete-btn { margin-top: 32px; }
 </style>

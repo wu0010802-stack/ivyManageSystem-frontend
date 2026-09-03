@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
 
@@ -15,6 +15,8 @@ const h = vi.hoisted(() => {
       starting: r(false),
       completing: r(false),
       actingStopId: r<number | null>(null),
+      pendingDepart: r<{ stopId: number; remainingMs: number } | null>(null),
+      cancelPendingDepart: vi.fn(),
       gpsActive: r(false),
       gpsSupported: r(true),
       gpsClockSuspect: r(false),
@@ -57,6 +59,7 @@ function resetState() {
   s.starting.value = false
   s.completing.value = false
   s.actingStopId.value = null
+  s.pendingDepart.value = null
   s.gpsActive.value = false
   s.gpsSupported.value = true
   s.gpsClockSuspect.value = false
@@ -650,5 +653,145 @@ describe('PortalBusTripView — review findings 回歸', () => {
     expect(wrapper.findAll('[data-testid="bus-stop-contact-11"]')).toHaveLength(2)
     expect(warn.mock.calls.flat().join(' ')).not.toContain('Duplicate keys')
     warn.mockRestore()
+  })
+})
+
+/**
+ * 日期：截圖回報的第一個缺口——畫面上完全看不出這是哪一天的班次。娃娃車走車上
+ * 專用裝置、整天不關頁，昨天忘了結束的班次會原樣停在畫面上。
+ */
+describe('PortalBusTripView — 日期', () => {
+  const TODAY = new Date('2026-09-03T01:00:00Z') // 台北 09:00
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(TODAY)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('開班卡標出今天日期（下方徽章講的都是「今天」的狀態）', async () => {
+    s.routes.value = [routeItem()]
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-today"]').text()).toBe('9/3（四）')
+  })
+
+  it('班次進行中顯示班次日期與開班時刻', async () => {
+    s.trip.value = { id: 7, route_id: 3, direction: 'morning', started_at: '2026-09-03T07:35:00' }
+    s.tripSummary.value = 'A 線・早上接學生'
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const text = wrapper.find('[data-testid="bus-trip-date"]').text()
+    expect(text).toContain('9/3（四）')
+    expect(text).toContain('07:35 開班')
+  })
+
+  it('班次不是今天開的時，紅色警示講出它是哪一天的', async () => {
+    s.trip.value = { id: 7, route_id: 3, direction: 'morning', started_at: '2026-09-02T07:35:00' }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const alert = wrapper.find('[data-testid="bus-stale-trip"]')
+    expect(alert.exists()).toBe(true)
+    expect(alert.attributes('title')).toContain('9/2（三）')
+  })
+
+  it('今天開的班次不出現跨日警示', async () => {
+    s.trip.value = { id: 7, route_id: 3, direction: 'morning', started_at: '2026-09-03T07:35:00' }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stale-trip"]').exists()).toBe(false)
+  })
+
+  it('started_at 缺值不誤報跨日，日期退回今天（舊資料不該亮紅燈）', async () => {
+    s.trip.value = { id: 7, route_id: 3, direction: 'morning' }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stale-trip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="bus-trip-date"]').text()).toContain('9/3（四）')
+    // 開班時刻缺值就不編造
+    expect(wrapper.find('[data-testid="bus-trip-date"]').text()).not.toContain('開班')
+  })
+
+  it('凌晨開的班次以台北曆日判定（裝置時區無關，不誤報跨日）', async () => {
+    // 台北 2026-09-03 00:30；UTC 仍是 09-02 → 用 UTC 日界會誤判成昨天的班次
+    vi.setSystemTime(new Date('2026-09-02T16:40:00Z'))
+    s.trip.value = { id: 7, route_id: 3, direction: 'morning', started_at: '2026-09-03T00:30:00' }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stale-trip"]').exists()).toBe(false)
+  })
+})
+
+/**
+ * 離站的可取消緩衝期在畫面上的樣子。誤觸離站的唯一救援窗口，所以「取消」必須
+ * 大、必須看得到剩幾秒。
+ */
+describe('PortalBusTripView — 待送出的離站', () => {
+  beforeEach(() => {
+    s.trip.value = { id: 7, route_id: 3, direction: 'morning', started_at: '2026-09-03T07:35:00' }
+    s.stops.value = [stop({ stop_id: 11, eta_planned: '2026-09-03T09:44:00' })]
+  })
+
+  it('待送期間該站的操作鈕換成帶倒數的取消鈕', async () => {
+    s.pendingDepart.value = { stopId: 11, remainingMs: 4200 }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const btns = wrapper.find('[data-testid="bus-stop-11"]').findAll('el-button')
+    expect(btns).toHaveLength(1)
+    expect(btns[0].text()).toBe('取消（5 秒後送出）')
+  })
+
+  it('倒數秒數無條件進位，最後不足一秒仍顯示 1 秒（不出現「0 秒後送出」）', async () => {
+    s.pendingDepart.value = { stopId: 11, remainingMs: 120 }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-11"]').find('el-button').text())
+      .toBe('取消（1 秒後送出）')
+  })
+
+  it('按下取消呼叫 cancelPendingDepart', async () => {
+    s.pendingDepart.value = { stopId: 11, remainingMs: 3000 }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    await wrapper.find('[data-testid="bus-stop-11"]').find('el-button').trigger('click')
+
+    expect(s.cancelPendingDepart).toHaveBeenCalled()
+  })
+
+  it('待送期間該站就先標「已離站」——按下去要立刻看得到結果', async () => {
+    s.pendingDepart.value = { stopId: 11, remainingMs: 3000 }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-departing-11"]').exists()).toBe(true)
+  })
+
+  it('待送期間不顯示 ETA（該站畫面上已是「已離站」，再講預計時刻自相矛盾）', async () => {
+    s.pendingDepart.value = { stopId: 11, remainingMs: 3000 }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="bus-stop-eta-11"]').exists()).toBe(false)
+  })
+
+  it('只影響待送的那一站，其他站照常可操作', async () => {
+    s.stops.value = [stop({ stop_id: 11 }), stop({ stop_id: 12, student_name: '小華', seq: 2 })]
+    s.pendingDepart.value = { stopId: 11, remainingMs: 3000 }
+    const wrapper = mount(PortalBusTripView)
+    await flushPromises()
+
+    const others = wrapper.find('[data-testid="bus-stop-12"]').findAll('el-button')
+    expect(others.map((b) => b.text())).toEqual(['離站', '跳過'])
   })
 })
