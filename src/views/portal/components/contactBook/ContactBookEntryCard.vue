@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Camera, Edit } from '@element-plus/icons-vue'
+import MoodChip from './MoodChip.vue'
 
 interface EntryRecord {
   published_at?: string | null
@@ -14,7 +15,6 @@ interface ItemEntry { student_name?: string; entry?: EntryRecord | null; [key: s
 
 defineProps<{
   item: ItemEntry
-  moodEmoji: Record<string, string>
 }>()
 
 defineEmits<{ 'click': [item: ItemEntry] }>()
@@ -42,8 +42,7 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
     </div>
     <div class="card-body">
       <div class="card-mood">
-        <span v-if="item.entry?.mood" class="mood-emoji">{{ moodEmoji[item.entry.mood!] || '🙂' }}</span>
-        <span v-else class="mood-empty">—</span>
+        <MoodChip :mood="item.entry?.mood ?? null" size="md" />
       </div>
       <div class="card-meta">
         <div v-if="item.entry?.teacher_note" class="card-note">{{ item.entry.teacher_note }}</div>
@@ -104,13 +103,8 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
 }
 
 .card-mood {
-  font-size: 32px;
-  line-height: 1;
-}
-
-.mood-empty {
-  font-size: 24px;
-  color: var(--text-tertiary);
+  flex-shrink: 0;
+  padding-top: 2px;
 }
 
 .card-meta {

@@ -30,6 +30,9 @@ import {
   Brush,
   Bell,
   Plus,
+  Cellphone,
+  Close,
+  ArrowLeft,
 } from '@element-plus/icons-vue'
 // 多租戶：UI 偏好走 tenantStorage wrapper（單租戶模式 key 與改造前逐字相同，DEV-12）。
 import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
@@ -215,6 +218,8 @@ onMounted(() => {
         type: 'info',
         confirmButtonText: '我知道了',
         showCancelButton: false,
+        // 訊息內含換行與條列，預設 white-space 會把它壓成一行（樣式見 soft-ui.css）
+        customClass: 'portal-onboarding-box',
       })
         .catch(() => {})
         .finally(() => {
@@ -499,9 +504,10 @@ const submitPassword = async () => {
 
       <!-- PWA 安裝提示（手機首次訪問且瀏覽器支援時才顯示）-->
       <div v-if="showInstallBanner && isMobile" class="install-banner">
-        <span>📱 加到桌面，打卡更方便！</span>
+        <el-icon class="install-banner__icon" aria-hidden="true"><Cellphone /></el-icon>
+        <span class="install-banner__text">加到桌面，打卡更方便</span>
         <el-button size="small" type="success" @click="installPWA">加入桌面</el-button>
-        <el-button size="small" text @click="dismissInstallBanner">✕</el-button>
+        <el-button size="small" text :icon="Close" aria-label="關閉安裝提示" @click="dismissInstallBanner" />
       </div>
 
       <el-header height="60px">
@@ -520,7 +526,11 @@ const submitPassword = async () => {
             >
               <el-icon><Fold /></el-icon>
             </button>
-            <h3>{{ branding.org_name }} - 教職員考勤系統</h3>
+            <!-- 手機只留機構名（原本整串折成兩行擠壓頁首）；系統名稱桌機才顯示 -->
+            <h3 class="portal-header__title">
+              <span class="portal-header__org">{{ branding.org_name }}</span>
+              <span class="portal-header__system">教職員考勤系統</span>
+            </h3>
           </div>
           <button class="psp-trigger-portal" @click="openPalette" title="搜尋 (Cmd+K)">
             <el-icon><Search /></el-icon>
@@ -535,10 +545,11 @@ const submitPassword = async () => {
               type="primary"
               size="small"
               plain
+              :icon="ArrowLeft"
               @click="goBackToAdmin"
               style="margin-right: 8px"
             >
-              ← 返回後台
+              返回後台
             </el-button>
 
             <span class="user-name">{{ userInfo.name || '' }}</span>
@@ -803,6 +814,28 @@ html.dark .portal-layout {
   color: var(--text-primary);
 }
 
+.portal-header__title {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.portal-header__system {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.portal-header__system::before {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 0.9em;
+  margin: 0 var(--space-3);
+  vertical-align: -0.1em;
+  background: var(--border-color);
+}
+
 .portal-user {
   display: flex;
   align-items: center;
@@ -879,7 +912,7 @@ html.dark .portal-layout {
 .install-banner {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   /* token 化（原硬編 #f0fdf4 淺綠不翻色，dark 下成刺眼亮條——finding #2 既有債清償）：
      light=soft pastel、dark=alpha tint，文字 *-darker 兩模式各自對比達標 */
@@ -887,6 +920,14 @@ html.dark .portal-layout {
   border-bottom: 1px solid var(--color-success);
   font-size: var(--text-base);
   color: var(--color-success-darker);
+}
+.install-banner__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.install-banner__text {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Misc */
@@ -1055,6 +1096,14 @@ html.dark .portal-layout {
 @media (--to-sm) {
   .portal-header h3 {
     font-size: var(--text-lg);
+  }
+  .header-left {
+    flex: 1;
+    min-width: 0;
+    gap: var(--space-2);
+  }
+  .portal-header__system {
+    display: none;
   }
 
   .el-header {

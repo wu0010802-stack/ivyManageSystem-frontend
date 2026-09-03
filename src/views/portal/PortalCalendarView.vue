@@ -10,6 +10,7 @@ import { EVENT_TYPES } from '@/constants/calendarEventTypes'
 import CalendarBoard from '@/components/calendar/CalendarBoard.vue'
 import CalendarEventDetailDialog from '@/components/calendar/CalendarEventDetailDialog.vue'
 import type { CalendarEventDetail } from '@/components/calendar/types'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 interface OfficialSync { warning?: string; [key: string]: unknown }
 
@@ -103,6 +104,8 @@ function onEventClick(arg: EventClickArg): void {
 
 <template>
   <div class="portal-calendar" v-loading="loading">
+    <PortalPageHeader title="學校行事曆" />
+
     <el-alert
       :title="officialSyncMessage"
       :type="officialSyncAlertType"

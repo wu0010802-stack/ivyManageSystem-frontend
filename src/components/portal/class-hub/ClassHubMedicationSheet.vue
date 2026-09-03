@@ -8,9 +8,11 @@
     @open="onOpen"
   >
     <div v-loading="loading" class="med-sheet">
-      <div v-if="!loading && pending.length === 0" class="med-empty">
-        <el-empty description="今日沒有待執行的用藥" />
-      </div>
+      <EmptyState
+        v-if="!loading && pending.length === 0"
+        variant="inline"
+        title="今日沒有待執行的用藥"
+      />
       <div v-for="item in pending" :key="item.log_id" class="med-row">
         <div class="med-row__head">
           <strong>{{ item.scheduled_time }}</strong>
@@ -49,6 +51,7 @@ import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
 import { listToday, administer, skipLog } from '@/api/portalMedications'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface MedItem {
   log_id: number | string
@@ -142,9 +145,6 @@ function onOpen() {
 <style scoped>
 .med-sheet {
   padding: 0 16px 24px;
-}
-.med-empty {
-  padding: 40px 0;
 }
 .med-row {
   border: 1px solid var(--el-border-color-lighter);

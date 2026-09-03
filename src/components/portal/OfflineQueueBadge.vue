@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { WarningFilled, Loading } from '@element-plus/icons-vue'
 
 /**
  * 離線佇列徽章 — 顯示「N 筆待同步」狀態。
@@ -31,9 +32,12 @@ const visible = computed(() => props.count > 0)
     data-test="badge-root"
     @click="$emit('click')"
   >
-    <span class="badge__icon" aria-hidden="true">
-      {{ status === 'failed' ? '⚠' : '⏳' }}
-    </span>
+    <el-icon
+      :class="['badge__icon', { 'is-loading': status !== 'failed' }]"
+      aria-hidden="true"
+    >
+      <component :is="status === 'failed' ? WarningFilled : Loading" />
+    </el-icon>
     <span class="badge__text">{{ display }} 筆待同步</span>
   </button>
 </template>
@@ -71,5 +75,12 @@ const visible = computed(() => props.count > 0)
 
 .badge__icon {
   font-size: 12px;
+}
+.badge__icon.is-loading {
+  animation: offline-queue-badge-spin 1.2s linear infinite;
+}
+@keyframes offline-queue-badge-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>

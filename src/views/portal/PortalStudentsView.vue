@@ -2,13 +2,15 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Hide, MoreFilled, Search, View, Warning } from '@element-plus/icons-vue'
+import { Hide, MoreFilled, Odometer, Search, Star, View, Warning } from '@element-plus/icons-vue'
 import { getMyStudents, revealPortalStudentPhone } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import PortalStudentDrawer from '@/components/portal/students/PortalStudentDrawer.vue'
 import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
 import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
 import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface Student { id: number; name?: string; birthday?: string; gender?: string; parent_name?: string; student_id?: string; lifecycle_status?: string; attendance_rate?: number; parent_phone_masked?: string; [key: string]: unknown }
 interface Classroom { classroom_id?: number; classroom_name?: string; student_count?: number; students?: Student[]; [key: string]: unknown }
@@ -178,9 +180,13 @@ onMounted(fetchStudents)
 
 <template>
   <div class="portal-students" v-loading="loading">
-    <div v-if="data.classrooms.length === 0 && !loading" class="empty-state">
-      <el-empty description="您目前未被分配到任何班級" />
-    </div>
+    <PortalPageHeader title="班級學生" />
+
+    <EmptyState
+      v-if="data.classrooms.length === 0 && !loading"
+      variant="mobile"
+      title="您目前未被分配到任何班級"
+    />
 
     <template v-else>
       <el-tabs v-model="(activeClassroom as string | number)" type="card" class="classroom-tabs">
@@ -239,8 +245,8 @@ onMounted(fetchStudents)
               </button>
               <template #dropdown>
                 <el-dropdown-menu>
-                  <el-dropdown-item command="measurement">📏 記量測</el-dropdown-item>
-                  <el-dropdown-item command="milestone">⭐ 記里程碑</el-dropdown-item>
+                  <el-dropdown-item command="measurement" :icon="Odometer">記量測</el-dropdown-item>
+                  <el-dropdown-item command="milestone" :icon="Star">記里程碑</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -300,7 +306,7 @@ onMounted(fetchStudents)
         </div>
 
         <div v-if="!filteredStudents.length" class="empty-grid">
-          <el-empty description="此班級目前沒有學生" :image-size="80" />
+          <EmptyState variant="inline" title="此班級目前沒有學生" />
         </div>
       </div>
     </template>
@@ -326,9 +332,6 @@ onMounted(fetchStudents)
 <style scoped>
 .portal-students {
   padding: 10px;
-}
-.empty-state {
-  padding: 60px 0;
 }
 .classroom-tabs {
   margin-bottom: var(--space-4);

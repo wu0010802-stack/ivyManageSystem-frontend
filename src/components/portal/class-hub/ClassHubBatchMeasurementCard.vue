@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Odometer } from '@element-plus/icons-vue'
 defineEmits<{ 'open': [] }>()
 const props = withDefaults(defineProps<{
   lastMeasuredOn?: string | null
@@ -17,7 +18,7 @@ const props = withDefaults(defineProps<{
   -->
   <button type="button" class="batch-card pt-card-elevated" @click="$emit('open')">
     <div class="left">
-      <span class="emoji">📏</span>
+      <span class="icon" aria-hidden="true"><el-icon><Odometer /></el-icon></span>
       <div class="text">
         <div class="title">全班量體位</div>
         <div class="sub">
@@ -54,8 +55,17 @@ const props = withDefaults(defineProps<{
   align-items: center;
   gap: 12px;
 }
-.emoji {
-  font-size: 28px;
+.icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-tint-contact);
+  color: var(--color-tint-contact-fg);
+  font-size: 20px;
 }
 .title {
   font-weight: 600;

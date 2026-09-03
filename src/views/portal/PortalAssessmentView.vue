@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, reactive, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { getMyClassAssessments, createPortalAssessment } from '@/api/studentAssessments'
 import { getMyStudents } from '@/api/portal'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG as _RATING_TAG } from '@/constants/studentRecords'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const RATING_TAG = _RATING_TAG as Record<string, ElTagType>
@@ -139,10 +141,11 @@ onMounted(async () => {
 
 <template>
   <div>
-    <div class="page-header">
-      <h3>學期評量</h3>
-      <el-button type="primary" size="small" @click="openCreate">＋ 新增評量</el-button>
-    </div>
+    <PortalPageHeader title="學期評量">
+      <template #actions>
+        <el-button type="primary" size="small" :icon="Plus" @click="openCreate">新增評量</el-button>
+      </template>
+    </PortalPageHeader>
 
     <el-tabs
       v-if="classrooms.length > 0"
@@ -291,17 +294,5 @@ onMounted(async () => {
 .pt-list-total {
   font-size: 13px;
   color: var(--text-secondary);
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: 600;
 }
 </style>

@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import {
   getMyColleagues,
   getMyLeaveStats,
@@ -13,6 +14,8 @@ import PortalLeaveList from '@/components/portal/PortalLeaveList.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import PortalSubstituteCardList from '@/components/portal/PortalSubstituteCardList.vue'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { isMobile } = useIsMobile()
 
@@ -153,10 +156,11 @@ onMounted(() => {
 
 <template>
   <div class="portal-leave">
-    <div class="page-header">
-      <h2>請假申請</h2>
-      <el-button type="primary" @click="showForm = true">新增請假</el-button>
-    </div>
+    <PortalPageHeader title="請假申請">
+      <template #actions>
+        <el-button type="primary" :icon="Plus" @click="showForm = true">新增請假</el-button>
+      </template>
+    </PortalPageHeader>
 
     <el-alert
       v-if="pendingSubstituteCount > 0"
@@ -281,20 +285,13 @@ onMounted(() => {
         </el-table>
       </div>
 
-      <el-empty v-if="!substituteLoading && mySubstituteRequests.length === 0" description="目前無待代理的假單" />
+      <EmptyState v-if="!substituteLoading && mySubstituteRequests.length === 0" variant="inline" title="目前無待代理的假單" />
     </el-card>
   </div>
 </template>
 
 <style scoped>
 .substitute-alert {
-  margin-bottom: var(--space-4);
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: var(--space-4);
 }
 

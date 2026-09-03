@@ -1,6 +1,6 @@
 <template>
   <div class="portal-activity">
-    <h2 class="page-title">才藝管理</h2>
+    <PortalPageHeader title="才藝管理" />
 
     <el-tabs v-model="mainTab" @tab-change="handleTabChange">
       <el-tab-pane label="課程報名" name="registrations" />
@@ -17,7 +17,7 @@
           v-model:active-class="activeClass"
         />
       </template>
-      <el-empty v-else-if="!loading" description="無班級資料" />
+      <EmptyState v-else-if="!loading" variant="mobile" title="無班級資料" />
     </template>
 
     <!-- ===== 課程點名 Tab ===== -->
@@ -68,6 +68,8 @@ import {
 import { dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import type { Schema } from '@/api/_generated/typed'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import ActivityRegistrationPanel from './components/activity/ActivityRegistrationPanel.vue'
 import ActivitySessionList from './components/activity/ActivitySessionList.vue'
 import ActivityRollcallDrawer from './components/activity/ActivityRollcallDrawer.vue'
@@ -244,7 +246,6 @@ onMounted(() => {
 
 <style scoped>
 .portal-activity { padding: 16px; }
-.page-title { margin: 0 0 16px; font-size: 20px; font-weight: 600; }
 </style>
 
 <style>

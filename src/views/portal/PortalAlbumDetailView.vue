@@ -1,15 +1,19 @@
 <template>
   <div class="portal-album-detail-view">
-    <div class="detail-header">
-      <el-button link @click="goBack">← 返回相簿列表</el-button>
-      <div v-if="album" class="detail-title-row">
-        <h2>{{ album.title }}</h2>
-        <span class="detail-date">{{ album.event_date }}</span>
-        <el-tag v-if="album.status === 'draft'" type="info" size="small">草稿</el-tag>
-        <el-tag v-else type="success" size="small">已發布</el-tag>
-        <span v-if="album.untagged_count > 0" class="detail-warning">未標記 {{ album.untagged_count }} 張</span>
-      </div>
-    </div>
+    <PortalPageHeader
+      :title="album?.title || ''"
+      back-label="返回相簿列表"
+      @back="goBack"
+    >
+      <template v-if="album" #subtitle>
+        <span class="detail-title-row">
+          <span class="detail-date">{{ album.event_date }}</span>
+          <el-tag v-if="album.status === 'draft'" type="info" size="small">草稿</el-tag>
+          <el-tag v-else type="success" size="small">已發布</el-tag>
+          <span v-if="album.untagged_count > 0" class="detail-warning">未標記 {{ album.untagged_count }} 張</span>
+        </span>
+      </template>
+    </PortalPageHeader>
 
     <div class="upload-panel">
       <el-upload
@@ -44,7 +48,12 @@
       </el-button>
     </div>
 
-    <el-empty v-if="album && album.photos.length === 0" description="還沒有照片，上傳第一張吧" />
+    <EmptyState
+      v-if="album && album.photos.length === 0"
+      variant="mobile"
+      title="還沒有照片"
+      description="上傳第一張吧"
+    />
 
     <div class="photo-grid">
       <div
@@ -108,6 +117,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { deleteAlbumPhoto, getAlbum, publishAlbum, setPhotoTags, uploadAlbumPhotos } from '@/api/classAlbums'
 import type { AlbumDetail } from '@/api/classAlbums'
 import { getMyStudents } from '@/api/portal'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB，前端先擋，後端仍會再驗一次
 
@@ -288,11 +299,9 @@ defineExpose({
 
 <style scoped>
 /* 版面比照 PortalAlbumsView：grid responsive 卡片；本頁多一列上傳工具列 */
-.detail-header { margin-bottom: 16px; }
-.detail-title-row { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
-.detail-title-row h2 { margin: 0; }
+.detail-title-row { display: inline-flex; align-items: center; gap: 12px; }
 .detail-date { color: var(--el-text-color-secondary); }
-.detail-warning { color: var(--el-color-warning); font-size: 13px; }
+.detail-warning { color: var(--color-warning-darker); font-size: 13px; }
 .upload-panel { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .upload-tip { color: var(--el-text-color-secondary); font-size: 12px; }
 .action-toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }

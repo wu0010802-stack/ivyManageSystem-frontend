@@ -7,7 +7,7 @@
     tabindex="0"
     @keyup.enter="$emit('jump', next.deep_link)"
   >
-    <span class="sticky-next__icon">⏭</span>
+    <el-icon class="sticky-next__icon" aria-hidden="true"><Timer /></el-icon>
     <span class="sticky-next__detail">
       下一件：<strong>{{ formatTime(next.due_at) }}</strong>
       <span v-if="next.student_name" class="sticky-next__student">
@@ -15,14 +15,16 @@
       </span>
       <span class="sticky-next__text">{{ next.detail }}</span>
     </span>
-    <span class="sticky-next__arrow">處理 →</span>
+    <span class="sticky-next__arrow">處理<el-icon aria-hidden="true"><ArrowRight /></el-icon></span>
   </div>
   <div v-else class="sticky-next sticky-next--empty">
-    ✨ 今日任務都完成
+    <el-icon class="sticky-next__icon" aria-hidden="true"><CircleCheck /></el-icon>
+    今日任務都完成
   </div>
 </template>
 
 <script setup lang="ts">
+import { Timer, ArrowRight, CircleCheck } from '@element-plus/icons-vue'
 interface NextTask {
   kind?: string
   student_name?: string
@@ -94,8 +96,14 @@ function formatTime(iso: string | null | undefined) {
 }
 .sticky-next__arrow {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   color: var(--el-color-primary);
   font-size: 13px;
   font-weight: 500;
+}
+.sticky-next--empty .sticky-next__icon {
+  margin-right: 6px;
 }
 </style>

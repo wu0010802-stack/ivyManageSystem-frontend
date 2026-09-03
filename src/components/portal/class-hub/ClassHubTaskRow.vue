@@ -43,17 +43,19 @@
         v-else-if="actionMode === 'page'"
         type="primary"
         link
+        class="task-row__jump"
         @click="$emit('jump-page')"
       >
-        跳頁面 →
+        跳頁面<el-icon class="task-row__chev" aria-hidden="true"><ArrowRight /></el-icon>
       </el-button>
       <el-button
         v-else-if="actionMode === 'inline_button'"
         type="primary"
         link
+        :icon="Plus"
         @click="$emit('open-sheet')"
       >
-        + 新增
+        新增
       </el-button>
     </span>
   </div>
@@ -61,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { ArrowRight, Plus } from '@element-plus/icons-vue'
 
 // Phase 1 殼層改版：emoji 圖示改線稿 SVG，tint 色塊走 canonical --color-tint-*
 const KIND_META: Record<string, { label: string }> = {
@@ -135,5 +138,12 @@ const iconKind = computed(() => (KIND_META[props.kind] ? props.kind : 'unknown')
 }
 .task-row__action {
   margin-left: auto;
+}
+.task-row__jump {
+  display: inline-flex;
+  align-items: center;
+}
+.task-row__chev {
+  margin-left: 2px;
 }
 </style>

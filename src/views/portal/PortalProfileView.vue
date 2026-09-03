@@ -7,6 +7,8 @@ import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/ap
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useTenantBranding } from '@/composables/useTenantBranding'
+import { WarningFilled } from '@element-plus/icons-vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 const { notify } = useErrorNotify()
 // 多租戶（4d/fb）：加好友連結改由品牌 API 提供（system_configs `brand.line_bot_friend_url`）。
@@ -233,7 +235,7 @@ onMounted(() => {
 
 <template>
   <div class="portal-profile" v-loading="loading">
-    <h3 style="margin: 0 0 16px;">個人資料</h3>
+    <PortalPageHeader title="個人資料" />
 
     <!-- Read-only: Basic Info -->
     <el-card class="profile-card" shadow="hover">
@@ -357,7 +359,8 @@ onMounted(() => {
               <el-button @click="copyLineBotUrl">複製連結</el-button>
             </div>
             <p v-else class="line-bot-url-missing">
-              ⚠ 尚未設定 Bot 加好友連結，請於後台「LINE 設定」填寫加好友連結
+              <el-icon aria-hidden="true"><WarningFilled /></el-icon>
+              尚未設定 Bot 加好友連結，請於後台「LINE 設定」填寫加好友連結
             </p>
           </div>
 
@@ -505,6 +508,9 @@ onMounted(() => {
 }
 
 .line-bot-url-missing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin: 8px 0 0;
   padding: 8px 10px;
   background: var(--color-warning-soft);

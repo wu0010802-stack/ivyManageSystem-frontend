@@ -6,7 +6,7 @@
   >
     <template #header>
       <div class="slot-card__header">
-        <span class="slot-card__icon">{{ slotMeta.icon }}</span>
+        <el-icon class="slot-card__icon" aria-hidden="true"><component :is="slotMeta.icon" /></el-icon>
         <span class="slot-card__label">{{ slotMeta.label }}</span>
         <span class="slot-card__time">
           {{ slotMeta.start }}–{{ slotMeta.end }}
@@ -31,7 +31,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
+import { Sunrise, Sunny, Food, Sunset, Clock } from '@element-plus/icons-vue'
 import ClassHubTaskRow from './ClassHubTaskRow.vue'
 
 interface SlotTask {
@@ -46,11 +47,12 @@ interface TimeSlot {
   tasks: SlotTask[]
 }
 
-const SLOT_META: Record<string, { icon: string; label: string; start: string; end: string }> = {
-  morning:   { icon: '🌅', label: '早晨', start: '07:00', end: '09:00' },
-  forenoon:  { icon: '☀',  label: '上午', start: '09:00', end: '12:00' },
-  noon:      { icon: '🍱', label: '午間', start: '12:00', end: '14:00' },
-  afternoon: { icon: '🌆', label: '下午', start: '14:00', end: '18:00' },
+// 時段圖示走 Element Plus 線稿（原本是 emoji，各平台字型長相不一）
+const SLOT_META: Record<string, { icon: Component; label: string; start: string; end: string }> = {
+  morning:   { icon: Sunrise, label: '早晨', start: '07:00', end: '09:00' },
+  forenoon:  { icon: Sunny,   label: '上午', start: '09:00', end: '12:00' },
+  noon:      { icon: Food,    label: '午間', start: '12:00', end: '14:00' },
+  afternoon: { icon: Sunset,  label: '下午', start: '14:00', end: '18:00' },
 }
 
 const props = withDefaults(defineProps<{
@@ -62,7 +64,7 @@ const props = withDefaults(defineProps<{
 defineEmits<{ 'open-sheet': [task: SlotTask]; 'jump-page': [task: SlotTask] }>()
 
 const slotMeta = computed(
-  () => SLOT_META[props.slot.slot_id ?? ''] ?? { icon: '•', label: props.slot.slot_id ?? '', start: '', end: '' }
+  () => SLOT_META[props.slot.slot_id ?? ''] ?? { icon: Clock, label: props.slot.slot_id ?? '', start: '', end: '' }
 )
 </script>
 
@@ -72,7 +74,7 @@ const slotMeta = computed(
 }
 .slot-card--current {
   border: 2px solid var(--el-color-primary);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
 }
 .slot-card__header {
   display: flex;
@@ -80,7 +82,8 @@ const slotMeta = computed(
   gap: 8px;
 }
 .slot-card__icon {
-  font-size: 20px;
+  font-size: 18px;
+  color: var(--el-color-primary);
 }
 .slot-card__label {
   font-weight: 600;

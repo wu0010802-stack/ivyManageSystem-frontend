@@ -86,7 +86,21 @@ defineEmits<{
 .batch-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding: var(--space-3);
+}
+/* EP 相鄰按鈕預設 margin-left 與 gap 疊加，折行後首顆會縮排 */
+.batch-bar :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+@media (--to-sm) {
+  .batch-bar :deep(.el-divider--vertical) {
+    display: none;
+  }
+  .batch-bar :deep(.el-checkbox) {
+    width: 100%;
+  }
 }
 </style>

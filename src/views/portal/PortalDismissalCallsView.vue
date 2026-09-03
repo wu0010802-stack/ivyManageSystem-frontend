@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, CircleCheck, Mute, Refresh } from '@element-plus/icons-vue'
+import { Bell, CircleCheck, Mute, Refresh, Pointer } from '@element-plus/icons-vue'
 import {
   acknowledgeDismissalCall,
   completeDismissalCall,
   cancelPortalDismissalCall,
 } from '@/api/dismissalCalls'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import {
   useNowClock,
   isPreArrivalNotice,
@@ -114,12 +115,14 @@ onMounted(() => {
     <!-- 無障礙即時宣告：新通知到達時報讀，與 beep/震動/瀏覽器推播對等 -->
     <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ liveAnnounce }}</p>
 
+    <!-- sticky 外殼保留（接送通知要一直看得到連線狀態與聲音開關），內容改走共用頁首 -->
     <header class="page-head">
-      <h2 class="page-head__title">
-        接送通知
-        <span v-if="activeCalls.length" class="page-head__count">待接送 {{ activeCalls.length }}</span>
-      </h2>
-      <div class="page-head__tools">
+      <PortalPageHeader>
+        <template #title>
+          接送通知
+          <span v-if="activeCalls.length" class="page-head__count">待接送 {{ activeCalls.length }}</span>
+        </template>
+        <template #actions>
         <el-tag
           :type="wsConnected ? 'success' : 'warning'"
           size="small"
@@ -146,12 +149,14 @@ onMounted(() => {
             @click="testSound"
           >測試</button>
         </div>
-      </div>
+        </template>
+      </PortalPageHeader>
     </header>
 
     <!-- 音效尚未解鎖提示：iOS/LINE WebView 需 user gesture 才能播聲音 -->
     <div v-if="!audioUnlocked" class="degrade-hint degrade-hint--audio" role="status">
-      <span>👆 點一下畫面以啟用接送提醒音</span>
+      <el-icon aria-hidden="true"><Pointer /></el-icon>
+      <span>點一下畫面以啟用接送提醒音</span>
     </div>
 
     <!-- 背景推播不可用提示：此裝置/瀏覽器不支援 Notification，或使用者未授權 -->
@@ -250,21 +255,13 @@ onMounted(() => {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
   padding: var(--space-3) 0;
   margin-bottom: var(--space-3);
   background: var(--bg-color, var(--neutral-50));
 }
 
-.page-head__title {
-  margin: 0;
-  font-size: var(--text-3xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--text-primary);
+.page-head :deep(.portal-page-header) {
+  margin-bottom: 0;
 }
 /* 待接送即時計數：老師一眼知道還有幾位待處理 */
 .page-head__count {
@@ -280,11 +277,6 @@ onMounted(() => {
   vertical-align: middle;
 }
 
-.page-head__tools {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
 
 /* ─── 聲音控制：顯性顯示開/關 + 測試 ─── */
 .sound-ctl {
@@ -462,7 +454,7 @@ onMounted(() => {
 }
 
 @media (max-width: 560px) {
-  .page-head__tools {
+  .page-head :deep(.portal-page-header__actions) {
     width: 100%;
     justify-content: space-between;
   }

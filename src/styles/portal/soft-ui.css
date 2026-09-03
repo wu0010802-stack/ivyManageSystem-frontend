@@ -53,6 +53,13 @@
   --pt-gradient-portal-soft: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
 }
 
+/* ========== 導航更新 MessageBox ==========
+ * PortalLayout 的一次性提示訊息含條列與換行，EP 預設 white-space 會壓成一行 */
+.portal-onboarding-box .el-message-box__message p {
+  white-space: pre-line;
+  line-height: 1.7;
+}
+
 /* ========== Card utility ========== */
 .pt-card {
   background: var(--pt-surface-card);

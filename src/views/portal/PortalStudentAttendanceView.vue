@@ -31,6 +31,7 @@ import StudentAttendanceTabs from './components/studentAttendance/StudentAttenda
 import StudentRollcallTable from './components/studentAttendance/StudentRollcallTable.vue'
 import StudentMonthlyStats from './components/studentAttendance/StudentMonthlyStats.vue'
 import StudentOfflinePanel from './components/studentAttendance/StudentOfflinePanel.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 interface ClassroomEntry { classroom_id?: number; classroom_name?: string; [key: string]: unknown }
 interface AttendanceRecord { student_id?: number; status?: string; remark?: string; [key: string]: unknown }
@@ -282,9 +283,7 @@ onMounted(async () => {
 
 <template>
   <div>
-    <div class="page-header">
-      <h3>學生點名</h3>
-    </div>
+    <PortalPageHeader title="學生點名" />
 
     <StudentOfflinePanel
       :is-online="isOnline"
@@ -365,19 +364,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.page-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: 600;
-}
-
 .review-list {
   margin: 6px 0 0 0;
   padding-left: 18px;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { WarningFilled, Present } from '@element-plus/icons-vue'
 
 interface ContactBook {
   roster?: number
@@ -80,7 +81,7 @@ function gotoDismissal() {
     </div>
 
     <div v-if="consecutiveAbsences.length" class="alert-row">
-      <span class="alert-label">⚠ 連續缺席</span>
+      <span class="alert-label alert-label--warn"><el-icon aria-hidden="true"><WarningFilled /></el-icon>連續缺席</span>
       <span class="alert-content">
         <span v-for="a in consecutiveAbsences" :key="a.student_id" class="chip warn">
           {{ a.student_name }}（{{ a.days }} 天）
@@ -89,7 +90,7 @@ function gotoDismissal() {
     </div>
 
     <div v-if="upcomingBirthdays.length" class="alert-row">
-      <span class="alert-label">🎂 近期生日</span>
+      <span class="alert-label alert-label--happy"><el-icon aria-hidden="true"><Present /></el-icon>近期生日</span>
       <span class="alert-content">
         <span v-for="b in upcomingBirthdays" :key="b.student_id" class="chip happy">
           {{ b.student_name }}（{{ b.days_until === 0 ? '今天' : `${b.days_until} 天後` }}）
@@ -98,7 +99,7 @@ function gotoDismissal() {
     </div>
 
     <div v-if="allergyAlerts.length" class="alert-row">
-      <span class="alert-label">⚠ 過敏注意</span>
+      <span class="alert-label alert-label--danger"><el-icon aria-hidden="true"><WarningFilled /></el-icon>過敏注意</span>
       <span class="alert-content">
         <span v-for="a in allergyAlerts" :key="a.student_id" class="chip danger">
           {{ a.student_name }}：{{ (a.allergens || []).map(x => x.allergen).join('、') }}
@@ -143,10 +144,18 @@ function gotoDismissal() {
   font-size: var(--text-sm);
 }
 .alert-label {
-  width: 80px;
+  width: 88px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--pt-text-muted);
   flex-shrink: 0;
+  line-height: 1.5;
 }
+.alert-label .el-icon { font-size: 15px; }
+.alert-label--warn .el-icon { color: var(--color-warning-darker); }
+.alert-label--happy .el-icon { color: var(--color-tint-activity-fg); }
+.alert-label--danger .el-icon { color: var(--color-danger-darker); }
 .alert-content { flex: 1; display: flex; gap: var(--space-2); flex-wrap: wrap; }
 .chip {
   display: inline-flex; align-items: center;

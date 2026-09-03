@@ -6,6 +6,8 @@ import { getMyStudents } from '@/api/portal'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TAG as _SEVERITY_TAG } from '@/constants/studentRecords'
 import { useIsMobile } from '@/composables/useIsMobile'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import { Plus } from '@element-plus/icons-vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const TYPE_TAG = _TYPE_TAG as Record<string, ElTagType>
@@ -165,15 +167,15 @@ onMounted(async () => {
 
 <template>
   <div>
-    <div v-if="fromHub" class="from-hub-bar">
-      <el-button type="primary" link @click="backToHub">
-        ← 返回今日工作台
-      </el-button>
-    </div>
-    <div class="page-header">
-      <h3>事件紀錄</h3>
-      <el-button type="primary" size="small" @click="openCreate">＋ 新增事件</el-button>
-    </div>
+    <PortalPageHeader
+      title="事件紀錄"
+      :back-label="fromHub ? '返回今日工作台' : ''"
+      @back="backToHub"
+    >
+      <template #actions>
+        <el-button type="primary" size="small" :icon="Plus" @click="openCreate">新增事件</el-button>
+      </template>
+    </PortalPageHeader>
 
     <el-tabs
       v-if="classrooms.length > 0"
@@ -356,20 +358,4 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
-.from-hub-bar {
-  margin: 0 0 12px;
-  padding: 4px 0;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h3 {
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: 600;
-}
 </style>

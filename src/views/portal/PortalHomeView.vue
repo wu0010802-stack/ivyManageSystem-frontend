@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Warning } from '@element-plus/icons-vue'
+import { Warning, ArrowRight } from '@element-plus/icons-vue'
 import { usePortalDashboard } from '@/composables/usePortalDashboard'
 import { getMyLeaveQuotaExpiry } from '@/api/portalLeaveQuotaExpiry'
 import { getTodayHub } from '@/api/portalClassHub'
@@ -189,12 +189,9 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
     <template v-else-if="summary">
       <PendingActionsCard :actions="actions" />
 
-      <el-card v-if="leaveQuotaInfo" class="leave-quota-card" shadow="hover">
-        <template #header>
-          <div class="card-header">
-            <span>補休結餘</span>
-          </div>
-        </template>
+      <!-- 與同頁 PendingActionsCard／QuickLinksCard 同一套 pt-card 語彙（原本獨自用 el-card + header 分隔線） -->
+      <section v-if="leaveQuotaInfo" class="pt-card leave-quota-card">
+        <h3 class="card-title">補休結餘</h3>
         <div class="leave-quota-content">
           <div class="balance">
             <span class="number">{{ leaveQuotaInfo.compensatory_balance.toFixed(1) }}</span>
@@ -215,10 +212,12 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
             <span class="hint">（未休將自動折算工資）</span>
           </div>
           <div class="history-link-row">
-            <router-link to="/portal/leave-history" class="history-link">查看詳細歷史 →</router-link>
+            <router-link to="/portal/leave-history" class="history-link">
+              查看詳細歷史<el-icon aria-hidden="true"><ArrowRight /></el-icon>
+            </router-link>
           </div>
         </div>
-      </el-card>
+      </section>
 
       <div class="classroom-section pt-stagger">
         <h3 class="pt-section-title">我的班級</h3>
@@ -397,9 +396,11 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
 
 /* 補休結餘 widget */
 .leave-quota-card {
-  border-radius: var(--radius-md);
+  padding: var(--space-4);
 }
-.leave-quota-card .card-header {
+.leave-quota-card .card-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--pt-text-strong);
 }
@@ -440,6 +441,9 @@ const isAnomaly = computed(() => Boolean(attendance.value?.is_anomaly))
   margin-top: var(--space-1);
 }
 .history-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-size: var(--text-sm);
   color: var(--el-color-primary);
   text-decoration: none;

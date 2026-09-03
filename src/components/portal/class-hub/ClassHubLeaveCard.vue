@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { House, ArrowRight } from '@element-plus/icons-vue'
 import { onMounted, ref } from 'vue'
 
 import { listPortalStudentLeaves } from '@/api/portalStudentLeaves'
@@ -44,9 +45,11 @@ onMounted(load)
        （同 PortalClassHubView 的既有約束）。 -->
   <section class="leave-card pt-card-elevated" v-loading="loading && !items.length">
     <header class="leave-card__head">
-      <span class="emoji" role="img" aria-label="請假">🏠</span>
+      <el-icon class="leave-card__icon" aria-hidden="true"><House /></el-icon>
       <h3>近期請假</h3>
-      <RouterLink class="leave-card__all" to="/portal/student-leaves">查看全部 →</RouterLink>
+      <RouterLink class="leave-card__all" to="/portal/student-leaves">
+        查看全部<el-icon aria-hidden="true"><ArrowRight /></el-icon>
+      </RouterLink>
     </header>
 
     <p v-if="errorMessage" class="leave-card__error">
@@ -80,6 +83,10 @@ onMounted(load)
 .leave-card__head h3 {
   margin: 0;
   font-size: 16px;
+}
+.leave-card__icon {
+  font-size: 18px;
+  color: var(--color-tint-leave-fg);
 }
 
 .leave-card__all {

@@ -1,8 +1,10 @@
 <template>
   <div class="portal-survey-list">
+    <PortalPageHeader title="活動調查" />
+
     <el-table :data="rows" v-loading="loading" border @row-click="onRowClick">
       <template #empty>
-        <el-empty description="尚無調查資料" />
+        <EmptyState variant="inline" title="尚無調查資料" />
       </template>
       <el-table-column label="標題" prop="title" min-width="160" />
       <el-table-column label="活動日" width="110">
@@ -24,6 +26,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { listPortalSurveys } from '@/api/surveys'
 import { friendlyError } from '@/utils/errorMessages'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface Row {
   id: number

@@ -5,6 +5,8 @@ import { ElMessage } from 'element-plus'
 import { CircleCheck } from '@element-plus/icons-vue'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface AnomalyEntry { id: number; type?: string; confirmed?: boolean; date?: string; weekday?: string; type_label?: string; detail?: string; estimated_deduction?: number | string; selected_action?: string; remark?: string; submitting?: boolean; [key: string]: unknown }
 const loading = ref(false)
@@ -78,17 +80,18 @@ onMounted(fetchAnomalies)
 
 <template>
   <div class="portal-anomaly">
-    <div class="page-header">
-      <h2>出勤異常確認</h2>
-      <div class="query-row">
-        <el-select v-model="query.year" style="width: 100px;" @change="fetchAnomalies">
-          <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
-        </el-select>
-        <el-select v-model="query.month" style="width: 100px;" @change="fetchAnomalies">
-          <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
-        </el-select>
-      </div>
-    </div>
+    <PortalPageHeader title="出勤異常確認">
+      <template #actions>
+        <div class="query-row">
+          <el-select v-model="query.year" style="width: 100px;" @change="fetchAnomalies">
+            <el-option v-for="y in yearOptions" :key="y" :label="`${y}年`" :value="y" />
+          </el-select>
+          <el-select v-model="query.month" style="width: 100px;" @change="fetchAnomalies">
+            <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
+          </el-select>
+        </div>
+      </template>
+    </PortalPageHeader>
 
     <el-alert
       v-if="pendingCount > 0"
@@ -159,11 +162,12 @@ onMounted(fetchAnomalies)
         </div>
       </el-card>
 
-      <el-empty v-if="!loading && anomalies.length === 0" description="本月無出勤異常">
-        <template #image>
-          <el-icon :size="60" style="color: #67c23a;"><CircleCheck /></el-icon>
-        </template>
-      </el-empty>
+      <EmptyState
+        v-if="!loading && anomalies.length === 0"
+        variant="mobile"
+        :icon="CircleCheck"
+        title="本月無出勤異常"
+      />
     </div>
   </div>
 </template>

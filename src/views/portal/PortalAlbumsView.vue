@@ -1,11 +1,12 @@
 <template>
   <div class="portal-albums-view">
-    <div class="view-header">
-      <h2>班級相簿</h2>
-      <el-button type="primary" @click="createVisible = true">建立相簿</el-button>
-    </div>
+    <PortalPageHeader title="班級相簿">
+      <template #actions>
+        <el-button type="primary" :icon="Plus" @click="createVisible = true">建立相簿</el-button>
+      </template>
+    </PortalPageHeader>
 
-    <el-empty v-if="!loading && albums.length === 0" description="還沒有相簿，建立第一本吧" />
+    <EmptyState v-if="!loading && albums.length === 0" variant="mobile" title="還沒有相簿，建立第一本吧" />
 
     <div class="album-grid">
       <div
@@ -64,9 +65,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { Plus } from '@element-plus/icons-vue'
 
 import { createAlbum, getAlbumClassrooms, listAlbums } from '@/api/classAlbums'
 import type { AlbumClassroomOption, AlbumSummary } from '@/api/classAlbums'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -131,5 +135,4 @@ defineExpose({ createForm, submitCreate })
 .album-cover img { width: 100%; height: 100%; object-fit: cover; }
 .album-info { padding: 10px 12px; }
 .album-warning { color: var(--el-color-warning); font-size: 12px; margin-top: 4px; }
-.view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 </style>

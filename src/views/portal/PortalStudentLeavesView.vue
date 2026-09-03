@@ -7,6 +7,8 @@
  * 僅回 approved，預設視窗過去 7 天～未來 14 天）。
  */
 import { computed, onMounted, ref, watch } from 'vue'
+import { House } from '@element-plus/icons-vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 import { getMyStudents } from '@/api/portal'
 import { listPortalStudentLeaves } from '@/api/portalStudentLeaves'
@@ -144,10 +146,10 @@ onMounted(() => {
 
 <template>
   <div class="student-leaves">
-    <header class="page-head">
-      <h2>學生請假</h2>
-      <p class="page-head__sub">家長端登記即成立，無需審核；此頁供教師掌握班上請假狀況。</p>
-    </header>
+    <PortalPageHeader
+      title="學生請假"
+      subtitle="家長端登記即成立，無需審核；此頁供教師掌握班上請假狀況。"
+    />
 
     <!-- error 與 empty 必須分辨：網路失敗被誤讀為「今天沒人請假」是安全隱患
          （同 ClassHubLeaveCard 的既有約束）。 -->
@@ -157,11 +159,11 @@ onMounted(() => {
       class="today pt-card-elevated"
     >
       <header class="today__head">
-        <span class="emoji" role="img" aria-label="請假">🏠</span>
+        <el-icon class="today__icon" aria-hidden="true"><House /></el-icon>
         <h3>今日請假</h3>
         <span class="today__count"><b data-test="today-count">{{ todayLeaves.length }}</b> 人</span>
       </header>
-      <p v-if="!todayLeaves.length" class="today__empty">今天沒有學生請假 🎉</p>
+      <p v-if="!todayLeaves.length" class="today__empty">今天沒有學生請假</p>
       <ul v-else class="today__list">
         <li v-for="item in todayLeaves" :key="item.id" data-test="today-item">
           <span class="name">{{ item.student_name }}</span>
@@ -271,17 +273,6 @@ onMounted(() => {
   max-width: 860px;
 }
 
-.page-head h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.page-head__sub {
-  margin: 4px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-}
-
 .today,
 .filters,
 .list {
@@ -298,6 +289,11 @@ onMounted(() => {
 .today__head h3 {
   margin: 0;
   font-size: 16px;
+}
+.today__icon {
+  align-self: center;
+  font-size: 18px;
+  color: var(--color-tint-leave-fg);
 }
 
 .today__count {
@@ -367,12 +363,18 @@ onMounted(() => {
 }
 
 .filters__custom input {
+  min-height: 32px;
   border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  padding: 3px 6px;
-  font-size: 13px;
+  border-radius: var(--el-border-radius-base);
+  padding: 0 8px;
+  font: inherit;
+  font-size: var(--text-sm);
   color: var(--el-text-color-regular);
-  background: transparent;
+  background: var(--pt-surface-card);
+}
+.filters__custom input:focus-visible {
+  outline: none;
+  border-color: var(--el-color-primary);
 }
 
 .tilde {

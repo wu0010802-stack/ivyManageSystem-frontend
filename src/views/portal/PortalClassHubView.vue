@@ -1,5 +1,21 @@
 <template>
   <div class="class-hub" v-loading="loading && !data">
+    <!-- 頁首移到最上方（原本夾在請假卡與時段卡之間，標題出現在頁面中段） -->
+    <PortalPageHeader
+      :title="(data?.classroom_name as string | undefined) || '今日工作台'"
+      :subtitle="data?.fetched_at ? `最後更新 ${formatTime(data.fetched_at as string | null | undefined)}` : ''"
+    >
+      <template #actions>
+        <el-button :loading="loading" @click="manualRefresh">
+          手動刷新
+        </el-button>
+        <!-- Phase 1 殼層改版：學生 tab 退出底部導覽，這裡補班級學生入口 -->
+        <el-button @click="goStudents">
+          班級學生
+        </el-button>
+      </template>
+    </PortalPageHeader>
+
     <ClassHubStickyNext :next="stickyNext" @jump="(dl) => jumpDeep(dl || '')" />
 
     <ClassHubBatchMeasurementCard
@@ -8,22 +24,6 @@
     />
 
     <ClassHubLeaveCard />
-
-    <div class="class-hub__header">
-      <h2 class="class-hub__title">
-        {{ data?.classroom_name || '今日工作台' }}
-      </h2>
-      <span v-if="data?.fetched_at" class="class-hub__updated">
-        最後更新 {{ formatTime(data.fetched_at as string | null | undefined) }}
-      </span>
-      <el-button :loading="loading" size="small" @click="manualRefresh">
-        手動刷新
-      </el-button>
-      <!-- Phase 1 殼層改版：學生 tab 退出底部導覽，這裡補班級學生入口 -->
-      <el-button size="small" @click="goStudents">
-        班級學生
-      </el-button>
-    </div>
 
     <!-- 載入失敗（error）與「今日沒有任務」（empty）必須分辨：
          原本一律顯示空狀態，會讓網路失敗被誤讀為「今天沒有用藥/任務」（安全隱患）。 -->
@@ -84,6 +84,7 @@ import ClassHubBatchMeasurementCard from '@/components/portal/class-hub/ClassHub
 import ClassHubLeaveCard from '@/components/portal/class-hub/ClassHubLeaveCard.vue'
 import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
 import PortalErrorState from '@/components/portal/PortalErrorState.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { getMeasurementsLatest } from '@/api/portalMeasurements'
 
 const { data, loading, error, refresh, decrementCount } = usePortalClassHub() as {
@@ -219,22 +220,6 @@ function formatTime(iso: string | null | undefined) {
   padding: 16px;
   max-width: 800px;
   margin: 0 auto;
-}
-.class-hub__header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.class-hub__title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-.class-hub__updated {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  margin-left: auto;
 }
 .class-hub__empty {
   padding: 48px 0;

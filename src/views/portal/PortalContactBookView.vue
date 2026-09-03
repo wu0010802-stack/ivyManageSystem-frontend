@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { getMyStudents } from '@/api/portal'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import {
   applyTemplate,
@@ -34,14 +35,6 @@ interface EntryRecord { id: number; published_at?: string | null; photos?: Photo
 interface ClassroomEntry { classroom_id?: number; classroom_name?: string; [key: string]: unknown }
 interface ItemEntry { student_id: number; student_name?: string; entry?: EntryRecord | null; [key: string]: unknown }
 interface Completion { roster: number; draft: number; published: number; missing: number }
-
-const MOOD_EMOJI = {
-  happy: '😄',
-  normal: '🙂',
-  tired: '😴',
-  sad: '😢',
-  sick: '🤒',
-}
 
 const route = useRoute()
 const classrooms = ref<ClassroomEntry[]>([])
@@ -442,14 +435,11 @@ watch([selectedClassroomId, selectedDate], () => {
 
 <template>
   <div class="contact-book-page">
-    <div v-if="fromHub" class="from-hub-bar">
-      <el-button type="primary" link @click="backToHub">
-        ← 返回今日工作台
-      </el-button>
-    </div>
-    <div class="page-header">
-      <h2>每日聯絡簿</h2>
-    </div>
+    <PortalPageHeader
+      title="每日聯絡簿"
+      :back-label="fromHub ? '返回今日工作台' : ''"
+      @back="backToHub"
+    />
 
     <ContactBookFilterBar
       v-model:classroom-id="(selectedClassroomId as number | undefined)"
@@ -492,7 +482,6 @@ watch([selectedClassroomId, selectedDate], () => {
         v-for="it in visibleItems"
         :key="it.student_id"
         :item="it"
-        :mood-emoji="MOOD_EMOJI"
         @click="(it) => openDrawer(it as ItemEntry)"
       />
     </div>
@@ -562,30 +551,11 @@ watch([selectedClassroomId, selectedDate], () => {
   gap: var(--space-4);
 }
 
-.from-hub-bar {
-  margin: 0 0 12px;
-  padding: 4px 0;
-}
-
 .tpl-list { display: flex; flex-direction: column; gap: var(--space-2); }
 .tpl-row { display: flex; gap: var(--space-2); align-items: center; }
 .hint { font-size: var(--text-xs); color: var(--pt-text-muted); margin-top: var(--space-2); }
 .empty { color: var(--pt-text-muted); padding: var(--space-3); text-align: center; }
 
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
 
 .completion-card {
   border: 1px solid var(--border-color-light);

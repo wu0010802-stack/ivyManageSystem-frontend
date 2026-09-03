@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { BarChart } from '@/composables/useChartJs'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface MonthlyStudent { name?: string; attendance_rate?: number; [key: string]: unknown }
 interface MonthlyData {
@@ -91,7 +92,7 @@ const chartOptions = {
       <el-button size="small" @click="emit('export-csv')">匯出 Excel</el-button>
     </div>
 
-    <div v-if="!data" class="empty-state">尚未載入月度資料</div>
+    <EmptyState v-if="!data" variant="inline" title="尚未載入月度資料" />
 
     <template v-else>
       <!-- Summary cards -->
@@ -134,7 +135,7 @@ const chartOptions = {
             {{ student.name }} 連缺 {{ student.longest_absence_streak }} 天
           </el-tag>
         </div>
-        <el-empty v-else description="本月沒有連續缺席告警" :image-size="60" />
+        <EmptyState v-else variant="inline" title="本月沒有連續缺席告警" />
       </el-card>
 
       <!-- Student monthly detail table -->
@@ -183,12 +184,6 @@ const chartOptions = {
   gap: var(--space-3, 12px);
   align-items: center;
   flex-wrap: wrap;
-}
-
-.empty-state {
-  text-align: center;
-  padding: var(--space-6, 24px);
-  color: var(--pt-text-muted, #9ca3af);
 }
 
 .summary-grid {

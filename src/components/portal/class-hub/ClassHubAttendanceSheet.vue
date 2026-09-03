@@ -8,9 +8,11 @@
     @open="onOpen"
   >
     <div v-loading="loading" class="attn-sheet">
-      <div v-if="!loading && pendingRecords.length === 0" class="attn-empty">
-        <el-empty description="本班學生今日皆已點名" />
-      </div>
+      <EmptyState
+        v-if="!loading && pendingRecords.length === 0"
+        variant="inline"
+        title="本班學生今日皆已點名"
+      />
       <div
         v-for="rec in pendingRecords"
         :key="rec.student_id"
@@ -42,6 +44,7 @@ import {
   getMyClassAttendance,
   batchSaveClassAttendance,
 } from '@/api/portal'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 interface AttendanceRecord { student_id: number | string; name?: string; status?: string | null }
 
@@ -143,9 +146,6 @@ function onOpen() {
 <style scoped>
 .attn-sheet {
   padding: 0 16px 24px;
-}
-.attn-empty {
-  padding: 40px 0;
 }
 .attn-row {
   display: flex;

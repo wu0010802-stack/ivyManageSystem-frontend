@@ -3,10 +3,11 @@ import { onMounted, ref, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getStudentDetail } from '@/api/portalStudentDetail'
-import { Odometer, Star } from '@element-plus/icons-vue'
+import { Odometer, Star, WarningFilled, StarFilled } from '@element-plus/icons-vue'
 import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
 import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
 import PortalErrorState from '@/components/portal/PortalErrorState.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
 
 const props = defineProps({
@@ -103,7 +104,7 @@ function back() {
 
 <template>
   <div class="student-detail">
-    <el-button text @click="back">← 返回班級學生</el-button>
+    <PortalPageHeader back-label="返回班級學生" @back="back" />
 
     <div v-if="loading" class="loading">
       <div class="pt-shimmer skeleton-block"></div>
@@ -133,7 +134,7 @@ function back() {
           ｜ 主要家長：{{ primaryGuardian?.name || '—' }}（{{ primaryGuardian?.phone_masked || '—' }}）
         </p>
         <div v-if="(healthInfo?.allergies as Record<string, unknown>[] | undefined)?.length" class="warn-row">
-          ⚠ 過敏：
+          <el-icon aria-hidden="true"><WarningFilled /></el-icon>過敏：
           <span v-for="a in (healthInfo?.allergies as Record<string, unknown>[])" :key="a.id as number" class="chip danger">
             {{ a.allergen }}（{{ a.severity }}）
           </span>
@@ -204,7 +205,7 @@ function back() {
               <li v-for="o in observations" :key="o.id as number">
                 <strong>{{ o.observation_date }}</strong>
                 <span v-if="o.domain" class="domain-tag">{{ o.domain }}</span>
-                <span v-if="o.is_highlight" class="highlight">✨ 成長亮點</span>
+                <span v-if="o.is_highlight" class="highlight"><el-icon aria-hidden="true"><StarFilled /></el-icon> 成長亮點</span>
                 <p>{{ o.narrative }}</p>
               </li>
             </ul>
@@ -326,6 +327,9 @@ function back() {
   gap: var(--space-2);
   align-items: center;
 }
+.warn-row .el-icon {
+  vertical-align: -2px;
+}
 .chip.danger {
   background: var(--color-danger-lighter);
   color: var(--color-danger);
@@ -376,7 +380,13 @@ function back() {
 .source-tag { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
 .published-tag { background: var(--color-success-lighter); color: var(--color-success); }
 .draft-tag { background: var(--pt-surface-mute); color: var(--pt-text-muted); }
-.highlight { background: var(--color-warning-lighter); color: var(--color-warning); }
+.highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--color-warning-lighter);
+  color: var(--color-warning-darker);
+}
 .mood { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
 
 .status-tag.出席 { background: var(--color-success-lighter); color: var(--color-success); }

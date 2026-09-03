@@ -16,6 +16,7 @@ import { apiError } from '@/utils/error'
 import { todayISO } from '@/utils/format'
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 const { fromHub, backToHub } = usePortalFromHub()
 
@@ -239,12 +240,11 @@ async function confirmDelete(item: WorkSampleItem) {
 
 <template>
   <div class="ws-view">
-    <div v-if="fromHub" class="from-hub-bar">
-      <el-button type="primary" link @click="backToHub"> ← 返回今日工作台 </el-button>
-    </div>
-    <header class="page-header">
-      <h2>作品上傳</h2>
-    </header>
+    <PortalPageHeader
+      title="作品上傳"
+      :back-label="fromHub ? '返回今日工作台' : ''"
+      @back="backToHub"
+    />
 
     <!-- 選擇學生：行動優先用可點選 chip，不用下拉（避免多層點擊） -->
     <div class="pt-card form-card">
@@ -396,9 +396,6 @@ async function confirmDelete(item: WorkSampleItem) {
 
 <style scoped>
 .ws-view { max-width: 800px; margin: 0 auto; }
-.from-hub-bar { margin: 0 0 12px; padding: 4px 0; }
-.page-header { margin-bottom: var(--space-3); }
-.page-header h2 { margin: 0; color: var(--pt-text-strong); }
 
 .form-card, .recent-card {
   padding: var(--space-4);

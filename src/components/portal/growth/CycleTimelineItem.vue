@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { CaretRight } from '@element-plus/icons-vue'
 import { gradeStyle, cycleLabel } from '@/composables/usePortalAppraisal'
 import ItemRadarChart from './ItemRadarChart.vue'
 import ScoreItemsTable from './ScoreItemsTable.vue'
@@ -82,7 +83,7 @@ const statusLabel = (item: AppraisalCycle) => {
         :style="{ background: gradeStyle(item.grade ?? '').color }"
       >{{ gradeStyle(item.grade ?? '').label }}</span>
       <span v-else class="status-chip">{{ statusLabel(item) }}</span>
-      <span class="chevron" :class="{ open: expanded }">▸</span>
+      <el-icon class="chevron" :class="{ open: expanded }" aria-hidden="true"><CaretRight /></el-icon>
     </button>
     <div v-if="expanded && item.is_visible" class="detail">
       <div v-if="loading" class="loading">載入中…</div>

@@ -44,8 +44,6 @@ const globalConfig = {
   },
 }
 
-const MOOD_EMOJI = { happy: '😄', normal: '🙂', tired: '😴', sad: '😢', sick: '🤒' }
-
 const ITEM_NO_ENTRY = { student_id: 1, student_name: '小明', entry: null }
 const ITEM_DRAFT = {
   student_id: 2,
@@ -87,7 +85,7 @@ const ITEM_NO_MOOD = {
 describe('ContactBookEntryCard', () => {
   it('renders student name', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_NO_ENTRY, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_NO_ENTRY },
       global: globalConfig,
     })
     expect(w.text()).toContain('小明')
@@ -95,7 +93,7 @@ describe('ContactBookEntryCard', () => {
 
   it('shows 未填 tag when no entry', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_NO_ENTRY, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_NO_ENTRY },
       global: globalConfig,
     })
     expect(w.text()).toContain('未填')
@@ -103,7 +101,7 @@ describe('ContactBookEntryCard', () => {
 
   it('shows 草稿 tag when entry has no published_at', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_DRAFT, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_DRAFT },
       global: globalConfig,
     })
     expect(w.text()).toContain('草稿')
@@ -111,31 +109,34 @@ describe('ContactBookEntryCard', () => {
 
   it('shows 已發布 tag when entry has published_at', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_PUBLISHED, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_PUBLISHED },
       global: globalConfig,
     })
     expect(w.text()).toContain('已發布')
   })
 
-  it('shows mood emoji when entry has mood', () => {
+  it('shows mood label chip when entry has mood（教師端不用 emoji）', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_DRAFT, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_DRAFT },
       global: globalConfig,
     })
-    expect(w.text()).toContain('😄')
+    const chip = w.find('[data-test="mood-chip"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toBe('開心')
+    expect(w.text()).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u)
   })
 
-  it('shows — when no mood', () => {
+  it('shows 未記錄 when no mood', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_NO_MOOD, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_NO_MOOD },
       global: globalConfig,
     })
-    expect(w.text()).toContain('—')
+    expect(w.find('[data-test="mood-chip"]').text()).toBe('未記錄')
   })
 
   it('shows teacher_note when present', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_DRAFT, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_DRAFT },
       global: globalConfig,
     })
     expect(w.text()).toContain('今日表現很好')
@@ -143,7 +144,7 @@ describe('ContactBookEntryCard', () => {
 
   it('shows 尚未填寫 when no teacher_note', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_NO_ENTRY, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_NO_ENTRY },
       global: globalConfig,
     })
     expect(w.text()).toContain('尚未填寫')
@@ -151,7 +152,7 @@ describe('ContactBookEntryCard', () => {
 
   it('shows photo count when entry has photos', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_PUBLISHED, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_PUBLISHED },
       global: globalConfig,
     })
     expect(w.text()).toContain('1 張')
@@ -159,7 +160,7 @@ describe('ContactBookEntryCard', () => {
 
   it('emits click with item when card is clicked', async () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_PUBLISHED, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_PUBLISHED },
       global: globalConfig,
     })
     await w.findComponent({ name: 'ElCard' }).vm.$emit('click')
@@ -175,7 +176,7 @@ describe('ContactBookEntryCard 家長回流訊號（2026-09-02 對齊稽核）',
       entry: { ...ITEM_PUBLISHED.entry, parent_ack_count: 1, parent_reply_count: 2 },
     }
     const w = mount(ContactBookEntryCard, {
-      props: { item, moodEmoji: MOOD_EMOJI },
+      props: { item },
       global: globalConfig,
     })
     const box = w.find('[data-testid="cb-parent-signals"]')
@@ -185,7 +186,7 @@ describe('ContactBookEntryCard 家長回流訊號（2026-09-02 對齊稽核）',
   })
   it('已發布但無互動時顯示「已讀 0」且不顯示回覆', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_PUBLISHED, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_PUBLISHED },
       global: globalConfig,
     })
     const box = w.find('[data-testid="cb-parent-signals"]')
@@ -194,7 +195,7 @@ describe('ContactBookEntryCard 家長回流訊號（2026-09-02 對齊稽核）',
   })
   it('草稿不顯示家長訊號（家長根本看不到草稿）', () => {
     const w = mount(ContactBookEntryCard, {
-      props: { item: ITEM_DRAFT, moodEmoji: MOOD_EMOJI },
+      props: { item: ITEM_DRAFT },
       global: globalConfig,
     })
     expect(w.find('[data-testid="cb-parent-signals"]').exists()).toBe(false)

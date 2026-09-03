@@ -3,7 +3,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
-import { Warning } from '@element-plus/icons-vue'
+import { Warning, Plus } from '@element-plus/icons-vue'
 import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
 import type { ApiBody } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
@@ -11,6 +11,8 @@ import { useIsMobile } from '@/composables/useIsMobile'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import PortalPunchCorrectionForm from '@/components/portal/PortalPunchCorrectionForm.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { isMobile } = useIsMobile()
 
@@ -127,10 +129,11 @@ onMounted(() => {
 
 <template>
   <div class="portal-punch-correction">
-    <div class="page-header">
-      <h2>補打卡申請</h2>
-      <el-button type="primary" @click="openForm">新增申請</el-button>
-    </div>
+    <PortalPageHeader title="補打卡申請">
+      <template #actions>
+        <el-button type="primary" :icon="Plus" @click="openForm">新增申請</el-button>
+      </template>
+    </PortalPageHeader>
 
     <el-card class="notice-card">
       <div class="notice-content">
@@ -194,7 +197,7 @@ onMounted(() => {
       </el-table>
 
       <!-- 桌機空狀態；手機空狀態由 AdminListCards emptyText 負責 -->
-      <el-empty v-if="!isMobile && !loading && corrections.length === 0" description="本月無補打卡申請記錄" />
+      <EmptyState v-if="!isMobile && !loading && corrections.length === 0" variant="inline" title="本月無補打卡申請記錄" />
 
       <!-- 手機卡片視圖；row-key="id" 對應後端 _format_correction 回傳 id 欄位 -->
       <AdminListCards
@@ -253,20 +256,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--space-4);
-}
-
-.page-header h2 {
-  margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
 .notice-card {
   margin-bottom: var(--space-4);
 }

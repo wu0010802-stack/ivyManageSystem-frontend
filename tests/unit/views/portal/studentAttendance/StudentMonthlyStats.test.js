@@ -62,11 +62,6 @@ const STUBS = {
     name: 'ElTag',
     props: ['type', 'effect'],
   },
-  ElEmpty: {
-    template: '<div class="el-empty">{{ description }}</div>',
-    name: 'ElEmpty',
-    props: ['description', 'imageSize'],
-  },
   ElTable: {
     template: '<table class="el-table"><slot /></table>',
     name: 'ElTable',
@@ -125,13 +120,13 @@ describe('StudentMonthlyStats', () => {
     expect(w.text()).toContain('4 天')
   })
 
-  it('shows el-empty in alert section when no alerts', () => {
+  it('shows empty state in alert section when no alerts', () => {
     const dataNoAlerts = { ...DATA, alerts: [] }
     const w = mount(StudentMonthlyStats, {
       props: { data: dataNoAlerts, monthPicker: '2026-05', loading: false },
       global: { stubs: STUBS },
     })
-    expect(w.findComponent({ name: 'ElEmpty' }).exists()).toBe(true)
+    expect(w.text()).toContain('本月沒有連續缺席告警')
   })
 
   it('emits update:monthPicker', async () => {

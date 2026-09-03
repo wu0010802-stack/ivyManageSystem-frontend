@@ -5,6 +5,8 @@ import { InfoFilled, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 import type { ApiResponse } from '@/api/_generated/typed'
 import { useIsMobile } from '@/composables/useIsMobile'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 // 2026-08-24 起吃後端 PortalSalaryPreviewOut 生成型別：salary 為
 // build_history_breakdown 三區明細（income/deductions/separate_transfer 皆為
@@ -79,14 +81,15 @@ onMounted(fetchSalary)
 
 <template>
   <div class="portal-salary">
-    <div class="page-header">
-      <h2>薪資查詢</h2>
-      <div class="month-nav">
-        <el-button class="month-nav-btn" :icon="ArrowLeft" circle aria-label="上個月" @click="prevMonth" />
-        <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-        <el-button class="month-nav-btn" :icon="ArrowRight" circle aria-label="下個月" @click="nextMonth" />
-      </div>
-    </div>
+    <PortalPageHeader title="薪資查詢">
+      <template #actions>
+        <div class="month-nav">
+          <el-button class="month-nav-btn" :icon="ArrowLeft" circle aria-label="上個月" @click="prevMonth" />
+          <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
+          <el-button class="month-nav-btn" :icon="ArrowRight" circle aria-label="下個月" @click="nextMonth" />
+        </div>
+      </template>
+    </PortalPageHeader>
 
     <div v-loading="loading">
       <!-- Attendance Stats -->
@@ -202,14 +205,7 @@ onMounted(fetchSalary)
       </el-card>
 
       <el-card v-else-if="salaryData && !salaryData.salary">
-        <el-empty :description="statusMessage.title">
-          <template #description>
-            <p style="margin: 0; font-weight: 600;">{{ statusMessage.title }}</p>
-            <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: var(--text-sm);">
-              {{ statusMessage.desc }}
-            </p>
-          </template>
-        </el-empty>
+        <EmptyState variant="mobile" :title="statusMessage.title" :description="statusMessage.desc" />
       </el-card>
     </div>
   </div>

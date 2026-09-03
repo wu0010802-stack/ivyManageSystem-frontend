@@ -7,6 +7,8 @@ import { listObservations, createObservation } from '@/api/portalObservations'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import EmptyState from '@/components/common/EmptyState.vue'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import { StarFilled } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const { fromHub, backToHub } = usePortalFromHub()
@@ -129,14 +131,11 @@ async function submit() {
 
 <template>
   <div class="obs-view">
-    <div v-if="fromHub" class="from-hub-bar">
-      <el-button type="primary" link @click="backToHub">
-        ← 返回今日工作台
-      </el-button>
-    </div>
-    <header class="page-header">
-      <h2>課堂觀察 / 成長紀錄</h2>
-    </header>
+    <PortalPageHeader
+      title="課堂觀察 / 成長紀錄"
+      :back-label="fromHub ? '返回今日工作台' : ''"
+      @back="backToHub"
+    />
 
     <!-- 快速記錄表單 -->
     <div class="pt-card form-card">
@@ -198,7 +197,7 @@ async function submit() {
         </el-form-item>
 
         <el-form-item>
-          <el-checkbox v-model="formIsHighlight">標記為成長亮點 ✨</el-checkbox>
+          <el-checkbox v-model="formIsHighlight">標記為成長亮點</el-checkbox>
         </el-form-item>
 
         <el-form-item>
@@ -220,7 +219,7 @@ async function submit() {
         <li v-for="o in recent" :key="o.id">
           <strong>{{ o.observation_date }}</strong>
           <span v-if="o.domain" class="domain-tag">{{ o.domain }}</span>
-          <span v-if="o.is_highlight" class="hl">✨</span>
+          <el-icon v-if="o.is_highlight" class="hl" aria-label="成長亮點"><StarFilled /></el-icon>
           <p>{{ o.narrative }}</p>
         </li>
       </ul>
@@ -230,12 +229,6 @@ async function submit() {
 
 <style scoped>
 .obs-view { max-width: 800px; margin: 0 auto; }
-.from-hub-bar {
-  margin: 0 0 12px;
-  padding: 4px 0;
-}
-.page-header { margin-bottom: var(--space-3); }
-.page-header h2 { margin: 0; color: var(--pt-text-strong); }
 
 .form-card, .timeline-card {
   padding: var(--space-4);
@@ -287,7 +280,8 @@ async function submit() {
 }
 .hl {
   margin-left: var(--space-1);
-  color: var(--color-warning);
+  color: var(--color-warning-darker);
+  vertical-align: -2px;
 }
 .empty {
   text-align: center;

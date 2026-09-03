@@ -4,6 +4,7 @@ import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { getMeasurementsLatest, createMeasurement } from '@/api/portalMeasurements'
 import { apiError } from '@/utils/error'
+import { Loading, Check, Close } from '@element-plus/icons-vue'
 
 interface MeasurementRow {
   student_id: number | string
@@ -185,9 +186,9 @@ function close() {
             :disabled="submitting"
           />
           <span class="col-status">
-            <template v-if="row.status === 'sending'">…</template>
-            <template v-else-if="row.status === 'ok'">✓</template>
-            <span v-else-if="row.status === 'failed'" class="failed" aria-hidden="true">✗</span>
+            <el-icon v-if="row.status === 'sending'" class="is-loading" aria-hidden="true"><Loading /></el-icon>
+            <el-icon v-else-if="row.status === 'ok'" class="ok" aria-hidden="true"><Check /></el-icon>
+            <el-icon v-else-if="row.status === 'failed'" class="failed" aria-hidden="true"><Close /></el-icon>
           </span>
           <!-- 失敗原因改內聯可見（原本僅 :title hover，手機無 hover 看不到） -->
           <div v-if="row.status === 'failed' && row.error" class="row-error">
@@ -270,9 +271,18 @@ function close() {
 .status-failed {
   background: var(--el-color-danger-light-9);
 }
-.status-failed .failed {
-  color: var(--el-color-danger);
-  font-weight: 700;
+.col-status .ok {
+  color: var(--color-success-darker);
+}
+.col-status .failed {
+  color: var(--color-danger-darker);
+}
+.col-status .is-loading {
+  animation: batch-row-spin 1s linear infinite;
+}
+@keyframes batch-row-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .row-error {
   grid-column: 1 / -1;

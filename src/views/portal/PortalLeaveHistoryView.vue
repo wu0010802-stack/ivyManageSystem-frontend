@@ -7,6 +7,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyCompLeaveGrants, getMyPayoutHistory } from '@/api/portalLeaveQuotaExpiry'
+import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 
 interface CompLeaveGrant {
   grant_id: number
@@ -80,7 +81,7 @@ function money(v: number): string {
 
 <template>
   <div class="portal-leave-history">
-    <h2 class="page-title">補休歷史明細</h2>
+    <PortalPageHeader title="補休歷史明細" />
 
     <el-tabs type="border-card">
       <el-tab-pane label="補休發放紀錄">
@@ -144,12 +145,6 @@ function money(v: number): string {
 <style scoped>
 .portal-leave-history {
   padding: 16px;
-}
-.page-title {
-  margin: 0 0 16px;
-  font-size: var(--text-2xl, 1.5rem);
-  font-weight: 700;
-  color: var(--pt-text-strong, #1a1a2e);
 }
 .hint {
   color: var(--el-text-color-secondary);

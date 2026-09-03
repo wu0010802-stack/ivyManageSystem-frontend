@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { Bell, Camera, Collection, Delete } from '@element-plus/icons-vue'
 import type { UploadRequestOptions } from 'element-plus'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { MOOD_OPTIONS } from './moods'
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
@@ -22,14 +23,6 @@ const emit = defineEmits([
   'delete-photo',  // (photo)
   'close',
 ])
-
-const MOOD_OPTIONS = [
-  { value: 'happy', label: '😄 開心' },
-  { value: 'normal', label: '🙂 普通' },
-  { value: 'tired', label: '😴 疲倦' },
-  { value: 'sad', label: '😢 難過' },
-  { value: 'sick', label: '🤒 不適' },
-]
 
 const MEAL_OPTIONS = [
   { value: 0, label: '未進食' },
