@@ -277,6 +277,9 @@
         結束班次
       </el-button>
     </template>
+
+    <!-- GPS 模擬器面板：只在 VITE_BUS_GPS_SIMULATOR=1 的 build 存在（測試用）。 -->
+    <component :is="GpsSimulatorPanel" v-if="GpsSimulatorPanel" :stops="stops" />
   </div>
 </template>
 
@@ -305,7 +308,7 @@
  * 行車情境的可用性取捨：按鈕一律 `size="large"`（手套／晃動下也點得到）、
  * 操作進行中鎖住整列避免重複送出、結束班次為 danger 並帶二次確認。
  */
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted } from 'vue'
 import {
   DIRECTION_LABELS,
   usePortalBusTrip,
@@ -384,6 +387,15 @@ function stopEta(stop: BusTripStop): string | null {
   const clock = formatTaipeiClock(stop.eta_live || stop.eta_planned)
   return clock ? `預計 ${clock}` : null
 }
+
+/**
+ * GPS 模擬器面板（測試用）。未設 `VITE_BUS_GPS_SIMULATOR=1` 時是 `null`，
+ * 元件不會被載入也不會渲染——正式 build 只多一個常數判斷。
+ * 模擬器本體在 `main.ts` 安裝，見 `utils/busGpsSimulator.ts`。
+ */
+const GpsSimulatorPanel = import.meta.env.VITE_BUS_GPS_SIMULATOR === '1'
+  ? defineAsyncComponent(() => import('@/components/dev/BusGpsSimulatorPanel.vue'))
+  : null
 
 onMounted(init)
 // 離開頁面 = 停止追蹤：殘留的 watchPosition 回呼不得再收集座標（隱私守衛），
