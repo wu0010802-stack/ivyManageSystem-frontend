@@ -7001,7 +7001,11 @@ export interface paths {
         delete: operations["delete_bill_slip_batch_api_fees_bill_slip_batches__batch_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Patch Bill Slip Batch
+         * @description 改批次類型（僅未產單批次；存量批次 migration 預設 monthly，誤選可改）。
+         */
+        patch: operations["patch_bill_slip_batch_api_fees_bill_slip_batches__batch_id__patch"];
         trace?: never;
     };
     "/fees/bill-slip-batches/{batch_id}/generate-records": {
@@ -7019,9 +7023,31 @@ export interface paths {
          *
          *     XLS 淨額＝應收權威（已含請假/同胞等調整），CS 代收媒合金額天生吻合。
          *     零元單跳過；未解析列 fail-closed 422（skip_unresolved 明示跳過）；
-         *     同月其他來源月費單衝突 409（XLS 為主、同月互擋，SPEC-018 §2）。
+         *     同期別其他來源同型費用單衝突 409（XLS 為主、同期互擋，SPEC-018 §2）。
+         *     批次類型（月費／註冊費）取自 DB——匯入時宣告（SPEC-019 §6.1）；註冊費批
+         *     產單後自動收掉該生同學期可用預繳額度（SPEC-019 §6.3）。
          */
         post: operations["generate_bill_slip_records_api_fees_bill_slip_batches__batch_id__generate_records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/bill-slip-batches/{batch_id}/items/{item_id}/student": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Assign Bill Slip Item Student
+         * @description 檢核檔姓名對不上在籍學生時，人工指定；之後重跑產單即補該生。
+         */
+        put: operations["assign_bill_slip_item_student_api_fees_bill_slip_batches__batch_id__items__item_id__student_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -7065,24 +7091,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/fees/billing-codes": {
+    "/fees/cash-fee-batches": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List Billing Codes */
-        get: operations["list_billing_codes_api_fees_billing_codes_get"];
+        /** List Cash Fee Batches Route */
+        get: operations["list_cash_fee_batches_route_api_fees_cash_fee_batches_get"];
+        put?: never;
+        /** Create Cash Fee Batch Route */
+        post: operations["create_cash_fee_batch_route_api_fees_cash_fee_batches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/cash-fee-batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Cash Fee Batch Route */
+        get: operations["get_cash_fee_batch_route_api_fees_cash_fee_batches__batch_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete Cash Fee Batch Route */
+        delete: operations["delete_cash_fee_batch_route_api_fees_cash_fee_batches__batch_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/fees/billing-codes/{assignment_id}/deactivate": {
+    "/fees/cash-fee-batches/{batch_id}/entries": {
         parameters: {
             query?: never;
             header?: never;
@@ -7091,15 +7136,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Deactivate Billing Code */
-        post: operations["deactivate_billing_code_api_fees_billing_codes__assignment_id__deactivate_post"];
+        /** Add Cash Fee Batch Entries */
+        post: operations["add_cash_fee_batch_entries_api_fees_cash_fee_batches__batch_id__entries_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/fees/billing-codes/activate": {
+    "/fees/cash-fee-batches/preview": {
         parameters: {
             query?: never;
             header?: never;
@@ -7108,31 +7153,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Activate Billing Codes
-         * @description 會計確認後批次啟用（關舊開新，不覆蓋歷史）。
-         */
-        post: operations["activate_billing_codes_api_fees_billing_codes_activate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fees/billing-codes/suggest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Suggest Billing Codes
-         * @description 依現況產生建議末四碼（僅 preview，不寫入）。
-         */
-        post: operations["suggest_billing_codes_api_fees_billing_codes_suggest_post"];
+        /** Preview Cash Fee Batch */
+        post: operations["preview_cash_fee_batch_api_fees_cash_fee_batches_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7418,33 +7440,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/fees/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Generate From Templates
-         * @description 依該學年/學期所有啟用範本，為符合條件的在學學生產生 FeeRecord。
-         *
-         *     - 範圍：fee_templates 表 is_active=True 且 (school_year, semester, fee_type) 命中。
-         *     - 學生過濾：Classroom.school_year/semester 命中 + Student.lifecycle 為
-         *       active/enrolled + Student.is_active。on_leave/withdrawn/transferred/graduated 跳過。
-         *     - 月費展開：上學期 8-1 月、下學期 2-7 月 共 6 張單據。
-         *     - 冪等：已存在 (student_id, source_template_id, target_month) 跳過。
-         *     - dry_run：回傳 created/skipped 估算但不寫入 DB。
-         */
-        post: operations["generate_from_templates_api_fees_generate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/fees/monthly-statement": {
         parameters: {
             query?: never;
@@ -7463,6 +7458,7 @@ export interface paths {
          *       （收費開始日快照，SPEC-015）落在該月曆月；無快照的舊資料 fallback
          *       ``due_date`` 落在該月曆月
          *     - 皆空的記錄不入任何月表（逐筆明細檢視仍可見）
+         *     - 現金項目批次的單不入月表（SPEC-019 §8.1，自有檢視）
          *
          *     園所規模（單租戶 ≤ 數百學生/月）下單月記錄量小，故不分頁、
          *     不收 status 參數——狀態快篩由前端在聚合結果上即時切換。
@@ -7909,71 +7905,6 @@ export interface paths {
         get: operations["fee_summary_api_fees_summary_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fees/templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Fee Templates */
-        get: operations["list_fee_templates_api_fees_templates_get"];
-        put?: never;
-        /** Create Fee Template */
-        post: operations["create_fee_template_api_fees_templates_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fees/templates/{template_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Fee Template */
-        put: operations["update_fee_template_api_fees_templates__template_id__put"];
-        post?: never;
-        /**
-         * Delete Fee Template
-         * @description 軟刪除(is_active=False),保留歷史記錄。
-         */
-        delete: operations["delete_fee_template_api_fees_templates__template_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/fees/templates/copy-year": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Copy Year Fee Templates
-         * @description SPEC-015 年度設定：複製整學年（上＋下學期）範本到新學年。
-         *
-         *     - 金額/名稱/breakdown/offset/is_active 照抄；billing_start_date 與
-         *       overdue_date 自動平移 (to - from) 年（monthly 的每月幾號欄照抄）。
-         *     - 已存在的 (grade, to_year, semester, fee_type) 跳過（冪等，可重跑）。
-         *     - **不觸發同步產單**：新學年日期金額未經業主確認前不該出帳；後續在
-         *       學年檢視上調整後，由每日排程（掃當前＋下一學期）自然產單。
-         */
-        post: operations["copy_year_fee_templates_api_fees_templates_copy_year_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -22813,122 +22744,10 @@ export interface components {
             /** Template Id */
             template_id: number;
         };
-        /** BillingCodeActivateItem */
-        BillingCodeActivateItem: {
-            /** Code Suffix */
-            code_suffix: string;
-            /** Full Collection Number */
-            full_collection_number?: string | null;
-            /** Student Id */
-            student_id: number;
-        };
-        /** BillingCodeActivateOut */
-        BillingCodeActivateOut: {
-            /** Activated */
-            activated: number;
-            /** Closed */
-            closed: number;
-        };
-        /** BillingCodeActivateRequest */
-        BillingCodeActivateRequest: {
-            /**
-             * Effective From
-             * Format: date
-             */
-            effective_from: string;
-            /** Items */
-            items: components["schemas"]["BillingCodeActivateItem"][];
-            /** Reason */
-            reason?: string | null;
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
-        };
-        /** BillingCodeAssignmentOut */
-        BillingCodeAssignmentOut: {
-            /** Classroom Id */
-            classroom_id?: number | null;
-            /** Code Suffix */
-            code_suffix: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Effective From
-             * Format: date
-             */
-            effective_from: string;
-            /** Effective To */
-            effective_to?: string | null;
-            /** Full Collection Number */
-            full_collection_number?: string | null;
-            /** Id */
-            id: number;
-            /** Reason */
-            reason?: string | null;
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
-            /** Student Id */
-            student_id: number;
-            /** Student Name */
-            student_name?: string | null;
-        };
-        /** BillingCodeDeactivateRequest */
-        BillingCodeDeactivateRequest: {
-            /**
-             * Effective To
-             * Format: date
-             */
-            effective_to: string;
-            /** Reason */
-            reason?: string | null;
-        };
-        /** BillingCodeSuggestionOut */
-        BillingCodeSuggestionOut: {
-            /** Classroom Id */
-            classroom_id: number;
-            /** Classroom Name */
-            classroom_name?: string | null;
-            /** Current Suffix */
-            current_suffix?: string | null;
-            /** Grade Name */
-            grade_name: string;
-            /** State */
-            state: string;
-            /** Student Id */
-            student_id: number;
-            /** Student Name */
-            student_name: string;
-            /** Suggested Suffix */
-            suggested_suffix: string;
-        };
-        /** BillingCodeSuggestOut */
-        BillingCodeSuggestOut: {
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
-            /** Suggestions */
-            suggestions: components["schemas"]["BillingCodeSuggestionOut"][];
-            /** Unassignable */
-            unassignable: {
-                [key: string]: unknown;
-            }[];
-        };
-        /** BillingCodeSuggestRequest */
-        BillingCodeSuggestRequest: {
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
-        };
         /** BillSlipBatchOut */
         BillSlipBatchOut: {
+            /** Batch Kind */
+            batch_kind: string;
             /** Batch No */
             batch_no?: string | null;
             /** Bill Month */
@@ -22964,6 +22783,14 @@ export interface components {
             /** Zero Amount Count */
             zero_amount_count: number;
         };
+        /** BillSlipBatchPatchRequest */
+        BillSlipBatchPatchRequest: {
+            /**
+             * Batch Kind
+             * @enum {string}
+             */
+            batch_kind: "monthly" | "registration";
+        };
         /** BillSlipDeleteOut */
         BillSlipDeleteOut: {
             /** Batch Id */
@@ -22998,6 +22825,8 @@ export interface components {
         BillSlipGenerateOut: {
             /** Batch Id */
             batch_id: number;
+            /** Batch Kind */
+            batch_kind: string;
             /** Conflicts */
             conflicts: components["schemas"]["BillSlipGenerateConflictOut"][];
             /** Created */
@@ -23009,6 +22838,16 @@ export interface components {
              * Format: date
              */
             due_date: string;
+            /**
+             * Prepayment Applied
+             * @default 0
+             */
+            prepayment_applied: number;
+            /**
+             * Prepayment Pending
+             * @default []
+             */
+            prepayment_pending: components["schemas"]["PrepaymentPendingOut"][];
             /** Preview */
             preview: components["schemas"]["BillSlipGeneratePreviewOut"][];
             /** Skipped Existing */
@@ -23016,7 +22855,7 @@ export interface components {
             /** Skipped Zero */
             skipped_zero: number;
             /** Target Month */
-            target_month: string;
+            target_month?: string | null;
             /** Total Amount Due */
             total_amount_due: number;
             /** Unresolved */
@@ -23035,8 +22874,6 @@ export interface components {
         };
         /** BillSlipGenerateRequest */
         BillSlipGenerateRequest: {
-            /** Batch Kind */
-            batch_kind?: "monthly" | null;
             /**
              * Dry Run
              * @default false
@@ -23060,6 +22897,35 @@ export interface components {
             slip_item_id: number;
             /** Student Name */
             student_name: string;
+        };
+        /**
+         * BillSlipItemOut
+         * @description SPEC-019 §5.2：人工指定學生後回傳的發單列。
+         */
+        BillSlipItemOut: {
+            /** Batch Id */
+            batch_id: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Collection Suffix */
+            collection_suffix: string;
+            /** Full Collection Number */
+            full_collection_number: string;
+            /** Grade Name */
+            grade_name?: string | null;
+            /** Id */
+            id: number;
+            /** Net Amount */
+            net_amount: number;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name: string;
+        };
+        /** BillSlipItemStudentRequest */
+        BillSlipItemStudentRequest: {
+            /** Student Id */
+            student_id: number;
         };
         /** BillSlipPreviewOut */
         BillSlipPreviewOut: {
@@ -23201,6 +23067,11 @@ export interface components {
         };
         /** Body_import_bill_slip_batch_api_fees_bill_slip_batches_post */
         Body_import_bill_slip_batch_api_fees_bill_slip_batches_post: {
+            /**
+             * Batch Kind
+             * @enum {string}
+             */
+            batch_kind: "monthly" | "registration";
             /** Batch No */
             batch_no?: string | null;
             /** File */
@@ -24531,6 +24402,151 @@ export interface components {
             prepayment?: components["schemas"]["CandidatePrepayOptionOut"] | null;
             /** Student Id */
             student_id: number;
+        };
+        /** CashFeeBatchCreateRequest */
+        CashFeeBatchCreateRequest: {
+            /** Due Date */
+            due_date?: string | null;
+            /** Entries */
+            entries: components["schemas"]["CashFeeEntryIn"][];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "material" | "miscellaneous";
+            /** Note */
+            note?: string | null;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Title */
+            title: string;
+        };
+        /** CashFeeBatchDeleteOut */
+        CashFeeBatchDeleteOut: {
+            /** Batch Id */
+            batch_id: number;
+            /** Deleted Records */
+            deleted_records: number;
+            /** Ok */
+            ok: boolean;
+            /** Title */
+            title: string;
+        };
+        /** CashFeeBatchDetailOut */
+        CashFeeBatchDetailOut: {
+            batch: components["schemas"]["CashFeeBatchOut"];
+            /** Items */
+            items: components["schemas"]["CashFeeBatchItemOut"][];
+        };
+        /** CashFeeBatchItemOut */
+        CashFeeBatchItemOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Record Id */
+            record_id: number;
+            /** Settlement */
+            settlement: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /** CashFeeBatchOut */
+        CashFeeBatchOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Due Date */
+            due_date?: string | null;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Note */
+            note?: string | null;
+            /** Outstanding */
+            outstanding: number;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Student Count */
+            student_count: number;
+            /** Title */
+            title: string;
+            /** Total Due */
+            total_due: number;
+            /** Total Paid */
+            total_paid: number;
+        };
+        /** CashFeeBatchPreviewOut */
+        CashFeeBatchPreviewOut: {
+            /** Entries */
+            entries: components["schemas"]["CashFeeEntryOut"][];
+            /** Student Count */
+            student_count: number;
+            /** Total Amount */
+            total_amount: number;
+        };
+        /** CashFeeBatchPreviewRequest */
+        CashFeeBatchPreviewRequest: {
+            /** Amounts By Grade */
+            amounts_by_grade: {
+                [key: string]: number;
+            };
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "material" | "miscellaneous";
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
+        /** CashFeeEntriesOut */
+        CashFeeEntriesOut: {
+            /** Created */
+            created: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /** CashFeeEntriesRequest */
+        CashFeeEntriesRequest: {
+            /** Entries */
+            entries: components["schemas"]["CashFeeEntryIn"][];
+        };
+        /** CashFeeEntryIn */
+        CashFeeEntryIn: {
+            /** Amount */
+            amount: number;
+            /** Student Id */
+            student_id: number;
+        };
+        /** CashFeeEntryOut */
+        CashFeeEntryOut: {
+            /** Amount */
+            amount: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Grade Name */
+            grade_name?: string | null;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /** CashReceiptOut */
         CashReceiptOut: {
@@ -26226,39 +26242,6 @@ export interface components {
             updated: number;
             /** Weeks Paired */
             weeks_paired: number;
-        };
-        /** CopyYearTemplateItem */
-        CopyYearTemplateItem: {
-            /** Amount */
-            amount: number;
-            /** Fee Type */
-            fee_type: string;
-            /** Grade Id */
-            grade_id: number;
-            /** Name */
-            name: string;
-            /** Semester */
-            semester: number;
-        };
-        /** CopyYearTemplatesOut */
-        CopyYearTemplatesOut: {
-            /** Created */
-            created: number;
-            /** From School Year */
-            from_school_year: number;
-            /** Items */
-            items: components["schemas"]["CopyYearTemplateItem"][];
-            /** Skipped */
-            skipped: number;
-            /** To School Year */
-            to_school_year: number;
-        };
-        /** CopyYearTemplatesRequest */
-        CopyYearTemplatesRequest: {
-            /** From School Year */
-            from_school_year: number;
-            /** To School Year */
-            to_school_year: number;
         };
         /** CopyYesterdayPayload */
         CopyYesterdayPayload: {
@@ -29183,6 +29166,11 @@ export interface components {
             /** Period */
             period?: string | null;
             settlement: components["schemas"]["FeeRecordSettlementOut"];
+            /**
+             * Source
+             * @default manual
+             */
+            source: string;
             /** Status */
             status?: string | null;
             /** Student Id */
@@ -29290,66 +29278,6 @@ export interface components {
             student_name?: string | null;
             /** Total Refunded */
             total_refunded: number;
-        };
-        /** FeeTemplateCreate */
-        FeeTemplateCreate: {
-            /** Amount */
-            amount: number;
-            /** Billing Start Date */
-            billing_start_date?: string | null;
-            /** Breakdown */
-            breakdown?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Due Date Offset Days
-             * @default 14
-             */
-            due_date_offset_days: number;
-            /** Fee Type */
-            fee_type: string;
-            /** Grade Id */
-            grade_id: number;
-            /**
-             * Is Active
-             * @default true
-             */
-            is_active: boolean;
-            /** Monthly Billing Day */
-            monthly_billing_day?: number | null;
-            /** Monthly Due Day */
-            monthly_due_day?: number | null;
-            /** Name */
-            name: string;
-            /** Overdue Date */
-            overdue_date?: string | null;
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
-        };
-        /** FeeTemplateUpdate */
-        FeeTemplateUpdate: {
-            /** Amount */
-            amount?: number | null;
-            /** Billing Start Date */
-            billing_start_date?: string | null;
-            /** Breakdown */
-            breakdown?: {
-                [key: string]: unknown;
-            } | null;
-            /** Due Date Offset Days */
-            due_date_offset_days?: number | null;
-            /** Is Active */
-            is_active?: boolean | null;
-            /** Monthly Billing Day */
-            monthly_billing_day?: number | null;
-            /** Monthly Due Day */
-            monthly_due_day?: number | null;
-            /** Name */
-            name?: string | null;
-            /** Overdue Date */
-            overdue_date?: string | null;
         };
         /** FinalizeMonthRequest */
         FinalizeMonthRequest: {
@@ -29554,20 +29482,6 @@ export interface components {
             issue_date: string;
             /** Purpose */
             purpose: string;
-        };
-        /** GenerateFromTemplatesRequest */
-        GenerateFromTemplatesRequest: {
-            /**
-             * Dry Run
-             * @default false
-             */
-            dry_run: boolean;
-            /** Fee Types */
-            fee_types: string[];
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
         };
         /** GenerateReportPayload */
         GenerateReportPayload: {
@@ -32352,6 +32266,11 @@ export interface components {
             /** Period */
             period?: string | null;
             settlement: components["schemas"]["FeeRecordSettlementOut"];
+            /**
+             * Source
+             * @default manual
+             */
+            source: string;
             /** Status */
             status?: string | null;
             /** Target Month */
@@ -37874,6 +37793,17 @@ export interface components {
             refund_id?: number | null;
             /** Reversal Of Id */
             reversal_of_id?: number | null;
+        };
+        /** PrepaymentPendingOut */
+        PrepaymentPendingOut: {
+            /** Credit Id */
+            credit_id: number;
+            /** Reason */
+            reason: string;
+            /** Student Id */
+            student_id: number;
+            /** Student Name */
+            student_name: string;
         };
         /** PrepaymentRefundListOut */
         PrepaymentRefundListOut: {
@@ -58129,6 +58059,41 @@ export interface operations {
             };
         };
     };
+    patch_bill_slip_batch_api_fees_bill_slip_batches__batch_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillSlipBatchPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     generate_bill_slip_records_api_fees_bill_slip_batches__batch_id__generate_records_post: {
         parameters: {
             query?: never;
@@ -58151,6 +58116,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillSlipGenerateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    assign_bill_slip_item_student_api_fees_bill_slip_batches__batch_id__items__item_id__student_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: number;
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BillSlipItemStudentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillSlipItemOut"];
                 };
             };
             /** @description Validation Error */
@@ -58230,11 +58231,11 @@ export interface operations {
             };
         };
     };
-    list_billing_codes_api_fees_billing_codes_get: {
+    list_cash_fee_batches_route_api_fees_cash_fee_batches_get: {
         parameters: {
             query?: {
-                active_only?: boolean;
-                student_id?: number | null;
+                school_year?: number | null;
+                semester?: number | null;
             };
             header?: never;
             path?: never;
@@ -58248,7 +58249,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BillingCodeAssignmentOut"][];
+                    "application/json": components["schemas"]["CashFeeBatchOut"][];
                 };
             };
             /** @description Validation Error */
@@ -58262,20 +58263,49 @@ export interface operations {
             };
         };
     };
-    deactivate_billing_code_api_fees_billing_codes__assignment_id__deactivate_post: {
+    create_cash_fee_batch_route_api_fees_cash_fee_batches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashFeeBatchCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashFeeBatchOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cash_fee_batch_route_api_fees_cash_fee_batches__batch_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                assignment_id: number;
+                batch_id: number;
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BillingCodeDeactivateRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -58283,7 +58313,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BillingCodeAssignmentOut"];
+                    "application/json": components["schemas"]["CashFeeBatchDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -58297,18 +58327,16 @@ export interface operations {
             };
         };
     };
-    activate_billing_codes_api_fees_billing_codes_activate_post: {
+    delete_cash_fee_batch_route_api_fees_cash_fee_batches__batch_id__delete: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                batch_id: number;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BillingCodeActivateRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -58316,7 +58344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BillingCodeActivateOut"];
+                    "application/json": components["schemas"]["CashFeeBatchDeleteOut"];
                 };
             };
             /** @description Validation Error */
@@ -58330,16 +58358,18 @@ export interface operations {
             };
         };
     };
-    suggest_billing_codes_api_fees_billing_codes_suggest_post: {
+    add_cash_fee_batch_entries_api_fees_cash_fee_batches__batch_id__entries_post: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                batch_id: number;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BillingCodeSuggestRequest"];
+                "application/json": components["schemas"]["CashFeeEntriesRequest"];
             };
         };
         responses: {
@@ -58349,7 +58379,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BillingCodeSuggestOut"];
+                    "application/json": components["schemas"]["CashFeeEntriesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_cash_fee_batch_api_fees_cash_fee_batches_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashFeeBatchPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashFeeBatchPreviewOut"];
                 };
             };
             /** @description Validation Error */
@@ -58918,39 +58981,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReverseOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    generate_from_templates_api_fees_generate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateFromTemplatesRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -59715,172 +59745,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_fee_templates_api_fees_templates_get: {
-        parameters: {
-            query?: {
-                fee_type?: string | null;
-                is_active?: boolean | null;
-                school_year?: number | null;
-                semester?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_fee_template_api_fees_templates_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FeeTemplateCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_fee_template_api_fees_templates__template_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FeeTemplateUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_fee_template_api_fees_templates__template_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                template_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    copy_year_fee_templates_api_fees_templates_copy_year_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CopyYearTemplatesRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CopyYearTemplatesOut"];
                 };
             };
             /** @description Validation Error */
