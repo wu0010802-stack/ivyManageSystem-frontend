@@ -10,6 +10,7 @@ import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 import ParentOfflineIndicator from '../components/ParentOfflineIndicator.vue'
 import { useTenantBranding } from '@/composables/useTenantBranding'
+import { isInLineClient } from '../utils/lineClient'
 
 interface TabItem {
   key: string
@@ -34,6 +35,19 @@ const currentTab = computed(() => (route.meta?.tab as string) || '')
  * 故用 route.name 精準比對，不能只看 currentTab === 'home'。
  */
 const isHomeRoute = computed(() => route.name === 'parent-home')
+
+/**
+ * 不畫自己那條 top bar 的兩種情況（SPEC-020 CT-M-01）：
+ *
+ * 1. 首頁——logo 已併入 HomeHeroHeader 的問候語 chip（見上）。
+ * 2. **在 LINE App 內**——LINE MINI App 的內建 header 不可隱藏，且已提供標題
+ *    （取自 document.title）、返回鈕與關閉鈕；我們這條提供的標題／返回／`/me`
+ *    入口三者全部重複，其中 `/me` 更已是底部 tab 之一。兩條疊起來會吃掉近
+ *    120px 的首屏。外部瀏覽器開啟時沒有內建 header，仍照常渲染。
+ *
+ * 版面補償沿用既有的 `no-topbar` class，不另開一套。
+ */
+const hideOwnTopBar = computed(() => isHomeRoute.value || isInLineClient())
 
 /**
  * 點再次點 active tab → scroll-to-top。
@@ -134,7 +148,7 @@ function onBack() {
 <template>
   <div class="parent-layout">
     <M3TopAppBar
-      v-if="!isPublic && !isHomeRoute"
+      v-if="!isPublic && !hideOwnTopBar"
       :title="headerTitle"
       :show-back="headerShowBack"
       :on-back="onBack"
@@ -161,7 +175,7 @@ function onBack() {
     <div
       v-if="!isPublic"
       class="parent-conn-slot"
-      :class="{ 'no-topbar': isHomeRoute }"
+      :class="{ 'no-topbar': hideOwnTopBar }"
     >
       <ConnectionBanner />
     </div>
@@ -171,7 +185,7 @@ function onBack() {
       :class="{
         'is-public': isPublic,
         'with-tabbar': !hideTabBar && !isPublic,
-        'no-topbar': isHomeRoute && !isPublic,
+        'no-topbar': hideOwnTopBar && !isPublic,
       }"
     >
       <slot />

@@ -28,6 +28,7 @@
 import liff from '@line/liff'
 
 import { fetchTenantMetaForLiff } from '@/api/tenantMeta'
+import { markLineClientFromSdk } from '../utils/lineClient'
 
 const LIFF_REFRESH_MARKER = 'parent_liff_token_refresh_marker'
 // id_token exp buffer：剩餘 < 60 秒視為需 refresh，避免送出途中過期
@@ -69,6 +70,13 @@ export function initLiff(): Promise<void> {
       // 允許在外部瀏覽器（非 LINE 內）也走 OAuth 流程，方便桌面測試
       withLoginOnExternalBrowser: true,
     })
+    // SDK 就緒後把權威判斷回填給 utils/lineClient（SPEC-020 CT-M-02）。
+    // 在此之前該模組靠 User-Agent 推斷，未登入家長走到這裡即升級為 SDK 判斷。
+    try {
+      markLineClientFromSdk(liff.isInClient())
+    } catch {
+      // isInClient() 理論上 init 後必可用；萬一拋錯就維持 UA 推斷，不影響登入。
+    }
   })()
   // 失敗即清空，讓 LoginView 的 manualRetry 能真的重試（原本 reject 會被永久快取）。
   _initPromise = _initPromise.catch((e: unknown) => {

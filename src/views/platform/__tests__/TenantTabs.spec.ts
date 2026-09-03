@@ -142,6 +142,31 @@ describe('TenantLineTab', () => {
     expect(payload).not.toHaveProperty('channel_access_token')
     expect(payload).not.toHaveProperty('channel_secret')
   })
+
+  /**
+   * SPEC-020 CT-M-05：家長端載體改為 LINE MINI App 後，`line_login_channel_id`
+   * 與 `liff_id` 兩欄的語意變了但欄名沒變（避免一支純改名的 migration）。
+   * 這條警告是畫面上唯一阻止維運者填回舊 LINE Login channel ID 的東西——
+   * 填錯的後果是全體家長登入 401，且症狀（aud 不符）不會指向設定頁。
+   * 因此它是功能的一部分，不是裝飾，刪掉要先看到這個測試紅。
+   */
+  it('必須顯示 MINI App 填值警告，並點出 Provider 與環境對應', async () => {
+    const w = mountTab()
+    await flushPromises()
+
+    const notice = w.find('[data-testid="line-miniapp-notice"]')
+    expect(notice.exists()).toBe(true)
+
+    const text = notice.text()
+    expect(text).toContain('MINI App')
+    // 填錯 channel 的後果
+    expect(text).toContain('登入失敗')
+    // 建立時就決定、事後無法補救的前提
+    expect(text).toContain('同一個 Provider')
+    // 三個內部 channel 的 LIFF ID 各不相同
+    expect(text).toContain('Published')
+    expect(text).toContain('Developing')
+  })
 })
 
 describe('TenantEmailTab', () => {

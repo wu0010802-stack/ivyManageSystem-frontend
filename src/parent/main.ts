@@ -33,7 +33,8 @@ import { initTheme } from './composables/useTheme'
 import { initA11y } from './composables/useA11y'
 import { initSentry } from '@/utils/sentry'
 import { initTenantBoot } from '@/utils/tenantBoot'
-import { getBranding, onBrandingLoaded, useTenantBranding } from '@/composables/useTenantBranding'
+import { onBrandingLoaded, useTenantBranding } from '@/composables/useTenantBranding'
+import { buildParentDocumentTitle } from './utils/parentPageTitle'
 // 離線寫入佇列：boot / online / visibilitychange flush triggers（spec §6.3.2）
 import { flushAllParent } from '@/parent/utils/parentOfflineQueue'
 import { resolvePublicLiffStateTarget } from '@/parent/utils/liffStateRedirect'
@@ -70,7 +71,7 @@ if (tenantBoot.proceed) {
   useTenantBranding()
   onBrandingLoaded(() => {
     const title = router.currentRoute.value.meta?.title
-    if (title) document.title = `${title} - ${getBranding().titles.parent_short}`
+    if (title) document.title = buildParentDocumentTitle(String(title))
   })
   app.use(createPinia())
   app.use(router)
