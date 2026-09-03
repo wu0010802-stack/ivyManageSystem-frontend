@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
-import { getBranding } from '@/composables/useTenantBranding'
+import { buildParentDocumentTitle } from './utils/parentPageTitle'
 
 const routes: RouteRecordRaw[] = [
     { path: '/', redirect: '/home' },
@@ -265,8 +265,9 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   if (to.meta.title) {
-    // 多租戶（4d/fb）：尾綴改讀 titles.parent_short（預設 '常春藤家長'）。
-    document.title = `${to.meta.title} - ${getBranding().titles.parent_short}`
+    // 多租戶（4d/fb）：尾綴讀 titles.parent_short（預設 '常春藤家長'）。
+    // 在 LINE App 內不加後綴——MINI App 內建 header 會顯示這串（SPEC-020 CT-M-03）。
+    document.title = buildParentDocumentTitle(String(to.meta.title))
   }
 })
 
