@@ -4,7 +4,8 @@
  * - 掛載即以本月查詢並渲染 per-student 聚合列（預設只顯示未繳＋部分繳費）
  * - 狀態快篩 tiles 可切換；班級 chips 直列快篩（含未收齊人數）
  * - 費用欄位依當月出現的 fee_type 動態顯示
- * - 收款/批次收款重用 BatchPayDialog，只帶未繳清項目
+ * - 列上「收現金」開 StudentCashReceiptDialog；批次收款（多人繳清）仍走 BatchPayDialog
+ * - 每列現金已收／網銀已收由 settlement 五桶算出（SPEC-019 §8.1）
  * - 月份導航（上一月/本月）重新查詢
  * - 展開明細列；「到逐筆明細處理」emit open-list
  */
@@ -13,11 +14,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 const getFeeMonthlyStatement = vi.fn()
 const getPrepayments = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
-const getPrepaymentRefunds = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
 vi.mock('@/api/fees', () => ({
   getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
   getPrepayments: (...args: unknown[]) => getPrepayments(...args),
-  getPrepaymentRefunds: (...args: unknown[]) => getPrepaymentRefunds(...args),
 }))
 
 const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
@@ -34,9 +33,20 @@ vi.mock('@/components/fees/PrepaymentDrawer.vue', () => ({
   __esModule: true,
   default: { name: 'PrepaymentDrawer', template: '<div data-testid="prepay-drawer-stub" />' },
 }))
-vi.mock('@/components/fees/PrepaymentRefundsDialog.vue', () => ({
+vi.mock('@/components/fees/StudentCashReceiptDialog.vue', () => ({
   __esModule: true,
-  default: { name: 'PrepaymentRefundsDialog', template: '<div data-testid="prepay-refunds-stub" />' },
+  default: {
+    name: 'StudentCashReceiptDialog',
+    props: {
+      modelValue: { type: Boolean, default: false },
+      studentId: { type: Number, default: null },
+      studentName: { type: String, default: '' },
+      month: { type: String, default: '' },
+    },
+    emits: ['update:modelValue', 'paid'],
+    template:
+      '<div data-testid="cash-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-student="studentId" :data-month="month" />',
+  },
 }))
 vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
   __esModule: true,
@@ -54,6 +64,16 @@ vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
 
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
 
+/** settlement 五桶（MonthlyStatementItemOut.settlement 為必填欄，預設全 0） */
+const settlement = (over: Record<string, number> = {}) => ({
+  cash_registered: 0,
+  cash_submitted: 0,
+  cash_confirmed: 0,
+  bank_reconciled: 0,
+  unreceipted: 0,
+  ...over,
+})
+
 const item = (over: Record<string, unknown>) => ({
   fee_item_name: '月費 (2026-08)',
   fee_type: 'monthly',
@@ -65,6 +85,8 @@ const item = (over: Record<string, unknown>) => ({
   due_date: '2026-08-15',
   target_month: '2026-08',
   period: '115-1',
+  source: 'bill_slip',
+  settlement: settlement(),
   ...over,
 })
 
@@ -98,7 +120,8 @@ const STATEMENT = {
           amount_paid: 9500,
           status: 'paid',
           payment_date: '2026-08-03',
-          payment_method: '現金',
+          payment_method: '轉帳',
+          settlement: settlement({ bank_reconciled: 9500 }),
         }),
         item({ id: 22, fee_item_name: '保險費', fee_type: 'insurance', amount_due: 180 }),
       ],
@@ -117,7 +140,8 @@ const STATEMENT = {
           amount_paid: 9500,
           status: 'paid',
           payment_date: '2026-08-01',
-          payment_method: '轉帳',
+          payment_method: '現金',
+          settlement: settlement({ cash_confirmed: 9500 }),
         }),
       ],
     },
@@ -152,21 +176,6 @@ const GLOBAL_STUBS = {
       '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
-  // el-dropdown 的 command 事件由 item 冒泡：stub 讓 item 直接呼叫父層 handler
-  'el-dropdown': {
-    emits: ['command'],
-    provide() {
-      return { epDropdownCommand: (cmd: string) => this.$emit('command', cmd) }
-    },
-    template: '<div><slot /><slot name="dropdown" /></div>',
-  },
-  'el-dropdown-menu': { template: '<div><slot /></div>' },
-  'el-dropdown-item': {
-    props: { command: { type: String, default: '' } },
-    inject: { epDropdownCommand: { default: null } },
-    template:
-      '<button type="button" v-bind="$attrs" @click="epDropdownCommand && epDropdownCommand(command)"><slot /></button>',
-  },
   'el-select': {
     props: { modelValue: { type: String, default: '' } },
     emits: ['update:modelValue'],
@@ -231,6 +240,29 @@ describe('預設載入與聚合列', () => {
     expect(strip.text()).toContain('NT$10,880')
     expect(strip.text()).toContain('1')
   })
+
+  // 加了現金／網銀已收兩欄後最容易錯位的地方：tfoot colspan 與展開列 colspan
+  it('tfoot 與展開列的 colspan 合計等於表頭欄數（有／無 FEES_WRITE 皆然）', async () => {
+    const colspanSum = (row: ReturnType<typeof mountStatement>['element'] | Element) =>
+      Array.from(row.querySelectorAll('td')).reduce(
+        (a, td) => a + Number(td.getAttribute('colspan') ?? 1),
+        0,
+      )
+
+    for (const perms of [['FEES_READ', 'FEES_WRITE'], ['FEES_READ']]) {
+      authMocks.perms = new Set(perms)
+      const w = mountStatement()
+      await flushPromises()
+      const headCount = w.findAll('[data-test="stmt-table"] thead th').length
+      const foot = w.find('[data-test="stmt-table"] tfoot tr').element
+      expect(colspanSum(foot)).toBe(headCount)
+
+      // 展開明細列以 totalColumns 跨滿整列
+      await w.find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-expand"]').trigger('click')
+      const detail = w.find('[data-test="stmt-detail"] > td')
+      expect(Number(detail.attributes('colspan'))).toBe(headCount)
+    }
+  })
 })
 
 describe('狀態快篩與班級篩選', () => {
@@ -288,15 +320,40 @@ describe('狀態快篩與班級篩選', () => {
 })
 
 describe('收款與批次收款', () => {
-  it('單一學生收款只帶未繳清項目開啟 BatchPayDialog', async () => {
+  it('列上「收現金」開啟 StudentCashReceiptDialog 並帶學生與月份', async () => {
     const w = mountStatement()
     await flushPromises()
     await w
       .find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-pay"]')
       .trigger('click')
-    const dialog = w.find('[data-testid="batch-pay-dialog"]')
+    const dialog = w.find('[data-testid="cash-dialog"]')
     expect(dialog.attributes('data-open')).toBe('1')
-    expect(dialog.attributes('data-ids')).toBe('22')
+    expect(dialog.attributes('data-student')).toBe('2')
+    expect(dialog.attributes('data-month')).toBe('2026-08')
+    expect(w.find('[data-testid="batch-pay-dialog"]').attributes('data-open')).toBe('0')
+  })
+
+  it('收現金完成（paid）後重新查詢', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    getFeeMonthlyStatement.mockClear()
+    w.findComponent({ name: 'StudentCashReceiptDialog' }).vm.$emit('paid')
+    await flushPromises()
+    expect(getFeeMonthlyStatement).toHaveBeenCalledWith({ month: '2026-08' })
+  })
+
+  it('每列顯示現金已收／網銀已收（由 settlement 五桶算出）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const row = w.find('[data-test="stmt-row"][data-student="陳部分"]')
+    expect(row.find('[data-test="stmt-bank-paid"]').text()).toContain('9,500')
+    expect(row.find('[data-test="stmt-cash-paid"]').text()).toBe('—')
+
+    // 全繳生走現金（cash_confirmed）：現金欄有值、網銀欄為 —
+    await w.find('[data-test="stmt-flt-paid"]').trigger('click')
+    const paidRow = w.find('[data-test="stmt-row"][data-student="張全繳"]')
+    expect(paidRow.find('[data-test="stmt-cash-paid"]').text()).toContain('9,500')
+    expect(paidRow.find('[data-test="stmt-bank-paid"]').text()).toBe('—')
   })
 
   it('批次收款預設 disabled；勾選後帶所有勾選學生的未繳項目', async () => {
@@ -321,7 +378,7 @@ describe('收款與批次收款', () => {
     expect(paidRow.find('[data-test="stmt-pay"]').exists()).toBe(false)
   })
 
-  it('收款完成（paid）後重新查詢', async () => {
+  it('批次收款完成（paid）後重新查詢', async () => {
     const w = mountStatement()
     await flushPromises()
     getFeeMonthlyStatement.mockClear()
@@ -378,7 +435,7 @@ describe('展開明細', () => {
     const detail = w.find('[data-test="stmt-detail"]')
     expect(detail.exists()).toBe(true)
     expect(detail.text()).toContain('保險費')
-    expect(detail.text()).toContain('現金')
+    expect(detail.text()).toContain('轉帳')
 
     await detail.find('[data-test="stmt-open-list"]').trigger('click')
     expect(w.emitted('open-list')).toEqual([['陳部分']])
@@ -416,5 +473,9 @@ describe('載入狀態', () => {
     const w = mountStatement()
     await flushPromises()
     expect(w.find('[data-test="stmt-empty"]').exists()).toBe(true)
+    // SPEC-019：應收唯一來源＝發單批次，空狀態導向匯入檢核檔
+    expect(w.find('[data-test="stmt-empty"]').text()).toContain('匯入繳款單檢核檔')
+    await w.find('[data-test="stmt-empty-import"]').trigger('click')
+    expect(w.emitted('open-imports')).toBeTruthy()
   })
 })

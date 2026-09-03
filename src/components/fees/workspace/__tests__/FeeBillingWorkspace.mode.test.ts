@@ -106,16 +106,6 @@ vi.mock('../FeeBillSlipDrawer.vue', () => ({
     template: '<div />',
   },
 }))
-// 產單 modal stub：真元件會 import generateFeeRecords 與 currentRocYear，
-// 本檔的 @/api/fees、@/utils/academic factory mock 未提供該兩個 export。
-vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
-  __esModule: true,
-  default: {
-    name: 'FeeGenerateModal',
-    props: { modelValue: { type: Boolean, default: false } },
-    template: '<div />',
-  },
-}))
 
 const GLOBAL_STUBS = {
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },

@@ -81,14 +81,6 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     template: '<div data-testid="refunds-tab" />',
   },
 }))
-vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
-  __esModule: true,
-  default: {
-    name: 'FeeGenerateModal',
-    props: { modelValue: { type: Boolean, default: false } },
-    template: '<div />',
-  },
-}))
 
 const matchingMocks = vi.hoisted(() => ({ refresh: vi.fn() }))
 vi.mock('../FeeMatchingPanel.vue', () => ({

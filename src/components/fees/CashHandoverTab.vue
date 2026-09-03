@@ -134,27 +134,9 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-form-item label="含預繳款" class="mt-1">
-          <el-switch v-model="cashForm.withPrepay" />
-          <template v-if="cashForm.withPrepay">
-            <el-input-number
-              v-model="cashForm.prepayStudentId"
-              :controls="false"
-              placeholder="學生 ID"
-              style="width: 110px"
-            />
-            <el-input-number
-              v-model="cashForm.prepayYear"
-              :controls="false"
-              placeholder="目標學年"
-              style="width: 100px"
-            />
-            <el-select v-model="cashForm.prepaySemester" style="width: 90px" placeholder="學期">
-              <el-option label="上" :value="1" />
-              <el-option label="下" :value="2" />
-            </el-select>
-          </template>
-        </el-form-item>
+        <p class="hint" data-test="cash-prepay-hint">
+          新生預繳請到「收款 › 現金項目 › 新生預繳」登記
+        </p>
         <el-form-item label="收款合計">
           <strong data-test="cash-total">{{ formatCurrency(cashTotal) }}</strong>
         </el-form-item>
@@ -276,10 +258,6 @@ const unpaidRecords = ref<FeeRecordRow[]>([])
 const selectedRecords = ref<FeeRecordRow[]>([])
 const cashForm = reactive({
   received_date: todayISO(),
-  withPrepay: false,
-  prepayStudentId: undefined as number | undefined,
-  prepayYear: undefined as number | undefined,
-  prepaySemester: undefined as number | undefined,
 })
 
 const confirmVisible = ref(false)
@@ -317,13 +295,9 @@ const todayState = computed<{ kind: 'idle' | 'pending' | 'done'; text: string }>
   }
 })
 
-const cashTotal = computed(() => {
-  const records = selectedRecords.value.reduce(
-    (sum, r) => sum + (r.amount_due - r.amount_paid),
-    0,
-  )
-  return records + (cashForm.withPrepay ? 5000 : 0)
-})
+const cashTotal = computed(() =>
+  selectedRecords.value.reduce((sum, r) => sum + (r.amount_due - r.amount_paid), 0),
+)
 
 function statusTag(status: string): 'success' | 'info' | 'warning' {
   return (
@@ -374,22 +348,6 @@ async function submitCash() {
     fee_record_id: r.id,
     amount: r.amount_due - r.amount_paid,
   }))
-  if (cashForm.withPrepay) {
-    const studentId = cashForm.prepayStudentId
-    const schoolYear = cashForm.prepayYear
-    const semester = cashForm.prepaySemester
-    if (studentId == null || schoolYear == null || semester == null) {
-      ElMessage.warning('請完整選擇預繳學生、目標學年與學期')
-      return
-    }
-    parts.push({
-      part_type: 'prepayment',
-      student_id: studentId,
-      amount: 5000,
-      target_school_year: schoolYear,
-      target_semester: semester,
-    })
-  }
   cashSubmitting.value = true
   try {
     await createCashReceipt({

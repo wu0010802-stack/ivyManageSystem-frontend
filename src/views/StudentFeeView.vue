@@ -2,7 +2,7 @@
   <div class="student-fee-view">
     <PageHeader title="學費管理" :subtitle="headerSubtitle" />
 
-    <!-- 主導航：底線頁籤（與次層的深色文字頁籤分層），右側為費用設定入口 -->
+    <!-- 主導航：底線頁籤 -->
     <nav class="fee-main-nav" aria-label="學費管理工作區">
       <div class="fee-tabs" role="tablist" data-test="fee-main-nav">
         <button
@@ -24,20 +24,6 @@
             >{{ todoCounts[w.key] }}</span
           >
         </button>
-
-        <button
-          type="button"
-          role="tab"
-          class="fee-tab fee-tab--settings"
-          :class="{ 'fee-tab--active': activeWs === 'settings' }"
-          :aria-selected="activeWs === 'settings'"
-          aria-label="費用設定（費用範本與銷帳碼）"
-          data-test="open-fee-settings"
-          @click="onWorkspaceChange('settings')"
-        >
-          <el-icon aria-hidden="true"><Setting /></el-icon>
-          <span>費用設定</span>
-        </button>
       </div>
     </nav>
 
@@ -56,15 +42,10 @@
         @navigate="navigateTo"
       />
       <FeeSettlementWorkspace
-        v-else-if="activeWs === 'settlement'"
-        :view="activeView ?? undefined"
-        @change-view="onViewChange"
-        @navigate="navigateTo"
-      />
-      <FeeSettingsWorkspace
         v-else
         :view="activeView ?? undefined"
         @change-view="onViewChange"
+        @navigate="navigateTo"
       />
     </KeepAlive>
   </div>
@@ -79,17 +60,16 @@
  *
  * 2026-09-02 簡化改版：
  * - 主導航由四項（工作台/帳單/對帳/結算）收成三項（工作台/收款/結算），
- *   「帳單」與「對帳」合併為「收款」；費用設定從 PageHeader 右上角的獨立
- *   「返回」模式改為頁籤列右側入口，不再切換整頁殼層。
+ *   「帳單」與「對帳」合併為「收款」。
  * - 主導航樣式由 el-segmented（與次層同款 pill，三層看起來一樣）改為底線頁籤，
  *   並顯示各工作區的待辦數（來源與工作台佇列同一份 useFeeOverview 載入）。
+ * - SPEC-019：費用設定（範本／銷帳碼）已全數退場，主導航不再有第四項入口。
  *
  * 舊網址（?tab= 系列與 2026-08-25 的 ?ws=recon 系列）由 resolveFeesLocation
  * 相容映射，於此以 router.replace 正規化。
  */
 import { computed, defineAsyncComponent, onMounted, reactive, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
-import { Setting } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import {
   FEE_MAIN_WORKSPACES,
@@ -109,9 +89,6 @@ const FeeBillingWorkspace = defineAsyncComponent(
 const FeeSettlementWorkspace = defineAsyncComponent(
   () => import('@/components/fees/workspace/FeeSettlementWorkspace.vue'),
 )
-const FeeSettingsWorkspace = defineAsyncComponent(
-  () => import('@/components/fees/workspace/FeeSettingsWorkspace.vue'),
-)
 
 const route = useRoute()
 const router = useRouter()
@@ -129,11 +106,7 @@ const studentSearch = computed(() => {
   return typeof value === 'string' ? value : ''
 })
 
-const headerSubtitle = computed(() =>
-  activeWs.value === 'settings'
-    ? '費用範本與銷帳末四碼等低頻設定'
-    : '收款、對帳與結算的日常工作區',
-)
+const headerSubtitle = '收款、對帳與結算的日常工作區'
 
 // 頁籤待辦數需要工作台那批唯讀統計；即使初次落在別的工作區也要載
 onMounted(() => {
@@ -274,15 +247,5 @@ function navigateTo(target: FeeNavTarget) {
   font-weight: 600;
   line-height: 1.5;
   text-align: center;
-}
-
-.fee-tab--settings {
-  margin-left: auto;
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-}
-
-.fee-tab--settings:hover {
-  color: var(--text-primary);
 }
 </style>

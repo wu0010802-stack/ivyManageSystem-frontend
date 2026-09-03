@@ -1,8 +1,8 @@
 <template>
   <div class="bill-slip-tab">
     <p v-if="!embedded" class="intro">
-      發單快照＝應收母體。匯入銀行回拋的檢核檔（Check_*.xls）後，系統即可自算
-      未繳／短繳／溢繳，不必依賴銀行核銷狀態。
+      銀行檢核檔（Check_*.xls）＝應收唯一權威。匯入時宣告月費批／註冊費批，
+      系統即可自算未繳／短繳／溢繳，不必依賴銀行核銷狀態。
     </p>
 
     <!-- 匯入 -->
@@ -35,6 +35,21 @@
           style="width: 120px"
           maxlength="20"
         />
+        <el-select
+          v-if="canWrite && pickedFile"
+          v-model="form.batch_kind"
+          placeholder="批次類型"
+          aria-label="批次類型"
+          data-test="slip-kind-select"
+          style="width: 130px"
+        >
+          <el-option
+            v-for="o in BILL_SLIP_KIND_OPTIONS"
+            :key="o.key"
+            :value="o.key"
+            :label="o.label"
+          />
+        </el-select>
         <el-button
           v-if="canWrite && pickedFile"
           data-test="run-preview"
@@ -90,13 +105,14 @@
           type="success"
           data-test="run-import"
           :loading="importing"
-          :disabled="!form.title.trim()"
+          :disabled="!form.title.trim() || !form.batch_kind"
           aria-label="確認匯入此發單快照"
           @click="runImport"
         >
           確認匯入
         </el-button>
         <span v-if="!form.title.trim()" class="hint">請先填批次名</span>
+        <span v-if="!form.batch_kind" class="hint">請先選批次類型（月費批／註冊費批）</span>
       </div>
     </section>
 
@@ -115,6 +131,23 @@
         </template>
       </el-table-column>
       <el-table-column prop="title" label="批次" min-width="180" />
+      <el-table-column label="類型" width="110">
+        <template #default="{ row }">
+          <span data-test="slip-kind-cell">
+            {{ BILL_SLIP_KIND_LABELS[row.batch_kind as BillSlipKind] ?? row.batch_kind }}
+          </span>
+          <el-button
+            v-if="canWrite && row.records_generated_count === 0"
+            size="small"
+            text
+            data-test="slip-kind-change"
+            aria-label="改批次類型"
+            @click.stop="openKindChange(row)"
+          >
+            改
+          </el-button>
+        </template>
+      </el-table-column>
       <el-table-column prop="batch_no" label="批號" width="80">
         <template #default="{ row }">{{ row.batch_no || '—' }}</template>
       </el-table-column>
@@ -194,7 +227,12 @@
         </p>
         <el-descriptions :column="2" size="small" border>
           <el-descriptions-item label="帳單期別">
-            {{ genPlan.target_month }}
+            {{ genPlan.target_month ?? genBatch?.title }}
+          </el-descriptions-item>
+          <el-descriptions-item label="批次類型">
+            <span data-test="gen-kind-label">
+              {{ BILL_SLIP_KIND_LABELS[genPlan.batch_kind] ?? genPlan.batch_kind }}
+            </span>
           </el-descriptions-item>
           <el-descriptions-item label="將建立">
             {{ genPlan.created }} 筆
@@ -235,9 +273,26 @@
           :closable="false"
           class="mt-1"
           data-test="gen-unresolved-alert"
-          :title="`${genPlan.unresolved.length} 筆學生未解析（銷帳碼查無當期配置）`"
-          :description="`${unresolvedNames}。請先到費用設定補銷帳碼配置，或勾選下方略過。`"
+          :title="`${genPlan.unresolved.length} 筆學生未解析（檢核檔姓名對不上在籍學生）`"
+          :description="`${unresolvedNames}。可逐列指定學生後重跑，或勾選下方略過。`"
         />
+        <ul v-if="genPlan.unresolved.length" class="unresolved-list">
+          <li v-for="u in genPlan.unresolved" :key="u.slip_item_id">
+            {{ u.student_name }}（末四碼 {{ u.collection_suffix }}，{{
+              formatCurrency(u.net_amount)
+            }}）
+            <el-button
+              v-if="canWrite"
+              size="small"
+              text
+              type="primary"
+              data-test="gen-assign-student"
+              @click="openAssign(u.slip_item_id, u.student_name)"
+            >
+              指定學生
+            </el-button>
+          </li>
+        </ul>
         <label v-if="genPlan.unresolved.length" class="skip-row">
           <el-checkbox
             v-model="skipUnresolved"
@@ -245,17 +300,6 @@
             aria-label="略過未解析學生，僅為已解析學生產單"
           />
           <span>略過未解析學生（之後補配置可再產）</span>
-        </label>
-        <label class="skip-row">
-          <el-checkbox
-            v-model="kindConfirmed"
-            data-test="gen-kind-confirm"
-            aria-label="確認此批為月費批次"
-          />
-          <span>
-            我確認此批為<strong>月費批次</strong>（註冊費等其他批次目前不支援產單，
-            檢核檔無類型資訊，請依批次名與樣張確認）
-          </span>
         </label>
       </template>
       <el-skeleton v-else :rows="3" animated />
@@ -368,6 +412,43 @@
         </template>
       </el-table>
     </section>
+
+    <StudentPickerDialog
+      v-model="assignVisible"
+      title="指定發單列對應的學生"
+      :hint="assignHint"
+      @pick="onAssignPick"
+    />
+
+    <el-dialog
+      v-model="kindDialogVisible"
+      title="改批次類型"
+      width="420px"
+      data-test="slip-kind-dialog"
+    >
+      <p class="intro">
+        只有尚未產生費用單的批次可改；類型決定產出的費用單種類（月費／註冊費）。
+      </p>
+      <el-select v-model="kindDialogValue" data-test="slip-kind-change-select" style="width: 100%">
+        <el-option
+          v-for="o in BILL_SLIP_KIND_OPTIONS"
+          :key="o.key"
+          :value="o.key"
+          :label="o.label"
+        />
+      </el-select>
+      <template #footer>
+        <el-button @click="kindDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          data-test="slip-kind-change-confirm"
+          :loading="kindSaving"
+          @click="confirmKindChange"
+        >
+          確認
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -385,15 +466,20 @@ import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import {
+  assignBillSlipItemStudent,
   deleteBillSlipBatch,
   generateBillSlipRecords,
   getBillSlipBatches,
   getOutstandingReport,
   importBillSlipBatch,
+  patchBillSlipBatch,
   previewBillSlipBatch,
 } from '@/api/fees'
 import EmptyState from '@/components/common/EmptyState.vue'
+import StudentPickerDialog from './StudentPickerDialog.vue'
 import {
+  BILL_SLIP_KIND_LABELS,
+  BILL_SLIP_KIND_OPTIONS,
   OUTSTANDING_SCOPES,
   OUTSTANDING_STATUS_LABELS,
   outstandingStatusTag,
@@ -401,6 +487,7 @@ import {
 import type {
   BillSlipBatchRow,
   BillSlipGenerateResult,
+  BillSlipKind,
   BillSlipPreview,
   OutstandingReport,
 } from './collectionTypes'
@@ -416,7 +503,12 @@ const pickedFile = ref<File | null>(null)
 const preview = ref<BillSlipPreview | null>(null)
 const previewing = ref(false)
 const importing = ref(false)
-const form = reactive({ title: '', batch_no: '' })
+// SPEC-019 §6.1：檢核檔無類型資訊，匯入時由操作者宣告（未選不可送出）
+const form = reactive<{ title: string; batch_no: string; batch_kind: BillSlipKind | '' }>({
+  title: '',
+  batch_no: '',
+  batch_kind: '',
+})
 
 const batches = ref<BillSlipBatchRow[]>([])
 const loading = ref(false)
@@ -457,12 +549,13 @@ async function runPreview() {
 }
 
 async function runImport() {
-  if (!pickedFile.value || !form.title.trim()) return
+  if (!pickedFile.value || !form.title.trim() || !form.batch_kind) return
   importing.value = true
   try {
     const result = (await importBillSlipBatch(pickedFile.value, {
       title: form.title.trim(),
       batch_no: form.batch_no.trim() || undefined,
+      batch_kind: form.batch_kind,
     })) as unknown as BillSlipBatchRow
     ElMessage.success(
       result.created
@@ -473,6 +566,7 @@ async function runImport() {
     preview.value = null
     form.title = ''
     form.batch_no = ''
+    form.batch_kind = ''
     await fetchBatches()
     await selectBatch(result)
   } catch (e) {
@@ -522,8 +616,6 @@ const genDialogVisible = ref(false)
 const genBatch = ref<BillSlipBatchRow | null>(null)
 const genPlan = ref<BillSlipGenerateResult | null>(null)
 const skipUnresolved = ref(false)
-// v1 僅支援月費批（SPEC-018 §3.6）：檢核檔無類型資訊，靠操作者明示聲明
-const kindConfirmed = ref(false)
 const genDueDate = ref<string | null>(null)
 const generating = ref(false)
 
@@ -541,7 +633,6 @@ const unresolvedNames = computed(() =>
 const canConfirmGenerate = computed(() => {
   const plan = genPlan.value
   if (!plan || generating.value) return false
-  if (!kindConfirmed.value) return false
   if (plan.conflicts.length > 0) return false
   if (plan.unresolved.length > 0 && !skipUnresolved.value) return false
   return plan.created > 0
@@ -551,7 +642,6 @@ async function openGenerateDialog(row: BillSlipBatchRow) {
   genBatch.value = row
   genPlan.value = null
   skipUnresolved.value = false
-  kindConfirmed.value = false
   genDueDate.value = null
   genDialogVisible.value = true
   try {
@@ -572,21 +662,28 @@ async function confirmGenerate() {
     const payload: {
       dry_run: boolean
       skip_unresolved: boolean
-      batch_kind: 'monthly'
       due_date?: string
     } = {
       dry_run: false,
       skip_unresolved: skipUnresolved.value,
-      batch_kind: 'monthly',
     }
     if (genDueDate.value) payload.due_date = genDueDate.value
     const result = (await generateBillSlipRecords(
       genBatch.value.id,
       payload,
     )) as unknown as BillSlipGenerateResult
+    const extra =
+      result.batch_kind === 'registration' && result.prepayment_applied
+        ? `，預繳套用 ${result.prepayment_applied} 筆`
+        : ''
     ElMessage.success(
-      `已產生 ${result.created} 筆費用單，應收 ${formatCurrency(result.total_amount_due)}`,
+      `已產生 ${result.created} 筆費用單，應收 ${formatCurrency(result.total_amount_due)}${extra}`,
     )
+    if (result.prepayment_pending?.length) {
+      ElMessage.warning(
+        `${result.prepayment_pending.length} 位學生的預繳仍掛招生訪視，請到現金項目›新生預繳先轉正式學生`,
+      )
+    }
     genDialogVisible.value = false
     genPlan.value = null
     await fetchBatches()
@@ -595,6 +692,60 @@ async function confirmGenerate() {
     ElMessage.error(friendlyError('產生費用單失敗', e))
   } finally {
     generating.value = false
+  }
+}
+
+// ===== 指定學生（SPEC-019 §5.2） =====
+const assignVisible = ref(false)
+const assignItemId = ref<number | null>(null)
+const assignHint = ref('')
+
+function openAssign(itemId: number, name: string) {
+  assignItemId.value = itemId
+  assignHint.value = `檢核檔上的姓名：${name}`
+  assignVisible.value = true
+}
+
+async function onAssignPick(student: { id: number; name: string }) {
+  if (!genBatch.value || assignItemId.value == null) return
+  try {
+    await assignBillSlipItemStudent(genBatch.value.id, assignItemId.value, {
+      student_id: student.id,
+    })
+    ElMessage.success(`已指定 ${student.name}`)
+    genPlan.value = (await generateBillSlipRecords(genBatch.value.id, {
+      dry_run: true,
+      skip_unresolved: false,
+    })) as unknown as BillSlipGenerateResult
+  } catch (e) {
+    ElMessage.error(friendlyError('指定學生失敗', e))
+  }
+}
+
+// ===== 改批次類型（SPEC-019 §6.1） =====
+const kindDialogVisible = ref(false)
+const kindDialogBatch = ref<BillSlipBatchRow | null>(null)
+const kindDialogValue = ref<BillSlipKind>('monthly')
+const kindSaving = ref(false)
+
+function openKindChange(row: BillSlipBatchRow) {
+  kindDialogBatch.value = row
+  kindDialogValue.value = row.batch_kind
+  kindDialogVisible.value = true
+}
+
+async function confirmKindChange() {
+  if (!kindDialogBatch.value) return
+  kindSaving.value = true
+  try {
+    await patchBillSlipBatch(kindDialogBatch.value.id, { batch_kind: kindDialogValue.value })
+    ElMessage.success('已更新批次類型')
+    kindDialogVisible.value = false
+    await fetchBatches()
+  } catch (e) {
+    ElMessage.error(friendlyError('更新批次類型失敗', e))
+  } finally {
+    kindSaving.value = false
   }
 }
 
@@ -715,5 +866,10 @@ defineExpose({ fetchBatches })
 }
 .cross-batch {
   font-weight: 600;
+}
+.unresolved-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
 }
 </style>

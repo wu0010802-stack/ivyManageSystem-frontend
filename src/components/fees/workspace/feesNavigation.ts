@@ -1,12 +1,12 @@
 /**
  * 學費管理任務導向 IA 的導航純邏輯。
  *
- * 2026-09-02 簡化改版：主導航收斂為三個工作區（工作台／收款／結算），
- * 「費用設定」仍以 ws=settings 存在但改為頁籤列右側入口（不再是獨立的
- * 「返回」模式）。原本平行的「帳單」與「對帳」合併為單一「收款」工作區，
- * 次層由 5 個（帳款／退款／代收明細／存摺明細／發單快照）收成 3 個：
+ * 2026-09-02 簡化改版：主導航收斂為三個工作區（工作台／收款／結算）。
+ * 費用設定（範本／銷帳碼）已於 SPEC-019 全數退場；ws=settings 視為非法值
+ * 退回工作台。原本平行的「帳單」與「對帳」合併為單一「收款」工作區：
  *
  *   - receivable 應收帳款（原 billing/records，含月表與逐筆兩種檢視模式）
+ *   - cashItems  現金項目（SPEC-019 §7：教材費等只收現金的批次＋新生預繳）
  *   - matching   入帳媒合（原 recon/collection ＋ recon/passbook，以 src 切換來源）
  *   - refunds    退款（原 billing/refunds）
  *
@@ -19,14 +19,14 @@
  */
 import type { LocationQuery, LocationQueryRaw } from 'vue-router'
 
-export type FeeWorkspaceKey = 'workbench' | 'billing' | 'settlement' | 'settings'
+export type FeeWorkspaceKey = 'workbench' | 'billing' | 'settlement'
 
 export interface FeeWorkspaceViewDef {
   key: string
   label: string
 }
 
-/** 主導航（不含 settings：費用設定走頁籤列右側入口） */
+/** 主導航三項；費用設定已於 SPEC-019 退場 */
 export const FEE_MAIN_WORKSPACES: { key: FeeWorkspaceKey; label: string }[] = [
   { key: 'workbench', label: '工作台' },
   { key: 'billing', label: '收款' },
@@ -38,16 +38,14 @@ export const FEE_WORKSPACE_VIEWS: Record<FeeWorkspaceKey, FeeWorkspaceViewDef[]>
   workbench: [],
   billing: [
     { key: 'receivable', label: '應收帳款' },
+    // SPEC-019 §7：教材費等只收現金的批次＋新生預繳，與銀行單分開看
+    { key: 'cashItems', label: '現金項目' },
     { key: 'matching', label: '入帳媒合' },
     { key: 'refunds', label: '退款' },
   ],
   settlement: [
     { key: 'handover', label: '每日交接' },
     { key: 'close', label: '月結' },
-  ],
-  settings: [
-    { key: 'templates', label: '費用範本' },
-    { key: 'billingCodes', label: '銷帳碼' },
   ],
 }
 
@@ -73,7 +71,8 @@ export interface FeeNavTarget {
 /** 舊版 ?tab= 值 → 新工作區/檢視 的相容映射（8 個舊 tab 全數涵蓋） */
 export const LEGACY_FEE_TAB_MAP: Record<string, FeeNavTarget> = {
   records: { ws: 'billing', view: 'receivable' },
-  templates: { ws: 'settings', view: 'templates' },
+  // SPEC-019：費用範本已退場，舊深連結導向應收帳款
+  templates: { ws: 'billing', view: 'receivable' },
   refunds: { ws: 'billing', view: 'refunds' },
   // 舊 bankRecon 深連結指的是存摺對帳，現落在入帳媒合的存摺來源
   bankRecon: { ws: 'billing', view: 'matching', src: 'passbook' },
@@ -81,7 +80,8 @@ export const LEGACY_FEE_TAB_MAP: Record<string, FeeNavTarget> = {
   prepayments: { ws: 'billing', view: 'receivable' },
   cashHandover: { ws: 'settlement', view: 'handover' },
   close: { ws: 'settlement', view: 'close' },
-  billingCodes: { ws: 'settings', view: 'billingCodes' },
+  // SPEC-019：銷帳碼已退場，舊深連結導向應收帳款
+  billingCodes: { ws: 'billing', view: 'receivable' },
 }
 
 /**
@@ -98,12 +98,7 @@ export const LEGACY_FEE_WS_VIEW_MAP: Record<string, FeeNavTarget> = {
   'billing/prepayments': { ws: 'billing', view: 'receivable' },
 }
 
-const WORKSPACE_KEYS = new Set<string>([
-  'workbench',
-  'billing',
-  'settlement',
-  'settings',
-])
+const WORKSPACE_KEYS = new Set<string>(['workbench', 'billing', 'settlement'])
 
 const MATCHING_SOURCE_KEYS = new Set<string>(FEE_MATCHING_SOURCES.map((s) => s.key))
 

@@ -50,12 +50,20 @@
           </p>
           <p class="fee-help__note">預繳款的退款走應收帳款的「預繳款」入口，不在此頁。</p>
         </template>
+        <template v-else-if="view === 'cashItems'">
+          <p><strong>現金項目</strong></p>
+          <ol>
+            <li><strong>教材費等</strong>：建批（依年級填金額展開逐生）→ 逐生收現金</li>
+            <li><strong>新生預繳</strong>：登記 5,000 現金；註冊費批產單時自動標記已套用</li>
+          </ol>
+          <p class="fee-help__note">這裡的錢都不上銀行，不進入帳媒合；月費／註冊費仍看應收帳款。</p>
+        </template>
         <template v-else>
           <p><strong>收款流程</strong></p>
           <ol>
             <li>
-              <strong>產生費用單</strong>：依費用範本每日自動產生，或匯入銀行檢核檔
-              （發單批次）一次產出當月月費
+              <strong>產生費用單</strong>：匯入銀行檢核檔（發單批次，月費批／註冊費批）
+              一鍵產單；教材費等只收現金的費用在「現金項目」建批
             </li>
             <li><strong>應收帳款</strong>：看誰該繳；收到現金時按該列的「收款」</li>
             <li><strong>入帳媒合</strong>：匯入代收明細後，把銀行收到的錢分配到費用單</li>
@@ -92,15 +100,6 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button
-            v-if="canWrite"
-            type="primary"
-            aria-label="批次產生費用單"
-            data-test="billing-generate"
-            @click="generateVisible = true"
-          >
-            產生費用單
-          </el-button>
         </template>
 
         <template v-else-if="view === 'matching'">
@@ -120,6 +119,17 @@
             @click="matchingRef?.openImport?.()"
           >
             匯入 CSV
+          </el-button>
+        </template>
+
+        <template v-else-if="view === 'cashItems'">
+          <el-button
+            v-if="canWrite"
+            type="primary"
+            data-test="cash-items-create"
+            @click="cashItemsRef?.openCreate?.()"
+          >
+            建立批次
           </el-button>
         </template>
       </template>
@@ -157,6 +167,7 @@
             ref="statementRef"
             :classrooms="classrooms"
             @open-list="onOpenList"
+            @open-imports="emit('update:imports-open', true)"
           />
           <FeeRecordsTab
             v-else
@@ -177,16 +188,12 @@
         :source="source"
       />
 
+      <!-- ── 現金項目（SPEC-019 §7）────────────────────────────────── -->
+      <CashItemsView v-else-if="view === 'cashItems'" ref="cashItemsRef" />
+
       <!-- ── 退款 ─────────────────────────────────────────────────── -->
       <FeeRefundsTab v-else :period-options="periodOptions" />
     </template>
-
-    <FeeGenerateModal
-      v-model="generateVisible"
-      :school-year="generateTerm?.schoolYear"
-      :semester="generateTerm?.semester"
-      @generated="onGenerated"
-    />
 
     <FeeBillSlipDrawer
       :model-value="importsOpen"
@@ -202,17 +209,17 @@
  *
  * 合併理由：對帳的三個檢視本來就是收款流程的下半段（錢進來了沒、對到誰），
  * 與帳單分成兩個平行主導航後，一筆學費從「該收」到「收到並對上」要跨兩個
- * 工作區、五個同層檢視。合併後次層只剩三個：
+ * 工作區、五個同層檢視。合併後次層：
  *
  *   - receivable 應收帳款（月表／逐筆兩種檢視模式，含預繳與批次收款）
+ *   - cashItems  現金項目（SPEC-019 §7：教材費等只收現金的批次＋新生預繳）
  *   - matching   入帳媒合（代收明細／存摺明細兩個來源，SPEC-016 語意不變）
  *   - refunds    退款
  *
  * 原「發單與未繳」降為「發單批次」抽屜（月拋一次的操作不該常駐佔檢視），
  * 三種匯入（代收 CSV／存摺 CSV／銀行檢核檔）收斂成工具列一顆「匯入」下拉。
  *
- * 費用單自 2026-08-25 起由後端排程依啟用範本每日自動產生；2026-09-01 起
- * 恢復「產生費用單」手動入口與排程並行（同一冪等產單核心，重跑只會跳過）。
+ * SPEC-019 起費用單只來自發單批次與現金項目批次（範本產單已移除）。
  * 預繳款自 2026-08-26 起併入應收帳款（月表「預繳」欄與工具列入口）。
  */
 import { computed, nextTick, onActivated, onMounted, ref, watch } from 'vue'
@@ -225,10 +232,10 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import { useAllClassroomStore } from '@/stores/classroomAll'
+import CashItemsView from '@/components/fees/CashItemsView.vue'
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
-import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
 import FeeMatchingPanel from './FeeMatchingPanel.vue'
 import FeeBillSlipDrawer from './FeeBillSlipDrawer.vue'
 import FeeSegToggle from './FeeSegToggle.vue'
@@ -250,7 +257,7 @@ const emit = defineEmits<{
   'change-view': [view: string]
   'change-source': [src: string]
   'update:imports-open': [open: boolean]
-  navigate: [target: { ws: 'billing' | 'settlement' | 'settings' | 'workbench'; view?: string }]
+  navigate: [target: { ws: 'billing' | 'settlement' | 'workbench'; view?: string }]
 }>()
 
 const views = FEE_WORKSPACE_VIEWS.billing
@@ -303,15 +310,7 @@ const matchingRef = ref<{
   refresh?: () => void
 } | null>(null)
 
-const generateVisible = ref(false)
-
-// 產單 modal 繼承目前聚焦的學期脈絡（"115-1" → 學年 115／上學期）；
-// 尚無 defaultPeriod 時交由 modal 以當前學年預設
-const generateTerm = computed(() => {
-  const [y, s] = (defaultPeriod.value || '').split('-').map(Number)
-  if (!y || (s !== 1 && s !== 2)) return null
-  return { schoolYear: y, semester: s }
-})
+const cashItemsRef = ref<{ refresh?: () => void; openCreate?: () => void } | null>(null)
 
 async function loadPeriods() {
   try {
@@ -370,6 +369,7 @@ let activatedOnce = false
 onActivated(() => {
   if (activatedOnce) {
     if (props.view === 'matching') matchingRef.value?.refresh?.()
+    else if (props.view === 'cashItems') cashItemsRef.value?.refresh?.()
     else refreshActiveRecordsView()
     refreshOverview()
   }

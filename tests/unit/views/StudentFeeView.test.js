@@ -1,8 +1,8 @@
 /**
  * 學費管理 IA 殼層測試（2026-09-02 簡化改版：帳單＋對帳合併為「收款」）。
  *
- * 涵蓋：預設進入工作台、三主入口切換、費用設定改為頁籤列入口（不再是
- * 「返回」模式）、舊 ?tab= 與舊 ?ws=recon 深連結相容映射、lazy（同時只掛載
+ * 涵蓋：預設進入工作台、三主入口切換、費用設定已於 SPEC-019 全數退場、
+ * 舊 ?tab= 與舊 ?ws=recon 深連結相容映射、lazy（同時只掛載
  * 一個工作區）、全域搜尋導向應收帳款、入帳來源與匯入抽屜的 query 同步。
  * 各工作區內部行為在 FeeWorkbench / FeeWorkspaces / FeeMatchingPanel 等測試覆蓋。
  */
@@ -63,14 +63,6 @@ vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
     template: '<div data-testid="ws-settlement" :data-view="view" />',
   },
 }))
-vi.mock('@/components/fees/workspace/FeeSettingsWorkspace.vue', () => ({
-  __esModule: true,
-  default: {
-    name: 'FeeSettingsWorkspace',
-    props: ['view'],
-    template: '<div data-testid="ws-settings" :data-view="view" />',
-  },
-}))
 
 // ── EP stubs ───────────────────────────────────────────────────────────────
 const GLOBAL_STUBS = {
@@ -122,7 +114,7 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     })
   })
 
-  it('主導航恰為三項：工作台/收款/結算，費用設定為頁籤列右側入口', async () => {
+  it('主導航恰為三項：工作台/收款/結算（費用設定已退場）', async () => {
     const wrapper = mountView()
     await flushAll()
     const nav = wrapper.find('[data-test="fee-main-nav"]')
@@ -130,7 +122,8 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     const labels = nav
       .findAll('button')
       .map((b) => b.text().replace(/\s+/g, ''))
-    expect(labels).toEqual(['工作台', '收款', '結算', '費用設定'])
+    expect(labels).toEqual(['工作台', '收款', '結算'])
+    expect(wrapper.find('[data-test="open-fee-settings"]').exists()).toBe(false)
   })
 
   it('lazy：同時只掛載目前工作區（其餘不出現在 DOM）', async () => {
@@ -168,14 +161,15 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
 
   it.each([
     ['records', 'ws-billing', 'receivable'],
-    ['templates', 'ws-settings', 'templates'],
+    // SPEC-019：費用範本／銷帳碼已退場，舊深連結導向應收帳款
+    ['templates', 'ws-billing', 'receivable'],
     ['refunds', 'ws-billing', 'refunds'],
     // 舊 bankRecon 深連結＝存摺對帳，落在收款／入帳媒合的存摺來源
     ['bankRecon', 'ws-billing', 'matching'],
     ['prepayments', 'ws-billing', 'receivable'],
     ['cashHandover', 'ws-settlement', 'handover'],
     ['close', 'ws-settlement', 'close'],
-    ['billingCodes', 'ws-settings', 'billingCodes'],
+    ['billingCodes', 'ws-billing', 'receivable'],
   ])('舊深連結 ?tab=%s 映射到 %s（view=%s）', async (tab, testid, view) => {
     const wrapper = mountView({ tab })
     await flushAll()
@@ -226,33 +220,6 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     expect(routerMocks.route.query.imports).toBeUndefined()
   })
 
-  it('費用設定：頁籤列右側入口進入，主導航仍在（不再是返回模式）', async () => {
-    const wrapper = mountView()
-    await flushAll()
-
-    await wrapper.find('[data-test="open-fee-settings"]').trigger('click')
-    await flushAll()
-    expect(wrapper.find('[data-testid="ws-settings"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="ws-settings"]').attributes('data-view')).toBe(
-      'templates',
-    )
-    // 主導航與設定入口都留在原地，可直接切回其他工作區
-    expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="open-fee-settings"]').exists()).toBe(true)
-
-    await wrapper.find('[data-test="fee-main-nav-workbench"]').trigger('click')
-    await flushAll()
-    expect(wrapper.find('[data-testid="ws-workbench"]').exists()).toBe(true)
-  })
-
-  it('費用設定可直達銷帳碼（?ws=settings&view=billingCodes）', async () => {
-    const wrapper = mountView({ ws: 'settings', view: 'billingCodes' })
-    await flushAll()
-    expect(wrapper.find('[data-testid="ws-settings"]').attributes('data-view')).toBe(
-      'billingCodes',
-    )
-  })
-
   it('全域搜尋 ?search= 導向應收帳款並下傳關鍵字', async () => {
     const wrapper = mountView({ search: '王小明' })
     await flushAll()
@@ -262,13 +229,10 @@ describe('StudentFeeView（任務導向 IA 殼層）', () => {
     expect(billing.attributes('data-search')).toBe('王小明')
   })
 
-  it('accessible name：主導航與費用設定入口具 aria-label', async () => {
+  it('accessible name：主導航具 aria-label', async () => {
     const wrapper = mountView()
     await flushAll()
     expect(wrapper.find('[data-test="fee-main-nav"]').exists()).toBe(true)
     expect(wrapper.find('nav[aria-label="學費管理工作區"]').exists()).toBe(true)
-    expect(
-      wrapper.find('[data-test="open-fee-settings"]').attributes('aria-label'),
-    ).toBeTruthy()
   })
 })

@@ -1,7 +1,7 @@
 /**
  * StudentFeeView：工作區 lazy mount 與 ?ws=/?view=（含舊 ?tab=）URL 同步。
- * （2026-09-02 簡化改版：帳單＋對帳合併為「收款」，主導航＝工作台/收款/結算
- *   ＋頁籤列右側費用設定）
+ * （2026-09-02 簡化改版：帳單＋對帳合併為「收款」，主導航＝工作台/收款/結算；
+ *   SPEC-019 起費用設定全數退場）
  *
  * - 非作用中的工作區不得在進頁時就 mount（各套資料不重複載）。
  * - 舊 ?tab= 深連結相容映射；非法值 fallback 工作台。
@@ -42,7 +42,7 @@ const apiMocks = vi.hoisted(() => ({
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
-// --- 四個工作區元件 stub（async chunk；各自行為由其專屬測試涵蓋）---
+// --- 三個工作區元件 stub（async chunk；各自行為由其專屬測試涵蓋）---
 vi.mock('@/components/fees/workspace/FeeWorkbench.vue', () => ({
   __esModule: true,
   default: { name: 'FeeWorkbench', template: '<div data-test="ws-workbench" />' },
@@ -64,15 +64,6 @@ vi.mock('@/components/fees/workspace/FeeSettlementWorkspace.vue', () => ({
     template: '<div data-test="ws-settlement" :data-view="view" />',
   },
 }))
-vi.mock('@/components/fees/workspace/FeeSettingsWorkspace.vue', () => ({
-  __esModule: true,
-  default: {
-    name: 'FeeSettingsWorkspace',
-    props: ['view'],
-    template: '<div data-test="ws-settings" :data-view="view" />',
-  },
-}))
-
 import StudentFeeView from '../StudentFeeView.vue'
 import { __resetFeeOverview } from '@/components/fees/workspace/useFeeOverview'
 
@@ -148,13 +139,13 @@ describe('StudentFeeView 工作區 lazy 與 query 同步（IA 改版）', () => 
     expect(lastPush.query.ws).toBe('billing')
   })
 
-  it('舊深連結 ?tab=templates → 費用設定範本分頁 mount，工作台不 mount', async () => {
+  it('舊深連結 ?tab=templates → 收款／應收帳款（費用設定已退場）', async () => {
     const w = mountView({ tab: 'templates' })
     await flushAll()
-    const settings = w.find('[data-test="ws-settings"]')
-    expect(settings.exists()).toBe(true)
-    expect(settings.attributes('data-view')).toBe('templates')
-    expect(w.find('[data-test="ws-workbench"]').exists()).toBe(false)
+    const billing = w.find('[data-test="ws-billing"]')
+    expect(billing.exists()).toBe(true)
+    expect(billing.attributes('data-view')).toBe('receivable')
+    expect(w.find('[data-test="ws-settings"]').exists()).toBe(false)
     expect(routerMocks.route!.query.tab).toBeUndefined()
   })
 
