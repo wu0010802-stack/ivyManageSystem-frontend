@@ -10,10 +10,11 @@
       class="rail-all"
       :class="{ 'rail-all--on': !selectedClass && !selectedGrade }"
       :aria-pressed="!selectedClass && !selectedGrade"
+      :title="`全部班級　共 ${total} 人・${totalUnpaid ? `${totalUnpaid} 人未收齊` : '已收齊'}`"
       data-test="stmt-class-rail-all"
       @click="emit('select', { cls: null, grade: null })"
     >
-      全部<span v-if="showCounts" class="rail-all__n">{{ total }}</span>
+      全部<span v-if="showCounts" class="rail-all__n">{{ totalUnpaid }}</span>
     </button>
 
     <template v-for="g in groups" :key="g.key">
@@ -27,12 +28,12 @@
           class="rail-grade__lbl"
           :class="{ 'rail-grade__lbl--on': isGradeOn(g.key) }"
           :aria-pressed="isGradeOn(g.key)"
-          :title="`只看${g.label}`"
+          :title="gradeTitle(g)"
           data-test="stmt-class-rail-grade"
           :data-grade="g.key"
           @click="onGrade(g.key)"
         >
-          {{ g.label }}<span v-if="showCounts" class="rail-grade__n">{{ g.total }}</span>
+          {{ g.label }}<span v-if="showCounts" class="rail-grade__n">{{ g.unpaidCount }}</span>
         </button>
         <span
           v-else
@@ -87,8 +88,10 @@ import type { ClassGroup, GradeGroup } from '@/components/fees/feeClassGrouping'
 const props = withDefaults(
   defineProps<{
     groups: GradeGroup[]
-    /** 範圍內總人數（「全部」的計數） */
+    /** 範圍內總人數（只進 title，不畫在 chip 上） */
     total?: number
+    /** 範圍內未收齊人數（「全部」的計數） */
+    totalUnpaid?: number
     /** 選中的班名（月表的 classroom_name），null＝未指定 */
     selectedClass?: string | null
     /** 選中的年段 key，null＝未指定 */
@@ -104,6 +107,7 @@ const props = withDefaults(
   }>(),
   {
     total: 0,
+    totalUnpaid: 0,
     selectedClass: null,
     selectedGrade: null,
     showCounts: true,
@@ -132,10 +136,19 @@ function onClass(c: ClassGroup) {
   else emit('select', { cls: c.name, grade: c.gradeLabel || null })
 }
 
+/**
+ * 三層 chip 上的數字一律是「未收齊人數」——這頁的問題只有一個「誰還沒收」，
+ * 混用總人數與未收人數會讓相鄰的數字讀起來像同一種。總人數放 title。
+ */
 function chipTitle(c: ClassGroup): string {
   const grade = c.gradeLabel ? `（${c.gradeLabel}）` : ''
   const state = c.unpaidCount ? `${c.unpaidCount} 人未收齊` : '已收齊'
-  return `${c.label}${grade}　${c.total} 人・${state}`
+  return `${c.label}${grade}　共 ${c.total} 人・${state}`
+}
+
+function gradeTitle(g: GradeGroup): string {
+  const state = g.unpaidCount ? `${g.unpaidCount} 人未收齊` : '已收齊'
+  return `只看${g.label}　共 ${g.total} 人・${state}`
 }
 </script>
 

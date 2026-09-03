@@ -146,6 +146,7 @@
     <FeeClassRail
       :groups="classGroups"
       :total="students.length"
+      :total-unpaid="totalUnpaidCount"
       :selected-class="selectedClassroom"
       :selected-grade="selectedGrade"
       @select="onRailSelect"
@@ -720,6 +721,11 @@ const students = computed<StatementStudent[]>(() => statement.value?.students ??
  * ——「哪一班還沒收齊」是這頁的固定問題，不該隨手上的篩選跳動。
  */
 const classGroups = computed(() => buildClassGroups(students.value, props.classrooms))
+
+/** 導覽列「全部」的計數；與各班 chip 同語意（未收齊人數），可直接相加驗算 */
+const totalUnpaidCount = computed(
+  () => students.value.filter((s) => s.status !== 'paid').length,
+)
 
 /** 班名 → 年段，供 scope 依年段過濾（年段本身不是月表欄位） */
 const gradeOfClass = computed(() => {
