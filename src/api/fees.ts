@@ -31,35 +31,6 @@ export const getFeeMonthlyStatement = (
 ): Promise<ApiResponse<'/fees/monthly-statement', 'get'>> =>
   api.get('/fees/monthly-statement', { params }).then((res) => res.data)
 
-// ===== 費用範本 =====
-export const getFeeTemplates = (params: unknown = {}) =>
-  api.get('/fees/templates', { params }).then((res) => res.data)
-export const createFeeTemplate = (payload: unknown) =>
-  api.post('/fees/templates', payload).then((res) => res.data)
-export const updateFeeTemplate = (id: number, payload: unknown) =>
-  api.put(`/fees/templates/${id}`, payload).then((res) => res.data)
-export const deleteFeeTemplate = (id: number) =>
-  api.delete(`/fees/templates/${id}`).then((res) => res.data)
-// 整學年複製（SPEC-015 年度設定）：金額照抄、收費/逾期日自動平移、既有組合冪等 skip
-export const copyYearFeeTemplates = (
-  payload: ApiBody<'/fees/templates/copy-year', 'post'>,
-): Promise<ApiResponse<'/fees/templates/copy-year', 'post'>> =>
-  api.post('/fees/templates/copy-year', payload).then((res) => res.data)
-
-// 手動補產費用單（2026-09-01 起與每日排程並行）：dry_run 預覽 → 確認寫入；
-// 冪等，已存在（學生 × 範本 × 月份）組合自動跳過。後端未標 response_model，
-// 回傳形狀以 ivy-backend api/fees/generation.py 為準，於此手寫窄型別。
-export interface FeeGenerateResult {
-  created: number
-  skipped: number
-  dry_run: boolean
-  preview?: Record<string, unknown>[]
-}
-export const generateFeeRecords = (
-  payload: ApiBody<'/fees/generate', 'post'>,
-): Promise<FeeGenerateResult> =>
-  api.post('/fees/generate', payload).then((res) => res.data)
-
 // ===== 學費折抵 CRUD（同胞優惠 / 預繳 / 請假扣款 / 其他）=====
 // getFeeAdjustments 參數維持 unknown：FeesTab.vue 以 Record<string, unknown> 傳入，
 // 改用 ApiQuery 會破壞既有 typecheck（對齊本檔 getFeeRecords 慣例）。
@@ -80,24 +51,6 @@ export const deleteFeeAdjustment = (id: number) =>
 // SPEC-014：銀行對帳 / 銷帳碼 / 預繳款 / 現金交接 / 關帳
 // 型別自 OpenAPI codegen 下放（後端全數標 response_model）；沿用本檔自解包慣例。
 // ============================================================================
-
-// ===== 銷帳末四碼 =====
-export const getBillingCodes = (
-  params?: unknown,
-): Promise<ApiResponse<'/fees/billing-codes', 'get'>> =>
-  api.get('/fees/billing-codes', { params }).then((res) => res.data)
-export const suggestBillingCodes = (
-  payload: ApiBody<'/fees/billing-codes/suggest', 'post'>,
-): Promise<ApiResponse<'/fees/billing-codes/suggest', 'post'>> =>
-  api.post('/fees/billing-codes/suggest', payload).then((res) => res.data)
-export const activateBillingCodes = (
-  payload: ApiBody<'/fees/billing-codes/activate', 'post'>,
-): Promise<ApiResponse<'/fees/billing-codes/activate', 'post'>> =>
-  api.post('/fees/billing-codes/activate', payload).then((res) => res.data)
-export const deactivateBillingCode = (
-  id: number,
-  payload: ApiBody<'/fees/billing-codes/{assignment_id}/deactivate', 'post'>,
-) => api.post(`/fees/billing-codes/${id}/deactivate`, payload).then((res) => res.data)
 
 // ===== 永豐 CSV 匯入 =====
 export const previewBankImport = (

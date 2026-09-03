@@ -18,28 +18,27 @@ describe('feesNavigation：主導航形狀（2026-09-02 帳單＋對帳合併）
     expect(FEE_MAIN_WORKSPACES.map((w) => w.label)).toEqual(['工作台', '收款', '結算'])
   })
 
-  it('收款次層＝應收帳款（預設）／入帳媒合／退款', () => {
+  it('收款次層＝應收帳款（預設）／現金項目／入帳媒合／退款', () => {
     expect(FEE_WORKSPACE_VIEWS.billing.map((v) => v.key)).toEqual([
       'receivable',
+      'cashItems',
       'matching',
       'refunds',
     ])
     expect(FEE_WORKSPACE_VIEWS.billing.map((v) => v.label)).toEqual([
       '應收帳款',
+      '現金項目',
       '入帳媒合',
       '退款',
     ])
   })
 
-  it('結算與設定次層維持兩項', () => {
+  it('結算次層維持兩項；費用設定已退場', () => {
     expect(FEE_WORKSPACE_VIEWS.settlement.map((v) => v.key)).toEqual([
       'handover',
       'close',
     ])
-    expect(FEE_WORKSPACE_VIEWS.settings.map((v) => v.key)).toEqual([
-      'templates',
-      'billingCodes',
-    ])
+    expect(FEE_WORKSPACE_VIEWS).not.toHaveProperty('settings')
   })
 
   it('入帳媒合來源＝代收明細（預設）＋存摺明細', () => {
@@ -56,7 +55,8 @@ describe('feesNavigation：主導航形狀（2026-09-02 帳單＋對帳合併）
 describe('feesNavigation：舊 tab 深連結相容映射（8 個舊 tab 全數涵蓋）', () => {
   const CASES: [string, string, string | null, string | null][] = [
     ['records', 'billing', 'receivable', null],
-    ['templates', 'settings', 'templates', null],
+    // SPEC-019：費用範本已退場，舊深連結導向應收帳款
+    ['templates', 'billing', 'receivable', null],
     ['refunds', 'billing', 'refunds', null],
     // 舊 bankRecon 深連結＝存摺對帳，落在入帳媒合的存摺來源
     ['bankRecon', 'billing', 'matching', 'passbook'],
@@ -64,7 +64,8 @@ describe('feesNavigation：舊 tab 深連結相容映射（8 個舊 tab 全數�
     ['prepayments', 'billing', 'receivable', null],
     ['cashHandover', 'settlement', 'handover', null],
     ['close', 'settlement', 'close', null],
-    ['billingCodes', 'settings', 'billingCodes', null],
+    // SPEC-019：銷帳碼已退場，舊深連結導向應收帳款
+    ['billingCodes', 'billing', 'receivable', null],
   ]
 
   it.each(CASES)('?tab=%s → ws=%s / view=%s / src=%s', (tab, ws, view, src) => {
@@ -226,10 +227,10 @@ describe('feesNavigation：ws/view 解析', () => {
     expect(loc.needsNormalize).toBe(true)
   })
 
-  it('費用設定仍可由 ws=settings 直達', () => {
-    const loc = resolveFeesLocation({ ws: 'settings' })
-    expect(loc.ws).toBe('settings')
-    expect(loc.view).toBe('templates')
+  it('ws=settings 已退場，退回工作台並正規化', () => {
+    const loc = resolveFeesLocation({ ws: 'settings', view: 'templates' })
+    expect(loc.ws).toBe('workbench')
+    expect(loc.needsNormalize).toBe(true)
   })
 
   it('全域搜尋（?search=）未指定 ws 時導向應收帳款', () => {

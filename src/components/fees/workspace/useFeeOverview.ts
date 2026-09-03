@@ -247,14 +247,14 @@ function receivableItem(): FeeQueueItem {
     return { ...base, state: 'unknown', detail: '無法載入收款統計，點入應收帳款查看' }
   }
   if (!state.currentPeriod) {
-    // SPEC-018：月費以發單批次（XLS）為主要來源；範本產單保留給其他費用類型
+    // SPEC-019：應收唯一來源＝發單批次（銀行檢核檔）與現金項目批次；範本產單已退場
     return {
       ...base,
       state: 'muted',
       detail:
-        '尚未產生任何費用單；可匯入繳款單檢核檔一鍵產單，或啟用費用範本由系統每日自動產生',
-      actionLabel: '去設定',
-      target: { ws: 'settings', view: 'templates' },
+        '尚未產生任何費用單；請匯入銀行繳款單檢核檔建立發單批次，或到現金項目建立教材費等批次',
+      actionLabel: '去匯入',
+      target: { ws: 'billing', view: 'receivable', imports: true },
     }
   }
   const s = state.feeSummary
@@ -541,7 +541,7 @@ export function useFeeOverview() {
    * 「這裡有幾件事要處理」，兩種量級混在同一列會誤讀。
    */
   const todoCounts = computed<Record<FeeWorkspaceKey, number>>(() => {
-    const counts = { workbench: 0, billing: 0, settlement: 0, settings: 0 }
+    const counts = { workbench: 0, billing: 0, settlement: 0 }
     for (const item of actionItems.value) counts[item.target.ws] += 1
     return counts
   })

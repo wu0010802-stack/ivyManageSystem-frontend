@@ -98,7 +98,6 @@ describe('useFeeOverview 待辦數（主導航徽章）', () => {
       workbench: 0,
       billing: 0,
       settlement: 0,
-      settings: 0,
     })
     expect(o.actionItems.value).toHaveLength(0)
   })
