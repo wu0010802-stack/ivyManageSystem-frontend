@@ -29147,8 +29147,12 @@ export interface components {
             amount_paid?: number | null;
             /** Billing Code Suffix */
             billing_code_suffix?: string | null;
+            /** Billing Start Date */
+            billing_start_date?: string | null;
             /** Classroom Name */
             classroom_name?: string | null;
+            /** Due Date */
+            due_date?: string | null;
             /** Fee Item Name */
             fee_item_name?: string | null;
             /** Fee Type */
@@ -29177,6 +29181,8 @@ export interface components {
             student_id: number;
             /** Student Name */
             student_name?: string | null;
+            /** Target Month */
+            target_month?: string | null;
         };
         /**
          * FeeRecordSettlementOut
