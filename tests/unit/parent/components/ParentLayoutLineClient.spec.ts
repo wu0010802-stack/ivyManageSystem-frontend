@@ -7,12 +7,16 @@ import ParentLayout from '@/parent/layouts/ParentLayout.vue'
 import { _resetLineClientForTests, markLineClientFromSdk } from '@/parent/utils/lineClient'
 
 /**
- * SPEC-020 CT-M-01：LINE MINI App 的內建 header 不可隱藏，且已提供標題、
- * 返回鈕與關閉鈕。家長端自畫的 M3TopAppBar 提供的三件事（標題／返回／`/me` 入口）
- * 在 LINE 內全部重複，其中 `/me` 更已是底部 tab 之一。
+ * SPEC-020 CT-M-01：LINE 的內建 header 不可隱藏，已提供標題（取自
+ * document.title）與關閉鈕。家長端自畫 M3TopAppBar 的標題與 `/me` 入口在
+ * LINE 內都是重複的（`/me` 更已是底部 tab 之一），兩條疊起來吃掉近 120px。
  *
- * 因此在 LINE App 內必須整條不渲染，否則首屏被兩條標題列吃掉。
- * 外部瀏覽器（含桌機測試）不受影響，仍是唯一的導覽列。
+ * 但**深層頁必須保留返回鈕**：LINE 內建 header 的返回鈕不是通用的「上一頁」
+ * ——LIFF browser 只在 LIFF 之間轉場時才顯示它，MINI App 的 Return button
+ * 也未保證在所有情境出現。整條隱藏會讓深層頁只剩底部 tab 可逃。
+ *
+ * 因此分流：LINE 內的主分頁整條不渲染；深層頁保留，但不重複顯示標題。
+ * 外部瀏覽器（含桌機測試）不受影響，它仍是唯一導覽列且照常顯示標題。
  */
 
 vi.mock('@/parent/api/announcements', () => ({
@@ -69,7 +73,7 @@ async function mountLayout(initialPath: string) {
       stubs: {
         M3TopAppBar: {
           template:
-            '<header data-test="top-app-bar"><slot name="leading" /><span>{{ title }}</span><slot name="actions" /></header>',
+            '<header data-test="top-app-bar" :data-title="title" :data-show-back="String(showBack)"><slot name="leading" /><span>{{ title }}</span><slot name="actions" /></header>',
           props: ['title', 'showBack', 'onBack', 'variant'],
         },
         M3NavigationBar: { template: '<nav data-test="nav-bar" />' },
@@ -93,16 +97,29 @@ afterEach(() => {
   setUserAgent(ORIGINAL_UA)
 })
 
-describe('ParentLayout 在 LINE App 內不渲染自畫 header', () => {
-  it.each([['/fees'], ['/fees/1']])(
-    'LINE 內的 %s 不得出現 M3TopAppBar（避免與 MINI App 內建 header 疊成雙標題列）',
-    async (path) => {
-      markLineClientFromSdk(true)
-      const { wrapper } = await mountLayout(path)
-      expect(wrapper.find('[data-test="top-app-bar"]').exists()).toBe(false)
-      wrapper.unmount()
-    },
-  )
+describe('ParentLayout 在 LINE App 內的 header 分流', () => {
+  it('LINE 內的主分頁不得出現 M3TopAppBar（避免與內建 header 疊成雙標題列）', async () => {
+    markLineClientFromSdk(true)
+    const { wrapper } = await mountLayout('/fees')
+    expect(wrapper.find('[data-test="top-app-bar"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('LINE 內的深層頁必須保留 header：內建返回鈕不是通用的「上一頁」', async () => {
+    markLineClientFromSdk(true)
+    const { wrapper } = await mountLayout('/fees/1')
+    const bar = wrapper.find('[data-test="top-app-bar"]')
+    expect(bar.exists()).toBe(true)
+    expect(bar.attributes('data-show-back')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('LINE 內的深層頁不重複顯示標題（內建 header 已在顯示 document.title）', async () => {
+    markLineClientFromSdk(true)
+    const { wrapper } = await mountLayout('/fees/1')
+    expect(wrapper.find('[data-test="top-app-bar"]').attributes('data-title')).toBe('')
+    wrapper.unmount()
+  })
 
   it.each([['/fees'], ['/fees/1']])(
     '外部瀏覽器的 %s 仍必須有 M3TopAppBar（此時它是唯一導覽列）',
@@ -114,7 +131,14 @@ describe('ParentLayout 在 LINE App 內不渲染自畫 header', () => {
     },
   )
 
-  it('SDK 未就緒時以 User-Agent 判斷：LINE WebView 的 UA 一樣不渲染 header', async () => {
+  it('外部瀏覽器照常顯示標題', async () => {
+    markLineClientFromSdk(false)
+    const { wrapper } = await mountLayout('/fees/1')
+    expect(wrapper.find('[data-test="top-app-bar"]').attributes('data-title')).toBe('繳費明細')
+    wrapper.unmount()
+  })
+
+  it('SDK 未就緒時以 User-Agent 判斷：LINE WebView 的主分頁一樣不渲染 header', async () => {
     setUserAgent('Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Line/14.2.1 LIAPP')
     const { wrapper } = await mountLayout('/fees')
     expect(wrapper.find('[data-test="top-app-bar"]').exists()).toBe(false)

@@ -37,17 +37,31 @@ const currentTab = computed(() => (route.meta?.tab as string) || '')
 const isHomeRoute = computed(() => route.name === 'parent-home')
 
 /**
- * 不畫自己那條 top bar 的兩種情況（SPEC-020 CT-M-01）：
+ * 不畫自己那條 top bar 的情況（SPEC-020 CT-M-01）：
  *
  * 1. 首頁——logo 已併入 HomeHeroHeader 的問候語 chip（見上）。
- * 2. **在 LINE App 內**——LINE MINI App 的內建 header 不可隱藏，且已提供標題
- *    （取自 document.title）、返回鈕與關閉鈕；我們這條提供的標題／返回／`/me`
- *    入口三者全部重複，其中 `/me` 更已是底部 tab 之一。兩條疊起來會吃掉近
- *    120px 的首屏。外部瀏覽器開啟時沒有內建 header，仍照常渲染。
+ * 2. **在 LINE App 內的主分頁**——LINE 的內建 header 不可隱藏，已提供標題
+ *    （取自 document.title）與關閉鈕；我們這條的標題與 `/me` 入口都重複，
+ *    而 `/me` 更已是底部 tab 之一。兩條疊起來吃掉近 120px 的首屏。
+ *
+ * **深層頁（`showBack`）在 LINE 內仍要保留**：LINE 內建 header 的返回鈕不是
+ * 通用的「上一頁」——LIFF browser 只在 LIFF 之間轉場時才顯示它，MINI App 的
+ * Return button 也未保證在所有情境出現。整條隱藏會讓深層頁只剩底部 tab 可逃，
+ * 從「繳費明細」按不回「繳費」。保留時只留返回鈕，標題交給 LINE 的 header。
  *
  * 版面補償沿用既有的 `no-topbar` class，不另開一套。
  */
-const hideOwnTopBar = computed(() => isHomeRoute.value || isInLineClient())
+const headerShowBack = computed(() => route.meta?.showBack === true)
+
+const hideOwnTopBar = computed(
+  () => isHomeRoute.value || (isInLineClient() && !headerShowBack.value),
+)
+
+/**
+ * LINE 內不重複顯示標題——內建 header 已經在顯示 document.title，
+ * 同一串字上下相鄰出現兩次比沒有標題更糟。
+ */
+const showOwnTitle = computed(() => !isInLineClient())
 
 /**
  * 點再次點 active tab → scroll-to-top。
@@ -133,8 +147,9 @@ onMounted(() => refreshBadges())
 watch(() => route.fullPath, () => refreshBadges())
 
 const { branding } = useTenantBranding()
-const headerTitle = computed(() => (route.meta?.title as string) || branding.value.titles.parent_short)
-const headerShowBack = computed(() => route.meta?.showBack === true)
+const headerTitle = computed(() =>
+  showOwnTitle.value ? (route.meta?.title as string) || branding.value.titles.parent_short : '',
+)
 
 function onBack() {
   if (window.history.length > 1) {
