@@ -29,6 +29,12 @@ const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
 vi.mock('@/utils/auth', () => ({
   hasPermission: (name: string) => authMocks.perms.has(name),
 }))
+// StudentPickerDialog（未解析列指定學生）用 useAllClassroomStore 把 classroom_id
+// 對映成班名；此處不掛 pinia，故 mock 掉 store 模組
+vi.mock('@/stores/classroomAll', () => ({
+  useAllClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }),
+}))
+
 const mbMocks = vi.hoisted(() => ({ confirm: vi.fn() }))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },

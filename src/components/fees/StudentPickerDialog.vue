@@ -33,7 +33,7 @@
       <tbody>
         <tr v-for="s in rows" :key="s.id" data-test="picker-row">
           <td>{{ s.name }}</td>
-          <td>{{ s.classroom_name || '—' }}</td>
+          <td>{{ classroomName(s) || '—' }}</td>
           <td>{{ statusLabel(s) }}</td>
           <td>
             <el-button size="small" type="primary" text data-test="picker-pick" @click="pick(s)">
@@ -55,26 +55,36 @@
  * 學生挑選 dialog（SPEC-019 §5.2）：檢核檔姓名對不上在籍學生時人工指定；
  * 新生預繳登記也用它挑學生。只做搜尋＋挑選，不改任何資料。
  *
- * ⚠ `GET /students` 的 StudentListItemOut 目前沒有 classroom_name，
- * 只有 classroom_id；班級欄在後端補欄位前會顯示「—」，同名學生改看狀態欄辨識。
+ * 班級欄是本 dialog 存在的理由（同名學生只能靠班級分辨），但
+ * `GET /students` 的 `StudentListItemOut` 只回 `classroom_id`／`term_classroom_id`、
+ * **沒有** `classroom_name`，所以班名要在前端用 `useAllClassroomStore`
+ * （跨學期班級清單，`current_only=false`）自行對映；用當期班級 store 會在
+ * 暑假期間把已編入下學年班的學生一律查成「—」。
  */
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getStudents } from '@/api/students'
+import { useAllClassroomStore } from '@/stores/classroomAll'
 import { friendlyError } from '@/utils/errorMessages'
 
 interface PickerStudent {
   id: number
   name: string
-  classroom_name?: string | null
+  classroom_id?: number | null
+  term_classroom_id?: number | null
   lifecycle_status?: string | null
   status?: string | null
 }
 
-withDefaults(defineProps<{ modelValue: boolean; title?: string; hint?: string }>(), {
-  title: '指定學生',
-  hint: '',
-})
+interface ClassroomLite {
+  id: number
+  name: string
+}
+
+const props = withDefaults(
+  defineProps<{ modelValue: boolean; title?: string; hint?: string }>(),
+  { title: '指定學生', hint: '' },
+)
 
 const emit = defineEmits<{
   'update:modelValue': [visible: boolean]
@@ -85,6 +95,22 @@ const keyword = ref('')
 const rows = ref<PickerStudent[]>([])
 const searching = ref(false)
 const searched = ref(false)
+
+const classroomStore = useAllClassroomStore()
+const classroomNameById = computed(() => {
+  const map = new Map<number, string>()
+  for (const c of (classroomStore.classrooms as unknown as ClassroomLite[]) ?? []) {
+    if (c && typeof c.id === 'number') map.set(c.id, c.name)
+  }
+  return map
+})
+
+/** 班名：現行班級優先，暑假等尚未編班時退回該學期班級；查不到才顯示 '—' */
+function classroomName(s: PickerStudent): string | null {
+  const id = s.classroom_id ?? s.term_classroom_id
+  if (id == null) return null
+  return classroomNameById.value.get(id) ?? null
+}
 
 function statusLabel(s: PickerStudent): string {
   return s.lifecycle_status || s.status || '—'
@@ -107,9 +133,18 @@ async function runSearch() {
 }
 
 function pick(s: PickerStudent) {
-  emit('pick', { id: s.id, name: s.name, classroom_name: s.classroom_name ?? null })
+  emit('pick', { id: s.id, name: s.name, classroom_name: classroomName(s) })
   emit('update:modelValue', false)
 }
+
+// 班級清單有 5 分鐘 TTL 快取＋in-flight 去重，開啟時再抓不會重複打 API
+watch(
+  () => props.modelValue,
+  (open) => {
+    if (open) classroomStore.fetchClassrooms()
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
