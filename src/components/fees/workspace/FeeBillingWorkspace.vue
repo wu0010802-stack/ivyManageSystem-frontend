@@ -148,6 +148,7 @@
             ref="statementRef"
             :classrooms="classrooms"
             @open-list="onOpenList"
+            @open-imports="emit('update:imports-open', true)"
           />
           <FeeRecordsTab
             v-else

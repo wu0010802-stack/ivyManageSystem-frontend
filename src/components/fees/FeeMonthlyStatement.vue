@@ -131,26 +131,6 @@
         共 {{ visibleStudents.length }} 人
       </span>
 
-      <el-dropdown v-if="canWrite" trigger="click" @command="onPrepayCommand">
-        <el-button data-test="stmt-prepay-menu">
-          預繳款<el-icon class="el-icon--right" aria-hidden="true"><ArrowDown /></el-icon>
-        </el-button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item
-              v-if="visitCredits.length"
-              command="visit"
-              data-test="stmt-visit-prepay"
-            >
-              訪視預繳 {{ visitCredits.length }} 筆
-            </el-dropdown-item>
-            <el-dropdown-item command="refunds" data-test="stmt-refund-todo">
-              預繳退款{{ pendingRefundCount ? `（${pendingRefundCount} 待辦）` : '' }}
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-
       <el-button
         v-if="canWrite"
         type="primary"
@@ -178,7 +158,16 @@
       <el-button size="small" data-test="stmt-retry" @click="fetchStatement">重試</el-button>
     </div>
     <div v-else-if="students.length === 0" class="stmt-state" data-test="stmt-empty">
-      <p>{{ monthLabel }}尚無費用單——啟用費用範本後，系統將於每日自動產生</p>
+      <p>{{ monthLabel }}尚無費用單——請匯入繳款單檢核檔產單（月費批／註冊費批）</p>
+      <el-button
+        v-if="canWrite"
+        size="small"
+        type="primary"
+        data-test="stmt-empty-import"
+        @click="emit('open-imports')"
+      >
+        匯入檢核檔
+      </el-button>
     </div>
     <div v-else class="stmt-table-wrap">
       <table class="stmt-table" data-test="stmt-table">
@@ -198,6 +187,9 @@
             <th v-for="b in visibleBuckets" :key="b.key" class="num-col">{{ b.label }}</th>
             <th class="num-col">應繳合計</th>
             <th class="num-col">未收</th>
+            <!-- SPEC-019 §8.1：分辨這筆錢是現金收的還是網銀進來的 -->
+            <th class="num-col">現金已收</th>
+            <th class="num-col">網銀已收</th>
             <th>預繳</th>
             <th>狀態</th>
             <th v-if="canWrite">操作</th>
@@ -257,6 +249,20 @@
               <td class="num-cell" :class="stu.outstanding > 0 ? 'outstanding-pos' : 'cell-empty'">
                 {{ stu.outstanding > 0 ? formatCurrency(stu.outstanding) : '—' }}
               </td>
+              <td
+                class="num-cell"
+                :class="{ 'cell-empty': paidSplit(stu).cash <= 0 }"
+                data-test="stmt-cash-paid"
+              >
+                {{ paidSplit(stu).cash > 0 ? formatCurrency(paidSplit(stu).cash) : '—' }}
+              </td>
+              <td
+                class="num-cell"
+                :class="{ 'cell-empty': paidSplit(stu).bank <= 0 }"
+                data-test="stmt-bank-paid"
+              >
+                {{ paidSplit(stu).bank > 0 ? formatCurrency(paidSplit(stu).bank) : '—' }}
+              </td>
               <td>
                 <button
                   v-if="prepayCells.get(stu.student_id)"
@@ -294,9 +300,9 @@
                   type="primary"
                   size="small"
                   data-test="stmt-pay"
-                  @click="openPayFor(stu)"
+                  @click="openCashFor(stu)"
                 >
-                  收款
+                  收現金
                 </el-button>
               </td>
             </tr>
@@ -369,7 +375,8 @@
             <td :colspan="3 + visibleBuckets.length">合計（目前篩選 {{ visibleStudents.length }} 人）</td>
             <td class="num-cell">{{ formatCurrency(visibleDue) }}</td>
             <td class="num-cell outstanding-pos">{{ formatCurrency(visibleOutstanding) }}</td>
-            <td :colspan="canWrite ? 3 : 2" />
+            <!-- 現金已收／網銀已收／預繳／狀態（＋canWrite 的操作欄）不做合計 -->
+            <td :colspan="canWrite ? 5 : 4" />
           </tr>
         </tfoot>
       </table>
@@ -382,10 +389,12 @@
       :title="drawerTitle"
       @refresh="onPrepayMutated"
     />
-    <PrepaymentRefundsDialog
-      v-model="refundsVisible"
-      :refunds="prepayRefunds"
-      @refresh="onPrepayMutated"
+    <StudentCashReceiptDialog
+      v-model="cashDialogVisible"
+      :student-id="cashStudent?.id ?? null"
+      :student-name="cashStudent?.name ?? ''"
+      :month="month"
+      @paid="onPaid"
     />
   </section>
 </template>
@@ -396,17 +405,20 @@
  *
  * 一次撈整月 per-student 聚合（GET /fees/monthly-statement），
  * 班級 chips／狀態快篩／姓名搜尋全部前端即時切換（園所規模單月 ≤ 數百人）。
- * 收款走 BatchPayDialog（繳清全額語意）；部分繳費／退款導向逐筆明細
+ * 批次收款（多人繳清全額）走 BatchPayDialog；部分繳費／退款導向逐筆明細
  * （emit open-list 由帳單工作區切換模式）。
  *
  * 預繳款自 2026-08-26 起併入本表：每列「預繳」欄顯示該生額度狀態，
- * 點擊開 PrepaymentDrawer 管理；工具列另有「訪視預繳」（尚未轉正式
- * 學生的訪視額度）與「預繳退款」（老闆核准/交付）兩個入口。
+ * 點擊開 PrepaymentDrawer 管理。
+ *
+ * 2026-09-02 SPEC-019：列上「收現金」改開 StudentCashReceiptDialog（該生
+ * 月費＋註冊＋教材費一次收成一張收據）；新增「現金已收／網銀已收」兩欄，
+ * 讓業主一眼分辨錢是現金收的還是網銀進來的；工具列「預繳款」下拉移到
+ * 現金項目檢視（訪視預繳／預繳退款），本表只留每列預繳欄。
  */
-import { ArrowDown } from '@element-plus/icons-vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getFeeMonthlyStatement, getPrepaymentRefunds, getPrepayments } from '@/api/fees'
+import { getFeeMonthlyStatement, getPrepayments } from '@/api/fees'
 import { ElMessage } from 'element-plus'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
@@ -421,12 +433,11 @@ import {
 } from '@/components/fees/settlementDisplay'
 import type { FeeWorkspaceKey } from '@/components/fees/workspace/feesNavigation'
 import PrepaymentDrawer from '@/components/fees/PrepaymentDrawer.vue'
-import PrepaymentRefundsDialog from '@/components/fees/PrepaymentRefundsDialog.vue'
+import StudentCashReceiptDialog from '@/components/fees/StudentCashReceiptDialog.vue'
 import {
   CREDIT_STATUS_LABELS,
   creditStatusTag,
   type PrepayCreditRow,
-  type PrepayRefundRow,
 } from '@/components/fees/prepayTypes'
 
 type MonthlyStatement = Awaited<ReturnType<typeof getFeeMonthlyStatement>>
@@ -446,6 +457,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   'open-list': [studentName: string]
+  /** SPEC-019：空狀態導向發單批次抽屜（應收唯一來源＝檢核檔產單） */
+  'open-imports': []
 }>()
 
 const canWrite = computed(() => hasPermission(PERMISSION_NAMES.FEES_WRITE))
@@ -512,16 +525,11 @@ defineExpose({ refresh: refreshAll })
 
 // ─── 預繳款（2026-08-26 併入帳款）────────────────────────────────────────
 const prepayCredits = ref<PrepayCreditRow[]>([])
-const prepayRefunds = ref<PrepayRefundRow[]>([])
 
 async function fetchPrepayData() {
   try {
-    const [creditsRes, refundsRes] = await Promise.all([
-      getPrepayments(),
-      getPrepaymentRefunds(),
-    ])
+    const creditsRes = await getPrepayments()
     prepayCredits.value = (creditsRes.items ?? []) as PrepayCreditRow[]
-    prepayRefunds.value = (refundsRes.items ?? []) as PrepayRefundRow[]
   } catch (e) {
     // 不阻擋帳款主表；欄位顯示 '—' 但明講載入失敗，避免誤讀成「無預繳」
     ElMessage.error(friendlyError('載入預繳款失敗', e))
@@ -563,46 +571,21 @@ const prepayCells = computed(() => {
   return cells
 })
 
-/** 尚未綁定正式學生、仍有效的訪視預繳（工具列入口，有才顯示） */
-const visitCredits = computed(() =>
-  prepayCredits.value.filter(
-    (c) => c.student_id == null && ['available', 'refund_pending'].includes(c.status),
-  ),
-)
-
-const pendingRefundCount = computed(
-  () => prepayRefunds.value.filter((r) => ['requested', 'approved'].includes(r.status)).length,
-)
-
-// 抽屜：單一學生模式（點預繳欄）或訪視模式（工具列入口）
+// 抽屜只剩單一學生模式（點預繳欄）；訪視預繳／預繳退款入口自 SPEC-019 起
+// 移到收款›現金項目檢視
 const drawerVisible = ref(false)
-const drawerMode = ref<'student' | 'visits'>('student')
 const drawerStudent = ref<{ id: number; name: string } | null>(null)
 
 const drawerCredits = computed(() =>
-  drawerMode.value === 'visits'
-    ? visitCredits.value
-    : prepayCredits.value.filter((c) => c.student_id === drawerStudent.value?.id),
+  prepayCredits.value.filter((c) => c.student_id === drawerStudent.value?.id),
 )
 
-const drawerTitle = computed(() =>
-  drawerMode.value === 'visits'
-    ? '訪視預繳（待轉正式學生）'
-    : `${drawerStudent.value?.name ?? ''} 的預繳款`,
-)
+const drawerTitle = computed(() => `${drawerStudent.value?.name ?? ''} 的預繳款`)
 
 function openStudentDrawer(stu: StatementStudent) {
-  drawerMode.value = 'student'
   drawerStudent.value = { id: stu.student_id, name: stu.student_name ?? '' }
   drawerVisible.value = true
 }
-
-function openVisitDrawer() {
-  drawerMode.value = 'visits'
-  drawerVisible.value = true
-}
-
-const refundsVisible = ref(false)
 
 // 預繳 mutation（套用會建立折抵，影響應繳）→ 帳款與預繳一起重抓
 function onPrepayMutated() {
@@ -635,12 +618,6 @@ function onClassroomSelect(value: unknown) {
   if (name === selectedClassroom.value) return
   selectedClassroom.value = name
   checkedIds.value = new Set()
-}
-
-/** 預繳款下拉：訪視預繳（抽屜）／預繳退款（對話框） */
-function onPrepayCommand(command: string | number | object) {
-  if (command === 'visit') openVisitDrawer()
-  else if (command === 'refunds') refundsVisible.value = true
 }
 
 const students = computed<StatementStudent[]>(() => statement.value?.students ?? [])
@@ -784,11 +761,28 @@ function bucketCell(stu: StatementStudent, bucketKey: string) {
   }
 }
 
-// 6 固定欄（學生/班級/應繳合計/未收/預繳/狀態）＋銷帳碼＋動態費用欄
-// ＋canWrite 時的勾選與操作兩欄
+// 9 固定欄（學生/班級/銷帳碼/應繳合計/未收/現金已收/網銀已收/預繳/狀態）
+// ＋動態費用欄＋canWrite 時的勾選與操作兩欄
 const totalColumns = computed(
-  () => 7 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
+  () => 9 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
 )
+
+/**
+ * SPEC-019 §8.1：每列現金／網銀已收＝該生各項 settlement 五桶加總。
+ * 現金三桶（已登錄／待簽收／已簽收）都是「現金收到了」，只是簽收層級不同；
+ * 網銀為對帳銷帳。unreceipted（存量無收據）不歸入任一欄，仍由既有 tag 呈現。
+ */
+function paidSplit(stu: StatementStudent): { cash: number; bank: number } {
+  return stu.items.reduce(
+    (acc, it) => {
+      const s = it.settlement
+      acc.cash += (s?.cash_registered ?? 0) + (s?.cash_submitted ?? 0) + (s?.cash_confirmed ?? 0)
+      acc.bank += s?.bank_reconciled ?? 0
+      return acc
+    },
+    { cash: 0, bank: 0 },
+  )
+}
 
 // ─── 展開明細 ──────────────────────────────────────────────────────────────
 const expandedIds = ref<Set<number>>(new Set())
@@ -856,9 +850,14 @@ function outstandingRecordsOf(stu: StatementStudent): PayRecordLite[] {
     }))
 }
 
-function openPayFor(stu: StatementStudent) {
-  payRecords.value = outstandingRecordsOf(stu)
-  payDialogVisible.value = true
+// 列上收現金（SPEC-019 §8.2）：一生多單開一張現金收據，dialog 自己撈該生
+// 全部未繳／部分繳的單（含其他月份、現金項目），不只本月這幾張
+const cashDialogVisible = ref(false)
+const cashStudent = ref<{ id: number; name: string } | null>(null)
+
+function openCashFor(stu: StatementStudent) {
+  cashStudent.value = { id: stu.student_id, name: stu.student_name ?? '' }
+  cashDialogVisible.value = true
 }
 
 function openBatchPay() {

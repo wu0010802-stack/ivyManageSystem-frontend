@@ -9,11 +9,9 @@ import { mount, flushPromises } from '@vue/test-utils'
 
 const getFeeMonthlyStatement = vi.fn()
 const getPrepayments = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
-const getPrepaymentRefunds = vi.fn(() => Promise.resolve({ total: 0, items: [] }))
 vi.mock('@/api/fees', () => ({
   getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
   getPrepayments: (...args: unknown[]) => getPrepayments(...args),
-  getPrepaymentRefunds: (...args: unknown[]) => getPrepaymentRefunds(...args),
 }))
 
 vi.mock('@/utils/auth', () => ({ hasPermission: () => false }))
@@ -27,9 +25,9 @@ vi.mock('@/components/fees/PrepaymentDrawer.vue', () => ({
   __esModule: true,
   default: { name: 'PrepaymentDrawer', template: '<div />' },
 }))
-vi.mock('@/components/fees/PrepaymentRefundsDialog.vue', () => ({
+vi.mock('@/components/fees/StudentCashReceiptDialog.vue', () => ({
   __esModule: true,
-  default: { name: 'PrepaymentRefundsDialog', template: '<div />' },
+  default: { name: 'StudentCashReceiptDialog', template: '<div />' },
 }))
 vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
   __esModule: true,
@@ -50,6 +48,14 @@ const item = (over: Record<string, unknown>) => ({
   billing_start_date: '2026-08-01',
   target_month: null,
   period: '115-1',
+  source: 'bill_slip',
+  settlement: {
+    cash_registered: 0,
+    cash_submitted: 0,
+    cash_confirmed: 0,
+    bank_reconciled: 0,
+    unreceipted: 0,
+  },
   ...over,
 })
 

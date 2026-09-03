@@ -1,17 +1,18 @@
 /**
  * 彙總繳費表 × 預繳款整合（2026-08-26 預繳併入帳款）：
- * 預繳欄顯示與點擊開抽屜、工具列訪視預繳/預繳退款入口、mutation 後整體重抓。
+ * 預繳欄顯示與點擊開抽屜、mutation 後整體重抓。
+ *
+ * SPEC-019（2026-09-02）：工具列「預繳款」下拉（訪視預繳／預繳退款）移到
+ * 現金項目檢視，本表只保留每列「預繳」欄與 PrepaymentDrawer。
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const getFeeMonthlyStatement = vi.fn()
 const getPrepayments = vi.fn()
-const getPrepaymentRefunds = vi.fn()
 vi.mock('@/api/fees', () => ({
   getFeeMonthlyStatement: (...args: unknown[]) => getFeeMonthlyStatement(...args),
   getPrepayments: (...args: unknown[]) => getPrepayments(...args),
-  getPrepaymentRefunds: (...args: unknown[]) => getPrepaymentRefunds(...args),
 }))
 
 const authMocks = vi.hoisted(() => ({ perms: new Set<string>() }))
@@ -45,21 +46,25 @@ vi.mock('@/components/fees/PrepaymentDrawer.vue', () => ({
       '<div v-if="modelValue" data-testid="prepay-drawer" :data-title="title" :data-count="credits.length" />',
   },
 }))
-vi.mock('@/components/fees/PrepaymentRefundsDialog.vue', () => ({
+vi.mock('@/components/fees/StudentCashReceiptDialog.vue', () => ({
   __esModule: true,
   default: {
-    name: 'PrepaymentRefundsDialog',
-    props: {
-      modelValue: { type: Boolean, default: false },
-      refunds: { type: Array, default: () => [] },
-    },
-    emits: ['update:modelValue', 'refresh'],
-    template:
-      '<div v-if="modelValue" data-testid="prepay-refunds-dialog" :data-count="refunds.length" />',
+    name: 'StudentCashReceiptDialog',
+    props: { modelValue: { type: Boolean, default: false } },
+    template: '<div data-testid="cash-dialog-stub" />',
   },
 }))
 
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
+
+/** settlement 五桶（MonthlyStatementItemOut.settlement 為必填欄） */
+const ZERO_SETTLEMENT = {
+  cash_registered: 0,
+  cash_submitted: 0,
+  cash_confirmed: 0,
+  bank_reconciled: 0,
+  unreceipted: 0,
+}
 
 const STATEMENT = {
   month: '2026-08',
@@ -82,6 +87,8 @@ const STATEMENT = {
           status: 'unpaid',
           payment_date: null,
           payment_method: null,
+          source: 'bill_slip',
+          settlement: { ...ZERO_SETTLEMENT },
         },
       ],
     },
@@ -103,6 +110,8 @@ const STATEMENT = {
           status: 'unpaid',
           payment_date: null,
           payment_method: null,
+          source: 'bill_slip',
+          settlement: { ...ZERO_SETTLEMENT },
         },
       ],
     },
@@ -134,20 +143,6 @@ const CREDITS = {
   ],
 }
 
-const REFUNDS = {
-  total: 2,
-  items: [
-    {
-      id: 11, prepayment_credit_id: 3, amount: 5000, status: 'requested',
-      reason: '不就讀', recipient_name: null, disbursed_at: null,
-    },
-    {
-      id: 12, prepayment_credit_id: 3, amount: 5000, status: 'completed',
-      reason: '不就讀', recipient_name: '張媽媽', disbursed_at: '2026-08-01T10:00:00',
-    },
-  ],
-}
-
 const GLOBAL_STUBS = {
   'el-button': {
     template: '<button type="button" v-bind="$attrs" :disabled="disabled"><slot /></button>',
@@ -160,21 +155,6 @@ const GLOBAL_STUBS = {
       '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
-  // el-dropdown 的 command 事件由 item 冒泡：stub 讓 item 直接呼叫父層 handler
-  'el-dropdown': {
-    emits: ['command'],
-    provide() {
-      return { epDropdownCommand: (cmd: string) => this.$emit('command', cmd) }
-    },
-    template: '<div><slot /><slot name="dropdown" /></div>',
-  },
-  'el-dropdown-menu': { template: '<div><slot /></div>' },
-  'el-dropdown-item': {
-    props: { command: { type: String, default: '' } },
-    inject: { epDropdownCommand: { default: null } },
-    template:
-      '<button type="button" v-bind="$attrs" @click="epDropdownCommand && epDropdownCommand(command)"><slot /></button>',
-  },
   'el-select': {
     props: { modelValue: { type: String, default: '' } },
     emits: ['update:modelValue'],
@@ -199,7 +179,6 @@ beforeEach(() => {
   authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
   getFeeMonthlyStatement.mockResolvedValue(STATEMENT)
   getPrepayments.mockResolvedValue(CREDITS)
-  getPrepaymentRefunds.mockResolvedValue(REFUNDS)
 })
 
 describe('預繳欄', () => {
@@ -227,45 +206,12 @@ describe('預繳欄', () => {
 })
 
 describe('工具列入口', () => {
-  it('訪視預繳只計有效額度（refunded 不計），點擊開抽屜帶訪視額度', async () => {
+  it('工具列不再有預繳款下拉（移到現金項目檢視）', async () => {
     const wrapper = mountStatement()
     await flushPromises()
-    const visitBtn = wrapper.find('[data-test="stmt-visit-prepay"]')
-    expect(visitBtn.text()).toContain('訪視預繳 1 筆')
-    await visitBtn.trigger('click')
-    await flushPromises()
-    const drawer = wrapper.find('[data-testid="prepay-drawer"]')
-    expect(drawer.attributes('data-title')).toBe('訪視預繳（待轉正式學生）')
-    expect(drawer.attributes('data-count')).toBe('1')
-  })
-
-  it('無有效訪視額度時不顯示訪視預繳入口', async () => {
-    getPrepayments.mockResolvedValue({
-      total: 1,
-      items: [CREDITS.items[0]],
-    })
-    const wrapper = mountStatement()
-    await flushPromises()
+    expect(wrapper.find('[data-test="stmt-prepay-menu"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="stmt-visit-prepay"]').exists()).toBe(false)
-  })
-
-  it('預繳退款入口顯示待辦數（requested/approved 才算），點擊開退款清單', async () => {
-    const wrapper = mountStatement()
-    await flushPromises()
-    const refundBtn = wrapper.find('[data-test="stmt-refund-todo"]')
-    expect(refundBtn.text()).toContain('預繳退款（1 待辦）')
-    await refundBtn.trigger('click')
-    await flushPromises()
-    const dialog = wrapper.find('[data-testid="prepay-refunds-dialog"]')
-    expect(dialog.exists()).toBe(true)
-    expect(dialog.attributes('data-count')).toBe('2')
-  })
-
-  it('無待辦時入口文字不帶數字', async () => {
-    getPrepaymentRefunds.mockResolvedValue({ total: 0, items: [] })
-    const wrapper = mountStatement()
-    await flushPromises()
-    expect(wrapper.find('[data-test="stmt-refund-todo"]').text()).toBe('預繳退款')
+    expect(wrapper.find('[data-test="stmt-refund-todo"]').exists()).toBe(false)
   })
 })
 
@@ -277,12 +223,10 @@ describe('mutation 後重抓', () => {
     await flushPromises()
     getFeeMonthlyStatement.mockClear()
     getPrepayments.mockClear()
-    getPrepaymentRefunds.mockClear()
     wrapper.findComponent({ name: 'PrepaymentDrawer' }).vm.$emit('refresh')
     await flushPromises()
     expect(getFeeMonthlyStatement).toHaveBeenCalledTimes(1)
     expect(getPrepayments).toHaveBeenCalledTimes(1)
-    expect(getPrepaymentRefunds).toHaveBeenCalledTimes(1)
   })
 
   it('exposed refresh（帳單工作區切回時）也會重抓預繳', async () => {
