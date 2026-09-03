@@ -58,9 +58,15 @@ interface TabVm {
   loadError: boolean
 }
 
-const mountTab = (opts: { unstubToolbar?: boolean; unstubEmpty?: boolean } = {}) =>
+const mountTab = (
+  opts: {
+    unstubToolbar?: boolean
+    unstubEmpty?: boolean
+    classrooms?: Array<Record<string, unknown>>
+  } = {},
+) =>
   shallowMount(FeeRecordsTab, {
-    props: { classrooms: [], periodOptions: ['114-1'] },
+    props: { classrooms: opts.classrooms ?? [], periodOptions: ['114-1'] },
     global: {
       stubs: {
         teleport: true,
@@ -118,12 +124,17 @@ describe('FeeRecordsTab 表格與 toolbar', () => {
     expect(w.findAll('[class-name="num-cell"]').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('學期/班級 select 具 aria-label；搜尋輸入具 aria-label（AdminListToolbar）', async () => {
-    const w = mountTab({ unstubToolbar: true })
+  it('學期 select 與班級導覽列具 aria-label；搜尋輸入具 aria-label（AdminListToolbar）', async () => {
+    // 導覽列在沒有班級時不渲染，故此案例要帶班級進來
+    const w = mountTab({
+      unstubToolbar: true,
+      classrooms: [{ id: 1, name: '向日葵', grade_name: '幼幼班' }],
+    })
     await flushPromises()
     const html = w.html()
     expect(html).toContain('aria-label="學期"')
-    expect(html).toContain('aria-label="班級"')
+    // 班級自 2026-09-03 起是導覽列元件；其 nav aria-label 由 FeeClassRail 自己的測試涵蓋
+    expect(w.findComponent({ name: 'FeeClassRail' }).exists()).toBe(true)
     // AdminListToolbar 內的搜尋 el-input 需帶 aria-label（未 stub AdminListToolbar 本體）
     const searchInput = w.find('[data-test="toolbar-search"]')
     expect(searchInput.exists()).toBe(true)

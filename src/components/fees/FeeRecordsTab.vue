@@ -71,25 +71,16 @@
             />
           </el-select>
         </label>
-        <label class="context-filter">
-          <span class="context-filter__label">班級</span>
-          <el-select
-            v-model="recordFilter.classroom_name"
-            aria-label="班級"
-            placeholder="全部班級"
-            clearable
-            class="context-filter__control context-filter__control--classroom"
-          >
-            <el-option
-              v-for="cls in classroomNameOptions"
-              :key="cls.id"
-              :label="cls.name"
-              :value="cls.name"
-              data-testid="fee-classroom-option"
-            />
-          </el-select>
-        </label>
       </div>
+      <!-- 班級：與月表同一個導覽列元件（2026-09-03）。逐筆走伺服器分頁，
+           算不出整月未收人數、也無法一次查整個年段，故計數與年段選取都關閉 -->
+      <FeeClassRail
+        :groups="classGroups"
+        :selected-class="recordFilter.classroom_name || null"
+        :show-counts="false"
+        :grade-selectable="false"
+        @select="onRailSelect"
+      />
     </div>
 
     <!-- ================================================================
@@ -358,6 +349,8 @@ import {
 } from '@/components/fees/settlementDisplay'
 import type { FeeWorkspaceKey } from '@/components/fees/workspace/feesNavigation'
 import BillingCodeCell from '@/components/fees/BillingCodeCell.vue'
+import FeeClassRail from '@/components/fees/FeeClassRail.vue'
+import { buildClassGroupsFromClassrooms } from '@/components/fees/feeClassGrouping'
 import { todayISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
 import { downloadFile } from '@/utils/download'
@@ -420,15 +413,12 @@ const props = withDefaults(defineProps<{
 })
 
 // 這個篩選的值是 classroom_name（後端按班名比對），而班級清單是跨學期的，
-// 114-2 與 115-1 的同名班會變成兩個同名同值的選項 → 按班名去重，保留先出現者。
-const classroomNameOptions = computed(() => {
-  const seen = new Set<string>()
-  return props.classrooms.filter(c => {
-    if (seen.has(c.name)) return false
-    seen.add(c.name)
-    return true
-  })
-})
+// 114-2 與 115-1 的同名班會是兩個同名同值的項目 → 按班名去重（在分組函式內處理）。
+const classGroups = computed(() => buildClassGroupsFromClassrooms(props.classrooms))
+
+function onRailSelect(payload: { cls: string | null; grade: string | null }) {
+  recordFilter.value.classroom_name = payload.cls ?? ''
+}
 
 // ─── 繳費記錄 ─────────────────────────────────────────────────────────────────
 const feeRecords = ref<FeeRow[]>([])

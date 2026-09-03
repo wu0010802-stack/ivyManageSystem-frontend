@@ -4,8 +4,25 @@
          合併成一列。改版前這四塊各佔一列，表格被推到第五列才開始。 -->
     <div class="stmt-strip" data-test="stmt-summary">
       <div class="stmt-strip__main">
-        <div class="stmt-strip__label">{{ monthLabel }}待收</div>
-        <div class="stmt-strip__value">{{ formatCurrency(scopeOutstanding) }}</div>
+        <div class="stmt-strip__label">{{ scopeLabel }}待收</div>
+        <div
+          class="stmt-strip__value"
+          :class="{ 'stmt-strip__value--clear': scopeOutstanding === 0 }"
+        >
+          {{ scopeOutstanding > 0 ? formatCurrency(scopeOutstanding) : '已收齊' }}
+        </div>
+        <!-- 收款進度：金額看得出還缺多少，但看不出「收到幾成」——月中追繳看的是後者 -->
+        <div
+          class="stmt-progress"
+          role="img"
+          :aria-label="`已收 ${paidPercent}%`"
+          data-test="stmt-progress"
+        >
+          <i :style="{ width: `${paidPercent}%` }" />
+        </div>
+        <div class="stmt-strip__sub">
+          已收 {{ paidPercent }}%・{{ scopeUnpaidCount }} 人未收齊
+        </div>
       </div>
 
       <div class="stmt-strip__chips" role="group" aria-label="繳費狀態快篩">
@@ -99,23 +116,6 @@
         </el-button>
       </div>
 
-      <!-- 班級：改版前是 11 顆 chip 佔滿一整列，改為下拉並在選項內保留未收人數 -->
-      <el-select
-        :model-value="selectedClassroom ?? ALL_CLASSROOMS"
-        class="stmt-class-select"
-        data-test="stmt-class-select"
-        aria-label="班級篩選"
-        @update:model-value="onClassroomSelect"
-      >
-        <el-option
-          v-for="chip in classChips"
-          :key="chip.name || ALL_CLASSROOMS"
-          :value="chip.name || ALL_CLASSROOMS"
-          :label="chip.selectLabel"
-          :data-classroom="chip.name"
-        />
-      </el-select>
-
       <el-input
         v-model="searchName"
         class="stmt-search"
@@ -141,6 +141,15 @@
         批次收款{{ checkedIds.size ? `（${checkedIds.size} 人）` : '' }}
       </el-button>
     </div>
+
+    <!-- 班級導覽列（取代下拉）：年段 › 班級攤開，未收人數標在班名旁 -->
+    <FeeClassRail
+      :groups="classGroups"
+      :total="students.length"
+      :selected-class="selectedClassroom"
+      :selected-grade="selectedGrade"
+      @select="onRailSelect"
+    />
 
     <p
       v-if="canWrite && checkedIds.size"
@@ -182,7 +191,6 @@
               />
             </th>
             <th class="col-student">學生</th>
-            <th>班級</th>
             <th>銷帳碼</th>
             <th v-for="b in visibleBuckets" :key="b.key" class="num-col">{{ b.label }}</th>
             <th class="num-col">應繳合計</th>
@@ -196,7 +204,85 @@
           </tr>
         </thead>
         <tbody>
-          <template v-for="stu in visibleStudents" :key="stu.student_id">
+          <template v-for="grp in visibleGroups" :key="grp.name">
+            <!-- 分組表頭：捲動時黏在表頭下，往下看永遠知道自己在哪一班 -->
+            <tr
+              class="stmt-group"
+              :class="{ 'stmt-group--done': grp.allPaid }"
+              data-test="stmt-class-group"
+              :data-classroom="grp.name"
+              :data-collapsed="isCollapsed(grp.name) ? '1' : '0'"
+            >
+              <td :colspan="totalColumns">
+                <div class="group-bar">
+                  <!-- 勾選框對齊表格的勾選欄，讀起來就是「這一班的全選」 -->
+                  <span v-if="canWrite" class="group-check">
+                    <input
+                      v-if="grp.payableIds.length"
+                      type="checkbox"
+                      data-test="stmt-group-check"
+                      :title="`全選 ${grp.label} 未收學生`"
+                      :aria-label="`全選 ${grp.label} 未收學生`"
+                      :checked="isGroupAllChecked(grp)"
+                      @change="toggleGroupCheck(grp)"
+                    />
+                  </span>
+
+                  <button
+                    type="button"
+                    class="group-toggle"
+                    data-test="stmt-group-toggle"
+                    :aria-expanded="!isCollapsed(grp.name)"
+                    :aria-label="`${isCollapsed(grp.name) ? '展開' : '收合'} ${grp.label}`"
+                    @click="toggleCollapse(grp.name)"
+                  >
+                    <span
+                      class="expand-caret"
+                      :class="{ 'expand-caret--open': !isCollapsed(grp.name) }"
+                      >▸</span
+                    >
+                  </button>
+
+                  <span class="group-name">{{ grp.label }}</span>
+                  <span v-if="grp.gradeLabel" class="group-grade">{{ grp.gradeLabel }}</span>
+                  <span class="group-count">
+                    {{ grp.total }} 人<template
+                      v-if="!grp.allPaid && grp.rows.length !== grp.total"
+                      >・篩選後 {{ grp.rows.length }} 人</template
+                    >
+                  </span>
+                  <span class="group-progress">
+                    <span class="stmt-progress" aria-hidden="true">
+                      <i :style="{ width: `${grp.paidPercent}%` }" />
+                    </span>
+                    收齊 {{ grp.paidCount }}／{{ grp.total }}
+                  </span>
+                  <span class="group-owe">
+                    <template v-if="grp.allPaid">
+                      <b class="group-owe--clear">本班收齊</b>
+                    </template>
+                    <template v-else>
+                      未收 <b>{{ formatCurrency(grp.outstanding) }}</b>
+                    </template>
+                  </span>
+                </div>
+              </td>
+            </tr>
+
+            <!-- 只在明確選定該班時說明「為什麼是空的」；未選班時已收齊的班
+                 自然只剩一條表頭線，不必每組都掛一行空狀態 -->
+            <tr
+              v-if="
+                !isCollapsed(grp.name) && grp.rows.length === 0 && selectedClassroom === grp.name
+              "
+            >
+              <td :colspan="totalColumns" class="stmt-state" data-test="stmt-no-match">
+                {{ grp.label }} 在此篩選條件下沒有學生——試試切換狀態快篩
+              </td>
+            </tr>
+
+            <template v-if="!isCollapsed(grp.name)">
+          <template v-for="stu in grp.rows" :key="stu.student_id">
             <tr
               class="stmt-row"
               :class="{ 'stmt-row--paid': stu.status === 'paid' }"
@@ -226,7 +312,6 @@
                   <span class="student-name">{{ stu.student_name }}</span>
                 </button>
               </td>
-              <td>{{ stu.classroom_name || '—' }}</td>
               <td class="col-billing-code">
                 <BillingCodeCell
                   :suffix="stu.billing_code_suffix"
@@ -363,7 +448,9 @@
               </td>
             </tr>
           </template>
-          <tr v-if="visibleStudents.length === 0">
+            </template>
+          </template>
+          <tr v-if="visibleGroups.length === 0">
             <td :colspan="totalColumns" class="stmt-state" data-test="stmt-no-match">
               此篩選條件下沒有學生——試試切換狀態或班級
             </td>
@@ -372,7 +459,7 @@
         <tfoot v-if="visibleStudents.length">
           <tr>
             <td v-if="canWrite" />
-            <td :colspan="3 + visibleBuckets.length">合計（目前篩選 {{ visibleStudents.length }} 人）</td>
+            <td :colspan="2 + visibleBuckets.length">合計（目前篩選 {{ visibleStudents.length }} 人）</td>
             <td class="num-cell">{{ formatCurrency(visibleDue) }}</td>
             <td class="num-cell outstanding-pos">{{ formatCurrency(visibleOutstanding) }}</td>
             <!-- 現金已收／網銀已收／預繳／狀態（＋canWrite 的操作欄）不做合計 -->
@@ -427,6 +514,8 @@ import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import BatchPayDialog from '@/components/fees/BatchPayDialog.vue'
 import BillingCodeCell from '@/components/fees/BillingCodeCell.vue'
+import FeeClassRail from '@/components/fees/FeeClassRail.vue'
+import { buildClassGroups } from '@/components/fees/feeClassGrouping'
 import {
   activeSettlementTags,
   sumSettlements,
@@ -595,6 +684,7 @@ function onPrepayMutated() {
 // ─── 前端快篩狀態 ──────────────────────────────────────────────────────────
 const searchName = ref('')
 const selectedClassroom = ref<string | null>(null)
+const selectedGrade = ref<string | null>(null)
 // 預設「該繳的人」：未繳＋部分繳費開、已繳清關
 const statusOn = ref<Record<string, boolean>>({
   unpaid: true,
@@ -609,27 +699,47 @@ function toggleStatus(key: string) {
   statusOn.value = next
 }
 
-/** el-select 用空字串當值會被當成「未選」而顯示 placeholder，故全部班級用哨兵值 */
-const ALL_CLASSROOMS = '__all__'
-
-function onClassroomSelect(value: unknown) {
-  const name =
-    typeof value === 'string' && value && value !== ALL_CLASSROOMS ? value : null
-  if (name === selectedClassroom.value) return
-  selectedClassroom.value = name
+/** 班級導覽列選取：班與年段兩層，選班時同時記住其年段（供年段標籤顯示脈絡） */
+function onRailSelect(payload: { cls: string | null; grade: string | null }) {
+  if (payload.cls === selectedClassroom.value && payload.grade === selectedGrade.value) return
+  selectedClassroom.value = payload.cls
+  selectedGrade.value = payload.grade
   checkedIds.value = new Set()
+  // 明確點進某一班時展開它，否則自動收合會讓人以為班是空的
+  if (payload.cls) {
+    const next = new Set(collapsedClasses.value)
+    next.delete(payload.cls)
+    collapsedClasses.value = next
+  }
 }
 
 const students = computed<StatementStudent[]>(() => statement.value?.students ?? [])
 
-// scope＝班級＋姓名（不含狀態），供統計 tiles 與費用欄位可見性
+/**
+ * 班級分組（導覽列用）：以整月資料計，未收人數不受狀態快篩與姓名搜尋影響
+ * ——「哪一班還沒收齊」是這頁的固定問題，不該隨手上的篩選跳動。
+ */
+const classGroups = computed(() => buildClassGroups(students.value, props.classrooms))
+
+/** 班名 → 年段，供 scope 依年段過濾（年段本身不是月表欄位） */
+const gradeOfClass = computed(() => {
+  const map = new Map<string, string>()
+  classGroups.value.forEach((g) => g.classes.forEach((c) => map.set(c.name, g.key)))
+  return map
+})
+
+// scope＝班級／年段＋姓名（不含狀態），供統計 tiles 與費用欄位可見性
 const scopeStudents = computed(() => {
   const kw = searchName.value.trim()
-  return students.value.filter(
-    (s) =>
-      (!selectedClassroom.value || s.classroom_name === selectedClassroom.value) &&
-      (!kw || (s.student_name ?? '').includes(kw)),
-  )
+  return students.value.filter((s) => {
+    const cls = s.classroom_name ?? ''
+    if (selectedClassroom.value) {
+      if (cls !== selectedClassroom.value) return false
+    } else if (selectedGrade.value && gradeOfClass.value.get(cls) !== selectedGrade.value) {
+      return false
+    }
+    return !kw || (s.student_name ?? '').includes(kw)
+  })
 })
 
 // ─── 逾期（SPEC-015 衍生標註）：任一費用項 due_date 已過且該項未繳清 ───────
@@ -669,10 +779,23 @@ function jumpToWorkspace(target: { ws: FeeWorkspaceKey; view: string }) {
   router?.push({ path: '/fees', query: { ws: target.ws, view: target.view } })
 }
 
+/** 摘要列標題隨範圍走：選了班或年段就說出是哪一個，避免看錯成全園數字 */
+const scopeLabel = computed(() => {
+  const scope = selectedClassroom.value || selectedGrade.value || ''
+  return scope ? `${monthLabel.value}・${scope}` : monthLabel.value
+})
+
+const scopeUnpaidCount = computed(
+  () => scopeStudents.value.filter((s) => s.status !== 'paid').length,
+)
+
 const scopeDue = computed(() => scopeStudents.value.reduce((a, s) => a + s.total_due, 0))
 const scopePaid = computed(() => scopeStudents.value.reduce((a, s) => a + s.total_paid, 0))
 const scopeOutstanding = computed(() =>
   scopeStudents.value.reduce((a, s) => a + s.outstanding, 0),
+)
+const paidPercent = computed(() =>
+  scopeDue.value > 0 ? Math.round((scopePaid.value / scopeDue.value) * 100) : 0,
 )
 const visibleDue = computed(() => visibleStudents.value.reduce((a, s) => a + s.total_due, 0))
 const visibleOutstanding = computed(() =>
@@ -688,47 +811,93 @@ const statusTiles = computed(() => {
   ]
 })
 
-// ─── 班級 chips（跨學期同名去重；未收齊人數以整月資料計，不受搜尋影響）──
-const classChips = computed(() => {
-  const oweBy = new Map<string, number>()
-  students.value.forEach((s) => {
-    if (s.status === 'paid') return
+// ─── 表格分組（依班級）──────────────────────────────────────────────────────
+/**
+ * 表格分組：班級順序沿用導覽列（年段序），每組只放**通過狀態快篩**的列。
+ *
+ * 範圍內有學生的班一律留一條分組表頭，即使篩選後沒有列——這正是「哪些班已收齊」
+ * 的答案所在（預設篩選下已收齊的班本來就一列都不會通過，整組消失反而看不出它
+ * 存在且收齊了）。表頭的統計以範圍內該班全體計，不受狀態快篩影響。
+ */
+const visibleGroups = computed(() => {
+  const rowsBy = new Map<string, StatementStudent[]>()
+  visibleStudents.value.forEach((s) => {
     const key = s.classroom_name ?? ''
-    oweBy.set(key, (oweBy.get(key) ?? 0) + 1)
+    const list = rowsBy.get(key) ?? []
+    list.push(s)
+    rowsBy.set(key, list)
   })
-  const seen = new Set<string>()
-  const chips: Array<{
-    name: string
-    label: string
-    gradeName: string
-    oweCount: number
-    /** 下拉選項文字：班名（年級）＋未收人數／已收齊 */
-    selectLabel: string
-  }> = []
-  const allOwe = students.value.filter((s) => s.status !== 'paid').length
-  chips.push({
-    name: '',
-    label: '全部班級',
-    gradeName: '',
-    oweCount: allOwe,
-    selectLabel: allOwe ? `全部班級（${allOwe} 人未收齊）` : '全部班級（已收齊）',
+  const scopeBy = new Map<string, StatementStudent[]>()
+  scopeStudents.value.forEach((s) => {
+    const key = s.classroom_name ?? ''
+    const list = scopeBy.get(key) ?? []
+    list.push(s)
+    scopeBy.set(key, list)
   })
-  props.classrooms.forEach((c) => {
-    const name = c.name ?? ''
-    if (!name || seen.has(name)) return
-    seen.add(name)
-    const grade = c.grade_name ?? ''
-    const owe = oweBy.get(name) ?? 0
-    chips.push({
-      name,
-      label: name,
-      gradeName: grade,
-      oweCount: owe,
-      selectLabel: `${name}${grade ? `（${grade}）` : ''}　${owe ? `${owe} 人未收齊` : '已收齊'}`,
+
+  return classGroups.value
+    .flatMap((g) => g.classes)
+    .filter((c) => scopeBy.has(c.name))
+    .map((c) => {
+      const rows = rowsBy.get(c.name) ?? []
+      // 分組表頭的統計以「範圍內該班全體」計（不受狀態快篩影響），
+      // 否則關掉「已繳清」時每班都會顯示「已收齊 0／N」
+      const scoped = scopeBy.get(c.name) ?? []
+      const paidCount = scoped.filter((s) => s.status === 'paid').length
+      return {
+        name: c.name,
+        label: c.label,
+        gradeLabel: c.gradeLabel,
+        rows,
+        total: scoped.length,
+        paidCount,
+        allPaid: scoped.length > 0 && paidCount === scoped.length,
+        outstanding: scoped.reduce((a, s) => a + s.outstanding, 0),
+        paidPercent: scoped.length ? Math.round((paidCount / scoped.length) * 100) : 0,
+        payableIds: rows.filter((s) => s.status !== 'paid').map((s) => s.student_id),
+      }
     })
-  })
-  return chips
 })
+
+// ─── 分組收合（手動）────────────────────────────────────────────────────────
+/**
+ * 收合是純手動的：處理某一班時把其他班折起來。
+ *
+ * 刻意不做「已收齊自動收合」——已收齊的班在預設篩選下本來就沒有列，天然只剩
+ * 一條表頭；而使用者主動打開「已繳清」快篩時就是要看那些人，自動收合會正面
+ * 擋住該意圖。
+ */
+const collapsedClasses = ref<Set<string>>(new Set())
+
+function isCollapsed(name: string): boolean {
+  return collapsedClasses.value.has(name)
+}
+
+function toggleCollapse(name: string) {
+  const next = new Set(collapsedClasses.value)
+  if (next.has(name)) next.delete(name)
+  else next.add(name)
+  collapsedClasses.value = next
+}
+
+// 換月份／換範圍時回到全展開（新一批資料的收款狀況不同）
+watch([month, selectedClassroom, selectedGrade], () => {
+  collapsedClasses.value = new Set()
+})
+
+type VisibleGroup = (typeof visibleGroups.value)[number]
+
+function isGroupAllChecked(grp: VisibleGroup): boolean {
+  return grp.payableIds.length > 0 && grp.payableIds.every((id) => checkedIds.value.has(id))
+}
+
+/** 按班全選：老師交來整班現金時不必逐列勾。只勾該班「可見且未繳清」的人 */
+function toggleGroupCheck(grp: VisibleGroup) {
+  const next = new Set(checkedIds.value)
+  if (isGroupAllChecked(grp)) grp.payableIds.forEach((id) => next.delete(id))
+  else grp.payableIds.forEach((id) => next.add(id))
+  checkedIds.value = next
+}
 
 // ─── 費用欄位（依當月出現的 fee_type 動態顯示）────────────────────────────
 const FEE_BUCKETS = [
@@ -761,10 +930,10 @@ function bucketCell(stu: StatementStudent, bucketKey: string) {
   }
 }
 
-// 9 固定欄（學生/班級/銷帳碼/應繳合計/未收/現金已收/網銀已收/預繳/狀態）
-// ＋動態費用欄＋canWrite 時的勾選與操作兩欄
+// 8 固定欄（學生/銷帳碼/應繳合計/未收/現金已收/網銀已收/預繳/狀態）
+// ＋動態費用欄＋canWrite 時的勾選與操作兩欄。班級欄自 2026-09-03 起由分組表頭取代。
 const totalColumns = computed(
-  () => 9 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
+  () => 8 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
 )
 
 /**
@@ -932,6 +1101,35 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   font-variant-numeric: tabular-nums;
 }
 
+.stmt-strip__value--clear {
+  color: var(--color-success-darker);
+}
+
+.stmt-strip__sub {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 收款進度條：摘要列與各分組表頭共用同一個尺度語彙 */
+.stmt-progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  margin: 4px 0 2px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--el-fill-color-dark);
+  overflow: hidden;
+}
+
+.stmt-progress i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-success);
+  transition: width var(--transition-base, 0.2s ease);
+}
+
 .stmt-strip__chips {
   display: flex;
   align-items: center;
@@ -1063,10 +1261,6 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   font-size: 14px;
 }
 
-.stmt-class-select {
-  width: 200px;
-}
-
 .stmt-search {
   width: 200px;
 }
@@ -1113,6 +1307,110 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   padding: 9px 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
   vertical-align: middle;
+}
+
+/* ── 班級分組表頭 ──────────────────────────────────────────────────────────
+   捲動時黏在表頭下方（thead 是 sticky top:0，這裡接著它），往下看永遠知道
+   自己在哪一班。 */
+.stmt-group td {
+  padding: 0;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.group-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 38px;
+  padding: 0 12px;
+  background: var(--el-fill-color-lighter);
+}
+
+/* 與表格勾選欄同寬同位置，視覺上就是這一班的全選 */
+.group-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.stmt-group--done .group-bar {
+  background: var(--el-bg-color);
+}
+
+.group-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+}
+
+.group-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.stmt-group--done .group-name {
+  color: var(--el-text-color-regular);
+}
+
+.group-grade {
+  padding: 1px 6px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--el-bg-color);
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+.group-count {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.group-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.group-progress .stmt-progress {
+  width: 88px;
+  margin: 0;
+}
+
+.group-owe {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-owe b {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-danger-darker);
+}
+
+.group-owe b.group-owe--clear {
+  color: var(--color-success-darker);
+}
+
+@media (--to-sm) {
+  .group-progress,
+  .group-count {
+    display: none;
+  }
 }
 
 .stmt-table tfoot td {

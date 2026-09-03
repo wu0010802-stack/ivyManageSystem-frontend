@@ -275,34 +275,64 @@ describe('狀態快篩與班級篩選', () => {
     expect(rowNames(w)).toEqual(['陳部分', '張全繳'])
   })
 
-  it('班級下拉（去重）在選項內保留未收齊人數；選取即篩選、回全部班級即還原', async () => {
+  it('班級以導覽列（非下拉）呈現，chip 帶未收人數／已收齊，跨學期同名班去重', async () => {
     const w = mountStatement()
     await flushPromises()
-    const select = w.find('[data-test="stmt-class-select"]')
-    const options = select.findAll('option')
-    // 全部班級 + 向日葵 + 櫻花（跨學期同名去重）
-    expect(options.map((o) => o.attributes('value'))).toEqual([
-      '__all__',
-      '向日葵',
-      '櫻花',
-    ])
-    // 預設選中「全部班級」而非顯示 placeholder（el-select 空字串會被當成未選）
-    expect(select.attributes('value') ?? (select.element as HTMLSelectElement).value).toBe(
-      '__all__',
-    )
-    // 向日葵未收齊 2 人；選項文字帶年級與未收人數
-    expect(options[1].text()).toContain('小班')
-    expect(options[1].text()).toContain('2 人未收齊')
-    expect(options[0].text()).toContain('全部班級')
+    expect(w.find('[data-test="stmt-class-select"]').exists()).toBe(false)
+    const rail = w.find('[data-test="stmt-class-rail"]')
+    expect(rail.exists()).toBe(true)
 
-    await select.setValue('向日葵')
+    const chips = rail.findAll('[data-test="stmt-class-rail-class"]')
+    expect(chips.map((c) => c.attributes('data-classroom'))).toEqual(['向日葵', '櫻花'])
+    // 向日葵 2 人未收齊；櫻花全繳清顯示勾號而非數字
+    expect(chips[0].find('[data-test="rail-owe"]').text()).toBe('2')
+    expect(chips[1].find('[data-test="rail-ok"]').exists()).toBe(true)
+    // 年段來自班級清單
+    expect(rail.findAll('[data-test="stmt-class-rail-grade"]').map((g) => g.text())).toEqual([
+      expect.stringContaining('小班'),
+      expect.stringContaining('中班'),
+    ])
+  })
+
+  it('點班級 chip 即篩選；再點一次回全部', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const chip = (name: string) =>
+      w.find(`[data-test="stmt-class-rail-class"][data-classroom="${name}"]`)
+
+    await chip('向日葵').trigger('click')
     expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
     // 櫻花只有已繳生，預設狀態下無列
-    await select.setValue('櫻花')
+    await chip('櫻花').trigger('click')
     expect(rowNames(w)).toEqual([])
-    // 回全部班級
-    await select.setValue('__all__')
+    await chip('櫻花').trigger('click')
     expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('點年段標籤篩選整個年段', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.findAll('[data-test="stmt-class-rail-grade"]')[1].trigger('click')
+    // 中班＝櫻花（只有已繳生）
+    expect(rowNames(w)).toEqual([])
+    await w.findAll('[data-test="stmt-class-rail-grade"]')[0].trigger('click')
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('班名與班級清單不一致（向日葵班 vs 向日葵）時，未收人數仍算得出來', async () => {
+    // staging 實況：月表回「向日葵班」、班級清單是「向日葵」。改版前這裡歸零成「已收齊」
+    getFeeMonthlyStatement.mockResolvedValue({
+      ...STATEMENT,
+      students: STATEMENT.students.map((s) =>
+        s.classroom_name === '向日葵' ? { ...s, classroom_name: '向日葵班' } : s,
+      ),
+    })
+    const w = mountStatement()
+    await flushPromises()
+    const chip = w.find('[data-test="stmt-class-rail-class"][data-classroom="向日葵班"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.find('[data-test="rail-owe"]').text()).toBe('2')
+    expect(chip.attributes('title')).toContain('小班')
   })
 
   it('篩選列顯示目前可見人數', async () => {
@@ -316,6 +346,98 @@ describe('狀態快篩與班級篩選', () => {
     await flushPromises()
     await w.find('[data-test="stmt-search"]').setValue('陳')
     expect(rowNames(w)).toEqual(['陳部分'])
+  })
+})
+
+describe('表格依班級分組', () => {
+  const groups = (w: ReturnType<typeof mountStatement>) =>
+    w.findAll('[data-test="stmt-class-group"]')
+
+  it('班級欄從表頭移除（班名改由分組表頭標示）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const heads = w.findAll('[data-test="stmt-table"] thead th').map((t) => t.text())
+    expect(heads).not.toContain('班級')
+    expect(heads).toContain('學生')
+  })
+
+  it('每班一條分組表頭，顯示班名、年段、人數與未收小計', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const g = groups(w)
+    expect(g.map((x) => x.attributes('data-classroom'))).toEqual(['向日葵', '櫻花'])
+    expect(g[0].text()).toContain('向日葵')
+    expect(g[0].text()).toContain('小班')
+    // 向日葵 2 人、未收 10,700 + 180
+    expect(g[0].text()).toContain('2 人')
+    expect(g[0].text()).toContain('NT$10,880')
+  })
+
+  it('已收齊的班仍留一條表頭（標示已收齊），不因篩選後無列而整組消失', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const sakura = w.find('[data-test="stmt-class-group"][data-classroom="櫻花"]')
+    expect(sakura.exists()).toBe(true)
+    expect(sakura.text()).toContain('本班收齊')
+    // 已收齊的班不再贅述「篩選後 0 人」
+    expect(sakura.text()).not.toContain('篩選後')
+    // 預設篩選下該班沒有列，但表頭在
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('打開「已繳清」快篩後，已收齊的班直接顯示學生（不被收合擋住）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-flt-paid"]').trigger('click')
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分', '張全繳'])
+  })
+
+  it('分組表頭可手動收合／展開該班', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    const toggle = () =>
+      w.find(
+        '[data-test="stmt-class-group"][data-classroom="向日葵"] [data-test="stmt-group-toggle"]',
+      )
+    await toggle().trigger('click')
+    expect(rowNames(w)).toEqual([])
+    expect(
+      w.find('[data-test="stmt-class-group"][data-classroom="向日葵"]').attributes('data-collapsed'),
+    ).toBe('1')
+
+    await toggle().trigger('click')
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('分組表頭「全選本班未收」只勾該班未繳清的學生', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-flt-paid"]').trigger('click')
+
+    await w
+      .find('[data-test="stmt-class-group"][data-classroom="向日葵"] [data-test="stmt-group-check"]')
+      .setValue(true)
+    expect(w.find('[data-test="stmt-batch-pay"]').text()).toContain('2')
+
+    // 已收齊的班沒有可勾的人，不渲染全選
+    expect(
+      w
+        .find('[data-test="stmt-class-group"][data-classroom="櫻花"] [data-test="stmt-group-check"]')
+        .exists(),
+    ).toBe(false)
+
+    await w.find('[data-test="stmt-batch-pay"]').trigger('click')
+    expect(w.find('[data-testid="batch-pay-dialog"]').attributes('data-ids')).toBe('11,12,22')
+  })
+
+  it('選定班級但篩選後無列時，顯示該班的空狀態而非整表空白', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w
+      .find('[data-test="stmt-class-rail-class"][data-classroom="櫻花"]')
+      .trigger('click')
+    expect(groups(w)).toHaveLength(1)
+    expect(w.find('[data-test="stmt-no-match"]').exists()).toBe(true)
   })
 })
 
