@@ -50,6 +50,14 @@
           </p>
           <p class="fee-help__note">預繳款的退款走應收帳款的「預繳款」入口，不在此頁。</p>
         </template>
+        <template v-else-if="view === 'cashItems'">
+          <p><strong>現金項目</strong></p>
+          <ol>
+            <li><strong>教材費等</strong>：建批（依年級填金額展開逐生）→ 逐生收現金</li>
+            <li><strong>新生預繳</strong>：登記 5,000 現金；註冊費批產單時自動標記已套用</li>
+          </ol>
+          <p class="fee-help__note">這裡的錢都不上銀行，不進入帳媒合；月費／註冊費仍看應收帳款。</p>
+        </template>
         <template v-else>
           <p><strong>收款流程</strong></p>
           <ol>
@@ -113,6 +121,17 @@
             匯入 CSV
           </el-button>
         </template>
+
+        <template v-else-if="view === 'cashItems'">
+          <el-button
+            v-if="canWrite"
+            type="primary"
+            data-test="cash-items-create"
+            @click="cashItemsRef?.openCreate?.()"
+          >
+            建立批次
+          </el-button>
+        </template>
       </template>
     </FeeWorkspaceToolbar>
 
@@ -169,8 +188,8 @@
         :source="source"
       />
 
-      <!-- ── 現金項目（SPEC-019 §7，佔位；Task 6 換成真元件）───────────── -->
-      <div v-else-if="view === 'cashItems'" data-test="cash-items-placeholder" />
+      <!-- ── 現金項目（SPEC-019 §7）────────────────────────────────── -->
+      <CashItemsView v-else-if="view === 'cashItems'" ref="cashItemsRef" />
 
       <!-- ── 退款 ─────────────────────────────────────────────────── -->
       <FeeRefundsTab v-else :period-options="periodOptions" />
@@ -213,6 +232,7 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import { useAllClassroomStore } from '@/stores/classroomAll'
+import CashItemsView from '@/components/fees/CashItemsView.vue'
 import FeeMonthlyStatement from '@/components/fees/FeeMonthlyStatement.vue'
 import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
@@ -290,6 +310,8 @@ const matchingRef = ref<{
   refresh?: () => void
 } | null>(null)
 
+const cashItemsRef = ref<{ refresh?: () => void; openCreate?: () => void } | null>(null)
+
 async function loadPeriods() {
   try {
     periodOptions.value = ((await getFeePeriods()) as string[]) ?? []
@@ -347,6 +369,7 @@ let activatedOnce = false
 onActivated(() => {
   if (activatedOnce) {
     if (props.view === 'matching') matchingRef.value?.refresh?.()
+    else if (props.view === 'cashItems') cashItemsRef.value?.refresh?.()
     else refreshActiveRecordsView()
     refreshOverview()
   }

@@ -85,6 +85,18 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     template: '<div data-testid="refunds-tab" />',
   },
 }))
+const cashItemsMocks = vi.hoisted(() => ({ refresh: vi.fn(), openCreate: vi.fn() }))
+vi.mock('@/components/fees/CashItemsView.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'CashItemsView',
+    setup(_: unknown, { expose }: { expose: (o: Record<string, unknown>) => void }) {
+      expose(cashItemsMocks)
+      return {}
+    },
+    template: '<div data-testid="cash-items" />',
+  },
+}))
 const handoverMocks = vi.hoisted(() => ({
   fetchBatches: vi.fn(),
   openCashDialog: vi.fn(),
@@ -228,6 +240,18 @@ describe('FeeBillingWorkspace（收款）', () => {
     await flushAll()
     await wrapper.find('[data-test="billing-view-refunds"]').trigger('click')
     expect(wrapper.emitted('change-view')).toEqual([['refunds']])
+  })
+
+  it('view=cashItems 渲染現金項目檢視，工具列可開建批 dialog', async () => {
+    const wrapper = mount(FeeBillingWorkspace, {
+      props: { view: 'cashItems' },
+      global: { stubs: GLOBAL_STUBS },
+    })
+    await flushAll()
+    expect(wrapper.find('[data-testid="cash-items"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(false)
+    await wrapper.find('[data-test="cash-items-create"]').trigger('click')
+    expect(cashItemsMocks.openCreate).toHaveBeenCalledTimes(1)
   })
 
   it('view=refunds 渲染退款分頁（預繳無獨立分頁）', async () => {
