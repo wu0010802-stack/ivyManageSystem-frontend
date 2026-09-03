@@ -17931,46 +17931,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/student-enrollment/headcount-changes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Headcount Changes
-         * @description 區間逐筆異動：UNION StudentChangeLog（生命週期）＋ StudentClassroomTransfer（轉班）。
-         */
-        get: operations["get_headcount_changes_api_student_enrollment_headcount_changes_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/student-enrollment/headcount-history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Headcount History
-         * @description 某學年學期的快照序列（含對前一快照的人數 delta，讀取時計算）。
-         */
-        get: operations["get_headcount_history_api_student_enrollment_headcount_history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/student-enrollment/headcount-on": {
         parameters: {
             query?: never;
@@ -17980,7 +17940,11 @@ export interface paths {
         };
         /**
          * Get Headcount On
-         * @description 節慶專用契約：有快照讀快照、無快照即時算（SPEC-017 §4 同一規則）。
+         * @description 某日全校＋各班在籍人數（純即時算）。
+         *
+         *     SPEC-017 時期本端點是「有快照讀快照、無快照即時算」，快照移除後不再有此分歧，
+         *     故回傳不再帶 `source` 欄位。維持存在的理由是它是**節慶獎金人數未來遷移的
+         *     正式讀取契約**（SPEC-021 §7），本次仍不接進節慶計算。
          */
         get: operations["get_headcount_on_api_student_enrollment_headcount_on_get"];
         put?: never;
@@ -17991,20 +17955,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/student-enrollment/headcount-snapshots": {
+    "/student-enrollment/ledger": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Create Headcount Snapshot
-         * @description 手動拍照（任意過去日期，含非月初的節慶基準日）。已存在且未 overwrite → 409。
+         * List Ledger
+         * @description 帳列表（分頁）。班級篩選同時涵蓋原班與新班，轉班兩側都查得到。
          */
-        post: operations["create_headcount_snapshot_api_student_enrollment_headcount_snapshots_post"];
+        get: operations["list_ledger_api_student_enrollment_ledger_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student-enrollment/ledger/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reconcile
+         * @description 對帳：帳上累加值 vs 實際名冊即時值（SPEC-021 §6）。
+         *
+         *     唯讀——`reconcile()` 不會觸發開帳寫入。
+         */
+        get: operations["get_reconcile_api_student_enrollment_ledger_reconcile_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/student-enrollment/ledger/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Trend
+         * @description 逐日在籍人數序列，由帳累加推導（不是另外拍快照）。
+         *
+         *     班級人數取「該日之前最後一筆涉及該班的帳列」所釘的 count_after——
+         *     帳列本身就帶著當時的班級人數憑證，不需要回頭重算。
+         */
+        get: operations["get_trend_api_student_enrollment_ledger_trend_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18086,26 +18095,6 @@ export interface paths {
          * @description 匯出在籍記錄 xlsx（編班表版面，A4 橫向 fit-to-page）。
          */
         get: operations["export_enrollment_roster_xlsx_api_student_enrollment_roster_xlsx_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/student-enrollment/snapshot-members": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Snapshot Members
-         * @description 某快照日名冊（姓名讀取時 join，不落庫）。
-         */
-        get: operations["get_snapshot_members_api_student_enrollment_snapshot_members_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21698,16 +21687,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** ManualSnapshotRequest */
-        api__enrollment_history__ManualSnapshotRequest: {
-            /**
-             * Overwrite
-             * @default false
-             */
-            overwrite: boolean;
-            /** Snapshot Date */
-            snapshot_date?: string | null;
-        };
         /** CertificateOut */
         api__gov_moe__certificates__CertificateOut: {
             /** Copies */
@@ -21770,16 +21749,6 @@ export interface components {
             finalize_all: boolean;
             /** Rejection Reason */
             rejection_reason?: string | null;
-        };
-        /** ManualSnapshotRequest */
-        api__salary__snapshots__ManualSnapshotRequest: {
-            /**
-             * Employee Id
-             * @description 空值表示整月快照
-             */
-            employee_id?: number | null;
-            /** Remark */
-            remark?: string | null;
         };
         /** ApplyTemplatePayload */
         ApplyTemplatePayload: {
@@ -30286,8 +30255,6 @@ export interface components {
             class_name: string | null;
             /** Classroom Id */
             classroom_id: number | null;
-            /** Delta Total */
-            delta_total: number | null;
             /** Female */
             female: number;
             /** Grade Name */
@@ -30299,69 +30266,20 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** HeadcountChangeEvent */
-        HeadcountChangeEvent: {
-            /** Event Date */
-            event_date: string;
-            /** Event Kind */
-            event_kind: string;
-            /** From Classroom Name */
-            from_classroom_name: string | null;
-            /** Reason */
-            reason: string | null;
-            /** Source Table */
-            source_table: string;
-            /** Student Id */
-            student_id: number;
-            /** Student Name */
-            student_name: string;
-            /** To Classroom Name */
-            to_classroom_name: string | null;
-        };
-        /** HeadcountChangesResponse */
-        HeadcountChangesResponse: {
-            /** Date From */
-            date_from: string;
-            /** Date To */
-            date_to: string;
-            /** Events */
-            events: components["schemas"]["HeadcountChangeEvent"][];
-        };
-        /** HeadcountHistoryResponse */
-        HeadcountHistoryResponse: {
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
-            /** Semester Label */
-            semester_label: string;
-            /** Snapshots */
-            snapshots: components["schemas"]["HeadcountSnapshotEntry"][];
-        };
         /** HeadcountOnResponse */
         HeadcountOnResponse: {
             /** Classes */
             classes: components["schemas"]["HeadcountCell"][];
             /** Date */
             date: string;
+            /** School Female */
+            school_female: number;
+            /** School Male */
+            school_male: number;
+            /** School On Leave */
+            school_on_leave: number;
             /** School Total */
             school_total: number;
-            /** Source */
-            source: string;
-        };
-        /** HeadcountSnapshotEntry */
-        HeadcountSnapshotEntry: {
-            /** Captured At */
-            captured_at: string;
-            /** Classes */
-            classes: components["schemas"]["HeadcountCell"][];
-            school: components["schemas"]["HeadcountCell"];
-            /** Snapshot Date */
-            snapshot_date: string;
-            /** Snapshot Type */
-            snapshot_type: string;
-            /** Source */
-            source: string;
         };
         /** HighRiskListResponse */
         HighRiskListResponse: {
@@ -31470,6 +31388,71 @@ export interface components {
             /** Salary Warning */
             salary_warning?: string | null;
         };
+        /** LedgerListResponse */
+        LedgerListResponse: {
+            /** Items */
+            items: components["schemas"]["LedgerRowOut"][];
+            /** Opened */
+            opened: boolean;
+            /** Total */
+            total: number;
+        };
+        /** LedgerRowOut */
+        LedgerRowOut: {
+            /** Actor Name */
+            actor_name: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Event Date */
+            event_date: string;
+            /** Event Kind */
+            event_kind: string;
+            /** Field Changed */
+            field_changed: string | null;
+            /** From Class Count After */
+            from_class_count_after: number | null;
+            /** From Class Name */
+            from_class_name: string | null;
+            /** From Classroom Id */
+            from_classroom_id: number | null;
+            /** Id */
+            id: number;
+            /** New Value */
+            new_value: string | null;
+            /** Notes */
+            notes: string | null;
+            /** Old Value */
+            old_value: string | null;
+            /** Reason */
+            reason: string | null;
+            /** School Delta */
+            school_delta: number | null;
+            /** School Total After */
+            school_total_after: number | null;
+            /** Source */
+            source: string;
+            /** Source Path */
+            source_path: string | null;
+            /** Student Display Id */
+            student_display_id: string | null;
+            /** Student Id */
+            student_id: number | null;
+            /** Student Name */
+            student_name: string | null;
+            /** To Class Count After */
+            to_class_count_after: number | null;
+            /** To Class Name */
+            to_class_name: string | null;
+            /** To Classroom Id */
+            to_classroom_id: number | null;
+        };
+        /** LedgerTrendResponse */
+        LedgerTrendResponse: {
+            /** Opened */
+            opened: boolean;
+            /** Points */
+            points: components["schemas"]["TrendPoint"][];
+        };
         /** LifecycleOverviewOut */
         LifecycleOverviewOut: {
             /** Current Stage */
@@ -31692,20 +31675,15 @@ export interface components {
             /** Remark */
             remark?: string | null;
         };
-        /** ManualSnapshotResponse */
-        ManualSnapshotResponse: {
-            /** Class Rows */
-            class_rows: number;
-            /** Member Rows */
-            member_rows: number;
-            /** School Total */
-            school_total: number;
-            /** Snapshot Date */
-            snapshot_date: string;
-            /** Snapshot Type */
-            snapshot_type: string;
-            /** Source */
-            source: string;
+        /** ManualSnapshotRequest */
+        ManualSnapshotRequest: {
+            /**
+             * Employee Id
+             * @description 空值表示整月快照
+             */
+            employee_id?: number | null;
+            /** Remark */
+            remark?: string | null;
         };
         /** MarkPaidRequest */
         MarkPaidRequest: {
@@ -38623,6 +38601,38 @@ export interface components {
             /** Read At */
             read_at?: string | null;
         };
+        /** ReconcileResponse */
+        ReconcileResponse: {
+            /** Difference */
+            difference: number | null;
+            /** Ledger Total */
+            ledger_total: number | null;
+            /** Opened */
+            opened: boolean;
+            /** Roster Total */
+            roster_total: number;
+            /** Status */
+            status: string;
+            /** Unknown Rows */
+            unknown_rows: components["schemas"]["ReconcileUnknownRow"][];
+        };
+        /** ReconcileUnknownRow */
+        ReconcileUnknownRow: {
+            /** Event Date */
+            event_date: string;
+            /** Event Kind */
+            event_kind: string;
+            /** Field Changed */
+            field_changed: string | null;
+            /** Id */
+            id: number;
+            /** New Value */
+            new_value: string | null;
+            /** Old Value */
+            old_value: string | null;
+            /** Student Name */
+            student_name: string | null;
+        };
         /**
          * RecruitmentBonusReportBlockOut
          * @description 統計表每師一區塊（含計算式字串與下次核算名單）。
@@ -43458,28 +43468,6 @@ export interface components {
             /** Student Name */
             student_name: string;
         };
-        /** SnapshotMemberEntry */
-        SnapshotMemberEntry: {
-            /** Class Name */
-            class_name: string | null;
-            /** Classroom Id */
-            classroom_id: number | null;
-            /** Lifecycle Status At */
-            lifecycle_status_at: string;
-            /** Student Id */
-            student_id: number;
-            /** Student Name */
-            student_name: string;
-        };
-        /** SnapshotMembersResponse */
-        SnapshotMembersResponse: {
-            /** Exists */
-            exists: boolean;
-            /** Members */
-            members: components["schemas"]["SnapshotMemberEntry"][];
-            /** Snapshot Date */
-            snapshot_date: string;
-        };
         /**
          * SourceRecord
          * @description 一筆原始來源紀錄（下鑽明細的一列）。
@@ -45687,6 +45675,17 @@ export interface components {
             visit_id: number;
             /** Warnings */
             warnings?: string[];
+        };
+        /** TrendPoint */
+        TrendPoint: {
+            /** Class Totals */
+            class_totals: {
+                [key: string]: number;
+            };
+            /** Date */
+            date: string;
+            /** School Total */
+            school_total: number;
         };
         /** TripStartIn */
         TripStartIn: {
@@ -75228,7 +75227,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["api__salary__snapshots__ManualSnapshotRequest"];
+                "application/json": components["schemas"]["ManualSnapshotRequest"];
             };
         };
         responses: {
@@ -76476,71 +76475,6 @@ export interface operations {
             };
         };
     };
-    get_headcount_changes_api_student_enrollment_headcount_changes_get: {
-        parameters: {
-            query: {
-                classroom_id?: number | null;
-                date_from: string;
-                date_to: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HeadcountChangesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_headcount_history_api_student_enrollment_headcount_history_get: {
-        parameters: {
-            query?: {
-                school_year?: number | null;
-                semester?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HeadcountHistoryResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_headcount_on_api_student_enrollment_headcount_on_get: {
         parameters: {
             query: {
@@ -76572,18 +76506,22 @@ export interface operations {
             };
         };
     };
-    create_headcount_snapshot_api_student_enrollment_headcount_snapshots_post: {
+    list_ledger_api_student_enrollment_ledger_get: {
         parameters: {
-            query?: never;
+            query: {
+                classroom_id?: number | null;
+                date_from: string;
+                date_to: string;
+                event_kind?: string | null;
+                page?: number;
+                page_size?: number;
+                source?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["api__enrollment_history__ManualSnapshotRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -76591,7 +76529,70 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ManualSnapshotResponse"];
+                    "application/json": components["schemas"]["LedgerListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_reconcile_api_student_enrollment_ledger_reconcile_get: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconcileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trend_api_student_enrollment_ledger_trend_get: {
+        parameters: {
+            query: {
+                date_from: string;
+                date_to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerTrendResponse"];
                 };
             };
             /** @description Validation Error */
@@ -76708,38 +76709,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_snapshot_members_api_student_enrollment_snapshot_members_get: {
-        parameters: {
-            query: {
-                classroom_id?: number | null;
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SnapshotMembersResponse"];
                 };
             };
             /** @description Validation Error */
