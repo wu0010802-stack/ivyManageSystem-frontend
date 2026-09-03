@@ -12,8 +12,8 @@
       <div class="drawer-head">
         <span class="drawer-head__title">發單批次</span>
         <span class="drawer-head__sub">
-          銀行檢核檔（Check_*.xls）＝應收母體：匯入後即可一鍵產生費用單，
-          並自算未繳／短繳／溢繳。
+          銀行檢核檔（Check_*.xls）＝應收唯一權威：匯入時宣告月費批／註冊費批，
+          一鍵產生費用單，並自算未繳／短繳／溢繳。
         </span>
       </div>
     </template>
