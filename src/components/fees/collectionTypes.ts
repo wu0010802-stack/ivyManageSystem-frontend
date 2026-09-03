@@ -1,5 +1,15 @@
 /** SPEC-016 代收明細共用型別與顯示常數。 */
 
+export type { BillSlipKind } from '@/api/fees'
+import type { BillSlipKind } from '@/api/fees'
+export const BILL_SLIP_KIND_LABELS: Record<BillSlipKind, string> = {
+  monthly: '月費批',
+  registration: '註冊費批',
+}
+export const BILL_SLIP_KIND_OPTIONS = (Object.keys(BILL_SLIP_KIND_LABELS) as BillSlipKind[]).map(
+  (key) => ({ key, label: BILL_SLIP_KIND_LABELS[key] }),
+)
+
 export interface CollectionPaymentRow {
   id: number
   import_id: number
@@ -116,6 +126,8 @@ export interface BillSlipBatchRow {
   created?: boolean | null
   /** SPEC-018：該批已產生的費用單筆數（0＝尚未產單） */
   records_generated_count: number
+  /** SPEC-019 §6.1：月費批／註冊費批，匯入時宣告，未產單前可改 */
+  batch_kind: BillSlipKind
 }
 
 /** SPEC-018：發單批次產生費用單的計畫/結果（dry_run 與實際產生同構） */
@@ -140,7 +152,11 @@ export interface BillSlipGenerateResult {
   }[]
   total_amount_due: number
   due_date: string
-  target_month: string
+  target_month: string | null
+  batch_kind: BillSlipKind
+  /** SPEC-019 §6.3：註冊費批產單後自動標記已套用的預繳額度數 */
+  prepayment_applied: number
+  prepayment_pending: { credit_id: number; student_id: number; student_name: string; reason: string }[]
   preview: {
     student_id: number
     student_name: string

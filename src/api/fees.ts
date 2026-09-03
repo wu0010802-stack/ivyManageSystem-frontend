@@ -158,13 +158,15 @@ export const previewBillSlipBatch = (
     })
     .then((res) => res.data)
 }
+export type BillSlipKind = 'monthly' | 'registration'
 export const importBillSlipBatch = (
   file: File,
-  meta: { title: string; batch_no?: string },
+  meta: { title: string; batch_no?: string; batch_kind: BillSlipKind },
 ): Promise<ApiResponse<'/fees/bill-slip-batches', 'post'>> => {
   const form = new FormData()
   form.append('file', file)
   form.append('title', meta.title)
+  form.append('batch_kind', meta.batch_kind)
   if (meta.batch_no) form.append('batch_no', meta.batch_no)
   return api
     .post('/fees/bill-slip-batches', form, {
@@ -172,6 +174,23 @@ export const importBillSlipBatch = (
     })
     .then((res) => res.data)
 }
+// SPEC-019 §6.1：改批次類型（僅未產單批次）
+export const patchBillSlipBatch = (
+  batchId: number,
+  payload: ApiBody<'/fees/bill-slip-batches/{batch_id}', 'patch'>,
+): Promise<ApiResponse<'/fees/bill-slip-batches/{batch_id}', 'patch'>> =>
+  api.patch(`/fees/bill-slip-batches/${batchId}`, payload).then((res) => res.data)
+// SPEC-019 §5.2：檢核檔姓名對不上時人工指定學生
+export const assignBillSlipItemStudent = (
+  batchId: number,
+  itemId: number,
+  payload: ApiBody<'/fees/bill-slip-batches/{batch_id}/items/{item_id}/student', 'put'>,
+): Promise<
+  ApiResponse<'/fees/bill-slip-batches/{batch_id}/items/{item_id}/student', 'put'>
+> =>
+  api
+    .put(`/fees/bill-slip-batches/${batchId}/items/${itemId}/student`, payload)
+    .then((res) => res.data)
 export const getBillSlipBatches = (
   params?: unknown,
 ): Promise<ApiResponse<'/fees/bill-slip-batches', 'get'>> =>
@@ -197,6 +216,33 @@ export const generateBillSlipRecords = (
   api
     .post(`/fees/bill-slip-batches/${batchId}/generate-records`, payload)
     .then((res) => res.data)
+
+// ===== 現金項目批次（SPEC-019 §7.1）=====
+export const previewCashFeeBatch = (
+  payload: ApiBody<'/fees/cash-fee-batches/preview', 'post'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches/preview', 'post'>> =>
+  api.post('/fees/cash-fee-batches/preview', payload).then((res) => res.data)
+export const createCashFeeBatch = (
+  payload: ApiBody<'/fees/cash-fee-batches', 'post'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches', 'post'>> =>
+  api.post('/fees/cash-fee-batches', payload).then((res) => res.data)
+export const addCashFeeBatchEntries = (
+  batchId: number,
+  payload: ApiBody<'/fees/cash-fee-batches/{batch_id}/entries', 'post'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches/{batch_id}/entries', 'post'>> =>
+  api.post(`/fees/cash-fee-batches/${batchId}/entries`, payload).then((res) => res.data)
+export const getCashFeeBatches = (
+  params?: ApiQuery<'/fees/cash-fee-batches', 'get'>,
+): Promise<ApiResponse<'/fees/cash-fee-batches', 'get'>> =>
+  api.get('/fees/cash-fee-batches', { params }).then((res) => res.data)
+export const getCashFeeBatch = (
+  batchId: number,
+): Promise<ApiResponse<'/fees/cash-fee-batches/{batch_id}', 'get'>> =>
+  api.get(`/fees/cash-fee-batches/${batchId}`).then((res) => res.data)
+export const deleteCashFeeBatch = (
+  batchId: number,
+): Promise<ApiResponse<'/fees/cash-fee-batches/{batch_id}', 'delete'>> =>
+  api.delete(`/fees/cash-fee-batches/${batchId}`).then((res) => res.data)
 
 // ===== 現金收款 / 收款流水 =====
 export const createCashReceipt = (
