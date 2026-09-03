@@ -5,10 +5,13 @@
  * - 跨批應收（expected_total ≠ net_amount）與差額方向可辨識
  * - 「疑缺另一批快照」警示（避免會計把滿江紅的溢繳誤讀成家長多繳）
  * - 唯讀權限隱藏匯入
+ *
+ * SPEC-019：匯入時宣告批次類型（月費批／註冊費批），未產單批次可改類型；
+ * 產單對話框改顯示類型（不再要求「月費批聲明」勾選），未解析列可逐列指定學生。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { defineComponent, h, nextTick } from 'vue'
+import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent, h, inject, nextTick, provide } from 'vue'
 
 const apiMocks = vi.hoisted(() => ({
   previewBillSlipBatch: vi.fn(),
@@ -17,6 +20,8 @@ const apiMocks = vi.hoisted(() => ({
   getOutstandingReport: vi.fn(),
   deleteBillSlipBatch: vi.fn(() => Promise.resolve({ ok: true })),
   generateBillSlipRecords: vi.fn(),
+  patchBillSlipBatch: vi.fn(),
+  assignBillSlipItemStudent: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
 
@@ -30,9 +35,14 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: mbMocks.confirm },
 }))
 
+// 欄位 stub 要能渲染 `#default="{ row }"`（SPEC-019 的類型欄與「改」按鈕都在欄位插槽裡），
+// 所以 el-table stub 把列資料 provide 下去，由 el-table-column stub 逐列展開。
+const TABLE_ROWS = Symbol('table-rows')
+
 const ElTableStub = defineComponent({
   props: { data: { type: Array, default: () => [] } },
   setup(props, { slots }) {
+    provide(TABLE_ROWS, props)
     return () =>
       h(
         'div',
@@ -42,9 +52,20 @@ const ElTableStub = defineComponent({
   },
 })
 
+const ElTableColumnStub = defineComponent({
+  setup(_props, { slots }) {
+    const holder = inject<{ data: unknown[] }>(TABLE_ROWS, { data: [] })
+    return () =>
+      h(
+        'span',
+        (holder.data ?? []).map((row) => h('span', slots.default?.({ row }))),
+      )
+  },
+})
+
 const STUBS = {
   'el-table': ElTableStub,
-  'el-table-column': { template: '<span />' },
+  'el-table-column': ElTableColumnStub,
   'el-upload': { template: '<div><slot /></div>' },
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-input': { template: '<input v-bind="$attrs" />' },
@@ -64,6 +85,11 @@ const STUBS = {
       '<div v-if="modelValue" v-bind="$attrs"><p>{{ title }}</p><slot /><slot name="footer" /></div>',
   },
   'el-checkbox': { template: '<input type="checkbox" v-bind="$attrs" />' },
+  'el-select': {
+    template:
+      '<select v-bind="$attrs" @change="$emit(\'update:modelValue\', $event.target.value)"><slot /></select>',
+  },
+  'el-option': { props: ['value', 'label'], template: '<option :value="value">{{ label }}</option>' },
   'el-date-picker': { template: '<input v-bind="$attrs" />' },
   EmptyState: {
     props: ['title', 'description'],
@@ -85,6 +111,23 @@ const BATCH = {
   note: null,
   created_at: '2026-08-26T10:00:00',
   created: null,
+  records_generated_count: 0,
+  batch_kind: 'registration' as const,
+}
+
+const PREVIEW = {
+  bill_year: 2026,
+  bill_month: 8,
+  row_count: 197,
+  net_total: 1775200,
+  zero_amount_count: 78,
+  error_count: 0,
+  errors: [],
+  already_imported: false,
+  existing_batch_id: null,
+  overlap_count: 0,
+  overlap_ratio: 0,
+  overlap_batch_ids: [],
 }
 
 function report(over: Record<string, unknown> = {}) {
@@ -133,6 +176,16 @@ async function mountTab(reportData = report()) {
   return wrapper
 }
 
+const flush = async () => {
+  await flushPromises()
+  await nextTick()
+}
+
+async function pickFile(wrapper: { vm: unknown }, name = 'Check.xls') {
+  ;(wrapper.vm as { pickedFile: File | null }).pickedFile = new File(['x'], name)
+  await nextTick()
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
@@ -167,6 +220,25 @@ describe('BillSlipTab 匯入', () => {
     expect(text).toContain('應收合計')
     expect(text).toContain('零元單')
     expect(vm.form.title).toBe('2026-08 繳款單')
+  })
+
+  it('匯入前必選批次類型；送出帶 batch_kind', async () => {
+    apiMocks.previewBillSlipBatch.mockResolvedValue({ ...PREVIEW })
+    apiMocks.importBillSlipBatch.mockResolvedValue({ ...BATCH, created: true })
+    const wrapper = await mountTab()
+    await pickFile(wrapper)
+    await wrapper.find('[data-test="run-preview"]').trigger('click')
+    await flush()
+    expect(wrapper.find('[data-test="run-import"]').attributes('disabled')).toBeDefined()
+    await wrapper.find('[data-test="slip-kind-select"]').setValue('registration')
+    await flush()
+    expect(wrapper.find('[data-test="run-import"]').attributes('disabled')).toBeUndefined()
+    await wrapper.find('[data-test="run-import"]').trigger('click')
+    await flush()
+    expect(apiMocks.importBillSlipBatch).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ batch_kind: 'registration' }),
+    )
   })
 
   it('唯讀權限隱藏匯入入口', async () => {
@@ -353,6 +425,9 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
     total_amount_due: 1775200,
     due_date: '2026-08-10',
     target_month: '2026-08',
+    batch_kind: 'monthly',
+    prepayment_applied: 0,
+    prepayment_pending: [],
     preview: [],
   }
 
@@ -374,16 +449,14 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
     expect(dialog.text()).toContain('零元')
   })
 
-  it('確認後以非 dry_run 送出（含月費批聲明）並刷新批次清單', async () => {
+  it('確認後以非 dry_run 送出並刷新批次清單', async () => {
     apiMocks.generateBillSlipRecords.mockResolvedValue(PLAN)
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
       openGenerateDialog: (row: unknown) => Promise<void>
       confirmGenerate: () => Promise<void>
-      kindConfirmed: boolean
     }
     await vm.openGenerateDialog(BATCH)
-    vm.kindConfirmed = true
     apiMocks.generateBillSlipRecords.mockResolvedValue({
       ...PLAN,
       dry_run: false,
@@ -393,31 +466,41 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
     expect(apiMocks.generateBillSlipRecords).toHaveBeenLastCalledWith(7, {
       dry_run: false,
       skip_unresolved: false,
-      batch_kind: 'monthly',
     })
     expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()
     expect(wrapper.find('[data-test="gen-dialog"]').exists()).toBe(false)
   })
 
-  it('未勾選月費批聲明時不可確認（v1 僅支援月費批）', async () => {
-    apiMocks.generateBillSlipRecords.mockResolvedValue(PLAN)
+  it('產單 dialog 顯示批次類型，不再要求月費批聲明勾選', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue({ ...PLAN, batch_kind: 'registration' })
     const wrapper = await mountTab()
-    const vm = wrapper.vm as unknown as {
-      openGenerateDialog: (row: unknown) => Promise<void>
-      confirmGenerate: () => Promise<void>
-      canConfirmGenerate: boolean
-      kindConfirmed: boolean
-    }
-    await vm.openGenerateDialog(BATCH)
-    await nextTick()
-    expect(wrapper.find('[data-test="gen-kind-confirm"]').exists()).toBe(true)
-    expect(vm.canConfirmGenerate).toBe(false)
-    apiMocks.generateBillSlipRecords.mockClear()
-    await vm.confirmGenerate()
-    expect(apiMocks.generateBillSlipRecords).not.toHaveBeenCalled()
-    vm.kindConfirmed = true
-    await nextTick()
-    expect(vm.canConfirmGenerate).toBe(true)
+    await wrapper.find('[data-test="open-generate"]').trigger('click')
+    await flush()
+    expect(wrapper.find('[data-test="gen-kind-confirm"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="gen-kind-label"]').text()).toContain('註冊費批')
+    expect(wrapper.find('[data-test="gen-confirm"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('產單成功訊息含預繳套用數（註冊費批）', async () => {
+    apiMocks.generateBillSlipRecords
+      .mockResolvedValueOnce({ ...PLAN, batch_kind: 'registration' })
+      .mockResolvedValueOnce({
+        ...PLAN,
+        batch_kind: 'registration',
+        dry_run: false,
+        created: 3,
+        prepayment_applied: 2,
+        prepayment_pending: [],
+      })
+    const wrapper = await mountTab()
+    await wrapper.find('[data-test="open-generate"]').trigger('click')
+    await flush()
+    await wrapper.find('[data-test="gen-confirm"]').trigger('click')
+    await flush()
+    const { ElMessage } = await import('element-plus')
+    expect((ElMessage.success as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]).toContain(
+      '預繳套用 2',
+    )
   })
 
   it('有同月其他來源衝突時警示且不可確認', async () => {
@@ -467,7 +550,6 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
       confirmGenerate: () => Promise<void>
       canConfirmGenerate: boolean
       skipUnresolved: boolean
-      kindConfirmed: boolean
     }
     await vm.openGenerateDialog(BATCH)
     await nextTick()
@@ -475,15 +557,15 @@ describe('BillSlipTab 產生費用單（SPEC-018）', () => {
       '查無此生',
     )
     expect(vm.canConfirmGenerate).toBe(false)
-    vm.kindConfirmed = true
     vm.skipUnresolved = true
     await nextTick()
     expect(vm.canConfirmGenerate).toBe(true)
+    // 未解析列可逐列指定學生（dialog 關閉前檢查）
+    expect(wrapper.find('[data-test="gen-assign-student"]').exists()).toBe(true)
     await vm.confirmGenerate()
     expect(apiMocks.generateBillSlipRecords).toHaveBeenLastCalledWith(7, {
       dry_run: false,
       skip_unresolved: true,
-      batch_kind: 'monthly',
     })
   })
 
@@ -517,11 +599,12 @@ describe('BillSlipTab 匯入衝突處理', () => {
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
       pickedFile: File | null
-      form: { title: string; batch_no: string }
+      form: { title: string; batch_no: string; batch_kind: string }
       runImport: () => Promise<void>
     }
     vm.pickedFile = new File(['x'], 'Check_v2.xls')
     vm.form.title = '註冊費(修正)'
+    vm.form.batch_kind = 'registration'
     await vm.runImport()
     expect(ElMessage.error).toHaveBeenCalled()
     // 檔案保留，讓會計可先去刪舊批次再重試
@@ -536,14 +619,83 @@ describe('BillSlipTab 匯入衝突處理', () => {
     const wrapper = await mountTab()
     const vm = wrapper.vm as unknown as {
       pickedFile: File | null
-      form: { title: string }
+      form: { title: string; batch_kind: string }
       runImport: () => Promise<void>
     }
     vm.pickedFile = new File(['x'], 'Check.xls')
     vm.form.title = '註冊費'
+    vm.form.batch_kind = 'monthly'
     apiMocks.getBillSlipBatches.mockClear()
     await vm.runImport()
     expect(vm.pickedFile).toBeNull()
     expect(apiMocks.getBillSlipBatches).toHaveBeenCalled()
+  })
+})
+
+
+describe('BillSlipTab 批次類型（SPEC-019 §6.1）', () => {
+  it('未產單批次可改類型（PATCH），已產單不顯示', async () => {
+    apiMocks.patchBillSlipBatch.mockResolvedValue({ ...BATCH, batch_kind: 'monthly' })
+    const wrapper = await mountTab()
+    expect(wrapper.find('[data-test="slip-kind-cell"]').text()).toContain('註冊費批')
+    await wrapper.find('[data-test="slip-kind-change"]').trigger('click')
+    await flush()
+    await wrapper.find('[data-test="slip-kind-change-select"]').setValue('monthly')
+    await wrapper.find('[data-test="slip-kind-change-confirm"]').trigger('click')
+    await flush()
+    expect(apiMocks.patchBillSlipBatch).toHaveBeenCalledWith(7, { batch_kind: 'monthly' })
+  })
+
+  it('已產單批次不顯示「改」入口', async () => {
+    apiMocks.getBillSlipBatches.mockResolvedValue([{ ...BATCH, records_generated_count: 119 }])
+    apiMocks.getOutstandingReport.mockResolvedValue(report())
+    const BillSlipTab = (await import('../BillSlipTab.vue')).default
+    const wrapper = mount(BillSlipTab, { global: { stubs: STUBS } })
+    await flush()
+    expect(wrapper.find('[data-test="slip-kind-cell"]').text()).toContain('註冊費批')
+    expect(wrapper.find('[data-test="slip-kind-change"]').exists()).toBe(false)
+  })
+
+  it('未解析列可指定學生，指定後重跑 dry_run', async () => {
+    apiMocks.generateBillSlipRecords.mockResolvedValue({
+      batch_id: 7,
+      dry_run: true,
+      created: 1,
+      skipped_zero: 0,
+      skipped_existing: 0,
+      unresolved: [
+        {
+          slip_item_id: 3,
+          student_name: '查無此生',
+          collection_suffix: '9999',
+          net_amount: 9720,
+        },
+      ],
+      conflicts: [],
+      total_amount_due: 9720,
+      due_date: '2026-08-10',
+      target_month: '2026-08',
+      batch_kind: 'registration',
+      prepayment_applied: 0,
+      prepayment_pending: [],
+      preview: [],
+    })
+    apiMocks.assignBillSlipItemStudent.mockResolvedValue({ ok: true })
+    const wrapper = await mountTab()
+    await wrapper.find('[data-test="open-generate"]').trigger('click')
+    await flush()
+    await wrapper.find('[data-test="gen-assign-student"]').trigger('click')
+    await flush()
+    const vm = wrapper.vm as unknown as {
+      onAssignPick: (s: { id: number; name: string }) => Promise<void>
+    }
+    apiMocks.generateBillSlipRecords.mockClear()
+    await vm.onAssignPick({ id: 5, name: '王小明' })
+    await flush()
+    expect(apiMocks.assignBillSlipItemStudent).toHaveBeenCalledWith(7, 3, { student_id: 5 })
+    expect(apiMocks.generateBillSlipRecords).toHaveBeenCalledWith(7, {
+      dry_run: true,
+      skip_unresolved: false,
+    })
   })
 })
