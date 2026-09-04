@@ -29,6 +29,7 @@ interface CollectionApi {
   fetchPayments?: () => void
   openCoverage?: () => void
   openImport?: () => void
+  openBatch?: () => void
 }
 interface PassbookApi {
   fetchTxns?: () => void
@@ -55,5 +56,10 @@ function refresh() {
   else collectionRef.value?.fetchPayments?.()
 }
 
-defineExpose({ openImport, openCoverage, refresh })
+/** 批次媒合只存在於代收明細來源（存摺明細無帳號錨定，不做批次） */
+function openBatch() {
+  collectionRef.value?.openBatch?.()
+}
+
+defineExpose({ openImport, openCoverage, openBatch, refresh })
 </script>

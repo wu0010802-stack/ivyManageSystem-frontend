@@ -83,6 +83,23 @@
       </div>
     </section>
 
+    <div v-if="batchHint" class="batch-hint" data-test="batch-hint">
+      <span>
+        本批有 <strong>{{ batchHint.count }}</strong> 筆可一鍵入帳（{{
+          formatCurrency(batchHint.total)
+        }}）
+      </span>
+      <el-button type="primary" size="small" data-test="open-batch" @click="openBatch">
+        批次媒合
+      </el-button>
+    </div>
+
+    <CollectionBatchDrawer
+      v-model:visible="batchVisible"
+      :import-id="lastImportId"
+      @done="onBatchDone"
+    />
+
     <!-- 工作台 -->
     <div class="scope-row" role="group" aria-label="繳費狀態檢視">
       <button
@@ -302,6 +319,7 @@ import { formatCurrency } from '@/utils/currency'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
 import {
+  batchCollectionCandidates,
   confirmCollectionImport,
   getCollectionPayments,
   previewCollectionImport,
@@ -309,6 +327,7 @@ import {
   reverseCollectionPayment,
 } from '@/api/fees'
 import CollectionAllocationDialog from './CollectionAllocationDialog.vue'
+import CollectionBatchDrawer from './CollectionBatchDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import {
   COLLECTION_PENDING_STATUSES,
@@ -350,6 +369,35 @@ const pickedFile = ref<File | null>(null)
 const preview = ref<CollectionImportPreview | null>(null)
 const previewing = ref(false)
 const importing = ref(false)
+
+const batchVisible = ref(false)
+const lastImportId = ref<number | null>(null)
+const batchHint = ref<{ count: number; total: number } | null>(null)
+
+function openBatch() {
+  batchVisible.value = true
+}
+
+/** 匯入後探一次可批次筆數——只為決定要不要顯示提示條 */
+async function refreshBatchHint(importId: number | null) {
+  try {
+    const data = (await batchCollectionCandidates({
+      import_id: importId,
+      limit: 200,
+    } as never)) as unknown as { auto_high_count: number; auto_high_total: number }
+    batchHint.value =
+      data.auto_high_count > 0
+        ? { count: data.auto_high_count, total: data.auto_high_total }
+        : null
+  } catch {
+    batchHint.value = null // 提示條是加分項，探測失敗不打擾會計
+  }
+}
+
+async function onBatchDone() {
+  await fetchPayments()
+  await refreshBatchHint(lastImportId.value)
+}
 
 const filters = reactive<{
   status: string
@@ -418,6 +466,7 @@ async function runImport() {
   importing.value = true
   try {
     const result = (await confirmCollectionImport(pickedFile.value)) as unknown as {
+      id: number
       row_count: number
       created: boolean | null
     }
@@ -426,6 +475,8 @@ async function runImport() {
     )
     pickedFile.value = null
     preview.value = null
+    lastImportId.value = result.id
+    await refreshBatchHint(lastImportId.value)
     await fetchPayments()
   } catch (e) {
     ElMessage.error(friendlyError('匯入失敗', e))
@@ -522,7 +573,7 @@ async function runCoverage(dryRun: boolean) {
 }
 
 onMounted(fetchPayments)
-defineExpose({ fetchPayments, openCoverage, openImport, setScope, filters })
+defineExpose({ fetchPayments, openCoverage, openImport, openBatch, setScope, filters })
 </script>
 
 <style scoped>
@@ -570,6 +621,16 @@ defineExpose({ fetchPayments, openCoverage, openImport, setScope, filters })
 }
 .preview-box {
   margin-top: 10px;
+}
+.batch-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: var(--el-color-primary-light-9);
+  font-size: 13px;
 }
 .scope-row {
   display: flex;
