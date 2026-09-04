@@ -23,7 +23,12 @@ const STUBS = {
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
   'el-card': { template: '<div><slot /></div>' },
-  'el-select': { template: '<select v-bind="$attrs"><slot /></select>' },
+  // 宣告 modelValue 為 prop（而非落進 $attrs），測試才能斷言 v-model 綁到哪個欄位
+  'el-select': {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: '<select v-bind="$attrs"><slot /></select>',
+  },
   'el-option': { template: '<option />' },
   'el-input': { template: '<input v-bind="$attrs" />' },
   'el-input-number': { template: '<input type="number" v-bind="$attrs" />' },
@@ -192,6 +197,11 @@ describe('CollectionAllocationDialog', () => {
     const wrapper = await mountDialog()
     expect(wrapper.find('[data-test="fee-record-select"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="fee-record-id-input"]').exists()).toBe(false)
+    // v-model 必須綁在 fee_record_id 上：綁錯欄位（例如 student_id）時
+    // payload 仍會是預填值而看不出來，只有查 modelValue 才抓得到
+    expect(
+      wrapper.findComponent('[data-test="fee-record-select"]').props('modelValue'),
+    ).toBe(77)
     await wrapper.find('[data-test="alloc-confirm"]').trigger('click')
     await nextTick()
     expect(apiMocks.allocateCollectionPayment).toHaveBeenCalledWith(
