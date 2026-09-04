@@ -70,10 +70,20 @@ describe('渲染', () => {
     expect(meigui.attributes('title')).toContain('已收齊')
   })
 
-  it('「全部」顯示總人數；年段標籤顯示該年段人數', () => {
+  it('三層 chip 的數字都是未收齊人數（可相加驗算），總人數放 title', () => {
     const w = mountRail()
-    expect(w.find('[data-test="stmt-class-rail-all"]').text()).toContain('5')
-    expect(w.findAll('[data-test="stmt-class-rail-grade"]')[0].text()).toContain('3')
+    // 全部：5 人中 2 人未收齊
+    const all = w.find('[data-test="stmt-class-rail-all"]')
+    expect(all.text()).toContain('2')
+    expect(all.attributes('title')).toContain('共 5 人')
+    // 幼幼班：3 人中 2 人未收齊（牡丹 1 + 向日葵 1）
+    const grade = w.findAll('[data-test="stmt-class-rail-grade"]')[0]
+    expect(grade.text()).toContain('2')
+    expect(grade.attributes('title')).toContain('共 3 人')
+    // 小班全繳清 → 年段數字為 0
+    expect(w.findAll('[data-test="stmt-class-rail-grade"]')[1].attributes('title')).toContain(
+      '已收齊',
+    )
   })
 
   it('show-counts 關閉時不顯示人數與已收齊標記（逐筆模式無整月資料）', () => {

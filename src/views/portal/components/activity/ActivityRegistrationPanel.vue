@@ -80,6 +80,7 @@ function courseStatusLabel(status: string): string {
 
     <!-- 報名列表 -->
     <el-table
+      empty-text="目前沒有學生報名才藝課程"
       :data="registrations"
       border
       stripe
@@ -119,9 +120,7 @@ function courseStatusLabel(status: string): string {
       </el-table-column>
     </el-table>
 
-    <div v-if="registrations.length === 0 && !loading" class="empty-hint">
-      目前沒有學生報名才藝課程。
-    </div>
+
   </div>
 </template>
 

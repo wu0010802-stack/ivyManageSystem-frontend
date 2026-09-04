@@ -275,7 +275,8 @@ onMounted(async () => {
       </template>
     </AdminListCards>
 
-    <div class="pt-list-footer">
+    <!-- 0 筆時不畫分頁：空清單配「共 0 筆・20項/頁・‹1›」只是噪音（P2-06） -->
+    <div v-if="total > 0" class="pt-list-footer">
       <span class="pt-list-total">共 {{ total }} 筆紀錄</span>
       <el-pagination
         v-model:current-page="currentPage"

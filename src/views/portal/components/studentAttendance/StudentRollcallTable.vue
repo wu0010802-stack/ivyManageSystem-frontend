@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { reactive } from 'vue'
+
 interface RollcallStudent { student_id?: number; student_no?: string; name?: string; status?: string; remark?: string; [key: string]: unknown }
 
 defineProps<{
@@ -13,6 +15,17 @@ const emit = defineEmits<{
 
 // 點名狀態選項（依原 view 的 STATUSES 常數對齊）
 const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
+
+// 手動點開備註的學生（已有備註者自動視為展開）
+const openedRemarks = reactive(new Set<number | string>())
+function isRemarkOpen(student: RollcallStudent): boolean {
+  if (student.remark) return true
+  const key = student.student_id ?? student.student_no ?? ''
+  return openedRemarks.has(key)
+}
+function openRemark(student: RollcallStudent) {
+  openedRemarks.add(student.student_id ?? student.student_no ?? '')
+}
 
 function onStatusChange(student: RollcallStudent, value: string) {
   emit('update-status', {
@@ -69,7 +82,10 @@ function onRemarkChange(student: RollcallStudent, value: string) {
               {{ opt }}
             </el-radio-button>
           </el-radio-group>
+          <!-- 備註預設收起（P2-15）：一班 27 人時，27 個常駐輸入框讓整頁
+               長到 9,200px，而備註是例外才填的東西。有值或點開才展開。 -->
           <el-input
+            v-if="isRemarkOpen(s)"
             :model-value="s.remark"
             placeholder="備註（選填）"
             size="small"
@@ -77,6 +93,16 @@ function onRemarkChange(student: RollcallStudent, value: string) {
             clearable
             @update:model-value="onRemarkChange(s, $event)"
           />
+          <el-button
+            v-else
+            link
+            type="primary"
+            class="remark-toggle"
+            :aria-label="`為 ${s.name} 加備註`"
+            @click="openRemark(s)"
+          >
+            加備註
+          </el-button>
         </div>
       </div>
     </template>
@@ -112,6 +138,10 @@ function onRemarkChange(student: RollcallStudent, value: string) {
   border: var(--pt-hairline, 1px solid #e5e7eb);
   border-radius: var(--radius-md, 8px);
   flex-wrap: wrap;
+}
+
+.remark-toggle {
+  margin-left: auto;
 }
 
 .student-row.is-absent {
