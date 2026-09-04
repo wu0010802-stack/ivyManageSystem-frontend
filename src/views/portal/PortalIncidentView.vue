@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import { getMyStudents } from '@/api/portal'
@@ -7,6 +7,7 @@ import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TA
 import { useIsMobile } from '@/composables/useIsMobile'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import PortalFilterBar from '@/components/portal/PortalFilterBar.vue'
 import { Plus } from '@element-plus/icons-vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
@@ -163,6 +164,15 @@ onMounted(async () => {
   await fetchMyStudents()
   fetchIncidents()
 })
+
+const activeFilterCount = computed(
+  () => (filterType.value ? 1 : 0) + (filterDateRange.value?.length ? 1 : 0),
+)
+function resetFilters() {
+  filterType.value = null
+  filterDateRange.value = []
+  fetchIncidents()
+}
 </script>
 
 <template>
@@ -191,14 +201,17 @@ onMounted(async () => {
       />
     </el-tabs>
 
-    <!-- 篩選列 -->
-    <el-row :gutter="12" style="margin-bottom: 16px">
-      <el-col :xs="12" :sm="6">
-        <el-select v-model="filterType" placeholder="事件類型" clearable size="small" style="width: 100%">
+    <!-- 篩選列：手機收進 sheet（P2-06） -->
+    <PortalFilterBar
+      :active-count="activeFilterCount"
+      title="事件篩選"
+      @apply="fetchIncidents"
+      @reset="resetFilters"
+    >
+      <template #controls>
+        <el-select v-model="filterType" placeholder="事件類型" clearable style="width: 180px">
           <el-option v-for="t in INCIDENT_TYPES" :key="t" :label="t" :value="t" />
         </el-select>
-      </el-col>
-      <el-col :xs="24" :sm="10">
         <el-date-picker
           v-model="filterDateRange"
           type="daterange"
@@ -206,15 +219,10 @@ onMounted(async () => {
           start-placeholder="開始"
           end-placeholder="結束"
           value-format="YYYY-MM-DD"
-          size="small"
-          style="width: 100%"
+          style="width: 260px"
         />
-      </el-col>
-      <el-col :xs="12" :sm="4">
-        <el-button size="small" @click="fetchIncidents">查詢</el-button>
-        <el-button size="small" @click="filterType = null; filterDateRange = []; fetchIncidents()">重置</el-button>
-      </el-col>
-    </el-row>
+      </template>
+    </PortalFilterBar>
 
     <!-- 事件表格（桌機）／卡片（手機） -->
     <el-table v-if="!isMobile" :data="incidents" v-loading="loading" stripe size="small">

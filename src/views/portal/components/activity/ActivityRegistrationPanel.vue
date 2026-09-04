@@ -2,6 +2,10 @@
 import { computed } from 'vue'
 import { COURSE_STATUS_LABEL, COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
 import { formatActivityDate } from '@/utils/format'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+interface CourseTag { course_name: string; status: string; waitlist_position?: number }
 
 interface Registration { class_name?: string | null; [key: string]: unknown }
 interface ActivityData {
@@ -31,37 +35,29 @@ const showClassTabs = computed(() => classrooms.value.length > 1)
 function courseStatusLabel(status: string): string {
   return (COURSE_STATUS_LABEL as Record<string, string>)[status] || status
 }
+
+const { isMobile } = useIsMobile()
+
+const regCardColumns = [
+  { label: '課程', prop: 'courses', block: true },   // tags → #cell-courses
+  { label: '繳費', prop: 'is_paid' },                // tag → #cell-is_paid
+  {
+    label: '報名時間',
+    prop: 'created_at',
+    formatter: (i: Record<string, unknown>) => formatActivityDate(i.created_at as string),
+  },
+]
 </script>
 
 <template>
   <div class="registration-panel" v-if="data">
-    <!-- 摘要統計卡片 -->
-    <el-row :gutter="12" class="summary-row">
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="summary-card">
-          <div class="card-val">{{ summary?.total_registrations ?? 0 }}</div>
-          <div class="card-label">已報名人數</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="summary-card">
-          <div class="card-val">{{ summary?.total_enrolled ?? 0 }}</div>
-          <div class="card-label">正式報名數</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="summary-card">
-          <div class="card-val">{{ summary?.total_waitlist ?? 0 }}</div>
-          <div class="card-label">候補人次</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="6">
-        <el-card shadow="never" class="summary-card">
-          <div class="card-val">{{ summary?.total_paid ?? 0 }}</div>
-          <div class="card-label">已繳費人數</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <!-- 報名摘要（P2-07）：原本 4 個大數字方塊，值多半是 0，改成一句話 -->
+    <p class="reg-summary">
+      已報名 <strong>{{ summary?.total_registrations ?? 0 }}</strong> 人・
+      正式 {{ summary?.total_enrolled ?? 0 }}・
+      候補 {{ summary?.total_waitlist ?? 0 }}・
+      已繳費 {{ summary?.total_paid ?? 0 }}
+    </p>
 
     <!-- 班級切換 Tabs（多班時顯示） -->
     <el-tabs
@@ -79,7 +75,9 @@ function courseStatusLabel(status: string): string {
     </el-tabs>
 
     <!-- 報名列表 -->
+    <!-- 桌機表格；手機用卡片（課程欄會塞多個 tag，390px 完全讀不了，P2-06） -->
     <el-table
+      v-if="!isMobile"
       empty-text="目前沒有學生報名才藝課程"
       :data="registrations"
       border
@@ -120,15 +118,59 @@ function courseStatusLabel(status: string): string {
       </el-table-column>
     </el-table>
 
+    <AdminListCards
+      v-else
+      :items="registrations as unknown as Record<string, unknown>[]"
+      :columns="regCardColumns"
+      row-key="student_name"
+      :loading="loading ?? false"
+      empty-text="目前沒有學生報名才藝課程"
+    >
+      <template #title="{ item }">
+        {{ item.student_name }}
+        <span class="reg-card__class">{{ item.class_name }}</span>
+      </template>
+      <template #cell-courses="{ item }">
+        <span v-if="(item.courses as unknown[]).length === 0" class="no-course">—</span>
+        <el-tag
+          v-for="(c, idx) in (item.courses as CourseTag[])"
+          :key="idx"
+          :type="((COURSE_STATUS_TAG_TYPE as Record<string, string>)[c.status] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger'"
+          size="small"
+          style="margin: 2px"
+        >
+          {{ c.course_name }}（{{ courseStatusLabel(c.status)
+          }}<template v-if="c.status === 'waitlist' && c.waitlist_position"> #{{ c.waitlist_position }}</template>）
+        </el-tag>
+      </template>
+      <template #cell-is_paid="{ item }">
+        <el-tag :type="item.is_paid ? 'success' : 'warning'" size="small">
+          {{ item.is_paid ? '已繳費' : '未繳費' }}
+        </el-tag>
+      </template>
+    </AdminListCards>
+
 
   </div>
 </template>
 
 <style scoped>
-.summary-row { margin-bottom: 16px; }
-.summary-card { text-align: center; padding: 4px 0; }
-.card-val { font-size: 28px; font-weight: 700; color: var(--color-info-darker); }
-.card-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.reg-summary {
+  margin: 0 0 16px;
+  font-size: var(--text-base);
+  color: var(--el-text-color-primary);
+}
+.reg-summary strong {
+  font-size: var(--text-xl);
+  color: var(--el-color-primary);
+  font-variant-numeric: tabular-nums;
+}
+.reg-card__class {
+  margin-left: 8px;
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--el-text-color-secondary);
+}
 .no-course { color: var(--text-tertiary); }
 .empty-hint { text-align: center; color: var(--text-tertiary); padding: 24px 0; font-size: 14px; }
 </style>
