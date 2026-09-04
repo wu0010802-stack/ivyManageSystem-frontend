@@ -8986,17 +8986,7 @@ export interface paths {
         };
         /**
          * Get Integrations Health
-         * @description 回傳外部整合系統的即時健康狀態（**per-tenant 視角**）。
-         *
-         *     多租戶（sch §3-3 / scan-cross-repo GAP-07）：`LineTokenHealth` 由 id=1
-         *     singleton 改為每租戶一列，本端點是它的第三個讀取點（另兩個在
-         *     `services/line_token_health_scheduler.py`）。硬編 `id == 1` 會讓第二個以後的
-         *     租戶永遠讀到 default tenant 的列（或在 RLS 下讀到 0 列而誤報 unknown）。
-         *     `PendingUpload` 計數因該表改判 DIRECT，在 tenant session 下自動縮域
-         *     （原「全平台加總洩漏」問題連帶消失）。
-         *
-         *     粒度分工：per-tenant LINE 健康看本端點（`/api/internal/integrations/health`），
-         *     平台級單列檢查看 `/health`（`api/health.py`，維持平台級不動）。
+         * @description 回傳外部整合系統的即時健康狀態（**per-tenant 視角**）。實作見 `compute_integrations_health`。
          */
         get: operations["get_integrations_health_api_internal_integrations_health_get"];
         put?: never;
@@ -10361,6 +10351,57 @@ export interface paths {
          * @description 下載加班批次匯入 Excel 範本
          */
         get: operations["get_overtime_import_template_api_overtimes_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent-monitor/config-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Config Check */
+        get: operations["get_config_check_api_parent_monitor_config_check_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent-monitor/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Overview */
+        get: operations["get_overview_api_parent_monitor_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent-monitor/probes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Probes */
+        get: operations["get_probes_api_parent_monitor_probes_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -25608,6 +25649,19 @@ export interface components {
             /** Topic */
             topic?: string | null;
         };
+        /** ConfigCheckItemOut */
+        ConfigCheckItemOut: {
+            /** Detail */
+            detail: string;
+            /** Fix Hint */
+            fix_hint: string;
+            /** Key */
+            key: string;
+            /** Link */
+            link?: string | null;
+            /** Ok */
+            ok?: boolean | null;
+        };
         /** ConfirmPromotionPayload */
         ConfirmPromotionPayload: {
             /** Course Id */
@@ -27223,6 +27277,15 @@ export interface components {
         DeleteResultOut: {
             /** Message */
             message: string;
+        };
+        /** DeliveriesSummaryOut */
+        DeliveriesSummaryOut: {
+            /** Attempted 24H */
+            attempted_24h: number;
+            /** Final Failed 24H */
+            final_failed_24h: number;
+            /** Retrying */
+            retrying: number;
         };
         /**
          * DerivedValue
@@ -31435,6 +31498,17 @@ export interface components {
             /** Id Token */
             id_token: string;
         };
+        /** LightOut */
+        LightOut: {
+            /** Key */
+            key: string;
+            /** Level */
+            level: string;
+            /** Metric */
+            metric?: string | null;
+            /** Reason */
+            reason: string;
+        };
         /** LineBindingUpdate */
         LineBindingUpdate: {
             /** Line User Id */
@@ -33760,6 +33834,49 @@ export interface components {
             thumb_url?: string | null;
             /** Url */
             url?: string | null;
+        };
+        /** ParentMonitorConfigCheckOut */
+        ParentMonitorConfigCheckOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Items */
+            items?: components["schemas"]["ConfigCheckItemOut"][] | null;
+        };
+        /** ParentMonitorOverviewOut */
+        ParentMonitorOverviewOut: {
+            /** Client Events 24H */
+            client_events_24h?: {
+                [key: string]: unknown;
+            } | null;
+            deliveries_24h?: components["schemas"]["DeliveriesSummaryOut"] | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Generated At */
+            generated_at?: string | null;
+            integrations?: components["schemas"]["IntegrationsHealthResponse"] | null;
+            /** Lights */
+            lights?: components["schemas"]["LightOut"][] | null;
+            /** Overall */
+            overall?: string | null;
+            /** Probes Latest */
+            probes_latest?: components["schemas"]["ProbeRunOut"][] | null;
+            /** Rls Ready */
+            rls_ready?: boolean | null;
+            /** Schedulers */
+            schedulers?: components["schemas"]["SchedulerSignalOut"][] | null;
+            /** Traffic 1H */
+            traffic_1h?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ParentMonitorProbesOut */
+        ParentMonitorProbesOut: {
+            /** Checks */
+            checks?: components["schemas"]["ProbeCheckSummaryOut"][] | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Hours */
+            hours?: number | null;
         };
         /**
          * ParentPortalMessageAttachmentOut
@@ -37960,6 +38077,34 @@ export interface components {
             alerts: components["schemas"]["_ProbationAlertCounts"];
             /** Employees */
             employees: components["schemas"]["ProbationAlertItem"][];
+        };
+        /** ProbeCheckSummaryOut */
+        ProbeCheckSummaryOut: {
+            /** Availability */
+            availability?: number | null;
+            /** Check Name */
+            check_name: string;
+            /**
+             * Failures
+             * @default []
+             */
+            failures: components["schemas"]["ProbeRunOut"][];
+            latest?: components["schemas"]["ProbeRunOut"] | null;
+            /** Total Runs */
+            total_runs: number;
+        };
+        /** ProbeRunOut */
+        ProbeRunOut: {
+            /** Check Name */
+            check_name: string;
+            /** Detail */
+            detail?: string | null;
+            /** Ok */
+            ok?: boolean | null;
+            /** Ran At */
+            ran_at?: string | null;
+            /** Status Code */
+            status_code?: number | null;
         };
         /** ProfileUpdate */
         ProfileUpdate: {
@@ -42323,6 +42468,26 @@ export interface components {
             status: string;
             /** Total */
             total: number;
+        };
+        /** SchedulerSignalOut */
+        SchedulerSignalOut: {
+            /**
+             * Consecutive Failures
+             * @default 0
+             */
+            consecutive_failures: number;
+            /** Expected Interval Seconds */
+            expected_interval_seconds?: number | null;
+            /** Lag Ratio */
+            lag_ratio?: number | null;
+            /** Lag Seconds */
+            lag_seconds?: number | null;
+            /** Last Success At */
+            last_success_at?: string | null;
+            /** Name */
+            name: string;
+            /** Status */
+            status: string;
         };
         /**
          * ScheduleSwapCandidateOut
@@ -52632,6 +52797,7 @@ export interface operations {
         parameters: {
             query?: {
                 action?: string | null;
+                actor_type?: ("staff" | "parent" | "system" | "anonymous") | null;
                 end_at?: string | null;
                 entity_id?: string | null;
                 entity_type?: string | null;
@@ -52741,6 +52907,7 @@ export interface operations {
         parameters: {
             query?: {
                 action?: string | null;
+                actor_type?: ("staff" | "parent" | "system" | "anonymous") | null;
                 end_at?: string | null;
                 entity_id?: string | null;
                 entity_type?: string | null;
@@ -64004,6 +64171,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_config_check_api_parent_monitor_config_check_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMonitorConfigCheckOut"];
+                };
+            };
+        };
+    };
+    get_overview_api_parent_monitor_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMonitorOverviewOut"];
+                };
+            };
+        };
+    };
+    get_probes_api_parent_monitor_probes_get: {
+        parameters: {
+            query?: {
+                hours?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMonitorProbesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
