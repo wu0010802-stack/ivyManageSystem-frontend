@@ -193,9 +193,22 @@ onMounted(() => {
           @click="setRange('today')"
         >今天</button>
         <span class="filters__custom">
-          <input v-model="customStart" data-test="custom-start" type="date" aria-label="起始日期" />
+          <!-- lang 讓瀏覽器用本地日期格式，不再顯示 mm/dd/yyyy（P2-08） -->
+          <input
+            v-model="customStart"
+            data-test="custom-start"
+            type="date"
+            lang="zh-TW"
+            aria-label="起始日期"
+          />
           <span class="tilde">~</span>
-          <input v-model="customEnd" data-test="custom-end" type="date" aria-label="結束日期" />
+          <input
+            v-model="customEnd"
+            data-test="custom-end"
+            type="date"
+            lang="zh-TW"
+            aria-label="結束日期"
+          />
         </span>
       </div>
 

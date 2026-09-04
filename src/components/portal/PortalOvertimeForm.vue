@@ -147,7 +147,7 @@ const { isMobile } = useIsMobile()
         <el-form ref="formRef" :model="form" :rules="rules" :label-position="isMobile ? 'top' : 'right'"
             :label-width="isMobile ? undefined : '80px'">
             <el-form-item label="日期" prop="overtime_date">
-                <el-date-picker v-model="form.overtime_date" type="date" value-format="YYYY-MM-DD" placeholder="選擇加班日期" style="width: 100%;" />
+                <el-date-picker popper-class="portal-sheet-picker" v-model="form.overtime_date" type="date" value-format="YYYY-MM-DD" placeholder="選擇加班日期" style="width: 100%;" />
             </el-form-item>
             <el-form-item label="類型" prop="overtime_type">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -162,10 +162,10 @@ const { isMobile } = useIsMobile()
                 </div>
             </el-form-item>
             <el-form-item label="開始時間" required>
-                <el-time-picker v-model="form.start_time" format="HH:mm" value-format="HH:mm" placeholder="選擇開始時間" style="width: 100%;" />
+                <el-time-picker popper-class="portal-sheet-picker" v-model="form.start_time" format="HH:mm" value-format="HH:mm" placeholder="選擇開始時間" style="width: 100%;" />
             </el-form-item>
             <el-form-item label="結束時間" required :error="timeError">
-                <el-time-picker v-model="form.end_time" format="HH:mm" value-format="HH:mm" placeholder="選擇結束時間" style="width: 100%;" />
+                <el-time-picker popper-class="portal-sheet-picker" v-model="form.end_time" format="HH:mm" value-format="HH:mm" placeholder="選擇結束時間" style="width: 100%;" />
             </el-form-item>
             <el-form-item label="時數" prop="hours">
                 <el-input-number v-model="form.hours" :min="0.5" :max="12" :step="0.5" disabled />

@@ -80,7 +80,7 @@ const { isMobile } = useIsMobile()
         <el-form ref="formRef" :model="form" :rules="rules" :label-position="isMobile ? 'top' : 'right'"
             :label-width="isMobile ? undefined : '100px'">
             <el-form-item label="申請日期" prop="attendance_date">
-                <el-date-picker
+                <el-date-picker popper-class="portal-sheet-picker"
                     v-model="form.attendance_date"
                     type="date"
                     value-format="YYYY-MM-DD"
@@ -105,7 +105,7 @@ const { isMobile } = useIsMobile()
                 </el-select>
             </el-form-item>
             <el-form-item v-if="showPunchIn" label="申請上班時間" required>
-                <el-time-picker
+                <el-time-picker popper-class="portal-sheet-picker"
                     v-model="form.requested_punch_in_time"
                     format="HH:mm"
                     value-format="HH:mm"
@@ -114,7 +114,7 @@ const { isMobile } = useIsMobile()
                 />
             </el-form-item>
             <el-form-item v-if="showPunchOut" label="申請下班時間" required>
-                <el-time-picker
+                <el-time-picker popper-class="portal-sheet-picker"
                     v-model="form.requested_punch_out_time"
                     format="HH:mm"
                     value-format="HH:mm"

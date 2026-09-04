@@ -334,16 +334,16 @@ const { isMobile } = useIsMobile()
 
       <template v-if="leaveMode === 'full'">
         <el-form-item label="開始日期" prop="start_date">
-          <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇開始日期" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇開始日期" />
         </el-form-item>
         <el-form-item label="結束日期" prop="end_date">
-          <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇結束日期" :disabled-date="disabledEndDate" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇結束日期" :disabled-date="disabledEndDate" />
         </el-form-item>
       </template>
 
       <template v-else-if="leaveMode === 'morning' || leaveMode === 'afternoon'">
         <el-form-item label="請假日期" prop="start_date">
-          <el-date-picker v-model="leaveSingleDate" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇請假日期" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="leaveSingleDate" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇請假日期" />
           <div v-if="form.start_date && form.end_date" style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
             時段：{{ form.start_date.substring(11, 16) }} – {{ form.end_date.substring(11, 16) }}
             <el-icon v-if="calcLoading" class="is-loading" style="vertical-align: middle; margin-left: 6px;"><Loading /></el-icon>
@@ -353,10 +353,10 @@ const { isMobile } = useIsMobile()
 
       <template v-else>
         <el-form-item label="開始時間" prop="start_date">
-          <el-date-picker v-model="form.start_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 08:30" style="width: 100%;" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.start_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 08:30" style="width: 100%;" />
         </el-form-item>
         <el-form-item label="結束時間" prop="end_date">
-          <el-date-picker v-model="form.end_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 17:30" style="width: 100%;" :disabled-date="disabledEndDate" />
+          <el-date-picker popper-class="portal-sheet-picker" v-model="form.end_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" placeholder="例如: 2026-02-23 17:30" style="width: 100%;" :disabled-date="disabledEndDate" />
         </el-form-item>
       </template>
 

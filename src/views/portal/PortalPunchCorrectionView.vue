@@ -12,7 +12,6 @@ import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import PortalPunchCorrectionForm from '@/components/portal/PortalPunchCorrectionForm.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
 
 const { isMobile } = useIsMobile()
 
@@ -158,7 +157,14 @@ onMounted(() => {
         </el-select>
       </div>
 
-      <el-table v-if="!isMobile" :data="corrections" border stripe style="margin-top: 12px;">
+      <el-table
+        v-if="!isMobile"
+        :data="corrections"
+        border
+        stripe
+        empty-text="本月無補打卡申請記錄"
+        style="margin-top: 12px;"
+      >
         <el-table-column prop="attendance_date" label="申請日期" width="120" />
         <el-table-column label="補正類型" width="120">
           <template #default="{ row }">
@@ -196,8 +202,8 @@ onMounted(() => {
         </el-table-column>
       </el-table>
 
-      <!-- 桌機空狀態；手機空狀態由 AdminListCards emptyText 負責 -->
-      <EmptyState v-if="!isMobile && !loading && corrections.length === 0" variant="inline" title="本月無補打卡申請記錄" />
+      <!-- 空狀態：桌機走表格 empty-text、手機走 AdminListCards emptyText，
+           原本另外再畫一次 EmptyState，同一頁出現兩份（P2-06） -->
 
       <!-- 手機卡片視圖；row-key="id" 對應後端 _format_correction 回傳 id 欄位 -->
       <AdminListCards
