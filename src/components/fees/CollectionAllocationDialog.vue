@@ -40,7 +40,12 @@
                 {{ partText(p) }}
               </div>
             </div>
-            <el-button size="small" data-test="use-candidate" @click="useCandidate(cand)">
+            <span
+              v-if="appliedCandidateIndex === idx"
+              class="cand-applied"
+              data-test="candidate-applied"
+            >✓ 已套用</span>
+            <el-button v-else size="small" data-test="use-candidate" @click="useCandidate(cand, idx)">
               套用此組合
             </el-button>
           </div>
@@ -254,14 +259,27 @@ const levelTag = computed(() =>
       : 'info',
 )
 
-function partText(p: CandidatePart): string {
-  if (p.part_type === 'prepayment') {
-    return `學生#${p.student_id} 預繳 ${formatCurrency(p.amount)}（目標 ${p.target_school_year}-${p.target_semester}）`
-  }
-  return `學生#${p.student_id} ${p.label}（單#${p.fee_record_id}）${formatCurrency(p.amount)}`
+const studentNameById = computed<Record<number, string>>(() => {
+  const map: Record<number, string> = {}
+  for (const s of candidates.value?.students ?? []) map[s.student_id] = s.display_name
+  return map
+})
+
+function studentLabel(id: number | null | undefined): string {
+  if (id == null) return '未知學生'
+  return studentNameById.value[id] ?? `學生#${id}`
 }
 
-function useCandidate(cand: Candidate) {
+function partText(p: CandidatePart): string {
+  if (p.part_type === 'prepayment') {
+    return `${studentLabel(p.student_id)} 預繳 ${formatCurrency(p.amount)}（目標 ${p.target_school_year}-${p.target_semester}）`
+  }
+  return `${studentLabel(p.student_id)} ${p.label} ${formatCurrency(p.amount)}`
+}
+
+const appliedCandidateIndex = ref<number | null>(null)
+
+function useCandidate(cand: Candidate, idx: number | null = null) {
   parts.value = cand.parts.map((p) => ({
     part_type: p.part_type as EditablePart['part_type'],
     amount: p.amount,
@@ -270,6 +288,7 @@ function useCandidate(cand: Candidate) {
     target_school_year: p.target_school_year ?? undefined,
     target_semester: p.target_semester ?? undefined,
   }))
+  appliedCandidateIndex.value = idx
 }
 
 function addItemPart(studentId: number, item: StudentItem) {
@@ -301,11 +320,12 @@ watch(
     if (!visible || !paymentId) return
     parts.value = []
     candidates.value = null
+    appliedCandidateIndex.value = null
     try {
       candidates.value = (await getCollectionCandidates(paymentId)) as unknown as Candidates
       // auto_high 唯一組合直接預填，會計只需按確認
       if (candidates.value?.level === 'auto_high' && candidates.value.candidates.length === 1) {
-        useCandidate(candidates.value.candidates[0])
+        useCandidate(candidates.value.candidates[0], 0)
       }
     } catch (e) {
       ElMessage.error(friendlyError('載入媒合候選失敗', e))
@@ -379,6 +399,12 @@ async function submit() {
 }
 .cand-part {
   font-size: 13px;
+}
+.cand-applied {
+  font-size: 13px;
+  color: var(--el-color-success);
+  font-weight: 600;
+  white-space: nowrap;
 }
 .no-cand {
   font-size: 13px;

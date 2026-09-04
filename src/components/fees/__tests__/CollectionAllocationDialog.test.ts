@@ -174,4 +174,17 @@ describe('CollectionAllocationDialog', () => {
     const wrapper = await mountDialog()
     expect(wrapper.find('[data-test="add-prepayment"]').exists()).toBe(false)
   })
+
+  it('候選列顯示學生姓名而非 學生#id', async () => {
+    const wrapper = await mountDialog()
+    const text = wrapper.text()
+    expect(text).toContain('王小明')
+    expect(text).not.toContain('學生#5')
+  })
+
+  it('已自動套用的候選顯示已套用、不顯示可按的套用按鈕', async () => {
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="candidate-applied"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="use-candidate"]').exists()).toBe(false)
+  })
 })
