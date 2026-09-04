@@ -43,12 +43,14 @@ const total = ref(0)
 
 const entityTypes = ref<MetaOption[]>([])
 const actionTypes = ref<MetaOption[]>([])
+const actorTypes = ref<MetaOption[]>([])
 const fieldLabels = ref<Record<string, string>>({})
 
 const filters = reactive({
   search: '',
   entity_type: '',
   action: '',
+  actor_type: '',
   username: '',
   entity_id: '',
   ip_address: '',
@@ -96,7 +98,7 @@ const activeRiskFilter = ref('')
 
 // URL 同步的篩選 key（page_size 不進 URL——非分享語意）
 const URL_FILTER_KEYS = [
-  'entity_type', 'action', 'username', 'entity_id', 'ip_address',
+  'entity_type', 'action', 'actor_type', 'username', 'entity_id', 'ip_address',
   'risk_tag', 'start_at', 'end_at',
 ] as const
 
@@ -152,6 +154,7 @@ const buildFilterParams = () => {
   if (filters.search) params.search = filters.search
   if (filters.entity_type) params.entity_type = filters.entity_type
   if (filters.action) params.action = filters.action
+  if (filters.actor_type) params.actor_type = filters.actor_type
   if (filters.username) params.username = filters.username
   if (filters.entity_id && filters.entity_type) params.entity_id = filters.entity_id
   if (filters.ip_address) params.ip_address = filters.ip_address
@@ -166,9 +169,17 @@ const buildFilterParams = () => {
 const fetchMeta = async () => {
   try {
     const res = await getAuditLogsMeta()
-    const d = res.data as { entity_types: MetaOption[]; actions: MetaOption[]; field_labels?: Record<string, string> }
+    // GET /audit-logs/meta 後端未宣告 response_model，schema.d.ts 整支是 unknown（既有缺口）。
+    // 不補後端 response_model：曾經教訓是補了會靜默過濾未宣告欄位，漏列現有欄位即打壞本頁。
+    const d = res.data as {
+      entity_types: MetaOption[]
+      actions: MetaOption[]
+      actor_types?: MetaOption[]
+      field_labels?: Record<string, string>
+    }
     entityTypes.value = d.entity_types
     actionTypes.value = d.actions
+    actorTypes.value = d.actor_types || []
     fieldLabels.value = d.field_labels || {}
   } catch {
     // meta 抓不到不影響查詢
@@ -212,6 +223,7 @@ const handleReset = () => {
   filters.entity_type = ''
   filters.search = ''
   filters.action = ''
+  filters.actor_type = ''
   filters.username = ''
   filters.entity_id = ''
   filters.ip_address = ''
@@ -229,6 +241,7 @@ const hasActiveFilter = computed(() =>
   Boolean(filters.search) ||
   Boolean(filters.entity_type) ||
   Boolean(filters.action) ||
+  Boolean(filters.actor_type) ||
   Boolean(filters.username) ||
   Boolean(filters.entity_id) ||
   Boolean(filters.ip_address) ||
@@ -493,6 +506,15 @@ defineExpose({ formatOperator })
         </el-select>
         <el-select v-model="filters.action" placeholder="操作類型" clearable style="width: 110px;">
           <el-option v-for="at in actionTypes" :key="at.value" :label="at.label" :value="at.value" />
+        </el-select>
+        <el-select v-model="filters.actor_type" placeholder="操作者類型" clearable style="width: 130px;">
+          <el-option
+            v-for="t in actorTypes"
+            :key="t.value"
+            data-testid="actor-type-option"
+            :label="t.label"
+            :value="t.value"
+          />
         </el-select>
         <el-input v-model="filters.username" placeholder="使用者名稱" clearable style="width: 140px;" />
         <el-input
