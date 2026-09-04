@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Camera, Edit } from '@element-plus/icons-vue'
+import { Camera, ArrowRight } from '@element-plus/icons-vue'
 import MoodChip from './MoodChip.vue'
 
 interface EntryRecord {
@@ -15,6 +15,8 @@ interface ItemEntry { student_name?: string; entry?: EntryRecord | null; [key: s
 
 defineProps<{
   item: ItemEntry
+  /** 手機用的單列緊湊版：一班 27 人時，200px 高的卡片會讓整頁長到 10,500px（P1-03） */
+  compact?: boolean
 }>()
 
 defineEmits<{ 'click': [item: ItemEntry] }>()
@@ -29,7 +31,29 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
 </script>
 
 <template>
+  <!-- 緊湊單列（手機）：姓名、狀態、心情、一行摘要，整列可點 -->
+  <button
+    v-if="compact"
+    type="button"
+    class="entry-row"
+    @click="$emit('click', item)"
+  >
+    <MoodChip :mood="item.entry?.mood ?? null" size="sm" />
+    <span class="entry-row__name">{{ item.student_name }}</span>
+    <span class="entry-row__note" :class="{ muted: !item.entry?.teacher_note }">
+      {{ item.entry?.teacher_note || '尚未填寫' }}
+    </span>
+    <span v-if="item.entry?.photos?.length" class="entry-row__photos">
+      <el-icon aria-hidden="true"><Camera /></el-icon>{{ item.entry.photos.length }}
+    </span>
+    <el-tag :type="statusOf(item.entry).type" size="small">
+      {{ statusOf(item.entry).label }}
+    </el-tag>
+    <el-icon class="entry-row__chev" aria-hidden="true"><ArrowRight /></el-icon>
+  </button>
+
   <el-card
+    v-else
     class="student-card"
     shadow="hover"
     @click="$emit('click', item)"
@@ -64,15 +88,51 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
         </div>
       </div>
     </div>
-    <div class="card-action">
-      <el-button :icon="Edit" size="small" type="primary" plain>
-        編輯
-      </el-button>
-    </div>
   </el-card>
 </template>
 
 <style scoped>
+.entry-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-2) var(--space-3);
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--radius-md);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.entry-row__name {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.entry-row__note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+.entry-row__photos {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+.entry-row__chev {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
 .student-card {
   cursor: pointer;
   transition: transform var(--transition-base), box-shadow var(--transition-base);
@@ -154,12 +214,6 @@ function statusOf(entry: EntryRecord | null | undefined): { label: string; type:
 .card-parent__item.is-reply {
   background: var(--color-primary-lighter);
   color: var(--color-primary-darker);
-}
-
-.card-action {
-  margin-top: var(--space-2);
-  display: flex;
-  justify-content: flex-end;
 }
 
 .muted {

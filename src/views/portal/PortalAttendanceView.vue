@@ -123,6 +123,8 @@ const isViewingCurrentMonth = computed(() => {
 
 // isCurrentMonth：供 AttendanceMonthSticky prop 使用（與 isViewingCurrentMonth 同義）
 const isCurrentMonth = computed(() => isViewingCurrentMonth.value)
+// 檢視當月時傳今天的日號，讓卡片清單折疊未來日並標記今天（P1-05）
+const todayDay = computed(() => (isViewingCurrentMonth.value ? new Date().getDate() : null))
 
 const printSheet = async () => {
   await openPdfInNewTab({
@@ -235,6 +237,7 @@ onUnmounted(() => {
         v-if="sheetData"
         :days="sheetData.days || []"
         :month="query.month"
+        :today-day="todayDay"
       />
     </div>
   </div>

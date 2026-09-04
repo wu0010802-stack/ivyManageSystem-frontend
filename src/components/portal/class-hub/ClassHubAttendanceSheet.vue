@@ -18,6 +18,19 @@
           : '今日尚未產生點名名單'"
         :description="totalRecords > 0 ? '' : '可能是今天沒有排課，或名單尚未建立。'"
       />
+      <!-- 多數日子全班都到，逐一點 27 次是白工（P2-15）。與點名頁的
+           「全部出席」對齊，例外再逐一改。 -->
+      <div v-if="pendingRecords.length > 1" class="attn-bulk">
+        <span class="attn-bulk__count">{{ pendingRecords.length }} 位待點名</span>
+        <el-button
+          type="success"
+          plain
+          :loading="bulkSaving"
+          @click="markAllPresent"
+        >
+          全部出席
+        </el-button>
+      </div>
       <div
         v-for="rec in pendingRecords"
         :key="rec.student_id"
@@ -67,6 +80,7 @@ const loading = ref(false)
 const error = ref('')
 const pendingRecords = ref<AttendanceRecord[]>([]) // students with status==null
 const totalRecords = ref(0) // 全班應點名人數（用於分辨「已點完」與「沒有名單」）
+const bulkSaving = ref(false)
 const picks = reactive<Record<string | number, string>>({}) // student_id -> selected status (optimistic UI)
 let cachedClassroomId: number | null = null
 let cachedDate: string | null = null
@@ -145,6 +159,29 @@ async function onPick(studentId: number | string) {
   }
 }
 
+async function markAllPresent() {
+  if (cachedDate == null || cachedClassroomId == null) return
+  const targets = pendingRecords.value.slice()
+  if (targets.length === 0) return
+  bulkSaving.value = true
+  try {
+    await batchSaveClassAttendance({
+      date: cachedDate,
+      classroom_id: cachedClassroomId,
+      entries: targets.map((r) => ({ student_id: Number(r.student_id), status: '出席' })),
+    })
+    pendingRecords.value = []
+    for (const r of targets) delete picks[r.student_id]
+    // 每位學生各扣一次 count，與逐筆送出的行為一致
+    for (let i = 0; i < targets.length; i += 1) emit('done')
+    ElMessage.success(`已將 ${targets.length} 位標記為出席`)
+  } catch (e) {
+    error.value = '批次儲存失敗，請改為逐一點名'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
 function onOpen() {
   load()
 }
@@ -153,6 +190,18 @@ function onOpen() {
 <style scoped>
 .attn-sheet {
   padding: 0 16px 24px;
+}
+.attn-bulk {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.attn-bulk__count {
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm, 13px);
 }
 .attn-row {
   display: flex;

@@ -27,7 +27,9 @@ const { notify } = useErrorNotify()
 import ContactBookEntryCard from './components/contactBook/ContactBookEntryCard.vue'
 import ContactBookEntryDrawer from './components/contactBook/ContactBookEntryDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
+const { isMobile } = useIsMobile()
 const { fromHub, backToHub } = usePortalFromHub()
 
 interface Photo { id: number; url?: string; [key: string]: unknown }
@@ -108,6 +110,12 @@ async function fetchClassDay() {
   }
 }
 
+const hasNextStudent = computed(() => {
+  const list = visibleItems.value as ItemEntry[]
+  const idx = list.findIndex((i) => i.student_id === drawerStudent.value?.student_id)
+  return idx >= 0 && idx < list.length - 1
+})
+
 function openDrawer(item: ItemEntry) {
   drawerStudent.value = { student_id: item.student_id, student_name: item.student_name }
   drawerEntry.value = item.entry ? { ...item.entry } : null
@@ -142,8 +150,8 @@ function handleSaveError(err: unknown) {
   }
 }
 
-async function handleSaveDraft(formPayload: Record<string, unknown>, version: unknown) {
-  if (!drawerStudent.value) return
+async function handleSaveDraft(formPayload: Record<string, unknown>, version: unknown): Promise<boolean> {
+  if (!drawerStudent.value) return false
   drawerSaving.value = true
   try {
     if (drawerEntry.value?.id) {
@@ -173,11 +181,37 @@ async function handleSaveDraft(formPayload: Record<string, unknown>, version: un
       }
       ElMessage.success('草稿已建立')
     }
+    return true
   } catch (err) {
     handleSaveError(err)
+    return false
   } finally {
     drawerSaving.value = false
   }
+}
+
+/**
+ * 儲存後直接開下一位（P1-03）。
+ *
+ * 一班 27 人，原本每位都要「回列表 → 找到卡片 → 點開 → 填 → 儲存」，
+ * 每天光是找人就多花十幾分鐘。這裡沿用畫面上的排序（visibleItems），
+ * 只是把「回列表再點下一張」這一步省掉。
+ */
+function openNextStudent() {
+  const list = visibleItems.value as ItemEntry[]
+  const idx = list.findIndex((i) => i.student_id === drawerStudent.value?.student_id)
+  const next = idx >= 0 ? list[idx + 1] : undefined
+  if (next) {
+    openDrawer(next)
+  } else {
+    closeDrawer()
+    ElMessage.success('已是名單最後一位')
+  }
+}
+
+async function handleSaveAndNext(formPayload: Record<string, unknown>, version: unknown) {
+  const ok = await handleSaveDraft(formPayload, version)
+  if (ok) openNextStudent()
 }
 
 async function handlePublish(formPayload: Record<string, unknown>, version: unknown) {
@@ -477,11 +511,12 @@ watch([selectedClassroomId, selectedDate], () => {
       :description="showOnlyUnpublished ? '無未發布草稿' : '此日期此班級無學生資料'"
     />
 
-    <div v-else class="card-grid" v-loading="listLoading">
+    <div v-else :class="isMobile ? 'entry-list' : 'card-grid'" v-loading="listLoading">
       <ContactBookEntryCard
         v-for="it in visibleItems"
         :key="it.student_id"
         :item="it"
+        :compact="isMobile"
         @click="(it) => openDrawer(it as ItemEntry)"
       />
     </div>
@@ -494,7 +529,9 @@ watch([selectedClassroomId, selectedDate], () => {
       :saving="drawerSaving"
       :publishing="drawerPublishing"
       :photo-uploading="drawerPhotoUploading"
+      :has-next="hasNextStudent"
       @save-draft="handleSaveDraft"
+      @save-and-next="handleSaveAndNext"
       @save-as-template="handleSaveAsTemplate"
       @publish="handlePublish"
       @upload-photo="handlePhotoUpload"
@@ -589,4 +626,11 @@ watch([selectedClassroomId, selectedDate], () => {
   gap: var(--space-3);
 }
 
+
+/* 手機單列清單：原本 27 張 200px 卡片讓整頁長到 10,500px（P1-03） */
+.entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 </style>
