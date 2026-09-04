@@ -144,13 +144,19 @@ describe('CollectionAllocationDialog', () => {
     expect(vm.parts).toHaveLength(0)
   })
 
+  // SPEC-022 §4.2 起，預設候選（auto_high 且唯一）進的是確認卡而非手動編輯器，
+  // 以下斷言手動編輯器 DOM 的既有測試改為先展開手動分配，行為（保留預填）不變。
   it('本期項目標示徽章', async () => {
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     expect(wrapper.find('[data-test="student-items"]').text()).toContain('本期')
   })
 
   it('可一鍵加入可用預繳候選（BE 已回傳 prepayment）', async () => {
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     const btn = wrapper.find('[data-test="add-prepayment"]')
     expect(btn.exists()).toBe(true)
     await btn.trigger('click')
@@ -177,6 +183,8 @@ describe('CollectionAllocationDialog', () => {
     noPrepay.students[0].prepayment = null as never
     apiMocks.getCollectionCandidates.mockResolvedValue(noPrepay)
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     expect(wrapper.find('[data-test="add-prepayment"]').exists()).toBe(false)
   })
 
@@ -189,12 +197,16 @@ describe('CollectionAllocationDialog', () => {
 
   it('已自動套用的候選顯示已套用、不顯示可按的套用按鈕', async () => {
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     expect(wrapper.find('[data-test="candidate-applied"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="use-candidate"]').exists()).toBe(false)
   })
 
   it('費用單以下拉選擇，送出帶正確 fee_record_id', async () => {
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     expect(wrapper.find('[data-test="fee-record-select"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="fee-record-id-input"]').exists()).toBe(false)
     // v-model 必須綁在 fee_record_id 上：綁錯欄位（例如 student_id）時
@@ -232,5 +244,33 @@ describe('CollectionAllocationDialog', () => {
     await nextTick()
     expect(wrapper.find('[data-test="fee-record-select"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="fee-record-id-input"]').exists()).toBe(true)
+  })
+
+  // SPEC-022 §4.2：高信心（auto_high 且候選唯一）預設只給確認卡，
+  // 不再讓會計看四段重複資訊；要改才展開完整編輯器，且保留預填 parts。
+  it('高信心時只渲染確認卡，不渲染分配明細編輯器', async () => {
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="alloc-confirm-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="part-row"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="manual-toggle"]').exists()).toBe(true)
+  })
+
+  it('展開手動分配後出現編輯器且保留預填 parts', async () => {
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
+    expect(wrapper.findAll('[data-test="part-row"]')).toHaveLength(1)
+  })
+
+  it('非高信心直接進編輯器、不顯示確認卡', async () => {
+    apiMocks.getCollectionCandidates.mockResolvedValue(
+      candidates({
+        level: 'needs_review',
+        reasons: ['舊期別帳號繳款（帳單期別早於當期），請人工確認'],
+      }),
+    )
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="alloc-confirm-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="manual-toggle"]').exists()).toBe(false)
   })
 })

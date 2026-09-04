@@ -22,164 +22,177 @@
         {{ formatCurrency(payment.gross_amount) }} 為準。
       </p>
 
-      <!-- 系統候選（帳號已錨定學生與期別）-->
-      <div v-if="candidates" class="candidates" data-test="collection-candidates">
-        <div class="cand-head">
-          <el-tag :type="levelTag" size="small">{{ levelLabel }}</el-tag>
-          <span v-for="(r, i) in candidates.reasons" :key="i" class="reason">{{ r }}</span>
-        </div>
-        <el-card
-          v-for="(cand, idx) in candidates.candidates"
-          :key="idx"
-          shadow="never"
-          class="cand-card"
-        >
-          <div class="cand-row">
-            <div>
-              <div v-for="(p, pi) in cand.parts" :key="pi" class="cand-part">
-                {{ partText(p) }}
-              </div>
-            </div>
-            <span
-              v-if="appliedCandidateIndex === idx"
-              class="cand-applied"
-              data-test="candidate-applied"
-            >✓ 已套用</span>
-            <el-button v-else size="small" data-test="use-candidate" @click="useCandidate(cand, idx)">
-              套用此組合
-            </el-button>
-          </div>
-        </el-card>
-        <p v-if="!candidates.candidates.length" class="no-cand" data-test="no-candidate">
-          系統無法組出完全相符的組合，請於下方手動分配。
-        </p>
-      </div>
+      <!-- 高信心（帳號錨定唯一學生、候選唯一）：只給極簡確認卡，不重複四段資訊 -->
+      <CollectionAllocConfirmCard v-if="showConfirmCard" v-bind="confirmCardProps" />
 
-      <!-- 學生未繳項目速查（期別內優先標示）-->
-      <div v-if="candidates?.students?.length" class="students" data-test="student-items">
-        <div v-for="stu in candidates.students" :key="stu.student_id" class="stu-block">
-          <div class="stu-name">{{ stu.display_name }}（#{{ stu.student_id }}）</div>
-          <div v-for="item in stu.items" :key="item.fee_record_id" class="stu-item">
-            <el-tag v-if="item.in_bill_period" size="small" type="success" effect="plain">
-              本期
-            </el-tag>
-            <span>{{ item.label }}</span>
-            <span class="stu-amt">{{ formatCurrency(item.remaining) }}</span>
-            <el-button size="small" text type="primary" @click="addItemPart(stu.student_id, item)">
-              加入分配
-            </el-button>
+      <template v-if="!showConfirmCard">
+        <!-- 系統候選（帳號已錨定學生與期別）-->
+        <div v-if="candidates" class="candidates" data-test="collection-candidates">
+          <div class="cand-head">
+            <el-tag :type="levelTag" size="small">{{ levelLabel }}</el-tag>
+            <span v-for="(r, i) in candidates.reasons" :key="i" class="reason">{{ r }}</span>
           </div>
-          <div v-if="stu.prepayment" class="stu-item">
-            <el-tag size="small" type="info" effect="plain">預繳</el-tag>
-            <span>
-              可收預繳（目標 {{ stu.prepayment.target_school_year }}-{{
-                stu.prepayment.target_semester
-              }}）
-            </span>
-            <span class="stu-amt">{{ formatCurrency(stu.prepayment.amount) }}</span>
-            <el-button
-              size="small"
-              text
-              type="primary"
-              data-test="add-prepayment"
-              @click="addPrepaymentPart(stu.student_id, stu.prepayment)"
-            >
-              加入分配
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <h4>分配明細</h4>
-      <div v-for="(part, idx) in parts" :key="idx" class="part-row" data-test="part-row">
-        <el-select v-model="part.part_type" style="width: 120px">
-          <el-option label="費用單" value="fee_record" />
-          <el-option label="預繳款" value="prepayment" />
-          <el-option label="非學費" value="non_tuition" />
-        </el-select>
-        <el-input-number
-          v-model="part.amount"
-          :min="1"
-          :controls="false"
-          style="width: 110px"
-          placeholder="金額"
-        />
-        <template v-if="part.part_type === 'fee_record'">
-          <el-select
-            v-if="feeRecordOptions.length && !manualRecordRows.has(idx)"
-            v-model="part.fee_record_id"
-            style="width: 280px"
-            placeholder="選擇費用單"
-            data-test="fee-record-select"
+          <el-card
+            v-for="(cand, idx) in candidates.candidates"
+            :key="idx"
+            shadow="never"
+            class="cand-card"
           >
-            <el-option
-              v-for="opt in feeRecordOptions"
-              :key="opt.value"
-              :label="opt.label"
-              :value="opt.value"
-            />
+            <div class="cand-row">
+              <div>
+                <div v-for="(p, pi) in cand.parts" :key="pi" class="cand-part">
+                  {{ partText(p) }}
+                </div>
+              </div>
+              <span
+                v-if="appliedCandidateIndex === idx"
+                class="cand-applied"
+                data-test="candidate-applied"
+              >✓ 已套用</span>
+              <el-button v-else size="small" data-test="use-candidate" @click="useCandidate(cand, idx)">
+                套用此組合
+              </el-button>
+            </div>
+          </el-card>
+          <p v-if="!candidates.candidates.length" class="no-cand" data-test="no-candidate">
+            系統無法組出完全相符的組合，請於下方手動分配。
+          </p>
+        </div>
+
+        <!-- 學生未繳項目速查（期別內優先標示）-->
+        <div v-if="candidates?.students?.length" class="students" data-test="student-items">
+          <div v-for="stu in candidates.students" :key="stu.student_id" class="stu-block">
+            <div class="stu-name">{{ stu.display_name }}（#{{ stu.student_id }}）</div>
+            <div v-for="item in stu.items" :key="item.fee_record_id" class="stu-item">
+              <el-tag v-if="item.in_bill_period" size="small" type="success" effect="plain">
+                本期
+              </el-tag>
+              <span>{{ item.label }}</span>
+              <span class="stu-amt">{{ formatCurrency(item.remaining) }}</span>
+              <el-button size="small" text type="primary" @click="addItemPart(stu.student_id, item)">
+                加入分配
+              </el-button>
+            </div>
+            <div v-if="stu.prepayment" class="stu-item">
+              <el-tag size="small" type="info" effect="plain">預繳</el-tag>
+              <span>
+                可收預繳（目標 {{ stu.prepayment.target_school_year }}-{{
+                  stu.prepayment.target_semester
+                }}）
+              </span>
+              <span class="stu-amt">{{ formatCurrency(stu.prepayment.amount) }}</span>
+              <el-button
+                size="small"
+                text
+                type="primary"
+                data-test="add-prepayment"
+                @click="addPrepaymentPart(stu.student_id, stu.prepayment)"
+              >
+                加入分配
+              </el-button>
+            </div>
+          </div>
+        </div>
+
+        <h4>分配明細</h4>
+        <div v-for="(part, idx) in parts" :key="idx" class="part-row" data-test="part-row">
+          <el-select v-model="part.part_type" style="width: 120px">
+            <el-option label="費用單" value="fee_record" />
+            <el-option label="預繳款" value="prepayment" />
+            <el-option label="非學費" value="non_tuition" />
           </el-select>
           <el-input-number
-            v-else
-            v-model="part.fee_record_id"
-            :min="1"
-            :controls="false"
-            style="width: 130px"
-            placeholder="費用單 ID"
-            data-test="fee-record-id-input"
-          />
-          <el-button
-            v-if="feeRecordOptions.length"
-            text
-            size="small"
-            data-test="fee-record-manual-toggle"
-            @click="toggleManualRecord(idx)"
-          >
-            {{ manualRecordRows.has(idx) ? '改用選單' : '手動輸入單號' }}
-          </el-button>
-        </template>
-        <template v-else-if="part.part_type === 'prepayment'">
-          <span v-if="part.student_id" class="part-student">{{ studentLabel(part.student_id) }}</span>
-          <el-input-number
-            v-else
-            v-model="part.student_id"
+            v-model="part.amount"
             :min="1"
             :controls="false"
             style="width: 110px"
-            placeholder="學生 ID"
+            placeholder="金額"
           />
-          <el-input-number
-            v-model="part.target_school_year"
-            :min="100"
-            :controls="false"
-            style="width: 100px"
-            placeholder="目標學年"
-          />
-          <el-select v-model="part.target_semester" style="width: 90px" placeholder="學期">
-            <el-option label="上" :value="1" />
-            <el-option label="下" :value="2" />
-          </el-select>
-        </template>
-        <template v-else>
-          <el-input v-model="part.reason" style="width: 220px" placeholder="非學費原因（必填）" />
-        </template>
-        <el-button text type="danger" @click="parts.splice(idx, 1)">移除</el-button>
-      </div>
-      <el-button size="small" data-test="add-part" @click="addPart">＋ 加一筆分配</el-button>
+          <template v-if="part.part_type === 'fee_record'">
+            <el-select
+              v-if="feeRecordOptions.length && !manualRecordRows.has(idx)"
+              v-model="part.fee_record_id"
+              style="width: 280px"
+              placeholder="選擇費用單"
+              data-test="fee-record-select"
+            >
+              <el-option
+                v-for="opt in feeRecordOptions"
+                :key="opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+            <el-input-number
+              v-else
+              v-model="part.fee_record_id"
+              :min="1"
+              :controls="false"
+              style="width: 130px"
+              placeholder="費用單 ID"
+              data-test="fee-record-id-input"
+            />
+            <el-button
+              v-if="feeRecordOptions.length"
+              text
+              size="small"
+              data-test="fee-record-manual-toggle"
+              @click="toggleManualRecord(idx)"
+            >
+              {{ manualRecordRows.has(idx) ? '改用選單' : '手動輸入單號' }}
+            </el-button>
+          </template>
+          <template v-else-if="part.part_type === 'prepayment'">
+            <span v-if="part.student_id" class="part-student">{{ studentLabel(part.student_id) }}</span>
+            <el-input-number
+              v-else
+              v-model="part.student_id"
+              :min="1"
+              :controls="false"
+              style="width: 110px"
+              placeholder="學生 ID"
+            />
+            <el-input-number
+              v-model="part.target_school_year"
+              :min="100"
+              :controls="false"
+              style="width: 100px"
+              placeholder="目標學年"
+            />
+            <el-select v-model="part.target_semester" style="width: 90px" placeholder="學期">
+              <el-option label="上" :value="1" />
+              <el-option label="下" :value="2" />
+            </el-select>
+          </template>
+          <template v-else>
+            <el-input v-model="part.reason" style="width: 220px" placeholder="非學費原因（必填）" />
+          </template>
+          <el-button text type="danger" @click="parts.splice(idx, 1)">移除</el-button>
+        </div>
+        <el-button size="small" data-test="add-part" @click="addPart">＋ 加一筆分配</el-button>
 
-      <div class="total-bar" data-test="alloc-total">
-        分配合計：<strong>{{ formatCurrency(partsTotal) }}</strong>
-        <el-tag v-if="partsTotal === payment.unallocated" type="success" size="small">
-          全額分配
-        </el-tag>
-        <el-tag v-else-if="partsTotal < payment.unallocated" type="warning" size="small">
-          部分分配（餘 {{ formatCurrency(payment.unallocated - partsTotal) }}）
-        </el-tag>
-        <el-tag v-else type="danger" size="small">超額，請調整</el-tag>
-      </div>
+        <div class="total-bar" data-test="alloc-total">
+          分配合計：<strong>{{ formatCurrency(partsTotal) }}</strong>
+          <el-tag v-if="partsTotal === payment.unallocated" type="success" size="small">
+            全額分配
+          </el-tag>
+          <el-tag v-else-if="partsTotal < payment.unallocated" type="warning" size="small">
+            部分分配（餘 {{ formatCurrency(payment.unallocated - partsTotal) }}）
+          </el-tag>
+          <el-tag v-else type="danger" size="small">超額，請調整</el-tag>
+        </div>
+      </template>
     </template>
 
     <template #footer>
+      <el-button
+        v-if="isHighConfidence"
+        text
+        data-test="manual-toggle"
+        @click="manualMode = !manualMode"
+      >
+        {{ manualMode ? '回到快速確認' : '改成手動分配' }}
+      </el-button>
       <el-button @click="emit('update:visible', false)">取消</el-button>
       <el-button
         type="primary"
@@ -201,6 +214,7 @@ import { friendlyError } from '@/utils/errorMessages'
 import { formatCurrency } from '@/utils/currency'
 import { allocateCollectionPayment, getCollectionCandidates } from '@/api/fees'
 import type { CollectionPaymentRow } from './collectionTypes'
+import CollectionAllocConfirmCard from './CollectionAllocConfirmCard.vue'
 
 interface CandidatePart {
   part_type: string
@@ -259,6 +273,28 @@ const emit = defineEmits<{ 'update:visible': [value: boolean]; allocated: [] }>(
 const candidates = ref<Candidates | null>(null)
 const parts = ref<EditablePart[]>([])
 const submitting = ref(false)
+const manualMode = ref(false)
+
+/** 高信心＝帳號錨定唯一學生且候選唯一，此時預設走極簡確認卡（SPEC-022 §4.2） */
+const isHighConfidence = computed(
+  () => candidates.value?.level === 'auto_high' && candidates.value.candidates.length === 1,
+)
+const showConfirmCard = computed(() => isHighConfidence.value && !manualMode.value)
+
+const confirmCardProps = computed(() => {
+  const cand = candidates.value?.candidates?.[0]
+  const first = cand?.parts?.[0]
+  return {
+    studentName: studentLabel(first?.student_id),
+    itemLabel: first?.label ?? '',
+    amount: cand?.total ?? 0,
+    reasons: candidates.value?.reasons ?? [],
+    paidDate: props.payment?.customer_paid_date ?? '',
+    channel: props.payment?.channel ?? '',
+    feeAmount: props.payment?.fee_amount ?? 0,
+    netAmount: props.payment?.net_amount ?? 0,
+  }
+})
 
 const partsTotal = computed(() =>
   parts.value.reduce((sum, p) => sum + (Number.isFinite(p.amount) ? p.amount : 0), 0),
@@ -366,6 +402,7 @@ watch(
     parts.value = []
     candidates.value = null
     appliedCandidateIndex.value = null
+    manualMode.value = false
     try {
       candidates.value = (await getCollectionCandidates(paymentId)) as unknown as Candidates
       // auto_high 唯一組合直接預填，會計只需按確認
