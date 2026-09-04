@@ -112,6 +112,15 @@
             存摺勾稽
           </el-button>
           <el-button
+            v-if="canWrite && source !== 'passbook'"
+            type="primary"
+            aria-label="批次媒合可一鍵入帳的代收繳費"
+            data-test="matching-batch"
+            @click="matchingRef?.openBatch?.()"
+          >
+            批次媒合
+          </el-button>
+          <el-button
             v-if="canWrite"
             type="primary"
             :aria-label="`匯入${source === 'passbook' ? '存摺' : '代收'}明細 CSV`"
@@ -307,6 +316,7 @@ const statementRef = ref<{ refresh?: () => void } | null>(null)
 const matchingRef = ref<{
   openImport?: () => void
   openCoverage?: () => void
+  openBatch?: () => void
   refresh?: () => void
 } | null>(null)
 

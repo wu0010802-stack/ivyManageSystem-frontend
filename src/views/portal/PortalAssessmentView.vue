@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getMyClassAssessments, createPortalAssessment } from '@/api/studentAssessments'
 import { getMyStudents } from '@/api/portal'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG as _RATING_TAG } from '@/constants/studentRecords'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import PortalFilterBar from '@/components/portal/PortalFilterBar.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+
+const { isMobile } = useIsMobile()
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const RATING_TAG = _RATING_TAG as Record<string, ElTagType>
@@ -16,6 +21,15 @@ interface ClassroomItem { classroom_id: number; classroom_name: string; students
 const classrooms = ref<ClassroomItem[]>([])      // [{ classroom_id, classroom_name, students: [...] }]
 const activeClassroom = ref('')
 const classLoading = ref(false)
+
+const assessmentCardColumns = [
+  { label: '學期', prop: 'semester' },
+  { label: '評量類型', prop: 'assessment_type' },   // tag → #cell-assessment_type
+  { label: '領域', prop: 'domain' },
+  { label: '評等', prop: 'rating' },                 // tag → #cell-rating
+  { label: '評量內容', prop: 'content' },
+  { label: '評量日期', prop: 'assessment_date' },
+]
 
 // ── 評量列表 ──────────────────────────────────────────
 const assessments = ref<Record<string, unknown>[]>([])
@@ -137,6 +151,15 @@ onMounted(async () => {
   await fetchMyStudents()
   fetchAssessments()
 })
+
+const activeFilterCount = computed(
+  () => (filterSemester.value ? 1 : 0) + (filterType.value ? 1 : 0),
+)
+function resetFilters() {
+  filterSemester.value = null
+  filterType.value = null
+  fetchAssessments()
+}
 </script>
 
 <template>
@@ -162,23 +185,30 @@ onMounted(async () => {
     </el-tabs>
 
     <!-- 篩選列 -->
-    <el-row :gutter="12" style="margin-bottom: 16px">
-      <el-col :xs="12" :sm="5">
-        <el-input v-model="filterSemester" placeholder="學期（如 2025上）" clearable size="small" style="width: 100%" />
-      </el-col>
-      <el-col :xs="12" :sm="5">
-        <el-select v-model="filterType" placeholder="評量類型" clearable size="small" style="width: 100%">
+    <!-- 篩選列：手機收進 sheet（P2-06） -->
+    <PortalFilterBar
+      :active-count="activeFilterCount"
+      title="評量篩選"
+      @apply="fetchAssessments"
+      @reset="resetFilters"
+    >
+      <template #controls>
+        <el-input v-model="filterSemester" placeholder="學期（如 2025上）" clearable style="width: 180px" />
+        <el-select v-model="filterType" placeholder="評量類型" clearable style="width: 180px">
           <el-option v-for="t in ASSESSMENT_TYPES" :key="t" :label="t" :value="t" />
         </el-select>
-      </el-col>
-      <el-col :xs="12" :sm="4">
-        <el-button size="small" @click="fetchAssessments">查詢</el-button>
-        <el-button size="small" @click="filterSemester = null; filterType = null; fetchAssessments()">重置</el-button>
-      </el-col>
-    </el-row>
+      </template>
+    </PortalFilterBar>
 
-    <!-- 評量表格 -->
-    <el-table :data="assessments" v-loading="loading" stripe size="small">
+    <!-- 評量表格（桌機）。手機用卡片：7 欄擠在 390px 會把評量內容壓到看不見（P2-06） -->
+    <el-table
+      v-if="!isMobile"
+      :data="assessments"
+      v-loading="loading"
+      stripe
+      size="small"
+      empty-text="尚無評量紀錄"
+    >
       <el-table-column label="學生姓名" width="90" prop="student_name" />
       <el-table-column label="學期" width="80" prop="semester" />
       <el-table-column label="評量類型" width="80">
@@ -208,7 +238,28 @@ onMounted(async () => {
       <el-table-column label="評量日期" width="100" prop="assessment_date" />
     </el-table>
 
-    <div class="pt-list-footer">
+    <AdminListCards
+      v-else
+      :items="assessments"
+      :columns="assessmentCardColumns"
+      row-key="id"
+      :loading="loading"
+      empty-text="尚無評量紀錄"
+    >
+      <template #title="{ item }">{{ item.student_name }}</template>
+      <template #cell-assessment_type="{ item }">
+        <el-tag type="info" size="small">{{ item.assessment_type }}</el-tag>
+      </template>
+      <template #cell-rating="{ item }">
+        <el-tag v-if="item.rating" :type="RATING_TAG[item.rating as string]" size="small">
+          {{ item.rating }}
+        </el-tag>
+        <span v-else>-</span>
+      </template>
+    </AdminListCards>
+
+    <!-- 0 筆時不畫分頁：空清單配「共 0 筆・20項/頁・‹1›」只是噪音（P2-06） -->
+    <div v-if="total > 0" class="pt-list-footer">
       <span class="pt-list-total">共 {{ total }} 筆紀錄</span>
       <el-pagination
         v-model:current-page="currentPage"

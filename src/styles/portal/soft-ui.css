@@ -162,3 +162,37 @@ html.ivy-portal:not(.dark) {
   --el-color-primary-light-9: #edecfc;
   --el-color-primary-dark-2: #4338ca;
 }
+
+/* ==========================================================================
+ * 手機底部 sheet 內的日期／時間選擇器（P2-08）
+ *
+ * 三張申請表單在手機是 TeacherBottomSheet，輸入框貼近螢幕底部時，EP popper
+ * 算出來的位置會超出視窗，日曆被截掉一半，等於「選日期」只能用猜的。
+ * 這裡不動表單邏輯，只在窄幕把 popover 改成貼齊畫面底部的固定面板。
+ * ========================================================================== */
+@media (max-width: 767.98px) {
+  .portal-sheet-picker.el-popper {
+    position: fixed !important;
+    left: 8px !important;
+    right: 8px !important;
+    top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: none !important;
+    box-shadow: 0 -4px 24px rgb(15 23 42 / 18%);
+  }
+  .portal-sheet-picker.el-popper > .el-popper__arrow {
+    display: none;
+  }
+  .portal-sheet-picker .el-picker-panel,
+  .portal-sheet-picker .el-picker-panel__body,
+  .portal-sheet-picker .el-date-picker__time-header {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  /* 觸控目標：日期格與時間列 */
+  .portal-sheet-picker .el-date-table td {
+    height: 40px;
+  }
+}

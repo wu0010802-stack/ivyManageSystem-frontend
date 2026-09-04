@@ -146,6 +146,16 @@ export const reconcileCollectionCoverage = (
 ): Promise<ApiResponse<'/fees/collection-coverage', 'post'>> =>
   api.post('/fees/collection-coverage', payload).then((res) => res.data)
 
+// ===== SPEC-022 批次媒合 =====
+export const batchCollectionCandidates = (
+  payload: ApiBody<'/fees/collection-payments/batch-candidates', 'post'>,
+): Promise<ApiResponse<'/fees/collection-payments/batch-candidates', 'post'>> =>
+  api.post('/fees/collection-payments/batch-candidates', payload).then((res) => res.data)
+export const batchAllocateCollectionPayments = (
+  payload: ApiBody<'/fees/collection-payments/batch-allocate', 'post'>,
+): Promise<ApiResponse<'/fees/collection-payments/batch-allocate', 'post'>> =>
+  api.post('/fees/collection-payments/batch-allocate', payload).then((res) => res.data)
+
 // ===== 發單快照與未繳差集（SPEC-016 Phase 3）=====
 export const previewBillSlipBatch = (
   file: File,

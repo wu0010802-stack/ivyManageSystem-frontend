@@ -46,7 +46,7 @@
         class="task-row__jump"
         @click="$emit('jump-page')"
       >
-        跳頁面<el-icon class="task-row__chev" aria-hidden="true"><ArrowRight /></el-icon>
+        前往<el-icon class="task-row__chev" aria-hidden="true"><ArrowRight /></el-icon>
       </el-button>
       <el-button
         v-else-if="actionMode === 'inline_button'"

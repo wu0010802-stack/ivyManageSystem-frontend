@@ -142,7 +142,7 @@ describe('PortalClassHubView smoke', () => {
   it('手動刷新按鈕觸發 refresh', async () => {
     hubData.value = { classroom_id: 3, classroom_name: '向日葵班', slots: [] }
     const wrapper = await mountView()
-    const btn = wrapper.findAll('button').find((b) => b.text().includes('手動刷新'))
+    const btn = wrapper.findAll('button').find((b) => b.text().includes('重新整理'))
     expect(btn).toBeTruthy()
     await btn!.trigger('click')
     expect(mockRefresh).toHaveBeenCalled()

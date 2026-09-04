@@ -23,7 +23,12 @@ const STUBS = {
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
   'el-card': { template: '<div><slot /></div>' },
-  'el-select': { template: '<select v-bind="$attrs"><slot /></select>' },
+  // 宣告 modelValue 為 prop（而非落進 $attrs），測試才能斷言 v-model 綁到哪個欄位
+  'el-select': {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: '<select v-bind="$attrs"><slot /></select>',
+  },
   'el-option': { template: '<option />' },
   'el-input': { template: '<input v-bind="$attrs" />' },
   'el-input-number': { template: '<input type="number" v-bind="$attrs" />' },
@@ -139,13 +144,19 @@ describe('CollectionAllocationDialog', () => {
     expect(vm.parts).toHaveLength(0)
   })
 
+  // SPEC-022 §4.2 起，預設候選（auto_high 且唯一）進的是確認卡而非手動編輯器，
+  // 以下斷言手動編輯器 DOM 的既有測試改為先展開手動分配，行為（保留預填）不變。
   it('本期項目標示徽章', async () => {
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     expect(wrapper.find('[data-test="student-items"]').text()).toContain('本期')
   })
 
   it('可一鍵加入可用預繳候選（BE 已回傳 prepayment）', async () => {
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     const btn = wrapper.find('[data-test="add-prepayment"]')
     expect(btn.exists()).toBe(true)
     await btn.trigger('click')
@@ -172,6 +183,118 @@ describe('CollectionAllocationDialog', () => {
     noPrepay.students[0].prepayment = null as never
     apiMocks.getCollectionCandidates.mockResolvedValue(noPrepay)
     const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
     expect(wrapper.find('[data-test="add-prepayment"]').exists()).toBe(false)
+  })
+
+  it('候選列顯示學生姓名而非 學生#id', async () => {
+    const wrapper = await mountDialog()
+    const text = wrapper.text()
+    expect(text).toContain('王小明')
+    expect(text).not.toContain('學生#5')
+  })
+
+  it('已自動套用的候選顯示已套用、不顯示可按的套用按鈕', async () => {
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="candidate-applied"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="use-candidate"]').exists()).toBe(false)
+  })
+
+  it('費用單以下拉選擇，送出帶正確 fee_record_id', async () => {
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="fee-record-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="fee-record-id-input"]').exists()).toBe(false)
+    // v-model 必須綁在 fee_record_id 上：綁錯欄位（例如 student_id）時
+    // payload 仍會是預填值而看不出來，只有查 modelValue 才抓得到
+    expect(
+      wrapper.findComponent('[data-test="fee-record-select"]').props('modelValue'),
+    ).toBe(77)
+    await wrapper.find('[data-test="alloc-confirm"]').trigger('click')
+    await nextTick()
+    expect(apiMocks.allocateCollectionPayment).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({
+            part_type: 'fee_record',
+            fee_record_id: 77,
+            amount: 10800,
+          }),
+        ],
+      }),
+    )
+  })
+
+  it('unmatched（students 為空）時落回手動輸入單號', async () => {
+    apiMocks.getCollectionCandidates.mockResolvedValue(
+      candidates({
+        level: 'unmatched',
+        candidates: [],
+        students: [],
+        reasons: ['銷帳編號末四碼在繳費日期無有效學生配置'],
+      }),
+    )
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-test="add-part"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="fee-record-select"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="fee-record-id-input"]').exists()).toBe(true)
+  })
+
+  // SPEC-022 §4.2：高信心（auto_high 且候選唯一）預設只給確認卡，
+  // 不再讓會計看四段重複資訊；要改才展開完整編輯器，且保留預填 parts。
+  it('高信心時只渲染確認卡，不渲染分配明細編輯器', async () => {
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="alloc-confirm-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="part-row"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="manual-toggle"]').exists()).toBe(true)
+  })
+
+  it('高信心確認卡直接按確認即送出正確分配（不展開手動）', async () => {
+    // 這是本功能的主線流程：會計開對話框→看確認卡→按確認，全程不展開編輯器。
+    // 確認鈕必須留在 footer（v-if 之外），否則卡片態就沒有東西可按。
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="alloc-confirm-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="part-row"]').exists()).toBe(false)
+    await wrapper.find('[data-test="alloc-confirm"]').trigger('click')
+    await nextTick()
+    expect(apiMocks.allocateCollectionPayment).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({
+            part_type: 'fee_record',
+            fee_record_id: 77,
+            amount: 10800,
+          }),
+        ],
+        // 帳單面額全額吻合＝不可送出部分分配
+        allow_partial: false,
+      }),
+    )
+  })
+
+  it('展開手動分配後出現編輯器且保留預填 parts', async () => {
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-test="manual-toggle"]').trigger('click')
+    await nextTick()
+    expect(wrapper.findAll('[data-test="part-row"]')).toHaveLength(1)
+  })
+
+  it('非高信心直接進編輯器、不顯示確認卡', async () => {
+    apiMocks.getCollectionCandidates.mockResolvedValue(
+      candidates({
+        level: 'needs_review',
+        reasons: ['舊期別帳號繳款（帳單期別早於當期），請人工確認'],
+      }),
+    )
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="alloc-confirm-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="manual-toggle"]').exists()).toBe(false)
   })
 })

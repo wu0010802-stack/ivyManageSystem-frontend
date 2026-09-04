@@ -52,10 +52,10 @@
       <div class="inc-actions">
         <el-button @click="onCancel">取消</el-button>
         <el-button type="primary" @click="onSaveBrief" :disabled="!isValid">
-          儲存簡略
+          儲存
         </el-button>
         <el-button type="primary" plain @click="onSaveAndDetail" :disabled="!isValid">
-          儲存並進詳細
+          儲存並補細節
         </el-button>
       </div>
       <p v-if="error" class="inc-error">{{ error }}</p>

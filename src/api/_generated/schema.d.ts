@@ -7440,6 +7440,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/collection-payments/batch-allocate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Allocate Collection Payments Route
+         * @description 批次確認代收分配（SPEC-022 §3.2）——逐筆部分成功。
+         *
+         *     只處理 auto_high 且指紋與預覽相符的筆。超過簽核門檻者一律該筆失敗、
+         *     不做簽核互動（訊息刻意不揭露門檻與累計金額），請走單筆流程。
+         */
+        post: operations["batch_allocate_collection_payments_route_api_fees_collection_payments_batch_allocate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/fees/collection-payments/batch-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Collection Candidates
+         * @description 批次媒合預覽（SPEC-022 §3.1）——唯讀，逐筆算候選並回統計。
+         *
+         *     吃與 GET /collection-payments 相同的 filter（不是 id 陣列），讓前端
+         *     一次呼叫就拿到整批匯入的候選，不必先分頁撈清單再組陣列。
+         */
+        post: operations["batch_collection_candidates_api_fees_collection_payments_batch_candidates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/monthly-statement": {
         parameters: {
             query?: never;
@@ -25394,6 +25440,106 @@ export interface components {
             receipt_id: number;
             /** Unallocated */
             unallocated: number;
+        };
+        /** CollectionBatchAllocateItemIn */
+        CollectionBatchAllocateItemIn: {
+            /** Expected Digest */
+            expected_digest: string;
+            /** Payment Id */
+            payment_id: number;
+        };
+        /** CollectionBatchAllocateOut */
+        CollectionBatchAllocateOut: {
+            /** Failed */
+            failed: number;
+            /** Results */
+            results: components["schemas"]["CollectionBatchAllocateResultOut"][];
+            /** Succeeded */
+            succeeded: number;
+        };
+        /** CollectionBatchAllocateRequest */
+        CollectionBatchAllocateRequest: {
+            /** Items */
+            items: components["schemas"]["CollectionBatchAllocateItemIn"][];
+        };
+        /** CollectionBatchAllocateResultOut */
+        CollectionBatchAllocateResultOut: {
+            /** Allocated Total */
+            allocated_total?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Payment Id */
+            payment_id: number;
+            /** Receipt Id */
+            receipt_id?: number | null;
+        };
+        /** CollectionBatchCandidateFilter */
+        CollectionBatchCandidateFilter: {
+            /** Date From */
+            date_from?: string | null;
+            /** Date To */
+            date_to?: string | null;
+            /** Import Id */
+            import_id?: number | null;
+            /**
+             * Limit
+             * @default 200
+             */
+            limit: number;
+            /** Suffix */
+            suffix?: string | null;
+        };
+        /** CollectionBatchCandidateItemOut */
+        CollectionBatchCandidateItemOut: {
+            /** Bill Period */
+            bill_period?: string | null;
+            /** Blocked Reason */
+            blocked_reason?: string | null;
+            /** Candidate Digest */
+            candidate_digest?: string | null;
+            /** Channel */
+            channel: string;
+            /** Collection Suffix */
+            collection_suffix?: string | null;
+            /**
+             * Customer Paid Date
+             * Format: date
+             */
+            customer_paid_date: string;
+            /** Fee Amount */
+            fee_amount: number;
+            /** Gross Amount */
+            gross_amount: number;
+            /** Level */
+            level: string;
+            /**
+             * Parts
+             * @default []
+             */
+            parts: components["schemas"]["CandidatePartOut"][];
+            /** Payment Id */
+            payment_id: number;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /** CollectionBatchCandidatesOut */
+        CollectionBatchCandidatesOut: {
+            /** Auto High Count */
+            auto_high_count: number;
+            /** Auto High Total */
+            auto_high_total: number;
+            /** Items */
+            items: components["schemas"]["CollectionBatchCandidateItemOut"][];
+            /** Needs Review Count */
+            needs_review_count: number;
+            /** Truncated */
+            truncated: boolean;
+            /** Unmatched Count */
+            unmatched_count: number;
         };
         /** CollectionCandidateItemOut */
         CollectionCandidateItemOut: {
@@ -59156,6 +59302,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReverseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_allocate_collection_payments_route_api_fees_collection_payments_batch_allocate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionBatchAllocateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionBatchAllocateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_collection_candidates_api_fees_collection_payments_batch_candidates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CollectionBatchCandidateFilter"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionBatchCandidatesOut"];
                 };
             };
             /** @description Validation Error */

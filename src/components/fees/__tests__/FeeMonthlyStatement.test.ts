@@ -217,9 +217,11 @@ describe('預設載入與聚合列', () => {
     const w = mountStatement()
     await flushPromises()
     const row = w.find('[data-test="stmt-row"][data-student="陳部分"]')
-    expect(row.text()).toContain('NT$9,680')
-    expect(row.text()).toContain('NT$180')
+    expect(row.text()).toContain('9,680')
+    expect(row.text()).toContain('180')
     expect(row.text()).toContain('部分繳費')
+    // 表格儲存格不重複幣別前綴（幣別由分組表頭與合計列標示）
+    expect(row.text()).not.toContain('NT$')
   })
 
   it('費用欄依當月 fee_type 動態顯示（無註冊費/雜項欄）', async () => {

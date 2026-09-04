@@ -16,7 +16,18 @@ const props = defineProps<{
   rowKey: string
   loading?: boolean
   emptyText?: string
+  /**
+   * 整張卡片可點（對應桌機 el-table 的 @row-click）。
+   * 預設 false，既有 24 個使用端行為不變。
+   */
+  clickable?: boolean
 }>()
+
+const emit = defineEmits<{ 'row-click': [item: Record<string, unknown>] }>()
+
+function onCardActivate(item: Record<string, unknown>) {
+  if (props.clickable) emit('row-click', item)
+}
 
 function cellValue(col: AdminListColumn, item: Record<string, unknown>): unknown {
   return col.formatter ? col.formatter(item) : item[col.prop]
@@ -43,7 +54,12 @@ function titleFallback(item: Record<string, unknown>): unknown {
         v-for="item in items"
         :key="String(item[rowKey])"
         class="alc-card"
+        :class="{ 'alc-card--clickable': clickable }"
         shadow="never"
+        :role="clickable ? 'button' : undefined"
+        :tabindex="clickable ? 0 : undefined"
+        @click="onCardActivate(item)"
+        @keyup.enter="onCardActivate(item)"
       >
         <header class="alc-card__title">
           <slot name="title" :item="item">{{ titleFallback(item) }}</slot>
@@ -70,6 +86,13 @@ function titleFallback(item: Record<string, unknown>): unknown {
 </template>
 
 <style scoped>
+.alc-card--clickable {
+  cursor: pointer;
+}
+.alc-card--clickable:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
 .admin-list-cards {
   display: grid;
   gap: var(--space-3);
