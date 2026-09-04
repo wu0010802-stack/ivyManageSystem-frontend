@@ -1421,13 +1421,21 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   cursor: not-allowed;
 }
 
-/* ── 班級分組表頭 ────────────────────────────────────────────────────────── */
-.stmt-group td {
+/* ── 班級分組表頭 ──────────────────────────────────────────────────────────
+   選擇器要壓過 `.stmt-table tbody td` 的 padding（0,1,2），否則 td 上下各留
+   8px 透明區——黏住時捲過的學生列會從那條縫透出來。背景掛在 td 本身，
+   sticky 遮蔽才完整。 */
+.stmt-table tbody tr.stmt-group > td {
   position: sticky;
   top: var(--stmt-head-h);
   z-index: 2;
   padding: 0;
+  background: var(--el-fill-color-lighter);
   border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.stmt-table tbody tr.stmt-group--done > td {
+  background: var(--el-bg-color);
 }
 
 .group-bar {
@@ -1436,11 +1444,6 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   gap: var(--space-2);
   min-height: 38px;
   padding: 0 12px;
-  background: var(--el-fill-color-lighter);
-}
-
-.stmt-group--done .group-bar {
-  background: var(--el-bg-color);
 }
 
 /* 與表格勾選欄同寬同位置，視覺上就是這一班的全選 */
@@ -1634,8 +1637,8 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   font-variant-numeric: tabular-nums;
 }
 
-/* 展開明細 */
-.stmt-detail > td {
+/* 展開明細（同樣要壓過 `.stmt-table tbody td`，否則左側 44px 縮排不生效） */
+.stmt-table tbody tr.stmt-detail > td {
   background: var(--el-fill-color-lighter);
   padding: 10px 16px 12px 44px;
 }
