@@ -2,7 +2,7 @@
  * SPEC-022 §4.1：匯入成功後在清單頂端顯示可批次筆數提示條，點「批次媒合」
  * 開啟批次抽屜。
  */
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick } from 'vue'
 import CollectionReconTab from '../CollectionReconTab.vue'
@@ -26,7 +26,8 @@ const apiMocks = vi.hoisted(() => ({
   batchAllocateCollectionPayments: vi.fn(),
 }))
 vi.mock('@/api/fees', () => apiMocks)
-vi.mock('@/utils/auth', () => ({ hasPermission: () => true }))
+const authMocks = vi.hoisted(() => ({ canWrite: true }))
+vi.mock('@/utils/auth', () => ({ hasPermission: () => authMocks.canWrite }))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { prompt: vi.fn(), confirm: vi.fn() },
@@ -85,6 +86,19 @@ async function triggerImport(wrapper: ReturnType<typeof mount>) {
 }
 
 describe('CollectionReconTab 批次提示條', () => {
+  beforeEach(() => {
+    authMocks.canWrite = true
+  })
+
+  it('無寫入權限時不顯示提示條（按下去只會 403）', async () => {
+    authMocks.canWrite = false
+    const wrapper = mount(CollectionReconTab, { global: { stubs: STUBS } })
+    await nextTick()
+    await triggerImport(wrapper)
+    expect(wrapper.find('[data-test="batch-hint"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="open-batch"]').exists()).toBe(false)
+  })
+
   it('匯入成功後顯示可一鍵入帳筆數', async () => {
     const wrapper = mount(CollectionReconTab, { global: { stubs: STUBS } })
     await nextTick()

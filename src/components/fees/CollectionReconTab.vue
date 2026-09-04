@@ -83,7 +83,10 @@
       </div>
     </section>
 
-    <div v-if="batchHint" class="batch-hint" data-test="batch-hint">
+    <!-- 目前 refreshBatchHint() 只在匯入成功／批次完成後呼叫（皆需寫入權限），
+         但把 canWrite 寫明而非依賴這個間接保證：探測時機一旦改成掛 onMounted，
+         唯讀使用者就會看到一顆按下去 403 的按鈕。 -->
+    <div v-if="canWrite && batchHint" class="batch-hint" data-test="batch-hint">
       <span>
         本批有 <strong>{{ batchHint.count }}</strong> 筆可一鍵入帳（{{
           formatCurrency(batchHint.total)
