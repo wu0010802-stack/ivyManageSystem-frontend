@@ -60,27 +60,26 @@
  *
  * ⚠ 查詢設計偏離原計畫草稿，理由詳見同目錄測試檔頂端註解，這裡只記結論：
  *
- * 1. **不傳 `entity_type`**：計畫假設的 `'parent_auth'` 不存在。真實值是
- *    `'auth'`（`write_login_audit` 固定寫死，LOGIN／LOGIN_FAILED／
- *    REFRESH_FAILED／BIND_FAILED 皆走此函式，且**員工端登入也共用同一個
- *    entity_type**）與 `'parent_device_setup'`（device-setup 管道另外指定）。
- *    改用 `action` 精確查詢即可同時涵蓋兩個管道，不必為此多打兩次查詢。
- * 2. **`LOGIN`／`BIND_FAILED`／`REFRESH_FAILED` 三個 action 字串全 repo
- *    唯一**（僅 `api/parent_portal/auth.py` 使用），直接信任後端 `total`。
- * 3. **`LOGIN_FAILED` 與員工端撞名**：`api/auth.py` 的 4 處員工登入失敗
- *    稽核也是 `action='LOGIN_FAILED'`、`entity_type='auth'`，且同樣因為
- *    登入失敗當下沒有 token，`derive_actor_type` 一樣推導成
- *    `actor_type='anonymous'`——`actor_type` 對這個 action 完全沒有鑑別力。
- *    改用 `username` 二次過濾：家長端（liff 與 device-setup 兩管道皆然）
- *    刻意不寫 username（防稽核本身洩漏 LINE 帳號存在性），員工端必帶帳號
- *    名，故 `!item.username` 可同時涵蓋兩個家長端管道並排除員工端。
- * 4. **`BIND_FAILED` 的 `actor_type` 隨端點而異**：`/bind`（首綁，短效
- *    bind token）失敗回 `anonymous`；`/bind-additional`（已登入家長）失敗
- *    回 `parent`。故此查詢刻意不加 `actor_type` 篩選（會漏掉一半），直接
- *    信任 action 本身的唯一性。
+ * 後端已補 `entity_type='parent_auth'`（BE commit `6a576dec`）：家長端
+ * `write_login_audit` 五個呼叫點（liff 登入成功／失敗、refresh 失敗、bind
+ * 首綁失敗、bind-additional 二胎綁定失敗）皆顯式傳
+ * `entity_type="parent_auth"`，與員工端共用的 `entity_type="auth"` 分開。
+ * 故不必再靠 `username` 是否為空這種間接訊號去猜「這筆是不是家長事件」——
+ * 直接用 `entity_type='parent_auth' + action` 精確查詢，信任後端回傳的
+ * `total`（不受 `page_size` 上限影響，比對 `items` 過濾更準確）。
  *
- * `LOGIN` 與 `REFRESH_FAILED` 兩者 `actor_type` 固定（分別恆為 parent／
- * anonymous），額外帶上作雙重保險，不影響結果、增加一層防禦縱深。
+ * `device_setup` 管道（無 LINE 家長以 staff 簽發碼登入）維持獨立的
+ * `entity_type='parent_device_setup'`（後端刻意不併入 `parent_auth`，因為
+ * 它不屬於「量大的登入雜訊」，不需要進 `include_auth=false` 排除集合）。
+ * 但它確實是一條真實的家長登入管道，漏算會讓「家長登入成功/失敗幾次」
+ * 偏低——本面板**納入**它：`LOGIN`／`LOGIN_FAILED` 兩個計數皆為
+ * `parent_auth` 與 `parent_device_setup` 兩個 entity_type 各自查詢後加總；
+ * `BIND_FAILED`／`REFRESH_FAILED` 只存在於 `parent_auth`（device-setup 沒有
+ * 綁定與 refresh 流程），各查一次即可。
+ *
+ * 一共 6 次查詢（4 個 action × parent_auth，2 個 action × device_setup），
+ * 每次都是 `entity_type + action` 雙重鎖定，全部只取 `total`（`page_size`
+ * 給後端允許的最小值即可，反正不讀 `items`）。
  */
 import { computed, onMounted, ref } from 'vue'
 
@@ -88,23 +87,9 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import { getAuditLogs } from '@/api/audit'
 import { getErrorMessage } from '@/utils/errorHandler'
 
-interface AuditLogItem {
-  action: string
-  actor_type: string | null
-  username: string | null
-  entity_type: string
-  summary: string
-  created_at: string
-}
-
 interface AuditLogListResponse {
-  items: AuditLogItem[]
   total: number
 }
-
-// 單次查詢的頁面大小上限（後端 `page_size` le=200）。這是 24 小時健康面板，
-// 不是逐筆列表，量若逼近上限本身就是值得留意的異常流量訊號。
-const PAGE_SIZE = 200
 
 type ActionKey = 'LOGIN' | 'LOGIN_FAILED' | 'BIND_FAILED' | 'REFRESH_FAILED'
 
@@ -136,27 +121,21 @@ function last24Hours(): { start_at: string; end_at: string } {
   return { start_at: formatLocal(start), end_at: formatLocal(end) }
 }
 
-async function fetchCount(
+/** `entity_type + action` 精確查詢一次，回傳 `total`。不讀 `items`，`page_size`
+ * 給允許的最小值（後端 `ge=1`）以減少不必要的 payload。 */
+async function fetchTotal(
+  entityType: 'parent_auth' | 'parent_device_setup',
   action: ActionKey,
   window: { start_at: string; end_at: string },
-  actorType?: 'parent' | 'anonymous',
 ): Promise<number> {
-  const params: Record<string, unknown> = {
+  const res = await getAuditLogs({
+    entity_type: entityType,
     action,
     start_at: window.start_at,
     end_at: window.end_at,
-    page_size: PAGE_SIZE,
-  }
-  if (actorType) params.actor_type = actorType
-
-  const res = await getAuditLogs(params)
-  const data = res.data as AuditLogListResponse
-
-  if (action === 'LOGIN_FAILED') {
-    // 排除帶 username 的員工端登入失敗（見檔頭註解第 3 點）。
-    return (data.items ?? []).filter((item) => !item.username).length
-  }
-  return data.total ?? 0
+    page_size: 1,
+  })
+  return (res.data as AuditLogListResponse).total ?? 0
 }
 
 async function fetchData(): Promise<void> {
@@ -164,15 +143,18 @@ async function fetchData(): Promise<void> {
   errorMessage.value = null
   const window = last24Hours()
   try {
-    const [login, loginFailed, bindFailed, refreshFailed] = await Promise.all([
-      fetchCount('LOGIN', window, 'parent'),
-      fetchCount('LOGIN_FAILED', window),
-      fetchCount('BIND_FAILED', window),
-      fetchCount('REFRESH_FAILED', window, 'anonymous'),
-    ])
+    const [parentLogin, parentLoginFailed, bindFailed, refreshFailed, deviceLogin, deviceLoginFailed] =
+      await Promise.all([
+        fetchTotal('parent_auth', 'LOGIN', window),
+        fetchTotal('parent_auth', 'LOGIN_FAILED', window),
+        fetchTotal('parent_auth', 'BIND_FAILED', window),
+        fetchTotal('parent_auth', 'REFRESH_FAILED', window),
+        fetchTotal('parent_device_setup', 'LOGIN', window),
+        fetchTotal('parent_device_setup', 'LOGIN_FAILED', window),
+      ])
     counts.value = {
-      LOGIN: login,
-      LOGIN_FAILED: loginFailed,
+      LOGIN: parentLogin + deviceLogin,
+      LOGIN_FAILED: parentLoginFailed + deviceLoginFailed,
       BIND_FAILED: bindFailed,
       REFRESH_FAILED: refreshFailed,
     }

@@ -1,30 +1,29 @@
 /**
  * 家長行為分頁（SPEC-023 批次 1，Task 15）。
  *
- * ⚠ 計畫草稿假設 `entity_type: 'parent_auth'` 且失敗事件恆為 `actor_type:
- * 'anonymous'`——實測後端 `api/parent_portal/auth.py` 五個稽核寫入點後，
- * 兩者皆不成立：
- *   1. 沒有 `entity_type='parent_auth'` 這個值。`write_login_audit` 固定寫
- *      `entity_type='auth'`（LOGIN／LOGIN_FAILED／REFRESH_FAILED／
- *      BIND_FAILED 皆走此函式，且**員工端登入也走同一函式、同一
- *      entity_type**）；device-setup 管道另外用 `entity_type=
- *      'parent_device_setup'`。
- *   2. `BIND_FAILED` 的 `actor_type` 隨端點而異：`/bind`（首綁，走短效
- *      bind token）失敗時 `derive_actor_type` 讀不到 access_token 回
- *      `anonymous`；`/bind-additional`（已登入家長）失敗時回 `parent`。
- *   3. 員工端 `api/auth.py` 的 4 處 `LOGIN_FAILED` 也共用 `action=
- *      'LOGIN_FAILED'` 且未顯式傳 `actor_type`，登入失敗當下同樣沒有
- *      token，`derive_actor_type` 一樣回 `anonymous`——`actor_type=
- *      'anonymous'` 對 `LOGIN_FAILED` 完全沒有鑑別力，會把員工登入失敗
- *      也算進「家長登入失敗」。
+ * 後端已於 `entity_type='parent_auth'` 補丁（BE commit `6a576dec`）修正計畫
+ * 草稿的錯誤假設：家長端 `write_login_audit` 五個呼叫點（liff 登入成功／
+ * 失敗、refresh 失敗、bind 首綁失敗、bind-additional 二胎綁定失敗）現在皆
+ * 顯式傳 `entity_type="parent_auth"`，與員工端共用的 `entity_type="auth"`
+ * 分開；`api/audit.py` 的 `include_auth=false` 排除集合也同步擴成
+ * `('auth', 'parent_auth')`。
  *
- * 改採「以 `action` 精確查詢＋僅 `LOGIN_FAILED` 額外用 `username` 二次
- * 過濾」：`LOGIN`／`BIND_FAILED`／`REFRESH_FAILED` 三個 action 字串經 grep
- * 全 repo 確認只有 `api/parent_portal/auth.py` 使用，天然唯一，直接用
- * `total`。唯獨 `LOGIN_FAILED` 與員工端撞名，但家長端（含 liff 與
- * device-setup 兩管道）刻意不寫 `username`（防稽核本身洩漏帳號存在性），
- * 員工端則必帶帳號名，故用 `!item.username` 過濾即可同時涵蓋兩個家長端
- * 管道、排除員工端。
+ * 因此前端**不再需要**用 `username` 是否為空這種間接訊號去猜「這筆是不是
+ * 家長事件」——直接用 `entity_type='parent_auth' + action` 精確查詢即可
+ * 信任後端回傳的 `total`（不受 `page_size` 上限影響，比對 `items` 過濾更
+ * 準確）。
+ *
+ * `device_setup` 管道（無 LINE 家長以 staff 簽發碼登入）維持獨立的
+ * `entity_type='parent_device_setup'`（後端刻意不併入 `parent_auth`，因為
+ * 它不屬於「量大的登入雜訊」，不需要進 `include_auth=false` 排除集合）。
+ * 但它確實是一條真實的家長登入管道，漏算會讓「家長登入成功/失敗幾次」
+ * 偏低——本面板**納入**它：`LOGIN`／`LOGIN_FAILED` 兩個計數皆為
+ * `parent_auth` 與 `parent_device_setup` 兩個 entity_type 各自查詢後加總；
+ * `BIND_FAILED`／`REFRESH_FAILED` 只存在於 `parent_auth`（device-setup 沒有
+ * 綁定與 refresh 流程），各查一次即可。
+ *
+ * 一共 6 次查詢（4 個 action × parent_auth，2 個 action × device_setup），
+ * 每次都是 `entity_type + action` 雙重鎖定，全部信任 `total`。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -44,92 +43,19 @@ const stubs = {
   },
 }
 
-function resultFor(items: Record<string, unknown>[]) {
-  return { data: { items, total: items.length } }
+// entity_type → action → total。刻意在 parent_auth 與 parent_device_setup
+// 都各放一些 LOGIN／LOGIN_FAILED，用來驗證兩個管道的計數確實有加總。
+const TOTALS: Record<string, Record<string, number>> = {
+  parent_auth: { LOGIN: 3, LOGIN_FAILED: 2, BIND_FAILED: 1, REFRESH_FAILED: 0 },
+  parent_device_setup: { LOGIN: 1, LOGIN_FAILED: 1 },
 }
-
-const LOGIN_ITEMS = [
-  {
-    id: 1,
-    action: 'LOGIN',
-    actor_type: 'parent',
-    username: '家長A',
-    entity_type: 'auth',
-    summary: '家長登入',
-    created_at: '2026-09-04 09:00',
-  },
-]
-
-// 3 筆：2 筆家長（liff／device-setup 皆不帶 username）+ 1 筆員工（帶帳號名，
-// 必須被排除）。
-const LOGIN_FAILED_ITEMS = [
-  {
-    id: 2,
-    action: 'LOGIN_FAILED',
-    actor_type: 'anonymous',
-    username: null,
-    entity_type: 'auth',
-    summary: 'LINE 驗證失敗',
-    created_at: '2026-09-04 09:05',
-  },
-  {
-    id: 3,
-    action: 'LOGIN_FAILED',
-    actor_type: 'anonymous',
-    username: '',
-    entity_type: 'parent_device_setup',
-    summary: '裝置設定碼兌換失敗',
-    created_at: '2026-09-04 09:06',
-  },
-  {
-    id: 4,
-    action: 'LOGIN_FAILED',
-    actor_type: 'anonymous',
-    username: 'staff01',
-    entity_type: 'auth',
-    summary: '員工登入失敗',
-    created_at: '2026-09-04 09:07',
-  },
-]
-
-// 2 筆：1 筆來自 /bind（anonymous）、1 筆來自 /bind-additional（parent）。
-const BIND_FAILED_ITEMS = [
-  {
-    id: 5,
-    action: 'BIND_FAILED',
-    actor_type: 'anonymous',
-    username: null,
-    entity_type: 'auth',
-    summary: '綁定碼兌換失敗',
-    created_at: '2026-09-04 09:10',
-  },
-  {
-    id: 6,
-    action: 'BIND_FAILED',
-    actor_type: 'parent',
-    username: '家長B',
-    entity_type: 'auth',
-    summary: '綁定碼兌換失敗',
-    created_at: '2026-09-04 09:11',
-  },
-]
-
-const REFRESH_FAILED_ITEMS: Record<string, unknown>[] = []
 
 function mockGetAuditLogs() {
   h.getAuditLogs.mockImplementation((params: Record<string, unknown>) => {
-    switch (params.action) {
-      case 'LOGIN':
-        return Promise.resolve(resultFor(LOGIN_ITEMS))
-      case 'LOGIN_FAILED':
-        return Promise.resolve(resultFor(LOGIN_FAILED_ITEMS))
-      case 'BIND_FAILED':
-        return Promise.resolve(resultFor(BIND_FAILED_ITEMS))
-      case 'REFRESH_FAILED':
-        return Promise.resolve(resultFor(REFRESH_FAILED_ITEMS))
-      default:
-        return Promise.resolve(resultFor([]))
-    }
+    const entityType = params.entity_type as string
+    const action = params.action as string
+    const total = TOTALS[entityType]?.[action] ?? 0
+    return Promise.resolve({ data: { items: [], total } })
   })
 }
 
@@ -139,57 +65,72 @@ describe('ParentActivityPanel', () => {
     mockGetAuditLogs()
   })
 
-  it('分四個 action 精確查詢 24 小時區間，不傳 hours、不傳不存在的 entity_type', async () => {
+  it('只查 parent_auth／parent_device_setup 兩個 entity_type，絕不查會混入員工端的 auth', async () => {
     mount(ParentActivityPanel, { global: { stubs } })
     await flushPromises()
 
-    expect(h.getAuditLogs).toHaveBeenCalledTimes(4)
-    const actions = h.getAuditLogs.mock.calls.map((c) => (c[0] as { action: string }).action).sort()
-    expect(actions).toEqual(['BIND_FAILED', 'LOGIN', 'LOGIN_FAILED', 'REFRESH_FAILED'])
+    expect(h.getAuditLogs).toHaveBeenCalledTimes(6)
+    const entityTypes = h.getAuditLogs.mock.calls.map(
+      (c) => (c[0] as Record<string, unknown>).entity_type,
+    )
+    expect(new Set(entityTypes)).toEqual(new Set(['parent_auth', 'parent_device_setup']))
+    expect(entityTypes).not.toContain('auth')
+  })
+
+  it('每次查詢帶 24 小時區間，不傳 hours、不傳 actor_type／username 過濾', async () => {
+    mount(ParentActivityPanel, { global: { stubs } })
+    await flushPromises()
 
     for (const call of h.getAuditLogs.mock.calls) {
       const params = call[0] as Record<string, unknown>
       expect(params.start_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
       expect(params.end_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
       expect(params.hours).toBeUndefined()
-      expect(params.entity_type).toBeUndefined()
+      expect(params.actor_type).toBeUndefined()
+      expect(params.username).toBeUndefined()
     }
   })
 
-  it('LOGIN 與 REFRESH_FAILED 查詢帶 actor_type 作為雙重保險，BIND_FAILED 不帶（橫跨 anonymous／parent 兩種）', async () => {
+  it('parent_auth 查了四種 action、parent_device_setup 只查 LOGIN／LOGIN_FAILED 兩種', async () => {
     mount(ParentActivityPanel, { global: { stubs } })
     await flushPromises()
 
-    const byAction = Object.fromEntries(
-      h.getAuditLogs.mock.calls.map((c) => {
-        const p = c[0] as Record<string, unknown>
-        return [p.action, p.actor_type]
-      }),
-    )
-    expect(byAction.LOGIN).toBe('parent')
-    expect(byAction.REFRESH_FAILED).toBe('anonymous')
-    expect(byAction.BIND_FAILED).toBeUndefined()
+    const actionsByEntity: Record<string, string[]> = {}
+    for (const call of h.getAuditLogs.mock.calls) {
+      const p = call[0] as Record<string, unknown>
+      const key = p.entity_type as string
+      ;(actionsByEntity[key] ??= []).push(p.action as string)
+    }
+    expect(actionsByEntity.parent_auth.sort()).toEqual([
+      'BIND_FAILED',
+      'LOGIN',
+      'LOGIN_FAILED',
+      'REFRESH_FAILED',
+    ])
+    expect(actionsByEntity.parent_device_setup.sort()).toEqual(['LOGIN', 'LOGIN_FAILED'])
   })
 
-  it('登入成功計數為 1', async () => {
+  it('登入成功計數 = parent_auth 與 device_setup 兩管道加總', async () => {
     const w = mount(ParentActivityPanel, { global: { stubs } })
     await flushPromises()
 
-    expect(w.find('[data-testid="count-login"]').text()).toContain('1')
+    expect(w.find('[data-testid="count-login"]').text()).toContain('4')
   })
 
-  it('登入失敗計數排除帶 username 的員工端事件，同時涵蓋 liff 與裝置設定碼兩管道', async () => {
+  it('登入失敗計數 = parent_auth 與 device_setup 兩管道加總，且不受員工端污染', async () => {
     const w = mount(ParentActivityPanel, { global: { stubs } })
     await flushPromises()
 
-    expect(w.find('[data-testid="count-login-failed"]').text()).toContain('2')
+    // parent_auth(2) + device_setup(1) = 3；若前端誤查了員工端共用的
+    // entity_type='auth'，這裡會混進不相干的數字，測試會抓到。
+    expect(w.find('[data-testid="count-login-failed"]').text()).toContain('3')
   })
 
-  it('綁定失敗計數同時涵蓋首綁（anonymous）與二胎綁定（parent）兩種 actor_type', async () => {
+  it('綁定失敗計數只來自 parent_auth（device-setup 無綁定流程）', async () => {
     const w = mount(ParentActivityPanel, { global: { stubs } })
     await flushPromises()
 
-    expect(w.find('[data-testid="count-bind-failed"]').text()).toContain('2')
+    expect(w.find('[data-testid="count-bind-failed"]').text()).toContain('1')
   })
 
   it('連線續期失敗計數為 0', async () => {
@@ -208,7 +149,7 @@ describe('ParentActivityPanel', () => {
   })
 
   it('四個計數皆為 0 時顯示 EmptyState', async () => {
-    h.getAuditLogs.mockResolvedValue(resultFor([]))
+    h.getAuditLogs.mockResolvedValue({ data: { items: [], total: 0 } })
     const w = mount(ParentActivityPanel, { global: { stubs } })
     await flushPromises()
 
@@ -217,8 +158,10 @@ describe('ParentActivityPanel', () => {
 
   it('任一查詢失敗時顯示錯誤訊息而非讓整頁掛掉', async () => {
     h.getAuditLogs.mockImplementation((params: Record<string, unknown>) => {
-      if (params.action === 'LOGIN') return Promise.reject(new Error('network error'))
-      return Promise.resolve(resultFor([]))
+      if (params.entity_type === 'parent_auth' && params.action === 'LOGIN') {
+        return Promise.reject(new Error('network error'))
+      }
+      return Promise.resolve({ data: { items: [], total: 0 } })
     })
     const w = mount(ParentActivityPanel, { global: { stubs } })
     await flushPromises()
