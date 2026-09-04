@@ -37,20 +37,7 @@
           <span class="lights-board__overall-value">{{ levelLabel(overview?.overall) }}</span>
         </div>
 
-        <div class="lights-board__grid">
-          <div
-            v-for="light in lights"
-            :key="light.key"
-            :data-testid="`light-${light.key}`"
-            class="light-card"
-            :class="`light-card--${light.level}`"
-          >
-            <span class="light-card__label">{{ LIGHT_LABELS[light.key] ?? light.key }}</span>
-            <span class="light-card__level">{{ levelLabel(light.level) }}</span>
-            <span class="light-card__reason">{{ light.reason }}</span>
-            <span v-if="light.metric != null" class="light-card__metric">{{ light.metric }}</span>
-          </div>
-        </div>
+        <LightsBoard :lights="normalizedLights" />
 
         <p v-if="overview?.generated_at" class="lights-board__generated-at">
           更新時間：{{ overview.generated_at }}
@@ -71,23 +58,25 @@
 
 <script setup lang="ts">
 /**
- * 家長端監控頁殼（SPEC-023 批次 1，Task 12）。
+ * 家長端監控頁殼（SPEC-023 批次 1，Task 12；燈板已於 Task 13 抽成元件）。
  *
  * 總開關（`PARENT_MONITOR_ENABLED`）關閉時後端回 `200 {enabled: false}`，
  * 本頁對應整頁 EmptyState，不是錯誤畫面——「功能沒開」與「查詢失敗」是
  * 兩種不同狀態，不能共用同一個錯誤分支。
  *
- * 燈板在此檔內放最小版（九燈 + 總燈），Task 13 才抽成 LightsBoard 元件；
+ * 九盞燈卡片渲染邏輯（中文名稱對照、燈色對照、metric null 不渲染）已抽到
+ * `parentMonitor/LightsBoard.vue`，本檔只負責整體狀態與資料抓取；
  * 兩個分頁（探針健檢／家長行為）先是空殼，內容由 Task 14／15 填入。
  *
  * ⚠ 未收集的訊號（`metric: null`）一律不顯示 0——`traffic_1h`／
  * `client_events_24h` 批次 1 恆為 null，顯示 0 會被誤讀成「零錯誤」，
- * 是本頁最核心的防呆規則。
+ * 是本頁最核心的防呆規則；LightsBoard 內部已落實。
  */
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import LightsBoard, { type MonitorLight } from './parentMonitor/LightsBoard.vue'
 import { getParentMonitorOverview } from '@/api/parentMonitor'
 import { getErrorMessage } from '@/utils/errorHandler'
 
@@ -95,18 +84,6 @@ type OverviewData = Awaited<ReturnType<typeof getParentMonitorOverview>>['data']
 type LightItem = NonNullable<OverviewData['lights']>[number]
 
 const REFRESH_INTERVAL_MS = 60_000
-
-const LIGHT_LABELS: Record<string, string> = {
-  login_channel: '家長登入通道',
-  tenant_entry: '租戶入口',
-  line_push: 'LINE 推播',
-  storage: '儲存服務',
-  db_rls: '資料庫 / RLS',
-  schedulers: '排程',
-  api_errors: 'API 錯誤率',
-  silence: '流量沉默偵測',
-  client_events: '前端錯誤事件',
-}
 
 const LEVEL_LABELS: Record<string, string> = {
   green: '正常',
@@ -120,11 +97,31 @@ function levelLabel(level: string | null | undefined): string {
   return LEVEL_LABELS[level] ?? level
 }
 
+/**
+ * OpenAPI 產生的 `LightOut.level` 型別是寬鬆的 `string`（後端 Pydantic 該欄
+ * 未宣告 Literal），但 `LightsBoard` 的 props 要求嚴格聯集型別以確保燈色
+ * 對照表窮盡。用型別守衛收斂，收斂不到的值一律當 `gray`（未知）處理，
+ * 不用 `as any` 硬轉型。
+ */
+function isKnownLevel(level: string): level is MonitorLight['level'] {
+  return level === 'green' || level === 'yellow' || level === 'red' || level === 'gray'
+}
+
+function toMonitorLight(light: LightItem): MonitorLight {
+  return {
+    key: light.key,
+    level: isKnownLevel(light.level) ? light.level : 'gray',
+    reason: light.reason,
+    metric: light.metric ?? null,
+  }
+}
+
 const loading = ref(true)
 const errorMessage = ref<string | null>(null)
 const enabled = ref<boolean | null>(null)
 const overview = ref<OverviewData | null>(null)
 const lights = ref<LightItem[]>([])
+const normalizedLights = computed<MonitorLight[]>(() => lights.value.map(toMonitorLight))
 const activeTab = ref<'probes' | 'activity'>('probes')
 
 let timerId: ReturnType<typeof setInterval> | null = null
@@ -206,55 +203,6 @@ onUnmounted(() => {
 
 .lights-board__overall--gray {
   background: var(--el-fill-color-light, #f5f7fa);
-  color: var(--el-text-color-secondary, #909399);
-}
-
-.lights-board__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.light-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color-lighter, #ebeef5);
-}
-
-.light-card--green {
-  border-left: 4px solid var(--el-color-success, #67c23a);
-}
-
-.light-card--yellow {
-  border-left: 4px solid var(--el-color-warning, #e6a23c);
-}
-
-.light-card--red {
-  border-left: 4px solid var(--el-color-danger, #f56c6c);
-}
-
-.light-card--gray {
-  border-left: 4px solid var(--el-border-color, #dcdfe6);
-}
-
-.light-card__label {
-  font-weight: 600;
-}
-
-.light-card__level {
-  font-size: 12px;
-  color: var(--el-text-color-secondary, #909399);
-}
-
-.light-card__reason {
-  font-size: 13px;
-}
-
-.light-card__metric {
-  font-size: 12px;
   color: var(--el-text-color-secondary, #909399);
 }
 
