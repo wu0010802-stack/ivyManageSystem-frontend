@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getMyClassAssessments, createPortalAssessment } from '@/api/studentAssessments'
@@ -7,6 +7,7 @@ import { getMyStudents } from '@/api/portal'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG as _RATING_TAG } from '@/constants/studentRecords'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import AdminListCards from '@/components/common/AdminListCards.vue'
+import PortalFilterBar from '@/components/portal/PortalFilterBar.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 
 const { isMobile } = useIsMobile()
@@ -150,6 +151,15 @@ onMounted(async () => {
   await fetchMyStudents()
   fetchAssessments()
 })
+
+const activeFilterCount = computed(
+  () => (filterSemester.value ? 1 : 0) + (filterType.value ? 1 : 0),
+)
+function resetFilters() {
+  filterSemester.value = null
+  filterType.value = null
+  fetchAssessments()
+}
 </script>
 
 <template>
@@ -175,20 +185,20 @@ onMounted(async () => {
     </el-tabs>
 
     <!-- 篩選列 -->
-    <el-row :gutter="12" style="margin-bottom: 16px">
-      <el-col :xs="12" :sm="5">
-        <el-input v-model="filterSemester" placeholder="學期（如 2025上）" clearable size="small" style="width: 100%" />
-      </el-col>
-      <el-col :xs="12" :sm="5">
-        <el-select v-model="filterType" placeholder="評量類型" clearable size="small" style="width: 100%">
+    <!-- 篩選列：手機收進 sheet（P2-06） -->
+    <PortalFilterBar
+      :active-count="activeFilterCount"
+      title="評量篩選"
+      @apply="fetchAssessments"
+      @reset="resetFilters"
+    >
+      <template #controls>
+        <el-input v-model="filterSemester" placeholder="學期（如 2025上）" clearable style="width: 180px" />
+        <el-select v-model="filterType" placeholder="評量類型" clearable style="width: 180px">
           <el-option v-for="t in ASSESSMENT_TYPES" :key="t" :label="t" :value="t" />
         </el-select>
-      </el-col>
-      <el-col :xs="12" :sm="4">
-        <el-button size="small" @click="fetchAssessments">查詢</el-button>
-        <el-button size="small" @click="filterSemester = null; filterType = null; fetchAssessments()">重置</el-button>
-      </el-col>
-    </el-row>
+      </template>
+    </PortalFilterBar>
 
     <!-- 評量表格（桌機）。手機用卡片：7 欄擠在 390px 會把評量內容壓到看不見（P2-06） -->
     <el-table
