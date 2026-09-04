@@ -96,6 +96,47 @@ describe('CollectionBatchDrawer', () => {
     })
   })
 
+  it('取消勾選的筆不會被送出', async () => {
+    // 這個面板存在的意義就是會計能挑。checkbox 接線若壞掉（toggle 沒觸發
+    // 反應性、或 @update:model-value 綁錯），被取消勾選的筆照樣會入帳，
+    // 而畫面看起來完全正常——是會寫錯錢的路徑。
+    const twoAuto = preview({
+      items: [
+        {
+          payment_id: 1, customer_paid_date: '2026-09-02', channel: 'FISC',
+          gross_amount: 10800, fee_amount: 0, collection_suffix: '1101',
+          bill_period: '2026-09', level: 'auto_high', student_id: 5,
+          student_name: '郭栩甫', parts: [],
+          candidate_digest: 'a3f9c1d84b2e0577', blocked_reason: null,
+        },
+        {
+          payment_id: 3, customer_paid_date: '2026-09-02', channel: 'FISC',
+          gross_amount: 12300, fee_amount: 0, collection_suffix: '1103',
+          bill_period: '2026-09', level: 'auto_high', student_id: 7,
+          student_name: '陳小美', parts: [],
+          candidate_digest: 'b1c2d3e4f5061728', blocked_reason: null,
+        },
+      ],
+      auto_high_count: 2, needs_review_count: 0, auto_high_total: 23100,
+    })
+    apiMocks.batchAllocateCollectionPayments.mockResolvedValue({
+      results: [], succeeded: 0, failed: 0,
+    })
+    const wrapper = await open(twoAuto)
+    expect(wrapper.findAll('[data-test="batch-row"]')).toHaveLength(2)
+
+    // checkbox[0] 是全選，其後依序為各列；取消第二列（payment_id 3）
+    const boxes = wrapper.findAll('input[type="checkbox"]')
+    await boxes[2].setValue(false)
+    await nextTick()
+
+    await wrapper.find('[data-test="batch-submit"]').trigger('click')
+    await nextTick()
+    expect(apiMocks.batchAllocateCollectionPayments).toHaveBeenCalledWith({
+      items: [{ payment_id: 1, expected_digest: 'a3f9c1d84b2e0577' }],
+    })
+  })
+
   it('結果態逐筆顯示失敗原因', async () => {
     apiMocks.batchAllocateCollectionPayments.mockResolvedValue({
       results: [{ payment_id: 1, ok: false, receipt_id: null,
