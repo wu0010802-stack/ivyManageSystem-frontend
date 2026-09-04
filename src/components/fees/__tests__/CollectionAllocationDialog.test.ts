@@ -255,6 +255,30 @@ describe('CollectionAllocationDialog', () => {
     expect(wrapper.find('[data-test="manual-toggle"]').exists()).toBe(true)
   })
 
+  it('高信心確認卡直接按確認即送出正確分配（不展開手動）', async () => {
+    // 這是本功能的主線流程：會計開對話框→看確認卡→按確認，全程不展開編輯器。
+    // 確認鈕必須留在 footer（v-if 之外），否則卡片態就沒有東西可按。
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="alloc-confirm-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="part-row"]').exists()).toBe(false)
+    await wrapper.find('[data-test="alloc-confirm"]').trigger('click')
+    await nextTick()
+    expect(apiMocks.allocateCollectionPayment).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({
+            part_type: 'fee_record',
+            fee_record_id: 77,
+            amount: 10800,
+          }),
+        ],
+        // 帳單面額全額吻合＝不可送出部分分配
+        allow_partial: false,
+      }),
+    )
+  })
+
   it('展開手動分配後出現編輯器且保留預填 parts', async () => {
     const wrapper = await mountDialog()
     await wrapper.find('[data-test="manual-toggle"]').trigger('click')
