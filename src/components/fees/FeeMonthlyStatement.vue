@@ -179,7 +179,8 @@
         匯入檢核檔
       </el-button>
     </div>
-    <div v-else class="stmt-table-wrap">
+    <div v-else class="stmt-table-area">
+      <div class="stmt-table-wrap">
       <table class="stmt-table" data-test="stmt-table">
         <thead>
           <tr>
@@ -192,16 +193,16 @@
               />
             </th>
             <th class="col-student">學生</th>
-            <th>銷帳碼</th>
+            <th class="col-code">銷帳碼</th>
             <th v-for="b in visibleBuckets" :key="b.key" class="num-col">{{ b.label }}</th>
             <th class="num-col">應繳合計</th>
             <th class="num-col">未收</th>
             <!-- SPEC-019 §8.1：分辨這筆錢是現金收的還是網銀進來的 -->
             <th class="num-col">現金已收</th>
             <th class="num-col">網銀已收</th>
-            <th>預繳</th>
-            <th>狀態</th>
-            <th v-if="canWrite">操作</th>
+            <th class="col-prepay">預繳</th>
+            <th class="col-status">狀態</th>
+            <th v-if="canWrite" class="col-action">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -237,11 +238,12 @@
                     :aria-label="`${isCollapsed(grp.name) ? '展開' : '收合'} ${grp.label}`"
                     @click="toggleCollapse(grp.name)"
                   >
-                    <span
+                    <el-icon
                       class="expand-caret"
                       :class="{ 'expand-caret--open': !isCollapsed(grp.name) }"
-                      >▸</span
                     >
+                      <ArrowRight />
+                    </el-icon>
                   </button>
 
                   <span class="group-name">{{ grp.label }}</span>
@@ -252,19 +254,23 @@
                       >・篩選後 {{ grp.rows.length }} 人</template
                     >
                   </span>
-                  <span class="group-progress">
-                    <span class="stmt-progress" aria-hidden="true">
-                      <i :style="{ width: `${grp.paidPercent}%` }" />
-                    </span>
-                    收齊 {{ grp.paidCount }}／{{ grp.total }}
+
+                  <!-- 收款狀況集中右側：進度條、收齊幾人、未收金額相鄰一眼讀完；
+                       已收齊的班不畫滿格進度條，直接標示 -->
+                  <span v-if="grp.allPaid" class="group-status group-status--clear">
+                    <el-icon aria-hidden="true"><Check /></el-icon>
+                    <b>本班收齊</b>
                   </span>
-                  <span class="group-owe">
-                    <template v-if="grp.allPaid">
-                      <b class="group-owe--clear">本班收齊</b>
-                    </template>
-                    <template v-else>
+                  <span v-else class="group-status">
+                    <span class="group-progress">
+                      <span class="stmt-progress" aria-hidden="true">
+                        <i :style="{ width: `${grp.paidPercent}%` }" />
+                      </span>
+                      收齊 {{ grp.paidCount }}／{{ grp.total }}
+                    </span>
+                    <span class="group-owe">
                       未收 <b>{{ formatCurrency(grp.outstanding) }}</b>
-                    </template>
+                    </span>
                   </span>
                 </div>
               </td>
@@ -286,7 +292,11 @@
           <template v-for="stu in grp.rows" :key="stu.student_id">
             <tr
               class="stmt-row"
-              :class="{ 'stmt-row--paid': stu.status === 'paid' }"
+              :class="{
+                'stmt-row--paid': stu.status === 'paid',
+                'stmt-row--checked': checkedIds.has(stu.student_id),
+                'stmt-row--overdue': isOverdueStudent(stu),
+              }"
               data-test="stmt-row"
               :data-student="stu.student_name ?? ''"
             >
@@ -309,7 +319,12 @@
                   :aria-label="`展開 ${stu.student_name} 明細`"
                   @click="toggleExpand(stu.student_id)"
                 >
-                  <span class="expand-caret" :class="{ 'expand-caret--open': expandedIds.has(stu.student_id) }">▸</span>
+                  <el-icon
+                    class="expand-caret"
+                    :class="{ 'expand-caret--open': expandedIds.has(stu.student_id) }"
+                  >
+                    <ArrowRight />
+                  </el-icon>
                   <span class="student-name">{{ stu.student_name }}</span>
                 </button>
               </td>
@@ -326,30 +341,32 @@
                     :class="{ 'bucket-amount--paid': bucketCell(stu, b.key)!.allPaid }"
                     :title="bucketCell(stu, b.key)!.names"
                   >
-                    {{ bucketCell(stu, b.key)!.due.toLocaleString('zh-Hant') }}
+                    {{ formatAmount(bucketCell(stu, b.key)!.due) }}
                   </span>
                 </template>
                 <span v-else class="cell-empty">—</span>
               </td>
-              <td class="num-cell total-due">{{ formatCurrency(stu.total_due) }}</td>
+              <!-- 表格內金額不重複「NT$」前綴（幣別由分組表頭與合計列標示），
+                   數字才對得齊、欄寬不被前綴吃掉 -->
+              <td class="num-cell total-due">{{ formatAmount(stu.total_due) }}</td>
               <td class="num-cell" :class="stu.outstanding > 0 ? 'outstanding-pos' : 'cell-empty'">
-                {{ stu.outstanding > 0 ? formatCurrency(stu.outstanding) : '—' }}
+                {{ stu.outstanding > 0 ? formatAmount(stu.outstanding) : '—' }}
               </td>
               <td
                 class="num-cell"
                 :class="{ 'cell-empty': paidSplit(stu).cash <= 0 }"
                 data-test="stmt-cash-paid"
               >
-                {{ paidSplit(stu).cash > 0 ? formatCurrency(paidSplit(stu).cash) : '—' }}
+                {{ paidSplit(stu).cash > 0 ? formatAmount(paidSplit(stu).cash) : '—' }}
               </td>
               <td
                 class="num-cell"
                 :class="{ 'cell-empty': paidSplit(stu).bank <= 0 }"
                 data-test="stmt-bank-paid"
               >
-                {{ paidSplit(stu).bank > 0 ? formatCurrency(paidSplit(stu).bank) : '—' }}
+                {{ paidSplit(stu).bank > 0 ? formatAmount(paidSplit(stu).bank) : '—' }}
               </td>
-              <td>
+              <td class="col-prepay">
                 <button
                   v-if="prepayCells.get(stu.student_id)"
                   type="button"
@@ -364,7 +381,7 @@
                 </button>
                 <span v-else class="cell-empty">—</span>
               </td>
-              <td>
+              <td class="col-status">
                 <el-tag :type="statusTagType(stu.status)" size="small">
                   {{ statusLabel(stu.status) }}
                 </el-tag>
@@ -379,7 +396,7 @@
                   逾期
                 </el-tag>
               </td>
-              <td v-if="canWrite">
+              <td v-if="canWrite" class="col-action">
                 <el-button
                   v-if="stu.status !== 'paid'"
                   link
@@ -408,7 +425,7 @@
                   <tbody>
                     <tr v-for="it in stu.items" :key="it.id">
                       <td>{{ it.fee_item_name }}</td>
-                      <td class="num-cell">{{ formatCurrency(it.amount_due) }}</td>
+                      <td class="num-cell">{{ formatAmount(it.amount_due) }}</td>
                       <td>
                         <el-tag :type="statusTagType(it.status ?? 'unpaid')" size="small">
                           {{ statusLabel(it.status ?? 'unpaid') }}
@@ -468,6 +485,7 @@
           </tr>
         </tfoot>
       </table>
+      </div>
     </div>
 
     <BatchPayDialog v-model="payDialogVisible" :records="payRecords" @paid="onPaid" />
@@ -503,13 +521,19 @@
  * 月費＋註冊＋教材費一次收成一張收據）；新增「現金已收／網銀已收」兩欄，
  * 讓業主一眼分辨錢是現金收的還是網銀進來的；工具列「預繳款」下拉移到
  * 現金項目檢視（訪視預繳／預繳退款），本表只留每列預繳欄。
+ *
+ * 2026-09-04 表格可讀性：數字欄表頭改右對齊（原本 thead th 的 text-align:left
+ * 特異度較高，表頭與數字對不上）、表頭＋分組表頭真正 sticky（外框放得下時改
+ * overflow-x:clip，不再自己成為捲動容器）、儲存格金額去掉 NT$ 前綴、未收金額
+ * 只在逾期時標紅、列 hover／勾選底色、caret 改 EP 圖示。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getFeeMonthlyStatement, getPrepayments } from '@/api/fees'
 import { ElMessage } from 'element-plus'
+import { ArrowRight, Check } from '@element-plus/icons-vue'
 import { friendlyError } from '@/utils/errorMessages'
-import { formatCurrency } from '@/utils/currency'
+import { formatAmount, formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import { PERMISSION_NAMES } from '@/constants/permissions'
@@ -1284,41 +1308,124 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   cursor: pointer;
 }
 
-/* 表格 */
+/* ── 表格 ──────────────────────────────────────────────────────────────────
+   表頭與分組表頭都黏住：往下捲永遠知道欄位是什麼、自己在哪一班。
+   黏住的前提是捲動容器＝AdminLayout 的 .el-main；外框一旦 overflow-x:auto 就
+   自己變成捲動容器、sticky 只會黏在外框頂端（等於沒黏）。所以放得下整張表時
+   改 clip（不成為捲動容器），只有窄容器才退回橫向捲動。
+   container-type 只掛在這層 area：掛在 section 會把 el-dialog／el-drawer 的
+   fixed 定位一起包進去。 */
+.stmt-table-area {
+  --stmt-head-h: 36px;
+
+  container-type: inline-size;
+}
+
 .stmt-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: var(--radius-md, 8px);
 }
 
+@container (min-width: 900px) {
+  .stmt-table-wrap {
+    overflow-x: clip;
+  }
+}
+
+/* separate 而非 collapse：collapse 模式下 sticky 儲存格的框線不會跟著黏 */
 .stmt-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
   min-width: 860px;
   font-size: 13.5px;
 }
 
 .stmt-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  height: var(--stmt-head-h);
+  padding: 0 12px;
   background: var(--el-fill-color-lighter);
   color: var(--el-text-color-secondary);
   font-weight: 600;
   font-size: 12.5px;
   text-align: left;
-  padding: 9px 12px;
   border-bottom: 1px solid var(--el-border-color-light);
   white-space: nowrap;
 }
 
 .stmt-table tbody td {
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
   vertical-align: middle;
 }
 
-/* ── 班級分組表頭 ──────────────────────────────────────────────────────────
-   捲動時黏在表頭下方（thead 是 sticky top:0，這裡接著它），往下看永遠知道
-   自己在哪一班。 */
+/* 數字欄：表頭與儲存格同右對齊、等寬數字，整欄才對得齊
+   （先前 thead th 的 text-align:left 特異度較高，表頭全靠左、數字靠右對不上） */
+.stmt-table th.num-col,
+.stmt-table td.num-cell {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 欄寬：數字欄固定，多出來的寬度全給學生欄，數字彼此靠攏好比對 */
+.col-check {
+  width: 36px;
+}
+
+.col-student {
+  min-width: 160px;
+}
+
+.col-code {
+  width: 96px;
+}
+
+.stmt-table th.num-col {
+  width: 104px;
+}
+
+.col-prepay {
+  width: 104px;
+  text-align: center;
+}
+
+/* 逾期列有兩顆標籤（未繳＋逾期）並排，不夠寬會折成兩行把列高撐高一倍 */
+.col-status {
+  width: 140px;
+  white-space: nowrap;
+}
+
+.col-action {
+  width: 72px;
+  text-align: right;
+}
+
+/* 原生 checkbox 只換主色與尺寸，行為與測試不動 */
+.stmt-table input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  vertical-align: middle;
+  accent-color: var(--el-color-primary);
+  cursor: pointer;
+}
+
+.stmt-table input[type='checkbox']:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── 班級分組表頭 ────────────────────────────────────────────────────────── */
 .stmt-group td {
+  position: sticky;
+  top: var(--stmt-head-h);
+  z-index: 2;
   padding: 0;
   border-bottom: 1px solid var(--el-border-color-light);
 }
@@ -1326,10 +1433,14 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 .group-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-height: 38px;
   padding: 0 12px;
   background: var(--el-fill-color-lighter);
+}
+
+.stmt-group--done .group-bar {
+  background: var(--el-bg-color);
 }
 
 /* 與表格勾選欄同寬同位置，視覺上就是這一班的全選 */
@@ -1341,21 +1452,8 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   flex-shrink: 0;
 }
 
-.stmt-group--done .group-bar {
-  background: var(--el-bg-color);
-}
-
-.group-toggle {
-  display: inline-flex;
-  align-items: center;
-  padding: 0;
-  border: none;
-  background: none;
-  color: var(--el-text-color-secondary);
-  cursor: pointer;
-}
-
 .group-name {
+  margin-left: var(--space-1);
   font-size: 14px;
   font-weight: 700;
   color: var(--el-text-color-primary);
@@ -1380,13 +1478,31 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   white-space: nowrap;
 }
 
+.group-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.group-status--clear {
+  gap: 4px;
+  color: var(--color-success-darker);
+}
+
+.group-status--clear b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
 .group-progress {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
 }
 
 .group-progress .stmt-progress {
@@ -1394,22 +1510,10 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   margin: 0;
 }
 
-.group-owe {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
 .group-owe b {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--color-danger-darker);
-}
-
-.group-owe b.group-owe--clear {
-  color: var(--color-success-darker);
+  font-weight: 700;
+  color: var(--el-text-color-primary);
 }
 
 @media (--to-sm) {
@@ -1419,44 +1523,60 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
   }
 }
 
-.stmt-table tfoot td {
-  background: var(--el-fill-color-lighter);
-  font-weight: 700;
-  padding: 9px 12px;
-  border-top: 1px solid var(--el-border-color-light);
-  font-variant-numeric: tabular-nums;
+/* ── 學生列 ──────────────────────────────────────────────────────────────── */
+/* 一列橫跨十幾欄，hover 底色讓「姓名 ↔ 右端收現金」讀在同一列上 */
+.stmt-row:hover td {
+  background: var(--el-fill-color-light);
 }
 
-.num-col,
-.num-cell {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.stmt-row--checked td {
+  background: var(--el-color-primary-light-9);
 }
 
-.col-check {
-  width: 36px;
+.stmt-row--checked:hover td {
+  background: var(--el-color-primary-light-8);
 }
 
 .stmt-row--paid td {
   color: var(--el-text-color-placeholder);
 }
 
+/* 展開／收合：同一顆圖示按鈕語彙，hover 有底、鍵盤焦點有環 */
+.group-toggle,
 .expand-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: none;
-  background: none;
   padding: 0;
-  cursor: pointer;
-  font-size: inherit;
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+  background: none;
+  font: inherit;
   color: inherit;
+  cursor: pointer;
+}
+
+.group-toggle:focus-visible,
+.expand-btn:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .expand-caret {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 12px;
   color: var(--el-text-color-secondary);
-  font-size: 11px;
-  transition: transform 0.15s;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.group-toggle:hover .expand-caret,
+.expand-btn:hover .expand-caret {
+  background: var(--el-fill-color-dark);
+  color: var(--el-text-color-primary);
 }
 
 .expand-caret--open {
@@ -1488,12 +1608,30 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 }
 
 .total-due {
-  font-weight: 700;
+  font-weight: 600;
 }
 
+/* 未收金額用粗體而非紅字：月初全班都未繳，滿版紅字等於沒有訊號；
+   紅色只留給逾期（真正要追的人），狀態標籤仍是唯一的狀態色彩來源 */
 .outstanding-pos {
   font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.stmt-row--overdue .outstanding-pos {
   color: var(--color-danger-darker, #b91c1c);
+}
+
+.overdue-tag {
+  margin-left: 4px;
+}
+
+.stmt-table tfoot td {
+  background: var(--el-fill-color-lighter);
+  font-weight: 700;
+  padding: 9px 12px;
+  border-top: 1px solid var(--el-border-color-light);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 展開明細 */
