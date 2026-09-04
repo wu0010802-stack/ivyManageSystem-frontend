@@ -94,6 +94,12 @@ export const routes: RouteRecordRaw[] = [
                     component: () => import('../views/governance/DataQualityView.vue'),
                     meta: { title: PAGE_TERMS.dataQuality },
                 },
+                {
+                    path: 'parent-monitor',
+                    name: 'GovernanceParentMonitor',
+                    component: () => import('../views/governance/ParentMonitorView.vue'),
+                    meta: { title: '家長端監控' },
+                },
             ],
         },
         {

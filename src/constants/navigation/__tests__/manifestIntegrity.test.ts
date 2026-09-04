@@ -269,6 +269,10 @@ const INTENTIONAL_DIVERGENCE = {
     // 2026-08-20 節慶人數月底結算：新頁掛在「考核與年終 › 規則設定」下，權限沿用
     // SALARY_READ（業主裁定 D4；該碼本就在 appraisalYearEnd 群組 sharedViews 內）。
     '/appraisal-year-end/rules/festival-headcount × SALARY_READ',
+    // 2026-09-04 家長端服務監控新分頁（SPEC-023 批次 1）：沿用操作紀錄的
+    // AUDIT_LOGS，不新增權限碼；一律 exact，禁用 prefix（外溢會讓 DATA_QUALITY_READ
+    // 深連結進監控頁）。
+    '/governance/parent-monitor × AUDIT_LOGS',
   ],
 }
 

@@ -60,9 +60,9 @@ describe('GovernanceLayout 分頁可見性', () => {
     unackCount.value = 0
   })
 
-  it('三碼皆有 → 三個分頁依序都在', () => {
+  it('三碼皆有 → 四個分頁依序都在（含沿用 AUDIT_LOGS 的家長端監控）', () => {
     grantedPermissions.value = ['HIGH_RISK_READ', 'AUDIT_LOGS', 'DATA_QUALITY_READ']
-    expect(tabNames(mountLayout())).toEqual(['high-risk', 'audit-logs', 'data-quality'])
+    expect(tabNames(mountLayout())).toEqual(['high-risk', 'audit-logs', 'data-quality', 'parent-monitor'])
   })
 
   it('分頁標籤即三個頁面的名稱（子頁不再自帶標題）', () => {
@@ -75,9 +75,9 @@ describe('GovernanceLayout 分頁可見性', () => {
     expect(text).toContain('資料異常待辦')
   })
 
-  it('只有 AUDIT_LOGS → 看不到高風險事件與資料異常待辦分頁', () => {
+  it('只有 AUDIT_LOGS → 看不到高風險事件與資料異常待辦分頁（但看得到沿用同碼的監控分頁）', () => {
     grantedPermissions.value = ['AUDIT_LOGS']
-    expect(tabNames(mountLayout())).toEqual(['audit-logs'])
+    expect(tabNames(mountLayout())).toEqual(['audit-logs', 'parent-monitor'])
   })
 
   it('只有 HIGH_RISK_READ → 只剩高風險事件分頁', () => {

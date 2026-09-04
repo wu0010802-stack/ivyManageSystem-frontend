@@ -189,6 +189,9 @@ export const NAVIGATION_MANIFEST = {
         { path: '/governance/high-risk', permission: 'HIGH_RISK_READ' },
         { path: '/governance/audit-logs', permission: 'AUDIT_LOGS' },
         { path: '/governance/data-quality', permission: 'DATA_QUALITY_READ' },
+        // 家長端服務監控（SPEC-023）：沿用 AUDIT_LOGS，不新增權限碼。
+        // ⚠ 一律 exact，禁用 routePrefix（prefix 會讓三碼互相外溢）。
+        { path: '/governance/parent-monitor', permission: 'AUDIT_LOGS' },
         // 三條舊路徑已 redirect 至上面三個分頁；規則保留供 redirect 解析。
         { path: '/workbench/high-risk', permission: 'HIGH_RISK_READ' },
         { path: '/audit-logs', permission: 'AUDIT_LOGS' },
