@@ -187,4 +187,40 @@ describe('CollectionAllocationDialog', () => {
     expect(wrapper.find('[data-test="candidate-applied"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="use-candidate"]').exists()).toBe(false)
   })
+
+  it('費用單以下拉選擇，送出帶正確 fee_record_id', async () => {
+    const wrapper = await mountDialog()
+    expect(wrapper.find('[data-test="fee-record-select"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="fee-record-id-input"]').exists()).toBe(false)
+    await wrapper.find('[data-test="alloc-confirm"]').trigger('click')
+    await nextTick()
+    expect(apiMocks.allocateCollectionPayment).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({
+        parts: [
+          expect.objectContaining({
+            part_type: 'fee_record',
+            fee_record_id: 77,
+            amount: 10800,
+          }),
+        ],
+      }),
+    )
+  })
+
+  it('unmatched（students 為空）時落回手動輸入單號', async () => {
+    apiMocks.getCollectionCandidates.mockResolvedValue(
+      candidates({
+        level: 'unmatched',
+        candidates: [],
+        students: [],
+        reasons: ['銷帳編號末四碼在繳費日期無有效學生配置'],
+      }),
+    )
+    const wrapper = await mountDialog()
+    await wrapper.find('[data-test="add-part"]').trigger('click')
+    await nextTick()
+    expect(wrapper.find('[data-test="fee-record-select"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="fee-record-id-input"]').exists()).toBe(true)
+  })
 })

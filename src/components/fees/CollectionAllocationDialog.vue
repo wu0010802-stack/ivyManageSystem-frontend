@@ -105,16 +105,43 @@
           placeholder="金額"
         />
         <template v-if="part.part_type === 'fee_record'">
+          <el-select
+            v-if="feeRecordOptions.length && !manualRecordRows.has(idx)"
+            v-model="part.fee_record_id"
+            style="width: 280px"
+            placeholder="選擇費用單"
+            data-test="fee-record-select"
+          >
+            <el-option
+              v-for="opt in feeRecordOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
           <el-input-number
+            v-else
             v-model="part.fee_record_id"
             :min="1"
             :controls="false"
             style="width: 130px"
             placeholder="費用單 ID"
+            data-test="fee-record-id-input"
           />
+          <el-button
+            v-if="feeRecordOptions.length"
+            text
+            size="small"
+            data-test="fee-record-manual-toggle"
+            @click="toggleManualRecord(idx)"
+          >
+            {{ manualRecordRows.has(idx) ? '改用選單' : '手動輸入單號' }}
+          </el-button>
         </template>
         <template v-else-if="part.part_type === 'prepayment'">
+          <span v-if="part.student_id" class="part-student">{{ studentLabel(part.student_id) }}</span>
           <el-input-number
+            v-else
             v-model="part.student_id"
             :min="1"
             :controls="false"
@@ -268,6 +295,24 @@ const studentNameById = computed<Record<number, string>>(() => {
 function studentLabel(id: number | null | undefined): string {
   if (id == null) return '未知學生'
   return studentNameById.value[id] ?? `學生#${id}`
+}
+
+/** 分配明細的費用單下拉選項——來自錨定學生的全部未繳項目（不只期別內） */
+const feeRecordOptions = computed(() =>
+  (candidates.value?.students ?? []).flatMap((s) =>
+    s.items.map((it) => ({
+      value: it.fee_record_id,
+      label: `${s.display_name} · ${it.label} · ${formatCurrency(it.remaining)}`,
+    })),
+  ),
+)
+
+/** 有選單時仍允許逐列切回手動輸入（跨期別舊單等罕見情境） */
+const manualRecordRows = ref<Set<number>>(new Set())
+function toggleManualRecord(idx: number) {
+  const next = new Set(manualRecordRows.value)
+  next.has(idx) ? next.delete(idx) : next.add(idx)
+  manualRecordRows.value = next
 }
 
 function partText(p: CandidatePart): string {
