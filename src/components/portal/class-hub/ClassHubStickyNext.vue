@@ -109,10 +109,19 @@ function formatTime(iso: string | null | undefined) {
   background: var(--el-color-warning-light-9);
   color: var(--el-color-warning);
   cursor: default;
+  align-items: flex-start;
+}
+/* 這一則要把待辦類別列完，不能沿用「下一件」那條的單行截斷 */
+.sticky-next--pending .sticky-next__detail {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.6;
 }
 .sticky-next--pending .sticky-next__text {
-  margin-left: 8px;
+  display: block;
   color: var(--el-text-color-regular);
+  font-size: var(--text-sm, 13px);
 }
 .sticky-next__icon {
   font-size: 18px;
