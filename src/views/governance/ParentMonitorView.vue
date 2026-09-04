@@ -49,7 +49,7 @@
           <ProbesPanel />
         </el-tab-pane>
         <el-tab-pane label="家長行為" name="activity">
-          <!-- Task 15 填內容：家長行為稽核 -->
+          <ParentActivityPanel />
         </el-tab-pane>
       </el-tabs>
     </template>
@@ -67,7 +67,7 @@
  * 九盞燈卡片渲染邏輯（中文名稱對照、燈色對照、metric null 不渲染）已抽到
  * `parentMonitor/LightsBoard.vue`，本檔只負責整體狀態與資料抓取；
  * 探針與設定健檢分頁已抽到 `parentMonitor/ProbesPanel.vue`（Task 14），
- * 家長行為分頁仍是空殼，內容由 Task 15 填入。
+ * 家長行為分頁已抽到 `parentMonitor/ParentActivityPanel.vue`（Task 15）。
  *
  * ⚠ 未收集的訊號（`metric: null`）一律不顯示 0——`traffic_1h`／
  * `client_events_24h` 批次 1 恆為 null，顯示 0 會被誤讀成「零錯誤」，
@@ -79,6 +79,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LightsBoard, { type MonitorLight } from './parentMonitor/LightsBoard.vue'
 import ProbesPanel from './parentMonitor/ProbesPanel.vue'
+import ParentActivityPanel from './parentMonitor/ParentActivityPanel.vue'
 import { getParentMonitorOverview } from '@/api/parentMonitor'
 import { getErrorMessage } from '@/utils/errorHandler'
 
