@@ -20,13 +20,24 @@
         @keydown.enter.space.prevent="goDetail(album.id)"
       >
         <div class="album-cover">
-          <img v-if="album.cover_thumb_url" :src="album.cover_thumb_url" :alt="album.title" />
-          <div v-else class="album-cover-empty">尚無照片</div>
+          <!-- 縮圖 404 時原本直接露出瀏覽器壞圖與 alt 文字（P2-12） -->
+          <img
+            v-if="album.cover_thumb_url && !brokenCovers.has(album.id as number)"
+            :src="album.cover_thumb_url"
+            :alt="album.title"
+            loading="lazy"
+            @error="brokenCovers.add(album.id as number)"
+          />
+          <div v-else class="album-cover-empty">
+            <el-icon aria-hidden="true"><Picture /></el-icon>
+            <span>{{ album.cover_thumb_url ? '照片載入失敗' : '尚無照片' }}</span>
+          </div>
         </div>
         <div class="album-info">
           <div class="album-title">{{ album.title }}</div>
           <div class="album-meta">
             <span>{{ album.event_date }}</span>
+            <span class="album-meta__dot" aria-hidden="true">・</span>
             <span>{{ album.photo_count }} 張</span>
             <el-tag v-if="album.status === 'draft'" type="info" size="small">草稿</el-tag>
             <el-tag v-else type="success" size="small">已發布</el-tag>
@@ -62,10 +73,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, Picture } from '@element-plus/icons-vue'
 
 import { createAlbum, getAlbumClassrooms, listAlbums } from '@/api/classAlbums'
 import type { AlbumClassroomOption, AlbumSummary } from '@/api/classAlbums'
@@ -126,6 +137,9 @@ onMounted(async () => {
 })
 
 defineExpose({ createForm, submitCreate })
+
+// 封面縮圖載入失敗的相簿 id（避免壞圖圖示外露）
+const brokenCovers = reactive(new Set<number>())
 </script>
 
 <style scoped>
@@ -134,5 +148,26 @@ defineExpose({ createForm, submitCreate })
 .album-card { cursor: pointer; border: 1px solid var(--el-border-color); border-radius: 8px; overflow: hidden; }.album-cover { aspect-ratio: 4 / 3; background: var(--el-fill-color-light); }
 .album-cover img { width: 100%; height: 100%; object-fit: cover; }
 .album-info { padding: 10px 12px; }
+/* 原本沒有任何 .album-meta 樣式，兩個 span 直接相鄰算繪成「2026-09-011 張」 */
+.album-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+}
+.album-meta__dot { color: var(--el-text-color-placeholder); }
+.album-cover-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--el-text-color-placeholder);
+  font-size: var(--text-xs);
+}
 .album-warning { color: var(--el-color-warning); font-size: 12px; margin-top: 4px; }
 </style>

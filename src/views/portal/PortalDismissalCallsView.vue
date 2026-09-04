@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, CircleCheck, Mute, Refresh, Pointer } from '@element-plus/icons-vue'
+import { Bell, CircleCheck, Mute, Refresh, Pointer, Close } from '@element-plus/icons-vue'
 import {
   acknowledgeDismissalCall,
   completeDismissalCall,
@@ -15,6 +15,7 @@ import {
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
 import { usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
+import { tenantGetItem, tenantSetItem } from '@/utils/tenantStorage'
 
 type DismissalCall = DismissalCallView
 
@@ -108,6 +109,14 @@ const handleCancel = async (call: DismissalCall) => {
 onMounted(() => {
   fetchCalls()
 })
+
+// 「此裝置無法背景推播」是裝置常態而非待辦，看過即可收起（P2-13）
+const NOTIFY_HINT_KEY = 'portal_dismissal_notify_hint_dismissed'
+const notifyHintDismissed = ref(tenantGetItem(NOTIFY_HINT_KEY) === '1')
+function dismissNotifyHint() {
+  notifyHintDismissed.value = true
+  tenantSetItem(NOTIFY_HINT_KEY, '1')
+}
 </script>
 
 <template>
@@ -153,15 +162,28 @@ onMounted(() => {
       </PortalPageHeader>
     </header>
 
-    <!-- 音效尚未解鎖提示：iOS/LINE WebView 需 user gesture 才能播聲音 -->
-    <div v-if="!audioUnlocked" class="degrade-hint degrade-hint--audio" role="status">
+    <!-- 裝置提示合併成一列（P2-13）：原本音效與推播各佔一條橫幅，加上頁首的
+         連線 tag 與聲音開關，一進頁面就有四條狀態訊息把佇列擠到螢幕外。
+         「無法背景推播」是裝置常態、不是待辦，看過可以收起。 -->
+    <div
+      v-if="!audioUnlocked || (!notificationPermitted && !notifyHintDismissed)"
+      class="degrade-hint degrade-hint--audio"
+      role="status"
+    >
       <el-icon aria-hidden="true"><Pointer /></el-icon>
-      <span>點一下畫面以啟用接送提醒音</span>
-    </div>
-
-    <!-- 背景推播不可用提示：此裝置/瀏覽器不支援 Notification，或使用者未授權 -->
-    <div v-if="!notificationPermitted" class="degrade-hint degrade-hint--notify" role="status">
-      <span>此裝置無法背景推播，請保持 App 開啟並開啟聲音</span>
+      <span v-if="!audioUnlocked">點一下畫面以啟用接送提醒音</span>
+      <span v-if="!notificationPermitted && !notifyHintDismissed" class="degrade-hint__sub">
+        此裝置無法背景推播，請保持 App 開啟並開啟聲音
+      </span>
+      <button
+        v-if="!notificationPermitted && !notifyHintDismissed"
+        type="button"
+        class="degrade-hint__close"
+        aria-label="不再顯示推播提示"
+        @click="dismissNotifyHint"
+      >
+        <el-icon aria-hidden="true"><Close /></el-icon>
+      </button>
     </div>
 
     <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）-->
@@ -335,6 +357,26 @@ onMounted(() => {
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   font-size: var(--text-sm);
+}
+.degrade-hint__sub {
+  color: var(--text-secondary, var(--el-text-color-secondary));
+}
+.degrade-hint__sub::before {
+  content: '・';
+  margin: 0 4px;
+  color: var(--el-text-color-placeholder);
+}
+.degrade-hint__close {
+  margin-left: auto;
+  min-width: var(--touch-target-min, 44px);
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
 }
 .degrade-hint--audio {
   background-color: var(--color-warning-soft);

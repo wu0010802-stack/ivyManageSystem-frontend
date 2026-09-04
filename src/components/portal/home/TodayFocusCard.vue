@@ -9,6 +9,11 @@
  * 完成狀態＝sticky_next 為空 **且** counts 四類皆 0（見 pendingTotal 註解）。
  */
 import { computed } from 'vue'
+import {
+  hubPendingChips,
+  hubPendingTotal,
+  type PortalHubCounts,
+} from '@/utils/portalHubCounts'
 
 interface NextTask {
   kind?: string
@@ -18,17 +23,10 @@ interface NextTask {
   deep_link?: string
 }
 
-interface HubCounts {
-  attendance_pending?: number
-  medications_pending?: number
-  observations_pending?: number
-  contact_books_pending?: number
-  [key: string]: unknown
-}
 
 const props = withDefaults(defineProps<{
   next?: NextTask | null
-  counts?: HubCounts
+  counts?: PortalHubCounts
   classroomName?: string
 }>(), {
   next: null,
@@ -46,18 +44,7 @@ const dueLabel = computed(() => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 })
 
-const CHIP_DEFS: Array<{ key: keyof HubCounts; label: string }> = [
-  { key: 'attendance_pending', label: '到園點名' },
-  { key: 'medications_pending', label: '用藥' },
-  { key: 'observations_pending', label: '課堂觀察' },
-  { key: 'contact_books_pending', label: '聯絡簿' },
-]
-
-const chips = computed(() =>
-  CHIP_DEFS
-    .map((c) => ({ ...c, count: (props.counts?.[c.key] as number) || 0 }))
-    .filter((c) => c.count > 0),
-)
+const chips = computed(() => hubPendingChips(props.counts))
 
 /**
  * 未完成的班級任務總數。
@@ -69,9 +56,7 @@ const chips = computed(() =>
  * 等於幾乎每天誤報，老師會因此漏做整天的點名與聯絡簿。
  * 完成狀態必須同時滿足「沒有下一件排程任務」與「四類計數皆為 0」。
  */
-const pendingTotal = computed(() =>
-  chips.value.reduce((sum, c) => sum + c.count, 0),
-)
+const pendingTotal = computed(() => hubPendingTotal(props.counts))
 </script>
 
 <template>

@@ -19,6 +19,7 @@ import {
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
 import FormSection from '@/components/common/FormSection.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 withDefaults(defineProps<{
   allEmployees?: Record<string, unknown>[]
@@ -244,11 +245,15 @@ const submitLeave = async () => {
     submitLoading.value = false
   }
 }
+
+// 手機改用頂端標籤，避免固定 label-width 把「開始時間」等標籤折行（P1-02）
+const { isMobile } = useIsMobile()
 </script>
 
 <template>
   <div class="portal-leave-form">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
+    <el-form ref="formRef" :model="form" :rules="rules" :label-position="isMobile ? 'top' : 'right'"
+            :label-width="isMobile ? undefined : '90px'">
       <el-form-item label="假別" prop="leave_type">
         <el-select v-model="form.leave_type" placeholder="請選擇" style="width: 100%;">
           <el-option v-for="lt in leaveTypes" :key="lt.value" :label="lt.label" :value="lt.value">

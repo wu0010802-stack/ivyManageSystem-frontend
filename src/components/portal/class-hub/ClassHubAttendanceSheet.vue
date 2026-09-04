@@ -8,10 +8,15 @@
     @open="onOpen"
   >
     <div v-loading="loading" class="attn-sheet">
+      <!-- 「全班已點名」與「今日還沒有名單」是兩件事：後者說成前者會讓老師
+           以為點過了（P1-01 的一環）。以 totalRecords 分辨。 -->
       <EmptyState
         v-if="!loading && pendingRecords.length === 0"
         variant="inline"
-        title="本班學生今日皆已點名"
+        :title="totalRecords > 0
+          ? `本班 ${totalRecords} 位學生今日皆已點名`
+          : '今日尚未產生點名名單'"
+        :description="totalRecords > 0 ? '' : '可能是今天沒有排課，或名單尚未建立。'"
       />
       <div
         v-for="rec in pendingRecords"
@@ -61,6 +66,7 @@ const emit = defineEmits<{
 const loading = ref(false)
 const error = ref('')
 const pendingRecords = ref<AttendanceRecord[]>([]) // students with status==null
+const totalRecords = ref(0) // 全班應點名人數（用於分辨「已點完」與「沒有名單」）
 const picks = reactive<Record<string | number, string>>({}) // student_id -> selected status (optimistic UI)
 let cachedClassroomId: number | null = null
 let cachedDate: string | null = null
@@ -97,15 +103,16 @@ async function load() {
       date: cachedDate,
       classroom_id: cachedClassroomId,
     })
-    const records: AttendanceRecord[] = (res.data.records ?? []).filter(
-      (r) => !r.status,
-    )
+    const allRecords = res.data.records ?? []
+    totalRecords.value = allRecords.length
+    const records: AttendanceRecord[] = allRecords.filter((r) => !r.status)
     pendingRecords.value = records
     // Reset picks for students newly loaded
     for (const r of records) {
       if (!(r.student_id in picks)) picks[r.student_id] = ''
     }
   } catch (e: unknown) {
+    totalRecords.value = 0
     error.value = (e instanceof Error ? e.message : null) || '載入失敗'
   } finally {
     loading.value = false

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const emit = defineEmits<{
   'submit': [payload: Record<string, unknown>]
@@ -69,11 +70,15 @@ const submit = async () => {
 }
 
 defineExpose({ form })
+
+// 手機改用頂端標籤，避免固定 label-width 把「開始時間」等標籤折行（P1-02）
+const { isMobile } = useIsMobile()
 </script>
 
 <template>
     <div class="punch-correction-form">
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+        <el-form ref="formRef" :model="form" :rules="rules" :label-position="isMobile ? 'top' : 'right'"
+            :label-width="isMobile ? undefined : '100px'">
             <el-form-item label="申請日期" prop="attendance_date">
                 <el-date-picker
                     v-model="form.attendance_date"

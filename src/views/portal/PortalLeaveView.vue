@@ -196,7 +196,7 @@ onMounted(() => {
           <div class="stat-value">{{ leaveStats.annual_leave_used_days }} 天</div>
         </div>
         <div class="stat-item">
-          <div class="stat-label">剩餘可用 (概算)</div>
+          <div class="stat-label">剩餘可用（約）</div>
           <div class="stat-value">{{ Math.max(0, (leaveStats.annual_leave_quota ?? 0) - (leaveStats.annual_leave_used_days ?? 0)) }} 天</div>
         </div>
       </div>

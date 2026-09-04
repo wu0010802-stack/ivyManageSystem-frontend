@@ -17,6 +17,14 @@
     </span>
     <span class="sticky-next__arrow">處理<el-icon aria-hidden="true"><ArrowRight /></el-icon></span>
   </div>
+  <!-- 沒有排定的下一件，但四類計數仍有待辦：不得宣稱「都完成」（P1-01）。 -->
+  <div v-else-if="pendingTotal > 0" class="sticky-next sticky-next--pending">
+    <el-icon class="sticky-next__icon" aria-hidden="true"><Clock /></el-icon>
+    <span class="sticky-next__detail">
+      沒有排定時間的任務，仍有 <strong>{{ pendingTotal }}</strong> 項待處理
+      <span v-if="pendingLabels" class="sticky-next__text">{{ pendingLabels }}</span>
+    </span>
+  </div>
   <div v-else class="sticky-next sticky-next--empty">
     <el-icon class="sticky-next__icon" aria-hidden="true"><CircleCheck /></el-icon>
     今日任務都完成
@@ -24,7 +32,14 @@
 </template>
 
 <script setup lang="ts">
-import { Timer, ArrowRight, CircleCheck } from '@element-plus/icons-vue'
+import { computed } from 'vue'
+import { Timer, ArrowRight, CircleCheck, Clock } from '@element-plus/icons-vue'
+import {
+  hubPendingChips,
+  hubPendingTotal,
+  type PortalHubCounts,
+} from '@/utils/portalHubCounts'
+
 interface NextTask {
   kind?: string
   student_name?: string
@@ -33,12 +48,25 @@ interface NextTask {
   deep_link?: string
 }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   next?: NextTask | null
+  /**
+   * class-hub 的四類待辦計數。呼叫端一律應傳入——只看 next 會在沒有用藥
+   * 委託的日子誤報「都完成」（見 utils/portalHubCounts.ts 檔頭）。
+   */
+  counts?: PortalHubCounts | null
 }>(), {
   next: null,
+  counts: null,
 })
 defineEmits<{ 'jump': [deepLink: string | undefined] }>()
+
+const pendingTotal = computed(() => hubPendingTotal(props.counts))
+const pendingLabels = computed(() =>
+  hubPendingChips(props.counts)
+    .map((c) => `${c.label} ${c.count}`)
+    .join('・'),
+)
 
 function formatTime(iso: string | null | undefined) {
   if (!iso) return ''
@@ -75,6 +103,16 @@ function formatTime(iso: string | null | undefined) {
   cursor: default;
   justify-content: center;
   color: var(--el-color-success);
+}
+/* 有待辦但沒有排定時間：用提醒色，與「都完成」的綠色明確區隔 */
+.sticky-next--pending {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+  cursor: default;
+}
+.sticky-next--pending .sticky-next__text {
+  margin-left: 8px;
+  color: var(--el-text-color-regular);
 }
 .sticky-next__icon {
   font-size: 18px;
