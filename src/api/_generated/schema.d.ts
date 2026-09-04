@@ -31502,8 +31502,11 @@ export interface components {
         LightOut: {
             /** Key */
             key: string;
-            /** Level */
-            level: string;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "green" | "yellow" | "red" | "gray";
             /** Metric */
             metric?: string | null;
             /** Reason */
@@ -33857,7 +33860,7 @@ export interface components {
             /** Lights */
             lights?: components["schemas"]["LightOut"][] | null;
             /** Overall */
-            overall?: string | null;
+            overall?: ("green" | "yellow" | "red" | "gray") | null;
             /** Probes Latest */
             probes_latest?: components["schemas"]["ProbeRunOut"][] | null;
             /** Rls Ready */
