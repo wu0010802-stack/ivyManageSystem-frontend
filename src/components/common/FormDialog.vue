@@ -44,6 +44,10 @@ const props = withDefaults(defineProps<{
   requiredLegend: false,
 })
 
+/**
+ * cancel＝使用者主動關閉（取消鈕／X／Esc／遮罩）且未被 dirty 攔下；
+ * 程式端設 v-model=false 關閉不發 cancel，只發 closed。
+ */
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   submit: []
@@ -67,9 +71,11 @@ const dialogAttrs = computed(() => ({
 
 const isDirty = (): boolean => (typeof props.dirty === 'function' ? props.dirty() : props.dirty)
 
-/** el-dialog before-close：X／Esc／遮罩三條路徑 */
+/** el-dialog before-close：X／Esc／遮罩三條路徑，皆視為使用者主動關閉，一致發 cancel */
 async function handleBeforeClose(done: () => void): Promise<void> {
-  if (!isDirty() || (await confirmDiscardChanges())) done()
+  if (isDirty() && !(await confirmDiscardChanges())) return
+  emit('cancel')
+  done()
 }
 
 /** footer 取消鈕與使用端自訂 footer 共用：dirty 檢查後關閉 */
@@ -125,13 +131,13 @@ defineExpose({ requestClose, scrollToFirstError })
 
 <template>
   <el-dialog
+    v-bind="dialogAttrs"
     :model-value="modelValue"
     :title="title"
     :width="width"
     :fullscreen="fullscreen"
     :before-close="handleBeforeClose"
     :class="['ivy-form-dialog', `ivy-form-dialog--${size}`]"
-    v-bind="dialogAttrs"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
     @opened="onOpened"
     @closed="emit('closed')"

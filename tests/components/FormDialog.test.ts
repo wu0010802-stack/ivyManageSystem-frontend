@@ -22,10 +22,15 @@ const ElDialogStub = defineComponent({
   },
 })
 
-function mountDialog(props: Record<string, unknown> = {}, slots: Record<string, string> = {}) {
+function mountDialog(
+  props: Record<string, unknown> = {},
+  slots: Record<string, string> = {},
+  attrs: Record<string, unknown> = {},
+) {
   return mount(FormDialog, {
     attachTo: document.body,
-    props: { modelValue: true, title: '新增課程', ...props },
+    // 非宣告 prop 的鍵（如 kebab-case 的 el-dialog 透傳屬性）VTU 會自動歸入 attrs。
+    props: { modelValue: true, title: '新增課程', ...props, ...attrs },
     slots: { default: '<input class="first" /><textarea class="ta"></textarea>', ...slots },
     global: { plugins: [ElementPlus], stubs: { 'el-dialog': ElDialogStub } },
   })
@@ -38,6 +43,24 @@ describe('FormDialog', () => {
     expect(w.classes()).toContain('ivy-form-dialog--compact')
     const wide = mountDialog({ size: 'wide' })
     expect(wide.find('.el-dialog-stub').attributes('data-width')).toBe('min(1040px, 94vw)')
+  })
+
+  it('destroy-on-close／close-on-click-modal 預設值可被使用端透傳 attrs 覆寫', () => {
+    const overridden = mountDialog({}, {}, { 'close-on-click-modal': true, 'destroy-on-close': false })
+    const overriddenDialog = overridden.findComponent(ElDialogStub)
+    expect(overriddenDialog.props('closeOnClickModal')).toBe(true)
+    expect(overriddenDialog.props('destroyOnClose')).toBe(false)
+  })
+
+  it('未覆寫時 destroy-on-close／close-on-click-modal 維持元件預設', () => {
+    const defaultDialog = mountDialog().findComponent(ElDialogStub)
+    expect(defaultDialog.props('closeOnClickModal')).toBe(false)
+    expect(defaultDialog.props('destroyOnClose')).toBe(true)
+  })
+
+  it('使用端誤傳 width／before-close 等透傳 attrs 不會蓋掉元件自己的顯式綁定', () => {
+    const w = mountDialog({}, {}, { width: '640px' })
+    expect(w.find('.el-dialog-stub').attributes('data-width')).toBe('520px')
   })
 
   it('footer 預設「取消／儲存」，submitText 可改，主鈕 loading 時 disabled', async () => {
@@ -59,17 +82,19 @@ describe('FormDialog', () => {
     expect(confirmDiscardChanges).not.toHaveBeenCalled()
   })
 
-  it('dirty 時關閉（X／before-close）先問 confirmDiscardChanges；拒絕則不關', async () => {
+  it('dirty 時關閉（X／before-close）先問 confirmDiscardChanges；拒絕則不關且不發 cancel；允許關閉時發 cancel', async () => {
     confirmDiscardChanges.mockResolvedValueOnce(false)
     const w = mountDialog({ dirty: true })
     await w.find('.stub-x').trigger('click')
     await nextTick(); await nextTick()
     expect(confirmDiscardChanges).toHaveBeenCalledTimes(1)
     expect(w.emitted('update:modelValue')).toBeUndefined()
+    expect(w.emitted('cancel')).toBeUndefined()
     confirmDiscardChanges.mockResolvedValueOnce(true)
     await w.find('.stub-x').trigger('click')
     await nextTick(); await nextTick()
     expect(w.emitted('update:modelValue')?.at(-1)).toEqual([false])
+    expect(w.emitted('cancel')).toHaveLength(1)
   })
 
   it('dirty 可為 getter，每次關閉重新求值', async () => {
