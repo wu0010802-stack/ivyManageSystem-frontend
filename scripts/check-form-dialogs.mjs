@@ -3,15 +3,16 @@
  * 後台表單 dialog 棘輪（只准降、不准升）。spec：docs/superpowers/specs/2026-09-06-admin-form-dialog-defaults-design.md §3.4
  *
  * 為什麼要擋：三波表單規範（FormSection／dialog 殼層／compact-standard-wide 分型）都寫進
- * DESIGN.md，但 84 個 dialog 表單裡 label-top 12、寬度常數 0、未儲存保護 6。根因是每個新
- * dialog 都從 EP 裸預設起步，規範靠人記。本腳本把四個數字鎖進版控，新表單請用
- * `src/components/common/FormDialog.vue`。
+ * DESIGN.md，但盤點期約 84 檔 dialog 表單（棘輪基線以 --list 實測為準）裡 label-top 12、
+ * 寬度常數 0、未儲存保護 6。根因是每個新 dialog 都從 EP 裸預設起步，規範靠人記。本腳本把
+ * 四個數字鎖進版控，新表單請用 `src/components/common/FormDialog.vue`。
  *
  * 指標：
- *   A 裸 dialog 表單：檔案含 <el-dialog 且含 <el-form（非 el-form-item）且不含 <FormDialog（檔數）
+ *   A 裸 dialog 表單：每個 <el-dialog 區塊（至對應 </el-dialog>）內含 <el-form（非 el-form-item）
+ *     即計 1（區塊數，非檔數——同檔多個裸 dialog 各自計）
  *   B label-width：含 <el-dialog 的檔案內 `label-width=` 出現次數（label-top 下是死屬性）
- *   C 硬寫寬度：<el-dialog … width="NNNpx"> 出現次數（應改 FORM_DIALOG_WIDTH／FormDialog size）
- *   D 按鈕誤用：新增／建立主鈕 type="success"，或按鈕文字以「＋」「+」開頭（次數）
+ *   C 硬寫寬度：<el-dialog … width="NNN[px]"> 出現次數（應改 FORM_DIALOG_WIDTH／FormDialog size）
+ *   D 按鈕誤用：新增／建立主鈕 type="success"，或任何按鈕文字以「＋」「+」開頭（次數）
  *
  * 用法：
  *   node scripts/check-form-dialogs.mjs            # 檢查（與 BASELINE 比）
@@ -24,7 +25,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 /** 修掉幾處後必須同步調降，否則棘輪鬆掉（同 check-error-detail-ratchet 慣例）。 */
-const BASELINE = { A: 87, B: 90, C: 164, D: 10 } // 2026-09-06 基線
+const BASELINE = { A: 103, B: 90, C: 164, D: 20 } // 2026-09-06 修正回合 1 基線（A 改區塊計數、D 放寬）
 
 /** 本來就該含 el-dialog 的檔案：FormDialog 殼本身。 */
 const EXEMPT = new Set(['src/components/common/FormDialog.vue'])
@@ -35,15 +36,20 @@ const SCAN_DIRS = ['src/views', 'src/components']
 const args = process.argv.slice(2)
 const listMode = args.includes('--list')
 const rootIdx = args.indexOf('--root')
+if (rootIdx >= 0 && args[rootIdx + 1] === undefined) {
+  console.error('用法：node scripts/check-form-dialogs.mjs [--list] [--root <dir>]\n  --root 缺少參數值')
+  process.exit(2)
+}
 const ROOT = rootIdx >= 0 ? args[rootIdx + 1] : process.cwd()
 
 const RE_DIALOG = /<el-dialog\b/
+const RE_DIALOG_OPEN_G = /<el-dialog\b/g
+const CLOSE_DIALOG_TAG = '</el-dialog>'
 const RE_FORM = /<el-form(?![-\w])/
-const RE_FORM_DIALOG = /<FormDialog\b/
 const RE_LABEL_WIDTH = /\blabel-width=/g
 const RE_PX_WIDTH = /<el-dialog\b[^>]*\swidth="\d+(?:px)?"/g
 const RE_SUCCESS_CREATE = /<el-button\b[^>]*type="success"[^>]*>\s*(?:<[^>]+>\s*)*(?:新增|建立)/g
-const RE_PLUS_TEXT = /<el-button\b[^>]*>\s*[＋+]\s*(?:新增|建立)/g
+const RE_PLUS_TEXT = /<el-button\b[^>]*>\s*[＋+]\s*\S/g
 
 function walk(dir, out = []) {
   if (!existsSync(dir)) return out
@@ -65,7 +71,17 @@ for (const { full, rel } of files) {
   const src = readFileSync(full, 'utf8')
   const hasDialog = RE_DIALOG.test(src)
   if (hasDialog) {
-    if (RE_FORM.test(src) && !RE_FORM_DIALOG.test(src)) hits.A.push(rel)
+    // A：逐個 <el-dialog> 區塊獨立判定，避免同檔另有 FormDialog 用法就整檔豁免
+    // （Task 7 遷移期常見：同檔一個已換 FormDialog、另一個仍是裸 el-dialog）。
+    RE_DIALOG_OPEN_G.lastIndex = 0
+    let openMatch
+    while ((openMatch = RE_DIALOG_OPEN_G.exec(src))) {
+      const start = openMatch.index
+      const closeIdx = src.indexOf(CLOSE_DIALOG_TAG, start)
+      const end = closeIdx >= 0 ? closeIdx + CLOSE_DIALOG_TAG.length : src.length
+      const block = src.slice(start, end)
+      if (RE_FORM.test(block)) hits.A.push(`${rel}:${lineOf(src, start)}`)
+    }
     for (const m of src.matchAll(RE_LABEL_WIDTH)) hits.B.push(`${rel}:${lineOf(src, m.index)}`)
     for (const m of src.matchAll(RE_PX_WIDTH)) hits.C.push(`${rel}:${lineOf(src, m.index)}`)
   }

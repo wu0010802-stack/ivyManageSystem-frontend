@@ -144,10 +144,10 @@ Expose：`scrollToFirstError()`：在 body 內找第一個 `.el-form-item.is-err
 
 | 指標 | 計算方式 |
 |---|---|
-| A 裸 dialog 表單 | 檔案含 `<el-dialog` 且含 `<el-form` 且不含 `<FormDialog`（檔數） |
+| A 裸 dialog 表單 | 每個 `<el-dialog` 區塊（至對應 `</el-dialog>`）內含 `<el-form`（非 el-form-item）即計 1（區塊數） |
 | B label-width | 上述表單檔內 `label-width=` 出現次數 |
-| C 硬寫寬度 | 表單檔內 `<el-dialog … width="\d+px"` 出現次數 |
-| D 按鈕誤用 | 新增／建立主鈕 `type="success"`，或按鈕文字以「＋」「+」開頭（次數） |
+| C 硬寫寬度 | 表單檔內 `<el-dialog … width="\d+[px]"` 出現次數 |
+| D 按鈕誤用 | 新增／建立主鈕 `type="success"`，或任何按鈕文字以「＋」「+」開頭（次數） |
 
 例外清單（`EXEMPT`）：`FormDialog.vue` 自身、確認型 dialog 的誤判可逐檔登記並附理由。接線：`package.json` 加 `check:form-dialogs`，`ci.yml` 緊接 `check:error-detail` 之後（開放決策 D3，預設 blocking）。
 
