@@ -10410,6 +10410,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent-monitor/traffic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Traffic
+         * @description 流量圖表／路由表／靜默偵測(SPEC-023 §6 `GET /traffic?range=&group=`)。
+         *
+         *     `range_` 對外曝露成 `range`(Python 內建名不能當參數名)。`group` 有值時
+         *     只看該模組(例如 `auth`)的流量,對應 `queries.traffic_series`／
+         *     `traffic_routes` 的同名參數。
+         */
+        get: operations["get_traffic_api_parent_monitor_traffic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/activity/bootstrap": {
         parameters: {
             query?: never;
@@ -33867,10 +33891,7 @@ export interface components {
             rls_ready?: boolean | null;
             /** Schedulers */
             schedulers?: components["schemas"]["SchedulerSignalOut"][] | null;
-            /** Traffic 1H */
-            traffic_1h?: {
-                [key: string]: unknown;
-            } | null;
+            traffic_1h?: components["schemas"]["TrafficSummaryOut"] | null;
         };
         /** ParentMonitorProbesOut */
         ParentMonitorProbesOut: {
@@ -33880,6 +33901,20 @@ export interface components {
             enabled: boolean;
             /** Hours */
             hours?: number | null;
+        };
+        /** ParentMonitorTrafficOut */
+        ParentMonitorTrafficOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Granularity Minutes */
+            granularity_minutes?: number | null;
+            /** Range */
+            range?: string | null;
+            /** Routes */
+            routes?: components["schemas"]["TrafficRouteOut"][] | null;
+            /** Series */
+            series?: components["schemas"]["TrafficSeriesPointOut"][] | null;
+            silence?: components["schemas"]["TrafficSilenceOut"] | null;
         };
         /**
          * ParentPortalMessageAttachmentOut
@@ -45746,6 +45781,68 @@ export interface components {
             pending: number;
             /** Skipped */
             skipped: number;
+        };
+        /** TrafficRouteOut */
+        TrafficRouteOut: {
+            /** Avg Ms */
+            avg_ms: number;
+            /** Count */
+            count: number;
+            /** Count 5Xx */
+            count_5xx: number;
+            /** Max Ms */
+            max_ms: number;
+            /** Method */
+            method: string;
+            /** P95 Ms */
+            p95_ms: number;
+            /** Rate 5Xx */
+            rate_5xx: number;
+            /** Route Group */
+            route_group: string;
+            /** Route Template */
+            route_template: string;
+        };
+        /** TrafficSeriesPointOut */
+        TrafficSeriesPointOut: {
+            /** Bucket Start */
+            bucket_start: string;
+            /** Count */
+            count: number;
+            /** Count 5Xx */
+            count_5xx: number;
+            /** P95 Ms */
+            p95_ms: number;
+        };
+        /** TrafficSilenceOut */
+        TrafficSilenceOut: {
+            /** Baseline Per Hour */
+            baseline_per_hour?: number | null;
+            /** Current Hour */
+            current_hour?: number | null;
+            /** Level */
+            level?: ("green" | "yellow" | "red" | "gray") | null;
+            /** Reason */
+            reason?: string | null;
+            /** Zero Hours */
+            zero_hours?: number | null;
+        };
+        /**
+         * TrafficSummaryOut
+         * @description 近 1 小時全租戶流量彙總(`queries.traffic_1h_summary` 的具名版本)。
+         *
+         *     裸 `dict` 在 OpenAPI 產出的前端型別是 `Record<string, unknown>`,前端取
+         *     `.count` 會是 `unknown`;宣告具名 model 才有精確欄位型別。
+         */
+        TrafficSummaryOut: {
+            /** Avg Ms */
+            avg_ms: number;
+            /** Count */
+            count: number;
+            /** Count 5Xx */
+            count_5xx: number;
+            /** P95 Ms */
+            p95_ms: number;
         };
         /** TransitionIn */
         TransitionIn: {
@@ -64236,6 +64333,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParentMonitorProbesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_traffic_api_parent_monitor_traffic_get: {
+        parameters: {
+            query?: {
+                group?: string | null;
+                range?: "24h" | "7d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMonitorTrafficOut"];
                 };
             };
             /** @description Validation Error */

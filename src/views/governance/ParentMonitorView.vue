@@ -51,6 +51,9 @@
         <el-tab-pane label="家長行為" name="activity">
           <ParentActivityPanel />
         </el-tab-pane>
+        <el-tab-pane label="流量" name="traffic">
+          <TrafficPanel />
+        </el-tab-pane>
       </el-tabs>
     </template>
   </div>
@@ -80,6 +83,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import LightsBoard, { type MonitorLight } from './parentMonitor/LightsBoard.vue'
 import ProbesPanel from './parentMonitor/ProbesPanel.vue'
 import ParentActivityPanel from './parentMonitor/ParentActivityPanel.vue'
+import TrafficPanel from './parentMonitor/TrafficPanel.vue'
 import { getParentMonitorOverview } from '@/api/parentMonitor'
 import { getErrorMessage } from '@/utils/errorHandler'
 
@@ -125,7 +129,7 @@ const enabled = ref<boolean | null>(null)
 const overview = ref<OverviewData | null>(null)
 const lights = ref<LightItem[]>([])
 const normalizedLights = computed<MonitorLight[]>(() => lights.value.map(toMonitorLight))
-const activeTab = ref<'probes' | 'activity'>('probes')
+const activeTab = ref<'probes' | 'activity' | 'traffic'>('probes')
 
 let timerId: ReturnType<typeof setInterval> | null = null
 

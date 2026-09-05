@@ -1,7 +1,7 @@
 import api from './index'
 import type { ApiQuery, AxiosResp } from './_generated/typed'
 
-// 家長端服務監控（SPEC-023）。三支皆唯讀，權限由後端 AUDIT_LOGS 把關。
+// 家長端服務監控（SPEC-023）。四支皆唯讀，權限由後端 AUDIT_LOGS 把關。
 // 路徑不帶 /api 前綴——dump_openapi.py 已剝除。
 
 export const getParentMonitorOverview = (): AxiosResp<'/parent-monitor/overview', 'get'> =>
@@ -14,3 +14,8 @@ export const getParentMonitorProbes = (
 
 export const getParentMonitorConfigCheck = (): AxiosResp<'/parent-monitor/config-check', 'get'> =>
   api.get('/parent-monitor/config-check')
+
+export const getParentMonitorTraffic = (
+  params: ApiQuery<'/parent-monitor/traffic', 'get'> = {},
+): AxiosResp<'/parent-monitor/traffic', 'get'> =>
+  api.get('/parent-monitor/traffic', { params })
