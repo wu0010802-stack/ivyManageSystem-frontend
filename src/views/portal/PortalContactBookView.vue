@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { getMyStudents } from '@/api/portal'
@@ -50,6 +50,8 @@ const completion = ref<Completion>({ roster: 0, draft: 0, published: 0, missing:
 const listLoading = ref(false)
 
 // Drawer state
+const drawerRef = ref<InstanceType<typeof ContactBookEntryDrawer> | null>(null)
+onBeforeRouteLeave(() => drawerRef.value?.requestLeave() ?? true)
 const drawerVisible = ref(false)
 const drawerStudent = ref<{ student_id: number; student_name?: string } | null>(null)
 const drawerEntry = ref<EntryRecord | null>(null) // server entry or null
@@ -129,7 +131,7 @@ function closeDrawer() {
 }
 
 // ── 統一 save / publish 失敗處理（含 409 衝突局部寫回） ────────────────
-function handleSaveError(err: unknown) {
+async function handleSaveError(err: unknown) {
   const e = err as { response?: { status?: number; data?: { detail?: unknown } } }
   if (e?.response?.status === 409) {
     const detail = e.response?.data?.detail
@@ -138,8 +140,17 @@ function handleSaveError(err: unknown) {
       // 局部寫回：用後端最新版本覆蓋本地，不再 fetchClassDay 整撈
       const idx = items.value.findIndex((i) => i.entry?.id === currentEntry.id)
       if (idx >= 0) items.value[idx].entry = currentEntry
-      drawerEntry.value = currentEntry
-      ElMessage.warning('資料已被他人更新，已載入最新版，請確認後重新儲存')
+      // 不覆蓋輸入；教師確認後才採用新版號供下一次儲存使用。
+      try {
+        await ElMessageBox.confirm('資料已被他人更新，您的輸入仍保留。若繼續，下一次儲存將以目前表單覆寫最新內容。', '聯絡簿版本衝突', {
+          type: 'warning',
+          confirmButtonText: '確認後重新儲存',
+          cancelButtonText: '先保留，不覆寫',
+        })
+        if (drawerEntry.value) drawerEntry.value.version = currentEntry.version
+      } catch {
+        // 保留原版本與輸入，取消不代表授權覆寫。
+      }
     } else {
       // fallback 整撈
       fetchClassDay()
@@ -183,7 +194,7 @@ async function handleSaveDraft(formPayload: Record<string, unknown>, version: un
     }
     return true
   } catch (err) {
-    handleSaveError(err)
+    await handleSaveError(err)
     return false
   } finally {
     drawerSaving.value = false
@@ -223,6 +234,7 @@ async function handlePublish(formPayload: Record<string, unknown>, version: unkn
   const confirmText = wasPublished
     ? '確定再次發布？將再次推播 LINE 與通知家長。'
     : '確定發布？發布後家長 App 與 LINE 將立即收到通知。'
+  drawerPublishing.value = true
   try {
     await ElMessageBox.confirm(confirmText, wasPublished ? '再次發布' : '發布給家長', {
       type: 'warning',
@@ -230,9 +242,9 @@ async function handlePublish(formPayload: Record<string, unknown>, version: unkn
       cancelButtonText: '取消',
     })
   } catch {
+    drawerPublishing.value = false
     return
   }
-  drawerPublishing.value = true
   try {
     // 先 update 欄位（若有變），樂觀更新本地
     const updateRes = await updateEntry(drawerEntry.value.id, formPayload, version as number | null | undefined)
@@ -249,7 +261,7 @@ async function handlePublish(formPayload: Record<string, unknown>, version: unkn
     drawerEntry.value = published
     ElMessage.success(wasPublished ? '已再次發布' : '已發布')
   } catch (err) {
-    handleSaveError(err)
+    await handleSaveError(err)
   } finally {
     drawerPublishing.value = false
   }
@@ -523,6 +535,9 @@ watch([selectedClassroomId, selectedDate], () => {
 
     <!-- Drawer：單筆編輯 -->
     <ContactBookEntryDrawer
+      ref="drawerRef"
+      :student-id="drawerStudent?.student_id"
+      :save-draft-for-close="handleSaveDraft"
       v-model="drawerVisible"
       :entry="drawerEntry ?? undefined"
       :student-name="drawerStudent?.student_name || ''"

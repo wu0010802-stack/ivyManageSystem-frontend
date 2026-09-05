@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import ContactBookEntryDrawer from '@/views/portal/components/contactBook/ContactBookEntryDrawer.vue'
 
 const ENTRY_DRAFT = {
@@ -30,6 +30,7 @@ const STUBS = {
     props: ['modelValue', 'title', 'direction', 'size', 'closeOnClickModal'],
     emits: ['update:modelValue', 'close'],
   },
+  ElDialog: { template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>', props: ['modelValue'] },
   ElForm: { template: '<form><slot /></form>' },
   ElFormItem: {
     template: '<div class="form-item"><label>{{ label }}</label><slot /></div>',
@@ -200,5 +201,94 @@ describe('ContactBookEntryDrawer 家長回應區（2026-09-02 對齊稽核）', 
   it('草稿不顯示家長回應區', () => {
     const w = mountWith(ENTRY_DRAFT)
     expect(w.find('[data-testid="cb-parent-signals"]').exists()).toBe(false)
+  })
+})
+
+
+describe('聯絡簿未儲存保護', () => {
+  async function edit(w) {
+    w.findAllComponents(STUBS.ElInput)[1].vm.$emit('update:modelValue', '合成測試提醒')
+    await flushPromises()
+  }
+
+  it('關閉前保留未儲存內容，繼續編輯不關閉', async () => {
+    const w = mountIt()
+    await edit(w)
+    await w.findAll('button').find(b => b.text() === '關閉').trigger('click')
+    expect(w.emitted('close')).toBeUndefined()
+    expect(w.text()).toContain('尚有未儲存的變更')
+    await w.findAll('button').find(b => b.text() === '繼續編輯').trigger('click')
+    expect(w.emitted('close')).toBeUndefined()
+    expect(w.findAll('textarea')[1].element.value).toBe('合成測試提醒')
+    w.unmount()
+  })
+
+  it('儲存失敗保留輸入，成功後才離開', async () => {
+    const save = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    const w = mountIt(ENTRY_DRAFT, { saveDraftForClose: save })
+    await edit(w)
+    await w.findAll('button').find(b => b.text() === '關閉').trigger('click')
+    await w.find('[data-testid="save-before-close"]').trigger('click')
+    await flushPromises()
+    expect(w.emitted('close')).toBeUndefined()
+    expect(w.findAll('textarea')[1].element.value).toBe('合成測試提醒')
+    await w.find('[data-testid="save-before-close"]').trigger('click')
+    await flushPromises()
+    expect(w.emitted('close')).toHaveLength(1)
+    w.unmount()
+  })
+
+  it('捨棄才關閉；X／遮罩／Esc 走同一個 beforeClose', async () => {
+    const w = mountIt()
+    await edit(w)
+    const drawer = w.findComponent(STUBS.ElDrawer)
+    const done = vi.fn()
+    drawer.vm.$attrs['before-close'](done)
+    await flushPromises()
+    expect(done).not.toHaveBeenCalled()
+    await w.findAll('button').find(b => b.text() === '捨棄變更').trigger('click')
+    await flushPromises()
+    expect(done).toHaveBeenCalledOnce()
+    w.unmount()
+  })
+
+  it('儲存等待期間不可捨棄或重複儲存，回應成功才關閉', async () => {
+    let resolveSave
+    const save = vi.fn(() => new Promise(resolve => { resolveSave = resolve }))
+    const w = mountIt(ENTRY_DRAFT, { saveDraftForClose: save })
+    await edit(w)
+    await w.findAll('button').find(b => b.text() === '關閉').trigger('click')
+    await w.find('[data-testid="save-before-close"]').trigger('click')
+    expect(w.emitted('close')).toBeUndefined()
+    expect(w.findAll('button').find(b => b.text() === '捨棄變更').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="save-before-close"]').attributes('disabled')).toBeDefined()
+    resolveSave(true)
+    await flushPromises()
+    expect(save).toHaveBeenCalledOnce()
+    expect(w.emitted('close')).toHaveLength(1)
+    w.unmount()
+  })
+
+  it('成功儲存後關閉不再提示，切下一位空白學生不沿用表單', async () => {
+    const w = mountIt()
+    await edit(w)
+    await w.setProps({ entry: { ...ENTRY_DRAFT, version: 2, teacher_note: '合成測試提醒' } })
+    await w.findAll('button').find(b => b.text() === '關閉').trigger('click')
+    expect(w.emitted('close')).toHaveLength(1)
+    await w.setProps({ entry: null, studentId: 1 })
+    await edit(w)
+    await w.setProps({ studentId: 2 })
+    expect(w.findAll('textarea')[1].element.value).toBe('')
+    w.unmount()
+  })
+
+  it('儲存中禁止關閉，分頁關閉也會提醒', async () => {
+    const w = mountIt(ENTRY_DRAFT, { saving: true })
+    await w.findAll('button').find(b => b.text() === '關閉').trigger('click')
+    expect(w.emitted('close')).toBeUndefined()
+    const event = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    w.unmount()
   })
 })

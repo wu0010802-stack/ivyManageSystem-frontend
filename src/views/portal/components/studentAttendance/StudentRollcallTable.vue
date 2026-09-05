@@ -6,6 +6,8 @@ interface RollcallStudent { student_id?: number; student_no?: string; name?: str
 defineProps<{
   students: RollcallStudent[]
   loading?: boolean
+  disabled?: boolean
+  pendingCount?: number
 }>()
 
 const emit = defineEmits<{
@@ -52,11 +54,11 @@ function onRemarkChange(student: RollcallStudent, value: string) {
 
     <template v-else>
       <div class="rollcall-actions">
-        <el-button size="small" type="success" plain @click="$emit('quick-set-all', '出席')">
-          全部出席
+        <el-button size="small" type="success" :disabled="disabled || pendingCount === 0" plain @click="$emit('quick-set-all', '出席')">
+          {{ pendingCount === undefined ? '全部出席' : `未點名者出席（${pendingCount} 人）` }}
         </el-button>
-        <el-button size="small" type="danger" plain @click="$emit('quick-set-all', '缺席')">
-          全部缺席
+        <el-button size="small" type="danger" :disabled="disabled || pendingCount === 0" plain @click="$emit('quick-set-all', '缺席')">
+          {{ pendingCount === undefined ? '全部缺席' : `未點名者缺席（${pendingCount} 人）` }}
         </el-button>
       </div>
 
@@ -69,8 +71,10 @@ function onRemarkChange(student: RollcallStudent, value: string) {
         >
           <span class="student-no">{{ s.student_no }}</span>
           <span class="student-name">{{ s.name }}</span>
+          <!-- 點擊已預選的出席也代表確認，必須通知父頁從待點名集合移除。 -->
           <el-radio-group
             :model-value="s.status"
+            :disabled="disabled"
             size="small"
             @update:model-value="(v) => onStatusChange(s, String(v))"
           >
@@ -78,6 +82,7 @@ function onRemarkChange(student: RollcallStudent, value: string) {
               v-for="opt in STATUS_OPTIONS"
               :key="opt"
               :value="opt"
+              @click.capture="s.status === opt && onStatusChange(s, opt)"
             >
               {{ opt }}
             </el-radio-button>
@@ -87,6 +92,7 @@ function onRemarkChange(student: RollcallStudent, value: string) {
           <el-input
             v-if="isRemarkOpen(s)"
             :model-value="s.remark"
+            :disabled="disabled"
             placeholder="備註（選填）"
             size="small"
             class="remark-input"

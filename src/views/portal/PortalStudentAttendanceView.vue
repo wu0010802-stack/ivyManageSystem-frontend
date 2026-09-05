@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, ref, watch, onMounted } from 'vue'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
@@ -26,6 +26,7 @@ import { flushClassAttendanceQueue } from '@/utils/attendanceSync'
 import { useOnlineStatus, isNetworkError } from '@/composables/useOnlineStatus'
 import { todayISO, thisMonthISO } from '@/utils/format'
 import { getUserInfo } from '@/utils/auth'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
 import StudentAttendanceTabs from './components/studentAttendance/StudentAttendanceTabs.vue'
 import StudentRollcallTable from './components/studentAttendance/StudentRollcallTable.vue'
@@ -51,6 +52,55 @@ const pendingCount = ref(0)
 const reviewOps = ref<Record<string, unknown>[]>([])
 const otherUserOpsCount = ref(0)
 const syncing = ref(false)
+
+// 保留伺服器原本未點名的集合，畫面預選出席不代表已確認。
+const pendingStudentIds = ref(new Set<number | undefined>())
+const baseline = ref(new Map<number | undefined, string>())
+const baselinePendingIds = ref(new Set<number | undefined>())
+const switching = ref(false)
+const bulkUndo = ref<{ records: AttendanceRecord[]; pending: Set<number | undefined> } | null>(null)
+const recordValue = (record: AttendanceRecord) => JSON.stringify([record.status || '', record.remark || ''])
+const unsavedCount = computed(() => dailyRecords.value.filter((record) =>
+  baseline.value.get(record.student_id) !== recordValue(record)
+  || (baselinePendingIds.value.has(record.student_id) && !pendingStudentIds.value.has(record.student_id)),
+).length)
+const editingBlocked = computed(() => dailyLoading.value || saveLoading.value || switching.value)
+
+function acceptSnapshot() {
+  baseline.value = new Map(dailyRecords.value.map(record => [record.student_id, recordValue(record)]))
+  baselinePendingIds.value = new Set(pendingStudentIds.value)
+  bulkUndo.value = null
+}
+
+// 儲存期間禁止導覽；尚未送出的修改沿用全站離頁／關閉分頁提醒。
+onBeforeRouteLeave(() => !saveLoading.value && !switching.value)
+const { confirmDiscard } = useUnsavedChangesGuard(() => unsavedCount.value > 0 || saveLoading.value)
+
+async function switchContext(change: () => void) {
+  if (saveLoading.value || switching.value) return
+  switching.value = true
+  try {
+    if (!(await confirmDiscard())) return
+    // 已確認捨棄，切換後由原本的 request-sequence guard 載入正確名冊。
+    ++dailyRequestSeq
+    dailyLoading.value = false
+    dailyRecords.value = []
+    pendingStudentIds.value.clear()
+    acceptSnapshot()
+    change()
+  } finally {
+    switching.value = false
+  }
+}
+function changeClassroom(value: number | null) {
+  if (value && value !== classroomId.value) return switchContext(() => { classroomId.value = value })
+}
+function changeDate(value: string | null) {
+  if (value && value !== dailyDate.value) return switchContext(() => { dailyDate.value = value })
+}
+function changeTab(value: string) {
+  if (value !== activeTab.value) return switchContext(() => { activeTab.value = value })
+}
 
 const currentUserId = (): string | number | null => (getUserInfo()?.id as string | number | undefined) ?? null
 
@@ -143,6 +193,8 @@ const fetchDailyAttendance = async () => {
   if (!classroomId.value || !dailyDate.value) return
   const seq = ++dailyRequestSeq
   dailyLoading.value = true
+  dailyRecords.value = []
+  bulkUndo.value = null
   try {
     const res = await getMyClassAttendance({
       date: dailyDate.value,
@@ -151,11 +203,13 @@ const fetchDailyAttendance = async () => {
     if (seq !== dailyRequestSeq) return
     // 後端缺 response_model，res.data 為 unknown，narrow 取 records。
     const records = (res.data as { records?: AttendanceRecord[] }).records ?? []
+    pendingStudentIds.value = new Set(records.filter(record => !record.status).map(record => record.student_id))
     dailyRecords.value = records.map((record) => ({
       ...record,
       status: record.status || '出席',
       remark: record.remark || '',
     }))
+    acceptSnapshot()
   } catch (error) {
     if (seq !== dailyRequestSeq) return
     ElMessage.error(apiError(error, '載入點名資料失敗'))
@@ -166,21 +220,39 @@ const fetchDailyAttendance = async () => {
 
 // onUpdateStatus：mutate 本機狀態，儲存由「儲存點名」按鈕觸發（批次）
 const onUpdateStatus = ({ student_id, status, remark }: { student_id: number | undefined; status: string; remark: string }) => {
+  if (editingBlocked.value) return
   const record = dailyRecords.value.find((r) => r.student_id === student_id)
   if (record) {
     record.status = status
     record.remark = remark
+    pendingStudentIds.value.delete(student_id)
+    bulkUndo.value = null
   }
 }
 
 const onQuickSetAll = (status: string) => {
+  if (editingBlocked.value || pendingStudentIds.value.size === 0) return
+  bulkUndo.value = { records: dailyRecords.value.map(record => ({ ...record })), pending: new Set(pendingStudentIds.value) }
   dailyRecords.value.forEach((record) => {
-    record.status = status
+    if (pendingStudentIds.value.has(record.student_id)) record.status = status
   })
+  pendingStudentIds.value.clear()
+}
+
+function undoBulk() {
+  if (editingBlocked.value || !bulkUndo.value) return
+  dailyRecords.value = bulkUndo.value.records
+  pendingStudentIds.value = bulkUndo.value.pending
+  bulkUndo.value = null
+}
+
+function markSaved() {
+  pendingStudentIds.value.clear()
+  acceptSnapshot()
 }
 
 const saveDailyAttendance = async () => {
-  if (!classroomId.value || dailyRecords.value.length === 0) return
+  if (editingBlocked.value || !classroomId.value || dailyRecords.value.length === 0) return
   const payload = {
     date: dailyDate.value,
     classroom_id: classroomId.value,
@@ -201,18 +273,26 @@ const saveDailyAttendance = async () => {
     // 離線：直接進佇列，不嘗試網路請求
     if (!isOnline.value) {
       await enqueueOp({ kind: OP_KINDS.CLASS_ATTENDANCE, payload, userId: uid, meta })
+      markSaved()
       await refreshPendingCount()
       ElMessage.success(`離線中，已暫存 ${payload.entries.length} 筆，連線後自動同步`)
       return
     }
     // entries 來自伺服器點名清單，student_id/status 必有值；依後端契約送出。
     await batchSaveClassAttendance(payload as ApiBody<'/portal/class-attendance/batch', 'post'>)
+    markSaved()
     ElMessage.success('點名儲存成功')
     if (pendingCount.value > 0) syncQueue({ silent: true })
   } catch (error) {
     // navigator.onLine 可能說謊：實際網路失敗也要 fallback 到佇列
     if (isNetworkError(error)) {
-      await enqueueOp({ kind: OP_KINDS.CLASS_ATTENDANCE, payload, userId: uid, meta })
+      try {
+        await enqueueOp({ kind: OP_KINDS.CLASS_ATTENDANCE, payload, userId: uid, meta })
+      } catch {
+        ElMessage.error('無法暫存點名，請保留此頁並重新儲存')
+        return
+      }
+      markSaved()
       await refreshPendingCount()
       ElMessage.warning(`網路異常，已暫存 ${payload.entries.length} 筆，稍後自動重送`)
       return
@@ -277,7 +357,6 @@ onMounted(async () => {
     syncQueue({ silent: false })
   }
   await fetchClassrooms()
-  fetchDailyAttendance()
 })
 </script>
 
@@ -321,15 +400,21 @@ onMounted(async () => {
     </el-alert>
 
     <StudentAttendanceTabs
-      v-model:active-tab="activeTab"
-      v-model:classroom-id="classroomId"
+      :active-tab="activeTab"
+      :classroom-id="classroomId"
+      :disabled="saveLoading || switching"
+      @update:active-tab="changeTab"
+      @update:classroom-id="changeClassroom"
       :classrooms="classrooms"
     >
       <template #daily>
         <div class="daily-filters">
           <div class="filter-label">日期</div>
           <el-date-picker
-            v-model="dailyDate"
+            :model-value="dailyDate"
+            :clearable="false"
+            :disabled="saveLoading || switching"
+            @update:model-value="changeDate"
             type="date"
             placeholder="選擇日期"
             value-format="YYYY-MM-DD"
@@ -340,12 +425,18 @@ onMounted(async () => {
         <StudentRollcallTable
           :students="dailyRecords"
           :loading="dailyLoading"
+          :disabled="editingBlocked"
+          :pending-count="pendingStudentIds.size"
           @update-status="onUpdateStatus"
           @quick-set-all="onQuickSetAll"
         />
 
         <div v-if="dailyRecords.length > 0" class="save-row">
-          <el-button type="primary" :loading="saveLoading" @click="saveDailyAttendance">
+          <span role="status" aria-live="polite">
+            {{ saveLoading ? '儲存中，請稍候' : unsavedCount ? `有 ${unsavedCount} 筆未儲存` : '目前沒有未儲存的修改' }}
+          </span>
+          <el-button v-if="bulkUndo" :disabled="editingBlocked" @click="undoBulk">復原批次點名</el-button>
+          <el-button type="primary" :loading="saveLoading" :disabled="dailyLoading || switching" @click="saveDailyAttendance">
             儲存點名（{{ dailyRecords.length }} 人）
           </el-button>
         </div>
@@ -385,7 +476,32 @@ onMounted(async () => {
 }
 
 .save-row {
-  margin-top: 16px;
-  text-align: right;
+  position: sticky;
+  bottom: var(--space-2);
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--pt-surface-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+}
+.save-row > span {
+  margin-right: auto;
+  color: var(--pt-text-strong);
+}
+.save-row :deep(.el-button) {
+  min-height: var(--touch-target-min);
+}
+@media (--to-sm) {
+  .save-row {
+    /* 與 PortalLayout 的底部導覽列高度對齊，避免遮住儲存動作。 */
+    bottom: calc(60px + env(safe-area-inset-bottom) + var(--space-2));
+  }
 }
 </style>
