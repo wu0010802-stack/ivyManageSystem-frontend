@@ -8,6 +8,8 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyCompLeaveGrants, getMyPayoutHistory } from '@/api/portalLeaveQuotaExpiry'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 interface CompLeaveGrant {
   grant_id: number
@@ -77,6 +79,27 @@ function sourceTagType(sourceType: string): 'warning' | 'danger' | 'success' {
 function money(v: number): string {
   return `$${Number(v).toLocaleString()}`
 }
+
+const { isMobile } = useIsMobile()
+
+const grantCardColumns = [
+  {
+    label: '時數',
+    prop: 'granted_hours',
+    formatter: (i: Record<string, unknown>) =>
+      `${i.granted_hours}h（已用 ${i.consumed_hours}h，剩 ${i.remaining_hours}h）`,
+  },
+  { label: '到期日', prop: 'expires_at' },
+  { label: '狀態', prop: 'status' },          // tag → #cell-status
+  { label: '結算時間', prop: 'expired_at' },
+]
+
+const logCardColumns = [
+  { label: '來源', prop: 'source_type' },     // tag → #cell-source_type
+  { label: '時數', prop: 'hours', formatter: (i: Record<string, unknown>) => `${i.hours}h` },
+  { label: '金額', prop: 'amount', formatter: (i: Record<string, unknown>) => money(i.amount as number) },
+  { label: '時薪基準日', prop: 'wage_basis_date' },
+]
 </script>
 
 <template>
@@ -85,7 +108,9 @@ function money(v: number): string {
 
     <el-tabs type="border-card">
       <el-tab-pane label="補休發放紀錄">
+        <!-- 桌機表格；手機用卡片（5 欄含「已用 Xh，剩 Yh」長文字，390px 讀不了，P2-06） -->
         <el-table
+          v-if="!isMobile"
           :data="grants"
           v-loading="loading"
           border
@@ -111,10 +136,27 @@ function money(v: number): string {
           </el-table-column>
           <el-table-column prop="expired_at" label="結算時間" width="180" />
         </el-table>
+
+        <AdminListCards
+          v-else
+          :items="grants as unknown as Record<string, unknown>[]"
+          :columns="grantCardColumns"
+          row-key="grant_id"
+          :loading="loading"
+          empty-text="尚無補休紀錄"
+        >
+          <template #title="{ item }">{{ item.granted_at }} 發放 {{ item.granted_hours }}h</template>
+          <template #cell-status="{ item }">
+            <el-tag :type="statusTagType(item.status as string)" size="small">
+              {{ STATUS_LABEL[item.status as string] ?? item.status }}
+            </el-tag>
+          </template>
+        </AdminListCards>
       </el-tab-pane>
 
       <el-tab-pane label="折算歷史">
         <el-table
+          v-if="!isMobile"
           :data="logs"
           v-loading="loading"
           border
@@ -137,6 +179,22 @@ function money(v: number): string {
           </el-table-column>
           <el-table-column prop="wage_basis_date" label="時薪基準日" width="130" />
         </el-table>
+
+        <AdminListCards
+          v-else
+          :items="logs as unknown as Record<string, unknown>[]"
+          :columns="logCardColumns"
+          row-key="log_id"
+          :loading="loading"
+          empty-text="尚無折算紀錄"
+        >
+          <template #title="{ item }">{{ item.salary_period }} 入帳</template>
+          <template #cell-source_type="{ item }">
+            <el-tag :type="sourceTagType(item.source_type as string)" size="small">
+              {{ SOURCE_LABEL[item.source_type as string] ?? item.source_type }}
+            </el-tag>
+          </template>
+        </AdminListCards>
       </el-tab-pane>
     </el-tabs>
   </div>

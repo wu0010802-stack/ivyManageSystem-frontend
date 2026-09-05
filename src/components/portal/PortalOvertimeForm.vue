@@ -4,6 +4,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { Loading } from '@element-plus/icons-vue'
 import { getMyWorkdayHours } from '@/api/portal'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const emit = defineEmits<{
   'submit': [payload: Record<string, unknown>]
@@ -136,13 +137,17 @@ const submit = async () => {
 }
 
 defineExpose({ form })
+
+// 手機改用頂端標籤，避免固定 label-width 把「開始時間」等標籤折行（P1-02）
+const { isMobile } = useIsMobile()
 </script>
 
 <template>
     <div class="overtime-form">
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+        <el-form ref="formRef" :model="form" :rules="rules" :label-position="isMobile ? 'top' : 'right'"
+            :label-width="isMobile ? undefined : '80px'">
             <el-form-item label="日期" prop="overtime_date">
-                <el-date-picker v-model="form.overtime_date" type="date" value-format="YYYY-MM-DD" placeholder="選擇加班日期" style="width: 100%;" />
+                <el-date-picker popper-class="portal-sheet-picker" v-model="form.overtime_date" type="date" value-format="YYYY-MM-DD" placeholder="選擇加班日期" style="width: 100%;" />
             </el-form-item>
             <el-form-item label="類型" prop="overtime_type">
                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -157,10 +162,10 @@ defineExpose({ form })
                 </div>
             </el-form-item>
             <el-form-item label="開始時間" required>
-                <el-time-picker v-model="form.start_time" format="HH:mm" value-format="HH:mm" placeholder="選擇開始時間" style="width: 100%;" />
+                <el-time-picker popper-class="portal-sheet-picker" v-model="form.start_time" format="HH:mm" value-format="HH:mm" placeholder="選擇開始時間" style="width: 100%;" />
             </el-form-item>
             <el-form-item label="結束時間" required :error="timeError">
-                <el-time-picker v-model="form.end_time" format="HH:mm" value-format="HH:mm" placeholder="選擇結束時間" style="width: 100%;" />
+                <el-time-picker popper-class="portal-sheet-picker" v-model="form.end_time" format="HH:mm" value-format="HH:mm" placeholder="選擇結束時間" style="width: 100%;" />
             </el-form-item>
             <el-form-item label="時數" prop="hours">
                 <el-input-number v-model="form.hours" :min="0.5" :max="12" :step="0.5" disabled />
@@ -174,9 +179,12 @@ defineExpose({ form })
                 </span>
             </el-form-item>
             <el-form-item label="補休方式">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <el-switch v-model="form.use_comp_leave" active-text="補休" inactive-text="加班費" active-color="#67c23a" />
-                    <span style="font-size: 12px; color: var(--el-text-color-secondary);">
+                <div class="comp-leave-choice">
+                    <el-radio-group v-model="form.use_comp_leave" aria-label="補休方式">
+                        <el-radio-button :value="false">加班費</el-radio-button>
+                        <el-radio-button :value="true">補休</el-radio-button>
+                    </el-radio-group>
+                    <span class="comp-leave-hint">
                         補休以 1:1 累積，核准後即計入當年度補休時數
                     </span>
                 </div>
@@ -193,6 +201,18 @@ defineExpose({ form })
 </template>
 
 <style scoped>
+/* 補休方式：原本用 el-switch 的 active-text/inactive-text，窄幕會把「加班費」
+   「補休」壓成直排單字（P1-02）。改分段選鈕後語意也更清楚。 */
+.comp-leave-choice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+.comp-leave-hint {
+    font-size: var(--text-xs);
+    color: var(--el-text-color-secondary);
+}
 .overtime-form {
     display: flex;
     flex-direction: column;

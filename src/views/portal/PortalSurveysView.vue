@@ -2,7 +2,8 @@
   <div class="portal-survey-list">
     <PortalPageHeader title="活動調查" />
 
-    <el-table :data="rows" v-loading="loading" border @row-click="onRowClick">
+    <!-- 桌機表格；手機用卡片（4 欄含長標題在 390px 會橫向捲，P2-06） -->
+    <el-table v-if="!isMobile" :data="rows" v-loading="loading" border @row-click="onRowClick">
       <template #empty>
         <EmptyState variant="inline" title="尚無調查資料" />
       </template>
@@ -17,6 +18,24 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <AdminListCards
+      v-else
+      :items="rows as unknown as Record<string, unknown>[]"
+      :columns="surveyCardColumns"
+      row-key="id"
+      :loading="loading"
+      empty-text="尚無調查資料"
+      clickable
+      @row-click="(item) => onRowClick(item as unknown as Row)"
+    >
+      <template #title="{ item }">{{ item.title }}</template>
+      <template #cell-status="{ item }">
+        <el-tag :type="statusTagType(item.status as string)" size="small">
+          {{ statusLabel(item.status as string) }}
+        </el-tag>
+      </template>
+    </AdminListCards>
   </div>
 </template>
 
@@ -28,6 +47,8 @@ import { listPortalSurveys } from '@/api/surveys'
 import { friendlyError } from '@/utils/errorMessages'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 interface Row {
   id: number
@@ -37,6 +58,14 @@ interface Row {
   status: string
   fee_note: string | null
 }
+
+const { isMobile } = useIsMobile()
+
+const surveyCardColumns = [
+  { label: '活動日', prop: 'event_date', formatter: (i: Record<string, unknown>) => i.event_date ?? '-' },
+  { label: '回覆截止', prop: 'reply_deadline' },
+  { label: '狀態', prop: 'status' },   // tag → #cell-status
+]
 
 const rows = ref<Row[]>([])
 const loading = ref(false)

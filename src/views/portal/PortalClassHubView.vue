@@ -7,7 +7,7 @@
     >
       <template #actions>
         <el-button :loading="loading" @click="manualRefresh">
-          手動刷新
+          重新整理
         </el-button>
         <!-- Phase 1 殼層改版：學生 tab 退出底部導覽，這裡補班級學生入口 -->
         <el-button @click="goStudents">
@@ -16,7 +16,7 @@
       </template>
     </PortalPageHeader>
 
-    <ClassHubStickyNext :next="stickyNext" @jump="(dl) => jumpDeep(dl || '')" />
+    <ClassHubStickyNext :next="stickyNext" :counts="hubCounts" @jump="(dl) => jumpDeep(dl || '')" />
 
     <ClassHubBatchMeasurementCard
       :last-measured-on="lastBatchMeasuredOn"
@@ -86,6 +86,7 @@ import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchM
 import PortalErrorState from '@/components/portal/PortalErrorState.vue'
 import PortalPageHeader from '@/components/portal/PortalPageHeader.vue'
 import { getMeasurementsLatest } from '@/api/portalMeasurements'
+import type { PortalHubCounts } from '@/utils/portalHubCounts'
 
 const { data, loading, error, refresh, decrementCount } = usePortalClassHub() as {
   data: import('vue').Ref<Record<string, unknown> | null>
@@ -102,6 +103,8 @@ interface SlotTask { kind?: string; count?: number; action_mode?: string; due_at
 interface TimeSlot { slot_id?: string; tasks: SlotTask[] }
 
 const stickyNext = computed(() => (data.value?.sticky_next ?? null) as NextTask | null)
+// 置頂條的「都完成」必須同時看 counts，否則沒有用藥委託的日子會誤報（P1-01）
+const hubCounts = computed(() => (data.value?.counts ?? null) as PortalHubCounts | null)
 const slots = computed(() => ((data.value?.slots ?? []) as unknown) as TimeSlot[])
 
 const batchSheetOpen = ref(false)

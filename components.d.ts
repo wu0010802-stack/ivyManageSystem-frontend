@@ -79,6 +79,8 @@ declare module 'vue' {
     ClassroomSummaryTable: typeof import('./src/components/gov-reports/ClassroomSummaryTable.vue')['default']
     CloseTab: typeof import('./src/components/fees/CloseTab.vue')['default']
     CollectionAllocationDialog: typeof import('./src/components/fees/CollectionAllocationDialog.vue')['default']
+    CollectionAllocConfirmCard: typeof import('./src/components/fees/CollectionAllocConfirmCard.vue')['default']
+    CollectionBatchDrawer: typeof import('./src/components/fees/CollectionBatchDrawer.vue')['default']
     CollectionReconTab: typeof import('./src/components/fees/CollectionReconTab.vue')['default']
     CommunicationEditorDialog: typeof import('./src/components/student/CommunicationEditorDialog.vue')['default']
     CommunicationTab: typeof import('./src/components/student/tabs/CommunicationTab.vue')['default']

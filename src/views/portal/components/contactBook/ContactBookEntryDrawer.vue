@@ -12,11 +12,14 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
   publishing: { type: Boolean, default: false },
   photoUploading: { type: Boolean, default: false },
+  /** 名單上還有下一位未填的學生時，底部才出現「儲存並填下一位」 */
+  hasNext: { type: Boolean, default: false },
 })
 
 const emit = defineEmits([
   'update:modelValue',
   'save-draft',    // (formPayload, version)
+  'save-and-next', // (formPayload, version) — 儲存後直接開下一位（P1-03）
   'save-as-template',  // (fields) — 形狀同後端 TemplateFields
   'publish',       // ()
   'upload-photo',  // (opts) — el-upload style { file }
@@ -38,42 +41,51 @@ const BOWEL_OPTIONS = [
   { value: 'none', label: '未排便' },
 ]
 
-const form = ref({
-  mood: null,
-  meal_lunch: null,
-  meal_snack: null,
-  nap_minutes: null,
-  bowel: null,
-  temperature_c: null,
+/**
+ * 表單值用 undefined 表示「未記錄」而非 null：el-radio-group 的 v-model
+ * 型別不接受 null，而 buildPayload() 的 norm() 會把 undefined 轉回 null，
+ * 送出去的 payload 形狀不變。
+ */
+interface EntryForm {
+  mood: string | undefined
+  meal_lunch: number | undefined
+  meal_snack: number | undefined
+  nap_minutes: number | undefined
+  bowel: string | undefined
+  temperature_c: number | undefined
+  teacher_note: string
+  learning_highlight: string
+}
+
+const EMPTY_FORM: EntryForm = {
+  mood: undefined,
+  meal_lunch: undefined,
+  meal_snack: undefined,
+  nap_minutes: undefined,
+  bowel: undefined,
+  temperature_c: undefined,
   teacher_note: '',
   learning_highlight: '',
-})
+}
+
+const form = ref<EntryForm>({ ...EMPTY_FORM })
 
 watch(
   () => props.entry,
   (e) => {
     if (e) {
       form.value = {
-        mood: e.mood ?? null,
-        meal_lunch: e.meal_lunch ?? null,
-        meal_snack: e.meal_snack ?? null,
-        nap_minutes: e.nap_minutes ?? null,
-        bowel: e.bowel ?? null,
-        temperature_c: e.temperature_c ?? null,
+        mood: e.mood ?? undefined,
+        meal_lunch: e.meal_lunch ?? undefined,
+        meal_snack: e.meal_snack ?? undefined,
+        nap_minutes: e.nap_minutes ?? undefined,
+        bowel: e.bowel ?? undefined,
+        temperature_c: e.temperature_c ?? undefined,
         teacher_note: e.teacher_note ?? '',
         learning_highlight: e.learning_highlight ?? '',
       }
     } else {
-      form.value = {
-        mood: null,
-        meal_lunch: null,
-        meal_snack: null,
-        nap_minutes: null,
-        bowel: null,
-        temperature_c: null,
-        teacher_note: '',
-        learning_highlight: '',
-      }
+      form.value = { ...EMPTY_FORM }
     }
   },
   { immediate: true },
@@ -121,6 +133,13 @@ function handleSaveDraft() {
 
 // 存為範本：buildPayload() 產出的形狀與後端 TemplateFields 完全同構，
 // 且只讀 form 不依賴 entry.id，因此尚未存成草稿時也能用。
+function handleSaveAndNext() {
+  emit('save-and-next', buildPayload(), props.entry?.version ?? 0)
+}
+
+// 午睡常見時長快選：原本只有 15 分鐘一格的加減鈕，填 90 分鐘要按 6 次
+const NAP_PRESETS = [30, 60, 90, 120]
+
 function handleSaveAsTemplate() {
   emit('save-as-template', buildPayload())
 }
@@ -178,28 +197,50 @@ function handleClose() {
         </ul>
       </section>
 
+      <!-- 心情／午餐／點心／排便改單選 chip（P1-03）：這四欄每位學生都要填，
+           下拉每次要「點開→捲動→選」三個動作，chip 一下就到。 -->
       <el-form-item label="心情">
-        <el-select v-model="form.mood" placeholder="選擇心情" clearable style="width: 220px; max-width: 100%">
-          <el-option v-for="o in MOOD_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-        </el-select>
+        <el-radio-group v-model="form.mood" class="chip-group">
+          <el-radio-button v-for="o in MOOD_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+
+      <el-form-item label="午餐">
+        <el-radio-group v-model="form.meal_lunch" class="chip-group">
+          <el-radio-button v-for="o in MEAL_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="點心">
+        <el-radio-group v-model="form.meal_snack" class="chip-group">
+          <el-radio-button v-for="o in MEAL_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
       </el-form-item>
 
       <div class="form-row">
-        <el-form-item label="午餐">
-          <el-select v-model="form.meal_lunch" placeholder="選擇" clearable>
-            <el-option v-for="o in MEAL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="點心">
-          <el-select v-model="form.meal_snack" placeholder="選擇" clearable>
-            <el-option v-for="o in MEAL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-          </el-select>
-        </el-form-item>
-      </div>
-
-      <div class="form-row">
         <el-form-item label="午睡（分鐘）">
-          <el-input-number v-model="form.nap_minutes" :min="0" :max="600" :step="15" />
+          <div class="nap-field">
+            <el-input-number v-model="form.nap_minutes" :min="0" :max="600" :step="15" />
+            <div class="nap-presets">
+              <el-button
+                v-for="m in NAP_PRESETS"
+                :key="m"
+                size="small"
+                :type="form.nap_minutes === m ? 'primary' : 'default'"
+                @click="form.nap_minutes = m"
+              >
+                {{ m }}
+              </el-button>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="體溫（°C）">
           <el-input-number
@@ -213,9 +254,12 @@ function handleClose() {
       </div>
 
       <el-form-item label="排便">
-        <el-select v-model="form.bowel" placeholder="選擇排便狀況" clearable style="width: 220px; max-width: 100%">
-          <el-option v-for="o in BOWEL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
-        </el-select>
+        <el-radio-group v-model="form.bowel" class="chip-group">
+          <el-radio-button v-for="o in BOWEL_OPTIONS" :key="o.value" :value="o.value">
+            {{ o.label }}
+          </el-radio-button>
+          <el-radio-button :value="undefined">未記錄</el-radio-button>
+        </el-radio-group>
       </el-form-item>
 
       <el-form-item label="今日學習亮點">
@@ -291,6 +335,16 @@ function handleClose() {
           @click="handleSaveDraft"
         >
           儲存草稿
+        </el-button>
+        <el-button
+          v-if="hasNext"
+          type="primary"
+          plain
+          :loading="saving"
+          :disabled="publishing"
+          @click="handleSaveAndNext"
+        >
+          儲存並填下一位
         </el-button>
         <el-button
           type="success"
@@ -414,5 +468,33 @@ function handleClose() {
   font-size: var(--text-sm);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 單選 chip 群組：換行不擠壓，觸控目標 ≥44px */
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-group :deep(.el-radio-button__inner) {
+  min-height: var(--touch-target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-full);
+  border-left: 1px solid var(--el-border-color);
+}
+.chip-group :deep(.el-radio-button) {
+  margin: 0;
+}
+.nap-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.nap-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 </style>

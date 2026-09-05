@@ -626,9 +626,6 @@ const submitPassword = async () => {
           <span>我的</span>
         </button>
       </nav>
-      <button v-if="isMobile" class="psp-fab" @click="openPalette" aria-label="搜尋">
-        <el-icon><Search /></el-icon>
-      </button>
     </el-container>
 
     <!-- 全域快速搜尋 Palette (Cmd+K) -->
@@ -1170,32 +1167,22 @@ html.dark .portal-layout {
   border-radius: 3px;
   font-size: 11px;
 }
+/* 手機：原本整個隱藏、改用右下角 FAB，但 FAB 會蓋住卡片右下角的「編輯」鈕，
+   且與底部導覽的「＋申請」形成雙 FAB（P2-10）。改成頁首圖示鈕。 */
 @media (--to-sm) {
   .psp-trigger-portal {
+    min-width: var(--touch-target-min, 44px);
+    min-height: var(--touch-target-min, 44px);
+    justify-content: center;
+    padding: 6px;
+    border-color: transparent;
+    background: transparent;
+  }
+  .psp-trigger-label,
+  .psp-trigger-kbd {
     display: none;
   }
 }
 
-/* ── 行動端搜尋 FAB（右下角圓鈕） ── */
-.psp-fab {
-  position: fixed;
-  bottom: calc(76px + env(safe-area-inset-bottom)); /* bottom-nav(60+inset)+16 gap */
-  right: 16px;
-  z-index: 50;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--el-color-primary);
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.psp-fab .el-icon {
-  font-size: 22px;
-}
 
 </style>

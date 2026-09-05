@@ -224,7 +224,7 @@ onMounted(fetchStudents)
         >
           <div class="row top">
             <span class="name">{{ s.name }}</span>
-            <el-tag :type="genderTagType(s.gender)" size="small">
+            <el-tag v-if="genderLabel(s.gender)" :type="genderTagType(s.gender)" size="small">
               {{ genderLabel(s.gender) }}
             </el-tag>
             <span
@@ -253,9 +253,9 @@ onMounted(fetchStudents)
           </div>
 
           <div class="row meta">
-            <span>學號 {{ s.student_id || '—' }}</span>
-            <span class="dot">・</span>
-            <span>{{ ageMap.get(s.id) ?? '—' }}</span>
+            <span v-if="s.student_id">學號 {{ s.student_id }}</span>
+            <span v-if="s.student_id && ageMap.get(s.id)" class="dot">・</span>
+            <span v-if="ageMap.get(s.id)">{{ ageMap.get(s.id) }}</span>
             <el-tag
               v-if="lifecycleLabel(s.lifecycle_status)"
               size="small"
@@ -265,18 +265,18 @@ onMounted(fetchStudents)
             </el-tag>
           </div>
 
-          <div class="row attendance">
+          <div v-if="s.attendance_rate_this_month != null" class="row attendance">
             <div class="att-label">本月出席</div>
             <div class="att-value" :class="`att-${attendanceLevel(s.attendance_rate_this_month as number | null | undefined)}`">
-              {{ s.attendance_rate_this_month != null ? `${s.attendance_rate_this_month}%` : '—' }}
+              {{ s.attendance_rate_this_month }}%
             </div>
             <div v-if="s.last_absent_date" class="att-last">
               最近缺席 {{ s.last_absent_date }}
             </div>
           </div>
 
-          <div class="row contact">
-            <span class="parent">{{ s.parent_name || '—' }}</span>
+          <div v-if="s.parent_name || s.parent_phone_masked" class="row contact">
+            <span v-if="s.parent_name" class="parent">{{ s.parent_name }}</span>
             <span v-if="s.parent_phone_masked" class="phone-block">
               <span :class="{ revealed: revealedParentPhones.has(s.id) }">
                 {{ displayedParentPhone(s) }}

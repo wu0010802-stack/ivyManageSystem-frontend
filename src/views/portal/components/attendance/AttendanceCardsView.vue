@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import type { ApprovalStatus } from '@/constants/approvalStatus'
 interface LeaveRequest { leave_type_label?: string; leave_hours?: number; status?: ApprovalStatus }
 interface OvertimeRequest { overtime_type_label?: string; hours?: number; status?: ApprovalStatus }
@@ -24,10 +25,38 @@ interface DayEntry {
   overtime_requests?: OvertimeRequest[]
 }
 
-defineProps<{
+const props = defineProps<{
   days: DayEntry[]
   month?: number | null
+  /** 檢視當月時為今天的日號；檢視其他月份為 null。未來日會折疊起來。 */
+  todayDay?: number | null
 }>()
+
+/**
+ * 未來日折疊（P1-05）。
+ *
+ * 原本手機版把整月 30 天都畫成卡片，9/3 打開會看到 9/4–9/30 共 27 張
+ * 「上班 — 下班 —」的空卡，整頁 6,900px，而老師來這頁通常只想確認
+ * 今天／昨天有沒有打到卡。
+ */
+const pastDays = computed(() =>
+  props.todayDay == null ? props.days : props.days.filter((d) => d.day <= props.todayDay!),
+)
+const futureDays = computed(() =>
+  props.todayDay == null ? [] : props.days.filter((d) => d.day > props.todayDay!),
+)
+const futureExpanded = ref(false)
+const visibleDays = computed(() =>
+  futureExpanded.value ? props.days : pastDays.value,
+)
+const futureRangeLabel = computed(() => {
+  const list = futureDays.value
+  if (list.length === 0) return ''
+  const m = props.month != null ? String(props.month).padStart(2, '0') : ''
+  const first = String(list[0].day).padStart(2, '0')
+  const last = String(list[list.length - 1].day).padStart(2, '0')
+  return `${m}/${first} 至 ${m}/${last}`
+})
 
 function getStatusInfo(day: DayEntry) {
   if (day.is_holiday) return { text: day.holiday_name || '假日', tone: 'holiday' }
@@ -101,7 +130,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
 <template>
   <div class="mobile-cards" role="list">
     <article
-      v-for="day in days"
+      v-for="day in visibleDays"
       :key="day.day"
       :data-day="day.day"
       class="day-card"
@@ -118,6 +147,7 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
       <div class="day-card__main">
         <div class="day-card__top">
           <span class="day-card__date-label">{{ formatDay(day, month) }}</span>
+          <span v-if="todayDay != null && day.day === todayDay" class="today-pill">今天</span>
           <span
             v-if="getStatusInfo(day)"
             class="status-pill"
@@ -187,6 +217,18 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
         </div>
       </div>
     </article>
+
+    <!-- 未來日折疊成一列，避免整月 27 張空卡把今天推到螢幕外（P1-05） -->
+    <button
+      v-if="futureDays.length > 0"
+      type="button"
+      class="future-toggle"
+      :aria-expanded="futureExpanded"
+      @click="futureExpanded = !futureExpanded"
+    >
+      <span>{{ futureRangeLabel }} 尚未到（{{ futureDays.length }} 天）</span>
+      <span class="future-toggle__action">{{ futureExpanded ? '收合' : '展開' }}</span>
+    </button>
   </div>
 </template>
 
@@ -289,6 +331,36 @@ function formatDay(day: DayEntry, month: number | null | undefined) {
   color: var(--pt-text-faint, var(--neutral-400));
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
+}
+
+.today-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  white-space: nowrap;
+}
+
+.future-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-2) var(--space-4);
+  border: 1px dashed var(--el-border-color);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.future-toggle__action {
+  color: var(--el-color-primary);
+  font-weight: 500;
 }
 
 .day-card__holiday {

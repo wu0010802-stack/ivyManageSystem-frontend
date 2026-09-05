@@ -128,10 +128,16 @@ function back() {
             {{ lifecycleLabel((studentInfo as Record<string, unknown>)?.lifecycle_status as string) }}
           </el-tag>
         </div>
+        <!-- 沒有值的欄位整段不畫，不要留「—｜—（—）」（P2-11） -->
         <p class="meta">
-          班級：{{ classroomInfo?.name || '—' }}
-          ｜ 生日：{{ (studentInfo as Record<string, unknown>)?.birthday || '—' }}
-          ｜ 主要家長：{{ primaryGuardian?.name || '—' }}（{{ primaryGuardian?.phone_masked || '—' }}）
+          <span v-if="classroomInfo?.name">班級：{{ classroomInfo.name }}</span>
+          <span v-if="(studentInfo as Record<string, unknown>)?.birthday">
+            生日：{{ (studentInfo as Record<string, unknown>).birthday }}
+          </span>
+          <span v-if="primaryGuardian?.name">
+            主要家長：{{ primaryGuardian.name
+            }}<template v-if="primaryGuardian.phone_masked">（{{ primaryGuardian.phone_masked }}）</template>
+          </span>
         </p>
         <div v-if="(healthInfo?.allergies as Record<string, unknown>[] | undefined)?.length" class="warn-row">
           <el-icon aria-hidden="true"><WarningFilled /></el-icon>過敏：
@@ -317,6 +323,15 @@ function back() {
   margin: 0;
   color: var(--pt-text-muted);
   font-size: var(--text-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+/* 欄位之間的分隔線（取代原本寫死在文字裡的「｜」） */
+.meta > span + span::before {
+  content: '｜';
+  margin-right: 12px;
+  color: var(--el-text-color-placeholder);
 }
 
 .warn-row {
