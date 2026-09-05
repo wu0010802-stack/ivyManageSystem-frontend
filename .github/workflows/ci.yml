@@ -171,6 +171,11 @@ jobs:
       - name: 錯誤處理棘輪（直讀 response.data.detail 只准降不准升）
         run: npm run check:error-detail
 
+      # 表單 dialog 棘輪：裸 el-dialog 表單／label-width／硬寫 px 寬度／新增鈕誤用 success 或「＋」
+      # 只准降不准升；新表單一律 FormDialog（spec 2026-09-06-admin-form-dialog-defaults）。
+      - name: 表單 dialog 棘輪（FormDialog 採用、label-width、px 寬度、按鈕誤用）
+        run: npm run check:form-dialogs
+
       # 可點擊但 Tab 不到的元素（div/li @click 沒補 role/tabindex/keydown）。
       # 存量分三類、修法各不同，見腳本頂部註解。
       - name: a11y 棘輪（可點擊元素必須鍵盤可及）
