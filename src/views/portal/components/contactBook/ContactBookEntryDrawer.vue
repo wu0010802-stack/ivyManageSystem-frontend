@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onScopeDispose, ref, watch } from 'vue'
+import type { PropType } from 'vue'
 import { Bell, Camera, Collection, Delete } from '@element-plus/icons-vue'
 import type { UploadRequestOptions } from 'element-plus'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -8,6 +9,8 @@ import { MOOD_OPTIONS } from './moods'
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
   entry: { type: Object, default: null },
+  studentId: { type: Number, default: null },
+  saveDraftForClose: { type: Function as PropType<(payload: Record<string, unknown>, version: unknown) => Promise<boolean>>, default: undefined },
   studentName: { type: String, default: '' },
   saving: { type: Boolean, default: false },
   publishing: { type: Boolean, default: false },
@@ -69,10 +72,15 @@ const EMPTY_FORM: EntryForm = {
 }
 
 const form = ref<EntryForm>({ ...EMPTY_FORM })
+const savedForm = ref('')
+const closePromptVisible = ref(false)
+const closeSaving = ref(false)
+const busy = computed(() => props.saving || props.publishing || props.photoUploading || closeSaving.value)
+const isDirty = computed(() => JSON.stringify(form.value) !== savedForm.value)
 
 watch(
-  () => props.entry,
-  (e) => {
+  () => [props.entry, props.studentId, props.modelValue] as const,
+  ([e]) => {
     if (e) {
       form.value = {
         mood: e.mood ?? undefined,
@@ -87,6 +95,7 @@ watch(
     } else {
       form.value = { ...EMPTY_FORM }
     }
+    savedForm.value = JSON.stringify(form.value)
   },
   { immediate: true },
 )
@@ -153,10 +162,62 @@ function handleUploadPhoto(opts: UploadRequestOptions): Promise<unknown> {
   return Promise.resolve()
 }
 
-function handleClose() {
-  visible.value = false
-  emit('close')
+let resolveLeave: ((allowed: boolean) => void) | undefined
+let pendingLeave: Promise<boolean> | undefined
+
+function requestLeave(): Promise<boolean> {
+  if (busy.value) return Promise.resolve(false)
+  if (!props.modelValue || !isDirty.value) return Promise.resolve(true)
+  if (pendingLeave) return pendingLeave
+  closePromptVisible.value = true
+  pendingLeave = new Promise<boolean>((resolve) => { resolveLeave = resolve })
+  return pendingLeave
 }
+
+function finishLeave(allowed: boolean) {
+  closePromptVisible.value = false
+  resolveLeave?.(allowed)
+  resolveLeave = undefined
+  pendingLeave = undefined
+}
+
+async function saveBeforeClose() {
+  if (busy.value || !props.saveDraftForClose) return
+  closeSaving.value = true
+  try {
+    const ok = await props.saveDraftForClose(buildPayload(), props.entry?.version ?? 0)
+    if (ok) {
+      savedForm.value = JSON.stringify(form.value)
+      finishLeave(true)
+    }
+  } finally {
+    closeSaving.value = false
+  }
+}
+
+async function handleClose() {
+  if (await requestLeave()) {
+    visible.value = false
+    emit('close')
+  }
+}
+
+async function beforeClose(done: () => void) {
+  if (await requestLeave()) done()
+}
+
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (props.modelValue && (isDirty.value || busy.value)) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+onMounted(() => window.addEventListener('beforeunload', beforeUnload))
+onScopeDispose(() => {
+  window.removeEventListener('beforeunload', beforeUnload)
+  finishLeave(false)
+})
+defineExpose({ requestLeave })
 </script>
 
 <template>
@@ -165,10 +226,12 @@ function handleClose() {
     :title="studentName ? `${studentName} 的聯絡簿` : '聯絡簿'"
     direction="rtl"
     :size="isMobile ? '100%' : '520px'"
-    :close-on-click-modal="!saving && !publishing"
-    @close="handleClose"
+    :close-on-click-modal="!busy"
+    :close-on-press-escape="!busy"
+    :before-close="beforeClose"
+    @close="emit('close')"
   >
-    <el-form v-if="entry !== undefined" label-position="top" class="drawer-form">
+    <el-form :disabled="busy" v-if="entry !== undefined" label-position="top" class="drawer-form">
       <el-alert
         v-if="entry?.published_at"
         type="success"
@@ -324,7 +387,8 @@ function handleClose() {
 
     <template #footer>
       <div class="drawer-footer">
-        <el-button @click="handleClose">關閉</el-button>
+        <span role="status">{{ busy ? '儲存處理中…' : isDirty ? '有未儲存的變更' : '尚無未儲存的變更' }}</span>
+        <el-button :disabled="busy" @click="handleClose">關閉</el-button>
         <el-button :icon="Collection" @click="handleSaveAsTemplate">
           存為範本
         </el-button>
@@ -358,6 +422,23 @@ function handleClose() {
       </div>
     </template>
   </el-drawer>
+  <el-dialog
+    :model-value="closePromptVisible"
+    title="未儲存變更"
+    width="min(440px, 92vw)"
+    append-to-body
+    :close-on-click-modal="false"
+    :close-on-press-escape="!busy"
+    :show-close="!busy"
+    @update:model-value="finishLeave(false)"
+  >
+    <p>尚有未儲存的變更。儲存草稿後再離開，或繼續編輯。</p>
+    <template #footer>
+      <el-button :disabled="busy" @click="finishLeave(false)">繼續編輯</el-button>
+      <el-button :disabled="busy" type="danger" plain @click="finishLeave(true)">捨棄變更</el-button>
+      <el-button data-testid="save-before-close" :disabled="busy || !saveDraftForClose" :loading="closeSaving" type="primary" @click="saveBeforeClose">儲存草稿並離開</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>

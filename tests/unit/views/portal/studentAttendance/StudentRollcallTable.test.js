@@ -89,6 +89,8 @@ describe('StudentRollcallTable', () => {
       props: { students: STUDENTS, loading: false },
       global: { stubs: STUBS },
     })
+    // 備註預設收合，先展開第一位學生，避免誤選原本已有備註的第二位。
+    await w.findAll('.student-row')[0].find('.remark-toggle').trigger('click')
     const inputs = w.findAllComponents({ name: 'ElInput' })
     await inputs[0].vm.$emit('update:modelValue', '感冒')
     const events = w.emitted('update-status')

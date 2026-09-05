@@ -19,6 +19,7 @@ import ElementPlus from 'element-plus'
 const routeQuery: Record<string, string> = {}
 
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ params: {}, query: routeQuery }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))

@@ -2,6 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('vue-router', () => ({
+  onBeforeRouteLeave: vi.fn(),
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }))
@@ -36,7 +37,9 @@ vi.mock('element-plus', () => ({
 }))
 
 import { getMyStudents } from '@/api/portal'
-import { getClassDay } from '@/api/contactBook'
+import { ElMessageBox } from 'element-plus'
+import { onBeforeRouteLeave } from 'vue-router'
+import { getClassDay, updateEntry } from '@/api/contactBook'
 import PortalContactBookView from '../PortalContactBookView.vue'
 
 function deferred<T>() {
@@ -115,5 +118,76 @@ describe('PortalContactBookView 聯絡簿請求競態', () => {
     expect(vm.items.map((i) => i.student_id)).toEqual([2])
     // loading 亦不得被落後的 A 班 finally 復位為 true 之外的錯亂
     expect(vm.listLoading).toBe(false)
+  })
+})
+
+
+describe('聯絡簿離開與失敗保護', () => {
+  it('路由離開必須等待側欄確認', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { drawerRef: { requestLeave: () => Promise<boolean> } }
+    const requestLeave = vi.fn().mockResolvedValue(false)
+    vm.drawerRef = { requestLeave }
+    const guard = vi.mocked(onBeforeRouteLeave).mock.calls.at(-1)?.[0]
+    expect(guard).toBeDefined()
+    expect(await (guard as () => Promise<boolean>)()).toBe(false)
+    expect(requestLeave).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
+  it('409 保留編輯中的 entry 物件並回傳儲存失敗', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      openDrawer: (item: unknown) => void
+      drawerEntry: { id: number; version: number; teacher_note: string }
+      handleSaveDraft: (payload: Record<string, unknown>, version: number) => Promise<boolean>
+    }
+    vm.openDrawer({ student_id: 99, entry: { id: 10, version: 1, teacher_note: '原提醒' } })
+    const original = vm.drawerEntry
+    vi.mocked(ElMessageBox.confirm).mockResolvedValueOnce('confirm')
+    vi.mocked(updateEntry).mockRejectedValueOnce({ response: { status: 409, data: { detail: {
+      current_entry: { id: 10, version: 2, teacher_note: '其他人修改' },
+    } } } })
+    expect(await vm.handleSaveDraft({ teacher_note: '未儲存提醒' }, 1)).toBe(false)
+    expect(vm.drawerEntry).toBe(original)
+    expect(vm.drawerEntry.teacher_note).toBe('原提醒')
+    expect(vm.drawerEntry.version).toBe(2)
+    wrapper.unmount()
+  })
+
+  it('409 取消覆寫確認時保留原版號與輸入', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      openDrawer: (item: unknown) => void
+      drawerEntry: { version: number; teacher_note: string }
+      handleSaveDraft: (payload: Record<string, unknown>, version: number) => Promise<boolean>
+    }
+    vm.openDrawer({ student_id: 99, entry: { id: 10, version: 1, teacher_note: '原提醒' } })
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    vi.mocked(updateEntry).mockRejectedValueOnce({ response: { status: 409, data: { detail: {
+      current_entry: { id: 10, version: 2, teacher_note: '其他人修改' },
+    } } } })
+    expect(await vm.handleSaveDraft({ teacher_note: '未儲存提醒' }, 1)).toBe(false)
+    expect(vm.drawerEntry.version).toBe(1)
+    expect(vm.drawerEntry.teacher_note).toBe('原提醒')
+    wrapper.unmount()
+  })
+
+  it('發布確認期間也鎖住側欄，取消後解除', async () => {
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      openDrawer: (item: unknown) => void
+      drawerPublishing: boolean
+      handlePublish: (payload: Record<string, unknown>, version: number) => Promise<void>
+    }
+    vm.openDrawer({ student_id: 99, entry: { id: 10, version: 1 } })
+    let cancel!: (reason: string) => void
+    vi.mocked(ElMessageBox.confirm).mockReturnValueOnce(new Promise((_resolve, reject) => { cancel = reject }) as never)
+    const pending = vm.handlePublish({}, 1)
+    expect(vm.drawerPublishing).toBe(true)
+    cancel('cancel')
+    await pending
+    expect(vm.drawerPublishing).toBe(false)
+    wrapper.unmount()
   })
 })
