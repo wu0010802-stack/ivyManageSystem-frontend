@@ -6,6 +6,7 @@ import { useChildSelection } from '../composables/useChildSelection'
 import M3List from '../components/m3/M3List.vue'
 import M3ListItem from '../components/m3/M3ListItem.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -97,6 +98,7 @@ onMounted(async () => {
 
 <template>
   <div class="child-hub-view">
+    <ChildContextHeader />
     <MobileErrorRetry v-if="loadFailed" :error="childrenStore.error" @retry="retryLoad" />
     <M3List v-else>
       <M3ListItem

@@ -237,7 +237,7 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     )
     await flushPromises()
     expect(w.text()).toContain('尚未綁定子女')
-    expect(w.text()).toContain('加綁')
+    expect(w.find('a[href="/bind-additional"]').text()).toContain('綁定孩子')
     expect(w.find('.hh-name').exists()).toBe(false)
     expect(w.find('.qa-cb-bar').exists()).toBe(false)
   })
@@ -476,3 +476,11 @@ describe('TodayView 首頁改版（2026-09-08）— 移除 LINE 加好友提示�
     expect(routerMock.push).toHaveBeenCalledWith('/announcements')
   })
 })
+
+ it('未綁定時提供直接綁定入口', async () => {
+   const w = mountWith({ children: [] }, null)
+   await flushPromises()
+   expect(w.find('a[href="/bind-additional"]').text()).toContain('綁定孩子')
+   expect(w.text()).not.toContain('右上角個人選單')
+   w.unmount()
+ })

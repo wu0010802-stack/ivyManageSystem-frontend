@@ -14,7 +14,7 @@ import { useParentTodos } from '../../composables/useParentTodos'
 import SectionHeader from '../SectionHeader.vue'
 import SkeletonBlock from '../SkeletonBlock.vue'
 import M3List from '../m3/M3List.vue'
-import M3ListItem from '../m3/M3ListItem.vue'
+import M3Icon from '../m3/M3Icon.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 const { todos, actionCount, pending, error, refresh } = useParentTodos()
@@ -47,26 +47,23 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
     </SectionHeader>
 
     <M3List>
-      <M3ListItem
-        v-for="todo in todos"
-        :key="todo.key"
-        :headline="todo.label"
-        :supporting-text="todo.sub || ''"
-        :leading-icon="todo.icon"
-      >
-        <template #trailing>
-          <router-link
-            :to="todo.to"
-            class="home-todo-row"
-            :class="`tone-${todo.tone}`"
-            :data-testid="`home-todo-row-${todo.key}`"
-            :aria-label="`${todo.label}，${todo.count} 件`"
-          >
-            <span class="home-todo-badge">{{ todo.count }}</span>
-            <span class="material-symbols-rounded home-todo-chevron" aria-hidden="true">chevron_right</span>
-          </router-link>
-        </template>
-      </M3ListItem>
+      <li v-for="todo in todos" :key="todo.key">
+        <router-link
+          :to="todo.to"
+          class="home-todo-row"
+          :class="`tone-${todo.tone}`"
+          :data-testid="`home-todo-row-${todo.key}`"
+          :aria-label="`${todo.label}，${todo.count} 件`"
+        >
+          <M3Icon :name="todo.icon" aria-hidden="true" />
+          <span class="home-todo-copy">
+            <span class="m3-body-large">{{ todo.label }}</span>
+            <span v-if="todo.sub" class="m3-body-medium">{{ todo.sub }}</span>
+          </span>
+          <span class="home-todo-badge">{{ todo.count }}</span>
+          <span class="material-symbols-rounded home-todo-chevron" aria-hidden="true">chevron_right</span>
+        </router-link>
+      </li>
     </M3List>
   </section>
 </template>
@@ -85,13 +82,13 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
   color: var(--pt-text-muted, #6b5e54);
 }
 
-/* 整列可點：撐滿 M3ListItem 的 trailing 區並延伸出可觸控範圍（≥44px） */
+/* 整列使用原生連結，包含標題、副標與右側徽章。 */
 .home-todo-row {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--space-2, 8px);
-  min-height: 44px;
-  padding: 0 var(--space-1, 4px);
+  gap: var(--space-3, 12px);
+  min-height: 56px;
+  padding: var(--space-2, 8px) var(--space-4, 16px);
   text-decoration: none;
   color: inherit;
 }
@@ -124,4 +121,6 @@ const { todos, actionCount, pending, error, refresh } = useParentTodos()
   color: var(--pt-text-muted, #6b5e54);
   font-variation-settings: 'wght' 400;
 }
+
+.home-todo-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow-wrap: anywhere; }
 </style>

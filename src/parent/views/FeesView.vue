@@ -56,6 +56,7 @@ const detail = ref<FeeDetail | null>(null)
 // 同一路徑）一律丟棄，不得寫進 B 或已關閉的彈窗。
 let detailSeq = 0
 const detailLoading = ref(false)
+const detailError = ref(false)
 
 const detailOpen = computed({
   get: () => detail.value !== null,
@@ -184,6 +185,7 @@ async function openDetail(record: FeeRecord) {
   const seq = ++detailSeq
   const mine = { record, payments: [] as Payment[], refunds: [] as unknown[] }
   detail.value = mine
+  detailError.value = false
   detailLoading.value = true
   try {
     const { data } = await getFeePayments(record.id)
@@ -191,10 +193,9 @@ async function openDetail(record: FeeRecord) {
     mine.payments = (data as { payments?: Payment[] })?.payments || []
     mine.refunds = (data as { refunds?: unknown[] })?.refunds || []
     detail.value = { ...mine }
-  } catch (err) {
-    if (seq !== detailSeq) return
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+  } catch {
+    // 失敗改在收據彈窗內顯示可重試的錯誤態，不再只跳 toast（避免顯示「無付款紀錄」的假空態）
+    if (seq === detailSeq) detailError.value = true
   } finally {
     if (seq === detailSeq) detailLoading.value = false
   }
@@ -344,6 +345,8 @@ async function pullRefresh() {
       :payments="detail?.payments || []"
       :refunds="(detail?.refunds || []) as never[]"
       :loading="detailLoading"
+      :error="detailError"
+      @retry="detail && openDetail(detail.record)"
       @copy-info="(r, p) => onCopyInfo(r as FeeRecord, p as Payment[])"
       @copy-no="onCopyNo"
     />

@@ -249,7 +249,8 @@ function go(path: string) {
     <section v-if="isUnbound" class="cb-hero">
       <div class="unbound">
         <p class="unbound-title">尚未綁定子女</p>
-        <p class="unbound-desc">可從右上角個人選單加綁，或請園所協助。</p>
+        <p class="unbound-desc">綁定孩子後即可查看在園紀錄，也可請園所協助。</p>
+        <router-link to="/bind-additional" class="pt-action-btn">綁定孩子</router-link>
       </div>
     </section>
 

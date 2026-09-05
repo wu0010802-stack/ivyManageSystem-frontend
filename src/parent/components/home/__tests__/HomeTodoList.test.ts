@@ -90,6 +90,8 @@ describe('HomeTodoList', () => {
     const w = mount(HomeTodoList, { global: { stubs } })
     const row = w.find('[data-testid="home-todo-row-fees"]')
     expect(row.attributes('href')).toBe('/fees')
+    expect(row.text()).toContain('待繳學費')
+    expect(row.text()).toContain('2 筆')
     expect(row.attributes('aria-label')).toContain('待繳學費')
     expect(row.attributes('aria-label')).toContain('2')
   })
