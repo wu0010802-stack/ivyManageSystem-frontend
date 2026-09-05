@@ -242,7 +242,7 @@ describe('FeeBillingWorkspace（收款）', () => {
     expect(wrapper.emitted('change-view')).toEqual([['refunds']])
   })
 
-  it('view=cashItems 渲染現金項目檢視，工具列可開建批 dialog', async () => {
+  it('view=cashItems 渲染現金項目檢視，新增入口集中於內頁', async () => {
     const wrapper = mount(FeeBillingWorkspace, {
       props: { view: 'cashItems' },
       global: { stubs: GLOBAL_STUBS },
@@ -250,8 +250,7 @@ describe('FeeBillingWorkspace（收款）', () => {
     await flushAll()
     expect(wrapper.find('[data-testid="cash-items"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="monthly-statement"]').exists()).toBe(false)
-    await wrapper.find('[data-test="cash-items-create"]').trigger('click')
-    expect(cashItemsMocks.openCreate).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-test="cash-items-create"]').exists()).toBe(false)
   })
 
   it('view=refunds 渲染退款分頁（預繳無獨立分頁）', async () => {

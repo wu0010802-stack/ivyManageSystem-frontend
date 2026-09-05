@@ -3,10 +3,11 @@
  */
 import type { FeeSettlement } from './settlementDisplay'
 
-export type CashFeeKind = 'material' | 'miscellaneous'
+export type CashFeeKind = 'material' | 'miscellaneous' | 'registration'
 
 export const CASH_FEE_KIND_LABELS: Record<CashFeeKind, string> = {
-  material: '教材費',
+  registration: '新生註冊費',
+  material: '教材／耗材費',
   miscellaneous: '其他現金項目',
 }
 

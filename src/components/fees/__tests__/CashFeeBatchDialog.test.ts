@@ -9,6 +9,8 @@ const apiMocks = vi.hoisted(() => ({
   createCashFeeBatch: vi.fn(() => Promise.resolve({ id: 3, title: '教材費', student_count: 2 })),
 }))
 vi.mock('@/api/fees', () => apiMocks)
+const authMocks = vi.hoisted(() => ({ studentRead: true }))
+vi.mock('@/utils/auth', () => ({ hasPermission: (name: string) => name !== 'STUDENTS_READ' || authMocks.studentRead }))
 const gradesApi = vi.hoisted(() => ({
   getGrades: vi.fn(() =>
     Promise.resolve({
@@ -21,7 +23,9 @@ const gradesApi = vi.hoisted(() => ({
 }))
 vi.mock('@/api/classrooms', () => gradesApi)
 vi.mock('@/utils/academic', () => ({ getCurrentAcademicTerm: () => ({ school_year: 115, semester: 1 }) }))
-vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
+vi.mock('element-plus', () => ({ ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }, ElMessageBox: { confirm: vi.fn(() => Promise.resolve()) } }))
+
+vi.mock('@/components/fees/StudentPickerDialog.vue', () => ({ default: { name: 'StudentPickerDialog', template: '<div />', emits: ['pick'] } }))
 
 import CashFeeBatchDialog from '@/components/fees/CashFeeBatchDialog.vue'
 
@@ -52,6 +56,7 @@ const STUBS = {
 
 describe('CashFeeBatchDialog', () => {
   beforeEach(() => {
+    authMocks.studentRead = true
     apiMocks.previewCashFeeBatch.mockReset()
     apiMocks.createCashFeeBatch.mockClear()
     apiMocks.previewCashFeeBatch.mockResolvedValue({
@@ -67,6 +72,7 @@ describe('CashFeeBatchDialog', () => {
   it('載入年級列、填金額後預覽、改金額與移除後建立', async () => {
     const w = mount(CashFeeBatchDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
     await flushPromises()
+    await w.find('[data-test="cfb-mode"]').setValue('grade')
     const gradeInputs = w.findAll('[data-test="cfb-grade-amount"]')
     expect(gradeInputs).toHaveLength(2)
     await gradeInputs[0].setValue('2500')
@@ -106,4 +112,76 @@ describe('CashFeeBatchDialog', () => {
     await flushPromises()
     expect(w.find('[data-test="cfb-create"]').attributes('disabled')).toBeDefined()
   })
+  it('承接選定學期，選學生後必須填正金額才可建立', async () => {
+    const w = mount(CashFeeBatchDialog, { props: { modelValue: true, schoolYear: 114, semester: 2 }, global: { stubs: STUBS } })
+    await flushPromises()
+    await w.find('[data-test="cfb-title"]').setValue('耗材費')
+    w.findComponent({ name: 'StudentPickerDialog' }).vm.$emit('pick', { id: 8, name: '測試學生' })
+    await flushPromises()
+    expect(w.find('[data-test="cfb-create"]').attributes('disabled')).toBeDefined()
+    await w.find('[data-test="cfb-row-amount"]').setValue('100')
+    await w.find('[data-test="cfb-create"]').trigger('click')
+    await flushPromises()
+    expect(apiMocks.createCashFeeBatch).toHaveBeenCalledWith(expect.objectContaining({ school_year: 114, semester: 2, entries: [{ student_id: 8, amount: 100 }] }))
+  })
+
+  it('關閉後回來的預覽不能填回重新開啟的表單', async () => {
+    let resolvePreview!: (value: unknown) => void
+    apiMocks.previewCashFeeBatch.mockImplementationOnce(() => new Promise(resolve => { resolvePreview = resolve }))
+    const w = mount(CashFeeBatchDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    await w.find('[data-test="cfb-mode"]').setValue('grade')
+    await w.find('[data-test="cfb-grade-amount"]').setValue('100')
+    await w.find('[data-test="cfb-preview"]').trigger('click')
+    await w.setProps({ modelValue: false })
+    await w.setProps({ modelValue: true })
+    resolvePreview({ entries: [{ student_id: 8, student_name: '測試學生', amount: 100 }] })
+    await flushPromises()
+    expect(w.findAll('[data-test="cfb-row"]')).toHaveLength(0)
+  })
+
+  it('年級金額改動保留人工名單並禁止建立，重新帶入後恢復', async () => {
+    const w = mount(CashFeeBatchDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    await w.find('[data-test="cfb-mode"]').setValue('grade')
+    await w.find('[data-test="cfb-title"]').setValue('耗材費')
+    await w.find('[data-test="cfb-grade-amount"]').setValue('100')
+    await w.find('[data-test="cfb-preview"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-test="cfb-row-amount"]').setValue('120')
+    await w.find('[data-test="cfb-grade-amount"]').setValue('200')
+    expect(w.findAll('[data-test="cfb-row"]')).toHaveLength(2)
+    expect(w.find('[data-test="cfb-create"]').attributes('disabled')).toBeDefined()
+    await w.find('[data-test="cfb-preview"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="cfb-create"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('小數、負值與非有限金額均不可建立', async () => {
+    const w = mount(CashFeeBatchDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    await w.find('[data-test="cfb-title"]').setValue('耗材費')
+    w.findComponent({ name: 'StudentPickerDialog' }).vm.$emit('pick', { id: 8, name: '測試學生', classroom_name: '測試班' })
+    await flushPromises()
+    expect(w.find('[data-test="cfb-row"]').text()).toContain('測試班')
+    for (const amount of ['1.5', '-1', '0']) {
+      await w.find('[data-test="cfb-row-amount"]').setValue(amount)
+      expect(w.find('[data-test="cfb-create"]').attributes('disabled')).toBeDefined()
+    }
+  })
+
+  it('沒有學生檢視權限時仍能依年級帶入，且不掛載學生搜尋', async () => {
+    authMocks.studentRead = false
+    const w = mount(CashFeeBatchDialog, { props: { modelValue: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    expect(w.findComponent({ name: 'StudentPickerDialog' }).exists()).toBe(false)
+    expect(w.find('[data-test="cfb-pick"]').exists()).toBe(false)
+    expect(w.text()).toContain('指定學生需具備學生檢視權限')
+    await w.find('[data-test="cfb-grade-amount"]').setValue('100')
+    await w.find('[data-test="cfb-preview"]').trigger('click')
+    await flushPromises()
+    expect(apiMocks.previewCashFeeBatch).toHaveBeenCalled()
+    expect(w.findAll('[data-test="cfb-row"]')).toHaveLength(2)
+  })
+
 })

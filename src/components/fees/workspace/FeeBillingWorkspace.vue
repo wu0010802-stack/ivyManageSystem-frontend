@@ -53,10 +53,10 @@
         <template v-else-if="view === 'cashItems'">
           <p><strong>現金項目</strong></p>
           <ol>
-            <li><strong>教材費等</strong>：建批（依年級填金額展開逐生）→ 逐生收現金</li>
+            <li><strong>新增收費項目</strong>：填寫內容 → 指定學生或依年級帶入 → 確認金額 → 登記收款</li>
             <li><strong>新生預繳</strong>：登記 5,000 現金；註冊費批產單時自動標記已套用</li>
           </ol>
-          <p class="fee-help__note">這裡的錢都不上銀行，不進入帳媒合；月費／註冊費仍看應收帳款。</p>
+          <p class="fee-help__note">新生註冊費、耗材費等不納入網銀銷帳單的收費，在這裡建立與收款；銀行發單項目仍在應收帳款處理。</p>
         </template>
         <template v-else>
           <p><strong>收款流程</strong></p>
@@ -131,16 +131,7 @@
           </el-button>
         </template>
 
-        <template v-else-if="view === 'cashItems'">
-          <el-button
-            v-if="canWrite"
-            type="primary"
-            data-test="cash-items-create"
-            @click="cashItemsRef?.openCreate?.()"
-          >
-            建立批次
-          </el-button>
-        </template>
+
       </template>
     </FeeWorkspaceToolbar>
 

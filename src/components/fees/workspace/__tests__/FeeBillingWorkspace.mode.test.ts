@@ -90,6 +90,7 @@ vi.mock('@/components/fees/FeeRefundsTab.vue', () => ({
     template: '<div data-testid="refunds-tab" />',
   },
 }))
+vi.mock('@/components/fees/CashItemsView.vue', () => ({ default: { template: '<div data-testid="cash-items" />' } }))
 vi.mock('../FeeMatchingPanel.vue', () => ({
   __esModule: true,
   default: {
@@ -247,4 +248,11 @@ describe('FeeBillingWorkspace 應收帳款模式切換', () => {
     await flushAll()
     expect(statementMocks.refresh).toHaveBeenCalledTimes(1)
   })
+  it('現金項目交由內頁提供新增入口，外層工具列不重複', async () => {
+    const wrapper = mount(FeeBillingWorkspace, { props: { view: 'cashItems' }, global: { stubs: GLOBAL_STUBS } })
+    await flushAll()
+    expect(wrapper.find('[data-testid="cash-items"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="cash-items-create"]').exists()).toBe(false)
+  })
+
 })

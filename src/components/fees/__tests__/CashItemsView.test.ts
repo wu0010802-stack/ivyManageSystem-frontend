@@ -13,6 +13,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h, inject, provide } from 'vue'
 
 const apiMocks = vi.hoisted(() => ({
+  addCashFeeBatchEntries: vi.fn(() => Promise.resolve({ created: 1 })),
   getCashFeeBatches: vi.fn(),
   getCashFeeBatch: vi.fn(),
   deleteCashFeeBatch: vi.fn(() => Promise.resolve({ ok: true })),
@@ -38,7 +39,7 @@ const apiMocks = vi.hoisted(() => ({
   getPrepaymentRefunds: vi.fn(() => Promise.resolve({ total: 0, items: [] })),
 }))
 vi.mock('@/api/fees', () => apiMocks)
-const authMocks = vi.hoisted(() => ({ perms: new Set<string>(['FEES_READ', 'FEES_WRITE']) }))
+const authMocks = vi.hoisted(() => ({ perms: new Set<string>(['FEES_READ', 'FEES_WRITE', 'STUDENTS_READ']) }))
 vi.mock('@/utils/auth', () => ({ hasPermission: (n: string) => authMocks.perms.has(n) }))
 vi.mock('@/utils/academic', () => ({ getCurrentAcademicTerm: () => ({ school_year: 115, semester: 1 }) }))
 vi.mock('element-plus', () => ({
@@ -122,6 +123,8 @@ const ElTableColumnStub = defineComponent({
 })
 
 const STUBS = {
+  'el-dialog': { props: ['modelValue'], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' },
+  'el-input-number': { props: ['modelValue'], emits: ['update:modelValue'], template: '<input type="number" v-bind="$attrs" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" />' },
   'el-table': ElTableStub,
   'el-table-column': ElTableColumnStub,
   'el-button': { template: '<button type="button" v-bind="$attrs"><slot /></button>' },
@@ -133,6 +136,7 @@ const STUBS = {
 
 describe('CashItemsView', () => {
   beforeEach(() => {
+    apiMocks.addCashFeeBatchEntries.mockClear()
     apiMocks.getCashFeeBatches.mockResolvedValue([BATCH])
     apiMocks.getCashFeeBatch.mockResolvedValue({
       batch: BATCH,
@@ -192,6 +196,75 @@ describe('CashItemsView', () => {
     await flushPromises()
     expect(w.find('[data-test="cfb-create-open"]').exists()).toBe(false)
     expect(w.find('[data-test="ppd-open"]').exists()).toBe(false)
-    authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
+    authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE', 'STUDENTS_READ'])
   })
+  it('加入學生先確認金額，選取與取消均不寫入', async () => {
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.find('[data-test="cfb-open"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-test="cfb-add-open"]').trigger('click')
+    w.findComponent({ name: 'StudentPickerDialog' }).vm.$emit('pick', { id: 9, name: '測試學生' })
+    await flushPromises()
+    expect(apiMocks.addCashFeeBatchEntries).not.toHaveBeenCalled()
+    expect(w.find('[data-test="cfb-add-confirm"]').attributes('disabled')).toBeDefined()
+    await w.find('[data-test="cfb-add-amount"]').setValue('500')
+    await w.find('[data-test="cfb-add-confirm"]').trigger('click')
+    await flushPromises()
+    expect(apiMocks.addCashFeeBatchEntries).toHaveBeenCalledWith(3, { entries: [{ student_id: 9, amount: 500 }] })
+  })
+
+  it('快速切換項目只顯示最後選擇的明細', async () => {
+    let resolveFirst!: (value: unknown) => void
+    apiMocks.getCashFeeBatches.mockResolvedValue([BATCH, { ...BATCH, id: 4, title: '第二個項目' }])
+    apiMocks.getCashFeeBatch.mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve }))
+    apiMocks.getCashFeeBatch.mockResolvedValueOnce({ batch: { ...BATCH, id: 4, title: '第二個項目' }, items: [] })
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.findAll('[data-test="cfb-open"]')[0].trigger('click')
+    await w.findAll('[data-test="cfb-open"]')[1].trigger('click')
+    await flushPromises()
+    resolveFirst({ batch: BATCH, items: [] })
+    await flushPromises()
+    expect(w.find('[data-test="cfb-detail"]').text()).toContain('第二個項目')
+    expect(w.find('[data-test="cfb-detail"]').text()).not.toContain('115-1 教材費')
+  })
+
+  it('僅有收費寫入權限時加入學生顯示權限提示且不掛載搜尋', async () => {
+    authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE'])
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.find('[data-test="cfb-open"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-test="cfb-add-open"]').exists()).toBe(false)
+    expect(w.findComponent({ name: 'StudentPickerDialog' }).exists()).toBe(false)
+    expect(w.text()).toContain('加入學生需具備學生檢視權限')
+    authMocks.perms = new Set(['FEES_READ', 'FEES_WRITE', 'STUDENTS_READ'])
+  })
+
+  it('取消加入不寫入，確認請求尚未結束時不重複送出', async () => {
+    const w = mount(CashItemsView, { global: { stubs: STUBS } })
+    await flushPromises()
+    await w.find('[data-test="cfb-open"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-test="cfb-add-open"]').trigger('click')
+    w.findComponent({ name: 'StudentPickerDialog' }).vm.$emit('pick', { id: 9, name: '測試學生' })
+    await flushPromises()
+    await w.find('[data-test="cfb-add-amount"]').setValue('500')
+    await w.find('[data-test="cfb-add-cancel"]').trigger('click')
+    expect(apiMocks.addCashFeeBatchEntries).not.toHaveBeenCalled()
+    await w.find('[data-test="cfb-add-open"]').trigger('click')
+    w.findComponent({ name: 'StudentPickerDialog' }).vm.$emit('pick', { id: 9, name: '測試學生' })
+    await flushPromises()
+    await w.find('[data-test="cfb-add-amount"]').setValue('600')
+    let resolveAdd!: (value: { created: number }) => void
+    apiMocks.addCashFeeBatchEntries.mockImplementationOnce(() => new Promise(resolve => { resolveAdd = resolve }))
+    await w.find('[data-test="cfb-add-confirm"]').trigger('click')
+    await w.find('[data-test="cfb-add-confirm"]').trigger('click')
+    expect(apiMocks.addCashFeeBatchEntries).toHaveBeenCalledTimes(1)
+    expect(apiMocks.addCashFeeBatchEntries).toHaveBeenCalledWith(3, { entries: [{ student_id: 9, amount: 600 }] })
+    resolveAdd({ created: 1 })
+    await flushPromises()
+  })
+
 })

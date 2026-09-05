@@ -24614,7 +24614,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "material" | "miscellaneous";
+            kind: "registration" | "material" | "miscellaneous";
             /** Note */
             note?: string | null;
             /** School Year */
@@ -24711,7 +24711,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "material" | "miscellaneous";
+            kind: "registration" | "material" | "miscellaneous";
             /** School Year */
             school_year: number;
             /** Semester */
