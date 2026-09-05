@@ -313,6 +313,30 @@ html.ivy-admin .el-table .el-table__cell {
   border-top: 1px solid var(--el-border-color-lighter);
 }
 
+/* ========== Dialog 表單預設層（2026-09-06，spec 2026-09-06-admin-form-dialog-defaults）==========
+ * DESIGN.md 規定表單型 dialog 用 label-position="top"，但 84 個 dialog 表單中只有 12 檔設定。
+ * 這裡以 CSS 模擬 EP label-top，讓其餘檔案零改動拿到堆疊標籤；
+ * 已明確設 label-position="top" 的表單走 EP 自己的規則，結果同構。
+ * opt-out：<el-form class="form-labels-inline"> 保留左右排（刻意緊湊的短表單）；inline 表單自動排除。
+ * !important 是必要的：EP 把 label-width 寫成 label 的 inline style width，
+ * 無 label 的 item 則在 content 上寫 inline margin-left（手機斷點既有規則同一手法）。 */
+.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item {
+  display: block;
+}
+.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item__label {
+  display: inline-block;
+  width: auto !important;
+  height: auto;
+  line-height: 22px;
+  padding: 0;
+  margin-bottom: 8px;
+  justify-content: flex-start;
+  text-align: left;
+}
+.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item__content {
+  margin-left: 0 !important;
+}
+
 /* Dialog - responsive on mobile */
 @media (--to-sm) {
   /* :not(.is-fullscreen)：手機下非滿版對話框收成 95% 置中；但對 :fullscreen="isMobile"
@@ -338,6 +362,9 @@ html.ivy-admin .el-table .el-table__cell {
   .el-dialog .el-form-item__label {
     width: auto !important;
     text-align: left;
+    /* EP label-right 的 label 是 inline-flex + justify-content:flex-end；
+       只改 text-align 蓋不掉，標籤會靠右浮在輸入框上方（2026-09-05 staging 實測 8/15 表單中招）。 */
+    justify-content: flex-start;
     padding-bottom: 4px;
   }
   .el-dialog .el-form-item__content {
