@@ -51,6 +51,15 @@
         <el-tab-pane label="家長行為" name="activity">
           <ParentActivityPanel />
         </el-tab-pane>
+        <el-tab-pane label="流量" name="traffic">
+          <TrafficPanel />
+        </el-tab-pane>
+        <el-tab-pane label="前端事件" name="client-events">
+          <ClientEventsPanel />
+        </el-tab-pane>
+        <el-tab-pane label="推播投遞" name="deliveries">
+          <DeliveriesPanel />
+        </el-tab-pane>
       </el-tabs>
     </template>
   </div>
@@ -67,7 +76,9 @@
  * 九盞燈卡片渲染邏輯（中文名稱對照、燈色對照、metric null 不渲染）已抽到
  * `parentMonitor/LightsBoard.vue`，本檔只負責整體狀態與資料抓取；
  * 探針與設定健檢分頁已抽到 `parentMonitor/ProbesPanel.vue`（Task 14），
- * 家長行為分頁已抽到 `parentMonitor/ParentActivityPanel.vue`（Task 15）。
+ * 家長行為分頁已抽到 `parentMonitor/ParentActivityPanel.vue`（Task 15），
+ * 前端事件分頁已抽到 `parentMonitor/ClientEventsPanel.vue`、推播投遞分頁
+ * 已抽到 `parentMonitor/DeliveriesPanel.vue`（批次 3，Task 6）。
  *
  * ⚠ 未收集的訊號（`metric: null`）一律不顯示 0——`traffic_1h`／
  * `client_events_24h` 批次 1 恆為 null，顯示 0 會被誤讀成「零錯誤」，
@@ -80,6 +91,9 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import LightsBoard, { type MonitorLight } from './parentMonitor/LightsBoard.vue'
 import ProbesPanel from './parentMonitor/ProbesPanel.vue'
 import ParentActivityPanel from './parentMonitor/ParentActivityPanel.vue'
+import TrafficPanel from './parentMonitor/TrafficPanel.vue'
+import ClientEventsPanel from './parentMonitor/ClientEventsPanel.vue'
+import DeliveriesPanel from './parentMonitor/DeliveriesPanel.vue'
 import { getParentMonitorOverview } from '@/api/parentMonitor'
 import { getErrorMessage } from '@/utils/errorHandler'
 
@@ -125,7 +139,7 @@ const enabled = ref<boolean | null>(null)
 const overview = ref<OverviewData | null>(null)
 const lights = ref<LightItem[]>([])
 const normalizedLights = computed<MonitorLight[]>(() => lights.value.map(toMonitorLight))
-const activeTab = ref<'probes' | 'activity'>('probes')
+const activeTab = ref<'probes' | 'activity' | 'traffic' | 'client-events' | 'deliveries'>('probes')
 
 let timerId: ReturnType<typeof setInterval> | null = null
 

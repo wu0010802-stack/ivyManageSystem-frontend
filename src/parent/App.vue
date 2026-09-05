@@ -8,6 +8,7 @@ import StaffSessionNotice from './components/StaffSessionNotice.vue'
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import { useConsentGate } from './composables/useConsentGate'
 import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
+import { reportClientEvent } from './utils/clientEvents'
 
 const gate = useConsentGate()
 const consentPolicy = ref<PolicyVersionOut | null>(null)
@@ -64,13 +65,26 @@ router.beforeEach((to, from) => {
   else if (dt < 0) transitionName.value = 'parent-slide-back'
   else transitionName.value = 'parent-fade'
 })
+
+/**
+ * ErrorBoundary 攔到子樹錯誤時的回報（SPEC-023 批次 3 Task 3）。
+ * 只有家長端接這個事件——ErrorBoundary 是 admin/parent 共用元件，管理端不監聽
+ * 此事件就完全無副作用，理由見 ErrorBoundary.vue 的 emit 註解。
+ */
+function onBoundaryError(payload: { error: unknown; variant: string }) {
+  const err = payload.error
+  reportClientEvent('error_boundary', {
+    message: err instanceof Error ? err.message : String(err),
+    route_name: router.currentRoute.value.path,
+  })
+}
 </script>
 
 <template>
   <ParentLayout>
     <!-- 全域錯誤邊界：單頁元件 render/computed throw 時降級成 fallback，
          而非白屏整個家長端 App（parent entry 無 app.config.errorHandler）。 -->
-    <ErrorBoundary variant="parent">
+    <ErrorBoundary variant="parent" @error-captured="onBoundaryError">
       <router-view v-slot="{ Component, route }">
         <transition :name="transitionName" mode="out-in">
           <component :is="Component" :key="route.fullPath" />

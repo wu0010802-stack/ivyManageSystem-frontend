@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import axios from 'axios'
 import {
   clearLiffTokenRefreshMarker,
   forceLiffReloginOnce,
@@ -16,6 +17,7 @@ import {
 } from '../api/consent'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { clearParentPersonalizedCaches } from '../composables/useParentLogout'
+import { reportClientEvent } from '../utils/clientEvents'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import ConsentModal from '../components/ConsentModal.vue'
@@ -144,6 +146,18 @@ async function startLogin({ forceFresh = false } = {}) {
     // useFriendlyError 處理 LINE_BINDING_EXPIRED / LINE_BINDING_NOT_FOUND /
     // LINE_PROFILE_FETCH_FAILED 等 envelope code；未知 code fallback displayMessage
     errorState.value = getFriendly(err)
+    // 家長端監控（SPEC-023 批次 3，09-05 修正重複回報）：liffLogin() 走的是
+    // 家長端 axios instance，凡是 axios 發出的請求（不論有沒有拿到 HTTP 回應）
+    // 都交給 src/parent/api/index.ts 的攔截器回報——打到登入端點時攔截器會
+    // 自動報成 login_failed（見該檔 PARENT_LOGIN_PATHS），這裡再報會讓同一次
+    // 故障變兩筆事件。這裡只補「連 axios 都沒發出去」的失敗：LINE SDK 取
+    // id_token 就丟出的 `Error('無法取得 LINE id_token')`，那類攔截器完全看
+    // 不到、批次 1 的稽核也不會寫 LOGIN_FAILED。
+    if (!axios.isAxiosError(err)) {
+      reportClientEvent('login_failed', {
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 }
 
@@ -227,6 +241,18 @@ async function submitDeviceSetup() {
       // 伺服器，碼就已經用掉了，只有 _reclaim_recent_device_setup_code 的 120 秒
       // 窗口能救回來；拖過窗口就真的只能向園所重新索取。
       deviceSetupError.value = '連線中斷，請確認網路後立即再試一次；拖太久需向園所重新索取設定碼'
+      // 家長端監控（SPEC-023 批次 3，09-05 修正重複回報）：同 startLogin 的
+      // 判斷——deviceSetup() 走的也是家長端 axios instance，真正的網路層
+      // 失敗已被 src/parent/api/index.ts 的攔截器攔到並報成 login_failed
+      // （見該檔 PARENT_LOGIN_PATHS），這裡不能重報。只有「err 根本不是
+      // axios 丟出來的」才補這一筆——例如下面 catch 前 `throw new
+      // Error('伺服器回應未預期狀態')` 這種在拿到 HTTP 回應之後、於本函式
+      // 內才丟出的例外，攔截器完全看不到、批次 1 的稽核也不會寫。
+      if (!axios.isAxiosError(err)) {
+        reportClientEvent('login_failed', {
+          message: err instanceof Error ? err.message : String(err),
+        })
+      }
     } else {
       // 後端對「碼不存在／已過期／已使用」一律回同一個 BusinessError code
       // 避免碼枚舉；前端也不採用後端實際訊息字串，固定顯示這句，避免後端

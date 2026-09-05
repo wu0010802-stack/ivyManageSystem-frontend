@@ -1,6 +1,7 @@
 import { createApp, type App as VueApp } from 'vue'
 import { createPinia } from 'pinia'
 import { installChunkSelfHeal } from '@/utils/chunkSelfHeal'
+import { reportClientEvent } from '@/parent/utils/clientEvents'
 
 import App from './App.vue'
 import router from './router'
@@ -45,8 +46,10 @@ import { resolvePublicLiffStateTarget } from '@/parent/utils/liffStateRedirect'
 const publicLiffTarget = resolvePublicLiffStateTarget(window.location.search)
 if (publicLiffTarget) window.location.replace(publicLiffTarget)
 
-// PWA 升級自救（chunk hash 失效時清 SW+caches reload，避免白屏）
-installChunkSelfHeal()
+// PWA 升級自救（chunk hash 失效時清 SW+caches reload，避免白屏）。
+// 只有家長端傳 callback 把事件送進「家長端監控」（SPEC-023 批次 3 Task 3）——
+// 共用模組不可直接 import clientEvents，理由見 chunkSelfHeal.ts 的函式註解。
+installChunkSelfHeal((msg) => reportClientEvent('chunk_load_failed', { message: msg }))
 
 // Theme + A11y 應在第一次 paint 前套用，避免閃爍
 initTheme()

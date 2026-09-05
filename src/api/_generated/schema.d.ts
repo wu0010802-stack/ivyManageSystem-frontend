@@ -10400,6 +10400,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent-monitor/client-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Client Events
+         * @description 家長端前端事件分頁列表(SPEC-023 §6 `GET /client-events?type=&hours=24&page=&page_size=`)。
+         */
+        get: operations["get_client_events_api_parent_monitor_client_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent-monitor/config-check": {
         parameters: {
             query?: never;
@@ -10411,6 +10431,64 @@ export interface paths {
         get: operations["get_config_check_api_parent_monitor_config_check_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent-monitor/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Deliveries
+         * @description 推播投遞分頁(SPEC-023 §6 `GET /deliveries?hours=24&event_type=`)。
+         */
+        get: operations["get_deliveries_api_parent_monitor_deliveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent-monitor/deliveries/{delivery_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Delivery
+         * @description 手動重送單筆已最終失敗的推播(SPEC-023 §6)。
+         *
+         *     ⚠ **權限刻意是 `SETTINGS_WRITE`,不是本頁其餘端點共用的 `AUDIT_LOGS`**——
+         *     這是本頁唯一的寫入動作,唯讀權限不該能觸發重送(否則稽核查閱者形同拿到
+         *     一個寫入後門)。
+         *
+         *     只接受 `line_retry_count >= 3`(已判定「最終失敗」,定義同
+         *     `queries.collect_delivery_signals`)的列;未達門檻回 **409 Conflict**——
+         *     該列可能仍在 scheduler 的正常重試佇列中,手動重送反而會打亂
+         *     `line_next_retry_at` 排程、造成重複計數。選 409 而非 400:`delivery_id`
+         *     本身合法存在、請求格式也對,只是「目前狀態」與「這個操作要求的狀態」
+         *     衝突(尚未進入最終失敗),語意上是 409 而非請求本身有誤的 400。
+         *
+         *     找不到列或列屬於別的租戶一律回 **404**,不細分——不對外洩漏「這個 id
+         *     屬於別校」這個事實,與本系統其餘跨租戶查詢的既有行為一致。
+         *
+         *     重設 `line_retry_count=0`、`line_next_retry_at=now`,由既有 retry
+         *     scheduler 接手;寫顯式稽核(`entity_type="notification_log"`)留下
+         *     「誰在什麼時候手動重送了哪一筆」的軌跡。
+         */
+        post: operations["retry_delivery_api_parent_monitor_deliveries__delivery_id__retry_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10443,6 +10521,30 @@ export interface paths {
         };
         /** Get Probes */
         get: operations["get_probes_api_parent_monitor_probes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent-monitor/traffic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Traffic
+         * @description 流量圖表／路由表／靜默偵測(SPEC-023 §6 `GET /traffic?range=&group=`)。
+         *
+         *     `range_` 對外曝露成 `range`(Python 內建名不能當參數名)。`group` 有值時
+         *     只看該模組(例如 `auth`)的流量,對應 `queries.traffic_series`／
+         *     `traffic_routes` 的同名參數。
+         */
+        get: operations["get_traffic_api_parent_monitor_traffic_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11001,6 +11103,27 @@ export interface paths {
         get: operations["get_week_agenda_api_parent_calendar_week_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/client-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Client Events
+         * @description 接收家長端前端事件 beacon，一律回 204 無內容（前端 fire-and-forget，
+         *     不檢查回應內容）。
+         */
+        post: operations["submit_client_events_api_parent_client_events_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -25372,6 +25495,78 @@ export interface components {
             /** Target Name */
             target_name?: string | null;
         };
+        /**
+         * ClientEventIn
+         * @description 單筆前端事件。前端只能送這八個欄位——`line_version`／`os`／
+         *     `in_line_client`／`user_hash`／`ip_hash`／`received_at` 一律後端算，
+         *     前端送了會被 `extra="forbid"` 拒絕（不是靜默忽略）。
+         */
+        ClientEventIn: {
+            /** App Build */
+            app_build?: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Event Type */
+            event_type: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Request Id */
+            request_id?: string | null;
+            /** Route Name */
+            route_name?: string | null;
+            /** Status Code */
+            status_code?: number | null;
+        };
+        /**
+         * ClientEventOut
+         * @description 單筆家長端前端事件。
+         *
+         *     ⚠ 刻意不含 `user_hash`／`ip_hash`——它們是去重用的內部值(供
+         *     `queries.collect_client_event_signals` 算 `client_events` 燈的來源數),
+         *     回給前端沒有用途,只會多一個外洩面。
+         */
+        ClientEventOut: {
+            /** App Build */
+            app_build?: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Event Type */
+            event_type: string;
+            /** In Line Client */
+            in_line_client: boolean;
+            /** Line Version */
+            line_version?: string | null;
+            /** Message */
+            message: string;
+            /** Occurred At */
+            occurred_at: string;
+            /** Os */
+            os?: string | null;
+            /** Received At */
+            received_at: string;
+            /** Request Id */
+            request_id?: string | null;
+            /** Route Name */
+            route_name?: string | null;
+            /** Status Code */
+            status_code?: number | null;
+        };
+        /**
+         * ClientEventsBatchIn
+         * @description `extra="forbid"` 疊在最外層 body——多送任何未知欄位都 422。
+         */
+        ClientEventsBatchIn: {
+            /** Events */
+            events: components["schemas"]["ClientEventIn"][];
+        };
         /** ClosePeriodListOut */
         ClosePeriodListOut: {
             /** Items */
@@ -27427,6 +27622,49 @@ export interface components {
             final_failed_24h: number;
             /** Retrying */
             retrying: number;
+        };
+        /** DeliveryByEventTypeOut */
+        DeliveryByEventTypeOut: {
+            /** Attempted */
+            attempted: number;
+            /** Event Type */
+            event_type: string;
+            /** Final Failed */
+            final_failed: number;
+        };
+        /** DeliveryFailedOut */
+        DeliveryFailedOut: {
+            /** Created At */
+            created_at?: string | null;
+            /** Event Type */
+            event_type: string;
+            /** Id */
+            id: number;
+            /** Line Retry Count */
+            line_retry_count: number;
+            /** Recipient User Id */
+            recipient_user_id: number;
+            /** Title */
+            title: string;
+        };
+        /** DeliveryFailureReasonOut */
+        DeliveryFailureReasonOut: {
+            /** Count */
+            count: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * DeliveryRetryOut
+         * @description `POST /deliveries/{delivery_id}/retry` 的重送結果。
+         */
+        DeliveryRetryOut: {
+            /** Id */
+            id: number;
+            /** Line Next Retry At */
+            line_next_retry_at?: string | null;
+            /** Line Retry Count */
+            line_retry_count: number;
         };
         /**
          * DerivedValue
@@ -33979,6 +34217,23 @@ export interface components {
             /** Url */
             url?: string | null;
         };
+        /** ParentMonitorClientEventsOut */
+        ParentMonitorClientEventsOut: {
+            /** By Type */
+            by_type?: {
+                [key: string]: number;
+            } | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Items */
+            items?: components["schemas"]["ClientEventOut"][] | null;
+            /** Page */
+            page?: number | null;
+            /** Page Size */
+            page_size?: number | null;
+            /** Total */
+            total?: number | null;
+        };
         /** ParentMonitorConfigCheckOut */
         ParentMonitorConfigCheckOut: {
             /** Enabled */
@@ -33986,11 +34241,24 @@ export interface components {
             /** Items */
             items?: components["schemas"]["ConfigCheckItemOut"][] | null;
         };
+        /** ParentMonitorDeliveriesOut */
+        ParentMonitorDeliveriesOut: {
+            /** By Event Type */
+            by_event_type?: components["schemas"]["DeliveryByEventTypeOut"][] | null;
+            /** Enabled */
+            enabled: boolean;
+            /** Failed */
+            failed?: components["schemas"]["DeliveryFailedOut"][] | null;
+            /** Failure Reasons */
+            failure_reasons?: components["schemas"]["DeliveryFailureReasonOut"][] | null;
+            /** Unfollowed Count */
+            unfollowed_count?: number | null;
+        };
         /** ParentMonitorOverviewOut */
         ParentMonitorOverviewOut: {
             /** Client Events 24H */
             client_events_24h?: {
-                [key: string]: unknown;
+                [key: string]: number;
             } | null;
             deliveries_24h?: components["schemas"]["DeliveriesSummaryOut"] | null;
             /** Enabled */
@@ -34008,10 +34276,7 @@ export interface components {
             rls_ready?: boolean | null;
             /** Schedulers */
             schedulers?: components["schemas"]["SchedulerSignalOut"][] | null;
-            /** Traffic 1H */
-            traffic_1h?: {
-                [key: string]: unknown;
-            } | null;
+            traffic_1h?: components["schemas"]["TrafficSummaryOut"] | null;
         };
         /** ParentMonitorProbesOut */
         ParentMonitorProbesOut: {
@@ -34021,6 +34286,20 @@ export interface components {
             enabled: boolean;
             /** Hours */
             hours?: number | null;
+        };
+        /** ParentMonitorTrafficOut */
+        ParentMonitorTrafficOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Granularity Minutes */
+            granularity_minutes?: number | null;
+            /** Range */
+            range?: string | null;
+            /** Routes */
+            routes?: components["schemas"]["TrafficRouteOut"][] | null;
+            /** Series */
+            series?: components["schemas"]["TrafficSeriesPointOut"][] | null;
+            silence?: components["schemas"]["TrafficSilenceOut"] | null;
         };
         /**
          * ParentPortalMessageAttachmentOut
@@ -45887,6 +46166,68 @@ export interface components {
             pending: number;
             /** Skipped */
             skipped: number;
+        };
+        /** TrafficRouteOut */
+        TrafficRouteOut: {
+            /** Avg Ms */
+            avg_ms: number;
+            /** Count */
+            count: number;
+            /** Count 5Xx */
+            count_5xx: number;
+            /** Max Ms */
+            max_ms: number;
+            /** Method */
+            method: string;
+            /** P95 Ms */
+            p95_ms: number;
+            /** Rate 5Xx */
+            rate_5xx: number;
+            /** Route Group */
+            route_group: string;
+            /** Route Template */
+            route_template: string;
+        };
+        /** TrafficSeriesPointOut */
+        TrafficSeriesPointOut: {
+            /** Bucket Start */
+            bucket_start: string;
+            /** Count */
+            count: number;
+            /** Count 5Xx */
+            count_5xx: number;
+            /** P95 Ms */
+            p95_ms: number;
+        };
+        /** TrafficSilenceOut */
+        TrafficSilenceOut: {
+            /** Baseline Per Hour */
+            baseline_per_hour?: number | null;
+            /** Current Hour */
+            current_hour?: number | null;
+            /** Level */
+            level?: ("green" | "yellow" | "red" | "gray") | null;
+            /** Reason */
+            reason?: string | null;
+            /** Zero Hours */
+            zero_hours?: number | null;
+        };
+        /**
+         * TrafficSummaryOut
+         * @description 近 1 小時全租戶流量彙總(`queries.traffic_1h_summary` 的具名版本)。
+         *
+         *     裸 `dict` 在 OpenAPI 產出的前端型別是 `Record<string, unknown>`,前端取
+         *     `.count` 會是 `unknown`;宣告具名 model 才有精確欄位型別。
+         */
+        TrafficSummaryOut: {
+            /** Avg Ms */
+            avg_ms: number;
+            /** Count */
+            count: number;
+            /** Count 5Xx */
+            count_5xx: number;
+            /** P95 Ms */
+            p95_ms: number;
         };
         /** TransitionIn */
         TransitionIn: {
@@ -64385,6 +64726,40 @@ export interface operations {
             };
         };
     };
+    get_client_events_api_parent_monitor_client_events_get: {
+        parameters: {
+            query?: {
+                hours?: number;
+                page?: number;
+                page_size?: number;
+                type?: ("api_5xx" | "api_timeout" | "chunk_load_failed" | "error_boundary" | "liff_init_failed" | "login_failed" | "maintenance_hit") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMonitorClientEventsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_config_check_api_parent_monitor_config_check_get: {
         parameters: {
             query?: never;
@@ -64401,6 +64776,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParentMonitorConfigCheckOut"];
+                };
+            };
+        };
+    };
+    get_deliveries_api_parent_monitor_deliveries_get: {
+        parameters: {
+            query?: {
+                event_type?: string | null;
+                hours?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMonitorDeliveriesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_delivery_api_parent_monitor_deliveries__delivery_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                delivery_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryRetryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -64443,6 +64881,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParentMonitorProbesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_traffic_api_parent_monitor_traffic_get: {
+        parameters: {
+            query?: {
+                group?: string | null;
+                range?: "24h" | "7d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentMonitorTrafficOut"];
                 };
             };
             /** @description Validation Error */
@@ -65212,6 +65682,37 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_client_events_api_parent_client_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientEventsBatchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
