@@ -2,9 +2,11 @@
   <nav
     v-if="groups.length"
     class="class-rail"
+    :class="{ 'class-rail--vertical': vertical }"
     :aria-label="label"
     data-test="stmt-class-rail"
   >
+    <strong v-if="vertical" class="rail-heading">班級</strong>
     <button
       type="button"
       class="rail-all"
@@ -14,7 +16,7 @@
       data-test="stmt-class-rail-all"
       @click="emit('select', { cls: null, grade: null })"
     >
-      全部<span v-if="showCounts" class="rail-all__n">{{ totalUnpaid }}</span>
+      {{ vertical ? '全部班級' : '全部' }}<span v-if="showCounts" class="rail-all__n">{{ totalUnpaid }}</span>
     </button>
 
     <template v-for="g in groups" :key="g.key">
@@ -67,6 +69,7 @@
         </button>
       </span>
     </template>
+    <small v-if="vertical && showCounts" class="rail-caption">數字為未收齊人數</small>
   </nav>
 </template>
 
@@ -103,6 +106,7 @@ const props = withDefaults(
     showCounts?: boolean
     /** 年段標籤是否可點選（能一次篩整個年段）。伺服器分頁的消費端請關閉 */
     gradeSelectable?: boolean
+    vertical?: boolean
     label?: string
   }>(),
   {
@@ -113,6 +117,7 @@ const props = withDefaults(
     showCounts: true,
     gradeSelectable: true,
     label: '班級篩選',
+    vertical: false,
   },
 )
 
@@ -309,5 +314,24 @@ function gradeTitle(g: GradeGroup): string {
     flex-shrink: 0;
     min-height: var(--touch-target-min);
   }
+}
+
+.rail-heading { padding: var(--space-2); font-size: var(--text-base); }
+.rail-caption { color: var(--text-secondary); padding: var(--space-3) var(--space-2); font-size: var(--text-xs); }
+.class-rail--vertical { margin: 0; }
+.class-rail--vertical :is(button):focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+@media (min-width: 1100px) {
+  .class-rail--vertical { display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--space-1); padding: var(--space-2); border-radius: var(--radius-md); position: sticky; top: 0; max-height: calc(100vh - 120px); overflow-y: auto; }
+  .class-rail--vertical .rail-grade { display: flex; flex-direction: column; align-items: stretch; }
+  .class-rail--vertical .rail-sep { width: 100%; height: 1px; margin: var(--space-2) 0; flex-shrink: 0; }
+  .class-rail--vertical :is(.rail-all, .rail-cls, .rail-grade__lbl) { min-height: 40px; justify-content: space-between; }
+  .class-rail--vertical .rail-cls { border-color: transparent; }
+  .class-rail--vertical :is(.rail-all--on, .rail-cls--on) { background: var(--el-color-primary-light-9); color: var(--el-color-primary-dark-2); }
+  .class-rail--vertical .rail-owe { color: inherit; background: none; }
+}
+@media (max-width: 1099px) {
+  .class-rail--vertical { flex-wrap: nowrap; overflow-x: auto; }
+  .class-rail--vertical :is(.rail-all, .rail-grade, .rail-cls) { flex-shrink: 0; }
+  .class-rail--vertical :is(.rail-heading, .rail-caption, .rail-sep) { display: none; }
 }
 </style>

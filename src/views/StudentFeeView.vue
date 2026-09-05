@@ -1,6 +1,6 @@
 <template>
   <div class="student-fee-view">
-    <PageHeader title="學費管理" :subtitle="headerSubtitle" />
+    <PageHeader title="學費管理" />
 
     <!-- 主導航：底線頁籤 -->
     <nav class="fee-main-nav" aria-label="學費管理工作區">
@@ -106,7 +106,6 @@ const studentSearch = computed(() => {
   return typeof value === 'string' ? value : ''
 })
 
-const headerSubtitle = '收款、對帳與結算的日常工作區'
 
 // 頁籤待辦數需要工作台那批唯讀統計；即使初次落在別的工作區也要載
 onMounted(() => {
@@ -183,7 +182,8 @@ function navigateTo(target: FeeNavTarget) {
 
 <style scoped>
 .student-fee-view {
-  padding: var(--space-5);
+  padding: var(--space-4);
+  min-width: 0;
 }
 
 .fee-main-nav {
@@ -248,4 +248,5 @@ function navigateTo(target: FeeNavTarget) {
   line-height: 1.5;
   text-align: center;
 }
+.student-fee-view :deep(.page-header) { margin-bottom: var(--space-3); }
 </style>

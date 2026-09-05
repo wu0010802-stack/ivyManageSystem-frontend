@@ -190,6 +190,7 @@ const GLOBAL_STUBS = {
     template:
       '<input :value="modelValue" v-bind="$attrs" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
+  'el-popover': { template: '<span><slot name="reference" /></span>' },
   'el-tag': { template: '<span v-bind="$attrs"><slot /></span>' },
   'el-select': {
     props: { modelValue: { type: String, default: '' } },
@@ -239,9 +240,10 @@ describe('預設載入與聚合列', () => {
     expect(row.text()).not.toContain('NT$')
   })
 
-  it('費用欄依當月 fee_type 動態顯示（無註冊費/雜項欄）', async () => {
+  it('完整欄位依當月 fee_type 動態顯示（無註冊費/雜項欄）', async () => {
     const w = mountStatement()
     await flushPromises()
+    await w.find('[data-test="stmt-columns"]').trigger('click')
     const head = w.find('[data-test="stmt-table"] thead').text()
     expect(head).toContain('月費')
     expect(head).toContain('教材費')
@@ -259,7 +261,7 @@ describe('預設載入與聚合列', () => {
   })
 
   // 加了現金／網銀已收兩欄後最容易錯位的地方：tfoot colspan 與展開列 colspan
-  it('tfoot 與展開列的 colspan 合計等於表頭欄數（有／無 FEES_WRITE 皆然）', async () => {
+  it('精簡與完整欄位的合計列皆對齊表頭（有／無 FEES_WRITE 皆然）', async () => {
     const colspanSum = (row: ReturnType<typeof mountStatement>['element'] | Element) =>
       Array.from(row.querySelectorAll('td')).reduce(
         (a, td) => a + Number(td.getAttribute('colspan') ?? 1),
@@ -274,10 +276,11 @@ describe('預設載入與聚合列', () => {
       const foot = w.find('[data-test="stmt-table"] tfoot tr').element
       expect(colspanSum(foot)).toBe(headCount)
 
-      // 展開明細列以 totalColumns 跨滿整列
-      await w.find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-expand"]').trigger('click')
-      const detail = w.find('[data-test="stmt-detail"] > td')
-      expect(Number(detail.attributes('colspan'))).toBe(headCount)
+      await w.find('[data-test="stmt-columns"]').trigger('click')
+      expect(colspanSum(w.find('[data-test="stmt-table"] tfoot tr').element)).toBe(
+        w.findAll('[data-test="stmt-table"] thead th').length,
+      )
+
     }
   })
 })
@@ -484,6 +487,7 @@ describe('收款與批次收款', () => {
   it('每列顯示現金已收／網銀已收（由 settlement 五桶算出）', async () => {
     const w = mountStatement()
     await flushPromises()
+    await w.find('[data-test="stmt-columns"]').trigger('click')
     const row = w.find('[data-test="stmt-row"][data-student="陳部分"]')
     expect(row.find('[data-test="stmt-bank-paid"]').text()).toContain('9,500')
     expect(row.find('[data-test="stmt-cash-paid"]').text()).toBe('—')
@@ -495,11 +499,11 @@ describe('收款與批次收款', () => {
     expect(paidRow.find('[data-test="stmt-bank-paid"]').text()).toBe('—')
   })
 
-  it('批次收款預設 disabled；勾選後帶所有勾選學生的未繳項目', async () => {
+  it('批次收款預設隱藏；勾選後帶所有勾選學生的未繳項目', async () => {
     const w = mountStatement()
     await flushPromises()
     const batchBtn = w.find('[data-test="stmt-batch-pay"]')
-    expect(batchBtn.attributes('disabled')).toBeDefined()
+    expect(batchBtn.exists()).toBe(false)
 
     await w.find('[data-test="stmt-row"][data-student="林未繳"] [data-test="stmt-check"]').setValue(true)
     await w.find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-check"]').setValue(true)
@@ -620,9 +624,10 @@ describe('載入狀態', () => {
 })
 
 describe('檢視收款明細', () => {
-  it('表頭有「檢視」欄，每列一顆檢視鈕；點下帶該生本月所有帳款 id 開彈窗', async () => {
+  it('完整欄位表頭有「檢視」欄，每列一顆檢視鈕；點下帶該生本月所有帳款 id 開彈窗', async () => {
     const w = mountStatement()
     await flushPromises()
+    await w.find('[data-test="stmt-columns"]').trigger('click')
     expect(w.find('[data-test="stmt-table"] thead').text()).toContain('檢視')
     expect(w.findAll('[data-test="stmt-view"]')).toHaveLength(2)
 
@@ -643,6 +648,7 @@ describe('檢視收款明細', () => {
     authMocks.perms = new Set(['FEES_READ'])
     const w = mountStatement()
     await flushPromises()
+    await w.find('[data-test="stmt-columns"]').trigger('click')
     expect(w.find('[data-test="stmt-table"] thead').text()).toContain('檢視')
     expect(w.findAll('[data-test="stmt-view"]')).toHaveLength(2)
     await w.find('[data-test="stmt-view"]').trigger('click')
@@ -652,10 +658,102 @@ describe('檢視收款明細', () => {
   it('已繳清的列同樣可檢視（看是誰收的）', async () => {
     const w = mountStatement()
     await flushPromises()
+    await w.find('[data-test="stmt-columns"]').trigger('click')
     await w.find('[data-test="stmt-flt-paid"]').trigger('click')
     const paidRow = w.find('[data-test="stmt-row"][data-student="張全繳"]')
     expect(paidRow.find('[data-test="stmt-view"]').exists()).toBe(true)
     await paidRow.find('[data-test="stmt-view"]').trigger('click')
     expect(w.find('[data-testid="coll-dialog"]').attributes('data-ids')).toBe('31')
   })
+})
+
+describe('應收帳款清單優先介面', () => {
+  it('預設精簡欄位，勾選才顯示批次操作，取消後移除', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-test="stmt-table"] thead').text()).toContain('已收')
+    expect(w.find('[data-test="stmt-table"] thead').text()).not.toContain('教材費')
+    expect(w.find('[data-test="stmt-batch-pay"]').exists()).toBe(false)
+    await w.find('[data-test="stmt-check"]').setValue(true)
+    expect(w.find('[data-test="stmt-batch-hint"]').text()).toContain('10,700')
+    await w.find('[data-test="stmt-clear-selection"]').trigger('click')
+    expect(w.find('[data-test="stmt-batch-pay"]').exists()).toBe(false)
+  })
+
+  it('明細在清單旁切換且不勾選學生，關閉後保留班級', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-classroom="向日葵"][data-test="stmt-class-rail-class"]').trigger('click')
+    await w.find('[data-test="stmt-expand"]').trigger('click')
+    expect(w.find('aside[data-test="stmt-detail"]').text()).toContain('林未繳')
+    expect(w.find('[data-test="stmt-batch-pay"]').exists()).toBe(false)
+    await w.findAll('[data-test="stmt-expand"]')[1].trigger('click')
+    expect(w.findAll('aside[data-test="stmt-detail"]')).toHaveLength(1)
+    expect(w.find('aside[data-test="stmt-detail"]').text()).toContain('陳部分')
+    await w.find('[data-test="stmt-detail-close"]').trigger('click')
+    expect(w.find('[data-test="stmt-detail"]').exists()).toBe(false)
+    expect(rowNames(w)).toEqual(['林未繳', '陳部分'])
+  })
+
+  it('可用銷帳碼搜尋，縮小範圍時清除隱藏勾選與明細', async () => {
+    getFeeMonthlyStatement.mockResolvedValue({ ...STATEMENT, students: STATEMENT.students.map((s) => ({ ...s, billing_code_suffix: `420${s.student_id}` })) })
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-check"]').setValue(true)
+    await w.find('[data-test="stmt-expand"]').trigger('click')
+    await w.find('[data-test="stmt-search"]').setValue('4202')
+    expect(rowNames(w)).toEqual(['陳部分'])
+    expect(w.find('[data-test="stmt-batch-pay"]').exists()).toBe(false)
+    expect(w.find('[data-test="stmt-detail"]').exists()).toBe(false)
+  })
+})
+
+
+describe('帳款明細操作邊界', () => {
+  it('側邊收款沿用該生與當月脈絡，唯讀使用者沒有收款按鈕', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-expand"]').trigger('click')
+    await w.find('[data-test="stmt-detail-pay"]').trigger('click')
+    expect(w.find('[data-testid="cash-dialog"]').attributes('data-student')).toBe('1')
+    expect(w.find('[data-testid="cash-dialog"]').attributes('data-month')).toBe('2026-08')
+    w.unmount()
+    authMocks.perms = new Set(['FEES_READ'])
+    const readOnly = mountStatement()
+    await flushPromises()
+    await readOnly.find('[data-test="stmt-expand"]').trigger('click')
+    expect(readOnly.find('[data-test="stmt-detail-pay"]').exists()).toBe(false)
+    expect(readOnly.find('[data-test="stmt-detail"]').text()).toContain('教材費')
+    readOnly.unmount()
+  })
+
+  it('切月等待回應期間隱藏舊金額與收款操作', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-expand"]').trigger('click')
+    let resolveNext!: (value: typeof STATEMENT) => void
+    getFeeMonthlyStatement.mockReturnValueOnce(new Promise(resolve => { resolveNext = resolve }))
+    await w.find('[data-test="stmt-month-prev"]').trigger('click')
+    expect(w.find('[data-test="stmt-summary"]').exists()).toBe(false)
+    expect(w.find('[data-test="stmt-pay"]').exists()).toBe(false)
+    expect(w.find('[data-test="stmt-detail"]').exists()).toBe(false)
+    resolveNext({ ...STATEMENT, students: [] })
+    await flushPromises()
+    expect(w.find('[data-test="stmt-summary"]').text()).toContain('尚無帳款')
+    expect(w.find('[data-test="stmt-summary"]').text()).not.toContain('已收齊')
+    w.unmount()
+  })
+})
+
+
+it('精簡清單的側邊明細仍可查看完整收款紀錄與經手人', async () => {
+  const w = mountStatement()
+  await flushPromises()
+  await w.find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-expand"]').trigger('click')
+  await w.find('[data-test="stmt-detail-collections"]').trigger('click')
+  const dialog = w.find('[data-testid="coll-dialog"]')
+  expect(dialog.attributes('data-ids')).toBe('21,22')
+  expect(dialog.attributes('data-month')).toBe('2026-08')
+  expect(w.find('[data-testid="cash-dialog"]').attributes('data-open')).toBe('0')
+  w.unmount()
 })

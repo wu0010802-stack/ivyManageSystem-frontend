@@ -182,9 +182,10 @@ beforeEach(() => {
 })
 
 describe('預繳欄', () => {
-  it('有可用額度顯示「可用 NT$5,000」，無額度顯示 —', async () => {
+  it('完整欄位有可用額度顯示「可用 NT$5,000」，無額度顯示 —', async () => {
     const wrapper = mountStatement()
     await flushPromises()
+    await wrapper.find('[data-test="stmt-columns"]').trigger('click')
     const cells = wrapper.findAll('[data-test="stmt-prepay-cell"]')
     expect(cells).toHaveLength(1)
     expect(cells[0].text()).toContain('可用 NT$5,000')
@@ -193,10 +194,11 @@ describe('預繳欄', () => {
     expect(rows[1].text()).not.toContain('可用')
   })
 
-  it('點預繳格開抽屜，只帶該生額度、標題含學生姓名', async () => {
+  it('從精簡清單明細開預繳抽屜，只帶該生額度、標題含學生姓名', async () => {
     const wrapper = mountStatement()
     await flushPromises()
-    await wrapper.find('[data-test="stmt-prepay-cell"]').trigger('click')
+    await wrapper.find('[data-test="stmt-expand"]').trigger('click')
+    await wrapper.find('[data-test="stmt-detail"] [data-test="stmt-prepay-cell"]').trigger('click')
     await flushPromises()
     const drawer = wrapper.find('[data-testid="prepay-drawer"]')
     expect(drawer.exists()).toBe(true)
@@ -219,7 +221,8 @@ describe('mutation 後重抓', () => {
   it('抽屜 emit refresh 時帳款與預繳一起重抓（套用會建立折抵影響應繳）', async () => {
     const wrapper = mountStatement()
     await flushPromises()
-    await wrapper.find('[data-test="stmt-prepay-cell"]').trigger('click')
+    await wrapper.find('[data-test="stmt-expand"]').trigger('click')
+    await wrapper.find('[data-test="stmt-detail"] [data-test="stmt-prepay-cell"]').trigger('click')
     await flushPromises()
     getFeeMonthlyStatement.mockClear()
     getPrepayments.mockClear()
