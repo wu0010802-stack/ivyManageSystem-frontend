@@ -20,8 +20,15 @@ describe('main.css dialog 表單預設層', () => {
     expect(labelRule.slice(0, 600)).toMatch(/justify-content:\s*flex-start/)
   })
 
-  it('桌機：dialog 內非 inline 表單預設堆疊標籤，並排除 .form-labels-inline', () => {
+  it('桌機：dialog 內非 inline 表單預設堆疊標籤，並排除 .form-labels-inline，包進 --bp-sm', () => {
     const desk = block('/* ========== Dialog 表單預設層')
+    // 區塊必須位於 @media (--bp-sm) 內
+    const bpSmIndex = desk.indexOf('@media (--bp-sm)')
+    const selectorIndex = desk.indexOf('.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline)')
+    expect(bpSmIndex, '@media (--bp-sm) 必須存在').toBeGreaterThan(-1)
+    expect(selectorIndex, '.el-form 選擇器必須存在').toBeGreaterThan(-1)
+    expect(bpSmIndex, '@media (--bp-sm) 應在選擇器之前').toBeLessThan(selectorIndex)
+    // 既有規則檢查
     expect(desk).toMatch(/\.el-dialog \.el-form:not\(\.el-form--inline\):not\(\.form-labels-inline\)/)
     expect(desk).toMatch(/\.el-form-item__label\s*\{[^}]*width:\s*auto\s*!important/)
     expect(desk).toMatch(/\.el-form-item__content\s*\{[^}]*margin-left:\s*0\s*!important/)

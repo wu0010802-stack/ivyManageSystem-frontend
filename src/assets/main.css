@@ -319,22 +319,25 @@ html.ivy-admin .el-table .el-table__cell {
  * 已明確設 label-position="top" 的表單走 EP 自己的規則，結果同構。
  * opt-out：<el-form class="form-labels-inline"> 保留左右排（刻意緊湊的短表單）；inline 表單自動排除。
  * !important 是必要的：EP 把 label-width 寫成 label 的 inline style width，
- * 無 label 的 item 則在 content 上寫 inline margin-left（手機斷點既有規則同一手法）。 */
-.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item {
-  display: block;
-}
-.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item__label {
-  display: inline-block;
-  width: auto !important;
-  height: auto;
-  line-height: 22px;
-  padding: 0;
-  margin-bottom: 8px;
-  justify-content: flex-start;
-  text-align: left;
-}
-.el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item__content {
-  margin-left: 0 !important;
+ * 無 label 的 item 則在 content 上寫 inline margin-left（手機斷點既有規則同一手法）。
+ * 包在 --bp-sm：手機（--to-sm）由下方既有規則獨佔，避免高 specificity 蓋掉手機微調。 */
+@media (--bp-sm) {
+  .el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item {
+    display: block;
+  }
+  .el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item__label {
+    display: inline-block;
+    width: auto !important;
+    height: auto;
+    line-height: 22px;
+    padding: 0;
+    margin-bottom: 8px;
+    justify-content: flex-start;
+    text-align: left;
+  }
+  .el-dialog .el-form:not(.el-form--inline):not(.form-labels-inline) .el-form-item__content {
+    margin-left: 0 !important;
+  }
 }
 
 /* Dialog - responsive on mobile */
