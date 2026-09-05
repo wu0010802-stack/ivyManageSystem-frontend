@@ -14,6 +14,7 @@ import axios, {
 import { applyDedupe, clearDedupe } from '@/utils/apiDedupe'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
+import { reportClientEvent } from '@/parent/utils/clientEvents'
 import { toast } from '@/parent/utils/toast'
 import { useConsentGate } from '@/parent/composables/useConsentGate'
 import { useStaffSessionGate } from '@/parent/composables/useStaffSessionGate'
@@ -105,6 +106,12 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   for (const [name, value] of Object.entries(tenantHeaders())) config.headers.set(name, value)
   return config
 })
+
+/** `sanitizeUrl` 對非字串輸入原樣回傳（型別是 `unknown`），這裡窄化成
+ * `clientEvents` 的 `route_name` 欄位需要的 `string | null`。 */
+function _routeNameOf(url: unknown): string | null {
+  return typeof url === 'string' ? url : null
+}
 
 function _recordTiming(method: string, url: string, status: number, durationMs: number) {
   if (import.meta.env.DEV) {
@@ -294,6 +301,12 @@ api.interceptors.response.use(
         }
         error.displayMessage = typeof ksObj.message === 'string' ? ksObj.message : '系統維護中，請稍後再回來'
         error.errorDetail = ksObj
+        // SPEC-023 批次 3：家長端監控事件（走 fetch keepalive 直送，不經本
+        // axios instance——它的攔截器正是這裡，用它送會遞迴）。
+        reportClientEvent('maintenance_hit', {
+          route_name: _routeNameOf(sanitizeUrl(originalRequest?.url)),
+          status_code: 503,
+        })
         return Promise.reject(error)
       }
       if (ksObj.code === 'READ_ONLY_MODE') {
@@ -360,6 +373,24 @@ api.interceptors.response.use(
         method: error.config?.method,
         status,
       }).catch(() => {})
+      // SPEC-023 批次 3：家長端監控事件（走 fetch keepalive 直送，不經本
+      // axios instance——它的攔截器正是這裡，用它送會遞迴）。無 response
+      // 涵蓋逾時（ECONNABORTED）與純網路錯誤——白名單沒有獨立的
+      // network_error 型別，兩者一律歸 api_timeout。
+      const routeName = _routeNameOf(sanitizeUrl(error.config?.url))
+      if (!error.response) {
+        reportClientEvent('api_timeout', {
+          route_name: routeName,
+          error_code: error.code ?? null,
+          message: error.message,
+        })
+      } else {
+        reportClientEvent('api_5xx', {
+          route_name: routeName,
+          status_code: status,
+          message: error.message,
+        })
+      }
     }
     return Promise.reject(error)
   },

@@ -29,6 +29,7 @@ import liff from '@line/liff'
 
 import { fetchTenantMetaForLiff } from '@/api/tenantMeta'
 import { markLineClientFromSdk } from '../utils/lineClient'
+import { reportClientEvent } from '../utils/clientEvents'
 
 const LIFF_REFRESH_MARKER = 'parent_liff_token_refresh_marker'
 // id_token exp buffer：剩餘 < 60 秒視為需 refresh，避免送出途中過期
@@ -79,8 +80,13 @@ export function initLiff(): Promise<void> {
     }
   })()
   // 失敗即清空，讓 LoginView 的 manualRetry 能真的重試（原本 reject 會被永久快取）。
+  // 這裡是「初始化 LIFF 失敗」唯一集中處，回報一次即可（SPEC-023 批次 3 Task 3）；
+  // LoginView 接住這個 rethrow 後只負責顯示錯誤 UI，不重複回報同一次失敗。
   _initPromise = _initPromise.catch((e: unknown) => {
     _initPromise = null
+    reportClientEvent('liff_init_failed', {
+      message: e instanceof Error ? e.message : String(e),
+    })
     throw e
   })
   return _initPromise

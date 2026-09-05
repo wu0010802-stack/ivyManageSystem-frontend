@@ -16,6 +16,7 @@ import {
 } from '../api/consent'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { clearParentPersonalizedCaches } from '../composables/useParentLogout'
+import { reportClientEvent } from '../utils/clientEvents'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import ConsentModal from '../components/ConsentModal.vue'
@@ -144,6 +145,16 @@ async function startLogin({ forceFresh = false } = {}) {
     // useFriendlyError 處理 LINE_BINDING_EXPIRED / LINE_BINDING_NOT_FOUND /
     // LINE_PROFILE_FETCH_FAILED 等 envelope code；未知 code fallback displayMessage
     errorState.value = getFriendly(err)
+    // 家長端監控（SPEC-023 批次 3）：只在請求根本沒送達後端才回報——有 HTTP
+    // 回應代表後端已收到這次登入嘗試、批次 1 的稽核已寫（LOGIN_FAILED），不要
+    // 重複計數。這裡補的是「LINE SDK 取 id_token 就失敗」「liffLogin 網路層
+    // 失敗」這類稽核照不到的情況。
+    const hasResponse = Boolean((err as { response?: unknown } | null | undefined)?.response)
+    if (!hasResponse) {
+      reportClientEvent('login_failed', {
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 }
 
@@ -227,6 +238,11 @@ async function submitDeviceSetup() {
       // 伺服器，碼就已經用掉了，只有 _reclaim_recent_device_setup_code 的 120 秒
       // 窗口能救回來；拖過窗口就真的只能向園所重新索取。
       deviceSetupError.value = '連線中斷，請確認網路後立即再試一次；拖太久需向園所重新索取設定碼'
+      // 家長端監控（SPEC-023 批次 3）：同 startLogin 的判斷——沒有 HTTP 回應
+      // 代表後端根本沒收到，批次 1 的 LOGIN_FAILED 稽核也不會寫，這裡補上。
+      reportClientEvent('login_failed', {
+        message: err instanceof Error ? err.message : String(err),
+      })
     } else {
       // 後端對「碼不存在／已過期／已使用」一律回同一個 BusinessError code
       // 避免碼枚舉；前端也不採用後端實際訊息字串，固定顯示這句，避免後端
