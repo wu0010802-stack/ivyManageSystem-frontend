@@ -260,12 +260,7 @@ export interface paths {
          *     時間倒序，限 200 筆；ApprovalLog 為 source of truth。
          *     供老闆/簽核者隨時查看異常解鎖記錄，補強稽核獨立性。
          *
-         *     ⚠ 顯式租戶縮域（P1-01）：`approval_logs` 沒有 `tenant_id` 欄，RLS policy 靠
-         *     `approver_id → users.tenant_id` 推導，且 `models/tenant_rls_ddl._NULLABLE_PATH_TABLES`
-         *     對 `approver_id IS NULL` 的列**明文 fail-open**。本端點回傳的 comment 含金額、
-         *     原簽核人與解鎖原因全文，不能只靠 RLS，故在應用層再縮一次域（縱深防禦，
-         *     對齊 workspace CLAUDE.md「應用層顯式 tenant filter 仍為必要」）。
-         *     approver_id 為 NULL 的歷史列一律不回（fail-closed）——那批列無法歸屬租戶。
+         *     以固定 tenant_id 限縮，即使簽核者刪除也保留本租戶的稽核紀錄。
          */
         get: operations["list_pos_unlock_events_api_activity_audit_pos_unlock_events_get"];
         put?: never;
