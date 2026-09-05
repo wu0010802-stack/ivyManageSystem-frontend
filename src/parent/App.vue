@@ -9,6 +9,7 @@ import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import { useConsentGate } from './composables/useConsentGate'
 import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
 import { reportClientEvent } from './utils/clientEvents'
+import { sanitizeUrl } from '@/utils/sentry'
 
 const gate = useConsentGate()
 const consentPolicy = ref<PolicyVersionOut | null>(null)
@@ -75,7 +76,11 @@ function onBoundaryError(payload: { error: unknown; variant: string }) {
   const err = payload.error
   reportClientEvent('error_boundary', {
     message: err instanceof Error ? err.message : String(err),
-    route_name: router.currentRoute.value.path,
+    // 過 sanitizeUrl 與 api/index.ts 的四個掛點一致：路徑裡的 id 要遮掉，
+    // 別讓遙測欄位變成另一條 PII 出口。（2026-09-05 複審 F3）
+    // sanitizeUrl 的參數型別是 unknown，回傳型別也跟著是 unknown；
+    // 這裡傳進去的必定是字串，用 String() 收斂而不是 as 硬轉。
+    route_name: String(sanitizeUrl(router.currentRoute.value.path)),
   })
 }
 </script>

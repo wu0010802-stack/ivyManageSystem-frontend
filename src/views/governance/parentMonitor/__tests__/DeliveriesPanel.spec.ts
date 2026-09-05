@@ -318,4 +318,37 @@ describe('DeliveriesPanel', () => {
     expect(error.exists()).toBe(true)
     expect(error.text()).toContain('推播投遞查詢失敗')
   })
+
+  it('兩列同時重送時，各自的載入指示不會互相蓋掉', async () => {
+    // 單一 `retryingId` ref 的話，後按的那列會把先按的狀態清掉——先按的列
+    // 看起來已完成，其實還在跑。每列要有自己的狀態。（複審 F2）
+    mockHasPermission.mockImplementation((name: string) => name === 'SETTINGS_WRITE')
+    mockConfirm.mockResolvedValue(true)
+    h_.getDeliveries.mockResolvedValue(
+      mockDeliveries({ failed: [failedItem({ id: 42 }), failedItem({ id: 43 })] }),
+    )
+
+    const resolvers: Array<(v: unknown) => void> = []
+    h_.retryDelivery.mockImplementation(
+      () => new Promise((resolve) => { resolvers.push(resolve) }),
+    )
+
+    const w = mount(DeliveriesPanel, { global: { stubs } })
+    await flushPromises()
+
+    await w.find('[data-testid="retry-btn-42"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-testid="retry-btn-43"]').trigger('click')
+    await flushPromises()
+
+    // 兩列都還在跑：stub 的 loading 會反映成 disabled
+    expect(w.find('[data-testid="retry-btn-42"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="retry-btn-43"]').attributes('disabled')).toBeDefined()
+
+    // 43 先回來，不該把 42 的載入狀態一起清掉
+    resolvers[1]({ data: { id: 43, line_retry_count: 0, line_next_retry_at: null } })
+    await flushPromises()
+
+    expect(w.find('[data-testid="retry-btn-42"]').attributes('disabled')).toBeDefined()
+  })
 })

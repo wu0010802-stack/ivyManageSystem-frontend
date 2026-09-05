@@ -58,7 +58,7 @@
                 <el-button
                   size="small"
                   :data-testid="`retry-btn-${row.id}`"
-                  :loading="retryingId === row.id"
+                  :loading="retryingIds.has(row.id)"
                   @click="handleRetry(row.id as number)"
                 >
                   重送
@@ -133,7 +133,12 @@ const byEventType = ref<ByEventTypeItem[]>([])
 const failed = ref<FailedItem[]>([])
 const failureReasons = ref<FailureReasonItem[]>([])
 const unfollowedCount = ref<number | null>(null)
-const retryingId = ref<number | null>(null)
+/**
+ * 進行中的重送 id 集合。⚠ 不能用單一 `ref<number | null>`：兩列同時重送時
+ * 後一次會蓋掉前一次的 loading 指示，畫面上先按的那列看起來已經完成（其實
+ * 還在跑）。每列各自記狀態才對得起來。（2026-09-05 複審 F2）
+ */
+const retryingIds = ref<Set<number>>(new Set())
 
 const canRetry = computed(() => hasPermission('SETTINGS_WRITE'))
 
@@ -173,11 +178,23 @@ const displayFailed = computed<DisplayFailed[]>(() =>
   })),
 )
 
+/**
+ * 請求序號：只有最後發出的那份回應可以寫進畫面。
+ *
+ * 重送成功後會立刻 `fetchData()`，連按兩列就會有兩份查詢在飛；沒有這道守衛
+ * 時先發的慢回應會蓋掉後發的快回應，列表顯示的是舊快照——而使用者剛做完
+ * 寫入動作，正好是最不能顯示舊資料的時候。（2026-09-05 複審 F2，與
+ * TrafficPanel／ClientEventsPanel 同一套寫法）
+ */
+let requestSeq = 0
+
 async function fetchData(): Promise<void> {
+  const seq = ++requestSeq
   loading.value = true
   errorMessage.value = null
   try {
     const res = await getParentMonitorDeliveries()
+    if (seq !== requestSeq) return
     enabled.value = res.data.enabled
     if (res.data.enabled) {
       byEventType.value = res.data.by_event_type ?? []
@@ -186,9 +203,10 @@ async function fetchData(): Promise<void> {
       unfollowedCount.value = res.data.unfollowed_count ?? null
     }
   } catch (e) {
+    if (seq !== requestSeq) return
     errorMessage.value = getErrorMessage(e, '推播投遞資料載入失敗，請稍後再試')
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
@@ -203,7 +221,7 @@ async function handleRetry(deliveryId: number): Promise<void> {
     return // 使用者取消，不視為錯誤
   }
 
-  retryingId.value = deliveryId
+  retryingIds.value.add(deliveryId)
   try {
     await retryParentMonitorDelivery(deliveryId)
     ElMessage.success('已排入重送，將由排程接手處理')
@@ -214,7 +232,7 @@ async function handleRetry(deliveryId: number): Promise<void> {
   } catch (e) {
     ElMessage.error(getErrorMessage(e, '重送失敗，請稍後再試'))
   } finally {
-    retryingId.value = null
+    retryingIds.value.delete(deliveryId)
   }
 }
 
