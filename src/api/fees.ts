@@ -30,6 +30,18 @@ export const getFeeMonthlyStatement = (
   params: ApiQuery<'/fees/monthly-statement', 'get'>,
 ): Promise<ApiResponse<'/fees/monthly-statement', 'get'>> =>
   api.get('/fees/monthly-statement', { params }).then((res) => res.data)
+// 帳款收款明細（月表「檢視」彈窗）：誰收的、什麼時候登錄／媒合、走哪條鏈。
+// record_id 為多值 query（?record_id=1&record_id=2），axios 預設會加 []，
+// 比照 studentRecords.ts 以 indexes:null 關掉。
+export const getFeeRecordCollections = (
+  recordIds: number[],
+): Promise<ApiResponse<'/fees/records/collections', 'get'>> =>
+  api
+    .get('/fees/records/collections', {
+      params: { record_id: recordIds },
+      paramsSerializer: { indexes: null },
+    })
+    .then((res) => res.data)
 
 // ===== 學費折抵 CRUD（同胞優惠 / 預繳 / 請假扣款 / 其他）=====
 // getFeeAdjustments 參數維持 unknown：FeesTab.vue 以 Record<string, unknown> 傳入，

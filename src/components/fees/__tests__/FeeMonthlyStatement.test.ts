@@ -48,6 +48,21 @@ vi.mock('@/components/fees/StudentCashReceiptDialog.vue', () => ({
       '<div data-testid="cash-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-student="studentId" :data-month="month" />',
   },
 }))
+vi.mock('@/components/fees/FeeCollectionDetailDialog.vue', () => ({
+  __esModule: true,
+  default: {
+    name: 'FeeCollectionDetailDialog',
+    props: {
+      modelValue: { type: Boolean, default: false },
+      recordIds: { type: Array, default: () => [] },
+      studentName: { type: String, default: '' },
+      month: { type: String, default: '' },
+    },
+    emits: ['update:modelValue'],
+    template:
+      '<div data-testid="coll-dialog" :data-open="modelValue ? \'1\' : \'0\'" :data-ids="recordIds.join(\',\')" :data-student="studentName" :data-month="month" />',
+  },
+}))
 vi.mock('@/components/fees/BatchPayDialog.vue', () => ({
   __esModule: true,
   default: {
@@ -601,5 +616,46 @@ describe('載入狀態', () => {
     expect(w.find('[data-test="stmt-empty"]').text()).toContain('匯入繳款單檢核檔')
     await w.find('[data-test="stmt-empty-import"]').trigger('click')
     expect(w.emitted('open-imports')).toBeTruthy()
+  })
+})
+
+describe('檢視收款明細', () => {
+  it('表頭有「檢視」欄，每列一顆檢視鈕；點下帶該生本月所有帳款 id 開彈窗', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-test="stmt-table"] thead').text()).toContain('檢視')
+    expect(w.findAll('[data-test="stmt-view"]')).toHaveLength(2)
+
+    const dialog = w.find('[data-testid="coll-dialog"]')
+    expect(dialog.attributes('data-open')).toBe('0')
+    await w
+      .find('[data-test="stmt-row"][data-student="陳部分"] [data-test="stmt-view"]')
+      .trigger('click')
+    expect(dialog.attributes('data-open')).toBe('1')
+    expect(dialog.attributes('data-ids')).toBe('21,22')
+    expect(dialog.attributes('data-student')).toBe('陳部分')
+    expect(dialog.attributes('data-month')).toBe('2026-08')
+    // 檢視是唯讀動作，不該順手開收款 dialog
+    expect(w.find('[data-testid="cash-dialog"]').attributes('data-open')).toBe('0')
+  })
+
+  it('只有 FEES_READ 也能檢視（唯讀欄不受寫入權限影響）', async () => {
+    authMocks.perms = new Set(['FEES_READ'])
+    const w = mountStatement()
+    await flushPromises()
+    expect(w.find('[data-test="stmt-table"] thead').text()).toContain('檢視')
+    expect(w.findAll('[data-test="stmt-view"]')).toHaveLength(2)
+    await w.find('[data-test="stmt-view"]').trigger('click')
+    expect(w.find('[data-testid="coll-dialog"]').attributes('data-open')).toBe('1')
+  })
+
+  it('已繳清的列同樣可檢視（看是誰收的）', async () => {
+    const w = mountStatement()
+    await flushPromises()
+    await w.find('[data-test="stmt-flt-paid"]').trigger('click')
+    const paidRow = w.find('[data-test="stmt-row"][data-student="張全繳"]')
+    expect(paidRow.find('[data-test="stmt-view"]').exists()).toBe(true)
+    await paidRow.find('[data-test="stmt-view"]').trigger('click')
+    expect(w.find('[data-testid="coll-dialog"]').attributes('data-ids')).toBe('31')
   })
 })

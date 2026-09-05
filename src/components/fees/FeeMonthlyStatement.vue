@@ -202,6 +202,8 @@
             <th class="num-col">網銀已收</th>
             <th class="col-prepay">預繳</th>
             <th class="col-status">狀態</th>
+            <!-- 收款明細（誰收的、何時登錄／媒合）：唯讀，FEES_READ 即可見 -->
+            <th class="col-view">檢視</th>
             <th v-if="canWrite" class="col-action">操作</th>
           </tr>
         </thead>
@@ -396,6 +398,19 @@
                   逾期
                 </el-tag>
               </td>
+              <td class="col-view">
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                  data-test="stmt-view"
+                  :aria-label="`檢視 ${stu.student_name} 收款明細`"
+                  @click="openViewFor(stu)"
+                >
+                  <el-icon aria-hidden="true"><View /></el-icon>
+                  檢視
+                </el-button>
+              </td>
               <td v-if="canWrite" class="col-action">
                 <el-button
                   v-if="stu.status !== 'paid'"
@@ -480,8 +495,8 @@
             <td :colspan="2 + visibleBuckets.length">合計（目前篩選 {{ visibleStudents.length }} 人）</td>
             <td class="num-cell">{{ formatCurrency(visibleDue) }}</td>
             <td class="num-cell outstanding-pos">{{ formatCurrency(visibleOutstanding) }}</td>
-            <!-- 現金已收／網銀已收／預繳／狀態（＋canWrite 的操作欄）不做合計 -->
-            <td :colspan="canWrite ? 5 : 4" />
+            <!-- 現金已收／網銀已收／預繳／狀態／檢視（＋canWrite 的操作欄）不做合計 -->
+            <td :colspan="canWrite ? 6 : 5" />
           </tr>
         </tfoot>
       </table>
@@ -501,6 +516,12 @@
       :student-name="cashStudent?.name ?? ''"
       :month="month"
       @paid="onPaid"
+    />
+    <FeeCollectionDetailDialog
+      v-model="viewDialogVisible"
+      :record-ids="viewRecordIds"
+      :student-name="viewStudentName"
+      :month="month"
     />
   </section>
 </template>
@@ -531,7 +552,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getFeeMonthlyStatement, getPrepayments } from '@/api/fees'
 import { ElMessage } from 'element-plus'
-import { ArrowRight, Check } from '@element-plus/icons-vue'
+import { ArrowRight, Check, View } from '@element-plus/icons-vue'
 import { friendlyError } from '@/utils/errorMessages'
 import { formatAmount, formatCurrency } from '@/utils/currency'
 import { todayISO } from '@/utils/format'
@@ -548,6 +569,7 @@ import {
 import type { FeeWorkspaceKey } from '@/components/fees/workspace/feesNavigation'
 import PrepaymentDrawer from '@/components/fees/PrepaymentDrawer.vue'
 import StudentCashReceiptDialog from '@/components/fees/StudentCashReceiptDialog.vue'
+import FeeCollectionDetailDialog from '@/components/fees/FeeCollectionDetailDialog.vue'
 import {
   CREDIT_STATUS_LABELS,
   creditStatusTag,
@@ -960,10 +982,10 @@ function bucketCell(stu: StatementStudent, bucketKey: string) {
   }
 }
 
-// 8 固定欄（學生/銷帳碼/應繳合計/未收/現金已收/網銀已收/預繳/狀態）
+// 9 固定欄（學生/銷帳碼/應繳合計/未收/現金已收/網銀已收/預繳/狀態/檢視）
 // ＋動態費用欄＋canWrite 時的勾選與操作兩欄。班級欄自 2026-09-03 起由分組表頭取代。
 const totalColumns = computed(
-  () => 8 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
+  () => 9 + visibleBuckets.value.length + (canWrite.value ? 2 : 0),
 )
 
 /**
@@ -1057,6 +1079,18 @@ const cashStudent = ref<{ id: number; name: string } | null>(null)
 function openCashFor(stu: StatementStudent) {
   cashStudent.value = { id: stu.student_id, name: stu.student_name ?? '' }
   cashDialogVisible.value = true
+}
+
+// 列上「檢視」（2026-09-05）：唯讀彈窗看該生本月每張帳款是誰收的、何時登錄／
+// 媒合、走到哪一層確認；帶本月全部 record_id 一次查
+const viewDialogVisible = ref(false)
+const viewRecordIds = ref<number[]>([])
+const viewStudentName = ref('')
+
+function openViewFor(stu: StatementStudent) {
+  viewRecordIds.value = stu.items.map((it) => it.id)
+  viewStudentName.value = stu.student_name ?? ''
+  viewDialogVisible.value = true
 }
 
 function openBatchPay() {
@@ -1404,6 +1438,11 @@ function statusTagType(status: string): 'success' | 'warning' | 'danger' {
 .col-action {
   width: 72px;
   text-align: right;
+}
+
+.col-view {
+  width: 72px;
+  white-space: nowrap;
 }
 
 /* 原生 checkbox 只換主色與尺寸，行為與測試不動 */

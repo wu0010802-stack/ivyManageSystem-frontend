@@ -7908,6 +7908,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/fees/records/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fee Record Collections
+         * @description 帳款收款事件：誰收的、什麼時候登錄／媒合、走現金交接還是網銀銷帳。
+         *
+         *     把每筆帳款沿 FeeAllocation→FeeReceipt→（交接批｜銀行交易｜代收明細）鏈
+         *     攤平成時間序事件，另附改版前存量繳費流水與真實退款；月繳總表每列的
+         *     「檢視」彈窗一次帶該生本月所有 record_id 查詢。
+         *
+         *     守衛比照月表（F-034）：FEES_READ 之上再要求全校 row scope；不屬本租戶的
+         *     record_id 靜默省略（不 404，不洩漏存在性）。
+         */
+        get: operations["fee_record_collections_api_fees_records_collections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/fees/refunds": {
         parameters: {
             query?: never;
@@ -29480,6 +29507,99 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
+        /**
+         * FeeCollectionBankTxnOut
+         * @description 網銀鏈：存摺明細交易（bank_transactions）。
+         */
+        FeeCollectionBankTxnOut: {
+            /** Id */
+            id: number;
+            /** Posting Date */
+            posting_date?: string | null;
+            /** Summary */
+            summary?: string | null;
+            /** Transaction At */
+            transaction_at?: string | null;
+        };
+        /**
+         * FeeCollectionEventOut
+         * @description 單筆帳款的一個收款／沖銷／退款事件（月表「檢視」彈窗）。
+         *
+         *     kind：
+         *     - cash／bank／collection／other：沿 FeeAllocation→FeeReceipt 的收據事件，
+         *       沖銷列 is_reversal=True、amount 為負
+         *     - legacy_payment：改版前只有繳費流水、無收據的付款（未立據存量）
+         *     - refund：真實退款（對帳沖銷在退款表留下的鏡像列不列，避免雙計）
+         *
+         *     occurred_at＝事件時間戳（分配／媒合建立時間、流水建立時間、退款時間）；
+         *     operator_name＝執行該事件的人（分配人／登錄人／退款人）的顯示名。
+         */
+        FeeCollectionEventOut: {
+            /** Amount */
+            amount: number;
+            bank_transaction?: components["schemas"]["FeeCollectionBankTxnOut"] | null;
+            collection_payment?: components["schemas"]["FeeCollectionPaymentSourceOut"] | null;
+            handover?: components["schemas"]["FeeCollectionHandoverOut"] | null;
+            /**
+             * Is Reversal
+             * @default false
+             */
+            is_reversal: boolean;
+            /** Kind */
+            kind: string;
+            /** Notes */
+            notes?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /** Operator Name */
+            operator_name?: string | null;
+            /** Payer Note */
+            payer_note?: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Receipt Id */
+            receipt_id?: number | null;
+            /** Receipt Status */
+            receipt_status?: string | null;
+            /** Received By Name */
+            received_by_name?: string | null;
+            /** Received Date */
+            received_date?: string | null;
+        };
+        /**
+         * FeeCollectionHandoverOut
+         * @description 現金鏈：收據所掛的當日交接批（Maker-Checker 進度）。
+         */
+        FeeCollectionHandoverOut: {
+            /** Business Date */
+            business_date?: string | null;
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Confirmed By Name */
+            confirmed_by_name?: string | null;
+            /** Id */
+            id: number;
+            /** Status */
+            status: string;
+            /** Submitted At */
+            submitted_at?: string | null;
+        };
+        /**
+         * FeeCollectionPaymentSourceOut
+         * @description 網銀鏈：永豐代收核銷明細（collection_payments）。
+         */
+        FeeCollectionPaymentSourceOut: {
+            /** Channel */
+            channel?: string | null;
+            /** Customer Paid Date */
+            customer_paid_date?: string | null;
+            /** Id */
+            id: number;
+            /** Posting Date */
+            posting_date?: string | null;
+        };
         /** FeeReceiptListOut */
         FeeReceiptListOut: {
             /** Items */
@@ -29532,6 +29652,33 @@ export interface components {
              * @enum {string}
              */
             part_type: "fee_record";
+        };
+        /**
+         * FeeRecordCollectionOut
+         * @description 單筆帳款＋其事件列表（依 occurred_at 升冪）。
+         */
+        FeeRecordCollectionOut: {
+            /** Amount Due */
+            amount_due: number;
+            /** Amount Paid */
+            amount_paid: number;
+            /** Events */
+            events: components["schemas"]["FeeCollectionEventOut"][];
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Record Id */
+            record_id: number;
+            /** Status */
+            status?: string | null;
+        };
+        /**
+         * FeeRecordCollectionsOut
+         * @description GET /fees/records/collections 回傳；records 依請求 record_id 順序，
+         *     不屬本租戶的 id 靜默省略。
+         */
+        FeeRecordCollectionsOut: {
+            /** Records */
+            records: components["schemas"]["FeeRecordCollectionOut"][];
         };
         /**
          * FeeRecordListOut
@@ -60399,6 +60546,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchFeePayResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fee_record_collections_api_fees_records_collections_get: {
+        parameters: {
+            query: {
+                record_id: number[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeeRecordCollectionsOut"];
                 };
             };
             /** @description Validation Error */
