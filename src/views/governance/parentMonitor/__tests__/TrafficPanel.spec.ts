@@ -346,4 +346,47 @@ describe('TrafficPanel', () => {
     expect(error.exists()).toBe(true)
     expect(error.text()).toContain('流量查詢失敗')
   })
+
+  it('慢的舊回應不得蓋掉快的新回應（區間快速切換）', async () => {
+    // 7 天查詢要掃比 24 小時多一個數量級的計量列，明顯較慢。使用者按了 7d
+    // 之後馬上切回 24h，先發的 7d 很可能後到——沒有請求序號守衛就會把較新的
+    // 24h 結果蓋掉，畫面顯示的區間與 radio 選的區間對不起來，而且看不出哪錯了。
+    const resolvers: Array<(v: unknown) => void> = []
+    const respond = (range: string, template: string) => ({
+      data: {
+        enabled: true,
+        range,
+        granularity_minutes: range === '7d' ? 60 : 5,
+        series: [seriesPoint()],
+        routes: [routeRow({ route_template: template })],
+        silence: silenceOf(),
+      },
+    })
+
+    h_.getTraffic.mockImplementation(
+      () => new Promise((resolve) => { resolvers.push(resolve) }),
+    )
+
+    const w = mount(TrafficPanel, { global: { stubs } })
+    await flushPromises()
+    resolvers[0](respond('24h', '/parent/初始'))
+    await flushPromises()
+
+    await w.find('[data-value="7d"]').trigger('click')
+    await flushPromises()
+    await w.find('[data-value="24h"]').trigger('click')
+    await flushPromises()
+
+    expect(resolvers).toHaveLength(3)
+
+    // 新的（24h，第 3 發）先回，舊的（7d，第 2 發）後回
+    resolvers[2](respond('24h', '/parent/最新的24h'))
+    await flushPromises()
+    resolvers[1](respond('7d', '/parent/過期的7d'))
+    await flushPromises()
+
+    const table = w.find('[data-testid="traffic-routes"]').text()
+    expect(table).toContain('/parent/最新的24h')
+    expect(table).not.toContain('/parent/過期的7d')
+  })
 })

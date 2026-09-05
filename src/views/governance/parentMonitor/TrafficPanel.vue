@@ -113,9 +113,10 @@ const SILENCE_LEVEL_LABELS: Record<SilenceLevel, string> = {
 }
 
 /**
- * 後端 `TrafficSilenceOut.level` 型別是寬鬆的 `string | null`（Pydantic 該欄
- * 未宣告 Literal），比照 `ParentMonitorView.vue::isKnownLevel` 的做法用型別
- * 守衛收斂，收斂不到的值一律當 `gray`（未知）處理，不用 `as any` 硬轉型。
+ * 後端 `TrafficSilenceOut.level` 已宣告成 `LightLevelLiteral`，codegen 產出的
+ * 就是四值聯集，型別上不需要收斂。這個守衛留著是**執行期**防線：後端日後若
+ * 加第五種燈色而前端還沒更新，未知值會落成 `gray`（未知）而不是讓
+ * `SILENCE_TAG_TYPES[level]` 取到 undefined、把整塊 tag 渲染成空白。
  */
 function isKnownSilenceLevel(level: string): level is SilenceLevel {
   return level === 'green' || level === 'yellow' || level === 'red' || level === 'gray'
@@ -243,11 +244,22 @@ const chartOptions = {
   scales: { y: { beginAtZero: true } },
 } as unknown as Record<string, unknown>
 
+/**
+ * 請求序號：只有「最後發出的那一份」回應可以寫進畫面。
+ *
+ * 7 天的查詢會掃比 24 小時多一個數量級的計量列，明顯較慢。使用者快速切
+ * 24h → 7d → 24h 時，先發的 7d 很可能後到，沒有這道守衛就會把較新的 24h
+ * 結果蓋掉——畫面顯示的區間與 radio 選的區間不一致，而且看不出哪裡錯了。
+ */
+let requestSeq = 0
+
 async function fetchData(): Promise<void> {
+  const seq = ++requestSeq
   loading.value = true
   errorMessage.value = null
   try {
     const res = await getParentMonitorTraffic({ range: range.value })
+    if (seq !== requestSeq) return
     enabled.value = res.data.enabled
     if (res.data.enabled) {
       series.value = res.data.series ?? []
@@ -256,9 +268,10 @@ async function fetchData(): Promise<void> {
       granularityMinutes.value = res.data.granularity_minutes
     }
   } catch (e) {
+    if (seq !== requestSeq) return
     errorMessage.value = getErrorMessage(e, '流量資料載入失敗，請稍後再試')
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
