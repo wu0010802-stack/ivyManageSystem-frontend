@@ -16012,7 +16012,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Timeline
+         * [deprecated] 改用 GET /api/recruitment/visits/{visit_id}/timeline
+         * @deprecated
          * @description Union of recruitment_event_log + student_change_logs, sorted by time。
          *
          *     邏輯已抽到 services.recruitment_timeline.build_visit_timeline（與正確路由端點
@@ -16180,6 +16181,34 @@ export interface paths {
         post?: never;
         /** Delete Recruitment Ivykids Backend Records */
         delete: operations["delete_recruitment_ivykids_backend_records_api_recruitment_ivykids_records_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment/ivykids/records/{record_id}/to-visit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert Ivykids Record To Visit
+         * @description 把一筆官網報名複製成招生訪視，讓它進得了漏斗（ivyconv01，2026-09-06）。
+         *
+         *     官網報名原本只被統計與地址熱點消費，要跟進得在「訪視明細」重打一次姓名電話。
+         *
+         *     刻意只複製「線索事實」（姓名、生日、聯絡方式、來源、備註），不複製官網那邊的
+         *     `has_deposit`／`enrolled`——轉入的是線索，預繳與註冊一律走漏斗狀態機重新登記，
+         *     否則又是一個繞過 transition 的旁門。
+         *
+         *     入學學期缺值時補當前學期：沒有 target 的訪視不會出現在任何學年看板。
+         */
+        post: operations["convert_ivykids_record_to_visit_api_recruitment_ivykids_records__record_id__to_visit_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -29982,6 +30011,11 @@ export interface components {
                 [key: string]: components["schemas"]["FunnelCard"][];
             };
             summary: components["schemas"]["FunnelSummary"];
+            /**
+             * Unscoped Count
+             * @default 0
+             */
+            unscoped_count: number;
         };
         /** FunnelCard */
         FunnelCard: {
@@ -29992,6 +30026,8 @@ export interface components {
              * @enum {string}
              */
             current_stage: "visited" | "deposited" | "enrolled" | "withdrawn";
+            /** Deposit Mismatch */
+            deposit_mismatch?: ("flag_without_credit" | "credit_without_flag") | null;
             /** Deposited At */
             deposited_at: string | null;
             /** District */
@@ -30000,6 +30036,8 @@ export interface components {
             grade: string | null;
             /** Phone */
             phone: string | null;
+            /** Prepayment State */
+            prepayment_state?: string | null;
             /** Provisional Grade Id */
             provisional_grade_id?: number | null;
             /** Provisional Grade Name */
@@ -39712,10 +39750,14 @@ export interface components {
             birthday?: string | null;
             /** Child Name */
             child_name?: string | null;
+            /** Contact Name */
+            contact_name?: string | null;
             /** Created At */
             created_at?: string | null;
             /** Deposit Collector */
             deposit_collector?: string | null;
+            /** Deposit Mismatch */
+            deposit_mismatch?: string | null;
             /** District */
             district?: string | null;
             /** Enrolled */
@@ -39738,6 +39780,8 @@ export interface components {
             parent_response?: string | null;
             /** Phone */
             phone?: string | null;
+            /** Prepayment State */
+            prepayment_state?: string | null;
             /** Provisional Grade Id */
             provisional_grade_id?: number | null;
             /** Referrer */
@@ -39783,6 +39827,8 @@ export interface components {
             birthday?: string | null;
             /** Child Name */
             child_name: string;
+            /** Contact Name */
+            contact_name?: string | null;
             /** Deposit Collector */
             deposit_collector?: string | null;
             /** District */
@@ -39852,6 +39898,8 @@ export interface components {
             birthday?: string | null;
             /** Child Name */
             child_name?: string | null;
+            /** Contact Name */
+            contact_name?: string | null;
             /** Deposit Collector */
             deposit_collector?: string | null;
             /** District */
@@ -41247,6 +41295,10 @@ export interface components {
         };
         /** ReserveSeatOut */
         ReserveSeatOut: {
+            /** Capacity Warning */
+            capacity_warning?: {
+                [key: string]: unknown;
+            } | null;
             /** Provisional Grade Id */
             provisional_grade_id: number | null;
             /** Provisional Grade Name */
@@ -46380,6 +46432,8 @@ export interface components {
         TransitionIn: {
             /** Classroom Id */
             classroom_id?: number | null;
+            /** Deposit Collector */
+            deposit_collector?: string | null;
             /** Reason */
             reason?: string | null;
             /**
@@ -74086,6 +74140,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    convert_ivykids_record_to_visit_api_recruitment_ivykids_records__record_id__to_visit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
