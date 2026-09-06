@@ -128,11 +128,26 @@
       </el-table-column>
       <el-table-column prop="source" label="來源" min-width="100" />
       <el-table-column prop="referrer" label="介紹者" width="90" />
-      <el-table-column label="預繳" align="center" width="70">
+      <el-table-column label="預繳" align="center" width="104">
         <template #default="{ row }">
           <el-tag :type="row.has_deposit ? 'success' : 'danger'" size="small">
             {{ row.has_deposit ? '是' : '否' }}
           </el-tag>
+          <!-- 收款對帳（2026-09-06）：招生端旗標與學費模組的預繳金是兩個真相，
+               不連動。落差直接標在這一欄，不必兩個模組對開才看得出來。 -->
+          <el-tooltip
+            v-if="mismatchLabel(row.deposit_mismatch)"
+            :content="mismatchTitle(row.deposit_mismatch)"
+            placement="top"
+          >
+            <el-tag
+              type="warning"
+              size="small"
+              effect="plain"
+              class="mismatch-tag"
+              data-test="row-deposit-mismatch"
+            >{{ mismatchLabel(row.deposit_mismatch) }}</el-tag>
+          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column label="已註冊" align="center" width="70">
@@ -156,7 +171,7 @@
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-      <el-table-column v-if="canWrite || canConvert" label="操作" width="290" fixed="right">
+      <el-table-column v-if="canWrite || canConvert" label="操作" width="360" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canWrite" size="small" @click="$emit('edit', row)">編輯</el-button>
           <el-button size="small" @click="$emit('journey', row)">歷程</el-button>
@@ -173,6 +188,16 @@
             type="success"
             @click="$emit('convert', row)"
           >轉為學生</el-button>
+          <!-- 退預繳／退註冊（2026-09-06）：原本唯一入口是漏斗看板拖曳，只看列表的人
+               根本找不到退費功能在哪。已退出的不再顯示。 -->
+          <el-button
+            v-if="canWrite && !row.withdrawn_at && (row.has_deposit || row.enrolled)"
+            size="small"
+            type="warning"
+            plain
+            data-test="row-withdraw"
+            @click="$emit('withdraw', row)"
+          >{{ row.enrolled ? '退註冊' : '退預繳' }}</el-button>
           <!-- plain 而非實心：實心 danger 是這一列裡唯一有填色的按鈕，視覺重量高過「編輯」
                與「轉為學生」，等於每列都在把眼睛引向不可逆的動作 -->
           <el-button v-if="canWrite" size="small" type="danger" plain @click="$emit('delete', row.id)">刪除</el-button>
@@ -244,8 +269,23 @@ const emit = defineEmits<{
   'convert': [row: Record<string, unknown>]
   'reserve': [row: Record<string, unknown>]
   'journey': [row: Record<string, unknown>]
+  'withdraw': [row: Record<string, unknown>]
   'delete': [id: unknown]
 }>()
+
+/** 招生旗標與學費模組收款紀錄的落差（後端 services/recruitment_prepayment_link 算好）。 */
+const MISMATCH_LABEL: Record<string, string> = {
+  flag_without_credit: '查無收款',
+  credit_without_flag: '未標記',
+}
+const MISMATCH_TITLE: Record<string, string> = {
+  flag_without_credit: '標記為已預繳，但學費管理查不到對應的預繳金，請確認收款是否漏登。',
+  credit_without_flag: '學費管理已有這筆的預繳金，但招生狀態還停在未預繳，請到漏斗看板推進到「已預繳」。',
+}
+const mismatchLabel = (key: unknown): string =>
+  MISMATCH_LABEL[typeof key === 'string' ? key : ''] ?? ''
+const mismatchTitle = (key: unknown): string =>
+  MISMATCH_TITLE[typeof key === 'string' ? key : ''] ?? ''
 
 const termYearOptions = computed(() => {
   const y = currentRocYear()
@@ -262,3 +302,10 @@ const updateFilter = (field: string, value: unknown) => {
   emit('update-filter', { [field]: value })
 }
 </script>
+
+<style scoped>
+/* 收款對帳標籤跟在「預繳」tag 後面，靠 margin 與它拉開，不另佔一欄 */
+.mismatch-tag {
+  margin-left: 4px;
+}
+</style>
