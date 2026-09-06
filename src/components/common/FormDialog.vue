@@ -71,6 +71,9 @@ const dialogAttrs = computed(() => ({
 
 const isDirty = (): boolean => (typeof props.dirty === 'function' ? props.dirty() : props.dirty)
 
+/** requiredLegend 去掉開頭的 `*`／`＊` 與其後空白；使用端傳「* 為必填」或「為必填」渲染結果相同（星號另由 .required-legend__star 補上） */
+const legendText = computed(() => (props.requiredLegend ? props.requiredLegend.replace(/^[*＊]\s*/, '') : ''))
+
 /** el-dialog before-close：X／Esc／遮罩三條路徑，皆視為使用者主動關閉，一致發 cancel */
 async function handleBeforeClose(done: () => void): Promise<void> {
   if (isDirty() && !(await confirmDiscardChanges())) return
@@ -91,13 +94,18 @@ function handleSubmit(): void {
 }
 
 const PICKER_WRAPPER = '.el-select, .el-date-editor, .el-time-picker, .el-cascader, .el-autocomplete'
+/** 可送出的文字類 input type；''＝未設 type（瀏覽器預設視為文字） */
+const TEXT_INPUT_TYPES = ['text', 'number', 'email', 'tel', 'url', 'password', 'search', '']
 
 function onBodyKeydown(event: KeyboardEvent): void {
   if (!props.enterSubmit || event.key !== 'Enter' || event.isComposing) return
   if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return
-  const target = event.target as HTMLElement | null
+  const target = event.target as HTMLInputElement | null
   if (!target || target.tagName !== 'INPUT') return
+  if (!TEXT_INPUT_TYPES.includes(target.type)) return
   if (target.closest(PICKER_WRAPPER)) return
+  // loading／disabled 判斷放在 preventDefault 之前：送出中按 Enter 既不吞事件也不送出。
+  if (props.loading || props.disabled) return
   event.preventDefault()
   handleSubmit()
 }
@@ -122,7 +130,10 @@ function scrollToFirstError(): boolean {
   const item = bodyRef.value?.querySelector<HTMLElement>('.el-form-item.is-error')
   if (!item) return false
   item.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  item.querySelector<HTMLElement>('input, textarea, [tabindex]')?.focus()
+  // 優先聚焦真正可輸入的欄位；找不到才退而求其次聚焦帶 tabindex 的元素。
+  const focusTarget = item.querySelector<HTMLElement>('input:not([type="hidden"]), textarea')
+    ?? item.querySelector<HTMLElement>('[tabindex]')
+  focusTarget?.focus()
   return true
 }
 
@@ -142,8 +153,8 @@ defineExpose({ requestClose, scrollToFirstError })
     @opened="onOpened"
     @closed="emit('closed')"
   >
-    <template v-if="$slots['title-extra']" #header>
-      <span class="el-dialog__title">{{ title }}</span>
+    <template v-if="$slots['title-extra']" #header="{ titleId, titleClass }">
+      <span :id="titleId" :class="titleClass">{{ title }}</span>
       <slot name="title-extra" />
     </template>
 
@@ -154,7 +165,7 @@ defineExpose({ requestClose, scrollToFirstError })
       tabindex="-1"
       @keydown="onBodyKeydown"
     >
-      <p v-if="requiredLegend" class="required-legend">{{ requiredLegend }}</p>
+      <p v-if="requiredLegend" class="required-legend"><span class="required-legend__star" aria-hidden="true">*</span>{{ legendText }}</p>
       <slot />
     </div>
 
@@ -176,6 +187,10 @@ defineExpose({ requestClose, scrollToFirstError })
   </el-dialog>
 </template>
 
+<!--
+  `.ivy-form-dialog--{size}` 落在 EP 渲染的 `.el-dialog` 節點上，不帶 scoped 屬性；
+  分型專屬樣式要寫在全域層（main.css）。
+-->
 <style scoped>
 .ivy-form-dialog__body { outline: none; }
 .ivy-form-dialog__footer {
@@ -189,5 +204,9 @@ defineExpose({ requestClose, scrollToFirstError })
   margin: 0 0 var(--space-3);
   font-size: var(--text-xs);
   color: var(--el-text-color-secondary);
+}
+.required-legend__star {
+  color: var(--el-color-danger);
+  margin-right: 4px;
 }
 </style>

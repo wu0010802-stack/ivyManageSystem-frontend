@@ -14,7 +14,7 @@ const ElDialogStub = defineComponent({
   emits: ['update:modelValue', 'opened', 'closed'],
   setup(props, { slots, emit }) {
     return () => h('div', { class: 'el-dialog-stub', 'data-width': props.width }, [
-      h('div', { class: 'stub-header' }, slots.header?.({}) ?? props.title),
+      h('div', { class: 'stub-header' }, slots.header?.({ titleId: 't1', titleClass: 'el-dialog__title' }) ?? props.title),
       h('div', { class: 'stub-body' }, slots.default?.()),
       h('div', { class: 'stub-footer' }, slots.footer?.()),
       h('button', { class: 'stub-x', onClick: () => props.beforeClose?.(() => emit('update:modelValue', false)) }, 'x'),
@@ -128,12 +128,37 @@ describe('FormDialog', () => {
     expect(w.emitted('submit')).toBeUndefined()
   })
 
+  it('Enter：非文字類 input（checkbox）不 emit submit', () => {
+    const w = mountDialog({}, { default: '<input type="checkbox" class="cb" />' })
+    w.find('input.cb').element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    expect(w.emitted('submit')).toBeUndefined()
+  })
+
+  it('Enter：picker 容器（.el-select）內的 input 不 emit submit', () => {
+    const w = mountDialog({}, { default: '<div class="el-select"><input class="inner" /></div>' })
+    w.find('input.inner').element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(w.emitted('submit')).toBeUndefined()
+  })
+
+  it('disabled=true 時點主鈕不 emit submit', async () => {
+    const w = mountDialog({ disabled: true })
+    await w.find('[data-test="form-dialog-submit"]').trigger('click')
+    expect(w.emitted('submit')).toBeUndefined()
+  })
+
   it('opened 後聚焦第一個可輸入欄，並轉發 opened 事件', async () => {
     const w = mountDialog()
     w.findComponent(ElDialogStub).vm.$emit('opened')
     await nextTick(); await nextTick()
     expect(document.activeElement).toBe(w.find('input.first').element)
     expect(w.emitted('opened')).toHaveLength(1)
+  })
+
+  it('body 內沒有可聚焦欄位時，opened 後聚焦 body 本身', async () => {
+    const w = mountDialog({}, { default: '<p>無欄位</p>' })
+    w.findComponent(ElDialogStub).vm.$emit('opened')
+    await nextTick(); await nextTick()
+    expect(document.activeElement).toBe(w.find('[data-test="form-dialog-body"]').element)
   })
 
   it('scrollToFirstError 捲到第一個 is-error 欄並聚焦其 input；沒有錯誤回 false', async () => {
@@ -156,9 +181,22 @@ describe('FormDialog', () => {
     const footer = w.find('.stub-footer')
     expect(footer.find('.extra').exists()).toBe(true)
     expect(footer.html().indexOf('extra')).toBeLessThan(footer.html().indexOf('form-dialog-submit'))
-    expect(w.find('.required-legend').text()).toBe('* 為必填')
+    expect(w.find('.required-legend').text()).toContain('為必填')
+    expect(w.find('.required-legend__star').exists()).toBe(true)
     const replaced = mountDialog({}, { footer: '<span class="mine">自訂</span>' })
     expect(replaced.find('[data-test="form-dialog-submit"]').exists()).toBe(false)
     expect(replaced.find('.mine').exists()).toBe(true)
+  })
+
+  it('requiredLegend 傳「為必填」（未帶星號）時渲染結果與傳「* 為必填」相同', () => {
+    const withStar = mountDialog({ requiredLegend: '* 為必填' })
+    const withoutStar = mountDialog({ requiredLegend: '為必填' })
+    expect(withStar.find('.required-legend').text()).toBe(withoutStar.find('.required-legend').text())
+  })
+
+  it('title-extra slot 使用 EP header slot props（titleId／titleClass）', () => {
+    const w = mountDialog({}, { 'title-extra': '<span class="chip">序號</span>' })
+    expect(w.find('.stub-header .chip').exists()).toBe(true)
+    expect(w.find('#t1').text()).toBe('新增課程')
   })
 })
