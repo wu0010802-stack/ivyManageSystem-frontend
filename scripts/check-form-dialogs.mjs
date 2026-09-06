@@ -25,7 +25,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 /** 修掉幾處後必須同步調降，否則棘輪鬆掉（同 check-error-detail-ratchet 慣例）。 */
-const BASELINE = { A: 101, B: 89, C: 162, D: 20 } // 2026-09-06 Task 9 調降：旗艦 F1／F2（活動課程、收付款）遷移 FormDialog 後實測
+const BASELINE = { A: 101, B: 89, C: 161, D: 20 } // 2026-09-06 併入 staging 後調降：C 隨 staging 側 fees 改動再少一處硬編寬度
 
 /** 本來就該含 el-dialog 的檔案：FormDialog 殼本身。 */
 const EXEMPT = new Set(['src/components/common/FormDialog.vue'])
