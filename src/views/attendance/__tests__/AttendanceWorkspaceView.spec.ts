@@ -77,7 +77,9 @@ const WorkspaceHeaderStub = {
   template: `<div class="workspace-header-stub"><slot /></div>`,
 }
 
+const ReconciliationPanelStub = { name: 'ReconciliationPanel', emits: ['records', 'import'], template: '<div />' }
 const STUBS = {
+  ReconciliationPanel: ReconciliationPanelStub,
   RosterColumn: RosterColumnStub,
   AnomalyQueueColumn: AnomalyQueueColumnStub,
   DetailColumn: DetailColumnStub,
@@ -423,5 +425,32 @@ describe('WorkspaceHeader', () => {
     expect(exportBtn).toBeDefined()
     // 重設，避免污染後續 test
     mockHasPermission.mockReturnValue(true)
+  })
+})
+
+describe('核對跨月明細導向', () => {
+  it('完全沒有紀錄時可在該月份開啟補匯入', async () => {
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+    const wrapper = mount(AttendanceWorkspaceView, { props: { initialDate: '2026-09-06', defaultReconcile: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(ReconciliationPanelStub).vm.$emit('import', { date: '2026-08-31' })
+    await flushPromises()
+    const dialog = wrapper.findComponent(ImportPreviewDialogStub)
+    expect(dialog.props('modelValue')).toBe(true)
+    expect(dialog.props('month')).toBe(8)
+    wrapper.unmount()
+  })
+  it('依所點人日的月份載入該員工明細', async () => {
+    getSummaryMock.mockResolvedValue({ data: sampleRoster })
+    getAnomalyListMock.mockResolvedValue({ data: { items: [], pending: 0, total: 0, confirmed: 0 } })
+    getRecordsMock.mockResolvedValue({ data: [] })
+    const wrapper = mount(AttendanceWorkspaceView, { props: { initialDate: '2026-09-06', defaultReconcile: true }, global: { stubs: STUBS } })
+    await flushPromises()
+    wrapper.findComponent(ReconciliationPanelStub).vm.$emit('records', { employee_id: 2, date: '2026-08-31' })
+    await flushPromises()
+    expect(getRecordsMock).toHaveBeenLastCalledWith({ year: 2026, month: 8, employee_id: 2 })
+    wrapper.unmount()
   })
 })

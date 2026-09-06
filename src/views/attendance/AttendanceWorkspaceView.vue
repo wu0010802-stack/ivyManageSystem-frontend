@@ -10,6 +10,12 @@
       @export="onExport"
     />
 
+    <div v-if="canReconcile" class="workspace-mode" aria-label="出勤核對方式">
+      <el-button :type="reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = true">班表與打卡核對</el-button>
+      <el-button :type="!reconcileOpen ? 'primary' : 'default'" @click="reconcileOpen = false">出勤明細與補卡</el-button>
+    </div>
+    <ReconciliationPanel v-if="reconcileOpen && canReconcile" :year="query.year" :month="query.month" :revision="importRevision" @confirmed="onResolved" @records="onReconciliationRecords" @import="onReconciliationImport" />
+    <div v-show="!reconcileOpen || !canReconcile">
     <!-- 桌機三欄 -->
     <div v-if="isDesktop" class="workspace-cols">
       <div class="col-roster">
@@ -100,6 +106,7 @@
       </el-tab-pane>
     </el-tabs>
 
+    </div>
     <!-- 匯入 dialog -->
     <ImportPreviewDialog
       v-model="importOpen"
@@ -111,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, toRef, onMounted, provide, computed, ref, watch } from 'vue'
+import { reactive, toRef, onMounted, provide, computed, ref, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useAttendanceWorkspace } from '@/composables/useAttendanceWorkspace'
@@ -126,12 +133,17 @@ import RosterColumn from '@/components/attendance/RosterColumn.vue'
 import AnomalyQueueColumn from '@/components/attendance/AnomalyQueueColumn.vue'
 import DetailColumn from '@/components/attendance/DetailColumn.vue'
 import ImportPreviewDialog from '@/components/attendance/ImportPreviewDialog.vue'
+import { hasPermission } from '@/utils/auth'
+const ReconciliationPanel = defineAsyncComponent(() => import('@/components/attendance/ReconciliationPanel.vue'))
+
+const props = defineProps<{ initialDate?: string; defaultReconcile?: boolean }>()
+const emit = defineEmits<{ dateChange: [date: string] }>()
 
 // ── getRecords 回傳列（OpenAPI 契約型別）────────────────────────────────────
 type RecordRow = ApiResponse<'/attendance/records', 'get'>[number]
 
 // ── 查詢狀態 ────────────────────────────────────────────────────────────────
-const now = new Date()
+const now = props.initialDate ? new Date(`${props.initialDate}T12:00:00`) : new Date()
 const query = reactive({ year: now.getFullYear(), month: now.getMonth() + 1 })
 
 // ── workspace composable ───────────────────────────────────────────────────
@@ -150,6 +162,16 @@ const selectedEmployeeId = ref<number | null>(null)
 const selectedAnomalyIndex = ref(0)
 const detailMode = ref<'resolve' | 'month'>('resolve')
 const importOpen = ref(false)
+const canReconcile = computed(() => hasPermission('SCHEDULE') && hasPermission('ATTENDANCE_READ'))
+const reconcileOpen = ref(props.defaultReconcile ?? false)
+const importRevision = ref(0)
+watch(() => [query.year, query.month], () => { emit('dateChange', `${query.year}-${String(query.month).padStart(2, '0')}-01`) })
+watch(() => props.initialDate, value => {
+  if (!value) return
+  const date = new Date(`${value}T12:00:00`)
+  query.year = date.getFullYear()
+  query.month = date.getMonth() + 1
+})
 
 // ── 手機三段流程 ────────────────────────────────────────────────────────────
 // 桌機三欄同時可見，不需要這個狀態；手機一次只看得到一段，故需記錄目前在哪一段。
@@ -288,7 +310,26 @@ function onNavigate(delta: number): void {
   selectedAnomalyIndex.value = Math.min(Math.max(0, selectedAnomalyIndex.value + delta), max)
 }
 
+function onReconciliationRecords(row: { employee_id: number; date: string }): void {
+  const [year, month] = row.date.split('-').map(Number)
+  query.year = year
+  query.month = month
+  reconcileOpen.value = false
+  selectedEmployeeId.value = row.employee_id
+  detailMode.value = 'month'
+  if (!isDesktop.value) mobileTab.value = 'detail'
+}
+
+function onReconciliationImport(row: { date: string }): void {
+  const [year, month] = row.date.split('-').map(Number)
+  query.year = year
+  query.month = month
+  importOpen.value = true
+}
+
 async function onImported(): Promise<void> {
+  importRevision.value += 1
+  if (canReconcile.value) reconcileOpen.value = true
   await Promise.all([ws.refresh(), invalidateRecordsCache()])
   clampSelectedIndex()
   ElMessage.success('匯入完成')
@@ -311,6 +352,8 @@ provide('attendanceWs', ws)
 .attendance-workspace {
   padding: var(--space-4);
 }
+
+.workspace-mode { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4); }
 
 .workspace-cols {
   display: grid;
